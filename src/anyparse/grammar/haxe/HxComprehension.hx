@@ -55,7 +55,7 @@ final class HxComprehension {
 	 * `wrapping/issue_238_keep_wrapping_nowrap.hxtest`: net 0, refused with the number.
 	 *
 	 * What unblocked the append is positional and lives in the PARSER, not in either classifier —
-	 * `Lowering.lowerTriviaStarBranch` and `Lowering.emitTriviaStarFieldSteps` clear the pending stash
+	 * `Lowering.lowerTriviaStarBranch` and `StarFieldLowering.emitTriviaStarFieldSteps` clear the pending stash
 	 * newline right after their open literal, because consuming `[` proves the elements are inside it.
 	 * With that in place the append moves ZERO corpus fixtures (both named above stay PASS), and
 	 * `HxComprehensionBracketPolicyTest.testReifiedForHeadIsComprehension` pins what it buys:

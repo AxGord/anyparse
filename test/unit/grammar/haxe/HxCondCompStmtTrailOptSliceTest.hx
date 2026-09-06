@@ -21,7 +21,7 @@ import utest.Test;
  * output`, dogfooded test files) now round-trips byte-identically.
  *
  * Slice D4: `elseBody` was wired LAST because the kw-led optional Star
- * path (`Lowering.emitOptionalKwStarFieldSteps`) silently ignored
+ * path (`StarFieldLowering.emitOptionalKwStarFieldSteps`) silently ignored
  * `@:sep`. Adding the meta on its own would not have closed the bug —
  * the engine had to learn the same sep-consumption shape its
  * non-optional sibling (`emitTriviaStarFieldSteps`) already had.

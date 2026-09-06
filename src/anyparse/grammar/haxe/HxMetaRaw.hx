@@ -24,7 +24,7 @@ package anyparse.grammar.haxe;
  *    swap in a string-aware runtime helper when needed.
  *
  * `@:rawString` routes the matched slice through
- * `Lowering.lowerTerminal` without running the JSON-style unescape
+ * `TerminalParseLowering.lowerTerminal` without running the JSON-style unescape
  * loop — metadata source is not a Haxe string literal and must be
  * preserved byte-exact.
  *

@@ -39,7 +39,7 @@ package anyparse.grammar.haxe;
  * An earlier reading held that they COULD not be: the obvious
  * production `{cond, expr:HxExpr, op, tail:HxExpr}` needs the Pratt
  * loop to REWIND an operator whose right operand fails to parse, and
- * `Lowering.lowerPrattLoop` has no such path — every branch reads
+ * `PrattPostfixLowering.lowerPrattLoop` has no such path — every branch reads
  * `left = HxExpr.Add(left, parseHxExpr(ctx, prec + 1))` with zero
  * `try` and zero `catch` across its 14.5 KB, and 41 of its 42
  * `ctx.pos = _savedPos` writes are the MIN-PRECEDENCE gate. That

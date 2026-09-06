@@ -29,7 +29,7 @@ using Lambda;
  *
  * The strategy is annotate-only. It writes `ternary.op`, `ternary.sep`,
  * and `ternary.prec` onto the branch `ShapeNode` and returns `null`
- * from `lower`. `Lowering.lowerPrattLoop` detects `ternary.op` branches
+ * from `lower`. `PrattPostfixLowering.lowerPrattLoop` detects `ternary.op` branches
  * and merges them into the operator dispatch chain alongside binary
  * `@:infix` branches, sorted by literal length descending (D33).
  *

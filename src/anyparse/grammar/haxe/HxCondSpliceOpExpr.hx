@@ -29,7 +29,7 @@ package anyparse.grammar.haxe;
  * concluded it did. The obvious production `{cond, expr:HxExpr, op,
  * tail}` binds `expr` at FULL precedence, and then the Pratt loop
  * consumes the dangling operator and throws on the missing right
- * operand — `Lowering.lowerPrattLoop` emits no `try`/`catch` anywhere,
+ * operand — `PrattPostfixLowering.lowerPrattLoop` emits no `try`/`catch` anywhere,
  * so the throw escapes the whole `parseHxExpr`. All true. But prefix
  * and postfix do NOT live in that loop: `HxExpr`'s own contract is
  * that `parseHxExprAtom` is the postfix wrapper around
@@ -64,7 +64,7 @@ package anyparse.grammar.haxe;
  * pairs), and a `@:postfix('#if') CondSpliceOpTail(operand, inner)`
  * ctor written next to the raw one parses every sampled site and
  * round-trips them byte-for-byte. It still never fires. The postfix
- * dispatch is not an ordered choice: `Lowering.lowerPostfixLoop` emits
+ * dispatch is not an ordered choice: `PrattPostfixLowering.lowerPostfixLoop` emits
  * one `if` / `else if` chain keyed on the operator literal with, in its
  * own words, "no precedence gate and no `_savedPos` rollback — once a
  * postfix operator matches, the body commits". Two branches spelling

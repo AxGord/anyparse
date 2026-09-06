@@ -60,7 +60,7 @@ package anyparse.grammar.haxe;
  * corpus fixture later demands it.
  *
  * `@:optional @:kw('#else') @:tryparse var elseBody` uses the kw-led
- * optional Star path (`Lowering.emitOptionalKwStarFieldSteps`): `#else`
+ * optional Star path (`StarFieldLowering.emitOptionalKwStarFieldSteps`): `#else`
  * is the commit point, a miss leaves the field `null` so the writer
  * skips the entire clause.
  */

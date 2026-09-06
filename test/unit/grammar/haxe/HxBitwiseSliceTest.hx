@@ -28,7 +28,7 @@ import utest.Assert;
  * ordering is preserved for every operator pair.
  *
  * Every shared-prefix conflict this slice introduces is resolved by
- * the length-desc sort in `Lowering.lowerPrattLoop` (D33): `<<` vs
+ * the length-desc sort in `PrattPostfixLowering.lowerPrattLoop` (D33): `<<` vs
  * `<` vs `<=`, `>>>` vs `>>` vs `>` vs `>=`, `||` vs `|`, `&&` vs
  * `&`. Each conflict gets a dedicated disambiguation test below.
  *

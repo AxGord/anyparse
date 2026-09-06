@@ -40,7 +40,7 @@ package anyparse.grammar.haxe;
  * regions must look at both Stars.
  *
  * No field-level whitespace literals (e.g. `@:lead(' ')`) - the generated
- * parser calls `skipWs` at every field boundary (`Lowering.lowerStruct`
+ * parser calls `skipWs` at every field boundary (`StructSeqLowering.lowerStruct`
  * pre-field skipWs, plus the try-parse loop's own `skipWs` before each
  * iteration), so any amount of spacing between `cond`, the entries, and
  * `#end` is consumed transparently. A whitespace-prefix literal would
@@ -50,7 +50,7 @@ package anyparse.grammar.haxe;
  * trivia-captured `newlineBefore` to round-trip the shape.
  *
  * `@:tryparse` on the Stars puts them in try-parse termination mode
- * (`Lowering.emitStarFieldSteps` try-parse branch): the loop parses
+ * (`StarFieldLowering.emitStarFieldSteps` try-parse branch): the loop parses
  * entries until the next token is not a recognised keyword, `@`, or
  * nested `#if`, which in legal input is `#elseif` / `#else` / `#end` -
  * consumed by the following field or the outer ctor's `@:trail`.

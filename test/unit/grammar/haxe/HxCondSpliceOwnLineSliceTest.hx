@@ -6,7 +6,7 @@ import utest.Assert;
 
 /**
  * Slice F1 -- the OWN-LINE gate on word-like postfix operators
- * (`Lowering.buildPostfixOpMatchExpr`, the only word-like postfix op being
+ * (`PrattPostfixLowering.buildPostfixOpMatchExpr`, the only word-like postfix op being
  * `HxExpr.CondSpliceTail`'s `#if`).
  *
  * A `#if` sitting on its own line after a complete operand is ambiguous:
@@ -157,7 +157,7 @@ final class HxCondSpliceOwnLineSliceTest extends HxTestHelpers {
 	 * postfix loop saves `_preWsPos` PAST the newline and reads the region
 	 * as a SAME-LINE splice tail. The stash is the second newline source --
 	 * same mechanism the `captureChainNewline` chain-newline capture already
-	 * reads (`Lowering.chainNlValue`).
+	 * reads (`PrattPostfixLowering.chainNlValue`).
 	 */
 	public function testOwnLineStatementConditionalAfterBareBodyTryRoundTrips(): Void {
 		final src: String = 'class C {\n\tfunction f(code:Int) {\n\t\ttry a() catch (_:Exception) {}\n'

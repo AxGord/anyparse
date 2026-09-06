@@ -14,7 +14,7 @@ using anyparse.macro.MetaInspect;
  * Walks the shape tree and emits one `WriterRule` per type. Each rule's
  * body writes bytes directly to `output:haxe.io.BytesOutput` — no Doc
  * tree, no Renderer. This is the structural inverse of the binary
- * Terminal/Star handling in `Lowering.lowerStruct`.
+ * Terminal/Star handling in `StructSeqLowering.lowerStruct`.
  *
  * Separated from `WriterLowering` because text and binary writers have
  * fundamentally different output models (Doc vs BytesOutput) and share

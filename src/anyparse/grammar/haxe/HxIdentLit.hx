@@ -10,7 +10,7 @@ package anyparse.grammar.haxe;
  * underscores. Unicode identifiers are out of scope for the Phase 3
  * skeleton.
  *
- * `@:rawString` instructs `Lowering.lowerTerminal` to use the matched
+ * `@:rawString` instructs `TerminalParseLowering.lowerTerminal` to use the matched
  * slice directly as the result value instead of running it through the
  * JSON string-unescape helper. This is the minimal workaround to the
  * closed Phase 2 decoder table (D13) for identifier-like String

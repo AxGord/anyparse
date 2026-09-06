@@ -37,7 +37,7 @@ import utest.Assert;
  * The dangling-operator shape was refused once, on a measurement that is
  * still true: modelling it as `{cond, expr:HxExpr, op, tail:HxExpr}`
  * needs the Pratt loop to REWIND an operator whose right operand fails to
- * parse, and `Lowering.lowerPrattLoop` emits no such path — every branch
+ * parse, and `PrattPostfixLowering.lowerPrattLoop` emits no such path — every branch
  * is `left = HxExpr.Add(left, parseHxExpr(ctx, prec + 1))` with zero
  * `try` and zero `catch` in the whole generated loop, and 41 of its 42
  * `ctx.pos = _savedPos` writes are the min-precedence gate. What does not
