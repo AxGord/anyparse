@@ -68,6 +68,8 @@ class DocOwnerGuardSliceTest extends Test {
 	 * modifier inserts at the very same offset and must pass. Flipped by
 	 * dropping the `edit.text.indexOf('\n') < 0` clause.
 	 */
+	@:pin('control')
+	@:killer('M-DOCSPLIT-BREAKLESS-TOO')
 	public function testModifierInsertOnTheOwnersLineIsAccepted(): Void {
 		final text: String = assertOk(SeamEdit.insert(DOCD_MEMBER, 'function m1', 'public '));
 		Assert.isTrue(text.indexOf('public function m1') >= 0);
@@ -78,6 +80,8 @@ class DocOwnerGuardSliceTest extends Test {
 	 * start their span at or before the owner and OWN what they cover. Flipped by
 	 * dropping the `edit.span.to != edit.span.from` clause.
 	 */
+	@:pin('control')
+	@:killer('M-DOCSPLIT-COVERING-TOO')
 	public function testReplacementStartingAtTheOwnerIsAccepted(): Void {
 		// The replacement text carries a line break on purpose: without one the
 		// newline clause would reject the edit first and this control would pass
@@ -95,6 +99,8 @@ class DocOwnerGuardSliceTest extends Test {
 	 * one for the same reason, so the guard must not claim one either. Flipped by
 	 * dropping the `isDocOpener` clause.
 	 */
+	@:pin('control')
+	@:killer('M-DOCSPAN-BANNER-IS-DOC')
 	public function testBannerCommentIsNotGuarded(): Void {
 		final banner: String = '/*\n * Banner, not a doc.\n */\ntypedef A = {\n\tvar a: Int;\n}\n';
 		final text: String = assertOk(SeamEdit.insert(banner, 'typedef A', MID));
@@ -108,6 +114,8 @@ class DocOwnerGuardSliceTest extends Test {
 	 * that op cannot perform. Flipped by dropping the `isIdentStartChar` clause,
 	 * which is what makes the test the closer rather than the end of the file.
 	 */
+	@:pin('control')
+	@:killer('M-DOCSPLIT-OWNER-ANY')
 	public function testAppendBeforeAClosingBraceIsAccepted(): Void {
 		final orphan: String = 'class C {\n\n\tpublic function m(): Void {}\n\n\t/**\n\t * Orphan doc left behind.\n\t */\n}\n';
 		// Anchored on the newline that precedes the FINAL brace: `{}` above has no

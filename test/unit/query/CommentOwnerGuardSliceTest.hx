@@ -139,8 +139,10 @@ class CommentOwnerGuardSliceTest extends Test {
 	 *
 	 * The message assertion is the discriminating half: it must be the carry sentence ("carries
 	 * verbatim"), never the weld sentence, or the test would be passing on the older criterion.
-	 * Killed by arm `F1` (`CommentOwnerGuard.hoistedComment` returning null on entry).
+	 * Killed by arm `M-COMMENT-HOIST-BLIND`, which returns null from `CommentOwnerGuard.hoistedComment` on entry.
 	 */
+	@:pin('guard')
+	@:killer('M-COMMENT-HOIST-BLIND')
 	public function testHoistingAcrossADeclaredCarryIsRefused(): Void {
 		switch SeamEdit.replaceCarrying(CARRY_SOURCE, FOLDED_REGION, HOISTED, ['gate()', '11', '22']) {
 			case Ok(text):
@@ -186,9 +188,11 @@ class CommentOwnerGuardSliceTest extends Test {
 	 *
 	 * The fixture is the HOISTING edit, so this is the one cell of the matrix where a
 	 * mis-declaration turns a refusal into an acceptance — the price of the direction, stated
-	 * rather than hidden. Killed by arm `F2` (`placedCarry` returning a refusal instead of being
-	 * skipped when the declaration does not hold).
+	 * rather than hidden. Killed by arm `M-COMMENT-CARRY-REFUSES`, which turns the
+	 * null answer of `placedCarry` into a refusal instead of a skip.
 	 */
+	@:pin('control')
+	@:killer('M-COMMENT-CARRY-REFUSES')
 	public function testACarryDeclarationThatDoesNotHoldIsNotARefusal(): Void {
 		final text: String = assertOk(SeamEdit.replaceCarrying(CARRY_SOURCE, FOLDED_REGION, HOISTED, ['22', 'gate()']));
 		Assert.isTrue(text.indexOf('// why zero\n\t\treturn gate() ? 11 : 22;') >= 0, 'the fold did not land:\n$text');

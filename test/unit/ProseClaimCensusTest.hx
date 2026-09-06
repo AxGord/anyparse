@@ -253,15 +253,15 @@ final class ProseClaimCensusTest extends Test {
 		'unit.query.ApqSourceSelectTest#testAstSourceStopsBelowTheDocBlock :: control,base',
 		'unit.query.ApqSourceSelectTest#testSelectOnTheAnnotationItselfStillSpansOnlyIt :: control,base',
 		'unit.query.ApqSourceSelectTest#testSelectStopsBelowTheDocBlock :: control,base',
-		'unit.query.BodySlotGuardSliceTest#testAllowsAuthoredBodyThatTakesInTheNextStatement :: control',
+
 		'unit.query.BodySlotGuardSliceTest#testAllowsBracedIfBodyStatement :: control',
-		'unit.query.BodySlotGuardSliceTest#testAllowsHeaderRewriteOfBracelessConstruct :: control',
+
 		'unit.query.BodySlotGuardSliceTest#testAllowsPlainBlockStatement :: control',
 		'unit.query.BodySlotGuardSliceTest#testAllowsSoleCaseArmStatement :: control',
-		'unit.query.BodySlotGuardSliceTest#testAllowsSoleCatchClauseRemoval :: control',
-		'unit.query.BodySlotGuardSliceTest#testAllowsSoleCatchClauseRemovalWithATrailingComment :: control',
+
+
 		'unit.query.BodySlotGuardSliceTest#testAllowsWholeBracelessIfRemoval :: control',
-		'unit.query.BodySlotGuardSliceTest#testAllowsWholeElseBranchRemoval :: control',
+
 		'unit.query.BodySlotGuardSliceTest#testStatementBodyRefusalAdvisesBraces :: control,base',
 		'unit.query.CachingGrammarPluginTest#testProjectionsUnchangedByTheSharedRoot :: vacuity',
 		'unit.query.CliAtomicWriteSliceTest#testAChangeSetIsWrittenWholeOrNotAtAll :: base',
@@ -270,22 +270,22 @@ final class ProseClaimCensusTest extends Test {
 		'unit.query.CliAtomicWriteSliceTest#testASymlinkedTargetStaysASymlink :: control,base',
 		'unit.query.CliAtomicWriteSliceTest#testAnUnwritableFileNoLongerTakesTheRunDown :: base',
 		'unit.query.CliAtomicWriteSliceTest#testTheFilesModeSurvivesTheRewrite :: control,base',
-		'unit.query.CommentOwnerGuardSliceTest#testACarryDeclarationThatDoesNotHoldIsNotARefusal :: arm',
+
 		'unit.query.CommentOwnerGuardSliceTest#testACommentThatKeepsItsPlaceUnderACarryIsAccepted :: control',
 		'unit.query.CommentOwnerGuardSliceTest#testDeletingTheLastCommentedStatementIsAccepted :: control',
 		'unit.query.CommentOwnerGuardSliceTest#testEditOutsideTheGapIsAccepted :: control',
-		'unit.query.CommentOwnerGuardSliceTest#testHoistingAcrossADeclaredCarryIsRefused :: arm',
+
 		'unit.query.CommentOwnerGuardSliceTest#testInPlaceRewriteUnderOneCommentIsAccepted :: control',
 		'unit.query.CommentOwnerGuardSliceTest#testReplacingTheSeparatingCodeIsAccepted :: control',
 		'unit.query.CommentRewriteSliceTest#testCallerSuppliedGutterIsNotDoubled :: base',
 		'unit.query.CommentRewriteSliceTest#testOverWideReplacementAllowedWithFlag :: control',
 		'unit.query.CondBranchSplitTest#testBranchDeclResolvesFromAfterTheRegion :: control',
 		'unit.query.CondBranchSplitTest#testOuterDeclResolvesInsideBranch :: control',
-		'unit.query.DocOwnerGuardSliceTest#testAppendBeforeAClosingBraceIsAccepted :: control',
-		'unit.query.DocOwnerGuardSliceTest#testBannerCommentIsNotGuarded :: control',
+
+
 		'unit.query.DocOwnerGuardSliceTest#testInsertAboveTheDocIsAccepted :: control',
-		'unit.query.DocOwnerGuardSliceTest#testModifierInsertOnTheOwnersLineIsAccepted :: control',
-		'unit.query.DocOwnerGuardSliceTest#testReplacementStartingAtTheOwnerIsAccepted :: control',
+
+
 		'unit.query.ExtractInterfaceSliceTest#testANonCanonicalSourceIsNotReformatted :: control',
 		'unit.query.ExtractInterfaceSliceTest#testAlreadyImplementsRefused :: arm,base',
 		'unit.query.ExtractInterfaceSliceTest#testAnUntypedBodyIsCutOffLikeAnyOther :: base',

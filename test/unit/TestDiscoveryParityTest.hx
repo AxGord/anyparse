@@ -1152,6 +1152,17 @@ class TestDiscoveryParityTest extends Test {
 			+ ' :: control :: M-PEB-WS-REWIND-OFF',
 			'unit.lowering.StarBlockEndedWsRewindTest#testAnOrdinaryTerminatorNeedsNoRewind :: guard :: ',
 			'unit.lowering.StarBlockEndedWsRewindTest#testTheShapeThePredicateAnswersForNeedsNoRewind :: guard :: ',
+			'unit.query.BodySlotGuardSliceTest#testAllowsAuthoredBodyThatTakesInTheNextStatement :: control :: M-BODYSLOT-AUTHORED-NEVER',
+			'unit.query.BodySlotGuardSliceTest#testAllowsHeaderRewriteOfBracelessConstruct :: control :: M-BODYSLOT-LIMIT-EDIT-END',
+			'unit.query.BodySlotGuardSliceTest#testAllowsSoleCatchClauseRemoval :: control :: M-BODYSLOT-LEAD-KEPT',
+			'unit.query.BodySlotGuardSliceTest#testAllowsSoleCatchClauseRemovalWithATrailingComment :: control :: M-BODYSLOT-TRIM-WS-ONLY',
+			'unit.query.BodySlotGuardSliceTest#testAllowsWholeElseBranchRemoval :: control :: M-BODYSLOT-LEAD-KEPT',
+			'unit.query.CommentOwnerGuardSliceTest#testACarryDeclarationThatDoesNotHoldIsNotARefusal :: control :: M-COMMENT-CARRY-REFUSES',
+			'unit.query.CommentOwnerGuardSliceTest#testHoistingAcrossADeclaredCarryIsRefused :: guard :: M-COMMENT-HOIST-BLIND',
+			'unit.query.DocOwnerGuardSliceTest#testAppendBeforeAClosingBraceIsAccepted :: control :: M-DOCSPLIT-OWNER-ANY',
+			'unit.query.DocOwnerGuardSliceTest#testBannerCommentIsNotGuarded :: control :: M-DOCSPAN-BANNER-IS-DOC',
+			'unit.query.DocOwnerGuardSliceTest#testModifierInsertOnTheOwnersLineIsAccepted :: control :: M-DOCSPLIT-BREAKLESS-TOO',
+			'unit.query.DocOwnerGuardSliceTest#testReplacementStartingAtTheOwnerIsAccepted :: control :: M-DOCSPLIT-COVERING-TOO',
 			'unit.query.OpaqueCondRegionScanTest#testACommentAfterTheEndStaysOutOfTheQuote :: control :: M-OPAQUE-REGION-TRIVIA-KEPT',
 			'unit.query.OpaqueCondRegionScanTest#testAPartlyRawRegionSaysSoAndQuotesOnlyItsRawBytes :: control :: M-REGION-INSIDE-NONE',
 			'unit.query.OpaqueCondRegionScanTest#testAWhitespaceGapDoesNotDragTheSharedBodyIntoTheQuote'
@@ -1282,7 +1293,17 @@ class TestDiscoveryParityTest extends Test {
 			'M-ARM-KIND-UNSPELLED',
 			'M-REGION-INSIDE-NONE',
 			'M-REGION-NOTES-ALWAYS',
-			'M-NULLABLE-FLOW-EXCLUDE-NONE'
+			'M-NULLABLE-FLOW-EXCLUDE-NONE',
+			'M-DOCSPLIT-COVERING-TOO',
+			'M-DOCSPLIT-BREAKLESS-TOO',
+			'M-DOCSPLIT-OWNER-ANY',
+			'M-DOCSPAN-BANNER-IS-DOC',
+			'M-BODYSLOT-AUTHORED-NEVER',
+			'M-BODYSLOT-LIMIT-EDIT-END',
+			'M-BODYSLOT-LEAD-KEPT',
+			'M-COMMENT-HOIST-BLIND',
+			'M-COMMENT-CARRY-REFUSES',
+			'M-BODYSLOT-TRIM-WS-ONLY'
 		], [for (line in TestRegistry.arms()) line.split(' :: ')[0]], 'the arms every @:killer resolves into');
 	}
 

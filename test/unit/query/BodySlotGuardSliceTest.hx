@@ -232,6 +232,8 @@ class BodySlotGuardSliceTest extends Test {
 	 * ordinary `remove-element` a refusal — one comment was the whole discriminator, and the
 	 * comment-free twin below stayed green throughout.
 	 */
+	@:pin('control')
+	@:killer('M-BODYSLOT-TRIM-WS-ONLY')
 	public function testAllowsSoleCatchClauseRemovalWithATrailingComment(): Void {
 		final out: String = assertRemoved(TRY_CATCH_COMMENT_STMT, 3, 11);
 		Assert.isTrue(out.indexOf('catch') == -1, 'the catch clause is gone: $out');
@@ -283,6 +285,8 @@ class BodySlotGuardSliceTest extends Test {
 	 * SURVIVING source can have taken in what nobody asked for. Drop the `editEnd` test in
 	 * `reached` and this goes red while every refusal above stays green.
 	 */
+	@:pin('control')
+	@:killer('M-BODYSLOT-AUTHORED-NEVER')
 	public function testAllowsAuthoredBodyThatTakesInTheNextStatement(): Void {
 		final out: String = assertSpliced(IF_STMT, 'a();\n\t\tb();', '{\n\t\t\ta();\n\t\t\tb();\n\t\t}');
 		Assert.isTrue(out.indexOf('if (c) {') != -1, 'the caller\'s braces are what the construct now holds: $out');
@@ -296,6 +300,8 @@ class BodySlotGuardSliceTest extends Test {
 	 * EDIT's own end instead of the region it replaced and this one goes red while every refusal
 	 * stays green.
 	 */
+	@:pin('control')
+	@:killer('M-BODYSLOT-LIMIT-EDIT-END')
 	public function testAllowsHeaderRewriteOfBracelessConstruct(): Void {
 		final out: String = assertSpliced(WHILE_STMT, 'while (c)', 'if (c)');
 		Assert.isTrue(out.indexOf('if (c) a();') != -1, 'the header was rewritten over its own body: $out');
@@ -313,6 +319,8 @@ class BodySlotGuardSliceTest extends Test {
 	 * try body and its first `catch` is a single space, so the slot is skipped. That skip is
 	 * correct here, which is why the "hole" was left as it is.
 	 */
+	@:pin('control')
+	@:killer('M-BODYSLOT-LEAD-KEPT')
 	public function testAllowsSoleCatchClauseRemoval(): Void {
 		final out: String = assertRemoved(TRY_CATCH_STMT, 3, 11);
 		Assert.isTrue(out.indexOf('catch') == -1, 'the catch clause is gone: $out');
@@ -361,6 +369,8 @@ class BodySlotGuardSliceTest extends Test {
 	 * It goes through `canonicalize` because an `else` branch is not a NODE: no addressed op
 	 * can hand the guard an edit spanning the keyword and its body together.
 	 */
+	@:pin('control')
+	@:killer('M-BODYSLOT-LEAD-KEPT')
 	public function testAllowsWholeElseBranchRemoval(): Void {
 		final out: String = assertSpliced(IF_ELSE_STMT, 'else\n\t\t\tb();', '');
 		Assert.isTrue(out.indexOf('else') == -1, 'the else branch is gone: $out');
