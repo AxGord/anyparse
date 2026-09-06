@@ -439,9 +439,17 @@ final class StructuralTypes {
 	 * Four spellings are open by construction. A type PARAMETER of the declaring type binds to
 	 * whatever the unification site supplies. `Dynamic` unifies with everything. `Null<T>` is
 	 * transparent for this question (measured: `{var x:Null<Int>}` accepts `var x:Int` and the
-	 * reverse), so the wrapper is stripped and its argument answered instead. And a nominal
-	 * naming an ANONYMOUS-STRUCTURE typedef is a structure rather than a name — a class can unify
-	 * with one — so it is open too.
+	 * reverse), so the wrapper is stripped and its argument answered instead.
+	 *
+	 * And an ANONYMOUS-STRUCTURE nominal is open too, though not for the reason this doc gave for
+	 * four slices. Measured on 4.3.7, one variable at a time:
+	 * `{var x:{a:Int}}` REJECTS a class declaring `var x:D` for a `D` that declares `a:Int` —
+	 * mutable-field invariance holds here too, so a class does NOT unify into a structural field.
+	 * What is open is the STRUCTURE side: two differently-named anon typedefs of the same shape DO
+	 * unify (`{var x:Shape}` accepts `var x:Shape2`), so comparing anon nominals by NAME would
+	 * refute a unification the compiler performs. Narrowing this to refute only against a provably
+	 * non-structural other side was priced and declined: the loosest possible version — refuting on
+	 * the anon nominal's own name — moves 0 findings on this tree and 0 on the Pony fork.
 	 *
 	 * A plain `typedef A = C` alias is FOLLOWED, not refused: measured, `{var x:MyInt}` with
 	 * `typedef MyInt = Int` DOES accept `var x:Int`, so comparing the written spellings would
@@ -449,12 +457,16 @@ final class StructuralTypes {
 	 * that re-enters itself, is open.
 	 *
 	 * RESIDUAL, deliberately: a nominal that resolves NOWHERE in the index is treated as CLOSED
-	 * and compared by its written simple name. That is what lets the refutation fire at all — the
-	 * types a project field and a structure field disagree on are usually a target's own
-	 * (`EventDispatcher` vs `Float`) — and it is wrong for exactly one shape: an out-of-scope
-	 * `typedef` aliasing the other side's nominal, which would be followed if it resolved. Since
-	 * S103 the configured library half IS in the index, so the residual is the std path and
-	 * whatever no configured root reaches.
+	 * and compared by its written simple name. It is wrong for exactly one shape: an out-of-scope
+	 * `typedef` aliasing the other side's nominal, which would be followed if it resolved. Since S103 the
+	 * configured library half IS in the index, so the residual is the std path and whatever no
+	 * configured root reaches — and it is INERT there: flipping the default to OPEN moves 0
+	 * findings on this tree and 0 on the Pony fork, measured on the base engine and on the one
+	 * that types the `var` field form. The older reading of this branch — that the closed default
+	 * is what lets the refutation fire at all — was true before the library joined the index and
+	 * is not true now: every refutation that fires today has a resolved declaration on both
+	 * sides. `unit.check.StructuralConformanceProofTest#testUnresolvableStructureMemberTypeRefutes`
+	 * pins the residual, so a future instance is a test change rather than a silent one.
 	 */
 	private function comparableNominalOf(typeSource: String, host: ResolvedType, seen: Array<String>): Null<String> {
 		final nominal: Null<String> = NominalTypes.outerNominalOf(typeSource);

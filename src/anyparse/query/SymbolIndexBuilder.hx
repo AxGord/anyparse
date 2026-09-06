@@ -83,6 +83,15 @@ final class SymbolIndexBuilder {
 	private static final ANON_SHORT_FIELD_KINDS: Array<String> = ['Required', 'Optional'];
 
 	/**
+	 * The anon-structure field forms `var name:T;` / `final name:T;`, whose DECLARATION sits one
+	 * node deeper than the member: the grammar wraps it in an optional-marker node (`var ?name:T`)
+	 * that owns the name and the annotation. The span-info walk keys every type map on the node
+	 * carrying the `type` field, so a lookup at the MEMBER's own span answers nothing for these
+	 * two - measured on this tree, 4653 of 5223 indexed anon-struct members read as unannotated.
+	 */
+	private static final ANON_WRAPPED_FIELD_KINDS: Array<String> = ['VarField', 'FinalField'];
+
+	/**
 	 * Parse every entry with `plugin` and extract its `FileInfo`. Entries whose source does not
 	 * parse are collected into `skipped` and excluded; every parsed entry's source is retained in
 	 * `sources` so a later body scan can inspect a declaration's raw span. The three results are
@@ -465,12 +474,13 @@ final class SymbolIndexBuilder {
 						// Re-bind to a non-null local — Strict null-safety takes a struct
 						// literal's field type from the declared type, not the narrowed one.
 						final memberName: String = nm;
+						final typeKey: Int = typeInfoKeyOf(child, sp);
 						out.push({
 							name: memberName,
-							hasGetter: accessors[sp.from] ?? false,
-							hasSetter: writeAccessors[sp.from] ?? false,
-							returnNominal: returnTypes[sp.from],
-							typeSource: typeSources[sp.from],
+							hasGetter: accessors[typeKey] ?? false,
+							hasSetter: writeAccessors[typeKey] ?? false,
+							returnNominal: returnTypes[typeKey],
+							typeSource: typeSources[typeKey],
 							firstParamTypeSource: firstParamTypeSourceOf(child, typeSources, seams.paramKinds),
 							visibility: runVisibility,
 							isOverride: runOverride,
@@ -506,6 +516,23 @@ final class SymbolIndexBuilder {
 			}
 		});
 		return out;
+	}
+
+	/**
+	 * The span offset the four type maps are keyed on for `member` — its own declaration span,
+	 * except for the anon-structure `var` / `final` field kinds, whose declaration sits one node
+	 * deeper (`ANON_WRAPPED_FIELD_KINDS`). The inner node must re-declare the SAME name, so an
+	 * initializer or any other single child can never stand in for the declaration.
+	 *
+	 * `declFrom` deliberately keeps the MEMBER's own offset: it is a rename cursor, not a key
+	 * into a type map.
+	 */
+	private static function typeInfoKeyOf(member: QueryNode, own: Span): Int {
+		if (!ANON_WRAPPED_FIELD_KINDS.contains(member.kind)) return own.from;
+		final decl: Null<QueryNode> = member.children[0];
+		if (decl == null || decl.name != member.name) return own.from;
+		final declSpan: Null<Span> = decl.span;
+		return declSpan == null ? own.from : declSpan.from;
 	}
 
 	/**
