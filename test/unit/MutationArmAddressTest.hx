@@ -66,6 +66,14 @@ typedef ArmSite = {
 final class MutationArmAddressTest extends Test {
 
 	/**
+	 * `inline` as a whole word — a member whose modifiers carry it cannot take a forced return.
+	 *
+	 * Word-bounded on purpose: the modifier group is source text, and `@:inlineIfSmall`-shaped
+	 * metadata would match a bare substring test.
+	 */
+	private static final INLINE_MODIFIER: EReg = ~/(^|[^A-Za-z0-9_])inline([^A-Za-z0-9_]|$)/;
+
+	/**
 	 * Every arm resolves to a file under `src/` or `test/` that declares its member.
 	 *
 	 * Reads the REAL registry, which is the point: this is the only instrument that
@@ -212,8 +220,16 @@ final class MutationArmAddressTest extends Test {
 	 * What the runner needs is narrow, and the tree states all of it: the member resolves
 	 * to exactly one node, that node opens a `BlockBody` (an expression body or a bodyless
 	 * declaration offers no brace to splice after), nothing but whitespace follows the
-	 * brace on its line, and the header up to it occurs exactly once inside the member —
-	 * that header being the fragment `apq patch` is then handed.
+	 * brace on its line, the member is not `inline`, and the header up to the brace occurs
+	 * exactly once inside the member — that header being the fragment `apq patch` is handed.
+	 *
+	 * The `inline` condition is the FOURTH arm-authoring blind spot, and the last of the
+	 * five a walk can answer (S147). A forced `return` ahead of an inline body is a
+	 * non-final return the compiler refuses, which is why S94 hand-special-cased one arm
+	 * and S96 re-encoded `M-PATHWALK-NULL` as `find`/`replace` — nothing said so until the
+	 * arm ran. It over-approximates in one direction, measured: an inline member NOBODY
+	 * CALLS compiles with a leading return, because inlining happens at the call site. An
+	 * arm on an uncalled member has no behaviour to remove, so refusing it costs nothing.
 	 *
 	 * The runner derives the same header by BALANCING braces in a shell-embedded script,
 	 * because shell has no parser, and that arithmetic is what once sent a forced `return`
@@ -236,6 +252,13 @@ final class MutationArmAddressTest extends Test {
 			final address: String = MutationArms.address(arm);
 			final resolved: Null<ArmSite> = resolveArmSite(arm, address, plugin, sources, trees, stale);
 			if (resolved == null) continue;
+			if (INLINE_MODIFIER.match(modifiersOf(resolved))) {
+				stale.push(
+					'$address: the member is inline, and a forced return ahead of its body is a non-final return the compiler refuses'
+					+ ' — cut it with "find"/"replace"'
+				);
+				continue;
+			}
 			final header: Null<String> = forcedCutHeader(resolved);
 			if (header == null) {
 				stale.push('$address: the resolved ${resolved.node.kind} node opens no block body a forced return can follow');
@@ -326,6 +349,18 @@ final class MutationArmAddressTest extends Test {
 		// splices after would then carry the first statement along with the brace.
 		if (site.source.substring(bodySpan.from + 1, lineEnd).trim() != '') return null;
 		return site.source.substring(memberSpan.from, lineEnd + 1);
+	}
+
+	/**
+	 * The member's modifier text — everything the declaration's edit span holds ahead of the
+	 * member node, which is where `inline` sits.
+	 *
+	 * Read out of the SPANS rather than by re-scanning the line: a modifier group can carry
+	 * metadata and wrap across lines, and the two spans already say exactly where it ends.
+	 */
+	private static function modifiersOf(site: ArmSite): String {
+		final memberSpan: Null<Span> = site.node.span;
+		return memberSpan == null ? '' : site.source.substring(site.group.from, memberSpan.from);
 	}
 
 }

@@ -1,5 +1,6 @@
 package anyparse.query.cli.command;
 
+import anyparse.query.BuildFailure.BuildFailureResult;
 import anyparse.query.MutationVerdict.MutationVerdictResult;
 import anyparse.query.cli.CliContext;
 import haxe.Exception;
@@ -50,6 +51,10 @@ final class MutationVerdictCommand implements CliCommand {
 	 * the point of the subcommand is that shell no longer has to PARSE anything.
 	 * A JSON payload would just move the second parser from awk to `jq`.
 	 *
+	 * With --build the input is a haxe BUILD log instead of a transcript, and the
+	 * two lines name the cause and quote the compiler line — an arm being AUTHORED
+	 * is checked that way, before it has a fixture to kill.
+	 *
 	 * The exit code answers "could this be classified", not "what was the
 	 * verdict": every verdict — `RUN-FAIL` included — exits 0, because it is a
 	 * verdict. Only a usage error or an unreadable file is non-zero, which keeps
@@ -58,10 +63,13 @@ final class MutationVerdictCommand implements CliCommand {
 	private static function runMutationVerdict(args: Array<String>): Int {
 		var logPath: Null<String> = null;
 		var expectCsv: String = '';
+		var buildLog: Bool = false;
 		var i: Int = 0;
 		while (i < args.length) {
 			final a: String = args[i];
 			switch a {
+				case '--build':
+					buildLog = true;
 				case '--expect':
 					expectCsv = CliArgs.expectValue(args, ++i, '--expect');
 				case '--lang':
@@ -96,6 +104,12 @@ final class MutationVerdictCommand implements CliCommand {
 			CliIo.stderr('apq mutation-verdict: read failed: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		}
+		if (buildLog) {
+			final failure: BuildFailureResult = BuildFailure.classify(raw);
+			CliIo.sysPrint('${BuildFailure.label(failure.cause)}\n');
+			CliIo.sysPrint('${failure.line}\n');
+			return EXIT_OK;
+		}
 		final expected: Array<String> = [
 			for (part in expectCsv.split(',')) if (part.trim().length > 0) part.trim()
 		];
@@ -107,6 +121,7 @@ final class MutationVerdictCommand implements CliCommand {
 
 	private static function printMutationVerdictUsage(): Void {
 		CliIo.sysPrint('Usage: apq mutation-verdict <transcript> [--expect <csv>]\n');
+		CliIo.sysPrint('       apq mutation-verdict <haxe-build-log> --build\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Classify one utest stdout transcript for tools/mutation-check.sh.\n');
 		CliIo.sysPrint('Prints the verdict on line 1 and the report-row detail on line 2:\n');
@@ -119,7 +134,18 @@ final class MutationVerdictCommand implements CliCommand {
 		CliIo.sysPrint('The exit code says whether classification was possible, not what the\n');
 		CliIo.sysPrint('verdict was: every verdict exits 0, a usage error or unreadable file 2.\n');
 		CliIo.sysPrint('\n');
+		CliIo.sysPrint('With --build the input is a haxe BUILD log instead, and line 1 names why\n');
+		CliIo.sysPrint('the mutated tree did not compile — the reading a BUILD-FAIL row used to\n');
+		CliIo.sysPrint('leave to whoever opened the log:\n');
+		CliIo.sysPrint('  null-safety-structure  a nullable reached a non-nullable structure field\n');
+		CliIo.sysPrint('  null-safety            any other strict-null-safety refusal\n');
+		CliIo.sysPrint('  inline-return          a forced return ahead of an inline member body\n');
+		CliIo.sysPrint('  arm-registry           the arm registry own @:pin/@:killer cross-checks\n');
+		CliIo.sysPrint('  syntax / type / other  the cut did not parse / did not typecheck / else\n');
+		CliIo.sysPrint('  no-error               the log carries no compiler error at all\n');
+		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --build         Read a haxe build log and name the failure cause\n');
 		CliIo.sysPrint('  --expect <csv>  Comma-separated substrings matched against the failing\n');
 		CliIo.sysPrint('                  test names; empty means any red run kills\n');
 		CliIo.sysPrint('  -h, --help      Show this help\n');

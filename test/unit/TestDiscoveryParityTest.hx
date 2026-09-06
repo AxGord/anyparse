@@ -794,6 +794,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.ApqTextRenderTest',
 		'unit.query.ApqUsesTest',
 		'unit.query.BodySlotGuardSliceTest',
+		'unit.query.BuildFailureTest',
 		'unit.query.CachingGrammarPluginTest',
 		'unit.query.CallGraphTest',
 		'unit.query.ChangeSigSliceTest',
@@ -1119,6 +1120,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxChainStaircaseSliceTest#testIsIdempotentAcrossThreePasses :: control :: M-CHAIN-STAIRCASE-OFF',
 			'unit.grammar.haxe.HxChainStaircaseSliceTest#testTornConditionParenIsGone :: control :: M-CHAIN-STAIRCASE-OFF',
 			'unit.grammar.haxe.HxChainStaircaseSliceTest#testWholeChainOverTheLimitStaircases :: control :: M-CHAIN-STAIRCASE-OFF',
+			'unit.grammar.haxe.HxComprehensionCuddledOpenTest#testAFlatItemThatStillOverflowsCuddlesItsHead :: control :: '
+			+ 'M-CUDDLE-FLATONLY',
+			'unit.grammar.haxe.HxComprehensionCuddledOpenTest#testTheReportedLayoutIsIdempotent :: control :: M-CUDDLE-FLATONLY',
 			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testFitLineMovesANonFlatBodyOffTheHeadLine :: control :: '
 			+ 'M-FIRST-LINE-FIT',
 			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testFitLinePullsUpABodyThatFits :: control :: M-NO-WIRE',
@@ -1413,6 +1417,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-CLAIM-NEG-BLIND',
 			'M-CLAIM-NOKINDS',
 			'M-CLAIM-RAW-DOC',
+			'M-CUDDLE-FLATONLY',
 			'M-CUDDLE-OFF',
 			'M-DECLARINGFILES-EMPTY',
 			'M-DECLSITE-SCOPEWIDE',
