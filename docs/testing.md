@@ -1148,6 +1148,106 @@ a feeling: **17 of 18 survive all 66 existing writer arms, and of nine fresh cut
 them only one owned one of them.** The next reduction of this census, if there is one, comes
 from a fixture being REWRITTEN to discriminate — S92's move — not from another arm.
 
+#### The prose already named the mutation, in nine of the fifty-three (S129)
+
+S126 ended the writer residue and left the census itself as the work. Read as a LIST
+rather than as a number, the 241 rows split in a way that decides where to look: only a
+PURE `control` row leaves it, because a `control,base` row that gains a pin merely becomes
+`:: base`. Inside the query / cli / format / `grammar.haxe` fence that is **53 of 125**
+rows, and their docs are not silent about what would break them — nine name the
+discriminating mutation in words ("widening the refusal to any conditional region in the
+run", "a gate keyed on the NAME rather than on the member set", "canonicalising every
+written file unconditionally"). The work was to render each and read the blast.
+
+Thirteen cuts were rendered against `46e8e70f`, each run over the WHOLE suite. Eight owned
+a fixture, one target turned out to be killed by an arm the registry already declared, and
+four are refusals with their numbers.
+
+| cut | blast | outcome |
+|---|---|---|
+| `SetModifier#isModuleLevel` — module level decided by `RefShape.typeDeclKinds` | **1**, its own pin | `M-SETMOD-MODULE-BY-TYPE-KINDS` |
+| `SetModifier#guardedCollision` — a guarded keyword collides with any visibility change | 3, one class | `M-SETMOD-GUARDED-ANY-VISIBILITY` |
+| … — a guarded keyword collides with EVERY change | 4, one class | not armed — the narrower cut above owns the same pin |
+| `ElementSpan#isAnnotationElement` — any non-empty conditional region is an annotation | 2 | `M-META-ELEMENT-ANY-COND-REGION` |
+| `ElementSpan#elementCut` — the doc exception widens to every declaration prefix sibling | **1**, its own pin | `M-CUT-DOC-KEPT-BY-ANY-PREFIX` |
+| `ElementSpan#declGroupSpan` — the forward walk off | 12 over 7 classes | not armed — no single owner |
+| `MoveCommand#canonicalMoveChange` — the was-canonical half dropped | 2, one class | `M-MOVE-CANONICALISE-ALWAYS` |
+| `NameMentionScan#qualifiedPathMention` — the comment exclusion dropped | 3 over 3 classes | `M-QUALPATH-COMMENT-COUNTED` |
+| `NameMentionScan#sourceNamesAny` — comments blanked for BOTH readers | 6 over 3 classes | not armed — see below |
+| `HaxeQueryPlugin#refShape` — `CondBranch` added to `scopeKinds` | 15 over 6 classes | not armed — no single owner |
+| `CommentOwnerGuard#crossedCarry` — the side comparison dropped | **1**, its own pin | `M-CARRY-CROSSING-ANY-SIDE` |
+| `StructuralTypes#structuralConformancePins` — a builtin structural set matched by member NAME | **1**, its own pin | `M-STRUCT-BUILTIN-BY-NAME` |
+| `MemberKinds#descendsToMemberHost` — the typedef arm dropped | 30 over 10 classes | not armed — no single owner |
+| `WriterBraceSymmetryLowering#deBraceBodyAccess` — the frame's span-precision probe dropped | 1, already pinned | not armed — identical to `M-SSB-FRAME-BLANKET` |
+
+**The cheapest row cost no arm at all.** `NameMentionScanTest#testACommentOnlyDestinationMentionDoesNotContestTheCarry`
+was measured against the registry's OWN `M-MOVE-NAMESCAN-COMMENT-COUNTED` before a new cut
+was written for it, and dies there — so it is a pin on an existing arm, which now carries
+two. That check is one whole-suite run and it is worth making before rendering anything: a
+control whose mechanism a sibling arm already cuts needs a `@:killer`, not a registry row.
+
+**Three doc claims were corrected because the measurement refuted them.** Two fixtures said
+the named over-fix "flips this and nothing else" and one said it "flips exactly this"; the
+real blasts are 2, 2 and 3, every extra row inside the same class or its immediate sibling.
+A doc sentence naming a blast is a claim like any other, and the slice that renders the cut
+is the one that can settle it.
+
+**Verified serially, one arm at a time.** All nine were re-run through
+`tools/mutation-arm.sh --jobs 1`: **9 killed, 0 survived, 0 mismatch, 0 error**. That run
+also reproduced the LOAD tell from the other side — the exploratory probes were run two
+whole-suite tracks at a time and carried one to five oracle-driven CLI-e2e rows
+(`AvoidDynamic*E2ETest`, `OracleCacheTest`, `OracleCoverageTest`, `PreferCaseGuardOracleE2ETest`,
+`ExplicitTypeReturnOracleTest`), never the same set twice; the serial verdicts carry none of
+them, and every blast quoted above is the serial number where one exists. Each fragment arm
+carries `unit.MutationArmAddressTest#testEveryFragmentArmStillCutsItsNode` as its one
+constant `+extra`, exactly as S123 recorded.
+
+**Census 241 -> 232, pins 321 -> 330, arms 200 -> 208, classes 796 unchanged.** The fence's
+pure-`control` residue goes 53 -> 44.
+
+##### The residue's chain rows: a rewrite DOES discriminate, and it costs the guarantee (S129)
+
+S126 handed on one experiment: of the 22 unpinned fixtures in `M-CURLY-CTORS-NONE`'s blast,
+eight are the primary behaviour of a fail-closed classifier that answers "safe" through a
+CHAIN (`tailSealed` -> `tailOperandIndex` -> `containsIf`), and its closing sentence was that
+the next reduction "comes from a fixture being REWRITTEN to discriminate, not from another
+arm". Both halves were measured here.
+
+**The census arm reproduces at `46e8e70f`: 50 failures, 0 `ERROR`, 28 pinned / 22 unpinned**
+— S113's and S126's distribution, with the pinned half three larger than S126's 25/25.
+
+**The frame direction is closed, and the instrument says so.** `testSuppressFrameSealedLoopBodyDeBraces`
+is the sharpest of the eight, and its own comment names a mutation ("the blanket frame kept
+every nested body braced here"). Rendering that mutation independently — arming
+`deBraceBodyAccess`'s suppress frame without its span-precision probe — reproduced
+`M-SSB-FRAME-BLANKET` byte for byte in effect: **1 fixture, `testBracedThenBodySealsNestedGuardLoop`,
+already pinned to exactly that arm.** So the mechanism the fixture's prose points at is armed
+already, and it is not this fixture the arm owns.
+
+**The rewrite works.** The fixture's loop body was rewritten from a sealed CALL
+(`while (c) g();`) to a sealed SWITCH holding an `if` — the one shape where `tailSealed` and
+`containsIf` DISAGREE — and re-run: green at base, and under `M-SSB-TAIL-SEALED-NONE` it goes
+red, joining that arm's four existing fixtures in the class for five. A chain-guarded row can
+be moved out of the residue by a rewrite, measured rather than argued.
+
+**And it is refused, for what the rewrite costs.** The discriminating half IS
+`testSwitchSealedInnerIfDeBraces` — the same sealed-switch-with-inner-`if` shape, in the same
+class, already pinned to the same arm — so the census row would retire against a mechanism the
+class already controls. What the rewrite deletes is the fixture's own subject: after it, no
+fixture anywhere asserts that a loop body ending on a sealed CALL de-braces under an armed
+frame, which is the everyday shape and the reason the fixture exists. The additive variant
+(keep the original `assertFmt`, append the switch one) keeps the guarantee and would make the
+row pinnable — and then the pin names `M-SSB-TAIL-SEALED-NONE` while the prose claims the
+frame's span precision, which is S123's "an annotation recording a role the fixture does not
+play is worse than the prose", one level up. Net either way: **-1 census row, -1 real
+guarantee, +1 duplicate pin.** Not shipped.
+
+**So the reading to carry forward is narrower than S126's.** A rewrite CAN discriminate a
+chain-guarded row; what it cannot do is discriminate it against a mechanism the class does not
+already own, because the only disagreement the chain has is the one an existing fixture was
+written for. The residue's chain half is not waiting on effort — it is waiting on a SECOND
+disagreement inside the chain, and the module does not have one today.
+
 ## Macro-specific tests
 
 anyparse is a macro-heavy project. Macros have three test shapes:
