@@ -16,7 +16,7 @@
 # uncommitted work in the main tree is NOT seen — commit (or stash into
 # the patch) whatever the mutation is supposed to be measured against.
 #
-# Usage: tools/mutation-check.sh <manifest> [--jobs N]
+# Usage: tools/mutation-check.sh <manifest> [--jobs N] [--keep]
 #
 # For a mutation that a `@:killer` in the test tree NAMES, do not write a
 # manifest by hand: `tools/mutation-arm.sh <ARM>` renders the arm's record out
@@ -72,14 +72,30 @@
 # INT/TERM/HUP); a `worktree remove` that itself fails is swallowed so
 # one bad entry cannot strand the rest, which does mean a stuck worktree
 # can survive as a registered entry — `git worktree list` after a crashed
-# run is the check. The workroot is never deleted: its transcripts,
-# build logs and .verdict files are the post-mortem, and they accumulate
-# in TMPDIR across a long campaign.
+# run is the check.
+#
+# The workroot follows the run: removed when every track was KILLED,
+# kept — with its path printed — on any other exit or under `--keep`,
+# because then the transcripts, build logs and .verdict files are the
+# post-mortem. It used to be kept unconditionally, and the price is on
+# record: each track leaves a private 23 MB build beside its transcripts,
+# so one `--all` sweep of the 208 declared arms is ~4.8 GB, and on
+# 2026-09-05 125 of these directories held 46.6 GB — one of them from a
+# crashed run still holding 105 REGISTERED worktrees at a dead commit.
+# What no trap can cover is SIGKILL, so the next run of any of these
+# tools sweeps what a killed one left; the predicate that keeps that safe
+# while sibling workers are running is in tools/tmp-lifecycle.sh.
 set -euo pipefail
 
 script_dir=$(cd -P "$(dirname "$0")" && pwd)
 self="$script_dir/$(basename "$0")"
 repo=$(cd -P "$script_dir/.." && pwd)
+
+# Scratch-directory lifecycle: creation, the startup sweep for what a
+# SIGKILL left behind, and the predicate that keeps a sibling's live run
+# safe from it. Sourced above the `--track` child entry point, which uses
+# none of it — the child is handed the parent's workroot.
+. "$script_dir/tmp-lifecycle.sh"
 
 # ---------------------------------------------------------------- parse
 
@@ -231,8 +247,13 @@ fi
 manifest=$1
 shift
 jobs=""
+keep=0
 while [ "$#" -gt 0 ]; do
     case "$1" in
+        --keep)
+            keep=1
+            shift
+            ;;
         --jobs)
             if [ "$#" -lt 2 ]; then
                 echo "mutation-check.sh: --jobs needs a number" >&2
@@ -242,7 +263,7 @@ while [ "$#" -gt 0 ]; do
             shift 2
             ;;
         *)
-            echo "mutation-check.sh: unknown argument '$1'" >&2
+            echo "mutation-check.sh: unknown argument '$1' (expected --jobs N or --keep)" >&2
             exit 2
             ;;
     esac
@@ -324,16 +345,30 @@ else
     fi
 fi
 
-workroot=$(mktemp -d "${TMPDIR:-/tmp}/anyparse-mutcheck.XXXXXX")
+# The sweep runs BEFORE the claim so this run's own directory is never one
+# of its candidates, and after the argument parsing so a usage error costs
+# nothing.
+tmpl_sweep "$repo"
+workroot=$(tmpl_claim anyparse-mutcheck)
 echo "workroot: $workroot"
 
 created=""
+exit_code=1
 cleanup() {
     local wt
     for wt in $created; do
         git -C "$repo" worktree remove --force "$workroot/wt-$wt" >/dev/null 2>&1 || true
     done
     git -C "$repo" worktree prune >/dev/null 2>&1 || true
+    # `exit_code` is 1 until the report has computed the real one, so every
+    # abort BEFORE the report — a bad manifest, an interrupt, a `set -e`
+    # death — keeps the directory. Only an all-KILLED run drops it.
+    # `|| true` is load-bearing: a non-zero LAST command in an EXIT trap
+    # replaces the script's own exit status, so a refused discard would turn
+    # an all-KILLED run into `exit 1`.
+    if [ "$keep" -eq 0 ] && [ "$exit_code" -eq 0 ]; then
+        tmpl_discard "$workroot" "$repo" || true
+    fi
 }
 # INT/TERM/HUP exit rather than resuming, which then fires the EXIT trap
 # once. HUP matters here because the common way this runs is an agent
@@ -398,5 +433,9 @@ EOF
 
 total_tracks=$(printf '%s\n' "$rows" | wc -l | tr -d ' ')
 echo "$total_tracks tracks: $killed killed, $survived survived, $mismatch mismatch, $errors error"
-echo "workroot: $workroot (logs and verdicts kept)"
+if [ "$keep" -eq 0 ] && [ "$exit_code" -eq 0 ]; then
+    echo "workroot: $workroot (removed — every track was KILLED; --keep to keep it)"
+else
+    echo "workroot: $workroot (logs and verdicts kept)"
+fi
 exit "$exit_code"

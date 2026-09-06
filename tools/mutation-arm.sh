@@ -12,11 +12,15 @@
 # both directions. This script is the other half: it turns a name into a run.
 #
 # Usage:
-#   tools/mutation-arm.sh <ARM> [<ARM>...] [--jobs N] [--fast]
-#   tools/mutation-arm.sh --all [--jobs N] [--fast]
+#   tools/mutation-arm.sh <ARM> [<ARM>...] [--jobs N] [--fast] [--keep]
+#   tools/mutation-arm.sh --all [--jobs N] [--fast] [--keep]
 #   tools/mutation-arm.sh --list
 #
 #   --all    every arm the registry declares.
+#   --keep   keep the scratch directories of this run AND of the
+#            mutation-check.sh it drives. Both are otherwise removed when
+#            every arm was KILLED, and kept with their paths printed on any
+#            other outcome.
 #   --fast   run only the test classes that pin the arm, instead of the whole
 #            suite. Cheap, and it forfeits the collateral census — an arm cuts
 #            shared engine code, so what ELSE went red is part of the reading.
@@ -65,6 +69,11 @@ set -euo pipefail
 script_dir=$(cd -P "$(dirname "$0")" && pwd)
 repo=$(cd -P "$script_dir/.." && pwd)
 arms_json="$repo/test/testkit/mutation-arms.json"
+
+# Scratch-directory lifecycle — creation, the startup sweep for what a
+# SIGKILL left behind, and the predicate that keeps a sibling's live run
+# safe from it — all live in one place. See tools/tmp-lifecycle.sh.
+. "$script_dir/tmp-lifecycle.sh"
 
 # ------------------------------------------------------------------ registry
 
@@ -118,7 +127,7 @@ arm_pins() {
 # ---------------------------------------------------------------- arguments
 
 if [ "$#" -lt 1 ]; then
-    echo "usage: mutation-arm.sh <ARM>... | --all | --list [--jobs N] [--fast]" >&2
+    echo "usage: mutation-arm.sh <ARM>... | --all | --list [--jobs N] [--fast] [--keep]" >&2
     exit 2
 fi
 
@@ -126,6 +135,7 @@ names=""
 jobs=""
 filter_mode="all-tests"
 want_all=0
+keep=0
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -135,6 +145,7 @@ while [ "$#" -gt 0 ]; do
             ;;
         --all) want_all=1; shift ;;
         --fast) filter_mode="pinned-classes"; shift ;;
+        --keep) keep=1; shift ;;
         --jobs)
             if [ "$#" -lt 2 ]; then
                 echo "mutation-arm.sh: --jobs needs a number" >&2
@@ -175,16 +186,32 @@ fi
 
 # ---------------------------------------------------------------- generation
 
-workroot=$(mktemp -d "${TMPDIR:-/tmp}/anyparse-mutarm.XXXXXX")
+tmpl_sweep "$repo"
+workroot=$(tmpl_claim anyparse-mutarm)
 gen="$workroot/gen"
 manifest="$workroot/manifest"
 : > "$manifest"
 
-cleanup_gen() {
+# This directory used to survive every run, successful ones included: the
+# script `exec`ed into mutation-check.sh, which replaces the process and
+# takes the EXIT trap with it, while the manifest and the rendered patches
+# had to outlive the handoff because the child reads them. Running the
+# child as a CHILD keeps the trap, and it is also the honest signal
+# behaviour — an INT reaches the whole process group either way.
+cleanup() {
+    local status=$?
     git -C "$repo" worktree remove --force "$gen" >/dev/null 2>&1 || true
     git -C "$repo" worktree prune >/dev/null 2>&1 || true
+    # `|| true` is load-bearing: a non-zero LAST command in an EXIT trap
+    # replaces the script's own exit status, so a refused discard would turn
+    # an all-KILLED run into `exit 1`.
+    if [ "$keep" -eq 0 ] && [ "$status" -eq 0 ]; then
+        tmpl_discard "$workroot" "$repo" || true
+    else
+        echo "mutation-arm.sh: work files kept in $workroot" >&2
+    fi
 }
-trap cleanup_gen EXIT
+trap cleanup EXIT
 trap 'exit 130' INT TERM HUP
 
 if ! git -C "$repo" worktree add --detach --quiet "$gen" HEAD 2>"$workroot/gen.log"; then
@@ -300,12 +327,21 @@ process.stdout.write(src.slice(0, nl + 1));
     printf '%s | %s | %s | %s\n' "$name" "$workroot/$name.patch" "$apq_filter" "$expected" >> "$manifest"
 done
 
-cleanup_gen
-trap - EXIT
+# The scratch worktree has done its job — the patches are rendered. Removed
+# here rather than at exit so it is not held for the length of the run; the
+# EXIT trap repeats the removal harmlessly.
+git -C "$repo" worktree remove --force "$gen" >/dev/null 2>&1 || true
+git -C "$repo" worktree prune >/dev/null 2>&1 || true
 
 echo "manifest: $manifest"
 unset ANYPARSE_HXFORMAT_FORK
+check_args=""
 if [ -n "$jobs" ]; then
-    exec "$repo/tools/mutation-check.sh" "$manifest" --jobs "$jobs"
+    check_args="--jobs $jobs"
 fi
-exec "$repo/tools/mutation-check.sh" "$manifest"
+if [ "$keep" -eq 1 ]; then
+    check_args="$check_args --keep"
+fi
+rc=0
+"$repo/tools/mutation-check.sh" "$manifest" $check_args || rc=$?
+exit "$rc"
