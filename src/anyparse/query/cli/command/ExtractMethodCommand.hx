@@ -3,6 +3,7 @@ package anyparse.query.cli.command;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.cli.CliContext;
+import anyparse.query.cli.PostWriteFix;
 import anyparse.runtime.Span;
 import haxe.Exception;
 import anyparse.query.ExitCode.*;
@@ -33,7 +34,7 @@ typedef ExtractMethodOpts = {
  * resolution and its `--write` / preview tail.
  */
 @:nullSafety(Strict)
-final class ExtractMethodCommand implements CliCommand {
+final class ExtractMethodCommand implements CliCommand implements PostWriteFix {
 
 	public function new() {}
 
@@ -46,7 +47,7 @@ final class ExtractMethodCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runExtractMethod(args);
+		return runExtractMethod(args, ctx.postWriteFix);
 	}
 
 	public function usage(): Void {
@@ -80,7 +81,7 @@ final class ExtractMethodCommand implements CliCommand {
 	 * the rewritten source is emitted to stdout; with `--write` it
 	 * overwrites in place.
 	 */
-	private static function runExtractMethod(args: Array<String>): Int {
+	private static function runExtractMethod(args: Array<String>, fix: Bool): Int {
 		final o: ExtractMethodOpts = parseExtractMethodArgs(args);
 		if (o.errExit != null) return o.errExit;
 		// parseExtractMethodArgs proved these non-null before returning with
@@ -103,7 +104,7 @@ final class ExtractMethodCommand implements CliCommand {
 		final result: EditResult = ExtractMethod.extractMethod(
 			source, startPos.line, startPos.col, endPos.line, endPos.col, nameStr, o.reformat, plugin, shape, optsJson
 		);
-		return CliEdit.finishEdit('extract-method', filePath, o.write, result);
+		return CliEdit.finishEdit('extract-method', filePath, o.write, result, fix);
 	}
 
 	private static function printExtractMethodUsage(): Void {
@@ -113,6 +114,7 @@ final class ExtractMethodCommand implements CliCommand {
 		CliIo.sysPrint('a fresh local function <name> (a closure), replacing the run with a call.\n');
 		CliIo.sysPrint('A local defined in the run and used after it becomes the return value.\n');
 		CliUsage.printOptionsEditTail();
+		CliUsage.printPostWriteFixTail();
 	}
 
 	private static function parseExtractMethodArgs(args: Array<String>): ExtractMethodOpts {

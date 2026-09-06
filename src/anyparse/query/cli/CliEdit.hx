@@ -5,6 +5,7 @@ import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.ElementSpan;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.ReplaceNode;
+import anyparse.query.cli.command.LintCommand;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -63,8 +64,18 @@ final class CliEdit {
 		if (note != null) CliIo.stderr('apq $opName: $filePath: $note\n');
 	}
 
-	/** Shared Ok/Err + write/preview tail for the single-result writer-emit ops. */
-	public static function finishEdit(opName: String, filePath: String, write: Bool, result: EditResult, ?detail: String): Int {
+	/**
+	 * Shared Ok/Err + write/preview tail for the single-result writer-emit ops.
+	 *
+	 * `fix` is the op's `--fix`: after a successful WRITE, lint what was written and apply
+	 * the safe fixes, scoped to the lines this write actually changed. It is spelled as an
+	 * ordinary parameter BEFORE the optional `detail` on purpose — Haxe skips an optional by
+	 * TYPE, so a trailing `?fix: Bool` would let a `detail`-less call site's next argument
+	 * land on the wrong parameter with no error.
+	 */
+	public static function finishEdit(
+		opName: String, filePath: String, write: Bool, result: EditResult, fix: Bool = false, ?detail: String
+	): Int {
 		switch result {
 			case Ok(text, rewrites):
 				warnRewrites(opName, filePath, rewrites);
@@ -72,8 +83,12 @@ final class CliEdit {
 				// the mode where "did all of them land?" has no other answer.
 				final tail: String = detail == null ? '' : ' ($detail)';
 				if (write) {
+					// Read BEFORE the write, because the window `--fix` narrows to is the difference
+					// between these two texts and there is no second chance to see the old one.
+					final before: Null<String> = fix ? (try CliIo.readFile(filePath) catch (exception: Exception) null) : null;
 					CliIo.writeFile(filePath, text);
 					CliIo.stderr('apq $opName: wrote $filePath$tail\n');
+					if (fix) postWriteFix(filePath, before, text);
 				} else
 					previewEdit(opName, filePath, text, tail);
 				return EXIT_OK;
@@ -253,6 +268,64 @@ final class CliEdit {
 			case Err(_):
 				null;
 		};
+	}
+
+	/**
+	 * The op-level `--fix`: lint the file just written and apply the safe fixes, over the
+	 * LINES this write changed and no others.
+	 *
+	 * `--no-oracle` is not a default to be talked out of. The oracle is a project-wide build
+	 * — measured at 46.5s against 4.8s without it on this tree — which no per-edit step can
+	 * pay; and without it every RiskyFix and OracleAssisted rule stays report-only, so what
+	 * lands automatically behind someone's edit is the SAFE half only. `runLint` prints that
+	 * it had no net, so the run says so rather than implying a verification it did not do.
+	 *
+	 * The lint's exit status is deliberately dropped: the write already happened and already
+	 * reported, so a lint that finds nothing to do, or refuses, must not turn the op into a
+	 * failure. What the fix pass did, it says itself.
+	 */
+	private static function postWriteFix(filePath: String, before: Null<String>, after: String): Void {
+		if (before == null) {
+			CliIo.stderr('apq: --fix skipped — could not read $filePath as it was before this write\n');
+			return;
+		}
+		final window: Null<{ from: Int, to: Int }> = changedLineHull(before, after);
+		if (window == null) return; // byte-identical write: nothing changed, nothing to lint
+		// The window is PRINTED, not just used. A fix that rewrites code the author did not
+		// think they touched is the one failure mode this whole scoping exists to prevent, and
+		// the reader cannot check that against a number nobody showed them.
+		CliIo.stderr('apq: --fix over lines ${window.from}-${window.to} of $filePath\n');
+		LintCommand.runLint([filePath, '--fix', '--no-oracle', '--range', '${window.from}:${window.to}']);
+	}
+
+	/**
+	 * The 1-based inclusive line window of `after` that differs from `before`, or null when
+	 * the two are identical.
+	 *
+	 * Trimmed by LINE, not by byte, and that is not a style choice. A byte-level common
+	 * prefix/suffix trim returns the minimal EDIT, which for an insertion is not line-aligned:
+	 * inserting two lines after `trace(a);` made the byte window start eight characters into
+	 * its first line and end eight characters into the line AFTER the insertion, so the hull
+	 * covered three lines instead of two — and `--fix` duly rewrote a standing finding on that
+	 * third line. Comparing whole lines gives exactly the lines the write produced.
+	 *
+	 * Several changed regions give their HULL — from the first differing line to the last —
+	 * which is WIDER than the truth and is the one imprecision left: a multi-pair `patch`
+	 * touching the top and the bottom of a file narrows to almost nothing. Widening errs toward
+	 * linting code the op did write; a set of ranges would buy precision this flag does not need.
+	 */
+	private static function changedLineHull(before: String, after: String): Null<{ from: Int, to: Int }> {
+		if (before == after) return null;
+		final old: Array<String> = before.split('\n');
+		final now: Array<String> = after.split('\n');
+		final limit: Int = old.length < now.length ? old.length : now.length;
+		var head: Int = 0;
+		while (head < limit && old[head] == now[head]) head++;
+		var tail: Int = 0;
+		while (tail < limit - head && old[old.length - 1 - tail] == now[now.length - 1 - tail]) tail++;
+		final from: Int = head + 1;
+		final to: Int = now.length - tail;
+		return { from: from, to: to < from ? from : to };
 	}
 
 }

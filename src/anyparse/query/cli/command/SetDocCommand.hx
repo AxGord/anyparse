@@ -2,6 +2,8 @@ package anyparse.query.cli.command;
 
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.cli.CliContext;
+import anyparse.query.cli.CliUsage;
+import anyparse.query.cli.PostWriteFix;
 import anyparse.runtime.Span;
 import haxe.Exception;
 import anyparse.query.ExitCode.*;
@@ -34,7 +36,7 @@ typedef SetDocOpts = {
  * resolution and its `--write` / preview tail.
  */
 @:nullSafety(Strict)
-final class SetDocCommand implements CliCommand {
+final class SetDocCommand implements CliCommand implements PostWriteFix {
 
 	public function new() {}
 
@@ -47,7 +49,7 @@ final class SetDocCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runSetDoc(args);
+		return runSetDoc(args, ctx.postWriteFix);
 	}
 
 	public function usage(): Void {
@@ -114,7 +116,7 @@ final class SetDocCommand implements CliCommand {
 	 * the declaration itself untouched; the result is writer-formatted and
 	 * re-parse-validated (canonical-gated unless `--reformat`).
 	 */
-	private static function runSetDoc(args: Array<String>): Int {
+	private static function runSetDoc(args: Array<String>, fix: Bool): Int {
 		final o: SetDocOpts = parseSetDocArgs(args);
 		if (o.errExit != null) return o.errExit;
 		var docText: Null<String> = o.docText;
@@ -144,7 +146,7 @@ final class SetDocCommand implements CliCommand {
 		if (loc == null) return EXIT_RUNTIME;
 		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
 		final result: EditResult = SetDoc.setDoc(source, loc.line, loc.col, docStr, o.reformat, plugin, optsJson);
-		return CliEdit.finishEdit('set-doc', filePath, o.write, result);
+		return CliEdit.finishEdit('set-doc', filePath, o.write, result, fix);
 	}
 
 	private static function printSetDocUsage(): Void {
@@ -166,6 +168,7 @@ final class SetDocCommand implements CliCommand {
 		CliIo.sysPrint('gutter and adds it. A gutter you write yourself is stripped rather than\n');
 		CliIo.sysPrint('doubled, and only the two spellings the writer emits count as one, so a\n');
 		CliIo.sysPrint('`* bullet` and an indented code sample keep what they were given.\n');
+		CliUsage.printPostWriteFixTail();
 	}
 
 	private static function parseSetDocArgs(args: Array<String>): SetDocOpts {

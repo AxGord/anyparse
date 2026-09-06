@@ -2,6 +2,8 @@ package anyparse.query.cli.command;
 
 import anyparse.query.ReplaceNode;
 import anyparse.query.cli.CliContext;
+import anyparse.query.cli.CliUsage;
+import anyparse.query.cli.PostWriteFix;
 import haxe.Exception;
 import anyparse.query.ExitCode.*;
 
@@ -35,7 +37,7 @@ typedef ReplaceNodeOpts = {
  * resolution and its `--write` / preview tail.
  */
 @:nullSafety(Strict)
-final class ReplaceNodeCommand implements CliCommand {
+final class ReplaceNodeCommand implements CliCommand implements PostWriteFix {
 
 	public function new() {}
 
@@ -48,7 +50,7 @@ final class ReplaceNodeCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runReplaceNode(args);
+		return runReplaceNode(args, ctx.postWriteFix);
 	}
 
 	public function usage(): Void {
@@ -87,7 +89,7 @@ final class ReplaceNodeCommand implements CliCommand {
 	 * to no / multiple nodes, a non-canonical file without `--reformat`, or
 	 * an unparseable result, exits non-zero with the file untouched.
 	 */
-	private static function runReplaceNode(args: Array<String>): Int {
+	private static function runReplaceNode(args: Array<String>, fix: Bool): Int {
 		final o: ReplaceNodeOpts = parseReplaceNodeArgs(args);
 		if (o.errExit != null) return o.errExit;
 		var newSource: Null<String> = o.newSource;
@@ -120,7 +122,8 @@ final class ReplaceNodeCommand implements CliCommand {
 
 		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
 		return CliEdit.finishEdit(
-			'replace-node', filePath, o.write, ReplaceNode.replaceNode(source, target, newSrc, o.reformat, plugin, o.withDoc, optsJson)
+			'replace-node', filePath, o.write, ReplaceNode.replaceNode(source, target, newSrc, o.reformat, plugin, o.withDoc, optsJson),
+			fix
 		);
 	}
 
@@ -149,6 +152,7 @@ final class ReplaceNodeCommand implements CliCommand {
 		CliIo.sysPrint('spaces. A target that resolves to no / multiple nodes, a non-canonical\n');
 		CliIo.sysPrint('file without --reformat, or an unparseable result, exits non-zero with\n');
 		CliIo.sysPrint('the file untouched.\n');
+		CliUsage.printPostWriteFixTail();
 	}
 
 	private static function parseReplaceNodeArgs(args: Array<String>): ReplaceNodeOpts {

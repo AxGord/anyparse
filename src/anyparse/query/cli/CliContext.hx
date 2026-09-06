@@ -26,8 +26,22 @@ final class CliContext {
 	 */
 	public final requireMatch: Bool;
 
-	public function new(requireMatch: Bool) {
+	/**
+	 * True when the invocation carried `--fix` on a command that declares
+	 * `PostWriteFix` — the opt-in that makes a write op lint what it just wrote and
+	 * apply the safe fixes, scoped to the lines the write actually changed.
+	 *
+	 * Parsed by the dispatcher like `requireMatch` above and for the same reason: the
+	 * flag is written next to the op, and read much later, in the shared edit tail.
+	 * Defaulted so that a `CliContext` built for a run that never saw the flag — every
+	 * command outside that set, and the tests that construct one directly — is the
+	 * value it always was.
+	 */
+	public final postWriteFix: Bool;
+
+	public function new(requireMatch: Bool, postWriteFix: Bool = false) {
 		this.requireMatch = requireMatch;
+		this.postWriteFix = postWriteFix;
 	}
 
 	/**

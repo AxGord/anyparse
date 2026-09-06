@@ -2,6 +2,7 @@ package anyparse.query.cli.command;
 
 import anyparse.query.MemberKinds;
 import anyparse.query.cli.CliContext;
+import anyparse.query.cli.PostWriteFix;
 import haxe.Exception;
 import anyparse.query.ExitCode.*;
 
@@ -26,7 +27,7 @@ typedef NamedMember = {
  * resolution and its `--write` / preview tail.
  */
 @:nullSafety(Strict)
-final class RemoveMemberCommand implements CliCommand {
+final class RemoveMemberCommand implements CliCommand implements PostWriteFix {
 
 	public function new() {}
 
@@ -39,7 +40,7 @@ final class RemoveMemberCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runRemoveMember(args);
+		return runRemoveMember(args, ctx.postWriteFix);
 	}
 
 	public function usage(): Void {
@@ -57,7 +58,7 @@ final class RemoveMemberCommand implements CliCommand {
 	 * and all of them go, each with its leading doc comment unless `--keep-doc` says otherwise.
 	 * The by-name counterpart of `add-member`.
 	 */
-	private static function runRemoveMember(args: Array<String>): Int {
+	private static function runRemoveMember(args: Array<String>, fix: Bool): Int {
 		var lang: String = 'haxe';
 		var write: Bool = false;
 		var reformat: Bool = false;
@@ -139,7 +140,7 @@ final class RemoveMemberCommand implements CliCommand {
 		final target: NamedMember = named;
 		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
 		return CliEdit.finishEdit(
-			op, filePath, write, RemoveMember.removeMember(source, target.type, target.member, reformat, plugin, withDoc, optsJson)
+			op, filePath, write, RemoveMember.removeMember(source, target.type, target.member, reformat, plugin, withDoc, optsJson), fix
 		);
 	}
 
@@ -163,6 +164,7 @@ final class RemoveMemberCommand implements CliCommand {
 		CliIo.sysPrint('  --type <T>      The enclosing type (with <memberName>, the by-name form)\n');
 		CliIo.sysPrint('  --keep-doc      Leave the member\'s leading doc comment behind\n');
 		CliUsage.printEditOptionsTail();
+		CliUsage.printPostWriteFixTail();
 	}
 
 	/**

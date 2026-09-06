@@ -35,6 +35,29 @@ typedef CheckPartition = {
 };
 
 /**
+ * The `--range` window: a 1-based, inclusive LINE span, and the only scope the lint
+ * layer narrows to below file granularity.
+ *
+ * A finding is kept when the line its span STARTS on falls inside; a finding carrying
+ * no span at all is dropped, because no coordinate means no proof of membership. The
+ * line is measured against the file as the run reads it AT THAT MOMENT, which matters
+ * only under `--fix`: the fixed-point loop re-reads a rewritten file on the next pass,
+ * so a fix that changes the file's line count shifts what a later pass sees through
+ * the same window. For the window this exists to serve — the lines a write op just
+ * changed — that drift is bounded, and this is a narrowing net rather than a
+ * correctness gate; for an exact one-shot, pair `--range` with `--rule`.
+ *
+ * What it narrows is FINDINGS, never EDITS. A check whose fix is atomic across sites
+ * (`unused-parameter` rewrites the signature AND every call-site argument) still
+ * writes wherever its own fix says, off a finding inside the window. Clipping that
+ * would leave the file broken, which is the opposite of a safety net.
+ */
+typedef LintRange = {
+	final from: Int;
+	final to: Int;
+};
+
+/**
  * Parsed options for `apq lint` — `lang`, `flat`, `includeInfo`, `fix`, the `failOn` severity, output `format`, `ruleFilters`, and `inputSpecs`. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
  */
 @:nullSafety(Strict)
@@ -48,6 +71,8 @@ typedef LintOpts = {
 	var format: String;
 	var ruleFilters: Array<String>;
 	var inputSpecs: Array<String>;
+	// The `--range` line window, or null for the whole scope. See `LintRange`.
+	var range: Null<LintRange>;
 	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag/value -> EXIT_USAGE);
 	// the caller returns this immediately and ignores the rest of the struct.
 	var errExit: Null<Int>;
@@ -64,9 +89,7 @@ typedef LintOpts = {
 final class LintCommand implements CliCommand {
 
 	private static inline final FORMAT_JSON: String = 'json';
-
 	private static inline final FORMAT_CHECKSTYLE: String = 'checkstyle';
-
 	private static inline final FORMAT_TEXT: String = 'text';
 
 	public function new() {}
@@ -87,28 +110,8 @@ final class LintCommand implements CliCommand {
 		printLintUsage();
 	}
 
-	/** Source-offset sort key for a violation span; null spans sort last. */
-	private static inline function spanStart(span: Null<Span>): Int {
-		return span != null ? span.from : CliArgs.MAX_INT;
-	}
-
-	private static inline function lintParseExit(code: Int): LintOpts {
-		return {
-			lang: '',
-			flat: false,
-			includeInfo: false,
-			fix: false,
-			noOracle: false,
-			failOn: null,
-			format: FORMAT_TEXT,
-			ruleFilters: [],
-			inputSpecs: [],
-			errExit: code
-		};
-	}
-
 	/**
-	 * `apq lint <scope> [--rule <id>]... [--all] [--flat] [--lang <name>]`
+	 * `apq lint <scope> [--rule <id>]... [--all] [--flat] [--range <a>:<b>] [--lang <name>]`
 	 * — run the analysis checks over `<scope>` (one or more file/dir/glob
 	 * specs) and report violations grouped by file, reusing the walker
 	 * reporter (`Text.renderViolations`). `--rule` selects a subset of the
@@ -119,8 +122,14 @@ final class LintCommand implements CliCommand {
 	 * unverifiable wildcard / `using` imports) are hidden unless `--all` is
 	 * given, but always counted in the summary. The exit code is success
 	 * regardless of findings — `lint` is a report, like `symbols`.
+	 *
+	 * Public because a write op's `--fix` re-enters the lint layer through here
+	 * (see `CliEdit.finishEdit`). The argument is argv, so such a caller re-uses
+	 * every bit of setup this function does — check resolution, per-file config
+	 * discovery, the resolution scope, the oracle keys — instead of assembling a
+	 * second copy of it that would drift.
 	 */
-	private static function runLint(args: Array<String>): Int {
+	public static function runLint(args: Array<String>): Int {
 		final o: LintOpts = parseLintArgs(args);
 		if (o.errExit != null) return o.errExit;
 		if (o.inputSpecs.length == 0) {
@@ -139,6 +148,8 @@ final class LintCommand implements CliCommand {
 			return EXIT_RUNTIME;
 		}
 		final plugin: GrammarPlugin = io.plugin;
+		final rangeError: Null<Int> = rangeScopeError(o, paths);
+		if (rangeError != null) return rangeError;
 
 		final files: Array<{ file: String, source: String }> = [];
 		final sourceOf: Map<String, String> = [];
@@ -203,7 +214,7 @@ final class LintCommand implements CliCommand {
 
 		if (o.fix)
 			return LintFixDriver.runLintFix(
-				files, activeChecks, plugin, resolveConfig, applyEnablement, resolution, oracleHxml, oracleDir, o.noOracle
+				files, activeChecks, plugin, resolveConfig, applyEnablement, resolution, oracleHxml, oracleDir, o.noOracle, o.range
 			);
 
 		// Report mode only — the fix path returned above, so this pass never runs redundantly in a
@@ -211,7 +222,9 @@ final class LintCommand implements CliCommand {
 		// files. ONE wrapper serves both halves of the pass: the address annotation in the report
 		// reads the trees the checks just parsed out of its cache instead of parsing them again.
 		final cached: CachingGrammarPlugin = wrapResolution(plugin, resolution);
-		final all: Array<Violation> = Linter.run(files, cached, activeChecks, resolveConfig, applyEnablement);
+		final all: Array<Violation> = withinRange(
+			Linter.run(files, cached, activeChecks, resolveConfig, applyEnablement), f -> sourceOf[f], o.range
+		);
 
 		final shown: Array<Violation> = reportedViolations(all, o.includeInfo, o.format);
 		renderLintReport(paths, shown, sourceOf, o.format, o.flat, cached);
@@ -233,6 +246,27 @@ final class LintCommand implements CliCommand {
 			for (v in all) if ((cast v.severity: Int) <= threshold) return EXIT_RUNTIME;
 		}
 		return EXIT_OK;
+	}
+
+	/** Source-offset sort key for a violation span; null spans sort last. */
+	private static inline function spanStart(span: Null<Span>): Int {
+		return span != null ? span.from : CliArgs.MAX_INT;
+	}
+
+	private static inline function lintParseExit(code: Int): LintOpts {
+		return {
+			lang: '',
+			flat: false,
+			includeInfo: false,
+			fix: false,
+			noOracle: false,
+			failOn: null,
+			format: FORMAT_TEXT,
+			ruleFilters: [],
+			inputSpecs: [],
+			range: null,
+			errExit: code
+		};
 	}
 
 	/**
@@ -627,6 +661,11 @@ final class LintCommand implements CliCommand {
 		CliIo.sysPrint('  --all, -a        Include Info-severity advisories in the report (text format only —\n');
 		CliIo.sysPrint('                   json and checkstyle are never capped)\n');
 		CliIo.sysPrint('  --flat           One <file>:<line>:<col> per line (text format only)\n');
+		CliIo.sysPrint('  --range <a>:<b>  Only findings whose span STARTS on a line in [a, b], 1-based\n');
+		CliIo.sysPrint('                   and inclusive; the scope must be exactly one file. Narrows\n');
+		CliIo.sysPrint('                   the report AND --fix. It narrows FINDINGS, not EDITS: an\n');
+		CliIo.sysPrint('                   atomic fix off a finding inside the window still writes\n');
+		CliIo.sysPrint('                   wherever its own fix says\n');
 		CliIo.sysPrint('  --lang <name>    Grammar plugin (default: haxe)\n');
 		CliIo.sysPrint('  -h, --help       Show this help\n');
 	}
@@ -641,6 +680,7 @@ final class LintCommand implements CliCommand {
 		var format: String = FORMAT_TEXT;
 		final ruleFilters: Array<String> = [];
 		final inputSpecs: Array<String> = [];
+		var range: Null<LintRange> = null;
 
 		var i: Int = 0;
 		while (i < args.length) {
@@ -658,6 +698,15 @@ final class LintCommand implements CliCommand {
 					fix = true;
 				case '--no-oracle':
 					noOracle = true;
+				case '--range':
+					final spec: String = CliArgs.expectValue(args, ++i, '--range');
+					range = parseLintRange(spec);
+					if (range == null) {
+						CliIo.stderr(
+							'apq lint: --range expects <from>:<to>, 1-based inclusive line numbers with from <= to — got "$spec"\n'
+						);
+						return lintParseExit(EXIT_USAGE);
+					}
 				case '--fail-on':
 					final level: String = CliArgs.expectValue(args, ++i, '--fail-on');
 					failOn = Severity.fromName(level);
@@ -696,8 +745,45 @@ final class LintCommand implements CliCommand {
 			format: format,
 			ruleFilters: ruleFilters,
 			inputSpecs: inputSpecs,
+			range: range,
 			errExit: null
 		};
+	}
+
+	/**
+	 * `<from>:<to>` — both ends required, 1-based, `from <= to`. Null on anything else,
+	 * and the caller turns that into a usage error naming the spec it was given.
+	 *
+	 * Deliberately stricter than `apq source --range`, which clamps to the file and lets
+	 * either end be omitted: this one is a FILTER, and a silently clamped window would
+	 * narrow a fix run to a region the caller never asked for.
+	 */
+	private static function parseLintRange(spec: String): Null<LintRange> {
+		final colon: Int = spec.indexOf(':');
+		if (colon <= 0 || colon == spec.length - 1) return null;
+		final lo: Null<Int> = Std.parseInt(spec.substring(0, colon));
+		if (lo == null) return null;
+		final hi: Null<Int> = Std.parseInt(spec.substring(colon + 1));
+		if (hi == null) return null;
+		final from: Int = lo;
+		final to: Int = hi;
+		return from < 1 || to < from ? null : { from: from, to: to };
+	}
+
+	/**
+	 * The usage error a `--range` over a multi-file scope earns, or null when there is no
+	 * window, or the scope is the single file a window can mean something about.
+	 *
+	 * Its own function rather than a branch in `runLint` because a window is a claim about
+	 * ONE file's lines: applied to a directory it would narrow every file in it to the same
+	 * line numbers, which is not a narrower version of anything the caller asked for.
+	 */
+	private static function rangeScopeError(o: LintOpts, paths: Array<String>): Null<Int> {
+		if (o.range == null || paths.length == 1) return null;
+		CliIo.stderr(
+			'apq lint: --range needs a scope of exactly one file — ${CliArgs.quotedSpecs(o.inputSpecs)} matched ${paths.length}\n'
+		);
+		return EXIT_USAGE;
 	}
 
 	private static function resolveLintChecks(ruleFilters: Array<String>): Null<Array<Check>> {
@@ -730,6 +816,28 @@ final class LintCommand implements CliCommand {
 	 */
 	public static function reportedViolations(all: Array<Violation>, includeInfo: Bool, format: String): Array<Violation> {
 		return includeInfo || format == FORMAT_JSON || format == FORMAT_CHECKSTYLE ? all : all.filter(v -> v.severity != Severity.Info);
+	}
+
+	/**
+	 * The findings a `--range` window keeps: those whose span STARTS on a line inside it.
+	 *
+	 * A null window keeps everything, so both lint paths — the report and every pass of
+	 * the fix loop — call this unconditionally and the flag cannot come to mean two
+	 * different things in the two of them. `sourceOf` answers the file's CURRENT bytes,
+	 * which is what makes the window re-measurable per pass; see `LintRange`.
+	 */
+	public static function withinRange(
+		all: Array<Violation>, sourceOf: (String) -> Null<String>, range: Null<LintRange>
+	): Array<Violation> {
+		if (range == null) return all;
+		final window: LintRange = range;
+		return all.filter(v -> {
+			final span: Null<Span> = v.span;
+			final source: Null<String> = sourceOf(v.file);
+			if (span == null || source == null) return false;
+			final line: Int = span.lineCol(source).line;
+			return line >= window.from && line <= window.to;
+		});
 	}
 
 	private static function renderLintReport(

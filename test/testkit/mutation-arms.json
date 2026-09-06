@@ -1080,12 +1080,20 @@
 			"note": "the registry memoises its command objects into process-scoped state, so every run of the CLI shares one instance of each command"
 		},
 		{
+		  "name": "M-LINT-RANGE-INERT",
+		  "type": "anyparse.query.cli.command.LintCommand",
+		  "method": "withinRange",
+		  "find": "if (range == null) return all;",
+		  "replace": "if (range == null) return all;\nif (all != null) return all;",
+		  "note": "the --range window stops filtering, so a write op's --fix rewrites every finding in the file instead of only those on the lines it changed"
+		},
+		{
 			"name": "M-CLI-REQUIREMATCH-STATIC",
 			"type": "anyparse.query.cli.CliContext",
 			"method": "CliContext",
 			"kind": "ClassDecl",
-			"find": "public function new(requireMatch: Bool) {\nthis.requireMatch = requireMatch;\n}",
-			"replace": "private static var _sticky: Bool = false;\n\npublic function new(requireMatch: Bool) {\nif (requireMatch) _sticky = true;\nthis.requireMatch = _sticky;\n}",
+			"find": "public function new(requireMatch: Bool, postWriteFix: Bool = false) {\nthis.requireMatch = requireMatch;\nthis.postWriteFix = postWriteFix;\n}",
+			"replace": "private static var _sticky: Bool = false;\n\npublic function new(requireMatch: Bool, postWriteFix: Bool = false) {\nif (requireMatch) _sticky = true;\nthis.requireMatch = _sticky;\nthis.postWriteFix = postWriteFix;\n}",
 			"note": "the per-run flag gains a static backing, so one invocation's --exit-on-empty survives into the next one in the same process"
 		},
 		{

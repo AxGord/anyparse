@@ -2,6 +2,8 @@ package anyparse.query.cli.command;
 
 import anyparse.query.cli.CliCommand;
 import anyparse.query.cli.CliContext;
+import anyparse.query.cli.CliUsage;
+import anyparse.query.cli.PostWriteFix;
 import anyparse.runtime.Span;
 import haxe.Exception;
 import anyparse.query.ExitCode.*;
@@ -19,7 +21,7 @@ using StringTools;
  * an edit's answer depends only on its own arguments.
  */
 @:nullSafety(Strict)
-final class SetCommentCommand implements CliCommand {
+final class SetCommentCommand implements CliCommand implements PostWriteFix {
 
 	public function new() {}
 
@@ -70,7 +72,8 @@ final class SetCommentCommand implements CliCommand {
 		final plugin: GrammarPlugin = CliArgs.pickPlugin(o.lang);
 		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
 		return CliEdit.finishEdit(
-			'set-comment', filePath, o.write, SetComment.setComment(source, loc.line, loc.col, commentStr, o.reformat, plugin, optsJson)
+			'set-comment', filePath, o.write, SetComment.setComment(source, loc.line, loc.col, commentStr, o.reformat, plugin, optsJson),
+			ctx.postWriteFix
 		);
 	}
 
@@ -81,6 +84,7 @@ final class SetCommentCommand implements CliCommand {
 		CliIo.sysPrint('  --from-file <path>  Read the comment text from a file instead of the argument\n');
 		CliIo.sysPrint('  --reformat          Canonicalise the whole file (allow a non-canonical input)\n');
 		CliIo.sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
+		CliUsage.printPostWriteFixTail();
 	}
 
 	private function parseSetCommentArgs(args: Array<String>): SetCommentOpts {

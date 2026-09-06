@@ -237,7 +237,12 @@ class CliHelpListingPinTest extends Test {
 		'The text is PLAIN prose, one line per doc line: this op owns the ` * `',
 		'gutter and adds it. A gutter you write yourself is stripped rather than',
 		'doubled, and only the two spellings the writer emits count as one, so a',
-		'`* bullet` and an indented code sample keep what they were given.'
+		'`* bullet` and an indented code sample keep what they were given.',
+		'',
+		'--fix: after a --write, lint what was just written and apply the safe fixes,',
+		'scoped to the LINES this write changed. It skips the compiler oracle (which',
+		'is a project-wide build), so RiskyFix and OracleAssisted rules stay',
+		'report-only: only the safe half of the fixer can land behind your edit.'
 	];
 
 	/** `apq safe-delete --help`, from the base binary. */

@@ -1,6 +1,7 @@
 package anyparse.query.cli.command;
 
 import anyparse.query.cli.CliContext;
+import anyparse.query.cli.PostWriteFix;
 import anyparse.runtime.Span;
 import haxe.Exception;
 import anyparse.query.ExitCode.*;
@@ -14,7 +15,7 @@ using StringTools;
  * resolution and its `--write` / preview tail.
  */
 @:nullSafety(Strict)
-final class RemoveElementCommand implements CliCommand {
+final class RemoveElementCommand implements CliCommand implements PostWriteFix {
 
 	public function new() {}
 
@@ -27,7 +28,7 @@ final class RemoveElementCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runRemoveElement(args);
+		return runRemoveElement(args, ctx.postWriteFix);
 	}
 
 	public function usage(): Void {
@@ -42,7 +43,7 @@ final class RemoveElementCommand implements CliCommand {
 	 * inverse of `add-element`; same column convention `apq refs` prints. A leading
 	 * doc comment goes with the element unless `--keep-doc` says otherwise.
 	 */
-	private static function runRemoveElement(args: Array<String>): Int {
+	private static function runRemoveElement(args: Array<String>, fix: Bool): Int {
 		var lang: String = 'haxe';
 		var write: Bool = false;
 		var reformat: Bool = false;
@@ -131,7 +132,7 @@ final class RemoveElementCommand implements CliCommand {
 		final removed: Null<String> = RemoveElement.describeRemoval(source, pos.line, pos.col, plugin, withDoc);
 		return CliEdit.finishEdit(
 			'remove-element', filePath, write, RemoveElement.removeElement(source, pos.line, pos.col, reformat, plugin, withDoc, optsJson),
-			removed
+			fix, removed
 		);
 	}
 
@@ -151,6 +152,7 @@ final class RemoveElementCommand implements CliCommand {
 		CliIo.sysPrint('Options:\n');
 		CliIo.sysPrint('  --keep-doc      Leave the element\'s leading doc comment behind\n');
 		CliUsage.printEditOptionsTail();
+		CliUsage.printPostWriteFixTail();
 	}
 
 }

@@ -134,7 +134,8 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: NOT_CANONICAL }];
 		final noted: Array<String> = [];
 		LintFixDriver.applyLintPass(
-			files, files, plugin, [check], [], [check], _ -> LintConfig.parse('{}'), false, ['C.hx' => null], 2, noted, [], [], [], []
+			files, files, plugin, [check],
+			[], [check], _ -> LintConfig.parse('{}'), false, ['C.hx' => null], 2, noted, [], [], [], [], null
 		);
 		Assert.isTrue(noted.contains('C.hx'), 'the pass-2 refusal is reported and counted as a skipped file');
 		#else
@@ -399,7 +400,8 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final noted: Array<String> = [];
 		final changed: Array<String> = [];
 		LintFixDriver.applyLintPass(
-			files, files, plugin, [check], [], [check], _ -> LintConfig.parse('{}'), false, ['C.hx' => null], 1, noted, [], changed, [], []
+			files, files, plugin, [check],
+			[], [check], _ -> LintConfig.parse('{}'), false, ['C.hx' => null], 1, noted, [], changed, [], [], null
 		);
 		Assert.equals(0, noted.length, 'nothing was refused: $noted');
 		Assert.isTrue(changed.contains('C.hx'), 'and the file was written');

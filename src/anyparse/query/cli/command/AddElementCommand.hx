@@ -2,6 +2,8 @@ package anyparse.query.cli.command;
 
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.cli.CliContext;
+import anyparse.query.cli.CliUsage;
+import anyparse.query.cli.PostWriteFix;
 import anyparse.runtime.Span;
 import haxe.Exception;
 import anyparse.query.ExitCode.*;
@@ -37,7 +39,7 @@ typedef AddElementOpts = {
  * resolution and its `--write` / preview tail.
  */
 @:nullSafety(Strict)
-final class AddElementCommand implements CliCommand {
+final class AddElementCommand implements CliCommand implements PostWriteFix {
 
 	public function new() {}
 
@@ -50,7 +52,7 @@ final class AddElementCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runAddElement(args);
+		return runAddElement(args, ctx.postWriteFix);
 	}
 
 	public function usage(): Void {
@@ -90,7 +92,7 @@ final class AddElementCommand implements CliCommand {
 	 * Without `--write` the result goes to stdout; with `--write` it
 	 * overwrites in place.
 	 */
-	private static function runAddElement(args: Array<String>): Int {
+	private static function runAddElement(args: Array<String>, fix: Bool): Int {
 		// noqa: complexity
 		final o: AddElementOpts = parseAddElementArgs(args);
 		if (o.errExit != null) return o.errExit;
@@ -144,7 +146,7 @@ final class AddElementCommand implements CliCommand {
 		final result: EditResult = appendSpec != null
 			? AddElement.appendElement(source, pos.line, pos.col, codeStr, o.reformat, plugin, optsJson)
 			: AddElement.addElement(source, pos.line, pos.col, afterSpec != null ? After : Before, codeStr, o.reformat, plugin, optsJson);
-		return CliEdit.finishEdit('add-element', filePath, o.write, result);
+		return CliEdit.finishEdit('add-element', filePath, o.write, result, fix);
 	}
 
 	private static function printAddElementUsage(): Void {
@@ -184,6 +186,7 @@ final class AddElementCommand implements CliCommand {
 		CliIo.sysPrint('  --reformat        Canonicalise the whole file if it is not already canonical\n');
 		CliIo.sysPrint('  --lang <name>     Grammar plugin (default: haxe)\n');
 		CliIo.sysPrint('  -h, --help        Show this help\n');
+		CliUsage.printPostWriteFixTail();
 	}
 
 	private static function parseAddElementArgs(args: Array<String>): AddElementOpts {
