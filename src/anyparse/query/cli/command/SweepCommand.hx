@@ -1,6 +1,7 @@
 package anyparse.query.cli.command;
 
 import anyparse.query.cli.CliContext;
+import anyparse.query.cli.command.SweepCorpus.SweepCorpusResult;
 import anyparse.query.format.json.SweepFixture;
 import anyparse.query.format.json.SweepSnapshot;
 import anyparse.query.format.json.SweepSnapshotParser;
@@ -94,19 +95,7 @@ final class SweepCommand implements CliCommand {
 				final entryPath: Null<String> = entry.path;
 				final entryStatus: Null<String> = entry.status;
 				if (entryPath == null || entryStatus == null) continue;
-				// Normalise snapshot path to match what
-				// `stripRootPrefix` emits for the recon walker. The
-				// corpus harness records paths as
-				// `test/testcases/<subdir>/<name>` (rooted at the fork);
-				// recon walks from `<fork>/test/testcases` so its
-				// stripped paths are `<subdir>/<name>`. Trim the leading
-				// `test/testcases/` here so the diff lookup is keyed
-				// the same way on both sides.
-				final corpusPrefix: String = 'test/testcases/';
-				final normalised: String = StringTools.startsWith(entryPath, corpusPrefix)
-					? entryPath.substr(corpusPrefix.length)
-					: entryPath;
-				out[normalised] = entryStatus;
+				out[normaliseFixtureKey(entryPath)] = entryStatus;
 			}
 		} catch (_: Exception) {
 			// best-effort: a scan failure leaves the partial status map (or the
@@ -150,6 +139,13 @@ final class SweepCommand implements CliCommand {
 		// forget before a grammar slice. Performs the copy AFTER the
 		// totals print so the user still sees the snapshot's contents.
 		var savePath: Null<String> = null;
+		// ω-sweep-run: the census this command has only ever READ. `--run` walks
+		// the corpus itself and prints the same totals line, so the snapshot's
+		// numbers can be re-derived instead of taken on trust — `--diff` then
+		// pairs the two fixture-by-fixture.
+		var runCorpus: Bool = false;
+		var corpusDir: Null<String> = null;
+		var lang: String = 'haxe';
 		var i: Int = 0;
 		while (i < args.length) {
 			final a: String = args[i];
@@ -169,11 +165,14 @@ final class SweepCommand implements CliCommand {
 						: autoRotatedBaseline;
 				case '--save':
 					savePath = CliArgs.expectValue(args, ++i, '--save');
+				case '--run':
+					runCorpus = true;
+				case '--corpus':
+					corpusDir = CliArgs.expectValue(args, ++i, '--corpus');
 				case '--lang':
-					// hxq shim auto-injects --lang haxe; harmless here (sweep
-					// reads a JSON snapshot, no grammar plugin needed). Accept
-					// + consume the value to keep shim invariance.
-					CliArgs.expectValue(args, ++i, '--lang');
+					// hxq shim auto-injects --lang haxe; the snapshot READER needs no
+					// grammar plugin, but `--run` does — it drives the writer.
+					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '-h', '--help':
 					printSweepUsage();
 					return EXIT_OK;
@@ -184,27 +183,21 @@ final class SweepCommand implements CliCommand {
 			}
 			i++;
 		}
+		if (runCorpus) return runSweepRun(lang, corpusDir, prevPath, diffPath, savePath, autoRotatedBaseline);
 		final cur: Null<SweepTotals> = loadSweepJson(filePath);
 		if (cur == null) {
 			CliIo.stderr(sweepNoSnapshot(filePath, savePath));
 			return EXIT_RUNTIME;
 		}
 		CliIo.warnIfTestJsStale('sweep');
-		final total: Int = cur.pass + cur.fail + cur.skipParse + cur.skipWrite + cur.skipConfig + cur.skipMalformed;
-		CliIo.sysPrint(
-			'${cur.pass} pass / ${cur.fail} fail / ${cur.skipParse} skip-parse / ${cur.skipWrite} skip-write / ${cur.skipConfig}'
-			+ ' skip-config / ${cur.skipMalformed} malformed (total $total)\n'
-		);
+		CliIo.sysPrint(sweepTotalsLine(cur));
 		if (prevPath != null) {
 			final prev: Null<SweepTotals> = loadSweepJson(prevPath);
 			if (prev == null) {
 				CliIo.stderr(sweepNoSnapshot(prevPath, null, true));
 				return EXIT_RUNTIME;
 			}
-			CliIo.sysPrint(
-				'  Δpass ${sweepSigned(cur.pass - prev.pass)} / Δfail ${sweepSigned(cur.fail - prev.fail)} / Δskip-parse '
-				+ '${sweepSigned(cur.skipParse - prev.skipParse)}  vs $prevPath (${prev.pass} / ${prev.fail} / ${prev.skipParse})\n'
-			);
+			CliIo.sysPrint(sweepDeltaLine(cur, prev, prevPath));
 		}
 		if (savePath != null) {
 			try {
@@ -236,14 +229,21 @@ final class SweepCommand implements CliCommand {
 	 */
 	private static function runSweepDiff(curPath: String, prevPath: String, autoRotated: Bool): Int {
 		final cur: Map<String, String> = loadSweepFixtureStatus(curPath);
+		if (cur.iterator().hasNext()) return diffFixtureMaps(cur, prevPath, autoRotated);
+		CliIo.stderr(
+			'apq sweep: --diff: $curPath has no `fixtures` array — re-run `node bin/test.js` under $$ANYPARSE_HXFORMAT_FORK to seed it\n'
+		);
+		return EXIT_RUNTIME;
+	}
+
+	/**
+	 * The per-fixture comparison itself, over a CURRENT status map that may have
+	 * come from a snapshot on disk (`--diff`) or from the live census
+	 * (`--run --diff`) — the two sides of the cross-check that lets the corpus
+	 * numbers be re-derived rather than trusted.
+	 */
+	private static function diffFixtureMaps(cur: Map<String, String>, prevPath: String, autoRotated: Bool): Int {
 		final prev: Map<String, String> = loadSweepFixtureStatus(prevPath);
-		if (!cur.iterator().hasNext()) {
-			CliIo.stderr(
-				'apq sweep: --diff: $curPath'
-				+ ' has no `fixtures` array — re-run `node bin/test.js` under $$ANYPARSE_HXFORMAT_FORK to seed it\n'
-			);
-			return EXIT_RUNTIME;
-		}
 		if (!prev.iterator().hasNext()) {
 			CliIo.stderr(sweepDiffNoBaseline(prevPath, sweepSnapshotExists(prevPath), autoRotated));
 			return EXIT_RUNTIME;
@@ -388,6 +388,93 @@ final class SweepCommand implements CliCommand {
 	}
 
 	/**
+	 * `--run`: re-derive the census from the corpus on disk instead of reading
+	 * the snapshot a `node bin/test.js` left behind. Prints the same totals
+	 * line the reader prints, so the two are directly comparable; `--diff`
+	 * pairs them fixture by fixture, `--save` writes a snapshot in the same
+	 * schema, and `--prev` gives the Δ triple against one.
+	 */
+	private static function runSweepRun(
+		lang: String, corpusDir: Null<String>, prevPath: Null<String>, diffPath: Null<String>, savePath: Null<String>,
+		autoRotatedBaseline: String
+	): Int {
+		final root: String = corpusDir ?? ReconCommand.defaultReconRoot();
+		if (root == '') {
+			CliIo.stderr('apq sweep: --run needs a corpus directory — set $$ANYPARSE_HXFORMAT_FORK or pass --corpus <dir>\n');
+			return EXIT_RUNTIME;
+		}
+		if (!FileSystem.exists(root) || !FileSystem.isDirectory(root)) {
+			CliIo.stderr('apq sweep: --run: corpus directory "$root" does not exist\n');
+			return EXIT_RUNTIME;
+		}
+		final census: SweepCorpusResult = SweepCorpus.run(CliArgs.pickPlugin(lang), root, SweepCorpus.keyRootFor(root));
+		final totals: SweepTotals = {
+			pass: census.pass,
+			fail: census.fail,
+			skipParse: census.skipParse,
+			skipWrite: census.skipWrite,
+			skipConfig: census.skipConfig,
+			skipMalformed: census.skipMalformed
+		};
+		CliIo.sysPrint(sweepTotalsLine(totals));
+		if (prevPath != null) {
+			final prev: Null<SweepTotals> = loadSweepJson(prevPath);
+			if (prev == null) {
+				CliIo.stderr(sweepNoSnapshot(prevPath, null, true));
+				return EXIT_RUNTIME;
+			}
+			CliIo.sysPrint(sweepDeltaLine(totals, prev, prevPath));
+		}
+		if (savePath != null) {
+			try {
+				sys.io.File.saveContent(
+					(savePath: String), haxe.Json.stringify({
+						pass: census.pass,
+						fail: census.fail,
+						skipParse: census.skipParse,
+						skipWrite: census.skipWrite,
+						skipConfig: census.skipConfig,
+						skipMalformed: census.skipMalformed,
+						fixtures: census.entries
+					})
+				);
+				CliIo.sysPrint('apq sweep: saved census of $root -> $savePath\n');
+			} catch (e: Exception) {
+				CliIo.stderr('apq sweep: --save failed: ${e.message}\n');
+				return EXIT_RUNTIME;
+			}
+		}
+		if (diffPath == null) return EXIT_OK;
+		final cur: Map<String, String> = [];
+		for (entry in census.entries) cur[normaliseFixtureKey(entry.path)] = entry.status;
+		return diffFixtureMaps(cur, diffPath, diffPath == autoRotatedBaseline);
+	}
+
+	/** The six-counter line both the snapshot reader and `--run` report, from one copy. */
+	private static function sweepTotalsLine(t: SweepTotals): String {
+		final total: Int = t.pass + t.fail + t.skipParse + t.skipWrite + t.skipConfig + t.skipMalformed;
+		return '${t.pass} pass / ${t.fail} fail / ${t.skipParse} skip-parse / ${t.skipWrite} skip-write / ${t.skipConfig}'
+			+ ' skip-config / ${t.skipMalformed} malformed (total $total)\n';
+	}
+
+	/** The Δ triple against a prior snapshot, from one copy. */
+	private static function sweepDeltaLine(cur: SweepTotals, prev: SweepTotals, prevPath: String): String {
+		return '  Δpass ${sweepSigned(cur.pass - prev.pass)} / Δfail ${sweepSigned(cur.fail - prev.fail)} / Δskip-parse '
+			+ '${sweepSigned(cur.skipParse - prev.skipParse)}  vs $prevPath (${prev.pass} / ${prev.fail} / ${prev.skipParse})\n';
+	}
+
+	/**
+	 * The snapshot's fixture key as the diff maps it. Snapshots record paths
+	 * rooted at the FORK (`test/testcases/<subdir>/<name>`) while the recon
+	 * walker reports them rooted at the corpus directory, so the prefix comes
+	 * off here and both sides key the same way.
+	 */
+	public static function normaliseFixtureKey(path: String): String {
+		final corpusPrefix: String = 'test/testcases/';
+		return path.startsWith(corpusPrefix) ? path.substr(corpusPrefix.length) : path;
+	}
+
+	/**
 	 * Read `path` (`bin/.last-sweep.json` / a `--prev`/`--diff` snapshot) into
 	 * the six-int `SweepTotals`, via the declared `SweepSnapshot` schema.
 	 * Returns null when the file is missing, the JSON is malformed, OR a
@@ -422,6 +509,7 @@ final class SweepCommand implements CliCommand {
 
 	private static function printSweepUsage(): Void {
 		CliIo.sysPrint('Usage: apq sweep [--file <path>] [--prev <path>] [--diff <path>] [--save <path>]\n');
+		CliIo.sysPrint('       apq sweep --run [--corpus <dir>] [--diff <path>] [--save <path>]\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Read the corpus harness sweep snapshot (`bin/.last-sweep.json` by\n');
 		CliIo.sysPrint('default) and print totals + optional delta vs a prior snapshot.\n');
@@ -430,7 +518,20 @@ final class SweepCommand implements CliCommand {
 		CliIo.sysPrint('$$ANYPARSE_HXFORMAT_FORK is what writes the snapshot; every sweep form,\n');
 		CliIo.sysPrint('--save included, fails until it has.\n');
 		CliIo.sysPrint('\n');
+		CliIo.sysPrint('--run is the exception: it RE-DERIVES the census from the corpus on\n');
+		CliIo.sysPrint('disk, so it needs no snapshot and no test run. It is the only way to\n');
+		CliIo.sysPrint('reproduce the pass/fail/skip-parse numbers this project gates on\n');
+		CliIo.sysPrint('without trusting the snapshot — pair it with --diff for the check:\n');
+		CliIo.sysPrint('  apq sweep --run --diff bin/.last-sweep.json\n');
+		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Options:\n');
+		CliIo.sysPrint('  --run           Walk the corpus and classify every .hxtest fixture now\n');
+		CliIo.sysPrint('                  (PASS / FAIL / SKIP_PARSE / SKIP_WRITE / SKIP_CONFIG /\n');
+		CliIo.sysPrint('                  MALFORMED), instead of reading a snapshot. Composes with\n');
+		CliIo.sysPrint('                  --prev, --diff and --save, which then write/compare the\n');
+		CliIo.sysPrint('                  live census rather than the file named by --file.\n');
+		CliIo.sysPrint('  --corpus <dir>  Corpus root for --run (default:\n');
+		CliIo.sysPrint('                  $$ANYPARSE_HXFORMAT_FORK/test/testcases)\n');
 		CliIo.sysPrint('  --file <path>   Snapshot file (default: bin/.last-sweep.json)\n');
 		CliIo.sysPrint('  --prev <path>   Compare against another snapshot, print Δ triple\n');
 		CliIo.sysPrint('  --diff <path>   Per-fixture status diff vs another snapshot (PASS->FAIL,\n');

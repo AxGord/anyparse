@@ -389,6 +389,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.cli.RenameTypeInFileCliTest',
 		'unit.cli.ResolutionScopeCliTest',
 		'unit.cli.SafeDeleteFormatConfigCliTest',
+		'unit.cli.SweepRunCensusCliTest',
 		'unit.core.BodyGroupPrefixChargeConsumerTest',
 		'unit.core.DocMeasureFirstVisibleTextTest',
 		'unit.core.DocRendererTest',

@@ -435,6 +435,19 @@ final class FmtCommand implements CliCommand {
 		plugin: GrammarPlugin, lang: String, path: String, write: Bool, listMode: Bool, verify: Bool = false, onePass: Bool = false,
 		listedExplicitly: Bool = false
 	): FmtFileResult {
+		// A `.hxtest` is THREE sections (config / input / expected) around `\n---\n`,
+		// not a source file. Formatting it is meaningless in both directions: the whole
+		// file does not parse (it reported `unexpected input`, which reads as a parser
+		// defect), and a `--write` that formatted only the input section would overwrite
+		// the fixture with a third of itself. The corpus census is what a caller
+		// reaching for this actually wants, so the refusal names it.
+		if (CliIo.isHxtestPath(path)) {
+			CliIo.stderr(
+				'apq fmt: $path: a .hxtest fixture is three `---`-separated sections, not a source file'
+				+ ' — use `apq sweep --run` for the corpus census or `apq recon --probe $path --writer-equals` for one fixture\n'
+			);
+			return { changed: false, failed: true, fatalExit: null };
+		}
 		final source: String = try CliIo.readFile(path) catch (exception: Exception) {
 			CliIo.stderr('apq fmt: $path: ${exception.message}\n');
 			return { changed: false, failed: true, fatalExit: null };

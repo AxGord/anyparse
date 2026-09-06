@@ -2295,6 +2295,56 @@ evidence that the fixtures' VERDICTS held, and reach for a byte capture — a
 `fmt --write` tree diffed against the other arm, or the unit pins for the
 mechanism you touched — when the question is whether the bytes held.
 
+### Reproducing the corpus census: `apq sweep --run`
+
+`781 pass / 120 fail / 43 skip-parse` is quoted as a gate in over a hundred
+slice reports, and until S131 the only thing that could produce it was a full
+`node bin/test.js` under `$ANYPARSE_HXFORMAT_FORK`. `apq sweep` read that run's
+snapshot back — it has never run the corpus — and `apq fmt`, the shipping
+formatter, could not open a `.hxtest` at all: it read the whole three-section
+file and answered `unexpected input`, which reads as a parser defect. A gate
+whose number nothing can re-derive is one bad refactor away from being
+decorative.
+
+```sh
+apq sweep --run                                # re-derive the census, ~0.7s
+apq sweep --run --diff bin/.last-sweep.json    # pair it against the snapshot
+apq sweep --run --corpus <dir> --save <path>   # a census of any fixture tree
+```
+
+`--run` walks every `.hxtest` under `$ANYPARSE_HXFORMAT_FORK/test/testcases`
+(or `--corpus <dir>`) and prints the SAME six-counter line the snapshot reader
+prints, from one copy of the formatting code, so the two forms can be compared
+by eye. `--save` writes the snapshot schema the harness writes, and `--diff`
+keys both sides through the same normaliser — so the pairing is per fixture,
+not per total. Measured on `2d39cdf1`: `946 of 946` fixtures agree, status for
+status, and the totals line is byte-identical to the harness's.
+
+It is a SECOND driver over the same engine, deliberately not a shared one. If
+`SweepCorpus` and `HxFormatterCorpusTest` ever disagree, `--diff` names the
+fixtures — which a shared predicate could not do.
+
+**What the gap actually was.** The measurement is worth recording, because four
+of the five hypotheses about it were wrong in a way that reads plausible:
+
+| Difference | Fixtures | What it did |
+|---|---|---|
+| the trailing `\n` | 779 of 781 PASS | `.hxtest` sections are padded with one `\n` that the reader strips from `expected`; the writer emits `finalNewline`, so a self-comparison is one byte long by construction and can never pass |
+| `disableFormatting` / `excludes` | 2 | driver-level meta-config: the fork's formatter never ran, so `expected` is empty and the writer must not run either |
+| the comment-loss guard | 5 | `writeRoundTrip` refuses to hand back output that dropped a comment; the harness calls the writer directly and compares the lossy bytes. Both call it FAIL — verified in both arms, since `APQ_ALLOW_COMMENT_LOSS=1` turns the refusal into the plain byte-diff and moves no count |
+| MALFORMED / SKIP\_CONFIG | 1 + 1 | one CLI error bucket where the harness has three |
+
+`apq writer-equals <fixture>.hxtest <same>.hxtest` was already the per-fixture
+predicate for everything except that first row — which is why it reported a
+byte-diff on 779 fixtures that PASS. `apq recon --probe <fixture>
+--writer-equals` already normalises the newline and is the single-fixture form;
+`--run` is the whole-corpus one.
+
+**`apq fmt` refuses a `.hxtest` by name** rather than reporting a parse failure,
+and names both replacements. The refusal is not cosmetic: `fmt --write` on a
+fixture, had it learned to read the input section, would have overwritten the
+fixture with a third of itself.
+
 ### The step graph: four branches, one join
 
 The checks read like a sequence, but their dependencies are far sparser than
