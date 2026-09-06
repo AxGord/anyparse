@@ -1049,8 +1049,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.RedundantReplaceLoopCheckTest#testSearchEndingWithTheReplacementHeadNotFlagged :: control :: M-SEAM-BLIND',
 			'unit.check.RedundantThisCheckTest#testInheritedFromOtherFileBaseFlagged :: control :: M-INHERITS-FALSE',
 			'unit.check.RedundantUpcastTest#testUpcastFlagged :: control :: M-ISSUBTYPE-FALSE',
-			'unit.check.ShortenTypeRefCheckTest#testASingleSurvivingOccurrenceEarnsNoImport :: control :: '
-			+ 'M-SHORTEN-IMPORT-THRESHOLD-ONE',
+			'unit.check.ShortenTypeRefCheckTest#testASingleSurvivingOccurrenceEarnsNoImport :: control :: M-SHORTEN-IMPORT-THRESHOLD-ONE',
 			'unit.check.StaticConstantCheckTest#testScalarInstanceFinalFlagged :: control :: M-BUILDMACRO-TRUE',
 			'unit.check.StructuralConformanceProofTest#testAliasedStructureMemberTypeStillPins :: control :: M-STRUCT-ALIAS-OPAQUE',
 			'unit.check.StructuralConformanceProofTest#testAnonStructureNominalStillPins :: control :: M-STRUCT-ANON-CLOSED',
