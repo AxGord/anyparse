@@ -1545,7 +1545,7 @@ private class MacroIndex {
 		// The wildcard's own `*` is dropped from the answer: the caller appends the member
 		// name to it to probe the whitelist, and `m.Lang.*.t` names nothing.
 		for (imported in info.imports) if (binds(imported, name) && !carriesTarget(imported.raw))
-			return StringTools.endsWith(imported.raw, '.*') ? imported.raw.substr(0, imported.raw.length - 2) : imported.raw;
+			return imported.raw.endsWith('.*') ? imported.raw.substr(0, imported.raw.length - 2) : imported.raw;
 		return null;
 	}
 

@@ -443,6 +443,30 @@ class PreferIndexAccessCheckTest extends Test {
 		);
 	}
 
+	/**
+	 * `m[k] = { … }` goes through the `Map` abstract @:arrayAccess write, whose overload
+	 * resolution does not propagate the map value type into the argument the way a plain
+	 * `set(k, v)` call does — the literal keeps its own all-`var` inferred structure and fails
+	 * to unify with any value type carrying even one `final` field. Measured on Haxe 4.3.7
+	 * against this project's own `DefaultRepeatedArgument` / `RedundantLambdaWrapper` value
+	 * typedefs, which are all-`final`: the rewrite this check used to emit did not compile.
+	 */
+	public function testObjectLiteralSetValueNotFlagged(): Void {
+		final source: String = src('var m:Map<String, Rec> = [];', 'm.set("a", { x: 1 });');
+		Assert.equals(0, violations(source).length);
+		Assert.equals(source, applyFix(source));
+	}
+
+	public function testObjectLiteralNestedInSetValueStillFlagged(): Void {
+		// Only a DIRECT literal is refused: nested in a call the literal is typed against that
+		// call's parameter, not against the map, so the rewrite stays safe.
+		final source: String = src('var m:Map<String, Rec> = [];', 'm.set("a", make({ x: 1 }));');
+		Assert.equals(1, violations(source).length);
+		final fixed: String = applyFix(source);
+		Assert.isTrue(fixed.indexOf('m["a"] = make(') != -1, fixed);
+		Assert.equals(-1, fixed.indexOf('m.set'));
+	}
+
 	/** `holderUserField` with the default `m:Map<String, Int>` field. */
 	private inline function holderUser(body: String): String {
 		return holderUserField('m:Map<String, Int>', body);

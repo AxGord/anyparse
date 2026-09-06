@@ -55,6 +55,13 @@ using StringTools;
  * (`m.get(n.get(k))`) yield overlapping edits; `RefactorSupport.dropContainedEdits` keeps the
  * outer, the inner is caught on the next `--fix` pass.
  *
+ * A `set` whose VALUE argument is an object literal is not flagged at all: `m[k] = v` goes
+ * through the `Map` abstract @:arrayAccess write, which does not propagate the map value type
+ * into the argument the way `set(k, v)` does, so the literal keeps its own all-`var` inferred
+ * structure and fails to unify with any value type carrying even one `final` field (measured
+ * on Haxe 4.3.7, through `Null<V>` too). A value that merely CONTAINS a literal
+ * (`m.set(k, f({ a: 1 }))`) is unaffected — there the literal is typed against the parameter.
+ *
  * ## Cross-file scope
  *
  * A path receiver's member types resolve through a `SymbolIndex` over the file set `run` is
@@ -176,6 +183,7 @@ final class PreferIndexAccess implements Check {
 			callKind: callKind,
 			fieldKind: fieldKind,
 			exprStmtKind: exprStmtKind,
+			objectLiteralKind: shape.objectLiteralKind,
 			mapTypes: mapTypes,
 			nullableWrappers: shape.nullableWrapperTypeNames ?? [],
 			opaqueKinds: shape.opaqueKinds ?? [],
@@ -326,6 +334,20 @@ final class PreferIndexAccess implements Check {
 	 * extraction — WITHOUT the type gate. `run` layers the type + null-guard gates on top; `fix`
 	 * uses it alone and keeps only the spans `run` already flagged, so the fix trusts detection
 	 * and needs no cross-file index of its own.
+	 *
+	 * One gate here IS about the value expression, because it decides compilability rather than
+	 * taste: a `set` whose value argument is an `objectLiteralKind` node is refused. `m[k] = v`
+	 * goes through the `Map` abstract @:arrayAccess write, whose overload resolution does not
+	 * propagate the map value type into the argument the way a plain `set(k, v)` call does, so
+	 * an anonymous-structure literal keeps its own all-`var` inferred structure and fails to
+	 * unify with a value type carrying even one `final` field — the compiler then reports
+	 * `No @:arrayAccess function for haxe.ds.Map<K, V> accepts arguments of K and { … }`, which
+	 * names neither the literal nor the mutability. Measured on Haxe 4.3.7: an all-`var` target
+	 * accepts the literal, a target with any `final` field does not, through `Null<V>` as well.
+	 * Field mutability is not knowable from the call site, so the whole shape is a conservative
+	 * miss, in the same direction as an unresolvable receiver. A value that merely CONTAINS a
+	 * literal (`m.set(k, f({ a: 1 }))`) is unaffected: there the literal is typed against the
+	 * parameter, not against the map.
 	 */
 	private static function structuralMatch(call: QueryNode, parentKind: Null<String>, cfg: Cfg): Null<Match> {
 		if (call.children.length < 1) return null;
@@ -340,6 +362,7 @@ final class PreferIndexAccess implements Check {
 			true;
 		else
 			return null;
+		if (isSet && cfg.objectLiteralKind != null && call.children[2].kind == cfg.objectLiteralKind) return null;
 		final callSpan: Null<Span> = call.span;
 		return callSpan == null ? null : {
 			callSpan: callSpan,
@@ -371,6 +394,7 @@ private typedef Cfg = {
 	var callKind: String;
 	var fieldKind: String;
 	var exprStmtKind: String;
+	var objectLiteralKind: Null<String>;
 	var mapTypes: Array<String>;
 	var nullableWrappers: Array<String>;
 	var opaqueKinds: Array<String>;

@@ -262,11 +262,9 @@ final class CondRegionLiveness {
 	/** The unary level: any run of `!` prefixes, then a primary. */
 	private static function parseUnary(text: String, cursor: Cursor, defines: Array<String>): Null<Bool> {
 		skipSpace(text, cursor);
-		if (cursor.pos < text.length && text.fastCodeAt(cursor.pos) == '!'.code) {
-			cursor.pos++;
-			return notOf(parseUnary(text, cursor, defines));
-		}
-		return parsePrimary(text, cursor, defines);
+		if (cursor.pos >= text.length || text.fastCodeAt(cursor.pos) != '!'.code) return parsePrimary(text, cursor, defines);
+		cursor.pos++;
+		return notOf(parseUnary(text, cursor, defines));
 	}
 
 	/** A parenthesised condition, a possibly-dotted flag, a number, or a quoted string. */

@@ -312,8 +312,7 @@ final class HoistBranchStringAffix implements Check implements DefaultOff {
 	private static function ownDirectives(region: Span, ctx: Ctx): Null<Array<CondDirective>> {
 		final out: Array<CondDirective> = [];
 		var depth: Int = 0;
-		for (d in ctx.directives) {
-			if (d.span.from < region.from || d.span.to > region.to) continue;
+		for (d in ctx.directives) if (d.span.from >= region.from && d.span.to <= region.to) {
 			if (d.keyword == ctx.seams.ifKeyword) {
 				if (depth == 0) out.push(d);
 				depth++;

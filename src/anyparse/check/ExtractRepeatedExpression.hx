@@ -309,11 +309,11 @@ final class ExtractRepeatedExpression implements Check implements VolatileMessag
 
 	/** Whether every occurrence of `g` is strictly contained in some occurrence of a distinct group at least as frequent. */
 	private static function isSubsumed(g: Group, groups: Array<Group>): Bool {
-		for (h in groups) {
-			if (h.render == g.render || h.occ.length < g.occ.length) continue;
-			if (g.occ.foreach(go -> h.occ.exists(ho -> strictlyContains(ho.span, go.span)))) return true;
-		}
-		return false;
+		return groups.exists(
+			h ->
+				h.render != g.render && h.occ.length >= g.occ.length
+				&& g.occ.foreach(go -> h.occ.exists(ho -> strictlyContains(ho.span, go.span)))
+		);
 	}
 
 	/**
