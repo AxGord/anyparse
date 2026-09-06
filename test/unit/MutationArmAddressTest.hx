@@ -5,9 +5,12 @@ import sys.FileSystem;
 import sys.io.File;
 #end
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.ElementSpan;
 import anyparse.query.Engine;
+import anyparse.query.Patch;
 import anyparse.query.QueryNode;
 import anyparse.query.Selector;
+import anyparse.runtime.Span;
 import testkit.MutationArms;
 import testkit.TestRegistry;
 import utest.Assert;
@@ -39,10 +42,10 @@ using Lambda;
  * spells another, which is how an arm reaches a grammar DECLARATION with no method to
  * cut — and until now nothing checked that either step still lands.
  *
- * What it deliberately does NOT check is whether a FRAGMENT arm's `find` text
- * still occurs. That is `anyparse.query.Patch`'s matcher, and calling it per arm
- * would run a canonical writer round-trip over each host file; running the arm
- * is what answers it, and a stale `find` fails loudly there. Backlog, named.
+ * The FRAGMENT half was written off here as needing a canonical writer
+ * round-trip per host file. It does not: `Patch.locate` runs on the raw slice,
+ * long before `CanonicalEdit.canonicalize` is reached, so the last fixture below
+ * asks that matcher directly and costs one extra parse of the ~20 host files.
  */
 @:nullSafety(Strict)
 final class MutationArmAddressTest extends Test {
@@ -118,6 +121,88 @@ final class MutationArmAddressTest extends Test {
 		}
 		Assert.isTrue(TestRegistry.deferredArms().length > 0, 'a deferral the typer never makes would make this fixture vacuous');
 		Assert.equals(0, missing.length, 'deferred arms with no file to parse:\n  ${missing.join('\n  ')}');
+		#else
+		Assert.pass('the walk needs a filesystem');
+		#end
+	}
+
+	/**
+	 * Every FRAGMENT arm's stored `find` text still cuts — asked of the matcher `hxq patch`
+	 * itself uses, over the very node the runner resolves.
+	 *
+	 * The build macro checks an arm's TYPE and its MEMBER, so a rename or a move stops the
+	 * build. It never checked the fragment, and a refactor that rewrites a member's body
+	 * leaves the arm pointing at text that no longer occurs — twice, measured: S103 found
+	 * `M-ROOTS-THIRDPARTY` had silently stopped applying after an extraction, and
+	 * `M-OPAQUE-REGION-NODE-SPAN` built green for a whole slice after `daf1a095` and was
+	 * caught only by RUNNING it.
+	 *
+	 * A plain substring test over the host FILE cannot take the job, and the measurement says
+	 * so rather than the reasoning: of the 69 fragment arms at `a45a05d9`, three match only
+	 * through the whitespace-insensitive fallback and four occur TWICE in the file while
+	 * occurring once in the node, so a strict substring gate would fail seven healthy arms and
+	 * stop the build where there is no defect. What made the faithful check look expensive was
+	 * a claim this fixture refutes: `Patch.locate` runs on the raw slice, long before
+	 * `CanonicalEdit.canonicalize` is reached, so no writer round-trip is involved at all.
+	 *
+	 * The node has to resolve UNIQUELY, which is the runner's own contract (`--select` refuses
+	 * an ambiguous match) and one step stricter than the walk above.
+	 *
+	 * Killed by arm `M-ARM-FRAGMENT-NONE`, which makes the matcher answer zero.
+	 */
+	@:access(anyparse.query.Patch)
+	@:pin('control')
+	@:killer('M-ARM-FRAGMENT-NONE')
+	public function testEveryFragmentArmStillCutsItsNode(): Void {
+		#if (sys || nodejs)
+		final table: ArmTable = MutationArms.parse(File.getContent('test/testkit/mutation-arms.json'));
+		Assert.equals(0, table.errors.length, 'the registry has to read cleanly first: ${table.errors.join('; ')}');
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final sources: Map<String, String> = [];
+		final trees: Map<String, QueryNode> = [];
+		final stale: Array<String> = [];
+		var fragments: Int = 0;
+		for (arm in table.arms) {
+			final find: Null<String> = arm.find;
+			if (find == null) continue;
+			fragments++;
+			final address: String = MutationArms.address(arm);
+			final candidates: Array<String> = MutationArms.candidateFiles(arm.type);
+			final file: Null<String> = candidates.find(path -> FileSystem.exists(path));
+			if (file == null) {
+				stale.push('$address: under none of ${candidates.join(', ')}');
+				continue;
+			}
+			final cachedSource: Null<String> = sources[file];
+			final source: String = if (cachedSource != null)
+				cachedSource;
+			else {
+				final read: String = File.getContent(file);
+				sources[file] = read;
+				trees[file] = plugin.parseFile(read);
+				read;
+			}
+			final tree: Null<QueryNode> = trees[file];
+			if (tree == null) throw 'the tree is written beside the source it was parsed from';
+			final selector: String = '${arm.kind}:${arm.method}';
+			final matches: Array<QueryNode> = Engine.select(tree, Selector.parse(selector), plugin.selectKindEquivalence());
+			if (matches.length != 1) {
+				stale.push('$address: $file holds ${matches.length} "$selector" nodes, and the cut needs exactly one');
+				continue;
+			}
+			final node: QueryNode = matches[0];
+			final span: Null<Span> = node.span;
+			if (span == null) {
+				stale.push('$address: the resolved ${node.kind} node carries no span to search');
+				continue;
+			}
+			final group: Span = ElementSpan.declEditSpan(source, tree, node, span, plugin.lexicalRegions.bind(source));
+			final hits: Int = Patch.occurrences(source.substring(group.from, group.to), find, node.kind);
+			if (hits != 1)
+				stale.push('$address: the stored fragment occurs $hits time(s) in the ${node.kind} node, and the cut needs exactly one');
+		}
+		Assert.isTrue(fragments > 0, 'a registry with no fragment arm would make this walk vacuous');
+		Assert.equals(0, stale.length, 'arms whose stored cut no longer applies:\n  ${stale.join('\n  ')}');
 		#else
 		Assert.pass('the walk needs a filesystem');
 		#end

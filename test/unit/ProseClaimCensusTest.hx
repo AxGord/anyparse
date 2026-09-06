@@ -51,8 +51,11 @@ final class ProseClaimCensusTest extends Test {
 	private static final PLAIN_SENTENCE: String = 'The fix walks the member list once and stops at the first modifier.';
 
 	/**
-	 * The census as it stood at `7331535c`, one line per fixture whose prose
-	 * claims something no `@:pin` / `@:killer` records.
+	 * The census as it stood at `a45a05d9` plus this slice, one line per
+	 * fixture whose prose claims something no `@:pin` / `@:killer` records.
+	 * It was 283 lines carrying 39 `arm` claims; the 30 outside
+	 * `unit.grammar.haxe` now name a declared arm, and the 9 that remain are
+	 * all in that package.
 	 *
 	 * Two of the four kinds have an exit: an `arm` line leaves by gaining a
 	 * `@:killer`, a `control` line by gaining `@:pin(\'control\')`. `base` and
@@ -97,7 +100,7 @@ final class ProseClaimCensusTest extends Test {
 		'unit.check.LintFixDeclineWiringSliceTest#testARefusedRuleCostsOnlyItsOwnEdits :: base',
 		'unit.check.LintFixDeclineWiringSliceTest#testARuleThatSaidNothingIsNotCountedAsDeclining :: base',
 		'unit.check.LintFixDeclineWiringSliceTest#testASourceLevelRefusalIsNotBisected :: base',
-		'unit.check.LintFixDeclineWiringSliceTest#testAnAcceptedFileIsWrittenAndBlamesNobody :: arm,control,base',
+		'unit.check.LintFixDeclineWiringSliceTest#testAnAcceptedFileIsWrittenAndBlamesNobody :: base',
 		'unit.check.LintFixDeclineWiringSliceTest#testGuardRefusalBecomesTheRulesDeclineRow :: base',
 		'unit.check.LintFixDeclineWiringSliceTest#testLaterPassGateRefusalStillReachesTheReport :: base',
 		'unit.check.LintFixDeclineWiringSliceTest#testLaterPassRefusalIsStillReported :: base',
@@ -134,7 +137,7 @@ final class ProseClaimCensusTest extends Test {
 		'unit.check.NamingCheckTest#testExternDeclarationsAreOutsideTheBuiltInConvention :: control',
 		'unit.check.OracleCacheTest#testFixNeverConsultsTheCache :: vacuity',
 		'unit.check.OracleFixImportLeakTest#testAnAdmissibleLocalStillGetsItsImport :: control',
-		'unit.check.OrphanAccessorCheckTest#testTheUnresolvedSupertypeArmAlsoSaysWhyNoEditFollows :: arm,base',
+		'unit.check.OrphanAccessorCheckTest#testTheUnresolvedSupertypeArmAlsoSaysWhyNoEditFollows :: base',
 		'unit.check.OrphanAccessorCheckTest#testUnreadableFileNotSpellingThePropertyKeepsTheWarning :: base',
 		'unit.check.OrphanAccessorCheckTest#testUnreadableFileSpellingOnlyTheAccessorKeepsTheWarning :: base',
 		'unit.check.OrphanAccessorCheckTest#testUnreadableFileSpellingThePropertyKeepsTheDeclaredArmsWarning :: base',
@@ -158,11 +161,11 @@ final class ProseClaimCensusTest extends Test {
 		'unit.check.PreferFinalPublicFieldCheckTest#testCtorConditionalDefaultPlainStringFlagged :: control',
 		'unit.check.PreferFinalPublicFieldCheckTest#testNonInterfacePublicFieldStillConverts :: control',
 		'unit.check.PreferIfExpressionAssignmentCheckTest#testBlockCommentInARungConditionIsClaimedAndKept :: control',
-		'unit.check.PreferIfExpressionAssignmentCheckTest#testFlatTwoBranchStillNotFlagged :: arm,control,base',
+		'unit.check.PreferIfExpressionAssignmentCheckTest#testFlatTwoBranchStillNotFlagged :: base',
 		'unit.check.PreferIfExpressionAssignmentCheckTest#testTerminalTernaryTailSuppliesTheThirdRung :: base',
 		'unit.check.PreferIfExpressionChainCheckTest#testBooleanReducibleChainHeadIsNotFlagged :: base',
-		'unit.check.PreferIfExpressionChainCheckTest#testBooleanReducibleUnfoldedRungStillConverts :: arm,control,base',
-		'unit.check.PreferIfExpressionChainCheckTest#testChainWithNoBooleanLeafStillFlagged :: arm,control,base',
+		'unit.check.PreferIfExpressionChainCheckTest#testBooleanReducibleUnfoldedRungStillConverts :: base',
+		'unit.check.PreferIfExpressionChainCheckTest#testChainWithNoBooleanLeafStillFlagged :: base',
 		'unit.check.PreferIfExpressionReturnCheckTest#testBoolLiteralRungNotClaimed :: control',
 		'unit.check.PreferIfExpressionReturnCheckTest#testMarchRefusedRungValuesNotClaimed :: control',
 		'unit.check.PreferIfExpressionReturnCheckTest#testNonReturnStatementDoesNotHideTheCascade :: control',
@@ -170,9 +173,7 @@ final class ProseClaimCensusTest extends Test {
 		'unit.check.PreferStaticExtensionCheckTest#testHedgedVerdictsCarryTheirOwnDeclineReason :: base',
 		'unit.check.PreferTernaryAssignmentCheckTest#testTernaryTailedElseIsNotFlagged :: base',
 		'unit.check.PreferTernaryReturnCheckTest#testNonReturnRungDoesNotBreakTheDeferral :: control',
-		'unit.check.PreferTernaryReturnCheckTest#testOwnLineCommentInACascadeDefersTheTail :: arm',
 		'unit.check.PreferTernaryReturnCheckTest#testTailOfClaimedCascadeDeferred :: control',
-		'unit.check.PreferTernaryReturnCheckTest#testTheRunOfOneHoistIsRefusedAtTheSeam :: arm',
 		'unit.check.RedundantElseCheckTest#testElseIfChainOfValuedReturnsIsDeferred :: control',
 		'unit.check.RedundantMapExistsCheckTest#testUnprovenSiteCarriesItsDeclineReason :: base',
 		'unit.check.RedundantParensCheckTest#testInterpolationUncloseableBlockIsStillFlagged :: vacuity',
@@ -194,8 +195,6 @@ final class ProseClaimCensusTest extends Test {
 		'unit.check.UnusedPrivateCheckTest#testEmptyCtorKeptWhenSubtypeExtendsATypedefOfIt :: control',
 		'unit.check.UnusedPrivateCheckTest#testPrivateMemberKeptWhenSubtypeExtendsImportAlias :: control',
 		'unit.cli.AddressCliTest#testRemoveElementStillRemovesAMetaBySelector :: control',
-		'unit.cli.CliCommandSeamTest#testTheRegistryHandsOutAFreshCommandPerCall :: arm',
-		'unit.cli.CliCommandSeamTest#testTheRequireMatchFlagDoesNotSurviveItsRun :: arm,control',
 		'unit.cli.ResolutionScopeCliTest#testConfigLessProjectStaysConservativeOnUnresolvableType :: control',
 		'unit.cli.ResolutionScopeCliTest#testSymlinkedSpellingOfTheSameTreeStillDedups :: base',
 		'unit.core.BodyGroupPrefixChargeConsumerTest#testRestStackAlsoDefersAnInlineNestedBody :: control',
@@ -240,11 +239,7 @@ final class ProseClaimCensusTest extends Test {
 		'unit.grammar.haxe.HxOptionalSemicolonSliceTest#testPlainWriterStillElidesAfterASingleBraceTerminatedInit :: control',
 		'unit.grammar.haxe.HxTernaryCuddleProbeShapeTest#testAfterLastLocationBuildsNoCuddleProbes :: control',
 		'unit.query.AddElementSliceTest#testInsertAfterMemberStillLandsBeforeTheNextDoc :: control',
-		'unit.query.AddMetaSliceTest#testCliWritesTheEntry :: arm',
-		'unit.query.AddMetaSliceTest#testFinalClassWrapperIsLifted :: arm',
-		'unit.query.AddMetaSliceTest#testGuardedTypeKeepsTheEntryInsideTheGuard :: arm',
-		'unit.query.AddMetaSliceTest#testTypeEntryLandsBelowTheDoc :: arm',
-		'unit.query.AddressTest#testTreeAddresserBuildsOneIndexForAWholeTree :: arm,base',
+		'unit.query.AddressTest#testTreeAddresserBuildsOneIndexForAWholeTree :: base',
 		'unit.query.ApqRefsTest#testARedeclarationInANestedBlockDoesNotEscapeIt :: control',
 		'unit.query.ApqRefsTest#testAnonymousFunctionLiteralParameterDoesNotLeakIntoTheEnclosingScope :: control',
 		'unit.query.ApqSourceSelectTest#testAstDocReachesPastAConditionalDeclKeywordPrefix :: base',
@@ -253,15 +248,10 @@ final class ProseClaimCensusTest extends Test {
 		'unit.query.ApqSourceSelectTest#testAstSourceStopsBelowTheDocBlock :: control,base',
 		'unit.query.ApqSourceSelectTest#testSelectOnTheAnnotationItselfStillSpansOnlyIt :: control,base',
 		'unit.query.ApqSourceSelectTest#testSelectStopsBelowTheDocBlock :: control,base',
-
 		'unit.query.BodySlotGuardSliceTest#testAllowsBracedIfBodyStatement :: control',
-
 		'unit.query.BodySlotGuardSliceTest#testAllowsPlainBlockStatement :: control',
 		'unit.query.BodySlotGuardSliceTest#testAllowsSoleCaseArmStatement :: control',
-
-
 		'unit.query.BodySlotGuardSliceTest#testAllowsWholeBracelessIfRemoval :: control',
-
 		'unit.query.BodySlotGuardSliceTest#testStatementBodyRefusalAdvisesBraces :: control,base',
 		'unit.query.CachingGrammarPluginTest#testProjectionsUnchangedByTheSharedRoot :: vacuity',
 		'unit.query.CliAtomicWriteSliceTest#testAChangeSetIsWrittenWholeOrNotAtAll :: base',
@@ -270,28 +260,21 @@ final class ProseClaimCensusTest extends Test {
 		'unit.query.CliAtomicWriteSliceTest#testASymlinkedTargetStaysASymlink :: control,base',
 		'unit.query.CliAtomicWriteSliceTest#testAnUnwritableFileNoLongerTakesTheRunDown :: base',
 		'unit.query.CliAtomicWriteSliceTest#testTheFilesModeSurvivesTheRewrite :: control,base',
-
 		'unit.query.CommentOwnerGuardSliceTest#testACommentThatKeepsItsPlaceUnderACarryIsAccepted :: control',
 		'unit.query.CommentOwnerGuardSliceTest#testDeletingTheLastCommentedStatementIsAccepted :: control',
 		'unit.query.CommentOwnerGuardSliceTest#testEditOutsideTheGapIsAccepted :: control',
-
 		'unit.query.CommentOwnerGuardSliceTest#testInPlaceRewriteUnderOneCommentIsAccepted :: control',
 		'unit.query.CommentOwnerGuardSliceTest#testReplacingTheSeparatingCodeIsAccepted :: control',
 		'unit.query.CommentRewriteSliceTest#testCallerSuppliedGutterIsNotDoubled :: base',
 		'unit.query.CommentRewriteSliceTest#testOverWideReplacementAllowedWithFlag :: control',
 		'unit.query.CondBranchSplitTest#testBranchDeclResolvesFromAfterTheRegion :: control',
 		'unit.query.CondBranchSplitTest#testOuterDeclResolvesInsideBranch :: control',
-
-
 		'unit.query.DocOwnerGuardSliceTest#testInsertAboveTheDocIsAccepted :: control',
-
-
 		'unit.query.ExtractInterfaceSliceTest#testANonCanonicalSourceIsNotReformatted :: control',
-		'unit.query.ExtractInterfaceSliceTest#testAlreadyImplementsRefused :: arm,base',
+		'unit.query.ExtractInterfaceSliceTest#testAlreadyImplementsRefused :: base',
 		'unit.query.ExtractInterfaceSliceTest#testAnUntypedBodyIsCutOffLikeAnyOther :: base',
-		'unit.query.ExtractInterfaceSliceTest#testGuardedImplementsRefused :: arm',
-		'unit.query.ExtractInterfaceSliceTest#testQualifiedSameNameDoesNotBlock :: arm,base',
-		'unit.query.ExtractInterfaceSliceTest#testSecondInterfaceStillExtracts :: arm,base',
+		'unit.query.ExtractInterfaceSliceTest#testQualifiedSameNameDoesNotBlock :: base',
+		'unit.query.ExtractInterfaceSliceTest#testSecondInterfaceStillExtracts :: base',
 		'unit.query.ImplicitStdScopeTest#testConfigLessUnresolvableImportStaysInfoAndSurvivesFix :: control',
 		'unit.query.LexicalRegionsSeamTest#testTheEngineNamesNoHaxeGrammarRuleType :: base',
 		'unit.query.MakeFinalSliceTest#testHalfIteratorShapeStillFinal :: control',
@@ -302,10 +285,10 @@ final class ProseClaimCensusTest extends Test {
 		'unit.query.MetaElementSpanSliceTest#testRemoveModuleDeclStillTakesItsDocAndMeta :: control,base',
 		'unit.query.MetaElementSpanSliceTest#testRemoveModuleModifierStillTakesTheType :: control,base',
 		'unit.query.MoveCanonicalOutputSliceTest#testMoveLeavesANonCanonicalSourceUnformatted :: control',
-		'unit.query.MoveFamilyCaptureTest#testABareWildcardCallerIsRepointedByteIdentically :: arm,base',
-		'unit.query.MoveFamilyCaptureTest#testALocalShadowKeepsItsBareReadByteIdentically :: arm,base',
-		'unit.query.MoveFamilyCaptureTest#testARivalWildcardKeepsItsBareCallerByteIdentically :: arm,base',
-		'unit.query.MoveFamilyCaptureTest#testASubModuleMoveRepointsNoWildcardCallerByteIdentically :: arm,base',
+		'unit.query.MoveFamilyCaptureTest#testABareWildcardCallerIsRepointedByteIdentically :: base',
+		'unit.query.MoveFamilyCaptureTest#testALocalShadowKeepsItsBareReadByteIdentically :: base',
+		'unit.query.MoveFamilyCaptureTest#testARivalWildcardKeepsItsBareCallerByteIdentically :: base',
+		'unit.query.MoveFamilyCaptureTest#testASubModuleMoveRepointsNoWildcardCallerByteIdentically :: base',
 		'unit.query.MoveGuardedImportCarryTest#testAModuleImportCarriesOnlyWhenTheModuleIsInsideTheScope :: base',
 		'unit.query.MoveGuardedImportCarryTest#testASubModuleTypeKeepsItsModuleImportInTheDestinationsOwnPackage :: base',
 		'unit.query.MoveMemberSliceTest#testARedundantMemberLevelAccessIsNotWritten :: control',
@@ -329,18 +312,15 @@ final class ProseClaimCensusTest extends Test {
 		'unit.query.MoveSymbolSliceTest#testTheDestinationCollisionScanReadsTheDestinationsOwnComments :: control',
 		'unit.query.NameMentionScanTest#testACommentOnlyDestinationMentionDoesNotContestTheCarry :: control',
 		'unit.query.NameMentionScanTest#testAStringSpellingTheQualifiedPathStillRefusesWhileACommentDoesNot :: control',
-		'unit.query.NewFileSliceTest#testImportsSectionRefusesABareKeyword :: arm',
-		'unit.query.NewFileSliceTest#testImportsSectionRefusesAnUnusableLine :: arm',
-		'unit.query.NewFileSliceTest#testImportsSectionTakesStatements :: arm,base',
+		'unit.query.NewFileSliceTest#testImportsSectionTakesStatements :: base',
 		'unit.query.PatchSliceTest#testAbsentFragmentKeepsTheVerbatimRemedy :: control,base',
-		'unit.query.PatchSliceTest#testDocCodeSampleIndentationSurvives :: arm,base',
-		'unit.query.PatchSliceTest#testDocPayloadWithASpaceGutterApplies :: arm,base',
+		'unit.query.PatchSliceTest#testDocCodeSampleIndentationSurvives :: base',
+		'unit.query.PatchSliceTest#testDocPayloadWithASpaceGutterApplies :: base',
 		'unit.query.PatchSliceTest#testInPlaceEditUnderADocAccepted :: base',
 		'unit.query.PatchSliceTest#testInsertAfterAPlainBannerAccepted :: base',
 		'unit.query.PatchSliceTest#testInsertAheadOfADocumentedMemberThatIsAlsoRenamedRefused :: base',
 		'unit.query.PatchSliceTest#testInsertAheadOfTheDocBlockAccepted :: control',
 		'unit.query.PatchSliceTest#testMidLineFragmentByteExactStillApplies :: control,base',
-		'unit.query.PatchSliceTest#testStringLiteralPerLineIndentStillRefused :: arm',
 		'unit.query.PatchSliceTest#testWholeLineFragmentIsIndentationInsensitive :: control,base',
 		'unit.query.RemoveMemberSliceTest#testTypedefFieldIsRemovable :: control',
 		'unit.query.RenameSliceTest#testNamedFunctionLiteralParameterRenamesApartFromAnOuterLocal :: control',
@@ -350,8 +330,8 @@ final class ProseClaimCensusTest extends Test {
 		'unit.query.SetModifierSliceTest#testAnEnumAbstractMemberStillTakesPublic :: control',
 		'unit.query.ShardPlanTest#testTheNoRegistrationsRefusalNamesTheOtherDoor :: vacuity',
 		'unit.query.SymbolIndexLayerSeamTest#testEachLayerOwnsItsQuestionsAndTheIndexDeclaresNone :: base',
-		'unit.query.SymbolIndexRunMemoSliceTest#testConfinementGateReadsTheIndexGrantSlot :: arm,base',
-		'unit.query.SymbolIndexRunMemoSliceTest#testSupertypeNameUnionIsBuiltOncePerIndex :: arm,base',
+		'unit.query.SymbolIndexRunMemoSliceTest#testConfinementGateReadsTheIndexGrantSlot :: base',
+		'unit.query.SymbolIndexRunMemoSliceTest#testSupertypeNameUnionIsBuiltOncePerIndex :: base',
 		'unit.query.SymbolIndexSliceTest#testIsExternUnconditionalControls :: control',
 		'unit.query.SymbolIndexSliceTest#testTypedefAnonFieldsAreMembers :: control',
 		'unit.query.TypeResolverSliceTest#testAReadBeforeAReDeclarationKeepsItsOwnProof :: control'

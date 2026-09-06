@@ -313,9 +313,12 @@ class PreferIfExpressionAssignmentCheckTest extends Test {
 	 * CONTROL: a flat 2-branch with two plain leaves stays `prefer-ternary-assignment`'s.
 	 *
 	 * Green at base by arithmetic — `terminalTernaryRungs` answers 0 for an r-value that is not a
-	 * ternary, so the widened gate is byte-identical to the old one here. Killed by making
-	 * `terminalTernaryRungs` answer a positive count unconditionally.
+	 * ternary, so the widened gate is byte-identical to the old one here. Killed by arm
+	 * `M-TERMINAL-RUNGS-ANY`, which makes `terminalTernaryRungs` answer a positive count
+	 * unconditionally.
 	 */
+	@:pin('control')
+	@:killer('M-TERMINAL-RUNGS-ANY')
 	public function testFlatTwoBranchStillNotFlagged(): Void {
 		Assert.equals(0, violations('class C {\n\tfunction f() {\n\t\tif (a) x = 1;\n\t\telse x = 2;\n\t}\n}').length);
 	}

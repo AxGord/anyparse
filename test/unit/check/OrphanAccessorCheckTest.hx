@@ -276,8 +276,11 @@ import utest.Test;
 	 * reason, and it is a DIFFERENT sentence: the two arms decline for different facts, and one
 	 * sentence covering both would be the "confident wrong answer" this rule keeps producing.
 	 *
-	 * RED at base (the arm has never written one) and killed by making the two arms share a reason.
+	 * RED at base (the arm has never written one) and killed by arm `M-ORPHAN-ARMS-SHARE-REASON`,
+	 * which gives both of them the unreadable arm's sentence.
 	 */
+	@:pin('control')
+	@:killer('M-ORPHAN-ARMS-SHARE-REASON')
 	public function testTheUnresolvedSupertypeArmAlsoSaysWhyNoEditFollows(): Void {
 		final found: Null<Violation> = loneFinding([
 			{ file: 'C.hx', source: 'class C extends Missing {\n\tpublic function get_data():Int return 0;\n}' }

@@ -457,12 +457,13 @@ class PreferTernaryReturnCheckTest extends Test {
 	 * than a fixture that never reached the code. What kills each, MEASURED by reverting one
 	 * thing at a time:
 	 *
-	 *  - the TRAILING arm is killed by neutralising `ridesItsBranch` (`F..`). It is not
+	 *  - the TRAILING arm is killed by arm `M-PTR-RIDES-NEVER`, which neutralises
+	 *    `ridesItsBranch` (`F..`). It is not
 	 *    decoration: `buildEdit` splices a guard-line comment after the `?` value instead of
 	 *    hoisting it, and every later step of the march finds it inside the else value it copies
 	 *    whole.
-	 *  - the OWN-LINE arm is killed by neutralising `strandsCascadeComment` itself (`..F`) — the
-	 *    claim.
+	 *  - the OWN-LINE arm is killed by arm `M-PTR-CASCADE-NEVER-STRANDS`, which neutralises
+	 *    `strandsCascadeComment` itself (`..F`) — the claim.
 	 *  - the SINGLE arm is killed by NOTHING in this slice, and saying so is the honest reading:
 	 *    its comment LEADS the `if`, and a statement span starts at the `if` keyword, so that
 	 *    comment lies outside the region whether or not the `head == i` exception is there. It
@@ -475,6 +476,9 @@ class PreferTernaryReturnCheckTest extends Test {
 	 * with no replacement anywhere — which is why the narrowing is the conjunction of shape and
 	 * comment rather than either one.
 	 */
+	@:pin('control')
+	@:killer('M-PTR-RIDES-NEVER')
+	@:killer('M-PTR-CASCADE-NEVER-STRANDS')
 	public function testOwnLineCommentInACascadeDefersTheTail(): Void {
 		final trailing: String = 'class C {\n\tfunction f(a:Bool, b:Bool):Bool {\n\t\tif (a) return true; // a wins outright\n'
 			+ '\t\tif (b) return false;\n\t\treturn true;\n\t}\n}';
@@ -508,9 +512,12 @@ class PreferTernaryReturnCheckTest extends Test {
 	 * files / 4 passes) are byte-identical with and without the declaration, and neither run
 	 * produces a single carry refusal. The shape is real (this fixture) and rare.
 	 *
-	 * Killed by arm `F1` (`CommentOwnerGuard.hoistedComment` returning null) and by arm `F3`
-	 * (`buildEdit` declaring an empty carry).
+	 * Killed by arm `M-COMMENT-HOIST-BLIND` (`CommentOwnerGuard.hoistedComment` returning
+	 * null). The second cut S84 named — `buildEdit` declaring an empty carry — reaches the
+	 * same seam from the producer's side and has no declared arm of its own.
 	 */
+	@:pin('control')
+	@:killer('M-COMMENT-HOIST-BLIND')
 	public function testTheRunOfOneHoistIsRefusedAtTheSeam(): Void {
 		final source: String = 'class C {\n\tfunction f(a:Bool):Int {\n\t\tif (a) return 1;\n\t\t// why zero\n\t\treturn 0;\n\t}\n}';
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
