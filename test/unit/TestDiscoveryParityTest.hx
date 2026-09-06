@@ -1064,9 +1064,15 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.TrivialGetterCheckTest#testBasicBlockBodyFlagged :: control :: M-SUBOVERRIDE-TRUE',
 			'unit.check.TrivialGetterShapeCollapseTest#testForeignHierarchyBackingNameStaysAccountedFor :: control :: '
 			+ 'M-SUPERDECLARES-FALSE',
+			'unit.check.UnguardedNullableDerefTest#testDeclaredNullableFromANullableFieldStillFlagged :: control :: '
+			+ 'M-DECL-INIT-RECEIVER-MODE-NOMINAL',
 			'unit.check.UnguardedNullableDerefTest#testDeclaredNullableLocalFlagged :: control :: M-DECL-NULLABLE-BLIND',
+			'unit.check.UnguardedNullableDerefTest#testDeclaredNullableTernaryWithANullableArmStillFlagged :: control :: '
+			+ 'M-DECL-INIT-TERNARY-ANY-ARM',
 			'unit.check.UnguardedNullableDerefTest#testDeclaredNullableUnderExistsGuardNotFlagged :: control :: '
 			+ 'M-DECL-NULLABLE-OVERRIDES-EXISTS',
+			'unit.check.UnguardedNullableDerefTest#testDeclaredNullableWithProvablyNonNullInitializerNotFlagged :: control :: '
+			+ 'M-DECL-INIT-NONNULL-BLIND,M-DECL-INIT-LITERAL-BLIND',
 			'unit.check.UnguardedNullableDerefTest#testExistsGuardEarlyReturnPathKeySuppressed :: control :: M-EXISTS-GUARD-BLIND',
 			'unit.check.UnguardedNullableDerefTest#testFieldPathMapSeedFlagged :: control :: M-NULLABLE-NO-CHAIN',
 			'unit.check.UnguardedNullableDerefTest#testReflectCopyBindingNotFlagged :: control :: M-NULLABLE-FLOW-EXCLUDE-NONE',
@@ -1611,7 +1617,11 @@ class TestDiscoveryParityTest extends Test {
 			'M-EXISTS-GUARD-BLIND',
 			'M-USES-EXACT-ONLY',
 			'M-USES-TAIL-SUBSTRING',
-			'M-USES-QUALIFIED-DEFAULT'
+			'M-USES-QUALIFIED-DEFAULT',
+			'M-DECL-INIT-NONNULL-BLIND',
+			'M-DECL-INIT-TERNARY-ANY-ARM',
+			'M-DECL-INIT-LITERAL-BLIND',
+			'M-DECL-INIT-RECEIVER-MODE-NOMINAL'
 		], [for (line in TestRegistry.arms()) line.split(' :: ')[0]], 'the arms every @:killer resolves into');
 	}
 

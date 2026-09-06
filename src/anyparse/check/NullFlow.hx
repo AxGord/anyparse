@@ -241,8 +241,14 @@ final class NullFlow {
 	 */
 	public static final META_KINDS: Array<String> = ['MetaCall', 'Meta', 'PlainMeta'];
 
-	/** Expression kinds whose value can never be null — a safe non-null assignment RHS. */
-	private static final NON_NULL_RHS_KINDS: Array<String> = [
+	/**
+	 * Expression kinds whose value can never be null — a safe non-null assignment RHS.
+	 *
+	 * Also read by `NullableSource.initTypeIsNonNull`, which asks the same question of a
+	 * ternary's value arms one level down: a chain resolver types a call but says nothing
+	 * about a bare literal, and a literal arm is exactly what this list already answers.
+	 */
+	public static final NON_NULL_RHS_KINDS: Array<String> = [
 		'NewExpr',
 		'ArrayExpr',
 		'ObjectLit',

@@ -1719,6 +1719,37 @@
 			"find": "includeQualified: Bool = false",
 			"replace": "includeQualified: Bool = true",
 			"note": "the widened match becomes the default, so the rewriter arm of `CrossRename` is handed dotted paths it would splice whole"
+		},
+		{
+			"name": "M-DECL-INIT-NONNULL-BLIND",
+			"type": "anyparse.check.NullableSource",
+			"method": "initTypeIsNonNull",
+			"force": "false",
+			"note": "no initializer is ever proved non-null, so the declaration seed fires again over a redundant `Null<T>` whose value cannot be null"
+		},
+		{
+			"name": "M-DECL-INIT-TERNARY-ANY-ARM",
+			"type": "anyparse.check.NullableSource",
+			"method": "initTypeIsNonNull",
+			"find": "return initTypeIsNonNull(init.children[1], cfg, valueNominalOf) && initTypeIsNonNull(init.children[2], cfg, valueNominalOf);",
+			"replace": "return initTypeIsNonNull(init.children[1], cfg, valueNominalOf) || initTypeIsNonNull(init.children[2], cfg, valueNominalOf);",
+			"note": "one proven arm carries the whole ternary, so `flag ? a : null` reads as non-null and a real NPE goes silent"
+		},
+		{
+			"name": "M-DECL-INIT-LITERAL-BLIND",
+			"type": "anyparse.check.NullableSource",
+			"method": "initTypeIsNonNull",
+			"find": "if (NullFlow.NON_NULL_RHS_KINDS.contains(init.kind)) return true;",
+			"replace": "if (NullFlow.NON_NULL_RHS_KINDS.contains('')) return true;",
+			"note": "a bare literal arm is judged by the chain resolver alone, which does not type one, so a ternary with a literal branch stays seeded"
+		},
+		{
+			"name": "M-DECL-INIT-RECEIVER-MODE-NOMINAL",
+			"type": "anyparse.check.UnguardedNullableDeref",
+			"method": "run",
+			"find": "NullFlow.declInit(decl, declTypeChildKinds), cfgValue, valueNominalOf);",
+			"replace": "NullFlow.declInit(decl, declTypeChildKinds), cfgValue, nominalOf);",
+			"note": "the initializer is typed through the RECEIVER arc, which peels `Null<>`, so a field declared `Null<T>` reads as non-null and its seed is dropped"
 		}
 	]
 }
