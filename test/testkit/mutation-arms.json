@@ -711,6 +711,14 @@
 			"note": "a `?.` guard narrows nothing, so `if (u?.b != null) u.b.c()` reports its own guarded dereference again"
 		},
 		{
+			"name": "M-OPAQUE-REGION-BRACE-DELTA",
+			"type": "anyparse.query.CondRegionScan",
+			"method": "opaqueCondRegions",
+			"find": "if (gaps.length > 0) {",
+			"replace": "final braceRule: String = gaps.length > 0 ? source.substring(gaps[0].from, gaps[gaps.length - 1].to) : '';\nif (gaps.length > 0 && braceRule.split('{').length != braceRule.split('}').length) {",
+			"note": "a region is reported raw only where its own brace counts differ - the refuted brace-delta rule, which drops 34 of the 59 raw regions measured over three trees"
+		},
+		{
 			"name": "M-OPAQUE-REGION-NONE",
 			"type": "anyparse.query.CondRegionScan",
 			"method": "opaqueCondRegions",

@@ -326,6 +326,19 @@ Writer philosophy (load-bearing decision): **parsing is lossy, writing is `forma
 
 See `testing.md` for why this is the right trade-off and what use cases are preserved.
 
+### A `#if` region the parser captured raw
+
+One AST, one writer has exactly one boundary, and it is conditional compilation. A `#if ... #end` region whose bytes are not a balanced subtree IN THEIR GRAMMATICAL POSITION — a `try {` whose `catch` closes in another region, an `else` whose `if` is outside it, a dangling operator, a bare `case` label — cannot be a node, so the grammar falls back to a raw byte capture (Haxe: `CondSpliceStmt` / `CondSpliceTail` / `CondSharedBodyDecl` / …, listed by `RefShape.opaqueCondRegionKinds`). The bytes the fallback ctor leaves unmodelled project no nodes, so the writer re-emits exactly those verbatim while reformatting everything around them — several of the ctors do keep children INSIDE the region, and those are formatted like any other subtree (`OpaqueCondRegion.formatted`) — and the name-driven mutating ops refuse over such a region rather than part-applying. One collector answers both consumers: `anyparse.query.CondRegionScan.opaqueCondRegions`. The nearest thing to a bracket test anywhere on the capture path is `HxCondBlockOpenRaw`'s `\{\s*#end` — a token-SHAPE constraint picking WHICH raw ctor a region takes, never whether it is raw at all.
+
+**The predicate is the grammar's fallback ctor, never a bracket count** — worth stating outright, because the bracket reading is the one the shape invites and it has been proposed and refuted twice. Measured 2026-09-07 over three trees (this project's `src`, 934 files; the Pony fork's `src`, 680; the haxe-formatter corpus inputs, the 897 of 946 that `fmt` processes) — 1580 `#if ... #end` regions, 59 captured raw, of which this project contributes 0:
+
+| | braces EQUAL | braces UNEQUAL |
+|---|---|---|
+| **captured raw** | 34 | 25 |
+| **formatted** | 1520 | 1 |
+
+A brace rule would therefore report none of 34 raw regions, and would report one region that formats. That single false positive is a defect of the metric rather than a near miss: a brace count over the region's code bytes adds up BOTH mutually exclusive arms of `#if a … { #else … { #end … }`, and no configuration of the file ever holds both — so "how the brackets balance" is not even well defined over a region with an `#else`. `unit.query.OpaqueCondRegionScanTest` pins one fixture per class (construct-cutting with balanced braces, construct-cutting with unbalanced braces, unbalanced-yet-formatted), and the mutation arm `M-OPAQUE-REGION-BRACE-DELTA` is the refuted rule itself.
+
 ## The CLI layer
 
 `apq` / `hxq` is the platform's own first consumer: a query, refactor and lint CLI written entirely against the public parser, writer and check layers. It is where the architecture is dogfooded, so its own shape is part of the architecture rather than an accident of one binary.
