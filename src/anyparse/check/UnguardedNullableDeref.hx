@@ -25,8 +25,13 @@ import anyparse.runtime.Span;
  * file's `declaredTypes` / `returnTypes`, with `CheckScan.typeNominalResolver` behind them for a
  * receiver no annotation names — a `Map`-family index or `.get`, or a `Null<T>`-returning call).
  * The DECLARATION side (`NullableSource.declaredNullable`) fires on a local whose written
- * annotation is `Null<T>` and whose initializer the expression side has no opinion about, so a
- * receiver no nullable expression ever feeds still carries the fact; where the expression side
+ * annotation is `Null<T>` and whose initializer says nothing against it, so a receiver no
+ * nullable expression ever feeds still carries the fact. "Says nothing" is two conditions, not
+ * one: the expression side has no opinion, AND the initializer's own type does not RESOLVE to
+ * something non-nullable (`NullableSource.initTypeIsNonNull`, read through a VALUE-mode
+ * resolver). Without the second the annotation was seeded over a value that cannot be null —
+ * seven such warnings across two real trees, every one a redundant `Null<T>` over a two-branch
+ * ternary or a non-null-returning call; where the expression side
  * DOES have an opinion its verdict stands, which is what keeps an `m.exists(k)`-proven map read
  * silent even though its declaration reads `Null<V>`. Parameters are not seeded from their
  * annotation — `NullFlow.analyze` documents the measurement behind that. The length-guarded collection accessors (`Array` / `List` `pop` / `shift` / `first` / `last`) are excluded from the seed — their dominant `while (c.length > 0) c.pop()` idiom is safe by a guard flow cannot model, so seeding them would be a systematic false positive; the point-wise `possible-null-dereference` still flags them at `Info`. The fact is narrowed away by the same guards the engine already models — an
@@ -90,6 +95,7 @@ final class UnguardedNullableDeref implements Check {
 		// the exclusion list has to be re-applied inside the arc once it is this wide.
 		final index: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? SymbolIndex.build(files, plugin);
 		final ctx: Ctx = { ident: ident, soleChildKinds: soleChildKinds, firstChildKinds: firstChildKinds };
+		final declTypeChildKinds: Array<String> = shape.declTypeChildKinds ?? [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
@@ -100,9 +106,24 @@ final class UnguardedNullableDeref implements Check {
 			final nominalOf: Null<(QueryNode) -> Null<String>> = CheckScan.typeNominalResolver(
 				entry.source, plugin, tree, entry.file, index, true
 			);
+			// A SECOND resolver, in VALUE mode. The receiver-mode one above peels the `Null<>`
+			// wrapper on purpose — `tmp.trim()` on a `tmp: Null<String>` has to look `trim` up on
+			// `String` — so it answers `Data` for a field declared `Null<Data>`. That is the whole
+			// answer for the question below, and reading it through the receiver arc silently
+			// declared a genuinely nullable initializer non-null (measured: one real seed lost on
+			// TM-Haxe4 before this split).
+			final valueNominalOf: Null<(QueryNode) -> Null<String>> = CheckScan.typeNominalResolver(
+				entry.source, plugin, tree, entry.file, index
+			);
 			final seed: (QueryNode) -> Bool = rhs ->
 				NullableSource.describe(rhs, root, declaredTypes, returnTypes, cfgValue, index, nominalOf) != null;
-			final declaredNullable: (QueryNode) -> Bool = decl -> NullableSource.declaredNullable(decl, declaredTypes, cfgValue);
+			// The annotation is evidence only where the INITIALIZER has none. `NullFlow` reaches this
+			// seed whenever the initializer named no nullable SOURCE, which is also true of an
+			// initializer the resolver typed and typed as NOT nullable — there the `Null<T>` is a
+			// redundant annotation, and seeding it warns about a dereference no path can fault.
+			final declaredNullable: (QueryNode) -> Bool = decl ->
+				NullableSource.declaredNullable(decl, declaredTypes, cfgValue)
+					&& !NullableSource.initTypeIsNonNull(NullFlow.declInit(decl, declTypeChildKinds), cfgValue, valueNominalOf);
 			NullFlow.analyze(
 				tree, shape, entry.source, (node, facts) -> checkDeref(violations, entry.file, node, facts, ctx), seed, declaredNullable
 			);

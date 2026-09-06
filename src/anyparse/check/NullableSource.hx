@@ -54,6 +54,9 @@ import anyparse.runtime.Span;
 @:nullSafety(Strict)
 final class NullableSource {
 
+	/** A ternary's child count — condition, then-arm, else-arm. */
+	private static inline final TERNARY_ARITY: Int = 3;
+
 	/**
 	 * Resolve the recognition config from a grammar's `RefShape`, or null when the
 	 * grammar has no identifier kind or declares no nullable source at all (index
@@ -124,6 +127,45 @@ final class NullableSource {
 		if (span == null || cfg.returnMarkers.length == 0) return false;
 		final declared: Null<String> = declaredTypes[span.from];
 		return declared != null && cfg.returnMarkers.contains(declared);
+	}
+
+	/**
+	 * Whether `init` — a declaration's initializer — has a RESOLVED type that is not the nullable
+	 * wrapper. The one state the declaration seed above must not read as silence.
+	 *
+	 * That seed exists because an initializer the resolver cannot type leaves the written `Null<T>`
+	 * as the whole evidence (`final e: Null<Char> = t.getChar(1)`). `NullFlow` reaches it whenever
+	 * the initializer named no nullable SOURCE — which collapses two different states: "the resolver
+	 * typed this and it is `Foo`" and "the resolver has no idea" both arrive as silence, so the
+	 * annotation gets seeded over a value that cannot be null. The annotation is then merely
+	 * redundant, and the warning is about a dereference no path can fault.
+	 *
+	 * `valueNominalOf` MUST be a resolver built in VALUE mode. The receiver-mode arc peels the
+	 * `Null<>` wrapper by design — `tmp.trim()` on a `tmp: Null<String>` has to find `trim` on
+	 * `String` — so it answers `T` for a field declared `Null<T>`, which is the exact opposite of
+	 * what this predicate asks. Passing the receiver-mode resolver silently drops real seeds, and
+	 * only a fixture over a `Null<T>`-declared FIELD tells the two apart.
+	 *
+	 * Three answers, in order. A TERNARY is answered branch-wise, because the chain resolver does
+	 * not type one: it is non-null when every value arm is, recursing through a nested ternary.
+	 * A node whose KIND can never produce null answers itself — the resolver says nothing about a
+	 * bare literal, and a literal arm is what a redundant `Null<T>` over a ternary usually holds.
+	 * Everything else is asked of the resolver, and an unresolved answer stays silence — the safe
+	 * direction, since it only leaves today's seed standing.
+	 *
+	 * Residual: a nominal of `Any` reads as proof, since only the raw dynamic name is excluded by
+	 * name. Unmeasured — no tree in the corpus writes `final p: Null<T> = <an Any>`.
+	 */
+	public static function initTypeIsNonNull(
+		init: Null<QueryNode>, cfg: NullableSourceCfg, valueNominalOf: Null<(QueryNode) -> Null<String>>
+	): Bool {
+		if (init == null || valueNominalOf == null) return false;
+		final ternaryKind: Null<String> = cfg.shape.ternaryKind;
+		if (ternaryKind != null && init.kind == ternaryKind && init.children.length == TERNARY_ARITY)
+			return initTypeIsNonNull(init.children[1], cfg, valueNominalOf) && initTypeIsNonNull(init.children[2], cfg, valueNominalOf);
+		if (NullFlow.NON_NULL_RHS_KINDS.contains(init.kind)) return true;
+		final nominal: Null<String> = valueNominalOf(init);
+		return nominal != null && !cfg.returnMarkers.contains(nominal) && nominal != cfg.shape.rawDynamicTypeName;
 	}
 
 	/**

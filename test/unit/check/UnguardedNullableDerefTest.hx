@@ -617,6 +617,67 @@ class UnguardedNullableDerefTest extends Test {
 		Assert.equals(0, violations('class C { function f(t:Tex) { final e: Dynamic = t.getChar(1); e.width; } }').length);
 	}
 
+	/**
+	 * The annotation is evidence only where the INITIALIZER has none. When the initializer's
+	 * own type is resolvable and not nullable, a `Null<T>` on the declaration is a redundant
+	 * annotation, not a fact about the value — seeding from it reports a dereference that
+	 * cannot be null.
+	 */
+	@:pin('control')
+	@:killer('M-DECL-INIT-NONNULL-BLIND')
+	@:killer('M-DECL-INIT-LITERAL-BLIND')
+	public function testDeclaredNullableWithProvablyNonNullInitializerNotFlagged(): Void {
+		Assert.equals(
+			0, violations('class C { function f(flag:Bool, a:Foo, b:Foo) { final p: Null<Foo> = flag ? a : b; p.foo; } }').length,
+			'both ternary branches are non-null bindings'
+		);
+		Assert.equals(
+			0, violations('class C { function make():Foo { return null; } function f() { final p: Null<Foo> = make(); p.foo; } }').length,
+			'the call declares a non-null return type'
+		);
+		Assert.equals(
+			0, violations('class C { function f(flag:Bool, a:Foo) { final p: Null<Foo> = flag ? a : 0; p.foo; } }').length,
+			'a bare literal arm is non-null by kind — the chain resolver types a call but says nothing about `0`'
+		);
+		Assert.equals(
+			1, violations('class C { function f(t:Tex) { final e: Null<Char> = t.getChar(1); e.width; } }').length,
+			'an initializer the resolver cannot type still leaves the annotation as the whole evidence'
+		);
+	}
+
+	/** A ternary is only as non-null as its WEAKEST arm — one unproven arm leaves the seed standing. */
+	@:pin('control')
+	@:killer('M-DECL-INIT-TERNARY-ANY-ARM')
+	public function testDeclaredNullableTernaryWithANullableArmStillFlagged(): Void {
+		Assert.equals(
+			1, violations('class C { function f(flag:Bool, a:Foo) { final p: Null<Foo> = flag ? a : null; p.foo; } }').length,
+			'a null literal arm is not proof of anything'
+		);
+		Assert.equals(
+			1,
+			violations('class C { function f(flag:Bool, a:Foo, t:Tex) { final p: Null<Foo> = flag ? a : t.getChar(1); p.foo; } }').length,
+			'an arm the resolver cannot type leaves the ternary unproven'
+		);
+	}
+
+	/**
+	 * A `Null<T>`-declared FIELD read as the initializer keeps the seed. The resolver this check
+	 * builds for its receiver lookups peels the `Null<>` wrapper by design, so asking it here
+	 * answered `Foo` for a genuinely nullable field and dropped a real seed — the predicate reads
+	 * a second resolver in VALUE mode instead.
+	 */
+	@:pin('control')
+	@:killer('M-DECL-INIT-RECEIVER-MODE-NOMINAL')
+	public function testDeclaredNullableFromANullableFieldStillFlagged(): Void {
+		Assert.equals(
+			1, violationsFiles([
+				{ file: 'Ev.hx', source: 'class Ev { public final itemData:Null<Foo>; public function new() { itemData = null; } }' },
+				{ file: 'C.hx', source: 'class C { function f(event:Ev) { final item: Null<Foo> = event.itemData; item.bar; } }' }
+			]).length,
+			'the field is declared Null<Foo>, so its read proves nothing'
+		);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new UnguardedNullableDeref().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
