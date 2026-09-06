@@ -1207,9 +1207,13 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxIfStmtExprPositionDispatchTest#testElseBodyDualFlagDispatchesAtExpressionPosition :: control :: '
 			+ 'M-ELSE-SEP-EXPR-BLIND',
 			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testBrokenShapeIsIdempotent :: control :: M-LOOPIF-NEVER',
+			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testDoWhileStaysOutOfReach :: guard :: ',
 			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testForIfElseBreaksUnderHeader :: control :: M-LOOPIF-NEVER',
 			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testGuardIfWithoutElseStaysGlued :: control :: M-LOOPIF-ALWAYS',
+			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testKnobOffRejoinsAHandBrokenSite :: guard :: ',
 			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testNonLoopAndNonIfBodiesUnchanged :: control :: M-LOOPIF-ALWAYS',
+			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testReportedConfigGuardStaysGlued :: control :: M-LOOPIF-ALWAYS',
+			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testReportedSiteBreaksUnderHeader :: control :: M-LOOPIF-NEVER',
 			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testWhileIfElseBreaksUnderHeader :: control :: M-LOOPIF-NEVER',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testBareThenIfGetsBracesAdded :: control :: M-SSB-WRAP-DIRECTION',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testBareThenOppositeBracedElseGetsBraces :: control :: M-SSB-CHAIN-TAIL-OFF',

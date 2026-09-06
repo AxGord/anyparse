@@ -284,6 +284,86 @@ Two traps:
 Until 2026-09-04 the key did nothing BUT the padding: `same` / `next` / `fitLine` / `keep` produced
 byte-identical output for every input, so no config value could move a comprehension body.
 
+## `sameLine.loopBodyIfElseNext` — the one loop body whose `else` has nothing to pair with
+
+**`sameLine.loopBodyIfElseNext: true | false`** (default `false`) breaks a `for` / `while` header
+away from a body that is an `if` carrying an `else`, putting the whole `if`/`else` on the next line
+one indent step in. A `Bool`, like its nine `sameLine` neighbours (`fitLineIfWithElse`,
+`fitLineBodyGlue`, `expressionIfWithBlocks`, `expressionIfFit`, `expressionIfWithBrackets`,
+`expressionIfArrowBodyReflow`, `ifElseSemicolonNextLine`, `conditionalExprFit`,
+`elseIfCommentReflow`) — it does not pick a placement, it withdraws ONE shape from the placement
+`forBody` / `whileBody` already decided.
+
+It reaches ONLY the `fitLine` placement, which is not the same as "the only policy that glues".
+Measured on the reported site, one variable at a time:
+
+| `forBody` | knob off | knob on |
+|---|---|---|
+| `fitLine` | glued | **broken out** |
+| `same`    | glued | glued |
+| `keep`    | glued (a glued source is reproduced) | glued |
+| `next`    | broken out | broken out |
+
+So a config on `same` or `keep` has the reported defect and this key cannot decline it — the same
+honest position `do … while` is in, below. `next` already breaks every loop body, the guard idiom
+included, which is the cost this key exists to avoid.
+
+```jsonc
+"sameLine": { "forBody": "fitLine", "whileBody": "fitLine", "loopBodyIfElseNext": true }
+```
+
+Reported site (`src/pony/unity3d/UTools.hx`), off — the `}` and the `else` sit at the LOOP's
+indent, so the `else` reads as a branch of the `for`:
+
+```haxe
+		for (i in 0...a.Length) if (skip) {
+			skip = false;
+		} else {
+```
+
+and on:
+
+```haxe
+		for (i in 0...a.Length)
+			if (skip) {
+				skip = false;
+			} else {
+```
+
+### The two forms are NOT both fixed points
+
+With the key off and `forBody: fitLine`, writing the broken-out shape by hand does not survive one
+`fmt` pass — the writer re-joins it onto the header, because that is what `fitLine` means. The key
+is the only way to hold the shape. (`HxLoopBodyIfElseSliceTest.testKnobOffRejoinsAHandBrokenSite`
+records this in both directions.)
+
+### What counts as a "branching body", and what does not
+
+The predicate is exactly `LoopBodyShape.isIfWithElse`: the body's ctor is `IfStmt` AND its
+`elseBody` field is non-null. Nothing else. Two neighbouring shapes look like they belong and do
+not, measured over one real 872-file tree (all six source roots):
+
+- **An `if` with NO `else` — 64 further files.** This is the deliberate `for (x in xs) if (c) …`
+  guard idiom, and the whole reason the gate reads the body's shape instead of being a body policy:
+  `forBody: "next"` moves the guard idiom under the header too. Nothing here is dangling — the
+  header line's own `{`, or its single statement, is what the reader pairs with.
+- **A `switch` body — 19 files.** `for (e in data) switch e {` … `}` has no keyword outside the
+  braces: the `}` at the loop's indent closes the `{` on the header line, which is the same visual
+  contract the guard idiom has. The defect this key exists for is a SECOND keyword (`else`)
+  appearing at the loop's indent with nothing on the header line to pair it with, and a `switch`
+  body never produces one.
+
+That asymmetry is why the key is named for its predicate rather than for the broader
+"branching body": the wider name would promise coverage the predicate does not have, over 19 sites
+whose glued form the reporter's own layout rule endorses.
+
+### `do … while`
+
+`do <body> while (cond);` has a glued form of its own (`do if (c) { … } else { … } while (c);`), but
+only under `sameLine.doWhileBody: "fitLine"` — the default `Next` already puts the body on its own
+line, so there is nothing to break. This key does not reach `HxDoWhileStmt.body`; a config that sets
+`doWhileBody: "fitLine"` gets the glued shape back with no way to decline it.
+
 ## Where to look when a key still does nothing
 
 1. Check the spelling here. An unknown value is silently ignored.

@@ -2111,6 +2111,31 @@ Especially valuable in property tests where the failure is hidden in random data
 
 When adding a grammar, the PR includes a round-trip test with at least 20 curated cases and a random generator that produces 100+ cases per run. A grammar without a round-trip test is not ready to merge.
 
+### "Does the writer touch this shape?" is TWO measurements, not one
+
+Feeding a reported layout back through the writer and getting the same bytes proves only that
+the shape is a fixed point. It does NOT prove the writer is neutral about it — the writer may be
+actively PRODUCING that shape from every other spelling, which is the case a report is usually
+about. The second measurement is the one that decides: write the layout you WANT, format it, and
+see whether it survives.
+
+Measured on S157's reported site, under the reporting tree's own `hxformat.json`
+(`sameLine.forBody: "fitLine"`): `for (…) if (c) { … } else { … }` formats to itself, and the
+broken-out form the report asked for formats back INTO it. One direction says "nothing touches
+this"; the pair says the writer owns the shape and only a knob can hold the other one.
+
+The generalisation for any layout report: the answer is a 2x2 — {reported form, wanted form} x
+{knob off, knob on} — and a slice brief that quotes only the reported-form cell has measured a
+quarter of the question. The same grid is what a fixture pair should assert, which is why the
+slice test carries a `@:pin('guard')` on the re-join direction: no arm of that slice can flip it
+(the knob's flag short-circuits ahead of the shape probe, so an off knob answers the same whatever
+the probe is cut to), and without it the re-join is a fact nothing in the suite records.
+
+When the second cell turns out to have NO knob behind it — the writer owns the shape and no config
+value declines it — the finding is the same shape as a missing feature and belongs in the report
+with its measurement, not in a fixture: assert what the writer does today, say in the doc which
+configurations are stuck with it, and let the absence be visible rather than implied.
+
 ## Running tests
 
 ```sh
