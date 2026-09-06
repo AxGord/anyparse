@@ -252,12 +252,7 @@ final class SweepCommand implements CliCommand {
 		for (k in cur.keys()) allPaths[k] = true;
 		for (k in prev.keys()) allPaths[k] = true;
 		final sorted: Array<String> = [for (k in allPaths.keys()) k];
-		sorted.sort((a: String, b: String) -> if (a < b)
-			-1
-		else if (a > b)
-			1
-		else
-			0);
+		sorted.sort(CliIo.compareStrings);
 		final transitions: Map<String, Int> = [];
 		var changed: Int = 0;
 		for (path in sorted) {
@@ -270,12 +265,7 @@ final class SweepCommand implements CliCommand {
 			CliIo.sysPrint('${moved.line}\n');
 		}
 		final breakdown: Array<String> = [for (k => v in transitions) '$k: $v'];
-		breakdown.sort((a: String, b: String) -> if (a < b)
-			-1
-		else if (a > b)
-			1
-		else
-			0);
+		breakdown.sort(CliIo.compareStrings);
 		CliIo.sysPrint(
 			changed == 0
 				? '--- sweep --diff: 0 fixtures changed vs $prevPath (snapshots identical) ---\n'

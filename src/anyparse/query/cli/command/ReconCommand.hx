@@ -865,10 +865,40 @@ final class ReconCommand implements CliCommand {
 	}
 
 	/**
+	 * Every `.hxtest` fixture under `root`, in the order the corpus walk visits
+	 * them: each directory's own entries sorted, subdirectories descended after
+	 * the files beside them and in reverse order (a LIFO stack — the shape the
+	 * skip listing has always had, and what `apq recon`'s SKIP lines and
+	 * `--regression-probe` read).
+	 *
+	 * One walker because there were two: `apq sweep --run` re-derives the corpus
+	 * census over the same tree, and `duplicate-code` reported the prologue
+	 * cross-file the day the second one landed.
+	 */
+	public static function hxtestPathsUnder(root: String): Array<String> {
+		final out: Array<String> = [];
+		final stack: Array<String> = [root];
+		while (stack.length > 0) {
+			final dir: Null<String> = stack.pop();
+			if (dir == null) break;
+			final names: Array<String> = FileSystem.readDirectory(dir);
+			names.sort(CliIo.compareStrings);
+			for (name in names) {
+				final path: String = '$dir/$name';
+				if (FileSystem.isDirectory(path))
+					stack.push(path);
+				else if (CliIo.isHxtestPath(name))
+					out.push(path);
+			}
+		}
+		return out;
+	}
+
+	/**
 	 * Corpus-walk extracted from `runReconSweep` so the same skip-parse
 	 * record list drives both the recon sweep (histogram / cluster drill
 	 * / predict-strip) and `strip --from-cluster` (apply substitutions
-	 * to every file in a named cluster). Recurses into subdirs, parses
+	 * to every file in a named cluster). Walks `hxtestPathsUnder`, parses
 	 * each `.hxtest` via the plugin's trivia parser, and clusters
 	 * failures by normalised forward-locus. `wired == false` when the
 	 * plugin returns `false` from `reconParse` — surfaces the same
@@ -878,61 +908,42 @@ final class ReconCommand implements CliCommand {
 		final clusters: Map<String, ReconCluster> = [];
 		final records: Array<ReconRecord> = [];
 		var wired: Bool = true;
-		final stack: Array<String> = [root];
-		while (stack.length > 0) {
-			final dir: Null<String> = stack.pop();
-			if (dir == null) break;
-			final names: Array<String> = FileSystem.readDirectory(dir);
-			names.sort((a: String, b: String) -> if (a < b)
-				-1
-			else if (a > b)
-				1
-			else
-				0);
-			for (name in names) {
-				final path: String = '$dir/$name';
-				if (FileSystem.isDirectory(path)) {
-					stack.push(path);
-					continue;
+		for (path in hxtestPathsUnder(root)) {
+			final source: String = CliIo.readSourceForParse(path);
+			try {
+				if (!plugin.reconParse(source)) {
+					wired = false;
+					break;
 				}
-				if (!name.endsWith('.hxtest')) continue;
-				final source: String = CliIo.readSourceForParse(path);
-				try {
-					if (!plugin.reconParse(source)) {
-						wired = false;
-						break;
-					}
-				} catch (exception: ParseError) {
-					final pos: Position = exception.span.lineCol(source);
-					final relPath: String = stripRootPrefix(path, root);
-					final exp: String = reconNormalize(exception.expected);
-					final snip: String = reconNormalize(reconSnippet(source, exception.span.from));
-					final rawLocus: String = reconRawLocus(source, exception.span.from);
-					final key: String = reconNormalizeLocus(rawLocus);
-					addReconCluster(clusters, key, relPath, rawLocus);
-					records.push({
-						path: relPath,
-						clusterKey: key,
-						source: source,
-						skipLine: 'SKIP $relPath :: ${pos.line}:${pos.col} expected="$exp" :: src="$snip"',
-						line: pos.line,
-						col: pos.col
-					});
-				} catch (exception: Exception) {
-					final relPath: String = stripRootPrefix(path, root);
-					final key: String = '<non-ParseError> ${reconNormalize(exception.message)}';
-					addReconCluster(clusters, key, relPath, '<exception>');
-					records.push({
-						path: relPath,
-						clusterKey: key,
-						source: source,
-						skipLine: 'SKIP $relPath :: $key',
-						line: 0,
-						col: 0
-					});
-				}
+			} catch (exception: ParseError) {
+				final pos: Position = exception.span.lineCol(source);
+				final relPath: String = stripRootPrefix(path, root);
+				final exp: String = reconNormalize(exception.expected);
+				final snip: String = reconNormalize(reconSnippet(source, exception.span.from));
+				final rawLocus: String = reconRawLocus(source, exception.span.from);
+				final key: String = reconNormalizeLocus(rawLocus);
+				addReconCluster(clusters, key, relPath, rawLocus);
+				records.push({
+					path: relPath,
+					clusterKey: key,
+					source: source,
+					skipLine: 'SKIP $relPath :: ${pos.line}:${pos.col} expected="$exp" :: src="$snip"',
+					line: pos.line,
+					col: pos.col
+				});
+			} catch (exception: Exception) {
+				final relPath: String = stripRootPrefix(path, root);
+				final key: String = '<non-ParseError> ${reconNormalize(exception.message)}';
+				addReconCluster(clusters, key, relPath, '<exception>');
+				records.push({
+					path: relPath,
+					clusterKey: key,
+					source: source,
+					skipLine: 'SKIP $relPath :: $key',
+					line: 0,
+					col: 0
+				});
 			}
-			if (!wired) break;
 		}
 		return { wired: wired, records: records, clusters: clusters };
 	}

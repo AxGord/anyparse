@@ -5,7 +5,6 @@ import anyparse.query.GrammarPlugin;
 import anyparse.runtime.ParseError;
 import haxe.Exception;
 #if (sys || nodejs)
-import sys.FileSystem;
 import sys.io.File;
 #end
 
@@ -87,7 +86,6 @@ final class SweepCorpus {
 	private static inline final SECTION_SEP: String = '\n---\n';
 
 	private static inline final SECTION_COUNT: Int = 3;
-	private static inline final EXT: String = '.hxtest';
 	private static inline final STATUS_PASS: String = 'PASS';
 	private static inline final STATUS_FAIL: String = 'FAIL';
 	private static inline final STATUS_SKIP_PARSE: String = 'SKIP_PARSE';
@@ -103,7 +101,7 @@ final class SweepCorpus {
 	 * snapshot does and `--diff` can pair them.
 	 */
 	public static function run(plugin: GrammarPlugin, root: String, keyRoot: String): SweepCorpusResult {
-		final entries: Array<SweepCorpusEntry> = fixturePaths(root).map(censusRow.bind(plugin, _, keyRoot));
+		final entries: Array<SweepCorpusEntry> = ReconCommand.hxtestPathsUnder(root).map(censusRow.bind(plugin, _, keyRoot));
 		return {
 			entries: entries,
 			pass: countOf(entries, STATUS_PASS),
@@ -136,34 +134,6 @@ final class SweepCorpus {
 		return n;
 	}
 
-	private static function fixturePaths(root: String): Array<String> {
-		final out: Array<String> = [];
-		final stack: Array<String> = [root];
-		while (stack.length > 0) {
-			final dir: Null<String> = stack.pop();
-			if (dir == null) break;
-			final names: Array<String> = FileSystem.readDirectory(dir);
-			names.sort(compareStrings);
-			for (name in names) {
-				final path: String = '$dir/$name';
-				if (FileSystem.isDirectory(path))
-					stack.push(path);
-				else if (name.endsWith(EXT))
-					out.push(path);
-			}
-		}
-		out.sort(compareStrings);
-		return out;
-	}
-
-	private static function compareStrings(a: String, b: String): Int {
-		return if (a < b)
-			-1
-		else if (a > b)
-			1
-		else
-			0;
-	}
 
 	private static function classify(plugin: GrammarPlugin, path: String, relPath: String): String {
 		final content: String = File.getContent(path);

@@ -88,6 +88,20 @@ final class CliIo {
 		#end
 	}
 
+	/**
+	 * Lexicographic order for `Array<String>.sort`, which takes no default
+	 * comparator — so every walker that wants a stable listing writes the same
+	 * three-branch ternary, and `duplicate-code` reports the copies.
+	 */
+	public static function compareStrings(a: String, b: String): Int {
+		return if (a < b)
+			-1
+		else if (a > b)
+			1
+		else
+			0;
+	}
+
 	public static function stderr(s: String): Void {
 		#if (sys || nodejs)
 		Sys.stderr().writeString(s);
