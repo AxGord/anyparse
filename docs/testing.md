@@ -401,6 +401,15 @@ Measured on `d86c958b`, with a probe compiled against `src`:
 
 Those are two different facts and separating them is the whole fix. A module the classpath does not carry still stops the build; an arm whose type is real but invisible here is DEFERRED — recorded in `TestRegistry.deferredArms()` and answered by `unit.MutationArmAddressTest`, which resolves the type to the file `tools/mutation-arm.sh` would patch and asks anyparse's own parser for a `FnMember:<method>`. The parser has no blind spot here: a `#if` region is a `Conditional` node whose branches are ordinary children. That walk also answers a question the build macro never asked at all — the runner resolves a type to a file by hand (`for root in src test`), and nothing checked that step either.
 
+A SECOND, unrelated reason lands an arm in that same census, and the passage above does not
+cover it: an arm that spells a `kind` is deferred whatever its module, because the build macro's
+member check asks the typer for a METHOD and a kinded arm does not address one. Three of the
+deferred entries are of this kind and nothing about them is macro-side —
+`M-CLI-COMMANDS-MEMOISED` and `M-CLI-REQUIREMATCH-STATIC` on `anyparse.query.cli`, and
+`M-SHORTEN-IMPORT-THRESHOLD-ONE` on a `FinalMember` constant in `anyparse.check`. So declaring a
+kinded arm costs a line in `testTheDeferredArmCensusNamesTheMacroModuleArms` as well as in the
+arm list, and only a suite RUN says so — `checkArms` does not.
+
 There is no build-macro route around the typer, and both dodges were measured rather than argued: `Context.defined('macro')` reads false inside a macro function during a js build, `Type.resolveClass` at macro runtime answers null for macro-side and runtime-side classes alike, and the obvious `@:build` on a type declared inside `#if macro` is a compiler refusal in as many words — `You cannot use @:build inside a macro`.
 
 The trade is that a macro-module arm's member check moves from a build ERROR to a suite failure. That is not the "declared but unverified" class S96 refused: the check is machine-run on every suite run, it is asked of the real parser rather than of prose, and the whole walk costs 0.42 s including node start-up — ~20 files, one of them `WriterLowering.hx` at 367 KB.

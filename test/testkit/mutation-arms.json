@@ -1750,6 +1750,15 @@
 			"find": "NullFlow.declInit(decl, declTypeChildKinds), cfgValue, valueNominalOf);",
 			"replace": "NullFlow.declInit(decl, declTypeChildKinds), cfgValue, nominalOf);",
 			"note": "the initializer is typed through the RECEIVER arc, which peels `Null<>`, so a field declared `Null<T>` reads as non-null and its seed is dropped"
+		},
+		{
+			"name": "M-SHORTEN-IMPORT-THRESHOLD-ONE",
+			"type": "anyparse.check.ShortenTypeRef",
+			"method": "IMPORT_THRESHOLD",
+			"kind": "FinalMember",
+			"find": "IMPORT_THRESHOLD: Int = 2;",
+			"replace": "IMPORT_THRESHOLD: Int = 1;",
+			"note": "one surviving occurrence is enough to buy an import line, so the wash the threshold exists to refuse is written anyway"
 		}
 	]
 }

@@ -1049,6 +1049,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.RedundantReplaceLoopCheckTest#testSearchEndingWithTheReplacementHeadNotFlagged :: control :: M-SEAM-BLIND',
 			'unit.check.RedundantThisCheckTest#testInheritedFromOtherFileBaseFlagged :: control :: M-INHERITS-FALSE',
 			'unit.check.RedundantUpcastTest#testUpcastFlagged :: control :: M-ISSUBTYPE-FALSE',
+			'unit.check.ShortenTypeRefCheckTest#testASingleSurvivingOccurrenceEarnsNoImport :: control :: '
+			+ 'M-SHORTEN-IMPORT-THRESHOLD-ONE',
 			'unit.check.StaticConstantCheckTest#testScalarInstanceFinalFlagged :: control :: M-BUILDMACRO-TRUE',
 			'unit.check.StructuralConformanceProofTest#testAliasedStructureMemberTypeStillPins :: control :: M-STRUCT-ALIAS-OPAQUE',
 			'unit.check.StructuralConformanceProofTest#testAnonStructureNominalStillPins :: control :: M-STRUCT-ANON-CLOSED',
@@ -1621,7 +1623,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-DECL-INIT-NONNULL-BLIND',
 			'M-DECL-INIT-TERNARY-ANY-ARM',
 			'M-DECL-INIT-LITERAL-BLIND',
-			'M-DECL-INIT-RECEIVER-MODE-NOMINAL'
+			'M-DECL-INIT-RECEIVER-MODE-NOMINAL',
+			'M-SHORTEN-IMPORT-THRESHOLD-ONE'
 		], [for (line in TestRegistry.arms()) line.split(' :: ')[0]], 'the arms every @:killer resolves into');
 	}
 
@@ -1679,7 +1682,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-KEEP-ELSEIF-ALWAYS-GLUED :: anyparse.macro.WriterBodyPolicyLowering#buildBodyKeepLayout',
 			'M-BEFORE-KW-TRAILING-DROP :: anyparse.macro.WriterFieldSepLowering#beforeKwSeparator',
 			'M-BEFORE-KW-LEADING-DROP :: anyparse.macro.WriterFieldSepLowering#beforeKwSeparator',
-			'M-BEFORE-LEADING-COMMENT-DROP :: anyparse.macro.WriterTriviaSlotLowering#buildBeforeLeadingSep'
+			'M-BEFORE-LEADING-COMMENT-DROP :: anyparse.macro.WriterTriviaSlotLowering#buildBeforeLeadingSep',
+			'M-SHORTEN-IMPORT-THRESHOLD-ONE :: anyparse.check.ShortenTypeRef#FinalMember:IMPORT_THRESHOLD'
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 
