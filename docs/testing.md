@@ -445,6 +445,8 @@ A `SURVIVED` or `MISMATCH` row is evidence about the FIXTURE, not noise to retry
 
 **Cadence: `--all --fast` per WAVE, one arm on demand.** Two minutes is cheap enough to run at the end of a wave and far too expensive to run per slice — and the build-time checks already catch the failure a sweep would otherwise be needed for (an arm pointing at a member that no longer exists), for free, on every build. Run a single arm when you add or edit a pin, which is the moment its claim is actually being made. Reach for `--all` (whole suite) when the collateral census is the point — before a release, or when a refactor is supposed to have preserved a coupling.
 
+**The scratch directory a run leaves behind is documented** — `anyparse-mutarm.*` and the `anyparse-mutcheck.*` it drives, kept on a non-KILLED verdict with the path printed, removed otherwise, and swept at startup once their owner pid is gone: § "Scratch directories: every tool's, and who removes them".
+
 **One caveat on the whole-suite mode, measured.** Twenty-three concurrent full-suite runs at `--jobs 4` put the oracle-driven CLI end-to-end fixtures under load, and they flake there: across two `--all` sweeps of the same tree, 11 failure names appeared in one run and not the other — `unit.check.*OracleE2ETest`, `unit.check.OracleCacheTest`, `unit.cli.LintPerFileConfigCliTest`, `unit.check.NamingCheckMemberFixTest`, `unit.check.MagicNumberCheckTest.testRespectsIgnoreFromDisk`. That they are flakes rather than coupling is not a guess: `M-ARM-ROW-OK` cuts `test/testkit/MutationArms.hx`, a file no check reads, and five of its eleven "extras" in the first sweep were `unit.check.*`. Every VERDICT was stable across both sweeps; it is the `+extra` column that should be read as approximate. `--fast` has neither problem.
 
 #### Which seams an arm can OWN, decided by blast (S104)
@@ -2099,7 +2101,7 @@ That list is derived, not remembered: `hxq lit 'probe' test/ --kind Literal` fin
 - The sticky list is hand-maintained (`ShardPlan.STICKY_CLASSES`), so every pinned name must still be registered — otherwise a rename un-pins a class in silence and the race comes back. The per-class weights next to it only balance the split; no gate reads them, so a stale weight costs balance and never correctness.
 - Test and assertion totals grow with every slice, so no literal is pinned in the script. Class parity plus the no-collision gate plus a non-empty, green shard is what makes the totals trustworthy; `--verify` (pays for a monolith run, and fails on a monolith that is red as well as on one that disagrees) and `--expect T/A` are the explicit cross-checks when you want the totals proved rather than argued.
 
-Exit status is 0 only when every shard is green *and* parity holds. A red shard, an empty shard, a collision, an unnameable registration, an un-pinned sticky class, a misplaced class or a count mismatch all exit non-zero and keep the work directory — the shard logs when the run got that far, the plan files when it refused earlier.
+Exit status is 0 only when every shard is green *and* parity holds. A red shard, an empty shard, a collision, an unnameable registration, an un-pinned sticky class, a misplaced class or a count mismatch all exit non-zero and keep the work directory — the shard logs when the run got that far, the plan files when it refused earlier. Kept, not leaked: on green the directory is removed, and `--keep` overrides both ways — see § "Scratch directories: every tool's, and who removes them".
 
 **When to shard, when not.** Shard the full battery during a slice — after the `APQ_TEST`-filtered edit loop, when you want the whole suite as a checkpoint. Run the **monolith** for the final pre-commit run of a slice or campaign, and any time the shard plan itself changed (a new sticky-state test, a new fixed shared path, a new class whose name overlaps another).
 
@@ -2242,6 +2244,80 @@ tools/battery.sh --allow-blast      # accept the blast movement it printed last 
 `ANYPARSE_HXFORMAT_FORK` must be set: without it the corpus layer skips in
 silence, and a battery that cannot tell "corpus clean" from "corpus not run"
 is worse than no corpus gate, so the script refuses rather than warns.
+
+### Scratch directories: every tool's, and who removes them
+
+Four tools create a directory under `TMPDIR`. Until S134 two of them never
+removed it, and on 2026-09-05 that reached 99 % disk — 51 GiB free of
+3.6 TiB — with 125 `anyparse-mutcheck.*` directories holding **46.6 GB**,
+one of them from a crashed run still holding **105 registered git
+worktrees** at a long-dead commit.
+
+| tool | prefix | success | failure / interrupt |
+|---|---|---|---|
+| `tools/battery.sh` | `apq-battery.` | removed | kept, path printed |
+| `tools/suite-shard.sh` | `apq-suite-shard.` | removed | kept, path printed |
+| `tools/mutation-check.sh` | `anyparse-mutcheck.` | removed when every track was KILLED | kept, path printed |
+| `tools/mutation-arm.sh` | `anyparse-mutarm.` | removed | kept, path printed |
+
+`--keep` on any of the four keeps it regardless — that is the debugging
+escape hatch, and `mutation-arm.sh --keep` forwards it to the
+`mutation-check.sh` it drives, so both directories survive together.
+
+**The recorded blame was half wrong.** `battery.sh` and `suite-shard.sh`
+were already correct: their scratch directory is deleted on green and kept
+on red BY DESIGN, so the ~2.8 GB of orphaned `apq-battery.*` was twenty
+failed or killed runs behaving as documented. The two that leaked
+unconditionally were `mutation-check.sh` — whose header said the workroot is
+"never deleted", at ~23 MB of private build per track, so one `--all` sweep
+of the 208 arms is **~4.8 GB kept forever** — and `mutation-arm.sh`, which
+`exec`ed into mutation-check and so took its own EXIT trap out of the
+process. It now runs mutation-check as a child.
+
+**SIGKILL is the half no trap closes**, and it is the common case here: the
+agent harness kills a session outright. Measured by SIGKILLing a 6-arm run:
+295 MB and 6 registered worktrees left, plus 25 orphaned `haxe`/`node`
+children still writing into the directory. So every one of the four sweeps
+orphans at STARTUP, in `tools/tmp-lifecycle.sh`.
+
+**The sweep predicate, and why it is safe with siblings running.** Several
+workers run these tools at once — the normal state of a campaign — so an
+age-only sweep would delete live work. A claimed directory carries a stamp
+naming its owner's pid, and a directory is swept only when all of:
+
+* its basename is one of this project's four prefixes plus mktemp's six
+  template characters, **directly** under the scratch root — every other
+  shape is refused out loud (five refusal shapes are exercised, including
+  the repo root and `$HOME`);
+* its stamped owner is gone (`kill -0` fails). A REUSED pid reads as alive,
+  so pid reuse can only ever make the sweep keep too much;
+* nothing has written into it for `TMPL_GRACE_SECONDS` (300) — the newest
+  mtime among its **top-level entries**, because a grandchild appending to a
+  track log does not move the directory's own mtime.
+
+A directory with no stamp predates the change; age is then all there is, so
+it needs `TMPL_LEGACY_SECONDS` (6h) of silence. That window is what protects
+a sibling still running a pre-fix copy out of their own worktree — which
+happened during S134 and is visible in `--list` as an owner-less row.
+
+**Deregistration, not just deletion.** `git worktree prune` only forgets
+entries whose directory is GONE, so a leaked directory keeps its
+registration alive indefinitely. Removal comes first and the prune second,
+never the reverse.
+
+`tools/tmp-lifecycle.sh --list` prints every scratch directory with its
+owner pid, ORPHAN/live verdict, idle seconds and size; `--sweep` runs the
+predicate by hand; `--help` is the whole rationale. `APQ_TMP_NO_SWEEP=1`
+turns the startup sweep off.
+
+**Two shell facts this cost, both worth knowing before editing any of these
+scripts.** A failing LAST command in an EXIT trap REPLACES the script's exit
+status — measured on bash 3.2.57, `exit 7` under such a trap exits 1, and so
+does `exit 0` — so every cleanup call inside a trap ends `|| true`, or a
+refused cleanup silently turns a green gate red. And an async child of a
+shell WITHOUT job control inherits SIGINT set to IGNORE, and a script cannot
+trap a signal ignored on entry: any A/B of the signal traps must run the
+target in the foreground or `set -m`, or both arms measure nothing.
 
 ### The shard plan's own producer is cross-checked against a hand-maintained count
 
