@@ -141,6 +141,8 @@ final class HxCaseBodyControlFlowGlueTest extends Test {
 	}
 
 	/** Below its label is a below-label placement, so the per-switch rule takes the one-liner sibling down too. */
+	@:pin('control')
+	@:killer('M-CASE-CTRLFLOW-STAR-FLAG-BLIND')
 	public function testAControlFlowBodySpreadsItsSiblings(): Void {
 		final out: String = write(BLOCK_IF_SRC, json(140));
 		Assert.isTrue(out.indexOf('case _:\n\t\t\t\tbb();') != -1, 'a fitting sibling must follow a control-flow body down: <$out>');
@@ -159,6 +161,8 @@ final class HxCaseBodyControlFlowGlueTest extends Test {
 	}
 
 	/** `for` / `while` / `try` / `do while` / `switch` are the same kind of body and take the same placement. */
+	@:pin('control')
+	@:killer('M-CASE-CTRLFLOW-STAR-FLAG-BLIND')
 	public function testEveryControlFlowCtorGoesBelowItsLabel(): Void {
 		final out: String = write(LOOPS_SRC, json(140));
 		Assert.isTrue(out.indexOf('case A:\n\t\t\t\tfor (i in list) {') != -1, 'for: <$out>');
@@ -202,6 +206,8 @@ final class HxCaseBodyControlFlowGlueTest extends Test {
 	 * `while` body its hardline, the case body then cannot render flat, and the
 	 * same refusal applies — head below the label, sibling spread with it.
 	 */
+	@:pin('control')
+	@:killer('M-CASE-CTRLFLOW-STAR-FLAG-BLIND')
 	public function testABracelessControlFlowBodyGoesBelowAndSpreads(): Void {
 		final out: String = write(BRACELESS_WHILE_SRC, jsonNextWhileBody(140));
 		Assert.isTrue(out.indexOf('case A:\n\t\t\t\twhile (c)\n\t\t\t\t\tbb();') != -1, 'the brace-less head goes below its label: <$out>');

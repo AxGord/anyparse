@@ -152,6 +152,8 @@ class HxTryBraceSymmetrySliceTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-KWREF-BARE-BODY-BREAKS-BLIND')
 	public inline function testDeBracedGroupIsIdempotent(): Void {
 		final source: String =
 			'class F {\n\tfunction f():Void {\n\t\ttry {\n\t\t\tp();\n\t\t} catch (e:Exception) {\n\t\t\tq();\n\t\t}\n\t}\n}';

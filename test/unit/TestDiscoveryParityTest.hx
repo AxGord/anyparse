@@ -1122,6 +1122,13 @@ class TestDiscoveryParityTest extends Test {
 			+ 'M-BLANK-MULTILINE-OFF',
 			'unit.grammar.haxe.HxCallGroupRestProbeCasePatternTest#testCasePatternCtorInsideACollectionStaysGlued :: control :: '
 			+ 'M-PATTERN-RESTPROBE-UNSET',
+			'unit.grammar.haxe.HxCaseBodyControlFlowGlueTest#testABracelessControlFlowBodyGoesBelowAndSpreads :: control :: '
+			+ 'M-CASE-CTRLFLOW-STAR-FLAG-BLIND',
+			'unit.grammar.haxe.HxCaseBodyControlFlowGlueTest#testAControlFlowBodySpreadsItsSiblings :: control :: '
+			+ 'M-CASE-CTRLFLOW-STAR-FLAG-BLIND',
+			'unit.grammar.haxe.HxCaseBodyControlFlowGlueTest#testEveryControlFlowCtorGoesBelowItsLabel :: control :: '
+			+ 'M-CASE-CTRLFLOW-STAR-FLAG-BLIND',
+			'unit.grammar.haxe.HxCaseBodyPolicySliceTest#testDefaultBranchSameFlattensSingleStmt :: control :: M-KWREF-TIGHT-LEAD-BLIND',
 			'unit.grammar.haxe.HxChainStaircaseSliceTest#testFiveLinkChainStaircasesAsOneShape :: control :: M-CHAIN-STAIRCASE-OFF',
 			'unit.grammar.haxe.HxChainStaircaseSliceTest#testIsIdempotentAcrossThreePasses :: control :: M-CHAIN-STAIRCASE-OFF',
 			'unit.grammar.haxe.HxChainStaircaseSliceTest#testTornConditionParenIsGone :: control :: M-CHAIN-STAIRCASE-OFF',
@@ -1212,6 +1219,10 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxIfExprCondWrapSliceTest#testExplodedSourceIsIdempotent :: control :: M-ARROW-HEAD-WIDTH-NONE',
 			'unit.grammar.haxe.HxIfStmtExprPositionDispatchTest#testElseBodyDualFlagDispatchesAtExpressionPosition :: control :: '
 			+ 'M-ELSE-SEP-EXPR-BLIND',
+			'unit.grammar.haxe.HxIndentCaseLabelsOptionsTest#testIndentCaseLabelsFalseFlushesLabelsWithSwitch :: control :: '
+			+ 'M-KWREF-TIGHT-LEAD-BLIND',
+			'unit.grammar.haxe.HxIndentCaseLabelsOptionsTest#testIndentCaseLabelsTrueKeepsLabelsIndented :: control :: '
+			+ 'M-KWREF-TIGHT-LEAD-BLIND',
 			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testBrokenShapeIsIdempotent :: control :: M-LOOPIF-NEVER',
 			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testDoWhileIfElseBreaksUnderHeader :: control :: M-LOOPIF-NOWRAP',
 			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testEveryPlacementObeysTheKey :: control :: M-LOOPIF-POLICY-BLIND',
@@ -1225,8 +1236,12 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testReportedConfigGuardStaysGlued :: control :: M-LOOPIF-ALWAYS',
 			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testReportedSiteBreaksUnderHeader :: control :: M-LOOPIF-NEVER',
 			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testWhileIfElseBreaksUnderHeader :: control :: M-LOOPIF-NEVER',
+			'unit.grammar.haxe.HxSameLineOptionsTest#testStatementBareTryBreaksByDefault :: control :: M-BLOCK-SHAPE-EQUIV-NONE',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testBareThenIfGetsBracesAdded :: control :: M-SSB-WRAP-DIRECTION',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testBareThenOppositeBracedElseGetsBraces :: control :: M-SSB-CHAIN-TAIL-OFF',
+			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testBareTryCatchForBodyUnbraced :: control :: M-BLOCK-SHAPE-EQUIV-NONE',
+			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testBareTryCatchIfBodyUnbraced :: control :: M-BLOCK-SHAPE-EQUIV-NONE',
+			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testBareTryCatchWhileBodyUnbraced :: control :: M-BLOCK-SHAPE-EQUIV-NONE',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testBracedCatchBodySealsTryCatchBeforeElse :: control :: '
 			+ 'M-SSB-FRAME-OFF,M-SSB-DANGLING-NONE,M-SSB-TAIL-SEALED-NONE',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testBracedThenBodySealsNestedGuardLoop :: control :: M-SSB-FRAME-BLANKET',
@@ -1264,6 +1279,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testValueIfBareThenGainsBraces :: control :: M-SSB-VALUE-WRAP-OFF',
 			'unit.grammar.haxe.HxSoleArgGluedCloseDedentTest#testSoleArgClosingOnContentKeepsTheGluedClose :: control :: '
 			+ 'M-ELSE-SEP-EXPR-BLIND',
+			'unit.grammar.haxe.HxStaticLocalStmtSliceTest#testStaticFinalWriterEquals :: control :: M-KWLEAD-NEVER-WORD',
+			'unit.grammar.haxe.HxStaticLocalStmtSliceTest#testStaticLocalsRoundTrip :: control :: M-KWLEAD-NEVER-WORD',
+			'unit.grammar.haxe.HxStaticLocalStmtSliceTest#testStaticVarWriterEquals :: control :: M-KWLEAD-NEVER-WORD',
 			'unit.grammar.haxe.HxTriviaWriteTest#testMultipleOwnLineCommentsBetweenBraceAndElseRoundTrip :: control :: '
 			+ 'M-BEFORE-KW-LEADING-DROP',
 			'unit.grammar.haxe.HxTriviaWriteTest#testOwnLineCommentBetweenBraceAndElseRoundTrip :: control :: M-BEFORE-KW-LEADING-DROP',
@@ -1273,6 +1291,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxTryBraceSymmetrySliceTest#testBracedGroupDeBraces :: control :: '
 			+ 'M-SSB-TRY-DEBRACE-NONE,M-SSB-TRY-SUBST-OFF',
 			'unit.grammar.haxe.HxTryBraceSymmetrySliceTest#testDanglingElseKeepsBraces :: control :: M-SSB-FRAME-OFF,M-SSB-DANGLING-NONE',
+			'unit.grammar.haxe.HxTryBraceSymmetrySliceTest#testDeBracedGroupIsIdempotent :: control :: M-KWREF-BARE-BODY-BREAKS-BLIND',
 			'unit.grammar.haxe.HxTryBraceSymmetrySliceTest#testMultiStatementCatchBracesTheBareTry :: control :: M-SSB-TRY-SUBST-OFF',
 			'unit.grammar.haxe.HxTryBraceSymmetrySliceTest#testOnlyTheLastCatchKeepsItsTerminator :: control :: '
 			+ 'M-TRY-CATCHES-SYM-OFF,M-SSB-TRY-SUBST-OFF,M-SSB-TRY-DEBRACE-NONE',
@@ -1671,7 +1690,12 @@ class TestDiscoveryParityTest extends Test {
 			'M-DECL-INIT-TERNARY-ANY-ARM',
 			'M-DECL-INIT-LITERAL-BLIND',
 			'M-DECL-INIT-RECEIVER-MODE-NOMINAL',
-			'M-SHORTEN-IMPORT-THRESHOLD-ONE'
+			'M-SHORTEN-IMPORT-THRESHOLD-ONE',
+			'M-KWLEAD-NEVER-WORD',
+			'M-BLOCK-SHAPE-EQUIV-NONE',
+			'M-KWREF-BARE-BODY-BREAKS-BLIND',
+			'M-KWREF-TIGHT-LEAD-BLIND',
+			'M-CASE-CTRLFLOW-STAR-FLAG-BLIND'
 		], [for (line in TestRegistry.arms()) line.split(' :: ')[0]], 'the arms every @:killer resolves into');
 	}
 
@@ -1733,7 +1757,12 @@ class TestDiscoveryParityTest extends Test {
 			'M-BEFORE-KW-TRAILING-DROP :: anyparse.macro.WriterFieldSepLowering#beforeKwSeparator',
 			'M-BEFORE-KW-LEADING-DROP :: anyparse.macro.WriterFieldSepLowering#beforeKwSeparator',
 			'M-BEFORE-LEADING-COMMENT-DROP :: anyparse.macro.WriterTriviaSlotLowering#buildBeforeLeadingSep',
-			'M-SHORTEN-IMPORT-THRESHOLD-ONE :: anyparse.check.ShortenTypeRef#FinalMember:IMPORT_THRESHOLD'
+			'M-SHORTEN-IMPORT-THRESHOLD-ONE :: anyparse.check.ShortenTypeRef#FinalMember:IMPORT_THRESHOLD',
+			'M-KWLEAD-NEVER-WORD :: anyparse.macro.WriterLoweringSupport#isWordStart',
+			'M-BLOCK-SHAPE-EQUIV-NONE :: anyparse.macro.WriterLoweringSupport#isBlockShapeEquivalentBranch',
+			'M-KWREF-BARE-BODY-BREAKS-BLIND :: anyparse.macro.WriterKwRefLowering#subStructStartsWithBareBodyBreaks',
+			'M-KWREF-TIGHT-LEAD-BLIND :: anyparse.macro.WriterKwRefLowering#subStructStartsWithTightLead',
+			'M-CASE-CTRLFLOW-STAR-FLAG-BLIND :: anyparse.macro.WriterTriviaStarDispatch#ownStarHasFlag'
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 

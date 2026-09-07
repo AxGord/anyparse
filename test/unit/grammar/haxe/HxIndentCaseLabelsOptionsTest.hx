@@ -39,6 +39,8 @@ class HxIndentCaseLabelsOptionsTest extends Test {
 		Assert.isTrue(defaults.indentCaseLabels);
 	}
 
+	@:pin('control')
+	@:killer('M-KWREF-TIGHT-LEAD-BLIND')
 	public function testIndentCaseLabelsTrueKeepsLabelsIndented(): Void {
 		final out: String = writeWith('class M { static function f() { switch (e) { case A: 1; default: 2; } } }', true);
 		// Inside `{ ... }` of switch, case label sits at 3 tabs (one inside
@@ -47,6 +49,8 @@ class HxIndentCaseLabelsOptionsTest extends Test {
 		Assert.isTrue(out.indexOf('\n\t\t\tdefault:') != -1, 'expected `default:` at 3-tab indent in: <$out>');
 	}
 
+	@:pin('control')
+	@:killer('M-KWREF-TIGHT-LEAD-BLIND')
 	public function testIndentCaseLabelsFalseFlushesLabelsWithSwitch(): Void {
 		final out: String = writeWith('class M { static function f() { switch (e) { case A: 1; default: 2; } } }', false);
 		// switch keyword sits at 2 tabs (inside class + function body); flushed

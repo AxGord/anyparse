@@ -466,6 +466,8 @@ class HxSingleStmtBracesSliceTest extends Test {
 		roundTrip('class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) {\n\t\t\tp();\n\t\t\tq();\n\t\t} else\n\t\t\tr()\n\t}\n}');
 	}
 
+	@:pin('control')
+	@:killer('M-BLOCK-SHAPE-EQUIV-NONE')
 	public inline function testBareTryCatchIfBodyUnbraced(): Void {
 		// GAP FIX (TryCatchStmtBare): a bare try-catch self-terminates via the `;` on the
 		// HxStatement.TryCatchStmtBare ctor (`@:trail(';')`), so a single bare try-catch
@@ -476,6 +478,8 @@ class HxSingleStmtBracesSliceTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-BLOCK-SHAPE-EQUIV-NONE')
 	public inline function testBareTryCatchForBodyUnbraced(): Void {
 		// GAP FIX: for-body counterpart of the bare try-catch de-brace (loop bodies have no
 		// dangling-else sibling, so they always de-brace a self-terminating single statement).
@@ -487,6 +491,8 @@ class HxSingleStmtBracesSliceTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-BLOCK-SHAPE-EQUIV-NONE')
 	public inline function testBareTryCatchWhileBodyUnbraced(): Void {
 		// GAP FIX: while-body counterpart of the bare try-catch de-brace.
 		assertFmt(
