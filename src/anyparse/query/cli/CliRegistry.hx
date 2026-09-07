@@ -13,6 +13,7 @@ import anyparse.query.cli.command.CasesCommand;
 import anyparse.query.cli.command.ChangeSigCommand;
 import anyparse.query.cli.command.ClustersCommand;
 import anyparse.query.cli.command.CommentRewriteCommand;
+import anyparse.query.cli.command.CondCommand;
 import anyparse.query.cli.command.DeclaresCommand;
 import anyparse.query.cli.command.DiffCommand;
 import anyparse.query.cli.command.EncapsulateFieldCommand;
@@ -149,6 +150,7 @@ final class CliRegistry {
 			new LitCommand(),
 			new MentionsCommand(),
 			new CasesCommand(),
+			new CondCommand(),
 			new CalleesCommand(),
 			new CallersCommand(),
 			new ReachCommand(),

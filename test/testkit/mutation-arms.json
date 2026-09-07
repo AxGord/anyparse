@@ -2023,6 +2023,29 @@
 			"find": "collectGuardedImports(root, false, null, r -> singleBranchRegion(r, source, shape, regions) ? r.span : null, out);",
 			"replace": "collectGuardedImports(root, false, null, r -> r.span, out);",
 			"note": "every branch of one region shares its span, so a `using` in the `#if` arm reads as covering a call in the `#else` arm and the rewrite lands with no import"
+		},
+		{
+			"name": "M-COND-BODY-SWALLOWS-DIRECTIVES",
+			"type": "anyparse.query.CondQuery",
+			"method": "closeBranch",
+			"find": "frame.bodies.push(new Span(frame.heads[frame.heads.length - 1].span.to, next.span.from));",
+			"replace": "frame.bodies.push(new Span(frame.heads[frame.heads.length - 1].span.from, next.span.to));",
+			"note": "a branch body is bounded by the two directives' OUTER edges, so it carries its own `#if` and the next `#else` - the shape a guessed `source --range` window produces, which is the route `cond` exists to replace"
+		},
+		{
+			"name": "M-COND-INNERMOST-FRAME",
+			"type": "anyparse.query.CondQuery",
+			"method": "regionsMentioning",
+			"find": "final frame: OpenRegion = open[open.length - 1];",
+			"replace": "final frame: OpenRegion = open[0];",
+			"note": "a branch or closing directive lands on the OUTERMOST open region instead of the innermost, so a nested region's `#end` closes its parent and the parent's branch splits at it"
+		},
+		{
+			"name": "M-COND-RAW-NEVER-MARKED",
+			"type": "anyparse.query.CondQuery",
+			"method": "isRawBody",
+			"force": "false",
+			"note": "every branch answers \"the tree models this\", so an expression-position `#if` loses its raw-span marker and `--names` prints an empty name list where the verbatim bytes were the whole answer"
 		}
 	]
 }
