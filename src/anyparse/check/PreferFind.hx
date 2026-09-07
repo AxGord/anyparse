@@ -189,9 +189,10 @@ final class PreferFind implements Check {
 			for (e in candEdits) edits.push(e);
 			if (!cand.qualified) rewrote = true;
 		}
-		// `false` is the guarded-`using` refusal: the file declares `using Lambda;` only inside a `#if`
-		// region that leaves a rewritten call out, so neither the extension call nor a second,
-		// unguarded declaration is safe and the whole edit set goes.
+		// `false` is the refusal, in either of the two ways it comes: the file declares `using Lambda;`
+		// only inside a `#if` region that leaves a rewritten call out, or an accepted rewrite already
+		// covers the byte the declaration would be spliced at. Neither the extension call nor a second,
+		// unguarded declaration is safe, so the whole edit set goes.
 		return rewrote && !UsingScan.appendUsingInsert(header, LAMBDA_MODULE, edits, violations) ? [] : edits;
 	}
 

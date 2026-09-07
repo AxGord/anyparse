@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.SymbolIndex;
@@ -51,7 +52,7 @@ import anyparse.runtime.Span;
  * idiom, not a mistake — same rule, same reason, as for a local declaration.
  */
 @:nullSafety(Strict)
-final class ShadowingParameter implements Check implements DefaultOff {
+final class ShadowingParameter implements Check implements NoAutofix implements DefaultOff {
 
 	/** The rule's stable identifier — the `apqlint.json` key and the `--rule` selector. */
 	private static inline final RULE_ID: String = 'shadowing-parameter';
@@ -75,6 +76,10 @@ final class ShadowingParameter implements Check implements DefaultOff {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		return [];
+	}
+
+	public function noAutofixReason(): String {
+		return 'renaming the parameter or the binding it hides is the author\'s call';
 	}
 
 }

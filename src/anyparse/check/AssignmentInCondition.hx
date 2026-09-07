@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
@@ -25,7 +26,7 @@ import anyparse.runtime.Span;
  * assignment (`if (c) x = y else z`). Any optional kind unset → no-op.
  */
 @:nullSafety(Strict)
-final class AssignmentInCondition implements Check {
+final class AssignmentInCondition implements Check implements NoAutofix {
 
 	public function new() {}
 
@@ -58,6 +59,11 @@ final class AssignmentInCondition implements Check {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		return [];
+	}
+
+	public function noAutofixReason(): String {
+		return '`=` versus `==` is the author\'s intent, and either reading is a working program — picking one mechanically would rewrite '
+			+ 'the meaning, not a spelling';
 	}
 
 	private static function walk(

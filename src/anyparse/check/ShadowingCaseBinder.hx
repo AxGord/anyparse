@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.CasePatternScan.CaseRunContext;
 import anyparse.check.CasePatternScan.CaseSeams;
 import anyparse.check.CasePatternScan.PatternBinder;
+import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
@@ -69,7 +70,7 @@ import anyparse.runtime.Span;
  * null, which is the same thing one finding at a time.
  */
 @:nullSafety(Strict)
-final class ShadowingCaseBinder implements Check {
+final class ShadowingCaseBinder implements Check implements NoAutofix {
 
 	private static final RULE_ID: String = 'shadowing-case-binder';
 
@@ -98,6 +99,10 @@ final class ShadowingCaseBinder implements Check {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		return [];
+	}
+
+	public function noAutofixReason(): String {
+		return 'which of an `==` test, a case guard or a free binder name was meant is the author\'s call';
 	}
 
 	/** Every shadowing binder in `tree`, in document order. */

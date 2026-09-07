@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
@@ -38,7 +39,7 @@ using Lambda;
  * typographic punctuation are not letters and never flag.
  */
 @:nullSafety(Strict)
-final class EnglishComments implements Check {
+final class EnglishComments implements Check implements NoAutofix {
 
 	/** Lowest flagged code unit; below it (ASCII, Latin-1, Latin-extended, Greek) a char is never a hit — fast reject. */
 	private static inline final FIRST_NON_LATIN: Int = 0x0400;
@@ -79,6 +80,10 @@ final class EnglishComments implements Check {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		return [];
+	}
+
+	public function noAutofixReason(): String {
+		return 'translating a comment into English is a human task, not a mechanical rewrite';
 	}
 
 	/** Scan every comment token in `source`, flagging the first non-Latin letter in each. */

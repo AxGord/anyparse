@@ -2100,6 +2100,37 @@
 			"note": "a declaration's edit span keeps every trailing byte its raw span swallowed, so a module-level decl contiguous with the next one owns the neighbour's doc comment for reading and for editing alike"
 		},
 		{
+			"name": "M-USING-INSERT-COVERED-SILENT",
+			"type": "anyparse.check.UsingScan",
+			"method": "appendUsingInsert",
+			"find": "if (insert == null) return false;",
+			"replace": "if (insert == null) return true;",
+			"note": "an insert the accepted edits already cover is dropped while the helper still answers `true`, so every rule sharing it keeps a rewritten extension call with no `using` to bind it"
+		},
+		{
+			"name": "M-BOOL-LOOP-USING-COVERED-KEPT",
+			"type": "anyparse.check.BoolLoopScan",
+			"method": "withUsingInsert",
+			"find": "if (usingEdit == null) return [];",
+			"replace": "if (usingEdit == null) return flat;",
+			"note": "a covered insert byte hands back the ungrouped rewrites again, so `prefer-exists` / `prefer-foreach` write extension calls with no `using Lambda;` to bind them"
+		},
+		{
+			"name": "M-PSE-USING-INSERT-SILENT",
+			"type": "anyparse.check.PreferStaticExtension",
+			"method": "appendUsingInserts",
+			"find": "if (CanonicalEdit.editsOverlapAny([edit], edits)) return false;\n\tedits.push(edit);\n\treturn true;",
+			"replace": "if (!CanonicalEdit.editsOverlapAny([edit], edits)) edits.push(edit);\n\treturn true;",
+			"note": "the merged `using` insert answers `true` whether or not it was appended, so `prefer-static-extension` keeps rewrites whose declaration never landed"
+		},
+		{
+			"name": "M-STRING-LITERAL-DUP-REASON-MUTE",
+			"type": "anyparse.check.StringLiteralDup",
+			"method": "noAutofixReason",
+			"force": "''",
+			"note": "the rule declares `NoAutofix` with an empty sentence, so `--fix` reports it as report-only without saying that `apq extract-constant` does the hoist"
+		},
+		{
 			"name": "M-PROBE-SLOT-CONST",
 			"type": "anyparse.query.cli.command.ProbeCommand",
 			"method": "stageProbePath",
