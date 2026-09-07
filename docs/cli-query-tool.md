@@ -750,7 +750,20 @@ Rules and properties:
 
 - Exactly one of position / `--select` / `--match` per op invocation.
 - An ambiguous `--select` / `--match` fails with a candidate listing (position
-  + kind of the first few matches) ready for an `--nth` pick.
+  + kind of the first few matches) ready for an `--nth` pick — and each row that
+  a NAME can address alone also carries the selector that does it, the same
+  canonical address `Address.describe` hands to a position-addressed op and to
+  the `source` read-guard menu. A row only an ordinal separates stays bare,
+  since `--nth <k>` is what the message already offers. So a `--select
+  'Conditional'` that matched a module-level region and a member-level one
+  answers `#2 4:2 Conditional  --select 'ClassDecl:C >> Conditional'`, instead
+  of leaving the reader to guess that such a path exists. The listing asks
+  `AddressIndex.uniqueSelector`, which reports "names cannot single this out"
+  as an ABSENCE — reading it off `describe`'s rendered string cannot work,
+  because a node's name is arbitrary text: a literal spelling ` --nth 2` looks
+  like the ordinal form, and a literal holding a `>` sends the widened selector
+  down a child path that matches nothing, so `describe` falls back to
+  `<line>:<col>` and a string-sniffing listing offered `--select '6:10'`.
 - Named/pattern addresses are **edit-stable**: they survive edits above them,
   so a chain of ops needs no re-locate step between edits (a position rots as
   soon as an earlier edit shifts lines).
@@ -776,12 +789,49 @@ Rules and properties:
   address that lands inside a body to the member holding it. The removal itself
   stays BY NAME, so every conditional-compilation twin of that name goes,
   whichever branch's declaration the address happened to resolve — an address
-  SPELLS the pair, it never narrows the removal to one branch. Giving both an
+  SPELLS the pair, it never narrows the removal to one branch. Twins are
+  declarations in DIFFERENT branches: two of one name inside ONE branch are an
+  illegal duplicate no build can compile — the state a `replace-node` leaves
+  when its replacement re-declares the member it was aimed at — and taking both
+  is data loss, so that is a refusal naming the count and pointing at
+  `remove-element --select … --nth <k>`, which addresses one node. (Until S168
+  the check was region-level, so it caught two unguarded declarations and a
+  guarded/unguarded mix and was blind to the same-branch pair; `safe-delete`
+  shares the path and the fix.) Giving both an
   address and `--type <T> <memberName>` is a usage error, and an address that
   resolves to something that is not a member is refused with a pointer at
   `remove-element`. (The ops that accept no address form are the ones whose
   target is not a node: `add-member` appends by `--type`, `add-import` /
   `remove-import` take a module path, `new` / `fmt` are whole-file.)
+
+### A module-level declaration's RAW span reaches the next one — the ops do not
+
+A module-level declaration's node span runs to the first byte of the
+declaration after it, so it holds the whitespace AND the comments between them,
+the next declaration's own doc block included. Member spans are tight, which is
+why the asymmetry keeps being rediscovered from a reading command and filed as
+a greedy-window bug. Census over `src` + `test` (S168): **1013 of 14 055
+module-level declarations (7.2%)** have a span longer than their own last token
+— **5062 lines / 239 001 bytes** in total, worst single **140 lines**
+(`TypedefDecl` in `src/anyparse/check/PreferMapType.hx`); 668 of them are
+`FinalDecl`, 345 `TypedefDecl`, no other kind.
+
+None of that reaches an op. Every addressed op folds the node through
+`ElementSpan.declEditSpan`, whose `trailingTrimmedSpan` walks the swallowed
+whitespace and comments back off before anything reads or writes them — so
+`source --select` prints the declaration's own bytes, `patch` cannot find a
+fragment that lives only in the gap, and `replace-node` / `set-doc` /
+`remove-element` / `add-element` leave the neighbour's doc standing. Measured on
+`PreferMapType.hx`: `TypedefDecl:Site`'s raw span is 10 267 bytes and
+`source --select` prints 6 lines.
+
+The report that opened this question measured
+`GrammarPlugin.hx --select 'TypedefDecl:RefShape'` at 2648 lines and read that
+as the greedy span. `RefShape` is a genuinely 2648-line declaration (line 365 to
+line 3010, mostly its own field documentation) and the window was exactly its
+own bytes. `unit.query.GreedyDeclSpanEditBoundarySliceTest` pins the trim, and
+that the raw span really is greedy — a fixture whose span went tight would
+otherwise make the suite green and meaningless.
 
 ### What a removal reports, and why it is a report rather than a refusal
 

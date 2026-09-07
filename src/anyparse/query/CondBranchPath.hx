@@ -77,6 +77,24 @@ final class CondBranchPath {
 		return true;
 	}
 
+	/**
+	 * Whether two positions sit in the SAME branch of the SAME regions — the strict form of
+	 * `comparable`, for a caller whose question is "is this an illegal DUPLICATE" rather than
+	 * "may these be compared". The two differ on every shape where one position is inside a
+	 * region the other is not: `comparable` says yes, because a build taking that branch sees
+	 * both, and that is the right answer for a duplicate-case report. It is the wrong answer
+	 * for a REFUSAL, because this class cannot see that `#if js` and `#if !js` are alternatives
+	 * — they are two regions, not two branches of one — and refusing that pair would reject the
+	 * conditional-twin shape the callers exist to serve. Identical paths carry no such doubt: no build compiles one without the other.
+	 * FALSE is not a licence, though — it means only "not provably always together". Two sibling regions spelling the SAME condition
+	 * are different frames here, because a frame is keyed by region OCCURRENCE and this class never reads the condition text.
+	 */
+	public static function sameBranch(a: Array<CondFrame>, b: Array<CondFrame>): Bool {
+		if (a.length != b.length) return false;
+		for (i in 0...a.length) if (a[i].region != b[i].region || a[i].branch != b[i].branch) return false;
+		return true;
+	}
+
 }
 
 /** One open conditional region at a position: which region, and which of its branches. */

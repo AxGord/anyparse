@@ -1,7 +1,11 @@
 package anyparse.query;
 
 import anyparse.query.CanonicalEdit.EditResult;
+import anyparse.query.CondBranchPath.CondBranchIndex;
+import anyparse.query.CondBranchPath.CondFrame;
+import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.ParseError;
+import anyparse.runtime.Span;
 import haxe.Exception;
 
 using Lambda;
@@ -23,10 +27,11 @@ using Lambda;
  *
  * Outside a conditional region a name cannot legally repeat, so a match set
  * that is not wholly conditional means the source is already rejected by the
- * compiler; that stays an `Err` rather than being quietly laundered. The
- * check is region-level, not branch-level — the tree flattens a region's
- * branches into one child list — so two declarations inside the SAME branch,
- * equally illegal, are removed rather than refused.
+ * compiler; that stays an `Err` rather than being quietly laundered. Two declarations inside ONE branch are equally illegal, and
+ * equally refused: the tree flattens a region's branches into one child list, so the region-level question above cannot tell such
+ * a pair from twins — both parents ARE the region — and `CondBranchPath` replays the directives to answer it per
+ * BRANCH instead. That reaches the pair one region holds; two SIBLING regions spelling the same condition are
+ * still taken together, because a replayed frame is keyed by region occurrence and carries no condition text.
  *
  * ## The doc comment goes with the member
  *
@@ -79,14 +84,21 @@ final class RemoveMember {
 		collectMembers(typeNode, memberName, members);
 		if (members.length == 0) return Err('no member named "$memberName" in type "$typeName"');
 
-		final condKind: Null<String> = plugin.refShape().conditionalMemberKind;
+		final shape: RefShape = plugin.refShape();
+		final condKind: Null<String> = shape.conditionalMemberKind;
 		// Several declarations of one name are the SAME logical member spread over conditional
 		// branches — the rule `rename` already applies — so all of them go. Outside a branch the
 		// name cannot legally repeat, so a second UNGUARDED declaration means the source is already
 		// rejected by the compiler; deleting both would quietly launder that, and the refusal names
-		// it instead.
-		if (members.length > 1 && members.exists(m -> condKind == null || m.parent.kind != condKind))
-			return Err('ambiguous — "$memberName" matches ${members.length} members in "$typeName", not all conditional');
+		// it instead. Two of them inside ONE branch are not twins either — that is the second
+		// question, and S166 is why it is asked: one call took BOTH copies at rc 0, leaving as its
+		// only evidence a member that had silently ceased to exist.
+		if (members.length > 1) {
+			if (members.exists(m -> condKind == null || m.parent.kind != condKind))
+				return Err('ambiguous — "$memberName" matches ${members.length} members in "$typeName", not all conditional');
+			final collision: Null<String> = sameBranchDuplicate(source, plugin, shape, members, typeName, memberName);
+			if (collision != null) return Err(collision);
+		}
 
 		final targets: Array<{ node: QueryNode, parent: Null<QueryNode> }> = [];
 		final regionsTaken: Array<QueryNode> = [];
@@ -148,6 +160,43 @@ final class RemoveMember {
 			MemberKinds.isFieldMemberKind(child.kind) && child.name == memberName
 		)
 			out.push({ node: child, parent: host }));
+	}
+
+	/**
+	 * The refusal for a name whose declarations are not all in branches of their own — or null
+	 * when every one of them sits in a branch no other shares. `remove-member` removes BY NAME by
+	 * contract (an address is only a way to SPELL the pair, never a way to keep one twin), so it
+	 * has no `--nth` of its own to offer; the message names how many were found and hands over to
+	 * the op that does address one node.
+	 *
+	 * What it does NOT catch: two SIBLING regions carrying the same condition (`#if a … #end #if a … #end`).
+	 * The frames are keyed by region OCCURRENCE, so those are different branches to this question even
+	 * though no build compiles one without the other. So the criterion the refusal states is wider
+	 * than what it can see, and that half stays open: it is what a `replace-node` duplicating a
+	 * whole GUARDED group produces, rather than the bare member the covered half comes from.
+	 */
+	private static function sameBranchDuplicate(
+		source: String, plugin: GrammarPlugin, shape: RefShape, members: Array<{ node: QueryNode, parent: QueryNode }>, typeName: String,
+		memberName: String
+	): Null<String> {
+		final branches: CondBranchIndex = CondBranchPath.scan(source, shape, plugin.lexicalRegions(source));
+		final placed: Array<{ kind: String, path: Array<CondFrame> }> = [];
+		for (hit in members) {
+			final span: Null<Span> = hit.node.span;
+			// A member with no span cannot be placed in a branch, so it is SKIPPED rather than
+			// answered for: returning here would report `no collision` for the whole set, and on a
+			// check whose null means "go ahead and delete" that is the unsafe direction. The sibling
+			// consumer of this index, `DuplicateCase.compareArms`, skips a spanless arm the same way.
+			if (span != null) placed.push({ kind: hit.node.kind, path: CondBranchPath.pathAt(branches, span.from) });
+		}
+		for (entry in placed) {
+			final together: Int = placed.count(other -> CondBranchPath.sameBranch(other.path, entry.path));
+			if (together > 1)
+				return 'ambiguous — "$memberName" has $together declarations in ONE conditional branch of "$typeName", a pair no build '
+					+ 'can compile; this op removes by NAME, so take them one at a time with '
+					+ '`apq remove-element --select \'${entry.kind}:$memberName\' --nth <k>`';
+		}
+		return null;
 	}
 
 	/**

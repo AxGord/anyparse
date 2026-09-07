@@ -4,6 +4,7 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.ElementSpan;
 import anyparse.query.QueryNode;
+import anyparse.query.RemoveElement;
 import anyparse.query.RemoveMember;
 import utest.Assert;
 import utest.Test;
@@ -245,6 +246,62 @@ class RemoveMemberSliceTest extends Test {
 	}
 
 	/**
+	 * Two declarations of one name inside the SAME branch are not conditional twins: no build sees
+	 * one without the other, so the pair cannot compile whatever guards it. It is the state a
+	 * `replace-node` leaves when its replacement re-declares the member it was aimed at — and one
+	 * `remove-member` call used to take BOTH, at rc 0, leaving as its only evidence a member that
+	 * had silently ceased to exist (S166 met it twice in one slice). The region-level check above
+	 * cannot see the shape, because both parents ARE the region.
+	 *
+	 * The assertion is the COUNT in the message, not merely that an Err came back: every other
+	 * refusal on this path would satisfy a bare `assertErr`, so the count is what ties the test to
+	 * the branch question.
+	 *
+	 * KILLED by arm `M-REMOVE-MEMBER-BRANCH-BLIND`, which answers `null` from the branch check —
+	 * `remove-member` goes back to removing both declarations and reporting success.
+	 */
+	@:pin('control')
+	@:killer('M-REMOVE-MEMBER-BRANCH-BLIND')
+	public function testTwoDeclarationsInOneBranchAreRefusedByCount(): Void {
+		switch RemoveMember.removeMember(sameBranchPair(), 'C', 'drop', true, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.fail('both declarations were removed instead of refused:\n$text');
+			case Err(message):
+				Assert.stringContains('2 declarations in ONE conditional branch', message);
+		}
+	}
+
+	/**
+	 * Two declarations in SEPARATE regions with complementary conditions are twins as much as two
+	 * branches of one region are, and both still go. This is the shape the branch-level refusal is
+	 * deliberately unable to see — `CondBranchPath.sameBranch` compares region occurrences, not
+	 * condition text, so `#if js` and `#if !js` are different frames — and it is the reason the
+	 * refusal is not written on `CondBranchPath.comparable`, which reads the pair as overlapping
+	 * and would reject it. Without this fixture that whole argument rests on prose: the nesting
+	 * test is the only other case a `comparable` swap would flip, and it is about nesting.
+	 */
+	public function testAlternativeSiblingRegionsAreStillTwins(): Void {
+		final source: String = 'class C {\n\t#if js\n\tvar drop:Int;\n\t#end\n\t#if !js\n\tvar drop:String;\n\t#end\n\tvar keep:Int;\n}\n';
+		Assert.equals('class C {\n\tvar keep:Int;\n}\n', okText(source, 'C', 'drop'));
+	}
+
+	/**
+	 * The escape the refusal names, on the same fixture: `remove-element` addresses ONE node, so
+	 * the second declaration goes and the first one stands — the declaration the by-name removal used to take
+	 * along with its twin. The whole canonical result carries the assertion, so a run that took both, or took
+	 * the wrong one, cannot pass: the two bodies differ.
+	 */
+	public function testTheAddressedEscapeTakesOneDeclarationAndLeavesTheTwin(): Void {
+		// 5:2 is the SECOND `var drop` of `sameBranchPair()` — its first token.
+		switch RemoveElement.removeElement(sameBranchPair(), 5, 2, true, new HaxeQueryPlugin(), true) {
+			case Ok(text):
+				Assert.equals('class C {\n\t#if mobile\n\tvar drop:Int;\n\t#end\n\tvar keep:Int;\n}\n', text);
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+		}
+	}
+
+	/**
 	 * The shared multi-node delete keeps only the OUTERMOST of nesting targets. `remove-member`
 	 * hands it exactly that shape from nested regions, and splicing both would run the second on
 	 * coordinates the first already shifted — deleting whatever follows the outer node while the
@@ -275,6 +332,15 @@ class RemoveMemberSliceTest extends Test {
 			case Err(message):
 				Assert.fail('nesting targets must collapse to the outer one, got Err: $message');
 		}
+	}
+
+	/**
+	 * The pair a `replace-node` leaves behind when its replacement re-declares the member it was
+	 * aimed at: two `drop`s inside ONE `#if` branch. Their TYPES differ, so a removal that took the
+	 * wrong declaration is distinguishable from one that took the right one.
+	 */
+	private inline function sameBranchPair(): String {
+		return 'class C {\n\t#if mobile\n\tvar drop:Int;\n\n\tvar drop:String;\n\t#end\n\tvar keep:Int;\n}\n';
 	}
 
 	/** The round-2 repro: a doc'd `victim` whose text carries `marker`, followed by a doc'd `neighbor`. */

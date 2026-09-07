@@ -54,8 +54,8 @@ final class RemoveMemberCommand implements CliCommand implements PostWriteFix {
 	 * by-name `--type <T> <memberName>` pair; giving both is a usage error, and an address is
 	 * reduced to that same pair by `resolveMemberAddress`, so it SPELLS the removal rather than
 	 * narrowing it. `<memberName>` may resolve to SEVERAL declarations, when
-	 * conditional-compilation regions declare it once per build — those are one logical member
-	 * and all of them go, each with its leading doc comment unless `--keep-doc` says otherwise.
+	 * conditional-compilation regions declare it once per build — those are one logical member and all of them go, each with its leading
+	 * doc comment unless `--keep-doc` says otherwise. Two declarations in ONE branch are refused instead: no build compiles the pair.
 	 * The by-name counterpart of `add-member`.
 	 */
 	private static function runRemoveMember(args: Array<String>, fix: Bool): Int {
@@ -150,7 +150,9 @@ final class RemoveMemberCommand implements CliCommand implements PostWriteFix {
 		CliIo.sysPrint('Remove a member (a field or method) with its modifier / meta group. When the\n');
 		CliIo.sysPrint('name is declared in several conditional-compilation branches, ALL of those\n');
 		CliIo.sysPrint('declarations go — they are one logical member — and a region left with no\n');
-		CliIo.sysPrint('member takes its directives with it. The by-name counterpart of add-member.\n');
+		CliIo.sysPrint('member takes its directives with it. Two declarations in ONE branch are not\n');
+		CliIo.sysPrint('that shape: no build can compile the pair, so it is refused, naming how many\n');
+		CliIo.sysPrint('were found. The by-name counterpart of add-member.\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('The member is addressed either by the v2 forms the sibling ops take or by\n');
 		CliIo.sysPrint('--type <T> <memberName>; giving both is a usage error. An address resolves\n');

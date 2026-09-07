@@ -155,6 +155,56 @@ class AddressTest extends Test {
 		}
 	}
 
+	/**
+	 * The listing SPELLS the selector that picks a candidate, not only its position. Two
+	 * conditional regions at different depths are indistinguishable by kind, so the old listing
+	 * (`<line>:<col> Kind` per row) left `--nth <k>` as the only way out — while the resolver
+	 * already computes a canonical, edit-stable address for exactly this node, and hands it to a
+	 * position-addressed op as `target …` and to the `source` read-guard menu as its entry.
+	 *
+	 * The module-level region has no named ancestor, so `describe` can only ordinal it and the row
+	 * stays bare — asserting BOTH halves in one test is what keeps the label from degenerating
+	 * either way: a labeller that printed nothing loses the second row, one that printed the
+	 * ordinal address for everything gains it on the first.
+	 *
+	 * KILLED by arm `M-CANDIDATE-LABEL-BARE`, which drops back to the bare `<line>:<col> Kind`.
+	 */
+	@:pin('control')
+	@:killer('M-CANDIDATE-LABEL-BARE')
+	public function testAnAmbiguityListingSpellsTheSelectorThatPicksOneCandidate(): Void {
+		final src: String = '#if js\n#end\nclass C {\n\t#if js\n\tvar x:Int;\n\t#end\n}\n';
+		switch resolveIn(src, { select: 'Conditional' }) {
+			case Ok(_, _):
+				Assert.fail('two regions resolved as one');
+			case Err(message):
+				Assert.stringContains("#2 4:2 Conditional  --select 'ClassDecl:C >> Conditional'", message);
+				Assert.stringContains('#1 1:1 Conditional\n', message);
+		}
+	}
+
+	/**
+	 * A candidate's own NAME is arbitrary text — a string literal is a named node like any other —
+	 * so the listing cannot decide "is this a real selector" by reading the rendered address back.
+	 * Two shapes broke a string-sniffing version, and both are here in one fixture because they
+	 * fail in opposite directions: `"a > b"` sends `Selector.parse` down a direct-child path that
+	 * matches nothing, so `describe` falls back to `<line>:<col>` and the row offered
+	 * `--select '6:10'`, which is not a command; `"pick --nth 2"` spells the ordinal suffix, so a
+	 * ` --nth ` test read the row as ordinal-only and withheld the selector that does address it.
+	 * `AddressIndex.uniqueSelector` answers the question as an absence instead, and neither shape
+	 * can reach the label.
+	 */
+	public function testACandidateNameThatSpellsAnAddressDoesNotFakeOne(): Void {
+		final src: String =
+			'class C {\n\tfunction f():Void {\n\t\ttrace("a > b");\n\t\ttrace("pick --nth 2");\n\t\ttrace("plain");\n\t}\n}\n';
+		switch resolveIn(src, { select: 'DoubleStringExpr' }) {
+			case Ok(_, _):
+				Assert.fail('three literals resolved as one');
+			case Err(message):
+				Assert.isFalse(message.indexOf("--select '3:") >= 0 || message.indexOf("--select '4:") >= 0, message);
+				Assert.stringContains('#2 4:9 DoubleStringExpr:"pick --nth 2"  --select \'DoubleStringExpr:"pick --nth 2"\'', message);
+		}
+	}
+
 	public function testSelectNthPicks(): Void {
 		switch resolve({ select: 'Call', nth: 2 }) {
 			case Ok(offset, node):
