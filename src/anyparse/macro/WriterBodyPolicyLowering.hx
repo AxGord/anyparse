@@ -738,13 +738,24 @@ final class WriterBodyPolicyLowering {
 		// arm. On a LOOP body field whose runtime body is an `if` that owns an
 		// `else`, the placement `forBody` / `whileBody` / `doWhileBody` chose is
 		// replaced by `Next` before ANY reader sees it — the outer `Keep` switch
-		// below, and the policy switch inside it, both read `policyFlag`. That is
-		// the whole S159 fix: S157 gated `buildBodyFitExpr` instead, so `same` and
-		// `keep` had the defect the key is documented to withdraw and no way to
-		// decline it. Folded into the selector rather than added as arms, for the
-		// JVM method-size reason the `omega-else-switch` comment below records.
+		// below, and the policy switch inside it, both read the selector
+		// `policyFlag` this one feeds. That is the whole S159 fix: S157 gated
+		// `buildBodyFitExpr` instead, so `same` and `keep` had the defect the key
+		// is documented to withdraw and no way to decline it. Folded into the
+		// selector rather than added as arms, for the JVM method-size reason the
+		// `omega-else-switch` comment below records.
 		final loopIfElseTest: Null<Expr> = buildLoopBodyIfElseTest(opts);
-		final policyFlag: Expr = loopIfElseTest == null ? optFlag : macro ($loopIfElseTest ? $nextPat : $optFlag);
+		final loopPolicy: Expr = loopIfElseTest == null ? optFlag : macro ($loopIfElseTest ? $nextPat : $optFlag);
+		// omega-bracket-body-glue: a `[` body the knob hugs to its branch head IS the `Same`
+		// layout, so the knob is a policy SUBSTITUTION on the selector — one ternary over two
+		// enum constants instead of a whole extra outer arm, the same shape `loopIfElseTest`
+		// above and `elseSwitchPolicy` below take. On the SELECTOR and not on the inner
+		// `policySwitch`, because the outer `Keep` switch at the bottom reads this value too:
+		// gated one level in, the knob's OPEN seam was blind to `sameLine.expressionIf: keep`
+		// while its two CLOSE seams (`semicolonBeforeSiblingWrap`, `beforeKwSeparator`) read
+		// the flag alone, so the same knob glued `] else` and refused `if (c) [` on one input.
+		final bracketTest: Null<Expr> = bp.buildBracketBodyGlueTest(opts.bracketBodyGlueArgs, opts.bodyTypePath, opts.bodyValueExpr);
+		final policyFlag: Expr = bracketTest == null ? loopPolicy : macro ($bracketTest ? $samePat : $loopPolicy);
 		final policyCases: Array<Case> = [
 			{ values: [samePat], expr: sameLayoutExpr, guard: null },
 			{ values: [nextPat], expr: nextLayoutExpr, guard: null },
@@ -762,12 +773,7 @@ final class WriterBodyPolicyLowering {
 		final esSame: Null<Expr> = tests.same;
 		final esNext: Null<Expr> = tests.next;
 		final elseSwitchPolicy: Expr = esSame == null ? policyFlag : macro ($esSame ? $samePat : ($esNext ? $nextPat : $policyFlag));
-		// omega-bracket-body-glue: same substitution seam, same reason — a `[` body
-		// that hugs its branch head is the `Same` layout, so it costs one ternary
-		// here instead of a whole extra outer arm.
-		final bracketTest: Null<Expr> = bp.buildBracketBodyGlueTest(opts.bracketBodyGlueArgs, opts.bodyTypePath, opts.bodyValueExpr);
-		final effPolicy: Expr = bracketTest == null ? elseSwitchPolicy : macro ($bracketTest ? $samePat : $elseSwitchPolicy);
-		final policySwitch: Expr = { expr: ESwitch(effPolicy, policyCases, sameLayoutExpr), pos: Context.currentPos() };
+		final policySwitch: Expr = { expr: ESwitch(elseSwitchPolicy, policyCases, sameLayoutExpr), pos: Context.currentPos() };
 		final outerCases: Array<Case> = [];
 		if (ifStmtPattern != null) {
 			final kpPath: Array<String> = ['anyparse', 'format', 'KeywordPlacement'];

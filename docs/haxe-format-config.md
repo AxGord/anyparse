@@ -397,6 +397,58 @@ and on:
 The population is 0 in both configs measured here (no `hxformat.json` in either tree sets
 `doWhileBody` at all), so this arm of the key is carried by pins rather than by a corpus.
 
+## `sameLine.expressionIfWithBrackets` — one knob, three seams, and they have to agree
+
+**`sameLine.expressionIfWithBrackets: true | false`** (default `false`; the fork has no such key,
+so an absent one is fork parity) makes an opening `[` — an array literal AND an array
+comprehension, which share one ctor — that is the value of an expression-`if` branch HUG the branch
+head, and makes the matching `]` close against the `else`:
+
+```haxe
+return if (c) [
+	oneLongElementName,
+	anotherLongElementName
+] else [];
+```
+
+It owns THREE seams, not one: the body placement (the `[` comes up to the head), the branch's
+optional `;` (dropped before an `else`, because `];` cannot cuddle) and the pre-`else` gap (a plain
+space, so the `else` reaches the `]`). Two of them read the flag alone; until S154 the OPEN seam was
+folded one level deeper, into the layout policy INSIDE `WriterBodyPolicyLowering.buildBodyCoreWrap`'s
+`Keep` switch — so under `sameLine.expressionIf: "keep"` the knob dropped the `;`, pulled `else` up to
+the `]`, and left the `[` on a line of its own. Half a shape, and the half the knob exists to prevent:
+
+```haxe
+// pre-S154, `expressionIf: "keep"` + `expressionIfWithBrackets: true`
+return if (c)
+	[
+		oneLongElementName,
+		anotherLongElementName
+	] else
+	[];
+```
+
+S154 moved the substitution onto the policy VALUE, the seam S159 took for `loopBodyIfElseNext`, so
+every placement consults the knob before a layout is chosen. Measured on one broken source (`[` on
+its own line, `];`, `else` on the next), one variable at a time:
+
+| `expressionIf` | knob off (or absent) | knob on, pre-S154 | knob on, S154 |
+|---|---|---|---|
+| `same` | source shape | **hugged + cuddled** | hugged + cuddled |
+| `next` | source shape | **hugged + cuddled** | hugged + cuddled |
+| `keep` | source shape (preserved whole) | `] else` only, `[` left behind | **hugged + cuddled** |
+
+`keep` decides the LAYOUT POLICY — it never decides whether an explicit knob applies; with the knob
+absent it still preserves the source whole, which is the vacuity guard in
+`unit.grammar.haxe.HxValueIfBracketHugSliceTest`. The `same` row is what proves the defect was the
+placement and not the knob: the identical source already reached the target bytes there.
+
+The curly twin is a different question and needs no key. `sameLine.expressionIfWithBlocks` collapses
+a block body's CONTENTS and glues nothing; the `} else {` shape comes from `sameLine.expressionIf`
+itself, whose `next` resolves the pre-`else` gap to `SameOnBlock` (S100). So a value-`if` with block
+branches hugs its head and cuddles its `else` under `same` and `next` with or without
+`expressionIfWithBlocks` — measured on the same broken source in both trees' configs.
+
 ## Where to look when a key still does nothing
 
 1. Check the spelling here. An unknown value is silently ignored.
