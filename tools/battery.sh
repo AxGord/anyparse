@@ -58,8 +58,9 @@
 #
 # Inside a branch the order is a real dependency; across branches there is none
 # that matters: all four read `src`, and each branch's writes are read only by
-# itself — the suite's `bin/.last-sweep.json`, its rotated `.prev-sweep.json`
-# and `/tmp/anyparse-last-probe.hx` by its own corpus step and by nothing else,
+# itself — the suite's `bin/.last-sweep.json` and its rotated `.prev-sweep.json`
+# by its own corpus step and by nothing else (probe staging left this list in
+# S170: the slot resolves under the writing process's own temp root),
 # the jvm probe's `bin/jvm-portability.jar` by nobody. Adding a fifth branch
 # means re-checking that, not assuming it: `docs/testing.md` § "The step
 # graph: four branches, one join" carries the full rationale, and

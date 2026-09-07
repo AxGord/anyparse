@@ -468,6 +468,56 @@ backtracking collapses every failure to the file head (`expected <root>`);
 with it, the reported span points at the innermost blocking token, which
 is what diagnostics and recon tooling need.
 
+### `apq probe`: the staged scratch slot resolves per PROCESS (T700)
+
+`apq probe '<code>'` persists the bytes it was handed so the next command can
+target the same source without re-heredoc-ing it, and prints the path on
+stderr:
+
+```
+apq probe: staged source -> /var/folders/…/T/anyparse-last-probe.19905.hx (use it with `apq strip …` or `apq recon --probe …`).
+```
+
+**Read that path out of the nudge — never spell one yourself.** It is resolved,
+in this order:
+
+1. `$APQ_PROBE_PATH`, when set and non-empty — the slot outright.
+2. otherwise `<temp root>/anyparse-last-probe.<pid>.hx`, where the temp root is
+   the OS one (`$TMPDIR` when the caller set one, exactly as `os.tmpdir()`
+   reads it).
+
+Both halves are load-bearing, measured. The temp root answers the caller's own
+isolation, so a process that claimed a private root — the suite does, via
+`CliFixture.isolateTempDir` — stages inside it and has the slot reaped with it.
+The pid is what separates two CONCURRENT probes: on macOS every process of one
+user inherits the same `/var/folders/…/T`, so a temp root alone separates
+nothing between two agents on one machine.
+
+Until this landed the slot was the fixed constant `/tmp/anyparse-last-probe.hx`.
+Two workers then shared one file and the failure was silent: worker A staged,
+worker B staged a second later, and A's `strip` / `recon --probe` parsed B's
+source — exit 0, no exception, a plausible WRONG answer, which is the worst
+shape a measurement harness can be handed. Measured on 12 interleaved rounds
+each: A read foreign bytes 4 times of 12 and B 8 of 12, and one read came back
+`class A1 { var a:Int; }}` — A's 23 bytes carrying a residual `}` of B's
+24-byte content, a source neither process ever wrote (two truncating opens
+interleaved). The same probe after the fix reads 0 of 12 in both directions and
+12 of 12 byte-exact.
+
+Single-slot is unchanged where it was ever meant: WITHIN one process a chained
+`recon --probe` still targets the LAST probe, not a history — the second probe
+of a process overwrites the first one's slot.
+
+Staging never fails a probe. A write error (read-only temp root, disk full,
+permission) skips the nudge and the probe still answers. So does a REFUSAL: a
+target that exists and is not a regular file is not written through, because
+`File.saveContent` FOLLOWS a symlink and a slot in a shared directory would
+otherwise be a write-anywhere primitive with this process's rights.
+
+```
+apq probe: not staged — "…/planted.hx" exists and is not a regular file (symlink, directory or device); set APQ_PROBE_PATH to stage somewhere else.
+```
+
 ## Mutation commands (source rewriting)
 
 Distinct from the read-only query commands above: these **rewrite** source. Without `--write` the rewrite goes to stdout; with `--write` it overwrites the file in place. Cursor positions are 1-based `line:col` — the same convention `apq refs` prints (and `ast --at` / `source`). Two sub-families differ in how they format the result:

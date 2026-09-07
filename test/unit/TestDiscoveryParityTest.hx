@@ -1134,6 +1134,13 @@ class TestDiscoveryParityTest extends Test {
 			'unit.cli.AddressCliTest#testRemoveElementReportNamesWhatTheCutTook :: control :: M-REMOVE-CUT-ANNOTATIONS-NONE',
 			'unit.cli.AddressCliTest#testRemoveElementReportOnAModifierPositionNamesTheDeclaration :: control :: M-REMOVE-CUT-SUBJECT-RAW',
 			'unit.cli.ApqBatchQueryCliTest#testTheSeparatorIsWhatSplitsQueriesFromScope :: control :: M-BATCH-SEPARATOR-BLIND',
+			'unit.cli.ApqDxTier5CliTest#testProbeRefusesToStageOntoASymlink :: guard :: ',
+			'unit.cli.ApqDxTier5CliTest#testProbeRestagingOverwritesPreviousScratch :: control :: M-PROBE-SLOT-CONST',
+			'unit.cli.ApqDxTier5CliTest#testProbeStagesSourceUnderTheCurrentTempRoot :: control :: M-PROBE-SLOT-CONST',
+			'unit.cli.ApqDxTier5CliTest#testProbeStagingRefusesANonRegularTargetAndHonoursTheEnvPath :: control :: '
+				+ 'M-PROBE-STAGE-ANY-TARGET',
+			'unit.cli.ApqDxTier5CliTest#testTwoProbeProcessesGetSeparateScratchSlots :: guard :: ',
+			'unit.cli.ApqDxTier5CliTest#testTwoProbeProcessesUnderOneTempRootStillGetSeparateSlots :: guard :: ',
 			'unit.cli.ApqProgressTtyCliTest#testNoEnvAndNoTerminalIsSilent :: control :: M-PROGRESS-TTY-BLIND',
 			'unit.cli.ApqSourceReadGuardCliTest#testALongUnnarrowedReadIsRefused :: control :: M-SOURCE-READ-GUARD-OFF',
 			'unit.cli.ApqTestSummaryExitStatusCliTest#testTruncatedTranscriptDisagreesWithANonZeroExit :: control :: M-EXIT-STATUS-AGREES',
@@ -1793,7 +1800,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-SOURCE-READ-GUARD-OFF',
 			'M-REMOVE-MEMBER-BRANCH-BLIND',
 			'M-CANDIDATE-LABEL-BARE',
-			'M-DECL-EDIT-SPAN-UNTRIMMED'
+			'M-DECL-EDIT-SPAN-UNTRIMMED',
+			'M-PROBE-SLOT-CONST',
+			'M-PROBE-STAGE-ANY-TARGET'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

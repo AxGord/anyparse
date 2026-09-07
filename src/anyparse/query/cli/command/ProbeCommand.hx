@@ -15,7 +15,20 @@ using StringTools;
 @:nullSafety(Strict)
 final class ProbeCommand implements CliCommand {
 
-	private static inline final STAGE_PROBE_PATH: String = '/tmp/anyparse-last-probe.hx';
+	/**
+	 * Basename stem of the probe scratch slot. The temp root and this
+	 * process's own id complete it — see `stageProbePath`.
+	 */
+	private static inline final STAGE_PROBE_STEM: String = 'anyparse-last-probe';
+
+	/** Env var naming the staging path outright, overriding the resolved one. */
+	private static inline final STAGE_PROBE_ENV: String = 'APQ_PROBE_PATH';
+
+	/** Lowest six-digit value, so the non-node process token is always six characters. */
+	private static inline final PROCESS_TOKEN_LOW: Int = 100000;
+
+	/** How many six-digit values that token draws from. */
+	private static inline final PROCESS_TOKEN_SPAN: Int = 900000;
 
 	private static final AST_BOOL_FLAGS: Array<String> = [
 		'--json',
@@ -135,12 +148,12 @@ final class ProbeCommand implements CliCommand {
 			return EXIT_USAGE;
 		}
 		final codeFinal: String = codeArg;
-		// ω-probe-staging: persist the probe source to a fixed scratch
-		// path so a follow-up `strip` / `recon --probe` / `writer-equals`
-		// can target the same bytes without re-heredoc-ing them. The
-		// stdin path is also captured (we read once, write to /tmp, then
-		// hand the bytes to runAst via --code instead of --stdin so the
-		// downstream loader sees the same source we staged).
+		// ω-probe-staging: persist the probe source to a per-process scratch
+		// path so a follow-up `strip` / `recon --probe` / `writer-equals` can
+		// target the same bytes without re-heredoc-ing them. The stdin path is
+		// also captured (we read once, write the file, then hand the bytes to
+		// runAst via --code instead of --stdin so the downstream loader sees the
+		// same source we staged).
 		final stagedSource: Null<String> = stageProbeSource(codeFinal);
 		if (writerProbeMode) {
 			final source: String = stagedSource ?? (codeFinal == '-' ? CliIo.readStdin() : codeFinal);
@@ -166,37 +179,40 @@ final class ProbeCommand implements CliCommand {
 	}
 
 	/**
-	 * Resolve the probe source bytes (from arg or stdin), persist them to
-	 * `/tmp/anyparse-last-probe.hx`, and emit a stderr nudge naming the
-	 * path. Returns the resolved bytes UNCONDITIONALLY on `sys` (whether
-	 * or not the write succeeded) so the caller can re-use them via
-	 * `--code` instead of attempting a second stdin read on an already-
-	 * drained stream. Returns `null` only on `#if !sys` (no FileSystem
-	 * access — the caller falls through to the original argv-passthrough
-	 * path).
+	 * Resolve the probe source bytes (from arg or stdin), persist them to the
+	 * path `stageProbePath` resolves, and emit a stderr nudge naming THAT path
+	 * rather than a constant — the nudge is the only thing a caller can chain
+	 * from, so it has to carry the name the next command needs.
 	 *
-	 * Inline-arg and stdin-source both stage on `sys`: the user can
-	 * re-run `strip /tmp/anyparse-last-probe.hx …` straight after any
-	 * `probe` invocation. A write failure (read-only /tmp, disk full,
-	 * permission) skips the nudge but still returns the resolved bytes —
-	 * losing the stdin read AND failing the probe would be the worse
-	 * outcome.
+	 * Returns the resolved bytes UNCONDITIONALLY on `sys` (whether or not the
+	 * write happened) so the caller can re-use them via `--code` instead of
+	 * attempting a second stdin read on an already-drained stream. Returns
+	 * `null` only on `#if !sys` (no FileSystem access — the caller falls
+	 * through to the original argv-passthrough path).
 	 *
-	 * `STAGE_PROBE_PATH` is a constant (not a flag) — the scratch path
-	 * is single-slot by design (a chained `recon --probe` should target
-	 * the LAST probe, not pick from a history).
+	 * Inline-arg and stdin-source both stage on `sys`: the user can re-run
+	 * `strip <the announced path> …` straight after any `probe` invocation. A
+	 * write failure (read-only temp root, disk full, permission) skips the
+	 * nudge but still returns the resolved bytes — losing the stdin read AND
+	 * failing the probe would be the worse outcome. So does a refusal: staging
+	 * is a convenience, never the probe's job.
 	 */
 	private static function stageProbeSource(codeArg: String): Null<String> {
 		#if (sys || nodejs)
 		final source: String = codeArg == '-' ? CliIo.readStdin() : codeArg;
+		final path: String = stageProbePath();
 		try {
-			sys.io.File.saveContent(STAGE_PROBE_PATH, source);
-			CliIo.stderr(
-				'apq probe: staged source -> $STAGE_PROBE_PATH (use it with `apq strip $STAGE_PROBE_PATH …` or `apq recon --probe '
-				+ '$STAGE_PROBE_PATH`).\n'
-			);
+			if (isStageTargetSafe(path)) {
+				sys.io.File.saveContent(path, source);
+				CliIo.stderr('apq probe: staged source -> $path (use it with `apq strip $path …` or `apq recon --probe $path`).\n');
+			} else {
+				CliIo.stderr(
+					'apq probe: not staged — "$path" exists and is not a regular file (symlink, directory or device); '
+					+ 'set $STAGE_PROBE_ENV to stage somewhere else.\n'
+				);
+			}
 		} catch (_: Exception) {
-			// Write failed (read-only /tmp, disk full, permission). Skip
+			// Write failed (read-only temp root, disk full, permission). Skip
 			// the nudge but STILL return the read bytes so the caller can
 			// use `--code` instead of `--stdin` — a second stdin read on
 			// an already-drained stream would silently parse empty input.
@@ -206,6 +222,86 @@ final class ProbeCommand implements CliCommand {
 		return null;
 		#end
 	}
+
+	#if (sys || nodejs)
+	/**
+	 * The scratch path THIS process stages to: `$STAGE_PROBE_ENV` when set,
+	 * else `<temp root>/anyparse-last-probe.<pid>.hx`.
+	 *
+	 * Both halves are load-bearing and neither alone is enough, measured.
+	 * The temp root answers the caller's own isolation — the suite's
+	 * `CliFixture.isolateTempDir` (S150) puts every fixture under a private
+	 * root, and staging now lands there and is reaped with it. But two
+	 * WORKERS on one machine share `$TMPDIR`: on macOS every process of one
+	 * user inherits the same `/var/folders/…/T`, and nothing in the campaign
+	 * sets its own. So the pid is what actually separates two `apq probe`
+	 * processes, and without it the old fixed `/tmp` slot let worker B's
+	 * source answer worker A's `strip` — exit 0, no exception, a plausible
+	 * WRONG answer. Overlapping writes were worse than that: two truncating
+	 * opens interleaved produced a HYBRID file (A's 23 bytes carrying a
+	 * residual `}` of B's 24) that neither process ever wrote.
+	 *
+	 * The single-slot intent survives whole. It was never "one slot per
+	 * machine" — it is "a chained `recon --probe` targets the LAST probe,
+	 * not a history", and one slot per PROCESS says exactly that for the
+	 * only caller that can chain. The nudge prints this resolved path, so
+	 * the next command is handed the right name rather than a constant it
+	 * has to remember.
+	 */
+	private static function stageProbePath(): String {
+		final explicit: Null<String> = Sys.getEnv(STAGE_PROBE_ENV);
+		return explicit != null && explicit.length > 0
+			? explicit
+			: haxe.io.Path.join([probeTempRoot(), '$STAGE_PROBE_STEM.${processToken()}.hx']);
+	}
+
+	/** The OS temp root, mirroring `OracleCache.tempDir` — `$TMPDIR` when the caller set one. */
+	private static function probeTempRoot(): String {
+		#if nodejs
+		return js.node.Os.tmpdir();
+		#elseif sys
+		final tmp: Null<String> = Sys.getEnv('TMPDIR');
+		return tmp != null && tmp.length > 0 ? tmp : '/tmp';
+		#end
+	}
+
+	/** What separates two concurrent stagings: this process's own id. */
+	private static function processToken(): String {
+		// No portable pid outside node, and no CLI runner outside it either — a
+		// draw keeps two processes apart on a target that never reaches here.
+		#if nodejs
+		return '${js.Node.process.pid}';
+		#elseif sys
+		return '${PROCESS_TOKEN_LOW + Std.random(PROCESS_TOKEN_SPAN)}';
+		#end
+	}
+
+	/**
+	 * Whether staging may write `path`. `sys.io.File.saveContent` FOLLOWS a
+	 * symlink, so a slot under a shared temp root is otherwise a
+	 * write-anywhere primitive with this process's rights: plant a link and
+	 * the next `apq probe` overwrites whatever it points at. An absent target
+	 * is fine — that is the ordinary first probe.
+	 *
+	 * Check-then-write, so not atomic: a link planted in the window between
+	 * the two still wins. What closes the window for good is the pid in the
+	 * name — an attacker has to guess the slot before the process that owns
+	 * it exists — and this check is what stops the case that needs no timing
+	 * at all, a link left lying at a predictable path.
+	 */
+	private static function isStageTargetSafe(path: String): Bool {
+		#if nodejs
+		// `lstatSync`, not `statSync`: the latter resolves the link and would
+		// report the VICTIM's kind, which is exactly the file being protected.
+		final stat: Null<js.node.fs.Stats> = try js.node.Fs.lstatSync(path) catch (_: Exception) null;
+		return stat == null || stat.isFile();
+		#else
+		// No portable `lstat`; a directory is the one non-regular kind this
+		// branch can name, and it has no CLI runner anyway.
+		return !sys.FileSystem.exists(path) || !sys.FileSystem.isDirectory(path);
+		#end
+	}
+	#end
 
 	public static function emitOneWriterProbe(
 		plugin: GrammarPlugin, source: String, file: String, lang: String, plain: Bool, optsJson: Null<String>
@@ -292,6 +388,10 @@ final class ProbeCommand implements CliCommand {
 		CliIo.sysPrint('the trivia and plain writer outputs separated by `=== trivia ===` /\n');
 		CliIo.sysPrint('`=== plain ===` fences. Mirrors `apq writer-probe <file>` for inline\n');
 		CliIo.sysPrint('source — no scratch file needed.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('The source is staged to a scratch slot and the path is printed on\n');
+		CliIo.sysPrint('stderr — read it from there, it is per-process. $STAGE_PROBE_ENV\n');
+		CliIo.sysPrint('names the slot outright.\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Example:\n');
 		CliIo.sysPrint("  apq probe 'class C { function f() { @:m return switch x { case _: 0; } } }' --depth 6\n");
