@@ -391,6 +391,68 @@ The mechanism is a differential parse, not a precedence table: a grammar declare
 `parenKind` and `parenDelimiters` and gets the whole behaviour, and one that declares
 neither keeps the raw splice.
 
+### `apq fmt`: canonicalise source through the writer (T718)
+
+```
+apq fmt <file/dir/glob>... [--write] [--list] [--verify] [--one-pass] [--lang <name>]
+```
+
+Re-emits each file through the writer — the same whole-file pipeline the
+writer-emitted mutation ops above use — formatted by the project's
+`hxformat.json` discovered from the file's own directory. This is the
+file-level counterpart of those ops and the measuring stick for the
+canonical gate (`writeRoundTrip(s) == s`); unlike them it takes whole
+files/directories/globs rather than a cursor or `--select`.
+
+- No flags, one concrete file: the formatted source goes to stdout (gofmt's
+  one-file default).
+- No flags, multiple files or a directory: `--list` mode is implied — prints
+  the paths whose output would differ (gofmt `-l`); nothing is rewritten.
+- `--write` / `-w` — rewrite each file in place with its canonical form.
+- `--list` / `-l` — force list mode explicitly. An EXPLICIT `--list` also
+  turns off the `#if` region notes below (see there) — the machine mode a
+  whole-tree gate spells, one line per drifted path.
+- `--verify` — audit mode: the output must differ from the input by
+  WHITESPACE only; every other divergence is reported and the file is never
+  written. Catches what the writer round trip itself cannot — a writer
+  defect whose output the parser still accepts is invisible to `--list`,
+  self-status and lint alike, all of which can read green on a tree that no
+  longer compiles. Some formatting policies change tokens on purpose (a
+  trailing comma, braces around a single statement, an optional semicolon)
+  and are reported too; read the diff rather than treating every hit as a
+  bug.
+- `--one-pass` — also require every file to reach its fixed point in ONE
+  writer rewrite; exits non-zero otherwise. Composes with every mode above
+  and changes none of them. Catches a class no other tree-level gate can
+  see: `fmt` writes the writer's FIXED POINT, so a file the writer only
+  settles on its second rewrite is reported canonical by `--list` while the
+  next writer-emit op refuses it as non-canonical (that op's own gate is one
+  round trip, not the fixed point). Off by default — a project whose config
+  reaches the writer's convergence tail must still be able to run
+  `--write`; on for a gate.
+- `--lang <name>` — grammar plugin (default: `haxe`).
+
+A file that fails to parse is reported and skipped; the run's exit code is
+non-zero if any file failed. A file whose re-emission would DROP a comment
+(an inline comment in a seam the parser has no capture slot for, e.g.
+`if (/* c */ x)`) is reported with the comment and left byte-identical
+rather than rewritten without it.
+
+**The `#if` region note.** A conditional-compilation region whose bytes are
+not a balanced subtree in their position (a `try {` whose `catch` closes in
+another region, an `else` whose `if` is outside it, a dangling operator) is
+captured raw by the parser, so the writer has no tree to format there and
+re-emits it byte-for-byte while reformatting everything around it — a note,
+not a failure; the rest of the file is formatted and written. Surveying a
+directory needs no flag at all (`apq fmt <dir>` implies listing and keeps
+the notes, as do `--write`, `--verify` and a single file to stdout); an
+EXPLICIT `--list` is the one mode that turns them off, because the second
+parse behind them costs one extra parse per file that has a `#if` (+19.9%
+on a whole-tree `--list` gate, measured). Mechanism, the two-sentence split
+between wholly-raw and head-only regions, and the measured region census
+across this project / the Pony fork / the haxe-formatter corpus:
+`docs/architecture.md` § "A `#if` region the parser captured raw".
+
 ## Pattern syntax for `search` (frozen for v1)
 
 The pattern is parsed by the active grammar plugin **with a metavariable extension**: any identifier-shaped token starting with `$` is treated as a metavariable rather than a concrete identifier.
