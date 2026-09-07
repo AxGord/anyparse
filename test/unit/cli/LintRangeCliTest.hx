@@ -88,6 +88,11 @@ class LintRangeCliTest extends Test {
 		Assert.equals(2, Cli.run(['lint', file, '--no-oracle', '--range', '6']), 'a bare line number is not a window');
 		Assert.equals(2, Cli.run(['lint', file, '--no-oracle', '--range', '8:6']), 'a reversed window is refused');
 		Assert.equals(2, Cli.run(['lint', file, '--no-oracle', '--range', '0:3']), 'lines are 1-based');
+		// T711 sibling: Std.parseInt parses a leading digit PREFIX and drops trailing
+		// garbage (Std.parseInt('6x') == 6), so a colon-having spec with a garbage-suffixed
+		// bound used to slip past parseLintRange's colon-shape guard undetected.
+		Assert.equals(2, Cli.run(['lint', file, '--no-oracle', '--range', '6x:8']), 'trailing garbage on the low bound');
+		Assert.equals(2, Cli.run(['lint', file, '--no-oracle', '--range', '6:8x']), 'trailing garbage on the high bound');
 		FileSystem.deleteFile(file);
 		#else
 		Assert.pass('non-sys target');

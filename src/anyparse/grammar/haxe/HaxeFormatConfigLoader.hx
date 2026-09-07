@@ -46,6 +46,7 @@ import anyparse.grammar.haxe.format.HxFormatWrapCondition;
 import anyparse.grammar.haxe.format.HxFormatWrapRule;
 import anyparse.grammar.haxe.format.HxFormatWrapRules;
 import anyparse.grammar.haxe.format.HxFormatWrappingSection;
+import haxe.Exception;
 
 /**
  * Loads a haxe-formatter `hxformat.json` config and maps the subset of
@@ -1764,15 +1765,25 @@ final class HaxeFormatConfigLoader {
 	 * `tab`, or a literal run of spaces whose LENGTH is the indent size (so the
 	 * common misspelling `"space"` is invalid there too — this line is what tells
 	 * the author, instead of a silent tab-indented result).
+	 *
+	 * T160 sibling of `CliIo.stderr`'s EPIPE guard (same reasoning as
+	 * `HaxeFormatConfigDiagnostics.warn`): `Sys.stderr()` on nodejs is a
+	 * synchronous `Fs.writeSync(2, …)` that bypasses the `process.stderr`
+	 * stream object, so a closed downstream reader throws here directly
+	 * instead of raising the `'error'` event `Cli.main`'s listener catches.
 	 */
 	private static function warnUnknownIndentCharacter(character: String): Void {
 		if (warnedIndentCharacters.contains(character)) return;
 		warnedIndentCharacters.push(character);
-		#if (sys || nodejs)
-		Sys.stderr().writeString(
-			'apq: hxformat.json indentation.character \'$character'
-			+ '\' is not recognized — use "tab" or a literal run of spaces (e.g. "    "); keeping the default\n'
-		);
+		final line: String = 'apq: hxformat.json indentation.character \'$character'
+			+ '\' is not recognized — use "tab" or a literal run of spaces (e.g. "    "); keeping the default\n';
+		#if nodejs
+		try Sys.stderr().writeString(line) catch (exception: Exception) {
+			if (Reflect.field(exception.native, 'code') == 'EPIPE') js.Node.process.exit(0);
+			throw exception;
+		}
+		#elseif sys
+		Sys.stderr().writeString(line);
 		#end
 	}
 

@@ -357,6 +357,8 @@ class TestDiscoveryParityTest extends Test {
 		'unit.cli.ApqDxTier4CliTest',
 		'unit.cli.ApqDxTier5CliTest',
 		'unit.cli.ApqExitOnEmptyCliTest',
+		'unit.cli.ApqFmtConfigWarnCliTest',
+		'unit.cli.ApqFmtEpipeCliTest',
 		'unit.cli.ApqFmtOnePassCliTest',
 		'unit.cli.ApqFmtVerifyCliTest',
 		'unit.cli.ApqFromFileCliTest',

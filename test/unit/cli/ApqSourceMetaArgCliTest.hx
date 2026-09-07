@@ -80,6 +80,7 @@ class ApqSourceMetaArgCliTest extends Test {
 		Assert.equals(0, Cli.run(['source', f, '--range', '99:200']), 'past-EOF clamps');
 		Assert.equals(0, Cli.run(['source', f, '--range', ':999']), 'past-EOF hi clamps');
 		Assert.equals(0, Cli.run(['source', f, '--range', '0:1']), 'below-1 lo clamps');
+		Assert.equals(0, Cli.run(['source', f, '--range', '-5:2']), 'negative lo still clamps, not a parse failure');
 		FileSystem.deleteFile(f);
 		#else
 		Assert.pass('non-sys/nodejs target');
@@ -98,6 +99,13 @@ class ApqSourceMetaArgCliTest extends Test {
 		#if (sys || nodejs)
 		final f: String = writeFile('a\nb\n');
 		Assert.equals(2, Cli.run(['source', f, '--range', 'foo']), 'non-int range');
+		// T711: `Std.parseInt` parses a PREFIX and silently drops trailing
+		// garbage (`Std.parseInt('205,225') == 205`) — a comma typo for the
+		// `:` separator used to read as the single line `205` with exit 0
+		// instead of a usage error naming the expected `L:L2` form.
+		Assert.equals(2, Cli.run(['source', f, '--range', '1,2']), 'comma instead of colon');
+		Assert.equals(2, Cli.run(['source', f, '--range', '1x']), 'trailing garbage after a single line number');
+		Assert.equals(2, Cli.run(['source', f, '--range', '1:2x']), 'trailing garbage after the high bound');
 		FileSystem.deleteFile(f);
 		#else
 		Assert.pass('non-sys/nodejs target');
