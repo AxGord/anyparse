@@ -926,19 +926,19 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			conditionalElseKeywords: ['#else', '#elseif'],
 			conditionalEndKeyword: '#end',
 			condDeclPrefixKeywordKinds: ['EnumKw', 'AbstractKw', 'FinalKw'],
-			opaqueCondRegionKinds: [
-				'CondSpliceExpr',
-				'CondSpliceOpExpr',
-				'CondSpliceTail',
-				'CondSpliceStmt',
-				'CondSpliceBlockOpen',
-				'CondSpliceBlockTail',
-				'CondSpliceSwitchOpen',
-				'CondSpliceBlockClose',
-				'CondSpliceCase',
-				'CondSpliceMember',
-				'CondSharedBodyDecl'
-			],
+			// PREFIXES, not names: `CondSplice` is the whole raw-capture family the parser falls back to
+			// (12 ctors today), so a ctor added to it lands in the gate without a hand edit here. The
+			// hand-kept form of this list had gone stale by THREE in the two days after it shipped —
+			// `CondSpliceReturnStmt`, `CondSpliceReturnExpr` and `MetaCondStmt`, all added 2026-08-20 —
+			// and every name-driven op wrote silently over each of them.
+			//
+			// The two names spelled in full are the raw-capture ctors OUTSIDE that convention, and each
+			// breaks it for a reason: `CondSharedBodyDecl` is a declaration region, not a splice, and
+			// `MetaCondStmt` is named for the metadata it dispatches on rather than for the
+			// `HxCondSpliceClosedRegion` it then swallows. Nothing else in any grammar module starts with
+			// either string. A ctor that breaks the convention a THIRD way is still invisible here and to
+			// the pin that guards this list - T796.
+			opaqueCondRegionKindPrefixes: ['CondSplice', 'CondSharedBodyDecl', 'MetaCondStmt'],
 			condOperandRunKinds: ['CondSpliceOpExpr'],
 			stringInterpIdentKind: 'Ident',
 			stringInterpBlockKind: 'Block',

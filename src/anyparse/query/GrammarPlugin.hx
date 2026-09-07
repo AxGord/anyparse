@@ -1569,24 +1569,44 @@ typedef RefShape = {
 	@:optional var condDeclPrefixKeywordKinds: Array<String>;
 
 	/**
-	 * Node kinds that SWALLOW a conditional-compilation region as a RAW byte capture —
-	 * the fallback ctors a grammar reaches when the region is not a balanced subtree
-	 * (Haxe `CondSpliceExpr` / `CondSpliceTail` / `CondSpliceStmt` / …, each holding an
-	 * `HxCondSpliceRaw`-style terminal). Their interior projects NO nodes: an identifier
-	 * written inside one is invisible to `Refs`, to every check, and to every rewriting op,
-	 * so a name-driven mutation would part-apply and leave the region on the old spelling —
+	 * Ctor-name PREFIXES of the node kinds that SWALLOW a conditional-compilation region as a
+	 * RAW byte capture — the fallback ctors a grammar reaches when the region is not a balanced
+	 * subtree (Haxe `CondSplice`, naming the whole `CondSpliceExpr` / `CondSpliceTail` /
+	 * `CondSpliceStmt` / … family, each holding an `HxCondSpliceRaw`-style terminal, plus the
+	 * two names outside that convention). The bytes such a ctor captures project NO nodes — the
+	 * whole region for most of the family, the unbalanced HEAD alone for the few that keep a
+	 * modelled tail (`CondSpliceOpExpr`'s operands, `CondSpliceBlockTail`'s block) — and an
+	 * identifier written in them is invisible to `Refs`, to every check, and to every rewriting
+	 * op, so a name-driven mutation would part-apply and leave the region on the old spelling —
 	 * valid-looking source that miscompiles only in the build defining the condition.
 	 *
-	 * The structural conditional kind (`conditionalMemberKind`) is deliberately NOT one of
-	 * these: it keeps its guarded material as real children, which every consumer resolves.
+	 * PREFIXES rather than exact names because a grammar's fallback ctors are a family that
+	 * grows with the parser, and an exhaustive list desyncs the first time it does — silently,
+	 * and in the fail-OPEN direction. `CondRegionScan.isOpaqueCondRegionKind` carries the
+	 * measured case: the list held ten `CondSplice*` names, the grammar gained three more raw
+	 * capture ctors two days later, and `rename` rewrote a declaration while leaving its
+	 * reference inside each new shape untouched, with no diagnostic. A prefix that catches a
+	 * kind the grammar DOES model is harmless — the gate only decides which nodes the gap
+	 * analysis examines, and a modelled interior leaves no gap to read. What a prefix cannot
+	 * catch is a ctor named outside every convention the grammar has so far used, which is why
+	 * `unit.query.CondRegionKindDerivationTest` asks the grammar's own source what the family
+	 * holds rather than trusting this field to be complete.
+	 *
+	 * The structural conditional kind (`conditionalMemberKind`) is deliberately NOT covered by
+	 * one of these prefixes: it keeps its guarded material as real children, which every
+	 * consumer resolves.
 	 *
 	 * Read by `CondRegionScan.opaqueCondRegions`, which serves both consumers of the fact: the
 	 * fail-closed gate the mutating ops consult, and the note `fmt` prints for a region it
 	 * leaves byte-for-byte while reformatting around it. Optional; unset leaves those ops with
 	 * no such gate — correct for a grammar with no conditional compilation, silent corruption
 	 * for one that has it, and a formatter that declines regions without saying so.
+	 *
+	 * Named for what it HOLDS: a grammar that filled the former `opaqueCondRegionKindPrefixes` with
+	 * exact ctor names would otherwise have acquired prefix semantics in silence. Under the new
+	 * name it gets a compile error instead, which is the only signal a structure field can give.
 	 */
-	@:optional var opaqueCondRegionKinds: Array<String>;
+	@:optional var opaqueCondRegionKindPrefixes: Array<String>;
 
 	/**
 	 * Node kinds of an OPERAND-RUN conditional-compilation splice — a region whose

@@ -116,7 +116,7 @@ package anyparse.grammar.haxe;
  * `fmt`. Zero movement over 1665 real modules, and it catches an
  * injected seam move in either direction.
  *
- * `HaxeQueryPlugin.opaqueCondRegionKinds` still lists this ctor. That
+ * `HaxeQueryPlugin.opaqueCondRegionKindPrefixes` still lists this ctor. That
  * is not a leftover: `RefactorSupport.opaqueCondRegionMentioning`
  * walks the parts of an opaque node's span NO CHILD covers, so listing
  * it keeps the `#if`/`#end` keyword bytes and the operator slices

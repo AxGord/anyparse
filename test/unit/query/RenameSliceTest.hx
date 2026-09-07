@@ -738,7 +738,7 @@ class RenameSliceTest extends Test {
 
 	/**
 	 * The guard did not get switched off with the operands - it NARROWED. `CondSpliceOpExpr`
-	 * is in `opaqueCondRegionKinds` like its raw sibling, and
+	 * is in `opaqueCondRegionKindPrefixes` like its raw sibling, and
 	 * `RefactorSupport.opaqueCondRegionMentioning` walks the parts of an opaque node's span no
 	 * CHILD covers. The operands are children now; the `#if <cond>` head is not. So a binding
 	 * whose name is spelled by the CONDITION is still refused, from the same modelled region
