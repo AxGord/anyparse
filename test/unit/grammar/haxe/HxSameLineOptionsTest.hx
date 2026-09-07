@@ -67,6 +67,8 @@ class HxSameLineOptionsTest extends Test {
 		Assert.isTrue(firstAt >= 0 && secondAt > firstAt, 'both catches expected in: <$out>');
 	}
 
+	@:pin('control')
+	@:killer('M-BLOCK-SHAPE-EQUIV-NONE')
 	public function testStatementBareTryBreaksByDefault(): Void {
 		// ω-statement-bare-break: under default config (sameLineCatch=Same)
 		// a bare-body statement-form try-catch must still break to multi-line —

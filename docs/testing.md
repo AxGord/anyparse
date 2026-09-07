@@ -1477,6 +1477,132 @@ forbids, for a count of one.
 16, one caller that is inert by construction, and a position split whose narrow half is
 six-sevenths already owned. T659 is closed here rather than deferred a fourth time.
 
+#### T623: the macro layer holds 41 of 236, and five of ten cuts on its writer half own a fixture (S155)
+
+T623 was carried as "`anyparse.macro.*` holds 2 arms of the registry's 226 while 60 macro modules
+hold none". Re-counted on `da0be5b8` off `node bin/test.js --list-arms`: the macro layer holds
+**41 of 236** arms over **14 of its 78 classes**. The line was several waves stale — the
+file-header family alone put seven on `TriviaEofLowering`, and S154/S159 put three more on
+`WriterBodyPolicyLowering#buildBodyCoreWrap` in this same wave. Read the count off the binary, never off a task
+line. The question worth asking is the other one: which of the **64** classes that hold none
+could ever hold one.
+
+**Where the 41 already sit answers most of it.** Eleven of the fourteen armed modules are
+Pass 3W — writer lowering — and the other three are Pass 3, where all four arms cut the same
+kind of thing: a REWIND. `M-PEB-WS-REWIND-OFF`, `M-PEB-WS-REWIND-TRYPARSE-OFF` and
+`M-PEB-WS-REWIND-SEPSTARTS-OFF` are three copies of the block-ended byte check's whitespace
+rewind, and `M-WORDOP-NO-RESTORE` is the operator loop's trivia restore. Each removes a REPAIR
+the parser performs, not a step it needs, which is why one shape stops parsing while everything
+else still does. That the rest of the parse side has no such property — `ShapeBuilder` ->
+`Lowering` -> `Codegen` is the path every one of the 14 255 fixtures walks — is an ARGUMENT from
+the pipeline's shape and not a measurement: nothing in those three modules was cut here. What
+WAS measured is the writer's own trunk, and it behaves the way the argument predicts:
+`WriterLowering#isTightLead` -> false takes **1135** fixtures and
+`WriterLoweringSupport#isBareTryparseStar` -> false **1706**, 8 % and 12 % of the suite. Being
+Pass 3W is not enough on its own; the member has to sit on a branch rather than on that trunk.
+
+The 64 by pass, which is the shape of the residue: 16 Pass 3W · 9 Pass 3 · 6 the secondary
+pipelines (`3Q`/`4Q` query-walker, `3S`/`4S` span-info, `3T`/`4T` transform) · 2 codegen
+(`Codegen`, `WriterCodegen`) · 3 Pass 1/2 (`ShapeBuilder`, `strategy.Bin`, `strategy.Lit`) ·
+7 carrying an ω marker (`TriviaTypeSynth`, `TriviaPairAltCtor`, `TriviaPairConverters`,
+`TriviaPairSlots`, `TriviaSlotNames`, `TriviaAnalysis`, `WriterOptFanout` — six type-synth, one
+analysis) · 21 with no pass marker at all — the seven remaining strategies, the name and
+constant tables (`AnnotationKeys`, `MacroNames`, `GeneratedRule`, `PrattMeta`, `MetaInspect`),
+`Build`, `FormatReader`, `StrategyRegistry`, `AstPredLowering`, `RegexFirstBytes`,
+`SpanTypeSynth`, the lexical pair and the paired-shape base. The Pass-3 arms are all one shape —
+a removed repair — and no pass outside 3W and 3 has ever yielded one, so all ten candidates came
+from the 3W group; the ω type-synth half is the one S104 already measured twice, where a forced
+constant desynchronises a SYNTHESISED ctor's arity from the parse lowering and the tree stops
+compiling (`Lowering.hx: Too many arguments`).
+
+**Ten cuts, five owners.** Each was rendered as a FORCE against `da0be5b8` and run over the WHOLE
+suite through a hand-written `tools/mutation-check.sh` manifest (`ALL`, no expectation) — the
+only way to blast-measure a candidate that has no `@:killer` yet, since `--fast` derives its
+filter from the arm's own pins. Ten at `--jobs 3`, then the five finalists again at `--jobs 1`.
+
+| module · member | cut | blast (`--jobs 3`) | at `--jobs 1` | verdict |
+|---|---|---:|---:|---|
+| `WriterTriviaStarDispatch#ownStarHasFlag` | `false` | 5, ONE class | 5, same set | `M-CASE-CTRLFLOW-STAR-FLAG-BLIND` |
+| `WriterLoweringSupport#isBlockShapeEquivalentBranch` | `false` | 5 over 3 | 5, same set | `M-BLOCK-SHAPE-EQUIV-NONE` |
+| `WriterKwRefLowering#subStructStartsWithTightLead` | `false` | 5 over 4 | 5, same set | `M-KWREF-TIGHT-LEAD-BLIND` |
+| `WriterKwRefLowering#subStructStartsWithBareBodyBreaks` | `false` | 3 over 3 | **1** | `M-KWREF-BARE-BODY-BREAKS-BLIND` |
+| `WriterLoweringSupport#isWordStart` | `false` | 10 over 5 | 10, same set | `M-KWLEAD-NEVER-WORD` |
+| `WriterKwRefLowering#subStructStartsWithBodyBreak` | `false` | 15 over ≥5 | — | not armed — no single owner |
+| `WriterKwRefLowering#subStructStartsWithBodyPolicy` | `false` | 40 over ≥6 | — | not armed — no single owner |
+| `WriterCtorBlankLowering#buildMultilinePredicate` | `null` | **0 — SURVIVED** | — | not armed — no fixture at all |
+| `WriterLowering#isTightLead` | `false` | 1135 | — | not armed — the writer's trunk |
+| `WriterLoweringSupport#isBareTryparseStar` | `false` | 1706 | — | not armed — the writer's trunk |
+
+**The `--jobs 1` re-run earned its five tracks — ~7 minutes — on exactly one row.** Four
+finalists reproduce set-for-set; `subStructStartsWithBareBodyBreaks` goes 3 -> **1**, and the two
+rows it sheds are
+`unit.query.IntroduceParameterObjectSliceTest#testTheCliHandsTheOpTheFilesOwnFormatConfig` and
+`unit.query.StdResolverTest#testEnvOverrideFixtureDir` — neither reachable from a writer
+sub-struct probe, and both of the load-driven family S113 says to re-run rather than classify.
+That arm is the narrowest of the five: one cut, one fixture.
+
+**What each cut actually produces**, read off the transcripts rather than argued:
+
+- `ownStarHasFlag` -> false makes `refuseGlueOnControlFlowRoot` unreachable from the case-LIST
+  Star's pre-pass, so `case _: bb();` glues to its own label beside a control-flow body instead
+  of following it down. All five fixtures are `HxCaseBodyControlFlowGlueTest`'s.
+- `isBlockShapeEquivalentBranch` -> false empties `collectBlockShapeEquivalentPatterns` — the
+  member is `isBlockCtorBranch(branch) || branch.fmtHasFlag('blockShape')`, so BOTH disjuncts go
+  and the `@:fmt(blockShape)` bare try-catch ctor is the one the suite notices:
+  `foo() catch (e:Dynamic)` stays glued where the braced form breaks.
+- `subStructStartsWithTightLead` -> false stops stripping the `default` keyword's trailing space,
+  so a `default` label is written `default :`.
+- `subStructStartsWithBareBodyBreaks` -> false writes `try  p()` with two spaces, which the
+  second pass normalises — an idempotence break and nothing else.
+- `isWordStart` -> false strips the keyword's trailing space in front of a WORD lead too, so
+  `static var` glues; the writer then cannot re-parse its own output, which is what takes the six
+  `unit.check.*` fixer fixtures and `RewriteSliceTest` with it. Three pins, seven collateral —
+  the `+extra` reading this table calls expected for shared code, and every extra is the same
+  mechanism seen one layer downstream.
+
+**All five run KILLED against the commit** (`tools/mutation-arm.sh <ARM> … --jobs 3`, whole
+suite). `M-KWREF-BARE-BODY-BREAKS-BLIND` gets the NARROWEST reading — one pin, one fixture, no
+`+extra` at all. The other four carry the `+extra` this table calls expected: 7 for
+`M-KWLEAD-NEVER-WORD` (the six `unit.check.*` fixer fixtures plus `RewriteSliceTest`, all
+downstream of the same glue), 2 for `M-CASE-CTRLFLOW-STAR-FLAG-BLIND` (siblings in the ONE class
+it owns, left unpinned rather than pinned for the count), 2 for `M-KWREF-TIGHT-LEAD-BLIND` in the
+two further classes its cut reaches
+(`HxCaseBodyFitLineSliceTest#testDefaultBranchFitLineFlattens`,
+`HxCaseBodySymmetrySliceTest#testDefaultBranchMultiStatementSpreads` — both `default`-branch
+fixtures, so the same mechanism), and 1 for `M-BLOCK-SHAPE-EQUIV-NONE` —
+`HxTryBraceSymmetrySliceTest#testOverflowBreaksAtTheSeamNotInsideTheCall`, which already names
+two other arms and whose claim is the seam break, not the block-shape equivalence.
+
+**The SURVIVED row is the finding, not the failure.** `buildMultilinePredicate` returns
+`Null<Expr>` and forcing it to `null` — no multiline predicate for the blank-line cascade at all
+— changes nothing 14 255 fixtures can see. That is S105's `elseSiblingKeepsExpr` shape: a
+statement about the TESTS, not proof the code is dead. Filed as T735 rather than armed.
+
+**Cost: 15 whole-suite tracks.** Ten at `--jobs 3` (~9 min wall, the sibling wave loading the
+machine) and five at `--jobs 1` (~7 min). The registry goes **236 -> 241 arms and 378 -> 392
+pins**, the macro layer **41 -> 46 arms over 14 -> 17 of its 78 classes**, and five test classes
+gain their first pin ever
+(`HxCaseBodyControlFlowGlueTest`, `HxCaseBodyPolicySliceTest`, `HxIndentCaseLabelsOptionsTest`,
+`HxSameLineOptionsTest`, `HxStaticLocalStmtSliceTest`).
+
+**What S155 did NOT do, and the residue this leaves.** The ten cuts came from FIVE modules, so
+**59 of the 64 were never probed** and the section's finding is about the five that were — three
+of which turned out to be empty by oversight rather than by shape, since they now hold arms.
+
+- **48 non-3W modules, deliberately.** Nine are the parse trunk, whose whole-suite blast is an
+  argument from the pipeline rather than a measurement (above); six carry the ω type-synth
+  marker, which S104 has twice shown answers BUILD-FAIL rather than a behaviour removal; and the
+  constant tables have no behaviour to force at all. Minting an arm there would be the
+  count-chasing S142 forbids.
+- **11 of the 16 Pass-3W residue modules, for budget** — `BinaryWriterLowering`,
+  `TriviaBlockLowering`, `TriviaTryparseLowering`, `WriterArrowValueIfLowering`,
+  `WriterCascadeLowering`, `WriterChainLowering`, `WriterCondWrapLowering`,
+  `WriterPrattLowering`, `WriterRefLeadLowering`, `WriterStarPadLowering`,
+  `WriterTriviaStarEmitLowering`. This is the largest untouched block and it sits in the ONE
+  group that has ever yielded an arm, so it is where a later slice should start — T737.
+- **The six secondary pipelines** (`QueryWalker*`, `SpanInfo*`, `Transform*`) have their own
+  small fixture families and were simply out of the ten-cut budget — T736.
+
 
 ## Macro-specific tests
 

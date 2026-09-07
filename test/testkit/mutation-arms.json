@@ -1857,6 +1857,41 @@
 			"find": "IMPORT_THRESHOLD: Int = 2;",
 			"replace": "IMPORT_THRESHOLD: Int = 1;",
 			"note": "one surviving occurrence is enough to buy an import line, so the wash the threshold exists to refuse is written anyway"
+		},
+		{
+			"name": "M-KWLEAD-NEVER-WORD",
+			"type": "anyparse.macro.WriterLoweringSupport",
+			"method": "isWordStart",
+			"force": "false",
+			"note": "no `@:lead` ever reads as starting with a word character, so the keyword's trailing space is stripped in front of a word lead too and `static var` / `static final` come out glued - after which the writer cannot re-parse its own output"
+		},
+		{
+			"name": "M-BLOCK-SHAPE-EQUIV-NONE",
+			"type": "anyparse.macro.WriterLoweringSupport",
+			"method": "isBlockShapeEquivalentBranch",
+			"force": "false",
+			"note": "no branch is block-shape equivalent - both disjuncts go, the block ctor and the `@:fmt(blockShape)` flag - so the bare try-catch ctor contributes no ctor pattern and the shape-aware separator glues `catch` onto the bare body instead of breaking the way the braced form does"
+		},
+		{
+			"name": "M-KWREF-BARE-BODY-BREAKS-BLIND",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "subStructStartsWithBareBodyBreaks",
+			"force": "false",
+			"note": "a sub-struct whose first field carries `@:fmt(bareBodyBreaks)` stops stripping the keyword's trailing space, so a de-braced `try` is written with two spaces before its bare body and the second pass no longer reproduces the first"
+		},
+		{
+			"name": "M-KWREF-TIGHT-LEAD-BLIND",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "subStructStartsWithTightLead",
+			"force": "false",
+			"note": "a `default` branch's sub-struct opening on a tight `:` lead stops stripping the keyword's trailing space, so a `default` label is written `default :`"
+		},
+		{
+			"name": "M-CASE-CTRLFLOW-STAR-FLAG-BLIND",
+			"type": "anyparse.macro.WriterTriviaStarDispatch",
+			"method": "ownStarHasFlag",
+			"force": "false",
+			"note": "no direct Star child reads as carrying its `@:fmt` flag, so `refuseGlueOnControlFlowRoot` never reaches the case-list pre-pass and a sibling case unit glues to its own label beside a control-flow body"
 		}
 	]
 }

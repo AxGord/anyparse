@@ -88,6 +88,8 @@ final class HxCaseBodyPolicySliceTest extends Test {
 		Assert.isTrue(out.indexOf('case 1:\n') != -1, 'expected multiline `case 1:\\n` for multi-stmt in: <$out>');
 	}
 
+	@:pin('control')
+	@:killer('M-KWREF-TIGHT-LEAD-BLIND')
 	public function testDefaultBranchSameFlattensSingleStmt(): Void {
 		final src: String = 'class M { function f():Void { switch (x) { default: foo(); } } }';
 		final out: String = writeWithCaseBody(src, BodyPolicy.Same);
