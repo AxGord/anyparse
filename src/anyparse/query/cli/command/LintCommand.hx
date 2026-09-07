@@ -8,6 +8,7 @@ import anyparse.check.Severity;
 import anyparse.query.Address.TreeAddresser;
 import anyparse.query.CachingGrammarPlugin.LibrarySources;
 import anyparse.query.CachingGrammarPlugin.ResolutionScope;
+import anyparse.query.SourceText;
 import anyparse.query.cli.CliContext;
 import anyparse.query.format.LintFormat;
 import anyparse.query.format.Text;
@@ -757,13 +758,20 @@ final class LintCommand implements CliCommand {
 	 * Deliberately stricter than `apq source --range`, which clamps to the file and lets
 	 * either end be omitted: this one is a FILTER, and a silently clamped window would
 	 * narrow a fix run to a region the caller never asked for.
+	 *
+	 * T711 sibling: `--range 1x:2` / `--range 1:2x` used to pass a raw `Std.parseInt`
+	 * on each bound, which parses a leading digit PREFIX and silently drops trailing
+	 * garbage — `--range 1,2` (no colon at all) was already caught by the `colon <= 0`
+	 * guard below, but a colon WITH a garbage-suffixed bound was not.
+	 * `SourceText.parseStrictInt` is the shared whole-token digit check `apq source
+	 * --range` already uses.
 	 */
 	private static function parseLintRange(spec: String): Null<LintRange> {
 		final colon: Int = spec.indexOf(':');
 		if (colon <= 0 || colon == spec.length - 1) return null;
-		final lo: Null<Int> = Std.parseInt(spec.substring(0, colon));
+		final lo: Null<Int> = SourceText.parseStrictInt(spec.substring(0, colon));
 		if (lo == null) return null;
-		final hi: Null<Int> = Std.parseInt(spec.substring(colon + 1));
+		final hi: Null<Int> = SourceText.parseStrictInt(spec.substring(colon + 1));
 		if (hi == null) return null;
 		final from: Int = lo;
 		final to: Int = hi;

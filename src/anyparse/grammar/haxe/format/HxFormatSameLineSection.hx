@@ -43,9 +43,14 @@ package anyparse.grammar.haxe.format;
  * knob shape as `ifBody`, gating the separator between `return` and
  * its value expression. The loader maps it onto the runtime
  * `returnBody` option on `HxModuleWriteOptions`. The sibling
- * `returnBodySingleLine` knob (refining the policy for returns whose
- * value is single-line) is parsed and silently dropped — the
- * single-line refinement axis is not yet wired through the runtime.
+ * `returnBodySingleLine` knob refines the policy for return values
+ * that are NOT a control-flow / block construct (literals, idents,
+ * ternaries, calls, …) — wired via
+ * `@:fmt(bodyPolicySingleLine('returnBodySingleLine', …))` on
+ * `HxStatement.ReturnStmt`, and read unconditionally by
+ * `HaxeFormatConfigLoader.applySameLineBodies` like every other key
+ * in this class (T160: an earlier revision of this sentence claimed
+ * it was "parsed and silently dropped" — measured false).
  *
  * `catchBody` (ω-catch-body) is the same three-way body-placement
  * knob shape as `ifBody`, gating the separator between the `)` of
@@ -109,10 +114,14 @@ package anyparse.grammar.haxe.format;
  * shape as `catchBody`, gating the separator between the `try`
  * keyword and its body at `HxTryCatchStmt.body`. The loader maps
  * it onto the runtime `tryBody` option on `HxModuleWriteOptions`.
- * Default `Same` diverges from upstream haxe-formatter's
- * `sameLine.tryBody: @:default(next)` to match the AxGord fork's
- * project-level `hxformat.json` (`"sameLine": { "tryBody": "same" }`)
- * — the corpus we validate against. Co-exists with the
+ * Default `Next` (`HaxeFormat.instance.defaultWriteOptions.tryBody`),
+ * matching upstream haxe-formatter's `sameLine.tryBody: @:default(next)`
+ * (T160: an earlier revision of this sentence claimed the shipped
+ * default was `Same`, diverging from upstream to match the AxGord
+ * fork's project-level `hxformat.json` — measured false; the AxGord
+ * config's own `"tryBody": "same"` entry is what makes THAT project
+ * render `Same`, an explicit override like any other, not the
+ * compiled default). Co-exists with the
  * `whitespace.tryPolicy` knob via the `kwOwnsInlineSpace` mode in
  * `WriterLowering.bodyPolicyWrap` — `tryBody=Same` + `tryPolicy=None`
  * still collapses to `try{…}`, decoupling the two semantic axes
@@ -124,9 +133,12 @@ package anyparse.grammar.haxe.format;
  * The loader fans this single JSON key out into three runtime knobs
  * — `expressionIfBody` / `expressionElseBody` / `expressionForBody` —
  * because haxe-formatter exposes only one config key for the trio.
- * Default `Keep` (in `HaxeFormat.defaultWriteOptions`) preserves the
- * source layout, matching haxe-formatter's
- * `sameLine.expressionIf: @:default(Keep)`. Statement-level
+ * No SINGLE default: absent, each of the three keeps its own compiled
+ * default — `Same` / `Same` / `Keep` — not a uniform `Keep` (T160: an
+ * earlier revision of this sentence claimed the trio's default was
+ * uniformly `Keep`; measured false against
+ * `HaxeFormat.instance.defaultWriteOptions`, which the loader's `base`
+ * copies from verbatim when the JSON key is absent). Statement-level
  * counterparts (`ifBody` / `elseBody` / `forBody`) keep their own
  * defaults — the divergence is intentional.
  *

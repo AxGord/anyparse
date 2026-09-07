@@ -84,11 +84,30 @@ final class HaxeFormatConfigDiagnostics {
 	 * for the life of the process. Silent when the config is fully
 	 * understood, when `APQ_NO_CONFIG_WARN=1`, and on a target with no
 	 * stderr.
+	 *
+	 * T160 sibling of `CliIo.stderr`'s EPIPE guard: `Sys.stderr()` on
+	 * nodejs is a synchronous `Fs.writeSync(2, …)` that never touches the
+	 * `process.stderr` stream object, so a closed downstream reader (this
+	 * is the FIRST line of most gate transcripts, per the class doc above)
+	 * throws here directly instead of emitting an `'error'` event
+	 * `Cli.main`'s process-level listener could catch. Not routed through
+	 * `CliIo.stderr` — this is a grammar-layer module and does not depend
+	 * on the CLI package — so the guard is duplicated locally rather than
+	 * shared; `CliIo.stderr` is the sibling copy if this ever grows a
+	 * third caller and is worth consolidating.
 	 */
 	public static function warn(path: String, json: String): Void {
 		if (reported.contains(path)) return;
 		reported.push(path);
-		#if (sys || nodejs)
+		#if nodejs
+		if (Sys.getEnv(SILENCE_VAR) == '1') return;
+		final line: Null<String> = message(path, diagnose(json));
+		if (line == null) return;
+		try Sys.stderr().writeString(line) catch (exception: Exception) {
+			if (Reflect.field(exception.native, 'code') == 'EPIPE') js.Node.process.exit(0);
+			throw exception;
+		}
+		#elseif sys
 		if (Sys.getEnv(SILENCE_VAR) == '1') return;
 		final line: Null<String> = message(path, diagnose(json));
 		if (line != null) Sys.stderr().writeString(line);

@@ -174,6 +174,28 @@ final class Cli {
 
 	public static function main(): Void {
 		#if nodejs
+		// A downstream reader that closes its end of the pipe early (piping into a
+		// pager that only reads the first line) makes the NEXT write to
+		// stdout/stderr fail with EPIPE — an 'error' event with no listener is an
+		// uncaught exception on nodejs (a raw Node stack trace, no apq message,
+		// seen at `FmtCommand.formatOneFile`). A well-behaved Unix CLI exits
+		// quietly instead: the reader closing early is not a tool failure.
+		// `process.exit` here is NOT the truncation hazard the `exitCode` comment
+		// below warns about — that risk is for a normal completion still flushing
+		// buffered output; here the write already failed unrecoverably, so there
+		// is nothing left to flush, and letting the run continue would only
+		// retrigger EPIPE on every subsequent write — one listener on the process
+		// streams covers every long-output command (`fmt --list`, `lit`, `search`,
+		// `show`, …), not just `fmt`.
+		final proc: js.node.Process = js.Node.process;
+		final epipeQuiet: (err:js.lib.Error) -> Void = (err: js.lib.Error) -> {
+			if (Reflect.field(err, 'code') == 'EPIPE')
+				proc.exit(0)
+			else
+				throw err;
+		};
+		proc.stdout.on(js.node.stream.Writable.WritableEvent.Error, epipeQuiet);
+		proc.stderr.on(js.node.stream.Writable.WritableEvent.Error, epipeQuiet);
 		// Set the exit code and let Node exit naturally — do NOT call
 		// `Sys.exit` -> `process.exit`. `process.exit` terminates before async
 		// `process.stdout`/`stderr` writes to a pipe fd flush, truncating
@@ -181,7 +203,7 @@ final class Cli {
 		// synchronously, which is why `apq … > file` was always complete). `run`
 		// is fully synchronous, so the event loop empties immediately and Node
 		// drains stdout/stderr before exiting with this code.
-		js.Node.process.exitCode = run(Sys.args());
+		proc.exitCode = run(Sys.args());
 		#elseif sys
 		Sys.exit(run(Sys.args()));
 		#else

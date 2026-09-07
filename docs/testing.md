@@ -2469,6 +2469,25 @@ It is a portability PROBE, not a dependency: nothing anyparse ships needs a
 JVM. It exists so the invariant above is something a slice can fail on
 instead of a paragraph nothing can flip.
 
+**Expected line, on an untouched tree (measured twice, deterministic):**
+`files=482 wrote=482 threw=0 checks=179 violations=893 lintdiff=1+0-`, followed
+by a second `  phases: roundtrip=Xs lint=Ys` line (timings, not a count — no
+expected value). `files` and `violations` drift with the tree — say so rather
+than chasing them; `checks` (`Linter.builtins().length`) is stable ACROSS RUNS
+on one commit but is itself a rule-registry count, so it drifts across commits
+the same way `files`/`violations` do, just less often — treat it the same way,
+not as a fixed constant. `lintdiff=1+0-` does NOT: it is `JvmPortability.lintDiffProbe`'s own embedded
+self-test of `LintDiff`'s normalization (two hand-written JSON report
+fixtures compared against each other, nothing to do with `src/`), forcing the
+macro-generated `LintDiff` JSON parser to actually build under `--jvm` — a
+`-main` target only compiles what it reaches, so without this call neither
+`LintDiff` nor its parser would be exercised by the probe at all. `1+0-` is
+that helper's own documented right answer (the duplicate-code pair differs
+only in a `./` and a line number, which normalization erases, leaving the new
+dead-code record as the one real surplus) — a T747 investigation confirmed it
+is exactly that fixed self-check, not a JS/JVM lint desync, before recording
+it here.
+
 ### Parallel tracks: per-worker build outputs
 
 `bin/apq.js` and `bin/test.js` are single shared artifacts. That is fine for one person at a keyboard and actively hostile to several agents working the repo at once: every build truncates the binary the others are executing, so a second worker cannot even run a probe while the first is compiling. The parallelism is lost before it starts, and the failures it produces look like flaky tests rather than like a build race.
