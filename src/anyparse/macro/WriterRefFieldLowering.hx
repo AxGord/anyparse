@@ -914,10 +914,12 @@ final class WriterRefFieldLowering {
 		// cascade.
 		final inlineBlockBodyArgs: Null<Array<String>> = child.fmtReadStringArgs('inlineBlockBodyIfFlag');
 		// ω-loop-body-if-else-next: `@:fmt(loopBodyIfElseNext('<optField>',
-		// '<ifCtor>', '<elseField>'))` on a LOOP body field forwards the three
-		// names to `bodyPolicyWrap`, which degrades the `FitLine` layout to
-		// `Next` when the knob is on and the body is an `if` that owns an
-		// `else`. Currently consumed by `HxForStmt.body` / `HxWhileStmt.body`.
+		// '<ifCtor>', '<elseField>'[, '<wrapperCtor>']))` on a LOOP body field
+		// forwards the names to `bodyPolicyWrap`, which substitutes
+		// `BodyPolicy.Next` for the chosen placement when the knob is on and the
+		// body is an `if` that owns an `else`. Consumed by `HxForStmt.body` /
+		// `HxWhileStmt.body` / `HxDoWhileStmt.body`; the optional fourth name is one
+		// enum ctor to unwrap first, which is what the do-while body needs.
 		final loopBodyIfElseArgs: Null<Array<String>> = child.fmtReadStringArgs('loopBodyIfElseNext');
 		// omega-else-switch: read ONCE - the body wrap decides the head glue from it and the
 		// close-side verdict below is built from the same names, so the two cannot drift.

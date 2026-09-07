@@ -997,12 +997,13 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	fitLineBodyGlue: Bool,
 
 	/**
-	 * ω-loop-body-if-else-next: break a `for` / `while` header away from a body
-	 * that is an `if` carrying an `else`, placing the whole `if`/`else` one line
-	 * down and one indent step in.
+	 * ω-loop-body-if-else-next: break a `for` / `while` / `do … while` header
+	 * away from a body that is an `if` carrying an `else`, placing the whole
+	 * `if`/`else` one line down and one indent step in.
 	 *
-	 * Under `forBody` / `whileBody: fitLine` a one-line-able body glues to the
-	 * loop header. For a bare guard `if` that is the point — `for (x in xs) if
+	 * Under `fitLine` a one-line-able body glues to the loop header, under
+	 * `same` any body does, and under `keep` a source-glued one is reproduced.
+	 * For a bare guard `if` that is the point — `for (x in xs) if
 	 * (c) f(x);` is a deliberate idiom and stays glued. For an `if` that owns an
 	 * `else`, the same glue leaves the `else` at the LOOP's indent, where it
 	 * reads as a branch of the loop rather than of the `if`.
@@ -1017,9 +1018,11 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	 * with upstream semantics and is deliberately not widened to loops.
 	 *
 	 * Default `false` is fork parity. Fed by `sameLine.loopBodyIfElseNext`;
-	 * consumed by `WriterLowering.buildBodyFitExpr` at the two fields carrying
-	 * `@:fmt(loopBodyIfElseNext(...))`, so a `Keep` / `Same` / `Next` body policy
-	 * never sees it.
+	 * consumed by `WriterBodyPolicyLowering.buildBodyCoreWrap`, which substitutes
+	 * `BodyPolicy.Next` for whatever placement the config chose, at each of the
+	 * three fields carrying `@:fmt(loopBodyIfElseNext(...))` — so `Same`, `Keep`
+	 * and `FitLine` all obey it. S157 gated the `FitLine` LAYOUT instead, and a
+	 * config on `same` / `keep` could not decline the defect the key names.
 	 */
 	loopBodyIfElseNext: Bool,
 
