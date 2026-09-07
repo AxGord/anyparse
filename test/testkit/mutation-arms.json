@@ -2077,6 +2077,27 @@
 			"method": "wholeFileRefusal",
 			"force": "null",
 			"note": "`apq source <file>` with nothing narrowing the read prints the whole file again at exit 0 — the cat behaviour that cost 617 585 bytes over this tree's three largest files"
+		},
+		{
+			"name": "M-REMOVE-MEMBER-BRANCH-BLIND",
+			"type": "anyparse.query.RemoveMember",
+			"method": "sameBranchDuplicate",
+			"force": "null",
+			"note": "the branch-level duplicate question answers `no collision` for every input, so two declarations of one name inside ONE conditional branch go back to being removed together at rc 0"
+		},
+		{
+			"name": "M-CANDIDATE-LABEL-BARE",
+			"type": "anyparse.query.Address",
+			"method": "candidateLabel",
+			"force": "describeNode(source, node)",
+			"note": "an ambiguity listing goes back to `<line>:<col> Kind` per candidate, so the selector that addresses one of them is withheld and `--nth` is the only way out"
+		},
+		{
+			"name": "M-DECL-EDIT-SPAN-UNTRIMMED",
+			"type": "anyparse.query.ElementSpan",
+			"method": "trailingTrimmedSpan",
+			"force": "span",
+			"note": "a declaration's edit span keeps every trailing byte its raw span swallowed, so a module-level decl contiguous with the next one owns the neighbour's doc comment for reading and for editing alike"
 		}
 	]
 }

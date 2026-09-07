@@ -840,6 +840,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.FmtSliceTest',
 		'unit.query.FormatConfigDiscoveryTest',
 		'unit.query.GlobExpandTest',
+		'unit.query.GreedyDeclSpanEditBoundarySliceTest',
 		'unit.query.HaxelibResolverTest',
 		'unit.query.ImplicitStdScopeTest',
 		'unit.query.InheritanceMoveSliceTest',
@@ -1388,6 +1389,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.AddMetaSliceTest#testFinalClassWrapperIsLifted :: control :: M-ADDMETA-NO-WRAPPER-CLIMB',
 			'unit.query.AddMetaSliceTest#testGuardedTypeKeepsTheEntryInsideTheGuard :: control :: M-ADDMETA-LOOSE-WRAPPER-CLIMB',
 			'unit.query.AddMetaSliceTest#testTypeEntryLandsBelowTheDoc :: control :: M-ADDMETA-ZERO-WIDTH-INSERT',
+			'unit.query.AddressTest#testAnAmbiguityListingSpellsTheSelectorThatPicksOneCandidate :: control :: M-CANDIDATE-LABEL-BARE',
 			'unit.query.ApqUsesTest#testQualifiedIsOptInSoRewritersKeepTheExactAnswer :: control :: M-USES-QUALIFIED-DEFAULT',
 			'unit.query.ApqUsesTest#testQualifiedSpellingsAcrossTypePositions :: control :: M-USES-EXACT-ONLY',
 			'unit.query.ApqUsesTest#testQualifiedSubModuleTypeIsFoundBySimpleName :: control :: M-USES-EXACT-ONLY',
@@ -1441,6 +1443,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.ExtractInterfaceSliceTest#testGuardedImplementsRefused :: control :: M-EI-DUP-IMPL-ALLOWED,M-EI-GUARD-FLAT-SCAN',
 			'unit.query.ExtractInterfaceSliceTest#testQualifiedSameNameDoesNotBlock :: control :: M-EI-IMPL-ANY-REFUSED',
 			'unit.query.ExtractInterfaceSliceTest#testSecondInterfaceStillExtracts :: control :: M-EI-IMPL-ANY-REFUSED',
+			'unit.query.GreedyDeclSpanEditBoundarySliceTest#testAGreedyModuleDeclSpanIsTrimmedToItsOwnLastToken :: control :: '
+				+ 'M-DECL-EDIT-SPAN-UNTRIMMED',
 			'unit.query.MakeFinalSliceTest#testHalfIteratorShapeStillFinal :: control :: M-STRUCT-BUILTIN-BY-NAME',
 			'unit.query.MetaElementSpanSliceTest#testRemoveConditionalModifierRegionStillTakesTheMember :: control :: '
 				+ 'M-META-ELEMENT-ANY-COND-REGION',
@@ -1495,6 +1499,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.PatchSliceTest#testDocCodeSampleIndentationSurvives :: control :: M-PATCH-COMMENT-SHAPE-CHECKED',
 			'unit.query.PatchSliceTest#testDocPayloadWithASpaceGutterApplies :: control :: M-PATCH-COMMENT-SHAPE-CHECKED',
 			'unit.query.PatchSliceTest#testStringLiteralPerLineIndentStillRefused :: control :: M-PATCH-SHAPE-ALWAYS-SURVIVES',
+			'unit.query.RemoveMemberSliceTest#testTwoDeclarationsInOneBranchAreRefusedByCount :: control :: M-REMOVE-MEMBER-BRANCH-BLIND',
 			'unit.query.ResolutionProjectFilesTest#testDerivedIndexesAreMemoised :: control :: M-MEMO-OFF',
 			'unit.query.ResolutionProjectFilesTest#testSetResolutionIndexExpiresDerivedIndexes :: control :: M-NO-INVALIDATE',
 			'unit.query.SetModifierSliceTest#testAConditionalRegionOutsideTheKeywordRunIsStillServed :: control :: '
@@ -1785,7 +1790,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-COND-RAW-NEVER-MARKED',
 			'M-PROGRESS-TTY-BLIND',
 			'M-BATCH-SEPARATOR-BLIND',
-			'M-SOURCE-READ-GUARD-OFF'
+			'M-SOURCE-READ-GUARD-OFF',
+			'M-REMOVE-MEMBER-BRANCH-BLIND',
+			'M-CANDIDATE-LABEL-BARE',
+			'M-DECL-EDIT-SPAN-UNTRIMMED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

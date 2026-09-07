@@ -220,7 +220,7 @@ final class Address {
 		final matches: Array<QueryNode> = Engine.select(tree, selector, equiv);
 		return matches.length == 0
 			? Err('--select "$selectorExpr" matched no nodes${kindHint(tree, source, plugin, selector)}')
-			: pick(matches.map(describeNode.bind(source)), matches, '--select "$selectorExpr"', nth);
+			: pick(tree, source, equiv, matches, '--select "$selectorExpr"', nth);
 	}
 
 	/** An `apq search` pattern — the matched node is the target; same exactly-one / `nth` discipline. */
@@ -236,7 +236,7 @@ final class Address {
 			final node: Null<QueryNode> = nodeAtSpan(tree, m.span);
 			if (node != null && !nodes.contains(node)) nodes.push(node);
 		}
-		return pick(nodes.map(describeNode.bind(source)), nodes, '--match "$patternSource"', nth);
+		return pick(tree, source, plugin.selectKindEquivalence(), nodes, '--match "$patternSource"', nth);
 	}
 
 	/**
@@ -275,7 +275,9 @@ final class Address {
 	}
 
 	/** Apply the exactly-one / `nth` discipline to a candidate list; the ambiguity error lists positions ready for an `--nth` pick. */
-	private static function pick(labels: Array<String>, nodes: Array<QueryNode>, what: String, nth: Null<Int>): AddressResult {
+	private static function pick(
+		tree: QueryNode, source: String, equiv: Null<KindEquivalence>, nodes: Array<QueryNode>, what: String, nth: Null<Int>
+	): AddressResult {
 		if (nodes.length == 0) return Err('$what matched no nodes');
 		if (nth != null) {
 			return nth < 1 || nth > nodes.length
@@ -284,9 +286,31 @@ final class Address {
 		}
 		if (nodes.length <= 1) return toResult(nodes[0], what);
 		final shown: Int = nodes.length < CANDIDATE_LIMIT ? nodes.length : CANDIDATE_LIMIT;
-		final lines: Array<String> = [for (i in 0...shown) '  #${i + 1} ${labels[i]}'];
+		// The index is built HERE and not by the caller: an ambiguity is the rare path, and every
+		// resolve would otherwise pay for a whole-tree index that the single-match answer discards.
+		final index: AddressIndex = describerFor(tree, equiv);
+		final lines: Array<String> = [for (i in 0...shown) '  #${i + 1} ${candidateLabel(index, source, nodes[i])}'];
 		final more: String = nodes.length > shown ? '\n  … ${nodes.length - shown} more' : '';
 		return Err('$what matched ${nodes.length} nodes — narrow it or pick one with --nth <k>:\n' + lines.join('\n') + more);
+	}
+
+	/**
+	 * One candidate's line in an ambiguity refusal: its position and kind, plus the SELECTOR that
+	 * addresses that candidate alone when names can spell one. `AddressIndex.describe` already
+	 * answers that — it is the address a position-addressed op echoes back as `target …`, and the
+	 * one the `source` read-guard menu lists — so a listing that stopped at `<line>:<col> Kind`
+	 * was withholding an address the resolver computes for every other caller. Measured on a
+	 * two-region file: `--select 'Conditional'` matched a module-level region and a member-level
+	 * one and offered only `--nth`, while the index spells the second `ClassForm:C >> Conditional`.
+	 *
+	 * A candidate only an ORDINAL separates keeps the bare line: `describe` answers `<sel> --nth k`
+	 * there, which is exactly what the message already offers, and repeating it per candidate would
+	 * be noise rather than a second way in.
+	 */
+	private static function candidateLabel(index: AddressIndex, source: String, node: QueryNode): String {
+		final base: String = describeNode(source, node);
+		final selector: Null<String> = index.uniqueSelector(node);
+		return selector == null ? base : '$base  --select \'$selector\'';
 	}
 
 	/** The chosen node as a result — its span start is the offset the ops consume. */
@@ -374,23 +398,32 @@ final class AddressIndex {
 
 	/** The canonical, edit-stable address of `node` — `Address.describe`'s contract, answered from the index. */
 	public function describe(source: String, node: QueryNode): String {
-		if (!_ordinalOf.exists(node)) return positionOf(source, node);
-		var selector: String = segmentOf(node);
-		if (uniquelyResolves(selector, node)) return selector;
-		// Prepend the nearest named ancestors until the selector is unique.
-		var ancestor: Null<QueryNode> = _parentOf[node];
-		while (ancestor != null) {
-			final above: QueryNode = ancestor;
-			if (above.name != null) {
-				selector = '${segmentOf(above)} >> $selector';
-				if (uniquelyResolves(selector, node)) return selector;
-			}
-			ancestor = _parentOf[above];
-		}
+		final widened: Null<{ selector: String, unique: Bool }> = widenToUnique(node);
+		if (widened == null) return positionOf(source, node);
+		final selector: String = widened.selector;
+		if (widened.unique) return selector;
 		// Names cannot disambiguate — pick the instance ordinal.
 		final matches: Array<QueryNode> = try resolveSelector(Selector.parse(selector)) catch (exception: Exception) [];
 		final k: Int = matches.indexOf(node);
 		return k >= 0 ? '$selector --nth ${k + 1}' : positionOf(source, node);
+	}
+
+	/**
+	 * The selector that resolves to `node` and to nothing else, or null when NAMES cannot single
+	 * it out — `describe` with its two non-selector answers, the instance ordinal and the
+	 * `<line>:<col>` fallback, reported as an absence instead of rendered.
+	 *
+	 * A caller that offers its result AS A COMMAND needs that distinction, and cannot recover it
+	 * from `describe`'s string: sniffing for a ` --nth ` suffix mistakes a node NAME that spells
+	 * it (a string literal is a named node like any other) for the ordinal form, and nothing in
+	 * the string marks the positional fallback at all — which a `>` inside a name reaches, since
+	 * `Selector.parse` reads it as a child separator and the widened selector then matches
+	 * nothing. Measured on a two-literal fixture: the ambiguity listing offered
+	 * `--select '6:10'`, which is not a selector.
+	 */
+	public function uniqueSelector(node: QueryNode): Null<String> {
+		final widened: Null<{ selector: String, unique: Bool }> = widenToUnique(node);
+		return widened != null && widened.unique ? widened.selector : null;
 	}
 
 	/**
@@ -407,6 +440,27 @@ final class AddressIndex {
 	 */
 	public function nodeAt(offset: Int): Null<QueryNode> {
 		return nested ? Engine.atNested(_root, offset) : Engine.at(_root, offset);
+	}
+
+	/**
+	 * `node`'s segment with the nearest named ancestors prepended until it resolves uniquely,
+	 * and whether it got there — or null when the node is not in this tree at all. The widest
+	 * selector TRIED comes back either way, because `describe`'s ordinal form is built on it.
+	 */
+	private function widenToUnique(node: QueryNode): Null<{ selector: String, unique: Bool }> {
+		if (!_ordinalOf.exists(node)) return null;
+		var selector: String = segmentOf(node);
+		if (uniquelyResolves(selector, node)) return { selector: selector, unique: true };
+		var ancestor: Null<QueryNode> = _parentOf[node];
+		while (ancestor != null) {
+			final above: QueryNode = ancestor;
+			if (above.name != null) {
+				selector = '${segmentOf(above)} >> $selector';
+				if (uniquelyResolves(selector, node)) return { selector: selector, unique: true };
+			}
+			ancestor = _parentOf[above];
+		}
+		return { selector: selector, unique: false };
 	}
 
 	/**
