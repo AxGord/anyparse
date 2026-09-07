@@ -91,7 +91,8 @@ final class SourceComments {
 	}
 
 	/**
-	 * Wrap `text` as a doc-comment block, one ` * ` line per input line. Its own doc had been orphaned onto `NewFile.parseSections`, one file over.
+	 * Wrap `text` as a doc-comment block, one ` * ` line per input line. Its
+	 * own doc had been orphaned onto `NewFile.parseSections`, one file over.
 	 */
 	public static function docComment(text: String): String {
 		final lines: Array<String> = trimBlankEdges(text.split('\n'));
@@ -419,7 +420,9 @@ final class SourceComments {
 
 	/**
 	 * `body` with the lines the edit made TOO WIDE broken back at spaces into lines carrying
-	 * `continuation`, and every other line byte-identical. `was` is the body before the edit.
+	 * `continuation`, and every other line byte-identical. `was` is the body before the edit; a
+	 * caller that already knows WHICH lines it wants broken passes their body-line indices as
+	 * `wrapAt` instead, and then neither `was` nor the trigger below is consulted.
 	 *
 	 * WHY the op reflows at all: a literal find crossing a comment line break replaces that break
 	 * along with the text around it, so the two lines JOIN — which is the whole T755 scenario (fix a
@@ -444,18 +447,33 @@ final class SourceComments {
 	 * A blank continuation line's width IS its prefix, so it is kept by construction: a paragraph
 	 * separator survives the reflow rather than being filled into its neighbours. Nothing here ever
 	 * JOINS two lines, which is what keeps the caller's own line breaks intact. What layout it must
-	 * not touch at all is `reflowSafeLine`'s question.
+	 * not touch at all is `reflowRefusal`'s question, whichever channel selected the line.
+	 *
+	 * ## Why `wrapAt` is a second channel and not a tighter `was`
+	 *
+	 * `was` can only be read by CONTENT — the body before an edit has different line boundaries from
+	 * the body after it, which is the whole reason the repair caller has one — and over-protecting
+	 * there is the SAFE direction: a line the edit did not touch stays exactly as its author left it.
+	 * For a caller that names lines it is the UNSAFE direction: two identical over-width lines in one
+	 * block protect each other, so the line a finding named comes back unwrapped, the edit is dropped,
+	 * and nothing says why. Tightening the content test would break the repair caller, so the precise
+	 * question got its own parameter instead.
 	 */
 	public static function wrapCommentBody(
-		body: String, was: String, head: String, continuation: String, metrics: LayoutMetrics, lineRun: Bool
+		body: String, was: String, head: String, continuation: String, metrics: LayoutMetrics, lineRun: Bool, ?wrapAt: Array<Int>
 	): String {
 		final width: Int = metrics.lineWidth;
 		final tab: Int = metrics.indentWidth;
 		final lines: Array<String> = body.split('\n');
 		final keep: Array<String> = was.split('\n');
-		final got: Array<Int> = overWidthColumns(lines, head, width, tab);
-		final had: Array<Int> = overWidthColumns(keep, head, width, tab);
-		if (got.length <= had.length && widestColumn(got) <= widestColumn(had)) return body;
+		// The REPAIR trigger, and only the repair caller's. A caller that names its lines has already
+		// decided; asking it again through the count-and-widest comparison would only re-derive the
+		// answer from a `was` it has no edit to supply.
+		if (wrapAt == null) {
+			final got: Array<Int> = overWidthColumns(lines, head, width, tab);
+			final had: Array<Int> = overWidthColumns(keep, head, width, tab);
+			if (got.length <= had.length && widestColumn(got) <= widestColumn(had)) return body;
+		}
 		final out: Array<String> = [];
 		final contCols: Int = CheckScan.displayColumn(continuation, 0, continuation.length, tab);
 		final headHasCode: Bool = head.trim().length > 2;
@@ -464,8 +482,15 @@ final class SourceComments {
 			final line: String = cr ? raw.substring(0, raw.length - 1) : raw;
 			final lead: String = i == 0 ? head : '';
 			final leadCols: Int = CheckScan.displayColumn(lead, 0, lead.length, tab);
-			final at: Int = i == 0 ? openerBodyPrefix(line, head) : linePrefixLength(line, lineRun);
-			final wrappable: Bool = !keep.contains(raw) && !(i == 0 && headHasCode) && reflowSafeLine(line.substring(at));
+			final at: Int = commentLineBodyAt(line, i == 0, head, lineRun);
+			// TWO channels, because the safe direction differs. The repair caller can only ask by
+			// CONTENT — its `was` has different line boundaries from `body`, which is the whole point —
+			// and being over-generous there is safe: an untouched line stays as its author left it. A
+			// caller that names INDICES cannot afford that generosity: two identical lines in one block
+			// would protect each other, so the line a finding named comes back unwrapped and the edit is
+			// silently dropped.
+			final untouched: Bool = wrapAt == null ? keep.contains(raw) : !wrapAt.contains(i);
+			final wrappable: Bool = !untouched && !(i == 0 && headHasCode) && reflowRefusal(line.substring(at)) == null;
 			if (!wrappable || leadCols + CheckScan.displayColumn(line, 0, line.length, tab) <= width) {
 				out.push(raw);
 				continue;
@@ -479,8 +504,14 @@ final class SourceComments {
 	}
 
 	/**
-	 * Whether one comment line's post-prefix `text` is prose a reflow may re-lay-out, rather than
-	 * layout that carries its own meaning.
+	 * WHY a reflow may not re-lay-out one comment line's post-prefix `text`, in words a report can
+	 * print, or null when the line is prose a reflow may break at spaces.
+	 *
+	 * ONE predicate answering in REASONS rather than in a boolean, because its two callers need two
+	 * views of it and a second copy would drift: `wrapCommentBody` only asks whether to touch the
+	 * line, while the `comment-width` check REPORTS a line it declines to wrap and has to say what
+	 * stopped it. Written this way round so a shape added here cannot be refused anonymously, and a
+	 * shape named here cannot fail to be refused.
 	 *
 	 * Every shape refused here is one whose wrapped form is a CORRUPTION no gate in this project can
 	 * see — the writer re-emits a comment interior byte for byte, so `fmt --list` stays clean and no
@@ -497,20 +528,62 @@ final class SourceComments {
 	 *  - a MARKDOWN block marker. A table row split mid-row loses its cell count; a `- ` bullet's
 	 *    continuation, laid out at the bare gutter, reads as a sibling paragraph between two bullets.
 	 *
-	 * A refused line stays over-width and the caller's width gate names it, which is the honest end
-	 * state: the op cannot re-lay-out this line, and says so instead of guessing.
+	 * A refused line stays over-width and the caller names it, which is the honest end state: the
+	 * reflow cannot re-lay-out this line, and says so instead of guessing.
 	 */
-	public static function reflowSafeLine(text: String): Bool {
-		if (text.length == 0) return false;
+	public static function reflowRefusal(text: String): Null<String> {
+		if (text.length == 0) return 'an empty line';
 		final head: Int = text.fastCodeAt(0);
-		if (head == ' '.code || head == '\t'.code) return false;
+		if (SourceText.isSpace(head)) return 'indentation the author wrote';
 		final lower: String = text.toLowerCase();
-		if (lower.startsWith('noqa') || lower.startsWith('checkstyle:')) return false;
-		if (head == '|'.code || head == '>'.code || head == '#'.code) return false;
-		if (text.length > 1 && text.fastCodeAt(1) == ' '.code && (head == '-'.code || head == '+'.code || head == '*'.code)) return false;
+		if (lower.startsWith('noqa') || lower.startsWith('checkstyle:')) return 'a suppression directive';
+		if (head == '|'.code) return 'a table row';
+		if (head == '>'.code) return 'a block quote';
+		if (head == '#'.code) return 'a markdown heading';
+		if (text.length > 1 && text.fastCodeAt(1) == ' '.code && (head == '-'.code || head == '+'.code || head == '*'.code))
+			return 'a bullet';
 		var digits: Int = 0;
 		while (digits < text.length && text.fastCodeAt(digits) >= '0'.code && text.fastCodeAt(digits) <= '9'.code) digits++;
-		return !(digits > 0 && digits + 1 < text.length && text.fastCodeAt(digits) == '.'.code && text.fastCodeAt(digits + 1) == ' '.code);
+		final numbered: Bool = digits > 0 && digits + 1 < text.length && text.fastCodeAt(digits) == '.'.code
+			&& text.fastCodeAt(digits + 1) == ' '.code;
+		return numbered ? 'a numbered list item' : null;
+	}
+
+	/**
+	 * Where one comment line's own TEXT begins — how many characters of it are prefix rather than
+	 * prose. On the body's FIRST line (`first`) that is the doc block's second star plus the single
+	 * space any opener puts before its prose; on every later line it is the indentation, the
+	 * continuation marker, and the space after it — the `//` opener of a merged run when `lineRun`,
+	 * the gutter star otherwise.
+	 *
+	 * ONE function rather than the two halves of the ternary that used to call it, because
+	 * `comment-width` has to ask this of the same line the reflow does, and two private halves could
+	 * only be shared by making both public — the shape that drifts. The trailing "skip one space" is
+	 * literally shared: both halves already did it.
+	 *
+	 * `commentBody` starts two characters past `//` or `/*`, so line 0 arrives carrying the pieces
+	 * every other line hands to the gutter reader. Reading it as text instead is what made
+	 * `reflowRefusal` see the standard space after `//` as the author's own indentation and refuse
+	 * every first line, and the doc opener's second star as a markdown bullet. A gutter-less block
+	 * line carries only its indentation, and `ungutter` answers that by handing the line back
+	 * unchanged — it owns the "exactly one space before the star" rule that keeps a `* item` bullet
+	 * and a code sample's `* b;` reachable, so the prefix is read through it rather than by a second
+	 * whitespace scan that would disagree.
+	 */
+	public static function commentLineBodyAt(line: String, first: Bool, head: String, lineRun: Bool): Int {
+		if (!first && !lineRun) {
+			final bare: String = ungutter(line);
+			return bare.length == line.length ? line.length - line.ltrim().length : line.length - bare.length;
+		}
+		var i: Int = 0;
+		if (first) {
+			if (head.endsWith('/*') && line.length > 0 && line.fastCodeAt(0) == '*'.code) i++;
+		} else {
+			while (i < line.length && (line.fastCodeAt(i) == ' '.code || line.fastCodeAt(i) == '\t'.code)) i++;
+			if (line.substr(i, LINE_OPEN.length) != LINE_OPEN) return i;
+			i += LINE_OPEN.length;
+		}
+		return i < line.length && line.fastCodeAt(i) == ' '.code ? i + 1 : i;
 	}
 
 	/**
@@ -621,7 +694,10 @@ final class SourceComments {
 		return nl < 0 ? source.length + 1 : nl + 1;
 	}
 
-	/** Extend a member's `span` back over own-line leading comments and forward over a same-line trailing comment, yielding its full source slot. */
+	/**
+	 * Extend a member's `span` back over own-line leading comments and forward
+	 * over a same-line trailing comment, yielding its full source slot.
+	 */
 	public static function memberTriviaSpan(source: String, span: Span, comments: Array<{ from: Int, to: Int, isLine: Bool }>): Span {
 		final from: Int = absorbLeadingComments(source, comments, span.from);
 		var to: Int = span.to;
@@ -814,7 +890,10 @@ final class SourceComments {
 		return best;
 	}
 
-	/** Walk `from` back over own-line leading comments (and the whitespace between) to the first code; returns the new start offset. Shared by `memberTriviaSpan` and `leadingCommentBlockStart`. */
+	/**
+	 * Walk `from` back over own-line leading comments (and the whitespace between) to the first code;
+	 * returns the new start offset. Shared by `memberTriviaSpan` and `leadingCommentBlockStart`.
+	 */
 	private static function absorbLeadingComments(source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, from: Int): Int {
 		var result: Int = from;
 		while (true) {
@@ -832,28 +911,6 @@ final class SourceComments {
 		comments: Array<{ from: Int, to: Int, isLine: Bool }>, at: Int
 	): Null<{ from: Int, to: Int, isLine: Bool }> {
 		return comments.find(token -> token.from <= at && at < token.to);
-	}
-
-	/**
-	 * How many characters of one INTERIOR comment line are its continuation prefix — the
-	 * indentation, the marker, and the single space after it. `lineRun` picks the marker the way
-	 * `normalizeCommentBody` does: the `//` opener of a merged run, the gutter star otherwise.
-	 *
-	 * A gutter-less block line carries only its indentation, and `ungutter` answers that by handing
-	 * the line back unchanged — it owns the "exactly one space before the star" rule that keeps a
-	 * `* item` bullet and a code sample's `* b;` reachable, so the prefix is read through it rather
-	 * than by a second whitespace scan that would disagree.
-	 */
-	private static function linePrefixLength(line: String, lineRun: Bool): Int {
-		if (!lineRun) {
-			final bare: String = ungutter(line);
-			return bare.length == line.length ? line.length - line.ltrim().length : line.length - bare.length;
-		}
-		var i: Int = 0;
-		while (i < line.length && (line.fastCodeAt(i) == ' '.code || line.fastCodeAt(i) == '\t'.code)) i++;
-		if (line.substr(i, LINE_OPEN.length) != LINE_OPEN) return i;
-		i += LINE_OPEN.length;
-		return i < line.length && line.fastCodeAt(i) == ' '.code ? i + 1 : i;
 	}
 
 	/**
@@ -962,21 +1019,6 @@ final class SourceComments {
 			if (cols > best) best = cols;
 		}
 		return best;
-	}
-
-	/**
-	 * How many characters of the body's FIRST line belong to the opener rather than to the text: the
-	 * doc block's second star, and the single space that separates any opener from its prose.
-	 *
-	 * `commentBody` starts two characters past `//` or `/*`, so line 0 arrives carrying the pieces
-	 * every other line hands to `linePrefixLength`. Reading it as text instead is what made
-	 * `reflowSafeLine` see the standard space after `//` as the author's own indentation and refuse
-	 * every first line, and the `/**`'s second star as a markdown bullet.
-	 */
-	private static function openerBodyPrefix(line: String, head: String): Int {
-		var i: Int = 0;
-		if (head.endsWith('/*') && line.length > 0 && line.fastCodeAt(0) == '*'.code) i++;
-		return i < line.length && line.fastCodeAt(i) == ' '.code ? i + 1 : i;
 	}
 
 }

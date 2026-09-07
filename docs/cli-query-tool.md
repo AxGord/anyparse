@@ -339,6 +339,30 @@ Three things about it are load-bearing, and each was measured rather than assume
 
 The window is a `lint` feature, not an op feature: `apq lint <file> --range <from>:<to>` takes a 1-based inclusive line window over a scope of exactly one file, and narrows the report AND `--fix` alike. It selects FINDINGS, never EDITS — a check whose fix is atomic across sites (`unused-parameter` rewrites the signature and every call-site argument) still writes wherever its own fix says, off a finding inside the window; clipping that would leave the file broken. Under `--fix` the window is re-applied on every fixed-point pass against the file's current bytes, so a fix that changes the line count shifts what a later pass sees — bounded, and documented on `LintRange`.
 
+### `comment-width`: the one width nothing measured
+
+`apq lint --rule comment-width` reports a COMMENT line — a `//` run, a `/* … */` banner or a `/** … */` doc block — rendered wider than the project's own `wrapping.maxLineLength`. It is `DefaultOff` and `Info`: the threshold is a project's style choice, so a project opts in through `apqlint.json` (`"comment-width": { "enabled": true }`), and a rule that can report several hundred lines of standing prose must not flip a warning-gated build the day it is switched on.
+
+The gap it closes is that the writer owns every CODE line's width and re-emits a comment interior BYTE FOR BYTE. An over-wide comment line therefore leaves `fmt --list` clean and no other rule reads a comment's shape: 468 lines of this repository stood past its configured 140, one of them at 6641 columns, and the only gate any of them had ever met was a human reading a diff.
+
+**The comment has to be what puts the line over.** A line is measured whole (`CheckScan.displayColumn` — the writer's own answer to what a tab is worth), but a comment sharing its line with code that is ALREADY past the width is not this rule's finding: the comment could vanish and the line would still be too long, and the code's width is the formatter's concern. That single gate is the difference between 470 over-width comment lines in this tree and the 468 the rule reports — the two it drops are `// noqa` markers riding 160-column string-literal fixtures. The code is read on BOTH sides of the comment, which this tree cannot show: a short banner between a call head and a long argument leaves nothing to its left and everything to its right, so a left-only gate calls a 162-column line the comment's doing when deleting the comment leaves 154. The census is 468 either way here; the shape came out of a constructed probe.
+
+**The fix** breaks the line back at spaces into the block it already lives in, carrying the prefix that position needs — `SourceComments.wrapCommentBody`, the same reflow `comment-rewrite` repairs its own edits with. Only the lines the findings NAME are wrapped, addressed by body-line INDEX (`wrapAt`) rather than by the content matching the repair caller uses: two identical over-width lines in one block would otherwise protect each other, and the line a finding named would come back unwrapped with nothing to say why. That is what keeps a whole-body edit answerable to the findings that asked for it. Measured: of the 468 standing at this slice's base, 418 are fixable and 50 decline; the dogfood run over the 465 left after the slice reflowed 3 in its own file wrote 387 edits in 210 files over two passes and then reached a fixed point at 0 edits. Every gate on that copy: AST identity on all 210 changed files (`apq diff`), comment prose word-for-word identical on all 210, `fmt --list` 0 of 1780, and a `lint-diff` over every OTHER rule at 0 added / 0 removed (all 210 removed keys are this rule's own).
+
+**The 50 it declines stand with the reason in the message** (and in `Violation.declineReason`, which `--fix`'s unfixed ledger reads), because wrapping is not always meaning-preserving and the shapes where it is not are corruptions nothing downstream can see:
+
+| reason | count here | why |
+|---|---|---|
+| `indentation the author wrote` | 15 | a code sample or a hanging indent, laid out at the bare gutter |
+| `a bullet` / `a table row` / a heading / a numbered item | 15 | `SourceComments.reflowRefusal`, the per-line predicate shared with the reflow itself |
+| `a suppression directive` | 0 | `Suppression.parseNoqa` reads an empty rule list as EVERY rule, so a broken `// noqa: x` widens to a blanket exemption |
+| `it is inside a fenced code block` | 0 | `reflowRefusal` is per-line and cannot see the triple-backtick fence that opened above it; tracked per comment unit instead |
+| `it trails after code` | 0 | its continuation would be a NEW own-line comment the writer then relocates |
+| a raw `#if` region / the file does not parse | 0 | nothing inside an opaque `CondRegionScan` region projects, so no edit there can be corroborated — fail-closed, as every mutating op is |
+| `the block closer shares this line` | 20 | `wrapCommentBody` measures the BODY, which ends two characters short of the `*/`, so it reads a 142-column one-line doc block as 140 and leaves it |
+
+The last row is a known limitation of the reflow rather than of the rule: all 20 are one-line doc blocks at 141 or 142 columns, over by exactly the closer.
+
 ### `apq rewrite`: a template is a TREE, so it is spliced as one
 
 `apq rewrite <file> <pattern> <replacement>` matches with `search` syntax and splices

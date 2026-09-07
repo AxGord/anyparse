@@ -1421,7 +1421,7 @@
 			"name": "M-COMMENT-REFLOW-TOUCHED-ONLY",
 			"type": "anyparse.query.SourceComments",
 			"method": "wrapCommentBody",
-			"find": "!keep.contains(raw) && !(i == 0",
+			"find": "!untouched && !(i == 0",
 			"replace": "!(i == 0",
 			"note": "the reflow stops asking which lines the edit produced, so an inherited over-width doc line the caller never mentioned is re-wrapped along with the one it did"
 		},
@@ -1435,8 +1435,8 @@
 		{
 			"name": "M-COMMENT-REFLOW-UNSAFE-LINES",
 			"type": "anyparse.query.SourceComments",
-			"method": "reflowSafeLine",
-			"force": "true",
+			"method": "reflowRefusal",
+			"force": "null",
 			"note": "every comment line reads as plain prose, so the reflow breaks a `// noqa: <rule>` after the colon into a blanket exemption and lays a code sample, a table row and a bullet out at the bare gutter"
 		},
 		{
@@ -1454,6 +1454,69 @@
 			"find": "if (balanced.length <= lines && widestChunk(balanced, firstCols, contCols, tab) <= ceiling) return balanced;",
 			"replace": "if (balanced.length <= lines) return balanced;",
 			"note": "the balancer weighs line count alone, so it accepts the one-line answer `fillText` returns when no break point fits and a wrappable line is refused as over-width"
+		},
+		{
+			"name": "M-COMMENT-WIDTH-CONFIG-BLIND",
+			"type": "anyparse.check.CommentWidth",
+			"method": "collectUnit",
+			"find": "if (cols <= metrics.lineWidth || seen.contains(lineFrom)) continue;",
+			"replace": "if (cols <= 140 || seen.contains(lineFrom)) continue;",
+			"note": "the width stops coming from the file's own hxformat.json, so a project declaring 60 gets this repository's 140 and its over-width comment lines are reported clean"
+		},
+		{
+			"name": "M-COMMENT-WIDTH-CODE-BLIND",
+			"type": "anyparse.check.CommentWidth",
+			"method": "collectUnit",
+			"find": "if (CheckScan.displayColumn(code, 0, code.length, tab) > metrics.lineWidth) continue;",
+			"replace": "if (code.length < 0) continue;",
+			"note": "the rule stops asking whether the COMMENT is what puts the line over, so a short marker riding a 174-column line of code is reported as a comment-width finding the formatter owns"
+		},
+		{
+			"name": "M-COMMENT-WIDTH-TRAILING-WRAPPED",
+			"type": "anyparse.check.CommentWidth",
+			"method": "collectUnit",
+			"find": "refusal: i == 0 && headHasCode ? TRAILING : inFence ? FENCED : SourceComments.reflowRefusal(text)",
+			"replace": "refusal: inFence ? FENCED : SourceComments.reflowRefusal(text)",
+			"note": "a comment trailing after code reads as own-line prose, so the rule offers a fix whose continuation would be a NEW own-line comment the writer then relocates"
+		},
+		{
+			"name": "M-COMMENT-WIDTH-FENCE-BLIND",
+			"type": "anyparse.check.CommentWidth",
+			"method": "collectUnit",
+			"find": "final inFence: Bool = fenced || marker;",
+			"replace": "final inFence: Bool = false;",
+			"note": "the fence state is never consulted, so a line inside a ``` code sample reads as prose and the fix breaks the sample at spaces"
+		},
+		{
+			"name": "M-COMMENT-WIDTH-PROTECTION-OFF",
+			"type": "anyparse.check.CommentWidth",
+			"method": "fix",
+			"find": "w.refusal == null && wanted.contains(w.from)",
+			"replace": "w.refusal == null",
+			"note": "the protection list goes, so a whole-body edit re-wraps every over-width line of the block including the ones no surviving finding asked for"
+		},
+		{
+			"name": "M-COMMENT-WIDTH-CLOSER-UNSEEN",
+			"type": "anyparse.check.CommentWidth",
+			"method": "probeReflow",
+			"find": "final closer: Int = bodySpan.to == unit.to - 2 ? 2 : 0;",
+			"replace": "final closer: Int = 0;",
+			"note": "the block closer sharing the last body line stops being counted, so a one-line doc block over by exactly its `*/` is blamed on having no break point"
+		},
+		{
+			"name": "M-COMMENT-WIDTH-OPAQUE-OPEN",
+			"type": "anyparse.check.CommentWidth",
+			"method": "opaqueRegionsOf",
+			"force": "[]",
+			"note": "the raw `#if` regions come back empty, so a comment whose bytes the model dropped is offered a fix no tree can corroborate"
+		},
+		{
+			"name": "M-COMMENT-WIDTH-PROTECTION-BY-TEXT",
+			"type": "anyparse.query.SourceComments",
+			"method": "wrapCommentBody",
+			"find": "final untouched: Bool = wrapAt == null ? keep.contains(raw) : !wrapAt.contains(i);",
+			"replace": "final untouched: Bool = keep.contains(raw);",
+			"note": "the index channel collapses back to matching a line by its TEXT, so two identical over-width lines in one block protect each other and the line a finding named comes back unwrapped with no reason given"
 		},
 		{
 			"name": "M-MOVE-SIBLINGS-FALSE",
