@@ -30,7 +30,10 @@ using StringTools;
 @:nullSafety(Strict)
 final class HaxelibResolver {
 
-	/** Total `haxelib libpath` spawns this process — a run whose resolution thunk never fires leaves this untouched (the laziness invariant tests read). */
+	/**
+	 * Total `haxelib libpath` spawns this process — a run whose resolution thunk
+	 * never fires leaves this untouched (the laziness invariant tests read).
+	 */
 	public static var invocations(default, null): Int = 0;
 
 	/**
@@ -52,7 +55,9 @@ final class HaxelibResolver {
 	 * `root/classPath`, where `classPath` defaults to the empty string (the root
 	 * itself) when the key is absent or empty. `haxelibJson` is read through the
 	 * declared `HaxelibJson` schema (macro-generated `HaxelibJsonParser`) —
-	 * malformed JSON, a non-object root, or a `classPath` of the WRONG type (not a string) all throw and are caught here and the lib is skipped rather than indexed from an unknown root. A null `haxelibJson` is NOT one of those: no manifest means a legacy library whose sources are the root, and it resolves to the root. ACCEPTED behaviour change from the pre-schema Reflect-based
+	 * malformed JSON, a non-object root, or a `classPath` of the WRONG type (not a string) all throw and are caught here and the
+	 * lib is skipped rather than indexed from an unknown root. A null `haxelibJson` is NOT one of those: no manifest means a legacy
+	 * library whose sources are the root, and it resolves to the root. ACCEPTED behaviour change from the pre-schema Reflect-based
 	 * reader: a non-string `classPath` used to fall back to the root; it now
 	 * yields null (see `HaxelibResolverTest.testNonStringClassPathIsNull`). No
 	 * I/O, so it is unit-testable without a real haxelib.
@@ -84,7 +89,10 @@ final class HaxelibResolver {
 		return root == '' ? null : root;
 	}
 
-	/** Spawn `haxelib libpath <name>` and return its stdout on a zero exit, or null on any failure (mirrors `CompilerOracle`'s target-conditional spawn). */
+	/**
+	 * Spawn `haxelib libpath <name>` and return its stdout on a zero exit, or
+	 * null on any failure (mirrors `CompilerOracle`'s target-conditional spawn).
+	 */
 	private static function runLibpath(name: String): Null<String> {
 		#if nodejs
 		final res: ChildProcessSpawnSyncResult = js.node.ChildProcess.spawnSync('haxelib', ['libpath', name], { encoding: 'utf8' });
@@ -112,7 +120,10 @@ final class HaxelibResolver {
 		#end
 	}
 
-	/** Read `<root>/haxelib.json`, or null when it is missing/unreadable (graceful — the lib is then skipped). A null `root` (empty libpath) short-circuits to null. */
+	/**
+	 * Read `<root>/haxelib.json`, or null when it is missing/unreadable (graceful —
+	 * the lib is then skipped). A null `root` (empty libpath) short-circuits to null.
+	 */
 	private static function readHaxelibJson(root: Null<String>): Null<String> {
 		return root == null
 			? null

@@ -321,7 +321,9 @@ final class NullableSwitchMissingNull implements Check {
 	}
 
 	/**
-	 * The identifier a precondition call proves non-null before `node` runs — the plain-ident argument of a `nullAssertionCalls` call (`Assert.notNull(x)`), or the operand a `assertTrueCalls`/`assertFalseCalls` relational assert narrows non-null (`Assert.isTrue(x != null)` / `Assert.isFalse(x == null)`); null when `node` is neither.
+	 * The identifier a precondition call proves non-null before `node` runs — the plain-ident argument of a
+	 * `nullAssertionCalls` call (`Assert.notNull(x)`), or the operand a `assertTrueCalls`/`assertFalseCalls` relational
+	 * assert narrows non-null (`Assert.isTrue(x != null)` / `Assert.isFalse(x == null)`); null when `node` is neither.
 	 */
 	private static function assertionArg(node: QueryNode, s: Seams): Null<QueryNode> {
 		final callKind: Null<String> = s.callKind;

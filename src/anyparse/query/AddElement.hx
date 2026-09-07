@@ -303,7 +303,10 @@ final class AddElement {
 		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
 	}
 
-	/** Whether `cursor` falls within the first token of a node starting at `from` (its start through the token's trailing boundary, inclusive). */
+	/**
+	 * Whether `cursor` falls within the first token of a node starting at
+	 * `from` (its start through the token's trailing boundary, inclusive).
+	 */
 	private static inline function cursorInFirstToken(source: String, from: Int, cursor: Int): Bool {
 		return cursor >= from && cursor <= SourceText.firstTokenEnd(source, from);
 	}

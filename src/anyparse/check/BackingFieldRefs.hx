@@ -225,7 +225,10 @@ final class BackingFieldRefs {
 		return out;
 	}
 
-	/** The `field` token offset inside a `this.`/`super.` field access `node` (`span` its whole access), or -1 for any other receiver shape. */
+	/**
+	 * The `field` token offset inside a `this.`/`super.` field access
+	 * `node` (`span` its whole access), or -1 for any other receiver shape.
+	 */
 	private static function fieldAccessTokenOffset(node: QueryNode, span: Span, source: String, field: String): Int {
 		if (node.children.length != 1) return -1;
 		final recv: QueryNode = node.children[0];

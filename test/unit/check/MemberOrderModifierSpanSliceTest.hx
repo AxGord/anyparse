@@ -123,7 +123,10 @@ class MemberOrderModifierSpanSliceTest extends Test {
 		return span != null && span.from <= at && at < span.to;
 	}
 
-	/** The line after the first one whose trimmed text is `needle`, trimmed, or `''` - keeps the assertion off whole-source substring order. */
+	/**
+	 * The line after the first one whose trimmed text is `needle`, trimmed,
+	 * or `''` - keeps the assertion off whole-source substring order.
+	 */
 	private function lineAfter(src: String, needle: String): String {
 		final lines: Array<String> = src.split('\n');
 		for (i in 0...lines.length - 1) if (lines[i].trim() == needle) return lines[i + 1].trim();

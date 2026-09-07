@@ -67,7 +67,10 @@ typedef ImportAnchor = {
 	final order: Int;
 }
 
-/** One run weighed as a host for a fresh import: the run, whether an order explains it, its dotted-prefix affinity, and the index the path sorts before (-1 = append at the run's end). */
+/**
+ * One run weighed as a host for a fresh import: the run, whether an order explains it, its
+ * dotted-prefix affinity, and the index the path sorts before (-1 = append at the run's end).
+ */
 private typedef RunChoice = {
 	final run: Array<ImportLine>;
 	final ordered: Bool;

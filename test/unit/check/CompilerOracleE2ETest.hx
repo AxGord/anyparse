@@ -34,7 +34,10 @@ final class CompilerOracleE2ETest extends Test {
 	private static final BROKEN: String = 'class Good {\n\tstatic function main() {\n\t\tvar x:Int = "no";\n\t\ttrace(x);\n\t}\n}\n';
 	private static final HXML: String = '-cp .\n-main Good\n';
 
-	/** The convention fixtures' main, in `src/`: it names a type reachable ONLY through the hxml's `-cp lib`, which the default cwd classpath cannot stand in for. */
+	/**
+	 * The convention fixtures' main, in `src/`: it names a type reachable ONLY through
+	 * the hxml's `-cp lib`, which the default cwd classpath cannot stand in for.
+	 */
 	private static final NESTED_MAIN: String =
 		'class Good {\n\tstatic function main() {\n\t\tvar x:Int = 1;\n\t\ttrace(x + Helper.bump());\n\t}\n}\n';
 
@@ -58,7 +61,10 @@ final class CompilerOracleE2ETest extends Test {
 	/** A recorded warm server whose process cannot exist: the fixture for the dead-record recovery path. */
 	private static final DEAD_SERVER_RECORD: String = '{"port":1,"pid":$DEAD_SERVER_PID,"compiledAt":1000000000}';
 
-	/** How far ahead of now a pinned modification time is set, so a later write can be pinned back to the value the server already recorded. */
+	/**
+	 * How far ahead of now a pinned modification time is set, so a later
+	 * write can be pinned back to the value the server already recorded.
+	 */
 	private static inline final FUTURE_MTIME_MS: Float = 5000;
 	#end
 
@@ -420,7 +426,10 @@ final class CompilerOracleE2ETest extends Test {
 		return CliFixture.writeDir('oracle', files);
 	}
 
-	/** Force `path`'s modification time to `stamp` — the device that makes the server's staleness comparison deterministic instead of a race with the wall clock. */
+	/**
+	 * Force `path`'s modification time to `stamp` — the device that makes the server's
+	 * staleness comparison deterministic instead of a race with the wall clock.
+	 */
 	private inline function pinMtime(path: String, stamp: Date): Void {
 		js.node.Fs.utimesSync(path, stamp, stamp);
 	}

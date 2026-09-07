@@ -375,7 +375,10 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	);
 
 	/**
-	 * FALLBACK table of `using`-eligible extension-method names, consulted only when `StdResolver` cannot discover the std sources `knownExtensionMethods` derives these from at runtime. Its entries were themselves sourced from the installed std (every static `FnMember` of each module, private helpers included), so it is a subset of what the live extraction returns — a superset there is harmless (it only makes the `unused-import` "used" test more generous).
+	 * FALLBACK table of `using`-eligible extension-method names, consulted only when `StdResolver` cannot discover the std
+	 * sources `knownExtensionMethods` derives these from at runtime. Its entries were themselves sourced from the
+	 * installed std (every static `FnMember` of each module, private helpers included), so it is a subset of what the live
+	 * extraction returns — a superset there is harmless (it only makes the `unused-import` "used" test more generous).
 	 */
 	private static final EXTENSION_METHODS: Map<String, Array<String>> = [
 		'StringTools' => [
@@ -428,10 +431,16 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		]
 	];
 
-	/** Per-module-path cache of the std extension-method extraction; a cached null (a non-std / missing module) is retained via `exists`, not recomputed. */
+	/**
+	 * Per-module-path cache of the std extension-method extraction; a cached
+	 * null (a non-std / missing module) is retained via `exists`, not recomputed.
+	 */
 	private static final extMethodsCache: Map<String, Null<Array<String>>> = [];
 
-	/** Member-modifier node kinds — a `Static` among these marks the following `FnMember` static; any other is a non-`Static` modifier that preserves the accumulated flag (used by `collectStaticMethodsWithParam`). */
+	/**
+	 * Member-modifier node kinds — a `Static` among these marks the following `FnMember` static; any other is
+	 * a non-`Static` modifier that preserves the accumulated flag (used by `collectStaticMethodsWithParam`).
+	 */
 	private static final MODIFIER_KINDS: Array<String> = [
 		'Static',
 		'Public',
@@ -445,7 +454,10 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		'Abstract'
 	];
 
-	/** Non-function member kinds that end a modifier run (a static var / final field), so their `Static` never leaks onto a following method (used by `collectStaticMethodsWithParam`). */
+	/**
+	 * Non-function member kinds that end a modifier run (a static var / final field), so their
+	 * `Static` never leaks onto a following method (used by `collectStaticMethodsWithParam`).
+	 */
 	private static final FIELD_BOUNDARY_KINDS: Array<String> = ['VarMember', 'FinalMember', 'FinalModifiedMember'];
 
 	public function new() {}
@@ -1591,7 +1603,10 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		return out;
 	}
 
-	/** Lazily extract + cache the `using`-eligible method names of `modulePath` from the std source, or null when std / the module file is absent. */
+	/**
+	 * Lazily extract + cache the `using`-eligible method names of `modulePath`
+	 * from the std source, or null when std / the module file is absent.
+	 */
 	private function extensionMethodsFromStd(modulePath: String): Null<Array<String>> {
 		if (extMethodsCache.exists(modulePath)) return extMethodsCache[modulePath];
 		final computed: Null<Array<String>> = computeExtensionMethodsFromStd(modulePath);
@@ -1599,7 +1614,10 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		return computed;
 	}
 
-	/** Parse `<std>/<modulePath>.hx` and collect its static-with-first-param `FnMember` names, or null when std is undiscovered or the file is missing / unparseable. */
+	/**
+	 * Parse `<std>/<modulePath>.hx` and collect its static-with-first-param `FnMember`
+	 * names, or null when std is undiscovered or the file is missing / unparseable.
+	 */
 	private function computeExtensionMethodsFromStd(modulePath: String): Null<Array<String>> {
 		final dir: Null<String> = StdResolver.stdDir();
 		if (dir == null) return null;
@@ -1626,7 +1644,10 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		return stated == null ? HaxeFormat.instance.defaultWriteOptions : HaxeFormatConfigLoader.loadHxFormatJson(stated);
 	}
 
-	/** Read `<dir>/<modulePath-as-path>.hx`, or null when it does not exist / is unreadable (a non-std module then falls back to the table). */
+	/**
+	 * Read `<dir>/<modulePath-as-path>.hx`, or null when it does not exist
+	 * / is unreadable (a non-std module then falls back to the table).
+	 */
 	private static function readStdModule(dir: String, modulePath: String): Null<String> {
 		#if (sys || nodejs)
 		final file: String = haxe.io.Path.join([dir, '${modulePath.split('.').join('/')}.hx']);
@@ -1670,7 +1691,10 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		}
 	}
 
-	/** Dissolve `Conditional` (`#if`) wrappers, splicing their children in place (recursively), so a modifier or member guarded by conditional compilation reads as a plain sibling. */
+	/**
+	 * Dissolve `Conditional` (`#if`) wrappers, splicing their children in place (recursively),
+	 * so a modifier or member guarded by conditional compilation reads as a plain sibling.
+	 */
 	private static function flattenConditionals(children: Array<QueryNode>): Array<QueryNode> {
 		final out: Array<QueryNode> = [];
 		for (c in children) if (c.kind == 'Conditional')

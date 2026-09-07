@@ -15,14 +15,17 @@ import anyparse.runtime.Span;
  *
  * ## Type-aware, conservative
  *
- * The operand must be a plain identifier whose declared type is recovered via `TypeInfoProvider.declaredTypeSources`, and the cast's target type via `TypeInfoProvider.castTargetSources`; both are the VERBATIM written type SOURCE. A non-identifier
+ * The operand must be a plain identifier whose declared type is recovered via `TypeInfoProvider.declaredTypeSources`, and the
+ * cast's target type via `TypeInfoProvider.castTargetSources`; both are the VERBATIM written type SOURCE. A non-identifier
  * operand (a call / field access whose type is unknown), an operand with no
  * recovered type, or a target type that differs keeps the conservative default and
  * is not flagged. The untyped `cast x` form carries no target type and is excluded
  * by `RefShape.typedCastKinds`. Macro-reification subtrees (`RefShape.opaqueKinds`)
  * are not descended into.
  *
- * Comparison is on the written type SOURCE (whitespace-insensitive), which is sound within one file — a byte-identical spelling cannot denote two different types, so the unwrap autofix is safe. Differing spellings of the same type (`Eof` vs `haxe.io.Eof`) are conservatively treated as different (a safe miss); resolving those needs a typer anyparse does not have.
+ * Comparison is on the written type SOURCE (whitespace-insensitive), which is sound within one file — a byte-identical
+ * spelling cannot denote two different types, so the unwrap autofix is safe. Differing spellings of the same type (`Eof` vs
+ * `haxe.io.Eof`) are conservatively treated as different (a safe miss); resolving those needs a typer anyparse does not have.
  */
 @:nullSafety(Strict)
 final class RedundantCast implements Check {

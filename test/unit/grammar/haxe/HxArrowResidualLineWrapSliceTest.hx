@@ -61,7 +61,10 @@ final class HxArrowResidualLineWrapSliceTest extends Test {
 		super();
 	}
 
-	/** A sole paren-arrow call arg whose line overflows breaks after `->` with the body indented and the close `)` on its own line — no competing outer construct. */
+	/**
+	 * A sole paren-arrow call arg whose line overflows breaks after `->` with the
+	 * body indented and the close `)` on its own line — no competing outer construct.
+	 */
 	public function testSoleArrowArgBreaksWithCloseOnOwnLine(): Void {
 		final src: String = 'class Sample {\n\tfunction run() {\n\t\tfinal picked:Null<WrapperResultType> = '
 			+ 'elementCollectionValue.find((element:MemberEntryType) -> ScoringHelperName.computeRankValueFor(element) == 1);\n\t}\n}';
@@ -73,7 +76,10 @@ final class HxArrowResidualLineWrapSliceTest extends Test {
 		);
 	}
 
-	/** A `cond ? a : b` whose condition is an arrow-arg call keeps the arrow FLAT and breaks the ternary at `?`/`:` (the arrow defers to the ternary). */
+	/**
+	 * A `cond ? a : b` whose condition is an arrow-arg call keeps the arrow
+	 * FLAT and breaks the ternary at `?`/`:` (the arrow defers to the ternary).
+	 */
 	public function testTernaryBreaksArrowStaysFlat(): Void {
 		final src: String = 'class Sample {\n\tfunction run() {\n\t\tfinal chosen = memberCollectionVal.exists((entry:MemberEntryType) '
 			+ '-> entry.id == probe.id || entry.tag == probe.tagAddress) ? firstRankListValue : otherRankListValue;\n\t}\n}';
@@ -84,7 +90,10 @@ final class HxArrowResidualLineWrapSliceTest extends Test {
 		);
 	}
 
-	/** An `if (!x && exists(arrow) && exists(arrow))` opens the condition paren and breaks at `&&`, keeping both arrows FLAT (the arrows defer to the boolean chain). */
+	/**
+	 * An `if (!x && exists(arrow) && exists(arrow))` opens the condition paren and
+	 * breaks at `&&`, keeping both arrows FLAT (the arrows defer to the boolean chain).
+	 */
 	public function testConditionAndChainOpensArrowsStayFlat(): Void {
 		final src: String = 'class Sample {\n\tfunction run() {\n'
 			+ '\t\tif (!errorFlag && !firstBucketList.entries.exists((entry:BucketEntryType) -> entry.tag == probeValue) '
@@ -97,7 +106,10 @@ final class HxArrowResidualLineWrapSliceTest extends Test {
 		);
 	}
 
-	/** A `find(arrow) ?? find(arrow)` breaks the FIRST arrow (body indented, close `)` on its own line with `??` glued to it) and keeps the second arrow inline. */
+	/**
+	 * A `find(arrow) ?? find(arrow)` breaks the FIRST arrow (body indented, close
+	 * `)` on its own line with `??` glued to it) and keeps the second arrow inline.
+	 */
 	public function testNullCoalesceFirstArrowBreaksCloseCoupled(): Void {
 		final src: String = 'class Sample {\n\tfunction run() {\n\t\treturn allPaths.findEntry(path -> isAvailableAt(path) '
 			+ '&& Path.directory(path) == newDirValue) ?? allPaths.findEntry(path -> isAvailableAt(path));\n\t}\n}';
@@ -108,7 +120,10 @@ final class HxArrowResidualLineWrapSliceTest extends Test {
 		);
 	}
 
-	/** A `??` chain of calls with a `//` comment after each operator keeps EVERY comment (Keep shape forced by the attached line comment): each `??` trails its own line at a flat continuation indent. The plain infix path dropped these. */
+	/**
+	 * A `??` chain of calls with a `//` comment after each operator keeps EVERY comment (Keep shape forced by the attached
+	 * line comment): each `??` trails its own line at a flat continuation indent. The plain infix path dropped these.
+	 */
 	public function testNullCoalescePostOpCommentsPreserved(): Void {
 		final src: String = 'class Sample {\n\tfunction run() {\n\t\treturn pathList.findEntry(path -> isAvailableAt(path)) '
 			+ '?? // primary lookup by direct match\n\t\t\tpathList.findEntry(path -> isNamedAt(path)) '
@@ -121,7 +136,10 @@ final class HxArrowResidualLineWrapSliceTest extends Test {
 		);
 	}
 
-	/** A short 2-operand `??` with a trailing `//` comment stays multi-line to keep the comment -- it would otherwise collapse to one line and drop it. */
+	/**
+	 * A short 2-operand `??` with a trailing `//` comment stays multi-line to
+	 * keep the comment -- it would otherwise collapse to one line and drop it.
+	 */
 	public function testNullCoalesceShortChainCommentPreserved(): Void {
 		final src: String = 'class Sample {\n\tfunction run() {\n\t\treturn primaryLookupValueForEntry ?? // fall back when the primary is '
 			+ 'null here\n\t\t\tsecondaryLookupValueForEntry;\n\t}\n}';

@@ -50,7 +50,10 @@ final class SourceText {
 		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || c == '_'.code;
 	}
 
-	/** Does `s` begin with an upper-case ASCII letter — the Haxe convention a type name follows, distinguishing a type reference from a lower-case value / package segment? */
+	/**
+	 * Does `s` begin with an upper-case ASCII letter — the Haxe convention a type name
+	 * follows, distinguishing a type reference from a lower-case value / package segment?
+	 */
 	public static inline function isUpperInitial(s: String): Bool {
 		final c: Int = s.fastCodeAt(0);
 		return c >= 'A'.code && c <= 'Z'.code;
@@ -197,7 +200,8 @@ final class SourceText {
 	}
 
 	/**
-	 * Whether only spaces and tabs separate `at` from the start of its line — the test that tells a declaration's own leading comment from the PREVIOUS declaration's trailing
+	 * Whether only spaces and tabs separate `at` from the start of its line — the test that
+	 * tells a declaration's own leading comment from the PREVIOUS declaration's trailing
 	 * one. Both end just above the next declaration and are equally adjacent to it; only
 	 * the line the comment opens on says whose it is.
 	 */

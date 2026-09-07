@@ -94,7 +94,8 @@ final class RedundantNullCoalescing implements Check {
 }
 
 /**
- * The resolved seams `RedundantNullCoalescing` reads in `run` and `fix`; `opaqueKinds` / `shape` are read only by `run` (the type-aware walk).
+ * The resolved seams `RedundantNullCoalescing` reads in `run` and `fix`;
+ * `opaqueKinds` / `shape` are read only by `run` (the type-aware walk).
  */
 private typedef Seams = {
 	final coalKind: String;

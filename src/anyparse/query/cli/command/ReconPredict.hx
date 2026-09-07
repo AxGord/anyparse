@@ -19,7 +19,8 @@ import sys.FileSystem;
 #end
 
 /**
- * The reduced `MechanismMetas` variant the recon `--permissive-construct` path uses: optional flag plus lead / trail / sep only (no kw / absentOn), describing the tokens a maximally-permissive reconstruction would emit.
+ * The reduced `MechanismMetas` variant the recon `--permissive-construct` path uses: optional flag plus lead /
+ * trail / sep only (no kw / absentOn), describing the tokens a maximally-permissive reconstruction would emit.
  */
 typedef PermissiveMetas = {
 	var hasOptional: Bool;
@@ -29,7 +30,8 @@ typedef PermissiveMetas = {
 };
 
 /**
- * A single-construct current-parse probe for `apq recon`: whether the construct is `unwired`, whether it parses `ok`, and the `line` / `col` / `msg` of the failure when it does not.
+ * A single-construct current-parse probe for `apq recon`: whether the construct is `unwired`,
+ * whether it parses `ok`, and the `line` / `col` / `msg` of the failure when it does not.
  */
 typedef ReconCurrentParse = {
 	var unwired: Bool;
@@ -40,7 +42,8 @@ typedef ReconCurrentParse = {
 };
 
 /**
- * Tallies from an `apq recon --regression-probe` run: how many corpus constructs `regressed` (parse OK to SKIP), how many `unblocked` (SKIP to OK), how many `scanned`, and whether the target mechanism was `unwired`.
+ * Tallies from an `apq recon --regression-probe` run: how many corpus constructs `regressed` (parse OK to
+ * SKIP), how many `unblocked` (SKIP to OK), how many `scanned`, and whether the target mechanism was `unwired`.
  */
 typedef ReconRegressionResult = {
 	var regressed: Int;
@@ -69,7 +72,8 @@ enum PredictRelaxKind {
 }
 
 /**
- * Full result of one `apq recon --predict-relax` probe: its `PredictRelaxKind` plus the `original` / `patched` sources, the `injected` text, and the original vs new fail loci (`origLine`/`origCol`, `newLine`/`newCol`). Consumed by `reportPredictRelax`.
+ * Full result of one `apq recon --predict-relax` probe: its `PredictRelaxKind` plus the `original` / `patched` sources, the
+ * `injected` text, and the original vs new fail loci (`origLine`/`origCol`, `newLine`/`newCol`). Consumed by `reportPredictRelax`.
  */
 typedef PredictRelaxResult = {
 	var kind: PredictRelaxKind;

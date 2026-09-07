@@ -1,7 +1,9 @@
 package anyparse.macro;
 
 /**
- * Named constants for the annotation keys that form the string contract between the macro passes (`ShapeBuilder` / `Lowering` set them; `WriterLowering` and the trivia / span synths read them via `annotations.get`/`set`). Extracting the keys here makes a typo in one of the many `.get`/`.set` sites a compile error instead of a silently-missed annotation.
+ * Named constants for the annotation keys that form the string contract between the macro passes (`ShapeBuilder` /
+ * `Lowering` set them; `WriterLowering` and the trivia / span synths read them via `annotations.get`/`set`). Extracting the
+ * keys here makes a typo in one of the many `.get`/`.set` sites a compile error instead of a silently-missed annotation.
  */
 @:nullSafety(Strict)
 final class AnnotationKeys {

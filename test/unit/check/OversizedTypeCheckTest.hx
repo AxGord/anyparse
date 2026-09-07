@@ -17,7 +17,8 @@ using StringTools;
 /**
  * The `oversized-type` check: a type whose member count or line extent exceeds
  * the default thresholds (50 members / 2000 lines) is flagged `Warning`; a
- * smaller one is not. Both boundaries are pinned (== max is quiet, over flags); `#if`-guarded members count; an `apqlint.json` overrides both
+ * smaller one is not. Both boundaries are pinned (== max is quiet, over
+ * flags); `#if`-guarded members count; an `apqlint.json` overrides both
  * thresholds. Report-only — `fix` yields no edits.
  */
 class OversizedTypeCheckTest extends Test {

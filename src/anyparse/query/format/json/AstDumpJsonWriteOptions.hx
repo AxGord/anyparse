@@ -3,6 +3,7 @@ package anyparse.query.format.json;
 import anyparse.format.WriteOptions;
 
 /**
- * Writer options for `AstDumpJsonWriter` — the base `WriteOptions` with no format-specific additions (the `& {}` keeps a distinct nominal type so the generated writer dispatches on it).
+ * Writer options for `AstDumpJsonWriter` — the base `WriteOptions` with no format-specific
+ * additions (the `& {}` keeps a distinct nominal type so the generated writer dispatches on it).
  */
 typedef AstDumpJsonWriteOptions = WriteOptions & {};

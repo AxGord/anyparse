@@ -405,7 +405,10 @@ final class PreferLocalFunction implements Check {
 		return arrowEnd < 0 ? null : text.substring(arrowEnd, stop).trim();
 	}
 
-	/** Whether `node` is `null`, or a cast of it (`cast null`, `cast(null, T)`) — a value the declaration carried only to satisfy definite assignment. */
+	/**
+	 * Whether `node` is `null`, or a cast of it (`cast null`, `cast(null, T)`)
+	 * — a value the declaration carried only to satisfy definite assignment.
+	 */
 	private static function isNullPlaceholder(node: QueryNode, s: Seams): Bool {
 		if (node.kind == s.nullLiteralKind) return true;
 		final isCast: Bool = node.kind == s.uncheckedCastKind || s.castKinds.contains(node.kind);

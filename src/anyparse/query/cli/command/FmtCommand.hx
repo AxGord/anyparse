@@ -14,7 +14,8 @@ import anyparse.query.ExitCode.*;
 using StringTools;
 
 /**
- * Parsed options for `apq fmt` — `lang`, `write` (rewrite in place) vs `list` (name changed files only), and `inputSpecs`. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ * Parsed options for `apq fmt` — `lang`, `write` (rewrite in place) vs `list` (name changed files only),
+ * and `inputSpecs`. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
  */
 @:nullSafety(Strict)
 typedef FmtOpts = {
@@ -45,7 +46,8 @@ typedef FmtOpts = {
 };
 
 /**
- * Per-file outcome of `apq fmt`: whether the file `changed`, whether formatting `failed`, and `fatalExit` (non-null = an unrecoverable per-file outcome, e.g. no writer wired for the lang, that aborts the remaining files).
+ * Per-file outcome of `apq fmt`: whether the file `changed`, whether formatting `failed`, and `fatalExit` (non-null
+ * = an unrecoverable per-file outcome, e.g. no writer wired for the lang, that aborts the remaining files).
  */
 @:nullSafety(Strict)
 typedef FmtFileResult = {

@@ -84,7 +84,10 @@ class PreferIfExpressionReturnCheckTest extends Test {
 		Assert.equals('return if (a) 1 else if (b) /* keep */ 2 else 3;', es[0].text);
 	}
 
-	/** A leading comment the author put on its OWN line keeps it — welded onto the `if (…)` line it would re-read as being about the CONDITION. */
+	/**
+	 * A leading comment the author put on its OWN line keeps it — welded
+	 * onto the `if (…)` line it would re-read as being about the CONDITION.
+	 */
 	public function testOwnLineLeadingCommentKeepsItsLine(): Void {
 		final es: Array<{ span: Span, text: String }> =
 			edits(wrap('if (a)\n\t\t\t// why one\n\t\t\treturn 1;\n\t\telse if (b) return 2;\n\t\telse return 3;'));
@@ -109,7 +112,10 @@ class PreferIfExpressionReturnCheckTest extends Test {
 		Assert.equals('return if (a) 1 // why one\nelse if (b) 2 else 3;', es[0].text);
 	}
 
-	/** A comment sitting on its own line BEFORE the `else` still describes the branch that ends there — it rides the trailing slot and keeps its line. */
+	/**
+	 * A comment sitting on its own line BEFORE the `else` still describes the
+	 * branch that ends there — it rides the trailing slot and keeps its line.
+	 */
 	public function testOwnLineCommentBeforeElseCarried(): Void {
 		final es: Array<{ span: Span, text: String }> =
 			edits(wrap('if (a) return 1;\n\t\t// which branch?\n\t\telse if (b) return 2;\n\t\telse return 3;'));
@@ -117,7 +123,10 @@ class PreferIfExpressionReturnCheckTest extends Test {
 		Assert.equals('return if (a) 1\n// which branch?\nelse if (b) 2 else 3;', es[0].text);
 	}
 
-	/** Layout does not decide the trailing slot — only what PRECEDES the comment does, so a same-line block comment before the `else` rides it too. */
+	/**
+	 * Layout does not decide the trailing slot — only what PRECEDES the comment
+	 * does, so a same-line block comment before the `else` rides it too.
+	 */
 	public function testSameLineCommentBeforeElseCarried(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(wrap('if (a) return 1; /* x */ else if (b) return 2;\n\t\telse return 3;'));
 		Assert.equals(1, es.length);

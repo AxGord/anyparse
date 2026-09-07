@@ -94,7 +94,8 @@ package anyparse.grammar.haxe;
  * `BodyGroup`, the shape the condWrap path already builds for `if` / `for` / `while` out of their
  * CONDITION field. A try/catch has no condition, so without it the body and the `catch` seams each
  * answered the width question on their own line, and the seam answered AFTER the body had broken —
- * which squeezed a de-braced `try f(a, b) catch (e) g();` into breaking INSIDE the call. The companion `@:fmt(constructFitSep)` on `catches` makes the seam before each
+ * which squeezed a de-braced `try f(a, b) catch (e) g();` into breaking INSIDE the
+ * call. The companion `@:fmt(constructFitSep)` on `catches` makes the seam before each
  * `catch` a SOFT line the group owns, and `@:fmt(constructFitBody)` on every body field does the
  * same for the body seam. Both matter: with the body still answering for its own line it GLUED to
  * `try` while the `catch` below it had already broken. Breaking them together gives the LADDER an

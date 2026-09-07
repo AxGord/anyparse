@@ -639,7 +639,10 @@ final class InlineConstant implements Check {
 		return out;
 	}
 
-	/** Whether `source` is macro-context code — it imports `haxe.macro`, has a positive `#if` / `#elseif macro` region, or declares a `macro function`. */
+	/**
+	 * Whether `source` is macro-context code — it imports `haxe.macro`, has a
+	 * positive `#if` / `#elseif macro` region, or declares a `macro function`.
+	 */
 	private static function isMacroContext(source: String): Bool {
 		final signals: Array<String> = [
 			'haxe.macro',

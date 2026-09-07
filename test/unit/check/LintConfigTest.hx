@@ -68,7 +68,10 @@ class LintConfigTest extends Test {
 		Assert.isTrue(LintConfig.parse('{"rules":{}}').enabledFor('naming'), 'an empty rules map is valid — the loop short-circuits');
 	}
 
-	/** A `rules` entry whose value is not a JSON object is not a rule config — dropped, exactly as the untyped reader skipped a non-object. */
+	/**
+	 * A `rules` entry whose value is not a JSON object is not a rule
+	 * config — dropped, exactly as the untyped reader skipped a non-object.
+	 */
 	public function testRulesNonObjectEntryDropped(): Void {
 		final cfg: LintConfig = LintConfig.parse('{"rules":{"a-rule":5,"b-rule":{"severity":"error"}}}');
 		Assert.isNull(cfg.severityFor('a-rule'));
@@ -183,12 +186,18 @@ class LintConfigTest extends Test {
 		Assert.isTrue(mixed.resolutionStd(), 'and every other key degrades with it, back to the default');
 	}
 
-	/** The `resolutionStd` opt-out defaults to ON — absent, the auto-discovered std joins the scope, which is the whole point of it being implicit. */
+	/**
+	 * The `resolutionStd` opt-out defaults to ON — absent, the auto-discovered
+	 * std joins the scope, which is the whole point of it being implicit.
+	 */
 	public function testResolutionStdDefaultsOn(): Void {
 		Assert.isTrue(LintConfig.parse('{}').resolutionStd(), 'no key keeps the implicit std scope');
 	}
 
-	/** `"resolutionStd": false` declines it — the per-project opt-out for a source tree targeting a different Haxe version than the installed one. */
+	/**
+	 * `"resolutionStd": false` declines it — the per-project opt-out for a
+	 * source tree targeting a different Haxe version than the installed one.
+	 */
 	public function testResolutionStdFalseDeclines(): Void {
 		Assert.isFalse(LintConfig.parse('{"resolutionStd":false}').resolutionStd(), 'an explicit false declines the std');
 		Assert.isTrue(LintConfig.parse('{"resolutionStd":true}').resolutionStd(), 'an explicit true is the default, spelled out');

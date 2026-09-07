@@ -7,7 +7,8 @@ package anyparse.format.wrap;
  * For the three SET predicates — `ExceedsMaxLineLength`,
  * `HasMultilineItems`, `EqualItemLengths` — `value` is not a threshold
  * but a polarity: `1` matches when the signal holds, `0` when it does
- * not. The fork ships `exceedsMaxLineLength` in both polarities (254 rules at `0`, 94 at `1` across its own corpus); the other two it only ever ships at `1`, but the schema declares both for all three.
+ * not. The fork ships `exceedsMaxLineLength` in both polarities (254 rules at `0`, 94 at `1` across
+ * its own corpus); the other two it only ever ships at `1`, but the schema declares both for all three.
  *
  * A condition whose `value` the config OMITS reads `1` here, matching
  * haxe-formatter's own `@:default(1)` on this field. That default is load-bearing for exactly those three: `0` silently

@@ -11,7 +11,9 @@ import anyparse.query.ExitCode.*;
 using StringTools;
 
 /**
- * Parsed options for `apq set-doc` — `lang`, `write` / `reformat`, the target `file`, the address (`pos` / `selectExpr` / `matchExpr` / `nth`), and the doc body (`docText` or `fromFile`). `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ * Parsed options for `apq set-doc` — `lang`, `write` / `reformat`, the target `file`, the address
+ * (`pos` / `selectExpr` / `matchExpr` / `nth`), and the doc body (`docText` or `fromFile`).
+ * `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
  */
 @:nullSafety(Strict)
 typedef SetDocOpts = {

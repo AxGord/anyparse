@@ -42,7 +42,8 @@ import utest.Test;
  * The eleven CONTROL tests are green on both sides by construction and are the other half of
  * the pin: a guard that refused a `case` arm, a braced body, an ordinary block statement, a
  * sole `catch` clause, a header rewritten over its own body or a body somebody braced by hand
- * would be a worse regression than the bug, since those edits mean exactly what they say. Each names the line it pins and how disabling that line flips it — except one, which says
+ * would be a worse regression than the bug, since those edits mean exactly what they say.
+ * Each names the line it pins and how disabling that line flips it — except one, which says
  * plainly that nothing flips it and why it is still here.
  */
 class BodySlotGuardSliceTest extends Test {
@@ -362,7 +363,8 @@ class BodySlotGuardSliceTest extends Test {
 	/**
 	 * CONTROL for the LEAD rule, which nothing else pins. Blanking a whole `else` branch
 	 * takes the `else` keyword with it, so the `if` is being reshaped rather than left
-	 * reaching, and the guard must stay out of the way. Disable the lead test in `BodySlotGuard.emptiedChild` and every refusal test above stays
+	 * reaching, and the guard must stay out of the way. Disable the lead
+	 * test in `BodySlotGuard.emptiedChild` and every refusal test above stays
 	 * green while this one goes red (measured) — the three membership controls cannot see
 	 * that line at all.
 	 *

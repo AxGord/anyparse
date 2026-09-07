@@ -136,7 +136,10 @@ class PreferTernaryReturnCheckTest extends Test {
 		Assert.equals('return res != null && res.d != null ? t(res.d) : t("x");', es[0].text);
 	}
 
-	/** A null-check WITHOUT accessing the same ident still flags (no narrowing to lose). Value returns keep this off the stuck-boolean gate. */
+	/**
+	 * A null-check WITHOUT accessing the same ident still flags (no
+	 * narrowing to lose). Value returns keep this off the stuck-boolean gate.
+	 */
 	public function testNullCheckWithoutAccessFlagged(): Void {
 		Assert.equals(
 			1, violations('class C {\n\tfunction f(s:Null<S>):Int {\n\t\tif (s != null) return 1;\n\t\treturn 0;\n\t}\n}').length

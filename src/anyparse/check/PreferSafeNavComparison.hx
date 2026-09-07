@@ -493,7 +493,10 @@ final class PreferSafeNavComparison implements Check implements VersionGated {
 		return { span: new Span(r.from, r.to), text: text };
 	}
 
-	/** `node` followed by its receiver descent — `children[0]` repeatedly, the slot every field access / call / index carries its receiver in. */
+	/**
+	 * `node` followed by its receiver descent — `children[0]` repeatedly,
+	 * the slot every field access / call / index carries its receiver in.
+	 */
 	private static function descentChain(node: QueryNode): Array<QueryNode> {
 		final chain: Array<QueryNode> = [node];
 		var n: QueryNode = node;

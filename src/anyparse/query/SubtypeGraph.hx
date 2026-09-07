@@ -86,7 +86,14 @@ final class SubtypeGraph {
 	}
 
 	/**
-	 * Whether any (transitive) SUBTYPE of `owner` references the private backing field `field` the trivial-getter collapse would DELETE — a subclass reading `owner`'s private `_x` directly breaks with 'Unknown identifier' once `_x` is removed, since the rename only rewrites references inside `owner`. The subtype closure is walked DOWNWARD over the index by simple-name supertype edges, so only real descendants are visited (a sibling sharing an unresolvable ancestor never false-blocks). A subtype declaring its OWN `field` is skipped (a bare reference there binds to that member, not the inherited one); a subtype whose declaration span word-boundary-references `field` blocks the collapse, and an unscannable source — or a second type carrying `owner`'s own simple name, which the index cannot tell apart from `owner` — blocks conservatively. Sound over indexed subtypes; a subtype in an unindexed file is the inherent blind spot the accessor-override gate shares.
+	 * Whether any (transitive) SUBTYPE of `owner` references the private backing field `field` the trivial-getter collapse would
+	 * DELETE — a subclass reading `owner`'s private `_x` directly breaks with 'Unknown identifier' once `_x` is removed, since
+	 * the rename only rewrites references inside `owner`. The subtype closure is walked DOWNWARD over the index by simple-name
+	 * supertype edges, so only real descendants are visited (a sibling sharing an unresolvable ancestor never false-blocks). A
+	 * subtype declaring its OWN `field` is skipped (a bare reference there binds to that member, not the inherited one); a
+	 * subtype whose declaration span word-boundary-references `field` blocks the collapse, and an unscannable source — or a
+	 * second type carrying `owner`'s own simple name, which the index cannot tell apart from `owner` — blocks conservatively.
+	 * Sound over indexed subtypes; a subtype in an unindexed file is the inherent blind spot the accessor-override gate shares.
 	 */
 	public inline function subtypeReferencesField(owner: String, field: String): Bool {
 		return subtypeDeclMatches(

@@ -598,7 +598,10 @@ final class MapKeysLookup implements Check {
 		for (c in node.children) collectLookupEdits(c, path, keyName, cfg, valName, out);
 	}
 
-	/** A value-variable name not already used in the loop body and distinct from the path root / key names — `value`, else `value1`, `value2`… */
+	/**
+	 * A value-variable name not already used in the loop body and distinct
+	 * from the path root / key names — `value`, else `value1`, `value2`…
+	 */
 	private static function freshValueName(source: String, bodySpan: Span, rootName: String, keyName: String): String {
 		final base: String = 'value';
 		var candidate: String = base;

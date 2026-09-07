@@ -93,7 +93,11 @@ using Lambda;
  * ### Comments and `#if`
  *
  * No comment may sit in a region the rebuild drops -- the `try` keyword, the braces, each
- * `return`-less body's `target =` prefix, and (decl arm) the declaration's `= init`. Each `catch (…)` header and each r-value is copied verbatim, so a comment inside one rides along; anything else leaves the `try` unflagged rather than silently lost. One exception to "inside a copied region rides along": a DANGLING line comment, one with no newline after it within its own slice, refuses the site (`TryExpressionShape.danglingLineComment`) -- whatever the rebuild appends after that slice, the next `catch (…)` header or the terminating `;`, would land behind the `//`. Every copied slice is checked, the declaration prefix and the hoisted target included.
+ * `return`-less body's `target =` prefix, and (decl arm) the declaration's `= init`. Each `catch (…)` header and each r-value is copied
+ * verbatim, so a comment inside one rides along; anything else leaves the `try` unflagged rather than silently lost. One exception to
+ * "inside a copied region rides along": a DANGLING line comment, one with no newline after it within its own slice, refuses the site
+ * (`TryExpressionShape.danglingLineComment`) -- whatever the rebuild appends after that slice, the next `catch (…)` header or the
+ * terminating `;`, would land behind the `//`. Every copied slice is checked, the declaration prefix and the hoisted target included.
  *
  * Both arms read the BRANCH-AWARE projection (`CheckScan.parseBranchAwareOrNull`): a
  * declaration and its `try` inside a `#if sys` region are children of a conditional node, not

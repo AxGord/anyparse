@@ -55,7 +55,8 @@ private enum Either<L, R> {
  *
  * Atomic: the superclass is assembled through `NewFile.createRaw` (canonical at
  * the WRITER FIXED POINT, under the format config governing where the file
- * lands) and the source re-parses before either is returned. The EDITED source comes back at the same fixed point when it went in at one — a
+ * lands) and the source re-parses before either is returned. The EDITED
+ * source comes back at the same fixed point when it went in at one — a
  * cut can double a blank separator, and the writer is what gives one back. It cannot
  * damage a literal or a comment doing so, and not because it knows what one is: a
  * canonical source cannot hold an over-long blank run ANYWHERE, literals included,

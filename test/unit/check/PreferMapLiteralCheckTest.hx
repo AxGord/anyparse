@@ -17,12 +17,18 @@ import utest.Test;
  */
 class PreferMapLiteralCheckTest extends Test {
 
-	/** The critical case: an unannotated `var m = new Map()` is NOT pinned — `[]` infers `Array`, not `Map`, so rewriting it would miscompile. Reported, not fixed. */
+	/**
+	 * The critical case: an unannotated `var m = new Map()` is NOT pinned — `[]`
+	 * infers `Array`, not `Map`, so rewriting it would miscompile. Reported, not fixed.
+	 */
 	public inline function testGateRefusesUntypedLocal(): Void {
 		assertGateRefuses('class C { function f():Void { var m = new Map(); } }');
 	}
 
-	/** An unannotated local whose only type source is the constructor `<Int, Int>` is NOT pinned — `[]` drops the key/value types and infers Array. */
+	/**
+	 * An unannotated local whose only type source is the constructor `<Int,
+	 * Int>` is NOT pinned — `[]` drops the key/value types and infers Array.
+	 */
 	public inline function testGateRefusesUntypedTypeParam(): Void {
 		assertGateRefuses('class C { function f():Void { var m = new Map<Int, Int>(); } }');
 	}
@@ -82,7 +88,10 @@ class PreferMapLiteralCheckTest extends Test {
 		Assert.equals('[]', fixTextIndexed('class C { var m:Map<Int, String>; function f():Void { this.m = new Map(); } }'));
 	}
 
-	/** SOUNDNESS: a `this.<field>` Map assignment whose field is `Dynamic` must NOT become `[]`, even with an index threaded. Reported, no edit. */
+	/**
+	 * SOUNDNESS: a `this.<field>` Map assignment whose field is `Dynamic`
+	 * must NOT become `[]`, even with an index threaded. Reported, no edit.
+	 */
 	public function testGateRefusesDynamicThisTargetWithIndex(): Void {
 		final src: String = 'class C { var d:Dynamic; function f():Void { this.d = new Map(); } }';
 		Assert.equals(1, violations(src).length);

@@ -151,7 +151,8 @@ using StringTools;
  * `identKind` / `stringLiteralKinds` / `nullableWrapperTypeNames` (+ the optional
  * `TypeInfoProvider`) for the method-call shape; `identKind` + `optionalParamKind` +
  * the `TypeInfoProvider` also drive the identifier-read shape; `fieldAccessKind` +
- * `identKind` + the cross-file `SymbolIndex` drive the static-field-read shape. `staticMethodReturns` + `callKind` + `fieldAccessKind` + `identKind` (+ the cross-file `SymbolIndex`) drive the static-method-call shape.
+ * `identKind` + the cross-file `SymbolIndex` drive the static-field-read shape. `staticMethodReturns` + `callKind`
+ * + `fieldAccessKind` + `identKind` (+ the cross-file `SymbolIndex`) drive the static-method-call shape.
  * `indexAccessKind` + `indexedElementTypeParams` + `nullableIndexTypeNames` (+ the
  * `TypeInfoProvider`) drive the index-access shape.
  * `parenKind` peels the initializer's parentheses BEFORE any of them runs, so a

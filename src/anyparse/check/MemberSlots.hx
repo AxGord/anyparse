@@ -34,7 +34,10 @@ final class MemberSlots {
 		return b == null ? 0 : b.index;
 	}
 
-	/** A member's construct branch shape, `''` when it is in none - part of the block key, so only same-shaped constructs merge into one block. */
+	/**
+	 * A member's construct branch shape, `''` when it is in none - part of
+	 * the block key, so only same-shaped constructs merge into one block.
+	 */
 	public static inline function branchSignatureOf(m: OrderedMember): String {
 		final b: Null<BranchInfo> = m.branch;
 		return b == null ? '' : b.opens.join('\n');
@@ -342,7 +345,10 @@ final class MemberSlots {
 		return false;
 	}
 
-	/** Whether `out[firstIdx...]` is ONE flat, single-section branch set: no member under a nested conditional, none already branched, none whose rank crosses into another section. */
+	/**
+	 * Whether `out[firstIdx...]` is ONE flat, single-section branch set: no member under a
+	 * nested conditional, none already branched, none whose rank crosses into another section.
+	 */
 	private static function isFlatBranchSet(out: Array<OrderedMember>, firstIdx: Int, condition: Null<String>): Bool {
 		for (i in firstIdx ... out.length) if (out[i].branch != null || out[i].condition != condition) return false;
 		return true;

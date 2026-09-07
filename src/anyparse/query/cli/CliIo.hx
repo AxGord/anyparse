@@ -363,7 +363,8 @@ final class CliIo {
 	}
 
 	/**
-	 * Move a staged temporary onto its target, or report the file — never the temporary — as unwritable. The host message it quotes can still name the temporary; the path this CLI prints is the one the caller gave.
+	 * Move a staged temporary onto its target, or report the file — never the temporary — as unwritable. The
+	 * host message it quotes can still name the temporary; the path this CLI prints is the one the caller gave.
 	 */
 	private static function commitStagedWrite(pending: StagedWrite): Void {
 		try FileSystem.rename(pending.staged, pending.target) catch (exception: Exception) {

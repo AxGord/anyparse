@@ -130,7 +130,8 @@ class PreferSwitchExpressionAssignmentCheckTest extends Test {
 	}
 
 	/**
-	 * A field l-value (`obj.x = …`) is not the bare declared identifier, so the decl pair does not collapse; with no default the l-value arm does not fire either.
+	 * A field l-value (`obj.x = …`) is not the bare declared identifier, so the decl
+	 * pair does not collapse; with no default the l-value arm does not fire either.
 	 */
 	public function testFieldLvalueNotFlagged(): Void {
 		Assert.equals(
@@ -225,7 +226,8 @@ class PreferSwitchExpressionAssignmentCheckTest extends Test {
 	}
 
 	/**
-	 * A statement between the declaration and the switch breaks adjacency, so the decl pair does not collapse; with no default the l-value arm does not fire either.
+	 * A statement between the declaration and the switch breaks adjacency, so the decl
+	 * pair does not collapse; with no default the l-value arm does not fire either.
 	 */
 	public function testNonAdjacentNotFlagged(): Void {
 		Assert.equals(
@@ -378,7 +380,10 @@ class PreferSwitchExpressionAssignmentCheckTest extends Test {
 		Assert.isTrue(out.indexOf('controlsHolder.y = switch v {') != -1);
 	}
 
-	/** A plain-ident switch whose declaration is NOT adjacent (a statement between) is an l-value-arm match — the decl-pairing needs adjacency, the l-value arm does not. */
+	/**
+	 * A plain-ident switch whose declaration is NOT adjacent (a statement between) is
+	 * an l-value-arm match — the decl-pairing needs adjacency, the l-value arm does not.
+	 */
 	public function testLvalueNonAdjacentIdentFlagged(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(
 			wrap('var x:String = \'\';\n\t\ttrace(\'mid\');\n\t\tswitch v {\n\t\t\tcase 1: x = \'a\';\n\t\t\tcase _: x = \'d\';\n\t\t}')
@@ -419,7 +424,10 @@ class PreferSwitchExpressionAssignmentCheckTest extends Test {
 		Assert.equals(0, violations(wrap('switch v {\n\t\t\tcase A: if (c) x = 1; else y = 2;\n\t\t\tcase _: x = 0;\n\t\t}')).length);
 	}
 
-	/** The decl-pairing arm gains the same recursion: a nested `if` arm value collapses to `final x = switch … { case A: if (c) a else b; … };`. */
+	/**
+	 * The decl-pairing arm gains the same recursion: a nested `if` arm value
+	 * collapses to `final x = switch … { case A: if (c) a else b; … };`.
+	 */
 	public function testDeclArmNestedIfFixed(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(
 			wrap('var x:Int = 0;\n\t\tswitch v {\n\t\t\tcase A: if (c) x = 1; else x = 2;\n\t\t\tcase _: x = 3;\n\t\t}')

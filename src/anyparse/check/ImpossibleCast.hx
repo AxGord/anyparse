@@ -11,7 +11,8 @@ import anyparse.runtime.Span;
 /**
  * Flags a runtime-checked cast `cast(x, T)` that can NEVER succeed — `x`'s declared type
  * `S` and the target type `T` are two UNRELATED classes, so under Haxe single inheritance
- * no value of `S` is ever a `T`; the cast can never produce a usable `T` (it throws for any non-null value, yields `null` for a null one). `Severity.Warning`; report-only.
+ * no value of `S` is ever a `T`; the cast can never produce a usable `T` (it throws for
+ * any non-null value, yields `null` for a null one). `Severity.Warning`; report-only.
  *
  * ## The cast-sibling of `impossible-is-check`
  *

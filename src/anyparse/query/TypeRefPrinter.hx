@@ -800,7 +800,10 @@ final class TypeRefPrinter {
 			&& index.refs.declaringFiles(simple).exists(f -> f.pkg == pkg && ModuleScan.pathOfTypeIn(f, simple) != canonical);
 	}
 
-	/** The dotted path a type named `simple` declared in THIS module carries: `pkg.Module.simple`, reduced to `pkg.Module` when it IS the main type. */
+	/**
+	 * The dotted path a type named `simple` declared in THIS module carries:
+	 * `pkg.Module.simple`, reduced to `pkg.Module` when it IS the main type.
+	 */
 	private function moduleLocalPathOf(simple: String): Null<String> {
 		final module: Null<String> = _module;
 		if (module == null) return null;

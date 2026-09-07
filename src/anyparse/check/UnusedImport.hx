@@ -33,7 +33,8 @@ private typedef FileScan = { source: String, excluded: Array<Span>, commentRegio
  * An earlier version collected occurrences from the plugin's `parseFile` +
  * `parseFileTypeRefs` trees. That MISSED references the type projection does
  * not surface — a type nested in `Array<{ f: Array<Name> }>`, for one — and
- * `lint --fix` then deleted a needed import, breaking the build. A raw word-boundary scan catches every reference the compiler can see, at the cost of also
+ * `lint --fix` then deleted a needed import, breaking the build. A raw word-boundary
+ * scan catches every reference the compiler can see, at the cost of also
  * counting the name inside STRING literals. That trade is the right one for an autofix: err
  * toward a false NEGATIVE (a missed unused import) over a false POSITIVE (deleting a needed
  * one), and a string is where the trade earns its keep — `Type.resolveClass('Foo')` and the
@@ -313,7 +314,8 @@ final class UnusedImport implements Check {
 	}
 
 	/**
-	 * Is `name` referenced as a SIMPLE name anywhere in the file, outside its own import statements and outside its comments? The one liveness test every arm of the check asks — see
+	 * Is `name` referenced as a SIMPLE name anywhere in the file, outside its own import
+	 * statements and outside its comments? The one liveness test every arm of the check asks — see
 	 * `RefactorSupport.referencedUnqualifiedInRange` for why a dotted tail is not
 	 * a reference.
 	 */

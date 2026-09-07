@@ -164,7 +164,10 @@ final class NewLiteral {
 		return span != null && source.substring(span.from, span.to).rtrim().endsWith('()');
 	}
 
-	/** Index every `new` node by its `from:to` span key and record its parent (for `fix` to re-find a flagged node and gate on its enclosing declaration). */
+	/**
+	 * Index every `new` node by its `from:to` span key and record its parent (for
+	 * `fix` to re-find a flagged node and gate on its enclosing declaration).
+	 */
 	private static function index(
 		node: QueryNode, parent: Null<QueryNode>, newExprKind: String, nodeByKey: Map<String, QueryNode>,
 		parentByKey: Map<String, QueryNode>

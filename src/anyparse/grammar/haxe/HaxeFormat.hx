@@ -226,7 +226,8 @@ final class HaxeFormat implements TextFormat {
 	 * `caseBody` corresponds to
 	 * haxe-formatter's `sameLine.caseBody: @:default(Next)`;
 	 * `expressionCase` to `sameLine.expressionCase: @:default(Same)`.
-	 * We pick `Keep` over upstream's `Same` to avoid a `;`-cascade regression — Keep gates on source same-line-ness so multi-line source bodies
+	 * We pick `Keep` over upstream's `Same` to avoid a `;`-cascade regression
+	 * — Keep gates on source same-line-ness so multi-line source bodies
 	 * keep their VarStmt `@:trailOpt(';')` cascade behaviour.
 	 *
 	 * `tryBody` (ω-tryBody) defaults to `Next` — matches upstream

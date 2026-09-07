@@ -730,7 +730,8 @@ final class DocMeasure {
 	 * Tri-state right-to-left walker behind `endsWithForcedCloseLine` and
 	 * `breakTailCloseNest`: `TailCloses` while only close delimiters and
 	 * whitespace have been seen, `TailBreak` once a forced hardline is reached
-	 * with such a tail, `TailOther` as soon as substantive content appears. What a non-null `out` records is the accumulated `Nest` depth AT the hardline
+	 * with such a tail, `TailOther` as soon as substantive content appears. What
+	 * a non-null `out` records is the accumulated `Nest` depth AT the hardline
 	 * that opened the closing line, plus whether the LEFTMOST of that line's
 	 * closers is a brace. Passing `null` skips both and keeps the walk
 	 * allocation-free. The depth is what fixes the line's indent — which is what fixes that line's indent, so

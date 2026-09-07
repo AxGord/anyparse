@@ -7,7 +7,8 @@ package unit.check;
  * resolves to `String`, `Null<String>` included), a plain identifier read whose
  * binding — local, parameter or own-class field — carries a written type, copied
  * VERBATIM so `Null<…>` is preserved, a cross-class `Type.staticField` read whose
- * field's builtin (always-in-scope) written type is recovered from the cross-file `SymbolIndex`, `Null<…>` preserved, and a tabled `Type.staticMethod()` call.
+ * field's builtin (always-in-scope) written type is recovered from the cross-file
+ * `SymbolIndex`, `Null<…>` preserved, and a tabled `Type.staticMethod()` call.
  *
  * Every inference-resolved shape stays report-only: a generic `.map()`, an
  * unresolved / non-String receiver, an untabled method, an identifier whose binding

@@ -15,7 +15,9 @@ import sys.FileSystem;
 #end
 
 /**
- * Parsed options for `apq new` — `lang`, the `kind` of declaration to scaffold and its shape (`asClass` / `iface` / `underlying` / `extendsList` / `fields` / bodies), the target `path`, and `write` / `open` flags. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ * Parsed options for `apq new` — `lang`, the `kind` of declaration to scaffold and its shape (`asClass`
+ * / `iface` / `underlying` / `extendsList` / `fields` / bodies), the target `path`, and `write` /
+ * `open` flags. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
  */
 @:nullSafety(Strict)
 typedef NewOpts = {

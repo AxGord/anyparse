@@ -46,7 +46,9 @@ using StringTools;
  *
  * ## Grammar-agnostic
  *
- * Type bodies are the plugin's `RefShape.visibilityContainerKinds` — for Haxe the class-like declarations (class / abstract class / abstract); an interface, enum, enum abstract or typedef is deliberately out of scope (a grammar-sized enum is a definition table, not a decomposition candidate). A grammar that declares no containers or no member kinds makes the check a no-op. The
+ * Type bodies are the plugin's `RefShape.visibilityContainerKinds` — for Haxe the class-like declarations (class / abstract class
+ * / abstract); an interface, enum, enum abstract or typedef is deliberately out of scope (a grammar-sized enum is a definition
+ * table, not a decomposition candidate). A grammar that declares no containers or no member kinds makes the check a no-op. The
  * thresholds are the built-in defaults unless a discovered `apqlint.json`
  * configures `maxMembers` / `maxLines` on the `oversized-type` rule.
  */
@@ -221,7 +223,11 @@ final class OversizedType implements Check implements ConfigAware implements Vol
 	}
 
 	/**
-	 * Append ONE `Warning` naming every exceeded threshold when `type` is over either limit. The reported span is the type's HEADER LINE only, NOT the whole body: inline suppression clears a finding whose span covers the `// noqa` line, so a whole-body span would let any unrelated bare `// noqa` deep inside the type silently swallow the type-level finding — and the god-files this check targets are exactly the ones that accumulate those. Suppressing this rule is deliberate: `// noqa: oversized-type` on the header line. Bails (no finding) when the node has no span.
+	 * Append ONE `Warning` naming every exceeded threshold when `type` is over either limit. The reported span is the
+	 * type's HEADER LINE only, NOT the whole body: inline suppression clears a finding whose span covers the `// noqa`
+	 * line, so a whole-body span would let any unrelated bare `// noqa` deep inside the type silently swallow the
+	 * type-level finding — and the god-files this check targets are exactly the ones that accumulate those. Suppressing
+	 * this rule is deliberate: `// noqa: oversized-type` on the header line. Bails (no finding) when the node has no span.
 	 */
 	private static function checkType(out: Array<Violation>, file: String, source: String, type: QueryNode, cfg: OversizedCfg): Void {
 		final span: Null<Span> = type.span;
@@ -303,9 +309,13 @@ final class OversizedType implements Check implements ConfigAware implements Vol
 	}
 
 	/**
-	 * The NAMES of the member declarations among `parent`'s children, in document order, recursing into `#if` conditional-compilation blocks so guarded members count too — an `#if` and its `#else` branches ALL count (a source-size metric measures what is written, not one compiled configuration). Modifier siblings (visibility / static runs preceding a member) are separate nodes whose kinds are not in `memberKinds`, so they are never counted.
+	 * The NAMES of the member declarations among `parent`'s children, in document order, recursing into `#if`
+	 * conditional-compilation blocks so guarded members count too — an `#if` and its `#else` branches ALL count (a
+	 * source-size metric measures what is written, not one compiled configuration). Modifier siblings (visibility /
+	 * static runs preceding a member) are separate nodes whose kinds are not in `memberKinds`, so they are never counted.
 	 *
-	 * The LENGTH is the member metric; the names themselves feed the interface carve-out. A nameless member projects as the empty string, which no interface can declare, so it counts toward the total and never toward the dictated share.
+	 * The LENGTH is the member metric; the names themselves feed the interface carve-out. A nameless member projects as
+	 * the empty string, which no interface can declare, so it counts toward the total and never toward the dictated share.
 	 */
 	private static function memberNames(parent: QueryNode, cfg: OversizedCfg): Array<String> {
 		final names: Array<String> = [];

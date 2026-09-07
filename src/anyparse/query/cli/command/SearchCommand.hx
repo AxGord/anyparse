@@ -12,7 +12,8 @@ using StringTools;
 using Lambda;
 
 /**
- * Parsed options for `apq search` — `lang`, `json`, the `kind` filter, `explain`, `flat`, `limit`, the structural `pattern`, and `inputSpecs`. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ * Parsed options for `apq search` — `lang`, `json`, the `kind` filter, `explain`, `flat`, `limit`, the structural
+ * `pattern`, and `inputSpecs`. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
  */
 @:nullSafety(Strict)
 typedef SearchOpts = {

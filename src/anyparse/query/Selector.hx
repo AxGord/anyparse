@@ -100,7 +100,8 @@ final class Selector {
 }
 
 /**
- * One segment of a parsed `--select` path: the node `kind` to match, an optional `name` filter, and `descendant` (`A > B` direct child vs `A >> B` any-depth). A selector is the ordered list of these segments.
+ * One segment of a parsed `--select` path: the node `kind` to match, an optional `name` filter, and
+ * `descendant` (`A > B` direct child vs `A >> B` any-depth). A selector is the ordered list of these segments.
  */
 @:nullSafety(Strict)
 final class SelectorSegment {

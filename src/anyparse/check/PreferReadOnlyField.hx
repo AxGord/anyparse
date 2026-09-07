@@ -71,7 +71,8 @@ using StringTools;
  * field whose only other write is one `if (p != null) x = p;` constructor statement
  * is that check's as well — its conditional-default arm folds the default into the
  * constructor — and is ceded through `RefactorSupport.ctorConditionalDefaultFinalEdits`
- * for the same reason. The two checks therefore never emit conflicting fixes for the same field — and both cessions are conditional on that check actually claiming the candidate, since the two chains no longer agree on the structural gate. NOTE: the cession is
+ * for the same reason. The two checks therefore never emit conflicting fixes for the same field — and both cessions are conditional
+ * on that check actually claiming the candidate, since the two chains no longer agree on the structural gate. NOTE: the cession is
  * unconditional — it does not check whether `prefer-final-public-field` is enabled,
  * so a config that disables that rule silently drops these findings instead of
  * reporting `(default, null)` for them.

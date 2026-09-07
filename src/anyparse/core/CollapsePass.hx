@@ -694,7 +694,9 @@ final class CollapsePass {
 	/**
 	 * ω-methodchain-reeval-after-callparam — the dot-break continuation BASE
 	 * indent captured by the renderer's measure pass: the sister decision
-	 * entry keyed by the probe marker itself with `crosses == false` (`capturedIndent` demands `crosses`, so the two probe-keyed entries never collide; the inner `IfFullLineExceeds` keeps its own entry unmasked for `opens()`) carries the FRAME indent the dot-break shape's `Nest` is
+	 * entry keyed by the probe marker itself with `crosses == false` (`capturedIndent` demands
+	 * `crosses`, so the two probe-keyed entries never collide; the inner `IfFullLineExceeds` keeps
+	 * its own entry unmasked for `opens()`) carries the FRAME indent the dot-break shape's `Nest` is
 	 * relative to. The marker's own `capturedIndent` is the VISUAL column of
 	 * a possibly mid-line chain start — an over-estimate of the continuation
 	 * base. Null when the probe never rendered through the measure pass.
@@ -1078,9 +1080,11 @@ final class CollapsePass {
 	}
 
 	/**
-	 * Find a callParameter args wrap inside `d` whose break branch LEADING-BREAKS the argument onto its own line, returning that break branch (null when absent) — the glue-shape
+	 * Find a callParameter args wrap inside `d` whose break branch LEADING-BREAKS the argument
+	 * onto its own line, returning that break branch (null when absent) — the glue-shape
 	 * `Group(IfBreak(brk, flat))` form or its dot-break-shape rest-aware
-	 * `IfLineExceeds(w, brk, flat)` swap. Only the segment Concat\x27s top-level items are probed (see `argsWrapBrk`); the wrap branches themselves are not descended.
+	 * `IfLineExceeds(w, brk, flat)` swap. Only the segment Concat\x27s top-level items
+	 * are probed (see `argsWrapBrk`); the wrap branches themselves are not descended.
 	 */
 	private static function findLeadingBreakArgsBrk(d: Doc): Null<Doc> {
 		return switch d {

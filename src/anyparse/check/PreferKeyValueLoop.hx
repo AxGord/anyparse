@@ -12,13 +12,21 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
 
 /**
- * Flags an INDEXED `for` that only wanted the element — `for (i in 0...X.length)` whose body OPENS with `final v = X[i];` — which Haxe's key-value iteration writes directly: `for (i => v in X)`, with that first statement gone. `Severity.Info`, paired with an autofix. DEFAULT OFF (`DefaultOff`): the two spellings are equivalent, so which one a project wants is a style choice — opt in with `"prefer-keyvalue-loop": { "enabled": true }`.
+ * Flags an INDEXED `for` that only wanted the element — `for (i in 0...X.length)` whose body OPENS with `final
+ * v = X[i];` — which Haxe's key-value iteration writes directly: `for (i => v in X)`, with that first statement
+ * gone. `Severity.Info`, paired with an autofix. DEFAULT OFF (`DefaultOff`): the two spellings are equivalent,
+ * so which one a project wants is a style choice — opt in with `"prefer-keyvalue-loop": { "enabled": true }`.
  *
- * The index stays BOUND, which is what makes the rewrite worth having over `for (v in X)`: an inner `for (j in i + 1...X.length)`, an `i`-keyed lookup elsewhere in the body, a `trace(i)` — all keep working untouched. A body that never reads `i` again is still rewritten to the key-value form (the transform this rule is specified as); collapsing THAT case to `for (v in X)` is a different rewrite and is deliberately out of scope.
+ * The index stays BOUND, which is what makes the rewrite worth having over `for (v in X)`: an inner `for (j in
+ * i + 1...X.length)`, an `i`-keyed lookup elsewhere in the body, a `trace(i)` — all keep working untouched. A
+ * body that never reads `i` again is still rewritten to the key-value form (the transform this rule is
+ * specified as); collapsing THAT case to `for (v in X)` is a different rewrite and is deliberately out of scope.
  *
  * ## The shape it accepts
  *
- * A `for` whose iterable is exactly `0...X.length` for a bare identifier `X`, whose body is a braced block of at least two statements, and whose FIRST statement is a single-variable local declaration (`var` or `final`, with or without a type annotation) initialised by exactly `X[i]`.
+ * A `for` whose iterable is exactly `0...X.length` for a bare identifier `X`, whose body is a
+ * braced block of at least two statements, and whose FIRST statement is a single-variable local
+ * declaration (`var` or `final`, with or without a type annotation) initialised by exactly `X[i]`.
  *
  * ## Soundness gates (all required for a flag)
  *
@@ -32,11 +40,17 @@ import anyparse.runtime.Span;
  *
  * ## Rewrite gate (report-only when it fails)
  *
- * A container that RESOLVES to something other than `Array` is not reported at all — the message names a form that would not compile for it. An UNRESOLVED `X` (unannotated, a path, a plugin without `TypeInfoProvider`) still reports, and there the FIX additionally needs the element type provable, because it DROPS the declaration and with it any `:Type` annotation: `X`'s binding must be declared `Array<E>` and the annotation — when the declaration carries one — must be exactly `E`. A widening annotation, or a comment anywhere in the replaced region (through the end of the declaration's line, so a trailing comment cannot silently migrate onto the loop header), leaves the finding report-only.
+ * A container that RESOLVES to something other than `Array` is not reported at all — the message names a form that would
+ * not compile for it. An UNRESOLVED `X` (unannotated, a path, a plugin without `TypeInfoProvider`) still reports, and
+ * there the FIX additionally needs the element type provable, because it DROPS the declaration and with it any `:Type`
+ * annotation: `X`'s binding must be declared `Array<E>` and the annotation — when the declaration carries one — must be
+ * exactly `E`. A widening annotation, or a comment anywhere in the replaced region (through the end of the declaration's
+ * line, so a trailing comment cannot silently migrate onto the loop header), leaves the finding report-only.
  *
  * ## Grammar-agnostic
  *
- * Driven by `LoopScan.seamsOf` plus `RefShape.intervalKind`; any unset kind makes the check a no-op. The `length` member name is the one language-specific token, spelled as a constant the way the other member-name-matching checks spell theirs.
+ * Driven by `LoopScan.seamsOf` plus `RefShape.intervalKind`; any unset kind makes the check a no-op. The `length` member
+ * name is the one language-specific token, spelled as a constant the way the other member-name-matching checks spell theirs.
  */
 @:nullSafety(Strict)
 final class PreferKeyValueLoop implements Check implements DefaultOff {

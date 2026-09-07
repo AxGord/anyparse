@@ -13,7 +13,9 @@ import anyparse.query.ExitCode.*;
 using StringTools;
 
 /**
- * Parsed options for `apq move` — `lang`, `write`, the `scope` to search, the source address (`posSpec` / `selectExpr` / `matchExpr` / `nth`), and the `destFile`. `errExit` non-null means arg parsing hit a terminal case (incl. missing --scope / address) the caller returns immediately.
+ * Parsed options for `apq move` — `lang`, `write`, the `scope` to search, the source address
+ * (`posSpec` / `selectExpr` / `matchExpr` / `nth`), and the `destFile`. `errExit` non-null means
+ * arg parsing hit a terminal case (incl. missing --scope / address) the caller returns immediately.
  */
 @:nullSafety(Strict)
 typedef MoveOpts = {

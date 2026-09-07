@@ -500,7 +500,8 @@ final class PreferRangeLoop implements Check {
 }
 
 /**
- * The `RefShape` kinds `PreferRangeLoop` reads (plus the shape itself for binding resolution), bundled once so the walkers take one argument.
+ * The `RefShape` kinds `PreferRangeLoop` reads (plus the shape itself
+ * for binding resolution), bundled once so the walkers take one argument.
  */
 private typedef Seams = {
 	var shape: RefShape;

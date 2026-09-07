@@ -97,7 +97,10 @@ class PreferIfExpressionChainCheckTest extends Test {
 		Assert.equals('if (a.nodeName < b.nodeName) -1 else if (a.nodeName > b.nodeName) 1 else 0', es[0].text);
 	}
 
-	/** A 2-branch ternary IS the canon — one condition is below the minimum, and this is the whole disjointness proof against `prefer-ternary-expression`. */
+	/**
+	 * A 2-branch ternary IS the canon — one condition is below the minimum, and
+	 * this is the whole disjointness proof against `prefer-ternary-expression`.
+	 */
 	public function testTwoBranchTernaryNotFlagged(): Void {
 		Assert.equals(0, violations('class C {\n\tfunction f():Int {\n\t\treturn a ? 1 : 2;\n\t}\n}').length);
 	}
@@ -269,7 +272,10 @@ class PreferIfExpressionChainCheckTest extends Test {
 		Assert.equals('if (a < b) // why\n1 else if (c) 2 else 3', es[0].text);
 	}
 
-	/** A comment at the end of a RUNG VALUE's own line rides that value; the `:` it sat after is dropped, and the ` else ` moves to the next line. */
+	/**
+	 * A comment at the end of a RUNG VALUE's own line rides that value; the
+	 * `:` it sat after is dropped, and the ` else ` moves to the next line.
+	 */
 	public function testTrailingLineCommentOnRungValueCarried(): Void {
 		final es: Array<{ span: Span, text: String }> =
 			edits('class C {\n\tfunction f():Int {\n\t\treturn a ? 1 // one\n\t\t\t: b ? 2 : 3;\n\t}\n}');
@@ -491,7 +497,10 @@ class PreferIfExpressionChainCheckTest extends Test {
 		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tg(() -> a ? b ? p() : if (q) s() : r());\n\t}\n}').length);
 	}
 
-	/** The chain's terminal MOVES into a rung value, where the emitted ` else ` follows it — so an else-less conditional there is refused too. */
+	/**
+	 * The chain's terminal MOVES into a rung value, where the emitted `
+	 * else ` follows it — so an else-less conditional there is refused too.
+	 */
 	public function testElseLessMovedTerminalNotFlagged(): Void {
 		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tg(() -> a ? b ? p() : r() : if (q) s());\n\t}\n}').length);
 	}

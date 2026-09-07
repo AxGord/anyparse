@@ -25,7 +25,10 @@ using Lambda;
 @:nullSafety(Strict)
 final class ModuleScan {
 
-	/** The import / using declaration kinds a grammar projects at the top level — the anchor set for an insert and for the bound-name scan. */
+	/**
+	 * The import / using declaration kinds a grammar projects at the top
+	 * level — the anchor set for an insert and for the bound-name scan.
+	 */
 	public static final IMPORT_DECL_KINDS: Array<String> = [
 		'ImportDecl',
 		'UsingDecl',
@@ -410,7 +413,10 @@ final class ModuleScan {
 		return decl != null && decl.isMain ? file.module : '${file.module}.$name';
 	}
 
-	/** Whether the file's own top level declares a type named `name` — a same-module type, visible with no import. `final class` wrappers normalised via `RefactorSupport.typeDeclOf`. */
+	/**
+	 * Whether the file's own top level declares a type named `name` — a same-module type,
+	 * visible with no import. `final class` wrappers normalised via `RefactorSupport.typeDeclOf`.
+	 */
 	private static function declaresTypeNamed(root: QueryNode, name: String): Bool {
 		for (c in root.children) {
 			final decl: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(c);
@@ -435,7 +441,10 @@ final class ModuleScan {
 		return out;
 	}
 
-	/** `text` with every `//` line comment and `/* … *\/` block comment replaced by a space, so a lexical scan cannot read comment content as code. */
+	/**
+	 * `text` with every `//` line comment and `/* … *\/` block comment replaced
+	 * by a space, so a lexical scan cannot read comment content as code.
+	 */
 	private static function stripComments(text: String): String {
 		final buf: StringBuf = new StringBuf();
 		final n: Int = text.length;

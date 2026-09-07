@@ -145,7 +145,10 @@ final class DynamicBag {
 		return fs == null || isProperty(source, fs, span) || isPublicMember(tree, field, ctx) ? null : field;
 	}
 
-	/** Whether the member `field` (span `fs`, Dynamic token at `dynSpan`) is a property — a `(` accessor clause between the name and the type `:`. */
+	/**
+	 * Whether the member `field` (span `fs`, Dynamic token at `dynSpan`) is
+	 * a property — a `(` accessor clause between the name and the type `:`.
+	 */
 	private static function isProperty(source: String, fs: Span, dynSpan: Span): Bool {
 		var i: Int = fs.from;
 		while (i < dynSpan.from && i < source.length) {
@@ -419,7 +422,10 @@ final class DynamicBag {
 		};
 	}
 
-	/** Whether the innermost function containing `declFrom` has an explicit `Dynamic` return type — a bag returned there flows out as Dynamic (safe). */
+	/**
+	 * Whether the innermost function containing `declFrom` has an explicit
+	 * `Dynamic` return type — a bag returned there flows out as Dynamic (safe).
+	 */
 	@:access(anyparse.check.AvoidDynamic)
 	private static function enclosingFnReturnsDynamic(
 		tree: QueryNode, declFrom: Int, shape: RefShape, ctx: DynCtx, source: String, dynName: String

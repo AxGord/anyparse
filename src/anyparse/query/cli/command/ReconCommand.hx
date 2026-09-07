@@ -50,7 +50,9 @@ typedef ReconWalkResult = {
 };
 
 /**
- * Parsed options for `apq recon` — `lang`, `topN`, the probe / cluster filters, and the family of analysis-mode flags (`predictStrip` / `regressionProbe` / `predictRelax` / `permissiveConstruct` / writer-equals). `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ * Parsed options for `apq recon` — `lang`, `topN`, the probe / cluster filters, and the family of
+ * analysis-mode flags (`predictStrip` / `regressionProbe` / `predictRelax` / `permissiveConstruct` /
+ * writer-equals). `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
  */
 @:nullSafety(Strict)
 typedef ReconOpts = {

@@ -17,7 +17,8 @@ import utest.Test;
  * `implements Declarator`, so the class itself carries no metadata — strips the initializer off
  * every non-inline `var` field and moves the assignment into the constructor. `var` -> `final`
  * then gives `Static final variable must be initialized`, and a field promoted to `static` gives
- * `Cannot access static field from a class instance`, raised from inside the builder. Ten fields in one file of the reporting tree, 25 types overall.
+ * `Cannot access static field from a class instance`, raised from inside the
+ * builder. Ten fields in one file of the reporting tree, 25 types overall.
  *
  * Which rules take the gate was itself a gap. `inline-constant` and `trivial-getter` consulted NO
  * build-macro predicate — not `@:build`, not `@:autoBuild`, not `@:genericBuild` — while the four

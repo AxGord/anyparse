@@ -364,7 +364,10 @@ final class AssignmentTreeHoist {
 	}
 
 
-	/** Whether any branch / terminal of `chain` is a nested switch / if construct (not a plain-assign leaf) -- the if-rule's 2-branch disjointness gate. */
+	/**
+	 * Whether any branch / terminal of `chain` is a nested switch / if construct
+	 * (not a plain-assign leaf) -- the if-rule's 2-branch disjointness gate.
+	 */
 	public static function chainHasConstruct(chain: IfChain, s: TreeSeams): Bool {
 		for (b in chain.branches) if (isConstruct(b.stmt, s)) return true;
 		return isConstruct(chain.terminal, s);
@@ -625,7 +628,10 @@ typedef UnitValue = {
 	var leafCount: Int;
 }
 
-/** A switch's collected arms: the ` case h: v;…` text, the kept spans, whether a source default exists, the leaf count, and the subject node. */
+/**
+ * A switch's collected arms: the ` case h: v;…` text, the kept spans,
+ * whether a source default exists, the leaf count, and the subject node.
+ */
 typedef SwitchArms = {
 	var armsText: String;
 	var kept: Array<Span>;

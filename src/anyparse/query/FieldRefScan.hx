@@ -103,7 +103,8 @@ final class FieldRefScan {
 	}
 
 	/**
-	 * The field name a node references as a bare `IdentExpr <name>`, a simple `$<name>` string-interpolation `Ident`, or a `this.<name>` `FieldAccess`, else null.
+	 * The field name a node references as a bare `IdentExpr <name>`, a simple `$<name>`
+	 * string-interpolation `Ident`, or a `this.<name>` `FieldAccess`, else null.
 	 */
 	public static function fieldRefName(node: QueryNode): Null<String> {
 		return switch node.kind {

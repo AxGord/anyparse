@@ -14,7 +14,10 @@ import utest.Test;
  * including the last one (`typedef R = { > A, > B, }` — dropping the
  * final `,` is a compile error `Expected ,`). Before this slice the
  * trivia writer normalised the trailing separator away, so a format
- * round-trip produced invalid Haxe (caught live on the dogfood corpus: extension-only typedefs broke under `apq fmt`). PLAIN mode (`HaxeModuleParser` / `HxModuleWriter`) is knowingly out of scope: the `<field>TrailPresent` slot exists only on the trivia pair, so the plain writer still emits `{> A, > B}` without the mandatory comma; `apq fmt` and every writer-emit op run the trivia pipeline, which is what this slice fixes.
+ * round-trip produced invalid Haxe (caught live on the dogfood corpus: extension-only typedefs broke under `apq
+ * fmt`). PLAIN mode (`HaxeModuleParser` / `HxModuleWriter`) is knowingly out of scope: the `<field>TrailPresent`
+ * slot exists only on the trivia pair, so the plain writer still emits `{> A, > B}` without the mandatory comma;
+ * `apq fmt` and every writer-emit op run the trivia pipeline, which is what this slice fixes.
  */
 @:nullSafety(Strict)
 final class HxAnonTypeSourceTrailCommaSliceTest extends Test {

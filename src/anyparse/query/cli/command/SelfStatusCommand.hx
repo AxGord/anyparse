@@ -10,7 +10,8 @@ import anyparse.query.ExitCode.*;
 using StringTools;
 
 /**
- * Corpus-walk tallies for `apq self-status`: how many project files `parseable`, how many `skipParse`, and the `skipLines` describing each skipped file. Rolled up into the self-status report.
+ * Corpus-walk tallies for `apq self-status`: how many project files `parseable`, how many `skipParse`,
+ * and the `skipLines` describing each skipped file. Rolled up into the self-status report.
  */
 typedef SelfStatusWalk = {
 	var parseable: Int;
@@ -19,7 +20,8 @@ typedef SelfStatusWalk = {
 };
 
 /**
- * Parsed options for `apq self-status` — `lang`, the `roots` (file / dir / glob specs) to walk, and `strict` / `showSource` flags. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ * Parsed options for `apq self-status` — `lang`, the `roots` (file / dir / glob specs) to walk, and `strict` /
+ * `showSource` flags. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
  */
 typedef SelfStatusOpts = {
 	var lang: String;

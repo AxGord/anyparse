@@ -399,11 +399,18 @@ final class TailMerge implements Check {
 	}
 
 	/**
-	 * Whether `stmts` holds a variable declaration whose bound names `localDeclNames` cannot fully enumerate. Such a statement makes the shadowing gate blind, so its mere presence refuses the candidate.
+	 * Whether `stmts` holds a variable declaration whose bound names `localDeclNames` cannot fully
+	 * enumerate. Such a statement makes the shadowing gate blind, so its mere presence refuses the candidate.
 	 *
-	 * A MULTI-DECLARATOR (`var a = 1, t = 2;`) is no longer one of them: every binding after the first surfaces as its own continuation node (`RefShape.localDeclContinuationKinds`) and `localDeclNames` walks the chain, so the precise shadowing gate decides it. The arms below stay as the fail-closed net for a declaration whose span or head initializer the projection does not resolve — and the comma scan still catches a form no continuation node covers.
+	 * A MULTI-DECLARATOR (`var a = 1, t = 2;`) is no longer one of them: every binding after the first surfaces as its
+	 * own continuation node (`RefShape.localDeclContinuationKinds`) and `localDeclNames` walks the chain, so the precise
+	 * shadowing gate decides it. The arms below stay as the fail-closed net for a declaration whose span or head
+	 * initializer the projection does not resolve — and the comma scan still catches a form no continuation node covers.
 	 *
-	 * The projection children are the INITIALIZERS, one per initialized declarator (a type annotation is NOT a child). The remaining shapes declare without initializing and are found as a declarator-separating comma in the text outside the initializers — at bracket depth 0, so a generic type parameter list (`var m:Map<String, Int> = …`) does not count. That text holds no expression, which is what makes counting `<` / `>` as brackets safe there.
+	 * The projection children are the INITIALIZERS, one per initialized declarator (a type annotation is NOT a child).
+	 * The remaining shapes declare without initializing and are found as a declarator-separating comma in the text
+	 * outside the initializers — at bracket depth 0, so a generic type parameter list (`var m:Map<String, Int> = …`)
+	 * does not count. That text holds no expression, which is what makes counting `<` / `>` as brackets safe there.
 	 */
 	private static function hasOpaqueDecl(stmts: Array<QueryNode>, source: String, seams: Seams): Bool {
 		for (c in stmts) {

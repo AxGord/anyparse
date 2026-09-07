@@ -610,7 +610,10 @@ final class GuardContinue implements Check {
 				|| code == '_'.code);
 	}
 
-	/** Whether a comment sits in the dropped `if (` or `) {` glue (a comment in the condition or the then-body is preserved and does NOT refuse). */
+	/**
+	 * Whether a comment sits in the dropped `if (` or `) {` glue (a comment
+	 * in the condition or the then-body is preserved and does NOT refuse).
+	 */
 	private static function headerHasComment(source: String, ifNode: QueryNode, cond: QueryNode, thenBlock: QueryNode): Bool {
 		final ifSpan: Null<Span> = ifNode.span;
 		final condSpan: Null<Span> = cond.span;

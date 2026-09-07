@@ -43,7 +43,10 @@ class PreferLambdaExpressionBodyCheckTest extends Test {
 		Assert.equals('v + 1', es[0].text);
 	}
 
-	/** The Void twin: a block holding one bare expression. A Haxe block's value IS its last expression, so the collapse is type-preserving. */
+	/**
+	 * The Void twin: a block holding one bare expression. A Haxe block's
+	 * value IS its last expression, so the collapse is type-preserving.
+	 */
 	public function testFixExpressionStatementBody(): Void {
 		final es: Array<{ span: Span, text: String }> = edits('class C {\n\tfunction f():Void {\n\t\tg(v -> { trace(v); });\n\t}\n}');
 		Assert.equals(1, es.length);

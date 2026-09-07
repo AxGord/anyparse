@@ -204,7 +204,8 @@ class CrossRenameMemberSliceTest extends Test {
 	/**
 	 * The MODULE-RELATIVE spelling of a sub-module type — `Mod.Sub`, legal wherever the module is
 	 * in simple-name scope — is a third spelling beside the bare and the root-relative one, and
-	 * it resolves only FROM the reading file (`TypeRefIndex.moduleRelativeRefAll`). Annotation and `new` forms both rename. The visibility rule is the MODULE's, not a bare type
+	 * it resolves only FROM the reading file (`TypeRefIndex.moduleRelativeRefAll`). Annotation
+	 * and `new` forms both rename. The visibility rule is the MODULE's, not a bare type
 	 * name's, and it is narrower: compiled on 4.3.7, `import pkg.*;` reaches `Mod.Sub` while
 	 * `import pkg.Mod;` does NOT (`Type not found : Mod`). Both arms are asserted here, alongside
 	 * the root-relative `other.Mod.Sub` of another package, which resolves to nothing.
@@ -865,7 +866,8 @@ class CrossRenameMemberSliceTest extends Test {
 	/**
 	 * A MODULE-level VALUE binding of the name shadows the expected type — measured on Haxe 4.3.7, a
 	 * module-level `var SAME:Colour` wins over `function pick():Colour return SAME;` both from a
-	 * module function and from a class method in the same file, and `Refs` binds neither read. The whole FILE is refused, in all five spellings the gate has to reach: a plain `var`; a `#if`-
+	 * module function and from a class method in the same file, and `Refs` binds neither read. The
+	 * whole FILE is refused, in all five spellings the gate has to reach: a plain `var`; a `#if`-
 	 * GUARDED one, which is a child of the REGION rather than of the module; a `final`, which is a
 	 * child of the `final` keyword's own dispatch node (`FinalDecl(VarForm …)`) and slipped the gate
 	 * entirely while the descent keyed on the region kind alone — the rewrite then retargeted a read

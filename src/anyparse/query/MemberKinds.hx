@@ -165,7 +165,10 @@ final class MemberKinds {
 		'Overload'
 	]);
 
-	/** The grammar kind a block-level `#if … #end` region projects as - the host of a conditional-modifier prefix (`isConditionalModifierRegion`). */
+	/**
+	 * The grammar kind a block-level `#if … #end` region projects as - the
+	 * host of a conditional-modifier prefix (`isConditionalModifierRegion`).
+	 */
 	public static final CONDITIONAL_REGION_KIND: String = 'Conditional';
 
 	/**

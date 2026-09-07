@@ -162,7 +162,8 @@ final class PossibleNullDereference implements Check {
 }
 
 /**
- * Resolved constants threaded through the recursive walk — per-run except `guarded`, the per-FILE set of exists-guarded map-read span keys `existsGuardedReads` collects.
+ * Resolved constants threaded through the recursive walk — per-run except `guarded`,
+ * the per-FILE set of exists-guarded map-read span keys `existsGuardedReads` collects.
  */
 private typedef Ctx = {
 	var derefKinds: Array<String>;

@@ -14,7 +14,8 @@ using StringTools;
 using Lambda;
 
 /**
- * Parsed options for `apq meta` — `lang`, `json`, the `argContains` / `onKind` filters, `flat`, `limit`, and input `positionals`. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ * Parsed options for `apq meta` — `lang`, `json`, the `argContains` / `onKind` filters, `flat`, `limit`, and
+ * input `positionals`. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
  */
 @:nullSafety(Strict)
 typedef MetaOpts = {

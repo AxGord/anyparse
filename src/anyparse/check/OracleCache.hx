@@ -149,7 +149,10 @@ final class OracleCache {
 	/** The scheme tag in every manifest: bump it and every stored record misses, which is the point. */
 	private static final FORMAT_TAG: String = 'apq-oracle-cache v1';
 
-	/** Per-process memo of the compiler probe, keyed by compile root + library set — it depends on the toolchain, never on the tree under lint. */
+	/**
+	 * Per-process memo of the compiler probe, keyed by compile root + library
+	 * set — it depends on the toolchain, never on the tree under lint.
+	 */
 	private static final probeMemo: Map<String, CompilerProbe> = [];
 
 	/** Per-process memo of a directory's `.hx` content hashes, populated ONLY for the compiler's own installation dirs — see `mergeDir`. */
@@ -378,7 +381,10 @@ final class OracleCache {
 		return { lines: lines, classPaths: classPaths, libs: libs };
 	}
 
-	/** Fold one hxml's refs into the chain's accumulators, absolutising paths against the compile root and deduping — the queue's dedupe is also the include-cycle guard. */
+	/**
+	 * Fold one hxml's refs into the chain's accumulators, absolutising paths against the
+	 * compile root and deduping — the queue's dedupe is also the include-cycle guard.
+	 */
 	private static function mergeRefs(
 		root: String, refs: HxmlRefs, queue: Array<String>, classPaths: Array<String>, libs: Array<String>
 	): Void {
@@ -393,7 +399,10 @@ final class OracleCache {
 		}
 	}
 
-	/** The manifest the fingerprint hashes: the tag, the compiler's defines, the hxml chain, then every reachable `.hx` file by path and content hash, sorted by path. */
+	/**
+	 * The manifest the fingerprint hashes: the tag, the compiler's defines, the hxml
+	 * chain, then every reachable `.hx` file by path and content hash, sorted by path.
+	 */
 	private static function buildManifest(root: String, chain: HxmlChain, probe: CompilerProbe): Array<String> {
 		final files: Map<String, String> = [];
 		// The compile directory is on the compiler's classpath IMPLICITLY — it is the empty
@@ -439,14 +448,20 @@ final class OracleCache {
 		return collected;
 	}
 
-	/** Every `.hx` under `dir`, as absolute normalised path to content hash. An unreadable directory contributes nothing rather than failing the key. */
+	/**
+	 * Every `.hx` under `dir`, as absolute normalised path to content hash.
+	 * An unreadable directory contributes nothing rather than failing the key.
+	 */
 	private static function collectDir(dir: String): Map<String, String> {
 		final collected: Map<String, String> = [];
 		walkDir(dir, collected, 0);
 		return collected;
 	}
 
-	/** The recursive half of `collectDir`: dot-prefixed entries are skipped (which keeps `.git` out), depth is capped so a symlink loop terminates, unreadable entries are skipped. */
+	/**
+	 * The recursive half of `collectDir`: dot-prefixed entries are skipped (which keeps `.git`
+	 * out), depth is capped so a symlink loop terminates, unreadable entries are skipped.
+	 */
 	private static function walkDir(dir: String, into: Map<String, String>, depth: Int): Void {
 		if (depth > MAX_DIR_DEPTH) return;
 		final entries: Null<Array<String>> = try sys.FileSystem.readDirectory(dir) catch (_exception: haxe.Exception) null;

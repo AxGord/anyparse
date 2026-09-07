@@ -21,7 +21,10 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxSoleItemCuddledBracketsTest extends Test {
 
-	/** project-shaped config (tab indent, maxLineLength 140, ifBody fitLine, expressionIf next, padded comprehension brackets) with the knob OFF. */
+	/**
+	 * project-shaped config (tab indent, maxLineLength 140, ifBody fitLine,
+	 * expressionIf next, padded comprehension brackets) with the knob OFF.
+	 */
 	private static final OFF: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140},'
 		+ ' "whitespace": {"bracketConfig": {"comprehensionBrackets": {"openingPolicy": "onlyAfter", "closingPolicy": "before"}}},'
 		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "keep"}}';

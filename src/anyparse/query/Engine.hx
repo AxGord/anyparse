@@ -161,7 +161,10 @@ final class Engine {
 		if (segIdx == 0) for (c in node.children) walkSelect(c, sel, 0, out, equiv);
 	}
 
-	/** Try segment `segIdx` at `node` and every node below it — the `>>` scope. A match continues the chain exactly like `walkSelect`; the search keeps descending regardless, so every descendant occurrence is found. */
+	/**
+	 * Try segment `segIdx` at `node` and every node below it — the `>>` scope. A match continues the chain
+	 * exactly like `walkSelect`; the search keeps descending regardless, so every descendant occurrence is found.
+	 */
 	private static function walkDescendant(
 		node: QueryNode, sel: Selector, segIdx: Int, out: Array<QueryNode>, ?equiv: KindEquivalence
 	): Void {

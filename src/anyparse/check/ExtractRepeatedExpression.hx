@@ -211,7 +211,8 @@ final class ExtractRepeatedExpression implements Check implements VolatileMessag
 	/**
 	 * Walk `node`, appending each candidate-kind expression (with its whitespace-
 	 * normalized text, span and branch path) to `out`. Descent stops at a nested
-	 * function / lambda unit and at a macro-reification subtree. Entering a branch child (index >= 1) of an `if` / `switch` pushes that branch onto `path`, so a
+	 * function / lambda unit and at a macro-reification subtree. Entering a branch
+	 * child (index >= 1) of an `if` / `switch` pushes that branch onto `path`, so a
 	 * candidate records which mutually-exclusive branches it lives in. The CALLEE child of a call
 	 * (`isCallee`) is descended into but never recorded — see the class doc's position rule.
 	 */

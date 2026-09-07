@@ -104,7 +104,8 @@ final class Lit {
 }
 
 /**
- * One `apq lit` result: a string / numeric literal matched by content, carrying its node `kind`, the literal `name` (its source text), and its source `span`.
+ * One `apq lit` result: a string / numeric literal matched by content, carrying
+ * its node `kind`, the literal `name` (its source text), and its source `span`.
  */
 @:nullSafety(Strict)
 final class LitHit {

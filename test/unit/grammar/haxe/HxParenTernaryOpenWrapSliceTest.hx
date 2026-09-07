@@ -71,7 +71,8 @@ final class HxParenTernaryOpenWrapSliceTest extends Test {
 	}
 
 	/**
-	 * Under a fillLine-family expressionWrapping the overflowing paren-ternary OPENS with the chain head glued: `offsetX + (` on one line, close `)` on its own line.
+	 * Under a fillLine-family expressionWrapping the overflowing paren-ternary OPENS
+	 * with the chain head glued: `offsetX + (` on one line, close `)` on its own line.
 	 */
 	public function testFillLineExpressionWrapOpensParenTernary(): Void {
 		Assert.equals(
@@ -83,7 +84,10 @@ final class HxParenTernaryOpenWrapSliceTest extends Test {
 		);
 	}
 
-	/** Without expressionWrapping (universal default) the paren stays glued to the ternary on both sides — the config gate keeps fork default-config parity. */
+	/**
+	 * Without expressionWrapping (universal default) the paren stays glued to the
+	 * ternary on both sides — the config gate keeps fork default-config parity.
+	 */
 	public function testDefaultExpressionWrapKeepsParenTernaryGlued(): Void {
 		Assert.equals(
 			'class Sample {\n\n\tfunction run() {\n\t\tspriteMarkItem.x = offsetX\n\t\t\t+ (node.bucket\n'

@@ -159,7 +159,8 @@ final class CliFixture {
 	 * THROWS rather than returning null, which is what let both call sites collapse to one line.
 	 * A `Null<String>` return is what the walk-up carried in `BuildMacroMetaSeamTest`, together
 	 * with an assert-and-bail prologue whose `return` is a drift guard passing while guarding
-	 * nothing — the one outcome a guard must not have, and it would have been copied here. The suite is documented to run with the cwd set to the tree it was built from
+	 * nothing — the one outcome a guard must not have, and it would have been copied
+	 * here. The suite is documented to run with the cwd set to the tree it was built from
 	 * (`tools/worker-build.sh`), so a cwd that cannot see the tree is a broken invocation, not a
 	 * configuration to tolerate.
 	 */

@@ -241,7 +241,10 @@ final class PreferFinal implements Check {
 
 }
 
-/** One `var` candidate: its name, its declaration span, its enclosing scope, and the type it constructs (null unless the initializer is a `new`). */
+/**
+ * One `var` candidate: its name, its declaration span, its enclosing scope,
+ * and the type it constructs (null unless the initializer is a `new`).
+ */
 private typedef Candidate = {
 	final name: String;
 	final span: Span;

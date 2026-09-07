@@ -57,7 +57,10 @@ using StringTools;
  * not by name), and annotation-bearing members (`@:keep`, abstract `@:from` /
  * `@:op`, ...) can be used without an in-source identifier reference. The grammar marks these via `NamedDecl.implicitReach` — except when a
  * conditional-compilation region sits between the annotation and the declaration,
- * which `AnnotatedMemberScan` recovers; the check never flags them — a missed dead member, never a deleted live one. Members reachable only through a framework or macro across files are skipped too: a `static final` macro-force field (`= SomeType`, via `implicitReach`), and a utest `test*` method whose class transitively extends `Test` (via `NamingSupport.frameworkReachable`, resolved through the cross-file index).
+ * which `AnnotatedMemberScan` recovers; the check never flags them — a missed dead member, never a deleted
+ * live one. Members reachable only through a framework or macro across files are skipped too: a `static
+ * final` macro-force field (`= SomeType`, via `implicitReach`), and a utest `test*` method whose class
+ * transitively extends `Test` (via `NamingSupport.frameworkReachable`, resolved through the cross-file index).
  *
  * ## Members that are public despite no `public` keyword
  *

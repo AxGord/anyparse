@@ -14,7 +14,9 @@ import sys.io.File;
 #end
 
 /**
- * Parsed options for `apq patch` — `lang`, `write` / `reformat`, the address (`selectExpr` / `atSpec` / `matchExpr` / `nth` / `kind`), the old/new `sep`, and the `payload` (or `fromFile`). `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ * Parsed options for `apq patch` — `lang`, `write` / `reformat`, the address (`selectExpr` /
+ * `atSpec` / `matchExpr` / `nth` / `kind`), the old/new `sep`, and the `payload` (or `fromFile`).
+ * `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
  */
 @:nullSafety(Strict)
 typedef PatchOpts = {

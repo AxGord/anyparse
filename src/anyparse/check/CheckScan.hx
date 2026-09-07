@@ -66,7 +66,10 @@ final class CheckScan {
 	/** A sole-referenced declaration has exactly one non-declaration reference resolving to it. */
 	private static inline final SOLE_REFERENCE_COUNT: Int = 1;
 
-	/** The last dot-segment of a module path — the name a call site spells (`utils.TextUtil` -> `TextUtil`); `RefactorSupport.lastSegment` under a name that says which question the check layer is asking. */
+	/**
+	 * The last dot-segment of a module path — the name a call site spells (`utils.TextUtil` -> `TextUtil`);
+	 * `RefactorSupport.lastSegment` under a name that says which question the check layer is asking.
+	 */
 	public static inline function simpleModuleName(path: String): String {
 		return SourceText.lastSegment(path);
 	}
@@ -397,7 +400,8 @@ final class CheckScan {
 	 * non-whitespace characters. The shared text-identity metric of `duplicate-code`
 	 * (which hashes statement norms to find clones and gates a run on its non-whitespace
 	 * size), `extract-repeated-expression` (which buckets equal expressions) and
-	 * `tail-merge` (which compares a branch tail against the shared fall-through run). Deliberately NOT string-literal-aware: whitespace INSIDE a literal collapses
+	 * `tail-merge` (which compares a branch tail against the shared fall-through run).
+	 * Deliberately NOT string-literal-aware: whitespace INSIDE a literal collapses
 	 * too, so `f("a  b")` and `f("a b")` normalize equal — a consumer needing exact token
 	 * identity pairs this with a structural comparison rather than relying on it alone. Text
 	 * headed for a MESSAGE wants `SpanRender.renderSpan`, whose collapsing stops at a token boundary.

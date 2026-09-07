@@ -420,7 +420,8 @@ final class Refs {
 /**
  * The context `Refs.walkMulti` carries down the tree, as one bit set.
  *
- * Three independent booleans that all propagate to children and are all `Bool`. As three adjacent positional parameters a transposition at the call site compiles clean and silently
+ * Three independent booleans that all propagate to children and are all `Bool`. As three
+ * adjacent positional parameters a transposition at the call site compiles clean and silently
  * mis-walks the whole tree; as one value it is unrepresentable. The abstract IS an `Int`, so
  * the walker's hottest signature gets cheaper rather than dearer.
  */

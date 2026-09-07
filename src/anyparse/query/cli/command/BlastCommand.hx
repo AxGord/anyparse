@@ -16,7 +16,8 @@ using StringTools;
 using Lambda;
 
 /**
- * Parsed options for `apq blast` — `lang`, `flat`, `limit`, `showAll`, the symbol `name`, and `inputSpecs`. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ * Parsed options for `apq blast` — `lang`, `flat`, `limit`, `showAll`, the symbol `name`, and
+ * `inputSpecs`. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
  */
 @:nullSafety(Strict)
 typedef BlastOpts = {

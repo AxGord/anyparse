@@ -101,7 +101,10 @@ class RedundantImportCheckTest extends Test {
 		Assert.equals(0, new RedundantImport().run(files, new HaxeQueryPlugin()).length);
 	}
 
-	/** An ALIASED module import binds only the alias — it brings no secondary type into scope. Refused on the path shape: an alias's `raw` IS the alias, never a dotted module path. */
+	/**
+	 * An ALIASED module import binds only the alias — it brings no secondary type into scope.
+	 * Refused on the path shape: an alias's `raw` IS the alias, never a dotted module path.
+	 */
 	public function testAliasedModuleImportDoesNotMakeTheSubTypeImportRedundant(): Void {
 		final src: String = 'package app;\n\nimport pkg.deep.Mod as M;\nimport pkg.deep.Mod.Sub;\n\nclass C {\n\n\tvar s:Sub;\n\n}\n';
 		Assert.equals(0, violations(src).length);

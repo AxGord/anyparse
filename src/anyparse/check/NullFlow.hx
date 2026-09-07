@@ -13,7 +13,8 @@ using StringTools;
 /**
  * The null facts holding at one visited node's entry, queried by a consumer.
  * `nonNull(name)` answers whether `name` is provably non-null by flow there;
- * `isNull(name)` whether it is provably null; `isMaybeNull(name)` whether it came from a nullable source and is not yet narrowed non-null (a mechanism-A seed, empty for the flow checks that pass none). All three honour the closure-captured
+ * `isNull(name)` whether it is provably null; `isMaybeNull(name)` whether it came from a nullable source and is not yet
+ * narrowed non-null (a mechanism-A seed, empty for the flow checks that pass none). All three honour the closure-captured
  * exclusion. At most one of the three accessors is ever true for a given name (`NonNull`, `Null`, `MaybeNull`, or — none true — `Unknown`).
  *
  * `indexPresent(node)` is the one name-free accessor: it answers whether `node` is a map
@@ -32,7 +33,8 @@ typedef NullFacts = {
 /**
  * The per-path fact lattice carried through a `NullFlow` walk: the set of names
  * provably `NonNull` and the disjoint set provably `Null` at the current point.
- * A name in the third `maybe` set is `MaybeNull`; a name absent from all three is `Unknown`. Every transfer keeps the three sets pairwise disjoint (marking one polarity clears the others).
+ * A name in the third `maybe` set is `MaybeNull`; a name absent from all three is `Unknown`.
+ * Every transfer keeps the three sets pairwise disjoint (marking one polarity clears the others).
  */
 private typedef FlowState = {
 	var nonNull: Array<String>;
@@ -43,7 +45,12 @@ private typedef FlowState = {
 	var present: Array<ExistsFact>;
 }
 
-/** A laundered-guard fact: `bool ⇒ (target != null)` when `notEq`, else `bool ⇒ (target == null)`. A Bool own-name local bound to a null-comparison of a plain own-name ident, so branching on `bool` narrows `target`. `compound` marks a one-way fact seeded from a conjunctive RHS (`bool = a != null && …`): only its truth (the then-arm) narrows each conjunct, its falsity implying no single one — so the else-arm mirror is suppressed. */
+/**
+ * A laundered-guard fact: `bool ⇒ (target != null)` when `notEq`, else `bool ⇒ (target == null)`. A Bool
+ * own-name local bound to a null-comparison of a plain own-name ident, so branching on `bool` narrows `target`.
+ * `compound` marks a one-way fact seeded from a conjunctive RHS (`bool = a != null && …`): only its truth (the
+ * then-arm) narrows each conjunct, its falsity implying no single one — so the else-arm mirror is suppressed.
+ */
 private typedef PredicateFact = {
 	bool: String,
 	target: String,
@@ -51,11 +58,18 @@ private typedef PredicateFact = {
 	compound: Bool
 };
 
-/** An unordered pair of plain own-name locals proven to hold the same reference (a direct `v = u` copy) — narrowing either narrows both, until one is written, captured, or re-aliased. */
+/**
+ * An unordered pair of plain own-name locals proven to hold the same reference (a direct `v
+ * = u` copy) — narrowing either narrows both, until one is written, captured, or re-aliased.
+ */
 private typedef AliasPair = { a: String, b: String };
 
 /**
- * A map/key pair proven present by a dominating `m.exists(k)` guard: the two operand expressions by their verbatim source text, plus `names` — every identifier either of them mentions, so any write to one kills the fact. Both operands must be PURE REF PATHS (identifier, field access, index access, a leaf literal), never a call: text identity plus the write-kill is the whole soundness argument, and a call could answer a different map on the second evaluation. A same-map/key `m[k]` read under the guard is not seeded `MaybeNull`, and `NullFacts.indexPresent` reports it to the point-wise consumer.
+ * A map/key pair proven present by a dominating `m.exists(k)` guard: the two operand expressions by their verbatim source
+ * text, plus `names` — every identifier either of them mentions, so any write to one kills the fact. Both operands must be
+ * PURE REF PATHS (identifier, field access, index access, a leaf literal), never a call: text identity plus the write-kill
+ * is the whole soundness argument, and a call could answer a different map on the second evaluation. A same-map/key `m[k]`
+ * read under the guard is not seeded `MaybeNull`, and `NullFacts.indexPresent` reports it to the point-wise consumer.
  */
 private typedef ExistsFact = { map: String, key: String, names: Array<String> };
 
@@ -140,7 +154,8 @@ private typedef FlowCtx = {
  *
  * ## What it proves
  *
- * The lattice is four-valued per name: `NonNull`, `Null`, `MaybeNull` (a value from a nullable source, pending a narrowing — populated only when a consumer supplies the mechanism-A seed), or `Unknown`. A name
+ * The lattice is four-valued per name: `NonNull`, `Null`, `MaybeNull` (a value from a nullable source,
+ * pending a narrowing — populated only when a consumer supplies the mechanism-A seed), or `Unknown`. A name
  * is `NonNull`-by-flow at a point when it is non-null on **every** path reaching
  * it, and `Null`-by-flow when it is null on every such path — each established
  * only by a flow event: a guard narrowing a branch (a `!= null` then-arm / `== null`
@@ -150,7 +165,10 @@ private typedef FlowCtx = {
  * non-null whichever side survives, and its right-hand side's effects are
  * joined in as conditional). It seeds **no** facts from declared types —
  * declared-non-null is the point-wise checks' domain
- * (`TypeResolver.isProvablyNonNull`); this engine is strictly the flow-only complement, so a flow consumer never duplicates a point-wise finding. The one exception is the optional `MaybeNull` seed (mechanism A): when a consumer supplies a `seed` predicate, a local assigned a value the predicate accepts (a nullable source) becomes `MaybeNull` until narrowed, backing the flow-sensitive `unguarded-nullable-deref` — inert for every consumer that passes no seed.
+ * (`TypeResolver.isProvablyNonNull`); this engine is strictly the flow-only complement, so a flow consumer never
+ * duplicates a point-wise finding. The one exception is the optional `MaybeNull` seed (mechanism A): when a consumer
+ * supplies a `seed` predicate, a local assigned a value the predicate accepts (a nullable source) becomes `MaybeNull`
+ * until narrowed, backing the flow-sensitive `unguarded-nullable-deref` — inert for every consumer that passes no seed.
  *
  * ## Soundness invariant
  *
@@ -224,7 +242,10 @@ final class NullFlow {
 	 */
 	public static final PRE_TEST_LOOP_KINDS: Array<String> = ['WhileStmt', 'WhileExpr'];
 
-	/** `switch` construct kinds — joined branch-per-branch by the flow walk (statement and expression forms, bare and parenthesized subjects). */
+	/**
+	 * `switch` construct kinds — joined branch-per-branch by the flow walk
+	 * (statement and expression forms, bare and parenthesized subjects).
+	 */
 	public static final SWITCH_KINDS: Array<String> = ['SwitchStmt', 'SwitchStmtBare', 'SwitchExpr', 'SwitchExprBare'];
 
 	/** `try` construct kinds — the body and each catch clause joined by the flow walk. */
@@ -455,7 +476,10 @@ final class NullFlow {
 		state.maybe.remove(name);
 	}
 
-	/** Record `name` as `MaybeNull` in `state` — a value from a nullable source, pending a narrowing — clearing any `NonNull` / `Null` fact (the three sets stay disjoint), deduplicated. */
+	/**
+	 * Record `name` as `MaybeNull` in `state` — a value from a nullable source, pending a narrowing
+	 * — clearing any `NonNull` / `Null` fact (the three sets stay disjoint), deduplicated.
+	 */
 	private static inline function markMaybe(state: FlowState, name: String): Void {
 		if (!state.maybe.contains(name)) state.maybe.push(name);
 		state.nonNull.remove(name);
@@ -498,7 +522,10 @@ final class NullFlow {
 		for (e in next.present) state.present.push(e);
 	}
 
-	/** The verbatim source text of `node`, trimmed — the identity an `ExistsFact` compares its operands by; `''` for a span-less node, which `existsGuardFact` refuses. */
+	/**
+	 * The verbatim source text of `node`, trimmed — the identity an `ExistsFact` compares
+	 * its operands by; `''` for a span-less node, which `existsGuardFact` refuses.
+	 */
 	private static inline function pathText(node: QueryNode, source: String): String {
 		final span: Null<Span> = node.span;
 		return span == null ? '' : source.substring(span.from, span.to).trim();
@@ -618,7 +645,11 @@ final class NullFlow {
 			for (c in node.children) walk(c, state, ctx);
 	}
 
-	/** Assignment / compound-assignment / increment: narrow the target to `NonNull` for a plain assign of a non-null value, to `Null` for a plain assign of the null literal, else clear it on both polarities. A `??=` is routed to its own transfer — its right-hand side runs conditionally. */
+	/**
+	 * Assignment / compound-assignment / increment: narrow the target to `NonNull` for a plain assign
+	 * of a non-null value, to `Null` for a plain assign of the null literal, else clear it on both
+	 * polarities. A `??=` is routed to its own transfer — its right-hand side runs conditionally.
+	 */
 	private static function handleWrite(node: QueryNode, state: FlowState, ctx: FlowCtx): Void {
 		if (node.kind == ctx.nullCoalAssignKind) {
 			handleNullCoalAssign(node, state, ctx);
@@ -762,7 +793,10 @@ final class NullFlow {
 		establishAux(state, ctx, name, init);
 	}
 
-	/** `if` / ternary: narrow each arm by the condition's `!= null` / `== null` guards (both polarities); analyze each arm in isolation; join the arm-exit states. */
+	/**
+	 * `if` / ternary: narrow each arm by the condition's `!= null` / `== null` guards
+	 * (both polarities); analyze each arm in isolation; join the arm-exit states.
+	 */
 	private static function handleIf(node: QueryNode, state: FlowState, ctx: FlowCtx): Void {
 		if (node.children.length < 2) {
 			for (c in node.children) walk(c, state, ctx);
@@ -1021,7 +1055,10 @@ final class NullFlow {
 		return false;
 	}
 
-	/** Clear every identifier name in a case-pattern subtree from `state` — a pattern capture is a fresh binding shadowing any same-named outer local, so no outer fact may survive into the branch. */
+	/**
+	 * Clear every identifier name in a case-pattern subtree from `state` — a pattern capture is a
+	 * fresh binding shadowing any same-named outer local, so no outer fact may survive into the branch.
+	 */
 	private static function clearPatternNames(pattern: QueryNode, state: FlowState, ctx: FlowCtx): Void {
 		final name: Null<String> = pattern.name;
 		if (pattern.kind == ctx.identKind && name != null) clearName(state, name);
@@ -1040,7 +1077,10 @@ final class NullFlow {
 		for (n in collectDeclared(scope, ctx.localDeclKinds, ctx.nestedFnKinds)) clearName(state, n);
 	}
 
-	/** Statement-list block: children share one running state; block-local declarations are cleared on exit so their facts do not leak out. */
+	/**
+	 * Statement-list block: children share one running state; block-local
+	 * declarations are cleared on exit so their facts do not leak out.
+	 */
 	private static function handleBlock(node: QueryNode, state: FlowState, ctx: FlowCtx): Void {
 		for (c in node.children) walk(c, state, ctx);
 		for (n in collectDeclared(node, ctx.localDeclKinds, ctx.nestedFnKinds)) clearName(state, n);
@@ -1051,7 +1091,10 @@ final class NullFlow {
 		return rhs != null && ctx.nonNullRhsKinds.contains(rhs.kind);
 	}
 
-	/** Whether `rhs` is a nullable source per the consumer's seed predicate (mechanism A) — always false when no seed was supplied, so the flow checks never see a `MaybeNull` fact. */
+	/**
+	 * Whether `rhs` is a nullable source per the consumer's seed predicate (mechanism A) —
+	 * always false when no seed was supplied, so the flow checks never see a `MaybeNull` fact.
+	 */
 	private static function isNullableSourceRhs(rhs: Null<QueryNode>, ctx: FlowCtx): Bool {
 		final seed: Null<(QueryNode) -> Bool> = ctx.nullableSourceRhs;
 		return rhs != null && seed != null && seed(rhs);

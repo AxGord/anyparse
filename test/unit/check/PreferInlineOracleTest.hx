@@ -17,7 +17,11 @@ import utest.Test;
 using Lambda;
 
 /**
- * The `prefer-inline` compiler-oracle path (its `RiskyFix` integration). WITHOUT an oracle the check keeps its structural null-safety gate, so a null-literal-carrying benefit-class body is suppressed (report byte-identical). WITH an oracle configured, `Cli.applyLintFixes` moves the check into the verified `RiskyFix` path, calls `setOracleRelaxed` to drop that gate, and routes every insertion through the per-file typecheck-and-revert pipeline: a typechecking null-arg forward is inlined, a null-unsafe unwrap is reverted. The
+ * The `prefer-inline` compiler-oracle path (its `RiskyFix` integration). WITHOUT an oracle the check keeps its
+ * structural null-safety gate, so a null-literal-carrying benefit-class body is suppressed (report
+ * byte-identical). WITH an oracle configured, `Cli.applyLintFixes` moves the check into the verified `RiskyFix`
+ * path, calls `setOracleRelaxed` to drop that gate, and routes every insertion through the per-file
+ * typecheck-and-revert pipeline: a typechecking null-arg forward is inlined, a null-unsafe unwrap is reverted. The
  * pure tests exercise the relaxed candidate selection without a compiler; the E2E cases drive the
  * real compiler and skip gracefully when no `haxe` is on the host.
  */

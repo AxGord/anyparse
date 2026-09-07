@@ -94,7 +94,11 @@ final class HxOpAddTrailingParenGlueSliceTest extends Test {
 		);
 	}
 
-	/** A last operand that LEADS with `(` but is a Div (`(a - b) / 2`), not a bare paren-expr, must NOT glue even under the fillLine expressionWrapping: the chain breaks `beforeLast` and the operand stays flat. Guards the `endsWithCloseDelim` narrowing of the glue gate. */
+	/**
+	 * A last operand that LEADS with `(` but is a Div (`(a - b) / 2`), not a bare paren-expr,
+	 * must NOT glue even under the fillLine expressionWrapping: the chain breaks `beforeLast`
+	 * and the operand stays flat. Guards the `endsWithCloseDelim` narrowing of the glue gate.
+	 */
 	public function testParenDivLastOperandDoesNotGlue(): Void {
 		final src: String = 'class Sample {\n\tfunction run() {\n'
 			+ '\t\tbadgeContainer.offset = baselineTextExtent + captionTextField.measuredWidth + BADGE_SLOT_RESERVED_SIZE + ('

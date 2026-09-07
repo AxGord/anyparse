@@ -881,7 +881,8 @@ final class CrossRenameMember {
 	 *
 	 * A module-level TYPE of that name is NOT one, which is why the question goes to
 	 * `RefShape.moduleValueDeclKinds` and not to `declHostKinds` — that vocabulary names every
-	 * type-declaration kind and omits `VarForm` entirely, so neither list contains the other. Compiled and run on 4.3.7: with `class File` in the reading module and
+	 * type-declaration kind and omits `VarForm` entirely, so neither list contains the
+	 * other. Compiled and run on 4.3.7: with `class File` in the reading module and
 	 * `enum abstract Colour { var File = 3; }`, `function pick(): Colour return File;` prints 3 — the
 	 * value wins, and refusing the file threw that rewrite away.
 	 *

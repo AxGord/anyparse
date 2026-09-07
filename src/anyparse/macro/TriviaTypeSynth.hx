@@ -101,7 +101,8 @@ class TriviaTypeSynth {
 
 	/**
 	 * ω-trivia-before-kw — own-line comments captured BEFORE the optional
-	 * keyword commit point (e.g. `if (x) { }\n// comment\nelse { }`). The pre-commit `skipWs` collects it and stashes it here on commit-success. Empty array on the
+	 * keyword commit point (e.g. `if (x) { }\n// comment\nelse { }`). The pre-commit
+	 * `skipWs` collects it and stashes it here on commit-success. Empty array on the
 	 * commit-miss path (rewind discards the captured trivia).
 	 */
 	public static inline final BEFORE_KW_LEADING_SUFFIX: String = 'BeforeKwLeading';
@@ -169,7 +170,8 @@ class TriviaTypeSynth {
 	 * paired Seq types alongside the same bare non-first Ref fields that grow
 	 * `BeforeNewline` (`isBareNonFirstRef`). Records the verbatim comments
 	 * captured in the gap between the preceding content and the sub-rule's
-	 * first token — the run that `BeforeNewline`'s `collectTrivia` scans; this slot keeps its `.leadingComments` (`BeforeNewline` itself keeps only the `.newlineBefore` bool). Load-bearing for
+	 * first token — the run that `BeforeNewline`'s `collectTrivia` scans; this slot keeps its
+	 * `.leadingComments` (`BeforeNewline` itself keeps only the `.newlineBefore` bool). Load-bearing for
 	 * `lineends/issue_598_multiline_comment_var`: a multiline block comment
 	 * between a member modifier (`public`) and the `var` keyword is rejected
 	 * by the modifier Star's `collectTrailingFull` (internal newline) and
@@ -316,7 +318,9 @@ class TriviaTypeSynth {
 	 * round-tripping the source's "I want this list multi-line" intent.
 	 * First consumer: `HxObjectLit.fields`.
 	 *
-	 * Dual consumer (`buildStructFieldTrailPresentSlot`): struct typedef Ref fields with `@:trailOpt(LIT)` reuse the same suffix on an `@:optional Null<Bool>` slot. Both consumers encode "trail literal was present in source"; disjoint host kinds (Star vs Ref) within one Seq cannot collide on field name. The writer does not yet read the struct-field slot — see `isStructFieldTrailOpt`.
+	 * Dual consumer (`buildStructFieldTrailPresentSlot`): struct typedef Ref fields with `@:trailOpt(LIT)` reuse the same suffix on
+	 * an `@:optional Null<Bool>` slot. Both consumers encode "trail literal was present in source"; disjoint host kinds (Star vs Ref)
+	 * within one Seq cannot collide on field name. The writer does not yet read the struct-field slot — see `isStructFieldTrailOpt`.
 	 */
 	public static inline final TRAIL_PRESENT_SUFFIX: String = 'TrailPresent';
 

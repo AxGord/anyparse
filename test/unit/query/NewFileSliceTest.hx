@@ -535,7 +535,10 @@ class NewFileSliceTest extends Test {
 		CliFixture.removeDir(dir);
 	}
 
-	/** `--kind class` with no other shape flag creates an empty class (regression: it was rejected as "no intent" — only `--class` worked). */
+	/**
+	 * `--kind class` with no other shape flag creates an empty class
+	 * (regression: it was rejected as "no intent" — only `--class` worked).
+	 */
 	public function testCliKindClassEmpty(): Void {
 		final dir: String = tmpDir();
 		final p: String = '$dir/Empty.hx';

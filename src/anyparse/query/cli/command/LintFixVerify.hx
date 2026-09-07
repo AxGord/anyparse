@@ -675,7 +675,10 @@ final class LintFixVerify {
 		for (c in candidates) if (applied.contains(c.file)) for (entry in files) if (entry.file == c.file) entry.source = c.after;
 	}
 
-	/** Candidate files (not already reverted) the compiler error text blames — a local's bad annotation errors in its own file, so the error's `path:` names the culprit. */
+	/**
+	 * Candidate files (not already reverted) the compiler error text blames — a local's
+	 * bad annotation errors in its own file, so the error's `path:` names the culprit.
+	 */
 	private static function oracleErrorFiles(
 		errors: String, candidates: Array<{ file: String, before: String, after: String }>, reverted: Array<String>
 	): Array<String> {

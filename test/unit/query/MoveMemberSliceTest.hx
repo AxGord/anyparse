@@ -688,7 +688,10 @@ class MoveMemberSliceTest extends Test {
 		Assert.isTrue(newB.contains('@:keep public static function util'), 'public should follow the meta');
 	}
 
-	/** A paren-bearing `@:name(args)` meta (MetaCall) above the moved member: the promotion `public` must land AFTER it, like the paren-less form. */
+	/**
+	 * A paren-bearing `@:name(args)` meta (MetaCall) above the moved member:
+	 * the promotion `public` must land AFTER it, like the paren-less form.
+	 */
 	public function testMetaCallMemberPromotionLandsAfterMeta(): Void {
 		final a: String = 'package pkg;\n\nclass A {\n\tpublic static function run():Int return util(3);\n'
 			+ '\t@:nowarn("x") static function util(x:Int):Int return x;\n}';

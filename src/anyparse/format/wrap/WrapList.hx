@@ -635,7 +635,8 @@ class WrapList {
 	// the inner's TOP-LEVEL (WrapBoundary depth 1) operator separators are
 	// ternary `?`/`:` and NO `+`/`-`/`||`/`&&` appears at that level. Mirrors
 	// isTopLevelChain's depth-1 walk; routes a ternary-inner expr-paren to the
-	// keep-`(`-glued shape instead of the IfFullLineExceeds open when expressionWrapping is at its universal default; a fillLine-family mode opens the paren (fork parity).
+	// keep-`(`-glued shape instead of the IfFullLineExceeds open when expressionWrapping
+	// is at its universal default; a fillLine-family mode opens the paren (fork parity).
 	// BOTH separators are required: a real ternary always emits `?` AND `:` at the
 	// same wrap level, while an OBJECT LITERAL emits only `:` (its field separator)
 	// and used to be misread as a ternary here. That misread is what made
@@ -2738,7 +2739,8 @@ class WrapList {
 	}
 
 	/**
-	 * ω-callparam-multiarg-block-lambda: a FLWLB MULTI-arg call ANY of whose args is a block-bodied paren-param lambda (`f((p) -> { … }, y)` / `f(x, () -> { … })`) keeps ALL args
+	 * ω-callparam-multiarg-block-lambda: a FLWLB MULTI-arg call ANY of whose args is a
+	 * block-bodied paren-param lambda (`f((p) -> { … }, y)` / `f(x, () -> { … })`) keeps ALL args
 	 * GLUED to the open paren iff the glued flat first line (up to the block
 	 * `{`) fits `lineWidth`; the lambda's block body self-breaks at its `{` and
 	 * the enclosing `)` glues to the block close (`});`). Without this, the
@@ -2750,7 +2752,10 @@ class WrapList {
 	 * is never opened. The `reEvaluateMultiArgCallParamAfterContextWraps` pass
 	 * (713-748) then leaves the collapsed multi-arg call as-is.
 	 *
-	 * DISJOINT from the sole-arrow paths above (inc5 / inc5-cont / ThinArrow, all `items.length == 1`): this gates on `items.length > 1`, so sole-arrow handling is untouched. The block-body lambda may sit at ANY position (first / middle / last); trailing args ride the block-close line (`}, y)`), matching fork applyArrowWrapping, which collapses the arrow head regardless of arg position. The block-body discriminator is STRUCTURAL
+	 * DISJOINT from the sole-arrow paths above (inc5 / inc5-cont / ThinArrow, all `items.length == 1`): this gates
+	 * on `items.length > 1`, so sole-arrow handling is untouched. The block-body lambda may sit at ANY position
+	 * (first / middle / last); trailing args ride the block-close line (`}, y)`), matching fork applyArrowWrapping,
+	 * which collapses the arrow head regardless of arg position. The block-body discriminator is STRUCTURAL
 	 * (`arrowBodyIsBlock` — the body's first visible Text is `{`), needing no
 	 * post-layout "did it break" fact: a block with statements always carries
 	 * hardlines.
@@ -4651,7 +4656,9 @@ class WrapList {
 	 * `if` (no top-level `else`) that is NOT a `{}`-block. Such an arrow hides
 	 * its `if`-then-branch behind a `BodyGroup`, which `DocMeasure.flatTokenWidth`
 	 * defers to width 0 — under-measuring the arg so the `callParameter` cascade
-	 * mis-picks NoWrap / fill-hug even when the body overflows. `emit` gates `groupifyInlineBodies` on this predicate so exactly this arg shape has its hardline-free `BodyGroup`s re-tagged as render-identical `Group`s, making the true width visible so an overflowing plain-`if` arrow opens the call (fork parity). Block-body arrows (`arrowBodyIsBlock`) and if-ELSE arrows
+	 * mis-picks NoWrap / fill-hug even when the body overflows. `emit` gates `groupifyInlineBodies` on this predicate so exactly
+	 * this arg shape has its hardline-free `BodyGroup`s re-tagged as render-identical `Group`s, making the true width visible so
+	 * an overflowing plain-`if` arrow opens the call (fork parity). Block-body arrows (`arrowBodyIsBlock`) and if-ELSE arrows
 	 * (`hasTopLevelElse`) are excluded: the former hugs (block owns its layout),
 	 * the latter is the landed thin-arrow if-else path.
 	 */

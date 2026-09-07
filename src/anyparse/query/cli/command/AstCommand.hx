@@ -15,7 +15,9 @@ using StringTools;
 using Lambda;
 
 /**
- * Parsed options for `apq ast` / `apq probe` — `lang`, `json`, `depth`, the address (`selectExpr` / `atExpr`), output toggles, child-count filters, and the inline-source channels (`codeArg` / `stdinFlag`). `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ * Parsed options for `apq ast` / `apq probe` — `lang`, `json`, `depth`, the address (`selectExpr` /
+ * `atExpr`), output toggles, child-count filters, and the inline-source channels (`codeArg` /
+ * `stdinFlag`). `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
  */
 @:nullSafety(Strict)
 typedef AstOpts = {

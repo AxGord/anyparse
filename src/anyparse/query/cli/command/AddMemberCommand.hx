@@ -10,7 +10,8 @@ import anyparse.query.ExitCode.*;
 using StringTools;
 
 /**
- * Parsed options for `apq add-member` — `lang`, `write` / `reformat`, the target `typeName` and `file`, and the member body (`memberText` or `fromFile`). `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ * Parsed options for `apq add-member` — `lang`, `write` / `reformat`, the target `typeName` and `file`, and the member body
+ * (`memberText` or `fromFile`). `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
  */
 @:nullSafety(Strict)
 typedef AddMemberOpts = {

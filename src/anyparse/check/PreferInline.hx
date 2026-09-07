@@ -548,7 +548,9 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	}
 
 	/**
-	 * Whether `name` / `fn` is an inline candidate: a non-constructor method with a benefit-class body, not already `inline` / `dynamic` / `macro` / `override`, not `@:keep`, not self-recursive (a bare `name` / `this.name` in its body), and whose body is a benefit class (see `isBaseCandidateMethod`).
+	 * Whether `name` / `fn` is an inline candidate: a non-constructor method with a benefit-class body,
+	 * not already `inline` / `dynamic` / `macro` / `override`, not `@:keep`, not self-recursive (a bare
+	 * `name` / `this.name` in its body), and whose body is a benefit class (see `isBaseCandidateMethod`).
 	 */
 	private static function isCandidateMethod(
 		name: String, fn: QueryNode, mods: Array<String>, metas: Array<String>, relaxed: Bool, retained: Null<String>, shape: RefShape

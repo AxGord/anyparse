@@ -137,7 +137,10 @@ class StaticConstantCheckTest extends Test {
 		Assert.equals(0, violations('class C {\n\tprivate final _n:Int = 5;\n\tfunction f(o:C):Int return o._n;\n}').length);
 	}
 
-	/** A subtype's UNQUALIFIED read of a private static is `Unknown identifier` — measured; the fix would have to reach the subtype's file. */
+	/**
+	 * A subtype's UNQUALIFIED read of a private static is `Unknown
+	 * identifier` — measured; the fix would have to reach the subtype's file.
+	 */
 	public function testSubtypeReadRefused(): Void {
 		Assert.equals(
 			0,
@@ -204,7 +207,10 @@ class StaticConstantCheckTest extends Test {
 		Assert.equals(0, violations('@:rtti\nclass C {\n\tprivate final _n:Int = 5;\n\tfunction f():Int return _n;\n}').length);
 	}
 
-	/** An initialized `final` under `@:structInit` is an OPTIONAL CONSTRUCTOR ARGUMENT — promoting it deletes a name every `{ … }` literal may pass. */
+	/**
+	 * An initialized `final` under `@:structInit` is an OPTIONAL CONSTRUCTOR
+	 * ARGUMENT — promoting it deletes a name every `{ … }` literal may pass.
+	 */
 	public function testStructInitClassRefused(): Void {
 		Assert.equals(0, violations('@:structInit\nclass C {\n\tprivate final _n:Int = 5;\n\tfunction f():Int return _n;\n}').length);
 	}

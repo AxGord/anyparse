@@ -107,7 +107,10 @@ final class AccessorClauseText {
 		return j;
 	}
 
-	/** The offset just past the `var name` prefix of `span` (keyword + whitespace + identifier), or -1 when it does not begin with `var <name>`. */
+	/**
+	 * The offset just past the `var name` prefix of `span` (keyword +
+	 * whitespace + identifier), or -1 when it does not begin with `var <name>`.
+	 */
 	private static function nameEndAfterVar(source: String, span: Span): Int {
 		final n: Int = source.length;
 		final kw: String = 'var';

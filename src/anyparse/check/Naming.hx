@@ -228,7 +228,8 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 	 * Cross-file autofix (the `CrossFileFix` seam): rename each flagged member whose references can reach
 	 * beyond its declaring file — a NON-confined private field / constant / method (reachable from its
 	 * subtypes / `@:access`-grant files), or ANY public one (reachable from anywhere). The single-file
-	 * `fix` skips both (a non-confined member is not provably contained; a public one is refused outright by `RenameRefusal.of`); here the rename is proven complete across EVERY affected report file and emitted
+	 * `fix` skips both (a non-confined member is not provably contained; a public one is refused outright by
+	 * `RenameRefusal.of`); here the rename is proven complete across EVERY affected report file and emitted
 	 * as one atomic multi-file edit set. The declaring file resolves scope-correctly (the T29 occurrence
 	 * set + completeness gate), and a collision with a constructor PARAMETER there is repaired by
 	 * qualifying through `this.` rather than refused; each other affected file classifies every occurrence

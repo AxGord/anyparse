@@ -408,7 +408,10 @@ final class DeadStore implements Check {
 		walkConstruct(node, kind, live, childScope, ctx);
 	}
 
-	/** The compound-construct half of the backward dispatch: branches, loops, branchy constructs, short-circuit operators, null-safe calls — anything else folds its children generically. */
+	/**
+	 * The compound-construct half of the backward dispatch: branches, loops, branchy constructs,
+	 * short-circuit operators, null-safe calls — anything else folds its children generically.
+	 */
 	private static function walkConstruct(node: QueryNode, kind: String, live: Array<String>, scope: QueryNode, ctx: LiveCtx): Void {
 		if (NullFlow.IF_KINDS.contains(kind) && node.children.length >= 2)
 			handleIf(node, live, scope, ctx);
@@ -494,7 +497,10 @@ final class DeadStore implements Check {
 		foldChildren(node, live, scope, ctx);
 	}
 
-	/** Branch: liveness after the construct flows into each arm independently; the entry liveness is the union of the arms (plus the fall-through path when there is no else). */
+	/**
+	 * Branch: liveness after the construct flows into each arm independently; the entry
+	 * liveness is the union of the arms (plus the fall-through path when there is no else).
+	 */
 	private static function handleIf(node: QueryNode, live: Array<String>, scope: QueryNode, ctx: LiveCtx): Void {
 		final cond: QueryNode = node.children[0];
 		final thenArm: QueryNode = node.children[1];
@@ -511,7 +517,10 @@ final class DeadStore implements Check {
 		walkBack(cond, live, scope, ctx);
 	}
 
-	/** Loop: no fixpoint — every name read anywhere in the subtree is live throughout the body (back-edge), and the exit state survives (zero iterations). */
+	/**
+	 * Loop: no fixpoint — every name read anywhere in the subtree is live throughout
+	 * the body (back-edge), and the exit state survives (zero iterations).
+	 */
 	private static function handleLoop(node: QueryNode, live: Array<String>, scope: QueryNode, ctx: LiveCtx): Void {
 		final reads: Array<String> = collectReads(node, ctx);
 		final bodyLive: Array<String> = live.copy();
@@ -520,7 +529,10 @@ final class DeadStore implements Check {
 		for (n in bodyLive) addLive(live, n);
 	}
 
-	/** `switch` / `try`: each branch folds from the exit state plus every name read anywhere in the construct (a read in any branch keeps stores in the others alive). */
+	/**
+	 * `switch` / `try`: each branch folds from the exit state plus every name read
+	 * anywhere in the construct (a read in any branch keeps stores in the others alive).
+	 */
 	private static function handleBranchy(node: QueryNode, live: Array<String>, scope: QueryNode, ctx: LiveCtx): Void {
 		final reads: Array<String> = collectReads(node, ctx);
 		final n: Int = node.children.length;
@@ -532,7 +544,10 @@ final class DeadStore implements Check {
 		for (r in reads) addLive(live, r);
 	}
 
-	/** Short-circuit operator: the right operand evaluates conditionally, so its liveness result is unioned with the skip path instead of replacing it. */
+	/**
+	 * Short-circuit operator: the right operand evaluates conditionally, so its
+	 * liveness result is unioned with the skip path instead of replacing it.
+	 */
 	private static function handleShortCircuit(node: QueryNode, live: Array<String>, scope: QueryNode, ctx: LiveCtx): Void {
 		final rhsLive: Array<String> = live.copy();
 		walkBack(node.children[1], rhsLive, scope, ctx);
@@ -557,7 +572,10 @@ final class DeadStore implements Check {
 		return node.kind == kind || node.children.exists(c -> containsKind(c, kind));
 	}
 
-	/** A null-safe call: fold the conditionally-evaluated arguments in isolation and union, then the callee (whose receiver read is unconditional). */
+	/**
+	 * A null-safe call: fold the conditionally-evaluated arguments in isolation
+	 * and union, then the callee (whose receiver read is unconditional).
+	 */
 	private static function handleSafeNavCall(node: QueryNode, live: Array<String>, scope: QueryNode, ctx: LiveCtx): Void {
 		final argsLive: Array<String> = live.copy();
 		final n: Int = node.children.length;
@@ -566,7 +584,10 @@ final class DeadStore implements Check {
 		walkBack(node.children[0], live, scope, ctx);
 	}
 
-	/** The decl-initializer partition test: is `name` referenced in the enclosing scope outside the declaration itself (`unused-local`'s own test, inverted)? */
+	/**
+	 * The decl-initializer partition test: is `name` referenced in the enclosing
+	 * scope outside the declaration itself (`unused-local`'s own test, inverted)?
+	 */
 	private static function referencedOutsideDecl(ctx: LiveCtx, name: String, scope: QueryNode, declSpan: Span): Bool {
 		final scopeSpan: Null<Span> = scope.span;
 		return scopeSpan != null && OccurrenceScan.referencedInRange(ctx.source, name, scopeSpan.from, scopeSpan.to, [declSpan]);
@@ -577,7 +598,10 @@ final class DeadStore implements Check {
 		for (n in ctx.ownNames) addLive(live, n);
 	}
 
-	/** Every identifier name occurring anywhere in `node`'s subtree (including nested functions and write targets — over-counting reads only ever loses precision, never soundness). */
+	/**
+	 * Every identifier name occurring anywhere in `node`'s subtree (including nested functions
+	 * and write targets — over-counting reads only ever loses precision, never soundness).
+	 */
 	private static function collectReads(node: QueryNode, ctx: LiveCtx): Array<String> {
 		final out: Array<String> = [];
 		function walkR(n: QueryNode): Void {
@@ -593,7 +617,10 @@ final class DeadStore implements Check {
 		return out;
 	}
 
-	/** The names a nested function value reads or writes — excluded from the whole unit's analysis (the closure may run at any later time). */
+	/**
+	 * The names a nested function value reads or writes — excluded from
+	 * the whole unit's analysis (the closure may run at any later time).
+	 */
 	private static function collectExcluded(
 		body: QueryNode, identKind: String, interpIdentKind: Null<String>, nestedFnKinds: Array<String>
 	): Array<String> {

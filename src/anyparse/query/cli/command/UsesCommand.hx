@@ -13,7 +13,8 @@ using StringTools;
 using Lambda;
 
 /**
- * Parsed options for `apq uses` — `lang`, the `wantDoc` / `wantSource` output toggles, `flat`, `limit`, the type `name`, and `inputSpecs`. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ * Parsed options for `apq uses` — `lang`, the `wantDoc` / `wantSource` output toggles, `flat`, `limit`, the type
+ * `name`, and `inputSpecs`. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
  */
 @:nullSafety(Strict)
 typedef UsesOpts = {

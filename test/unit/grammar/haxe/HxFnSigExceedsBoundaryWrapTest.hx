@@ -26,7 +26,10 @@ final class HxFnSigExceedsBoundaryWrapTest extends Test {
 		super();
 	}
 
-	/** A two-param signature whose flat width is 141 (one column over 140) OPENS: leading break after `(`, params packed, `)` + return on their own line. */
+	/**
+	 * A two-param signature whose flat width is 141 (one column over 140) OPENS:
+	 * leading break after `(`, params packed, `)` + return on their own line.
+	 */
 	public function testOneColumnOverBoundaryWrapsSignature(): Void {
 		final src: String = 'class M {\n\tprivate static function mergeCoachUsers(a:Array<FileListShareCoachUser>, '
 			+ 'b:Array<FileListShareCoachUser>):Array<FileListShareCoachUser> {\n\t\treturn a;\n\t}\n}';

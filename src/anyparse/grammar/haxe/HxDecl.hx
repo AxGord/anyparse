@@ -174,7 +174,8 @@ enum HxDecl {
 	/**
 	 * Top-level `final …` (slice ω-module-final), covering both
 	 * `final class Foo {}` (sealed class) and `final FOO = 1;`
-	 * (module-level immutable binding). `HxModifier` carries no `Final` marker (mirroring `HxMemberModifier`'s member-scope split) — the keyword is owned here so both forms reach dispatch. `@:kw('final')` consumes the
+	 * (module-level immutable binding). `HxModifier` carries no `Final` marker (mirroring `HxMemberModifier`'s
+	 * member-scope split) — the keyword is owned here so both forms reach dispatch. `@:kw('final')` consumes the
 	 * keyword; the inner `HxFinalDecl` enum disambiguates class-vs-var
 	 * by ordered first-match with `tryBranch` rollback (no lookahead —
 	 * see `HxFinalDecl`). `@:trailOpt(';')` terminates the var form and

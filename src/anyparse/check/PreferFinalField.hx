@@ -41,9 +41,13 @@ import anyparse.runtime.Span;
  *    a comment / string, reads as a write) which only ever KEEPS a `var`, never
  *    produces a wrong `final`.
  *
- * Together these prove the assignment is the sole one, so `var → final` is always sound. An interface-mutability gate additionally skips a field an implemented interface declares — or that ANY unresolvable implemented interface might declare — since the interface pins its property access and finalizing would break parity.
+ * Together these prove the assignment is the sole one, so `var → final` is always sound. An interface-mutability
+ * gate additionally skips a field an implemented interface declares — or that ANY unresolvable implemented
+ * interface might declare — since the interface pins its property access and finalizing would break parity.
  *
- * A structural-conformance gate (`StructuralTypes.structuralConformanceForbidsFinal`, shared with `prefer-final-public-field` and the `make-final` op, whose write-restriction twin `prefer-read-only-field` takes) applies too. It looks unnecessary here and is not: a PRIVATE member
+ * A structural-conformance gate (`StructuralTypes.structuralConformanceForbidsFinal`, shared with
+ * `prefer-final-public-field` and the `make-final` op, whose write-restriction twin
+ * `prefer-read-only-field` takes) applies too. It looks unnecessary here and is not: a PRIVATE member
  * takes no part in structural unification, and NO access grant changes that — `@:allow` on the
  * type and `@:access` on the reader both leave `var` failing with "The field x is not public",
  * with `final` only changing which error prints first. What DOES expose the field is

@@ -19,7 +19,8 @@ import utest.Test;
  *
  * Each test formats ONE source holding two lists that differ only in the
  * axis under test. A single-list fixture would pass on a cascade that
- * answered the same way for every input; the pair cannot. Each asserts the whole output, so a shape that moves anywhere else in the file fails too.
+ * answered the same way for every input; the pair cannot. Each asserts the
+ * whole output, so a shape that moves anywhere else in the file fails too.
  */
 @:nullSafety(Strict)
 class HxWrapConditionVocabularyTest extends Test {

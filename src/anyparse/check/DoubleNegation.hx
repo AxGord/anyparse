@@ -177,7 +177,10 @@ final class DoubleNegation implements Check {
 private typedef Seams = {
 	final notKind: String;
 
-	/** The parenthesis kind the redundancy scan reads THROUGH (`!(!x)`), or null when the grammar has none — then only the bare `!!x` shape is seen. */
+	/**
+	 * The parenthesis kind the redundancy scan reads THROUGH (`!(!x)`), or
+	 * null when the grammar has none — then only the bare `!!x` shape is seen.
+	 */
 	final parenKind: Null<String>;
 
 	final opaqueKinds: Array<String>;

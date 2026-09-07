@@ -32,9 +32,12 @@ import anyparse.query.StringFold.StringFoldSupport;
  * method delegates straight through; a parse that throws is not cached (a
  * skip-parse file re-parses per check, a negligible minority).
  *
- * Behind them sits ONE process-scoped tier, for the resolution LIBRARY only (`SharedParseTier`): a fresh wrapper per `Cli.run` otherwise means re-parsing the
+ * Behind them sits ONE process-scoped tier, for the resolution LIBRARY only
+ * (`SharedParseTier`): a fresh wrapper per `Cli.run` otherwise means re-parsing the
  * 200+ auto-discovered Haxe std files, plus every declared `resolutionRoots` /
- * `resolutionLibs` source, on every run in the process. Only the library half of a `ResolutionSources` ever enters it, which is what bounds it — a `--fix` loop's per-pass rewritten report sources never do, and the nominal `LibrarySources` type makes feeding it the report half a compile error rather than a convention. Same single-thread rule as the
+ * `resolutionLibs` source, on every run in the process. Only the library half of a `ResolutionSources` ever enters it,
+ * which is what bounds it — a `--fix` loop's per-pass rewritten report sources never do, and the nominal `LibrarySources`
+ * type makes feeding it the report half a compile error rather than a convention. Same single-thread rule as the
  * instance caches; same content key, so a library file changed on disk misses.
  *
  * Under all of them is the run-scoped PARSED-ROOT cache, the one thing the projection

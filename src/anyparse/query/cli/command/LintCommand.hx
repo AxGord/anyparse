@@ -26,7 +26,9 @@ import sys.FileSystem;
 #end
 
 /**
- * The `lint --fix` check sets, split by how each is applied: `risky` is verified against the compiler oracle, `safe` runs in the unverified fixpoint loop, and `safe` in turn splits into `activeScope` (re-linted only over the files a prior pass changed) and `fullScope` (re-linted over the whole file set every pass).
+ * The `lint --fix` check sets, split by how each is applied: `risky` is verified against the compiler oracle,
+ * `safe` runs in the unverified fixpoint loop, and `safe` in turn splits into `activeScope` (re-linted only
+ * over the files a prior pass changed) and `fullScope` (re-linted over the whole file set every pass).
  */
 typedef CheckPartition = {
 	var risky: Array<Check>;
@@ -59,7 +61,8 @@ typedef LintRange = {
 };
 
 /**
- * Parsed options for `apq lint` — `lang`, `flat`, `includeInfo`, `fix`, the `failOn` severity, output `format`, `ruleFilters`, and `inputSpecs`. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ * Parsed options for `apq lint` — `lang`, `flat`, `includeInfo`, `fix`, the `failOn` severity, output `format`,
+ * `ruleFilters`, and `inputSpecs`. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
  */
 @:nullSafety(Strict)
 typedef LintOpts = {

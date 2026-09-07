@@ -55,7 +55,10 @@ final class HxArrowPlainIfOpenSliceTest extends Test {
 		);
 	}
 
-	/** When the opened arrow + `if` still overflow at the deeper indent, the arrow leading-breaks after `->` and the `if` sits on one line one level deeper. */
+	/**
+	 * When the opened arrow + `if` still overflow at the deeper indent, the arrow
+	 * leading-breaks after `->` and the `if` sits on one line one level deeper.
+	 */
 	public function testArrowLeadingBreaksWhenBodyOverflowsAtDeeperIndent(): Void {
 		final src: String = 'class M {\n\tfunction deepBreak() {\n\t\tpost({}, (v:Null<DeferredPayloadType>) -> if (v != null) '
 			+ 'dispatcher.enqueueDeferredWork((rec:LedgerRecordType) -> rec.ledgerBlock.pendingSlot = v));\n\t}\n}';
@@ -66,7 +69,10 @@ final class HxArrowPlainIfOpenSliceTest extends Test {
 		);
 	}
 
-	/** GUARD: a plain-CALL arrow body (no `if`) is NOT matched by the arrow-plain-`if` path, so its layout is untouched (arrow leading-breaks, call opens — the pre-existing anyparse shape). */
+	/**
+	 * GUARD: a plain-CALL arrow body (no `if`) is NOT matched by the arrow-plain-`if` path, so its
+	 * layout is untouched (arrow leading-breaks, call opens — the pre-existing anyparse shape).
+	 */
 	public function testPlainCallArrowBodyUnchangedByArrowIfPath(): Void {
 		final src: String = 'class M {\n\tfunction plainCallBody() {\n\t\tcallThing((payloadValue:Null<PayloadRecordType>) '
 			+ '-> registryService.applyPendingBatchUpdate(payloadValue, extraArgOne, extraArgTwo, extraArgThreeLong));\n\t}\n}';
@@ -77,7 +83,10 @@ final class HxArrowPlainIfOpenSliceTest extends Test {
 		);
 	}
 
-	/** GUARD: a plain-`if` whose body is a `{}`-block keeps the (hardline-bearing) block deferred and stays hugged — the transform only re-tags hardline-free bodies. */
+	/**
+	 * GUARD: a plain-`if` whose body is a `{}`-block keeps the (hardline-bearing) block
+	 * deferred and stays hugged — the transform only re-tags hardline-free bodies.
+	 */
 	public function testBlockIfArrowBodyStaysHugged(): Void {
 		final src: String = 'class M {\n\tfunction blockIf() {\n\t\tcallThing((v:Null<PayloadRecordType>) -> if (condition) {\n'
 			+ '\t\t\tdoOne();\n\t\t\tdoTwo();\n\t\t});\n\t}\n}';

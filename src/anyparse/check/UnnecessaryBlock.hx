@@ -189,7 +189,8 @@ final class UnnecessaryBlock implements Check {
 }
 
 /**
- * The resolved seams `UnnecessaryBlock` reads in both `run` and `fix`. The frame fields unify structurally with `ScopeFrames.FrameSeams`, so the value is passed to `ScopeFrames` unconverted.
+ * The resolved seams `UnnecessaryBlock` reads in both `run` and `fix`. The frame fields unify
+ * structurally with `ScopeFrames.FrameSeams`, so the value is passed to `ScopeFrames` unconverted.
  */
 private typedef Seams = {
 	final blockStmtKind: String;

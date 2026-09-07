@@ -311,7 +311,10 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		return [];
 	}
 
-	/** Bundle the `RefShape` seams + type provider, or null when a required kind / type information is missing (the check is then a no-op). */
+	/**
+	 * Bundle the `RefShape` seams + type provider, or null when a required
+	 * kind / type information is missing (the check is then a no-op).
+	 */
 	private static function readSeams(plugin: GrammarPlugin): Null<Seams> {
 		final shape: RefShape = plugin.refShape();
 		final callKind: Null<String> = shape.callKind;

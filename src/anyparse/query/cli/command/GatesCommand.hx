@@ -13,7 +13,8 @@ using StringTools;
 using Lambda;
 
 /**
- * Per-field format-mechanism summary the `recon` walk projects from a schema field's `@:fmt` / `@:lit` metadata: whether it is optional plus its lead / trail / kw / sep tokens and `absentOn` flag. Feeds cluster keying and relaxation prediction.
+ * Per-field format-mechanism summary the `recon` walk projects from a schema field's `@:fmt` / `@:lit` metadata: whether it
+ * is optional plus its lead / trail / kw / sep tokens and `absentOn` flag. Feeds cluster keying and relaxation prediction.
  */
 typedef MechanismMetas = {
 	var hasOptional: Bool;
@@ -48,7 +49,8 @@ typedef GateHit = {
 typedef GateExtract = { gateKind: String, predicate: String };
 
 /**
- * Parsed options for `apq gates` — `lang`, `flat`, `limit`, the `mechanism` to inspect, and `inputSpecs`. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ * Parsed options for `apq gates` — `lang`, `flat`, `limit`, the `mechanism` to inspect, and
+ * `inputSpecs`. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
  */
 @:nullSafety(Strict)
 typedef GatesOpts = {
@@ -412,7 +414,8 @@ final class GatesCommand implements CliCommand {
 
 	/**
 	 * Whether a decl group's metas qualify under the requested mechanism.
-	 * `optional-ref` = optional single Ref (excluding Star @:sep); `optional-ref-trail` = the relaxed bracket-pair shape, `mandatory-ref-lead-trail` = its unrelaxed precursor; `kw-lead` = any keyword-dispatched field.
+	 * `optional-ref` = optional single Ref (excluding Star @:sep); `optional-ref-trail` = the relaxed bracket-pair
+	 * shape, `mandatory-ref-lead-trail` = its unrelaxed precursor; `kw-lead` = any keyword-dispatched field.
 	 */
 	private static function mechanismMatches(m: MechanismMetas, mechanism: String): Bool {
 		return switch mechanism {

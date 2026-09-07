@@ -29,7 +29,9 @@ import anyparse.runtime.Span;
  * with BOTH closures fully resolved inside the index — `SubtypeGraph.unrelatedClasses`.
  * An unindexed supertype link (an external type, or a project file not in the lint set)
  * makes the relation unknown → skip. Generics / parametric / `Null<...>` / `Dynamic`
- * operands or checked types never resolve to an indexed class → skip. Every skip is a safe miss. Residual boundary: type names resolve by SIMPLE name, so an external supertype whose simple name collides with an unrelated indexed class could mis-resolve — it does not arise within one self-contained project tree. Macro-reification subtrees (`RefShape.opaqueKinds`) are not descended into.
+ * operands or checked types never resolve to an indexed class → skip. Every skip is a safe miss. Residual boundary: type names
+ * resolve by SIMPLE name, so an external supertype whose simple name collides with an unrelated indexed class could mis-resolve — it
+ * does not arise within one self-contained project tree. Macro-reification subtrees (`RefShape.opaqueKinds`) are not descended into.
  *
  * Report-only: the right rewrite (the branch is dead — drop it, or fix the declared
  * type) is context-dependent, exactly as for `redundant-is-check`.

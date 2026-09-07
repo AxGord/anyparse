@@ -848,7 +848,10 @@ final class BoolLoopScan {
 		};
 	}
 
-	/** The operand span of a `!` condition — the span that REPLACES it when `foreach` inverts — or null when the condition is not a negation. */
+	/**
+	 * The operand span of a `!` condition — the span that REPLACES it when
+	 * `foreach` inverts — or null when the condition is not a negation.
+	 */
 	private static function negatedSpan(cond: QueryNode, s: Seams): Null<Span> {
 		final notKind: Null<String> = s.notKind;
 		return notKind != null && cond.kind == notKind && cond.children.length == 1 ? cond.children[0].span : null;

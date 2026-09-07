@@ -142,7 +142,10 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 		);
 	}
 
-	/** `@:forward` to a CLASS underlying — a forwarded call mutates the object, never the binding — so the ctor-only abstract field IS flagged. */
+	/**
+	 * `@:forward` to a CLASS underlying — a forwarded call mutates the
+	 * object, never the binding — so the ctor-only abstract field IS flagged.
+	 */
 	@:pin('control')
 	@:killer('M-PFF-REBIND-UNRESOLVED')
 	public function testForwardToClassAbstractFieldFlagged(): Void {
@@ -153,7 +156,10 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 		Assert.equals(1, vs.length);
 	}
 
-	/** `@:forward` to an abstract underlying that itself rebinds `this` in a non-ctor method — the forward inherits the rebind, so NOT flagged. */
+	/**
+	 * `@:forward` to an abstract underlying that itself rebinds `this` in
+	 * a non-ctor method — the forward inherits the rebind, so NOT flagged.
+	 */
 	public function testForwardToRebindingAbstractNotFlagged(): Void {
 		final vs: Array<Violation> = fieldViolations(
 			'$REBIND_INNER@:forward abstract W2(Inner) { public inline function new(v:Inner) this = v; } class C {'
@@ -201,7 +207,10 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 		Assert.equals(0, new PreferFinal().run(report, new HaxeQueryPlugin()).length);
 	}
 
-	/** A module-level modifier between `@:forward` and the decl (`@:forward private abstract`) must not drop the meta — forwards to a rebinding underlying, so NOT flagged. */
+	/**
+	 * A module-level modifier between `@:forward` and the decl (`@:forward private
+	 * abstract`) must not drop the meta — forwards to a rebinding underlying, so NOT flagged.
+	 */
 	public function testForwardMetaBeforeModifierPreserved(): Void {
 		final vs: Array<Violation> = fieldViolations(
 			'$REBIND_INNER@:forward private abstract Wp(Inner) { public inline function new(v:Inner) this = v; } class C {'
@@ -210,7 +219,10 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 		Assert.equals(0, vs.length);
 	}
 
-	/** `@:build` before a modifier (`@:build(...) private abstract`) must not drop the meta — the ctor-only abstract bails conservative, so NOT flagged. */
+	/**
+	 * `@:build` before a modifier (`@:build(...) private abstract`) must not
+	 * drop the meta — the ctor-only abstract bails conservative, so NOT flagged.
+	 */
 	public function testBuildMetaBeforeModifierPreserved(): Void {
 		Assert.equals(
 			0,
@@ -221,7 +233,10 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 		);
 	}
 
-	/** A `#if`-guarded meta+decl (`#if x @:forward abstract Wg(Inner) ... #end`, openfl `Vector` pattern) lifts the meta out of the region — forwards to a rebinding underlying, so NOT flagged. */
+	/**
+	 * A `#if`-guarded meta+decl (`#if x @:forward abstract Wg(Inner) ... #end`, openfl `Vector`
+	 * pattern) lifts the meta out of the region — forwards to a rebinding underlying, so NOT flagged.
+	 */
 	public function testGuardedForwardMetaLifted(): Void {
 		final vs: Array<Violation> = fieldViolations(
 			'$REBIND_INNER#if x @:forward abstract Wg(Inner) { public inline function new(v:Inner) this = v; } #end class C {'
@@ -230,7 +245,10 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 		Assert.equals(0, vs.length);
 	}
 
-	/** Control: a `private` ctor-only abstract with NO meta is still flagged — preserving the meta run across a modifier must not over-suppress a meta-less decl. */
+	/**
+	 * Control: a `private` ctor-only abstract with NO meta is still flagged —
+	 * preserving the meta run across a modifier must not over-suppress a meta-less decl.
+	 */
 	@:pin('control')
 	@:killer('M-PFF-REBIND-UNRESOLVED')
 	public function testPrivateCtorOnlyNoMetaStillFlagged(): Void {

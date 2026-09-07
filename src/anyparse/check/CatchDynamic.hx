@@ -298,12 +298,18 @@ final class CatchDynamic implements Check implements ConfigAware implements Vers
 		return b == null || !flagged.exists('${b.from}:${b.to}') ? null : { span: new Span(b.from, b.to), text: '(${b.varName}:$exText)' };
 	}
 
-	/** Whether any node in `node`'s subtree carries `name` — catches plain identifiers, field-access names, and string-interpolation idents alike (a conservative reference test). */
+	/**
+	 * Whether any node in `node`'s subtree carries `name` — catches plain identifiers,
+	 * field-access names, and string-interpolation idents alike (a conservative reference test).
+	 */
 	private static function mentionsName(node: QueryNode, name: String): Bool {
 		return node.name == name || node.children.exists(c -> mentionsName(c, name));
 	}
 
-	/** The catch-clause kind, catch-all type names and canonical exception path, or null when the grammar sets none of them (the check is then a no-op). */
+	/**
+	 * The catch-clause kind, catch-all type names and canonical exception path,
+	 * or null when the grammar sets none of them (the check is then a no-op).
+	 */
 	private static function readKinds(plugin: GrammarPlugin): Null<{
 		kind: String,
 		catchAll: Array<String>,

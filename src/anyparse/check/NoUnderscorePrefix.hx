@@ -315,7 +315,11 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 	}
 
 	/**
-	 * The spans to rewrite to `target` for one flagged binding, or null when a gate refuses the rename: `target` collides with something reachable from the binding's scope (`Naming.collidesInScope` - a sibling parameter, an overlapping local, an own member, a static, an import), it names a member INHERITED from a supertype, it names a declared top-level type, or the occurrence set cannot be proven complete (`Naming.declaringFileRenameSpans`). The same-target conflict between two flagged bindings is settled by the caller (`claimedByAnother`); the derived `target` itself comes from `strippedName`.
+	 * The spans to rewrite to `target` for one flagged binding, or null when a gate refuses the rename: `target` collides with
+	 * something reachable from the binding's scope (`Naming.collidesInScope` - a sibling parameter, an overlapping local, an
+	 * own member, a static, an import), it names a member INHERITED from a supertype, it names a declared top-level type, or
+	 * the occurrence set cannot be proven complete (`Naming.declaringFileRenameSpans`). The same-target conflict between two
+	 * flagged bindings is settled by the caller (`claimedByAnother`); the derived `target` itself comes from `strippedName`.
 	 */
 	private static function renameSpansFor(
 		decl: NamedDecl, target: String, source: String, tree: QueryNode, shape: RefShape, plugin: GrammarPlugin,
@@ -336,7 +340,10 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 	}
 
 	/**
-	 * `decl`'s name with every leading underscore stripped, or null when the result must not be written: nothing was stripped, the remainder is not a valid identifier (`_1` -> `1`), it is a reserved word of the grammar (`_new` -> `new`), or it violates the applicable naming rule's format, which would trade this finding for a `naming` one. With no applicable rule (a project policy governing neither category) the bare strip stands - still keyword-checked, since that gate is the grammar's, not the policy's.
+	 * `decl`'s name with every leading underscore stripped, or null when the result must not be written: nothing was stripped, the
+	 * remainder is not a valid identifier (`_1` -> `1`), it is a reserved word of the grammar (`_new` -> `new`), or it violates the
+	 * applicable naming rule's format, which would trade this finding for a `naming` one. With no applicable rule (a project policy
+	 * governing neither category) the bare strip stands - still keyword-checked, since that gate is the grammar's, not the policy's.
 	 */
 	private static function strippedName(decl: NamedDecl, policy: NamingPolicy, shape: RefShape): Null<String> {
 		final name: String = decl.name;
@@ -401,7 +408,10 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 		return fn != null && !OccurrenceScan.referencedInRange(source, name, fn.from, fn.to, [declSpan]);
 	}
 
-	/** Every node kind that bounds a binding's visibility to one body: a function declaration, a local (or local inline) function, a lambda. */
+	/**
+	 * Every node kind that bounds a binding's visibility to one body: a
+	 * function declaration, a local (or local inline) function, a lambda.
+	 */
 	private static function functionScopeKinds(shape: RefShape): Array<String> {
 		return (
 			shape.functionKinds ?? []
@@ -421,7 +431,8 @@ private typedef Options = {
 };
 
 /**
- * One flagged binding whose derived target name passed `strippedName`: the declaration, that target, and the scope the target must be unique within. The set of these decides the same-target conflict between two flagged bindings before any rename is emitted.
+ * One flagged binding whose derived target name passed `strippedName`: the declaration, that target, and the scope the target must
+ * be unique within. The set of these decides the same-target conflict between two flagged bindings before any rename is emitted.
  */
 private typedef Candidate = {
 	final decl: NamedDecl;

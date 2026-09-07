@@ -107,7 +107,8 @@ class RedundantLambdaWrapperCheckTest extends Test {
 	}
 
 	/**
-	 * A parameter used as the callee receiver. The lower-initial receiver gate is what refuses this — the parameter-mention scan would too, but it never gets the chance (see the check type doc).
+	 * A parameter used as the callee receiver. The lower-initial receiver gate is what refuses this
+	 * — the parameter-mention scan would too, but it never gets the chance (see the check type doc).
 	 */
 	public function testParamInsideCalleeNotFlagged(): Void {
 		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\txs.foreach(p -> p.check(p));\n\t}\n}').length);

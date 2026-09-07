@@ -22,7 +22,8 @@ import anyparse.runtime.Span;
  * `RefShape.branchKinds` — for Haxe: `if` / `else-if`, `while` / `do-while`,
  * `for` (incl. comprehensions), each `switch` (counted once, not per-case), each `catch`, the boolean
  * `&&` / `||`, the ternary `?:`, and `??`. (`&&` / `||` are counted, matching
- * checkstyle's `CyclomaticComplexity`; a `switch` counts once — which arm is taken — not once per case, so a flat dispatcher / arg-parser is not inflated; branches inside case bodies still count (see `countIn`).)
+ * checkstyle's `CyclomaticComplexity`; a `switch` counts once — which arm is taken — not once per case, so
+ * a flat dispatcher / arg-parser is not inflated; branches inside case bodies still count (see `countIn`).)
  *
  * Each function unit (`RefShape.functionKinds`) is measured independently: when
  * counting a function's branches the walk descends through nested local functions and

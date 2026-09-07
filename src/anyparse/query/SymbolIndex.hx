@@ -74,16 +74,29 @@ typedef MemberInfo = {
 	/** The member's name. */
 	var name: String;
 
-	/** True when the member is a property whose READ accessor is a getter (`get` / `dynamic`) — reading it runs code. A plain field / method is false. */
+	/**
+	 * True when the member is a property whose READ accessor is a getter (`get`
+	 * / `dynamic`) — reading it runs code. A plain field / method is false.
+	 */
 	var hasGetter: Bool;
 
-	/** True when the member is a property whose WRITE accessor is a setter (`set` / `dynamic`) - writing it runs code. A plain field / final / `(default|null|never)` write slot is false (no set-accessor). */
+	/**
+	 * True when the member is a property whose WRITE accessor is a setter (`set` / `dynamic`) - writing
+	 * it runs code. A plain field / final / `(default|null|never)` write slot is false (no set-accessor).
+	 */
 	var hasSetter: Bool;
 
-	/** The member's return type OUTER nominal (last `.` segment, `Null<T>` → `Null`), or null for a field / `Void` / unannotated return. Drives cross-file `Null<T>`-return nullable-source resolution. */
+	/**
+	 * The member's return type OUTER nominal (last `.` segment, `Null<T>` → `Null`), or null for a field
+	 * / `Void` / unannotated return. Drives cross-file `Null<T>`-return nullable-source resolution.
+	 */
 	var returnNominal: Null<String>;
 
-	/** The member's VERBATIM declared type SOURCE — the written `:Type` text (`Null<T>` preserved), or null for an unannotated / inference-typed / function member (whose annotation is a `returnType`, not a `type`). Drives cross-file `Type.staticField` read-type resolution. */
+	/**
+	 * The member's VERBATIM declared type SOURCE — the written `:Type` text (`Null<T>`
+	 * preserved), or null for an unannotated / inference-typed / function member (whose annotation
+	 * is a `returnType`, not a `type`). Drives cross-file `Type.staticField` read-type resolution.
+	 */
 	var typeSource: Null<String>;
 
 	/**
@@ -98,13 +111,22 @@ typedef MemberInfo = {
 	 */
 	var firstParamTypeSource: Null<String>;
 
-	/** The member's EXPLICIT visibility keyword as WRITTEN (`public` / `private`), or null when its modifier run carries none. Drives cross-file override-visibility resolution. */
+	/**
+	 * The member's EXPLICIT visibility keyword as WRITTEN (`public` / `private`), or null
+	 * when its modifier run carries none. Drives cross-file override-visibility resolution.
+	 */
 	var visibility: Null<String>;
 
-	/** True when the member's modifier run carries the grammar's override modifier — an unmarked override's effective visibility comes from the supertype, not the container default. */
+	/**
+	 * True when the member's modifier run carries the grammar's override modifier — an unmarked
+	 * override's effective visibility comes from the supertype, not the container default.
+	 */
 	var isOverride: Bool;
 
-	/** The grammar member-decl kind the member projected as (`VarMember` / `FinalMember` / `FnMember` / `SimpleCtor` / …) — lets a consumer tell a FIELD from a method or an enum constructor without re-walking the tree. */
+	/**
+	 * The grammar member-decl kind the member projected as (`VarMember` / `FinalMember` / `FnMember` / `SimpleCtor`
+	 * / …) — lets a consumer tell a FIELD from a method or an enum constructor without re-walking the tree.
+	 */
 	var kind: String;
 
 	/**
@@ -123,7 +145,10 @@ typedef MemberInfo = {
 	 */
 	var isStatic: Bool;
 
-	/** True when the member's modifier run carries the grammar's `inline` modifier — an inlined field's value is a compile-time constant at every use site. */
+	/**
+	 * True when the member's modifier run carries the grammar's `inline` modifier
+	 * — an inlined field's value is a compile-time constant at every use site.
+	 */
 	var isInline: Bool;
 
 	/**
@@ -168,7 +193,8 @@ typedef MemberInfo = {
 };
 
 /**
- * A cross-file index entry for one top-level type: its `name` / `kind` / `span`, whether it is the module `isMain` type, its direct `supertypes` and `members`, and `isAnonStruct`. Feeds cross-file-safe rename and move-symbol gates.
+ * A cross-file index entry for one top-level type: its `name` / `kind` / `span`, whether it is the module `isMain`
+ * type, its direct `supertypes` and `members`, and `isAnonStruct`. Feeds cross-file-safe rename and move-symbol gates.
  */
 typedef TypeDeclInfo = {
 	var name: String;
@@ -252,7 +278,10 @@ typedef TypeDeclInfo = {
 	 */
 	var interfaces: Array<String>;
 
-	/** True when this is a `typedef X = {…}` anonymous struct — its fields can never be properties, so field access on it is side-effect-free. */
+	/**
+	 * True when this is a `typedef X = {…}` anonymous struct — its fields
+	 * can never be properties, so field access on it is side-effect-free.
+	 */
 	var isAnonStruct: Bool;
 
 	/**
@@ -332,7 +361,8 @@ typedef TypeDeclInfo = {
 };
 
 /**
- * A cross-file index entry for one source file: its `file` path, `pkg` / `module`, `imports`, declared `types`, and `accessGrants` (types it `@:access(...)`-grants itself private reach into). The unit `SymbolIndex` aggregates.
+ * A cross-file index entry for one source file: its `file` path, `pkg` / `module`, `imports`, declared `types`, and
+ * `accessGrants` (types it `@:access(...)`-grants itself private reach into). The unit `SymbolIndex` aggregates.
  */
 typedef FileInfo = {
 	var file: String;
@@ -414,7 +444,10 @@ final class SymbolIndex {
 	 */
 	private static final PLAIN_NOMINAL_KINDS: Array<String> = [CLASS_DECL_KIND, 'InterfaceDecl', 'EnumDecl'];
 
-	/** The name -> DECLARATION layer: which files declare a name, and which declaration a written type reference denotes in a file's scope. */
+	/**
+	 * The name -> DECLARATION layer: which files declare a name, and which
+	 * declaration a written type reference denotes in a file's scope.
+	 */
 	public final refs: TypeRefIndex;
 
 	/** The INHERITANCE layer: subtype enumeration and supertype-closure proofs over the indexed `supertypes` edges. */
@@ -438,7 +471,10 @@ final class SymbolIndex {
 	private final _files: Array<FileInfo>;
 	private final _skipped: Array<String>;
 
-	/** Per-file source text, retained so a subtype-ward body scan (`SubtypeGraph.subtypeReferencesField`) can inspect a subtype's raw declaration span for a backing-field reference. */
+	/**
+	 * Per-file source text, retained so a subtype-ward body scan (`SubtypeGraph.subtypeReferencesField`)
+	 * can inspect a subtype's raw declaration span for a backing-field reference.
+	 */
 	private final _sources: Map<String, String>;
 
 	private function new(

@@ -213,7 +213,8 @@ class DeadNullGuardTest extends Test {
 	}
 
 	public function testTryWriteNotTrustedInCatch(): Void {
-		// `x` is narrowed before the try; the try body rewrites it before the call that may throw — the catch must not trust any try-body write.
+		// `x` is narrowed before the try; the try body rewrites it before the
+		// call that may throw — the catch must not trust any try-body write.
 		Assert.equals(
 			0,
 			violations(

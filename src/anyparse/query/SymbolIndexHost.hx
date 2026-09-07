@@ -34,7 +34,10 @@ interface SymbolIndexHost {
 	 */
 	function hasDeclaredResolutionScope(): Bool;
 
-	/** The memoised resolution-scoped `SymbolIndex` (built once, over report files UNION the library roots), or null when no scope is configured. */
+	/**
+	 * The memoised resolution-scoped `SymbolIndex` (built once, over report
+	 * files UNION the library roots), or null when no scope is configured.
+	 */
 	function resolutionIndex(): Null<SymbolIndex>;
 
 	/**

@@ -20,7 +20,8 @@ using Lambda;
  * Flags a manual first-match `for` loop — one that iterates a collection to return
  * (or capture-and-break) the first element satisfying a condition — which the
  * user's rule replaces with `Lambda.find`: use `.find()` instead of manually
- * iterating to find the first matching element. `Severity.Info`, with an autofix that rewrites the loop to `xs.find(x -> cond)` and inserts a `using Lambda;` when the file lacks one. Purely structural, so it holds without a
+ * iterating to find the first matching element. `Severity.Info`, with an autofix that rewrites the loop to `xs.find(x
+ * -> cond)` and inserts a `using Lambda;` when the file lacks one. Purely structural, so it holds without a
  * type-checker. Grammar-agnostic over `RefShape`.
  *
  * ## The three shapes it accepts
@@ -197,7 +198,8 @@ final class PreferFind implements Check {
 	}
 
 	/**
-	 * Bundle the required + optional `RefShape` kinds, or null when a required one is unset — including the statement-list kinds every form pairs siblings within (the check is then a no-op).
+	 * Bundle the required + optional `RefShape` kinds, or null when a required one is unset —
+	 * including the statement-list kinds every form pairs siblings within (the check is then a no-op).
 	 */
 	private static function readSeams(plugin: GrammarPlugin): Null<Seams> {
 		final shape: RefShape = plugin.refShape();
@@ -473,7 +475,10 @@ final class PreferFind implements Check {
 		return intervalKind != null && iterable.kind == intervalKind;
 	}
 
-	/** Whether the iterable is a call — a `.keys()` / `.iterator()` result is an `Iterator`, not `Iterable`, so `Lambda.find` would not compile (a call result's iterability is unknowable without types — skip conservatively). */
+	/**
+	 * Whether the iterable is a call — a `.keys()` / `.iterator()` result is an `Iterator`, not `Iterable`, so
+	 * `Lambda.find` would not compile (a call result's iterability is unknowable without types — skip conservatively).
+	 */
 	private static function isCallIterable(iterable: QueryNode, s: Seams): Bool {
 		final callKind: Null<String> = s.callKind;
 		return callKind != null && iterable.kind == callKind;
@@ -546,7 +551,10 @@ final class PreferFind implements Check {
 	}
 
 
-	/** Re-run the two-form shape analysis, keying a fix candidate by its loop's `from:to` span — the same key `run` anchors a violation on. */
+	/**
+	 * Re-run the two-form shape analysis, keying a fix candidate by its
+	 * loop's `from:to` span — the same key `run` anchors a violation on.
+	 */
 	private static function collectFixCandidates(
 		node: QueryNode, source: String, s: Seams, probe: MemberProbe, out: Map<String, FixCandidate>
 	): Void {
@@ -654,9 +662,12 @@ final class PreferFind implements Check {
 	}
 
 	/**
-	 * Whether `node`'s subtree is free of the effect shapes this fix refuses when moving a predicate into a `find` lambda: no assignment / compound-assignment (`*Assign`), no `++` / `--`
+	 * Whether `node`'s subtree is free of the effect shapes this fix refuses when moving a predicate
+	 * into a `find` lambda: no assignment / compound-assignment (`*Assign`), no `++` / `--`
 	 * (`*Incr` / `*Decr`), no `new`, and no free-function call — only field reads and
-	 * accessor-style method calls (a call whose callee is an `a.b` / `a?.b` / `a!.b` chain) is ASSUMED effect-free, not proven — a mutating method such as `sink.push(x)` would pass, yet the rewrite stays safe because `Lambda.find` runs the predicate exactly as the loop did. Conservative on refusal: any unrecognised call shape refuses.
+	 * accessor-style method calls (a call whose callee is an `a.b` / `a?.b` / `a!.b` chain) is ASSUMED effect-free, not
+	 * proven — a mutating method such as `sink.push(x)` would pass, yet the rewrite stays safe because `Lambda.find`
+	 * runs the predicate exactly as the loop did. Conservative on refusal: any unrecognised call shape refuses.
 	 */
 	private static function condIsPure(node: QueryNode, s: Seams): Bool {
 		final k: String = node.kind;
@@ -664,7 +675,10 @@ final class PreferFind implements Check {
 			&& (k != s.callKind || calleeIsAccessor(node, s)) && node.children.foreach(c -> condIsPure(c, s));
 	}
 
-	/** Whether a call's callee (`children[0]`) is a field-access chain (`a.b` / `a?.b` / `a!.b`) — a method call, not a free-function call. */
+	/**
+	 * Whether a call's callee (`children[0]`) is a field-access chain
+	 * (`a.b` / `a?.b` / `a!.b`) — a method call, not a free-function call.
+	 */
 	private static function calleeIsAccessor(call: QueryNode, s: Seams): Bool {
 		if (call.children.length == 0) return false;
 		final callee: String = call.children[0].kind;
@@ -695,7 +709,10 @@ final class PreferFind implements Check {
 		return safe ? src : '($src)';
 	}
 
-	/** Whether `kind` is a postfix / primary expression that `.find(...)` binds directly onto (no wrapping parens needed); a looser operator (ternary / binary) iterable is wrapped. */
+	/**
+	 * Whether `kind` is a postfix / primary expression that `.find(...)` binds directly onto
+	 * (no wrapping parens needed); a looser operator (ternary / binary) iterable is wrapped.
+	 */
 	private static function postfixSafe(kind: String, s: Seams): Bool {
 		return kind == s.identKind || kind == s.fieldAccessKind || kind == s.nullSafeAccessKind || kind == s.forceFieldAccessKind
 			|| kind == s.indexAccessKind || kind == s.parenKind || kind == s.callKind || kind == s.newExprKind;
@@ -758,7 +775,10 @@ private typedef Seams = {
 	var blockKinds: Array<String>;
 }
 
-/** A recovered first-match loop ready to rewrite: the form flag, the loop node, its partner (Form A trailing return / Form B declaration) and the destructured head. */
+/**
+ * A recovered first-match loop ready to rewrite: the form flag, the loop node, its
+ * partner (Form A trailing return / Form B declaration) and the destructured head.
+ */
 private typedef FixCandidate = {
 	/** Which of the three shapes was recovered — the tag `buildEdits` dispatches on. */
 	var form: FindForm;

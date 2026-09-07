@@ -718,7 +718,8 @@ class MoveSymbolSliceTest extends Test {
 	 * Two things used to break it, both invisible to every gate the project runs (no gate formats a
 	 * move's output): a carried import written directly under `package …;` with no blank line
 	 * between them, and the destination's own trailing newline re-added on top of the one the cut
-	 * span already carried, which left EVERY move's destination one blank line long. The second arm is the offset-0 anchor of a module with no package declaration, where the blank
+	 * span already carried, which left EVERY move's destination one blank line long. The second
+	 * arm is the offset-0 anchor of a module with no package declaration, where the blank
 	 * line the fresh import owes is the one BELOW it.
 	 */
 	public function testDestinationIsCanonicalAfterAMove(): Void {

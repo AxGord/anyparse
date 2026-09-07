@@ -56,7 +56,10 @@ final class CompilerDisplayOracle implements TypeOracle {
 	#if nodejs
 	private final _child: Dynamic;
 
-	/** Source text per queried file, read once and kept for the rest of this oracle's life — `answerAt` needs it to turn a reply's line/column position back into a byte offset. */
+	/**
+	 * Source text per queried file, read once and kept for the rest of this oracle's life
+	 * — `answerAt` needs it to turn a reply's line/column position back into a byte offset.
+	 */
 	private final _sources: Map<String, String> = [];
 	#end
 
@@ -284,7 +287,10 @@ final class CompilerDisplayOracle implements TypeOracle {
 		return out;
 	}
 
-	/** `file` made relative to `cwd` (the compile-server client cwd) so the display path matches the module the compiler registered; unchanged when `cwd` is null or not a prefix. */
+	/**
+	 * `file` made relative to `cwd` (the compile-server client cwd) so the display path
+	 * matches the module the compiler registered; unchanged when `cwd` is null or not a prefix.
+	 */
 	private static function relativeToCwd(file: String, cwd: Null<String>): String {
 		if (cwd == null) return file;
 		final prefix: String = StringTools.endsWith(cwd, '/') ? cwd : '$cwd/';

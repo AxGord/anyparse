@@ -155,16 +155,25 @@ using Lambda;
 @:nullSafety(Strict)
 final class TrivialGetter implements Check implements ConfigAware implements CrossFileFix {
 
-	/** Default cap on statement-level backing-field writes a shape-A collapse marks `@:bypassAccessor` before it instead falls back to inlining the getter. */
+	/**
+	 * Default cap on statement-level backing-field writes a shape-A collapse marks
+	 * `@:bypassAccessor` before it instead falls back to inlining the getter.
+	 */
 	private static inline final DEFAULT_MAX_BYPASS_WRITES: Int = 3;
 
-	/** The write accessor that refuses a write from EVERY position, the constructor included — the one whose SELF-BACKED collapse target is `(default, never)` rather than `(default, null)`. */
+	/**
+	 * The write accessor that refuses a write from EVERY position, the constructor included — the
+	 * one whose SELF-BACKED collapse target is `(default, never)` rather than `(default, null)`.
+	 */
 	private static inline final WRITE_NEVER: String = 'never';
 
 	/** The `messageFor` shape tag of the `(get, set)` -> `(default, set)` collapse: a trivial getter over a real setter. */
 	private static inline final SHAPE_SET_A: String = 'setA';
 
-	/** The metadata that gives a property physical storage of its OWN — what makes a self-backed trivial getter legal, and dead the moment the collapse gives the property a `default` side. */
+	/**
+	 * The metadata that gives a property physical storage of its OWN — what makes a self-backed
+	 * trivial getter legal, and dead the moment the collapse gives the property a `default` side.
+	 */
 	private static inline final IS_VAR_META: String = '@:isVar';
 
 	/** The class-body member kinds `memberTables` reads — the two field forms and the two method forms. */

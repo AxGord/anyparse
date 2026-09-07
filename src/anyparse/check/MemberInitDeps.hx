@@ -163,7 +163,10 @@ final class MemberInitDeps {
 		return span != null && source.substring(span.from, span.to).rtrim().endsWith('()');
 	}
 
-	/** The node kinds whose presence in a field initializer makes its position observable - an assignment, a call, an allocation. One list, two consumers (`hasSideEffectingFieldFlip` and `blockInitInert`), so the flip bail and the block gate cannot drift apart. */
+	/**
+	 * The node kinds whose presence in a field initializer makes its position observable - an assignment, a call, an allocation. One
+	 * list, two consumers (`hasSideEffectingFieldFlip` and `blockInitInert`), so the flip bail and the block gate cannot drift apart.
+	 */
 	private static function unsafeInitKinds(shape: RefShape): Array<String> {
 		final kinds: Array<String> = shape.writeParentKinds.copy();
 		if (shape.callKind != null) kinds.push(shape.callKind);

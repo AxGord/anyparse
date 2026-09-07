@@ -49,7 +49,10 @@ final class HxComprehensionCloserSliceTest extends Test {
 		+ ' "whitespace": {"bracketConfig": {"comprehensionBrackets": {"openingPolicy": "onlyAfter", "closingPolicy": "before"}}},'
 		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "keep"}}';
 
-	/** Knob ON but TIGHT (unpadded) comprehension brackets — no `comprehensionBrackets` padding, where `shapeComprehensionBlockHug` declines. */
+	/**
+	 * Knob ON but TIGHT (unpadded) comprehension brackets — no
+	 * `comprehensionBrackets` padding, where `shapeComprehensionBlockHug` declines.
+	 */
 	private static final TIGHT_ON: String = '{"indentation": {"character": "tab", "tabWidth": 4},'
 		+ ' "wrapping": {"maxLineLength": 140, "comprehensionCuddledOpen": true},'
 		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "keep"}}';

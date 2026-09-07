@@ -1047,7 +1047,8 @@ typedef RefShape = {
 
 	/**
 	 * Literal-expression node kinds usable verbatim as a switch `case` pattern
-	 * (int / float / bool / null; interpolation-free strings are matched via `stringFoldSupport` instead) — the `prefer-switch` check needs to tell
+	 * (int / float / bool / null; interpolation-free strings are matched via
+	 * `stringFoldSupport` instead) — the `prefer-switch` check needs to tell
 	 * a comparison against a constant (convertible to `case <lit>:`) from one against
 	 * an arbitrary expression. Optional; unset makes the check a no-op.
 	 */
@@ -3031,7 +3032,8 @@ typedef RefShape = {
 }
 
 /**
- * Plugin-declared contract for `apq meta`: `metaKinds` are the `QueryNode.kind` values a metadata annotation carries, and `declHostKinds` the kinds that may host one. The meta walker reads these slots and never inspects grammar-specific node types.
+ * Plugin-declared contract for `apq meta`: `metaKinds` are the `QueryNode.kind` values a metadata annotation carries, and
+ * `declHostKinds` the kinds that may host one. The meta walker reads these slots and never inspects grammar-specific node types.
  */
 @:nullSafety(Strict)
 typedef MetaShape = {

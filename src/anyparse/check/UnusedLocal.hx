@@ -139,7 +139,8 @@ private typedef ScanCtx = {
  * A flagged local is by construction wholly unreferenced, so the only
  * deletion hazard is a side-effecting initializer (`final x = compute();`).
  * `fix` deletes the declaration line only when it has no initializer or a
- * side-effect-free one, or (with a symbol index) a type-aware deletion-pure expression — a plain field read, a pure array literal, or a provably-pure stdlib static call (`TypeResolver.isDeletionPure`); a side-effecting
+ * side-effect-free one, or (with a symbol index) a type-aware deletion-pure expression — a plain field read, a
+ * pure array literal, or a provably-pure stdlib static call (`TypeResolver.isDeletionPure`); a side-effecting
  * initializer is reported but left for the author to resolve.
  */
 @:nullSafety(Strict)

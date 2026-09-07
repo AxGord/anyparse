@@ -2290,7 +2290,10 @@ typedef BlockStarCtx = {
 	final anyEmptyLinesFlag: Bool;
 	final uniformStmtBlanks: Bool;
 
-	/** ω-case-sibling-symmetry: `final _csW: Int = …;` widest-sibling pre-pass, or `macro -1` when the Star has no `caseSiblingSymmetry` meta. */
+	/**
+	 * ω-case-sibling-symmetry: `final _csW: Int = …;` widest-sibling
+	 * pre-pass, or `macro -1` when the Star has no `caseSiblingSymmetry` meta.
+	 */
 	final caseSiblingWidthExpr: Expr;
 
 	/** ω-blank-around-multiline-members: records where this gap's blank would go; `macro {}` without the flag. */
@@ -2453,7 +2456,9 @@ typedef SepStarNoTriviaCtx = {
  *
  * The two travel together because neither is usable alone: the field name
  * without the test would pick a cascade for every list, and the test without
- * the name has nothing to pick. `isMapLiteralExpr` is a spliced `Expr` rather than a predicate name because the class it calls depends on the build (`AstPreds` plain, `AstPredsT` trivia), which only the lowering that owns `_shape` and `_ctx` can resolve — `WriterLowering.mapWrapFor` builds both halves.
+ * the name has nothing to pick. `isMapLiteralExpr` is a spliced `Expr` rather than a predicate name
+ * because the class it calls depends on the build (`AstPreds` plain, `AstPredsT` trivia), which only the
+ * lowering that owns `_shape` and `_ctx` can resolve — `WriterLowering.mapWrapFor` builds both halves.
  */
 typedef SepStarMapWrap = {
 	final field: String;
@@ -2539,7 +2544,10 @@ typedef TryparseStarCtx = {
 	 */
 	final trailPadSpaceDoc: Expr;
 
-	/** Typed nested-conditional element probe fn-ref (`AstPredsT.elementIsConditional_<ElemRule>`), or null when the format has no generated predicates. */
+	/**
+	 * Typed nested-conditional element probe fn-ref (`AstPredsT.elementIsConditional_<ElemRule>`),
+	 * or null when the format has no generated predicates.
+	 */
 	final elemCondFn: Null<Expr>;
 };
 typedef CascadeEmit = {

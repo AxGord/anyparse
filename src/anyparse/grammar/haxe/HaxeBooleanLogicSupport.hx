@@ -11,7 +11,8 @@ using StringTools;
  * an equivalent boolean expression. The four mixed forms collapse via
  * short-circuit `&&` / `||` (`cond ? true : x` -> `cond || x`, `cond ? false : x`
  * -> `!cond && x`, `cond ? x : true` -> `!cond || x`, `cond ? x : false` ->
- * `cond && x`), and the two pure-literal forms collapse to `cond` / `!cond`. A mixed form reduces only when its non-literal branch is a provably non-null `Bool` (a boolean-operator result); a `null` literal, bare identifier or call/field branch is left alone.
+ * `cond && x`), and the two pure-literal forms collapse to `cond` / `!cond`. A mixed form reduces only when its non-literal branch
+ * is a provably non-null `Bool` (a boolean-operator result); a `null` literal, bare identifier or call/field branch is left alone.
  *
  * Any negation is pushed inward by De Morgan — `!(a == null || b == null)`
  * becomes `a != null && b != null`, not `!(a == null || b == null)` — so the
@@ -292,7 +293,9 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 	}
 
 	/**
-	 * The precedence an expression must bind at to sit UNPARENTHESISED in a `slotKind` child slot, or null when the slot constrains nothing — including a kind this function does not model, since an unlisted kind is by construction one no caller may rely on — a statement, a condition, a call
+	 * The precedence an expression must bind at to sit UNPARENTHESISED in a `slotKind` child slot, or
+	 * null when the slot constrains nothing — including a kind this function does not model, since an
+	 * unlisted kind is by construction one no caller may rely on — a statement, a condition, a call
 	 * argument, an array element, an already-parenthesised expression: any expression is
 	 * grammatical there.
 	 *

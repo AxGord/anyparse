@@ -35,7 +35,8 @@ using StringTools;
  * same-named unrelated type is the residual soundness boundary (as in `impossible-is-check`).
  * Macro-reification subtrees (`RefShape.opaqueKinds`) are not descended into.
  *
- * `fix` deletes the dead clause (unreachable => dead code); an alternative repair (fixing its type or reordering) is left to the human when the deletion is not what they meant.
+ * `fix` deletes the dead clause (unreachable => dead code); an alternative repair (fixing
+ * its type or reordering) is left to the human when the deletion is not what they meant.
  */
 @:nullSafety(Strict)
 final class UnreachableCatch implements Check {

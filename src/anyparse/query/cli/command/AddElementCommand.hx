@@ -11,7 +11,9 @@ import anyparse.query.ExitCode.*;
 using StringTools;
 
 /**
- * Parsed options for `apq add-element` — `lang`, `write` / `reformat`, the insertion address (`afterSpec` / `beforeSpec` / `appendSpec`, plus `selectExpr` / `matchExpr` / `nth`), and the element source (`code` or `fromFile`). `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ * Parsed options for `apq add-element` — `lang`, `write` / `reformat`, the insertion address (`afterSpec`
+ * / `beforeSpec` / `appendSpec`, plus `selectExpr` / `matchExpr` / `nth`), and the element source (`code`
+ * or `fromFile`). `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
  */
 @:nullSafety(Strict)
 typedef AddElementOpts = {

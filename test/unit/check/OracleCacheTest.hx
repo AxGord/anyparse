@@ -30,7 +30,10 @@ import utest.Test;
 @:nullSafety(Strict)
 final class OracleCacheTest extends Test {
 
-	/** Every token shape `hxmlRefs` must read: a comment line, all three classpath spellings, both library spellings, an include, flags it must ignore, and two tokens on one line. */
+	/**
+	 * Every token shape `hxmlRefs` must read: a comment line, all three classpath spellings,
+	 * both library spellings, an include, flags it must ignore, and two tokens on one line.
+	 */
 	private static final HXML_FIXTURE: String = '# a comment\n-cp src\n--class-path test\n-lib utest\n'
 		+ '--library hxnodejs:1.2.3\nother.hxml\n-D analyzer-optimize\n-js bin/out.js\n-cp lib -lib heaps\n';
 
@@ -182,7 +185,10 @@ final class OracleCacheTest extends Test {
 		#end
 	}
 
-	/** The hxml token grammar: comments skipped, all three classpath spellings, both library spellings with the version suffix stripped, includes by extension, and several tokens on one line. */
+	/**
+	 * The hxml token grammar: comments skipped, all three classpath spellings, both library spellings
+	 * with the version suffix stripped, includes by extension, and several tokens on one line.
+	 */
 	public function testHxmlRefsReadsCpLibAndIncludes(): Void {
 		final refs: HxmlRefs = OracleCache.hxmlRefs(HXML_FIXTURE);
 		Assert.same(['src', 'test', 'lib'], refs.classPaths);
@@ -190,7 +196,10 @@ final class OracleCacheTest extends Test {
 		Assert.same(['other.hxml'], refs.includes);
 	}
 
-	/** The `haxe -v` probe parsing: the classpath entries with the empty one dropped, the whole `Defines:` line, and null/empty degradation when neither line is there. */
+	/**
+	 * The `haxe -v` probe parsing: the classpath entries with the empty one dropped,
+	 * the whole `Defines:` line, and null/empty degradation when neither line is there.
+	 */
 	public function testProbeParsingReadsClasspathAndDefines(): Void {
 		Assert.same(['/a/', '/b/std/'], OracleCache.probeDirs(PROBE_STDOUT));
 		Assert.equals('Defines: dce=std;haxe=4.3.7;utest=1.13.2', OracleCache.probeDefines(PROBE_STDOUT));

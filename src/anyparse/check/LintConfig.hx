@@ -81,19 +81,31 @@ final class LintConfig {
 
 	private final _rules: Map<String, RuleConfig>;
 
-	/** The `compilerOracle` hxml path, resolved against the declaring config's directory (verbatim when parsed without a base), or null when unset. */
+	/**
+	 * The `compilerOracle` hxml path, resolved against the declaring config's
+	 * directory (verbatim when parsed without a base), or null when unset.
+	 */
 	private final _compilerOracle: Null<String>;
 
 	/** The compile CWD probed for that hxml (`hxmlCompileDir`), or null when unset or parsed without a base. */
 	private final _compilerOracleDir: Null<String>;
 
-	/** Whether the project opted the oracle into the shared warm compilation server (`compilerOracleServer`); false unless the key asks for it. */
+	/**
+	 * Whether the project opted the oracle into the shared warm compilation
+	 * server (`compilerOracleServer`); false unless the key asks for it.
+	 */
 	private final _compilerOracleServer: Bool;
 
-	/** The declared library source roots (`resolutionRoots`), each resolved to absolute against the config directory; an empty array when the key is absent. */
+	/**
+	 * The declared library source roots (`resolutionRoots`), each resolved to
+	 * absolute against the config directory; an empty array when the key is absent.
+	 */
 	private final _resolutionRoots: Array<String>;
 
-	/** The declared haxelib library names (`resolutionLibs`) — verbatim strings; the CLI resolves each to a source dir lazily via `haxelib libpath`. An empty array when the key is absent. */
+	/**
+	 * The declared haxelib library names (`resolutionLibs`) — verbatim strings; the CLI resolves
+	 * each to a source dir lazily via `haxelib libpath`. An empty array when the key is absent.
+	 */
 	private final _resolutionLibs: Array<String>;
 
 	/** Whether the auto-discovered Haxe std may join the resolution scope (`resolutionStd`); true unless the key explicitly declines it. */
@@ -215,7 +227,10 @@ final class LintConfig {
 		return rc?.severity;
 	}
 
-	/** A rule-specific integer option (e.g. complexity `max`), or null when unset or non-numeric. A fractional value truncates, as it always has. */
+	/**
+	 * A rule-specific integer option (e.g. complexity `max`), or null when
+	 * unset or non-numeric. A fractional value truncates, as it always has.
+	 */
 	public function intOption(id: String, key: String): Null<Int> {
 		return switch propOf(id, key) {
 			case JNumber(v): Std.int(v);
@@ -449,7 +464,10 @@ final class LintConfig {
 		#end
 	}
 
-	/** Write `message` to stderr the first time `configPath` reports anything — the once-per-file-per-process ledger `discover`'s two diagnostics share. */
+	/**
+	 * Write `message` to stderr the first time `configPath` reports anything —
+	 * the once-per-file-per-process ledger `discover`'s two diagnostics share.
+	 */
 	private static function warnOnce(configPath: String, message: String): Void {
 		if (warnedConfigs.contains(configPath)) return;
 		warnedConfigs.push(configPath);
@@ -657,7 +675,10 @@ final class LintConfig {
 		return out;
 	}
 
-	/** Append every `JString` of `items` to `out`, dropping any other element — the loop `stringListOption` runs one level up, shared with it. */
+	/**
+	 * Append every `JString` of `items` to `out`, dropping any other element
+	 * — the loop `stringListOption` runs one level up, shared with it.
+	 */
 	private static function collectStrings(items: Array<JValue>, out: Array<String>): Void {
 		for (item in items) switch item {
 			case JString(v):
@@ -666,7 +687,10 @@ final class LintConfig {
 		}
 	}
 
-	/** Resolve a config-relative path (a `resolutionRoots` entry, the `compilerOracle` hxml) to absolute against the config dir; an absolute path (or one parsed without a base) is kept as-is. */
+	/**
+	 * Resolve a config-relative path (a `resolutionRoots` entry, the `compilerOracle` hxml) to
+	 * absolute against the config dir; an absolute path (or one parsed without a base) is kept as-is.
+	 */
 	private static function resolveAgainstConfigDir(baseDir: Null<String>, path: String): String {
 		return baseDir == null || Path.isAbsolute(path) ? path : Path.normalize(Path.join([baseDir, path]));
 	}

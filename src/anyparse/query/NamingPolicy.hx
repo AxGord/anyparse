@@ -106,7 +106,8 @@ typedef NamingRule = {
 }
 
 /**
- * The ordered list of `NamingRule`s the `naming` check applies to a file — the first rule whose category / modifier selector matches a declaration governs it. Loaded from a project `checkstyle.json` or the grammar built-in default.
+ * The ordered list of `NamingRule`s the `naming` check applies to a file — the first rule whose category / modifier
+ * selector matches a declaration governs it. Loaded from a project `checkstyle.json` or the grammar built-in default.
  */
 typedef NamingPolicy = Array<NamingRule>;
 
@@ -221,7 +222,9 @@ typedef FrameworkContract = {
 };
 
 /**
- * A grammar plugins projection for the `naming` check: `project` lists the name-checkable declarations of a tree, and the policy lookup resolves each file to its effective `NamingPolicy` (discovered project config or built-in default). Keeps the check free of grammar-specific node types.
+ * A grammar plugins projection for the `naming` check: `project` lists the name-checkable declarations
+ * of a tree, and the policy lookup resolves each file to its effective `NamingPolicy` (discovered
+ * project config or built-in default). Keeps the check free of grammar-specific node types.
  */
 @:nullSafety(Strict)
 interface NamingSupport {
@@ -258,7 +261,8 @@ interface NamingSupport {
 	 * Whether a framework's claim on `decl`'s name is TOTAL — the whole spelling IS the message, so
 	 * no rename of it can be safe. Strictly narrower than `frameworkReachable`, and the two are
 	 * separate questions rather than one answer read twice. An exact `names` contract always owns the
-	 * spelling. A PREFIX contract owns it only when a rename would DESTROY the fragment it claims: utest's `test` / `spec` / `setup` / `teardown` are fragments no correction the Haxe grammar ships
+	 * spelling. A PREFIX contract owns it only when a rename would DESTROY the fragment it claims:
+	 * utest's `test` / `spec` / `setup` / `teardown` are fragments no correction the Haxe grammar ships
 	 * can eat, so what follows them is still the project's to choose and a naming finding there is
 	 * right — where a prefix like Godot's `_` survives no correction at all, and dropping it unhooks the
 	 * member from the framework as surely as renaming it whole. WHICH prefixes survive is the

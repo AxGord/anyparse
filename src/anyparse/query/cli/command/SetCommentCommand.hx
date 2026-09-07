@@ -157,7 +157,8 @@ final class SetCommentCommand implements CliCommand implements PostWriteFix {
 }
 
 /**
- * Parsed options for `apq set-comment` — `lang`, `write` / `reformat`, the target `file`, the `pos` address, and the comment body (`commentText` or `fromFile`). `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ * Parsed options for `apq set-comment` — `lang`, `write` / `reformat`, the target `file`, the `pos` address, and the comment
+ * body (`commentText` or `fromFile`). `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
  */
 @:nullSafety(Strict)
 typedef SetCommentOpts = {

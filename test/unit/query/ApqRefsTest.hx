@@ -1272,7 +1272,9 @@ class ApqRefsTest extends Test {
 	}
 
 	/**
-	 * `body` is a control-flow construct that opens a frame of its OWN and declares a brace-less local `x` over a field of the same name. Asserts, as ONE string, that both the occurrence inside the construct and the read AFTER it belong to the FIELD - pairing the two keeps the assertion from passing on a shape where nothing resolved at all.
+	 * `body` is a control-flow construct that opens a frame of its OWN and declares a brace-less local `x` over a field
+	 * of the same name. Asserts, as ONE string, that both the occurrence inside the construct and the read AFTER it
+	 * belong to the FIELD - pairing the two keeps the assertion from passing on a shape where nothing resolved at all.
 	 */
 	private function assertBracelessBodyConfines(body: String): Void {
 		final source: String = 'class X { static var x:Int = 60; static function f(c:Bool):Int { $body g(x); return x; } }';

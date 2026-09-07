@@ -89,14 +89,20 @@ class JoinReturnCheckTest extends Test {
 		Assert.equals('return new Row(a, b);', es[0].text);
 	}
 
-	/** A generic annotation still ascribes even when the initializer is a matching `new` call -- its type parameters pin `new Map()`'s otherwise inference-open key/value types. */
+	/**
+	 * A generic annotation still ascribes even when the initializer is a matching `new` call
+	 * -- its type parameters pin `new Map()`'s otherwise inference-open key/value types.
+	 */
 	public function testFixNewGenericAnnotationKeepsAscription(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(wrap('final m:Map<String,Int> = new Map();\n\t\treturn m;'));
 		Assert.equals(1, es.length);
 		Assert.equals('return (new Map() : Map<String,Int>);', es[0].text);
 	}
 
-	/** A non-`new` initializer keeps its ascription even when it happens to share the annotation's name (e.g. a factory function) -- only a literal constructor call is exempted. */
+	/**
+	 * A non-`new` initializer keeps its ascription even when it happens to share the
+	 * annotation's name (e.g. a factory function) -- only a literal constructor call is exempted.
+	 */
 	public function testFixNonNewInitializerKeepsAscription(): Void {
 		final es: Array<{ span: Span, text: String }> =
 			edits(wrapRet('Null<DisplayObject>', 'final row:Row = makeRow();\n\t\treturn row;'));

@@ -28,7 +28,10 @@ class NoUnderscorePrefixCheckTest extends Test {
 	/** A config that turns `unused-parameter`'s silencing rename off EXPLICITLY — the `false` value, as distinct from the absent option. */
 	private static inline final NO_SILENCE: String = '{"rules":{"unused-parameter":{"renameSilence":false}}}';
 
-	/** A config that opts the silencing rename in but disables the rule carrying it — the only shape where the guard's enablement conjunct decides. */
+	/**
+	 * A config that opts the silencing rename in but disables the rule carrying
+	 * it — the only shape where the guard's enablement conjunct decides.
+	 */
 	private static inline final SILENCE_BUT_DISABLED: String = '{"rules":{"unused-parameter":{"enabled":false,"renameSilence":true}}}';
 
 	/** A config that cedes the supertype-shadow veto for locals / parameters. */
@@ -668,7 +671,9 @@ class NoUnderscorePrefixCheckTest extends Test {
 	}
 
 	/**
-	 * The check's autofix edits for `src` under a NAMING policy adapted from `checkstyle` content, discovered the way a real run discovers it - a `checkstyle.json` written next to the linted file. That is the shape whose rules carry no `normalize`, so the reserved-word veto cannot lean on the policy.
+	 * The check's autofix edits for `src` under a NAMING policy adapted from `checkstyle` content,
+	 * discovered the way a real run discovers it - a `checkstyle.json` written next to the linted file. That
+	 * is the shape whose rules carry no `normalize`, so the reserved-word veto cannot lean on the policy.
 	 */
 	private function editsUnderPolicy(src: String, checkstyle: String): Array<{ span: Span, text: String }> {
 		final tmp: Null<String> = Sys.getEnv('TMPDIR');

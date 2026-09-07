@@ -127,7 +127,10 @@ final class DocCoverage implements Check implements ConfigAware implements NoAut
 		return 'a generated doc restates the member name; the sentence a reader needs is the one only its author can write';
 	}
 
-	/** The declared name of a type node — its own, or its container child's for a `final class` (whose name sits on the inner `ClassForm`). */
+	/**
+	 * The declared name of a type node — its own, or its container child's
+	 * for a `final class` (whose name sits on the inner `ClassForm`).
+	 */
 	private static inline function typeName(node: QueryNode, seams: Seams): String {
 		return CheckScan.typeDeclName(node, seams.containers.concat(seams.interfaceDecls));
 	}

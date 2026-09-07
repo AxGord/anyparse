@@ -6,7 +6,10 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.SymbolIndex;
 import utest.Assert;
 
-/** The `subtypeReadFixture` bundle: the file set, the check instance that produced the finding, the finding, and a plugin for the fix calls. */
+/**
+ * The `subtypeReadFixture` bundle: the file set, the check instance that
+ * produced the finding, the finding, and a plugin for the fix calls.
+ */
 typedef SubtypeReadFixture = {
 	files: Array<{ file: String, source: String }>,
 	check: TrivialGetter,

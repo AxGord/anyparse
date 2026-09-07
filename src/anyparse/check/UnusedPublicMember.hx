@@ -207,11 +207,13 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 	 *
 	 * Skip-parse is NOT one of them any more. The TWO textual mechanisms read a skipped file's
 	 * retained source, so a name that file SPELLS is proven referenced there and no finding survives
-	 * to be deleted. What they cannot read is the INTERPOLATED reflection surface: a parsed `Reflect.field(o, 'unused$n')` contributes the fragment `unused`, which
+	 * to be deleted. What they cannot read is the INTERPOLATED reflection surface: a
+	 * parsed `Reflect.field(o, 'unused$n')` contributes the fragment `unused`, which
 	 * `runtimeNameFragment` matches against a method named `unusedThing` and blocks its deletion,
 	 * while a skipped file contributes no fragment at all. The fragment has to be a PROPER substring
 	 * of the name for this to be the difference: were it the whole name, the skipped file would spell
-	 * it and the two mechanisms above would suppress the finding by themselves. That one shape is the narrowing this rule takes for an unreadable file, in
+	 * it and the two mechanisms above would suppress the finding by themselves.
+	 * That one shape is the narrowing this rule takes for an unreadable file, in
 	 * exchange for not going silent on the whole run. CONCATENATION (`'unused' + n`) is NOT part of
 	 * it — no fragment is collected for that shape from a PARSED file either, and the class doc owns
 	 * that hole above.

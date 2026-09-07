@@ -19,7 +19,10 @@ class HxBlockCommentCloseWriteTest extends Test {
 	private static final BRACE_CLOSE: String =
 		'class C {\n\tfunction f(): Void {\n\t\t/*\n\t\tif (a)\n\t\t{\n\t\t\tb = true;\n}*/\n\t\ttrace("z");\n\t}\n}\n';
 
-	/** Non-`}` content close, outdented to column 0: with no residue beyond the interior frame it settles AT the wrap column (one bake-flip pass allowed), then is a fixed point. */
+	/**
+	 * Non-`}` content close, outdented to column 0: with no residue beyond the interior frame
+	 * it settles AT the wrap column (one bake-flip pass allowed), then is a fixed point.
+	 */
 	private static final TEXT_CLOSE: String =
 		'class C {\n\tfunction f(): Void {\n\t\t/*\n\t\ttext one\n\t\t\ttext two\ntail text*/\n\t\ttrace("z");\n\t}\n}\n';
 

@@ -45,7 +45,8 @@ using Lambda;
 final class ExtractConstant {
 
 	/**
-	 * Extract the plain string literal `literal` (single- or double-quoted) in `typeName` into a `private static final` named `name`. `reformat` canonicalises a drifted file. Returns `Ok(rewritten)` or an `Err`.
+	 * Extract the plain string literal `literal` (single- or double-quoted) in `typeName` into a `private
+	 * static final` named `name`. `reformat` canonicalises a drifted file. Returns `Ok(rewritten)` or an `Err`.
 	 */
 	public static function extractConstant(
 		source: String, typeName: String, name: String, literal: String, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
@@ -79,7 +80,11 @@ final class ExtractConstant {
 	}
 
 	/**
-	 * Extract every occurrence of the plain `literal` (single- or double-quoted) across `scopeFiles` into a shared `public static final` named `name` on the constants module `moduleClass` (package `modulePkg`). Each occurrence becomes `<moduleClass>.<name>`; a scope file whose package differs from the modules gains an `import`. When `moduleExists` the constant is added to `moduleSource` (refused if a `name` member already exists); otherwise a new `final class` module is created with a private constructor. `reformat` canonicalises drifted files. Returns the changed files plus the final module source, or an `Err`.
+	 * Extract every occurrence of the plain `literal` (single- or double-quoted) across `scopeFiles` into a shared `public static
+	 * final` named `name` on the constants module `moduleClass` (package `modulePkg`). Each occurrence becomes `<moduleClass>.<name>`;
+	 * a scope file whose package differs from the modules gains an `import`. When `moduleExists` the constant is added to
+	 * `moduleSource` (refused if a `name` member already exists); otherwise a new `final class` module is created with a private
+	 * constructor. `reformat` canonicalises drifted files. Returns the changed files plus the final module source, or an `Err`.
 	 */
 	public static function extractInto(
 		scopeFiles: Array<{ file: String, source: String }>, modulePkg: String, moduleClass: String, moduleExists: Bool,
@@ -136,7 +141,9 @@ final class ExtractConstant {
 	}
 
 	/**
-	 * Spans of every plain string literal equal to `literal` anywhere under `typeNode`: a single-quoted `SingleStringExpr` with exactly one `Literal` child (an interpolated string carries extra children, so it is skipped), or any `DoubleStringExpr` (Haxe double-quoted strings never interpolate, so each is a plain literal). Matched on the raw source between the quotes; metadata subtrees are skipped.
+	 * Spans of every plain string literal equal to `literal` anywhere under `typeNode`: a single-quoted `SingleStringExpr` with exactly
+	 * one `Literal` child (an interpolated string carries extra children, so it is skipped), or any `DoubleStringExpr` (Haxe double-quoted
+	 * strings never interpolate, so each is a plain literal). Matched on the raw source between the quotes; metadata subtrees are skipped.
 	 */
 	private static function collectOccurrences(typeNode: QueryNode, literal: String): Array<Span> {
 		final spans: Array<Span> = [];
@@ -162,7 +169,9 @@ final class ExtractConstant {
 	}
 
 	/**
-	 * Source offset just before the first member, with its leading `/**` doc comment and modifier run included (via `docExtendedSpan`) — where the constant is spliced so it becomes the types first member while the original first member keeps its own doc. -1 when the type has no member.
+	 * Source offset just before the first member, with its leading `/**` doc comment and modifier
+	 * run included (via `docExtendedSpan`) — where the constant is spliced so it becomes the types
+	 * first member while the original first member keeps its own doc. -1 when the type has no member.
 	 */
 	private static function firstMemberStart(source: String, decl: TypeDeclMatch, shape: RefShape, regions: Array<LexRegion>): Int {
 		final condKind: Null<String> = shape.conditionalMemberKind;

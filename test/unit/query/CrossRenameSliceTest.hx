@@ -415,7 +415,8 @@ class CrossRenameSliceTest extends Test {
 	/**
 	 * A static access reached through the module path — `pkg.Boxes.M`, and every
 	 * `macro pkg.Mod.Ctor(…)` reification — carries the type on a `FieldAccess` CHAIN, not on the
-	 * bare identifier the static-receiver arm recognised, so it was left behind. The same expression also reads `other.Boxes.M` — the SAME simple name, from a
+	 * bare identifier the static-receiver arm recognised, so it was left behind.
+	 * The same expression also reads `other.Boxes.M` — the SAME simple name, from a
 	 * different module outside the scope: the chain is matched WHOLE, so only the first receiver
 	 * moves.
 	 */

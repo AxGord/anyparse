@@ -56,7 +56,8 @@ final class CasePatternScan {
 	private static inline final OBJECT_FIELD_CHILD_COUNT: Int = 1;
 
 	/**
-	 * Whether `name` opens with an uppercase ASCII letter — the family spelling of a constructor reference. Public because `collapse-nested-switch` makes the same assumption and reads it from here rather than keeping its own copy.
+	 * Whether `name` opens with an uppercase ASCII letter — the family spelling of a constructor reference. Public
+	 * because `collapse-nested-switch` makes the same assumption and reads it from here rather than keeping its own copy.
 	 */
 	public static inline function startsUpper(name: String): Bool {
 		final code: Int = name.fastCodeAt(0);

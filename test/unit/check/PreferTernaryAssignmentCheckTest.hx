@@ -133,7 +133,10 @@ class PreferTernaryAssignmentCheckTest extends Test {
 		);
 	}
 
-	/** REPRODUCTION: a short-circuit `??=` must NOT be flagged — the ternary RHS is skipped when the l-value is non-null, so the conditions stop being evaluated (silent behaviour change). Currently flagged (bug). */
+	/**
+	 * REPRODUCTION: a short-circuit `??=` must NOT be flagged — the ternary RHS is skipped when the l-value
+	 * is non-null, so the conditions stop being evaluated (silent behaviour change). Currently flagged (bug).
+	 */
 	public function testNullCoalAssignNotFlagged(): Void {
 		Assert.equals(0, violations('class C {\n\tfunction f() {\n\t\tif (a) x ??= 1;\n\t\telse x ??= 2;\n\t}\n}').length);
 	}

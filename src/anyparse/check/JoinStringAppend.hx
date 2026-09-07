@@ -438,7 +438,10 @@ private typedef Seams = {
 	var selection: Null<OperatorSelection>;
 }
 
-/** One joinable run: the reported anchor (the first statement's span, also the finding key), the replaced region, and the built replacement text. */
+/**
+ * One joinable run: the reported anchor (the first statement's span, also
+ * the finding key), the replaced region, and the built replacement text.
+ */
 private typedef Match = {
 	var anchorSpan: Span;
 	var editSpan: Span;

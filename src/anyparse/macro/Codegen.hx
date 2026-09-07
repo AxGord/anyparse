@@ -1149,7 +1149,8 @@ class Codegen {
 	 * (e.g. `// foo` or `/* foo *\/`). Used exclusively by close-trailing
 	 * slots (ω-close-trailing / ω-close-trailing-alt) where the writer
 	 * must preserve source style — a captured `/* catch *\/` round-trips
-	 * as `/* catch *\/`, not as `// catch` (which feeding the stripped body through the line-style-only `trailingCommentDoc` would produce). Per-element and AfterKw slots keep
+	 * as `/* catch *\/`, not as `// catch` (which feeding the stripped body through the
+	 * line-style-only `trailingCommentDoc` would produce). Per-element and AfterKw slots keep
 	 * `collectTrailing` because their writer helpers deliberately
 	 * normalise to line style — a stronger contract only applies to the
 	 * close-trailing slot.

@@ -35,7 +35,12 @@ import haxe.Exception;
  * left is the per-rule `additionalIndent` and a handful of whitespace /
  * brace policies.
  *
- * Analysis and reporting are split on purpose: `diagnose` is a pure function of the config text and is what tests assert on, while `warn` is the boundary shell that knows the file the text came from and owns the once-per-path stderr line. One older diagnostic of the same kind still lives elsewhere: `HaxeFormatConfigLoader.warnUnknownIndentCharacter` reports an unreadable `indentation.character` from inside the loader, deduplicated by VALUE and without naming the file. Folding it in here needs its recognition predicate to become a shared `…FromString` reader first, so it stays where it is for now — and `indentation` is therefore the one section whose VALUES this class does not survey.
+ * Analysis and reporting are split on purpose: `diagnose` is a pure function of the config text and is what tests assert
+ * on, while `warn` is the boundary shell that knows the file the text came from and owns the once-per-path stderr line.
+ * One older diagnostic of the same kind still lives elsewhere: `HaxeFormatConfigLoader.warnUnknownIndentCharacter`
+ * reports an unreadable `indentation.character` from inside the loader, deduplicated by VALUE and without naming the
+ * file. Folding it in here needs its recognition predicate to become a shared `…FromString` reader first, so it stays
+ * where it is for now — and `indentation` is therefore the one section whose VALUES this class does not survey.
  */
 @:access(anyparse.grammar.haxe.HaxeFormatValues)
 @:nullSafety(Strict)

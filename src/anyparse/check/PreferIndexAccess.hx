@@ -159,7 +159,10 @@ final class PreferIndexAccess implements Check {
 		}));
 	}
 
-	/** Whether `nominal` (with optional verbatim `source`) is a `Map`-abstract name, or a nullable wrapper whose inner nominal is one — the shared `CheckScan` predicate. */
+	/**
+	 * Whether `nominal` (with optional verbatim `source`) is a `Map`-abstract name, or
+	 * a nullable wrapper whose inner nominal is one — the shared `CheckScan` predicate.
+	 */
 	private static inline function nominalIsMap(nominal: String, source: Null<String>, cfg: Cfg): Bool {
 		return MapNominal.isMap(nominal, source, cfg.mapTypes, cfg.nullableWrappers);
 	}

@@ -18,7 +18,8 @@ import utest.Assert;
  * `OptionalArg(Named(b))` and then the enclosing `@:sep(',')` /
  * `@:trail(')')` Star choked on the `:`.
  *
- * The slice adds a third branch, `@:lead('?') OptionalNamedParam`, sharing `HxArrowParamBody` with `NamedParam` and placed before the catch-all
+ * The slice adds a third branch, `@:lead('?') OptionalNamedParam`, sharing
+ * `HxArrowParamBody` with `NamedParam` and placed before the catch-all
  * `Positional`, which would otherwise swallow `?b` again.
  *
  * Real-world source: 3 Haxe stdlib modules.
@@ -28,7 +29,8 @@ import utest.Assert;
  *    nested function type sitting in the optional named slot.
  *
  * The positional-optional shape deliberately does NOT move: `(?Int)`
- * enters `OptionalNamedParam`, reads `Int` as a candidate name, fails the mandatory `:` lead on `HxArrowParamBody.type`, and `tryBranch` restores `ctx.pos`; `NamedParam` then rejects the leading `?`, and
+ * enters `OptionalNamedParam`, reads `Int` as a candidate name, fails the mandatory `:` lead on
+ * `HxArrowParamBody.type`, and `tryBranch` restores `ctx.pos`; `NamedParam` then rejects the leading `?`, and
  * `Positional` reproduces the pre-slice `OptionalArg(Named(Int))` AST.
  * The regression cases below pin that for a type-shaped candidate name
  * (`?Int`), a qualified one (`?haxe.io.Bytes`) and a name-shaped one

@@ -513,7 +513,10 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 		return false;
 	}
 
-	/** Whether two operands denote the SAME thing — equal literal content, or the same parameter binding. A literal / parameter mix never matches. */
+	/**
+	 * Whether two operands denote the SAME thing — equal literal content, or
+	 * the same parameter binding. A literal / parameter mix never matches.
+	 */
 	private static function sameOperand(a: Operand, b: Operand): Bool {
 		final literal: Null<String> = a.literal;
 		if (literal != null) return literal == b.literal;

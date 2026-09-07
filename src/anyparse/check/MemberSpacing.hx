@@ -22,7 +22,10 @@ using StringTools;
 @:nullSafety(Strict)
 final class MemberSpacing {
 
-	/** The inter-slot separator carrying exactly one blank line - what both fix arms (the reorder rebuild and the spacing-only fallback) place between rank groups. */
+	/**
+	 * The inter-slot separator carrying exactly one blank line - what both fix arms
+	 * (the reorder rebuild and the spacing-only fallback) place between rank groups.
+	 */
 	public static final GROUP_SEPARATOR: String = '\n\n';
 
 	/**
@@ -99,7 +102,10 @@ final class MemberSpacing {
 		return prev.rank != next.rank || !next.isField || slotStartsWithComment(next, source) ? GROUP_SEPARATOR : '\n';
 	}
 
-	/** Whether any inter-member gap in the region holds non-whitespace (a stray `;`, a trailing comment) a rebuild would silently drop - the guard that falls the reorder back to per-slot swaps. */
+	/**
+	 * Whether any inter-member gap in the region holds non-whitespace (a stray `;`, a trailing
+	 * comment) a rebuild would silently drop - the guard that falls the reorder back to per-slot swaps.
+	 */
 	public static function hasNonWhitespaceGap(members: Array<OrderedMember>, source: String): Bool {
 		for (i in 0...members.length - 1) if (source.substring(members[i].span.to, members[i + 1].span.from).trim() != '') return true;
 		return false;
@@ -168,7 +174,10 @@ final class MemberSpacing {
 		return !hasConditionalMember(members) && hasNonWhitespaceGap(members, source);
 	}
 
-	/** Whether `m`'s slot text begins (after trimming) with a comment - a doc/line comment the spacing rule never strips or demands a blank against. */
+	/**
+	 * Whether `m`'s slot text begins (after trimming) with a comment - a
+	 * doc/line comment the spacing rule never strips or demands a blank against.
+	 */
 	private static function slotStartsWithComment(m: OrderedMember, source: String): Bool {
 		final t: String = source.substring(m.span.from, m.span.to).trim();
 		return t.startsWith('/*') || t.startsWith('//');

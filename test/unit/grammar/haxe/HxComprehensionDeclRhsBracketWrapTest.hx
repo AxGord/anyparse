@@ -55,13 +55,19 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxComprehensionDeclRhsBracketWrapTest extends Test {
 
-	/** Project-shaped config: tab indent, maxLineLength 140, `ifBody` fitLine, `expressionIf` next, padded comprehension brackets, cuddled-open on. */
+	/**
+	 * Project-shaped config: tab indent, maxLineLength 140, `ifBody` fitLine,
+	 * `expressionIf` next, padded comprehension brackets, cuddled-open on.
+	 */
 	private static final CFG: String = '{"indentation": {"character": "tab", "tabWidth": 4},'
 		+ ' "wrapping": {"maxLineLength": 140, "comprehensionCuddledOpen": true},'
 		+ ' "whitespace": {"bracketConfig": {"comprehensionBrackets": {"openingPolicy": "onlyAfter", "closingPolicy": "before"}}},'
 		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "keep"}}';
 
-	/** Same, plus the project's `callParameter` cascade — needed by the call-host fixtures, whose hug depends on its `totalItemLength <= 100` rule. */
+	/**
+	 * Same, plus the project's `callParameter` cascade — needed by the call-host
+	 * fixtures, whose hug depends on its `totalItemLength <= 100` rule.
+	 */
 	private static final CFG_CALL: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
 		+ '"maxLineLength": 140, "comprehensionCuddledOpen": true, "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": ['
 		+ '{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"},{"conditions": ['

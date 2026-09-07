@@ -333,7 +333,9 @@ private typedef Seams = {
 }
 
 /**
- * A matched loop guard: the `if`-continue statement, the block whose span the rewrite replaces, the guard condition to invert, and — on the MERGE arm only — the CONDITION of the header `if` the inversion joins with `&&` (null on the LIFT arm, which creates that header instead).
+ * A matched loop guard: the `if`-continue statement, the block whose span the rewrite replaces,
+ * the guard condition to invert, and — on the MERGE arm only — the CONDITION of the header `if`
+ * the inversion joins with `&&` (null on the LIFT arm, which creates that header instead).
  */
 private typedef Candidate = {
 	var guard: QueryNode;

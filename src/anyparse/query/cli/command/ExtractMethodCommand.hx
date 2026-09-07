@@ -11,7 +11,9 @@ import anyparse.query.ExitCode.*;
 using StringTools;
 
 /**
- * Parsed options for `apq extract-method` — `lang`, `write` / `reformat`, the target `file`, the statement-run bounds (`startPos` / `endPos`), and the new method `name`. `errExit` non-null means arg parsing hit a terminal case (incl. a malformed position) the caller returns immediately.
+ * Parsed options for `apq extract-method` — `lang`, `write` / `reformat`, the target `file`, the
+ * statement-run bounds (`startPos` / `endPos`), and the new method `name`. `errExit` non-null means
+ * arg parsing hit a terminal case (incl. a malformed position) the caller returns immediately.
  */
 @:nullSafety(Strict)
 typedef ExtractMethodOpts = {

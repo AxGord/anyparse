@@ -19,7 +19,9 @@ using Lambda;
 /**
  * The `member-order` check: a type whose members are not in canonical order
  * (constants, properties, fields, constructor, accessors, instance methods, static methods; public before private) is flagged
- * `Info` and `--fix` reorders them. Reordering bails when a field initializer is side-effecting or reads a sibling field in a way the sort would reverse - counting only flips with INITIALIZED fields, since an init-less field runs no code in the init phase. Within one rank `inline` members sort first, then initialized fields before init-less ones.
+ * `Info` and `--fix` reorders them. Reordering bails when a field initializer is side-effecting or reads a sibling
+ * field in a way the sort would reverse - counting only flips with INITIALIZED fields, since an init-less field runs no
+ * code in the init phase. Within one rank `inline` members sort first, then initialized fields before init-less ones.
  */
 class MemberOrderCheckTest extends Test {
 
@@ -184,7 +186,10 @@ class MemberOrderCheckTest extends Test {
 		Assert.equals(1, violations(src).length);
 	}
 
-	/** (a) A member-level `abstract` modifier must travel WITH its bodyless decl during reorder - never migrate onto a neighbour or strand as an orphan line. */
+	/**
+	 * (a) A member-level `abstract` modifier must travel WITH its bodyless decl
+	 * during reorder - never migrate onto a neighbour or strand as an orphan line.
+	 */
 	public function testAbstractModifierTravelsWithMember(): Void {
 		final src: String =
 			'abstract class C {\n\tpublic function m():Void {}\n\tabstract public function area():Float;\n\tpublic var x:Int;\n}';
@@ -197,7 +202,10 @@ class MemberOrderCheckTest extends Test {
 		Assert.isFalse(fixed.split('\n').exists(line -> StringTools.trim(line) == 'abstract'), 'no orphaned bare abstract line: $fixed');
 	}
 
-	/** (b) A `@:access` / `@:meta` on its own line above a member must MOVE WITH that member during reorder, staying immediately before it. */
+	/**
+	 * (b) A `@:access` / `@:meta` on its own line above a member must
+	 * MOVE WITH that member during reorder, staying immediately before it.
+	 */
 	public function testMetaCallTravelsWithMember(): Void {
 		final src: String = 'class C {\n\t@:access(Bar.secret)\n\tpublic function useSecret():Void {}\n\tpublic var x:Int;\n}';
 		final fixed: String = fixedSource(src);
@@ -209,7 +217,10 @@ class MemberOrderCheckTest extends Test {
 		Assert.isTrue(meta < use && fixed.substring(meta, use).indexOf('var ') < 0, '@:access stays immediately before useSecret: $fixed');
 	}
 
-	/** (c) Fixer output must be checker-canonical: a class with abstract accessors + a public abstract method must be flag-free after ONE fix pass. */
+	/**
+	 * (c) Fixer output must be checker-canonical: a class with abstract
+	 * accessors + a public abstract method must be flag-free after ONE fix pass.
+	 */
 	public function testAbstractAccessorFixConverges(): Void {
 		final src: String = 'abstract class C {\n\tpublic var x:Int;\n\tpublic function new() {}\n\tabstract function get_x():Int;\n'
 			+ '\tabstract function set_x(v:Int):Int;\n\tfunction handler():Void {}\n\tabstract public function process():Void;\n}';
@@ -300,13 +311,19 @@ class MemberOrderCheckTest extends Test {
 		Assert.equals(0, violations(src).length);
 	}
 
-	/** A blank line after a doc-commented same-rank PREDECESSOR is allowed - the writer itself inserts it, so flagging it could never converge. */
+	/**
+	 * A blank line after a doc-commented same-rank PREDECESSOR is allowed
+	 * - the writer itself inserts it, so flagging it could never converge.
+	 */
 	public function testBlankAfterDocPredecessorAllowed(): Void {
 		final src: String = 'class C {\n\t/** doc */\n\tpublic static final A:Int = 0;\n\n\tpublic static final B:Int = 0;\n}';
 		Assert.equals(0, violations(src).length);
 	}
 
-	/** A reorder involving a doc-commented member converges through the PRODUCTION canonicalization: the writer re-inserts the blank after the doc-commented slot, and the check must accept it. */
+	/**
+	 * A reorder involving a doc-commented member converges through the PRODUCTION canonicalization:
+	 * the writer re-inserts the blank after the doc-commented slot, and the check must accept it.
+	 */
 	public function testDocPredecessorFixConvergesCanonical(): Void {
 		final src: String = 'class C {\n\tpublic function m():Void {}\n\n\t/** doc */\n\tpublic static final A:Int = 0;\n\n'
 			+ '\tpublic static final B:Int = 0;\n}';
@@ -315,7 +332,10 @@ class MemberOrderCheckTest extends Test {
 		Assert.equals(0, violations(fixed).length, 'converges through writeRoundTrip: $fixed');
 	}
 
-	/** The stray-`;` slot-swap fallback converges through the PRODUCTION canonicalization: the check skips spacing on such a container instead of flagging what the fixer will never normalize. */
+	/**
+	 * The stray-`;` slot-swap fallback converges through the PRODUCTION canonicalization: the check
+	 * skips spacing on such a container instead of flagging what the fixer will never normalize.
+	 */
 	public function testStraySemicolonFixConvergesCanonical(): Void {
 		final src: String = 'class C {\n\tpublic function m():Void {}\n\t;\n\tpublic var x:Int = 0;\n}';
 		Assert.isTrue(violations(src).length > 0, 'order violation flagged');
@@ -323,7 +343,10 @@ class MemberOrderCheckTest extends Test {
 		Assert.equals(0, violations(fixed).length, 'converges through writeRoundTrip: $fixed');
 	}
 
-	/** Two `#if X` field blocks (a final and a var, split by plain fields) merge into ONE block at the field-section end, final before var, blank-separated. */
+	/**
+	 * Two `#if X` field blocks (a final and a var, split by plain fields) merge
+	 * into ONE block at the field-section end, final before var, blank-separated.
+	 */
 	public function testConditionalFieldBlockMergesFinalThenVar(): Void {
 		final src: String = 'class C {\n\tpublic final a:Int = 0;\n\n\t#if X\n\tprivate final g1:Int = 0;\n\t#end\n\n'
 			+ '\tprivate var b:Int = 0;\n\n\t#if X\n\tprivate var g2:Int = 0;\n\t#end\n\n\tpublic function new() {}\n}';
@@ -354,7 +377,8 @@ class MemberOrderCheckTest extends Test {
 	}
 
 	/**
-	 * A conditional block with an `#else` between member slots is exempt from the new grouping - the whole container bails, the block never moves.
+	 * A conditional block with an `#else` between member slots is exempt from
+	 * the new grouping - the whole container bails, the block never moves.
 	 * A guarded method mixed among plain methods moves to the END of the methods section (unconditional methods first).
 	 */
 	public function testGuardedMethodsGoToMethodsSectionEnd(): Void {
@@ -530,7 +554,10 @@ class MemberOrderCheckTest extends Test {
 		Assert.equals(0, violations(canonicalizedFix(src, movableArglessNewResolver())).length, 'converges: $fixed');
 	}
 
-	/** A static const (immutable) directly followed by a static var (mutable) is a rank boundary: the missing blank is flagged and the fix inserts exactly one. */
+	/**
+	 * A static const (immutable) directly followed by a static var (mutable) is a
+	 * rank boundary: the missing blank is flagged and the fix inserts exactly one.
+	 */
 	public function testStaticImmutableBeforeStaticMutableBlank(): Void {
 		final src: String = 'class C {\n\tpublic static final A:Int = 0;\n\tpublic static var b:Int;\n}';
 		final vs: Array<Violation> = violations(src);
@@ -552,7 +579,10 @@ class MemberOrderCheckTest extends Test {
 		Assert.equals('class C {\n\tprivate static final A:Float = 1;\n\nprivate static var v:Float = 30;\n}', fixedSource(src));
 	}
 
-	/** A rank boundary coinciding with a member-level #if composes to ONE blank, not two (spacing bails cross-condition; directive spacing owns the gap). */
+	/**
+	 * A rank boundary coinciding with a member-level #if composes to ONE blank,
+	 * not two (spacing bails cross-condition; directive spacing owns the gap).
+	 */
 	public function testStaticRankConditionalComposesNoDoubleBlank(): Void {
 		final src: String = 'class C {\n\tpublic static final A:Int = 0;\n\t#if X\n\tpublic static var b:Int;\n\t#end\n}';
 		final vs: Array<Violation> = violations(src);
@@ -563,7 +593,10 @@ class MemberOrderCheckTest extends Test {
 		Assert.equals(0, violations(fixed).length, 'converges through writeRoundTrip');
 	}
 
-	/** The static-rank spacing fix converges through the production canonicalization (writeRoundTrip re-indents, the check accepts the result). */
+	/**
+	 * The static-rank spacing fix converges through the production
+	 * canonicalization (writeRoundTrip re-indents, the check accepts the result).
+	 */
 	public function testStaticRankSpacingConvergesCanonical(): Void {
 		final src: String = 'class C {\n\tpublic static final A:Int = 0;\n\tpublic static var b:Int;\n}';
 		Assert.isTrue(violations(src).length > 0, 'boundary flagged');
@@ -947,7 +980,10 @@ class MemberOrderCheckTest extends Test {
 		Assert.equals(0, edits(src).length, 'no edit can reverse the read');
 	}
 
-	/** A side-effecting init whose only sort flips are with fields that have NO initializer reorders — an init-less field runs no code in the init phase. */
+	/**
+	 * A side-effecting init whose only sort flips are with fields that have NO
+	 * initializer reorders — an init-less field runs no code in the init phase.
+	 */
 	public function testSideEffectFlipWithUninitFieldReorders(): Void {
 		final src: String = 'class C { private var b:Float; private final s:Foo = new Foo(1); }';
 		Assert.isTrue(violations(src).length > 0);
@@ -1029,7 +1065,10 @@ class MemberOrderCheckTest extends Test {
 		);
 	}
 
-	/** A textual read of an INIT-LESS sibling is no order dependency — the sibling runs no init code, the reader sees the default either way. */
+	/**
+	 * A textual read of an INIT-LESS sibling is no order dependency — the
+	 * sibling runs no init code, the reader sees the default either way.
+	 */
 	public function testSiblingReadOfUninitFieldReorders(): Void {
 		final src: String = 'class C { private static var total:Int; private static var seed:Int = f(total); }';
 		Assert.equals(1, violations(src).length);
@@ -1255,7 +1294,10 @@ class MemberOrderCheckTest extends Test {
 		return _ -> cfg;
 	}
 
-	/** Whether `src` parses — used to assert a conditional-reorder rebuild round-trips through the parse gate `canonicalize` applies (which `fixedSource`'s raw splice skips). */
+	/**
+	 * Whether `src` parses — used to assert a conditional-reorder rebuild round-trips
+	 * through the parse gate `canonicalize` applies (which `fixedSource`'s raw splice skips).
+	 */
 	private function parses(src: String): Bool {
 		return try {
 			new HaxeQueryPlugin().parseFile(src);

@@ -26,7 +26,8 @@ using StringTools;
  * whole debt.
  *
  * `unwrapStmt` is spliced by `WriterLowering` around the body value of
- * `HxIfStmt.thenBody` / `HxIfStmt.elseBody` / `HxForStmt.body` / `HxWhileStmt.body` / `HxDoWhileStmt.body` (fields carrying `@:fmt(dropSingleStmtBraces)`, trivia mode only). When every safety gate passes it returns the
+ * `HxIfStmt.thenBody` / `HxIfStmt.elseBody` / `HxForStmt.body` / `HxWhileStmt.body` / `HxDoWhileStmt.body`
+ * (fields carrying `@:fmt(dropSingleStmtBraces)`, trivia mode only). When every safety gate passes it returns the
  * block's single inner statement so the writer emits
  * `if (cond) return x;` instead of `if (cond) { return x; }`; in every
  * other case it returns the original body unchanged (byte-inert).

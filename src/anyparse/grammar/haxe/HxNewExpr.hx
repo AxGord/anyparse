@@ -14,11 +14,13 @@ package anyparse.grammar.haxe;
  * `\$?` prefix on the first ident segment for macro type-reification
  * (`new $tp()`, `new $tp.Sub(args)`). Module- and
  * pack-qualified constructor paths round-trip via the regex's dotted
- * continuation — `new haxe.Exception(...)`, `new haxe.ds.StringMap(...)` — a single-segment terminal here would leave `.Sub(...)` to be mis-absorbed by postfix field-access. The `$` prefix is intentionally kept LOCAL to the constructor-target slot
+ * continuation — `new haxe.Exception(...)`, `new haxe.ds.StringMap(...)` — a single-segment terminal here would leave `.Sub(...)`
+ * to be mis-absorbed by postfix field-access. The `$` prefix is intentionally kept LOCAL to the constructor-target slot
  * (rather than widening `HxTypeName` itself) so the documented
  * `HxType.Named` vs `HxType.DollarType` dispatch contract is preserved
  * — a `$`-bearing `HxTypeName` on `HxTypeRef.name` would shadow
- * `DollarType` since `Named` is the first `HxType` branch. Like `HxTypeName` and `HxIdentLit`, the terminal is `@:rawString abstract(String) from String to String`, so call-site string comparisons (`(ne.type : String)`) work directly.
+ * `DollarType` since `Named` is the first `HxType` branch. Like `HxTypeName` and `HxIdentLit`, the terminal is `@:rawString
+ * abstract(String) from String to String`, so call-site string comparisons (`(ne.type : String)`) work directly.
  *
  * `params` carries the optional angle-bracketed type-parameter list
  * for `new Map<K, V>()` / `new Holder<A, B, C>(args)`. Byte-twin of

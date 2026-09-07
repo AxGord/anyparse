@@ -118,7 +118,8 @@ class RedundantCaseBodyCheckTest extends Test {
 	}
 
 	/**
-	 * An `#if` region in only ONE arm already makes the bodies structurally unequal, so this pins the pair as refused without reaching the conditional gate — `testMatchingConditionalCompilationArmsRefused` is what isolates that gate.
+	 * An `#if` region in only ONE arm already makes the bodies structurally unequal, so this pins the pair as refused
+	 * without reaching the conditional gate — `testMatchingConditionalCompilationArmsRefused` is what isolates that gate.
 	 */
 	public function testConditionalCompilationArmSkipped(): Void {
 		Assert.equals(0, violations(sw('case A:\n\t\t\t\t#if debug\n\t\t\t\tr();\n\t\t\t\t#end\n\t\t\tcase _: r();')).length);

@@ -304,7 +304,8 @@ typedef FmtRunResult = {
  * "reported but got no edit" block.
  *
  * `reported` is the FIRST pass's finding count (later passes see only what an earlier edit
- * exposed, so summing them would not be a number to compare `fixed N` against). `declined` counts the first-pass findings that got no LANDED edit — either their `Check.fix`
+ * exposed, so summing them would not be a number to compare `fixed N` against). `declined`
+ * counts the first-pass findings that got no LANDED edit — either their `Check.fix`
  * answered with none at all, or it answered and the writer-emit gate refused the lot; the
  * measurement, taken where the call happens, that replaces guessing. `edits` accumulates over
  * EVERY pass on purpose: one edit anywhere PROVES the rule can fix, which is exactly the claim

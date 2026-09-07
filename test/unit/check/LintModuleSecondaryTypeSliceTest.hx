@@ -100,7 +100,10 @@ class LintModuleSecondaryTypeSliceTest extends Test {
 		Assert.isTrue(vs[0].message.contains('not in lint scope'));
 	}
 
-	/** A module import used ONLY via a bare enum constructor (the type name never appears) is kept — the ctor is bare-referenceable via expected-type resolution. */
+	/**
+	 * A module import used ONLY via a bare enum constructor (the type name never
+	 * appears) is kept — the ctor is bare-referenceable via expected-type resolution.
+	 */
 	public function testBareEnumConstructorKeepsModuleImport(): Void {
 		final mod: String = 'package a.b;\n\nenum Mod {\n\tGo;\n\tStop;\n}';
 		final use: String = 'package pkg;\n\nimport a.b.Mod;\n\nclass C {\n\tvar x = Go;\n}';

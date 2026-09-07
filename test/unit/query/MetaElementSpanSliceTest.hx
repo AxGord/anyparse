@@ -11,7 +11,8 @@ import utest.Test;
  * A `@:meta` is an element in its OWN right — `--select 'MetaCall:@:access'`
  * names it, `apq source --select` prints its seventeen bytes alone, and the
  * mutation ops echo it back as their target. `declGroupSpan` used to walk
- * FORWARD off it to the declaration it decorates, so the span every op COMPUTED was the whole `[@:meta modifiers… decl]` group: `remove-element`
+ * FORWARD off it to the declaration it decorates, so the span every op
+ * COMPUTED was the whole `[@:meta modifiers… decl]` group: `remove-element`
  * on a module-level `@:access` deleted the annotation AND the entire class
  * (137 lines to 12 on the file that found this), at rc 0, reporting
  * `wrote <file>`, and leaving a file that still parses — invisible to the

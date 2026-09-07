@@ -28,7 +28,9 @@ import anyparse.runtime.Span;
  * back-edge, a closure-captured name, a macro subtree — collapses to `Unknown`,
  * so the check reports only a genuinely dead guard, never a load-bearing one.
  *
- * `Severity.Info`. The removal is `RiskyFix`: a flow-dead guard can still be compiler-load-bearing (`@:nullSafety` narrowing cannot see a fact laundered through a Bool local, e.g. `final ok = x != null && flag; if (ok) x.f`), so the fix lands only through the oracle typecheck-and-revert pipeline. `fix` conservatively drops the dead guard where a safe span rewrite
+ * `Severity.Info`. The removal is `RiskyFix`: a flow-dead guard can still be compiler-load-bearing (`@:nullSafety` narrowing
+ * cannot see a fact laundered through a Bool local, e.g. `final ok = x != null && flag; if (ok) x.f`), so the fix lands only
+ * through the oracle typecheck-and-revert pipeline. `fix` conservatively drops the dead guard where a safe span rewrite
  * exists — unwrap / delete a sole-condition `if`, or drop a conjunct / disjunct from a
  * homogeneous `&&` / `||` chain — and refuses (leaves a finding) everywhere else. Its
  * proof is FLOW-based (`NullFlow`), never declared-type trust, so a default-null parameter

@@ -34,7 +34,8 @@ final class ReflectionScan {
 	/**
 	 * The shortest static fragment of an interpolated string that carries reflection INTENT. Below it
 	 * a fragment is punctuation or a syllable — contained in half the names of any scope — and a gate
-	 * reading it would decline every rewrite the scope offers. Calibrated as an accessor prefix's length, which is what the two checks that already had this
+	 * reading it would decline every rewrite the scope offers. Calibrated as an
+	 * accessor prefix's length, which is what the two checks that already had this
 	 * test each reached for independently.
 	 */
 	private static inline final MIN_NAME_FRAGMENT_LENGTH: Int = 4;
@@ -65,7 +66,8 @@ final class ReflectionScan {
 	 * `UnusedPublicMember.tokenCounts` already reads three lines from its own call of this function,
 	 * for exactly this reason. Widening the FILE SET only ever ADDS strings, so it only ever adds
 	 * REFUSALS — the safe direction under the nominate-never-disqualify rule, since a LOST refusal is
-	 * a rewrite that compiles and fails at run time. Cost, measured: Pony (867 files, 3643 findings) moved 0 added / 0 removed, and a single-file
+	 * a rewrite that compiles and fails at run time. Cost, measured: Pony
+	 * (867 files, 3643 findings) moved 0 added / 0 removed, and a single-file
 	 * lint stayed at ~1.0s. It also does not newly FORCE the library read in a project that declares no
 	 * `resolutionLibs` and enables only default-on rules: 0.63s -> 0.66s there, against 0.14s with
 	 * `APQ_NO_STD=1` — the std was already being demanded by the base arm, not by this change.
@@ -79,7 +81,9 @@ final class ReflectionScan {
 		final stringFold: Null<StringFoldSupport> = plugin.stringFoldSupport();
 		if (stringFold == null) return out;
 		final fold: StringFoldSupport = stringFold;
-		// Once per PATH, deduped through a linear scan — measured at no cost (Pony 867 files 12.4s -> 11.9s, anyparse 1487 files 1:55.9 -> 1:54.3), which is why it is not the `Map` the sibling dedupe in `Cli.resolutionThunk` argues for. The two halves overlap — `resolutionFiles` is report UNION library — and
+		// Once per PATH, deduped through a linear scan — measured at no cost (Pony 867 files 12.4s -> 11.9s,
+		// anyparse 1487 files 1:55.9 -> 1:54.3), which is why it is not the `Map` the sibling dedupe in
+		// `Cli.resolutionThunk` argues for. The two halves overlap — `resolutionFiles` is report UNION library — and
 		// `whole` keeps duplicates on purpose, since `inline-constant` COUNTS occurrences and
 		// subtracts a constant's own value; a file scanned twice doubles that value and turns its
 		// `count > self` test true on nothing at all.

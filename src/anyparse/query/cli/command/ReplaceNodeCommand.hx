@@ -10,7 +10,9 @@ import anyparse.query.ExitCode.*;
 using StringTools;
 
 /**
- * Parsed options for `apq replace-node` — `lang`, `write` / `reformat`, the address (`selectExpr` / `atSpec` / `matchExpr` / `nth` / `kind`), `withDoc`, and the replacement source (`newSource` or `fromFile`). `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ * Parsed options for `apq replace-node` — `lang`, `write` / `reformat`, the address (`selectExpr` /
+ * `atSpec` / `matchExpr` / `nth` / `kind`), `withDoc`, and the replacement source (`newSource` or
+ * `fromFile`). `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
  */
 @:nullSafety(Strict)
 typedef ReplaceNodeOpts = {

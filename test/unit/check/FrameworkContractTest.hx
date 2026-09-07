@@ -19,7 +19,8 @@ import utest.Test;
 
 /**
  * The FRAMEWORK CONTRACT seam: a project declares in `apqlint.json` (`frameworks`) which root types
- * a framework drives and which member names it reaches BY NAME, and one seam (`NamingSupport.frameworkReachable` for the unused-* rules, the narrower
+ * a framework drives and which member names it reaches BY NAME, and one seam
+ * (`NamingSupport.frameworkReachable` for the unused-* rules, the narrower
  * `frameworkOwnsName` for `naming`) serves all three rules that ask the question — `naming`,
  * `unused-private` and `unused-public-member`.
  *

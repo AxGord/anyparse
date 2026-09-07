@@ -117,7 +117,13 @@ package anyparse.grammar.haxe;
  * comment captured between the head and the `switch`, which is the same fail-closed answer
  * `buildElseSwitchCases` gives the `else` side.
  *
- * `@:fmt(dropSingleStmtBraces)` on BOTH `thenBody` and `elseBody` (ω-single-stmt-braces; also on `HxForStmt.body` / `HxWhileStmt.body` / `HxDoWhileStmt.body`) opts the field into the `opt.dropSingleStmtBraces` writer knob (JSON `whitespace.bracesConfig.singleStatementBraces: "remove"`): a `{ single; }` block body is substituted with its bare inner statement (via `anyparse.format.SingleStmtBraces.unwrapStmt`) before any layout / shape dispatch, so `if (c) { return x; }` emits as `if (c) return x;`. Trivia mode only; every safety gate (dangling-else incl. the `_ssbSuppress` then-body frame, comments, terminator presence, declaration scoping) fails closed — braces kept. Default off, byte-inert. Dangling else is resolved correctly by construction: the inner `if` greedily consumes the nearest `else`, leaving outer `if`s with no else branch.
+ * `@:fmt(dropSingleStmtBraces)` on BOTH `thenBody` and `elseBody` (ω-single-stmt-braces; also on `HxForStmt.body` /
+ * `HxWhileStmt.body` / `HxDoWhileStmt.body`) opts the field into the `opt.dropSingleStmtBraces` writer knob (JSON
+ * `whitespace.bracesConfig.singleStatementBraces: "remove"`): a `{ single; }` block body is substituted with its bare inner
+ * statement (via `anyparse.format.SingleStmtBraces.unwrapStmt`) before any layout / shape dispatch, so `if (c) { return x; }`
+ * emits as `if (c) return x;`. Trivia mode only; every safety gate (dangling-else incl. the `_ssbSuppress` then-body frame,
+ * comments, terminator presence, declaration scoping) fails closed — braces kept. Default off, byte-inert. Dangling else is
+ * resolved correctly by construction: the inner `if` greedily consumes the nearest `else`, leaving outer `if`s with no else branch.
  *
  * A bare non-`;`-terminated then-body before `else` (e.g.
  * `if (c) foo() else { … }`) is accepted via the Slice-X2 extension to

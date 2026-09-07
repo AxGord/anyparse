@@ -131,7 +131,8 @@ final class Diff {
 }
 
 /**
- * How a `DiffHit` node pair relates across the two compared trees: `Differs` (present on both sides but not structurally equal), `Added` (only on the right), `Removed` (only on the left).
+ * How a `DiffHit` node pair relates across the two compared trees: `Differs` (present on both
+ * sides but not structurally equal), `Added` (only on the right), `Removed` (only on the left).
  */
 @:nullSafety(Strict)
 enum DiffKind {
@@ -143,7 +144,8 @@ enum DiffKind {
 }
 
 /**
- * One node-level difference from an `apq diff`: its `kind` plus the `left` / `right` nodes it relates (either is null for an add / remove, where the node exists on only one side).
+ * One node-level difference from an `apq diff`: its `kind` plus the `left` / `right` nodes
+ * it relates (either is null for an add / remove, where the node exists on only one side).
  */
 @:nullSafety(Strict)
 final class DiffHit {

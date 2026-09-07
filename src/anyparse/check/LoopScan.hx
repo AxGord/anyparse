@@ -10,19 +10,36 @@ import anyparse.runtime.Span;
 using Lambda;
 
 /**
- * The subtree scans the two COLLECTION-LOOP rewrite rules share — `prefer-keyvalue-loop` (an indexed `for` whose body opens by binding `X[i]`) and `dead-binder-counter-loop` (a `var i = 0;` counter threaded through a `for`-in whose binder nothing reads). Both move a name into, or drop one out of, a loop HEADER, so both must prove the same things about the body: the names involved are not written, not re-declared, not captured by a closure, and — for the collection itself — used only in positions that cannot change its LENGTH.
+ * The subtree scans the two COLLECTION-LOOP rewrite rules share — `prefer-keyvalue-loop` (an indexed `for` whose body opens by binding
+ * `X[i]`) and `dead-binder-counter-loop` (a `var i = 0;` counter threaded through a `for`-in whose binder nothing reads). Both move a
+ * name into, or drop one out of, a loop HEADER, so both must prove the same things about the body: the names involved are not written,
+ * not re-declared, not captured by a closure, and — for the collection itself — used only in positions that cannot change its LENGTH.
  *
- * That last one is the non-obvious gate. A `for (i in 0...X.length)` evaluates its bound ONCE, whereas `for (v in X)` re-asks the iterator every step; converting either way while the body can grow or shrink `X` changes how many iterations run (an added element turns a terminating loop into a runaway one). So a rewrite is licensed only when every mention of `X` in the body READS it through the size member or an index — never a call on it, never a method value taken off it, never a bare mention that hands the reference to something else, never a write to or through it. That is a WHITELIST of two positions, not a list of banned ones: the next hazardous shape nobody has thought of fails by construction.
+ * That last one is the non-obvious gate. A `for (i in 0...X.length)` evaluates its bound ONCE, whereas `for (v in X)`
+ * re-asks the iterator every step; converting either way while the body can grow or shrink `X` changes how many iterations
+ * run (an added element turns a terminating loop into a runaway one). So a rewrite is licensed only when every mention of
+ * `X` in the body READS it through the size member or an index — never a call on it, never a method value taken off it,
+ * never a bare mention that hands the reference to something else, never a write to or through it. That is a WHITELIST of
+ * two positions, not a list of banned ones: the next hazardous shape nobody has thought of fails by construction.
  *
- * Its limit is that the scan is BODY-LOCAL. An alias handed out before the loop, or a call that mutates the same collection through a field the callee owns, is outside what a per-file check can see; both rules state that caveat in their own type docs rather than pretending the gate is a proof.
+ * Its limit is that the scan is BODY-LOCAL. An alias handed out before the loop, or a call that
+ * mutates the same collection through a field the callee owns, is outside what a per-file check can
+ * see; both rules state that caveat in their own type docs rather than pretending the gate is a proof.
  *
- * Grammar-agnostic: every node kind arrives through `LoopSeams`, built once per run by `seamsOf`, and a grammar leaving any required kind unset makes both rules a no-op.
+ * Grammar-agnostic: every node kind arrives through `LoopSeams`, built once per run by
+ * `seamsOf`, and a grammar leaving any required kind unset makes both rules a no-op.
  *
  * ## The JUMP-BINDING scans — a second, independent seam bundle
  *
- * Beside the collection scans this class also hosts the loop-body scans every rule that MOVES a jump needs: `loopBody` (the body block, last child for `for` / `while`, first for `do … while`) and `escapesIteration` (does this subtree leave the CURRENT iteration). They read `LoopJumpSeams`, a bundle of their own — `LoopSeams` demands field access, index access and numeric literals, none of which a jump scan asks about, so making one bundle serve both would refuse a grammar that answers everything the jump scan needs.
+ * Beside the collection scans this class also hosts the loop-body scans every rule that MOVES a jump needs: `loopBody` (the body block,
+ * last child for `for` / `while`, first for `do … while`) and `escapesIteration` (does this subtree leave the CURRENT iteration). They
+ * read `LoopJumpSeams`, a bundle of their own — `LoopSeams` demands field access, index access and numeric literals, none of which a
+ * jump scan asks about, so making one bundle serve both would refuse a grammar that answers everything the jump scan needs.
  *
- * `escapesIteration` is where the one non-obvious language fact lives: a `break` inside a `switch` inside a loop breaks the LOOP, not the switch (measured on `--interp`), so the scan DESCENDS into switch bodies — while a `break` inside a nested `for` / `while` / `do … while` binds to that inner loop, so `inInnerLoop` turns the loop-jump kinds off below one. A nested function or lambda gets neither: its jumps and returns belong to it, so the scan stops at its boundary.
+ * `escapesIteration` is where the one non-obvious language fact lives: a `break` inside a `switch` inside a loop breaks
+ * the LOOP, not the switch (measured on `--interp`), so the scan DESCENDS into switch bodies — while a `break` inside a
+ * nested `for` / `while` / `do … while` binds to that inner loop, so `inInnerLoop` turns the loop-jump kinds off below
+ * one. A nested function or lambda gets neither: its jumps and returns belong to it, so the scan stops at its boundary.
  */
 @:nullSafety(Strict)
 final class LoopScan {
@@ -48,9 +65,14 @@ final class LoopScan {
 	}
 
 	/**
-	 * Whether every mention of `name` in `node`'s subtree sits in a position that cannot change the collection it denotes: a READ of `sizeMember` on it (`name.length`, including through `?.` / `!.`) or an index READ (`name[e]`). Everything else answers false — a call on it (`name.push(v)`), a method VALUE taken off it (`f(name.pop)`), a bare mention handing the reference to a callee (`f(name)`), a write to the binding, a write THROUGH it (`name.length = 0`, `name[k] = v`), a receiverless use.
+	 * Whether every mention of `name` in `node`'s subtree sits in a position that cannot change the collection it denotes: a READ
+	 * of `sizeMember` on it (`name.length`, including through `?.` / `!.`) or an index READ (`name[e]`). Everything else answers
+	 * false — a call on it (`name.push(v)`), a method VALUE taken off it (`f(name.pop)`), a bare mention handing the reference to
+	 * a callee (`f(name)`), a write to the binding, a write THROUGH it (`name.length = 0`, `name[k] = v`), a receiverless use.
 	 *
-	 * The scan is BODY-LOCAL, which is its documented limit: an alias handed out before the loop, or a call that reaches the same collection through a field the callee owns, is invisible to it. Closing that would need whole-program alias analysis; each rule's type doc repeats the caveat.
+	 * The scan is BODY-LOCAL, which is its documented limit: an alias handed out before the loop, or
+	 * a call that reaches the same collection through a field the callee owns, is invisible to it.
+	 * Closing that would need whole-program alias analysis; each rule's type doc repeats the caveat.
 	 */
 	public static inline function usedOnlyAsStableCollection(node: QueryNode, name: String, sizeMember: String, s: LoopSeams): Bool {
 		return stableUseScan(node, null, null, name, sizeMember, s);

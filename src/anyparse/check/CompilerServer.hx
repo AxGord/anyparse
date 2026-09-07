@@ -421,7 +421,10 @@ final class CompilerServer {
 		return text(res.stdout).indexOf('--wait $port') != -1;
 	}
 
-	/** Terminate a recorded server. Spawned rather than signalled in-process so an already-exited pid is a silent no-op instead of a throw. */
+	/**
+	 * Terminate a recorded server. Spawned rather than signalled in-process
+	 * so an already-exited pid is a silent no-op instead of a throw.
+	 */
 	private static function killPid(pid: Int): Void {
 		js.node.ChildProcess.spawnSync('kill', ['$pid']);
 	}
@@ -451,7 +454,10 @@ final class CompilerServer {
 		return try sys.FileSystem.absolutePath(file) catch (exception: haxe.Exception) file;
 	}
 
-	/** `file` with its symlink chain resolved — the form the compiler records a module under; the plain absolute form when it cannot be resolved. */
+	/**
+	 * `file` with its symlink chain resolved — the form the compiler records
+	 * a module under; the plain absolute form when it cannot be resolved.
+	 */
 	private static function realPath(file: String): String {
 		// The result is bridged through an explicit `Null<String>` because `FileSystem.fullPath`'s
 		// declared non-null `String` reads as nullable off a compilation-server cache — and, on

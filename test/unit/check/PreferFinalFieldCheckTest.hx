@@ -179,7 +179,10 @@ class PreferFinalFieldCheckTest extends Test {
 		Assert.equals(-1, fixed.indexOf('var _x'));
 	}
 
-	/** The `var → final` swap is an in-place keyword rewrite, so it preserves canonical modifier order: `private static var` → `private static final`. */
+	/**
+	 * The `var → final` swap is an in-place keyword rewrite, so it preserves
+	 * canonical modifier order: `private static var` → `private static final`.
+	 */
 	public function testFixPreservesModifierOrder(): Void {
 		final fixed: String = fixedSource('class C { private static var _x:Int = 0; }');
 		Assert.isTrue(fixed.indexOf('private static final _x:Int = 0') >= 0);

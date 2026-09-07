@@ -304,7 +304,10 @@ class InlineConstantCheckTest extends Test {
 		);
 	}
 
-	/** A PUBLIC constant whose owning module is referenced in macro-context code (a file importing haxe.macro that mentions the class) is macro-consumed and left alone. */
+	/**
+	 * A PUBLIC constant whose owning module is referenced in macro-context code (a file
+	 * importing haxe.macro that mentions the class) is macro-consumed and left alone.
+	 */
 	public function testMacroContextReferencedModuleNotFlagged(): Void {
 		final files: Array<{ file: String, source: String }> = [
 			{ file: 'C.hx', source: 'class C { public static final A:Int = 5; }' },

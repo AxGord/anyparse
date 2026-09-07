@@ -102,7 +102,10 @@ final class MemberWriteScan {
 			);
 	}
 
-	/** Whether any file granting itself `@:access(owner)` MENTIONS `name` — `accessGrantMayWrite`'s read counterpart (see `subtypeMayReference`). */
+	/**
+	 * Whether any file granting itself `@:access(owner)` MENTIONS `name` —
+	 * `accessGrantMayWrite`'s read counterpart (see `subtypeMayReference`).
+	 */
 	public static inline function accessGrantMayReference(owner: String, name: String, index: SymbolIndex, plugin: GrammarPlugin): Bool {
 		return scopeOf(index, plugin).text.accessGrantMatches(owner, src -> mayReference(src, name, 0, src.length));
 	}

@@ -40,7 +40,8 @@ final class WriterCtorBlankLowering {
 	/**
 	 * ω-bug-2c-inner-star — read every cascade `@:fmt(blankLines*)` meta
 	 * off a `@:trivia` Star ShapeNode and resolve them into the four
-	 * info arrays consumed by `buildCascadeEmit`. Centralises the meta-read + transparent-merge + cross-validation block shared by the EOF-Star branch of `lowerStruct` and the inner-Star branch (`triviaTryparseStarExpr` consumers).
+	 * info arrays consumed by `buildCascadeEmit`. Centralises the meta-read + transparent-merge + cross-validation block
+	 * shared by the EOF-Star branch of `lowerStruct` and the inner-Star branch (`triviaTryparseStarExpr` consumers).
 	 *
 	 * Recognised metas:
 	 *  - `blankLinesAfterCtor` / `blankLinesAfterCtorIf`

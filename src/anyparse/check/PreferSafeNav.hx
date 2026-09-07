@@ -202,7 +202,8 @@ final class PreferSafeNav implements Check implements VersionGated {
 	}
 
 	/**
-	 * Rewrite each flagged guard to `<root>?.<rest>`: the statement and ternary arms replace the whole `if` statement / ternary in place, the assignment arm folds the chain into the null initializer of the declaration above and deletes the `if`.
+	 * Rewrite each flagged guard to `<root>?.<rest>`: the statement and ternary arms replace the whole `if` statement / ternary
+	 * in place, the assignment arm folds the chain into the null initializer of the declaration above and deletes the `if`.
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex

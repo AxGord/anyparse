@@ -134,7 +134,10 @@ class PreferIfExpressionAssignmentCheckTest extends Test {
 		Assert.equals('x = if (a) 1 // one\nelse if (b) 2 else 3;', es[0].text);
 	}
 
-	/** A comment on its own line BEFORE the `else` still describes the branch that ends there — it rides the trailing slot and keeps its line. */
+	/**
+	 * A comment on its own line BEFORE the `else` still describes the branch
+	 * that ends there — it rides the trailing slot and keeps its line.
+	 */
 	public function testOwnLineCommentBeforeElseCarried(): Void {
 		final es: Array<{ span: Span, text: String }> =
 			edits(wrap('if (a) x = 1;\n\t\t// which branch?\n\t\telse if (b) x = 2;\n\t\telse x = 3;'));

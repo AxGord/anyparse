@@ -224,7 +224,10 @@ class PreferMapTypeCheckTest extends Test {
 		Assert.equals(0, violations('import foo.IntMap;\nclass C { var m:IntMap<Int>; }').length);
 	}
 
-	/** The wildcard would otherwise prove the name — the alias binding is what refuses it (the grammar does not expose what it aliases FROM). */
+	/**
+	 * The wildcard would otherwise prove the name — the alias binding is
+	 * what refuses it (the grammar does not expose what it aliases FROM).
+	 */
 	public function testAliasedImportNotFlagged(): Void {
 		Assert.equals(0, violations('import haxe.ds.*;\nimport foo.Bar as IntMap;\nclass C { var m:IntMap<Int>; }').length);
 	}
@@ -255,7 +258,10 @@ class PreferMapTypeCheckTest extends Test {
 		Assert.equals(0, violations(imp('IntMap', 'class C<K:IntMap<Int>> { }')).length);
 	}
 
-	/** With the return type omitted, a function's type-parameter constraint IS the child before the body — the parameter list between them is what tells them apart. */
+	/**
+	 * With the return type omitted, a function's type-parameter constraint IS the
+	 * child before the body — the parameter list between them is what tells them apart.
+	 */
 	public function testFunctionTypeParameterConstraintNotFlagged(): Void {
 		Assert.equals(0, violations(imp('IntMap', 'class C { function f<T:IntMap<Int>>() {} }')).length);
 	}
