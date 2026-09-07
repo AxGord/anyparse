@@ -20,9 +20,13 @@ package anyparse.grammar.haxe;
  * flag is true the separator is a plain space (`} while (…);`); when
  * false it becomes a hardline (`}\nwhile (…);`).
  *
- * `@:fmt(bodyPolicy("doBody"))` on `body` controls how a non-block body is placed relative to `do` — same line, always next line, or fit-line (ψ₅). `@:fmt(dropSingleStmtBraces)` (ω-single-stmt-braces) additionally maps a single-`ExprStmt` `BlockBody` onto a bare `ExprBody` when `opt.dropSingleStmtBraces` is set (`do { x(); } while (c);` → `do x() while (c);`, no `;` before `while` — modern Haxe rejects it there) — see `anyparse.format.SingleStmtBraces.unwrapDoBody`. Block bodies (`{ … }`) always take a single space
- * regardless of the policy: the `{` carries its own layout via
- * `blockBody`.
+ * `@:fmt(bodyPolicy("doBody"))` on `body` controls how a non-block body is placed relative to
+ * `do` — same line, always next line, or fit-line (ψ₅). `@:fmt(dropSingleStmtBraces)`
+ * (ω-single-stmt-braces) additionally maps a single-`ExprStmt` `BlockBody` onto a bare
+ * `ExprBody` when `opt.dropSingleStmtBraces` is set (`do { x(); } while (c);` → `do x() while
+ * (c);`, no `;` before `while` — modern Haxe rejects it there) — see
+ * `anyparse.format.SingleStmtBraces.unwrapDoBody`. Block bodies (`{ … }`) always take a single
+ * space regardless of the policy: the `{` carries its own layout via `blockBody`.
  *
  * `@:fmt(loopBodyIfElseNext(...))` (S159) is the loop-shape gate the `for` /
  * `while` bodies already carried: when `sameLine.loopBodyIfElseNext` is on and

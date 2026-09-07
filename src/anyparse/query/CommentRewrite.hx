@@ -28,12 +28,19 @@ private typedef WideLine = {
  * parse tree, so neither `rewrite` nor `set-comment` (one block, whole-text)
  * can do a bulk find/replace across comments. This fills that gap.
  *
- * Every comment body (located by `RefactorSupport.collectCommentTokens`, which
- * skips string literals) is searched: in literal mode `find` is a substring and
- * `replace` is verbatim; in `regex` mode `find` is an `EReg` and `replace` is a
- * template where `${0}` / `${1}` / `${N}` expand to capture group N,
- * `${N+K}` / `${N-K}` shift group N (an integer) by K, and `$$` is a literal
- * `$`. Only comment bodies change — code and the comment delimiters are never touched.
+ * Every comment body (located by `SourceComments.collectCommentUnits`, which skips
+ * string literals) is searched. A UNIT, not a lexer token: a run of contiguous
+ * full-line `//` comments is ONE body, so a find spanning two of its lines matches
+ * the way it does inside a `/**` block. Per token it could not — a `//` run is N
+ * tokens, one per line, and no single body held both halves, so the op answered
+ * that the text was absent (T755). In `--regex` mode the raw body is the run too,
+ * which is what makes `\s+//\s+` cross a line and what anchors `^` at the run
+ * rather than at each line.
+ *
+ * In literal mode `find` is a substring and `replace` is verbatim; in `regex` mode `find` is
+ * an `EReg` and `replace` is a template where `${0}` / `${1}` / `${N}` expand to capture group
+ * N, `${N+K}` / `${N-K}` shift group N (an integer) by K, and `$$` is a literal `$`. Only
+ * comment bodies change — code and the comment delimiters are never touched.
  *
  * A replacement carrying a real NEWLINE is re-prefixed with the comment's own continuation
  * (`RefactorSupport.commentContinuation`) before it is spliced, in both modes: the writer
@@ -80,21 +87,28 @@ final class CommentRewrite {
 
 		final edits: Array<{ span: Span, text: String }> = [];
 		try {
-			for (tok in SourceComments.collectCommentTokens(plugin.lexicalRegions(source))) {
-				final bodySpan: Span = SourceComments.commentBody(source, tok);
+			for (unit in SourceComments.collectCommentUnits(source, plugin.lexicalRegions(source))) {
+				final bodySpan: Span = SourceComments.commentBody(source, unit);
 				final body: String = source.substring(bodySpan.from, bodySpan.to);
 				// The splice is RAW and the writer re-emits a comment interior byte for byte, so a
 				// replacement carrying a real newline would start a line with no continuation prefix
 				// — the corruption `doc-comment-continuation` exists to see. Give every new line the
 				// prefix THIS comment already uses instead.
-				final continuation: String = SourceComments.commentContinuation(source, tok);
+				final continuation: String = SourceComments.commentContinuation(source, unit);
 				final next: String = compiled != null
 					? compiled.map(body, m -> SourceComments.reflowIntoComment(expandGroups(replace, m), continuation))
-					: literalReplace(body, find, SourceComments.reflowIntoComment(replace, continuation));
+					: literalReplace(body, find, SourceComments.reflowIntoComment(replace, continuation), unit.isLine);
 				if (next == body) continue;
+				// A merged `//` run's body SPANS the interior openers of its lines 2..N — that is what lets a
+				// find cross a break at all — so a replacement can delete one and turn a comment into CODE.
+				final orphan: Null<String> = unit.isLine ? runLineWithoutOpener(next) : null;
+				if (orphan != null)
+					return Err(
+						'the replacement leaves a line of the `//` run without its opener, which would turn a comment into code:\n$orphan'
+					);
 				// A ONE-LINE doc block that has just grown has to be re-opened, or its closer rides the last
 				// content line and the writer eats the space before that line's star (`\t* text */`).
-				final grown: Bool = next.indexOf('\n') >= 0 && isOneLineDocBlock(source, tok);
+				final grown: Bool = next.indexOf('\n') >= 0 && isOneLineDocBlock(source, unit);
 				edits.push({ span: bodySpan, text: grown ? SourceComments.openGrownDocBlock(next, continuation) : next });
 			}
 		} catch (exception: Exception)
@@ -141,6 +155,30 @@ final class CommentRewrite {
 	private static function isOneLineDocBlock(source: String, tok: { from: Int, to: Int, isLine: Bool }): Bool {
 		return !tok.isLine && tok.from + 2 < source.length && source.fastCodeAt(tok.from + 2) == '*'.code
 			&& source.substring(tok.from, tok.to).indexOf('\n') < 0;
+	}
+
+	/**
+	 * The first line of a merged `//` run's body that the replacement left without its opener, or
+	 * null when every line after the first still carries one.
+	 *
+	 * A unit's body span reaches from the FIRST opener to the run's last byte, so it covers the
+	 * INTERIOR openers of lines 2..N. That is what lets a find cross a break at all, and it is also
+	 * a way to delete one. Literal mode cannot: `normalizeCommentBody`'s index map makes a break run
+	 * one atomic normalized character, so no match starts or ends inside it. A `--regex` find matches
+	 * the RAW body and has no such protection — and every gate downstream says yes, because the result
+	 * is valid Haxe. Measured: `--regex '/' ''` over `// disabled for now:` + `// var y = 2;` wrote
+	 * `var y = 2;` as a live field, reported `rewrote 1 file(s)`, left `fmt --list` at 0 of 1, and drew
+	 * no lint finding — the linter reported the new member as if a human had written it. Only a blank
+	 * line between the two comments (two units, the pre-merge shape) made the op refuse.
+	 *
+	 * The check cannot refuse a legitimate edit: a multi-line replacement is re-prefixed by
+	 * `reflowIntoComment` with the run's own `// ` continuation, and a join — the documented
+	 * `\s+//\s+` idiom, or a deletion consuming the break — removes the line rather than orphaning it.
+	 */
+	private static function runLineWithoutOpener(next: String): Null<String> {
+		final lines: Array<String> = next.split('\n');
+		for (i in 1...lines.length) if (!lines[i].ltrim().startsWith('//')) return lines[i];
+		return null;
 	}
 
 	/**
@@ -334,14 +372,15 @@ final class CommentRewrite {
 
 	/**
 	 * Literal find/replace inside a comment body, matching ACROSS the body's line
-	 * continuations: the body is normalized (each `\n` + ` * ` doc prefix folded to
-	 * one space) for the search, and every non-overlapping match is projected back
-	 * to its span in the original body via the index map — so a phrase wrapped over
-	 * two ` * ` lines is found and replaced. Consuming the continuation BETWEEN two
-	 * matched lines is safe because the replacement is re-prefixed before it is
-	 * spliced (`RefactorSupport.reflowIntoComment`) — the writer does NOT re-wrap a
-	 * comment interior, it re-emits it byte for byte, which is what made the raw
-	 * splice a corruption no gate could see.
+	 * continuations: the body is normalized (each `\n` plus the body's own continuation
+	 * marker folded to one space) for the search,
+	 * and every non-overlapping match is projected back to its span in the original body via the
+	 * index map — so a phrase wrapped over two ` * ` lines is found and replaced. `lineRun` says
+	 * the body is a merged run of `//` comments, whose continuation marker is the opener rather
+	 * than the gutter star. Consuming the continuation BETWEEN two matched lines is safe because
+	 * the replacement is re-prefixed before it is spliced (`RefactorSupport.reflowIntoComment`) —
+	 * the writer does NOT re-wrap a comment interior, it re-emits it byte for byte, which is what
+	 * made the raw splice a corruption no gate could see.
 	 *
 	 * `find` is normalised the SAME way, which is what makes a multi-line FIND work.
 	 * Without that, a find carrying a newline could never match anything in either
@@ -361,11 +400,11 @@ final class CommentRewrite {
 	 * stands for it. Only an EMPTY replacement — a deletion, which has to take its
 	 * separator with it — still consumes the break.
 	 */
-	private static function literalReplace(body: String, find: String, replace: String): String {
-		final normalized: { text: String, map: Array<Int> } = SourceComments.normalizeCommentBody(body);
+	private static function literalReplace(body: String, find: String, replace: String, lineRun: Bool): String {
+		final normalized: { text: String, map: Array<Int> } = SourceComments.normalizeCommentBody(body, lineRun);
 		final norm: String = normalized.text;
 		final map: Array<Int> = normalized.map;
-		final needle: String = SourceComments.normalizeCommentBody(find).text;
+		final needle: String = SourceComments.normalizeCommentBody(find, lineRun).text;
 		if (needle.length == 0) return body;
 		final keepBreaks: Bool = replace.length > 0;
 		final buf: StringBuf = new StringBuf();

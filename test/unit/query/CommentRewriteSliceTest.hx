@@ -58,6 +58,101 @@ class CommentRewriteSliceTest extends Test {
 	}
 
 	/**
+	 * A literal find spanning two consecutive `//` lines, written with a plain newline.
+	 *
+	 * It matched NOTHING until this slice, and the op said so — `no comment body in 1 file(s)
+	 * contains the find text` — about text plainly present in the file (T755). The lexer's tokens
+	 * are one per LINE for `//`, so no single body held both halves; a `/**` block, whose body is
+	 * the whole thing, had worked all along. `collectCommentUnits` merges the run into one body,
+	 * and the two spellings of a comment now answer the same.
+	 */
+	@:pin('control')
+	@:killer('M-COMMENT-RUN-PER-TOKEN')
+	public function testLineCommentRunMatchesAcrossItsLines(): Void {
+		final text: String = okText(cr(lineRun(), 'sentence that runs across two line comments.', 'sentence on one line.', false));
+		Assert.isTrue(text.contains('// first half of a sentence on one line.\n\tvar x = 1;'), text);
+	}
+
+	/** The same find written WITH the `//` openers the source carries — the run's continuation marker. */
+	public function testLineCommentRunFindWithOpenerPrefixes(): Void {
+		final text: String = okText(cr(lineRun(), 'sentence that runs\n\t// across two line comments.', 'sentence on one line.', false));
+		Assert.isTrue(text.contains('// first half of a sentence on one line.\n\tvar x = 1;'), text);
+	}
+
+	/** A replacement that grows past one line gets the run's own `//` opener, not a doc gutter. */
+	public function testLineCommentRunSpliceCarriesTheOpener(): Void {
+		final text: String = okText(cr(lineRun(), 'a sentence that runs across', 'a sentence\nthat runs across', false));
+		Assert.isTrue(text.contains('// first half of a sentence\n\t// that runs across two line comments.'), text);
+	}
+
+	/** `--regex` sees the run as one RAW body too, so `\s+//\s+` crosses the break the way `\s+\*\s+` does. */
+	public function testRegexCrossesALineCommentBreak(): Void {
+		final text: String = okText(cr(lineRun(), 'runs\\s+//\\s+across', 'runs across', true));
+		Assert.isTrue(text.contains('// first half of a sentence that runs across two line comments.\n\tvar x = 1;'), text);
+	}
+
+	/**
+	 * A code line between two `//` comments ends the run — they stay two bodies, so a find reaching
+	 * across the code matches nothing and the statement between them cannot be rewritten away.
+	 *
+	 * The weaker spelling — a find joining the two comment TEXTS — cannot fail: with the run guard
+	 * removed the merged body still HOLDS the code between them, so `alpha beta` is absent either
+	 * way. The find has to quote the code for the fixture to discriminate (measured: that spelling
+	 * stayed green under a `contiguousLineComments` that merged everything).
+	 */
+	public function testCodeBetweenLineCommentsEndsTheRun(): Void {
+		final src: String = 'class C {\n\t// alpha\n\tvar x = 1;\n\t// beta\n\tvar y = 2;\n}';
+		Assert.isTrue(noEdit(src, 'alpha var x = 1; beta'), okText(cr(src, 'alpha var x = 1; beta', 'JOINED', false)));
+	}
+
+	/** So does a blank line: the run is the CONTIGUOUS full-line comments, one break apart. */
+	public function testBlankLineBetweenLineCommentsEndsTheRun(): Void {
+		final src: String = 'class C {\n\t// alpha\n\n\t// beta\n\tvar y = 2;\n}';
+		Assert.isTrue(noEdit(src, 'alpha beta'), okText(cr(src, 'alpha beta', 'JOINED', false)));
+	}
+
+	/**
+	 * A `//` opening a line INSIDE a block comment is CONTENT, not a continuation marker.
+	 *
+	 * The marker is picked per body — the gutter star for a block, the opener for a `//` run — and
+	 * folding `//` unconditionally would have made this commented-out line unreachable to a find,
+	 * silently, in the one direction (a refusal) nothing else in this project reports.
+	 */
+	@:pin('control')
+	@:killer('M-COMMENT-MARKER-FORCED')
+	public function testBlockCommentKeepsAnInteriorLineCommentMarker(): Void {
+		final src: String = 'class C {\n\t/*\n\t// old();\n\t*/\n\tvar x = 1;\n}';
+		final text: String = okText(cr(src, '// old();', '// new();', false));
+		Assert.isTrue(text.contains('/*\n\t// new();\n\t */'), text);
+	}
+
+	/**
+	 * A replacement that would leave a line of the run without its `//` is REFUSED.
+	 *
+	 * The unit's body span reaches over the INTERIOR openers of lines 2..N, which is what lets a
+	 * find cross a break — and what let `--regex '/' ''` delete one, turning `// var y = 2;` into a
+	 * live field. Every gate downstream said yes: valid Haxe, so the re-parse passed, `fmt --list`
+	 * read 0 of 1, and lint reported the new member as if a human had written it.
+	 */
+	@:pin('control')
+	@:killer('M-COMMENT-RUN-OPENER-UNGUARDED')
+	public function testARunLineMayNotLoseItsOpener(): Void {
+		Assert.isTrue(errText(cr(lineRun(), '/', '', true)).contains('without its opener'));
+	}
+
+	/**
+	 * The break-boundary rule holds for a `//` run, not only for a `/** ` block: a find whose leading
+	 * character is the folded break keeps that break rather than eating the opener after it.
+	 *
+	 * It generalises only because `isBreakRun` is marker-agnostic; the four `M-COMMENT-BOUNDARY-*`
+	 * controls all use blocks, so nothing else in this class would notice it becoming marker-aware.
+	 */
+	public function testLeadingBreakSpaceKeepsTheRunBreak(): Void {
+		final text: String = okText(cr(lineRun(), ' across two line comments.', ' ACROSS two line comments.', false));
+		Assert.isTrue(text.contains('// first half of a sentence that runs\n\t// ACROSS two line comments.'), text);
+	}
+
+	/**
 	 * A replacement carrying a real NEWLINE gets the block's own ` * ` continuation on every
 	 * line it adds. Spliced raw it produced a line with no gutter at all, and the writer then
 	 * re-based the whole run onto that shallowest line — so ONE bad line pushed its guttered
@@ -464,6 +559,11 @@ class CommentRewriteSliceTest extends Test {
 		return '/**\n * Lead sentence.\n *\n * - M1 first item\n * - M2 second item\n * - M3 third item\n */\nclass C {}';
 	}
 
+	/** A run of two `//` lines with a sentence wrapped across them, and code right after it. */
+	private inline function lineRun(): String {
+		return 'class C {\n\t// first half of a sentence that runs\n\t// across two line comments.\n\tvar x = 1;\n}';
+	}
+
 	private function cr(src: String, find: String, replace: String, regex: Bool): EditResult {
 		return CommentRewrite.rewrite(src, find, replace, regex, true, new HaxeQueryPlugin());
 	}
@@ -492,6 +592,11 @@ class CommentRewriteSliceTest extends Test {
 				'';
 			case Err(message): message;
 		};
+	}
+
+	/** Whether the literal `find` leaves the canonicalised source exactly as an edit-free pass does. */
+	private function noEdit(src: String, find: String): Bool {
+		return okText(cr(src, find, 'JOINED', false)) == okText(cr(src, 'no such text anywhere', 'x', false));
 	}
 
 }

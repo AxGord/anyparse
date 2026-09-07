@@ -22,22 +22,33 @@ import anyparse.runtime.Span;
  *
  * A `NullFlow` walk seeds a `MaybeNull` fact from two independent sides. The EXPRESSION side
  * fires whenever a local is assigned a nullable source (`NullableSource.describe` over the
- * file's `declaredTypes` / `returnTypes`, with `CheckScan.typeNominalResolver` behind them for a
- * receiver no annotation names — a `Map`-family index or `.get`, or a `Null<T>`-returning call).
- * The DECLARATION side (`NullableSource.declaredNullable`) fires on a local whose written
- * annotation is `Null<T>` and whose initializer says nothing against it, so a receiver no
- * nullable expression ever feeds still carries the fact. "Says nothing" is two conditions, not
- * one: the expression side has no opinion, AND the initializer's own type does not RESOLVE to
- * something non-nullable (`NullableSource.initTypeIsNonNull`, read through a VALUE-mode
+ * file's `declaredTypes` / `returnTypes`, with `CheckScan.typeNominalResolver` behind them for
+ * a receiver no annotation names — a `Map`-family index or `.get`, or a `Null<T>`-returning
+ * call). The DECLARATION side (`NullableSource.declaredNullable`) fires on a local whose
+ * written annotation is `Null<T>` and whose initializer says nothing against it, so a receiver
+ * no nullable expression ever feeds still carries the fact. "Says nothing" is two conditions,
+ * not one: the expression side has no opinion, AND the initializer's own type does not RESOLVE
+ * to something non-nullable (`NullableSource.initTypeIsNonNull`, read through a VALUE-mode
  * resolver). Without the second the annotation was seeded over a value that cannot be null —
  * seven such warnings across two real trees, every one a redundant `Null<T>` over a two-branch
- * ternary or a non-null-returning call; where the expression side
- * DOES have an opinion its verdict stands, which is what keeps an `m.exists(k)`-proven map read
- * silent even though its declaration reads `Null<V>`. Parameters are not seeded from their
- * annotation — `NullFlow.analyze` documents the measurement behind that. The length-guarded collection accessors (`Array` / `List` `pop` / `shift` / `first` / `last`) are excluded from the seed — their dominant `while (c.length > 0) c.pop()` idiom is safe by a guard flow cannot model, so seeding them would be a systematic false positive; the point-wise `possible-null-dereference` still flags them at `Info`. The fact is narrowed away by the same guards the engine already models — an
- * `if (u != null)` arm, an early `if (u == null) return;`, an `&&` right side, a
- * non-null reassignment, a `??=`, a `switch` branch after a `case null:`, a `case _ if (u != null):` guard, and a `nullAssertionCalls` helper (`Assert.notNull(u)`) — so a guarded deref is a safe miss. Only a function
- * unit's own names (parameters / locals) are tracked, so a field / static / `this` receiver is never reported. Residual false positives remain where the non-null guarantee lives in a value / relational invariant the name-keyed flow cannot see — an `m.exists(k)` guard before `m[k]`, a key just written (`m[k] = v; var u = m[k];`), a key drawn from `m.keys()`, or an alias (`var v = u; if (v != null) u.f;`); these are report-only Warning residuals, suppressible via `// noqa` or `apqlint.json`.
+ * ternary or a non-null-returning call; where the expression side DOES have an opinion its
+ * verdict stands, which is what keeps an `m.exists(k)`-proven map read silent even though its
+ * declaration reads `Null<V>`. Parameters are not seeded from their annotation —
+ * `NullFlow.analyze` documents the measurement behind that. The length-guarded collection
+ * accessors (`Array` / `List` `pop` / `shift` / `first` / `last`) are excluded from the seed —
+ * their dominant `while (c.length > 0) c.pop()` idiom is safe by a guard flow cannot model, so
+ * seeding them would be a systematic false positive; the point-wise
+ * `possible-null-dereference` still flags them at `Info`. The fact is narrowed away by the
+ * same guards the engine already models — an `if (u != null)` arm, an early `if (u == null)
+ * return;`, an `&&` right side, a non-null reassignment, a `??=`, a `switch` branch after a
+ * `case null:`, a `case _ if (u != null):` guard, and a `nullAssertionCalls` helper
+ * (`Assert.notNull(u)`) — so a guarded deref is a safe miss. Only a function unit's own names
+ * (parameters / locals) are tracked, so a field / static / `this` receiver is never reported.
+ * Residual false positives remain where the non-null guarantee lives in a value / relational
+ * invariant the name-keyed flow cannot see — an `m.exists(k)` guard before `m[k]`, a key just
+ * written (`m[k] = v; var u = m[k];`), a key drawn from `m.keys()`, or an alias (`var v = u;
+ * if (v != null) u.f;`); these are report-only Warning residuals, suppressible via `// noqa`
+ * or `apqlint.json`.
  *
  * A `?.` guard on the receiver narrows it too: `u?.f != null` cannot be true with a null `u`,
  * because `?.` short-circuits the whole remaining chain. The `== null` direction proves nothing —
@@ -137,7 +148,11 @@ final class UnguardedNullableDeref implements Check {
 		return [];
 	}
 
-	/** Flag `node` when it is a covered deref form (`ctx.soleChildKinds` sole-child / `ctx.firstChildKinds` first-child) whose receiver is a `MaybeNull`-bound plain identifier. */
+	/**
+	 * Flag `node` when it is a covered deref form (`ctx.soleChildKinds` sole-child /
+	 * `ctx.firstChildKinds` first-child) whose receiver is a `MaybeNull`-bound plain
+	 * identifier.
+	 */
 	private static function checkDeref(out: Array<Violation>, file: String, node: QueryNode, facts: NullFacts, ctx: Ctx): Void {
 		final sole: Bool = ctx.soleChildKinds.contains(node.kind) && node.children.length == 1;
 		final first: Bool = ctx.firstChildKinds.contains(node.kind) && node.children.length >= 1;

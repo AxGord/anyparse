@@ -278,6 +278,7 @@ final class ProseClaimCensusTest extends Test {
 		'unit.query.CommentOwnerGuardSliceTest#testInPlaceRewriteUnderOneCommentIsAccepted :: control',
 		'unit.query.CommentOwnerGuardSliceTest#testReplacingTheSeparatingCodeIsAccepted :: control',
 		'unit.query.CommentRewriteSliceTest#testCallerSuppliedGutterIsNotDoubled :: base',
+		'unit.query.CommentRewriteSliceTest#testLeadingBreakSpaceKeepsTheRunBreak :: control',
 		'unit.query.CommentRewriteSliceTest#testOverWideReplacementAllowedWithFlag :: control',
 		'unit.query.CondBranchSplitTest#testBranchDeclResolvesFromAfterTheRegion :: control',
 		'unit.query.CondBranchSplitTest#testOuterDeclResolvesInsideBranch :: control',

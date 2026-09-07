@@ -148,6 +148,16 @@ final class CommentRewriteCommand implements CliCommand {
 		CliIo.sysPrint('prefixes or without them. A --regex find is matched against the RAW body\n');
 		CliIo.sysPrint('instead, prefixes included, so a multi-line pattern needs `\\s+\\*\\s+`.\n');
 		CliIo.sysPrint('\n');
+		CliIo.sysPrint('A BODY is one comment UNIT, not one lexer token: a run of contiguous full-line\n');
+		CliIo.sysPrint('`//` comments counts as ONE, so a find spanning two of its lines matches the\n');
+		CliIo.sysPrint('way it does inside a /** block, its continuation marker being `//` rather than\n');
+		CliIo.sysPrint('` * `. A --regex pattern crossing such a break needs `\\s+//\\s+`, and `^` / `$`\n');
+		CliIo.sysPrint('anchor at the RUN, not at each line — so a --regex pattern that anchored per\n');
+		CliIo.sysPrint('`//` line before this rule existed now matches nothing and is reported as an\n');
+		CliIo.sysPrint('absent find; drop the anchor, or spell the break as `\\s+//\\s+`. A replacement\n');
+		CliIo.sysPrint('that would leave a line of the run without its `//` is REFUSED, naming it: the\n');
+		CliIo.sysPrint('run body spans those openers, and deleting one turns a comment into code.\n');
+		CliIo.sysPrint('\n');
 		CliIo.sysPrint("SPLICING. Write plain lines and real newlines (a shell $'a\\nb' literal): each\n");
 		CliIo.sysPrint("new line gets the comment's own continuation, and a ` * ` you add yourself is\n");
 		CliIo.sysPrint("stripped rather than doubled. The continuation is read off the block's own\n");
