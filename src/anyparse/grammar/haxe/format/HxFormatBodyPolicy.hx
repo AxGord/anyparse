@@ -8,9 +8,11 @@ package anyparse.grammar.haxe.format;
  * - `"same"` → `BodyPolicy.Same`
  * - `"next"` → `BodyPolicy.Next`
  * - `"fitLine"` → `BodyPolicy.FitLine`
- * - `"keep"` → `BodyPolicy.Same` (degraded — recovering the original
- *   source shape requires per-node layout tracking the parser does
- *   not yet preserve; `Same` is the nearest no-surprise fallback).
+ * - `"keep"` → `BodyPolicy.Keep` — the writer reads the source form and
+ *    reproduces it. This line read `BodyPolicy.Same` (degraded) until S159
+ *    noticed it: `bodyPolicyToRuntime` has mapped `Keep` to `Keep` for long
+ *    enough that `HxLoopBodyIfElseSliceTest` now pins the difference, and a
+ *    `keep` body that reproduces a source break is what that pin asserts.
  */
 enum abstract HxFormatBodyPolicy(String) to String {
 

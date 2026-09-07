@@ -21,9 +21,10 @@ using anyparse.macro.MetaInspect;
  * the source had it - and what separator, indent, brace placement and
  * comment fold the choice implies. The five layout builders
  * (`buildBodySameLayout` / `Next` / `Block` / `Fit` / `Keep`) each emit one
- * arm, `buildBodyCoreWrap` selects between them at runtime, and the
- * `wrapBody*` members bolt on the trailing-doc, Allman, meta-block-glue and
- * loop-shape corrections.
+ * arm, `buildBodyCoreWrap` selects between them at runtime - substituting
+ * `BodyPolicy.Next` for the config's placement on the one loop-body shape
+ * `buildLoopBodyIfElseTest` names - and the `wrapBody*` members bolt on the
+ * trailing-doc, Allman and meta-block-glue corrections.
  *
  * Split out of `WriterLowering` for size. Five members there enter through
  * `bodyPolicyWrap`, the family's single door.
@@ -501,15 +502,11 @@ final class WriterBodyPolicyLowering {
 			// owner (`anyparse.format.BodyFit`), shared with the case-body Star
 			// path. `nestGluedBody = false` keeps this site byte-identical.
 			macro anyparse.format.BodyFit.fitLineLayout(_cols, _body, false, opt.lineWidth, anyparse.format.BodyFit.SIBLING_NONE);
-		// ω-loop-body-if-else-next: on a LOOP body field the whole FitLine answer
-		// above is skipped for one body shape — an `if` that owns an `else` — and
-		// replaced by the same `Next` layout the `fitLineIfWithElse` escape below
-		// uses. Every other body, this flag off, and every non-loop field keep the
-		// answer unchanged.
-		final fitGatedExpr: Expr = wrapLoopBodyIfElseNext(opts, fitInnerExpr);
+		// ω-loop-body-if-else-next is NOT here: it is a substitution on the policy
+		// value in `buildBodyCoreWrap`, upstream of every layout.
 		if (elseFieldName == null) return macro {
 			final _body: anyparse.core.Doc = $writeCall;
-			$fitGatedExpr;
+			$fitInnerExpr;
 		};
 		final elseAccess: Expr = {
 			expr: EField(macro value, elseFieldName),
@@ -521,7 +518,7 @@ final class WriterBodyPolicyLowering {
 			// via propagateElseIfBranch) is an extra break trigger even when this
 			// `if` has no `else` of its own — mirrors fork's `isPartOfIfElse`
 			// "if inside else" clause. Still suppressed by `fitLineIfWithElse`.
-			opt.fitLineIfWithElse || ($elseAccess == null && !opt._inElseIfBranch) ? $fitGatedExpr : _dn(_cols, _dc([_dhl(), _body]));
+			opt.fitLineIfWithElse || ($elseAccess == null && !opt._inElseIfBranch) ? $fitInnerExpr : _dn(_cols, _dc([_dhl(), _body]));
 		};
 	}
 
@@ -737,6 +734,17 @@ final class WriterBodyPolicyLowering {
 		final nextPat: Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Next']));
 		final fitPat: Expr = MacroStringTools.toFieldExpr(bpPath.concat(['FitLine']));
 		final keepPat: Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Keep']));
+		// ω-loop-body-if-else-next: the key is a POLICY SUBSTITUTION, not a layout
+		// arm. On a LOOP body field whose runtime body is an `if` that owns an
+		// `else`, the placement `forBody` / `whileBody` / `doWhileBody` chose is
+		// replaced by `Next` before ANY reader sees it — the outer `Keep` switch
+		// below, and the policy switch inside it, both read `policyFlag`. That is
+		// the whole S159 fix: S157 gated `buildBodyFitExpr` instead, so `same` and
+		// `keep` had the defect the key is documented to withdraw and no way to
+		// decline it. Folded into the selector rather than added as arms, for the
+		// JVM method-size reason the `omega-else-switch` comment below records.
+		final loopIfElseTest: Null<Expr> = buildLoopBodyIfElseTest(opts);
+		final policyFlag: Expr = loopIfElseTest == null ? optFlag : macro ($loopIfElseTest ? $nextPat : $optFlag);
 		final policyCases: Array<Case> = [
 			{ values: [samePat], expr: sameLayoutExpr, guard: null },
 			{ values: [nextPat], expr: nextLayoutExpr, guard: null },
@@ -753,7 +761,7 @@ final class WriterBodyPolicyLowering {
 		final tests: { same: Null<Expr>, next: Null<Expr> } = buildElseSwitchTests(bp, opts);
 		final esSame: Null<Expr> = tests.same;
 		final esNext: Null<Expr> = tests.next;
-		final elseSwitchPolicy: Expr = esSame == null ? optFlag : macro ($esSame ? $samePat : ($esNext ? $nextPat : $optFlag));
+		final elseSwitchPolicy: Expr = esSame == null ? policyFlag : macro ($esSame ? $samePat : ($esNext ? $nextPat : $policyFlag));
 		// omega-bracket-body-glue: same substitution seam, same reason — a `[` body
 		// that hugs its branch head is the `Same` layout, so it costs one ternary
 		// here instead of a whole extra outer arm.
@@ -787,7 +795,7 @@ final class WriterBodyPolicyLowering {
 		// policy-driven layout shortcuts do not apply. Route the whole
 		// wrap through `keepLayoutExpr` when `opt.<flag> == Keep`.
 		final outerKeepCases: Array<Case> = [{ values: [keepPat], expr: keepLayoutExpr, guard: null }];
-		return { expr: ESwitch(optFlag, outerKeepCases, bodySwitch), pos: Context.currentPos() };
+		return { expr: ESwitch(policyFlag, outerKeepCases, bodySwitch), pos: Context.currentPos() };
 	}
 
 	/**
@@ -905,15 +913,16 @@ final class WriterBodyPolicyLowering {
 	}
 
 	/**
-	 * Wrap the `FitLine` layout Expr with the ω-loop-body-if-else-next gate: a
-	 * loop body that is an `if` carrying an `else` takes the `Next` layout
-	 * instead of the FitLine answer.
+	 * Build the ω-loop-body-if-else-next TEST — `opt.<flag> && <shape probe>` — for
+	 * `buildBodyCoreWrap` to substitute `BodyPolicy.Next` with: a loop body that is
+	 * an `if` carrying an `else` takes the `Next` placement whatever `forBody` /
+	 * `whileBody` / `doWhileBody` said.
 	 *
-	 * The three names arrive declaratively from
-	 * `@:fmt(loopBodyIfElseNext('<optField>', '<ifCtor>', '<elseField>'))` so the
-	 * macro stays format-neutral, and the shape question itself is asked at
-	 * runtime by `anyparse.format.LoopBodyShape.isIfWithElse` — the body value is
-	 * a trivia-synthesised enum, which no non-macro module may name.
+	 * The names arrive declaratively from `@:fmt(loopBodyIfElseNext('<optField>',
+	 * '<ifCtor>', '<elseField>'[, '<wrapperCtor>']))` so the macro stays
+	 * format-neutral, and the shape question itself is asked at runtime by
+	 * `anyparse.format.LoopBodyShape.isIfWithElse` — the body value is a
+	 * trivia-synthesised enum, which no non-macro module may name.
 	 *
 	 * The gate looks at the CHILD's shape, not at a sibling field, and that is
 	 * the whole difference from `fitLineIfWithElse`: an `if` WITHOUT an `else`
@@ -922,23 +931,37 @@ final class WriterBodyPolicyLowering {
 	 * `forBody: next` moves the guard idiom under the header too, which is why
 	 * this is a knob and not a config value.
 	 *
-	 * Returns `fitInnerExpr` unchanged when no args (every non-loop body field).
+	 * Returns `null` when no args (every non-loop body field), which leaves
+	 * every placement reading the raw config value.
 	 */
-	private static function wrapLoopBodyIfElseNext(opts: WriterLowering.WrapBodyOpts, fitInnerExpr: Expr): Expr {
+	private static function buildLoopBodyIfElseTest(opts: WriterLowering.WrapBodyOpts): Null<Expr> {
 		final args: Null<Array<String>> = opts.loopBodyIfElseArgs;
-		if (args == null) return fitInnerExpr;
-		if (args.length != 3)
+		if (args == null) return null;
+		// The substitution is read by `buildBodyCoreWrap`'s policy switch, which an
+		// `elseIf` field never reaches - its `ifStmtPattern` arm intercepts an `IfStmt`
+		// body first. No grammar pairs the two tags today (`elseIf` sits on
+		// `HxIfStmt.elseBody` / `HxIfExpr.elseBranch`, neither a loop body); refuse the
+		// pairing at compile time rather than let a later one go silently inert.
+		if (opts.hasElseIf)
 			Context.fatalError(
-				'WriterLowering: bodyPolicyWrap loopBodyIfElseArgs requires (optField, ifCtor, elseField), got ${args.length} args',
+				'WriterLowering: bodyPolicyWrap loopBodyIfElseNext is not composable with elseIf on one field - the elseIf arm'
+				+ ' intercepts the body before the policy switch reads the substitution',
+				Context.currentPos()
+			);
+		if (args.length != 3 && args.length != 4)
+			Context.fatalError(
+				'WriterLowering: bodyPolicyWrap loopBodyIfElseArgs requires (optField, ifCtor, elseField[, wrapperCtor]), got '
+				+ '${args.length} args',
 				Context.currentPos()
 			);
 		final flagAccess: Expr = { expr: EField(macro opt, args[0]), pos: Context.currentPos() };
 		final ifCtor: String = args[1];
 		final elseField: String = args[2];
 		final bodyValueExpr: Expr = opts.bodyValueExpr;
-		return macro $flagAccess && anyparse.format.LoopBodyShape.isIfWithElse($bodyValueExpr, $v{ifCtor}, $v{elseField})
-			? _dn(_cols, _dc([_dhl(), _body]))
-			: $fitInnerExpr;
+		final shapeProbe: Expr = args.length == 4
+			? macro anyparse.format.LoopBodyShape.isIfWithElse($bodyValueExpr, $v{ifCtor}, $v{elseField}, $v{args[3]})
+			: macro anyparse.format.LoopBodyShape.isIfWithElse($bodyValueExpr, $v{ifCtor}, $v{elseField});
+		return macro $flagAccess && $shapeProbe;
 	}
 
 	/**
