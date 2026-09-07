@@ -1,4 +1,5 @@
 import testkit.TestRegistry;
+import unit.cli.CliFixture;
 import utest.Runner;
 
 /**
@@ -20,6 +21,15 @@ class RunTests {
 
 	public static function main(): Void {
 		if (listing()) return;
+		// Every fixture path this suite writes is built from a process-local counter and a
+		// millisecond clock, so two suite processes started together — a parallel mutation-arm
+		// sweep, a `suite-shard.sh` shard set, a second worker on the same machine — generate the
+		// SAME names under one shared `$TMPDIR` and delete each other's files mid-test. A private
+		// temp root per process is what keeps them apart. A COMPLETED run now leaves nothing at
+		// all where the old scheme accumulated; an INTERRUPTED one leaves one claimed directory
+		// holding whatever fixtures were live (17 at the peak, measured), and `tmp-lifecycle.sh`
+		// reaps that once this pid is gone.
+		final scratch: String = CliFixture.isolateTempDir();
 		final runner: Runner = new Runner();
 
 		// Optional test-class filter for a fast dev inner-loop: APQ_TEST is a
@@ -116,6 +126,16 @@ class RunTests {
 		var executed: Int = 0;
 		runner.onTestComplete.add(_ -> executed++);
 		runner.onComplete.add(_ -> Sys.println('tests executed: $executed'));
+		// Registered here for the same reason as the line above: `Report.create`'s own
+		// `onComplete` handler exits the process from inside the dispatch, so a scratch
+		// teardown added after it would never run. `removeScratchRoot` rather than `removeDir`
+		// because this argument is a recursive delete: it refuses any path that is not a claimed
+		// `apq-suite.` root. Guarded because `Dispatcher.dispatch` catches only its own
+		// `EventException` — a vanished entry or an `EPERM` inside the removal would abort the
+		// remaining handlers and take the `successes:` / `failures:` block with it, so a cleanup
+		// hiccup would reach every gate as an UNCOUNTABLE transcript. The scratch root is
+		// reapable; the report is not reproducible.
+		runner.onComplete.add(_ -> try CliFixture.removeScratchRoot(scratch) catch (_exception: haxe.Exception) {});
 		utest.ui.Report.create(runner, verbose ? AlwaysShowSuccessResults : NeverShowSuccessResults, AlwaysShowHeader);
 		runner.run();
 	}

@@ -468,7 +468,32 @@ A `SURVIVED` or `MISMATCH` row is evidence about the FIXTURE, not noise to retry
 
 **The scratch directory a run leaves behind is documented** — `anyparse-mutarm.*` and the `anyparse-mutcheck.*` it drives, kept on a non-KILLED verdict with the path printed, removed otherwise, and swept at startup once their owner pid is gone: § "Scratch directories: every tool's, and who removes them".
 
-**One caveat on the whole-suite mode, measured.** Twenty-three concurrent full-suite runs at `--jobs 4` put the oracle-driven CLI end-to-end fixtures under load, and they flake there: across two `--all` sweeps of the same tree, 11 failure names appeared in one run and not the other — `unit.check.*OracleE2ETest`, `unit.check.OracleCacheTest`, `unit.cli.LintPerFileConfigCliTest`, `unit.check.NamingCheckMemberFixTest`, `unit.check.MagicNumberCheckTest.testRespectsIgnoreFromDisk`. That they are flakes rather than coupling is not a guess: `M-ARM-ROW-OK` cuts `test/testkit/MutationArms.hx`, a file no check reads, and five of its eleven "extras" in the first sweep were `unit.check.*`. Every VERDICT was stable across both sweeps; it is the `+extra` column that should be read as approximate. `--fast` has neither problem.
+**The whole-suite mode's flake had a mechanism, and it was never the compiler — FIXED (S150).** This section used to carry it as a standing caveat: N concurrent full-suite runs at `--jobs 4` put the oracle-driven CLI end-to-end fixtures under load and they flake there, 11 failure names appearing in one `--all` sweep of a tree and not the next. The recorded suspicion was the oracle — serialize the `haxe <hxml> --no-output` spawn across processes, or lock what the oracle reads. The compiler is not in it at all, and neither lock would have helped: **an in-process lock is vacuous by construction, and a cross-process one would have serialized the wrong thing.**
+
+Every one of those failures is an `ENOENT` on a `$TMPDIR/tmp_…` path. `unit.cli.CliFixture` names a fixture `tmp_<prefix>_<dir|fixture>_${Sys.time()}_$counter`, and neither half carries anything a SECOND process cannot produce: `counter` is a static, so it is unique within a process only, and `Sys.time()` on node is `Date.now() / 1000`, a millisecond clock. Two suite processes started together are lockstep copies of each other — the same classes in the same order — so their counters advance side by side and land in the same millisecond. Whole runs of names coincide, both processes write into ONE directory, and the first teardown deletes the other's fixture mid-test. The colliding counters seen in one pair of runs were 356, 358, 359, 361, 363, 365, 367, 390, 394, 398 and 402 — a narrow band rather than a scatter, which is the lockstep showing, and it is what turns a coincidence into a rate. The oracle-driven fixtures dominated the census for the reason they are the slowest — a fixture directory that stays alive across a `haxe` spawn is a window a sibling has a whole second to delete it in — which is exactly why the family read as "the oracle".
+
+The cut is the queue's second candidate at the only layer that covers every producer: `RunTests.main` calls `CliFixture.isolateTempDir()` before the first fixture is written and removes the root on completion. A per-process ROOT rather than a per-process NAME because the naming is not in one place — TWENTY sites under `test/` build such a path by hand (`hxq search 'Sys.time()' test/`), one of them a FIXED name (`FormatConfigDiscoveryTest`) that no per-name fix could ever have reached, and `OracleCache` / `CompilerServer` key their records by an hxml+cwd hash under the same directory. One root covers every producer, including the ones not written yet.
+
+**The root is CLAIMED, not just created**, in `tools/tmp-lifecycle.sh`'s own shape — `apq-suite.XXXXXX` from `mkdtemp` plus a `.apq-owner` stamp naming the pid, and `apq-suite` added to that script's `TMPL_PREFIXES`. Otherwise this would be the project's FIFTH scratch producer and the only one no sweep can reap; § "Scratch directories" records what the last such omission cost. Three consequences worth stating exactly, because the first draft of this paragraph got the middle one wrong: a COMPLETED run now leaves nothing at all, where the old scheme accumulated (a developer's temp dir held 3 294 stale `tmp_*` entries at the time of the fix); an INTERRUPTED run leaves one directory holding whatever fixtures were live — 17 at the peak, measured by sampling the root every 0.2 s — not an empty one; and that directory is swept once its pid is gone. The teardown goes through `CliFixture.removeScratchRoot`, which refuses any path that is not a claimed root: `removeDir` is a recursive delete, and while probing this seam the runner's teardown was pointed at `repoRoot()` for one build, whereupon the run deleted the entire worktree it was running in.
+
+Measured two ways. Four concurrent whole suites from four worktrees, counting non-green ROWS and the distinct fixtures behind them; and `tools/mutation-arm.sh` over a FIXED 12-arm subset at `--jobs 4`, two sweeps of one tree, where the deciding column is the DRIFT — rows present in exactly one of the two sweeps, since a fragment arm's own constant `+extra` row is stable and subtracts out. `--all` was not affordable: the registry is 236 arms at that base, not the 23 the cost table above was measured on, so a whole-suite `--all` is ~45 min a sweep rather than 335 s (T702).
+
+| measurement | round 1 | round 2 | reading |
+|---|---:|---:|---|
+| 4 concurrent suites, `0430a5eb`, before | 19 rows / 15 fixtures / 7 classes | 2 / 2 / 2 | zero overlap between the two rounds |
+| 4 concurrent suites, `da0be5b8`, before | 12 / 11 / 7 | 38 / 34 / 19 | |
+| 4 concurrent suites, `1edb07e7`, before | 4 / 3 / 3 | 8 / 8 / 4 | one name in common of eleven |
+| 4 concurrent suites, `1edb07e7`, after | 0 / 0 / 0 | 0 / 0 / 0, and a third round 0 | 12 of 12 runs green, 46 072 assertions each |
+| 12 arms `--jobs 4`, `0430a5eb`, before | 52 `+extra` | 44 `+extra` | drift **20 rows / 18 fixtures / 12 classes** |
+| 12 arms `--jobs 4`, `1edb07e7`, after | 39 `+extra` | 39 `+extra` | drift **0** — the two sets are identical |
+
+The 18 drifting fixtures before the fix sit in `CompilerOracleE2ETest` (4), `MoveExtractDocCensusTest` (3), `StringLiteralDupCheckTest` (2), `ExplicitLocalTypeOracleE2ETest` (2), `AvoidDynamicRiskyFixE2ETest` (2), and one each in `MoveCanonicalOutputSliceTest`, `LintConfigCliTest`, `ThreadSafetyCheckTest`, `FixVerifierProbeRefusalE2ETest`, `ExplicitTypeReturnOracleTest`, `ExplicitTypeCheckTest` and `HxComprehensionCloserSliceTest` — the family this caveat used to name, plus eight it did not, while four names it DID list never appeared. The last of the twelve is not itself a flake but a DISPLAY artefact worth knowing when reading any drift census: a row's `+extra` list is truncated at ten names with `…+N more`, so `M-ALWAYS-SAME` going from 46 red fixtures to 45 pushed one honest name out of the visible ten (T703). The one-variable manipulation that decided the mechanism before a line was written: the same four concurrent suites, each handed a private `TMPDIR` by the shell, came back 4 of 4 green with byte-identical assertion counts.
+
+**The residue is 2 fixtures and it is a DIFFERENT defect — a lower-rate one, so a drift of 0 is not proof it is gone.** An earlier pair of sweeps of the fixed tree drifted by 3 rows, and all three were `unit.cli.ApqDxTier5CliTest.testProbeStagesSourceToTmp` / `testProbeRestagingOverwritesPreviousScratch`; the pair quoted above drifted by 0 because neither fired. Both assert on the exact content of `/tmp/anyparse-last-probe.hx` — a path `ProbeCommand` hard-codes OUTSIDE `$TMPDIR` on purpose, because a human is meant to copy it out of the tool's own output. No temp-root isolation reaches it and no test-side change de-races it; the options are to move the product path under the OS temp dir or to accept these two as single-process fixtures (T700). `--jobs 1` remains the way to isolate THAT race — it is no longer the FIRST thing to try for an unexplained extra row, which is what it used to be. Every VERDICT was stable across all six arm sweeps, before and after.
+
+**What is NOT covered, and is the same defect one layer out (T706).** The recon fork-path cache is one file per USER (`$HOME/.config/anyparse/fork_path`); `unit.cli.ApqDxTier5CliTest.testReconCacheFileWritesOnEnvResolution` now gives itself a private `HOME` rather than stashing and restoring the developer's real file, but some other fixture still drives `ReconCommand.defaultReconRoot()` under the ambient `HOME` and writes it. That is invisible today only because the write short-circuits on equal content — two worktrees exporting different `ANYPARSE_HXFORMAT_FORK` values bring the shared cross-process write straight back. `unit.cli.ScratchIsolationGateTest` is the gate for the `TMPDIR` half; there is none for `HOME`.
+
+`--fast` never had either problem.
 
 #### Which seams an arm can OWN, decided by blast (S104)
 
@@ -917,6 +942,18 @@ also corrects one entry: S111 filed the four `unit.cli.LintFixFixedPointCliTest`
 census as "the flake family", and serially they are ordinary `FAILURE`s whose messages name the
 de-nesting the cut removed — real unpinned blast. The price is wall time: the two-arm pair is 57 s
 at `--jobs 4` and 104 s serial, and `M-CURLY-CTORS-NONE` alone is 51 s.
+
+**S150 found what the load was doing, and it is fixed** — the extra rows were fixture
+paths colliding between lockstep suite processes under one shared `$TMPDIR`, not the
+compiler oracle and not a property of those classes; the runner now claims a private temp
+root per process. So `--jobs 1` is no longer the FIRST thing to try for an unexplained
+extra row, and the exclusion lists this subsection subtracts are history rather than
+advice — but it stays the way to isolate the one race the fix does not reach (T700, the
+hard-coded `/tmp/anyparse-last-probe.hx` staging path). What survives unchanged is the
+rule the subsection is named for: **do not classify by `ERROR`-vs-`FAILURE`** — the
+verdict kind never carried the information, and a residual flake still reaches you as
+either. Mechanism, cut and the before/after drift: § "Declared arms", the
+whole-suite-mode paragraph.
 
 #### A FRAGMENT arm's whole-suite blast always carries one constant row (S123)
 
@@ -2469,7 +2506,7 @@ Measured on Mac15,9 / 16 CPU at `11423 tests / 24066 assertions`, wall time of t
 
 Past six shards the curve is flat: what remains is the sticky group below plus the per-process warm-up each shard re-pays (roughly 2.4 s of std/haxelib resolution parsing that a single process pays once). The default stays at 4 because the extra shards buy ~1.5 s at the price of that warm-up multiplied again — worth asking for explicitly on a many-core machine, not worth defaulting to on a small one.
 
-**The sticky group.** Most tests write unique per-run temp directories and pick random compiler-server ports, so they parallelise freely. Two paths are fixed constants and are *not* safe to split: `/tmp/anyparse-last-probe.hx` (`Cli.STAGE_PROBE_PATH` — a single slot that `apq probe` overwrites and the Tier-5 tests read back byte-for-byte) and `bin/.last-sweep.json` (the corpus Δ-baseline, rewritten by `HxFormatterCorpusTest` and read by `ApqDxTier5CliTest`). The eight classes that touch them are pinned to shard 0 as one block.
+**The sticky group.** Every shard process claims a PRIVATE temp root before it writes a fixture (`unit.cli.CliFixture.isolateTempDir`, § "Declared arms"), so fixture paths cannot collide between shards and the compiler-server records under them are per-process too. That sentence used to read "most tests write unique per-run temp directories … so they parallelise freely", and S150 showed it was false: the names were unique within ONE process and two processes started together produced the same ones. The conclusion held; the reason did not. Two paths are fixed constants and are *not* safe to split: `/tmp/anyparse-last-probe.hx` (`Cli.STAGE_PROBE_PATH` — a single slot that `apq probe` overwrites and the Tier-5 tests read back byte-for-byte) and `bin/.last-sweep.json` (the corpus Δ-baseline, rewritten by `HxFormatterCorpusTest` and read by `ApqDxTier5CliTest`). The eight classes that touch them are pinned to shard 0 as one block.
 
 That list is derived, not remembered: `hxq lit 'probe' test/ --kind Literal` finds every class holding an exact `'probe'` string leaf (read each hit — one of them is a fixture *method* named `probe`, not the subcommand), and `hxq lit '.last-sweep.json' test/` finds the baseline's users. Re-derive it when adding a test that stages a probe or touches the sweep baseline. A writer left outside the group does not fail the run: it races the read-back assertion in a window of well under a millisecond, so it shows up weeks later as an unreproducible flake. Better still is to make the path configurable so the block can shrink.
 
@@ -2638,6 +2675,16 @@ worktrees** at a long-dead commit.
 | `tools/suite-shard.sh` | `apq-suite-shard.` | removed | kept, path printed |
 | `tools/mutation-check.sh` | `anyparse-mutcheck.` | removed when every track was KILLED | kept, path printed |
 | `tools/mutation-arm.sh` | `anyparse-mutarm.` | removed | kept, path printed |
+| `node bin/test.js` (the suite itself) | `apq-suite.` | removed | kept, swept once the pid is gone |
+
+**Five, since S150** — the suite process claims one too. `unit.cli.CliFixture.isolateTempDir`
+is `mkdtemp` plus the same `.apq-owner` stamp, so a run that is SIGKILLed (the common case
+under an agent harness) is reaped by the sweep below exactly like the other four; the runner
+removes it itself on any completion, red or green. It is the one entry whose failure column
+is not "path printed": nothing prints, because the directory holds only fixtures and the
+transcript is the artifact. Why it exists at all — two suite processes under one shared
+`$TMPDIR` generate the SAME fixture names and delete each other's files — is
+§ "Declared arms", the whole-suite-mode paragraph.
 
 `--keep` on any of the four keeps it regardless — that is the debugging
 escape hatch, and `mutation-arm.sh --keep` forwards it to the

@@ -103,8 +103,11 @@
 #     from it reads `.../T//apq-battery.xxxxxx` and compares unequal to
 #     git's own spelling of the same path.
 
-# The scratch prefixes this project creates, one per tool.
-TMPL_PREFIXES=${TMPL_PREFIXES:-'anyparse-mutcheck anyparse-mutarm apq-battery apq-suite-shard'}
+# The scratch prefixes this project creates, one per tool. `apq-suite` is the SUITE
+# PROCESS's own private temp root (`unit.cli.CliFixture.isolateTempDir`), which every
+# `node bin/test.js` claims so two concurrent runs cannot name the same fixture; the
+# runner removes it on completion, and this sweep is what covers a SIGKILLed one.
+TMPL_PREFIXES=${TMPL_PREFIXES:-'anyparse-mutcheck anyparse-mutarm apq-battery apq-suite-shard apq-suite'}
 
 # The stamp a claimed directory carries. Dotted so no tool's own glob or
 # report ever sees it.
