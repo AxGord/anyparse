@@ -362,8 +362,11 @@ final class FmtCommand implements CliCommand {
 		CliIo.sysPrint('with its own text quoted; a region unbalanced only in its HEAD says so and\n');
 		CliIo.sysPrint('quotes just the head, because the rest of it IS formatted. It is a note,\n');
 		CliIo.sysPrint('not a failure: the rest of the file is formatted and written. How the\n');
-		CliIo.sysPrint('braces BALANCE does not decide it — measured over two real trees, 34 of 56\n');
-		CliIo.sysPrint('such regions have an equal number of `{` and `}`.\n');
+		CliIo.sysPrint('braces BALANCE does not decide it — measured over this project, the Pony\n');
+		CliIo.sysPrint('fork and the haxe-formatter corpus (1580 regions), 34 of the 59 captured\n');
+		CliIo.sysPrint('raw have an equal number of `{` and `}`; the one region that does NOT\n');
+		CliIo.sysPrint('balance yet formats is unbalanced only to a brace count that adds up both\n');
+		CliIo.sysPrint('arms of a nested #if/#else.\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Those notes cost one extra parse per file that has a `#if`, so an EXPLICIT\n');
 		CliIo.sysPrint('--list turns them off: that flag is the machine mode, one line per drifted\n');

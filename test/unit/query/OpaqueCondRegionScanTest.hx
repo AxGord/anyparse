@@ -18,8 +18,11 @@ using StringTools;
  * The predicate is NOT how the braces balance, which is the reading the shape invites and
  * the one this class exists to refute: the first two fixtures are the same region with the
  * same number of `{` and `}`, differing only in a trailing `else`, and only one of them is
- * opaque. Measured over two real trees when this landed, 34 of 56 opaque regions had an
- * equal brace count, so a brace rule would have missed most of the class.
+ * opaque. Re-measured 2026-09-07 over three trees (this project, the Pony fork, the
+ * haxe-formatter corpus inputs — 1580 regions between them): 34 of the 59 captured raw have an
+ * equal brace count, so a brace rule would report 25 of them and miss 34; and the one region
+ * whose braces do NOT balance yet formats is unbalanced only to a count over the region's own
+ * text, which adds up both mutually exclusive arms of a nested `#if` / `#else`.
  *
  * What decides it is whether the bytes between the directives are a balanced subtree IN
  * THEIR GRAMMATICAL POSITION. When they are not, the grammar falls back to one of
@@ -58,6 +61,16 @@ class OpaqueCondRegionScanTest extends Test {
 	 */
 	private static final TRAILING_COMMENT: String =
 		'class C {\n\tstatic function foo() #if foo :SomeType #end\n\t// note after the end\n\t{\n\t\tbar;\n\t}\n}\n';
+
+	/**
+	 * The class a brace count gets wrong in the OTHER direction. The OUTER region holds two `{`
+	 * and one `}` — a text count adds up both mutually exclusive arms of the region nested in it
+	 * — and it is an ordinary `Conditional` the writer formats; only the INNER region is captured
+	 * raw. Live shape: `Pony/src/pony/flash/HaxeInit.hx:26`, the one region of the 1580 measured
+	 * that a brace rule calls unbalanced while `fmt` reformats it.
+	 */
+	private static final NESTED_ARMS: String = 'class C {\n\tstatic function f(c: Bool, d: Bool): Void {\n\t\t#if outer\n'
+		+ '\t\t#if inner\n\t\tif (c) {\n\t\t#else\n\t\tif (d) {\n\t\t#end\n\t\t\tg();\n\t\t}\n\t\t#end\n\t}\n}\n';
 
 	/**
 	 * THE discriminating pair. Both regions hold one `{` and one `}`; the only difference is
@@ -193,6 +206,40 @@ class OpaqueCondRegionScanTest extends Test {
 		Assert.equals(0, FmtCommand.opaqueCondRegionNotes(plugin, 'A.hx', SPLIT_TRY, true).length, 'an explicit --list builds none');
 	}
 
+	/**
+	 * The three classes a `#if` region falls into, and the two of them a brace-delta rule
+	 * answers wrong.
+	 *
+	 * Construct-cutting with BALANCED braces is the MAJORITY — 34 of the 59 raw regions over
+	 * the three trees — and a brace rule reports none of them. Construct-cutting with
+	 * unbalanced braces is the one class it gets right. The third is its false positive:
+	 * braces that do not balance over the region TEXT while the region is an ordinary
+	 * `Conditional` the writer formats, because the count added up both mutually exclusive
+	 * arms of a nested `#if` / `#else` — one region in 1580, and no configuration of the file
+	 * ever holds both arms.
+	 *
+	 * The arm IS the refuted rule: keep a record only where the region's brace counts differ,
+	 * and the first class stops being reported at all.
+	 */
+	@:pin('control')
+	@:killer('M-OPAQUE-REGION-BRACE-DELTA')
+	public function testABraceDeltaRuleAnswersTwoOfTheThreeRegionClassesWrong(): Void {
+		final danglingFrom: Int = DANGLING_ELSE.indexOf('#if x');
+		final danglingTo: Int = DANGLING_ELSE.indexOf('#end') + '#end'.length;
+		Assert.equals(0, braceDelta(DANGLING_ELSE, danglingFrom, danglingTo), 'class 1: the region braces balance');
+		Assert.equals(1, regionsOf(DANGLING_ELSE).length, 'class 1: and it is captured raw regardless');
+		final tryFrom: Int = SPLIT_TRY.indexOf('#if display');
+		final tryTo: Int = SPLIT_TRY.indexOf('#end') + '#end'.length;
+		Assert.equals(1, braceDelta(SPLIT_TRY, tryFrom, tryTo), 'class 2: the region opens a brace it never closes');
+		Assert.equals(2, regionsOf(SPLIT_TRY).length, 'class 2: both of its regions are captured raw');
+		final outerFrom: Int = NESTED_ARMS.indexOf('#if outer');
+		final outerTo: Int = NESTED_ARMS.lastIndexOf('#end') + '#end'.length;
+		Assert.equals(1, braceDelta(NESTED_ARMS, outerFrom, outerTo), 'class 3: the outer region text holds one brace too many');
+		final nested: Array<OpaqueCondRegion> = regionsOf(NESTED_ARMS);
+		Assert.equals(1, nested.length, 'class 3: yet only ONE region there is captured raw');
+		Assert.equals(NESTED_ARMS.indexOf('#if inner'), nested[0].region.from, 'class 3: and it is the inner region, not the outer');
+	}
+
 	private static function regionsOf(source: String): Array<OpaqueCondRegion> {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final shape: RefShape = plugin.refShape();
@@ -203,10 +250,13 @@ class OpaqueCondRegionScanTest extends Test {
 		return SourceText.regionExcerpt(source, regionsOf(source)[index].region);
 	}
 
-	/** `{` minus `}` over the whole source — the reading the first fixture refutes. */
-	private static function braceDelta(source: String): Int {
+	/**
+	 * `{` minus `}` over `[from, to)`, the whole source by default — the reading these fixtures
+	 * refute, read off the same bytes a brace rule would.
+	 */
+	private static function braceDelta(source: String, from: Int = 0, ?to: Int): Int {
 		var delta: Int = 0;
-		for (i in 0...source.length) {
+		for (i in from ... (to ?? source.length)) {
 			final code: Int = source.fastCodeAt(i);
 			if (code == '{'.code)
 				delta++;

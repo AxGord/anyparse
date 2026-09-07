@@ -1378,6 +1378,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.NewFileSliceTest#testImportsSectionRefusesABareKeyword :: control :: M-NEWFILE-BARE-KEYWORD-WRAPPED',
 			'unit.query.NewFileSliceTest#testImportsSectionRefusesAnUnusableLine :: control :: M-NEWFILE-IMPORT-ANY-LINE',
 			'unit.query.NewFileSliceTest#testImportsSectionTakesStatements :: control :: M-NEWFILE-IMPORT-DOUBLED',
+			'unit.query.OpaqueCondRegionScanTest#testABraceDeltaRuleAnswersTwoOfTheThreeRegionClassesWrong :: control :: '
+			+ 'M-OPAQUE-REGION-BRACE-DELTA',
 			'unit.query.OpaqueCondRegionScanTest#testACommentAfterTheEndStaysOutOfTheQuote :: control :: M-OPAQUE-REGION-TRIVIA-KEPT',
 			'unit.query.OpaqueCondRegionScanTest#testAPartlyRawRegionSaysSoAndQuotesOnlyItsRawBytes :: control :: M-REGION-INSIDE-NONE',
 			'unit.query.OpaqueCondRegionScanTest#testAWhitespaceGapDoesNotDragTheSharedBodyIntoTheQuote :: control :: '
@@ -1505,6 +1507,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-NULLABLE-NO-CHAIN',
 			'M-NULLABLE-WRAPPER-OPAQUE',
 			'M-SAFENAV-NO-NARROW',
+			'M-OPAQUE-REGION-BRACE-DELTA',
 			'M-OPAQUE-REGION-NONE',
 			'M-OPAQUE-REGION-NODE-SPAN',
 			'M-OPAQUE-REGION-WS-GAP',
