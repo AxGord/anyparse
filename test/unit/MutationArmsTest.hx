@@ -49,6 +49,36 @@ final class MutationArmsTest extends Test {
 		+ '"force": "false", "note": "the layer stops answering"},{"name": "X-FORCED-META", "type": "pack.Raw", '
 		+ '"method": "@:re", "kind": "MetaCall", "force": "false", "note": "nothing to splice after"}]}';
 
+	/** A valid row beside a two-pair cut — the shape a permutation of two statements needs. */
+	private static final TWO_PAIRS: String = '{"arms": [{"name": "X-FORCE", "type": "pack.Layer", "method": "answer", "force": "false", '
+		+ '"note": "the layer stops answering"},{"name": "X-PAIRS", "type": "pack.Other", "method": "shape", '
+		+ '"find": ["a", "c"], "replace": ["b", "d"], "note": "the shape reads b and d"}]}';
+
+	/** A valid row beside one whose two lists do not pair up. */
+	private static final UNEVEN_PAIRS: String = '{"arms": [{"name": "X-FORCE", "type": "pack.Layer", "method": "answer", '
+		+ '"force": "false", "note": "the layer stops answering"},{"name": "X-UNEVEN", "type": "pack.Other", "method": "shape", '
+		+ '"find": ["a", "c"], "replace": ["b"], "note": "which fragment loses its replacement"}]}';
+
+	/** A valid row beside one whose cut is an array with nothing in it. */
+	private static final EMPTY_LISTS: String = '{"arms": [{"name": "X-FORCE", "type": "pack.Layer", "method": "answer", '
+		+ '"force": "false", "note": "the layer stops answering"},{"name": "X-EMPTY", "type": "pack.Other", "method": "shape", '
+		+ '"find": [], "replace": [], "note": "nothing to cut"}]}';
+
+	/** A valid row beside one claiming a forced return AND a multi-pair fragment cut. */
+	private static final FORCED_PAIRS: String = '{"arms": [{"name": "X-FORCE", "type": "pack.Layer", "method": "answer", '
+		+ '"force": "false", "note": "the layer stops answering"},{"name": "X-FORCED-PAIRS", "type": "pack.Other", '
+		+ '"method": "shape", "force": "false", "find": ["a", "c"], "replace": ["b", "d"], "note": "which one"}]}';
+
+	/** A valid row beside one whose first pair replaces its fragment with itself. */
+	private static final NOOP_PAIR: String = '{"arms": [{"name": "X-FORCE", "type": "pack.Layer", "method": "answer", '
+		+ '"force": "false", "note": "the layer stops answering"},{"name": "X-NOOP", "type": "pack.Other", "method": "shape", '
+		+ '"find": ["a", "c"], "replace": ["a", "d"], "note": "the first pair changes nothing"}]}';
+
+	/** A valid row beside one whose "find" list holds something that is not a string. */
+	private static final NON_STRING: String = '{"arms": [{"name": "X-FORCE", "type": "pack.Layer", "method": "answer", '
+		+ '"force": "false", "note": "the layer stops answering"},{"name": "X-NONSTRING", "type": "pack.Other", '
+		+ '"method": "shape", "find": [1], "replace": ["b"], "note": "a number is not a fragment"}]}';
+
 	/** Two rows that are each well-formed and share a name. */
 	private static final DUPLICATE: String = '{"arms": ['
 		+ '{"name": "X-TWICE", "type": "pack.Layer", "method": "answer", "force": "false", "note": "first"},'
@@ -64,7 +94,7 @@ final class MutationArmsTest extends Test {
 		final fragment: Null<MutationArm> = MutationArms.find(table.arms, 'X-FRAGMENT');
 		Assert.notNull(fragment);
 		Assert.equals('X-FRAGMENT', fragment == null ? '' : fragment.name, 'the name asked for is the arm returned');
-		Assert.equals('a', fragment == null ? '' : fragment.find, 'and it carries its own cut, not a neighbour\'s');
+		Assert.same(['a'], fragment == null ? [] : fragment.find, 'and it carries its own cut, not a neighbour\'s');
 	}
 
 	/** The question a `@:killer` really asks: an undeclared name has no arm behind it. */
@@ -184,6 +214,111 @@ final class MutationArmsTest extends Test {
 		Assert.equals(
 			'MetaCall:@:re', MutationArms.selectorOf('MetaCall:@:re'), 'and a colon-bearing name splits once, not at every colon'
 		);
+	}
+
+	/**
+	 * A multi-pair cut reads back as its own list of fragments, and the rendered line says so.
+	 *
+	 * The scalar spelling is that same list with one element, which is what keeps all 161
+	 * existing fragment records — and every `--list-arms` row they produce — byte-unchanged.
+	 */
+	@:pin('guard')
+	public function testAMultiPairCutCarriesEveryFragment(): Void {
+		final table: ArmTable = MutationArms.parse(TWO_PAIRS);
+		Assert.same([], table.errors, 'the second table is clean, so the fixture reaches the read');
+		final arm: Null<MutationArm> = MutationArms.find(table.arms, 'X-PAIRS');
+		Assert.notNull(arm);
+		Assert.same(['a', 'c'], arm == null ? [] : arm.find, 'both fragments come back, in the order written');
+		Assert.same(['b', 'd'], arm == null ? [] : arm.replace, 'and each keeps its own replacement');
+		Assert.equals(
+			'X-PAIRS :: pack.Other#shape :: 2 fragments :: the shape reads b and d', arm == null ? '' : MutationArms.render(arm),
+			'the rendered line counts the pairs'
+		);
+		final single: Null<MutationArm> = MutationArms.find(MutationArms.parse(TWO_ARMS).arms, 'X-FRAGMENT');
+		Assert.equals(
+			'X-FRAGMENT :: pack.Other#shape :: fragment :: the shape reads b', single == null ? '' : MutationArms.render(single),
+			'and a one-pair cut still renders the word it always did'
+		);
+	}
+
+	/**
+	 * Two lists that do not pair up cannot be rendered into a payload, so the row is refused.
+	 *
+	 * `apq patch` alternates old / new sections and needs an EVEN count. A record with two
+	 * fragments and one replacement would hand it an odd one, and the failure would arrive as
+	 * a usage error about the payload rather than as a complaint naming the arm.
+	 */
+	@:pin('control')
+	@:killer('M-ARM-ROW-OK')
+	public function testAMismatchedPairCountIsRefused(): Void {
+		final table: ArmTable = MutationArms.parse(UNEVEN_PAIRS);
+		Assert.notNull(MutationArms.find(table.arms, 'X-FORCE'), 'the valid sibling row is admitted, so the read reached the table');
+		Assert.equals(1, table.errors.length, 'the uneven row is one complaint');
+		Assert.stringContains('X-UNEVEN', table.errors[0]);
+		Assert.stringContains('2 "find" fragment(s) against 1 "replace"', table.errors[0]);
+	}
+
+	/** An array with no entry in it declares no cut at all, and is named by its key rather than by silence. */
+	@:pin('control')
+	@:killer('M-ARM-ROW-OK')
+	public function testAnEmptyFragmentArrayIsRefused(): Void {
+		final table: ArmTable = MutationArms.parse(EMPTY_LISTS);
+		Assert.notNull(MutationArms.find(table.arms, 'X-FORCE'), 'the valid sibling row is admitted, so the read reached the table');
+		Assert.equals(2, table.errors.length, 'each empty list is its own complaint');
+		Assert.stringContains('empty "find" array', table.errors[0]);
+		Assert.stringContains('empty "replace" array', table.errors[1]);
+	}
+
+	/**
+	 * The list spelling opens no second way to claim both cuts at once.
+	 *
+	 * The exclusivity check read `find` as a STRING, so a record spelling it as an array would
+	 * have gone straight past it and left the runner holding a forced return and a fragment
+	 * payload with nothing to say which one it was asked for.
+	 */
+	@:pin('control')
+	@:killer('M-ARM-ROW-OK')
+	public function testAForcedRowWithFragmentListsIsRefused(): Void {
+		final table: ArmTable = MutationArms.parse(FORCED_PAIRS);
+		Assert.notNull(MutationArms.find(table.arms, 'X-FORCE'), 'the valid sibling row is admitted, so the read reached the table');
+		Assert.equals(1, table.errors.length, 'the row claiming both cuts is one complaint');
+		Assert.stringContains('X-FORCED-PAIRS', table.errors[0]);
+		Assert.stringContains('declares both "force" and "find"', table.errors[0]);
+	}
+
+	/**
+	 * A pair whose `replace` is its own `find` changes nothing, and `apq patch` refuses it —
+	 * so the registry refuses it too, rather than leaving it for whoever runs the arm.
+	 *
+	 * The row is otherwise perfect: two fragments, two replacements, equal lengths. Only the
+	 * pairing is wrong, which is a question no length comparison can reach.
+	 */
+	@:pin('control')
+	@:killer('M-ARM-ROW-OK')
+	public function testAPairThatChangesNothingIsRefused(): Void {
+		final table: ArmTable = MutationArms.parse(NOOP_PAIR);
+		Assert.notNull(MutationArms.find(table.arms, 'X-FORCE'), 'the valid sibling row is admitted, so the read reached the table');
+		Assert.equals(1, table.errors.length, 'the second pair does change something, so only the first is a complaint');
+		Assert.stringContains('X-NOOP', table.errors[0]);
+		Assert.stringContains('in pair 1', table.errors[0]);
+	}
+
+	/**
+	 * A malformed fragment list is named by its own key, and by that key ALONE.
+	 *
+	 * `strings` answers null for a list holding a non-string exactly as it does for an absent
+	 * key, so the clauses that read absence as intent would pile "declares neither cut" and
+	 * "replace without find" on top of the one complaint that is true — three errors for one
+	 * defect, two of them pointing at the wrong key.
+	 */
+	@:pin('control')
+	@:killer('M-ARM-ROW-OK')
+	public function testAMalformedFragmentListIsNamedByItsKeyAlone(): Void {
+		final table: ArmTable = MutationArms.parse(NON_STRING);
+		Assert.notNull(MutationArms.find(table.arms, 'X-FORCE'), 'the valid sibling row is admitted, so the read reached the table');
+		Assert.equals(1, table.errors.length, 'the malformed list is one complaint, not three');
+		Assert.stringContains('X-NONSTRING', table.errors[0]);
+		Assert.stringContains('"find" entry that is not a string', table.errors[0]);
 	}
 
 	/**

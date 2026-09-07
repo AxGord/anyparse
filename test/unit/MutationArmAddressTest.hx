@@ -171,6 +171,11 @@ final class MutationArmAddressTest extends Test {
 	 * The node has to resolve UNIQUELY, which is the runner's own contract (`--select` refuses
 	 * an ambiguous match) and one step stricter than the walk above.
 	 *
+	 * A record may spell its cut as N pairs, and every pair is asked this separately: `Patch`
+	 * locates each one against the ORIGINAL node text, so a pair cannot be written against what
+	 * an earlier one produced, and uniqueness is a property of the member as it stands rather
+	 * than of the text a sibling pair leaves behind.
+	 *
 	 * Killed by arm `M-ARM-FRAGMENT-NONE`, which makes the matcher answer zero.
 	 */
 	@:access(anyparse.query.Patch)
@@ -186,19 +191,25 @@ final class MutationArmAddressTest extends Test {
 		final stale: Array<String> = [];
 		var fragments: Int = 0;
 		for (arm in table.arms) {
-			final find: Null<String> = arm.find;
-			if (find == null) continue;
+			final finds: Null<Array<String>> = arm.find;
+			if (finds == null) continue;
 			fragments++;
 			final address: String = MutationArms.address(arm);
 			final resolved: Null<ArmSite> = resolveArmSite(arm, address, plugin, sources, trees, stale);
 			if (resolved == null) continue;
-			final hits: Int = Patch.occurrences(
-				resolved.source.substring(resolved.group.from, resolved.group.to), find, resolved.node.kind
-			);
-			if (hits != 1)
+			final slice: String = resolved.source.substring(resolved.group.from, resolved.group.to);
+			// EVERY pair, in the same coordinates the runner uses: `Patch` locates each pair of a
+			// multi-pair payload against the ORIGINAL node text, never against what an earlier
+			// pair produced, so asking them one at a time here is the same question it will ask.
+			for (index => find in finds) {
+				final hits: Int = Patch.occurrences(slice, find, resolved.node.kind);
+				if (hits == 1) continue;
+				final pair: String = finds.length > 1 ? 'pair ${index + 1}: ' : '';
 				stale.push(
-					'$address: the stored fragment occurs $hits time(s) in the ${resolved.node.kind} node, and the cut needs exactly one'
+					'$address: ${pair}the stored fragment occurs $hits time(s) in the ${resolved.node.kind} node,'
+					+ ' and the cut needs exactly one'
 				);
+			}
 		}
 		Assert.isTrue(fragments > 0, 'a registry with no fragment arm would make this walk vacuous');
 		Assert.equals(0, stale.length, 'arms whose stored cut no longer applies:\n  ${stale.join('\n  ')}');

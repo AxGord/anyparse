@@ -61,6 +61,15 @@
 # `find`/`replace` cut can address one — a forced `return` is spliced after a
 # function signature, so `MutationArms.rowErrors` refuses `force` with any other
 # kind before this script ever sees it.
+#
+# A `find`/`replace` cut is one string or a LIST of them, and a list becomes N
+# pairs in ONE payload rather than N calls: `hxq patch` alternates old / new
+# sections and locates every pair against the ORIGINAL member text. That is what
+# lets an arm PERMUTE two statements — delete here, re-insert there — instead of
+# widening one fragment until it bridges both edits. `rowErrors` refuses a row
+# whose two lists are not the same length, so a payload with an odd section count
+# cannot be rendered.
+#
 # Nothing here classifies a transcript — `apq mutation-verdict` does, out of the
 # unmutated tree, exactly as it already did for a hand-written manifest.
 #
@@ -125,9 +134,21 @@ if (!arm) {
     process.exit(1);
 }
 const force = arm.force === undefined || arm.force === null ? "" : String(arm.force);
+// `find` / `replace` are one string or a LIST of them. N pairs go into ONE payload,
+// which alternates old / new sections, and `Patch` locates every pair against the
+// ORIGINAL member text - so a multi-edit cut needs no ordering and no bridge text.
+const list = v => v === undefined || v === null ? null : (Array.isArray(v) ? v.map(String) : [String(v)]);
 if (force === "") {
-    const replace = arm.replace === undefined || arm.replace === null ? "" : String(arm.replace);
-    fs.writeFileSync(process.argv[3], String(arm.find) + "\n====\n" + replace + "\n");
+    const finds = list(arm.find) || [];
+    const replaces = list(arm.replace) || finds.map(() => "");
+    if (finds.length === 0 || finds.length !== replaces.length) {
+        process.stderr.write("mutation-arm.sh: \"" + arm.name + "\" declares " + finds.length
+            + " find fragment(s) against " + replaces.length + " replace(s) - a multi-pair cut pairs them up\n");
+        process.exit(1);
+    }
+    const sections = [];
+    for (let i = 0; i < finds.length; i++) sections.push(finds[i], replaces[i]);
+    fs.writeFileSync(process.argv[3], sections.join("\n====\n") + "\n");
 }
 const kind = arm.kind === undefined || arm.kind === null || arm.kind === "" ? "FnMember" : String(arm.kind);
 process.stdout.write([force === "" ? "FIND" : "FORCE", arm.type, arm.method, kind, force].join("\t") + "\n");
