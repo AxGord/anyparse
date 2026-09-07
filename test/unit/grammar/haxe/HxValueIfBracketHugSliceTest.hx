@@ -11,7 +11,12 @@ import utest.Test;
  * where both fire — the reported `Matrix.hor`. `expressionIfWithBrackets`
  * decides whether the value-`if` branch's `[` hugs the branch head, and
  * `comprehensionFor: fitLine` decides where each `for` body lands under its
- * own cuddled head. The `CFG_OFF` arm differs from `CFG_ON` in that one key, so an arm that hard-wires the hug on fails against it.
+ * own cuddled head. The `CFG_OFF` arm differs from `CFG_ON` in that one key, so an arm
+ * that hard-wires the hug on fails against it. `CFG_KEEP_ON` / `CFG_KEEP_OFF`
+ * are the same pair under the third body placement, `sameLine.expressionIf:
+ * keep` — the one the knob was blind to until S154, because its OPEN seam sat
+ * inside a policy switch the `Keep` arm bypasses while its two CLOSE seams read
+ * the flag alone.
  *
  * Two fixtures here are GREEN on the base binary and are the vacuity guards:
  * `testAnArrayLiteralBranchWithoutTheKeyKeepsItsOwnLine` (an arm that hugs
@@ -41,6 +46,17 @@ final class HxValueIfBracketHugSliceTest extends Test {
 
 	/** The same config with `sameLine.expressionIfWithBrackets` absent — the base binary's layout. */
 	private static final CFG_OFF: String = cfg(false);
+
+	/**
+	 * The hug knob under the THIRD body placement, `sameLine.expressionIf: keep`. The knob owns three
+	 * seams and two of them read the flag alone (`semicolonBeforeSiblingWrap`, `beforeKwSeparator`)
+	 * while the OPEN one was folded into the layout policy one level below the `Keep` switch — so this
+	 * arm is where the knob glued `] else` and refused `if (c) [` on the same input.
+	 */
+	private static final CFG_KEEP_ON: String = cfg(true, 'keep');
+
+	/** The `keep` arm with the knob absent: `keep` means preserve source, and it must still mean that. */
+	private static final CFG_KEEP_OFF: String = cfg(false, 'keep');
 
 	/** The reported `Matrix.hor`, written flat on one source line so no arm can pass by preserving the input. */
 	private static final HOR_FLAT: String = 'class C {\n\tpublic function hor(d: Int): Matrix<T> {\n\t\treturn if (d > 0) '
@@ -83,6 +99,15 @@ final class HxValueIfBracketHugSliceTest extends Test {
 	private static final ARRAY_UNHUGGED: String = 'class C {\n\tpublic function b(c: Bool): Array<String> {\n\t\treturn if (c)\n'
 		+ '\t\t\t[\n\t\t\t\tfirstLongElementNameHereThatIsQuiteLongIndeed,\n'
 		+ '\t\t\t\tsecondLongElementNameHereThatIsAlsoLongIndeed\n\t\t\t] else\n\t\t\t[];\n\t}\n}';
+
+	/**
+	 * The same literal branch written with BOTH seams broken in source — `[` on a line of its own,
+	 * `];` closing it, `else` on the next line. Under `keep` nothing in the source is already the
+	 * answer, so a hug and a cuddle can only come from the knob.
+	 */
+	private static final ARRAY_KEEP_BROKEN: String = 'class C {\n\tpublic function b(c: Bool): Array<String> {\n\t\treturn if (c)\n'
+		+ '\t\t\t[\n\t\t\t\tfirstLongElementNameHereThatIsQuiteLongIndeed,\n'
+		+ '\t\t\t\tsecondLongElementNameHereThatIsAlsoLongIndeed\n\t\t\t];\n\t\telse\n\t\t\t[];\n\t}\n}';
 
 	/** The reported `Matrix.hor` AS THE SWEPT TREE HOLDS IT: each branch closed by `];` with `else` on the next line. */
 	private static final HOR_SEMI: String = 'class C {\n\tpublic function hor(d: Int): Matrix<T> {\n'
@@ -223,14 +248,61 @@ final class HxValueIfBracketHugSliceTest extends Test {
 		Assert.equals(STMT_SEMI, HxWriteFixture.triviaWrite(STMT_SEMI, CFG_OFF));
 	}
 
-	/** Pony-shaped config text with `sameLine.expressionIfWithBrackets` as the only variable. */
-	private static function cfg(brackets: Bool): String {
+	/**
+	 * The whole rule under `sameLine.expressionIf: keep`, on a source where neither half is already
+	 * there: the `[` comes up to the branch head AND the `];` / `else` break closes to `] else [];`.
+	 * One string carries both halves, so an engine that fixes only the close still fails it — which is
+	 * exactly what the pre-S154 engine did here, dropping the `;` and cuddling the `else` while leaving
+	 * the `[` on its own line. `keep` decides the layout POLICY, never whether an explicit knob applies.
+	 */
+	@:pin('control')
+	@:killer('M-BRACKET-GLUE-KEEP-BLIND')
+	public function testUnderKeepTheKnobHugsTheHeadAndCuddlesTheElse(): Void {
+		Assert.equals(ARRAY_HUGGED, HxWriteFixture.triviaWrite(ARRAY_KEEP_BROKEN, CFG_KEEP_ON));
+	}
+
+	/** The reported `Matrix.hor` reaches the same target bytes from `keep` as it does from `next`. */
+	@:pin('control')
+	@:killer('M-BRACKET-GLUE-KEEP-BLIND')
+	public function testUnderKeepTheReportedComprehensionReachesTheTargetLayout(): Void {
+		Assert.equals(HOR_HUGGED, HxWriteFixture.triviaWrite(HOR_UNHUGGED, CFG_KEEP_ON));
+	}
+
+	/**
+	 * VACUITY GUARD, green on the base binary: with the knob absent `keep` still means preserve, so
+	 * both sources come back byte-identical — an engine that hugs unconditionally fails here.
+	 */
+	@:pin('guard')
+	public function testUnderKeepWithoutTheKeyTheSourceShapeSurvivesWhole(): Void {
+		Assert.equals(ARRAY_KEEP_BROKEN, HxWriteFixture.triviaWrite(ARRAY_KEEP_BROKEN, CFG_KEEP_OFF));
+		Assert.equals(HOR_UNHUGGED, HxWriteFixture.triviaWrite(HOR_UNHUGGED, CFG_KEEP_OFF));
+	}
+
+	/**
+	 * The one-variable proof that the placement was the whole difference: the identical broken source
+	 * under `same` already reached the target bytes on the base binary, and still does. Green both
+	 * sides — it is what makes the pin above a statement about `keep` and not about the knob.
+	 */
+	@:pin('guard')
+	public function testUnderSameTheBrokenSourceAlreadyReachedTheTargetLayout(): Void {
+		Assert.equals(ARRAY_HUGGED, HxWriteFixture.triviaWrite(ARRAY_KEEP_BROKEN, cfg(true, 'same')));
+	}
+
+	/** The `keep` target layout is a fixed point — a second write under the same config changes nothing. */
+	@:pin('guard')
+	public function testTheKeepTargetLayoutIsIdempotent(): Void {
+		Assert.equals(ARRAY_HUGGED, HxWriteFixture.triviaWrite(ARRAY_HUGGED, CFG_KEEP_ON));
+		Assert.equals(HOR_HUGGED, HxWriteFixture.triviaWrite(HOR_HUGGED, CFG_KEEP_ON));
+	}
+
+	/** Pony-shaped config text with `sameLine.expressionIfWithBrackets` and the body placement as the two variables. */
+	private static function cfg(brackets: Bool, expressionIf: String = 'next'): String {
 		final hug: String = brackets ? ', "expressionIfWithBrackets": true' : '';
 		return '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
 			+ '"maxLineLength": 140, "comprehensionCuddledOpen": true, "arrayWrap": {"defaultWrap": "ignore", "rules": [{"conditions":'
 			+ ' [{"cond": "anyItemLength >= n", "value": 30}], "type": "onePerLine"}]}}, "whitespace": {"typeHintColonPolicy": "after", '
 			+ '"bracketConfig": {"comprehensionBrackets": {"openingPolicy": "onlyAfter", "closingPolicy": "before"}}}, "sameLine": {'
-			+ '"ifBody": "fitLine", "functionBody": "fitLine", "expressionIf": "next", "comprehensionFor": "fitLine"$hug}}';
+			+ '"ifBody": "fitLine", "functionBody": "fitLine", "expressionIf": "$expressionIf", "comprehensionFor": "fitLine"$hug}}';
 	}
 
 }

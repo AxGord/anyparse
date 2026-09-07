@@ -156,8 +156,16 @@ package anyparse.grammar.haxe.format;
  * never hugs a branch value to its head (that is
  * `expressionIfWithBrackets`, and only for `[`). Measured at `f8ba0a46` on
  * the reported `} else {` shape: turning this knob on flattened BOTH block
- * bodies onto one line and STILL left `else` on a line of its own. It is a
- * body-CONTENTS flattener, and nothing else.
+ * bodies onto one line and STILL left `else` on a line of its own. It is
+ * a body-CONTENTS flattener, and nothing else.
+ *
+ * Which leaves the block twin of the bracket hug needing NO key. Since
+ * S100 the `next` value of `expressionIf` resolves the pre-`else` gap to
+ * `SameOnBlock`, and the block-ctor arm of the body wrap brings the `{`
+ * up to the head, so a value-`if` with block branches comes back
+ * `if (c) {` … `} else {` under `same` AND under `next`, with this
+ * flattener on or off. Only `keep` reproduces a source break there,
+ * which is what `keep` is for.
  *
  * omega-arrow-value-if-reflow: `expressionIfArrowBodyReflow` (default
  * `false`, absent = fork parity) is a `Bool` knob for the ONE context
@@ -271,6 +279,17 @@ package anyparse.grammar.haxe.format;
 	 * `whitespace.semicolonBeforeElse` for this one shape. The curly twin (`};`)
 	 * is deliberately NOT covered: `expressionIfWithBlocks` collapses a block
 	 * body's CONTENTS and hugs nothing.
+	 *
+	 * All three seams read the flag ALONE. Until S154 the HUG read the flag AND
+	 * the resolved layout: it sat inside the policy switch that the outer `Keep`
+	 * arm of `WriterBodyPolicyLowering.buildBodyCoreWrap` bypasses, so under
+	 * `sameLine.expressionIf: keep` the knob dropped the `;`, pulled `else` up to
+	 * the `]` and left the `[` on a line of its own -- the same half shape the two
+	 * close seams exist to prevent, mirrored. The substitution now sits on the
+	 * policy VALUE, the seam S159 took for `loopBodyIfElseNext`, so `same` / `next`
+	 * / `keep` emit ONE byte-identical result under the knob while every knob-off
+	 * cell keeps the bytes it had. `keep` decides the layout POLICY; it never
+	 * decides whether an explicit knob applies.
 	 */
 	@:optional var expressionIfWithBrackets: Bool;
 

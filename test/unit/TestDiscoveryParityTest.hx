@@ -1281,6 +1281,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxTryBraceSymmetrySliceTest#testValueTryBracesTheBareBody :: control :: '
 			+ 'M-TRY-BODY-SYM-OFF,M-SSB-TRY-SUBST-OFF',
 			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testAnArrayLiteralBranchHugsTheHead :: control :: M-BRACKET-GLUE-NONE',
+			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testTheKeepTargetLayoutIsIdempotent :: guard :: ',
 			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testTheReportedComprehensionReachesTheTargetLayout :: control :: '
 			+ 'M-BRACKET-GLUE-NONE',
 			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testTheSemicolonClosedSourceReachesTheTargetLayout :: control :: '
@@ -1288,6 +1289,12 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testTheSplitCloserCuddlesTheElseWithNoSemicolonToDrop :: control :: '
 			+ 'M-BRACKET-GLUE-NONE',
 			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testTheTargetLayoutIsIdempotent :: control :: M-BRACKET-GLUE-NONE',
+			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testUnderKeepTheKnobHugsTheHeadAndCuddlesTheElse :: control :: '
+			+ 'M-BRACKET-GLUE-KEEP-BLIND',
+			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testUnderKeepTheReportedComprehensionReachesTheTargetLayout :: '
+			+ 'control :: M-BRACKET-GLUE-KEEP-BLIND',
+			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testUnderKeepWithoutTheKeyTheSourceShapeSurvivesWhole :: guard :: ',
+			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testUnderSameTheBrokenSourceAlreadyReachedTheTargetLayout :: guard :: ',
 			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testWithoutTheKeyTheSemicolonAndTheBreakBothSurvive :: control :: '
 			+ 'M-NONCURLY-SAME-DROP',
 			'unit.grammar.haxe.HxValueIfCurlyElseJoinSliceTest#testABracketBranchKeepsTheSourceBreak :: control :: '
@@ -1498,6 +1505,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-LOOPIF-ALWAYS',
 			'M-LOOPIF-POLICY-BLIND',
 			'M-LOOPIF-KEEP-BLIND',
+			'M-BRACKET-GLUE-KEEP-BLIND',
 			'M-LOOPIF-NOWRAP',
 			'M-SSB-TRY-SUBST-OFF',
 			'M-SSB-TRY-DEBRACE-NONE',
@@ -1689,6 +1697,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-EICR-KNOB-IGNORED :: anyparse.macro.WriterBodyPolicyLowering#buildElseIfCommentReflowLayout',
 			'M-LOOPIF-POLICY-BLIND :: anyparse.macro.WriterBodyPolicyLowering#buildBodyCoreWrap',
 			'M-LOOPIF-KEEP-BLIND :: anyparse.macro.WriterBodyPolicyLowering#buildBodyCoreWrap',
+			'M-BRACKET-GLUE-KEEP-BLIND :: anyparse.macro.WriterBodyPolicyLowering#buildBodyCoreWrap',
 			'M-PEB-WS-REWIND-OFF :: anyparse.macro.StarLoopLowering#buildBlockEndedByteCheck',
 			'M-BRACKET-GLUE-NONE :: anyparse.macro.WriterCtorPatternLowering#buildBracketBodyGlueTest',
 			'M-ELSE-SWITCH-COMMENT-GLUE :: anyparse.macro.WriterBodyPolicyLowering#buildElseSwitchCases',

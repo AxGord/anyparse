@@ -568,8 +568,8 @@
 			"name": "M-LOOPIF-POLICY-BLIND",
 			"type": "anyparse.macro.WriterBodyPolicyLowering",
 			"method": "buildBodyCoreWrap",
-			"find": "final policyFlag: Expr = loopIfElseTest == null ? optFlag : macro ($loopIfElseTest ? $nextPat : $optFlag);",
-			"replace": "final policyFlag: Expr = optFlag;",
+			"find": "final loopPolicy: Expr = loopIfElseTest == null ? optFlag : macro ($loopIfElseTest ? $nextPat : $optFlag);",
+			"replace": "final loopPolicy: Expr = optFlag;",
 			"note": "the loop-body `if`/`else` shape stops substituting `Next` for the placement, so `loopBodyIfElseNext` is inert at every `forBody` / `whileBody` / `doWhileBody` value and the reported site glues again"
 		},
 		{
@@ -578,7 +578,15 @@
 			"method": "buildBodyCoreWrap",
 			"find": "return { expr: ESwitch(policyFlag, outerKeepCases, bodySwitch), pos: Context.currentPos() };",
 			"replace": "return { expr: ESwitch(optFlag, outerKeepCases, bodySwitch), pos: Context.currentPos() };",
-			"note": "the outer `Keep` switch reads the raw placement again, so a `keep` loop body routes to the source-preserving layout before the substituted `Next` can be seen - the S157 blind spot narrowed to one placement"
+			"note": "the outer `Keep` switch reads the raw placement again, so a `keep` body routes to the source-preserving layout before any substitution can be seen - the S157 blind spot at `loopBodyIfElseNext`, and since S154 the bracket-hug substitution too, which is why `M-BRACKET-GLUE-KEEP-BLIND` cuts the same line one substitution narrower"
+		},
+		{
+			"name": "M-BRACKET-GLUE-KEEP-BLIND",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "buildBodyCoreWrap",
+			"find": "return { expr: ESwitch(policyFlag, outerKeepCases, bodySwitch), pos: Context.currentPos() };",
+			"replace": "return { expr: ESwitch(loopPolicy, outerKeepCases, bodySwitch), pos: Context.currentPos() };",
+			"note": "the outer `Keep` switch reads the placement from before the bracket substitution, so `expressionIfWithBrackets` goes blind at `sameLine.expressionIf: keep` and only there - the knob still cuddles `] else` through its two close seams and refuses the `[` hug, which is the half shape it exists to prevent"
 		},
 		{
 			"name": "M-LOOPIF-NOWRAP",

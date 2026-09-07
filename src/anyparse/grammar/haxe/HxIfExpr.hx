@@ -154,7 +154,12 @@ package anyparse.grammar.haxe;
  * source that wrote `];` on its own line keeps `else` on the next one no
  * matter what the knob says, and the hug reads as half a shape.
  * Keyed on the `[` ctor, so a block-valued or
- * plain-valued branch is byte-identical either way. Caveat: under
+ * plain-valued branch is byte-identical either way -- and keyed on the FLAG
+ * alone at all three seams. The hug used to be folded into the layout policy
+ * inside `buildBodyCoreWrap`, one level below the outer `Keep` switch, so
+ * `sameLine.expressionIf: keep` got the two close seams and not the open one;
+ * S154 moved it onto the policy VALUE, the seam S159 took for
+ * `loopBodyIfElseNext`. Caveat: under
  * Trivia mode `// line comments` inside the block body fold against
  * the next token and break syntax — same limitation as fork; the
  * knob is opt-in.
