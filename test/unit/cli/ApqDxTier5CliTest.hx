@@ -171,17 +171,17 @@ class ApqDxTier5CliTest extends Test {
 	// --- 4. ANYPARSE_HXFORMAT_FORK cache (write-on-resolve, read-on-fallback) ---
 
 	public function testReconCacheFileWritesOnEnvResolution(): Void {
-		final home: Null<String> = Sys.getEnv('HOME');
-		if (home == null || home.length == 0) {
-			Assert.pass('HOME unset — cache write path skipped');
-			return;
-		}
+		// A private HOME for the duration. The cache is ONE file per USER, so two suite
+		// processes each write their own cwd into it and read back the other's — and the
+		// stash-and-restore this used to do around the REAL file was a second cross-process
+		// write of the same path. Under a private HOME the developer's own cache is never
+		// touched at all, and the assertion below answers for this process alone.
+		final homeStash: Null<String> = Sys.getEnv('HOME');
+		final home: String = CliFixture.writeDir('recon_home', []);
 		final cachePath: String = '$home/.config/anyparse/fork_path';
-		// Stash BOTH env + cache file state before mutating. utest does
-		// not run teardown on assertion failure, so the restore block is
-		// wrapped in try/catch — any throw re-raises after restore.
+		// utest does not run teardown on assertion failure, so the restore block is wrapped
+		// in try/catch — any throw re-raises after restore.
 		final envStash: Null<String> = Sys.getEnv('ANYPARSE_HXFORMAT_FORK');
-		final cacheStash: Null<String> = FileSystem.exists(cachePath) ? File.getContent(cachePath) : null;
 		// Use a synthetic path that exists (the project root itself —
 		// guaranteed present, never a haxe-formatter fork). The cache
 		// write logic doesn't care whether the path is a real fork; it
@@ -192,6 +192,7 @@ class ApqDxTier5CliTest extends Test {
 			: synthetic;
 		var raised: Null<Exception> = null;
 		try {
+			Sys.putEnv('HOME', home);
 			Sys.putEnv('ANYPARSE_HXFORMAT_FORK', trimmed);
 			// Trigger defaultReconRoot via a recon invocation — exit code is
 			// whatever recon decides; we only care about the side effect on
@@ -203,14 +204,11 @@ class ApqDxTier5CliTest extends Test {
 		} catch (exception: Exception) {
 			raised = exception;
 		}
-		// Restore env first (always — the env mutation is process-wide).
-		Sys.putEnv('ANYPARSE_HXFORMAT_FORK', envStash ?? '');
-		// Restore cache file: stash present → write it back; stash absent
-		// → delete the file we created.
-		if (cacheStash != null)
-			File.saveContent(cachePath, cacheStash);
-		else if (FileSystem.exists(cachePath))
-			FileSystem.deleteFile(cachePath);
+		// Restore both env mutations (always — they are process-wide), then drop the
+		// private HOME with the cache file inside it.
+		Sys.putEnv('HOME', homeStash);
+		Sys.putEnv('ANYPARSE_HXFORMAT_FORK', envStash);
+		CliFixture.removeDir(home);
 		if (raised != null) throw raised;
 	}
 
