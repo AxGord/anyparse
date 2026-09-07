@@ -613,7 +613,7 @@ final class FmtCommand implements CliCommand {
 	 * sentence and a quote that stops at the first child.
 	 *
 	 * What decides it is the TREE, not the ctor name, so a grammar that gives an existing ctor a
-	 * structural field cannot leave a hand-kept list stale. `RefShape.opaqueCondRegionKinds` stays
+	 * structural field cannot leave a hand-kept list stale. `RefShape.opaqueCondRegionKindPrefixes` stays
 	 * the WIDE set — it is what the mutating ops' fail-closed gate reads through
 	 * `CondRegionScan.opaqueCondRegionMentioning`, and a head that spells a type name must keep
 	 * refusing a rename — and only this note reads the narrower fact.
@@ -665,7 +665,7 @@ final class FmtCommand implements CliCommand {
 		// reach it.
 		if (listedExplicitly) return [];
 		final shape: RefShape = plugin.refShape();
-		final kinds: Null<Array<String>> = shape.opaqueCondRegionKinds;
+		final kinds: Null<Array<String>> = shape.opaqueCondRegionKindPrefixes;
 		if (kinds == null || kinds.length == 0) return [];
 		if (source.indexOf(shape.conditionalIfKeyword ?? '#if') == -1) return [];
 		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: Exception) null;

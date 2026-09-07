@@ -26,7 +26,7 @@ using StringTools;
  *
  * What decides it is whether the bytes between the directives are a balanced subtree IN
  * THEIR GRAMMATICAL POSITION. When they are not, the grammar falls back to one of
- * `RefShape.opaqueCondRegionKinds`, whose interior projects no nodes at all — which is the
+ * `RefShape.opaqueCondRegionKindPrefixes`, whose interior projects no nodes at all — which is the
  * same fact the mutating ops refuse on, reached through the same scan.
  *
  * The remaining fixtures pin the QUOTE, because a message naming the wrong bytes is what

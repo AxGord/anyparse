@@ -34,10 +34,38 @@ final class CondRegionScan {
 	}
 
 	/**
+	 * Whether `kind` is one of the RAW-CAPTURE fallback ctors a grammar reaches when a
+	 * `#if … #end` region is not a balanced subtree in its position — the fail-closed gate
+	 * `opaqueCondRegions` walks with.
+	 *
+	 * `RefShape.opaqueCondRegionKindPrefixes` is read as a set of ctor-name PREFIXES, not of exact
+	 * names, and that is the whole point of the function existing. A grammar's fallback ctors
+	 * are a FAMILY that grows with the parser (Haxe: `CondSplice*`), so an exhaustive list of
+	 * them desyncs the first time the family gains a member and the mutating ops then go
+	 * SILENT over the new shape rather than refusing. Measured: the list shipped with ten `CondSplice*` names
+	 * on 2026-08-18 and the grammar gained THREE more raw-capture ctors two days later (`CondSpliceReturnStmt`,
+	 * `CondSpliceReturnExpr`, `MetaCondStmt`), after which `rename` rewrote a declaration and
+	 * left its reference inside `return #if nodejs target; #else 2; #end` on the old name —
+	 * `Unknown identifier : target` under `-D nodejs`, no diagnostic. The sibling predicate `isConditionalKind` had been deriving
+	 * the same family by prefix all along; the asymmetry between the two WAS the defect. It still hard-codes the prefix rather
+	 * than reading it from the shape, so the family has two sources of truth and only this one is a grammar's to override - T795.
+	 *
+	 * A prefix that is too WIDE costs almost nothing here, which is why erring that way is
+	 * right: the list only decides which nodes the GAP analysis examines, and a ctor whose
+	 * interior the grammar does model contributes no unmodelled bytes for the mention scan to
+	 * read. `CondSpliceOpExpr` is the proof — every operand of its branch is a real node, so a
+	 * rename through one of them already succeeds today even though the kind is on the list.
+	 */
+	public static inline function isOpaqueCondRegionKind(kind: String, shape: RefShape): Bool {
+		final prefixes: Array<String> = shape.opaqueCondRegionKindPrefixes ?? [];
+		return prefixes.exists(prefix -> kind.startsWith(prefix));
+	}
+
+	/**
 	 * The span of an UNPARSED conditional-compilation region inside `scope` whose raw bytes
 	 * spell `name` as a standalone identifier, or null when no region there could hold one.
 	 *
-	 * `RefShape.opaqueCondRegionKinds` names the ctors a grammar falls back to when a
+	 * `RefShape.opaqueCondRegionKindPrefixes` names the ctors a grammar falls back to when a
 	 * `#if … #end` region is not a balanced subtree. Such a node keeps its CONTINUATION as a
 	 * child (the tail operand, the shared body, the statement after `#end`) and drops the
 	 * region itself: nothing in it projects. So the unmodelled bytes are exactly the parts of
@@ -80,7 +108,7 @@ final class CondRegionScan {
 	 * h();` has an equal number of `{` and `}` and is opaque, while the same region without the
 	 * trailing `else` is an ordinary `Conditional` and formats. What decides it is whether the
 	 * bytes between the directives are a balanced subtree IN THEIR GRAMMATICAL POSITION; when
-	 * they are not, the grammar falls back to one of `RefShape.opaqueCondRegionKinds`.
+	 * they are not, the grammar falls back to one of `RefShape.opaqueCondRegionKindPrefixes`.
 	 *
 	 * `region` runs from the FIRST unmodelled byte to the LAST — not from the node's own start,
 	 * which is a different place in half the shapes: a `CondSpliceTail` begins at the operand
@@ -95,12 +123,15 @@ final class CondRegionScan {
 	 * yields no record: there is nothing the model dropped.
 	 */
 	public static function opaqueCondRegions(scope: QueryNode, source: String, shape: RefShape): Array<OpaqueCondRegion> {
-		final kinds: Array<String> = shape.opaqueCondRegionKinds ?? [];
+		// The grammar declares no raw-capture family at all — no conditional compilation, so no
+		// region to walk for. Read here rather than per node: the predicate below re-reads the
+		// same field, and this is the one answer that skips the whole walk.
+		final prefixes: Array<String> = shape.opaqueCondRegionKindPrefixes ?? [];
 		final out: Array<OpaqueCondRegion> = [];
-		if (kinds.length == 0) return out;
+		if (prefixes.length == 0) return out;
 		function walk(node: QueryNode): Void {
 			final span: Null<Span> = node.span;
-			if (span != null && kinds.contains(node.kind)) {
+			if (span != null && isOpaqueCondRegionKind(node.kind, shape)) {
 				final gaps: Array<Span> = unmodelledGaps(node, span).filter(g -> source.substring(g.from, g.to).trim().length > 0);
 				if (gaps.length > 0) {
 					final region: Span = new Span(gaps[0].from, gaps[gaps.length - 1].to);
@@ -380,7 +411,7 @@ final class CondRegionScan {
  */
 typedef OpaqueCondRegion = {
 
-	/** The projected ctor the grammar fell back to — one of `RefShape.opaqueCondRegionKinds`. */
+	/** The projected ctor the grammar fell back to — one of `RefShape.opaqueCondRegionKindPrefixes`. */
 	final kind: String;
 
 	final region: Span;
