@@ -4,6 +4,7 @@ import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.Lit.LitHit;
 import anyparse.query.Matcher.Match;
 import anyparse.query.SourceComments;
+import anyparse.query.cli.CliArgs.ResolvedInputs;
 import anyparse.query.cli.CliContext;
 import anyparse.query.cli.CliWalk;
 import anyparse.runtime.Span;
@@ -14,7 +15,11 @@ using StringTools;
 using Lambda;
 
 /**
- * Parsed options for `apq lit` — `lang`, the `exact` / `kindFilter` / `includeComments` / `includeDirectives` match controls, the `target` literal, `flat`, `limit`, and `inputSpecs`. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ * Parsed options for `apq lit` — `lang`, the `exact` / `kindFilter` / `includeComments`
+ * / `includeDirectives` match controls, the `targets` literals (a LIST — a bare `--` in
+ * argv separates several of them from the scope), `flat`, `limit`, and `inputSpecs`.
+ * `errExit` non-null means arg parsing hit a terminal case the caller returns
+ * immediately.
  */
 @:nullSafety(Strict)
 typedef LitOpts = {
@@ -25,7 +30,7 @@ typedef LitOpts = {
 	var kindFilter: Null<Array<String>>;
 	var includeComments: Bool;
 	var includeDirectives: Bool;
-	var target: Null<String>;
+	var targets: Array<String>;
 	var inputSpecs: Array<String>;
 	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
 	// the caller returns this immediately and ignores the rest of the struct.
@@ -42,10 +47,12 @@ typedef LitOpts = {
 @:nullSafety(Strict)
 final class LitCommand implements CliCommand {
 
+	private static final CMD: String = 'lit';
+
 	public function new() {}
 
 	public function name(): String {
-		return 'lit';
+		return CMD;
 	}
 
 	public function summary(): String {
@@ -69,7 +76,7 @@ final class LitCommand implements CliCommand {
 			kindFilter: null,
 			includeComments: false,
 			includeDirectives: false,
-			target: null,
+			targets: [],
 			inputSpecs: [],
 			errExit: code
 		};
@@ -91,8 +98,7 @@ final class LitCommand implements CliCommand {
 	private static function runLit(args: Array<String>, ctx: CliContext): Int {
 		final o: LitOpts = parseLitArgs(args);
 		if (o.errExit != null) return o.errExit;
-		final target: Null<String> = o.target;
-		if (target == null) {
+		if (o.targets.length == 0) {
 			CliIo.stderr('apq lit: missing <text> argument\n');
 			printLitUsage();
 			return EXIT_USAGE;
@@ -102,7 +108,56 @@ final class LitCommand implements CliCommand {
 			printLitUsage();
 			return EXIT_USAGE;
 		}
-		final targetStr: String = target;
+
+		final io: ResolvedInputs = CliArgs.resolveInputPaths(o.lang, o.inputSpecs, CliArgs.nameSeparatorIndex(args) < 0);
+		final paths: Array<String> = io.paths;
+		if (paths.length == 0) {
+			CliIo.stderr('apq lit: no input files matched ${CliArgs.quotedSpecs(o.inputSpecs)}\n');
+			return EXIT_RUNTIME;
+		}
+		final plugin: GrammarPlugin = io.plugin;
+
+		// `lit` matches DECODED literal values; the raw file holds the ESCAPED form,
+		// so a raw-substring pre-filter can false-negative when a searched key
+		// carries a backslash. One backslash-bearing target opts the WHOLE
+		// pre-filter out — all or nothing, since a union missing one target's key
+		// would skip files that target needs. For plain keys the decoded value and
+		// the raw bytes coincide, so the union pre-filter is safe.
+		final escaped: Bool = o.targets.exists(target -> target.indexOf('\\') >= 0);
+		final skips: Array<QuerySkip> = [];
+		final trees: Null<Array<{ path: String, source: String, tree: QueryNode }>> = collectLitTrees(
+			paths, plugin, io.singleFile, skips, escaped ? null : o.targets
+		);
+		if (trees == null) return EXIT_RUNTIME;
+		final parsed: Array<{ path: String, source: String, tree: QueryNode }> = trees;
+
+		final batched: Bool = o.targets.length > 1;
+		var anyTarget: Bool = false;
+		for (targetStr in o.targets) {
+			if (batched) CliIo.sysPrint(CliWalk.batchSection(targetStr));
+			// A parse failure is evidence for THIS target only when the walk pre-filtered
+			// on the targets' own text; with the pre-filter off (an escaped key) no such
+			// conclusion is available and every target hears about every failure.
+			final own: Array<SkipEntry> = CliWalk.skipsFor(targetStr, !escaped && !io.singleFile, skips);
+			if (emitLitTarget(targetStr, parsed, plugin, paths, own, o)) anyTarget = true;
+		}
+		return ctx.emptyExit(!anyTarget);
+	}
+
+	/**
+	 * One target's whole `lit` answer over the ALREADY-PARSED trees: resolve the
+	 * smart kind default from the text's shape, query, print the nudge or the
+	 * auto-widen note, cap and render. Answers whether anything was found.
+	 *
+	 * A separate member because every one of those decisions is a property of the
+	 * TEXT rather than of the run — a batch resolves them once per target — and
+	 * because folding the loop body back into `runLit` puts that function over the
+	 * complexity budget.
+	 */
+	private static function emitLitTarget(
+		targetStr: String, parsed: Array<{ path: String, source: String, tree: QueryNode }>, plugin: GrammarPlugin, paths: Array<String>,
+		skipEntries: Array<SkipEntry>, o: LitOpts
+	): Bool {
 		final kindFilter: Null<Array<String>> = o.kindFilter;
 		// Resolve smart-default kind filter from <text> shape:
 		// `trailOptShapeGate` / `MAX_LEN` / `endsWith_close_brace` look like
@@ -131,35 +186,18 @@ final class LitCommand implements CliCommand {
 		// directive lines are hit surface no `lit` query has ever returned, and widening a flag
 		// that already ships would change what an existing query prints.
 		final scanDirectives: Bool = o.includeDirectives || (kindFilter != null && kindFilter.contains('Directive'));
-		// `lit` matches DECODED literal values; the raw file holds the
-		// ESCAPED form, so a raw-substring pre-filter can false-negative
-		// when the searched key carries a backslash. Opt the pre-filter OUT
-		// for backslash-bearing keys; for plain keys the decoded value and
-		// the raw bytes coincide, so the pre-filter is safe.
-		final litPrefilterKey: Null<String> = targetStr.indexOf('\\') < 0 ? targetStr : null;
 
-		final io = CliArgs.resolveInputPaths(o.lang, o.inputSpecs);
-		final paths: Array<String> = io.paths;
-		if (paths.length == 0) {
-			CliIo.stderr('apq lit: no input files matched ${CliArgs.quotedSpecs(o.inputSpecs)}\n');
-			return EXIT_RUNTIME;
-		}
-		final plugin: GrammarPlugin = io.plugin;
-
-		final skipEntries: Array<SkipEntry> = [];
-		final collected: Null<{
+		final collected: {
 			entries: Array<{ file: String, source: String, hits: Array<LitHit> }>,
 			autoWidened: Bool
-		}> = collectLitEntries(paths, plugin, io.singleFile, skipEntries, {
+		} = litEntriesFor(parsed, plugin, {
 			target: targetStr,
 			exact: o.exact,
 			kinds: effectiveKindFilter,
 			kindWasDefault: kindFilter == null,
 			scanComments: scanComments,
-			scanDirectives: scanDirectives,
-			prefilterKey: litPrefilterKey
+			scanDirectives: scanDirectives
 		});
-		if (collected == null) return EXIT_RUNTIME;
 		final allEntries: Array<{ file: String, source: String, hits: Array<LitHit> }> = collected.entries;
 
 		if (allEntries.length == 0) {
@@ -172,7 +210,7 @@ final class LitCommand implements CliCommand {
 				regexLabel != null
 					? 'apq lit: NOTE "$targetStr" looks like a regex (contains $regexLabel) — lit is substring-only. Run separate lit '
 						+ 'calls per alternative, or use apq refs / apq uses / apq search for shape-aware lookup.\n'
-					: '${CliWalk.emptyWalkerNudge('lit', targetStr, paths.length, paths.length - skipEntries.length, skipEntries, null)}\n'
+					: '${CliWalk.emptyWalkerNudge(CMD, targetStr, paths.length, paths.length - skipEntries.length, skipEntries, null)}\n'
 			);
 		} else if (collected.autoWidened) {
 			final tried: String = effectiveKindFilter.join(',');
@@ -182,12 +220,14 @@ final class LitCommand implements CliCommand {
 			);
 		}
 
+		// The cap is PER TARGET: a run that asked for three texts wants all three
+		// represented, and a shared budget would let the first one eat it.
 		final shown: Array<{ file: String, source: String, hits: Array<LitHit> }> = CliWalk.capAndReport(
-			'lit', allEntries, o.limit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) },
+			CMD, allEntries, o.limit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) },
 			paths.length
 		);
 		for (entry in shown) CliIo.sysPrint(Lit.render(entry.file, entry.source, entry.hits, o.flat));
-		return ctx.emptyExit(allEntries.length == 0);
+		return allEntries.length > 0;
 	}
 
 	/**
@@ -249,6 +289,7 @@ final class LitCommand implements CliCommand {
 
 	private static function printLitUsage(): Void {
 		CliIo.sysPrint('Usage: apq lit [options] <text> <file-or-dir-or-glob>...\n');
+		CliIo.sysPrint('       apq lit [options] <text>... -- <file-or-dir-or-glob>...\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Options:\n');
 		CliIo.sysPrint('  --exact              Require exact string equality (default: substring)\n');
@@ -276,6 +317,10 @@ final class LitCommand implements CliCommand {
 		CliIo.sysPrint('  --flat               Legacy flat `file:line:col:` format (default: grouped-by-file)\n');
 		CliIo.sysPrint('  --limit <n>          Stop after n hits total (default: no limit)\n');
 		CliIo.sysPrint('  --lang <name>        Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('A bare `--` splits SEVERAL texts from the scope: the tree is parsed ONCE\n');
+		CliIo.sysPrint('and every text answered off it, each under its own `=== <text> ===` section\n');
+		CliIo.sysPrint('with its own smart --kind default and its own --limit budget.\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Walks parsed AST for leaf nodes whose `name` slot matches <text>.\n');
 		CliIo.sysPrint('Smart-default --kind: when <text> is camelCase / snake_case the\n');
@@ -336,13 +381,17 @@ final class LitCommand implements CliCommand {
 		var kindFilter: Null<Array<String>> = null;
 		var includeComments: Bool = false;
 		var includeDirectives: Bool = false;
-		var target: Null<String> = null;
+		final targets: Array<String> = [];
 		final inputSpecs: Array<String> = [];
+		// A bare `--` makes every positional before it a search text and every one
+		// after it a scope spec; without one the grammar is untouched.
+		final separator: Int = CliArgs.nameSeparatorIndex(args);
 
 		var i: Int = 0;
 		while (i < args.length) {
 			final a: String = args[i];
 			switch a {
+				case '--':
 				case '--lang':
 					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--exact':
@@ -370,10 +419,7 @@ final class LitCommand implements CliCommand {
 						CliIo.stderr('apq lit: unknown option "$a"\n');
 						return litParseExit(EXIT_USAGE);
 					}
-					if (target == null)
-						target = a;
-					else
-						inputSpecs.push(a);
+					CliArgs.routePositional(a, i, separator, targets, inputSpecs);
 			}
 			i++;
 		}
@@ -385,47 +431,69 @@ final class LitCommand implements CliCommand {
 			kindFilter: kindFilter,
 			includeComments: includeComments,
 			includeDirectives: includeDirectives,
-			target: target,
+			targets: targets,
 			inputSpecs: inputSpecs,
 			errExit: null
 		};
 	}
 
-	private static function collectLitEntries(
-		paths: Array<String>, plugin: GrammarPlugin, singleFile: Bool, skipEntries: Array<SkipEntry>, query: {
+	/**
+	 * Parse every path once, keeping the trees. The walk half of `lit`, split from the
+	 * query half (`litEntriesFor`) so a batch of texts — and the auto-widen retry each
+	 * of them may need — reads one set of trees instead of reparsing the scope per text.
+	 *
+	 * `prefilterKeys` is handed straight to `CliWalk.parseWalkedAny`: null means no
+	 * pre-filter, a list skips a file holding NONE of the keys.
+	 */
+	private static function collectLitTrees(
+		paths: Array<String>, plugin: GrammarPlugin, singleFile: Bool, skips: Array<QuerySkip>, ?prefilterKeys: Array<String>
+	): Null<Array<{ path: String, source: String, tree: QueryNode }>> {
+		// ONE parse per file for the whole run — the trees are what every target of
+		// a batch, and the auto-widen retry of each, then query without reparsing.
+		final trees: Array<{ path: String, source: String, tree: QueryNode }> = [];
+		var scanned: Int = 0;
+		for (path in paths) {
+			final source: String = CliIo.readSourceForParse(path);
+			final fileSkips: Array<SkipEntry> = [];
+			final tree: Null<QueryNode> = CliWalk.parseWalkedAny(CMD, plugin.parseFile, path, source, singleFile, fileSkips, prefilterKeys);
+			CliIo.streamProgress(CMD, ++scanned, paths.length, singleFile);
+			if (tree == null) {
+				if (singleFile) return null;
+				// The source travels with the failure so `CliWalk.skipsFor` can hand each
+				// target only the failures that target could have been found in.
+				for (entry in fileSkips) skips.push({ source: source, entry: entry });
+				continue;
+			}
+			trees.push({ path: path, source: source, tree: tree });
+		}
+		return trees;
+	}
+
+	/**
+	 * One target's hits over ALREADY-PARSED trees, plus whether the answer came from
+	 * the auto-widen retry. The query half of what `collectLitTrees` walked.
+	 */
+	private static function litEntriesFor(
+		trees: Array<{ path: String, source: String, tree: QueryNode }>, plugin: GrammarPlugin, query: {
 			target: String,
 			exact: Bool,
 			kinds: Array<String>,
 			kindWasDefault: Bool,
 			scanComments: Bool,
-			scanDirectives: Bool,
-			prefilterKey: Null<String>
+			scanDirectives: Bool
 		}
-	): Null<{ entries: Array<{ file: String, source: String, hits: Array<LitHit> }>, autoWidened: Bool }> {
+	): { entries: Array<{ file: String, source: String, hits: Array<LitHit> }>, autoWidened: Bool } {
 		final allEntries: Array<{ file: String, source: String, hits: Array<LitHit> }> = [];
-		// Cache parsed trees so the auto-widen retry path doesn't reparse.
-		final trees: Array<{ path: String, source: String, tree: QueryNode }> = [];
-		var scanned: Int = 0;
-		for (path in paths) {
-			final source: String = CliIo.readSourceForParse(path);
-			final tree: Null<QueryNode> = CliWalk.parseWalked(
-				'lit', plugin.parseFile, path, source, singleFile, skipEntries, query.prefilterKey
-			);
-			CliIo.streamProgress('lit', ++scanned, paths.length, singleFile);
-			if (tree == null) {
-				if (singleFile) return null;
-				continue;
-			}
-			trees.push({ path: path, source: source, tree: tree });
-			final hits: Array<LitHit> = Lit.find(query.target, tree, query.exact, query.kinds);
-			if (query.scanComments) appendCommentHits(query.target, source, query.exact, hits, plugin.lexicalRegions(source));
-			if (query.scanDirectives) appendDirectiveHits(query.target, source, query.exact, plugin, hits);
+		for (entry in trees) {
+			final hits: Array<LitHit> = Lit.find(query.target, entry.tree, query.exact, query.kinds);
+			if (query.scanComments) appendCommentHits(query.target, entry.source, query.exact, hits, plugin.lexicalRegions(entry.source));
+			if (query.scanDirectives) appendDirectiveHits(query.target, entry.source, query.exact, plugin, hits);
 			if (hits.length == 0) continue;
 			// AST walk emits in depth-first source order; comment and directive
 			// hits are appended after. Sort by span.from so the rendered file
 			// group stays in source order regardless of which pass produced the hit.
 			if (query.scanComments || query.scanDirectives) hits.sort((a, b) -> a.span.from - b.span.from);
-			allEntries.push({ file: path, source: source, hits: hits });
+			allEntries.push({ file: entry.path, source: entry.source, hits: hits });
 		}
 
 		// Auto-widen on 0-hit when kind was the smart-default (user didn't

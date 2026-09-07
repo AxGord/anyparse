@@ -97,7 +97,19 @@ final class SymbolQuery {
 	public static function declares(
 		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, typeName: String
 	): Array<SymbolRow> {
-		return symbols(files, plugin).filter(row -> row.name == typeName || row.qualified == typeName);
+		return declaredAmong(symbols(files, plugin), typeName);
+	}
+
+	/**
+	 * The rows of an ALREADY-BUILT listing that declare `typeName` — `declares`
+	 * without the parse.
+	 *
+	 * It exists so a batched `apq declares A B C -- <scope>` builds the listing ONCE
+	 * and answers every name off it; going through `declares` per name would re-parse
+	 * the whole scope per name, which is the round the batch exists to remove.
+	 */
+	public static function declaredAmong(rows: Array<SymbolRow>, typeName: String): Array<SymbolRow> {
+		return rows.filter(row -> row.name == typeName || row.qualified == typeName);
 	}
 
 	/** Render a `SymbolRow` as `qualified<TAB>kind<TAB>file:line:col`. */

@@ -3,6 +3,7 @@ package anyparse.query.cli;
 using StringTools;
 using Lambda;
 
+import anyparse.query.cli.CliWalk.QuerySkip;
 import anyparse.query.cli.CliWalk.SkipEntry;
 import anyparse.runtime.EditDistance;
 import anyparse.runtime.ParseError;
@@ -151,7 +152,29 @@ final class CliWalk {
 		cmd: String, parse: String -> QueryNode, path: String, source: String, singleFile: Bool, ?skipOut: Array<SkipEntry>,
 		?searchKey: String
 	): Null<QueryNode> {
-		return !singleFile && searchKey != null && source.indexOf(searchKey) < 0
+		return parseWalkedAny(cmd, parse, path, source, singleFile, skipOut, searchKey == null ? null : [searchKey]);
+	}
+
+	/**
+	 * `parseWalked` for a walk that carries SEVERAL query keys — one parse per
+	 * file serving every name in a batch, which is the whole saving a batched
+	 * `refs A B C -- src` buys: `refs` is 0.23 s per name on this tree (935
+	 * files) because the raw-substring pre-filter already skips the files that
+	 * cannot hold the name, so what a batch removes is not CPU but ROUNDS — one
+	 * process, one progress stream, one nudge pass instead of N.
+	 *
+	 * `searchKeys` null OR EMPTY means NO pre-filter: no key is no evidence, so
+	 * no file may be skipped on it. A non-empty list skips a file only when NONE
+	 * of the keys occurs in it — the union, because any one of them reaching the
+	 * tree is reason enough to parse.
+	 */
+	public static function parseWalkedAny(
+		cmd: String, parse: String -> QueryNode, path: String, source: String, singleFile: Bool, ?skipOut: Array<SkipEntry>,
+		?searchKeys: Array<String>
+	): Null<QueryNode> {
+		final keys: Null<Array<String>> = searchKeys;
+		final prefiltered: Bool = !singleFile && keys != null && keys.length > 0 && !keys.exists(key -> source.indexOf(key) >= 0);
+		return prefiltered
 			? null
 			: try parse(source) catch (exception: ParseError) {
 				if (singleFile) CliIo.stderr('apq $cmd: $path: $exception\n');
@@ -163,6 +186,52 @@ final class CliWalk {
 				skipOut?.push({ path: path, locus: exception.message });
 				null;
 			};
+	}
+
+	/**
+	 * The skip entries `query` may be told about, out of one walk's whole set.
+	 *
+	 * A parse failure is evidence for a query only if that query could have been found
+	 * in the file at all. When the walk pre-filtered on the queries' own text
+	 * (`prefiltered`), a query whose text the raw source lacks was never going to be
+	 * found there, so naming the file in its 0-hit nudge sends the reader to look
+	 * somewhere that cannot answer — and a BATCH would otherwise hand every query the
+	 * union of the others' failures, which also moves the "N parseable" count a solo
+	 * run reports. With the pre-filter OFF (a backslash-bearing `lit` key, whose decoded
+	 * value need not appear raw) no such conclusion is available, so every query hears
+	 * about every failure, exactly as a single-query run does.
+	 */
+	public static function skipsFor(query: String, prefiltered: Bool, skips: Array<QuerySkip>): Array<SkipEntry> {
+		return prefiltered ? [for (s in skips) if (s.source.indexOf(query) >= 0) s.entry] : [for (s in skips) s.entry];
+	}
+
+	/**
+	 * The stdout banner that opens one query's section in a BATCHED walk. Emitted
+	 * only when a run carries two or more queries, so a single-query invocation
+	 * stays byte-identical to what it printed before batching existed — the
+	 * compatibility every existing caller (the skill, the hooks, every fixture)
+	 * depends on.
+	 */
+	public static function batchSection(label: String): String {
+		return '=== $label ===\n';
+	}
+
+	/**
+	 * The nudge for the one shape a batch grammar makes ambiguous: positionals
+	 * after the first that matched no file.
+	 *
+	 * `apq refs A B C src` was SILENT before this — the first positional is the
+	 * name, every later one a scope spec, so `B` and `C` expanded to nothing and
+	 * the walk answered for `src` alone with exit 0 and not a word about the two
+	 * arguments it dropped. Measured on this tree 2026-09-07. That is why the
+	 * batch separator is a bare `--` rather than a "last positional is the scope"
+	 * rule: `apq refs X src test` is a legal two-scope call today, and reading its
+	 * `src` as a name would silently change what it answers.
+	 */
+	public static function unmatchedSpecNudge(cmd: String, unmatched: Array<String>): String {
+		return 'apq $cmd: ${CliArgs.quotedSpecs(unmatched)} matched no files and was walked as a scope spec — a positional after '
+			+ 'the first is a SCOPE; to query SEVERAL names in one walk put a bare `--` between the names and the scope: '
+			+ 'apq $cmd <name>… -- <scope>…';
 	}
 
 	/**
@@ -599,3 +668,12 @@ final class CliWalk {
  * without a follow-up `hxq ast <path>` probe.
  */
 typedef SkipEntry = { path: String, locus: String };
+/**
+ * One walk's skip-parse entry together with the RAW SOURCE it came from — the pair
+ * `skipsFor` needs to decide which queries of a batch may be told about it.
+ *
+ * The source is carried rather than re-read: the walk already has it in hand, and
+ * re-reading a file to answer a diagnostic would make a 0-hit nudge cost a second
+ * pass over the failures.
+ */
+typedef QuerySkip = { var source: String; var entry: SkipEntry; };

@@ -2046,6 +2046,29 @@
 			"method": "isRawBody",
 			"force": "false",
 			"note": "every branch answers \"the tree models this\", so an expression-position `#if` loses its raw-span marker and `--names` prints an empty name list where the verbatim bytes were the whole answer"
+		},
+		{
+			"name": "M-PROGRESS-TTY-BLIND",
+			"type": "anyparse.query.cli.CliIo",
+			"method": "progressEnabled",
+			"find": "return progressEnv != null && progressEnv != '' ? progressEnv != '0' : !noProgressSet && stderrTty;",
+			"replace": "return !noProgressSet;",
+			"note": "the pre-slice rule is back — the heartbeat prints into a pipe unless HXQ_NO_PROGRESS is set, so 38 stderr lines land in a transcript per src-wide walk again"
+		},
+		{
+			"name": "M-BATCH-SEPARATOR-BLIND",
+			"type": "anyparse.query.cli.CliArgs",
+			"method": "nameSeparatorIndex",
+			"find": "return args.indexOf('--');",
+			"replace": "return -1;",
+			"note": "a bare `--` stops splitting queries from scope, so `refs A B -- src` reads A as the one name and B as a scope spec and every batch collapses to its first query"
+		},
+		{
+			"name": "M-SOURCE-READ-GUARD-OFF",
+			"type": "anyparse.query.cli.command.SourceCommand",
+			"method": "wholeFileRefusal",
+			"force": "null",
+			"note": "`apq source <file>` with nothing narrowing the read prints the whole file again at exit 0 — the cat behaviour that cost 617 585 bytes over this tree's three largest files"
 		}
 	]
 }

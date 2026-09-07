@@ -192,6 +192,7 @@ class CliHelpListingPinTest extends Test {
 	/** `apq refs --help`, from the base binary. */
 	private static final BASE_USAGE_REFS: Array<String> = [
 		'Usage: apq refs [options] <name> <file-or-dir-or-glob>...',
+		'       apq refs [options] <name>... -- <file-or-dir-or-glob>...',
 		'',
 		'Options:',
 		'  --json              Emit JSON instead of text',
@@ -209,7 +210,13 @@ class CliHelpListingPinTest extends Test {
 		'  --lang <name>       Grammar plugin (default: haxe)',
 		'',
 		'Phase 3.1: name-only matching, no lexical scope. Filters combine',
-		'inclusively — passing `--decls --reads` keeps both kinds.'
+		'inclusively — passing `--decls --reads` keeps both kinds.',
+		'',
+		'A bare `--` splits SEVERAL names from the scope: every positional before',
+		'it is a name, every one after it a scope spec, and the tree is parsed ONCE',
+		'for all of them. Each name gets its own `=== <name> ===` section on stdout',
+		'and its own --limit budget. Without the separator the grammar is unchanged',
+		'(first positional = name, rest = scope). --json takes ONE name.'
 	];
 
 	/** `apq set-doc --help`, from the base binary. */
