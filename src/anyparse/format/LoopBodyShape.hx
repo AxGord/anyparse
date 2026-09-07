@@ -5,10 +5,13 @@ package anyparse.format;
  * omega-loop-body-if-else-next; JSON key `sameLine.loopBodyIfElseNext`).
  *
  * `isIfWithElse` is spliced by `WriterLowering` around the body value of
- * `HxForStmt.body` / `HxWhileStmt.body` (fields carrying
- * `@:fmt(loopBodyIfElseNext(...))`). It answers ONE question the `FitLine`
- * placement cannot ask for itself: is the statement about to be glued to the
- * loop header an `if` that carries an `else`?
+ * `HxForStmt.body` / `HxWhileStmt.body` / `HxDoWhileStmt.body` (the fields
+ * carrying `@:fmt(loopBodyIfElseNext(...))`). It answers ONE question no body
+ * PLACEMENT can ask for itself: is the statement about to be glued to the loop
+ * header an `if` that carries an `else`? Its answer substitutes
+ * `BodyPolicy.Next` for the placement in `WriterBodyPolicyLowering.`
+ * `buildBodyCoreWrap`, upstream of every layout, so `same` and `keep` obey it
+ * exactly as `fitLine` does.
  *
  * That distinction is the whole slice. A bare guard `if` glued to its header
  * (`for (x in xs) if (c) f(x);`) reads correctly and is a deliberate project
@@ -37,9 +40,19 @@ final class LoopBodyShape {
 	 * not a struct, a head that does not declare the field at all (what a
 	 * grammar rename looks like from a name-keyed probe), and a declared field
 	 * holding `null` (an `if` with no `else`).
+	 *
+	 * `wrapperCtor`, when given, is ONE enum ctor to unwrap before the probe:
+	 * `HxDoWhileStmt.body` is an `HxDoWhileBody`, so its `if` arrives as
+	 * `ExprBody(IfExpr(head))` where the `for` / `while` twin has the bare
+	 * `IfStmt(head)`. The unwrap is a single level and answers `false` when the
+	 * body carries a different ctor, so the two-name form is as narrow as the
+	 * one-name one.
 	 */
-	public static function isIfWithElse(body: Dynamic, ifCtor: String, elseField: String): Bool {
-		if (body == null || !Reflect.isEnumValue(body) || Type.enumConstructor(body) != ifCtor) return false;
+	public static function isIfWithElse(body: Dynamic, ifCtor: String, elseField: String, ?wrapperCtor: String): Bool {
+		if (body == null || !Reflect.isEnumValue(body)) return false;
+		if (wrapperCtor != null)
+			return Type.enumConstructor(body) == wrapperCtor && isIfWithElse(Type.enumParameters(body)[0], ifCtor, elseField);
+		if (Type.enumConstructor(body) != ifCtor) return false;
 		final head: Dynamic = Type.enumParameters(body)[0];
 		if (head == null || Reflect.isEnumValue(head) || !Reflect.hasField(head, elseField)) return false;
 		return Reflect.field(head, elseField) != null;

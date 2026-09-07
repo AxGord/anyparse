@@ -171,19 +171,17 @@ final class HxLoopBodyIfElseSliceTest extends Test {
 		+ '\t\tfor (x in xs) if (isWanted(x)) {\n\t\t\tcollect(x);\n\t\t\tnotify(x);\n\t\t}\n'
 		+ '\t\tfor (y in xs) if (isWanted(y)) {\n\t\t\tcollect(y);\n\t\t}\n\t}\n\n}';
 
-	/** The one config under which `do ... while` glues a body to its keyword at all, with the knob ON. */
-	private static final DO_WHILE_ON: String = withKnob(
-		REPORTED_CONFIG.replace('"sameLine":{', '"sameLine":{"doWhileBody":"fitLine",'), true
-	);
-
-	/** The same, knob OFF. */
-	private static final DO_WHILE_OFF: String = withKnob(
-		REPORTED_CONFIG.replace('"sameLine":{', '"sameLine":{"doWhileBody":"fitLine",'), false
-	);
-
-	/** The `do ... while` twin of the reported shape: the body glues to `do`, and this key does not reach it. */
+	/** The `do ... while` twin of the reported shape: the body glues to `do`, so the `else` sits at the `do`'s indent. */
 	private static final DO_WHILE_GLUED: String = 'class W {\n\n\tfunction f(): Void {\n\t\tdo if (skip) {\n'
 		+ '\t\t\tskip = false;\n\t\t} else {\n\t\t\tuse(skip);\n\t\t} while (skip);\n\t}\n\n}';
+
+	/** The same `do ... while` with the whole `if`/`else` one indent step under the `do`. */
+	private static final DO_WHILE_NEXT: String = 'class W {\n\n\tfunction f(): Void {\n\t\tdo\n\t\t\tif (skip) {\n'
+		+ '\t\t\t\tskip = false;\n\t\t\t} else {\n\t\t\t\tuse(skip);\n\t\t\t} while (skip);\n\t}\n\n}';
+
+	/** The guard idiom on `do ... while`: an `if` with NO `else`, so the key must leave it glued to the `do`. */
+	private static final DO_WHILE_GUARD: String = 'class W {\n\n\tfunction f(): Void {\n\t\tdo if (isWanted(x)) {\n'
+		+ '\t\t\tcollect(x);\n\t\t\tnotify(x);\n\t\t} while (skip);\n\t}\n\n}';
 
 	/** The reported `for` site: with the knob on, the `else` moves under its own `if`. */
 	@:pin('control')
@@ -267,15 +265,80 @@ final class HxLoopBodyIfElseSliceTest extends Test {
 	}
 
 	/**
-	 * `do ... while` has a glued form of its own, but only under `sameLine.doWhileBody: "fitLine"` - the default `Next`
-	 * already breaks the body. This key is wired on `HxForStmt.body` / `HxWhileStmt.body` and nowhere else, so under
-	 * that config the shape comes back with no way to decline it. Recorded so the claim in
-	 * `docs/haxe-format-config.md` fails here the day someone wires `HxDoWhileStmt.body` instead of going stale.
+	 * The whole 4x2 placement table on the reported site, in one pin. S157 shipped the key gated on the `FitLine`
+	 * LAYOUT, so `same` and `keep` produced the reported defect and the key documented for them was silent; S159 moved
+	 * the gate onto the policy VALUE, upstream of every layout, and all four placements answer it.
+	 *
+	 * Off (or absent, which is the same `false`) every placement keeps the bytes it had before the key existed:
+	 * `fitLine` / `same` glue whatever the source did, `keep` reproduces the glued source, `next` breaks every body.
+	 * On, all four produce ONE shape - the `next` bytes.
 	 */
-	@:pin('guard')
-	public function testDoWhileStaysOutOfReach(): Void {
-		Assert.equals(DO_WHILE_GLUED, triviaWrite(DO_WHILE_GLUED, DO_WHILE_ON));
-		Assert.equals(DO_WHILE_GLUED, triviaWrite(DO_WHILE_GLUED, DO_WHILE_OFF));
+	@:pin('control')
+	@:killer('M-LOOPIF-POLICY-BLIND')
+	public function testEveryPlacementObeysTheKey(): Void {
+		for (placement in ['fitLine', 'same', 'keep', 'next']) {
+			Assert.equals(REPORTED_NEXT, triviaWrite(REPORTED_GLUED, withPlacement(REPORTED_ON, placement)), 'on/$placement');
+			Assert.equals(
+				placement == 'next' ? REPORTED_NEXT : REPORTED_GLUED, triviaWrite(REPORTED_GLUED, withPlacement(REPORTED_OFF, placement)),
+				'off/$placement'
+			);
+		}
+	}
+
+	/**
+	 * `keep` is the placement that reads the source, and the key has to win over it without taking the reading away: off, both
+	 * source forms come back verbatim; on, both land on the broken-out one.
+	 *
+	 * Only the third assertion can fail under an arm - it is the table pin's `on/keep` cell again. The one that earns this pin
+	 * its own place is the SECOND: `keep` reproducing a hand-broken source is the only proof in this file that `"keep"` reaches
+	 * `BodyPolicy.Keep` at all rather than degrading to `Same`, which is what `HxFormatBodyPolicy` claimed until S159 read the
+	 * loader.
+	 */
+	@:pin('control')
+	@:killer('M-LOOPIF-KEEP-BLIND')
+	public function testKeepPlacementObeysTheKeyAndStillReadsTheSource(): Void {
+		final keepOn: String = withPlacement(REPORTED_ON, 'keep');
+		final keepOff: String = withPlacement(REPORTED_OFF, 'keep');
+		Assert.equals(REPORTED_GLUED, triviaWrite(REPORTED_GLUED, keepOff));
+		Assert.equals(REPORTED_NEXT, triviaWrite(REPORTED_NEXT, keepOff));
+		Assert.equals(REPORTED_NEXT, triviaWrite(REPORTED_GLUED, keepOn));
+		Assert.equals(REPORTED_NEXT, triviaWrite(REPORTED_NEXT, keepOn));
+	}
+
+	/**
+	 * The guard idiom - an `if` with NO `else` - is the population the key exists to spare, and widening the key from
+	 * one layout to the policy value must not widen the SHAPE it acts on. It stays glued under every placement that
+	 * glues at all; `next` is left out because it breaks every loop body by construction, which is the cost this key
+	 * exists to avoid.
+	 */
+	@:pin('control')
+	@:killer('M-LOOPIF-ALWAYS')
+	public function testGuardStaysGluedUnderEveryPlacement(): Void {
+		for (placement in ['fitLine', 'same', 'keep']) {
+			Assert.equals(REPORTED_GUARD, triviaWrite(REPORTED_GUARD, withPlacement(REPORTED_ON, placement)), 'on/$placement');
+			Assert.equals(REPORTED_GUARD, triviaWrite(REPORTED_GUARD, withPlacement(REPORTED_OFF, placement)), 'off/$placement');
+			Assert.equals(DO_WHILE_GUARD, triviaWrite(DO_WHILE_GUARD, doWhileConfig(placement, true)), 'do-on/$placement');
+			Assert.equals(DO_WHILE_GUARD, triviaWrite(DO_WHILE_GUARD, doWhileConfig(placement, false)), 'do-off/$placement');
+		}
+	}
+
+	/**
+	 * `do ... while` glues an `if`/`else` to its keyword under every placement but `next`, and until S159 the key did
+	 * not reach it: it is wired on `HxDoWhileStmt.body`, whose value is an `HxDoWhileBody`, so the `if` arrives as
+	 * `ExprBody(IfExpr(...))` where the `for` / `while` twin has a bare `IfStmt(...)`. The one-level unwrap in
+	 * `LoopBodyShape.isIfWithElse` is what closes it, and this pin is S157's `guard` record turned into a control.
+	 */
+	@:pin('control')
+	@:killer('M-LOOPIF-NOWRAP')
+	public function testDoWhileIfElseBreaksUnderHeader(): Void {
+		for (placement in ['fitLine', 'same', 'keep', 'next']) {
+			Assert.equals(DO_WHILE_NEXT, triviaWrite(DO_WHILE_GLUED, doWhileConfig(placement, true)), 'on/$placement');
+			Assert.equals(
+				placement == 'next' ? DO_WHILE_NEXT : DO_WHILE_GLUED, triviaWrite(DO_WHILE_GLUED, doWhileConfig(placement, false)),
+				'off/$placement'
+			);
+			Assert.equals(DO_WHILE_NEXT, triviaWrite(DO_WHILE_NEXT, doWhileConfig(placement, true)), 'idempotent/$placement');
+		}
 	}
 
 	private inline function triviaWrite(src: String, config: String): String {
@@ -285,8 +348,24 @@ final class HxLoopBodyIfElseSliceTest extends Test {
 	/**
 	 * Splice the one key under test into a config's `sameLine` section, so a fixture pair differs in nothing else.
 	 */
-	private static function withKnob(source: String, next: Bool): String {
-		return source.replace('"sameLine":{', '"sameLine":{"loopBodyIfElseNext":${next ? 'true' : 'false'},');
+	private static function withKnob(source: String, knobOn: Bool): String {
+		return source.replace('"sameLine":{', '"sameLine":{"loopBodyIfElseNext":${knobOn ? 'true' : 'false'},');
+	}
+
+	/**
+	 * Move `REPORTED_CONFIG`'s loop-body placement off `fitLine`, both loops at once, so a cell of the table differs
+	 * from its neighbour in the placement alone.
+	 */
+	private static function withPlacement(source: String, placement: String): String {
+		return source.replace('"forBody":"fitLine","whileBody":"fitLine"', '"forBody":"$placement","whileBody":"$placement"');
+	}
+
+	/**
+	 * `doWhileBody` is absent from every config in this file and from the reporting tree's own, so the do-while table
+	 * has to add it: the default `Next` already breaks the body and there is nothing to decline.
+	 */
+	private static function doWhileConfig(placement: String, knobOn: Bool): String {
+		return withKnob(REPORTED_CONFIG.replace('"sameLine":{', '"sameLine":{"doWhileBody":"$placement",'), knobOn);
 	}
 
 }

@@ -24,6 +24,14 @@ package anyparse.grammar.haxe;
  * regardless of the policy: the `{` carries its own layout via
  * `blockBody`.
  *
+ * `@:fmt(loopBodyIfElseNext(...))` (S159) is the loop-shape gate the `for` /
+ * `while` bodies already carried: when `sameLine.loopBodyIfElseNext` is on and
+ * the body is an `if` that owns an `else`, the chosen placement is replaced by
+ * `next` so the `else` stops sitting at the `do`'s own indent. The body here is
+ * an `HxDoWhileBody`, so the `if` arrives wrapped as `ExprBody(IfExpr(…))` —
+ * hence the fourth argument, the one ctor `LoopBodyShape.isIfWithElse` unwraps
+ * before probing.
+ *
  * Field-level `@:trailOpt(';')` covers nested-do-while: in
  * `do do x; while(a); while(b);` the outer body is
  * `InnerDoWhile(inner)`; the `;` after inner's `)` is consumed at
@@ -32,7 +40,8 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxDoWhileStmt = {
-	@:trailOpt(';') @:fmt(bodyPolicy('doBody'), dropSingleStmtBraces) var body: HxDoWhileBody;
+	@:trailOpt(';') @:fmt(bodyPolicy('doBody'), dropSingleStmtBraces,
+		loopBodyIfElseNext('loopBodyIfElseNext', 'IfExpr', 'elseBranch', 'ExprBody')) var body: HxDoWhileBody;
 	@:kw('while') @:lead('(') @:trail(')')
 	@:fmt(sameLine('sameLineDoWhile'), whilePolicy, whileCondParensInsideOpen, whileCondParensInsideClose)
 	var cond: HxExpr;

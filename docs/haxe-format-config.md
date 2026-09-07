@@ -286,27 +286,34 @@ byte-identical output for every input, so no config value could move a comprehen
 
 ## `sameLine.loopBodyIfElseNext` — the one loop body whose `else` has nothing to pair with
 
-**`sameLine.loopBodyIfElseNext: true | false`** (default `false`) breaks a `for` / `while` header
-away from a body that is an `if` carrying an `else`, putting the whole `if`/`else` on the next line
-one indent step in. A `Bool`, like its nine `sameLine` neighbours (`fitLineIfWithElse`,
-`fitLineBodyGlue`, `expressionIfWithBlocks`, `expressionIfFit`, `expressionIfWithBrackets`,
-`expressionIfArrowBodyReflow`, `ifElseSemicolonNextLine`, `conditionalExprFit`,
-`elseIfCommentReflow`) — it does not pick a placement, it withdraws ONE shape from the placement
-`forBody` / `whileBody` already decided.
+**`sameLine.loopBodyIfElseNext: true | false`** (default `false`) breaks a `for` / `while` /
+`do … while` header away from a body that is an `if` carrying an `else`, putting the whole
+`if`/`else` on the next line one indent step in. A `Bool`, like its nine `sameLine` neighbours
+(`fitLineIfWithElse`, `fitLineBodyGlue`, `expressionIfWithBlocks`, `expressionIfFit`,
+`expressionIfWithBrackets`, `expressionIfArrowBodyReflow`, `ifElseSemicolonNextLine`,
+`conditionalExprFit`, `elseIfCommentReflow`) — it does not pick a placement, it withdraws ONE shape
+from the placement `forBody` / `whileBody` / `doWhileBody` already decided.
 
-It reaches ONLY the `fitLine` placement, which is not the same as "the only policy that glues".
-Measured on the reported site, one variable at a time:
+It reaches EVERY placement, because it is a substitution on the placement VALUE rather than on one
+layout: for this one body shape the writer reads `next` where the config said `fitLine`, `same` or
+`keep`, before any layout is chosen. Measured on the reported site, one variable at a time:
 
-| `forBody` | knob off | knob on |
+| `forBody` | knob off (or absent) | knob on |
 |---|---|---|
 | `fitLine` | glued | **broken out** |
-| `same`    | glued | glued |
-| `keep`    | glued (a glued source is reproduced) | glued |
+| `same`    | glued | **broken out** |
+| `keep`    | glued (a glued source is reproduced) | **broken out** |
 | `next`    | broken out | broken out |
 
-So a config on `same` or `keep` has the reported defect and this key cannot decline it — the same
-honest position `do … while` is in, below. `next` already breaks every loop body, the guard idiom
-included, which is the cost this key exists to avoid.
+`whileBody` and `doWhileBody` answer the same table. All four ON cells emit the SAME bytes — the
+ones `next` emits — and every OFF cell is byte-identical to what that placement produced before the
+key existed. `next` already breaks every loop body, the guard idiom included, which is the cost this
+key exists to avoid.
+
+S157 shipped the key gated on the `FitLine` LAYOUT, so the `same` and `keep` rows of this table both
+read "glued / glued": a config on either had the reported defect and no way to decline the key that
+was documented for it. S159 moved the gate onto the policy value (`WriterBodyPolicyLowering.`
+`buildBodyCoreWrap`, one ternary over `BodyPolicy.Next`) and wired `HxDoWhileStmt.body` as well.
 
 ```jsonc
 "sameLine": { "forBody": "fitLine", "whileBody": "fitLine", "loopBodyIfElseNext": true }
@@ -340,8 +347,10 @@ records this in both directions.)
 ### What counts as a "branching body", and what does not
 
 The predicate is exactly `LoopBodyShape.isIfWithElse`: the body's ctor is `IfStmt` AND its
-`elseBody` field is non-null. Nothing else. Two neighbouring shapes look like they belong and do
-not, measured over one real 872-file tree (all six source roots):
+`elseBody` field is non-null. Nothing else. (`do … while` needs one unwrap first — its body is an
+`HxDoWhileBody`, so the same `if` arrives as `ExprBody(IfExpr(…))` and the field is `elseBranch`.)
+Two neighbouring shapes look like they belong and do not, measured over one real 872-file tree
+(all six source roots):
 
 - **An `if` with NO `else` — 64 further files.** This is the deliberate `for (x in xs) if (c) …`
   guard idiom, and the whole reason the gate reads the body's shape instead of being a body policy:
@@ -359,10 +368,34 @@ whose glued form the reporter's own layout rule endorses.
 
 ### `do … while`
 
-`do <body> while (cond);` has a glued form of its own (`do if (c) { … } else { … } while (c);`), but
-only under `sameLine.doWhileBody: "fitLine"` — the default `Next` already puts the body on its own
-line, so there is nothing to break. This key does not reach `HxDoWhileStmt.body`; a config that sets
-`doWhileBody: "fitLine"` gets the glued shape back with no way to decline it.
+`do <body> while (cond);` has a glued form of its own (`do if (c) { … } else { … } while (c);`)
+under every `sameLine.doWhileBody` value but `next`, whose default `Next` already puts the body on
+its own line. The key reaches it: on, the body moves one indent step under `do` and the trailing
+`while (cond);` stays cuddled to the body's close, exactly as `doWhileBody: "next"` renders it.
+
+Off:
+
+```haxe
+		do if (skip) {
+			skip = false;
+		} else {
+			use(skip);
+		} while (skip);
+```
+
+and on:
+
+```haxe
+		do
+			if (skip) {
+				skip = false;
+			} else {
+				use(skip);
+			} while (skip);
+```
+
+The population is 0 in both configs measured here (no `hxformat.json` in either tree sets
+`doWhileBody` at all), so this arm of the key is carried by pins rather than by a corpus.
 
 ## Where to look when a key still does nothing
 

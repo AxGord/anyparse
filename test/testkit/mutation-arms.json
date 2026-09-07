@@ -565,6 +565,30 @@
 			"note": "the same probe answers yes for every body, so a bare guard `if` and a non-`if` body break under the loop header alongside the shape the knob exists for"
 		},
 		{
+			"name": "M-LOOPIF-POLICY-BLIND",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "buildBodyCoreWrap",
+			"find": "final policyFlag: Expr = loopIfElseTest == null ? optFlag : macro ($loopIfElseTest ? $nextPat : $optFlag);",
+			"replace": "final policyFlag: Expr = optFlag;",
+			"note": "the loop-body `if`/`else` shape stops substituting `Next` for the placement, so `loopBodyIfElseNext` is inert at every `forBody` / `whileBody` / `doWhileBody` value and the reported site glues again"
+		},
+		{
+			"name": "M-LOOPIF-KEEP-BLIND",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "buildBodyCoreWrap",
+			"find": "return { expr: ESwitch(policyFlag, outerKeepCases, bodySwitch), pos: Context.currentPos() };",
+			"replace": "return { expr: ESwitch(optFlag, outerKeepCases, bodySwitch), pos: Context.currentPos() };",
+			"note": "the outer `Keep` switch reads the raw placement again, so a `keep` loop body routes to the source-preserving layout before the substituted `Next` can be seen - the S157 blind spot narrowed to one placement"
+		},
+		{
+			"name": "M-LOOPIF-NOWRAP",
+			"type": "anyparse.format.LoopBodyShape",
+			"method": "isIfWithElse",
+			"find": "return Type.enumConstructor(body) == wrapperCtor && isIfWithElse(Type.enumParameters(body)[0], ifCtor, elseField);",
+			"replace": "return false;",
+			"note": "the one-level unwrap answers no, so a `do ... while` body - an `HxDoWhileBody.ExprBody` around the `if` - is invisible to the probe while the bare `for` / `while` body still reaches it"
+		},
+		{
 			"name": "M-SSB-TRY-SUBST-OFF",
 			"type": "anyparse.format.SingleStmtBraces",
 			"method": "trySubstBody",
