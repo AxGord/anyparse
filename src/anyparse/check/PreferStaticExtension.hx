@@ -251,6 +251,10 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 			byKey['${candidate.callSpan.from}:${candidate.callSpan.to}'] = candidate;
 		final edits: Array<{ span: Span, text: String }> = [];
 		final needsUsing: Array<String> = [];
+		// The findings whose rewrites actually reached `edits`. Only they are harmed if the `using`
+		// insert is refused below, so only they may be told why: a site this loop skipped was skipped
+		// for its OWN reason, and handing it the insert's sentence would be inventing one.
+		final accepted: Array<Violation> = [];
 		for (violation in violations) {
 			final span: Null<Span> = violation.span;
 			if (span == null) continue;
@@ -267,7 +271,9 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 			// so `declineReasonFor` wrote nothing on it — the reason has to be written here, at the gate
 			// that decided, on the caller's own violation objects (`Cli` hands `fix` the array `run`
 			// built, which is what makes a note here reach the reporter; `ImportBlockOrder.noteDecline`
-			// is the same mechanism). Left unset, the ledger reported these as a rule that "withheld it,
+			// writes the field the same way, though it targets a known set and overwrites where
+			// `UsingScan.noteDeclineWhereUnset` yields to a sentence already there). Left unset, the
+			// ledger reported these as a rule that "withheld it,
 			// without saying why" — the defect this rule's `run` side no longer has.
 			final scope: UsingScope = UsingScan.usingScopeAt(header, candidate.module, [span.from]);
 			if (scope == UsingScope.Guarded) {
@@ -285,17 +291,24 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 					+ ' never acceptable';
 				continue;
 			}
-			// No reason on THIS one, and that is not an oversight: the gate can only fire once `edits`
-			// holds an accepted rewrite, so this `fix` call returns a non-empty edit set, and
-			// `Cli.noteFixOutcome` returns on `editCount != 0` before it reads any `declineReason`. A
-			// sentence here would be unreachable by construction — the site is genuinely deferred to the
-			// next fixpoint pass, and the pass that reports it is the one where it gets no edit.
+			// No reason on THIS one, and that is not an oversight: the gate fires only once `edits`
+			// holds an accepted rewrite, so this `fix` call returns a NON-EMPTY edit set — unless the
+			// `using` insert below is refused wholesale, the one path that empties it, and a deferred
+			// site is deliberately not among the `accepted` that refusal speaks for. Either way the
+			// site is genuinely deferred to the next fixpoint pass, and the pass that reports it is the
+			// one where it gets no edit; a sentence here would name a gate that did not decide it.
 			if (CanonicalEdit.editsOverlapAny(pair, edits)) continue;
 			for (edit in pair) edits.push(edit);
+			accepted.push(violation);
 			if (scope == UsingScope.Absent && !needsUsing.contains(candidate.module)) needsUsing.push(candidate.module);
 		}
-		appendUsingInserts(header, needsUsing, edits);
-		return edits;
+		// The insert is the LAST thing built and the first that can fail wholesale: it anchors in the
+		// header while every rewrite sits in a body, so an accepted rewrite covering that byte refuses
+		// the declaration outright. Keeping the rewrites then ships extension calls with nothing to bind
+		// them — the whole set goes, and the sites that have no reason yet get this one.
+		if (appendUsingInserts(header, needsUsing, edits)) return edits;
+		UsingScan.noteDeclineWhereUnset(accepted, UsingScan.coveredUsingDecline(needsUsing));
+		return [];
 	}
 
 	/** Bundle the `RefShape` seams + type provider, or null when a required kind / type information is missing (the check is then a no-op). */
@@ -608,10 +621,15 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 	 * Every insert anchors at the same zero-width position, so they are merged into a single
 	 * edit rather than pushed as several — two zero-width edits at one offset would apply in an
 	 * unspecified order.
+	 *
+	 * `false` says the merged edit could NOT be appended because an accepted rewrite already covers its
+	 * byte — a refusal the caller owes its whole edit set, since the rewrites that asked for these
+	 * modules do not compile without them. Returning `Void` here made "did not insert" indistinguishable
+	 * from "inserted", which is the shape `UsingScan.appendUsingInsert` had on the same branch.
 	 */
 	private static function appendUsingInserts(
 		header: UsingHeader, modules: Array<String>, edits: Array<{ span: Span, text: String }>
-	): Void {
+	): Bool {
 		var anchor: Null<Span> = null;
 		var text: String = '';
 		for (module in modules) {
@@ -620,9 +638,11 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 			text += insert.text;
 		}
 		final span: Null<Span> = anchor;
-		if (span == null) return;
+		if (span == null) return true;
 		final edit: { span: Span, text: String } = { span: span, text: text };
-		if (!CanonicalEdit.editsOverlapAny([edit], edits)) edits.push(edit);
+		if (CanonicalEdit.editsOverlapAny([edit], edits)) return false;
+		edits.push(edit);
+		return true;
 	}
 
 	/**

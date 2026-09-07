@@ -358,6 +358,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.UnusedPrivateCheckTest',
 		'unit.check.UnusedPublicMemberCheckTest',
 		'unit.check.UnusedReturnValueTest',
+		'unit.check.UsingInsertRefusalTest',
 		'unit.check.WhileTrueConditionCheckTest',
 		'unit.cli.AddressCliTest',
 		'unit.cli.ApqAstTypeRefsCliTest',
@@ -1100,6 +1101,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.RedundantUpcastTest#testUpcastFlagged :: control :: M-ISSUBTYPE-FALSE',
 			'unit.check.ShortenTypeRefCheckTest#testASingleSurvivingOccurrenceEarnsNoImport :: control :: M-SHORTEN-IMPORT-THRESHOLD-ONE',
 			'unit.check.StaticConstantCheckTest#testScalarInstanceFinalFlagged :: control :: M-BUILDMACRO-TRUE',
+			'unit.check.StringLiteralDupCheckTest#testReportOnlyIsDeclaredAndPointsAtExtractConstant :: control :: '
+				+ 'M-STRING-LITERAL-DUP-REASON-MUTE',
 			'unit.check.StructuralConformanceProofTest#testAliasedStructureMemberTypeStillPins :: control :: M-STRUCT-ALIAS-OPAQUE',
 			'unit.check.StructuralConformanceProofTest#testAnonStructureNominalStillPins :: control :: M-STRUCT-ANON-CLOSED',
 			'unit.check.StructuralConformanceProofTest#testDifferentDeclaredTypeDoesNotPin :: control :: M-STRUCT-NOMINAL-OPEN',
@@ -1129,6 +1132,12 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.UnguardedNullableDerefTest#testSafeNavGuardNarrowsRoot :: control :: M-SAFENAV-NO-NARROW',
 			'unit.check.UnreachableCatchTest#testSubtypeAfterSupertypeFlagged :: control :: M-ISSUBTYPE-FALSE',
 			'unit.check.UnusedPublicMemberCheckTest#testInterpolationEscapeKeepsTheMember :: control :: M-NAMEOUTSIDE-TRUE',
+			'unit.check.UsingInsertRefusalTest#testBoolLoopCoveredAnchorDropsTheWholeSet :: control :: M-BOOL-LOOP-USING-COVERED-KEPT',
+			'unit.check.UsingInsertRefusalTest#testBoolLoopUncoveredAnchorGroupsTheInsert :: guard :: ',
+			'unit.check.UsingInsertRefusalTest#testCoveredAnchorRefusesAndAppendsNothing :: control :: M-USING-INSERT-COVERED-SILENT',
+			'unit.check.UsingInsertRefusalTest#testStaticExtensionCoveredAnchorRefuses :: control :: M-PSE-USING-INSERT-SILENT',
+			'unit.check.UsingInsertRefusalTest#testStaticExtensionUncoveredAnchorAppendsOneEdit :: guard :: ',
+			'unit.check.UsingInsertRefusalTest#testUncoveredAnchorStillInserts :: guard :: ',
 			'unit.cli.AddressCliTest#testRemoveElementReportFollowsKeepDoc :: control :: M-REMOVE-CUT-ANNOTATIONS-NONE',
 			'unit.cli.AddressCliTest#testRemoveElementReportNamesWhatTheCutTook :: control :: M-REMOVE-CUT-ANNOTATIONS-NONE',
 			'unit.cli.AddressCliTest#testRemoveElementReportOnAModifierPositionNamesTheDeclaration :: control :: M-REMOVE-CUT-SUBJECT-RAW',
@@ -1785,7 +1794,11 @@ class TestDiscoveryParityTest extends Test {
 			'M-COND-RAW-NEVER-MARKED',
 			'M-PROGRESS-TTY-BLIND',
 			'M-BATCH-SEPARATOR-BLIND',
-			'M-SOURCE-READ-GUARD-OFF'
+			'M-SOURCE-READ-GUARD-OFF',
+			'M-USING-INSERT-COVERED-SILENT',
+			'M-BOOL-LOOP-USING-COVERED-KEPT',
+			'M-PSE-USING-INSERT-SILENT',
+			'M-STRING-LITERAL-DUP-REASON-MUTE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

@@ -1,5 +1,7 @@
 package unit.check;
 
+import anyparse.check.AnonTypeDup;
+import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
@@ -24,6 +26,30 @@ using StringTools;
  * Report-only — `fix` yields no edits (the constant's name is intent).
  */
 class StringLiteralDupCheckTest extends Test {
+
+	/**
+	 * An empty edit set is the SAME answer a check with no autofix and one whose gate declined here
+	 * give, and this rule gave it while declaring neither — so `--fix` reported it as a rule that had
+	 * nothing to fix, while the work is real and `apq extract-constant` performs it. The pin is the
+	 * pair: no edits AND a declared reason that names the op which does the hoist. The twin
+	 * `anon-type-dup` is the second instance — same shape, its own sentence, so a reason hard-coded
+	 * for one of them fails the other. Killed by arm `M-STRING-LITERAL-DUP-REASON-MUTE`.
+	 */
+	@:pin('control')
+	@:killer('M-STRING-LITERAL-DUP-REASON-MUTE')
+	public function testReportOnlyIsDeclaredAndPointsAtExtractConstant(): Void {
+		final check: StringLiteralDup = new StringLiteralDup();
+		final src: String = body('trace("hello"); trace("hello"); trace("hello");');
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+		Assert.isTrue(check is NoAutofix);
+		final reason: String = check.noAutofixReason();
+		Assert.isTrue(reason.contains('extract-constant'));
+		final twin: String = new AnonTypeDup().noAutofixReason();
+		Assert.isTrue(twin.length > 0);
+		Assert.notEquals(reason, twin);
+	}
 
 	public function testThreeOccurrencesFlagged(): Void {
 		// Three plain "hello" (5 chars >= minLength) -> ONE finding at the first occurrence.

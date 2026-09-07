@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.check.Check.VolatileMessage;
 import anyparse.query.GrammarPlugin;
@@ -15,9 +16,10 @@ using Lambda;
 /**
  * Flags a plain string literal that appears three or more times (configurable)
  * in ONE file — a repeated literal the project rule says to hoist into a single
- * named constant, so an edit to the value happens in one place. Report-only:
- * like `magic-number`, the constant's NAME is intent a human supplies, not a
- * mechanical rewrite, so `fix` produces no edits.
+ * named constant, so an edit to the value happens in one place. Report-only, and it SAYS so: like `magic-number`
+ * it declares `NoAutofix`, because the constant's NAME is intent a human supplies. An empty edit set alone reads
+ * to `--fix` as a rule with nothing to fix, which is what filed work on a gate this rule already had — the
+ * declared reason names `apq extract-constant`, which performs the hoist once the name is chosen.
  *
  * ## What is flagged
  *
@@ -132,7 +134,7 @@ using Lambda;
  * a silent capture. Only a lower-case name would capture.
  */
 @:nullSafety(Strict)
-final class StringLiteralDup implements Check implements ConfigAware implements VolatileMessage {
+final class StringLiteralDup implements Check implements ConfigAware implements NoAutofix implements VolatileMessage {
 
 	/** Least repetitions of a literal before its occurrences are flagged. */
 	private static inline final DEFAULT_MIN_OCCURRENCES: Int = 3;
@@ -223,6 +225,11 @@ final class StringLiteralDup implements Check implements ConfigAware implements 
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		return [];
+	}
+
+	public function noAutofixReason(): String {
+		return 'the constant needs a NAME, and which one says what the occurrences have in common is the author\'s call — once it is'
+			+ ' chosen, `apq extract-constant <file> --type <Type> --name <NAME> --literal <text>` performs the whole hoist';
 	}
 
 	/** A configured value when it is a positive integer, else the built-in default (a zero / negative option is ignored). */

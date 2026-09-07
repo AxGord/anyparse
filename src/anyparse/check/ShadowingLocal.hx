@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
@@ -88,7 +89,7 @@ using Lambda;
  * off by default, and it runs `collect` below with the same walk and the same gates.
  */
 @:nullSafety(Strict)
-final class ShadowingLocal implements Check {
+final class ShadowingLocal implements Check implements NoAutofix {
 
 	/** The rule's stable identifier — the `apqlint.json` key and the `--rule` selector. */
 	private static inline final RULE_ID: String = 'shadowing-local';
@@ -112,6 +113,10 @@ final class ShadowingLocal implements Check {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		return [];
+	}
+
+	public function noAutofixReason(): String {
+		return 'renaming the inner declaration or the outer one is the author\'s call';
 	}
 
 	/**
