@@ -188,6 +188,16 @@ cleanup() {
     if [ "$keep" -eq 0 ] && [ "$status" -eq 0 ] && [ "$rc" -eq 0 ]; then
         tmpl_discard "$work" || true
     else
+        # T738: `keep=1` here is either an explicit --keep or the internal
+        # --plan-only auto-keep, both a real ask to retain — get the
+        # permanent marker (tmpl_mark_keep, tools/tmp-lifecycle.sh), or a
+        # LATER run's startup sweep reclaims this directory once its owner
+        # pid is gone, same as a crashed run. A failed run with `keep=0` is
+        # deliberately left off the marker and ages out through the
+        # ordinary grace-period sweep unchanged.
+        if [ "$keep" -eq 1 ]; then
+            tmpl_mark_keep "$work" || true
+        fi
         echo "suite-shard.sh: work files kept in $work" >&2
     fi
 }
