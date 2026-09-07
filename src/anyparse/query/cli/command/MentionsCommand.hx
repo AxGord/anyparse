@@ -16,14 +16,17 @@ using StringTools;
 using Lambda;
 
 /**
- * Parsed options for `apq mentions` — `lang`, `flat`, `limit`, the `name` to search for, and `inputSpecs`. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ * Parsed options for `apq mentions` — `lang`, `flat`, `limit`, the `names` to search
+ * for (a LIST — a bare `--` in argv separates several of them from the scope), and
+ * `inputSpecs`. `errExit` non-null means arg parsing hit a terminal case the caller
+ * returns immediately.
  */
 @:nullSafety(Strict)
 typedef MentionsOpts = {
 	var lang: String;
 	var flat: Bool;
 	var limit: Int;
-	var name: Null<String>;
+	var names: Array<String>;
 	var inputSpecs: Array<String>;
 	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
 	// the caller returns this immediately and ignores the rest of the struct.
@@ -40,10 +43,12 @@ typedef MentionsOpts = {
 @:nullSafety(Strict)
 final class MentionsCommand implements CliCommand {
 
+	private static final CMD: String = 'mentions';
+
 	public function new() {}
 
 	public function name(): String {
-		return 'mentions';
+		return CMD;
 	}
 
 	public function summary(): String {
@@ -63,7 +68,7 @@ final class MentionsCommand implements CliCommand {
 			lang: '',
 			flat: false,
 			limit: -1,
-			name: null,
+			names: [],
 			inputSpecs: [],
 			errExit: code
 		};
@@ -90,8 +95,7 @@ final class MentionsCommand implements CliCommand {
 	private static function runMentions(args: Array<String>, ctx: CliContext): Int {
 		final o: MentionsOpts = parseMentionsArgs(args);
 		if (o.errExit != null) return o.errExit;
-		final name: Null<String> = o.name;
-		if (name == null) {
+		if (o.names.length == 0) {
 			CliIo.stderr('apq mentions: missing <name> argument\n');
 			printMentionsUsage();
 			return EXIT_USAGE;
@@ -101,7 +105,6 @@ final class MentionsCommand implements CliCommand {
 			printMentionsUsage();
 			return EXIT_USAGE;
 		}
-		final target: String = name;
 
 		final plugin: GrammarPlugin = CliArgs.pickPlugin(o.lang);
 		final refShape: RefShape = plugin.refShape();
@@ -113,23 +116,32 @@ final class MentionsCommand implements CliCommand {
 			CliIo.stderr('apq mentions: no input files matched ${CliArgs.quotedSpecs(o.inputSpecs)}\n');
 			return EXIT_RUNTIME;
 		}
+		if (expanded.unmatched.length > 0 && CliArgs.nameSeparatorIndex(args) < 0)
+			CliIo.stderr('${CliWalk.unmatchedSpecNudge(CMD, expanded.unmatched)}\n');
 
 		final valueTrees: Null<Array<{ path: String, source: String, tree: QueryNode }>> = collectMentionsValueTrees(
-			target, paths, plugin, expanded.singleFile
+			o.names, paths, plugin, expanded.singleFile
 		);
 		if (valueTrees == null) return EXIT_RUNTIME;
 
-		final usesAny: Bool = emitMentionsUses(target, valueTrees, plugin, typeShape, expanded.singleFile, o.flat);
-		final refsAny: Bool = emitMentionsRefs(target, valueTrees, refShape, o.flat, plugin.lexicalRegions);
-		final litAny: Bool = emitMentionsLit(target, valueTrees, o.limit, o.flat);
+		final batched: Bool = o.names.length > 1;
+		var anyName: Bool = false;
+		for (target in o.names) {
+			if (batched) CliIo.sysPrint(CliWalk.batchSection(target));
+			final usesAny: Bool = emitMentionsUses(target, valueTrees, plugin, typeShape, expanded.singleFile, o.flat);
+			final refsAny: Bool = emitMentionsRefs(target, valueTrees, refShape, o.flat, plugin.lexicalRegions);
+			final litAny: Bool = emitMentionsLit(target, valueTrees, o.limit, o.flat);
 
-		final any: Bool = usesAny || refsAny || litAny;
-		if (!any) CliIo.stderr('apq mentions: no uses / refs / lit-leaf of "$target" found\n');
-		return ctx.emptyExit(!any);
+			final any: Bool = usesAny || refsAny || litAny;
+			if (any) anyName = true;
+			if (!any) CliIo.stderr('apq mentions: no uses / refs / lit-leaf of "$target" found\n');
+		}
+		return ctx.emptyExit(!anyName);
 	}
 
 	private static function printMentionsUsage(): Void {
 		CliIo.sysPrint('Usage: apq mentions [options] <name> <file-or-dir-or-glob>...\n');
+		CliIo.sysPrint('       apq mentions [options] <name>... -- <file-or-dir-or-glob>...\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Options:\n');
 		CliIo.sysPrint('  --flat              Legacy flat `file:line:col:` format (default: grouped-by-file)\n');
@@ -150,19 +162,26 @@ final class MentionsCommand implements CliCommand {
 		CliIo.sysPrint('blind to refs/uses/blast). All three sections are structural,\n');
 		CliIo.sysPrint('with no heuristic; the only over-match is a qualified path\n');
 		CliIo.sysPrint('whose last segment is the name but whose module is another.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('A bare `--` splits SEVERAL names from the scope: the tree is parsed ONCE\n');
+		CliIo.sysPrint('and every name answered off it, each under its own `=== <name> ===` section.\n');
 	}
 
 	private static function parseMentionsArgs(args: Array<String>): MentionsOpts {
 		var lang: String = 'haxe';
 		var flat: Bool = false;
 		var limit: Int = -1;
-		var name: Null<String> = null;
+		final names: Array<String> = [];
 		final inputSpecs: Array<String> = [];
+		// A bare `--` makes every positional before it a name and every one after
+		// it a scope spec; without one the grammar is untouched.
+		final separator: Int = CliArgs.nameSeparatorIndex(args);
 
 		var i: Int = 0;
 		while (i < args.length) {
 			final a: String = args[i];
 			switch a {
+				case '--':
 				case '--lang':
 					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--flat':
@@ -180,10 +199,7 @@ final class MentionsCommand implements CliCommand {
 						CliIo.stderr('apq mentions: unknown option "$a"\n');
 						return mentionsParseExit(EXIT_USAGE);
 					}
-					if (name == null)
-						name = a;
-					else
-						inputSpecs.push(a);
+					CliArgs.routePositional(a, i, separator, names, inputSpecs);
 			}
 			i++;
 		}
@@ -191,31 +207,33 @@ final class MentionsCommand implements CliCommand {
 			lang: lang,
 			flat: flat,
 			limit: limit,
-			name: name,
+			names: names,
 			inputSpecs: inputSpecs,
 			errExit: null
 		};
 	}
 
 	private static function collectMentionsValueTrees(
-		target: String, paths: Array<String>, plugin: GrammarPlugin, singleFile: Bool
+		targets: Array<String>, paths: Array<String>, plugin: GrammarPlugin, singleFile: Bool
 	): Null<Array<{ path: String, source: String, tree: QueryNode }>> {
-		// Single value-AST pass per file, shared across all three sections.
-		// Mirrors `runBlast`'s caching discipline. All three sections
-		// (uses / refs / lit-exact) search for `target` verbatim, so the
-		// raw-substring pre-filter is a strict necessary condition.
-		// Section 3 (`lit`) matches decoded literal values, so the key is
-		// opted out of the pre-filter when it carries a backslash — same
-		// escaped-literal caution as `runLit`.
-		final mentionsPrefilterKey: Null<String> = target.indexOf('\\') < 0 ? target : null;
+		// Single value-AST pass per file, shared across all three sections AND
+		// across every target of a batch. Mirrors `runBlast`'s caching discipline.
+		// All three sections (uses / refs / lit-exact) search for a target
+		// verbatim, so the raw-substring pre-filter is a strict necessary
+		// condition — taken as the UNION over the targets, since a file holding
+		// any one of them must be parsed. Section 3 (`lit`) matches decoded
+		// literal values, so a backslash-bearing target opts the WHOLE pre-filter
+		// out — same escaped-literal caution as `runLit`, and it has to be all or
+		// nothing: a union that dropped one target's key would skip files that
+		// target needs.
+		final escaped: Bool = targets.exists(target -> target.indexOf('\\') >= 0);
+		final prefilterKeys: Null<Array<String>> = escaped ? null : targets;
 		final valueTrees: Array<{ path: String, source: String, tree: QueryNode }> = [];
 		var scanned: Int = 0;
 		for (path in paths) {
 			final source: String = CliIo.readSourceForParse(path);
-			final tree: Null<QueryNode> = CliWalk.parseWalked(
-				'mentions', plugin.parseFile, path, source, singleFile, null, mentionsPrefilterKey
-			);
-			CliIo.streamProgress('mentions', ++scanned, paths.length, singleFile);
+			final tree: Null<QueryNode> = CliWalk.parseWalkedAny(CMD, plugin.parseFile, path, source, singleFile, null, prefilterKeys);
+			CliIo.streamProgress(CMD, ++scanned, paths.length, singleFile);
 			if (tree == null) {
 				if (singleFile) return null;
 				continue;
@@ -236,7 +254,7 @@ final class MentionsCommand implements CliCommand {
 		var header: Bool = false;
 		for (entry in valueTrees) {
 			final typeTree: Null<QueryNode> = CliWalk.parseWalked(
-				'mentions', plugin.parseFileTypeRefs, entry.path, entry.source, singleFile, null, target
+				CMD, plugin.parseFileTypeRefs, entry.path, entry.source, singleFile, null, target
 			);
 			if (typeTree == null) continue;
 			final hits: Array<UsesHit> = Uses.find(target, typeTree, typeShape, true);
@@ -285,11 +303,10 @@ final class MentionsCommand implements CliCommand {
 			litEntries.push({ file: entry.path, source: entry.source, hits: hits });
 		}
 		if (litEntries.length == 0) return false;
-		final shown: Array<{ file: String, source: String, hits: Array<LitHit> }> =
-			CliWalk.capAndReport(
-				'mentions', litEntries, limit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) },
-				valueTrees.length
-			);
+		final shown: Array<{ file: String, source: String, hits: Array<LitHit> }> = CliWalk.capAndReport(
+			CMD, litEntries, limit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) },
+			valueTrees.length
+		);
 		CliIo.sysPrint('# lit (every leaf — case-patterns / imports / new exprs / field-name slots)\n');
 		for (entry in shown) CliIo.sysPrint(Lit.render(entry.file, entry.source, entry.hits, flat));
 		return true;

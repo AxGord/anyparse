@@ -14,7 +14,11 @@ import anyparse.query.ExitCode.*;
 using StringTools;
 
 /**
- * Parsed options for `apq refs` — `lang`, `json`, the read / write / decl selection (`wantDecls` / `wantReads` / `wantWrites`), output toggles, `flat`, `limit`, the symbol `name`, and `inputSpecs`. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ * Parsed options for `apq refs` — `lang`, `json`, the read / write / decl selection
+ * (`wantDecls` / `wantReads` / `wantWrites`), output toggles, `flat`, `limit`, the symbol
+ * `names` (a LIST — a bare `--` in argv separates several of them from the scope), and
+ * `inputSpecs`. `errExit` non-null means arg parsing hit a terminal case the caller
+ * returns immediately.
  */
 @:nullSafety(Strict)
 typedef RefsOpts = {
@@ -27,11 +31,34 @@ typedef RefsOpts = {
 	var wantSource: Bool;
 	var flat: Bool;
 	var limit: Int;
-	var name: Null<String>;
+	var names: Array<String>;
 	var inputSpecs: Array<String>;
 	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
 	// the caller returns this immediately and ignores the rest of the struct.
 	var errExit: Null<Int>;
+};
+
+/**
+ * One name's slice of a batched `apq refs` walk: the file groups its hits landed
+ * in, the two unfiltered totals the member-access nudge reads, and the candidate
+ * names a 0-hit nudge suggests from.
+ *
+ * It exists because a batch parses each file ONCE and then asks every name of the
+ * same tree, so the per-name accumulators cannot live in the loop — one record per
+ * name carries them across the file walk.
+ *
+ * `candidateNames` is the one place a batch is not identical to N separate runs:
+ * a single-name walk parses only files whose text holds that name, while a batch
+ * parses any file holding ANY of them, so a name's candidate set can be WIDER
+ * here. That only ever improves the suggestion in a nudge; no hit set moves.
+ */
+@:nullSafety(Strict)
+typedef RefsBatch = {
+	var name: String;
+	var entries: Array<{ file: String, source: String, hits: Array<RefHit> }>;
+	var memberAccesses: Int;
+	var bindings: Int;
+	var candidateNames: Map<String, Bool>;
 };
 
 /**
@@ -44,10 +71,12 @@ typedef RefsOpts = {
 @:nullSafety(Strict)
 final class RefsCommand implements CliCommand {
 
+	private static final CMD: String = 'refs';
+
 	public function new() {}
 
 	public function name(): String {
-		return 'refs';
+		return CMD;
 	}
 
 	public function summary(): String {
@@ -81,7 +110,7 @@ final class RefsCommand implements CliCommand {
 			wantSource: false,
 			flat: false,
 			limit: -1,
-			name: null,
+			names: [],
 			inputSpecs: [],
 			errExit: code
 		};
@@ -90,8 +119,7 @@ final class RefsCommand implements CliCommand {
 	private static function runRefs(args: Array<String>, ctx: CliContext): Int {
 		final o: RefsOpts = parseRefsArgs(args);
 		if (o.errExit != null) return o.errExit;
-		final name: Null<String> = o.name;
-		if (name == null) {
+		if (o.names.length == 0) {
 			CliIo.stderr('apq refs: missing <name> argument\n');
 			printRefsUsage();
 			return EXIT_USAGE;
@@ -101,7 +129,13 @@ final class RefsCommand implements CliCommand {
 			printRefsUsage();
 			return EXIT_USAGE;
 		}
-		final nameStr: String = name;
+		// `--json` renders ONE document, and two concatenated documents are not JSON.
+		// A refusal is the honest answer; inventing a by-name envelope would give the
+		// schema two shapes and every consumer a branch.
+		if (o.json && o.names.length > 1) {
+			CliIo.stderr('apq refs: --json emits ONE document, so it takes ONE name — drop --json, or run one call per name\n');
+			return EXIT_USAGE;
+		}
 		// No flag = no filter (emit every hit). Any flag flips on the
 		// allow-set; sister CLIs (`git log --author --grep`) follow the
 		// same any-flag-narrows convention.
@@ -116,44 +150,58 @@ final class RefsCommand implements CliCommand {
 			CliIo.stderr('apq refs: no input files matched ${CliArgs.quotedSpecs(o.inputSpecs)}\n');
 			return EXIT_RUNTIME;
 		}
+		if (expanded.unmatched.length > 0 && CliArgs.nameSeparatorIndex(args) < 0)
+			CliIo.stderr('${CliWalk.unmatchedSpecNudge(CMD, expanded.unmatched)}\n');
 
-		final skipEntries: Array<SkipEntry> = [];
-		final candidateNames: Map<String, Bool> = [];
-		final collected: Null<{
-			entries: Array<{ file: String, source: String, hits: Array<RefHit> }>,
-			memberAccesses: Int,
-			bindings: Int
-		}> = collectRefsEntries(nameStr, paths, plugin, shape, expanded.singleFile, skipEntries, candidateNames, {
+		final skips: Array<QuerySkip> = [];
+		final collected: Null<Array<RefsBatch>> = collectRefsEntries(o.names, paths, plugin, shape, expanded.singleFile, skips, {
 			anyFilter: anyFilter,
 			wantDecls: o.wantDecls,
 			wantReads: o.wantReads,
 			wantWrites: o.wantWrites
 		});
 		if (collected == null) return EXIT_RUNTIME;
-		final allEntries: Array<{ file: String, source: String, hits: Array<RefHit> }> = collected.entries;
 
-		if (allEntries.length == 0)
-			CliIo.stderr('${CliWalk.emptyWalkerNudge('refs', nameStr, paths.length, paths.length - skipEntries.length, skipEntries, candidateNames)}\n');
-		if (collected.memberAccesses > 0)
-			CliIo.stderr('${CliWalk.memberAccessNudge('refs', nameStr, collected.memberAccesses, collected.bindings)}\n');
+		final batched: Bool = collected.length > 1;
+		var anyHits: Bool = false;
+		for (batch in collected) {
+			final allEntries: Array<{ file: String, source: String, hits: Array<RefHit> }> = batch.entries;
+			if (allEntries.length > 0) anyHits = true;
+			if (batched) CliIo.sysPrint(CliWalk.batchSection(batch.name));
 
-		final shown: Array<{ file: String, source: String, hits: Array<RefHit> }> = CliWalk.capAndReport(
-			'refs', allEntries, o.limit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) },
-			paths.length
-		);
-		if (o.json) {
-			CliIo.sysPrint(Json.renderRefs(shown, o.wantDoc, o.wantSource, plugin.lexicalRegions));
-		} else {
-			for (entry in shown)
-				CliIo.sysPrint(Text.renderRefs(
-					entry.file, entry.source, entry.hits, o.wantDoc, o.wantSource, plugin.lexicalRegions(entry.source), o.flat
-				));
+			// A parse failure is evidence for THIS name only if the file could have held it —
+			// otherwise a batch hands every name the union of the others' failures, and the
+			// "N parseable" count stops matching what the same name reports on its own.
+			final own: Array<SkipEntry> = CliWalk.skipsFor(batch.name, !expanded.singleFile, skips);
+			if (allEntries.length == 0)
+				CliIo.stderr(
+					'${CliWalk.emptyWalkerNudge(CMD, batch.name, paths.length, paths.length - own.length, own, batch.candidateNames)}\n'
+				);
+			if (batch.memberAccesses > 0)
+				CliIo.stderr('${CliWalk.memberAccessNudge(CMD, batch.name, batch.memberAccesses, batch.bindings)}\n');
+
+			// The cap is PER NAME: a run that asked for three names wants all three
+			// represented, and a shared budget would let the first one eat it.
+			final shown: Array<{ file: String, source: String, hits: Array<RefHit> }> =
+				CliWalk.capAndReport(
+					CMD, allEntries, o.limit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) },
+					paths.length
+				);
+			if (o.json) {
+				CliIo.sysPrint(Json.renderRefs(shown, o.wantDoc, o.wantSource, plugin.lexicalRegions));
+			} else {
+				for (entry in shown)
+					CliIo.sysPrint(Text.renderRefs(
+						entry.file, entry.source, entry.hits, o.wantDoc, o.wantSource, plugin.lexicalRegions(entry.source), o.flat
+					));
+			}
 		}
-		return ctx.emptyExit(allEntries.length == 0);
+		return ctx.emptyExit(!anyHits);
 	}
 
 	private static function printRefsUsage(): Void {
 		CliIo.sysPrint('Usage: apq refs [options] <name> <file-or-dir-or-glob>...\n');
+		CliIo.sysPrint('       apq refs [options] <name>... -- <file-or-dir-or-glob>...\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Options:\n');
 		CliIo.sysPrint('  --json              Emit JSON instead of text\n');
@@ -163,6 +211,12 @@ final class RefsCommand implements CliCommand {
 		CliUsage.printDocSourceFlatLimitLangHelp();
 		CliIo.sysPrint('Phase 3.1: name-only matching, no lexical scope. Filters combine\n');
 		CliIo.sysPrint('inclusively — passing `--decls --reads` keeps both kinds.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('A bare `--` splits SEVERAL names from the scope: every positional before\n');
+		CliIo.sysPrint('it is a name, every one after it a scope spec, and the tree is parsed ONCE\n');
+		CliIo.sysPrint('for all of them. Each name gets its own `=== <name> ===` section on stdout\n');
+		CliIo.sysPrint('and its own --limit budget. Without the separator the grammar is unchanged\n');
+		CliIo.sysPrint('(first positional = name, rest = scope). --json takes ONE name.\n');
 	}
 
 	/**
@@ -191,13 +245,18 @@ final class RefsCommand implements CliCommand {
 		var wantSource: Bool = false;
 		var flat: Bool = false;
 		var limit: Int = -1;
-		var name: Null<String> = null;
+		final names: Array<String> = [];
 		final inputSpecs: Array<String> = [];
+		// A bare `--` in argv makes every positional BEFORE it a name and every one
+		// after it a scope spec. Without one the grammar is untouched: the first
+		// positional is the name, the rest are scope specs.
+		final separator: Int = CliArgs.nameSeparatorIndex(args);
 
 		var i: Int = 0;
 		while (i < args.length) {
 			final a: String = args[i];
 			switch a {
+				case '--':
 				case '--lang':
 					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--json':
@@ -227,10 +286,7 @@ final class RefsCommand implements CliCommand {
 						CliIo.stderr('apq refs: unknown option "$a"\n');
 						return refsParseExit(EXIT_USAGE);
 					}
-					if (name == null)
-						name = a;
-					else
-						inputSpecs.push(a);
+					CliArgs.routePositional(a, i, separator, names, inputSpecs);
 			}
 			i++;
 		}
@@ -244,52 +300,68 @@ final class RefsCommand implements CliCommand {
 			wantSource: wantSource,
 			flat: flat,
 			limit: limit,
-			name: name,
+			names: names,
 			inputSpecs: inputSpecs,
 			errExit: null
 		};
 	}
 
 	private static function collectRefsEntries(
-		name: String, paths: Array<String>, plugin: GrammarPlugin, shape: RefShape, singleFile: Bool, skipEntries: Array<SkipEntry>,
-		candidateNames: Map<String, Bool>, filter: {
+		names: Array<String>, paths: Array<String>, plugin: GrammarPlugin, shape: RefShape, singleFile: Bool, skips: Array<QuerySkip>,
+		filter: {
 			anyFilter: Bool,
 			wantDecls: Bool,
 			wantReads: Bool,
 			wantWrites: Bool
 		}
-	): Null<{ entries: Array<{ file: String, source: String, hits: Array<RefHit> }>, memberAccesses: Int, bindings: Int }> {
-		final allEntries: Array<{ file: String, source: String, hits: Array<RefHit> }> = [];
-		var memberAccesses: Int = 0;
-		var bindings: Int = 0;
+	): Null<Array<RefsBatch>> {
+		final batches: Array<RefsBatch> = [
+			for (name in names)
+				{
+					name: name,
+					entries: [],
+					memberAccesses: 0,
+					bindings: 0,
+					candidateNames: []
+				}
+		];
 		var scanned: Int = 0;
 		for (path in paths) {
 			final source: String = CliIo.readSourceForParse(path);
-			final tree: Null<QueryNode> = CliWalk.parseWalked('refs', plugin.parseFile, path, source, singleFile, skipEntries, name);
-			CliIo.streamProgress('refs', ++scanned, paths.length, singleFile);
+			// ONE parse per file for the whole batch. The pre-filter is the UNION of
+			// the names, so a file holding any of them is parsed and every name is
+			// then asked of the same tree.
+			final fileSkips: Array<SkipEntry> = [];
+			final tree: Null<QueryNode> = CliWalk.parseWalkedAny(CMD, plugin.parseFile, path, source, singleFile, fileSkips, names);
+			CliIo.streamProgress(CMD, ++scanned, paths.length, singleFile);
 			if (tree == null) {
 				// Single-file mode treats a parse failure as fatal — null tells
 				// the caller to return EXIT_RUNTIME. Multi-file mode records the
-				// file in skipEntries and keeps walking.
+				// file — WITH its source, so `CliWalk.skipsFor` can hand each name
+				// only the failures that name could have been found in — and walks on.
 				if (singleFile) return null;
+				for (entry in fileSkips) skips.push({ source: source, entry: entry });
 				continue;
 			}
-			final found: { hits: Array<RefHit>, skipped: Int } = Refs.findWithSkipped(name, tree, shape);
-			final raw: Array<RefHit> = found.hits;
-			// Both totals are UNFILTERED and cover every file, so what the walker could not
-			// resolve is reported the same way whatever the caller asked to be shown.
-			memberAccesses += found.skipped;
-			for (h in raw) if (h.kind != RefKind.Decl) bindings++;
-			final filtered: Array<RefHit> = filter.anyFilter
-				? raw.filter(h -> kindAllowed(h.kind, filter.wantDecls, filter.wantReads, filter.wantWrites))
-				: raw;
-			if (filtered.length == 0) {
-				collectNames(tree, candidateNames);
-				continue;
+			final parsed: QueryNode = tree;
+			for (batch in batches) {
+				final found: { hits: Array<RefHit>, skipped: Int } = Refs.findWithSkipped(batch.name, parsed, shape);
+				final raw: Array<RefHit> = found.hits;
+				// Both totals are UNFILTERED and cover every file, so what the walker could not
+				// resolve is reported the same way whatever the caller asked to be shown.
+				batch.memberAccesses += found.skipped;
+				for (h in raw) if (h.kind != RefKind.Decl) batch.bindings++;
+				final filtered: Array<RefHit> = filter.anyFilter
+					? raw.filter(h -> kindAllowed(h.kind, filter.wantDecls, filter.wantReads, filter.wantWrites))
+					: raw;
+				if (filtered.length == 0) {
+					collectNames(parsed, batch.candidateNames);
+					continue;
+				}
+				batch.entries.push({ file: path, source: source, hits: filtered });
 			}
-			allEntries.push({ file: path, source: source, hits: filtered });
 		}
-		return { entries: allEntries, memberAccesses: memberAccesses, bindings: bindings };
+		return batches;
 	}
 
 }

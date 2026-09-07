@@ -362,6 +362,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.cli.AddressCliTest',
 		'unit.cli.ApqAstTypeRefsCliTest',
 		'unit.cli.ApqAtCliTest',
+		'unit.cli.ApqBatchQueryCliTest',
 		'unit.cli.ApqCondCliTest',
 		'unit.cli.ApqCountSummaryCliTest',
 		'unit.cli.ApqDxTier2CliTest',
@@ -382,9 +383,11 @@ class TestDiscoveryParityTest extends Test {
 		'unit.cli.ApqMetaCliTest',
 		'unit.cli.ApqPrefilterCliTest',
 		'unit.cli.ApqProbeCliTest',
+		'unit.cli.ApqProgressTtyCliTest',
 		'unit.cli.ApqReconCliTest',
 		'unit.cli.ApqSearchCliTest',
 		'unit.cli.ApqSourceMetaArgCliTest',
+		'unit.cli.ApqSourceReadGuardCliTest',
 		'unit.cli.ApqStripDryRunCliTest',
 		'unit.cli.ApqStripFromClusterCliTest',
 		'unit.cli.ApqTestSummaryExitStatusCliTest',
@@ -1128,6 +1131,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.cli.AddressCliTest#testRemoveElementReportFollowsKeepDoc :: control :: M-REMOVE-CUT-ANNOTATIONS-NONE',
 			'unit.cli.AddressCliTest#testRemoveElementReportNamesWhatTheCutTook :: control :: M-REMOVE-CUT-ANNOTATIONS-NONE',
 			'unit.cli.AddressCliTest#testRemoveElementReportOnAModifierPositionNamesTheDeclaration :: control :: M-REMOVE-CUT-SUBJECT-RAW',
+			'unit.cli.ApqBatchQueryCliTest#testTheSeparatorIsWhatSplitsQueriesFromScope :: control :: M-BATCH-SEPARATOR-BLIND',
+			'unit.cli.ApqProgressTtyCliTest#testNoEnvAndNoTerminalIsSilent :: control :: M-PROGRESS-TTY-BLIND',
+			'unit.cli.ApqSourceReadGuardCliTest#testALongUnnarrowedReadIsRefused :: control :: M-SOURCE-READ-GUARD-OFF',
 			'unit.cli.ApqTestSummaryExitStatusCliTest#testTruncatedTranscriptDisagreesWithANonZeroExit :: control :: M-EXIT-STATUS-AGREES',
 			'unit.cli.CliCommandSeamTest#testTheRegistryHandsOutAFreshCommandPerCall :: control :: M-CLI-COMMANDS-MEMOISED',
 			'unit.cli.CliCommandSeamTest#testTheRequireMatchFlagDoesNotSurviveItsRun :: control :: M-CLI-REQUIREMATCH-STATIC',
@@ -1768,7 +1774,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-COND-BRANCH-SPAN-SHARED',
 			'M-COND-BODY-SWALLOWS-DIRECTIVES',
 			'M-COND-INNERMOST-FRAME',
-			'M-COND-RAW-NEVER-MARKED'
+			'M-COND-RAW-NEVER-MARKED',
+			'M-PROGRESS-TTY-BLIND',
+			'M-BATCH-SEPARATOR-BLIND',
+			'M-SOURCE-READ-GUARD-OFF'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

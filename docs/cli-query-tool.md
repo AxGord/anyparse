@@ -87,6 +87,7 @@ apq refs --writes <name> <files>     # only assignment positions
 apq refs --reads <name> <files>      # only read positions
 apq refs --decls <name> <files>      # only declaration positions
 apq refs --decls <name> <files> --doc --source   # + doc-comment / verbatim slice
+apq refs <name>... -- <files> --decls            # SEVERAL names, one walk (see below)
 ```
 
 Scope awareness is lexical only: a local declaration shadows an outer name with the same identifier, and the tool correctly attributes references to the innermost binding. A name RE-declared in the SAME block shadows its own predecessor from that point on — `var x:Int = 1; … var x:String = null;` is legal Haxe and the second declaration is what a read past it binds to, so occurrences on either side of it attribute to different declarations. A loop iterator (e.g. a `for`/comprehension induction variable) is a declaration scoped to the loop body: references inside the loop resolve to it and shadow an outer same-named binding, while references after the loop fall through to the enclosing scope. A catch-clause exception name is scoped the same way (visible only inside the clause body); a lambda parameter is a declaration scoped to the lambda body. No type-based resolution. No cross-file resolution.
@@ -370,6 +371,93 @@ avoid the shell pre-expanding them):
   (character class, leading `!` negates). The literal prefix before the
   first metacharacter is the walk root, so `src/grammar/haxe/*.hx` scans
   only that directory while `src/**/Hx*.hx` scans the whole subtree.
+
+### The cost of a ROUND: batched queries, the TTY progress gate, and the whole-file read guard
+
+Three properties of the read-only commands that are about the price a CALLER
+pays per invocation rather than about what the walk finds. All three were
+user-reported on 2026-09-07 from one real session, and all three carry a
+measured before/after on this tree (935 `.hx` under `src`).
+
+**Progress is printed only to a TERMINAL.** `CliIo.streamProgress` writes
+`apq <cmd>: scanned N/M files…` every 25 files plus once at completion. That is
+38 stderr lines / 1289 bytes per `src`-wide walk — measured for `lit`, `refs`
+and `mentions` alike — and `2>/dev/null` is not an available answer, because the
+same stream carries the `--limit` cap line, the `refs` member-access warning and,
+for every mutation op, the ONLY channel a refusal has. So the heartbeat now asks
+whether stderr is a terminal: a human watching a run still gets it, a pipe gets
+nothing — and a watchdog reading a redirected stream, which is the other caller
+the heartbeat was written for, asks for it back with `HXQ_PROGRESS=1`.
+`HXQ_PROGRESS=0` and the older `HXQ_NO_PROGRESS` force it off. Under `HXQ_PROGRESS=1` the stderr is
+byte-identical to what the pre-gate binary printed by default.
+
+**A bare `--` separates SEVERAL queries from the scope.** `refs`, `mentions`,
+`lit` and `declares` take a list:
+
+```
+apq refs alphaOne betaTwo -- src --decls     # two names, ONE walk
+apq lit 'todo' 'fixme' -- src test           # two texts, ONE parse per file
+apq declares Alpha Beta -- src               # one symbol listing, two answers
+apq source F.hx --select 'FnMember:a' --select 'FnMember:b'
+```
+
+Each query prints under its own `=== <query> ===` banner on stdout, in the order
+given (`source --select` orders by document position instead, since it prints
+source), and each gets its own `--limit` budget, its own 0-hit nudge and — for
+`lit` — its own smart `--kind` default. ONE query prints exactly what it printed
+before the separator existed: no banner, no reordering, byte for byte, which is
+what the skill, the hooks and every existing fixture depend on. `refs --json`
+takes ONE name, because two concatenated JSON documents are not JSON.
+
+Why a separator and not "the last positional is the scope": the second positional
+IS a scope spec today and SEVERAL of them are legal (`apq refs X src test`), so a
+last-positional rule would silently reinterpret an existing call. A bare `--`
+appears in no invocation that works today, so it costs nothing. `--name A --name B`
+was the other candidate and doubles the typing at exactly the call the feature
+exists for. The shape the separator disambiguates used to be SILENT: `apq refs A
+B C src` walked `src` alone, dropped `B` and `C` without a word and exited 0; it
+now names the dropped positionals and the `--` form on stderr.
+
+What a batch buys is ROUNDS, not CPU. The walkers pre-filter by raw substring, so
+a name costs ~0.23 s whether it is alone or not; three separate
+`refs <name> src --decls` calls cost 5108 bytes over 3 rounds, the batched call
+1191 bytes over 1.
+
+**A long whole-file read is refused, with the selector menu instead.**
+`apq source <file>` with no `--range` / `--select` / `--at` printed the file
+whole, which is `cat`, and that is what a caller reaches for. Measured over one
+session: 7 files, 1270 lines dumped, ~100 used (≈8%), two files needed nothing.
+The reason is not discipline — `--select` needs a member NAME, and on first
+contact the only way to learn one was to dump the file — so past a line budget
+the command answers the NAMES instead of the bytes:
+
+```
+apq source: <file> is 3101 lines and nothing narrowed the read (budget 120 lines, HXQ_SOURCE_MAX_LINES; 0 disables).
+Narrow it — `apq source <file> --select '<sel>'` (repeatable):
+  InterfaceDecl:GrammarPlugin   lines 19-306
+  TypedefDecl:MetaShape   lines 3016-3020
+  …
+Or read a line window with `--range L:L2`. `--all` prints the whole file.
+```
+
+Exit is `EXIT_USAGE`; `--all` prints the file whole; `HXQ_SOURCE_MAX_LINES` moves
+the budget and `0` switches the refusal off. On this tree the three largest `src`
+files cost 617 585 bytes of stdout whole against 6 994 bytes for the three
+refusals. The budget counts LINES, not Haxe: a long `.md`, `.json` or log read
+through `source` is refused the same way and answers the no-menu form, so a habit
+of reading one whole needs `--all`.
+
+Two properties of the menu are deliberate. Each entry's selector is
+`Address.describe`'s canonical, EDIT-STABLE address, and its line range is the
+window `--select` will actually print (`CliEdit.sourceWindows`), so an entry
+states what following it costs — which also exposes a greedy module-level span
+as a thousand-line entry rather than hiding it — an entry whose own window is
+past the budget says so, so nobody follows a "narrowing" that narrows nothing.
+And "top-level" is counted in
+NAMED ANCESTORS with one-line nodes dropped, never in grammar kind names: that
+keeps the package line, the imports and the typedef fields out of the menu on
+Haxe and still works on a grammar this code has never seen. A file that does not
+parse has no menu, so its refusal names `--range` and `--all` and nothing else.
 
 ### Parse-failure locus
 

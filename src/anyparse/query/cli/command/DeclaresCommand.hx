@@ -1,5 +1,6 @@
 package anyparse.query.cli.command;
 
+import anyparse.query.cli.CliArgs.ResolvedInputs;
 import anyparse.query.cli.CliContext;
 import haxe.Exception;
 import anyparse.query.ExitCode.*;
@@ -33,8 +34,7 @@ final class DeclaresCommand implements CliCommand {
 	}
 
 	/**
-	 * `apq declares <type> <scope> [--lang <name>]` — the declaration
-	 * site(s) of the type named `<type>` across `<scope>` (one or more
+	 * `apq declares <type>… [--] <scope> [--lang <name>]` — the declaration site(s) of each named type across `<scope>` (one or more
 	 * file/dir/glob specs), matching either the simple name or the fully
 	 * qualified import path. Each site prints as
 	 * `qualified<TAB>kind<TAB>file:line:col` on stdout. More than one is an
@@ -44,13 +44,18 @@ final class DeclaresCommand implements CliCommand {
 	 */
 	private static function runDeclares(args: Array<String>): Int {
 		var lang: String = 'haxe';
-		var typeName: Null<String> = null;
+		final typeNames: Array<String> = [];
 		final inputSpecs: Array<String> = [];
+		// A bare `--` makes every positional before it a type name and every one
+		// after it a scope spec; without one the first positional is the type and
+		// the rest are scope specs, exactly as before.
+		final separator: Int = CliArgs.nameSeparatorIndex(args);
 
 		var i: Int = 0;
 		while (i < args.length) {
 			final a: String = args[i];
 			switch a {
+				case '--':
 				case '--lang':
 					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '-h', '--help':
@@ -61,21 +66,17 @@ final class DeclaresCommand implements CliCommand {
 						CliIo.stderr('apq declares: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
-					if (typeName == null)
-						typeName = a;
-					else
-						inputSpecs.push(a);
+					CliArgs.routePositional(a, i, separator, typeNames, inputSpecs);
 			}
 			i++;
 		}
-		if (typeName == null || inputSpecs.length == 0) {
+		if (typeNames.length == 0 || inputSpecs.length == 0) {
 			CliIo.stderr('apq declares: expected <type> <scope> (one or more file/dir/glob specs)\n');
 			printDeclaresUsage();
 			return EXIT_USAGE;
 		}
 
-		final name: String = typeName;
-		final io = CliArgs.resolveInputPaths(lang, inputSpecs);
+		final io: ResolvedInputs = CliArgs.resolveInputPaths(lang, inputSpecs, separator < 0);
 		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
 			CliIo.stderr('apq declares: ${CliArgs.quotedSpecs(inputSpecs)} matched no .hx files\n');
@@ -94,23 +95,34 @@ final class DeclaresCommand implements CliCommand {
 				}
 		];
 
-		final rows: Array<SymbolQuery.SymbolRow> = SymbolQuery.declares(files, plugin, name);
-		if (rows.length == 0)
-			CliIo.stderr('apq declares: no type named "$name" in ${inputSpecs.join(', ')}\n');
-		else if (rows.length > 1)
-			CliIo.stderr('apq declares: ambiguous — ${rows.length} declarations of "$name"\n');
-		for (row in rows) CliIo.sysPrint('${SymbolQuery.formatSymbolRow(row)}\n');
+		// ONE listing for the whole batch — the parse is the expensive half and it
+		// does not depend on the names.
+		final listing: Array<SymbolQuery.SymbolRow> = SymbolQuery.symbols(files, plugin);
+		final batchedOutput: Bool = typeNames.length > 1;
+		for (name in typeNames) {
+			final rows: Array<SymbolQuery.SymbolRow> = SymbolQuery.declaredAmong(listing, name);
+			if (batchedOutput) CliIo.sysPrint(CliWalk.batchSection(name));
+			if (rows.length == 0)
+				CliIo.stderr('apq declares: no type named "$name" in ${inputSpecs.join(', ')}\n');
+			else if (rows.length > 1)
+				CliIo.stderr('apq declares: ambiguous — ${rows.length} declarations of "$name"\n');
+			for (row in rows) CliIo.sysPrint('${SymbolQuery.formatSymbolRow(row)}\n');
+		}
 		return EXIT_OK;
 	}
 
 	private static function printDeclaresUsage(): Void {
 		CliIo.sysPrint('Usage: apq declares <type> <scope...> [options]\n');
+		CliIo.sysPrint('       apq declares <type>... -- <scope...> [options]\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Print the declaration site(s) of the type named <type> across the scope\n');
 		CliIo.sysPrint('(file/dir/glob specs after the type), matching the simple name or the fully\n');
 		CliIo.sysPrint('qualified import path. Each row is qualified<TAB>kind<TAB>file:line:col. More\n');
 		CliIo.sysPrint('than one row is an ambiguity; zero means the type is not declared in the\n');
 		CliIo.sysPrint('scope. The focused, single-type counterpart of symbols.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('A bare `--` splits SEVERAL types from the scope: the listing is built ONCE\n');
+		CliIo.sysPrint('and every type answered off it, each under its own `=== <type> ===` section.\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Options:\n');
 		CliIo.sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');

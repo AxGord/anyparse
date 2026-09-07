@@ -173,14 +173,47 @@ final class CliIo {
 	}
 
 	/**
+	 * Whether stderr is a terminal — the one question that separates a human
+	 * watching a long walk from a model reading a transcript.
+	 *
+	 * hxnodejs types `process.stderr` as `IWritable`, which declares no `isTTY`,
+	 * so the flag is read reflectively rather than through a widened extern.
+	 * Every non-node target answers `true`: there is no portable `isatty` in the
+	 * Haxe stdlib, and `true` is what the progress line did before this gate
+	 * existed, so a target without the probe keeps the behaviour it had.
+	 */
+	public static function stderrIsTty(): Bool {
+		return #if nodejs Reflect.field(js.Node.process.stderr, 'isTTY') == true #else true #end;
+	}
+
+	/**
+	 * Whether `streamProgress` may write — the decision, separated from the
+	 * process so it can be stated as a table instead of observed as a side effect.
+	 *
+	 * `HXQ_PROGRESS` decides when it is set to anything but the empty string
+	 * (`0` off, anything else on); the older `HXQ_NO_PROGRESS` still forces it
+	 * off; with neither set the answer is whether stderr is a terminal.
+	 *
+	 * The TTY default is the point. The progress line was written for a human
+	 * (and for a watchdog reading a redirected stream), and it costs a model 38
+	 * stderr lines / 1289 bytes per `src`-wide walk of this tree — measured, at
+	 * 935 files — which cannot be silenced with `2>/dev/null` because the same
+	 * stream carries the `--limit` cap line, the `refs` member-access warning and,
+	 * for a mutation op, the ONLY channel a refusal has.
+	 */
+	public static function progressEnabled(progressEnv: Null<String>, noProgressSet: Bool, stderrTty: Bool): Bool { // noqa: prefer-inline
+		return progressEnv != null && progressEnv != '' ? progressEnv != '0' : !noProgressSet && stderrTty;
+	}
+
+	/**
 	 * Per-file walk progress heartbeat (multi-file scans only). Writes a
 	 * `scanned <done>/<total>` line to **stderr** — never stdout — so the
 	 * walker's machine-readable hit output stays byte-identical while a
 	 * long run still produces incremental output. Fires every
 	 * `PROGRESS_INTERVAL` files plus once at completion, and is a no-op
 	 * for single-file queries (`singleFile`), tiny scans (`total <=
-	 * PROGRESS_INTERVAL`), or when `HXQ_NO_PROGRESS` is set (so a caller
-	 * merging streams via `2>&1` can suppress it).
+	 * PROGRESS_INTERVAL`), or whenever `progressEnabled` says no — which by default
+	 * is every run whose stderr is not a terminal, i.e. every run a model reads.
 	 *
 	 * `done` is 1-based (the count of files processed so far, inclusive
 	 * of the current one).
@@ -188,7 +221,12 @@ final class CliIo {
 	public static function streamProgress(cmd: String, done: Int, total: Int, singleFile: Bool): Void {
 		if (singleFile || total <= PROGRESS_INTERVAL) return;
 		#if (sys || nodejs)
-		if (Sys.getEnv('HXQ_NO_PROGRESS') != null) return;
+		// An EMPTY value means UNSET for both variables, not "set to nothing": restoring a
+		// saved-null env var writes exactly that (`Sys.putEnv(k, saved ?? '')`), and the two
+		// must agree or a test restoring one of them silently disables the heartbeat for the
+		// rest of the process.
+		final noProgress: Null<String> = Sys.getEnv('HXQ_NO_PROGRESS');
+		if (!progressEnabled(Sys.getEnv('HXQ_PROGRESS'), noProgress != null && noProgress != '', stderrIsTty())) return;
 		#end
 		if (done % PROGRESS_INTERVAL == 0 || done == total) CliIo.stderr('apq $cmd: scanned $done/$total files…\n');
 	}

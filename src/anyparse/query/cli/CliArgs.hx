@@ -39,6 +39,52 @@ final class CliArgs {
 	}
 
 	/**
+	 * The index of the bare `--` in `args`, or `-1` — the separator that turns a walker's
+	 * leading positionals into a LIST of queries instead of one query plus scope specs.
+	 *
+	 * An INDEX rather than a flag, and computed up front, because the loop that consumes
+	 * `args` has to know at the FIRST positional whether a separator is coming, and each
+	 * later positional has to know which side of it it fell on. Argv already holds both
+	 * answers; a running `afterSeparator` flag in every parser only copies them.
+	 *
+	 * Why a separator at all, rather than a "last positional is the scope" rule or a
+	 * repeatable `--name`: `apq refs X src test` is a legal TWO-SCOPE call today, so
+	 * reading the last positional as the scope would silently reinterpret it, and
+	 * `--name A --name B` doubles the typing at exactly the call the batch exists for.
+	 * A bare `--` occurs in no invocation that works today, so every existing form keeps
+	 * its meaning byte for byte. One blind spot, inherited rather than introduced: this
+	 * reads the RAW argv, so a `--` consumed as some flag's VALUE (`--lang --`) is still
+	 * found here while the parse loop never reaches its separator arm.
+	 */
+	public static inline function nameSeparatorIndex(args: Array<String>): Int {
+		return args.indexOf('--');
+	}
+
+	/**
+	 * Route one positional argument of a batch-capable walker into either the QUERY list
+	 * or the SCOPE list, given its own `index` in argv and the `separator` index
+	 * `nameSeparatorPresent` found (`-1` = none).
+	 *
+	 * With a separator every positional before it is a query and every one after it a
+	 * scope spec; without one the grammar is the one that shipped — the FIRST positional
+	 * is the query, every later one a scope spec.
+	 *
+	 * One member because four argument parsers (`refs`, `mentions`, `lit`, `declares`)
+	 * ask the same question, and a fifth command gaining a batch form must inherit the
+	 * rule rather than copy it — the copy is what `duplicate-code` reported across the
+	 * first three. Taking the INDEX rather than a running `afterSeparator` flag also
+	 * leaves the parsers with no batch state of their own: argv already knows.
+	 */
+	public static function routePositional(arg: String, index: Int, separator: Int, queries: Array<String>, specs: Array<String>): Void {
+		if (separator >= 0)
+			(index > separator ? specs : queries).push(arg);
+		else if (queries.length == 0)
+			queries.push(arg);
+		else
+			specs.push(arg);
+	}
+
+	/**
 	 * Parse a `<line>:<col>` coordinate. Both components must be
 	 * non-negative integers; returns null on any malformed shape so the
 	 * caller emits a usage error rather than silently clamping.
@@ -206,31 +252,24 @@ final class CliArgs {
 	}
 
 	/**
-	 * The plugin plus the `.hx` paths `specs` name, and the place a spec that named nothing is
-	 * reported.
+	 * Plugin + expanded input paths for a scope, warning about scope specs that matched
+	 * no `.hx` file at all — a silent drop there is a query answered over less than the
+	 * caller asked for.
 	 *
-	 * The empty case has always been reported by the caller (`<specs> matched no .hx files`); what was
-	 * silent is the MIXED one — a spec that matched nothing beside one that did, which vanishes into
-	 * the union and leaves the run analysing less than it was asked for with no word about it. Each
-	 * unmatched spec is QUOTED: an argument carrying whitespace or newlines (a shell that failed to
-	 * word-split a file list into separate arguments) is otherwise indistinguishable from a list of
-	 * paths the tool was given, which is exactly how one such invocation read as a tool defect.
-	 *
-	 * SCOPE OF THAT REPORT: this covers the twelve commands that resolve their scope THROUGH
-	 * here. THIRTEEN other call sites reach `expandInputs` directly and still drop an unmatched spec in
-	 * silence — `refs`, `uses`, `meta`, `search`, `blast`, `mentions`, `gates`, `rename --scope`, the
-	 * call-graph builder, `extract-constant`, `collectScopeFiles`, `collectPermissiveCandidates`, and
-	 * `readResolutionLibrary`. The last is the one to fix next: a `resolutionRoots` entry that matches
-	 * no `.hx` is dropped there in exactly the silence this function just closed for the report scope,
-	 * one screen away. `unmatched` is computed for all of them — they simply do not read it yet.
+	 * `suggestSeparator` adds the bare-`--` hint to that warning, and ONLY a command that
+	 * has a batch form may pass it: thirteen commands share this helper and eleven refuse
+	 * a bare `--` outright, so an unconditional hint sends most of its readers straight
+	 * into `unknown option "--"`. A batching caller passes it only when the invocation had
+	 * no separator — with one present the specs are unambiguous and the advice is noise.
 	 */
-	public static function resolveInputPaths(lang: String, specs: Array<String>): ResolvedInputs {
+	public static function resolveInputPaths(lang: String, specs: Array<String>, suggestSeparator: Bool = false): ResolvedInputs {
 		final plugin: GrammarPlugin = pickPlugin(lang);
 		final expanded: ExpandedInputs = expandInputs(specs, '.hx');
 		if (expanded.unmatched.length > 0 && expanded.paths.length > 0)
 			CliIo.stderr(
 				'apq: ${expanded.unmatched.length} of ${specs.length} scope argument(s) matched no .hx files and were skipped: '
-				+ '${quotedSpecs(expanded.unmatched)}\n'
+				+ quotedSpecs(expanded.unmatched)
+				+ (suggestSeparator ? ' — if they are QUERIES, put a bare `--` between them and the scope' : '') + '\n'
 			);
 		return { plugin: plugin, paths: expanded.paths, singleFile: expanded.singleFile };
 	}
