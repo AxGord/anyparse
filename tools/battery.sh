@@ -193,6 +193,15 @@ cleanup() {
     if [ "$verdict" -eq 0 ] && [ "$keep_work" -eq 0 ]; then
         tmpl_discard "$work" || true
     else
+        # T738: an EXPLICIT --keep gets the permanent marker (tmpl_mark_keep,
+        # tools/tmp-lifecycle.sh) — without it, a LATER run's startup sweep
+        # reclaims this directory once its owner pid is gone, same as a
+        # crashed run, despite --keep having asked to retain it. A red
+        # verdict without --keep is deliberately left off the marker and
+        # ages out through the ordinary grace-period sweep unchanged.
+        if [ "$keep_work" -eq 1 ]; then
+            tmpl_mark_keep "$work" || true
+        fi
         echo "battery.sh: logs kept in $work" >&2
     fi
 }

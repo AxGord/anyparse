@@ -144,6 +144,38 @@ class MutationVerdictTest extends Test {
 		Assert.isFalse(verdict.detail.indexOf('+extra') >= 0, 'a blank entry must not become an unmatched failure');
 	}
 
+	/**
+	 * `cap` elides past ten names; `full` is the escape hatch (T703) — present
+	 * only when it did, so a caller reading two lines by habit sees no change
+	 * and one reading a third only has to check it is non-empty.
+	 */
+	public function testFullIsAbsentWhenNothingWasCapped(): Void {
+		final verdict: MutationVerdictResult = classify(transcript(1, 0, 0, false, [
+			'unit.SampleTest',
+			'  testTwo: FAILURE expected 1 but was 2'
+		]), '');
+		Assert.isNull(verdict.full);
+	}
+
+	/**
+	 * Twelve failures push the capped row to `…+2 more`; `full` must carry all
+	 * twelve, uncapped, including the two the row itself cannot show.
+	 */
+	public function testFullCarriesEveryNameTheRowCapped(): Void {
+		final rows: Array<String> = ['unit.SampleTest'];
+		for (i in 0...12) rows.push('  test${Std.string(i).lpad('0', 2)}: FAILURE expected 1 but was $i');
+		final verdict: MutationVerdictResult = classify(transcript(12, 0, 0, false, rows), '');
+		Assert.stringContains('…+2 more', verdict.detail, 'the row itself stays capped');
+		Assert.isFalse(verdict.detail.indexOf('test11') >= 0, 'the row elides the 11th and 12th names');
+		final full: Null<String> = verdict.full;
+		Assert.notNull(full);
+		if (full == null) return;
+		Assert.isFalse(full.indexOf('more') >= 0, 'full must not itself be capped');
+		Assert.stringContains('unit.SampleTest.test10', full, 'a name the row elided must be present in full');
+		Assert.stringContains('unit.SampleTest.test11', full, 'a name the row elided must be present in full');
+		Assert.stringContains('unit.SampleTest.test00', full, 'names the row DID show stay in full too');
+	}
+
 	// ------------------------------------------------------------ fixtures
 
 	private inline function label(verdict: MutationVerdictResult): String {

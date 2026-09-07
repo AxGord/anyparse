@@ -10,13 +10,23 @@
 # whether the suite caught it. SURVIVED is the finding the tool exists
 # for — a green suite over a mechanism no fixture reaches.
 #
-# Each track gets its own git worktree from HEAD plus its own private
-# build (tools/worker-build.sh), so tracks run in parallel and never
-# touch bin/apq.js or bin/test.js. Because the worktrees come from HEAD,
-# uncommitted work in the main tree is NOT seen — commit (or stash into
-# the patch) whatever the mutation is supposed to be measured against.
+# Each track gets its own git worktree from a base commit (HEAD, unless
+# --base names another — see below) plus its own private build
+# (tools/worker-build.sh), so tracks run in parallel and never touch
+# bin/apq.js or bin/test.js. Because the worktrees come from that ONE
+# commit, uncommitted work in the main tree is NOT seen unless --base
+# points at a snapshot that carries it — commit (or stash into the patch,
+# or pass --base) whatever the mutation is supposed to be measured against.
 #
-# Usage: tools/mutation-check.sh <manifest> [--jobs N] [--keep] [--build-only]
+# Usage: tools/mutation-check.sh <manifest> [--jobs N] [--keep] [--build-only] [--base <ref>]
+#
+# --base <ref>  build every track worktree from <ref> instead of HEAD.
+#               `tools/mutation-arm.sh --working-tree` (T694) passes the
+#               `git stash create` commit it built the manifest's patches
+#               against here — a track built from plain HEAD would either
+#               PATCH-FAIL (the patch's context lines came from the
+#               snapshot) or silently apply while missing whatever ELSE
+#               the snapshot carried, which reads as a false SURVIVED.
 #
 # `--build-only` stops after the build: each track is applied, compiled and
 # reported as APPLIES or BUILD-FAIL, and no suite runs. That is not a weaker
@@ -200,12 +210,13 @@ run_track() {
     # truncates before classify runs, so an abort inside it would leave an
     # empty file and the report would print a blank verdict column.
     # write_verdict stays the single owner of the file format.
-    local classified v d
+    local classified v d full
     if ! classified=$(classify "$log" "$expected"); then
         write_verdict "$verdict_file" "RUN-FAIL" "classifier aborted on $log"
         return 0
     fi
-    { IFS= read -r v; IFS= read -r d; } <<EOF
+    full=""
+    { IFS= read -r v; IFS= read -r d; IFS= read -r full || true; } <<EOF
 $classified
 EOF
     # The classifier reports WHY it could not judge; only the shell knows
@@ -213,6 +224,16 @@ EOF
     # to open it.
     if [ "$v" = "RUN-FAIL" ]; then
         d="$d ($log)"
+    fi
+    # T703: an optional third line is the SAME row, every name-list uncapped
+    # — `MutationVerdict.classify` emits it only when `cap` actually elided
+    # something. Appended to the transcript itself (not the report row,
+    # which stays capped) so a name a flake pushed past the ten-item window
+    # is findable without re-deriving it from the raw utest dump; a command
+    # this script does not own writing to (it only reports) is deliberately
+    # kept read-only, so the write lives here rather than in the classifier.
+    if [ -n "$full" ]; then
+        printf '\n--- mutation-verdict: uncapped %s ---\n%s\n' "$v" "$full" >> "$log"
     fi
     write_verdict "$verdict_file" "$v" "$d"
     return 0
@@ -277,7 +298,7 @@ fi
 # -------------------------------------------------------- parent mode
 
 if [ "$#" -lt 1 ]; then
-    echo "usage: mutation-check.sh <manifest> [--jobs N] [--keep] [--build-only]" >&2
+    echo "usage: mutation-check.sh <manifest> [--jobs N] [--keep] [--build-only] [--base <ref>]" >&2
     exit 2
 fi
 
@@ -286,6 +307,14 @@ shift
 jobs=""
 keep=0
 build_only=0
+# The commit every track worktree is built from. Always HEAD except when
+# `tools/mutation-arm.sh --working-tree` (T694) rendered the manifest's
+# patches against a `git stash create` snapshot instead — a track built
+# from plain HEAD then either PATCH-FAILs (the patch's context lines came
+# from the snapshot) or, worse, silently applies while missing whatever
+# ELSE the snapshot carried (a new fixture the patch does not touch but the
+# arm's expectation set already names), which reads as a false SURVIVED.
+base_ref="HEAD"
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --keep)
@@ -296,6 +325,14 @@ while [ "$#" -gt 0 ]; do
             build_only=1
             shift
             ;;
+        --base)
+            if [ "$#" -lt 2 ]; then
+                echo "mutation-check.sh: --base needs a ref" >&2
+                exit 2
+            fi
+            base_ref=$2
+            shift 2
+            ;;
         --jobs)
             if [ "$#" -lt 2 ]; then
                 echo "mutation-check.sh: --jobs needs a number" >&2
@@ -305,7 +342,7 @@ while [ "$#" -gt 0 ]; do
             shift 2
             ;;
         *)
-            echo "mutation-check.sh: unknown argument '$1' (expected --jobs N, --keep or --build-only)" >&2
+            echo "mutation-check.sh: unknown argument '$1' (expected --jobs N, --keep, --build-only or --base <ref>)" >&2
             exit 2
             ;;
     esac
@@ -316,11 +353,26 @@ if [ ! -f "$manifest" ]; then
     exit 2
 fi
 
-# The verdict classifier is `apq mutation-verdict` out of the MAIN tree.
-# Checked here rather than per track: without it every track would run its
-# build and its suite and only then fail to be judged.
-if [ ! -f "$repo/bin/apq.js" ]; then
-    echo "mutation-check.sh: $repo/bin/apq.js missing — run 'haxe bin/apq-js.hxml' first (the verdict classifier is 'apq mutation-verdict')" >&2
+# The verdict classifier is `apq mutation-verdict`, run through `$repo/bin/hxq`
+# — the shim itself honours HXQ_BIN (T725) when a caller (mutation-arm.sh, or
+# a worker driving this script directly) has one set, so `classify`/
+# `build_detail` below need no change. This guard only has to stop pointing
+# at $repo/bin/apq.js unconditionally, or a worker with an empty $repo/bin/
+# (T710/T739) is refused here before the shim ever gets a chance to use its
+# own private engine.
+apq_bin="$repo/bin/apq.js"
+if [ -n "${HXQ_BIN:-}" ]; then
+    if [ ! -f "$HXQ_BIN" ]; then
+        echo "mutation-check.sh: HXQ_BIN=$HXQ_BIN not found" >&2
+        exit 2
+    fi
+    # Canonicalised, like mutation-arm.sh does for the same variable — a
+    # relative HXQ_BIN would otherwise resolve against whatever CWD this
+    # script happens to be invoked from, which this script never controls.
+    apq_bin=$(cd -P "$(dirname "$HXQ_BIN")" && pwd)/$(basename "$HXQ_BIN")
+fi
+if [ ! -f "$apq_bin" ]; then
+    echo "mutation-check.sh: $apq_bin missing — run 'haxe bin/apq-js.hxml' first, or point HXQ_BIN at a private engine (tools/worker-build.sh <dir> && export HXQ_BIN=<dir>/apq.js) — the verdict classifier is 'apq mutation-verdict'" >&2
     exit 2
 fi
 
@@ -410,6 +462,18 @@ cleanup() {
     # an all-KILLED run into `exit 1`.
     if [ "$keep" -eq 0 ] && [ "$exit_code" -eq 0 ]; then
         tmpl_discard "$workroot" "$repo" || true
+    elif [ "$keep" -eq 1 ]; then
+        # T738: an EXPLICIT --keep gets the permanent marker — without it,
+        # tmpl_is_orphan reads this directory as abandoned the moment this
+        # process exits (the owner pid is dead either way), indistinguishable
+        # from a crashed run, and a LATER run's startup sweep reclaims it
+        # despite --keep having asked to retain it. A directory kept only
+        # because exit_code != 0 (no --keep) is deliberately left off the
+        # marker and ages out through the ordinary grace-period sweep, same
+        # as before this fix — a blanket "any non-KILLED run" grant would
+        # reintroduce the unbounded accumulation this file's own header
+        # records paying for.
+        tmpl_mark_keep "$workroot" || true
     fi
 }
 # INT/TERM/HUP exit rather than resuming, which then fires the EXIT trap
@@ -423,7 +487,7 @@ trap 'exit 130' INT TERM HUP
 # ones.
 runnable=""
 while IFS=$'\t' read -r name patch filter expected; do
-    if ! git -C "$repo" worktree add --detach --quiet "$workroot/wt-$name" HEAD 2>"$workroot/$name.wt.log"; then
+    if ! git -C "$repo" worktree add --detach --quiet "$workroot/wt-$name" "$base_ref" 2>"$workroot/$name.wt.log"; then
         write_verdict "$workroot/$name.verdict" "WT-FAIL" "worktree add failed: $(tr '\n' ' ' < "$workroot/$name.wt.log")"
         continue
     fi
