@@ -1054,14 +1054,19 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PreferFinalAbstractMethodCheckTest#testStdlibArrayFieldMethodCallStillFlagged :: control :: M-PFF-STDLIB-SAFE-NONE',
 			'unit.check.PreferFinalAbstractMethodCheckTest#testStdlibStringFieldMethodCallStillFlagged :: control :: '
 			+ 'M-PFF-STDLIB-SAFE-NONE',
+			'unit.check.PreferFindCheckTest#testFixRefusedWhenTheOnlyUsingIsGuarded :: control :: M-GUARDED-USING-ABSENT',
 			'unit.check.PreferIfExpressionAssignmentCheckTest#testFlatTwoBranchStillNotFlagged :: control :: M-TERMINAL-RUNGS-ANY',
 			'unit.check.PreferIfExpressionChainCheckTest#testBooleanReducibleUnfoldedRungStillConverts :: control :: '
 			+ 'M-PIEC-SPINE-CLAIM-ANY',
 			'unit.check.PreferIfExpressionChainCheckTest#testChainWithNoBooleanLeafStillFlagged :: control :: M-PIEC-SPINE-CLAIM-ANY',
 			'unit.check.PreferIndexAccessCheckTest#testObjectLiteralSetValueNotFlagged :: control :: M-PIA-OBJLIT-SET-FLAGGED',
+			'unit.check.PreferStaticExtensionCheckTest#testGuardedImportRunGetsNoSecondUsing :: control :: M-GUARDED-USING-ABSENT',
+			'unit.check.PreferStaticExtensionCheckTest#testGuardedImportRunRefusalNamesTheRegion :: control :: M-GUARDED-USING-ABSENT',
 			'unit.check.PreferStaticExtensionCheckTest#testMessageKeepsATwoSpaceLiteral :: control :: M-RENDER-SPAN-TOKENS',
 			'unit.check.PreferStaticExtensionCheckTest#testMessageQuotesLiteralWhitespaceExactlyAsTheFixWritesIt :: control :: '
 			+ 'M-RENDER-SPAN-TOKENS',
+			'unit.check.PreferStaticExtensionCheckTest#testUsingInAnotherBranchDoesNotCoverTheCall :: control :: '
+			+ 'M-COND-BRANCH-SPAN-SHARED',
 			'unit.check.PreferTernaryReturnCheckTest#testOwnLineCommentInACascadeDefersTheTail :: control :: '
 			+ 'M-PTR-RIDES-NEVER,M-PTR-CASCADE-NEVER-STRANDS',
 			'unit.check.PreferTernaryReturnCheckTest#testTheRunOfOneHoistIsRefusedAtTheSeam :: control :: M-COMMENT-HOIST-BLIND',
@@ -1737,7 +1742,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-BLOCK-SHAPE-EQUIV-NONE',
 			'M-KWREF-BARE-BODY-BREAKS-BLIND',
 			'M-KWREF-TIGHT-LEAD-BLIND',
-			'M-CASE-CTRLFLOW-STAR-FLAG-BLIND'
+			'M-CASE-CTRLFLOW-STAR-FLAG-BLIND',
+			'M-GUARDED-USING-ABSENT',
+			'M-COND-BRANCH-SPAN-SHARED'
 		], [for (line in TestRegistry.arms()) line.split(' :: ')[0]], 'the arms every @:killer resolves into');
 	}
 

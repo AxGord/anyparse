@@ -106,6 +106,40 @@ final class ModuleScan {
 	}
 
 	/**
+	 * Every import-ish declaration the file nests inside a `#if … #end` region, paired with the span
+	 * of the INNERMOST region holding it — the byte range within which the names it binds are bound.
+	 *
+	 * `guardedImportDecls` is this list with the regions dropped, and the regions are what a REWRITE
+	 * needs: a `using` a region guards supplies its extension methods to a call site inside that
+	 * region and to no other, so an insert decided on presence alone either duplicates the
+	 * declaration or leaves the rewritten call unresolved in the builds the region is compiled out
+	 * of.
+	 *
+	 * A MULTI-BRANCH region reports a null span, and that is the whole reason this reader needs
+	 *  `source` and the plugin: the grammar projects `#if a … #elseif b … #else … #end` as ONE node
+	 *  whose span covers every branch, with all branches' declarations as flat siblings, so a `using`
+	 *  in one branch and a call in another both fall inside it. Measured, before the gate: a `using
+	 *  Lambda;` in the `#if` arm let `prefer-find --fix` rewrite a loop in the `#else` arm and insert
+	 *  nothing, and the call bound nothing in the build where that arm was live — WORSE than the
+	 *  duplicate `using` this whole seam exists to stop. `singleBranchRegion`, the third gate
+	 *  `guardedBodyRegion` already applies for the same flattening, is what decides it; a region it
+	 *  refuses (or cannot read) covers nothing. That over-refuses a `using` and a call in the SAME
+	 *  branch of a multi-branch region, which is the safe side.
+	 *
+	 *  Regions nest and an inner span lies inside every span enclosing it, so the innermost one alone
+	 *  answers the containment question. A region the grammar recorded no span for yields a null
+	 * `region`, which covers nothing — the fail-closed reading for a caller asking whether a site is
+	 * covered, and the reason the walk carries the guard flag separately from the span.
+	 */
+	public static function guardedImportScopes(root: QueryNode, source: String, plugin: GrammarPlugin): Array<GuardedImport> {
+		final shape: RefShape = plugin.refShape();
+		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
+		final out: Array<GuardedImport> = [];
+		collectGuardedImports(root, false, null, r -> singleBranchRegion(r, source, shape, regions) ? r.span : null, out);
+		return out;
+	}
+
+	/**
 	 * Whether `node`'s source STARTS with the grammar's `#if` directive — i.e. it is a
 	 * conditional-compilation region, whatever kind the grammar happens to project it as.
 	 *
@@ -307,23 +341,31 @@ final class ModuleScan {
 	 * different type in the build where both guards hold.
 	 */
 	private static function guardedImportDecls(root: QueryNode): Array<QueryNode> {
-		final out: Array<QueryNode> = [];
-		collectGuardedImports(root, false, out);
-		return out;
+		final out: Array<GuardedImport> = [];
+		collectGuardedImports(root, false, null, _ -> null, out);
+		return [for (g in out) g.decl];
 	}
 
 	/**
 	 * Append every import-ish declaration reachable from `node` through conditional regions ONLY —
 	 * the walk never enters a type body, so it stays proportional to the file's directive nesting
 	 * rather than its size. `guarded` is false at the file's top level and true once the walk has
-	 * entered a region, so an UNGUARDED top-level import is skipped (it is already in
-	 * `_importMap` / `_aliasTargets`).
+	 * entered a region, so an UNGUARDED top-level import is skipped (it is already in `_importMap` / `_aliasTargets`). `region` tracks the
+	 * innermost region that HAS a span and is carried APART from the flag for that reason: a
+	 * spanless region must still mark the imports under it guarded, and reporting them with a null
+	 * region is what makes a containment test refuse rather than read them as unguarded. It is `c.span`
+	 * and deliberately NOT `c.span ?? region`: falling back to the ENCLOSING span would hand out a
+	 * range WIDER than the region the import actually sits in, and a site inside the outer region but
+	 * outside the inner one would then read as covered — the one direction that emits a call binding
+	 * nothing.
 	 */
-	private static function collectGuardedImports(node: QueryNode, guarded: Bool, out: Array<QueryNode>): Void {
+	private static function collectGuardedImports(
+		node: QueryNode, guarded: Bool, region: Null<Span>, scopeOf: QueryNode -> Null<Span>, out: Array<GuardedImport>
+	): Void {
 		for (c in node.children) if (c.kind == 'Conditional' || c.kind == 'CondSharedBodyDecl')
-			collectGuardedImports(c, true, out);
+			collectGuardedImports(c, true, scopeOf(c), scopeOf, out);
 		else if (guarded && IMPORT_DECL_KINDS.contains(c.kind))
-			out.push(c);
+			out.push({ decl: c, region: region });
 	}
 
 	/** Whether `node` declares a type directly, or inside a region nested in it — `guardedBodyRegion`'s coverage gate. */
@@ -429,3 +471,18 @@ final class ModuleScan {
 	}
 
 }
+
+/**
+ * One import-ish declaration a `#if … #end` region guards, as `ModuleScan.guardedImportScopes`
+ * reports it.
+ *
+ * `decl` is the statement itself; `region` the span of the INNERMOST region holding it — the byte
+ * range a reference must fall inside for the names the statement binds to be bound there — or null
+ * when the grammar recorded no span for that region. A null `region` covers nothing, which is the
+ * fail-closed answer: a caller asking whether a site is covered gets "no" and refuses, rather than
+ * treating an unlocatable guard as if it were absent.
+ */
+typedef GuardedImport = {
+	final decl: QueryNode;
+	final region: Null<Span>;
+};

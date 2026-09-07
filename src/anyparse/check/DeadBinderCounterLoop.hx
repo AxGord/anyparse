@@ -158,10 +158,11 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 		// needed `Lambda` — deciding first would leave an unused `using Lambda;` behind, which
 		// widens static-extension resolution for the whole file.
 		final edits: Array<{ span: Span, text: String }> = CanonicalEdit.dropContainedEdits([for (c in collected) c.edit]);
-		if (!keptNeedsLambda(collected, edits) || UsingScan.hasUsingModule(header, LAMBDA_MODULE)) return edits;
-		final usingEdit: { span: Span, text: String } = UsingScan.usingInsertEdit(header, LAMBDA_MODULE);
-		if (!CanonicalEdit.editsOverlapAny([usingEdit], edits)) edits.push(usingEdit);
-		return edits;
+		// The insert is asked for only when a SURVIVING edit is the `count()` form, and
+		// `appendUsingInsert` answering false is the guarded-`using` refusal: the file declares
+		// `using Lambda;` only inside a `#if` region that leaves a rewritten call out, so neither the
+		// extension call nor a second, unguarded declaration is safe and the whole edit set goes.
+		return !keptNeedsLambda(collected, edits) || UsingScan.appendUsingInsert(header, LAMBDA_MODULE, edits, violations) ? edits : [];
 	}
 
 	/** Whether any SURVIVING edit is the `count()` form — matched by span, since the containment filter rebuilds the list. */

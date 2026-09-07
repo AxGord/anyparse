@@ -189,11 +189,10 @@ final class PreferFind implements Check {
 			for (e in candEdits) edits.push(e);
 			if (!cand.qualified) rewrote = true;
 		}
-		if (rewrote && !UsingScan.hasUsingModule(header, LAMBDA_MODULE)) {
-			final usingEdit: { span: Span, text: String } = UsingScan.usingInsertEdit(header, LAMBDA_MODULE);
-			if (!CanonicalEdit.editsOverlapAny([usingEdit], edits)) edits.push(usingEdit);
-		}
-		return edits;
+		// `false` is the guarded-`using` refusal: the file declares `using Lambda;` only inside a `#if`
+		// region that leaves a rewritten call out, so neither the extension call nor a second,
+		// unguarded declaration is safe and the whole edit set goes.
+		return rewrote && !UsingScan.appendUsingInsert(header, LAMBDA_MODULE, edits, violations) ? [] : edits;
 	}
 
 	/**

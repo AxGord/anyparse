@@ -1,5 +1,7 @@
 package anyparse.check;
 
+import anyparse.check.Check.Violation;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.ModuleScan;
 import anyparse.query.QueryNode;
@@ -19,9 +21,10 @@ using StringTools;
  * receiver MEMBER shadows the extension and the rule falls back to the QUALIFIED `Module.m(recv, …)`
  * spelling — does the bare module name still mean that module here (`qualifiedCallReaches`).
  *
- * The header is not always the file's TOP LEVEL: a module whose whole body sits inside one
- * `#if … #end` region carries its imports there too, and `headerOf` reads that region as the header —
- * `ModuleScan.guardedBodyRegion` holds the gates that decide when a region qualifies.
+ * The header is not always the file's TOP LEVEL: a module whose whole body sits inside one `#if … #end` region carries its imports
+ * there too, and `headerOf` reads that region as the header — `ModuleScan.guardedBodyRegion` holds the gates that decide when a region
+ * qualifies. Every OTHER guarded `using` — one under a region that guards an import run but not the code using it — is in scope for
+ * that region alone, which is why the presence question has a site-scoped form (`usingScopeAt`) whose third answer is a refusal.
  *
  * Split out of `CheckScan`, on the same contract: PURE static helpers over the tree a check
  * already holds, no shared mutable state and no cache — the memo a caller wants is its own
@@ -32,6 +35,13 @@ final class UsingScan {
 
 	/** The grammar's `using` declaration kind, spelled literally (see `hasUsingModule`). */
 	public static inline final USING_DECL_KIND: String = 'UsingDecl';
+
+	/**
+	 * How `appendUsingInsert` names its subject in `guardedUsingDecline` — the rules that decide one
+	 * insert for the whole file cannot point at a single call, so they say what is true of the set.
+	 * `prefer-static-extension`, which decides per site, passes its own subject instead.
+	 */
+	public static inline final FILE_WIDE_SUBJECT: String = 'a rewritten call';
 
 	/** The wildcard import kind — the one form that binds names it does not spell out (`headerRebindsName`). */
 	private static inline final WILDCARD_IMPORT_KIND: String = 'ImportWildDecl';
@@ -62,7 +72,13 @@ final class UsingScan {
 	 * which a per-site rebuild would repeat for every candidate.
 	 */
 	public static function headerOf(tree: QueryNode, source: String, plugin: GrammarPlugin): UsingHeader {
-		return { root: tree, guard: ModuleScan.guardedBodyRegion(tree, source, plugin) };
+		return {
+			root: tree,
+			guard: ModuleScan.guardedBodyRegion(tree, source, plugin),
+			guardedUsings: [
+				for (g in ModuleScan.guardedImportScopes(tree, source, plugin)) if (g.decl.kind == USING_DECL_KIND) g
+			]
+		};
 	}
 
 	/**
@@ -70,8 +86,8 @@ final class UsingScan {
 	 * extension methods resolve without inserting one. `module` may be QUALIFIED
 	 * (`pkg.Lambda`), in which case only an exact match counts; a SIMPLE `module`
 	 * (`Lambda`) also matches a qualified declaration ending in it (`pkg.Lambda`),
-	 * since both bring the same module into scope. Shared by `prefer-find` and
-	 * `prefer-static-extension`.
+	 * since both bring the same module into scope. This is the FILE-wide half of `usingScopeAt`, which every rule now
+	 * asks instead: a `using` under an accepted whole-body guard counts here, one under any other `#if` region does not.
 	 *
 	 * CAVEAT on that simple-name match: the index models no packages, so a `using
 	 * other.pkg.Lambda` of an UNRELATED project-local module sharing the simple name reads
@@ -84,12 +100,88 @@ final class UsingScan {
 	 * `using` at all — which only ever causes a redundant insert, never a wrong one.
 	 */
 	public static function hasUsingModule(header: UsingHeader, module: String): Bool {
-		final simple: Bool = module.indexOf('.') == -1;
-		for (child in headerDecls(header)) if (child.kind == USING_DECL_KIND) {
-			final name: Null<String> = child.name;
-			if (name != null && (name == module || (simple && name.endsWith('.$module')))) return true;
+		return headerDecls(header).exists(child -> child.kind == USING_DECL_KIND && bindsModule(child.name, module));
+	}
+
+	/**
+	 * Whether `using <module>;` is in scope at every one of `offsets` — the three-valued question
+	 * `hasUsingModule` answers only for the file as a whole, and the one an INSERT has to ask.
+	 *
+	 * A `using` a `#if … #end` region guards is in scope for the bytes of that region and for no
+	 * other, so presence alone decides nothing: read as present it leaves a rewritten call
+	 * unresolved in the builds the region is compiled out of, read as absent it splices a SECOND,
+	 * unguarded declaration next to the guarded one — which duplicates it, and changes what the
+	 * guarded arms themselves resolve, since Haxe picks the LAST `using` of a name. That is the
+	 * shape `prefer-static-extension --fix` shipped: a file whose import run sits under
+	 * `#if (sys || nodejs)` while its class does not gained a top-level `using StringTools;` with
+	 * one already three lines below, and no check reports the pair.
+	 *
+	 * `Guarded` is therefore a REFUSAL, not a "insert one anyway": neither spelling is safe, and
+	 * the caller keeps its report-only finding. It is also the answer for
+	 * a region whose span the grammar did not record and for a MULTI-BRANCH
+	 * one, both of which cover nothing: the grammar gives every branch of a region one span, so without
+	 * that gate a `using` in the `#if` arm read as covering a call in the `#else` arm
+	 * (`ModuleScan.guardedImportScopes` holds the measurement).
+	 *
+	 * An empty `offsets` answers `InScope`, since a caller with no site to rewrite needs no
+	 * declaration. That makes the seam ORDER-dependent: `offsets` must be every site the caller
+	 * still intends to emit, so a caller that decides the insert before it has collected its edits
+	 * gets a rewritten call with no `using` and no diagnostic. The containment
+	 * test is SPAN coverage, not condition equivalence, so a call under its
+	 * own `#if (sys || nodejs)` and a `using` under a SEPARATE region spelling the same condition read as uncovered
+	 * and refuse. Answering that pair would mean deciding whether one condition implies another, chain of enclosing
+	 * regions included; span coverage is the relation a tree can state on its own, and it errs toward the refusal.
+	 */
+	public static function usingScopeAt(header: UsingHeader, module: String, offsets: Array<Int>): UsingScope {
+		if (hasUsingModule(header, module)) return UsingScope.InScope;
+		// The element nullability is LOAD-BEARING and must not be "cleaned up" by filtering the
+		// nulls out: an unlocatable region would then leave `regions` empty and the verdict would
+		// flip from `Guarded` to `Absent` — from refusing to splicing a second `using`.
+		final regions: Array<Null<Span>> = [for (g in header.guardedUsings) if (bindsModule(g.decl.name, module)) g.region];
+		if (regions.length == 0) return UsingScope.Absent;
+		for (offset in offsets) if (!regions.exists(r -> r != null && offset >= r.from && offset < r.to)) return UsingScope.Guarded;
+		return UsingScope.InScope;
+	}
+
+	/**
+	 * Append the `using <module>;` insert `edits` need — nothing when the module is already in
+	 * scope at every edit — and answer whether the file can carry the rewrite at all.
+	 *
+	 * `false` is `usingScopeAt`'s `Guarded` verdict passed on: the caller must DROP its whole edit
+	 * set, because the rewrites it built resolve through a `using` that only some builds declare.
+	 * `violations` are the findings that set is built from, and every one of them is annotated with the refusal: a `fix` that
+	 * returns nothing and says nothing reads to the ledger as a rule that withheld an edit without a reason. The rules that
+	 * insert one `using` per file share this seam rather than each spelling the same branches; `prefer-static-extension`
+	 * decides per SITE instead (one file can hold a covered call and an uncovered one) and calls `usingScopeAt` directly.
+	 *
+	 * The offsets are every edit's start, INCLUDING rewrites that would not have needed the module
+	 * — a caller that mixes qualified and extension forms is refused a little more often than it
+	 * strictly must be, which is the direction that cannot emit a call binding nothing.
+	 */
+	public static function appendUsingInsert(
+		header: UsingHeader, module: String, edits: Array<{ span: Span, text: String }>, violations: Array<Violation>
+	): Bool {
+		final scope: UsingScope = usingScopeAt(header, module, [for (e in edits) e.span.from]);
+		if (scope == UsingScope.Guarded) {
+			for (violation in violations) violation.declineReason = guardedUsingDecline(module, FILE_WIDE_SUBJECT);
+			return false;
 		}
-		return false;
+		if (scope == UsingScope.Absent) {
+			final insert: { span: Span, text: String } = usingInsertEdit(header, module);
+			if (!CanonicalEdit.editsOverlapAny([insert], edits)) edits.push(insert);
+		}
+		return true;
+	}
+
+	/**
+	 * Why a rewrite is refused when the file's only `using <module>;` sits inside a `#if` region that
+	 * leaves one of its call sites out — one sentence, in one place, so every rule sharing the gate
+	 * reports the same fact and a reader who has met it once recognises it from any of them.
+	 */
+	public static function guardedUsingDecline(module: String, subject: String): String {
+		return 'the file declares `using $module` only inside a `#if` region $subject sits outside of, so the extension call'
+			+ ' would not resolve in the builds that region is compiled out of, and a second unguarded `using` would change'
+			+ ' what the region\'s own calls resolve to';
 	}
 
 	/**
@@ -204,6 +296,16 @@ final class UsingScan {
 		return out;
 	}
 
+	/**
+	 * Whether a `using` declaration spelling `name` brings `module` into scope: an exact match, or —
+	 * for a SIMPLE `module` — a qualified path ending in it, since both reach the same module. The
+	 * one place that comparison is made, so the presence test and the scope test cannot drift apart
+	 * on which declaration counts.
+	 */
+	private static function bindsModule(name: Null<String>, module: String): Bool {
+		return name != null && (name == module || (module.indexOf('.') == -1 && name.endsWith('.$module')));
+	}
+
 	/** The unmemoised body of `conflictingUsing` — one pass over the file's other `using` declarations. */
 	private static function conflictScan(
 		usings: Array<String>, module: String, method: String, plugin: GrammarPlugin, symbols: () -> Null<SymbolIndex>
@@ -296,4 +398,31 @@ final class UsingScan {
 typedef UsingHeader = {
 	final root: QueryNode;
 	final guard: Null<QueryNode>;
+
+	/**
+	 * Every `using` the module declares inside a conditional-compilation region, each paired with
+	 * the span of the innermost region holding it — what `usingScopeAt` tests a rewrite site
+	 * against. A `using` DIRECTLY under an accepted whole-body `guard` appears here too and decides nothing: that
+	 * region covers every type the module declares, and `headerDecls` merges its children, so `hasUsingModule`
+	 * has already answered. One nested a level deeper inside that guard is NOT in `headerDecls`, which reads one
+	 * level only, so its entry here is what answers — correctly, since the inner region is where it binds.
+	 */
+	final guardedUsings: Array<GuardedImport>;
+}
+
+/**
+ * Whether a module's `using` is in scope where a rewrite is about to spell an extension call —
+ * `UsingScan.usingScopeAt`'s verdict, and the three answers an insert has to tell apart.
+ */
+enum abstract UsingScope(Int) {
+
+	/** In scope at every site: an unguarded `using`, or a guarded one whose region covers them all. Nothing to insert. */
+	final InScope = 0;
+
+	/** Declared ONLY inside a `#if` region that leaves some site out — neither an insert nor the rewrite is safe. */
+	final Guarded = 1;
+
+	/** Not declared at all, so an insert is the whole job. */
+	final Absent = 2;
+
 }
