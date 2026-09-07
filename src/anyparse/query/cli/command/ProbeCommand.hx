@@ -10,7 +10,9 @@ using StringTools;
 /**
  * `apq probe` — aST/writer probe with inline source (no file IO).
  *
- * A READ-ONLY command: it reports and never writes.
+ * It reports and never rewrites a source file. It does WRITE one: the probe
+ * source is staged to a scratch slot so the next command can chain onto it —
+ * see `stageProbePath` for where that lands and why it is per process.
  */
 @:nullSafety(Strict)
 final class ProbeCommand implements CliCommand {
@@ -200,8 +202,11 @@ final class ProbeCommand implements CliCommand {
 	private static function stageProbeSource(codeArg: String): Null<String> {
 		#if (sys || nodejs)
 		final source: String = codeArg == '-' ? CliIo.readStdin() : codeArg;
-		final path: String = stageProbePath();
 		try {
+			// Inside the `try` on purpose: resolving the path reads the
+			// environment and the OS temp root, and a throw there would
+			// otherwise fail a probe that staging is only decorating.
+			final path: String = stageProbePath();
 			if (isStageTargetSafe(path)) {
 				sys.io.File.saveContent(path, source);
 				CliIo.stderr('apq probe: staged source -> $path (use it with `apq strip $path …` or `apq recon --probe $path`).\n');
@@ -283,6 +288,10 @@ final class ProbeCommand implements CliCommand {
 	 * the next `apq probe` overwrites whatever it points at. An absent target
 	 * is fine — that is the ordinary first probe.
 	 *
+	 * A HARD link is not covered and cannot be: it lstats as the regular file
+	 * it is. Reachable only by pointing `APQ_PROBE_PATH` into a directory
+	 * someone else can write.
+	 *
 	 * Check-then-write, so not atomic: a link planted in the window between
 	 * the two still wins. What closes the window for good is the pid in the
 	 * name — an attacker has to guess the slot before the process that owns
@@ -296,8 +305,17 @@ final class ProbeCommand implements CliCommand {
 		final stat: Null<js.node.fs.Stats> = try js.node.Fs.lstatSync(path) catch (_: Exception) null;
 		return stat == null || stat.isFile();
 		#else
-		// No portable `lstat`; a directory is the one non-regular kind this
-		// branch can name, and it has no CLI runner anyway.
+		// `sys.FileSystem` has no `lstat` and `exists` FOLLOWS the link, so
+		// this branch catches a directory and nothing else — a symlink to a
+		// regular file, and a dangling one, both read as writable here. It is
+		// weaker than the contract on purpose rather than by oversight, and
+		// `docs/cli-query-tool.md` scopes the refusal to the node runner
+		// because of it. Nothing in this repo compiles this branch: the
+		// `--jvm` portability probe reaches `anyparse.query` and
+		// `anyparse.query.format.json` only (measured — 0 of 3346 jar entries
+		// under `anyparse/query/cli`), and every hxml that DOES reach this
+		// file passes `-lib hxnodejs`. It exists for the hxcpp target the
+		// project has not built yet.
 		return !sys.FileSystem.exists(path) || !sys.FileSystem.isDirectory(path);
 		#end
 	}

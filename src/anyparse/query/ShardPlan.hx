@@ -84,15 +84,15 @@ final class ShardPlan {
 	 * nothing into this group; the list has NOT been re-derived against that
 	 * narrower reason, which is the whole point of the recipe below.
 	 *
-	 * The list is DERIVED, not remembered. Every class holding an exact
-	 * `probe` string leaf calls the subcommand that writes the staging slot:
-	 * `hxq lit 'probe' test/ --kind Literal`, then READ each hit — one of
-	 * them is a fixture method named `probe`, not a subcommand. `hxq lit
-	 * '.last-sweep.json' test/` finds the corpus baseline's users. Re-derive
-	 * when adding a test that stages a probe or touches that baseline: a
-	 * writer left outside the group does not fail, it races a byte-for-byte
-	 * read-back in a sub-millisecond window and surfaces later as an
-	 * unreproducible flake.
+	 * The list is DERIVED, not remembered. `hxq lit '.last-sweep.json' test/`
+	 * finds the corpus baseline's users — the one shared constant left.
+	 * Re-derive when adding a test that touches that baseline: a writer left
+	 * outside the group does not fail, it races a byte-for-byte read-back in a
+	 * sub-millisecond window and surfaces later as an unreproducible flake.
+	 * The recipe had a second half until S170 — `hxq lit 'probe' test/ --kind
+	 * Literal`, every class that stages a probe — and following it now
+	 * re-derives the old, too-wide group: probe staging is per process and
+	 * shares no path with anything.
 	 *
 	 * Everything else uses unique per-test temp directories and random
 	 * compiler-server ports, so it parallelises freely.

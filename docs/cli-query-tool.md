@@ -483,8 +483,8 @@ in this order:
 
 1. `$APQ_PROBE_PATH`, when set and non-empty — the slot outright.
 2. otherwise `<temp root>/anyparse-last-probe.<pid>.hx`, where the temp root is
-   the OS one (`$TMPDIR` when the caller set one, exactly as `os.tmpdir()`
-   reads it).
+   the OS one — on the node runner literally `os.tmpdir()`, so `$TMPDIR` when
+   the caller set one.
 
 Both halves are load-bearing, measured. The temp root answers the caller's own
 isolation, so a process that claimed a private root — the suite does, via
@@ -504,6 +504,18 @@ each: A read foreign bytes 4 times of 12 and B 8 of 12, and one read came back
 interleaved). The same probe after the fix reads 0 of 12 in both directions and
 12 of 12 byte-exact.
 
+`$APQ_PROBE_PATH` is an escape hatch, not an isolation mechanism: two workers
+exporting the SAME value re-create this defect exactly. Give each one its own
+value, or leave it unset and let the pid do the work.
+
+Nothing reaps the slot. `tools/tmp-lifecycle.sh` sweeps claimed
+`<prefix>.XXXXXX` DIRECTORIES, and this is a bare file, so a slot survives its
+process. Inside the suite that costs nothing — the run's private
+`apq-suite.XXXXXX` root is the temp root, and the slot goes with it — but
+interactive use leaves one small file per `probe` invocation in `$TMPDIR`,
+where the old design left exactly one per machine. Measured on a session that
+ran ~40 probes: 3 files, 12 KB, the rest having landed inside reaped roots.
+
 Single-slot is unchanged where it was ever meant: WITHIN one process a chained
 `recon --probe` still targets the LAST probe, not a history — the second probe
 of a process overwrites the first one's slot.
@@ -512,7 +524,11 @@ Staging never fails a probe. A write error (read-only temp root, disk full,
 permission) skips the nudge and the probe still answers. So does a REFUSAL: a
 target that exists and is not a regular file is not written through, because
 `File.saveContent` FOLLOWS a symlink and a slot in a shared directory would
-otherwise be a write-anywhere primitive with this process's rights.
+otherwise be a write-anywhere primitive with this process's rights. That
+refusal is the NODE runner's (`lstat`); the `sys` fallback has no portable
+`lstat` and catches a directory only — no build in this repo compiles it, and
+`ProbeCommand.isStageTargetSafe` says so at the branch. A HARD link is outside
+either check by construction: it *is* the regular file.
 
 ```
 apq probe: not staged — "…/planted.hx" exists and is not a regular file (symlink, directory or device); set APQ_PROBE_PATH to stage somewhere else.

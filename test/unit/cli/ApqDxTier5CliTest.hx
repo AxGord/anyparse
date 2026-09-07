@@ -246,6 +246,11 @@ class ApqDxTier5CliTest extends Test {
 	 * The assertion is on the path the probe RESOLVED and announced, never on a
 	 * constant: the nudge is the only thing a caller can chain from.
 	 *
+	 * This half tests the TEMP ROOT and nothing else: the two children get two
+	 * roots, so their slots differ by the root alone and a pid-less name would
+	 * still pass here. The pid half is its sibling below, which hands both
+	 * children ONE root.
+	 *
 	 * `guard`, not `control`, and the reason is worth knowing before you write
 	 * another child-process fixture: NO source cut can kill this one.
 	 * `mutation-check.sh` builds the arm's worktree with `worker-build.sh <dir>
@@ -258,11 +263,8 @@ class ApqDxTier5CliTest extends Test {
 	@:pin('guard')
 	public function testTwoProbeProcessesGetSeparateScratchSlots(): Void {
 		#if nodejs
-		final engine: String = 'bin/apq.js';
-		if (!FileSystem.exists(engine)) {
-			Assert.pass('bin/apq.js is not built — a per-process slot needs the CLI as a process');
-			return;
-		}
+		final engine: Null<String> = engineOrSkip();
+		if (engine == null) return;
 		final rootA: String = CliFixture.writeDir('probe_slot_a', []);
 		final rootB: String = CliFixture.writeDir('probe_slot_b', []);
 		final sourceA: String = 'class AlphaOwnedByWorkerA { var alpha:Int = 1; }';
@@ -289,11 +291,8 @@ class ApqDxTier5CliTest extends Test {
 	@:pin('guard')
 	public function testTwoProbeProcessesUnderOneTempRootStillGetSeparateSlots(): Void {
 		#if nodejs
-		final engine: String = 'bin/apq.js';
-		if (!FileSystem.exists(engine)) {
-			Assert.pass('bin/apq.js is not built — a per-process slot needs the CLI as a process');
-			return;
-		}
+		final engine: Null<String> = engineOrSkip();
+		if (engine == null) return;
 		final shared: String = CliFixture.writeDir('probe_slot_shared', []);
 		final sourceA: String = 'class AlphaSharedRoot { var alpha:Int = 1; }';
 		final sourceB: String = 'class BetaSharedRoot { var beta:Bool; }';
@@ -313,23 +312,25 @@ class ApqDxTier5CliTest extends Test {
 	 * directory is a write-anywhere primitive with this process's rights. Staging
 	 * refuses a target that is not a regular file and says so; the probe itself
 	 * still answers.
+	 *
+	 * Its in-process sibling covers the same refusal and they are not redundant:
+	 * only a CHILD can be read for the stderr WORDING (`Cli.run` writes the real
+	 * fd 2), and only the in-process one can also assert the positive arm — that
+	 * `$APQ_PROBE_PATH` names the slot when the target is free.
 	 */
 	@:pin('guard')
 	public function testProbeRefusesToStageOntoASymlink(): Void {
 		#if nodejs
-		final engine: String = 'bin/apq.js';
-		if (!FileSystem.exists(engine)) {
-			Assert.pass('bin/apq.js is not built — the refusal needs the CLI as a process');
-			return;
-		}
+		final engine: Null<String> = engineOrSkip();
+		if (engine == null) return;
 		final root: String = CliFixture.writeDir('probe_slot_symlink', []);
 		final victim: String = '$root/victim.txt';
-		File.saveContent(victim, 'ORIGINAL VICTIM CONTENT\n');
+		File.saveContent(victim, VICTIM_CONTENT);
 		final planted: String = '$root/planted-slot.hx';
-		js.node.Fs.symlinkSync(victim, planted);
+		symlink(victim, planted);
 		final result: js.node.ChildProcess.ChildProcessSpawnSyncResult = spawnProbe(engine, root, 'class Attacker {}', planted);
 		Assert.equals(0, result.status, 'the probe still answers even when staging is refused');
-		Assert.equals('ORIGINAL VICTIM CONTENT\n', File.getContent(victim), 'staging must not write through a symlink');
+		Assert.equals(VICTIM_CONTENT, File.getContent(victim), 'staging must not write through a symlink');
 		final err: String = result.stderr == null ? '' : Std.string(result.stderr);
 		Assert.isTrue(err.indexOf('not a regular file') != -1, 'the refusal must say why, got: $err');
 		CliFixture.removeDir(root);
@@ -397,6 +398,19 @@ class ApqDxTier5CliTest extends Test {
 	}
 
 	#if nodejs
+	/**
+	 * `bin/apq.js`, or null after passing. A child-process fixture needs the CLI
+	 * as a process, and `haxe test-js.hxml` alone does not build one — an arm's
+	 * worktree in particular never has it, which is why these fixtures are
+	 * `guard` rather than `control`.
+	 */
+	private function engineOrSkip(): Null<String> {
+		final engine: String = 'bin/apq.js';
+		if (FileSystem.exists(engine)) return engine;
+		Assert.pass('bin/apq.js is not built — a child-process fixture needs the CLI as a process');
+		return null;
+	}
+
 	/** Run `probe` as a child process under `tmpRoot` and return the slot path it announced. */
 	private function probeChildSlot(engine: String, tmpRoot: String, source: String): String {
 		final result: js.node.ChildProcess.ChildProcessSpawnSyncResult = spawnProbe(engine, tmpRoot, source, null);
@@ -421,7 +435,13 @@ class ApqDxTier5CliTest extends Test {
 		for (key => value in Sys.environment()) Reflect.setField(env, key, value);
 		Reflect.setField(env, 'TMPDIR', tmpRoot);
 		Reflect.setField(env, 'TEMP', tmpRoot);
-		if (slot != null) Reflect.setField(env, 'APQ_PROBE_PATH', slot);
+		// Cleared, not merely left unset: an APQ_PROBE_PATH inherited from the
+		// suite process would hand both children ONE slot and turn the
+		// shared-root test red for a reason that has nothing to do with the pid.
+		if (slot != null)
+			Reflect.setField(env, PROBE_PATH_ENV, slot);
+		else
+			Reflect.deleteField(env, PROBE_PATH_ENV);
 		return js.node.ChildProcess.spawnSync('node', [
 			engine,
 			'probe',
