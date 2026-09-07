@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.Violation;
 import anyparse.check.UsingScan.UsingHeader;
+import anyparse.check.UsingScan.UsingScope;
 import anyparse.query.BoolExprShape;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
@@ -128,8 +129,13 @@ import anyparse.runtime.Span;
  * - An `import.hx`-provided `using` is invisible (anyparse ignores `import.hx` repo-wide):
  *   worst case an inserted `using` that was already implied, or a conservative miss of a
  *   conflicting module. Neither breaks a build.
- * - `#if` bodies project as one opaque node, so a call inside conditional compilation is never
- *   found — the standard walker limitation. A `#if`-SPLIT type is a subtler one: the index
+ * - A call inside a `#if … #end` region IS found: the grammar projects a balanced region as a
+ *   `Conditional` whose branches are flat children, and this walk descends into it like any other
+ *   node (measured, a `StringTools` call in a `#if (sys || nodejs)` statement region is reported).
+ *   Only a region the parser captured RAW has no interior node to find, which is `CondRegionScan`
+ *   territory rather than this rule. What conditional compilation does cost here is the INSERT: a
+ *   `using` under a region that does not cover the call bytes leaves the site report-only
+ *   (`UsingScan.usingScopeAt`). A `#if`-SPLIT type is a subtler one: the index
  *   keeps the first branch's declaration of a name, so the shadow gate reads that branch's
  *   member list only. The alias arm refuses such a decl outright; a split CLASS could still
  *   hide a member the other branch declares.
@@ -244,22 +250,31 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		for (candidate in candidates(root, source, file, s, options, plugin, () -> resolution))
 			byKey['${candidate.callSpan.from}:${candidate.callSpan.to}'] = candidate;
 		final edits: Array<{ span: Span, text: String }> = [];
-		final rewritten: Array<String> = [];
+		final needsUsing: Array<String> = [];
 		for (violation in violations) {
 			final span: Null<Span> = violation.span;
 			if (span == null) continue;
 			final candidate: Null<Candidate> = byKey['${span.from}:${span.to}'];
 			if (candidate == null || candidate.verdict != Verdict.Fixable) continue;
 			// A rewrite without the module in scope does not compile, so a file that lacks the
-			// `using` and forbids inserting one is refused before any edit is built.
+			// `using` and forbids inserting one is refused before any edit is built — and so is one
+			// whose only `using` is guarded by a `#if` region this call sits outside of, where neither
+			// spelling works: the extension call binds nothing in the builds that region is compiled
+			// out of, and a second, unguarded declaration would re-target every extension call the
+			// region's own code makes.
 			//
-			// These three gates are PER-SITE and they fire on a finding `run` already judged `Fixable`,
+			// These four gates are PER-SITE and they fire on a finding `run` already judged `Fixable`,
 			// so `declineReasonFor` wrote nothing on it — the reason has to be written here, at the gate
 			// that decided, on the caller's own violation objects (`Cli` hands `fix` the array `run`
 			// built, which is what makes a note here reach the reporter; `ImportBlockOrder.noteDecline`
 			// is the same mechanism). Left unset, the ledger reported these as a rule that "withheld it,
 			// without saying why" — the defect this rule's `run` side no longer has.
-			if (!options.addUsing && !UsingScan.hasUsingModule(header, candidate.module)) {
+			final scope: UsingScope = UsingScan.usingScopeAt(header, candidate.module, [span.from]);
+			if (scope == UsingScope.Guarded) {
+				violation.declineReason = UsingScan.guardedUsingDecline(candidate.module, 'this call');
+				continue;
+			}
+			if (!options.addUsing && scope != UsingScope.InScope) {
 				violation.declineReason = 'the file has no `using ${candidate.module}` and this project sets addUsing:false, so the'
 					+ ' extension call would not resolve';
 				continue;
@@ -277,9 +292,9 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 			// next fixpoint pass, and the pass that reports it is the one where it gets no edit.
 			if (CanonicalEdit.editsOverlapAny(pair, edits)) continue;
 			for (edit in pair) edits.push(edit);
-			if (!rewritten.contains(candidate.module)) rewritten.push(candidate.module);
+			if (scope == UsingScope.Absent && !needsUsing.contains(candidate.module)) needsUsing.push(candidate.module);
 		}
-		appendUsingInserts(header, rewritten, edits);
+		appendUsingInserts(header, needsUsing, edits);
 		return edits;
 	}
 
@@ -588,7 +603,8 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 	}
 
 	/**
-	 * Append ONE insert edit carrying a `using` line for each rewritten module the file lacks.
+	 * Append ONE insert edit carrying a `using` line for each module in `modules` — the ones the per-site scope
+	 * test found the file declares nowhere in scope, so the caller has already decided every entry needs one.
 	 * Every insert anchors at the same zero-width position, so they are merged into a single
 	 * edit rather than pushed as several — two zero-width edits at one offset would apply in an
 	 * unspecified order.
@@ -598,7 +614,7 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 	): Void {
 		var anchor: Null<Span> = null;
 		var text: String = '';
-		for (module in modules) if (!UsingScan.hasUsingModule(header, module)) {
+		for (module in modules) {
 			final insert: { span: Span, text: String } = UsingScan.usingInsertEdit(header, module);
 			anchor = insert.span;
 			text += insert.text;

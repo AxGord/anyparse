@@ -178,6 +178,28 @@ class PreferFindCheckTest extends Test {
 		Assert.equals(out.indexOf('using Lambda;'), out.lastIndexOf('using Lambda;'));
 	}
 
+	/**
+	 * The SECOND instance of the guarded-`using` shape, on a rule that reaches the same seam by a
+	 * different route: `prefer-find` decides the insert once for the whole file, where
+	 * `prefer-static-extension` decides it per site. Both go through
+	 * `UsingScan.appendUsingInsert`, and a fixture on only one of them would pass on a fix that
+	 * repaired that rule's own call site rather than the shared gate.
+	 *
+	 * `using Lambda;` sits inside a `#if` region the loop is outside of, so the rewritten
+	 * `xs.find(...)` would bind nothing in the builds the region is compiled out of, while a second
+	 * unguarded `using Lambda;` would change what the region's own calls resolve to. The whole edit
+	 * set goes rather than either.
+	 */
+	@:pin('control') @:killer('M-GUARDED-USING-ABSENT')
+	public function testFixRefusedWhenTheOnlyUsingIsGuarded(): Void {
+		final source: String = 'package p;\n\n#if FLAG\nusing Lambda;\n#end\n\nclass C {\n'
+			+ '\tfunction f(xs:Array<Int>):Null<Int> {\n\t\tfor (x in xs) if (x > 2) return x;\n\t\treturn null;\n\t}\n}';
+		final out: String = fixResult(source);
+		Assert.isTrue(out.indexOf('.find(') == -1, out);
+		Assert.isTrue(out.indexOf('for (') != -1, out);
+		Assert.equals(out.indexOf('using Lambda;'), out.lastIndexOf('using Lambda;'));
+	}
+
 	public function testFixEffectfulCondNotRewritten(): Void {
 		final out: String = fixResult(file('for (x in xs) if (bump(x) > 2) return x;\n\t\treturn null;', 'Null<Int>', false));
 		Assert.isTrue(out.indexOf('.find(') == -1);

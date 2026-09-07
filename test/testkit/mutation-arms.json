@@ -2007,6 +2007,22 @@
 			"method": "ownStarHasFlag",
 			"force": "false",
 			"note": "no direct Star child reads as carrying its `@:fmt` flag, so `refuseGlueOnControlFlowRoot` never reaches the case-list pre-pass and a sibling case unit glues to its own label beside a control-flow body"
+		},
+		{
+			"name": "M-GUARDED-USING-ABSENT",
+			"type": "anyparse.check.UsingScan",
+			"method": "usingScopeAt",
+			"find": "if (regions.length == 0) return UsingScope.Absent;",
+			"replace": "return UsingScope.Absent;",
+			"note": "a `using` a `#if` region guards is invisible again, so every rule sharing the insert seam splices a SECOND, unguarded one beside it"
+		},
+		{
+			"name": "M-COND-BRANCH-SPAN-SHARED",
+			"type": "anyparse.query.ModuleScan",
+			"method": "guardedImportScopes",
+			"find": "collectGuardedImports(root, false, null, r -> singleBranchRegion(r, source, shape, regions) ? r.span : null, out);",
+			"replace": "collectGuardedImports(root, false, null, r -> r.span, out);",
+			"note": "every branch of one region shares its span, so a `using` in the `#if` arm reads as covering a call in the `#else` arm and the rewrite lands with no import"
 		}
 	]
 }

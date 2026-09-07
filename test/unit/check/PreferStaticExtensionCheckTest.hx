@@ -86,6 +86,64 @@ class PreferStaticExtensionCheckTest extends Test {
 		Assert.isTrue(out.indexOf('w.deco(1);') != -1, out);
 	}
 
+	/**
+	 * A `#if` region that guards the IMPORT RUN while the code sits OUTSIDE it — the shape
+	 * `prefer-static-extension --fix` corrupted on `test/unit/cli/CliFixture.hx`, whose imports and
+	 * `using StringTools;` live under `#if (sys || nodejs)` and whose class does not.
+	 *
+	 * The presence test saw only the top level, read the file as declaring no `using`, and spliced a
+	 * SECOND, unguarded one above the `#if` — a duplicate under the flag, and a `using` the file
+	 * never had in the builds without it, where it re-targets every same-named extension call. No
+	 * check reports the pair: `duplicate-import` compares top-level statements, and the writer
+	 * re-emits both, so `fmt --list` stays clean.
+	 *
+	 * The verdict is a REFUSAL rather than the other reading, because neither spelling works here:
+	 * the guarded `using` is not in scope for this call in the builds the region is compiled out of,
+	 * so counting it would leave the rewritten call binding nothing.
+	 */
+	@:pin('control') @:killer('M-GUARDED-USING-ABSENT')
+	public function testGuardedImportRunGetsNoSecondUsing(): Void {
+		final files: Array<{ file: String, source: String }> = guardedImportRunFiles();
+		Assert.equals(1, violationsOf(files).length);
+		Assert.equals(0, editsOf(files).length);
+	}
+
+	/**
+	 * The refusal says which region decided it — a `fix` that returns nothing and
+	 * says nothing reads to the ledger as a rule withholding an edit for no reason.
+	 */
+	@:pin('control') @:killer('M-GUARDED-USING-ABSENT')
+	public function testGuardedImportRunRefusalNamesTheRegion(): Void {
+		final violations: Array<Violation> = fixRunOf(guardedImportRunFiles()).violations;
+		Assert.equals(1, violations.length);
+		final reason: Null<String> = violations[0].declineReason;
+		Assert.notNull(reason);
+		Assert.isTrue((reason: String).indexOf('#if') != -1, reason);
+		Assert.isTrue((reason: String).indexOf('using Ext') != -1, reason);
+		// Pins the per-SITE subject: this rule reaches the shared sentence through
+		// `guardedUsingDecline(module, 'this call')`, and a hand-spelled copy would drift silently.
+		Assert.isTrue((reason: String).indexOf('this call sits outside of') != -1, reason);
+	}
+
+	/**
+	 * A `using` in ANOTHER BRANCH of the same region does not cover the call — the sibling of the
+	 * fixture above, and the one that makes span containment sound rather than merely narrower.
+	 *
+	 * The grammar projects `#if a … #else … #end` as ONE node whose span covers every branch, with
+	 * all branches' declarations as flat siblings. So containment alone answers "covered" for a
+	 * `using` and a call that are in MUTUALLY EXCLUSIVE builds, and the rewrite lands with no
+	 * insert: in the build where the other arm is live the call binds nothing. That is strictly
+	 * worse than the duplicate `using` this whole seam exists to stop, which is why
+	 * `guardedImportScopes` runs the region through `singleBranchRegion` and reports a
+	 * multi-branch one as covering nothing.
+	 */
+	@:pin('control') @:killer('M-COND-BRANCH-SPAN-SHARED')
+	public function testUsingInAnotherBranchDoesNotCoverTheCall(): Void {
+		final files: Array<{ file: String, source: String }> = branchedUsingFiles();
+		Assert.equals(1, violationsOf(files).length);
+		Assert.equals(0, editsOf(files).length);
+	}
+
 	public function testAddUsingFalseReportsButDoesNotFix(): Void {
 		final config: String = '{"rules": {"prefer-static-extension": {"types": ["Ext"], "addUsing": false}}}';
 		Assert.equals(1, violationsOf(importingFiles(), config).length);
@@ -891,6 +949,40 @@ class PreferStaticExtensionCheckTest extends Test {
 		];
 	}
 
+	/**
+	 * The `#if` region guards the IMPORT RUN only — the class, and the call the rewrite touches, sit
+	 * OUTSIDE it. `conditionalFiles`'s region guards the whole body instead, which is the shape that
+	 * already worked; this one is its counterexample.
+	 */
+	private function guardedImportRunFiles(): Array<{ file: String, source: String }> {
+		return [
+			{
+				file: 'C.hx',
+				source: 'package top;\n\n#if FLAG\nimport sub.Widget;\n\nusing Ext;\n#end\n\nclass C {\n'
+					+ '\tfunction f(w:Widget):Void {\n\t\tExt.deco(w, 1);\n\t}\n}\n'
+			},
+			{ file: 'Ext.hx', source: EXT_SOURCE },
+			{ file: 'sub/Widget.hx', source: 'package sub;\n\n$WIDGET_SOURCE' }
+		];
+	}
+
+	/**
+	 * A MULTI-BRANCH region: `using Ext;` in the `#if` arm, the call in the `#else` arm. The grammar
+	 * gives both arms ONE span, so span containment alone reads the `using` as covering the call —
+	 * and the build that compiles the `#else` arm has no `using` at all.
+	 */
+	private function branchedUsingFiles(): Array<{ file: String, source: String }> {
+		return [
+			{
+				file: 'C.hx',
+				source: 'package top;\n\n#if FLAG\nimport sub.Widget;\n\nusing Ext;\n\nclass D {\n\tfunction g():Void {}\n}\n'
+					+ '#else\nimport sub.Widget;\n\nclass C {\n\tfunction f(w:Widget):Void {\n\t\tExt.deco(w, 1);\n\t}\n}\n#end\n'
+			},
+			{ file: 'Ext.hx', source: EXT_SOURCE },
+			{ file: 'sub/Widget.hx', source: 'package sub;\n\n$WIDGET_SOURCE' }
+		];
+	}
+
 	/** The check's findings over `files`, with `config` (default: `Ext` as the single module) injected. */
 	private function violationsOf(files: Array<{ file: String, source: String }>, ?config: String): Array<Violation> {
 		final check: PreferStaticExtension = new PreferStaticExtension();
@@ -899,14 +991,25 @@ class PreferStaticExtensionCheckTest extends Test {
 		return check.run(files, new HaxeQueryPlugin());
 	}
 
-	/** The fix edits for `files[0]`'s own findings, resolved through a `SymbolIndex` over the whole set. */
-	private function editsOf(files: Array<{ file: String, source: String }>, ?config: String): Array<{ span: Span, text: String }> {
+	/**
+	 * One `run` + `fix` pass over `files[0]`, returning BOTH halves: the edits, and the violation
+	 * objects `fix` was handed — which is where a per-site refusal writes its `declineReason`, so a
+	 * fixture asserting the reason has to read the same array the edits came from.
+	 */
+	private function fixRunOf(
+		files: Array<{ file: String, source: String }>, ?config: String
+	): { edits: Array<{ span: Span, text: String }>, violations: Array<Violation> } {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: PreferStaticExtension = new PreferStaticExtension();
 		final json: String = config ?? EXT_CONFIG;
 		check.setConfigResolver(_ -> LintConfig.parse(json));
 		final own: Array<Violation> = check.run(files, plugin).filter(v -> v.file == files[0].file);
-		return check.fix(files[0].source, own, plugin, SymbolIndex.build(files, plugin));
+		return { edits: check.fix(files[0].source, own, plugin, SymbolIndex.build(files, plugin)), violations: own };
+	}
+
+	/** The fix edits for `files[0]`'s own findings, resolved through a `SymbolIndex` over the whole set. */
+	private function editsOf(files: Array<{ file: String, source: String }>, ?config: String): Array<{ span: Span, text: String }> {
+		return fixRunOf(files, config).edits;
 	}
 
 	/**

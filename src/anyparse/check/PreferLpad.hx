@@ -3,7 +3,6 @@ package anyparse.check;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.check.UsingScan.UsingHeader;
-import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
@@ -196,14 +195,17 @@ final class PreferLpad implements Check implements DefaultOff {
 		if (edits.length == 0) return edits;
 		final header: UsingHeader = UsingScan.headerOf(tree, source, plugin);
 		final symbols: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
-		// A second `using` supplying `lpad` outranks the inserted one, so the rewritten calls would
-		// resolve there instead -- refuse the whole file rather than retarget them silently.
-		if (UsingScan.conflictingUsing(UsingScan.usingModules(header), STRING_TOOLS_MODULE, LPAD_METHOD, plugin, () -> symbols, []))
-			return [];
-		if (UsingScan.hasUsingModule(header, STRING_TOOLS_MODULE)) return edits;
-		final usingEdit: { span: Span, text: String } = UsingScan.usingInsertEdit(header, STRING_TOOLS_MODULE);
-		if (!CanonicalEdit.editsOverlapAny([usingEdit], edits)) edits.push(usingEdit);
-		return edits;
+		// Two ways the file refuses the rewrite outright, both answering "the calls would not resolve
+		// the way this file's own declarations say they should". A second `using` supplying `lpad`
+		// outranks the inserted one, so the rewritten calls would resolve there instead; and
+		// `appendUsingInsert` answering false means the only `using StringTools;` sits inside a `#if`
+		// region that leaves a rewritten call out, where neither the extension call nor a second,
+		// unguarded declaration is safe. Either way the whole edit set goes rather than retarget a
+		// call silently.
+		final resolves: Bool = !UsingScan.conflictingUsing(
+				UsingScan.usingModules(header), STRING_TOOLS_MODULE, LPAD_METHOD, plugin, () -> symbols, []
+			) && UsingScan.appendUsingInsert(header, STRING_TOOLS_MODULE, edits, violations);
+		return resolves ? edits : [];
 	}
 
 	/** Bundle the kinds this check reads, or null when one is unset (the check is then a no-op). */

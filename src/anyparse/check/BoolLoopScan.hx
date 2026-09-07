@@ -5,6 +5,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.LoopScan.LoopSeams;
 import anyparse.check.PurityScan.PurityCtx;
 import anyparse.check.UsingScan.UsingHeader;
+import anyparse.check.UsingScan.UsingScope;
 import anyparse.query.BinderScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.CtorFieldFold;
@@ -278,7 +279,7 @@ final class BoolLoopScan {
 			rewrites.push(edit);
 			extensionForm.push(!cand.head.qualified);
 		}
-		return rewrites.length == 0 ? [] : withUsingInsert(rewrites, extensionForm, header);
+		return rewrites.length == 0 ? [] : withUsingInsert(rewrites, extensionForm, header, violations);
 	}
 
 	/**
@@ -294,10 +295,24 @@ final class BoolLoopScan {
 	 * down too, and a file whose every claimed site is shadowed gets the calls and no import at all.
 	 */
 	private static function withUsingInsert(
-		rewrites: Array<{ span: Span, text: String }>, extensionForm: Array<Bool>, header: UsingHeader
+		rewrites: Array<{ span: Span, text: String }>, extensionForm: Array<Bool>, header: UsingHeader, violations: Array<Violation>
 	): Array<GroupedEdit> {
 		final flat: Array<GroupedEdit> = [for (e in rewrites) { span: e.span, text: e.text, group: null }];
-		if (!extensionForm.contains(true) || UsingScan.hasUsingModule(header, LAMBDA_MODULE)) return flat;
+		if (!extensionForm.contains(true)) return flat;
+		// Only the EXTENSION-form sites depend on the module, so only their offsets decide: a
+		// qualified rewrite outside the guard is no reason to refuse. `Guarded` is a refusal of the
+		// whole file — the file declares `using Lambda;` inside a `#if` region that leaves one of
+		// those calls out, and neither the extension call nor a second, unguarded declaration
+		// resolves the way the author's guard says it should.
+		final scope: UsingScope = UsingScan.usingScopeAt(
+			header, LAMBDA_MODULE, [for (i in 0...rewrites.length) if (extensionForm[i]) rewrites[i].span.from]
+		);
+		if (scope == UsingScope.Guarded) {
+			for (violation in violations)
+				violation.declineReason = UsingScan.guardedUsingDecline(LAMBDA_MODULE, UsingScan.FILE_WIDE_SUBJECT);
+			return [];
+		}
+		if (scope == UsingScope.InScope) return flat;
 		final usingEdit: { span: Span, text: String } = UsingScan.usingInsertEdit(header, LAMBDA_MODULE);
 		if (CanonicalEdit.editsOverlapAny([usingEdit], rewrites)) return flat;
 		final grouped: Array<GroupedEdit> = [
