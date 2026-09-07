@@ -352,6 +352,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.cli.AddressCliTest',
 		'unit.cli.ApqAstTypeRefsCliTest',
 		'unit.cli.ApqAtCliTest',
+		'unit.cli.ApqCondCliTest',
 		'unit.cli.ApqCountSummaryCliTest',
 		'unit.cli.ApqDxTier2CliTest',
 		'unit.cli.ApqDxTier3CliTest',
@@ -809,6 +810,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.CommentRewriteSliceTest',
 		'unit.query.CommentWeldDeletionSliceTest',
 		'unit.query.CondBranchSplitTest',
+		'unit.query.CondQueryTest',
 		'unit.query.CrossRenameMemberSliceTest',
 		'unit.query.CrossRenameSliceTest',
 		'unit.query.DeleteBlankLineSliceTest',
@@ -1405,6 +1407,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CommentWeldDeletionSliceTest#testHoistingInsideAReplacementIsStillRefused :: control :: M-COMMENT-WELD-BLIND',
 			'unit.query.CommentWeldDeletionSliceTest#testWeldingAcrossTheRepeatedSeparatorIsStillRefused :: control :: '
 			+ 'M-COMMENT-WELD-BLIND',
+			'unit.query.CondQueryTest#testABranchBodyNeverCarriesADirective :: control :: M-COND-BODY-SWALLOWS-DIRECTIVES',
+			'unit.query.CondQueryTest#testANestedRegionRunsInsideItsParentBranch :: control :: M-COND-INNERMOST-FRAME',
+			'unit.query.CondQueryTest#testARawExpressionSpliceIsFlaggedAndKeepsItsBytes :: control :: M-COND-RAW-NEVER-MARKED',
 			'unit.query.DocOwnerGuardSliceTest#testAppendBeforeAClosingBraceIsAccepted :: control :: M-DOCSPLIT-OWNER-ANY',
 			'unit.query.DocOwnerGuardSliceTest#testBannerCommentIsNotGuarded :: control :: M-DOCSPAN-BANNER-IS-DOC',
 			'unit.query.DocOwnerGuardSliceTest#testModifierInsertOnTheOwnersLineIsAccepted :: control :: M-DOCSPLIT-BREAKLESS-TOO',
@@ -1746,7 +1751,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-KWREF-TIGHT-LEAD-BLIND',
 			'M-CASE-CTRLFLOW-STAR-FLAG-BLIND',
 			'M-GUARDED-USING-ABSENT',
-			'M-COND-BRANCH-SPAN-SHARED'
+			'M-COND-BRANCH-SPAN-SHARED',
+			'M-COND-BODY-SWALLOWS-DIRECTIVES',
+			'M-COND-INNERMOST-FRAME',
+			'M-COND-RAW-NEVER-MARKED'
 		], [for (line in TestRegistry.arms()) line.split(' :: ')[0]], 'the arms every @:killer resolves into');
 	}
 

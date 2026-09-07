@@ -123,6 +123,28 @@ final class CondRegionLiveness {
 	}
 
 	/**
+	 * The liveness of one conditional branch whose condition evaluates to `value`, together with the
+	 * guard it leaves for its later siblings, given the guard its earlier siblings left.
+	 *
+	 * One step for all three keywords, which is why it is a function rather than three copies of the
+	 * same Kleene arithmetic: an opener is `branchStep(true, value)`, an `#elseif` is
+	 * `branchStep(guard, value)`, and a final `#else` is `branchStep(guard, true)` — it is taken
+	 * exactly when every earlier branch is refuted, and leaves nothing behind it. `apply` folds it
+	 * over the open-region stack for the coverage question above; `CondQuery` folds the same step over
+	 * one region's directives for the report `apq cond` prints, so the two cannot disagree about which
+	 * branch a define selects.
+	 */
+	public static function branchStep(guard: Null<Bool>, value: Null<Bool>): CondBranchStep {
+		return { live: andOf(guard, value), guard: andOf(guard, notOf(value)) };
+	}
+
+	/** One directive's condition evaluated, or unknown when it carries none the reader could delimit. */
+	public static function conditionValue(source: String, directive: CondDirective, defines: Array<String>): Null<Bool> {
+		final span: Null<Span> = directive.condition;
+		return span == null ? null : evaluate(source.substring(span.from, span.to), defines);
+	}
+
+	/**
 	 * The offsets that decide whether every byte of `spans` is live.
 	 *
 	 * Liveness is piecewise constant — only a directive can change it — so a span is fully
@@ -188,12 +210,12 @@ final class CondRegionLiveness {
 			return;
 		}
 		if (directive.keyword == shape.conditionalIfKeyword) {
-			final value: Null<Bool> = conditionValue(source, directive, defines);
+			final step: CondBranchStep = branchStep(true, conditionValue(source, directive, defines));
 			frames.push({
 				open: text,
 				branch: text,
-				live: value,
-				elseGuard: notOf(value)
+				live: step.live,
+				elseGuard: step.guard
 			});
 			return;
 		}
@@ -210,21 +232,16 @@ final class CondRegionLiveness {
 		if (ifKeyword == null || !CondDirectives.takesCondition(directive.keyword, ifKeyword, shape.conditionalEndKeyword)) {
 			// The final `#else`: live exactly when every earlier branch is refuted, and nothing
 			// can follow it.
-			frame.live = frame.elseGuard;
-			frame.elseGuard = false;
+			final elseStep: CondBranchStep = branchStep(frame.elseGuard, true);
+			frame.live = elseStep.live;
+			frame.elseGuard = elseStep.guard;
 			return;
 		}
 		// Unknown when the condition could not be delimited, which `conditionValue` answers for a
 		// null span — the conservative half of the pair above.
-		final value: Null<Bool> = conditionValue(source, directive, defines);
-		frame.live = andOf(frame.elseGuard, value);
-		frame.elseGuard = andOf(frame.elseGuard, notOf(value));
-	}
-
-	/** One directive's condition evaluated, or unknown when it carries none the reader could delimit. */
-	private static function conditionValue(source: String, directive: CondDirective, defines: Array<String>): Null<Bool> {
-		final span: Null<Span> = directive.condition;
-		return span == null ? null : evaluate(source.substring(span.from, span.to), defines);
+		final step: CondBranchStep = branchStep(frame.elseGuard, conditionValue(source, directive, defines));
+		frame.live = step.live;
+		frame.elseGuard = step.guard;
 	}
 
 	/** `&&` over `||`: the disjunction level, lowest precedence. */
@@ -368,6 +385,18 @@ final class CondRegionLiveness {
 	}
 
 }
+
+/**
+ * What `CondRegionLiveness.branchStep` answers about one conditional-compilation branch: `live`
+ * is three-valued — true when the branch is provably taken, false when provably not, null when
+ * some flag outside the define set decides — and `guard` is the same three-valued answer to "is
+ * every branch up to and including this one refuted", which is exactly what the NEXT branch of
+ * the region needs to know.
+ */
+typedef CondBranchStep = {
+	final live: Null<Bool>;
+	final guard: Null<Bool>;
+};
 
 /**
  * One open conditional region while the stack is walked: the OPENING directive's text

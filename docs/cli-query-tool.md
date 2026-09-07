@@ -286,6 +286,77 @@ apq meta --on <decl-kind> <files>    # list every annotation on a kind
 
 `<annotation>` syntax is the **target language's user-source annotation syntax**, not anyparse grammar metadata — for Haxe it is `@:foo` or `@bar`; for AS3 it would be `[Foo]`; for Python it would be `@foo`. The preset alias picks the syntax.
 
+### `apq cond`
+
+`apq cond <DEFINE> <file-or-dir-or-glob>...` — for every conditional-compilation
+region whose own `#if` / `#elseif` conditions mention `<DEFINE>` as a standalone
+identifier, print one head line per branch (its position, its verbatim directive,
+its tags) with that branch's own source indented under it.
+
+```
+apq cond FEATURE_X src                      # bodies of every branch of every matching region
+apq cond FEATURE_X src --active --names     # only what can run with the flag, as symbol names
+apq cond FEATURE_X src --inactive           # only the branches that cannot run with it
+```
+
+**A branch is not a node — it is delimited by its DIRECTIVES.** A whole
+`#if A … #elseif B … #else … #end` region projects as ONE node whose span covers
+every branch, with all the branches' constructs flattened into a single sibling
+list: nothing in the tree marks a boundary, so no selector addresses a branch and
+no node span can be sliced into one. `cond` takes a branch's body to be the byte
+run `[end of its own directive, start of the next directive at the same nesting
+depth)`, replayed from `CondDirectives.scan` through a depth stack. Three things
+follow, and they are the contract:
+
+- **Nest-safe by construction.** An inner region's directives are consumed while
+  its own frame is on top of the stack, so an outer branch simply runs across the
+  whole inner region. A region that itself mentions the define is reported as its
+  own entry too, tagged `nested`; its text therefore appears twice, once inside
+  its parent's body.
+- **Parse-free.** The scan is lexical, so an unparseable file is walked rather
+  than skipped, and — more importantly — so are the shapes where the grammar
+  parses but projects nothing. An expression-position `#if`
+  (`return #if nodejs a; #else b; #end`) is a single childless `CondSplice*` node;
+  such a branch is tagged `raw span` and printed verbatim, never silently skipped.
+- **A body never carries a directive**, so it starts and stops where the branch
+  does. That is the whole point: the route this replaces is
+  `lit --include-directives` for the `#if` line plus one `source --range` per site
+  over a window whose end is a guess. Measured for the define `nodejs` over
+  `src/anyparse/query`: 87 regions → 88 commands and 57 497 bytes of stdout, with
+  25 of the 87 guessed windows never reaching their own `#end`. `apq cond nodejs
+  src/anyparse/query` is one command and 40 750 bytes (27 807 with `--names`).
+
+**Matching is by CONDITION, not by directive text.** `#if (sys || nodejs)` is a
+site of both flags and answers a query for either — where `lit '#if nodejs'` sees
+neither. In the scope above that is the difference between 12 sites and 87.
+
+**Tags** on each head line:
+
+| Tag | Meaning |
+|---|---|
+| `[live]` | taken whenever `<DEFINE>` is set |
+| `[dead]` | never taken when `<DEFINE>` is set |
+| `[maybe]` | a flag outside the query decides |
+| `[raw span]` | the body holds text no node covers — printed verbatim; `--names` has nothing to answer with, so it keeps the source |
+| `[no parse]` | the FILE has no tree, so every non-blank branch of it is unmodelled for THAT reason and not for want of a node — printed verbatim like `[raw span]`. In a multi-file walk nothing else says so: a parse failure is reported only for a single file |
+| `[nested]` | the region sits inside another one |
+
+Liveness is `CondRegionLiveness.branchStep` folded over the region's directives
+under the hypothesis that `<DEFINE>` is set and every other flag is unknown — the
+same step the `oracle`-coverage question uses, so the two cannot disagree about
+which branch a define selects. It is three-valued because a positive-only define
+set cannot prove a flag absent: an `#elseif <DEFINE>` after an `#if other` is
+`maybe`, not `live`, since nothing refuted `other`.
+
+**Options.** `--active` keeps every branch that is not `[dead]`, `--inactive`
+exactly the `[dead]` ones, and the two partition a region's branches (neither flag,
+or both, keeps everything). `--names` prints the distinct `<Kind> <name>` rows of
+the branch instead of its source — the "what does this flag reach" answer without
+paying for the bodies. `--max-body N` bounds each body (default 20, `0` for no cap)
+and names what it dropped; `--limit` counts REGIONS (so a region is never
+half-printed) and cannot bound a define used as a whole-file guard — `--max-body` is the flag that does. `--flat` prefixes
+each head line with the file instead of printing a group header.
+
 ### Input path forms
 
 The trailing positional of `search` / `refs` / `meta` accepts one of three
