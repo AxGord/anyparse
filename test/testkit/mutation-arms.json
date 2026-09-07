@@ -13,6 +13,14 @@
 		"`hxq patch --select '<kind>:<method>'` payloads, so an arm survives every",
 		"edit that does not rename its member, which a stored line number does not.",
 		"",
+		"`find` and `replace` are each ONE string or a LIST of them, of equal",
+		"length — N pairs applied in a single `hxq patch` payload, which alternates",
+		"old / new sections. Every pair is located against the ORIGINAL member text,",
+		"so the list is order-independent and a pair may not be written against",
+		"another pair's output. Reach for it when the cut is two disjoint edits: one",
+		"pair would have to widen its fragment until it bridges them, and a cut that",
+		"MOVES a statement cannot be written as one pair at all.",
+		"",
 		"`kind` is the projected node the selector addresses and defaults to",
 		"`FnMember`. A grammar DECLARATION has no method to cut — its `@:re`",
 		"terminal is a module-level `MetaCall` — so such an arm spells its kind and",
@@ -161,9 +169,15 @@
 			"name": "M-FANOUT-FIRST",
 			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
 			"method": "applySameLine",
-			"find": "if (section.comprehensionFor != null) opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(section.comprehensionFor);",
-			"replace": "if (section.comprehensionFor != null && section.expressionIf == null) opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(section.comprehensionFor);",
-			"note": "the general expressionIf fanout outranks the specific comprehensionFor key, which is the precedence S77 chose, reversed"
+			"find": [
+				"applyExpressionIfFanout(section, opt);",
+				"if (section.comprehensionFor != null) opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(section.comprehensionFor);"
+			],
+			"replace": [
+				"if (section.comprehensionFor != null) opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(section.comprehensionFor);\n\tapplyExpressionIfFanout(section, opt);",
+				""
+			],
+			"note": "the specific comprehensionFor key is read BEFORE the general expressionIf fanout, so the fanout clobbers it — the S77 precedence PERMUTED, which is what its note asked for and what one find/replace pair could not express"
 		},
 		{
 			"name": "M-FIRST-LINE-FIT",

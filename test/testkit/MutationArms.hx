@@ -34,11 +34,18 @@ typedef MutationArm = {
 	/** RETURN arm: `return <force>;` inserted directly after the signature, or null. */
 	force: Null<String>,
 
-	/** FRAGMENT arm: the exact text replaced inside the member, or null. */
-	find: Null<String>,
+	/**
+	 * FRAGMENT arm: the exact texts replaced inside the member, or null.
+	 *
+	 * One element for the scalar spelling, N for a cut that needs several edits at once.
+	 * `hxq patch` has taken N pairs in one payload all along, and it locates every pair
+	 * against the ORIGINAL member text, so the list is order-independent and a pair may
+	 * not be written against another pair's output.
+	 */
+	find: Null<Array<String>>,
 
-	/** What replaces `find`; the empty string deletes it. Null for a RETURN arm. */
-	replace: Null<String>,
+	/** What replaces each `find`, element for element; an empty string deletes one. Null for a RETURN arm. */
+	replace: Null<Array<String>>,
 
 	/** One sentence: what stops working once the arm is applied. */
 	note: String
@@ -89,6 +96,9 @@ final class MutationArms {
 	/** Keys every arm must carry a non-empty string for. */
 	private static final REQUIRED_KEYS: Array<String> = ['name', 'type', 'method', 'note'];
 
+	/** Keys a record may spell as one string or as a list of them — the two halves of a FRAGMENT cut. */
+	private static final FRAGMENT_KEYS: Array<String> = ['find', 'replace'];
+
 	/** The classpath roots `test-js.hxml` declares, in its order — where an arm's `type` is looked for. */
 	private static final SOURCE_ROOTS: Array<String> = ['src', 'test'];
 
@@ -138,8 +148,8 @@ final class MutationArms {
 				method: required(entry, 'method'),
 				kind: nonEmpty(entry, 'kind') ?? DEFAULT_KIND,
 				force: nonEmpty(entry, 'force'),
-				find: nonEmpty(entry, 'find'),
-				replace: text(entry, 'replace'),
+				find: strings(entry, 'find'),
+				replace: strings(entry, 'replace'),
 				note: required(entry, 'note')
 			});
 		}
@@ -164,17 +174,7 @@ final class MutationArms {
 		final name: Null<String> = nonEmpty(entry, 'name');
 		final at: String = name == null ? 'arms[$index]' : 'arms[$index] "$name"';
 		for (key in REQUIRED_KEYS) if (nonEmpty(entry, key) == null) out.push('$at has no non-empty "$key"');
-		final force: Null<String> = nonEmpty(entry, 'force');
-		final fragment: Null<String> = nonEmpty(entry, 'find');
-		if (force == null && fragment == null) out.push('$at declares neither "force" nor "find" — an arm has to say what it cuts');
-		if (force != null && fragment != null) out.push('$at declares both "force" and "find" — an arm cuts one way');
-		if (fragment == null && text(entry, 'replace') != null) out.push('$at declares "replace" without "find"');
-		final kind: Null<String> = nonEmpty(entry, 'kind');
-		if (force != null && kind != null && kind != DEFAULT_KIND)
-			out.push(
-				'$at declares "force" with kind "$kind" — a forced return is spliced after a function signature,'
-				+ ' so only $DEFAULT_KIND can carry one; use "find"/"replace"'
-			);
+		for (issue in cutErrors(entry, at)) out.push(issue);
 		return out;
 	}
 
@@ -185,7 +185,14 @@ final class MutationArms {
 
 	/** One line for `node bin/test.js --list-arms`, and the shape the parity test pins. */
 	public static function render(arm: MutationArm): String {
-		final cut: String = arm.force == null ? 'fragment' : 'return ${arm.force};';
+		final force: Null<String> = arm.force;
+		final pairs: Int = arm.find?.length ?? 0;
+		final cut: String = if (force != null)
+			'return $force;'
+		else if (pairs > 1)
+			'$pairs fragments'
+		else
+			'fragment';
 		return '${arm.name} :: ${address(arm)} :: $cut :: ${arm.note}';
 	}
 
@@ -212,6 +219,113 @@ final class MutationArms {
 	public static function selectorOf(member: String): String {
 		final at: Int = member.indexOf(':');
 		return at == -1 ? '$DEFAULT_KIND:$member' : member;
+	}
+
+	/**
+	 * Everything wrong with the way ONE row declares its cut: the two spellings are
+	 * exclusive, a `find` list and a `replace` list pair up element for element, and only a
+	 * function signature can carry a forced return.
+	 *
+	 * Split out of `rowErrors` because the list spelling doubled the questions asked here and
+	 * the two halves answer about different things — the four mandatory keys, and the cut.
+	 */
+	private static function cutErrors(entry: Any, at: String): Array<String> {
+		final out: Array<String> = [];
+		final force: Null<String> = nonEmpty(entry, 'force');
+		final fragments: Null<Array<String>> = strings(entry, 'find');
+		final replacements: Null<Array<String>> = strings(entry, 'replace');
+		var malformed: Bool = false;
+		for (key in FRAGMENT_KEYS) {
+			final shape: Null<String> = listShapeError(entry, key);
+			if (shape == null) continue;
+			out.push('$at $shape');
+			malformed = true;
+		}
+		if (fragments != null && fragments.contains(''))
+			out.push('$at declares a blank "find" fragment — `apq patch` refuses an empty one, so there would be nothing to cut');
+		// The two clauses gated on `malformed` read ABSENCE as intent, and a malformed list is
+		// absent to `strings` exactly as a missing key is — so without the gate a row whose
+		// "find" holds a number collects "declares neither cut" and "replace without find" on
+		// top of the one complaint that is true, and sends its author to the wrong key.
+		if (force == null && fragments == null && !malformed)
+			out.push('$at declares neither "force" nor "find" — an arm has to say what it cuts');
+		if (force != null && fragments != null) out.push('$at declares both "force" and "find" — an arm cuts one way');
+		if (fragments == null && replacements != null && !malformed) out.push('$at declares "replace" without "find"');
+		if (fragments != null && replacements != null) for (issue in pairErrors(fragments, replacements, at)) out.push(issue);
+		final kind: Null<String> = nonEmpty(entry, 'kind');
+		if (force != null && kind != null && kind != DEFAULT_KIND)
+			out.push(
+				'$at declares "force" with kind "$kind" — a forced return is spliced after a function signature,'
+				+ ' so only $DEFAULT_KIND can carry one; use "find"/"replace"'
+			);
+		return out;
+	}
+
+	/**
+	 * What is wrong with the SHAPE of the list at `key`, or null — an array with no entry at
+	 * all, or one holding something that is not a string.
+	 *
+	 * Named rather than silently normalised: `strings` answers null for both, and a row that
+	 * fell through as "declares neither cut" would send the author looking at the wrong key.
+	 */
+	private static function listShapeError(entry: Any, key: String): Null<String> {
+		final raw: Null<Array<Any>> = items(entry, key);
+		return if (raw == null)
+			null
+		else if (raw.length == 0)
+			'declares an empty "$key" array — a cut is at least one pair'
+		else if (strings(entry, key) == null)
+			'declares a "$key" entry that is not a string'
+		else
+			null;
+	}
+
+	/**
+	 * Everything wrong with the way N fragments pair up with N replacements: the two lists are
+	 * the same length, and no pair replaces its own fragment with itself.
+	 *
+	 * The second is `apq patch`'s own refusal — `the old and new fragments are identical` — and
+	 * it is pure over the two lists the row already carries, so the registry answers it at BUILD
+	 * time instead of leaving it for whoever runs the arm.
+	 */
+	private static function pairErrors(fragments: Array<String>, replacements: Array<String>, at: String): Array<String> {
+		if (fragments.length != replacements.length) return [
+			'$at declares ${fragments.length} "find" fragment(s) against ${replacements.length} "replace" — every pair of a'
+				+ ' multi-pair cut replaces its own fragment, so the two lists are the same length'
+		];
+		final out: Array<String> = [];
+		for (index => piece in fragments) if (piece == replacements[index]) {
+			final pair: String = fragments.length > 1 ? ' in pair ${index + 1}' : '';
+			out.push('$at declares the same text as "find" and "replace"$pair — `apq patch` refuses a pair that changes nothing');
+		}
+		return out;
+	}
+
+	/**
+	 * The raw items at `key`: null when the key is absent, the array's own items for the list
+	 * spelling, and a one-item list for the scalar one — so every question after this is
+	 * asked of a list whichever way the record was written.
+	 */
+	private static function items(entry: Any, key: String): Null<Array<Any>> {
+		final raw: Any = Reflect.field(entry, key);
+		return if (raw == null)
+			null
+		else if (raw is Array)
+			(raw: Array<Any>)
+		else
+			[raw];
+	}
+
+	/** The items at `key` as strings, or null when the key is absent or any item is not one. */
+	private static function strings(entry: Any, key: String): Null<Array<String>> {
+		final raw: Null<Array<Any>> = items(entry, key);
+		if (raw == null) return null;
+		final out: Array<String> = [];
+		for (item in raw) if (item is String)
+			out.push((item: String));
+		else
+			return null;
+		return out;
 	}
 
 	/** A key the row is already known to carry; the fallback never fires after `rowErrors`. */
