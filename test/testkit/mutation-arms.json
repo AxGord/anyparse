@@ -1382,6 +1382,28 @@
 			"note": "the trailing guard reads the needle at a NORMALIZED-body offset, which is out of range for every match past offset 0, so only the leading half of the boundary rule survives"
 		},
 		{
+			"name": "M-COMMENT-RUN-PER-TOKEN",
+			"type": "anyparse.query.SourceComments",
+			"method": "collectCommentUnits",
+			"force": "collectCommentTokens(regions)",
+			"note": "a run of contiguous full-line `//` comments stops merging into one body, so a find spanning two of its lines matches nothing and comment-rewrite reports the text absent from the file"
+		},
+		{
+			"name": "M-COMMENT-RUN-OPENER-UNGUARDED",
+			"type": "anyparse.query.CommentRewrite",
+			"method": "runLineWithoutOpener",
+			"force": "null",
+			"note": "the run invariant is never checked, so a --regex replacement that deletes an interior `//` opener turns a commented-out line into live code and the op reports success"
+		},
+		{
+			"name": "M-COMMENT-MARKER-FORCED",
+			"type": "anyparse.query.SourceComments",
+			"method": "normalizeCommentBody",
+			"find": "lineRun ? LINE_OPEN : GUTTER_STAR",
+			"replace": "LINE_OPEN",
+			"note": "every body folds the `//` opener as its continuation marker, so a `//` line INSIDE a block comment reads as structure rather than content and a find naming it matches nothing"
+		},
+		{
 			"name": "M-MOVE-SIBLINGS-FALSE",
 			"type": "anyparse.query.MoveSymbol",
 			"method": "hasSiblingsOnBothSides",

@@ -30,6 +30,18 @@ final class SourceComments {
 	private static final DOC_OPEN: String = '/**';
 
 	/**
+	 * The line-comment opener — also the continuation marker every line after the first of a
+	 * line-comment RUN carries, which is what `normalizeCommentBody` folds away in `lineRun` mode.
+	 */
+	private static final LINE_OPEN: String = '//';
+
+	/**
+	 * The block-comment gutter marker — one per continuation line, the default
+	 * `normalizeCommentBody` folds.
+	 */
+	private static final GUTTER_STAR: String = '*';
+
+	/**
 	 * Whether `text` holds a `//` or `/*` comment marker. The primitive under
 	 * `hasCommentMarker` and under `CheckScan.hasCommentMarker`, exposed separately for the
 	 * callers whose subject is not a contiguous source range — a concatenation of trivia
@@ -98,23 +110,15 @@ final class SourceComments {
 	 * and below it (no blank line, no code between), so a line-comment block is
 	 * addressed as one unit; a trailing line comment after code is returned
 	 * alone. String literals are skipped, so an opener inside a string is not
-	 * mistaken for a comment.
+	 * mistaken for a comment. The grouping itself lives in `collectCommentUnits`; this is a
+	 * lookup into it for one cursor — and since a merged run is ONE span, a cursor in the
+	 * whitespace BETWEEN two of its lines now resolves to the run, where the per-token walk
+	 * this replaced answered null.
 	 */
 	public static function commentBlockAt(source: String, cursor: Int, regions: Array<LexRegion>): Null<Span> {
-		final toks: Array<{ from: Int, to: Int, isLine: Bool }> = collectCommentTokens(regions);
-		var hitIdx: Int = -1;
-		for (k in 0...toks.length) if (cursor >= toks[k].from && cursor < toks[k].to) {
-			hitIdx = k;
-			break;
-		}
-		if (hitIdx < 0) return null;
-		final hit: { from: Int, to: Int, isLine: Bool } = toks[hitIdx];
-		if (!hit.isLine || !isFullLineComment(source, hit.from)) return new Span(hit.from, hit.to);
-		var lo: Int = hitIdx;
-		while (lo > 0 && contiguousLineComments(source, toks[lo - 1], toks[lo])) lo--;
-		var hi: Int = hitIdx;
-		while (hi < toks.length - 1 && contiguousLineComments(source, toks[hi], toks[hi + 1])) hi++;
-		return new Span(toks[lo].from, toks[hi].to);
+		final units: Array<{ from: Int, to: Int, isLine: Bool }> = collectCommentUnits(source, regions);
+		final unit: Null<{ from: Int, to: Int, isLine: Bool }> = units.find(u -> cursor >= u.from && cursor < u.to);
+		return unit == null ? null : new Span(unit.from, unit.to);
 	}
 
 	/**
@@ -173,6 +177,34 @@ final class SourceComments {
 			case BlockComment:
 				out.push({ from: region.from, to: region.to, isLine: false });
 			case StringLit, RegexLit:
+		}
+		return out;
+	}
+
+	/**
+	 * The comment UNITS of one source — one entry per logically single body, in source order: a
+	 * block comment as it stands, a run of contiguous full-line `//` comments merged into ONE
+	 * `{ from, to, isLine: true }` reaching from the first opener to the last line's end, and a
+	 * `//` trailing after code on its own.
+	 *
+	 * The lexer's tokens (`collectCommentTokens`) are one per LINE for `//`, which is right for
+	 * every consumer that masks or measures BYTES and wrong for the one that matches TEXT: a find
+	 * spanning two `//` lines could never match, because no single body held both, and
+	 * `comment-rewrite` answered that the text was absent from the file. `commentBlockAt` already
+	 * carried this grouping rule for one cursor; this is the same rule over the whole file, and
+	 * that function is now a lookup into it.
+	 */
+	public static function collectCommentUnits(source: String, regions: Array<LexRegion>): Array<{ from: Int, to: Int, isLine: Bool }> {
+		final toks: Array<{ from: Int, to: Int, isLine: Bool }> = collectCommentTokens(regions);
+		final out: Array<{ from: Int, to: Int, isLine: Bool }> = [];
+		var i: Int = 0;
+		while (i < toks.length) {
+			final head: { from: Int, to: Int, isLine: Bool } = toks[i];
+			final merge: Bool = head.isLine && isFullLineComment(source, head.from);
+			var last: Int = i;
+			while (merge && last + 1 < toks.length && contiguousLineComments(source, toks[last], toks[last + 1])) last++;
+			out.push(last == i ? head : { from: head.from, to: toks[last].to, isLine: true });
+			i = last + 1;
 		}
 		return out;
 	}
@@ -336,13 +368,18 @@ final class SourceComments {
 	/**
 	 * Normalize a comment BODY for cross-line literal matching: fold each line
 	 * continuation — a `\n` or `\r\n`, the following whitespace, blank lines, and
-	 * one ` * ` doc-marker per line — into a single space, so a phrase wrapped
-	 * across two ` * ` lines reads as one run. Returns the normalized text plus a
+	 * one continuation marker per line — into a single space, so a phrase wrapped
+	 * across two lines reads as one run. `lineRun` picks the marker — the gutter star of a
+	 * block comment, the `//` opener when the body is a run of line comments merged by
+	 * `collectCommentUnits`. It is REQUIRED and not defaulted: a caller who forgets it would
+	 * silently get block semantics for a run, which is the shape arm `M-COMMENT-MARKER-FORCED`
+	 * exists to catch. Returns the normalized text plus a
 	 * `map` from each normalized index to the original body offset it came from,
 	 * with `map[text.length] == body.length`, so a match found in the normalized
 	 * text projects back to a span in the original body.
 	 */
-	public static function normalizeCommentBody(body: String): { text: String, map: Array<Int> } {
+	public static function normalizeCommentBody(body: String, lineRun: Bool): { text: String, map: Array<Int> } {
+		final marker: String = lineRun ? LINE_OPEN : GUTTER_STAR;
 		final buf: StringBuf = new StringBuf();
 		final map: Array<Int> = [];
 		final n: Int = body.length;
@@ -352,7 +389,7 @@ final class SourceComments {
 			final crlf: Bool = c == '\r'.code && i + 1 < n && body.fastCodeAt(i + 1) == '\n'.code;
 			if (c == '\n'.code || crlf) {
 				final runStart: Int = i;
-				i = skipContinuation(body, (crlf ? i + 1 : i) + 1, n);
+				i = skipContinuation(body, (crlf ? i + 1 : i) + 1, n, marker);
 				buf.addChar(' '.code);
 				map.push(runStart);
 			} else {
@@ -562,10 +599,11 @@ final class SourceComments {
 
 	/**
 	 * Skip a comment line-continuation starting at `from` (just past a `\n`): any
-	 * further whitespace and blank lines, plus ONE ` * ` doc-marker per line.
-	 * Returns the index of the first content character (or `n`).
+	 * further whitespace and blank lines, plus ONE `marker` per line — the gutter star of a block, or the `//` opener
+	 * every line after the first of a line-comment RUN carries. Returns the index
+	 * of the first content character (or `n`).
 	 */
-	private static function skipContinuation(body: String, from: Int, n: Int): Int {
+	private static function skipContinuation(body: String, from: Int, n: Int, marker: String): Int {
 		var i: Int = from;
 		var markerSeen: Bool = false;
 		while (i < n) {
@@ -575,8 +613,8 @@ final class SourceComments {
 			} else if (c == '\n'.code) {
 				i++;
 				markerSeen = false;
-			} else if (c == '*'.code && !markerSeen) {
-				i++;
+			} else if (!markerSeen && body.substr(i, marker.length) == marker) {
+				i += marker.length;
 				markerSeen = true;
 			} else {
 				break;
