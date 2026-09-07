@@ -19,8 +19,8 @@ typedef CommentRewriteOpts = {
 	var list: Bool;
 	var reformat: Bool;
 	var regex: Bool;
-	// A replacement is refused when it pushes a comment line past the configured width — the last
-	// half of this op no gate could see. `--allow-wide` waives it for a line meant to stay long.
+	// A replacement is REFLOWED into the configured width, and refused only where nothing can be broken — the
+	// last half of this op no gate could see. `--allow-wide` waives both for a block meant to stay as written.
 	var allowWide: Bool;
 	var find: Null<String>;
 	var replace: Null<String>;
@@ -138,8 +138,8 @@ final class CommentRewriteCommand implements CliCommand {
 		CliIo.sysPrint('                 list of changed paths for a dir / multiple files)\n');
 		CliIo.sysPrint('  --list, -l     Print paths whose comments would change; no rewrite\n');
 		CliIo.sysPrint('  --reformat     Canonicalise the whole file (allow a non-canonical input)\n');
-		CliIo.sysPrint('  --allow-wide   Accept a replacement that pushes a comment line past the\n');
-		CliIo.sysPrint('                 configured wrapping.maxLineLength (refused by default)\n');
+		CliIo.sysPrint('  --allow-wide   Leave the block exactly as written: no reflow into\n');
+		CliIo.sysPrint('                 wrapping.maxLineLength and no width refusal\n');
 		CliIo.sysPrint('  --lang <name>  Grammar plugin (default: haxe)\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('MATCHING. A LITERAL find is matched against a body whose line breaks — and the\n');
@@ -158,6 +158,14 @@ final class CommentRewriteCommand implements CliCommand {
 		CliIo.sysPrint('that would leave a line of the run without its `//` is REFUSED, naming it: the\n');
 		CliIo.sysPrint('run body spans those openers, and deleting one turns a comment into code.\n');
 		CliIo.sysPrint('\n');
+		CliIo.sysPrint('PARAGRAPHS. A blank comment line — a bare `//` in a run, a bare gutter in a\n');
+		CliIo.sysPrint('block — folds into the same single space an ordinary break does, so a LITERAL\n');
+		CliIo.sysPrint('find could read straight across it and the splice then deleted the separator,\n');
+		CliIo.sysPrint('merging two paragraphs into one line with nothing to report it. Such a find is\n');
+		CliIo.sysPrint('now REFUSED: narrow it to one paragraph, or use --regex, where the separator is\n');
+		CliIo.sysPrint('visible in the pattern (a run needs `\\s+//` twice over to cross it). An empty\n');
+		CliIo.sysPrint('replacement is a deletion and still takes its own separator with it.\n');
+		CliIo.sysPrint('\n');
 		CliIo.sysPrint("SPLICING. Write plain lines and real newlines (a shell $'a\\nb' literal): each\n");
 		CliIo.sysPrint("new line gets the comment's own continuation, and a ` * ` you add yourself is\n");
 		CliIo.sysPrint("stripped rather than doubled. The continuation is read off the block's own\n");
@@ -165,12 +173,22 @@ final class CommentRewriteCommand implements CliCommand {
 		CliIo.sysPrint('star-guttered one keeps its star; a one-line /** … */ that grows past one line\n');
 		CliIo.sysPrint('is re-opened so its closer gets a line of its own.\n');
 		CliIo.sysPrint('\n');
-		CliIo.sysPrint('WIDTH is not re-wrapped either, but it is no longer silent: a replacement that\n');
-		CliIo.sysPrint('leaves a comment line past wrapping.maxLineLength is REFUSED, naming the line,\n');
-		CliIo.sysPrint('because neither `fmt --list` nor any lint rule reports one. An edit that only\n');
-		CliIo.sysPrint('touches a line already over-width is fine — the gate compares how many such\n');
-		CliIo.sysPrint('lines there are and how wide the widest is, so shortening one is not gaining\n');
-		CliIo.sysPrint('one. Break it where you want it broken, or pass --allow-wide.\n');
+		CliIo.sysPrint('WIDTH is REFLOWED, but only where the edit BROKE it. A find crossing a line break\n');
+		CliIo.sysPrint('takes the break with it, so the two lines join; if that leaves more over-width\n');
+		CliIo.sysPrint('lines than the block had, or a wider one, every line the edit made too wide is\n');
+		CliIo.sysPrint('broken back at spaces into wrapping.maxLineLength, carrying the same prefix and\n');
+		CliIo.sysPrint('indent, at the narrowest width that costs no extra line. An edit that gains none\n');
+		CliIo.sysPrint('— a typo fix inside an inherited 600-column doc line — changes nothing else.\n');
+		CliIo.sysPrint('Nothing is ever JOINED, so your own line breaks survive, and a line the edit left\n');
+		CliIo.sysPrint('BYTE-IDENTICAL is never re-wrapped.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('Four shapes are never re-laid-out, because their layout IS their meaning: a\n');
+		CliIo.sysPrint('`noqa` / CHECKSTYLE directive (breaking `// noqa: rule` after the colon would\n');
+		CliIo.sysPrint('widen it to every rule), a line indented past the gutter (a code sample), a\n');
+		CliIo.sysPrint('markdown table row, and a bullet. Those, and a replacement with no space inside\n');
+		CliIo.sysPrint('the width, are handed back long and then REFUSED by name, because neither\n');
+		CliIo.sysPrint('`fmt --list` nor any lint rule reports a comment width. --allow-wide skips both\n');
+		CliIo.sysPrint('the reflow and the refusal.\n');
 	}
 
 	private static function parseCommentRewriteArgs(args: Array<String>): CommentRewriteOpts {

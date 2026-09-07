@@ -1404,6 +1404,58 @@
 			"note": "every body folds the `//` opener as its continuation marker, so a `//` line INSIDE a block comment reads as structure rather than content and a find naming it matches nothing"
 		},
 		{
+			"name": "M-COMMENT-REFLOW-ABSENT",
+			"type": "anyparse.query.SourceComments",
+			"method": "wrapCommentBody",
+			"force": "body",
+			"note": "the spliced body is handed back unwrapped, so a find crossing a comment line break joins the two lines and the width gate refuses the edit the join made over-long"
+		},
+		{
+			"name": "M-COMMENT-REFLOW-GREEDY",
+			"type": "anyparse.query.SourceComments",
+			"method": "wrapText",
+			"force": "fillText(text, firstCols, contCols, width, tab)",
+			"note": "the reflow fills every wrapped line to the limit instead of the narrowest width costing the same lines, so a joined run comes back as a full-width line followed by a stub"
+		},
+		{
+			"name": "M-COMMENT-REFLOW-TOUCHED-ONLY",
+			"type": "anyparse.query.SourceComments",
+			"method": "wrapCommentBody",
+			"find": "!keep.contains(raw) && !(i == 0",
+			"replace": "!(i == 0",
+			"note": "the reflow stops asking which lines the edit produced, so an inherited over-width doc line the caller never mentioned is re-wrapped along with the one it did"
+		},
+		{
+			"name": "M-COMMENT-PARAGRAPH-UNGUARDED",
+			"type": "anyparse.query.SourceComments",
+			"method": "interiorParagraphBreak",
+			"force": "false",
+			"note": "a blank comment line reads as an ordinary break again, so a find spanning two paragraphs deletes the separator between them and the op reports success"
+		},
+		{
+			"name": "M-COMMENT-REFLOW-UNSAFE-LINES",
+			"type": "anyparse.query.SourceComments",
+			"method": "reflowSafeLine",
+			"force": "true",
+			"note": "every comment line reads as plain prose, so the reflow breaks a `// noqa: <rule>` after the colon into a blanket exemption and lays a code sample, a table row and a bullet out at the bare gutter"
+		},
+		{
+			"name": "M-COMMENT-REFLOW-TRAILING-WRAPPED",
+			"type": "anyparse.query.SourceComments",
+			"method": "wrapCommentBody",
+			"find": "&& !(i == 0 && headHasCode) &&",
+			"replace": "&&",
+			"note": "a `//` trailing after code is wrapped like any other, so its continuation becomes a NEW own-line comment the writer relocates — and a trailing `// noqa: <rule>` broken after the colon widens to every rule"
+		},
+		{
+			"name": "M-COMMENT-REFLOW-COUNT-ONLY",
+			"type": "anyparse.query.SourceComments",
+			"method": "wrapText",
+			"find": "if (balanced.length <= lines && widestChunk(balanced, firstCols, contCols, tab) <= ceiling) return balanced;",
+			"replace": "if (balanced.length <= lines) return balanced;",
+			"note": "the balancer weighs line count alone, so it accepts the one-line answer `fillText` returns when no break point fits and a wrappable line is refused as over-width"
+		},
+		{
 			"name": "M-MOVE-SIBLINGS-FALSE",
 			"type": "anyparse.query.MoveSymbol",
 			"method": "hasSiblingsOnBothSides",

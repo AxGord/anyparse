@@ -4,6 +4,7 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.Cli;
 import anyparse.query.CommentRewrite;
+import anyparse.query.GrammarPlugin.LayoutMetrics;
 import anyparse.query.SourceComments;
 import unit.cli.CliFixture;
 import utest.Assert;
@@ -20,6 +21,12 @@ using StringTools;
  * no-op, string-literal immunity, and the parse-breaking-replacement refusal.
  */
 class CommentRewriteSliceTest extends Test {
+
+	/** A replacement long enough that joining the two fixture lines passes the configured width. */
+	private static final WIDENED: String = 'omicron and a good deal of additional prose inserted right here pi rho';
+
+	/** A find whose two halves lie in DIFFERENT paragraphs, so it reads across the blank comment line. */
+	private static final CROSSING: String = 'First paragraph ends here. Second paragraph starts here.';
 
 	/** Literal replace inside a line comment. */
 	public function testLiteralLineComment(): Void {
@@ -321,21 +328,26 @@ class CommentRewriteSliceTest extends Test {
 	}
 
 	/**
-	 * An over-long replacement produced a comment line past the configured width that NOTHING
-	 * measured — `fmt --list` clean, comment interiors verbatim, no rule reading doc line width.
-	 * The op refuses instead, unless the block was already over-width (its style is not this op's
-	 * to police) or the caller passes `--allow-wide`.
+	 * A replacement that would leave a comment line past the configured width is REFLOWED into the
+	 * width, not refused.
+	 *
+	 * The refusal was the right answer while the op could not re-wrap: the writer re-emits a comment
+	 * interior byte for byte, so `fmt --list` is clean, no rule reads a doc line width, and a human
+	 * reading the diff was the only gate. What it could not do was let the caller edit the text in
+	 * place, which is what the reflow adds. `--allow-wide` still turns both off.
 	 */
-	public function testOverWideReplacementRefused(): Void {
+	public function testOverWideReplacementIsReflowed(): Void {
 		final src: String = 'class C {\n\t/**\n\t * A short line.\n\t */\n\tfunction f() {}\n}';
 		final long: String = 'A rewritten sentence that runs on and on and on and on and on and on and on and on and on '
 			+ 'and on and on and on and on and on and on and on and on and on and on past every plausible width.';
-		Assert.isTrue(isErr(cr(src, 'A short line.', long, false)));
+		final text: String = okText(cr(src, 'A short line.', long, false));
+		Assert.isTrue(widestLine(text) <= lineWidth(), 'no line past the width: ${widestLine(text)} in $text');
+		Assert.isTrue(commentProse(text).contains(long), commentProse(text));
 	}
 
 	/**
-	 * The width gate is waived by `--allow-wide`, so the op still reaches a line the caller means to
-	 * leave long (a URL, a table row) without asking them to re-flow it.
+	 * The width gate AND the reflow are waived by `--allow-wide`, so the op still reaches a
+	 * line the caller means to leave long (a URL, a table row) and leaves it exactly as written.
 	 *
 	 * FALSE START, recorded because it is the trap this slice was told to look for in its own
 	 * fixtures: the first version of this control asserted that a block ALREADY carrying an
@@ -362,13 +374,16 @@ class CommentRewriteSliceTest extends Test {
 	}
 
 	/**
-	 * EDITING an over-width line is allowed as long as it does not get wider — a typo fix inside a
-	 * long doc line must not need `--allow-wide`.
+	 * EDITING an over-width line is allowed as long as it does not get wider, and the line is handed
+	 * back long rather than re-wrapped: the block's style is the caller's, not this op's to police.
 	 *
 	 * FOUND BY REVIEW, and it is why the gate compares COUNT and WIDEST rather than the set of line
 	 * TEXTS. An edit necessarily changes the text of the line it edits, so under text identity every
 	 * touched over-width line read as a newly gained one and the op refused a rename that SHORTENED a
-	 * 155-column line to 154 — in exactly the case the gate's own doc promised to allow.
+	 * 155-column line to 154 — in exactly the case the gate's own doc promised to allow. The REFLOW
+	 * reads the same comparison, which is what keeps it a repair: measured on `MemberOrder.hx`, whose
+	 * doc holds a 6641-column line, a seven-character shortening edit left the file at 978 lines,
+	 * byte-identical to the same edit under `--allow-wide`.
 	 */
 	public function testEditingAWideLineShorterNotRefused(): Void {
 		final wide: String = 'An existing sentence that already runs on and on and on and on and on and on and on and on '
@@ -376,6 +391,7 @@ class CommentRewriteSliceTest extends Test {
 		final src: String = 'class C {\n\t/**\n\t * $wide\n\t */\n\tfunction f() {}\n}';
 		final text: String = okText(cr(src, 'An existing sentence', 'An old sentence', false));
 		Assert.isTrue(text.contains('An old sentence that already runs'), text);
+		Assert.isFalse(text.contains('An old sentence that already\n'), 'and it is not re-wrapped on the way: $text');
 	}
 
 	/**
@@ -412,15 +428,18 @@ class CommentRewriteSliceTest extends Test {
 	}
 
 	/**
-	 * Making an ALREADY over-width line wider is still refused — otherwise the gate would let a long
-	 * line grow without limit as long as no second one appeared, which is what a count-only
-	 * comparison does (measured: dropping the `widest` half killed no fixture until this one).
+	 * Making an already over-width line WIDER is still refused when nothing can break it — otherwise
+	 * the gate would let a long line grow without limit as long as no second one appeared, which is
+	 * what a count-only comparison does (measured: dropping the `widest` half killed no fixture until
+	 * this one).
+	 *
+	 * The fixture is deliberately space-free: a wrappable widening reflows now, so the only input left
+	 * that can reach the gate at an unchanged line COUNT is one the reflow hands back whole.
 	 */
-	public function testWideningAnAlreadyWideLineRefused(): Void {
-		final wide: String = 'An existing sentence that already runs on and on and on and on and on and on and on and on '
-			+ 'and on and on and on and on and on and on and on and on and on and on past every plausible width.';
-		final src: String = 'class C {\n\t/**\n\t * $wide\n\t */\n\tfunction f() {}\n}';
-		Assert.isTrue(isErr(cr(src, 'An existing sentence', 'An existing and considerably longer sentence', false)));
+	public function testWideningAnUnwrappableWideLineRefused(): Void {
+		final wide: String = ''.rpad('w', 200);
+		final src: String = 'class C {\n\t/**\n\t * ${wide}TAIL\n\t */\n\tfunction f() {}\n}';
+		Assert.isTrue(isErr(cr(src, 'TAIL', 'TAIL' + ''.rpad('x', 30), false)));
 	}
 
 	/**
@@ -555,13 +574,375 @@ class CommentRewriteSliceTest extends Test {
 		Assert.isTrue(text.contains(' * - M1 first item\n * - M3 third item'), text);
 	}
 
+	/**
+	 * A literal find crossing a `//` run's line break takes the break with it, so the two lines JOIN —
+	 * and the join is now REFLOWED back into the configured width instead of refused.
+	 *
+	 * That join is the whole T755 scenario, fixing a phrase spread over two `//` lines, and the width
+	 * gate turned it down every time the joined line passed the width. Measured on
+	 * `WriterRefFieldLowering.hx` under that file's 140: the run at lines 92-96 has siblings of 80 to
+	 * 84, an edit to the phrase spanning lines 92 and 93 joined them into 169 columns and was refused,
+	 * and the same edit now comes back as 86 and 93. Being able to FIND the text was never the same as
+	 * being able to edit it in place. Killed by arm `M-COMMENT-REFLOW-ABSENT`.
+	 */
+	@:pin('control')
+	@:killer('M-COMMENT-REFLOW-ABSENT')
+	public function testJoinedRunLineIsReflowed(): Void {
+		final text: String = okText(cr(wideRun(), 'omicron pi rho', WIDENED, false));
+		Assert.isTrue(widestLine(text) <= lineWidth(), 'no line past the width: ${widestLine(text)} in $text');
+		Assert.isTrue(commentProse(text).contains(WIDENED), commentProse(text));
+	}
+
+	/**
+	 * The same join inside a `/** ` block, which is the shape the reflow had to be ALIGNED with
+	 * rather than taught: a block comment's body was always the whole block, so a find has always
+	 * crossed its ` * ` breaks and always joined the two lines. Nothing re-wrapped that either.
+	 * Killed by arm `M-COMMENT-REFLOW-ABSENT`.
+	 */
+	@:pin('control')
+	@:killer('M-COMMENT-REFLOW-ABSENT')
+	public function testJoinedDocLineIsReflowed(): Void {
+		final text: String = okText(cr(wideDoc(), 'omicron pi rho', WIDENED, false));
+		Assert.isTrue(widestLine(text) <= lineWidth(), 'no line past the width: ${widestLine(text)} in $text');
+		Assert.isTrue(commentProse(text).contains(WIDENED), commentProse(text));
+	}
+
+	/**
+	 * The reflow wraps at the NARROWEST width that costs the same number of lines, not at the limit.
+	 *
+	 * Filling greedily reads wrong, and the shape that showed it is `WriterRefFieldLowering.hx`, not
+	 * this fixture: broken at that file's configured 140, its joined run left a 137-column line followed
+	 * by a 42-column orphan among siblings of 82 — a shape a reviewer flags and the author would rather
+	 * have edited by hand. Balanced, those two came back at 86 and 93.
+	 *
+	 * What this fixture pins is the same rule at the compiled default of 160, where greedy would fill
+	 * one line to the limit and leave a stub. Both produced lines are asserted in one string, so neither
+	 * can be satisfied alone. Killed by arm `M-COMMENT-REFLOW-GREEDY`.
+	 */
+	@:pin('control')
+	@:killer('M-COMMENT-REFLOW-GREEDY')
+	public function testReflowBalancesRatherThanFillingToTheLimit(): Void {
+		final wrapped: String = '\t// alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron and a good deal of'
+			+ ' additional\n\t// prose inserted right here pi rho sigma tau upsilon phi chi psi omega and then some more words'
+			+ ' to be sure.';
+		Assert.isTrue(
+			okText(cr(wideRun(), 'omicron pi rho', WIDENED, false)).contains(wrapped),
+			okText(cr(wideRun(), 'omicron pi rho', WIDENED, false))
+		);
+	}
+
+	/**
+	 * An over-width line the edit left BYTE-IDENTICAL is not re-wrapped, even in a block the edit DID
+	 * break, so an inherited long doc line the caller never mentioned keeps its own style.
+	 *
+	 * The two assertions span both halves in one fixture and neither is satisfiable alone: the grown
+	 * line must carry a break the reflow put there, and the 251-column line beside it must still be one
+	 * line. Its earlier form edited `padme` to something SHORT, which under the
+	 * gained-line trigger reflows nothing at all, so the guard it named was never reached. Killed by arm
+	 * `M-COMMENT-REFLOW-TOUCHED-ONLY`.
+	 */
+	@:pin('control')
+	@:killer('M-COMMENT-REFLOW-TOUCHED-ONLY')
+	public function testReflowLeavesAnUntouchedWideLineAlone(): Void {
+		final untouched: String = ''.rpad('word ', 245) + 'end';
+		final src: String = '/**\n * $untouched\n * padme\n */\nclass C {}';
+		final text: String = okText(cr(src, 'padme', ''.rpad('grown ', 200) + 'end', false));
+		Assert.isTrue(text.contains('grown\n * grown'), 'the line the edit grew IS wrapped: $text');
+		Assert.isTrue(text.contains(' * $untouched\n * grown grown'), 'and the one it never touched is not: $text');
+	}
+
+	/**
+	 * A find that reads straight across a blank `//` line is REFUSED, naming the separator.
+	 *
+	 * `normalizeCommentBody` folds a blank continuation line into the SAME single space an ordinary
+	 * break becomes, so `A B` matched across `A`, a bare `//` and `B` — and the splice then deleted the
+	 * separator, merging two paragraphs into one line with no diagnostic anywhere. Measured on
+	 * `HxCasePattern.hx`, whose line 56 is a bare `\t//` between two paragraphs: an edit that SHORTENED
+	 * the text around it (a long `@:fmt(...)` name cut to a short one) merged lines 55 and 57 into 125
+	 * columns — inside that file's 140, so the width gate never fired either, and a longer replacement
+	 * would have been refused for its width rather than for the separator it ate.
+	 * Killed by arm `M-COMMENT-PARAGRAPH-UNGUARDED`.
+	 */
+	@:pin('control')
+	@:killer('M-COMMENT-PARAGRAPH-UNGUARDED')
+	public function testFindSpanningABlankRunLineIsRefused(): Void {
+		Assert.isTrue(errText(cr(runParagraphs(), CROSSING, 'JOINED', false)).contains('blank comment line'));
+	}
+
+	/**
+	 * The same separator inside a `/** ` block: a blank ` *` line folds the same way, so it needs the
+	 * same refusal. Killed by arm `M-COMMENT-PARAGRAPH-UNGUARDED`.
+	 */
+	@:pin('control')
+	@:killer('M-COMMENT-PARAGRAPH-UNGUARDED')
+	public function testFindSpanningABlankDocLineIsRefused(): Void {
+		Assert.isTrue(errText(cr(docParagraphs(), CROSSING, 'JOINED', false)).contains('blank comment line'));
+	}
+
+	/** The way out the refusal names first: a find inside ONE paragraph still matches, and the separator stays. */
+	public function testNarrowedFindInsideOneParagraphStillMatches(): Void {
+		final text: String = okText(cr(runParagraphs(), 'Second paragraph starts here.', 'Second paragraph now starts here.', false));
+		Assert.isTrue(text.contains('// First paragraph ends here.\n\t//\n\t// Second paragraph now starts here.'), text);
+	}
+
+	/**
+	 * The other way out, and the reason the guard is scoped to LITERAL mode: `--regex` matches the
+	 * raw body, where the separator is visible in the pattern, so joining two paragraphs is
+	 * something the caller can still spell — `\s+//` twice over for a run, the blank line being a
+	 * second opener rather than whitespace.
+	 */
+	public function testRegexMayStillCrossAParagraphBreak(): Void {
+		final text: String = okText(cr(runParagraphs(), 'here\\.\\s+//\\s+//\\s+Second', 'here. SECOND', true));
+		Assert.isTrue(text.contains('// First paragraph ends here. SECOND paragraph starts here.'), text);
+	}
+
+	/**
+	 * An EMPTY replacement is a deletion, and the guard is on replacements only: the deletion consumes
+	 * whatever break run precedes its match, INCLUDING a paragraph separator.
+	 *
+	 * Named for what it pins rather than for what one would want. The blank line here separated the lead
+	 * sentence from the LIST, so it was never the first bullet's to take — the same silent paragraph
+	 * merge `interiorParagraphBreak` refuses, reached through the exemption. The exemption exists because
+	 * an empty replacement that keeps the break strands a gutter where the text was; that residue is now
+	 * a bare gutter rather than one with a trailing space, but WHICH separator a deletion owns is a
+	 * question this slice did not answer. Backlog T770.
+	 */
+	public function testDeletingTheFirstBulletTakesTheSeparatorBeforeIt(): Void {
+		final text: String = okText(cr(bullets(), ' - M1 first item', '', false));
+		Assert.isTrue(text.contains('Lead sentence.\n * - M2 second item'), text);
+	}
+
+	/**
+	 * A deletion that leaves a gutter behind leaves a BARE one — the rule `reflowIntoComment` and
+	 * `openGrownDocBlock` already follow, applied to the one path that did not.
+	 *
+	 * The writer re-emits a comment interior byte for byte, so ` * ` with a trailing space survives
+	 * in a project whose `hxformat.json` sets `indentation.trailingWhitespace: false`, and
+	 * `fmt --list` still calls the file canonical. The closer's own indentation is asserted in the
+	 * same string: rtrimming EVERY prefix-only line first put the closer flush at column 0, because
+	 * a body's last line is the whitespace that carries it.
+	 */
+	public function testADeletionLeavesABareGutterNotATrailingSpace(): Void {
+		final src: String = '/**\n * Para one.\n *\n * Para two.\n *\n * Para three.\n */\nclass C {}';
+		final text: String = okText(cr(src, 'Para two.', '', false));
+		Assert.isTrue(text.contains('Para one.\n *\n *\n *\n * Para three.\n */'), text);
+	}
+
+	/**
+	 * A match beginning in the MIDDLE of a line is reflowed too — the replacement's first line lands
+	 * behind whatever already stood there, and that offset used to be the caller's to count.
+	 *
+	 * T732 measured 119 columns from exactly this shape and read it as a defect of the width gate. It is
+	 * not: the gate compares against the CONFIGURED width, and the same shape reproduced at 123 columns
+	 * on `HxFormatSameLineSection.hx` is inside that file's own 140. What was missing is the reflow —
+	 * the identical edit written long enough to cross the width was REFUSED at 160 columns there and now
+	 * comes back as two lines of 80 and 82.
+	 *
+	 * This fixture is not that file: `cr` passes no options, so it measures against the plugin's
+	 * compiled default of 160, where its own join is 177 columns and reflows to 92 and 91.
+	 */
+	public function testMidLineMatchIsReflowed(): Void {
+		final src: String = 'class C {\n\t/**\n\t * A first sentence. A second sentence that is quite long and carries on for a while '
+			+ 'yet.\n\t */\n\tfunction f() {}\n}';
+		final long: String = 'A second and considerably more elaborate sentence, restated at some length for the sake of the probe,';
+		final text: String = okText(cr(src, 'A second sentence', long, false));
+		Assert.isTrue(widestLine(text) <= lineWidth(), 'no line past the width: ${widestLine(text)} in $text');
+		Assert.isTrue(commentProse(text).contains(long), commentProse(text));
+	}
+
+	/**
+	 * The refusal survives for the one shape a reflow cannot repair: a replacement with no space
+	 * inside the width. Cutting a 200-character identifier or URL mid-word would change the text, so
+	 * the line is handed back over-width and the gate is the only thing left that can name it.
+	 */
+	public function testUnwrappableOverWideReplacementRefused(): Void {
+		final src: String = 'class C {\n\t/**\n\t * A short line.\n\t */\n\tfunction f() {}\n}';
+		Assert.isTrue(errText(cr(src, 'A short line.', ''.rpad('u', 200), false)).contains('columns'));
+	}
+
+	/**
+	 * A `noqa` directive is never re-laid-out, because breaking it after the colon widens it to every
+	 * rule.
+	 *
+	 * `Suppression.parseNoqa` reads an empty rule list as EVERY rule, and every gate here says the
+	 * result is fine: the writer re-emits a comment interior byte for byte so `fmt --list` is clean, the
+	 * re-parse passes, and LINT ITSELF REPORTS FEWER FINDINGS, which reads as progress. Measured on a
+	 * 133-column trailing probe, a live `naming` warning disappeared. 24 of this tree's 131 trailing
+	 * noqa comments are already past 120 columns.
+	 *
+	 * The directive here stands on its OWN line inside a `//` run, so `reflowSafeLine` is the only guard
+	 * it can reach — as a TRAILING comment it was refused by the trailing-comment test first and pinned
+	 * neither. Killed by arm `M-COMMENT-REFLOW-UNSAFE-LINES`.
+	 */
+	@:pin('control')
+	@:killer('M-COMMENT-REFLOW-UNSAFE-LINES')
+	public function testASuppressionDirectiveIsNeverWrapped(): Void {
+		final pad: String = ''.rpad(' and more words', 150);
+		final src: String = 'class C {\n\t// noqa: magic-number\n\t// a second run line.\n\tvar x = 1;\n}';
+		Assert.isTrue(errText(cr(src, 'magic-number', 'magic-number$pad', false)).contains('columns'));
+	}
+
+	/**
+	 * A `//` trailing after CODE is never wrapped either, whatever it says: its continuation would be
+	 * a NEW own-line comment, and the writer then relocates it away from the code it annotates.
+	 *
+	 * A SEPARATE guard from `reflowSafeLine`, and it took a mutation run to see that: the directive
+	 * fixture above was written as a trailing noqa, so both guards refused it and each arm reported
+	 * the other's control as missing. Neither could be discriminated until the two fixtures reached
+	 * one guard apiece. Killed by arm `M-COMMENT-REFLOW-TRAILING-WRAPPED`.
+	 */
+	@:pin('control')
+	@:killer('M-COMMENT-REFLOW-TRAILING-WRAPPED')
+	public function testATrailingCommentIsNeverWrapped(): Void {
+		final pad: String = ''.rpad(' and more words', 150);
+		final src: String = 'class C {\n\tvar x = 1; // a trailing note.\n}';
+		Assert.isTrue(errText(cr(src, 'a trailing note.', 'a trailing note$pad', false)).contains('columns'));
+	}
+
+	/**
+	 * Layout that carries its own meaning is never wrapped either: an indented code sample, a
+	 * markdown table row and a bullet all keep their shape and the width gate names them instead.
+	 *
+	 * Wrapping them was a corruption no gate could see — the sample lost its hanging indent to the
+	 * bare gutter, the table row lost its cell count, and a bullet's continuation read as a sibling
+	 * paragraph between two bullets. Three shapes in one fixture because they share one predicate,
+	 * `SourceComments.reflowSafeLine`. Killed by arm `M-COMMENT-REFLOW-UNSAFE-LINES`.
+	 */
+	@:pin('control')
+	@:killer('M-COMMENT-REFLOW-UNSAFE-LINES')
+	public function testStructuralCommentLinesAreNeverWrapped(): Void {
+		final tail: String = ''.rpad(' and more words', 150);
+		for (line in [
+			'    final rows = build(a, b);',
+			'| a first cell | second value |',
+			'- M1 first item'
+		]) {
+			// The find is the line's own text WITHOUT its indentation: `normalizeCommentBody` folds the
+			// whitespace after a break into the continuation, so a leading-space find matches nothing.
+			final find: String = line.ltrim();
+			Assert.isTrue(isErr(cr(structured(line), find, find + tail, false)), 'must refuse to wrap: $line');
+		}
+	}
+
+	/**
+	 * Ordinary prose in the SAME block still reflows, so the refusals above are a predicate and not
+	 * a switch that turned the feature off.
+	 */
+	public function testProseBesideStructuralLinesStillReflows(): Void {
+		final long: String = 'Lead sentence made a great deal longer indeed so that it certainly runs past the configured '
+			+ 'maximum line length that this fixture is measured against.';
+		final text: String = okText(cr(structured('    final rows = build(a, b);'), 'Lead sentence.', long, false));
+		Assert.isTrue(widestLine(text) <= lineWidth(), 'no line past the width: ${widestLine(text)} in $text');
+		Assert.isTrue(text.contains(' *     final rows = build(a, b);'), 'the code sample keeps its indent: $text');
+	}
+
+	/**
+	 * A line whose FIRST token is wider than the balancer's estimate is still wrapped, not refused.
+	 *
+	 * `fillText` hands a remainder back whole when no break point fits, so at a small enough limit
+	 * the line COUNT falls and a one-line over-width answer beat a legal two-line one — the
+	 * balancer accepted it and the gate then refused the edit. Measured: an 86-character URL
+	 * followed by prose was REFUSED at 168 columns while the same body with its first space at
+	 * index 60 wrapped happily. The acceptance test compares WIDTH as well as line count.
+	 * Killed by arm `M-COMMENT-REFLOW-COUNT-ONLY`.
+	 */
+	@:pin('control')
+	@:killer('M-COMMENT-REFLOW-COUNT-ONLY')
+	public function testALongFirstTokenIsWrappedNotRefused(): Void {
+		final url: String = 'https://example.invalid/' + ''.rpad('u', 62);
+		final src: String = 'class C {\n\t// $url XX\n\tvar x = 1;\n}';
+		final text: String = okText(cr(src, 'XX', 'is the fork rule shape we still have to explain at some length here indeed', false));
+		Assert.isTrue(widestLine(text) <= lineWidth(), 'no line past the width: ${widestLine(text)} in $text');
+		Assert.isTrue(text.contains('// $url\n\t// is the fork rule'), 'and it broke after the URL: $text');
+	}
+
+	/**
+	 * The reflow runs BEFORE the one-line-doc re-open, so a block the reflow itself grew past one
+	 * line still gets its closer on a line of its own.
+	 *
+	 * The two are order-sensitive neighbours — `openGrownDocBlock` asks whether the body holds a
+	 * break — and nothing distinguished the orders: every earlier grown-doc fixture supplied its own
+	 * newline. Here the replacement is ONE line and only the reflow can introduce the break.
+	 */
+	public function testAOneLineDocTheReflowGrewIsOpenedToo(): Void {
+		final long: String = 'A rewritten sentence that runs on and on and on and on and on and on and on and on and on '
+			+ 'and on and on and on and on and on and on past every plausible width.';
+		final text: String = okText(cr('class C {\n\t/** One liner. */\n\tfunction f() {}\n}', 'One liner.', long, false));
+		Assert.isTrue(widestLine(text) <= lineWidth(), 'no line past the width: ${widestLine(text)} in $text');
+		Assert.isTrue(text.contains('\t/**\n\t * A rewritten sentence'), 'the opener got its own line: $text');
+		Assert.isTrue(text.contains('width.\n\t */'), 'and so did the closer: $text');
+	}
+
 	private inline function bullets(): String {
 		return '/**\n * Lead sentence.\n *\n * - M1 first item\n * - M2 second item\n * - M3 third item\n */\nclass C {}';
+	}
+
+	/** A doc block holding `line` as its own paragraph between two prose paragraphs. */
+	private inline function structured(line: String): String {
+		return 'class C {\n\t/**\n\t * Lead sentence.\n\t *\n\t * $line\n\t *\n\t * Tail sentence.\n\t */\n\tfunction f() {}\n}';
+	}
+
+	/** A run of two `//` lines wide enough that a find crossing their break joins them past the width. */
+	private inline function wideRun(): String {
+		return 'class C {\n\t// alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron\n'
+			+ '\t// pi rho sigma tau upsilon phi chi psi omega and then some more words to be sure.\n\tvar x = 1;\n}';
+	}
+
+	/** The same two lines as one `/** ` block, so the two comment spellings answer the reflow alike. */
+	private inline function wideDoc(): String {
+		return 'class C {\n\t/**\n\t * alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron\n'
+			+ '\t * pi rho sigma tau upsilon phi chi psi omega and then some more words to be sure.\n\t */\n\tfunction f() {}\n}';
+	}
+
+	/** Two `//` paragraphs with a bare `//` separating them. */
+	private inline function runParagraphs(): String {
+		return 'class C {\n\t// First paragraph ends here.\n\t//\n\t// Second paragraph starts here.\n\tvar x = 1;\n}';
+	}
+
+	/** The same two paragraphs in a doc block, separated by a bare ` *`. */
+	private inline function docParagraphs(): String {
+		return 'class C {\n\t/**\n\t * First paragraph ends here.\n\t *\n\t * Second paragraph starts here.\n\t */\n\tfunction f() {}\n}';
 	}
 
 	/** A run of two `//` lines with a sentence wrapped across them, and code right after it. */
 	private inline function lineRun(): String {
 		return 'class C {\n\t// first half of a sentence that runs\n\t// across two line comments.\n\tvar x = 1;\n}';
+	}
+
+	/** The configured line width the fixtures measure against — the plugin's compiled default. */
+	private function lineWidth(): Int {
+		final metrics: Null<LayoutMetrics> = new HaxeQueryPlugin().layoutMetrics(null);
+		return metrics == null ? 0 : metrics.lineWidth;
+	}
+
+	/** The widest line of `text` in rendered columns, a tab worth the plugin's own indent width. */
+	private function widestLine(text: String): Int {
+		final metrics: Null<LayoutMetrics> = new HaxeQueryPlugin().layoutMetrics(null);
+		final tab: Int = metrics == null ? 1 : metrics.indentWidth;
+		var best: Int = 0;
+		for (line in text.split('\n')) {
+			var cols: Int = 0;
+			for (i in 0...line.length) cols += line.fastCodeAt(i) == '\t'.code ? tab : 1;
+			if (cols > best) best = cols;
+		}
+		return best;
+	}
+
+	/**
+	 * Every line of `text` with a leading comment marker stripped, folded into one whitespace-normalised
+	 * run — the prose a reflow has to keep word for word, whatever it did to the line breaks.
+	 */
+	private function commentProse(text: String): String {
+		final words: Array<String> = [];
+		for (line in text.split('\n')) {
+			var rest: String = line.ltrim();
+			for (marker in ['/**', '/*', '*/', '//', '*']) if (rest.startsWith(marker)) {
+				rest = rest.substring(marker.length);
+				break;
+			}
+			for (word in rest.split(' ')) if (word.trim() != '') words.push(word.trim());
+		}
+		return words.join(' ');
 	}
 
 	private function cr(src: String, find: String, replace: String, regex: Bool): EditResult {
