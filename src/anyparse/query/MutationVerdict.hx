@@ -18,10 +18,15 @@ enum MutationVerdictKind {
 	RunFail;
 }
 
-/** One classified track: the verdict plus the human-readable row detail. */
+/**
+ * One classified track: the verdict plus the human-readable row detail. `full` carries the SAME detail uncapped, present only when
+ * `cap` actually elided something — the caller (`tools/mutation-check.sh`) appends it to the track's own transcript file rather than
+ * the console row, so a name `cap`'s ten-item window pushed out is still findable without re-deriving it from the raw utest dump (T703).
+ */
 typedef MutationVerdictResult = {
 	kind: MutationVerdictKind,
-	detail: String
+	detail: String,
+	?full: String
 };
 
 /**
@@ -98,10 +103,22 @@ class MutationVerdict {
 			for (name in failures) if (!containsAny(name, expected)) extra.push(name);
 		}
 
-		final counted: String = '${failures.length} tests failed / $assertions assertions: ${cap(failures)}';
-		return missing.length > 0
-			? { kind: Mismatch, detail: '$counted (missing: ${cap(missing)})' }
-			: { kind: Killed, detail: extra.length > 0 ? '$counted +extra: ${cap(extra)}' : counted };
+		inline function render(join: Array<String> -> String): String {
+			final counted: String = '${failures.length} tests failed / $assertions assertions: ${join(failures)}';
+			return if (missing.length > 0)
+				'$counted (missing: ${join(missing)})'
+			else if (extra.length > 0)
+				'$counted +extra: ${join(extra)}'
+			else
+				counted;
+		}
+		final detail: String = render(cap);
+		// `full` is set only when `cap` actually elided something — an
+		// unconditional second string would make every KILLED row carry a
+		// redundant identical `full`, which is not what T703 asked to fix.
+		final capped: Bool = failures.length > DETAIL_ITEM_LIMIT || missing.length > DETAIL_ITEM_LIMIT || extra.length > DETAIL_ITEM_LIMIT;
+		final full: Null<String> = capped ? render(items -> items.join(', ')) : null;
+		return missing.length > 0 ? { kind: Mismatch, detail: detail, full: full } : { kind: Killed, detail: detail, full: full };
 	}
 
 	/** Does any of `names` carry `needle` as a substring? */

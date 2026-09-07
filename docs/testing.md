@@ -357,7 +357,7 @@ MISMATCH   foo                  filter=Bar            2 tests failed / 9 asserti
 3 tracks: 1 killed, 1 survived, 1 mismatch, 0 error
 ```
 
-The two figures on a row are in different units on purpose: the count of failing *test methods* against the total *assertions* utest reported, since that total is the only run-size figure the header carries — once a run goes red utest stops listing the passing tests, so there is no test-level total to divide by. The name list is capped at the first ten, with `…+N more`; the full set is in the track's transcript, which the workroot path points at.
+The two figures on a row are in different units on purpose: the count of failing *test methods* against the total *assertions* utest reported, since that total is the only run-size figure the header carries — once a run goes red utest stops listing the passing tests, so there is no test-level total to divide by. The name list is capped at the first ten, with `…+N more`; the full set — every list uncapped, not just a re-parse of the raw utest dump — is appended to the track's own transcript whenever the cap actually elided something (T703), and the workroot path points at it.
 
 ### Declared arms — the pin metadata's other half
 
@@ -444,6 +444,12 @@ node bin/test.js --list-arms             # the same list, out of the generated r
 
 It renders each record into a patch inside a scratch worktree at `HEAD`, derives the expectation set from the arm's OWN pins in the generated registry — the pin metadata is where that pairing is declared, and one copy of a fact is enough — writes a manifest, and hands it to `tools/mutation-check.sh`. Nothing new classifies a transcript.
 
+**`HEAD` is a fixed point, and `--working-tree` (T694) is the escape hatch for authoring.** The registry itself (`test/testkit/mutation-arms.json`) is always read live off disk — `arm_pins`/`read_arm` never went through `HEAD` — so a brand-new, still-uncommitted arm record was never the problem. What a `HEAD`-based run cannot see is the SOURCE the arm cuts, when that source is itself still uncommitted: the render step (`hxq patch` inside `mutation-arm.sh`'s own scratch worktree) fails outright if the member the arm names does not exist yet at `HEAD`. S156 hit exactly this and verified the shape by hand — apply the `find`/`replace` cut directly on the working tree, rebuild, run the family, restore — because there was no automated path.
+
+`--working-tree` builds BOTH the render worktree (`mutation-arm.sh`'s own `$gen`) and every track worktree `mutation-check.sh` builds from a `git stash create` snapshot instead of `HEAD` (no stash-list entry, the real working tree untouched), falling back to `HEAD` on a clean tree — `mutation-arm.sh` passes the snapshot commit to `mutation-check.sh` via a new `--base <ref>` option so the two stay on the same base. Threading it through both scripts is not a nicety: a track built from plain `HEAD` while the manifest's patch carries context lines from the snapshot either `PATCH-FAIL`s outright, or — the quieter failure — applies cleanly while the track's `HEAD`-based tree is still missing whatever ELSE the snapshot carried (a new fixture the patch does not touch but the arm's own `@:killer` already names), which reads as a misleading `SURVIVED` or `NO-TESTS` for exactly the case the flag exists to make trustworthy.
+
+The flag refuses outright on any UNTRACKED file — `stash create` silently drops those, which is the one way it could make the verdict lie by itself — but it does NOT refuse on ordinary tracked, uncommitted changes beyond the cut, and that is a decision rather than an oversight: no predicate can tell "this uncommitted change is part of the cut" from "this one is unrelated" before the cut has been rendered to compare against, and authoring an arm beside its own feature is precisely the case the flag exists for. What it does instead is print every included change before the run, so the reading stays accountable.
+
 **The contract is "kills its own pin", not "kills exactly one test", and the existing verdicts already say which.** An arm cuts shared engine code, so collateral is inherent rather than a defect: measured on `18fc8e90`, `M-DECLARINGFILES-EMPTY` takes 326 fixtures down and `M-BUILDMACRO-TRUE` 280, while `M-KINDS` takes 3 and `M-ARM-ROW-OK` exactly its own 2.
 
 | Row | Reading |
@@ -455,16 +461,26 @@ It renders each record into a patch inside a scratch worktree at `HEAD`, derives
 
 A `SURVIVED` or `MISMATCH` row is evidence about the FIXTURE, not noise to retry past: S86 deleted a helper because an arm survived the full suite, and S92 had two arms survive and rewrote the fixtures until they discriminated rather than hiding it. This slice's own first sweep produced one of each, and both were defects in the arm records rather than in the fixtures — `M-FANOUT-FIRST` SURVIVED because its cut ADDED a second read of the specific key while leaving the original in place, so the original still won; `M-PATHWALK-NULL` came back `BUILD-FAIL` because the member is `inline` and a forced return ahead of the body is a non-final return the compiler refuses (which is why S94 had hand-special-cased that one). Both are now `find`/`replace` cuts, and the second failure mode is why the registry has that shape at all.
 
-**Cost, measured on `18fc8e90` with 23 arms, 16 cores, `--jobs 4`:**
+**Cost, measured on `08439aea` (2026-09-07) with 16 cores, `--jobs 4`.** The registry has grown past the point a
+full `--all` sweep is affordable to re-measure per doc update (this table went stale by an order of magnitude the
+last time it quoted one — T702), so the two `--all` rows are an EXTRAPOLATION from a real 12-arm sample, marked as
+such rather than presented as a full run:
 
 | Run | Wall | Verdicts |
 |---|---|---|
-| one arm, whole suite | 48 s | |
-| one arm, `--fast` | 17 s | |
-| `--all`, whole suite | 335 s | 23 killed |
-| `--all --fast` | 130 s | 23 killed |
+| one arm, whole suite | 53 s | 1 killed |
+| one arm, `--fast` | 17 s | 1 killed |
+| 12 arms, whole suite, `--jobs 4` (measured) | 180 s | 12 killed |
+| 12 arms, `--fast`, `--jobs 4` (measured) | 68 s | 12 killed |
+| `--all` (248 arms), whole suite (extrapolated ×20.7) | ~62 min | — |
+| `--all --fast` (248 arms) (extrapolated ×20.7) | ~23 min | — |
 
-**Cadence: `--check-apply` while AUTHORING, `--all --fast` per WAVE, one arm on demand.** A cut is compiled BEFORE it is claimed — `tools/mutation-arm.sh <ARM> --check-apply` answers the one question no walk over the record and the tree can (§ "The five arm-authoring blind spots"), and it runs before the arm has a `@:killer`, which is what makes it an authoring step rather than a cheaper sweep. For the SWEEPS, two minutes is cheap enough to run at the end of a wave and far too expensive to run per slice — and the build-time checks already catch the failure a sweep would otherwise be needed for (an arm pointing at a member that no longer exists), for free, on every build. Run a single arm when you add or edit a pin, which is the moment its claim is actually being made. Reach for `--all` (whole suite) when the collateral census is the point — before a release, or when a refactor is supposed to have preserved a coupling.
+The extrapolation is linear in arm count on purpose, not a hedge: the architecture is N independent
+worktree-plus-build-plus-suite tracks processed in fixed-size `--jobs`-wide batches (`tools/mutation-check.sh`), not
+one process doing more work per arm — the risk profile "A T(2n)/T(n) Ratio Is Not Evidence of Superlinearity" warns
+about does not apply to a batch of independent, same-shaped jobs the way it would to a single growing computation.
+
+**Cadence: `--check-apply` while AUTHORING, `--all --fast` per WAVE, one arm on demand.** A cut is compiled BEFORE it is claimed — `tools/mutation-arm.sh <ARM> --check-apply` answers the one question no walk over the record and the tree can (§ "The five arm-authoring blind spots"), and it runs before the arm has a `@:killer`, which is what makes it an authoring step rather than a cheaper sweep. For the SWEEPS, the `--fast` variant is cheap enough to run at the end of a wave and the full whole-suite `--all` is not — reach for the WHOLE-SUITE form only before a release or when a refactor is supposed to have preserved a coupling, never as a routine per-wave gate at the current registry size. The build-time checks already catch the failure a sweep would otherwise be needed for (an arm pointing at a member that no longer exists), for free, on every build. Run a single arm when you add or edit a pin, which is the moment its claim is actually being made.
 
 **The scratch directory a run leaves behind is documented** — `anyparse-mutarm.*` and the `anyparse-mutcheck.*` it drives, kept on a non-KILLED verdict with the path printed, removed otherwise, and swept at startup once their owner pid is gone: § "Scratch directories: every tool's, and who removes them".
 
@@ -476,7 +492,7 @@ The cut is the queue's second candidate at the only layer that covers every prod
 
 **The root is CLAIMED, not just created**, in `tools/tmp-lifecycle.sh`'s own shape — `apq-suite.XXXXXX` from `mkdtemp` plus a `.apq-owner` stamp naming the pid, and `apq-suite` added to that script's `TMPL_PREFIXES`. Otherwise this would be the project's FIFTH scratch producer and the only one no sweep can reap; § "Scratch directories" records what the last such omission cost. Three consequences worth stating exactly, because the first draft of this paragraph got the middle one wrong: a COMPLETED run now leaves nothing at all, where the old scheme accumulated (a developer's temp dir held 3 294 stale `tmp_*` entries at the time of the fix); an INTERRUPTED run leaves one directory holding whatever fixtures were live — 17 at the peak, measured by sampling the root every 0.2 s — not an empty one; and that directory is swept once its pid is gone. The teardown goes through `CliFixture.removeScratchRoot`, which refuses any path that is not a claimed root: `removeDir` is a recursive delete, and while probing this seam the runner's teardown was pointed at `repoRoot()` for one build, whereupon the run deleted the entire worktree it was running in.
 
-Measured two ways. Four concurrent whole suites from four worktrees, counting non-green ROWS and the distinct fixtures behind them; and `tools/mutation-arm.sh` over a FIXED 12-arm subset at `--jobs 4`, two sweeps of one tree, where the deciding column is the DRIFT — rows present in exactly one of the two sweeps, since a fragment arm's own constant `+extra` row is stable and subtracts out. `--all` was not affordable: the registry is 236 arms at that base, not the 23 the cost table above was measured on, so a whole-suite `--all` is ~45 min a sweep rather than 335 s (T702).
+Measured two ways. Four concurrent whole suites from four worktrees, counting non-green ROWS and the distinct fixtures behind them; and `tools/mutation-arm.sh` over a FIXED 12-arm subset at `--jobs 4`, two sweeps of one tree, where the deciding column is the DRIFT — rows present in exactly one of the two sweeps, since a fragment arm's own constant `+extra` row is stable and subtracts out. `--all` was not affordable: the registry was 236 arms at that base, not the 23 arms / 335 s an earlier revision of the cost table above quoted, so a whole-suite `--all` was already ~45 min a sweep back then — since grown further to 248 arms / ~62 min, the CURRENT figure the table above states (T702).
 
 | measurement | round 1 | round 2 | reading |
 |---|---:|---:|---|
@@ -487,7 +503,7 @@ Measured two ways. Four concurrent whole suites from four worktrees, counting no
 | 12 arms `--jobs 4`, `0430a5eb`, before | 52 `+extra` | 44 `+extra` | drift **20 rows / 18 fixtures / 12 classes** |
 | 12 arms `--jobs 4`, `1edb07e7`, after | 39 `+extra` | 39 `+extra` | drift **0** — the two sets are identical |
 
-The 18 drifting fixtures before the fix sit in `CompilerOracleE2ETest` (4), `MoveExtractDocCensusTest` (3), `StringLiteralDupCheckTest` (2), `ExplicitLocalTypeOracleE2ETest` (2), `AvoidDynamicRiskyFixE2ETest` (2), and one each in `MoveCanonicalOutputSliceTest`, `LintConfigCliTest`, `ThreadSafetyCheckTest`, `FixVerifierProbeRefusalE2ETest`, `ExplicitTypeReturnOracleTest`, `ExplicitTypeCheckTest` and `HxComprehensionCloserSliceTest` — the family this caveat used to name, plus eight it did not, while four names it DID list never appeared. The last of the twelve is not itself a flake but a DISPLAY artefact worth knowing when reading any drift census: a row's `+extra` list is truncated at ten names with `…+N more`, so `M-ALWAYS-SAME` going from 46 red fixtures to 45 pushed one honest name out of the visible ten (T703). The one-variable manipulation that decided the mechanism before a line was written: the same four concurrent suites, each handed a private `TMPDIR` by the shell, came back 4 of 4 green with byte-identical assertion counts.
+The 18 drifting fixtures before the fix sit in `CompilerOracleE2ETest` (4), `MoveExtractDocCensusTest` (3), `StringLiteralDupCheckTest` (2), `ExplicitLocalTypeOracleE2ETest` (2), `AvoidDynamicRiskyFixE2ETest` (2), and one each in `MoveCanonicalOutputSliceTest`, `LintConfigCliTest`, `ThreadSafetyCheckTest`, `FixVerifierProbeRefusalE2ETest`, `ExplicitTypeReturnOracleTest`, `ExplicitTypeCheckTest` and `HxComprehensionCloserSliceTest` — the family this caveat used to name, plus eight it did not, while four names it DID list never appeared. The last of the twelve is not itself a flake but a DISPLAY artefact worth knowing when reading any drift census: a row's `+extra` list is truncated at ten names with `…+N more`, so `M-ALWAYS-SAME` going from 46 red fixtures to 45 pushed one honest name out of the visible ten — FIXED (T703): `MutationVerdict.classify` now also emits the same list uncapped whenever `cap` actually elided something, and `tools/mutation-check.sh` appends it to the track's own transcript rather than the console row, so a drift rewrite reads the transcript instead of counting past ten in the printed line. The one-variable manipulation that decided the mechanism before a line was written: the same four concurrent suites, each handed a private `TMPDIR` by the shell, came back 4 of 4 green with byte-identical assertion counts.
 
 **The residue is 2 fixtures and it is a DIFFERENT defect — a lower-rate one, so a drift of 0 is not proof it is gone.** An earlier pair of sweeps of the fixed tree drifted by 3 rows, and all three were `unit.cli.ApqDxTier5CliTest.testProbeStagesSourceToTmp` / `testProbeRestagingOverwritesPreviousScratch`; the pair quoted above drifted by 0 because neither fired. Both assert on the exact content of `/tmp/anyparse-last-probe.hx` — a path `ProbeCommand` hard-codes OUTSIDE `$TMPDIR` on purpose, because a human is meant to copy it out of the tool's own output. No temp-root isolation reaches it and no test-side change de-races it; the options are to move the product path under the OS temp dir or to accept these two as single-process fixtures (T700). `--jobs 1` remains the way to isolate THAT race — it is no longer the FIRST thing to try for an unexplained extra row, which is what it used to be. Every VERDICT was stable across all six arm sweeps, before and after.
 
@@ -2686,9 +2702,33 @@ transcript is the artifact. Why it exists at all — two suite processes under o
 `$TMPDIR` generate the SAME fixture names and delete each other's files — is
 § "Declared arms", the whole-suite-mode paragraph.
 
-`--keep` on any of the four keeps it regardless — that is the debugging
-escape hatch, and `mutation-arm.sh --keep` forwards it to the
-`mutation-check.sh` it drives, so both directories survive together.
+`--keep` on any of the four keeps it — that is the debugging escape hatch,
+and `mutation-arm.sh --keep` forwards it to the `mutation-check.sh` it
+drives, so both directories survive together — **and, since T738, "keeps"
+means past this process's own exit, not just past its own cleanup.** The
+sweep predicate below reads "stamped owner is gone" identically for a
+CRASHED run and a `--keep` run that finished normally, because the owner
+process has exited either way; a `--keep` run that only skipped its OWN
+`tmpl_discard` call left the directory exposed to the very NEXT run's
+startup sweep with nothing distinguishing it from an abandoned one —
+measured (S155): a saved workroot with 10 transcripts was gone by the time
+the wave's finalists started. The fix is a marker file
+(`tmpl_mark_keep`, `.apq-keep`) that `tmpl_is_orphan` checks before anything
+else and treats as permanently NOT orphan; all four tools write it, but only
+on an EXPLICIT `--keep` (or `suite-shard.sh --plan-only`'s internal
+equivalent) — never on a bare "kept because this run failed / was red"
+without `--keep`, which stays exactly as before and ages out through the
+ordinary grace-period sweep. That scoping is deliberate, not an
+afterthought: a marker that fired on every non-green exit would make it
+PERMANENT, and this file's own header already prices what an unbounded
+kept-forever set costs (46.6 GB, 125 directories) — a marker exempt from
+its own sweep for every red run would reopen exactly that hole one layer
+in. Verified with two consecutive runs: claim a directory, mark it kept,
+backdate its mtime and stamp past `TMPL_GRACE_SECONDS`, and a second
+`tmpl_sweep` still leaves it standing — a directory with no marker under the
+same conditions does not. `tmp-lifecycle.sh --list`'s STATE column now reads
+`KEEP` for a marked directory rather than reusing `ORPHAN`/`live`, which
+would have hidden exactly this distinction from the hand tool too.
 
 **The recorded blame was half wrong.** `battery.sh` and `suite-shard.sh`
 were already correct: their scratch directory is deleted on green and kept
@@ -4259,6 +4299,28 @@ pays zero extra round trips. Measured 0 files needing a second rewrite over `src
 The general shape is the sister of "A comment interior and a string literal are
 outside every gate": **a gate that reads the same component the defect lives in
 cannot see the defect — make the component check its own postcondition.**
+
+### A Pony writer blast pair needs all SIX roots, not `src` alone
+
+A before/after byte comparison of the writer against the user's Pony fork —
+`cp -R` two copies, format both with the base engine and the slice engine,
+`diff -rq` — is complete only when it covers every root the fork ships `.hx`
+under: `src tools tests socketTests install docgen`. Two slices paid for
+comparing `src` alone: S146 measured `src` only and missed
+`tools/src/module/Build.hx`; S156, running the identical `src`-only
+comparison, missed a DIFFERENT file of the same shape,
+`tools/src/module/CfgModule.hx`. Neither miss showed up as a wrong verdict —
+each comparison answered a narrower question than the one it was asked, and
+the tree the answer was silently narrower than kept a real writer-affecting
+file outside either engine's reach.
+
+Copy the WHOLE repo (`cp -R /Users/axg/dev/libs/Pony /tmp/pony-SNNN`, never
+`cp -R .../Pony/src`): beyond missing files under the other five roots, a
+`src`-only copy also loses the fork's root `apqlint.json` / `hxformat.json`,
+so it silently measures a DIFFERENT config than the fork actually runs
+under, not just a smaller file set. `diff -rq` the two formatted copies
+afterward — a root-scoped `find <root> -name '*.hx' | wc -l` count is not a
+substitute for comparing the copies themselves.
 
 ### Every `fmt` summary that reports a count names BOTH quantities
 

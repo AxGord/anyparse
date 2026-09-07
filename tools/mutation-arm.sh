@@ -12,10 +12,10 @@
 # both directions. This script is the other half: it turns a name into a run.
 #
 # Usage:
-#   tools/mutation-arm.sh <ARM> [<ARM>...] [--jobs N] [--fast] [--keep]
-#   tools/mutation-arm.sh --all [--jobs N] [--fast] [--keep]
-#   tools/mutation-arm.sh <ARM>... --check-apply [--jobs N] [--keep]
-#   tools/mutation-arm.sh --all --check-apply [--jobs N] [--keep]
+#   tools/mutation-arm.sh <ARM> [<ARM>...] [--jobs N] [--fast] [--keep] [--working-tree]
+#   tools/mutation-arm.sh --all [--jobs N] [--fast] [--keep] [--working-tree]
+#   tools/mutation-arm.sh <ARM>... --check-apply [--jobs N] [--keep] [--working-tree]
+#   tools/mutation-arm.sh --all --check-apply [--jobs N] [--keep] [--working-tree]
 #   tools/mutation-arm.sh --list
 #
 #   --all    every arm the registry declares.
@@ -28,6 +28,14 @@
 #            shared engine code, so what ELSE went red is part of the reading.
 #   --jobs N passed to tools/mutation-check.sh (default: its own max(1,min(4,cores/2))).
 #   --list   print the registry and exit.
+#   --working-tree
+#            build the scratch worktree (and, since T694's mutation-check.sh
+#            --base companion, every track worktree) from a `git stash
+#            create` snapshot of the CURRENT working tree instead of HEAD,
+#            for an arm authored alongside the still-uncommitted source it
+#            targets. Refuses on any untracked file; prints every included
+#            change otherwise. Full rationale: `docs/testing.md` §
+#            "Declared arms" — one copy of this fact is enough.
 #   --check-apply
 #            AUTHORING mode: apply the cut and BUILD, no suite. Each arm is
 #            reported APPLIES or BUILD-FAIL with the cause named
@@ -54,7 +62,7 @@
 #
 # What it does per arm: takes the arm's record, renders it into an
 # `hxq patch --select '<kind>:<method>'` payload, applies it inside a scratch
-# worktree at HEAD, captures the result as a git patch, and hands the patch to
+# worktree at HEAD (or a `--working-tree` snapshot), captures the result as a git patch, and hands the patch to
 # `tools/mutation-check.sh` with the arm's OWN pins as the expectation set. The
 # kind is `FnMember` unless the record spells another: a grammar DECLARATION has
 # no method to cut, and its `@:re` terminal is a module-level `MetaCall`. Only a
@@ -103,6 +111,26 @@ set -euo pipefail
 script_dir=$(cd -P "$(dirname "$0")" && pwd)
 repo=$(cd -P "$script_dir/.." && pwd)
 arms_json="$repo/test/testkit/mutation-arms.json"
+
+# Engine binaries — HXQ_BIN (a parallel worker's private build: the wave
+# protocol's `cd <worktree> && haxe bin/apq-js.hxml && haxe test-js.hxml`, or
+# `tools/worker-build.sh <dir>`) is honoured before falling back to the
+# repo's own shared `bin/` (T725). Without this a worker whose OWN `bin/` is
+# empty — on purpose, T710/T739, so `git status --porcelain` stays clean —
+# could not run this script at all, and both error texts pointed at
+# `haxe bin/apq-js.hxml`, exactly what building in the worker's own worktree
+# is meant to avoid. `test.js` is assumed to sit beside `apq.js`: every
+# build recipe that produces one produces the other in the same directory.
+apq_bin="$repo/bin/apq.js"
+test_bin="$repo/bin/test.js"
+if [ -n "${HXQ_BIN:-}" ]; then
+    if [ ! -f "$HXQ_BIN" ]; then
+        echo "mutation-arm.sh: HXQ_BIN=$HXQ_BIN not found" >&2
+        exit 2
+    fi
+    apq_bin=$(cd -P "$(dirname "$HXQ_BIN")" && pwd)/$(basename "$HXQ_BIN")
+    test_bin="$(dirname "$apq_bin")/test.js"
+fi
 
 # Scratch-directory lifecycle — creation, the startup sweep for what a
 # SIGKILL left behind, and the predicate that keeps a sibling's live run
@@ -160,7 +188,11 @@ process.stdout.write([force === "" ? "FIND" : "FORCE", arm.type, arm.method, kin
 # GENERATED registry, never restated in the arm record: the pin metadata is
 # where the arm/fixture pairing is declared, and one copy of a fact is enough.
 arm_pins() {
-    ( cd "$repo" && node bin/test.js --list-pins ) | awk -F' :: ' -v arm="$1" -v want="$2" '
+    # No `cd` needed: `--list-pins` is a compile-time-embedded registry dump
+    # with no CWD-relative read, measured (`cd /tmp && node <abs>/test.js
+    # --list-pins` matches the in-repo count byte-for-byte) — which is what
+    # lets this honour a private `$test_bin` living anywhere.
+    node "$test_bin" --list-pins | awk -F' :: ' -v arm="$1" -v want="$2" '
         {
             n = split($3, killers, ",")
             for (i = 1; i <= n; i++) if (killers[i] == arm) {
@@ -173,7 +205,7 @@ arm_pins() {
 # ---------------------------------------------------------------- arguments
 
 if [ "$#" -lt 1 ]; then
-    echo "usage: mutation-arm.sh <ARM>... | --all | --list [--jobs N] [--fast] [--keep] [--check-apply]" >&2
+    echo "usage: mutation-arm.sh <ARM>... | --all | --list [--jobs N] [--fast] [--keep] [--check-apply] [--working-tree]" >&2
     exit 2
 fi
 
@@ -183,17 +215,27 @@ filter_mode="all-tests"
 want_all=0
 keep=0
 check_apply=0
+working_tree=0
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --list)
-            ( cd "$repo" && node bin/test.js --list-arms )
+            # Checked here too, not just in the shared existence loop below
+            # (which --list runs ahead of): otherwise a missing $test_bin
+            # surfaces as a raw node stack trace instead of the same
+            # friendly message every other path gets.
+            if [ ! -f "$test_bin" ]; then
+                echo "mutation-arm.sh: $test_bin missing — build it first (haxe test-js.hxml), or point HXQ_BIN at a private engine (tools/worker-build.sh <dir> && export HXQ_BIN=<dir>/apq.js — test.js must sit beside it)" >&2
+                exit 2
+            fi
+            node "$test_bin" --list-arms
             exit 0
             ;;
         --all) want_all=1; shift ;;
         --check-apply) check_apply=1; shift ;;
         --fast) filter_mode="pinned-classes"; shift ;;
         --keep) keep=1; shift ;;
+        --working-tree) working_tree=1; shift ;;
         --jobs)
             if [ "$#" -lt 2 ]; then
                 echo "mutation-arm.sh: --jobs needs a number" >&2
@@ -216,10 +258,12 @@ if [ ! -f "$arms_json" ]; then
 fi
 # Both binaries are read from the UNMUTATED tree: apq.js is the hxq engine that
 # renders the cut and the verdict classifier mutation-check.sh shells out to,
-# test.js is the generated registry the expectations come from.
-for binary in bin/apq.js bin/test.js; do
-    if [ ! -f "$repo/$binary" ]; then
-        echo "mutation-arm.sh: $repo/$binary missing — build it first (haxe bin/apq-js.hxml && haxe test-js.hxml)" >&2
+# test.js is the generated registry the expectations come from. "Unmutated"
+# means unmutated relative to the CUT under test, which for a worker with its
+# own HXQ_BIN is its own private engine, not necessarily $repo's.
+for binary_path in "$apq_bin" "$test_bin"; do
+    if [ ! -f "$binary_path" ]; then
+        echo "mutation-arm.sh: $binary_path missing — build it first (haxe bin/apq-js.hxml && haxe test-js.hxml), or point HXQ_BIN at a private engine (tools/worker-build.sh <dir> && export HXQ_BIN=<dir>/apq.js — test.js must sit beside it)" >&2
         exit 2
     fi
 done
@@ -230,6 +274,28 @@ fi
 if [ -z "$(printf '%s' "$names" | tr -d ' ')" ]; then
     echo "mutation-arm.sh: no arm named (pass names, or --all)" >&2
     exit 2
+fi
+
+# The commit the scratch worktree is built from — HEAD, unless --working-tree
+# asked for a snapshot of the current working tree instead (see the flag's
+# doc above).
+base_ref="HEAD"
+if [ "$working_tree" -eq 1 ]; then
+    # sed, not `awk '{print $2}'`: an untracked path containing a space
+    # would otherwise print truncated at the first space in the refusal
+    # text below (the refusal itself still fires correctly either way).
+    untracked=$(git -C "$repo" status --porcelain | sed -n 's/^?? //p')
+    if [ -n "$untracked" ]; then
+        echo "mutation-arm.sh: --working-tree refuses — untracked file(s) would be silently dropped from the snapshot: $(printf '%s' "$untracked" | tr '\n' ' ')" >&2
+        exit 2
+    fi
+    stash_commit=$(git -C "$repo" stash create) || stash_commit=""
+    base_ref=${stash_commit:-HEAD}
+    dirty=$(git -C "$repo" status --porcelain --untracked-files=no)
+    if [ -n "$dirty" ]; then
+        echo "mutation-arm.sh: --working-tree base = $base_ref, folding in $(printf '%s\n' "$dirty" | wc -l | tr -d ' ') uncommitted change(s) beyond HEAD:" >&2
+        printf '%s\n' "$dirty" | sed 's/^/mutation-arm.sh:   /' >&2
+    fi
 fi
 
 # ---------------------------------------------------------------- generation
@@ -274,18 +340,34 @@ cleanup() {
     if [ "$keep" -eq 0 ] && [ "$status" -eq 0 ]; then
         tmpl_discard "$workroot" "$repo" || true
     else
+        # T738: an EXPLICIT --keep gets the permanent marker — without it,
+        # `tmpl_is_orphan` reads a finished --keep run identically to a
+        # crashed one (the owner pid is dead either way) and a LATER run's
+        # startup sweep reclaims it despite the ask to retain it. A run kept
+        # only because it FAILED (no --keep) is deliberately left off the
+        # marker: that directory is meant to age out through the ordinary
+        # grace-period sweep, same as before this fix — the marker is not a
+        # blanket "any non-zero exit" grant, or it reintroduces the
+        # unbounded accumulation this file's own header records paying for.
+        if [ "$keep" -eq 1 ]; then
+            tmpl_mark_keep "$workroot" || true
+        fi
         echo "mutation-arm.sh: work files kept in $workroot" >&2
     fi
 }
 trap cleanup EXIT
 trap 'exit 130' INT TERM HUP
 
-if ! git -C "$repo" worktree add --detach --quiet "$gen" HEAD 2>"$workroot/gen.log"; then
+if ! git -C "$repo" worktree add --detach --quiet "$gen" "$base_ref" 2>"$workroot/gen.log"; then
     echo "mutation-arm.sh: scratch worktree failed: $(tr '\n' ' ' < "$workroot/gen.log")" >&2
     exit 2
 fi
 
-export HXQ_BIN="$repo/bin/apq.js"
+# $apq_bin already resolved HXQ_BIN if the caller set one (else the repo's
+# own bin/apq.js) — exporting it here (rather than a caller's raw HXQ_BIN)
+# is what stops this line from CLOBBERING a worker's private engine, which
+# is what it did unconditionally before T725.
+export HXQ_BIN="$apq_bin"
 export APQ_NO_CONFIG_WARN=1
 
 for name in $names; do
@@ -310,7 +392,7 @@ for name in $names; do
         fi
     done
     if [ -z "$file" ]; then
-        gen_fail "$name" "$name names $type, which is under neither src/ nor test/ at HEAD" && continue
+        gen_fail "$name" "$name names $type, which is under neither src/ nor test/ at $base_ref" && continue
     fi
 
     if [ "$cut_kind" = "FORCE" ]; then
@@ -372,8 +454,9 @@ process.stdout.write(src.slice(0, nl + 1));
         gen_fail "$name" "$name: the cut changed nothing — the registry describes the code as it already is" && continue
     fi
     # Safe here and nowhere else: `$gen` is a worktree this script created from
-    # HEAD seconds ago, and the only uncommitted thing in it is the cut just
-    # made. Never spell this against a tree that holds work.
+    # the base ref (HEAD, or a `--working-tree` snapshot) seconds ago, and the
+    # only uncommitted thing in it is the cut just made. Never spell this
+    # against a tree that holds work.
     git -C "$gen" checkout -- "$file"
 
     # --check-apply asks the COMPILER, not the suite, so the arm needs no pin
@@ -387,7 +470,7 @@ process.stdout.write(src.slice(0, nl + 1));
     else
         expected=$(arm_pins "$name" "test")
         if [ -z "$expected" ]; then
-            echo "mutation-arm.sh: $name: no @:killer in the generated registry names it — rebuild bin/test.js" >&2
+            echo "mutation-arm.sh: $name: no @:killer in the generated registry names it — rebuild $test_bin" >&2
             exit 2
         fi
         if [ "$filter_mode" = "pinned-classes" ]; then
@@ -416,6 +499,14 @@ if [ "$keep" -eq 1 ]; then
 fi
 if [ "$check_apply" -eq 1 ]; then
     check_args="$check_args --build-only"
+fi
+if [ "$base_ref" != "HEAD" ]; then
+    # --working-tree (T694): the patches above were rendered against a
+    # snapshot of the working tree, not HEAD — each track's OWN worktree
+    # has to come from that same snapshot, or the patch context lines
+    # mismatch (PATCH-FAIL) or, worse, silently apply against a HEAD that
+    # is missing whatever else the snapshot carried (a false SURVIVED).
+    check_args="$check_args --base $base_ref"
 fi
 rc=0
 if [ -s "$manifest" ]; then

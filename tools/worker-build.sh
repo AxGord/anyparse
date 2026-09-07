@@ -61,9 +61,27 @@ out=$(cd -P "$workdir" && pwd)
 # precisely the shared-artifact clobbering this script exists to avoid.
 # Compared after resolution, so `bin`, `./bin` and an absolute path are
 # all caught.
+#
+# `$repo` above resolves from THIS script's own location — inside a LINKED
+# worktree (`git worktree add`), that IS the worktree's root, so its `bin/`
+# trips this same comparison even though it is a PRIVATE, gitignored
+# artifact (T710/T739 — the wave protocol builds there on purpose, via the
+# plain `haxe … -js bin/apq.js` hxml targets, precisely so `git status
+# --porcelain` stays clean): nothing else can clobber it, so the guard's
+# reason to refuse does not apply. A linked worktree's `--git-dir` points at
+# `.git/worktrees/<name>` while `--git-common-dir` points at the shared
+# `.git` the MAIN tree resolves BOTH to identically — measured: in the main
+# tree both print `.git` (equal); inside a linked worktree `--git-dir` prints
+# an absolute `.../worktrees/<name>` against `--git-common-dir`'s absolute
+# `.../.git` (unequal). A resolution failure (not a git repo at all) is
+# treated as the main-tree case — refuse, the conservative default.
 if [ "$out" = "$repo/bin" ]; then
-    echo "worker-build.sh: <workdir> is the repo's own bin/ — that is the shared build this script exists to avoid; pick a private directory" >&2
-    exit 2
+    git_dir=$(cd "$repo" && git rev-parse --git-dir 2>/dev/null) || git_dir=""
+    git_common_dir=$(cd "$repo" && git rev-parse --git-common-dir 2>/dev/null) || git_common_dir=""
+    if [ -z "$git_dir" ] || [ "$git_dir" = "$git_common_dir" ]; then
+        echo "worker-build.sh: <workdir> is the repo's own bin/ — that is the shared build this script exists to avoid; pick a private directory" >&2
+        exit 2
+    fi
 fi
 
 apq_pid=""

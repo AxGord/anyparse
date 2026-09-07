@@ -119,6 +119,16 @@ TMPL_GRACE_SECONDS=${TMPL_GRACE_SECONDS:-300}
 # Silence required before an UNSTAMPED (pre-fix) directory is swept.
 TMPL_LEGACY_SECONDS=${TMPL_LEGACY_SECONDS:-21600}
 
+# The marker a KEPT directory carries — written by a caller's `--keep` (or by
+# a non-zero exit that already kept the directory) so a LATER run's startup
+# sweep leaves it alone regardless of owner-pid or idle time (T738). Without
+# this, `tmpl_is_orphan`'s "owner pid is dead" reads identically for a
+# CRASHED run and a `--keep` run that finished normally — its process exits
+# either way — so a kept workroot was reclaimed by the next campaign's sweep
+# exactly like an abandoned one: measured 2026-09-06 (S155), a saved workroot
+# with 10 transcripts was gone by the time the wave's finalists started.
+TMPL_KEEP_MARKER=${TMPL_KEEP_MARKER:-.apq-keep}
+
 # `${TMPDIR:-/tmp}` with every trailing slash removed.
 tmpl_root() {
     local r=${TMPDIR:-/tmp}
@@ -182,10 +192,23 @@ tmpl_owner_pid() {
     awk '$1 == "pid" { print $2; exit }' "$dir/$TMPL_STAMP" 2> /dev/null || true
 }
 
+# tmpl_mark_keep <dir> — flag a claimed directory as kept: every LATER run's
+# startup sweep skips it regardless of owner-pid or idle time, until someone
+# removes it by hand. Callers that already print the kept path (mutation-arm.sh
+# / mutation-check.sh on `--keep` or a non-zero exit) call this alongside that
+# print — the marker is what makes the print true past the owner process's own
+# exit.
+tmpl_mark_keep() {
+    local dir=$1
+    [ -n "$dir" ] || return 0
+    : > "$dir/$TMPL_KEEP_MARKER"
+}
+
 # tmpl_is_orphan <dir> — true when no live run owns it. See the predicate
 # discussion in the header; every uncertainty resolves toward KEEPING.
 tmpl_is_orphan() {
     local dir=$1 pid limit newest now
+    [ -f "$dir/$TMPL_KEEP_MARKER" ] && return 1
     pid=$(tmpl_owner_pid "$dir")
     if [ -f "$dir/$TMPL_STAMP" ]; then
         if [ -n "$pid" ] && kill -0 "$pid" 2> /dev/null; then
@@ -256,7 +279,13 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
                     [ -d "$tmpl_d" ] || continue
                     tmpl_pid=$(tmpl_owner_pid "$tmpl_d")
                     [ -n "$tmpl_pid" ] || tmpl_pid="-"
-                    if tmpl_is_orphan "$tmpl_d"; then tmpl_state="ORPHAN"; else tmpl_state="live/young"; fi
+                    if [ -f "$tmpl_d/$TMPL_KEEP_MARKER" ]; then
+                        tmpl_state="KEEP"
+                    elif tmpl_is_orphan "$tmpl_d"; then
+                        tmpl_state="ORPHAN"
+                    else
+                        tmpl_state="live/young"
+                    fi
                     tmpl_new=$(tmpl_newest_mtime "$tmpl_d")
                     printf '%-10s %-9s %7ss %6s  %s\n' "$tmpl_pid" "$tmpl_state" \
                         "$(( $(date +%s) - ${tmpl_new:-0} ))" \
