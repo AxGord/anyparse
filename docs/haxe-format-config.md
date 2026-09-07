@@ -207,6 +207,104 @@ answer says so rather than quietly removing your rule.
 
 `beforeLast` or `afterLast` — which side of the separator the break falls on.
 
+## `sameLine.*` — the full key list (33 keys)
+
+`HxFormatSameLineSection` (`src/anyparse/grammar/haxe/format/HxFormatSameLineSection.hx`)
+declares 33 `sameLine.*` fields. Before this section the file you are reading named 9 of
+them with a real default/values write-up (10 if a passing mention counts — `grep -oE
+'sameLine\.[A-Za-z]+' docs/haxe-format-config.md` returns 10 distinct names, but
+`doWhileBody` was only named in passing inside the `loopBodyIfElseNext` do-while
+subsection, never documented on its own); the other 24 lived only in
+`HxFormatSameLineSection`'s doc-comment, which is where its own doc points a reader who
+hits a key that "does nothing". The table below is sourced from that doc-comment, from
+`HxModuleWriteOptions`'s own (more detailed, per-field) doc-comment, and from the actual
+default values in `HaxeFormat.defaultWriteOptions` — and every key is cross-checked
+against `HaxeFormatConfigLoader.applySameLine` / `applySameLineBodies` /
+`applyExpressionIfFanout`: all 33 are read unconditionally (`if (section.<key> != null)
+opt.<key> = …`), so none of the 33 is a dead field the loader silently drops.
+
+**`Default` is the COMPILED baseline — `HaxeFormat.instance.defaultWriteOptions`,
+what a bare file with no discoverable `hxformat.json` gets.** Six keys
+(`ifBody`/`elseBody`/`forBody`/`whileBody`/`doWhileBody`/`caseBody`) are
+RE-BASELINED to the fork's own declared default the moment ANY `hxformat.json`
+is loaded — before individual JSON keys are applied — because anyparse's
+compiled default for these six is `Keep` (a "no config at all" dogfood
+preference) while upstream haxe-formatter's own schema declares `Next` for
+all six (`HaxeFormatConfigLoader.loadHxFormatJson`, the `ω-D6`/`ω-D7`
+re-baseline block, unconditional and outside the `cfg.sameLine != null`
+guard). So `caseBody`'s row below is accurate on a scratch file with no
+project config, and the do-while section further down (`whose default
+`Next` already puts the body on its own line`) is accurate for the
+overwhelmingly common case — a real project that HAS an `hxformat.json`,
+even one that never mentions these six keys. The `Kind`/`Default` columns
+give the compiled value; the `Governs` column notes the re-baseline where it
+applies.
+
+| Key | Kind | Default | Governs |
+|---|---|---|---|
+| `ifElse` | same/next/keep | `same` | `else` placement after a statement-`if`'s closing `}` |
+| `tryCatch` | same/next/keep | `same` | `catch` placement after a `try` block's `}` |
+| `doWhile` | same/next/keep | `same` | closing `while (…)` placement after a `do … while` body's `}` |
+| `expressionTry` | same/next/keep | `same` | separator between an expression-position `try`'s body and each `catch` (`var x = try foo() catch (_:Any) null;`); independent of `tryCatch`, which is the statement form |
+| `ifBody` | same/next/fitLine/keep | `keep` (bare) / `next` (any config loaded) | statement-`if` then-body placement (non-block bodies only); re-baselined, see the note above the table |
+| `elseBody` | same/next/fitLine/keep | `keep` (bare) / `next` (any config loaded) | statement-`if` else-body placement (a non-`if` else; `elseIf` governs a nested `if`, `elseSwitch` a nested `switch`); re-baselined |
+| `forBody` | same/next/fitLine/keep | `keep` (bare) / `next` (any config loaded) | statement-`for` body placement; re-baselined |
+| `whileBody` | same/next/fitLine/keep | `keep` (bare) / `next` (any config loaded) | statement-`while` body placement; re-baselined |
+| `doWhileBody` | same/next/fitLine/keep | `keep` (bare) / `next` (any config loaded) | `do <body> while (…);` body placement (maps to the runtime `doBody` field); re-baselined |
+| `returnBody` | same/next/fitLine/keep | `fitLine` | separator between `return` and its value |
+| `returnBodySingleLine` | same/next/fitLine/keep | `fitLine` | refines `returnBody` for return values that are NOT a control-flow/block construct (`if`/`for`/`while`/`switch`/`try`/`{…}` keep using `returnBody`) — wired via `@:fmt(bodyPolicySingleLine('returnBodySingleLine', …))` on `HxStatement.ReturnStmt`, confirmed live in the grammar. `HxFormatSameLineSection`'s doc-comment on `returnBody` used to call this knob "parsed and silently dropped"; fixed in source (T160) |
+| `catchBody` | same/next/fitLine/keep | `next` | separator between a `catch (name:Type)` header's `)` and its body |
+| `tryBody` | same/next/fitLine/keep | `next` | separator between `try` and its body (`HxTryCatchStmt.body`), orthogonal to `whitespace.tryPolicy` (the `try{` vs `try {` inline gap); NOT re-baselined (outside the `ω-D6`/`ω-D7` block), so `next` holds whether or not a config is loaded, unless a project's own `hxformat.json` sets `"tryBody": "same"` as an explicit override — the AxGord fork's does, which is what the field's doc-comment used to describe as the compiled default; fixed in source (T160) |
+| `caseBody` | same/next/fitLine/keep | `keep` (bare) / `next` (any config loaded) | statement-switch single-stmt case-body placement (`HxCaseBranch.body` / `HxDefaultBranch.stmts`); `fitLine` measures the whole `case <patterns>: <body>` against `lineWidth`; re-baselined, see the note above the table — its own field doc-comment already states the `next` reading and was not stale |
+| `expressionCase` | same/next/fitLine/keep | `keep` | same shape, selected instead of `caseBody` for an expression-position switch (`var x = switch … { case Y: 1; }`) — dispatch is on `opt._inExprPosition`, not an OR of the two keys (see the position trap below) |
+| `functionBody` | same/next/fitLine/keep | `next` | separator between a function declaration's `()` and a single-expression body (`function f() trace("hi");`); `BlockBody` and the `;`-only `NoBody` are unaffected |
+| `anonFunctionBody` | same/next/fitLine/keep | `same` | expression-position sibling of `functionBody`, for `HxFnExpr.body`'s `ExprBody` branch (e.g. `function() trace(i)`) |
+| `untypedBody` | same/next/fitLine/keep | `same` | parent→`untyped` separator at `HxFnBody.UntypedBlockBody` (`function f():T untyped { … }`); the statement form `HxStatement.UntypedBlockStmt` (incl. `try untyped { … }`) deliberately does not read this knob — stacking it with parent body-policy / block-stmt separators would double a gap |
+| `expressionIf` | same/next/fitLine/keep | n/a — no single default, see Governs | body placement for the expression-position counterparts of `if`/`for` (array comprehensions and any value-position `if`/`for`). One JSON key fans into three runtime knobs (`expressionIfBody` / `expressionElseBody` / `expressionForBody`); ABSENT, each of the three keeps its OWN compiled default — `same` / `same` / `keep`, not a uniform value (not re-baselined the way `ifBody`'s sextet is — `expressionIfBody`/`expressionElseBody`/`expressionForBody` are outside the `ω-D6`/`ω-D7` block). PRESENT, `keep`/`same` propagate to all three; `next`/`fitLine` propagate only to the if/else pair, never to `expressionForBody` (a `for` has no `else` sibling, so the arrow-body/comprehension-filter fallback that `next`/`fitLine` would otherwise break stays intact) — `comprehensionFor` is the way to set the `for` case specifically, and it is read AFTER this fanout so it always wins |
+| `comprehensionFor` | same/next/fitLine/keep | absent → `keep` | the SPECIFIC override of `expressionForBody`, read after the `expressionIf` fanout — see its own section below |
+| `elseIf` | same/next | `same` | keyword placement for a nested `if` inside an `else` (`else if (…)` inline vs. `else` alone then `if` one indent deeper); overrides `elseBody` for the `IfStmt` ctor |
+| `elseSwitch` | same/next/keep | `keep` | keyword placement for a nested `switch` inside an `else`, the `elseIf` twin for the other keyword-headed branch — see "The three keys S67 added" below |
+| `fitLineIfWithElse` | bool | `false` | when `false`, an `ifBody`/`elseBody` of `fitLine` degrades to `next` for an `if` that carries an `else` (fitting one branch and breaking the other reads as inconsistent); `true` keeps `fitLine` unconditionally |
+| `fitLineBodyGlue` | bool | `false` | when a `fitLine` construct body (`if`/`for`/`while`) does not fit the header line AND the next line would not rescue it either (its flat width still exceeds the continuation indent), stay glued to the header and break inside the body instead of moving down a line and an indent step; also reaches an arrow-lambda body that is itself a parenthesised expression |
+| `loopBodyIfElseNext` | bool | `false` | see the dedicated section below (S159's paragraph, left as-is by this slice) |
+| `conditionalExprFit` | bool | `false` | break an expression-scope `#if … #end` region at its directive seams, the way an `if`/`else if`/`else` chain breaks, when the glued form does not fit the line; off (default) keeps the layout purely source-driven |
+| `ifElseSemicolonNextLine` | bool | **`true`** | when the statement-`if` then-branch is a bare (non-block) statement ending in `;` and the branch carries an `else`, put that `else` on the next line instead of gluing it after the `;` (`if (c) foo();` / `else bar();` rather than `if (c) foo(); else bar();`). Undocumented in any doc-comment in either source file (no class-level mention, no field-level `/**…*/`); this description is derived from its one consumer, `WriterFieldSepLowering.hx` (the `@:fmt(semicolonNextLineElse)` flag on `HxIfStmt.elseBody`). Trivia-mode only: the plain (Fast) writer canonicalises `;` presence, so this knob is inert there and the flag-based separator is used instead; it also never fires in expression position (`opt._inExprPosition`), which is `sameLineExpressionElse`'s job. Note the default is `true`, unlike every other bare-Bool `sameLine` knob in this table, which default `false` |
+| `expressionIfWithBlocks` | bool | `false` | collapses a `BlockExpr` branch body's CONTENTS onto one line regardless of width (`{ … }` survives, its interior flattens); glues nothing and never moves `else` — see the closing paragraph of the `expressionIfWithBrackets` section below for the distinction |
+| `expressionIfWithBrackets` | bool | `false` | see the dedicated section below |
+| `expressionIfArrowBodyReflow` | bool | `false` | when `true`, a value-`if`/`else` chain that is the direct body of an arrow lambda becomes one width-decided unit — flat when it fits, one branch per line (each value glued to its own condition) when it does not — instead of each branch following the `expressionIf` policy independently. Reach extends slightly beyond the immediate arrow body: a `cast(…, T)` operand, an `untyped`/`@:meta` prefix, and an enclosing value-`if`'s condition also re-flow. A comment anywhere on the chain's `else`-spine refuses the reflow whole |
+| `expressionIfFit` | bool | `false` | the non-arrow sibling of `expressionIfArrowBodyReflow`: fit-decides EVERY value-`if`/`else if` chain (initializer, `return`, call argument, …), not only one in an arrow body — flat on one line when it fits, otherwise the exact `expressionIfBody`/`expressionElseBody` layout. An arrow body under both knobs keeps the arrow-specific shape (that gate is checked first) |
+| `expressionIfFitMaxBranches` | int | `0` (no cap) | largest number of value branches an `expressionIfFit` chain may hold and still collapse onto one line (`if (c) a else b` is 2, `if (c) a else if (d) b else e` is 3); a chain over the cap keeps the exact policy layout. Inert while `expressionIfFit` is off |
+| `elseIfCommentReflow` | bool | `false` | when `true`, an `else if` whose nested `if` carries exactly one interposed `//` line comment glues as usual (`} else if (b) {`) and re-emits that comment at the end of the nested `if`'s head line, instead of forcing the three-line layout (`else` alone, comment one indent deeper, `if` back at the outer indent). Refuses (layout unchanged) for a block comment, more than one comment, a comment cuddled to `else` itself, a nested `if` head that already carries its own trailing `//`, an empty then-body, or any body shape offering no provable head-line anchor. Statement position only (`HxIfStmt.elseBody`); `elseBody: "keep"` also disables it |
+
+**Unlike the `wrapping.*` cascades, a `sameLine.*` value must be spelled in the exact
+lowercase-camelCase the schema declares — `"Same"` / `"FitLine"` / `"Keep"` are each a
+DIFFERENT string from `"same"` / `"fitLine"` / `"keep"` to Haxe's enum-abstract-from-string
+equality, so a capitalised spelling here is not silently ignored, it is a hard parse
+failure: `apq fmt` exits 1 with `invalid HxFormat<…>Policy value: "Same"` and leaves the
+file unformatted** (measured: `sameLine.ifElse`, `sameLine.ifBody` and `sameLine.elseIf`
+all reject `"Same"` this way — every `sameLine.*` value type does, since all three enum
+abstracts behind it declare only the lowercase spellings). This is the opposite of the
+`wrapping.*` cascades' `defaultWrap`/`rules[].type`, which DO also accept a capitalised
+spelling (`OnePerLine`, `FillLine`, …) — a different vocabulary with its own reader.
+
+A CORRECTLY-spelled `sameLine.*` value can still be silently DEGRADED at the runtime-mapping
+step, which is a narrower and different failure mode than the capitalisation one above — it
+parses, and only THEN loses information. The four `SameLinePolicy` keys (`ifElse`,
+`tryCatch`, `doWhile`, `expressionTry`) parse all four lowercase `HxFormatSameLinePolicy`
+strings, but their runtime type (`anyparse.format.SameLinePolicy`) has only three members —
+`sameLineToRuntime` maps `next` → `Next`, `keep` → `Keep`, and BOTH `same` and `fitLine` →
+`Same`, so `ifElse: "fitLine"` parses fine and silently becomes `same` (`HxFormatSameLinePolicy`'s
+own doc-comment describes an older Bool-only runtime and is stale on this point — the
+loader code, read above, is the current truth). `elseIf` and
+`elseSwitch` share one JSON vocabulary, `HxFormatKeywordPlacement` — all four strings
+(`same`/`next`/`keep`/`fitLine`) parse on EITHER key, but `elseIf` only has a two-value
+`KeywordPlacement` to land in at runtime: `keywordPlacementToRuntime` degrades both
+`keep` and `fitLine` to `Same` (no per-node source-shape tracking / no fit mode for a
+lone keyword), while `elseSwitch` reads through `keywordPlacementKeepToRuntime`, which
+keeps `keep` as real `Keep` and only degrades `fitLine`. So `elseIf: "keep"` is accepted
+by the schema and silently becomes `same` — not a parse error, and not what the string
+promises.
+
 ## `sameLine.*` — one position trap worth repeating
 
 `sameLine.caseBody` governs a `switch` in STATEMENT position; a `switch` used as a VALUE

@@ -1,5 +1,6 @@
 package anyparse.query.cli.command;
 
+import anyparse.query.SourceText;
 import anyparse.query.cli.CliContext;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -325,6 +326,27 @@ final class SourceCommand implements CliCommand {
 	}
 
 	/**
+	 * `Std.parseInt` parses a PREFIX and silently ignores trailing garbage
+	 * (`Std.parseInt('205,225') == 205`), which made `--range 205,225` (a
+	 * comma typo for `:`) read as the single line `205` instead of a usage
+	 * error. `SourceText.parseStrictInt` already closes that hole (whole-token
+	 * digit check before parsing) for the `<line>:<col>` grammar, but it has no
+	 * `-` case — `--range -5:2` is a deliberate idiom `clampLine` folds to `1`,
+	 * so this wraps the shared digit check with the ONE extra rule this grammar
+	 * needs instead of forking a second copy of the digit loop.
+	 */
+	private static function strictRangeInt(s: String): Null<Int> {
+		final negative: Bool = s.length > 0 && s.fastCodeAt(0) == '-'.code;
+		final digits: Null<Int> = SourceText.parseStrictInt(negative ? s.substring(1) : s);
+		return if (digits == null)
+			null
+		else if (negative)
+			-digits
+		else
+			digits;
+	}
+
+	/**
 	 * Parse a `source --range` spec into a 1-based inclusive `{from, to}`
 	 * line pair, clamped to `[1, lineCount]`. Forms: `null`/`""` → whole
 	 * file; `L` → single line; `L:L2` → range; `L:` → L to EOF; `:L2` →
@@ -337,15 +359,15 @@ final class SourceCommand implements CliCommand {
 		if (spec == null || spec.length == 0) return { from: 1, to: lineCount };
 		final colon: Int = spec.indexOf(':');
 		if (colon < 0) {
-			final single: Null<Int> = Std.parseInt(spec);
+			final single: Null<Int> = strictRangeInt(spec);
 			if (single == null) return null;
 			final clamped: Int = clampLine(single, lineCount);
 			return { from: clamped, to: clamped };
 		}
 		final loStr: String = spec.substring(0, colon);
 		final hiStr: String = spec.substring(colon + 1);
-		final lo: Null<Int> = loStr.length == 0 ? 1 : Std.parseInt(loStr);
-		final hi: Null<Int> = hiStr.length == 0 ? lineCount : Std.parseInt(hiStr);
+		final lo: Null<Int> = loStr.length == 0 ? 1 : strictRangeInt(loStr);
+		final hi: Null<Int> = hiStr.length == 0 ? lineCount : strictRangeInt(hiStr);
 		if (lo == null || hi == null) return null;
 		final from: Int = clampLine(lo, lineCount);
 		final to: Int = clampLine(hi, lineCount);

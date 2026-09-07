@@ -102,8 +102,24 @@ final class CliIo {
 			0;
 	}
 
+	/**
+	 * T746 stderr sibling: `Sys.stderr()` on nodejs is `Fs.writeSync(2, …)` — a
+	 * SYNCHRONOUS raw fd write that never touches the `process.stderr` Writable
+	 * stream object, so `Cli.main`'s `process.stderr.on('error', …)` EPIPE guard
+	 * (which only fires for an ASYNC stream write) never sees this path's
+	 * failure. A closed reader makes `Fs.writeSync` throw synchronously instead,
+	 * with the native error reachable at `exception.native` (verified: `.code`
+	 * lives there, not on the caught `Exception` wrapper itself) — caught and
+	 * handled the same way, quietly, rather than crashing with a raw stack
+	 * trace. Every other write failure still propagates.
+	 */
 	public static function stderr(s: String): Void {
-		#if (sys || nodejs)
+		#if nodejs
+		try Sys.stderr().writeString(s) catch (exception: Exception) {
+			if (Reflect.field(exception.native, 'code') == 'EPIPE') js.Node.process.exit(0);
+			throw exception;
+		}
+		#elseif sys
 		Sys.stderr().writeString(s);
 		#end
 	}
