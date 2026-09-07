@@ -3,6 +3,8 @@ package anyparse.query;
 using StringTools;
 using Lambda;
 
+import anyparse.check.CheckScan;
+import anyparse.query.GrammarPlugin.LayoutMetrics;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
 
@@ -366,6 +368,177 @@ final class SourceComments {
 	}
 
 	/**
+	 * The text that precedes a comment's BODY on the comment's own line, opener included — the
+	 * indentation plus `//` for a line comment or for the first line of a merged run, whatever code
+	 * stands to the left plus `/*` for a block that opens after something else.
+	 *
+	 * The body's first line is the ONE line whose rendered width the body does not carry:
+	 * `commentBody` starts two characters past the opener, so a width measurement over the body
+	 * alone calls that line short by the opener and everything left of it.
+	 */
+	public static function commentHead(source: String, tok: { from: Int, to: Int, isLine: Bool }): String {
+		return source.substring(SourceText.lineStartOf(source, tok.from), tok.from + 2);
+	}
+
+	/**
+	 * Whether the raw comment body range `[from, to)` holds a PARAGRAPH SEPARATOR it does not merely
+	 * OPEN with — a line continuation whose skipped run crosses a blank continuation line (a bare
+	 * `//` inside a run, a bare ` *` inside a block).
+	 *
+	 * `normalizeCommentBody` folds such a run into the SAME single space an ordinary line break
+	 * becomes, so a literal find reads `A B` across `A`, a blank line and `B`, matches, and the
+	 * splice then DELETES the separator — two paragraphs become one line with no diagnostic.
+	 * Measured on `HxCasePattern.hx`: the bare `\t//` on line 56 vanished and lines 55 and 57 became
+	 * one 125-column line, inside the configured 140, so the width gate never fired either.
+	 *
+	 * `from` is always CONTENT, never a break: a match beginning on a folded break has a leading
+	 * space in its needle, and `literalReplace`'s leading-boundary rule then moves `from` past the
+	 * whole run before asking. A guard for that case here was dead code, and its absence is why this
+	 * function reports every separator in the range rather than "interior" ones by position.
+	 */
+	public static function interiorParagraphBreak(body: String, from: Int, to: Int, lineRun: Bool): Bool {
+		final marker: String = lineRun ? LINE_OPEN : GUTTER_STAR;
+		final n: Int = body.length;
+		var i: Int = from;
+		while (i < to) {
+			final c: Int = body.fastCodeAt(i);
+			final crlf: Bool = c == '\r'.code && i + 1 < n && body.fastCodeAt(i + 1) == '\n'.code;
+			if (c != '\n'.code && !crlf) {
+				i++;
+				continue;
+			}
+			final start: Int = (crlf ? i + 1 : i) + 1;
+			final next: Int = skipContinuation(body, start, n, marker);
+			// A second break inside one skipped run means a line went by carrying nothing but its
+			// marker — the blank line that IS the paragraph separator.
+			for (k in start ... next) if (body.fastCodeAt(k) == '\n'.code) return true;
+			i = next;
+		}
+		return false;
+	}
+
+	/**
+	 * `body` with the lines the edit made TOO WIDE broken back at spaces into lines carrying
+	 * `continuation`, and every other line byte-identical. `was` is the body before the edit.
+	 *
+	 * WHY the op reflows at all: a literal find crossing a comment line break replaces that break
+	 * along with the text around it, so the two lines JOIN — which is the whole T755 scenario (fix a
+	 * phrase spread over two `//` lines) and left one over-long line the width gate refused every
+	 * time the join passed the configured width. Measured on `WriterRefFieldLowering.hx`: 169
+	 * columns against 140. Being able to FIND the text was never the same as being able to edit it
+	 * in place.
+	 *
+	 * It is a REPAIR, not a restyling, and the trigger says so: unless the edit GAINED an over-width
+	 * line — more of them, or a wider widest, the same comparison the caller's width gate makes —
+	 * the body comes back untouched. Without that test a seven-character SHORTENING edit inside one
+	 * of this tree's 210 inherited over-width comment lines re-wrapped the whole paragraph:
+	 * `MemberOrder.hx` went 980 lines to 1029 for an edit the old gate accepted outright.
+	 *
+	 * `head` is what precedes the body on its own line (`commentHead`), because the body's first
+	 * line is the one line whose width the body does not carry. A line the edit left byte-identical
+	 * is never wrapped either, so an inherited long line inside a block the edit DID break keeps its
+	 * own style. A line with no space inside its budget is handed back over-width — the caller's
+	 * width gate is then the only thing that can name it, and that is the one outcome a reflow
+	 * cannot repair.
+	 *
+	 * A blank continuation line's width IS its prefix, so it is kept by construction: a paragraph
+	 * separator survives the reflow rather than being filled into its neighbours. Nothing here ever
+	 * JOINS two lines, which is what keeps the caller's own line breaks intact. What layout it must
+	 * not touch at all is `reflowSafeLine`'s question.
+	 */
+	public static function wrapCommentBody(
+		body: String, was: String, head: String, continuation: String, metrics: LayoutMetrics, lineRun: Bool
+	): String {
+		final width: Int = metrics.lineWidth;
+		final tab: Int = metrics.indentWidth;
+		final lines: Array<String> = body.split('\n');
+		final keep: Array<String> = was.split('\n');
+		final got: Array<Int> = overWidthColumns(lines, head, width, tab);
+		final had: Array<Int> = overWidthColumns(keep, head, width, tab);
+		if (got.length <= had.length && widestColumn(got) <= widestColumn(had)) return body;
+		final out: Array<String> = [];
+		final contCols: Int = CheckScan.displayColumn(continuation, 0, continuation.length, tab);
+		final headHasCode: Bool = head.trim().length > 2;
+		for (i => raw in lines) {
+			final cr: Bool = raw.length > 0 && raw.fastCodeAt(raw.length - 1) == '\r'.code;
+			final line: String = cr ? raw.substring(0, raw.length - 1) : raw;
+			final lead: String = i == 0 ? head : '';
+			final leadCols: Int = CheckScan.displayColumn(lead, 0, lead.length, tab);
+			final at: Int = i == 0 ? openerBodyPrefix(line, head) : linePrefixLength(line, lineRun);
+			final wrappable: Bool = !keep.contains(raw) && !(i == 0 && headHasCode) && reflowSafeLine(line.substring(at));
+			if (!wrappable || leadCols + CheckScan.displayColumn(line, 0, line.length, tab) <= width) {
+				out.push(raw);
+				continue;
+			}
+			final prefix: String = line.substring(0, at);
+			final firstCols: Int = leadCols + CheckScan.displayColumn(prefix, 0, prefix.length, tab);
+			final chunks: Array<String> = wrapText(line.substring(at), firstCols, contCols, width, tab);
+			for (k => chunk in chunks) out.push((k == 0 ? prefix : continuation) + chunk + (cr ? '\r' : ''));
+		}
+		return out.join('\n');
+	}
+
+	/**
+	 * Whether one comment line's post-prefix `text` is prose a reflow may re-lay-out, rather than
+	 * layout that carries its own meaning.
+	 *
+	 * Every shape refused here is one whose wrapped form is a CORRUPTION no gate in this project can
+	 * see — the writer re-emits a comment interior byte for byte, so `fmt --list` stays clean and no
+	 * rule reads a comment's shape. Measured, each on a real edit that pushed its line past the
+	 * width:
+	 *
+	 *  - a SUPPRESSION directive. `Suppression.parseNoqa` reads an empty rule list as EVERY rule, so
+	 *    breaking `// noqa: some-rule` after the colon silently turns one exemption into a blanket
+	 *    one: a live `naming` warning disappeared and lint reported it as an improvement. 24 of this
+	 *    tree's 131 trailing noqa comments are already past 120 columns.
+	 *  - INDENTATION the author wrote. `CommentStyle`'s own rule is that whitespace beyond the
+	 *    block's common prefix is the author's and survives; a wrapped code sample loses its hanging
+	 *    indent to the bare continuation.
+	 *  - a MARKDOWN block marker. A table row split mid-row loses its cell count; a `- ` bullet's
+	 *    continuation, laid out at the bare gutter, reads as a sibling paragraph between two bullets.
+	 *
+	 * A refused line stays over-width and the caller's width gate names it, which is the honest end
+	 * state: the op cannot re-lay-out this line, and says so instead of guessing.
+	 */
+	public static function reflowSafeLine(text: String): Bool {
+		if (text.length == 0) return false;
+		final head: Int = text.fastCodeAt(0);
+		if (head == ' '.code || head == '\t'.code) return false;
+		final lower: String = text.toLowerCase();
+		if (lower.startsWith('noqa') || lower.startsWith('checkstyle:')) return false;
+		if (head == '|'.code || head == '>'.code || head == '#'.code) return false;
+		if (text.length > 1 && text.fastCodeAt(1) == ' '.code && (head == '-'.code || head == '+'.code || head == '*'.code)) return false;
+		var digits: Int = 0;
+		while (digits < text.length && text.fastCodeAt(digits) >= '0'.code && text.fastCodeAt(digits) <= '9'.code) digits++;
+		return !(digits > 0 && digits + 1 < text.length && text.fastCodeAt(digits) == '.'.code && text.fastCodeAt(digits + 1) == ' '.code);
+	}
+
+	/**
+	 * `body` with every line that holds nothing but its continuation prefix rtrimmed to the bare
+	 * prefix.
+	 *
+	 * `reflowIntoComment` and `openGrownDocBlock` both do this to their own output and for the same
+	 * reason: the writer re-emits a comment interior byte for byte, so a trailing space survives in a
+	 * project whose `hxformat.json` sets `indentation.trailingWhitespace: false`, and `fmt --list`
+	 * still calls the file canonical. The path that did NOT do it is a DELETION — an empty
+	 * replacement consumes a paragraph's text and leaves ` * ` where the text was, measured on a
+	 * three-paragraph block. Making the rule uniform is what this is; it is not a new policy.
+	 */
+	public static function trimPrefixOnlyLines(body: String): String {
+		final lines: Array<String> = body.split('\n');
+		var changed: Bool = false;
+		for (i => line in lines) {
+			final kept: String = line.rtrim();
+			// The line has to END on a marker. A body's LAST line is the whitespace carrying the
+			// closer's indentation, and rtrimming that put `*\/` flush against column 0.
+			if (kept == line || !kept.endsWith(GUTTER_STAR) && !kept.endsWith(LINE_OPEN)) continue;
+			lines[i] = kept;
+			changed = true;
+		}
+		return changed ? lines.join('\n') : body;
+	}
+
+	/**
 	 * Normalize a comment BODY for cross-line literal matching: fold each line
 	 * continuation — a `\n` or `\r\n`, the following whitespace, blank lines, and
 	 * one continuation marker per line — into a single space, so a phrase wrapped
@@ -659,6 +832,151 @@ final class SourceComments {
 		comments: Array<{ from: Int, to: Int, isLine: Bool }>, at: Int
 	): Null<{ from: Int, to: Int, isLine: Bool }> {
 		return comments.find(token -> token.from <= at && at < token.to);
+	}
+
+	/**
+	 * How many characters of one INTERIOR comment line are its continuation prefix — the
+	 * indentation, the marker, and the single space after it. `lineRun` picks the marker the way
+	 * `normalizeCommentBody` does: the `//` opener of a merged run, the gutter star otherwise.
+	 *
+	 * A gutter-less block line carries only its indentation, and `ungutter` answers that by handing
+	 * the line back unchanged — it owns the "exactly one space before the star" rule that keeps a
+	 * `* item` bullet and a code sample's `* b;` reachable, so the prefix is read through it rather
+	 * than by a second whitespace scan that would disagree.
+	 */
+	private static function linePrefixLength(line: String, lineRun: Bool): Int {
+		if (!lineRun) {
+			final bare: String = ungutter(line);
+			return bare.length == line.length ? line.length - line.ltrim().length : line.length - bare.length;
+		}
+		var i: Int = 0;
+		while (i < line.length && (line.fastCodeAt(i) == ' '.code || line.fastCodeAt(i) == '\t'.code)) i++;
+		if (line.substr(i, LINE_OPEN.length) != LINE_OPEN) return i;
+		i += LINE_OPEN.length;
+		return i < line.length && line.fastCodeAt(i) == ' '.code ? i + 1 : i;
+	}
+
+	/**
+	 * `text` broken at spaces into the chunks of one wrapped comment line: the first laid out behind
+	 * `firstCols` rendered columns, every later one behind `contCols`, none past `width`.
+	 *
+	 * The width it actually wraps at is the NARROWEST that costs the same number of lines as
+	 * `width` does. Filling greedily to the limit is correct and reads wrong: the T698 join, broken
+	 * at the configured 140, left a 137-column line followed by a 42-column orphan inside a run
+	 * whose other lines are 82 — a shape a reviewer flags and the author would rather have avoided
+	 * the op for. Balanced, the same two lines come out at 86 and 93.
+	 *
+	 * A remainder with no space inside its budget is emitted WHOLE and over-width rather than cut
+	 * mid-word: a 180-character identifier or URL is not a wrapping problem, and splitting it would
+	 * change the text. That short-circuit is also why the narrowest width is found by scanning up
+	 * from an estimate rather than by bisecting — at a small enough limit `fillText` stops finding
+	 * break points and the line COUNT falls again, so the predicate is not monotone and a bisection
+	 * would converge on one unwrappable line.
+	 */
+	private static function wrapText(text: String, firstCols: Int, contCols: Int, width: Int, tab: Int): Array<String> {
+		final greedy: Array<String> = fillText(text, firstCols, contCols, width, tab);
+		final lines: Int = greedy.length;
+		if (lines < 2) return greedy;
+		final lead: Int = firstCols > contCols ? firstCols : contCols;
+		final start: Int = lead + Math.ceil(CheckScan.displayColumn(text, 0, text.length, tab) / lines);
+		final ceiling: Int = widestChunk(greedy, firstCols, contCols, tab);
+		for (limit in (start < 1 ? 1 : start) ... width) {
+			final balanced: Array<String> = fillText(text, firstCols, contCols, limit, tab);
+			// The LINE COUNT alone is not the test, because `fillText` short-circuits: below the first
+			// token's own width it stops finding break points and hands the remainder back whole, so the
+			// count FALLS and a one-line over-width answer beats a legal two-line one. Measured: an
+			// 86-character URL followed by prose was refused at 145 columns while the same body with the
+			// space at index 60 wrapped at 150. The candidate must also be no WIDER than greedy.
+			if (balanced.length <= lines && widestChunk(balanced, firstCols, contCols, tab) <= ceiling) return balanced;
+		}
+		return greedy;
+	}
+
+	/**
+	 * `text` filled greedily to `limit` columns, the first chunk behind `firstCols` and the rest
+	 * behind `contCols`. Trailing whitespace at a break point goes with the break — the project's
+	 * own `hxformat.json` forbids it and the writer re-emits a comment interior verbatim, so nothing
+	 * downstream would remove it.
+	 */
+	private static function fillText(text: String, firstCols: Int, contCols: Int, limit: Int, tab: Int): Array<String> {
+		final chunks: Array<String> = [];
+		var start: Int = 0;
+		var avail: Int = limit - firstCols;
+		while (true) {
+			if (avail > 0 && CheckScan.displayColumn(text, start, text.length, tab) <= avail) {
+				chunks.push(text.substring(start));
+				break;
+			}
+			var cut: Int = -1;
+			var cols: Int = 0;
+			var i: Int = start;
+			while (i < text.length) {
+				cols += text.fastCodeAt(i) == '\t'.code ? tab : 1;
+				if (cols > avail) break;
+				if (i > start && text.fastCodeAt(i) == ' '.code) cut = i;
+				i++;
+			}
+			if (cut < 0) {
+				chunks.push(text.substring(start));
+				break;
+			}
+			chunks.push(text.substring(start, cut).rtrim());
+			start = cut + 1;
+			while (start < text.length && text.fastCodeAt(start) == ' '.code) start++;
+			avail = limit - contCols;
+		}
+		return chunks;
+	}
+
+	/**
+	 * The rendered column width of every line of `lines` that runs past `width`, in order. `head` is
+	 * what precedes line 0 on its own line, which is the one line the body does not carry.
+	 *
+	 * The pair with `widestColumn` is the same COUNT-and-WIDEST comparison `CommentRewrite`'s width
+	 * gate makes over the whole file, asked here of one comment unit: it is what lets the reflow fire
+	 * only where the edit actually broke something, rather than restyling every block it touches.
+	 */
+	private static function overWidthColumns(lines: Array<String>, head: String, width: Int, tab: Int): Array<Int> {
+		final out: Array<Int> = [];
+		for (i => raw in lines) {
+			final line: String = raw.length > 0 && raw.fastCodeAt(raw.length - 1) == '\r'.code ? raw.substring(0, raw.length - 1) : raw;
+			final lead: String = i == 0 ? head : '';
+			final cols: Int = CheckScan.displayColumn(lead, 0, lead.length, tab) + CheckScan.displayColumn(line, 0, line.length, tab);
+			if (cols > width) out.push(cols);
+		}
+		return out;
+	}
+
+	/** The largest of `columns`, 0 when there is none. */
+	private static function widestColumn(columns: Array<Int>): Int {
+		var best: Int = 0;
+		for (cols in columns) if (cols > best) best = cols;
+		return best;
+	}
+
+	/** The widest rendered line `chunks` would produce behind `firstCols` and then `contCols`. */
+	private static function widestChunk(chunks: Array<String>, firstCols: Int, contCols: Int, tab: Int): Int {
+		var best: Int = 0;
+		for (k => chunk in chunks) {
+			final cols: Int = (k == 0 ? firstCols : contCols) + CheckScan.displayColumn(chunk, 0, chunk.length, tab);
+			if (cols > best) best = cols;
+		}
+		return best;
+	}
+
+	/**
+	 * How many characters of the body's FIRST line belong to the opener rather than to the text: the
+	 * doc block's second star, and the single space that separates any opener from its prose.
+	 *
+	 * `commentBody` starts two characters past `//` or `/*`, so line 0 arrives carrying the pieces
+	 * every other line hands to `linePrefixLength`. Reading it as text instead is what made
+	 * `reflowSafeLine` see the standard space after `//` as the author's own indentation and refuse
+	 * every first line, and the `/**`'s second star as a markdown bullet.
+	 */
+	private static function openerBodyPrefix(line: String, head: String): Int {
+		var i: Int = 0;
+		if (head.endsWith('/*') && line.length > 0 && line.fastCodeAt(0) == '*'.code) i++;
+		return i < line.length && line.fastCodeAt(i) == ' '.code ? i + 1 : i;
 	}
 
 }

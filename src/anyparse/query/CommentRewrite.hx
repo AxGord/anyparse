@@ -42,6 +42,23 @@ private typedef WideLine = {
  * N, `${N+K}` / `${N-K}` shift group N (an integer) by K, and `$$` is a literal `$`. Only
  * comment bodies change — code and the comment delimiters are never touched.
  *
+ * WIDTH is this op's own concern, because nothing downstream measures a comment. Unless the edit GAINED an over-width line — more of
+ * them, or a wider widest, the same comparison the gate below makes — nothing moves at all; when it
+ * did, every line the edit produced and made too wide is broken back at spaces into
+ * `wrapping.maxLineLength` with the block's own prefix (`SourceComments.wrapCommentBody`), at the
+ * narrowest width costing no extra line. A line the edit left byte-identical is never touched, and
+ * nothing is ever JOINED, so a caller's own breaks survive; a suppression directive, an author's own
+ * indentation, a table row and a bullet are not re-laid-out at all
+ * (`reflowSafeLine`). That reflow is what makes the T755 scenario work IN PLACE: a
+ * literal find crossing a line break takes the break with it, so the two lines merge, and the width
+ * gate refused every merge past the width. What the reflow cannot break — a replacement with no space
+ * inside the width — the gate still refuses, and `--allow-wide` skips both.
+ *
+ * A blank comment line is a PARAGRAPH separator, and it folds into the same single space an ordinary
+ * break does, so a literal find could read across it and the splice then deleted it. Such a find is
+ * refused (`SourceComments.interiorParagraphBreak`); a deletion still takes its own separator with
+ * it, and `--regex` sees the separator in the pattern.
+ *
  * A replacement carrying a real NEWLINE is re-prefixed with the comment's own continuation
  * (`RefactorSupport.commentContinuation`) before it is spliced, in both modes: the writer
  * re-emits a comment interior byte for byte, so an unguttered line spliced into a doc block
@@ -84,6 +101,9 @@ final class CommentRewrite {
 				return Err('invalid regex: ${exception.message}');
 		}
 		final compiled: Null<EReg> = ereg;
+		// The reflow reads the same two numbers the width gate does, and `--allow-wide` is the caller
+		// saying they own this block's layout — then neither runs.
+		final metrics: Null<LayoutMetrics> = allowWide == true ? null : plugin.layoutMetrics(optsJson);
 
 		final edits: Array<{ span: Span, text: String }> = [];
 		try {
@@ -95,17 +115,28 @@ final class CommentRewrite {
 				// — the corruption `doc-comment-continuation` exists to see. Give every new line the
 				// prefix THIS comment already uses instead.
 				final continuation: String = SourceComments.commentContinuation(source, unit);
-				final next: String = compiled != null
+				final raw: String = compiled != null
 					? compiled.map(body, m -> SourceComments.reflowIntoComment(expandGroups(replace, m), continuation))
 					: literalReplace(body, find, SourceComments.reflowIntoComment(replace, continuation), unit.isLine);
-				if (next == body) continue;
+				final spliced: String = SourceComments.trimPrefixOnlyLines(raw);
+				if (spliced == body) continue;
 				// A merged `//` run's body SPANS the interior openers of its lines 2..N — that is what lets a
 				// find cross a break at all — so a replacement can delete one and turn a comment into CODE.
-				final orphan: Null<String> = unit.isLine ? runLineWithoutOpener(next) : null;
+				final orphan: Null<String> = unit.isLine ? runLineWithoutOpener(spliced) : null;
 				if (orphan != null)
 					return Err(
 						'the replacement leaves a line of the `//` run without its opener, which would turn a comment into code:\n$orphan'
 					);
+				// A find crossing a line break takes the break WITH the text around it, so the two lines
+				// join — the T755 scenario, and the reason the width gate refused it. Break the lines the
+				// edit made too wide back into the width instead; a unit that gained none is untouched.
+				var next: String = spliced;
+				if (metrics != null) {
+					final layout: LayoutMetrics = metrics;
+					next = SourceComments.wrapCommentBody(
+						spliced, body, SourceComments.commentHead(source, unit), continuation, layout, unit.isLine
+					);
+				}
 				// A ONE-LINE doc block that has just grown has to be re-opened, or its closer rides the last
 				// content line and the writer eats the space before that line's star (`\t* text */`).
 				final grown: Bool = next.indexOf('\n') >= 0 && isOneLineDocBlock(source, unit);
@@ -188,8 +219,12 @@ final class CommentRewrite {
 	 * WIDTH was the last unguarded half of this op. The writer re-emits a comment interior byte for
 	 * byte, so an over-long one-line replacement leaves a doc line nothing in this project measures:
 	 * `fmt --list` is clean because the file IS what the writer emits, and no rule reads a comment
-	 * line's width. It bit two slices of this campaign, and both times a human reading the diff was
-	 * the only gate.
+	 * line's width. It bit two slices of this campaign, and both times a human reading the
+	 * diff was the only gate.
+	 * Since the reflow (`SourceComments.wrapCommentBody`) runs first, what reaches this gate is what it
+	 * would not or could not break: a replacement with no space inside the width, a line whose layout
+	 * `reflowSafeLine` refuses to touch, and the lines the edit left byte-identical, which the baseline
+	 * subtraction below then forgives.
 	 *
 	 * A block that was ALREADY over-width keeps its own style — that is the caller's file, not this
 	 * op's to police; only a line the edit ADDED to that set is refused, and `--allow-wide` waives it.
@@ -372,13 +407,15 @@ final class CommentRewrite {
 
 	/**
 	 * Literal find/replace inside a comment body, matching ACROSS the body's line
-	 * continuations: the body is normalized (each `\n` plus the body's own continuation
-	 * marker folded to one space) for the search,
-	 * and every non-overlapping match is projected back to its span in the original body via the
-	 * index map — so a phrase wrapped over two ` * ` lines is found and replaced. `lineRun` says
-	 * the body is a merged run of `//` comments, whose continuation marker is the opener rather
-	 * than the gutter star. Consuming the continuation BETWEEN two matched lines is safe because
-	 * the replacement is re-prefixed before it is spliced (`RefactorSupport.reflowIntoComment`) —
+	 * continuations: a blank continuation line is a paragraph separator no replacement
+	 * may swallow (see `SourceComments.interiorParagraphBreak`), and the body is
+	 * normalized (each `\n` plus the body's own continuation marker folded to one space)
+	 * for the search, and every non-overlapping match is projected back to its span in
+	 * the original body via the index map — so a phrase wrapped over two ` * ` lines is
+	 * found and replaced. `lineRun` says the body is a merged run of `//` comments, whose
+	 * continuation marker is the opener rather than the gutter star. Consuming the
+	 * continuation BETWEEN two matched lines is safe because the replacement is
+	 * re-prefixed before it is spliced (`RefactorSupport.reflowIntoComment`) —
 	 * the writer does NOT re-wrap a comment interior, it re-emits it byte for byte, which is what
 	 * made the raw splice a corruption no gate could see.
 	 *
@@ -426,6 +463,16 @@ final class CommentRewrite {
 				to = map[last];
 				if (text.length > 0 && text.fastCodeAt(text.length - 1) == ' '.code) text = text.substring(0, text.length - 1);
 			}
+			// A blank comment line folds into the same single space an ordinary break does, so a find
+			// reads straight across a paragraph separator and the splice DELETES it. A deletion is
+			// entitled to take its own separator with it (`keepBreaks` is false there); a replacement
+			// is not, and the loss is silent — the join can land inside the width, and no gate in this
+			// project reads a comment's paragraph structure.
+			if (keepBreaks && SourceComments.interiorParagraphBreak(body, from, to, lineRun))
+				throw new Exception(
+					'the find spans a blank comment line, and the replacement would delete that paragraph separator'
+						+ ' — narrow the find to one paragraph, or use --regex to match the raw body'
+				);
 			buf.add(body.substring(cursor, from));
 			buf.add(text);
 			cursor = to;
