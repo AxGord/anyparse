@@ -24,10 +24,13 @@ using StringTools;
  *     append a cross-project hint (`refs --decls src/` / `uses` /
  *     `blast`) since `ast` is single-file by design and the user is
  *     likely hunting a decl that lives in a different module.
- *  3. `apq probe` always stages the source bytes to
- *     `/tmp/anyparse-last-probe.hx` so a follow-up `strip` / `recon
- *     --probe` / `writer-equals` can target them without re-heredoc-ing.
- *     Stdin source path also stages (avoids a second stdin read).
+ *  3. `apq probe` always stages the source bytes to a scratch slot so a
+ *     follow-up `strip` / `recon --probe` / `writer-equals` can target them
+ *     without re-heredoc-ing, and prints the RESOLVED path. Stdin source
+ *     path also stages (avoids a second stdin read). Since S170 the slot is
+ *     `$APQ_PROBE_PATH`, else `<temp root>/anyparse-last-probe.<pid>.hx` —
+ *     it used to be one hard-coded `/tmp` path for the whole machine, which
+ *     handed a second worker's source to the first one's `strip` (T700).
  *  4. `ANYPARSE_HXFORMAT_FORK` persistent cache — `defaultReconRoot`
  *     writes the env-supplied path to `~/.config/anyparse/fork_path`
  *     on every successful resolution AND falls back to that cache when
@@ -44,6 +47,15 @@ using StringTools;
  */
 @:nullSafety(Strict)
 class ApqDxTier5CliTest extends Test {
+
+	/** The half of the staging slot's name that is a contract; the rest belongs to the resolver. */
+	private static inline final PROBE_SLOT_STEM: String = 'anyparse-last-probe';
+
+	/** The env var that names the staging slot outright. */
+	private static inline final PROBE_PATH_ENV: String = 'APQ_PROBE_PATH';
+
+	/** What a symlinked staging target must still hold after a probe. */
+	private static inline final VICTIM_CONTENT: String = 'ORIGINAL VICTIM CONTENT\n';
 
 	// --- 1. refs/uses macro-emit nudge ---
 
@@ -143,29 +155,188 @@ class ApqDxTier5CliTest extends Test {
 	}
 
 	// --- 3. probe staging ---
-
-	public function testProbeStagesSourceToTmp(): Void {
-		final stagedPath: String = '/tmp/anyparse-last-probe.hx';
-		// Pre-clean — guarantee we observe a fresh write, not a stale
-		// file lingering from an earlier probe.
-		if (FileSystem.exists(stagedPath)) FileSystem.deleteFile(stagedPath);
+	/**
+	 * The staging slot RESOLVES — it is not a constant this test may re-derive.
+	 * The probe lands under whatever temp root the caller is running with, which
+	 * is what makes the suite's own private root (`CliFixture.isolateTempDir`)
+	 * reach it and what lets two workers stay apart; the assertion therefore
+	 * names the ROOT and finds the file by its stem, never by a full path.
+	 */
+	@:pin('control')
+	@:killer('M-PROBE-SLOT-CONST')
+	public function testProbeStagesSourceUnderTheCurrentTempRoot(): Void {
+		#if nodejs
+		final root: String = CliFixture.writeDir('probe_stage_root', []);
 		final source: String = 'class StagedProbe { var x:Int = 42; }';
-		final code: Int = Cli.run(['probe', source]);
-		Assert.equals(0, code, 'probe exits clean');
-		Assert.isTrue(FileSystem.exists(stagedPath), 'probe stages source to $stagedPath');
-		final staged: String = File.getContent(stagedPath);
-		Assert.equals(source, staged, 'staged file content matches the probe source byte-for-byte');
+		final staged: Array<String> = stagedUnder(root, [source]);
+		Assert.equals(1, staged.length, 'exactly one slot under the temp root the probe was handed');
+		Assert.equals(source, File.getContent('$root/${staged[0]}'), 'staged file content matches the probe source byte-for-byte');
+		CliFixture.removeDir(root);
+		#else
+		Assert.pass('non-nodejs target');
+		#end
 	}
 
+	/**
+	 * Single-slot is preserved, at the scope it was always about: WITHIN one
+	 * process a chained `recon --probe` targets the LAST probe, never a history.
+	 * What changed is that the slot no longer spans processes.
+	 */
+	@:pin('control')
+	@:killer('M-PROBE-SLOT-CONST')
 	public function testProbeRestagingOverwritesPreviousScratch(): Void {
-		final stagedPath: String = '/tmp/anyparse-last-probe.hx';
-		Assert.equals(0, Cli.run(['probe', 'class First {}']), 'first probe exits clean');
-		final firstStaged: String = FileSystem.exists(stagedPath) ? File.getContent(stagedPath) : '';
-		Assert.equals('class First {}', firstStaged, 'first probe staged');
-		Assert.equals(0, Cli.run(['probe', 'class Second { var b:Bool; }']), 'second probe exits clean');
+		#if nodejs
+		final root: String = CliFixture.writeDir('probe_restage_root', []);
+		final staged: Array<String> = stagedUnder(root, ['class First {}', 'class Second { var b:Bool; }']);
+		Assert.equals(1, staged.length, 'a second probe reuses this process\'s slot rather than adding one');
 		Assert.equals(
-			'class Second { var b:Bool; }', File.getContent(stagedPath), 'second probe overwrites the scratch file (single-slot by design)'
+			'class Second { var b:Bool; }', File.getContent('$root/${staged[0]}'),
+			'second probe overwrites the scratch file (single-slot by design)'
 		);
+		CliFixture.removeDir(root);
+		#else
+		Assert.pass('non-nodejs target');
+		#end
+	}
+
+	/**
+	 * `APQ_PROBE_PATH` names the slot outright — the escape hatch for a caller
+	 * that cannot isolate its temp root — and a target that is not a regular
+	 * file is REFUSED rather than written through. `File.saveContent` follows a
+	 * symlink, so without the refusal a planted link under a shared temp root is
+	 * a write-anywhere primitive with this process's rights.
+	 */
+	@:pin('control')
+	@:killer('M-PROBE-STAGE-ANY-TARGET')
+	public function testProbeStagingRefusesANonRegularTargetAndHonoursTheEnvPath(): Void {
+		#if nodejs
+		final root: String = CliFixture.writeDir('probe_env_slot', []);
+		final victim: String = '$root/victim.txt';
+		final slot: String = '$root/planted-slot.hx';
+		final stash: Null<String> = Sys.getEnv(PROBE_PATH_ENV);
+		var raised: Null<Exception> = null;
+		try {
+			File.saveContent(victim, VICTIM_CONTENT);
+			symlink(victim, slot);
+			Sys.putEnv(PROBE_PATH_ENV, slot);
+			Assert.equals(0, Cli.run(['probe', 'class Attacker {}']), 'the probe still answers when staging is refused');
+			Assert.equals(VICTIM_CONTENT, File.getContent(victim), 'staging must not write through a symlink');
+			// Same env path, now a free name: the override itself is honoured.
+			FileSystem.deleteFile(slot);
+			Assert.equals(0, Cli.run(['probe', 'class Explicit {}']), 'probe exits clean with the env-named slot');
+			Assert.equals('class Explicit {}', File.getContent(slot), 'APQ_PROBE_PATH names the slot outright');
+		} catch (exception: Exception) {
+			raised = exception;
+		}
+		Sys.putEnv(PROBE_PATH_ENV, stash);
+		CliFixture.removeDir(root);
+		if (raised != null) throw raised;
+		#else
+		Assert.pass('non-nodejs target');
+		#end
+	}
+	/**
+	 * Two `probe` PROCESSES, each with its own private temp root, must stage to
+	 * two different files — the S150 isolation mechanism (`RunTests.main` ->
+	 * `CliFixture.isolateTempDir`) applied to the probe slot. A hard-coded
+	 * absolute slot makes both processes name one path, so whichever ran second
+	 * owns the bytes and the first one's follow-up `strip` / `recon --probe`
+	 * silently parses a source it never wrote.
+	 *
+	 * The assertion is on the path the probe RESOLVED and announced, never on a
+	 * constant: the nudge is the only thing a caller can chain from.
+	 *
+	 * This half tests the TEMP ROOT and nothing else: the two children get two
+	 * roots, so their slots differ by the root alone and a pid-less name would
+	 * still pass here. The pid half is its sibling below, which hands both
+	 * children ONE root.
+	 *
+	 * `guard`, not `control`, and the reason is worth knowing before you write
+	 * another child-process fixture: NO source cut can kill this one.
+	 * `mutation-check.sh` builds the arm's worktree with `worker-build.sh <dir>
+	 * test` — the test runner only — and `bin/` is gitignored, so the fresh
+	 * worktree has no `bin/apq.js` at all and this method takes its not-built
+	 * branch. Measured: under `M-PROBE-SLOT-CONST` the three IN-PROCESS probe
+	 * fixtures go red and this pair stays green. Those three kill the arm; this
+	 * pair is what proves the fix end to end.
+	 */
+	@:pin('guard')
+	public function testTwoProbeProcessesGetSeparateScratchSlots(): Void {
+		#if nodejs
+		final engine: Null<String> = engineOrSkip();
+		if (engine == null) return;
+		final rootA: String = CliFixture.writeDir('probe_slot_a', []);
+		final rootB: String = CliFixture.writeDir('probe_slot_b', []);
+		final sourceA: String = 'class AlphaOwnedByWorkerA { var alpha:Int = 1; }';
+		final sourceB: String = 'class BetaOwnedByWorkerB { var beta:Bool; }';
+		final slotA: String = probeChildSlot(engine, rootA, sourceA);
+		final slotB: String = probeChildSlot(engine, rootB, sourceB);
+		Assert.notEquals(slotA, slotB, 'two probe processes must not name one scratch slot (got "$slotA" twice)');
+		Assert.equals(sourceA, File.getContent(slotA), 'the first process reads back its OWN bytes');
+		Assert.equals(sourceB, File.getContent(slotB), 'the second process reads back its OWN bytes');
+		CliFixture.removeDir(rootA);
+		CliFixture.removeDir(rootB);
+		#else
+		Assert.pass('non-nodejs target');
+		#end
+	}
+
+	/**
+	 * The shape the campaign actually runs in: two workers share ONE `$TMPDIR`
+	 * (measured — on macOS every process of one user inherits the same
+	 * `/var/folders/…/T`, and no worker sets its own). A temp-root base alone
+	 * therefore separates nothing; the slot name has to carry the writing
+	 * process's own identity too.
+	 */
+	@:pin('guard')
+	public function testTwoProbeProcessesUnderOneTempRootStillGetSeparateSlots(): Void {
+		#if nodejs
+		final engine: Null<String> = engineOrSkip();
+		if (engine == null) return;
+		final shared: String = CliFixture.writeDir('probe_slot_shared', []);
+		final sourceA: String = 'class AlphaSharedRoot { var alpha:Int = 1; }';
+		final sourceB: String = 'class BetaSharedRoot { var beta:Bool; }';
+		final slotA: String = probeChildSlot(engine, shared, sourceA);
+		final slotB: String = probeChildSlot(engine, shared, sourceB);
+		Assert.notEquals(slotA, slotB, 'one shared temp root must still give two processes two slots');
+		Assert.equals(sourceA, File.getContent(slotA), 'the first process reads back its OWN bytes');
+		Assert.equals(sourceB, File.getContent(slotB), 'the second process reads back its OWN bytes');
+		CliFixture.removeDir(shared);
+		#else
+		Assert.pass('non-nodejs target');
+		#end
+	}
+
+	/**
+	 * `sys.io.File.saveContent` FOLLOWS a symlink, so a slot in a world-writable
+	 * directory is a write-anywhere primitive with this process's rights. Staging
+	 * refuses a target that is not a regular file and says so; the probe itself
+	 * still answers.
+	 *
+	 * Its in-process sibling covers the same refusal and they are not redundant:
+	 * only a CHILD can be read for the stderr WORDING (`Cli.run` writes the real
+	 * fd 2), and only the in-process one can also assert the positive arm — that
+	 * `$APQ_PROBE_PATH` names the slot when the target is free.
+	 */
+	@:pin('guard')
+	public function testProbeRefusesToStageOntoASymlink(): Void {
+		#if nodejs
+		final engine: Null<String> = engineOrSkip();
+		if (engine == null) return;
+		final root: String = CliFixture.writeDir('probe_slot_symlink', []);
+		final victim: String = '$root/victim.txt';
+		File.saveContent(victim, VICTIM_CONTENT);
+		final planted: String = '$root/planted-slot.hx';
+		symlink(victim, planted);
+		final result: js.node.ChildProcess.ChildProcessSpawnSyncResult = spawnProbe(engine, root, 'class Attacker {}', planted);
+		Assert.equals(0, result.status, 'the probe still answers even when staging is refused');
+		Assert.equals(VICTIM_CONTENT, File.getContent(victim), 'staging must not write through a symlink');
+		final err: String = result.stderr == null ? '' : Std.string(result.stderr);
+		Assert.isTrue(err.indexOf('not a regular file') != -1, 'the refusal must say why, got: $err');
+		CliFixture.removeDir(root);
+		#else
+		Assert.pass('non-nodejs target');
+		#end
 	}
 
 	// --- 4. ANYPARSE_HXFORMAT_FORK cache (write-on-resolve, read-on-fallback) ---
@@ -225,6 +396,91 @@ class ApqDxTier5CliTest extends Test {
 		}
 		Assert.equals(0, Cli.run(['sweep']), 'sweep exits clean with warn-check in the path');
 	}
+
+	#if nodejs
+	/**
+	 * `bin/apq.js`, or null after passing. A child-process fixture needs the CLI
+	 * as a process, and `haxe test-js.hxml` alone does not build one — an arm's
+	 * worktree in particular never has it, which is why these fixtures are
+	 * `guard` rather than `control`.
+	 */
+	private function engineOrSkip(): Null<String> {
+		final engine: String = 'bin/apq.js';
+		if (FileSystem.exists(engine)) return engine;
+		Assert.pass('bin/apq.js is not built — a child-process fixture needs the CLI as a process');
+		return null;
+	}
+
+	/** Run `probe` as a child process under `tmpRoot` and return the slot path it announced. */
+	private function probeChildSlot(engine: String, tmpRoot: String, source: String): String {
+		final result: js.node.ChildProcess.ChildProcessSpawnSyncResult = spawnProbe(engine, tmpRoot, source, null);
+		Assert.equals(0, result.status, 'probe child exits clean');
+		final err: String = result.stderr == null ? '' : Std.string(result.stderr);
+		final marker: String = 'staged source -> ';
+		final at: Int = err.indexOf(marker);
+		if (at < 0) {
+			Assert.fail('the probe nudge must name the staged path, got: $err');
+			return '';
+		}
+		final rest: String = err.substr(at + marker.length);
+		final close: Int = rest.indexOf(' (');
+		return close < 0 ? rest.trim() : rest.substr(0, close);
+	}
+
+	/** `node bin/apq.js probe <source>` with `TMPDIR` (and optionally `APQ_PROBE_PATH`) overridden. */
+	private function spawnProbe(
+		engine: String, tmpRoot: String, source: String, slot: Null<String>
+	): js.node.ChildProcess.ChildProcessSpawnSyncResult {
+		final env: Any = {};
+		for (key => value in Sys.environment()) Reflect.setField(env, key, value);
+		Reflect.setField(env, 'TMPDIR', tmpRoot);
+		Reflect.setField(env, 'TEMP', tmpRoot);
+		// Cleared, not merely left unset: an APQ_PROBE_PATH inherited from the
+		// suite process would hand both children ONE slot and turn the
+		// shared-root test red for a reason that has nothing to do with the pid.
+		if (slot != null)
+			Reflect.setField(env, PROBE_PATH_ENV, slot);
+		else
+			Reflect.deleteField(env, PROBE_PATH_ENV);
+		return js.node.ChildProcess.spawnSync('node', [
+			engine,
+			'probe',
+			source,
+			'--lang',
+			'haxe'
+		], cast { encoding: 'utf8', env: env });
+	}
+
+	/** There is no `sys.FileSystem` symlink, and the guard under test only means anything against a real one. */
+	private inline function symlink(target: String, link: String): Void {
+		js.node.Fs.symlinkSync(target, link);
+	}
+
+	/**
+	 * Run `probe` in-process once per source with `root` as the temp root, and
+	 * return the slot basenames it left behind. The stem is the contract; the
+	 * rest of the name belongs to the resolver, so a test that spelled the whole
+	 * path would be pinning the implementation instead of the behaviour.
+	 */
+	private function stagedUnder(root: String, sources: Array<String>): Array<String> {
+		final tmpStash: Null<String> = Sys.getEnv('TMPDIR');
+		final tempStash: Null<String> = Sys.getEnv('TEMP');
+		var raised: Null<Exception> = null;
+		var slots: Array<String> = [];
+		try {
+			Sys.putEnv('TMPDIR', root);
+			Sys.putEnv('TEMP', root);
+			for (source in sources) Assert.equals(0, Cli.run(['probe', source]), 'probe exits clean');
+			slots = FileSystem.readDirectory(root).filter(name -> name.startsWith(PROBE_SLOT_STEM));
+		} catch (exception: Exception) {
+			raised = exception;
+		}
+		Sys.putEnv('TMPDIR', tmpStash);
+		Sys.putEnv('TEMP', tempStash);
+		if (raised != null) throw raised;
+		return slots;
+	}
+	#end
 	#end
 
 }

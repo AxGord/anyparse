@@ -2129,6 +2129,20 @@
 			"method": "noAutofixReason",
 			"force": "''",
 			"note": "the rule declares `NoAutofix` with an empty sentence, so `--fix` reports it as report-only without saying that `apq extract-constant` does the hoist"
+		},
+		{
+			"name": "M-PROBE-SLOT-CONST",
+			"type": "anyparse.query.cli.command.ProbeCommand",
+			"method": "stageProbePath",
+			"force": "'/tmp/anyparse-last-probe.hx'",
+			"note": "every process stages to one machine-global path again, so a second worker's source answers the first one's `strip` / `recon --probe` with exit 0 and no exception"
+		},
+		{
+			"name": "M-PROBE-STAGE-ANY-TARGET",
+			"type": "anyparse.query.cli.command.ProbeCommand",
+			"method": "isStageTargetSafe",
+			"force": "true",
+			"note": "staging writes whatever the slot names, so a planted symlink there is a write-anywhere primitive with this process's rights"
 		}
 	]
 }

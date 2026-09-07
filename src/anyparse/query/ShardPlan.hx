@@ -76,21 +76,23 @@ final class ShardPlan {
 
 	/**
 	 * Classes that share MUTABLE STATE outside their own process, pinned to
-	 * shard 0 as ONE group. Two such paths are fixed constants, not per-test
-	 * temps: `/tmp/anyparse-last-probe.hx` (`Cli.STAGE_PROBE_PATH`, a single
-	 * slot that `apq probe` overwrites and the Tier-5 tests read back
-	 * byte-for-byte) and `bin/.last-sweep.json` (the corpus delta baseline,
+	 * shard 0 as ONE group. One such path is still a fixed constant, not a
+	 * per-test temp: `bin/.last-sweep.json` (the corpus delta baseline,
 	 * rewritten by `HxFormatterCorpusTest` and read by `ApqDxTier5CliTest`).
+	 * The second was `/tmp/anyparse-last-probe.hx` — since S170 `apq probe`
+	 * stages to `<temp root>/anyparse-last-probe.<pid>.hx`, so it forces
+	 * nothing into this group; the list has NOT been re-derived against that
+	 * narrower reason, which is the whole point of the recipe below.
 	 *
-	 * The list is DERIVED, not remembered. Every class holding an exact
-	 * `probe` string leaf calls the subcommand that writes the staging slot:
-	 * `hxq lit 'probe' test/ --kind Literal`, then READ each hit — one of
-	 * them is a fixture method named `probe`, not a subcommand. `hxq lit
-	 * '.last-sweep.json' test/` finds the corpus baseline's users. Re-derive
-	 * when adding a test that stages a probe or touches that baseline: a
-	 * writer left outside the group does not fail, it races a byte-for-byte
-	 * read-back in a sub-millisecond window and surfaces later as an
-	 * unreproducible flake.
+	 * The list is DERIVED, not remembered. `hxq lit '.last-sweep.json' test/`
+	 * finds the corpus baseline's users — the one shared constant left.
+	 * Re-derive when adding a test that touches that baseline: a writer left
+	 * outside the group does not fail, it races a byte-for-byte read-back in a
+	 * sub-millisecond window and surfaces later as an unreproducible flake.
+	 * The recipe had a second half until S170 — `hxq lit 'probe' test/ --kind
+	 * Literal`, every class that stages a probe — and following it now
+	 * re-derives the old, too-wide group: probe staging is per process and
+	 * shares no path with anything.
 	 *
 	 * Everything else uses unique per-test temp directories and random
 	 * compiler-server ports, so it parallelises freely.
