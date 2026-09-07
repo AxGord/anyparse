@@ -1396,6 +1396,83 @@ around 15 min). So the fifth zone is LATENT today, exactly as the fourth is — 
 compiles, and what the mode buys is that the next one is checked before it is claimed rather
 than after a wave has gone green around it.
 
+#### T659: the two callers are 16 and 0, and the empty one is inert by PROOF (S153)
+
+S111 left `needsSymmetryWrap` as a refusal with three numbers and one instruction — if a seam
+exists it has to come from the CALLER, because both inner gates are WIDER than the conjunction
+they sit in. This slice measured that direction. **Nothing was armed, and T659 closes as "no
+ownable seam".**
+
+**The address it was carried under was wrong, and one command says so.** T659 named
+`WriterBraceSymmetryLowering.needsSymmetryWrap`; the member is `private static inline` on
+`anyparse.format.SingleStmtBraces`, and `hxq mentions needsSymmetryWrap src/anyparse/macro`
+returns nothing at all, while `hxq callers 'SingleStmtBraces.needsSymmetryWrap'
+src/anyparse/format` resolves both call sites in one run. Verify the owning type before quoting
+a member address out of a backlog line — a task's file list is not evidence about where the code
+lives.
+
+**Re-measured at `552954f7`, whole suite, `--jobs 1`**, so the load-driven extra rows S113
+documents cannot appear — and none did: the five transcripts hold no oracle-e2e or `unit.cli.*`
+name at all.
+
+| cut | S111 | S153 | classes |
+|---|---:|---:|---|
+| the member → `false` | 16 | **16** | 3 |
+| … the `SYMMETRY_WRAP_SKIP_CTORS` gate ignored | 27 | **27** | 4 |
+| … the `innerSelfTerminates` gate ignored | 56 | **58** | 5 (33 in one) |
+
+The first two reproduce set-for-set. The third moved +2 and lost a class against S111's "56 over
+6"; the suite grew 14 148 → 14 232 fixtures in between, and this is the cut whose blast tracks
+the class it is widest in. Quote 58 over 5 going forward.
+
+**The two callers, and the blast of forcing each one's use to `false`:**
+
+| call site | what it decides | blast |
+|---|---|---:|
+| `unwrapStmt` — gate 7's repair arm, `return wrapInBlock(block, 'BlockStmt')` | the ONE direction `symmetry` alone arms | **16**, the SAME SET as cutting the member |
+| `deBracedElem` — gate 7's `return null` | refuse the de-brace | **0 — SURVIVED** |
+
+`unwrapStmt`'s failure set is identical to the member's own, name for name, so the member has
+exactly ONE live caller and there is no caller-side split to find: cutting the call site and
+cutting the callee are the same measurement.
+
+**And the zero is not a vacuum — it is a proof.** `innerSelfTerminates` answers `false` for
+`BlockStmt` and `BlockBody` (its own arm, carrying a comment that forbids the flip), so
+`needsSymmetryWrap(block, _) == true` implies `Type.enumConstructor(block) != 'BlockStmt'` — and
+the line IMMEDIATELY after gate 7 in `deBracedElem` is
+`if (Type.enumConstructor(block) != 'BlockStmt') return null;`. Both return `null`, for every
+input that can reach either. That is S105's `elseSiblingKeepsExpr` shape (a constant answer for
+all inputs, not merely for the fixtures we have) with S126's `elseFollows` resolution: **KEEP.**
+Deleting it removes a predicate EVALUATION rather than a spelling, and the guard it duplicates is
+the one `innerSelfTerminates`'s own comment says both callers must supply for themselves if that
+arm ever moves. No oracle here can tell the difference — which is why the subsumption is written
+down instead of tested for.
+
+**The live call site does decompose — by POSITION, and not into a mechanism.** `isIfThenBody` is
+a parameter of `unwrapStmt` and gate 8 one line above already reads it, so the wrap can be
+restricted to one side:
+
+| cut at `unwrapStmt`'s gate 7 | blast | already pinned |
+|---|---:|---:|
+| `!isIfThenBody && needsSymmetryWrap(…)` — the THEN-position wrap off | **7** over 3 classes | 6 of 7 |
+| `isIfThenBody && needsSymmetryWrap(…)` — the ELSE-position wrap off | **12** over 2 classes | 4 of 12 |
+
+The two are a clean decomposition — their union is EXACTLY the 16, sharing three fixtures — and
+neither earns an arm. The narrow half is seven fixtures of which SIX already name an arm
+(`M-SSB-CHAIN-OFF` ×3, `M-SSB-SYMMETRY-ONLY-BLIND`, `M-SSB-VALUE-WRAP-OFF`,
+`M-SSB-CHAIN-TAIL-OFF`), so arming it would buy exactly one pin, and buy it on
+`unit.check.CollapsibleElseIfCheckTest#testFixOutputKeepsBracesOppositeBlockThenBranch` — a lint
+fixture downstream of the writer, not a writer fixture. The wide half's eight unpinned fixtures
+are the `HxSingleStmtBracesSliceTest` residue S126 settled as structural: the symmetric de-brace
+happy path, which every cut that reaches it reaches most of the class with. And `!isIfThenBody`
+is not a gate this module has — gate 7 does not read the position, gate 8 does — so the cut
+MANUFACTURES a mechanism in order to make a blast small enough to arm. That is the arm S142
+forbids, for a count of one.
+
+**Verdict, with the numbers: no ownable seam.** One live caller whose blast is the member's own
+16, one caller that is inert by construction, and a position split whose narrow half is
+six-sevenths already owned. T659 is closed here rather than deferred a fourth time.
+
 
 ## Macro-specific tests
 
