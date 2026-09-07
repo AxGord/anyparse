@@ -77,11 +77,19 @@ class BuiltinFixClassCensusTest extends Test {
 
 	public function testTheseRulesDeclareNoAutofixAtAll(): Void {
 		Assert.same([
+			'anon-type-dup',
+			'assignment-in-condition',
 			'asymmetric-branch-braces',
 			'complexity',
 			'doc-coverage',
 			'duplicate-code',
-			'magic-number'
+			'english-comments',
+			'magic-number',
+			'shadowing-case-binder',
+			'shadowing-local',
+			'shadowing-parameter',
+			'string-literal-dup',
+			'swallowed-exception'
 		], idsImplementing(c -> c is NoAutofix));
 	}
 

@@ -198,10 +198,10 @@ final class PreferLpad implements Check implements DefaultOff {
 		// Two ways the file refuses the rewrite outright, both answering "the calls would not resolve
 		// the way this file's own declarations say they should". A second `using` supplying `lpad`
 		// outranks the inserted one, so the rewritten calls would resolve there instead; and
-		// `appendUsingInsert` answering false means the only `using StringTools;` sits inside a `#if`
-		// region that leaves a rewritten call out, where neither the extension call nor a second,
-		// unguarded declaration is safe. Either way the whole edit set goes rather than retarget a
-		// call silently.
+		// `appendUsingInsert` answering false means the declaration cannot be made — the only
+		// `using StringTools;` sits inside a `#if` region that leaves a rewritten call out, or an
+		// accepted rewrite already covers the byte the insert would go at. Either way the whole edit
+		// set goes rather than retarget a call silently, or spell one that binds nothing.
 		final resolves: Bool = !UsingScan.conflictingUsing(
 				UsingScan.usingModules(header), STRING_TOOLS_MODULE, LPAD_METHOD, plugin, () -> symbols, []
 			) && UsingScan.appendUsingInsert(header, STRING_TOOLS_MODULE, edits, violations);

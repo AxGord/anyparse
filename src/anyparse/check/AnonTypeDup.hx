@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.check.Check.VolatileMessage;
 import anyparse.query.GrammarPlugin;
@@ -73,7 +74,7 @@ using StringTools;
  * verdict depend on which occurrence happened to come first.
  */
 @:nullSafety(Strict)
-final class AnonTypeDup implements Check implements ConfigAware implements DefaultOff implements VolatileMessage {
+final class AnonTypeDup implements Check implements NoAutofix implements ConfigAware implements DefaultOff implements VolatileMessage {
 
 	/** Least occurrences of one shape before the group is flagged. */
 	private static inline final DEFAULT_MIN_OCCURRENCES: Int = 3;
@@ -140,6 +141,10 @@ final class AnonTypeDup implements Check implements ConfigAware implements Defau
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		return [];
+	}
+
+	public function noAutofixReason(): String {
+		return 'the typedef needs a NAME, and which concept the repeated structure stands for is the author\'s call';
 	}
 
 	/**

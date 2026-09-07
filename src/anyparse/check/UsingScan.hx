@@ -14,7 +14,7 @@ using StringTools;
 
 /**
  * The `using`-declaration helpers the static-extension checks share — `dead-binder-counter-loop`,
- * `prefer-exists`, `prefer-foreach`, `prefer-find` and `prefer-static-extension` each rewrite a
+ * `prefer-exists`, `prefer-foreach`, `prefer-find`, `prefer-lpad` and `prefer-static-extension` each rewrite a
  * call into an extension method, so each has to ask the same four questions of a file's header: is
  * the module already brought in with `using`, where would the insert go, does some OTHER `using`
  * already bind the method name (which would make the rewrite resolve elsewhere), and — where a
@@ -147,9 +147,13 @@ final class UsingScan {
 	 * Append the `using <module>;` insert `edits` need — nothing when the module is already in
 	 * scope at every edit — and answer whether the file can carry the rewrite at all.
 	 *
-	 * `false` is `usingScopeAt`'s `Guarded` verdict passed on: the caller must DROP its whole edit
-	 * set, because the rewrites it built resolve through a `using` that only some builds declare.
-	 * `violations` are the findings that set is built from, and every one of them is annotated with the refusal: a `fix` that
+	 * `false` is a REFUSAL and the caller must DROP its whole edit set: either `usingScopeAt` answered
+	 * `Guarded`, so the rewrites resolve through a `using` only some builds declare, or the insert byte
+	 * is already covered by an accepted rewrite and the declaration cannot be spliced at all. Whichever
+	 * it was, the answer NEVER means "inserted" — the only way `true` comes back is with the insert in
+	 * `edits` or the module already in scope.
+	 * `violations` are the findings that set is built from, and the refusal is written on them: unconditionally on the
+	 * `Guarded` branch, and on every one carrying no reason yet on the covered branch. A `fix` that
 	 * returns nothing and says nothing reads to the ledger as a rule that withheld an edit without a reason. The rules that
 	 * insert one `using` per file share this seam rather than each spelling the same branches; `prefer-static-extension`
 	 * decides per SITE instead (one file can hold a covered call and an uncovered one) and calls `usingScopeAt` directly.
@@ -167,8 +171,9 @@ final class UsingScan {
 			return false;
 		}
 		if (scope == UsingScope.Absent) {
-			final insert: { span: Span, text: String } = usingInsertEdit(header, module);
-			if (!CanonicalEdit.editsOverlapAny([insert], edits)) edits.push(insert);
+			final insert: Null<{ span: Span, text: String }> = insertUnlessCovered(header, module, edits, violations);
+			if (insert == null) return false;
+			edits.push(insert);
 		}
 		return true;
 	}
@@ -182,6 +187,52 @@ final class UsingScan {
 		return 'the file declares `using $module` only inside a `#if` region $subject sits outside of, so the extension call'
 			+ ' would not resolve in the builds that region is compiled out of, and a second unguarded `using` would change'
 			+ ' what the region\'s own calls resolve to';
+	}
+
+	/**
+	 * Write `reason` on every finding that carries none yet — the annotation half of a WHOLESALE
+	 * refusal, where one gate closes on an edit set several findings share.
+	 *
+	 * A finding that already names its own gate keeps that sentence: it is the more specific of the
+	 * two, and overwriting it would replace "this call is shadowed" with the file-wide answer. The
+	 * WhereUnset half of the name is load-bearing: `ImportBlockOrder.noteDecline` is the same idea with
+	 * the opposite policy (it targets a known set and overwrites), and the two must not be read as one.
+	 */
+	public static function noteDeclineWhereUnset(violations: Array<Violation>, reason: String): Void {
+		for (violation in violations) if (violation.declineReason == null) violation.declineReason = reason;
+	}
+
+	/**
+	 * The zero-width `using <module>;` edit for `header`, or null when an already-accepted edit covers
+	 * the byte it would be spliced at — in which case the refusal is ALREADY written on `violations`.
+	 *
+	 * This is the decision `appendUsingInsert` and `BoolLoopScan.withUsingInsert` share; they differ
+	 * only in what a refusal looks like to their own caller (`false` against an empty grouped set).
+	 * Returning the edit rather than pushing it is what makes "did not insert" unrepresentable as
+	 * "inserted": there is no success value to hand back when nothing was produced.
+	 */
+	public static function insertUnlessCovered(
+		header: UsingHeader, module: String, edits: Array<{ span: Span, text: String }>, violations: Array<Violation>
+	): Null<{ span: Span, text: String }> {
+		final insert: { span: Span, text: String } = usingInsertEdit(header, module);
+		if (!CanonicalEdit.editsOverlapAny([insert], edits)) return insert;
+		noteDeclineWhereUnset(violations, coveredUsingDecline([module]));
+		return null;
+	}
+
+	/**
+	 * Why a rewrite is refused when the byte the `using <module>;` insert would go at is already
+	 * covered by an accepted rewrite — the second, rarer way the declaration cannot be made, and the
+	 * one that used to be answered by inserting nothing and reporting success.
+	 *
+	 * The subject is spelled as the caller would have written it, so the per-file rules name one module
+	 * and `prefer-static-extension`, which can owe several, names them all in one declaration run.
+	 */
+	public static function coveredUsingDecline(modules: Array<String>): String {
+		final declarations: String = 'using ' + modules.join('; using ') + ';';
+		return 'an accepted rewrite already covers the byte where `$declarations` would be spliced, so the declaration cannot'
+			+ ' be inserted without corrupting that edit — and a rewritten extension call whose `using` never landed does not'
+			+ ' compile, so the whole edit set goes rather than ship one that cannot build';
 	}
 
 	/**

@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
@@ -54,7 +55,7 @@ using StringTools;
  * family uses) and the exit test is `RefactorSupport.subtreeContainsKind`.
  */
 @:nullSafety(Strict)
-final class SwallowedException implements Check {
+final class SwallowedException implements Check implements NoAutofix {
 
 	public function new() {}
 
@@ -85,6 +86,10 @@ final class SwallowedException implements Check {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		return [];
+	}
+
+	public function noAutofixReason(): String {
+		return 'resolving a swallowed exception — handle it, or rethrow — is a human decision';
 	}
 
 	/** Walk `node`, flagging every swallowing statement-context catch clause reached. */

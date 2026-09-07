@@ -284,7 +284,11 @@ final class BoolLoopScan {
 
 	/**
 	 * The rewrites as `GroupedEdit`s, plus the `using Lambda;` the EXTENSION-form ones need — atomic
-	 * with exactly those, and absent when none of them is present.
+	 * with exactly those, and absent when none of them is present. An EMPTY result is the refusal: the
+	 * guard leaves a call out, or the insert byte is already covered by a rewrite. Both refusals take
+	 * the QUALIFIED rewrites down with them even though those need no import — the carve-out below
+	 * keeps them out of the atomic GROUP, not out of a whole-file veto, and erring toward emitting
+	 * nothing is the only direction that cannot ship a call binding nothing.
 	 *
 	 * The inserted `using` and the calls that need it are ONE group: a verifier that reverted every
 	 * rewrite while keeping the `using` would leave a file that still compiles, so nothing
@@ -313,8 +317,11 @@ final class BoolLoopScan {
 			return [];
 		}
 		if (scope == UsingScope.InScope) return flat;
-		final usingEdit: { span: Span, text: String } = UsingScan.usingInsertEdit(header, LAMBDA_MODULE);
-		if (CanonicalEdit.editsOverlapAny([usingEdit], rewrites)) return flat;
+		// Returning `flat` on a covered anchor shipped exactly the output the `Guarded` branch above
+		// refuses: every extension-form rewrite, and no `using Lambda;` to bind it. An insert that
+		// cannot be spliced is a refusal of the whole set, not a reason to emit the calls without it.
+		final usingEdit: Null<{ span: Span, text: String }> = UsingScan.insertUnlessCovered(header, LAMBDA_MODULE, rewrites, violations);
+		if (usingEdit == null) return [];
 		final grouped: Array<GroupedEdit> = [
 			for (i in 0...rewrites.length)
 				{
