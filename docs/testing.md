@@ -2419,6 +2419,79 @@ left as runners that no longer compile.
 Both `test-js-common.hxml` and `bin/apq-js-common.hxml` pass
 `-D analyzer-optimize`, so the suite exercises the codegen that ships.
 
+### The assertion count is a per-machine fact, not a build artifact (T716)
+
+A gate that greps `tests executed:` off a transcript names a fixed number per
+commit — 14 304 test METHODS at `615b2a3e`, checked three separate ways in
+one audit: the same binary run twice, and a SECOND binary independently
+built from a second `git worktree add` of the identical commit
+(`haxe bin/apq-js.hxml && haxe test-js.hxml` from scratch). All three gave
+`tests executed: 14304` / `assertations: 46182`, byte-for-byte. **Two builds
+of one commit do not drift on this machine** — the earlier standing worry
+that they might was not reproduced here.
+
+What DOES move `assertations:` is the process's ambient environment, not the
+build. Two classes in this tree read something outside the git tree and
+change how many `Assert.*` calls their body reaches:
+
+- **`unit.query.HaxelibResolverTest.testLibSourceDirResolvesRealInstalledLib`**
+  is the only site whose ASSERTION COUNT depends on the ambient `$HOME` /
+  haxelib-setup state. It is not the only test that spawns the real `haxelib`
+  binary — `unit.cli.ResolutionScopeCliTest.testResolutionLibsMissingLibIsGraceful`
+  does too, through a `resolutionLibs` config entry naming a lib that does not
+  exist — but that one asserts `HaxelibResolver.invocations` merely
+  INCREASED and the run's exit code, both true whether or not `haxelib
+  libpath` finds a repository to fail inside, so its own assertion count
+  never moves. This one calls `HaxelibResolver.libSourceDir('utest')`, which
+  shells out to `haxelib libpath utest`. A `$HOME` that has run `haxelib setup`
+  resolves the path and the test asserts three things (absolute, ends with
+  `/src`, exists on disk); a `$HOME` that has not makes `haxelib libpath`
+  exit 1 ("Please run `haxelib setup` first"), `libSourceDir` returns `null`,
+  and the test takes its own documented graceful-skip branch —
+  `Assert.pass('haxelib not on PATH…')` — one assertion instead of three.
+  Reproduced directly: `haxelib libpath utest` under the real developer
+  `$HOME` prints the utest source root; under a freshly created `$HOME` (an
+  empty directory, the same private-HOME shape `unit.cli.ApqReconCliTest`
+  already uses to force its own usage-error branch) it fails with that exact
+  message. Isolated with `APQ_TEST=unit.query.` on one binary: **8354
+  assertions under the real `$HOME`, 8352 under a scratch one** — a diff of
+  2, on the identical 2117 tests, and every other class in the package (117
+  checked, one full pass each HOME) held steady. This is the mechanism
+  behind the earlier "`APQ_TEST=unit.query.` gives 8316 under a real `HOME`
+  and 8314 under a private one" measurement (T709) — the codebase has moved
+  since, so the absolute numbers changed; the shape (diff of 2, exactly one
+  class) did not.
+- **`unit.query.PatchSliceTest.testCliPreviewAndWriteBothAnnounceThemselvesOnStderr`**
+  guards on `sys.FileSystem.exists('bin/apq.js')` — a path relative to the
+  process's CWD, on purpose (its own doc comment: "a missing `bin/apq.js` is
+  not a failing contract") — and takes a one-assertion skip branch instead of
+  its normal five when the engine has not been built yet from wherever the
+  runner's CWD sits. Same shape as the `$HOME` case above: an ambient,
+  per-checkout precondition, not a build non-determinism. This is the
+  mechanism behind the "7 fewer assertions in a worktree with an empty
+  `bin/`" trap.
+
+**Neither is a bug to fix.** Both tests document their own graceful
+degradation on purpose — the alternative is a hard failure on every fresh
+clone or container that has not yet run `haxelib setup` or built
+`bin/apq.js`, which is worse than a documented `±N`. Every worker in this
+project runs with both preconditions already met (a real developer `$HOME`
+with `haxelib setup` done, `bin/apq.js` built before the suite runs), which
+is why the six-reading main-tree census this slice's brief quoted never saw
+either move: **read `tests executed` as the number a gate can require
+exactly; read `assertations` as that number, `±` up to 6 (2 from
+`HaxelibResolverTest`, up to 4 from `PatchSliceTest`) on an environment
+missing one of the two preconditions above.**
+
+Not reproduced in this audit: a difference between two builds of the SAME
+commit under IDENTICAL preconditions. The `TMPDIR` fixture collision this
+section documents below is fixed (S150); the `HOME`-keyed fork-path cache
+write (T706, below) is real but invisible in a same-fork-path environment
+because the write short-circuits on equal content. No other axis (oracle
+cache warmth, directory-walk order, wall-clock date) produced a difference
+across this audit's two-worktree, two-independent-build, three-run
+comparison.
+
 ### The core stays target-independent
 
 The runner being js-only says nothing about the library. Parser, writer and
