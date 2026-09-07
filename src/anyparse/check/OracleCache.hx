@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.CompilerOracle.OracleOutcome;
 import anyparse.check.HaxeSpawn.HaxeRun;
+import anyparse.core.TempScratch;
 import haxe.io.Path;
 
 using StringTools;
@@ -231,7 +232,7 @@ final class OracleCache {
 	public static function cacheFile(hxml: String, cwd: Null<String>): String {
 		#if (sys || nodejs)
 		final key: String = '${absolute(cwd ?? Sys.getCwd(), hxml)}|${cwd ?? ''}';
-		return Path.join([tempDir(), 'apq-oracle-verdict-${md5(key)}.json']);
+		return Path.join([TempScratch.root(), 'apq-oracle-verdict-${md5(key)}.json']);
 		#else
 		return '';
 		#end
@@ -547,15 +548,6 @@ final class OracleCache {
 	/** `path`'s content, or null when it cannot be read — the caller decides what an unreadable file means. */
 	private static function readText(path: String): Null<String> {
 		return try sys.io.File.getContent(path) catch (_exception: haxe.Exception) null;
-	}
-
-	/** The OS temp dir the record lives in, mirroring `CompilerServer.stateFile`. */
-	private static function tempDir(): String {
-		#if nodejs
-		return js.node.Os.tmpdir();
-		#elseif sys
-		return Sys.getEnv('TMPDIR') ?? '/tmp';
-		#end
 	}
 	#end
 

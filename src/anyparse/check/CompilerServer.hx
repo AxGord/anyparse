@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.CompilerOracle.OracleOutcome;
+import anyparse.core.TempScratch;
 import haxe.crypto.Md5;
 import haxe.io.Path;
 
@@ -193,7 +194,7 @@ final class CompilerServer {
 	public static function stateFile(hxml: String, cwd: Null<String>): String {
 		#if nodejs
 		final key: String = '${absolute(hxml)}|${cwd ?? ''}';
-		return Path.join([js.node.Os.tmpdir(), 'apq-oracle-${Md5.encode(key)}.json']);
+		return Path.join([TempScratch.root(), 'apq-oracle-${Md5.encode(key)}.json']);
 		#else
 		return '';
 		#end

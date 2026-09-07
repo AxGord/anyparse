@@ -323,6 +323,20 @@ final class StdlibDifferential {
 	 * Generates the probe into `dir`, compiles and runs it on the Haxe interpreter, and reads back
 	 * the surviving mappings. A compile failure is `Skipped` with the compiler's own text -- that
 	 * is the terminal proof the candidate was not self-contained after all.
+	 *
+	 * The module name is FIXED (`Probe.hx`), which is safe only because `dir` belongs to one
+	 * process: the write and the `haxe -cp <dir> --run Probe` that follows it are two steps, so a
+	 * `dir` two runs share lets the second write land between the first run's two steps and the
+	 * first run then reports a fully-formed finding about the other run's function, at exit 0
+	 * (measured: 12 of 12 rounds compiled one process's program twice). `StdlibDupCommand`
+	 * resolves that directory per process.
+	 *
+	 * `--work` is an escape hatch, not an isolation mechanism: two runs pointed at the SAME
+	 * value re-create this defect exactly, because the module name inside it is still fixed.
+	 * Give each run its own value, or leave it unset and let the process token do the work.
+	 * The durable fix is a per-process module name here rather than a per-process directory
+	 * one layer up; it is not in this slice because `PROBE_CLASS` is also the reserved name a
+	 * candidate is refused for owning, so both would have to move together.
 	 */
 	public static function run(candidate: StdlibCandidate, maps: Array<Mapping>, dir: String): DifferentialOutcome {
 		final refused: Null<String> = refusal(candidate, maps);

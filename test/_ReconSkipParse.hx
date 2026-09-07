@@ -22,8 +22,8 @@ using StringTools;
  * after recon.
  *
  * Build/run:
- *   haxe -cp src -cp test -lib hxnodejs -main _ReconSkipParse -js /tmp/recon.js
- *   ANYPARSE_HXFORMAT_FORK=/Users/axg/dev/libs/haxe-formatter node /tmp/recon.js
+ *   haxe recon.hxml
+ *   ANYPARSE_HXFORMAT_FORK=/Users/axg/dev/libs/haxe-formatter node bin/recon.js
  */
 typedef ReconCluster = {
 	var count: Int;
@@ -81,7 +81,7 @@ final class _ReconSkipParse { // noqa: naming
 		if (root == null) {
 			Sys.println('RECON: ANYPARSE_HXFORMAT_FORK env var unset or points at a missing dir — abort.');
 			Sys.println('  set it to the haxe-formatter fork checkout containing test/testcases/, e.g.:');
-			Sys.println('    ANYPARSE_HXFORMAT_FORK=/path/to/haxe-formatter node /tmp/recon.js');
+			Sys.println('    ANYPARSE_HXFORMAT_FORK=/path/to/haxe-formatter node bin/recon.js');
 			Sys.println('  rebuild after a grammar edit with:');
 			Sys.println('    haxe recon.hxml');
 			return;

@@ -1,5 +1,6 @@
 package anyparse.query.cli.command;
 
+import anyparse.core.TempScratch;
 import anyparse.query.cli.CliContext;
 import anyparse.runtime.ParseError;
 import haxe.Exception;
@@ -25,12 +26,6 @@ final class ProbeCommand implements CliCommand {
 
 	/** Env var naming the staging path outright, overriding the resolved one. */
 	private static inline final STAGE_PROBE_ENV: String = 'APQ_PROBE_PATH';
-
-	/** Lowest six-digit value, so the non-node process token is always six characters. */
-	private static inline final PROCESS_TOKEN_LOW: Int = 100000;
-
-	/** How many six-digit values that token draws from. */
-	private static inline final PROCESS_TOKEN_SPAN: Int = 900000;
 
 	private static final AST_BOOL_FLAGS: Array<String> = [
 		'--json',
@@ -255,30 +250,7 @@ final class ProbeCommand implements CliCommand {
 	 */
 	private static function stageProbePath(): String {
 		final explicit: Null<String> = Sys.getEnv(STAGE_PROBE_ENV);
-		return explicit != null && explicit.length > 0
-			? explicit
-			: haxe.io.Path.join([probeTempRoot(), '$STAGE_PROBE_STEM.${processToken()}.hx']);
-	}
-
-	/** The OS temp root, mirroring `OracleCache.tempDir` — `$TMPDIR` when the caller set one. */
-	private static function probeTempRoot(): String {
-		#if nodejs
-		return js.node.Os.tmpdir();
-		#elseif sys
-		final tmp: Null<String> = Sys.getEnv('TMPDIR');
-		return tmp != null && tmp.length > 0 ? tmp : '/tmp';
-		#end
-	}
-
-	/** What separates two concurrent stagings: this process's own id. */
-	private static function processToken(): String {
-		// No portable pid outside node, and no CLI runner outside it either — a
-		// draw keeps two processes apart on a target that never reaches here.
-		#if nodejs
-		return '${js.Node.process.pid}';
-		#elseif sys
-		return '${PROCESS_TOKEN_LOW + Std.random(PROCESS_TOKEN_SPAN)}';
-		#end
+		return explicit != null && explicit.length > 0 ? explicit : TempScratch.slot(STAGE_PROBE_STEM, '.hx');
 	}
 
 	/**

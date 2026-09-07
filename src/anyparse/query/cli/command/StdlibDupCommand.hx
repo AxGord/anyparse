@@ -1,5 +1,6 @@
 package anyparse.query.cli.command;
 
+import anyparse.core.TempScratch;
 import anyparse.query.cli.CliContext;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -19,6 +20,9 @@ import sys.FileSystem;
  */
 @:nullSafety(Strict)
 final class StdlibDupCommand implements CliCommand {
+
+	/** Basename stem of the probe staging directory; the temp root and this process's id complete it. */
+	private static inline final WORK_DIR_STEM: String = 'apq-stdlib-dup';
 
 	public function new() {}
 
@@ -123,6 +127,7 @@ final class StdlibDupCommand implements CliCommand {
 			CliIo.stderr('apq stdlib-dup: could not create a work directory for the probes\n');
 			return EXIT_RUNTIME;
 		}
+		announceWorkDir(dir, work);
 		final sourceOf: Map<String, String> = [];
 		for (entry in files) sourceOf[entry.file] = entry.source;
 		var driven: Int = 0;
@@ -156,7 +161,48 @@ final class StdlibDupCommand implements CliCommand {
 			}
 		}
 		CliIo.stderr('apq stdlib-dup: drove $driven candidate(s), $found finding(s)\n');
+		removeStagedWorkDir(dir, work);
 		return EXIT_OK;
+	}
+
+	/**
+	 * Name the staging directory on stderr.
+	 *
+	 * Not silent, because the generated probe is the only artifact a reader can go look at
+	 * when a verdict surprises them, and the path is per PROCESS now — a constant in the
+	 * docs would no longer find it. A resolved one also says it goes away again, so nobody
+	 * plans to inspect it after the run.
+	 */
+	private static function announceWorkDir(dir: String, requested: Null<String>): Void {
+		CliIo.stderr(
+			requested == null
+				? 'apq stdlib-dup: staging probes in $dir (removed when the run ends — pass --work <dir> to keep them)\n'
+				: 'apq stdlib-dup: staging probes in $dir\n'
+		);
+	}
+
+	/**
+	 * Remove a work directory THIS run resolved; `--work` means the caller owns it.
+	 *
+	 * A per-process directory with nothing reaping it would be a leak where the shared one
+	 * was merely wrong: `tools/tmp-lifecycle.sh` only sweeps a claimed `<prefix>.XXXXXX`
+	 * name, which this is not, so the run that creates it is the only thing that can
+	 * destroy it. A failure to remove is reported, never fatal — the findings are already
+	 * out.
+	 */
+	private static function removeStagedWorkDir(dir: String, requested: Null<String>): Void {
+		if (requested != null) return;
+		#if (sys || nodejs)
+		try {
+			for (entry in FileSystem.readDirectory(dir)) {
+				final path: String = haxe.io.Path.join([dir, entry]);
+				if (!FileSystem.isDirectory(path)) FileSystem.deleteFile(path);
+			}
+			FileSystem.deleteDirectory(dir);
+		} catch (exception: Exception) {
+			CliIo.stderr('apq stdlib-dup: could not remove the work directory $dir (${exception.message})\n');
+		}
+		#end
 	}
 
 	/** `<file>:<line>:<col>` of a candidate's declaration, resolved against its own file's source. */
@@ -171,17 +217,33 @@ final class StdlibDupCommand implements CliCommand {
 		return owner == null ? candidate.name : '$owner.${candidate.name}';
 	}
 
-	/** The directory the generated probes are staged in, created on demand; null when it cannot be made. */
+	/**
+	 * The directory the generated probes are staged in, created on demand; null when it cannot
+	 * be made.
+	 *
+	 * PER PROCESS, and that is the whole correctness of the differential. Every probe is written
+	 * to `<dir>/Probe.hx` under one fixed module name, and the run then spawns
+	 * `haxe -cp <dir> --run Probe` — so two runs sharing a directory race between the write and
+	 * the compile, and the loser compiles the OTHER run's program. The verdict that comes back is
+	 * not a crash: it is a plausible, fully-formed finding about the wrong function, at exit 0.
+	 * Measured on the machine-global `<temp root>/apq-stdlib-dup` this used to resolve to: two
+	 * concurrent runs over two one-candidate scopes, 12 rounds, and the two processes reported
+	 * IDENTICAL findings in every round — 7 of 12 wrong for one and 5 of 12 for the other, one of
+	 * them naming `StringTools.endsWith` for a function that begins-with and claiming agreement
+	 * on 484 generated inputs.
+	 *
+	 * `--work <dir>` still names it outright, which is what a caller wanting to keep the probes
+	 * uses; the default is the one that had to stop being shared.
+	 */
 	private static function stdlibDupWorkDir(requested: Null<String>): Null<String> {
 		#if (sys || nodejs)
-		final base: String = if (requested != null)
-			requested
-		else {
-			#if nodejs
-			haxe.io.Path.join([js.node.Os.tmpdir(), 'apq-stdlib-dup']);
-			#else
-			haxe.io.Path.join([Sys.getEnv('TMPDIR') ?? '/tmp', 'apq-stdlib-dup']);
-			#end
+		final base: String = requested ?? TempScratch.slot(WORK_DIR_STEM);
+		if (!isWorkDirSafe(base)) {
+			CliIo.stderr(
+				'apq stdlib-dup: not staged — "$base" exists and is not a real directory (symlink, file or device); '
+				+ 'pass --work <dir> to stage somewhere else.\n'
+			);
+			return null;
 		}
 		try {
 			if (!FileSystem.exists(base)) FileSystem.createDirectory(base);
@@ -191,6 +253,37 @@ final class StdlibDupCommand implements CliCommand {
 		return base;
 		#else
 		return null;
+		#end
+	}
+
+	/**
+	 * Whether staging may own `path` as its work directory.
+	 *
+	 * `FileSystem.exists` FOLLOWS a symlink, so without this a link planted at the slot is
+	 * ADOPTED: `File.saveContent` writes the generated probe through it, and — new in S171 —
+	 * `removeStagedWorkDir` then deletes every non-directory entry of whatever it points at.
+	 * The write half was always there; the delete half is what makes the guard non-optional.
+	 * An absent target is fine — that is the ordinary first run.
+	 *
+	 * Check-then-use, so not atomic: a link planted in the window between still wins. The
+	 * process token in the name is what closes the case that needs timing — an attacker has
+	 * to guess the slot before the process that owns it exists — and this check is what stops
+	 * the case that needs none, a link left lying at a predictable path. Same shape and same
+	 * limits as `ProbeCommand.isStageTargetSafe`, which S170 shipped for the sibling command.
+	 */
+	private static function isWorkDirSafe(path: String): Bool {
+		#if nodejs
+		// `lstatSync`, not `statSync`: the latter resolves the link and would report the
+		// VICTIM's kind, which is exactly what is being protected.
+		final stat: Null<js.node.fs.Stats> = try js.node.Fs.lstatSync(path) catch (_: Exception) null;
+		return stat == null || stat.isDirectory();
+		#else
+		// `sys.FileSystem` has no `lstat` and `exists` FOLLOWS the link, so this branch
+		// catches a plain file and nothing else. Weaker than the contract on purpose, and
+		// nothing in this repo compiles it — every hxml reaching this file passes
+		// `-lib hxnodejs`, and the `--jvm` probe carries 0 of 3346 entries under
+		// `anyparse/query/cli`.
+		return !FileSystem.exists(path) || FileSystem.isDirectory(path);
 		#end
 	}
 
@@ -207,7 +300,8 @@ final class StdlibDupCommand implements CliCommand {
 		CliIo.sysPrint('Options:\n');
 		CliIo.sysPrint('  --census        Candidate census only — no probe generation, no haxe spawn\n');
 		CliIo.sysPrint('  --limit <n>     Drive at most n candidates through the differential\n');
-		CliIo.sysPrint('  --work <dir>    Stage the generated probes here (default: a temp directory)\n');
+		CliIo.sysPrint('  --work <dir>    Stage the generated probes here (default: a per-process\n');
+		CliIo.sysPrint('                  directory under the OS temp root, announced on stderr)\n');
 		CliIo.sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
 		CliIo.sysPrint('  -h, --help      Show this help\n');
 	}
