@@ -241,6 +241,10 @@ final class Linter {
 			new PreferSafeNav(),
 			new PreferSafeNavComparison(),
 			new EnglishComments(),
+			// Beside `english-comments`, and disjoint from it by what each reads: that rule flags a
+			// comment's CHARACTERS, this one a comment line's WIDTH. Both are report-first on trivia
+			// no other rule measures, and neither can claim the other's finding.
+			new CommentWidth(),
 			new PreferComprehension(),
 			// Registry order is free: this rule claims an empty-array binding followed by PUSH
 			// STATEMENTS, `prefer-comprehension` one followed by a `for` / `while` LOOP — the

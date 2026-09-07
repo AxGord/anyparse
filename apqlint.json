@@ -22,6 +22,9 @@
 		"collapse-nested-switch": {
 			"enabled": true
 		},
+		"comment-width": {
+			"enabled": true
+		},
 		"cond-assign-merge": {
 			"enabled": true
 		},
