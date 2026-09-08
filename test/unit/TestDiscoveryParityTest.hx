@@ -1142,6 +1142,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.TrivialGetterCheckTest#testBasicBlockBodyFlagged :: control :: M-SUBOVERRIDE-TRUE',
 			'unit.check.TrivialGetterShapeCollapseTest#testForeignHierarchyBackingNameStaysAccountedFor :: control :: '
 				+ 'M-SUPERDECLARES-FALSE',
+			'unit.check.TrivialGetterShapeCollapseTest#testShapeACtorInitSingleQuotedStringMoveFix :: control :: '
+				+ 'M-TRIVGET-MOVABLE-LITERAL-FALSE',
 			'unit.check.UnguardedNullableDerefTest#testDeclaredNullableFromANullableFieldStillFlagged :: control :: '
 				+ 'M-DECL-INIT-RECEIVER-MODE-NOMINAL',
 			'unit.check.UnguardedNullableDerefTest#testDeclaredNullableLocalFlagged :: control :: M-DECL-NULLABLE-BLIND',
@@ -1945,7 +1947,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-SCOPE-GAP-UNWIRED',
 			'M-SCOPE-GAP-ROOT-UNWIRED',
 			'M-PROJECTED-KINDS-ALT-ONLY',
-			'M-DECL-HOST-KIND-STALE'
+			'M-DECL-HOST-KIND-STALE',
+			'M-TRIVGET-MOVABLE-LITERAL-FALSE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

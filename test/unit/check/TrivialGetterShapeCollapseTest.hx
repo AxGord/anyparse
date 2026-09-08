@@ -112,6 +112,56 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 		Assert.isTrue(fixed.indexOf('get_disabled') == -1);
 	}
 
+	/**
+	 * Regression: a single-quoted `SingleStringExpr` ctor-init carries its text in a `Literal`
+	 * child, not a `name` slot (`node.name` is always null there — the double-quoted spelling is
+	 * the one with a `name`), so a predicate that read `node.name` here was permanently
+	 * unreachable and misclassified every single-quoted movable literal as an external write. The
+	 * message below must land on the SAME shape `testShapeAZeroWritesNoBypass` gets (no
+	 * `@:bypassAccessor`), only with `label`/`_label` in place of `active`/`_active`.
+	 * Killed by arm `M-TRIVGET-MOVABLE-LITERAL-FALSE`.
+	 */
+	@:pin('control')
+	@:killer('M-TRIVGET-MOVABLE-LITERAL-FALSE')
+	public function testShapeACtorInitSingleQuotedStringMoveFix(): Void {
+		final src: String = 'class C {\n\tpublic var label(get, set):String;\n\tprivate var _label:String;\n\tpublic function new() {\n'
+			+ '\t\t_label = \'lit\';\n\t}\n\tfunction get_label():String return _label;\n\tfunction set_label(v:String):String {\n'
+			+ '\t\t_label = v;\n\t\ttrace(v);\n\t\treturn _label;\n\t}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals(
+			'property \'label\' has a trivial getter over backing field \'_label\'; use \'var label(default, set)\' and remove get_label',
+			vs[0].message
+		);
+		final fixed: String = fixedText(src);
+		Assert.isTrue(fixed.indexOf('label(default, set):String = \'lit\'') >= 0);
+		Assert.isTrue(fixed.indexOf('get_label') == -1);
+		Assert.isTrue(fixed.indexOf('private var _label') == -1);
+		Assert.isTrue(fixed.indexOf('@:bypassAccessor') == -1);
+	}
+
+	/**
+	 * The interpolating sibling of the fix above: a `$name` fragment inside the single-quoted
+	 * literal projects an `Ident` child alongside the `Literal` text, so the ctor-init is
+	 * genuinely not a compile-time constant and must stay on the `@:bypassAccessor` arm — the fix
+	 * must not swing the other way and start treating every single-quoted ctor init as movable.
+	 */
+	public function testShapeACtorInitInterpolatedStringStaysBypass(): Void {
+		final src: String = 'class C {\n\tpublic var label(get, set):String;\n\tprivate var _label:String;\n'
+			+ '\tpublic function new(name:String) {\n\t\t_label = \'hi $$name\';\n\t}\n'
+			+ '\tfunction get_label():String return _label;\n\tfunction set_label(v:String):String {\n\t\t_label = v;\n'
+			+ '\t\ttrace(v);\n\t\treturn _label;\n\t}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals(
+			'property \'label\' has a trivial getter over backing field \'_label\'; use \'var label(default, set)\', remove '
+			+ 'get_label and mark 1 external write(s) with @:bypassAccessor',
+			vs[0].message
+		);
+		final fixed: String = fixedText(src);
+		Assert.isTrue(fixed.indexOf('@:bypassAccessor label = \'hi $$name\'') >= 0);
+	}
+
 	public function testBothTrivialCollapsesToPlainVar(): Void {
 		final vs: Array<Violation> = violations(cls(
 			'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n'

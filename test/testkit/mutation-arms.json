@@ -2471,6 +2471,13 @@
 			"find": "\t\t'Rest',\n",
 			"replace": "\t\t'Rest',\n\t\t'LambdaParam',\n",
 			"note": "a retired ctor name is put back into a kind set the hand-written side declares - the exact shape of this slice's real catch, where `LambdaParam` outlived the grammar rule that projected it by three months. A dead name in a kind set changes no behaviour, so no other test can see it and only the subset assertion goes red"
+		},
+		{
+			"name": "M-TRIVGET-MOVABLE-LITERAL-FALSE",
+			"type": "anyparse.check.TrivialGetter",
+			"method": "isMovableLiteral",
+			"force": "false",
+			"note": "no literal is ever movable, so a ctor-init that should relocate to the field's own default (a plain single-quoted string among them, the shape `SingleStringExpr` misclassified before its `node.name` read was replaced with a children-are-all-Literal check) is treated as an external write and forced onto the @:bypassAccessor arm instead of the clean (default, set) collapse"
 		}
 	]
 }

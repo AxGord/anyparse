@@ -980,26 +980,28 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		final body: Null<QueryNode> = bodyOf(ctor, shape);
 		if (body == null || body.kind != shape.blockBodyKind) return null;
 		final firstMention: Null<QueryNode> = body.children.find(stmt -> FieldRefScan.mentionsField(stmt, field));
-		return firstMention == null ? null : movableInitOf(firstMention, field);
+		return firstMention == null ? null : movableInitOf(firstMention, field, shape);
 	}
 
 	/** `stmt` as a movable ctor-init of `field` (`ExprStmt` of `field = <literal>`), else null. */
-	private static function movableInitOf(stmt: QueryNode, field: String): Null<{ stmt: QueryNode, assign: QueryNode, rhsSpan: Span }> {
+	private static function movableInitOf(
+		stmt: QueryNode, field: String, shape: RefShape
+	): Null<{ stmt: QueryNode, assign: QueryNode, rhsSpan: Span }> {
 		if (stmt.kind != 'ExprStmt' || stmt.children.length != 1) return null;
 		final assign: QueryNode = stmt.children[0];
 		if (assign.kind != 'Assign' || assign.children.length != 2 || FieldRefScan.fieldRefName(assign.children[0]) != field) return null;
 		final rhs: QueryNode = assign.children[1];
-		if (!isMovableLiteral(rhs)) return null;
+		if (!isMovableLiteral(rhs, shape)) return null;
 		final rhsSpan: Null<Span> = rhs.span;
 		return rhsSpan == null ? null : { stmt: stmt, assign: assign, rhsSpan: rhsSpan };
 	}
 
 	/** Whether `node` is a compile-time literal safe to relocate to a field-initializer position. */
-	private static function isMovableLiteral(node: QueryNode): Bool {
+	private static function isMovableLiteral(node: QueryNode, shape: RefShape): Bool {
 		return switch node.kind {
 			case 'IntLit', 'FloatLit', 'BoolLit', 'NullLit', 'DoubleStringExpr': true;
 			case 'SingleStringExpr':
-				node.name != null && node.name.indexOf('$') == -1;
+				node.children.foreach(c -> c.kind == shape.stringInterpTextKind);
 			case _: false;
 		}
 	}
