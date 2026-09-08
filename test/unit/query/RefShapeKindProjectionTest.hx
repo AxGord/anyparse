@@ -95,12 +95,17 @@ final class RefShapeKindProjectionTest extends Test {
 	 * A registered grammar missing from this map fails `testEveryRegisteredGrammarHasAProjectedKindSource`.
 	 *
 	 * A kind set names a spelling and never the rule that owns it, so each of these is
-	 * admitted for every rule that spells it at once. All are deliberate: the modifier ctors
-	 * are declared identically by `HxModifier` / `HxMemberModifier` / `HxCondModPrefix` and a
-	 * consumer wants all three; `Conditional` is the `#if` wrapper on sixteen rules; the
-	 * parameter and body ctors are shared by the required/optional splits and the three
-	 * function-body enums; `CatchClause` is one `@:spanned` kind on three catch-clause
-	 * spellings. A name arriving here that is NOT on this list is the `HxArrowParam.Named`
+	 * admitted for every rule that spells it at once. All are deliberate, and every pair is named here because the next reader
+	 * audits THIS list and not the grammar: the modifier ctors are declared identically by `HxModifier` / `HxMemberModifier` /
+	 * `HxCondModPrefix` and a consumer wants all three; `Conditional` is the `#if` wrapper on sixteen rules; `EnumKw` is the
+	 * `enum` keyword on both `HxCondDeclPrefix` and `HxCondModPrefix`; the body ctors (`BlockBody` / `ExprBody`) are shared by
+	 * the three function-body enums; `Required` / `Optional` are the param splits of `HxParam` AND `HxLambdaParam`, and ALSO
+	 * the bare `name: Type` labels of `HxAnonField` / `HxAnonVarBody`; `Plain` is `HxAnonVarBody`'s and `HxCasePatternBody`'s,
+	 * where `FieldRefScan.bindsNameHere` handles only the case-pattern one, so the overlap costs a false negative and never a
+	 * wrong rewrite; `Arrow` is the only CROSS-CATEGORY pair, `HxExpr.Arrow` (`=>` in a map literal or case extractor) against
+	 * `HxType.Arrow` (`->` in a function type), probed harmless only because both sides answer "declares no value" to
+	 * `Refs.isTypeAnnotation` - it is the entry to re-probe when that predicate changes; `CatchClause` is one `@:spanned` kind
+	 * on three catch-clause spellings. A name arriving here that is NOT on this list is the `HxArrowParam.Named`
 	 * shape and has to be renamed in the grammar, not admitted here.
 	 */
 	private static final KNOWN_AMBIGUOUS: Map<String, Array<String>> = [
@@ -141,10 +146,13 @@ final class RefShapeKindProjectionTest extends Test {
 	 * Killed by arm M-PROJECTED-KINDS-ALT-ONLY, which drops the `@:spanned` half of the shape
 	 * walk: `CatchClause`, `KeyValueBinder` and `VarMore` are declared by six kind sets
 	 * between them and stop being projected, while the floors below stay satisfied — so the
-	 * subset assertion is what goes red, not the census.
+	 * subset assertion is what goes red, not the census. Killed also by arm M-DECL-HOST-KIND-STALE, which puts a retired
+	 * name back into `DECL_HOST_KINDS` - the mutation is on the HAND-WRITTEN side, the one that produced this slice's real
+	 * catch, and a dead name in a kind set changes no behaviour, so the new assertion is the only thing that can see it.
 	 */
 	@:pin('control')
 	@:killer('M-PROJECTED-KINDS-ALT-ONLY')
+	@:killer('M-DECL-HOST-KIND-STALE')
 	public function testEveryDeclaredKindNameIsOneTheGrammarProjects(): Void {
 		for (lang in CliArgs.langNames()) {
 			final shape: RefShape = CliArgs.pickPlugin(lang).refShape();
@@ -240,33 +248,6 @@ final class RefShapeKindProjectionTest extends Test {
 		}
 	}
 
-	/**
-	 * The projected vocabulary read from the other end: every kind a real parse emits has to
-	 * be in it. The list is DERIVED from the grammar shape, so it can be wrong in this
-	 * direction too — `TypeRef`, which the type-reference projection mints rather than the
-	 * grammar, was missing from the first version of it.
-	 */
-	public function testTheProjectedVocabularyCoversWhatAParseEmits(): Void {
-		final plugin: GrammarPlugin = CliArgs.pickPlugin('haxe');
-		final projected: Array<String> = projectedKindsFor('haxe');
-		// One grammar by design: the roots below are Haxe sources, so widening the loop would
-		// hand another plugin a corpus in a language it cannot parse. The registry fixture is
-		// what notices a second grammar; this arm stays where its corpus is.
-		final emitted: Array<String> = [];
-		var parsed: Int = 0;
-		for (root in PARSE_ROOTS) for (path in hxSourcesUnder(root)) {
-			final source: String = File.getContent(path);
-			collectChildKinds(plugin.parseFile(source), emitted);
-			collectChildKinds(plugin.parseFileTypeRefs(source), emitted);
-			parsed++;
-		}
-		final roots: String = PARSE_ROOTS.join(', ');
-		Assert.isTrue(parsed >= MIN_PARSED_FILES, '$parsed file(s) reached under $roots');
-		Assert.isTrue(emitted.length >= MIN_EMITTED_KINDS, '${emitted.length} distinct kind(s) emitted by the parse arm');
-		final missing: String = emitted.filter(kind -> !projected.contains(kind)).join(', ');
-		Assert.equals('', missing, 'kind(s) a parse emits that the derived vocabulary omits: [$missing]');
-	}
-
 	/** The projected vocabulary of `lang`, or null when this fixture knows no source for it. */
 	private static function projectedKindsSourceFor(lang: String): Null<Array<String>> {
 		return switch lang {
@@ -352,6 +333,34 @@ final class RefShapeKindProjectionTest extends Test {
 		for (child in node.children) collectKinds(child, out);
 	}
 
+	#if (sys || nodejs)
+	/**
+	 * The projected vocabulary read from the other end: every kind a real parse emits has to
+	 * be in it. The list is DERIVED from the grammar shape, so it can be wrong in this
+	 * direction too — `TypeRef`, which the type-reference projection mints rather than the
+	 * grammar, was missing from the first version of it.
+	 */
+	public function testTheProjectedVocabularyCoversWhatAParseEmits(): Void {
+		final plugin: GrammarPlugin = CliArgs.pickPlugin('haxe');
+		final projected: Array<String> = projectedKindsFor('haxe');
+		// One grammar by design: the roots below are Haxe sources, so widening the loop would
+		// hand another plugin a corpus in a language it cannot parse. The registry fixture is
+		// what notices a second grammar; this arm stays where its corpus is.
+		final emitted: Array<String> = [];
+		var parsed: Int = 0;
+		for (root in PARSE_ROOTS) for (path in hxSourcesUnder(root)) {
+			final source: String = File.getContent(path);
+			collectChildKinds(plugin.parseFile(source), emitted);
+			collectChildKinds(plugin.parseFileTypeRefs(source), emitted);
+			parsed++;
+		}
+		final roots: String = PARSE_ROOTS.join(', ');
+		Assert.isTrue(parsed >= MIN_PARSED_FILES, '$parsed file(s) reached under $roots');
+		Assert.isTrue(emitted.length >= MIN_EMITTED_KINDS, '${emitted.length} distinct kind(s) emitted by the parse arm');
+		final missing: String = emitted.filter(kind -> !projected.contains(kind)).join(', ');
+		Assert.equals('', missing, 'kind(s) a parse emits that the derived vocabulary omits: [$missing]');
+	}
+
 	/** Every `.hx` under `dir`, recursively. */
 	private static function hxSourcesUnder(dir: String): Array<String> {
 		final out: Array<String> = [];
@@ -364,5 +373,6 @@ final class RefShapeKindProjectionTest extends Test {
 		}
 		return out;
 	}
+	#end
 
 }

@@ -1599,7 +1599,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.PatchSliceTest#testDocPayloadWithASpaceGutterApplies :: control :: M-PATCH-COMMENT-SHAPE-CHECKED',
 			'unit.query.PatchSliceTest#testStringLiteralPerLineIndentStillRefused :: control :: M-PATCH-SHAPE-ALWAYS-SURVIVES',
 			'unit.query.RefShapeKindProjectionTest#testEveryDeclaredKindNameIsOneTheGrammarProjects :: control :: '
-				+ 'M-PROJECTED-KINDS-ALT-ONLY',
+				+ 'M-PROJECTED-KINDS-ALT-ONLY,M-DECL-HOST-KIND-STALE',
 			'unit.query.RemoveMemberSliceTest#testSiblingRegionsWithOneConditionAreRefusedByCount :: control :: '
 				+ 'M-COND-FRAME-REGION-KEYED,M-COND-FRAME-CONDITION-RAW',
 			'unit.query.RemoveMemberSliceTest#testTwoDeclarationsInOneBranchAreRefusedByCount :: control :: M-REMOVE-MEMBER-BRANCH-BLIND',
@@ -1944,7 +1944,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-SCOPE-GAP-SILENT',
 			'M-SCOPE-GAP-UNWIRED',
 			'M-SCOPE-GAP-ROOT-UNWIRED',
-			'M-PROJECTED-KINDS-ALT-ONLY'
+			'M-PROJECTED-KINDS-ALT-ONLY',
+			'M-DECL-HOST-KIND-STALE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
@@ -2015,7 +2016,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-KWREF-BARE-BODY-BREAKS-BLIND :: anyparse.macro.WriterKwRefLowering#subStructStartsWithBareBodyBreaks',
 			'M-KWREF-TIGHT-LEAD-BLIND :: anyparse.macro.WriterKwRefLowering#subStructStartsWithTightLead',
 			'M-CASE-CTRLFLOW-STAR-FLAG-BLIND :: anyparse.macro.WriterTriviaStarDispatch#ownStarHasFlag',
-			'M-PROJECTED-KINDS-ALT-ONLY :: anyparse.macro.QueryWalkerLowering#eachProjectedKind'
+			'M-PROJECTED-KINDS-ALT-ONLY :: anyparse.macro.QueryWalkerLowering#eachProjectedKind',
+			'M-DECL-HOST-KIND-STALE :: anyparse.grammar.haxe.HaxeQueryPlugin#FinalMember:DECL_HOST_KINDS'
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 

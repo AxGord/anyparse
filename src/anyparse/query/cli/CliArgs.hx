@@ -120,19 +120,18 @@ final class CliArgs {
 	/**
 	 * Every `--lang` the CLI can dispatch - the grammar-plugin registry, enumerable so a
 	 * whole-registry check (`RefShapeKindProjectionTest`) covers a plugin added here without
-	 * being taught its name. `pickPlugin` reads THIS list and its switch is only the
-	 * construction table, so a name declared here and not constructed there throws rather
-	 * than falling through to "no such plugin".
+	 * being taught its name. That test calls `pickPlugin` for every name here, so a name declared here and
+	 * not constructed there fails the suite. `pickPlugin` itself stays switch-only: it is the construction
+	 * site, never gated on this list, so a plugin constructed there is never refused for being absent here.
 	 */
 	public static function langNames(): Array<String> {
 		return ['haxe'];
 	}
 
 	public static function pickPlugin(lang: String): GrammarPlugin {
-		if (!langNames().contains(lang)) throw new UsageFailure('no grammar plugin for --lang "$lang"');
 		return switch lang {
 			case 'haxe': new HaxeQueryPlugin();
-			case _: throw new UsageFailure('--lang "$lang" is a declared grammar but CliArgs.pickPlugin does not construct it');
+			case _: throw new UsageFailure('no grammar plugin for --lang "$lang"');
 		};
 	}
 

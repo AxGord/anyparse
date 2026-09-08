@@ -2462,6 +2462,15 @@
 			"find": "\t\t\t\tif (isSpanned(node)) visit(node, node.readMetaString(PairedShapeLowering.SPANNED_META));\n",
 			"replace": "",
 			"note": "the projected vocabulary loses its @:spanned half, so CatchClause / KeyValueBinder / VarMore stop being projected while the six kind sets that declare them keep naming them - the exact fail-open shape the differential exists to see, and the census floors stay satisfied so only the subset assertion goes red"
+		},
+		{
+			"name": "M-DECL-HOST-KIND-STALE",
+			"type": "anyparse.grammar.haxe.HaxeQueryPlugin",
+			"method": "DECL_HOST_KINDS",
+			"kind": "FinalMember",
+			"find": "\t\t'Rest',\n",
+			"replace": "\t\t'Rest',\n\t\t'LambdaParam',\n",
+			"note": "a retired ctor name is put back into a kind set the hand-written side declares - the exact shape of this slice's real catch, where `LambdaParam` outlived the grammar rule that projected it by three months. A dead name in a kind set changes no behaviour, so no other test can see it and only the subset assertion goes red"
 		}
 	]
 }
