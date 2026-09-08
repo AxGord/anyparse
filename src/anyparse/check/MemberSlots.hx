@@ -385,9 +385,7 @@ final class MemberSlots {
 	}
 
 	/** The comment token ending exactly at `at`, or null. */
-	private static function commentEndingAt(
-		comments: Array<{ from: Int, to: Int, isLine: Bool }>, at: Int
-	): Null<{ from: Int, to: Int, isLine: Bool }> {
+	private static function commentEndingAt(comments: Array<CommentTok>, at: Int): Null<CommentTok> {
 		return comments.find(c -> c.to == at);
 	}
 

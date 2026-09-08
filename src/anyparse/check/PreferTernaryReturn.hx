@@ -508,7 +508,7 @@ final class PreferTernaryReturn implements Check implements CarryingFix {
 	}
 
 	/** Whether one of `spans` contains `token` whole. */
-	private static function spanCovers(spans: Array<Span>, token: { from: Int, to: Int, isLine: Bool }): Bool {
+	private static function spanCovers(spans: Array<Span>, token: CommentTok): Bool {
 		return spans.exists(span -> token.from >= span.from && token.to <= span.to);
 	}
 
@@ -518,7 +518,7 @@ final class PreferTernaryReturn implements Check implements CarryingFix {
 	 * `?` value instead of hoisting it, and the next step up finds it inside the else value it
 	 * copies whole, so it rides the march to the end still attached to its branch.
 	 */
-	private static function ridesItsBranch(source: String, values: Array<Span>, token: { from: Int, to: Int, isLine: Bool }): Bool {
+	private static function ridesItsBranch(source: String, values: Array<Span>, token: CommentTok): Bool {
 		return source.substring(token.from, token.to).trim().indexOf('\n') < 0
 			&& values.exists(span -> token.from >= span.to && source.substring(span.to, token.from).indexOf('\n') < 0);
 	}

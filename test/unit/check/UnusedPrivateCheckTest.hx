@@ -5,6 +5,7 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.UnusedPrivate;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -106,6 +107,30 @@ class UnusedPrivateCheckTest extends Test {
 			{ file: 'pkg/E.hx', source: 'package pkg;\n@:access(pkg.C)\nclass E {\n\tpublic function f(c:C) { return c._x; }\n}' }
 		];
 		Assert.equals(0, violations(files).filter(v -> v.file == 'pkg/C.hx').length);
+	}
+
+	/**
+	 * The occurrence-based confinement proof must ask the WIDEST index available, not the
+	 * report-only one: an `@:access` grant living in a file OUTSIDE the report set — present
+	 * only through the project's declared `resolutionRoots` — must still keep the member.
+	 * `isPrivateMemberConfined` used to be asked with the narrow report index, so linting
+	 * `C.hx` alone (as `hxq lint` does for one changed file) never saw `E.hx`'s grant and
+	 * wrongly flagged `_x` as unused.
+	 */
+	public function testAccessGrantOutsideReportScopeKeepsMember(): Void {
+		final report: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/C.hx', source: 'package pkg;\nclass C {\n\tprivate var _x:Int;\n}' }
+		];
+		final library: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/E.hx', source: 'package pkg;\n@:access(pkg.C)\nclass E {\n\tpublic function f(c:C) { return c._x; }\n}' }
+		];
+		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		plugin.setResolutionScope({
+			declared: true,
+			sources: () -> {report: report, projectRoots: [], library: new LibrarySources(library) }
+		});
+		final result: Array<Violation> = new UnusedPrivate().run(report, plugin);
+		Assert.equals(0, result.filter(v -> v.file == 'pkg/C.hx').length);
 	}
 
 	/** Occurrence-based: an `@:allow`ed type that NAMES the member reaches it -> kept. */

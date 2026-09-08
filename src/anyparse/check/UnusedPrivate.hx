@@ -305,10 +305,11 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	}
 
 	/**
-	 * The widest source scope available for the zero-occurrence proof: the host's resolution-scoped
-	 * index (report UNION the DECLARED library roots) when `plugin` is a `SymbolIndexHost` carrying a
-	 * declared scope, else the report-scoped `index` the caller passed, else null (a direct `fix` call
-	 * with no index — the caller falls back to the single file it was handed).
+	 * The widest source scope available for the zero-occurrence proof and the structural
+	 * confinement checks: the host's resolution-scoped index (report UNION the DECLARED library
+	 * roots) when `plugin` is a `SymbolIndexHost` carrying a declared scope, else the report-scoped
+	 * `index` the caller passed, else null (a direct `fix` call with no index — the caller falls
+	 * back to the single file it was handed).
 	 *
 	 * Deliberately gated on `hasDeclaredResolutionScope`, NOT on `hasAnyResolutionScope` the way
 	 * `RefactorSupport.lazySymbolIndex` is. The proof this index feeds is `referencedElsewhere`, a
@@ -320,6 +321,14 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	 * cost is usefulness rather than correctness — which is exactly why it must not happen by
 	 * accident. A DECLARED library is a different matter: the project chose it, and a file the run
 	 * does not lint can legitimately be where the reference lives.
+	 *
+	 * The same index also feeds `isPrivateMemberConfined`'s STRUCTURAL checks (subtype / `@:access`
+	 * matched by simple type name, not by occurrence). A declared scope's library half still admits
+	 * the auto-discovered std unconditionally (`LintCommand.readResolutionLibrary`), so the identical
+	 * std-collision hazard applies there: an owner type whose simple name coincides with a std type
+	 * that HAS subtypes can flip "confined" to false on that coincidence alone. Same direction as
+	 * above — it can only keep a member that a narrower proof would have deleted, never delete one
+	 * that is live — so the hazard costs usefulness, not correctness.
 	 */
 	private static function widestScopeIndex(plugin: GrammarPlugin, index: Null<SymbolIndex>): Null<SymbolIndex> {
 		final host: Null<SymbolIndexHost> = plugin is SymbolIndexHost ? cast plugin : null;
@@ -405,7 +414,13 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 		// WIDEST index, because the declaring base may live in a resolution library rather than
 		// the report scope. An unresolvable supertype leaves the member flaggable, as before.
 		if (scopeIndex.members.supertypeDeclaresMember(owner, decl.name)) return null;
-		final unused: Bool = RefactorSupport.isPrivateMemberConfined(owner, decl.name, source, index)
+		// The confinement question goes to the WIDEST index too: a `@:access` grant or a subtype
+		// declared OUTSIDE the report scope (but inside the project's `resolutionRoots`) is
+		// invisible to the narrow `index`, which would wrongly call the member confined to this
+		// one file and run a same-file-only scan that can never see the grantee. Widening can only
+		// ADD subtypes/grants `index` did not have, never remove one it did, so this can only turn
+		// an existing finding OFF — never invent one on a member that is genuinely referenced.
+		final unused: Bool = RefactorSupport.isPrivateMemberConfined(owner, decl.name, source, scopeIndex)
 			? !OccurrenceScan.referencedInRange(source, decl.name, 0, source.length, [span])
 			: provablyDeadProjectWide(decl.name, file, source, span, index, scopeIndex);
 		return unused ? {
