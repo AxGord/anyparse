@@ -99,6 +99,13 @@ using StringTools;
  * Against the 57% / 78% the same masking would have cost on `duplicate-code`, that is the
  * trade this policy makes.
  *
+ * A census of every builtin whose message carries a digit (S173, on the whole `src`+`test` report) found no unmasked
+ * coordinate left: `duplicate-code` in BOTH wordings, `unused-local`, `oversized-type`, `complexity`, `anon-type-dup`,
+ * `comment-width`, `extract-repeated-expression` and `string-literal-dup` all survive a shifted number with 0 added /
+ * 0 removed, and the one rule that does NOT — `fragmented-doc-comment`, whose block tally is its only discriminator —
+ * refuses masking on purpose and says so on its own constant. So a claim that a message re-keys on an unrelated edit
+ * needs a probe, not an inference: the one such claim on record was a misread of `render`s own headline.
+ *
  * Everything here is pure — the CLI layer reads the files, builds the identity
  * map, calls `parseReport` / `tally` / `compare` / `render` and prints. That
  * split is what lets the suite test both normalizations directly rather than
@@ -185,6 +192,17 @@ final class LintDiff {
 	 * `added` and nothing to `removed` — counting keys rather than occurrences
 	 * would report that pair as unchanged, and duplicated findings inside one
 	 * file are exactly where a regression hides.
+	 *
+	 * Both surpluses are occurrence counts over the same two multisets, so
+	 * `addedTotal - removedTotal` is ALWAYS `newTotal - oldTotal`. The identity is
+	 * worth stating because reading that pair backwards is what produced a backlog
+	 * item: a verdict of `66 added / 9 removed` was read as "57 findings FEWER", the
+	 * apparent contradiction was blamed on a normalization this module was said to be
+	 * missing, and a fix for it entered the queue. 66 - 9 = 57 findings MORE, which is
+	 * what the same reader's own per-rule tally (`+50 comment-width`, `+3
+	 * duplicate-code`, `+5 unused-return-value`, `+1` twice, `-2`, `-1` — net +57) had
+	 * already said. `render` now publishes the net, and `ruleDeltas` the per-rule
+	 * breakdown, so neither question needs a reader's arithmetic.
 	 */
 	public static function compare(before: LintDiffTally, after: LintDiffTally): LintDiffResult {
 		final added: Array<LintDiffEntry> = surplus(after, before);
@@ -200,26 +218,49 @@ final class LintDiff {
 			removed: removed,
 			addedTotal: addedTotal,
 			removedTotal: removedTotal,
-			severities: severityDeltas(added, removed)
+			severities: severityDeltas(added, removed),
+			rules: ruleDeltas(before, after, added, removed)
 		};
 	}
 
 	/**
 	 * Render the verdict as plain lines, most-summary first: one headline
-	 * always, then — only when something actually moved — the severity
-	 * breakdown the ratchets are scoped by, then up to `limit` example keys
-	 * per sign (`limit < 0` prints every one).
+	 * always, then — only when something actually moved — the per-rule
+	 * breakdown, the severity breakdown the ratchets are scoped by, and up to
+	 * `limit` example keys per sign (`limit < 0` prints every one).
 	 *
 	 * A clean run is deliberately ONE line per tree: the battery prints this
 	 * twice on every slice, and a breakdown of zeros would train the reader
 	 * to skip the block that matters.
+	 *
+	 * The headline states the NET as well as the two surpluses. It is arithmetically
+	 * redundant — `compare` guarantees `added - removed == new - base` — and that is
+	 * exactly why it is there: the one recorded misreading of this tool inverted the
+	 * `N findings (base M)` pair, and no amount of the two numbers being present
+	 * catches that. A third statement of the same fact does.
+	 *
+	 * The per-rule block comes FIRST because it answers the question the gate exists
+	 * for — "did a rule OTHER than the one I touched move" — which until now needed a
+	 * reader to filter 190-odd example lines by hand, or to re-count the two JSON
+	 * reports in another language.
+	 *
+	 * It is one row per rule, under the same `limit` and elision note the examples get.
+	 * The first version joined the rows onto ONE line, and on a half-tree diff that line
+	 * came out 1125 characters against 44 for the severity line — a gate whose own output
+	 * is unbounded, printed twice per slice, in the name of readability.
 	 */
 	public static function render(result: LintDiffResult, label: String, limit: Int): Array<String> {
 		final tag: String = label == '' ? 'lint-diff' : 'lint-diff $label';
+		final net: String = signed(result.newTotal - result.oldTotal);
 		final lines: Array<String> = [
-			'$tag: ${result.newTotal} findings (base ${result.oldTotal}) — ${result.addedTotal} added / ${result.removedTotal} removed'
+			'$tag: ${result.newTotal} findings (base ${result.oldTotal}, net $net)'
+				+ ' — ${result.addedTotal} added / ${result.removedTotal} removed'
 		];
 		if (result.addedTotal == 0 && result.removedTotal == 0) return lines;
+		pushCapped(
+			lines, result.rules, limit, 'rule(s) that moved',
+			r -> '  by rule      ${r.rule} ${r.before}->${r.after} (+${r.added} -${r.removed})'
+		);
 		final parts: Array<String> = [for (s in result.severities) '${s.severity} +${s.added} -${s.removed}'];
 		if (parts.length > 0) lines.push('  by severity  ${parts.join('   ')}');
 		pushExamples(lines, '+', 'added', result.added, limit);
@@ -288,6 +329,11 @@ final class LintDiff {
 		return '${file.length}:$file${rule.length}:$rule${severity.length}:$severity$message';
 	}
 
+	/** A total delta written so its DIRECTION is unmistakable: `+57`, `-3`, `+0`. */
+	private static inline function signed(delta: Int): String {
+		return delta < 0 ? '$delta' : '+$delta';
+	}
+
 	/**
 	 * `root` reduced to the exact prefix a path in this tree carries: trailing
 	 * slashes dropped, empty when there is nothing to strip. Shared by the path
@@ -331,12 +377,113 @@ final class LintDiff {
 		return out;
 	}
 
-	/** Add one surplus list's occurrence counts into `into`, recording each new severity in `names`. */
-	private static function accumulate(entries: Array<LintDiffEntry>, into: Map<String, Int>, names: Array<String>): Void {
-		for (e in entries) {
-			into[e.severity] = (into[e.severity] ?? 0) + e.count;
-			if (!names.contains(e.severity)) names.push(e.severity);
+	/**
+	 * Both surplus lists folded into per-bucket occurrence counts, with the bucket names in
+	 * first-seen order.
+	 *
+	 * `key` rather than a fixed field because the severity breakdown and the per-rule one are
+	 * the same fold over the same two lists, differing only in which field of an entry names
+	 * the bucket — writing that fold twice is how the two would drift, and `duplicate-code`
+	 * reported exactly those three declarations when they were.
+	 */
+	private static function bucket(
+		added: Array<LintDiffEntry>, removed: Array<LintDiffEntry>, key: (LintDiffEntry) -> String
+	): LintDiffBuckets {
+		final names: Array<String> = [];
+		final addedBy: Map<String, Int> = [];
+		final removedBy: Map<String, Int> = [];
+		inline function fold(entries: Array<LintDiffEntry>, into: Map<String, Int>): Void {
+			for (e in entries) {
+				final name: String = key(e);
+				into[name] = (into[name] ?? 0) + e.count;
+				if (!names.contains(name)) names.push(name);
+			}
 		}
+		fold(added, addedBy);
+		fold(removed, removedBy);
+		return { names: names, added: addedBy, removed: removedBy };
+	}
+
+	/**
+	 * Rule id -> occurrences of that rule in one snapshot, summed over the keys it owns.
+	 *
+	 * Derived from the tally rather than counted during it: `tally` already records the
+	 * rule on every row, and a second pass over `order` costs one walk of the distinct
+	 * keys, which is what keeps `tally`'s own contract (fold a report into a multiset)
+	 * from growing a reporting concern.
+	 */
+	private static function ruleTotals(tally: LintDiffTally): Map<String, Int> {
+		final out: Map<String, Int> = [];
+		for (key in tally.order) {
+			final rule: String = rowOf(tally, key).rule;
+			out[rule] = (out[rule] ?? 0) + (tally.counts[key] ?? 0);
+		}
+		return out;
+	}
+
+	/**
+	 * The per-rule breakdown: for every rule that MOVED, both snapshot totals and the two
+	 * surpluses.
+	 *
+	 * A rule that moved nothing is left out on purpose. All 180 rules are registered and 38
+	 * of them fire on this tree, so printing every one with its totals would bury the two or
+	 * three that changed — and "which rules exist" is `lint --list-rules`'s question, not
+	 * this gate's.
+	 *
+	 * Movement is the ADDED/REMOVED surplus, not a difference of the two totals: a finding
+	 * that migrated from one file to another leaves the rule's total untouched while
+	 * genuinely moving, and a summary keyed on totals alone would report that rule as
+	 * silent. So `before -> after` can read `5->5 (+1 -1)`, and that is the row worth
+	 * having.
+	 *
+	 * Ordered by how much each rule moved, then by id — the reader is looking for the
+	 * biggest mover, and a stable tie-break keeps two runs on one input byte-identical.
+	 */
+	private static function ruleDeltas(
+		before: LintDiffTally, after: LintDiffTally, added: Array<LintDiffEntry>, removed: Array<LintDiffEntry>
+	): Array<LintDiffRuleDelta> {
+		final counted: LintDiffBuckets = bucket(added, removed, e -> e.rule);
+		final beforeBy: Map<String, Int> = ruleTotals(before);
+		final afterBy: Map<String, Int> = ruleTotals(after);
+		final out: Array<LintDiffRuleDelta> = [
+			for (n in counted.names)
+				{
+					rule: n,
+					before: beforeBy[n] ?? 0,
+					after: afterBy[n] ?? 0,
+					added: counted.added[n] ?? 0,
+					removed: counted.removed[n] ?? 0
+				}
+		];
+		out.sort(compareRuleMovement);
+		return out;
+	}
+
+	/** Most movement first, then rule id — a total order, so the render is reproducible. */
+	private static function compareRuleMovement(a: LintDiffRuleDelta, b: LintDiffRuleDelta): Int {
+		final ma: Int = a.added + a.removed;
+		final mb: Int = b.added + b.removed;
+		return if (ma != mb)
+			mb - ma
+		else if (a.rule < b.rule)
+			-1
+		else
+			(a.rule > b.rule ? 1 : 0);
+	}
+
+	/**
+	 * The row `tally` recorded for a key it put in `order`.
+	 *
+	 * `tally` pushes the key and writes its row in one breath, so the row is always there.
+	 * Throwing rather than skipping is the point: a dropped surplus UNDERSTATES the blast
+	 * radius, which is the single failure this whole tool exists to prevent. Spelled once
+	 * because `bucket` argues one folder over two copies and the same argument applies to a
+	 * guard — the two copies of this one were `duplicate-code`'s next candidate.
+	 */
+	private static function rowOf(tally: LintDiffTally, key: String): LintDiffRow {
+		final row: Null<LintDiffRow> = tally.rows[key];
+		if (row == null) throw new Exception('lint-diff: tally invariant broken — no row for a key in document order');
+		return row;
 	}
 
 	/** Keys occurring more often in `a` than in `b`, in `a`'s document order. */
@@ -346,12 +493,7 @@ final class LintDiff {
 			final mine: Int = a.counts[key] ?? 0;
 			final theirs: Int = b.counts[key] ?? 0;
 			if (mine <= theirs) continue;
-			// `tally` pushes the key and writes its row in one breath, so a key in
-			// `order` always has one. Throwing rather than skipping is the point:
-			// a dropped surplus UNDERSTATES the blast radius, which is the single
-			// failure this whole tool exists to prevent.
-			final row: Null<LintDiffRow> = a.rows[key];
-			if (row == null) throw new Exception('lint-diff: tally invariant broken — no row for a key in document order');
+			final row: LintDiffRow = rowOf(a, key);
 			out.push({
 				file: row.file,
 				rule: row.rule,
@@ -365,14 +507,10 @@ final class LintDiff {
 
 	/** Per-severity totals over both surplus lists, in `SEVERITY_ORDER`. */
 	private static function severityDeltas(added: Array<LintDiffEntry>, removed: Array<LintDiffEntry>): Array<LintDiffSeverityDelta> {
-		final names: Array<String> = [];
-		final addedBy: Map<String, Int> = [];
-		final removedBy: Map<String, Int> = [];
-		accumulate(added, addedBy, names);
-		accumulate(removed, removedBy, names);
-		names.sort(compareSeverity);
+		final counted: LintDiffBuckets = bucket(added, removed, e -> e.severity);
+		counted.names.sort(compareSeverity);
 		return [
-			for (n in names) { severity: n, added: addedBy[n] ?? 0, removed: removedBy[n] ?? 0 }
+			for (n in counted.names) { severity: n, added: counted.added[n] ?? 0, removed: counted.removed[n] ?? 0 }
 		];
 	}
 
@@ -394,14 +532,26 @@ final class LintDiff {
 	private static function pushExamples(
 		lines: Array<String>, sign: String, word: String, entries: Array<LintDiffEntry>, limit: Int
 	): Void {
-		final cap: Int = limit < 0 || limit > entries.length ? entries.length : limit;
-		for (i in 0...cap) {
-			final e: LintDiffEntry = entries[i];
+		pushCapped(lines, entries, limit, '$word key(s)', e -> {
 			final multiplicity: String = e.count > 1 ? ' (x${e.count})' : '';
-			lines.push('  $sign ${e.file}  ${e.rule}  ${e.message}$multiplicity');
-		}
-		final rest: Int = entries.length - cap;
-		if (rest > 0) lines.push('  … $rest more $word key(s) not shown — raise --limit');
+			return '  $sign ${e.file}  ${e.rule}  ${e.message}$multiplicity';
+		});
+	}
+
+	/**
+	 * Append at most `limit` rendered rows, then a note naming how many were left out
+	 * (`limit < 0` prints every row and no note).
+	 *
+	 * Shared by the per-rule block and both example blocks, which differ only in how one row
+	 * renders and what the note calls it. Every list this render prints goes through here, so
+	 * an unbounded one has to be written on purpose rather than by omission — which is exactly
+	 * how the per-rule block shipped as a single 1125-character line.
+	 */
+	private static function pushCapped<T>(lines: Array<String>, rows: Array<T>, limit: Int, noun: String, render: (T) -> String): Void {
+		final cap: Int = limit < 0 || limit > rows.length ? rows.length : limit;
+		for (i in 0...cap) lines.push(render(rows[i]));
+		final rest: Int = rows.length - cap;
+		if (rest > 0) lines.push('  … $rest more $noun not shown — raise --limit');
 	}
 
 }
@@ -472,6 +622,38 @@ typedef LintDiffSeverityDelta = {
 	var removed: Int;
 };
 
+/** Both snapshot totals and both surpluses for one rule — the per-rule half of the verdict. */
+typedef LintDiffRuleDelta = {
+
+	var rule: String;
+
+	/** Occurrences of this rule in the BASE snapshot. */
+	var before: Int;
+
+	/** Occurrences of this rule in the compared snapshot. */
+	var after: Int;
+
+	var added: Int;
+
+	var removed: Int;
+};
+
+/**
+ * One fold of the two surplus lists into buckets: the names in first-seen order and the
+ * occurrence count each side contributed.
+ *
+ * A named type rather than an inline anonymous one because two callers read it and the
+ * project's own `anon-type-dup` counts a structure written twice.
+ */
+typedef LintDiffBuckets = {
+
+	var names: Array<String>;
+
+	var added: Map<String, Int>;
+
+	var removed: Map<String, Int>;
+};
+
 /** The whole verdict: totals, both surplus lists and the severity breakdown. */
 typedef LintDiffResult = {
 
@@ -488,4 +670,7 @@ typedef LintDiffResult = {
 	var removedTotal: Int;
 
 	var severities: Array<LintDiffSeverityDelta>;
+
+	/** Every rule that moved, most movement first — the gate's headline question. */
+	var rules: Array<LintDiffRuleDelta>;
 };

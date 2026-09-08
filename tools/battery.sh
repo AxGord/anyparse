@@ -737,9 +737,12 @@ XCFG
 
 # --- 4. branch: jvm portability probe ----------------------------------
 #
-# Only when the core actually moved: the two packages below are the ones whose
-# static-target portability has regressed in practice, and the probe costs ~9s
-# plus a JVM. See docs/testing.md § "The core stays target-independent".
+# Only when the core actually moved — anything under src/, or the probe's own
+# two files; the trigger below is deliberately not narrowed to the two packages
+# the probe happens to LINT, because what it COMPILES is whatever `-main
+# JvmPortability` reaches. The probe costs ~9s plus a JVM. See docs/testing.md
+# § "The core stays target-independent", which measures that reach: 0 of the 87
+# files under src/anyparse/query/cli are typed for --jvm at all.
 # Whether it applies is decided in the driver, before the fork, because it
 # reads git — but the SKIP is still recorded as a row, so "the probe did not
 # apply" and "the probe never ran" stay different words in the table.
