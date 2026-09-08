@@ -38,7 +38,7 @@ using StringTools;
  *   GUESSED end line.
  *
  * Whether a branch has a tree at all is asked STRUCTURALLY — does any projected node lie wholly
- * inside the body span — and never from `RefShape.opaqueCondRegionKindPrefixes`. That list names the
+ * inside the body span — and never from `RefShape.opaqueCondRegionKinds`. That list names the
  * ctors a grammar falls back to for an unbalanced region, which is a different question:
  * `CondSpliceReturnStmt` is not on it and still projects no interior, so a kind test would have
  * called such a branch modelled and then had nothing to print for it. A body with text but no

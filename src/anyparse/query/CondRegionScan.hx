@@ -24,13 +24,25 @@ import anyparse.runtime.Span;
 final class CondRegionScan {
 
 	/**
-	 * Whether a projected node kind denotes a `#if...#end` region — a block
-	 * `Conditional`, an expression `ConditionalExpr`, or any `CondSplice*`
-	 * mid-expression / statement splice. An unrecognised conditional kind
-	 * degrades to `ActiveCode`, which still blocks — fail-closed.
+	 * Whether a projected node kind denotes a `#if … #end` region at all — a balanced block
+	 * `Conditional`, an expression `ConditionalExpr`, or one of the raw-capture splices.
+	 *
+	 * `RefShape.conditionalRegionKinds` is the whole vocabulary, and the grammar DERIVES it
+	 * (see that field). Until S175 this function spelled three Haxe kinds inline — two exact
+	 * names and a `CondSplice` prefix — inside a core that must not know a grammar's ctor
+	 * names: the same family then had two sources of truth, of which only the other one, the
+	 * shape, a grammar could override. The prefix half also carried the defect the sibling
+	 * `isOpaqueCondRegionKind` documents, one convention-breaking ctor away from silence.
+	 *
+	 * The superset relation is load-bearing rather than incidental: everything opaque IS a
+	 * conditional region, so a consumer that wants "region, modelled or not" reads this and a
+	 * consumer that wants "and its bytes project nothing" reads the sibling. A grammar that
+	 * declares neither answers false here, which is right for one with no conditional
+	 * compilation and is the same answer the hard-coded form gave it.
 	 */
-	public static inline function isConditionalKind(kind: String): Bool {
-		return kind == 'Conditional' || kind == 'ConditionalExpr' || kind.startsWith('CondSplice');
+	public static inline function isConditionalKind(kind: String, shape: RefShape): Bool {
+		final kinds: Array<String> = shape.conditionalRegionKinds ?? [];
+		return kinds.contains(kind);
 	}
 
 	/**
@@ -38,34 +50,37 @@ final class CondRegionScan {
 	 * `#if … #end` region is not a balanced subtree in its position — the fail-closed gate
 	 * `opaqueCondRegions` walks with.
 	 *
-	 * `RefShape.opaqueCondRegionKindPrefixes` is read as a set of ctor-name PREFIXES, not of exact
-	 * names, and that is the whole point of the function existing. A grammar's fallback ctors
-	 * are a FAMILY that grows with the parser (Haxe: `CondSplice*`), so an exhaustive list of
-	 * them desyncs the first time the family gains a member and the mutating ops then go
-	 * SILENT over the new shape rather than refusing. Measured: the list shipped with ten `CondSplice*` names
-	 * on 2026-08-18 and the grammar gained THREE more raw-capture ctors two days later (`CondSpliceReturnStmt`,
-	 * `CondSpliceReturnExpr`, `MetaCondStmt`), after which `rename` rewrote a declaration and
-	 * left its reference inside `return #if nodejs target; #else 2; #end` on the old name —
-	 * `Unknown identifier : target` under `-D nodejs`, no diagnostic. The sibling predicate `isConditionalKind` had been deriving
-	 * the same family by prefix all along; the asymmetry between the two WAS the defect. It still hard-codes the prefix rather
-	 * than reading it from the shape, so the family has two sources of truth and only this one is a grammar's to override - T795.
+	 * `RefShape.opaqueCondRegionKinds` holds EXACT ctor names, and no grammar writes them: the
+	 * macro derives them from the raw-capture TERMINALS the grammar marks. That is what the
+	 * two earlier spellings of this field could not do. A hand-written list of ten names went
+	 * stale by three in two days — `rename` then rewrote a declaration and left its reference
+	 * inside `return #if nodejs target; #else 2; #end` on the old name, `Unknown identifier :
+	 * target` under `-D nodejs`, no diagnostic, for eighteen days. Reading the list as ctor-name
+	 * PREFIXES closed those three by making the FAMILY the unit, and left a narrower hole of
+	 * the same shape: a ctor named outside the convention. Two already were, and the pin
+	 * guarding the list checked the same convention, so it could not see a third.
 	 *
-	 * A prefix that is too WIDE costs almost nothing here, which is why erring that way is
-	 * right: the list only decides which nodes the GAP analysis examines, and a ctor whose
-	 * interior the grammar does model contributes no unmodelled bytes for the mention scan to
-	 * read. `CondSpliceOpExpr` is the proof — every operand of its branch is a real node, so a
-	 * rename through one of them already succeeds today even though the kind is on the list.
+	 * Measured, by renaming `CondSpliceReturnStmt` to `GuardedReturnStmt` and changing nothing
+	 * else: under the prefix list the reproducer above went from a loud refusal to `apq rename:
+	 * wrote probe/Probe.hx`, exit 0; under this one the refusal is unchanged, because the ctor
+	 * still holds an `HxCondSpliceClosedRegion` and that is what the derivation reads.
+	 *
+	 * A list that is too WIDE costs almost nothing here, which is why erring that way is
+	 * right: it only decides which nodes the GAP analysis examines, and a ctor whose interior
+	 * the grammar does model contributes no unmodelled bytes for the mention scan to read.
+	 * `CondSpliceOpExpr` is the proof — every operand of its branch is a real node, so a rename
+	 * through one of them already succeeds today even though the kind is on the list.
 	 */
 	public static inline function isOpaqueCondRegionKind(kind: String, shape: RefShape): Bool {
-		final prefixes: Array<String> = shape.opaqueCondRegionKindPrefixes ?? [];
-		return prefixes.exists(prefix -> kind.startsWith(prefix));
+		final kinds: Array<String> = shape.opaqueCondRegionKinds ?? [];
+		return kinds.contains(kind);
 	}
 
 	/**
 	 * The span of an UNPARSED conditional-compilation region inside `scope` whose raw bytes
 	 * spell `name` as a standalone identifier, or null when no region there could hold one.
 	 *
-	 * `RefShape.opaqueCondRegionKindPrefixes` names the ctors a grammar falls back to when a
+	 * `RefShape.opaqueCondRegionKinds` names the ctors a grammar falls back to when a
 	 * `#if … #end` region is not a balanced subtree. Such a node keeps its CONTINUATION as a
 	 * child (the tail operand, the shared body, the statement after `#end`) and drops the
 	 * region itself: nothing in it projects. So the unmodelled bytes are exactly the parts of
@@ -108,7 +123,7 @@ final class CondRegionScan {
 	 * h();` has an equal number of `{` and `}` and is opaque, while the same region without the
 	 * trailing `else` is an ordinary `Conditional` and formats. What decides it is whether the
 	 * bytes between the directives are a balanced subtree IN THEIR GRAMMATICAL POSITION; when
-	 * they are not, the grammar falls back to one of `RefShape.opaqueCondRegionKindPrefixes`.
+	 * they are not, the grammar falls back to one of `RefShape.opaqueCondRegionKinds`.
 	 *
 	 * `region` runs from the FIRST unmodelled byte to the LAST — not from the node's own start,
 	 * which is a different place in half the shapes: a `CondSpliceTail` begins at the operand
@@ -126,9 +141,9 @@ final class CondRegionScan {
 		// The grammar declares no raw-capture family at all — no conditional compilation, so no
 		// region to walk for. Read here rather than per node: the predicate below re-reads the
 		// same field, and this is the one answer that skips the whole walk.
-		final prefixes: Array<String> = shape.opaqueCondRegionKindPrefixes ?? [];
+		final kinds: Array<String> = shape.opaqueCondRegionKinds ?? [];
 		final out: Array<OpaqueCondRegion> = [];
-		if (prefixes.length == 0) return out;
+		if (kinds.length == 0) return out;
 		function walk(node: QueryNode): Void {
 			final span: Null<Span> = node.span;
 			if (span != null && isOpaqueCondRegionKind(node.kind, shape)) {
@@ -411,7 +426,7 @@ final class CondRegionScan {
  */
 typedef OpaqueCondRegion = {
 
-	/** The projected ctor the grammar fell back to — one of `RefShape.opaqueCondRegionKindPrefixes`. */
+	/** The projected ctor the grammar fell back to — one of `RefShape.opaqueCondRegionKinds`. */
 	final kind: String;
 
 	final region: Span;

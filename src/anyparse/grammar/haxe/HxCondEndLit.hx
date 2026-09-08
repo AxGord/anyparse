@@ -18,4 +18,5 @@ package anyparse.grammar.haxe;
  */
 @:re('#end')
 @:rawString
+@:condRegionRaw
 abstract HxCondEndLit(String) from String to String {}

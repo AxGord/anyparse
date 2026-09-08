@@ -273,7 +273,7 @@ final class CtorFieldFold {
 		if (base == null || base.decl.dropped != null) return null;
 		final decl: FoldableDecl = base.decl;
 		final ctor: QueryNode = base.ctor;
-		if (holdsConditionalRegion(ctor) || holdsConditionalRegion(base.field)) return null;
+		if (holdsConditionalRegion(ctor, shape) || holdsConditionalRegion(base.field, shape)) return null;
 		final init: Null<ConditionalCtorInit> = soleConditionalCtorFieldInit(source, base.container, ctor, base.field, shape);
 		if (init == null) return null;
 		final guardFrom: Int = init.ifStmt.from;
@@ -657,8 +657,8 @@ final class CtorFieldFold {
 	}
 
 	/** Whether `node`'s subtree holds a `#if…#end` region of any projection (`isConditionalKind`). */
-	private static function holdsConditionalRegion(node: QueryNode): Bool {
-		return CondRegionScan.isConditionalKind(node.kind) || node.children.exists(child -> holdsConditionalRegion(child));
+	private static function holdsConditionalRegion(node: QueryNode, shape: RefShape): Bool {
+		return CondRegionScan.isConditionalKind(node.kind, shape) || node.children.exists(child -> holdsConditionalRegion(child, shape));
 	}
 
 	/** Parenthesise a folded ternary's condition iff it binds no tighter than `?:` (a ternary or an assignment). */

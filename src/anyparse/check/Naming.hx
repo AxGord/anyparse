@@ -1109,7 +1109,7 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		final bare: Array<{ off: Int, cls: Null<String> }> = [];
 		final typed: Array<{ recv: QueryNode, fa: QueryNode }> = [];
 		final recvNames: Array<String> = [];
-		collectAttributedRefs(tree, name, source, null, bare, typed, recvNames);
+		collectAttributedRefs(tree, name, source, null, bare, typed, recvNames, shape);
 		// The two owner-bound halves are kept apart because their trustworthiness differs. `typedBound`
 		// is attributed through a RECEIVER's declared type, which no scope resolver reproduces, so it is
 		// safe to RENAME anywhere. `bareBound` is attributed by the enclosing CLASS alone — every bare
@@ -1150,9 +1150,9 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 	 */
 	private static function collectAttributedRefs(
 		node: QueryNode, name: String, source: String, currentClass: Null<String>, bare: Array<{ off: Int, cls: Null<String> }>,
-		typed: Array<{ recv: QueryNode, fa: QueryNode }>, recvNames: Array<String>
+		typed: Array<{ recv: QueryNode, fa: QueryNode }>, recvNames: Array<String>, shape: RefShape
 	): Void {
-		if (CondRegionScan.isConditionalKind(node.kind)) return;
+		if (CondRegionScan.isConditionalKind(node.kind, shape)) return;
 		final cls: Null<String> = CheckScan.isClassBodyKind(node.kind) && node.name != null ? node.name : currentClass;
 		if (node.kind == 'IdentExpr' && node.name == name) {
 			final s: Null<Span> = node.span;
@@ -1160,7 +1160,7 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 			if (off >= 0) bare.push({ off: off, cls: cls });
 		} else if (node.kind == 'FieldAccess' && node.name == name)
 			collectFieldAccessRef(node, name, source, cls, bare, typed, recvNames);
-		for (child in node.children) collectAttributedRefs(child, name, source, cls, bare, typed, recvNames);
+		for (child in node.children) collectAttributedRefs(child, name, source, cls, bare, typed, recvNames, shape);
 	}
 
 	/** The binding-decl offset of the read / write hit at `recvFrom`, or null when it is unresolved. */

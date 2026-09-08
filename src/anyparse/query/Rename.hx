@@ -601,7 +601,7 @@ final class Rename {
 		var instance: Bool = false;
 		var isStatic: Bool = false;
 		function scan(parent: QueryNode): Void {
-			for (child in parent.children) if (CondRegionScan.isConditionalKind(child.kind))
+			for (child in parent.children) if (CondRegionScan.isConditionalKind(child.kind, shape))
 				scan(child);
 			else {
 				final span: Null<Span> = child.span;

@@ -655,7 +655,7 @@ final class CtorFieldWrite {
 	 * statement per candidate FIELD, so building the union per call would allocate for nothing.
 	 */
 	private static function completesNormally(kind: String, shape: RefShape): Bool {
-		return kind == shape.exprStatementKind || CondRegionScan.isConditionalKind(kind) || kindIn(shape.localDeclKinds, kind)
+		return kind == shape.exprStatementKind || CondRegionScan.isConditionalKind(kind, shape) || kindIn(shape.localDeclKinds, kind)
 			|| kindIn(shape.staticLocalDeclKinds, kind) || kindIn(shape.ifStatementKinds, kind) || kindIn(shape.switchKinds, kind)
 			|| kindIn(shape.tryStatementKinds, kind) || kindIn(shape.localFunctionKinds, kind) || kindIn(shape.inlineFunctionKinds, kind);
 	}

@@ -938,19 +938,18 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			conditionalElseKeywords: ['#else', '#elseif'],
 			conditionalEndKeyword: '#end',
 			condDeclPrefixKeywordKinds: ['EnumKw', 'AbstractKw', 'FinalKw'],
-			// PREFIXES, not names: `CondSplice` is the whole raw-capture family the parser falls back to
-			// (12 ctors today), so a ctor added to it lands in the gate without a hand edit here. The
-			// hand-kept form of this list had gone stale by THREE in the two days after it shipped —
-			// `CondSpliceReturnStmt`, `CondSpliceReturnExpr` and `MetaCondStmt`, all added 2026-08-20 —
-			// and every name-driven op wrote silently over each of them.
-			//
-			// The two names spelled in full are the raw-capture ctors OUTSIDE that convention, and each
-			// breaks it for a reason: `CondSharedBodyDecl` is a declaration region, not a splice, and
-			// `MetaCondStmt` is named for the metadata it dispatches on rather than for the
-			// `HxCondSpliceClosedRegion` it then swallows. Nothing else in any grammar module starts with
-			// either string. A ctor that breaks the convention a THIRD way is still invisible here and to
-			// the pin that guards this list - T796.
-			opaqueCondRegionKindPrefixes: ['CondSplice', 'CondSharedBodyDecl', 'MetaCondStmt'],
+			// DERIVED, not written. The macro walks each ctor's own production to the terminals it
+			// reaches and reports the ones that reach a `@:condRegionRaw` capture; `conditionalRegionKinds`
+			// is the same walk widened by `@:condRegionCondition`, the atom every directive's condition is
+			// captured as. Nothing here names a ctor, which is the point: the two earlier spellings of
+			// this field both went stale in the fail-OPEN direction. A hand-written list of ten
+			// `CondSplice*` names missed the three raw-capture ctors the grammar gained two days later
+			// (`CondSpliceReturnStmt`, `CondSpliceReturnExpr`, `MetaCondStmt`), and every name-driven op
+			// wrote silently over them for eighteen days; reading it as ctor-name PREFIXES closed those
+			// and left the ctors that break the naming convention open — two already did, and the pin
+			// guarding the list checked the same convention it did.
+			opaqueCondRegionKinds: HaxeQueryWalker.opaqueCondRegionKinds(),
+			conditionalRegionKinds: HaxeQueryWalker.conditionalRegionKinds(),
 			condOperandRunKinds: ['CondSpliceOpExpr'],
 			stringInterpIdentKind: 'Ident',
 			stringInterpBlockKind: 'Block',

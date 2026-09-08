@@ -134,6 +134,35 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	/** Name of the local a `@:queryTypeSlot` field walks into before its first node becomes the slot. */
 	private static inline final TYPE_SLOT_OWN_LOCAL: String = '_typeSlotOwn';
 
+	/**
+	 * Grammar opt-in on a TERMINAL: the bytes it matches are conditional-compilation region text
+	 * that the model does NOT project as nodes - a raw fallback capture, the `#end` a splice
+	 * swallows, the operators between a splice's operands.
+	 *
+	 * The MECHANISM behind the fail-closed gate, declared where the mechanism lives. A ctor
+	 * reaching such a terminal captures bytes no scan can read, so a name-driven rewrite over it
+	 * would part-apply; the gate refuses instead. Marking the TERMINAL rather than each ctor is
+	 * what makes the derivation survive the grammar growing: the raw terminals are a small stable
+	 * set (a fallback ctor cannot capture a region without one), while the ctors that reuse them
+	 * are added freely - `CondSpliceReturnStmt`, `CondSpliceReturnExpr` and `MetaCondStmt` all
+	 * appeared in one series two days after the hand-kept ctor list shipped, and every name-driven
+	 * op wrote silently over them for eighteen days.
+	 */
+	private static inline final COND_REGION_RAW_META: String = ':condRegionRaw';
+
+	/**
+	 * Grammar opt-in on a TERMINAL: the bytes it matches are the CONDITION of a
+	 * conditional-compilation directive (Haxe `HxPpCondLit`, the atom after `#if` / `#elseif`).
+	 *
+	 * The seed that separates "this node IS a `#if` region" from "this node captured one RAW".
+	 * Every conditional production carries a condition, balanced or not, so it derives the wider
+	 * set; the raw seed derives the subset whose interior projects nothing. Deliberately NOT
+	 * `COND_REGION_RAW_META`: a balanced region's condition text is unmodelled too, and seeding
+	 * the raw set with it would make every ordinary `#if` refuse a rename of a name its CONDITION
+	 * spells.
+	 */
+	private static inline final COND_REGION_CONDITION_META: String = ':condRegionCondition';
+
 	/** Struct fields consulted, in order, for a String-valued display name. */
 	private static final NAME_STRING_SLOTS: Array<String> = ['name', 'type', 'varName'];
 
@@ -211,13 +240,16 @@ class QueryWalkerLowering extends PairedShapeLowering {
 			});
 		}
 
+		final rawSeeds: Array<String> = condSeedRules(COND_REGION_RAW_META);
 		return {
 			rootTypePath: _shape.root,
 			rootCT: pairedComplexType(_shape.root),
 			rootFnName: walkFnName(_shape.root),
 			walks: walks,
 			names: names,
-			typeRefs: typeRefs
+			typeRefs: typeRefs,
+			opaqueCondRegionKinds: condKindsReaching(rawSeeds),
+			conditionalRegionKinds: condKindsReaching(rawSeeds.concat(condSeedRules(COND_REGION_CONDITION_META)))
 		};
 	}
 
@@ -677,6 +709,80 @@ class QueryWalkerLowering extends PairedShapeLowering {
 		return out;
 	}
 
+	/**
+	 * Every rule name the fields (or ctor args) of `node` reference DIRECTLY, Terminals
+	 * INCLUDED - the one difference from `reachableRules`, which drops them because its
+	 * consumer emits functions and a Terminal gets none. A derivation asking "does this
+	 * production reach a MARKED terminal" needs precisely the names that one throws away.
+	 */
+	private function fieldRuleRefs(node: ShapeNode): Array<String> {
+		final out: Array<String> = [];
+		inline function visit(n: ShapeNode): Void {
+			final target: ShapeNode = (n.kind == Star || n.kind == Opt) && n.children.length > 0 ? n.children[0] : n;
+			final ref: Null<String> = refOf(target);
+			if (ref != null && !out.contains(ref)) out.push(ref);
+		}
+		for (child in node.children) visit(child);
+		return out;
+	}
+
+	/**
+	 * Whether `rule`'s own production reaches one of `seeds`, stopping at every `Alt`.
+	 *
+	 * An `Alt` is a DISPATCH point, not a container: each of its ctors materialises its own
+	 * node and is classified on its own, so letting a ctor's verdict flow up into every
+	 * production that can hold the enum is what turns this into the closure S167 measured and
+	 * rejected - seeding on the raw terminals and closing over type MENTIONS reached 244 of the
+	 * Haxe package's 262 modules. Stopping at the dispatch point keeps the answer to the
+	 * question every consumer actually asks: which bytes does THIS node's own span leave
+	 * unmodelled.
+	 */
+	private function reachesCondSeed(rule: String, seeds: Array<String>, seen: Array<String>): Bool {
+		if (seeds.contains(rule)) return true;
+		if (seen.contains(rule)) return false;
+		seen.push(rule);
+		final node: Null<ShapeNode> = _shape.rules.get(rule);
+		if (node == null || node.kind == Alt || node.kind == Terminal) return false;
+		return fieldRuleRefs(node).exists(ref -> reachesCondSeed(ref, seeds, seen));
+	}
+
+	/** The Terminal rules the grammar tagged with `meta` - one derivation's seed set. */
+	private function condSeedRules(meta: String): Array<String> {
+		final out: Array<String> = [];
+		for (rule in sortedRuleNames()) {
+			final node: Null<ShapeNode> = _shape.rules.get(rule);
+			if (node != null && node.kind == Terminal && node.hasMeta(meta)) out.push(rule);
+		}
+		return out;
+	}
+
+	/**
+	 * Every projected node kind whose own production reaches one of `seeds` - one candidate per
+	 * `Alt` ctor and per `@:spanned` `Seq`, which are exactly the shapes `lowerWalk`
+	 * materialises a `QueryNode` for. A transparent `Seq` contributes its fields to the
+	 * enclosing node instead, which is why the recursion descends through one rather than
+	 * naming it.
+	 */
+	private function condKindsReaching(seeds: Array<String>): Array<String> {
+		final out: Array<String> = [];
+		inline function add(kind: Null<String>): Void if (kind != null && !out.contains(kind)) out.push(kind);
+		for (rule in sortedRuleNames()) {
+			final node: Null<ShapeNode> = _shape.rules.get(rule);
+			if (node == null) continue;
+			switch node.kind {
+				case Alt:
+					for (branch in node.children) if (fieldRuleRefs(branch).exists(ref -> reachesCondSeed(ref, seeds, [])))
+						add(branch.annotations[AnnotationKeys.BASE_CTOR]);
+				case Seq:
+					if (isSpanned(node) && fieldRuleRefs(node).exists(ref -> reachesCondSeed(ref, seeds, [])))
+						add(node.readMetaString(PairedShapeLowering.SPANNED_META));
+				case _:
+			}
+		}
+		out.sort(Reflect.compare);
+		return out;
+	}
+
 	/** Generated walk-function name for a rule type path (`anyparse.grammar.haxe.HxExpr` to `_walkHxExprS`). */
 	public static inline function walkFnName(typePath: String): String {
 		return '_walk${simpleName(typePath)}S';
@@ -732,5 +838,19 @@ typedef QueryWalkerResult = {
 
 	/** One `_typeRefs<T>` per rule reachable from a `type` field. */
 	final typeRefs: Array<WalkerFn>;
+
+	/**
+	 * Projected node kinds that SWALLOW a conditional-compilation region as raw bytes -
+	 * derived from the `@:condRegionRaw` terminals the grammar declares, never from a list of
+	 * ctor names. What the engine's fail-closed gate over a name-driven rewrite reads.
+	 */
+	final opaqueCondRegionKinds: Array<String>;
+
+	/**
+	 * Projected node kinds that denote a conditional-compilation region at all - the
+	 * `opaqueCondRegionKinds` superset, adding the regions whose interior the grammar DOES
+	 * model. Derived by the same walk from the `@:condRegionCondition` terminal as well.
+	 */
+	final conditionalRegionKinds: Array<String>;
 };
 #end

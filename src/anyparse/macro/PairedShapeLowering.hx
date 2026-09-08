@@ -40,6 +40,9 @@ class PairedShapeLowering {
 	/** Struct field whose presence makes a `Seq` a transparent envelope - the walk descends it and ignores the rest. */
 	public static inline final ENVELOPE_FIELD: String = 'node';
 
+	/** Grammar opt-out of `Seq` transparency: `@:spanned('<Kind>')` gives the struct `_kind` + `_span` and its own node. */
+	public static inline final SPANNED_META: String = ':spanned';
+
 	private final _shape: ShapeBuilder.ShapeResult;
 
 	public function new(shape: ShapeBuilder.ShapeResult) {
@@ -159,7 +162,7 @@ class PairedShapeLowering {
 
 	/** Whether a `Seq` rule opted out of transparency with `@:spanned('<Kind>')`, gaining `_kind` + `_span`. */
 	private function isSpanned(node: ShapeNode): Bool {
-		return node.kind == Seq && node.readMetaString(':spanned') != null;
+		return node.kind == Seq && node.readMetaString(SPANNED_META) != null;
 	}
 
 	/**

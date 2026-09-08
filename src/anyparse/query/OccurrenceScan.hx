@@ -227,7 +227,7 @@ final class OccurrenceScan {
 		final len: Int = name.length;
 		if (len == 0) return out;
 		final condSpans: Array<Span> = [];
-		collectConditionalSpans(tree, condSpans);
+		collectConditionalSpans(tree, condSpans, plugin.refShape());
 		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
 		final stop: Int = end <= source.length ? end : source.length;
 		var i: Int = from;
@@ -426,12 +426,12 @@ final class OccurrenceScan {
 	}
 
 	/** Collect the span of every `#if...#end` region node into `out` (recursive). */
-	private static function collectConditionalSpans(node: QueryNode, out: Array<Span>): Void {
-		if (CondRegionScan.isConditionalKind(node.kind)) {
+	private static function collectConditionalSpans(node: QueryNode, out: Array<Span>, shape: RefShape): Void {
+		if (CondRegionScan.isConditionalKind(node.kind, shape)) {
 			final s: Null<Span> = node.span;
 			if (s != null) out.push(s);
 		}
-		for (child in node.children) collectConditionalSpans(child, out);
+		for (child in node.children) collectConditionalSpans(child, out, shape);
 	}
 
 	/**

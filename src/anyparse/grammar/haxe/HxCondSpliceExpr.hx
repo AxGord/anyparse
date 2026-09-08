@@ -64,7 +64,7 @@ package anyparse.grammar.haxe;
  * `HxCondSpliceOpLit`.
  *
  * The consequence is owned rather than hidden: `HaxeQueryPlugin.
- * opaqueCondRegionKindPrefixes` lists this ctor, so `RefactorSupport.
+ * opaqueCondRegionKinds` lists this ctor, so `RefactorSupport.
  * opaqueCondRegionDiagnostic` REFUSES any rename / inline / move whose
  * name is spelled in these bytes, loudly, instead of rewriting the
  * occurrences it can see. `refs` and `mentions` under-report there for
