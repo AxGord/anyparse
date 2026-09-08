@@ -358,6 +358,76 @@ and names what it dropped; `--limit` counts REGIONS (so a region is never
 half-printed) and cannot bound a define used as a whole-file guard — `--max-body` is the flag that does. `--flat` prefixes
 each head line with the file instead of printing a group header.
 
+### `apq resolve-define`
+
+`apq resolve-define <DEFINE> <file-or-dir-or-glob>...` — the WRITE-TWIN of `apq cond`,
+the same relation `comment-rewrite` has to `lit`. Every conditional-compilation region
+whose own `#if` / `#elseif` conditions mention `<DEFINE>` and whose branches are ALL
+decided is replaced, from its `#if` marker to the end of its `#end`, by the body of its
+one live branch — or deleted when no branch is live.
+
+```
+apq resolve-define FEATURE_X src --list          # which files would change
+apq resolve-define FEATURE_X src/A.hx            # the rewritten file on stdout (preview)
+apq resolve-define FEATURE_X src --write         # apply
+apq resolve-define FEATURE_Y src --undefined -w  # retire a flag that is never SET
+```
+
+Retiring a define is a one-time procedure, not a standing policy, which is why this is
+an op and not a lint rule — and why no `--fix` covers these shapes: the `if-false` check
+matches only a literal `#if true` / `#if false`, and withholds its fix when the
+eliminated branch is non-trivial.
+
+**DECIDED vs UNDECIDED.** A branch is decided when it is provably taken or provably not;
+a region is decided when every one of its branches is — the same three-valued answer
+`cond` prints as `[live]` / `[dead]` / `[maybe]`, folded by the same
+`CondRegionLiveness.branchStep`, so the two commands cannot disagree about which branch a
+define selects. A region carrying a `[maybe]` branch — a flag outside the query decides,
+as in `#if (mobile && X)` or an `#elseif X` after an unrefuted `#if other` — is **left as
+is** and reported on stderr by position:
+
+```
+src/popups/Foo.hx:91:3: #if (mobile && X) - left as is: a flag outside the query decides
+```
+
+**Conditions are never SIMPLIFIED.** `(mobile && X)` does not become `mobile`. That is a
+rewrite of the condition TEXT, a separate job with separate failure modes, and mixing it
+in would make a refusal indistinguishable from a partial edit.
+
+**`--undefined` is the negative hypothesis** — the define is asserted ABSENT rather than
+set, which is what a never-defined flag needs. It is an assertion the operator signs for:
+no compile output can prove a flag undefined (the compiler prints its `Defines:` line
+before init macros run), so `CondRegionLiveness.evaluate` stays positive-only and only
+the explicit `evaluateFacts` entry point can read a name as false.
+
+**Nesting.** A decided region inside a decided one is folded into its parent's
+replacement in the same pass and counted separately in the summary. A decided region
+inside an **undecided** one is folded on its own and the parent stays — the parent
+contributes no edit, so nothing collides.
+
+**Whole-line deletion.** A region whose `#if` starts its line and whose `#end` ends one
+takes those lines with it when nothing is live, so no blank line is left behind. A region
+sharing its lines with code keeps the narrow span, and the replacement is re-indented by
+the writer like any other emitted code — which is what folds the mid-expression shape
+`x = #if X c ? new A() : #end new B();` into `x = c ? new A() : new B();`.
+
+**What is refused** is the shared write gate's list, because the whole result goes through
+`CanonicalEdit.canonicalize` and never through a bare splice:
+
+| Refusal | Why |
+|---|---|
+| a region that was the whole body slot of a brace-less `if` | folding it to nothing leaves the `if` to swallow the FOLLOWING statement; the result parses, so only `BodySlotGuard` can see it |
+| `file is not in canonical form` | a whole-file rewrite would reflow unrelated hand-wrapping into a surprise diff — run `apq fmt --write`, or pass `--reformat` |
+| a source the grammar cannot parse | the deliberate difference from `cond`, which walks an unparseable file happily: reading a region needs no tree, writing one needs a re-parse |
+
+Each is a per-file failure — the walk continues, the file is left byte-identical, and the
+run exits non-zero.
+
+**Multi-file UX is `comment-rewrite`'s**: one file with no flag previews the rewritten
+source on stdout (diagnostics on stderr, so a preview redirects and diffs cleanly), a
+directory or glob lists the paths that would change, `--write` rewrites in place. A walk
+that matched nothing says so rather than reporting `0 region(s)`.
+
 ### Input path forms
 
 The trailing positional of `search` / `refs` / `meta` accepts one of three

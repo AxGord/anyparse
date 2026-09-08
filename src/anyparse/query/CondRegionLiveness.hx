@@ -20,6 +20,16 @@ typedef CondBranchStep = {
 	final guard: Null<Bool>;
 };
 
+/**
+ * What a CALLER asserts about a define set: `defined` names the flags it proved set, `undefined`
+ * the flags it proved absent. The second half is never derived from a compiler's `Defines:` line
+ * — only an operator asking "resolve this file as if X were not defined" can supply it.
+ */
+typedef DefineFacts = {
+	final defined: Array<String>;
+	final undefined: Array<String>;
+};
+
 private typedef Frame = {
 	final open: String;
 	var branch: String;
@@ -62,6 +72,14 @@ private typedef Cursor = {
  *
  * What IS provable, and what closes the hole above: `#else` after an `#if` whose flag
  * the compiler listed is provably DEAD, because exactly one branch of a region is live.
+ *
+ * A name a CALLER asserts is undefined is the one exception, and it is
+ * opt-in: `evaluateFacts` takes a `DefineFacts` whose `undefined` list makes such a flag
+ * provably FALSE. That list can only come from an operator — `apq resolve-define
+ * --undefined X` states the hypothesis and signs for it — never from absence in the
+ * `Defines:` line a compile prints, which is the unsound reading above. `evaluate` itself
+ * stays positive-only: a thin wrapper passing an EMPTY `undefined` list, so every coverage
+ * answer derived from it is unchanged.
  *
  * ## Grammar-agnostic
  *
@@ -140,8 +158,22 @@ final class CondRegionLiveness {
 	 * property that makes a permission derived from this sound.
 	 */
 	public static function evaluate(condition: String, defines: Array<String>): Null<Bool> {
+		return evaluateFacts(condition, { defined: defines, undefined: [] });
+	}
+
+	/**
+	 * `evaluate` against a define set a CALLER states in both directions: a flag in
+	 * `facts.defined` is true, a flag in `facts.undefined` is false, and everything else is
+	 * unknown exactly as before.
+	 *
+	 * The negative half is what a write op needs and a coverage question must never have.
+	 * `apq resolve-define --undefined X` asks "fold this file as if X were not defined", which
+	 * makes absence an ASSERTION the operator signed for rather than something read off a
+	 * compiler's output — and only then may `!X` come out true.
+	 */
+	public static function evaluateFacts(condition: String, facts: DefineFacts): Null<Bool> {
 		final cursor: Cursor = { pos: 0, ok: true };
-		final value: Null<Bool> = parseOr(condition, cursor, defines);
+		final value: Null<Bool> = parseOr(condition, cursor, facts);
 		skipSpace(condition, cursor);
 		return cursor.ok && cursor.pos >= condition.length ? value : null;
 	}
@@ -164,8 +196,13 @@ final class CondRegionLiveness {
 
 	/** One directive's condition evaluated, or unknown when it carries none the reader could delimit. */
 	public static function conditionValue(source: String, directive: CondDirective, defines: Array<String>): Null<Bool> {
+		return conditionValueFacts(source, directive, { defined: defines, undefined: [] });
+	}
+
+	/** `conditionValue` under a define set stated in both directions — the `evaluateFacts` entry for one directive. */
+	public static function conditionValueFacts(source: String, directive: CondDirective, facts: DefineFacts): Null<Bool> {
 		final span: Null<Span> = directive.condition;
-		return span == null ? null : evaluate(source.substring(span.from, span.to), defines);
+		return span == null ? null : evaluateFacts(source.substring(span.from, span.to), facts);
 	}
 
 	/**
@@ -269,16 +306,16 @@ final class CondRegionLiveness {
 	}
 
 	/** `&&` over `||`: the disjunction level, lowest precedence. */
-	private static function parseOr(text: String, cursor: Cursor, defines: Array<String>): Null<Bool> {
-		var value: Null<Bool> = parseAnd(text, cursor, defines);
-		while (cursor.ok && matchOperator(text, cursor, '||')) value = orOf(value, parseAnd(text, cursor, defines));
+	private static function parseOr(text: String, cursor: Cursor, facts: DefineFacts): Null<Bool> {
+		var value: Null<Bool> = parseAnd(text, cursor, facts);
+		while (cursor.ok && matchOperator(text, cursor, '||')) value = orOf(value, parseAnd(text, cursor, facts));
 		return value;
 	}
 
 	/** The conjunction level. */
-	private static function parseAnd(text: String, cursor: Cursor, defines: Array<String>): Null<Bool> {
-		var value: Null<Bool> = parseCompare(text, cursor, defines);
-		while (cursor.ok && matchOperator(text, cursor, '&&')) value = andOf(value, parseCompare(text, cursor, defines));
+	private static function parseAnd(text: String, cursor: Cursor, facts: DefineFacts): Null<Bool> {
+		var value: Null<Bool> = parseCompare(text, cursor, facts);
+		while (cursor.ok && matchOperator(text, cursor, '&&')) value = andOf(value, parseCompare(text, cursor, facts));
 		return value;
 	}
 
@@ -287,8 +324,8 @@ final class CondRegionLiveness {
 	 * as malformed — and evaluates to unknown: the define set carries names, not the values
 	 * a `haxe_ver >= 4.0` would need.
 	 */
-	private static function parseCompare(text: String, cursor: Cursor, defines: Array<String>): Null<Bool> {
-		final left: Null<Bool> = parseUnary(text, cursor, defines);
+	private static function parseCompare(text: String, cursor: Cursor, facts: DefineFacts): Null<Bool> {
+		final left: Null<Bool> = parseUnary(text, cursor, facts);
 		if (!cursor.ok) return null;
 		skipSpace(text, cursor);
 		final comparison: Null<String> = comparisonAt(text, cursor.pos);
@@ -296,20 +333,20 @@ final class CondRegionLiveness {
 		cursor.pos += comparison.length;
 		// The right operand is parsed for its POSITION, not its value: consuming it is what keeps
 		// the enclosing condition on grammar, and its value could not change an unknown anyway.
-		parseUnary(text, cursor, defines); // noqa: unused-return-value
+		parseUnary(text, cursor, facts); // noqa: unused-return-value
 		return null;
 	}
 
 	/** The unary level: any run of `!` prefixes, then a primary. */
-	private static function parseUnary(text: String, cursor: Cursor, defines: Array<String>): Null<Bool> {
+	private static function parseUnary(text: String, cursor: Cursor, facts: DefineFacts): Null<Bool> {
 		skipSpace(text, cursor);
-		if (cursor.pos >= text.length || text.fastCodeAt(cursor.pos) != '!'.code) return parsePrimary(text, cursor, defines);
+		if (cursor.pos >= text.length || text.fastCodeAt(cursor.pos) != '!'.code) return parsePrimary(text, cursor, facts);
 		cursor.pos++;
-		return notOf(parseUnary(text, cursor, defines));
+		return notOf(parseUnary(text, cursor, facts));
 	}
 
 	/** A parenthesised condition, a possibly-dotted flag, a number, or a quoted string. */
-	private static function parsePrimary(text: String, cursor: Cursor, defines: Array<String>): Null<Bool> {
+	private static function parsePrimary(text: String, cursor: Cursor, facts: DefineFacts): Null<Bool> {
 		skipSpace(text, cursor);
 		if (cursor.pos >= text.length) {
 			cursor.ok = false;
@@ -318,7 +355,7 @@ final class CondRegionLiveness {
 		final code: Int = text.fastCodeAt(cursor.pos);
 		if (code == '('.code) {
 			cursor.pos++;
-			final inner: Null<Bool> = parseOr(text, cursor, defines);
+			final inner: Null<Bool> = parseOr(text, cursor, facts);
 			skipSpace(text, cursor);
 			if (cursor.ok && cursor.pos < text.length && text.fastCodeAt(cursor.pos) == ')'.code) {
 				cursor.pos++;
@@ -330,10 +367,17 @@ final class CondRegionLiveness {
 		if (CondDirectives.isIdentStart(code)) {
 			final from: Int = cursor.pos;
 			cursor.pos = flagEnd(text, cursor.pos);
-			// The one asymmetry the whole class rests on: a listed flag is PROVED, an unlisted
-			// one is unknown. Reading absence as `false` would let `#if !nothing_special` claim
-			// a region the compiler may never have compiled.
-			return defines.contains(text.substring(from, cursor.pos)) ? true : null;
+			// The one asymmetry `evaluate` rests on: a listed flag is PROVED, an unlisted one is
+			// unknown. Reading absence as `false` would let `#if !nothing_special` claim a region
+			// the compiler may never have compiled. A flag the CALLER put in `facts.undefined` is
+			// the one way to get a `false` here, and no compile output can produce that list.
+			final flag: String = text.substring(from, cursor.pos);
+			return if (facts.defined.contains(flag))
+				true;
+			else if (facts.undefined.contains(flag))
+				false;
+			else
+				null;
 		}
 		if (code == '"'.code || code == '\''.code) {
 			cursor.pos = quotedEnd(text, cursor.pos);

@@ -29,6 +29,9 @@ final class CondRegionLivenessTest extends Test {
 	private static final BRANCHED: String = 'class C {\n\n\tpublic function new() {}\n\n\t#if nodejs\n\tvar live:Int = 1;\n'
 		+ '\t#else\n\tvar dead:Int = 2;\n\t#end\n\n}\n';
 
+	/** The one hypothesis no compile output can state: `X` asserted ABSENT, every other flag unknown. */
+	private static final UNDEFINED_X: DefineFacts = { defined: [], undefined: ['X'] };
+
 	// --- evaluate: the three-valued condition reader ---
 
 	public function testListedFlagIsTrue(): Void {
@@ -86,6 +89,39 @@ final class CondRegionLivenessTest extends Test {
 	public function testTrailingGarbageIsUnknown(): Void {
 		Assert.isNull(CondRegionLiveness.evaluate('nodejs @@', ['nodejs']));
 		Assert.isNull(CondRegionLiveness.evaluate('nodejs )', ['nodejs']));
+	}
+
+	// --- evaluateFacts: the same reader over a set stated in BOTH directions ---
+
+	/**
+	 * A flag the CALLER asserts undefined is provably FALSE, so `!X` finally comes out TRUE — the
+	 * one answer `evaluate` must never give, and the whole reason the negative list is a separate
+	 * entry point instead of a wider reading of the positive one.
+	 */
+	public function testAssertedUndefinedFlagIsFalseAndItsNegationTrue(): Void {
+		Assert.equals(true, CondRegionLiveness.evaluateFacts('!X', UNDEFINED_X));
+		Assert.equals(false, CondRegionLiveness.evaluateFacts('(X)', UNDEFINED_X));
+	}
+
+	/** A refuted operand refutes the whole conjunction, even beside a flag nothing decided. */
+	public function testAssertedUndefinedFlagRefutesAConjunction(): Void {
+		Assert.equals(false, CondRegionLiveness.evaluateFacts('X && other', UNDEFINED_X));
+	}
+
+	/** A refuted operand leaves a DISJUNCTION unknown — the other operand still decides it. */
+	public function testAssertedUndefinedFlagLeavesADisjunctionUnknown(): Void {
+		Assert.isNull(CondRegionLiveness.evaluateFacts('X || other', UNDEFINED_X));
+	}
+
+	/**
+	 * `evaluate` is untouched by the new entry point: it is a wrapper passing an EMPTY `undefined`
+	 * list, so absence stays UNKNOWN. This is the pair that proves the polarity is opt-in — the
+	 * same three conditions answer `false` / `true` / `false` above and `null` here.
+	 */
+	public function testEvaluateStaysPositiveOnly(): Void {
+		Assert.isNull(CondRegionLiveness.evaluate('(X)', []));
+		Assert.isNull(CondRegionLiveness.evaluate('!X', []));
+		Assert.isNull(CondRegionLiveness.evaluate('X && other', []));
 	}
 
 	// --- unproven: the region walk ---

@@ -226,6 +226,17 @@ phrase wrapped over two ` * ` doc lines). Code and the comment delimiters are ne
 touched; strings are skipped. A mechanical convention change cited across many doc-comments (e.g. bumping a
 coordinate) becomes one command instead of a hand-rolled script.
 
+`resolve-define <DEFINE> <path>…` is the write-twin of `cond`: it RETIRES a
+conditional-compilation flag. Every `#if` region whose own conditions mention the define and whose
+branches are all decided is replaced, from its `#if` marker to the end of its `#end`, by the body
+of its one live branch — or deleted with its lines when no branch is live, including the
+expression-position shapes (`x = #if X c ? new A() : #end new B();` folds to
+`x = c ? new A() : new B();`) that no node-based rewrite can address. `--undefined` states the
+opposite hypothesis, for a flag that is never set. A region a flag OUTSIDE the query also decides
+is left alone and reported by position; conditions are never simplified, so `(mobile && X)` never
+becomes `mobile`. Retiring a define is a one-time procedure rather than a standing policy, which is
+why it is an op and not a lint rule.
+
 ### File creation & formatting
 
 The create-side and whole-file counterparts of the insert ops — a new file gets the same

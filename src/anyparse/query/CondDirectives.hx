@@ -177,6 +177,24 @@ final class CondDirectives {
 	}
 
 
+	/**
+	 * Whether only blanks stand between `at` and the end of its line — the forward half of
+	 * `SourceText.startsItsLine`, which has no twin there.
+	 *
+	 * Public because the pair is what decides WHOLE-LINE hygiene for a caller rewriting a region:
+	 * `CondResolve` widens an emptied region to its full lines only when its `#if` starts one and
+	 * its `#end` ends one, and asking that of a private twin would mean a second copy of this scan.
+	 */
+	public static function endsItsLine(source: String, at: Int): Bool {
+		var i: Int = at;
+		while (
+			i < source.length
+			&& (source.fastCodeAt(i) == ' '.code || source.fastCodeAt(i) == '\t'.code || source.fastCodeAt(i) == '\r'.code)
+		)
+			i++;
+		return i >= source.length || source.fastCodeAt(i) == '\n'.code;
+	}
+
 	/** Collapse internal whitespace runs in `condition` to single spaces, so two spellings of one condition compare equal. */
 	public static function normalizeCondition(condition: String): String {
 		return (~/\s+/g).replace(condition.trim(), ' ');
@@ -219,20 +237,6 @@ final class CondDirectives {
 	/** Whether `c` is an ASCII digit. */
 	private static inline function isDigit(c: Int): Bool {
 		return c >= '0'.code && c <= '9'.code;
-	}
-
-	/**
-	 * Whether only blanks stand between `at` and the end of its line — the forward half of
-	 * `RefactorSupport.startsItsLine`, which has no twin there.
-	 */
-	private static function endsItsLine(source: String, at: Int): Bool {
-		var i: Int = at;
-		while (
-			i < source.length
-			&& (source.fastCodeAt(i) == ' '.code || source.fastCodeAt(i) == '\t'.code || source.fastCodeAt(i) == '\r'.code)
-		)
-			i++;
-		return i >= source.length || source.fastCodeAt(i) == '\n'.code;
 	}
 
 	/**

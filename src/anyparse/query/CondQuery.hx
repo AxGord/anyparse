@@ -46,8 +46,9 @@ using StringTools;
  * must not have. A BLANK body is not raw: there is nothing in it to model.
  *
  * Liveness is the shared step: `CondRegionLiveness.branchStep` folded over the region's
- * directives under the hypothesis that the queried define IS defined while every other flag is
- * unknown. `live` means provably taken, `dead` provably not, and `maybe` that a flag outside the
+ * directives under the hypothesis the caller states about the queried define — IS defined by
+ * default, is NOT defined when the caller opts into the negative polarity — while every other
+ * flag is unknown. `live` means provably taken, `dead` provably not, and `maybe` that a flag outside the
  * query decides — the three-valued answer a positive-only define set can honestly give.
  *
  * Pure: no filesystem, no process, no state between calls.
@@ -91,6 +92,10 @@ final class CondQuery {
 	 * comes back `raw`, which is the honest degradation: the bodies are still exact, only their
 	 * interior is unmodelled.
 	 *
+	 * `undefined` flips the hypothesis liveness is folded under: by default `define` is taken to BE
+	 * defined, and with it set the define is taken NOT to be — the polarity `apq resolve-define
+	 * --undefined` needs. Which regions MATCH is unaffected; only their per-branch `live` changes.
+	 *
 	 * A region left open at the end of the file is not reported at all, and a stray branch or
 	 * closer with no region open is ignored: the same directions `CondDirectives.topLevelBlocks`
 	 * and `CondBranchPath.scan` already take, for the same reason — a text whose directives do not
@@ -98,7 +103,7 @@ final class CondQuery {
 	 * no slice.
 	 */
 	public static function regionsMentioning(
-		source: String, tree: Null<QueryNode>, shape: RefShape, regions: () -> Array<LexRegion>, define: String
+		source: String, tree: Null<QueryNode>, shape: RefShape, regions: () -> Array<LexRegion>, define: String, undefined: Bool = false
 	): Array<CondRegion> {
 		final declared: Null<String> = shape.conditionalIfKeyword;
 		if (declared == null || declared == '' || define.length == 0) return [];
@@ -109,7 +114,8 @@ final class CondQuery {
 			ifKeyword: ifKeyword,
 			endKeyword: shape.conditionalEndKeyword,
 			elseKeywords: shape.conditionalElseKeywords ?? [],
-			define: define
+			define: define,
+			facts: undefined ? { defined: [], undefined: [define] } : { defined: [define], undefined: [] }
 		};
 		final out: Array<CondRegion> = [];
 		final open: Array<OpenRegion> = [];
@@ -211,12 +217,11 @@ final class CondQuery {
 		source: String, tree: Null<QueryNode>, frame: OpenRegion, close: CondDirective, seams: CondSeams
 	): Null<CondRegion> {
 		if (!mentionsDefine(source, frame.heads, seams.define)) return null;
-		final defines: Array<String> = [seams.define];
 		final branches: Array<CondBranch> = [];
 		var guard: Null<Bool> = true;
 		for (i => head in frame.heads) {
 			final takes: Bool = CondDirectives.takesCondition(head.keyword, seams.ifKeyword, seams.endKeyword);
-			final value: Null<Bool> = takes ? CondRegionLiveness.conditionValue(source, head, defines) : true;
+			final value: Null<Bool> = takes ? CondRegionLiveness.conditionValueFacts(source, head, seams.facts) : true;
 			final step: CondBranchStep = CondRegionLiveness.branchStep(guard, value);
 			guard = step.guard;
 			final body: Span = frame.bodies[i];
@@ -417,8 +422,9 @@ typedef CondRegion = {
  * `directive` text, `at` — the directive's own span, which is what a hit line's `line:col` names —
  * and `body`, the byte run between this directive and the next one at the same nesting depth.
  *
- * `live` is three-valued under the hypothesis that the queried define is set (true = provably
- * taken, false = provably not, null = a flag outside the query decides). `raw` says the body holds
+ * `live` is three-valued under the hypothesis the caller stated about the queried define — set,
+ * or explicitly NOT set (true = provably taken, false = provably not, null = a flag outside the
+ * query decides). `raw` says the body holds
  * text no projected node covers, so `--names` has nothing to answer with and the source is printed
  * instead.
  */
@@ -450,10 +456,15 @@ private typedef OpenRegion = {
 	final bodies: Array<Span>;
 };
 
-/** The grammar's directive vocabulary plus the queried define, gathered once per `regionsMentioning` call. */
+/**
+ * The grammar's directive vocabulary plus the queried define, gathered once per
+ * `regionsMentioning` call. `facts` is the hypothesis liveness is folded under: the define
+ * asserted DEFINED by default, asserted UNDEFINED when the caller opts into that polarity.
+ */
 private typedef CondSeams = {
 	final ifKeyword: String;
 	final endKeyword: Null<String>;
 	final elseKeywords: Array<String>;
 	final define: String;
+	final facts: DefineFacts;
 };

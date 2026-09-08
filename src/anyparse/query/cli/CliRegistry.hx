@@ -52,6 +52,7 @@ import anyparse.query.cli.command.RemoveMemberCommand;
 import anyparse.query.cli.command.RemoveParamCommand;
 import anyparse.query.cli.command.RenameCommand;
 import anyparse.query.cli.command.ReplaceNodeCommand;
+import anyparse.query.cli.command.ResolveDefineCommand;
 import anyparse.query.cli.command.RewriteCommand;
 import anyparse.query.cli.command.SafeDeleteCommand;
 import anyparse.query.cli.command.SearchCommand;
@@ -151,6 +152,7 @@ final class CliRegistry {
 			new MentionsCommand(),
 			new CasesCommand(),
 			new CondCommand(),
+			new ResolveDefineCommand(),
 			new CalleesCommand(),
 			new CallersCommand(),
 			new ReachCommand(),
