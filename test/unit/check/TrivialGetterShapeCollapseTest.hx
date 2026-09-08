@@ -768,6 +768,77 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 	}
 
 	/**
+	 * The `${…}` sibling of the guard above: a block interpolation projects a `Block` child, which
+	 * the all-children-are-text predicate must refuse just as it refuses a bare `$name` `Ident` — a
+	 * whitelist of the text kind covers both, a blacklist of the `Ident` kind would cover only one
+	 * and would relocate `'${a + b}'` into a field initializer, where the identifiers are out of
+	 * scope and the result does not compile.
+	 */
+	public function testShapeACtorInitBlockInterpolatedStringStaysBypass(): Void {
+		final src: String = 'class C {\n\tpublic var label(get, set):String;\n\tprivate var _label:String;\n'
+			+ '\tpublic function new(name:String) {\n\t\t_label = \'$${name}!\';\n\t}\n'
+			+ '\tfunction get_label():String return _label;\n\tfunction set_label(v:String):String {\n\t\t_label = v;\n'
+			+ '\t\ttrace(v);\n\t\treturn _label;\n\t}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		final fixed: String = fixedText(src);
+		Assert.isTrue(fixed.indexOf('@:bypassAccessor label = \'$${name}!\'') >= 0);
+	}
+
+	/**
+	 * The same hole one kind over: a hex integer projects `HexLit`, not `IntLit`, so the movable-
+	 * literal kind list had to name it explicitly — `_mask = 0xFF;` was pushed onto the
+	 * `@:bypassAccessor` arm while the byte-equivalent `_mask = 255;` collapsed cleanly. A missing
+	 * kind in a movability list reads exactly like the dead `name` probe it sits next to: the check
+	 * refuses a rewrite it should make, and nothing fails.
+	 */
+	public function testShapeACtorInitHexLiteralMoveFix(): Void {
+		final src: String = cls(
+			'public var mask(get, set):Int;\n\tprivate var _mask:Int;\n\tpublic function new() { _mask = 0xFF; }\n'
+			+ '\tfunction get_mask():Int return _mask;\n\tfunction set_mask(v:Int):Int { redraw(); return _mask = v; }'
+		);
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals(
+			'property \'mask\' has a trivial getter over backing field \'_mask\'; use \'var mask(default, set)\' and remove get_mask',
+			vs[0].message
+		);
+		final fixed: String = fixedText(src);
+		Assert.isTrue(fixed.indexOf('mask(default, set):Int = 0xFF') >= 0);
+		Assert.isTrue(fixed.indexOf('get_mask') == -1);
+		Assert.isTrue(fixed.indexOf('@:bypassAccessor') == -1);
+	}
+
+	/**
+	 * The recognized ctor-init leaves the external-write count, so the fix does not merely reword a
+	 * finding — it can carry one ACROSS the bypass cap and change what gets written. Four writes,
+	 * one of them the movable ctor-init: with the init recognized the remaining three sit on the cap
+	 * and take the bypass arm (collapse + mark), where before they read as four and fell back to the
+	 * inline arm (`mark get_label inline`, the field kept). `testShapeAExactlyCapBypass` cannot see
+	 * this boundary — its backing field carries a decl initializer, so the ctor-init path is never
+	 * entered at all.
+	 */
+	public function testShapeACtorInitCrossesBypassCap(): Void {
+		final src: String = cls(
+			'public var label(get, set):String;\n\tprivate var _label:String;\n\tpublic function new() { _label = \'lit\'; }\n'
+			+ '\tfunction get_label():String return _label;\n\tfunction set_label(v:String):String { redraw(); return _label = v; }\n'
+			+ '\tfunction a():Void { _label = \'a\'; }\n\tfunction b():Void { _label = \'b\'; }\n\tfunction c():Void { _label = \'c\'; }'
+		);
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals(
+			'property \'label\' has a trivial getter over backing field \'_label\'; use \'var label(default, set)\', remove '
+			+ 'get_label and mark 3 external write(s) with @:bypassAccessor',
+			vs[0].message
+		);
+		final fixed: String = fixedText(src);
+		Assert.isTrue(fixed.indexOf('label(default, set):String = \'lit\'') >= 0);
+		Assert.isTrue(fixed.indexOf('@:bypassAccessor label = \'a\'') >= 0);
+		Assert.isTrue(fixed.indexOf('inline function get_label') == -1);
+		Assert.isTrue(fixed.indexOf('private var _label') == -1);
+	}
+
+	/**
 	 * Run the check + `crossFileFix` over `files`, apply every rename's per-file edits (unioned,
 	 * canonicalized), and return the resulting source per file — the in-test equivalent of `apq lint
 	 * --fix`'s cross-file commit. A file with no edits keeps its source.

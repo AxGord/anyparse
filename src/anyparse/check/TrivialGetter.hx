@@ -996,10 +996,17 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		return rhsSpan == null ? null : { stmt: stmt, assign: assign, rhsSpan: rhsSpan };
 	}
 
-	/** Whether `node` is a compile-time literal safe to relocate to a field-initializer position. */
+	/**
+	 * Whether `node` is a compile-time literal safe to relocate to a field-initializer position.
+	 * A single-quoted string keeps its text in `Literal` CHILDREN and has no `name` of its own — only
+	 * the double-quoted spelling carries one — so the single-quoted arm asks the children; a `name`
+	 * read here is unreachable code, which is exactly how the interpolation guard was dead before.
+	 * The child test is a WHITELIST of the text kind on purpose: this predicate gates a rewrite, so a
+	 * segment kind the grammar grows later must read as non-movable rather than silently movable.
+	 */
 	private static function isMovableLiteral(node: QueryNode, shape: RefShape): Bool {
 		return switch node.kind {
-			case 'IntLit', 'FloatLit', 'BoolLit', 'NullLit', 'DoubleStringExpr': true;
+			case 'IntLit', 'HexLit', 'FloatLit', 'BoolLit', 'NullLit', 'DoubleStringExpr': true;
 			case 'SingleStringExpr':
 				node.children.foreach(c -> c.kind == shape.stringInterpTextKind);
 			case _: false;
