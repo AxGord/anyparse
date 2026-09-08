@@ -538,14 +538,14 @@ class ApqRefsTest extends Test {
 	}
 
 	public function testLambdaParamVisibleInBody(): Void {
-		// 3.2b-β: a lambda parameter surfaces as a `LambdaParam` decl-host
-		// bound into the enclosing lambda scope frame; a body read of the
+		// 3.2b-β: a lambda parameter surfaces as a `Required` decl-host (`HxLambdaParam`'s ctors are the
+		// SAME names `HxParam` projects) bound into the enclosing lambda scope frame; a body read of the
 		// parameter resolves to it.
 		final source: String = 'class X { static function f():Void { var fn = (x) -> x + 1; } }';
 		final hits: Array<RefHit> = findIn(source, 'x');
 		final decls: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
 		final reads: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
-		Assert.equals(1, decls.length, 'one LambdaParam decl — got ${describe(hits)}');
+		Assert.equals(1, decls.length, 'one lambda-parameter decl — got ${describe(hits)}');
 		Assert.equals(1, reads.length, 'one read at `x + 1` — got ${describe(hits)}');
 		final paramDecl: RefHit = decls[0];
 		final boundTo: Null<Span> = reads[0].bindingSpan;
@@ -560,7 +560,7 @@ class ApqRefsTest extends Test {
 		final hits: Array<RefHit> = findIn(source, 'x');
 		final decls: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
 		final reads: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
-		Assert.equals(2, decls.length, 'outer var x + LambdaParam — got ${describe(hits)}');
+		Assert.equals(2, decls.length, 'outer var x + lambda parameter — got ${describe(hits)}');
 		Assert.equals(1, reads.length, 'one read at `g(x)` — got ${describe(hits)}');
 		final outerDecl: RefHit = decls[0];
 		final paramDecl: RefHit = decls[1];

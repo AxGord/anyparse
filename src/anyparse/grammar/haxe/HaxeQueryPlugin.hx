@@ -66,9 +66,8 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 * statement-level var bindings (plus their expression-position
 	 * `VarExpr` / `FinalExpr` twins — `macro var x = e` — wrapping the
 	 * same `HxVarDecl`), class-member bindings, function
-	 * parameters (`HxParam`'s three Alt branches), the
-	 * `@:spanned('LambdaParam')` lambda-parameter struct, and enum
-	 * constructors (`SimpleCtor` / `ParamCtor`) so an annotation on
+	 * parameters (`HxParam`'s three Alt branches, reused verbatim by `HxLambdaParam`'s `Optional`
+	 * / `Required`), and enum constructors (`SimpleCtor` / `ParamCtor`) so an annotation on
 	 * an `enum E { @:kw('x') A; }` ctor attributes to that ctor — the
 	 * `MetaCall` and ctor nodes flatten as spanned siblings, so
 	 * `Meta.followingDeclHost` resolves once the kind is a host.
@@ -144,7 +143,6 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		'Required',
 		'Optional',
 		'Rest',
-		'LambdaParam',
 		'SimpleCtor',
 		'ParamCtor',
 		'VarField',
@@ -609,14 +607,23 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		// the loop's own scope frame, visible to reads inside the body,
 		// not after the loop.
 		//
-		// Catch-clause exception names and lambda-parameter names are
-		// resolved (Phase 3.2b-beta): their grammar typedefs are tagged
-		// `@:spanned('CatchClause')` / `@:spanned('LambdaParam')`, so the
-		// paired struct carries a per-instance `_span` + `_kind` and
-		// `appendNodes` surfaces it as an addressable node. `CatchClause`
-		// is a self-scoped decl (the exception var is visible only inside
-		// the clause body, like a for-loop iterator); `LambdaParam` is a
-		// decl-host that binds into the enclosing lambda scope frame.
+		// Catch-clause exception names are resolved (Phase 3.2b-beta):
+		// the three catch-clause typedefs are tagged
+		// `@:spanned('CatchClause')`, so the paired struct carries a
+		// per-instance `_span` + `_kind` and `appendNodes` surfaces it as
+		// an addressable node. `CatchClause` is a self-scoped decl (the
+		// exception var is visible only inside the clause body, like a
+		// for-loop iterator).
+		//
+		// A lambda parameter reached the same list through a
+		// `@:spanned('LambdaParam')` typedef until `327ae658` split
+		// `HxLambdaParam` into an `Optional` / `Required` Alt enum. Both
+		// ctors were already decl-hosts for `HxParam`, so the split needed
+		// no vocabulary edit — and the retired `LambdaParam` kind sat in
+		// this list, in `HaxeNamingSupport.categoryOf` and in
+		// `FieldRefScan.bindsNameHere` for three months, matching nothing
+		// and reported by nothing. `RefShapeKindProjectionTest` is what
+		// found it, and is what keeps the next one from lasting.
 		//
 		// Write-parent kinds: ctors on `HxExpr` whose first positional
 		// child carries the binding being modified. `Assign(left, right)`

@@ -461,7 +461,7 @@ class TrivialGetterCheckTest extends TrivialGetterCheckTestBase {
 
 	public function testFixShadowedThinArrowParamUsesThis(): Void {
 		// A single-parameter thin arrow projects its parameter as a bare `IdentExpr`, not a
-		// `Required` / `LambdaParam` node.
+		// `Required` node.
 		final src: String = cls(
 			'public var count(get, never):Int;\n\tprivate var _count:Int = 0;\n\tfunction get_count():Int return _count;\n'
 			+ '\tfunction m():Void { var f = count -> count + _count; trace(f(1)); }'

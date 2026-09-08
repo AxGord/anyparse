@@ -237,7 +237,7 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 			// A candidate whose occurrence set does not resolve can never be renamed, so it must not
 			// CLAIM the target either - leaving it in the set would block a provable sibling's rename
 			// over a conflict that can never materialise. NO REACHABLE INPUT IS CURRENTLY KNOWN: every
-			// kind this rule flags resolves (checked across Required / Optional / Rest / LambdaParam /
+			// kind this rule flags resolves (checked across Required / Optional / Rest /
 			// VarStmt / FinalStmt / VarMore / KeyValueBinder / ForStmt / comprehension binder /
 			// LocalFnStmt / LocalInlineFnStmt), and a binding inside a reification subtree never
 			// reaches here at all - `HaxeNamingSupport.walk` returns at `MacroExpr`, so it is never
