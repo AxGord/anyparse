@@ -2110,6 +2110,21 @@
 			"note": "every branch answers \"the tree models this\", so an expression-position `#if` loses its raw-span marker and `--names` prints an empty name list where the verbatim bytes were the whole answer"
 		},
 		{
+			"name": "M-COND-NAMES-LITERAL-TEXT-KEPT",
+			"type": "anyparse.query.CondQuery",
+			"method": "carriesLiteralText",
+			"force": "false",
+			"note": "no kind carries literal text, so `--names` reports a string literal's content among the declarations again - and asymmetrically, since the single-quoted spelling leaks through its `Literal` segment while the double-quoted one is kept out by the quote marks its raw name happens to carry"
+		},
+		{
+			"name": "M-COND-NAMES-WHOLE-LITERAL-KEPT",
+			"type": "anyparse.query.CondQuery",
+			"method": "carriesLiteralText",
+			"find": "return kind == shape.stringInterpTextKind || (shape.stringLiteralKinds ?? []).contains(kind);",
+			"replace": "return kind == shape.stringInterpTextKind;",
+			"note": "only the interpolating literal's text fragment is dropped, so a grammar whose WHOLE string literal carries its content unquoted in its own name slot gets that content back among its symbol rows - the half no Haxe fixture can see, since `DoubleStringExpr` keeps its quote marks either way"
+		},
+		{
 			"name": "M-PROGRESS-TTY-BLIND",
 			"type": "anyparse.query.cli.CliIo",
 			"method": "progressEnabled",

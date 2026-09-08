@@ -1,6 +1,7 @@
 package anyparse.query.cli.command;
 
 import anyparse.query.CondQuery;
+import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.cli.CliArgs.ResolvedInputs;
 import anyparse.query.cli.CliCommand;
 import anyparse.query.cli.CliContext;
@@ -137,6 +138,10 @@ final class CondCommand implements CliCommand {
 			regions: Array<CondRegion>
 		}> = [];
 		final skipEntries: Array<SkipEntry> = [];
+		// Hoisted: `refShape()` rebuilds a two-hundred-field structure, two of whose entries are
+		// themselves derived by a walk over the grammar — once per file and once per printed entry
+		// is a per-input cost for an answer that is a property of the PLUGIN.
+		final shape: RefShape = plugin.refShape();
 		var scanned: Int = 0;
 		for (path in paths) {
 			final source: String = CliIo.readSourceForParse(path);
@@ -150,9 +155,8 @@ final class CondCommand implements CliCommand {
 			}
 			final tree: Null<QueryNode> = CliWalk.parseWalked('cond', plugin.parseFile, path, source, singleFile, skipEntries);
 			CliIo.streamProgress('cond', ++scanned, paths.length, singleFile);
-			final found: Array<CondRegion> = CondQuery.regionsMentioning(
-				source, tree, plugin.refShape(), plugin.lexicalRegions.bind(source), defineStr
-			);
+			final found: Array<CondRegion> =
+				CondQuery.regionsMentioning(source, tree, shape, plugin.lexicalRegions.bind(source), defineStr);
 			if (found.length == 0) continue;
 			allEntries.push({
 				file: path,
@@ -178,7 +182,7 @@ final class CondCommand implements CliCommand {
 			tree: e.tree,
 			regions: e.regions.slice(0, k)
 		}, paths.length);
-		for (entry in shown) CliIo.sysPrint(CondQuery.render(entry.file, entry.source, entry.tree, entry.regions, opts));
+		for (entry in shown) CliIo.sysPrint(CondQuery.render(entry.file, entry.source, entry.tree, entry.regions, opts, shape));
 		return ctx.emptyExit(allEntries.length == 0);
 	}
 

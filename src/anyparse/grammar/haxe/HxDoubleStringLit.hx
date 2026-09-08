@@ -24,8 +24,16 @@ package anyparse.grammar.haxe;
  * since Haxe decodes before it scans for interpolation and a `\x24`
  * that is plain text here becomes a live `$` there.
  *
- * `from String to String` keeps test assertion literals compiling
- * without explicit casts.
+ * The QUERY projection follows from that, and is the half a consumer actually meets: this terminal
+ * projects as ONE `DoubleStringExpr` node whose own `name` IS the raw slice, quote marks included,
+ * while the interpolating sibling `HxInterpString` projects as a composite with no name of its own
+ * and one child per segment. The two are not symmetric and cannot be — a form that interpolates has
+ * to expose its parts, a raw terminal has none to expose. A consumer wanting the content either
+ * strips the quotes off the name (`ExtractConstant`, `PreferInline.stringLiteralValue`) or reads the
+ * span out of the source (`HaxeStringFoldSupport`); a consumer listing SYMBOLS drops both kinds by
+ * declaration, through `RefShape.stringLiteralKinds` and `RefShape.stringInterpTextKind`.
+ *
+ * `from String to String` keeps test assertion literals compiling without explicit casts.
  */
 @:re('"(?:[^"\\\\]|\\\\.)*"')
 @:rawString
