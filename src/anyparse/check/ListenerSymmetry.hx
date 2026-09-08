@@ -43,9 +43,9 @@ using StringTools;
  * `conditionalMemberKind`). A grammar declaring none of these makes the check a
  * no-op.
  *
- * Report-only: adding the missing twin is a design intent (which events to
- * unsubscribe, in what order), not a mechanical rewrite, so `fix` yields no
- * edits.
+ * Report-only for two of the three findings rather than for all of them: adding the missing twin, or reconciling a static-ness mismatch,
+ * is design intent (which events to unsubscribe, in what order) and not a mechanical rewrite, while the `not adjacent` finding IS a
+ * mechanical permutation nobody has written. `fix` yields no edits either way; its doc-comment carries the distinction and the backlog id.
  */
 @:nullSafety(Strict)
 final class ListenerSymmetry implements Check {
@@ -84,7 +84,21 @@ final class ListenerSymmetry implements Check {
 		return violations;
 	}
 
-	/** Adding the missing twin is a design decision, not a mechanical autofix — report-only. */
+	/**
+	 * No edits — and DELIBERATELY not a `NoAutofix` declaration, because the rule reports THREE finding
+	 * classes and only two of them are unmechanisable.
+	 *
+	 * A missing twin and a static-ness mismatch are design intent: which events the absent method has to
+	 * unsubscribe, and in what order, is nowhere in the signature. The third, `not adjacent`, is a pure
+	 * member permutation of a pair that BOTH already exist — exactly the edit `member-order` computes
+	 * through `MemberOrder.fixWalk`, and `member-order` itself does not report it, because two public
+	 * instance methods with a third between them are in canonical order. So the repair is unowned and
+	 * writable, and a class-wide "cannot be mechanised" stamp would have asserted the opposite.
+	 *
+	 * The framework has no third answer for this shape: `NoAutofix` is class-wide and
+	 * `Violation.declineReason` is for a fix that exists and withheld itself. Until one of the two moves,
+	 * the honest state is an empty `fix` and this paragraph. Backlog T827.
+	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {

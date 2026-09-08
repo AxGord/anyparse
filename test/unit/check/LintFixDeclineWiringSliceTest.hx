@@ -683,6 +683,63 @@ class LintFixDeclineWiringSliceTest extends Test {
 	}
 
 	/**
+	 * A rule whose autofix lives on the CROSS-FILE seam gets that said, instead of the ledger's
+	 * honest-default row about a check that "declares neither NoAutofix nor a decline reason".
+	 *
+	 * `default-repeated-argument` is the whole of the case: its per-file `fix` returns nothing BY
+	 * CONSTRUCTION, because the argument sites it deletes are in other files, and every edit it makes
+	 * arrives through `crossFileFix`. Measured on this project's own `src` + `test`, the rule lands
+	 * 46 edits in 11 files — so the row that read "the run will not say which it is" was about a rule
+	 * that does fix, on a seam the row never asked. The id list is derived from the check objects in
+	 * `ledgerLines`, so a rule gaining the seam gets the sentence without a `Cli` edit.
+	 *
+	 * Killed by arm `M-LEDGER-CROSS-FILE-MUTE`, which inverts the branch: the note then attaches to
+	 * every rule that does NOT carry the seam, which is what both halves of this fixture read.
+	 */
+	@:pin('control')
+	@:killer('M-LEDGER-CROSS-FILE-MUTE')
+	public function testACrossFileRuleIsNotReportedAsSayingNothing(): Void {
+		#if (sys || nodejs)
+		final ledger: Map<String, RuleFixOutcome> = [];
+		LintFixDriver.ledgerFileLintEdits(ledger, [
+			{
+				rule: 'cross-file-rule',
+				findings: [reasoned(null)],
+				carried: [],
+				edits: [],
+				overlapped: false,
+				refusal: null
+			}
+		], true);
+		final clause: String = 'land through `crossFileFix`';
+		final withSeam: String = LintFixLedger.unfixedFixLedger(ledger, [], [], [], ['cross-file-rule']).join('');
+		Assert.isTrue(withSeam.indexOf(clause) != -1, 'the row says where the rule\'s edits actually go: $withSeam');
+		final withoutSeam: String = LintFixLedger.unfixedFixLedger(ledger, [], [], [], []).join('');
+		Assert.isTrue(withoutSeam.indexOf(clause) == -1, 'and a rule without the seam keeps the honest default: $withoutSeam');
+		Assert.isTrue(withoutSeam.indexOf('declares neither NoAutofix nor a decline reason') != -1, withoutSeam);
+		// And the clause is gated on THAT arm, not on carrying the seam: `naming` and `trivial-getter`
+		// carry `CrossFileFix` too and have real per-file fixes, so a specific decline of theirs must
+		// not be told its edits go somewhere else.
+		final reasoning: Map<String, RuleFixOutcome> = [];
+		LintFixDriver.ledgerFileLintEdits(reasoning, [
+			{
+				rule: 'cross-file-rule',
+				findings: [reasoned('this call is shadowed')],
+				carried: [],
+				edits: [],
+				overlapped: false,
+				refusal: null
+			}
+		], true);
+		final spoken: String = LintFixLedger.unfixedFixLedger(reasoning, [], [], [], ['cross-file-rule']).join('');
+		Assert.isTrue(spoken.indexOf('this call is shadowed') != -1, spoken);
+		Assert.isTrue(spoken.indexOf(clause) == -1, 'a rule that named its own gate is not told its edits went elsewhere: $spoken');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
 	 * The census tells the four things a `--fix` run can be about a rule apart, and NAMES the ones the
 	 * run exercised.
 	 *

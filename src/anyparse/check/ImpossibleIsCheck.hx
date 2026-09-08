@@ -92,6 +92,16 @@ final class ImpossibleIsCheck implements Check {
 		return violations;
 	}
 
+	/**
+	 * No edits — and DELIBERATELY not a `NoAutofix` declaration, for the same reason as
+	 * `always-null-comparison`: the rewrite is writable through a seam that already exists, and claiming
+	 * it cannot be mechanised would be false.
+	 *
+	 * `redundant-is-check` is the always-TRUE twin and its whole `fix` is
+	 * `CheckScan.simplifyConditionFixes(plugin, source, violations, [isExprKind], _ -> true)`. The
+	 * always-FALSE direction is `_ -> false` over the same kind, and the helper handles it as a
+	 * first-class case rather than as a fallthrough. Backlog T826.
+	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {

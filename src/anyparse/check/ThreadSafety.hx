@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.query.CallGraph;
 import anyparse.query.GrammarPlugin;
@@ -49,7 +50,7 @@ using StringTools;
  * entry is `<lock pattern>/<unlock member name>` on the same type.
  */
 @:nullSafety(Strict)
-final class ThreadSafety implements Check implements ConfigAware {
+final class ThreadSafety implements Check implements ConfigAware implements NoAutofix {
 
 	private static inline final CTX_MAIN: Int = 1;
 	private static inline final CTX_BG: Int = 2;
@@ -109,6 +110,11 @@ final class ThreadSafety implements Check implements ConfigAware {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		return [];
+	}
+
+	public function noAutofixReason(): String {
+		return 'moving the work off the main thread, or narrowing what the lock covers, is a concurrency design change no span'
+			+ ' rewrite expresses';
 	}
 
 	/** Union of `graph.matchIds` over `patterns`, deduplicated. */

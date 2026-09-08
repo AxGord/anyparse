@@ -253,7 +253,9 @@ final class BoolLoopScan {
 		if (tree == null) return [];
 		final symbols: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
 		final header: UsingHeader = UsingScan.headerOf(tree, source, plugin);
-		if (UsingScan.conflictingUsing(UsingScan.usingModules(header), LAMBDA_MODULE, method(kind), plugin, () -> symbols, [])) return [];
+		final conflicted: Bool = UsingScan.conflictingUsing(
+			UsingScan.usingModules(header), LAMBDA_MODULE, method(kind), plugin, () -> symbols, []
+		);
 		// The same file the violations name, so the CALL-iterable proof resolves imports from
 		// where the loop is written — the report pass proved it against exactly that context.
 		final file: String = violations.length == 0 ? '' : violations[0].file;
@@ -269,6 +271,9 @@ final class BoolLoopScan {
 		// Parallel to `rewrites`: whether each took the EXTENSION spelling, which is what decides
 		// the `using` insert and its group. A QUALIFIED rewrite names `Lambda` outright.
 		final extensionForm: Array<Bool> = [];
+		// Parallel too: the finding each rewrite came from, and the ONLY ones a refusal below may name.
+		// A `byKey` miss got no edit for its own reason, which the `using` gate did not decide.
+		final accepted: Array<Violation> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
 			if (span == null) continue;
@@ -278,8 +283,14 @@ final class BoolLoopScan {
 			if (edit == null || CanonicalEdit.editsOverlapAny([edit], rewrites)) continue;
 			rewrites.push(edit);
 			extensionForm.push(!cand.head.qualified);
+			accepted.push(v);
 		}
-		return rewrites.length == 0 ? [] : withUsingInsert(rewrites, extensionForm, header, violations);
+		// Decided from the header BEFORE the loop and answered AFTER it, so the refusal can name the
+		// findings whose rewrites it takes down. Answering at the decision point returned an empty set
+		// and wrote nothing at all — a rule that withheld an edit without saying why, to the ledger.
+		if (!conflicted) return rewrites.length == 0 ? [] : withUsingInsert(rewrites, extensionForm, header, accepted);
+		UsingScan.noteDeclineWhereUnset(accepted, UsingScan.conflictingUsingDecline(LAMBDA_MODULE, method(kind)));
+		return [];
 	}
 
 	/**

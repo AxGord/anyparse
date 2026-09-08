@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.check.NullFlow.NullFacts;
 import anyparse.check.NullableSource.NullableSourceCfg;
@@ -77,7 +78,7 @@ using StringTools;
  * sources 2 / 3. Needs `plugin is TypeInfoProvider` for declared-type / return resolution.
  */
 @:nullSafety(Strict)
-final class NullableSwitchMissingNull implements Check {
+final class NullableSwitchMissingNull implements Check implements NoAutofix {
 
 	public function new() {}
 
@@ -122,11 +123,25 @@ final class NullableSwitchMissingNull implements Check {
 		return violations;
 	}
 
-	/** Route null through the switch's lone wildcard/default arm — rewrite its head to `case null, _:`. */
+	/**
+	 * Report-only, and the trigger is why: the rule fires only where the switch has NO wildcard and no
+	 * null arm, so there is no catch-all body a `case null` could route into.
+	 *
+	 * Until this slice the sentence here read "Route null through the switch's lone wildcard/default arm
+	 * — rewrite its head to `case null, _:`", which described the autofix the rule had before its
+	 * premise was INVERTED (`abbbbd3a`): the old rule flagged a wildcard-carrying switch, the new one
+	 * excludes it by construction, and the commit that swapped them said the autofix went with the old
+	 * premise. The plan outlived the shape it planned for and read as work waiting to be done.
+	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		return [];
+	}
+
+	public function noAutofixReason(): String {
+		return 'the trigger IS the absence of a catch-all arm, so there is no body to route null into and what a `case null` should'
+			+ ' DO is the author\'s decision';
 	}
 
 	/** Bundle the required + optional `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */

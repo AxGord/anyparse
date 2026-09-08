@@ -162,7 +162,9 @@ final class PreferFind implements Check {
 		// index when it has one, the caller's otherwise.
 		final symbols: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
 		final header: UsingHeader = UsingScan.headerOf(tree, source, plugin);
-		if (UsingScan.conflictingUsing(UsingScan.usingModules(header), LAMBDA_MODULE, FIND_METHOD, plugin, () -> symbols, [])) return [];
+		final conflicted: Bool = UsingScan.conflictingUsing(
+			UsingScan.usingModules(header), LAMBDA_MODULE, FIND_METHOD, plugin, () -> symbols, []
+		);
 		final byKey: Map<String, FixCandidate> = [];
 		// The same file the violations name, so the shadow proof resolves imports from where the
 		// loop is written — the report pass proved it against exactly that context.
@@ -180,6 +182,9 @@ final class PreferFind implements Check {
 		// Only an EXTENSION-form rewrite needs `Lambda` in scope; a qualified one names the module
 		// outright, so a file whose every claimed site is shadowed gets the calls and no import.
 		var rewrote: Bool = false;
+		// The findings whose loop actually became an edit, and the ONLY ones the refusals below may
+		// name: a `byKey` miss got no edit for its own reason, and the `using` gate did not decide it.
+		final accepted: Array<Violation> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
 			if (span == null) continue;
@@ -188,13 +193,22 @@ final class PreferFind implements Check {
 			final candEdits: Null<Array<{ span: Span, text: String }>> = buildEdits(cand, source, s);
 			if (candEdits == null || CanonicalEdit.editsOverlapAny(candEdits, edits)) continue;
 			for (e in candEdits) edits.push(e);
+			accepted.push(v);
 			if (!cand.qualified) rewrote = true;
+		}
+		// The conflict is decided BEFORE the loop (it reads only the header) and answered AFTER it, so
+		// the refusal can name the findings whose rewrites it takes down. Answering at the decision
+		// point returned an empty set and wrote nothing at all, which the ledger reads as a rule that
+		// withheld an edit without saying why.
+		if (conflicted) {
+			UsingScan.noteDeclineWhereUnset(accepted, UsingScan.conflictingUsingDecline(LAMBDA_MODULE, FIND_METHOD));
+			return [];
 		}
 		// `false` is the refusal, in either of the two ways it comes: the file declares `using Lambda;`
 		// only inside a `#if` region that leaves a rewritten call out, or an accepted rewrite already
 		// covers the byte the declaration would be spliced at. Neither the extension call nor a second,
 		// unguarded declaration is safe, so the whole edit set goes.
-		return rewrote && !UsingScan.appendUsingInsert(header, LAMBDA_MODULE, edits, violations) ? [] : edits;
+		return rewrote && !UsingScan.appendUsingInsert(header, LAMBDA_MODULE, edits, accepted) ? [] : edits;
 	}
 
 	/**

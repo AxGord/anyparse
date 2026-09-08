@@ -123,10 +123,17 @@ final class UsingScan {
 	 * that gate a `using` in the `#if` arm read as covering a call in the `#else` arm
 	 * (`ModuleScan.guardedImportScopes` holds the measurement).
 	 *
-	 * An empty `offsets` answers `InScope`, since a caller with no site to rewrite needs no
-	 * declaration. That makes the seam ORDER-dependent: `offsets` must be every site the caller
-	 * still intends to emit, so a caller that decides the insert before it has collected its edits
-	 * gets a rewritten call with no `using` and no diagnostic. The containment
+	 * An empty `offsets` is a REFUSAL too — but only HERE, once a guarded region is in play. An
+	 * unguarded `using` answers `InScope` on the first line whatever the offsets say, and a module
+	 * the file declares nowhere answers `Absent` two lines down, so the empty case reaches the
+	 * coverage loop only in the one shape that can be wrong. There it is decisive: no offset is no
+	 * EVIDENCE of coverage, and the loop would read it as proof — a caller that decided the insert
+	 * before it had collected its edits was told the guarded `using` covered sites it had not shown,
+	 * kept its rewrites, and wrote an extension call that binds nothing in the builds the region is
+	 * compiled out of, with no diagnostic, because `InScope` is the one answer that declines
+	 * nothing. That makes `offsets` a contract rather than a hint: it must be every site the caller
+	 * still intends to emit. A caller that genuinely has no site to rewrite loses nothing to the
+	 * refusal: its edit set is empty either way, and the refusal names no finding. The containment
 	 * test is SPAN coverage, not condition equivalence, so a call under its
 	 * own `#if (sys || nodejs)` and a `using` under a SEPARATE region spelling the same condition read as uncovered
 	 * and refuse. Answering that pair would mean deciding whether one condition implies another, chain of enclosing
@@ -139,6 +146,8 @@ final class UsingScan {
 		// flip from `Guarded` to `Absent` — from refusing to splicing a second `using`.
 		final regions: Array<Null<Span>> = [for (g in header.guardedUsings) if (bindsModule(g.decl.name, module)) g.region];
 		if (regions.length == 0) return UsingScope.Absent;
+		// Ask BEFORE the loop, which passes vacuously on an empty array and would answer `InScope`.
+		if (offsets.length == 0) return UsingScope.Guarded;
 		for (offset in offsets) if (!regions.exists(r -> r != null && offset >= r.from && offset < r.to)) return UsingScope.Guarded;
 		return UsingScope.InScope;
 	}
@@ -152,8 +161,12 @@ final class UsingScan {
 	 * is already covered by an accepted rewrite and the declaration cannot be spliced at all. Whichever
 	 * it was, the answer NEVER means "inserted" — the only way `true` comes back is with the insert in
 	 * `edits` or the module already in scope.
-	 * `violations` are the findings that set is built from, and the refusal is written on them: unconditionally on the
-	 * `Guarded` branch, and on every one carrying no reason yet on the covered branch. A `fix` that
+	 * `violations` are the findings that set is built from — ONLY those, and the contract is load-bearing rather than
+	 * descriptive: the refusal is written on every one of them, unconditionally on the `Guarded` branch and on every one
+	 * carrying no reason yet on the covered branch, so a caller handing over its whole `run` output makes this gate
+	 * answer for findings it never decided. A site the caller skipped for its OWN cause (an unproven range, a candidate
+	 * key that missed) also gets no edit, which is true and is not this gate's doing; naming it here is the
+	 * mis-attribution `noteDeclineWhereUnset` avoids in the other direction. A `fix` that
 	 * returns nothing and says nothing reads to the ledger as a rule that withheld an edit without a reason. The rules that
 	 * insert one `using` per file share this seam rather than each spelling the same branches; `prefer-static-extension`
 	 * decides per SITE instead (one file can hold a covered call and an uncovered one) and calls `usingScopeAt` directly.
@@ -187,6 +200,24 @@ final class UsingScan {
 		return 'the file declares `using $module` only inside a `#if` region $subject sits outside of, so the extension call'
 			+ ' would not resolve in the builds that region is compiled out of, and a second unguarded `using` would change'
 			+ ' what the region\'s own calls resolve to';
+	}
+
+	/**
+	 * Why a rewrite is refused when another `using` in the same file could also supply `method` — the THIRD way this seam says
+	 * no, and the one that used to say nothing at all. The refusal it explains is FILE-WIDE: a caller that mixes extension-form
+	 * and qualified rewrites drops both, and the sentence says so rather than implying every dropped rewrite needed the module
+	 * in scope. Narrowing it to the extension-form sites is T829 - the back-link exists (`PreferFind.rewrote`,
+	 * `BoolLoopScan.extensionForm`), so it is a behaviour change with its own measurement, not a wording fix.
+	 *
+	 * `conflictingUsing` answers a Bool, so the conflicting module is not nameable here; what the
+	 * reader needs is the rule, which is the same in every file it fires on. Written in one place for
+	 * the same reason `guardedUsingDecline` is: three rules take this branch and a hand-spelled copy
+	 * in each would drift.
+	 */
+	public static function conflictingUsingDecline(module: String, method: String): String {
+		return 'another `using` in this file could also supply `$method`, and Haxe resolves static extensions in REVERSE'
+			+ ' declaration order, so a rewritten extension call could bind there instead of `$module.$method` — the refusal is'
+			+ ' WHOLESALE, so a rewrite that would have named the module outright and needed no `using` goes down with it';
 	}
 
 	/**

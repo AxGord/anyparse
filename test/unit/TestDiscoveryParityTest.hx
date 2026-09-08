@@ -358,6 +358,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.UnusedPrivateCheckTest',
 		'unit.check.UnusedPublicMemberCheckTest',
 		'unit.check.UnusedReturnValueTest',
+		'unit.check.UsingDeclineAttributionTest',
 		'unit.check.UsingInsertRefusalTest',
 		'unit.check.WhileTrueConditionCheckTest',
 		'unit.cli.AddressCliTest',
@@ -993,6 +994,10 @@ class TestDiscoveryParityTest extends Test {
 			'unit.ProseClaimCensusTest#testAnArmSentenceIsReadAsAnArmClaim :: control :: M-CLAIM-NOKINDS',
 			'unit.ProseClaimCensusTest#testTheCodeSenseOfControlIsNotAControlClaim :: control :: M-CLAIM-CODE-BLIND',
 			'unit.ProseClaimCensusTest#testTheTwoUnrecordableKindsStayOnTheList :: control :: M-CLAIM-NOKINDS',
+			'unit.check.BuiltinFixClassCensusTest#testEveryDeclaredNoAutofixRuleAnswersNoEdit :: control :: M-NO-AUTOFIX-STILL-EDITS',
+			'unit.check.BuiltinFixClassCensusTest#testNoAutofixReasonIsNotTheRuleNameReadBack :: control :: '
+				+ 'M-NO-AUTOFIX-REASON-IS-THE-RULE-NAME',
+			'unit.check.BuiltinFixClassCensusTest#testNoDeclaredNoAutofixRuleCarriesAFixSeam :: guard :: ',
 			'unit.check.CommentWidthCheckTest#testACommentInARawCondRegionIsReportOnly :: control :: M-COMMENT-WIDTH-OPAQUE-OPEN',
 			'unit.check.CommentWidthCheckTest#testAFencedCodeSampleIsReportOnly :: control :: M-COMMENT-WIDTH-FENCE-BLIND',
 			'unit.check.CommentWidthCheckTest#testAOneLineBlockOverByItsCloserNamesTheCloser :: control :: M-COMMENT-WIDTH-CLOSER-UNSEEN',
@@ -1041,6 +1046,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.JoinSingleUseLocalCheckTest#testTrailingStatementWithoutInterpolationStillFlagged :: control :: '
 				+ 'M-JSUL-UNINDEXED-NAME-ALWAYS',
 			'unit.check.JoinSingleUseLocalCheckTest#testUnconditionalFieldChainStillFlagged :: control :: M-JSUL-PATH-ALWAYS-CONDITIONAL',
+			'unit.check.LintFixDeclineWiringSliceTest#testACrossFileRuleIsNotReportedAsSayingNothing :: control :: '
+				+ 'M-LEDGER-CROSS-FILE-MUTE',
 			'unit.check.LintFixDeclineWiringSliceTest#testAnAcceptedFileIsWrittenAndBlamesNobody :: control :: M-LINTFIX-ACCEPTED-BLAMED',
 			'unit.check.NamingCheckCrossFileFixTest#testCrossFileRenameAsksTheResolutionScopeForUnreadableFiles :: control :: '
 				+ 'M-NAMING-SKIPSCAN-REPORT-INDEX,M-SKIPSCAN-SCOPEWIDE',
@@ -1134,6 +1141,21 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.UnguardedNullableDerefTest#testSafeNavGuardNarrowsRoot :: control :: M-SAFENAV-NO-NARROW',
 			'unit.check.UnreachableCatchTest#testSubtypeAfterSupertypeFlagged :: control :: M-ISSUBTYPE-FALSE',
 			'unit.check.UnusedPublicMemberCheckTest#testInterpolationEscapeKeepsTheMember :: control :: M-NAMEOUTSIDE-TRUE',
+			'unit.check.UsingDeclineAttributionTest#testCounterLoopConflictNamesTheSkippedSiteAndKeepsTheOther :: control :: '
+				+ 'M-COUNT-CONFLICT-SILENT',
+			'unit.check.UsingDeclineAttributionTest#testCounterLoopGuardRefusalNamesOnlyTheSurvivingFinding :: control :: '
+				+ 'M-COUNT-GUARDED-MIS-ATTRIBUTED',
+			'unit.check.UsingDeclineAttributionTest#testEmptyOffsetsRefuseInsteadOfAnsweringInScope :: control :: '
+				+ 'M-USING-SCOPE-EMPTY-OFFSETS-INSCOPE',
+			'unit.check.UsingDeclineAttributionTest#testEmptyOffsetsStillAnswerAbsentForAnUndeclaredModule :: guard :: ',
+			'unit.check.UsingDeclineAttributionTest#testExistsConflictingUsingRefusalNamesItself :: control :: M-BOOL-LOOP-CONFLICT-SILENT',
+			'unit.check.UsingDeclineAttributionTest#testFindConflictingUsingRefusalNamesItself :: control :: '
+				+ 'M-FIND-CONFLICT-SILENT,M-FIND-CONFLICT-MIS-ATTRIBUTED',
+			'unit.check.UsingDeclineAttributionTest#testGuardRefusalNamesOnlyTheFindingItTookDown :: control :: '
+				+ 'M-GUARDED-DECLINE-MIS-ATTRIBUTED',
+			'unit.check.UsingDeclineAttributionTest#testLpadConflictingUsingRefusalNamesItself :: control :: M-LPAD-CONFLICT-SILENT',
+			'unit.check.UsingDeclineAttributionTest#testOffsetInsideTheGuardedRegionIsInScope :: guard :: ',
+			'unit.check.UsingDeclineAttributionTest#testOffsetOutsideTheGuardedRegionRefuses :: guard :: ',
 			'unit.check.UsingInsertRefusalTest#testBoolLoopCoveredAnchorDropsTheWholeSet :: control :: M-BOOL-LOOP-USING-COVERED-KEPT',
 			'unit.check.UsingInsertRefusalTest#testBoolLoopUncoveredAnchorGroupsTheInsert :: guard :: ',
 			'unit.check.UsingInsertRefusalTest#testCoveredAnchorRefusesAndAppendsNothing :: control :: M-USING-INSERT-COVERED-SILENT',
@@ -1826,7 +1848,18 @@ class TestDiscoveryParityTest extends Test {
 			'M-PROBE-STAGE-ANY-TARGET',
 			'M-TEST-SUMMARY-GLOBAL-DEFAULT',
 			'M-STDLIB-DUP-WORKDIR-SHARED',
-			'M-STDLIB-DUP-WORK-ANY-TARGET'
+			'M-STDLIB-DUP-WORK-ANY-TARGET',
+			'M-USING-SCOPE-EMPTY-OFFSETS-INSCOPE',
+			'M-LPAD-CONFLICT-SILENT',
+			'M-FIND-CONFLICT-SILENT',
+			'M-BOOL-LOOP-CONFLICT-SILENT',
+			'M-GUARDED-DECLINE-MIS-ATTRIBUTED',
+			'M-NO-AUTOFIX-STILL-EDITS',
+			'M-NO-AUTOFIX-REASON-IS-THE-RULE-NAME',
+			'M-LEDGER-CROSS-FILE-MUTE',
+			'M-FIND-CONFLICT-MIS-ATTRIBUTED',
+			'M-COUNT-CONFLICT-SILENT',
+			'M-COUNT-GUARDED-MIS-ATTRIBUTED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
