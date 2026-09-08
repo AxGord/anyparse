@@ -139,15 +139,17 @@ final class CondQuery {
 	 * The distinct `<Kind> <name>` rows of every projected node lying wholly inside `body`, in
 	 * document order — what `--names` prints instead of the branch source.
 	 *
-	 * Named nodes rather than a declaration/call classification: a name slot is what every grammar carries,
-	 * so the answer stays grammar-agnostic, and for the question the flag exists to answer ("what does this
-	 * branch touch") a declaration and a call target are both wanted. Only IDENTIFIER-shaped names — see
-	 * `collectNames`, whose filter is what keeps a string literal out of a list of symbols. Empty for a
-	 * branch with no tree, which is why the caller prints the raw body for those instead.
+	 * Named nodes rather than a declaration/call classification: a name slot is what every grammar
+	 * carries, so the answer stays grammar-agnostic, and for the question the flag exists to answer
+	 * ("what does this branch touch") a declaration and a call target are both wanted. SYMBOLS only —
+	 * `collectNames` drops a name that is not identifier-shaped AND a node whose kind the grammar
+	 * declares as carrying literal text, so a string literal's content stays out of the list whichever
+	 * way it is quoted. Empty for a branch with no tree, which is why the caller prints the raw body
+	 * for those instead.
 	 */
-	public static function namesIn(tree: Null<QueryNode>, body: Span): Array<String> {
+	public static function namesIn(tree: Null<QueryNode>, body: Span, shape: RefShape): Array<String> {
 		final out: Array<String> = [];
-		if (tree != null) collectNames(tree, body, out);
+		if (tree != null) collectNames(tree, body, shape, out);
 		return out;
 	}
 
@@ -169,7 +171,7 @@ final class CondQuery {
 	 * it. Empty when nothing was kept, so a caller can concatenate per-file reports.
 	 */
 	public static function render(
-		file: String, source: String, tree: Null<QueryNode>, found: Array<CondRegion>, opts: CondRenderOptions
+		file: String, source: String, tree: Null<QueryNode>, found: Array<CondRegion>, opts: CondRenderOptions, shape: RefShape
 	): String {
 		final buf: StringBuf = new StringBuf();
 		final body: StringBuf = new StringBuf();
@@ -180,7 +182,7 @@ final class CondQuery {
 			// Trailing blanks are stripped per line: an inline region's body is the text between
 			// two directives on one line, so it arrives with the space before the next `#else`
 			// still on it, and a whitespace-only interior line would otherwise print as indent.
-			for (line in branchLines(source, tree, branch, opts)) {
+			for (line in branchLines(source, tree, branch, opts, shape)) {
 				final text: String = line.rtrim();
 				body.add(text == '' ? '\n' : '$BODY_INDENT$text\n');
 			}
@@ -267,52 +269,61 @@ final class CondQuery {
 	 * Append the distinct `<Kind> <name>` rows of every named node wholly inside `body`, in document
 	 * order.
 	 *
-	 * A name that is not SYMBOL-shaped (`isSymbolName`) is dropped, because a leaf's name slot is not always a
-	 * symbol: a string literal carries its decoded content there, so the flag's own question ("what
-	 * does this branch touch") came back with rows like `Literal .hx` and half a diagnostic message
-	 * between the declarations. Asked of the text rather than of a kind list, so it needs no grammar
-	 * seam and no per-grammar literal vocabulary; the cost is that a literal whose content happens to spell one is
-	 * still reported, and a DOTTED path counts — so a bare `'probe.hx'` comes back as `Literal probe.hx` (649 distinct
-	 * such rows over `src` + `test`). What keeps that readable is the KIND prefix every row carries, not the filter.
+	 * Two filters, answering different halves of "is this name a SYMBOL".
 	 *
-	 * S178 re-checked whether that cost narrows WITHOUT a kind list and found it does not, plus two
-	 * more precision gaps in the same family, all left as-is for the reason above:
+	 * SHAPE — a name that is not identifier-shaped (`isSymbolName`) contributes no row, because a
+	 * leaf's name slot is not always a symbol. Asked of the text, so it needs no grammar seam; and it
+	 * cannot finish the job, since `'probe.hx'` IS a dotted pair of identifiers. Half a diagnostic
+	 * message and a file name reached a list of declarations that way.
 	 *
-	 * - `@:native(...)` and every other metadata argument is invisible here, not filtered — `QueryNode`
-	 *   (`anyparse.query.QueryNode`) carries only `kind` / `name` / `children` / `span` / `type`, by its
-	 *   own doc's design; a modifier is not a child, so `collectNames`'s walk never reaches one. This is
-	 *   not local to `--names`: no `anyparse.query` consumer sees a metadata argument through `QueryNode`
-	 *   today, so fixing it here alone would be one grammar's leaf treated as a special case, not a real
-	 *   fix.
-	 * - The `probe.hx` cost is QUOTE-SENSITIVE in the Haxe plugin, and asymmetrically: a single-quoted
-	 *   `'probe.hx'` projects as `SingleStringExpr` wrapping a `Literal` child whose `name` is the
-	 *   decoded text (`probe.hx`, no quotes) — SYMBOL-shaped, so it is reported (the case above). The
-	 *   same content double-quoted, `"probe.hx"`, projects as one `DoubleStringExpr` node whose OWN
-	 *   `name` is the RAW source text WITH its quote marks (`"probe.hx"`) — never SYMBOL-shaped, so it
-	 *   is silently dropped instead. Two spellings of one literal, two different answers; confirmed via
-	 *   `apq ast` on `trace('probe.hx'); trace("probe.hx");` at HEAD `ed52a241`. This is a
-	 *   `HaxeQueryPlugin` projection asymmetry (`DoubleStringExpr` never decodes into a `Literal`
-	 *   child the way `SingleStringExpr` does), not a `CondQuery` bug, and `DoubleStringExpr`'s raw
-	 *   `name` has ~20 other kind-matching readers project-wide (`apq mentions DoubleStringExpr src`) —
-	 *   changing what it carries needs its own review of every one of them, well past this flag.
+	 * KIND — a node whose kind is the grammar's `stringInterpTextKind`, or one of its `stringLiteralKinds`,
+	 * carries literal CONTENT in its name slot BY DECLARATION and contributes no row either. Its
+	 * CHILDREN are still walked: a `$name` (`stringInterpIdentKind`) and a `${ … }`
+	 * (`stringInterpBlockKind`) are real references the branch really does touch. Measured over `src` +
+	 * `test`, this drops 795 / 900 / 1481 `Literal` rows for `nodejs` / `sys` / `macro`, and rows of no
+	 * other kind.
 	 *
-	 * Narrowing `collectNames` itself would need one of: a NEW declared `RefShape` field naming the
-	 * per-grammar "decoded string-literal piece" kind (Haxe: `Literal`) — `RefShape.stringLiteralKinds`
-	 * already names the two STRING kinds but not the piece kind interpolation splits into — or an
-	 * ancestor-aware walk that drops any node under a `stringLiteralKinds` subtree. Either is a real
-	 * grammar-seam change, not a dictionary hardcoded here, but it is a bigger and riskier edit than
-	 * this flag's own scope; left undone, and the choice is on the record now rather than re-derived
-	 * next time.
+	 * The kind filter is what makes the two spellings of ONE literal answer alike. They do not project
+	 * alike and are not meant to: `'x'` is a composite whose text lives in `Literal` CHILD segments —
+	 * segments are what interpolation needs — while `"x"` is one `@:rawString` terminal whose own
+	 * `name` is the source slice WITH its quotes (`HxDoubleStringLit` records why the quotes stay).
+	 * Before the kind filter the first leaked and the second was kept out only by those quote marks,
+	 * which is an accident of the raw spelling and not a contract anything states.
+	 *
+	 * Two neighbouring gaps recorded here by S178 were re-measured in S181 and are NOT open:
+	 *
+	 * - METADATA ARGUMENTS ARE VISIBLE. `QueryNode` carries them as CHILDREN of the metadata node —
+	 *   `@:native('Foo.Bar')` projects `(MetaCall @:native (SingleStringExpr (Literal Foo.Bar)))`,
+	 *   `@:access(pkg.Other)` its `FieldAccess` / `IdentExpr` pair — and this walk reaches them like
+	 *   any other child, while `apq meta '@:native(...)'` matches the argument exactly. What no row
+	 *   carries is the metadata NAME, and that is `isSymbolName` rejecting a leading `@`.
+	 * - NEITHER FORM IS DECODED. Both string terminals are `@:rawString`, so `'a\tb'` yields the
+	 *   four-character `Literal a\tb` and not a tab; a consumer wanting the runtime value calls
+	 *   `HxStringEscape`.
 	 */
-	private static function collectNames(node: QueryNode, body: Span, out: Array<String>): Void {
+	private static function collectNames(node: QueryNode, body: Span, shape: RefShape, out: Array<String>): Void {
 		final span: Null<Span> = node.span;
 		if (span != null && (span.to <= body.from || span.from >= body.to)) return;
 		final name: Null<String> = node.name;
-		if (name != null && isSymbolName(name) && span != null && span.from >= body.from && span.to <= body.to) {
+		if (
+			name != null && !carriesLiteralText(node.kind, shape) && isSymbolName(name) && span != null && span.from >= body.from
+			&& span.to <= body.to
+		) {
 			final row: String = '${node.kind} $name';
 			if (!out.contains(row)) out.push(row);
 		}
-		for (child in node.children) collectNames(child, body, out);
+		for (child in node.children) collectNames(child, body, shape, out);
+	}
+
+	/**
+	 * Whether `kind`'s name slot holds literal TEXT rather than a symbol — an interpolating
+	 * literal's text fragment (`stringInterpTextKind`) or a whole string literal (`stringLiteralKinds`).
+	 *
+	 * A grammar that declares neither answers false for everything, which is the pre-seam behaviour:
+	 * a plugin gets literal content back in its symbol rows until it names the kinds that carry it.
+	 */
+	private static function carriesLiteralText(kind: String, shape: RefShape): Bool {
+		return kind == shape.stringInterpTextKind || (shape.stringLiteralKinds ?? []).contains(kind);
 	}
 
 	/**
@@ -346,9 +357,11 @@ final class CondQuery {
 	}
 
 	/** What goes under a branch's head line: its name rows under `--names`, else its own source; never nothing. */
-	private static function branchLines(source: String, tree: Null<QueryNode>, branch: CondBranch, opts: CondRenderOptions): Array<String> {
+	private static function branchLines(
+		source: String, tree: Null<QueryNode>, branch: CondBranch, opts: CondRenderOptions, shape: RefShape
+	): Array<String> {
 		if (opts.names && !branch.raw) {
-			final rows: Array<String> = namesIn(tree, branch.body);
+			final rows: Array<String> = namesIn(tree, branch.body, shape);
 			return capped(rows.length > 0 ? rows : ['(no named node in this branch)'], opts.maxBody, 'name');
 		}
 		final lines: Array<String> = bodyLines(source, branch.body);

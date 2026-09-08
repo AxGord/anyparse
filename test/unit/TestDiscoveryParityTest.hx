@@ -1487,6 +1487,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CondQueryTest#testABranchBodyNeverCarriesADirective :: control :: M-COND-BODY-SWALLOWS-DIRECTIVES',
 			'unit.query.CondQueryTest#testANestedRegionRunsInsideItsParentBranch :: control :: M-COND-INNERMOST-FRAME',
 			'unit.query.CondQueryTest#testARawExpressionSpliceIsFlaggedAndKeepsItsBytes :: control :: M-COND-RAW-NEVER-MARKED',
+			'unit.query.CondQueryTest#testAWholeStringLiteralKindIsDroppedByItsDeclaration :: control :: M-COND-NAMES-WHOLE-LITERAL-KEPT',
+			'unit.query.CondQueryTest#testNamesInReportsSymbolsAndNotLiteralContent :: control :: M-COND-NAMES-LITERAL-TEXT-KEPT',
 			'unit.query.CondRegionKindDerivationTest#testAModelledRegionStaysInvisibleToTheGate :: guard :: ',
 			'unit.query.CondRegionKindDerivationTest#testEveryDirectiveAwareTerminalCarriesItsMarker :: guard :: ',
 			'unit.query.CondRegionKindDerivationTest#testTheConditionalVocabularyIsTheRawCaptureOneWidened :: control :: '
@@ -1866,6 +1868,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-COND-BODY-SWALLOWS-DIRECTIVES',
 			'M-COND-INNERMOST-FRAME',
 			'M-COND-RAW-NEVER-MARKED',
+			'M-COND-NAMES-LITERAL-TEXT-KEPT',
+			'M-COND-NAMES-WHOLE-LITERAL-KEPT',
 			'M-PROGRESS-TTY-BLIND',
 			'M-BATCH-SEPARATOR-BLIND',
 			'M-SOURCE-READ-GUARD-OFF',

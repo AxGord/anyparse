@@ -1877,6 +1877,24 @@ typedef RefShape = {
 	@:optional var stringInterpBlockKind: String;
 
 	/**
+	 * The plain-TEXT fragment kind of an interpolating string literal (Haxe `Literal` — one
+	 * `HxStringLitSegment` run, the stretch between two interpolation triggers). Its `name` slot
+	 * carries the literal's raw CONTENT, never a symbol, so a consumer listing what a region
+	 * TOUCHES has to drop it by KIND: the content is arbitrary text and no test on the text can
+	 * tell a file name from an identifier. `apq cond --names` reported `Literal probe.hx` rows
+	 * among the declarations for exactly that reason — 795 / 900 / 1481 of them over `src` + `test`
+	 * for `nodejs` / `sys` / `macro`.
+	 *
+	 * Third of the segment triple, beside `stringInterpIdentKind` and `stringInterpBlockKind`, and the only
+	 * one of the three whose name is content rather than a reference. A grammar's non-interpolating string is
+	 * one terminal already named by `stringLiteralKinds`, so the same consumer drops it there — and
+	 * that pairing is what makes the two spellings of one literal answer alike, instead of the
+	 * double-quoted one being kept out only by the quote marks its raw `name` happens to carry.
+	 * Optional; unset leaves such a consumer reporting literal content.
+	 */
+	@:optional var stringInterpTextKind: String;
+
+	/**
 	 * The language's reserved words — identifiers no binding may be named. A check that
 	 * DERIVES a new identifier (`no-underscore-prefix` strips a leading `_`) must refuse a
 	 * result that lands on one, or it emits source the parser rejects. A naming policy cannot
@@ -1990,10 +2008,14 @@ typedef RefShape = {
 	@:optional var nullableNumericReturnCalls: Array<String>;
 
 	/**
-	 * String-literal node kinds (Haxe `SingleStringExpr` / `DoubleStringExpr`) —
-	 * the `unchecked-nullable` check skips a numeric-operator node bearing one
-	 * as an operand, since `+` there is string concatenation (`n + "x"`), not a
-	 * numeric use. Optional; unset removes that carve-out.
+	 * String-literal node kinds (Haxe `SingleStringExpr` / `DoubleStringExpr`) — every
+	 * kind whose whole span IS a string literal, however the grammar spells the quotes.
+	 *
+	 * Written for `unchecked-nullable`, which skips a numeric-operator node bearing one as an operand (`+` there is string
+	 * concatenation, `n + "x"`, not a numeric use), and read by 38 sites across 23 files by the time anyone checked — so treat it
+	 * as the general seam it became, not as that one check's carve-out. Two readings it now has to serve at once: "this operand
+	 * is a string" and, paired with `stringInterpTextKind`, "this node's name slot carries literal TEXT and not a symbol".
+	 * Optional; unset makes each consumer fall back to its own default, which for `unchecked-nullable` is losing the carve-out.
 	 */
 	@:optional var stringLiteralKinds: Array<String>;
 

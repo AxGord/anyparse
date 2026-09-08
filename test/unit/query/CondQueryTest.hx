@@ -2,6 +2,7 @@ package unit.query;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CondQuery;
+import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 import utest.Assert;
@@ -28,6 +29,9 @@ using StringTools;
  */
 @:nullSafety(Strict)
 class CondQueryTest extends Test {
+
+	/** The Haxe grammar's own vocabulary — what tells `namesIn` which kinds carry literal text. */
+	private static final SHAPE: RefShape = new HaxeQueryPlugin().refShape();
 
 	/** A flat three-branch region: no nesting, so no body of it may contain any directive at all. */
 	private static final FLAT: String = fn('#if nodejs\n\t\ta();\n\t\t#elseif other\n\t\tb();\n\t\t#else\n\t\tc();\n\t\t#end');
@@ -131,7 +135,7 @@ class CondQueryTest extends Test {
 		Assert.same([true, true], [for (branch in found[0].branches) branch.raw]);
 		Assert.same(['1;', '2;'], [for (branch in found[0].branches) text(RAW, branch.body).trim()]);
 		Assert.same([[], []], [
-			for (branch in found[0].branches) CondQuery.namesIn(new HaxeQueryPlugin().parseFile(RAW), branch.body)
+			for (branch in found[0].branches) CondQuery.namesIn(new HaxeQueryPlugin().parseFile(RAW), branch.body, SHAPE)
 		]);
 		// …and a region the tree DOES model is not flagged, so the flag is about this shape and not
 		// about every region.
@@ -226,30 +230,77 @@ class CondQueryTest extends Test {
 		final src: String = fn('#if nodejs\n\t\tvar v:Int = 1;\n\t\tuse(v);\n\t\t#else\n\t\tother();\n\t\t#end');
 		final found: Array<CondRegion> = regionsOf(src, 'nodejs');
 		final tree: QueryNode = new HaxeQueryPlugin().parseFile(src);
-		final first: Array<String> = CondQuery.namesIn(tree, found[0].branches[0].body);
+		final first: Array<String> = CondQuery.namesIn(tree, found[0].branches[0].body, SHAPE);
 		Assert.isTrue(first.indexOf('VarStmt v') >= 0, 'the declaration is missing: $first');
 		Assert.isTrue(first.indexOf('IdentExpr use') >= 0, 'the call target is missing: $first');
-		Assert.same(['IdentExpr other'], CondQuery.namesIn(tree, found[0].branches[1].body));
+		Assert.same(['IdentExpr other'], CondQuery.namesIn(tree, found[0].branches[1].body, SHAPE));
 	}
 
 	/**
-	 * `namesIn` reports SYMBOLS, not every name slot: a guarded import's whole dotted path is a row, and a string
-	 * literal's content — which the tree also carries in a name slot — is not, WHEN it is not identifier-shaped. The
-	 * fixture's `/probe.hx` is kept out by its leading slash; a bare `probe.hx` is a dotted path of identifiers and
-	 * would still come back as `Literal probe.hx`, so what this pins is the filter, not the absence of every literal.
+	 * `namesIn` reports SYMBOLS, and the two spellings of ONE string literal answer alike.
 	 *
-	 * Both directions were wrong at first in the same fixture. Filtering to a bare identifier dropped
-	 * the import path and left a guarded import block reporting nothing; not filtering at all put half
-	 * a diagnostic message and a file extension in a list of symbols.
+	 * A guarded import's whole dotted path is a row; a literal's content is not. That has to be asked
+	 * by KIND rather than of the text: `'probe.hx'` IS a dotted pair of identifiers, so the shape
+	 * filter alone reported it as a `Literal probe.hx` row while the double-quoted twin was kept out
+	 * only because its raw `name` still carries the quote marks. Two spellings, two answers, and
+	 * neither of them the symbol list the flag promises.
+	 *
+	 * The `$dir` read is what keeps the kind filter from being a blanket subtree skip: an interpolation
+	 * is a real reference and stays. One `Assert.same` over the whole ordered list, so no half of this
+	 * can pass on its own.
+	 *
+	 * Both directions were wrong at first in the earlier fixture. Filtering to a bare identifier
+	 * dropped the import path and left a guarded import block reporting nothing; not filtering at all
+	 * put half a diagnostic message and a file extension in a list of symbols.
+	 *
+	 * CONTROL for the kind filter. KILLED by arm `M-COND-NAMES-LITERAL-TEXT-KEPT`, which answers "no
+	 * literal text here" for every kind — the pre-seam behaviour, and what a grammar declaring no `stringInterpTextKind` still gets.
 	 */
+	@:pin('control')
+	@:killer('M-COND-NAMES-LITERAL-TEXT-KEPT')
 	public function testNamesInReportsSymbolsAndNotLiteralContent(): Void {
 		final src: String = 'package pkg;\n\n#if nodejs\nimport js.node.ChildProcess;\n#end\n\nclass C {\n\tfunction f():Void {\n'
-			+ '\t\t#if nodejs\n\t\tsave(dir + \'/probe.hx\');\n\t\t#end\n\t}\n}';
+			+ '\t\t#if nodejs\n\t\tsave(dir + \'/probe.hx\');\n\t\tlog(\'probe.hx\');\n\t\tlog("probe.hx");\n'
+			+ '\t\tlog(\'at $$dir/probe.hx\');\n\t\t#end\n\t}\n}';
 		final found: Array<CondRegion> = regionsOf(src, 'nodejs');
 		final tree: QueryNode = new HaxeQueryPlugin().parseFile(src);
-		Assert.same(['ImportDecl js.node.ChildProcess'], CondQuery.namesIn(tree, found[0].branches[0].body));
-		final call: Array<String> = CondQuery.namesIn(tree, found[1].branches[0].body);
-		Assert.same(['IdentExpr save', 'IdentExpr dir'], call, 'a literal\'s content is not a symbol: $call');
+		Assert.same(['ImportDecl js.node.ChildProcess'], CondQuery.namesIn(tree, found[0].branches[0].body, SHAPE));
+		final call: Array<String> = CondQuery.namesIn(tree, found[1].branches[0].body, SHAPE);
+		Assert.same(
+			['IdentExpr save', 'IdentExpr dir', 'IdentExpr log', 'Ident dir'],
+			call, 'a literal\'s content is not a symbol, in either spelling, and an interpolation still is: $call'
+		);
+	}
+
+	/**
+	 * The `stringLiteralKinds` half of the drop is asked of a SECOND vocabulary, because the Haxe one
+	 * cannot exhibit it: `DoubleStringExpr`'s raw `name` always keeps its quote marks, so in this
+	 * grammar that half is invisible either way and no Haxe fixture can tell it from its absence.
+	 *
+	 * A grammar whose whole string literal carries its content UNQUOTED in its own name slot is the case it exists for,
+	 * and a synthetic node plus a six-field shape is what states it — which is also the strongest thing this class can
+	 * say about `namesIn` being grammar-agnostic: nothing here is read back out of the declaration under test.
+	 *
+	 * The second half pins what OPTIONAL means, since the seam claims it: hand the same tree a shape naming no literal kind at all
+	 * and both rows come back. That half is a guard rather than a control — no arm makes it fail, and narrowing the drop cannot.
+	 *
+	 * CONTROL for the whole-literal half. KILLED by arm `M-COND-NAMES-WHOLE-LITERAL-KEPT`, which
+	 * narrows the drop to `stringInterpTextKind` alone.
+	 */
+	@:pin('control')
+	@:killer('M-COND-NAMES-WHOLE-LITERAL-KEPT')
+	public function testAWholeStringLiteralKindIsDroppedByItsDeclaration(): Void {
+		final body: Span = new Span(0, 40);
+		final tree: QueryNode = new QueryNode('Root', null, [
+			new QueryNode('Str', 'looks.like.a.symbol', [], new Span(0, 20)),
+			new QueryNode('Call', 'realCall', [], new Span(20, 30))
+		], body);
+		final declared: Array<String> = CondQuery.namesIn(tree, body, minimalShape(['Str']));
+		Assert.same(['Call realCall'], declared, 'a whole-literal kind carries content, not a symbol: $declared');
+		// …and OPTIONAL means exactly this: declare neither kind and the content comes back, which is
+		// the answer every grammar that has not named its literal vocabulary still gets.
+		final undeclared: Array<String> = CondQuery.namesIn(tree, body, minimalShape());
+		Assert.same(['Str looks.like.a.symbol', 'Call realCall'], undeclared, 'an undeclared vocabulary must drop nothing: $undeclared');
 	}
 
 	/** A source with no `#if` at all yields nothing, and a grammar declaring no opener keyword cannot yield anything either. */
@@ -275,6 +326,23 @@ class CondQueryTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final tree: Null<QueryNode> = withTree ? plugin.parseFile(source) : null;
 		return CondQuery.regionsMentioning(source, tree, plugin.refShape(), plugin.lexicalRegions.bind(source), define);
+	}
+
+	/**
+	 * A `RefShape` carrying only the six fields the typedef requires, plus whichever whole-literal
+	 * kinds the caller names — the smallest SECOND vocabulary this class can hand `namesIn`, and the
+	 * only way to exercise a grammar that declares none.
+	 */
+	private static function minimalShape(?stringLiteralKinds: Array<String>): RefShape {
+		return {
+			identKind: 'Ident',
+			declHostKinds: [],
+			moduleValueDeclKinds: [],
+			scopeKinds: [],
+			writeParentKinds: [],
+			selfScopeDeclKinds: [],
+			stringLiteralKinds: stringLiteralKinds
+		};
 	}
 
 }
