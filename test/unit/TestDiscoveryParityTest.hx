@@ -127,6 +127,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.CondRegionMergeCheckTest',
 		'unit.check.ConstantConditionCheckTest',
 		'unit.check.CoreApiConformanceGateTest',
+		'unit.check.CrossScopeSoundnessTest',
 		'unit.check.DeadBinderCounterLoopCheckTest',
 		'unit.check.DeadCodeCheckTest',
 		'unit.check.DeadNullCoalescingTest',
@@ -1015,6 +1016,10 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.CommentWidthCheckTest#testTheFixReflowsIntoTheWidthWordForWord :: control :: M-COMMENT-REFLOW-ABSENT',
 			'unit.check.CommentWidthCheckTest#testTwoIdenticalWideLinesAreTwoLines :: control :: M-COMMENT-WIDTH-PROTECTION-BY-TEXT',
 			'unit.check.ComparisonToBooleanCheckTest#testFieldAccessBoolMemberFlagged :: control :: M-PATHWALK-NULL',
+			'unit.check.CrossScopeSoundnessTest#testNarrowReportFindsNothingTheWideRunDoesNot :: control :: '
+				+ 'M-CONFINEMENT-REPORT-INDEX-DEAD',
+			'unit.check.CrossScopeSoundnessTest#testNarrowReportWritesNothingTheWideRunRefuses :: control :: '
+				+ 'M-REFLECTION-REPORT-INDEX-DELETE',
 			'unit.check.DeadBinderCounterLoopCheckTest#testFixRewritesMapLoopAndInsertsUsing :: control :: M-SHADOWEXT-TRUE',
 			'unit.check.DuplicateCodeCheckTest#testALiteralInteriorDifferenceIsNotACloneWhileItsLayoutTwinIs :: control :: '
 				+ 'M-DUP-CODE-NORM-KEY',
@@ -1054,6 +1059,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-NAMING-SKIPSCAN-REPORT-INDEX,M-SKIPSCAN-SCOPEWIDE',
 			'unit.check.NamingCheckMemberFixTest#testAccessGrantOutsideReportScopeRefusesSingleFileRename :: control :: '
 				+ 'M-CONFINEMENT-REPORT-INDEX-RENAME',
+			'unit.check.NamingCheckMemberFixTest#testReflectionCallOutsideReportScopeRefusesRename :: control :: '
+				+ 'M-REFLECTION-REPORT-INDEX-RENAME',
 			'unit.check.NullableSourceResolutionScopeTest#testExcludedArrayPopStaysUnseeded :: control :: M-NULLABLE-INDEX-EXCLUSION',
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryReturnBindingSeeded :: control :: M-NULLABLE-FLOW-REPORT-INDEX',
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryReturnDerefFlagged :: control :: M-NULLABLE-REPORT-INDEX',
@@ -1144,6 +1151,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.UnreachableCatchTest#testSubtypeAfterSupertypeFlagged :: control :: M-ISSUBTYPE-FALSE',
 			'unit.check.UnusedParameterCheckTest#testAccessGrantOutsideReportScopeKeepsParameter :: control :: '
 				+ 'M-CONFINEMENT-REPORT-INDEX-PARAM',
+			'unit.check.UnusedPrivateCheckTest#testReflectionCallOutsideReportScopeKeepsMember :: control :: '
+				+ 'M-REFLECTION-REPORT-INDEX-DELETE',
 			'unit.check.UnusedPublicMemberCheckTest#testInterpolationEscapeKeepsTheMember :: control :: M-NAMEOUTSIDE-TRUE',
 			'unit.check.UsingDeclineAttributionTest#testCounterLoopConflictNamesTheSkippedSiteAndKeepsTheOther :: control :: '
 				+ 'M-COUNT-CONFLICT-SILENT',
@@ -1900,7 +1909,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-COMMENT-PARAGRAPH-DELETION-EXEMPT',
 			'M-COMMENT-CONTINUATION-ALWAYS-GUTTER',
 			'M-CONFINEMENT-REPORT-INDEX-PARAM',
-			'M-CONFINEMENT-REPORT-INDEX-RENAME'
+			'M-CONFINEMENT-REPORT-INDEX-RENAME',
+			'M-REFLECTION-REPORT-INDEX-RENAME',
+			'M-REFLECTION-REPORT-INDEX-DELETE',
+			'M-CONFINEMENT-REPORT-INDEX-DEAD'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

@@ -843,6 +843,48 @@ class UnusedPrivateCheckTest extends Test {
 		Assert.equals(2, guardedAliasCtorArmViolations('First', 'Second', 'class Both {\n\tpublic function new() {}\n}'));
 	}
 
+	/**
+	 * The REFLECTION gate and the REPORT SCOPE, on the path that DELETES — found by
+	 * `unit.check.CrossScopeSoundnessTest`, not by hand, and the reason that fixture exists.
+	 *
+	 * `run` gathered the string-literal contents `fix`'s reflection gate consults from the REPORT
+	 * files alone, so `Reflect.field(d, 'secretThing')` in a file the run does not lint contributed
+	 * nothing and the member read as reachable by nobody. Measured on a two-file probe under
+	 * `resolutionRoots: ["src"]` before the fix: `lint D.hx --rule unused-private --fix` deleted the
+	 * field and the reflective read went on naming it. The contents come from the PROJECT scope now
+	 * (report UNION the declared `resolutionRoots`), which only ever ADDS strings — so the gate can
+	 * only KEEP a member, never newly delete one.
+	 */
+	@:pin('control')
+	@:killer('M-REFLECTION-REPORT-INDEX-DELETE')
+	public function testReflectionCallOutsideReportScopeKeepsMember(): Void {
+		final declSource: String = 'package pkg;\n\nclass D {\n\n\tprivate var secretThing: Int = 0;\n\n\tpublic function new() {}\n\n}\n';
+		final report: Array<{ file: String, source: String }> = [{ file: 'pkg/D.hx', source: declSource }];
+		// Leading assertion — with NO reflective reader anywhere the same field IS deleted, so the
+		// refusal below is about the out-of-scope reflection call and not about the fixture.
+		final bare: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final bareCheck: UnusedPrivate = new UnusedPrivate();
+		final bareVs: Array<Violation> = bareCheck.run(report, bare);
+		Assert.equals(1, bareVs.length);
+		Assert.isTrue(bareCheck.fix(declSource, bareVs, bare, SymbolIndex.build(report, bare)).length > 0);
+		final library: Array<{ file: String, source: String }> = [
+			{
+				file: 'pkg/F.hx',
+				source: 'package pkg;\n\nclass F {\n\n\tpublic function f(d: D) {\n\t\treturn Reflect.field(d, \'secretThing\');\n\t}\n\n'
+					+ '}\n'
+			}
+		];
+		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		plugin.setResolutionScope({
+			declared: true,
+			sources: () -> {report: report, projectRoots: library, library: new LibrarySources(library) }
+		});
+		final check: UnusedPrivate = new UnusedPrivate();
+		final vs: Array<Violation> = check.run(report, plugin).filter(v -> v.file == 'pkg/D.hx');
+		Assert.equals(1, vs.length, 'the member is still REPORTED — only the deletion is withheld');
+		Assert.equals(0, check.fix(declSource, vs, plugin, SymbolIndex.build(report, plugin)).length);
+	}
+
 	/** `run` reports the dead member and `fix` declines it — the shape every class-annotation gate has. */
 	private function assertReportedButNotDeleted(src: String): Void {
 		final check: UnusedPrivate = new UnusedPrivate();

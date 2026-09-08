@@ -2374,9 +2374,39 @@
 			"name": "M-CONFINEMENT-REPORT-INDEX-RENAME",
 			"type": "anyparse.check.Naming",
 			"method": "fix",
-			"find": "final confinementIndex: Null<SymbolIndex> = RefactorSupport.widestScopeIndex(plugin, index);",
-			"replace": "final confinementIndex: Null<SymbolIndex> = index;",
-			"note": "the single-file rename asks the REPORT index for confinement again, so an `@:access` grantee outside the lint scope is invisible, the member reads as confined and the rename rewrites the declaring file alone — orphaning the grantee's access"
+			"find": "resolutionIndex, wideIndex,",
+			"replace": "resolutionIndex, index,",
+			"note": "the single-file rename asks the REPORT index for confinement again, so an `@:access` grantee outside the lint scope is invisible, the member reads as confined and the rename rewrites the declaring file alone — orphaning the grantee's access. Cuts the ARGUMENT rather than the local since S180: the local `wideIndex` now feeds the reflection scan beside it, and an arm that cut it would disable two proofs at once"
+		},
+		{
+			"name": "M-REFLECTION-REPORT-INDEX-RENAME",
+			"type": "anyparse.check.Naming",
+			"method": "fix",
+			"find": [
+				"final reflectionNames: Array<String> = wideIndex == null",
+				": reflectionNamesInOtherFiles(wideIndex, violations[0].file, flaggedNames, plugin, support);"
+			],
+			"replace": [
+				"final reflectionNames: Array<String> = index == null",
+				": reflectionNamesInOtherFiles(index, violations[0].file, flaggedNames, plugin, support);"
+			],
+			"note": "the cross-file reflection guard asks the REPORT index again, so a `Reflect.field(x, 'name')` in a file the run does not lint contributes no name, the guard has nothing to refuse on and the single-file rename orphans the reflective read"
+		},
+		{
+			"name": "M-REFLECTION-REPORT-INDEX-DELETE",
+			"type": "anyparse.check.UnusedPrivate",
+			"method": "projectStringContents",
+			"find": "final projectSources: Null<Array<{ file: String, source: String }>> = RefactorSupport.resolutionProjectSourcesOf(plugin);",
+			"replace": "final projectSources: Null<Array<{ file: String, source: String }>> = null;",
+			"note": "the reflection gate's string contents come from the REPORT files again, so a `Reflect.field(x, 'name')` in a file the run does not lint contributes nothing and the autofix DELETES the member that reflective read still names"
+		},
+		{
+			"name": "M-CONFINEMENT-REPORT-INDEX-DEAD",
+			"type": "anyparse.check.UnusedPrivate",
+			"method": "run",
+			"find": "final scopeIndex: SymbolIndex = RefactorSupport.widestScopeIndex(plugin, index) ?? index;",
+			"replace": "final scopeIndex: SymbolIndex = index;",
+			"note": "the S177 site, declared as an arm only in S180: the zero-occurrence proof asks the REPORT index again, so an `@:access` grantee outside the lint scope is invisible and a live private member is reported dead — and then deleted"
 		}
 	]
 }

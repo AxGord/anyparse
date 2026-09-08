@@ -117,20 +117,34 @@ final class RefactorSupport {
 	 * else null (no index reached the call at all — the caller falls back to the single file it holds).
 	 *
 	 * Deliberately gated on `hasDeclaredResolutionScope`, NOT on `hasAnyResolutionScope` the way
-	 * `resolutionIndexOf` beside it is. The proofs this index feeds are name-keyed rather than
-	 * type-resolved, so admitting the implicitly discovered Haxe std would let a SIMPLE-NAME
-	 * coincidence with a std type decide them: an owner whose simple name collides with a std type
+	 * `resolutionIndexOf` beside it is. The proofs this index feeds are name-keyed rather than type-resolved, so a SIMPLE-NAME
+	 * coincidence with a std type decides them: an owner whose simple name collides with a std type
 	 * that HAS subtypes reads as unconfined on that coincidence alone. The direction is safe — an
 	 * unconfined member is kept, its rename refused, its parameter left alone — so the hazard costs
-	 * usefulness rather than correctness, which is exactly why it must not happen by accident. A
+	 * usefulness rather than correctness, which is exactly why it must not happen by ACCIDENT. A
 	 * DECLARED library is a different matter: the project chose it, and a file the run does not lint
 	 * can legitimately be where the reference lives.
 	 *
-	 * The three consumers fail DIFFERENTLY on the narrow report index, which is why each asks for
-	 * this one. `UnusedPrivate.violationFor` reports a live member dead (S177). The other two WRITE:
-	 * `UnusedParameter.checkFunction` raises the finding to `Warning`, and `Warning` is what removes
-	 * a parameter whose cross-file callers the proof never saw; `Naming`'s `RenameRefusal.of` lets a
-	 * single-file rename go ahead and orphans a cross-file reference to the old name.
+	 * Read the gate for what it does and not for what its name suggests, because the obvious reading
+	 * is wrong: it does NOT keep the std out of the returned index. `LintCommand.readResolutionLibrary`
+	 * appends the std to the SAME scope as the declared roots and libs, so a project that declares
+	 * anything gets the std in here too. What the gate refuses is a scope that exists ONLY because a
+	 * std was discovered — a project that declared nothing keeps the report index. The narrower
+	 * `resolutionProjectSourcesOf` below is the seam for a proof that must not admit third-party
+	 * sources at all, and `UnusedPrivate.projectStringContents` asks a name-keyed question through it
+	 * while `Naming`'s reflection scan asks one through this: only one of the two can be right, and
+	 * T868 holds the question.
+	 *
+	 * FOUR call sites, and they fail DIFFERENTLY on the narrow report index, which is why each asks
+	 * for this one. `UnusedPrivate.run` feeds `violationFor`, which reports a live member dead (S177),
+	 * and `UnusedPrivate.fix` feeds `referencedElsewhere`, the zero-occurrence proof that lifts a
+	 * `#if`-carrying file's whole-file veto. The other two WRITE: `UnusedParameter.run` raises the
+	 * finding to `Warning`, and `Warning` is what removes a parameter whose cross-file callers the
+	 * proof never saw; `Naming.fix` takes ONE index and feeds it to TWO proofs — `RenameRefusal.of`,
+	 * which otherwise lets a single-file rename orphan a cross-file reference to the old name, and
+	 * `reflectionNamesInOtherFiles` (S180), which otherwise never visits the file whose
+	 * `Reflect.field(x, 'name')` the rename is about to break. That sharing is why the arm cutting the
+	 * confinement half has to cut the ARGUMENT rather than the local.
 	 */
 	public static inline function widestScopeIndex(plugin: GrammarPlugin, ?index: SymbolIndex): Null<SymbolIndex> {
 		final host: Null<SymbolIndexHost> = plugin is SymbolIndexHost ? cast plugin : null;
@@ -161,6 +175,13 @@ final class RefactorSupport {
 	 * Gated on `hasDeclaredResolutionScope`, like `unused-private`'s zero-occurrence scan and unlike
 	 * `resolutionIndexOf`: the implicit std-only scope declares no roots, so it can only ever answer
 	 * null here anyway, and asking the narrow predicate says why in the code.
+	 *
+	 * The second consumer, `UnusedPrivate.projectStringContents`, asks the same shape of question about
+	 * a member NAME rather than a write: which files could hold a `Reflect.field(x, 'name')` this
+	 * deletion would break. Note the fork it creates with `Naming`'s reflection scan, which asks that
+	 * SAME question through `widestScopeIndex` and so admits the std and every declared haxelib. Both
+	 * err toward refusal, so neither is a correctness bug, but the two sites now cite opposite
+	 * precedents and only one can be intended — T868.
 	 */
 	public static inline function resolutionProjectSourcesOf(plugin: GrammarPlugin): Null<Array<{ file: String, source: String }>> {
 		final host: Null<SymbolIndexHost> = plugin is SymbolIndexHost ? cast plugin : null;

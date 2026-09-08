@@ -145,8 +145,24 @@ final class RemoveParam {
 	 * in-file call site. `error` is non-null exactly when no edits are
 	 * produced — an out-of-range index, a parameter still referenced in the
 	 * body, an unresolvable / receiver-qualified call site, or a call whose
-	 * arity does not match (an omitted optional argument). `callSites` is the
-	 * number of updated in-file calls (0 on error), for the caller's advisory.
+	 * arity does not match (an omitted optional argument). `callSites` is
+	 * the number of updated in-file calls (0 on error), for the caller's
+	 * advisory.
+	 *
+	 * PRECONDITION, and it is the CALLER's — T862. `CallSites.collect` is handed ONE tree and
+	 * ONE source, so this function can neither see nor check a call site in another file. It
+	 * proves nothing cross-file and its `error` sentences never claim to; the caller owes that
+	 * proof. THREE call sites discharge it, in two ways. `removeParam` hands the gap to the human,
+	 * as an advisory naming the in-file sites it did update. On the lint side the proof and the
+	 * WRITE are split across two of them, which is the part worth knowing:
+	 * `UnusedParameter.checkFunction` calls this to decide SEVERITY, and only raises `Warning` when
+	 * the function is also LOCAL (no cross-file caller is expressible) or a private method proved
+	 * CONFINED against `RefactorSupport.widestScopeIndex` — the REPORT index was not enough, and
+	 * S179 measured what that costs: an `@:access` grantee outside the lint scope went on passing
+	 * the argument the fix had just deleted. `UnusedParameter.collectFixEdits` then calls this
+	 * again and is the site that actually emits the edits; it re-checks NOTHING, resting entirely
+	 * on `fix` having routed `Warning` findings alone into it. A fourth caller that skips the proof
+	 * gets a build break rather than a diagnostic, because there is nothing here to give it one.
 	 */
 	public static function paramSlotEdits(
 		source: String, tree: QueryNode, decl: QueryNode, index: Int, name: String, binding: Int, shape: RefShape

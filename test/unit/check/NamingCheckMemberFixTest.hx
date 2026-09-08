@@ -1086,6 +1086,56 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		);
 	}
 
+	/**
+	 * The REFLECTION guard and the REPORT SCOPE — T861, the last of the four report-index sites and
+	 * the one that had never been probed.
+	 *
+	 * `reflectionNamesInOtherFiles` walked `index.allFiles()` and `index` was the REPORT index, so a
+	 * `Reflect.field(c, 'My_Field')` in a file the run does not lint contributed no name and the guard
+	 * had nothing to refuse on. Measured on a two-file probe under `resolutionRoots: ["src"]` before
+	 * the fix: `lint C.hx --rule naming --fix` wrote 2 edits in C.hx and left the reflective read
+	 * naming a field that no longer existed, where the same command over `src` refused with
+	 * `REFLECTION_NAME`. The scan takes the WIDEST index now — the one the confinement proof beside it
+	 * already took in S179, and for the same reason both are name-keyed, so neither may admit the
+	 * implicit std.
+	 *
+	 * The second half of the fix is what makes THIS fixture able to reach the guard at all: the scan
+	 * read its sources with `sys.io.File.getContent(fi.file)`, so a synthetic library source with no
+	 * file on disk was invisible to it. It reads `index.sourceOf` now.
+	 */
+	@:pin('control')
+	@:killer('M-REFLECTION-REPORT-INDEX-RENAME')
+	public function testReflectionCallOutsideReportScopeRefusesRename(): Void {
+		final declSource: String =
+			'package pkg;\nclass C {\n\tprivate var My_Field:Int = 0;\n\n\tpublic function read():Int {\n\t\treturn My_Field;\n\t}\n}';
+		final report: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: declSource }];
+		// Leading assertion — with NO reflective reader anywhere the same declaration DOES rename, so
+		// the refusal below is about the out-of-scope reflection call and not about the fixture.
+		final bare: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final bareCheck: Naming = new Naming();
+		final bareVs: Array<Violation> = bareCheck.run(report, bare);
+		Assert.equals(1, bareVs.length);
+		Assert.isTrue(bareCheck.fix(declSource, bareVs, bare, SymbolIndex.build(report, bare)).length > 0);
+		final library: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/E.hx', source: 'package pkg;\nclass E {\n\tpublic function f(c:C) { return Reflect.field(c, \'My_Field\'); }\n}' }
+		];
+		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		plugin.setResolutionScope({
+			declared: true,
+			sources: () -> {report: report, projectRoots: library, library: new LibrarySources(library) }
+		});
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(report, plugin).filter(v -> v.file == 'pkg/C.hx');
+		Assert.equals(1, vs.length);
+		final index: SymbolIndex = SymbolIndex.build(report, plugin);
+		Assert.equals(0, check.crossFileFix(report, vs, plugin, index).length, 'the cross-file rename declines');
+		Assert.equals(0, check.fix(declSource, vs, plugin, index).length, 'and the single-file rename is refused');
+		Assert.equals(
+			'another indexed file reaches this member by NAME through a reflection call, and a rename breaks such a reference silently',
+			vs[0].declineReason
+		);
+	}
+
 	/** The `Naming` fix edits for `pkg/C.hx` with one unparseable sibling carrying `badSrc`. */
 	private function fixCount(cSrc: String, badSrc: String): Int {
 		final files: Array<{ source: String, file: String }> = [
