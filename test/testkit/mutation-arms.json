@@ -814,8 +814,8 @@
 			"name": "M-COND-KIND-NAME-CONVENTION",
 			"type": "anyparse.macro.QueryWalkerLowering",
 			"method": "condKindsReaching",
-			"find": "\t\tout.sort(Reflect.compare);\n\t\treturn out;",
-			"replace": "\t\tfinal byConvention: Array<String> = out.filter(kind -> StringTools.startsWith(kind, 'CondSplice'));\n\t\tbyConvention.sort(Reflect.compare);\n\t\treturn byConvention;",
+			"find": "\t\treturn collectKinds(declaring -> fieldRuleRefs(declaring).exists(ref -> reachesCondSeed(ref, seeds, [])));",
+			"replace": "\t\treturn collectKinds(declaring -> fieldRuleRefs(declaring).exists(ref -> reachesCondSeed(ref, seeds, [])))\n\t\t\t.filter(kind -> StringTools.startsWith(kind, 'CondSplice'));",
 			"note": "the derived vocabulary is filtered back to the grammar's NAMING convention, so the two ctors that already break it - `CondSharedBodyDecl`, named for a declaration region rather than a splice, and `MetaCondStmt`, named for the metadata it dispatches on - fall out of the gate, which is the hole a prefix list could never close"
 		},
 		{
@@ -2454,6 +2454,14 @@
 			"find": "\t\tConfigDisagreement.warnUnreachableProjectRoots(unreachable);\n",
 			"replace": "",
 			"note": "a declared resolutionRoots entry that matches no .hx goes back to being read, dropped and never mentioned - the only place that learns it stops saying so"
+		},
+		{
+			"name": "M-PROJECTED-KINDS-ALT-ONLY",
+			"type": "anyparse.macro.QueryWalkerLowering",
+			"method": "eachProjectedKind",
+			"find": "\t\t\t\tif (isSpanned(node)) visit(node, node.readMetaString(PairedShapeLowering.SPANNED_META));\n",
+			"replace": "",
+			"note": "the projected vocabulary loses its @:spanned half, so CatchClause / KeyValueBinder / VarMore stop being projected while the six kind sets that declare them keep naming them - the exact fail-open shape the differential exists to see, and the census floors stay satisfied so only the subset assertion goes red"
 		}
 	]
 }

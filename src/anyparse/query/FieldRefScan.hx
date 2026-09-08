@@ -136,7 +136,8 @@ final class FieldRefScan {
 
 	/**
 	 * Whether `node` ITSELF binds `name`. Every binding form the grammar projects as a named
-	 * node: a parameter (`Required` / `Optional` / `Rest` / `LambdaParam`), a local declaration
+	 * node: a parameter (`Required` / `Optional` / `Rest` — the bare-arrow spelling
+	 * arrives as `Required` through `HxArrowParamProjection`), a local declaration
 	 * (`VarStmt` / `FinalStmt`, their expression twins, and the `VarMore` continuation of a
 	 * multi-var list), a local function, a catch variable, the self-scoped `for` iterator
 	 * (`ForStmt` / `ForExpr` — the array-comprehension form is a `ForExpr`) and the `KeyValueBinder`
@@ -154,9 +155,9 @@ final class FieldRefScan {
 	 */
 	private static function bindsNameHere(node: QueryNode, name: String): Bool {
 		return switch node.kind {
-			case 'Required', 'Optional', 'Rest', 'LambdaParam', 'VarStmt', 'FinalStmt', 'VarExpr', 'FinalExpr', 'VarMore',
-				'StaticVarStmt', 'StaticFinalStmt', 'LocalFnStmt', 'LocalInlineFnStmt', 'NamedFnExpr', 'CatchClause', 'ForStmt',
-				'ForExpr', 'KeyValueBinder', 'Capture': node.name == name;
+			case 'Required', 'Optional', 'Rest', 'VarStmt', 'FinalStmt', 'VarExpr', 'FinalExpr', 'VarMore', 'StaticVarStmt',
+				'StaticFinalStmt', 'LocalFnStmt', 'LocalInlineFnStmt', 'NamedFnExpr', 'CatchClause', 'ForStmt', 'ForExpr',
+				'KeyValueBinder', 'Capture': node.name == name;
 			case 'Plain': mentionsField(node, name);
 			case _: false;
 		}

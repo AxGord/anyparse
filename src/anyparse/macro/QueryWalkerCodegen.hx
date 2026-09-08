@@ -53,18 +53,32 @@ class QueryWalkerCodegen {
 		fields.push(publicParseRootField(result));
 		fields.push(publicWalkRootField(result));
 		fields.push(publicWalkField(result));
-		fields.push(condKindsField(
+		fields.push(kindsField(
 			'opaqueCondRegionKinds', result.opaqueCondRegionKinds,
 			'Projected node kinds that swallow a `#if ... #end` region as RAW bytes - the fallback ctors the grammar reaches when the '
 			+ 'region is not a balanced subtree in its position. Derived from the `@:condRegionRaw` terminals the grammar declares, so a '
 			+ 'ctor added to the family lands here with no hand edit anywhere; published through `RefShape.opaqueCondRegionKinds` and read '
 			+ 'by the fail-closed gate every name-driven mutating op consults.'
 		));
-		fields.push(condKindsField(
+		fields.push(kindsField(
 			'conditionalRegionKinds', result.conditionalRegionKinds,
 			'Projected node kinds that denote a `#if ... #end` region at all, whether or not its interior is modelled - the superset of '
 			+ '`opaqueCondRegionKinds`, derived by the same walk from the `@:condRegionCondition` terminal as well. Published through '
 			+ '`RefShape.conditionalRegionKinds` and read by `CondRegionScan.isConditionalKind`.'
+		));
+		fields.push(kindsField(
+			'projectedKinds', result.projectedKinds,
+			'Every node kind this walker can project - the grammar\'s whole `QueryNode.kind` vocabulary, derived from the same '
+			+ 'shape the walk itself is emitted from, so a ctor added to the grammar lands here with no hand edit. No engine path '
+			+ 'reads it: it is the PROJECTED half of the differential against a plugin\'s hand-written `RefShape` kind sets, where '
+			+ 'a stale spelling fails OPEN - the query silently does not see the node, and an `Array<String>` cannot be typo-checked.'
+		));
+		fields.push(kindsField(
+			'ambiguousProjectedKinds', result.ambiguousProjectedKinds,
+			'The `projectedKinds` entries MORE THAN ONE grammar rule declares. A `RefShape` kind set names a spelling and never '
+			+ 'the rule that owns it, so listing one of these admits every rule\'s spelling of it at once - the collision that made '
+			+ '`uses` / `rename` read an arrow-parameter LABEL as a type, when the arrow-parameter enum spelled a ctor the '
+			+ 'type-level vocabulary already spelled.'
 		));
 		return fields;
 	}
@@ -88,7 +102,7 @@ class QueryWalkerCodegen {
 	 * rebuilt per call, which costs nothing next to the object literal `refShape` already
 	 * allocates around it.
 	 */
-	private static function condKindsField(name: String, kinds: Array<String>, doc: String): Field {
+	private static function kindsField(name: String, kinds: Array<String>, doc: String): Field {
 		final items: Array<Expr> = [for (kind in kinds) { expr: EConst(CString(kind)), pos: Context.currentPos() }];
 		final literal: Expr = { expr: EArrayDecl(items), pos: Context.currentPos() };
 		return {

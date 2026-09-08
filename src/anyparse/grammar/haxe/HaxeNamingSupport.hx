@@ -477,7 +477,7 @@ final class HaxeNamingSupport implements NamingSupport {
 			case 'FinalMember': mods.contains('static') ? NamingCategory.Constant : NamingCategory.Field;
 			case 'SimpleCtor', 'ParamCtor': NamingCategory.EnumValue;
 			case 'VarStmt', 'FinalStmt', 'ForStmt', 'ForExpr', 'KeyValueBinder', 'LocalFnStmt', 'LocalInlineFnStmt': NamingCategory.Local;
-			case 'Required', 'Optional', 'Rest', 'LambdaParam': NamingCategory.Param;
+			case 'Required', 'Optional', 'Rest': NamingCategory.Param;
 			case 'CatchClause': NamingCategory.CatchVar;
 			case _: null;
 		}

@@ -163,6 +163,15 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	 */
 	private static inline final COND_REGION_CONDITION_META: String = ':condRegionCondition';
 
+	/**
+	 * The kind the `_typeRefs` projection MINTS for a nominal type name. No grammar ctor
+	 * spells it, so it is the one entry of `projectedKinds` that the shape walk cannot
+	 * find - and `RefShape.typeRefChildKinds` / `declTypeChildKinds` and
+	 * `TypeRefShape.typeRefKinds` all name it, so leaving it out of the projected
+	 * vocabulary would report three live declarations as stale.
+	 */
+	private static inline final TYPE_REF_KIND: String = 'TypeRef';
+
 	/** Struct fields consulted, in order, for a String-valued display name. */
 	private static final NAME_STRING_SLOTS: Array<String> = ['name', 'type', 'varName'];
 
@@ -249,7 +258,9 @@ class QueryWalkerLowering extends PairedShapeLowering {
 			names: names,
 			typeRefs: typeRefs,
 			opaqueCondRegionKinds: condKindsReaching(rawSeeds),
-			conditionalRegionKinds: condKindsReaching(rawSeeds.concat(condSeedRules(COND_REGION_CONDITION_META)))
+			conditionalRegionKinds: condKindsReaching(rawSeeds.concat(condSeedRules(COND_REGION_CONDITION_META))),
+			projectedKinds: projectedKinds(),
+			ambiguousProjectedKinds: ambiguousProjectedKinds()
 		};
 	}
 
@@ -518,7 +529,6 @@ class QueryWalkerLowering extends PairedShapeLowering {
 			call(nameFnName(ref), [access]);
 	}
 
-
 	/** Fold candidate name expressions into `a ?? b ?? ... ?? null`, dropping the ones that can never yield a name. */
 	private function firstNonNullName(candidates: Array<Null<Expr>>): Expr {
 		var out: Expr = macro null;
@@ -662,7 +672,7 @@ class QueryWalkerLowering extends PairedShapeLowering {
 				final n: Null<Expr> = nameOfValue(head, access);
 				if (n != null) body.push(macro {
 					final _nm: Null<String> = $n;
-					if (_nm != null) into.push(new anyparse.query.QueryNode('TypeRef', _nm, [], _span));
+					if (_nm != null) into.push(new anyparse.query.QueryNode($v{TYPE_REF_KIND}, _nm, [], _span));
 				});
 				for (e in typeRefsDescend(head, access, 0)) body.push(e);
 			}
@@ -757,28 +767,75 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	}
 
 	/**
-	 * Every projected node kind whose own production reaches one of `seeds` - one candidate per
-	 * `Alt` ctor and per `@:spanned` `Seq`, which are exactly the shapes `lowerWalk`
-	 * materialises a `QueryNode` for. A transparent `Seq` contributes its fields to the
-	 * enclosing node instead, which is why the recursion descends through one rather than
-	 * naming it.
+	 * Visit every node kind `lowerWalk` materialises a `QueryNode` for, once per DECLARING
+	 * rule - one call per `Alt` ctor and one per `@:spanned` `Seq`, which are exactly those
+	 * shapes. `visit` receives the node that DECIDES the kind (the `Alt` branch, or the
+	 * `@:spanned` `Seq` rule itself) beside the kind name, so a caller can filter on the
+	 * declaring node's own fields. A transparent `Seq` contributes its fields to the enclosing
+	 * node instead and is deliberately not visited.
+	 *
+	 * Two rules may declare the SAME kind - `Public` is a ctor of all three modifier enums -
+	 * and the visitor sees each declaration, so a caller counting visits per kind reads how
+	 * AMBIGUOUS the spelling is. That is what a `RefShape` kind set cannot express: it names a
+	 * spelling, never the rule that owns it.
 	 */
-	private function condKindsReaching(seeds: Array<String>): Array<String> {
-		final out: Array<String> = [];
-		inline function add(kind: Null<String>): Void if (kind != null && !out.contains(kind)) out.push(kind);
+	private function eachProjectedKind(visit: (declaring:ShapeNode, kind:Null<String>) -> Void): Void {
 		for (rule in sortedRuleNames()) {
 			final node: Null<ShapeNode> = _shape.rules.get(rule);
 			if (node == null) continue;
 			switch node.kind {
 				case Alt:
-					for (branch in node.children) if (fieldRuleRefs(branch).exists(ref -> reachesCondSeed(ref, seeds, [])))
-						add(branch.annotations[AnnotationKeys.BASE_CTOR]);
+					for (branch in node.children) visit(branch, branch.annotations[AnnotationKeys.BASE_CTOR]);
 				case Seq:
-					if (isSpanned(node) && fieldRuleRefs(node).exists(ref -> reachesCondSeed(ref, seeds, [])))
-						add(node.readMetaString(PairedShapeLowering.SPANNED_META));
+					if (isSpanned(node)) visit(node, node.readMetaString(PairedShapeLowering.SPANNED_META));
 				case _:
 			}
 		}
+	}
+
+	/** The sorted, deduplicated projected kinds whose declaring node `accept` admits. */
+	private function collectKinds(accept: ShapeNode -> Bool): Array<String> {
+		final out: Array<String> = [];
+		eachProjectedKind((declaring, kind) -> if (kind != null && !out.contains(kind) && accept(declaring)) out.push(kind));
+		out.sort(Reflect.compare);
+		return out;
+	}
+
+	/** Every projected node kind whose own production reaches one of `seeds`. */
+	private function condKindsReaching(seeds: Array<String>): Array<String> {
+		return collectKinds(declaring -> fieldRuleRefs(declaring).exists(ref -> reachesCondSeed(ref, seeds, [])));
+	}
+
+	/**
+	 * Every node kind the generated walker can project - this grammar's whole
+	 * `QueryNode.kind` vocabulary.
+	 *
+	 * Nothing in the engine consumes it. It is the PROJECTED half of the differential that
+	 * answers whether a kind name a plugin's `RefShape` declares is a name its own parser ever
+	 * emits: a stale entry there fails OPEN - the query silently does not see the node - and no
+	 * build error can catch it, because every kind set is an `Array<String>`.
+	 */
+	private function projectedKinds(): Array<String> {
+		final out: Array<String> = collectKinds(_ -> true);
+		if (_typeRefSeeds.length > 0 && !out.contains(TYPE_REF_KIND)) {
+			out.push(TYPE_REF_KIND);
+			out.sort(Reflect.compare);
+		}
+		return out;
+	}
+
+	/**
+	 * The projected kinds MORE THAN ONE grammar rule declares - `Conditional`, the modifier
+	 * ctors the three modifier enums share, `Required` / `Optional` across the parameter enums.
+	 *
+	 * A `RefShape` kind set carries no rule qualifier, so naming one of these admits every
+	 * rule's spelling of it at once. `HxArrowParam.Named` collided with the type-level `Named`
+	 * exactly that way and made `uses` / `rename` read an arrow-parameter LABEL as a type.
+	 */
+	private function ambiguousProjectedKinds(): Array<String> {
+		final counts: Map<String, Int> = [];
+		eachProjectedKind((_, kind) -> if (kind != null) counts[kind] = (counts[kind] ?? 0) + 1);
+		final out: Array<String> = [for (kind => n in counts) if (n > 1) kind];
 		out.sort(Reflect.compare);
 		return out;
 	}
@@ -852,5 +909,20 @@ typedef QueryWalkerResult = {
 	 * model. Derived by the same walk from the `@:condRegionCondition` terminal as well.
 	 */
 	final conditionalRegionKinds: Array<String>;
+
+	/**
+	 * Every node kind the generated walker can project - the grammar's whole
+	 * `QueryNode.kind` vocabulary, derived from the same shape the walk is emitted from.
+	 * Published so a plugin's hand-written `RefShape` kind sets can be differenced against
+	 * what its parser actually emits; a stale name there fails open and no build sees it.
+	 */
+	final projectedKinds: Array<String>;
+
+	/**
+	 * The subset of `projectedKinds` that MORE THAN ONE grammar rule declares. A kind set
+	 * names a spelling and not a rule, so an entry here is admitted for every rule that
+	 * spells it.
+	 */
+	final ambiguousProjectedKinds: Array<String>;
 };
 #end

@@ -117,10 +117,22 @@ final class CliArgs {
 		return line == null || col == null ? null : { line: line, col: col };
 	}
 
+	/**
+	 * Every `--lang` the CLI can dispatch - the grammar-plugin registry, enumerable so a
+	 * whole-registry check (`RefShapeKindProjectionTest`) covers a plugin added here without
+	 * being taught its name. `pickPlugin` reads THIS list and its switch is only the
+	 * construction table, so a name declared here and not constructed there throws rather
+	 * than falling through to "no such plugin".
+	 */
+	public static function langNames(): Array<String> {
+		return ['haxe'];
+	}
+
 	public static function pickPlugin(lang: String): GrammarPlugin {
+		if (!langNames().contains(lang)) throw new UsageFailure('no grammar plugin for --lang "$lang"');
 		return switch lang {
 			case 'haxe': new HaxeQueryPlugin();
-			case _: throw new UsageFailure('no grammar plugin for --lang "$lang"');
+			case _: throw new UsageFailure('--lang "$lang" is a declared grammar but CliArgs.pickPlugin does not construct it');
 		};
 	}
 

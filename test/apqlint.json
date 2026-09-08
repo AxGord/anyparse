@@ -3,7 +3,12 @@
         "magic-number": { "enabled": false },
         "string-literal-dup": { "enabled": false },
         "doc-coverage": { "enabled": false },
-        "oversized-type": { "maxMembers": 100 },
+        "oversized-type": {
+            "maxMembers": 100,
+            "grants": [
+                "TestDiscoveryParityTest: not a type but a wall of parity snapshots - one inline list per GENERATED registry (test classes, pins, arms, claims, deferred arms, dead fixtures), one assertion each. Its member count is a quarter of its own limit; the LINES are data that grows with the tree and with nothing else, so every slice that adds a fixture or an arm pushes it further. Splitting by registry would leave one half of the same contract in another file and still leave every list growing."
+            ]
+        },
         "duplicate-code": { "enabled": false },
         "prefer-typed-throw": { "enabled": false }
     }
