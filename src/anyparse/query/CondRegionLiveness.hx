@@ -1,4 +1,4 @@
-package anyparse.check;
+package anyparse.query;
 
 import anyparse.query.CondDirectives;
 import anyparse.query.GrammarPlugin.RefShape;
@@ -7,6 +7,30 @@ import anyparse.runtime.Span;
 
 using Lambda;
 using StringTools;
+
+/**
+ * What `CondRegionLiveness.branchStep` answers about one conditional-compilation branch: `live`
+ * is three-valued — true when the branch is provably taken, false when provably not, null when
+ * some flag outside the define set decides — and `guard` is the same three-valued answer to "is
+ * every branch up to and including this one refuted", which is exactly what the NEXT branch of
+ * the region needs to know.
+ */
+typedef CondBranchStep = {
+	final live: Null<Bool>;
+	final guard: Null<Bool>;
+};
+
+private typedef Frame = {
+	final open: String;
+	var branch: String;
+	var live: Null<Bool>;
+	var elseGuard: Null<Bool>;
+}
+
+private typedef Cursor = {
+	var pos: Int;
+	var ok: Bool;
+}
 
 /**
  * Whether a byte offset in a source file sits in code the compiler PROVABLY compiled,
@@ -384,35 +408,4 @@ final class CondRegionLiveness {
 		}
 	}
 
-}
-
-/**
- * What `CondRegionLiveness.branchStep` answers about one conditional-compilation branch: `live`
- * is three-valued — true when the branch is provably taken, false when provably not, null when
- * some flag outside the define set decides — and `guard` is the same three-valued answer to "is
- * every branch up to and including this one refuted", which is exactly what the NEXT branch of
- * the region needs to know.
- */
-typedef CondBranchStep = {
-	final live: Null<Bool>;
-	final guard: Null<Bool>;
-};
-
-/**
- * One open conditional region while the stack is walked: the OPENING directive's text
- * (what a decline names the region by), the CURRENT branch's text, whether that branch is
- * provably live, and `elseGuard` — whether every earlier branch of this region is
- * provably refuted, which is exactly what a later `#elseif` or `#else` needs to be live.
- */
-private typedef Frame = {
-	final open: String;
-	var branch: String;
-	var live: Null<Bool>;
-	var elseGuard: Null<Bool>;
-}
-
-/** The condition parser's position, plus whether the parse is still on grammar — a failed parse answers unknown, never a value. */
-private typedef Cursor = {
-	var pos: Int;
-	var ok: Bool;
 }

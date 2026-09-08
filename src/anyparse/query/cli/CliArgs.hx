@@ -120,7 +120,7 @@ final class CliArgs {
 	public static function pickPlugin(lang: String): GrammarPlugin {
 		return switch lang {
 			case 'haxe': new HaxeQueryPlugin();
-			case _: throw 'apq: no grammar plugin for --lang "$lang"';
+			case _: throw new UsageFailure('no grammar plugin for --lang "$lang"');
 		};
 	}
 
@@ -180,7 +180,7 @@ final class CliArgs {
 	}
 
 	public static function expectValue(args: Array<String>, idx: Int, flag: String): String {
-		if (idx >= args.length) throw 'apq: $flag requires a value';
+		if (idx >= args.length) throw new UsageFailure('$flag requires a value');
 		return args[idx];
 	}
 
@@ -218,7 +218,7 @@ final class CliArgs {
 	public static function parseLimit(args: Array<String>, idx: Int): Int {
 		final v: String = expectValue(args, idx, '--limit');
 		final n: Null<Int> = Std.parseInt(v);
-		if (n == null || n < 0) throw 'apq: --limit expects a non-negative integer, got "$v"';
+		if (n == null || n < 0) throw new UsageFailure('--limit expects a non-negative integer, got "$v"');
 		return n;
 	}
 

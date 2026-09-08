@@ -76,36 +76,35 @@ final class ShardPlan {
 
 	/**
 	 * Classes that share MUTABLE STATE outside their own process, pinned to
-	 * shard 0 as ONE group. One such path is still a fixed constant, not a
-	 * per-test temp: `bin/.last-sweep.json` (the corpus delta baseline,
-	 * rewritten by `HxFormatterCorpusTest` and read by `ApqDxTier5CliTest`).
-	 * The second was `/tmp/anyparse-last-probe.hx` — since S170 `apq probe`
-	 * stages to `<temp root>/anyparse-last-probe.<pid>.hx`, so it forces
-	 * nothing into this group; the list has NOT been re-derived against that
-	 * narrower reason, which is the whole point of the recipe below.
+	 * shard 0 as ONE group. One path is a fixed constant, not a per-test
+	 * temp: `bin/.last-sweep.json` (the corpus delta baseline, rewritten by
+	 * `HxFormatterCorpusTest` and read by `ApqDxTier5CliTest`). The other
+	 * hazard this group once carried — `/tmp/anyparse-last-probe.hx` — is
+	 * gone: since S170 `apq probe` stages to
+	 * `<temp root>/anyparse-last-probe.<pid>.hx`, so nothing forces a class
+	 * into this group for staging a probe. S178 re-derived the list against
+	 * that narrower reason (below) and it dropped from 8 names to these 2.
 	 *
 	 * The list is DERIVED, not remembered. `hxq lit '.last-sweep.json' test/`
-	 * finds the corpus baseline's users — the one shared constant left.
-	 * Re-derive when adding a test that touches that baseline: a writer left
-	 * outside the group does not fail, it races a byte-for-byte read-back in a
+	 * finds the baseline's users — the one shared constant left; re-derive
+	 * when adding a test that touches it, since a writer left outside the
+	 * group does not fail, it races a byte-for-byte read-back in a
 	 * sub-millisecond window and surfaces later as an unreproducible flake.
-	 * The recipe had a second half until S170 — `hxq lit 'probe' test/ --kind
-	 * Literal`, every class that stages a probe — and following it now
-	 * re-derives the old, too-wide group: probe staging is per process and
-	 * shares no path with anything.
+	 * The recipe over-matches by name, not under: it also turns up
+	 * `ApqReconCliTest` (writes the SAME basename inside its own per-test
+	 * `mkTempDir`, never the shared relative path) and
+	 * `CliHelpListingPinTest` (the path spelled out in `--help` prose) —
+	 * both read the hit and stay out, since neither touches the real file.
+	 * `hxq lit 'probe' test/ --kind Literal`, the recipe's retired second
+	 * half, re-derives the old, too-wide group: probe staging is per
+	 * process now and shares no path with anything.
 	 *
 	 * Everything else uses unique per-test temp directories and random
 	 * compiler-server ports, so it parallelises freely.
 	 */
 	public static final STICKY_CLASSES: Array<String> = [
 		'unit.grammar.haxe.HxFormatterCorpusTest',
-		'unit.cli.ApqDxTier5CliTest',
-		'unit.cli.ApqDxTier4CliTest',
-		'unit.cli.ApqProbeCliTest',
-		'unit.cli.ApqReconCliTest',
-		'unit.cli.ApqWriterProbeCliTest',
-		'unit.cli.ApqAstTypeRefsCliTest',
-		'unit.query.ApqHxtestSection1ConfigTest'
+		'unit.cli.ApqDxTier5CliTest'
 	];
 
 	/** What a class not in `CLASS_WEIGHTS` costs — the tail is flat, so one number covers it. */

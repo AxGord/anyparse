@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.HaxeSpawn.HaxeRun;
+import anyparse.query.CondRegionLiveness;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;

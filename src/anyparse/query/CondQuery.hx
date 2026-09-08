@@ -1,7 +1,7 @@
 package anyparse.query;
 
-import anyparse.check.CondRegionLiveness;
 import anyparse.query.CondDirectives.CondDirective;
+import anyparse.query.CondRegionLiveness;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
@@ -274,6 +274,35 @@ final class CondQuery {
 	 * seam and no per-grammar literal vocabulary; the cost is that a literal whose content happens to spell one is
 	 * still reported, and a DOTTED path counts — so a bare `'probe.hx'` comes back as `Literal probe.hx` (649 distinct
 	 * such rows over `src` + `test`). What keeps that readable is the KIND prefix every row carries, not the filter.
+	 *
+	 * S178 re-checked whether that cost narrows WITHOUT a kind list and found it does not, plus two
+	 * more precision gaps in the same family, all left as-is for the reason above:
+	 *
+	 * - `@:native(...)` and every other metadata argument is invisible here, not filtered — `QueryNode`
+	 *   (`anyparse.query.QueryNode`) carries only `kind` / `name` / `children` / `span` / `type`, by its
+	 *   own doc's design; a modifier is not a child, so `collectNames`'s walk never reaches one. This is
+	 *   not local to `--names`: no `anyparse.query` consumer sees a metadata argument through `QueryNode`
+	 *   today, so fixing it here alone would be one grammar's leaf treated as a special case, not a real
+	 *   fix.
+	 * - The `probe.hx` cost is QUOTE-SENSITIVE in the Haxe plugin, and asymmetrically: a single-quoted
+	 *   `'probe.hx'` projects as `SingleStringExpr` wrapping a `Literal` child whose `name` is the
+	 *   decoded text (`probe.hx`, no quotes) — SYMBOL-shaped, so it is reported (the case above). The
+	 *   same content double-quoted, `"probe.hx"`, projects as one `DoubleStringExpr` node whose OWN
+	 *   `name` is the RAW source text WITH its quote marks (`"probe.hx"`) — never SYMBOL-shaped, so it
+	 *   is silently dropped instead. Two spellings of one literal, two different answers; confirmed via
+	 *   `apq ast` on `trace('probe.hx'); trace("probe.hx");` at HEAD `ed52a241`. This is a
+	 *   `HaxeQueryPlugin` projection asymmetry (`DoubleStringExpr` never decodes into a `Literal`
+	 *   child the way `SingleStringExpr` does), not a `CondQuery` bug, and `DoubleStringExpr`'s raw
+	 *   `name` has ~20 other kind-matching readers project-wide (`apq mentions DoubleStringExpr src`) —
+	 *   changing what it carries needs its own review of every one of them, well past this flag.
+	 *
+	 * Narrowing `collectNames` itself would need one of: a NEW declared `RefShape` field naming the
+	 * per-grammar "decoded string-literal piece" kind (Haxe: `Literal`) — `RefShape.stringLiteralKinds`
+	 * already names the two STRING kinds but not the piece kind interpolation splits into — or an
+	 * ancestor-aware walk that drops any node under a `stringLiteralKinds` subtree. Either is a real
+	 * grammar-seam change, not a dictionary hardcoded here, but it is a bigger and riskier edit than
+	 * this flag's own scope; left undone, and the choice is on the record now rather than re-derived
+	 * next time.
 	 */
 	private static function collectNames(node: QueryNode, body: Span, out: Array<String>): Void {
 		final span: Null<Span> = node.span;
