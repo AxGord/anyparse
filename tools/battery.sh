@@ -451,9 +451,10 @@ build_test_pid=$!
 # outside that reach.) So the corpus drill's own driver was typechecked by NOTHING
 # and could rot silently against any `src/` signature it calls (measured: the
 # module compiles today, the gate is what was missing). `--no-output` writes no
-# `/tmp/recon.js`, which also keeps concurrent workers off one shared artifact —
-# and it costs ~2.6s inside a stretch the ~25s test compile already owns, so the
-# branch's wall clock is unchanged.
+# artifact at all, and it costs ~2.6s inside a stretch the ~25s test compile
+# already owns, so the branch's wall clock is unchanged. (Until S171 it was also
+# what kept concurrent workers off one artifact: the hxml named the machine-global
+# `/tmp/recon.js`. It now writes the repo-relative `bin/recon.js`.)
 haxe recon.hxml --no-output > "$work/build-recon.log" 2>&1 &
 build_recon_pid=$!
 wait "$build_apq_pid" || apq_rc=$?

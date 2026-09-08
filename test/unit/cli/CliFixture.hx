@@ -1,12 +1,11 @@
 package unit.cli;
 
+import anyparse.core.TempScratch;
 #if (sys || nodejs)
 import haxe.Exception;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
-
-using StringTools;
 #end
 
 /**
@@ -51,7 +50,7 @@ final class CliFixture {
 	 */
 	public static function writeAs(prefix: String, extension: String, content: String): String {
 		counter++;
-		final path: String = '${tempDir()}/tmp_${prefix}_fixture_${Sys.time()}_$counter.$extension';
+		final path: String = '${TempScratch.root()}/tmp_${prefix}_fixture_${Sys.time()}_$counter.$extension';
 		File.saveContent(path, content);
 		return path;
 	}
@@ -63,7 +62,7 @@ final class CliFixture {
 	 */
 	public static function writeDir(prefix: String, files: Array<{ name: String, source: String }>): String {
 		counter++;
-		final dir: String = '${tempDir()}/tmp_${prefix}_dir_${Sys.time()}_$counter';
+		final dir: String = '${TempScratch.root()}/tmp_${prefix}_dir_${Sys.time()}_$counter';
 		FileSystem.createDirectory(dir);
 		for (f in files) File.saveContent('$dir/${f.name}', f.source);
 		return dir;
@@ -135,7 +134,7 @@ final class CliFixture {
 	 * directory and the only one nothing reaps.
 	 */
 	public static function isolateTempDir(): String {
-		final dir: String = makeScratchRoot(tempDir());
+		final dir: String = makeScratchRoot(TempScratch.root());
 		#if nodejs
 		// The stamp `tools/tmp-lifecycle.sh` reads. Its sweep removes a claimed directory
 		// whose owner pid is gone and whose entries have been untouched for the grace
@@ -204,17 +203,6 @@ final class CliFixture {
 		fn();
 		return '';
 		#end
-	}
-
-	private static inline function stripTrailingSlash(p: String): String {
-		return p.endsWith('/') ? p.substring(0, p.length - 1) : p;
-	}
-
-	private static function tempDir(): String {
-		final tmpdir: Null<String> = Sys.getEnv('TMPDIR');
-		if (tmpdir != null && tmpdir.length > 0) return stripTrailingSlash(tmpdir);
-		final temp: Null<String> = Sys.getEnv('TEMP');
-		return temp != null && temp.length > 0 ? stripTrailingSlash(temp) : '/tmp';
 	}
 
 	/**

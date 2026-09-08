@@ -3067,8 +3067,14 @@ signature it calls — measured
 by planting `private static function s17PlantedDefect(): Int { return 'not an Int'; }`
 in it: `haxe test-js.hxml` and `haxe bin/apq-js.hxml` both stayed exit 0, the new
 step failed the run with `recon.hxml did not typecheck`. `--no-output` writes no
-`/tmp/recon.js`, so concurrent workers do not share one artifact, and it costs
-~2.6s inside a stretch the ~25s test compile already owns.
+artifact at all, and it costs ~2.6s inside a stretch the ~25s test compile already
+owns. It used to be that `--no-output` was ALSO what kept concurrent workers off one
+artifact, because `recon.hxml` named the machine-global `/tmp/recon.js`; since S171 the
+hxml writes the repo-relative `bin/recon.js` like every other hxml here, so a worker
+that builds it for real is isolated by its own worktree. The clobber that motivated
+that: 3 concurrent rounds from two worktrees, both builds exit 0 every round, and the
+single surviving `/tmp/recon.js` was one tree's twice and the other's once — the loser
+then drills a grammar it did not build.
 
 Inside a branch the order is a real dependency; across branches there is none
 that matters: all four read `src`, and each branch's writes are read only by

@@ -386,6 +386,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.cli.ApqProbeCliTest',
 		'unit.cli.ApqProgressTtyCliTest',
 		'unit.cli.ApqReconCliTest',
+		'unit.cli.ApqScratchPathCliTest',
 		'unit.cli.ApqSearchCliTest',
 		'unit.cli.ApqSourceMetaArgCliTest',
 		'unit.cli.ApqSourceReadGuardCliTest',
@@ -1151,6 +1152,13 @@ class TestDiscoveryParityTest extends Test {
 			'unit.cli.ApqDxTier5CliTest#testTwoProbeProcessesGetSeparateScratchSlots :: guard :: ',
 			'unit.cli.ApqDxTier5CliTest#testTwoProbeProcessesUnderOneTempRootStillGetSeparateSlots :: guard :: ',
 			'unit.cli.ApqProgressTtyCliTest#testNoEnvAndNoTerminalIsSilent :: control :: M-PROGRESS-TTY-BLIND',
+			'unit.cli.ApqScratchPathCliTest#testStdlibDupRefusesAWorkDirectoryThatIsASymlink :: control :: M-STDLIB-DUP-WORK-ANY-TARGET',
+			'unit.cli.ApqScratchPathCliTest#testStdlibDupStagesItsProbesInAPerProcessDirectory :: control :: M-STDLIB-DUP-WORKDIR-SHARED',
+			'unit.cli.ApqScratchPathCliTest#testTestSummaryReadsTheTranscriptTheEnvVarNames :: control :: M-TEST-SUMMARY-GLOBAL-DEFAULT',
+			'unit.cli.ApqScratchPathCliTest#testTestSummaryWithoutASourceOrTheEnvVarIsAUsageError :: control :: '
+				+ 'M-TEST-SUMMARY-GLOBAL-DEFAULT',
+			'unit.cli.ApqScratchPathCliTest#testThreeTestSummaryProcessesUnderOneTempRootEachAnswerFromTheirOwnSource :: guard :: ',
+			'unit.cli.ApqScratchPathCliTest#testTwoStdlibDupProcessesUnderOneTempRootGetSeparateWorkDirectories :: guard :: ',
 			'unit.cli.ApqSourceReadGuardCliTest#testALongUnnarrowedReadIsRefused :: control :: M-SOURCE-READ-GUARD-OFF',
 			'unit.cli.ApqTestSummaryExitStatusCliTest#testTruncatedTranscriptDisagreesWithANonZeroExit :: control :: M-EXIT-STATUS-AGREES',
 			'unit.cli.CliCommandSeamTest#testTheRegistryHandsOutAFreshCommandPerCall :: control :: M-CLI-COMMANDS-MEMOISED',
@@ -1815,7 +1823,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-PSE-USING-INSERT-SILENT',
 			'M-STRING-LITERAL-DUP-REASON-MUTE',
 			'M-PROBE-SLOT-CONST',
-			'M-PROBE-STAGE-ANY-TARGET'
+			'M-PROBE-STAGE-ANY-TARGET',
+			'M-TEST-SUMMARY-GLOBAL-DEFAULT',
+			'M-STDLIB-DUP-WORKDIR-SHARED',
+			'M-STDLIB-DUP-WORK-ANY-TARGET'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

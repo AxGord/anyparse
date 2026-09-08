@@ -2143,6 +2143,29 @@
 			"method": "isStageTargetSafe",
 			"force": "true",
 			"note": "staging writes whatever the slot names, so a planted symlink there is a write-anywhere primitive with this process's rights"
+		},
+		{
+			"name": "M-TEST-SUMMARY-GLOBAL-DEFAULT",
+			"type": "anyparse.query.cli.command.TestSummaryCommand",
+			"method": "runTestSummary",
+			"find": "final resolved: Null<String> = sourcePath ?? Sys.getEnv(TRANSCRIPT_ENV);",
+			"replace": "final resolved: Null<String> = sourcePath ?? '/tmp/test.out';",
+			"note": "a source-less run reaches for one machine-global transcript again, so a second worker's suite log answers the first worker's counts at exit 0"
+		},
+		{
+			"name": "M-STDLIB-DUP-WORKDIR-SHARED",
+			"type": "anyparse.query.cli.command.StdlibDupCommand",
+			"method": "stdlibDupWorkDir",
+			"find": "final base: String = requested ?? TempScratch.slot(WORK_DIR_STEM);",
+			"replace": "final base: String = requested ?? haxe.io.Path.join([TempScratch.root(), WORK_DIR_STEM]);",
+			"note": "every run stages its generated probe into one machine-global directory under one fixed module name again, so two concurrent runs compile each other's program and report a fully-formed finding about the wrong function"
+		},
+		{
+			"name": "M-STDLIB-DUP-WORK-ANY-TARGET",
+			"type": "anyparse.query.cli.command.StdlibDupCommand",
+			"method": "isWorkDirSafe",
+			"force": "true",
+			"note": "the work directory is whatever the slot names, so a symlink planted there is adopted: the generated probe is written through it and every non-directory entry of the victim is deleted when the run ends"
 		}
 	]
 }

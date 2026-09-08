@@ -1,12 +1,20 @@
 # Phase 3 skip-parse drill recon — rebuild after any grammar edit.
 # Runtime requires the haxe-formatter fork checkout: set
 # `ANYPARSE_HXFORMAT_FORK=/path/to/haxe-formatter` and run
-# `node /tmp/recon.js` (or pass a single .hxtest path as argv[0] to
+# `node bin/recon.js` (or pass a single .hxtest path as argv[0] to
 # probe one file).
+#
+# The output is repo-relative like every other hxml here, and that is
+# load-bearing rather than tidy: it used to be the machine-global
+# `/tmp/recon.js`, so two worker trees building this file wrote one
+# artifact. Measured, 3 concurrent rounds from two worktrees: both
+# builds exited 0 every round and the surviving `/tmp/recon.js` was
+# one tree's twice and the other's once — the loser's `node` run then
+# drilled a grammar it had not built, silently.
 -cp src
 -cp test
 -lib hxnodejs
 -main _ReconSkipParse
--js /tmp/recon.js
+-js bin/recon.js
 # Mirrors bin/apq-js.hxml — a corpus sweep is the work it measures. See there.
 -D analyzer-optimize

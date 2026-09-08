@@ -19,8 +19,10 @@ import utest.Test;
  *  3. `apq sweep --diff` (no arg) — defaults to `bin/.prev-sweep.json`
  *     (auto-rotated by the corpus harness).
  *  4. `apq test-summary` — parses utest stdout into tests/asserts/
- *     failures/errors; file path / `-` (stdin) / default `/tmp/test.out`
- *     resolution rules.
+ *     failures/errors; file path and `-` (stdin) resolution. The
+ *     source-less case moved to `ApqScratchPathCliTest` when the
+ *     `/tmp/test.out` default went: a path default there could only
+ *     ever be machine-global.
  *  5. `apq recon --candidates <regex>` — walks skip-parse fixtures and
  *     counts regex hits per file (cross-cluster construct enumeration).
  */
@@ -138,19 +140,6 @@ class ApqDxTier3CliTest extends Test {
 		final path: String = CliFixture.writeAs('apq_test_summary', 'log', transcript);
 		Assert.equals(0, Cli.run(['test-summary', path]));
 		FileSystem.deleteFile(path);
-		#else
-		Assert.pass('non-sys target');
-		#end
-	}
-
-	public function testTestSummaryMissingDefaultExitsUsage(): Void {
-		#if (sys || nodejs)
-		// No positional + /tmp/test.out absent → usage error.
-		if (FileSystem.exists('/tmp/test.out')) {
-			Assert.pass('/tmp/test.out exists, skipping default-missing probe');
-			return;
-		}
-		Assert.equals(2, Cli.run(['test-summary']));
 		#else
 		Assert.pass('non-sys target');
 		#end

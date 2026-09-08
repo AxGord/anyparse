@@ -534,6 +534,61 @@ either check by construction: it *is* the regular file.
 apq probe: not staged — "…/planted.hx" exists and is not a regular file (symlink, directory or device); set APQ_PROBE_PATH to stage somewhere else.
 ```
 
+### `apq test-summary` has no path default, and `apq stdlib-dup` stages per PROCESS (T810 / T811)
+
+Two more commands carried the defect the section above closed for `apq probe`,
+and neither had a symptom: both processes exit 0 and both answers look right.
+
+**`apq test-summary` used to read `/tmp/test.out` when given no positional
+source.** It now reads `$APQ_TEST_OUT`, and a run with neither is a USAGE error
+naming the env var. A per-process path could not have fixed this and none is
+offered: the transcript is written by a DIFFERENT process (`node bin/test.js >
+…`), so nothing this one knows about itself can name the file it is meant to
+read. Measured on the pre-fix binary — two workers each writing their own suite
+log to that constant and each summarising it, 12 interleaved rounds — one read a
+transcript it had not written 7 times and the other 6, every one at exit 0 with
+plausible counts; in one round BOTH read a TORN interleave (`6 tests / 5
+assertions`) that neither had written. Nothing in the repo relied on the
+default: `tools/suite-shard.sh` always passes a path, and so does every recipe in
+`CLAUDE.md`.
+
+**`apq stdlib-dup` used to stage its generated probe into
+`<temp root>/apq-stdlib-dup/Probe.hx`** — one directory and one fixed module name
+for the whole machine — and then spawn `haxe -cp <dir> --run Probe`. The write
+and the spawn are two steps, so two runs sharing that directory race, and the
+loser compiles the OTHER run's program. The verdict that comes back is not a
+crash; it is a fully-formed differential finding about the wrong function.
+Measured: two one-candidate scopes driven concurrently, 12 rounds, the two
+processes reported IDENTICAL findings in EVERY round — 7 of 12 wrong for one and
+5 of 12 for the other, one of them reading
+
+```
+AlphaBegins.hx:3:16: info: AlphaBegins.beginsWith looks like StringTools.endsWith(s, p) — agreed on 484 generated inputs, 6 mapping(s) tried [stdlib-dup]
+```
+
+for a function that begins-with. The work directory is
+`<temp root>/apq-stdlib-dup.<pid>` now and the run ANNOUNCES it, because the
+generated probe is the only artifact a reader can go inspect when a verdict
+surprises them and a per-process path is not something the docs can spell:
+
+```
+apq stdlib-dup: staging probes in /var/folders/…/T/apq-stdlib-dup.19905
+```
+
+`--work <dir>` still names it outright; a caller passing one owns the same rule.
+
+**Where the temp root comes from.** `anyparse.core.TempScratch` is the single
+answer to "where may this process write scratch, and what keeps it apart from
+another process's". Five copies had drifted before it — `OracleCache.tempDir`,
+`CompilerServer.stateFile`, `ProbeCommand.probeTempRoot`,
+`StdlibDupCommand.stdlibDupWorkDir` and the suite's `CliFixture.tempDir` — over
+`?? '/tmp'` versus a `length > 0` guard, `TMPDIR` alone versus
+`TMPDIR`-then-`TEMP`, and whether the trailing slash macOS exports gets trimmed.
+`TempScratch.root()` stays a FUNCTION on purpose (`TMPDIR` is mutated at
+runtime, which is how the suite's private root reaches every producer), while
+the process token is resolved once, which is what makes a slot single per
+process rather than per call.
+
 ## Mutation commands (source rewriting)
 
 Distinct from the read-only query commands above: these **rewrite** source. Without `--write` the rewrite goes to stdout; with `--write` it overwrites the file in place. Cursor positions are 1-based `line:col` — the same convention `apq refs` prints (and `ast --at` / `source`). Two sub-families differ in how they format the result:

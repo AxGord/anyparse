@@ -7,8 +7,6 @@ import anyparse.query.cli.CliContext;
 import haxe.Exception;
 import anyparse.query.ExitCode.*;
 
-using Lambda;
-
 /**
  * `apq test-summary` — parse utest stdout transcript into tests/assertions/failures.
  *
@@ -16,6 +14,21 @@ using Lambda;
  */
 @:nullSafety(Strict)
 final class TestSummaryCommand implements CliCommand {
+
+	/**
+	 * Env var naming the transcript to read when no positional source is given.
+	 *
+	 * There is no PATH default any more, and there cannot be one. A transcript is written by a
+	 * DIFFERENT process (`node bin/test.js > …`), so nothing this process knows about itself —
+	 * its pid, its cwd — can name the file it is meant to read; the old `/tmp/test.out` named
+	 * one file for the whole machine, and two workers each writing their own suite log there
+	 * answered each other's questions. Measured on the pre-fix binary, 12 interleaved rounds:
+	 * one worker read a transcript it had not written 7 times, the other 6, every one of them at
+	 * exit 0 with plausible counts — and in one round BOTH read a TORN interleave (`6 tests /
+	 * 5 assertions`) that neither had written. An env var is the only thing that scales with
+	 * the caller's own isolation, so it is the only default offered.
+	 */
+	private static inline final TRANSCRIPT_ENV: String = 'APQ_TEST_OUT';
 
 	public function new() {}
 
@@ -46,11 +59,11 @@ final class TestSummaryCommand implements CliCommand {
 	/**
 	 * `apq test-summary [<file>]` — parse a utest stdout transcript and
 	 * print `N tests / M assertions / F failures / E errors`. Replaces
-	 * the manual `grep -cE ': OK' /tmp/test.out` + assertion-count
-	 * one-liner I keep rebuilding after every test run.
+	 * the manual `grep -cE ': OK' <transcript>` + assertion-count one-liner I keep rebuilding after every test run.
 	 *
-	 * Source resolution: positional path (file), `-` (stdin), or default
-	 * `/tmp/test.out` when run with no positional and the file exists.
+	 * Source resolution: positional path (file), `-` (stdin), or `$TRANSCRIPT_ENV`
+	 * when run with no positional. No positional and no env var is a USAGE error —
+	 * see the constant for why a path default cannot exist here.
 	 * Exits 0 on a COUNTABLE parse, 1 on a read failure or on a
 	 * transcript that yields no counts at all (see the refusal in the body).
 	 * The test outcome itself is informational — the runner's exit code is
@@ -91,23 +104,23 @@ final class TestSummaryCommand implements CliCommand {
 			}
 			i++;
 		}
+		final resolved: Null<String> = sourcePath ?? Sys.getEnv(TRANSCRIPT_ENV);
+		if (resolved == null || resolved.length == 0) {
+			CliIo.stderr(
+				'apq test-summary: no source given — pass <path>, `-` for stdin, or set $TRANSCRIPT_ENV to the transcript '
+				+ 'this run wrote. There is no built-in default: the one that used to be here named a single machine-global '
+				+ 'file, so a second worker\'s transcript answered the first worker\'s question at exit 0.\n'
+			);
+			return EXIT_USAGE;
+		}
+		final src: String = resolved;
 		final raw: String = try {
-			switch (sourcePath) {
-				case null: if (sys.FileSystem.exists('/tmp/test.out'))
-					sys.io.File.getContent('/tmp/test.out');
-				else {
-					CliIo.stderr('apq test-summary: no source given and /tmp/test.out missing — pass <path> or `-` for stdin\n');
-					return EXIT_USAGE;
-				}
-				case '-': CliIo.readStdin();
-				case _: sys.io.File.getContent((sourcePath: String));
-			}
+			src == '-' ? CliIo.readStdin() : sys.io.File.getContent(src);
 		} catch (e: Exception) {
 			CliIo.stderr('apq test-summary: read failed: ${e.message}\n');
 			return EXIT_RUNTIME;
 		}
 		final result: TestSummaryResult = TestTranscript.parseTestSummary(raw);
-		final src: String = sourcePath ?? '/tmp/test.out';
 		CliIo.warnIfTestJsStale('test-summary');
 		// A transcript that carries no REPORT is a read failure, not a green empty
 		// run. `0 tests / 0 assertions / 0 failures / 0 errors` is what every quiet
@@ -194,7 +207,9 @@ final class TestSummaryCommand implements CliCommand {
 		CliIo.sysPrint('errors. Source resolution:\n');
 		CliIo.sysPrint('  <file>     — read from the given path\n');
 		CliIo.sysPrint('  -          — read from stdin (heredoc / pipe / process subst.)\n');
-		CliIo.sysPrint('  (default)  — `/tmp/test.out` if it exists, else usage error\n');
+		CliIo.sysPrint('  (default)  — $$$TRANSCRIPT_ENV when set, else a usage error. There is no\n');
+		CliIo.sysPrint('               path default: one machine-global file answered a second\n');
+		CliIo.sysPrint('               worker with the first worker\'s transcript, at exit 0.\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Assertions come from utest\'s own `assertations:` block when the transcript\n');
 		CliIo.sysPrint('has one, and the test total from the runner\'s `tests executed:` line — the\n');
