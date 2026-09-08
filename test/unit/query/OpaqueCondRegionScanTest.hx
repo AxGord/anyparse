@@ -44,6 +44,19 @@ class OpaqueCondRegionScanTest extends Test {
 	private static final BALANCED_TWIN: String =
 		'class C {\n\tstatic function f(c: Bool): Void {\n\t\t#if x\n\t\tif (c) { g(); }\n\t\t#end\n\t\th();\n\t}\n}\n';
 
+	/**
+	 * A raw region whose CONDITION spells a local's name, while neither branch body mentions it —
+	 * the refusal it used to draw was false, and it was the LAST of that family: the directive
+	 * KEYWORDS were already exempt, since `SourceText.mentionsIdent` skips an identifier directly
+	 * preceded by `#`.
+	 */
+	private static final DEFINE_NAMED_LOCAL: String = 'class C {\n\tstatic function f(): Int {\n\t\tfinal debug: Int = 1;\n'
+		+ '\t\ttrace(debug);\n\t\treturn #if debug 1; #else 2; #end\n\t}\n}\n';
+
+	/** The same region with the name READ in a branch body — the refusal that must survive. */
+	private static final DEFINE_READ_IN_BRANCH: String =
+		'class C {\n\tstatic function f(): Int {\n\t\tfinal debug: Int = 1;\n\t\treturn #if debug 1; #else debug; #end\n\t}\n}\n';
+
 	/** A postfix tail splice: the node starts at `foo`, so the region is NOT the node's span. */
 	private static final TAIL_SPLICE: String = 'class C {\n\tstatic function f(): Void {\n\t\treturn foo #if target .sys #end;\n\t}\n}\n';
 
@@ -238,6 +251,62 @@ class OpaqueCondRegionScanTest extends Test {
 		final nested: Array<OpaqueCondRegion> = regionsOf(NESTED_ARMS);
 		Assert.equals(1, nested.length, 'class 3: yet only ONE region there is captured raw');
 		Assert.equals(NESTED_ARMS.indexOf('#if inner'), nested[0].region.from, 'class 3: and it is the inner region, not the outer');
+	}
+
+	/**
+	 * The region's OWN directives are not read as a mention of the name being rewritten.
+	 *
+	 * They sit in the gaps like everything else the model dropped, and they carry
+	 * identifier-shaped tokens that name no binding: a condition names build flags, `#end` and
+	 * `#else` name nothing. So the gate refused a rename of a local `debug` because the region
+	 * that mentions it is `#if debug`, and a local `end` because of the region's own closer —
+	 * fail-CLOSED, so safe, and wrong in both cases. Measured over the Pony fork: 20 of 872 files
+	 * hold an opaque region, all 20 lose names from their refusal set, and the whole dropped
+	 * multiset is the directive keywords plus `haxe_ver` / `starling` / `mobile` / `js` / `ios` /
+	 * `hxbitmini` / `display` — every one a compile-time define, and in 19 of the 20 files not
+	 * even a name the tree carries.
+	 *
+	 * The three fixtures are one triple: the SAME region and the SAME name, differing only in
+	 * whether the name is also written in a branch BODY. Asserting the refusal alone would pass
+	 * with the whole subtraction deleted, and asserting its absence alone would pass with the
+	 * scan deleted.
+	 *
+	 * KILLED by arm `M-COND-GAP-KEEPS-DIRECTIVES`, which reads the whole gap again.
+	 */
+	@:pin('control')
+	@:killer('M-COND-GAP-KEEPS-DIRECTIVES')
+	@:killer('M-COND-GAP-SCANS-NOTHING')
+	public function testARegionsOwnDirectivesAreNotAMentionOfTheNameTheyGuard(): Void {
+		Assert.isNull(diagnosticFor(DEFINE_NAMED_LOCAL, 'debug'), 'the only "debug" is the condition of the region itself');
+		final real: Null<String> = diagnosticFor(DEFINE_READ_IN_BRANCH, 'debug');
+		Assert.notNull(real, 'a read of the name INSIDE a branch still refuses');
+		Assert.stringContains('spells "debug" in bytes the parser captured raw', real ?? '');
+	}
+
+	/**
+	 * The subtraction is per DIRECTIVE, not per region: what lies BETWEEN two directive runs is
+	 * still read.
+	 *
+	 * A tail splice's whole gap is `#if target .sys #end` — a directive, one branch body, a
+	 * directive — so a scan that dropped everything from the region's first directive to its last
+	 * would lose the body, which for this shape is the only occurrence there is. The condition
+	 * sits two characters from it and must not be read; asserting the pair on ONE fixture is what
+	 * tells the two apart.
+	 *
+	 * KILLED by `M-COND-GAP-SCANS-NOTHING` (the body stops being read) and by
+	 * `M-COND-GAP-KEEPS-DIRECTIVES` (the condition starts being read).
+	 */
+	@:pin('control')
+	@:killer('M-COND-GAP-KEEPS-DIRECTIVES')
+	@:killer('M-COND-GAP-SCANS-NOTHING')
+	public function testOnlyTheDirectiveRunsComeOutOfTheGap(): Void {
+		Assert.notNull(diagnosticFor(TAIL_SPLICE, 'sys'), 'the branch body between the two directives is still scanned');
+		Assert.isNull(diagnosticFor(TAIL_SPLICE, 'target'), 'while the condition two characters before it is not');
+	}
+
+	private static function diagnosticFor(source: String, name: String): Null<String> {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		return CondRegionScan.opaqueCondRegionDiagnostic(source, plugin.parseFile(source), name, plugin.refShape(), 'rename of "$name"');
 	}
 
 	private static function regionsOf(source: String): Array<OpaqueCondRegion> {

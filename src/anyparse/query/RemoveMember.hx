@@ -169,11 +169,13 @@ final class RemoveMember {
 	 * has no `--nth` of its own to offer; the message names how many were found and hands over to
 	 * the op that does address one node.
 	 *
-	 * What it does NOT catch: two SIBLING regions carrying the same condition (`#if a … #end #if a … #end`).
-	 * The frames are keyed by region OCCURRENCE, so those are different branches to this question even
-	 * though no build compiles one without the other. So the criterion the refusal states is wider
-	 * than what it can see, and that half stays open: it is what a `replace-node` duplicating a
-	 * whole GUARDED group produces, rather than the bare member the covered half comes from.
+	 * Two SIBLING regions carrying the same condition (`#if a … #end #if a … #end`) ARE this shape and
+	 * are caught: since a `CondFrame` carries its branch's condition chain, not just its region's
+	 * ordinal, the pair reads as one branch. That is the half a `replace-node` duplicating a whole
+	 * GUARDED group produces, and it was open while a frame knew only which region it sat in — the
+	 * criterion the message states is now the criterion the frames answer. What still reads as two
+	 * branches is a pair whose conditions are logically equivalent but spelled apart (`#if !a` against
+	 * an `#else`, `#if a #if b` against `#if b #if a`); both declarations then go, as before.
 	 */
 	private static function sameBranchDuplicate(
 		source: String, plugin: GrammarPlugin, shape: RefShape, members: Array<{ node: QueryNode, parent: QueryNode }>, typeName: String,

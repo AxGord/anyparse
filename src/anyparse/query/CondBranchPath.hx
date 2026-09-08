@@ -1,7 +1,9 @@
 package anyparse.query;
 
+import anyparse.query.CondDirectives.CondDirective;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.runtime.Span;
 
 /**
  * Which conditional-compilation BRANCH a source position sits in, for checks that compare
@@ -20,6 +22,10 @@ import anyparse.query.LexicalRegions.LexRegion;
  * Two positions are ALTERNATIVES when some region they are both inside assigns them different
  * branch indices. Anything else is comparable — including a position outside a region against
  * one inside it, since a build that takes that branch really does see both.
+ *
+ * A frame carries its branch's CONDITION as well as its region's ordinal, because the two questions the
+ * class answers need different keys: `comparable` asks "is this the same region" and `sameBranch` asks
+ * "do these guard the same builds". Only the second is true of two sibling regions spelling one condition.
  *
  * Grammar-agnostic (the keyword vocabulary is `RefShape`'s) and parse-free, so it works on a
  * file the grammar cannot parse.
@@ -44,13 +50,17 @@ final class CondBranchPath {
 		final endKeyword: Null<String> = shape.conditionalEndKeyword;
 		for (directive in CondDirectives.scan(source, shape, () -> regions)) {
 			if (directive.keyword == shape.conditionalIfKeyword) {
-				stack.push({ region: nextRegion, branch: 0 });
+				stack.push({ region: nextRegion, branch: 0, condition: conditionText(source, directive) });
 				nextRegion++;
 			} else if (endKeyword != null && directive.keyword == endKeyword) {
 				if (stack.length > 0) stack.pop();
 			} else if (elseKeywords.contains(directive.keyword) && stack.length > 0) {
 				final top: CondFrame = stack[stack.length - 1];
-				stack[stack.length - 1] = { region: top.region, branch: top.branch + 1 };
+				stack[stack.length - 1] = {
+					region: top.region,
+					branch: top.branch + 1,
+					condition: '${top.condition}|${conditionText(source, directive)}'
+				};
 			}
 			marks.push({ at: directive.span.from, path: stack.copy() });
 		}
@@ -85,22 +95,63 @@ final class CondBranchPath {
 	 * both, and that is the right answer for a duplicate-case report. It is the wrong answer
 	 * for a REFUSAL, because this class cannot see that `#if js` and `#if !js` are alternatives
 	 * — they are two regions, not two branches of one — and refusing that pair would reject the
-	 * conditional-twin shape the callers exist to serve. Identical paths carry no such doubt: no build compiles one without the other.
-	 * FALSE is not a licence, though — it means only "not provably always together". Two sibling regions spelling the SAME condition
-	 * are different frames here, because a frame is keyed by region OCCURRENCE and this class never reads the condition text.
+	 * conditional-twin shape the callers exist to serve. Identical paths carry no such doubt: no
+	 * build compiles one without the other.
+	 *
+	 * Keyed by the branch's CONDITION CHAIN, not by region occurrence, which is what lets two
+	 * SIBLING regions spelling one condition (`#if a … #end #if a … #end`) answer true. They are
+	 * two regions and no build compiles one without the other, so a caller refusing on this
+	 * question has to see them as one branch — the shape a `replace-node` that duplicates a whole
+	 * guarded group produces, and the half `remove-member` reported as uncatchable while a frame
+	 * carried only its region's ordinal. Each frame's key is every condition its region has
+	 * spelled up to and including the branch in force (`a`, `a|b` for an `#elseif b`, `a|` for an
+	 * `#else`), so branch INDEX alone cannot equate two differently-conditioned `#elseif` arms.
+	 *
+	 * FALSE is still not a licence — it means only "not provably always together". Two chains that
+	 * are logically equivalent but spelled differently (`#if a #if b` against `#if b #if a`, or
+	 * `#if !a` against an `#else`) are different keys, and answer false.
 	 */
 	public static function sameBranch(a: Array<CondFrame>, b: Array<CondFrame>): Bool {
 		if (a.length != b.length) return false;
-		for (i in 0...a.length) if (a[i].region != b[i].region || a[i].branch != b[i].branch) return false;
+		for (i in 0...a.length) if (a[i].branch != b[i].branch || a[i].condition != b[i].condition) return false;
 		return true;
+	}
+
+	/**
+	 * The directive's condition as a comparison key: normalised whitespace, outer parentheses
+	 * stripped, empty for a keyword that carries none (`#else`, and a malformed `#if` whose tail
+	 * the reader could not delimit).
+	 *
+	 * Two spellings of one condition have to compare equal or the widening below buys nothing —
+	 * `#if (js)` and `#if js` guard the same builds — and the two normalisers `CondDirectives`
+	 * already exposes for `MemberSlots` are exactly that pair.
+	 */
+	private static function conditionText(source: String, directive: CondDirective): String {
+		final span: Null<Span> = directive.condition;
+		return span == null ? '' : CondDirectives.stripOuterParens(CondDirectives.normalizeCondition(source.substring(span.from, span.to)));
 	}
 
 }
 
-/** One open conditional region at a position: which region, and which of its branches. */
+/**
+ * One open conditional region at a position: which region, which of its branches, and that
+ * branch's condition chain.
+ *
+ * `region` is an occurrence ordinal — it answers "is this the SAME region", which is what
+ * `comparable` needs and what `sameBranch` must NOT use. `condition` answers "does this branch
+ * guard the same builds", which is what a REFUSAL needs; the two questions differ exactly on a
+ * pair of sibling regions spelling one condition.
+ */
 typedef CondFrame = {
 	final region: Int;
 	final branch: Int;
+
+	/**
+	 * Every condition the region has spelled up to and including this branch, normalised and
+	 * joined with `|` — `a` for the `#if` arm, `a|b` for an `#elseif b`, `a|` for an `#else`.
+	 * Empty where the directive carries no condition the reader could delimit.
+	 */
+	final condition: String;
 };
 
 /** The replayed directive marks of one source, in source order — `CondBranchPath.scan`'s result. */

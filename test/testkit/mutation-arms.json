@@ -30,6 +30,14 @@
 	],
 	"arms": [
 		{
+			"name": "M-ADDRESS-NO-ROOT-ANCHOR",
+			"type": "anyparse.query.Address",
+			"method": "widenToUnique",
+			"find": "\t\tif (_parentOf[node] == _root) {\n\t\t\tfinal anchored: String = '${segmentOf(_root)} > $selector';\n\t\t\tif (uniquelyResolves(anchored, node)) return { selector: anchored, unique: true };\n\t\t}\n",
+			"replace": "",
+			"note": "the root-anchored last attempt is dropped, so a node hanging directly off the module has no named ancestor to widen to and falls back to an --nth ordinal - the depth `>>` cannot express and no listing then spells"
+		},
+		{
 			"name": "M-ADMITS-TRUE",
 			"type": "anyparse.query.FieldWriteIndex",
 			"method": "admits",
@@ -110,6 +118,36 @@
 			"method": "normalize",
 			"force": "doc ?? ''",
 			"note": "the doc keeps its gutter and line breaks, so a claim wrapped across two lines is invisible — the failure mode of a line-oriented search"
+		},
+		{
+			"name": "M-COND-FRAME-CONDITION-RAW",
+			"type": "anyparse.query.CondBranchPath",
+			"method": "conditionText",
+			"find": "return span == null ? '' : CondDirectives.stripOuterParens(CondDirectives.normalizeCondition(source.substring(span.from, span.to)));",
+			"replace": "return span == null ? '' : source.substring(span.from, span.to);",
+			"note": "a branch key is the condition's raw bytes, so `#if (js)` and `#if js` stop comparing equal and two sibling regions guarding one build read as different branches again"
+		},
+		{
+			"name": "M-COND-FRAME-REGION-KEYED",
+			"type": "anyparse.query.CondBranchPath",
+			"method": "sameBranch",
+			"find": "for (i in 0...a.length) if (a[i].branch != b[i].branch || a[i].condition != b[i].condition) return false;",
+			"replace": "for (i in 0...a.length) if (a[i].region != b[i].region || a[i].branch != b[i].branch) return false;",
+			"note": "two positions are the same branch only when they sit in the same region OCCURRENCE, so `#if a f #end #if a f #end` reads as two branches and `remove-member` deletes both declarations of a pair no build can compile"
+		},
+		{
+			"name": "M-COND-GAP-KEEPS-DIRECTIVES",
+			"type": "anyparse.query.CondRegionScan",
+			"method": "outsideDirectives",
+			"force": "[gap]",
+			"note": "the mention scan reads a raw region's own directives again, so renaming a local `debug` beside `#if debug` - or one named `end` beside the region's `#end` - is refused by the directive that guards it"
+		},
+		{
+			"name": "M-COND-GAP-SCANS-NOTHING",
+			"type": "anyparse.query.CondRegionScan",
+			"method": "outsideDirectives",
+			"force": "[]",
+			"note": "no byte of a raw region is scanned at all, so the fail-closed gate stops seeing every occurrence it exists to see and every name-driven op rewrites around such a region in silence"
 		},
 		{
 			"name": "M-CUDDLE-FLATONLY",

@@ -884,8 +884,18 @@ Rules and properties:
   the `source` read-guard menu. A row only an ordinal separates stays bare,
   since `--nth <k>` is what the message already offers. So a `--select
   'Conditional'` that matched a module-level region and a member-level one
-  answers `#2 4:2 Conditional  --select 'ClassDecl:C >> Conditional'`, instead
-  of leaving the reader to guess that such a path exists. The listing asks
+  answers both rows — `#2 4:2 Conditional  --select 'ClassDecl:C >> Conditional'`
+  for the member-level one and `#1 1:1 Conditional  --select 'module >
+  Conditional'` for the other — instead of leaving the reader to guess that such
+  a path exists. The second row reaches its address a different way: every
+  widening step prepends a NAMED ancestor with `>>`, so the walk can say
+  "somewhere under X" and cannot say "at the TOP LEVEL", and the root is the one
+  ancestor every node shares and the one that is always nameless. A node hanging
+  directly off it therefore has no named ancestor at all, and its bare segment
+  matches every same-kind node in the file; a final root-anchored attempt with
+  the direct-child combinator is what singles it out. It is tried only for a
+  direct child of the root — deeper, the ordinal is genuinely what separates the
+  candidates. The listing asks
   `AddressIndex.uniqueSelector`, which reports "names cannot single this out"
   as an ABSENCE — reading it off `describe`'s rendered string cannot work,
   because a node's name is arbitrary text: a literal spelling ` --nth 2` looks
@@ -925,7 +935,19 @@ Rules and properties:
   `remove-element --select … --nth <k>`, which addresses one node. (Until S168
   the check was region-level, so it caught two unguarded declarations and a
   guarded/unguarded mix and was blind to the same-branch pair; `safe-delete`
-  shares the path and the fix.) Giving both an
+  shares the path and the fix.) "One branch" includes two SIBLING regions
+  spelling the same condition (`#if a f #end #if a f #end`): no build compiles
+  one without the other, so the pair is as uncompilable as two declarations
+  inside one region. That half was open until S176, because a `CondFrame` was
+  keyed by region OCCURRENCE and the two read as different branches; the frame
+  now carries its branch's condition CHAIN (`a`, `a|b` for an `#elseif b`, `a|`
+  for an `#else`, normalised so `#if (a)` and `#if a` compare equal) and
+  `CondBranchPath.sameBranch` compares that. `CondBranchPath.comparable` keeps
+  the region ordinal — it asks "is this the same region", which is the right key
+  for `duplicate-case` and the wrong one for a refusal. Two chains that are
+  logically equivalent but spelled apart (`#if !a` against an `#else`) are still
+  different keys, and both declarations then go, which is the direction that
+  keeps the conditional-twin removal the op exists for. Giving both an
   address and `--type <T> <memberName>` is a usage error, and an address that
   resolves to something that is not a member is refused with a pointer at
   `remove-element`. (The ops that accept no address form are the ones whose
