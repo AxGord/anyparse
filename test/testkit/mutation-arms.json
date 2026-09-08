@@ -1728,6 +1728,13 @@
 			"note": "a multi-line arrow body reports no construct head, so the glue threshold stops discounting the head width and an overflowing block-`if` body is measured whole"
 		},
 		{
+			"name": "M-FN-LAMBDA-BODY-DEFERRED",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "isFunctionInlineBodyItem",
+			"force": "false",
+			"note": "no `function`-keyword lambda argument opens the BodyGroup re-tag gate, so its parked inline body measures 0 again and the callParameter / methodChain / ifBody cascades above it all read a line short by the whole body - the fixed point of any width the Pony site showed at 146 columns"
+		},
+		{
 			"name": "M-GLUE-NEVER-BREAKS",
 			"type": "anyparse.format.BodyFit",
 			"method": "glueLayout",
