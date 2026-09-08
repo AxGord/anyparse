@@ -269,7 +269,11 @@ class ShardPlanTest extends Test {
 
 	/** A pinned class missing from the list is refused through `--classes` too. */
 	public function testAClassListMissingAPinnedClassIsRefused(): Void {
-		final listed: Array<String> = ShardPlan.STICKY_CLASSES.filter(name -> name != 'unit.cli.ApqProbeCliTest');
+		// Padding so the list clears the `--shards 2` floor on its own — `STICKY_CLASSES`
+		// is down to 2 (S178), and without this the run would hit the "exceeds registered
+		// classes" gate before reaching the one this test means.
+		final listed: Array<String> = ShardPlan.STICKY_CLASSES.filter(name -> name != 'unit.cli.ApqDxTier5CliTest')
+			.concat(['unit.PaddingOneTest', 'unit.PaddingTwoTest']);
 		final message: String = switch ShardPlan.planClasses(listed, 2, 'a list') {
 			case Planned(_):
 				Assert.fail('expected a refusal');
@@ -277,7 +281,7 @@ class ShardPlanTest extends Test {
 			case Refused(text):
 				text;
 		};
-		Assert.stringContains('pinned class unit.cli.ApqProbeCliTest is not registered in a list', message);
+		Assert.stringContains('pinned class unit.cli.ApqDxTier5CliTest is not registered in a list', message);
 	}
 
 	/** A runner registering every pinned class, then `statements` verbatim. */
@@ -323,7 +327,12 @@ class ShardPlanTest extends Test {
 
 	/** A runner registering every pinned class except `omitted`. */
 	private function runnerWithout(omitted: String): String {
-		return build(ShardPlan.STICKY_CLASSES.filter(name -> name != omitted), []);
+		// Padding so the class count clears the `--shards 2` floor on its own —
+		// `STICKY_CLASSES` is down to 2 (S178), and without this the run would hit
+		// the "exceeds registered classes" gate before reaching the one this test means.
+		return build(
+			ShardPlan.STICKY_CLASSES.filter(name -> name != omitted), ['addCase(new PaddingOneTest());', 'addCase(new PaddingTwoTest());']
+		);
 	}
 
 	/** A runner registering every pinned class, then one `addCase(new X());` per name. */

@@ -8,6 +8,7 @@ import anyparse.query.cli.CliContext;
 import anyparse.query.cli.CliIo;
 import anyparse.query.cli.CliRegistry;
 import anyparse.query.cli.PostWriteFix;
+import anyparse.query.cli.UsageFailure;
 import anyparse.query.cli.WriteFailure;
 import anyparse.runtime.Span;
 import anyparse.query.ExitCode.*;
@@ -233,6 +234,13 @@ final class Cli {
 			// (the empty / `--help` argv returned above).
 			CliIo.stderr('apq ${args[0]}: ${failure.message}\n');
 			return EXIT_RUNTIME;
+		} catch (failure: UsageFailure) {
+			// A bad flag (missing value, unparseable `--limit`, unknown `--lang`) is a fact about
+			// the argv, not a bug — same shape as the WriteFailure catch above, EXIT_USAGE instead
+			// of EXIT_RUNTIME. Everything else (a plain String / Dynamic throw, a real exception)
+			// still reaches `main` as a raw stack — what an internal bug wants.
+			CliIo.stderr('apq ${args[0]}: ${failure.message}\n');
+			return EXIT_USAGE;
 		}
 	}
 

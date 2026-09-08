@@ -1,8 +1,8 @@
 package unit;
 
-import anyparse.check.CondRegionLiveness;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CondDirectives;
+import anyparse.query.CondRegionLiveness;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
 import utest.Assert;
