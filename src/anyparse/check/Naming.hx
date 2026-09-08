@@ -177,27 +177,48 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 			final s: Null<Span> = decl.span;
 			if (s != null && flaggedFroms.contains(s.from) && !flaggedNames.contains(decl.name)) flaggedNames.push(decl.name);
 		}
-		final reflectionNames: Array<String> = index == null
-			? []
-			: reflectionNamesInOtherFiles(index, violations[0].file, flaggedNames, plugin, support);
 		final confinedMemo: Map<String, Bool> = [];
 		// The inherited-member proof of a `_`-prefix field rename walks the FULL supertype
 		// closure, so it resolves through the plugin's resolution scope (report files UNION the
 		// configured libraries) when present — a field of an `openfl` / `lime` subclass is then
-		// provable rather than blocked as unresolvable. The report-scope `index` still backs the
-		// confinement / reflection proofs (they reason about report-file reachability).
+		// provable rather than blocked as unresolvable. The two CROSS-FILE proofs below take a
+		// DIFFERENT index from this one, and neither takes the report index once the project declares
+		// a resolution scope — confinement moved off it in S179, the reflection scan in S180. With no
+		// declared scope both fall back to `index` exactly as before, which is the state every unit
+		// test holding a bare plugin exercises.
 		final resolutionIndex: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
-		// The confinement proof gets the WIDEST index rather than the report one — and unlike the
-		// inheritance proof above it must NOT take the implicit std with it, which is what
-		// `RefactorSupport.widestScopeIndex` gates. This is the decision that lets the SINGLE-FILE
-		// rename go ahead: a false "confined" (a subtype, or an `@:access` grantee, declared in a file
-		// the run does not lint) let it rewrite the declaration and its in-file uses and leave the
-		// grantee's own access bound to a name that no longer exists. Measured on a two-file probe
-		// under `resolutionRoots: ["src"]`: `lint A.hx --rule naming --fix` wrote 2 edits in A alone
-		// and left `a.My_Field` standing in the grantee, where the same command over `src` wrote 3
-		// edits in 2 files. Widening only ever ADDS a subtype / grant, so `confined` can only go
-		// true -> false: this path can only LOSE a rename to a `NOT_CONFINED` refusal, never gain one.
-		final confinementIndex: Null<SymbolIndex> = RefactorSupport.widestScopeIndex(plugin, index);
+		// Those two cross-file proofs — is this private member confined, and does another file name
+		// it in a reflection call — share ONE index, and it is the WIDEST rather than the report one.
+		// What `RefactorSupport.widestScopeIndex` gates is NARROWER than its name suggests, and the
+		// sentence that used to stand here got it wrong: it refuses a scope that exists ONLY because a
+		// Haxe std was discovered, so a project declaring nothing keeps the report index. A project
+		// that DID declare `resolutionRoots` / `resolutionLibs` gets the std inside this index too —
+		// `LintCommand.readResolutionLibrary` appends it to the SAME scope — and both proofs are keyed
+		// on a NAME, so a std or haxelib coincidence can decide them. Measured on this project's own
+		// config: 33 `Reflect.<m>(…, "literal")` sites in the std tree the spec covers, ~28 distinct
+		// names. The direction is safe (an extra subtype or reflection name only adds a refusal) so it
+		// costs usefulness, not correctness — but the sibling scan in `UnusedPrivate` deliberately
+		// takes the narrower PROJECT scope for exactly this reason, and only one of the two can be
+		// right. T868 holds that question; nothing here depends on which way it goes.
+		//
+		// This is the decision that lets the SINGLE-FILE rename go ahead, and each half was measured
+		// on its own two-file probe under `resolutionRoots: ["src"]`.
+		// CONFINEMENT (S179): a false "confined" — a subtype or an `@:access` grantee declared in a
+		// file the run does not lint — let `lint A.hx --rule naming --fix` write 2 edits in A alone
+		// and leave `a.My_Field` standing in the grantee, where the same command over `src` writes 3
+		// edits in 2 files. REFLECTION (S180, T861): with `Reflect.field(c, 'My_Field')` in a file the
+		// run does not lint, `lint C.hx --rule naming --fix` wrote 2 edits and the reflective read
+		// went on naming a field that no longer existed, where `lint src` refuses with
+		// `REFLECTION_NAME`.
+		//
+		// Each widening is one-way, and both point the same way. Widening only ever ADDS a subtype /
+		// grant, so `confined` can only go true -> false; it only ever ADDS reflection names, so
+		// `REFLECTION_NAME` only fires more often. So this path can only LOSE a rename to a refusal,
+		// never gain one.
+		final wideIndex: Null<SymbolIndex> = RefactorSupport.widestScopeIndex(plugin, index);
+		final reflectionNames: Array<String> = wideIndex == null
+			? []
+			: reflectionNamesInOtherFiles(wideIndex, violations[0].file, flaggedNames, plugin, support);
 
 		// The HOIST arm runs FIRST. A flagged LOCAL that is an author-intended CONSTANT — an
 		// UPPER_SNAKE name over a compile-time-constant initializer — moves to its enclosing type
@@ -223,7 +244,7 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 			final declSpan: Null<Span> = decl.span;
 			if (declSpan != null && hoistedFroms.contains(declSpan.from)) continue;
 			final rename: Null<DeclRename> = renameEditsFor(
-				decl, source, tree, policy, shape, plugin, flaggedFroms, reflectionNames, confinedMemo, resolutionIndex, confinementIndex,
+				decl, source, tree, policy, shape, plugin, flaggedFroms, reflectionNames, confinedMemo, resolutionIndex, wideIndex,
 				violations[0].file, flaggedAt
 			);
 			final owner: Null<String> = RenameClaims.memberOwnerOf(decl);
@@ -723,8 +744,8 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		// mentioning the name (`publicAffectedFiles`), and `otherFileRenameSpans` already refuses on a
 		// name-shaped string literal in any of them. Measured: with a duplicate AST-projected guard
 		// removed, `Reflect.field(x, '__size')` in the declaring file AND in another file both still
-		// refuse. A second mechanism answering the same question would only add a disk read per candidate
-		// and a gate no in-memory test can reach.
+		// refuse. A second mechanism answering the same question would only re-scan the
+		// resolution scope once per candidate for an answer this path already holds.
 		// Unresolvable hierarchy, and the two causes answer separately: one sentence for both sent a
 		// reader looking for an `@:allow` that a duplicate type name had actually caused.
 		//
@@ -1279,10 +1300,13 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 	 * pre-filter, so the overwhelming majority of files are dismissed at today's cost and
 	 * only a handful are parsed.
 	 *
-	 * Sources are read from disk via the paths the index holds, since `SymbolIndex` retains
-	 * none; an unreadable or unparseable file is skipped. WANT: a `SymbolIndex.sourceOf(file)`
-	 * accessor would reuse the already-parsed sources and drop the disk read entirely — it
-	 * would also make this guard reachable from an in-memory unit test, which today it is not.
+	 * Sources come from the index's own `sourceOf`, which holds the exact bytes the index was
+	 * built from. Reading by PATH instead — a `sys.io.File.getContent(fi.file)` — answers about
+	 * the DISK rather than about the run: it puts this guard out of reach of every in-memory test
+	 * (a synthetic library source has no file on disk), and mid-`--fix` it reports whatever an
+	 * earlier pass wrote. It also needed a `#if (sys || nodejs)` around the whole scan, which
+	 * silently disabled the `REFLECTION_NAME` refusal on any other target; that guard is gone and
+	 * the refusal now fires everywhere. An unparseable file contributes nothing and is skipped.
 	 */
 	private static function reflectionNamesInOtherFiles(
 		index: SymbolIndex, currentFile: String, candidates: Array<String>, plugin: GrammarPlugin, support: NamingSupport
@@ -1290,13 +1314,11 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		final out: Array<String> = [];
 		if (candidates.length == 0) return out;
 		for (fi in index.allFiles()) if (fi.file != currentFile) {
-			#if (sys || nodejs)
-			final source: Null<String> = try sys.io.File.getContent(fi.file) catch (exception: Exception) null;
+			final source: Null<String> = index.sourceOf(fi.file);
 			if (source == null || !quotedMention(source, candidates)) continue;
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 			if (tree == null) continue;
 			for (name in support.reflectionMemberNames(tree, source)) if (candidates.contains(name) && !out.contains(name)) out.push(name);
-			#end
 		}
 		return out;
 	}
