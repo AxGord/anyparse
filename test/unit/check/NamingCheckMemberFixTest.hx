@@ -1040,6 +1040,52 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		for (src in [field, constant]) Assert.stringContains('the member carries metadata', declineReasonsIn('pkg', src)[0]);
 	}
 
+	/**
+	 * The confinement proof and the REPORT SCOPE, on the path that REWRITES.
+	 *
+	 * Every other confinement fixture in this part puts the subtype / grant in the report scope, where
+	 * the report index sees it. Here the `@:access` grantee lives in a file the run does not lint but
+	 * the project's declared `resolutionRoots` do cover — and asked of the report index the member
+	 * reads as confined, which is the single-file rename's whole licence. Measured on a two-file probe
+	 * before the fix: `lint C.hx --rule naming --fix` wrote 2 edits in C.hx alone and left the
+	 * grantee's `c.My_Field` bound to a name that no longer existed. The widest index answers
+	 * `NOT_CONFINED` instead, and the cross-file path declines too (its own gate reads the report
+	 * index, on purpose — see `crossFileCandidate`), so the finding is reported and nothing is written.
+	 */
+	@:pin('control')
+	@:killer('M-CONFINEMENT-REPORT-INDEX-RENAME')
+	public function testAccessGrantOutsideReportScopeRefusesSingleFileRename(): Void {
+		final declSource: String =
+			'package pkg;\nclass C {\n\tprivate var My_Field:Int = 0;\n\n\tpublic function read():Int {\n\t\treturn My_Field;\n\t}\n}';
+		final report: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: declSource }];
+		// Leading assertion — with NO grantee anywhere the same declaration DOES rename, so the refusal
+		// below is about the out-of-scope grant and not about the fixture.
+		final bare: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final bareCheck: Naming = new Naming();
+		final bareVs: Array<Violation> = bareCheck.run(report, bare);
+		Assert.equals(1, bareVs.length);
+		Assert.isTrue(bareCheck.fix(declSource, bareVs, bare, SymbolIndex.build(report, bare)).length > 0);
+		final library: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/E.hx', source: 'package pkg;\n@:access(pkg.C)\nclass E {\n\tpublic function f(c:C) { return c.My_Field; }\n}' }
+		];
+		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		plugin.setResolutionScope({
+			declared: true,
+			sources: () -> {report: report, projectRoots: [], library: new LibrarySources(library) }
+		});
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(report, plugin).filter(v -> v.file == 'pkg/C.hx');
+		Assert.equals(1, vs.length);
+		final index: SymbolIndex = SymbolIndex.build(report, plugin);
+		Assert.equals(0, check.crossFileFix(report, vs, plugin, index).length, 'the cross-file rename declines');
+		Assert.equals(0, check.fix(declSource, vs, plugin, index).length, 'and the single-file rename is refused');
+		Assert.equals(
+			'the private member is not provably confined to this file — a subtype, an `@:access` / `@:allow` grant or a file the grammar '
+			+ 'could not read can reach it, so the rewrite must cross files',
+			vs[0].declineReason
+		);
+	}
+
 	/** The `Naming` fix edits for `pkg/C.hx` with one unparseable sibling carrying `badSrc`. */
 	private function fixCount(cSrc: String, badSrc: String): Int {
 		final files: Array<{ source: String, file: String }> = [

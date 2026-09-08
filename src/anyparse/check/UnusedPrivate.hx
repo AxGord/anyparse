@@ -17,7 +17,6 @@ import anyparse.query.SourceText;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.query.SymbolIndex;
-import anyparse.query.SymbolIndexHost;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -143,7 +142,7 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 		final support: Null<NamingSupport> = plugin.namingSupport();
 		if (support == null) return [];
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
-		final scopeIndex: SymbolIndex = widestScopeIndex(plugin, index) ?? index;
+		final scopeIndex: SymbolIndex = RefactorSupport.widestScopeIndex(plugin, index) ?? index;
 		final contracts: Array<FrameworkContract> = LintConfig.frameworksFor(_resolveConfig, files);
 		final stringFold: Null<StringFoldSupport> = plugin.stringFoldSupport();
 		final reflected: Array<String> = [];
@@ -228,7 +227,7 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return edits;
 		final hasConditional: Bool = fileHasConditional(source);
-		final scopeIndex: Null<SymbolIndex> = widestScopeIndex(plugin, index);
+		final scopeIndex: Null<SymbolIndex> = RefactorSupport.widestScopeIndex(plugin, index);
 
 		final memberByFrom: Map<Int, { node: QueryNode, parent: QueryNode, inExtends: Bool }> = [];
 		collectMembers(tree, false, memberByFrom);
@@ -302,41 +301,6 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	 */
 	private static inline function mayImplementAbstractMethod(member: QueryNode, inExtendsClass: Bool): Bool {
 		return (member.kind == 'FnMember' || member.kind == 'FinalModifiedMember') && inExtendsClass;
-	}
-
-	/**
-	 * The widest source scope available for the zero-occurrence proof and the structural
-	 * confinement checks: the host's resolution-scoped index (report UNION the DECLARED library
-	 * roots) when `plugin` is a `SymbolIndexHost` carrying a declared scope, else the report-scoped
-	 * `index` the caller passed, else null (a direct `fix` call with no index — the caller falls
-	 * back to the single file it was handed).
-	 *
-	 * Deliberately gated on `hasDeclaredResolutionScope`, NOT on `hasAnyResolutionScope` the way
-	 * `RefactorSupport.lazySymbolIndex` is. The proof this index feeds is `referencedElsewhere`, a
-	 * TEXTUAL occurrence scan used to lift a `#if`-carrying file's whole-file veto — and a private
-	 * member of this project can never legitimately be referenced from the Haxe std. Admitting the
-	 * implicit std scope would therefore add only false positives: a private member named `write` or
-	 * `get` occurs all over std, the veto stands, and `unused-private --fix` silently stops deleting
-	 * it. Conservative either way (more occurrences means fewer deletions, never a wrong one), so the
-	 * cost is usefulness rather than correctness — which is exactly why it must not happen by
-	 * accident. A DECLARED library is a different matter: the project chose it, and a file the run
-	 * does not lint can legitimately be where the reference lives.
-	 *
-	 * The same index also feeds `isPrivateMemberConfined`'s STRUCTURAL checks (subtype / `@:access`
-	 * matched by simple type name, not by occurrence). A declared scope's library half still admits
-	 * the auto-discovered std unconditionally (`LintCommand.readResolutionLibrary`), so the identical
-	 * std-collision hazard applies there: an owner type whose simple name coincides with a std type
-	 * that HAS subtypes can flip "confined" to false on that coincidence alone. Same direction as
-	 * above — it can only keep a member that a narrower proof would have deleted, never delete one
-	 * that is live — so the hazard costs usefulness, not correctness.
-	 */
-	private static function widestScopeIndex(plugin: GrammarPlugin, index: Null<SymbolIndex>): Null<SymbolIndex> {
-		final host: Null<SymbolIndexHost> = plugin is SymbolIndexHost ? cast plugin : null;
-		if (host != null && host.hasDeclaredResolutionScope()) {
-			final res: Null<SymbolIndex> = host.resolutionIndex();
-			if (res != null) return res;
-		}
-		return index;
 	}
 
 	/**

@@ -130,7 +130,7 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 	 * Autofix: rename each flagged binding to a mechanically-corrected name when
 	 * the rename is provably complete in this one file. A function-body-scoped
 	 * binding (Local / Param / CatchVar) is a candidate; a private FIELD is one
-	 * only when the cross-file `index` proves it confined (no subtype, no
+	 * only when the WIDEST index available proves it confined (no subtype, no
 	 * `@:access`, no `@:allow`, no skip-parse file that could hide one) and no
 	 * OTHER indexed file names it through a reflection call
 	 * (`reflectionNamesInOtherFiles` — an AST verdict, not a text scan). Every
@@ -187,6 +187,17 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		// provable rather than blocked as unresolvable. The report-scope `index` still backs the
 		// confinement / reflection proofs (they reason about report-file reachability).
 		final resolutionIndex: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
+		// The confinement proof gets the WIDEST index rather than the report one — and unlike the
+		// inheritance proof above it must NOT take the implicit std with it, which is what
+		// `RefactorSupport.widestScopeIndex` gates. This is the decision that lets the SINGLE-FILE
+		// rename go ahead: a false "confined" (a subtype, or an `@:access` grantee, declared in a file
+		// the run does not lint) let it rewrite the declaration and its in-file uses and leave the
+		// grantee's own access bound to a name that no longer exists. Measured on a two-file probe
+		// under `resolutionRoots: ["src"]`: `lint A.hx --rule naming --fix` wrote 2 edits in A alone
+		// and left `a.My_Field` standing in the grantee, where the same command over `src` wrote 3
+		// edits in 2 files. Widening only ever ADDS a subtype / grant, so `confined` can only go
+		// true -> false: this path can only LOSE a rename to a `NOT_CONFINED` refusal, never gain one.
+		final confinementIndex: Null<SymbolIndex> = RefactorSupport.widestScopeIndex(plugin, index);
 
 		// The HOIST arm runs FIRST. A flagged LOCAL that is an author-intended CONSTANT — an
 		// UPPER_SNAKE name over a compile-time-constant initializer — moves to its enclosing type
@@ -212,7 +223,7 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 			final declSpan: Null<Span> = decl.span;
 			if (declSpan != null && hoistedFroms.contains(declSpan.from)) continue;
 			final rename: Null<DeclRename> = renameEditsFor(
-				decl, source, tree, policy, shape, plugin, flaggedFroms, reflectionNames, confinedMemo, resolutionIndex, index,
+				decl, source, tree, policy, shape, plugin, flaggedFroms, reflectionNames, confinedMemo, resolutionIndex, confinementIndex,
 				violations[0].file, flaggedAt
 			);
 			final owner: Null<String> = RenameClaims.memberOwnerOf(decl);
@@ -488,12 +499,12 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 	private static function renameEditsFor(
 		decl: NamedDecl, source: String, tree: QueryNode, policy: NamingPolicy, shape: RefShape, plugin: GrammarPlugin,
 		flaggedFroms: Array<Int>, reflectionNames: Array<String>, confinedMemo: Map<String, Bool>, resolutionIndex: Null<SymbolIndex>,
-		index: Null<SymbolIndex>, file: String, flaggedAt: Map<Int, Violation>
+		confinementIndex: Null<SymbolIndex>, file: String, flaggedAt: Map<Int, Violation>
 	): Null<DeclRename> {
 		final span: Null<Span> = decl.span;
 		if (span == null || !flaggedFroms.contains(span.from)) return null;
 		final declFrom: Int = span.from;
-		final unsafe: Null<String> = RenameRefusal.of(decl, source, index, reflectionNames, confinedMemo);
+		final unsafe: Null<String> = RenameRefusal.of(decl, source, confinementIndex, reflectionNames, confinedMemo);
 		if (unsafe != null) return RenameRefusal.rename(flaggedAt, declFrom, unsafe);
 		final rule: Null<NamingRule> = applicableRule(decl, policy);
 		if (rule == null) return RenameRefusal.rename(flaggedAt, declFrom, RenameRefusal.NO_RULE);
@@ -689,6 +700,23 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		// A confined PRIVATE member is the single-file path's job; only a non-confined one crosses files.
 		// A PUBLIC member is never confined in that sense - any file holding a value of the owner's type
 		// reaches it - so the proof does not apply and it always crosses.
+		//
+		// The REPORT index here, deliberately, where the single-file path's twin of this question
+		// (`RenameRefusal.of`) takes the WIDEST one. The asymmetry is load-bearing and was measured
+		// rather than reasoned: this gate only decides who OWNS the declaration, and everything after
+		// it — `affectedFiles`, `publicAffectedFiles`, `sourceByFile` — enumerates the files to edit
+		// from the REPORT scope. Widen the question without widening the enumeration and a member the
+		// wide index calls unconfined is accepted here, its affected set comes back as the declaring
+		// file alone, and the rename lands in that one file: on the two-file `@:access` probe under
+		// `resolutionRoots: ["src"]`, `lint A.hx --rule naming --fix` went from 0 edits back to 2 in
+		// 1 file with the grantee's access left bound to the old name — the same orphan the
+		// single-file path had just been stopped from writing.
+		//
+		// Asking NARROW here is therefore not a hole. Confinement is monotone: widening the index can
+		// only flip `confined` true -> false, so the wider `RenameRefusal.of` can only DECLINE where
+		// this one accepts, never the reverse — the two paths can leave a member to nobody (reported,
+		// with `NOT_CONFINED` as its decline reason) and can never both claim it. The gap is the safe
+		// direction; the overlap, which is the one that writes twice, is structurally impossible.
 		if (!isPublic && RefactorSupport.isPrivateMemberConfined(ownerName, decl.name, source, index)) return null;
 		// No reflection guard here, deliberately. `RenameRefusal.of`'s exists because the single-file path
 		// never looks at another file; this path DOES - a public member's affected set is every scope file
@@ -1933,7 +1961,8 @@ private class RenameRefusal {
 	 * then the guard's own and cannot drift from the condition that produced it.
 	 */
 	public static function of(
-		decl: NamedDecl, source: String, index: Null<SymbolIndex>, reflectionNames: Array<String>, confinedMemo: Map<String, Bool>
+		decl: NamedDecl, source: String, confinementIndex: Null<SymbolIndex>, reflectionNames: Array<String>,
+		confinedMemo: Map<String, Bool>
 	): Null<String> {
 		// A declaration the grammar marked rename-unsafe (a typedef / anon-structure
 		// field whose name is a wire contract, or a property backed by physical
@@ -1946,7 +1975,7 @@ private class RenameRefusal {
 		// different answers to "why not mine", so the reader gets three sentences.
 		if (!isConfinableMemberCategory(category)) return NOT_A_MEMBER;
 		if (decl.mods.contains('public')) return PUBLIC_MEMBER;
-		if (index == null) return NO_INDEX;
+		if (confinementIndex == null) return NO_INDEX;
 		// An `override` is a METHOD-only hazard - it binds the name to the SUPERTYPE's declaration, so
 		// renaming the override alone orphans it. `implicitReach` is EVERY member's: a member reached
 		// without an identifier naming it is reached that way whatever its category, and the OTHER check
@@ -1980,10 +2009,16 @@ private class RenameRefusal {
 		// Keyed by owner AND member: the skipped-file half of the proof is per-NAME now (a file
 		// the grammar cannot read can only reach a member it spells), so two members of one type
 		// no longer share an answer.
+		//
+		// The key carries no INDEX, and it does not need one: the map is built per `fix()` call and
+		// this is its only writer, so every entry in it was decided against the one
+		// `confinementIndex` that call resolved. A second index reaching the same map would make the
+		// first answer serve the second question — so a future caller must pass its own map, not
+		// share this one.
 		final memoKey: String = '$owner\t${decl.name}';
 		final cached: Null<Bool> = confinedMemo[memoKey];
 		if (cached != null) return cached ? null : NOT_CONFINED;
-		final confined: Bool = RefactorSupport.isPrivateMemberConfined(owner, decl.name, source, index);
+		final confined: Bool = RefactorSupport.isPrivateMemberConfined(owner, decl.name, source, confinementIndex);
 		confinedMemo[memoKey] = confined;
 		return confined ? null : NOT_CONFINED;
 	}
