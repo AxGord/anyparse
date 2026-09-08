@@ -27,7 +27,10 @@ import haxe.Exception;
 @:nullSafety(Strict)
 final class SharedParseTier {
 
-	/** Library sources actually parsed into the shared tier — a served entry leaves this untouched (the caching-invariant tests read it). */
+	/**
+	 * Library sources actually parsed into the shared tier — a served
+	 * entry leaves this untouched (the caching-invariant tests read it).
+	 */
 	public static var libraryParses(default, null): Int = 0;
 
 	/**

@@ -330,7 +330,10 @@ final class LintConfig {
 		return _drops;
 	}
 
-	/** The raw prop `key` of rule `id`, or null when the rule is unconfigured or lacks the key — the base for the typed option accessors. */
+	/**
+	 * The raw prop `key` of rule `id`, or null when the rule is unconfigured
+	 * or lacks the key — the base for the typed option accessors.
+	 */
 	private function propOf(id: String, key: String): Null<JValue> {
 		final rc: Null<RuleConfig> = _rules[id];
 		return rc?.props[key];

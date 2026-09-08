@@ -303,7 +303,10 @@ final class PreferRangeLoop implements Check {
 		return flat.length > EXCERPT_MAX ? '${flat.substring(0, EXCERPT_MAX)}…' : flat;
 	}
 
-	/** The counter variable of a `var i = A;` single-var declaration (not `final`, one initializer, no multi-declaration comma), or null. */
+	/**
+	 * The counter variable of a `var i = A;` single-var declaration (not
+	 * `final`, one initializer, no multi-declaration comma), or null.
+	 */
 	private static function matchCounterDecl(decl: QueryNode, source: String, s: Seams): Null<String> {
 		if (!s.mutableKinds.contains(decl.kind) || decl.children.length != 1) return null;
 		final name: Null<String> = decl.name;

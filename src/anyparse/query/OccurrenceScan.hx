@@ -348,7 +348,10 @@ final class OccurrenceScan {
 		return null;
 	}
 
-	/** The scan behind `referencedInRange` / `referencedUnqualifiedInRange`; a non-null `commentRegions` drops dot-qualified occurrences. */
+	/**
+	 * The scan behind `referencedInRange` / `referencedUnqualifiedInRange`;
+	 * a non-null `commentRegions` drops dot-qualified occurrences.
+	 */
 	private static function scanReference(
 		source: String, name: String, from: Int, end: Int, excluded: Array<Span>, commentRegions: Null<Array<Span>>
 	): Bool {

@@ -781,7 +781,10 @@ final class MemberOrder implements Check implements ConfigAware {
 		return true;
 	}
 
-	/** Whether every maximal chunk of `[from, to)` left uncovered by the from-sorted `covered` spans holds only blank or directive lines. */
+	/**
+	 * Whether every maximal chunk of `[from, to)` left uncovered by the
+	 * from-sorted `covered` spans holds only blank or directive lines.
+	 */
 	private static function uncoveredIsDirectiveOnly(source: String, from: Int, to: Int, covered: Array<Span>): Bool {
 		var cursor: Int = from;
 		for (c in covered) {
@@ -913,7 +916,10 @@ final class MemberOrder implements Check implements ConfigAware {
 		return false;
 	}
 
-	/** Whether an emitted part is comment text only - the lead doc hoisted above a branched block's `#if`, which occupies no member slot. */
+	/**
+	 * Whether an emitted part is comment text only - the lead doc hoisted
+	 * above a branched block's `#if`, which occupies no member slot.
+	 */
 	private static function isTriviaOnly(text: String): Bool {
 		return StringTools.trim((~/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g).replace(text, '')) == '';
 	}

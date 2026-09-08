@@ -757,7 +757,10 @@ final class BoolLoopScan {
 		return node.kind == s.blockStmtKind && node.children.length == 1 ? node.children[0] : node;
 	}
 
-	/** Assemble the `Info` finding anchored at the loop (or its guard, or the flag's declaration), with the suggested call in the message. */
+	/**
+	 * Assemble the `Info` finding anchored at the loop (or its guard, or
+	 * the flag's declaration), with the suggested call in the message.
+	 */
 	private static function buildViolation(
 		cand: Cand, source: String, s: Seams, kind: BoolLoopKind, ruleId: String, file: String
 	): Null<Violation> {

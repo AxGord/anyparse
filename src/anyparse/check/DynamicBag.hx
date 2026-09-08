@@ -524,7 +524,10 @@ private enum BagVerdict {
 	Undetermined;
 }
 
-/** One reflect operation on a bag: the call node, the reflect method, whether it is a direct `Reflect.<m>` call, and the bag operand node. */
+/**
+ * One reflect operation on a bag: the call node, the reflect method,
+ * whether it is a direct `Reflect.<m>` call, and the bag operand node.
+ */
 private typedef BagOp = {
 	var call: QueryNode;
 	var method: String;

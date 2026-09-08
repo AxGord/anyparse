@@ -493,7 +493,10 @@ final class ImportOrder {
 			candidate.slot >= 0 && incumbent.slot < 0;
 	}
 
-	/** Whether what follows the statement on its own line is nothing, or a `//` comment — the only two shapes a whole-line move may carry. */
+	/**
+	 * Whether what follows the statement on its own line is nothing, or
+	 * a `//` comment — the only two shapes a whole-line move may carry.
+	 */
 	private static inline function isPureTail(tail: String): Bool {
 		return tail == '' || tail.startsWith('//');
 	}

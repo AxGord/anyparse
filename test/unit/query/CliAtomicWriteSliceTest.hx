@@ -225,7 +225,10 @@ final class CliAtomicWriteSliceTest extends Test {
 	}
 
 	#if (sys || nodejs)
-	/** Three canonical files with one `unused-local` each: `lint --fix` rewrites all three, so a count of changed files measures the run. */
+	/**
+	 * Three canonical files with one `unused-local` each: `lint --fix`
+	 * rewrites all three, so a count of changed files measures the run.
+	 */
 	private static function fixtureTree(): String {
 		return CliFixture.writeDir('apq_stage_set', [
 			{ name: 'A.hx', source: fixable('A') },

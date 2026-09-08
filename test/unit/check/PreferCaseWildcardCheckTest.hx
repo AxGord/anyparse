@@ -25,7 +25,10 @@ class PreferCaseWildcardCheckTest extends Test {
 	private static inline final QUOTED_THEN_RUNTIME: String = 'class C {\n\tfunction f(k:Int):Void {\n\t\tfinal e = macro switch m {\n'
 		+ '\t\t\tcase 1: a();\n\t\t\tdefault: b();\n\t\t};\n\t\tswitch k {\n\t\t\tcase 1: a();\n\t\t\tdefault: b();\n\t\t}\n\t}\n}\n';
 
-	/** A `default:` inside a REIFICATION subtree is DATA: it reifies as `ESwitch.edef`, where `case _:` becomes another entry of `cases`. */
+	/**
+	 * A `default:` inside a REIFICATION subtree is DATA: it reifies as
+	 * `ESwitch.edef`, where `case _:` becomes another entry of `cases`.
+	 */
 	public function testMacroQuotationNotFlagged(): Void {
 		Assert.equals(0, linted(QUOTED).length);
 	}

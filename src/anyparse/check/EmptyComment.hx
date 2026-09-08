@@ -157,7 +157,10 @@ final class EmptyComment implements Check {
 		return true;
 	}
 
-	/** Whether the gap `[gapStart, gapEnd)` between two tokens is whitespace holding EXACTLY one newline — they sit on consecutive lines. */
+	/**
+	 * Whether the gap `[gapStart, gapEnd)` between two tokens is whitespace
+	 * holding EXACTLY one newline — they sit on consecutive lines.
+	 */
 	private static function oneLineApart(source: String, gapStart: Int, gapEnd: Int): Bool {
 		var newlines: Int = 0;
 		for (i in gapStart ... gapEnd) {

@@ -51,7 +51,10 @@ class SpanInfoLowering extends PairedShapeLowering {
 	/** Rules a `type` / `returnType` field can point at that are enums - the only ones that yield a nominal name or a span. */
 	private final _nominalRules: Array<String> = [];
 
-	/** Element type of the accessor clause's `ids` array, or null when no rule has that shape - the emitted accessor test is typed on it. */
+	/**
+	 * Element type of the accessor clause's `ids` array, or null when
+	 * no rule has that shape - the emitted accessor test is typed on it.
+	 */
 	private var _accessorIdCT: Null<ComplexType> = null;
 
 	public function new(shape: ShapeBuilder.ShapeResult) {

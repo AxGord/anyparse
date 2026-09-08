@@ -339,7 +339,10 @@ final class MemberSlots {
 		return out;
 	}
 
-	/** Whether `at` falls inside one of the member slots `out[firstIdx...]` - a directive in a member's own body is not a branch boundary. */
+	/**
+	 * Whether `at` falls inside one of the member slots `out[firstIdx...]`
+	 * - a directive in a member's own body is not a branch boundary.
+	 */
 	private static function insideAnyMember(out: Array<OrderedMember>, firstIdx: Int, at: Int): Bool {
 		for (i in firstIdx ... out.length) if (at >= out[i].span.from && at < out[i].span.to) return true;
 		return false;

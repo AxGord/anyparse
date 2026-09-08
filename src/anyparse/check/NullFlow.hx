@@ -1106,7 +1106,10 @@ final class NullFlow {
 		return declared != null && declared(decl);
 	}
 
-	/** Clear every name written anywhere in `node`'s subtree (any write-kind whose first child is a plain identifier) on both polarities. */
+	/**
+	 * Clear every name written anywhere in `node`'s subtree (any write-kind
+	 * whose first child is a plain identifier) on both polarities.
+	 */
 	private static function killWritten(node: QueryNode, state: FlowState, ctx: FlowCtx): Void {
 		if (ctx.writeKinds.contains(node.kind) && node.children.length >= 1) {
 			final target: QueryNode = node.children[0];

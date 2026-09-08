@@ -530,7 +530,10 @@ final class OracleCache {
 		return run.failure == '' && run.status == 0 ? run.out : '';
 	}
 
-	/** `path` resolved against the compile root when relative, normalised either way — the one spelling every key and memo is written in. */
+	/**
+	 * `path` resolved against the compile root when relative, normalised
+	 * either way — the one spelling every key and memo is written in.
+	 */
 	private static function absolute(root: String, path: String): String {
 		return Path.normalize(Path.isAbsolute(path) ? path : Path.join([root, path]));
 	}

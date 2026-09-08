@@ -345,7 +345,10 @@ class PreferIfExpressionAssignmentCheckTest extends Test {
 		);
 	}
 
-	/** End-to-end through the canonical writer: the emitted file holds the hoisted if-expression whose else value is a switch-expression. */
+	/**
+	 * End-to-end through the canonical writer: the emitted file holds
+	 * the hoisted if-expression whose else value is a switch-expression.
+	 */
 	public function testSwitchInElseEndToEnd(): Void {
 		final out: String = applyFixOnce(
 			wrap('if (a) x = f();\n\t\telse switch line {\n\t\t\tcase \'3.1\': x = \'a\';\n\t\t\tcase _: x = \'b\';\n\t\t}')

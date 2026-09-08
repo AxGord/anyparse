@@ -27,7 +27,10 @@ final class MapScopeScan {
 	/** The `import a.b.*;` declaration kind. */
 	private static inline final WILDCARD_IMPORT_KIND: String = 'ImportWildDecl';
 
-	/** The `using a.b.*;` declaration kind — the `using` twin of `WILDCARD_IMPORT_KIND` (`UsingScan.USING_DECL_KIND` names the plain one). */
+	/**
+	 * The `using a.b.*;` declaration kind — the `using` twin of
+	 * `WILDCARD_IMPORT_KIND` (`UsingScan.USING_DECL_KIND` names the plain one).
+	 */
 	private static inline final WILDCARD_USING_KIND: String = 'UsingWildDecl';
 
 	/** The aliasing import kinds (`import a.b.X as Y;` / `… in Y;`) — each binds a simple name to an unexposed path. */

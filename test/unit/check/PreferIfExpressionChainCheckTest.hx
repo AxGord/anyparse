@@ -376,7 +376,10 @@ class PreferIfExpressionChainCheckTest extends Test {
 		Assert.equals('if (!a && !c) 3 else if (b) 1 else 2', es[0].text);
 	}
 
-	/** The same engine FLIPS an equality operator rather than wrapping it — `n == 0` negates to `n != 0`, which is what a reader expects. */
+	/**
+	 * The same engine FLIPS an equality operator rather than wrapping
+	 * it — `n == 0` negates to `n != 0`, which is what a reader expects.
+	 */
 	public function testInvertedConditionFlipsAnEqualityOperator(): Void {
 		final es: Array<{ span: Span, text: String }> =
 			edits('class C {\n\tfunction f():Int {\n\t\treturn n == 0 ? b ? 1 : 2 : 3;\n\t}\n}');

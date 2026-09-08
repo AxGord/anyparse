@@ -123,7 +123,10 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	 */
 	private static inline final QUERY_TYPE_SLOT_META: String = ':queryTypeSlot';
 
-	/** Name of the `_walk` parameter carrying the enclosing node's type slot, and of the local a node-forming rule allocates for its own. */
+	/**
+	 * Name of the `_walk` parameter carrying the enclosing node's type
+	 * slot, and of the local a node-forming rule allocates for its own.
+	 */
 	private static inline final TYPE_OUT_PARAM: String = 'typeOut';
 
 	private static inline final TYPE_SLOT_LOCAL: String = '_typeSlot';
