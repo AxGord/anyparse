@@ -14,8 +14,6 @@ import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SourceText;
-import anyparse.query.StringFold.StringFoldSupport;
-import anyparse.query.StringFold.StringLiteral;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -88,10 +86,9 @@ using StringTools;
  * `RefactorSupport.isSideEffectFree`), it is not an abstract-method impl of an
  * `extends` class (`mayImplementAbstractMethod`: Haxe impls carry no `override` and
  * the base's call is invisible to a single-file scan), its enclosing type carries no
- * `@:rtti` (drill-Node serialization by field name), `@:keep`, or `@:build`, and its
- * name appears in no string literal anywhere in the PROJECT scope — report files
- * UNION the declared `resolutionRoots` — where it would be a possible
- * `Reflect.field` target.
+ * `@:rtti` (drill-Node serialization by field name), `@:keep`, or `@:build`, and its name appears in no string literal
+ * anywhere in the RESOLUTION scope — report files UNION the library, which is `ReflectionScan`'s scope and since T868
+ * the only one a name-keyed reflection question is asked in — where it would be a possible `Reflect.field` target.
  *
  * Conditional compilation (`#if` / `#elseif` / `#else`) refines the reference scan
  * rather than vetoing the file wholesale: a member in a `#if`-carrying file is deleted
@@ -108,9 +105,9 @@ using StringTools;
 final class UnusedPrivate implements Check implements ConfigAware implements FrameworkAware {
 
 	/**
-	 * PROJECT-scope string-literal contents gathered by the last `run` — report files UNION the
-	 * declared `resolutionRoots` — consulted by `fix`'s reflection gate. Null until `run` populates
-	 * it; `fix` then falls back to the single file it is handed.
+	 * RESOLUTION-scope string-literal contents gathered by the last `run` — `ReflectionScan.reflectionSurface`,
+	 * report files UNION the library — consulted by `fix`'s reflection gate. Null until `run` populates it;
+	 * `fix` then asks the same seam with the one source it is handed, which still unions the resolution scope.
 	 */
 	private var _reflectedContents: Null<Array<String>> = null;
 
@@ -136,8 +133,8 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	 * scan for a confined type, else the report-UNION-resolution zero-occurrence proof)
 	 * plus a deletable private empty constructor: a `private function new() {}` in a
 	 * never-instantiated all-static utility class (no structural `new C`, no reflection
-	 * mention of the class name, no `@:build`, no subtype). The PROJECT-scope string-literal
-	 * contents gathered here serve TWO readers — `fix`'s per-member reflection gate, and the
+	 * mention of the class name, no `@:build`, no subtype). The RESOLUTION-scope string-literal contents gathered here
+	 * (`ReflectionScan.reflectionSurface` — report UNION the library, T868) serve TWO readers — `fix`'s per-member reflection gate, and the
 	 * constructor arm below, which asks them about the CLASS name. Widening the scope can only
 	 * add contents, so the arm can only stop reporting a constructor, never start.
 	 */
@@ -147,7 +144,7 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
 		final scopeIndex: SymbolIndex = RefactorSupport.widestScopeIndex(plugin, index) ?? index;
 		final contracts: Array<FrameworkContract> = LintConfig.frameworksFor(_resolveConfig, files);
-		final reflected: Array<String> = projectStringContents(files, plugin);
+		final reflected: Array<String> = ReflectionScan.reflectionSurface(files, plugin).whole;
 		final violations: Array<Violation> = [];
 		final ctorCandidates: Array<{ file: String, className: String, span: Span }> = [];
 		for (entry in files) {
@@ -200,9 +197,9 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	 * qualifies, a body-less declaration never), it is not an abstract-method impl of an `extends`
 	 * class (`mayImplementAbstractMethod`), its enclosing type carries no
 	 * `@:rtti` (drill-Node field-name serialization, via the index), `@:keep`, or
-	 * `@:build`, and its name appears in no string literal anywhere in the PROJECT scope —
-	 * report files UNION the declared `resolutionRoots` — where it would be a possible
-	 * `Reflect.field` target.
+	 * `@:build`, and its name appears in no string literal anywhere in the RESOLUTION scope — report
+	 * files UNION the library, which is `ReflectionScan`'s scope and since T868 the only one a
+	 * name-keyed reflection question is asked in — where it would be a possible `Reflect.field` target.
 	 *
 	 * Conditional compilation refines rather than vetoes wholesale: a file carrying ANY
 	 * `#if` makes the single-file reference scan branch-blind, so a MEMBER in such a file
@@ -236,7 +233,12 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 		collectMembers(tree, false, memberByFrom);
 		final classMeta: Map<String, { hasBuild: Bool, hasKeep: Bool }> = [];
 		collectClassMeta(plugin, tree, classMeta);
-		final reflected: Array<String> = _reflectedContents ?? inFileStringContents(source, plugin);
+		// The fallback path — `fix` reached without the `run` that fills the field. The empty path is a
+		// name no scope file has, so the source joins the scan as one more entry instead of shadowing a
+		// real one; what it is NOT any more is a scan of this file ALONE, since the seam unions the
+		// resolution scope onto whatever it is handed.
+		final reflected: Array<String> = _reflectedContents ?? ReflectionScan.reflectionSurface([{ file: '', source: source }], plugin)
+			.whole;
 
 		final deleting: Array<QueryNode> = [];
 		for (v in violations) if (v.severity == Severity.Warning) {
@@ -523,67 +525,6 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	/** Whether a `FnMember`'s only child is an empty block body (no params, no statements). */
 	private static function isEmptyCtorBody(node: QueryNode): Bool {
 		return node.children.length == 1 && node.children[0].kind == 'BlockBody' && node.children[0].children.length == 0;
-	}
-
-	/** Collect every plain string-literal's raw content in `node`'s subtree into `out`. */
-	private static function collectStringContents(
-		node: QueryNode, source: String, stringFold: StringFoldSupport, out: Array<String>
-	): Void {
-		final lit: Null<StringLiteral> = stringFold.literalOf(node, source);
-		if (lit != null) out.push(lit.content);
-		for (child in node.children) collectStringContents(child, source, stringFold, out);
-	}
-
-	/**
-	 * Every string-literal content in the PROJECT scope — the report files UNION the declared
-	 * `resolutionRoots`, and the report files alone when a project declares none.
-	 *
-	 * Two consumers, not one: `fix`'s per-member reflection gate, and `run`'s OWN private-empty-
-	 * constructor arm, which asks the same contents about a CLASS name. Both ask whether some file
-	 * NAMES the thing as a string, and a file outside the LINT scope answers that as well as one
-	 * inside it: `Reflect.field(a, 'My_Field')` in a sibling module is exactly the reference a
-	 * deletion breaks silently. Gathered from the report files alone it read "no such string in the
-	 * files I was given" as "no such string" — the S177 / S179 / S180 report-scope defect in its
-	 * DELETING form. Measured on the two-file reflection cell of `CrossScopeSoundnessTest`: the
-	 * narrow-report `fix` removed a member the same two files, reported together, keep. Widening
-	 * moves a finding COUNT in the constructor arm (fewer findings, the under-reporting direction)
-	 * and no count at all in the member gate, which only withholds an edit.
-	 *
-	 * PROJECT scope rather than the whole resolution scope, for the reason
-	 * `RefactorSupport.resolutionProjectSourcesOf` states: the question is keyed on a member NAME, so
-	 * admitting a haxelib or the std would let any string that happens to spell one veto a deletion.
-	 * The sign is one-way whichever half is added — contents only GROW, `mentionedInStrings` only
-	 * turns true more often, so a member can only be KEPT, never newly deleted.
-	 */
-	private static function projectStringContents(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<String> {
-		final stringFold: Null<StringFoldSupport> = plugin.stringFoldSupport();
-		final out: Array<String> = [];
-		if (stringFold == null) return out;
-
-		// The project scope is scanned FIRST and the handed `files` are then topped up with whatever
-		// it did not already cover, rather than being replaced by it. Replacing them read as monotone
-		// only because the CLI hands `check.run` the very array its resolution thunk closed over; any
-		// caller whose declared scope's report half is not a superset of `files` would LOSE strings,
-		// and losing a string is the one direction that newly DELETES a member. Union, and the sign
-		// is a property of this function instead of an unstated coupling.
-		final projectSources: Null<Array<{ file: String, source: String }>> = RefactorSupport.resolutionProjectSourcesOf(plugin);
-		final project: Array<{ file: String, source: String }> = projectSources ?? [];
-		final scanned: Array<String> = [for (entry in project) entry.file];
-		for (entry in project.concat([for (f in files) if (!scanned.contains(f.file)) f])) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) collectStringContents(tree, entry.source, stringFold, out);
-		}
-		return out;
-	}
-
-	/** The single-file string-literal contents — `fix`'s fallback when `run` left no cross-file stash. */
-	private static function inFileStringContents(source: String, plugin: GrammarPlugin): Array<String> {
-		final stringFold: Null<StringFoldSupport> = plugin.stringFoldSupport();
-		if (stringFold == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		final out: Array<String> = [];
-		if (tree != null) collectStringContents(tree, source, stringFold, out);
-		return out;
 	}
 
 	/** Whether `name` occurs as a word inside any collected string-literal content (a possible reflection target). */

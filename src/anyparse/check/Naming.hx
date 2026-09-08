@@ -6,6 +6,7 @@ import anyparse.check.Check.CrossFileFix;
 import anyparse.check.Check.FrameworkAware;
 import anyparse.check.Check.Violation;
 import anyparse.check.ConstantHoist.Hoist;
+import anyparse.check.ReflectionScan.ScopeFile;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.CondRegionScan;
 import anyparse.query.GrammarPlugin;
@@ -197,9 +198,12 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		// on a NAME, so a std or haxelib coincidence can decide them. Measured on this project's own
 		// config: 33 `Reflect.<m>(…, "literal")` sites in the std tree the spec covers, ~28 distinct
 		// names. The direction is safe (an extra subtype or reflection name only adds a refusal) so it
-		// costs usefulness, not correctness — but the sibling scan in `UnusedPrivate` deliberately
-		// takes the narrower PROJECT scope for exactly this reason, and only one of the two can be
-		// right. T868 holds that question; nothing here depends on which way it goes.
+		// costs usefulness, not correctness. T868 settled the fork that used to stand here — the sibling
+		// scan in `UnusedPrivate` took the narrower PROJECT scope, and it was the one that was wrong:
+		// with the reflective string in the LIBRARY half of the same declared scope, the narrow seam
+		// licensed a member DELETION the wide one refuses. Both name-keyed scans now share
+		// `ReflectionScan.scopeFiles`, so `wideIndex` is the CONFINEMENT half's index here and the
+		// reflection scan's FALLBACK for a run with no declared scope, not its scope.
 		//
 		// This is the decision that lets the SINGLE-FILE rename go ahead, and each half was measured
 		// on its own two-file probe under `resolutionRoots: ["src"]`.
@@ -216,9 +220,12 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		// `REFLECTION_NAME` only fires more often. So this path can only LOSE a rename to a refusal,
 		// never gain one.
 		final wideIndex: Null<SymbolIndex> = RefactorSupport.widestScopeIndex(plugin, index);
-		final reflectionNames: Array<String> = wideIndex == null
-			? []
-			: reflectionNamesInOtherFiles(wideIndex, violations[0].file, flaggedNames, plugin, support);
+		// The REPORT index goes to the reflection scan, not `wideIndex`: since T868 the SCOPE is
+		// `ReflectionScan.scopeFiles`', and an index is only the fallback for a run that declared none —
+		// where the report set IS the whole world. Handing the wide one would have made the two
+		// interchangeable (on a declared scope it is a subset of what the seam adds anyway) and hidden
+		// which of them the guard actually depends on.
+		final reflectionNames: Array<String> = reflectionNamesInOtherFiles(index, violations[0].file, flaggedNames, plugin, support);
 
 		// The HOIST arm runs FIRST. A flagged LOCAL that is an author-intended CONSTANT — an
 		// UPPER_SNAKE name over a compile-time-constant initializer — moves to its enclosing type
@@ -1309,18 +1316,39 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 	 * the refusal now fires everywhere. An unparseable file contributes nothing and is skipped.
 	 */
 	private static function reflectionNamesInOtherFiles(
-		index: SymbolIndex, currentFile: String, candidates: Array<String>, plugin: GrammarPlugin, support: NamingSupport
+		index: Null<SymbolIndex>, currentFile: String, candidates: Array<String>, plugin: GrammarPlugin, support: NamingSupport
 	): Array<String> {
 		final out: Array<String> = [];
 		if (candidates.length == 0) return out;
-		for (fi in index.allFiles()) if (fi.file != currentFile) {
-			final source: Null<String> = index.sourceOf(fi.file);
-			if (source == null || !quotedMention(source, candidates)) continue;
+		for (entry in ReflectionScan.scopeFiles(index == null ? [] : indexSources(index), plugin)) if (entry.file != currentFile) {
+			final source: String = entry.source;
+			if (!quotedMention(source, candidates)) continue;
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-			if (tree == null) continue;
+			// T867: a file the parser could not read still SPELLS the name in quotes, and nothing
+			// downstream can tell a `Reflect.field(x, 'name')` there from a menu key. `continue` here
+			// was the blindness — `SymbolIndex.allFiles()`, which this walked before, drops a
+			// skip-parsed file entirely, so its text reached no reader at all. The conservative answer
+			// is the one `RawSourceScan.skippedMayReference` gives the confinement proof beside it.
+			if (tree == null) {
+				for (name in candidates) if (quotedMention(source, [name]) && !out.contains(name)) out.push(name);
+				continue;
+			}
 			for (name in support.reflectionMemberNames(tree, source)) if (candidates.contains(name) && !out.contains(name)) out.push(name);
 		}
 		return out;
+	}
+
+	/**
+	 * `index`'s files as raw sources — the FALLBACK half `ReflectionScan.scopeFiles` unions the
+	 * resolution sources onto, for the runs that have no declared scope and whose whole reflection
+	 * surface is therefore the report set this index was built over.
+	 *
+	 * Skipped files carry their retained source and are included: they are the T867 half, and an index
+	 * that dropped them here would put the blindness back one layer down.
+	 */
+	private static function indexSources(index: SymbolIndex): Array<ScopeFile> {
+		final files: Array<String> = [for (fi in index.allFiles()) fi.file].concat(index.skippedFiles());
+		return [for (file in files) { file: file, source: index.sourceOf(file) ?? '' }];
 	}
 
 	/**

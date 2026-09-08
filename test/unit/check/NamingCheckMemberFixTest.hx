@@ -1095,9 +1095,10 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 	 * had nothing to refuse on. Measured on a two-file probe under `resolutionRoots: ["src"]` before
 	 * the fix: `lint C.hx --rule naming --fix` wrote 2 edits in C.hx and left the reflective read
 	 * naming a field that no longer existed, where the same command over `src` refused with
-	 * `REFLECTION_NAME`. The scan takes the WIDEST index now — the one the confinement proof beside it
-	 * already took in S179, and for the same reason both are name-keyed, so neither may admit the
-	 * implicit std.
+	 * `REFLECTION_NAME`. The scan took the WIDEST index for a while — the one the confinement proof beside it already took
+	 * in S179 — and since T868 it takes neither: the SCOPE is `ReflectionScan.scopeFiles`, shared with `unused-private`
+	 * and five other checks, and the index it is handed is only the fallback for a run that declared no scope. That is why
+	 * the arm cuts the seam call rather than the index argument; cutting the argument is a no-op now, which is the point.
 	 *
 	 * The second half of the fix is what makes THIS fixture able to reach the guard at all: the scan
 	 * read its sources with `sys.io.File.getContent(fi.file)`, so a synthetic library source with no

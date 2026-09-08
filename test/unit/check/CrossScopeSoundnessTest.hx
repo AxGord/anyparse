@@ -53,6 +53,22 @@ class CrossScopeSoundnessTest extends Test {
 	/** The one file a `resolutionLibs`-only scope holds: installed, third-party, and no relation to the project. */
 	private static inline final LIB_FILE: String = 'lib/third/Third.hx';
 
+	/** A declared `resolutionRoots` file that reaches nothing — the roots half of the library-only placement. */
+	private static inline final ROOT_FILE: String = 'pkg/C.hx';
+
+	/** The reacher sits in `resolutionRoots` AND in the library — what `LintCommand` builds for a project declaring roots. */
+	private static inline final ROOTS_AND_LIBRARY: String = 'roots-and-library';
+
+	/**
+	 * The reacher sits in the LIBRARY half alone, `resolutionRoots` holding an inert project file — so the
+	 * roots are declared, `RefactorSupport.resolutionProjectSourcesOf` answers with files, and the reacher
+	 * is not among them. T868's discriminator: the two seams differ HERE and nowhere else.
+	 */
+	private static inline final LIBRARY_ONLY: String = 'library-only';
+
+	/** `resolutionLibs` declared and `resolutionRoots` absent — the Pony shape `LIBS_ONLY_REGRESSIONS` prices. */
+	private static inline final LIBS_ONLY: String = 'libs-only';
+
 	/** A declaration file whose private members are also read WITHIN it. */
 	private static final A_USED: String = 'package pkg;\n\nclass A {\n\n\tprivate var My_Field: Int = 0;\n\n'
 		+ '\tpublic function new() {}\n\n\tpublic function read(): Int {\n\t\treturn My_Field + helper(1, 2);\n\t}\n\n'
@@ -86,6 +102,14 @@ class CrossScopeSoundnessTest extends Test {
 	/** A haxelib source — what `resolutionLibs` alone puts in the scope, and it reaches nothing of the project. */
 	private static final LIB_THIRD_PARTY: String = 'package third;\n\nclass Third {\n\n\tpublic function new() {}\n\n}\n';
 
+	/** A declared `resolutionRoots` file that reaches nothing — what the roots half holds while the reacher is elsewhere. */
+	private static final C_INERT: String = 'package pkg;\n\nclass C {\n\n\tpublic function new() {}\n\n}\n';
+
+	/** The reflective reacher with a token the grammar cannot read — present in the scope, answerable only as raw text. */
+	private static final B_REFLECT_UNPARSEABLE: String = 'package pkg;\n\nclass B {\n\n\t?? ?? ??\n\n'
+		+ '\tpublic function reach(a: A): Dynamic {\n\t\treturn Reflect.field(a, \'My_Field\');\n\t}\n\n}\n';
+
+
 	/** The two-file cells: one per route by which the second file reaches the first. */
 	private static final CELLS: Array<Cell> = [
 		{ name: 'access-grant', decl: A_USED, grantee: B_ACCESS },
@@ -107,12 +131,23 @@ class CrossScopeSoundnessTest extends Test {
 	private static final KNOWN_REPORT_DIVERGENCES: Array<String> = [];
 
 	/**
+	 * The `<kind>:<rule>@<cell>` pairs a reflective string answers differently depending on WHICH half
+	 * of one declared resolution scope it sits in. EMPTY by the same contract as the two above, and
+	 * that emptiness IS T868's verdict: the two seams the check layer forked over — the wide
+	 * `RefactorSupport.widestScopeIndex` and the narrow `resolutionProjectSourcesOf` — are now one
+	 * (`ReflectionScan.scopeFiles`), so a library source and a `resolutionRoots` source carry the same
+	 * weight for a name-keyed question.
+	 */
+	private static final KNOWN_PLACEMENT_DIVERGENCES: Array<String> = [];
+
+	/**
 	 * What a project declaring `resolutionLibs` and NO `resolutionRoots` loses — MEASURED, and the one
 	 * list in this class that is not empty by contract.
 	 *
-	 * Fourteen entries over the six cells: `naming` renames a field five of the six routes reach,
-	 * `unused-parameter` deletes a parameter three cross-file callers still pass, `unused-private` deletes
-	 * two live members. Ten are WRITES and four are findings, which is the same defect one step earlier.
+	 * Fourteen entries over the six cells, and unchanged by T868 — a libs-only scope holds the sibling in
+	 * NEITHER half, so widening the name-keyed seam buys nothing here: `naming` renames a field five of the six
+	 * routes reach, `unused-parameter` deletes a parameter three cross-file callers still pass, `unused-private`
+	 * deletes two live members. Ten are WRITES and four are findings, which is the same defect one step earlier.
 	 * Every one of them is a repair S177 / S179 / S180 shipped and this scope shape undoes. One cell is
 	 * absent by right: `allow-grant` puts the `@:allow` in the DECLARING file, so the narrow report scope
 	 * sees the grant without help and both arms refuse alike.
@@ -212,12 +247,11 @@ class CrossScopeSoundnessTest extends Test {
 	 * The Pony shape — `resolutionLibs` declared, `resolutionRoots` ABSENT — puts every proof S177,
 	 * S179 and S180 widened back where it started.
 	 *
-	 * The key starves BOTH halves of the scope, and a one-variable matrix over this fixture says which
-	 * half costs what: `projectRoots` empty with the sibling still in the library gives ONE divergence,
-	 * the sibling gone from the library with `projectRoots` full gives THIRTEEN. So the reflection scan
-	 * of `unused-private` is the one proof reading `RefactorSupport.resolutionProjectSourcesOf`
-	 * (`projectRoots`, null when empty), and the other thirteen read the index `widestScopeIndex` hands
-	 * back, which is `report ∪ library` — on a project declaring roots the library CONTAINS them
+	 * The key starves BOTH halves of the scope, and a one-variable matrix over this fixture says which half costs
+	 * what: `projectRoots` empty with the sibling still in the library gave ONE divergence when this was written and
+	 * gives ZERO since T868 moved that scan onto `ReflectionScan.scopeFiles`; the sibling gone from the library with
+	 * `projectRoots` full gives THIRTEEN, and always did. So every remaining entry reads the index `widestScopeIndex`
+	 * hands back, which is `report ∪ library` — on a project declaring roots the library CONTAINS them
 	 * (`LintCommand.resolutionThunk` concatenates), on a libs-only one it is haxelibs and the std and not
 	 * one file of the project's own.
 	 *
@@ -232,6 +266,102 @@ class CrossScopeSoundnessTest extends Test {
 	}
 
 	/**
+	 * T868: for a name-keyed reflection question, WHICH half of the declared scope holds the reflective
+	 * string must not decide the answer.
+	 *
+	 * The fork this pins was two seams answering one question. `check/Naming`'s reflection scan asked
+	 * `RefactorSupport.widestScopeIndex` — report UNION the library, so an installed haxelib and the std
+	 * counted — while `check/UnusedPrivate`'s asked `resolutionProjectSourcesOf`, report UNION the
+	 * declared `resolutionRoots` and nothing third-party. Both err toward refusal, so neither was a
+	 * correctness bug on its own; what they were is two incompatible precedents for the next site.
+	 *
+	 * The narrow seam's own argument is what settles it, by not carrying over: it reasons that a WRITE to
+	 * a project type's field has to NAME that type, which no haxelib does. A reflective string names no
+	 * type at all — `Reflect.field(o, 'name')` reaches a project member from a library without ever
+	 * spelling the project — so the exclusion the write proof earns, the reflection proof does not.
+	 *
+	 * `LIBRARY_ONLY` is what makes the difference observable: `resolutionRoots` is declared and holds one
+	 * inert file, so the narrow seam answers with files and simply does not contain the reacher.
+	 */
+	@:pin('control')
+	@:killer('M-REFLECTION-SCOPE-PROJECT-ONLY')
+	public function testTheScopeHalfHoldingAReflectiveStringDoesNotMatter(): Void {
+		Assert.equals(KNOWN_PLACEMENT_DIVERGENCES.join('\n'), placementDivergences().join('\n'));
+	}
+
+	/**
+	 * T867: a scope file the PARSER could not read still spells the name, and must license nothing that a
+	 * readable one refuses.
+	 *
+	 * `Naming`'s reflection scan walked `SymbolIndex.allFiles()`, which a skip-parsed file is absent from,
+	 * so the reflective read in one contributed no name to refuse on. The confinement proof beside it has
+	 * `RawSourceScan.skippedMayReference` for exactly this and the reflection guard had nothing — the
+	 * asymmetry T867 names.
+	 *
+	 * The assertion is one-directional on purpose. An unreadable sibling can only ever make the run MORE
+	 * conservative, so the readable arm is the ceiling and the unreadable one has to stay under it;
+	 * equality would fail on refusals that are correct.
+	 */
+	public function testAnUnreadableReflectiveFileLicensesNothingExtra(): Void {
+		Assert.equals('', unreadableExtras().join('\n'));
+	}
+
+	/**
+	 * Every `<kind>:<rule>@<cell>` the two REFLECTION cells answer differently when the reacher moves from
+	 * `resolutionRoots` into the library half of the same declared scope.
+	 *
+	 * BOTH directions are collected: the claim is that the halves are interchangeable, so either side
+	 * gaining an answer the other lacks refutes it. The one-directional shape the other differentials use
+	 * fits a SUBSET claim, and this is not one.
+	 */
+	private function placementDivergences(): Array<String> {
+		final out: Array<String> = [];
+		for (cell in CELLS) if (cell.grantee == B_REFLECT) {
+			final report: Array<SourceFile> = [{ file: DECL_FILE, source: cell.decl }];
+			final reach: Array<SourceFile> = [{ file: REACH_FILE, source: cell.grantee }];
+			final rootsEdits: Map<String, Array<String>> = editsByRule(report, reach, cell.decl);
+			final libEdits: Map<String, Array<String>> = editsByRule(report, reach, cell.decl, LIBRARY_ONLY);
+			final rootsFindings: Array<String> = findingKeys(report, reach);
+			final libFindings: Array<String> = findingKeys(report, reach, LIBRARY_ONLY);
+			extraEdits(libEdits, rootsEdits, 'edit:', cell.name, out);
+			extraEdits(rootsEdits, libEdits, 'edit:', cell.name, out);
+			extraFindings(libFindings, rootsFindings, 'report:', cell.name, out);
+			extraFindings(rootsFindings, libFindings, 'report:', cell.name, out);
+			Assert.isTrue(
+				rootsFindings.length >= 5,
+				'${cell.name}: only ${rootsFindings.length} finding(s) — the placement differential has nothing to compare'
+			);
+		}
+		out.sort(Reflect.compare);
+		return out;
+	}
+
+	/**
+	 * Every `<kind>:<rule>@<cell>` an UNREADABLE reflective reacher produces on the declaring file that
+	 * the same reacher, readable, does not — the T867 residue.
+	 *
+	 * Both arms place the reacher in `LIBRARY_ONLY`, so the ONE variable between them is whether the
+	 * grammar can parse it.
+	 */
+	private function unreadableExtras(): Array<String> {
+		final out: Array<String> = [];
+		for (cell in CELLS) if (cell.grantee == B_REFLECT) {
+			final report: Array<SourceFile> = [{ file: DECL_FILE, source: cell.decl }];
+			final readable: Array<SourceFile> = [{ file: REACH_FILE, source: cell.grantee }];
+			final unreadable: Array<SourceFile> = [{ file: REACH_FILE, source: B_REFLECT_UNPARSEABLE }];
+			extraEdits(
+				editsByRule(report, unreadable, cell.decl, LIBRARY_ONLY), editsByRule(report, readable, cell.decl, LIBRARY_ONLY), 'edit:',
+				cell.name, out
+			);
+			extraFindings(
+				findingKeys(report, unreadable, LIBRARY_ONLY), findingKeys(report, readable, LIBRARY_ONLY), 'report:', cell.name, out
+			);
+		}
+		out.sort(Reflect.compare);
+		return out;
+	}
+
+	/**
 	 * Every `<kind>:<rule>@<cell>` the LIBS-ONLY arm produces on the declaring file and the
 	 * roots-declared arm does not — both kinds in one list, because the defect has both forms and the
 	 * scope shape is what they share.
@@ -241,8 +371,8 @@ class CrossScopeSoundnessTest extends Test {
 		for (cell in CELLS) {
 			final report: Array<SourceFile> = [{ file: DECL_FILE, source: cell.decl }];
 			final reach: Array<SourceFile> = [{ file: REACH_FILE, source: cell.grantee }];
-			extraEdits(editsByRule(report, reach, cell.decl, false), editsByRule(report, reach, cell.decl), 'edit:', cell.name, out);
-			extraFindings(findingKeys(report, reach, false), findingKeys(report, reach), 'report:', cell.name, out);
+			extraEdits(editsByRule(report, reach, cell.decl, LIBS_ONLY), editsByRule(report, reach, cell.decl), 'edit:', cell.name, out);
+			extraFindings(findingKeys(report, reach, LIBS_ONLY), findingKeys(report, reach), 'report:', cell.name, out);
 		}
 		out.sort(Reflect.compare);
 		return out;
@@ -308,8 +438,10 @@ class CrossScopeSoundnessTest extends Test {
 	}
 
 	/** Every finding the roster reports on the declaring file, as `<rule>|<severity>|<from>`. */
-	private function findingKeys(report: Array<SourceFile>, reach: Array<SourceFile>, declaredRoots: Bool = true): Array<String> {
-		final plugin: CachingGrammarPlugin = scoped(report, reach, declaredRoots);
+	private function findingKeys(
+		report: Array<SourceFile>, reach: Array<SourceFile>, placement: String = ROOTS_AND_LIBRARY
+	): Array<String> {
+		final plugin: CachingGrammarPlugin = scoped(report, reach, placement);
 		return [
 			for (check in Linter.builtins()) for (v in check.run(
 				report, plugin
@@ -335,9 +467,9 @@ class CrossScopeSoundnessTest extends Test {
 
 	/** Each check's `fix` edits for the declaring file, keyed by rule id, each rendered `from:to:text`. */
 	private function editsByRule(
-		report: Array<SourceFile>, reach: Array<SourceFile>, declSource: String, declaredRoots: Bool = true
+		report: Array<SourceFile>, reach: Array<SourceFile>, declSource: String, placement: String = ROOTS_AND_LIBRARY
 	): Map<String, Array<String>> {
-		final plugin: CachingGrammarPlugin = scoped(report, reach, declaredRoots);
+		final plugin: CachingGrammarPlugin = scoped(report, reach, placement);
 		final index: SymbolIndex = SymbolIndex.build(report, plugin);
 		final out: Map<String, Array<String>> = [];
 		for (check in Linter.builtins()) {
@@ -353,7 +485,7 @@ class CrossScopeSoundnessTest extends Test {
 	 * The plugin `LintCommand` builds for a project that declares `resolutionRoots`: the scope is
 	 * DECLARED, and the library half carries the root files the report scope does not hold.
 	 *
-	 * `declaredRoots` false is the OTHER shape a real config has — `resolutionLibs` declared and
+	 * `LIBS_ONLY` is the OTHER shape a real config has — `resolutionLibs` declared and
 	 * `resolutionRoots` absent — and it is not merely a narrower version of the first: the scope is still
 	 * DECLARED, it just holds an installed library where the project's own sources should be. Both halves
 	 * lose them at once, which is what one key filling both buys: `RefactorSupport.resolutionProjectSourcesOf`
@@ -361,11 +493,24 @@ class CrossScopeSoundnessTest extends Test {
 	 * files plus a haxelib. What that costs is `LIBS_ONLY_REGRESSIONS`. Flipping `declared` to false as
 	 * well changes none of it — the pinned cost is equally the cost of declaring no resolution at all —
 	 * so the arm is named for the config shape it models, not for a behaviour only it has.
+	 *
+	 * `LIBRARY_ONLY` is the third placement, and the ONLY one that separates the two seams T868 forked over: `resolutionRoots`
+	 * is declared and non-empty, so the narrow seam answers with files — one inert file — while the reacher sits in the library
+	 * half alone and is therefore THIRD-PARTY, exactly as an installed haxelib source is. The library carries the roots too,
+	 * the way `LintCommand.resolutionThunk` concatenates them, so `thirdPartyFiles` tags the reacher and nothing else.
 	 */
-	private function scoped(report: Array<SourceFile>, reach: Array<SourceFile>, declaredRoots: Bool = true): CachingGrammarPlugin {
+	private function scoped(
+		report: Array<SourceFile>, reach: Array<SourceFile>, placement: String = ROOTS_AND_LIBRARY
+	): CachingGrammarPlugin {
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		final library: Array<SourceFile> = declaredRoots ? reach : [{ file: LIB_FILE, source: LIB_THIRD_PARTY }];
-		final roots: Array<SourceFile> = declaredRoots ? reach : [];
+		final roots: Array<SourceFile> = switch placement {
+			case LIBS_ONLY: [];
+			case LIBRARY_ONLY: [{ file: ROOT_FILE, source: C_INERT }];
+			case _: reach;
+		};
+		final library: Array<SourceFile> = placement == LIBS_ONLY
+			? [{ file: LIB_FILE, source: LIB_THIRD_PARTY }]
+			: roots.concat(placement == LIBRARY_ONLY ? reach : []);
 		plugin.setResolutionScope({
 			declared: true,
 			sources: () -> {report: report, projectRoots: roots, library: new LibrarySources(library) }

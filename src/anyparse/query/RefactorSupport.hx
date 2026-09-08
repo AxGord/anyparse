@@ -129,11 +129,12 @@ final class RefactorSupport {
 	 * is wrong: it does NOT keep the std out of the returned index. `LintCommand.readResolutionLibrary`
 	 * appends the std to the SAME scope as the declared roots and libs, so a project that declares
 	 * anything gets the std in here too. What the gate refuses is a scope that exists ONLY because a
-	 * std was discovered — a project that declared nothing keeps the report index. The
-	 * narrower `resolutionProjectSourcesOf` below is the seam for a proof that must not admit
-	 * third-party sources at all, and `UnusedPrivate.projectStringContents` asks a name-keyed question
-	 * through it while `Naming`'s reflection scan asks one through this: only one of the two can be right,
-	 * and T868 holds the question.
+	 * std was discovered — a project that declared nothing keeps the report index. The narrower
+	 * `resolutionProjectSourcesOf` below is the seam for a proof that must not admit third-party sources at all — a
+	 * FIELD-WRITE proof, and only that. T868 asked whether a name-keyed REFLECTION question belongs there too and the
+	 * answer is no: both such sites now go through `check/ReflectionScan.scopeFiles`, which unions `resolutionSourcesOf`.
+	 * Measured on `CrossScopeSoundnessTest.placementDivergences`, the narrow seam licensed one edit the wide one refuses
+	 * — `unused-private` DELETING a member a reflective string in the library half of the same declared scope still names.
 	 *
 	 * What BOTH seams answer on a project declaring `resolutionLibs` and no `resolutionRoots` is nothing
 	 * of the project: `projectRoots` is empty, so the narrow seam returns null, and this one returns
@@ -182,12 +183,11 @@ final class RefactorSupport {
 	 * `resolutionIndexOf`: the implicit std-only scope declares no roots, so it can only ever answer
 	 * null here anyway, and asking the narrow predicate says why in the code.
 	 *
-	 * The second consumer, `UnusedPrivate.projectStringContents`, asks the same shape of question about
-	 * a member NAME rather than a write: which files could hold a `Reflect.field(x, 'name')` this
-	 * deletion would break. Note the fork it creates with `Naming`'s reflection scan, which asks that
-	 * SAME question through `widestScopeIndex` and so admits the std and every declared haxelib. Both
-	 * err toward refusal, so neither is a correctness bug, but the two sites now cite opposite
-	 * precedents and only one can be intended — T868.
+	 * TWO consumers left, and both are FIELD-WRITE proofs (`prefer-final-public-field`, `prefer-read-only-field`). The third
+	 * used to be `UnusedPrivate`'s reflection gate, asking a name-keyed question — which files could hold a `Reflect.field(x,
+	 * 'name')` this deletion would break — and T868 moved it out. The argument above does not reach that question: a
+	 * reflective string names no TYPE, so a haxelib can spell a project member without spelling the project, and the exclusion
+	 * a write proof earns a reflection proof does not. Both name-keyed sites now read `check/ReflectionScan.scopeFiles`.
 	 */
 	public static inline function resolutionProjectSourcesOf(plugin: GrammarPlugin): Null<Array<{ file: String, source: String }>> {
 		final host: Null<SymbolIndexHost> = plugin is SymbolIndexHost ? cast plugin : null;
