@@ -372,6 +372,24 @@ avoid the shell pre-expanding them):
   first metacharacter is the walk root, so `src/grammar/haxe/*.hx` scans
   only that directory while `src/**/Hx*.hx` scans the whole subtree.
 
+### An argv mistake is not a bug, and no longer exits like one (T787)
+
+Three argument faults used to leave the CLI through the same path an internal
+error takes — a bare `throw` from `CliArgs` that nothing caught, so
+`apq cond f.hx --max-body` printed a Node stack trace and exited 1:
+
+- a flag given no value (`--max-body`, `--lang`, … at the end of argv);
+- a `--limit` that is not a non-negative integer;
+- a `--lang` naming no registered grammar plugin.
+
+They now raise `UsageFailure` (its own type beside `WriteFailure`, for the
+same reason that one has one) and `Cli.run` catches it: one sentence on
+stderr, named with the subcommand, and `EXIT_USAGE`. Everything else — a
+plain `String`/`Dynamic` throw, a real exception — still reaches `main` as a
+raw stack, which is what an internal bug wants. Adding a new flag that reads
+a value through `CliArgs.expectValue` inherits this; a hand-rolled `throw` in
+a command module does not.
+
 ### The cost of a ROUND: batched queries, the TTY progress gate, and the whole-file read guard
 
 Three properties of the read-only commands that are about the price a CALLER
