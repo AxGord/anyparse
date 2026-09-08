@@ -2403,24 +2403,26 @@
 		{
 			"name": "M-REFLECTION-REPORT-INDEX-RENAME",
 			"type": "anyparse.check.Naming",
-			"method": "fix",
-			"find": [
-				"final reflectionNames: Array<String> = wideIndex == null",
-				": reflectionNamesInOtherFiles(wideIndex, violations[0].file, flaggedNames, plugin, support);"
-			],
-			"replace": [
-				"final reflectionNames: Array<String> = index == null",
-				": reflectionNamesInOtherFiles(index, violations[0].file, flaggedNames, plugin, support);"
-			],
-			"note": "the cross-file reflection guard asks the REPORT index again, so a `Reflect.field(x, 'name')` in a file the run does not lint contributes no name, the guard has nothing to refuse on and the single-file rename orphans the reflective read"
+			"method": "reflectionNamesInOtherFiles",
+			"find": "for (entry in ReflectionScan.scopeFiles(index == null ? [] : indexSources(index), plugin)) if (entry.file != currentFile) {",
+			"replace": "for (entry in (index == null ? [] : indexSources(index))) if (entry.file != currentFile) {",
+			"note": "the cross-file reflection guard walks the REPORT index alone again instead of the shared scope seam, so a `Reflect.field(x, 'name')` in a file the run does not lint contributes no name, the guard has nothing to refuse on and the single-file rename orphans the reflective read"
 		},
 		{
 			"name": "M-REFLECTION-REPORT-INDEX-DELETE",
-			"type": "anyparse.check.UnusedPrivate",
-			"method": "projectStringContents",
-			"find": "final projectSources: Null<Array<{ file: String, source: String }>> = RefactorSupport.resolutionProjectSourcesOf(plugin);",
-			"replace": "final projectSources: Null<Array<{ file: String, source: String }>> = null;",
-			"note": "the reflection gate's string contents come from the REPORT files again, so a `Reflect.field(x, 'name')` in a file the run does not lint contributes nothing and the autofix DELETES the member that reflective read still names"
+			"type": "anyparse.check.ReflectionScan",
+			"method": "scopeFiles",
+			"find": "final resolution: Null<Array<ScopeFile>> = RefactorSupport.resolutionSourcesOf(plugin);",
+			"replace": "final resolution: Null<Array<ScopeFile>> = null;",
+			"note": "the ONE name-keyed reflection scope collapses to the report files again, so a `Reflect.field(x, 'name')` in a file the run does not lint contributes nothing: the autofix DELETES the member that reflective read still names, and the rename orphans it"
+		},
+		{
+			"name": "M-REFLECTION-SCOPE-PROJECT-ONLY",
+			"type": "anyparse.check.ReflectionScan",
+			"method": "scopeFiles",
+			"find": "final resolution: Null<Array<ScopeFile>> = RefactorSupport.resolutionSourcesOf(plugin);",
+			"replace": "final resolution: Null<Array<ScopeFile>> = RefactorSupport.resolutionProjectSourcesOf(plugin);",
+			"note": "the T868 fork put back: the name-keyed reflection scope narrows to report UNION resolutionRoots, so a reflective string in the LIBRARY half of the very same declared scope stops counting and the two halves answer differently"
 		},
 		{
 			"name": "M-CONFINEMENT-REPORT-INDEX-DEAD",

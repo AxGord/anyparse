@@ -12,10 +12,11 @@ using Lambda;
  * The one scan behind every "is this name reached by reflection" gate in the check layer, and the
  * containment test the interpolated half of its answer takes.
  *
- * Five checks refuse a rewrite when a member's name might be spelled by a runtime `Reflect` call —
+ * Six checks refuse a rewrite when a member's name might be spelled by a runtime `Reflect` call —
  * `inline-constant` (which erases the field's reflective value), `static-constant` (which moves it
- * off the instance), `prefer-enum-abstract` (which stops the type existing as a runtime class) and
- * the two deletion checks `orphan-accessor` / `unused-public-member`. Each of them used to walk the
+ * off the instance), `prefer-enum-abstract` (which stops the type existing as a runtime class) and the three deletion
+ * checks `orphan-accessor` / `unused-public-member` / `unused-private` (the last joined in S184, T868: it had asked
+ * the narrower PROJECT scope, and that scope licensed a deletion the wide one refuses). Each of them used to walk the
  * scope itself, and the walks did not agree: two collected interpolation FRAGMENTS, two answered
  * only for PLAIN literals, so `Reflect.field(o, '${p}NAME')` was invisible to one pair and visible
  * to the other. The domain of that scan is what makes the difference sound or silent, so it is
@@ -62,9 +63,9 @@ final class ReflectionScan {
 	 * not evidence of absence in the project, so a gate answered from it authorises a rewrite on
 	 * evidence it never had. Measured end to end: `hxq lint <one-file> --fix` converted a type a
 	 * `Type.resolveClass('pkg.Align')` in a sibling file reaches — oracle green, `resolveClass` null
-	 * afterwards. So the scan also takes `RefactorSupport.resolutionSourcesOf`, the seam
-	 * `UnusedPublicMember.tokenCounts` already reads three lines from its own call of this function,
-	 * for exactly this reason. Widening the FILE SET only ever ADDS strings, so it only ever adds
+	 * afterwards. So the scan takes its file set from `scopeFiles` below, which unions `RefactorSupport.resolutionSourcesOf` — the seam
+	 * `UnusedPublicMember.tokenCounts` already reads three lines from its own call of this function, for exactly this reason, and since
+	 * T868 the ONE definition every name-keyed reflection gate shares. Widening the FILE SET only ever ADDS strings, so it only ever adds
 	 * REFUSALS — the safe direction under the nominate-never-disqualify rule, since a LOST refusal is
 	 * a rewrite that compiles and fails at run time. Cost, measured: Pony
 	 * (867 files, 3643 findings) moved 0 added / 0 removed, and a single-file
@@ -81,23 +82,62 @@ final class ReflectionScan {
 		final stringFold: Null<StringFoldSupport> = plugin.stringFoldSupport();
 		if (stringFold == null) return out;
 		final fold: StringFoldSupport = stringFold;
+		// The file set is `scopeFiles`' to define, and the de-duplication with it: `whole` keeps
+		// duplicates on purpose, since `inline-constant` COUNTS occurrences and subtracts a constant's
+		// own value, so a file scanned twice doubles that value and turns its `count > self` test true
+		// on nothing at all.
+		//
+		// A scope file the parser cannot read contributes NOTHING here, which is the pre-`scopeFiles`
+		// behaviour kept deliberately: this surface is a set of literal CONTENTS, and an unreadable file
+		// has none to give. What it could give instead is the conservative "may spell it" answer, and
+		// that is a per-NAME question the raw-text proofs already own. MEASURED on the T867 fixture cell
+		// (`CrossScopeSoundnessTest.unreadableExtras`, an unreadable `Reflect.field(a, 'My_Field')` in
+		// the library half): with both skip-parsed proofs cut, three rewrites go through; with only
+		// `RawSourceScan.skippedMayReference` cut and `Naming`'s own unreadable branch live, one; on the
+		// shipped tree, zero. So the conservative half here would be a fourth line behind three, at the
+		// price of a raw scan of every unreadable std source per name — and the direction it errs in is
+		// the one that makes a whole rule silent.
+		for (entry in scopeFiles(files, plugin)) {
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			if (tree != null) collect(tree, entry.source, fold, out);
+		}
+		return out;
+	}
+
+	/**
+	 * Every file a name-keyed reflection gate must consult: `files` UNION the resolution sources,
+	 * deduped by path, and an unparseable one handed BACK rather than dropped.
+	 *
+	 * The ONE definition of that scope, and the answer to T868 — the fork where `check/Naming`'s
+	 * reflection scan asked `RefactorSupport.widestScopeIndex` while `check/UnusedPrivate`'s asked
+	 * `resolutionProjectSourcesOf`, so the same name-keyed question admitted the library and the std at
+	 * one site and not at the other. The WIDE half wins, and not on a fresh judgement: this scan already
+	 * answered it that way for five registered checks, with the cost measured. The narrow seam's own
+	 * argument does not carry over — it reasons that a write to a project type's field must NAME that
+	 * type, which no haxelib can; a reflective string names no type at all, so `Reflect.field(o, 'name')`
+	 * in a library reaches a project member without ever spelling the project. And the two error
+	 * directions are not symmetric: an extra name only DECLINES a rewrite, a missing one lets the rewrite
+	 * through and breaks a call at run time.
+	 *
+	 * Handing back the unreadable files is what lets each reader decide about them ITSELF. Dropping them
+	 * here would decide for both invisibly, and that drop is exactly the T867 blindness — `Naming`'s scan
+	 * walked `SymbolIndex.allFiles()`, which a skip-parsed file is absent from.
+	 */
+	public static function scopeFiles(files: Array<ScopeFile>, plugin: GrammarPlugin): Array<ScopeFile> {
 		// Once per PATH, deduped through a linear scan — measured at no cost (Pony 867 files 12.4s -> 11.9s,
 		// anyparse 1487 files 1:55.9 -> 1:54.3), which is why it is not the `Map` the sibling dedupe in
-		// `Cli.resolutionThunk` argues for. The two halves overlap — `resolutionFiles` is report UNION library — and
-		// `whole` keeps duplicates on purpose, since `inline-constant` COUNTS occurrences and
-		// subtracts a constant's own value; a file scanned twice doubles that value and turns its
-		// `count > self` test true on nothing at all.
-		final scanned: Array<String> = [];
-		inline function scan(entry: { file: String, source: String }): Void {
-			if (!scanned.contains(entry.file)) {
-				scanned.push(entry.file);
-				final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-				if (tree != null) collect(tree, entry.source, fold, out);
+		// `Cli.resolutionThunk` argues for. The two halves overlap: `resolutionFiles` is report UNION library.
+		final out: Array<ScopeFile> = [];
+		final seen: Array<String> = [];
+		inline function take(entry: ScopeFile): Void {
+			if (!seen.contains(entry.file)) {
+				seen.push(entry.file);
+				out.push(entry);
 			}
 		}
-		for (entry in files) scan(entry);
-		final resolution: Null<Array<{ file: String, source: String }>> = RefactorSupport.resolutionSourcesOf(plugin);
-		if (resolution != null) for (entry in resolution) scan(entry);
+		for (entry in files) take(entry);
+		final resolution: Null<Array<ScopeFile>> = RefactorSupport.resolutionSourcesOf(plugin);
+		if (resolution != null) for (entry in resolution) take(entry);
 		return out;
 	}
 
@@ -173,6 +213,18 @@ final class ReflectionScan {
 	}
 
 }
+
+/**
+ * One file of the name-keyed reflection scope: its path and its raw source, parseable or not.
+ *
+ * A transparent alias for the `{ file, source }` pair the whole check layer passes around — declared
+ * so the seam that OWNS that scope has a name for its element, and so the two members reading it do
+ * not each spell the structure out again.
+ */
+typedef ScopeFile = {
+	var file: String;
+	var source: String;
+};
 
 /**
  * The reflection SURFACE of a scope: every string a member name — or a type's fully-qualified

@@ -2338,6 +2338,30 @@ Its own floor is a non-vacuity guard: a differential over a roster is exactly th
 that passes by exercising nothing. Measure the write coverage when you widen it — at
 introduction only 5 rules of ~180 actually produced an edit in any cell.
 
+S184 widened it a second way, and the axis is worth naming because it is NOT the report
+scope: it is WHICH HALF of one declared resolution scope a fact sits in. `scoped`'s
+`LIBRARY_ONLY` placement declares `resolutionRoots` holding one inert file and puts the
+reaching file in the library half alone, so the narrow seam
+(`RefactorSupport.resolutionProjectSourcesOf`) answers with files and simply does not
+contain it, while the wide one (`resolutionSourcesOf`) does. That is the only shape that
+separates the two seams the check layer had forked over for one name-keyed question —
+T868 — and it decided it with a number: the narrow seam licensed
+`edit:unused-private@reflection-unread-in-file`, a member DELETION the wide seam refuses,
+where the reflective string sits in the library half. Both name-keyed scans now read
+`ReflectionScan.scopeFiles`, and `KNOWN_PLACEMENT_DIVERGENCES` is empty by the same
+contract as the other two lists.
+
+The second addition is a one-directional arm and it REFUTED its own premise, which is
+worth more than the code. T867 said the reflection guard was blind to skip-parsed files
+(`Naming.reflectionNamesInOtherFiles` walked `SymbolIndex.allFiles()`, which drops them)
+while the confinement proof beside it had `RawSourceScan.skippedMayReference`. True as
+stated, and unobservable: with the reacher made unparseable,
+`testAnUnreadableReflectiveFileLicensesNothingExtra` is green on the BASE engine, because
+the confinement proof refuses on the same raw text one step LATER — `RenameRefusal.of` asks the reflection guard first and the confinement proof after it, and both must pass. The three-cell probe
+that shows the layering — cut both proofs, 3 rewrites go through; restore only the
+reflection guard's new unreadable branch, 1; ship state, 0 — is what says the branch is a
+real second line of defence rather than a fix for a live bug.
+
 ### A guard on `#if sys` is a test that does not run
 
 `sys` is NOT defined by an hxnodejs build, and js/node is the only runner the suite has.
@@ -3538,10 +3562,20 @@ Every consumer meanwhile believes it asked the wider one, because
 `hasDeclaredResolutionScope()` still says yes.
 
 Which half costs what is measured rather than assumed — a one-variable matrix over the
-fixture below: `projectRoots` emptied with the sibling still in the library gives ONE
+fixture below: `projectRoots` emptied with the sibling still in the library gave ONE
 divergence, the sibling removed from the library with `projectRoots` full gives
-THIRTEEN. The single `projectRoots` entry is `unused-private`'s reflection scan; the
+THIRTEEN. The single `projectRoots` entry was `unused-private`'s reflection scan; the
 other thirteen come through the index. Both are the same missing key.
+
+**The `projectRoots` half of that matrix is now ZERO — re-measured at S184 on the same
+fixture, `projectRoots` emptied and the sibling still in the library, 0 divergences.**
+T868 moved that one scan off `RefactorSupport.resolutionProjectSourcesOf` and onto
+`ReflectionScan.scopeFiles`, which unions `resolutionSourcesOf` and so still sees a
+sibling the library half holds. `LIBS_ONLY_REGRESSIONS` is unchanged at fourteen, because
+a libs-only scope has the sibling in NEITHER half; what shrank is the cost of declaring
+`resolutionLibs` and `resolutionRoots` where the roots do not happen to cover the sibling.
+No name-keyed proof reads the narrow seam any more — its two remaining consumers are
+field-WRITE proofs, where the argument for excluding third-party sources does hold.
 
 Measured end to end on a two-file scratch project — `A.hx` declares
 `private var My_Field` AND reads it once in a method of its own, `B.hx` carries

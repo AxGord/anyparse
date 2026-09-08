@@ -1023,6 +1023,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-CONFINEMENT-REPORT-INDEX-DEAD',
 			'unit.check.CrossScopeSoundnessTest#testNarrowReportWritesNothingTheWideRunRefuses :: control :: '
 				+ 'M-REFLECTION-REPORT-INDEX-DELETE',
+			'unit.check.CrossScopeSoundnessTest#testTheScopeHalfHoldingAReflectiveStringDoesNotMatter :: control :: '
+				+ 'M-REFLECTION-SCOPE-PROJECT-ONLY',
 			'unit.check.DeadBinderCounterLoopCheckTest#testFixRewritesMapLoopAndInsertsUsing :: control :: M-SHADOWEXT-TRUE',
 			'unit.check.DuplicateCodeCheckTest#testALiteralInteriorDifferenceIsNotACloneWhileItsLayoutTwinIs :: control :: '
 				+ 'M-DUP-CODE-NORM-KEY',
@@ -1934,6 +1936,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-CONFINEMENT-REPORT-INDEX-RENAME',
 			'M-REFLECTION-REPORT-INDEX-RENAME',
 			'M-REFLECTION-REPORT-INDEX-DELETE',
+			'M-REFLECTION-SCOPE-PROJECT-ONLY',
 			'M-CONFINEMENT-REPORT-INDEX-DEAD',
 			'M-SCOPE-GAP-SILENT',
 			'M-SCOPE-GAP-UNWIRED',
