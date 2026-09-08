@@ -253,20 +253,23 @@ class CommentWidthCheckTest extends Test {
 	}
 
 	/**
-	 * A one-line block whose `*\/` shares the line is over-width by exactly the closer, which
-	 * `wrapCommentBody` measures nothing of — it reads a 141-column line as 139 and leaves it.
-	 * The rule says THAT rather than "no break point", which the same silence would otherwise be
-	 * reported as. Twenty lines of this tree are in this state, all at 141 or 142 columns.
-	 * Killed by arm `M-COMMENT-WIDTH-CLOSER-UNSEEN`.
+	 * A one-line block whose `*\/` shares the line is over-width by exactly the closer, and the body span stops two
+	 * characters short of it — so the reflow used to read a 141-column line as 139, decline it, and the rule reported
+	 * the closer as the reason. `closerCols` gives that one line its two columns back, and the twenty lines of this tree
+	 * in this state (all at 141 or 142) became ordinary fixable findings. Killed by arm `M-COMMENT-WIDTH-CLOSER-UNSEEN`.
 	 */
 	@:pin('control')
 	@:killer('M-COMMENT-WIDTH-CLOSER-UNSEEN')
-	public function testAOneLineBlockOverByItsCloserNamesTheCloser(): Void {
+	public function testAOneLineBlockOverByItsCloserIsReflowed(): Void {
 		final src: String = 'class C {\n\t/** ' + rep('word ', 26).rtrim() + 'z */\n\tfunction f() {}\n}';
 		Assert.equals(141, widestLine(src, 'C.hx'));
 		final vs: Array<Violation> = violations(src);
 		Assert.equals(1, vs.length);
-		Assert.isTrue(vs[0].message.contains('the block closer shares this line'), vs[0].message);
+		Assert.isFalse(vs[0].message.contains('not reflowed'), vs[0].message);
+		final out: String = fixed(src);
+		Assert.isTrue(widestLine(out, 'C.hx') <= 140, out);
+		Assert.equals(prose(src), prose(out));
+		Assert.equals(0, violations(out).length, out);
 	}
 
 	/**
@@ -358,6 +361,11 @@ class CommentWidthCheckTest extends Test {
 				rest = rest.substring(marker.length);
 				break;
 			}
+			// A ONE-LINE block carries its closer at the END of the same line, where the leading-marker
+			// strip never reaches it — so a reflow that moves the closer onto a line of its own reads
+			// as a lost word rather than as the same prose.
+			final body: String = rest.rtrim();
+			if (body.endsWith('*/')) rest = body.substring(0, body.length - 2);
 			for (word in rest.split(' ')) {
 				final trimmed: String = word.trim();
 				if (trimmed != '') words.push(trimmed);

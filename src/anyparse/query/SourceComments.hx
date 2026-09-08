@@ -444,8 +444,11 @@ final class SourceComments {
 	 * width gate is then the only thing that can name it, and that is the one outcome a reflow
 	 * cannot repair.
 	 *
-	 * A blank continuation line's width IS its prefix, so it is kept by construction: a paragraph
-	 * separator survives the reflow rather than being filled into its neighbours. Nothing here ever
+	 * A blank continuation line's width IS its prefix, so it is kept by construction: a paragraph separator
+	 * survives the reflow rather than being filled into its neighbours. `closerCols` is what the LAST body line
+	 * owes the block's own closer — the two columns of a `*\/` the body span stops short of, zero for a `//` run
+	 * or an unterminated block — added to that one line's measured width and taken off its wrap budget, because a
+	 * one-line doc block over the width by exactly those two columns used to read as legal here. Nothing here ever
 	 * JOINS two lines, which is what keeps the caller's own line breaks intact. What layout it must
 	 * not touch at all is `reflowRefusal`'s question, whichever channel selected the line.
 	 *
@@ -460,7 +463,8 @@ final class SourceComments {
 	 * question got its own parameter instead.
 	 */
 	public static function wrapCommentBody(
-		body: String, was: String, head: String, continuation: String, metrics: LayoutMetrics, lineRun: Bool, ?wrapAt: Array<Int>
+		body: String, was: String, head: String, continuation: String, metrics: LayoutMetrics, lineRun: Bool, closerCols: Int,
+		?wrapAt: Array<Int>
 	): String {
 		final width: Int = metrics.lineWidth;
 		final tab: Int = metrics.indentWidth;
@@ -470,13 +474,16 @@ final class SourceComments {
 		// decided; asking it again through the count-and-widest comparison would only re-derive the
 		// answer from a `was` it has no edit to supply.
 		if (wrapAt == null) {
-			final got: Array<Int> = overWidthColumns(lines, head, width, tab);
-			final had: Array<Int> = overWidthColumns(keep, head, width, tab);
+			final got: Array<Int> = overWidthColumns(lines, head, width, tab, closerCols);
+			final had: Array<Int> = overWidthColumns(keep, head, width, tab, closerCols);
 			if (got.length <= had.length && widestColumn(got) <= widestColumn(had)) return body;
 		}
 		final out: Array<String> = [];
 		final contCols: Int = CheckScan.displayColumn(continuation, 0, continuation.length, tab);
 		final headHasCode: Bool = head.trim().length > 2;
+		// The block's own closer rides the LAST body line and the body span stops two characters short
+		// of it, so that one line is measured — and wrapped — with those columns added back.
+		final last: Int = lines.length - 1;
 		for (i => raw in lines) {
 			final cr: Bool = raw.length > 0 && raw.fastCodeAt(raw.length - 1) == '\r'.code;
 			final line: String = cr ? raw.substring(0, raw.length - 1) : raw;
@@ -491,13 +498,21 @@ final class SourceComments {
 			// silently dropped.
 			final untouched: Bool = wrapAt == null ? keep.contains(raw) : !wrapAt.contains(i);
 			final wrappable: Bool = !untouched && !(i == 0 && headHasCode) && reflowRefusal(line.substring(at)) == null;
-			if (!wrappable || leadCols + CheckScan.displayColumn(line, 0, line.length, tab) <= width) {
+			final tailCols: Int = i == last ? closerCols : 0;
+			if (!wrappable || leadCols + CheckScan.displayColumn(line, 0, line.length, tab) + tailCols <= width) {
 				out.push(raw);
 				continue;
 			}
 			final prefix: String = line.substring(0, at);
 			final firstCols: Int = leadCols + CheckScan.displayColumn(prefix, 0, prefix.length, tab);
-			final chunks: Array<String> = wrapText(line.substring(at), firstCols, contCols, width, tab);
+			// Every chunk of the closer's own line is wrapped at the narrowed width, not just the chunk
+			// that ends up carrying it. Two reasons, and the second is the load-bearing one: which chunk
+			// is last is not known until the fill has run, and the caller may MOVE the closer afterwards
+			// — `openGrownDocBlock` gives a one-line doc block that has just grown a closer line of its
+			// own, after which no output line owes these columns at all. The reflow cannot know that
+			// from here, so it pays two columns it may not owe rather than emit a line it cannot take
+			// back.
+			final chunks: Array<String> = wrapText(line.substring(at), firstCols, contCols, width - tailCols, tab);
 			for (k => chunk in chunks) out.push((k == 0 ? prefix : continuation) + chunk + (cr ? '\r' : ''));
 		}
 		return out.join('\n');
@@ -993,12 +1008,15 @@ final class SourceComments {
 	 * gate makes over the whole file, asked here of one comment unit: it is what lets the reflow fire
 	 * only where the edit actually broke something, rather than restyling every block it touches.
 	 */
-	private static function overWidthColumns(lines: Array<String>, head: String, width: Int, tab: Int): Array<Int> {
+	private static function overWidthColumns(lines: Array<String>, head: String, width: Int, tab: Int, closerCols: Int): Array<Int> {
 		final out: Array<Int> = [];
+		final last: Int = lines.length - 1;
 		for (i => raw in lines) {
 			final line: String = raw.length > 0 && raw.fastCodeAt(raw.length - 1) == '\r'.code ? raw.substring(0, raw.length - 1) : raw;
 			final lead: String = i == 0 ? head : '';
-			final cols: Int = CheckScan.displayColumn(lead, 0, lead.length, tab) + CheckScan.displayColumn(line, 0, line.length, tab);
+			final tailCols: Int = i == last ? closerCols : 0;
+			final cols: Int = CheckScan.displayColumn(lead, 0, lead.length, tab) + CheckScan.displayColumn(line, 0, line.length, tab)
+				+ tailCols;
 			if (cols > width) out.push(cols);
 		}
 		return out;

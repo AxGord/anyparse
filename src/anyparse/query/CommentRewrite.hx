@@ -134,7 +134,7 @@ final class CommentRewrite {
 				if (metrics != null) {
 					final layout: LayoutMetrics = metrics;
 					next = SourceComments.wrapCommentBody(
-						spliced, body, SourceComments.commentHead(source, unit), continuation, layout, unit.isLine
+						spliced, body, SourceComments.commentHead(source, unit), continuation, layout, unit.isLine, unit.to - bodySpan.to
 					);
 				}
 				// A ONE-LINE doc block that has just grown has to be re-opened, or its closer rides the last
@@ -464,13 +464,23 @@ final class CommentRewrite {
 				if (text.length > 0 && text.fastCodeAt(text.length - 1) == ' '.code) text = text.substring(0, text.length - 1);
 			}
 			// A blank comment line folds into the same single space an ordinary break does, so a find
-			// reads straight across a paragraph separator and the splice DELETES it. A deletion is
-			// entitled to take its own separator with it (`keepBreaks` is false there); a replacement
-			// is not, and the loss is silent — the join can land inside the width, and no gate in this
-			// project reads a comment's paragraph structure.
-			if (keepBreaks && SourceComments.interiorParagraphBreak(body, from, to, lineRun))
+			// reads straight across a paragraph separator and the splice DELETES it — silently, since
+			// the join can land inside the width and no gate in this project reads a comment's
+			// paragraph structure.
+			//
+			// A DELETION used to be exempt, on the reading that it takes its own separator with it.
+			// It does not own this one: the blank line in front of a list's FIRST item is the lead's
+			// boundary with the list, never that item's, and deleting ` - first bullet` off it glued
+			// the rest of the list onto the lead. Adjacency is a deletion's to take — an ordinary
+			// break run on either side of the match still goes, which is what keeps the residue from
+			// being an empty line — but structure is not, whichever side of the match it sits on.
+			//
+			// `keepBreaks` is not retired: the two span-shrink guards above still read it, and that is
+			// exactly what leaves a deletion its adjacent break while a replacement keeps one. Only
+			// the STRUCTURE question below stopped asking which kind of edit is being made.
+			if (SourceComments.interiorParagraphBreak(body, from, to, lineRun))
 				throw new Exception(
-					'the find spans a blank comment line, and the replacement would delete that paragraph separator'
+					'the edit spans a blank comment line, and would delete that paragraph separator'
 						+ ' — narrow the find to one paragraph, or use --regex to match the raw body'
 				);
 			buf.add(body.substring(cursor, from));

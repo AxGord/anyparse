@@ -697,19 +697,34 @@ class CommentRewriteSliceTest extends Test {
 	}
 
 	/**
-	 * An EMPTY replacement is a deletion, and the guard is on replacements only: the deletion consumes
-	 * whatever break run precedes its match, INCLUDING a paragraph separator.
+	 * T770 answered: a deletion does NOT own the blank line in front of a list's first item.
 	 *
-	 * Named for what it pins rather than for what one would want. The blank line here separated the lead
-	 * sentence from the LIST, so it was never the first bullet's to take — the same silent paragraph
-	 * merge `interiorParagraphBreak` refuses, reached through the exemption. The exemption exists because
-	 * an empty replacement that keeps the break strands a gutter where the text was; that residue is now
-	 * a bare gutter rather than one with a trailing space, but WHICH separator a deletion owns is a
-	 * question this slice did not answer. Backlog T770.
+	 * That separator is the lead's boundary with the LIST, so taking it glued the rest of the list onto
+	 * the lead — and silently, since the join lands inside the width and no gate in this project reads a
+	 * comment's paragraph structure. The exemption that allowed it was `keepBreaks`, on the reading that
+	 * a deletion takes its own separator with it; `interiorParagraphBreak` now governs deletions too, so
+	 * the answer is one predicate for both, with the same two ways out the message already named.
+	 * Adjacency is still a deletion's — `testDeletingWithATrailingSpaceTakesTheOrdinaryBreak`.
+	 * Killed by arm `M-COMMENT-PARAGRAPH-DELETION-EXEMPT`.
 	 */
-	public function testDeletingTheFirstBulletTakesTheSeparatorBeforeIt(): Void {
-		final text: String = okText(cr(bullets(), ' - M1 first item', '', false));
-		Assert.isTrue(text.contains('Lead sentence.\n * - M2 second item'), text);
+	@:pin('control')
+	@:killer('M-COMMENT-PARAGRAPH-DELETION-EXEMPT')
+	public function testDeletingTheFirstBulletMayNotTakeTheListsOwnSeparator(): Void {
+		Assert.isTrue(errText(cr(bullets(), ' - M1 first item', '', false)).contains('blank comment line'));
+	}
+
+	/**
+	 * The other side of that rule, and what keeps it from being a blanket refusal on deletions: an
+	 * ORDINARY break run adjacent to the match still goes with it, so the deleted bullet's line
+	 * disappears instead of standing as an empty gutter, and the separator above it stays put.
+	 *
+	 * Nothing cuts this one — it is the behaviour every arm on the paragraph guard leaves alone, which
+	 * is exactly what it is here to state.
+	 */
+	@:pin('guard')
+	public function testDeletingWithATrailingSpaceTakesTheOrdinaryBreak(): Void {
+		final text: String = okText(cr(bullets(), '- M1 first item ', '', false));
+		Assert.isTrue(text.contains('Lead sentence.\n *\n * - M2 second item'), text);
 	}
 
 	/**
@@ -857,6 +872,75 @@ class CommentRewriteSliceTest extends Test {
 	}
 
 	/**
+	 * T780: the reflow measures the BODY, which stops two characters short of the block's `*\/`, so a
+	 * one-line doc block the edit left at exactly one or two columns over came back unwrapped — and
+	 * the width gate, which measures the PHYSICAL line, then refused the edit outright.
+	 *
+	 * Two failures of one blindness, and this is the louder of the two: `comment-width` merely
+	 * reported the closer as a decline reason on 20 lines of this tree, while HERE a legitimate edit
+	 * was rejected with `the replacement leaves a comment line at 141 columns` and nothing to do about
+	 * it but `--allow-wide`. Both widths are pinned because the whole class is 141 and 142 — the
+	 * closer is two columns and the body span concedes exactly those.
+	 * Killed by arm `M-COMMENT-REFLOW-TAIL-UNSEEN`.
+	 */
+	@:pin('control')
+	@:killer('M-COMMENT-REFLOW-TAIL-UNSEEN')
+	public function testAOneLineDocOverByItsCloserIsReflowedNotRefused(): Void {
+		final src: String = oneLineDoc('MK', lineWidth() - 4);
+		Assert.equals(lineWidth() - 4, widestLine(src));
+		for (grown in ['MKabcde', 'MKabcdef']) {
+			final text: String = okText(cr(src, 'MK', grown, false));
+			Assert.isTrue(widestLine(text) <= lineWidth(), '$grown: ${widestLine(text)} columns in $text');
+			Assert.isTrue(text.contains('\t/**\n\t * $grown'), '$grown: the block was re-opened: $text');
+		}
+	}
+
+	/**
+	 * The same trigger read through `overWidthColumns`, which is what the REPAIR caller asks instead of naming its lines: without
+	 * the closer's two columns the comparison sees no gained over-width line at all and hands the body straight back, before the
+	 * wrap loop is ever reached. This pin is NOT independent evidence and does not pretend to be — the trigger arm's kill set is a
+	 * strict SUBSET of the wrap loop's, since whenever the trigger's tail decides, the loop's does too. Its job is to give that seam
+	 * a killer of its own, so removing the trigger's tail alone cannot pass. Killed by arm `M-COMMENT-REFLOW-TRIGGER-TAIL-UNSEEN`.
+	 */
+	@:pin('control')
+	@:killer('M-COMMENT-REFLOW-TRIGGER-TAIL-UNSEEN')
+	public function testTheRepairTriggerCountsTheCloserToo(): Void {
+		final src: String = oneLineDoc('MK', lineWidth() - 4);
+		Assert.isTrue(okText(cr(src, 'MK', 'MKabcde', false)).contains('\t/**\n'), 'the trigger fired at all');
+	}
+
+	/**
+	 * T771 answered — KEEP the gutter-less continuation, and this is what it looks like.
+	 *
+	 * A one-line PLAIN `/* … *\/` the edit grows past the width wraps into a continuation carrying the
+	 * block's own indentation and NO star. Inventing a ` * ` would change the comment's KIND, and
+	 * permanently: the writer re-emits a comment interior byte for byte, so a star this tool adds
+	 * stands for good. `commentContinuation` already answers the same way for a MULTI-line plain
+	 * block — it reads the block's own first interior line — and the one-line fallback is that rule
+	 * where there is no interior line to read.
+	 *
+	 * The reported "column 0" is not the reflow's doing either: the continuation IS the block's own
+	 * indent, and the writer's canonical form for a gutter-less block prepends the opener's indent to
+	 * each interior line — measured, `\t/* a\n\tb *\/` canonicalises to `\t/* a\n\t\tb *\/`, while the
+	 * same shape at column 0 has nothing to prepend and stays there.
+	 * Killed by arm `M-COMMENT-CONTINUATION-ALWAYS-GUTTER`.
+	 */
+	@:pin('control')
+	@:killer('M-COMMENT-CONTINUATION-ALWAYS-GUTTER')
+	public function testAGrownPlainBlockWrapsWithoutAGutter(): Void {
+		final src: String = '/* MK alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron */\nclass C {}';
+		final text: String = okText(cr(src, 'MK', 'MK' + ''.rpad(' pi rho sigma tau upsilon phi chi psi omega', 220), false));
+		final block: Array<String> = text.substring(0, text.indexOf('*/') + 2).split('\n');
+		Assert.isTrue(widestLine(text) <= lineWidth(), '${widestLine(text)} columns in $text');
+		// The wrap and the missing gutter read TOGETHER, over the block's own lines: the unchanged
+		// input has one line and so fails the first, and a continuation carrying a star fails the
+		// second — neither half can be satisfied without the other.
+		Assert.isTrue(block.length > 1, 'the block really did wrap onto more lines: $text');
+		for (line in block.slice(1)) Assert.isTrue(~/^[A-Za-z]/.match(line), 'no gutter and no indent: $line');
+		Assert.isTrue(text.contains('*/\nclass C {}'), 'the block still closes: $text');
+	}
+
+	/**
 	 * The reflow runs BEFORE the one-line-doc re-open, so a block the reflow itself grew past one
 	 * line still gets its closer on a line of its own.
 	 *
@@ -875,6 +959,18 @@ class CommentRewriteSliceTest extends Test {
 
 	private inline function bullets(): String {
 		return '/**\n * Lead sentence.\n *\n * - M1 first item\n * - M2 second item\n * - M3 third item\n */\nclass C {}';
+	}
+
+	/**
+	 * A ONE-LINE doc block whose whole physical line renders at exactly `cols`: one tab and `/** ` lead it, ` *\/` closes it, so the
+	 * prose length that hits a given width is arithmetic rather than something to count by eye. `marker` opens the prose and is what an
+	 * edit then grows. The literal 12 is that arithmetic at the compiled default tab of 4 (4 + 4 + 1 + 3), which is the only thing here
+	 * tied to a tab width — a project declaring another one fails the caller's `Assert.equals` loudly rather than leaving the pin vacuous.
+	 */
+	private inline function oneLineDoc(marker: String, cols: Int): String {
+		final prose: String = ''.rpad('word ', cols).substr(0, cols - 12 - marker.length);
+		final tail: String = prose.endsWith(' ') ? '${prose.substr(0, prose.length - 1)}z' : prose;
+		return 'class C {\n\t/** $marker $tail */\n\tfunction f() {}\n}';
 	}
 
 	/** A doc block holding `line` as its own paragraph between two prose paragraphs. */
@@ -940,6 +1036,11 @@ class CommentRewriteSliceTest extends Test {
 				rest = rest.substring(marker.length);
 				break;
 			}
+			// A ONE-LINE block carries its closer at the END of the same line, where the leading-marker
+			// strip never reaches it — so a reflow that moves the closer onto a line of its own reads
+			// as a lost word rather than as the same prose.
+			final body: String = rest.rtrim();
+			if (body.endsWith('*/')) rest = body.substring(0, body.length - 2);
 			for (word in rest.split(' ')) if (word.trim() != '') words.push(word.trim());
 		}
 		return words.join(' ');

@@ -123,14 +123,6 @@ final class CommentWidth implements Check implements DefaultOff implements Volat
 	/** Report-only: the reflow handed the line back byte-identical — one word wider than the width. */
 	private static inline final NO_BREAK: String = 'it holds no break point inside the width';
 
-	/**
-	 * Report-only: the block's `*\/` shares this line, and `wrapCommentBody` measures the BODY, which
-	 * ends two characters short of it — so the reflow reads a 142-column line as 140 and leaves it.
-	 * Every one of the 20 lines this names in this tree is a one-line doc block at 141 or 142 columns,
-	 * over by exactly the closer.
-	 */
-	private static inline final CLOSER: String = 'the block closer shares this line and the reflow measures the body without it';
-
 	public function new() {}
 
 	public function id(): String {
@@ -196,7 +188,7 @@ final class CommentWidth implements Check implements DefaultOff implements Volat
 			final bodySpan: Span = SourceComments.commentBody(source, unit);
 			final body: String = source.substring(bodySpan.from, bodySpan.to);
 			final continuation: String = SourceComments.commentContinuation(source, unit);
-			final next: String = reflow(source, unit, body, open, layout);
+			final next: String = reflow(source, unit, body, open, layout, unit.to - bodySpan.to);
 			if (next == body) continue;
 			// A ONE-LINE doc block that has just grown has to be re-opened, or its closer rides the
 			// last content line and the writer eats the space before that line's star. The block's
@@ -308,15 +300,10 @@ final class CommentWidth implements Check implements DefaultOff implements Volat
 		if (open.length == 0) return;
 		final bodySpan: Span = SourceComments.commentBody(source, unit);
 		final body: String = source.substring(bodySpan.from, bodySpan.to);
-		// A body span two characters short of its unit is a CLOSED block, so its last body line is
-		// the one the closer rides — the two columns the reflow measures nothing of.
-		final closer: Int = bodySpan.to == unit.to - 2 ? 2 : 0;
-		final last: Int = body.split('\n').length - 1;
 		// ONE line at a time, so the answer is about THAT line. Wrapping the whole open set at once and
 		// looking for each line's text in the result reads a surviving IDENTICAL twin — a prose line
 		// whose copy sits inside a fenced block, say — as evidence that this line could not be broken.
-		for (w in open) if (reflow(source, unit, body, [w.body], metrics) == body)
-			w.refusal = w.body == last && w.cols - closer <= metrics.lineWidth ? CLOSER : NO_BREAK;
+		for (w in open) if (reflow(source, unit, body, [w.body], metrics, unit.to - bodySpan.to) == body) w.refusal = NO_BREAK;
 	}
 
 	/**
@@ -328,10 +315,12 @@ final class CommentWidth implements Check implements DefaultOff implements Volat
 	 * for it. A line blanked out of the protection list is never over-width in it either, so the
 	 * reflow's own trigger fires exactly when an open line stands.
 	 */
-	private static function reflow(source: String, unit: CommentUnit, body: String, open: Array<Int>, metrics: LayoutMetrics): String {
+	private static function reflow(
+		source: String, unit: CommentUnit, body: String, open: Array<Int>, metrics: LayoutMetrics, closerCols: Int
+	): String {
 		return SourceComments.wrapCommentBody(
 			body, body, SourceComments.commentHead(source, unit), SourceComments.commentContinuation(source, unit), metrics, unit.isLine,
-			open
+			closerCols, open
 		);
 	}
 
