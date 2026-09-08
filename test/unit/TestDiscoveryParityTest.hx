@@ -1000,7 +1000,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.BuiltinFixClassCensusTest#testNoDeclaredNoAutofixRuleCarriesAFixSeam :: guard :: ',
 			'unit.check.CommentWidthCheckTest#testACommentInARawCondRegionIsReportOnly :: control :: M-COMMENT-WIDTH-OPAQUE-OPEN',
 			'unit.check.CommentWidthCheckTest#testAFencedCodeSampleIsReportOnly :: control :: M-COMMENT-WIDTH-FENCE-BLIND',
-			'unit.check.CommentWidthCheckTest#testAOneLineBlockOverByItsCloserNamesTheCloser :: control :: M-COMMENT-WIDTH-CLOSER-UNSEEN',
+			'unit.check.CommentWidthCheckTest#testAOneLineBlockOverByItsCloserIsReflowed :: control :: M-COMMENT-WIDTH-CLOSER-UNSEEN',
 			'unit.check.CommentWidthCheckTest#testAProseLineWithATwinInsideAFenceIsStillFixable :: control :: '
 				+ 'M-COMMENT-WIDTH-PROTECTION-BY-TEXT',
 			'unit.check.CommentWidthCheckTest#testATableRowIsReportOnlyAndSaysSo :: control :: M-COMMENT-REFLOW-UNSAFE-LINES',
@@ -1093,8 +1093,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PreferStaticExtensionCheckTest#testMessageKeepsATwoSpaceLiteral :: control :: M-RENDER-SPAN-TOKENS',
 			'unit.check.PreferStaticExtensionCheckTest#testMessageQuotesLiteralWhitespaceExactlyAsTheFixWritesIt :: control :: '
 				+ 'M-RENDER-SPAN-TOKENS',
-			'unit.check.PreferStaticExtensionCheckTest#testUsingInAnotherBranchDoesNotCoverTheCall :: control :: '
-				+ 'M-COND-BRANCH-SPAN-SHARED',
+			'unit.check.PreferStaticExtensionCheckTest#testUsingInAnotherBranchDoesNotCoverTheCall :: control :: M-COND-BRANCH-SPAN-SHARED',
 			'unit.check.PreferTernaryReturnCheckTest#testOwnLineCommentInACascadeDefersTheTail :: control :: '
 				+ 'M-PTR-RIDES-NEVER,M-PTR-CASCADE-NEVER-STRANDS',
 			'unit.check.PreferTernaryReturnCheckTest#testTheRunOfOneHoistIsRefusedAtTheSeam :: control :: M-COMMENT-HOIST-BLIND',
@@ -1227,8 +1226,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-CUDDLE-FLATONLY',
 			'unit.grammar.haxe.HxComprehensionCuddledOpenTest#testAnItemOverflowingTheGlueColumnCuddlesAndDropsItsBody :: control :: '
 				+ 'M-CUDDLE-FALLBACK-INDENT',
-			'unit.grammar.haxe.HxComprehensionCuddledOpenTest#testTheGlueOverflowLayoutIsIdempotent :: control :: '
-				+ 'M-CUDDLE-FALLBACK-INDENT',
+			'unit.grammar.haxe.HxComprehensionCuddledOpenTest#testTheGlueOverflowLayoutIsIdempotent :: control :: M-CUDDLE-FALLBACK-INDENT',
 			'unit.grammar.haxe.HxComprehensionCuddledOpenTest#testTheReportedLayoutIsIdempotent :: control :: M-CUDDLE-FLATONLY',
 			'unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testFitLineMovesANonFlatBodyOffTheHeadLine :: control :: '
 				+ 'M-FIRST-LINE-FIT',
@@ -1400,8 +1398,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testTheTargetLayoutIsIdempotent :: control :: M-BRACKET-GLUE-NONE',
 			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testUnderKeepTheKnobHugsTheHeadAndCuddlesTheElse :: control :: '
 				+ 'M-BRACKET-GLUE-KEEP-BLIND',
-			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testUnderKeepTheReportedComprehensionReachesTheTargetLayout :: '
-				+ 'control :: M-BRACKET-GLUE-KEEP-BLIND',
+			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testUnderKeepTheReportedComprehensionReachesTheTargetLayout :: control :: '
+				+ 'M-BRACKET-GLUE-KEEP-BLIND',
 			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testUnderKeepWithoutTheKeyTheSourceShapeSurvivesWhole :: guard :: ',
 			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testUnderSameTheBrokenSourceAlreadyReachedTheTargetLayout :: guard :: ',
 			'unit.grammar.haxe.HxValueIfBracketHugSliceTest#testWithoutTheKeyTheSemicolonAndTheBreakBothSurvive :: control :: '
@@ -1451,11 +1449,17 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CommentOwnerGuardSliceTest#testHoistingACommentPastSurvivingCodeIsRefused :: control :: M-COMMENT-WELD-BLIND',
 			'unit.query.CommentOwnerGuardSliceTest#testHoistingAcrossADeclaredCarryIsRefused :: guard :: M-COMMENT-HOIST-BLIND',
 			'unit.query.CommentOwnerGuardSliceTest#testWeldingTwoCommentBlocksIsRefused :: control :: M-COMMENT-WELD-BLIND',
+			'unit.query.CommentRewriteSliceTest#testAGrownPlainBlockWrapsWithoutAGutter :: control :: M-COMMENT-CONTINUATION-ALWAYS-GUTTER',
 			'unit.query.CommentRewriteSliceTest#testALongFirstTokenIsWrappedNotRefused :: control :: M-COMMENT-REFLOW-COUNT-ONLY',
+			'unit.query.CommentRewriteSliceTest#testAOneLineDocOverByItsCloserIsReflowedNotRefused :: control :: '
+				+ 'M-COMMENT-REFLOW-TAIL-UNSEEN',
 			'unit.query.CommentRewriteSliceTest#testARunLineMayNotLoseItsOpener :: control :: M-COMMENT-RUN-OPENER-UNGUARDED',
 			'unit.query.CommentRewriteSliceTest#testASuppressionDirectiveIsNeverWrapped :: control :: M-COMMENT-REFLOW-UNSAFE-LINES',
 			'unit.query.CommentRewriteSliceTest#testATrailingCommentIsNeverWrapped :: control :: M-COMMENT-REFLOW-TRAILING-WRAPPED',
 			'unit.query.CommentRewriteSliceTest#testBlockCommentKeepsAnInteriorLineCommentMarker :: control :: M-COMMENT-MARKER-FORCED',
+			'unit.query.CommentRewriteSliceTest#testDeletingTheFirstBulletMayNotTakeTheListsOwnSeparator :: control :: '
+				+ 'M-COMMENT-PARAGRAPH-DELETION-EXEMPT',
+			'unit.query.CommentRewriteSliceTest#testDeletingWithATrailingSpaceTakesTheOrdinaryBreak :: guard :: ',
 			'unit.query.CommentRewriteSliceTest#testFindSpanningABlankDocLineIsRefused :: control :: M-COMMENT-PARAGRAPH-UNGUARDED',
 			'unit.query.CommentRewriteSliceTest#testFindSpanningABlankRunLineIsRefused :: control :: M-COMMENT-PARAGRAPH-UNGUARDED',
 			'unit.query.CommentRewriteSliceTest#testJoinedDocLineIsReflowed :: control :: M-COMMENT-REFLOW-ABSENT',
@@ -1468,6 +1472,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CommentRewriteSliceTest#testReflowBalancesRatherThanFillingToTheLimit :: control :: M-COMMENT-REFLOW-GREEDY',
 			'unit.query.CommentRewriteSliceTest#testReflowLeavesAnUntouchedWideLineAlone :: control :: M-COMMENT-REFLOW-TOUCHED-ONLY',
 			'unit.query.CommentRewriteSliceTest#testStructuralCommentLinesAreNeverWrapped :: control :: M-COMMENT-REFLOW-UNSAFE-LINES',
+			'unit.query.CommentRewriteSliceTest#testTheRepairTriggerCountsTheCloserToo :: control :: M-COMMENT-REFLOW-TRIGGER-TAIL-UNSEEN',
 			'unit.query.CommentRewriteSliceTest#testTrailingBreakSpaceKeepsTheLineBreak :: control :: M-COMMENT-BOUNDARY-TRAIL-INDEX',
 			'unit.query.CommentWeldDeletionSliceTest#testHoistingInsideAReplacementIsStillRefused :: control :: M-COMMENT-WELD-BLIND',
 			'unit.query.CommentWeldDeletionSliceTest#testWeldingAcrossTheRepeatedSeparatorIsStillRefused :: control :: '
@@ -1865,7 +1870,11 @@ class TestDiscoveryParityTest extends Test {
 			'M-COUNT-GUARDED-MIS-ATTRIBUTED',
 			'M-LINTDIFF-RULE-SUMMARY-BLANK',
 			'M-LINTDIFF-NET-UNSTATED',
-			'M-LINTDIFF-SURPLUS-BY-KEY'
+			'M-LINTDIFF-SURPLUS-BY-KEY',
+			'M-COMMENT-REFLOW-TAIL-UNSEEN',
+			'M-COMMENT-REFLOW-TRIGGER-TAIL-UNSEEN',
+			'M-COMMENT-PARAGRAPH-DELETION-EXEMPT',
+			'M-COMMENT-CONTINUATION-ALWAYS-GUTTER'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

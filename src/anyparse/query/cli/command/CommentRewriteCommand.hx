@@ -163,8 +163,11 @@ final class CommentRewriteCommand implements CliCommand {
 		CliIo.sysPrint('find could read straight across it and the splice then deleted the separator,\n');
 		CliIo.sysPrint('merging two paragraphs into one line with nothing to report it. Such a find is\n');
 		CliIo.sysPrint('now REFUSED: narrow it to one paragraph, or use --regex, where the separator is\n');
-		CliIo.sysPrint('visible in the pattern (a run needs `\\s+//` twice over to cross it). An empty\n');
-		CliIo.sysPrint('replacement is a deletion and still takes its own separator with it.\n');
+		CliIo.sysPrint('visible in the pattern (a run needs `\\s+//` twice over to cross it). A DELETION\n');
+		CliIo.sysPrint('is refused on the same terms: an adjacent ORDINARY break run still goes with it,\n');
+		CliIo.sysPrint("so no empty line is left behind, but a blank one is the neighbouring paragraphs'\n");
+		CliIo.sysPrint("boundary and never the deleted text's own. To delete a WHOLE paragraph, reach\n");
+		CliIo.sysPrint('for --regex: narrowing the find works but leaves the bare gutters behind.\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint("SPLICING. Write plain lines and real newlines (a shell $'a\\nb' literal): each\n");
 		CliIo.sysPrint("new line gets the comment's own continuation, and a ` * ` you add yourself is\n");
