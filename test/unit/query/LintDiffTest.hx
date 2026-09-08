@@ -336,10 +336,10 @@ class LintDiffTest extends Test {
 		final lines: Array<String> = LintDiff.render(diff(before, after, ''), 'tm', 2);
 		Assert.stringContains('lint-diff tm:', lines[0]);
 		Assert.stringContains('3 added / 0 removed', lines[0]);
-		Assert.equals(5, lines.length, 'headline, severity breakdown, two examples and the elision note');
+		Assert.equals(6, lines.length, 'headline, one moved rule, the severity breakdown, two examples and the elision note');
 		Assert.stringContains('1 more added key(s)', lines[lines.length - 1]);
 		final uncapped: Array<String> = LintDiff.render(diff(before, after, ''), 'tm', -1);
-		Assert.equals(5, uncapped.length, 'a negative limit prints every example and no elision note');
+		Assert.equals(6, uncapped.length, 'a negative limit prints every example and no elision note');
 		Assert.stringContains('src/C.hx', uncapped[uncapped.length - 1]);
 	}
 
@@ -368,6 +368,128 @@ class LintDiffTest extends Test {
 		final result: LintDiffResult = diff(before, after, '');
 		Assert.equals(0, result.addedTotal, 'a member the type gained is not a NEW finding');
 		Assert.equals(0, result.removedTotal);
+	}
+
+	/**
+	 * The question the gate exists for is "did a rule OTHER than the one I touched move", and
+	 * until this row existed it took a reader filtering 190-odd example lines by hand — or, on
+	 * the run that produced this test, re-counting both JSON reports in another language.
+	 *
+	 * A rule that moved nothing is deliberately absent: which rules EXIST is
+	 * `lint --list-rules`'s question — 180 are registered and 38 of them fire on this tree,
+	 * so printing every one would bury the two that moved.
+	 */
+	@:pin('control')
+	@:killer('M-LINTDIFF-RULE-SUMMARY-BLANK')
+	public function testTheByRuleSummaryNamesEveryRuleThatMoved(): Void {
+		final before: String = reportOf([
+			record('src/A.hx', 'warning', 'unused-import', 'import a.B is unused'),
+			record('src/A.hx', 'info', 'member-order', 'member out of order')
+		]);
+		final after: String = reportOf([
+			record('src/A.hx', 'warning', 'unused-import', 'import a.B is unused'),
+			record('src/A.hx', 'error', 'dead-code', 'unreachable statement'),
+			record('src/B.hx', 'error', 'dead-code', 'unreachable statement')
+		]);
+		final result: LintDiffResult = diff(before, after, '');
+		Assert.equals(2, result.rules.length, 'dead-code appeared and member-order went away; unused-import did not move');
+		Assert.equals('dead-code', result.rules[0].rule, 'the biggest mover leads');
+		Assert.equals(0, result.rules[0].before);
+		Assert.equals(2, result.rules[0].after);
+		Assert.equals(2, result.rules[0].added);
+		Assert.equals(0, result.rules[0].removed);
+		Assert.equals('member-order', result.rules[1].rule);
+		Assert.equals(1, result.rules[1].before);
+		Assert.equals(0, result.rules[1].after);
+		Assert.equals(1, result.rules[1].removed);
+		final rendered: Array<String> = LintDiff.render(result, '', EXAMPLE_LIMIT);
+		Assert.stringContains('by rule      dead-code 0->2 (+2 -0)', rendered[1], 'one row per rule, biggest mover first');
+		Assert.stringContains('by rule      member-order 1->0 (+0 -1)', rendered[2]);
+		Assert.isTrue(rendered.join('\n').indexOf('unused-import') < 0, 'a rule that moved nothing is not a row');
+	}
+
+	/**
+	 * Equal movement falls back to the rule id, which is what makes the block a TOTAL order and
+	 * two runs on one input byte-identical. The doc promises that; nothing exercised it, and a
+	 * comparator returning 0 for every tie would leave the order at the sort's mercy.
+	 */
+	public function testRulesTiedOnMovementSortByName(): Void {
+		final before: String = reportOf([record('src/A.hx', 'warning', 'zeta-rule', 'zeta finding')]);
+		final after: String = reportOf([
+			record('src/A.hx', 'warning', 'mid-rule', 'mid finding'),
+			record('src/A.hx', 'warning', 'alpha-rule', 'alpha finding')
+		]);
+		final result: LintDiffResult = diff(before, after, '');
+		Assert.same(['alpha-rule', 'mid-rule', 'zeta-rule'], [for (r in result.rules) r.rule]);
+	}
+
+	/**
+	 * A finding that migrated between files leaves its rule's two totals equal, so a summary
+	 * built from the totals alone would report that rule as silent. The row is built from the
+	 * SURPLUSES instead, which is what makes `1->1 (+1 -1)` a row worth printing.
+	 */
+	public function testARuleWhoseTotalsAreEqualStillShowsItsMovement(): Void {
+		final before: String = reportOf([record('src/A.hx', 'warning', 'unused-import', 'import a.B is unused')]);
+		final after: String = reportOf([record('src/C.hx', 'warning', 'unused-import', 'import a.B is unused')]);
+		final result: LintDiffResult = diff(before, after, '');
+		Assert.equals(1, result.rules.length);
+		Assert.equals(1, result.rules[0].before);
+		Assert.equals(1, result.rules[0].after);
+		Assert.equals(1, result.rules[0].added);
+		Assert.equals(1, result.rules[0].removed);
+		Assert.stringContains('unused-import 1->1 (+1 -1)', LintDiff.render(result, '', EXAMPLE_LIMIT)[1]);
+	}
+
+	/**
+	 * The headline states the net as well as the two surpluses, and the redundancy is the point:
+	 * the only recorded misreading of this tool inverted the `N findings (base M)` pair — a
+	 * verdict of 66 added / 9 removed was read as 57 findings FEWER, and the contradiction was
+	 * filed as a normalization this module was missing. 66 - 9 = +57, which is what the same
+	 * reader's own per-rule tally had already said.
+	 */
+	@:pin('control')
+	@:killer('M-LINTDIFF-NET-UNSTATED')
+	public function testTheHeadlineStatesTheNetDirection(): Void {
+		final small: String = reportOf([record('src/A.hx', 'error', 'dead-code', 'unreachable statement')]);
+		final big: String = reportOf([
+			record('src/A.hx', 'warning', 'unused-import', 'import a.B is unused'),
+			record('src/B.hx', 'warning', 'unused-import', 'import a.C is unused')
+		]);
+		Assert.stringContains('2 findings (base 1, net +1)', LintDiff.render(diff(small, big, ''), '', EXAMPLE_LIMIT)[0]);
+		Assert.stringContains('1 findings (base 2, net -1)', LintDiff.render(diff(big, small, ''), '', EXAMPLE_LIMIT)[0]);
+		Assert.stringContains('2 findings (base 2, net +0)', LintDiff.render(diff(big, big, ''), '', EXAMPLE_LIMIT)[0]);
+	}
+
+	/**
+	 * `added - removed` is `new - base` by construction: both surpluses count OCCURRENCES over
+	 * the same two multisets. Nothing pinned that identity, and it is the fact that settles
+	 * every "the totals and the surpluses disagree" reading — there is no such reading.
+	 */
+	@:pin('control')
+	@:killer('M-LINTDIFF-SURPLUS-BY-KEY')
+	public function testAddedMinusRemovedIsAlwaysTheTotalDelta(): Void {
+		final before: String = reportOf([
+			record('src/A.hx', 'warning', 'magic-number', 'magic number'),
+			record('src/B.hx', 'info', 'member-order', 'member out of order')
+		]);
+		final after: String = reportOf([
+			record('src/A.hx', 'warning', 'magic-number', 'magic number'),
+			record('src/A.hx', 'warning', 'magic-number', 'magic number'),
+			record('src/A.hx', 'warning', 'magic-number', 'magic number'),
+			record('src/B.hx', 'info', 'member-order', 'member out of order'),
+			record('src/C.hx', 'error', 'dead-code', 'unreachable statement')
+		]);
+		final result: LintDiffResult = diff(before, after, '');
+		Assert.equals(2, result.oldTotal);
+		Assert.equals(5, result.newTotal);
+		Assert.equals(3, result.addedTotal, 'two more magic-number occurrences plus the dead-code one');
+		Assert.equals(0, result.removedTotal);
+		Assert.equals(
+			result.newTotal - result.oldTotal, result.addedTotal - result.removedTotal,
+			'added - removed is the total delta, whatever the multiplicities behind it'
+		);
+		Assert.stringContains('5 findings (base 2, net +3)', LintDiff.render(result, '', EXAMPLE_LIMIT)[0]);
+		Assert.stringContains('magic-number 1->3 (+2 -0)', LintDiff.render(result, '', EXAMPLE_LIMIT)[1]);
 	}
 
 	private static function diff(before: String, after: String, root: String): LintDiffResult {

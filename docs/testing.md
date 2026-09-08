@@ -2531,36 +2531,110 @@ Two things break this quietly, and both did:
   target-conditional style choice but a real unification constraint.
 
 A `--jvm` build of a minimal parse+lint harness is the cheapest way to
-re-check this after a slice that touches `src/anyparse/query` or
-`src/anyparse/check`. That harness is committed:
+re-check this. That harness is committed:
 
 ```sh
 haxe tools/jvm-portability.hxml     # ~9s; parser + writer + every builtin check
-java -jar bin/jvm-portability.jar   # prints the counts it parsed and linted
+java -jar bin/jvm-portability.jar   # prints the gate line and a census line
 ```
 
 It is a portability PROBE, not a dependency: nothing anyparse ships needs a
 JVM. It exists so the invariant above is something a slice can fail on
 instead of a paragraph nothing can flip.
 
-**Expected line, on an untouched tree (measured twice, deterministic):**
-`files=482 wrote=482 threw=0 checks=179 violations=893 lintdiff=1+0-`, followed
-by a second `  phases: roundtrip=Xs lint=Ys` line (timings, not a count — no
-expected value). `files` and `violations` drift with the tree — say so rather
-than chasing them; `checks` (`Linter.builtins().length`) is stable ACROSS RUNS
-on one commit but is itself a rule-registry count, so it drifts across commits
-the same way `files`/`violations` do, just less often — treat it the same way,
-not as a fixed constant. `lintdiff=1+0-` does NOT: it is `JvmPortability.lintDiffProbe`'s own embedded
-self-test of `LintDiff`'s normalization (two hand-written JSON report
-fixtures compared against each other, nothing to do with `src/`), forcing the
-macro-generated `LintDiff` JSON parser to actually build under `--jvm` — a
-`-main` target only compiles what it reaches, so without this call neither
-`LintDiff` nor its parser would be exercised by the probe at all. `1+0-` is
-that helper's own documented right answer (the duplicate-code pair differs
-only in a `./` and a line number, which normalization erases, leaving the new
-dead-code record as the one real surplus) — a T747 investigation confirmed it
-is exactly that fixed self-check, not a JS/JVM lint desync, before recording
-it here.
+#### What the probe actually covers — NOT a package
+
+The trigger has been written as "run it if you touched `src/anyparse/query`
+or `src/anyparse/check`", and that reads as a coverage claim the probe does
+not make. Those two paths are the probe's **default input** — the files it
+READS and lints (`JvmPortability.DEFAULT_SCOPE`). What it **compiles** is a
+different set entirely: `-main JvmPortability` with `-cp src -cp tools`, and
+Haxe types only the modules that main reaches. Measured on the jar built at
+`1c225caf`, 3346 `anyparse/*` class entries:
+
+| package | classes in jar | modules with no class in the jar |
+|---|---|---|
+| `anyparse/grammar` | 1525 | — |
+| `anyparse/check` | 1215 | 11 of 234 |
+| `anyparse/query` | 439 | **65 of 129**, plus all 87 files under `query/cli` |
+| `anyparse/format` | 86 | 20 of 27 |
+| `anyparse/core` | 68 | 7 of 13 |
+| `anyparse/runtime` | 13 | 4 of 15 |
+
+`anyparse/query/cli` contributes **zero** entries — the CLI is not reachable
+from this `-main`, so no command module is typed for `--jvm` at all. Nor are
+half the top-level `query` modules: `Address`, `Patch`, `ReplaceNode`,
+`Selector`, `Engine`, `NewFile`, `MoveSymbol`, `MutationVerdict`,
+`StdlibDifferential` and the rest of the addressing/mutation family are
+absent, as are `OracleCache`, `CompilerServer`, `CompilerOracle`,
+`HaxeSpawn`, `FixVerifier` and `OracleCoverage` on the `check` side. A few of
+those emit nothing by construction (`ExitCode` is all-inline, `Severity` an
+`enum abstract`); most are simply never reached.
+
+So: a green probe after a slice in `query/cli` proves the slice's code
+compiles for **js**, and nothing more. `tools/battery.sh` already gets this
+right in its own trigger — it re-runs the probe when anything under `src`,
+`tools/JvmPortability.hx` or the hxml moved, deliberately not narrowing to
+the two linted packages — and it is the prose around it that was wrong.
+Widening what the probe TYPES is a separate question: the honest way is a
+`--macro include('anyparse.query.cli')`, which trades build time for
+coverage and would first have to survive `-lib hxnodejs` not being there.
+
+#### Reading the two output lines
+
+```
+gate: files=485 wrote=485 threw=0 lintdiff=1+0-
+census @ 1c225caf: checks=180 findings=839 — a reading of THIS tree, not an invariant — …
+  phases: roundtrip=2.6s lint=11.8s
+```
+
+The split is deliberate, and it exists because the numbers were being read as
+one kind of thing when they are two.
+
+**The gate line is the verdict.** `wrote == files` and `threw == 0` are the
+invariant — `writeRoundTrip` throws only on a parse failure or a comment
+loss, never on a formatting difference. `lintdiff=1+0-` is fixed too: it is
+`JvmPortability.lintDiffProbe`'s own embedded self-test of `LintDiff`'s
+normalization (two hand-written JSON report fixtures compared against each
+other, nothing to do with `src/`), forcing the macro-generated `LintDiff`
+JSON parser to actually build under `--jvm` — a `-main` target only compiles
+what it reaches, so without that call neither `LintDiff` nor its parser would
+be exercised by the probe at all. `1+0-` is that helper's own documented
+right answer (the duplicate-code pair differs only in a `./` and a line
+number, which normalization erases, leaving the new dead-code record as the
+one real surplus) — a T747 investigation confirmed it is exactly that fixed
+self-check, not a JS/JVM lint desync, before recording it here.
+
+**The census line is a reading, and it is stamped with the commit it was
+taken on.** `checks`, `findings` and `files` are all functions of the whole
+tree: a doc reflow moves `findings`, a new rule moves `checks`, a new file
+moves `files`. The stamp (`git describe --always --dirty`, or `unknown`) is
+there because this exact number was quoted twice in a row as a fixed
+expectation and was wrong both times — 1183 written where the tree said 1177,
+then 1177 where it said 929 — each time a correct number measured one commit
+before the header it was written into. **Take the census on YOUR base with a
+freshly built jar; never copy one from a queue header, a brief or this file.**
+
+`findings` was renamed from `violations` in the same change, and it now means
+something it did not before: `Linter.run` is called WITH a per-file config
+resolver and `applyEnablement: true`, so the probe answers the same rule set
+the project's own `apqlint.json` declares. Before that it passed no resolver,
+which skips the enablement pass entirely — every registered rule counted,
+including the 42 that declare `Check.DefaultOff` and are OFF unless a project
+opts in, so registering one moved the number by its whole finding count with
+nothing in the code having changed. On `1c225caf` the config-blind count was
+927 and the config-aware one is 839; the 88-finding gap is exactly two rules
+the project does not enable — `asymmetric-branch-braces` (86) and
+`default-repeated-argument` (2) — confirmed by re-running `apq lint` over the
+same two directories with every rule force-enabled (909 findings, the same two
+rules as its surplus over the configured run). T783 had already measured the
+same mechanism twice, at 893 -> 1180.
+
+It is still NOT the same number as `apq lint src/anyparse/query
+src/anyparse/check --all` (821 on that commit): that run joins a `SymbolIndex`
+over the declared `resolutionRoots`, which the cross-file checks read and this
+probe has no business building. Close, for the same reason it should be —
+comparable in kind, not equal.
 
 ### Parallel tracks: per-worker build outputs
 

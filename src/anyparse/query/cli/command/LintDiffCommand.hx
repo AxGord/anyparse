@@ -124,7 +124,13 @@ final class LintDiffCommand implements CliCommand {
 		CliIo.sysPrint('Usage: apq lint-diff --old <a.json> --new <b.json> [--root <prefix>] [--label <name>]\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Compare two `apq lint --format json` snapshots as MULTISETS of\n');
-		CliIo.sysPrint('(file, rule, severity, message) keys and report added and removed.\n');
+		CliIo.sysPrint('(file, rule, severity, message) keys and report added and removed,\n');
+		CliIo.sysPrint('broken down PER RULE before the example keys — one row per rule that\n');
+		CliIo.sysPrint('moved, `<rule> <before>-><after> (+a -r)`, under the same --limit and\n');
+		CliIo.sysPrint('elision note. A rule whose two totals are EQUAL still shows a row when\n');
+		CliIo.sysPrint('a finding of it moved between files, which is the case a comparison of\n');
+		CliIo.sysPrint('totals hides. The headline also states the NET, so the pair\n');
+		CliIo.sysPrint('`N findings (base M)` cannot be read backwards.\n');
 		CliIo.sysPrint('Line, column and address are deliberately not part of the key —\n');
 		CliIo.sysPrint('they move under any edit above them, and `apq lint --format json`\n');
 		CliIo.sysPrint('records DO carry all three (file, line, col, severity, rule,\n');

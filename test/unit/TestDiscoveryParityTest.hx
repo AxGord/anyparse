@@ -1491,6 +1491,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.ExtractInterfaceSliceTest#testSecondInterfaceStillExtracts :: control :: M-EI-IMPL-ANY-REFUSED',
 			'unit.query.GreedyDeclSpanEditBoundarySliceTest#testAGreedyModuleDeclSpanIsTrimmedToItsOwnLastToken :: control :: '
 				+ 'M-DECL-EDIT-SPAN-UNTRIMMED',
+			'unit.query.LintDiffTest#testAddedMinusRemovedIsAlwaysTheTotalDelta :: control :: M-LINTDIFF-SURPLUS-BY-KEY',
+			'unit.query.LintDiffTest#testTheByRuleSummaryNamesEveryRuleThatMoved :: control :: M-LINTDIFF-RULE-SUMMARY-BLANK',
+			'unit.query.LintDiffTest#testTheHeadlineStatesTheNetDirection :: control :: M-LINTDIFF-NET-UNSTATED',
 			'unit.query.MakeFinalSliceTest#testHalfIteratorShapeStillFinal :: control :: M-STRUCT-BUILTIN-BY-NAME',
 			'unit.query.MetaElementSpanSliceTest#testRemoveConditionalModifierRegionStillTakesTheMember :: control :: '
 				+ 'M-META-ELEMENT-ANY-COND-REGION',
@@ -1859,7 +1862,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-LEDGER-CROSS-FILE-MUTE',
 			'M-FIND-CONFLICT-MIS-ATTRIBUTED',
 			'M-COUNT-CONFLICT-SILENT',
-			'M-COUNT-GUARDED-MIS-ATTRIBUTED'
+			'M-COUNT-GUARDED-MIS-ATTRIBUTED',
+			'M-LINTDIFF-RULE-SUMMARY-BLANK',
+			'M-LINTDIFF-NET-UNSTATED',
+			'M-LINTDIFF-SURPLUS-BY-KEY'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

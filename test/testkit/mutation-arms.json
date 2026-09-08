@@ -2252,6 +2252,29 @@
 			"find": "\tfinal accepted: Array<Violation> = keptViolations(collected, edits, violations);",
 			"replace": "\tfinal accepted: Array<Violation> = violations;",
 			"note": "the guard's sentence is written on every finding the rule reported again, including the ones the containment filter dropped and the ones no site matched"
+		},
+		{
+			"name": "M-LINTDIFF-RULE-SUMMARY-BLANK",
+			"type": "anyparse.query.LintDiff",
+			"method": "ruleDeltas",
+			"force": "[]",
+			"note": "the per-rule breakdown comes back empty, so the report answers `did a rule other than mine move` with silence again and the reader is back to filtering example lines by hand"
+		},
+		{
+			"name": "M-LINTDIFF-NET-UNSTATED",
+			"type": "anyparse.query.LintDiff",
+			"method": "render",
+			"find": "'$tag: ${result.newTotal} findings (base ${result.oldTotal}, net $net)'",
+			"replace": "'$tag: ${result.newTotal} findings (base ${result.oldTotal})'",
+			"note": "the headline drops the net, so the `N findings (base M)` pair can be read backwards again - the misreading that put a phantom normalization defect in the backlog"
+		},
+		{
+			"name": "M-LINTDIFF-SURPLUS-BY-KEY",
+			"type": "anyparse.query.LintDiff",
+			"method": "compare",
+			"find": "for (e in added) addedTotal += e.count;",
+			"replace": "for (e in added) addedTotal += 1;",
+			"note": "the added surplus counts distinct KEYS instead of occurrences, so `added - removed` stops equalling `new - base` and a finding duplicated inside one file appears to move nothing"
 		}
 	]
 }
