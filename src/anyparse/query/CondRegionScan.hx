@@ -5,6 +5,7 @@ using Lambda;
 
 import anyparse.query.CondBranchProjection.CondBranchRun;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
 
 /**
@@ -96,6 +97,16 @@ final class CondRegionScan {
 	 * token, so `tagName` does not count as a mention of `tag`, and an interpolated `$tag`
 	 * still does (a `$` is not an identifier character).
 	 *
+	 * The one run the scan must NOT read is the region's OWN directives. They sit in the gaps
+	 * like everything else the model dropped, and they carry identifier-shaped tokens that name
+	 * no binding: a condition names build flags, `#end` and `#else` name nothing. So a local
+	 * `debug` beside `#if debug` was refused by the directive guarding it, and a local `end`
+	 * beside the region's own `#end` by the closer - a pre-existing fail-CLOSED refusal, safe
+	 * and wrong. `CondDirectives.scan` delimits them, keyword plus condition, and the mention
+	 * scan reads only what is left. It cannot hide a real occurrence: the branch bodies between
+	 * the directives are untouched, and a condition is not an expression over bindings in any
+	 * grammar that has one, so a reference written inside the region still refuses.
+	 *
 	 * CONSUMED BY BOTH SUBSYSTEMS, which is why the mutating ops and `lint --fix` are not in
 	 * fact asymmetric over an unparsed region: the name-driven ops ask through
 	 * `opaqueCondRegionInAny`, and the one CHECK whose fix is itself a rename (`naming`) asks
@@ -105,9 +116,21 @@ final class CondRegionScan {
 	 */
 	public static function opaqueCondRegionMentioning(scope: QueryNode, source: String, name: String, shape: RefShape): Null<Span> {
 		if (name.length == 0) return null;
-		for (region in opaqueCondRegions(scope, source, shape))
+		final regions: Array<OpaqueCondRegion> = opaqueCondRegions(scope, source, shape);
+		if (regions.length == 0) return null;
+		// The directive lines are part of the gap by construction — nothing projects them either —
+		// and they are the one run inside it that CANNOT hold a reference: a condition names build
+		// flags, and `#end` / `#else` name nothing at all. Read as ordinary bytes they refused a
+		// rename of a local `debug` standing beside `#if debug`, and of one named `end` beside the
+		// region's own `#end`. Scanned only when a region was found: the whole point of this
+		// module is that the file holding one is rare.
+		final directives: Array<Span> = [
+			for (directive in CondDirectives.scan(source, shape, noLexicalMask)) directive.span
+		];
+		for (region in regions)
 			for (gap in region.gaps)
-				if (SourceText.mentionsIdent(source, gap, name)) return gap;
+				for (run in outsideDirectives(gap, directives))
+					if (SourceText.mentionsIdent(source, run, name)) return gap;
 		return null;
 	}
 
@@ -328,6 +351,45 @@ final class CondRegionScan {
 			&& node.children.foreach(
 				c -> MemberKinds.MODIFIER_META_KINDS.contains(c.kind) || MemberKinds.COND_DECL_PREFIX_KEYWORD_KINDS.contains(c.kind)
 			);
+	}
+
+	/**
+	 * The non-code mask `CondDirectives.scan` is given here: NONE, deliberately, and this is the one
+	 * consumer for which that is the more precise read rather than a shortcut.
+	 *
+	 * Every other consumer asks the lexer which `#if` is real, because it is scanning ordinary source
+	 * where one may sit in a comment or a string. This one scans only the GAPS of a region the parser
+	 * captured raw, and the two directions of the lexer's answer are not symmetric there. Masking a
+	 * directive-shaped token that turns out to live in a comment or a string can only drop a mention
+	 * that lives in that same comment or string - a refusal this function's own doc already calls one
+	 * it would rather not make. Failing to mask a real directive keeps a refusal that is simply wrong,
+	 * and the lexer does lose directives: an unterminated literal earlier in the file swallows the rest
+	 * of it as non-code, which is a choice the reader makes for its OTHER consumers.
+	 *
+	 * So no lexical answer can make this gate fail OPEN, and consulting one can make it refuse where it
+	 * should not. A named function rather than an inline `() -> []` so the divergence from the reader's
+	 * every other caller is visible at the call site.
+	 */
+	private static function noLexicalMask(): Array<LexRegion> {
+		return [];
+	}
+
+	/**
+	 * The parts of `gap` that none of `masked` covers, in source order. `masked` is the directive
+	 * run list, which `CondDirectives.scan` emits in source order and non-overlapping (it resumes
+	 * the walk at each directive's own end), so one sweep answers it.
+	 */
+	private static function outsideDirectives(gap: Span, masked: Array<Span>): Array<Span> {
+		final out: Array<Span> = [];
+		var at: Int = gap.from;
+		for (run in masked) if (run.to > at) {
+			if (run.from >= gap.to) break;
+			if (run.from > at) out.push(new Span(at, run.from));
+			if (run.to >= gap.to) return out;
+			at = run.to;
+		}
+		if (at < gap.to) out.push(new Span(at, gap.to));
+		return out;
 	}
 
 	/**

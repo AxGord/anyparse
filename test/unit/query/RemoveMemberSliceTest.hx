@@ -272,17 +272,57 @@ class RemoveMemberSliceTest extends Test {
 	}
 
 	/**
-	 * Two declarations in SEPARATE regions with complementary conditions are twins as much as two
-	 * branches of one region are, and both still go. This is the shape the branch-level refusal is
-	 * deliberately unable to see — `CondBranchPath.sameBranch` compares region occurrences, not
-	 * condition text, so `#if js` and `#if !js` are different frames — and it is the reason the
-	 * refusal is not written on `CondBranchPath.comparable`, which reads the pair as overlapping
-	 * and would reject it. Without this fixture that whole argument rests on prose: the nesting
-	 * test is the only other case a `comparable` swap would flip, and it is about nesting.
+	 * Two declarations in SEPARATE regions with COMPLEMENTARY conditions are twins as much as two
+	 * branches of one region are, and both still go. `#if js` and `#if !js` are different branch
+	 * keys — the frame carries the condition text, and nothing here knows that one is the negation
+	 * of the other — so the refusal below cannot reach this pair, which is what the op exists to
+	 * serve. It is also the reason the refusal is not written on `CondBranchPath.comparable`, which
+	 * reads the pair as overlapping and would reject it. Without this fixture that whole argument
+	 * rests on prose: the nesting test is the only other case a `comparable` swap would flip, and
+	 * it is about nesting.
 	 */
 	public function testAlternativeSiblingRegionsAreStillTwins(): Void {
 		final source: String = 'class C {\n\t#if js\n\tvar drop:Int;\n\t#end\n\t#if !js\n\tvar drop:String;\n\t#end\n\tvar keep:Int;\n}\n';
 		Assert.equals('class C {\n\tvar keep:Int;\n}\n', okText(source, 'C', 'drop'));
+	}
+
+	/**
+	 * Two declarations in SEPARATE regions carrying the SAME condition are the branch-collision
+	 * shape too, and the count refusal reaches them.
+	 *
+	 * No build compiles one without the other, so the pair is exactly as uncompilable as two
+	 * declarations inside one region — but a `CondFrame` used to be keyed by region OCCURRENCE, so
+	 * the two read as different branches and `remove-member` deleted both at rc 0. That was the
+	 * documented half of the criterion the op could state and not answer; the frame now carries its
+	 * branch's condition chain, so the two questions have met. The last fixture is the one that
+	 * makes the key a CONDITION rather than its bytes: `#if (js)` and `#if js` guard the same builds.
+	 *
+	 * Asserted against the alternative-condition twin above, which must stay removable: a key that
+	 * ignored the condition entirely would equate those two as well and break the op's whole
+	 * purpose.
+	 *
+	 * KILLED by `M-COND-FRAME-REGION-KEYED` (back to region ordinals) and, for the parenthesised
+	 * pair alone, by `M-COND-FRAME-CONDITION-RAW` (the key stops being normalised).
+	 */
+	@:pin('control')
+	@:killer('M-COND-FRAME-REGION-KEYED')
+	@:killer('M-COND-FRAME-CONDITION-RAW')
+	public function testSiblingRegionsWithOneConditionAreRefusedByCount(): Void {
+		final twin: String = 'class C {\n\t#if js\n\tvar drop:Int;\n\t#end\n\t#if js\n\tvar drop:String;\n\t#end\n\tvar keep:Int;\n}\n';
+		switch RemoveMember.removeMember(twin, 'C', 'drop', true, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.fail('both declarations of a pair no build can compile were removed:\n$text');
+			case Err(message):
+				Assert.stringContains('2 declarations in ONE conditional branch', message);
+		}
+		final spelledApart: String =
+			'class C {\n\t#if (js)\n\tvar drop:Int;\n\t#end\n\t#if js\n\tvar drop:String;\n\t#end\n\tvar keep:Int;\n}\n';
+		switch RemoveMember.removeMember(spelledApart, 'C', 'drop', true, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.fail('`#if (js)` and `#if js` guard the same builds and were read as two branches:\n$text');
+			case Err(message):
+				Assert.stringContains('2 declarations in ONE conditional branch', message);
+		}
 	}
 
 	/**

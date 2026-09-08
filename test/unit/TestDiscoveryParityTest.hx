@@ -1425,15 +1425,17 @@ class TestDiscoveryParityTest extends Test {
 			'unit.lowering.StarBlockEndedWsRewindSitesTest#testANestedBlockKeepsTheStatementAfterASwallowedTerminator :: control :: '
 				+ 'M-PEB-WS-REWIND-SEPSTARTS-OFF',
 			'unit.lowering.StarBlockEndedWsRewindSitesTest#testANestedBlockWithAnOrdinaryTerminatorNeedsNoRewind :: guard :: ',
-			'unit.lowering.StarBlockEndedWsRewindTest#testASwallowedTerminatorBehindTrailingWhitespaceStillEndsTheStatement :: control '
-				+ ':: M-PEB-WS-REWIND-OFF',
+			'unit.lowering.StarBlockEndedWsRewindTest#testASwallowedTerminatorBehindTrailingWhitespaceStillEndsTheStatement :: control :: '
+				+ 'M-PEB-WS-REWIND-OFF',
 			'unit.lowering.StarBlockEndedWsRewindTest#testAnOrdinaryTerminatorNeedsNoRewind :: guard :: ',
 			'unit.lowering.StarBlockEndedWsRewindTest#testTheShapeThePredicateAnswersForNeedsNoRewind :: guard :: ',
 			'unit.query.AddMetaSliceTest#testCliWritesTheEntry :: control :: M-ADDMETA-CLI-UNROUTED',
 			'unit.query.AddMetaSliceTest#testFinalClassWrapperIsLifted :: control :: M-ADDMETA-NO-WRAPPER-CLIMB',
 			'unit.query.AddMetaSliceTest#testGuardedTypeKeepsTheEntryInsideTheGuard :: control :: M-ADDMETA-LOOSE-WRAPPER-CLIMB',
 			'unit.query.AddMetaSliceTest#testTypeEntryLandsBelowTheDoc :: control :: M-ADDMETA-ZERO-WIDTH-INSERT',
-			'unit.query.AddressTest#testAnAmbiguityListingSpellsTheSelectorThatPicksOneCandidate :: control :: M-CANDIDATE-LABEL-BARE',
+			'unit.query.AddressTest#testAModuleLevelNodeIsAddressedFromTheRootNotByOrdinal :: control :: M-ADDRESS-NO-ROOT-ANCHOR',
+			'unit.query.AddressTest#testAnAmbiguityListingSpellsTheSelectorThatPicksOneCandidate :: control :: '
+				+ 'M-CANDIDATE-LABEL-BARE,M-ADDRESS-NO-ROOT-ANCHOR',
 			'unit.query.ApqUsesTest#testQualifiedIsOptInSoRewritersKeepTheExactAnswer :: control :: M-USES-QUALIFIED-DEFAULT',
 			'unit.query.ApqUsesTest#testQualifiedSpellingsAcrossTypePositions :: control :: M-USES-EXACT-ONLY',
 			'unit.query.ApqUsesTest#testQualifiedSubModuleTypeIsFoundBySimpleName :: control :: M-USES-EXACT-ONLY',
@@ -1544,11 +1546,15 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-OPAQUE-REGION-BRACE-DELTA',
 			'unit.query.OpaqueCondRegionScanTest#testACommentAfterTheEndStaysOutOfTheQuote :: control :: M-OPAQUE-REGION-TRIVIA-KEPT',
 			'unit.query.OpaqueCondRegionScanTest#testAPartlyRawRegionSaysSoAndQuotesOnlyItsRawBytes :: control :: M-REGION-INSIDE-NONE',
+			'unit.query.OpaqueCondRegionScanTest#testARegionsOwnDirectivesAreNotAMentionOfTheNameTheyGuard :: control :: '
+				+ 'M-COND-GAP-KEEPS-DIRECTIVES,M-COND-GAP-SCANS-NOTHING',
 			'unit.query.OpaqueCondRegionScanTest#testAWhitespaceGapDoesNotDragTheSharedBodyIntoTheQuote :: control :: '
 				+ 'M-OPAQUE-REGION-WS-GAP',
 			'unit.query.OpaqueCondRegionScanTest#testAnExplicitListBuildsNoNotes :: control :: M-REGION-NOTES-ALWAYS',
 			'unit.query.OpaqueCondRegionScanTest#testDanglingElseIsOpaqueWhileItsBraceIdenticalTwinIsNot :: control :: '
 				+ 'M-OPAQUE-REGION-NONE',
+			'unit.query.OpaqueCondRegionScanTest#testOnlyTheDirectiveRunsComeOutOfTheGap :: control :: '
+				+ 'M-COND-GAP-KEEPS-DIRECTIVES,M-COND-GAP-SCANS-NOTHING',
 			'unit.query.OpaqueCondRegionScanTest#testTheNoteNamesTheLineTheRegionAndTheReason :: control :: M-OPAQUE-REGION-NONE',
 			'unit.query.OpaqueCondRegionScanTest#testTheQuoteStartsAtTheIfEvenWhenTheNodeBeginsBeforeIt :: control :: '
 				+ 'M-OPAQUE-REGION-NODE-SPAN',
@@ -1556,7 +1562,10 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.PatchSliceTest#testDocCodeSampleIndentationSurvives :: control :: M-PATCH-COMMENT-SHAPE-CHECKED',
 			'unit.query.PatchSliceTest#testDocPayloadWithASpaceGutterApplies :: control :: M-PATCH-COMMENT-SHAPE-CHECKED',
 			'unit.query.PatchSliceTest#testStringLiteralPerLineIndentStillRefused :: control :: M-PATCH-SHAPE-ALWAYS-SURVIVES',
+			'unit.query.RemoveMemberSliceTest#testSiblingRegionsWithOneConditionAreRefusedByCount :: control :: '
+				+ 'M-COND-FRAME-REGION-KEYED,M-COND-FRAME-CONDITION-RAW',
 			'unit.query.RemoveMemberSliceTest#testTwoDeclarationsInOneBranchAreRefusedByCount :: control :: M-REMOVE-MEMBER-BRANCH-BLIND',
+			'unit.query.RenameSliceTest#testModelledSpliceConditionOccurrenceRenames :: control :: M-COND-GAP-KEEPS-DIRECTIVES',
 			'unit.query.ResolutionProjectFilesTest#testDerivedIndexesAreMemoised :: control :: M-MEMO-OFF',
 			'unit.query.ResolutionProjectFilesTest#testSetResolutionIndexExpiresDerivedIndexes :: control :: M-NO-INVALIDATE',
 			'unit.query.SetModifierSliceTest#testAConditionalRegionOutsideTheKeywordRunIsStillServed :: control :: '
@@ -1583,6 +1592,7 @@ class TestDiscoveryParityTest extends Test {
 	 */
 	public function testTheArmRegistryReachesTheGeneratedRegistry(): Void {
 		final expectedArms: Array<String> = [
+			'M-ADDRESS-NO-ROOT-ANCHOR',
 			'M-ADMITS-TRUE',
 			'M-ALWAYS-NEXT',
 			'M-ALWAYS-SAME',
@@ -1594,6 +1604,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-CLAIM-NEG-BLIND',
 			'M-CLAIM-NOKINDS',
 			'M-CLAIM-RAW-DOC',
+			'M-COND-FRAME-CONDITION-RAW',
+			'M-COND-FRAME-REGION-KEYED',
+			'M-COND-GAP-KEEPS-DIRECTIVES',
+			'M-COND-GAP-SCANS-NOTHING',
 			'M-CUDDLE-FLATONLY',
 			'M-CUDDLE-FALLBACK-INDENT',
 			'M-CUDDLE-OFF',

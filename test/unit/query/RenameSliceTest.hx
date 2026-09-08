@@ -737,17 +737,40 @@ class RenameSliceTest extends Test {
 	}
 
 	/**
-	 * The guard did not get switched off with the operands - it NARROWED. `CondSpliceOpExpr`
-	 * is in `opaqueCondRegionKinds` like its raw sibling, and
-	 * `RefactorSupport.opaqueCondRegionMentioning` walks the parts of an opaque node's span no
-	 * CHILD covers. The operands are children now; the `#if <cond>` head is not. So a binding
-	 * whose name is spelled by the CONDITION is still refused, from the same modelled region
-	 * whose operand rename the test above performs.
+	 * A binding whose name the region's own CONDITION spells renames, and the condition is left
+	 * standing - the refutation of the refusal this fixture used to assert.
+	 *
+	 * It read: "the operands are children now; the `#if <cond>` head is not, so a binding whose
+	 * name is spelled by the CONDITION is still refused". True of the code and false about the
+	 * world. A condition names BUILD FLAGS; no grammar with conditional compilation resolves one
+	 * against a binding, so no rename of a binding can ever owe it an edit. The refusal was
+	 * fail-CLOSED, and so invisible: it declined correct work and reported a real-looking reason.
+	 * The directive keywords were already exempt - `SourceText.mentionsIdent` skips an identifier
+	 * directly preceded by `#`, which is what `testDirectiveKeywordIsNotAMention` below pins - and
+	 * that exemption is exactly why the CONDITION was the surviving half of the same mistake.
+	 *
+	 * Measured before it moved, on a compilable analogue of this fixture (`#if myflag`, a local
+	 * `myflag`, both arms reachable): `xya` without the define and `xbya` with it, byte-identical
+	 * before and after the rename. Over the Pony fork, 18 of the 20 files holding an opaque region
+	 * lose a name from their refusal set, 19 (file, name) pairs in all, and every one of the names
+	 * is a compile-time define - `haxe_ver` twelve times, then `starling`, `mobile`, `js`, `ios`,
+	 * `hxbitmini`, `display` - none of them so much as a name the file's own tree carries.
+	 *
+	 * Asserted on the whole program so the two halves cannot be satisfied apart: the binding moves
+	 * to `label` in both its positions AND `#if flash` keeps its bytes. A run that rewrote the
+	 * condition would pass a bare "did not refuse" test.
+	 *
+	 * KILLED by arm `M-COND-GAP-KEEPS-DIRECTIVES`, which reads the directive runs again and brings
+	 * the refusal back.
 	 */
-	public function testModelledSpliceConditionOccurrenceStillRefused(): Void {
+	@:pin('control')
+	@:killer('M-COND-GAP-KEEPS-DIRECTIVES')
+	public function testModelledSpliceConditionOccurrenceRenames(): Void {
 		final src: String = 'class B {\n\tstatic function f():String {\n\t\tvar flash:String = "a";\n'
 			+ "\t\treturn 'x' + #if flash tag + #end 'y' + flash;\n\t}\n}";
-		assertRenameErr(src, 3, 7, 'label', 'unparsed conditional-compilation region at 4:16');
+		final expected: String = 'class B {\n\tstatic function f():String {\n\t\tvar label:String = "a";\n'
+			+ "\t\treturn 'x' + #if flash tag + #end 'y' + label;\n\t}\n}";
+		assertRename(src, 3, 7, 'label', expected);
 	}
 
 	/**

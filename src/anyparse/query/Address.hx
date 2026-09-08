@@ -446,6 +446,22 @@ final class AddressIndex {
 	 * `node`'s segment with the nearest named ancestors prepended until it resolves uniquely,
 	 * and whether it got there — or null when the node is not in this tree at all. The widest
 	 * selector TRIED comes back either way, because `describe`'s ordinal form is built on it.
+	 *
+	 * Every step prepends with `>>`, so what the walk can express is "somewhere under a named
+	 * ancestor" — and DEPTH is the one thing it cannot say. That is invisible almost everywhere,
+	 * because a node at a different depth almost always has a named ancestor the other lacks. The
+	 * exception is the ROOT: it is the one ancestor every node shares and the one that is always
+	 * nameless, so a node hanging directly off it has no named ancestor at all and its bare
+	 * segment matches every same-kind node in the file. `--select 'Conditional'` on a file with a
+	 * module-level region and a member-level one was exactly that — ambiguous, with `--nth` the
+	 * only offer, while `module > Conditional` picks the first and no listing spelled it.
+	 *
+	 * So the last attempt anchors at the root with a DIRECT-CHILD combinator. Only for a direct
+	 * child of the root: deeper, the ordinal is genuinely what separates the candidates, and
+	 * prepending a root segment there would neither disambiguate nor be worth the walk (a
+	 * non-descendant segment sends `resolveSelector` to the full `Engine.select`). A failed
+	 * attempt costs the caller nothing — the accumulated `>>` selector is what comes back, so
+	 * `describe`'s ordinal form is unchanged for every node this cannot single out.
 	 */
 	private function widenToUnique(node: QueryNode): Null<{ selector: String, unique: Bool }> {
 		if (!_ordinalOf.exists(node)) return null;
@@ -459,6 +475,10 @@ final class AddressIndex {
 				if (uniquelyResolves(selector, node)) return { selector: selector, unique: true };
 			}
 			ancestor = _parentOf[above];
+		}
+		if (_parentOf[node] == _root) {
+			final anchored: String = '${segmentOf(_root)} > $selector';
+			if (uniquelyResolves(anchored, node)) return { selector: anchored, unique: true };
 		}
 		return { selector: selector, unique: false };
 	}

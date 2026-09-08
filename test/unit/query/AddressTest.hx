@@ -162,15 +162,17 @@ class AddressTest extends Test {
 	 * already computes a canonical, edit-stable address for exactly this node, and hands it to a
 	 * position-addressed op as `target …` and to the `source` read-guard menu as its entry.
 	 *
-	 * The module-level region has no named ancestor, so `describe` can only ordinal it and the row
-	 * stays bare — asserting BOTH halves in one test is what keeps the label from degenerating
-	 * either way: a labeller that printed nothing loses the second row, one that printed the
-	 * ordinal address for everything gains it on the first.
+	 * The two rows reach their address by DIFFERENT routes, which is what keeps the label from
+	 * degenerating either way: the member-level region widens to a named ancestor, the
+	 * module-level one has none and is anchored at the root instead. A labeller that printed
+	 * nothing loses both; one that printed `describe`'s ordinal form for everything writes
+	 * `Conditional --nth 1` on the first.
 	 *
 	 * KILLED by arm `M-CANDIDATE-LABEL-BARE`, which drops back to the bare `<line>:<col> Kind`.
 	 */
 	@:pin('control')
 	@:killer('M-CANDIDATE-LABEL-BARE')
+	@:killer('M-ADDRESS-NO-ROOT-ANCHOR')
 	public function testAnAmbiguityListingSpellsTheSelectorThatPicksOneCandidate(): Void {
 		final src: String = '#if js\n#end\nclass C {\n\t#if js\n\tvar x:Int;\n\t#end\n}\n';
 		switch resolveIn(src, { select: 'Conditional' }) {
@@ -178,7 +180,45 @@ class AddressTest extends Test {
 				Assert.fail('two regions resolved as one');
 			case Err(message):
 				Assert.stringContains("#2 4:2 Conditional  --select 'ClassDecl:C >> Conditional'", message);
-				Assert.stringContains('#1 1:1 Conditional\n', message);
+				Assert.stringContains("#1 1:1 Conditional  --select 'module > Conditional'", message);
+		}
+	}
+
+	/**
+	 * A node hanging directly off the ROOT is addressed BY DEPTH, and the address it is given is
+	 * one the resolver accepts back.
+	 *
+	 * Every widening step prepends a named ancestor with `>>`, so the walk can say "somewhere
+	 * under X" and cannot say "at the top level" — and the root is the one ancestor that is always
+	 * nameless, so a module-level node has no named ancestor at all and its bare segment matches
+	 * every same-kind node in the file. `--select 'Conditional'` on this fixture was therefore
+	 * ambiguous with `--nth` the only way out, while `module > Conditional` picks the first and
+	 * nothing in the tool ever spelled it. The two assertions are one fact split in half: the
+	 * address is the anchored form, and the anchored form resolves back to THAT node.
+	 *
+	 * The member-level twin is asserted beside it because the anchor must not become the answer
+	 * everywhere — a named ancestor still wins where one exists, and the second row of the
+	 * ambiguity listing above is the same claim from the user's side.
+	 *
+	 * KILLED by arm `M-ADDRESS-NO-ROOT-ANCHOR`, which drops the anchored attempt and sends the
+	 * module-level node back to `Conditional --nth 1`.
+	 */
+	@:pin('control')
+	@:killer('M-ADDRESS-NO-ROOT-ANCHOR')
+	public function testAModuleLevelNodeIsAddressedFromTheRootNotByOrdinal(): Void {
+		final src: String = '#if js\n#end\nclass C {\n\t#if js\n\tvar x:Int;\n\t#end\n}\n';
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final tree: QueryNode = plugin.parseFile(src);
+		final regions: Array<QueryNode> = Engine.select(tree, Selector.parse('Conditional'), plugin.selectKindEquivalence());
+		Assert.equals(2, regions.length, 'the fixture holds a module-level region and a member-level one');
+		Assert.equals('module > Conditional', Address.describe(tree, src, regions[0], plugin.selectKindEquivalence()));
+		Assert.equals('ClassDecl:C >> Conditional', Address.describe(tree, src, regions[1], plugin.selectKindEquivalence()));
+		switch resolveIn(src, { select: 'module > Conditional' }) {
+			case Ok(offset, node):
+				Assert.equals(regions[0].span?.from, offset);
+				Assert.equals('Conditional', node?.kind);
+			case Err(message):
+				Assert.fail(message);
 		}
 	}
 

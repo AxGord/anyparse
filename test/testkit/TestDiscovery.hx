@@ -438,7 +438,7 @@ class TestDiscovery {
 			else if (types.length == 0 || arm.kind != MutationArms.DEFAULT_KIND)
 				deferred.push('${arm.name} :: ${MutationArms.address(arm)}');
 			else {
-				final owner: Null<ClassType> = classIn(types, arm.type);
+				final owner: Null<ClassType> = classIn(types, arm.type, arm.method);
 				if (owner == null)
 					Context.error('$ARMS_FILE: "${arm.name}" names the type ${arm.type}, which resolves to no class', Context.currentPos());
 				else if (!declaresMethod(owner, arm.method))
@@ -477,16 +477,41 @@ class TestDiscovery {
 		return try Context.getModule(path) catch (exception: Exception) null;
 	}
 
-	/** The class a dotted module path names among `types`, or null when the module declares no such type. */
-	private static function classIn(types: Array<Type>, path: String): Null<ClassType> {
+	/**
+	 * The class of `types` that owns `method`: the one the dotted path NAMES if it declares the
+	 * method, else any class of the same MODULE that does — or null when nothing there declares it.
+	 *
+	 * `type` is a MODULE path everywhere else in this machinery: `MutationArms.candidateFiles` maps
+	 * it straight to a file and `tools/mutation-arm.sh` resolves it the same way by hand, and the
+	 * cut the runner applies is a file-scoped `<kind>:<member>` selector that never asks which class
+	 * of the file declares the member. Only this check read it as a CLASS, and the disagreement cost
+	 * a whole shape of arm: a member of a SUB-MODULE type (`AddressIndex` in `Address.hx`,
+	 * `TreeAddresser` beside it — this repo is full of them) could be cut by the runner and by the
+	 * parser-side address test, and was rejected here as "declares no such method".
+	 *
+	 * Falling back does weaken the typo guard by exactly the module's own type list: a path naming a
+	 * class that is gone still resolves while a sibling in the file declares the member. What it
+	 * cannot do is let a MISSING member through, which is the regression the check exists to catch.
+	 */
+	private static function classIn(types: Array<Type>, path: String, method: String): Null<ClassType> {
 		final parts: Array<String> = path.split('.');
+		final named: Array<ClassType> = [];
+		final owning: Array<ClassType> = [];
 		for (moduleType in types) switch moduleType {
 			case TInst(ref, _):
 				final c: ClassType = ref.get();
-				if (c.name == parts[parts.length - 1]) return c;
+				if (c.name == parts[parts.length - 1]) named.push(c);
+				if (declaresMethod(c, method)) owning.push(c);
 			case _:
 		}
-		return null;
+		return if (named.length > 0 && declaresMethod(named[0], method))
+			named[0]
+		else if (owning.length > 0)
+			owning[0]
+		else if (named.length > 0)
+			named[0]
+		else
+			null;
 	}
 
 	/** Does `c` declare a method called `name` — static or instance, private or public. */
