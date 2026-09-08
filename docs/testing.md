@@ -2308,6 +2308,36 @@ output for a human reading one run.
 
 ## Guidelines for new tests
 
+### A whole DEFECT CLASS gets a roster-driven differential, not one test per site
+
+`unit.check.CrossScopeSoundnessTest` is the shape to copy when the same mistake keeps
+turning up in a new check. Its subject is not a check but an INVARIANT that every check
+owes: a run whose REPORT scope is narrower than its declared resolution scope must not
+write an edit, or raise a finding, that the wider run would refuse.
+
+Three properties make it catch a class rather than a case:
+
+- It iterates **`Linter.builtins()`**, the registry itself, so a check joins by being
+  registered — no list to keep in sync, which is the failure mode a hand-written list has.
+- It is a **differential**: the same fixture twice, with only the report scope moved, and
+  the assertion is a SUBSET relation between the two runs (narrow edits ⊆ wide edits,
+  narrow findings ⊆ wide findings). Nothing has to predict what a check should say — only
+  that widening the scope cannot take an answer away.
+- Divergences it tolerates live in an **explicit named constant**, not in a weakened
+  assertion, so an accepted exception is readable and a new one fails loudly.
+
+It found the class it was written for. Four sites had already been fixed one at a time
+(S177 `UnusedPrivate.violationFor`, S179 `UnusedParameter.checkFunction` and
+`Naming.RenameRefusal.of`, S180 `Naming`'s reflection guard) — reverting each fix makes the
+harness fail, so it would have caught all four at once — and on its first run it found a
+FIFTH nobody had looked for: `UnusedPrivate.run` gathered its reflection gate's string
+contents from the report files alone, so `lint D.hx --rule unused-private --fix` DELETED a
+private member that a sibling file reached through `Reflect.field`.
+
+Its own floor is a non-vacuity guard: a differential over a roster is exactly the shape
+that passes by exercising nothing. Measure the write coverage when you widen it — at
+introduction only 5 rules of ~180 actually produced an edit in any cell.
+
 ### A guard on `#if sys` is a test that does not run
 
 `sys` is NOT defined by an hxnodejs build, and js/node is the only runner the suite has.
