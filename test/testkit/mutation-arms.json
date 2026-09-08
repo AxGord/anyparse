@@ -2422,6 +2422,29 @@
 			"find": "final scopeIndex: SymbolIndex = RefactorSupport.widestScopeIndex(plugin, index) ?? index;",
 			"replace": "final scopeIndex: SymbolIndex = index;",
 			"note": "the S177 site, declared as an arm only in S180: the zero-occurrence proof asks the REPORT index again, so an `@:access` grantee outside the lint scope is invisible and a live private member is reported dead — and then deleted"
+		},
+		{
+			"name": "M-SCOPE-GAP-SILENT",
+			"type": "anyparse.check.ConfigDisagreement",
+			"method": "missingProjectRootsMessage",
+			"force": "null",
+			"note": "a scope declaring resolutionLibs and no resolutionRoots goes back to saying nothing, so a narrow --fix on such a project writes the orphan the cross-scope repairs were built to refuse and no byte of output warns that the proofs had nothing to widen into"
+		},
+		{
+			"name": "M-SCOPE-GAP-UNWIRED",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "warnScopeNotices",
+			"find": "\t\tConfigDisagreement.warnMissingProjectRoots(resolveConfig, paths);\n",
+			"replace": "",
+			"note": "the missing-roots notice is written but never called, which is what moving it below the --fix early return would also do - the message fixtures stay green and every run goes silent"
+		},
+		{
+			"name": "M-SCOPE-GAP-ROOT-UNWIRED",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "readResolutionRoots",
+			"find": "\t\tConfigDisagreement.warnUnreachableProjectRoots(unreachable);\n",
+			"replace": "",
+			"note": "a declared resolutionRoots entry that matches no .hx goes back to being read, dropped and never mentioned - the only place that learns it stops saying so"
 		}
 	]
 }

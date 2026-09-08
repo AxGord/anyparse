@@ -211,7 +211,7 @@ final class LintCommand implements CliCommand {
 		// the reader is a word when the scope spans roots that name DIFFERENT builds, since
 		// every risky and oracle-assisted verdict below is then taken against a build the
 		// second root never declared.
-		warnScopeDisagreements(activeChecks, resolveConfig, paths, o.noOracle);
+		warnScopeNotices(activeChecks, resolveConfig, paths, o.noOracle);
 		final oracleConfig: Null<LintConfig> = paths.length > 0 ? resolveConfig(paths[0]) : null;
 		final oracleHxml: Null<String> = oracleConfig?.compilerOracle();
 		final oracleDir: Null<String> = oracleConfig?.compilerOracleDir();
@@ -274,29 +274,38 @@ final class LintCommand implements CliCommand {
 	}
 
 	/**
-	 * The two scope-level `apqlint.json` diagnostics, once per run, from the one place that can
+	 * The three scope-level `apqlint.json` diagnostics, once per run, from the one place that can
 	 * afford them and can tell whether the run consults each setting.
 	 *
-	 * Both ask their question of EVERY path where the answer they serve costs one resolve, and
+	 * All three ask their question of EVERY path where the answer they serve costs one resolve, and
 	 * `resolveConfig` is the only resolver in the codebase memoised per directory. The roster half
 	 * used to be asked from `LintConfig.frameworksFor`, which runs once per framework-aware rule and
 	 * re-ran the whole scan each time (its argument is evaluated whatever the once-per-process
 	 * ledger later decides) — and for the `RiskyFix` half of those rules, `prefer-inline` under a
 	 * configured oracle and `unused-public-member` when enabled, `FixVerifier` installs no resolver
-	 * at all, so each scan was an uncached `LintConfig.discover` walk per file. The three
-	 * `resolveConfig` sweeps in `runLint` leave the directory cache warm, so here both cost nothing.
+	 * at all, so each scan was an uncached `LintConfig.discover` walk per file. The three `resolveConfig`
+	 * sweeps in `runLint` leave the directory cache warm, so here none of them costs anything.
 	 *
-	 * Each is GATED on whether this run consults its setting, because the sentence claims the first
-	 * root's answer "applies to all N file(s)": `--no-oracle` takes no oracle verdict, and a run
-	 * holding no `FrameworkAware` rule (`--rule prefer-single-quotes`, or a config disabling all
+	 * The first two are GATED on whether this run consults their setting, because each sentence claims
+	 * the first root's answer "applies to all N file(s)": `--no-oracle` takes no oracle verdict, and a
+	 * run holding no `FrameworkAware` rule (`--rule prefer-single-quotes`, or a config disabling all
 	 * four) applies no roster. An ungated line would be the same defect as the silence it replaced,
 	 * pointing the other way.
+	 *
+	 * The third is NOT gated, and that is the same reasoning rather than an exception: the missing project
+	 * roots are a property of the resolution scope EVERY check shares, not of one setting one family reads,
+	 * and the report half of that scope is what a `--range`-narrowed `--fix` behind a write op runs on. The
+	 * gate its two neighbours use is a marker interface (`c is FrameworkAware`), which works because a
+	 * framework-aware rule cannot read the roster without declaring itself; nothing similar guards the wide
+	 * index — a check reaches it by calling `RefactorSupport.widestScopeIndex`, so any marker here would be
+	 * a hand-kept roster of the five that do, failing open the day a sixth joins them.
 	 */
-	private static function warnScopeDisagreements(
+	private static function warnScopeNotices(
 		activeChecks: Array<Check>, resolveConfig: (String) -> LintConfig, paths: Array<String>, noOracle: Bool
 	): Void {
 		if (activeChecks.exists(c -> c is FrameworkAware)) ConfigDisagreement.warnRoster(resolveConfig, paths);
 		if (!noOracle) ConfigDisagreement.warnOracle(resolveConfig, paths);
+		ConfigDisagreement.warnMissingProjectRoots(resolveConfig, paths);
 	}
 
 	/**
@@ -434,7 +443,32 @@ final class LintCommand implements CliCommand {
 	private static function readResolutionRoots(
 		roots: Array<String>, reportPaths: Map<String, Bool>
 	): Array<{ file: String, source: String }> {
-		return readResolutionSources(roots, reportPaths);
+		// Expanded per ROOT rather than in one call, so a root that matches nothing can be NAMED.
+		// A declared root resolving to no `.hx` — a typo, a directory since moved, a path written
+		// against the wrong base — leaves `projectRoots` empty, which is byte-identical to never
+		// declaring the key: `RefactorSupport.resolutionProjectSourcesOf` answers null and the
+		// cross-file proofs answer from the report scope. `ConfigDisagreement.warnMissingProjectRoots`
+		// is blind to it by construction — it reads the config, where the key IS present — so this is
+		// the only place that learns it, and it learns it lazily.
+		// `seen` grows as roots are read because the per-root expansion cannot dedup across roots the
+		// way one call over every spec could: two overlapping roots would otherwise index a shared
+		// file TWICE, and duplicate declarations are what trips the resolver's ambiguity gate.
+		final out: Array<{ file: String, source: String }> = [];
+		final seen: Map<String, Bool> = reportPaths.copy();
+		final unreachable: Array<String> = [];
+		for (root in roots) {
+			final paths: Array<String> = CliArgs.expandInputs([root], '.hx').paths;
+			if (paths.length == 0) {
+				unreachable.push(root);
+				continue;
+			}
+			for (entry in readExpanded(paths, seen)) {
+				seen[realPath(entry.file)] = true;
+				out.push(entry);
+			}
+		}
+		ConfigDisagreement.warnUnreachableProjectRoots(unreachable);
+		return out;
 	}
 
 	/**
@@ -485,8 +519,13 @@ final class LintCommand implements CliCommand {
 	private static function readResolutionSources(
 		specs: Array<String>, exclude: Map<String, Bool>
 	): Array<{ file: String, source: String }> {
+		return readExpanded(CliArgs.expandInputs(specs, '.hx').paths, exclude);
+	}
+
+	/** Read each of `paths`, skipping any whose `realPath` is in `exclude` and any that cannot be read. */
+	private static function readExpanded(paths: Array<String>, exclude: Map<String, Bool>): Array<{ file: String, source: String }> {
 		final out: Array<{ file: String, source: String }> = [];
-		for (path in CliArgs.expandInputs(specs, '.hx').paths) if (!exclude.exists(realPath(path))) {
+		for (path in paths) if (!exclude.exists(realPath(path))) {
 			final src: Null<String> = try CliIo.readSourceForParse(path) catch (exception: Exception) null;
 			if (src != null) out.push({ file: path, source: src });
 		}

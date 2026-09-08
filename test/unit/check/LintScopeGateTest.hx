@@ -1,5 +1,6 @@
 package unit.check;
 
+import anyparse.check.ConfigDisagreement;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.check.ReflectionScan;
@@ -30,6 +31,13 @@ import utest.Test;
  *    finding had the same command report `fixed 2 issue(s) over 3 pass(es)`.
  *
  * Both failures are SILENT: the rewrite compiles and breaks only when the code runs.
+ *
+ * A third way the set comes out narrower is not a defect in this wiring at all but a hole in a
+ * project's own config, and unlike those two it has no repair: a scope declaring `resolutionLibs`
+ * and no `resolutionRoots` is DECLARED and holds installed libraries only, so the surface is the
+ * report set again while `hasDeclaredResolutionScope` answers yes. Roots nobody declared cannot be
+ * invented, so the only honest move is to say so — which `testALibsOnlyScopeIsNamedAsAGap` pins,
+ * and `CrossScopeSoundnessTest.LIBS_ONLY_REGRESSIONS` prices.
  */
 @:nullSafety(Strict)
 class LintScopeGateTest extends Test {
@@ -118,6 +126,76 @@ class LintScopeGateTest extends Test {
 	public function testASameFileRuleStaysOnTheActiveSubset(): Void {
 		Assert.isTrue(activeScopeIds().contains('redundant-parens'));
 		Assert.isFalse(fullScopeIds().contains('redundant-parens'));
+	}
+
+	/**
+	 * The third scope shape, and the only one the tool cannot repair: `resolutionLibs` declared and
+	 * `resolutionRoots` absent, which is what a real project out there looks like.
+	 *
+	 * Measured end to end on a two-file scratch project before this test was written:
+	 * `hxq lint A.hx --rule naming --fix` renamed a private field and left B.hx, an `@:access`
+	 * grantee, reading the old name — code that no longer compiles — while the same command under a
+	 * config adding `"resolutionRoots": ["src"]` DECLINED, naming confinement. Both arms of that probe
+	 * live on as `CrossScopeSoundnessTest.LIBS_ONLY_REGRESSIONS`; what CANNOT live anywhere is a
+	 * repair, because source roots nobody declared cannot be invented. So the run says it once, and
+	 * this pins the sentence together with the three shapes that must stay silent.
+	 */
+	@:access(anyparse.check.ConfigDisagreement)
+	@:pin('control')
+	@:killer('M-SCOPE-GAP-SILENT')
+	public function testALibsOnlyScopeIsNamedAsAGap(): Void {
+		final libsOnly: (String) -> LintConfig = _ -> LintConfig.parse('{"resolutionLibs":["utest"]}');
+		final message: Null<String> = ConfigDisagreement.missingProjectRootsMessage(libsOnly, ['a/A.hx']);
+		Assert.notNull(message, 'a DECLARED scope holding no project sources is the gap');
+		if (message != null)
+			Assert.equals(
+				'apq: 1 of 1 file(s) this run reports sit under an apqlint.json declaring resolutionLibs and no'
+				+ ' resolutionRoots — their resolution scope is this run\'s own files plus an installed library, with no other source of '
+				+ 'the project in it, so the checks that prove a cross-file rewrite safe answer from the report scope alone: one can '
+				+ 'report a live member as dead, rename a member another file reaches, or drop a parameter a cross-file caller still '
+				+ 'passes, and --fix writes it. Declare "resolutionRoots" naming the project\'s own source dirs (e.g. ["src"])\n',
+				message
+			);
+		Assert.isNull(
+			ConfigDisagreement.missingProjectRootsMessage(
+				_ -> LintConfig.parse('{"resolutionRoots":["src"],"resolutionLibs":["utest"]}'), ['a/A.hx']
+			),
+			'declared roots are exactly what the cross-scope proofs widen into — nothing to say'
+		);
+		Assert.isNull(
+			ConfigDisagreement.missingProjectRootsMessage(_ -> LintConfig.parse('{}'), ['a/A.hx']),
+			'a project declaring no resolution at all is deliberately out of scope — see the class doc'
+		);
+		Assert.isNull(ConfigDisagreement.missingProjectRootsMessage(libsOnly, []), 'and an empty scope has nobody to tell');
+		// The COUNT is the point of this arm and it was a bug before a reviewer reproduced it: the
+		// keys resolve as a union, but the SCOPE of a root document is not the whole run. A file
+		// under a libs-only root is exposed however many sibling roots declare their own sources, so
+		// the answer is per PATH and the sentence says how many.
+		final mixed: (String) -> LintConfig = path ->
+			LintConfig.parse(path == 'b/B.hx' ? '{"resolutionRoots":["src"]}' : '{"resolutionLibs":["utest"]}');
+		final split: Null<String> = ConfigDisagreement.missingProjectRootsMessage(mixed, ['a/A.hx', 'b/B.hx']);
+		Assert.notNull(split, 'a file under a libs-only root stays exposed when its SIBLING root declares roots');
+		if (split != null) Assert.stringContains('apq: 1 of 2 file(s)', split);
+	}
+
+	/**
+	 * A root that IS declared and matches no `.hx` is named — the blind spot the sibling notice has by
+	 * construction, since it reads the config and the key is present there.
+	 *
+	 * Reproduced end to end before this existed: `{"resolutionLibs":["utest"],"resolutionRoots":["sources"]}`
+	 * beside a real `src/` let `lint <one file> --rule naming --fix` rename a private field and orphan
+	 * an `@:access` grantee, with no diagnostic at all — byte-identical damage to the shape the
+	 * sibling notice does catch.
+	 */
+	@:access(anyparse.check.ConfigDisagreement)
+	public function testARootMatchingNothingIsNamed(): Void {
+		final message: Null<String> = ConfigDisagreement.unreachableProjectRootsMessage(['sources', 'lib']);
+		Assert.notNull(message, 'a declared root that expands to nothing is the same gap one layer down');
+		if (message != null) {
+			Assert.stringContains('resolutionRoots: sources, lib match no .hx', message);
+			Assert.stringContains('exactly as if the key were never declared', message);
+		}
+		Assert.isNull(ConfigDisagreement.unreachableProjectRootsMessage([]), 'every root matched something');
 	}
 
 	#if (sys || nodejs)

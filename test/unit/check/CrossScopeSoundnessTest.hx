@@ -33,6 +33,14 @@ import utest.Test;
  *
  * `KNOWN_DIVERGENCES` is the escape hatch and it is EMPTY by contract. A line there is a filed
  * defect with an address, never a way to keep this green.
+ *
+ * A THIRD arm asks what those four repairs never did: what a project that declares `resolutionLibs`
+ * and no `resolutionRoots` gets. The scope is still DECLARED and it holds an installed library, but
+ * not one file of the project's own — the key fills `projectRoots` AND joins the library half, so
+ * without it the widened index and the reflection scan are BOTH starved.
+ * `LIBS_ONLY_REGRESSIONS` is what that costs over the same cells, and there the mitigation is a
+ * sentence rather than soundness: source roots nobody declared cannot be invented, so the tool says so
+ * out loud (`ConfigDisagreement.warnMissingProjectRoots`).
  */
 class CrossScopeSoundnessTest extends Test {
 
@@ -41,6 +49,9 @@ class CrossScopeSoundnessTest extends Test {
 
 	/** The reaching file — outside the report scope of the narrow arm, inside its resolution scope. */
 	private static inline final REACH_FILE: String = 'pkg/B.hx';
+
+	/** The one file a `resolutionLibs`-only scope holds: installed, third-party, and no relation to the project. */
+	private static inline final LIB_FILE: String = 'lib/third/Third.hx';
 
 	/** A declaration file whose private members are also read WITHIN it. */
 	private static final A_USED: String = 'package pkg;\n\nclass A {\n\n\tprivate var My_Field: Int = 0;\n\n'
@@ -72,6 +83,9 @@ class CrossScopeSoundnessTest extends Test {
 	private static final B_REFLECT: String = 'package pkg;\n\nclass B {\n\n\tpublic function new() {}\n\n'
 		+ '\tpublic function reach(a: A): Dynamic {\n\t\treturn Reflect.field(a, \'My_Field\');\n\t}\n\n}\n';
 
+	/** A haxelib source — what `resolutionLibs` alone puts in the scope, and it reaches nothing of the project. */
+	private static final LIB_THIRD_PARTY: String = 'package third;\n\nclass Third {\n\n\tpublic function new() {}\n\n}\n';
+
 	/** The two-file cells: one per route by which the second file reaches the first. */
 	private static final CELLS: Array<Cell> = [
 		{ name: 'access-grant', decl: A_USED, grantee: B_ACCESS },
@@ -91,6 +105,34 @@ class CrossScopeSoundnessTest extends Test {
 
 	/** The same list for the REPORTING form of the defect. Empty by the same contract. */
 	private static final KNOWN_REPORT_DIVERGENCES: Array<String> = [];
+
+	/**
+	 * What a project declaring `resolutionLibs` and NO `resolutionRoots` loses — MEASURED, and the one
+	 * list in this class that is not empty by contract.
+	 *
+	 * Fourteen entries over the six cells: `naming` renames a field five of the six routes reach,
+	 * `unused-parameter` deletes a parameter three cross-file callers still pass, `unused-private` deletes
+	 * two live members. Ten are WRITES and four are findings, which is the same defect one step earlier.
+	 * Every one of them is a repair S177 / S179 / S180 shipped and this scope shape undoes. One cell is
+	 * absent by right: `allow-grant` puts the `@:allow` in the DECLARING file, so the narrow report scope
+	 * sees the grant without help and both arms refuse alike.
+	 */
+	private static final LIBS_ONLY_REGRESSIONS: Array<String> = [
+		'edit:naming@access-grant',
+		'edit:naming@access-grant-unread-in-file',
+		'edit:naming@reflection',
+		'edit:naming@reflection-unread-in-file',
+		'edit:naming@subtype',
+		'edit:unused-parameter@access-grant',
+		'edit:unused-parameter@access-grant-unread-in-file',
+		'edit:unused-parameter@subtype',
+		'edit:unused-private@access-grant-unread-in-file',
+		'edit:unused-private@reflection-unread-in-file',
+		'report:unused-parameter@access-grant',
+		'report:unused-parameter@access-grant-unread-in-file',
+		'report:unused-parameter@subtype',
+		'report:unused-private@access-grant-unread-in-file'
+	];
 
 	/** No check writes into the declaring file an edit the same two files, both reported, refuse. */
 	@:pin('control')
@@ -166,28 +208,84 @@ class CrossScopeSoundnessTest extends Test {
 		}
 	}
 
+	/**
+	 * The Pony shape — `resolutionLibs` declared, `resolutionRoots` ABSENT — puts every proof S177,
+	 * S179 and S180 widened back where it started.
+	 *
+	 * The key starves BOTH halves of the scope, and a one-variable matrix over this fixture says which
+	 * half costs what: `projectRoots` empty with the sibling still in the library gives ONE divergence,
+	 * the sibling gone from the library with `projectRoots` full gives THIRTEEN. So the reflection scan
+	 * of `unused-private` is the one proof reading `RefactorSupport.resolutionProjectSourcesOf`
+	 * (`projectRoots`, null when empty), and the other thirteen read the index `widestScopeIndex` hands
+	 * back, which is `report ∪ library` — on a project declaring roots the library CONTAINS them
+	 * (`LintCommand.resolutionThunk` concatenates), on a libs-only one it is haxelibs and the std and not
+	 * one file of the project's own.
+	 *
+	 * So the list above is what `hxq lint <one file> --fix` writes there that the same command in this
+	 * project refuses. It shrinks when the two arms CONVERGE, which is a repair in one direction and a
+	 * regression of the roots-declared arm in the other — read a shrink together with the two differentials
+	 * above, which go red for the second cause. A line APPEARING is a new site of the same defect. Until it
+	 * is empty the mitigation is a sentence, not soundness — `ConfigDisagreement.warnMissingProjectRoots`.
+	 */
+	public function testALibsOnlyScopeLosesProofsTheRootsArmKeeps(): Void {
+		Assert.equals(LIBS_ONLY_REGRESSIONS.join('\n'), libsOnlyExtras().join('\n'));
+	}
+
+	/**
+	 * Every `<kind>:<rule>@<cell>` the LIBS-ONLY arm produces on the declaring file and the
+	 * roots-declared arm does not — both kinds in one list, because the defect has both forms and the
+	 * scope shape is what they share.
+	 */
+	private function libsOnlyExtras(): Array<String> {
+		final out: Array<String> = [];
+		for (cell in CELLS) {
+			final report: Array<SourceFile> = [{ file: DECL_FILE, source: cell.decl }];
+			final reach: Array<SourceFile> = [{ file: REACH_FILE, source: cell.grantee }];
+			extraEdits(editsByRule(report, reach, cell.decl, false), editsByRule(report, reach, cell.decl), 'edit:', cell.name, out);
+			extraFindings(findingKeys(report, reach, false), findingKeys(report, reach), 'report:', cell.name, out);
+		}
+		out.sort(Reflect.compare);
+		return out;
+	}
+
+	/**
+	 * Every rule with an edit in `some` that `every` does not also carry, appended to `out` as
+	 * `<tag><rule>@<cell>`.
+	 *
+	 * The destination is a parameter because the three differentials in this class differ ONLY in
+	 * which pair of arms they compare and how they tag the result — `libsOnlyExtras` collects both
+	 * kinds into one list, the other two collect one kind each.
+	 */
+	private function extraEdits(
+		some: Map<String, Array<String>>, every: Map<String, Array<String>>, tag: String, cell: String, out: Array<String>
+	): Void {
+		for (rule => edits in some) {
+			final seen: Array<String> = every[rule] ?? [];
+			for (edit in edits) if (!seen.contains(edit)) {
+				final tagged: String = '$tag$rule@$cell';
+				if (!out.contains(tagged)) out.push(tagged);
+				break;
+			}
+		}
+	}
+
+	/** The same over finding KEYS, which carry a severity and an offset the tag drops. */
+	private function extraFindings(some: Array<String>, every: Array<String>, tag: String, cell: String, out: Array<String>): Void {
+		for (key in some) if (!every.contains(key)) {
+			final tagged: String = '$tag${key.split('|')[0]}@$cell';
+			if (!out.contains(tagged)) out.push(tagged);
+		}
+	}
+
 	/** Every `<rule>@<cell>` whose narrow-report `fix` wrote an edit the wide-report run did not. */
 	private function narrowOnlyEdits(): Array<String> {
 		final out: Array<String> = [];
 		for (cell in CELLS) {
 			final report: Array<SourceFile> = [{ file: DECL_FILE, source: cell.decl }];
 			final reach: Array<SourceFile> = [{ file: REACH_FILE, source: cell.grantee }];
-			final narrow: Map<String, Array<String>> = editsByRule(report, reach, cell.decl);
-			final wide: Map<String, Array<String>> = editsByRule(report.concat(reach), [], cell.decl);
-			for (rule => edits in narrow) {
-				final seen: Array<String> = wide[rule] ?? [];
-				for (edit in edits) if (!seen.contains(edit)) {
-					out.push('$rule@${cell.name}');
-					break;
-				}
-			}
+			extraEdits(editsByRule(report, reach, cell.decl), editsByRule(report.concat(reach), [], cell.decl), '', cell.name, out);
 		}
-		out.sort((a, b) -> if (a < b)
-			-1
-		else if (a > b)
-			1
-		else
-			0);
+		out.sort(Reflect.compare);
 		return out;
 	}
 
@@ -203,26 +301,15 @@ class CrossScopeSoundnessTest extends Test {
 		for (cell in CELLS) {
 			final report: Array<SourceFile> = [{ file: DECL_FILE, source: cell.decl }];
 			final reach: Array<SourceFile> = [{ file: REACH_FILE, source: cell.grantee }];
-			final narrow: Array<String> = findingKeys(report, reach);
-			final wide: Array<String> = findingKeys(report.concat(reach), []);
-			for (key in narrow) if (!wide.contains(key)) {
-				final rule: String = key.split('|')[0];
-				final tagged: String = '$rule@${cell.name}';
-				if (!out.contains(tagged)) out.push(tagged);
-			}
+			extraFindings(findingKeys(report, reach), findingKeys(report.concat(reach), []), '', cell.name, out);
 		}
-		out.sort((a, b) -> if (a < b)
-			-1
-		else if (a > b)
-			1
-		else
-			0);
+		out.sort(Reflect.compare);
 		return out;
 	}
 
 	/** Every finding the roster reports on the declaring file, as `<rule>|<severity>|<from>`. */
-	private function findingKeys(report: Array<SourceFile>, reach: Array<SourceFile>): Array<String> {
-		final plugin: CachingGrammarPlugin = scoped(report, reach);
+	private function findingKeys(report: Array<SourceFile>, reach: Array<SourceFile>, declaredRoots: Bool = true): Array<String> {
+		final plugin: CachingGrammarPlugin = scoped(report, reach, declaredRoots);
 		return [
 			for (check in Linter.builtins()) for (v in check.run(
 				report, plugin
@@ -242,18 +329,15 @@ class CrossScopeSoundnessTest extends Test {
 			final reach: Array<SourceFile> = [{ file: REACH_FILE, source: cell.grantee }];
 			for (rule => edits in editsByRule(report, reach, cell.decl)) if (edits.length > 0 && !out.contains(rule)) out.push(rule);
 		}
-		out.sort((a, b) -> if (a < b)
-			-1
-		else if (a > b)
-			1
-		else
-			0);
+		out.sort(Reflect.compare);
 		return out;
 	}
 
 	/** Each check's `fix` edits for the declaring file, keyed by rule id, each rendered `from:to:text`. */
-	private function editsByRule(report: Array<SourceFile>, reach: Array<SourceFile>, declSource: String): Map<String, Array<String>> {
-		final plugin: CachingGrammarPlugin = scoped(report, reach);
+	private function editsByRule(
+		report: Array<SourceFile>, reach: Array<SourceFile>, declSource: String, declaredRoots: Bool = true
+	): Map<String, Array<String>> {
+		final plugin: CachingGrammarPlugin = scoped(report, reach, declaredRoots);
 		final index: SymbolIndex = SymbolIndex.build(report, plugin);
 		final out: Map<String, Array<String>> = [];
 		for (check in Linter.builtins()) {
@@ -268,12 +352,23 @@ class CrossScopeSoundnessTest extends Test {
 	/**
 	 * The plugin `LintCommand` builds for a project that declares `resolutionRoots`: the scope is
 	 * DECLARED, and the library half carries the root files the report scope does not hold.
+	 *
+	 * `declaredRoots` false is the OTHER shape a real config has — `resolutionLibs` declared and
+	 * `resolutionRoots` absent — and it is not merely a narrower version of the first: the scope is still
+	 * DECLARED, it just holds an installed library where the project's own sources should be. Both halves
+	 * lose them at once, which is what one key filling both buys: `RefactorSupport.resolutionProjectSourcesOf`
+	 * answers null on the empty `projectRoots`, and the index behind `widestScopeIndex` becomes the report
+	 * files plus a haxelib. What that costs is `LIBS_ONLY_REGRESSIONS`. Flipping `declared` to false as
+	 * well changes none of it — the pinned cost is equally the cost of declaring no resolution at all —
+	 * so the arm is named for the config shape it models, not for a behaviour only it has.
 	 */
-	private function scoped(report: Array<SourceFile>, reach: Array<SourceFile>): CachingGrammarPlugin {
+	private function scoped(report: Array<SourceFile>, reach: Array<SourceFile>, declaredRoots: Bool = true): CachingGrammarPlugin {
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		final library: Array<SourceFile> = declaredRoots ? reach : [{ file: LIB_FILE, source: LIB_THIRD_PARTY }];
+		final roots: Array<SourceFile> = declaredRoots ? reach : [];
 		plugin.setResolutionScope({
 			declared: true,
-			sources: () -> {report: report, projectRoots: reach, library: new LibrarySources(reach) }
+			sources: () -> {report: report, projectRoots: roots, library: new LibrarySources(library) }
 		});
 		return plugin;
 	}

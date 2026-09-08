@@ -74,8 +74,8 @@ final class LintConfig {
 
 	/**
 	 * Keys already diagnosed — a config path for `discover`'s own per-file lines, a
-	 * `scope-disagreement:<setting>` key for a warning about the SCOPE rather than about one
-	 * document. Each reports at most once per process, whatever it reported.
+	 * `scope-disagreement:<setting>` or `scope-gap:<label>` key for a warning about the SCOPE rather than
+	 * about one document. Each reports at most once per process, whatever it reported.
 	 */
 	private static final warnedConfigs: Array<String> = [];
 
@@ -97,8 +97,8 @@ final class LintConfig {
 	private final _compilerOracleServer: Bool;
 
 	/**
-	 * The declared library source roots (`resolutionRoots`), each resolved to
-	 * absolute against the config directory; an empty array when the key is absent.
+	 * The declared source roots (`resolutionRoots`) — the project's own, see the accessor — each resolved
+	 * to absolute against the config directory; an empty array when the key is absent.
 	 */
 	private final _resolutionRoots: Array<String>;
 
@@ -176,11 +176,20 @@ final class LintConfig {
 	}
 
 	/**
-	 * The declared library source roots (`resolutionRoots`) — extra directories whose
-	 * `.hx` sources join the resolution scope so the cross-file type / inheritance
-	 * checks resolve against libraries, without those files ever being reported or
-	 * edited. Each is resolved to absolute against the config directory; an empty
-	 * array when the key is absent.
+	 * The declared source roots (`resolutionRoots`) — directories whose `.hx` sources join the resolution
+	 * scope so the cross-file type / inheritance checks resolve against them, without those files ever
+	 * being reported or edited. Each is resolved to absolute against the config directory; an empty array
+	 * when the key is absent.
+	 *
+	 * The name reads as "extra directories for resolution" and that is no longer all it is:
+	 * this key is the ONLY channel that puts the project's OWN unlinted sources into the scope —
+	 * `resolutionLibs` names installed libraries and the std joins by itself — and it feeds BOTH halves a
+	 * cross-file rewrite is proved against: `ResolutionSources.projectRoots`, which the reflection scan of
+	 * `unused-private` reads directly, and the library half, which `LintCommand.resolutionThunk`
+	 * concatenates the same roots into and which is what the index behind `widestScopeIndex` is built from. Leave it out while
+	 * declaring libs and the scope is declared, holds no file of the project, and those proofs quietly
+	 * answer from the report scope again — measured as `CrossScopeSoundnessTest.LIBS_ONLY_REGRESSIONS`, and
+	 * announced by `ConfigDisagreement.warnMissingProjectRoots`.
 	 */
 	public function resolutionRoots(): Array<String> {
 		return _resolutionRoots;

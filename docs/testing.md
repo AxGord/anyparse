@@ -3520,6 +3520,115 @@ the chain in place this project's nested document overrides none of them, so
 every spelling agrees; a project whose nested document DOES override an oracle
 key would still see it.
 
+### A `resolutionLibs`-only config gets none of that, and the tool can only say so
+
+The section above is written from the inside of a project that declares the key.
+The shape it does not cover is the one a real repository out there has: `apqlint.json`
+declaring `resolutionLibs` and NO `resolutionRoots`. That is not "a project with no
+resolution scope" — the scope is DECLARED, `hasDeclaredResolutionScope()` answers yes,
+and it holds installed libraries plus the std. What it holds none of is any OTHER source
+of the project — the run's own report files are in it, and nothing else of the project
+is, because `resolutionLibs` names haxelibs and only `resolutionRoots` carries the
+project's own tree. That key feeds BOTH halves of the scope —
+`ResolutionSources.projectRoots` directly, and the library half through the concat in
+`LintCommand.resolutionThunk` — so leaving it out starves both:
+`RefactorSupport.resolutionProjectSourcesOf` answers null on the empty `projectRoots`,
+and the index behind `widestScopeIndex` is the report files plus an installed library.
+Every consumer meanwhile believes it asked the wider one, because
+`hasDeclaredResolutionScope()` still says yes.
+
+Which half costs what is measured rather than assumed — a one-variable matrix over the
+fixture below: `projectRoots` emptied with the sibling still in the library gives ONE
+divergence, the sibling removed from the library with `projectRoots` full gives
+THIRTEEN. The single `projectRoots` entry is `unused-private`'s reflection scan; the
+other thirteen come through the index. Both are the same missing key.
+
+Measured end to end on a two-file scratch project — `A.hx` declares
+`private var My_Field` AND reads it once in a method of its own, `B.hx` carries
+`@:access(pkg.A)` and reads `a.My_Field` — under
+`hxq lint src/pkg/A.hx --rule naming --fix --no-oracle`. The in-file read is why the
+count below is 2: the declaration and that read are one edit each, and a fixture without
+it reports `1 edit(s)` for the same defect.
+
+| `apqlint.json` | outcome |
+|---|---|
+| `{"resolutionLibs": ["utest"]}` | `2 edit(s)` — `My_Field` becomes `_myField` in `A.hx`, `B.hx` still reads `a.My_Field`: code that no longer compiles |
+| the same plus `"resolutionRoots": ["src"]` | `0 edit(s)` — `fix DECLINED — the private member is not provably confined to this file` |
+
+The differential prices the whole class rather than that one route:
+`CrossScopeSoundnessTest.LIBS_ONLY_REGRESSIONS` runs the file's six two-file cells
+over `Linter.builtins()` twice, once with the reaching file in both halves of the
+scope and once with `projectRoots` empty and an installed library in the other half,
+and pins what only the second arm produces — **14 cells: 10 writes and 4 findings**, `naming` renaming a
+field five of the six routes reach, `unused-parameter` dropping a parameter three
+cross-file callers still pass, `unused-private` deleting two live members. Every one
+of them is a repair S177, S179 and S180 shipped, undone by a config gap.
+
+**And there is nothing to repair it with, which is why the fix is a sentence.** Source
+roots nobody declared cannot be invented; the two ways to guess them — the directory
+holding `apqlint.json`, or the `-cp` entries of the `compilerOracle` hxml — would
+silently widen what every such project resolves against, and pay the ~4 s tax measured
+above for a scope its owner never asked for. So `ConfigDisagreement.warnMissingProjectRoots`
+prints one line, once per process, naming the shape, the report count and the key
+(`LintCommand.warnScopeNotices`; pinned by `LintScopeGateTest.testALibsOnlyScopeIsNamedAsAGap`,
+killed by arm `M-SCOPE-GAP-SILENT`). Unlike its two neighbours there it is NOT gated on
+the run consulting a setting: the missing roots are a property of the resolution scope
+every check shares, and gating it on a hand-kept roster of the five checks that read the
+half would fail open the day a sixth joins them.
+
+The count in that sentence is per PATH, and getting it wrong was this slice's own bug,
+caught in review by a reproduction: an early version returned silent as soon as ANY
+config in the scope declared roots, reasoning that the run resolves the UNION of every
+document's keys. True of the keys, false of the COVERAGE — with a root `apqlint.json`
+declaring `resolutionRoots: ["src"]` and a sibling `other/apqlint.json` (`inherit: false`)
+declaring only libs, `lint src/pkg/A.hx other/pkg2/C.hx --rule naming --fix` renamed
+`C.My_Field` and orphaned `other/pkg2/D.hx`, silently. It now answers per path and says
+`N of M file(s)`.
+
+It stays silent for a scope whose every path resolves a config declaring roots, and for a
+project that declares no resolution at all. The second is a deliberate scoping choice, not
+a covered case: the outcome there is identical (the same `--fix` writes the same orphan,
+with no diagnostic), and firing on every config-less project — every foreign repo `hxq`
+is ever pointed at — would be noise rather than a finding.
+
+Pony was exactly that shape, read on 2026-09-08: `apqlint.json` at HEAD `86344552`
+declares 6 `resolutionLibs` and no `resolutionRoots`, its working tree that day declared
+11 and no roots — and its own `lint-oracle.hxml` opens with `-cp src`, so the roots it
+never declared were written down one file away. Declaring `"resolutionRoots": ["src"]`
+there that day (uncommitted, by the user's own instruction) silenced the notice and took a one-file
+`lint --all --no-oracle` of `src/pony/Config.hx` from 5.76 s to 7.38 s — the tree read
+this whole section prices — with the file's own findings unchanged (73 before, 73 after
+on the larger `src/pony/Tools.hx`, 0 added / 0 removed). The key changes REFUSALS, not
+reports, which is exactly what it is for.
+
+**That notice answers a CONFIG question, and a config question cannot see a root that is
+declared and spelled wrong** — a typo, a directory since moved, a path written against
+the wrong base. It expands to no `.hx`, `projectRoots` comes back empty, and the run is
+byte-identical to one that never declared the key: reproduced in review with
+`{"resolutionLibs":["utest"],"resolutionRoots":["sources"]}` beside a real `src/`, where
+`lint <one file> --rule naming --fix` renamed the field and orphaned the grantee with no
+diagnostic at all.
+
+So there is a second sentence, and it lives where the truth is:
+`ConfigDisagreement.warnUnreachableProjectRoots`, called from
+`LintCommand.readResolutionRoots`, which expands each root SEPARATELY so the one that
+matched nothing can be named. It is lazy — a run whose checks never demand the index
+still pays nothing, which is why a report-mode `--rule naming` stays quiet while
+`--rule unused-private` (whose `run` asks for the wide index) prints it. It is not a
+"zero sources read" test either: the roots are deduped against the report set, so
+`lint src` under `"resolutionRoots": ["src"]` legitimately reads zero of them. Per-root
+expansion costs the dedup that one whole-spec call gave for free, so the reader carries
+the `seen` map forward across roots — two overlapping roots indexing one file twice is
+what trips the resolver's ambiguity gate.
+
+Both notices are pinned at their message seam (`LintScopeGateTest`) AND at their wiring
+(`LintConfigCliTest.testTheScopeGapNoticesReachTheRun`, which runs a real
+`Cli.run(['lint', ...])` over a temp project and reads stderr). Three arms cut the three
+places it can silently go wrong: `M-SCOPE-GAP-SILENT` (the message returns null),
+`M-SCOPE-GAP-UNWIRED` (the call disappears from `warnScopeNotices` — the same effect as
+moving it below `runLint`'s `--fix` early return), `M-SCOPE-GAP-ROOT-UNWIRED` (the same
+for the unreachable-root call).
+
 ### The safe pass reverts the file the compiler blames, not the wave
 
 `lint --fix`'s safe pass is applied under a net (`LintFixSafePass`): typecheck

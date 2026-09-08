@@ -1057,6 +1057,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.LintFixDeclineWiringSliceTest#testACrossFileRuleIsNotReportedAsSayingNothing :: control :: '
 				+ 'M-LEDGER-CROSS-FILE-MUTE',
 			'unit.check.LintFixDeclineWiringSliceTest#testAnAcceptedFileIsWrittenAndBlamesNobody :: control :: M-LINTFIX-ACCEPTED-BLAMED',
+			'unit.check.LintScopeGateTest#testALibsOnlyScopeIsNamedAsAGap :: control :: M-SCOPE-GAP-SILENT',
 			'unit.check.NamingCheckCrossFileFixTest#testCrossFileRenameAsksTheResolutionScopeForUnreadableFiles :: control :: '
 				+ 'M-NAMING-SKIPSCAN-REPORT-INDEX,M-SKIPSCAN-SCOPEWIDE',
 			'unit.check.NamingCheckMemberFixTest#testAccessGrantOutsideReportScopeRefusesSingleFileRename :: control :: '
@@ -1200,6 +1201,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.cli.ApqTestSummaryExitStatusCliTest#testTruncatedTranscriptDisagreesWithANonZeroExit :: control :: M-EXIT-STATUS-AGREES',
 			'unit.cli.CliCommandSeamTest#testTheRegistryHandsOutAFreshCommandPerCall :: control :: M-CLI-COMMANDS-MEMOISED',
 			'unit.cli.CliCommandSeamTest#testTheRequireMatchFlagDoesNotSurviveItsRun :: control :: M-CLI-REQUIREMATCH-STATIC',
+			'unit.cli.LintConfigCliTest#testTheScopeGapNoticesReachTheRun :: control :: M-SCOPE-GAP-UNWIRED,M-SCOPE-GAP-ROOT-UNWIRED',
 			'unit.cli.LintRangeCliTest#testWriteFixLeavesAStandingFindingOutsideTheWindow :: control :: M-LINT-RANGE-INERT',
 			'unit.format.BraceSymmetrySliceTest#testAWrappedValueThenBranchDropsItsSourceSemicolon :: control :: M-SSB-VALUE-WRAP-OFF',
 			'unit.format.BraceSymmetrySliceTest#testTheSameTryOutsideAMacroIsStillBraced :: control :: '
@@ -1918,7 +1920,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-CONFINEMENT-REPORT-INDEX-RENAME',
 			'M-REFLECTION-REPORT-INDEX-RENAME',
 			'M-REFLECTION-REPORT-INDEX-DELETE',
-			'M-CONFINEMENT-REPORT-INDEX-DEAD'
+			'M-CONFINEMENT-REPORT-INDEX-DEAD',
+			'M-SCOPE-GAP-SILENT',
+			'M-SCOPE-GAP-UNWIRED',
+			'M-SCOPE-GAP-ROOT-UNWIRED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

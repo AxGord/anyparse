@@ -129,11 +129,17 @@ final class RefactorSupport {
 	 * is wrong: it does NOT keep the std out of the returned index. `LintCommand.readResolutionLibrary`
 	 * appends the std to the SAME scope as the declared roots and libs, so a project that declares
 	 * anything gets the std in here too. What the gate refuses is a scope that exists ONLY because a
-	 * std was discovered — a project that declared nothing keeps the report index. The narrower
-	 * `resolutionProjectSourcesOf` below is the seam for a proof that must not admit third-party
-	 * sources at all, and `UnusedPrivate.projectStringContents` asks a name-keyed question through it
-	 * while `Naming`'s reflection scan asks one through this: only one of the two can be right, and
-	 * T868 holds the question.
+	 * std was discovered — a project that declared nothing keeps the report index. The
+	 * narrower `resolutionProjectSourcesOf` below is the seam for a proof that must not admit
+	 * third-party sources at all, and `UnusedPrivate.projectStringContents` asks a name-keyed question
+	 * through it while `Naming`'s reflection scan asks one through this: only one of the two can be right,
+	 * and T868 holds the question.
+	 *
+	 * What BOTH seams answer on a project declaring `resolutionLibs` and no `resolutionRoots` is nothing
+	 * of the project: `projectRoots` is empty, so the narrow seam returns null, and this one returns
+	 * report ∪ haxelibs ∪ std — a declared scope with not one of the project's own other files in it.
+	 * Neither seam can tell, so the CLI says it instead (`ConfigDisagreement.warnMissingProjectRoots`), and
+	 * `CrossScopeSoundnessTest.LIBS_ONLY_REGRESSIONS` prices what it costs.
 	 *
 	 * FOUR call sites, and they fail DIFFERENTLY on the narrow report index, which is why each asks
 	 * for this one. `UnusedPrivate.run` feeds `violationFor`, which reports a live member dead (S177),
