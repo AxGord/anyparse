@@ -12,10 +12,11 @@ using Lambda;
  * The one scan behind every "is this name reached by reflection" gate in the check layer, and the
  * containment test the interpolated half of its answer takes.
  *
- * Five checks refuse a rewrite when a member's name might be spelled by a runtime `Reflect` call —
+ * Six checks refuse a rewrite when a member's name might be spelled by a runtime `Reflect` call —
  * `inline-constant` (which erases the field's reflective value), `static-constant` (which moves it
- * off the instance), `prefer-enum-abstract` (which stops the type existing as a runtime class) and
- * the two deletion checks `orphan-accessor` / `unused-public-member`. Each of them used to walk the
+ * off the instance), `prefer-enum-abstract` (which stops the type existing as a runtime class) and the three deletion
+ * checks `orphan-accessor` / `unused-public-member` / `unused-private` (the last joined in S184, T868: it had asked
+ * the narrower PROJECT scope, and that scope licensed a deletion the wide one refuses). Each of them used to walk the
  * scope itself, and the walks did not agree: two collected interpolation FRAGMENTS, two answered
  * only for PLAIN literals, so `Reflect.field(o, '${p}NAME')` was invisible to one pair and visible
  * to the other. The domain of that scan is what makes the difference sound or silent, so it is

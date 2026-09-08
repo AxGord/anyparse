@@ -2357,7 +2357,7 @@ worth more than the code. T867 said the reflection guard was blind to skip-parse
 while the confinement proof beside it had `RawSourceScan.skippedMayReference`. True as
 stated, and unobservable: with the reacher made unparseable,
 `testAnUnreadableReflectiveFileLicensesNothingExtra` is green on the BASE engine, because
-the confinement proof refuses on the same raw text one step earlier. The three-cell probe
+the confinement proof refuses on the same raw text one step LATER — `RenameRefusal.of` asks the reflection guard first and the confinement proof after it, and both must pass. The three-cell probe
 that shows the layering — cut both proofs, 3 rewrites go through; restore only the
 reflection guard's new unreadable branch, 1; ship state, 0 — is what says the branch is a
 real second line of defence rather than a fix for a live bug.

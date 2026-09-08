@@ -203,7 +203,11 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		// with the reflective string in the LIBRARY half of the same declared scope, the narrow seam
 		// licensed a member DELETION the wide one refuses. Both name-keyed scans now share
 		// `ReflectionScan.scopeFiles`, so `wideIndex` is the CONFINEMENT half's index here and the
-		// reflection scan's FALLBACK for a run with no declared scope, not its scope.
+		// reflection scan's FALLBACK for a run with no declared scope, not its scope. That fallback is WIDER than `widestScopeIndex`
+		// was: `resolutionSourcesOf` gates on `hasAnyResolutionScope`, so a project declaring nothing now asks the discovered std
+		// too (the 33 sites above), where the old index kept the report alone — same direction, only refusals are added. And it runs
+		// once per `fix()` call, not once per run (S184 review): measured on a Pony copy, `lint src --rule naming --fix` 7.16s →
+		// 7.69s for the same 31 edits in 5 files; memoising the per-call `scopeFiles` union and its linear dedupe is T905.
 		//
 		// This is the decision that lets the SINGLE-FILE rename go ahead, and each half was measured
 		// on its own two-file probe under `resolutionRoots: ["src"]`.

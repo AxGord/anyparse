@@ -303,7 +303,15 @@ class CrossScopeSoundnessTest extends Test {
 	 * equality would fail on refusals that are correct.
 	 */
 	public function testAnUnreadableReflectiveFileLicensesNothingExtra(): Void {
-		Assert.equals('', unreadableExtras().join('\n'));
+		final arms: { extras: Array<String>, readableEdits: Int, readableFindings: Int } = unreadableExtras();
+		// Non-vacuity floor (S184 review): a comparison whose READABLE arm reports and writes nothing
+		// passes on nothing. The sibling placements carry the same floor.
+		Assert.isTrue(
+			arms.readableFindings >= 5,
+			'the readable arm reported ${arms.readableFindings} finding(s) on the declaration file — the comparison is vacuous'
+		);
+		Assert.isTrue(arms.readableEdits > 0, 'the readable arm wrote no edit — the comparison is vacuous');
+		Assert.equals('', arms.extras.join('\n'));
 	}
 
 	/**
@@ -343,22 +351,23 @@ class CrossScopeSoundnessTest extends Test {
 	 * Both arms place the reacher in `LIBRARY_ONLY`, so the ONE variable between them is whether the
 	 * grammar can parse it.
 	 */
-	private function unreadableExtras(): Array<String> {
+	private function unreadableExtras(): { extras: Array<String>, readableEdits: Int, readableFindings: Int } {
 		final out: Array<String> = [];
+		var readableEdits: Int = 0;
+		var readableFindings: Int = 0;
 		for (cell in CELLS) if (cell.grantee == B_REFLECT) {
 			final report: Array<SourceFile> = [{ file: DECL_FILE, source: cell.decl }];
 			final readable: Array<SourceFile> = [{ file: REACH_FILE, source: cell.grantee }];
 			final unreadable: Array<SourceFile> = [{ file: REACH_FILE, source: B_REFLECT_UNPARSEABLE }];
-			extraEdits(
-				editsByRule(report, unreadable, cell.decl, LIBRARY_ONLY), editsByRule(report, readable, cell.decl, LIBRARY_ONLY), 'edit:',
-				cell.name, out
-			);
-			extraFindings(
-				findingKeys(report, unreadable, LIBRARY_ONLY), findingKeys(report, readable, LIBRARY_ONLY), 'report:', cell.name, out
-			);
+			final readableByRule: Map<String, Array<String>> = editsByRule(report, readable, cell.decl, LIBRARY_ONLY);
+			final readableKeys: Array<String> = findingKeys(report, readable, LIBRARY_ONLY);
+			for (edits in readableByRule) readableEdits += edits.length;
+			readableFindings += readableKeys.length;
+			extraEdits(editsByRule(report, unreadable, cell.decl, LIBRARY_ONLY), readableByRule, 'edit:', cell.name, out);
+			extraFindings(findingKeys(report, unreadable, LIBRARY_ONLY), readableKeys, 'report:', cell.name, out);
 		}
 		out.sort(Reflect.compare);
-		return out;
+		return { extras: out, readableEdits: readableEdits, readableFindings: readableFindings };
 	}
 
 	/**
