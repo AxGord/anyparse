@@ -360,10 +360,17 @@ class WrapList {
 		// newly-visible width OUT through the returned Doc into an enclosing
 		// construct's measure, flipping e.g. a `callParameter`
 		// `totalItemLength <= n` rule and opening a call paren that used to hug
-		// the bracket. Host positions are out of this slice's remit, so the
-		// gate keeps the re-tag where it decides something.
+		// the bracket. Host positions are out of this slice's remit, so the gate keeps the re-tag where it decides something.
+		//
+		// ω-fnlambda-body-width: the third disjunct opens the SAME re-tag for the `function`-keyword spelling of a lambda item
+		// (`isFunctionInlineBodyItem`) — same defect, same remedy. Its body condition is WIDER than the arrow arm's: any hardline-free
+		// body, not only a plain `if`. The leak warning above does not reach it, because it shares the comprehension arm's
+		// `flatLength >= 0` guard — an item that already forces a break is exactly what it excludes. Measurement, and the residual
+		// asymmetry it leaves on the arrow side, are in that predicate's own doc.
 		var groupified: Null<Array<Doc>> = null;
-		for (i in 0...items.length) if ((comprehensionBodyMeasure && flatLength(items[i]) >= 0) || isArrowPlainIfBody(items[i])) {
+		for (i in 0...items.length) if (
+			(comprehensionBodyMeasure && flatLength(items[i]) >= 0) || isArrowPlainIfBody(items[i]) || isFunctionInlineBodyItem(items[i])
+		) {
 			if (groupified == null) groupified = items.copy();
 			groupified[i] = groupifyInlineBodies(items[i]);
 		}
@@ -4107,6 +4114,38 @@ class WrapList {
 	 */
 	private static function isFunctionBlockLambdaItem(item: Doc): Bool {
 		return firstVisibleTextIsFunctionKw(item) && flatLength(item) < 0;
+	}
+
+	/**
+	 * The exact complement of `isFunctionBlockLambdaItem` on the same `flatLength` axis: a wrap-list item that leads with the
+	 * `function` keyword and carries NO forced break, i.e. one the renderer will lay out inline. `function` is reserved, so a
+	 * first-visible-Text of exactly `function` is unambiguously a function expression; the predicate does not inspect the body, and
+	 * an item that parks none re-tags to itself.
+	 *
+	 * Such an item parks its body behind a `BodyGroup` whenever the body policy is `fitLine`, and `DocMeasure.flatTokenWidth` /
+	 * `Renderer.fitsFlat` DEFER a `BodyGroup` to width 0 - so the item under-measures and every width-only cascade above it
+	 * (`callParameter`'s `exceedsMaxLineLength`, `methodChain`'s `lineLength >= n`, the statement's own `ifBody: fitLine` fit)
+	 * reads a line short by the whole body. The render side cannot repair it either: `shapeNoWrap` wraps a committed body in
+	 * `Flatten`, and `Renderer.pushStructural`'s single `Group`/`BodyGroup` arm skips `fitsFlat` under `forceFlat`.
+	 *
+	 * `emit` feeds this into the same `groupifyInlineBodies` re-tag as `isArrowPlainIfBody`: the mechanism was never missing, only
+	 * gated on the ARROW spelling. Measured on a reduction of the Pony site `ServersideStorageDB.save()` under `maxLineLength:
+	 * 140`, with the lambda spelling as the only variable: `(r) -> if (!r) throw ...` at 141 columns breaks, `function(r) if (!r)
+	 * throw ...` at 146 is a FIXED POINT, and the same `function` shape with a 260-character body is an equally immovable 420. The
+	 * SITE itself is not over the limit: it sits at exactly 140 with the `+` continuation laid at the STATEMENT's own indent, which
+	 * is the same root cause one level down.
+	 *
+	 * Block bodies are excluded by construction - `flatLength(item) < 0` is `isFunctionBlockLambdaItem`, which hugs, the block
+	 * owning its own layout. The gate is NOT position-restricted: `emit` serves every wrap list, so an array element leading with
+	 * `function` is re-tagged too, which is what makes it agree with its arrow twin there.
+	 *
+	 * Residual, measured under Pony's own `hxformat.json` and left open (T875): this gate accepts ANY hardline-free body while
+	 * `isArrowPlainIfBody` still demands a plain `if`, so for a `for` / `while` / `switch` / `if`-`else` body the `function`
+	 * spelling now measures and the ARROW spelling does not. Not a regression - the arrow side is byte-for-byte as it was - but the
+	 * two gates coincide only for a plain `if`.
+	 */
+	private static function isFunctionInlineBodyItem(item: Doc): Bool {
+		return firstVisibleTextIsFunctionKw(item) && flatLength(item) >= 0;
 	}
 
 	/**

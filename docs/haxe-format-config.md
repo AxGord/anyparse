@@ -265,7 +265,7 @@ applies.
 | `elseIf` | same/next | `same` | keyword placement for a nested `if` inside an `else` (`else if (…)` inline vs. `else` alone then `if` one indent deeper); overrides `elseBody` for the `IfStmt` ctor |
 | `elseSwitch` | same/next/keep | `keep` | keyword placement for a nested `switch` inside an `else`, the `elseIf` twin for the other keyword-headed branch — see "The three keys S67 added" below |
 | `fitLineIfWithElse` | bool | `false` | when `false`, an `ifBody`/`elseBody` of `fitLine` degrades to `next` for an `if` that carries an `else` (fitting one branch and breaking the other reads as inconsistent); `true` keeps `fitLine` unconditionally |
-| `fitLineBodyGlue` | bool | `false` | when a `fitLine` construct body (`if`/`for`/`while`) does not fit the header line AND the next line would not rescue it either (its flat width still exceeds the continuation indent), stay glued to the header and break inside the body instead of moving down a line and an indent step; also reaches an arrow-lambda body that is itself a parenthesised expression |
+| `fitLineBodyGlue` | bool | `false` | when a `fitLine` construct body (`if`/`for`/`while`) does not fit the header line AND the next line would not rescue it either (its flat width still exceeds the continuation indent), stay glued to the header and break inside the body instead of moving down a line and an indent step; also reaches an arrow-lambda body that is itself a parenthesised expression. Neither this knob nor `fitLine` itself decides whether a body parked inside a LAMBDA item is counted in the enclosing line's width — that is a separate mechanism, see "A `fitLine` body parked inside a lambda item" below |
 | `loopBodyIfElseNext` | bool | `false` | see the dedicated section below (S159's paragraph, left as-is by this slice) |
 | `conditionalExprFit` | bool | `false` | break an expression-scope `#if … #end` region at its directive seams, the way an `if`/`else if`/`else` chain breaks, when the glued form does not fit the line; off (default) keeps the layout purely source-driven |
 | `ifElseSemicolonNextLine` | bool | **`true`** | when the statement-`if` then-branch is a bare (non-block) statement ending in `;` and the branch carries an `else`, put that `else` on the next line instead of gluing it after the `;` (`if (c) foo();` / `else bar();` rather than `if (c) foo(); else bar();`). Undocumented in any doc-comment in either source file (no class-level mention, no field-level `/**…*/`); this description is derived from its one consumer, `WriterFieldSepLowering.hx` (the `@:fmt(semicolonNextLineElse)` flag on `HxIfStmt.elseBody`). Trivia-mode only: the plain (Fast) writer canonicalises `;` presence, so this knob is inert there and the flag-based separator is used instead; it also never fires in expression position (`opt._inExprPosition`), which is `sameLineExpressionElse`'s job. Note the default is `true`, unlike every other bare-Bool `sameLine` knob in this table, which default `false` |
@@ -304,6 +304,77 @@ lone keyword), while `elseSwitch` reads through `keywordPlacementKeepToRuntime`,
 keeps `keep` as real `Keep` and only degrades `fitLine`. So `elseIf: "keep"` is accepted
 by the schema and silently becomes `same` — not a parse error, and not what the string
 promises.
+
+## A `fitLine` body parked inside a lambda item IS counted in the line width
+
+A `fitLine` body is emitted behind a `BodyGroup`, and the static width measures
+`DocMeasure.flatTokenWidth` and `Renderer.fitsFlat` both DEFER a nested `BodyGroup` to
+width 0 (`Renderer.flatFirstLineStep` defers it too, but only in its `bgPrefix == false`
+mode; with `bgPrefix` it charges the body's cuddled first-line prefix). That deferral is
+deliberate and load-bearing: it is what lets chained `fitLine` constructs (`forBody:
+fitLine` + `ifBody: fitLine`) keep the OUTER body on the header line while the inner one
+breaks, and what lets a block body sit inside a call argument without forcing the call's
+parens apart.
+
+The premise it rests on is that the deferred body "decides its own layout when the renderer
+reaches it". That premise fails for a body parked inside a LAMBDA, because the decisions
+above such an item are width-only cascades — `callParameter`'s `exceedsMaxLineLength`,
+`methodChain`'s `lineLength >= n`, and the enclosing statement's own `fitLine` fit — and
+each of them reads a line short by the whole body. Worse, once the argument list answers
+`noWrap` the call wraps its body in `Flatten`, and `Renderer.pushStructural` skips
+`fitsFlat` under force-flat, so the render side cannot repair the overflow either. The
+result is a FIXED POINT of any width: the writer re-emits an over-length line unchanged,
+forever.
+
+`WrapList.emit` closes this by re-tagging the item's hardline-free `BodyGroup`s as plain
+`Group`s (`groupifyInlineBodies`) before the cascades measure. Nothing about the LAYOUT
+changes — `pushStructural` and the natural-group resolver take the same decision for both
+ctors — only the static width becomes visible. (`Group` and `BodyGroup` are not
+interchangeable everywhere: `embeddedLineWidths` and the tail walkers still tell them
+apart. The re-tag is safe because the item it is applied to has no forced break at all.)
+
+Two gates open that re-tag, one per lambda spelling:
+
+- `isArrowPlainIfBody` — an ARROW lambda (`r -> …`, `(r) -> …`) whose body is a plain `if`
+  (no top-level `else`, not a `{}`-block).
+- `isFunctionInlineBodyItem` — an item leading with the `function` keyword whose body
+  carries NO forced break (`flatLength(item) >= 0`). It is the exact complement of
+  `isFunctionBlockLambdaItem` on the same axis, so a BLOCK-bodied `function(){ … }` item is
+  excluded by construction: a block owns its own layout and hugs the head line.
+
+Neither gate is position-restricted — `emit` serves every wrap list, so an array element
+leading with `function` is re-tagged just like a call argument, which is what makes the two
+spellings agree there.
+
+Until S183 only the first gate existed, and the asymmetry was measurable at one variable.
+Under `maxLineLength: 140` with `ifBody: fitLine`, at the same site, statement at two tabs:
+
+```haxe
+// 141 columns — the arrow gate reveals the body's width, so this breaks correctly
+if (s != orig[k]) table.where(client == $key && key == $k).update(['value' => (s: DBV)], (r) -> if (!r) throw 'Cannot save storage');
+
+// 146 columns — a FIXED POINT before S183: re-emitted unchanged, over the limit
+if (s != orig[k]) table.where(client == $key && key == $k).update(['value' => (s: DBV)], function(r) if (!r) throw 'Cannot save storage');
+```
+
+The overflow was unbounded, not a threshold effect: the same shape with a 260-character
+body sat at 420 columns and still moved nothing. With the width visible it breaks at every
+point the construct owns — the statement body first (`ifBody: fitLine`), then `methodChain`,
+then the call parens — and only an unbreakable string literal can still exceed the limit.
+
+**The two gates coincide only for a plain `if` body.** The `function` gate accepts any
+hardline-free body; `isArrowPlainIfBody` still demands `if` with no top-level `else`. So for
+a `for` / `while` / `switch` / `if`-`else` body the `function` spelling now measures and the
+ARROW spelling does not — measured under Pony's own `hxformat.json`, where
+`function(r) for (q in r) f(q)` as the last argument went from a 149-column line to a correct
+break while `(r) -> for (q in r) f(q)` is byte-identical before and after. That residual is
+open (T875); closing it means one spelling-agnostic "does this item park a hardline-free
+`BodyGroup`?" predicate, which also has to be weighed against the landed thin-arrow if-else
+path `isArrowPlainIfBody`'s `else` clause protects.
+
+Body policies OTHER than `fitLine` are untouched by all of this: `next` puts the body on its
+own line unconditionally, so there is nothing to hide, and a block body is excluded at the
+gate.
 
 ## `sameLine.*` — one position trap worth repeating
 

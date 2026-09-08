@@ -600,6 +600,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.grammar.haxe.HxFormatterCorpusTest',
 		'unit.grammar.haxe.HxFormatterOffTest',
 		'unit.grammar.haxe.HxFunctionBodyPolicySliceTest',
+		'unit.grammar.haxe.HxFunctionLambdaBodyWidthSliceTest',
 		'unit.grammar.haxe.HxGlueWidthSliceTest',
 		'unit.grammar.haxe.HxGroupRestProbeStructStarTest',
 		'unit.grammar.haxe.HxGroupTrailCommentWriteTest',
@@ -1312,6 +1313,18 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxFitLineBodyGlueSliceTest#testArrowLambdaBodyGluesAfterTheArrow :: control :: M-PAREN-PIN-NONE',
 			'unit.grammar.haxe.HxFitLineBodyGlueSliceTest#testComprehensionFilterBodyGluesToTheIfHead :: control :: M-PAREN-PIN-NONE',
 			'unit.grammar.haxe.HxFitLineBodyGlueSliceTest#testGluedBodyIsIdempotent :: control :: M-PAREN-PIN-NONE',
+			'unit.grammar.haxe.HxFunctionLambdaBodyWidthSliceTest#testABareCallStatementOpensItsArgumentListInsteadOfSplittingTheChain :: '
+				+ 'control :: M-FN-LAMBDA-BODY-DEFERRED',
+			'unit.grammar.haxe.HxFunctionLambdaBodyWidthSliceTest#testABlockBodiedFunctionLambdaKeepsItsGluedHead :: guard :: ',
+			'unit.grammar.haxe.HxFunctionLambdaBodyWidthSliceTest#testAFittingFunctionLambdaArgumentStaysOnOneLine :: guard :: ',
+			'unit.grammar.haxe.HxFunctionLambdaBodyWidthSliceTest#testAFourHundredColumnFunctionLambdaBodyBreaksEveryPointItOwns :: '
+				+ 'control :: M-FN-LAMBDA-BODY-DEFERRED',
+			'unit.grammar.haxe.HxFunctionLambdaBodyWidthSliceTest#testAReturnBodiedFunctionLambdaIsUnchanged :: guard :: ',
+			'unit.grammar.haxe.HxFunctionLambdaBodyWidthSliceTest#testStatementIfWithFunctionLambdaIfBodyBreaksInsteadOfOverflowing :: '
+				+ 'control :: M-FN-LAMBDA-BODY-DEFERRED',
+			'unit.grammar.haxe.HxFunctionLambdaBodyWidthSliceTest#testTheArrowSpellingOfTheSameBodyIsUnchanged :: guard :: ',
+			'unit.grammar.haxe.HxFunctionLambdaBodyWidthSliceTest#testTheConcatenatedThrowNoLongerContinuesAtTheStatementIndent :: '
+				+ 'control :: M-FN-LAMBDA-BODY-DEFERRED',
 			'unit.grammar.haxe.HxGlueWidthSliceTest#testBreakIsTakenWhenItJustFixesTheOverflow :: control :: M-GLUE-NEVER-BREAKS',
 			'unit.grammar.haxe.HxGlueWidthSliceTest#testCaseBodyGlueInheritsTheSameAnswer :: control :: M-GLUE-NEVER-BREAKS',
 			'unit.grammar.haxe.HxGlueWidthSliceTest#testGlueTurnedBreakIsNotASiblingSymmetryTrigger :: control :: M-GLUE-NEVER-BREAKS',
@@ -1832,6 +1845,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-CHAIN-STAIRCASE-OFF',
 			'M-PAREN-PIN-NONE',
 			'M-ARROW-HEAD-WIDTH-NONE',
+			'M-FN-LAMBDA-BODY-DEFERRED',
 			'M-GLUE-NEVER-BREAKS',
 			'M-SSB-TRAILOPT-REEMIT',
 			'M-SSB-ELSE-SPINE-STOP',
