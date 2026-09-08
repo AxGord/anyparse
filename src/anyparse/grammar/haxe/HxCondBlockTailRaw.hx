@@ -63,4 +63,5 @@ package anyparse.grammar.haxe;
  */
 @:re('(?:(?![{}]|#if|#end)[\\s\\S])*\\}(?:(?!\\{|#if|#end)[\\s\\S])*?(?=\\s*\\{)')
 @:rawString
+@:condRegionRaw
 abstract HxCondBlockTailRaw(String) from String to String {}

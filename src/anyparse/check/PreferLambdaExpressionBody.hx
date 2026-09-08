@@ -894,7 +894,7 @@ final class PreferLambdaExpressionBody implements Check {
 	private static function emittedEnd(node: QueryNode, s: Seams): Null<Int> {
 		// A `#if` region closes on `#end` and the terminator to drop sits INSIDE it, ahead of
 		// that keyword — no structural end recovers it, so the site is refused.
-		if (CondRegionScan.isConditionalKind(node.kind)) return null;
+		if (CondRegionScan.isConditionalKind(node.kind, s.shield.shape)) return null;
 		final span: Null<Span> = node.span;
 		if (span == null) return null;
 		final terminated: Bool = s.terminatedKinds.contains(node.kind);

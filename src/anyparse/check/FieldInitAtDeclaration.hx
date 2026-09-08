@@ -759,7 +759,7 @@ final class FieldInitAtDeclaration implements Check {
 	private static function coMoverOrderUnsafe(
 		member: QueryNode, container: QueryNode, statics: Array<Int>, source: String, shape: RefShape, mayBeInherited: (String) -> Bool
 	): Bool {
-		if (CondRegionScan.isConditionalKind(member.kind)) return true;
+		if (CondRegionScan.isConditionalKind(member.kind, shape)) return true;
 		final fields: Array<String> = shape.fieldDeclKinds ?? [];
 		final span: Null<Span> = member.span;
 		return span != null && fields.contains(member.kind) && !statics.contains(span.from) && member.children.length >= 1

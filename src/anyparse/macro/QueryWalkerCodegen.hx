@@ -53,6 +53,19 @@ class QueryWalkerCodegen {
 		fields.push(publicParseRootField(result));
 		fields.push(publicWalkRootField(result));
 		fields.push(publicWalkField(result));
+		fields.push(condKindsField(
+			'opaqueCondRegionKinds', result.opaqueCondRegionKinds,
+			'Projected node kinds that swallow a `#if ... #end` region as RAW bytes - the fallback ctors the grammar reaches when the '
+			+ 'region is not a balanced subtree in its position. Derived from the `@:condRegionRaw` terminals the grammar declares, so a '
+			+ 'ctor added to the family lands here with no hand edit anywhere; published through `RefShape.opaqueCondRegionKinds` and read '
+			+ 'by the fail-closed gate every name-driven mutating op consults.'
+		));
+		fields.push(condKindsField(
+			'conditionalRegionKinds', result.conditionalRegionKinds,
+			'Projected node kinds that denote a `#if ... #end` region at all, whether or not its interior is modelled - the superset of '
+			+ '`opaqueCondRegionKinds`, derived by the same walk from the `@:condRegionCondition` terminal as well. Published through '
+			+ '`RefShape.conditionalRegionKinds` and read by `CondRegionScan.isConditionalKind`.'
+		));
 		return fields;
 	}
 
@@ -63,6 +76,32 @@ class QueryWalkerCodegen {
 	 */
 	public static function nullRootCT(rootCT: ComplexType): ComplexType {
 		return TPath({ pack: [], name: 'Null', params: [TPType(rootCT)] });
+	}
+
+	/**
+	 * One `public static function <name>(): Array<String> return [...]` carrying a kind
+	 * vocabulary the macro derived from the grammar's own declarations.
+	 *
+	 * A function rather than a `static final` array on purpose: a shared mutable array on a
+	 * generated class is process-scoped state a caller could write through, and the whole
+	 * point of deriving these is that no hand-held copy of the answer exists. The literal is
+	 * rebuilt per call, which costs nothing next to the object literal `refShape` already
+	 * allocates around it.
+	 */
+	private static function condKindsField(name: String, kinds: Array<String>, doc: String): Field {
+		final items: Array<Expr> = [for (kind in kinds) { expr: EConst(CString(kind)), pos: Context.currentPos() }];
+		final literal: Expr = { expr: EArrayDecl(items), pos: Context.currentPos() };
+		return {
+			name: name,
+			access: [APublic, AStatic],
+			doc: doc,
+			kind: FFun({
+				args: [],
+				ret: TPath({ pack: [], name: 'Array', params: [TPType(STRING_CT)] }),
+				expr: macro return $literal
+			}),
+			pos: Context.currentPos()
+		};
 	}
 
 	/** The memoised source of `_memoRoot` - `null` before the first parse. */

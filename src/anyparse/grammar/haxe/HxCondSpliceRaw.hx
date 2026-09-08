@@ -58,4 +58,5 @@ package anyparse.grammar.haxe;
  */
 @:re('(?:(?:(?!#if|#end)[\\s\\S])*(?:#if(?:(?!#end)[\\s\\S])*#end(?:(?!#if|#end)[\\s\\S])*)*#end|(?:(?!#end)[\\s\\S])*#end)')
 @:rawString
+@:condRegionRaw
 abstract HxCondSpliceRaw(String) from String to String {}

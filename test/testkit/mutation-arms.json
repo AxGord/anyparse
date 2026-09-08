@@ -768,9 +768,25 @@
 			"name": "M-OPAQUE-REGION-HAND-LIST",
 			"type": "anyparse.grammar.haxe.HaxeQueryPlugin",
 			"method": "refShape",
-			"find": "opaqueCondRegionKindPrefixes: ['CondSplice', 'CondSharedBodyDecl', 'MetaCondStmt'],",
-			"replace": "opaqueCondRegionKindPrefixes: ['CondSpliceExpr', 'CondSpliceOpExpr', 'CondSpliceTail', 'CondSpliceStmt', 'CondSpliceBlockOpen', 'CondSpliceBlockTail', 'CondSpliceSwitchOpen', 'CondSpliceBlockClose', 'CondSpliceCase', 'CondSpliceMember', 'CondSharedBodyDecl'],",
-			"note": "the fallback-ctor family is enumerated by hand again, exactly as it stood on 2026-08-18 - the three raw-capture ctors the grammar gained two days later (both `return` splices and the metadata-prefixed `MetaCondStmt`) fall out of the gate and every name-driven op rewrites around such a region in silence"
+			"find": "opaqueCondRegionKinds: HaxeQueryWalker.opaqueCondRegionKinds(),",
+			"replace": "opaqueCondRegionKinds: ['CondSpliceExpr', 'CondSpliceOpExpr', 'CondSpliceTail', 'CondSpliceStmt', 'CondSpliceBlockOpen', 'CondSpliceBlockTail', 'CondSpliceSwitchOpen', 'CondSpliceBlockClose', 'CondSpliceCase', 'CondSpliceMember', 'CondSharedBodyDecl'],",
+			"note": "the fallback-ctor family is enumerated by hand again, exactly as it stood on 2026-08-18 instead of being derived from the grammar's `@:condRegionRaw` terminals - the three raw-capture ctors the grammar gained two days later (both `return` splices and the metadata-prefixed `MetaCondStmt`) fall out of the gate and every name-driven op rewrites around such a region in silence"
+		},
+		{
+			"name": "M-COND-KIND-NAME-CONVENTION",
+			"type": "anyparse.macro.QueryWalkerLowering",
+			"method": "condKindsReaching",
+			"find": "\t\tout.sort(Reflect.compare);\n\t\treturn out;",
+			"replace": "\t\tfinal byConvention: Array<String> = out.filter(kind -> StringTools.startsWith(kind, 'CondSplice'));\n\t\tbyConvention.sort(Reflect.compare);\n\t\treturn byConvention;",
+			"note": "the derived vocabulary is filtered back to the grammar's NAMING convention, so the two ctors that already break it - `CondSharedBodyDecl`, named for a declaration region rather than a splice, and `MetaCondStmt`, named for the metadata it dispatches on - fall out of the gate, which is the hole a prefix list could never close"
+		},
+		{
+			"name": "M-COND-REGION-KINDS-HARDCODED",
+			"type": "anyparse.query.CondRegionScan",
+			"method": "isConditionalKind",
+			"find": "\t\tfinal kinds: Array<String> = shape.conditionalRegionKinds ?? [];\n\t\treturn kinds.contains(kind);",
+			"replace": "\t\treturn kind == 'Conditional' || kind == 'ConditionalExpr' || StringTools.startsWith(kind, 'CondSplice');",
+			"note": "the region vocabulary goes back to three Haxe spellings hard-coded in the grammar-agnostic core - the second source of truth for the family, and an incomplete one: `ConditionalArgs`, `ConditionalType`, `CondBody`, `CondSharedBodyDecl` and `MetaCondStmt` are every one a `#if` region and none of them match"
 		},
 		{
 			"name": "M-OPAQUE-REGION-NONE",

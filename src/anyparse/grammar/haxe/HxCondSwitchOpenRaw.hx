@@ -56,4 +56,5 @@ package anyparse.grammar.haxe;
  */
 @:re('(?:(?!#end)[\\s\\S])*#else(?:(?!#end)[\\s\\S])*\\{(?:(?!#end)[\\s\\S])*\\bswitch\\b(?:(?!#end)[\\s\\S])*\\{\\s*#end')
 @:rawString
+@:condRegionRaw
 abstract HxCondSwitchOpenRaw(String) from String to String {}

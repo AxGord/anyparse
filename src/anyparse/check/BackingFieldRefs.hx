@@ -134,6 +134,7 @@ final class BackingFieldRefs {
 		plugin: GrammarPlugin
 	): Null<Array<CrossFileEdits>> {
 		final distinctive: Bool = isDistinctiveName(field);
+		final shape: RefShape = plugin.refShape();
 		final slices: Array<CrossFileEdits> = [];
 		for (file in affectedSubtypeFiles(owner, index)) {
 			final source: Null<String> = sourceByFile[file];
@@ -142,14 +143,14 @@ final class BackingFieldRefs {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, src);
 			if (tree == null) return null;
 			final refs: Null<{ renameEdits: Array<{ span: Span, text: String }>, excludeSpans: Array<Span> }> = collectSubtypeFieldRefs(
-				tree, field, owner, propName, index, src, file == ownerFile
+				tree, field, owner, propName, index, src, file == ownerFile, shape
 			);
 			if (refs == null) return null;
 			final excluded: Array<Span> = [for (e in refs.renameEdits) e.span];
 			for (s in refs.excludeSpans) excluded.push(s);
 			// A `package` / `import` path is a dotted module path, not a reference to the field —
 			// same reading as `Naming`'s collectors.
-			for (s in OccurrenceScan.modulePathSpans(tree, plugin.refShape())) excluded.push(s);
+			for (s in OccurrenceScan.modulePathSpans(tree, shape)) excluded.push(s);
 			final classified: Null<Array<ClassifiedOccurrence>> = OccurrenceScan.classifyOccurrences(
 				src, field, plugin, 0, src.length, excluded
 			);
@@ -301,9 +302,10 @@ final class BackingFieldRefs {
 	 */
 	private static function subtypeRefWalk(
 		node: QueryNode, field: String, owner: String, propName: String, index: SymbolIndex, source: String, ownerFileScan: Bool,
-		cls: Null<String>, writePos: Bool, shadowsProp: Bool, renameEdits: Array<{ span: Span, text: String }>, excludeSpans: Array<Span>
+		cls: Null<String>, writePos: Bool, shadowsProp: Bool, renameEdits: Array<{ span: Span, text: String }>, excludeSpans: Array<Span>,
+		shape: RefShape
 	): Bool {
-		if (CondRegionScan.isConditionalKind(node.kind)) return true;
+		if (CondRegionScan.isConditionalKind(node.kind, shape)) return true;
 		final isClass: Bool = CheckScan.isClassBodyKind(node.kind);
 		// The owner's own class is rewritten wholesale by `buildFix`; exclude its whole span from the
 		// completeness scan and stop descending, so a same-file sibling subtype is still walked.
@@ -324,7 +326,7 @@ final class BackingFieldRefs {
 		final isWrite: Bool = FieldRefScan.isWriteNodeKind(node.kind);
 		for (i in 0...node.children.length) if (!subtypeRefWalk(
 			node.children[i], field, owner, propName, index, source, ownerFileScan, cls2, isWrite && i == 0, childShadows, renameEdits,
-			excludeSpans
+			excludeSpans, shape
 		))
 			return false;
 		return true;
@@ -338,14 +340,19 @@ final class BackingFieldRefs {
 	 * `buildFix` rewrites them.
 	 */
 	private static function collectSubtypeFieldRefs(
-		tree: QueryNode, field: String, owner: String, propName: String, index: SymbolIndex, source: String, ownerFileScan: Bool
+		tree: QueryNode, field: String, owner: String, propName: String, index: SymbolIndex, source: String, ownerFileScan: Bool,
+		shape: RefShape
 	): Null<{ renameEdits: Array<{ span: Span, text: String }>, excludeSpans: Array<Span> }> {
 		final renameEdits: Array<{ span: Span, text: String }> = [];
 		final excludeSpans: Array<Span> = [];
-		return subtypeRefWalk(tree, field, owner, propName, index, source, ownerFileScan, null, false, false, renameEdits, excludeSpans) ? {
-			renameEdits: renameEdits,
-			excludeSpans: excludeSpans
-		} : null;
+		return subtypeRefWalk(
+			tree, field, owner, propName, index, source, ownerFileScan, null, false, false, renameEdits, excludeSpans, shape
+		)
+			? {
+				renameEdits: renameEdits,
+				excludeSpans: excludeSpans
+			}
+			: null;
 	}
 
 }

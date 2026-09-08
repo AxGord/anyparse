@@ -415,7 +415,7 @@ final class GuardReturn implements Check {
 		final thenBlock: QueryNode = ifNode.children[1];
 		if (!s.blockKinds.contains(thenBlock.kind) || thenBlock.children.length < MIN_THEN_STATEMENTS) return null;
 		if (tail != null && !s.flow.isTerminal(thenBlock.children[thenBlock.children.length - 1])) return null;
-		if (hasConditionalRegion(ifNode) || (tail != null && hasConditionalRegion(tail))) return null;
+		if (hasConditionalRegion(ifNode, s.shape) || (tail != null && hasConditionalRegion(tail, s.shape))) return null;
 		final blocked: Bool = spanCommentBlocked(source, ifNode, cond, thenBlock, tail ?? ifNode)
 			|| redeclaresSibling(block, ifNode, thenBlock, s, scopeNames);
 		return blocked ? null : {
@@ -461,8 +461,8 @@ final class GuardReturn implements Check {
 	}
 
 	/** Whether `node`'s subtree holds a `#if … #end` region, whose raw-preserved interior the re-indenting de-nest must not move. */
-	private static function hasConditionalRegion(node: QueryNode): Bool {
-		return CondRegionScan.isConditionalKind(node.kind) || node.children.exists(c -> hasConditionalRegion(c));
+	private static function hasConditionalRegion(node: QueryNode, shape: RefShape): Bool {
+		return CondRegionScan.isConditionalKind(node.kind, shape) || node.children.exists(c -> hasConditionalRegion(c, shape));
 	}
 
 	/**

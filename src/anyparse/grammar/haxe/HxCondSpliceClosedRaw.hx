@@ -63,5 +63,6 @@ package anyparse.grammar.haxe;
  */
 @:re('(?:(?:(?!#if|#end)[\\s\\S])*(?:#if(?:(?!#end)[\\s\\S])*#end(?:(?!#if|#end)[\\s\\S])*)*;\\s*#end|(?:(?!#end)[\\s\\S])*;\\s*#end)')
 @:rawString
+@:condRegionRaw
 @:writeNormalize('reindentBlock')
 abstract HxCondSpliceClosedRaw(String) from String to String {}

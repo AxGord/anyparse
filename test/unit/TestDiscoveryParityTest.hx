@@ -1481,8 +1481,11 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CondQueryTest#testANestedRegionRunsInsideItsParentBranch :: control :: M-COND-INNERMOST-FRAME',
 			'unit.query.CondQueryTest#testARawExpressionSpliceIsFlaggedAndKeepsItsBytes :: control :: M-COND-RAW-NEVER-MARKED',
 			'unit.query.CondRegionKindDerivationTest#testAModelledRegionStaysInvisibleToTheGate :: guard :: ',
-			'unit.query.CondRegionKindDerivationTest#testEverySpliceCtorTheGrammarDeclaresIsCoveredByTheShape :: control :: '
-				+ 'M-OPAQUE-REGION-HAND-LIST',
+			'unit.query.CondRegionKindDerivationTest#testEveryDirectiveAwareTerminalCarriesItsMarker :: guard :: ',
+			'unit.query.CondRegionKindDerivationTest#testTheConditionalVocabularyIsTheRawCaptureOneWidened :: control :: '
+				+ 'M-COND-REGION-KINDS-HARDCODED',
+			'unit.query.CondRegionKindDerivationTest#testTheDerivedOpaqueKindsMatchAnIndependentScanOfTheGrammar :: control :: '
+				+ 'M-COND-KIND-NAME-CONVENTION,M-OPAQUE-REGION-HAND-LIST',
 			'unit.query.CondRegionKindDerivationTest#testTheMetadataPrefixedSpliceIsSeenByTheGate :: control :: M-OPAQUE-REGION-HAND-LIST',
 			'unit.query.CondRegionKindDerivationTest#testTheReturnExpressionSpliceIsSeenByTheGate :: control :: M-OPAQUE-REGION-HAND-LIST',
 			'unit.query.CondRegionKindDerivationTest#testTheReturnStatementSpliceIsSeenByTheGate :: control :: M-OPAQUE-REGION-HAND-LIST',
@@ -1677,6 +1680,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-SAFENAV-NO-NARROW',
 			'M-OPAQUE-REGION-BRACE-DELTA',
 			'M-OPAQUE-REGION-HAND-LIST',
+			'M-COND-KIND-NAME-CONVENTION',
+			'M-COND-REGION-KINDS-HARDCODED',
 			'M-OPAQUE-REGION-NONE',
 			'M-OPAQUE-REGION-NODE-SPAN',
 			'M-OPAQUE-REGION-WS-GAP',
@@ -1909,6 +1914,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-LOOPIF-POLICY-BLIND :: anyparse.macro.WriterBodyPolicyLowering#buildBodyCoreWrap',
 			'M-LOOPIF-KEEP-BLIND :: anyparse.macro.WriterBodyPolicyLowering#buildBodyCoreWrap',
 			'M-BRACKET-GLUE-KEEP-BLIND :: anyparse.macro.WriterBodyPolicyLowering#buildBodyCoreWrap',
+			'M-COND-KIND-NAME-CONVENTION :: anyparse.macro.QueryWalkerLowering#condKindsReaching',
 			'M-PEB-WS-REWIND-OFF :: anyparse.macro.StarLoopLowering#buildBlockEndedByteCheck',
 			'M-BRACKET-GLUE-NONE :: anyparse.macro.WriterCtorPatternLowering#buildBracketBodyGlueTest',
 			'M-ELSE-SWITCH-COMMENT-GLUE :: anyparse.macro.WriterBodyPolicyLowering#buildElseSwitchCases',

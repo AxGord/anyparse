@@ -52,4 +52,5 @@ package anyparse.grammar.haxe;
  */
 @:re('(?:>>>=|>>>|>>=|>>|>=|>|<<=|<<|<=|<|\\?\\?=|\\?\\?|&&=|&&|&=|&|\\|\\|=|\\|\\||\\|=|\\||\\.\\.\\.|==|=>|=|!=|\\+=|\\+|-=|->|-|\\*=|\\*|/=|/|%=|%|\\^=|\\^|(?:is|in)(?![A-Za-z0-9_]))')
 @:rawString
+@:condRegionRaw
 abstract HxCondSpliceOpLit(String) from String to String {}

@@ -39,7 +39,7 @@ class CondQueryTest extends Test {
 
 	/**
 	 * An expression-position region. The grammar parses this and projects a single CHILDLESS
-	 * `CondSpliceReturnStmt` — a kind `RefShape.opaqueCondRegionKindPrefixes` does not even list — so it
+	 * `CondSpliceReturnStmt` — a kind `RefShape.opaqueCondRegionKinds` does not even list — so it
 	 * is exactly the shape a node-based reader has nothing to say about.
 	 */
 	private static final RAW: String = 'class C {\n\tfunction f():Int {\n\t\treturn #if nodejs 1; #else 2; #end\n\t}\n}';

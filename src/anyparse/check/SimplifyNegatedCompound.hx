@@ -198,7 +198,7 @@ final class SimplifyNegatedCompound implements Check {
 		// The engine rebuilds the operator glue between operands, so a comment inside the span
 		// would be dropped; a `#if` region projects as flat siblings, so a rebuilt chain would
 		// splice both arms together. Both refuse rather than emit a lossy rewrite.
-		if (CheckScan.hasCommentMarker(source, span.from, span.to) || hasConditionalRegion(node)) return null;
+		if (CheckScan.hasCommentMarker(source, span.from, span.to) || hasConditionalRegion(node, s.shape)) return null;
 		final text: Null<String> = s.support.simplifyNegatedCompound(node, parent, source, types);
 		return text == null ? null : { span: span, text: text, message: messageFor(operand, s) };
 	}
@@ -211,8 +211,8 @@ final class SimplifyNegatedCompound implements Check {
 	}
 
 	/** Whether a `#if … #end` region sits anywhere in `node` — block, expression or mid-expression splice alike. */
-	private static function hasConditionalRegion(node: QueryNode): Bool {
-		return CondRegionScan.isConditionalKind(node.kind) || node.children.exists(c -> hasConditionalRegion(c));
+	private static function hasConditionalRegion(node: QueryNode, shape: RefShape): Bool {
+		return CondRegionScan.isConditionalKind(node.kind, shape) || node.children.exists(c -> hasConditionalRegion(c, shape));
 	}
 
 	/**
@@ -228,6 +228,7 @@ final class SimplifyNegatedCompound implements Check {
 		final notKind: Null<String> = shape.notKind;
 		if (notKind != null && !operatorKinds.contains(notKind)) operatorKinds.push(notKind);
 		return {
+			shape: shape,
 			opaqueKinds: shape.opaqueKinds ?? [],
 			negation: NegationScan.negationSeams(shape),
 			support: support,
@@ -247,6 +248,7 @@ private typedef Candidate = {
 
 /** The resolved seams `SimplifyNegatedCompound` reads in both `run` and `fix`. */
 private typedef Seams = {
+	final shape: RefShape;
 	final opaqueKinds: Array<String>;
 	final negation: NegationSeams;
 	final support: BooleanLogicSupport;

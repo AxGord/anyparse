@@ -308,7 +308,7 @@ final class NarrowLocalScope implements Check {
 		var node: QueryNode = root;
 		var best: Null<QueryNode> = null;
 		while (true) {
-			if (s.functionKinds.contains(node.kind) || CondRegionScan.isConditionalKind(node.kind)) return null;
+			if (s.functionKinds.contains(node.kind) || CondRegionScan.isConditionalKind(node.kind, s.shape)) return null;
 			if (s.blockScopeKinds.contains(node.kind)) best = node;
 			var next: Null<QueryNode> = null;
 			for (c in node.children) {

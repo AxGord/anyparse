@@ -94,6 +94,7 @@ final class ConstantHoist {
 			blockKinds: blockKinds,
 
 			plugin: plugin,
+			shape: shape,
 			support: support,
 			flaggedFroms: flaggedFroms,
 			index: index,
@@ -281,11 +282,11 @@ final class ConstantHoist {
 	 * the answer is about that declaration's own ancestry rather than the subtree holding a region
 	 * somewhere.
 	 */
-	private static function conditionalBetween(node: QueryNode, declFrom: Int): Bool {
-		if (CondRegionScan.isConditionalKind(node.kind)) return true;
+	private static function conditionalBetween(node: QueryNode, declFrom: Int, shape: RefShape): Bool {
+		if (CondRegionScan.isConditionalKind(node.kind, shape)) return true;
 		for (child in node.children) {
 			final s: Null<Span> = child.span;
-			if (s != null && declFrom >= s.from && declFrom < s.to) return conditionalBetween(child, declFrom);
+			if (s != null && declFrom >= s.from && declFrom < s.to) return conditionalBetween(child, declFrom, shape);
 		}
 		return false;
 	}
@@ -394,7 +395,7 @@ final class ConstantHoist {
 		match: TypeDeclMatch, name: String, ownerName: String, declSpan: Span, ctx: HoistContext, regions: () -> Array<LexRegion>
 	): Bool {
 		return !staticsForbidden(ctx.tree, match, ctx.plugin) && ctx.index.members.typeProvablyLacksMember(ownerName, name, ctx.file)
-			&& !conditionalBetween(match.nameNode, declSpan.from) && !commentAbove(ctx.source, declSpan, regions)
+			&& !conditionalBetween(match.nameNode, declSpan.from, ctx.shape) && !commentAbove(ctx.source, declSpan, regions)
 			&& occupiesNameAlone(name, declSpan.from, ctx);
 	}
 
@@ -454,6 +455,7 @@ private typedef HoistContext = {
 	final blockKinds: Array<String>;
 
 	final plugin: GrammarPlugin;
+	final shape: RefShape;
 	final support: NamingSupport;
 	final flaggedFroms: Array<Int>;
 	final index: SymbolIndex;

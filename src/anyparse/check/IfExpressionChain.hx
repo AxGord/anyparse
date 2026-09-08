@@ -70,6 +70,13 @@ typedef ShieldSeams = {
 
 	/** Every `if` form, statement and expression — what an emitted else-less header could absorb. */
 	var conditionalKinds: Array<String>;
+
+	/**
+	 * The grammar shape, for the one question `childShielded` cannot answer from a kind LIST:
+	 * whether the parent is a conditional-compilation region, whose children are the branches
+	 * of one `#if` rather than a sequence.
+	 */
+	var shape: RefShape;
 }
 
 /**
@@ -506,7 +513,7 @@ final class IfExpressionChain {
 			shape.caseBranchKind
 		];
 		for (host in delimitedHosts) if (host != null) kinds.push(host);
-		return { shieldKinds: kinds, conditionalKinds: conditionalKinds(shape) };
+		return { shieldKinds: kinds, conditionalKinds: conditionalKinds(shape), shape: shape };
 	}
 
 	/**
@@ -524,7 +531,7 @@ final class IfExpressionChain {
 		// A `#if` region projects EVERY branch's nodes as FLAT siblings, so a following sibling
 		// may belong to a different branch and separate nothing at all: under the defines that
 		// select this child's branch, whatever follows the region follows the child. Inherit.
-		return if (CondRegionScan.isConditionalKind(parent.kind))
+		return if (CondRegionScan.isConditionalKind(parent.kind, seams.shape))
 			shielded
 		else if (index < parent.children.length - 1)
 			!(index == THEN_BRANCH_INDEX && seams.conditionalKinds.contains(parent.kind))
