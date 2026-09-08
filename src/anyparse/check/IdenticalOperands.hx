@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
@@ -21,7 +22,7 @@ import anyparse.runtime.Span;
  * side-effect-free identical operands are flagged.
  */
 @:nullSafety(Strict)
-final class IdenticalOperands implements Check {
+final class IdenticalOperands implements Check implements NoAutofix {
 
 	public function new() {}
 
@@ -46,11 +47,25 @@ final class IdenticalOperands implements Check {
 		return violations;
 	}
 
-	/** Identical-operands has no autofix — report-only. */
+	/**
+	 * Report-only — see `noAutofixReason`.
+	 *
+	 * A collapse is EXPRESSIBLE for the `&&` / `||` half of `comparisonKinds`
+	 * (`CheckScan.dropOperandEdit` deletes one operand of a homogeneous chain, and `duplicate-ternary-branches`
+	 * ships that same shape under the same side-effect-free gate). It is deliberately not written, because
+	 * what it would produce is a program that no longer reports the bug — which is the one outcome a
+	 * finding of this kind must not have. Backlog T828 holds the counter-argument.
+	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		return [];
+	}
+
+	public function noAutofixReason(): String {
+		return 'the finding is a suspected TYPO, and every rewrite of one would SILENCE it rather than repair it: `a && a`'
+			+ ' collapses to `a` and `a == a` to `true`, both of which compile and neither of which is the second operand the'
+			+ ' author meant — and that operand is not in the source';
 	}
 
 	/** Walk `node`, flagging every comparison whose two operands are identical and call-free. */

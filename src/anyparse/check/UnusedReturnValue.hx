@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
@@ -71,7 +72,7 @@ import anyparse.runtime.Span;
  * to the default). The match is on the called name for every receiver form.
  */
 @:nullSafety(Strict)
-final class UnusedReturnValue implements Check implements ConfigAware {
+final class UnusedReturnValue implements Check implements ConfigAware implements NoAutofix {
 
 	/**
 	 * Call names whose non-`Void` result is idiomatically discarded — in-place
@@ -156,6 +157,11 @@ final class UnusedReturnValue implements Check implements ConfigAware {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		return [];
+	}
+
+	public function noAutofixReason(): String {
+		return 'using the result and deliberately discarding it are opposite intents, and a call in statement position says nothing'
+			+ ' about which was meant';
 	}
 
 	/**

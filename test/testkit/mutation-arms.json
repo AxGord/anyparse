@@ -2166,6 +2166,92 @@
 			"method": "isWorkDirSafe",
 			"force": "true",
 			"note": "the work directory is whatever the slot names, so a symlink planted there is adopted: the generated probe is written through it and every non-directory entry of the victim is deleted when the run ends"
+		},
+		{
+			"name": "M-USING-SCOPE-EMPTY-OFFSETS-INSCOPE",
+			"type": "anyparse.check.UsingScan",
+			"method": "usingScopeAt",
+			"find": "\tif (offsets.length == 0) return UsingScope.Guarded;",
+			"replace": "\tif (offsets.length == 0) return UsingScope.InScope;",
+			"note": "an empty offset list reads as coverage again, so a caller deciding the insert before it has collected its sites is told the guarded `using` covers them all"
+		},
+		{
+			"name": "M-LPAD-CONFLICT-SILENT",
+			"type": "anyparse.check.PreferLpad",
+			"method": "fix",
+			"find": "\tUsingScan.noteDeclineWhereUnset(accepted, UsingScan.conflictingUsingDecline(STRING_TOOLS_MODULE, LPAD_METHOD));",
+			"replace": "\tUsingScan.noteDeclineWhereUnset([], UsingScan.conflictingUsingDecline(STRING_TOOLS_MODULE, LPAD_METHOD));",
+			"note": "the conflicting-`using` branch drops the whole edit set and writes no reason again, so the ledger reports the rule as one that withheld an edit without saying why"
+		},
+		{
+			"name": "M-FIND-CONFLICT-SILENT",
+			"type": "anyparse.check.PreferFind",
+			"method": "fix",
+			"find": "\t\tUsingScan.noteDeclineWhereUnset(accepted, UsingScan.conflictingUsingDecline(LAMBDA_MODULE, FIND_METHOD));",
+			"replace": "\t\tUsingScan.noteDeclineWhereUnset([], UsingScan.conflictingUsingDecline(LAMBDA_MODULE, FIND_METHOD));",
+			"note": "the second copy of the same branch goes silent again"
+		},
+		{
+			"name": "M-BOOL-LOOP-CONFLICT-SILENT",
+			"type": "anyparse.check.BoolLoopScan",
+			"method": "edits",
+			"find": "\tUsingScan.noteDeclineWhereUnset(accepted, UsingScan.conflictingUsingDecline(LAMBDA_MODULE, method(kind)));",
+			"replace": "\tUsingScan.noteDeclineWhereUnset([], UsingScan.conflictingUsingDecline(LAMBDA_MODULE, method(kind)));",
+			"note": "the third copy, the one `prefer-exists` and `prefer-foreach` share, goes silent again"
+		},
+		{
+			"name": "M-GUARDED-DECLINE-MIS-ATTRIBUTED",
+			"type": "anyparse.check.PreferLpad",
+			"method": "fix",
+			"find": "\t\treturn UsingScan.appendUsingInsert(header, STRING_TOOLS_MODULE, edits, accepted) ? edits : [];",
+			"replace": "\t\treturn UsingScan.appendUsingInsert(header, STRING_TOOLS_MODULE, edits, violations) ? edits : [];",
+			"note": "the guard's sentence is written on every finding the rule reported again, including the ones the fix had already skipped for their own cause"
+		},
+		{
+			"name": "M-NO-AUTOFIX-STILL-EDITS",
+			"type": "anyparse.check.IdenticalOperands",
+			"method": "fix",
+			"force": "[{ span: new Span(0, 1), text: '' }]",
+			"note": "a rule declaring `NoAutofix` answers with an edit, so the declaration is a claim the run contradicts"
+		},
+		{
+			"name": "M-NO-AUTOFIX-REASON-IS-THE-RULE-NAME",
+			"type": "anyparse.check.IdenticalOperands",
+			"method": "noAutofixReason",
+			"force": "'identical operands has no autofix'",
+			"note": "the declared reason is the rule name read back, which tells a reader nothing the id did not"
+		},
+		{
+			"name": "M-LEDGER-CROSS-FILE-MUTE",
+			"type": "anyparse.query.cli.command.LintFixLedger",
+			"method": "unfixedVerdict",
+			"find": "\tfinal withCross: String = crossFile",
+			"replace": "\tfinal withCross: String = !crossFile",
+			"note": "the cross-file clause attaches to the rules that do NOT carry the seam, so the one rule whose edits only land there is reported as saying nothing again"
+		},
+		{
+			"name": "M-FIND-CONFLICT-MIS-ATTRIBUTED",
+			"type": "anyparse.check.PreferFind",
+			"method": "fix",
+			"find": "\t\tUsingScan.noteDeclineWhereUnset(accepted, UsingScan.conflictingUsingDecline(LAMBDA_MODULE, FIND_METHOD));",
+			"replace": "\t\tUsingScan.noteDeclineWhereUnset(violations, UsingScan.conflictingUsingDecline(LAMBDA_MODULE, FIND_METHOD));",
+			"note": "the conflict sentence is written on every finding the rule reported again, including the ones the candidate map never matched"
+		},
+		{
+			"name": "M-COUNT-CONFLICT-SILENT",
+			"type": "anyparse.check.DeadBinderCounterLoop",
+			"method": "fixWalk",
+			"find": "\t\t\tfound.declineReason = UsingScan.conflictingUsingDecline(LAMBDA_MODULE, COUNT_METHOD);",
+			"replace": "\t\t\tUsingScan.conflictingUsingDecline(LAMBDA_MODULE, COUNT_METHOD);",
+			"note": "the per-site conflicting-`using` skip drops the `count()` rewrite silently again, and the `length`-form rewrites in the same file hide it from the ledger"
+		},
+		{
+			"name": "M-COUNT-GUARDED-MIS-ATTRIBUTED",
+			"type": "anyparse.check.DeadBinderCounterLoop",
+			"method": "fix",
+			"find": "\tfinal accepted: Array<Violation> = keptViolations(collected, edits, violations);",
+			"replace": "\tfinal accepted: Array<Violation> = violations;",
+			"note": "the guard's sentence is written on every finding the rule reported again, including the ones the containment filter dropped and the ones no site matched"
 		}
 	]
 }

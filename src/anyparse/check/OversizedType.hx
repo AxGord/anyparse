@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.check.Check.VolatileMessage;
 import anyparse.query.CallGraph;
@@ -53,7 +54,7 @@ using StringTools;
  * configures `maxMembers` / `maxLines` on the `oversized-type` rule.
  */
 @:nullSafety(Strict)
-final class OversizedType implements Check implements ConfigAware implements VolatileMessage {
+final class OversizedType implements Check implements ConfigAware implements VolatileMessage implements NoAutofix {
 
 	/**
 	 * The member count above which a type is flagged — generous enough that only
@@ -178,6 +179,11 @@ final class OversizedType implements Check implements ConfigAware implements Vol
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		return [];
+	}
+
+	public function noAutofixReason(): String {
+		return 'which members split off into which new type is a decomposition decision — `apq clusters` proposes one and'
+			+ ' `apq move-member` carries it out, and neither is a span rewrite this rule could make on its own';
 	}
 
 	/**

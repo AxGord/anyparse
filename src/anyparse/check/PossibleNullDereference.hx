@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.check.NullableSource.NullableSourceCfg;
 import anyparse.query.GrammarPlugin;
@@ -59,7 +60,7 @@ import anyparse.runtime.Span;
  * not descended into.
  */
 @:nullSafety(Strict)
-final class PossibleNullDereference implements Check {
+final class PossibleNullDereference implements Check implements NoAutofix {
 
 	public function new() {}
 
@@ -111,6 +112,11 @@ final class PossibleNullDereference implements Check {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		return [];
+	}
+
+	public function noAutofixReason(): String {
+		return 'a nullable value needs a guard, a default or a different API, and whether that belongs at the access or where the'
+			+ ' value is produced restructures different code each time';
 	}
 
 	/**

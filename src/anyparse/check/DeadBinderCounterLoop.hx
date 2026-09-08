@@ -165,10 +165,12 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 		final lambdaBlocked: Bool = UsingScan.conflictingUsing(
 			UsingScan.usingModules(header), LAMBDA_MODULE, COUNT_METHOD, plugin, symbols, []
 		);
-		final wanted: Array<String> = [];
+		// Keyed by finding rather than a bare key list: the per-site `lambdaBlocked` skip below owes the
+		// finding it drops a reason, and a `wanted` that carried only keys had nothing to write it on.
+		final wanted: Map<String, Violation> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
-			if (span != null) wanted.push('${span.from}:${span.to}');
+			if (span != null) wanted['${span.from}:${span.to}'] = v;
 		}
 		final collected: Array<CountEdit> = [];
 		fixWalk(tree, tree, source, types, s, wanted, lambdaBlocked, symbols, lazyQualified(tree, source, plugin, symbols), collected);
@@ -182,7 +184,11 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 		// file declares `using Lambda;` only inside a `#if` region that leaves a rewritten call out, or
 		// an accepted rewrite already covers the byte the declaration would be spliced at. Neither the
 		// extension call nor a second, unguarded declaration is safe, so the whole edit set goes.
-		return !keptNeedsLambda(collected, edits) || UsingScan.appendUsingInsert(header, LAMBDA_MODULE, edits, violations) ? edits : [];
+		// The refusal may name only the findings whose rewrite SURVIVED the containment filter: a
+		// violation `wanted` never matched, and one whose edit an enclosing rewrite swallowed, both get
+		// no edit for their own reason, which is not the `using` gate's doing.
+		final accepted: Array<Violation> = keptViolations(collected, edits, violations);
+		return !keptNeedsLambda(collected, edits) || UsingScan.appendUsingInsert(header, LAMBDA_MODULE, edits, accepted) ? edits : [];
 	}
 
 	/** Whether any SURVIVING edit is the `count()` form — matched by span, since the containment filter rebuilds the list. */
@@ -247,20 +253,31 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 
 	/** Mirror of `walk` for the fix path: emit the range-loop rewrite for each wanted, rewritable pair. */
 	private static function fixWalk(
-		node: QueryNode, root: QueryNode, source: String, types: Null<Map<Int, String>>, s: Seams, wanted: Array<String>,
+		node: QueryNode, root: QueryNode, source: String, types: Null<Map<Int, String>>, s: Seams, wanted: Map<String, Violation>,
 		lambdaBlocked: Bool, index: () -> Null<SymbolIndex>, qualified: () -> Bool, out: Array<CountEdit>
 	): Void {
 		if (s.core.opaqueKinds.contains(node.kind)) return;
 		final kids: Array<QueryNode> = node.children;
 		if (s.blockKinds.contains(node.kind)) for (i in 0...kids.length - 1) {
 			final m: Null<Match> = analyze(kids[i], kids[i + 1], node, root, source, types, s, index, qualified);
-			if (m == null || !wanted.contains('${m.declSpan.from}:${m.declSpan.to}')) continue;
-			if (m.needsLambda && lambdaBlocked) continue;
+			if (m == null) continue;
+			final key: String = '${m.declSpan.from}:${m.declSpan.to}';
+			final found: Null<Violation> = wanted[key];
+			if (found == null) continue;
+			// The per-SITE half of the conflicting-`using` gate: this rule keeps the rewrites that do
+			// not need `Lambda` instead of refusing the file, which is the more precise design and was
+			// also the silent one — the dropped site got no edit and no reason, and the ledger could
+			// not see it because the surviving `length`-form rewrites gave the rule a non-empty edit
+			// set in the same run.
+			if (m.needsLambda && lambdaBlocked) {
+				found.declineReason = UsingScan.conflictingUsingDecline(LAMBDA_MODULE, COUNT_METHOD);
+				continue;
+			}
 			final e: Null<{ span: Span, text: String }> = buildEdit(m, source);
 			if (e == null) continue;
 			// Re-bound because strict null-safety narrowing does not reach INTO a struct literal.
 			final edit: { span: Span, text: String } = e;
-			out.push({ edit: edit, lambda: m.needsLambda });
+			out.push({ edit: edit, lambda: m.needsLambda, key: key });
 		}
 		for (c in kids) fixWalk(c, root, source, types, s, wanted, lambdaBlocked, index, qualified, out);
 	}
@@ -451,6 +468,21 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 		return { span: new Span(m.declSpan.from, m.forSpan.to), text: 'for (${m.counter} in 0...${m.bound}) {$interior}' };
 	}
 
+	/** The findings whose collected rewrite is still in `kept` — matched by edit span, since the containment filter rebuilds the list. */
+	private static function keptViolations(
+		collected: Array<CountEdit>, kept: Array<{ span: Span, text: String }>, violations: Array<Violation>
+	): Array<Violation> {
+		final keys: Array<String> = [
+			for (c in collected) for (k in kept) if (k.span.from == c.edit.span.from && k.span.to == c.edit.span.to) c.key
+		];
+		final out: Array<Violation> = [];
+		for (v in violations) {
+			final span: Null<Span> = v.span;
+			if (span != null && keys.contains('${span.from}:${span.to}')) out.push(v);
+		}
+		return out;
+	}
+
 }
 
 /** The `RefShape` kinds `DeadBinderCounterLoop` reads on top of the shared `LoopScan` core. */
@@ -469,10 +501,18 @@ private typedef Bound = {
 	var lambda: Bool;
 }
 
-/** One collected rewrite plus whether its bound is the `count()` form — the pair `fix` re-reads after the containment filter. */
+/**
+ * One collected rewrite, whether its bound is the `count()` form, and the `<from>:<to>` key of the
+ * finding it came from — the triple `fix` re-reads after the containment filter.
+ *
+ * The key is what lets a `using` refusal name the findings it takes down and no others: a violation
+ * `wanted` never matched, or whose edit the containment filter dropped, got no edit for its own
+ * reason, and the `using` gate did not decide it.
+ */
 private typedef CountEdit = {
 	var edit: { span: Span, text: String };
 	var lambda: Bool;
+	var key: String;
 }
 
 /** One matched pair: the spans the rewrite splices, the counter it re-binds, and the bound that replaces the iteration. */

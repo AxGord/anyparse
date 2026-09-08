@@ -182,16 +182,23 @@ final class PreferLpad implements Check implements DefaultOff {
 		final seams: Null<LpadSeams> = readSeams(plugin);
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (seams == null || tree == null) return [];
-		final wanted: Map<String, Bool> = [];
+		final wanted: Map<String, Violation> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
-			if (span != null) wanted['${span.from}:${span.to}'] = true;
+			if (span != null) wanted['${span.from}:${span.to}'] = v;
 		}
-		final edits: Array<{ span: Span, text: String }> = [
-			for (site in sitesOf(
-				tree, seams, source
-			)) if (site.proven && wanted.exists('${site.span.from}:${site.span.to}')) { span: site.span, text: replacement(site.ladder) }
-		];
+		final edits: Array<{ span: Span, text: String }> = [];
+		// The findings whose ladder actually became an edit, and the ONLY ones a refusal below may
+		// name: a site `wanted` did not match, or whose range is unproven, gets no edit for its own
+		// reason, and handing it the `using` gate's sentence would answer for a decision that gate
+		// never made.
+		final accepted: Array<Violation> = [];
+		for (site in sitesOf(tree, seams, source)) {
+			final found: Null<Violation> = wanted['${site.span.from}:${site.span.to}'];
+			if (!site.proven || found == null) continue;
+			edits.push({ span: site.span, text: replacement(site.ladder) });
+			accepted.push(found);
+		}
 		if (edits.length == 0) return edits;
 		final header: UsingHeader = UsingScan.headerOf(tree, source, plugin);
 		final symbols: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
@@ -202,10 +209,15 @@ final class PreferLpad implements Check implements DefaultOff {
 		// `using StringTools;` sits inside a `#if` region that leaves a rewritten call out, or an
 		// accepted rewrite already covers the byte the insert would go at. Either way the whole edit
 		// set goes rather than retarget a call silently, or spell one that binds nothing.
-		final resolves: Bool = !UsingScan.conflictingUsing(
-				UsingScan.usingModules(header), STRING_TOOLS_MODULE, LPAD_METHOD, plugin, () -> symbols, []
-			) && UsingScan.appendUsingInsert(header, STRING_TOOLS_MODULE, edits, violations);
-		return resolves ? edits : [];
+		//
+		// Spelled as two statements rather than one `&&`: the short-circuit skipped `appendUsingInsert`
+		// entirely on a conflict, so that branch dropped the whole set and wrote no reason at all — the
+		// ledger then read the rule as one that withheld an edit without saying why, which is the
+		// defect the `Guarded` branch two calls down exists to prevent.
+		if (!UsingScan.conflictingUsing(UsingScan.usingModules(header), STRING_TOOLS_MODULE, LPAD_METHOD, plugin, () -> symbols, []))
+			return UsingScan.appendUsingInsert(header, STRING_TOOLS_MODULE, edits, accepted) ? edits : [];
+		UsingScan.noteDeclineWhereUnset(accepted, UsingScan.conflictingUsingDecline(STRING_TOOLS_MODULE, LPAD_METHOD));
+		return [];
 	}
 
 	/** Bundle the kinds this check reads, or null when one is unset (the check is then a no-op). */

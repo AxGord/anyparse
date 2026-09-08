@@ -84,8 +84,9 @@ final class LintFixLedger {
 	 */
 	public static function unfixedFixLedger(
 		ledger: Map<String, RuleFixOutcome>, noAutofixReasons: Map<String, String>, oracleAssistedIds: Array<String>,
-		riskyIds: Array<String>
+		riskyIds: Array<String>, ?crossFileIds: Array<String>
 	): Array<String> {
+		final crossFile: Array<String> = crossFileIds ?? [];
 		final rows: Array<{
 			rule: String,
 			count: Int,
@@ -100,7 +101,7 @@ final class LintFixLedger {
 				rule: rule,
 				count: entry.declined,
 				reported: entry.reported,
-				verdict: unfixedVerdict(entry, declared, oracleAssistedIds.contains(rule)),
+				verdict: unfixedVerdict(entry, declared, oracleAssistedIds.contains(rule), crossFile.contains(rule)),
 				detail: declared != null ? [] : reasonLines(entry.reasons, entry.declined),
 				declared: declared != null || entry.reasons.length > 0
 			});
@@ -203,12 +204,31 @@ final class LintFixLedger {
 	 * a rule that produced an edit somewhere this run has PROVED it can fix, so its silence here
 	 * is a decline whatever it says.
 	 */
-	private static function unfixedVerdict(entry: RuleFixOutcome, noAutofixReason: Null<String>, oracleAssisted: Bool): String {
+	private static function unfixedVerdict(
+		entry: RuleFixOutcome, noAutofixReason: Null<String>, oracleAssisted: Bool, crossFile: Bool
+	): String {
 		final verdict: String = plainUnfixedVerdict(entry, noAutofixReason);
+		// A CrossFileFix rule's edits land on a seam the per-file `fix` cannot express, so an empty
+		// `fix` there is a design, not a decline. `default-repeated-argument` is the whole of that
+		// design — its `fix` returns nothing by construction because the argument sites it rewrites are
+		// in OTHER files — and without this the honest-default arm read it as a rule that declares
+		// nothing and says nothing, which is the reading that arm exists to avoid making.
+		//
+		// Gated on that arm and no other, which is narrower than "the rule carries the seam": `naming`
+		// and `trivial-getter` carry it too and have REAL per-file fixes, so a specific decline of
+		// theirs — or the arm that says the rule produced edits elsewhere and withheld one here — has
+		// nothing to do with the cross-file seam, and appending the sentence there would contradict the
+		// verdict it is appended to.
+		final honestDefault: Bool = noAutofixReason == null && entry.reasons.length == 0 && entry.edits == 0;
+		final withCross: String = crossFile && honestDefault
+			? '$verdict — and this rule\'s edits land through `crossFileFix`, a seam the per-file `fix` this row asked cannot carry'
+			: verdict;
 		// An OracleAssisted rule has a SECOND fix path this ledger never sees (it runs once, after
 		// the loop, against a warm display server). Saying only what the safe loop observed would
 		// under-report a rule whose oracle pass did land edits.
-		return oracleAssisted ? '$verdict — and this rule has an oracle-assisted pass besides, counted on the summary line above' : verdict;
+		return oracleAssisted
+			? '$withCross — and this rule has an oracle-assisted pass besides, counted on the summary line above'
+			: withCross;
 	}
 
 	/**
@@ -361,7 +381,10 @@ final class LintFixLedger {
 		final reasons: Map<String, String> = [
 			for (c in checks) if (c is NoAutofix) c.id() => (cast c: NoAutofix).noAutofixReason()
 		];
-		final lines: Array<String> = unfixedFixLedger(ledger, reasons, oracleIds, riskyIds);
+		// Read off the check objects rather than passed in: the caller has no list of them, and a rule
+		// that gains the seam without touching `Cli` would otherwise keep the wrong verdict silently.
+		final crossFileIds: Array<String> = [for (c in checks) if (c is CrossFileFix) c.id()];
+		final lines: Array<String> = unfixedFixLedger(ledger, reasons, oracleIds, riskyIds, crossFileIds);
 		for (line in exerciseCensus(ledger, [for (c in checks) c.id()], riskyIds)) lines.push(line);
 		return lines;
 	}

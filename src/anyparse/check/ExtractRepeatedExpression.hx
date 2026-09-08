@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.check.Check.VolatileMessage;
 import anyparse.check.PurityScan.PurityCtx;
@@ -78,7 +79,7 @@ using Lambda;
  * kind makes the check a no-op. The finding is spanned at the earliest occurrence.
  */
 @:nullSafety(Strict)
-final class ExtractRepeatedExpression implements Check implements VolatileMessage {
+final class ExtractRepeatedExpression implements Check implements VolatileMessage implements NoAutofix {
 
 	/** The least number of identical occurrences within one body to report. */
 	private static inline final MIN_OCCURRENCES: Int = 3;
@@ -154,6 +155,12 @@ final class ExtractRepeatedExpression implements Check implements VolatileMessag
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		return [];
+	}
+
+	public function noAutofixReason(): String {
+		return 'where the shared `final` belongs, and whether hoisting the value reads better at all, is an author judgement the'
+			+ ' heuristic safe-extraction preconditions here cannot make — once it is chosen,'
+			+ ' `apq extract-var <file> --match <expr> <name>` performs the hoist';
 	}
 
 	/** Whether `outer` strictly contains `inner` (covers it and is not the identical span). */

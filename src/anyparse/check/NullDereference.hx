@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
@@ -31,7 +32,7 @@ import anyparse.runtime.Span;
  * dereference has no mechanical fix (the surrounding logic is wrong).
  */
 @:nullSafety(Strict)
-final class NullDereference implements Check {
+final class NullDereference implements Check implements NoAutofix {
 
 	public function new() {}
 
@@ -83,6 +84,11 @@ final class NullDereference implements Check {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		return [];
+	}
+
+	public function noAutofixReason(): String {
+		return 'the access is not the defect — the surrounding logic that lets the receiver be null on every path is, and it is not'
+			+ ' in the reported span';
 	}
 
 }

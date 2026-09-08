@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.check.NullFlow.NullFacts;
 import anyparse.check.NullableSource.NullableSourceCfg;
@@ -73,7 +74,7 @@ import anyparse.runtime.Span;
  * null dereference has no single mechanical fix.
  */
 @:nullSafety(Strict)
-final class UnguardedNullableDeref implements Check {
+final class UnguardedNullableDeref implements Check implements NoAutofix {
 
 	public function new() {}
 
@@ -146,6 +147,11 @@ final class UnguardedNullableDeref implements Check {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		return [];
+	}
+
+	public function noAutofixReason(): String {
+		return 'the check the binding is missing belongs either at this use or at the assignment that made it nullable, and which'
+			+ ' one restructures different code';
 	}
 
 	/**

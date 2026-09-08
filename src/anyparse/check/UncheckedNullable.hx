@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
@@ -55,7 +56,7 @@ using Lambda;
  * type ARGUMENT, so nothing available can tell `Null<Int>` from `Null<String>`.
  */
 @:nullSafety(Strict)
-final class UncheckedNullable implements Check {
+final class UncheckedNullable implements Check implements NoAutofix {
 
 	public function new() {}
 
@@ -106,6 +107,11 @@ final class UncheckedNullable implements Check {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		return [];
+	}
+
+	public function noAutofixReason(): String {
+		return
+			'a parse that can fail needs a guard, a default or a different API, and which of the three is right is not in the expression';
 	}
 
 	/** Walk `node`, flagging a nullable-numeric call in any non-null numeric position. */

@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
@@ -34,7 +35,7 @@ import anyparse.runtime.Span;
  * restructure) is context-dependent.
  */
 @:nullSafety(Strict)
-final class ImpossibleCast implements Check {
+final class ImpossibleCast implements Check implements NoAutofix {
 
 	public function new() {}
 
@@ -92,6 +93,11 @@ final class ImpossibleCast implements Check {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		return [];
+	}
+
+	public function noAutofixReason(): String {
+		return 'the cast can never yield a usable value, and the three repairs — correct the declared type, drop the cast,'
+			+ ' restructure the call — each change different code, none of it inside the reported span';
 	}
 
 }

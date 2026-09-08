@@ -76,6 +76,24 @@ final class AlwaysNullComparison implements Check {
 		return violations;
 	}
 
+	/**
+	 * No edits — and DELIBERATELY not a `NoAutofix` declaration, because one is writable and nobody has
+	 * written it. That is the honest third answer, and stamping the class instead would have said the
+	 * rewrite cannot be mechanised when the mirror rule mechanises it today.
+	 *
+	 * The mirror is `dead-null-guard`: same shape, opposite proof, and its `fix` is one line —
+	 * `CheckScan.simplifyNullComparisonFixes`, which is `simplifyConditionFixes(plugin, source,
+	 * violations, [eq, notEq], node -> node.kind == notEq)`. The `alwaysTrueOf` predicate is the only
+	 * half that differs here: a provably-null operand makes `== null` true where a provably-non-null one
+	 * makes `!= null` true, so the dual is `node -> node.kind == eq` over the same two kinds. The shared
+	 * helper already carries the always-FALSE direction as a first-class case (`conditionEdit` picks
+	 * `orKind` over `andKind` and hands `alwaysTrue` straight to `ifShapeEdit`), so nothing is missing
+	 * below this seam.
+	 *
+	 * What stops it being a one-line slice is the blast radius, not the mechanism: `dead-null-guard` is a
+	 * `RiskyFix` and this one is not, so the same edits would land unverified on a run with no compiler
+	 * oracle. Backlog T825.
+	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
