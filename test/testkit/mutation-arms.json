@@ -2361,6 +2361,22 @@
 			"find": "return tok.from + 2 < source.length && source.fastCodeAt(tok.from + 2) == '*'.code ? '$indent * ' : indent;",
 			"replace": "return '$indent * ';",
 			"note": "a one-line PLAIN block's continuation gains a star gutter it never had, so the reflow turns a `/* … */` banner into a starred block and the writer then keeps that star for good"
+		},
+		{
+			"name": "M-CONFINEMENT-REPORT-INDEX-PARAM",
+			"type": "anyparse.check.UnusedParameter",
+			"method": "run",
+			"find": "final index: SymbolIndex = RefactorSupport.widestScopeIndex(plugin) ?? SymbolIndex.build(files, plugin);",
+			"replace": "final index: SymbolIndex = SymbolIndex.build(files, plugin);",
+			"note": "the removability proof asks the REPORT index again, so an `@:access` grantee outside the lint scope is invisible, the private method reads as confined and the finding goes back to `Warning` — the severity that REMOVES the parameter its cross-file callers still pass"
+		},
+		{
+			"name": "M-CONFINEMENT-REPORT-INDEX-RENAME",
+			"type": "anyparse.check.Naming",
+			"method": "fix",
+			"find": "final confinementIndex: Null<SymbolIndex> = RefactorSupport.widestScopeIndex(plugin, index);",
+			"replace": "final confinementIndex: Null<SymbolIndex> = index;",
+			"note": "the single-file rename asks the REPORT index for confinement again, so an `@:access` grantee outside the lint scope is invisible, the member reads as confined and the rename rewrites the declaring file alone — orphaning the grantee's access"
 		}
 	]
 }

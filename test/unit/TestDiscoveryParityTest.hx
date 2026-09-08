@@ -1051,6 +1051,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.LintFixDeclineWiringSliceTest#testAnAcceptedFileIsWrittenAndBlamesNobody :: control :: M-LINTFIX-ACCEPTED-BLAMED',
 			'unit.check.NamingCheckCrossFileFixTest#testCrossFileRenameAsksTheResolutionScopeForUnreadableFiles :: control :: '
 				+ 'M-NAMING-SKIPSCAN-REPORT-INDEX,M-SKIPSCAN-SCOPEWIDE',
+			'unit.check.NamingCheckMemberFixTest#testAccessGrantOutsideReportScopeRefusesSingleFileRename :: control :: '
+				+ 'M-CONFINEMENT-REPORT-INDEX-RENAME',
 			'unit.check.NullableSourceResolutionScopeTest#testExcludedArrayPopStaysUnseeded :: control :: M-NULLABLE-INDEX-EXCLUSION',
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryReturnBindingSeeded :: control :: M-NULLABLE-FLOW-REPORT-INDEX',
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryReturnDerefFlagged :: control :: M-NULLABLE-REPORT-INDEX',
@@ -1139,6 +1141,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.UnguardedNullableDerefTest#testReflectCopyBindingNotFlagged :: control :: M-NULLABLE-FLOW-EXCLUDE-NONE',
 			'unit.check.UnguardedNullableDerefTest#testSafeNavGuardNarrowsRoot :: control :: M-SAFENAV-NO-NARROW',
 			'unit.check.UnreachableCatchTest#testSubtypeAfterSupertypeFlagged :: control :: M-ISSUBTYPE-FALSE',
+			'unit.check.UnusedParameterCheckTest#testAccessGrantOutsideReportScopeKeepsParameter :: control :: '
+				+ 'M-CONFINEMENT-REPORT-INDEX-PARAM',
 			'unit.check.UnusedPublicMemberCheckTest#testInterpolationEscapeKeepsTheMember :: control :: M-NAMEOUTSIDE-TRUE',
 			'unit.check.UsingDeclineAttributionTest#testCounterLoopConflictNamesTheSkippedSiteAndKeepsTheOther :: control :: '
 				+ 'M-COUNT-CONFLICT-SILENT',
@@ -1893,7 +1897,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-COMMENT-REFLOW-TAIL-UNSEEN',
 			'M-COMMENT-REFLOW-TRIGGER-TAIL-UNSEEN',
 			'M-COMMENT-PARAGRAPH-DELETION-EXEMPT',
-			'M-COMMENT-CONTINUATION-ALWAYS-GUTTER'
+			'M-COMMENT-CONTINUATION-ALWAYS-GUTTER',
+			'M-CONFINEMENT-REPORT-INDEX-PARAM',
+			'M-CONFINEMENT-REPORT-INDEX-RENAME'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

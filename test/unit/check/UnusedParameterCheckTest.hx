@@ -6,6 +6,7 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.UnusedParameter;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CachingGrammarPlugin;
 import utest.Assert;
 import utest.Test;
 
@@ -273,6 +274,43 @@ class UnusedParameterCheckTest extends Test {
 		);
 		Assert.equals(1, plain.length, 'the plain local-function control must still be flagged');
 		Assert.equals('unused parameter \'dead\'', plain[0].message);
+	}
+
+	/**
+	 * The removal proof and the REPORT SCOPE, the pair that decides whether a parameter is deleted.
+	 *
+	 * `testConfinedPrivateMethodParameterAutofixed` above is this fixture with its caller in the
+	 * declaring file; here the only caller lives in a file the run does not lint but the project's
+	 * declared `resolutionRoots` do cover. Asked of the report index alone, `h` reads as confined,
+	 * `eligible` goes up, and `eligible` is what makes the finding a `Warning` — the severity `fix`
+	 * reads as "remove it". The second proof cannot catch it: `RemoveParam.paramSlotEdits` collects
+	 * call sites from the ONE tree it is handed, so both proofs are blind in the same direction. On a
+	 * two-file probe, `lint C.hx --rule unused-parameter --fix` cut `h(a, b)` to `h(a)` and left the
+	 * grantee passing two arguments.
+	 */
+	@:pin('control')
+	@:killer('M-CONFINEMENT-REPORT-INDEX-PARAM')
+	public function testAccessGrantOutsideReportScopeKeepsParameter(): Void {
+		final declSource: String = 'package pkg;\nclass C {\n\tprivate function h(a:Int, b:Int):Int {\n\t\treturn a;\n\t}\n}';
+		final report: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: declSource }];
+		// Leading assertion — with NO grantee anywhere the same declaration is removable, so the
+		// downgrade below is about the out-of-scope grant and not about the fixture.
+		final bare: Array<Violation> = new UnusedParameter().run(report, new HaxeQueryPlugin());
+		Assert.equals(1, bare.length);
+		Assert.equals(Severity.Warning, bare[0].severity, 'a confined private method is the autofixable subset');
+		final library: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/E.hx', source: 'package pkg;\n@:access(pkg.C)\nclass E {\n\tpublic function f(c:C) { return c.h(1, 2); }\n}' }
+		];
+		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		plugin.setResolutionScope({
+			declared: true,
+			sources: () -> {report: report, projectRoots: [], library: new LibrarySources(library) }
+		});
+		final check: UnusedParameter = new UnusedParameter();
+		final vs: Array<Violation> = check.run(report, plugin);
+		Assert.equals(1, vs.length);
+		Assert.equals(Severity.Info, vs[0].severity, 'a grantee outside the report scope keeps the finding report-only');
+		Assert.equals(0, check.fix(declSource, vs, plugin).length, 'and no parameter is removed');
 	}
 
 	private function violations(src: String): Array<Violation> {

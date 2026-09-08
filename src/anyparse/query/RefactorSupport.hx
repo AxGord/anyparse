@@ -111,6 +111,34 @@ final class RefactorSupport {
 	}
 
 	/**
+	 * The WIDEST index a structural confinement or zero-occurrence proof may ask: the host's
+	 * resolution-scoped index (report UNION the DECLARED library roots) when `plugin` is a
+	 * `SymbolIndexHost` carrying a declared scope, else the report-scoped `index` the caller passed,
+	 * else null (no index reached the call at all — the caller falls back to the single file it holds).
+	 *
+	 * Deliberately gated on `hasDeclaredResolutionScope`, NOT on `hasAnyResolutionScope` the way
+	 * `resolutionIndexOf` beside it is. The proofs this index feeds are name-keyed rather than
+	 * type-resolved, so admitting the implicitly discovered Haxe std would let a SIMPLE-NAME
+	 * coincidence with a std type decide them: an owner whose simple name collides with a std type
+	 * that HAS subtypes reads as unconfined on that coincidence alone. The direction is safe — an
+	 * unconfined member is kept, its rename refused, its parameter left alone — so the hazard costs
+	 * usefulness rather than correctness, which is exactly why it must not happen by accident. A
+	 * DECLARED library is a different matter: the project chose it, and a file the run does not lint
+	 * can legitimately be where the reference lives.
+	 *
+	 * The three consumers fail DIFFERENTLY on the narrow report index, which is why each asks for
+	 * this one. `UnusedPrivate.violationFor` reports a live member dead (S177). The other two WRITE:
+	 * `UnusedParameter.checkFunction` raises the finding to `Warning`, and `Warning` is what removes
+	 * a parameter whose cross-file callers the proof never saw; `Naming`'s `RenameRefusal.of` lets a
+	 * single-file rename go ahead and orphans a cross-file reference to the old name.
+	 */
+	public static inline function widestScopeIndex(plugin: GrammarPlugin, ?index: SymbolIndex): Null<SymbolIndex> {
+		final host: Null<SymbolIndexHost> = plugin is SymbolIndexHost ? cast plugin : null;
+		final declared: Null<SymbolIndex> = host != null && host.hasDeclaredResolutionScope() ? host.resolutionIndex() : null;
+		return declared ?? index;
+	}
+
+	/**
 	 * The resolution scope's RAW sources (report UNION the library roots) when `plugin` hosts one, else
 	 * null. The text counterpart of `resolutionIndexOf`, for a scan that needs no parse: the index
 	 * drops a skip-parsed file from `allFiles` (it keeps the raw source, which is what

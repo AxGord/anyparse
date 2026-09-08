@@ -147,10 +147,21 @@ final class UnusedParameter implements Check implements ConfigAware {
 		final modifierKinds: Array<String> = shape.modifierOrderKinds ?? [];
 		final noBodyKind: Null<String> = shape.noBodyKind;
 		final dynamicKind: Null<String> = shape.dynamicModifierKind;
-		// The autofixable subset (a confined private method) is proven against the
-		// cross-file SymbolIndex, exactly as `unused-private`; both are registered in
-		// the `--fix` loop's `fullScopeIds` so this index sees every file each pass.
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		// The autofixable subset (a confined private method) is proven against the WIDEST index
+		// there is, exactly as `unused-private`: the project's DECLARED resolution scope when it has
+		// one, else the report scope (both ids sit in the `--fix` loop's `fullScopeIds`, so that
+		// fallback sees every report file each pass). The report scope alone is not enough, and here
+		// the failure WRITES rather than mis-reports: an `@:access` grant or a subtype declared in a
+		// file the run does not lint reads as absent, the method reads as confined, `eligible` goes
+		// up, and `eligible` is exactly what turns the finding into the `Warning` whose autofix
+		// removes the parameter. The second proof does not save it — `RemoveParam.paramSlotEdits`
+		// collects call sites from the ONE tree it is handed, so both proofs are blind in the same
+		// direction. Measured on a two-file probe under `resolutionRoots: ["src"]`:
+		// `lint A.hx --rule unused-parameter --fix` cut `helper(a, b)` to `helper(a)` and left the
+		// grantee file's `a.helper(3, 4)` standing. Widening can only ADD a subtype / grant, so it
+		// can only turn `eligible` OFF — a `Warning` becomes an `Info`, never the reverse, and no
+		// removal is ever invented.
+		final index: SymbolIndex = RefactorSupport.widestScopeIndex(plugin) ?? SymbolIndex.build(files, plugin);
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
