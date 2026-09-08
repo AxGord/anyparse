@@ -112,6 +112,56 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 		Assert.isTrue(fixed.indexOf('get_disabled') == -1);
 	}
 
+	/**
+	 * Regression: a single-quoted `SingleStringExpr` ctor-init carries its text in a `Literal`
+	 * child, not a `name` slot (`node.name` is always null there — the double-quoted spelling is
+	 * the one with a `name`), so a predicate that read `node.name` here was permanently
+	 * unreachable and misclassified every single-quoted movable literal as an external write. The
+	 * message below must land on the SAME shape `testShapeAZeroWritesNoBypass` gets (no
+	 * `@:bypassAccessor`), only with `label`/`_label` in place of `active`/`_active`.
+	 * Killed by arm `M-TRIVGET-MOVABLE-LITERAL-FALSE`.
+	 */
+	@:pin('control')
+	@:killer('M-TRIVGET-MOVABLE-LITERAL-FALSE')
+	public function testShapeACtorInitSingleQuotedStringMoveFix(): Void {
+		final src: String = 'class C {\n\tpublic var label(get, set):String;\n\tprivate var _label:String;\n\tpublic function new() {\n'
+			+ '\t\t_label = \'lit\';\n\t}\n\tfunction get_label():String return _label;\n\tfunction set_label(v:String):String {\n'
+			+ '\t\t_label = v;\n\t\ttrace(v);\n\t\treturn _label;\n\t}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals(
+			'property \'label\' has a trivial getter over backing field \'_label\'; use \'var label(default, set)\' and remove get_label',
+			vs[0].message
+		);
+		final fixed: String = fixedText(src);
+		Assert.isTrue(fixed.indexOf('label(default, set):String = \'lit\'') >= 0);
+		Assert.isTrue(fixed.indexOf('get_label') == -1);
+		Assert.isTrue(fixed.indexOf('private var _label') == -1);
+		Assert.isTrue(fixed.indexOf('@:bypassAccessor') == -1);
+	}
+
+	/**
+	 * The interpolating sibling of the fix above: a `$name` fragment inside the single-quoted
+	 * literal projects an `Ident` child alongside the `Literal` text, so the ctor-init is
+	 * genuinely not a compile-time constant and must stay on the `@:bypassAccessor` arm — the fix
+	 * must not swing the other way and start treating every single-quoted ctor init as movable.
+	 */
+	public function testShapeACtorInitInterpolatedStringStaysBypass(): Void {
+		final src: String = 'class C {\n\tpublic var label(get, set):String;\n\tprivate var _label:String;\n'
+			+ '\tpublic function new(name:String) {\n\t\t_label = \'hi $$name\';\n\t}\n'
+			+ '\tfunction get_label():String return _label;\n\tfunction set_label(v:String):String {\n\t\t_label = v;\n'
+			+ '\t\ttrace(v);\n\t\treturn _label;\n\t}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals(
+			'property \'label\' has a trivial getter over backing field \'_label\'; use \'var label(default, set)\', remove '
+			+ 'get_label and mark 1 external write(s) with @:bypassAccessor',
+			vs[0].message
+		);
+		final fixed: String = fixedText(src);
+		Assert.isTrue(fixed.indexOf('@:bypassAccessor label = \'hi $$name\'') >= 0);
+	}
+
 	public function testBothTrivialCollapsesToPlainVar(): Void {
 		final vs: Array<Violation> = violations(cls(
 			'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n'
@@ -715,6 +765,77 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 			Assert.isTrue((out['p/Sub.hx'] ?? '').indexOf('return active;') >= 0, 'and the subtype read is rewritten');
 		}
 		Assert.equals(1, new TrivialGetter().run(aliasSubtypeFiles('', 'Owner'), new HaxeQueryPlugin()).length);
+	}
+
+	/**
+	 * The `${…}` sibling of the guard above: a block interpolation projects a `Block` child, which
+	 * the all-children-are-text predicate must refuse just as it refuses a bare `$name` `Ident` — a
+	 * whitelist of the text kind covers both, a blacklist of the `Ident` kind would cover only one
+	 * and would relocate `'${a + b}'` into a field initializer, where the identifiers are out of
+	 * scope and the result does not compile.
+	 */
+	public function testShapeACtorInitBlockInterpolatedStringStaysBypass(): Void {
+		final src: String = 'class C {\n\tpublic var label(get, set):String;\n\tprivate var _label:String;\n'
+			+ '\tpublic function new(name:String) {\n\t\t_label = \'$${name}!\';\n\t}\n'
+			+ '\tfunction get_label():String return _label;\n\tfunction set_label(v:String):String {\n\t\t_label = v;\n'
+			+ '\t\ttrace(v);\n\t\treturn _label;\n\t}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		final fixed: String = fixedText(src);
+		Assert.isTrue(fixed.indexOf('@:bypassAccessor label = \'$${name}!\'') >= 0);
+	}
+
+	/**
+	 * The same hole one kind over: a hex integer projects `HexLit`, not `IntLit`, so the movable-
+	 * literal kind list had to name it explicitly — `_mask = 0xFF;` was pushed onto the
+	 * `@:bypassAccessor` arm while the byte-equivalent `_mask = 255;` collapsed cleanly. A missing
+	 * kind in a movability list reads exactly like the dead `name` probe it sits next to: the check
+	 * refuses a rewrite it should make, and nothing fails.
+	 */
+	public function testShapeACtorInitHexLiteralMoveFix(): Void {
+		final src: String = cls(
+			'public var mask(get, set):Int;\n\tprivate var _mask:Int;\n\tpublic function new() { _mask = 0xFF; }\n'
+			+ '\tfunction get_mask():Int return _mask;\n\tfunction set_mask(v:Int):Int { redraw(); return _mask = v; }'
+		);
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals(
+			'property \'mask\' has a trivial getter over backing field \'_mask\'; use \'var mask(default, set)\' and remove get_mask',
+			vs[0].message
+		);
+		final fixed: String = fixedText(src);
+		Assert.isTrue(fixed.indexOf('mask(default, set):Int = 0xFF') >= 0);
+		Assert.isTrue(fixed.indexOf('get_mask') == -1);
+		Assert.isTrue(fixed.indexOf('@:bypassAccessor') == -1);
+	}
+
+	/**
+	 * The recognized ctor-init leaves the external-write count, so the fix does not merely reword a
+	 * finding — it can carry one ACROSS the bypass cap and change what gets written. Four writes,
+	 * one of them the movable ctor-init: with the init recognized the remaining three sit on the cap
+	 * and take the bypass arm (collapse + mark), where before they read as four and fell back to the
+	 * inline arm (`mark get_label inline`, the field kept). `testShapeAExactlyCapBypass` cannot see
+	 * this boundary — its backing field carries a decl initializer, so the ctor-init path is never
+	 * entered at all.
+	 */
+	public function testShapeACtorInitCrossesBypassCap(): Void {
+		final src: String = cls(
+			'public var label(get, set):String;\n\tprivate var _label:String;\n\tpublic function new() { _label = \'lit\'; }\n'
+			+ '\tfunction get_label():String return _label;\n\tfunction set_label(v:String):String { redraw(); return _label = v; }\n'
+			+ '\tfunction a():Void { _label = \'a\'; }\n\tfunction b():Void { _label = \'b\'; }\n\tfunction c():Void { _label = \'c\'; }'
+		);
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals(
+			'property \'label\' has a trivial getter over backing field \'_label\'; use \'var label(default, set)\', remove '
+			+ 'get_label and mark 3 external write(s) with @:bypassAccessor',
+			vs[0].message
+		);
+		final fixed: String = fixedText(src);
+		Assert.isTrue(fixed.indexOf('label(default, set):String = \'lit\'') >= 0);
+		Assert.isTrue(fixed.indexOf('@:bypassAccessor label = \'a\'') >= 0);
+		Assert.isTrue(fixed.indexOf('inline function get_label') == -1);
+		Assert.isTrue(fixed.indexOf('private var _label') == -1);
 	}
 
 	/**
