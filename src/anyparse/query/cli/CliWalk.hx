@@ -189,6 +189,25 @@ final class CliWalk {
 	}
 
 	/**
+	 * Parse one file of a multi-file walk: read its source, run it through `parseWalkedAny`,
+	 * stream progress, and on a parse failure push it onto `skips` (harmless in single-file
+	 * mode, whose caller returns before ever reading `skips`) — the per-file parse-and-skip
+	 * prologue every batch-walking command repeats before it does its own thing with the tree.
+	 */
+	public static function parseWalkedFile(
+		cmd: String, parse: String -> QueryNode, path: String, singleFile: Bool, scanned: Int, total: Int, searchKeys: Null<Array<String>>,
+		skips: Array<QuerySkip>
+	): Null<{ source: String, tree: QueryNode }> {
+		final source: String = CliIo.readSourceForParse(path);
+		final fileSkips: Array<SkipEntry> = [];
+		final tree: Null<QueryNode> = parseWalkedAny(cmd, parse, path, source, singleFile, fileSkips, searchKeys);
+		CliIo.streamProgress(cmd, scanned, total, singleFile);
+		if (tree != null) return { source: source, tree: tree };
+		for (entry in fileSkips) skips.push({ source: source, entry: entry });
+		return null;
+	}
+
+	/**
 	 * The skip entries `query` may be told about, out of one walk's whole set.
 	 *
 	 * A parse failure is evidence for a query only if that query could have been found

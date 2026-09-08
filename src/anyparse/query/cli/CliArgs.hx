@@ -6,6 +6,7 @@ using Lambda;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.SourceText;
 import anyparse.query.cli.CliArgs.ExpandedInputs;
+import anyparse.query.cli.CliArgs.PositionalScan;
 import anyparse.query.cli.CliArgs.ResolvedInputs;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -58,6 +59,25 @@ final class CliArgs {
 	 */
 	public static inline function nameSeparatorIndex(args: Array<String>): Int {
 		return args.indexOf('--');
+	}
+
+	/** A fresh `PositionalScan` for `args`: an empty scope-spec accumulator and its separator index. */
+	public static inline function beginPositionalScan(args: Array<String>): PositionalScan {
+		return { inputSpecs: [], separator: nameSeparatorIndex(args) };
+	}
+
+	/**
+	 * A fresh `WalkerScan` for `args`: `--flat`/`--limit` at their defaults, an empty name
+	 * and scope-spec accumulator, and the separator index.
+	 */
+	public static function beginWalkerScan(args: Array<String>): WalkerScan {
+		return {
+			flat: false,
+			limit: -1,
+			names: [],
+			inputSpecs: [],
+			separator: nameSeparatorIndex(args)
+		};
 	}
 
 	/**
@@ -329,4 +349,30 @@ typedef ResolvedInputs = {
 	var plugin: GrammarPlugin;
 	var paths: Array<String>;
 	var singleFile: Bool;
+};
+
+/**
+ * The pair every `--`-then-scope argv parser builds identically before it starts consuming
+ * argv itself: an empty scope-spec accumulator and the `--` separator index `routePositional`
+ * reads. Named so the shared prologue collapses to one call instead of repeating the same two
+ * declarations command by command — the last residue `duplicate-code` still named once S166
+ * carried off the rest of the per-command scaffold.
+ */
+typedef PositionalScan = {
+	var inputSpecs: Array<String>;
+	var separator: Int;
+};
+
+/**
+ * `PositionalScan` plus the two output-shaping flags (`--flat`, `--limit`) a plain
+ * name-then-scope walker also carries — `RefsOpts` and `MentionsOpts` both close over
+ * exactly this subset before they add their own command-specific fields. One call
+ * collapses the shared five-field prologue below `duplicate-code`'s statement floor.
+ */
+typedef WalkerScan = {
+	var flat: Bool;
+	var limit: Int;
+	var names: Array<String>;
+	var inputSpecs: Array<String>;
+	var separator: Int;
 };

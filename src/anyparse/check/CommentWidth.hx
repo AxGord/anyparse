@@ -15,20 +15,13 @@ import anyparse.runtime.Span;
 using Lambda;
 using StringTools;
 
-/** One comment token, or one merged `//` run, exactly as `SourceComments` models it. */
-private typedef CommentUnit = {
-	from: Int,
-	to: Int,
-	isLine: Bool
-};
-
 /**
  * One over-width comment line: the physical span to report, its rendered width, the unit that
  * owns it, which of that unit's BODY lines it is, and why the reflow may not re-lay-out it —
  * null while it still may.
  */
 private typedef WideLine = {
-	final owner: CommentUnit;
+	final owner: CommentTok;
 	final body: Int;
 	final from: Int;
 	final to: Int;
@@ -201,8 +194,8 @@ final class CommentWidth implements Check implements DefaultOff implements Volat
 	}
 
 	/** `wide`'s owning units, first occurrence first — one entry per comment unit that carries a finding. */
-	private static function ownersOf(wide: Array<WideLine>): Array<CommentUnit> {
-		final out: Array<CommentUnit> = [];
+	private static function ownersOf(wide: Array<WideLine>): Array<CommentTok> {
+		final out: Array<CommentTok> = [];
 		for (w in wide) if (!out.exists(u -> u.from == w.owner.from)) out.push(w.owner);
 		return out;
 	}
@@ -224,7 +217,7 @@ final class CommentWidth implements Check implements DefaultOff implements Volat
 	 * is paid only by a file that reached the end with a finding.
 	 */
 	private static function classify(source: String, plugin: GrammarPlugin, metrics: LayoutMetrics): Array<WideLine> {
-		final units: Array<CommentUnit> = SourceComments.collectCommentUnits(source, plugin.lexicalRegions(source));
+		final units: Array<CommentTok> = SourceComments.collectCommentUnits(source, plugin.lexicalRegions(source));
 		final wide: Array<WideLine> = [];
 		final seen: Array<Int> = [];
 		for (unit in units) collectUnit(source, unit, metrics, wide, seen);
@@ -244,7 +237,7 @@ final class CommentWidth implements Check implements DefaultOff implements Volat
 
 	/** Walk one unit's body lines, appending every over-width one with the shape gates already applied. */
 	private static function collectUnit(
-		source: String, unit: CommentUnit, metrics: LayoutMetrics, out: Array<WideLine>, seen: Array<Int>
+		source: String, unit: CommentTok, metrics: LayoutMetrics, out: Array<WideLine>, seen: Array<Int>
 	): Void {
 		final tab: Int = metrics.indentWidth;
 		final bodySpan: Span = SourceComments.commentBody(source, unit);
@@ -295,7 +288,7 @@ final class CommentWidth implements Check implements DefaultOff implements Volat
 	 * rule's report while the fix went on using the original, and the two would drift silently.
 	 * A line the reflow hands back byte-identical is one it could not break.
 	 */
-	private static function probeReflow(source: String, unit: CommentUnit, wide: Array<WideLine>, metrics: LayoutMetrics): Void {
+	private static function probeReflow(source: String, unit: CommentTok, wide: Array<WideLine>, metrics: LayoutMetrics): Void {
 		final open: Array<WideLine> = [for (w in wide) if (w.owner.from == unit.from && w.refusal == null) w];
 		if (open.length == 0) return;
 		final bodySpan: Span = SourceComments.commentBody(source, unit);
@@ -316,7 +309,7 @@ final class CommentWidth implements Check implements DefaultOff implements Volat
 	 * reflow's own trigger fires exactly when an open line stands.
 	 */
 	private static function reflow(
-		source: String, unit: CommentUnit, body: String, open: Array<Int>, metrics: LayoutMetrics, closerCols: Int
+		source: String, unit: CommentTok, body: String, open: Array<Int>, metrics: LayoutMetrics, closerCols: Int
 	): String {
 		return SourceComments.wrapCommentBody(
 			body, body, SourceComments.commentHead(source, unit), SourceComments.commentContinuation(source, unit), metrics, unit.isLine,
@@ -339,7 +332,7 @@ final class CommentWidth implements Check implements DefaultOff implements Volat
 	 * head and a long argument leaves nothing to its left and everything to its right, and a gate that
 	 * read only the left would call the whole line the comment's doing.
 	 */
-	private static function lineWithoutComment(source: String, from: Int, to: Int, unit: CommentUnit): String {
+	private static function lineWithoutComment(source: String, from: Int, to: Int, unit: CommentTok): String {
 		return (source.substring(from, clamp(unit.from, from, to)) + source.substring(clamp(unit.to, from, to), to)).rtrim();
 	}
 

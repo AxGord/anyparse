@@ -4,6 +4,7 @@ import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.Lit.LitHit;
 import anyparse.query.Matcher.Match;
 import anyparse.query.SourceComments;
+import anyparse.query.cli.CliArgs.PositionalScan;
 import anyparse.query.cli.CliArgs.ResolvedInputs;
 import anyparse.query.cli.CliContext;
 import anyparse.query.cli.CliWalk;
@@ -382,10 +383,9 @@ final class LitCommand implements CliCommand {
 		var includeComments: Bool = false;
 		var includeDirectives: Bool = false;
 		final targets: Array<String> = [];
-		final inputSpecs: Array<String> = [];
 		// A bare `--` makes every positional before it a search text and every one
 		// after it a scope spec; without one the grammar is untouched.
-		final separator: Int = CliArgs.nameSeparatorIndex(args);
+		final scan: PositionalScan = CliArgs.beginPositionalScan(args);
 
 		var i: Int = 0;
 		while (i < args.length) {
@@ -419,7 +419,7 @@ final class LitCommand implements CliCommand {
 						CliIo.stderr('apq lit: unknown option "$a"\n');
 						return litParseExit(EXIT_USAGE);
 					}
-					CliArgs.routePositional(a, i, separator, targets, inputSpecs);
+					CliArgs.routePositional(a, i, scan.separator, targets, scan.inputSpecs);
 			}
 			i++;
 		}
@@ -432,7 +432,7 @@ final class LitCommand implements CliCommand {
 			includeComments: includeComments,
 			includeDirectives: includeDirectives,
 			targets: targets,
-			inputSpecs: inputSpecs,
+			inputSpecs: scan.inputSpecs,
 			errExit: null
 		};
 	}
@@ -453,18 +453,17 @@ final class LitCommand implements CliCommand {
 		final trees: Array<{ path: String, source: String, tree: QueryNode }> = [];
 		var scanned: Int = 0;
 		for (path in paths) {
-			final source: String = CliIo.readSourceForParse(path);
-			final fileSkips: Array<SkipEntry> = [];
-			final tree: Null<QueryNode> = CliWalk.parseWalkedAny(CMD, plugin.parseFile, path, source, singleFile, fileSkips, prefilterKeys);
-			CliIo.streamProgress(CMD, ++scanned, paths.length, singleFile);
-			if (tree == null) {
+			final parsedFile: Null<{ source: String, tree: QueryNode }> = CliWalk.parseWalkedFile(
+				CMD, plugin.parseFile, path, singleFile, ++scanned, paths.length, prefilterKeys, skips
+			);
+			if (parsedFile == null) {
+				// The source travelled with the failure into `skips` already, so
+				// `CliWalk.skipsFor` can hand each target only the failures that
+				// target could have been found in.
 				if (singleFile) return null;
-				// The source travels with the failure so `CliWalk.skipsFor` can hand each
-				// target only the failures that target could have been found in.
-				for (entry in fileSkips) skips.push({ source: source, entry: entry });
 				continue;
 			}
-			trees.push({ path: path, source: source, tree: tree });
+			trees.push({ path: path, source: parsedFile.source, tree: parsedFile.tree });
 		}
 		return trees;
 	}

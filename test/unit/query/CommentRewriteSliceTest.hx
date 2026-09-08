@@ -416,14 +416,14 @@ class CommentRewriteSliceTest extends Test {
 	 */
 	public function testEmptyDocBlockContinuationIsTheDocGutter(): Void {
 		final src: String = 'class C {\n\t/**\n\t */\n\tfunction f() {}\n}';
-		final tok: { from: Int, to: Int, isLine: Bool } = { from: src.indexOf('/**'), to: src.indexOf('*/') + 2, isLine: false };
+		final tok: CommentTok = { from: src.indexOf('/**'), to: src.indexOf('*/') + 2, isLine: false };
 		Assert.equals('\t * ', SourceComments.commentContinuation(src, tok));
 	}
 
 	/** The other closer spelling — an empty GUTTER-LESS block ends `**\/`, and it is skipped too. */
 	public function testEmptyGutterlessBlockContinuationIsTheDocGutter(): Void {
 		final src: String = 'class C {\n\t/**\n\t**/\n\tfunction f() {}\n}';
-		final tok: { from: Int, to: Int, isLine: Bool } = { from: src.indexOf('/**'), to: src.indexOf('**/') + 3, isLine: false };
+		final tok: CommentTok = { from: src.indexOf('/**'), to: src.indexOf('**/') + 3, isLine: false };
 		Assert.equals('\t * ', SourceComments.commentContinuation(src, tok));
 	}
 

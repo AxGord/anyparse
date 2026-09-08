@@ -194,9 +194,7 @@ final class MissingVisibility implements Check {
 	 * conditional region's branch-boundary scan — so a grammar with no conditional seams, or a file
 	 * with no `#if` in it at all, pays nothing.
 	 */
-	private static function commentTokens(
-		source: String, seams: Seams, regions: () -> Array<LexRegion>
-	): Array<{ from: Int, to: Int, isLine: Bool }> {
+	private static function commentTokens(source: String, seams: Seams, regions: () -> Array<LexRegion>): Array<CommentTok> {
 		return seams.condKind != null && source.indexOf(seams.ifKeyword) >= 0 ? SourceComments.collectCommentTokens(regions()) : [];
 	}
 

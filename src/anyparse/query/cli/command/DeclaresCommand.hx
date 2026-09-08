@@ -1,5 +1,6 @@
 package anyparse.query.cli.command;
 
+import anyparse.query.cli.CliArgs.PositionalScan;
 import anyparse.query.cli.CliArgs.ResolvedInputs;
 import anyparse.query.cli.CliContext;
 import haxe.Exception;
@@ -45,11 +46,10 @@ final class DeclaresCommand implements CliCommand {
 	private static function runDeclares(args: Array<String>): Int {
 		var lang: String = 'haxe';
 		final typeNames: Array<String> = [];
-		final inputSpecs: Array<String> = [];
 		// A bare `--` makes every positional before it a type name and every one
 		// after it a scope spec; without one the first positional is the type and
 		// the rest are scope specs, exactly as before.
-		final separator: Int = CliArgs.nameSeparatorIndex(args);
+		final scan: PositionalScan = CliArgs.beginPositionalScan(args);
 
 		var i: Int = 0;
 		while (i < args.length) {
@@ -66,20 +66,20 @@ final class DeclaresCommand implements CliCommand {
 						CliIo.stderr('apq declares: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
-					CliArgs.routePositional(a, i, separator, typeNames, inputSpecs);
+					CliArgs.routePositional(a, i, scan.separator, typeNames, scan.inputSpecs);
 			}
 			i++;
 		}
-		if (typeNames.length == 0 || inputSpecs.length == 0) {
+		if (typeNames.length == 0 || scan.inputSpecs.length == 0) {
 			CliIo.stderr('apq declares: expected <type> <scope> (one or more file/dir/glob specs)\n');
 			printDeclaresUsage();
 			return EXIT_USAGE;
 		}
 
-		final io: ResolvedInputs = CliArgs.resolveInputPaths(lang, inputSpecs, separator < 0);
+		final io: ResolvedInputs = CliArgs.resolveInputPaths(lang, scan.inputSpecs, scan.separator < 0);
 		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
-			CliIo.stderr('apq declares: ${CliArgs.quotedSpecs(inputSpecs)} matched no .hx files\n');
+			CliIo.stderr('apq declares: ${CliArgs.quotedSpecs(scan.inputSpecs)} matched no .hx files\n');
 			return EXIT_RUNTIME;
 		}
 		final plugin: GrammarPlugin = io.plugin;
@@ -103,7 +103,7 @@ final class DeclaresCommand implements CliCommand {
 			final rows: Array<SymbolQuery.SymbolRow> = SymbolQuery.declaredAmong(listing, name);
 			if (batchedOutput) CliIo.sysPrint(CliWalk.batchSection(name));
 			if (rows.length == 0)
-				CliIo.stderr('apq declares: no type named "$name" in ${inputSpecs.join(', ')}\n');
+				CliIo.stderr('apq declares: no type named "$name" in ${scan.inputSpecs.join(', ')}\n');
 			else if (rows.length > 1)
 				CliIo.stderr('apq declares: ambiguous — ${rows.length} declarations of "$name"\n');
 			for (row in rows) CliIo.sysPrint('${SymbolQuery.formatSymbolRow(row)}\n');

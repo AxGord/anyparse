@@ -169,13 +169,9 @@ final class MentionsCommand implements CliCommand {
 
 	private static function parseMentionsArgs(args: Array<String>): MentionsOpts {
 		var lang: String = 'haxe';
-		var flat: Bool = false;
-		var limit: Int = -1;
-		final names: Array<String> = [];
-		final inputSpecs: Array<String> = [];
 		// A bare `--` makes every positional before it a name and every one after
 		// it a scope spec; without one the grammar is untouched.
-		final separator: Int = CliArgs.nameSeparatorIndex(args);
+		final scan: WalkerScan = CliArgs.beginWalkerScan(args);
 
 		var i: Int = 0;
 		while (i < args.length) {
@@ -185,9 +181,9 @@ final class MentionsCommand implements CliCommand {
 				case '--lang':
 					lang = CliArgs.expectValue(args, ++i, '--lang');
 				case '--flat':
-					flat = true;
+					scan.flat = true;
 				case '--limit':
-					try limit = CliArgs.parseLimit(args, ++i) catch (e: Exception) {
+					try scan.limit = CliArgs.parseLimit(args, ++i) catch (e: Exception) {
 						CliIo.stderr('${e.message}\n');
 						return mentionsParseExit(EXIT_USAGE);
 					}
@@ -199,16 +195,16 @@ final class MentionsCommand implements CliCommand {
 						CliIo.stderr('apq mentions: unknown option "$a"\n');
 						return mentionsParseExit(EXIT_USAGE);
 					}
-					CliArgs.routePositional(a, i, separator, names, inputSpecs);
+					CliArgs.routePositional(a, i, scan.separator, scan.names, scan.inputSpecs);
 			}
 			i++;
 		}
 		return {
 			lang: lang,
-			flat: flat,
-			limit: limit,
-			names: names,
-			inputSpecs: inputSpecs,
+			flat: scan.flat,
+			limit: scan.limit,
+			names: scan.names,
+			inputSpecs: scan.inputSpecs,
 			errExit: null
 		};
 	}

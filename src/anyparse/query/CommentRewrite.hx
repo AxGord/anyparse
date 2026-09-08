@@ -4,6 +4,7 @@ import anyparse.check.CheckScan;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin.LayoutMetrics;
 import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.SourceComments.CommentTok;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -183,7 +184,7 @@ final class CommentRewrite {
 	 * comment onto its own line during the same edit anyway, so the position the guard read no longer
 	 * held by the time the damage landed.
 	 */
-	private static function isOneLineDocBlock(source: String, tok: { from: Int, to: Int, isLine: Bool }): Bool {
+	private static function isOneLineDocBlock(source: String, tok: CommentTok): Bool {
 		return !tok.isLine && tok.from + 2 < source.length && source.fastCodeAt(tok.from + 2) == '*'.code
 			&& source.substring(tok.from, tok.to).indexOf('\n') < 0;
 	}

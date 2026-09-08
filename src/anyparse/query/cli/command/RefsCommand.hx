@@ -243,14 +243,10 @@ final class RefsCommand implements CliCommand {
 		var wantWrites: Bool = false;
 		var wantDoc: Bool = false;
 		var wantSource: Bool = false;
-		var flat: Bool = false;
-		var limit: Int = -1;
-		final names: Array<String> = [];
-		final inputSpecs: Array<String> = [];
 		// A bare `--` in argv makes every positional BEFORE it a name and every one
 		// after it a scope spec. Without one the grammar is untouched: the first
 		// positional is the name, the rest are scope specs.
-		final separator: Int = CliArgs.nameSeparatorIndex(args);
+		final scan: WalkerScan = CliArgs.beginWalkerScan(args);
 
 		var i: Int = 0;
 		while (i < args.length) {
@@ -272,9 +268,9 @@ final class RefsCommand implements CliCommand {
 				case '--source':
 					wantSource = true;
 				case '--flat':
-					flat = true;
+					scan.flat = true;
 				case '--limit':
-					try limit = CliArgs.parseLimit(args, ++i) catch (e: Exception) {
+					try scan.limit = CliArgs.parseLimit(args, ++i) catch (e: Exception) {
 						CliIo.stderr('${e.message}\n');
 						return refsParseExit(EXIT_USAGE);
 					}
@@ -286,7 +282,7 @@ final class RefsCommand implements CliCommand {
 						CliIo.stderr('apq refs: unknown option "$a"\n');
 						return refsParseExit(EXIT_USAGE);
 					}
-					CliArgs.routePositional(a, i, separator, names, inputSpecs);
+					CliArgs.routePositional(a, i, scan.separator, scan.names, scan.inputSpecs);
 			}
 			i++;
 		}
@@ -298,10 +294,10 @@ final class RefsCommand implements CliCommand {
 			wantWrites: wantWrites,
 			wantDoc: wantDoc,
 			wantSource: wantSource,
-			flat: flat,
-			limit: limit,
-			names: names,
-			inputSpecs: inputSpecs,
+			flat: scan.flat,
+			limit: scan.limit,
+			names: scan.names,
+			inputSpecs: scan.inputSpecs,
 			errExit: null
 		};
 	}
@@ -327,23 +323,22 @@ final class RefsCommand implements CliCommand {
 		];
 		var scanned: Int = 0;
 		for (path in paths) {
-			final source: String = CliIo.readSourceForParse(path);
 			// ONE parse per file for the whole batch. The pre-filter is the UNION of
 			// the names, so a file holding any of them is parsed and every name is
 			// then asked of the same tree.
-			final fileSkips: Array<SkipEntry> = [];
-			final tree: Null<QueryNode> = CliWalk.parseWalkedAny(CMD, plugin.parseFile, path, source, singleFile, fileSkips, names);
-			CliIo.streamProgress(CMD, ++scanned, paths.length, singleFile);
-			if (tree == null) {
-				// Single-file mode treats a parse failure as fatal — null tells
-				// the caller to return EXIT_RUNTIME. Multi-file mode records the
-				// file — WITH its source, so `CliWalk.skipsFor` can hand each name
-				// only the failures that name could have been found in — and walks on.
+			final parsedFile: Null<{ source: String, tree: QueryNode }> = CliWalk.parseWalkedFile(
+				CMD, plugin.parseFile, path, singleFile, ++scanned, paths.length, names, skips
+			);
+			if (parsedFile == null) {
+				// Single-file mode treats a parse failure as fatal — null tells the caller to
+				// return EXIT_RUNTIME. Multi-file mode already recorded the file — WITH its
+				// source, so `CliWalk.skipsFor` can hand each name only the failures that name
+				// could have been found in — and walks on.
 				if (singleFile) return null;
-				for (entry in fileSkips) skips.push({ source: source, entry: entry });
 				continue;
 			}
-			final parsed: QueryNode = tree;
+			final source: String = parsedFile.source;
+			final parsed: QueryNode = parsedFile.tree;
 			for (batch in batches) {
 				final found: { hits: Array<RefHit>, skipped: Int } = Refs.findWithSkipped(batch.name, parsed, shape);
 				final raw: Array<RefHit> = found.hits;

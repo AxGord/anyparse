@@ -9,6 +9,12 @@ import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
 
 /**
+ * One comment token collected by `collectCommentTokens`: its byte span and
+ * whether it opened with a line comment or a block comment.
+ */
+typedef CommentTok = { from: Int, to: Int, isLine: Bool };
+
+/**
  * The COMMENT token model of one source: which lexical regions are comments, where a comment
  * begins and ends, what its body is once the delimiters and the gutter come off, whether a
  * block is a documentation block, and what prefix a new line spliced into it must carry.
@@ -119,8 +125,8 @@ final class SourceComments {
 	 * this replaced answered null.
 	 */
 	public static function commentBlockAt(source: String, cursor: Int, regions: Array<LexRegion>): Null<Span> {
-		final units: Array<{ from: Int, to: Int, isLine: Bool }> = collectCommentUnits(source, regions);
-		final unit: Null<{ from: Int, to: Int, isLine: Bool }> = units.find(u -> cursor >= u.from && cursor < u.to);
+		final units: Array<CommentTok> = collectCommentUnits(source, regions);
+		final unit: Null<CommentTok> = units.find(u -> cursor >= u.from && cursor < u.to);
 		return unit == null ? null : new Span(unit.from, unit.to);
 	}
 
@@ -140,7 +146,7 @@ final class SourceComments {
 	 * `#end\n\t// note`: stopping at the newline would leave the comment standing, stopping at the
 	 * comment would leave the newline.
 	 */
-	public static function trimTrivia(source: String, span: Span, comments: Array<{ from: Int, to: Int, isLine: Bool }>): Span {
+	public static function trimTrivia(source: String, span: Span, comments: Array<CommentTok>): Span {
 		var from: Int = span.from;
 		var to: Int = span.to;
 		while (from < to) {
@@ -148,7 +154,7 @@ final class SourceComments {
 				from++;
 				continue;
 			}
-			final token: Null<{ from: Int, to: Int, isLine: Bool }> = enclosingComment(comments, from);
+			final token: Null<CommentTok> = enclosingComment(comments, from);
 			if (token == null) break;
 			from = token.to < to ? token.to : to;
 		}
@@ -157,7 +163,7 @@ final class SourceComments {
 				to--;
 				continue;
 			}
-			final token: Null<{ from: Int, to: Int, isLine: Bool }> = enclosingComment(comments, to - 1);
+			final token: Null<CommentTok> = enclosingComment(comments, to - 1);
 			if (token == null) break;
 			to = token.from > from ? token.from : from;
 		}
@@ -172,8 +178,8 @@ final class SourceComments {
 	 * (`GrammarPlugin.lexicalRegions`), and a caller that asks the plugin once per file can hand
 	 * the same array to every consumer instead of re-lexing per call.
 	 */
-	public static function collectCommentTokens(regions: Array<LexRegion>): Array<{ from: Int, to: Int, isLine: Bool }> {
-		final out: Array<{ from: Int, to: Int, isLine: Bool }> = [];
+	public static function collectCommentTokens(regions: Array<LexRegion>): Array<CommentTok> {
+		final out: Array<CommentTok> = [];
 		for (region in regions) switch region.kind {
 			case LineComment:
 				out.push({ from: region.from, to: region.to, isLine: true });
@@ -197,12 +203,12 @@ final class SourceComments {
 	 * carried this grouping rule for one cursor; this is the same rule over the whole file, and
 	 * that function is now a lookup into it.
 	 */
-	public static function collectCommentUnits(source: String, regions: Array<LexRegion>): Array<{ from: Int, to: Int, isLine: Bool }> {
-		final toks: Array<{ from: Int, to: Int, isLine: Bool }> = collectCommentTokens(regions);
-		final out: Array<{ from: Int, to: Int, isLine: Bool }> = [];
+	public static function collectCommentUnits(source: String, regions: Array<LexRegion>): Array<CommentTok> {
+		final toks: Array<CommentTok> = collectCommentTokens(regions);
+		final out: Array<CommentTok> = [];
 		var i: Int = 0;
 		while (i < toks.length) {
-			final head: { from: Int, to: Int, isLine: Bool } = toks[i];
+			final head: CommentTok = toks[i];
 			final merge: Bool = head.isLine && isFullLineComment(source, head.from);
 			var last: Int = i;
 			while (merge && last + 1 < toks.length && contiguousLineComments(source, toks[last], toks[last + 1])) last++;
@@ -245,7 +251,7 @@ final class SourceComments {
 	 * section label) and the empty `/**` `*\/` form are all NOT docs, which is the
 	 * discrimination `docExtendedSpan` makes and every doc-aware check needs.
 	 */
-	public static function isDocBlock(source: String, tok: { from: Int, to: Int, isLine: Bool }): Bool {
+	public static function isDocBlock(source: String, tok: CommentTok): Bool {
 		return !tok.isLine && source.substring(tok.from, tok.from + DOC_OPEN.length) == DOC_OPEN && !blockCommentIsBlank(source, tok);
 	}
 
@@ -255,7 +261,7 @@ final class SourceComments {
 	 * marker-only multi-line block all qualify. An unclosed block is never blank: its
 	 * interior is whatever runs to end of file.
 	 */
-	public static function blockCommentIsBlank(source: String, tok: { from: Int, to: Int, isLine: Bool }): Bool {
+	public static function blockCommentIsBlank(source: String, tok: CommentTok): Bool {
 		if (tok.isLine) return false;
 		final closed: Bool = tok.from + 2 <= tok.to - 2 && source.fastCodeAt(tok.to - 2) == '*'.code // noqa: magic-number
 			&& source.fastCodeAt(tok.to - 1) == '/'.code;
@@ -273,7 +279,7 @@ final class SourceComments {
 	 * excluded and a line comment running to the newline. Shared by the comment
 	 * finder (`Cli.appendCommentHits`) and the comment rewriter (`CommentRewrite`).
 	 */
-	public static function commentBody(source: String, tok: { from: Int, to: Int, isLine: Bool }): Span {
+	public static function commentBody(source: String, tok: CommentTok): Span {
 		final closed: Bool = !tok.isLine && tok.to >= tok.from + 4 && StringTools.fastCodeAt(source, tok.to - 2) == '*'.code // noqa
 			&& source.fastCodeAt(tok.to - 1) == '/'.code;
 		final bodyEnd: Int = closed ? tok.to - 2 : tok.to;
@@ -301,7 +307,7 @@ final class SourceComments {
 	 * called the result canonical, because it IS what the writer emits. This is what the
 	 * splicers prefix with instead.
 	 */
-	public static function commentContinuation(source: String, tok: { from: Int, to: Int, isLine: Bool }): String {
+	public static function commentContinuation(source: String, tok: CommentTok): String {
 		var lineStart: Int = tok.from;
 		while (lineStart > 0 && source.fastCodeAt(lineStart - 1) != '\n'.code) lineStart--;
 		var indent: String = source.substring(lineStart, tok.from);
@@ -377,7 +383,7 @@ final class SourceComments {
 	 * `commentBody` starts two characters past the opener, so a width measurement over the body
 	 * alone calls that line short by the opener and everything left of it.
 	 */
-	public static function commentHead(source: String, tok: { from: Int, to: Int, isLine: Bool }): String {
+	public static function commentHead(source: String, tok: CommentTok): String {
 		return source.substring(SourceText.lineStartOf(source, tok.from), tok.from + 2);
 	}
 
@@ -713,10 +719,10 @@ final class SourceComments {
 	 * Extend a member's `span` back over own-line leading comments and forward
 	 * over a same-line trailing comment, yielding its full source slot.
 	 */
-	public static function memberTriviaSpan(source: String, span: Span, comments: Array<{ from: Int, to: Int, isLine: Bool }>): Span {
+	public static function memberTriviaSpan(source: String, span: Span, comments: Array<CommentTok>): Span {
 		final from: Int = absorbLeadingComments(source, comments, span.from);
 		var to: Int = span.to;
-		final t: Null<{ from: Int, to: Int, isLine: Bool }> = firstCommentStartingAfter(comments, to);
+		final t: Null<CommentTok> = firstCommentStartingAfter(comments, to);
 		if (t != null && source.substring(to, t.from).trim() == '' && source.substring(to, t.from).indexOf('\n') < 0) to = t.to;
 		return new Span(from, to);
 	}
@@ -727,7 +733,7 @@ final class SourceComments {
 	 * line's start when none exists. Lets a reorder absorb a doc comment sitting just before
 	 * a `#if` directive into the conditional it documents.
 	 */
-	public static function leadingCommentBlockStart(source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, pos: Int): Int {
+	public static function leadingCommentBlockStart(source: String, comments: Array<CommentTok>, pos: Int): Int {
 		return absorbLeadingComments(source, comments, SourceText.lineStartOf(source, pos));
 	}
 
@@ -780,7 +786,7 @@ final class SourceComments {
 	 * own view: a block comment is ONE token from its opener to the first closer, so an
 	 * opener sequence appearing inside the comment's text is content, not a boundary.
 	 */
-	public static function commentEndingAt(tokens: Array<{ from: Int, to: Int, isLine: Bool }>, end: Int, blockOnly: Bool): Int {
+	public static function commentEndingAt(tokens: Array<CommentTok>, end: Int, blockOnly: Bool): Int {
 		for (t in tokens) if (t.to == end && !(blockOnly && t.isLine)) return t.from;
 		return -1;
 	}
@@ -845,9 +851,7 @@ final class SourceComments {
 	 * single line break (no blank line, no code) — members of one contiguous
 	 * line-comment block.
 	 */
-	private static function contiguousLineComments(
-		source: String, a: { from: Int, to: Int, isLine: Bool }, b: { from: Int, to: Int, isLine: Bool }
-	): Bool {
+	private static function contiguousLineComments(source: String, a: CommentTok, b: CommentTok): Bool {
 		if (!a.isLine || !b.isLine) return false;
 		if (!isFullLineComment(source, a.from) || !isFullLineComment(source, b.from)) return false;
 		var newlines: Int = 0;
@@ -888,19 +892,15 @@ final class SourceComments {
 	}
 
 	/** Walk back from `from` over own-line line-comments and block-comments (and the whitespace between) to the first code. */
-	private static function lastCommentEndingBefore(
-		comments: Array<{ from: Int, to: Int, isLine: Bool }>, pos: Int
-	): Null<{ from: Int, to: Int, isLine: Bool }> {
-		var best: Null<{ from: Int, to: Int, isLine: Bool }> = null;
+	private static function lastCommentEndingBefore(comments: Array<CommentTok>, pos: Int): Null<CommentTok> {
+		var best: Null<CommentTok> = null;
 		for (c in comments) if (c.to <= pos && (best == null || c.to > best.to)) best = c;
 		return best;
 	}
 
 	/** Extend `to` forward over a line-comment (or same-line block-comment) trailing on the decl's own line. */
-	private static function firstCommentStartingAfter(
-		comments: Array<{ from: Int, to: Int, isLine: Bool }>, pos: Int
-	): Null<{ from: Int, to: Int, isLine: Bool }> {
-		var best: Null<{ from: Int, to: Int, isLine: Bool }> = null;
+	private static function firstCommentStartingAfter(comments: Array<CommentTok>, pos: Int): Null<CommentTok> {
+		var best: Null<CommentTok> = null;
 		for (c in comments) if (c.from >= pos && (best == null || c.from < best.from)) best = c;
 		return best;
 	}
@@ -909,10 +909,10 @@ final class SourceComments {
 	 * Walk `from` back over own-line leading comments (and the whitespace between) to the first code;
 	 * returns the new start offset. Shared by `memberTriviaSpan` and `leadingCommentBlockStart`.
 	 */
-	private static function absorbLeadingComments(source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, from: Int): Int {
+	private static function absorbLeadingComments(source: String, comments: Array<CommentTok>, from: Int): Int {
 		var result: Int = from;
 		while (true) {
-			final c: Null<{ from: Int, to: Int, isLine: Bool }> = lastCommentEndingBefore(comments, result);
+			final c: Null<CommentTok> = lastCommentEndingBefore(comments, result);
 			if (c == null || source.substring(c.to, result).trim() != '') break;
 			final ls: Int = SourceText.lineStartOf(source, c.from);
 			if (source.substring(ls, c.from).trim() != '') break;
@@ -922,9 +922,7 @@ final class SourceComments {
 	}
 
 	/** The comment token of `comments` covering `at`, or null when that byte is not inside one. */
-	private static function enclosingComment(
-		comments: Array<{ from: Int, to: Int, isLine: Bool }>, at: Int
-	): Null<{ from: Int, to: Int, isLine: Bool }> {
+	private static function enclosingComment(comments: Array<CommentTok>, at: Int): Null<CommentTok> {
 		return comments.find(token -> token.from <= at && at < token.to);
 	}
 
