@@ -5,6 +5,7 @@ import anyparse.check.LintConfig;
 import anyparse.check.PreferInline;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 import utest.Assert;
 import utest.Test;
@@ -691,6 +692,58 @@ class PreferInlineCheckTest extends Test {
 			0, violations('class T extends Test {\n\tpublic function testThing():Void _other.ping();\n}').length,
 			'the INSTANCE method of the same class is still the framework\'s'
 		);
+	}
+
+	/**
+	 * What the widest index costs where the project DECLARES its scope: `SubtypeGraph` keys a
+	 * supertype by its SIMPLE name, so a project class named like one the library subclasses reads
+	 * as having a subtype and loses the finding its otherwise identical twin keeps.
+	 *
+	 * The two report files declare the same method; the library declares `lib.Exception` and a
+	 * `lib.Sub extends Exception` carrying a method of that name. Nothing in the report scope extends
+	 * `pkg.Exception` — the edge belongs to a DIFFERENT type of the same simple name — yet the graph
+	 * cannot tell them apart, so `tag` goes unflagged there and stays flagged on `Zzzunique`.
+	 *
+	 * Silence is the safe direction for a rule that WRITES, so this is a lost opportunity rather than
+	 * a defect of soundness, and the second assertion is what proves the loss is the SCOPE's doing:
+	 * with no resolution scope the same two files both flag. Keying the graph by qualified name is
+	 * the repair and it is not this rule's to make — the graph answers `unused-private`,
+	 * `unused-public-member` and `prefer-final-abstract-method` on the same key (T913).
+	 */
+	@:pin('control')
+	@:killer('M-INLINE-SUBTYPE-REPORT-INDEX')
+	public function testSimpleNameCollisionCostsTheTwinNamedLikeALibraryType(): Void {
+		final report: Array<{ file: String, source: String }> = [
+			{
+				file: 'pkg/Exception.hx',
+				source: 'package pkg;\n\nclass Exception {\n\tpublic function new() {}\n\tpublic function tag():Int return 1;\n}'
+			},
+			{
+				file: 'pkg/Zzzunique.hx',
+				source: 'package pkg;\n\nclass Zzzunique {\n\tpublic function new() {}\n\tpublic function tag():Int return 1;\n}'
+			}
+		];
+		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		scoped.setResolutionScope({
+			declared: true,
+			sources: () -> {
+				report: report,
+				projectRoots: [],
+				library: new LibrarySources([
+					{ file: 'lib/Exception.hx', source: 'package lib;\n\nclass Exception {\n\tpublic function new() {}\n}' },
+					{
+						file: 'lib/Sub.hx',
+						source: 'package lib;\n\nclass Sub extends Exception {\n\tpublic function new() { super(); }\n'
+						+ '\tpublic function tag():Int return 2;\n}'
+					}
+				])
+			}
+		});
+		final scopedNames: Array<String> = [for (v in new PreferInline().run(report, scoped)) v.file];
+		Assert.equals(
+			'pkg/Zzzunique.hx', scopedNames.join(','), 'the twin named like a library supertype loses the finding to the simple-name key'
+		);
+		Assert.equals(2, new PreferInline().run(report, new HaxeQueryPlugin()).length, 'with no resolution scope both twins flag');
 	}
 
 	private function cls(members: String): String {

@@ -41,8 +41,11 @@ using Lambda;
  * - A method referenced anywhere in scope as a VALUE (callback registration, `.bind`,
  *   passed as an argument, stored in a var). A method-value reference cannot be inlined,
  *   so any value-position occurrence of the method's name — resolvable or not — skips it.
- *   Detected by a conservative name scan over every file: a name in value position (not a
+ *   Detected by a conservative name scan over the REPORT files: a name in value position (not a
  *   call callee) via `IdentExpr` / `FieldAccess` / `SafeFieldAccess` / `ForceFieldAccess`.
+ *   Report-scoped deliberately, and NOT a soundness gate: measured on Haxe 4.3.7, a value
+ *   reference to an `inline` method compiles and returns its value under `--dce std` and
+ *   `--dce full` alike, so this gate withholds findings rather than preventing breakage.
  * - An `override` method, and a method OVERRIDDEN by a subtype (`SubtypeGraph.hasSubtype`
  *   plus a member-name lookup across strict subtypes) — inlining would break the override; and a method FILLING an
  *   abstract-superclass slot (`MemberLookup.supertypeDeclaresMember` — Haxe requires no `override` on such an
@@ -76,8 +79,11 @@ using Lambda;
  *   members too. Pre-existing for the two unused-* rules, and safe in the same direction for all
  *   three (a spurious yes only ever withholds a report), but it is a lost opportunity, not nothing.
  * - A `dynamic` method (re-bindable at runtime), a constructor (`new`), a `macro` method, a
- *   `@:keep` method, and any method whose name is passed to `Reflect.*` as a string literal
- *   anywhere in scope (reflection-accessed) — all skipped conservatively.
+ *   `@:keep` method, and any method whose name is passed to `Reflect.*` as a
+ *   string literal anywhere in the DECLARED scope, not merely in the report set
+ *   (`ReflectionScan.scopeFiles`) — all skipped conservatively. That one IS soundness: under
+ *   `--dce full` a method both statically called and read by `Reflect.field(o, 'm')` answers
+ *   FOUND while plain and MISSING once marked `inline`, silently.
  * - A method whose single expression references itself (a bare `foo` / `this.foo`) — a
  *   potential recursive inline; a delegation to a same-named method on another receiver
  *   (`other.foo()`) is NOT a self-reference and stays a candidate.
@@ -223,18 +229,43 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		// The report index is the wrong one to ask any of the ABSENCE questions `considerClass` puts
 		// to it — no subtype overrides this, no supertype grants a build macro, no interface requires
-		// it — because a file outside the lint scope answers all three. Widened to report UNION the
-		// declared resolution scope, which is the repair the unused-* family already carries
-		// (`UnusedPrivate.run`); a plugin declaring no scope gets the report index back unchanged, so
-		// a run with no `resolutionRoots` behaves exactly as before — including a project whose only
+		// it — because a file outside the lint scope answers all three. So they are asked of report
+		// UNION the declared resolution scope, the repair the unused-* family already carries
+		// (`UnusedPrivate.run`); a plugin declaring no scope falls back to the report index, so a run
+		// with no `resolutionRoots` behaves exactly as before — including a project whose only
 		// resolvable scope is the std library, since the gate is `hasDeclaredResolutionScope`.
+		//
+		// DEMANDED PER CANDIDATE, never on entry. That index reads and parses the whole declared
+		// scope, and S187 forced it here: a one-file `--rule prefer-inline` run went 0.14s -> 3.4s.
+		// The widest index only ever REFUTES a flag, so nothing needs it until a method has survived
+		// every local gate — `considerClass` returns before touching this thunk when the class offers
+		// no locally-eligible method, and then no index is built at all, not even the report one.
+		// Measured on this tree with `--rule prefer-inline --no-oracle`, findings identical
+		// throughout: a file with no candidate goes 4.29s -> 0.12s, the harness floor, and six of
+		// eight sampled `src` files land there. A file whose candidates DO reach the absence
+		// questions still pays the full build — `PreferInline.hx` itself is one, its four
+		// single-expression methods all being interface-declared, so it stays around 3.4s. Laziness
+		// moves the cost onto the files that need it; it does not make the index cheaper.
+		//
+		// The whole tree got cheaper for a second reason: the report index used to be built here
+		// EAGERLY as the fallback, so a full run indexed the report set and then the wider set that
+		// contains it. Built inside the thunk, it is skipped whenever a declared scope answers.
+		// `src` 4.63s -> 3.58s, `src` + `test` 4.98s -> 3.70s, Pony's six roots 6.63s -> 6.10s, and
+		// all three report the same findings they did before, name for name.
+		//
 		// The price where roots ARE declared: the widest index keys types by SIMPLE name, so a class
-		// named like one std subclasses reads as having a subtype and goes unflagged (measured, a
-		// class named `Exception` loses the finding its otherwise identical twin keeps). That is the
-		// same collision `violationFor`'s `supertypeDeclaresMember` in the unused-* family already
+		// named like one the library subclasses reads as having a subtype and goes unflagged
+		// (`PreferInlineCheckTest.testSimpleNameCollisionCostsTheTwinNamedLikeALibraryType` pins the
+		// twins). That is the same collision `supertypeDeclaresMember` in the unused-* family already
 		// lives with, and it errs toward silence, which is the safe direction for a rule that WRITES.
-		final report: SymbolIndex = SymbolIndex.build(files, plugin);
-		final index: SymbolIndex = RefactorSupport.widestScopeIndex(plugin, report) ?? report;
+		var wide: Null<SymbolIndex> = null;
+		function widest(): SymbolIndex {
+			final ready: Null<SymbolIndex> = wide;
+			if (ready != null) return ready;
+			final built: SymbolIndex = RefactorSupport.widestScopeIndex(plugin) ?? SymbolIndex.build(files, plugin);
+			wide = built;
+			return built;
+		}
 		final shape: RefShape = plugin.refShape();
 		// The framework carve-out's two halves: the grammar's own naming seam (which knows the
 		// frameworks its language ships) and the project's declared roster. Resolved once per run
@@ -261,13 +292,42 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 			if (isCandidateMethod(name, fn, mods, metas, _oracleRelaxed, retained, shape) && !candidateNames.contains(name))
 				candidateNames.push(name);
 		});
-		// Pass B: the reference-kind gate over the whole scope — a candidate name used as a VALUE
-		// (a method-value reference forbids inlining) or passed to `Reflect.*` as a string literal.
+		// Pass B: the value-reference gate, over the REPORT trees. It stays report-scoped on purpose
+		// and it is NOT a soundness gate: measured on Haxe 4.3.7, `final f: Void -> Int = h.m;` over
+		// an `inline` method compiles and returns 7 under `--dce std` AND `--dce full` — the compiler
+		// keeps a physical copy for the closure. So a method-value reference in an unlinted file
+		// cannot break anything the widening would prevent; it would only cost a scope walk to
+		// withhold more findings. What the narrow scope costs is the reverse and it is fine: a value
+		// reference this run cannot see leaves the finding standing, and applying it is still legal.
 		final valueBlocked: Array<String> = [];
+		for (t in trees) collectValueRefs(t.tree, false, candidateNames, valueBlocked);
+		// Pass B2: the REFLECTION gate, over the whole declared scope and demanded per candidate.
+		// Unlike the value gate this one IS soundness: measured on Haxe 4.3.7 under `--dce full`, a
+		// method that is statically called AND read by `Reflect.field(o, 'm')` answers FOUND while
+		// plain and MISSING once marked `inline` — the fold removes the only reference DCE counted,
+		// and nothing reports it, at compile time or at run time. (With no static call site `--dce
+		// full` drops the member either way, MISSING both ways, so `inline` is not what breaks THAT
+		// one.) The scope is `ReflectionScan.scopeFiles` — the one definition every name-keyed
+		// reflection gate in the check layer shares — so a `Reflect.field` in a file this run was not
+		// asked to lint still blocks. The narrow scanner is kept rather than
+		// `ReflectionScan.reflectionSurface`: that surface is EVERY plain literal in scope, and a
+		// method name is a common word, so reading it here would withhold findings by the hundred.
+		// PRICED where the scope is UNDECLARED, which neither measured tree is: `scopeFiles` gates on
+		// `hasAnyResolutionScope`, so a std-only scope makes this gate parse the std where `widest()`
+		// above never does — measured with `--rule prefer-inline --no-oracle`, one no-config file
+		// 0.13s -> 0.49s and the haxe-formatter fork's `src` (36 files) 0.50s -> 1.04s, both back to
+		// baseline under `APQ_NO_STD=1` and finding-identical either way. Extra refusals are the safe
+		// direction; the seconds are the price and they are not zero.
+		var reflectScanned: Bool = false;
 		final reflectBlocked: Array<String> = [];
-		for (t in trees) {
-			collectValueRefs(t.tree, false, candidateNames, valueBlocked);
-			collectReflectNames(t.tree, candidateNames, reflectBlocked, shape);
+		function reflectNames(): Array<String> {
+			if (reflectScanned) return reflectBlocked;
+			reflectScanned = true;
+			for (entry in ReflectionScan.scopeFiles(files, plugin)) {
+				final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+				if (tree != null) collectReflectNames(tree, candidateNames, reflectBlocked, shape);
+			}
+			return reflectBlocked;
 		}
 		// Pass C: emit a finding for each candidate the cross-file gates leave standing. A class whose
 		// own TYPE-level annotation is not inline-neutral is skipped whole (see `metaBlockedClasses`).
@@ -276,7 +336,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 			final metaBlocked: Array<QueryNode> = metaBlockedClasses(t.tree, t.branch);
 			for (cls in CheckScan.classBodies(t.tree)) if (!metaBlocked.contains(cls))
 				considerClass(
-					out, cls, t.file, index, valueBlocked, reflectBlocked, _oracleRelaxed, t.branch, retained, naming, contracts, plugin
+					out, cls, t.file, widest, valueBlocked, reflectNames, _oracleRelaxed, t.branch, retained, naming, contracts, plugin
 				);
 		}
 		return out;
@@ -441,21 +501,51 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 
 	/**
 	 * Flag each candidate method of `cls` (a benefit-class body) that passes every soundness gate:
-	 * not value-referenced / reflection-named anywhere, not overridden by a subtype, not implementing
+	 * not value-referenced in the REPORT (a method value over `inline` compiles), not reflection-named
+	 * anywhere in the DECLARED scope (`Reflect.field` under `-dce full` silently loses an inlined
+	 * method that a static call site keeps), not overridden by a subtype, not implementing
 	 * an abstract-superclass slot, not required by an implemented interface, and — per
 	 * `isCandidateMethod` — not a reserved name (a constructor or a compiler-invoked hook), an
 	 * override, dynamic, macro, `@:keep`, already inline, or self-recursive, with its body in a
 	 * benefit class.
 	 */
 	private static function considerClass(
-		out: Array<Violation>, cls: QueryNode, file: String, index: SymbolIndex, valueBlocked: Array<String>,
-		reflectBlocked: Array<String>, relaxed: Bool, branch: MemberBranchSeams, retained: Null<String>, naming: Null<NamingSupport>,
+		out: Array<Violation>, cls: QueryNode, file: String, widest: () -> SymbolIndex, valueBlocked: Array<String>,
+		reflectNames: () -> Array<String>, relaxed: Bool, branch: MemberBranchSeams, retained: Null<String>, naming: Null<NamingSupport>,
 		contracts: Array<FrameworkContract>, plugin: GrammarPlugin
 	): Void {
 		final className: Null<String> = cls.name;
 		if (className == null) return;
 		// Re-bound to a non-null local: the narrowing does not reach into the nested callback below.
 		final owner: String = className;
+		final shape: RefShape = plugin.refShape();
+		// Defaulted to a kind no modifier run can hold: a grammar that names no static modifier then
+		// answers `false` for every member, which is this rule's safe direction (the framework carve-out
+		// stays as wide as it was).
+		final staticKind: String = shape.staticModifierKind ?? '';
+		// The LOCAL half of the gate runs FIRST and on its own, because everything below it demands the
+		// widest index — the whole declared scope read and indexed. A class offering no locally-eligible
+		// method must not pay for it, which is what makes a lint of a file with no candidate cost the
+		// harness floor instead of the index build (4.29s -> 0.12s on this tree).
+		final locals: Array<{
+			name: String,
+			fn: QueryNode,
+			span: Span,
+			isStatic: Bool
+		}> = [];
+		forEachMethod(cls, branch, (name, fn, mods, metas) -> {
+			final span: Null<Span> = fn.span;
+			if (
+				span != null && !valueBlocked.contains(name) && isCandidateMethod(name, fn, mods, metas, relaxed, retained, shape)
+			) locals.push({
+				name: name,
+				fn: fn,
+				span: span,
+				isStatic: mods.contains(staticKind)
+			});
+		});
+		if (locals.length == 0) return;
+		final index: SymbolIndex = widest();
 		// A build macro on the owner — or granted by a supertype / interface through `@:autoBuild` —
 		// writes members no scan of this source can see, an `override` of this very method in every
 		// subclass included, with no `override` keyword anywhere for the modifier gate to read and no
@@ -464,24 +554,17 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		// overridden") — another file, possibly another project.
 		if (index.traits.transitivelyCarriesBuildMacro(owner, file)) return;
 		final subtypeMembers: Array<String> = index.subtypes.hasSubtype(owner) ? index.subtypes.subtypeMemberNames(owner) : [];
-		// Read OUT of the closure below and defaulted to a kind no modifier run can hold: a grammar
-		// that names no static modifier then answers `false` for every member, which is this rule's
-		// safe direction (the framework carve-out stays as wide as it was).
-		final shape: RefShape = plugin.refShape();
-		final staticKind: String = shape.staticModifierKind ?? '';
 		final ifaces: Array<String> = implementedInterfaces(cls);
-		forEachMethod(cls, branch, (name, fn, mods, metas) -> {
-			if (!isCandidateMethod(name, fn, mods, metas, relaxed, retained, shape)) return;
-			if (valueBlocked.contains(name) || reflectBlocked.contains(name) || subtypeMembers.contains(name)) return;
+		for (candidate in locals) {
+			final name: String = candidate.name;
+			if (subtypeMembers.contains(name)) continue;
 			// An abstract-superclass implementation carries no `override` (Haxe does
 			// not require it), so the modifier gate misses it — a resolvable
 			// supertype declaring the member means this method fills a base slot and
 			// must stay physical. An unresolvable supertype stays optimistic, like
 			// the extends chain always was for this rule.
-			if (index.members.supertypeDeclaresMember(owner, name)) return;
-			if (interfaceRequires(index, ifaces, name, file)) return;
-			final span: Null<Span> = fn.span;
-			if (span == null) return;
+			if (index.members.supertypeDeclaresMember(owner, name)) continue;
+			if (interfaceRequires(index, ifaces, name, file)) continue;
 			// A method a FRAMEWORK reaches by name has ONE call site, the one that framework's own
 			// macro writes or its runtime dispatches, and it runs once — so the fold buys nothing
 			// and the rule's premise ("inlining BUYS something") is unmet. Asked through the shared
@@ -493,32 +576,33 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 			// root can sit behind a base declared in a configured library
 			// (`class T extends TestBase extends Test`), and the report index alone stops at the
 			// first supertype it cannot name — which answers "no framework" and flags the method.
-			// The index is forced ONCE per run since S187 (`run`'s `widestScopeIndex`), so this
-			// thunk is no longer what defers the parse — it only keeps the fallback local. The cost
-			// that forcing buys is real and measured on this project's own config: a one-file
-			// `--rule prefer-inline` run goes 0.14s -> 3.4s, while a whole-tree lint is unchanged
-			// (3.62s -> 3.64s — other rules force the index anyway) and finding-identical. The
-			// three ABSENCE questions `run` asks are answered on that widest index; every other
-			// question this check asks is still answered on the report index.
+			// `resolutionIndexOf` asks the WIDER gate (`hasAnyResolutionScope`, the std-only scope
+			// included) than the fallback beside it does, which is why the two are not one call; the
+			// memo behind both means this costs nothing once `widest()` above has forced it — under a
+			// DECLARED scope; a std-only scope makes `widest()` build the report index instead, and the
+			// first call here pays the resolution index build.
 			// The modifier run decides `static`, and the contract cannot claim one: utest discovers with
 			// `!isStatic && isTestName(...)`, so a `public static function testX()` in a `Test` subclass
 			// is called by nobody and the carve-out would be a free pass. The adapter used to hand
 			// `nominated` an EMPTY modifier list, so this rule and `unused-public-member` exempted every
 			// such method while `unused-private` — which passes the projected declaration — did not.
 			if (CheckScan.frameworkReachableMethod(
-				naming, name, owner, span, () -> RefactorSupport.resolutionIndexOf(plugin) ?? index, contracts, mods.contains(staticKind)
+				naming, name, owner, candidate.span, () -> RefactorSupport.resolutionIndexOf(plugin) ?? index, contracts,
+				candidate.isStatic
 			))
-				return;
+				continue;
+			// LAST, because it is the one gate that walks the whole scope a second time (`run`'s Pass B2).
+			if (reflectNames().contains(name)) continue;
 			out.push({
 				file: file,
-				span: span,
+				span: candidate.span,
 				rule: 'prefer-inline',
 				severity: Severity.Info,
-				message: isEmptyBody(fn, shape)
+				message: isEmptyBody(candidate.fn, shape)
 					? 'method \'$name\' has an empty body and no value references; mark it inline — the call compiles away'
 					: 'method \'$name\' is a single-expression method with no value references; mark it inline'
 			});
-		});
+		}
 	}
 
 	/**

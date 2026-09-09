@@ -1031,7 +1031,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.CrossScopeSoundnessTest#testNarrowReportFindsNothingTheWideRunDoesNot :: control :: '
 				+ 'M-CONFINEMENT-REPORT-INDEX-DEAD',
 			'unit.check.CrossScopeSoundnessTest#testNarrowReportWritesNothingTheWideRunRefuses :: control :: '
-				+ 'M-REFLECTION-REPORT-INDEX-DELETE,M-INLINE-SUBTYPE-REPORT-INDEX',
+				+ 'M-REFLECTION-REPORT-INDEX-DELETE,M-INLINE-SUBTYPE-REPORT-INDEX,M-INLINE-REFLECT-REPORT-SCOPE',
 			'unit.check.CrossScopeSoundnessTest#testTheScopeHalfHoldingAReflectiveStringDoesNotMatter :: control :: '
 				+ 'M-REFLECTION-SCOPE-PROJECT-ONLY',
 			'unit.check.DeadBinderCounterLoopCheckTest#testFixRewritesMapLoopAndInsertsUsing :: control :: M-SHADOWEXT-TRUE',
@@ -1113,6 +1113,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-PIEC-SPINE-CLAIM-ANY',
 			'unit.check.PreferIfExpressionChainCheckTest#testChainWithNoBooleanLeafStillFlagged :: control :: M-PIEC-SPINE-CLAIM-ANY',
 			'unit.check.PreferIndexAccessCheckTest#testObjectLiteralSetValueNotFlagged :: control :: M-PIA-OBJLIT-SET-FLAGGED',
+			'unit.check.PreferInlineCheckTest#testSimpleNameCollisionCostsTheTwinNamedLikeALibraryType :: control :: '
+				+ 'M-INLINE-SUBTYPE-REPORT-INDEX',
 			'unit.check.PreferStaticExtensionCheckTest#testGuardedImportRunGetsNoSecondUsing :: control :: M-GUARDED-USING-ABSENT',
 			'unit.check.PreferStaticExtensionCheckTest#testGuardedImportRunRefusalNamesTheRegion :: control :: M-GUARDED-USING-ABSENT',
 			'unit.check.PreferStaticExtensionCheckTest#testMessageKeepsATwoSpaceLiteral :: control :: M-RENDER-SPAN-TOKENS',
@@ -2001,6 +2003,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-UNUSED-PRIVATE-DECLINE-SILENT',
 			'M-UNUSED-PRIVATE-REGION-DECLINE-SILENT',
 			'M-INLINE-SUBTYPE-REPORT-INDEX',
+			'M-INLINE-REFLECT-REPORT-SCOPE',
 			'M-COND-NAMES-DROP-META-NAME',
 			'M-INERT-REGIONS-HARDCODED-KINDS',
 			'M-LIT-CONTENT-KINDS-SEGMENT-ONLY',
