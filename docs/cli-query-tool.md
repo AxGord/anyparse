@@ -543,6 +543,73 @@ raw stack, which is what an internal bug wants. Adding a new flag that reads
 a value through `CliArgs.expectValue` inherits this; a hand-rolled `throw` in
 a command module does not.
 
+### An unknown subcommand answers with names, not with the help page (S197)
+
+`apq <not-a-command>` used to print the whole `--help` listing — measured **5440
+bytes** on `apq members Foo`, ~1360 tokens — at a reader who mistyped one word.
+It now prints two lines: the miss with the nearest real names, and where the
+full list is. Same command, **169 bytes**:
+
+```
+apq: unknown subcommand "members" — did you mean: add-member, move-member, remove-member?
+apq: run `apq --help` for all 71 commands, or `apq <command> --help` for one
+```
+
+The ranking is `CliWalk.findFuzzy`, the same two-tier matcher (contiguous
+substring, then Levenshtein within 3) the walkers' own "did you mean" uses, so
+a near-miss cannot come to mean two different things at two entry points.
+`CliRegistry.nearest` adds exactly one thing to it: a **plural probe**. The
+command vocabulary is singular (`add-member`, `move-member`, `remove-member`)
+while the miss a reader actually makes is `members` — five edits from the
+nearest of them and a substring of none, so the shared matcher answers nothing.
+Dropping a trailing `s` and asking again is what turns that miss into the right
+answer. Nothing close enough ⇒ no `did you mean` clause at all, rather than a
+fabricated one.
+
+### `apq lint --baseline <path>`: report the delta, not the standing findings (S197)
+
+A `PostToolUse` nudge behind a write op has to answer *"did THIS edit introduce a
+finding"*, and it only has the file AFTER the edit. `--baseline <path>` gives it
+the other half:
+
+- with a readable snapshot at `<path>` (a previous `--format json` report), the
+  run reports **only** the findings that snapshot does not already carry;
+- either way it then **rewrites `<path>` with every finding of this run**, so the
+  next invocation compares against the current state.
+
+The comparison is `lint-diff`'s: a MULTISET over `(file, rule, severity,
+message)` with that module's path and measurement normalizations. That is the
+whole reason it is not a text diff in the hook — `line` and `col` are not part
+of the key, so an edit that inserts a line above a finding does not manufacture
+a delta. Measured: two lines inserted above a finding ⇒ `0 new of 1 finding(s)`.
+
+It narrows the report, the severity summary and `--fail-on` alike, so a caller
+can gate on "my edit introduced something" without the exit code and the printed
+lines disagreeing. A missing or unreadable snapshot reports everything and says
+which it was — silence would read as "your edit introduced nothing". It is
+REFUSED with `--fix`: `--baseline` narrows what the run reports, `--fix` acts on
+what it finds, and a fixer handed a thinned set would claim a converged run.
+`--range` is the flag that narrows both.
+
+### `apq lint --verbose`: what a quiet `--fix` run stops saying (S197)
+
+Two blocks are statements about what a `--fix` run WROTE, and `--fix` behind a
+write op is scoped to the lines one edit touched, so it lands zero edits most
+times it is asked:
+
+- the per-rule unfixed ledger + never-asked list + `rule census`, now printed
+  only when the run produced an edit (or under `--verbose`);
+- `compiler oracle SKIPPED (--no-oracle) …`, now printed only under `--verbose`
+  — it narrates back a flag the reader passed (a write op's `--fix` passes it
+  for them), and the run's own summary line already carries both consequences it
+  states. The OTHER netless arm, `no compilerOracle configured …`, still speaks
+  always: it reports something the reader may not know and names a remedy they
+  have not taken.
+
+Measured on one `hxq lint <one file> --fix --no-oracle` with no edit to make:
+**1819 → 206 bytes** of stderr, the 206 being the summary line that carries the
+verdict. `--verbose` restores 1407.
+
 ### The cost of a ROUND: batched queries, the TTY progress gate, and the whole-file read guard
 
 Three properties of the read-only commands that are about the price a CALLER
@@ -775,6 +842,38 @@ Distinct from the read-only query commands above: these **rewrite** source. With
 | `apq replace-node <file> (--select <sel> \| --at <l>:<c>) '<newSource>' [--reformat]` | Replace one node's source span (writer-formatted); `--select` reuses the `ast` selector (must match exactly one node), `--at` the innermost node at the cursor |
 
 Run `apq <op> --help` for the full per-op flag reference and safety boundary. The hxq skill (`~/.claude/skills/hxq/SKILL.md`) carries the authoritative safety-boundary table for every mutation op.
+
+### Choosing between `patch` and `replace-node`, and what NOT to type (S197)
+
+`patch` matches its `old` fragment **verbatim** inside the resolved node —
+byte-exact first, then dedent-tolerant — and refuses with `the old fragment
+does not occur in the resolved <Kind> node` when it does not. That refusal is
+the tool being correct, so the cost of `patch` is retyping the fragment
+exactly, and it grows with the fragment.
+
+The rule of thumb: **when the replacement covers more than about half the
+node, address the node and pass only the new text** —
+`replace-node --select '<Kind>:<name>'`. `patch` earns its keep on a few lines
+inside a bigger body, where a whole-node replacement would make you retype
+what you are not changing. Two boundary cases stay with `replace-node`
+whatever the size: a macro-time local (`rename` cannot see a bare `$name`
+reification splice), and any change to a leading modifier group — and there
+`replace-node`'s span **includes** the modifiers, so spell them verbatim.
+
+A leading `/** */` on a TYPE is trivia BEFORE that type's node, so no `patch`
+address reaches it; use `comment-rewrite` for a sentence inside it or
+`set-doc` for the whole block. A MEMBER's doc is inside the enclosing type's
+node, so `patch --select 'ClassDecl:T'` does reach it.
+
+**What you do not have to type: layout. What you do: types.** Every
+writer-emit op re-emits the file through the writer, so the text you hand it
+is canonicalised — measured on `add-member`: a body written with no leading
+tabs and `xs: Array<String>): Int` came back tab-indented and spaced by the
+project's own `hxformat.json`. Explicit types are the opposite: hxq does not
+infer them for you (`explicit-type` / `explicit-local-type` are
+OracleAssisted, so under a write op's `--fix` — which forces `--no-oracle` —
+they are inert and report-only). So skip the indentation and write every
+annotation.
 
 ### `--fix` on a write op: the lint pass, scoped to the lines the write changed
 

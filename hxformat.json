@@ -7,14 +7,9 @@
 	},
 	"emptyLines": {
 		"maxAnywhereInFile": 2,
-		"afterBlocks": "remove",
 		"afterLeftCurly": "keep",
 		"beforeRightCurly": "keep",
 		"classEmptyLines": {
-			"beginType": 1,
-			"endType": 1
-		},
-		"interfaceEmptyLines": {
 			"beginType": 1,
 			"endType": 1
 		},
@@ -109,34 +104,18 @@
 		"functionTypeHaxe3Policy": "around",
 		"functionTypeHaxe4Policy": "around",
 		"arrowFunctionsPolicy": "around",
-		"commaPolicy": "after",
 		"ifPolicy": "around",
 		"forPolicy": "around",
 		"whilePolicy": "around",
 		"switchPolicy": "around",
-		"catchPolicy": "around",
 		"binopPolicy": "around",
 		"intervalPolicy": "around",
-		"openingBracketPolicy": "none",
-		"closingBracketPolicy": "none",
 		"bracesConfig": {
 			"objectLiteralBraces": {
 				"openingPolicy": "after",
 				"closingPolicy": "before"
 			},
 			"anonTypeBraces": {
-				"openingPolicy": "after",
-				"closingPolicy": "before"
-			},
-			"typedefBraces": {
-				"openingPolicy": "after",
-				"closingPolicy": "before"
-			},
-			"blockBraces": {
-				"openingPolicy": "around",
-				"closingPolicy": "before"
-			},
-			"unknownBraces": {
 				"openingPolicy": "after",
 				"closingPolicy": "before"
 			}
@@ -155,14 +134,6 @@
 				"closingPolicy": "after"
 			},
 			"anonFuncParamParens": {
-				"openingPolicy": "none",
-				"closingPolicy": "none"
-			},
-			"forLoopParens": {
-				"openingPolicy": "before",
-				"closingPolicy": "after"
-			},
-			"expressionParens": {
 				"openingPolicy": "none",
 				"closingPolicy": "none"
 			}

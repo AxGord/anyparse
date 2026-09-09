@@ -199,6 +199,54 @@ final class CliRegistry {
 	}
 
 	/**
+	 * Subcommands a mistyped `name` plausibly meant, best first, or empty when nothing is close.
+	 *
+	 * Delegates to the walkers' own two-tier matcher (`CliWalk.findFuzzy`: contiguous substring,
+	 * then Levenshtein) so a near-miss ranks the same way at both entry points and neither can
+	 * drift into its own notion of "close".
+	 *
+	 * The one thing added here is the PLURAL probe, and it is the case that motivated the whole
+	 * function: the command vocabulary is singular (`add-member`, `move-member`,
+	 * `remove-member`) while the miss a reader actually makes is `hxq members`, which is five
+	 * edits from the nearest of them — past the distance tier's ceiling — and not a substring of
+	 * any of them either. Its singular STEM is a substring of three real commands, so dropping a
+	 * trailing `s` and asking again is what turns that miss from "no idea" into the right answer.
+	 * Tried only when the direct query found nothing, so a real plural command name (none today)
+	 * would still answer for itself.
+	 */
+	public static function nearest(name: String): Array<String> {
+		// `findFuzzy` takes the pool as a Map because its walker callers hold one; the values
+		// carry nothing.
+		final pool: Map<String, Bool> = [for (c in commands()) c.name() => true];
+		final direct: Array<String> = CliWalk.findFuzzy(name, pool);
+		return direct.length > 0 || !name.endsWith('s') ? direct : CliWalk.findFuzzy(name.substr(0, name.length - 1), pool);
+	}
+
+	/**
+	 * What `Cli.dispatch` says about a subcommand it cannot resolve: the miss, the nearest real
+	 * names, and where the full list is.
+	 *
+	 * It replaces a `printUsage()` call, and that is the whole point. The dispatcher used to
+	 * answer an unknown subcommand with the ENTIRE help page — measured 5440 bytes on `apq
+	 * members Foo`, ~1360 tokens — for a reader who mistyped one word and needs one word back.
+	 * The list is still one command away and is named here; what the reader gets by default is
+	 * the answer.
+	 *
+	 * Returned as lines rather than printed because `CliIo.stderr` is a process write with no
+	 * seam a test can read (`LintFixLedger.ledgerLines`' reason, and the same pin shape).
+	 */
+	public static function unknownCommandLines(name: String): Array<String> {
+		final hints: Array<String> = nearest(name);
+		final head: String = hints.length == 0
+			? 'apq: unknown subcommand "$name"\n'
+			: 'apq: unknown subcommand "$name" — did you mean: ${hints.join(', ')}?\n';
+		return [
+			head,
+			'apq: run `apq --help` for all ${commands().length} commands, or `apq <command> --help` for one\n'
+		];
+	}
+
+	/**
 	 * Spaces between a command's name and its description in the `apq --help` listing.
 	 *
 	 * A name that fits `HELP_NAME_WIDTH` is padded to that column and the listing reads

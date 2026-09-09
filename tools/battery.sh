@@ -569,12 +569,17 @@ branch_fmt() {
     # `.log` and `.err` kept APART, like `replay_branch` and the suite step: the
     # gate's question is "did any file drift", and that answer is on stdout
     # alone. Merging the two with `2>&1` made this gate fail on a line that
-    # names no file at all -- hxq writes a config advisory to stderr on every
-    # invocation that loads this repo's own hxformat.json (12 keys it does not
+    # names no file at all -- hxq wrote a config advisory to stderr on every
+    # invocation that loaded this repo's own hxformat.json (12 keys it did not
     # implement), so `-s` on the merged log read "some file drifted" from it and
     # the battery's single verdict was red on every run in that environment.
-    # stderr is still PRINTED whenever it is non-empty -- dropping it on success
-    # would hide a real future warning -- it just does not decide the verdict.
+    # S197 removed those twelve dead keys and `unit.grammar.haxe.
+    # HxFormatConfigNoDeadKeysTest` keeps them gone, so that particular line is
+    # not expected any more -- the SPLIT stays, because it is the general
+    # property (a stderr line is not a drifted file) and not a workaround for
+    # one message. stderr is still PRINTED whenever it is non-empty -- dropping
+    # it on success would hide a real future warning -- it just does not decide
+    # the verdict.
     # `--one-pass` carries the OTHER half of the canonical gate, and it is the
     # half `--list` structurally cannot see: `fmt` writes the writer's FIXED
     # POINT, so a file the writer settles only on its SECOND rewrite is reported

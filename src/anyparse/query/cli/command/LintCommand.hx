@@ -8,6 +8,9 @@ import anyparse.check.Severity;
 import anyparse.query.Address.TreeAddresser;
 import anyparse.query.CachingGrammarPlugin.LibrarySources;
 import anyparse.query.CachingGrammarPlugin.ResolutionScope;
+import anyparse.query.LintBaseline;
+import anyparse.query.LintDiff.LintDiffTally;
+import anyparse.query.LintDiff.LintMessageIdentities;
 import anyparse.query.SourceText;
 import anyparse.query.cli.CliContext;
 import anyparse.query.format.LintFormat;
@@ -77,6 +80,18 @@ typedef LintOpts = {
 	var inputSpecs: Array<String>;
 	// The `--range` line window, or null for the whole scope. See `LintRange`.
 	var range: Null<LintRange>;
+
+	/**
+	 * The `--baseline` snapshot path, or null. A run given one reports only the findings the
+	 * snapshot does not already carry and rewrites the snapshot with everything it found.
+	 */
+	var baseline: Null<String>;
+
+	/**
+	 * `--verbose` — bring back the accounting a quiet run withholds: the `--fix` rule census
+	 * and the `--no-oracle` net notice. It adds output, never behaviour.
+	 */
+	var verbose: Bool;
 	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag/value -> EXIT_USAGE);
 	// the caller returns this immediately and ignores the rest of the struct.
 	var errExit: Null<Int>;
@@ -152,8 +167,8 @@ final class LintCommand implements CliCommand {
 			return EXIT_RUNTIME;
 		}
 		final plugin: GrammarPlugin = io.plugin;
-		final rangeError: Null<Int> = rangeScopeError(o, paths);
-		if (rangeError != null) return rangeError;
+		final optionError: Null<Int> = optionScopeError(o, paths);
+		if (optionError != null) return optionError;
 
 		final files: Array<{ file: String, source: String }> = [];
 		final sourceOf: Map<String, String> = [];
@@ -218,7 +233,8 @@ final class LintCommand implements CliCommand {
 
 		if (o.fix)
 			return LintFixDriver.runLintFix(
-				files, activeChecks, plugin, resolveConfig, applyEnablement, resolution, oracleHxml, oracleDir, o.noOracle, o.range
+				files, activeChecks, plugin, resolveConfig, applyEnablement, resolution, oracleHxml, oracleDir, o.noOracle, o.range,
+				o.verbose
 			);
 
 		// Report mode only — the fix path returned above, so this pass never runs redundantly in a
@@ -226,9 +242,14 @@ final class LintCommand implements CliCommand {
 		// files. ONE wrapper serves both halves of the pass: the address annotation in the report
 		// reads the trees the checks just parsed out of its cache instead of parsing them again.
 		final cached: CachingGrammarPlugin = wrapResolution(plugin, resolution);
-		final all: Array<Violation> = withinRange(
+		final found: Array<Violation> = withinRange(
 			Linter.run(files, cached, activeChecks, resolveConfig, applyEnablement), f -> sourceOf[f], o.range
 		);
+		// One narrowing, applied before everything downstream: the report, the severity summary and
+		// `--fail-on` all speak about the SAME set, so a caller can gate on "my edit introduced
+		// something" without the exit code and the printed lines disagreeing. The refreshed
+		// snapshot is the full set (`found`), not this one — see `baselineDelta`.
+		final all: Array<Violation> = baselineDelta(found, o.baseline, sourceOf);
 
 		final shown: Array<Violation> = reportedViolations(all, o.includeInfo, o.format);
 		renderLintReport(paths, shown, sourceOf, o.format, o.flat, cached);
@@ -269,6 +290,8 @@ final class LintCommand implements CliCommand {
 			ruleFilters: [],
 			inputSpecs: [],
 			range: null,
+			baseline: null,
+			verbose: false,
 			errExit: code
 		};
 	}
@@ -709,6 +732,16 @@ final class LintCommand implements CliCommand {
 		CliIo.sysPrint('                   the report AND --fix. It narrows FINDINGS, not EDITS: an\n');
 		CliIo.sysPrint('                   atomic fix off a finding inside the window still writes\n');
 		CliIo.sysPrint('                   wherever its own fix says\n');
+		CliIo.sysPrint('  --baseline <p>   Report only the findings the snapshot at <p> does not already\n');
+		CliIo.sysPrint('                   carry, then refresh <p> with EVERY finding of this run. The\n');
+		CliIo.sysPrint('                   comparison is lint-diff\'s multiset over (file, rule, severity,\n');
+		CliIo.sysPrint('                   message), so an edit that shifts line numbers does not\n');
+		CliIo.sysPrint('                   manufacture a delta. It narrows the report, the summary and\n');
+		CliIo.sysPrint('                   --fail-on alike; a missing or unreadable <p> reports\n');
+		CliIo.sysPrint('                   everything and says so. Refused with --fix\n');
+		CliIo.sysPrint('  --verbose        Bring back the accounting a quiet run withholds: the --fix\n');
+		CliIo.sysPrint('                   rule census (silent on a run that wrote nothing) and the\n');
+		CliIo.sysPrint('                   --no-oracle net notice. Adds output, never behaviour\n');
 		CliIo.sysPrint('  --lang <name>    Grammar plugin (default: haxe)\n');
 		CliIo.sysPrint('  -h, --help       Show this help\n');
 	}
@@ -724,6 +757,8 @@ final class LintCommand implements CliCommand {
 		final ruleFilters: Array<String> = [];
 		final inputSpecs: Array<String> = [];
 		var range: Null<LintRange> = null;
+		var baseline: Null<String> = null;
+		var verbose: Bool = false;
 
 		var i: Int = 0;
 		while (i < args.length) {
@@ -741,6 +776,10 @@ final class LintCommand implements CliCommand {
 					fix = true;
 				case '--no-oracle':
 					noOracle = true;
+				case '--verbose':
+					verbose = true;
+				case '--baseline':
+					baseline = CliArgs.expectValue(args, ++i, '--baseline');
 				case '--range':
 					final spec: String = CliArgs.expectValue(args, ++i, '--range');
 					range = parseLintRange(spec);
@@ -789,6 +828,8 @@ final class LintCommand implements CliCommand {
 			ruleFilters: ruleFilters,
 			inputSpecs: inputSpecs,
 			range: range,
+			baseline: baseline,
+			verbose: verbose,
 			errExit: null
 		};
 	}
@@ -821,14 +862,27 @@ final class LintCommand implements CliCommand {
 	}
 
 	/**
-	 * The usage error a `--range` over a multi-file scope earns, or null when there is no
-	 * window, or the scope is the single file a window can mean something about.
+	 * The usage error this argv earns for an option it cannot honour, or null when it can.
 	 *
-	 * Its own function rather than a branch in `runLint` because a window is a claim about
-	 * ONE file's lines: applied to a directory it would narrow every file in it to the same
-	 * line numbers, which is not a narrower version of anything the caller asked for.
+	 * Two refusals, both about NARROWING. A `--range` window is a claim about ONE file's lines:
+	 * applied to a directory it would narrow every file in it to the same line numbers, which
+	 * is not a narrower version of anything the caller asked for. A `--baseline` narrows the
+	 * REPORT only, so pairing it with `--fix` would hand the fixer a set the snapshot had
+	 * already thinned.
+	 *
+	 * One function rather than two branches in `runLint` because that function sits AT its
+	 * complexity budget — measured: either refusal written inline took it to 22 against a max
+	 * of 20 — and because a refusal that reads the whole argv belongs beside its sibling
+	 * rather than in the middle of the run.
 	 */
-	private static function rangeScopeError(o: LintOpts, paths: Array<String>): Null<Int> {
+	private static function optionScopeError(o: LintOpts, paths: Array<String>): Null<Int> {
+		// REFUSED rather than ignored. `--baseline` narrows what the run REPORTS; `--fix` acts on
+		// what it FINDS, and a fixer handed a narrowed set would leave every finding the snapshot
+		// happens to carry standing while reporting a converged run.
+		if (o.baseline != null && o.fix) {
+			CliIo.stderr('apq lint: --baseline narrows the REPORT and cannot be combined with --fix (--range narrows both)\n');
+			return EXIT_USAGE;
+		}
 		if (o.range == null || paths.length == 1) return null;
 		CliIo.stderr(
 			'apq lint: --range needs a scope of exactly one file — ${CliArgs.quotedSpecs(o.inputSpecs)} matched ${paths.length}\n'
@@ -1009,6 +1063,50 @@ final class LintCommand implements CliCommand {
 			final requires: String = c is VersionGated ? ' [needs ${(cast c: VersionGated).minLanguageVersion()}]' : '';
 			CliIo.sysPrint('${c.id().rpad(' ', width)}  ${c.description()}$requires\n');
 		}
+	}
+
+	/**
+	 * `found` narrowed to what the `--baseline` snapshot does not already carry, and the
+	 * snapshot refreshed with `found` itself.
+	 *
+	 * The IO half of `LintBaseline` — the one place that reads the file, catches what a
+	 * missing or malformed snapshot throws, and writes the new one. `LintBaseline.added` is
+	 * pure and knows none of it.
+	 *
+	 * THE SNAPSHOT IS THE FULL SET, never the delta. Writing the delta would make each run's
+	 * baseline the previous run's surplus, so a finding reported once would be reported again
+	 * on the next edit and the second answer would be wrong in the direction that matters —
+	 * the reader would stop believing the first.
+	 *
+	 * A snapshot that cannot be READ is not fatal and not silent: every finding is reported
+	 * (the fail-open direction for a nudge — say too much rather than nothing) and the reason
+	 * is named, because "0 new" and "could not compare" look identical otherwise. A snapshot
+	 * that cannot be WRITTEN is the same shape: the run's own answer stands, and the next run
+	 * will simply have no baseline again.
+	 */
+	private static function baselineDelta(found: Array<Violation>, path: Null<String>, sourceOf: Map<String, String>): Array<Violation> {
+		#if (sys || nodejs)
+		if (path == null) return found;
+		final snapshot: String = path;
+		// The rule -> `messageIdentity` map, asked of the check registry exactly as `lint-diff`
+		// asks it, so a rule that masks a coordinate in its message masks it on both sides.
+		final identities: LintMessageIdentities = Linter.messageIdentities();
+		var delta: Array<Violation> = found;
+		if (FileSystem.exists(snapshot)) try {
+			final before: LintDiffTally = LintDiff.tally(LintDiff.parseReport(CliIo.readFile(snapshot)), '', identities);
+			delta = LintBaseline.added(found, before, '', identities);
+			CliIo.stderr('apq lint: baseline $snapshot: ${delta.length} new of ${found.length} finding(s)\n');
+		} catch (exception: Exception) {
+			CliIo.stderr('apq lint: baseline $snapshot is unreadable (${exception.message}) — reporting every finding\n');
+		}
+		try
+			CliIo.writeFile(snapshot, LintFormat.json(found, sourceOf))
+		catch (exception: Exception)
+			CliIo.stderr('apq lint: baseline $snapshot could not be refreshed (${exception.message})\n');
+		return delta;
+		#else
+		return found;
+		#end
 	}
 
 }
