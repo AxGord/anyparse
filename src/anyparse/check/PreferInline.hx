@@ -312,6 +312,12 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		// asked to lint still blocks. The narrow scanner is kept rather than
 		// `ReflectionScan.reflectionSurface`: that surface is EVERY plain literal in scope, and a
 		// method name is a common word, so reading it here would withhold findings by the hundred.
+		// PRICED where the scope is UNDECLARED, which neither measured tree is: `scopeFiles` gates on
+		// `hasAnyResolutionScope`, so a std-only scope makes this gate parse the std where `widest()`
+		// above never does — measured with `--rule prefer-inline --no-oracle`, one no-config file
+		// 0.13s -> 0.49s and the haxe-formatter fork's `src` (36 files) 0.50s -> 1.04s, both back to
+		// baseline under `APQ_NO_STD=1` and finding-identical either way. Extra refusals are the safe
+		// direction; the seconds are the price and they are not zero.
 		var reflectScanned: Bool = false;
 		final reflectBlocked: Array<String> = [];
 		function reflectNames(): Array<String> {
@@ -495,7 +501,9 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 
 	/**
 	 * Flag each candidate method of `cls` (a benefit-class body) that passes every soundness gate:
-	 * not value-referenced / reflection-named anywhere, not overridden by a subtype, not implementing
+	 * not value-referenced in the REPORT (a method value over `inline` compiles), not reflection-named
+	 * anywhere in the DECLARED scope (`Reflect.field` under `-dce full` silently loses an inlined
+	 * method that a static call site keeps), not overridden by a subtype, not implementing
 	 * an abstract-superclass slot, not required by an implemented interface, and — per
 	 * `isCandidateMethod` — not a reserved name (a constructor or a compiler-invoked hook), an
 	 * override, dynamic, macro, `@:keep`, already inline, or self-recursive, with its body in a
@@ -570,7 +578,9 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 			// first supertype it cannot name — which answers "no framework" and flags the method.
 			// `resolutionIndexOf` asks the WIDER gate (`hasAnyResolutionScope`, the std-only scope
 			// included) than the fallback beside it does, which is why the two are not one call; the
-			// memo behind both means this costs nothing once `widest()` above has forced it.
+			// memo behind both means this costs nothing once `widest()` above has forced it — under a
+			// DECLARED scope; a std-only scope makes `widest()` build the report index instead, and the
+			// first call here pays the resolution index build.
 			// The modifier run decides `static`, and the contract cannot claim one: utest discovers with
 			// `!isStatic && isTestName(...)`, so a `public static function testX()` in a `Test` subclass
 			// is called by nobody and the carve-out would be a free pass. The adapter used to hand

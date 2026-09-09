@@ -232,7 +232,7 @@ class CrossScopeSoundnessTest extends Test {
 	 * fourteen over the six the fixture had before S187), and unchanged by T868 — a libs-only scope holds the sibling in
 	 * NEITHER half, so widening the name-keyed seam buys nothing here: `naming` renames a field five of the six
 	 * routes reach, `unused-parameter` deletes a parameter three cross-file callers still pass, `unused-private`
-	 * deletes two live members. Sixteen are WRITES and eight are findings, which is the same defect one step earlier.
+	 * deletes two live members. Eighteen are WRITES and nine are findings, which is the same defect one step earlier.
 	 * The ten S187 added are the two cells that supply cross-file WRITE and OVERRIDE evidence: `prefer-final-field`
 	 * makes a field final that a grantee assigns, `prefer-inline` inlines a method a subtype overrides, and `naming`
 	 * / `unused-parameter` lose the same proofs on the two new routes they lose on the old ones.
