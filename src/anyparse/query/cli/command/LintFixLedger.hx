@@ -371,8 +371,18 @@ final class LintFixLedger {
 	 * silently — the composition is the only part of it a pin can hold.
 	 */
 	public static function ledgerLines(
-		ledger: Map<String, RuleFixOutcome>, checks: Array<Check>, risky: Array<Check>, oracleAssisted: Array<Check>, riskyLedgered: Bool
+		ledger: Map<String, RuleFixOutcome>, checks: Array<Check>, risky: Array<Check>, oracleAssisted: Array<Check>, riskyLedgered: Bool,
+		fixedCount: Int, verbose: Bool
 	): Array<String> {
+		// A run that WROTE NOTHING owes this block nothing, and that is the common run: `--fix`
+		// behind a write op is scoped to the lines one edit touched, so it lands 0 edits most
+		// times it is asked, and printed ~1450 bytes of rule accounting about them anyway. Every
+		// sentence here is a statement ABOUT WHAT THE RUN WROTE — which rules produced an edit,
+		// which declined one, which were never asked — so with no edits there is no claim left to
+		// make that the summary line above does not already carry. A PRODUCTIVE run still prints
+		// it in full: that was the whole point of splitting it out of the summary tail, and the
+		// 668-fix tree that said nothing about its own 161 declines is the incident behind it.
+		if (fixedCount == 0 && !verbose) return [];
 		// Empty when the risky phase RAN: its rules then have rows of their own here, and the
 		// footer that names them as absent would contradict the row three lines above it.
 		final riskyIds: Array<String> = riskyLedgered ? [] : [for (c in risky) c.id()];
@@ -391,9 +401,10 @@ final class LintFixLedger {
 
 	/** Write `ledgerLines` to stderr — the one call that turns the run's rule accounting into output. */
 	public static function printUnfixedLedger(
-		ledger: Map<String, RuleFixOutcome>, checks: Array<Check>, risky: Array<Check>, oracleAssisted: Array<Check>, riskyLedgered: Bool
+		ledger: Map<String, RuleFixOutcome>, checks: Array<Check>, risky: Array<Check>, oracleAssisted: Array<Check>, riskyLedgered: Bool,
+		fixedCount: Int, verbose: Bool
 	): Void {
-		for (line in ledgerLines(ledger, checks, risky, oracleAssisted, riskyLedgered)) CliIo.stderr(line);
+		for (line in ledgerLines(ledger, checks, risky, oracleAssisted, riskyLedgered, fixedCount, verbose)) CliIo.stderr(line);
 	}
 	#end
 

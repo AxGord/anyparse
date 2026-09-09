@@ -253,15 +253,20 @@ final class LintFixSafePass {
 	 * they get the same sentence, differing only in the remedy: one is a flag the user
 	 * passed, the other a key they can add.
 	 *
-	 * REPORT MODE IS NOT AN ARM. A lint that writes nothing has no writes to revert, so
-	 * there is no net to be missing — `Cli.oracleSkippedNote` covers what report mode
-	 * loses without an oracle (nullSafety trust), which is a different fact.
+	 * REPORT MODE IS NOT AN ARM. A lint that writes nothing has no writes to revert, so there is no net to be missing —
+	 * `Cli.oracleSkippedNote` covers what report mode loses without an oracle (nullSafety trust), which is a different fact.
+	 *
+	 * THE TWO ARMS ARE NOT EQUALLY WORTH SAYING, which is why `verbose` gates only one of them. The unconfigured arm
+	 * reports a fact the reader may not know and names a remedy they have not taken, so it speaks always. The `--no-oracle`
+	 * arm narrates back a flag the reader just passed — and `--fix` on a write op passes it for them, so it printed 161
+	 * bytes on EVERY `hxq <op> --write --fix`, while the run's own summary line already carries both consequences it states
+	 * (`N risky-fix rule(s) left report-only (no compiler oracle for this run)`). Under `--verbose` it comes back.
 	 */
-	public static function netNotice(oracleHxml: Null<String>, noOracle: Bool): Null<String> {
+	public static function netNotice(oracleHxml: Null<String>, noOracle: Bool, verbose: Bool): Null<String> {
 		return if (oracleHxml == null)
 			'apq lint --fix: no compilerOracle configured — no safe-pass revert net, risky fixes stay report-only,'
 				+ ' oracle-assisted fixes are inert; add a "compilerOracle" hxml to apqlint.json to arm it\n'
-		else if (noOracle)
+		else if (noOracle && verbose)
 			'apq lint --fix: compiler oracle SKIPPED (--no-oracle) — no safe-pass revert net, risky fixes stay report-only,'
 				+ ' oracle-assisted fixes are inert\n'
 		else

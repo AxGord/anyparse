@@ -258,8 +258,11 @@ final class Cli {
 		final cmd: String = args[0];
 		final registered: Null<CliCommand> = CliRegistry.find(cmd);
 		if (registered == null) {
-			CliIo.stderr('apq: unknown subcommand "$cmd"\n');
-			printUsage();
+			// The nearest real names, NOT the whole help page: `printUsage()` here answered one
+			// mistyped word with 5440 bytes (`apq members Foo`, measured), which is the single
+			// largest thing this CLI printed for a reader who needed a name. `CliRegistry`
+			// owns the wording and the near-miss ranking; the second line names the full list.
+			for (line in CliRegistry.unknownCommandLines(cmd)) CliIo.stderr(line);
 			return EXIT_USAGE;
 		}
 		// `--fix` is stripped ONLY for a command that declares `PostWriteFix`. `lint` owns a

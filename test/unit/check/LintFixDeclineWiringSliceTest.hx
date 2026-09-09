@@ -817,7 +817,10 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final row: RuleFixOutcome = LintFixDriver.ledgerFor(ledger, 'unused-local');
 		row.reported = 2;
 		row.declined = 2;
-		final all: String = LintFixLedger.ledgerLines(ledger, [check], [], [], false).join('');
+		// One edit, because the block is gated on a run having WRITTEN something — the quiet
+		// default `LintFixQuietDefaultTest` pins. This case is about a PRODUCTIVE run, which is
+		// the arm the doc above celebrates.
+		final all: String = LintFixLedger.ledgerLines(ledger, [check], [], [], false, 1, false).join('');
 		final decline: Int = all.indexOf('unused-local 2:');
 		final census: Int = all.indexOf('rule census — of the 1 rule(s) this run was given');
 		Assert.isTrue(decline >= 0, 'the decline row is still printed - got: $all');

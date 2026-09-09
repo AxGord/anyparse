@@ -120,6 +120,14 @@
 			"note": "the doc keeps its gutter and line breaks, so a claim wrapped across two lines is invisible — the failure mode of a line-oriented search"
 		},
 		{
+			"name": "M-CLI-UNKNOWN-NO-PLURAL-PROBE",
+			"type": "anyparse.query.cli.CliRegistry",
+			"method": "nearest",
+			"find": "\t\treturn direct.length > 0 || !name.endsWith('s') ? direct : CliWalk.findFuzzy(name.substr(0, name.length - 1), pool);",
+			"replace": "\t\treturn direct;",
+			"note": "the singular-stem retry is dropped, so `apq members` is five edits and no substring away from every real command and the unknown-subcommand notice offers nothing - the exact miss the notice replaced the whole help page to answer"
+		},
+		{
 			"name": "M-COND-FRAME-CONDITION-RAW",
 			"type": "anyparse.query.CondBranchPath",
 			"method": "conditionText",
@@ -260,6 +268,22 @@
 			"method": "typeProvablyLacksMember",
 			"force": "false",
 			"note": "no absence is ever provable, so field-init-in-constructor stops ranking a constant it could prove nothing about"
+		},
+		{
+			"name": "M-LINT-BASELINE-NO-SUBTRACTION",
+			"type": "anyparse.query.LintBaseline",
+			"method": "added",
+			"find": "\t\t\tif (left == null || left <= 0) return true;\n\t\t\tremaining[key] = left - 1;\n\t\t\treturn false;\n",
+			"replace": "\t\t\treturn true;\n",
+			"note": "the multiset subtraction is gone, so every standing finding comes back as new and `--baseline` degrades to the whole-file dump it exists to replace - silently, since a delta that is too LARGE still reads as a delta"
+		},
+		{
+			"name": "M-LINT-FIX-CENSUS-UNGATED",
+			"type": "anyparse.query.cli.command.LintFixLedger",
+			"method": "ledgerLines",
+			"find": "fixedCount == 0 && !verbose",
+			"replace": "false",
+			"note": "the zero-edit gate is dropped, so a `--fix` run that wrote nothing prints the whole per-rule accounting about it again - ~1450 bytes of stderr per write op, which is what the slice measured and removed"
 		},
 		{
 			"name": "M-MEMO-OFF",

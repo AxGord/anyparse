@@ -61,7 +61,7 @@ final class LintFixDriver {
 
 	private static function applyLintFixes(
 		files: Array<{ file: String, source: String }>, checks: Array<Check>, plugin: GrammarPlugin, resolveConfig: (String) -> LintConfig,
-		applyEnablement: Bool, range: Null<LintRange>, ?resolution: ResolutionScope, ?oracleHxml: String, ?oracleDir: String
+		applyEnablement: Bool, range: Null<LintRange>, verbose: Bool, ?resolution: ResolutionScope, ?oracleHxml: String, ?oracleDir: String
 	): Int {
 		final oracleConfigured: Bool = oracleHxml != null;
 		final split: CheckPartition = LintCommand.partitionChecks(checks, oracleConfigured);
@@ -199,7 +199,7 @@ final class LintFixDriver {
 		// run, which the tail it replaces did not — `fixed 0` was the only trigger, so this 668-fix
 		// tree said nothing whatever about the 161 findings it declined, and a productive run is
 		// exactly where the misreading lands.
-		LintFixLedger.printUnfixedLedger(ledger, checks, split.risky, oracleAssisted, risky.ledgered);
+		LintFixLedger.printUnfixedLedger(ledger, checks, split.risky, oracleAssisted, risky.ledgered, fixedCount, verbose);
 		// The summary says HOW MANY reverted; these say WHICH, and by which rule. One line per
 		// revert, nothing else: attributing three of them on an 809-file tree otherwise costs an
 		// md5 snapshot before and after plus one run per candidate rule.
@@ -887,16 +887,17 @@ final class LintFixDriver {
 	public static function runLintFix(
 		files: Array<{ file: String, source: String }>, checks: Array<Check>, plugin: GrammarPlugin, resolveConfig: (String) -> LintConfig,
 		applyEnablement: Bool, resolution: Null<ResolutionScope>, oracleHxml: Null<String>, oracleDir: Null<String>, noOracle: Bool,
-		range: Null<LintRange>
+		range: Null<LintRange>, verbose: Bool
 	): Int {
 		FmtCommand.warnCommentGuardDeclined();
 		// Said BEFORE the first write, and said in both netless arms — the flag the user passed
-		// and the config key they never added. `LintFixSafePass.netNotice` owns which.
-		final notice: Null<String> = LintFixSafePass.netNotice(oracleHxml, noOracle);
+		// and the config key they never added. `LintFixSafePass.netNotice` owns which of them
+		// speaks by default and which waits for `--verbose`.
+		final notice: Null<String> = LintFixSafePass.netNotice(oracleHxml, noOracle, verbose);
 		if (notice != null) CliIo.stderr(notice);
 		return !noOracle
-			? applyLintFixes(files, checks, plugin, resolveConfig, applyEnablement, range, resolution, oracleHxml, oracleDir)
-			: applyLintFixes(files, checks, plugin, resolveConfig, applyEnablement, range, resolution);
+			? applyLintFixes(files, checks, plugin, resolveConfig, applyEnablement, range, verbose, resolution, oracleHxml, oracleDir)
+			: applyLintFixes(files, checks, plugin, resolveConfig, applyEnablement, range, verbose, resolution);
 	}
 
 }
