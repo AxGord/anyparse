@@ -1092,14 +1092,22 @@ final class LintCommand implements CliCommand {
 		// asks it, so a rule that masks a coordinate in its message masks it on both sides.
 		final identities: LintMessageIdentities = Linter.messageIdentities();
 		var delta: Array<Violation> = found;
+		// A path that exists and is not a lint report is not a stale snapshot — it is a file the caller
+		// named by mistake, and the refresh below would atomically REPLACE its content. `--baseline`
+		// carries no `--write` and no `--fix`, so a mistyped path must not be able to destroy a file.
+		var refresh: Bool = true;
 		if (FileSystem.exists(snapshot)) try {
 			final before: LintDiffTally = LintDiff.tally(LintDiff.parseReport(CliIo.readFile(snapshot)), '', identities);
 			delta = LintBaseline.added(found, before, '', identities);
 			CliIo.stderr('apq lint: baseline $snapshot: ${delta.length} new of ${found.length} finding(s)\n');
 		} catch (exception: Exception) {
-			CliIo.stderr('apq lint: baseline $snapshot is unreadable (${exception.message}) — reporting every finding\n');
+			refresh = false;
+			CliIo.stderr(
+				'apq lint: baseline $snapshot is unreadable (${exception.message}) — reporting every finding'
+				+ ' and leaving the file alone; delete it to start a fresh snapshot\n'
+			);
 		}
-		try
+		if (refresh) try
 			CliIo.writeFile(snapshot, LintFormat.json(found, sourceOf))
 		catch (exception: Exception)
 			CliIo.stderr('apq lint: baseline $snapshot could not be refreshed (${exception.message})\n');

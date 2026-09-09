@@ -6,6 +6,7 @@ import anyparse.check.Severity;
 import anyparse.query.LintBaseline;
 import anyparse.query.LintDiff;
 import anyparse.query.format.json.LintFindingJson;
+import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
 
@@ -30,14 +31,17 @@ class LintBaselineTest extends Test {
 	 *
 	 * The second half is the load-bearing one and the reason a plain text diff of two reports
 	 * cannot do this job: an edit that inserts a line above a finding moves its `line` and
-	 * `col`, and every naive comparison then reports it as new. The pair is written as a pair
-	 * because an empty delta also passes when the two sides were never different.
+	 * `col`, and every naive comparison then reports it as new. The live side therefore carries a
+	 * real span the recorded side cannot have — a `keyOf` that folded the coordinate in would call
+	 * this one new. The pair is written as a pair because an empty delta also passes when the two
+	 * sides were never different.
 	 */
 	@:pin('control')
 	@:killer('M-LINT-BASELINE-NO-SUBTRACTION')
 	public function testAFindingThatONLYMOVEDIsNotNew(): Void {
 		final before: LintDiffTally = snapshot([record('src/A.hx', 'warning', 'unused-import', 'import a.B is unused')]);
-		Assert.equals(0, delta([violation('src/A.hx', Severity.Warning, 'unused-import', 'import a.B is unused')], before).length);
+		final moved: Violation = violation('src/A.hx', Severity.Warning, 'unused-import', 'import a.B is unused', new Span(512, 530));
+		Assert.equals(0, delta([moved], before).length);
 		// The discriminating half: same key, different rule text -> a real addition.
 		Assert.equals(1, delta([violation('src/A.hx', Severity.Warning, 'unused-import', 'import a.C is unused')], before).length);
 	}
@@ -102,11 +106,12 @@ class LintBaselineTest extends Test {
 		return Linter.messageIdentities();
 	}
 
-	/** One live finding, span-less: `added` keys on file/rule/severity/message and never on a coordinate. */
-	private static function violation(file: String, severity: Severity, rule: String, message: String): Violation {
+	/** One live finding. `added` keys on file/rule/severity/message, never on a coordinate — which is
+		why the case that means to prove that hands a real span in. */
+	private static function violation(file: String, severity: Severity, rule: String, message: String, ?span: Span): Violation {
 		return {
 			file: file,
-			span: null,
+			span: span,
 			rule: rule,
 			severity: severity,
 			message: message

@@ -195,15 +195,23 @@ digest() { # stdin → a short stable hex token
   if command -v shasum > /dev/null 2>&1; then shasum | cut -c1-16
   else cksum | tr -d ' ' | cut -c1-16; fi
 }
-CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/hxq/lint-warn/$(printf '%s' "$session" | digest)"
+CACHE_ROOT="${XDG_CACHE_HOME:-$HOME/.cache}/hxq/lint-warn"
+CACHE_DIR="$CACHE_ROOT/$(printf '%s' "$session" | digest)"
 key=$(printf '%s\n%s' "$tree" "$(printf '%s' "$files" | LC_ALL=C sort)" | digest)
 snapshot="$CACHE_DIR/$key.json"
+# Sweep the cache ROOT, and before the mkdir. A sweep of this session's OWN
+# directory can never fire — by construction it holds only what this session just
+# wrote — so every past session's directory would live forever; and an empty-dir
+# sweep after the mkdir would delete the directory the refresh lands in.
+find "$CACHE_ROOT" -type f -name '*.json' -mtime "+$CACHE_DAYS" -delete 2>/dev/null
+find "$CACHE_ROOT" -mindepth 1 -type d -empty -delete 2>/dev/null
 mkdir -p "$CACHE_DIR" 2>/dev/null || snapshot=""
-[ -z "$snapshot" ] || find "$CACHE_DIR" -type f -name '*.json' -mtime "+$CACHE_DAYS" -delete 2>/dev/null
 
 # An engine older than S197 has no `--baseline`; passing it would make the whole
 # lint exit EXIT_USAGE and the nudge would go silent, which is the one failure
-# mode worse than being verbose. Ask once.
+# mode worse than being verbose. The hook process is fresh per op, so this is
+# asked on every write rather than cached: ~0.11s measured, against the ~5s of
+# the lint it guards.
 baseline=""
 if [ -n "$snapshot" ] \
   && node "$ENGINE" lint --help 2>/dev/null | grep -q -- '--baseline'; then
@@ -218,9 +226,18 @@ fi
 # `--all` makes the hook silent on the exact finding it was built to catch.
 # The engine is invoked directly rather than through the `hxq` shim so a stale
 # `src/` can never start a Haxe build inside a hook.
+# The engine's own stderr is what says whether a subtraction HAPPENED: it prints
+# `baseline <path>: N new of M finding(s)` only on a snapshot it managed to read.
+# Asking it beats inferring from the file's existence — an unreadable snapshot
+# exists and subtracts nothing, and the tail must not then call the whole
+# standing set what this edit added.
+noise=$(mktemp "${TMPDIR:-/tmp}/hxq-lint-warn.XXXXXX") || noise=/dev/null
 # shellcheck disable=SC2086
-out=$(cd "$tree" && APQ_NO_CONFIG_WARN=1 node "$ENGINE" lint $files --all --no-oracle --flat $baseline 2>/dev/null \
+out=$(cd "$tree" && APQ_NO_CONFIG_WARN=1 node "$ENGINE" lint $files --all --no-oracle --flat $baseline 2>"$noise" \
   | grep -E ':[0-9]+:[0-9]+:')
+subtracted=no
+grep -q ' new of .* finding(s)' "$noise" 2>/dev/null && subtracted=yes
+[ "$noise" = /dev/null ] || rm -f "$noise"
 [ -n "$out" ] || exit 0
 
 count=$(printf '%s\n' "$out" | grep -c .)
@@ -228,8 +245,10 @@ shown=$(printf '%s\n' "$out" | head -"$SHOWN_MAX")
 [ "$count" -gt "$SHOWN_MAX" ] && shown="$shown
 … $((count - SHOWN_MAX)) more finding(s) not shown"
 
-if [ -n "$baseline" ]; then
+if [ "$subtracted" = yes ]; then
   tail_line="$count finding(s) this edit added, against the last nudge on these file(s)."
+elif [ -n "$baseline" ]; then
+  tail_line="$count finding(s) standing on the file(s) that op wrote — the first nudge on them in this session; later ones show only what changed."
 else
   tail_line="$count finding(s) on the file(s) that op wrote — standing ones included (this engine has no --baseline)."
 fi

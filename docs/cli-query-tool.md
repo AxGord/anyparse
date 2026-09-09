@@ -574,8 +574,12 @@ the other half:
 
 - with a readable snapshot at `<path>` (a previous `--format json` report), the
   run reports **only** the findings that snapshot does not already carry;
-- either way it then **rewrites `<path>` with every finding of this run**, so the
-  next invocation compares against the current state.
+- it then **rewrites `<path>` with every finding of this run**, so the next
+  invocation compares against the current state — unless `<path>` exists and
+  could not be read as a report, in which case the run leaves it alone. A path
+  that is there and is not a snapshot is a file the caller named by mistake, and
+  the refresh is atomic: `--baseline` carries no `--write` and must not be able
+  to destroy source. Delete it to start a fresh snapshot.
 
 The comparison is `lint-diff`'s: a MULTISET over `(file, rule, severity,
 message)` with that module's path and measurement normalizations. That is the
@@ -585,8 +589,8 @@ a delta. Measured: two lines inserted above a finding ⇒ `0 new of 1 finding(s)
 
 It narrows the report, the severity summary and `--fail-on` alike, so a caller
 can gate on "my edit introduced something" without the exit code and the printed
-lines disagreeing. A missing or unreadable snapshot reports everything and says
-which it was — silence would read as "your edit introduced nothing". It is
+lines disagreeing. A missing, empty or unreadable snapshot reports everything and
+says which it was — silence would read as "your edit introduced nothing". It is
 REFUSED with `--fix`: `--baseline` narrows what the run reports, `--fix` acts on
 what it finds, and a fixer handed a thinned set would claim a converged run.
 `--range` is the flag that narrows both.
@@ -607,8 +611,11 @@ times it is asked:
   have not taken.
 
 Measured on one `hxq lint <one file> --fix --no-oracle` with no edit to make:
-**1819 → 206 bytes** of stderr, the 206 being the summary line that carries the
-verdict. `--verbose` restores 1407.
+**1407 → 206 bytes** of stderr, the 206 being the summary line that carries the
+verdict, and `--verbose` restores the 1407 byte-for-byte. The same command also
+dropped the 412-byte `hxformat.json` advisory that the section above removes, so
+end to end the run went 1819 → 206; the two savings are independent and it is the
+1407 that this flag governs.
 
 ### The cost of a ROUND: batched queries, the TTY progress gate, and the whole-file read guard
 

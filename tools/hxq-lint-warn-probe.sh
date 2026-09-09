@@ -70,12 +70,45 @@ if [ -f "$REPO/bin/apq.js" ]; then
   # `Cli.hx` carries standing findings on any tree, so a FIRST nudge in a fresh
   # session speaks; the second, against the snapshot the first wrote, must not
   # repeat them. That pair is the whole point of the S197 rewrite.
+  # The snapshot is keyed by session id and this probe's is a CONSTANT, so the
+  # PREVIOUS run of this probe would otherwise be the thing the "first touch" case
+  # compares against: without the clear the matrix is green once and fails on every
+  # run after it.
+  probe_digest() {
+    if command -v shasum > /dev/null 2>&1; then shasum | cut -c1-16
+    else cksum | tr -d ' ' | cut -c1-16; fi
+  }
+  rm -rf "${XDG_CACHE_HOME:-$HOME/.cache}/hxq/lint-warn/$(printf '%s' probe-session | probe_digest)"
+
   first=$(run "hxq patch $F --write" "apq patch: wrote $F")
   second=$(run "hxq patch $F --write" "apq patch: wrote $F")
   if [ -n "$first" ]; then printf 'ok   %-6s %s\n' speaks "a first touch shows what is standing"
   else printf 'FAIL want=speaks got=silent  a first touch shows what is standing\n'; fails=$((fails + 1)); fi
   if [ -z "$second" ]; then printf 'ok   %-6s %s\n' silent "a second touch with no new finding says nothing"
   else printf 'FAIL want=silent got=speaks  a second touch with no new finding says nothing:\n%s\n' "$second"; fails=$((fails + 1)); fi
+
+  # The floor under the whole S197 rewrite. A hook that went PERMANENTLY silent
+  # after its first touch passes every case above, so one case has to prove the
+  # other direction: a finding the snapshot does not carry still reaches the
+  # reader, and the standing ones beside it do not come back with it.
+  P="$REPO/.hxq-probe-lint-warn"
+  trap 'rm -rf "$P"' EXIT INT TERM
+  mkdir -p "$P"
+  body='class Probe197 {\n\n\tpublic function new() {}\n\n\tpublic function f(): Int {\n\t\treturn 7777%s;\n\t}\n\n}\n'
+  # shellcheck disable=SC2059
+  printf "$body" '' > "$P/Probe197$X"
+  run "hxq patch $P/Probe197$X --write" "apq patch: wrote $P/Probe197$X" > /dev/null
+  # shellcheck disable=SC2059
+  printf "$body" ' + 4242' > "$P/Probe197$X"
+  third=$(run "hxq patch $P/Probe197$X --write" "apq patch: wrote $P/Probe197$X")
+  rm -rf "$P"
+  trap - EXIT INT TERM
+  case "$third" in
+    *'magic number 4242'*'1 finding(s) this edit added'*)
+      printf 'ok   %-6s %s\n' speaks "a NEW finding reaches the reader, and only it" ;;
+    '') printf 'FAIL want=speaks got=silent  a NEW finding reaches the reader, and only it\n'; fails=$((fails + 1)) ;;
+    *) printf 'FAIL want=speaks got=other   a NEW finding reaches the reader, and only it:\n%s\n' "$third"; fails=$((fails + 1)) ;;
+  esac
 else
   echo "skip        no $REPO/bin/apq.js — build it to probe the nudge itself"
 fi
