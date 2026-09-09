@@ -1083,7 +1083,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryStaticReturnDerefFlagged :: control :: M-NULLABLE-REPORT-INDEX',
 			'unit.check.OrphanAccessorCheckTest#testAnUnreadableCallerOutsideTheReportScopeStillDeclinesTheDeletion :: control :: '
 				+ 'M-ORPHAN-UNREADABLE-REPORT-SCOPE,M-ORPHAN-FIX-UNREADABLE-BLIND',
-			'unit.check.OrphanAccessorCheckTest#testAnUnreadableProjectFileSpellingNothingLeavesTheDeletionAvailable :: guard :: ',
+			'unit.check.OrphanAccessorCheckTest#testAnUnreadableProjectFileSpellingNothingLeavesTheDeletionAvailable :: control :: '
+				+ 'M-ORPHAN-UNREADABLE-ANY-FILE',
 			'unit.check.OrphanAccessorCheckTest#testAnUnreadableSubtypeOutsideTheReportScopeStillDowngradesTheReport :: control :: '
 				+ 'M-ORPHAN-UNREADABLE-REPORT-SCOPE,M-ORPHAN-REPORT-UNREADABLE-BLIND',
 			'unit.check.OrphanAccessorCheckTest#testAnUnreadableThirdPartyFileSpellingTheAccessorStillDeclines :: control :: '
@@ -1856,6 +1857,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-PTR-CASCADE-NEVER-STRANDS',
 			'M-TERMINAL-RUNGS-ANY',
 			'M-PIEC-SPINE-CLAIM-ANY',
+			'M-ORPHAN-UNREADABLE-ANY-FILE',
 			'M-ORPHAN-UNREADABLE-REPORT-SCOPE',
 			'M-ORPHAN-FIX-UNREADABLE-BLIND',
 			'M-ORPHAN-REPORT-UNREADABLE-BLIND',

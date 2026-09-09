@@ -1280,6 +1280,14 @@
 			"note": "every chain head reads as claimed by simplify-boolean-ternary, so the deferral fires on chains that check never touches"
 		},
 		{
+			"name": "M-ORPHAN-UNREADABLE-ANY-FILE",
+			"type": "anyparse.check.OrphanAccessor",
+			"method": "unreadableDecline",
+			"find": "\t\t\tname,\n",
+			"replace": "\t\t\t'',\n",
+			"note": "the reflection-shaped probe asks an EMPTY name, which `skippedFilesMentioning` reads as every admitted skipped file, so the per-NAME shape collapses back into the run-wide veto and an unparseable project file spelling nothing declines the deletion"
+		},
+		{
 			"name": "M-ORPHAN-UNREADABLE-REPORT-SCOPE",
 			"type": "anyparse.check.OrphanAccessor",
 			"method": "run",

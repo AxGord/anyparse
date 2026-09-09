@@ -728,7 +728,9 @@ import utest.Test;
 	 * more computed. So those two names are asked of every unreadable file in scope, and only the
 	 * property is asked per owner — the twin below.
 	 *
-	 * Green at base BY CONSTRUCTION — the report index it read held no library at all.
+	 * RED at base — the report index it read held no library at all, so nothing declined and the
+	 * deletion went through. Measured: the base-shaped cut `M-ORPHAN-UNREADABLE-REPORT-SCOPE` names
+	 * this fixture among the three it kills.
 	 */
 	@:pin('control')
 	@:killer('M-ORPHAN-UNREADABLE-REFLECTIVE-NARROWED')
@@ -780,7 +782,8 @@ import utest.Test;
 	 * `admits` admits it — it is not third-party — so the only thing between it and a whole-run veto is
 	 * that the probe asks about names.
 	 */
-	@:pin('guard')
+	@:pin('control')
+	@:killer('M-ORPHAN-UNREADABLE-ANY-FILE')
 	public function testAnUnreadableProjectFileSpellingNothingLeavesTheDeletionAvailable(): Void {
 		Assert.equals(
 			1, scopedFixEditCount(BARE_GETTER, [{ file: 'C.hx', source: BARE_GETTER }], [{ file: 'B.hx', source: UNREADABLE_INERT }])

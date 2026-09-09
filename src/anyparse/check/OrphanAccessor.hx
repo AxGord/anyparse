@@ -83,8 +83,8 @@ using StringTools;
  * hold a call, a subtype declaring the property, or a computed name — asked per name, never
  * per run); neither the class nor the member carries `@:keep` (they are reached by machinery
  * no scan models); the method name has ZERO direct call or value references — no `IdentExpr` /
- * `FieldAccess` / string-interpolation ident carries it anywhere in REPORT SCOPE; and no string
- * literal in that scope names it, a possible `Reflect.field` target whose breakage is SILENT at
+ * `FieldAccess` / string-interpolation ident carries it anywhere in the scope above (report UNION the resolution
+ * sources); and no string literal in that scope names it, a possible `Reflect.field` target whose breakage is SILENT at
  * runtime rather than a compile error. An INTERPOLATED string is matched the other way round —
  * `literalOf` answers null for one by contract, so its static `Literal` fragments are collected
  * and a fragment CONTAINED IN the method name blocks the
@@ -112,10 +112,14 @@ using StringTools;
  *
  * Widening the unreadable probe did NOT restore the whole-run veto it was split out of a flag to
  * end, and being asked per NAME is the whole of why: a scope file matters only when its text spells
- * this candidate's own accessor, property or accessor prefix. That was MEASURED rather than assumed,
- * and it refutes the premise the slice started from — over the Pony fork (eleven `resolutionLibs`) a
- * probe with no owner narrowing at all answered 3 warnings and 0 declines, and on a config-less
- * project reading the machine's Haxe std it left both deletions standing.
+ * this candidate's own accessor, property or accessor prefix. That was measured only for the PROPERTY, and the premise the slice
+ * started from is NOT refuted. The Pony reading (eleven `resolutionLibs`, 3 warnings / 0 declines) is the REPORT side: measured,
+ * its fix side declines nothing on either engine because `deletable` refuses first, so `unreadableDecline` is never reached there.
+ * The config-less reading is vacuous: the std core the scope discovers is 204 files, 0 of them skip-parse, so no scope width can
+ * decline. MEASURED against the shape neither reading covers — `resolutionLibs: ["heaps"]`, one candidate, nothing else — the base
+ * wrote 1 edit and this tip writes 0, DECLINED on `heaps/2,1,0/hxsl/Macros.hx`, which spells whole-word `get_` at six lines of
+ * macro-generated accessor names and does not parse. One unreadable haxelib source therefore DOES silence the fix over the whole
+ * project. That is the fail-CLOSED direction and it is left standing here, but it is a precision loss, not a refuted risk. T1006.
  *
  * What the OWNER narrowing (`RawSourceScan.admits`) is for is finer, and it applies to exactly one of
  * the names. Declaring a subtype is STRUCTURAL — the file has to name the type it extends — so an
@@ -620,9 +624,10 @@ private typedef Ctx = {
 	 * The RESOLUTION index and not the report one, because a skip-parsing sibling the caller did
 	 * not ask to lint is precisely the file a one-file `--fix` cannot see. The widening is safe
 	 * only because the probes reading it are per NAME and per OWNER: a scope file vetoes a
-	 * deletion when it spells that deletion's own subject, and a THIRD-PARTY one only for a
-	 * third-party candidate, so an unreadable haxelib source cannot silence the rule over the
-	 * project the way the run-wide `skippedFiles().length == 0` gate once did.
+	 * deletion when it spells that deletion's own subject, and a THIRD-PARTY one only for a third-party
+	 * candidate — but that narrowing carries ONLY the property name. The accessor name and the accessor PREFIX
+	 * are asked unnarrowed, so an unreadable haxelib source spelling whole-word `get_` DOES silence the fix
+	 * over the whole project (measured on `heaps/hxsl/Macros.hx`). Fail-closed, and a precision loss (T1006).
 	 */
 	var scopeIndex: SymbolIndex;
 
