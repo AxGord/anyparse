@@ -31,7 +31,7 @@ This convention exists so that the user does not lock themselves into a Haxe-col
 
 ## Command surface
 
-Five commands:
+The five original commands:
 
 | Command  | Purpose                                                |
 |----------|--------------------------------------------------------|
@@ -40,6 +40,10 @@ Five commands:
 | `refs`   | Value-binding references with lexical scope awareness  |
 | `uses`   | Type-position references (field/param/return/heritage) |
 | `meta`   | Metadata-on-declaration shortcut (specialization)      |
+
+(The surface has grown well past five — `apq --help` lists the live registry. The
+sections below document the ones whose CONTRACT needs stating; `lit` and `cond` are
+among them.)
 
 ### `apq ast`
 
@@ -287,6 +291,54 @@ apq meta --on <decl-kind> <files>    # list every annotation on a kind
 
 `<annotation>` syntax is the **target language's user-source annotation syntax**, not anyparse grammar metadata — for Haxe it is `@:foo` or `@bar`; for AS3 it would be `[Foo]`; for Python it would be `@foo`. The preset alias picks the syntax.
 
+### `apq lit`
+
+`apq lit <text> <file-or-dir-or-glob>...` — string-literal / leaf-name probe:
+every captured leaf whose `name` slot matches `<text>` (substring by default,
+`--exact` for full equality).
+
+**The default `--kind` is the grammar's string-content vocabulary, in EVERY quote
+spelling it has.** One string value can be spelled several ways and the spellings
+do not project alike: Haxe's single-quoted literal is a composite whose text lives
+in `stringInterpTextKind` child segments, while the double-quoted one is a single
+raw terminal whose own `name` slot is the source slice WITH its quotes. So the
+default set is `stringInterpTextKind` plus every `stringLiteralKinds` entry that is
+not itself an `interpolatingStringKinds` one (a segmented literal's own name slot
+is empty, so listing it could only mislead), and the declared quotes
+(`stringLiteralDelimiters`) come off before the compare — a WIDENING, so a query
+that spells the quotes itself still matches. `apq mentions`' third section reads
+the same delimiters, which is what lets its exact match reach a dotted path written
+in either spelling.
+
+Until S188 the default named ONE kind, and the failure was silent rather than
+merely narrow: over a directory holding `'needle'` and `"needle"`, `apq lit needle`
+printed the single-quoted hit and said nothing at all about the other — the 0-hit
+auto-widen retry fires only when NOTHING matched — while `--exact` could never
+reach the quoted spelling. The 0-hit nudge made it worse by suggesting a widening
+(`--kind Literal,IdentExpr`) that could not have found the missing hit either.
+
+**An explicit `--kind` is honoured and ANNOUNCED.** Naming only part of that
+vocabulary is a legitimate narrowing, so it still narrows — but a stderr note says
+which spelling is no longer searched and what the full set is, hit or no hit,
+because nothing in the output would otherwise say that a spelling is missing:
+
+```
+apq lit: NOTE --kind Literal covers 1 of this grammar's 2 string-literal content kind(s)
+  — content written as DoubleStringExpr is NOT searched. Add it, or pass
+  --kind Literal,DoubleStringExpr / --any-kind.
+```
+
+**Smart default:** a camelCase / snake_case `<text>` is unambiguously an identifier
+query, so the default also takes `identKind`. A pure-lowercase or all-uppercase
+single word stays content-only — it matches string content ambiguously and the
+identifier widening would flood prose hits. `--any-kind` matches every named leaf
+and also scans comments; `--include-comments` / `--include-directives` add those
+scans alongside the AST walk (see the `Comment` / `Directive` synthetic kinds).
+
+Escapes are decoded on NEITHER side: this is about the quotes, not the escaping,
+and a grammar's segmented spelling carries its escapes raw too — a consumer that
+wants the runtime value decodes it itself.
+
 ### `apq cond`
 
 `apq cond <DEFINE> <file-or-dir-or-glob>...` — for every conditional-compilation
@@ -357,6 +409,37 @@ paying for the bodies. `--max-body N` bounds each body (default 20, `0` for no c
 and names what it dropped; `--limit` counts REGIONS (so a region is never
 half-printed) and cannot bound a define used as a whole-file guard — `--max-body` is the flag that does. `--flat` prefixes
 each head line with the file instead of printing a group header.
+
+**What `--names` counts as a symbol, and why a metadata NAME is one.** A row is
+emitted for every node inside the branch whose `name` slot is symbol-shaped: an
+identifier, a dotted path of them (a guarded `import js.node.ChildProcess` is one
+row, and the most useful one such a block produces), or — since S188 — a metadata
+name written with one of the grammar's own sigils, printed WITH the sigil
+(`MetaCall @:build`). The kind column already separated the two, so keeping the
+sigil costs a reader nothing and tells a script which it has.
+
+The argument for including it is not a claim about what `@:meta` *is*; it is an
+asymmetry INSIDE one construct. Metadata ARGUMENTS were always counted — they are
+ordinary children of the annotation node — so `@:access(pkg.Other)` under a `#if`
+reported `IdentExpr pkg` and `FieldAccess Other` while the annotation deciding
+what those two mean reported nothing, and `@:native('nativeSpelling')` reported
+nothing at all. A census of what a flag reaches that counts a build macro's
+argument and hides the build macro is not a census.
+
+Two things this does NOT change. A metadata argument that is a string LITERAL
+stays out: `--names` answers symbol names, not literal content, and that drop is
+the same kind filter described below — which is why such an annotation used to
+contribute nothing whatsoever, its name dropped by shape and its argument by kind.
+And a grammar that declares no sigil (`RefShape.metadataNamePrefixes`) keeps every
+metadata name out, exactly as before the field existed.
+
+**A literal's CONTENT is never a row, in either quote spelling.** That is asked by
+KIND, not of the text — `'probe.hx'` IS a dotted pair of identifiers — so the
+`stringInterpTextKind` fragment and every `stringLiteralKinds` entry contribute no
+row while their CHILDREN still do: a `$name` shorthand and a `${ … }` hole are real
+references the branch really does touch. `apq lit` reads the same two fields with
+the opposite polarity (see below), so the two commands cannot disagree about which
+kinds carry content.
 
 ### `apq resolve-define`
 
@@ -1253,7 +1336,7 @@ The Haxe grammar plugin publishes the following commonly-navigated declaration k
 | Anonymous-type fields | `VarField`, `FinalField`, `FnField` |
 | Local declarations | `VarStmt`, `FinalStmt` |
 | Enum constructors | `SimpleCtor`, `ParamCtor` |
-| Params & bindings | `Required`, `Optional`, `Rest`, `LambdaParam` |
+| Params & bindings | `Required`, `Optional`, `Rest` |
 
 **Distinct constructs get distinct kinds — `enum` vs `enum abstract`.** These two look alike in source but parse to different kinds with different child shapes:
 
@@ -1338,6 +1421,44 @@ The matcher walks both ASTs through a generic tree-traversal interface that the 
 3. The plugin declares its metavariable token marker (`$` for most languages — configurable for languages where `$` has lexical meaning, e.g. shell).
 
 Engine code that switches on Haxe-specific types is a bug. This invariant is the difference between "Haxe AST-grep" and "universal AST-grep" — and must be enforced from the first commit.
+
+**Where it stands, measured rather than asserted (S188, on `e11018f5`).** The rule
+is about TYPES, and the engine names a Haxe type in exactly two places: the CLI
+registry, which has to construct the plugin it selects (`cli/CliArgs.hx`), and one
+real remainder — `query/FormatConfigDiscovery.hx` reaches for
+`HaxeFormatConfigDiagnostics` to warn about a config it found. A kind name spelled as
+a STRING is the same coupling with none of the compiler's help, and there are
+**549 occurrences of 126 distinct projected ctor names across 62 files** of
+`src/anyparse/query` + `src/anyparse/check` (761 / 168 / 73 if names that are also
+ordinary English words — `Static`, `Public`, `Inline` — are counted; that inclusive
+triple is the reproducible one — a second reviewer's word list gave 560 / 129 / 61
+for the exclusive count, so the narrow number is a reading of one word list, not a
+measurement). The census is
+one command against `HaxeQueryWalker.projectedKinds()`, which is the same generated
+vocabulary `unit.query.RefShapeKindProjectionTest` compares the declared side
+against:
+
+```
+hxq lit '' src/anyparse/query src/anyparse/check --kind Literal --flat   # then intersect
+```
+
+The repair per site is a `RefShape` field, and the reason to do it site by site
+rather than in one sweep is that each one is a CONTRACT question — what does this
+consumer actually need to know about the grammar — not a rename. Two shapes of that
+question have been answered so far and are worth reading as precedent: the
+string-literal vocabulary (`apq lit` / `InertRegions`, above) and the metadata
+sigils (`apq cond --names`). The biggest remaining block is the operator /
+precedence tables — `MemberKinds.SAFE_KINDS`, `InlineMethod.PURE_ARG_KINDS` and
+`ATOMIC_ROOT_KINDS`, ~78 ctor names between them — each paired with a SUFFIX
+heuristic (`kind.endsWith('Lit')`, `kind.endsWith('StringExpr')`) that guesses the
+grammar's naming CONVENTION rather than reading a declaration.
+
+A hardcoded list is invisible to the declared-vs-projected differential, which is
+its own hazard: that fixture reads `RefShape` fields, so a name moved into the shape
+gains a build-time check that it is a kind the grammar still projects, and a name
+left in an engine-side array has none. `LambdaParam` sat dead in three kind lists
+for three months on the shape side, where something eventually looked; nothing at
+all looks at the engine-side arrays.
 
 See [strategies.md](strategies.md) and [formats.md](formats.md) for the existing anyparse plugin-interface vocabulary that this engine builds on top of.
 

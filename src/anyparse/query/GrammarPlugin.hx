@@ -1169,6 +1169,21 @@ typedef RefShape = {
 	@:optional var enumAbstractMetaName: String;
 
 	/**
+	 * The sigil(s) a metadata name is written with — Haxe `@:` for a compiler annotation and `@`
+	 * for a user one. A name slot holding one of these followed by an identifier path is a
+	 * metadata NAME: a compile-time symbol, not a binding and not a reference to one.
+	 *
+	 * Read by `CondQuery` so `apq cond --names` counts a metadata name. Without it that census
+	 * was incoherent WITHIN one construct: `@:access(pkg.Other)` under a `#if` contributed
+	 * `IdentExpr pkg` and `FieldAccess Other` — its ARGUMENT — while the annotation deciding what
+	 * those two mean contributed nothing, and `@:native('x')` contributed nothing at all. The
+	 * sigil is the grammar's, not the reader's: an identifier-shape test rejects a leading `@` and
+	 * cannot tell a metadata name from a diagnostic message. Optional; unset keeps a metadata name
+	 * out of every symbol listing, as before this field existed.
+	 */
+	@:optional var metadataNamePrefixes: Array<String>;
+
+	/**
 	 * The ANNOTATION name a declaration carries to OVERLOAD an operator — Haxe `@:op`, whose
 	 * single argument is the overloaded form written with placeholder operands (`@:op(A + B)`,
 	 * `@:op(!A)`). `SymbolIndexBuilder` records the KIND that argument projects as, on every
@@ -2018,6 +2033,68 @@ typedef RefShape = {
 	 * Optional; unset makes each consumer fall back to its own default, which for `unchecked-nullable` is losing the carve-out.
 	 */
 	@:optional var stringLiteralKinds: Array<String>;
+
+	/**
+	 * The `stringLiteralKinds` members that project their content as SEGMENTS rather than
+	 * carrying it in their own `name` slot — Haxe's single-quoted, interpolating literal
+	 * (`SingleStringExpr`), whose text lives in `stringInterpTextKind` children and whose
+	 * `${ … }` holes are real expressions.
+	 *
+	 * The split matters to any consumer that walks INTO a literal: the segmented spelling has to
+	 * be handled child by child (some segments are text, some are references), while the other
+	 * spelling is one leaf. `InertRegions` reads exactly this distinction to decide whether a
+	 * literal is masked whole or segment by segment. Optional; unset means no string kind
+	 * segments, so every one of them is read as a single leaf.
+	 */
+	@:optional var interpolatingStringKinds: Array<String>;
+
+	/**
+	 * The segment kinds of an `interpolatingStringKinds` literal, BESIDE `stringInterpTextKind`,
+	 * whose bytes are literal text rather than a reference — Haxe's `$$` escape (`Dollar`) and a
+	 * `$` that no interpolation follows (`LoneDollar`).
+	 *
+	 * Named so the segment split is EXHAUSTIVE, not to change an answer: their spans hold `$`
+	 * characters only, which no identifier match can start inside, so no fixture discriminates
+	 * them from being left out. What leaving them out does is make the enumeration read as if a
+	 * `$$` were code — and their bytes are covered by no neighbouring text segment, because the
+	 * split cuts a fragment at every interpolation trigger. The reference segments
+	 * (`stringInterpIdentKind`, `stringInterpBlockKind`) are deliberately not here: a name read
+	 * through one is a real read. Optional; unset leaves the text segments alone.
+	 */
+	@:optional var stringInterpInertSegmentKinds: Array<String>;
+
+	/**
+	 * Literal kinds whose WHOLE span can neither BIND nor READ a name — Haxe's double-quoted
+	 * string (which never interpolates) and its regex literal, whose body is pattern syntax and
+	 * not Haxe. `InertRegions` masks each of these entire, where an
+	 * `interpolatingStringKinds` literal is masked segment by segment.
+	 *
+	 * NOT the same set as `stringLiteralKinds` in either direction: a regex is no string literal,
+	 * and the interpolating string literal is no inert span. Neither is it derivable from the two
+	 * — the regex kind is named nowhere else in this shape. Optional; unset masks no literal,
+	 * which is the conservative direction for its one consumer: an unmasked literal costs a
+	 * refused import, never a wrong one.
+	 */
+	@:optional var inertTextLiteralKinds: Array<String>;
+
+	/**
+	 * The string-literal kinds whose `name` slot carries the RAW source slice INCLUDING its quote
+	 * characters, mapped to the delimiter text each end of that slice holds — Haxe
+	 * `DoubleStringExpr` => `"`. Its keys are `stringLiteralKinds` minus
+	 * `interpolatingStringKinds`: a segmented literal's own name slot holds nothing.
+	 *
+	 * Read by `Lit` so a content query answers the two spellings of one literal ALIKE.
+	 * `apq lit needle` over a directory holding `'needle'` and `"needle"` printed the
+	 * single-quoted hit alone and said nothing about the other — the auto-widen that would have
+	 * found it fires only at ZERO hits — and `--exact` could never match the quoted spelling at
+	 * all. The delimiter cannot be guessed from the kind name, which is why this is a map and not
+	 * a key set: a leading-and-trailing-non-identifier-character rule is the same spelling
+	 * heuristic that hid `HexLit` from two other lists.
+	 *
+	 * Optional; unset makes every string kind's name slot read verbatim, quotes and all, which is
+	 * the behaviour before this field existed.
+	 */
+	@:optional var stringLiteralDelimiters: Map<String, String>;
 
 	/**
 	 * Nominal type names whose index-access `x[k]` yields a nullable value (Haxe's

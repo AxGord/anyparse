@@ -130,7 +130,7 @@ final class MentionsCommand implements CliCommand {
 			if (batched) CliIo.sysPrint(CliWalk.batchSection(target));
 			final usesAny: Bool = emitMentionsUses(target, valueTrees, plugin, typeShape, expanded.singleFile, o.flat);
 			final refsAny: Bool = emitMentionsRefs(target, valueTrees, refShape, o.flat, plugin.lexicalRegions);
-			final litAny: Bool = emitMentionsLit(target, valueTrees, o.limit, o.flat);
+			final litAny: Bool = emitMentionsLit(target, valueTrees, o.limit, o.flat, refShape.stringLiteralDelimiters);
 
 			final any: Bool = usesAny || refsAny || litAny;
 			if (any) anyName = true;
@@ -286,15 +286,22 @@ final class MentionsCommand implements CliCommand {
 	}
 
 	private static function emitMentionsLit(
-		target: String, valueTrees: Array<{ path: String, source: String, tree: QueryNode }>, limit: Int, flat: Bool
+		target: String, valueTrees: Array<{ path: String, source: String, tree: QueryNode }>, limit: Int, flat: Bool,
+		delimiters: Null<Map<String, String>>
 	): Bool {
 		// Section 3 — every other leaf carrying this name (case-patterns,
 		// imports, new exprs, field-name slots). `lit` with empty kind
 		// filter + exact match. `--limit` caps this section only — the
 		// precise refs/uses sections are typically small.
+		//
+		// `delimiters` is what makes the EXACT match reach a quoted name slot: a dotted import
+		// path or a reflective name written in the grammar's whole-span string spelling carries
+		// its quotes in `name`, so `mentions FooTest` used to answer `'unit.FooTest'` and not
+		// `"unit.FooTest"` — the one asymmetry a name audit cannot afford, since the wrong
+		// conclusion there is a build error one command later.
 		final litEntries: Array<{ file: String, source: String, hits: Array<LitHit> }> = [];
 		for (entry in valueTrees) {
-			final hits: Array<LitHit> = Lit.find(target, entry.tree, true, null);
+			final hits: Array<LitHit> = Lit.find(target, entry.tree, true, null, delimiters);
 			if (hits.length == 0) continue;
 			litEntries.push({ file: entry.path, source: entry.source, hits: hits });
 		}

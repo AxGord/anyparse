@@ -364,7 +364,7 @@ final class TypeRefPrinter {
 		final cached: Null<Array<Span>> = _inertRegions;
 		if (cached != null) return cached;
 		final plugin: Null<GrammarPlugin> = _plugin;
-		final regions: Array<Span> = InertRegions.of(_root, plugin == null ? [] : plugin.lexicalRegions(source));
+		final regions: Array<Span> = InertRegions.of(_root, plugin == null ? [] : plugin.lexicalRegions(source), plugin?.refShape());
 		_inertRegions = regions;
 		return regions;
 	}

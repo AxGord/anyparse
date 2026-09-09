@@ -200,6 +200,11 @@ final class CondQuery {
 		return buf.toString();
 	}
 
+	/** Whether `name` earns a row: an identifier path, or a metadata name written with one of the grammar's sigils. */
+	private static inline function symbolRow(name: String, shape: RefShape): Bool {
+		return isSymbolName(name) || isMetadataName(name, shape);
+	}
+
 	/**
 	 * Close `frame`'s current branch at `next`, the directive that ends it. The body runs from the
 	 * END of the branch's own opening directive to the START of this one, so it carries neither —
@@ -276,8 +281,9 @@ final class CondQuery {
 	 *
 	 * Two filters, answering different halves of "is this name a SYMBOL".
 	 *
-	 * SHAPE — a name that is not identifier-shaped (`isSymbolName`) contributes no row, because a
-	 * leaf's name slot is not always a symbol. Asked of the text, so it needs no grammar seam; and it
+	 * SHAPE — a name that is neither identifier-shaped (`isSymbolName`) nor a metadata name
+	 * (`isMetadataName`, the shape's own sigils) contributes no row, because a leaf's name slot is
+	 * not always a symbol. Asked of the text, so the identifier half needs no grammar seam; and it
 	 * cannot finish the job, since `'probe.hx'` IS a dotted pair of identifiers. Half a diagnostic
 	 * message and a file name reached a list of declarations that way.
 	 *
@@ -295,13 +301,26 @@ final class CondQuery {
 	 * Before the kind filter the first leaked and the second was kept out only by those quote marks,
 	 * which is an accident of the raw spelling and not a contract anything states.
 	 *
+	 * A metadata NAME is a symbol here, decided in S188 and spelled `metadataNamePrefixes` in the
+	 * shape. The argument that settled it is an asymmetry WITHIN one construct rather than a taste
+	 * about what `@:meta` is: `@:access(pkg.Other)` under a `#if` contributed `IdentExpr pkg` and
+	 * `FieldAccess Other` — its ARGUMENT, reached as an ordinary child — while the annotation that
+	 * decides what those two mean contributed nothing, and `@:native('nativeSpelling')` contributed
+	 * nothing at all. A census of what a flag reaches that counts a build macro's argument and hides
+	 * the build macro is not a census. The sigil STAYS in the row (`MetaCall @:build`), so a reader
+	 * and a script can still tell a compile-time annotation from a binding, and the kind column said
+	 * so already.
+	 *
+	 * What that does NOT change is the literal rule below: `@:native('x')`'s string argument is still
+	 * dropped by `carriesLiteralText`, which is `--names`' own semantics (symbol names, not literals)
+	 * and not a second gap.
+	 *
 	 * Two neighbouring gaps recorded here by S178 were re-measured in S181 and are NOT open:
 	 *
 	 * - METADATA ARGUMENTS ARE VISIBLE. `QueryNode` carries them as CHILDREN of the metadata node —
 	 *   `@:native('Foo.Bar')` projects `(MetaCall @:native (SingleStringExpr (Literal Foo.Bar)))`,
 	 *   `@:access(pkg.Other)` its `FieldAccess` / `IdentExpr` pair — and this walk reaches them like
-	 *   any other child, while `apq meta '@:native(...)'` matches the argument exactly. What no row
-	 *   carries is the metadata NAME, and that is `isSymbolName` rejecting a leading `@`.
+	 *   any other child, while `apq meta '@:native(...)'` matches the argument exactly.
 	 * - NEITHER FORM IS DECODED. Both string terminals are `@:rawString`, so `'a\tb'` yields the
 	 *   four-character `Literal a\tb` and not a tab; a consumer wanting the runtime value calls
 	 *   `HxStringEscape`.
@@ -311,7 +330,7 @@ final class CondQuery {
 		if (span != null && (span.to <= body.from || span.from >= body.to)) return;
 		final name: Null<String> = node.name;
 		if (
-			name != null && !carriesLiteralText(node.kind, shape) && isSymbolName(name) && span != null && span.from >= body.from
+			name != null && !carriesLiteralText(node.kind, shape) && symbolRow(name, shape) && span != null && span.from >= body.from
 			&& span.to <= body.to
 		) {
 			final row: String = '${node.kind} $name';
@@ -340,6 +359,23 @@ final class CondQuery {
 	 */
 	private static function isSymbolName(name: String): Bool {
 		return name.length != 0 && name.split('.').foreach(segment -> SourceText.isIdentifier(segment));
+	}
+
+	/**
+	 * Whether `name` is a metadata name: one of the grammar's `metadataNamePrefixes` followed by an
+	 * identifier path.
+	 *
+	 * The LONGEST matching prefix decides, because Haxe's two sigils NEST — `@:` starts with `@`, so
+	 * taking the first match in declaration order would leave `:build` as the remainder and reject
+	 * it. Read that way rather than by sorting the set: an order-dependent read of a declared
+	 * vocabulary is a coupling a grammar author has no way to know about, and it costs one pass over
+	 * a two-entry set. It is NOT allocation-free — the remainder check takes a `substr` — but it runs
+	 * only on a name that already carries a sigil, which is a minority of the named nodes it sees.
+	 */
+	private static function isMetadataName(name: String, shape: RefShape): Bool {
+		var longest: Int = -1;
+		for (prefix in shape.metadataNamePrefixes ?? []) if (name.startsWith(prefix) && prefix.length > longest) longest = prefix.length;
+		return longest >= 0 && isSymbolName(name.substr(longest));
 	}
 
 	/**

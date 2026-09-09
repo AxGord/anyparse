@@ -303,6 +303,67 @@ class CondQueryTest extends Test {
 		Assert.same(['Str looks.like.a.symbol', 'Call realCall'], undeclared, 'an undeclared vocabulary must drop nothing: $undeclared');
 	}
 
+	/**
+	 * A metadata NAME is a symbol row, and it keeps its sigil.
+	 *
+	 * The argument that settled the contract is an asymmetry INSIDE one construct, and this fixture
+	 * is that asymmetry: `@:access(pkg.Other)` contributes its ARGUMENT (`IdentExpr pkg`,
+	 * `FieldAccess Other`) as ordinary children, so a census that hid the annotation deciding what
+	 * those two mean reported the argument of a compile-time directive and not the directive. One
+	 * `Assert.same` over the whole ordered list, so the metadata rows cannot pass while a
+	 * neighbouring row went missing.
+	 *
+	 * `@:native`'s STRING argument is deliberately absent from the expected list: that is
+	 * `carriesLiteralText` doing its own job, which this change does not touch, and it is why the
+	 * annotation contributed nothing at all before — name dropped by shape, argument dropped by
+	 * kind.
+	 *
+	 * CONTROL for the metadata half. KILLED by arm `M-COND-NAMES-DROP-META-NAME`, which leaves the
+	 * identifier test alone — the pre-S188 answer, and the one a grammar declaring no
+	 * `metadataNamePrefixes` still gets.
+	 */
+	@:pin('control')
+	@:killer('M-COND-NAMES-DROP-META-NAME')
+	public function testAMetadataNameIsASymbolRowAndKeepsItsSigil(): Void {
+		final src: String = 'class C {\n\n\t#if nodejs\n\t@:access(pkg.Other)\n\t@:native(\'nativeSpelling\')\n'
+			+ '\tpublic function g(v: Int): Void {}\n\t#end\n\n}';
+		final found: Array<CondRegion> = regionsOf(src, 'nodejs');
+		final tree: QueryNode = new HaxeQueryPlugin().parseFile(src);
+		final rows: Array<String> = CondQuery.namesIn(tree, found[0].branches[0].body, SHAPE);
+		Assert.same([
+			'MetaCall @:access',
+			'FieldAccess Other',
+			'IdentExpr pkg',
+			'MetaCall @:native',
+			'FnMember g',
+			'Required v',
+			'Named Void'
+		], rows, 'a metadata name is a symbol and its argument was already one: $rows');
+	}
+
+	/**
+	 * The sigils NEST, so the longest one has to be tried first — and the shape may declare them in
+	 * either order, because nothing tells a grammar author that this reader is order-sensitive.
+	 *
+	 * Declared here in the order that BREAKS a naive scan (`@` before `@:`): under it a prefix test
+	 * taking the first match leaves `:build` as the remainder, which is no identifier, and the row
+	 * disappears. A guard rather than a control — the Haxe shape declares the safe order, so no arm
+	 * on the production code can exhibit this and only a second vocabulary can state it.
+	 */
+	public function testTheLongerSigilWinsWhateverOrderTheGrammarDeclares(): Void {
+		final body: Span = new Span(0, 40);
+		final tree: QueryNode = new QueryNode('Root', null, [
+			new QueryNode('Meta', '@:build', [], new Span(0, 10)),
+			new QueryNode('Meta', '@user', [], new Span(10, 20))
+		], body);
+		final rows: Array<String> = CondQuery.namesIn(tree, body, minimalShape(null, ['@', '@:']));
+		Assert.same(['Meta @:build', 'Meta @user'], rows, 'both sigils must resolve whatever order they were declared in: $rows');
+		// …and OPTIONAL means exactly this: declare no sigil and a metadata name is no symbol, which
+		// is the answer every grammar that has not named one still gets.
+		final undeclared: Array<String> = CondQuery.namesIn(tree, body, minimalShape());
+		Assert.same([], undeclared, 'an undeclared sigil set must admit nothing: $undeclared');
+	}
+
 	/** A source with no `#if` at all yields nothing, and a grammar declaring no opener keyword cannot yield anything either. */
 	public function testASourceWithNoRegionYieldsNothing(): Void {
 		Assert.equals(0, regionsOf('class C {\n\tvar x:Int = 0;\n}', 'nodejs').length);
@@ -330,10 +391,10 @@ class CondQueryTest extends Test {
 
 	/**
 	 * A `RefShape` carrying only the six fields the typedef requires, plus whichever whole-literal
-	 * kinds the caller names — the smallest SECOND vocabulary this class can hand `namesIn`, and the
-	 * only way to exercise a grammar that declares none.
+	 * kinds and metadata sigils the caller names — the smallest SECOND vocabulary this class can
+	 * hand `namesIn`, and the only way to exercise a grammar that declares none.
 	 */
-	private static function minimalShape(?stringLiteralKinds: Array<String>): RefShape {
+	private static function minimalShape(?stringLiteralKinds: Array<String>, ?metadataNamePrefixes: Array<String>): RefShape {
 		return {
 			identKind: 'Ident',
 			declHostKinds: [],
@@ -341,7 +402,8 @@ class CondQueryTest extends Test {
 			scopeKinds: [],
 			writeParentKinds: [],
 			selfScopeDeclKinds: [],
-			stringLiteralKinds: stringLiteralKinds
+			stringLiteralKinds: stringLiteralKinds,
+			metadataNamePrefixes: metadataNamePrefixes
 		};
 	}
 

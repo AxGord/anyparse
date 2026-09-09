@@ -266,7 +266,11 @@ final class CliWalk {
 			case 'Metavar':
 				'${prefix}is a lone metavar — matches every node. Narrow with structural context ('
 					+ 'e.g. "$$x.field", "func($$x)"), or look up by name: apq refs <name> --decls / apq uses <Type>. Searching anyway.';
-			case 'Literal', 'StringLit', 'BoolLit', 'IntLit', 'FloatLit', 'SingleStringExpr', 'DoubleStringExpr', 'RawString':
+			// `HexLit` was missing and `StringLit` / `RawString` name nothing this grammar projects, so
+			// `apq search '0xFF'` fell through to the identifier arm and advised `apq refs` / `apq uses`
+			// on a literal. Measured in review of S188; the principled form is a shape field, which is
+			// the same question T901 / T902 park for the operator tables.
+			case 'Literal', 'BoolLit', 'IntLit', 'FloatLit', 'HexLit', 'SingleStringExpr', 'DoubleStringExpr':
 				'${prefix}is a bare literal — for literal-content lookup use: apq lit \'$patternStr\' <files>. Searching anyway.';
 			case _:
 				// Bare identifier (IdentExpr) and anything else that
@@ -298,11 +302,12 @@ final class CliWalk {
 	 *    Silent when nothing close enough qualifies.
 	 */
 	public static function emptyWalkerNudge(
-		cmd: String, name: Null<String>, scanned: Int, parseable: Int, ?skipEntries: Array<SkipEntry>, ?candidates: Map<String, Bool>
+		cmd: String, name: Null<String>, scanned: Int, parseable: Int, ?skipEntries: Array<SkipEntry>, ?candidates: Map<String, Bool>,
+		?widenKinds: Array<String>
 	): String {
 		final summary: String = 'apq $cmd: 0 hits ($scanned file(s) scanned, $parseable parseable)';
 		final tail: StringBuf = new StringBuf();
-		if (name != null) tail.add(nudgeNameHint(cmd, name));
+		if (name != null) tail.add(nudgeNameHint(cmd, name, widenKinds));
 		tail.add(nudgeSkipWarning(cmd, skipEntries));
 		tail.add(nudgeFuzzy(cmd, name, candidates));
 		return summary + tail.toString();
@@ -467,7 +472,7 @@ final class CliWalk {
 	 * a structural-search redirect; otherwise the per-command cascade
 	 * (refs/uses/blast/lit) suggests the right walker for the name's case.
 	 */
-	private static function nudgeNameHint(cmd: String, n: String): String {
+	private static function nudgeNameHint(cmd: String, n: String, ?widenKinds: Array<String>): String {
 		final first: Int = n.length > 0 ? n.fastCodeAt(0) : 0;
 		final isUpper: Bool = first >= 'A'.code && first <= 'Z'.code;
 		final isLower: Bool = first >= 'a'.code && first <= 'z'.code;
@@ -476,7 +481,7 @@ final class CliWalk {
 		if (leadingDot == null || cmd != 'lit' && cmd != 'refs' && cmd != 'uses')
 			return dotted != null && (cmd == 'lit' || cmd == 'refs' || cmd == 'uses')
 				? nudgeDottedHint(cmd, n, dotted)
-				: nudgeCommandHint(cmd, n, isUpper, isLower);
+				: nudgeCommandHint(cmd, n, isUpper, isLower, widenKinds);
 		// Leading-dot query (`.expr`, `.body`) — user is hunting a
 		// field-access shape but typed the SLOT name only. lit
 		// won't capture the leading `.` (FieldAccess leaves are
@@ -512,7 +517,13 @@ final class CliWalk {
 	 * Per-command 0-hit hint (refs/uses/blast/lit), branching on the query
 	 * name's leading case to point at the complementary walker.
 	 */
-	private static function nudgeCommandHint(cmd: String, n: String, isUpper: Bool, isLower: Bool): String {
+	private static function nudgeCommandHint(cmd: String, n: String, isUpper: Bool, isLower: Bool, ?widenKinds: Array<String>): String {
+		// The `lit` arm names the kind set to RETRY WITH, and it has to be the caller's — the
+		// grammar's string-content vocabulary plus its identifier kind. The wording used to spell
+		// `Literal,IdentExpr`, one grammar's ctor names hardcoded in the agnostic DX layer, and it
+		// was WRONG as advice as well: neither of those two kinds reaches double-quoted content,
+		// so the suggested widening could not have found the very hit the user was missing.
+		final widen: String = (widenKinds ?? []).join(',');
 		return switch cmd {
 			case 'refs':
 				if (isUpper)
@@ -520,8 +531,8 @@ final class CliWalk {
 						+ ' <dir> (full change-impact incl. field-access), or apq lit \'$n'
 						+ '\' <dir> --any-kind (every leaf — case-patterns / imports / new exprs).';
 				else
-					' — "$n" has no value-binding here. Locals/params are NOT indexed. Try: apq lit \'$n\' <dir> --any-kind (every '
-						+ 'leaf — strings/idents/field-names) or apq search \'$$x.$n\' <dir> (field-access shape).${CliWalk.macroEmitHint(n)}';
+					' — "$n" has no value-binding here. Locals/params are NOT indexed. Try: apq lit \'$n\' <dir> --any-kind (every leaf '
+						+ '— strings/idents/field-names) or apq search \'$$x.$n\' <dir> (field-access shape).${CliWalk.macroEmitHint(n)}';
 			case 'uses':
 				if (isLower)
 					' — "$n" starts lowercase, not a TypeName. Try: apq refs $n <dir> (value bindings) or apq lit \'$n'
@@ -534,13 +545,13 @@ final class CliWalk {
 					+ ' <dir> + apq refs $n <dir> directly.';
 			case 'lit':
 				if (CliWalk.looksLikeMixedIdentifier(n))
-					' — no Literal/IdentExpr leaf matches "$n" (camelCase/snake_case query → default kind widened to Literal+IdentExpr; '
-						+ '--exact for full equality). Try --any-kind (every leaf — incl. field-name slots), apq refs $n'
+					' — no $widen leaf matches "$n" (camelCase/snake_case query → default kind already widened to the identifier '
+						+ 'kind; --exact for full equality). Try --any-kind (every leaf — incl. field-name slots), apq refs $n'
 						+ ' <dir> --decls, or apq search \'$$x.$n\' <dir> (field-access shape).';
 				else
-					' — no string-literal content matches "$n'
-						+ '" (default: substring on Literal leaves; --exact for full equality). Widen the kind set with --kind Literal,'
-						+ 'IdentExpr or --any-kind (catches every leaf — incl. field-name slots), or try: apq refs $n <dir> --decls.';
+					' — no string-literal content matches "$n" (default: substring on this grammar\'s string-content kinds, every quote '
+						+ 'spelling; --exact for full equality). Widen the kind set with --kind $widen'
+						+ ' or --any-kind (catches every leaf — incl. field-name slots), or try: apq refs $n <dir> --decls.';
 			case 'meta':
 				''; // meta has no <name> arg (annotation is its own thing) — leave silent.
 			case _:

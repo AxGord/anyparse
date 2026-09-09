@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
 
@@ -35,70 +36,66 @@ import anyparse.runtime.Span;
 @:nullSafety(Strict)
 final class InertRegions {
 
-	/** The INTERPOLATING string kind (Haxe single quotes) — masked segment by segment, never whole. */
-	private static inline final INTERP_STRING_KIND: String = 'SingleStringExpr';
-
-	/**
-	 * Literal kinds whose WHOLE span is inert text — a double-quoted string (Haxe never
-	 * interpolates one) and a regex literal, whose body is pattern syntax, not Haxe. Neither can
-	 * bind or read a name, so both are masked entire.
-	 */
-	private static final WHOLE_LITERAL_KINDS: Array<String> = ['DoubleStringExpr', 'RegexLit'];
-
-	/**
-	 * The segments of an interpolating literal that carry TEXT: a plain fragment, the escaped
-	 * dollar `$$` and a lone trailing `$`. Its OTHER segments — the `$name` shorthand (`Ident`)
-	 * and the `${ … }` hole (`Block`) — are real references and are deliberately absent.
-	 *
-	 * The two dollar forms are listed to keep the split of the segment kinds exhaustive, not to
-	 * change an answer: their spans hold `$` characters only, which no identifier match can start
-	 * inside, so no fixture can discriminate them. Their bytes are NOT covered by a neighbouring
-	 * `Literal` — the split cuts a fragment at every trigger — so dropping them would leave the
-	 * enumeration reading as if a `$$` were code.
-	 */
-	private static final TEXT_SEGMENT_KINDS: Array<String> = ['Literal', 'Dollar', 'LoneDollar'];
-
 	/**
 	 * Every inert region of one source: the comment spans among its scanned `regions` first, then the
 	 * literal-text spans of `root`, its parsed top level, in tree order. A null `root` (a caller with
 	 * no parsed file) yields the comment half alone, which is the conservative reading: an unmasked
-	 * literal only ever costs a refusal.
+	 * literal only ever costs a refusal. A null `shape` yields the same half for the same reason.
 	 *
-	 * The regions come from the caller because the scan is the GRAMMAR's
-	 * (`GrammarPlugin.lexicalRegions`) — this class is grammar-agnostic and never picks a lexer.
+	 * Both the regions and the shape come from the caller because both are the GRAMMAR's
+	 * (`GrammarPlugin.lexicalRegions` / `GrammarPlugin.refShape`) — this class is grammar-agnostic,
+	 * never picks a lexer and, since S188, no longer spells a ctor name of one grammar either. The
+	 * three vocabularies it used to hardcode are `interpolatingStringKinds`,
+	 * `inertTextLiteralKinds` and `stringInterpTextKind` + `stringInterpInertSegmentKinds`.
 	 */
-	public static function of(root: Null<QueryNode>, regions: Array<LexRegion>): Array<Span> {
+	public static function of(root: Null<QueryNode>, regions: Array<LexRegion>, shape: Null<RefShape>): Array<Span> {
 		final out: Array<Span> = SourceComments.collectCommentRegions(regions);
-		if (root != null) collectLiterals(root, out);
+		if (root != null && shape != null) collectLiterals(root, shape, textSegmentKinds(shape), out);
+		return out;
+	}
+
+	/**
+	 * The segment kinds of an interpolating literal that carry TEXT: the plain fragment
+	 * (`stringInterpTextKind`) and the inert interpolation triggers
+	 * (`stringInterpInertSegmentKinds` — Haxe's `$$` and a lone `$`). Its OTHER segments, the
+	 * `$name` shorthand and the `${ … }` hole, are real references and are deliberately absent.
+	 *
+	 * Built once per `of` rather than per node: the shape rebuilds its struct on every read, and
+	 * this walk asks the question at every child of every interpolating literal in the file.
+	 */
+	private static function textSegmentKinds(shape: RefShape): Array<String> {
+		final text: Null<String> = shape.stringInterpTextKind;
+		final out: Array<String> = text == null ? [] : [text];
+		for (kind in shape.stringInterpInertSegmentKinds ?? []) out.push(kind);
 		return out;
 	}
 
 	/**
 	 * Append to `out` every span of `node`'s subtree that is inert LITERAL text.
 	 *
-	 * A double-quoted string and a regex literal go in whole (`WHOLE_LITERAL_KINDS`). An
-	 * interpolating literal goes in segment by segment: its text fragments are inert, its `$name`
-	 * and `${ … }` segments are references and are LEFT OUT, so a name read through one still
-	 * vetoes. The reference segments are recursed into rather than skipped, which is what masks a
-	 * nested literal — the `"Bar"` of `'a ${ "Bar" } b'` is text like any other.
+	 * An `inertTextLiteralKinds` literal goes in whole. An `interpolatingStringKinds` one goes in
+	 * segment by segment: its text fragments (`textSegments`) are inert, its `$name` and
+	 * `${ … }` segments are references and are LEFT OUT, so a name read through one still vetoes.
+	 * The reference segments are recursed into rather than skipped, which is what masks a nested
+	 * literal — the `"Bar"` of `'a ${ "Bar" } b'` is text like any other.
 	 *
 	 * A `${ … }` the ESCAPE rescan discovered carries no child expression (see
 	 * `HxInterpProjection`), so nothing inside it is masked and every name it spells keeps its
 	 * veto — the fail-closed direction for a hole anyparse cannot read.
 	 */
-	private static function collectLiterals(node: QueryNode, out: Array<Span>): Void {
+	private static function collectLiterals(node: QueryNode, shape: RefShape, textSegments: Array<String>, out: Array<Span>): Void {
 		final span: Null<Span> = node.span;
-		if (span != null && WHOLE_LITERAL_KINDS.contains(node.kind)) {
+		if (span != null && (shape.inertTextLiteralKinds ?? []).contains(node.kind)) {
 			out.push(span);
 			return;
 		}
-		final interpolating: Bool = node.kind == INTERP_STRING_KIND;
+		final interpolating: Bool = (shape.interpolatingStringKinds ?? []).contains(node.kind);
 		for (child in node.children) {
 			final childSpan: Null<Span> = child.span;
-			if (interpolating && childSpan != null && TEXT_SEGMENT_KINDS.contains(child.kind))
+			if (interpolating && childSpan != null && textSegments.contains(child.kind))
 				out.push(childSpan);
 			else
-				collectLiterals(child, out);
+				collectLiterals(child, shape, textSegments, out);
 		}
 	}
 

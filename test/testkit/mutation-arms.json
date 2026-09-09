@@ -2502,6 +2502,53 @@
 			"find": "\tfinal index: SymbolIndex = RefactorSupport.widestScopeIndex(plugin, report) ?? report;",
 			"replace": "\tfinal index: SymbolIndex = report;",
 			"note": "the subtype / build-macro / interface ABSENCE questions go back to the report index, so `hxq lint <one file> --fix` inserts `inline` on a method a subtype in an unlinted file overrides — the S177 shape in the prefer-inline rule"
+		},
+		{
+			"name": "M-COND-NAMES-DROP-META-NAME",
+			"type": "anyparse.query.CondQuery",
+			"method": "symbolRow",
+			"find": "return isSymbolName(name) || isMetadataName(name, shape);",
+			"replace": "return isSymbolName(name);",
+			"note": "a symbol row is an identifier path again, so `cond --names` reports a metadata ARGUMENT and hides the annotation that decides what the argument means — the S188 asymmetry, and the answer a grammar declaring no `metadataNamePrefixes` still gets"
+		},
+		{
+			"name": "M-INERT-REGIONS-HARDCODED-KINDS",
+			"type": "anyparse.query.InertRegions",
+			"method": "collectLiterals",
+			"find": ["(shape.inertTextLiteralKinds ?? []).contains(node.kind)","final interpolating: Bool = (shape.interpolatingStringKinds ?? []).contains(node.kind);"],
+			"replace": ["['DoubleStringExpr', 'RegexLit'].contains(node.kind)","final interpolating: Bool = node.kind == 'SingleStringExpr';"],
+			"note": "the two kind vocabularies go back to Haxe ctor names spelled inside the grammar-agnostic masker, so the mask no longer follows the DECLARATION: a shape naming nothing inert still gets its literals masked"
+		},
+		{
+			"name": "M-LIT-CONTENT-KINDS-SEGMENT-ONLY",
+			"type": "anyparse.query.Lit",
+			"method": "contentKinds",
+			"find": "for (kind in shape.stringLiteralKinds ?? []) if (!segmented.contains(kind) && !out.contains(kind)) out.push(kind);",
+			"replace": "",
+			"note": "the content vocabulary shrinks back to the interpolating literal's text segment alone — the one kind `apq lit` used to hardcode — so a query over a scope holding the same needle in both quote spellings prints half its matches and says nothing about the other half"
+		},
+		{
+			"name": "M-LIT-DELIMITERS-IGNORED",
+			"type": "anyparse.query.Lit",
+			"method": "walk",
+			"find": "final hit: Bool = matches(n, target, exact) || content != null && matches(content, target, exact);",
+			"replace": "final hit: Bool = matches(n, target, exact);",
+			"note": "the declared quotes stay on the name slot for the compare, so `--exact` can never match content written in the grammar's whole-span string spelling and the two spellings answer differently again"
+		},
+		{
+			"name": "M-LIT-CONTENT-KINDS-FROZEN",
+			"type": "anyparse.query.Lit",
+			"method": "contentKinds",
+			"force": "['Literal', 'DoubleStringExpr']",
+			"note": "the content vocabulary freezes into this grammar's ctor names again - wide enough to pass every fixture that reads the Haxe shape, which is why review found the derivation itself unpinned, and no longer read from the declaration at all"
+		},
+		{
+			"name": "M-INERT-SEGMENT-KINDS-HARDCODED",
+			"type": "anyparse.query.InertRegions",
+			"method": "textSegmentKinds",
+			"find": "for (kind in shape.stringInterpInertSegmentKinds ?? []) out.push(kind);",
+			"replace": "for (kind in ['Dollar', 'LoneDollar']) out.push(kind);",
+			"note": "the inert segment kinds go back to Haxe ctor names inside the agnostic masker - the THIRD vocabulary of this class, the one the multi-pair arm on `collectLiterals` does not reach - so the segment split no longer follows the declaration"
 		}
 	]
 }
