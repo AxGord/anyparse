@@ -105,6 +105,15 @@ using StringTools;
 final class UnusedPrivate implements Check implements ConfigAware implements FrameworkAware {
 
 	/**
+	 * The one decline sentence two gates share: a member of a macro-built type, and a private empty
+	 * constructor of one. Named rather than spelled twice so the `--fix` ledger, which buckets by
+	 * exact text, keeps them one row and the two cannot drift apart. Every other gate spells its
+	 * sentence inline, at its own condition.
+	 */
+	private static inline final DECLINE_BUILD_MACRO: String = 'the enclosing type is under a `@:build` macro, which reads the '
+		+ 'field list this deletion would change';
+
+	/**
 	 * RESOLUTION-scope string-literal contents gathered by the last `run` — `ReflectionScan.reflectionSurface`,
 	 * report files UNION the library — consulted by `fix`'s reflection gate. Null until `run` populates it;
 	 * `fix` then asks the same seam with the one source it is handed, which still unions the resolution scope.
@@ -219,6 +228,16 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	 * all. Emptying one leaves a shape the grammar does not model, and the re-parse gate then drops
 	 * every edit the pass had for the file — including the other checks'. The per-member gates
 	 * above cannot see it, since each is decided alone; the question is per EDIT SET.
+	 *
+	 * EVERY one of those gates writes its own sentence on the finding it declines, so `apq lint
+	 * --fix` names the cause instead of reporting a bare `declined` (`Violation.declineReason`, whose
+	 * only reader is that ledger — no reported byte moves). Ten gates, ten sentences: the two shape
+	 * gates in `shapeDecline`, the four type-level ones in `memberDeclineReason`, the reflected-name
+	 * one beside them, the two the constructor / conditional arms decide here, and the region one
+	 * `noteRegionDeclines` attributes. The two remaining `continue`s get NONE by intent: a finding
+	 * with no span, and one whose span matches no member of THIS source, are not gates that closed —
+	 * they are a violation this call cannot place, and a sentence there would be invented rather
+	 * than the deciding gate speaking.
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
@@ -241,6 +260,9 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 			.whole;
 
 		final deleting: Array<QueryNode> = [];
+		// The finding behind each member this call TRIED to delete, so the region gate below can name
+		// the one it took down. Keyed on the span the report and `memberByFrom` already agree on.
+		final attempted: Map<Int, Violation> = [];
 		for (v in violations) if (v.severity == Severity.Warning) {
 			final span: Null<Span> = v.span;
 			if (span == null) continue;
@@ -248,19 +270,40 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 			if (hit == null) continue;
 			final node: QueryNode = hit.node;
 			final owner: Null<String> = hit.parent.name;
+			inline function attempt(): Void {
+				deleting.push(node);
+				attempted[span.from] = v;
+			}
 			if (isPrivateEmptyCtor(node)) {
-				if (hasConditional) continue;
+				if (hasConditional) {
+					v.declineReason = 'this is a private empty constructor and the file carries an `#if` region, so the '
+						+ 'never-instantiated proof behind its deletion is a whole-file one conditional compilation voids';
+					continue;
+				}
 				final ctorMeta: Null<{ hasBuild: Bool, hasKeep: Bool }> = owner == null ? null : classMeta[owner];
-				if (ctorMeta == null || !ctorMeta.hasBuild) deleting.push(node);
+				if (ctorMeta == null || !ctorMeta.hasBuild)
+					attempt();
+				else
+					v.declineReason = DECLINE_BUILD_MACRO;
 				continue;
 			}
-			if (hasConditional && referencedElsewhere(node.name, v.file, span, scopeIndex, source)) continue;
-			if (memberDeletable(node, owner, hit.inExtends, index, classMeta, reflected)) deleting.push(node);
+			if (hasConditional && referencedElsewhere(node.name, v.file, span, scopeIndex, source)) {
+				v.declineReason = 'the file carries an `#if` region and the name occurs elsewhere in the resolution scope, so which '
+					+ 'branch reads it is not decidable from here';
+				continue;
+			}
+			final decline: Null<String> = memberDeclineReason(node, owner, hit.inExtends, index, classMeta, reflected);
+			if (decline == null)
+				attempt();
+			else
+				v.declineReason = decline;
 		}
 		final shape: RefShape = plugin.refShape();
-		for (member in survivingPerType(
+		final surviving: Array<QueryNode> = survivingPerType(
 			tree, MemberBranchScan.seamsOf(shape, source, plugin.lexicalRegions.bind(source)), shape.conditionalMemberKind, deleting
-		)) {
+		);
+		noteRegionDeclines(deleting, surviving, attempted);
+		for (member in surviving) {
 			final span: Null<Span> = member.span;
 			final hit: Null<{ node: QueryNode, parent: QueryNode, inExtends: Bool }> = span == null ? null : memberByFrom[span.from];
 			if (span != null && hit != null)
@@ -431,20 +474,24 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	}
 
 	/**
-	 * Whether removing `member`'s declaration drops no behaviour: a body-bearing
-	 * method never executes at its site (deletable); a body-less declaration is a
-	 * contract whose implementation lives elsewhere (never deletable); a field is
-	 * deletable only when it has no initializer or a side-effect-free one (its
-	 * first child is the initializer expression).
+	 * Why removing `member`s declaration would drop behaviour, or null when it drops none: a
+	 * body-bearing method never executes at its site (deletable); a body-less declaration is a
+	 * contract whose implementation lives elsewhere (never deletable); a field is deletable only
+	 * when it has no initializer or a side-effect-free one (its first child is the initializer
+	 * expression).
 	 */
-	private static function deletableMember(member: QueryNode): Bool {
+	private static function shapeDecline(member: QueryNode): Null<String> {
 		// A body-less declaration has no dead code to remove — its implementation
 		// lives elsewhere (an `extern`'s in native code; an `abstract`'s in
 		// subclasses, though those are already exempt in `violationFor`).
-		for (c in member.children) if (c.kind == 'NoBody') return false;
-		if (member.kind != 'VarMember' && member.kind != 'FinalMember') return true;
+		for (c in member.children) if (c.kind == 'NoBody')
+			return 'the declaration has no body, so the implementation this would delete lives outside the file (an `extern` member '
+				+ 'in native code) and there is no dead code here to remove';
+		if (member.kind != 'VarMember' && member.kind != 'FinalMember') return null;
 		final init: Null<QueryNode> = member.children.length > 0 ? member.children[0] : null;
-		return init == null || MemberKinds.isSideEffectFree(init);
+		return init == null || MemberKinds.isSideEffectFree(init)
+			? null
+			: 'the initializer is not provably side-effect-free, so deleting the field would drop whatever it does';
 	}
 
 	/**
@@ -662,25 +709,36 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	}
 
 	/**
-	 * Whether a flagged MEMBER (not the constructor) clears every deletion gate: a
-	 * side-effect-free declaration (`deletableMember`), not an abstract-method impl of
-	 * an `extends` class (`mayImplementAbstractMethod`), an enclosing type with no
-	 * `@:rtti` / `@:keep` / `@:build`, and a name in no in-scope string literal (a
-	 * possible reflection target). Any doubt keeps the member (still reported).
+	 * Why a flagged MEMBER (not the constructor) fails a deletion gate, or null when it clears
+	 * every one: a side-effect-bearing or body-less declaration (`shapeDecline`), an abstract-method
+	 * impl of an `extends` class (`mayImplementAbstractMethod`), an enclosing type carrying `@:rtti`
+	 * / `@:keep` / `@:build`, or a name some in-scope string literal spells (a possible reflection
+	 * target). Any doubt keeps the member (still reported), and the sentence returned here is what
+	 * the `--fix` ledger prints for it.
+	 *
+	 * Each gate spells its OWN sentence at its OWN condition, rather than mapping a code to text
+	 * elsewhere, which is what keeps the two from drifting apart (`Violation.declineReason`).
 	 */
-	private static function memberDeletable(
+	private static function memberDeclineReason(
 		node: QueryNode, owner: Null<String>, inExtends: Bool, index: Null<SymbolIndex>,
 		classMeta: Map<String, { hasBuild: Bool, hasKeep: Bool }>, reflected: Array<String>
-	): Bool {
-		if (!deletableMember(node)) return false;
-		if (mayImplementAbstractMethod(node, inExtends)) return false;
+	): Null<String> {
+		final shape: Null<String> = shapeDecline(node);
+		if (shape != null) return shape;
+		if (mayImplementAbstractMethod(node, inExtends))
+			return 'the member may implement an ABSTRACT method of the `extends` class — a Haxe impl carries no `override`, so the '
+				+ 'call in the base is invisible from here';
 		if (owner != null) {
-			if (index != null && index.traits.transitivelyCarriesRtti(owner)) return false;
+			if (index != null && index.traits.transitivelyCarriesRtti(owner))
+				return 'the enclosing type transitively carries `@:rtti`, so its members are reachable by NAME at runtime';
 			final meta: Null<{ hasBuild: Bool, hasKeep: Bool }> = classMeta[owner];
-			if (meta != null && (meta.hasBuild || meta.hasKeep)) return false;
+			if (meta != null && meta.hasBuild) return DECLINE_BUILD_MACRO;
+			if (meta != null && meta.hasKeep) return 'the enclosing type is `@:keep`, so nothing may drop a member of it';
 		}
 		final name: Null<String> = node.name;
-		return name == null || !mentionedInStrings(name, reflected);
+		return name == null || !mentionedInStrings(name, reflected)
+			? null
+			: 'the name occurs in a STRING somewhere in the resolution scope, where it would be a `Reflect.field` target';
 	}
 
 	/**
@@ -726,6 +784,26 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 				? survivingPerType(child, seams, condKind, out)
 				: MemberBranchScan.survivingDeletions(seams, child, out, c -> MemberKinds.isMemberDeclKind(c.kind));
 		return out;
+	}
+
+	/**
+	 * Write the region gate's sentence on the finding behind every member `survivingDeletions`
+	 * refused — the ones whose whole `#if` branch this call would have emptied.
+	 *
+	 * A fact about the SET, which no per-member gate can answer, so it is attributed here: at the
+	 * one place the drop becomes observable, and only for a member this call actually TRIED to
+	 * delete (`attempted`), never for one an earlier gate had already declined for its own cause.
+	 */
+	private static function noteRegionDeclines(
+		deleting: Array<QueryNode>, surviving: Array<QueryNode>, attempted: Map<Int, Violation>
+	): Void {
+		for (node in deleting) if (!surviving.contains(node)) {
+			final span: Null<Span> = node.span;
+			final declined: Null<Violation> = span == null ? null : attempted[span.from];
+			if (declined != null)
+				declined.declineReason = 'every member of its `#if` branch would go with it, and emptying a conditional region '
+					+ 'loses the branch itself';
+		}
 	}
 
 }

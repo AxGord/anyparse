@@ -24,8 +24,9 @@ using Lambda;
  * `inline ` before the `function` keyword.
  *
  * A method qualifies when its body is one of three BENEFIT classes: (A) an EMPTY block — the call compiles away, and
- * a FUTURE override of an inlined method fails loudly at the overriding site (the same subtype-gate evidence the
- * other classes rely on); (B) a single accessor / thin-forward / trivial-mutator expression — a bare field chain, a
+ * a FUTURE override of an inlined method fails loudly at the overriding site (the same subtype-gate evidence the other
+ * classes rely on, asked of report UNION the declared resolution scope since S187 — a subtype in an unlinted file is what
+ * the report index cannot see); (B) a single accessor / thin-forward / trivial-mutator expression — a bare field chain, a
  * call through a chain with only chain / literal arguments, an assignment or increment over a chain — which collapses
  * into a direct read / write / forwarded call; (C) a constant / small-arithmetic expression (literals, chains and
  * operators only) which can fold at the call site. B and C are bounded by `MAX_BODY_NODES` (~32 AST nodes).
@@ -222,7 +223,14 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		// The report index is the wrong one to ask any of the ABSENCE questions `considerClass` puts
+		// to it — no subtype overrides this, no supertype grants a build macro, no interface requires
+		// it — because a file outside the lint scope answers all three. Widened to report UNION the
+		// declared resolution scope, which is the repair the unused-* family already carries
+		// (`UnusedPrivate.run`); a plugin declaring no scope gets the report index back unchanged, so
+		// a run with no `resolutionRoots` behaves exactly as before.
+		final report: SymbolIndex = SymbolIndex.build(files, plugin);
+		final index: SymbolIndex = RefactorSupport.widestScopeIndex(plugin, report) ?? report;
 		final shape: RefShape = plugin.refShape();
 		// The framework carve-out's two halves: the grammar's own naming seam (which knows the
 		// frameworks its language ships) and the project's declared roster. Resolved once per run
