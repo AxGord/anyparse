@@ -1031,7 +1031,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.CrossScopeSoundnessTest#testNarrowReportFindsNothingTheWideRunDoesNot :: control :: '
 				+ 'M-CONFINEMENT-REPORT-INDEX-DEAD',
 			'unit.check.CrossScopeSoundnessTest#testNarrowReportWritesNothingTheWideRunRefuses :: control :: '
-				+ 'M-REFLECTION-REPORT-INDEX-DELETE,M-INLINE-SUBTYPE-REPORT-INDEX,M-INLINE-REFLECT-REPORT-SCOPE',
+				+ 'M-REFLECTION-REPORT-INDEX-DELETE,M-INLINE-SUBTYPE-REPORT-INDEX,M-INLINE-REFLECT-REPORT-SCOPE,'
+				+ 'M-ORPHAN-ACCESSOR-REPORT-SCOPE',
 			'unit.check.CrossScopeSoundnessTest#testTheScopeHalfHoldingAReflectiveStringDoesNotMatter :: control :: '
 				+ 'M-REFLECTION-SCOPE-PROJECT-ONLY',
 			'unit.check.DeadBinderCounterLoopCheckTest#testFixRewritesMapLoopAndInsertsUsing :: control :: M-SHADOWEXT-TRUE',
@@ -2004,6 +2005,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-UNUSED-PRIVATE-REGION-DECLINE-SILENT',
 			'M-INLINE-SUBTYPE-REPORT-INDEX',
 			'M-INLINE-REFLECT-REPORT-SCOPE',
+			'M-ORPHAN-ACCESSOR-REPORT-SCOPE',
 			'M-COND-NAMES-DROP-META-NAME',
 			'M-INERT-REGIONS-HARDCODED-KINDS',
 			'M-LIT-CONTENT-KINDS-SEGMENT-ONLY',

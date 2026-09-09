@@ -17,8 +17,8 @@ import utest.Test;
  *
  * The shape is always the same and is exactly what `hxq patch <one file> --write --fix` runs: the
  * report scope is ONE file, the project declares `resolutionRoots`, and a second file reaches into
- * the first by a route no single-file analysis can see — an `@:access` grant, an `@:allow` grant,
- * a subtype, a reflection call naming the member. Every previously found site licensed a REWRITE
+ * the first by a route no single-file analysis can see — an `@:access` grant, an `@:allow` grant, a subtype, a reflection call
+ * naming the member, a write to a public field, a hand-written call to an accessor. Every previously found site licensed a REWRITE
  * that way: `unused-private` called a live member dead (S177), `unused-parameter` deleted a
  * parameter a cross-file caller still passes (S179), `naming` renamed a field and orphaned an
  * `@:access` grantee (S179), and `naming` renamed a field a reflection call in another file reads
@@ -36,7 +36,12 @@ import utest.Test;
  * and every cell only READ, `prefer-inline` licenses `inline` on the absence of an OVERRIDE and no cell declared one — so the
  * `access-write` and `subtype-override` cells supply exactly those two, and `FIX_WRITERS` replaced the count-of-five floor with a
  * census the fixture takes of itself. The second cell caught a live one on its first run: `prefer-inline`s subtype gate asked the
- * REPORT index, so a one-file `--fix` inlined a method an unlinted subtype overrides (arm `M-INLINE-SUBTYPE-REPORT-INDEX`).
+ * REPORT index, so a one-file `--fix` inlined a method an unlinted subtype overrides (arm `M-INLINE-SUBTYPE-REPORT-INDEX`). S191 (T895)
+ * then built the six cells S187 had only NAMED — one per registered autofix of the same license shape that no cell reached, each
+ * declaring a candidate the sibling file reaches beside a control it does not — and one of those, `accessor-call`, caught the next
+ * live one: `orphan-accessor`s accessor-CALL scan walked the report files while the reflection scan on the line above it walked
+ * the resolution scope, so a one-file `--fix` deleted a public `get_x` a sibling calls by hand (arm `M-ORPHAN-ACCESSOR-REPORT-SCOPE`).
+ * Two cells, two live defects, in the two slices that added them: this fixture pays for itself by being EXTENDED, not by being re-run.
  *
  * `KNOWN_DIVERGENCES` is the escape hatch and it is EMPTY by contract. A line there is a filed
  * defect with an address, never a way to keep this green.
@@ -117,8 +122,11 @@ class CrossScopeSoundnessTest extends Test {
 	 * once marked `inline`.
 	 *
 	 * It keeps the FIELD name beside the method one so the cell stays a `reflection` cell for
-	 * every other rule — drop it and `naming` renames a field nothing reaches, which puts a
-	 * sixth rule in `FIX_WRITERS` and says nothing about the route this cell exists to supply.
+	 * `naming` too, and S191 measured what dropping it costs: exactly one line, `edit:naming@reflection-method`,
+	 * leaves `LIBS_ONLY_REGRESSIONS` — both arms then rename a field nothing reaches, so the cell stops
+	 * pricing the FIELD route while saying nothing new about the method one. `FIX_WRITERS` does not move,
+	 * and the doc here claimed it would ("a sixth rule in `FIX_WRITERS`"): `naming` reaches that census
+	 * through T895's cells, whose sibling files spell no field name at all, and never through this one.
 	 */
 	private static final B_REFLECT_METHOD: String = 'package pkg;\n\nclass B {\n\n\tpublic function new() {}\n\n'
 		+ '\tpublic function reach(a: A): Dynamic {\n\t\tReflect.field(a, \'My_Field\');\n'
@@ -148,6 +156,61 @@ class CrossScopeSoundnessTest extends Test {
 	private static final B_REFLECT_UNPARSEABLE: String = 'package pkg;\n\nclass B {\n\n\t?? ?? ??\n\n'
 		+ '\tpublic function reach(a: A): Dynamic {\n\t\treturn Reflect.field(a, \'My_Field\');\n\t}\n\n}\n';
 
+	/**
+	 * A declaration carrying TWO public fields of one shape — the route's target and a control the
+	 * route does not reach. T895's cells all take this form, and it is what makes each of them
+	 * assert in both directions at once: the control proves the rule fires here at all (it is what
+	 * puts the rule in `FIX_WRITERS`), the target proves the cross-file evidence stops it.
+	 * A one-candidate cell can only ever show one of the two.
+	 */
+	private static final A_PUBLIC_FIELD: String = 'package pkg;\n\nclass A {\n\n\tpublic var reached: Int = 0;\n'
+		+ '\tpublic var lonely: Int = 0;\n\n\tprivate var My_Field: Int = 0;\n\n\tpublic function new() {}\n\n'
+		+ '\tpublic function read(): Int {\n\t\treturn My_Field;\n\t}\n\n}\n';
+
+	/** The same pair, each field ALSO written inside the class — `prefer-read-only-field`'s candidate shape. */
+	private static final A_PUBLIC_MUTATED: String = 'package pkg;\n\nclass A {\n\n\tpublic var reached: Int = 0;\n'
+		+ '\tpublic var lonely: Int = 0;\n\n\tprivate var My_Field: Int = 0;\n\n\tpublic function new() {}\n\n'
+		+ '\tpublic function bump(): Void {\n\t\treached = reached + 1;\n\t\tlonely = lonely + 1;\n\t}\n\n'
+		+ '\tpublic function read(): Int {\n\t\treturn My_Field;\n\t}\n\n}\n';
+
+	/** Two read-only properties over private backing fields, each getter trivial — `trivial-getter`'s collapse shape. */
+	private static final A_PROPERTY: String = 'package pkg;\n\nclass A {\n\n\tpublic var reached(get, never): Int;\n'
+		+ '\tpublic var lonely(get, never): Int;\n\n\tprivate var _reached: Int = 0;\n\tprivate var _lonely: Int = 0;\n'
+		+ '\tprivate var My_Field: Int = 0;\n\n\tpublic function new() {}\n\n\tprivate function get_reached(): Int {\n'
+		+ '\t\treturn _reached;\n\t}\n\n\tprivate function get_lonely(): Int {\n\t\treturn _lonely;\n\t}\n\n'
+		+ '\tpublic function read(): Int {\n\t\treturn My_Field;\n\t}\n\n}\n';
+
+	/** Two `get_` methods no property slot reaches — `orphan-accessor`'s deletion shape. */
+	private static final A_ACCESSOR: String = 'package pkg;\n\nclass A {\n\n\tprivate var My_Field: Int = 0;\n\n'
+		+ '\tpublic function new() {}\n\n\tpublic function get_reached(): Int {\n\t\treturn My_Field;\n\t}\n\n'
+		+ '\tpublic function get_lonely(): Int {\n\t\treturn My_Field;\n\t}\n\n}\n';
+
+	/** Two scalar `static final` constants — `inline-constant`'s candidate shape. */
+	private static final A_CONSTANT: String = 'package pkg;\n\nclass A {\n\n\tprivate static final REACHED: Int = 1;\n'
+		+ '\tprivate static final LONELY: Int = 2;\n\n\tprivate var My_Field: Int = 0;\n\n\tpublic function new() {}\n\n'
+		+ '\tpublic function read(): Int {\n\t\treturn My_Field + REACHED + LONELY;\n\t}\n\n}\n';
+
+	/** The same two constants as INSTANCE finals — `static-constant`'s promotion shape. */
+	private static final A_INSTANCE_CONSTANT: String = 'package pkg;\n\nclass A {\n\n\tprivate final _reached: Int = 1;\n'
+		+ '\tprivate final _lonely: Int = 2;\n\n\tprivate var My_Field: Int = 0;\n\n\tpublic function new() {}\n\n'
+		+ '\tpublic function read(): Int {\n\t\treturn My_Field + _reached + _lonely;\n\t}\n\n}\n';
+
+	/** The reacher that writes a PUBLIC field — no grant needed, and no single-file scan can see it. */
+	private static final B_PUBLIC_WRITE: String =
+		'package pkg;\n\nclass B {\n\n\tpublic function new() {}\n\n\tpublic function reach(a: A): Void {\n\t\ta.reached = 5;\n\t}\n\n}\n';
+
+	/** The subtype that reads a private member of `A` by its bare name — the route both collapse rules gate on. */
+	private static final B_SUBTYPE_FIELD: String = 'package pkg;\n\nclass B extends A {\n\n\tpublic function new() {\n\t\tsuper();\n\t}\n\n'
+		+ '\tpublic function reach(): Int {\n\t\treturn _reached;\n\t}\n\n}\n';
+
+	/** The reacher that CALLS an accessor by hand — what stops `orphan-accessor` deleting a method Haxe never calls but code does. */
+	private static final B_ACCESSOR_CALL: String = 'package pkg;\n\nclass B {\n\n\tpublic function new() {}\n\n'
+		+ '\tpublic function reach(a: A): Int {\n\t\treturn a.get_reached();\n\t}\n\n}\n';
+
+	/** The reacher whose reflective string names a CONSTANT — the value `inline` erases. */
+	private static final B_CONSTANT_REFLECT: String = 'package pkg;\n\nclass B {\n\n\tpublic function new() {}\n\n'
+		+ '\tpublic function reach(a: A): Dynamic {\n\t\treturn Reflect.field(a, \'REACHED\');\n\t}\n\n}\n';
+
 
 	/** The two-file cells: one per route by which the second file reaches the first. */
 	private static final CELLS: Array<Cell> = [
@@ -159,7 +222,13 @@ class CrossScopeSoundnessTest extends Test {
 		{ name: 'reflection-unread-in-file', decl: A_UNUSED, grantee: B_REFLECT },
 		{ name: 'access-write', decl: A_USED, grantee: B_WRITE },
 		{ name: 'subtype-override', decl: A_USED, grantee: B_OVERRIDE },
-		{ name: 'reflection-method', decl: A_USED, grantee: B_REFLECT_METHOD }
+		{ name: 'reflection-method', decl: A_USED, grantee: B_REFLECT_METHOD },
+		{ name: 'public-write', decl: A_PUBLIC_FIELD, grantee: B_PUBLIC_WRITE },
+		{ name: 'public-internal-write', decl: A_PUBLIC_MUTATED, grantee: B_PUBLIC_WRITE },
+		{ name: 'subtype-backing-field', decl: A_PROPERTY, grantee: B_SUBTYPE_FIELD },
+		{ name: 'accessor-call', decl: A_ACCESSOR, grantee: B_ACCESSOR_CALL },
+		{ name: 'constant-reflection', decl: A_CONSTANT, grantee: B_CONSTANT_REFLECT },
+		{ name: 'subtype-constant', decl: A_INSTANCE_CONSTANT, grantee: B_SUBTYPE_FIELD }
 	];
 
 	/**
@@ -196,31 +265,77 @@ class CrossScopeSoundnessTest extends Test {
 	 *
 	 * What makes a rule belong here is the shape of its LICENSE, not the shape of its edit: it
 	 * rewrites or removes a DECLARATION on the strength of a reference, write or override being
-	 * ABSENT, and a file outside the report scope can supply any of the three. This list is what
-	 * THESE cells drive, not the whole license class: at least six registered autofixes share the
-	 * shape and no cell reaches them yet — `prefer-final-public-field`, `prefer-read-only-field`,
-	 * `trivial-getter`, `orphan-accessor`, `inline-constant`, `static-constant`, each named as
-	 * cross-file-licensed by `LintCommand.partitionChecks`'s own `fullScopeIds` comments — which is
-	 * what T895 is for. Every autofix OUTSIDE that class edits a node whose references cannot leave
-	 * the file it is handed — a local, a case binder, a statement, an expression, an arm, a comment,
-	 * whitespace — so a wider scope cannot change its answer and there is nothing to compare.
+	 * ABSENT, and a file outside the report scope can supply any of the three. S187 read six
+	 * registered autofixes of that shape off `LintCommand.partitionChecks`'s own `fullScopeIds`
+	 * comments and found no cell reaching any of them; T895 built one cell each — `public-write`
+	 * for `prefer-final-public-field`, `public-internal-write` for `prefer-read-only-field`,
+	 * `subtype-backing-field` for `trivial-getter`, `accessor-call` for `orphan-accessor`,
+	 * `constant-reflection` for `inline-constant`, `subtype-constant` for `static-constant`. Every
+	 * one declares TWO candidates of one shape, the one the sibling file reaches and a control it
+	 * does not, so the SAME cell proves the rule writes here at all (this list) and that the
+	 * cross-file evidence stops it (the differentials); a one-candidate cell can only show one of
+	 * the two, and a rule that only ever refused would fail the roster containment instead of
+	 * joining this census.
+	 *
+	 * `accessor-call` caught a live defect on its first run, the second such find after `subtype-override`'s:
+	 * `orphan-accessor`'s accessor-CALL scan walked the REPORT files while the reflection scan on the line
+	 * above it walked `ReflectionScan.scopeFiles`, so a one-file `--fix` in a project declaring
+	 * `resolutionRoots` DELETED a public `get_x` a sibling calls by hand — two deletions where the run over
+	 * both files wrote one (arm `M-ORPHAN-ACCESSOR-REPORT-SCOPE`).
+	 *
+	 * The seven `fullScopeIds` no cell reaches are not all one class, and their own comments give the
+	 * split. `map-keys-lookup`, `prefer-index-access`, `prefer-static-extension` and
+	 * `redundant-tostring` need a type RESOLVED before they rewrite, so a narrow scope makes them MISS
+	 * — never overreach — and there is no unsound direction to pin. `field-init-at-declaration` reads
+	 * the same `FieldWriteIndex` the finalizing rules do, but its edit MOVES the sole assignment onto
+	 * the declaration and no external write can precede construction, so a narrow scope costs its
+	 * sole-assignment CLAIM rather than the behaviour the move preserves. Two DO share the license
+	 * shape exactly and have no cell: `redundant-map-exists`, whose comment says an unseen writer
+	 * turns an unprovable site into a wrongly PROVEN one, and `prefer-typed-throw`, where an absent
+	 * `catch (e:String)` licenses a boxing the wider scope refuses. They are backlog items T918 and
+	 * T919, not lines to add here.
+	 *
+	 * Every autofix OUTSIDE that class edits a node whose references cannot leave the file it is
+	 * handed — a local, a case binder, a statement, an expression, an arm, a comment, whitespace —
+	 * so a wider scope cannot change its answer and there is nothing to compare.
+	 *
+	 * `naming` sits in BOTH this list and `CROSS_FILE_WRITERS` since T895, and that is not a
+	 * duplication. On the older cells the sibling file spells `My_Field`, so the rename has to leave
+	 * through `crossFileFix` and `fix` emits nothing; T895's cells give `naming` a violation no
+	 * sibling names, and there the in-file rename IS a `fix` edit.
 	 *
 	 * An equality here is the anti-rot half: a rule dropping out is the vacuity regression the old
 	 * floor was watching for, and a NEW registered rule writing here is one nobody has classified
 	 * yet. Neither is a line to edit until the reason is in this doc.
 	 */
 	private static final FIX_WRITERS: Array<String> = [
+		'inline-constant',
+		'naming',
+		'orphan-accessor',
 		'prefer-final-field',
+		'prefer-final-public-field',
 		'prefer-inline',
+		'prefer-read-only-field',
+		'static-constant',
+		'trivial-getter',
 		'unused-parameter',
 		'unused-private',
 		'unused-public-member'
 	];
 
 	/**
-	 * The same family reached through `crossFileFix` instead of `fix`, so it can never appear in the
-	 * census above: `naming` refuses on a green tree and what it does emit leaves through the
-	 * cross-file seam. Its non-vacuity is asserted on the REPORTING side, per cell.
+	 * The same family reached through `crossFileFix` instead of `fix`: `naming` refuses an in-file
+	 * rename whenever a file outside the report scope spells the name or declares a subtype, and what
+	 * it does emit leaves through the cross-file seam.
+	 *
+	 * It is NOT "never in the census above" — that was true only while every cell's sibling file spelled
+	 * `My_Field`. T895's six cells give `naming` a violation no sibling names, so its in-file rename
+	 * lands as an ordinary `fix` edit there and it appears in BOTH lists. The roster reads their union,
+	 * so the overlap costs nothing; what it means is that a `naming` line vanishing from `FIX_WRITERS`
+	 * is a statement about THOSE cells, not about the cross-file seam this list stands for.
+	 *
+	 * Its non-vacuity on the reporting side is asserted per cell, where the flag is observable whichever
+	 * seam the edit takes.
 	 */
 	private static final CROSS_FILE_WRITERS: Array<String> = ['naming'];
 
@@ -228,21 +343,48 @@ class CrossScopeSoundnessTest extends Test {
 	 * What a project declaring `resolutionLibs` and NO `resolutionRoots` loses — MEASURED, and the one
 	 * list in this class that is not empty by contract.
 	 *
-	 * TWENTY-SEVEN entries over the nine cells (twenty-four over the eight before S190,
-	 * fourteen over the six the fixture had before S187), and unchanged by T868 — a libs-only scope holds the sibling in
-	 * NEITHER half, so widening the name-keyed seam buys nothing here: `naming` renames a field five of the six
-	 * routes reach, `unused-parameter` deletes a parameter three cross-file callers still pass, `unused-private`
-	 * deletes two live members. Eighteen are WRITES and nine are findings, which is the same defect one step earlier.
-	 * The ten S187 added are the two cells that supply cross-file WRITE and OVERRIDE evidence: `prefer-final-field`
-	 * makes a field final that a grantee assigns, `prefer-inline` inlines a method a subtype overrides, and `naming`
-	 * / `unused-parameter` lose the same proofs on the two new routes they lose on the old ones.
-	 * The three S190 added are the `reflection-method` cell, where a libs-only scope loses BOTH reflective
-	 * strings at once: `naming` renames the field one, `prefer-inline` inlines the method the other names.
-	 * Every one of them is a repair S177 / S179 / S180 shipped and this scope shape undoes. One cell is
-	 * absent by right: `allow-grant` puts the `@:allow` in the DECLARING file, so the narrow report scope
-	 * sees the grant without help and both arms refuse alike.
+	 * FORTY entries over the fifteen cells (twenty-seven over the nine before S191, twenty-four over the
+	 * eight before S190, fourteen over the six the fixture had before S187), and unchanged by T868 — a
+	 * libs-only scope holds the sibling in NEITHER half, so widening the name-keyed seam buys nothing
+	 * here. TWENTY-SIX are WRITES and FOURTEEN are findings, which is the same defect one step earlier.
+	 * Ten `edit:naming@` lines say the rename reaches ten of the fifteen cells, five
+	 * `edit:unused-parameter@` that a parameter goes with cross-file callers still passing it, two
+	 * `edit:unused-private@` that a live member is deleted.
+	 *
+	 * The ten S187 added are the two cells that supply cross-file WRITE and OVERRIDE evidence:
+	 * `prefer-final-field` makes a field final that a grantee assigns, `prefer-inline` inlines a method a
+	 * subtype overrides, and `naming` / `unused-parameter` lose the same proofs on the two new routes they
+	 * lose on the old ones. The three S190 added are the `reflection-method` cell, where a libs-only scope
+	 * loses BOTH reflective strings at once: `naming` renames the field one, `prefer-inline` inlines the
+	 * method the other names.
+	 *
+	 * The thirteen S191 added are T895's six license-class cells, and each names a repair that a declared
+	 * `resolutionRoots` makes and this scope shape undoes:
+	 *
+	 * - `prefer-final-public-field@public-write` — the sibling's `a.reached = 5` is invisible, the field
+	 *   reads as never reassigned and becomes `final`; the sibling then does not compile.
+	 * - `prefer-read-only-field@public-internal-write` — the same write lost, the field reads as written
+	 *   only internally and gets `(default, null)`; same break at the same line.
+	 * - `trivial-getter@subtype-backing-field` — the subtype's read of `_reached` is gone, so the property
+	 *   collapses and DELETES the backing field the subtype still reads.
+	 * - `static-constant@subtype-constant` — the subtype's mention of `_reached` is gone, so the instance
+	 *   final is promoted to `static` and the subtype's unqualified read stops resolving.
+	 * - `inline-constant@constant-reflection` — the sibling's `Reflect.field(a, 'REACHED')` is gone, so
+	 *   `inline` erases the constant's runtime value and that read silently answers null.
+	 * - `naming@subtype-backing-field` and `naming@subtype-constant` — the sibling declares a SUBTYPE, and
+	 *   `naming` defers an in-file rename to `crossFileFix` whenever one exists. Here the subtype does not
+	 *   spell `My_Field`, so the rename is harmless in fact; the entry prices the missing PROOF, which is
+	 *   the same one the `subtype` cell loses where it is NOT harmless.
+	 * - `orphan-accessor@accessor-call` is the one entry with no `report:` twin, and the asymmetry is the
+	 *   point: both arms report both accessors as orphans at the same severity — nothing in either chain
+	 *   declares the property — and only the DELETION verdict moves, so the cost exists in edits alone.
+	 *   A list of findings would have missed it entirely.
+	 *
+	 * One cell is absent by right: `allow-grant` puts the `@:allow` in the DECLARING file, so the narrow
+	 * report scope sees the grant without help and both arms refuse alike.
 	 */
 	private static final LIBS_ONLY_REGRESSIONS: Array<String> = [
+		'edit:inline-constant@constant-reflection',
 		'edit:naming@access-grant',
 		'edit:naming@access-grant-unread-in-file',
 		'edit:naming@access-write',
@@ -250,10 +392,17 @@ class CrossScopeSoundnessTest extends Test {
 		'edit:naming@reflection-method',
 		'edit:naming@reflection-unread-in-file',
 		'edit:naming@subtype',
+		'edit:naming@subtype-backing-field',
+		'edit:naming@subtype-constant',
 		'edit:naming@subtype-override',
+		'edit:orphan-accessor@accessor-call',
 		'edit:prefer-final-field@access-write',
+		'edit:prefer-final-public-field@public-write',
 		'edit:prefer-inline@reflection-method',
 		'edit:prefer-inline@subtype-override',
+		'edit:prefer-read-only-field@public-internal-write',
+		'edit:static-constant@subtype-constant',
+		'edit:trivial-getter@subtype-backing-field',
 		'edit:unused-parameter@access-grant',
 		'edit:unused-parameter@access-grant-unread-in-file',
 		'edit:unused-parameter@access-write',
@@ -261,9 +410,14 @@ class CrossScopeSoundnessTest extends Test {
 		'edit:unused-parameter@subtype-override',
 		'edit:unused-private@access-grant-unread-in-file',
 		'edit:unused-private@reflection-unread-in-file',
+		'report:inline-constant@constant-reflection',
 		'report:prefer-final-field@access-write',
+		'report:prefer-final-public-field@public-write',
 		'report:prefer-inline@reflection-method',
 		'report:prefer-inline@subtype-override',
+		'report:prefer-read-only-field@public-internal-write',
+		'report:static-constant@subtype-constant',
+		'report:trivial-getter@subtype-backing-field',
 		'report:unused-parameter@access-grant',
 		'report:unused-parameter@access-grant-unread-in-file',
 		'report:unused-parameter@access-write',
@@ -277,6 +431,7 @@ class CrossScopeSoundnessTest extends Test {
 	@:killer('M-REFLECTION-REPORT-INDEX-DELETE')
 	@:killer('M-INLINE-SUBTYPE-REPORT-INDEX')
 	@:killer('M-INLINE-REFLECT-REPORT-SCOPE')
+	@:killer('M-ORPHAN-ACCESSOR-REPORT-SCOPE')
 	public function testNarrowReportWritesNothingTheWideRunRefuses(): Void {
 		Assert.equals(KNOWN_EDIT_DIVERGENCES.join('\n'), narrowOnlyEdits().join('\n'));
 	}
@@ -291,11 +446,16 @@ class CrossScopeSoundnessTest extends Test {
 	/**
 	 * A cross-file autofix may only name files the report scope holds.
 	 *
-	 * Reported over BOTH files on purpose. Handed the declaring file ALONE this seam is
-	 * UNREACHABLE: `crossFileFix` then gets an index over one file, no cross-file occurrence is
-	 * expressible, and every `CrossFileFix` check returns an empty list — measured at 0 slices on
-	 * all six cells AND under each of the four declared arm cuts, so the containment assertion
-	 * never executed and the test could not fail. The slice counter is what stops that returning.
+	 * Reported over BOTH files on purpose. Handed the declaring file ALONE this seam is UNREACHABLE:
+	 * `crossFileFix` then gets an index over one file, no cross-file occurrence is expressible, and every
+	 * `CrossFileFix` check returns an empty list, so the containment assertion never executes and the test
+	 * cannot fail. S184 measured that at 0 slices over the fixture AS IT STOOD — six cells and four
+	 * declared arm cuts. That count is a reading of THAT tree, not a standing fact: the fixture now carries
+	 * fifteen cells and six arms, and the vacuity argument survives the arithmetic because it is structural
+	 * rather than numeric.
+	 *
+	 * The slice counter is what stops the vacuity returning without anyone re-measuring — it is the one
+	 * assertion here that fails when the loop above it produces nothing at all.
 	 */
 	public function testCrossFileEditsNameOnlyReportedFiles(): Void {
 		final reportFiles: Array<String> = [DECL_FILE, REACH_FILE];
@@ -332,10 +492,11 @@ class CrossScopeSoundnessTest extends Test {
 	 */
 	public function testFixtureExercisesTheWritingRules(): Void {
 		Assert.equals(FIX_WRITERS.join('\n'), narrowRulesEmittingEdits().join('\n'));
-		// `naming` can never appear above: on a green tree it REFUSES, and what it does emit leaves
-		// through `crossFileFix` rather than `fix`. Yet `naming@` is where four of the five arm kills
-		// land, so its non-vacuity is asserted on the REPORTING side, where the flag IS observable —
-		// and per cell, so reordering `CELLS` cannot quietly re-point this at a different fixture.
+		// `naming` reaches the census above only on the cells whose sibling file does not spell the
+		// renamed field — T895's six; on every older cell it REFUSES the in-file rename and what it
+		// emits leaves through `crossFileFix` rather than `fix`. Its non-vacuity is therefore asserted
+		// on the REPORTING side, where the flag is observable whichever seam the edit takes — and per
+		// cell, so reordering `CELLS` cannot quietly re-point this at a different fixture.
 		for (cell in CELLS) {
 			final keys: Array<String> = findingKeys([{ file: DECL_FILE, source: cell.decl }], [{ file: REACH_FILE, source: cell.grantee }]);
 			Assert.isTrue(

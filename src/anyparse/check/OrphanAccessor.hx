@@ -96,12 +96,13 @@ using StringTools;
  * property-slot absence. It gates only the DELETE, catching the case where `get_X` is also called
  * by hand as an ordinary method.
  *
- * REPORT SCOPE is the boundary of every scan here — the reference scans, the string scans, and the
- * subtype query all see the file set the lint was given (widened to the resolution scope where one
- * is configured). A narrowed scope therefore narrows both halves: `--fix` over a subdirectory can
- * delete a method the rest of the project calls, and a REPORT over a subdirectory can raise a
- * `Warning` on an accessor whose property is declared by a subtype outside it. Run the rule
- * whole-project; a subdirectory run is a preview, not a verdict.
+ * The DELETION scans span report UNION the resolution scope: the accessor-reference scan and the string scan both take
+ * `ReflectionScan.scopeFiles`, and the subtype query reads the resolution index. Until S191 the reference scan alone took the
+ * REPORT set, and the paragraph here asserted the widening it did not do — measured, `hxq lint <one file> --fix` with
+ * `resolutionRoots` declared deleted a public `get_x` a sibling file calls. What stays narrowed is the unreadable-file probe
+ * — `unreadableDecline` reads the REPORT index, so a skip-parsing sibling that sits in the resolution scope and spells the
+ * accessor licenses nothing — and, in a project declaring NO resolution key, every scan here, because the report set is then
+ * the only scope there is. Run the rule whole-project; a subdirectory run of a scopeless project is a preview, not a verdict.
  *
  * Scope is class bodies (`CheckScan.classBodies`: `class` / `final class` / `abstract class`).
  * An `interface` declares no accessor bodies; an `abstract` type's accessors are left alone (its
@@ -141,7 +142,15 @@ final class OrphanAccessor implements Check implements DefaultOff {
 		final wide: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? index;
 		final reflection: ReflectionSurface = ReflectionScan.reflectionSurface(files, plugin);
 		final ctx: Ctx = {
-			referenced: referencedAccessorNames(files, plugin),
+			// The call scan takes the SAME file set as the reflection scan above it
+			// (`ReflectionScan.scopeFiles`, report UNION the resolution sources) and NOT the report
+			// set. Handed the report set it answered "nothing calls this" from whatever the caller
+			// asked to lint, so `hxq lint <one file> --fix` DELETED a public `get_x` that a sibling
+			// calls by hand — measured on a two-file cell with `resolutionRoots` declared: the narrow
+			// run wrote 2 deletions where the run over both files wrote 1. Widening only ever ADDS
+			// names, so it only ever adds REFUSALS — the same safe direction the reflection scan's
+			// own scope note argues, and a lost refusal here is a compile error at the call site.
+			referenced: referencedAccessorNames(ReflectionScan.scopeFiles(files, plugin), plugin),
 			reflected: reflection.whole,
 			fragments: reflection.fragments,
 			reportIndex: index,
@@ -381,10 +390,13 @@ final class OrphanAccessor implements Check implements DefaultOff {
 	}
 
 	/**
-	 * Every `get_` / `set_`-prefixed name that appears in report scope as an identifier or a
+	 * Every `get_` / `set_`-prefixed name that appears in `files` as an identifier or a
 	 * field access — a direct call (`get_x()`, `this.get_x()`, `super.get_x()`, `o.get_x()`) or a
 	 * value reference (`f.bind(get_x)`). Declarations project as member kinds, not as these, so a
 	 * name occurring ONLY as its own declaration is absent from the result.
+	 *
+	 * `files` is the caller's to choose and `run` passes the whole reflection scope
+	 * (`ReflectionScan.scopeFiles`), never the report set — see the note at that call.
 	 */
 	private static function referencedAccessorNames(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<String> {
 		final shape: RefShape = plugin.refShape();
