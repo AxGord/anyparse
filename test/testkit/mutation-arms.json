@@ -2706,6 +2706,21 @@
 			"method": "shiftedDocEnd",
 			"force": "docEnd",
 			"note": "the watched doc block's end is never moved, so a payload whose earlier pair grows ahead of that block leaves the guard looking for the doc before where it now is and a real transfer goes through"
+		},
+		{
+			"name": "M-SELECT-MISS-NO-KIND-CLAUSE",
+			"type": "anyparse.query.Address",
+			"method": "selectMissHint",
+			"force": "kindHint(tree, source, plugin, selector)",
+			"note": "a `--select` miss explains only where the NAME lives, never that the KIND is one no rule of the grammar projects, so a misspelled kind reads exactly like a declaration that is somewhere else"
+		},
+		{
+			"name": "M-AND-OPERATOR-TEXT-STALE",
+			"type": "anyparse.grammar.haxe.HaxeQueryPlugin",
+			"method": "refShape",
+			"find": "andOperatorText: '&&',",
+			"replace": "andOperatorText: '&',",
+			"note": "the declared logical-and token is respelled as the bitwise one, which still parses and still is an operator, so nothing in the tree breaks and the shape simply names text the parser reads as a different node"
 		}
 	]
 }

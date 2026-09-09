@@ -1179,6 +1179,29 @@ Rules and properties:
   like the ordinal form, and a literal holding a `>` sends the widened selector
   down a child path that matches nothing, so `describe` falls back to
   `<line>:<col>` and a string-sniffing listing offered `--select '6:10'`.
+- A `--select` that matched nothing says WHY when it can. Two clauses, either of
+  which may be absent, joined with `; ` after a leading em dash. The first is the
+  unknown KIND: a segment naming a kind this grammar's parser projects no node for
+  is a typo against the vocabulary, not an absence in this file, and the message
+  says so with the nearest projected spellings — `--select "FnMembr:f" matched no
+  nodes — "FnMembr" is not a node kind this grammar projects (did you mean
+  FnMember?)`. The second is the known name under another kind, which is the older
+  clause (`"f" exists as 12:9 FnDecl:f; try --select "FnDecl:f"`). The vocabulary
+  is `GrammarPlugin.projectedKinds`, generated from the same grammar shape the
+  walker is emitted from, so the check holds for any plugin and spells no kind
+  name in the generic layer; the tree's own root kind and a `selectKindEquivalence`
+  alias are admitted alongside it, so `module > X` and `ClassDecl` on a `final
+  class` are never called unknown. A kind that IS projected and merely absent here
+  gets no such clause — claiming a typo there would send the reader hunting one
+  that is not present. `apq source` carries the same tail, and `apq ast --select`
+  answers the unknown-kind clause ALONE: its `Kinds present here: …` listing
+  answers "which kinds does this file hold", which is the wrong question for a
+  spelling no file could match. It keeps the cross-project pointer, though —
+  a TypeName typed into `--select` is the commonest way to reach a kind no
+  grammar projects, and `refs` / `uses` / `blast` are still the walkers that
+  find it. The did-you-mean over the whole vocabulary demands a substring hit
+  or an edit distance under half the query, so `ClassDeclz` still suggests
+  `ClassDecl` while `Fix` suggests nothing.
 - Named/pattern addresses are **edit-stable**: they survive edits above them,
   so a chain of ops needs no re-locate step between edits (a position rots as
   soon as an earlier edit shifts lines).

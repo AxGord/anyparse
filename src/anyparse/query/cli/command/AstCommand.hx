@@ -622,24 +622,25 @@ final class AstCommand implements CliCommand {
 	}
 
 	/**
-	 * `--select` matched nothing: emit a self-correcting hint listing the
-	 * kinds actually present, a fuzzy "did you mean", and (for a TypeName-
-	 * shaped first kind) a cross-project pointer to the multi-file walkers.
+	 * `--select` matched nothing. Two different answers, because they are two different
+	 * questions: `unknownKinds` non-empty means the spelling is one NO file of this grammar
+	 * could match, and that clause is the whole report — a per-file listing there would offer
+	 * kinds for a selector that can never resolve. Otherwise the kind is real and absent here,
+	 * and the report is the old one: the kinds actually present, a fuzzy "did you mean" over
+	 * them, and (for a TypeName-shaped first kind) a pointer to the multi-file walkers.
 	 */
 	private static function reportAstSelectEmpty(
-		tree: QueryNode, selectExpr: String, fileLabel: String, minChildren: Int, maxChildren: Int, preFilterLen: Int
+		tree: QueryNode, selectExpr: String, fileLabel: String, minChildren: Int, maxChildren: Int, preFilterLen: Int, unknownKinds: String
 	): Void {
-		// Empty `--select` is indistinguishable from "wrong kind
-		// name". Kinds are the exact node-constructor names and the
-		// engine never enumerates them — so list the kinds actually
-		// present in this file, turning a silent miss into a
-		// self-correcting hint (no global kind table needed).
-		final present: Array<String> = collectKinds(tree);
+		// Empty `--select` is indistinguishable from "wrong kind name" as far as THIS FILE can
+		// tell, so list the kinds actually present in it — a self-correcting hint for the common
+		// miss, where the spelling is real and the node is elsewhere.
 		final filterParts: Array<String> = [];
 		if (minChildren >= 0) filterParts.push('--min-children=$minChildren');
 		if (maxChildren >= 0) filterParts.push('--max-children=$maxChildren');
 		if (preFilterLen > 0) filterParts.push('$preFilterLen pre-filter match(es) dropped by child-count');
 		final filterNote: String = filterParts.length == 0 ? '' : ' (with ${filterParts.join(', ')})';
+		final present: Array<String> = collectKinds(tree);
 		// Kind-fuzzy "did you mean" — surface the closest match in
 		// `present` for the first kind segment of `selectExpr`
 		// (split on `>`, `:`, whitespace). Same `findFuzzy`
@@ -661,6 +662,14 @@ final class AstCommand implements CliCommand {
 			? ' If "$firstKind" is a TypeName declared elsewhere, ast is single-file; try apq refs $firstKind src/ --decls ('
 				+ 'declaration sites), apq uses $firstKind src/ (type positions), or apq blast $firstKind src/ (full change-impact).'
 			: '';
+		// A kind NO rule of the grammar projects is a different question from a kind this file happens
+		// not to hold, and the per-file listing answers only the second. Say the vocabulary is wrong and
+		// stop — but KEEP the cross-project pointer: it is orthogonal to the listing, and a TypeName
+		// typed into `--select` is the commonest way to reach a kind no grammar projects at all.
+		if (unknownKinds.length > 0) {
+			CliIo.stderr('apq ast: --select "$selectExpr"$filterNote matched no nodes in $fileLabel$unknownKinds.$crossProjectHint\n');
+			return;
+		}
 		CliIo.stderr(
 			'apq ast: --select "$selectExpr"$filterNote matched no nodes in $fileLabel. Kinds present here: ${present.join(', ')}.'
 			+ '$fuzzyLine$crossProjectHint Kinds are exact node-constructor names — run `apq ast $fileLabel` to see the tree.\n'
@@ -691,7 +700,11 @@ final class AstCommand implements CliCommand {
 				if ((o.minChildren < 0 || m.children.length >= o.minChildren) && (o.maxChildren < 0 || m.children.length <= o.maxChildren))
 					m
 		];
-		if (raw.length == 0) reportAstSelectEmpty(tree, selectExpr, fileLabel, o.minChildren, o.maxChildren, preFilter.length);
+		if (raw.length == 0)
+			reportAstSelectEmpty(
+				tree, selectExpr, fileLabel, o.minChildren, o.maxChildren, preFilter.length,
+				Address.selectMissHint(tree, source, plugin, selector)
+			);
 		if (o.countOnly) {
 			for (m in raw) CliIo.sysPrint('${m.children.length}\n');
 			return EXIT_OK;

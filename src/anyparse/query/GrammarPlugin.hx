@@ -59,6 +59,24 @@ interface GrammarPlugin {
 	public function refShape(): RefShape;
 
 	/**
+	 * Every `QueryNode.kind` this grammar's parser can project — its whole kind
+	 * vocabulary, generated from the same shape the walk is emitted from rather
+	 * than hand-listed.
+	 *
+	 * A kind is an `Array<String>` slot everywhere it is spelled, so a misspelling
+	 * fails OPEN in both directions: a stale name in a plugin's own `RefShape`
+	 * silently stops matching, and a typo in a user's `--select` silently matches
+	 * nothing. This is the vocabulary both differentials read.
+	 *
+	 * EMPTY means the grammar publishes none, and every consumer must then skip its
+	 * check rather than report the whole selector unknown. The projection's own
+	 * synthetic root (`QueryNode.kind` of the tree `parseFile` returns) is NOT in
+	 * here — it is minted by the plugin, not by the grammar — so a consumer that
+	 * accepts a root segment admits it separately.
+	 */
+	public function projectedKinds(): Array<String>;
+
+	/**
 	 * Declare which `QueryNode.kind` values the `Meta` walker should
 	 * treat as annotation nodes and which kinds are declaration hosts
 	 * an annotation can attach to. Plugin-supplied so the walker stays

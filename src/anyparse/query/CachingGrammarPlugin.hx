@@ -370,6 +370,8 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 
 	public function parsePattern(source: String): Pattern return _inner.parsePattern(source);
 
+	public function projectedKinds(): Array<String> return _inner.projectedKinds();
+
 	/**
 	 * `GrammarPlugin`: attaches this wrapper's run-scoped `RefsCache` to a fresh
 	 * copy of the inner shape, so `Refs.find` resolves through the memoized

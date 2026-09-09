@@ -1500,6 +1500,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.AddressTest#testAModuleLevelNodeIsAddressedFromTheRootNotByOrdinal :: control :: M-ADDRESS-NO-ROOT-ANCHOR',
 			'unit.query.AddressTest#testAnAmbiguityListingSpellsTheSelectorThatPicksOneCandidate :: control :: '
 				+ 'M-CANDIDATE-LABEL-BARE,M-ADDRESS-NO-ROOT-ANCHOR',
+			'unit.query.AddressTest#testSelectUnknownKindIsNamedAsUnknown :: control :: M-SELECT-MISS-NO-KIND-CLAUSE',
 			'unit.query.ApqUsesTest#testQualifiedIsOptInSoRewritersKeepTheExactAnswer :: control :: M-USES-QUALIFIED-DEFAULT',
 			'unit.query.ApqUsesTest#testQualifiedSpellingsAcrossTypePositions :: control :: M-USES-EXACT-ONLY',
 			'unit.query.ApqUsesTest#testQualifiedSubModuleTypeIsFoundBySimpleName :: control :: M-USES-EXACT-ONLY',
@@ -1649,6 +1650,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.PatchSliceTest#testTransferUnderADocMovedByAnEarlierGrowingPairRefused :: control :: M-PATCH-DOCEND-NEVER-SHIFTS',
 			'unit.query.RefShapeKindProjectionTest#testEveryDeclaredKindNameIsOneTheGrammarProjects :: control :: '
 				+ 'M-PROJECTED-KINDS-ALT-ONLY,M-DECL-HOST-KIND-STALE',
+			'unit.query.RefShapeKindProjectionTest#testEveryDeclaredTokenIsOneTheParserCaptures :: control :: M-AND-OPERATOR-TEXT-STALE',
 			'unit.query.RemoveMemberSliceTest#testSiblingRegionsWithOneConditionAreRefusedByCount :: control :: '
 				+ 'M-COND-FRAME-REGION-KEYED,M-COND-FRAME-CONDITION-RAW',
 			'unit.query.RemoveMemberSliceTest#testTwoDeclarationsInOneBranchAreRefusedByCount :: control :: M-REMOVE-MEMBER-BRANCH-BLIND',
@@ -2024,7 +2026,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-REFLECTION-MEMO-DEAD',
 			'M-REFLECTION-MEMO-STALE',
 			'M-PATCH-DOCEND-SHIFTS-EVERY-EDIT',
-			'M-PATCH-DOCEND-NEVER-SHIFTS'
+			'M-PATCH-DOCEND-NEVER-SHIFTS',
+			'M-SELECT-MISS-NO-KIND-CLAUSE',
+			'M-AND-OPERATOR-TEXT-STALE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

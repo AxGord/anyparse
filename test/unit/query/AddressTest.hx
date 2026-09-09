@@ -143,6 +143,68 @@ class AddressTest extends Test {
 		}
 	}
 
+	/**
+	 * A kind the grammar projects NO node for is a different failure from a kind that simply has
+	 * no instance here, and until this clause the two were one message: `--select 'FnMembr:f'`
+	 * and `--select 'DoWhileStmt'` both answered `matched no nodes`, so the reader could not tell
+	 * a typo from an absence and went looking for the declaration. The vocabulary is read off the
+	 * plugin, so the clause fires for whatever grammar is loaded.
+	 *
+	 * KILLED by arm `M-SELECT-MISS-NO-KIND-CLAUSE`, which drops the unknown-kind half of the tail
+	 * and leaves only the name hint — the exact state this pin was written against.
+	 */
+	@:pin('control')
+	@:killer('M-SELECT-MISS-NO-KIND-CLAUSE')
+	public function testSelectUnknownKindIsNamedAsUnknown(): Void {
+		switch resolve({ select: 'FnMembr:f' }) {
+			case Ok(_, _):
+				Assert.fail('resolved a misspelled kind');
+			case Err(message):
+				Assert.stringContains('"FnMembr" is not a node kind this grammar projects', message);
+				Assert.stringContains('did you mean FnMember?', message);
+		}
+	}
+
+	/**
+	 * The complement, and the reason the clause cannot be emitted on every miss: `DoWhileStmt` IS
+	 * projected, this fixture just holds no `do while`. Claiming an unknown kind there would send
+	 * the reader hunting a typo that is not present.
+	 */
+	public function testSelectKnownKindAbsentHereIsNotCalledUnknown(): Void {
+		switch resolve({ select: 'DoWhileStmt' }) {
+			case Ok(_, _):
+				Assert.fail('resolved an absent kind');
+			case Err(message):
+				Assert.stringContains('matched no nodes', message);
+				Assert.isTrue(message.indexOf('is not a node kind') < 0, message);
+		}
+	}
+
+	/**
+	 * The tree's ROOT kind is minted by the plugin's `treeFromRoot`, not projected by the grammar,
+	 * so a vocabulary check that only asked `projectedKinds` would call the one segment every
+	 * `AddressIndex.describe` anchor emits — `module > <kind>` — an unknown kind.
+	 */
+	public function testSelectRootSegmentIsNotCalledUnknown(): Void {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final tree: QueryNode = plugin.parseFile(SRC);
+		final unknown: Array<String> = Address.unknownSelectorKinds(tree, plugin, Selector.parse('module > ClassDecl'));
+		Assert.equals('', unknown.join(', '));
+	}
+
+	/**
+	 * Both spellings of every `--select` kind-equivalence class stay known. On this grammar all four
+	 * are also projected, so what the canon fallback in `unknownSelectorKinds` guards is the other
+	 * shape: an equivalence a plugin publishes as a user-facing ALIAS its walker never emits, where
+	 * asking `projectedKinds` alone would call the documented spelling a typo.
+	 */
+	public function testSelectEquivalenceSpellingsAreNotCalledUnknown(): Void {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final tree: QueryNode = plugin.parseFile(SRC);
+		final selector: Selector = Selector.parse('ClassDecl >> FnMember >> ClassForm >> FinalModifiedMember');
+		Assert.equals('', Address.unknownSelectorKinds(tree, plugin, selector).join(', '));
+	}
+
 	public function testSelectAmbiguousListsCandidates(): Void {
 		// Two `trace(x)` statements — the Call selector matches both.
 		switch resolve({ select: 'Call' }) {
