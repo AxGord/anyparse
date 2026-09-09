@@ -174,16 +174,14 @@ final class Patch {
 		// asking it per edit cost ~19% on a 17 000-line file with 135 ranges under `--all`.
 		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
 		final watched: Array<{ shifted: Int, owner: String, declared: Int }> = [];
-		var delta: Int = 0;
 		for (edit in sorted) {
 			final end: Int = docBlockEnd(source, comments, declGroupStart(source, tree, edit.span.from));
-			if (end >= 0) {
-				final node: Null<QueryNode> = docOwnerNode(source, tree, comments, end);
-				final owner: Null<String> = node?.name;
-				if (node != null && owner != null)
-					watched.push({ shifted: end + delta, owner: owner, declared: declSiblingCount(tree, node) });
-			}
-			delta += edit.text.length - (edit.span.to - edit.span.from);
+			if (end < 0) continue;
+			final shifted: Int = shiftedDocEnd(sorted, end);
+			if (shifted < 0) continue;
+			final node: Null<QueryNode> = docOwnerNode(source, tree, comments, end);
+			final owner: Null<String> = node?.name;
+			if (node != null && owner != null) watched.push({ shifted: shifted, owner: owner, declared: declSiblingCount(tree, node) });
 		}
 		if (watched.length == 0) return null;
 
@@ -223,6 +221,33 @@ final class Patch {
 					+ '`--select \'ClassDecl:<Type>\'`, not the member itself';
 		}
 		return null;
+	}
+
+	/**
+	 * Where the doc block ending at `docEnd` ends in the SPLICED text — moved by the edits that
+	 * lie entirely BEFORE it and by no others, or `-1` when an edit rewrites the block itself and
+	 * the position carries no meaning to map.
+	 *
+	 * The running total this replaced added EVERY preceding edit's delta. The guard watches the
+	 * doc above the declaration group CONTAINING an edit, so for an edit deep inside a type that
+	 * block is the TYPE's own doc — one block watched once per edit, from a position every later
+	 * edit sits after rather than before. From the second edit on, the recorded end was pushed
+	 * past itself onto whatever declaration the offset landed in, and the transfer/rename
+	 * discriminator then compared a module's declaration count against a type body's, which grows
+	 * by construction. Which multi-pair payloads that refused was decided by the delta's SIZE:
+	 * measured on a 16-line fixture, a first pair growing by 1/5/10 characters applied, by
+	 * 15/20/30 refused naming a static field as the doc's new owner, by 40/60 applied again — a
+	 * refusal WINDOW, which is the signature of a position error and not of a doc that moved.
+	 */
+	private static function shiftedDocEnd(sorted: Array<{ span: Span, text: String }>, docEnd: Int): Int {
+		var shifted: Int = docEnd;
+		// Arithmetic only — no lex, no tree walk — so rescanning the edit list per watched block
+		// stays cheap beside the two lexical passes this guard already pays for.
+		for (edit in sorted) if (edit.span.from < docEnd) {
+			if (edit.span.to > docEnd) return -1;
+			shifted += edit.text.length - (edit.span.to - edit.span.from);
+		}
+		return shifted;
 	}
 
 	/**

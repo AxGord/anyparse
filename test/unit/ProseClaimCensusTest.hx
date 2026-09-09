@@ -314,6 +314,7 @@ final class ProseClaimCensusTest extends Test {
 		'unit.query.PatchSliceTest#testAbsentFragmentKeepsTheVerbatimRemedy :: control,base',
 		'unit.query.PatchSliceTest#testDocCodeSampleIndentationSurvives :: base',
 		'unit.query.PatchSliceTest#testDocPayloadWithASpaceGutterApplies :: base',
+		'unit.query.PatchSliceTest#testGrowingPairsUnderOneClassDocAcceptedAtEveryDelta :: base',
 		'unit.query.PatchSliceTest#testInPlaceEditUnderADocAccepted :: base',
 		'unit.query.PatchSliceTest#testInsertAfterAPlainBannerAccepted :: base',
 		'unit.query.PatchSliceTest#testInsertAheadOfADocumentedMemberThatIsAlsoRenamedRefused :: base',

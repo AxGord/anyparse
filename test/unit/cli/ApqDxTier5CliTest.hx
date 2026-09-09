@@ -263,7 +263,7 @@ class ApqDxTier5CliTest extends Test {
 	@:pin('guard')
 	public function testTwoProbeProcessesGetSeparateScratchSlots(): Void {
 		#if nodejs
-		final engine: Null<String> = engineOrSkip();
+		final engine: Null<String> = CliFixture.engineOrSkip();
 		if (engine == null) return;
 		final rootA: String = CliFixture.writeDir('probe_slot_a', []);
 		final rootB: String = CliFixture.writeDir('probe_slot_b', []);
@@ -291,7 +291,7 @@ class ApqDxTier5CliTest extends Test {
 	@:pin('guard')
 	public function testTwoProbeProcessesUnderOneTempRootStillGetSeparateSlots(): Void {
 		#if nodejs
-		final engine: Null<String> = engineOrSkip();
+		final engine: Null<String> = CliFixture.engineOrSkip();
 		if (engine == null) return;
 		final shared: String = CliFixture.writeDir('probe_slot_shared', []);
 		final sourceA: String = 'class AlphaSharedRoot { var alpha:Int = 1; }';
@@ -321,7 +321,7 @@ class ApqDxTier5CliTest extends Test {
 	@:pin('guard')
 	public function testProbeRefusesToStageOntoASymlink(): Void {
 		#if nodejs
-		final engine: Null<String> = engineOrSkip();
+		final engine: Null<String> = CliFixture.engineOrSkip();
 		if (engine == null) return;
 		final root: String = CliFixture.writeDir('probe_slot_symlink', []);
 		final victim: String = '$root/victim.txt';
@@ -398,19 +398,6 @@ class ApqDxTier5CliTest extends Test {
 	}
 
 	#if nodejs
-	/**
-	 * `bin/apq.js`, or null after passing. A child-process fixture needs the CLI
-	 * as a process, and `haxe test-js.hxml` alone does not build one — an arm's
-	 * worktree in particular never has it, which is why these fixtures are
-	 * `guard` rather than `control`.
-	 */
-	private function engineOrSkip(): Null<String> {
-		final engine: String = 'bin/apq.js';
-		if (FileSystem.exists(engine)) return engine;
-		Assert.pass('bin/apq.js is not built — a child-process fixture needs the CLI as a process');
-		return null;
-	}
-
 	/** Run `probe` as a child process under `tmpRoot` and return the slot path it announced. */
 	private function probeChildSlot(engine: String, tmpRoot: String, source: String): String {
 		final result: js.node.ChildProcess.ChildProcessSpawnSyncResult = spawnProbe(engine, tmpRoot, source, null);

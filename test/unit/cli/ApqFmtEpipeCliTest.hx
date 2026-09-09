@@ -34,14 +34,21 @@ class ApqFmtEpipeCliTest extends Test {
 	 * captured separately (redirected on the LEFT side of the pipe) so
 	 * an `Error: write EPIPE` stack trace is visible even though the
 	 * pipeline as a whole still exits 0 via `head`.
+	 *
+	 * The engine has to EXIST for any of that to be measured, and in a mutation track it does
+	 * not: `CliFixture.engineOrSkip` is the family's one owner of that question. Without it
+	 * this fixture spawned `node bin/apq.js` against a worktree with no engine and reported
+	 * `MODULE_NOT_FOUND` as a failed EPIPE contract — `+extra` on every non-fast arm run
+	 * (T876/T898), which is exactly the reading an arm's verdict must not carry.
 	 */
 	public function testEpipeOnStdoutExitsQuietly(): Void {
 		#if (sys || nodejs)
+		final engine: Null<String> = CliFixture.engineOrSkip();
+		if (engine == null) return;
 		final fixture: String = CliFixture.write('epipe_fmt', bigFixtureSource());
 		final exitFile: String = CliFixture.writeAs('epipe_fmt_exit', 'txt', '');
 		final errFile: String = CliFixture.writeAs('epipe_fmt_err', 'txt', '');
-		final script: String =
-			'node bin/apq.js fmt "$fixture" 2>"$errFile" | head -c 1 >/dev/null; echo -n "$${PIPESTATUS[0]}" > "$exitFile"';
+		final script: String = 'node $engine fmt "$fixture" 2>"$errFile" | head -c 1 >/dev/null; echo -n "$${PIPESTATUS[0]}" > "$exitFile"';
 		js.node.ChildProcess.spawnSync('bash', ['-c', script], cast { encoding: 'utf8' });
 		final exitCode: String = File.getContent(exitFile).trim();
 		final stderrText: String = File.getContent(errFile);

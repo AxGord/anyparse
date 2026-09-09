@@ -8,6 +8,8 @@ import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
 
+using StringTools;
+
 /**
  * `Patch.patchNode` — replace ONE unique fragment inside an addressed node,
  * the surgical counterpart of `ReplaceNode` for small edits. The fragment is
@@ -206,6 +208,63 @@ class PatchSliceTest extends Test {
 				Assert.equals(expected, text);
 			case Err(message):
 				Assert.fail('expected Ok, got Err: $message');
+		}
+	}
+
+	/**
+	 * T907 — a multi-pair payload each of whose pairs applies alone was refused as a doc
+	 * TRANSFER, and WHICH deltas refuse was decided by arithmetic rather than by the edit.
+	 * Both pairs sit under the same class-level doc block, so the guard watches that one block
+	 * once per edit — and it mapped the block's end into the spliced text by the TOTAL delta of
+	 * every preceding edit, including the edits that lie AFTER it. From the second edit on the
+	 * recorded end was pushed past itself, and where it landed decided the verdict: MEASURED on
+	 * this fixture at base, padding the first pair by 1/5/10 characters applied, by 15/20/30
+	 * refused naming `LIB` as the doc's new owner, and by 40/60 applied again. A refusal WINDOW
+	 * is the signature of a position error, not of a doc that moved, so the fixture sweeps the
+	 * range instead of pinning one delta — three of its eight cells were red at base.
+	 */
+	@:pin('control')
+	@:killer('M-PATCH-DOCEND-SHIFTS-EVERY-EDIT')
+	public function testGrowingPairsUnderOneClassDocAcceptedAtEveryDelta(): Void {
+		final head: String = '/**\n * Class doc.\n */\nclass Foo {\n\tstatic final LIB:String = \'x\';\n\n\t/**\n\t * First doc.\n\t */\n'
+			+ '\tfunction m1():Void {}\n\n\t/**\n\t * Second doc.\n\t */\n\tfunction m2():Void {}\n}\n';
+		for (pad in [1, 5, 10, 15, 20, 30, 40, 60]) {
+			final padding: String = [for (i in 0...pad) 'x'].join('');
+			final pairs: Array<{ oldText: String, newText: String }> = [
+				{ oldText: ' * First doc.', newText: ' * First doc.$padding' },
+				{ oldText: ' * Second doc.', newText: ' * Second doc, expanded.' }
+			];
+			final expected: String = head.replace(' * First doc.', ' * First doc.$padding')
+				.replace(' * Second doc.', ' * Second doc, expanded.');
+			switch Patch.patchNodeMany(head, BySelector('ClassDecl:Foo'), pairs, false, new HaxeQueryPlugin()) {
+				case Ok(text):
+					Assert.equals(expected, text);
+				case Err(message):
+					Assert.fail('pad $pad: expected Ok, got Err: $message');
+			}
+		}
+	}
+
+	/**
+	 * The other half of the same arithmetic, and the control that keeps the repair from being a
+	 * blanket "never move the watched position": the earlier pair GROWS and lies BEFORE the
+	 * watched doc block, so that block really does move, and the transfer under it must still be
+	 * caught. Only the edits before the block shift it — drop that half and the guard looks for
+	 * the doc `Δ` bytes too early in the spliced text, where the doc is not.
+	 */
+	@:pin('control')
+	@:killer('M-PATCH-DOCEND-NEVER-SHIFTS')
+	public function testTransferUnderADocMovedByAnEarlierGrowingPairRefused(): Void {
+		final source: String = 'class C {\n\tfunction a() {}\n\n\t/**\n\t * About b.\n\t */\n\tfunction b() {}\n}\n';
+		final pairs: Array<{ oldText: String, newText: String }> = [
+			{ oldText: 'function a() {}', newText: 'function a():Int {\n\t\treturn 1;\n\t}' },
+			{ oldText: 'function b() {}', newText: 'function c() {}\n\n\tfunction b() {}' }
+		];
+		switch Patch.patchNodeMany(source, BySelector('ClassDecl:C'), pairs, false, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.fail('expected Err (refusal), got Ok:\n$text');
+			case Err(message):
+				Assert.stringContains('moves the `/**` block above `b` onto `c`', message);
 		}
 	}
 
@@ -549,14 +608,12 @@ class PatchSliceTest extends Test {
 	 *
 	 * Skipped, saying so, when the engine has not been built: `haxe test-js.hxml` alone
 	 * is enough to run the suite, and a missing `bin/apq.js` is not a failing contract.
+	 * `CliFixture.engineOrSkip` is the family's one owner of that question.
 	 */
 	public function testCliPreviewAndWriteBothAnnounceThemselvesOnStderr(): Void {
 		#if nodejs
-		final engine: String = 'bin/apq.js';
-		if (!sys.FileSystem.exists(engine)) {
-			Assert.pass('bin/apq.js is not built — the stderr contract needs the CLI as a process');
-			return;
-		}
+		final engine: Null<String> = CliFixture.engineOrSkip();
+		if (engine == null) return;
 		final source: String = 'class C {\n\tfunction f():Int {\n\t\ttrace(1);\n\t\treturn 1;\n\t}\n}\n';
 		final payload: String = CliFixture.writeAs(
 			'apq_patch_stderr_payload', 'txt', 'trace(1);\n====\ntrace(2);\n====\nreturn 1;\n====\nreturn 3;\n'

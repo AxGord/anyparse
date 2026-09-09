@@ -1,6 +1,7 @@
 package unit.cli;
 
 import anyparse.core.TempScratch;
+import utest.Assert;
 #if (sys || nodejs)
 import haxe.Exception;
 import haxe.io.Path;
@@ -252,6 +253,26 @@ final class CliFixture {
 		fn();
 		return '';
 		#end
+	}
+
+	/**
+	 * `bin/apq.js`, or null after passing — the ONE owner of the "is the engine built?"
+	 * question every child-process fixture in this suite has to ask.
+	 *
+	 * A fixture that spawns the CLI as a PROCESS needs a built `bin/apq.js`, and
+	 * `haxe test-js.hxml` alone does not build one. A MUTATION TRACK never has it:
+	 * `tools/mutation-check.sh` builds only `test.js`, into a directory of its own, and runs it
+	 * with the CWD set to a fresh worktree whose gitignored `bin/` holds no engine — so
+	 * `node bin/apq.js` there answers `MODULE_NOT_FOUND`, and the fixture reads as a failure of
+	 * whatever the arm cut rather than of its own environment. Two classes carried a private copy
+	 * of this guard and a third an inline one; the fourth fixture of the family had none, and it
+	 * was `+extra` in EVERY non-fast arm run for as long as it existed (T876/T898).
+	 */
+	public static function engineOrSkip(): Null<String> {
+		final engine: String = 'bin/apq.js';
+		if (FileSystem.exists(engine)) return engine;
+		Assert.pass('bin/apq.js is not built — a child-process fixture needs the CLI as a process');
+		return null;
 	}
 
 }
