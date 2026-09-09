@@ -133,10 +133,13 @@ final class RefShapeKindProjectionTest extends Test {
 	 * index for an array, a key for a map, a field name for an anonymous structure — so a probe
 	 * reads the shape's OWN text instead of a copy of it. That is what makes this a differential
 	 * and not a string compare: a token that drifts is parsed in its NEW spelling, and the arm goes red on the parse rather
-	 * than on an equality nobody wrote down. A probe is only as sharp as the kind it can name, though: where the grammar
-	 * projects no node distinct to the token — `this`, `super`, `new`, `_` are ordinary identifiers to it — the probe proves
-	 * the token PARSES in that position and nothing more, and a drift to another identifier would pass. The punctuation probes
-	 * do not have that slack, since the drifted spelling stops parsing or projects a different node. `before` / `after` wrap
+	 * than on an equality nobody wrote down. A probe is only as sharp as the kind it can name, and what it asserts is that
+	 * SOME node of that kind spans text holding the token — so wherever the grammar projects no node distinct to the token,
+	 * the probe proves it PARSES in that position and nothing more. That is 20 of the 34 slots, not four: the four identifier
+	 * keywords (`this`, `super`, `new`, `_` are plain `IdentExpr`) and all sixteen `@:<name>` metadata fields, because `Meta`
+	 * is projected for any name at all — measured, `@:keepx class C {}` parses to `(Meta @:keepx)` whose span is the whole
+	 * declaration. The 14 that DO discriminate are the ones whose drift stops the parse or changes the kind: the operators,
+	 * the `#if` family, the delimiters, the string quote, `private`, and the `@:` / `@` prefixes. `before` / `after` wrap
 	 * it. A probe that needs the token TWICE — a string delimiter closes what it opened — spells
 	 * the second occurrence as a literal in `after`, the same way the paren and bracket probes
 	 * hold their partner fixed while varying one end.

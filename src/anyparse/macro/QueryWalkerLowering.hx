@@ -810,7 +810,8 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	 * Every node kind the generated walker can project - this grammar's whole
 	 * `QueryNode.kind` vocabulary.
 	 *
-	 * Nothing in the engine consumes it. It is the PROJECTED half of the differential that
+	 * `Address.unknownSelectorKinds` reads it to tell a `--select` typed against the wrong vocabulary
+	 * from one that merely matches nothing here. It is also the PROJECTED half of the differential that
 	 * answers whether a kind name a plugin's `RefShape` declares is a name its own parser ever
 	 * emits: a stale entry there fails OPEN - the query silently does not see the node - and no
 	 * build error can catch it, because every kind set is an `Array<String>`.

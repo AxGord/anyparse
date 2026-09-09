@@ -640,14 +640,6 @@ final class AstCommand implements CliCommand {
 		if (maxChildren >= 0) filterParts.push('--max-children=$maxChildren');
 		if (preFilterLen > 0) filterParts.push('$preFilterLen pre-filter match(es) dropped by child-count');
 		final filterNote: String = filterParts.length == 0 ? '' : ' (with ${filterParts.join(', ')})';
-		// A kind NO rule of the grammar projects is a different question from a kind this file
-		// happens not to hold, and the per-file listing answers only the second: it would offer
-		// `Kinds present here: …` for a spelling that can never match ANY file. Say the vocabulary
-		// is wrong and stop — the whole-grammar suggestion is already in the clause.
-		if (unknownKinds.length > 0) {
-			CliIo.stderr('apq ast: --select "$selectExpr"$filterNote matched no nodes in $fileLabel$unknownKinds\n');
-			return;
-		}
 		final present: Array<String> = collectKinds(tree);
 		// Kind-fuzzy "did you mean" — surface the closest match in
 		// `present` for the first kind segment of `selectExpr`
@@ -670,6 +662,14 @@ final class AstCommand implements CliCommand {
 			? ' If "$firstKind" is a TypeName declared elsewhere, ast is single-file; try apq refs $firstKind src/ --decls ('
 				+ 'declaration sites), apq uses $firstKind src/ (type positions), or apq blast $firstKind src/ (full change-impact).'
 			: '';
+		// A kind NO rule of the grammar projects is a different question from a kind this file happens
+		// not to hold, and the per-file listing answers only the second. Say the vocabulary is wrong and
+		// stop — but KEEP the cross-project pointer: it is orthogonal to the listing, and a TypeName
+		// typed into `--select` is the commonest way to reach a kind no grammar projects at all.
+		if (unknownKinds.length > 0) {
+			CliIo.stderr('apq ast: --select "$selectExpr"$filterNote matched no nodes in $fileLabel$unknownKinds.$crossProjectHint\n');
+			return;
+		}
 		CliIo.stderr(
 			'apq ast: --select "$selectExpr"$filterNote matched no nodes in $fileLabel. Kinds present here: ${present.join(', ')}.'
 			+ '$fuzzyLine$crossProjectHint Kinds are exact node-constructor names — run `apq ast $fileLabel` to see the tree.\n'

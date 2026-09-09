@@ -68,10 +68,11 @@ class QueryWalkerCodegen {
 		));
 		fields.push(kindsField(
 			'projectedKinds', result.projectedKinds,
-			'Every node kind this walker can project - the grammar\'s whole `QueryNode.kind` vocabulary, derived from the same '
-			+ 'shape the walk itself is emitted from, so a ctor added to the grammar lands here with no hand edit. No engine path '
-			+ 'reads it: it is the PROJECTED half of the differential against a plugin\'s hand-written `RefShape` kind sets, where '
-			+ 'a stale spelling fails OPEN - the query silently does not see the node, and an `Array<String>` cannot be typo-checked.'
+			'Every node kind this walker can project - the grammar\'s whole `QueryNode.kind` vocabulary, derived from the same shape the '
+			+ 'walk itself is emitted from, so a ctor added to the grammar lands here with no hand edit. `Address` reads it to name a '
+			+ '`--select` kind no rule projects; it is also the PROJECTED half of the differential against a plugin\'s hand-written '
+			+ '`RefShape` kind sets, where a stale spelling fails OPEN - the query silently does not see the node, and an `Array<String>` '
+			+ 'cannot be typo-checked.'
 		));
 		fields.push(kindsField(
 			'ambiguousProjectedKinds', result.ambiguousProjectedKinds,

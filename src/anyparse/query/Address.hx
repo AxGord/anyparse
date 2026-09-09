@@ -188,7 +188,15 @@ final class Address {
 		final projected: Array<String> = plugin.projectedKinds();
 		final clauses: Array<String> = [
 			for (kind in unknownSelectorKinds(tree, plugin, selector)) {
-				final near: Array<String> = EditDistance.closest(kind, projected);
+				// The pool here is the WHOLE grammar vocabulary (238 kinds on this tree), not the ~11 a file
+				// happens to hold, and `closest`'s flat Levenshtein ceiling of 3 turns every short query into
+				// noise — `Fix` came back `Div, Add, And`, `*` came back `Eq, Gt, In`. Keep a substring lead
+				// (`Expr` -> `FnExpr` is real) and otherwise demand a distance under half the query, which is
+				// what lets `ClassDeclz` -> `ClassDecl` through and stops `Fix`.
+				final near: Array<String> = EditDistance.closest(kind, projected)
+					.filter(
+						candidate -> candidate.indexOf(kind) >= 0 || EditDistance.between(kind, candidate, kind.length) * 2 < kind.length
+					);
 				near.length == 0
 					? '"$kind" is not a node kind this grammar projects'
 					: '"$kind" is not a node kind this grammar projects (did you mean ${near.join(', ')}?)';

@@ -1196,7 +1196,12 @@ Rules and properties:
   that is not present. `apq source` carries the same tail, and `apq ast --select`
   answers the unknown-kind clause ALONE: its `Kinds present here: …` listing
   answers "which kinds does this file hold", which is the wrong question for a
-  spelling no file could match.
+  spelling no file could match. It keeps the cross-project pointer, though —
+  a TypeName typed into `--select` is the commonest way to reach a kind no
+  grammar projects, and `refs` / `uses` / `blast` are still the walkers that
+  find it. The did-you-mean over the whole vocabulary demands a substring hit
+  or an edit distance under half the query, so `ClassDeclz` still suggests
+  `ClassDecl` while `Fix` suggests nothing.
 - Named/pattern addresses are **edit-stable**: they survive edits above them,
   so a chain of ops needs no re-locate step between edits (a position rots as
   soon as an earlier edit shifts lines).
