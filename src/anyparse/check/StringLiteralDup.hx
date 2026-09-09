@@ -50,30 +50,40 @@ using Lambda;
  *     value duplicated across logic; extracting it would break the annotation's
  *     meaning. Such a literal neither counts toward a group nor is reported.
  *  4. it is NOT an entry of a DATA TABLE — a node of the grammar's OWN
- *     `RefShape.arrayLiteralKind`, outside a case PATTERN, holding `MIN_TABLE_ENTRIES` or
- *     more children, every one of them a plain string literal. A grammar kind-name vocabulary (`['ClassDecl',
- *     'FnMember', …]`), a keyword list, a MIME table: those literals are DATA, and the
- *     array IS already the single named place the advisory asks for, so hoisting one of 34
- *     entries into a constant leaves the table unreadable and the value no more centralised
- *     than it was. Such an entry neither counts toward a group nor is reported — the same
+ *     `RefShape.arrayLiteralKind`, outside a case PATTERN, EVERY child of which is a literal: a plain string
+ *     literal, a childless leaf of a kind the grammar declares to BE one (`RefShape.literalTypeNames` keys — a
+ *     number, a bool), or a map ENTRY (`RefShape.mapLiteralEntryKind`) whose every side is again one of those.
+ *     ARITY IS NOT PART OF THE TEST, and was never the concept: a grammar kind-name vocabulary (`['ClassDecl',
+ *     'FnMember', …]`), a keyword list, a MIME table, a ONE-name array (`arrayTypeNames: ['Array']`), a
+ *     `kind => type` map — those literals are DATA, and the collection IS already the single named place the
+ *     advisory asks for, so hoisting one of its entries into a constant leaves the table unreadable and the
+ *     value no more centralised than it was. Such an entry neither counts toward a group nor is reported — the same
  *     treatment metadata gets above.
  *
  * ### What the table carve-out costs
  *
- * Measured over this project's `src/` when it landed: 375 findings to 262, and 89 to 9 in
- * the grammar plugin whose kind vocabularies motivated it. Nothing was ADDED, and the
- * movement splits two ways: 113 groups disappear outright, and 43 more keep their finding
- * with a LOWER count (their table entries stopped counting but enough logic occurrences
- * remain). The blast-radius gate reads that second bucket as no movement, because this same
- * slice masks the repetition count — under the pre-S15 identity the same pair reads 43 added
- * / 156 removed, which is the honest way to describe it. Of the 113 groups it
- * removed, 16 were PURE vocabulary (every occurrence a table entry, so nothing was lost),
- * 44 keep one occurrence outside a table, and 53 keep TWO — one short of the default
- * threshold. That last bucket is the honest price and it has a real shape:
- * `'SingleStringExpr'` in `HaxeStringFoldSupport` occurs three times, once as an entry of
- * the primary-kind array and twice in logic (a `case` pattern and a `!=`), and is no longer
- * reported. A project that wants that bucket back sets
- * `string-literal-dup.minOccurrences: 2`.
+ * Two landings, each a READING of the tree it was taken on. The carve-out first landed as
+ * three-or-more string entries and took this project's `src/` from 375 findings to 262, its grammar
+ * plugin from 89 to 9. Dropping the arity floor and admitting map entries took `src` + `test` from
+ * 2387 to 2315 on `050c91bb` (src 189 -> 165, test 2198 -> 2150), the grammar plugin from 11 to 0,
+ * and the user's Pony tree from 48 to 44 over `src` (92 to 86 over all six roots). Nothing was ADDED
+ * in any of those pairs, on either tree.
+ * The 72 groups the widening removed split by what is LEFT once their collection entries stop
+ * counting: 38 are PURE data — every occurrence was an entry (across one collection or several,
+ * which is the criterion's one blind spot: three separate `['haxe']` argument arrays read as three
+ * tables and go silent together — a declaration-initialiser-only refinement would close it), and `'String'`
+ * nine times is the shape, all nine a value of a `kind => type` or `method => return` map — while 14
+ * keep one logic occurrence and 20 keep TWO, one short of the default threshold. That last bucket is
+ * the honest price and it has a real shape: `ownedMeta = [':postfix']` beside two
+ * `entry.name == ':postfix'` comparisons, and the four Pony sites where a `checkMeta([':asset'])`
+ * vocabulary sits beside two `getMeta(':asset')` calls. A project that wants it back sets
+ * `string-literal-dup.minOccurrences: 2`. A further 20 findings keep their anchor with a LOWER count,
+ * which the blast gate reads as no movement because `messageIdentity` masks the repetition count.
+ * Of the 72, 65 fall to the arity relaxation alone and 7 to the map arm. The third arm — a childless
+ * NON-string literal, so that `['Map' => 1, 'Array' => 0]` reads as the table it is — moved nothing
+ * on either tree, because `'Array'` was already under the threshold once its one-name array stopped
+ * counting. It stays because the criterion is 'a collection of only literals' and a number IS one: a
+ * type restriction there is exactly the leak-by-category a positive criterion exists to close.
  *
  * ## Grouping
  *
@@ -146,20 +156,6 @@ final class StringLiteralDup implements Check implements ConfigAware implements 
 	private static inline final MESSAGE_PREVIEW: Int = 40;
 
 	/**
-	 * Least entries a collection literal must hold, ALL of them plain string literals, before it
-	 * is read as a data TABLE rather than as logic. Three rather than two because a
-	 * two-element array is as readable inline as it is behind a name, so treating it as a
-	 * vocabulary buys nothing and only widens the exemption.
-	 *
-	 * (An earlier revision defended the threshold as keeping a binary concatenation of two
-	 * literals out. That reason is dead: the kind gate in `isTable` excludes `"a" + "b"`
-	 * whatever the threshold says, because its node is not the grammar's collection literal.
-	 * Stated so nobody lowers the constant on the strength of an argument that no longer
-	 * applies.)
-	 */
-	private static inline final MIN_TABLE_ENTRIES: Int = 3;
-
-	/**
 	 * The tail of a finding message, shared by the builder and by `messageIdentity` so the
 	 * mask anchor cannot drift from the wording it points at. Read BACKWARDS from, because
 	 * the repetition count precedes it — anchoring on ` repeated ` instead would also mask a
@@ -202,6 +198,11 @@ final class StringLiteralDup implements Check implements ConfigAware implements 
 		// `minLen` below is genuinely per-file, since it comes from the discovered config.
 		final metaKinds: Array<String> = plugin.metaShape().metaKinds;
 		final shape: RefShape = plugin.refShape();
+		// The grammar's own literal vocabulary, read off the KEYS of the kind -> type map: what
+		// a data table may hold besides a plain string (a number, a bool). Null when the grammar
+		// declares none, which simply leaves a table string-only.
+		final literals: Null<Map<String, String>> = shape.literalTypeNames;
+		final literalKinds: Array<String> = literals == null ? [] : [for (kind in literals.keys()) kind];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
@@ -212,6 +213,8 @@ final class StringLiteralDup implements Check implements ConfigAware implements 
 				support: folds,
 				metaKinds: metaKinds,
 				arrayLiteralKind: shape.arrayLiteralKind,
+				mapEntryKind: shape.mapLiteralEntryKind,
+				literalKinds: literalKinds,
 				casePatternKind: shape.plainCasePatternKind,
 				minLen: positiveOr(config.intOption(RULE_ID, 'minLength'), DEFAULT_MIN_LENGTH)
 			};
@@ -302,8 +305,8 @@ final class StringLiteralDup implements Check implements ConfigAware implements 
 
 	/**
 	 * Whether `node` IS a data TABLE: a COLLECTION LITERAL the grammar itself names
-	 * (`RefShape.arrayLiteralKind`) holding `MIN_TABLE_ENTRIES` or more children, every single
-	 * one a plain string literal.
+	 * (`RefShape.arrayLiteralKind`) whose every child is a DATA ENTRY (`isDataEntry`) — of ANY
+	 * arity, map entries included.
 	 *
 	 * Both halves are load-bearing and each was learned the hard way. The kind gate makes the
 	 * carve-out POSITIVE — only a construct the grammar declares to be a collection literal can
@@ -315,10 +318,12 @@ final class StringLiteralDup implements Check implements ConfigAware implements 
 	 * a table. Measured on this project's `src/`, the tighter gate removes exactly the same 113
 	 * findings the shape-only one did, so closing the leak cost nothing.
 	 *
-	 * The homogeneity half then keeps LOGIC out of the collection kind itself, which in Haxe is
-	 * shared with the map literal: a map entry pairs its key with a value under an `Arrow`, so
-	 * `['kkkk' => 1, 'llll' => 2, 'mmmm' => 3]` has no bare-literal child and its keys stay
-	 * candidates.
+	 * The homogeneity half then keeps LOGIC out of the collection kind itself, and it is what the
+	 * ARITY floor used to approximate — badly. A floor of three read `arrayTypeNames: ['Array']`
+	 * as logic and a 34-name vocabulary as data, though both are a field's stored value and
+	 * neither is an expression; the floor also could not see the MAP literal at all, which Haxe
+	 * spells with the SAME collection kind, pairing key and value under an `Arrow`. Homogeneity
+	 * alone decides both now, through `isDataEntry`.
 	 *
 	 * One shape the KIND gate cannot reach, because the grammar spells it with the same kind: an
 	 * array destructuring PATTERN (`case ["aaaa", "bbbb"]:`) is a collection literal by kind and
@@ -331,9 +336,32 @@ final class StringLiteralDup implements Check implements ConfigAware implements 
 	 * exactly as it did before — a missing seam disables the exemption, never the rule.
 	 */
 	private static function isTable(node: QueryNode, source: String, ctx: ScanCtx, inPattern: Bool): Bool {
-		final kids: Array<QueryNode> = node.children;
-		return !inPattern && node.kind == ctx.arrayLiteralKind && kids.length >= MIN_TABLE_ENTRIES
-			&& kids.foreach(kid -> ctx.support.literalOf(kid, source) != null);
+		return !inPattern && node.kind == ctx.arrayLiteralKind && node.children.foreach(kid -> isDataEntry(kid, source, ctx));
+	}
+
+	/**
+	 * Whether `node` is a DATA entry of a collection literal — the POSITIVE half of the table
+	 * criterion, and the only thing the old arity floor stood in for.
+	 *
+	 * Three shapes qualify, each named by the GRAMMAR rather than by this check: a plain string
+	 * literal (`StringFoldSupport.literalOf`), a childless leaf of a kind the grammar declares to
+	 * BE a literal (`RefShape.literalTypeNames` keys — a number, a bool), and a map ENTRY
+	 * (`RefShape.mapLiteralEntryKind`) every side of which is again one of these. The childless
+	 * test on the second is what keeps an INTERPOLATED string out: it carries its captured
+	 * expressions as children, and `literalOf` has already refused it.
+	 *
+	 * The map arm requires BOTH sides, not the key alone, because a positive answer makes
+	 * `collect` skip the whole subtree — a `'kkkk' => f(x)` pair would take an arbitrary value
+	 * expression down with it. The price is small and in the safe direction: a map whose values
+	 * are calls keeps its keys as candidates.
+	 *
+	 * A grammar naming neither a map-entry kind nor a literal vocabulary still gets the
+	 * string-only table it had; a missing seam narrows the exemption, never the rule.
+	 */
+	private static function isDataEntry(node: QueryNode, source: String, ctx: ScanCtx): Bool {
+		return node.kind == ctx.mapEntryKind
+			? node.children.foreach(part -> isDataEntry(part, source, ctx))
+			: ctx.support.literalOf(node, source) != null || (node.children.length == 0 && ctx.literalKinds.contains(node.kind));
 	}
 
 	/** `content` quoted for a message, elided to `MESSAGE_PREVIEW` characters so a long literal does not bloat the report. */
@@ -362,6 +390,8 @@ private typedef ScanCtx = {
 	final support: StringFoldSupport;
 	final metaKinds: Array<String>;
 	final arrayLiteralKind: Null<String>;
+	final mapEntryKind: Null<String>;
+	final literalKinds: Array<String>;
 	final casePatternKind: Null<String>;
 	final minLen: Int;
 };

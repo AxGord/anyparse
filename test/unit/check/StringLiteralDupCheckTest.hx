@@ -22,7 +22,10 @@ using StringTools;
  * first occurrence. The occurrence threshold and its boundary, the length boundary,
  * the by-construction empty / single-char exemption, the interpolation
  * exclusion (in both directions), the metadata-argument exclusion, quote-style-
- * agnostic grouping, and the `apqlint.json` overrides are all pinned.
+ * agnostic grouping, and the `apqlint.json` overrides are all pinned. So is the
+ * DATA-TABLE criterion, in the shape a lowered threshold could not have expressed: a collection
+ * literal of only literals is a table at ANY arity and in the map spelling too, while one mixing an
+ * identifier with its literals stays logic.
  * Report-only — `fix` yields no edits (the constant's name is intent).
  */
 class StringLiteralDupCheckTest extends Test {
@@ -171,12 +174,20 @@ class StringLiteralDupCheckTest extends Test {
 		Assert.equals(0, violations(body('var v = ["aaaa", "bbbb", "cccc"]; trace("aaaa"); trace("aaaa");')).length);
 	}
 
-	public function testTwoLiteralSiblingsAreNotATable(): Void {
-		// Boundary: `MIN_TABLE_ENTRIES` is 3, so a two-element array is still logic and its
-		// entry counts. (The concatenation beside it is excluded by the KIND gate, not by the
-		// threshold — its node is not the grammar's collection literal. Kept in the fixture
-		// because it contributes a third occurrence, not as evidence about the threshold.)
-		Assert.equals(1, violations(body('var a = ["aaaa", "bbbb"]; var b = "aaaa" + "zzzz"; trace("aaaa");')).length);
+	/**
+	 * THE difference an arity floor hid. A ONE- or TWO-name array of only literals is a vocabulary
+	 * exactly as a thirty-name one is — `arrayTypeNames: ['Array']` and `ownedMeta = [':postfix']`
+	 * are the shapes that motivated dropping the floor — so its entries are DATA and stop
+	 * counting. The concatenation beside it is excluded by the KIND gate, not by arity: its node
+	 * is not the grammar's collection literal, so it still contributes the occurrence that would
+	 * flag the group if the array entries counted, which is what makes this an assertion about
+	 * arity and nothing else. Killed by arm `M-STRING-LITERAL-DUP-TABLE-ARITY`.
+	 */
+	@:pin('control')
+	@:killer('M-STRING-LITERAL-DUP-TABLE-ARITY')
+	public function testSmallCollectionOfOnlyLiteralsIsATable(): Void {
+		Assert.equals(0, violations(body('var a = ["aaaa", "bbbb"]; var b = "aaaa" + "zzzz"; trace("aaaa");')).length);
+		Assert.equals(0, violations(body('var a = ["aaaa"]; var b = "aaaa" + "zzzz"; trace("aaaa");')).length);
 	}
 
 	public function testCallArgumentsAreNotATable(): Void {
@@ -188,17 +199,49 @@ class StringLiteralDupCheckTest extends Test {
 		Assert.equals(1, violations(body('g("aaaa", "aaaa", "aaaa");')).length);
 	}
 
-	public function testMapLiteralKeysAreNotATable(): Void {
-		// A map entry pairs its key with a value, so the array's children are the PAIRS, not
-		// literals — a repeated key stays a candidate.
-		Assert.equals(1, violations(body('var m = ["aaaa" => 1, "aaaa" => 2, "aaaa" => 3];')).length);
+	/**
+	 * The second difference: Haxe spells a map literal with the SAME collection kind, pairing key
+	 * and value under the grammar's `mapLiteralEntryKind`, so a table of only literals had no
+	 * bare-literal child and every key stayed a candidate — nine `'String'` values of a
+	 * `kind => type` map in the grammar plugin were the standing evidence. Three entries, so the
+	 * arity floor cannot be what carries this one. Killed by arm
+	 * `M-STRING-LITERAL-DUP-MAP-ENTRY-BLIND`.
+	 */
+	@:pin('control')
+	@:killer('M-STRING-LITERAL-DUP-MAP-ENTRY-BLIND')
+	public function testMapOfOnlyStringLiteralsIsATable(): Void {
+		Assert.equals(0, violations(body('var m = ["aaaa" => "bbbb", "aaaa" => "cccc", "aaaa" => "dddd"];')).length);
+	}
+
+	/**
+	 * The third arm, and the only one that moved NOTHING when it landed — on this project's
+	 * `src` + `test` and on the user's Pony tree alike. A map that stores numbers is a table as
+	 * much as one that stores strings (`indexedElementTypeParams: ['Map' => 1, 'Array' => 0]`),
+	 * and the entry test says so by asking the GRAMMAR which kinds are literals
+	 * (`RefShape.literalTypeNames` keys) rather than admitting strings only. A measured-inert
+	 * clause is exactly the one that rots unnoticed, which is why it is pinned. Killed by arm
+	 * `M-STRING-LITERAL-DUP-STRING-ONLY-ENTRIES`.
+	 */
+	@:pin('control')
+	@:killer('M-STRING-LITERAL-DUP-STRING-ONLY-ENTRIES')
+	public function testMapWithNonStringValuesIsATable(): Void {
+		Assert.equals(0, violations(body('var m = ["aaaa" => 1, "aaaa" => 2, "aaaa" => 3];')).length);
+	}
+
+	public function testInterpolatedEntryKeepsTheCollectionLogic(): Void {
+		// The entry test admits a non-string literal by KIND, so it has to refuse an interpolated
+		// string, whose kind IS a literal kind: it carries its captured expressions as children,
+		// and the childless half of the test is what keeps it out. The array is therefore not a
+		// table and its plain entry still counts, reaching the threshold with the two traces.
+		Assert.equals(1, violations(body('var v = [\'aaaa\', \'bb $$x\']; trace("aaaa"); trace("aaaa");')).length);
 	}
 
 	public function testObjectLiteralValuesAreNotATable(): Void {
 		// An object literal is a different kind from the collection literal, so the KIND gate
-		// rejects it. (Its values also sit under FIELD nodes, which would have excluded it by
-		// homogeneity too — unlike the map literal next door, which SHARES the collection kind
-		// and is genuinely carried by homogeneity alone.)
+		// rejects it — deliberately, and unlike the map literal next door, which SHARES the
+		// collection kind and is now read through the grammar's map-entry kind. An object literal
+		// is how a Haxe expression builds an anonymous VALUE, not only how a file spells a table,
+		// so admitting it would exempt a struct assembled in logic.
 		Assert.equals(1, violations(body('var o = { a: "aaaa", b: "aaaa", c: "aaaa" };')).length);
 	}
 
@@ -238,9 +281,15 @@ class StringLiteralDupCheckTest extends Test {
 		Assert.equals(1, violations(body('var v = #if js "aaaa" #elseif neko "aaaa" #else "aaaa" #end;')).length);
 	}
 
+	/**
+	 * The homogeneity half, inside the collection kind itself, and the half that had to SURVIVE
+	 * the widening: with arity gone it is the only thing left separating a vocabulary from an
+	 * expression list, so an array holding one identifier beside its literals is logic and its
+	 * literals count. Killed by arm `M-STRING-LITERAL-DUP-TABLE-ANY`.
+	 */
+	@:pin('control')
+	@:killer('M-STRING-LITERAL-DUP-TABLE-ANY')
 	public function testMixedArrayIsNotATable(): Void {
-		// The homogeneity half, inside the collection kind itself: an array holding one
-		// non-literal element is an expression list, not a vocabulary, so its literals count.
 		Assert.equals(1, violations(body('var v = ["aaaa", x, "aaaa", "aaaa"];')).length);
 	}
 
