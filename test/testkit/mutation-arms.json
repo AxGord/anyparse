@@ -2555,9 +2555,17 @@
 			"name": "M-INLINE-SUBTYPE-REPORT-INDEX",
 			"type": "anyparse.check.PreferInline",
 			"method": "run",
-			"find": "\tfinal index: SymbolIndex = RefactorSupport.widestScopeIndex(plugin, report) ?? report;",
-			"replace": "\tfinal index: SymbolIndex = report;",
-			"note": "the subtype / build-macro / interface ABSENCE questions go back to the report index, so `hxq lint <one file> --fix` inserts `inline` on a method a subtype in an unlinted file overrides — the S177 shape in the prefer-inline rule"
+			"find": "\t\tfinal built: SymbolIndex = RefactorSupport.widestScopeIndex(plugin) ?? SymbolIndex.build(files, plugin);",
+			"replace": "\t\tfinal built: SymbolIndex = SymbolIndex.build(files, plugin);",
+			"note": "the subtype / build-macro / interface ABSENCE questions go back to the report index, so `hxq lint <one file> --fix` inserts `inline` on a method a subtype in an unlinted file overrides — the S177 shape in the prefer-inline rule; re-encoded in S190 when the index became a per-candidate thunk"
+		},
+		{
+			"name": "M-INLINE-REFLECT-REPORT-SCOPE",
+			"type": "anyparse.check.PreferInline",
+			"method": "run",
+			"find": "\t\t\tfor (entry in ReflectionScan.scopeFiles(files, plugin)) {",
+			"replace": "\t\t\tfor (entry in files) {",
+			"note": "the reflection gate narrows back to the REPORT files, so `hxq lint <one file> --fix` inlines a method a `Reflect.field` in an unlinted file names — MEASURED on Haxe 4.3.7: under `--dce full` a statically-called method read reflectively answers FOUND while plain and MISSING once inline"
 		},
 		{
 			"name": "M-COND-NAMES-DROP-META-NAME",

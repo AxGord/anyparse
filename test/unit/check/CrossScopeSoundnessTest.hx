@@ -107,6 +107,24 @@ class CrossScopeSoundnessTest extends Test {
 		+ '\tpublic function reach(a: A): Dynamic {\n\t\treturn Reflect.field(a, \'My_Field\');\n\t}\n\n}\n';
 
 	/**
+	 * The reacher whose reflective string names the METHOD rather than the field — the evidence
+	 * `prefer-inline` reads, and the only cell that supplies it.
+	 *
+	 * The field cell above cannot stand in for it: `prefer-inline` gates on METHOD names, so a
+	 * `Reflect.field(a, 'My_Field')` leaves its scan silent and its report-scoped half of the
+	 * defect invisible. What it licenses is real and measured on Haxe 4.3.7: under `--dce full` a
+	 * method both statically called and read reflectively answers FOUND while plain and MISSING
+	 * once marked `inline`.
+	 *
+	 * It keeps the FIELD name beside the method one so the cell stays a `reflection` cell for
+	 * every other rule — drop it and `naming` renames a field nothing reaches, which puts a
+	 * sixth rule in `FIX_WRITERS` and says nothing about the route this cell exists to supply.
+	 */
+	private static final B_REFLECT_METHOD: String = 'package pkg;\n\nclass B {\n\n\tpublic function new() {}\n\n'
+		+ '\tpublic function reach(a: A): Dynamic {\n\t\tReflect.field(a, \'My_Field\');\n'
+		+ '\t\treturn Reflect.field(a, \'helper\');\n\t}\n\n}\n';
+
+	/**
 	 * The reacher that WRITES the private field rather than reading it — the evidence
 	 * `prefer-final-field` needs and no other cell supplies.
 	 */
@@ -140,7 +158,8 @@ class CrossScopeSoundnessTest extends Test {
 		{ name: 'access-grant-unread-in-file', decl: A_UNUSED, grantee: B_ACCESS },
 		{ name: 'reflection-unread-in-file', decl: A_UNUSED, grantee: B_REFLECT },
 		{ name: 'access-write', decl: A_USED, grantee: B_WRITE },
-		{ name: 'subtype-override', decl: A_USED, grantee: B_OVERRIDE }
+		{ name: 'subtype-override', decl: A_USED, grantee: B_OVERRIDE },
+		{ name: 'reflection-method', decl: A_USED, grantee: B_REFLECT_METHOD }
 	];
 
 	/**
@@ -209,14 +228,16 @@ class CrossScopeSoundnessTest extends Test {
 	 * What a project declaring `resolutionLibs` and NO `resolutionRoots` loses — MEASURED, and the one
 	 * list in this class that is not empty by contract.
 	 *
-	 * TWENTY-FOUR entries over the eight cells (fourteen over the six the fixture had
-	 * before S187), and unchanged by T868 — a libs-only scope holds the sibling in
+	 * TWENTY-SEVEN entries over the nine cells (twenty-four over the eight before S190,
+	 * fourteen over the six the fixture had before S187), and unchanged by T868 — a libs-only scope holds the sibling in
 	 * NEITHER half, so widening the name-keyed seam buys nothing here: `naming` renames a field five of the six
 	 * routes reach, `unused-parameter` deletes a parameter three cross-file callers still pass, `unused-private`
 	 * deletes two live members. Sixteen are WRITES and eight are findings, which is the same defect one step earlier.
 	 * The ten S187 added are the two cells that supply cross-file WRITE and OVERRIDE evidence: `prefer-final-field`
 	 * makes a field final that a grantee assigns, `prefer-inline` inlines a method a subtype overrides, and `naming`
 	 * / `unused-parameter` lose the same proofs on the two new routes they lose on the old ones.
+	 * The three S190 added are the `reflection-method` cell, where a libs-only scope loses BOTH reflective
+	 * strings at once: `naming` renames the field one, `prefer-inline` inlines the method the other names.
 	 * Every one of them is a repair S177 / S179 / S180 shipped and this scope shape undoes. One cell is
 	 * absent by right: `allow-grant` puts the `@:allow` in the DECLARING file, so the narrow report scope
 	 * sees the grant without help and both arms refuse alike.
@@ -226,10 +247,12 @@ class CrossScopeSoundnessTest extends Test {
 		'edit:naming@access-grant-unread-in-file',
 		'edit:naming@access-write',
 		'edit:naming@reflection',
+		'edit:naming@reflection-method',
 		'edit:naming@reflection-unread-in-file',
 		'edit:naming@subtype',
 		'edit:naming@subtype-override',
 		'edit:prefer-final-field@access-write',
+		'edit:prefer-inline@reflection-method',
 		'edit:prefer-inline@subtype-override',
 		'edit:unused-parameter@access-grant',
 		'edit:unused-parameter@access-grant-unread-in-file',
@@ -239,6 +262,7 @@ class CrossScopeSoundnessTest extends Test {
 		'edit:unused-private@access-grant-unread-in-file',
 		'edit:unused-private@reflection-unread-in-file',
 		'report:prefer-final-field@access-write',
+		'report:prefer-inline@reflection-method',
 		'report:prefer-inline@subtype-override',
 		'report:unused-parameter@access-grant',
 		'report:unused-parameter@access-grant-unread-in-file',
@@ -252,6 +276,7 @@ class CrossScopeSoundnessTest extends Test {
 	@:pin('control')
 	@:killer('M-REFLECTION-REPORT-INDEX-DELETE')
 	@:killer('M-INLINE-SUBTYPE-REPORT-INDEX')
+	@:killer('M-INLINE-REFLECT-REPORT-SCOPE')
 	public function testNarrowReportWritesNothingTheWideRunRefuses(): Void {
 		Assert.equals(KNOWN_EDIT_DIVERGENCES.join('\n'), narrowOnlyEdits().join('\n'));
 	}
