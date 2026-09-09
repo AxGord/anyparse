@@ -46,7 +46,6 @@ using StringTools;
  * spells, so the grammar growing a spelling moves both.
  */
 @:nullSafety(Strict)
-@:access(anyparse.query.Inline)
 @:access(anyparse.query.InlineMethod)
 @:access(anyparse.query.MemberKinds)
 @:access(anyparse.grammar.haxe.HaxeStringFoldSupport)
