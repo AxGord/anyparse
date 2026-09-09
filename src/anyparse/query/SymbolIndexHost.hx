@@ -1,5 +1,7 @@
 package anyparse.query;
 
+import anyparse.check.ReflectionMemo;
+
 /**
  * A run-scoped host that can supply a resolution-scoped `SymbolIndex` — the
  * report files UNION any configured library source roots, plus the implicitly
@@ -79,5 +81,17 @@ interface SymbolIndexHost {
 	 * its OWN candidate passes that candidate's file and is narrowed back to the project half.
 	 */
 	function fieldWriteIndex(): Null<FieldWriteIndex>;
+
+	/**
+	 * The run-scoped memo `check/ReflectionScan` keeps its scope-wide string surface in — the
+	 * reflection twin of the three memoised indexes above, and memoised for the same reason: five
+	 * registered checks demand that surface per run and each used to recompute the whole walk.
+	 *
+	 * The host owns only WHEN the memo dies (with the run, like every cache on the wrapper), never
+	 * what it means — the check layer fills it and validates it against the sources it read. That
+	 * split is what keeps it a RUN-scoped memo instead of a process cache: a surface collected in an
+	 * earlier run must never answer this one's gates.
+	 */
+	function reflectionMemo(): ReflectionMemo;
 
 }

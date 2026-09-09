@@ -1324,9 +1324,29 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 	): Array<String> {
 		final out: Array<String> = [];
 		if (candidates.length == 0) return out;
+		// The two quoted spellings of each candidate, built ONCE for the whole walk, per candidate so
+		// the skip-parse branch below can still ask about ONE name. The walk is the WIDE scope this
+		// guard gained in S180/T861 — report files UNION the resolution sources, 2764 of them on Pony
+		// against 680 report files — and it runs once per `fix()` call, 49 times in `lint src --rule
+		// naming --fix` there, so interpolating `'$name'` / `"$name"` INSIDE it was two string
+		// allocations per (scope file x candidate).
+		//
+		// THIS is where the widening's cost sits, and it is not where T905 looked. Timed around the
+		// call over three alternating rounds of that Pony command: 629 / 618 / 600 ms in 49 calls
+		// before this hoist, 439 / 436 / 436 ms after — while `ReflectionScan.scopeFiles`, the union
+		// T905 proposed memoising, is 12ms of the same 7s run. Wall clock cannot see either number
+		// (±0.4s between rounds), which is why both are taken at the call and not from `time`.
+		//
+		// A quoted spelling is deliberately NOT a verdict: the same text matches a comment, a
+		// `case 'name':` and an asset key, which is exactly the over-refusal the AST projection below
+		// exists to end. It is a pre-filter, so a file holding no such text needs no parse.
+		final quoted: Array<Array<String>> = [for (name in candidates) ['\'$name\'', '"$name"']];
+		inline function spelled(source: String, forms: Array<String>): Bool {
+			return forms.exists(form -> source.indexOf(form) >= 0);
+		}
 		for (entry in ReflectionScan.scopeFiles(index == null ? [] : indexSources(index), plugin)) if (entry.file != currentFile) {
 			final source: String = entry.source;
-			if (!quotedMention(source, candidates)) continue;
+			if (!quoted.exists(forms -> spelled(source, forms))) continue;
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 			// T867: a file the parser could not read still SPELLS the name in quotes, and nothing
 			// downstream can tell a `Reflect.field(x, 'name')` there from a menu key. `continue` here
@@ -1334,7 +1354,7 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 			// skip-parsed file entirely, so its text reached no reader at all. The conservative answer
 			// is the one `RawSourceScan.skippedMayReference` gives the confinement proof beside it.
 			if (tree == null) {
-				for (name in candidates) if (quotedMention(source, [name]) && !out.contains(name)) out.push(name);
+				for (i => forms in quoted) if (spelled(source, forms) && !out.contains(candidates[i])) out.push(candidates[i]);
 				continue;
 			}
 			for (name in support.reflectionMemberNames(tree, source)) if (candidates.contains(name) && !out.contains(name)) out.push(name);
@@ -1353,18 +1373,6 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 	private static function indexSources(index: SymbolIndex): Array<ScopeFile> {
 		final files: Array<String> = [for (fi in index.allFiles()) fi.file].concat(index.skippedFiles());
 		return [for (file in files) { file: file, source: index.sourceOf(file) ?? '' }];
-	}
-
-	/**
-	 * Whether any of `names` occurs in `source` as a quoted token (`'name'` / `"name"`, the
-	 * quotes hugging the exact name). The cheap pre-filter of
-	 * `reflectionNamesInOtherFiles`: a file with no such text cannot hold a reflection call
-	 * naming one of them, so it needs no parse. Deliberately NOT a verdict of its own — the
-	 * same text also matches a comment, a `case 'name':` and an asset key, which is exactly
-	 * the over-refusal the AST projection exists to end.
-	 */
-	private static function quotedMention(source: String, names: Array<String>): Bool {
-		return names.exists(name -> source.indexOf('\'$name\'') >= 0 || source.indexOf('"$name"') >= 0);
 	}
 
 	/**

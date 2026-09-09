@@ -77,7 +77,7 @@ final class ReflectionScan {
 	 * `resolutionRoots` has no resolution scope over its OWN sources, so a one-file lint there still
 	 * answers from one file. Declaring them closes it and costs that lint ~1.0s -> ~4.5s.
 	 */
-	public static function reflectionSurface(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): ReflectionSurface {
+	public static function reflectionSurface(files: Array<ScopeFile>, plugin: GrammarPlugin): ReflectionSurface {
 		final out: ReflectionSurface = { whole: [], fragments: [] };
 		final stringFold: Null<StringFoldSupport> = plugin.stringFoldSupport();
 		if (stringFold == null) return out;
@@ -97,10 +97,20 @@ final class ReflectionScan {
 		// shipped tree, zero. So the conservative half here would be a fourth line behind three, at the
 		// price of a raw scan of every unreadable std source per name — and the direction it errs in is
 		// the one that makes a whole rule silent.
-		for (entry in scopeFiles(files, plugin)) {
+		//
+		// MEMOISED per run, and validated against the sources rather than expired — `ReflectionMemo`
+		// carries both the measurement (five checks demand this surface per run, four of them paying
+		// the re-walk alone) and the argument for proving staleness impossible instead of hooking
+		// every path that rewrites a report file. A plugin hosting no memo recollects, byte-identically.
+		final scope: Array<ScopeFile> = scopeFiles(files, plugin);
+		final memo: Null<ReflectionMemo> = RefactorSupport.reflectionMemoOf(plugin);
+		final memoised: Null<ReflectionSurface> = memo?.surfaceFor(scope);
+		if (memoised != null) return memoised;
+		for (entry in scope) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree != null) collect(tree, entry.source, fold, out);
 		}
+		memo?.setSurface(scope, out);
 		return out;
 	}
 
@@ -124,14 +134,23 @@ final class ReflectionScan {
 	 * walked `SymbolIndex.allFiles()`, which a skip-parsed file is absent from.
 	 */
 	public static function scopeFiles(files: Array<ScopeFile>, plugin: GrammarPlugin): Array<ScopeFile> {
-		// Once per PATH, deduped through a linear scan — measured at no cost (Pony 867 files 12.4s -> 11.9s,
-		// anyparse 1487 files 1:55.9 -> 1:54.3), which is why it is not the `Map` the sibling dedupe in
-		// `Cli.resolutionThunk` argues for. The two halves overlap: `resolutionFiles` is report UNION library.
+		// Once per PATH, deduped through a MAP — the same argument `Cli.resolutionThunk`'s sibling dedupe
+		// makes. ASYMPTOTIC insurance and not a measured win, which is worth saying plainly: the linear
+		// `seen.contains` this replaced was one compare per (scope x scope) pair, and the scope is report
+		// UNION library, so a declared `resolutionLibs` puts thousands of paths in it — measured on Pony
+		// (`resolutionRoots: ["src"]` plus eleven `resolutionLibs`) at 680 report files against a
+		// resolution set of 2764, union 2764, i.e. ~3.8M compares per call over 49 calls in `lint src
+		// --rule naming --fix`. Timed there, the WHOLE of this function is 12ms of that 7s run either way
+		// (V8 compares paths drawn from one array by pointer), so the change buys the shape of the curve
+		// for a scope the project configures, nothing today. T905 read the half-second the S180 widening
+		// cost as this union's; timed side by side in the same run it is the pre-filter in
+		// `Naming.reflectionNamesInOtherFiles` (616ms) against this function's 12ms.
+		// `Bool` values are the flag a Haxe set has to carry.
 		final out: Array<ScopeFile> = [];
-		final seen: Array<String> = [];
+		final seen: Map<String, Bool> = [];
 		inline function take(entry: ScopeFile): Void {
-			if (!seen.contains(entry.file)) {
-				seen.push(entry.file);
+			if (!seen.exists(entry.file)) {
+				seen[entry.file] = true;
 				out.push(entry);
 			}
 		}
@@ -217,9 +236,15 @@ final class ReflectionScan {
 /**
  * One file of the name-keyed reflection scope: its path and its raw source, parseable or not.
  *
- * A transparent alias for the `{ file, source }` pair the whole check layer passes around — declared
- * so the seam that OWNS that scope has a name for its element, and so the two members reading it do
- * not each spell the structure out again.
+ * A transparent alias for the `{ file, source }` pair the whole check layer passes around — declared so the seam that
+ * OWNS that scope has a name for its element, and so the members reading it do not each spell the structure out again.
+ *
+ * T880 asked whether this name belongs in `Check` instead, next to the `run` signature that introduces the pair. MEASURED on this
+ * tree: `{ file: String, source: String }` is written 75 times across 39 files of `src` + `test`, one `anon-type-dup` finding.
+ * Lifting the name is free at the DECLARATION — the alias is structural, so every `Check` implementor keeps compiling against the
+ * anon spelling — but the finding only clears when all 75 sites adopt it, which is a sweep across most of the check layer rather
+ * than a slice, and the two neighbourhoods a wave runs in parallel both hold some of those files. So the name stays here and the
+ * sweep is a backlog line; a slice adopting it moves the DECLARATION into `Check` first, and the three files importing this one with it.
  */
 typedef ScopeFile = {
 	var file: String;
