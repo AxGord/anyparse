@@ -2568,6 +2568,14 @@
 			"note": "the reflection gate narrows back to the REPORT files, so `hxq lint <one file> --fix` inlines a method a `Reflect.field` in an unlinted file names — MEASURED on Haxe 4.3.7: under `--dce full` a statically-called method read reflectively answers FOUND while plain and MISSING once inline"
 		},
 		{
+			"name": "M-ORPHAN-ACCESSOR-REPORT-SCOPE",
+			"type": "anyparse.check.OrphanAccessor",
+			"method": "run",
+			"find": "referenced: referencedAccessorNames(ReflectionScan.scopeFiles(files, plugin), plugin),",
+			"replace": "referenced: referencedAccessorNames(files, plugin),",
+			"note": "the accessor-CALL scan narrows back to the REPORT files, so `hxq lint <one file> --fix` with `resolutionRoots` declared DELETES a public `get_x` a sibling file calls by hand — the S177 shape in the orphan-accessor rule, found by T895's `accessor-call` cell"
+		},
+		{
 			"name": "M-COND-NAMES-DROP-META-NAME",
 			"type": "anyparse.query.CondQuery",
 			"method": "symbolRow",
