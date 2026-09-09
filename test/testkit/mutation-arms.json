@@ -2605,6 +2605,20 @@
 			"find": "final delimiter: Null<String> = (shape.stringLiteralDelimiters ?? [])[node.kind];",
 			"replace": "final delimiter: Null<String> = null;",
 			"note": "the declared quote characters stop being read, so a whole-span string literal's value comes back WITH its quotes - the arithmetic three consumers used to spell themselves, one of them assuming a one-character quote"
+		},
+		{
+			"name": "M-REFLECTION-MEMO-DEAD",
+			"type": "anyparse.check.ReflectionMemo",
+			"method": "surfaceFor",
+			"force": "null",
+			"note": "the run-scoped memo is never consulted, so every one of the five checks sharing the reflection gate walks the whole scope again — the state before S192, and the half that makes the staleness cell beside it vacuous if nobody pins it"
+		},
+		{
+			"name": "M-REFLECTION-MEMO-STALE",
+			"type": "anyparse.check.ReflectionMemo",
+			"method": "surfaceFor",
+			"force": "_surface",
+			"note": "the memo answers without checking the sources it read, so a scope file a `--fix` pass has just rewritten — or a second, different scope in the same run — is answered from the earlier text: the reflective read a pass introduced stops vetoing, and the next rewrite orphans it silently"
 		}
 	]
 }

@@ -198,6 +198,7 @@ final class ProseClaimCensusTest extends Test {
 		'unit.check.RedundantThisCheckTest#testInheritedCrossPackageViaImportFlagged :: control',
 		'unit.check.RedundantThisCheckTest#testInheritedTransitiveFlagged :: control',
 		'unit.check.RedundantToStringCheckTest#testBlockedSiteCarriesItsBlockerAsTheDeclineReason :: base',
+		'unit.check.ReflectionMemoTest#testTheSurfaceIsMemoisedWithinARun :: vacuity',
 		'unit.check.ShadowingLocalCheckTest#testParameterSpellingsAreTheSiblingRulesFindings :: control',
 		'unit.check.ShortenTypeRefCheckTest#testASuppressedRuntimeUseDoesNotBuyAMacroBodyImport :: control',
 		'unit.check.ShortenTypeRefCheckTest#testNestedGuardedImportOfTheSameNameRefusesTheShortForm :: control',

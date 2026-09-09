@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.check.ReflectionMemo;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.Refs.RefHit;
@@ -203,6 +204,18 @@ final class RefactorSupport {
 	public static inline function fieldWriteIndexOf(plugin: GrammarPlugin): Null<FieldWriteIndex> {
 		final host: Null<SymbolIndexHost> = plugin is SymbolIndexHost ? cast plugin : null;
 		return host != null && host.hasAnyResolutionScope() ? host.fieldWriteIndex() : null;
+	}
+
+	/**
+	 * The run-scoped reflection memo `plugin` hosts, or null when it hosts none — a bare plugin in a
+	 * unit test, where every demand recollects and the answers stay byte-identical.
+	 *
+	 * NOT gated on either resolution predicate, unlike its neighbours above: the memo caches the
+	 * scan's OWN result, and it is just as valid for a run whose scope is the report set alone.
+	 */
+	public static inline function reflectionMemoOf(plugin: GrammarPlugin): Null<ReflectionMemo> {
+		final host: Null<SymbolIndexHost> = plugin is SymbolIndexHost ? cast plugin : null;
+		return host?.reflectionMemo();
 	}
 
 	/**

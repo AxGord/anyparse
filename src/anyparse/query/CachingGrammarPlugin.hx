@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.check.ReflectionMemo;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.FunctionTypeProvider;
@@ -84,6 +85,14 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	 * or one that does not configure `CyclomaticComplexity`), so reads go through `exists`.
 	 */
 	private final _maxComplexityCache: Map<String, Null<Int>> = [];
+
+	/**
+	 * The scope-wide reflection surface `check/ReflectionScan` collects, memoised for the run like
+	 * every cache above it. `final`, because the memo validates itself against the sources it read
+	 * rather than being expired from here: a `--fix` pass rewrites a report entry in place, and an
+	 * expiry hook would have to fire on every path that does so.
+	 */
+	private final _reflectionMemo: ReflectionMemo = new ReflectionMemo();
 
 	// Run-scoped, same lifecycle as the other caches on this class — a fresh
 	// RefsCache per wrapper instance, shared with every RefShape this plugin hands
@@ -260,6 +269,15 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		_fieldWriteIndexBuilt = true;
 		_fieldWriteIndex = FieldWriteIndex.build(files, this, resolutionIndex(), thirdPartyFiles());
 		return _fieldWriteIndex;
+	}
+
+	/**
+	 * `SymbolIndexHost`: the run-scoped reflection memo, one per wrapper. Handed out rather than
+	 * filled here — the check layer owns what its slots mean and proves them against the sources it
+	 * read, this wrapper owns only that they die with the run.
+	 */
+	public function reflectionMemo(): ReflectionMemo {
+		return _reflectionMemo;
 	}
 
 	/**

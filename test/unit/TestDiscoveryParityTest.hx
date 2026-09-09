@@ -319,6 +319,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.RedundantUncheckedCastCheckTest',
 		'unit.check.RedundantUpcastTest',
 		'unit.check.RedundantVoidReturnCheckTest',
+		'unit.check.ReflectionMemoTest',
 		'unit.check.ReificationGateFixPathTest',
 		'unit.check.ReificationGateTest',
 		'unit.check.ReturnReassignTernaryCheckTest',
@@ -1127,6 +1128,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.RedundantReplaceLoopCheckTest#testSearchEndingWithTheReplacementHeadNotFlagged :: control :: M-SEAM-BLIND',
 			'unit.check.RedundantThisCheckTest#testInheritedFromOtherFileBaseFlagged :: control :: M-INHERITS-FALSE',
 			'unit.check.RedundantUpcastTest#testUpcastFlagged :: control :: M-ISSUBTYPE-FALSE',
+			'unit.check.ReflectionMemoTest#testARewrittenScopeFileIsReRead :: control :: M-REFLECTION-MEMO-STALE',
+			'unit.check.ReflectionMemoTest#testASecondScopeIsNotAnsweredFromTheFirst :: control :: M-REFLECTION-MEMO-STALE',
+			'unit.check.ReflectionMemoTest#testTheSurfaceIsMemoisedWithinARun :: control :: M-REFLECTION-MEMO-DEAD',
 			'unit.check.ShortenTypeRefCheckTest#testASingleSurvivingOccurrenceEarnsNoImport :: control :: M-SHORTEN-IMPORT-THRESHOLD-ONE',
 			'unit.check.StaticConstantCheckTest#testScalarInstanceFinalFlagged :: control :: M-BUILDMACRO-TRUE',
 			'unit.check.StringLiteralDupCheckTest#testReportOnlyIsDeclaredAndPointsAtExtractConstant :: control :: '
@@ -1989,7 +1993,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-SAFE-KINDS-DROP-HEX',
 			'M-PURE-ARG-KINDS-SUFFIX-STUB',
 			'M-PLAIN-LITERAL-FROZEN',
-			'M-PLAIN-STRING-VALUE-NO-DELIMITERS'
+			'M-PLAIN-STRING-VALUE-NO-DELIMITERS',
+			'M-REFLECTION-MEMO-DEAD',
+			'M-REFLECTION-MEMO-STALE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
