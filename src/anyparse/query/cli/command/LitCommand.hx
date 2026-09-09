@@ -1,5 +1,6 @@
 package anyparse.query.cli.command;
 
+import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.Lit.LitHit;
 import anyparse.query.Matcher.Match;
@@ -160,26 +161,37 @@ final class LitCommand implements CliCommand {
 		skipEntries: Array<SkipEntry>, o: LitOpts
 	): Bool {
 		final kindFilter: Null<Array<String>> = o.kindFilter;
+		final shape: RefShape = plugin.refShape();
+		// The grammar's own string-content vocabulary, not a ctor name spelled here: the
+		// interpolating literal's text fragment plus every whole string-literal kind. Naming ONE
+		// of them (`Literal`) was this command's oldest defect — over a directory holding
+		// `'needle'` and `"needle"` it printed the single-quoted hit and said nothing about the
+		// other, since the auto-widen retry below fires only at ZERO hits.
+		final contentKinds: Array<String> = Lit.contentKinds(shape);
+		// What a 0-hit run is told to retry with: the whole content vocabulary plus the identifier
+		// kind, never the narrowed set the caller happened to pass. The old wording named
+		// `Literal,IdentExpr` — one grammar's ctor names, and advice that could not have found the
+		// double-quoted hit the user was missing.
+		final widenKinds: Array<String> = contentKinds.concat([shape.identKind]);
 		// Resolve smart-default kind filter from <text> shape:
 		// `trailOptShapeGate` / `MAX_LEN` / `endsWith_close_brace` look like
-		// identifiers, the default `Literal`-only would silently miss the
-		// `IdentExpr` / field-name leaves and force a re-run with
-		// `--kind Literal,IdentExpr` or `--any-kind`. Promote the default
-		// to `Literal,IdentExpr` for queries whose shape is unambiguously
-		// an identifier (camelCase: mixed-case letters; snake_case:
-		// contains `_` plus letters). Pure-lowercase / all-uppercase single
-		// words stay `Literal`-only — they ambiguously match string content
-		// and an `IdentExpr` widening would add noise (e.g. `hxq lit 'foo'`
-		// inside a corpus of strings).
-		final effectiveKindFilter: Array<String> = kindFilter ?? (
-			CliWalk.looksLikeMixedIdentifier(targetStr) ? ['Literal', 'IdentExpr'] : ['Literal']
-		);
+		// identifiers, the content-kind default would silently miss the
+		// `identKind` / field-name leaves and force a re-run with
+		// `--kind` or `--any-kind`. Promote the default with the identifier
+		// kind for queries whose shape is unambiguously an identifier
+		// (camelCase: mixed-case letters; snake_case: contains `_` plus
+		// letters). Pure-lowercase / all-uppercase single words stay
+		// content-only — they ambiguously match string content and an
+		// identifier widening would add noise (e.g. `hxq lit 'foo'` inside
+		// a corpus of strings).
+		final effectiveKindFilter: Array<String> = kindFilter ?? (CliWalk.looksLikeMixedIdentifier(targetStr) ? widenKinds : contentKinds);
 		// Comment scan fires when the user explicitly opted in (`--include-comments`),
 		// when the kind filter is the catch-all (`--any-kind` ⇒ empty array),
 		// or when `Comment` appears in an explicit `--kind` list. The
-		// default kind filter (smart-resolved Literal or Literal+IdentExpr)
-		// deliberately stays comment-free — silent `--include-comments`-by-
-		// default would flood doc-comment-heavy queries with noise.
+		// default kind filter (the smart-resolved content kinds, with or
+		// without the identifier kind) deliberately stays comment-free —
+		// a silent `--include-comments`-by-default would flood
+		// doc-comment-heavy queries with noise.
 		final scanComments: Bool = o.includeComments || (kindFilter != null && kindFilter.length == 0)
 			|| effectiveKindFilter.contains('Comment');
 		// Directive scan is OPT-IN ONLY: `--include-directives`, or `Directive` named in an
@@ -191,7 +203,7 @@ final class LitCommand implements CliCommand {
 		final collected: {
 			entries: Array<{ file: String, source: String, hits: Array<LitHit> }>,
 			autoWidened: Bool
-		} = litEntriesFor(parsed, plugin, {
+		} = litEntriesFor(parsed, plugin, shape.stringLiteralDelimiters, {
 			target: targetStr,
 			exact: o.exact,
 			kinds: effectiveKindFilter,
@@ -200,6 +212,19 @@ final class LitCommand implements CliCommand {
 			scanDirectives: scanDirectives
 		});
 		final allEntries: Array<{ file: String, source: String, hits: Array<LitHit> }> = collected.entries;
+
+		// An EXPLICIT `--kind` naming only SOME of the grammar's string-content kinds is a
+		// deliberate narrowing, and it stays one — but it is announced, hit or no hit, because the
+		// hits it drops are the same content written in the other spelling and nothing else in the
+		// output says a spelling is missing. Printed before the 0-hit nudge so a run that found
+		// half its matches is as loud as a run that found none.
+		final omitted: Array<String> = kindFilter == null ? [] : contentKinds.filter(kind -> !kindFilter.contains(kind));
+		if (kindFilter != null && kindFilter.length > 0 && omitted.length > 0 && omitted.length < contentKinds.length)
+			CliIo.stderr(
+				'apq lit: NOTE --kind ${kindFilter.join(',')} covers ${contentKinds.length - omitted.length} of this grammar\'s '
+				+ '${contentKinds.length} string-literal content kind(s) — content written as ${omitted.join(' / ')} is NOT '
+				+ 'searched. Add it, or pass --kind ${contentKinds.join(',')} / --any-kind.\n'
+			);
 
 		if (allEntries.length == 0) {
 			// DX v10: regex-like query → emit the regex-not-supported note
@@ -211,7 +236,7 @@ final class LitCommand implements CliCommand {
 				regexLabel != null
 					? 'apq lit: NOTE "$targetStr" looks like a regex (contains $regexLabel) — lit is substring-only. Run separate lit '
 						+ 'calls per alternative, or use apq refs / apq uses / apq search for shape-aware lookup.\n'
-					: '${CliWalk.emptyWalkerNudge(CMD, targetStr, paths.length, paths.length - skipEntries.length, skipEntries, null)}\n'
+					: '${CliWalk.emptyWalkerNudge(CMD, targetStr, paths.length, paths.length - skipEntries.length, skipEntries, null, widenKinds)}\n'
 			);
 		} else if (collected.autoWidened) {
 			final tried: String = effectiveKindFilter.join(',');
@@ -324,11 +349,18 @@ final class LitCommand implements CliCommand {
 		CliIo.sysPrint('with its own smart --kind default and its own --limit budget.\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Walks parsed AST for leaf nodes whose `name` slot matches <text>.\n');
-		CliIo.sysPrint('Smart-default --kind: when <text> is camelCase / snake_case the\n');
-		CliIo.sysPrint('default widens to `Literal,IdentExpr` (clearly an identifier query —\n');
+		CliIo.sysPrint('Default --kind is the GRAMMAR\'s string-literal content vocabulary —\n');
+		CliIo.sysPrint('every kind whose `name` slot carries literal text, in EVERY spelling\n');
+		CliIo.sysPrint('the grammar has for a string (Haxe: the single-quoted literal\'s text\n');
+		CliIo.sysPrint('fragments AND the double-quoted literal, whose own name carries its\n');
+		CliIo.sysPrint('quotes — the quotes are stripped before the compare, so `--exact`\n');
+		CliIo.sysPrint('answers the two spellings alike). An explicit --kind naming only part\n');
+		CliIo.sysPrint('of that vocabulary is honoured and NAMED on stderr.\n');
+		CliIo.sysPrint('Smart default: when <text> is camelCase / snake_case the default also\n');
+		CliIo.sysPrint('takes the identifier kind (clearly an identifier query —\n');
 		CliIo.sysPrint('`hxq lit trailOptShapeGate src/` finds both literals and identifier\n');
 		CliIo.sysPrint('references without a re-run). Pure-lowercase / all-uppercase single\n');
-		CliIo.sysPrint('words stay `Literal`-only — they ambiguously match string content and\n');
+		CliIo.sysPrint('words stay content-only — they ambiguously match string content and\n');
 		CliIo.sysPrint('identifier widening would flood prose hits. Override with --kind /\n');
 		CliIo.sysPrint('--any-kind. AST kinds skip comments and string interpolation by routing\n');
 		CliIo.sysPrint('through the parser; `--include-comments` / `--kind Comment` re-enables\n');
@@ -473,7 +505,8 @@ final class LitCommand implements CliCommand {
 	 * the auto-widen retry. The query half of what `collectLitTrees` walked.
 	 */
 	private static function litEntriesFor(
-		trees: Array<{ path: String, source: String, tree: QueryNode }>, plugin: GrammarPlugin, query: {
+		trees: Array<{ path: String, source: String, tree: QueryNode }>, plugin: GrammarPlugin, delimiters: Null<Map<String, String>>,
+		query: {
 			target: String,
 			exact: Bool,
 			kinds: Array<String>,
@@ -484,7 +517,7 @@ final class LitCommand implements CliCommand {
 	): { entries: Array<{ file: String, source: String, hits: Array<LitHit> }>, autoWidened: Bool } {
 		final allEntries: Array<{ file: String, source: String, hits: Array<LitHit> }> = [];
 		for (entry in trees) {
-			final hits: Array<LitHit> = Lit.find(query.target, entry.tree, query.exact, query.kinds);
+			final hits: Array<LitHit> = Lit.find(query.target, entry.tree, query.exact, query.kinds, delimiters);
 			if (query.scanComments) appendCommentHits(query.target, entry.source, query.exact, hits, plugin.lexicalRegions(entry.source));
 			if (query.scanDirectives) appendDirectiveHits(query.target, entry.source, query.exact, plugin, hits);
 			if (hits.length == 0) continue;
@@ -503,7 +536,7 @@ final class LitCommand implements CliCommand {
 		var autoWidened: Bool = false;
 		if (allEntries.length == 0 && query.kindWasDefault) {
 			for (entry in trees) {
-				final hits: Array<LitHit> = Lit.find(query.target, entry.tree, query.exact, []);
+				final hits: Array<LitHit> = Lit.find(query.target, entry.tree, query.exact, [], delimiters);
 				if (hits.length == 0) continue;
 				allEntries.push({ file: entry.path, source: entry.source, hits: hits });
 			}

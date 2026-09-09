@@ -16,8 +16,10 @@ using Lambda;
 /**
  * Every kind name a grammar plugin DECLARES, against every kind name its parser PROJECTS.
  *
- * `RefShape` publishes 233 fields, 172 of which carry a kind name or a set of them (200 distinct names in all),
- * and a kind set is an `Array<String>`. A name the grammar stopped spelling — or never spelled — therefore
+ * `RefShape` publishes a few hundred fields, most of which carry a kind name or a set of them, and a kind set is
+ * an `Array<String>`. The exact counts are read off the tree by the assertions below and move with every field a
+ * slice adds, so they live in the `MIN_*` floors rather than in this sentence: a snapshot quoted here would be
+ * wrong by the next slice and read as a fact. A name the grammar stopped spelling — or never spelled — therefore
  * costs nothing at compile time and fails OPEN at run time: the walker never matches that
  * kind, so a query silently does not see the node and every consumer reading the set loses
  * a case with no diagnostic anywhere. `HxArrowParam.Named` was the same seam from the other
@@ -73,8 +75,17 @@ final class RefShapeKindProjectionTest extends Test {
 	 */
 	private static final EXTRA_KIND_FIELDS: Array<String> = ['leftAssociativeBinaryFamilies'];
 
-	/** The `RefShape` fields whose map KEYS are kind names — `literalTypeNames` maps kind to type. */
-	private static final KIND_KEYED_MAP_FIELDS: Array<String> = ['literalTypeNames'];
+	/**
+	 * The `RefShape` fields whose map KEYS are kind names — `literalTypeNames` maps kind to type,
+	 * `stringLiteralDelimiters` maps kind to the quote text its `name` slot carries.
+	 *
+	 * A map field is the ONE shape that the `Kind`-in-the-name reading cannot classify: neither
+	 * name says `Kind`, and `stringsOf` would offer the VALUES (`Int`, `"`) to the projected
+	 * vocabulary alongside the keys. `testNoUnclassifiedFieldCarriesAProjectedKindName` is what
+	 * forced this entry to be written when the field landed, which is the differential covering
+	 * itself.
+	 */
+	private static final KIND_KEYED_MAP_FIELDS: Array<String> = ['literalTypeNames', 'stringLiteralDelimiters'];
 
 	/**
 	 * Fields carrying a TYPE or method name that merely COINCIDES with a projected kind.
@@ -205,7 +216,7 @@ final class RefShapeKindProjectionTest extends Test {
 	/**
 	 * Every grammar the CLI registry can dispatch has a projected vocabulary this file can
 	 * ask for. A plugin added to `CliArgs.langNames` without one fails HERE, by name, instead
-	 * of quietly leaving its 233 declarations unchecked.
+	 * of quietly leaving every one of its declarations unchecked.
 	 */
 	public function testEveryRegisteredGrammarHasAProjectedKindSource(): Void {
 		final langs: Array<String> = CliArgs.langNames();

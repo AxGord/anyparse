@@ -977,6 +977,11 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			],
 			nullableNumericReturnCalls: ['Std.parseInt', 'Std.parseFloat'],
 			stringLiteralKinds: ['SingleStringExpr', 'DoubleStringExpr'],
+			interpolatingStringKinds: ['SingleStringExpr'],
+			stringInterpInertSegmentKinds: ['Dollar', 'LoneDollar'],
+			inertTextLiteralKinds: ['DoubleStringExpr', 'RegexLit'],
+			stringLiteralDelimiters: ['DoubleStringExpr' => '"'],
+			metadataNamePrefixes: ['@:', '@'],
 			stringLiteralMethodReturns: [
 				'split' => 'Array<String>',
 				'substr' => 'String',

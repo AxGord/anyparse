@@ -862,6 +862,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.LexicalRegionsTest',
 		'unit.query.LintDiffTest',
 		'unit.query.LintFixSafePassRevertTest',
+		'unit.query.LiteralVocabularyTest',
 		'unit.query.LocalTypeAnnotationProjectionTest',
 		'unit.query.MakeFinalSliceTest',
 		'unit.query.MetaElementSpanSliceTest',
@@ -1519,6 +1520,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CommentWeldDeletionSliceTest#testWeldingAcrossTheRepeatedSeparatorIsStillRefused :: control :: '
 				+ 'M-COMMENT-WELD-BLIND',
 			'unit.query.CondQueryTest#testABranchBodyNeverCarriesADirective :: control :: M-COND-BODY-SWALLOWS-DIRECTIVES',
+			'unit.query.CondQueryTest#testAMetadataNameIsASymbolRowAndKeepsItsSigil :: control :: M-COND-NAMES-DROP-META-NAME',
 			'unit.query.CondQueryTest#testANestedRegionRunsInsideItsParentBranch :: control :: M-COND-INNERMOST-FRAME',
 			'unit.query.CondQueryTest#testARawExpressionSpliceIsFlaggedAndKeepsItsBytes :: control :: M-COND-RAW-NEVER-MARKED',
 			'unit.query.CondQueryTest#testAWholeStringLiteralKindIsDroppedByItsDeclaration :: control :: M-COND-NAMES-WHOLE-LITERAL-KEPT',
@@ -1545,6 +1547,10 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.LintDiffTest#testAddedMinusRemovedIsAlwaysTheTotalDelta :: control :: M-LINTDIFF-SURPLUS-BY-KEY',
 			'unit.query.LintDiffTest#testTheByRuleSummaryNamesEveryRuleThatMoved :: control :: M-LINTDIFF-RULE-SUMMARY-BLANK',
 			'unit.query.LintDiffTest#testTheHeadlineStatesTheNetDirection :: control :: M-LINTDIFF-NET-UNSTATED',
+			'unit.query.LiteralVocabularyTest#testAnExactQueryReachesContentInsideTheQuotes :: control :: M-LIT-DELIMITERS-IGNORED',
+			'unit.query.LiteralVocabularyTest#testInertRegionsMasksWhatTheGrammarDeclaresInert :: control :: '
+				+ 'M-INERT-REGIONS-HARDCODED-KINDS',
+			'unit.query.LiteralVocabularyTest#testOneContentQueryAnswersBothQuoteSpellings :: control :: M-LIT-CONTENT-KINDS-SEGMENT-ONLY',
 			'unit.query.MakeFinalSliceTest#testHalfIteratorShapeStillFinal :: control :: M-STRUCT-BUILTIN-BY-NAME',
 			'unit.query.MetaElementSpanSliceTest#testRemoveConditionalModifierRegionStillTakesTheMember :: control :: '
 				+ 'M-META-ELEMENT-ANY-COND-REGION',
@@ -1954,7 +1960,11 @@ class TestDiscoveryParityTest extends Test {
 			'M-TRIVGET-MOVABLE-LITERAL-FALSE',
 			'M-UNUSED-PRIVATE-DECLINE-SILENT',
 			'M-UNUSED-PRIVATE-REGION-DECLINE-SILENT',
-			'M-INLINE-SUBTYPE-REPORT-INDEX'
+			'M-INLINE-SUBTYPE-REPORT-INDEX',
+			'M-COND-NAMES-DROP-META-NAME',
+			'M-INERT-REGIONS-HARDCODED-KINDS',
+			'M-LIT-CONTENT-KINDS-SEGMENT-ONLY',
+			'M-LIT-DELIMITERS-IGNORED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

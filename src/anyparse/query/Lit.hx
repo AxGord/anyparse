@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
 
 /**
@@ -54,11 +55,49 @@ final class Lit {
 	 * a non-null name). The check is by exact string equality on
 	 * `kind` — no kind-equivalence consultation (that is search-only;
 	 * `lit` is a leaf-name probe with no pattern semantics).
+	 *
+	 * `delimiters` is the grammar's `RefShape.stringLiteralDelimiters`: for a kind listed there
+	 * the `name` slot is the raw source slice WITH its quotes, so the match is tried against the
+	 * name AND against the content inside them. Widening, never narrowing — a query spelling the
+	 * quotes still matches. Without it the two spellings of one literal answered differently:
+	 * `'needle'` matched and `"needle"` did not under `--exact`, and under a substring match only
+	 * because the quotes happen to sit at the ends.
 	 */
-	public static function find(target: String, tree: QueryNode, exact: Bool, ?kindFilter: Array<String>): Array<LitHit> {
+	public static function find(
+		target: String, tree: QueryNode, exact: Bool, ?kindFilter: Array<String>, ?delimiters: Map<String, String>
+	): Array<LitHit> {
 		final out: Array<LitHit> = [];
 		final filter: Null<Array<String>> = kindFilter == null || kindFilter.length == 0 ? null : kindFilter;
-		walk(target, tree, exact, filter, out);
+		walk(target, tree, exact, filter, delimiters, out);
+		return out;
+	}
+
+	/**
+	 * The kinds of `shape` whose `name` slot CARRIES string-literal content: the interpolating
+	 * literal's plain-text fragment (`stringInterpTextKind`) first, then every `stringLiteralKinds`
+	 * entry that is not itself an `interpolatingStringKinds` one. Deduped, and in that order so a
+	 * hit listing reads fragment-before-whole the way a nested literal nests.
+	 *
+	 * This is the default kind set of `apq lit`, and naming ONE of its members was the command's
+	 * oldest defect: over a directory holding `'needle'` and `"needle"` it printed the
+	 * single-quoted hit and said nothing about the other, because the 0-hit auto-widen never
+	 * fired. `CondQuery.carriesLiteralText` asks the same question with the opposite polarity —
+	 * that consumer DROPS these kinds from a symbol listing — so the two now read one vocabulary.
+	 *
+	 * The subtraction is what keeps the set honest rather than merely wide: a segmented literal's
+	 * OWN name slot is empty — its content lives in the fragments already named — so listing it
+	 * would add a kind that can never match and then report it to the user as content they are
+	 * missing.
+	 *
+	 * A grammar declaring none of the three leaves the set EMPTY, which `find` reads as no kind
+	 * filter at all — the same answer `--any-kind` gives. That is the fail-open direction on
+	 * purpose: an unaudited grammar gets a noisy answer rather than a silently empty one.
+	 */
+	public static function contentKinds(shape: RefShape): Array<String> {
+		final text: Null<String> = shape.stringInterpTextKind;
+		final segmented: Array<String> = shape.interpolatingStringKinds ?? [];
+		final out: Array<String> = text == null ? [] : [text];
+		for (kind in shape.stringLiteralKinds ?? []) if (!segmented.contains(kind) && !out.contains(kind)) out.push(kind);
 		return out;
 	}
 
@@ -73,16 +112,41 @@ final class Lit {
 		return buf.toString();
 	}
 
-	private static function walk(target: String, node: QueryNode, exact: Bool, filter: Null<Array<String>>, out: Array<LitHit>): Void {
+	/** Whether `name` answers `target`: full equality under `exact`, else a substring test. */
+	private static inline function matches(name: String, target: String, exact: Bool): Bool {
+		return exact ? name == target : name.indexOf(target) >= 0;
+	}
+
+	/**
+	 * `name` with one `delimiter` stripped off each end, or null when it does not carry the pair.
+	 *
+	 * A pair rather than a prefix: a one-character slice like `"` is the quote itself and stripping
+	 * it twice off the same byte would answer about an empty content. Escapes are NOT decoded —
+	 * this is about the QUOTES, and the grammar's other string spelling leaves its escapes raw
+	 * too, so decoding here would make the two answer differently for the opposite reason.
+	 */
+	private static function unquoted(name: String, delimiter: String): Null<String> {
+		final width: Int = delimiter.length;
+		return name.length < width * 2 || name.substr(0, width) != delimiter || name.substr(name.length - width) != delimiter
+			? null
+			: name.substring(width, name.length - width);
+	}
+
+	private static function walk(
+		target: String, node: QueryNode, exact: Bool, filter: Null<Array<String>>, delimiters: Null<Map<String, String>>,
+		out: Array<LitHit>
+	): Void {
 		final n: Null<String> = node.name;
 		if (n != null) {
 			final kindOk: Bool = filter == null || filter.contains(node.kind);
 			if (kindOk) {
-				final hit: Bool = exact ? n == target : n.indexOf(target) >= 0;
+				final delimiter: Null<String> = delimiters == null ? null : delimiters[node.kind];
+				final content: Null<String> = delimiter == null ? null : unquoted(n, delimiter);
+				final hit: Bool = matches(n, target, exact) || content != null && matches(content, target, exact);
 				if (hit && node.span != null) out.push(new LitHit(node.kind, n, (node.span: Span)));
 			}
 		}
-		for (c in node.children) walk(target, c, exact, filter, out);
+		for (c in node.children) walk(target, c, exact, filter, delimiters, out);
 	}
 
 	private static function displayText(name: String): String {
