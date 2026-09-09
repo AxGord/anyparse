@@ -69,7 +69,9 @@ using Lambda;
  * and the user's Pony tree from 48 to 44 over `src` (92 to 86 over all six roots). Nothing was ADDED
  * in any of those pairs, on either tree.
  * The 72 groups the widening removed split by what is LEFT once their collection entries stop
- * counting: 38 are PURE data — every occurrence was an entry, so nothing was lost, and `'String'`
+ * counting: 38 are PURE data — every occurrence was an entry (across one collection or several,
+ * which is the criterion's one blind spot: three separate `['haxe']` argument arrays read as three
+ * tables and go silent together — a declaration-initialiser-only refinement would close it), and `'String'`
  * nine times is the shape, all nine a value of a `kind => type` or `method => return` map — while 14
  * keep one logic occurrence and 20 keep TWO, one short of the default threshold. That last bucket is
  * the honest price and it has a real shape: `ownedMeta = [':postfix']` beside two
