@@ -356,6 +356,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.UnusedLocalShadowTest',
 		'unit.check.UnusedParameterCheckTest',
 		'unit.check.UnusedPrivateCheckTest',
+		'unit.check.UnusedPrivateDeclineReasonTest',
 		'unit.check.UnusedPublicMemberCheckTest',
 		'unit.check.UnusedReturnValueTest',
 		'unit.check.UsingDeclineAttributionTest',
@@ -1023,7 +1024,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.CrossScopeSoundnessTest#testNarrowReportFindsNothingTheWideRunDoesNot :: control :: '
 				+ 'M-CONFINEMENT-REPORT-INDEX-DEAD',
 			'unit.check.CrossScopeSoundnessTest#testNarrowReportWritesNothingTheWideRunRefuses :: control :: '
-				+ 'M-REFLECTION-REPORT-INDEX-DELETE',
+				+ 'M-REFLECTION-REPORT-INDEX-DELETE,M-INLINE-SUBTYPE-REPORT-INDEX',
 			'unit.check.CrossScopeSoundnessTest#testTheScopeHalfHoldingAReflectiveStringDoesNotMatter :: control :: '
 				+ 'M-REFLECTION-SCOPE-PROJECT-ONLY',
 			'unit.check.DeadBinderCounterLoopCheckTest#testFixRewritesMapLoopAndInsertsUsing :: control :: M-SHADOWEXT-TRUE',
@@ -1162,6 +1163,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-CONFINEMENT-REPORT-INDEX-PARAM',
 			'unit.check.UnusedPrivateCheckTest#testReflectionCallOutsideReportScopeKeepsMember :: control :: '
 				+ 'M-REFLECTION-REPORT-INDEX-DELETE',
+			'unit.check.UnusedPrivateDeclineReasonTest#testEachGateNamesItself :: control :: '
+				+ 'M-UNUSED-PRIVATE-DECLINE-SILENT,M-UNUSED-PRIVATE-REGION-DECLINE-SILENT',
 			'unit.check.UnusedPublicMemberCheckTest#testInterpolationEscapeKeepsTheMember :: control :: M-NAMEOUTSIDE-TRUE',
 			'unit.check.UsingDeclineAttributionTest#testCounterLoopConflictNamesTheSkippedSiteAndKeepsTheOther :: control :: '
 				+ 'M-COUNT-CONFLICT-SILENT',
@@ -1948,7 +1951,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-SCOPE-GAP-ROOT-UNWIRED',
 			'M-PROJECTED-KINDS-ALT-ONLY',
 			'M-DECL-HOST-KIND-STALE',
-			'M-TRIVGET-MOVABLE-LITERAL-FALSE'
+			'M-TRIVGET-MOVABLE-LITERAL-FALSE',
+			'M-UNUSED-PRIVATE-DECLINE-SILENT',
+			'M-UNUSED-PRIVATE-REGION-DECLINE-SILENT',
+			'M-INLINE-SUBTYPE-REPORT-INDEX'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

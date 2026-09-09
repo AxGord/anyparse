@@ -209,6 +209,7 @@ final class ProseClaimCensusTest extends Test {
 		'unit.check.UnusedParameterCheckTest#testInlineHelperOwnParameterNotYetReached :: control',
 		'unit.check.UnusedPrivateCheckTest#testEmptyCtorKeptWhenSubtypeExtendsATypedefOfIt :: control',
 		'unit.check.UnusedPrivateCheckTest#testPrivateMemberKeptWhenSubtypeExtendsImportAlias :: control',
+		'unit.check.UnusedPrivateDeclineReasonTest#testAFindingThisCallCannotPlaceGetsNoSentence :: vacuity',
 		'unit.cli.AddressCliTest#testRemoveElementStillRemovesAMetaBySelector :: control',
 		'unit.cli.ResolutionScopeCliTest#testConfigLessProjectStaysConservativeOnUnresolvableType :: control',
 		'unit.cli.ResolutionScopeCliTest#testSymlinkedSpellingOfTheSameTreeStillDedups :: base',

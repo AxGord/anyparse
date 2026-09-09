@@ -24,8 +24,9 @@ using Lambda;
  * `inline ` before the `function` keyword.
  *
  * A method qualifies when its body is one of three BENEFIT classes: (A) an EMPTY block — the call compiles away, and
- * a FUTURE override of an inlined method fails loudly at the overriding site (the same subtype-gate evidence the
- * other classes rely on); (B) a single accessor / thin-forward / trivial-mutator expression — a bare field chain, a
+ * a FUTURE override of an inlined method fails loudly at the overriding site (the same subtype-gate evidence the other
+ * classes rely on, asked of report UNION the declared resolution scope since S187 — a subtype in an unlinted file is what
+ * the report index cannot see); (B) a single accessor / thin-forward / trivial-mutator expression — a bare field chain, a
  * call through a chain with only chain / literal arguments, an assignment or increment over a chain — which collapses
  * into a direct read / write / forwarded call; (C) a constant / small-arithmetic expression (literals, chains and
  * operators only) which can fold at the call site. B and C are bounded by `MAX_BODY_NODES` (~32 AST nodes).
@@ -222,7 +223,20 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		// The report index is the wrong one to ask any of the ABSENCE questions `considerClass` puts
+		// to it — no subtype overrides this, no supertype grants a build macro, no interface requires
+		// it — because a file outside the lint scope answers all three. Widened to report UNION the
+		// declared resolution scope, which is the repair the unused-* family already carries
+		// (`UnusedPrivate.run`); a plugin declaring no scope gets the report index back unchanged, so
+		// a run with no `resolutionRoots` behaves exactly as before — including a project whose only
+		// resolvable scope is the std library, since the gate is `hasDeclaredResolutionScope`.
+		// The price where roots ARE declared: the widest index keys types by SIMPLE name, so a class
+		// named like one std subclasses reads as having a subtype and goes unflagged (measured, a
+		// class named `Exception` loses the finding its otherwise identical twin keeps). That is the
+		// same collision `violationFor`'s `supertypeDeclaresMember` in the unused-* family already
+		// lives with, and it errs toward silence, which is the safe direction for a rule that WRITES.
+		final report: SymbolIndex = SymbolIndex.build(files, plugin);
+		final index: SymbolIndex = RefactorSupport.widestScopeIndex(plugin, report) ?? report;
 		final shape: RefShape = plugin.refShape();
 		// The framework carve-out's two halves: the grammar's own naming seam (which knows the
 		// frameworks its language ships) and the project's declared roster. Resolved once per run
@@ -491,14 +505,13 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 			// root can sit behind a base declared in a configured library
 			// (`class T extends TestBase extends Test`), and the report index alone stops at the
 			// first supertype it cannot name — which answers "no framework" and flags the method.
-			// It is a THUNK built HERE rather than once per run, and that is the whole reason the
-			// seam takes one: forcing the resolution index reads and parses the configured scope,
-			// and `nominated` demands it only after a contract has CLAIMED the name. Measured with
-			// it forced once per run instead, on this project's own config, a one-file
-			// `--rule prefer-inline` run went 0.12s -> 2.88s while `--rule prefer-single-quotes`
-			// stayed at 0.13s — a whole-tree lint hides that (other rules force the index anyway),
-			// the edit loop and `tools/mutation-check.sh` do not. Every OTHER question this check
-			// asks is answered on the report index, unchanged by this slice.
+			// The index is forced ONCE per run since S187 (`run`'s `widestScopeIndex`), so this
+			// thunk is no longer what defers the parse — it only keeps the fallback local. The cost
+			// that forcing buys is real and measured on this project's own config: a one-file
+			// `--rule prefer-inline` run goes 0.14s -> 3.4s, while a whole-tree lint is unchanged
+			// (3.62s -> 3.64s — other rules force the index anyway) and finding-identical. The
+			// three ABSENCE questions `run` asks are answered on that widest index; every other
+			// question this check asks is still answered on the report index.
 			// The modifier run decides `static`, and the contract cannot claim one: utest discovers with
 			// `!isStatic && isTestName(...)`, so a `public static function testX()` in a `Test` subclass
 			// is called by nobody and the carve-out would be a free pass. The adapter used to hand

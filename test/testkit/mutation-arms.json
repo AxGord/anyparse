@@ -2478,6 +2478,30 @@
 			"method": "isMovableLiteral",
 			"force": "false",
 			"note": "no literal is ever movable, so a ctor-init that should relocate to the field's own default (a plain single-quoted string among them, the shape `SingleStringExpr` misclassified before its `node.name` read was replaced with a children-are-all-Literal check) is treated as an external write and pushed off the clean (default, set) collapse — onto the @:bypassAccessor arm, or, once that extra write carries the count past the bypass cap, onto the inline-getter arm, which keeps the field and writes a different fix"
+		},
+		{
+			"name": "M-UNUSED-PRIVATE-DECLINE-SILENT",
+			"type": "anyparse.check.UnusedPrivate",
+			"method": "fix",
+			"find": "\t\t\tv.declineReason = decline;",
+			"replace": "\t\t\tv.declineReason = null;",
+			"note": "the seven per-member gates go back to a bare `false`: `--fix` still refuses the member and the ledger still counts it declined, with no sentence saying which gate closed"
+		},
+		{
+			"name": "M-UNUSED-PRIVATE-REGION-DECLINE-SILENT",
+			"type": "anyparse.check.UnusedPrivate",
+			"method": "noteRegionDeclines",
+			"find": "\t\t\tdeclined.declineReason = 'every member of its `#if` branch would go with it, and emptying a conditional region '\n\t\t\t\t+ 'loses the branch itself';",
+			"replace": "\t\t\tdeclined.declineReason = null;",
+			"note": "the one gate that is a fact about the edit SET rather than about a member — a `#if` branch this call would empty — stops speaking, which is the site the T865 brief did not enumerate"
+		},
+		{
+			"name": "M-INLINE-SUBTYPE-REPORT-INDEX",
+			"type": "anyparse.check.PreferInline",
+			"method": "run",
+			"find": "\tfinal index: SymbolIndex = RefactorSupport.widestScopeIndex(plugin, report) ?? report;",
+			"replace": "\tfinal index: SymbolIndex = report;",
+			"note": "the subtype / build-macro / interface ABSENCE questions go back to the report index, so `hxq lint <one file> --fix` inserts `inline` on a method a subtype in an unlinted file overrides — the S177 shape in the prefer-inline rule"
 		}
 	]
 }

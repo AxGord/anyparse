@@ -28,8 +28,15 @@ import utest.Test;
  * the roster itself, so a new check joins it by being registered: for every cell, whatever the
  * NARROW-report run writes into the declaring file, the WIDE-report run over the same two files
  * must write too. An edit only the narrow run produces is an edit licensed by a file the run could
- * not see, which is the defect in its writing form. The sibling assertion covers the reporting
- * form: a `CrossFileFix` may only name files the report scope holds.
+ * not see, which is the defect in its writing form. The sibling assertion covers
+ * the reporting form: a `CrossFileFix` may only name files the report scope holds.
+ *
+ * S187 re-accounted what the fixture actually puts under those differentials. Two of the five rules writing in the narrow arm
+ * were doing so on evidence the cells never supplied — `prefer-final-field` licenses `final` on the absence of a cross-file WRITE
+ * and every cell only READ, `prefer-inline` licenses `inline` on the absence of an OVERRIDE and no cell declared one — so the
+ * `access-write` and `subtype-override` cells supply exactly those two, and `FIX_WRITERS` replaced the count-of-five floor with a
+ * census the fixture takes of itself. The second cell caught a live one on its first run: `prefer-inline`s subtype gate asked the
+ * REPORT index, so a one-file `--fix` inlined a method an unlinted subtype overrides (arm `M-INLINE-SUBTYPE-REPORT-INDEX`).
  *
  * `KNOWN_DIVERGENCES` is the escape hatch and it is EMPTY by contract. A line there is a filed
  * defect with an address, never a way to keep this green.
@@ -99,6 +106,20 @@ class CrossScopeSoundnessTest extends Test {
 	private static final B_REFLECT: String = 'package pkg;\n\nclass B {\n\n\tpublic function new() {}\n\n'
 		+ '\tpublic function reach(a: A): Dynamic {\n\t\treturn Reflect.field(a, \'My_Field\');\n\t}\n\n}\n';
 
+	/**
+	 * The reacher that WRITES the private field rather than reading it — the evidence
+	 * `prefer-final-field` needs and no other cell supplies.
+	 */
+	private static final B_WRITE: String = 'package pkg;\n\n@:access(pkg.A)\nclass B {\n\n\tpublic function new() {}\n\n'
+		+ '\tpublic function reach(a: A): Void {\n\t\ta.My_Field = 5;\n\t}\n\n}\n';
+
+	/**
+	 * The reacher that OVERRIDES the private method — the evidence `prefer-inline` needs, and the
+	 * one route by which a member this file calls trivial is not.
+	 */
+	private static final B_OVERRIDE: String = 'package pkg;\n\nclass B extends A {\n\n\tpublic function new() {\n\t\tsuper();\n\t}\n\n'
+		+ '\toverride private function helper(a: Int, b: Int): Int {\n\t\treturn b;\n\t}\n\n}\n';
+
 	/** A haxelib source — what `resolutionLibs` alone puts in the scope, and it reaches nothing of the project. */
 	private static final LIB_THIRD_PARTY: String = 'package third;\n\nclass Third {\n\n\tpublic function new() {}\n\n}\n';
 
@@ -117,7 +138,9 @@ class CrossScopeSoundnessTest extends Test {
 		{ name: 'allow-grant', decl: A_ALLOW, grantee: B_PLAIN },
 		{ name: 'reflection', decl: A_USED, grantee: B_REFLECT },
 		{ name: 'access-grant-unread-in-file', decl: A_UNUSED, grantee: B_ACCESS },
-		{ name: 'reflection-unread-in-file', decl: A_UNUSED, grantee: B_REFLECT }
+		{ name: 'reflection-unread-in-file', decl: A_UNUSED, grantee: B_REFLECT },
+		{ name: 'access-write', decl: A_USED, grantee: B_WRITE },
+		{ name: 'subtype-override', decl: A_USED, grantee: B_OVERRIDE }
 	];
 
 	/**
@@ -141,13 +164,59 @@ class CrossScopeSoundnessTest extends Test {
 	private static final KNOWN_PLACEMENT_DIVERGENCES: Array<String> = [];
 
 	/**
+	 * The rules whose per-file `fix` writes on the declaring file in the NARROW arm — a CENSUS the
+	 * fixture takes of itself, asserted by EQUALITY rather than by a floor.
+	 *
+	 * The floor it replaces (`exercised.length >= 5`) counted rules, not coverage, and two of its
+	 * five were counted while the fixture supplied nothing they could react to:
+	 * `prefer-final-field` licenses `final` on the absence of a WRITE and every cell only READ the
+	 * field; `prefer-inline` licenses `inline` on the absence of an OVERRIDE and no cell declared
+	 * one. The `access-write` and `subtype-override` cells supply exactly those two, and the second
+	 * of them put `prefer-inline` into both differentials at once — its subtype gate asked the
+	 * REPORT index, so a single-file `--fix` inlined a method an unlinted subtype overrides.
+	 *
+	 * What makes a rule belong here is the shape of its LICENSE, not the shape of its edit: it
+	 * rewrites or removes a DECLARATION on the strength of a reference, write or override being
+	 * ABSENT, and a file outside the report scope can supply any of the three. This list is what
+	 * THESE cells drive, not the whole license class: at least six registered autofixes share the
+	 * shape and no cell reaches them yet — `prefer-final-public-field`, `prefer-read-only-field`,
+	 * `trivial-getter`, `orphan-accessor`, `inline-constant`, `static-constant`, each named as
+	 * cross-file-licensed by `LintCommand.partitionChecks`'s own `fullScopeIds` comments — which is
+	 * what T895 is for. Every autofix OUTSIDE that class edits a node whose references cannot leave
+	 * the file it is handed — a local, a case binder, a statement, an expression, an arm, a comment,
+	 * whitespace — so a wider scope cannot change its answer and there is nothing to compare.
+	 *
+	 * An equality here is the anti-rot half: a rule dropping out is the vacuity regression the old
+	 * floor was watching for, and a NEW registered rule writing here is one nobody has classified
+	 * yet. Neither is a line to edit until the reason is in this doc.
+	 */
+	private static final FIX_WRITERS: Array<String> = [
+		'prefer-final-field',
+		'prefer-inline',
+		'unused-parameter',
+		'unused-private',
+		'unused-public-member'
+	];
+
+	/**
+	 * The same family reached through `crossFileFix` instead of `fix`, so it can never appear in the
+	 * census above: `naming` refuses on a green tree and what it does emit leaves through the
+	 * cross-file seam. Its non-vacuity is asserted on the REPORTING side, per cell.
+	 */
+	private static final CROSS_FILE_WRITERS: Array<String> = ['naming'];
+
+	/**
 	 * What a project declaring `resolutionLibs` and NO `resolutionRoots` loses — MEASURED, and the one
 	 * list in this class that is not empty by contract.
 	 *
-	 * Fourteen entries over the six cells, and unchanged by T868 — a libs-only scope holds the sibling in
+	 * TWENTY-FOUR entries over the eight cells (fourteen over the six the fixture had
+	 * before S187), and unchanged by T868 — a libs-only scope holds the sibling in
 	 * NEITHER half, so widening the name-keyed seam buys nothing here: `naming` renames a field five of the six
 	 * routes reach, `unused-parameter` deletes a parameter three cross-file callers still pass, `unused-private`
-	 * deletes two live members. Ten are WRITES and four are findings, which is the same defect one step earlier.
+	 * deletes two live members. Sixteen are WRITES and eight are findings, which is the same defect one step earlier.
+	 * The ten S187 added are the two cells that supply cross-file WRITE and OVERRIDE evidence: `prefer-final-field`
+	 * makes a field final that a grantee assigns, `prefer-inline` inlines a method a subtype overrides, and `naming`
+	 * / `unused-parameter` lose the same proofs on the two new routes they lose on the old ones.
 	 * Every one of them is a repair S177 / S179 / S180 shipped and this scope shape undoes. One cell is
 	 * absent by right: `allow-grant` puts the `@:allow` in the DECLARING file, so the narrow report scope
 	 * sees the grant without help and both arms refuse alike.
@@ -155,23 +224,34 @@ class CrossScopeSoundnessTest extends Test {
 	private static final LIBS_ONLY_REGRESSIONS: Array<String> = [
 		'edit:naming@access-grant',
 		'edit:naming@access-grant-unread-in-file',
+		'edit:naming@access-write',
 		'edit:naming@reflection',
 		'edit:naming@reflection-unread-in-file',
 		'edit:naming@subtype',
+		'edit:naming@subtype-override',
+		'edit:prefer-final-field@access-write',
+		'edit:prefer-inline@subtype-override',
 		'edit:unused-parameter@access-grant',
 		'edit:unused-parameter@access-grant-unread-in-file',
+		'edit:unused-parameter@access-write',
 		'edit:unused-parameter@subtype',
+		'edit:unused-parameter@subtype-override',
 		'edit:unused-private@access-grant-unread-in-file',
 		'edit:unused-private@reflection-unread-in-file',
+		'report:prefer-final-field@access-write',
+		'report:prefer-inline@subtype-override',
 		'report:unused-parameter@access-grant',
 		'report:unused-parameter@access-grant-unread-in-file',
+		'report:unused-parameter@access-write',
 		'report:unused-parameter@subtype',
+		'report:unused-parameter@subtype-override',
 		'report:unused-private@access-grant-unread-in-file'
 	];
 
 	/** No check writes into the declaring file an edit the same two files, both reported, refuse. */
 	@:pin('control')
 	@:killer('M-REFLECTION-REPORT-INDEX-DELETE')
+	@:killer('M-INLINE-SUBTYPE-REPORT-INDEX')
 	public function testNarrowReportWritesNothingTheWideRunRefuses(): Void {
 		Assert.equals(KNOWN_EDIT_DIVERGENCES.join('\n'), narrowOnlyEdits().join('\n'));
 	}
@@ -226,10 +306,7 @@ class CrossScopeSoundnessTest extends Test {
 	 * dropping out is a coverage regression to look at, never a line to delete.
 	 */
 	public function testFixtureExercisesTheWritingRules(): Void {
-		final exercised: Array<String> = narrowRulesEmittingEdits();
-		for (rule in ['unused-parameter', 'unused-private', 'unused-public-member'])
-			Assert.isTrue(exercised.contains(rule), '$rule writes nothing on this fixture any more — the differential is going vacuous');
-		Assert.isTrue(exercised.length >= 5, 'only ${exercised.length} rule(s) write in the NARROW arm of this fixture');
+		Assert.equals(FIX_WRITERS.join('\n'), narrowRulesEmittingEdits().join('\n'));
 		// `naming` can never appear above: on a green tree it REFUSES, and what it does emit leaves
 		// through `crossFileFix` rather than `fix`. Yet `naming@` is where four of the five arm kills
 		// land, so its non-vacuity is asserted on the REPORTING side, where the flag IS observable —
@@ -312,6 +389,34 @@ class CrossScopeSoundnessTest extends Test {
 		);
 		Assert.isTrue(arms.readableEdits > 0, 'the readable arm wrote no edit — the comparison is vacuous');
 		Assert.equals('', arms.extras.join('\n'));
+	}
+
+	/**
+	 * Every rule this fixture PROVES reacts to the resolution scope is in the roster — the
+	 * differential that keeps the roster from being a hand list nobody reconciles.
+	 *
+	 * The proof is a measurement, not a declaration: the report scope is held fixed at the
+	 * declaring file and only the declared SHAPE of the resolution scope moves
+	 * (`ROOTS_AND_LIBRARY` -> `LIBS_ONLY`), so a rule whose answer differs read the scope, whatever
+	 * seam it read it through. That matters because the seams are not one: `unused-private` and
+	 * `unused-parameter` ask `RefactorSupport.widestScopeIndex`, `unused-public-member`
+	 * `resolutionSourcesOf`, `prefer-final-field` reaches it through `MemberWriteScan`, and a grep
+	 * for any fixed list of them undercounts — which is how `prefer-final-field` sat in the old
+	 * floor's count of five while nobody had classified it.
+	 *
+	 * SUBSET rather than equality: a roster entry may be scope-INSENSITIVE on these cells and still
+	 * belong (`unused-public-member` deletes `read()` in both scope shapes here, because nothing in
+	 * either names it), so the direction with teeth is the other one — a rule reacting to the scope
+	 * that no roster entry covers.
+	 */
+	public function testEveryScopeSensitiveRuleIsInTheRoster(): Void {
+		final roster: Array<String> = FIX_WRITERS.concat(CROSS_FILE_WRITERS);
+		final sensitive: Array<String> = scopeSensitiveRules();
+		// Non-vacuity floor, in the ONE dimension a count belongs in: the measurement itself must
+		// have found something, or every containment below holds over nothing.
+		Assert.isTrue(sensitive.length > 0, 'no rule reacted to the resolution scope — the containment holds over nothing');
+		for (rule in sensitive)
+			Assert.isTrue(roster.contains(rule), '$rule reacts to the resolution scope on this fixture and no roster entry covers it');
 	}
 
 	/**
@@ -525,6 +630,20 @@ class CrossScopeSoundnessTest extends Test {
 			sources: () -> {report: report, projectRoots: roots, library: new LibrarySources(library) }
 		});
 		return plugin;
+	}
+
+	/**
+	 * The rule ids `libsOnlyExtras` names, deduplicated — every rule whose report or edit on the
+	 * declaring file changed when the declared scope shape did.
+	 */
+	private function scopeSensitiveRules(): Array<String> {
+		final out: Array<String> = [];
+		for (entry in libsOnlyExtras()) {
+			final rule: String = entry.split(':')[1].split('@')[0];
+			if (!out.contains(rule)) out.push(rule);
+		}
+		out.sort(Reflect.compare);
+		return out;
 	}
 
 }
