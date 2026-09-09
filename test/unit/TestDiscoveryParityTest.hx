@@ -1551,6 +1551,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.LiteralVocabularyTest#testInertRegionsMasksWhatTheGrammarDeclaresInert :: control :: '
 				+ 'M-INERT-REGIONS-HARDCODED-KINDS',
 			'unit.query.LiteralVocabularyTest#testOneContentQueryAnswersBothQuoteSpellings :: control :: M-LIT-CONTENT-KINDS-SEGMENT-ONLY',
+			'unit.query.LiteralVocabularyTest#testTheContentSetFollowsTheVocabularyItIsHanded :: control :: M-LIT-CONTENT-KINDS-FROZEN',
+			'unit.query.LiteralVocabularyTest#testTheInertSegmentKindsComeFromTheShapeToo :: control :: M-INERT-SEGMENT-KINDS-HARDCODED',
 			'unit.query.MakeFinalSliceTest#testHalfIteratorShapeStillFinal :: control :: M-STRUCT-BUILTIN-BY-NAME',
 			'unit.query.MetaElementSpanSliceTest#testRemoveConditionalModifierRegionStillTakesTheMember :: control :: '
 				+ 'M-META-ELEMENT-ANY-COND-REGION',
@@ -1964,7 +1966,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-COND-NAMES-DROP-META-NAME',
 			'M-INERT-REGIONS-HARDCODED-KINDS',
 			'M-LIT-CONTENT-KINDS-SEGMENT-ONLY',
-			'M-LIT-DELIMITERS-IGNORED'
+			'M-LIT-DELIMITERS-IGNORED',
+			'M-LIT-CONTENT-KINDS-FROZEN',
+			'M-INERT-SEGMENT-KINDS-HARDCODED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

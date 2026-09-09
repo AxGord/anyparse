@@ -2534,6 +2534,21 @@
 			"find": "final hit: Bool = matches(n, target, exact) || content != null && matches(content, target, exact);",
 			"replace": "final hit: Bool = matches(n, target, exact);",
 			"note": "the declared quotes stay on the name slot for the compare, so `--exact` can never match content written in the grammar's whole-span string spelling and the two spellings answer differently again"
+		},
+		{
+			"name": "M-LIT-CONTENT-KINDS-FROZEN",
+			"type": "anyparse.query.Lit",
+			"method": "contentKinds",
+			"force": "['Literal', 'DoubleStringExpr']",
+			"note": "the content vocabulary freezes into this grammar's ctor names again - wide enough to pass every fixture that reads the Haxe shape, which is why review found the derivation itself unpinned, and no longer read from the declaration at all"
+		},
+		{
+			"name": "M-INERT-SEGMENT-KINDS-HARDCODED",
+			"type": "anyparse.query.InertRegions",
+			"method": "textSegmentKinds",
+			"find": "for (kind in shape.stringInterpInertSegmentKinds ?? []) out.push(kind);",
+			"replace": "for (kind in ['Dollar', 'LoneDollar']) out.push(kind);",
+			"note": "the inert segment kinds go back to Haxe ctor names inside the agnostic masker - the THIRD vocabulary of this class, the one the multi-pair arm on `collectLiterals` does not reach - so the segment split no longer follows the declaration"
 		}
 	]
 }

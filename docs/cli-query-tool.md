@@ -1423,11 +1423,17 @@ The matcher walks both ASTs through a generic tree-traversal interface that the 
 Engine code that switches on Haxe-specific types is a bug. This invariant is the difference between "Haxe AST-grep" and "universal AST-grep" — and must be enforced from the first commit.
 
 **Where it stands, measured rather than asserted (S188, on `e11018f5`).** The rule
-is about TYPES, and no engine code names a Haxe type — but a kind name spelled as a
-STRING is the same coupling with none of the compiler's help, and there are
+is about TYPES, and the engine names a Haxe type in exactly two places: the CLI
+registry, which has to construct the plugin it selects (`cli/CliArgs.hx`), and one
+real remainder — `query/FormatConfigDiscovery.hx` reaches for
+`HaxeFormatConfigDiagnostics` to warn about a config it found. A kind name spelled as
+a STRING is the same coupling with none of the compiler's help, and there are
 **549 occurrences of 126 distinct projected ctor names across 62 files** of
 `src/anyparse/query` + `src/anyparse/check` (761 / 168 / 73 if names that are also
-ordinary English words — `Static`, `Public`, `Inline` — are counted). The census is
+ordinary English words — `Static`, `Public`, `Inline` — are counted; that inclusive
+triple is the reproducible one — a second reviewer's word list gave 560 / 129 / 61
+for the exclusive count, so the narrow number is a reading of one word list, not a
+measurement). The census is
 one command against `HaxeQueryWalker.projectedKinds()`, which is the same generated
 vocabulary `unit.query.RefShapeKindProjectionTest` compares the declared side
 against:

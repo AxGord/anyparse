@@ -30,10 +30,13 @@ using Lambda;
  *    claimed it "never picks a lexer".
  *
  * What every fixture below asks is whether the answer follows the DECLARATION. That is the half a
- * hardcoded list can also satisfy in the positive direction, so each control has a NEGATIVE arm
- * too: hand the reader a vocabulary that names nothing and the masking has to stop. A list frozen
- * into the engine cannot do that, which is what makes these fixtures discriminate the fix from the
- * defect rather than merely exercise it.
+ * hardcoded list also satisfies in the positive direction, so the negative direction needs a
+ * vocabulary the engine cannot have frozen: hand the masker one that names nothing and the masking
+ * has to stop, hand the content set one this grammar does not use and the set has to follow it.
+ * Review measured why the second of those is spelled out rather than assumed — every OTHER fixture
+ * here reads the Haxe shape, so `contentKinds` replaced by a literal `['Literal',
+ * 'DoubleStringExpr']` passed all of them; only `testTheContentSetFollowsTheVocabularyItIsHanded`
+ * separates a derivation from a copy.
  */
 @:nullSafety(Strict)
 class LiteralVocabularyTest extends Test {
@@ -154,7 +157,12 @@ class LiteralVocabularyTest extends Test {
 	 * fixture can discriminate them by their effect on a name scan — which is why the assertion is
 	 * about the span COUNT and not about a masked name. What it protects is the exhaustiveness of
 	 * the segment split: drop them and the enumeration reads as if an escaped trigger were code.
+	 *
+	 * CONTROL for the THIRD vocabulary — the one `textSegmentKinds` builds, which the multi-pair
+	 * arm on `collectLiterals` does not reach. KILLED by arm `M-INERT-SEGMENT-KINDS-HARDCODED`.
 	 */
+	@:pin('control')
+	@:killer('M-INERT-SEGMENT-KINDS-HARDCODED')
 	public function testTheInertSegmentKindsComeFromTheShapeToo(): Void {
 		final source: String = 'class C {\n\tvar a: String = \'a $$$$ b\';\n}';
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
@@ -164,6 +172,28 @@ class LiteralVocabularyTest extends Test {
 		silent.stringInterpInertSegmentKinds = [];
 		final without: Int = InertRegions.of(tree, plugin.lexicalRegions(source), silent).length;
 		Assert.isTrue(withSegments > without, 'the declared inert segments must contribute spans: $withSegments vs $without');
+	}
+
+	/**
+	 * The content set follows whatever vocabulary it is HANDED — the half a frozen list also
+	 * satisfies, and the one every other fixture here leaves unproved.
+	 *
+	 * Measured in review: `contentKinds` replaced by a literal `['Literal', 'DoubleStringExpr']` —
+	 * exactly the defect this slice removes — passes every other fixture in this class, because all
+	 * of them read the Haxe shape and that frozen pair is wide enough for it. Only a vocabulary this
+	 * grammar does not use separates a derivation from a copy.
+	 *
+	 * CONTROL for the derivation itself. KILLED by arm `M-LIT-CONTENT-KINDS-FROZEN`.
+	 */
+	@:pin('control')
+	@:killer('M-LIT-CONTENT-KINDS-FROZEN')
+	public function testTheContentSetFollowsTheVocabularyItIsHanded(): Void {
+		final other: RefShape = new HaxeQueryPlugin().refShape();
+		other.stringInterpTextKind = 'QuotedFragment';
+		other.stringLiteralKinds = ['QuotedWhole', 'QuotedSegmented'];
+		other.interpolatingStringKinds = ['QuotedSegmented'];
+		final kinds: Array<String> = Lit.contentKinds(other);
+		Assert.same(['QuotedFragment', 'QuotedWhole'], kinds, 'the set must follow the handed vocabulary: $kinds');
 	}
 
 	/** `Lit.find` over `source` with the grammar's own content vocabulary and its declared delimiters. */

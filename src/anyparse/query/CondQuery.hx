@@ -368,8 +368,9 @@ final class CondQuery {
 	 * The LONGEST matching prefix decides, because Haxe's two sigils NEST — `@:` starts with `@`, so
 	 * taking the first match in declaration order would leave `:build` as the remainder and reject
 	 * it. Read that way rather than by sorting the set: an order-dependent read of a declared
-	 * vocabulary is a coupling a grammar author has no way to know about, and this runs at every
-	 * named node of every branch, so it allocates nothing.
+	 * vocabulary is a coupling a grammar author has no way to know about, and it costs one pass over
+	 * a two-entry set. It is NOT allocation-free — the remainder check takes a `substr` — but it runs
+	 * only on a name that already carries a sigil, which is a minority of the named nodes it sees.
 	 */
 	private static function isMetadataName(name: String, shape: RefShape): Bool {
 		var longest: Int = -1;

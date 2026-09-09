@@ -266,7 +266,11 @@ final class CliWalk {
 			case 'Metavar':
 				'${prefix}is a lone metavar — matches every node. Narrow with structural context ('
 					+ 'e.g. "$$x.field", "func($$x)"), or look up by name: apq refs <name> --decls / apq uses <Type>. Searching anyway.';
-			case 'Literal', 'StringLit', 'BoolLit', 'IntLit', 'FloatLit', 'SingleStringExpr', 'DoubleStringExpr', 'RawString':
+			// `HexLit` was missing and `StringLit` / `RawString` name nothing this grammar projects, so
+			// `apq search '0xFF'` fell through to the identifier arm and advised `apq refs` / `apq uses`
+			// on a literal. Measured in review of S188; the principled form is a shape field, which is
+			// the same question T901 / T902 park for the operator tables.
+			case 'Literal', 'BoolLit', 'IntLit', 'FloatLit', 'HexLit', 'SingleStringExpr', 'DoubleStringExpr':
 				'${prefix}is a bare literal — for literal-content lookup use: apq lit \'$patternStr\' <files>. Searching anyway.';
 			case _:
 				// Bare identifier (IdentExpr) and anything else that
