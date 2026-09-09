@@ -121,7 +121,7 @@ class UnusedPrivateDeclineReasonTest extends Test {
 	@:killer('M-UNUSED-PRIVATE-REGION-DECLINE-SILENT')
 	public function testEachGateNamesItself(): Void {
 		for (gate in GATES) {
-			final answer: { reasons: Array<String>, edits: Int } = declineReasons(gate.files);
+			final answer: Declines = declineReasons(gate.files);
 			final spoke: Int = answer.reasons.length;
 			Assert.equals(1, spoke, '${gate.name}: $spoke declined finding(s), expected exactly one');
 			// A sentence on a finding the same call went on to FIX would be a lie about the run: the
@@ -199,6 +199,30 @@ class UnusedPrivateDeclineReasonTest extends Test {
 		Assert.isNull(own[0].declineReason);
 	}
 
+	/**
+	 * The region gate speaks for EVERY finding it takes down, not just the first.
+	 *
+	 * `GATES`'s region cell holds ONE member in its `#if` branch, so a mutation that labels only the
+	 * first refused member — a `break` in `noteRegionDeclines` — passes every assertion above: with
+	 * N == 1 the first is all of them. Two dead members in one branch make the count observable, and
+	 * the ledger then prints one row of two rather than a labelled finding beside a silent one.
+	 */
+	public function testTheRegionGateSpeaksForEveryMemberItTakesDown(): Void {
+		final files: Array<SourceFile> = [
+			{
+				file: 'C.hx',
+				source: 'class C {\n\t#if js\n\tprivate var _a: Int = 0;\n\tprivate var _b: Int = 0;\n\t#end\n\n'
+					+ '\tpublic function new() {}\n}\n'
+			}
+		];
+		final answer: Declines = declineReasons(files);
+		final spoke: Int = answer.reasons.length;
+		Assert.equals(2, spoke, '$spoke of the two members in the emptied branch got a sentence');
+		Assert.equals(0, answer.edits, 'the call wrote ${answer.edits} edit(s), so the region gate did not close');
+		for (said in answer.reasons)
+			Assert.isTrue(said.indexOf('emptying a conditional region') != -1, 'not the region gate speaking — $said');
+	}
+
 	/** A finding of this rule at `span` that no gate decides — the shape both `fix` guards drop. */
 	private function probe(span: Null<Span>): Violation {
 		return {
@@ -215,7 +239,7 @@ class UnusedPrivateDeclineReasonTest extends Test {
 	 * ledger channel, asked exactly the way `apq lint --fix` asks it: `run` first (which fills the
 	 * reflection surface), then `fix` over that file with the report-scoped index.
 	 */
-	private function declineReasons(files: Array<SourceFile>): { reasons: Array<String>, edits: Int } {
+	private function declineReasons(files: Array<SourceFile>): Declines {
 		final check: UnusedPrivate = new UnusedPrivate();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final target: String = files[0].file;
@@ -242,4 +266,10 @@ private typedef Gate = {
 private typedef SourceFile = {
 	var file: String;
 	var source: String;
+};
+
+/** What a cell's `fix` call said: one sentence per declined finding, and how many edits it wrote. */
+private typedef Declines = {
+	final reasons: Array<String>;
+	final edits: Int;
 };

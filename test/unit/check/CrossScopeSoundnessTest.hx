@@ -177,10 +177,14 @@ class CrossScopeSoundnessTest extends Test {
 	 *
 	 * What makes a rule belong here is the shape of its LICENSE, not the shape of its edit: it
 	 * rewrites or removes a DECLARATION on the strength of a reference, write or override being
-	 * ABSENT, and a file outside the report scope can supply any of the three. Every other autofix
-	 * in the roster edits a node whose references cannot leave the file it is handed — a local, a
-	 * case binder, a statement, an expression, an arm, a comment, whitespace — so a wider scope
-	 * cannot change its answer and there is nothing for this fixture to compare.
+	 * ABSENT, and a file outside the report scope can supply any of the three. This list is what
+	 * THESE cells drive, not the whole license class: at least six registered autofixes share the
+	 * shape and no cell reaches them yet — `prefer-final-public-field`, `prefer-read-only-field`,
+	 * `trivial-getter`, `orphan-accessor`, `inline-constant`, `static-constant`, each named as
+	 * cross-file-licensed by `LintCommand.partitionChecks`'s own `fullScopeIds` comments — which is
+	 * what T895 is for. Every autofix OUTSIDE that class edits a node whose references cannot leave
+	 * the file it is handed — a local, a case binder, a statement, an expression, an arm, a comment,
+	 * whitespace — so a wider scope cannot change its answer and there is nothing to compare.
 	 *
 	 * An equality here is the anti-rot half: a rule dropping out is the vacuity regression the old
 	 * floor was watching for, and a NEW registered rule writing here is one nobody has classified

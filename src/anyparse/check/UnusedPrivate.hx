@@ -106,9 +106,12 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 
 	/**
 	 * The one decline sentence two gates share: a member of a macro-built type, and a private empty
-	 * constructor of one. Named rather than spelled twice so the `--fix` ledger, which buckets by
-	 * exact text, keeps them one row and the two cannot drift apart. Every other gate spells its
-	 * sentence inline, at its own condition.
+	 * constructor of one. Only the MEMBER gate is live — the constructor one is a re-check no finding
+	 * reaches, since `run`'s collector already drops a macro-built type (measured: the same fixture
+	 * reports one finding with the metadata removed and none with it). The name is what keeps the
+	 * unreachable half saying the same thing as the live one if it ever starts firing, and keeps the
+	 * `--fix` ledger — which buckets by exact text — from growing two rows for one cause. Every other
+	 * gate spells its sentence inline, at its own condition.
 	 */
 	private static inline final DECLINE_BUILD_MACRO: String = 'the enclosing type is under a `@:build` macro, which reads the '
 		+ 'field list this deletion would change';
@@ -231,10 +234,11 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	 *
 	 * EVERY one of those gates writes its own sentence on the finding it declines, so `apq lint
 	 * --fix` names the cause instead of reporting a bare `declined` (`Violation.declineReason`, whose
-	 * only reader is that ledger — no reported byte moves). Ten gates, ten sentences: the two shape
-	 * gates in `shapeDecline`, the four type-level ones in `memberDeclineReason`, the reflected-name
-	 * one beside them, the two the constructor / conditional arms decide here, and the region one
-	 * `noteRegionDeclines` attributes. The two remaining `continue`s get NONE by intent: a finding
+	 * only reader is that ledger — no reported byte moves). ELEVEN sites, TEN sentences (the two
+	 * `@:build` sites share `DECLINE_BUILD_MACRO`): the two shape gates in `shapeDecline`, the four
+	 * type-level ones in `memberDeclineReason`, the reflected-name one beside them, the two the
+	 * constructor / conditional arms decide here, and the region one `noteRegionDeclines`
+	 * attributes. The two remaining `continue`s get NONE by intent: a finding
 	 * with no span, and one whose span matches no member of THIS source, are not gates that closed —
 	 * they are a violation this call cannot place, and a sentence there would be invented rather
 	 * than the deciding gate speaking.
