@@ -1081,6 +1081,15 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryReturnBindingSeeded :: control :: M-NULLABLE-FLOW-REPORT-INDEX',
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryReturnDerefFlagged :: control :: M-NULLABLE-REPORT-INDEX',
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryStaticReturnDerefFlagged :: control :: M-NULLABLE-REPORT-INDEX',
+			'unit.check.OrphanAccessorCheckTest#testAnUnreadableCallerOutsideTheReportScopeStillDeclinesTheDeletion :: control :: '
+				+ 'M-ORPHAN-UNREADABLE-REPORT-SCOPE,M-ORPHAN-FIX-UNREADABLE-BLIND',
+			'unit.check.OrphanAccessorCheckTest#testAnUnreadableProjectFileSpellingNothingLeavesTheDeletionAvailable :: guard :: ',
+			'unit.check.OrphanAccessorCheckTest#testAnUnreadableSubtypeOutsideTheReportScopeStillDowngradesTheReport :: control :: '
+				+ 'M-ORPHAN-UNREADABLE-REPORT-SCOPE,M-ORPHAN-REPORT-UNREADABLE-BLIND',
+			'unit.check.OrphanAccessorCheckTest#testAnUnreadableThirdPartyFileSpellingTheAccessorStillDeclines :: control :: '
+				+ 'M-ORPHAN-UNREADABLE-REFLECTIVE-NARROWED',
+			'unit.check.OrphanAccessorCheckTest#testAnUnreadableThirdPartySubtypeDoesNotDeclineAProjectDeletion :: control :: '
+				+ 'M-ORPHAN-UNREADABLE-SUBTYPE-OWNER-WIDE,M-ORPHAN-REPORT-OWNER-WIDE',
 			'unit.check.OrphanAccessorCheckTest#testTheUnresolvedSupertypeArmAlsoSaysWhyNoEditFollows :: control :: '
 				+ 'M-ORPHAN-ARMS-SHARE-REASON',
 			'unit.check.PossibleNullDereferenceTest#testCallReturnPopFlagged :: control :: M-NULLABLE-NO-CHAIN',
@@ -1847,6 +1856,12 @@ class TestDiscoveryParityTest extends Test {
 			'M-PTR-CASCADE-NEVER-STRANDS',
 			'M-TERMINAL-RUNGS-ANY',
 			'M-PIEC-SPINE-CLAIM-ANY',
+			'M-ORPHAN-UNREADABLE-REPORT-SCOPE',
+			'M-ORPHAN-FIX-UNREADABLE-BLIND',
+			'M-ORPHAN-REPORT-UNREADABLE-BLIND',
+			'M-ORPHAN-UNREADABLE-REFLECTIVE-NARROWED',
+			'M-ORPHAN-UNREADABLE-SUBTYPE-OWNER-WIDE',
+			'M-ORPHAN-REPORT-OWNER-WIDE',
 			'M-ORPHAN-ARMS-SHARE-REASON',
 			'M-LINTFIX-ACCEPTED-BLAMED',
 			'M-ADDMETA-LOOSE-WRAPPER-CLIMB',
