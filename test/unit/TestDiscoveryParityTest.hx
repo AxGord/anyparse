@@ -862,6 +862,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.LexicalRegionsTest',
 		'unit.query.LintDiffTest',
 		'unit.query.LintFixSafePassRevertTest',
+		'unit.query.LiteralClassificationTest',
 		'unit.query.LiteralVocabularyTest',
 		'unit.query.LocalTypeAnnotationProjectionTest',
 		'unit.query.MakeFinalSliceTest',
@@ -1144,6 +1145,10 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.TrivialGetterCheckTest#testBasicBlockBodyFlagged :: control :: M-SUBOVERRIDE-TRUE',
 			'unit.check.TrivialGetterShapeCollapseTest#testForeignHierarchyBackingNameStaysAccountedFor :: control :: '
 				+ 'M-SUPERDECLARES-FALSE',
+			'unit.check.TrivialGetterShapeCollapseTest#testShapeACtorInitInertDollarSegmentMoveFix :: control :: '
+				+ 'M-TRIVGET-INERT-SEGMENT-IGNORED',
+			'unit.check.TrivialGetterShapeCollapseTest#testShapeACtorInitNegativeNumberMoveFix :: control :: '
+				+ 'M-TRIVGET-NO-NEGATION-DESCENT',
 			'unit.check.TrivialGetterShapeCollapseTest#testShapeACtorInitSingleQuotedStringMoveFix :: control :: '
 				+ 'M-TRIVGET-MOVABLE-LITERAL-FALSE',
 			'unit.check.UnguardedNullableDerefTest#testDeclaredNullableFromANullableFieldStillFlagged :: control :: '
@@ -1547,6 +1552,15 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.LintDiffTest#testAddedMinusRemovedIsAlwaysTheTotalDelta :: control :: M-LINTDIFF-SURPLUS-BY-KEY',
 			'unit.query.LintDiffTest#testTheByRuleSummaryNamesEveryRuleThatMoved :: control :: M-LINTDIFF-RULE-SUMMARY-BLANK',
 			'unit.query.LintDiffTest#testTheHeadlineStatesTheNetDirection :: control :: M-LINTDIFF-NET-UNSTATED',
+			'unit.query.LiteralClassificationTest#testAKindNamedLikeALiteralIsNotClassifiedAsOne :: control :: M-SAFE-KINDS-SUFFIX-STUB',
+			'unit.query.LiteralClassificationTest#testAnAllocatingLiteralIsRefusedByEveryPredicate :: control :: '
+				+ 'M-PURE-ARG-KINDS-SUFFIX-STUB',
+			'unit.query.LiteralClassificationTest#testEveryDeclaredConstantLiteralIsClassifiedByEveryList :: control :: '
+				+ 'M-SAFE-KINDS-DROP-HEX',
+			'unit.query.LiteralClassificationTest#testThePlainLiteralPredicateFollowsTheVocabularyItIsHanded :: control :: '
+				+ 'M-PLAIN-LITERAL-FROZEN',
+			'unit.query.LiteralClassificationTest#testTheStringValueSeamAnswersBothSpellingsFromTheShape :: control :: '
+				+ 'M-PLAIN-STRING-VALUE-NO-DELIMITERS',
 			'unit.query.LiteralVocabularyTest#testAnExactQueryReachesContentInsideTheQuotes :: control :: M-LIT-DELIMITERS-IGNORED',
 			'unit.query.LiteralVocabularyTest#testInertRegionsMasksWhatTheGrammarDeclaresInert :: control :: '
 				+ 'M-INERT-REGIONS-HARDCODED-KINDS',
@@ -1968,7 +1982,14 @@ class TestDiscoveryParityTest extends Test {
 			'M-LIT-CONTENT-KINDS-SEGMENT-ONLY',
 			'M-LIT-DELIMITERS-IGNORED',
 			'M-LIT-CONTENT-KINDS-FROZEN',
-			'M-INERT-SEGMENT-KINDS-HARDCODED'
+			'M-INERT-SEGMENT-KINDS-HARDCODED',
+			'M-TRIVGET-NO-NEGATION-DESCENT',
+			'M-TRIVGET-INERT-SEGMENT-IGNORED',
+			'M-SAFE-KINDS-SUFFIX-STUB',
+			'M-SAFE-KINDS-DROP-HEX',
+			'M-PURE-ARG-KINDS-SUFFIX-STUB',
+			'M-PLAIN-LITERAL-FROZEN',
+			'M-PLAIN-STRING-VALUE-NO-DELIMITERS'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
@@ -2040,7 +2061,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-KWREF-TIGHT-LEAD-BLIND :: anyparse.macro.WriterKwRefLowering#subStructStartsWithTightLead',
 			'M-CASE-CTRLFLOW-STAR-FLAG-BLIND :: anyparse.macro.WriterTriviaStarDispatch#ownStarHasFlag',
 			'M-PROJECTED-KINDS-ALT-ONLY :: anyparse.macro.QueryWalkerLowering#eachProjectedKind',
-			'M-DECL-HOST-KIND-STALE :: anyparse.grammar.haxe.HaxeQueryPlugin#FinalMember:DECL_HOST_KINDS'
+			'M-DECL-HOST-KIND-STALE :: anyparse.grammar.haxe.HaxeQueryPlugin#FinalMember:DECL_HOST_KINDS',
+			'M-SAFE-KINDS-DROP-HEX :: anyparse.query.MemberKinds#FinalMember:SAFE_KINDS'
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 

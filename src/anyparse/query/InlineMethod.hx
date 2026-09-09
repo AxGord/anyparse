@@ -74,11 +74,14 @@ final class InlineMethod {
 	private static final PURE_ARG_KINDS: Array<String> = [
 		'IntLit',
 		'FloatLit',
+		'HexLit',
 		'BoolLit',
 		'NullLit',
 		'DoubleStringExpr',
 		'SingleStringExpr',
 		'Literal',
+		'Dollar',
+		'LoneDollar',
 		'IdentExpr',
 		'ParenExpr',
 		'Add',
@@ -120,6 +123,7 @@ final class InlineMethod {
 	private static final ATOMIC_ROOT_KINDS: Array<String> = [
 		'IntLit',
 		'FloatLit',
+		'HexLit',
 		'BoolLit',
 		'NullLit',
 		'DoubleStringExpr',
@@ -163,8 +167,17 @@ final class InlineMethod {
 		};
 	}
 
+	/**
+	 * Whether `kind` is a `PURE_ARG_KINDS` member.
+	 *
+	 * A NAME-CONVENTION stub (`|| kind.endsWith('Lit') || kind.endsWith('StringExpr')`) used to widen
+	 * the enumeration, readmitting the object and regex literals the list's own doc says are absent.
+	 * An argument this predicate calls pure is DUPLICATED once per use of its parameter, so admitting
+	 * an allocating literal turns one value into several — the same defect measured in
+	 * `MemberKinds.isSafeKind`, which the stub was copied from.
+	 */
 	private static inline function isPureKind(kind: String): Bool {
-		return PURE_ARG_KINDS.contains(kind) || kind.endsWith('Lit') || kind.endsWith('StringExpr');
+		return PURE_ARG_KINDS.contains(kind);
 	}
 
 	private static inline function isSpace(c: Int): Bool {

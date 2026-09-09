@@ -6,6 +6,7 @@ import anyparse.check.Check.OracleRelaxable;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.Lit;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberKinds;
 import anyparse.query.NamingPolicy.FrameworkContract;
@@ -106,8 +107,6 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	/** Field-access chain link kinds — a chain is `IdentExpr` at the leaf wrapped in any of these. */
 	private static final CHAIN_KINDS: Array<String> = ['FieldAccess', 'SafeFieldAccess', 'ForceFieldAccess'];
 
-	/** Scalar literal kinds — constants carrying no allocation (`NullLit` is mode-gated by the null-safety layer). */
-	private static final SCALAR_LIT_KINDS: Array<String> = ['IntLit', 'FloatLit', 'HexLit', 'BoolLit', 'NullLit'];
 
 	/** Assignment-family root kinds of a trivial mutator body (`x = v`, `_n += 1`, `_count++`). */
 	private static final MUTATOR_KINDS: Array<String> = [
@@ -269,7 +268,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		final reflectBlocked: Array<String> = [];
 		for (t in trees) {
 			collectValueRefs(t.tree, false, candidateNames, valueBlocked);
-			collectReflectNames(t.tree, candidateNames, reflectBlocked);
+			collectReflectNames(t.tree, candidateNames, reflectBlocked, shape);
 		}
 		// Pass C: emit a finding for each candidate the cross-file gates leave standing. A class whose
 		// own TYPE-level annotation is not inline-neutral is skipped whole (see `metaBlockedClasses`).
@@ -315,19 +314,9 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		return node.kind == 'ReturnExpr' && node.children.length == 1 ? node.children[0] : node;
 	}
 
-	/**
-	 * Whether `node` is an allocation-free literal — a scalar, or a string literal WITHOUT
-	 * interpolation parts (a plain single-quoted string carries only `Literal` children; any `Ident` /
-	 * `Block` part makes it a runtime concatenation).
-	 */
-	private static inline function isPlainLiteral(node: QueryNode): Bool {
-		return SCALAR_LIT_KINDS.contains(node.kind) || (node.kind == 'SingleStringExpr' || node.kind == 'DoubleStringExpr')
-			&& !node.children.exists(c -> c.kind != 'Literal');
-	}
-
 	/** Whether `node` qualifies as a thin-forward argument / mutator operand: a bare chain or a plain literal. */
-	private static inline function isSimpleOperand(node: QueryNode): Bool {
-		return isChain(node) || isPlainLiteral(node);
+	private static inline function isSimpleOperand(node: QueryNode, shape: RefShape): Bool {
+		return isChain(node) || MemberKinds.isPlainLiteral(node, shape);
 	}
 
 	/** Whether `fn`'s body is an empty statement block (the no-op arm's message discriminator). */
@@ -595,7 +584,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		if (referencesSelf(fn, name)) return false;
 		if (isEmptyBody(fn, shape)) return true;
 		final root: Null<QueryNode> = bodyRootExpr(fn, shape);
-		return root != null && (isAccessorOrForward(root) || isConstExpr(root)) && !bodyExceedsBudget(fn, shape);
+		return root != null && (isAccessorOrForward(root, shape) || isConstExpr(root, shape)) && !bodyExceedsBudget(fn, shape);
 	}
 
 	/**
@@ -639,18 +628,18 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	 * read / write / forwarded call — the benefit class the rule exists for. A `.bind` callee is
 	 * REJECTED: it allocates a closure, so the forward is not thin.
 	 */
-	private static function isAccessorOrForward(root: QueryNode): Bool {
+	private static function isAccessorOrForward(root: QueryNode, shape: RefShape): Bool {
 		final kids: Array<QueryNode> = root.children;
 		return isChain(root) || kids.length >= 1 && isChain(kids[0]) && kids[0].name != 'bind' && (
 			root.kind == CALL_KIND
-				? allSimpleOperands(kids, 1)
-				: MUTATOR_KINDS.contains(root.kind) && (kids.length == 1 || isSimpleOperand(kids[1]))
+				? allSimpleOperands(kids, 1, shape)
+				: MUTATOR_KINDS.contains(root.kind) && (kids.length == 1 || isSimpleOperand(kids[1], shape))
 		);
 	}
 
 	/** Whether every element of `nodes` from `start` on is a simple operand. */
-	private static function allSimpleOperands(nodes: Array<QueryNode>, start: Int): Bool {
-		for (i in start ... nodes.length) if (!isSimpleOperand(nodes[i])) return false;
+	private static function allSimpleOperands(nodes: Array<QueryNode>, start: Int, shape: RefShape): Bool {
+		for (i in start ... nodes.length) if (!isSimpleOperand(nodes[i], shape)) return false;
 		return true;
 	}
 
@@ -659,10 +648,9 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	 * `CONST_OP_KINDS` operators only — nothing that allocates or calls, so the call site can fold
 	 * it. The one non-expression child shape, `Is`'s type name (`Named`), is skipped.
 	 */
-	private static function isConstExpr(node: QueryNode): Bool {
-		return isSimpleOperand(node) || CONST_OP_KINDS.contains(node.kind) && node.children.foreach(c ->
-			c.kind == 'Named' || isConstExpr(c)
-		);
+	private static function isConstExpr(node: QueryNode, shape: RefShape): Bool {
+		return isSimpleOperand(node, shape) || CONST_OP_KINDS.contains(node.kind)
+			&& node.children.foreach(c -> c.kind == 'Named' || isConstExpr(c, shape));
 	}
 
 	/**
@@ -716,35 +704,20 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	 * Record into `out` each name in `candidateNames` passed to a `Reflect.<m>(...)` call as a string
 	 * literal — a method reached by reflection is not safe to inline.
 	 */
-	private static function collectReflectNames(node: QueryNode, candidateNames: Array<String>, out: Array<String>): Void {
+	private static function collectReflectNames(node: QueryNode, candidateNames: Array<String>, out: Array<String>, shape: RefShape): Void {
 		if (node.kind == CALL_KIND && node.children.length >= 1) {
 			final callee: QueryNode = node.children[0];
 			if (
 				callee.kind == 'FieldAccess' && callee.children.length == 1 && callee.children[0].kind == 'IdentExpr'
 				&& callee.children[0].name == 'Reflect'
 			) for (i in 1...node.children.length) {
-				final lit: Null<String> = stringLiteralValue(node.children[i]);
+				final lit: Null<String> = Lit.plainStringValue(node.children[i], shape);
 				if (lit != null && candidateNames.contains(lit) && !out.contains(lit)) out.push(lit);
 			}
 		}
-		for (c in node.children) collectReflectNames(c, candidateNames, out);
+		for (c in node.children) collectReflectNames(c, candidateNames, out, shape);
 	}
 
-	/**
-	 * The unquoted value of a string-literal node, else null. A `DoubleStringExpr` carries the QUOTED
-	 * text as its name; a plain `SingleStringExpr` carries the unquoted text in its one `Literal`
-	 * child (an interpolated string has `Ident` / `Block` parts and yields null).
-	 */
-	private static function stringLiteralValue(node: QueryNode): Null<String> {
-		return switch node.kind {
-			case 'DoubleStringExpr':
-				final raw: Null<String> = node.name;
-				raw == null || raw.length < 2 ? null : raw.substring(1, raw.length - 1);
-			case 'SingleStringExpr':
-				node.children.length == 1 && node.children[0].kind == 'Literal' ? node.children[0].name : null;
-			case _: null;
-		}
-	}
 
 	/** The simple names of every interface in `cls`'s `implements` clauses. */
 	private static function implementedInterfaces(cls: QueryNode): Array<String> {

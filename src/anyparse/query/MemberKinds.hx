@@ -215,16 +215,23 @@ final class MemberKinds {
 	 * is correctly excluded. The increment / decrement ctors are deliberately
 	 * absent — they mutate their operand. Shared by `Inline` (inline-var
 	 * substitution safety) and the `unused-local` check (delete-fix safety).
+	 *
+	 * The literal half must cover `MemberKinds.constantLiteralKinds` of every grammar this layer
+	 * serves and NOTHING ELSE — an allocating literal here is a wrong rewrite, not a missed one.
+	 * `LiteralClassificationTest` holds it to that in both directions.
 	 */
 	private static final SAFE_KINDS: Array<String> = [
-		// Literals + the plain-string content leaf.
+		// Literals + every inert segment of a plain interpolating string (text, `$$`, a lone `$`).
 		'IntLit',
 		'FloatLit',
+		'HexLit',
 		'BoolLit',
 		'NullLit',
 		'DoubleStringExpr',
 		'SingleStringExpr',
 		'Literal',
+		'Dollar',
+		'LoneDollar',
 		// Bare identifier + paren group.
 		'IdentExpr',
 		'ParenExpr',
@@ -335,12 +342,65 @@ final class MemberKinds {
 	}
 
 	/**
-	 * A node kind that contributes no side effect on its own: an enumerated
-	 * `SAFE_KINDS` member, or any leaf whose kind ends with `Lit` / `StringExpr`
-	 * (a literal payload not separately enumerated).
+	 * A node kind that contributes no side effect on its own — an enumerated `SAFE_KINDS` member.
+	 *
+	 * The enumeration used to be widened by a NAME-CONVENTION stub (`kind.endsWith('Lit')
+	 * || kind.endsWith('StringExpr')`), on the theory that a literal payload the list forgot is
+	 * still a literal. It admitted two kinds the Haxe grammar declares no constant literal, and
+	 * `Inline` — which DUPLICATES an initializer it is handed as side-effect-free — silently
+	 * changed behaviour on both. Measured on `a9efccd4`: `final r = ~/x(\d+)/;` read twice
+	 * inlined to `(~/x(\d+)/).match(a) ? (~/x(\d+)/).matched(1) : ''`, two `EReg` values where
+	 * the source had one, so the second never matched; `final o = {};` compared to itself
+	 * inlined to `({}) == ({})`, true becoming false. Neither is reported, both compile.
+	 * `LiteralClassificationTest` now holds the enumeration against the grammar's own literal
+	 * vocabulary in BOTH directions, which is what the stub was standing in for.
 	 */
 	public static inline function isSafeKind(kind: String): Bool {
-		return SAFE_KINDS.contains(kind) || kind.endsWith('Lit') || kind.endsWith('StringExpr');
+		return SAFE_KINDS.contains(kind);
+	}
+
+	/**
+	 * Whether `kind` is a segment of an interpolating literal whose bytes are TEXT rather than a
+	 * reference — the plain-text fragment or one of the declared inert triggers (`$$` / a lone `$`).
+	 */
+	public static inline function isInertStringSegmentKind(kind: String, shape: RefShape): Bool {
+		return kind == shape.stringInterpTextKind || (shape.stringInterpInertSegmentKinds ?? []).contains(kind);
+	}
+
+	/**
+	 * Every node kind the grammar declares an ALLOCATION-FREE COMPILE-TIME literal: its numeric,
+	 * string, boolean and null vocabularies, unioned and deduped.
+	 *
+	 * Deliberately NOT derived from `literalTypeNames`, whose keys are "literal kind => the type it
+	 * denotes" and would admit an ALLOCATING literal the moment a grammar names one (a regex kind
+	 * mapped to its type is a legitimate entry there and is no constant). Each of the four fields
+	 * unioned here is pinned by its own doc to a kind of value that carries no allocation, so the
+	 * union grows correctly when a grammar gains a spelling.
+	 */
+	public static function constantLiteralKinds(shape: RefShape): Array<String> {
+		final out: Array<String> = [];
+		inline function add(kind: Null<String>): Void if (kind != null && !out.contains(kind)) out.push(kind);
+		for (kind in shape.numericLiteralKinds ?? []) add(kind);
+		for (kind in shape.stringLiteralKinds ?? []) add(kind);
+		add(shape.boolLitKind);
+		add(shape.nullLiteralKind);
+		return out;
+	}
+
+	/**
+	 * Whether `node` is an allocation-free compile-time literal — a `constantLiteralKinds` kind and,
+	 * for the segmented spelling, one whose every segment is inert (`isInertStringSegmentKind`): an
+	 * `${ … }` hole or a `$name` shorthand makes the literal a runtime concatenation instead.
+	 *
+	 * The one question `prefer-inline` (allocation-free operand) and `trivial-getter` (relocatable
+	 * initializer) both ask, spelled once. Both used to spell the grammar's own ctor names, and both
+	 * missed the same kinds: `HexLit` stood unlisted in `trivial-getter` until review found
+	 * `_mask = 0xFF;` taking the `@:bypassAccessor` path a byte-equivalent `= 255;` did not.
+	 */
+	public static function isPlainLiteral(node: QueryNode, shape: RefShape): Bool {
+		return (shape.interpolatingStringKinds ?? []).contains(node.kind)
+			? node.children.foreach(c -> isInertStringSegmentKind(c.kind, shape))
+			: constantLiteralKinds(shape).contains(node.kind);
 	}
 
 	/**

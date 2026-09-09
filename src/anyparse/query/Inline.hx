@@ -68,6 +68,7 @@ final class Inline {
 	private static final ATOMIC_ROOT_KINDS: Array<String> = [
 		'IntLit',
 		'FloatLit',
+		'HexLit',
 		'BoolLit',
 		'NullLit',
 		'DoubleStringExpr',

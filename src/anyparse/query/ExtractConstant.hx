@@ -63,7 +63,7 @@ final class ExtractConstant {
 		if (MemberBranchScan.declaresMemberNamed(declNN, shape, source, name, plugin.lexicalRegions.bind(source)))
 			return Err('type "$typeName" already has a member named "$name"');
 
-		final occurrences: Array<Span> = collectOccurrences(declNN.nameNode, literal);
+		final occurrences: Array<Span> = collectOccurrences(declNN.nameNode, literal, shape);
 		if (occurrences.length == 0) return Err('no plain literal \'$literal\' occurs in type "$typeName"');
 
 		final insertAt: Int = firstMemberStart(source, declNN, shape, plugin.lexicalRegions(source));
@@ -104,7 +104,7 @@ final class ExtractConstant {
 			)
 			catch (exception: Exception) return Err('${sf.file} does not parse: ${exception.message}');
 
-			final occurrences: Array<Span> = collectOccurrences(tree, literal);
+			final occurrences: Array<Span> = collectOccurrences(tree, literal, plugin.refShape());
 			if (occurrences.length == 0) continue;
 			total += occurrences.length;
 			if (token == null) token = sf.source.substring(occurrences[0].from, occurrences[0].to);
@@ -141,27 +141,23 @@ final class ExtractConstant {
 	}
 
 	/**
-	 * Spans of every plain string literal equal to `literal` anywhere under `typeNode`: a single-quoted `SingleStringExpr` with exactly
-	 * one `Literal` child (an interpolated string carries extra children, so it is skipped), or any `DoubleStringExpr` (Haxe double-quoted
-	 * strings never interpolate, so each is a plain literal). Matched on the raw source between the quotes; metadata subtrees are skipped.
+	 * Spans of every plain string literal whose content is `literal` anywhere under `typeNode` —
+	 * whichever way the grammar spells its quotes, and interpolating literals excluded (an
+	 * `${ … }` / `$name` part makes the literal a runtime concatenation, not a constant).
+	 * Matched on the raw text inside the quotes; metadata subtrees are skipped.
+	 *
+	 * `Lit.plainStringValue` answers both spellings from the shape's own vocabulary. Spelling them
+	 * here was two hardcoded ctor names, and the double-quoted arm additionally hardcoded a
+	 * one-character quote width that only `stringLiteralDelimiters` can state.
 	 */
-	private static function collectOccurrences(typeNode: QueryNode, literal: String): Array<Span> {
+	private static function collectOccurrences(typeNode: QueryNode, literal: String, shape: RefShape): Array<Span> {
 		final spans: Array<Span> = [];
 		function walk(node: QueryNode): Void {
 			// A literal inside `@:meta('x')` must stay a literal — metadata needs a
 			// constant string, not an identifier reference.
 			if (MemberKinds.META_KINDS.contains(node.kind)) return;
-			if (node.kind == 'SingleStringExpr' && node.children.length == 1) {
-				final only: QueryNode = node.children[0];
-				final span: Null<Span> = node.span;
-				if (only.kind == 'Literal' && only.name == literal && span != null) spans.push(span);
-			} else if (node.kind == 'DoubleStringExpr') {
-				// Haxe double-quoted strings never interpolate, so every DoubleStringExpr is a plain
-				// literal; its `name` is the raw `"..."` token INCLUDING the quotes.
-				final span: Null<Span> = node.span;
-				final tok: Null<String> = node.name;
-				if (span != null && tok != null && tok.length >= 2 && tok.substring(1, tok.length - 1) == literal) spans.push(span);
-			}
+			final span: Null<Span> = node.span;
+			if (span != null && Lit.plainStringValue(node, shape) == literal) spans.push(span);
 			for (c in node.children) walk(c);
 		}
 		walk(typeNode);
