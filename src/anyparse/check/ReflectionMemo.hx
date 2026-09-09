@@ -7,7 +7,8 @@ import anyparse.check.ReflectionScan.ScopeFile;
  * Run-scoped memoization of `ReflectionScan.reflectionSurface`, keyed by the SOURCES it was collected from.
  *
  * The surface is one walk of every file in the name-keyed reflection scope — report files UNION the resolution sources —
- * and five registered checks demand it per run, each having recomputed the whole thing (`ReflectionScan.scopeFiles`
+ * and five of the six registered checks that reach it demand it per run on Pony (a READING of that tree: its
+ * config disables `unused-public-member`), each having recomputed the whole thing (`ReflectionScan.scopeFiles`
  * documents the scope; `LintCommand.partitionChecks` lists the checks). Measured on Pony (680 report files against a
  * resolution scope of 2764, eleven `resolutionLibs` declared): the FIRST demand pays the library parses, every later one
  * pays the re-walk alone, at ~0.12s each — `lint src --rule unused-private` 7.75s, the same plus `inline-constant` 7.92s,
@@ -21,7 +22,10 @@ import anyparse.check.ReflectionScan.ScopeFile;
  * hook would have to fire on every path that rewrites one — the safe-pass loop, the risky verifier, the cross-file commit —
  * and a missed hook is a gate answering about the PREVIOUS pass's text, which is the silent direction: a name a pass just
  * introduced into a `Reflect` call would not refuse the next rewrite. Comparing the sources instead makes staleness
- * unrepresentable, and costs one pointer compare per scope file on a hit (the strings are the same instances the caller holds).
+ * unrepresentable, and costs one string compare per scope file on a hit — a pointer compare on JS while callers
+ * hand back the same instances, a byte compare on a static target or a caller that rebuilds its entries. ONE slot:
+ * a demand over a DIFFERENT scope evicts it (`prefer-enum-abstract` hands a filtered report set, so on a read-only
+ * Pony `lint src` two of four repeat demands hit; `--fix` is unaffected, 24 of 32 hit) — a small ring is T926.
  *
  * Instance state, no statics — one per lint / fix run, never shared across threads, the same lifecycle as `CachingGrammarPlugin`'s
  * parse caches and `RefsCache`. A process-scoped memo here would be a scope from an earlier run answering this run's gates.
