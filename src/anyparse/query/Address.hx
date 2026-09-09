@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.query.Matcher.Match;
 import anyparse.query.Pattern.KindEquivalence;
 import anyparse.query.Selector.SelectorSegment;
+import anyparse.runtime.EditDistance;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
@@ -147,6 +148,57 @@ final class Address {
 		return new AddressIndex(tree, equiv);
 	}
 
+	/**
+	 * The kinds `selector` names that this grammar's parser projects no node for — a `--select`
+	 * typed against the wrong vocabulary, which today is indistinguishable from a correct
+	 * selector that simply matches nothing HERE.
+	 *
+	 * Read off `GrammarPlugin.projectedKinds`, never a literal list: the check has to hold for
+	 * every grammar the engine can load, and a kind name spelled in this package would be a
+	 * grammar leaking into the generic layer. Two spellings are admitted beyond that vocabulary —
+	 * the kind-equivalence canon of a segment (`--select ClassDecl` reaching a `ClassForm`), and
+	 * the tree's own root kind, which the plugin mints in `parseFile` rather than projecting it
+	 * from the grammar. A grammar publishing NO vocabulary answers empty: no diagnosis is better
+	 * than calling every kind unknown.
+	 */
+	public static function unknownSelectorKinds(tree: QueryNode, plugin: GrammarPlugin, selector: Selector): Array<String> {
+		final projected: Array<String> = plugin.projectedKinds();
+		if (projected.length == 0) return [];
+		final equiv: Null<KindEquivalence> = plugin.selectKindEquivalence();
+		final out: Array<String> = [];
+		for (segment in selector.segments) {
+			final kind: String = segment.kind;
+			if (kind == tree.kind || projected.contains(kind)) continue;
+			if (equiv != null && projected.contains(equiv.canon(kind))) continue;
+			if (!out.contains(kind)) out.push(kind);
+		}
+		return out;
+	}
+
+	/**
+	 * The whole explanatory tail of a `--select` that matched nothing: the kinds no rule of this
+	 * grammar projects (each with the nearest spellings that ARE projected), then the
+	 * declarations carrying the name under some OTHER kind.
+	 *
+	 * Either half can be empty, and the unknown-kind half comes FIRST because it is the root
+	 * cause whenever it fires: after `FnMembr:x`, a name hint pointing at `FnMember:x` reads as
+	 * "that name lives elsewhere", when what happened is that the kind does not exist at all.
+	 */
+	public static function selectMissHint(tree: QueryNode, source: String, plugin: GrammarPlugin, selector: Selector): String {
+		final projected: Array<String> = plugin.projectedKinds();
+		final clauses: Array<String> = [
+			for (kind in unknownSelectorKinds(tree, plugin, selector)) {
+				final near: Array<String> = EditDistance.closest(kind, projected);
+				near.length == 0
+					? '"$kind" is not a node kind this grammar projects'
+					: '"$kind" is not a node kind this grammar projects (did you mean ${near.join(', ')}?)';
+			}
+		];
+		final names: String = kindHint(tree, source, plugin, selector);
+		if (names.length > 0) clauses.push(names);
+		return clauses.length == 0 ? '' : ' — ${clauses.join('; ')}';
+	}
+
 	/** Identifier-character test for the name-token word-boundary scan. */
 	private static inline function isIdentChar(c: Int): Bool {
 		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code;
@@ -219,7 +271,7 @@ final class Address {
 		final equiv: Null<KindEquivalence> = plugin.selectKindEquivalence();
 		final matches: Array<QueryNode> = Engine.select(tree, selector, equiv);
 		return matches.length == 0
-			? Err('--select "$selectorExpr" matched no nodes${kindHint(tree, source, plugin, selector)}')
+			? Err('--select "$selectorExpr" matched no nodes${selectMissHint(tree, source, plugin, selector)}')
 			: pick(tree, source, equiv, matches, '--select "$selectorExpr"', nth);
 	}
 
@@ -240,8 +292,9 @@ final class Address {
 	}
 
 	/**
-	 * What to append to a `matched no nodes` refusal when the selector's NAME does exist, under other
-	 * kinds — the selector to use instead, with the position it is at.
+	 * One clause of a `matched no nodes` refusal: the selector's NAME does exist, under other
+	 * kinds — the selector to use instead, with the position it is at. `selectMissHint` composes
+	 * it with the unknown-kind clause and owns the separator, so this returns a BARE clause.
 	 *
 	 * A kind mismatch answered with nothing but "matched no nodes", which reads as "there is no such
 	 * declaration" and sends the caller looking for a typo. The sharpest case is a MODULE-LEVEL
@@ -265,7 +318,7 @@ final class Address {
 		final shown: Int = found.length < KIND_HINT_LIMIT ? found.length : KIND_HINT_LIMIT;
 		final kinds: Array<String> = [for (i in 0...shown) describeNode(source, found[i])];
 		final more: String = found.length > shown ? ', …' : '';
-		return ' — "$name" exists as ${kinds.join(', ')}$more; try --select "${found[0].kind}:$name"';
+		return '"$name" exists as ${kinds.join(', ')}$more; try --select "${found[0].kind}:$name"';
 	}
 
 	/** Every DECLARATION node in `tree` carrying `name`, in document order. */

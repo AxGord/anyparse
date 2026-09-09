@@ -1,6 +1,6 @@
 package anyparse.query.cli.command;
 
-import anyparse.query.Address.AddressIndex;
+import anyparse.query.Address;
 import anyparse.query.SourceText;
 import anyparse.query.cli.CliContext;
 import anyparse.query.cli.CliEdit;
@@ -169,7 +169,9 @@ final class SourceCommand implements CliCommand {
 			};
 			final matches: Array<QueryNode> = Engine.select(tree, selector, plugin.selectKindEquivalence());
 			if (matches.length == 0) {
-				CliIo.stderr('apq source: no node matched --select "$selectExpr"\n');
+				CliIo.stderr(
+					'apq source: no node matched --select "$selectExpr"${Address.selectMissHint(tree, content, plugin, selector)}\n'
+				);
 				return null;
 			}
 			if (matches.length > 1) {

@@ -577,6 +577,15 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		return { typeRefKinds: ['TypeRef', 'Named', 'NewExpr'] };
 	}
 
+	/**
+	 * `GrammarPlugin`: the generated walker's own kind vocabulary, verbatim.
+	 *
+	 * Derived by `QueryWalkerLowering` from the shape the walk is emitted from, so a ctor
+	 * added to the grammar lands here with no hand edit — which is what makes it usable as
+	 * the other half of a differential against the hand-typed kind sets below.
+	 */
+	public function projectedKinds(): Array<String> return HaxeQueryWalker.projectedKinds();
+
 	public function refShape(): RefShape {
 		// Identifier references come exclusively through `HxExpr.IdentExpr(v)`
 		// — the bare-identifier branch of the expression enum. Field-access
