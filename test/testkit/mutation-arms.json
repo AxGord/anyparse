@@ -2231,6 +2231,38 @@
 			"note": "the rule declares `NoAutofix` with an empty sentence, so `--fix` reports it as report-only without saying that `apq extract-constant` does the hoist"
 		},
 		{
+			"name": "M-STRING-LITERAL-DUP-TABLE-ARITY",
+			"type": "anyparse.check.StringLiteralDup",
+			"method": "isTable",
+			"find": "return !inPattern && node.kind == ctx.arrayLiteralKind && node.children.foreach(kid -> isDataEntry(kid, source, ctx));",
+			"replace": "return !inPattern && node.kind == ctx.arrayLiteralKind && node.children.length >= 3\n\t\t\t&& node.children.foreach(kid -> isDataEntry(kid, source, ctx));",
+			"note": "the arity floor is back, so a one- or two-name vocabulary array (`arrayTypeNames: ['Array']`) is read as logic again and its entries count toward the repetition"
+		},
+		{
+			"name": "M-STRING-LITERAL-DUP-TABLE-ANY",
+			"type": "anyparse.check.StringLiteralDup",
+			"method": "isTable",
+			"find": " && node.children.foreach(kid -> isDataEntry(kid, source, ctx))",
+			"replace": "",
+			"note": "homogeneity is dropped and every collection literal is a table, so an expression list mixing identifiers with literals exempts its literals"
+		},
+		{
+			"name": "M-STRING-LITERAL-DUP-MAP-ENTRY-BLIND",
+			"type": "anyparse.check.StringLiteralDup",
+			"method": "isDataEntry",
+			"find": "node.kind == ctx.mapEntryKind",
+			"replace": "false",
+			"note": "a map ENTRY is no longer a data entry, so a `kind => type` table has no bare-literal child and every key of it counts as a repetition again"
+		},
+		{
+			"name": "M-STRING-LITERAL-DUP-STRING-ONLY-ENTRIES",
+			"type": "anyparse.check.StringLiteralDup",
+			"method": "isDataEntry",
+			"find": " || (node.children.length == 0 && ctx.literalKinds.contains(node.kind))",
+			"replace": "",
+			"note": "only a string literal is a data entry, so a map storing numbers (`['Map' => 1, 'Array' => 0]`) stops being a table and its keys count again"
+		},
+		{
 			"name": "M-PROBE-SLOT-CONST",
 			"type": "anyparse.query.cli.command.ProbeCommand",
 			"method": "stageProbePath",

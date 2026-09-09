@@ -1137,8 +1137,14 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ReflectionMemoTest#testTheSurfaceIsMemoisedWithinARun :: control :: M-REFLECTION-MEMO-DEAD',
 			'unit.check.ShortenTypeRefCheckTest#testASingleSurvivingOccurrenceEarnsNoImport :: control :: M-SHORTEN-IMPORT-THRESHOLD-ONE',
 			'unit.check.StaticConstantCheckTest#testScalarInstanceFinalFlagged :: control :: M-BUILDMACRO-TRUE',
+			'unit.check.StringLiteralDupCheckTest#testMapOfOnlyStringLiteralsIsATable :: control :: M-STRING-LITERAL-DUP-MAP-ENTRY-BLIND',
+			'unit.check.StringLiteralDupCheckTest#testMapWithNonStringValuesIsATable :: control :: '
+				+ 'M-STRING-LITERAL-DUP-STRING-ONLY-ENTRIES',
+			'unit.check.StringLiteralDupCheckTest#testMixedArrayIsNotATable :: control :: M-STRING-LITERAL-DUP-TABLE-ANY',
 			'unit.check.StringLiteralDupCheckTest#testReportOnlyIsDeclaredAndPointsAtExtractConstant :: control :: '
 				+ 'M-STRING-LITERAL-DUP-REASON-MUTE',
+			'unit.check.StringLiteralDupCheckTest#testSmallCollectionOfOnlyLiteralsIsATable :: control :: '
+				+ 'M-STRING-LITERAL-DUP-TABLE-ARITY',
 			'unit.check.StructuralConformanceProofTest#testAliasedStructureMemberTypeStillPins :: control :: M-STRUCT-ALIAS-OPAQUE',
 			'unit.check.StructuralConformanceProofTest#testAnonStructureNominalStillPins :: control :: M-STRUCT-ANON-CLOSED',
 			'unit.check.StructuralConformanceProofTest#testDifferentDeclaredTypeDoesNotPin :: control :: M-STRUCT-NOMINAL-OPEN',
@@ -1953,6 +1959,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-BOOL-LOOP-USING-COVERED-KEPT',
 			'M-PSE-USING-INSERT-SILENT',
 			'M-STRING-LITERAL-DUP-REASON-MUTE',
+			'M-STRING-LITERAL-DUP-TABLE-ARITY',
+			'M-STRING-LITERAL-DUP-TABLE-ANY',
+			'M-STRING-LITERAL-DUP-MAP-ENTRY-BLIND',
+			'M-STRING-LITERAL-DUP-STRING-ONLY-ENTRIES',
 			'M-PROBE-SLOT-CONST',
 			'M-PROBE-STAGE-ANY-TARGET',
 			'M-TEST-SUMMARY-GLOBAL-DEFAULT',
