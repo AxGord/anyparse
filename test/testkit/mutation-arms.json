@@ -1280,6 +1280,61 @@
 			"note": "every chain head reads as claimed by simplify-boolean-ternary, so the deferral fires on chains that check never touches"
 		},
 		{
+			"name": "M-ORPHAN-UNREADABLE-ANY-FILE",
+			"type": "anyparse.check.OrphanAccessor",
+			"method": "unreadableDecline",
+			"find": "\t\t\tname,\n",
+			"replace": "\t\t\t'',\n",
+			"note": "the reflection-shaped probe asks an EMPTY name, which `skippedFilesMentioning` reads as every admitted skipped file, so the per-NAME shape collapses back into the run-wide veto and an unparseable project file spelling nothing declines the deletion"
+		},
+		{
+			"name": "M-ORPHAN-UNREADABLE-REPORT-SCOPE",
+			"type": "anyparse.check.OrphanAccessor",
+			"method": "run",
+			"find": "scopeIndex: wide,",
+			"replace": "scopeIndex: index,",
+			"note": "both unreadable probes narrow back to the REPORT index, so a skip-parsing sibling in the resolution scope licenses everything again: `hxq lint <one file> --fix` with `resolutionRoots` declared DELETES a `get_x` an unparseable sibling calls, and reports a proven orphan where an unparseable subtype may declare the property"
+		},
+		{
+			"name": "M-ORPHAN-FIX-UNREADABLE-BLIND",
+			"type": "anyparse.check.OrphanAccessor",
+			"method": "unreadableDecline",
+			"force": "null",
+			"note": "the FIX side stops asking the unreadable question at all, so an unparseable file spelling the accessor, the property or a computed accessor name blocks no deletion and no finding says why one went through"
+		},
+		{
+			"name": "M-ORPHAN-REPORT-UNREADABLE-BLIND",
+			"type": "anyparse.check.OrphanAccessor",
+			"method": "reportOrphan",
+			"find": "final unreadable: Array<String> = found.declared ? [] : scopeIndex.text.skippedFilesMentioning([prop], file);",
+			"replace": "final unreadable: Array<String> = [];",
+			"note": "the REPORT side stops asking it, so an unparseable file that may declare a subtype declaring the property gets the confident `Warning` back instead of the honest `Info` naming the file"
+		},
+		{
+			"name": "M-ORPHAN-UNREADABLE-REFLECTIVE-NARROWED",
+			"type": "anyparse.check.OrphanAccessor",
+			"method": "unreadableDecline",
+			"find": "\t\t\twantGetter ? CheckScan.GET_PREFIX : CheckScan.SET_PREFIX\n\t\t]);",
+			"replace": "\t\t\twantGetter ? CheckScan.GET_PREFIX : CheckScan.SET_PREFIX\n\t\t], ownerFile);",
+			"note": "the REFLECTION-shaped names take the per-owner narrowing too, so an unparseable installed source holding `Reflect.field(o, 'get_data')` or a computed accessor name stops vetoing a project deletion — T868's argument, unlearned one seam over"
+		},
+		{
+			"name": "M-ORPHAN-UNREADABLE-SUBTYPE-OWNER-WIDE",
+			"type": "anyparse.check.OrphanAccessor",
+			"method": "unreadableDecline",
+			"find": "skippedFilesMentioning([prop], ownerFile)",
+			"replace": "skippedFilesMentioning([prop])",
+			"note": "the SUBTYPE name loses its per-owner narrowing, so one unparseable haxelib source spelling an ordinary property word declines the deletion of every accessor of that property in the project"
+		},
+		{
+			"name": "M-ORPHAN-REPORT-OWNER-WIDE",
+			"type": "anyparse.check.OrphanAccessor",
+			"method": "reportOrphan",
+			"find": "skippedFilesMentioning([prop], file)",
+			"replace": "skippedFilesMentioning([prop])",
+			"note": "the report arm loses the same narrowing, so an unparseable installed source spelling the property downgrades a proven orphan to Info and takes its deletion with it"
+		},
+		{
 			"name": "M-ORPHAN-ARMS-SHARE-REASON",
 			"type": "anyparse.check.OrphanAccessor",
 			"method": "reportOrphan",

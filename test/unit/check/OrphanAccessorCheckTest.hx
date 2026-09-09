@@ -4,6 +4,7 @@ import anyparse.check.Check;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CachingGrammarPlugin;
 import utest.Assert;
 import utest.Test;
 
@@ -19,6 +20,16 @@ import utest.Test;
 
 	/** A class whose `get_data` serves no property of its own — the owner every unreadable-file arm starts from. */
 	private static inline final BARE_GETTER: String = 'class C {\n\tpublic function get_data():Int return 0;\n}';
+
+	/** An unreadable sibling that CALLS the accessor — the fix side's fact, and it spells no property. */
+	private static inline final UNREADABLE_CALLER: String = 'class B {\n\tfunction q(: {{{\n\tc.get_data();\n}\n';
+
+	/** An unreadable sibling declaring a SUBTYPE that declares the property — the report side's fact. */
+	private static inline final UNREADABLE_SUBTYPE: String =
+		'class D extends C {\n\tpublic var data(get, never):Int;\n\tfunction q(: {{{\n}\n';
+
+	/** An unreadable sibling spelling neither — the control every widening of the probe's SCOPE owes. */
+	private static inline final UNREADABLE_INERT: String = 'class B {\n\tfunction q(: {{{\n}\n';
 
 	public function testDefaultSetPropertyWithGetterFlagged(): Void {
 		final src: String = 'class C {\n\tpublic var data(default, set):Int = 0;\n\tfunction set_data(v:Int):Int return data = v;\n'
@@ -651,6 +662,134 @@ import utest.Test;
 		Assert.equals(src, applyFix(src));
 	}
 
+	/**
+	 * T920: the fix side's unreadable probe reads the RESOLUTION scope, so a skip-parsing file the
+	 * caller never asked to lint still refuses the deletion.
+	 *
+	 * Until S198 it read the REPORT index, which a one-file `--fix` fills with one file — so the very
+	 * sibling that makes the deletion unsafe was invisible to the only gate that asks about it. S191
+	 * had widened the accessor-CALL scan next to it and left this one narrow, which is why the shape
+	 * survived a slice that was looking straight at it. MEASURED end to end on a two-file project
+	 * declaring `resolutionRoots`, the sibling unparseable and calling `a.get_reached()`:
+	 * `hxq lint <the declaring file> --rule orphan-accessor --fix` wrote 2 deletions where the run
+	 * over both files wrote 1 and declined the second. Both arms now write 1 and decline.
+	 *
+	 * RED at base.
+	 */
+	@:pin('control')
+	@:killer('M-ORPHAN-UNREADABLE-REPORT-SCOPE')
+	@:killer('M-ORPHAN-FIX-UNREADABLE-BLIND')
+	public function testAnUnreadableCallerOutsideTheReportScopeStillDeclinesTheDeletion(): Void {
+		final report: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: BARE_GETTER }];
+		final reach: Array<{ file: String, source: String }> = [{ file: 'B.hx', source: UNREADABLE_CALLER }];
+		Assert.equals(0, scopedFixEditCount(BARE_GETTER, report, reach));
+		final found: Null<Violation> = scopedLoneFinding(report, reach);
+		if (found == null) return;
+		final reason: Null<String> = found.declineReason;
+		if (reason == null) {
+			Assert.fail('the widened probe must still say why no edit follows it');
+			return;
+		}
+		Assert.isTrue(reason.indexOf('B.hx') != -1, 'the reason NAMES the file, got: $reason');
+	}
+
+	/**
+	 * The REPORT-side twin, and the second member of one seam: the arm that downgrades a proven orphan
+	 * when an unparseable file could declare a subtype declaring the property reads that scope too.
+	 *
+	 * The two members ask DIFFERENT names — this one the property alone — so neither fixture answers
+	 * for the other, and a repair of either alone leaves the rule confidently wrong in one direction.
+	 * MEASURED at the CLI on the same two-file shape, the sibling declaring `class D extends A` with
+	 * `data(get, never)`: the narrow run answered `[warning] get_data has no property to serve` while
+	 * the run over both files answered `[info] … may have no property to serve … B.hx`.
+	 *
+	 * RED at base.
+	 */
+	@:pin('control')
+	@:killer('M-ORPHAN-UNREADABLE-REPORT-SCOPE')
+	@:killer('M-ORPHAN-REPORT-UNREADABLE-BLIND')
+	public function testAnUnreadableSubtypeOutsideTheReportScopeStillDowngradesTheReport(): Void {
+		final found: Null<Violation> = scopedLoneFinding(
+			[{ file: 'C.hx', source: BARE_GETTER }], [{ file: 'D.hx', source: UNREADABLE_SUBTYPE }]
+		);
+		if (found == null) return;
+		Assert.equals(Severity.Info, found.severity);
+		Assert.isTrue(found.message.indexOf('D.hx') != -1, 'the report NAMES the file it could not read: ${found.message}');
+	}
+
+	/**
+	 * The half of the widened probe that must NOT be narrowed per owner: a skip-parsing THIRD-PARTY
+	 * source spelling the ACCESSOR still declines a project-owned deletion.
+	 *
+	 * This is T868's argument one seam over. `RawSourceScan.admits` excludes an installed source from a
+	 * proof about a project type because such a source cannot NAME that type — sound for a write and
+	 * for a subtype, and NOT sound here: `Reflect.field(o, 'get_data')` in a library reaches a project
+	 * member without spelling the project at all, and the accessor PREFIX is the same shape one step
+	 * more computed. So those two names are asked of every unreadable file in scope, and only the
+	 * property is asked per owner — the twin below.
+	 *
+	 * RED at base — the report index it read held no library at all, so nothing declined and the
+	 * deletion went through. Measured: the base-shaped cut `M-ORPHAN-UNREADABLE-REPORT-SCOPE` names
+	 * this fixture among the three it kills.
+	 */
+	@:pin('control')
+	@:killer('M-ORPHAN-UNREADABLE-REFLECTIVE-NARROWED')
+	public function testAnUnreadableThirdPartyFileSpellingTheAccessorStillDeclines(): Void {
+		Assert.equals(
+			0,
+			scopedFixEditCount(
+				BARE_GETTER, [{ file: 'C.hx', source: BARE_GETTER }], [], [{ file: 'lib/Third.hx', source: UNREADABLE_CALLER }]
+			)
+		);
+	}
+
+	/**
+	 * The twin, and the ONE name the owner narrowing does apply to: a skip-parsing THIRD-PARTY source
+	 * spelling only the PROPERTY declines nothing.
+	 *
+	 * Declaring a subtype is structural — the file has to name the type it extends — so an installed
+	 * source cannot be the subtype that makes this accessor live, while a property name is an ordinary
+	 * word (`data`, `value`, `name`) any library spells by accident. Asked unnarrowed it is the one of
+	 * the four names that could turn a declared `resolutionLibs` into a project-wide veto.
+	 *
+	 * That risk is a HYPOTHESIS, and the measurement went the other way: over the Pony fork (eleven
+	 * `resolutionLibs`) a probe with NO owner narrowing at all answered 3 warnings and 0 declines, and
+	 * on a config-less project reading the machine's Haxe std it left both deletions standing. Read
+	 * that as weak evidence and not as a verdict — Pony's three properties are `asset_bytes`,
+	 * `internal_storage_path` and `sdl_error`, which is the opposite of the common word the narrowing
+	 * is really about. It is kept because the argument holds, not because a tree was found where it
+	 * pays.
+	 *
+	 * Green at base BY CONSTRUCTION.
+	 */
+	@:pin('control')
+	@:killer('M-ORPHAN-UNREADABLE-SUBTYPE-OWNER-WIDE')
+	@:killer('M-ORPHAN-REPORT-OWNER-WIDE')
+	public function testAnUnreadableThirdPartySubtypeDoesNotDeclineAProjectDeletion(): Void {
+		Assert.equals(
+			1,
+			scopedFixEditCount(
+				BARE_GETTER, [{ file: 'C.hx', source: BARE_GETTER }], [], [{ file: 'lib/Third.hx', source: UNREADABLE_SUBTYPE }]
+			)
+		);
+	}
+
+	/**
+	 * The per-NAME half of the same guarantee, where the per-OWNER half cannot stand in for it: a
+	 * PROJECT file in the resolution scope that did not parse and spells neither the accessor nor the
+	 * property leaves the deletion available.
+	 *
+	 * `admits` admits it — it is not third-party — so the only thing between it and a whole-run veto is
+	 * that the probe asks about names.
+	 */
+	@:pin('control')
+	@:killer('M-ORPHAN-UNREADABLE-ANY-FILE')
+	public function testAnUnreadableProjectFileSpellingNothingLeavesTheDeletionAvailable(): Void {
+		Assert.equals(
+			1, scopedFixEditCount(BARE_GETTER, [{ file: 'C.hx', source: BARE_GETTER }], [{ file: 'B.hx', source: UNREADABLE_INERT }])
+		);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return violationsOf([{ file: 'C.hx', source: src }]);
 	}
@@ -694,6 +833,47 @@ import utest.Test;
 	private function applyFix(src: String): String {
 		final check: Null<Check> = Linter.byId('orphan-accessor');
 		return check == null ? src : CheckFixture.fixedSource(check, src);
+	}
+
+	/**
+	 * The plugin `LintCommand` builds for a project declaring `resolutionRoots`: `report` is what the
+	 * run lints, `reach` sits in `resolutionRoots` AND in the library half — outside the report scope,
+	 * inside the resolution one — and `thirdParty` sits in the library ALONE, which is what tags it
+	 * installed for `RawSourceScan.admits`.
+	 */
+	private function scoped(
+		report: Array<{ file: String, source: String }>, reach: Array<{ file: String, source: String }>,
+		thirdParty: Array<{ file: String, source: String }>
+	): CachingGrammarPlugin {
+		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		plugin.setResolutionScope({
+			declared: true,
+			sources: () -> {report: report, projectRoots: reach, library: new LibrarySources(reach.concat(thirdParty)) }
+		});
+		return plugin;
+	}
+
+	/** `fixEditCount` with a report scope of `report` alone — `reach` and `thirdParty` are reachable only through the resolution scope. */
+	private function scopedFixEditCount(
+		owner: String, report: Array<{ file: String, source: String }>, reach: Array<{ file: String, source: String }>,
+		?thirdParty: Array<{ file: String, source: String }>
+	): Int {
+		final check: Null<Check> = Linter.byId('orphan-accessor');
+		Assert.notNull(check);
+		if (check == null) return -1;
+		final plugin: CachingGrammarPlugin = scoped(report, reach, thirdParty ?? []);
+		return check.fix(owner, check.run(report, plugin), plugin).length;
+	}
+
+	/** The rule's ONE finding over that same narrow report scope, or null when it did not produce exactly one. */
+	private function scopedLoneFinding(
+		report: Array<{ file: String, source: String }>, reach: Array<{ file: String, source: String }>
+	): Null<Violation> {
+		final check: Null<Check> = Linter.byId('orphan-accessor');
+		if (check == null) return null;
+		final vs: Array<Violation> = check.run(report, scoped(report, reach, []));
+		Assert.equals(1, vs.length);
+		return vs.length == 1 ? vs[0] : null;
 	}
 
 }
