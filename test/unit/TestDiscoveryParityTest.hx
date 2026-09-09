@@ -1644,7 +1644,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.OpaqueCondRegionScanTest#testTheSplitTryReportsBothOfItsRegions :: control :: M-OPAQUE-REGION-NONE',
 			'unit.query.PatchSliceTest#testDocCodeSampleIndentationSurvives :: control :: M-PATCH-COMMENT-SHAPE-CHECKED',
 			'unit.query.PatchSliceTest#testDocPayloadWithASpaceGutterApplies :: control :: M-PATCH-COMMENT-SHAPE-CHECKED',
+			'unit.query.PatchSliceTest#testGrowingPairsUnderOneClassDocAcceptedAtEveryDelta :: control :: M-PATCH-DOCEND-SHIFTS-EVERY-EDIT',
 			'unit.query.PatchSliceTest#testStringLiteralPerLineIndentStillRefused :: control :: M-PATCH-SHAPE-ALWAYS-SURVIVES',
+			'unit.query.PatchSliceTest#testTransferUnderADocMovedByAnEarlierGrowingPairRefused :: control :: M-PATCH-DOCEND-NEVER-SHIFTS',
 			'unit.query.RefShapeKindProjectionTest#testEveryDeclaredKindNameIsOneTheGrammarProjects :: control :: '
 				+ 'M-PROJECTED-KINDS-ALT-ONLY,M-DECL-HOST-KIND-STALE',
 			'unit.query.RemoveMemberSliceTest#testSiblingRegionsWithOneConditionAreRefusedByCount :: control :: '
@@ -2020,7 +2022,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-PLAIN-LITERAL-FROZEN',
 			'M-PLAIN-STRING-VALUE-NO-DELIMITERS',
 			'M-REFLECTION-MEMO-DEAD',
-			'M-REFLECTION-MEMO-STALE'
+			'M-REFLECTION-MEMO-STALE',
+			'M-PATCH-DOCEND-SHIFTS-EVERY-EDIT',
+			'M-PATCH-DOCEND-NEVER-SHIFTS'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

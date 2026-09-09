@@ -203,7 +203,7 @@ class ApqScratchPathCliTest extends Test {
 	@:pin('guard')
 	public function testThreeTestSummaryProcessesUnderOneTempRootEachAnswerFromTheirOwnSource(): Void {
 		#if nodejs
-		final engine: Null<String> = engineOrSkip();
+		final engine: Null<String> = CliFixture.engineOrSkip();
 		if (engine == null) return;
 		final shared: String = CliFixture.writeDir('scratch_ts_shared', [
 			{ name: 'a.log', source: '  testA1: OK .\n  testA2: OK .\n' },
@@ -235,7 +235,7 @@ class ApqScratchPathCliTest extends Test {
 	@:pin('guard')
 	public function testTwoStdlibDupProcessesUnderOneTempRootGetSeparateWorkDirectories(): Void {
 		#if nodejs
-		final engine: Null<String> = engineOrSkip();
+		final engine: Null<String> = CliFixture.engineOrSkip();
 		if (engine == null) return;
 		final shared: String = CliFixture.writeDir('scratch_dup_shared', []);
 		final scope: String = CliFixture.writeDir('scratch_dup_child_scope', [{ name: 'NoCandidate.hx', source: NO_CANDIDATE_SOURCE }]);
@@ -293,18 +293,6 @@ class ApqScratchPathCliTest extends Test {
 	#end
 
 	#if nodejs
-	/**
-	 * `bin/apq.js`, or null after passing. A child-process fixture needs the CLI as a
-	 * process, and `haxe test-js.hxml` alone does not build one — an arm's worktree in
-	 * particular never has it, which is why these fixtures are `guard` rather than `control`.
-	 */
-	private function engineOrSkip(): Null<String> {
-		final engine: String = 'bin/apq.js';
-		if (FileSystem.exists(engine)) return engine;
-		Assert.pass('bin/apq.js is not built — a child-process fixture needs the CLI as a process');
-		return null;
-	}
-
 	/** `node bin/apq.js test-summary` under `tmpRoot`, with `$TRANSCRIPT_ENV` set to `transcript` or cleared. */
 	private function spawnTestSummary(
 		engine: String, tmpRoot: String, transcript: Null<String>

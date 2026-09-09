@@ -2691,6 +2691,21 @@
 			"method": "surfaceFor",
 			"force": "_surface",
 			"note": "the memo answers without checking the sources it read, so a scope file a `--fix` pass has just rewritten — or a second, different scope in the same run — is answered from the earlier text: the reflective read a pass introduced stops vetoing, and the next rewrite orphans it silently"
+		},
+		{
+			"name": "M-PATCH-DOCEND-SHIFTS-EVERY-EDIT",
+			"type": "anyparse.query.Patch",
+			"method": "shiftedDocEnd",
+			"find": "for (edit in sorted) if (edit.span.from < docEnd) {\n\t\tif (edit.span.to > docEnd) return -1;\n\t\tshifted += edit.text.length - (edit.span.to - edit.span.from);\n\t}",
+			"replace": "for (edit in sorted) shifted += edit.text.length - (edit.span.to - edit.span.from);",
+			"note": "the watched doc block's end is moved by EVERY edit of the payload, including the ones lying after it, so a multi-pair call whose pairs each apply alone is refused as a doc transfer inside a window of first-pair growths"
+		},
+		{
+			"name": "M-PATCH-DOCEND-NEVER-SHIFTS",
+			"type": "anyparse.query.Patch",
+			"method": "shiftedDocEnd",
+			"force": "docEnd",
+			"note": "the watched doc block's end is never moved, so a payload whose earlier pair grows ahead of that block leaves the guard looking for the doc before where it now is and a real transfer goes through"
 		}
 	]
 }
