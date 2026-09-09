@@ -398,9 +398,9 @@ final class MemberKinds {
 	 * `_mask = 0xFF;` taking the `@:bypassAccessor` path a byte-equivalent `= 255;` did not.
 	 */
 	public static function isPlainLiteral(node: QueryNode, shape: RefShape): Bool {
-		return (shape.interpolatingStringKinds ?? []).contains(node.kind)
-			? node.children.foreach(c -> isInertStringSegmentKind(c.kind, shape))
-			: constantLiteralKinds(shape).contains(node.kind);
+		return constantLiteralKinds(shape).contains(node.kind)
+			&& (!(shape.interpolatingStringKinds ?? []).contains(node.kind)
+				|| node.children.foreach(c -> isInertStringSegmentKind(c.kind, shape)));
 	}
 
 	/**

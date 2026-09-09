@@ -107,7 +107,6 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	/** Field-access chain link kinds — a chain is `IdentExpr` at the leaf wrapped in any of these. */
 	private static final CHAIN_KINDS: Array<String> = ['FieldAccess', 'SafeFieldAccess', 'ForceFieldAccess'];
 
-
 	/** Assignment-family root kinds of a trivial mutator body (`x = v`, `_n += 1`, `_count++`). */
 	private static final MUTATOR_KINDS: Array<String> = [
 		      'Assign', 'AddAssign', 'SubAssign',      'MulAssign', 'DivAssign', 'ModAssign', 'BitOrAssign', 'BitAndAssign',
@@ -717,7 +716,6 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		}
 		for (c in node.children) collectReflectNames(c, candidateNames, out, shape);
 	}
-
 
 	/** The simple names of every interface in `cls`'s `implements` clauses. */
 	private static function implementedInterfaces(cls: QueryNode): Array<String> {

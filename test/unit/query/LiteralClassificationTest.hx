@@ -110,6 +110,10 @@ class LiteralClassificationTest extends Test {
 		final nonNull: Array<String> = declared.filter(kind -> kind != SHAPE.nullLiteralKind);
 		Assert.equals(declared.length - 1, nonNull.length, 'the null literal must be one member of the declared vocabulary');
 		assertClassifies('NullFlow.NON_NULL_RHS_KINDS', nonNull, NullFlow.NON_NULL_RHS_KINDS);
+		// The declaration itself drifts the same way: `case 0xFF:` is a literal case arm, and the
+		// hex kind was missing from the shape's own case vocabulary while present in numericLiteralKinds.
+		final caseable: Array<String> = declared.filter(kind -> !(SHAPE.stringLiteralKinds ?? []).contains(kind));
+		assertClassifies('shape.caseLiteralKinds', caseable, SHAPE.caseLiteralKinds ?? []);
 		// The two predicates above that walk a SUBTREE also meet the segments of a plain
 		// interpolating literal, so the segment vocabulary is part of the same classification. The
 		// text fragment was listed and the two inert triggers were not, which made `'a $$ b'` — a
@@ -181,6 +185,12 @@ class LiteralClassificationTest extends Test {
 				'${specimen.expr} (${node.kind}) must${specimen.plain ? '' : ' not'} be a pure argument'
 			);
 		}
+		// The refusal side, asked of the SHAPE rather than of a name convention: the allocating
+		// literals carry their own fields, and no spelling suffix would catch a renamed one.
+		for (kind in [SHAPE.objectLiteralKind, SHAPE.arrayLiteralKind]) if (kind != null) {
+			Assert.isFalse(MemberKinds.isSafeKind(kind), 'the allocating literal $kind must not be side-effect-free');
+			Assert.isFalse(InlineMethod.isPureKind(kind), 'the allocating literal $kind must not be a pure argument');
+		}
 	}
 
 	/**
@@ -219,6 +229,14 @@ class LiteralClassificationTest extends Test {
 		Assert.isFalse(MemberKinds.isPlainLiteral(initializerOf('1'), other), 'a kind the handed shape drops is no longer plain');
 		Assert.isFalse(MemberKinds.isPlainLiteral(initializerOf('\'lit\''), other), 'a string kind the handed shape drops either');
 		Assert.isTrue(MemberKinds.isPlainLiteral(initializerOf('true'), other), 'a kind the handed shape keeps still is');
+		// The segmented branch must not bypass the vocabulary: a kind the shape still calls
+		// interpolating but no longer calls a string literal is not plain either.
+		final interpOnly: RefShape = new HaxeQueryPlugin().refShape();
+		interpOnly.stringLiteralKinds = [];
+		Assert.isFalse(
+			MemberKinds.isPlainLiteral(initializerOf('\'lit\''), interpOnly),
+			'a segmented kind the shape no longer declares a string literal is no longer plain'
+		);
 	}
 
 	/**

@@ -852,7 +852,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				'ContinueExpr',
 				'VoidReturnExpr'
 			],
-			caseLiteralKinds: ['IntLit', 'FloatLit', 'BoolLit', 'NullLit'],
+			caseLiteralKinds: ['IntLit', 'HexLit', 'FloatLit', 'BoolLit', 'NullLit'],
 			tuplePatternDelimiters: { open: '[', close: ']' },
 			visibilityContainerKinds: ['ClassDecl', 'ClassForm', 'AbstractClassDecl', 'AbstractDecl'],
 			memberDeclKinds: ['VarMember', 'FinalMember', 'FnMember', 'FinalModifiedMember'],

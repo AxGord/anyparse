@@ -66,7 +66,7 @@ final class InlineMethod {
 	 * parameter) or duplicate (a 2+-use parameter) without changing
 	 * evaluation: literals, bare identifiers, parenthesised groups, and
 	 * the side-effect-free binary / unary / ternary operators. Adapted
-	 * from `Inline.SAFE_KINDS` (kept local per the "adapt, not import"
+	 * from `MemberKinds.SAFE_KINDS` (kept local per the "adapt, not import"
 	 * rule). Calls, `new`, field / index access (possible getter), object
 	 * / array / map literals, lambdas, assignment and increment /
 	 * decrement are all absent — an argument touching one is impure.
