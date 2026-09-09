@@ -119,34 +119,6 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		'BitXorAssign', 'ShlAssign', 'ShrAssign', 'NullCoalAssign',  'PostIncr',   'PreIncr',    'PostDecr',      'PreDecr'
 	];
 
-	/** Operator kinds a constant / small-arithmetic body may consist of (plus chains and literals) — none allocate. */
-	private static final CONST_OP_KINDS: Array<String> = [
-		'Add',
-		'Sub',
-		'Mul',
-		'Div',
-		'Mod',
-		'Neg',
-		'Not',
-		'And',
-		'Or',
-		'BitOr',
-		'BitAnd',
-		'BitXor',
-		'Shl',
-		'Shr',
-		'UShr',
-		'Eq',
-		'NotEq',
-		'Lt',
-		'Gt',
-		'LtEq',
-		'GtEq',
-		'NullCoal',
-		'Ternary',
-		'ParenExpr',
-		'Is'
-	];
 
 	/** The class-body member kinds that END a modifier run — a method and the three field forms. */
 	private static final MEMBER_KINDS: Array<String> = ['FnMember', 'VarMember', 'FinalMember', 'FinalModifiedMember'];
@@ -720,6 +692,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		);
 	}
 
+
 	/** Whether every element of `nodes` from `start` on is a simple operand. */
 	private static function allSimpleOperands(nodes: Array<QueryNode>, start: Int, shape: RefShape): Bool {
 		for (i in start ... nodes.length) if (!isSimpleOperand(nodes[i], shape)) return false;
@@ -727,12 +700,16 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	}
 
 	/**
-	 * Whether `node` is a constant / small-arithmetic expression: literals, chains, and
-	 * `CONST_OP_KINDS` operators only — nothing that allocates or calls, so the call site can fold
-	 * it. The one non-expression child shape, `Is`'s type name (`Named`), is skipped.
+	 * Whether `node` is a constant / small-arithmetic expression: literals, chains, and the grammar's
+	 * `pureOperandKinds` only — nothing that allocates or calls, so the call site can fold it. The one
+	 * non-expression child shape, `Is`'s type name (`Named`), is skipped.
+	 *
+	 * The operator half was a hand-written table until the grammar declared one, and it disagreed with
+	 * the two other tables of the same concept: it carried `Is` (which they lacked) and lacked `BitNot`
+	 * (which they carried), so `return ~_mask;` was not an inline candidate while `return -_mask;` was.
 	 */
 	private static function isConstExpr(node: QueryNode, shape: RefShape): Bool {
-		return isSimpleOperand(node, shape) || CONST_OP_KINDS.contains(node.kind)
+		return isSimpleOperand(node, shape) || MemberKinds.pureOperandKinds(shape).contains(node.kind)
 			&& node.children.foreach(c -> c.kind == 'Named' || isConstExpr(c, shape));
 	}
 

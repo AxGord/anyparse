@@ -672,7 +672,7 @@ final class DeadStore implements Check {
 		rhs: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: Null<SymbolIndex>,
 		fieldAccessKind: Null<String>
 	): Bool {
-		if (MemberKinds.isSideEffectFree(rhs)) return true;
+		if (MemberKinds.isSideEffectFree(rhs, shape)) return true;
 		if (fieldAccessKind == null) return false;
 		final faKind: String = fieldAccessKind;
 		final identKind: Null<String> = shape.identKind;

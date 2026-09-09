@@ -206,64 +206,6 @@ final class MemberKinds {
 	private static final ANON_KIND: String = 'Anon';
 
 	/**
-	 * Node kinds an expression subtree may contain and still be
-	 * SIDE-EFFECT-FREE: literals, bare identifiers, parenthesised groups, and
-	 * the pure binary / unary / ternary operators. The string-payload leaf
-	 * `Literal` is included so a plain (non-interpolated) string passes — an
-	 * INTERPOLATED string instead nests `Ident` / `Block` children (the
-	 * spliced expression / variable), neither of which is whitelisted, so it
-	 * is correctly excluded. The increment / decrement ctors are deliberately
-	 * absent — they mutate their operand. Shared by `Inline` (inline-var
-	 * substitution safety) and the `unused-local` check (delete-fix safety).
-	 *
-	 * The literal half must cover `MemberKinds.constantLiteralKinds` of every grammar this layer
-	 * serves and NOTHING ELSE — an allocating literal here is a wrong rewrite, not a missed one.
-	 * `LiteralClassificationTest` holds it to that in both directions.
-	 */
-	private static final SAFE_KINDS: Array<String> = [
-		// Literals + every inert segment of a plain interpolating string (text, `$$`, a lone `$`).
-		'IntLit',
-		'FloatLit',
-		'HexLit',
-		'BoolLit',
-		'NullLit',
-		'DoubleStringExpr',
-		'SingleStringExpr',
-		'Literal',
-		'Dollar',
-		'LoneDollar',
-		// Bare identifier + paren group.
-		'IdentExpr',
-		'ParenExpr',
-		// Binary operators (HxExpr Pratt set, mutating assigns excluded).
-		'Add',
-		'Sub',
-		'Mul',
-		'Div',
-		'Mod',
-		'And',
-		'Or',
-		'Eq',
-		'NotEq',
-		'Lt',
-		'Gt',
-		'LtEq',
-		'GtEq',
-		'BitAnd',
-		'BitOr',
-		'BitXor',
-		'Shl',
-		'Shr',
-		'UShr',
-		'NullCoal',
-		// Unary operators + ternary.
-		'Neg',
-		'Not',
-		'BitNot',
-		'Ternary'
-	];
-
-	/**
 	 * Whether `kind` is one of the modifier / metadata siblings a declaration projects BEFORE itself
 	 * (`MODIFIER_META_KINDS`). Address resolution asks this to walk a bare line number past a
 	 * `public static` prefix onto the declaration the line actually declares.
@@ -342,21 +284,46 @@ final class MemberKinds {
 	}
 
 	/**
-	 * A node kind that contributes no side effect on its own — an enumerated `SAFE_KINDS` member.
+	 * Expression roots that are SELF-DELIMITING — the grammar's atoms plus its grouping node. No
+	 * operator outside one can bind into it, so substituting such an expression into an arbitrary
+	 * context needs no parentheses.
 	 *
-	 * The enumeration used to be widened by a NAME-CONVENTION stub (`kind.endsWith('Lit')
-	 * || kind.endsWith('StringExpr')`), on the theory that a literal payload the list forgot is
-	 * still a literal. It admitted two kinds the Haxe grammar declares no constant literal, and
-	 * `Inline` — which DUPLICATES an initializer it is handed as side-effect-free — silently
-	 * changed behaviour on both. Measured on `a9efccd4`: `final r = ~/x(\d+)/;` read twice
-	 * inlined to `(~/x(\d+)/).match(a) ? (~/x(\d+)/).matched(1) : ''`, two `EReg` values where
-	 * the source had one, so the second never matched; `final o = {};` compared to itself
-	 * inlined to `({}) == ({})`, true becoming false. Neither is reported, both compile.
-	 * `LiteralClassificationTest` now holds the enumeration against the grammar's own literal
-	 * vocabulary in BOTH directions, which is what the stub was standing in for.
+	 * The narrow half of the pair: a caller that only ever meets side-effect-free roots (an
+	 * inline-VARIABLE initializer, which is gated on `sideEffectFreeExprKinds` first) can never
+	 * see a call, a field read or a `new`, so widening it to `parenFreeRootKinds` would only add
+	 * members it cannot reach.
 	 */
-	public static inline function isSafeKind(kind: String): Bool {
-		return SAFE_KINDS.contains(kind);
+	public static inline function atomicRootKinds(shape: RefShape): Array<String> {
+		return withGroupingKind(shape.atomExprKinds, shape);
+	}
+
+	/**
+	 * The operand shapes a CONSTANT expression may be built from: the operators the grammar declares
+	 * pure, plus its grouping node. The literals, chains and identifiers a caller also admits are its
+	 * own business — this is the operator half alone, which is what `prefer-inline` needs and what it
+	 * used to spell as a 25-name table of its own.
+	 */
+	public static inline function pureOperandKinds(shape: RefShape): Array<String> {
+		return withGroupingKind(shape.pureOperatorKinds, shape);
+	}
+
+	/**
+	 * A node kind that contributes no side effect on its own — a `sideEffectFreeExprKinds` member
+	 * of the grammar `shape` declares.
+	 *
+	 * The vocabulary used to be a hardcoded array widened by a NAME-CONVENTION stub
+	 * (`kind.endsWith('Lit') || kind.endsWith('StringExpr')`), on the theory that a literal payload
+	 * the list forgot is still a literal. It admitted two kinds the Haxe grammar declares no
+	 * constant literal, and `Inline` — which DUPLICATES an initializer it is handed as
+	 * side-effect-free — silently changed behaviour on both. Measured on `a9efccd4`:
+	 * `final r = ~/x(\d+)/;` read twice inlined to `(~/x(\d+)/).match(a) ? (~/x(\d+)/).matched(1) : ''`,
+	 * two `EReg` values where the source had one, so the second never matched; `final o = {};`
+	 * compared to itself inlined to `({}) == ({})`, true becoming false. Neither is reported, both
+	 * compile. `LiteralClassificationTest` holds the vocabulary against the grammar's own literal
+	 * declaration in BOTH directions, which is what the stub was standing in for.
+	 */
+	public static inline function isSafeKind(kind: String, shape: RefShape): Bool {
+		return sideEffectFreeExprKinds(shape).contains(kind);
 	}
 
 	/**
@@ -365,6 +332,47 @@ final class MemberKinds {
 	 */
 	public static inline function isInertStringSegmentKind(kind: String, shape: RefShape): Bool {
 		return kind == shape.stringInterpTextKind || (shape.stringInterpInertSegmentKinds ?? []).contains(kind);
+	}
+
+	/**
+	 * Every node kind an expression subtree may contain and still be SIDE-EFFECT-FREE, read off
+	 * the grammar rather than enumerated here: the constant literals, every inert segment of a
+	 * plain interpolating string (the text fragment and the inert `$$` / lone-`$` triggers), the
+	 * identifier kind, the grouping kind, and the operators the grammar declares pure.
+	 *
+	 * A subtree of only these may be DROPPED (nothing observable is lost) or DUPLICATED (each
+	 * copy computes the same value) — the gate behind `inline`, `inline-method` and the
+	 * `unused-local` delete-fix. An INTERPOLATED string fails on its own children: a `${…}` hole
+	 * or a `$name` shorthand projects a kind no vocabulary here admits.
+	 *
+	 * This layer used to spell the union as a 36-name array, and `InlineMethod` spelled a second
+	 * copy of it. Both are gone: the two of them already disagreed with a THIRD spelling
+	 * (`PreferInline.CONST_OP_KINDS`) over `Is` and `BitNot`, each of which one table called pure
+	 * and the other did not.
+	 */
+	public static function sideEffectFreeExprKinds(shape: RefShape): Array<String> {
+		final out: Array<String> = constantLiteralKinds(shape);
+		inline function add(kind: Null<String>): Void if (kind != null && !out.contains(kind)) out.push(kind);
+		add(shape.stringInterpTextKind);
+		for (kind in shape.stringInterpInertSegmentKinds ?? []) add(kind);
+		add(shape.identKind);
+		add(shape.parenKind);
+		for (kind in shape.pureOperatorKinds ?? []) add(kind);
+		return out;
+	}
+
+	/**
+	 * Every expression root that needs NO parentheses when substituted into an operator context —
+	 * the self-delimiting `atomicRootKinds` plus the grammar's `maximalPrecedenceRootKinds`, the
+	 * roots that carry operand-bearing structure but outrank every operator.
+	 *
+	 * Over-wrapping is always safe and under-wrapping is a precedence bug, so a grammar that
+	 * declares neither field falls back to parenthesising everything.
+	 */
+	public static function parenFreeRootKinds(shape: RefShape): Array<String> {
+		final out: Array<String> = atomicRootKinds(shape);
+		for (kind in shape.maximalPrecedenceRootKinds ?? []) if (!out.contains(kind)) out.push(kind);
+		return out;
 	}
 
 	/**
@@ -478,7 +486,7 @@ final class MemberKinds {
 	}
 
 	/**
-	 * Is every node kind in `node`'s subtree side-effect-free per `SAFE_KINDS`?
+	 * Is every node kind in `node`'s subtree side-effect-free per `sideEffectFreeExprKinds`?
 	 * A strict WHITELIST: an unknown kind fails the walk, so the verdict is
 	 * conservative — a missed-but-safe kind costs a spurious `false`, never an
 	 * unsafe `true`. Calls, field / index access, object / array / map literals,
@@ -486,11 +494,14 @@ final class MemberKinds {
 	 * strings embedding any of these all fall outside the whitelist and yield
 	 * `false`.
 	 */
-	public static function isSideEffectFree(node: QueryNode): Bool {
+	public static function isSideEffectFree(node: QueryNode, shape: RefShape): Bool {
+		// Derived ONCE per call and threaded through the walk: the vocabulary is a function of the
+		// handed shape, so a per-node derivation would rebuild it for every node of the subtree.
+		final kinds: Array<String> = sideEffectFreeExprKinds(shape);
 		var safe: Bool = true;
 		function walk(n: QueryNode): Void {
 			if (!safe) return;
-			if (!isSafeKind(n.kind)) {
+			if (!kinds.contains(n.kind)) {
 				safe = false;
 				return;
 			}
@@ -678,6 +689,18 @@ final class MemberKinds {
 				pending = collectStaticFroms(child, staticKind, members, pending, out) || pending;
 		}
 		return pending;
+	}
+
+	/**
+	 * `kinds` plus the grammar's grouping node, deduped. Every vocabulary answering "what may this
+	 * expression be made of" needs that pair: a grouping node is transparent, so admitting the content
+	 * without admitting the wrapper refuses `(a + b)` where it accepts `a + b`.
+	 */
+	private static function withGroupingKind(kinds: Null<Array<String>>, shape: RefShape): Array<String> {
+		final out: Array<String> = (kinds ?? []).copy();
+		final paren: Null<String> = shape.parenKind;
+		if (paren != null && !out.contains(paren)) out.push(paren);
+		return out;
 	}
 
 }

@@ -62,90 +62,6 @@ using Lambda;
 final class InlineMethod {
 
 	/**
-	 * Argument-expression kinds that are PURE — safe to drop (a 0-use
-	 * parameter) or duplicate (a 2+-use parameter) without changing
-	 * evaluation: literals, bare identifiers, parenthesised groups, and
-	 * the side-effect-free binary / unary / ternary operators. Adapted
-	 * from `MemberKinds.SAFE_KINDS` (kept local per the "adapt, not import"
-	 * rule). Calls, `new`, field / index access (possible getter), object
-	 * / array / map literals, lambdas, assignment and increment /
-	 * decrement are all absent — an argument touching one is impure.
-	 */
-	private static final PURE_ARG_KINDS: Array<String> = [
-		'IntLit',
-		'FloatLit',
-		'HexLit',
-		'BoolLit',
-		'NullLit',
-		'DoubleStringExpr',
-		'SingleStringExpr',
-		'Literal',
-		'Dollar',
-		'LoneDollar',
-		'IdentExpr',
-		'ParenExpr',
-		'Add',
-		'Sub',
-		'Mul',
-		'Div',
-		'Mod',
-		'And',
-		'Or',
-		'Eq',
-		'NotEq',
-		'Lt',
-		'Gt',
-		'LtEq',
-		'GtEq',
-		'BitAnd',
-		'BitOr',
-		'BitXor',
-		'Shl',
-		'Shr',
-		'UShr',
-		'NullCoal',
-		'Neg',
-		'Not',
-		'BitNot',
-		'Ternary'
-	];
-
-	/**
-	 * Expression-root kinds that are atomic primaries — they never need
-	 * wrapping parentheses when substituted into a surrounding expression
-	 * context (a literal, identifier, paren group, or a high-precedence
-	 * postfix call / field / index / `new`). Any OTHER root (a binary /
-	 * unary / ternary operator) is wrapped in `(...)` so the surrounding
-	 * precedence is preserved. Over-wrapping is always safe; under-wrapping
-	 * an operator would be a precedence bug — so the set is deliberately
-	 * conservative and anything unlisted is wrapped.
-	 */
-	private static final ATOMIC_ROOT_KINDS: Array<String> = [
-		'IntLit',
-		'FloatLit',
-		'HexLit',
-		'BoolLit',
-		'NullLit',
-		'DoubleStringExpr',
-		'SingleStringExpr',
-		'IdentExpr',
-		'ParenExpr',
-		'Call',
-		'FieldAccess',
-		'ArrayAccess',
-		'NewExpr'
-	];
-
-	/**
-	 * Binding kinds that, occurring INSIDE the body expression `E` with a
-	 * parameter's name, shadow that parameter — a nested lambda parameter,
-	 * a local `var` / `final`, or a local function. A shadowed parameter
-	 * name inside `E` would make the naive identifier substitution rewrite
-	 * the WRONG binding, so the inline refuses on any such collision.
-	 */
-	private static final SHADOW_BIND_KINDS: Array<String> = ['Required', 'Optional', 'VarStmt', 'FinalStmt', 'LocalFnStmt'];
-
-	/**
 	 * Inline the function whose declaration is at `line:col` in `source`.
 	 * `plugin` / `shape` are the caller-owned grammar plugin and its
 	 * `RefShape` (the pair the `refs` CLI builds). Returns `Ok(rewritten)`
@@ -163,26 +79,34 @@ final class InlineMethod {
 		final prep: InlineMethodPrep = resolveInlineMethod(source, line, col, cursor, tree, shape);
 		return switch prep {
 			case PErr(message): Err(message);
-			case POk(target): buildInlineMethodEdits(source, target, plugin);
+			case POk(target): buildInlineMethodEdits(source, target, plugin, shape);
 		};
-	}
-
-	/**
-	 * Whether `kind` is a `PURE_ARG_KINDS` member.
-	 *
-	 * A NAME-CONVENTION stub (`|| kind.endsWith('Lit') || kind.endsWith('StringExpr')`) used to widen
-	 * the enumeration, readmitting the object and regex literals the list's own doc says are absent.
-	 * An argument this predicate calls pure is DUPLICATED once per use of its parameter, so admitting
-	 * an allocating literal turns one value into several — the same defect measured in
-	 * `MemberKinds.isSafeKind`, which the stub was copied from.
-	 */
-	private static inline function isPureKind(kind: String): Bool {
-		return PURE_ARG_KINDS.contains(kind);
 	}
 
 	private static inline function isSpace(c: Int): Bool {
 		return c == ' '.code || c == '\t'.code || c == '\r'.code;
 	}
+
+	/**
+	 * Binding kinds that, occurring INSIDE the body expression `E` with a parameter's name,
+	 * shadow that parameter — read off the grammar: a parameter slot, a local declaration (its
+	 * continuation spelling included, which binds a name of its own), or a local function. A
+	 * shadowed parameter name inside `E` would make the naive identifier substitution rewrite
+	 * the WRONG binding, so the inline refuses on any such collision.
+	 *
+	 * Missing a shadowing kind is the dangerous direction (a silent wrong rewrite) and listing
+	 * one that cannot occur costs a refusal, so the union is taken whole rather than narrowed.
+	 */
+	private static function shadowBindKinds(shape: RefShape): Array<String> {
+		final out: Array<String> = [];
+		inline function add(kinds: Null<Array<String>>): Void if (kinds != null) for (kind in kinds) if (!out.contains(kind))
+			out.push(kind);
+		add(shape.paramKinds);
+		add(shape.localDeclKinds);
+		add(shape.localFunctionKinds);
+		return out;
+	}
+
 
 	/**
 	 * The single return expression `E` of `decl`'s body, or null when the
@@ -212,7 +136,7 @@ final class InlineMethod {
 		if (isBlock) {
 			if (body.children.length != 1) return null;
 			final stmt: QueryNode = body.children[0];
-			return if (stmt.kind != 'ReturnStmt')
+			return if (stmt.kind != shape.returnStatementKind)
 				null
 			else if (stmt.children.length > 0)
 				stmt.children[0]
@@ -220,9 +144,10 @@ final class InlineMethod {
 				null;
 		}
 
-		// ExprBody: a single expression, possibly a `ReturnExpr` wrapper.
+		// ExprBody: a single expression, possibly a value-return wrapper (`return E` in expression
+		// position — `valueReturnKinds` is the grammar's own superset of `returnStatementKind`).
 		final inner: QueryNode = body.children[0];
-		return if (inner.kind != 'ReturnExpr')
+		return if (!(shape.valueReturnKinds ?? []).contains(inner.kind))
 			inner
 		else if (inner.children.length > 0)
 			inner.children[0]
@@ -237,10 +162,15 @@ final class InlineMethod {
 	 * whole result parenthesised unless `E`'s root is atomic — so the
 	 * substituted expression keeps `E`'s precedence at the call position.
 	 */
-	private static function substitute(source: String, expr: QueryNode, paramNames: Array<String>, args: Array<QueryNode>): Null<String> {
+	private static function substitute(
+		source: String, expr: QueryNode, paramNames: Array<String>, args: Array<QueryNode>, shape: RefShape
+	): Null<String> {
 		final exprSpan: Null<Span> = expr.span;
 		if (exprSpan == null) return null;
 		final eFrom: Int = exprSpan.from;
+		final identKind: String = shape.identKind;
+		// Derived once for the whole substitution, not per argument: `argText` runs inside the walk.
+		final parenFreeRoots: Array<String> = MemberKinds.parenFreeRootKinds(shape);
 		var text: String = source.substring(eFrom, exprSpan.to);
 
 		// Collect parameter-ident occurrences in `E` (absolute spans). A
@@ -250,13 +180,13 @@ final class InlineMethod {
 		var failed: Bool = false;
 		function walk(node: QueryNode): Void {
 			if (failed) return;
-			if (node.kind == 'IdentExpr') {
+			if (node.kind == identKind) {
 				final nm: Null<String> = node.name;
 				final sp: Null<Span> = node.span;
 				if (nm != null && sp != null) {
 					final idx: Int = paramNames.indexOf(nm);
 					if (idx >= 0) {
-						final at: Null<String> = argText(source, args[idx]);
+						final at: Null<String> = argText(source, args[idx], parenFreeRoots);
 						if (at == null) {
 							failed = true;
 							return;
@@ -274,38 +204,53 @@ final class InlineMethod {
 		hits.sort((a, b) -> b.from - a.from);
 		for (h in hits) text = text.substring(0, h.from - eFrom) + h.text + text.substring(h.to - eFrom);
 
-		return ATOMIC_ROOT_KINDS.contains(expr.kind) ? text : '($text)';
+		return parenFreeRoots.contains(expr.kind) ? text : '($text)';
 	}
 
-	/** An argument's source, parenthesised when its root is an operator; null when it has no span. */
-	private static function argText(source: String, arg: QueryNode): Null<String> {
+	/**
+	 * An argument's source, parenthesised when its root does not outrank the operators; null when it
+	 * has no span. Takes the derived root vocabulary rather than the shape — the caller runs this
+	 * inside a subtree walk and derives it once.
+	 */
+	private static function argText(source: String, arg: QueryNode, parenFreeRoots: Array<String>): Null<String> {
 		final sp: Null<Span> = arg.span;
 		if (sp == null) return null;
 		final raw: String = source.substring(sp.from, sp.to);
-		return ATOMIC_ROOT_KINDS.contains(arg.kind) ? raw : '($raw)';
+		return parenFreeRoots.contains(arg.kind) ? raw : '($raw)';
 	}
 
-	/** Count `IdentExpr` nodes named `name` in `node`'s subtree. */
-	private static function countIdentExprNamed(node: QueryNode, name: String): Int {
+	/** Count identifier nodes named `name` in `node`'s subtree. */
+	private static function countIdentExprNamed(node: QueryNode, name: String, shape: RefShape): Int {
+		final identKind: String = shape.identKind;
 		var count: Int = 0;
 		function walk(n: QueryNode): Void {
-			if (n.kind == 'IdentExpr' && n.name == name) count++;
+			if (n.kind == identKind && n.name == name) count++;
 			for (c in n.children) walk(c);
 		}
 		walk(node);
 		return count;
 	}
 
-	/** Does `node`'s subtree contain a `Call` to bare `IdentExpr name`? */
-	private static function callsName(node: QueryNode, name: String): Bool {
+	/**
+	 * Does `node`'s subtree contain a call to bare `name`, or to a `receiver.name` member?
+	 *
+	 * A grammar that declares no call kind answers false, which is not a hole: the same grammar
+	 * gives `CallSites.collect` nothing to collect, and an inline with no proven call site is
+	 * refused one step later.
+	 */
+	private static function callsName(node: QueryNode, name: String, shape: RefShape): Bool {
+		final callKind: Null<String> = shape.callKind;
+		if (callKind == null) return false;
+		final identKind: String = shape.identKind;
+		final fieldAccessKind: Null<String> = shape.fieldAccessKind;
 		var found: Bool = false;
 		function walk(n: QueryNode): Void {
 			if (found) return;
-			if (n.kind == 'Call' && n.children.length > 0) {
+			if (n.kind == callKind && n.children.length > 0) {
 				final callee: QueryNode = n.children[0];
-				if (callee.kind == 'IdentExpr' && callee.name == name)
+				if (callee.kind == identKind && callee.name == name)
 					found = true;
-				else if (callee.kind == 'FieldAccess' && callee.name == name)
+				else if (callee.kind == fieldAccessKind && callee.name == name)
 					found = true;
 			}
 			for (c in n.children) walk(c);
@@ -315,17 +260,17 @@ final class InlineMethod {
 	}
 
 	/**
-	 * The first parameter name shadowed by a nested binding inside `expr`,
-	 * or null. A `Required` / `Optional` (lambda parameter), `VarStmt` /
-	 * `FinalStmt` (local) or `LocalFnStmt` whose name matches a parameter
-	 * rebinds it within `E`.
+	 * The first parameter name shadowed by a nested binding inside `expr`, or null. A parameter
+	 * slot, a local declaration or a local function whose name matches a parameter rebinds it
+	 * within `E` — the vocabulary is `shadowBindKinds`, read off the grammar.
 	 */
-	private static function shadowedParam(expr: QueryNode, paramNames: Array<String>): Null<String> {
+	private static function shadowedParam(expr: QueryNode, paramNames: Array<String>, shape: RefShape): Null<String> {
+		final shadowKinds: Array<String> = shadowBindKinds(shape);
 		var hit: Null<String> = null;
 		function walk(n: QueryNode): Void {
 			if (hit != null) return;
 			final nm: Null<String> = n.name;
-			if (nm != null && SHADOW_BIND_KINDS.contains(n.kind) && paramNames.contains(nm)) {
+			if (nm != null && shadowKinds.contains(n.kind) && paramNames.contains(nm)) {
 				hit = nm;
 				return;
 			}
@@ -336,18 +281,19 @@ final class InlineMethod {
 	}
 
 	/**
-	 * The first parameter referenced via a SIMPLE `'$p'` string
-	 * interpolation inside `expr`, or null. Simple interpolation is an
-	 * `Ident` node (distinct from the `IdentExpr` of normal positions and
-	 * of `${ ... }` complex interpolation, which the substitution handles);
-	 * `$p` cannot be replaced by an arbitrary argument expression, so its
+	 * The first parameter referenced via a SIMPLE `'$p'` string interpolation inside `expr`, or
+	 * null. Simple interpolation projects the grammar's `stringInterpIdentKind` (distinct from
+	 * the `identKind` of normal positions and of `${ ... }` complex interpolation, which the
+	 * substitution handles); `$p` cannot be replaced by an arbitrary argument expression, so its
 	 * presence is a refusal.
 	 */
-	private static function interpolatedParam(expr: QueryNode, paramNames: Array<String>): Null<String> {
+	private static function interpolatedParam(expr: QueryNode, paramNames: Array<String>, shape: RefShape): Null<String> {
+		final interpIdentKind: Null<String> = shape.stringInterpIdentKind;
+		if (interpIdentKind == null) return null;
 		var hit: Null<String> = null;
 		function walk(n: QueryNode): Void {
 			if (hit != null) return;
-			if (n.kind == 'Ident') {
+			if (n.kind == interpIdentKind) {
 				final nm: Null<String> = n.name;
 				if (nm != null && paramNames.contains(nm)) {
 					hit = nm;
@@ -360,12 +306,25 @@ final class InlineMethod {
 		return hit;
 	}
 
-	/** Is every node kind in `arg`'s subtree pure (droppable / duplicable)? */
-	private static function isPure(arg: QueryNode): Bool {
+	/**
+	 * Is every node kind in `arg`'s subtree pure — safe to DROP (a 0-use parameter) or DUPLICATE
+	 * (a 2+-use parameter) without changing evaluation?
+	 *
+	 * The vocabulary used to be a 36-name array here, copied from a second one in `MemberKinds`
+	 * "per the adapt-not-import rule", and both were widened by a NAME-CONVENTION stub
+	 * (`|| kind.endsWith('Lit') || kind.endsWith('StringExpr')`) that readmitted the object and
+	 * regex literals the list's own doc said were absent. An argument this call reports pure is
+	 * DUPLICATED once per use of its parameter, so an allocating literal admitted here turns one
+	 * value into several. Adapting a copy is what let the two spellings drift; the grammar
+	 * declaring it once is what ends that.
+	 */
+	private static function isPure(arg: QueryNode, shape: RefShape): Bool {
+		// Derived once and threaded through the walk, not re-derived per node.
+		final kinds: Array<String> = MemberKinds.sideEffectFreeExprKinds(shape);
 		var pure: Bool = true;
 		function walk(node: QueryNode): Void {
 			if (!pure) return;
-			if (!isPureKind(node.kind)) {
+			if (!kinds.contains(node.kind)) {
 				pure = false;
 				return;
 			}
@@ -447,16 +406,16 @@ final class InlineMethod {
 		final exprBody: QueryNode = body;
 
 		// Recursion: `E` calling `name` would outlive the deleted decl.
-		if (callsName(exprBody, name)) return PErr('"$name" is recursive — cannot inline a function that calls itself');
+		if (callsName(exprBody, name, shape)) return PErr('"$name" is recursive — cannot inline a function that calls itself');
 
 		// A parameter shadowed by a nested binding inside `E` would be
 		// substituted at the wrong binding.
-		final shadow: Null<String> = shadowedParam(exprBody, paramNames);
+		final shadow: Null<String> = shadowedParam(exprBody, paramNames, shape);
 		if (shadow != null) return PErr('parameter "$shadow" is shadowed inside the body of "$name" — cannot inline');
 
 		// A parameter referenced via simple `'$p'` interpolation cannot be
 		// replaced by an arbitrary argument expression.
-		final interp: Null<String> = interpolatedParam(exprBody, paramNames);
+		final interp: Null<String> = interpolatedParam(exprBody, paramNames, shape);
 		if (interp != null) return PErr('parameter "$interp" is used in string interpolation (\'$$$interp\') in "$name" — cannot inline');
 
 		// Collect + prove-complete the in-file call sites (the same proof
@@ -468,7 +427,7 @@ final class InlineMethod {
 		if (callSites.length == 0) return PErr('"$name" has no in-file call sites to inline');
 
 		// Per-parameter substitution count in `E` (the IdentExpr targets).
-		final occ: Array<Int> = [for (pn in paramNames) countIdentExprNamed(exprBody, pn)];
+		final occ: Array<Int> = [for (pn in paramNames) countIdentExprNamed(exprBody, pn, shape)];
 
 		return POk({
 			name: name,
@@ -488,7 +447,9 @@ final class InlineMethod {
 	 * non-pure argument that would be dropped or duplicated), delete the dead
 	 * declaration, then re-parse the rewrite — an unparseable result is rejected.
 	 */
-	private static function buildInlineMethodEdits(source: String, target: InlineMethodTarget, plugin: GrammarPlugin): EditResult {
+	private static function buildInlineMethodEdits(
+		source: String, target: InlineMethodTarget, plugin: GrammarPlugin, shape: RefShape
+	): EditResult {
 		final name: String = target.name;
 		final params: Array<QueryNode> = target.params;
 		final paramNames: Array<String> = target.paramNames;
@@ -507,7 +468,7 @@ final class InlineMethod {
 			}
 			// A dropped (0-use) or duplicated (2+-use) argument must be pure.
 			for (i in 0...params.length) {
-				if (occ[i] != 1 && !isPure(args[i])) {
+				if (occ[i] != 1 && !isPure(args[i], shape)) {
 					final at: String = CallSites.posOf(source, call.span);
 					final reason: String = occ[i] == 0
 						? 'dropped (parameter "${paramNames[i]}" is unused)'
@@ -517,7 +478,7 @@ final class InlineMethod {
 			}
 			final callSpan: Null<Span> = call.span;
 			if (callSpan == null) return Err('a call site of "$name" has no source span');
-			final subText: Null<String> = substitute(source, exprBody, paramNames, args);
+			final subText: Null<String> = substitute(source, exprBody, paramNames, args, shape);
 			if (subText == null) return Err('a node of "$name" has no source span — cannot inline');
 			edits.push({ span: callSpan, text: subText });
 		}

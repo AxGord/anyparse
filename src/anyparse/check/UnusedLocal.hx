@@ -226,7 +226,7 @@ final class UnusedLocal implements Check implements VolatileMessage {
 			final deletable: Bool = init == null || (
 				index != null
 					? TypeResolver.isDeletionPure(init, treeRoot, shape, declaredTypes, index)
-					: MemberKinds.isSideEffectFree(init)
+					: MemberKinds.isSideEffectFree(init, shape)
 			);
 			if (!deletable) continue;
 			// A binding that SHARES its line with another one is reported but never cut: the deletion

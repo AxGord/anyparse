@@ -296,7 +296,7 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 					+ 'branch reads it is not decidable from here';
 				continue;
 			}
-			final decline: Null<String> = memberDeclineReason(node, owner, hit.inExtends, index, classMeta, reflected);
+			final decline: Null<String> = memberDeclineReason(node, owner, hit.inExtends, index, classMeta, reflected, plugin.refShape());
 			if (decline == null)
 				attempt();
 			else
@@ -484,7 +484,7 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	 * when it has no initializer or a side-effect-free one (its first child is the initializer
 	 * expression).
 	 */
-	private static function shapeDecline(member: QueryNode): Null<String> {
+	private static function shapeDecline(member: QueryNode, shape: RefShape): Null<String> {
 		// A body-less declaration has no dead code to remove — its implementation
 		// lives elsewhere (an `extern`'s in native code; an `abstract`'s in
 		// subclasses, though those are already exempt in `violationFor`).
@@ -493,7 +493,7 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 				+ 'in native code) and there is no dead code here to remove';
 		if (member.kind != 'VarMember' && member.kind != 'FinalMember') return null;
 		final init: Null<QueryNode> = member.children.length > 0 ? member.children[0] : null;
-		return init == null || MemberKinds.isSideEffectFree(init)
+		return init == null || MemberKinds.isSideEffectFree(init, shape)
 			? null
 			: 'the initializer is not provably side-effect-free, so deleting the field would drop whatever it does';
 	}
@@ -725,10 +725,10 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	 */
 	private static function memberDeclineReason(
 		node: QueryNode, owner: Null<String>, inExtends: Bool, index: Null<SymbolIndex>,
-		classMeta: Map<String, { hasBuild: Bool, hasKeep: Bool }>, reflected: Array<String>
+		classMeta: Map<String, { hasBuild: Bool, hasKeep: Bool }>, reflected: Array<String>, shape: RefShape
 	): Null<String> {
-		final shape: Null<String> = shapeDecline(node);
-		if (shape != null) return shape;
+		final shapeReason: Null<String> = shapeDecline(node, shape);
+		if (shapeReason != null) return shapeReason;
 		if (mayImplementAbstractMethod(node, inExtends))
 			return 'the member may implement an ABSTRACT method of the `extends` class — a Haxe impl carries no `override`, so the '
 				+ 'call in the base is invisible from here';

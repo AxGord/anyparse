@@ -1235,6 +1235,44 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			// A transparent link: `a.b.c` is one atom, while `f().b` / `arr[i].b` /
 			// `a?.b` are not — their unlisted child stops the chain.
 			atomChainKinds: ['FieldAccess'],
+			// Every operator the Pratt set computes a value with and nothing else. The mutating
+			// halves are absent by construction: the compound assigns, `Assign` and the four
+			// increment / decrement ctors all store. `Is` and `BitNot` are in because `a is B` and
+			// `~a` are reads; each stood in exactly ONE of the two hand-written tables this field
+			// replaced, which is the drift a single declaration ends.
+			pureOperatorKinds: [
+				'Add',
+				'Sub',
+				'Mul',
+				'Div',
+				'Mod',
+				'And',
+				'Or',
+				'Eq',
+				'NotEq',
+				'Lt',
+				'Gt',
+				'LtEq',
+				'GtEq',
+				'BitAnd',
+				'BitOr',
+				'BitXor',
+				'Shl',
+				'Shr',
+				'UShr',
+				'NullCoal',
+				'Neg',
+				'Not',
+				'BitNot',
+				'Is',
+				'Ternary'
+			],
+			// Haxe's postfix / allocation primaries: nothing outranks a call, a field read, an
+			// index or a `new`, so none of them needs wrapping when substituted. `SafeFieldAccess`
+			// and `ForceFieldAccess` are deliberately absent — they bind just as tightly, but
+			// `(a?.b).c` and `a?.b.c` cover different spans with the null short-circuit, so the
+			// parens there are meaning and not precedence.
+			maximalPrecedenceRootKinds: ['Call', 'FieldAccess', 'IndexAccess', 'NewExpr'],
 			// One tier each, left-associative, so `(a * b) / c` and `a * b / c` parse
 			// alike. `Mod` is deliberately in NO family: Haxe binds `%` TIGHTER
 			// than `*` and `/` (`2 * 7 % 4` is 6), and the grammar models that as its own

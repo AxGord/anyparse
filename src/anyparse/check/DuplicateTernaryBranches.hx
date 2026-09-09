@@ -69,7 +69,7 @@ final class DuplicateTernaryBranches implements Check {
 			final node: Null<QueryNode> = nodeByKey['${span.from}:${span.to}'];
 			if (node == null || node.children.length != TERNARY_CHILD_COUNT) continue;
 			// Only safe to drop the condition when evaluating it has no side effect.
-			if (!MemberKinds.isSideEffectFree(node.children[0])) continue;
+			if (!MemberKinds.isSideEffectFree(node.children[0], plugin.refShape())) continue;
 			final branchSpan: Null<Span> = node.children[1].span;
 			if (branchSpan == null) continue;
 			edits.push({ span: span, text: source.substring(branchSpan.from, branchSpan.to) });

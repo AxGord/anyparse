@@ -60,24 +60,6 @@ enum InlineResult {
 final class Inline {
 
 	/**
-	 * Initializer root kinds that are atomic primaries — they never need
-	 * parentheses when substituted into an arbitrary expression context.
-	 * An operator root (binary / unary / ternary) is wrapped in `(...)`
-	 * instead so the surrounding precedence is preserved.
-	 */
-	private static final ATOMIC_ROOT_KINDS: Array<String> = [
-		'IntLit',
-		'FloatLit',
-		'HexLit',
-		'BoolLit',
-		'NullLit',
-		'DoubleStringExpr',
-		'SingleStringExpr',
-		'IdentExpr',
-		'ParenExpr'
-	];
-
-	/**
 	 * Local-variable declaration kinds the cursor's binding must carry to
 	 * be inlinable. Excludes statics, fields, params, for-iterators and
 	 * catch-vars — only a plain local `var` / `final` qualifies.
@@ -106,7 +88,7 @@ final class Inline {
 		final prep: InlinePrep = resolveInlineTarget(source, line, col, cursor, tree, shape);
 		return switch prep {
 			case PErr(message): Err(message);
-			case POk(target): buildInlineEdits(source, target, plugin);
+			case POk(target): buildInlineEdits(source, target, plugin, shape);
 		};
 	}
 
@@ -247,7 +229,7 @@ final class Inline {
 		if (reads.length == 0) return PErr('"$name" has no reads to inline');
 
 		// The initializer subtree must be entirely inline-safe.
-		if (!MemberKinds.isSideEffectFree(initializer))
+		if (!MemberKinds.isSideEffectFree(initializer, shape))
 			return PErr('"$name" initializer is not inline-safe (contains calls/field-access/collection/lambda)');
 
 		// Every free identifier the initializer reads must be a stable
@@ -303,7 +285,7 @@ final class Inline {
 	 * every read, delete the decl line (refusing if the decl shares its line),
 	 * then re-parse the rewrite — an unparseable result is rejected.
 	 */
-	private static function buildInlineEdits(source: String, target: InlineTarget, plugin: GrammarPlugin): InlineResult {
+	private static function buildInlineEdits(source: String, target: InlineTarget, plugin: GrammarPlugin, shape: RefShape): InlineResult {
 		final name: String = target.name;
 		final initializer: QueryNode = target.initializer;
 		final initRange: Span = target.initRange;
@@ -311,7 +293,10 @@ final class Inline {
 		// Build the substitution text: the initializer's exact source,
 		// parenthesised when the root is an operator.
 		final initText: String = source.substring(initRange.from, initRange.to);
-		final substitution: String = ATOMIC_ROOT_KINDS.contains(initializer.kind) ? initText : '($initText)';
+		// The initializer is already proven side-effect-free, so its root can only ever be an atom,
+		// a grouping node or an operator: the wider `parenFreeRootKinds` would add members
+		// unreachable here.
+		final substitution: String = MemberKinds.atomicRootKinds(shape).contains(initializer.kind) ? initText : '($initText)';
 
 		final edits: Array<{ span: Span, text: String }> = [];
 
