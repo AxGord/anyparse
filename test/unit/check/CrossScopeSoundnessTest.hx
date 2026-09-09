@@ -329,10 +329,15 @@ class CrossScopeSoundnessTest extends Test {
 	 * it does emit leaves through the cross-file seam.
 	 *
 	 * It is NOT "never in the census above" — that was true only while every cell's sibling file spelled
-	 * `My_Field`. T895's six cells give `naming` a violation no sibling names, so its in-file rename
-	 * lands as an ordinary `fix` edit there and it appears in BOTH lists. The roster reads their union,
-	 * so the overlap costs nothing; what it means is that a `naming` line vanishing from `FIX_WRITERS`
-	 * is a statement about THOSE cells, not about the cross-file seam this list stands for.
+	 * `My_Field`. FOUR of T895's six cells — `public-write`, `public-internal-write`, `accessor-call`,
+	 * `constant-reflection` — give `naming` a violation that no sibling names and no sibling subtype
+	 * defers, so its in-file rename lands as an ordinary `fix` edit there and it appears in BOTH lists.
+	 * On the other two the sibling IS a subtype, so the rename still leaves through `crossFileFix` —
+	 * MEASURED at this tip, `naming --fix` over the declaring file of `subtype-backing-field` alone
+	 * wrote 0 edits, which is why those two hold `edit:naming@` lines in `LIBS_ONLY_REGRESSIONS` below
+	 * and add nothing to the `naming` line in the census above. The roster reads their union, so the
+	 * overlap costs nothing; what it means is that a `naming` line vanishing from `FIX_WRITERS` is a
+	 * statement about THOSE cells, not about the cross-file seam this list stands for.
 	 *
 	 * Its non-vacuity on the reporting side is asserted per cell, where the flag is observable whichever
 	 * seam the edit takes.
@@ -370,7 +375,10 @@ class CrossScopeSoundnessTest extends Test {
 	 * - `static-constant@subtype-constant` — the subtype's mention of `_reached` is gone, so the instance
 	 *   final is promoted to `static` and the subtype's unqualified read stops resolving.
 	 * - `inline-constant@constant-reflection` — the sibling's `Reflect.field(a, 'REACHED')` is gone, so
-	 *   `inline` erases the constant's runtime value and that read silently answers null.
+	 *   `inline` erases the constant from the emitted output. The read in THIS fixture answers null
+	 *   either way — `REACHED` is `static` and the receiver is an instance — so what the entry prices is
+	 *   the lost PROOF, not a behaviour change; the shape it stands for is a reflective read that
+	 *   resolves.
 	 * - `naming@subtype-backing-field` and `naming@subtype-constant` — the sibling declares a SUBTYPE, and
 	 *   `naming` defers an in-file rename to `crossFileFix` whenever one exists. Here the subtype does not
 	 *   spell `My_Field`, so the rename is harmless in fact; the entry prices the missing PROOF, which is

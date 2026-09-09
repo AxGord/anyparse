@@ -102,7 +102,10 @@ using StringTools;
  * `resolutionRoots` declared deleted a public `get_x` a sibling file calls. What stays narrowed is the unreadable-file probe
  * — `unreadableDecline` reads the REPORT index, so a skip-parsing sibling that sits in the resolution scope and spells the
  * accessor licenses nothing — and, in a project declaring NO resolution key, every scan here, because the report set is then
- * the only scope there is. Run the rule whole-project; a subdirectory run of a scopeless project is a preview, not a verdict.
+ * the only scope there is. Run the rule whole-project; a subdirectory run is a preview, not a verdict — of a scopeless project because
+ * every scan is then narrow, and of a scoped one because the unreadable probe still is, in BOTH members that ask it: `unreadableDecline`
+ * and the unreadable arm of `reportOrphan` both read `ctx.reportIndex`. MEASURED at this tip: with one unparseable sibling in the
+ * resolution scope the narrow `--fix` wrote 2 deletions where the run over both files wrote 1 and declined the second. T920.
  *
  * Scope is class bodies (`CheckScan.classBodies`: `class` / `final class` / `abstract class`).
  * An `interface` declares no accessor bodies; an `abstract` type's accessors are left alone (its
