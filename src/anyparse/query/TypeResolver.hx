@@ -162,7 +162,7 @@ final class TypeResolver {
 	public static function isDeletionPure(
 		node: QueryNode, tree: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: SymbolIndex
 	): Bool {
-		if (MemberKinds.isSideEffectFree(node)) return true;
+		if (MemberKinds.isSideEffectFree(node, shape)) return true;
 		final arrayLiteralKind: Null<String> = shape.arrayLiteralKind;
 		if (arrayLiteralKind != null && node.kind == arrayLiteralKind) {
 			return node.children.foreach(c -> isDeletionPure(c, tree, shape, declaredTypes, index));

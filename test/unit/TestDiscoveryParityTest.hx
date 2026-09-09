@@ -1577,9 +1577,13 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.LiteralClassificationTest#testAnAllocatingLiteralIsRefusedByEveryPredicate :: control :: '
 				+ 'M-PURE-ARG-KINDS-SUFFIX-STUB',
 			'unit.query.LiteralClassificationTest#testEveryDeclaredConstantLiteralIsClassifiedByEveryList :: control :: '
-				+ 'M-SAFE-KINDS-DROP-HEX',
+				+ 'M-NON-NULL-RHS-DROP-HEX',
 			'unit.query.LiteralClassificationTest#testThePlainLiteralPredicateFollowsTheVocabularyItIsHanded :: control :: '
 				+ 'M-PLAIN-LITERAL-FROZEN',
+			'unit.query.LiteralClassificationTest#testTheRootVocabulariesFollowTheShapeTheyAreHanded :: control :: '
+				+ 'M-PAREN-FREE-ROOTS-ATOMS-ONLY',
+			'unit.query.LiteralClassificationTest#testTheSideEffectFreeVocabularyFollowsTheOperatorsItIsHanded :: control :: '
+				+ 'M-SIDE-EFFECT-FREE-DROPS-OPERATORS',
 			'unit.query.LiteralClassificationTest#testTheStringValueSeamAnswersBothSpellingsFromTheShape :: control :: '
 				+ 'M-PLAIN-STRING-VALUE-NO-DELIMITERS',
 			'unit.query.LiteralVocabularyTest#testAnExactQueryReachesContentInsideTheQuotes :: control :: M-LIT-DELIMITERS-IGNORED',
@@ -2019,7 +2023,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-TRIVGET-NO-NEGATION-DESCENT',
 			'M-TRIVGET-INERT-SEGMENT-IGNORED',
 			'M-SAFE-KINDS-SUFFIX-STUB',
-			'M-SAFE-KINDS-DROP-HEX',
+			'M-NON-NULL-RHS-DROP-HEX',
 			'M-PURE-ARG-KINDS-SUFFIX-STUB',
 			'M-PLAIN-LITERAL-FROZEN',
 			'M-PLAIN-STRING-VALUE-NO-DELIMITERS',
@@ -2028,7 +2032,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-PATCH-DOCEND-SHIFTS-EVERY-EDIT',
 			'M-PATCH-DOCEND-NEVER-SHIFTS',
 			'M-SELECT-MISS-NO-KIND-CLAUSE',
-			'M-AND-OPERATOR-TEXT-STALE'
+			'M-AND-OPERATOR-TEXT-STALE',
+			'M-PAREN-FREE-ROOTS-ATOMS-ONLY',
+			'M-SIDE-EFFECT-FREE-DROPS-OPERATORS'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
@@ -2101,7 +2107,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-CASE-CTRLFLOW-STAR-FLAG-BLIND :: anyparse.macro.WriterTriviaStarDispatch#ownStarHasFlag',
 			'M-PROJECTED-KINDS-ALT-ONLY :: anyparse.macro.QueryWalkerLowering#eachProjectedKind',
 			'M-DECL-HOST-KIND-STALE :: anyparse.grammar.haxe.HaxeQueryPlugin#FinalMember:DECL_HOST_KINDS',
-			'M-SAFE-KINDS-DROP-HEX :: anyparse.query.MemberKinds#FinalMember:SAFE_KINDS'
+			'M-NON-NULL-RHS-DROP-HEX :: anyparse.check.NullFlow#FinalMember:NON_NULL_RHS_KINDS'
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 

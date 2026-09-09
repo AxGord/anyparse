@@ -5,7 +5,6 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.grammar.haxe.HaxeQueryWalker;
 import anyparse.grammar.haxe.HaxeStringFoldSupport;
 import anyparse.query.GrammarPlugin.RefShape;
-import anyparse.query.Inline;
 import anyparse.query.InlineMethod;
 import anyparse.query.Lit;
 import anyparse.query.MemberKinds;
@@ -47,7 +46,6 @@ using StringTools;
  * spells, so the grammar growing a spelling moves both.
  */
 @:nullSafety(Strict)
-@:access(anyparse.query.Inline)
 @:access(anyparse.query.InlineMethod)
 @:access(anyparse.query.MemberKinds)
 @:access(anyparse.grammar.haxe.HaxeStringFoldSupport)
@@ -94,18 +92,24 @@ class LiteralClassificationTest extends Test {
 	 * from themselves. `NON_NULL_RHS_KINDS` is asked about the vocabulary MINUS the null literal —
 	 * the one member of it whose value IS null — which is a real exclusion and not a gap.
 	 *
-	 * CONTROL for the declared direction. KILLED by arm `M-SAFE-KINDS-DROP-HEX`, which takes one
-	 * declared kind back out of one list.
+	 * WHICH ROWS STILL DISCRIMINATE, since three of the consumers are now DERIVED from the shape:
+	 * `sideEffectFreeExprKinds` unions `constantLiteralKinds` in by construction, so its two rows are
+	 * TAUTOLOGICAL and kept only as a guard on the union's own arithmetic. The rows that can still
+	 * fail read a SECOND, independent declaration — `atomExprKinds` (through the two root
+	 * vocabularies), `NullFlow.NON_NULL_RHS_KINDS`, `HaxeStringFoldSupport.PRIMARY_KINDS` and the
+	 * shape's own `caseLiteralKinds` — and the killer arm cuts one of THOSE.
+	 *
+	 * CONTROL for the declared direction. KILLED by arm `M-NON-NULL-RHS-DROP-HEX`, which takes one
+	 * declared kind back out of the one still-hand-written list.
 	 */
 	@:pin('control')
-	@:killer('M-SAFE-KINDS-DROP-HEX')
+	@:killer('M-NON-NULL-RHS-DROP-HEX')
 	public function testEveryDeclaredConstantLiteralIsClassifiedByEveryList(): Void {
 		final declared: Array<String> = MemberKinds.constantLiteralKinds(SHAPE);
 		Assert.isTrue(declared.length > 0, 'the Haxe grammar must declare a literal vocabulary');
-		assertClassifies('MemberKinds.SAFE_KINDS', declared, MemberKinds.SAFE_KINDS);
-		assertClassifies('InlineMethod.PURE_ARG_KINDS', declared, InlineMethod.PURE_ARG_KINDS);
-		assertClassifies('InlineMethod.ATOMIC_ROOT_KINDS', declared, InlineMethod.ATOMIC_ROOT_KINDS);
-		assertClassifies('Inline.ATOMIC_ROOT_KINDS', declared, Inline.ATOMIC_ROOT_KINDS);
+		assertClassifies('MemberKinds.sideEffectFreeExprKinds', declared, MemberKinds.sideEffectFreeExprKinds(SHAPE));
+		assertClassifies('MemberKinds.atomicRootKinds', declared, MemberKinds.atomicRootKinds(SHAPE));
+		assertClassifies('MemberKinds.parenFreeRootKinds', declared, MemberKinds.parenFreeRootKinds(SHAPE));
 		assertClassifies('HaxeStringFoldSupport.PRIMARY_KINDS', declared, HaxeStringFoldSupport.PRIMARY_KINDS);
 		final nonNull: Array<String> = declared.filter(kind -> kind != SHAPE.nullLiteralKind);
 		Assert.equals(declared.length - 1, nonNull.length, 'the null literal must be one member of the declared vocabulary');
@@ -114,22 +118,25 @@ class LiteralClassificationTest extends Test {
 		// hex kind was missing from the shape's own case vocabulary while present in numericLiteralKinds.
 		final caseable: Array<String> = declared.filter(kind -> !(SHAPE.stringLiteralKinds ?? []).contains(kind));
 		assertClassifies('shape.caseLiteralKinds', caseable, SHAPE.caseLiteralKinds ?? []);
-		// The two predicates above that walk a SUBTREE also meet the segments of a plain
-		// interpolating literal, so the segment vocabulary is part of the same classification. The
-		// text fragment was listed and the two inert triggers were not, which made `'a $$ b'` — a
-		// constant by every other reading here — neither side-effect-free nor a pure argument.
+		// The predicates that walk a SUBTREE also meet the segments of a plain interpolating literal,
+		// so the segment vocabulary is part of the same classification. The text fragment was listed
+		// and the two inert triggers were not, which made `'a $$ b'` — a constant by every other
+		// reading here — neither side-effect-free nor a pure argument.
 		final text: Null<String> = SHAPE.stringInterpTextKind;
 		final segments: Array<String> = [];
 		if (text != null) segments.push(text);
 		for (kind in SHAPE.stringInterpInertSegmentKinds ?? []) segments.push(kind);
 		Assert.isTrue(segments.length > 1, 'the Haxe grammar must declare a text fragment and at least one inert trigger');
-		assertClassifies('MemberKinds.SAFE_KINDS (segments)', segments, MemberKinds.SAFE_KINDS);
-		assertClassifies('InlineMethod.PURE_ARG_KINDS (segments)', segments, InlineMethod.PURE_ARG_KINDS);
+		assertClassifies('MemberKinds.sideEffectFreeExprKinds (segments)', segments, MemberKinds.sideEffectFreeExprKinds(SHAPE));
 	}
 
 	/**
 	 * A projected kind whose NAME reads like a literal, but which no shape field declares one, is
-	 * refused by both predicates that used to admit it on the strength of its spelling.
+	 * refused by the predicate that used to admit it on the strength of its spelling.
+	 *
+	 * ONE predicate now, where there were two: `InlineMethod` spelled a second copy of the same
+	 * vocabulary and carried a second copy of the same stub. Its own end-to-end refusal is asserted
+	 * by `testAnAllocatingLiteralIsRefusedByEveryPredicate`, on parsed nodes rather than kind names.
 	 *
 	 * The kind list comes from the GENERATED projected vocabulary, so this half needs no maintenance
 	 * to keep covering the grammar: measured on `a9efccd4` the convention admitted nine of 238
@@ -145,16 +152,8 @@ class LiteralClassificationTest extends Test {
 		final undeclared: Array<String> = HaxeQueryWalker.projectedKinds()
 			.filter(kind -> !declared.contains(kind) && RETIRED_LITERAL_SUFFIXES.exists(suffix -> kind.endsWith(suffix)));
 		Assert.isTrue(undeclared.length > 0, 'the refutation needs at least one kind the convention admits and the shape does not');
-		// Both predicates are `inline`, so Haxe refuses a closure on either and the loop is the only
-		// spelling available: `undeclared.filter(MemberKinds.isSafeKind)` does not compile.
-		final safe: Array<String> = [];
-		final pure: Array<String> = [];
-		for (kind in undeclared) {
-			if (MemberKinds.isSafeKind(kind)) safe.push(kind);
-			if (InlineMethod.isPureKind(kind)) pure.push(kind);
-		}
+		final safe: Array<String> = [for (kind in undeclared) if (MemberKinds.isSafeKind(kind, SHAPE)) kind];
 		Assert.equals('', safe.join(', '), 'kind(s) named like a literal that MemberKinds.isSafeKind admits anyway: [${safe.join(', ')}]');
-		Assert.equals('', pure.join(', '), 'kind(s) named like a literal that InlineMethod.isPureKind admits anyway: [${pure.join(', ')}]');
 	}
 
 	/**
@@ -162,7 +161,9 @@ class LiteralClassificationTest extends Test {
 	 * the two measured breaks, asked of real parsed nodes rather than of kind names.
 	 *
 	 * `isSideEffectFree` is the predicate `Inline` gates on, so this is the fixture that stands
-	 * between a regex or object initializer and being duplicated once per read.
+	 * between a regex or object initializer and being duplicated once per read; `InlineMethod.isPure`
+	 * is the same question asked of a call ARGUMENT, and the one this class asserts end-to-end now
+	 * that the kind-by-kind twin of `isSafeKind` is gone from that class.
 	 *
 	 * CONTROL for the inline-method half of the stub removal. KILLED by arm
 	 * `M-PURE-ARG-KINDS-SUFFIX-STUB` (and by the `MemberKinds` one beside it).
@@ -177,20 +178,18 @@ class LiteralClassificationTest extends Test {
 				'${specimen.expr} (${node.kind}) must${specimen.plain ? '' : ' not'} be a plain literal'
 			);
 			Assert.equals(
-				specimen.plain, MemberKinds.isSideEffectFree(node),
+				specimen.plain, MemberKinds.isSideEffectFree(node, SHAPE),
 				'${specimen.expr} (${node.kind}) must${specimen.plain ? '' : ' not'} be side-effect-free'
 			);
 			Assert.equals(
-				specimen.plain, InlineMethod.isPureKind(node.kind) && node.children.foreach(c -> InlineMethod.isPureKind(c.kind)),
+				specimen.plain, InlineMethod.isPure(node, SHAPE),
 				'${specimen.expr} (${node.kind}) must${specimen.plain ? '' : ' not'} be a pure argument'
 			);
 		}
 		// The refusal side, asked of the SHAPE rather than of a name convention: the allocating
 		// literals carry their own fields, and no spelling suffix would catch a renamed one.
-		for (kind in [SHAPE.objectLiteralKind, SHAPE.arrayLiteralKind]) if (kind != null) {
-			Assert.isFalse(MemberKinds.isSafeKind(kind), 'the allocating literal $kind must not be side-effect-free');
-			Assert.isFalse(InlineMethod.isPureKind(kind), 'the allocating literal $kind must not be a pure argument');
-		}
+		for (kind in [SHAPE.objectLiteralKind, SHAPE.arrayLiteralKind]) if (kind != null)
+			Assert.isFalse(MemberKinds.isSafeKind(kind, SHAPE), 'the allocating literal $kind must not be side-effect-free');
 	}
 
 	/**
@@ -265,6 +264,75 @@ class LiteralClassificationTest extends Test {
 		final bare: RefShape = new HaxeQueryPlugin().refShape();
 		bare.stringLiteralDelimiters = [];
 		Assert.equals('"lit"', Lit.plainStringValue(initializerOf('"lit"'), bare), 'no declared delimiter reads the name verbatim');
+	}
+
+	/**
+	 * The two derived ROOT vocabularies follow the shape they are HANDED, and keep the two questions
+	 * apart: self-delimiting (`atomicRootKinds`) versus needs-no-parentheses (`parenFreeRootKinds`).
+	 *
+	 * Both halves are hand-written here, so neither derives from the declaration under test: the
+	 * probe shape names an atom and a maximal-precedence root that NO grammar projects, and the
+	 * answer has to carry both through — into the wide vocabulary only, for the second. A frozen
+	 * list of this grammar's ctor names passes every other fixture in this class and fails here.
+	 *
+	 * The set difference the two answer is the contract: a call, a field read, an index or a `new`
+	 * outranks every operator (so it is substituted bare) while a paren around one is NOT inert in
+	 * every position, which is why `redundant-parens` reads only the narrow half.
+	 *
+	 * CONTROL for the root derivation. KILLED by arm `M-PAREN-FREE-ROOTS-ATOMS-ONLY`.
+	 */
+	@:pin('control')
+	@:killer('M-PAREN-FREE-ROOTS-ATOMS-ONLY')
+	public function testTheRootVocabulariesFollowTheShapeTheyAreHanded(): Void {
+		final probe: RefShape = new HaxeQueryPlugin().refShape();
+		probe.atomExprKinds = ['NoSuchAtom'];
+		probe.parenKind = 'NoSuchGroup';
+		probe.maximalPrecedenceRootKinds = ['NoSuchPostfix'];
+		Assert.same(['NoSuchAtom', 'NoSuchGroup'], MemberKinds.atomicRootKinds(probe), 'the narrow half is atoms plus the group');
+		Assert.same(
+			['NoSuchAtom', 'NoSuchGroup', 'NoSuchPostfix'],
+			MemberKinds.parenFreeRootKinds(probe), 'the wide half adds the maximal-precedence roots and nothing else'
+		);
+		// On the REAL grammar the two must differ, or the second field declares nothing.
+		final narrow: Array<String> = MemberKinds.atomicRootKinds(SHAPE);
+		final wide: Array<String> = MemberKinds.parenFreeRootKinds(SHAPE);
+		final extra: Array<String> = wide.filter(kind -> !narrow.contains(kind));
+		Assert.isTrue(extra.length > 0, 'the Haxe grammar must declare at least one maximal-precedence root beyond its atoms');
+		for (kind in extra)
+			Assert.isFalse(
+				MemberKinds.isSafeKind(kind, SHAPE), 'a maximal-precedence root ($kind) is a precedence answer, never a purity one'
+			);
+	}
+
+	/**
+	 * The side-effect-free vocabulary follows the shape it is HANDED — the half a frozen 36-name
+	 * array also satisfied, and the reason two copies of one could drift apart unnoticed for months.
+	 *
+	 * The operator half is the part no other fixture reaches: `constantLiteralKinds` covers the
+	 * literals, and the identifier / grouping kinds are single fields, but the 25 operator names were
+	 * spelled THREE times in this engine — `MemberKinds.SAFE_KINDS`, `InlineMethod.PURE_ARG_KINDS`
+	 * and `PreferInline.CONST_OP_KINDS` — and the third disagreed with the first two in both
+	 * directions at once (it carried `Is`, it lacked `BitNot`).
+	 *
+	 * CONTROL for the operator derivation. KILLED by arm `M-SIDE-EFFECT-FREE-DROPS-OPERATORS`.
+	 */
+	@:pin('control')
+	@:killer('M-SIDE-EFFECT-FREE-DROPS-OPERATORS')
+	public function testTheSideEffectFreeVocabularyFollowsTheOperatorsItIsHanded(): Void {
+		final probe: RefShape = new HaxeQueryPlugin().refShape();
+		probe.pureOperatorKinds = ['NoSuchOperator'];
+		final kinds: Array<String> = MemberKinds.sideEffectFreeExprKinds(probe);
+		Assert.isTrue(kinds.contains('NoSuchOperator'), 'a declared operator must reach the vocabulary: $kinds');
+		Assert.isFalse(kinds.contains('Add'), 'an operator the handed shape drops must leave it: $kinds');
+		Assert.isFalse(MemberKinds.isSideEffectFree(initializerOf('1 + 2'), probe), 'and the subtree walk must follow it');
+		Assert.isTrue(MemberKinds.isSideEffectFree(initializerOf('1 + 2'), SHAPE), 'while the real grammar still admits it');
+		// Every operator the grammar declares pure must be one the purity predicate admits, and none
+		// may be a store: an admitted assignment is the wrong-rewrite direction.
+		for (kind in SHAPE.pureOperatorKinds ?? []) {
+			Assert.isTrue(MemberKinds.isSafeKind(kind, SHAPE), 'a declared pure operator ($kind) must be side-effect-free');
+			Assert.isFalse(kind == SHAPE.assignKind, 'the assignment kind must never be declared a pure operator');
+			Assert.isFalse(kind == SHAPE.addAssignKind, 'nor the compound assignment kind');
+		}
 	}
 
 	/** Assert `classifying` holds every kind of `kinds`, naming the ones it does not under the label `list`. */

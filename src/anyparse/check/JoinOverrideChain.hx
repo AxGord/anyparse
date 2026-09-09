@@ -10,7 +10,6 @@ import anyparse.check.PurityScan.PurityCtx;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
 import anyparse.query.SourceComments;
@@ -356,7 +355,7 @@ final class JoinOverrideChain implements Check implements DefaultOff {
 	 */
 	private static function pureValue(node: QueryNode, s: Seams, purity: PurityCtx): Bool {
 		return node.kind == s.stringInterpIdentKind || (
-			node.kind == s.identKind || !MemberKinds.isSafeKind(node.kind)
+			node.kind == s.identKind || !purity.safeKinds.contains(node.kind)
 				? PurityScan.isPure(node, purity)
 				: node.children.foreach(c -> pureValue(c, s, purity))
 		);

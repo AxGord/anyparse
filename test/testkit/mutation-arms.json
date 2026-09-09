@@ -2587,8 +2587,14 @@
 			"name": "M-INERT-REGIONS-HARDCODED-KINDS",
 			"type": "anyparse.query.InertRegions",
 			"method": "collectLiterals",
-			"find": ["(shape.inertTextLiteralKinds ?? []).contains(node.kind)","final interpolating: Bool = (shape.interpolatingStringKinds ?? []).contains(node.kind);"],
-			"replace": ["['DoubleStringExpr', 'RegexLit'].contains(node.kind)","final interpolating: Bool = node.kind == 'SingleStringExpr';"],
+			"find": [
+				"(shape.inertTextLiteralKinds ?? []).contains(node.kind)",
+				"final interpolating: Bool = (shape.interpolatingStringKinds ?? []).contains(node.kind);"
+			],
+			"replace": [
+				"['DoubleStringExpr', 'RegexLit'].contains(node.kind)",
+				"final interpolating: Bool = node.kind == 'SingleStringExpr';"
+			],
 			"note": "the two kind vocabularies go back to Haxe ctor names spelled inside the grammar-agnostic masker, so the mask no longer follows the DECLARATION: a shape naming nothing inert still gets its literals masked"
 		},
 		{
@@ -2642,26 +2648,26 @@
 			"name": "M-SAFE-KINDS-SUFFIX-STUB",
 			"type": "anyparse.query.MemberKinds",
 			"method": "isSafeKind",
-			"find": "return SAFE_KINDS.contains(kind);",
-			"replace": "return SAFE_KINDS.contains(kind) || kind.endsWith('Lit') || kind.endsWith('StringExpr');",
+			"find": "return sideEffectFreeExprKinds(shape).contains(kind);",
+			"replace": "return sideEffectFreeExprKinds(shape).contains(kind) || kind.endsWith('Lit') || kind.endsWith('StringExpr');",
 			"note": "the retired name-convention widening comes back, readmitting every projected kind whose spelling ends in Lit / StringExpr - the regex and object literals among them, neither declared a constant by any grammar vocabulary - and `Inline`, which DUPLICATES an initializer it is told is side-effect-free, again turns one EReg into two and one empty object literal into two"
 		},
 		{
-			"name": "M-SAFE-KINDS-DROP-HEX",
-			"type": "anyparse.query.MemberKinds",
-			"method": "SAFE_KINDS",
+			"name": "M-NON-NULL-RHS-DROP-HEX",
+			"type": "anyparse.check.NullFlow",
+			"method": "NON_NULL_RHS_KINDS",
 			"kind": "FinalMember",
 			"find": "\t'HexLit',\n",
 			"replace": "",
-			"note": "the hexadecimal literal leaves the side-effect-free enumeration, which is precisely the drift the suffix stub used to hide: with the stub gone the list IS the answer, so a kind the grammar declares constant and the list forgets is refused outright"
+			"note": "the hexadecimal literal leaves the last hand-written list of the literal vocabulary. The side-effect-free and root vocabularies are now DERIVED from the same declaration the differential reads, so cutting one of those is unfalsifiable; this list is a second, independent spelling and is exactly where the original HexLit gap lived"
 		},
 		{
 			"name": "M-PURE-ARG-KINDS-SUFFIX-STUB",
 			"type": "anyparse.query.InlineMethod",
-			"method": "isPureKind",
-			"find": "return PURE_ARG_KINDS.contains(kind);",
-			"replace": "return PURE_ARG_KINDS.contains(kind) || kind.endsWith('Lit') || kind.endsWith('StringExpr');",
-			"note": "the same name-convention widening on the inline-method side: an allocating literal passed as an argument is called pure again and gets DUPLICATED once per use of the parameter it substitutes"
+			"method": "isPure",
+			"find": "if (!kinds.contains(node.kind)) {",
+			"replace": "if (!(kinds.contains(node.kind) || node.kind.endsWith('Lit') || node.kind.endsWith('StringExpr'))) {",
+			"note": "the same name-convention widening on the inline-method side, now at the subtree walk that is all that is left of the second copy: an allocating literal passed as an argument is called pure again and gets DUPLICATED once per use of the parameter it substitutes"
 		},
 		{
 			"name": "M-PLAIN-LITERAL-FROZEN",
@@ -2721,6 +2727,21 @@
 			"find": "andOperatorText: '&&',",
 			"replace": "andOperatorText: '&',",
 			"note": "the declared logical-and token is respelled as the bitwise one, which still parses and still is an operator, so nothing in the tree breaks and the shape simply names text the parser reads as a different node"
+		},
+		{
+			"name": "M-PAREN-FREE-ROOTS-ATOMS-ONLY",
+			"type": "anyparse.query.MemberKinds",
+			"method": "parenFreeRootKinds",
+			"force": "atomicRootKinds(shape)",
+			"note": "the wide root vocabulary stops reading maximalPrecedenceRootKinds and collapses onto the self-delimiting atoms, which is the engine deciding a precedence question the grammar declares: a call / field read / index / `new` substituted by inline-method gets a parenthesis it does not need, and no other fixture sees the difference"
+		},
+		{
+			"name": "M-SIDE-EFFECT-FREE-DROPS-OPERATORS",
+			"type": "anyparse.query.MemberKinds",
+			"method": "sideEffectFreeExprKinds",
+			"find": "\tfor (kind in shape.pureOperatorKinds ?? []) add(kind);\n",
+			"replace": "",
+			"note": "the declared pure operators stop reaching the side-effect-free vocabulary, so every operator expression becomes impure: `inline` refuses an `a + b` initializer it used to substitute, and the 25 operator names go back to being unreachable from any declaration"
 		}
 	]
 }

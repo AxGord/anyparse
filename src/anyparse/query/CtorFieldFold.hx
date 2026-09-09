@@ -627,7 +627,7 @@ final class CtorFieldFold {
 		final braced: Bool = branch.kind == shape.blockStmtKind;
 		final sole: Bool = !braced || branch.children.length == 1;
 		final first: Null<QueryNode> = branchOpeningStatement(branch, braced);
-		if (condSpan == null || first == null || (!sole && !MemberKinds.isSideEffectFree(cond))) return null;
+		if (condSpan == null || first == null || (!sole && !MemberKinds.isSideEffectFree(cond, shape))) return null;
 		final firstSpan: Null<Span> = first.span;
 		if (first.kind != shape.exprStatementKind || first.children.length != 1 || firstSpan == null) return null;
 		final assign: QueryNode = first.children[0];

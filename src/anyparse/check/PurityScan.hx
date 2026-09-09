@@ -77,6 +77,7 @@ final class PurityScan {
 		final declaredTypes: Map<Int, String> = provider != null ? provider.declaredTypes(source) : [];
 		return {
 			shape: shape,
+			safeKinds: MemberKinds.sideEffectFreeExprKinds(shape),
 			identKind: shape.identKind,
 			fieldAccessKind: fieldAccessKind,
 			callKind: callKind,
@@ -97,7 +98,7 @@ final class PurityScan {
 		final kind: String = node.kind;
 		if (kind == ctx.identKind) return !readsGetterUnqualified(node, ctx);
 		function childrenPure() return node.children.foreach(c -> isPure(c, ctx));
-		if (MemberKinds.isSafeKind(kind)) return childrenPure();
+		if (ctx.safeKinds.contains(kind)) return childrenPure();
 		if (kind != ctx.fieldAccessKind) return if (ctx.indexAccessKind != null && kind == ctx.indexAccessKind)
 			childrenPure()
 		else if (kind == ctx.callKind)
@@ -189,6 +190,15 @@ final class PurityScan {
 /** Per-file resolved constants threaded through `PurityScan`'s recursive walk. */
 typedef PurityCtx = {
 	final shape: RefShape;
+
+	/**
+	 * The grammar's side-effect-free expression vocabulary, derived ONCE per file rather than per
+	 * node: `isPure` asks it at every node of every subtree it walks, and the vocabulary is a
+	 * function of `shape` alone. Run-scoped like the rest of this context — nothing here outlives
+	 * the file it was built for.
+	 */
+	final safeKinds: Array<String>;
+
 	final identKind: String;
 	final fieldAccessKind: String;
 	final callKind: String;

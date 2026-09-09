@@ -237,7 +237,7 @@ final class PreferSwitchExpressionAssignment implements Check {
 		if (name == null || declSpan == null) return null;
 		if (SourceText.isMultiDeclarator(decl, s.shape.localDeclContinuationKinds ?? [])) return null; // `var a, b;`
 		final init: Null<QueryNode> = decl.children.length == 1 ? decl.children[0] : null;
-		if (init != null && !MemberKinds.isSideEffectFree(init)) return null; // impure init cannot move to a default path
+		if (init != null && !MemberKinds.isSideEffectFree(init, s.shape)) return null; // impure init cannot move to a default path
 
 		if (!s.switchKinds.contains(switchStmt.kind) || switchStmt.children.length < 2) return null;
 		final switchSpan: Null<Span> = switchStmt.span;
@@ -357,7 +357,7 @@ final class PreferSwitchExpressionAssignment implements Check {
 		if (lvalue.kind == s.identKind && prev != null && s.mutableKinds.contains(prev.kind) && prev.name == lvalue.name) return false;
 		if (isField) {
 			final receiver: Null<QueryNode> = lvalue.children.length > 0 ? lvalue.children[0] : null;
-			if (receiver == null || !MemberKinds.isSideEffectFree(receiver)) return false;
+			if (receiver == null || !MemberKinds.isSideEffectFree(receiver, s.shape)) return false;
 		}
 		return !subjectTouchesLvalue(subject, lvalue, s);
 	}

@@ -613,7 +613,7 @@ final class JoinSingleUseLocal implements Check {
 			final kids: Array<QueryNode> = path[i].children;
 			for (c in kids) {
 				if (c == path[i + 1]) break;
-				if (!MemberKinds.isSideEffectFree(c) && !isTrivialPureRead(c, s)) return false;
+				if (!MemberKinds.isSideEffectFree(c, s.shape) && !isTrivialPureRead(c, s)) return false;
 			}
 		}
 		return true;

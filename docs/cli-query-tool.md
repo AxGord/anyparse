@@ -1557,12 +1557,13 @@ registry, which has to construct the plugin it selects (`cli/CliArgs.hx`), and o
 real remainder — `query/FormatConfigDiscovery.hx` reaches for
 `HaxeFormatConfigDiagnostics` to warn about a config it found. A kind name spelled as
 a STRING is the same coupling with none of the compiler's help, and there are
-**549 occurrences of 126 distinct projected ctor names across 62 files** of
-`src/anyparse/query` + `src/anyparse/check` (761 / 168 / 73 if names that are also
-ordinary English words — `Static`, `Public`, `Inline` — are counted; that inclusive
-triple is the reproducible one — a second reviewer's word list gave 560 / 129 / 61
-for the exclusive count, so the narrow number is a reading of one word list, not a
-measurement). The census is
+**495 occurrences of 130 distinct projected ctor names across 60 files** of
+`src/anyparse/query` + `src/anyparse/check` (609 / 147 / 70 if names that are also
+ordinary English words — `Static`, `Public`, `Inline` — are counted). BOTH triples are
+reproducible now: the exclusive one subtracts the 19 names of
+`HaxeQueryWalker.ambiguousProjectedKinds()`, which is GENERATED, not a hand-kept word
+list. Re-measure before quoting — this is a reading of `811365eb`, and S188's
+761 / 168 / 73 was a reading of `e11018f5`. The census is
 one command against `HaxeQueryWalker.projectedKinds()`, which is the same generated
 vocabulary `unit.query.RefShapeKindProjectionTest` compares the declared side
 against:
@@ -1576,11 +1577,14 @@ rather than in one sweep is that each one is a CONTRACT question — what does t
 consumer actually need to know about the grammar — not a rename. Two shapes of that
 question have been answered so far and are worth reading as precedent: the
 string-literal vocabulary (`apq lit` / `InertRegions`, above) and the metadata
-sigils (`apq cond --names`). The biggest remaining block is the operator /
-precedence tables — `MemberKinds.SAFE_KINDS`, `InlineMethod.PURE_ARG_KINDS` and
-`ATOMIC_ROOT_KINDS`, ~78 ctor names between them — each paired with a SUFFIX
-heuristic (`kind.endsWith('Lit')`, `kind.endsWith('StringExpr')`) that guesses the
-grammar's naming CONVENTION rather than reading a declaration.
+sigils (`apq cond --names`). The operator / precedence tables that used to be the
+biggest remaining block — `MemberKinds.SAFE_KINDS`, `InlineMethod.PURE_ARG_KINDS`
+and both `ATOMIC_ROOT_KINDS` — are gone as of S195: they derive from the shape's
+`pureOperatorKinds` and `maximalPrecedenceRootKinds`, which took
+`src/anyparse/query/InlineMethod.hx` to ZERO projected ctor spellings. The suffix
+heuristic they were paired with (`kind.endsWith('Lit')`, `kind.endsWith('StringExpr')`)
+was retired earlier, and `LiteralClassificationTest` holds the replacement to the
+grammar's own declaration in both directions.
 
 A hardcoded list is invisible to the declared-vs-projected differential, which is
 its own hazard: that fixture reads `RefShape` fields, so a name moved into the shape

@@ -118,6 +118,17 @@ class InlineMethodSliceTest extends Test {
 		assertRefused(source, 2, 11);
 	}
 
+	/**
+	 * A parameter re-bound by a multi-declarator CONTINUATION inside `E` shadows it. Until the
+	 * shadow vocabulary was read off the grammar, `VarMore` was absent from it and the substitution
+	 * rewrote the INNER binding's reads: `a + p` became `a + 3`, which parses and compiles.
+	 */
+	public function testRefuseShadowByDeclaratorContinuation(): Void {
+		final source: String = 'class C {\n\tfunction run():Int {\n\t\tfunction f(p:Int) return { var a = 1, p = 2; a + p; };\n'
+			+ '\t\treturn f(3) + f(4);\n\t}\n}';
+		assertRefused(source, 3, 12);
+	}
+
 	/** A cursor not on a function declaration / call is refused. */
 	public function testRefuseCursorNotOnFn(): Void {
 		final source: String = 'class C {\n\tvar n:Int = 0;\n}';

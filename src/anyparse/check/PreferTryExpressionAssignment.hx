@@ -250,7 +250,7 @@ final class PreferTryExpressionAssignment implements Check {
 		if (name == null || declSpan == null || trySpan == null) return null;
 		if (SourceText.isMultiDeclarator(decl, s.localDeclContinuationKinds)) return null; // `var a, b;`
 		final init: Null<QueryNode> = decl.children.length == 1 ? decl.children[0] : null;
-		if (init != null && !MemberKinds.isSideEffectFree(init)) return null; // an impure init cannot be dropped
+		if (init != null && !MemberKinds.isSideEffectFree(init, s.shape)) return null; // an impure init cannot be dropped
 
 		final ref: LvalueRef = { lvalue: null };
 		final targets: Array<Span> = [];
@@ -366,7 +366,7 @@ final class PreferTryExpressionAssignment implements Check {
 		final fieldAccessKind: Null<String> = s.fieldAccessKind;
 		if (fieldAccessKind == null || lvalue.kind != fieldAccessKind) return false;
 		final receiver: Null<QueryNode> = lvalue.children.length > 0 ? lvalue.children[0] : null;
-		return receiver != null && MemberKinds.isSideEffectFree(receiver);
+		return receiver != null && MemberKinds.isSideEffectFree(receiver, s.shape);
 	}
 
 	/**

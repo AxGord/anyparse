@@ -2953,6 +2953,50 @@ typedef RefShape = {
 	@:optional var atomChainKinds: Array<String>;
 
 	/**
+	 * Operator kinds that compute a value from their operands and do NOTHING ELSE — no store,
+	 * no increment, no call, no allocation. An expression subtree built from these plus the
+	 * grammar's constant literals, its identifier kind and its grouping kind may be DROPPED
+	 * (nothing observable is lost) or DUPLICATED (each copy computes the same value), which is
+	 * the one property `inline` / `inline-method` / `unused-local` all gate their rewrites on.
+	 *
+	 * Purity here is about the OPERATOR, not about what its operands turn out to be: the
+	 * consumers walk the whole subtree and every node in it must be admitted, so an operand
+	 * that is a call fails on the call's own kind rather than on its parent's.
+	 *
+	 * The enumeration is an AUDIT, and must stay one. A name-convention widening
+	 * (`kind.endsWith('Lit')`) stood in for the literal half of this vocabulary and readmitted
+	 * two allocating literals the grammar declares no constant; the measured cost is in
+	 * `LiteralClassificationTest`'s doc. So a grammar gaining a pure operator adds it HERE, and
+	 * a kind that is merely spelled like one stays out.
+	 *
+	 * Optional; unset leaves the derived vocabulary to literals, identifiers and grouping —
+	 * fewer rewrites, never a wrong one.
+	 */
+	@:optional var pureOperatorKinds: Array<String>;
+
+	/**
+	 * Expression kinds whose ROOT binds tighter than every operator the grammar has, so an
+	 * expression with such a root can be substituted into ANY operator context without
+	 * parentheses: no surrounding operator can bind into it and steal an operand.
+	 *
+	 * The complement of `atomExprKinds` rather than an extension of it. Those kinds are
+	 * SELF-DELIMITING — a paren around one is inert everywhere — while these carry
+	 * operand-bearing structure at their edges (a callee, a receiver, an index) and are
+	 * parenthesis-free only because nothing outranks them. Both answer "does this root need
+	 * wrapping", which is why the substituting ops read them together and `redundant-parens`,
+	 * whose question is the stricter self-delimiting one, reads only the first.
+	 *
+	 * A kind whose parenthesisation changes MEANING rather than precedence does not belong
+	 * here however tightly it binds: Haxe's `SafeFieldAccess` is left out because `(a?.b).c`
+	 * and `a?.b.c` disagree on what the null short-circuit covers, so dropping the parens
+	 * there is not a precedence-preserving edit.
+	 *
+	 * Optional; unset leaves the self-delimiting atoms as the only unwrapped roots — the
+	 * substitution then parenthesises more than it must, which is always safe.
+	 */
+	@:optional var maximalPrecedenceRootKinds: Array<String>;
+
+	/**
 	 * Groups of binary operator kinds that share ONE precedence tier and associate to
 	 * the LEFT. Within a group the grammar already parses `a OP1 b OP2 c` as
 	 * `(a OP1 b) OP2 c`, so a `parenKind` around the LEFT operand of a group member

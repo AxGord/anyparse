@@ -90,7 +90,7 @@ final class EmptyBlock implements Check {
 			if (span != null) flagged.push('${span.from}:${span.to}');
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
-		collectEmptyFixes(tree, null, null, source, blockKinds, flagged, edits);
+		collectEmptyFixes(tree, null, null, source, blockKinds, flagged, edits, plugin.refShape());
 		return CanonicalEdit.dropContainedEdits(edits);
 	}
 
@@ -113,14 +113,14 @@ final class EmptyBlock implements Check {
 	/** Walk `node` with its `parent` and `grandparent`, collecting safe deletions for flagged empty blocks. */
 	private static function collectEmptyFixes(
 		node: QueryNode, parent: Null<QueryNode>, grandparent: Null<QueryNode>, source: String, blockKinds: Array<String>,
-		flagged: Array<String>, edits: Array<{ span: Span, text: String }>
+		flagged: Array<String>, edits: Array<{ span: Span, text: String }>, shape: RefShape
 	): Void {
 		final span: Null<Span> = node.span;
 		if (span != null && parent != null && flagged.contains('${span.from}:${span.to}')) {
-			final edit: Null<{ span: Span, text: String }> = emptyBlockEdit(node, parent, grandparent, source, blockKinds);
+			final edit: Null<{ span: Span, text: String }> = emptyBlockEdit(node, parent, grandparent, source, blockKinds, shape);
 			if (edit != null) edits.push(edit);
 		}
-		for (c in node.children) collectEmptyFixes(c, node, parent, source, blockKinds, flagged, edits);
+		for (c in node.children) collectEmptyFixes(c, node, parent, source, blockKinds, flagged, edits, shape);
 	}
 
 	/**
@@ -134,7 +134,7 @@ final class EmptyBlock implements Check {
 	 * report-only.
 	 */
 	private static function emptyBlockEdit(
-		node: QueryNode, parent: QueryNode, grandparent: Null<QueryNode>, source: String, blockKinds: Array<String>
+		node: QueryNode, parent: QueryNode, grandparent: Null<QueryNode>, source: String, blockKinds: Array<String>, shape: RefShape
 	): Null<{ span: Span, text: String }> {
 		if (parent.kind != 'IfStmt') return null;
 		final nspan: Null<Span> = node.span;
@@ -148,7 +148,7 @@ final class EmptyBlock implements Check {
 		// Empty no-else `if (cond) {}` with a side-effect-free condition — safe to
 		// drop only when the `if` is a statement-list member, not a branch body.
 		if (
-			kids.length != 2 || kids[1] != node || !MemberKinds.isSideEffectFree(kids[0])
+			kids.length != 2 || kids[1] != node || !MemberKinds.isSideEffectFree(kids[0], shape)
 			|| (grandparent == null || !blockKinds.contains(grandparent.kind))
 		)
 			return null;
