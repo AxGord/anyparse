@@ -2549,6 +2549,62 @@
 			"find": "for (kind in shape.stringInterpInertSegmentKinds ?? []) out.push(kind);",
 			"replace": "for (kind in ['Dollar', 'LoneDollar']) out.push(kind);",
 			"note": "the inert segment kinds go back to Haxe ctor names inside the agnostic masker - the THIRD vocabulary of this class, the one the multi-pair arm on `collectLiterals` does not reach - so the segment split no longer follows the declaration"
+		},
+		{
+			"name": "M-TRIVGET-NO-NEGATION-DESCENT",
+			"type": "anyparse.check.TrivialGetter",
+			"method": "isMovableLiteral",
+			"find": "negation != null && node.kind == negation",
+			"replace": "false",
+			"note": "the one-level descent into the grammar's negation node goes away, so a written negative default (`-1`, `-1.5`) is read as an operator rather than as the literal it projects and the ctor-init is pushed onto the @:bypassAccessor arm - the exact asymmetry review measured beside a byte-equivalent `255`, which folded clean"
+		},
+		{
+			"name": "M-TRIVGET-INERT-SEGMENT-IGNORED",
+			"type": "anyparse.query.MemberKinds",
+			"method": "isInertStringSegmentKind",
+			"find": "|| (shape.stringInterpInertSegmentKinds ?? []).contains(kind)",
+			"replace": "",
+			"note": "the declared inert segments of an interpolating literal stop counting as text, so a lone-dollar and an escaped-dollar literal read as references and a ctor-init spelling either is treated as an external write - the fail-closed answer the grammar no longer needs, now that it names the two"
+		},
+		{
+			"name": "M-SAFE-KINDS-SUFFIX-STUB",
+			"type": "anyparse.query.MemberKinds",
+			"method": "isSafeKind",
+			"find": "return SAFE_KINDS.contains(kind);",
+			"replace": "return SAFE_KINDS.contains(kind) || kind.endsWith('Lit') || kind.endsWith('StringExpr');",
+			"note": "the retired name-convention widening comes back, readmitting every projected kind whose spelling ends in Lit / StringExpr - the regex and object literals among them, neither declared a constant by any grammar vocabulary - and `Inline`, which DUPLICATES an initializer it is told is side-effect-free, again turns one EReg into two and one empty object literal into two"
+		},
+		{
+			"name": "M-SAFE-KINDS-DROP-HEX",
+			"type": "anyparse.query.MemberKinds",
+			"method": "SAFE_KINDS",
+			"kind": "FinalMember",
+			"find": "\t'HexLit',\n",
+			"replace": "",
+			"note": "the hexadecimal literal leaves the side-effect-free enumeration, which is precisely the drift the suffix stub used to hide: with the stub gone the list IS the answer, so a kind the grammar declares constant and the list forgets is refused outright"
+		},
+		{
+			"name": "M-PURE-ARG-KINDS-SUFFIX-STUB",
+			"type": "anyparse.query.InlineMethod",
+			"method": "isPureKind",
+			"find": "return PURE_ARG_KINDS.contains(kind);",
+			"replace": "return PURE_ARG_KINDS.contains(kind) || kind.endsWith('Lit') || kind.endsWith('StringExpr');",
+			"note": "the same name-convention widening on the inline-method side: an allocating literal passed as an argument is called pure again and gets DUPLICATED once per use of the parameter it substitutes"
+		},
+		{
+			"name": "M-PLAIN-LITERAL-FROZEN",
+			"type": "anyparse.query.MemberKinds",
+			"method": "isPlainLiteral",
+			"force": "['IntLit', 'HexLit', 'FloatLit', 'BoolLit', 'NullLit', 'DoubleStringExpr'].contains(node.kind)",
+			"note": "the shared literal predicate freezes into this grammar's ctor names - wide enough for every fixture that reads the Haxe shape, which is why the derivation needs a vocabulary the engine cannot have frozen to be proved at all"
+		},
+		{
+			"name": "M-PLAIN-STRING-VALUE-NO-DELIMITERS",
+			"type": "anyparse.query.Lit",
+			"method": "plainStringValue",
+			"find": "final delimiter: Null<String> = (shape.stringLiteralDelimiters ?? [])[node.kind];",
+			"replace": "final delimiter: Null<String> = null;",
+			"note": "the declared quote characters stop being read, so a whole-span string literal's value comes back WITH its quotes - the arithmetic three consumers used to spell themselves, one of them assuming a one-character quote"
 		}
 	]
 }

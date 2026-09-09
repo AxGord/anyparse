@@ -101,6 +101,43 @@ final class Lit {
 		return out;
 	}
 
+	/**
+	 * The unquoted text of a string literal `node` whose content is entirely TEXT SEGMENTS, else null.
+	 *
+	 * The two spellings hold their content in different slots, which is the whole reason this is one
+	 * function and not a per-consumer switch: a segmented literal keeps its text in
+	 * `stringInterpTextKind` children and has no `name` of its own, while the other spelling's `name`
+	 * IS the raw source slice, quotes included, and only `stringLiteralDelimiters` says which quotes
+	 * to take off. A literal with no segment at all yields the empty string — it IS empty.
+	 *
+	 * Narrower than `MemberKinds.isPlainLiteral`, and measurably so: an INERT trigger segment (`$$`,
+	 * a lone `$`) is a constant that predicate admits, but it carries no `name` slot at all — its
+	 * bytes exist only in the source, which this function does not take — so a literal holding one
+	 * yields null here. That is also the answer a VALUE consumer wants: the bytes behind a lone `$`
+	 * re-emitted next to appended text would become an interpolation, the asymmetry
+	 * `HaxeStringFoldSupport.literalOf` states from the fold side.
+	 *
+	 * Escapes are NOT decoded, deliberately and for the same reason `unquoted` does not: both
+	 * spellings carry their escapes raw, so decoding one side would make the two answer differently.
+	 * A consumer comparing this against source text is therefore comparing like with like.
+	 */
+	public static function plainStringValue(node: QueryNode, shape: RefShape): Null<String> {
+		if ((shape.interpolatingStringKinds ?? []).contains(node.kind)) {
+			final text: StringBuf = new StringBuf();
+			for (segment in node.children) {
+				final name: Null<String> = segment.name;
+				if (segment.kind != shape.stringInterpTextKind || name == null) return null;
+				text.add(name);
+			}
+			return text.toString();
+		}
+		if (!(shape.stringLiteralKinds ?? []).contains(node.kind)) return null;
+		final name: Null<String> = node.name;
+		if (name == null) return null;
+		final delimiter: Null<String> = (shape.stringLiteralDelimiters ?? [])[node.kind];
+		return delimiter == null ? name : unquoted(name, delimiter);
+	}
+
 	public static function render(file: String, source: String, hits: Array<LitHit>, flat: Bool = false): String {
 		final buf: StringBuf = new StringBuf();
 		if (!flat && hits.length > 0) buf.add('$file:\n');

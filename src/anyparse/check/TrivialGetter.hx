@@ -997,20 +997,26 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	}
 
 	/**
-	 * Whether `node` is a compile-time literal safe to relocate to a field-initializer position.
-	 * A single-quoted string keeps its text in `Literal` CHILDREN and has no `name` of its own — only
-	 * the double-quoted spelling carries one — so the single-quoted arm asks the children; a `name`
-	 * read here is unreachable code, which is exactly how the interpolation guard was dead before.
-	 * The child test is a WHITELIST of the text kind on purpose: this predicate gates a rewrite, so a
-	 * segment kind the grammar grows later must read as non-movable rather than silently movable.
+	 * Whether `node` is a compile-time literal safe to relocate to a field-initializer position: an
+	 * allocation-free literal (`MemberKinds.isPlainLiteral`), or one under a single negation.
+	 *
+	 * The RHS travels as a VERBATIM span splice, so anything the grammar declares a constant literal
+	 * is relocatable — which is why the kinds are read off the shape rather than spelled here. Both
+	 * ways of spelling them by hand cost a correct rewrite: `HexLit` stood unlisted until review found
+	 * `_mask = 0xFF;` taking the `@:bypassAccessor` path a byte-equivalent `= 255;` did not, and a
+	 * `'$$'` / `'$'` segment read as non-text sent `_currency = '$';` the same way.
+	 *
+	 * The negation arm is one level and numeric-only, the shape `ConstantFieldScan.isScalarLiteral`
+	 * already uses: `-1` projects as `negationKind(IntLit 1)`, so without it every negative default
+	 * (`_mask = -1;`) took the bypass path while `255` folded clean. `- -1` is not admitted — one level
+	 * is what the projection produces for a written negative literal, and a deeper chain is not a
+	 * literal any grammar declares.
 	 */
 	private static function isMovableLiteral(node: QueryNode, shape: RefShape): Bool {
-		return switch node.kind {
-			case 'IntLit', 'HexLit', 'FloatLit', 'BoolLit', 'NullLit', 'DoubleStringExpr': true;
-			case 'SingleStringExpr':
-				node.children.foreach(c -> c.kind == shape.stringInterpTextKind);
-			case _: false;
-		}
+		final negation: Null<String> = shape.negationKind;
+		return negation != null && node.kind == negation
+			? node.children.length == 1 && (shape.numericLiteralKinds ?? []).contains(node.children[0].kind)
+			: MemberKinds.isPlainLiteral(node, shape);
 	}
 
 	/**

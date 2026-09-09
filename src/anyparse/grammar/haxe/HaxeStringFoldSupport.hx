@@ -63,6 +63,7 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 		'IdentExpr',
 		'IntLit',
 		'FloatLit',
+		'HexLit',
 		'BoolLit',
 		'NullLit',
 		'SingleStringExpr',
@@ -93,6 +94,18 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 		return 'Add';
 	}
 
+	/**
+	 * The literal's own quote plus its RAW inner slice — the text a caller re-emits verbatim.
+	 *
+	 * `LoneDollar` is excluded where `Dollar` is admitted, and the asymmetry is the whole point:
+	 * the content travels as raw bytes, so a raw `$` re-emitted next to appended text becomes an
+	 * interpolation (`'$' + 'x'` folded to `'$x'` reads `x` as a name), while the escaped `$$`
+	 * survives any concatenation unchanged. `segmentsOf` states the same rule from the other side —
+	 * it NORMALISES both spellings to the escape, which is why the decomposition is a fixed point
+	 * and this narrower answer is not. So `stringInterpInertSegmentKinds`, which names the two
+	 * together, is deliberately NOT read here: it answers "carries no reference", and the question
+	 * here is "survives re-emission", which only one of the two does.
+	 */
 	public function literalOf(node: QueryNode, source: String): Null<StringLiteral> {
 		final span: Null<Span> = node.span;
 		return span == null || span.to - span.from < 2

@@ -162,6 +162,74 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 		Assert.isTrue(fixed.indexOf('@:bypassAccessor label = \'hi $$name\'') >= 0);
 	}
 
+	/**
+	 * A NEGATIVE numeric ctor-init relocates. `-1` projects as `negationKind(IntLit 1)`, so a
+	 * predicate reading only the literal kinds saw an operator node and pushed the write onto the
+	 * `@:bypassAccessor` arm — measured in review beside a byte-equivalent `255`, which folded clean.
+	 * Both spellings the projection produces are asserted: the integer and the float.
+	 *
+	 * CONTROL for the negation descent. KILLED by arm `M-TRIVGET-NO-NEGATION-DESCENT`.
+	 */
+	@:pin('control')
+	@:killer('M-TRIVGET-NO-NEGATION-DESCENT')
+	public function testShapeACtorInitNegativeNumberMoveFix(): Void {
+		for (init in ['-1', '-1.5']) {
+			final src: String = 'class C {\n\tpublic var mask(get, set):Float;\n\tprivate var _mask:Float;\n\tpublic function new() {\n'
+				+ '\t\t_mask = $init;\n\t}\n\tfunction get_mask():Float return _mask;\n\tfunction set_mask(v:Float):Float {\n'
+				+ '\t\t_mask = v;\n\t\ttrace(v);\n\t\treturn _mask;\n\t}\n}';
+			final fixed: String = fixedText(src);
+			Assert.isTrue(fixed.indexOf('mask(default, set):Float = $init') >= 0, 'a negative literal must relocate: $init');
+			Assert.isTrue(fixed.indexOf('@:bypassAccessor') == -1, 'no write is left to bypass for $init');
+		}
+	}
+
+	/**
+	 * A negation over anything that is NOT a literal stays on the bypass arm — the descent is one
+	 * level over the numeric vocabulary, not "an operator with one child".
+	 */
+	public function testShapeACtorInitNegatedIdentifierStaysBypass(): Void {
+		final src: String = 'class C {\n\tpublic var mask(get, set):Int;\n\tprivate var _mask:Int;\n\tpublic function new(seed:Int) {\n'
+			+ '\t\t_mask = -seed;\n\t}\n\tfunction get_mask():Int return _mask;\n\tfunction set_mask(v:Int):Int {\n'
+			+ '\t\t_mask = v;\n\t\ttrace(v);\n\t\treturn _mask;\n\t}\n}';
+		Assert.isTrue(fixedText(src).indexOf('@:bypassAccessor mask = -seed') >= 0);
+	}
+
+	/**
+	 * A single-quoted literal whose only segment is an INERT trigger relocates: `'$'` projects one
+	 * `LoneDollar` child and `'$$'` one `Dollar`, neither of which is the plain-text segment kind, so
+	 * a text-only whitelist read `_currency = '$';` as an external write. The grammar now declares the
+	 * two as `stringInterpInertSegmentKinds`, which makes this a read rather than a judgement — and the
+	 * splice is VERBATIM, so the relocated token is the source token, escape and all.
+	 *
+	 * CONTROL for the inert-segment read. KILLED by arm `M-TRIVGET-INERT-SEGMENT-IGNORED`.
+	 */
+	@:pin('control')
+	@:killer('M-TRIVGET-INERT-SEGMENT-IGNORED')
+	public function testShapeACtorInitInertDollarSegmentMoveFix(): Void {
+		for (init in ['\'$$\'', '\'$$$$\'']) {
+			final src: String = 'class C {\n\tpublic var cur(get, set):String;\n\tprivate var _cur:String;\n\tpublic function new() {\n'
+				+ '\t\t_cur = $init;\n\t}\n\tfunction get_cur():String return _cur;\n\tfunction set_cur(v:String):String {\n'
+				+ '\t\t_cur = v;\n\t\ttrace(v);\n\t\treturn _cur;\n\t}\n}';
+			final fixed: String = fixedText(src);
+			Assert.isTrue(fixed.indexOf('cur(default, set):String = $init') >= 0, 'an inert-segment literal must relocate: $init');
+			Assert.isTrue(fixed.indexOf('@:bypassAccessor') == -1, 'no write is left to bypass for $init');
+		}
+	}
+
+	/**
+	 * A HEX ctor-init relocates. The gap this closes is the one the whole vocabulary differential
+	 * exists for: `HexLit` stood unlisted while `IntLit` was listed, so `_mask = 0xFF;` took the
+	 * bypass arm and `_mask = 255;` — the same value — folded clean.
+	 */
+	public function testShapeACtorInitHexMoveFix(): Void {
+		final src: String = 'class C {\n\tpublic var mask(get, set):Int;\n\tprivate var _mask:Int;\n\tpublic function new() {\n'
+			+ '\t\t_mask = 0xFF;\n\t}\n\tfunction get_mask():Int return _mask;\n\tfunction set_mask(v:Int):Int {\n'
+			+ '\t\t_mask = v;\n\t\ttrace(v);\n\t\treturn _mask;\n\t}\n}';
+		final fixed: String = fixedText(src);
+		Assert.isTrue(fixed.indexOf('mask(default, set):Int = 0xFF') >= 0);
+		Assert.isTrue(fixed.indexOf('@:bypassAccessor') == -1);
+	}
+
 	public function testBothTrivialCollapsesToPlainVar(): Void {
 		final vs: Array<Violation> = violations(cls(
 			'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n'
