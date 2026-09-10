@@ -68,3 +68,8 @@ decided the question; it may not become a record of runs.
   starts its line mid-clause, this project writes emphasis in upper case, and the parenthetical
   and dash-introduced readings are the larger half; the discriminator is clause POSITION —
   `c35ae45e`
+- the renamed clone reading was to CONTAIN the exact one finding for finding → it contains it by
+  REGION only: normalization extends a maximal run backwards and grows a bucket until the
+  path-earliest anchor changes file, so an exact finding's `(file, line, col)` can be absent while
+  the clone is reported at a wider span — compare the two rules by region — the commit that
+  added `duplicate-code-renamed`

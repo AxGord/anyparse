@@ -303,6 +303,10 @@ final class Linter {
 			// switch, so it contains theirs whenever both fire on the same one.
 			new UnnecessarySwitch(),
 			new DuplicateCode(),
+			// Its RENAMED reading, and by construction not disjoint from it: every exact clone is
+			// also a clone under renaming, so the two rules report the same site twice on purpose —
+			// one population per rule id. Both are report-only, so registry order carries no meaning.
+			new DuplicateCodeRenamed(),
 			new ListenerSymmetry(),
 			new StringLiteralDup(),
 			// The TYPE-level twin of `string-literal-dup`, and the two can never claim the same

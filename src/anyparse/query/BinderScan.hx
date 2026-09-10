@@ -156,7 +156,7 @@ final class BinderScan {
 	 * Gate only the match.
 	 */
 	public static function enclosingFunctionSubtree(tree: QueryNode, cursor: Int, shape: RefShape): QueryNode {
-		final fnKinds: Array<String> = (shape.functionKinds ?? []).concat(shape.lambdaKinds ?? []).concat(shape.localFunctionKinds ?? []);
+		final fnKinds: Array<String> = bindingScopeKinds(shape);
 		var best: QueryNode = tree;
 		function walk(node: QueryNode): Void {
 			final span: Null<Span> = node.span;
@@ -232,6 +232,34 @@ final class BinderScan {
 			for (c in node.children) walk(c);
 		}
 		walk(tree);
+		return out;
+	}
+
+	/**
+	 * Every node kind that OWNS a local binding scope — a function, a lambda, a local function.
+	 * A consumer gathering the names bound around a point takes the OUTERMOST of these that
+	 * contains it: an inner scope's bindings already lie inside the outer one's subtree.
+	 */
+	public static function bindingScopeKinds(shape: RefShape): Array<String> {
+		return (shape.functionKinds ?? []).concat(shape.lambdaKinds ?? []).concat(shape.localFunctionKinds ?? []);
+	}
+
+	/**
+	 * Every name `root`'s subtree BINDS — the `name` of each `binderKinds` node plus every `case`
+	 * pattern capture, which the grammar spells with no binder node of its own. The two halves of
+	 * this class's question answered together, for a consumer that has to tell a local binding from
+	 * a member or a type by name alone. Deduped.
+	 */
+	public static function boundNames(root: QueryNode, shape: RefShape): Array<String> {
+		final kinds: Array<String> = binderKinds(shape);
+		final out: Array<String> = [];
+		function walk(node: QueryNode): Void {
+			final name: Null<String> = node.name;
+			if (name != null && kinds.contains(node.kind) && !out.contains(name)) out.push(name);
+			for (child in node.children) walk(child);
+		}
+		walk(root);
+		for (name in casePatternCaptures(root, shape)) if (!out.contains(name)) out.push(name);
 		return out;
 	}
 

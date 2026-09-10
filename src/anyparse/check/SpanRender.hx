@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -47,23 +48,24 @@ final class SpanRender {
 	 * whose subtree covers `[from, to)`; bytes of the range that lie in no leaf of it are treated
 	 * as structure and their whitespace collapses.
 	 */
-	public static function renderSpan(source: String, from: Int, to: Int, root: QueryNode): String {
-		final tokens: Array<Span> = [];
-		collectLeafSpans(root, tokens);
-		tokens.sort((a, b) -> a.from - b.from);
+	public static function renderSpan(source: String, from: Int, to: Int, root: QueryNode, ?overrides: Array<SpanOverride>): String {
+		final parts: Array<RenderPart> = renderParts(root, overrides ?? []);
 		final buf: StringBuf = new StringBuf();
 		var emitted: Bool = false;
 		var pendingSpace: Bool = false;
+		inline function separate(): Void {
+			if (pendingSpace && emitted) buf.addChar(' '.code);
+			pendingSpace = false;
+		}
 		var next: Int = 0;
 		var i: Int = from;
 		while (i < to) {
-			while (next < tokens.length && tokens[next].to <= i) next++;
-			final inToken: Bool = next < tokens.length && tokens[next].from <= i;
-			if (inToken) {
-				final end: Int = tokens[next].to < to ? tokens[next].to : to;
-				if (pendingSpace && emitted) buf.addChar(' '.code);
-				pendingSpace = false;
-				buf.add(source.substring(i, end));
+			while (next < parts.length && parts[next].to <= i) next++;
+			final part: Null<RenderPart> = next < parts.length ? parts[next] : null;
+			if (part != null && part.from <= i) {
+				final end: Int = part.to < to ? part.to : to;
+				separate();
+				buf.add(part.text ?? source.substring(i, end));
 				emitted = true;
 				i = end;
 			} else {
@@ -71,8 +73,7 @@ final class SpanRender {
 				if (c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code) {
 					pendingSpace = true;
 				} else {
-					if (pendingSpace && emitted) buf.addChar(' '.code);
-					pendingSpace = false;
+					separate();
 					buf.addChar(c);
 					emitted = true;
 				}
@@ -92,4 +93,44 @@ final class SpanRender {
 		if (span != null) out.push(span);
 	}
 
+	/**
+	 * The spans `renderSpan` walks, in document order: every LEAF of `root` except one an override
+	 * replaces whole, plus every override in place. A part with a null `text` is copied from the
+	 * source; one carrying text is emitted instead of the bytes it covers.
+	 */
+	private static function renderParts(root: QueryNode, overrides: Array<SpanOverride>): Array<RenderPart> {
+		final tokens: Array<Span> = [];
+		collectLeafSpans(root, tokens);
+		final parts: Array<RenderPart> = [
+			for (token in tokens) if (!replaced(overrides, token)) { from: token.from, to: token.to, text: null }
+		];
+		for (hole in overrides) parts.push({ from: hole.span.from, to: hole.span.to, text: hole.text });
+		parts.sort((a, b) -> a.from - b.from);
+		return parts;
+	}
+
+	/** Whether an override covers `token` whole, in which case the token's own bytes are not emitted. */
+	private static function replaced(overrides: Array<SpanOverride>, token: Span): Bool {
+		return overrides.exists(hole -> hole.span.from <= token.from && token.to <= hole.span.to);
+	}
+
+}
+
+/**
+ * One stretch of a rendered span: the bytes `[from, to)` and, when non-null, the text emitted in
+ * their place. A null `text` is a token whose interior is copied verbatim.
+ */
+typedef RenderPart = {
+	var from: Int;
+	var to: Int;
+	var text: Null<String>;
+}
+
+/**
+ * A stretch of source and the text `renderSpan` emits in its place — the caller's way of blanking
+ * a name out of a comparison key without touching the bytes around it. Spans must not overlap.
+ */
+typedef SpanOverride = {
+	var span: Span;
+	var text: String;
 }

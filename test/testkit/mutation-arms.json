@@ -950,18 +950,24 @@
 		{
 			"name": "M-RENDER-SPAN-TOKENS",
 			"type": "anyparse.check.SpanRender",
-			"method": "renderSpan",
-			"find": "final inToken: Bool = next < tokens.length && tokens[next].from <= i;",
-			"replace": "final inToken: Bool = false;",
+			"method": "renderParts",
+			"force": "[]",
 			"note": "no byte is ever inside a token, so the display renderer collapses whitespace INSIDE a string literal again and a finding advertises a call the fix would not write"
 		},
 		{
 			"name": "M-DUP-CODE-NORM-KEY",
 			"type": "anyparse.check.DuplicateCode",
 			"method": "normalizeStmt",
-			"find": "return { text: SpanRender.renderSpan(source, span.from, span.to, node), span: span, nonWs: normalized.nonWs };",
-			"replace": "return { text: normalized.norm, span: span, nonWs: normalized.nonWs };",
+			"find": "text: SpanRender.renderSpan(ctx.source, span.from, span.to, node, holes),",
+			"replace": "text: normalized.norm,",
 			"note": "statements compare on the whitespace-collapsed norm again, so two runs differing only inside a string literal bucket into one three-gram and are reported as a clone"
+		},
+		{
+			"name": "M-DUP-CODE-RENAMED-BINDERS",
+			"type": "anyparse.query.BinderScan",
+			"method": "boundNames",
+			"force": "[]",
+			"note": "no name is a local binding any more, so the renamed reading normalizes nothing and degenerates into the exact one — two copies differing only in what their locals are called stop being a clone"
 		},
 		{
 			"name": "M-EXTRACT-REPEAT-RENDER-SPLIT",
