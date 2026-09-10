@@ -95,7 +95,7 @@ final class EnglishComments implements Check implements NoAutofix {
 				span: new Span(at, at + 1),
 				rule: 'english-comments',
 				severity: Severity.Info,
-				message: 'non-Latin letter in comment: ${excerpt(source, at, tok.to)}'
+				message: 'non-Latin letter in comment: ${SourceComments.excerptLine(source, at, tok.to, EXCERPT_LEN)}'
 			});
 		}
 	}
@@ -109,17 +109,6 @@ final class EnglishComments implements Check implements NoAutofix {
 	/** Whether code unit `c` falls in one of the flagged non-Latin letter blocks. */
 	private static function isNonLatinLetter(c: Int): Bool {
 		return c >= FIRST_NON_LATIN && BLOCKS.exists(b -> c >= b.lo && c <= b.hi);
-	}
-
-	/** A single-line excerpt of up to `EXCERPT_LEN` code units from `at`, tabs/newlines flattened to spaces. */
-	private static function excerpt(source: String, at: Int, to: Int): String {
-		final end: Int = at + EXCERPT_LEN < to ? at + EXCERPT_LEN : to;
-		final buf: StringBuf = new StringBuf();
-		for (i in at ... end) {
-			final c: Int = source.fastCodeAt(i);
-			buf.addChar(c == '\n'.code || c == '\r'.code || c == '\t'.code ? ' '.code : c);
-		}
-		return buf.toString().trim();
 	}
 
 }

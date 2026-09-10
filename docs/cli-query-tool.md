@@ -934,6 +934,29 @@ The gap it closes is that the writer owns every CODE line's width and re-emits a
 
 **A DELETION does not own a paragraph separator, on either side of its match.** A blank comment line folds into the same single space an ordinary break does, so a literal find reads straight across one; that has been refused for a REPLACEMENT since the reflow shipped, but a deletion was exempt on the reading that it takes its own separator with it. It does not own this one: the blank line in front of a list's FIRST item is the lead's boundary with the list, and deleting ` - first bullet` off it glued the rest of the list onto the lead — silently, since the join lands inside the width. `interiorParagraphBreak` now governs both, with the same two ways out the message already named (narrow the find to one paragraph, or use `--regex`, which matches the raw body). Adjacency is still a deletion's to take: a find spelling the break AFTER its match (`- first bullet `) removes the item's whole line rather than leaving an empty gutter, and the separator above it stays.
 
+### `doc-measurement-claim`: a reading of a tree is not a comment
+
+`apq lint --rule doc-measurement-claim` reports a comment carrying a READING rather than a contract — a number with a unit of time, an abbreviated commit hash, a slice or backlog id, a before-and-after pair of numbers, the recording verb standing beside a number, or a sentence pinning its claim to the state of this repository. It is `DefaultOff` and `Info`: what belongs in a comment is a project's own policy, so a project opts in through `apqlint.json` (`"doc-measurement-claim": { "enabled": true }`).
+
+The rule exists because a reading describes one tree at one moment while the code it sits above outlives that moment. The commit message and the campaign ledger keep the numbers; `docs/decisions.md` keeps a refuted hypothesis in one line; the comment keeps the conclusion in a phrase.
+
+**A number is never a marker on its own.** A doc naming the code's own constant — a minimum statement count, a configured maximum, a language floor — states a contract, and a rule that read digits would report every one of them. Each shape asks for something a contract does not have: the unit beside the number, an identifier only a repository issues, a delta between two values, or the verb with a number on its line. The same construction is why a fixture's own claim about its base commit needs no exception in the code: it carries no unit, no id and no hash. A commit hash written beside one IS reported, and deliberately — the hash is the half that goes stale.
+
+**Two exemptions.** A marker inside a path or a URL, and one on a doc-tag line (`@see`, `@link`), point AT a record instead of carrying one — which is exactly what the rule asks prose to leave behind. And a string literal is never visited at all: the seam is the comment scan, so a hash or a duration inside a fixture's source is data.
+
+Report-only (`NoAutofix`): lifting the numbers out leaves a sentence only its author can finish.
+
+### `doc-length`: past a point, a contract has become a document
+
+`apq lint --rule doc-length` reports a DOC BLOCK longer than the maximum the project declares — `apqlint.json` (`"doc-length": { "max": N }`), with the check's own default of 40 standing for a project that declares none. `DefaultOff` and `Info`, for the reason `comment-width` is: the length at which prose stops being a contract is a project's judgement, not this rule's.
+
+Only a doc block is measured. A `//` run and a plain `/* … */` banner belong to the statements they stand over and are left alone whatever their length, so a reader always knows which answer applies to what. There is no comment-to-code ratio here and there will not be one: a share is a metric, and a metric names no block to rewrite.
+
+The message quotes the block's own length, so the rule declares `VolatileMessage` and masks that number out of the finding identity — a block that gained a line is the same standing finding, while a project that shortened its contract has changed one.
+
+Report-only (`NoAutofix`): cutting prose by length keeps whichever sentences came first, and the contract is rarely one of them.
+
+
 ### `apq rewrite`: a template is a TREE, so it is spliced as one
 
 `apq rewrite <file> <pattern> <replacement>` matches with `search` syntax and splices

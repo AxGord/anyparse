@@ -245,6 +245,11 @@ final class Linter {
 			// comment's CHARACTERS, this one a comment line's WIDTH. Both are report-first on trivia
 			// no other rule measures, and neither can claim the other's finding.
 			new CommentWidth(),
+			// Beside `comment-width` and `english-comments`: these four read a comment and nothing else
+			// in the registry does. Disjoint by what each reads — the CHARACTERS, a line's WIDTH, prose
+			// that dates, a block's LENGTH — so no comment is two of these findings.
+			new DocMeasurementClaim(),
+			new DocLength(),
 			new PreferComprehension(),
 			// Registry order is free: this rule claims an empty-array binding followed by PUSH
 			// STATEMENTS, `prefer-comprehension` one followed by a `for` / `while` LOOP — the
