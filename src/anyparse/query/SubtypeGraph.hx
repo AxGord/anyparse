@@ -18,7 +18,8 @@ using Lambda;
  *
  * Split out of `SymbolIndex`, which keeps the layer BELOW: which files declare a name, and which
  * declaration a written type reference denotes. This layer asks that question through `_index`
- * and adds nothing to it. The two maps it caches are instance state on the run-scoped index — the
+ * and adds nothing to it. The adjacency record it caches (three keyings of the same edges: simple name,
+ * declaration, unresolved) and the supertype union are instance state on the run-scoped index — the
  * index is immutable after construction, so one build per instance is safe and nothing here is
  * process-scoped.
  */
@@ -435,7 +436,10 @@ final class SubtypeGraph {
 	 * two distinct types sharing one expand once, which is what terminates it — while `visit`
 	 * sees every declaration, since each carries its own file and its own members and skipping
 	 * the second one's would silently drop evidence. `owner` itself is visited whenever some
-	 * type in the closure names it; a collector that must exclude it says so.
+	 * type in the closure names it; a collector that must exclude it says so. With `fromFile` the
+	 * walk starts from the DECLARATION that file holds and follows the declaration-keyed adjacency
+	 * (`eachSubtypeOfDecl`), so a namesake in another package no longer lends its subtypes; without
+	 * it the simple-name walk above is the whole answer, unchanged.
 	 *
 	 * The shared seat of `subtypeMemberNames` and `subtypeFiles`, which differ only in what they
 	 * collect. `subtypeDeclMatches` keeps its own copy: it answers by RETURNING out of the walk.
@@ -522,9 +526,11 @@ final class SubtypeGraph {
 	 * skip-parse involved — and every consumer of that answer is a VETO: `unused-private` then
 	 * proposed deleting `Util`'s private constructor, which `Bad`'s `super()` calls (measured:
 	 * `--fix` deleted it, and the tree stopped compiling with `Util does not have a constructor`).
-	 * Filing the subtype under both names is the conservative direction for all four consumers —
-	 * `hasSubtype`, `subtypeDeclMatches`, `subtypeMemberNames`, `familyDeclaresEveryMember` — so
-	 * the change can only ever WITHHOLD, never propose.
+	 * Filing the subtype under both names is the conservative direction for every consumer that asks WITHOUT
+	 * a file — `subtypeDeclMatches`, `familyDeclaresEveryMember`, and `hasSubtype` / `subtypeMemberNames`
+	 * when no `fromFile` is passed — so for them the alias walk can only ever WITHHOLD, never propose; a
+	 * caller that passes the owner's declaring file reads the declaration-keyed bucket plus the unresolved
+	 * one instead, and THAT path can propose where the simple-name key used to withhold (S200).
 	 *
 	 * Four alias shapes are closed and the walk is transitive over all of them, in either
 	 * order: one hop (`typedef U = Util`), a chain (`typedef A = B; typedef B = Util`), a
@@ -603,12 +609,20 @@ final class SubtypeGraph {
 		if (built != null) return built;
 		final adjacency: SubtypeAdjacency = { simple: [], qualified: [], unresolved: [] };
 		final aliases: Map<String, Array<String>> = aliasEdges();
+		// A per-directory `import.hx` applies to every module in that directory and below and
+		// OUTRANKS a same-package type (compiler-verified), and this layer does not read it — so a
+		// supertype written under one cannot be pinned to a declaration and stays unresolved.
+		final importHxDirs: Array<String> = [
+			for (f in _files) if (f.file.substr(f.file.lastIndexOf('/') + 1) == 'import.hx')
+				f.file.substring(0, f.file.lastIndexOf('/') + 1)
+		];
 		for (fi in _files) {
 			// An `import pkg.Util as U;` binds `U` in THIS file and nowhere else, so its hop is
 			// read off the file's own imports rather than from the project-wide `aliasEdges` a
 			// `typedef` earns. It is consulted inside the walk, not only on the written name, so
 			// the two alias kinds compose in either order.
 			final importAliases: Map<String, Array<String>> = TypeRefIndex.importAliasEdges(fi, true);
+			final pinnable: Bool = !importHxDirs.exists(d -> fi.file.substr(0, d.length) == d);
 			for (t in fi.types) {
 				// A type naming one simple name TWICE (two differently-qualified supertypes reducing to
 				// it) lands in that bucket once — `supertypes.contains` reported it once per scan too.
@@ -625,7 +639,9 @@ final class SubtypeGraph {
 					// Only the WRITTEN reference carries a path to resolve, and it is filed per
 					// reference rather than per denotation for the reason above; every name the alias
 					// walk adds below is reached by simple name alone and stays in the unresolved half.
-					final direct: Null<ResolvedType> = i < t.supertypesRaw.length ? _refs.resolveTypeRef(t.supertypesRaw[i], fi) : null;
+					final direct: Null<ResolvedType> = pinnable && i < t.supertypesRaw.length
+						? _refs.resolveTypeRef(t.supertypesRaw[i], fi)
+						: null;
 					if (direct != null)
 						fileSubtypeOnce(adjacency.qualified, _refs.seenKey(direct), qualifiedKeys, fi, t);
 					else
