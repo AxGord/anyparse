@@ -190,7 +190,7 @@ final class Patch {
 			watched.push({
 				region: new Span(shiftedEnd(sorted, end), shiftedEnd(sorted, ownerSpan.to)),
 				owner: owner,
-				declared: declsInRegion(tree, node, new Span(end, ownerSpan.to))
+				declared: declsInRegion(tree, node, new Span(end, containingEnd(sorted, ownerSpan.to)))
 			});
 		}
 		if (watched.length == 0) return null;
@@ -264,6 +264,18 @@ final class Patch {
 			if (to > at) shifted += to - at;
 		}
 		return shifted;
+	}
+
+	/**
+	 * The ORIGINAL end of what `shiftedEnd` maps `at` onto: the end of the edit CONTAINING `at`, or
+	 * `at` itself when no edit does. `shiftedEnd` answers the end of that edit's REPLACEMENT, so the
+	 * baseline count has to be taken over the bytes that replacement consumed — otherwise a fragment
+	 * that renames the documented declaration and merely CARRIES a following sibling reads as a
+	 * region that grew from one declaration to two.
+	 */
+	private static function containingEnd(sorted: Array<{ span: Span, text: String }>, at: Int): Int {
+		for (edit in sorted) if (edit.span.from < at && edit.span.to > at) return edit.span.to;
+		return at;
 	}
 
 	/**

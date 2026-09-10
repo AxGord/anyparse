@@ -873,6 +873,19 @@ class PatchSliceTest extends Test {
 		}
 	}
 
+	/**
+	 * A fragment that renames the documented declaration and merely CARRIES the next one along
+	 * applies: the bytes the block documents held ONE declaration before the edit and hold one after,
+	 * whatever else the same fragment happens to cover.
+	 */
+	public function testARenameInAFragmentCarryingTheNextDeclarationApplies(): Void {
+		final source: String = 'class C {\n\t/**\n\t * About b.\n\t */\n\tfunction b() {}\n\n\tfunction z() {}\n}\n';
+		final expected: String = 'class C {\n\t/**\n\t * About b.\n\t */\n\tfunction bee() {}\n\n\tfunction z() {}\n}\n';
+		assertPatch(
+			source, BySelector('ClassDecl:C'), 'function b() {}\n\nfunction z() {}', 'function bee() {}\n\nfunction z() {}', expected
+		);
+	}
+
 	/** The refusal text for `pairs`, or a failure when the call unexpectedly succeeded. */
 	private function refusalMessage(source: String, pairs: Array<{ oldText: String, newText: String }>): String {
 		switch Patch.patchNodeMany(source, BySelector('FnMember:f'), pairs, false, new HaxeQueryPlugin()) {
