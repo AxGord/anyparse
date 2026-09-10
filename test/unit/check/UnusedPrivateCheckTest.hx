@@ -886,6 +886,40 @@ class UnusedPrivateCheckTest extends Test {
 		Assert.equals(0, check.fix(declSource, vs, plugin, SymbolIndex.build(report, plugin)).length);
 	}
 
+	/**
+	 * The constructor arm's subtype gate is keyed by the supertype's DECLARATION, so another
+	 * package's `Sub extends Exception` — whose `Exception` is that package's own — no longer
+	 * shields `pkg.Exception`s private constructor: it is reported exactly as its twin
+	 * `pkg.Zzzunique`s is, while `pkg.Base`, which `other.Deriv` really extends, keeps its own.
+	 * Before the split both `Exception` declarations answered one simple-name bucket and the twin
+	 * silently lost the finding.
+	 */
+	@:pin('control')
+	@:killer('M-SUBTYPE-KEY-SIMPLE-NAME')
+	public function testNamesakeSubtypeNoLongerShieldsAPrivateConstructor(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/Base.hx', source: utilityClass('pkg', 'Base') },
+			{ file: 'pkg/Exception.hx', source: utilityClass('pkg', 'Exception') },
+			{ file: 'pkg/Zzzunique.hx', source: utilityClass('pkg', 'Zzzunique') },
+			{ file: 'other/Exception.hx', source: 'package other;\n\nclass Exception {\n\n\tpublic function new() {}\n\n}\n' },
+			{
+				file: 'other/Sub.hx',
+				source: 'package other;\n\nclass Sub extends Exception {\n\n\tpublic function new() { super(); }\n\n}\n'
+			},
+			{
+				file: 'other/Deriv.hx',
+				source: 'package other;\n\nclass Deriv extends pkg.Base {\n\n\tpublic function new() { super(); }\n\n}\n'
+			}
+		];
+		final reported: Array<String> = [
+			for (v in new UnusedPrivate().run(files, new HaxeQueryPlugin())) if (v.message.contains('constructor')) v.file
+		];
+		Assert.equals(
+			'pkg/Exception.hx,pkg/Zzzunique.hx', reported.join(','),
+			'the twin named like another package\'s class keeps its finding; the type really subtyped loses it'
+		);
+	}
+
 	/** `run` reports the dead member and `fix` declines it — the shape every class-annotation gate has. */
 	private function assertReportedButNotDeleted(src: String): Void {
 		final check: UnusedPrivate = new UnusedPrivate();
@@ -996,6 +1030,11 @@ class UnusedPrivateCheckTest extends Test {
 			}
 		];
 		return violations(files).filter(v -> v.file == 'pkg/First.hx' || v.file == 'pkg/Second.hx').length;
+	}
+
+	/** A never-instantiated all-static utility class in `pkg` named `name`, with the private empty constructor the arm reports. */
+	private function utilityClass(pkg: String, name: String): String {
+		return 'package $pkg;\n\nclass $name {\n\n\tpublic static final K: Int = 1;\n\n\tprivate function new() {}\n\n}\n';
 	}
 
 }

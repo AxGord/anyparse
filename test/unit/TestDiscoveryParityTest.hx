@@ -1100,6 +1100,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PossibleNullDereferenceTest#testFieldPathMapReceiverFlagged :: control :: M-NULLABLE-NO-CHAIN',
 			'unit.check.PossibleNullDereferenceTest#testNullWrappedMapFlagged :: control :: M-NULLABLE-WRAPPER-OPAQUE',
 			'unit.check.PreferCaseGuardCheckTest#testInScopeEnumNotFlagged :: control :: M-DECLARINGFILES-EMPTY',
+			'unit.check.PreferEnumAbstractCheckTest#testFixRefusalFollowsTheDeclarationNotTheSimpleName :: control :: '
+				+ 'M-SUBTYPE-KEY-SIMPLE-NAME',
 			'unit.check.PreferEnumAbstractCheckTest#testFixRefusesAnRttiHomonym :: control :: M-RTTI-FALSE',
 			'unit.check.PreferEnumAbstractCheckTest#testFixRefusesSubtypedContainer :: control :: M-HASSUBTYPE-FALSE',
 			'unit.check.PreferFinalAbstractMethodCheckTest#testAbstractFieldNoCallStillFlagged :: control :: M-PFF-CALLSCAN-ALWAYS',
@@ -1124,7 +1126,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-PIEC-SPINE-CLAIM-ANY',
 			'unit.check.PreferIfExpressionChainCheckTest#testChainWithNoBooleanLeafStillFlagged :: control :: M-PIEC-SPINE-CLAIM-ANY',
 			'unit.check.PreferIndexAccessCheckTest#testObjectLiteralSetValueNotFlagged :: control :: M-PIA-OBJLIT-SET-FLAGGED',
-			'unit.check.PreferInlineCheckTest#testSimpleNameCollisionCostsTheTwinNamedLikeALibraryType :: control :: '
+			'unit.check.PreferInlineCheckTest#testQualifiedSupertypeKeySplitsTheTwinFromTheRealSubtypesOwner :: control :: '
 				+ 'M-INLINE-SUBTYPE-REPORT-INDEX',
 			'unit.check.PreferStaticExtensionCheckTest#testGuardedImportRunGetsNoSecondUsing :: control :: M-GUARDED-USING-ABSENT',
 			'unit.check.PreferStaticExtensionCheckTest#testGuardedImportRunRefusalNamesTheRegion :: control :: M-GUARDED-USING-ABSENT',
@@ -1194,6 +1196,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.UnreachableCatchTest#testSubtypeAfterSupertypeFlagged :: control :: M-ISSUBTYPE-FALSE',
 			'unit.check.UnusedParameterCheckTest#testAccessGrantOutsideReportScopeKeepsParameter :: control :: '
 				+ 'M-CONFINEMENT-REPORT-INDEX-PARAM',
+			'unit.check.UnusedPrivateCheckTest#testNamesakeSubtypeNoLongerShieldsAPrivateConstructor :: control :: '
+				+ 'M-SUBTYPE-KEY-SIMPLE-NAME',
 			'unit.check.UnusedPrivateCheckTest#testReflectionCallOutsideReportScopeKeepsMember :: control :: '
 				+ 'M-REFLECTION-REPORT-INDEX-DELETE',
 			'unit.check.UnusedPrivateDeclineReasonTest#testEachGateNamesItself :: control :: '
@@ -2051,7 +2055,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-SELECT-MISS-NO-KIND-CLAUSE',
 			'M-AND-OPERATOR-TEXT-STALE',
 			'M-PAREN-FREE-ROOTS-ATOMS-ONLY',
-			'M-SIDE-EFFECT-FREE-DROPS-OPERATORS'
+			'M-SIDE-EFFECT-FREE-DROPS-OPERATORS',
+			'M-SUBTYPE-KEY-SIMPLE-NAME'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

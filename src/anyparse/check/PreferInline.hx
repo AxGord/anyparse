@@ -525,7 +525,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		// silently and rejects it at the GENERATED override site ("Field <m> is inlined and cannot be
 		// overridden") — another file, possibly another project.
 		if (index.traits.transitivelyCarriesBuildMacro(owner, file)) return;
-		final subtypeMembers: Array<String> = index.subtypes.hasSubtype(owner) ? index.subtypes.subtypeMemberNames(owner) : [];
+		final subtypeMembers: Array<String> = index.subtypes.hasSubtype(owner, file) ? index.subtypes.subtypeMemberNames(owner, file) : [];
 		final ifaces: Array<String> = implementedInterfaces(cls);
 		for (candidate in locals) {
 			final name: String = candidate.name;

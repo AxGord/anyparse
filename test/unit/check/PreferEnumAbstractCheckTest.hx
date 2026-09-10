@@ -531,6 +531,26 @@ class PreferEnumAbstractCheckTest extends Test {
 	}
 
 	/**
+	 * The subtype refusal is keyed by the container's DECLARATION, not by its simple name: another
+	 * package's `Sub extends Align`, whose `Align` is that package's own, no longer refuses THIS
+	 * `Align`s conversion — while a subtype naming `pkg.Align` outright still does. The pair is the
+	 * differential: one fixture, one written supertype changed, opposite verdicts.
+	 */
+	@:pin('control')
+	@:killer('M-SUBTYPE-KEY-SIMPLE-NAME')
+	public function testFixRefusalFollowsTheDeclarationNotTheSimpleName(): Void {
+		final namesake: { file: String, source: String } = { file: 'other/Align.hx', source: 'package other;\n\nclass Align {}\n' };
+		Assert.equals(7, packagedAlignFixEdits([
+			namesake,
+			{ file: 'other/Sub.hx', source: 'package other;\n\nclass Sub extends Align {}\n' }
+		]), 'another package\'s subtype of its OWN Align no longer refuses this one');
+		Assert.equals(0, packagedAlignFixEdits([
+			namesake,
+			{ file: 'other/Sub.hx', source: 'package other;\n\nclass Sub extends pkg.Align {}\n' }
+		]), 'a subtype that really names this declaration still refuses it');
+	}
+
+	/**
 	 * The number of fix edits `THREE_STRING_CONSTANTS` yields when `other` is the second file in
 	 * scope — 7 for a conversion (one head plus two per member), 0 for a refusal. `withIndex`
 	 * supplies the `SymbolIndex` the resolution-backed gates read.
@@ -566,6 +586,16 @@ class PreferEnumAbstractCheckTest extends Test {
 
 	private function violations(src: String): Array<Violation> {
 		return new PreferEnumAbstract().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	/** `pkg.Align`s grouped fix-edit count with `others` alongside it in scope — 7 for a conversion, 0 for a refusal. */
+	private function packagedAlignFixEdits(others: Array<{ file: String, source: String }>): Int {
+		final decl: String = 'package pkg;\n\n$THREE_STRING_CONSTANTS';
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/Align.hx', source: decl }].concat(others);
+		final check: PreferEnumAbstract = new PreferEnumAbstract();
+		final vs: Array<Violation> = check.run(files, plugin).filter(v -> v.file == 'pkg/Align.hx');
+		return check.fixGrouped(decl, vs, plugin, SymbolIndex.build(files, plugin)).length;
 	}
 
 }
