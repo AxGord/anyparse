@@ -151,13 +151,15 @@ class PatchSliceTest extends Test {
 	}
 
 	/**
-	 * The conservative edge of that second signal, pinned so a later attempt to make the guard
-	 * precise has to flip a test rather than a user's file: renaming the documented declaration
-	 * while ALSO adding an unrelated one to the same container is refused, even though nothing
-	 * was orphaned. The refusal's own remedy — widen the fragment over the doc block — still
-	 * applies, which is what makes over-refusing here the safe side.
+	 * ONE fragment that both renames the documented declaration and adds a second leaves nothing in
+	 * the text to say which of the two the rename is, so the guard refuses — and says that, rather
+	 * than asserting a theft it cannot establish.
+	 *
+	 * The multi-pair spelling of the same intent applies: see
+	 * `testRenamePlusAnUnrelatedInsertElsewhereApplies`, where the growth sits outside the bytes
+	 * the watched block documents.
 	 */
-	public function testRenamePlusAnUnrelatedInsertInTheSameContainerRefused(): Void {
+	public function testRenameAndAnInsertFromOneFragmentRefused(): Void {
 		final source: String = 'class C {\n\t/**\n\t * About b.\n\t */\n\tfunction b() {}\n}\n';
 		switch Patch.patchNode(
 			source, BySelector('ClassDecl:C'), 'function b() {}', 'function bee() {}\n\n\tfunction extra() {}', false,
@@ -167,6 +169,69 @@ class PatchSliceTest extends Test {
 				Assert.fail('expected Err (refusal), got Ok:\n$text');
 			case Err(message):
 				Assert.stringContains('moves the `/**` block above `b` onto `bee`', message);
+				// `b` was RENAMED, so the tail that used to run here — "`b` would be left
+				// undocumented" — named a declaration the payload had already removed.
+				Assert.stringContains('`b` is no longer declared there', message);
+				Assert.isTrue(
+					message.indexOf('would be left undocumented') < 0, 'the refusal must not assert an orphan it cannot establish'
+				);
+		}
+	}
+
+	/**
+	 * A pair renaming a documented member and a pair inserting elsewhere in the SAME container
+	 * apply together — the growth sits outside the bytes the watched block documents.
+	 *
+	 * The container-wide growth count this replaced could not see that distance: it compared the
+	 * whole container before and after, so a second pair adding a declaration ANYWHERE read as an
+	 * insertion under the doc, and the refusal named a member the payload never moved. Each pair
+	 * applied alone, which is the signature of a discriminator asking the wrong question rather
+	 * than of a doc that moved.
+	 *
+	 * CONTROL for the localised growth count. KILLED by arm `M-PATCH-GROWTH-COUNTED-CONTAINER-WIDE`.
+	 */
+	@:pin('control')
+	@:killer('M-PATCH-GROWTH-COUNTED-CONTAINER-WIDE')
+	public function testRenamePlusAnUnrelatedInsertElsewhereApplies(): Void {
+		final source: String = 'class C {\n\t/**\n\t * About b.\n\t */\n\tfunction b() {}\n\n\tfunction z() {}\n}\n';
+		final expected: String =
+			'class C {\n\t/**\n\t * About b.\n\t */\n\tfunction bee() {}\n\n\tfunction z() {}\n\n\tfunction w() {}\n}\n';
+		final pairs: Array<{ oldText: String, newText: String }> = [
+			{ oldText: 'function b() {}', newText: 'function bee() {}' },
+			{ oldText: 'function z() {}', newText: 'function z() {}\n\n\tfunction w() {}' }
+		];
+		switch Patch.patchNodeMany(source, BySelector('ClassDecl:C'), pairs, false, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.equals(expected, text);
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+		}
+	}
+
+	/**
+	 * A pair REWRITING the doc block and a second pushing a declaration under it is a transfer like
+	 * any other — the block ends where the first pair's replacement leaves it.
+	 *
+	 * That position used to answer `-1` ("an edit rewrites the block, so there is nothing to map")
+	 * and the whole watch was dropped with it, so this payload moved `b`'s doc onto `c` at rc 0 with
+	 * the guard observing nothing at all. It is the only shape in which an edit can CONTAIN the
+	 * watched block's end, so nothing else covered it.
+	 *
+	 * CONTROL for the straddled block's end. KILLED by arm `M-PATCH-STRADDLED-DOC-UNWATCHED`.
+	 */
+	@:pin('control')
+	@:killer('M-PATCH-STRADDLED-DOC-UNWATCHED')
+	public function testATransferUnderADocRewrittenByTheSamePayloadRefused(): Void {
+		final source: String = 'class C {\n\t/**\n\t * About b.\n\t */\n\tfunction b() {}\n}\n';
+		final pairs: Array<{ oldText: String, newText: String }> = [
+			{ oldText: ' * About b.\n\t */\n', newText: ' * About b, expanded.\n\t */\n' },
+			{ oldText: 'function b() {}', newText: 'function c() {}\n\n\tfunction b() {}' }
+		];
+		switch Patch.patchNodeMany(source, BySelector('ClassDecl:C'), pairs, false, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.fail('expected Err (refusal), got Ok:\n$text');
+			case Err(message):
+				Assert.stringContains('moves the `/**` block above `b` onto `c`', message);
 		}
 	}
 

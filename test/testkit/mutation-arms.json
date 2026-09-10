@@ -2753,12 +2753,12 @@
 			"note": "the hexadecimal literal leaves the last hand-written list of the literal vocabulary. The side-effect-free and root vocabularies are now DERIVED from the same declaration the differential reads, so cutting one of those is unfalsifiable; this list is a second, independent spelling and is exactly where the original HexLit gap lived"
 		},
 		{
-			"name": "M-PURE-ARG-KINDS-SUFFIX-STUB",
+			"name": "M-PURE-ARG-ROOT-ONLY",
 			"type": "anyparse.query.InlineMethod",
 			"method": "isPure",
-			"find": "if (!kinds.contains(node.kind)) {",
-			"replace": "if (!(kinds.contains(node.kind) || node.kind.endsWith('Lit') || node.kind.endsWith('StringExpr'))) {",
-			"note": "the same name-convention widening on the inline-method side, now at the subtree walk that is all that is left of the second copy: an allocating literal passed as an argument is called pure again and gets DUPLICATED once per use of the parameter it substitutes"
+			"find": "for (c in node.children) walk(c);",
+			"replace": "if (node.children.length < 0) for (c in node.children) walk(c);",
+			"note": "the argument walk stops at the ROOT, so `1 + f()` is pure because `Add` is - the call under it is never seen - and an argument that allocates or calls gets DUPLICATED once per use of the parameter it substitutes; the kind vocabulary this arm used to widen is already cut on the MemberKinds side by M-SAFE-KINDS-SUFFIX-STUB"
 		},
 		{
 			"name": "M-PLAIN-LITERAL-FROZEN",
@@ -2792,17 +2792,33 @@
 		{
 			"name": "M-PATCH-DOCEND-SHIFTS-EVERY-EDIT",
 			"type": "anyparse.query.Patch",
-			"method": "shiftedDocEnd",
-			"find": "for (edit in sorted) if (edit.span.from < docEnd) {\n\t\tif (edit.span.to > docEnd) return -1;\n\t\tshifted += edit.text.length - (edit.span.to - edit.span.from);\n\t}",
+			"method": "shiftedEnd",
+			"find": "for (edit in sorted) if (edit.span.from < at) {\n\t\tfinal to: Int = edit.span.to;\n\t\tshifted += edit.text.length - (to - edit.span.from);\n\t\tif (to > at) shifted += to - at;\n\t}",
 			"replace": "for (edit in sorted) shifted += edit.text.length - (edit.span.to - edit.span.from);",
 			"note": "the watched doc block's end is moved by EVERY edit of the payload, including the ones lying after it, so a multi-pair call whose pairs each apply alone is refused as a doc transfer inside a window of first-pair growths"
 		},
 		{
 			"name": "M-PATCH-DOCEND-NEVER-SHIFTS",
 			"type": "anyparse.query.Patch",
-			"method": "shiftedDocEnd",
-			"force": "docEnd",
+			"method": "shiftedEnd",
+			"force": "at",
 			"note": "the watched doc block's end is never moved, so a payload whose earlier pair grows ahead of that block leaves the guard looking for the doc before where it now is and a real transfer goes through"
+		},
+		{
+			"name": "M-PATCH-STRADDLED-DOC-UNWATCHED",
+			"type": "anyparse.query.Patch",
+			"method": "docOrphanRefusal",
+			"find": "if (end < 0 || seen.contains(end)) continue;",
+			"replace": "if (end < 0 || seen.contains(end) || sorted.exists(e -> e.span.from < end && e.span.to > end)) continue;",
+			"note": "the retired `-1` answer comes back as a skip: a payload whose first pair rewrites the watched doc block drops the watch altogether, so a second pair pushing a declaration in under that block transfers the doc at rc 0"
+		},
+		{
+			"name": "M-PATCH-GROWTH-COUNTED-CONTAINER-WIDE",
+			"type": "anyparse.query.Patch",
+			"method": "docOrphanRefusal",
+			"find": "final grew: Bool = w.declared >= 0 && declsInRegion(after, owner, w.region) > w.declared;",
+			"replace": "final grew: Bool = w.declared >= 0 && declsInRegion(after, owner, new Span(0, spliced.length)) > w.declared;",
+			"note": "the growth is counted over the whole container again, so a pair renaming a documented member and a pair inserting anywhere else in the same container are refused together as a doc transfer that never happened"
 		},
 		{
 			"name": "M-SELECT-MISS-NO-KIND-CLAUSE",

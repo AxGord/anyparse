@@ -165,11 +165,15 @@ class LiteralClassificationTest extends Test {
 	 * is the same question asked of a call ARGUMENT, and the one this class asserts end-to-end now
 	 * that the kind-by-kind twin of `isSafeKind` is gone from that class.
 	 *
-	 * CONTROL for the inline-method half of the stub removal. KILLED by arm
-	 * `M-PURE-ARG-KINDS-SUFFIX-STUB` (and by the `MemberKinds` one beside it).
+	 * The last block asks the half of `isPure` that no vocabulary answers: the WALK. Every row above
+	 * is decided by its root kind, so an arm cutting the recursion survives them all; `1 + f()` has a
+	 * root the vocabulary calls pure and a call under it, and only the descent sees that.
+	 *
+	 * CONTROL for the inline-method half of the stub removal. KILLED by arm `M-PURE-ARG-ROOT-ONLY`;
+	 * the vocabulary the rows share is cut by `M-SAFE-KINDS-SUFFIX-STUB` beside it.
 	 */
 	@:pin('control')
-	@:killer('M-PURE-ARG-KINDS-SUFFIX-STUB')
+	@:killer('M-PURE-ARG-ROOT-ONLY')
 	public function testAnAllocatingLiteralIsRefusedByEveryPredicate(): Void {
 		for (specimen in SPECIMENS) {
 			final node: QueryNode = initializerOf(specimen.expr);
@@ -190,6 +194,11 @@ class LiteralClassificationTest extends Test {
 		// literals carry their own fields, and no spelling suffix would catch a renamed one.
 		for (kind in [SHAPE.objectLiteralKind, SHAPE.arrayLiteralKind]) if (kind != null)
 			Assert.isFalse(MemberKinds.isSafeKind(kind, SHAPE), 'the allocating literal $kind must not be side-effect-free');
+		// A pure ROOT over an impure subtree — the one question the kind vocabulary cannot answer,
+		// and the only assertion here a walk that never descends would fail.
+		final compound: QueryNode = initializerOf('1 + f()');
+		Assert.isFalse(InlineMethod.isPure(compound, SHAPE), 'an argument calling a function is not pure, whatever its root kind is');
+		Assert.isTrue(MemberKinds.isSafeKind(compound.kind, SHAPE), 'the fixture needs a root kind the vocabulary calls pure');
 	}
 
 	/**
