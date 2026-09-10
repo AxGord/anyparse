@@ -230,7 +230,8 @@ final class UnusedParameter implements Check implements ConfigAware {
 		if (renameFlagged.length > 0 && renameSilenceEnabled(violations)) {
 			final functionKinds: Array<String> = shape.functionKinds ?? [];
 			final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
-			if (functionKinds.length > 0) collectRenameEdits(tree, null, source, functionKinds, opaqueKinds, renameFlagged, index, edits);
+			if (functionKinds.length > 0)
+				collectRenameEdits(tree, null, source, shape, functionKinds, opaqueKinds, renameFlagged, index, edits);
 		}
 		return CanonicalEdit.dropContainedEdits(edits);
 	}
@@ -318,7 +319,7 @@ final class UnusedParameter implements Check implements ConfigAware {
 			|| (ownerName != null && !isPublicDecl(fn, parent, source, visibilityKinds, modifierKinds)
 				&& RefactorSupport.isPrivateMemberConfined(ownerName, fnName ?? '', source, index));
 		final capturedAsValue: Bool = fnName != null && captured.contains(fnName);
-		final params: Array<QueryNode> = CallSites.leadingParams(fn);
+		final params: Array<QueryNode> = CallSites.leadingParams(fn, shape);
 		for (pi => p in params) {
 			final name: Null<String> = p.name;
 			final pspan: Null<Span> = p.span;
@@ -449,7 +450,7 @@ final class UnusedParameter implements Check implements ConfigAware {
 			final fnSpan: Null<Span> = node.span;
 			final fnName: Null<String> = node.name;
 			if (fnSpan != null && fnName != null && !handled.contains(fnSpan.from)) {
-				final params: Array<QueryNode> = CallSites.leadingParams(node);
+				final params: Array<QueryNode> = CallSites.leadingParams(node, shape);
 				for (pi in 0...params.length) {
 					final pspan: Null<Span> = params[pi].span;
 					if (pspan == null || !flagged.contains('${pspan.from}:${pspan.to}')) continue;
@@ -488,13 +489,13 @@ final class UnusedParameter implements Check implements ConfigAware {
 	 * replacement.
 	 */
 	private static function collectRenameEdits(
-		node: QueryNode, parent: Null<QueryNode>, source: String, functionKinds: Array<String>, opaqueKinds: Array<String>,
-		renameFlagged: Array<String>, index: Null<SymbolIndex>, edits: Array<{ span: Span, text: String }>
+		node: QueryNode, parent: Null<QueryNode>, source: String, shape: RefShape, functionKinds: Array<String>,
+		opaqueKinds: Array<String>, renameFlagged: Array<String>, index: Null<SymbolIndex>, edits: Array<{ span: Span, text: String }>
 	): Void {
 		if (opaqueKinds.contains(node.kind)) return;
 		if (functionKinds.contains(node.kind)) {
 			final fnSpan: Null<Span> = node.span;
-			if (fnSpan != null && !ownerMayBeOverridden(node, parent, index)) for (p in CallSites.leadingParams(node)) {
+			if (fnSpan != null && !ownerMayBeOverridden(node, parent, index)) for (p in CallSites.leadingParams(node, shape)) {
 				final pspan: Null<Span> = p.span;
 				final name: Null<String> = p.name;
 				if (pspan == null || name == null) continue;
@@ -503,7 +504,7 @@ final class UnusedParameter implements Check implements ConfigAware {
 				if (nameStart >= 0) edits.push({ span: new Span(nameStart, nameStart + name.length), text: '_$name' });
 			}
 		}
-		for (c in node.children) collectRenameEdits(c, node, source, functionKinds, opaqueKinds, renameFlagged, index, edits);
+		for (c in node.children) collectRenameEdits(c, node, source, shape, functionKinds, opaqueKinds, renameFlagged, index, edits);
 	}
 
 

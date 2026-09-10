@@ -38,70 +38,47 @@ enum CollectResult {
  * cannot drift apart in what they accept and refuse.
  *
  * Two declaration kinds collect differently because the `Refs` resolver
- * indexes methods but not local functions:
+ * indexes methods but not local functions, and the split is read off the
+ * grammar's `localFunctionKinds` rather than named here:
  *
- *  - `FnMember` / `FinalModifiedMember` (method, plain or `final`): bare
- *    `name(...)` calls resolve through `Refs` to the decl binding — the
- *    query projection surfaces a `final` method's name off the inner
- *    `HxFinalModifierMember.fn`, so `Refs` indexes it as a decl exactly
- *    like a plain method; `this.name(...)` calls are matched structurally
- *    (a `FieldAccess` named `name` whose receiver is `this`), exactly like
- *    `Rename`'s `this.<name>` handling. Any `obj.name(...)` (non-`this`
- *    receiver) or unresolved bare call is a refusal. A method may have
- *    callers in OTHER files we cannot see — the caller decides whether to
- *    surface a cross-file advisory.
- *  - `LocalFnStmt` (local function): `Refs` does not index local
- *    functions, so a bare call's binding comes back unresolved and cannot
- *    be told apart from an unrelated unresolved call. The collector
- *    instead requires the function name to be UNIQUE among the file's
- *    declarations; with uniqueness proven, every bare `name(...)` call in
- *    the file unambiguously targets this local function. A
+ *  - a METHOD (plain or in whatever spelling the grammar gives a `final`
+ *    one): bare `name(...)` calls resolve through `Refs` to the decl
+ *    binding — the query projection surfaces a `final` method's name off
+ *    its inner function node, so `Refs` indexes it as a decl exactly like
+ *    a plain method; `this.name(...)` calls are matched structurally (a
+ *    field access named `name` whose receiver is the grammar's
+ *    `selfReferenceText`), exactly like `Rename`'s handling. Any
+ *    `obj.name(...)` (other receiver) or unresolved bare call is a
+ *    refusal. A method may have callers in OTHER files we cannot see —
+ *    the caller decides whether to surface a cross-file advisory.
+ *  - a LOCAL FUNCTION: `Refs` does not index them, so a bare call's
+ *    binding comes back unresolved and cannot be told apart from an
+ *    unrelated unresolved call. The collector instead requires the
+ *    function name to be UNIQUE among the file's declarations
+ *    (`nameClashKinds`); with uniqueness proven, every bare `name(...)`
+ *    call in the file unambiguously targets this local function. A
  *    receiver-qualified `*.name(...)` call is then impossible for the same
  *    name and is refused. A local function cannot escape its file, so the
  *    call set is complete and no advisory is needed.
+ *
+ * Every node kind and identifier text this module decides by is read off
+ * the handed `RefShape`; none is spelled here. The vocabulary a completeness
+ * PROOF rests on is exactly the vocabulary that must not be allowed to go
+ * quietly stale, and a name in a private array is checked by nothing —
+ * `nameClashKinds` used to be a seventeen-name one, missing eleven binder
+ * spellings the language has.
  */
 @:nullSafety(Strict)
 final class CallSites {
 
-	/** Parameter slot kinds — the leading children of a function decl. */
-	public static final PARAM_KINDS: Array<String> = ['Required', 'Optional'];
-
-	/**
-	 * Declaration kinds that, if any node of one carries the same name as
-	 * the target local function, make a bare `name(...)` call ambiguous —
-	 * so a `LocalFnStmt` collection refuses unless its name is unique
-	 * across all of these. Covers every binding a bare identifier could
-	 * resolve to: other local functions, class members, top-level
-	 * functions, and local var / final / param bindings.
-	 */
-	public static final NAME_CLASH_KINDS: Array<String> = [
-		'LocalFnStmt',
-		'FnMember',
-		'FinalModifiedMember',
-		'VarMember',
-		'FinalMember',
-		'FnField',
-		'VarField',
-		'FinalField',
-		'FnDecl',
-		'VarDecl',
-		'VarStmt',
-		'FinalStmt',
-		'StaticVarStmt',
-		'StaticFinalStmt',
-		'Required',
-		'Optional',
-		'Rest'
-	];
-
 	/**
 	 * The function declaration node the cursor identifies. When the cursor
-	 * already sits on a `FnMember` / `FinalModifiedMember` / `LocalFnStmt`
-	 * decl, that node is returned directly. Otherwise the cursor is on a
-	 * call / reference and the binding is resolved back to its decl through
-	 * the shared resolver: `resolveBindingFrom` yields the decl's
-	 * `span.from`, and `nodeAtFrom` looks the decl node up by that offset.
-	 * Returns null when nothing resolves.
+	 * already sits on a function declaration (`MemberKinds.FN_DECL_KINDS` — the
+	 * methods and the named local function), that node is returned directly.
+	 * Otherwise the cursor is on a call / reference and the binding is resolved
+	 * back to its decl through the shared resolver: `resolveBindingFrom` yields
+	 * the decl's `span.from`, and `nodeAtFrom` looks the decl node up by that
+	 * offset. Returns null when nothing resolves.
 	 */
 	public static function resolveFnDecl(cursorNode: QueryNode, tree: QueryNode, name: String, shape: RefShape): Null<QueryNode> {
 		if (MemberKinds.FN_DECL_KINDS.contains(cursorNode.kind)) return cursorNode;
@@ -112,28 +89,30 @@ final class CallSites {
 	}
 
 	/**
-	 * The leading `Required` / `Optional` children of `decl`, in source
-	 * order. The scan stops at the first child that is neither — the
-	 * `Named` return-type child or the function body — so the return type
-	 * is never mistaken for a parameter.
+	 * The leading POSITIONAL parameter children of `decl`, in source order
+	 * (`positionalParamKinds`). The scan stops at the first child that is not
+	 * one — the return-type child, the function body, or a variadic tail — so
+	 * neither the return type nor a rest parameter is ever handed to an
+	 * operation that rewrites parameters by index.
 	 */
-	public static function leadingParams(decl: QueryNode): Array<QueryNode> {
+	public static function leadingParams(decl: QueryNode, shape: RefShape): Array<QueryNode> {
+		final positional: Array<String> = positionalParamKinds(shape);
 		final out: Array<QueryNode> = [];
 		for (child in decl.children) {
-			if (!PARAM_KINDS.contains(child.kind)) break;
+			if (!positional.contains(child.kind)) break;
 			out.push(child);
 		}
 		return out;
 	}
 
 	/**
-	 * Collect every in-file call site of the function declared at `decl`
-	 * and PROVE the set is complete. Routes by declaration kind: a class
-	 * method (`FnMember` or the `final` form `FinalModifiedMember`) uses
-	 * the `Refs`-bound collector; a `LocalFnStmt` takes the
-	 * uniqueness-based local-function path. `binding` is the decl's
-	 * `span.from`. Returns `COk(sites)` with the proven-complete set or
-	 * `CErr(message)` describing why the set could not be proven complete.
+	 * Collect every in-file call site of the function declared at `decl` and
+	 * PROVE the set is complete. Routes by declaration kind: a local function
+	 * (the grammar's `localFunctionKinds`) takes the uniqueness-based path,
+	 * anything else is a method and uses the `Refs`-bound collector. `binding`
+	 * is the decl's `span.from`. Returns `COk(sites)` with the proven-complete
+	 * set or `CErr(message)` describing why the set could not be proven
+	 * complete.
 	 */
 	public static function collect(
 		decl: QueryNode, tree: QueryNode, source: String, name: String, binding: Int, shape: RefShape
@@ -144,8 +123,10 @@ final class CallSites {
 		// that strip the region. Refused before either runs - the shape neither can see.
 		final opaque: Null<String> = CondRegionScan.opaqueCondRegionDiagnostic(source, tree, name, shape, 'rewriting calls of "$name"');
 		if (opaque != null) return CErr(opaque);
-		final isMethod: Bool = decl.kind != 'LocalFnStmt';
-		return isMethod ? collectMethodCalls(tree, source, name, binding, shape) : collectLocalFnCalls(tree, source, name);
+		final unspellable: Null<String> = missingCallVocabulary(name, shape);
+		if (unspellable != null) return CErr(unspellable);
+		final isMethod: Bool = !(shape.localFunctionKinds ?? []).contains(decl.kind);
+		return isMethod ? collectMethodCalls(tree, source, name, binding, shape) : collectLocalFnCalls(tree, source, name, shape);
 	}
 
 	/** Human-facing `line:col` for a span, in the `apq refs` print convention. */
@@ -159,6 +140,50 @@ final class CallSites {
 	private static inline function bindingFrom(hit: RefHit): Int {
 		final b: Null<Span> = hit.bindingSpan;
 		return b == null ? -1 : b.from;
+	}
+
+	/**
+	 * The POSITIONAL parameter slots — the grammar's `paramKinds` minus its rest spelling.
+	 *
+	 * The exclusion is the contract, not an omission. `leadingParams` feeds the operations
+	 * that PERMUTE (`change-sig`) or DELETE (`remove-param`) a parameter by index, and a
+	 * variadic tail is neither reorderable (the language requires it last) nor deletable by
+	 * argument position (it consumes zero or more arguments at each call site). The
+	 * two-name hand list this replaces said the same thing by spelling `Required` and
+	 * `Optional` and stopping at everything else; this says it by naming what it drops.
+	 *
+	 * A grammar declaring no `paramKinds` answers the empty set, and the scan then stops at
+	 * the first child — the ops refuse on the index they cannot place, `unused-parameter`
+	 * reports nothing. Both are the quiet direction rather than the wrong-rewrite one.
+	 */
+	private static function positionalParamKinds(shape: RefShape): Array<String> {
+		final rest: Null<String> = shape.restParamKind;
+		return [for (kind in shape.paramKinds ?? []) if (kind != rest) kind];
+	}
+
+	/**
+	 * Declaration kinds that, if any node of one carries the same name as the target local
+	 * function, make a bare `name(...)` call ambiguous — so a local-function collection
+	 * refuses unless its name is unique across all of them. Every binding a bare identifier
+	 * could resolve to: the class members (`MemberKinds.FIELD_MEMBER_KINDS`, which carries
+	 * the anonymous-structure field spellings too), the module-level VALUE declarations, and
+	 * every named binder the grammar projects (`BinderScan.binderKinds`).
+	 *
+	 * The seventeen-name hand list this replaces was missing eleven of those twenty-eight,
+	 * and the gap was not decorative. `LocalInlineFnStmt` was one of them, so a file
+	 * declaring `function helper()` in one method and `inline function helper()` in another
+	 * read as UNIQUE: uniqueness "proven", every bare `helper(...)` in the file collected as
+	 * a site of the FIRST one, and `remove-param` / `change-sig` rewriting the calls of the
+	 * second against a signature that is not theirs — at rc 0, with a file that still parses.
+	 * The other ten (`VarForm`, `VarMore`, `VarExpr`, `FinalExpr`, `NamedFnExpr`,
+	 * `CatchClause`, `ForStmt`, `ForExpr`, `KeyValueBinder`, `Capture`) are the same class of
+	 * hole reached through a more exotic shadow. Nothing was dropped: over-answering a clash
+	 * costs a refusal, which is the direction this proof is allowed to fail in.
+	 */
+	private static function nameClashKinds(shape: RefShape): Array<String> {
+		final out: Array<String> = MemberKinds.FIELD_MEMBER_KINDS.copy();
+		for (kind in shape.moduleValueDeclKinds.concat(BinderScan.binderKinds(shape))) if (!out.contains(kind)) out.push(kind);
+		return out;
 	}
 
 	/**
@@ -190,7 +215,7 @@ final class CallSites {
 		];
 		final boundReadFroms: Array<Int> = [for (h in boundReads) h.span.from];
 
-		final classified: MethodCallScan = classifyMethodCalls(tree, source, name, boundReadFroms, hits);
+		final classified: MethodCallScan = classifyMethodCalls(tree, source, name, boundReadFroms, hits, shape);
 		var error: Null<String> = classified.error;
 		final sites: Array<QueryNode> = classified.sites;
 		// Refuse the method captured as a first-class value, whose indirect
@@ -206,7 +231,7 @@ final class CallSites {
 				error = '"$name" is referenced as a value (not called) at ${posOf(source, dangling.span)}'
 					+ ' — indirect calls through a captured reference cannot be tracked';
 		}
-		if (error == null) error = fieldAccessValueCapture(tree, source, name, classified.thisSiteCount);
+		if (error == null) error = fieldAccessValueCapture(tree, source, name, classified.thisSiteCount, shape);
 		return error != null ? CErr(error) : COk(sites);
 	}
 
@@ -220,14 +245,16 @@ final class CallSites {
 	 * `this.name` access). Returns the diagnostic or null when no value
 	 * capture is present.
 	 */
-	private static function fieldAccessValueCapture(tree: QueryNode, source: String, name: String, thisSiteCount: Int): Null<String> {
+	private static function fieldAccessValueCapture(
+		tree: QueryNode, source: String, name: String, thisSiteCount: Int, shape: RefShape
+	): Null<String> {
 		var thisAccess: Int = 0;
 		var error: Null<String> = null;
 		function scan(node: QueryNode): Void {
 			if (error != null) return;
-			if (node.kind == 'FieldAccess' && node.name == name && node.children.length > 0) {
+			if (node.kind == shape.fieldAccessKind && node.name == name && node.children.length > 0) {
 				final recv: QueryNode = node.children[0];
-				if (recv.kind == 'IdentExpr' && recv.name == 'this')
+				if (recv.kind == shape.identKind && recv.name == shape.selfReferenceText)
 					thisAccess++;
 				else
 					error = '"$name" is referenced as a value (not called) at ${posOf(source, node.span)}'
@@ -253,8 +280,8 @@ final class CallSites {
 	 * receiver-qualified `*.name(...)` call is impossible for that name and
 	 * is refused.
 	 */
-	private static function collectLocalFnCalls(tree: QueryNode, source: String, name: String): CollectResult {
-		final clashes: Int = countNameDecls(tree, name);
+	private static function collectLocalFnCalls(tree: QueryNode, source: String, name: String, shape: RefShape): CollectResult {
+		final clashes: Int = countNameDecls(tree, name, shape);
 		if (clashes > 1)
 			return CErr(
 				'cannot prove all call sites target the local function "$name": another declaration named "$name'
@@ -263,11 +290,12 @@ final class CallSites {
 
 		final sites: Array<QueryNode> = [];
 		var error: Null<String> = null;
+		final callKind: Null<String> = shape.callKind;
 		function walk(node: QueryNode): Void {
 			if (error != null) return;
-			if (node.kind == 'Call' && node.children.length > 0) {
+			if (node.kind == callKind && node.children.length > 0) {
 				final callee: QueryNode = node.children[0];
-				switch calleeShape(callee, name) {
+				switch calleeShape(callee, name, shape) {
 					case CalleeBare(_):
 						sites.push(node);
 					case CalleeThis:
@@ -285,11 +313,11 @@ final class CallSites {
 			}
 		}
 		walk(tree);
-		// With the name proven unique, every `IdentExpr` named `name` is a
-		// reference to this local function. Each bare CALL contributes
+		// With the name proven unique, every bare identifier named `name` is
+		// a reference to this local function. Each bare CALL contributes
 		// exactly one such ident (its callee); a surplus is a non-call
 		// value reference whose indirect calls cannot be tracked.
-		if (error == null && countIdentExprNamed(tree, name) > sites.length)
+		if (error == null && countIdentExprNamed(tree, name, shape) > sites.length)
 			error = 'the local function "$name'
 				+ '" is referenced as a value (not called) — indirect calls through a captured reference cannot be tracked';
 		return error != null ? CErr(error) : COk(sites);
@@ -302,16 +330,37 @@ final class CallSites {
 	 * receiver's display name), or none of these (a call to something
 	 * else).
 	 */
-	private static function calleeShape(callee: QueryNode, name: String): CalleeShape {
-		if (callee.kind == 'IdentExpr' && callee.name == name) {
+	private static function calleeShape(callee: QueryNode, name: String, shape: RefShape): CalleeShape {
+		if (callee.kind == shape.identKind && callee.name == name) {
 			final span: Null<Span> = callee.span;
 			return span == null ? CalleeNone : CalleeBare(span);
 		}
-		if (callee.kind != 'FieldAccess' || callee.name != name || callee.children.length <= 0) return CalleeNone;
+		if (callee.kind != shape.fieldAccessKind || callee.name != name || callee.children.length <= 0) return CalleeNone;
 		final recv: QueryNode = callee.children[0];
-		if (recv.kind == 'IdentExpr' && recv.name == 'this') return CalleeThis;
+		if (recv.kind == shape.identKind && recv.name == shape.selfReferenceText) return CalleeThis;
 		final recvName: String = recv.name ?? recv.kind;
 		return CalleeOtherReceiver(recvName);
+	}
+
+	/**
+	 * The call-site vocabulary this grammar does not declare, or null when it declares all of it.
+	 *
+	 * The completeness proof is a claim about EVERY call in the file, and each of these three
+	 * absences turns a refusal into a FALSE proof rather than into a missing feature: with no
+	 * call kind no site is recognised at all and the scan reports a complete empty set; with no
+	 * field-access kind or no self-reference text a receiver-qualified `obj.name(...)` reads as
+	 * "a call to something else" and is silently ignored instead of refused. Required up front,
+	 * because a default nobody can state correctly belongs at the producer.
+	 */
+	private static function missingCallVocabulary(name: String, shape: RefShape): Null<String> {
+		final missing: Array<String> = [];
+		if (shape.callKind == null) missing.push('call kind');
+		if (shape.fieldAccessKind == null) missing.push('field-access kind');
+		if (shape.selfReferenceText == null) missing.push('self-reference text');
+		return missing.length == 0
+			? null
+			: 'cannot prove all call sites target "$name": this grammar declares no ${missing.join(', no ')}'
+				+ ' — the shapes a call site is recognised by';
 	}
 
 	/**
@@ -328,21 +377,24 @@ final class CallSites {
 	}
 
 	/** Count declarations named `name` anywhere in the tree. */
-	private static function countNameDecls(tree: QueryNode, name: String): Int {
+	private static function countNameDecls(tree: QueryNode, name: String, shape: RefShape): Int {
+		// Derived ONCE and closed over: the vocabulary is a function of the handed shape, so a
+		// per-node derivation would rebuild all twenty-eight names for every node of the file.
+		final clashKinds: Array<String> = nameClashKinds(shape);
 		var count: Int = 0;
 		function walk(node: QueryNode): Void {
-			if (node.name == name && NAME_CLASH_KINDS.contains(node.kind)) count++;
+			if (node.name == name && clashKinds.contains(node.kind)) count++;
 			for (c in node.children) walk(c);
 		}
 		walk(tree);
 		return count;
 	}
 
-	/** Count `IdentExpr` nodes named `name` anywhere in the tree. */
-	private static function countIdentExprNamed(tree: QueryNode, name: String): Int {
+	/** Count bare-identifier nodes named `name` anywhere in the tree. */
+	private static function countIdentExprNamed(tree: QueryNode, name: String, shape: RefShape): Int {
 		var count: Int = 0;
 		function walk(node: QueryNode): Void {
-			if (node.kind == 'IdentExpr' && node.name == name) count++;
+			if (node.kind == shape.identKind && node.name == name) count++;
 			for (c in node.children) walk(c);
 		}
 		walk(tree);
@@ -361,17 +413,18 @@ final class CallSites {
 	 * or a null error when every call site was resolvable.
 	 */
 	private static function classifyMethodCalls(
-		tree: QueryNode, source: String, name: String, boundReadFroms: Array<Int>, hits: Array<RefHit>
+		tree: QueryNode, source: String, name: String, boundReadFroms: Array<Int>, hits: Array<RefHit>, shape: RefShape
 	): MethodCallScan {
 		final sites: Array<QueryNode> = [];
 		final consumedFroms: Array<Int> = [];
 		var thisSiteCount: Int = 0;
 		var error: Null<String> = null;
+		final callKind: Null<String> = shape.callKind;
 		function walk(node: QueryNode): Void {
 			if (error != null) return;
-			if (node.kind == 'Call' && node.children.length > 0) {
+			if (node.kind == callKind && node.children.length > 0) {
 				final callee: QueryNode = node.children[0];
-				switch calleeShape(callee, name) {
+				switch calleeShape(callee, name, shape) {
 					case CalleeBare(identSpan):
 						// A bare `name(...)` call. It is OUR call iff its
 						// callee identifier read binds to `binding`.

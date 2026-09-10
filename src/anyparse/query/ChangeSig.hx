@@ -113,7 +113,7 @@ final class ChangeSig {
 		// Parameters: the leading Required / Optional children, in source
 		// order. The scan stops at the first child that is neither (the
 		// `Named` return type or the body).
-		final params: Array<QueryNode> = CallSites.leadingParams(decl);
+		final params: Array<QueryNode> = CallSites.leadingParams(decl, shape);
 		final n: Int = params.length;
 		if (n < 2) return Err('"$name" has fewer than 2 parameters — nothing to reorder');
 

@@ -285,27 +285,26 @@ final class StdlibDupScan {
 		return written;
 	}
 
-	/** Every name a declaration inside the body introduces, appended to `out` (deduped). */
+	/**
+	 * Every name a declaration inside the body introduces, appended to `out` (deduped).
+	 *
+	 * The vocabulary is `BinderScan.binderKinds`, derived once per call and threaded down the
+	 * walk. This module used to carry a THIRD hand copy of it, twelve names against that
+	 * derivation's eighteen — missing the expression-position declarations
+	 * (`localDeclExprKinds`), the `static` locals (`staticLocalDeclKinds`), the `inline` local
+	 * function (`inlineFunctionKinds`) and the named function literal (`namedFnExprKind`). A name
+	 * one of those bound read as FREE, so a function that IS self-contained was rejected as one
+	 * that is not and never reached the differential.
+	 */
 	private static function collectBinders(node: QueryNode, shape: RefShape, out: Array<String>): Void {
-		final name: Null<String> = node.name;
-		if (name != null && binderKinds(shape).contains(node.kind) && !out.contains(name)) out.push(name);
-		for (child in node.children) collectBinders(child, shape, out);
+		collectBinderNames(node, BinderScan.binderKinds(shape), out);
 	}
 
-	/** The kinds whose node NAME is a binding: locals, parameters, loop and case binders, catch clauses. */
-	private static function binderKinds(shape: RefShape): Array<String> {
-		final kinds: Array<String> = [];
-		inline function add(more: Null<Array<String>>): Void if (more != null) for (kind in more) kinds.push(kind);
-		add(shape.localDeclKinds);
-		add(shape.localDeclContinuationKinds);
-		add(shape.paramKinds);
-		add(shape.iterationBindingKinds);
-		add(shape.iterationValueBinderKinds);
-		add(shape.casePatternBinderKinds);
-		add(shape.localFunctionKinds);
-		final catchKind: Null<String> = shape.catchClauseKind;
-		if (catchKind != null) kinds.push(catchKind);
-		return kinds;
+	/** Recursive worker of `collectBinders`, carrying the derived vocabulary down the walk. */
+	private static function collectBinderNames(node: QueryNode, binders: Array<String>, out: Array<String>): Void {
+		final name: Null<String> = node.name;
+		if (name != null && binders.contains(node.kind) && !out.contains(name)) out.push(name);
+		for (child in node.children) collectBinderNames(child, binders, out);
 	}
 
 	/**
