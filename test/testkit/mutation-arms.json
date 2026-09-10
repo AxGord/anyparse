@@ -2612,6 +2612,15 @@
 			"note": "a retired ctor name is put back into a kind set the hand-written side declares - the exact shape of this slice's real catch, where `LambdaParam` outlived the grammar rule that projected it by three months. A dead name in a kind set changes no behaviour, so no other test can see it and only the subset assertion goes red"
 		},
 		{
+			"name": "M-ELLIPSIS-STMT-TOKEN-STALE",
+			"type": "anyparse.grammar.haxe.HxStatement",
+			"method": "EllipsisStmt",
+			"kind": "SimpleCtor",
+			"find": "@:lit('....')",
+			"replace": "@:lit('.....')",
+			"note": "the statement-scope `....` placeholder is respelled as a five-dot token. The ctor stays declared and stays projected, and no source under PARSE_ROOTS spells the token at all, so nothing in the tree changes except that one row of the kind-source table stops emitting the kind it claims - the fail-open shape the coverage census exists to see"
+		},
+		{
 			"name": "M-TRIVGET-MOVABLE-LITERAL-FALSE",
 			"type": "anyparse.check.TrivialGetter",
 			"method": "isMovableLiteral",
@@ -2834,6 +2843,14 @@
 			"find": "andOperatorText: '&&',",
 			"replace": "andOperatorText: '&',",
 			"note": "the declared logical-and token is respelled as the bitwise one, which still parses and still is an operator, so nothing in the tree breaks and the shape simply names text the parser reads as a different node"
+		},
+		{
+			"name": "M-CONSTRUCTOR-NAME-PADDED",
+			"type": "anyparse.grammar.haxe.HaxeQueryPlugin",
+			"method": "refShape",
+			"find": "constructorName: 'new',",
+			"replace": "constructorName: 'new ',",
+			"note": "the declared constructor name gains a trailing space, so the probe source is `function new () {}` - it still parses, the FnMember still SPANS text holding `new `, and only the projected NAME stops being the declared token. The span-containment reading this arm was written against is green on it; the name-slot reading is what goes red"
 		},
 		{
 			"name": "M-PAREN-FREE-ROOTS-ATOMS-ONLY",

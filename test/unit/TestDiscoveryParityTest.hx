@@ -1690,7 +1690,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.PatchSliceTest#testTransferUnderADocMovedByAnEarlierGrowingPairRefused :: control :: M-PATCH-DOCEND-NEVER-SHIFTS',
 			'unit.query.RefShapeKindProjectionTest#testEveryDeclaredKindNameIsOneTheGrammarProjects :: control :: '
 				+ 'M-PROJECTED-KINDS-ALT-ONLY,M-DECL-HOST-KIND-STALE',
-			'unit.query.RefShapeKindProjectionTest#testEveryDeclaredTokenIsOneTheParserCaptures :: control :: M-AND-OPERATOR-TEXT-STALE',
+			'unit.query.RefShapeKindProjectionTest#testEveryDeclaredTokenIsOneTheParserCaptures :: control :: '
+				+ 'M-AND-OPERATOR-TEXT-STALE,M-CONSTRUCTOR-NAME-PADDED',
+			'unit.query.RefShapeKindProjectionTest#testEveryProjectedKindIsOneSomeSourceEmits :: control :: M-ELLIPSIS-STMT-TOKEN-STALE',
 			'unit.query.RemoveMemberSliceTest#testSiblingRegionsWithOneConditionAreRefusedByCount :: control :: '
 				+ 'M-COND-FRAME-REGION-KEYED,M-COND-FRAME-CONDITION-RAW',
 			'unit.query.RemoveMemberSliceTest#testTwoDeclarationsInOneBranchAreRefusedByCount :: control :: M-REMOVE-MEMBER-BRANCH-BLIND',
@@ -2055,6 +2057,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-SCOPE-GAP-ROOT-UNWIRED',
 			'M-PROJECTED-KINDS-ALT-ONLY',
 			'M-DECL-HOST-KIND-STALE',
+			'M-ELLIPSIS-STMT-TOKEN-STALE',
 			'M-TRIVGET-MOVABLE-LITERAL-FALSE',
 			'M-UNUSED-PRIVATE-DECLINE-SILENT',
 			'M-UNUSED-PRIVATE-REGION-DECLINE-SILENT',
@@ -2083,6 +2086,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-PATCH-GROWTH-COUNTED-CONTAINER-WIDE',
 			'M-SELECT-MISS-NO-KIND-CLAUSE',
 			'M-AND-OPERATOR-TEXT-STALE',
+			'M-CONSTRUCTOR-NAME-PADDED',
 			'M-PAREN-FREE-ROOTS-ATOMS-ONLY',
 			'M-SIDE-EFFECT-FREE-DROPS-OPERATORS',
 			'M-SUBTYPE-KEY-SIMPLE-NAME',
@@ -2167,6 +2171,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-CASE-CTRLFLOW-STAR-FLAG-BLIND :: anyparse.macro.WriterTriviaStarDispatch#ownStarHasFlag',
 			'M-PROJECTED-KINDS-ALT-ONLY :: anyparse.macro.QueryWalkerLowering#eachProjectedKind',
 			'M-DECL-HOST-KIND-STALE :: anyparse.grammar.haxe.HaxeQueryPlugin#FinalMember:DECL_HOST_KINDS',
+			'M-ELLIPSIS-STMT-TOKEN-STALE :: anyparse.grammar.haxe.HxStatement#SimpleCtor:EllipsisStmt',
 			'M-NON-NULL-RHS-DROP-HEX :: anyparse.check.NullFlow#FinalMember:NON_NULL_RHS_KINDS'
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
