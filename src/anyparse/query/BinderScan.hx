@@ -94,6 +94,7 @@ final class BinderScan {
 		inline function addOne(kind: Null<String>): Void if (kind != null && !out.contains(kind)) out.push(kind);
 		add(shape.paramKinds);
 		add(shape.localDeclKinds);
+		add(shape.localDeclContinuationKinds);
 		add(shape.localDeclExprKinds);
 		add(shape.staticLocalDeclKinds);
 		add(shape.localFunctionKinds);

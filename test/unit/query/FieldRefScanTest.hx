@@ -41,7 +41,10 @@ class FieldRefScanTest extends Test {
 
 	/**
 	 * One real Haxe spelling per function-scope kind — the SECOND instance the derivation is
-	 * pinned against, parsed by the grammar rather than read off the same shape fields.
+	 * pinned against, parsed by the grammar rather than read off the same shape fields. One row is
+	 * grammar-only: `() => 1` (`ParenLambdaExpr`) parses under the tolerant grammar but Haxe 4.3.7
+	 * refuses it (`Unexpected =>`) — the same dead-vocabulary position `&&=` / `||=` hold in
+	 * `WRITE_SPELLINGS`; the row stays because the PROJECTION is what the pin compares against.
 	 */
 	private static final FN_SCOPE_SPELLINGS: Array<{ kind: String, code: String }> = [
 		{ kind: 'FnMember', code: 'function m() {}' },
@@ -67,8 +70,8 @@ class FieldRefScanTest extends Test {
 		{ kind: 'VarStmt', code: 'var p = 1;' },
 		{ kind: 'FinalStmt', code: 'final p = 1;' },
 		{ kind: 'VarMore', code: 'var a = 1, p = 2;' },
-		{ kind: 'VarExpr', code: 'if (var p = 1) {}' },
-		{ kind: 'FinalExpr', code: 'while (final p = 1) {}' },
+		{ kind: 'VarExpr', code: '@:nullSafety(Off) var p = 1;' },
+		{ kind: 'FinalExpr', code: '@:nullSafety(Off) final p = 1;' },
 		{ kind: 'StaticVarStmt', code: 'static var p = 1;' },
 		{ kind: 'StaticFinalStmt', code: 'static final p = 1;' },
 		{ kind: 'LocalFnStmt', code: 'function p() {}' },

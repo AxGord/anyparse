@@ -34,8 +34,9 @@ using Lambda;
  * signatures and thirteen call sites and "could not express what these ask anyway
  * (`RefShape` names no pattern kind, no `this` identifier and no interpolation-read kind)".
  * All three of those exist: `plainCasePatternKind`, `selfReferenceText` and
- * `stringInterpIdentKind`. The price was real and was paid — the shape reaches fifteen call
- * sites in `src` and six in `test` — and what it buys is the differential: a name inside a
+ * `stringInterpIdentKind`. The price was real and was paid — the shape is threaded through every external caller of the eight
+ * functions (counted by `hxq mentions` at the S204 tip: 16 call sites in `src` across `BackingFieldRefs`, `TrivialGetter`,
+ * `FieldRename`, and 9 in `test`; a reading of that tree, not an invariant) — and what it buys is the differential: a name inside a
  * `RefShape` field is checked against the projected vocabulary by
  * `unit.query.RefShapeKindProjectionTest`, and a name in a private array here is checked by
  * nothing. The retired `LambdaParam` kind sat in `bindsNameHere` for three months matching
