@@ -276,119 +276,77 @@ typedef WriteOptions = {
 	soleItemCuddledBrackets: Bool,
 
 	/**
-	 * When `true`, a method-chain link whose PRECEDING link already rendered
-	 * multi-line and ended in a dedented closing-delimiter run (`}` / `})` /
-	 * `}]`) starts ON that closing line instead of on a fresh indented line of
-	 * its own — the compact fluent shape
-	 * `…postLocked(null, {\n\t…\n}).applied(… -> {\n\t…\n}).fault(…)` — while
-	 * every other link keeps the dot-break the cascade chose. Applies only to
-	 * the two dot-break chain shapers (`OnePerLineAfterFirst` / `OnePerLine`);
-	 * the cuddled link joins the run of the link it rides on, so its own body
-	 * indents from the statement head rather than gaining one extra level per
-	 * link.
+	 * When `true`, a method-chain link whose PRECEDING link already rendered multi-line
+	 * and ended in a dedented closing-delimiter run (`}` / `})` / `}]`) starts ON that
+	 * closing line instead of on a fresh indented line of its own, while every other
+	 * link keeps the dot-break the cascade chose. Applies only to the two dot-break
+	 * chain shapers (`OnePerLineAfterFirst` / `OnePerLine`); the cuddled link joins the
+	 * run of the link it rides on, so its body indents from the statement head rather
+	 * than gaining a level per link.
 	 *
-	 * The gate is emit-time and STRUCTURAL — `DocMeasure.endsWithForcedCloseLine`
-	 * over the preceding link: a FORCED hardline whose entire tail is close
-	 * delimiters and whitespace. Every conditional is read on its flat side, so
-	 * a construct the RENDERER would break for being too wide answers `false`
-	 * and keeps the pre-knob layout — no column measurement ever changes a
-	 * chain's shape here. The closes-only tail requirement additionally pins the
-	 * cuddle point to a low column (base indent plus two or three characters),
-	 * so the cuddled `.method(` head cannot by itself blow the line.
+	 * The gate is emit-time and STRUCTURAL — `DocMeasure.endsWithForcedCloseLine` over
+	 * the preceding link: a FORCED hardline whose whole tail is close delimiters and
+	 * whitespace, with every conditional read on its flat side, so a construct the
+	 * RENDERER would break for width answers `false` and keeps the pre-knob layout. No
+	 * column measurement ever changes a chain's shape here, and the closes-only tail
+	 * pins the cuddle point to a low column, so the cuddled `.method(` head cannot by
+	 * itself blow the line. A lambda BLOCK body with at least one statement therefore
+	 * always cuddles, while a bracketed literal cuddles only when its own wrap cascade
+	 * committed to breaking it at build time — the same AST can go either way depending
+	 * on how the source wrote it, and a trailing comma is an output of that break
+	 * rather than its cause.
 	 *
-	 * Which links therefore cuddle, measured rather than assumed: a link whose
-	 * argument is a lambda BLOCK body with at least one statement always does
-	 * (that body breaks even when the source wrote it on one line), which is
-	 * what compacts the real fluent-callback shapes. A link whose argument is a
-	 * BRACKETED LITERAL does iff that literal's own wrap cascade already
-	 * committed to breaking it at build time — under the stock object-literal
-	 * rules, an item count above the threshold breaks even a one-line source
-	 * literal, while at or below it `Keep` semantics reproduce the source's own
-	 * line breaks, so the same AST can cuddle or not depending on how it was
-	 * written. A trailing comma is an output of that break, not its cause.
+	 * Three shapes are deliberately NOT covered: `Keep`-mode chains (they already
+	 * reproduce the source's own dot boundaries), a chain carrying a trailing line
+	 * comment (a link cuddled after a `//` would be swallowed) and a link whose
+	 * predecessor breaks only at render time, for width.
 	 *
-	 * Three shapes are deliberately NOT covered: `Keep`-mode chains (they
-	 * already reproduce the source's own dot boundaries), chains carrying a
-	 * trailing line comment (routed through `shapeKeep` by
-	 * `commentBreakMask` — a link cuddled after a `//` would be swallowed),
-	 * and links whose predecessor breaks only at render time, for width.
-	 *
-	 * Default `false` — absent from config means byte-identical output to the
-	 * pre-knob writer, since both shapers early-return their pre-knob
-	 * construction when no gap cuddles. Fed by
-	 * `wrapping.methodChainCuddledLinks` through `HaxeFormatConfigLoader`.
-	 * Lives on the base options alongside the other cascade-independent layout
-	 * policies the wrap engine reads directly; the shapes it recognises are
-	 * expressed purely in `Doc` terms, so any grammar emitting method chains
-	 * through `MethodChainEmit` inherits it.
+	 * Default `false`, and absent from config the output is byte-identical to the
+	 * pre-knob writer because both shapers early-return when no gap cuddles. Fed by
+	 * `wrapping.methodChainCuddledLinks`; the shapes it recognises are pure `Doc`, so
+	 * any grammar emitting method chains through `MethodChainEmit` inherits it.
 	 */
 	methodChainCuddledLinks: Bool,
 
 	/**
 	 * Cuddle the `:` of a BROKEN ternary onto the then branch's own closing line
-	 * (`} : {`) instead of opening a continuation line that holds nothing but
-	 * `: {`. Only the `:` side moves; the `?` keeps its break, because the branch
-	 * that gains a line by breaking has earned it while the `: {` line buys
-	 * nothing — the else branch lays out across lines regardless, its own `{` IS
-	 * its wrap point, and the separator line only pushes everything below it down
-	 * one. `soleItemCuddledBrackets` reads the same policy from the other side: a
-	 * break is worth taking only when it RESCUES the line.
+	 * (`} : {`) instead of opening a continuation line that holds nothing but `: {`.
+	 * Only the `:` side moves: the branch that gains a line by breaking has earned it,
+	 * while the `: {` line buys nothing — the else branch lays out across lines
+	 * regardless and its own `{` IS its wrap point. `soleItemCuddledBrackets` reads the
+	 * same policy from the other side — a break is worth taking only when it RESCUES
+	 * the line.
 	 *
-	 * TWO ADMISSION LEGS, both in `BinaryChainEmit.ternaryBracesCuddle`. The
-	 * STRUCTURAL one reads `DocMeasure.breakTailCloseNest` over the then branch,
-	 * whose rendered tail must be a forced closing line whose leftmost closer is a
-	 * BRACE landing at depth ZERO — the indent of the line the branch itself
-	 * started on. That zero is what makes the cuddle safe rather than merely
-	 * shorter: the else branch's `{` opens at the `?` line's indent, so its own `}`
-	 * closes there too and neither delimiter sits below its opener. A then branch
-	 * that rendered FLAT has no closing line to ride and answers `-1`, so a ternary
-	 * whose branches both fit is never rebuilt onto one line.
-	 *
-	 * That read sees nothing under a config that defers every object-literal break
-	 * to the RENDERER (`objectLiteral.defaultWrap: "ignore"` plus a single
-	 * `exceedsMaxLineLength` rule). The SECOND leg resolves such a branch through
+	 * TWO ADMISSION LEGS, both in `BinaryChainEmit.ternaryBracesCuddle`. The STRUCTURAL
+	 * one reads `DocMeasure.breakTailCloseNest` over the then branch, whose rendered
+	 * tail must be a forced closing line whose leftmost closer is a BRACE landing at
+	 * depth ZERO; that zero is what makes the cuddle safe rather than merely shorter,
+	 * since the else branch's `{` opens at the `?` line's indent and its `}` closes
+	 * there too, so neither delimiter sits below its opener. A then branch that
+	 * rendered FLAT has no closing line to ride, so a ternary whose branches both fit
+	 * is never rebuilt onto one line. The SECOND leg exists for a config that defers
+	 * every object-literal break to the RENDERER: it resolves such a branch through
 	 * `WrapList.renderPivotBreakArm` and pays for the render-time reading with a
-	 * continuation-fits probe wrapped around the cuddled shape, slot-inverted so
-	 * the PRE-KNOB layout is what every Doc walker resolves to: a branch that fits
-	 * its own continuation line stays flat, and is never glued.
-	 *
-	 * The ELSE branch must additionally OPEN with a collection delimiter
-	 * (`WrapList.startsWithCollectionDelim`) — the `} : {` shape is only legible
-	 * when what follows the separator is itself a delimited body. A non-collection
-	 * else operand (a call, a chain, a bare identifier) keeps the pre-knob line of
-	 * its own.
+	 * continuation-fits probe, slot-inverted so that every Doc walker resolves to the
+	 * PRE-KNOB layout. The ELSE branch must additionally OPEN with a collection
+	 * delimiter, because `} : {` is legible only when what follows the separator is
+	 * itself a delimited body.
 	 *
 	 * A THIRD gate, `BinaryChainEmit.cuddleShape`, answers about the else branch's
-	 * WIDTH, because gluing does not move that branch — it SHIFTS it right by the
-	 * then branch's whole closing-line CLOSER RUN and the space after it — two
-	 * columns for a bare `}`, four for a `}))`. An else that fits its own
-	 * separator line can overflow the line it rides once glued, and the renderer
-	 * then breaks a branch that was a single line, spending several to save one.
-	 * Two `IfArrowContinuationFitsWithRest` probes BRACKET that band — both
-	 * failing, or both fitting, means the else lays out the same way either way and
-	 * the cuddle is free — and only inside the band does the separator line
-	 * survive. The rest-aware ctor is what makes those two widths honest: the line
-	 * they measure ends where the HOST does, not where the branch does, so they
-	 * charge what the render stack still emits after the ternary — the `;` of a
-	 * statement, the `);` of a glued call argument, nothing at all when the host
-	 * opened its own paren. `cuddleShape`'s own doc carries the arithmetic and the
-	 * band a fixed one-column reserve straddled before it.
+	 * WIDTH, because gluing does not move that branch — it SHIFTS it right by the then
+	 * branch's whole closer run and the space after it, so an else that fits its own
+	 * separator line can overflow the line it rides and the renderer then spends
+	 * several lines to save one. Two `IfArrowContinuationFitsWithRest` probes BRACKET
+	 * that band, and the rest-aware ctor makes those widths honest by charging what the
+	 * render stack still emits after the ternary. `cuddleShape` says why the tail is charged.
 	 *
-	 * Covers the two one-operand-per-line break shapes (`OnePerLineAfterFirst` /
-	 * `OnePerLine`) — what a broken ternary is — and within them only the
-	 * `beforeLast` separator location, the only one whose shaper reads the flag.
-	 * Deliberately NOT covered: `Keep` (source-faithful by contract — the source's
-	 * own `:` placement is the answer there), the fill family (its gaps break by
-	 * packing, so the separator may not start a line at all), and `NoWrap`
-	 * (already glued).
-	 *
-	 * Default `false` — absent from config means byte-identical output to the
-	 * pre-knob writer, since the cuddle branch is entered only when the gate
-	 * answers yes. Fed by `wrapping.ternaryCuddledBraces` through
-	 * `HaxeFormatConfigLoader`. Lives on the base options alongside the other
-	 * cuddle policies the wrap engine reads directly; the shape it recognises is
-	 * expressed purely in `Doc` terms, so any grammar emitting a mixfix `? :`
-	 * chain through `BinaryChainEmit` inherits it.
+	 * Covers the two one-operand-per-line break shapes — what a broken ternary is — and
+	 * within them only the `beforeLast` separator location, the only one whose shaper
+	 * reads the flag. Deliberately NOT covered: `Keep` (source-faithful by contract),
+	 * the fill family (its gaps break by packing) and `NoWrap` (already glued). Default
+	 * `false`, byte-identical to the pre-knob writer when absent from config; fed by
+	 * `wrapping.ternaryCuddledBraces`, and the shape it recognises is pure `Doc`, so any
+	 * grammar emitting a mixfix `? :` chain through `BinaryChainEmit` inherits it.
 	 */
 	ternaryCuddledBraces: Bool,
 

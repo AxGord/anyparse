@@ -1,48 +1,25 @@
 package anyparse.format;
 
 /**
- * Policy for uniform blank-line runs inside one delimited element list: a
- * statement block (function / if / for / while / plain-block bodies — NOT
- * class / interface / abstract member lists, whose spacing is owned by the
- * member-order / classEmptyLines machinery), or an array literal.
+ * Policy for uniform blank-line runs inside ONE delimited element list — a
+ * statement block body or an array literal, never a class member list, whose
+ * spacing is owned by the member-order / `classEmptyLines` machinery.
  *
- * Rationale: "separators that separate everything separate nothing." When
- * blank lines fall between EVERY adjacent pair in a list, they carry no
- * grouping information — they are uniform noise, so `Collapse` removes them
- * all. When the blanks are SELECTIVE (some adjacent pairs sit together, some
- * are split by a blank), they express deliberate semantic groups, and
- * `Collapse` leaves the list untouched, byte-exact.
+ * Separators that separate everything separate nothing: `Collapse` strips the
+ * blanks only when EVERY interior gap between adjacent elements is blank, and
+ * otherwise leaves the list byte-exact, because selective blanks express
+ * deliberate groups; `Keep` respects the source exactly. Uniformity is judged
+ * over interior gaps alone — head and tail blanks belong to `afterLeftCurly` /
+ * `beforeRightCurly` and are resolved before this policy runs.
  *
- * `Keep`     — respect the source's blank lines exactly (pre-slice default;
- * round-trip byte-identical).
- * `Collapse` — when every interior gap between adjacent elements is blank,
- * strip all of them; otherwise leave the list byte-exact.
+ * A leading comment on an INTERIOR element bails the collapse (under uniformity
+ * a blank always detaches it from the element above, which is what a group
+ * header looks like), while on the FIRST element it cannot be heading a group
+ * and collapses with the rest. Collapsing an array-literal gap also drops that
+ * gap's hardline requirement, without which the emit would not be idempotent.
  *
- * Uniformity is measured over INTERIOR gaps only — the head/tail blanks
- * adjacent to the delimiters are owned by `afterLeftCurly` /
- * `beforeRightCurly` and are already resolved before this policy runs. A
- * leading comment on an INTERIOR element leaves the list untouched: under
- * uniformity a blank always detaches it from the element above, which is
- * what a group header looks like, so the grouping intent is unclear and
- * `Collapse` bails. The FIRST element is different — nothing but the open
- * delimiter sits above it, so its comment cannot be heading a group. It
- * annotates its own element, and the blank it may hold between itself and
- * that element collapses with the rest.
- *
- * Which lists opt in is a GRAMMAR decision, not a policy one — a field or
- * enum branch carries `@:fmt(uniformStmtBlanks)`. In the Haxe grammar that
- * is the four statement-block Stars plus `HxExpr.ArrayExpr`; object
- * literals, anon types and argument lists deliberately stay out.
- *
- * Collapsing an array-literal gap also drops that gap's hardline
- * requirement, so the literal re-flows exactly as the same source without
- * the blanks would — under a `noWrap` array config that can mean the whole
- * literal collapses onto one line. Without that the emit would not be
- * idempotent.
- *
- * Format-neutral — lives in `anyparse.format` so other grammars with
- * delimited element lists can opt into the same policy surface from their
- * own grammar.
+ * Which lists opt in is a GRAMMAR decision — a field or enum branch carries
+ * `@:fmt(uniformStmtBlanks)`; the policy surface itself is format-neutral.
  */
 enum abstract UniformStatementBlanksPolicy(Int) from Int to Int {
 

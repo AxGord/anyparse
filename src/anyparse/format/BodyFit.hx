@@ -5,102 +5,83 @@ import anyparse.core.DocMeasure;
 import anyparse.format.wrap.WrapList;
 
 /**
- * The single `FitLine` body layout emitter (ω-case-body-fitline-shared).
+ * The single `FitLine` body layout emitter.
  *
  * Two writer paths place a construct's body relative to its header under
- * `BodyPolicy.FitLine`: `WriterLowering.buildBodyFitExpr` for a bare-Ref
- * body field (`return expr;`, `if (c) body`, `for (…) body`) and
- * `TriviaTryparseLowering.triviaTryparseCaseWrapExpr` for the `@:tryparse` Star
- * body of `HxCaseBranch.body` / `HxDefaultBranch.stmts`. They shipped as
- * two hand-written copies of the same Doc shape, and the copies drifted:
- * the case-path copy lost the `flatLength == -1` clause, which made its
- * placement depend on the SOURCE line shape and cost `fitLine` its
- * idempotence. Both now call this function, so the shape has one owner.
+ * `BodyPolicy.FitLine` — `WriterLowering.buildBodyFitExpr` for a bare-Ref body
+ * field and `TriviaTryparseLowering.triviaTryparseCaseWrapExpr` for the
+ * `@:tryparse` Star body of a case branch. Both call this function, so the Doc
+ * shape has ONE owner: as two hand-written copies they drifted, and the copy that
+ * lost the `flatLength == -1` clause made its placement depend on the SOURCE line
+ * shape, which cost `fitLine` its idempotence.
  *
  * Two outcomes, chosen by whether the body CAN render on one line:
  *
- *  - `WrapList.flatLength(body) == -1` — the body's Doc commits to a
- *    hardline (a `{ … }` block, a wrap cascade that refuses one line, a
- *    source-multi-line literal the emitter keeps broken). Measuring it
- *    WHOLE is meaningless: no budget makes it fit. It GLUES to the header,
- *    the same answer `BodyPolicy.Same` gives, with an `OptSpace` separator
- *    so a body that opens with its own hardline does not leave a trailing
- *    space behind — but the glue is width-gated by `glueLayout`, since the
- *    body's FIRST line is a real line and does have to fit. A caller may
- *    also refuse the glue outright for this body (`refuseGlue`), which
- *    takes `breakLayout` instead; that decision is about the body's KIND,
- *    not its width, and belongs to the caller.
- *  - otherwise — `BodyGroup(Nest(cols, [Line, body]))`. The renderer's
- *    `fitsFlat` sees the live column (the header is already emitted) plus
- *    the body's flat width and picks same-line or next-line-one-deeper.
+ *  - `WrapList.flatLength(body) == -1` — the body's Doc commits to a hardline, so
+ *    measuring it WHOLE is meaningless because no budget makes it fit. It GLUES to
+ *    the header, the answer `BodyPolicy.Same` gives, with an `OptSpace` separator
+ *    so a body opening with its own hardline leaves no trailing space; the glue is
+ *    still width-gated by `glueLayout`, since the body's FIRST line is a real line.
+ *    A caller may refuse the glue outright (`refuseGlue`) and take `breakLayout`
+ *    instead — a decision about the body's KIND, not its width, hence the caller's.
+ *  - otherwise — `BodyGroup(Nest(cols, [Line, body]))`, and the renderer's
+ *    `fitsFlat` picks same-line or next-line-one-deeper from the live column.
  *
- * WHY the two measures differ, and why the branch above is load-bearing:
- * `Renderer.fitsFlat` DEFERS a nested `BodyGroup` (its content decides
- * its own layout later, so it must not spend the parent's budget), while
- * `WrapList.flatLength` DESCENDS one. A body whose Doc is a `BodyGroup`
- * around forced-multi-line content therefore measures as nearly EMPTY to
- * `fitsFlat` — it would "fit" and inline — while an equivalent body whose
- * content sits outside a `BodyGroup` refuses to flatten. Since the writer
- * wraps source-multi-line literals in a `BodyGroup` and single-line ones
- * not, `fitsFlat` alone answers differently for the two source shapes of
- * ONE AST: format once and the body breaks, format the result again and
- * it re-joins. Asking the descending measure FIRST removes the source
- * shape from the decision, which is what makes a single `fmt` pass reach
+ * WHY that branch is load-bearing: `Renderer.fitsFlat` DEFERS a nested `BodyGroup`
+ * (its content decides its own layout later, so it must not spend the parent's
+ * budget) while `WrapList.flatLength` DESCENDS one. A body whose Doc is a
+ * `BodyGroup` around forced-multi-line content therefore measures as nearly EMPTY
+ * to `fitsFlat` and would inline, while the same content outside a `BodyGroup`
+ * refuses to flatten — and since the writer wraps source-multi-line literals in a
+ * `BodyGroup` and single-line ones not, `fitsFlat` alone answers differently for
+ * the two source shapes of ONE AST. Asking the descending measure FIRST removes
+ * the source shape from the decision, which is what lets a single `fmt` pass reach
  * the `writeRoundTrip(s) == s` fixed point.
  *
- * `nestGluedBody` is the one genuine difference between the two callers,
- * so it is a parameter rather than a second copy. On the glue outcome the
- * body's own inner lines may need a `+1` continuation indent relative to
- * the header line. The case path wants it (unless
- * `alignInlineSwitchCaseBody` says the body's container already indents
- * relative to the case line); the bare-Ref path has never emitted it and
- * stays byte-identical with `false`. The measured outcome does not take
- * the flag: a body that reaches it has NO hardline anywhere (that is what
- * `flatLength >= 0` means), so its `Nest` can only ever apply to breaks
- * the enclosing group itself introduces.
+ * `nestGluedBody` is the one genuine difference between the two callers, so it is a
+ * parameter rather than a second copy: on the glue outcome the body's inner lines
+ * may need one extra continuation indent level relative to the header line. The
+ * MEASURED outcome does not take the flag — a body that reaches it has no hardline
+ * anywhere, so its `Nest` can only apply to breaks the enclosing group introduces.
  */
 final class BodyFit {
 
 	/**
-	 * `_caseSiblingFlatWidth` sentinel: no sibling coordination — every body
-	 * decides for itself, exactly as before ω-case-sibling-symmetry. What a
-	 * case-list Star records when it is not opted in, when its policy is not
-	 * `FitLine`, when it holds one element or fewer, or when no element could
-	 * have rendered inline at all.
+	 * `_caseSiblingFlatWidth` sentinel: no sibling coordination — every body decides
+	 * for itself. What a case-list Star records when it is not opted in, when its
+	 * policy is not `FitLine`, when it holds one element or fewer, or when no element
+	 * could have rendered inline at all.
 	 */
 	public static inline final SIBLING_NONE: Int = -1;
 
 	/**
-	 * `_caseSiblingFlatWidth` sentinel: a widest-sibling pre-pass is IN
-	 * PROGRESS somewhere above (ω-case-sym-linear). Suppresses coordination
-	 * like `SIBLING_NONE`, and additionally tells every nested case-list Star
-	 * to skip its OWN pre-pass and pass the marker further down.
+	 * `_caseSiblingFlatWidth` sentinel: a widest-sibling pre-pass is IN PROGRESS
+	 * somewhere above. Suppresses coordination like `SIBLING_NONE`, and additionally
+	 * tells every nested case-list Star to skip its OWN pre-pass and pass the marker
+	 * further down.
 	 *
-	 * The suppression has no output consequence because the pre-pass consumes
-	 * its Docs only through `WrapList.flatLength`, which forwards
-	 * `IfIndentWidthExceeds` to the FLAT branch — a nested switch's
-	 * coordination cannot change the width being measured. Without the marker
-	 * every nesting level re-measures its whole subtree, which is the
-	 * 2^depth blow-up this sentinel exists to prevent.
+	 * The suppression has no output consequence, because the pre-pass consumes its
+	 * Docs only through `WrapList.flatLength`, which forwards `IfIndentWidthExceeds`
+	 * to the FLAT branch — a nested switch's coordination cannot change the width
+	 * being measured. Without the marker every nesting level re-measures its whole
+	 * subtree, which is the exponential blow-up this sentinel exists to prevent.
 	 */
 	public static inline final SIBLING_PROBING: Int = -2;
 
 	/**
-	 * `_caseSiblingFlatWidth` FORCE channel (ω-case-sibling-symmetry widened):
-	 * a width so large that `IfIndentWidthExceeds` takes its break branch at
-	 * every real indent and budget, so every coordinated body in the group
-	 * goes below its label.
+	 * `_caseSiblingFlatWidth` FORCE channel: a width so large that
+	 * `IfIndentWidthExceeds` takes its break branch at every real indent and budget, so
+	 * every coordinated body in the group goes below its label.
 	 *
-	 * It is an ordinary `siblingWidth >= 0` — `fitLineLayout` needs no arm for
-	 * it and the renderer needs no new ctor. What it encodes is a verdict the
-	 * emitter reached without a width COMPARISON: some unit of the group
-	 * renders below its own label whatever the budget (a multi-statement body,
-	 * a single-statement body `caseBodyRefusesFlat` refuses, a label-splice
-	 * region whose shared body always sits below the labels it was split from,
-	 * or a body that measured `-1` and is refused the glue by
-	 * `caseBodyControlFlowRoot`), so the per-switch rule "if one body is below
-	 * its label, all are" fires. The trigger set and the shapes it leaves out
-	 * are both enumerated in `WriterLowering.caseSiblingWidthProbeExpr`'s doc.
+	 * It is an ordinary `siblingWidth >= 0`, so `fitLineLayout` needs no arm for it and
+	 * the renderer no new ctor. What it encodes is a verdict the emitter reached without
+	 * a width COMPARISON: some unit of the group renders below its own label whatever
+	 * the budget — a multi-statement body, a single-statement body `caseBodyRefusesFlat`
+	 * refuses, a label-splice region whose shared body always sits below the labels it
+	 * was split from, or a body with no flat width that `caseBodyControlFlowRoot`
+	 * refuses the glue — so the per-switch rule "if one body is below its label, all
+	 * are" fires. The trigger set and the shapes it leaves out are both enumerated in
+	 * `WriterLowering.caseSiblingWidthProbeExpr`'s doc.
 	 */
 	public static inline final SIBLING_FORCE_BREAK: Int = 0x0FFFFFF0;
 
@@ -121,55 +102,39 @@ final class BodyFit {
 	}
 
 	/**
-	 * Build the `FitLine` placement Doc for `body` under a header rendered at
-	 * the enclosing indent.
+	 * Build the `FitLine` placement Doc for `body` under a header rendered at the
+	 * enclosing indent.
 	 *
-	 * `siblingWidth < 0` (`SIBLING_NONE`, the default) is the per-construct
-	 * decision described on the class: measure when the body can render flat,
-	 * width-gate the glue when it cannot. `lineWidth` is REQUIRED and comes
-	 * before it — the glue gate needs a budget at every call site, and an
-	 * omitted-by-default width would silently restore the unmeasured glue this
-	 * seam exists to remove.
+	 * `siblingWidth < 0` (`SIBLING_NONE`, the default) is the per-construct decision
+	 * described on the class: measure when the body can render flat, width-gate the
+	 * glue when it cannot. `lineWidth` is REQUIRED and comes before it — the glue gate
+	 * needs a budget at every call site, and an omitted-by-default width would
+	 * silently restore the unmeasured glue this seam exists to remove.
 	 *
-	 * `siblingWidth >= 0` opts into the SIBLING-COORDINATED decision
-	 * (ω-case-sibling-symmetry). The caller passes ONE width for the whole
-	 * group and the result is an `IfIndentWidthExceeds` probe on it, so every
-	 * sibling — which renders at the same indent — answers identically.
-	 * Exceeds the budget: the body goes to the next line one indent deeper,
-	 * and so does every sibling, including ones that would have fit and ones
-	 * that would have glued. Fits: the probe falls through to the
-	 * per-construct decision above, which picks the inline shape for every
-	 * MEASURED sibling (each one's own width is `<= siblingWidth`).
+	 * `siblingWidth >= 0` opts into the SIBLING-COORDINATED decision: the caller passes
+	 * ONE width for the whole group and the result is an `IfIndentWidthExceeds` probe
+	 * on it, so every sibling — all at the same indent — answers identically. Over the
+	 * budget the body goes to the next line one indent deeper and so does every
+	 * sibling, including ones that would have fit or glued; within it the probe falls
+	 * through to the per-construct decision above.
 	 *
-	 * TWO CHANNELS reach that width, and this function cannot tell them apart
-	 * — deliberately. The measured one is the widest sibling's flat width. The
-	 * other is `SIBLING_FORCE_BREAK`, which the emitter substitutes when some
-	 * unit of the group is below its own label at every budget (a
-	 * multi-statement body, a single-statement body the flat-refusal gate
-	 * rejects, a label-splice region, or a `refuseGlue` body that measured
-	 * `-1`): no real indent and budget can fit it, so the probe always breaks
-	 * and the whole group follows. A GLUED body is not such a unit — its first
-	 * line shares the label line — but a coordinated break still moves it,
-	 * since it sits inside the probe's break branch like everyone else.
+	 * TWO CHANNELS reach that width and this function deliberately cannot tell them
+	 * apart: the widest sibling's flat width, or `SIBLING_FORCE_BREAK` for a group
+	 * holding a unit that sits below its own label at every budget. A GLUED body is not
+	 * such a unit — its first line shares the label line — but a coordinated break
+	 * still moves it, since it sits inside the probe's break branch like everyone else.
 	 *
-	 * `refuseGlue` replaces the glue outcome with `breakLayout`. It is the
-	 * CALLER's verdict rather than anything measured here: the case-body path
-	 * passes it when the body's single statement is keyword-led control flow
-	 * (`caseBodyControlFlowRoot`). Such a construct's continuation lines (`else if`, `} while`,
-	 * `catch`) are siblings of its head, so glued they render at the HEAD's
-	 * indent rather than under the body — at the case LABEL's own column when
-	 * `alignInlineSwitchCaseBody` drops the continuation nest, one level under
-	 * it otherwise. Both read as if the statement had left the branch. The flag cannot reach the MEASURED
-	 * outcome: a body that renders flat never enters this branch, so
-	 * `case X: if (c) x();` is untouched. The bare-Ref caller leaves it
-	 * `false` and stays byte-identical.
+	 * `refuseGlue` replaces the glue outcome with `breakLayout`, and it is the CALLER's
+	 * verdict rather than anything measured here: the case-body path passes it when the
+	 * body's single statement is keyword-led control flow, whose continuation lines
+	 * (`else if`, `} while`, `catch`) are siblings of its head and so render at the
+	 * HEAD's indent when glued, reading as if the statement had left the branch. The
+	 * flag cannot reach the MEASURED outcome, so a body that renders flat is untouched.
 	 *
 	 * Some shapes DO render below their label and still cannot LEAD the group;
-	 * `WriterLowering.caseSiblingWidthProbeExpr`'s doc enumerates them. The
-	 * render-time one is a glue that `glueLayout` turns into a break: that
-	 * verdict is reached at the LIVE PEN COLUMN, which no emitter-side walk
-	 * can see, so the pre-pass never learns of it. Pinned by
-	 * `HxGlueWidthSliceTest.testGlueTurnedBreakIsNotASiblingSymmetryTrigger`.
+	 * `WriterLowering.caseSiblingWidthProbeExpr`'s doc enumerates them. The render-time
+	 * one is a glue that `glueLayout` turns into a break — a verdict reached at the LIVE
+	 * PEN COLUMN, which no emitter-side walk can see, so the pre-pass never learns it.
 	 */
 	public static function fitLineLayout(
 		cols: Int, body: Doc, nestGluedBody: Bool, lineWidth: Int, siblingWidth: Int = SIBLING_NONE, refuseGlue: Bool = false
@@ -187,108 +152,87 @@ final class BodyFit {
 	}
 
 	/**
-	 * Width answer for the GLUE outcome (ω-glue-width): `glued` as written when
-	 * the header line still fits with the body's first line on it, otherwise
-	 * `body` on the next line one indent deeper — the same break shape every
-	 * other `FitLine` outcome uses.
+	 * Width answer for the GLUE outcome: `glued` as written when the header line still
+	 * fits with the body's first line on it, otherwise `body` on the next line one
+	 * indent deeper — the same break shape every other `FitLine` outcome uses.
 	 *
-	 * The three writer sites that emit a `FitLine` glue (`fitLineLayout` above;
-	 * `WriterLowering.buildBodyFitExpr`'s construct-group arm for if/for/while
-	 * bodies and its single-line-flag arm for `return`-style bodies) all reach
-	 * the glue by the same test, `WrapList.flatLength(body) == -1`, and all
-	 * three used to stop there — a body that cannot render flat was placed
-	 * without ever being measured, so the header line ran past `maxLineLength`
-	 * unbounded (216 columns measured at a limit of 140). This function is the
-	 * one place that answers it; the call sites keep only their own glue shape.
+	 * The three writer sites that emit a `FitLine` glue all reach it by the same test,
+	 * `WrapList.flatLength(body) == -1`, and all three used to stop there, placing a
+	 * body that cannot render flat without ever measuring it, so the header line ran
+	 * past `maxLineLength` unbounded. This is the one place that answers the width; the
+	 * call sites keep only their own glue shape.
 	 *
-	 * WHAT is measured decides everything, and the two cheap answers are both
-	 * wrong. `flatLength` has already said the body carries a hardline, so its
-	 * full flat width is not a line width; and its FIRST line, measured
-	 * statically, counts a condition or an argument list that the renderer will
-	 * WRAP — over the two corpora that broke 11 files whose glued shape was
-	 * never over-wide, most of them regressions. `DocMeasure.breakableHead`
-	 * fails from the other side: it stops at the first break OPPORTUNITY, which
-	 * for a construct-group body is the `(` of its own condition, so it measures
-	 * 5 columns for the very site this slice exists to fix. What the question
-	 * actually needs is a speculative render, which is what
-	 * `IfGluedFirstLineExceeds` runs — at the LIVE PEN COLUMN, since the header
-	 * is emitted by the caller and only the renderer knows how wide it came out.
+	 * WHAT is measured decides everything, and the two cheap answers are both wrong.
+	 * `flatLength` has already said the body carries a hardline, so its full flat width
+	 * is not a line width; and its FIRST line, measured statically, counts a condition
+	 * or an argument list the renderer will WRAP, which breaks glued shapes that were
+	 * never over-wide. `DocMeasure.breakableHead` fails from the other side — it stops
+	 * at the first break OPPORTUNITY, the `(` of the body's own condition. The question
+	 * needs a speculative render, which is what `IfGluedFirstLineExceeds` runs at the
+	 * LIVE PEN COLUMN, since only the renderer knows how wide the header came out.
 	 *
-	 * The population that MOVES is bodies carrying real content before their
-	 * first break: a nested `if (…) {` / `for (…) {` statement, a call whose
-	 * `{`-lambda argument breaks. A body that breaks immediately after its own
-	 * opening `{` — a statement block, a `{ … }` literal already committed to
-	 * breaking — is refused outright, however wide the header got: it ends the
-	 * header line by itself, so moving it down returns two columns and strands
-	 * its `{` on a line of its own. Same population and same verdict as
-	 * `Renderer.selfBreakingBraceBody` gives the arrow-body marker.
+	 * The population that MOVES is bodies carrying real content before their first
+	 * break: a nested `if (…) {` / `for (…) {` statement, a call whose `{`-lambda
+	 * argument breaks. A body that breaks immediately after its own opening `{` is
+	 * refused outright however wide the header got — it ends the header line by itself,
+	 * so moving it down returns two columns and strands its `{` alone. Same population
+	 * and same verdict as `Renderer.selfBreakingBraceBody` gives the arrow-body marker.
 	 *
-	 * KNOWN over-fire, one site in the two-corpus sweep
-	 * (`editor/pitch/PitchArea.hx` `updatePlayerNamesForObjects`): the body is a
-	 * call whose sole argument is an array comprehension, and the comprehension
-	 * opens its bracket through a probe that the natural walk resolves on the
-	 * FLAT side (see the ctor doc's residual note). The walk therefore predicts
-	 * `…([ for (x in xs)` on the header line where the renderer emits `…([`, and
-	 * the glue breaks although it did not have to. The result is the same line
-	 * count and no over-wide line, so it is a wash rather than a regression.
-	 * The probe in question is an `IfFirstLineExceeds`, which
-	 * `naturalWidthStructural` has no opt-in for — `resolveOpenDelim` covers
-	 * only `IfNaturalFirstLineFitsOpenDelim` — so closing it means teaching
-	 * that walker a real predicate for one more probe, in a walk three other
-	 * consumers share.
+	 * One over-fire is known and accepted: a probe `naturalWidthStructural` resolves on
+	 * the FLAT side makes the walk predict a wider header line than the renderer emits,
+	 * so a glue can break although it did not have to — same line count, no over-wide
+	 * line, and closing it means teaching that walk one more predicate.
 	 *
-	 * `glued` carries an INVARIANT the render arm does arithmetic on: it must
-	 * lead with the one-column glue separator (`OptSpace(' ')`) before `body`,
-	 * because the break-side re-measure starts one column left of the body's
-	 * indent so that separator lands the body exactly on it. All three callers
-	 * build `Concat([OptSpace(' '), …])`; a fourth must too.
-	 *
-	 * `lineWidth <= 0` disables the gate and returns `glued` unchanged; no
-	 * production config reaches it (`WriteOptions.lineWidth` is always the
-	 * positive `maxLineLength`), it is the inert answer for a caller that has no
-	 * width to spend.
+	 * `glued` carries an INVARIANT the render arm does arithmetic on: it must lead with
+	 * the one-column glue separator (`OptSpace(' ')`) before `body`, because the
+	 * break-side re-measure starts one column left of the body's indent so that
+	 * separator lands the body exactly on it. All three callers build
+	 * `Concat([OptSpace(' '), …])`; a fourth must too. `lineWidth <= 0` disables the
+	 * gate and returns `glued` unchanged — the inert answer for a caller with no width
+	 * to spend, which no production config reaches.
 	 */
 	public static function glueLayout(cols: Int, body: Doc, glued: Doc, lineWidth: Int): Doc {
 		return lineWidth <= 0 ? glued : Doc.IfGluedFirstLineExceeds(lineWidth, cols, breakLayout(cols, body), glued);
 	}
 
 	/**
-	 * The width of the construct head an arrow-lambda body leads with, or `NO_CONSTRUCT_HEAD`
-	 * when it has none (omega-arrowif-blockbody-width).
+	 * The width of the construct head an arrow-lambda body leads with, or
+	 * `NO_CONSTRUCT_HEAD` when it has none.
 	 *
-	 * The `@:fmt(arrowBodyLineWrap)` marker already carries a break-after-`->` layout and a
-	 * render-time probe to reach it, but that probe measures FLAT WIDTH, and one construct shape
-	 * is invisible to every flat measure: a plain `if` (no `else`) whose body is a `{}`-block.
-	 * Its condition and body sit inside the construct-level `BodyGroup` that `WriterLowering`s
-	 * cond-fit group emits, and `DocMeasure.flatTokenWidthStep` defers a `BodyGroup` to width
-	 * 0 — measured, the whole `if (…) { … }` reports 4 columns (`if (`) where the same shape
-	 * written as a `for` reports 93. So the probe can never fire for it: the body glues to the
-	 * header line however wide its own head is, and the `if`s condition then breaks INSIDE the
-	 * arrow head, leaving a first line that ends on a bare `if (`.
+	 * The `@:fmt(arrowBodyLineWrap)` marker already carries a break-after-`->` layout
+	 * and a render-time probe to reach it, but that probe measures FLAT WIDTH, and one
+	 * construct shape is invisible to every flat measure: a plain `if` (no `else`)
+	 * whose body is a `{}`-block. Its condition and body sit inside the
+	 * construct-level `BodyGroup` that `WriterLowering`'s cond-fit group emits, and
+	 * `DocMeasure.flatTokenWidthStep` defers a `BodyGroup` to width 0, so the whole
+	 * `if (…) { … }` reports only its `if (` where the same shape written as a `for`
+	 * reports its true width. The probe can then never fire for it: the body glues to
+	 * the header line however wide its own head is, and the `if`'s condition breaks
+	 * INSIDE the arrow head, leaving a first line that ends on a bare `if (`.
 	 *
-	 * `HxArrowPlainIfOpenSliceTest`s re-tag closes the same blindness for a HARDLINE-FREE body
-	 * by re-tagging its `BodyGroup` as a `Group`; a block body carries hardlines, so re-tagging
-	 * it would change the render, not just the measure. Making the width visible to the CALL
-	 * cascade instead is the other wrong answer: the call then opens and the body moves twice,
-	 * which relocates the overflow rather than removing it. What is left is to hand the markers
-	 * own probe an honest width — see `arrowGlueThreshold`.
+	 * Re-tagging the `BodyGroup` as a `Group` is the fix for a HARDLINE-FREE body; a
+	 * block body carries hardlines, so re-tagging it would change the render and not
+	 * just the measure. Making the width visible to the CALL cascade instead is the
+	 * other wrong answer: the call then opens and the body moves twice, relocating the
+	 * overflow rather than removing it. What is left is to hand the marker's own probe
+	 * an honest width — see `arrowGlueThreshold`.
 	 *
-	 * THREE refusals, each one measured:
+	 * THREE refusals:
 	 *
-	 * - a body that CAN render flat (`flatLength != -1`) has no forced break, so its first line
-	 *   IS its whole width and the existing probe already measures it correctly;
-	 * - a `{}`-BLOCK body ends the header line by itself, so moving it down strands its brace
-	 *   and buys nothing. That population belongs to `Renderer.selfBreakingBraceBody`, which
-	 *   reads the markers FLAT side and must keep seeing exactly what it saw before — hence the
-	 *   refusal here rather than a probe the renderer would resolve;
-	 * - a body whose transparent first line is no WIDER than its flat width hides nothing behind
-	 *   a deferral, so there is no correction to make. This is what keeps the measure off
-	 *   call-bodied arrows: a call whose argument is a `{`-lambda also cannot render flat and
-	 *   also hides content behind a `BodyGroup`, but its transparent first line stops at that
-	 *   lambdas `{` and comes out SHORTER than the flat width, which counts the arguments past
-	 *   it. Without this test two such arrows in a real 800-file tree re-glued shapes that had
-	 *   been correctly broken (an `API…post(…).success(…)` chain and a
-	 *   `haxe.Timer.delay(() -> { … }, …)`); with it, neither file moves.
+	 * - a body that CAN render flat (`flatLength != -1`) has no forced break, so its
+	 *   first line IS its whole width and the existing probe already measures it;
+	 * - a `{}`-BLOCK body ends the header line by itself, so moving it down strands
+	 *   its brace and buys nothing. That population belongs to
+	 *   `Renderer.selfBreakingBraceBody`, which reads the marker's FLAT side and must
+	 *   keep seeing exactly what it saw before — hence a refusal here rather than a
+	 *   probe the renderer would resolve;
+	 * - a body whose transparent first line is no WIDER than its flat width hides
+	 *   nothing behind a deferral, so there is no correction to make. This is what
+	 *   keeps the measure off call-bodied arrows: a call whose argument is a
+	 *   `{`-lambda also cannot render flat and also hides content behind a
+	 *   `BodyGroup`, but its transparent first line stops at that lambda's `{` and
+	 *   comes out SHORTER than the flat width, which counts the arguments past it.
+	 *   Without this test such arrows re-glue shapes that were correctly broken.
 	 */
 	public static function arrowConstructHeadWidth(body: Doc): Int {
 		if (WrapList.flatLength(body) != -1) return NO_CONSTRUCT_HEAD;
@@ -322,8 +266,7 @@ final class BodyFit {
 
 	/**
 	 * The BREAK-side answer for a construct-group `FitLine` body that CAN render
-	 * flat (`flatLength >= 0`) but did not fit on the header line
-	 * (ω-fitline-body-glue).
+	 * flat (`flatLength >= 0`) but did not fit on the header line.
 	 *
 	 * Until this seam the answer was unconditional: the body went to the next
 	 * line one indent deeper, and a body too wide for THAT line broke again
@@ -351,9 +294,9 @@ final class BodyFit {
 	}
 
 	/**
-	 * The BREAK-side answer for an ARROW-LAMBDA body (ω-fitline-body-glue,
-	 * arrow arm): the sister of `continuationRescuesBody` for the one other
-	 * placement that puts a body after a header token rather than under it.
+	 * The BREAK-side answer for an ARROW-LAMBDA body: the sister of
+	 * `continuationRescuesBody` for the one other placement that puts a body
+	 * after a header token rather than under it.
 	 *
 	 * The arrow's own probe has already found that the line carrying
 	 * `params -> body` overflows; this decides what that costs. The body fits
@@ -362,10 +305,10 @@ final class BodyFit {
 	 * and breaks inside itself, saving a line and an indent level.
 	 *
 	 * SCOPED to a body that IS an expression paren (`m -> ({ … })`), i.e. one
-	 * `pinParenGlued` recognises. Widening it to every arrow body was measured
-	 * over a real tree and read WORSE: an `if`-expression body glues its head
-	 * and then explodes its own condition at the deeper column, and a chain
-	 * body trades one shape for another with no line saved. The paren body is
+	 * `pinParenGlued` recognises. Widening it to every arrow body reads WORSE:
+	 * an `if`-expression body glues its head and then explodes its own
+	 * condition at the deeper column, and a chain body trades one shape for
+	 * another with no line saved. The paren body is
 	 * the population where the glue provably pays — it breaks at its own `{`
 	 * either way, so the delimiter costs nothing beside the arrow while a whole
 	 * line and indent level below it do.
@@ -386,125 +329,42 @@ final class BodyFit {
 	}
 
 	/**
-	 * The chained-`FitLine` staircase gate (T135): a control-flow construct
-	 * whose `FitLine` body is ANOTHER such construct that in turn carries one
-	 * — three or more links — glues onto ONE line only when the whole chain
-	 * fits there. Otherwise every link but the last goes to its own line.
+	 * The chained-`FitLine` staircase gate: a control-flow construct whose `FitLine`
+	 * body is ANOTHER such construct that in turn carries one — three or more links —
+	 * glues onto ONE line only when the whole chain fits there; otherwise every link
+	 * but the last takes its own line.
 	 *
-	 * Without the gate each link answers for itself, and it answers with the
-	 * next link's own body DEFERRED: `Renderer.fitsFlat` refuses to spend a
-	 * parent's budget on a nested `BodyGroup` (Departure 2), so link k measures
-	 * its own header plus link k+1's header and nothing below that. The chain
-	 * therefore glues link by link until some link's OWN content finally
-	 * overflows — and that link is the one that pays, at the deepest column in
-	 * the chain, by wrapping its CONDITION: `… if (` / cond / `)` / body, four
-	 * lines where the source had three. Measured at a limit of 140 on a nine-
-	 * level-deep `if` / `for` / `if` chain, and on `haxe-formatter`'s own
-	 * `wrapping/condition_chain_short_cond_no_paren_split.hxtest`, which this
-	 * gate turns from FAIL to PASS.
+	 * Without it each link answers for itself with the next link's body DEFERRED,
+	 * since `Renderer.fitsFlat` will not spend a parent's budget on a nested
+	 * `BodyGroup`: the chain glues link by link until some link's OWN content
+	 * overflows, and that link then pays at the deepest column in the chain by
+	 * wrapping its CONDITION.
 	 *
-	 * `sameLine` is the caller's own same-line layout and is returned UNCHANGED
-	 * for every shape the gate does not claim, so a two-link chain
-	 * (`for (…) if (…) push();`) keeps the head-fit glue it has always had —
-	 * that is the population `sameline/fitline_chained_for_if_long.hxtest`
-	 * pins, and the gate must not reach it.
+	 * `sameLine` is the caller's own same-line layout, returned UNCHANGED for every
+	 * shape the gate does not claim, so a two-link chain keeps the head-fit glue it
+	 * has always had. The gate is NOT statement-position only — a brace-less FUNCTION
+	 * body reaches it through `fitLineLayout` and does not tear, because that two-link
+	 * guard refuses the chain — so what differs is the enclosing site, not the
+	 * position class.
 	 *
-	 * WHY the threshold is arithmetic rather than a second measurer:
-	 * `Doc.IfLineExceeds` tests `col + flatTokenWidth(inline) + rest >= n`, and
-	 * `flatTokenWidth` defers the very `BodyGroup`s whose width this gate
-	 * exists to charge. Both the honest width (`charged`, the chain's flat
-	 * FIRST line, measured THROUGH those `BodyGroup`s) and the width the probe
-	 * WILL measure are static, column-independent quantities, so their
+	 * The threshold is arithmetic rather than a second measurer: `Doc.IfLineExceeds`
+	 * measures with `flatTokenWidth`, which defers the very `BodyGroup`s this gate
+	 * exists to charge, and both widths are static and column-independent, so their
 	 * difference folds into `n` at emit time — the same correction
-	 * `arrowGlueThreshold` makes for the arrow-body marker. Stopping at the chain's first hardline is not an
-	 * approximation either: it is what the fork's own Phase 1 measures
-	 * (`findFirstLineLastToken`).
+	 * `arrowGlueThreshold` makes. Two things keep that boundary exact: `charged`
+	 * EXCLUDES the leading glue space, so a line landing ON the limit fits; and the
+	 * sibling `WrapList` probe's explicit `lineWidth + 1` must NOT be copied here,
+	 * since its measured doc contains the separator this one does not.
 	 *
-	 * THE BOUNDARY IS EXACT, and it rests on `charged` EXCLUDING the leading
-	 * glue space. Substituting `n` into the renderer's
-	 * `col + flatTokenWidth(flatDoc) + rest >= n` cancels the
-	 * `flatTokenWidth(sameLine)` term identically — for both call sites, whose
-	 * `sameLine` shapes differ — and leaves `col + charged + rest >= lineWidth`.
-	 * The rendered line is `col + 1 + charged + rest`, so the test is
-	 * `rendered > lineWidth`: the fork's strict semantic, where a line landing
-	 * ON the limit fits. The sibling `WrapList` probe reaches the same boundary
-	 * through an explicit `lineWidth + 1` because ITS measured doc contains the
-	 * separator; do not align the two by copying that `+ 1` here.
-	 * `testWholeChainExactlyAtTheLimitStaysOnOneLine` pins the edge.
+	 * INVARIANT: `n` is computed at EMIT time from `flatTokenWidth(sameLine)`, so no
+	 * post-pass may rewrite the flat branch in a way that changes that width.
+	 * `WrapList.groupifyInlineBodies` is exactly such a pass and carries an
+	 * `IfLineExceeds` through untouched; whether it can reach this gate is UNMEASURED,
+	 * and `arrowGlueThreshold` shares the exposure.
 	 *
-	 * `lineWidth <= 0` returns `sameLine` unchanged — the inert answer for a
-	 * caller with no width to spend, mirroring `glueLayout`. No production
-	 * config reaches it (`WriteOptions.lineWidth` is always the positive
-	 * `maxLineLength`).
-	 *
-	 * INVARIANT the threshold rests on: `n` is computed at EMIT time from
-	 * `flatTokenWidth(sameLine)`, so no post-pass may rewrite the flat branch in
-	 * a way that changes that width. `WrapList.groupifyInlineBodies` is exactly
-	 * such a pass — it re-tags a hardline-free `BodyGroup` as a `Group`, which
-	 * `flatTokenWidth` descends instead of deferring — and it carries an
-	 * `IfLineExceeds` through untouched.
-	 * Whether it can reach this gate is now UNMEASURED: the claim that it
-	 * cannot rested on the "statement-position only" premise the population
-	 * note below corrects. `arrowGlueThreshold` shares the exposure and still does not say so.
-	 *
-	 * THE POPULATION, re-measured (S31). This gate is NOT statement-position
-	 * only: a brace-less FUNCTION body reaches it through `fitLineLayout`, and
-	 * does not tear because the two-link guard BELOW refuses the chain, handing
-	 * the caller its glue untouched. Proved by splicing a `Doc.Text` marker
-	 * into that guard and reading the writer output — the marker lands on the
-	 * function-body slot and on every link below it, while a
-	 * statement-position `if` in the same file carries none.
-	 * What differs is the enclosing site, not the position class: a statement
-	 * `if` arrives with `buildBodyFitExpr`'s construct-level `condFitGroup`
-	 * already around it.
-	 *
-	 * That note also listed three shapes as still tearing, its third entry being
-	 * "a `{}` block OR an `else`"; split into halves that is `{}`-block, `else`
-	 * and arrow-lambda. Swept at a limit of 140 over five widths of one `if` /
-	 * `for` / `if` chain, only two of them still diverge from the fork and
-	 * neither is a tear: the `{}`-BLOCK one is byte-identical to the fork at
-	 * every width, so that half of the claim does not reproduce at all, and
-	 * the `else` and arrow-lambda ones diverge in SHAPE only — neither of THIS
-	 * writer's two outputs has a line over the limit, while on the arrow one
-	 * it is the FORK that runs to 144 columns against the same 140.
-	 *
-	 * REFUSED, with the measurement — and the CODE SHAPE it was measured on,
-	 * because a refusal whose candidate nobody can rebuild is a claim, not a
-	 * measurement. Gate `fitLineLayout`'s whole `flat != -1` arm on the body's
-	 * HONEST full flat width, i.e. break when `col + flat + 1 >= lineWidth`.
-	 * That reads, verbatim, as
-	 *
-	 *     final own: Doc = if (flat != -1)
-	 *         Doc.IfLineExceeds(
-	 *             lineWidth - flat - 1, breakLayout(cols, body),
-	 *             chainStaircase(cols, body, Doc.BodyGroup(Doc.Nest(cols, Doc.Concat([Doc.Line(' '), body]))), lineWidth)
-	 *         );
-	 *
-	 * — the probe's own `flatTokenWidth(flatDoc)` term is 0 (the flat branch is
-	 * the deferred `BodyGroup`), so substituting `n = lineWidth - flat - 1`
-	 * leaves exactly `col + flat + 1 + rest >= lineWidth`.
-	 *
-	 * It reproduces the fork byte for byte on the brace-less function body, and
-	 * it costs, RE-DERIVED on `a3cc4999` (the earlier note recorded the same
-	 * deltas against a 777-fixture base and named none of the tests):
-	 *  - one corpus fixture — `sameline/fitline_chained_for_if_long`,
-	 *    PASS -> FAIL, 781 -> 780, the ONLY fixture that moves;
-	 *  - exactly ten unit failures — `testFitLineBoundaryIsExactlyMaxLineLength`,
-	 *    `testTrailingBodyCommentCountsTowardTheFitMeasure`,
-	 *    `testForChainHeaderFitsBodyDrops`, `testForLadderIsIdempotent`,
-	 *    `testWholeChainExactlyAtTheLimitStaysOnOneLine`,
-	 *    `testTwoLinkChainKeepsItsHeadFitGlue`,
-	 *    `testAPatternScopeConditionalStillMeasuresFlat`,
-	 *    `testARegionIsNotATriggerByItself`,
-	 *    `testCondSpliceSwitchOpenStaysInlineWhenEverythingFits`,
-	 *    `testTriggerFlipsAtTheWidestSiblingsBoundary`.
-	 *
-	 * Those ten are also the pin: the refusal needs no fixture of its own,
-	 * because the candidate cannot be re-introduced without turning them red.
-	 * The cause is unchanged — that same arm places the two-link body of a
-	 * statement `for`, where the head-fit glue is what the fork wants. The seam
-	 * is shared by callers whose safe default points opposite ways, so a fix
-	 * belongs at the function-body site, not here.
+	 * `lineWidth <= 0` returns `sameLine` unchanged, the inert answer for a caller
+	 * with no width to spend. `docs/decisions.md` records the refused alternative of
+	 * gating the whole `flat != -1` arm on the body's honest full flat width.
 	 */
 	public static function chainStaircase(cols: Int, body: Doc, sameLine: Doc, lineWidth: Int): Doc {
 		if (lineWidth <= 0) return sameLine;
@@ -516,9 +376,9 @@ final class BodyFit {
 	}
 
 	/**
-	 * Pin a body that IS an expression paren to its GLUED delimiters
-	 * (ω-fitline-body-glue): `({` on the header line, `})` closing the body,
-	 * never the opened `(` / newline / `{` shape.
+	 * Pin a body that IS an expression paren to its GLUED delimiters: `({` on
+	 * the header line, `})` closing the body, never the opened
+	 * `(` / newline / `{` shape.
 	 *
 	 * The paren's own emitter offers both through an `IfFullLineExceeds` whose
 	 * width question — "can the inner be ONE fitting line if I open?" — is asked
@@ -578,34 +438,32 @@ final class BodyFit {
 	}
 
 	/**
-	 * The body a `FitLine` construct places on its own header line, or `null`
-	 * when `d` is not such a construct — the chain-link test.
+	 * The body a `FitLine` construct places on its own header line, or `null` when `d`
+	 * is not such a construct — the chain-link test.
 	 *
 	 * Both writer paths that emit a measured `FitLine` body land on the same
-	 * signature: a `BodyGroup` (the body-level one `fitLineLayout` builds, or
-	 * the construct-level one `WriterLowering` splices around condition plus
-	 * body when a `conditionWrapping` cascade is configured) whose TAIL is
-	 * `Nest(cols, Concat([Line(' '), body]))`. It is a SHAPE test, not an identity test, and the obvious uniqueness
-	 * claim would be FALSE: `WriterLowering.valueIfGapExpr` also emits
-	 * `Nest(_, Concat([Line(' '), body]))` for a value-`if` gap under
-	 * `softGap`. What keeps the classifier honest is the POSITION plus the
-	 * two-deep requirement — the node must be the tail of a construct's
-	 * trailing `BodyGroup` AND hold another such node — and the measurement
-	 * behind it: over the fork corpus (946 fixtures), the whole anyparse tree
-	 * (1511 files) and Pony under both of its configs (867 files each), the
-	 * only shapes this gate moved were control-flow chains. A false positive
-	 * is a latent hazard rather than an observed one; tagging the gate's own
-	 * probe would remove it, at the cost of a `Doc` ctor. The same reading
-	 * applies to the `IfLineExceeds` arms below: the two in the REWRITE twins
-	 * replace the matched node with its break branch, so a probe from another
-	 * emitter landing on a link's tail path would have its own width decision
-	 * overwritten. None was reachable in any shape probed.
+	 * signature: a `BodyGroup` — the body-level one `fitLineLayout` builds, or the
+	 * construct-level one `WriterLowering` splices around condition plus body when a
+	 * `conditionWrapping` cascade is configured — whose TAIL is
+	 * `Nest(cols, Concat([Line(' '), body]))`.
 	 *
-	 * Deliberately narrow in two directions, both conservative: a body that
-	 * cannot render flat reaches `glueLayout` and carries an
-	 * `IfGluedFirstLineExceeds` instead, and a body under
-	 * `opt.fitLineBodyGlue` carries an `IfBreak` — neither answers here, so a
-	 * chain through one of them keeps its current layout.
+	 * It is a SHAPE test, not an identity test, and the obvious uniqueness claim is
+	 * FALSE: `WriterLowering.valueIfGapExpr` emits the same `Nest` for a value-`if`
+	 * gap under `softGap`. What keeps the classifier honest is the POSITION plus the
+	 * two-deep requirement — the node must be the tail of a construct's trailing
+	 * `BodyGroup` AND hold another such node — and a sweep over the fork corpus, this
+	 * tree and Pony under both of its configs, in which the only shapes the gate moved
+	 * were control-flow chains. A false positive is a latent hazard rather than an
+	 * observed one; tagging the gate's own probe would remove it, at the cost of a
+	 * `Doc` ctor. The same reading applies to the `IfLineExceeds` arms below: the two
+	 * in the REWRITE twins replace the matched node with its break branch, so a probe
+	 * from another emitter landing on a link's tail path would have its own width
+	 * decision overwritten.
+	 *
+	 * Deliberately narrow in two directions, both conservative: a body that cannot
+	 * render flat reaches `glueLayout` and carries an `IfGluedFirstLineExceeds`
+	 * instead, and a body under `opt.fitLineBodyGlue` carries an `IfBreak` — neither
+	 * answers here, so a chain through one of them keeps its current layout.
 	 */
 	private static function chainBodyInner(d: Doc): Null<Doc> {
 		final group: Null<Doc> = tailBodyGroup(d);
