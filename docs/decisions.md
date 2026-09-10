@@ -68,3 +68,7 @@ decided the question; it may not become a record of runs.
   starts its line mid-clause, this project writes emphasis in upper case, and the parenthetical
   and dash-introduced readings are the larger half; the discriminator is clause POSITION —
   `c35ae45e`
+- the renamed clone reading was to CONTAIN the exact one → it contains neither by coordinate nor
+  by region: an earlier-starting renamed run suppresses the later-starting exact one through the
+  earliest-start occurrence filter, so the exact run's tail can lie outside every renamed span.
+  The two readings OVERLAP; a consumer takes their union, never one for the other — `ccbc5822`

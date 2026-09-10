@@ -962,6 +962,51 @@ The message quotes the block's own length, so the rule declares `VolatileMessage
 
 Report-only (`NoAutofix`): cutting prose by length keeps whichever sentences came first, and the contract is rarely one of them.
 
+### `duplicate-code-renamed`: the same code, different names
+
+`apq lint --rule duplicate-code-renamed` reports what `duplicate-code` reports, with one thing
+relaxed: every LOCAL binding's name is replaced, before comparison, by the position at which the
+run first binds it. Two copies that differ only in what their parameters, locals, loop variables,
+`catch` binders and pattern captures are called are therefore one clone. Members, types, method
+names and literals still have to match byte for byte — a type-2 detector, not a type-3 one.
+`DefaultOff` and `Info`, report-only.
+
+**Its own rule id rather than a mode of `duplicate-code`.** A shared id would merge two
+populations into one history — `--baseline` and `lint-diff` key on `(file, rule, severity,
+message)` — and would make "the exact reading did not widen" unanswerable from the CLI. The two
+also differ in cost and in how often a reader will disagree with them, and a rule you cannot
+switch off separately is a rule you switch off entirely.
+
+**The binder dictionary is derived, never spelled.** `BinderScan.boundNames` unions the name of
+every `binderKinds` node in the enclosing scope's subtree with every `case` pattern capture, and
+`BinderScan.binderKinds` is itself the union of the `RefShape` fields that declare each binder
+family — so a grammar gaining a binder spelling widens the normalization with it. A grammar that
+declares none normalizes nothing, and this rule degenerates into `duplicate-code` exactly.
+
+**The names in scope come from the OUTERMOST binding scope containing the block**, because a
+nested function's own bindings already lie inside that subtree. The renumbering then restarts at
+each candidate run, so a name's index is a property of the run and not of where its block happens
+to declare it — which is what lets two runs at different depths match, and what makes the mapping
+one-to-one: a copy whose names do not correspond one for one — two standing for one, or one for
+two — renumbers differently and ends the run. A consistent SWAP of two locals is a renaming, so it
+stays a clone.
+
+**Where the render finds a name.** A reference is an identifier leaf and is replaced whole. A
+binder writes its own name in the stretch between its node's start and its first child — the only
+region of its span the grammar has not given a node of its own — so a loop variable and a `catch`
+binder normalize too, while a default value and a body are out of reach by construction. A
+binding the grammar spells some other way (the bare single-parameter arrow lambda, whose parameter
+projects as a plain identifier) is left alone: that can cost a clone and never invent one.
+
+**What it does NOT promise.** Neither reading contains the other. Each candidate run is extended
+maximally, but the occurrence filter keeps the EARLIEST-starting run and drops every later one it
+overlaps, so a renamed run that starts one statement sooner suppresses an exact run that reaches
+further — the exact finding is then absent from this rule's coordinates AND its region. Take the
+union of the two rules; never read one as a subset of the other.
+
+Report-only (`NoAutofix`): a renaming makes two copies look alike without making them one idea,
+and only a reader can tell which they are.
+
 
 ### `apq rewrite`: a template is a TREE, so it is spliced as one
 

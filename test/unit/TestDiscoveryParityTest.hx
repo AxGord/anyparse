@@ -145,6 +145,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.DuplicateCaseCondBranchTest',
 		'unit.check.DuplicateCodeCheckTest',
 		'unit.check.DuplicateCodeCrossFileCheckTest',
+		'unit.check.DuplicateCodeRenamedCheckTest',
 		'unit.check.DuplicateTernaryBranchesCheckTest',
 		'unit.check.EmptyBlockCheckTest',
 		'unit.check.EmptyCaseArmCheckTest',
@@ -1055,6 +1056,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.DocMeasurementClaimCheckTest#testTheRecordingVerbOpeningAClauseIsAReading :: control :: M-DOC-CLAIM-CLAUSE-BLIND',
 			'unit.check.DuplicateCodeCheckTest#testALiteralInteriorDifferenceIsNotACloneWhileItsLayoutTwinIs :: control :: '
 				+ 'M-DUP-CODE-NORM-KEY',
+			'unit.check.DuplicateCodeRenamedCheckTest#testALocalsOnlyRenamingIsAClone :: control :: M-DUP-CODE-RENAMED-BINDERS',
 			'unit.check.ExtractRepeatedExpressionTest#testALiteralInteriorDifferenceSplitsTheGroup :: control :: '
 				+ 'M-EXTRACT-REPEAT-RENDER-SPLIT',
 			'unit.check.FieldInitInConstructorCheckTest#testConstantLandsInTheConstantsRank :: control :: M-LACKSMEMBER-FALSE',
@@ -1858,6 +1860,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-ELSE-SWITCH-CLOSE-COMMENT',
 			'M-RENDER-SPAN-TOKENS',
 			'M-DUP-CODE-NORM-KEY',
+			'M-DUP-CODE-RENAMED-BINDERS',
 			'M-EXTRACT-REPEAT-RENDER-SPLIT',
 			'M-OPAQUE-REGION-TRIVIA-KEPT',
 			'M-PEB-WS-REWIND-TRYPARSE-OFF',

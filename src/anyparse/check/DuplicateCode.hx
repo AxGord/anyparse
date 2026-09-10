@@ -4,9 +4,12 @@ import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.check.Check.VolatileMessage;
 import anyparse.check.CheckScan.NormalizedSpan;
+import anyparse.check.SpanRender.SpanOverride;
+import anyparse.query.BinderScan;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -125,6 +128,23 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 	 */
 	private static inline final CROSS_FILE_TAIL: String = ' — extract a shared helper (report-only, cross-file)';
 
+	/** The same-file wording's tail, after the original's line. */
+	private static inline final SAME_FILE_HELPER_TAIL: String = ' — extract a helper (hxq extract-method)';
+
+	/**
+	 * Wraps a normalized binder name inside a statement's comparison text — a byte no source text
+	 * contains, so a text carrying none is its own type-1 key.
+	 */
+	private static inline final HOLE: String = '\x1f';
+
+	/** This rule's reading: no binder normalization, so only exact-logic clones bucket together. */
+	private static final EXACT: DupMode = {
+		ruleId: RULE_ID,
+		normalizeBinders: false,
+		sameFileTail: SAME_FILE_HELPER_TAIL,
+		crossFileTail: CROSS_FILE_TAIL
+	};
+
 	public function new() {}
 
 	public function id(): String {
@@ -136,22 +156,7 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
-		if (support == null) return [];
-		final blockKinds: Array<String> = support.blockKinds();
-		final opaqueKinds: Array<String> = plugin.refShape().opaqueKinds ?? [];
-		final violations: Array<Violation> = [];
-		final perFile: Array<DupFile> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
-			final blocks: Array<Array<DupStmt>> = [];
-			collectBlocks(tree, entry.source, blockKinds, opaqueKinds, blocks);
-			perFile.push({ file: entry.file, source: entry.source, blocks: blocks });
-		}
-		for (pf in perFile) scanBlocks(violations, pf.file, pf.source, pf.blocks);
-		scanCrossFile(violations, perFile);
-		return violations;
+		return scan(files, plugin, EXACT);
 	}
 
 	/** Extraction is a refactoring (`hxq extract-method`), not a mechanical span edit — report-only. */
@@ -182,7 +187,60 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 	 * substitution inside such a group was invisible to the gate.
 	 */
 	public function messageIdentity(message: String): String {
-		return MessageMask.maskBefore(MessageMask.maskAfter(message, SAME_FILE_ORIGIN), CROSS_FILE_TAIL);
+		return maskCoordinate(message, EXACT);
+	}
+
+	/** `renumber` for a statement carrying markers, the statement's own render for one that carries none. */
+	private static inline function renumbered(stmt: DupStmt, names: Array<String>): String {
+		return stmt.renamed ? renumber(stmt.text, names) : stmt.text;
+	}
+
+	/**
+	 * Both readings of one clone engine over a file set: collect each file's blocks once, then run
+	 * the same-file and the cross-file pass over that single collection. `mode` decides the rule id
+	 * the findings carry, their message tails, and whether a LOCAL binding's name is normalized away
+	 * before two statements are compared — with normalization off the key is the raw render, so the
+	 * type-2 reading degenerates to the type-1 one.
+	 */
+	private static function scan(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, mode: DupMode): Array<Violation> {
+		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
+		if (support == null) return [];
+		final shape: RefShape = plugin.refShape();
+		final binders: Null<DupBinders> = mode.normalizeBinders ? {
+			shape: shape,
+			scopeKinds: BinderScan.bindingScopeKinds(shape),
+			binderKinds: BinderScan.binderKinds(shape),
+			identKind: shape.identKind
+		} : null;
+		final blockKinds: Array<String> = support.blockKinds();
+		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
+		final violations: Array<Violation> = [];
+		final perFile: Array<DupFile> = [];
+		for (entry in files) {
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			if (tree == null) continue;
+			final blocks: Array<Array<DupStmt>> = [];
+			final ctx: DupCtx = {
+				source: entry.source,
+				blockKinds: blockKinds,
+				opaqueKinds: opaqueKinds,
+				binders: binders
+			};
+			collectBlocks(tree, ctx, null, blocks);
+			perFile.push({ file: entry.file, source: entry.source, blocks: blocks });
+		}
+		for (pf in perFile) scanBlocks(violations, pf.file, pf.source, pf.blocks, mode);
+		scanCrossFile(violations, perFile, mode);
+		return violations;
+	}
+
+	/**
+	 * Both wordings' masked form, shared so a rule reading this engine cannot anchor its mask on a
+	 * fragment it does not write: the same-file coordinate is the text after the shared origin
+	 * fragment, the cross-file one the text before that mode's own tail.
+	 */
+	private static function maskCoordinate(message: String, mode: DupMode): String {
+		return MessageMask.maskBefore(MessageMask.maskAfter(message, SAME_FILE_ORIGIN), mode.crossFileTail);
 	}
 
 	/**
@@ -191,7 +249,9 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 	 * one `Info` per surviving later occurrence WITHIN the file. `blocks` was collected once by
 	 * `run` (`collectBlocks`) and is shared with the cross-file pass, so the tree is walked once.
 	 */
-	private static function scanBlocks(out: Array<Violation>, file: String, source: String, blocks: Array<Array<DupStmt>>): Void {
+	private static function scanBlocks(
+		out: Array<Violation>, file: String, source: String, blocks: Array<Array<DupStmt>>, mode: DupMode
+	): Void {
 		final grams: Map<String, Array<DupPos>> = buildGrams(blocks);
 		final findings: Array<DupFinding> = [];
 		for (bucket in grams) if (bucket.length >= 2) collectFindings(blocks, source, bucket, findings);
@@ -201,9 +261,9 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 		for (f in kept) out.push({
 			file: file,
 			span: f.span,
-			rule: RULE_ID,
+			rule: mode.ruleId,
 			severity: Severity.Info,
-			message: '${f.count}$SAME_FILE_ORIGIN${f.origLine} — extract a helper (hxq extract-method)'
+			message: '${f.count}$SAME_FILE_ORIGIN${f.origLine}${mode.sameFileTail}'
 		});
 	}
 
@@ -211,19 +271,23 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 	 * Append each block (a `blockKinds` node's direct-child statement sequence) with
 	 * at least `MIN_STATEMENTS` statements to `out`, skipping `opaqueKinds` subtrees.
 	 */
-	private static function collectBlocks(
-		node: QueryNode, source: String, blockKinds: Array<String>, opaqueKinds: Array<String>, out: Array<Array<DupStmt>>
-	): Void {
-		if (opaqueKinds.contains(node.kind)) return;
-		if (blockKinds.contains(node.kind)) {
+	private static function collectBlocks(node: QueryNode, ctx: DupCtx, names: Null<Array<String>>, out: Array<Array<DupStmt>>): Void {
+		if (ctx.opaqueKinds.contains(node.kind)) return;
+		final binders: Null<DupBinders> = ctx.binders;
+		// The names in scope come from the OUTERMOST binding scope containing the block: a nested
+		// function's own bindings already lie inside that subtree, so the first one answers for all.
+		final scoped: Null<Array<String>> = names == null && binders != null && binders.scopeKinds.contains(node.kind)
+			? BinderScan.boundNames(node, binders.shape)
+			: names;
+		if (ctx.blockKinds.contains(node.kind)) {
 			final stmts: Array<DupStmt> = [];
 			for (child in node.children) {
 				final span: Null<Span> = child.span;
-				if (span != null) stmts.push(normalizeStmt(source, child, span));
+				if (span != null) stmts.push(normalizeStmt(ctx, child, span, scoped));
 			}
 			if (stmts.length >= MIN_STATEMENTS) out.push(stmts);
 		}
-		for (child in node.children) collectBlocks(child, source, blockKinds, opaqueKinds, out);
+		for (child in node.children) collectBlocks(child, ctx, scoped, out);
 	}
 
 	/**
@@ -241,9 +305,90 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 	 * construction — which is what makes the render an exact-token key without a second tree
 	 * to compare against, and what lets the type doc's "zero false positives" claim stand.
 	 */
-	private static function normalizeStmt(source: String, node: QueryNode, span: Span): DupStmt {
-		final normalized: NormalizedSpan = CheckScan.normalizeSpan(source, span.from, span.to);
-		return { text: SpanRender.renderSpan(source, span.from, span.to, node), span: span, nonWs: normalized.nonWs };
+	private static function normalizeStmt(ctx: DupCtx, node: QueryNode, span: Span, names: Null<Array<String>>): DupStmt {
+		final normalized: NormalizedSpan = CheckScan.normalizeSpan(ctx.source, span.from, span.to);
+		final holes: Array<SpanOverride> = holeOverrides(ctx, node, names);
+		return {
+			text: SpanRender.renderSpan(ctx.source, span.from, span.to, node, holes),
+			renamed: holes.length > 0,
+			span: span,
+			nonWs: normalized.nonWs
+		};
+	}
+
+	/**
+	 * Where `node`'s subtree spells a name from `names`, and the marker text that stands in for it:
+	 * an identifier leaf whole, and a binder node's own name token where the grammar writes it
+	 * between the node's start and its first child. A binding the grammar spells some other way is
+	 * left alone, which can only cost a clone and never invent one.
+	 */
+	private static function holeOverrides(ctx: DupCtx, node: QueryNode, names: Null<Array<String>>): Array<SpanOverride> {
+		final out: Array<SpanOverride> = [];
+		final binders: Null<DupBinders> = ctx.binders;
+		if (binders == null) return out;
+		if (names == null || names.length == 0) return out;
+		collectHoles(ctx.source, node, names, binders, out);
+		return out;
+	}
+
+	/**
+	 * Recursive worker of `holeOverrides`. The vocabularies travel as arguments rather than as a
+	 * closure's captures: a captured nullable local loses its narrowing, and the checks belong to the
+	 * caller anyway.
+	 */
+	private static function collectHoles(
+		source: String, node: QueryNode, names: Array<String>, binders: DupBinders, out: Array<SpanOverride>
+	): Void {
+		final name: Null<String> = node.name;
+		final span: Null<Span> = node.span;
+		if (name != null && span != null && names.contains(name)) {
+			final nodeSpan: Span = span;
+			if (node.kind == binders.identKind && node.children.length == 0)
+				out.push({ span: nodeSpan, text: '$HOLE$name$HOLE' });
+			else if (binders.binderKinds.contains(node.kind)) {
+				final at: Int = binderNameOffset(source, node, nodeSpan, name);
+				if (at >= 0) out.push({ span: new Span(at, at + name.length), text: '$HOLE$name$HOLE' });
+			}
+		}
+		for (child in node.children) collectHoles(source, child, names, binders, out);
+	}
+
+	/**
+	 * Where a binder node writes its OWN name, or -1. Only the stretch from the node's start to its
+	 * first child can hold it — every later byte belongs to a child — so the search cannot reach into
+	 * a default value or a body.
+	 */
+	private static function binderNameOffset(source: String, node: QueryNode, span: Span, name: String): Int {
+		var to: Int = span.to;
+		for (child in node.children) {
+			final childSpan: Null<Span> = child.span;
+			if (childSpan == null) continue;
+			to = childSpan.from;
+			break;
+		}
+		return SourceText.identTokenOffset(source, new Span(span.from, to), name);
+	}
+
+	/**
+	 * `text` with each marked binder name replaced by its position in `names`, and every name new to
+	 * the run appended there. Two runs are clones under renaming exactly when their renumbered texts
+	 * match, so the mapping is bijective with no second table to check.
+	 */
+	private static function renumber(text: String, names: Array<String>): String {
+		final parts: Array<String> = text.split(HOLE);
+		final buf: StringBuf = new StringBuf();
+		for (i in 0...parts.length) if (i % 2 == 0)
+			buf.add(parts[i]);
+		else {
+			final name: String = parts[i];
+			var index: Int = names.indexOf(name);
+			if (index < 0) {
+				index = names.length;
+				names.push(name);
+			}
+			buf.add('$$$index');
+		}
+		return buf.toString();
 	}
 
 	/**
@@ -276,12 +421,20 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 		}
 	}
 
-	/** Length of the maximal run of normalized-equal statements from `a` and `b` in parallel. */
+	/**
+	 * Length of the maximal run of equal statements from `a` and `b` in parallel, each side's binder
+	 * names renumbered from its own run START — so the renaming a run establishes has to hold for
+	 * every statement of it, and a crossed pair of names ends the run instead of extending it. A
+	 * statement carrying no marker compares as its own text.
+	 */
 	private static function commonRun(blocks: Array<Array<DupStmt>>, a: DupPos, b: DupPos): Int {
 		final sa: Array<DupStmt> = blocks[a.b];
 		final sb: Array<DupStmt> = blocks[b.b];
+		final namesA: Array<String> = [];
+		final namesB: Array<String> = [];
 		var len: Int = 0;
-		while (a.i + len < sa.length && b.i + len < sb.length && sa[a.i + len].text == sb[b.i + len].text) len++;
+		while (a.i + len < sa.length && b.i + len < sb.length && renumbered(sa[a.i + len], namesA) == renumbered(sb[b.i + len], namesB))
+			len++;
 		return len;
 	}
 
@@ -318,7 +471,6 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 		return false;
 	}
 
-
 	/**
 	 * The cross-file pass (report-only). Concatenate every scoped file's blocks into ONE global
 	 * index and hash three-grams project-wide in a single pass — there is no O(N²) file-pair
@@ -332,7 +484,7 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 	 * helper there is a design decision the tool must not force, so this pass is REPORT-ONLY
 	 * (`fix` emits nothing) — the finding names both sites and leaves the call.
 	 */
-	private static function scanCrossFile(out: Array<Violation>, perFile: Array<DupFile>): Void {
+	private static function scanCrossFile(out: Array<Violation>, perFile: Array<DupFile>, mode: DupMode): Void {
 		final blocks: Array<Array<DupStmt>> = [];
 		final blockFile: Array<Int> = [];
 		for (fi in 0...perFile.length) for (blk in perFile[fi].blocks) {
@@ -349,12 +501,11 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 		for (f in kept) out.push({
 			file: perFile[f.laterFile].file,
 			span: f.span,
-			rule: RULE_ID,
+			rule: mode.ruleId,
 			severity: Severity.Info,
-			message: '${f.count}$STATEMENT_COUNT_UNIT${f.origFile}:${f.origLine}$CROSS_FILE_TAIL'
+			message: '${f.count}$STATEMENT_COUNT_UNIT${f.origFile}:${f.origLine}${mode.crossFileTail}'
 		});
 	}
-
 
 	/**
 	 * From a global three-gram bucket (≥2 starts), take the globally-earliest position (by file
@@ -408,7 +559,6 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 		}
 	}
 
-
 	/**
 	 * Hash every three-gram of consecutive RENDERED statements across `blocks` into
 	 * start-position buckets — the shared index both the same-file pass (one file's blocks)
@@ -416,9 +566,14 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 	 */
 	private static function buildGrams(blocks: Array<Array<DupStmt>>): Map<String, Array<DupPos>> {
 		final grams: Map<String, Array<DupPos>> = [];
+		final names: Array<String> = [];
 		for (b => stmts in blocks) {
 			for (i in 0...stmts.length - (MIN_STATEMENTS - 1)) {
-				final key: String = stmts[i].text + GRAM_SEP + stmts[i + 1].text + GRAM_SEP + stmts[i + 2].text;
+				// Numbering restarts at every window, so a name's index is a property of the window
+				// and not of where the block happens to declare it.
+				names.resize(0);
+				final key: String = renumbered(stmts[i], names) + GRAM_SEP + renumbered(stmts[i + 1], names) + GRAM_SEP
+					+ renumbered(stmts[i + 2], names);
 				final bucket: Null<Array<DupPos>> = grams[key];
 				if (bucket == null)
 					grams[key] = [{ b: b, i: i }];
@@ -434,6 +589,7 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 /** A block statement: its RENDERED comparison text (`SpanRender`), source span, and non-whitespace-character count. */
 typedef DupStmt = {
 	var text: String;
+	var renamed: Bool;
 	var span: Span;
 	var nonWs: Int;
 }
@@ -467,4 +623,38 @@ typedef DupFile = {
 	var file: String;
 	var source: String;
 	var blocks: Array<Array<DupStmt>>;
+}
+
+/**
+ * What separates the two readings of one clone engine: the rule id its findings carry, whether a
+ * LOCAL binding's name is normalized away before comparison, and each wording's tail — the
+ * cross-file tail doubling as that rule's `messageIdentity` mask anchor.
+ */
+typedef DupMode = {
+	var ruleId: String;
+	var normalizeBinders: Bool;
+	var sameFileTail: String;
+	var crossFileTail: String;
+}
+
+/**
+ * The vocabularies one file's block walk needs. `binders` null is the reading that normalizes no
+ * name, where every statement's key is its raw render.
+ */
+typedef DupCtx = {
+	var source: String;
+	var blockKinds: Array<String>;
+	var opaqueKinds: Array<String>;
+	var binders: Null<DupBinders>;
+}
+
+/**
+ * The grammar seams a binder-normalizing render asks: the scopes a local binding can span, the
+ * kinds that carry a binding on their own `name`, and the identifier kind a reference projects as.
+ */
+typedef DupBinders = {
+	var shape: RefShape;
+	var scopeKinds: Array<String>;
+	var binderKinds: Array<String>;
+	var identKind: String;
 }
