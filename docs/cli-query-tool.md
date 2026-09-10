@@ -1597,10 +1597,14 @@ minus `fieldDeclKinds` minus `finalModifierMemberKind`, the five modifier seams,
 `valueReturnKinds`, `exprStatementKind`, `typeAnnotationKinds`, `nullLiteralKind` /
 `eqKind` / `notEqKind` / `nullCoalesceKind`). It is worth reading as precedent for the
 reason the tables gave way: the hand-written assignment family disagreed with
-`writeParentKinds` by three members (`>>>=`, `&&=`, `||=` were not mutators to it), the
-same defect shape S195 measured on `BitNot`. What did NOT give way is the one kind no
-field names — `ImplementsClause`, the interface half of `supertypeClauseKinds` — which
-six files across `query` + `check` still spell.
+`writeParentKinds` by three members. One of them, `>>>=`, is a real mutator the table
+missed (the S195 `BitNot` shape, inlining verified output-identical under `--interp`);
+the other two, `&&=` and `||=`, the grammar parses but Haxe 4.3.7 refuses («The operators
+||= and &&= are not supported»), so for them the delta is vocabulary parity, not a
+reachable finding — and `writeParentKinds` carries two dead names for every consumer.
+What did NOT give way is the one kind no field names — `ImplementsClause`, the interface
+half of `supertypeClauseKinds` — which six spellings across five files of `query` +
+`check` still name.
 
 A hardcoded list is invisible to the declared-vs-projected differential, which is
 its own hazard: that fixture reads `RefShape` fields, so a name moved into the shape

@@ -765,7 +765,11 @@ class PreferInlineCheckTest extends Test {
 		final vs: Array<Violation> = violations(
 			cls('function shr():Void _bits >>>= 1;\n\tfunction both():Void _flag &&= true;\n\tfunction either():Void _flag ||= true;')
 		);
-		Assert.equals(3, vs.length, 'the unsigned-shift and boolean compound assignments are mutators the hand-written table did not name');
+		Assert.equals(
+			3, vs.length,
+			'the unsigned-shift assignment is a mutator the hand table did not name; the two boolean ones the grammar parses but Haxe '
+			+ '4.3.7 refuses ("The operators ||= and &&= are not supported"), so they are vocabulary parity, not a reachable finding'
+		);
 	}
 
 	/**

@@ -214,7 +214,8 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		// Asked from the source this run already holds it costs nothing: 3.21s -> 0.12s. Over `src` +
 		// `test` the 23 build-macro refusals split 18 own-file against 5 genuinely inherited, and index
 		// demands drop 261 -> 243; 68 of 943 `src` files spell such a token at all. Laziness still only
-		// moves the cost onto the files that need it — `src` as a whole moves 3.60s -> 3.48s.
+		// moves the cost onto the files that need it; over `src` as a whole the shift is inside the
+		// run-to-run spread (~3.5s either way), because only 68 of its 943 files carry the token.
 		//
 		// The whole tree got cheaper for a second reason: the report index used to be built here
 		// EAGERLY as the fallback, so a full run indexed the report set and then the wider set that
