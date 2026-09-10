@@ -7,6 +7,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.QueryNode;
+import anyparse.query.RawSourceScan;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.query.SymbolIndex;
@@ -433,7 +434,7 @@ final class InlineConstant implements Check {
 		final name: Null<String> = field.name;
 		final span: Null<Span> = field.span;
 		if (name == null || span == null) return;
-		if (reflected.whole.contains(name) || ReflectionScan.runtimeNameFragment(reflected.fragments, name)) return;
+		if (ReflectionScan.runtimeName(reflected, name)) return;
 		final containerName: Null<String> = container.name;
 		if (exported && containerName != null && macroConsumed.contains(containerName)) return;
 		final init: Null<QueryNode> = ConstantFieldScan.initializerOf(field);
@@ -599,6 +600,10 @@ final class InlineConstant implements Check {
 		name: String, init: QueryNode, source: String, seams: ConstantFieldSeams, reflected: ReflectionSurface
 	): Bool {
 		if (ReflectionScan.runtimeNameFragment(reflected.fragments, name)) return true;
+		// The unreadable half cannot take part in the count: a file the parser could not read has no
+		// literal the self-name test could subtract, so its bytes mentioning the name is the whole
+		// answer — the same word-boundary proof `runtimeName` makes for the non-counting gate.
+		if (reflected.unreadable.exists(source -> RawSourceScan.mentionsWord(source, name))) return true;
 		var count: Int = 0;
 		for (s in reflected.whole) if (s == name) count++;
 		if (count == 0) return false;

@@ -1028,11 +1028,13 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.CommentWidthCheckTest#testTheFixReflowsIntoTheWidthWordForWord :: control :: M-COMMENT-REFLOW-ABSENT',
 			'unit.check.CommentWidthCheckTest#testTwoIdenticalWideLinesAreTwoLines :: control :: M-COMMENT-WIDTH-PROTECTION-BY-TEXT',
 			'unit.check.ComparisonToBooleanCheckTest#testFieldAccessBoolMemberFlagged :: control :: M-PATHWALK-NULL',
+			'unit.check.CrossScopeSoundnessTest#testAnUnreadableReflectiveFileLicensesNothingExtra :: control :: '
+				+ 'M-REFLECTION-UNREADABLE-BLIND,M-INLINE-UNREADABLE-BLIND',
 			'unit.check.CrossScopeSoundnessTest#testNarrowReportFindsNothingTheWideRunDoesNot :: control :: '
 				+ 'M-CONFINEMENT-REPORT-INDEX-DEAD',
 			'unit.check.CrossScopeSoundnessTest#testNarrowReportWritesNothingTheWideRunRefuses :: control :: '
 				+ 'M-REFLECTION-REPORT-INDEX-DELETE,M-INLINE-SUBTYPE-REPORT-INDEX,M-INLINE-REFLECT-REPORT-SCOPE,'
-				+ 'M-ORPHAN-ACCESSOR-REPORT-SCOPE',
+				+ 'M-ORPHAN-ACCESSOR-REPORT-SCOPE,M-MAPVALUE-SUBTYPE-REPORT-INDEX,M-TYPEDTHROW-CATCH-REPORT-ONLY',
 			'unit.check.CrossScopeSoundnessTest#testTheScopeHalfHoldingAReflectiveStringDoesNotMatter :: control :: '
 				+ 'M-REFLECTION-SCOPE-PROJECT-ONLY',
 			'unit.check.DeadBinderCounterLoopCheckTest#testFixRewritesMapLoopAndInsertsUsing :: control :: M-SHADOWEXT-TRUE',
@@ -2056,7 +2058,11 @@ class TestDiscoveryParityTest extends Test {
 			'M-AND-OPERATOR-TEXT-STALE',
 			'M-PAREN-FREE-ROOTS-ATOMS-ONLY',
 			'M-SIDE-EFFECT-FREE-DROPS-OPERATORS',
-			'M-SUBTYPE-KEY-SIMPLE-NAME'
+			'M-SUBTYPE-KEY-SIMPLE-NAME',
+			'M-MAPVALUE-SUBTYPE-REPORT-INDEX',
+			'M-TYPEDTHROW-CATCH-REPORT-ONLY',
+			'M-REFLECTION-UNREADABLE-BLIND',
+			'M-INLINE-UNREADABLE-BLIND'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

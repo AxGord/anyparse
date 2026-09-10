@@ -2359,8 +2359,24 @@ stated, and unobservable: with the reacher made unparseable,
 `testAnUnreadableReflectiveFileLicensesNothingExtra` is green on the BASE engine, because
 the confinement proof refuses on the same raw text one step LATER — `RenameRefusal.of` asks the reflection guard first and the confinement proof after it, and both must pass. The three-cell probe
 that shows the layering — cut both proofs, 3 rewrites go through; restore only the
-reflection guard's new unreadable branch, 1; ship state, 0 — is what says the branch is a
+reflection guard's new unreadable branch, 1; ship state, 0 — read as saying the branch was a
 real second line of defence rather than a fix for a live bug.
+
+S199 refuted that reading. The zero was an artefact of the differential's SELECTOR: it picked
+cells by `cell.grantee == B_REFLECT`, so only the cell whose reflective string names a FIELD
+ever ran — and that name was exactly what `Naming`'s own unreadable branch and
+`RawSourceScan.skippedMayReference` already covered. Selecting by the FORM of the evidence
+(T921 — a plain literal in the reacher naming a member the declaring type declares) reaches
+4 of 4 reflective cells, and the two newly reached ones failed at once: an unreadable sibling
+licensed two rewrites and three findings a readable one refuses, `inline-constant` erasing a
+constant a `Reflect.field` reads and `prefer-inline` folding a method one names.
+`ReflectionScan.runtimeName` and `PreferInline`'s own scanner close it by keeping an
+unparseable scope file's raw source in `ReflectionSurface.unreadable`. So the branch WAS a fix
+for a live bug; what made it look otherwise was a test that could not see two of its own cells.
+Measured cost of the closure on the one tree with unparseable files (the haxe-formatter fork,
+2 of 56 skip-parse): `prefer-inline` 6 → 5, the lost finding a plain call the unreadable file
+spells (`indenter.setParsedCode(…)`) — fail-closed, and a tree with no unparseable scope file
+pays nothing (anyparse `src test` 1814 / 0 skip-parse, 2 → 2 findings).
 
 ### A guard on `#if sys` is a test that does not run
 

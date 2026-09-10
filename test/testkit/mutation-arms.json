@@ -2805,6 +2805,38 @@
 			"find": "\t\treturn (adjacency.qualified[_refs.seenKey(owner)] ?? []).concat(adjacency.unresolved[owner.type.name] ?? []);\n",
 			"replace": "\t\treturn adjacency.simple[owner.type.name] ?? [];\n",
 			"note": "the declaration-keyed subtype bucket collapses back onto the simple-name one, so a supertype reference that resolves to ANOTHER package's namesake is attributed to every declaration of that name again - the twin named like a library class loses its prefer-inline finding, its private constructor stays shielded and its enum-abstract conversion stays refused"
+		},
+		{
+			"name": "M-MAPVALUE-SUBTYPE-REPORT-INDEX",
+			"type": "anyparse.check.MapValueScan",
+			"method": "proven",
+			"find": "\t\tfinal scope: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? report;",
+			"replace": "\t\tfinal scope: SymbolIndex = report;",
+			"note": "the no-null-value census asks the REPORT index for the access-grant and subtype doors, so `hxq lint <one file> --fix` with `resolutionRoots` declared collapses `m.exists(k) ? m[k] : d` into `m[k] ?? d` for a map an unlinted subtype stores a null into — the S177 shape in the redundant-map-exists rule, found by T918's `subtype-map-write` cell"
+		},
+		{
+			"name": "M-TYPEDTHROW-CATCH-REPORT-ONLY",
+			"type": "anyparse.check.PreferTypedThrow",
+			"method": "catchAllInScope",
+			"find": "\t\tfinal index: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin);",
+			"replace": "\t\tfinal index: Null<SymbolIndex> = null;",
+			"note": "the catch-clause gate narrows to the report files, so a one-file `--fix` boxes a raw-string throw that a `catch (e: String)` in an unlinted sibling still catches — the wholesale-degrade twin of the S177 shape, found by T919's `string-catch` cell"
+		},
+		{
+			"name": "M-REFLECTION-UNREADABLE-BLIND",
+			"type": "anyparse.check.ReflectionScan",
+			"method": "runtimeName",
+			"find": "\t\t\t|| surface.unreadable.exists(source -> RawSourceScan.mentionsWord(source, name));",
+			"replace": "\t\t\t|| false;",
+			"note": "the name-keyed reflection gate goes blind to a scope file the parser could not read, so `inline-constant` erases a constant whose `Reflect.field` read lives in an unparseable sibling — T867's residue, reachable only once the fixture selects its cells by the FORM of the evidence (T921)"
+		},
+		{
+			"name": "M-INLINE-UNREADABLE-BLIND",
+			"type": "anyparse.check.PreferInline",
+			"method": "run",
+			"find": "RawSourceScan.mentionsWord(entry.source, candidate)",
+			"replace": "false",
+			"note": "prefer-inline's reflection gate goes blind to a scope file the parser could not read, so a method an unparseable sibling names by `Reflect.field` is folded inline and answers MISSING under --dce full — the same T867 residue as M-REFLECTION-UNREADABLE-BLIND, in the check that scans names itself"
 		}
 	]
 }

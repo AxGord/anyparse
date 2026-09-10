@@ -189,6 +189,25 @@ final class RawSourceScan {
 		return ownerFile == null || !_thirdParty.exists(file) || _thirdParty.exists(ownerFile);
 	}
 
+	/**
+	 * Whether `source` spells `name` as a whole WORD — the raw-text proof every scan over an unreadable file reduces to.
+	 *
+	 * Public because the reflection layer asks it of a scope file the parser could not read (`ReflectionScan.runtimeName`),
+	 * where no index has been built over the file at all and `skippedMayReference` therefore cannot answer.
+	 */
+	public static function mentionsWord(source: String, name: String): Bool {
+		var at: Int = source.indexOf(name);
+		while (at >= 0) {
+			final before: Int = at - 1;
+			final after: Int = at + name.length;
+			final leftFree: Bool = before < 0 || !isWordChar(source.fastCodeAt(before));
+			final rightFree: Bool = after >= source.length || !isWordChar(source.fastCodeAt(after));
+			if (leftFree && rightFree) return true;
+			at = source.indexOf(name, at + 1);
+		}
+		return false;
+	}
+
 	/** Whether `c` can be part of an identifier — the word boundary `mentionsWord` tests against. */
 	private static inline function isWordChar(c: Int): Bool {
 		return c == '_'.code || c >= 'a'.code && c <= 'z'.code || c >= 'A'.code && c <= 'Z'.code || c >= '0'.code && c <= '9'.code;
@@ -202,19 +221,6 @@ final class RawSourceScan {
 	 */
 	private static inline function skippedSourceMentions(source: Null<String>, name: String): Bool {
 		return source == null || mentionsWord(source, name);
-	}
-
-	private static function mentionsWord(source: String, name: String): Bool {
-		var at: Int = source.indexOf(name);
-		while (at >= 0) {
-			final before: Int = at - 1;
-			final after: Int = at + name.length;
-			final leftFree: Bool = before < 0 || !isWordChar(source.fastCodeAt(before));
-			final rightFree: Bool = after >= source.length || !isWordChar(source.fastCodeAt(after));
-			if (leftFree && rightFree) return true;
-			at = source.indexOf(name, at + 1);
-		}
-		return false;
 	}
 
 }

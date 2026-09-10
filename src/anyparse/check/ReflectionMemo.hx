@@ -30,7 +30,7 @@ import anyparse.check.ReflectionScan.ScopeFile;
  * Instance state, no statics — one per lint / fix run, never shared across threads, the same lifecycle as `CachingGrammarPlugin`'s
  * parse caches and `RefsCache`. A process-scoped memo here would be a scope from an earlier run answering this run's gates.
  *
- * Handed out SHARED, where `RefsCache.find` copies: a surface's two arrays are read by every consumer and written by none — censused
+ * Handed out SHARED, where `RefsCache.find` copies: a surface's three arrays are read by every consumer and written by none — censused
  * over the six checks that reach `reflectionSurface` (`inline-constant`, `static-constant`, `prefer-enum-abstract`, `orphan-accessor`,
  * `unused-public-member`, `unused-private`), each of which passes `whole` / `fragments` straight into a containment or
  * occurrence-count test. A consumer that MUTATES one has to copy here instead, since before this memo every call built its own.
