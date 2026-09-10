@@ -190,7 +190,7 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 		// exact: an UNREADABLE file that extends an alias of the owner. What is left needs the
 		// skipped file's own supertype clause, which is precisely what not parsing it withholds.
 		for (c in ctorCandidates) if (
-			!index.text.skippedMayReference(c.className) && !index.subtypes.hasSubtype(c.className)
+			!index.text.skippedMayReference(c.className) && !index.subtypes.hasSubtype(c.className, c.file)
 			&& !isInstantiatedAnywhere(c.className, files) && !mentionedInStrings(c.className, reflected)
 		) violations.push({
 			file: c.file,

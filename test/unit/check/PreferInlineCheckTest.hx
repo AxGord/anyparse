@@ -712,8 +712,12 @@ class PreferInlineCheckTest extends Test {
 	 */
 	@:pin('control')
 	@:killer('M-INLINE-SUBTYPE-REPORT-INDEX')
-	public function testSimpleNameCollisionCostsTheTwinNamedLikeALibraryType(): Void {
+	public function testQualifiedSupertypeKeySplitsTheTwinFromTheRealSubtypesOwner(): Void {
 		final report: Array<{ file: String, source: String }> = [
+			{
+				file: 'pkg/Base.hx',
+				source: 'package pkg;\n\nclass Base {\n\tpublic function new() {}\n\tpublic function tag():Int return 1;\n}'
+			},
 			{
 				file: 'pkg/Exception.hx',
 				source: 'package pkg;\n\nclass Exception {\n\tpublic function new() {}\n\tpublic function tag():Int return 1;\n}'
@@ -735,15 +739,21 @@ class PreferInlineCheckTest extends Test {
 						file: 'lib/Sub.hx',
 						source: 'package lib;\n\nclass Sub extends Exception {\n\tpublic function new() { super(); }\n'
 						+ '\tpublic function tag():Int return 2;\n}'
+					},
+					{
+						file: 'lib/Deriv.hx',
+						source: 'package lib;\n\nclass Deriv extends pkg.Base {\n\tpublic function new() { super(); }\n'
+						+ '\toverride public function tag():Int return 3;\n}'
 					}
 				])
 			}
 		});
 		final scopedNames: Array<String> = [for (v in new PreferInline().run(report, scoped)) v.file];
 		Assert.equals(
-			'pkg/Zzzunique.hx', scopedNames.join(','), 'the twin named like a library supertype loses the finding to the simple-name key'
+			'pkg/Exception.hx,pkg/Zzzunique.hx', scopedNames.join(','),
+			'the twin named like a library supertype keeps its finding; the type that library really subtypes loses it'
 		);
-		Assert.equals(2, new PreferInline().run(report, new HaxeQueryPlugin()).length, 'with no resolution scope both twins flag');
+		Assert.equals(3, new PreferInline().run(report, new HaxeQueryPlugin()).length, 'with no resolution scope all three flag');
 	}
 
 	private function cls(members: String): String {

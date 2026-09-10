@@ -2797,6 +2797,14 @@
 			"find": "\tfor (kind in shape.pureOperatorKinds ?? []) add(kind);\n",
 			"replace": "",
 			"note": "the declared pure operators stop reaching the side-effect-free vocabulary, so every operator expression becomes impure: `inline` refuses an `a + b` initializer it used to substitute, and the 25 operator names go back to being unreachable from any declaration"
+		},
+		{
+			"name": "M-SUBTYPE-KEY-SIMPLE-NAME",
+			"type": "anyparse.query.SubtypeGraph",
+			"method": "subtypesOfDecl",
+			"find": "\t\treturn (adjacency.qualified[_refs.seenKey(owner)] ?? []).concat(adjacency.unresolved[owner.type.name] ?? []);\n",
+			"replace": "\t\treturn adjacency.simple[owner.type.name] ?? [];\n",
+			"note": "the declaration-keyed subtype bucket collapses back onto the simple-name one, so a supertype reference that resolves to ANOTHER package's namesake is attributed to every declaration of that name again - the twin named like a library class loses its prefer-inline finding, its private constructor stays shielded and its enum-abstract conversion stays refused"
 		}
 	]
 }
