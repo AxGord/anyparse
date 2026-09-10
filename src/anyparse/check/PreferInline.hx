@@ -9,6 +9,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.Lit;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberKinds;
+import anyparse.query.MemberWriteScan;
 import anyparse.query.NamingPolicy.FrameworkContract;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.QueryNode;
@@ -60,7 +61,9 @@ using Lambda;
  *   carry it, and what it binds is the whole type: a placeholder body the backend discards, or a
  *   member the host runtime calls BY NAME.
  * - EVERY method of a class under a build macro — its own, or one granted through a supertype /
- *   interface (`TypeTraits.transitivelyCarriesBuildMacro`). The builder writes an `override` of the
+ *   interface (`TypeTraits.transitivelyCarriesBuildMacro`) — whose OWN half is a token scan of the
+ *   report source, asked BEFORE any index is built (`MemberWriteScan.carriesBuildMacro`, hop zero of
+ *   that closure), so only an INHERITED grant costs the index. The builder writes an `override` of the
  *   method into subclasses with no `override` keyword for the modifier gate to read and no declared
  *   member for the subtype lookup to find, and Haxe reports it at the GENERATED override site, in
  *   another file and possibly another project.
@@ -107,22 +110,6 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	 * duplicate at every call site for no gain.
 	 */
 	private static inline final MAX_BODY_NODES: Int = 32;
-
-	/** The `Call` node kind — shared by the forward classifier and both reference scans. */
-	private static inline final CALL_KIND: String = 'Call';
-
-	/** Field-access chain link kinds — a chain is `IdentExpr` at the leaf wrapped in any of these. */
-	private static final CHAIN_KINDS: Array<String> = ['FieldAccess', 'SafeFieldAccess', 'ForceFieldAccess'];
-
-	/** Assignment-family root kinds of a trivial mutator body (`x = v`, `_n += 1`, `_count++`). */
-	private static final MUTATOR_KINDS: Array<String> = [
-		      'Assign', 'AddAssign', 'SubAssign',      'MulAssign', 'DivAssign', 'ModAssign', 'BitOrAssign', 'BitAndAssign',
-		'BitXorAssign', 'ShlAssign', 'ShrAssign', 'NullCoalAssign',  'PostIncr',   'PreIncr',    'PostDecr',      'PreDecr'
-	];
-
-
-	/** The class-body member kinds that END a modifier run — a method and the three field forms. */
-	private static final MEMBER_KINDS: Array<String> = ['FnMember', 'VarMember', 'FinalMember', 'FinalModifiedMember'];
 
 
 	/**
@@ -211,14 +198,23 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		// DEMANDED PER CANDIDATE, never on entry. That index reads and parses the whole declared
 		// scope, and S187 forced it here: a one-file `--rule prefer-inline` run went 0.14s -> 3.4s.
 		// The widest index only ever REFUTES a flag, so nothing needs it until a method has survived
-		// every local gate — `considerClass` returns before touching this thunk when the class offers
-		// no locally-eligible method, and then no index is built at all, not even the report one.
-		// Measured on this tree with `--rule prefer-inline --no-oracle`, findings identical
-		// throughout: a file with no candidate goes 4.29s -> 0.12s, the harness floor, and six of
-		// eight sampled `src` files land there. A file whose candidates DO reach the absence
-		// questions still pays the full build — `PreferInline.hx` itself is one, its four
-		// single-expression methods all being interface-declared, so it stays around 3.4s. Laziness
-		// moves the cost onto the files that need it; it does not make the index cheaper.
+		// every LOCAL gate — `considerClass` returns before touching this thunk when the class offers
+		// no locally-eligible method, and again when the owner's own file carries a build-macro token,
+		// and then no index is built at all, not even the report one. Measured on this tree with
+		// `--rule prefer-inline --no-oracle`, findings identical throughout: a file that reaches
+		// neither gate costs 0.12s, the harness floor.
+		//
+		// What the LOCAL build-macro half bought, and what the reading here got wrong before it: this
+		// file used to be cited as the case that must pay the full build, "its four single-expression
+		// methods all being interface-declared". They are not. A CPU profile of that exact run put
+		// 2815ms of 3210ms under `widest()` — 2707ms of it reading and parsing the declared scope —
+		// and `interfaceRequires` at ZERO calls, because the class never got that far: this doc spells
+		// the build-macro tag, the file-scoped token scan behind `transitivelyCarriesBuildMacro`
+		// matches it anywhere in the source, and the whole index existed to answer that one boolean.
+		// Asked from the source this run already holds it costs nothing: 3.21s -> 0.12s. Over `src` +
+		// `test` the 23 build-macro refusals split 18 own-file against 5 genuinely inherited, and index
+		// demands drop 261 -> 243; 68 of 943 `src` files spell such a token at all. Laziness still only
+		// moves the cost onto the files that need it — `src` as a whole moves 3.60s -> 3.48s.
 		//
 		// The whole tree got cheaper for a second reason: the report index used to be built here
 		// EAGERLY as the fallback, so a full run indexed the report set and then the wider set that
@@ -248,11 +244,17 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		// The grammar's RETAINED tag (Haxe `@:keep`). Asked separately from the inline-neutral
 		// whitelist below it: that set is about what a body MEANS, this is about reachability.
 		final retained: Null<String> = shape.retainedDeclMetaName;
-		final trees: Array<{ file: String, tree: QueryNode, branch: MemberBranchSeams }> = [];
+		final trees: Array<{
+			file: String,
+			source: String,
+			tree: QueryNode,
+			branch: MemberBranchSeams
+		}> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree != null) trees.push({
 				file: entry.file,
+				source: entry.source,
 				tree: tree,
 				branch: MemberBranchScan.seamsOf(shape, entry.source, plugin.lexicalRegions.bind(entry.source))
 			});
@@ -261,7 +263,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		// inline / dynamic / macro / override / @:keep / constructor / self-recursive) — the only
 		// names the reference-kind scan below must resolve, keeping its blocked sets small.
 		final candidateNames: Array<String> = [];
-		for (t in trees) for (cls in CheckScan.classBodies(t.tree)) forEachMethod(cls, t.branch, (name, fn, mods, metas) -> {
+		for (t in trees) for (cls in CheckScan.classBodies(t.tree)) forEachMethod(cls, t.branch, shape, (name, fn, mods, metas) -> {
 			if (isCandidateMethod(name, fn, mods, metas, _oracleRelaxed, retained, shape) && !candidateNames.contains(name))
 				candidateNames.push(name);
 		});
@@ -273,7 +275,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		// withhold more findings. What the narrow scope costs is the reverse and it is fine: a value
 		// reference this run cannot see leaves the finding standing, and applying it is still legal.
 		final valueBlocked: Array<String> = [];
-		for (t in trees) collectValueRefs(t.tree, false, candidateNames, valueBlocked);
+		for (t in trees) collectValueRefs(t.tree, false, candidateNames, valueBlocked, shape);
 		// Pass B2: the REFLECTION gate, over the whole declared scope and demanded per candidate.
 		// Unlike the value gate this one IS soundness: measured on Haxe 4.3.7 under `--dce full`, a
 		// method that is statically called AND read by `Reflect.field(o, 'm')` answers FOUND while
@@ -287,10 +289,10 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		// method name is a common word, so reading it here would withhold findings by the hundred.
 		// PRICED where the scope is UNDECLARED, which neither measured tree is: `scopeFiles` gates on
 		// `hasAnyResolutionScope`, so a std-only scope makes this gate parse the std where `widest()`
-		// above never does — measured with `--rule prefer-inline --no-oracle`, one no-config file
-		// 0.13s -> 0.49s and the haxe-formatter fork's `src` (36 files) 0.50s -> 1.04s, both back to
-		// baseline under `APQ_NO_STD=1` and finding-identical either way. Extra refusals are the safe
-		// direction; the seconds are the price and they are not zero.
+		// above never does — re-measured as std-discovered against `APQ_NO_STD=1`, finding-identical
+		// either way: one no-config file whose candidates reach the gate (the haxe-formatter fork's
+		// `CodeLine.hx`) 0.11s -> 0.46s, and that fork's whole `src` (36 files) 0.43s -> 0.85s. Extra
+		// refusals are the safe direction; the seconds are the price and they are not zero.
 		var reflectScanned: Bool = false;
 		final reflectBlocked: Array<String> = [];
 		function reflectNames(): Array<String> {
@@ -321,7 +323,8 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 			final metaBlocked: Array<QueryNode> = metaBlockedClasses(t.tree, t.branch);
 			for (cls in CheckScan.classBodies(t.tree)) if (!metaBlocked.contains(cls))
 				considerClass(
-					out, cls, t.file, widest, valueBlocked, reflectNames, _oracleRelaxed, t.branch, retained, naming, contracts, plugin
+					out, cls, t.file, t.source, widest, valueBlocked, reflectNames, _oracleRelaxed, t.branch, retained, naming, contracts,
+					plugin
 				);
 		}
 		return out;
@@ -344,23 +347,24 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 			if (s != null) wanted.push('${s.from}:${s.to}');
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
-		final branch: MemberBranchSeams = MemberBranchScan.seamsOf(plugin.refShape(), source, plugin.lexicalRegions.bind(source));
-		for (cls in CheckScan.classBodies(tree)) forEachMethod(cls, branch, (name, fn, mods, metas) -> {
+		final shape: RefShape = plugin.refShape();
+		final branch: MemberBranchSeams = MemberBranchScan.seamsOf(shape, source, plugin.lexicalRegions.bind(source));
+		for (cls in CheckScan.classBodies(tree)) forEachMethod(cls, branch, shape, (name, fn, mods, metas) -> {
 			final span: Null<Span> = fn.span;
-			if (span == null || mods.contains('Inline') || !wanted.contains('${span.from}:${span.to}')) return;
+			if (span == null || mods.exists(m -> m == shape.inlineModifierKind) || !wanted.contains('${span.from}:${span.to}')) return;
 			edits.push({ span: new Span(span.from, span.from), text: 'inline ' });
 		});
 		return edits;
 	}
 
-	/** `node` with a wrapping `ReturnExpr` peeled (an arrow `return EXPR` body projects the wrapper). */
-	private static inline function unwrapReturn(node: QueryNode): QueryNode {
-		return node.kind == 'ReturnExpr' && node.children.length == 1 ? node.children[0] : node;
+	/** `node` with a wrapping value-return peeled (an arrow `return EXPR` body projects the wrapper). */
+	private static inline function unwrapReturn(node: QueryNode, shape: RefShape): QueryNode {
+		return (shape.valueReturnKinds ?? []).contains(node.kind) && node.children.length == 1 ? node.children[0] : node;
 	}
 
 	/** Whether `node` qualifies as a thin-forward argument / mutator operand: a bare chain or a plain literal. */
 	private static inline function isSimpleOperand(node: QueryNode, shape: RefShape): Bool {
-		return isChain(node) || MemberKinds.isPlainLiteral(node, shape);
+		return isChain(node, shape) || MemberKinds.isPlainLiteral(node, shape);
 	}
 
 	/** Whether `fn`'s body is an empty statement block (the no-op arm's message discriminator). */
@@ -376,8 +380,41 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	}
 
 	/** Whether `kind` is an identifier / field-access value node whose name could be a method-value reference. */
-	private static inline function isAccessKind(kind: String): Bool {
-		return kind == 'IdentExpr' || CHAIN_KINDS.contains(kind);
+	private static inline function isAccessKind(kind: String, shape: RefShape): Bool {
+		return kind == shape.identKind || isChainLinkKind(kind, shape);
+	}
+
+	/**
+	 * Whether `kind` is a member-access LINK — the grammar's plain, null-safe and force-unwrap field
+	 * accesses, which are what a bare chain is built out of. Compared field by field rather than
+	 * assembled into an array: `isChain` and `collectValueRefs` ask this once per node of a subtree
+	 * walk, so an array would be rebuilt per node; a grammar leaving a spelling unset simply never
+	 * matches it, which narrows the chain vocabulary and can only withhold candidates.
+	 */
+	private static inline function isChainLinkKind(kind: String, shape: RefShape): Bool {
+		return kind == shape.fieldAccessKind || kind == shape.nullSafeAccessKind || kind == shape.forceFieldAccessKind;
+	}
+
+	/**
+	 * Whether `kind` is a PLAIN method host — a member host that is neither a field host nor the
+	 * `final function` one. `RefShape.memberDeclKinds`'s own doc states the split (`explicit-type`
+	 * reads `fieldDeclKinds` and treats the rest as functions); the `final` flavour comes out through
+	 * `finalModifierMemberKind`, which this rule refuses for the same reason it refuses `override`.
+	 */
+	private static inline function isPlainMethodKind(kind: String, shape: RefShape): Bool {
+		return (shape.memberDeclKinds ?? []).contains(kind) && !(shape.fieldDeclKinds ?? []).contains(kind)
+			&& kind != shape.finalModifierMemberKind;
+	}
+
+	/**
+	 * Whether `kind` is a modifier that makes `inline` impossible or pointless: already inline,
+	 * re-bindable at runtime (`dynamic`), compile-time only (`macro`), an override, or a body-less
+	 * extern declaration. A grammar leaving one of these spellings unset simply drops that gate —
+	 * there is nothing in its modifier vocabulary for it to have matched.
+	 */
+	private static inline function isInlineBlockingModifier(kind: String, shape: RefShape): Bool {
+		return kind == shape.inlineModifierKind || kind == shape.dynamicModifierKind || kind == shape.macroModifierKind
+			|| kind == shape.overrideModifierKind || kind == shape.externModifierKind;
 	}
 
 	/** The last `.`-separated segment of `path` (its simple name). */
@@ -391,8 +428,9 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	 * the one context-sensitive construct a benefit-class body can still carry: a `null` argument /
 	 * operand re-typechecks in the CALLER's null-safety mode once inlined.
 	 */
-	private static inline function isRiskyHere(node: QueryNode, parentKind: String): Bool {
-		return node.kind == 'NullLit' && parentKind != 'Eq' && parentKind != 'NotEq' && parentKind != 'NullCoal';
+	private static inline function isRiskyHere(node: QueryNode, parentKind: String, shape: RefShape): Bool {
+		return node.kind == shape.nullLiteralKind && parentKind != shape.eqKind && parentKind != shape.notEqKind
+			&& parentKind != shape.nullCoalesceKind;
 	}
 
 	/**
@@ -493,9 +531,16 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	 * `isCandidateMethod` — not a reserved name (a constructor or a compiler-invoked hook), an
 	 * override, dynamic, macro, `@:keep`, already inline, or self-recursive, with its body in a
 	 * benefit class.
+	 *
+	 * The gates are ORDERED by what they cost, not by what they mean: everything answerable from this
+	 * class and this file runs first, and the widest index is demanded only by the survivors. Two
+	 * refusals are free — no locally-eligible method at all, and a build-macro token in the owner's
+	 * own source — and each of them is the whole index's price avoided (`run`'s thunk states the
+	 * measurement). The reflection scan stays LAST for the same reason: it walks the scope a second
+	 * time.
 	 */
 	private static function considerClass(
-		out: Array<Violation>, cls: QueryNode, file: String, widest: () -> SymbolIndex, valueBlocked: Array<String>,
+		out: Array<Violation>, cls: QueryNode, file: String, source: String, widest: () -> SymbolIndex, valueBlocked: Array<String>,
 		reflectNames: () -> Array<String>, relaxed: Bool, branch: MemberBranchSeams, retained: Null<String>, naming: Null<NamingSupport>,
 		contracts: Array<FrameworkContract>, plugin: GrammarPlugin
 	): Void {
@@ -518,7 +563,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 			span: Span,
 			isStatic: Bool
 		}> = [];
-		forEachMethod(cls, branch, (name, fn, mods, metas) -> {
+		forEachMethod(cls, branch, shape, (name, fn, mods, metas) -> {
 			final span: Null<Span> = fn.span;
 			if (
 				span != null && !valueBlocked.contains(name) && isCandidateMethod(name, fn, mods, metas, relaxed, retained, shape)
@@ -530,6 +575,13 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 			});
 		});
 		if (locals.length == 0) return;
+		// Hop ZERO of the build-macro closure below is a TEXT scan of the owner's OWN file:
+		// `TypeTraits.buildMacroRoots` starts the walk at the declaration in `file`, and its first act is
+		// `carriesBuildMacro` over THAT file's source — which this run already holds. Asking it here is
+		// the same predicate, not a second one (a yes here is a yes there), and it answers the commonest
+		// refusal without building the widest index at all. Only the INHERITED grant — a supertype or
+		// interface carrying `@:autoBuild` — needs the index, and that is what the call below still asks.
+		if (MemberWriteScan.carriesBuildMacro(source)) return;
 		final index: SymbolIndex = widest();
 		// A build macro on the owner — or granted by a supertype / interface through `@:autoBuild` —
 		// writes members no scan of this source can see, an `override` of this very method in every
@@ -591,19 +643,25 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	}
 
 	/**
-	 * Invoke `cb(name, fnNode, mods, metas)` for every `FnMember` of `cls`, where `mods` is the
-	 * member's preceding modifier-kind run (`Public` / `Static` / `Inline` / …) and `metas` its
-	 * preceding metadata names (`@:keep` / …), both reset at each member boundary. `final function`
-	 * (`FinalModifiedMember`) and fields reset the run but are not methods.
+	 * Invoke `cb(name, fnNode, mods, metas)` for every plain method of `cls`, where `mods` is the
+	 * member's preceding modifier-kind run (the grammar's visibility / static / inline / … sibling
+	 * kinds) and `metas` its preceding metadata names, both reset at each member boundary.
+	 *
+	 * The boundary is `RefShape.memberDeclKinds` — every member host a modifier run can attach to —
+	 * and the METHOD half of it is that set minus the field hosts (`fieldDeclKinds`) minus the
+	 * `final function` host (`finalModifierMemberKind`), which is what `isPlainMethodKind` computes.
+	 * So a field and a `final function` still END a run without being offered as candidates, and no
+	 * member kind is named here.
 	 */
 	private static function forEachMethod(
-		cls: QueryNode, branch: MemberBranchSeams, cb: (String, QueryNode, Array<String>, Array<String>) -> Void
+		cls: QueryNode, branch: MemberBranchSeams, shape: RefShape, cb: (String, QueryNode, Array<String>, Array<String>) -> Void
 	): Void {
-		MemberBranchScan.eachMember(branch, cls, child -> MEMBER_KINDS.contains(child.kind), (member, run, certain) -> {
+		final memberKinds: Array<String> = shape.memberDeclKinds ?? [];
+		MemberBranchScan.eachMember(branch, cls, child -> memberKinds.contains(child.kind), (member, run, certain) -> {
 			// A modifier run only SOME builds see cannot answer this rule's gates — see
 			// `MemberBranchScan.joinRuns`. It also closes the real shape `#if X inline #end function f`,
 			// where the flat reading missed the guarded `inline` and told you to inline it again.
-			if (!certain || member.kind != 'FnMember') return;
+			if (!certain || !isPlainMethodKind(member.kind, shape)) return;
 			final name: Null<String> = member.name;
 			if (name == null) return;
 			final mods: Array<String> = [];
@@ -642,14 +700,10 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		name: String, fn: QueryNode, mods: Array<String>, metas: Array<String>, retained: Null<String>, shape: RefShape
 	): Bool {
 		if (isReservedMemberName(name)) return false;
-		if (
-			mods.contains('Inline') || mods.contains('Dynamic') || mods.contains('Macro') || mods.contains('Override')
-			|| mods.contains('Extern')
-		)
-			return false;
+		if (mods.exists(m -> isInlineBlockingModifier(m, shape))) return false;
 		if (retained != null && metas.contains(retained)) return false;
 		if (metas.exists(m -> !inlineNeutralMeta(m))) return false;
-		if (referencesSelf(fn, name)) return false;
+		if (referencesSelf(fn, name, shape)) return false;
 		if (isEmptyBody(fn, shape)) return true;
 		final root: Null<QueryNode> = bodyRootExpr(fn, shape);
 		return root != null && (isAccessorOrForward(root, shape) || isConstExpr(root, shape)) && !bodyExceedsBudget(fn, shape);
@@ -669,10 +723,11 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	private static function bodyRootExpr(fn: QueryNode, shape: RefShape): Null<QueryNode> {
 		final body: Null<QueryNode> = bodyOf(fn, shape);
 		if (body == null || body.children.length != 1) return null;
-		if ((shape.expressionBodyKinds ?? []).contains(body.kind)) return unwrapReturn(body.children[0]);
+		if ((shape.expressionBodyKinds ?? []).contains(body.kind)) return unwrapReturn(body.children[0], shape);
 		if (body.kind != shape.blockBodyKind) return null;
 		final stmt: QueryNode = body.children[0];
-		return (stmt.kind == 'ReturnStmt' || stmt.kind == 'ExprStmt') && stmt.children.length == 1 ? stmt.children[0] : null;
+		final isValueCarrier: Bool = (shape.valueReturnKinds ?? []).contains(stmt.kind) || stmt.kind == shape.exprStatementKind;
+		return isValueCarrier && stmt.children.length == 1 ? stmt.children[0] : null;
 	}
 
 	/**
@@ -680,13 +735,10 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	 * `super` is REJECTED — Haxe refuses `inline` on a body containing `super` ("Cannot inline function
 	 * containing super"), and the no-oracle fix path would emit exactly that.
 	 */
-	private static function isChain(node: QueryNode): Bool {
-		return switch node.kind {
-			case 'IdentExpr': node.name != 'super';
-			case k if (CHAIN_KINDS.contains(k)):
-				node.children.length == 1 && isChain(node.children[0]);
-			case _: false;
-		}
+	private static function isChain(node: QueryNode, shape: RefShape): Bool {
+		return node.kind == shape.identKind
+			? node.name != shape.superReferenceText
+			: isChainLinkKind(node.kind, shape) && node.children.length == 1 && isChain(node.children[0], shape);
 	}
 
 	/**
@@ -698,10 +750,10 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	 */
 	private static function isAccessorOrForward(root: QueryNode, shape: RefShape): Bool {
 		final kids: Array<QueryNode> = root.children;
-		return isChain(root) || kids.length >= 1 && isChain(kids[0]) && kids[0].name != 'bind' && (
-			root.kind == CALL_KIND
+		return isChain(root, shape) || kids.length >= 1 && isChain(kids[0], shape) && kids[0].name != 'bind' && (
+			root.kind == shape.callKind
 				? allSimpleOperands(kids, 1, shape)
-				: MUTATOR_KINDS.contains(root.kind) && (kids.length == 1 || isSimpleOperand(kids[1], shape))
+				: shape.writeParentKinds.contains(root.kind) && (kids.length == 1 || isSimpleOperand(kids[1], shape))
 		);
 	}
 
@@ -722,8 +774,17 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	 * (which they carried), so `return ~_mask;` was not an inline candidate while `return -_mask;` was.
 	 */
 	private static function isConstExpr(node: QueryNode, shape: RefShape): Bool {
-		return isSimpleOperand(node, shape) || MemberKinds.pureOperandKinds(shape).contains(node.kind)
-			&& node.children.foreach(c -> c.kind == 'Named' || isConstExpr(c, shape));
+		return constExprWalk(node, shape, MemberKinds.pureOperandKinds(shape), shape.typeAnnotationKinds ?? []);
+	}
+
+	/**
+	 * `isConstExpr`'s recursion, with the two derived vocabularies passed down rather than re-derived.
+	 * `pureOperandKinds` assembles a fresh array from the shape on every call, so asking it inside the
+	 * walk rebuilt it once per NODE of the subtree; `typeAnnotationKinds` is the same shape read.
+	 */
+	private static function constExprWalk(node: QueryNode, shape: RefShape, pure: Array<String>, typeChildKinds: Array<String>): Bool {
+		return isSimpleOperand(node, shape) || pure.contains(node.kind)
+			&& node.children.foreach(c -> typeChildKinds.contains(c.kind) || constExprWalk(c, shape, pure, typeChildKinds));
 	}
 
 	/**
@@ -744,19 +805,17 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		return total;
 	}
 
-	/** Whether `node`'s subtree references `name` as a bare `IdentExpr` or a `this.<name>` `FieldAccess` — a self / recursive reference. */
-	private static function referencesSelf(node: QueryNode, name: String): Bool {
-		return selfRefName(node) == name || node.children.exists(c -> referencesSelf(c, name));
+	/** Whether `node`'s subtree references `name` as a bare identifier or a self-receiver field access — a self / recursive reference. */
+	private static function referencesSelf(node: QueryNode, name: String, shape: RefShape): Bool {
+		return selfRefName(node, shape) == name || node.children.exists(c -> referencesSelf(c, name, shape));
 	}
 
-	/** The name a node references as a bare `IdentExpr <name>` or `this.<name>` `FieldAccess`, else null. */
-	private static function selfRefName(node: QueryNode): Null<String> {
-		return switch node.kind {
-			case 'IdentExpr': node.name;
-			case 'FieldAccess':
-				node.children.length == 1 && node.children[0].kind == 'IdentExpr' && node.children[0].name == 'this' ? node.name : null;
-			case _: null;
-		}
+	/** The name a node references as a bare identifier or a `<self>.<name>` field access, else null. */
+	private static function selfRefName(node: QueryNode, shape: RefShape): Null<String> {
+		if (node.kind == shape.identKind) return node.name;
+		final selfReceiver: Bool = node.kind == shape.fieldAccessKind && node.children.length == 1
+			&& node.children[0].kind == shape.identKind && node.children[0].name == shape.selfReferenceText;
+		return selfReceiver ? node.name : null;
 	}
 
 	/**
@@ -765,12 +824,15 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	 * method-value references that forbid inlining. `inCalleePos` marks `node` as the callee child
 	 * (child 0) of a `Call`, where an occurrence is an invocation, not a value.
 	 */
-	private static function collectValueRefs(node: QueryNode, inCalleePos: Bool, candidateNames: Array<String>, out: Array<String>): Void {
+	private static function collectValueRefs(
+		node: QueryNode, inCalleePos: Bool, candidateNames: Array<String>, out: Array<String>, shape: RefShape
+	): Void {
 		final name: Null<String> = node.name;
-		if (name != null && !inCalleePos && isAccessKind(node.kind) && candidateNames.contains(name) && !out.contains(name)) out.push(name);
-		final isCall: Bool = node.kind == CALL_KIND;
+		if (name != null && !inCalleePos && isAccessKind(node.kind, shape) && candidateNames.contains(name) && !out.contains(name))
+			out.push(name);
+		final isCall: Bool = node.kind == shape.callKind;
 		final children: Array<QueryNode> = node.children;
-		for (i in 0...children.length) collectValueRefs(children[i], isCall && i == 0, candidateNames, out);
+		for (i in 0...children.length) collectValueRefs(children[i], isCall && i == 0, candidateNames, out, shape);
 	}
 
 	/**
@@ -778,10 +840,10 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	 * literal — a method reached by reflection is not safe to inline.
 	 */
 	private static function collectReflectNames(node: QueryNode, candidateNames: Array<String>, out: Array<String>, shape: RefShape): Void {
-		if (node.kind == CALL_KIND && node.children.length >= 1) {
+		if (node.kind == shape.callKind && node.children.length >= 1) {
 			final callee: QueryNode = node.children[0];
 			if (
-				callee.kind == 'FieldAccess' && callee.children.length == 1 && callee.children[0].kind == 'IdentExpr'
+				callee.kind == shape.fieldAccessKind && callee.children.length == 1 && callee.children[0].kind == shape.identKind
 				&& callee.children[0].name == 'Reflect'
 			) for (i in 1...node.children.length) {
 				final lit: Null<String> = Lit.plainStringValue(node.children[i], shape);
@@ -822,12 +884,12 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	 */
 	private static function bodyHasNullSafetyRisk(fn: QueryNode, shape: RefShape): Bool {
 		final body: Null<QueryNode> = bodyOf(fn, shape);
-		return body != null && subtreeHasNullSafetyRisk(body, body.kind);
+		return body != null && subtreeHasNullSafetyRisk(body, body.kind, shape);
 	}
 
 	/** Whether `node`'s subtree contains a null literal in a value slot. */
-	private static function subtreeHasNullSafetyRisk(node: QueryNode, parentKind: String): Bool {
-		return isRiskyHere(node, parentKind) || node.children.exists(c -> subtreeHasNullSafetyRisk(c, node.kind));
+	private static function subtreeHasNullSafetyRisk(node: QueryNode, parentKind: String, shape: RefShape): Bool {
+		return isRiskyHere(node, parentKind, shape) || node.children.exists(c -> subtreeHasNullSafetyRisk(c, node.kind, shape));
 	}
 
 }

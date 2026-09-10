@@ -1557,13 +1557,15 @@ registry, which has to construct the plugin it selects (`cli/CliArgs.hx`), and o
 real remainder — `query/FormatConfigDiscovery.hx` reaches for
 `HaxeFormatConfigDiagnostics` to warn about a config it found. A kind name spelled as
 a STRING is the same coupling with none of the compiler's help, and there are
-**495 occurrences of 130 distinct projected ctor names across 60 files** of
-`src/anyparse/query` + `src/anyparse/check` (609 / 147 / 70 if names that are also
+**455 occurrences of 124 distinct projected ctor names across 60 files** of
+`src/anyparse/query` + `src/anyparse/check` (563 / 141 / 70 if names that are also
 ordinary English words — `Static`, `Public`, `Inline` — are counted). BOTH triples are
 reproducible now: the exclusive one subtracts the 19 names of
 `HaxeQueryWalker.ambiguousProjectedKinds()`, which is GENERATED, not a hand-kept word
-list. Re-measure before quoting — this is a reading of `811365eb`, and S188's
-761 / 168 / 73 was a reading of `e11018f5`. The census is
+list. Re-measure before quoting — this is a reading of S202's tip; the same two
+commands answered 495 / 130 / 60 and 609 / 147 / 70 on `811365eb`, and S188's
+761 / 168 / 73 was a reading of `e11018f5`. The whole 40 / 46 the last reading lost is
+ONE file: `check/PreferInline.hx` went 47 spellings to 1. The census is
 one command against `HaxeQueryWalker.projectedKinds()`, which is the same generated
 vocabulary `unit.query.RefShapeKindProjectionTest` compares the declared side
 against:
@@ -1585,6 +1587,20 @@ and both `ATOMIC_ROOT_KINDS` — are gone as of S195: they derive from the shape
 heuristic they were paired with (`kind.endsWith('Lit')`, `kind.endsWith('StringExpr')`)
 was retired earlier, and `LiteralClassificationTest` holds the replacement to the
 grammar's own declaration in both directions.
+
+The third answered shape is a whole CHECK rather than a vocabulary: `prefer-inline`
+carried 47 spellings — a chain-link list, an assignment-family table, a member-host
+table and eleven single kinds — and S202 took it to 1 by reading the fields the
+grammar already declares (`identKind`, `callKind`, `fieldAccessKind` /
+`nullSafeAccessKind` / `forceFieldAccessKind`, `writeParentKinds`, `memberDeclKinds`
+minus `fieldDeclKinds` minus `finalModifierMemberKind`, the five modifier seams,
+`valueReturnKinds`, `exprStatementKind`, `typeAnnotationKinds`, `nullLiteralKind` /
+`eqKind` / `notEqKind` / `nullCoalesceKind`). It is worth reading as precedent for the
+reason the tables gave way: the hand-written assignment family disagreed with
+`writeParentKinds` by three members (`>>>=`, `&&=`, `||=` were not mutators to it), the
+same defect shape S195 measured on `BitNot`. What did NOT give way is the one kind no
+field names — `ImplementsClause`, the interface half of `supertypeClauseKinds` — which
+six files across `query` + `check` still spell.
 
 A hardcoded list is invisible to the declared-vs-projected differential, which is
 its own hazard: that fixture reads `RefShape` fields, so a name moved into the shape

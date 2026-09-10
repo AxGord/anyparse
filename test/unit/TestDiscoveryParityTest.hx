@@ -1128,6 +1128,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-PIEC-SPINE-CLAIM-ANY',
 			'unit.check.PreferIfExpressionChainCheckTest#testChainWithNoBooleanLeafStillFlagged :: control :: M-PIEC-SPINE-CLAIM-ANY',
 			'unit.check.PreferIndexAccessCheckTest#testObjectLiteralSetValueNotFlagged :: control :: M-PIA-OBJLIT-SET-FLAGGED',
+			'unit.check.PreferInlineCheckTest#testOwnFileBuildMacroTokenCostsNoResolutionIndex :: control :: M-INLINE-LOCAL-BUILD-MACRO',
 			'unit.check.PreferInlineCheckTest#testQualifiedSupertypeKeySplitsTheTwinFromTheRealSubtypesOwner :: control :: '
 				+ 'M-INLINE-SUBTYPE-REPORT-INDEX',
 			'unit.check.PreferStaticExtensionCheckTest#testGuardedImportRunGetsNoSecondUsing :: control :: M-GUARDED-USING-ABSENT',
@@ -2035,6 +2036,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-UNUSED-PRIVATE-DECLINE-SILENT',
 			'M-UNUSED-PRIVATE-REGION-DECLINE-SILENT',
 			'M-INLINE-SUBTYPE-REPORT-INDEX',
+			'M-INLINE-LOCAL-BUILD-MACRO',
 			'M-INLINE-REFLECT-REPORT-SCOPE',
 			'M-ORPHAN-ACCESSOR-REPORT-SCOPE',
 			'M-COND-NAMES-DROP-META-NAME',
