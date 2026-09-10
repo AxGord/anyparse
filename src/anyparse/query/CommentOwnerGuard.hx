@@ -40,17 +40,15 @@ using StringTools;
  * needs no model of what a comment means, and it says nothing about an edit that rewrites the
  * code under a single block.
  *
- * It is a positive criterion, not a proof of attachment, and the gap was MEASURED rather than
- * guessed. With `prefer-ternary-return`'s own cascade gate disabled and only this criterion
- * standing, the T546 cascade lands three folds and hoists one comment past a gate it does not
- * document before the weld is reached (measured S86, on the reduced fixture: 3 edits over 4
- * passes).
+ * It is a positive criterion, not a proof of attachment, and the gap is real: with
+ * `prefer-ternary-return`'s own cascade gate disabled and only this criterion standing, the cascade
+ * lands several folds and hoists one comment past a gate it does not document before the weld is reached.
  *
  * ## The second criterion, and why it needs the caller
  *
  * A weld is the shape a comparison of the two texts can decide on its own; "moved across code
- * that survived" is not, because an ordinary in-place rewrite changes the same bytes. S86 closed
- * that half by giving edits a way to SAY what they quote verbatim (`CanonicalEdit.CarriedEdit`,
+ * that survived" is not, because an ordinary in-place rewrite changes the same bytes. That half
+ * is closed by giving edits a way to SAY what they quote verbatim (`CanonicalEdit.CarriedEdit`,
  * `Check.CarryingFix`) and asking `hoistedComment` below. It is opt-in by construction: an edit
  * set that declares nothing is judged exactly as it was, and the same cascade with the
  * declaration in place stops after ONE fold with no comment detached.
@@ -89,15 +87,14 @@ final class CommentOwnerGuard {
 		// comment that lands INSIDE a replacement has to be matched by text, and then only against
 		// the comments THAT edit covers, so an edit elsewhere in the file cannot reach it.
 		//
-		// What this replaced was one queue per comment TEXT with one cursor per text across the
-		// whole file, and its doc argued only about the surplus a RESULT can carry ("runs the queue
-		// dry … cannot invent a refusal"). A deletion produces the opposite surplus: the removed
-		// member takes its comments with it, so every later occurrence of a repeated text — a bare
-		// `//` separator is the everyday case — drew the block of an EARLIER one, and a surviving
-		// two-comment block reported a weld between comments that never moved. Measured on S117:
-		// 11 of 44 whole-member deletions were refused that way, each naming code hundreds of lines
-		// from the deletion, and the workaround was to route them through `move-member`, which
-		// bypasses this seam rather than satisfying it.
+		// What this replaced was one queue per comment TEXT with one cursor per text across the whole file,
+		// and its doc argued only about the surplus a RESULT can carry ("runs the queue dry … cannot invent
+		// a refusal"). A deletion produces the opposite surplus: the removed member takes its comments with
+		// it, so every later occurrence of a repeated text — a bare `//` separator is the everyday case —
+		// drew the block of an EARLIER one, and a surviving two-comment block reported a weld between
+		// comments that never moved. Whole-member deletions were refused that way in quantity, each naming
+		// code hundreds of lines from the deletion, and the only workaround was to route them through
+		// `move-member`, which bypasses this seam rather than satisfying it.
 		final align: CommentAlignment = alignComments(source, edits, tokens, before);
 		for (block in after) {
 			var ownerBlock: Int = -1;

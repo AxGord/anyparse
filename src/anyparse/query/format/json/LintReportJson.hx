@@ -5,8 +5,7 @@ package anyparse.query.format.json;
  *
  * The report on disk is a BARE top-level JSON array, and the ByName lowering
  * cannot root on one: `@:peg typedef LintReportJson = Array<LintFindingJson>`
- * fails the build with `ShapeBuilder: typedef LintReportJson does not resolve
- * to an anonymous structure` (measured 2026-08-17 against this compiler).
+ * fails the build with `ShapeBuilder: typedef LintReportJson does not resolve to an anonymous structure`.
  * `AstRefHits` records the same constraint from the WRITER side and answers it
  * the same way — wrap the array in a one-key struct so the macro has a typedef
  * root to dispatch on.

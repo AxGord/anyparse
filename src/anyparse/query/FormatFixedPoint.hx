@@ -13,42 +13,35 @@ import haxe.Exception;
  * gets a different answer once the writer has rewritten that layout, so
  * `--write` stopped one pass short of where its own `--list` would.
  *
- * Measured instance (2026-08-22). Set `wrapping.objectLiteral.defaultWrap` to
- * `fillLineWithLeadingBreak` on the Pony tree: one `fmt --write` rewrote 173
- * files and the very next `fmt --list` still reported 163 of them.
- * `HxObjectLit.fields` carries no `@:fmt(reflowSourceMultiline)`, so a
- * source-MULTILINE object literal is force-one-per-lined before the wrap
- * cascade is consulted at all — and pass 1's own leading break is what makes
- * the literal multiline. That is faithful to the fork
- * (`MarkWrapping.objectLiteralWrapping` returns early on
- * `!parsedCode.isOriginalSameLine`, and haxe-formatter 1.18.0 reproduces the
- * same two-pass convergence on the same file); what was NOT faithful is a
- * `--write` whose result its own `--list` rejects.
+ * One instance: with `wrapping.objectLiteral.defaultWrap` set to `fillLineWithLeadingBreak`, a `fmt
+ * --write` over a real tree rewrote a batch of files and the very next `fmt --list` still reported most of
+ * them. `HxObjectLit.fields` carries no `@:fmt(reflowSourceMultiline)`, so a source-MULTILINE object
+ * literal is force-one-per-lined before the wrap cascade is consulted at all — and pass 1's own leading
+ * break is what makes the literal multiline. That is faithful to the fork
+ * (`MarkWrapping.objectLiteralWrapping` returns early on `!parsedCode.isOriginalSameLine`, and
+ * haxe-formatter 1.18.0 reproduces the same two-pass convergence on the same file); what was NOT faithful
+ * is a `--write` whose result its own `--list` rejects.
  *
- * It is a bug SHAPE, not one bug. Flipping each wrapping knob in turn on the
- * same 854-file corpus finds five more lists whose layout can be decided from
- * source newlines instead of from the cascade — `anonType` (33 files),
- * `callParameter` (2), `arrayWrap`, `anonFunctionSignature` and
- * `typeParameter` (one each). None of the 201 files needed more than
- * two rewrites, and none oscillated.
+ * It is a bug SHAPE, not one bug. Flipping each wrapping knob in turn over a large corpus finds five more
+ * lists whose layout can be decided from source newlines instead of from the cascade — `anonType`,
+ * `callParameter`, `arrayWrap`, `anonFunctionSignature` and `typeParameter`. No file needed more than two
+ * rewrites, and none oscillated.
  *
  * ω-flat-source-fixed-point since closed that class at the wrap decision
  * itself: a cascade answer that BREAKS a source-flat list is emitted as
  * `OnePerLine` — the shape the force-multi path would force on the next pass
  * anyway — so pass 2 reproduces pass 1 by construction
- * (`WrapList.breakAsOnePerLine`). Measured over the whole Pony tree (867
- * files, its own `hxformat.json`): the three files that took two rewrites now
- * take one, and `fmt --write` writes a BYTE-IDENTICAL tree. The corpus stayed
- * at 775/126/43 with zero fixtures moved.
+ * (`WrapList.breakAsOnePerLine`). Over a whole real tree under its own `hxformat.json` the files that
+ * took two rewrites now take one, `fmt --write` writes a BYTE-IDENTICAL tree, and no corpus fixture moved.
  *
  * So `fmt` writes the fixed point instead of one round trip. Two properties
  * make that safe rather than clever:
  *
  *  - It is FREE and byte-inert wherever it does not apply. A file already at
  *    its fixed point answers `source` on pass 1 and nothing else runs; a
- *    normally-dirty file confirms on pass 2. Every config this project ships
- *    is in that class — measured 0 files needing a second rewrite over `src`,
- *    `test`, and the whole Pony tree under its own `hxformat.json`.
+ *    normally-dirty file confirms on pass 2. Every config this project ships is in that
+ *    class: no file needs a second rewrite over `src`, over `test`, or over a
+ *    whole real tree under its own config.
  *  - It never SWALLOWS the defect it works around, PROVIDED the caller
  *    reports it. A file that never settles is a failure that leaves the bytes
  *    alone at every caller — churning a file forever is worse than declining
@@ -69,18 +62,13 @@ import haxe.Exception;
  *    library still does not own the diagnostic: it owns the WORDING
  *    (`rewritesNote`) and hands the count to the CLI boundary that prints it.
  *
- * `fmt` is no longer the only caller. `RefactorSupport.canonicalize` and
- * `NewFile.create` / `NewFile.createRaw` run the same loop over what they are
- * about to WRITE, because the gate the NEXT writer-emit op puts on that file is
- * `writeRoundTrip(s) == s` after ONE pass. A single round trip there reported
- * `wrote <file>` and left a file its own `fmt --list` immediately called
- * drifted, after which the next op refused it as non-canonical — measured on
- * Pony's `tools/src/module/Unpack.hx` through `apq add-member --reformat` and
- * through `apq new --raw -`. Seven files of that tree needed two rewrites
- * when this landed (a count that goes stale the moment the writer moves —
- * the SHAPES are what is pinned);
- * `unit.WrapFlatSourceFixedPointTest` pins the three writer shapes behind them
- * and records what closing each would cost.
+ * `fmt` is no longer the only caller. `RefactorSupport.canonicalize` and `NewFile.create` /
+ * `NewFile.createRaw` run the same loop over what they are about to WRITE, because the gate the NEXT
+ * writer-emit op puts on that file is `writeRoundTrip(s) == s` after ONE pass. A single round trip there
+ * reported `wrote <file>` and left a file its own `fmt --list` immediately called drifted, after which the
+ * next op refused it as non-canonical — reachable through `apq add-member --reformat` and through `apq new
+ * --raw -`. `unit.WrapFlatSourceFixedPointTest` pins the writer shapes behind that and records what closing
+ * each would cost.
  *
  * Sister postcondition to `Patch.verbatimSpliceIntact`: an op-internal check
  * for a corruption class no tree-level gate can observe, because every gate

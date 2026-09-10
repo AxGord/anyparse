@@ -153,7 +153,7 @@ interface StringFoldSupport {
 	 * passes on an unresolvable callee is fail-OPEN, and the target intrinsics are the one
 	 * family that never resolves by construction.
 	 *
-	 * Measured on Haxe 4.3.7, `untyped __lua__("{x=" + "1}")` compiles CLEAN and emits
+	 * `untyped __lua__("{x=" + "1}")` compiles CLEAN and emits
 	 * `__lua__(Std.string("{x=") .. Std.string("1}"))` — a call to a Lua function no runtime
 	 * declares; `__python__` does the same; `js.Syntax.code` rejects it with "must be a
 	 * string constant". So the concatenation is refused whether the target errors or not.

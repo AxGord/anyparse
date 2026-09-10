@@ -8,108 +8,45 @@ import haxe.Exception;
 using StringTools;
 
 /**
- * `apq lint-diff` — compare two `apq lint --format json --all` snapshots as
- * MULTISETS of `(file, rule, severity, message)` keys.
+ * `apq lint-diff` — compare two `apq lint --format json --all` snapshots as MULTISETS of
+ * `(file, rule, severity, message)` keys. The blast-radius gate every slice ends with.
  *
- * This is the blast-radius gate every slice ends with, and the reason it is a
- * multiset over four fields rather than a text diff is that the two obvious
- * cheaper answers both lie:
+ * Four fields rather than a text diff, because the cheaper answers lie. A byte diff reports
+ * half the tree: line and column move under any edit above them, so a one-line insertion
+ * re-keys every finding below it — `line`, `col` and `address` are not part of the key at all,
+ * and `LintFindingJson` does not model them. Keying on the raw fields is not enough either,
+ * because two of them are not stable under changes that are not findings.
  *
- *  - A byte diff of the two reports reports half the tree. Line and column
- *    move under any edit above them, so a one-line insertion re-keys every
- *    finding below it. `line`, `col` and `address` are therefore not part of
- *    the key at all — and `LintFindingJson` does not even model them.
- *  - Keying on the raw fields is not enough either, because two of them are
- *    not stable under changes that are not findings. Both normalizations
- *    below come from a false positive observed on real snapshots, not from
- *    anticipation, and each has its own test.
+ * NORMALIZATION 1 — PATHS. A relative scope argument records relative paths, an absolute one
+ * absolute paths, and a `./src` scope a third spelling again, so a literal comparison reports
+ * most of the tree twice over. `--root <prefix>` strips the prefix from whichever side carries
+ * it — from the `file` field AND from the paths a message quotes, since `duplicate-code` names
+ * its partner block by path — so a relative and an absolute snapshot of one tree compare equal.
  *
- * Normalization 1 — PATHS. A snapshot taken with a relative scope argument
- * (`apq lint src test`) records relative paths; one taken with an absolute
- * argument records absolute ones, and a `./src` scope records a third spelling
- * again. On two runs whose 2954 findings were otherwise identical, a literal
- * comparison reported 1812 added and 1812 removed; a `./src`-against-`src`
- * pair disagreed on 269 of 468. `--root <prefix>` strips the prefix from whichever side carries it —
- * from the `file` field AND from the paths a message quotes, since
- * `duplicate-code` names its partner block by path — so a relative and an
- * absolute snapshot of the same tree compare equal.
+ * NORMALIZATION 2 — the NUMBERS a message quotes, and the CHECKS own it. A rule writing a
+ * coordinate or a tally into its own prose re-keys on an edit that changed no finding
+ * (`duplicate-code`'s partner block, `unused-local`'s re-declaration, `oversized-type`'s line
+ * extent): the finding was there before the digit changed and is there after, so the gate
+ * prints one added plus one removed for no movement, and a gate waived by reflex has stopped
+ * being a gate. A check declares its own volatile parts (`Check.VolatileMessage`) and
+ * `identities`, built by `Linter.messageIdentities`, maps rule id to that declaration. This
+ * module holds NO list of rules: a rule quoting a coordinate joins by writing one method on itself.
  *
- * Normalization 2 — the MEASUREMENTS a message quotes, and the checks own it.
- * A rule that writes a source coordinate into its own prose re-keys on an edit
- * that changed no finding: `duplicate-code` names its partner block
- * `<path>:<line>`, `unused-local` the re-declaration that took a binding over,
- * `oversized-type` the type's line extent. The last one made the gate cry wolf
- * on exactly the work this project does — a writer slice moved four types by a
- * few lines each (`WrapList` 4184 -> 4194, plus `WriterLowering` / `Cli` /
- * `SymbolIndex`) and the gate printed eight moves against total findings 2256
- * versus a base of 2256. Waiving it became reflex, and a gate waived by reflex
- * has stopped being a gate.
+ * NOT normalized, and the question to ask before masking a future tally: `duplicate-code`'s
+ * statement COUNT and the `(max N)` THRESHOLD every limit rule quotes. A threshold is
+ * configuration — changing it IS a change. The statement count is the last DISCRIMINATOR its
+ * key has, both coordinates in that message being masked and the partner path shared by every
+ * clone against one file. So the test is not "does this digit move only with the code" but "is
+ * anything else telling two neighbouring findings apart"; `fragmented-doc-comment` refuses
+ * masking on that ground and says so on its own constant.
  *
- * So a check declares its own volatile parts (`Check.VolatileMessage`) and
- * `identities` — built by `Linter.messageIdentities` — maps rule id to that
- * declaration. This module holds NO list of rules: a new rule that quotes a
- * coordinate joins by writing one method on itself, and nothing here changes.
- * The list it replaced was two ids long and could say only "mask every digit in
- * this rule's messages", which is both too coarse (it ate `duplicate-code`'s
- * statement count and any digit in a partner filename — 57% of that rule's
- * findings on anyparse and 78% on tm shared a key with a sibling, and a
- * substitution inside such a group was invisible) and unable to express the
- * oversized-type case at all, where one number in the message drifts and the
- * one beside it IS the finding.
+ * Two prices, knowingly: there is no MAGNITUDE bound (the gate answers whether a finding appeared or
+ * disappeared, not by how much), and masking a number can COLLAPSE two keys into one, which is
+ * SCOPE-DEPENDENT rather than a property of the policy.
  *
- * Every MEASUREMENT a message quotes is masked, and that includes the tallies this
- * paragraph once listed as deliberately kept (`string-literal-dup`'s repetition count,
- * `complexity`'s score, `anon-type-dup`'s occurrence and file counts, `oversized-type`'s
- * member count). The argument for keeping them was that such a digit moves only when the
- * code moves. True, and beside the point: the finding it belongs to was already there
- * before the digit changed and is still there after, so the gate printed one added plus
- * one removed for no movement at all. Measured over the campaign's three consecutive
- * blast-radius verdicts before this change, SIX of six reported lines were exactly that
- * — two `oversized-type` member bumps and four `string-literal-dup` repetition
- * bumps — and none was a real change. `anon-type-dup` was the worst latent case:
- * both its numbers are project-wide POPULATIONS, so one new anonymous structure anywhere
- * re-keyed all 32 of its findings.
- *
- * What is still deliberately NOT normalized, and the question to ask before masking a
- * future tally: `duplicate-code`'s statement COUNT, and the `(max N)` THRESHOLD every
- * limit rule quotes. The threshold is configuration — changing it IS a change. The
- * statement count is the last DISCRIMINATOR its key has: both coordinates in that message
- * are masked and the partner path is shared by every clone against the same file, so
- * blanking the count merges two different clones in one file into one key (the 57% / 78%
- * above). So the test is not "does this digit move only with the code" but "is anything else in
- * this message telling two neighbouring findings apart".
- *
- * Two prices are paid knowingly, both measured. There is no MAGNITUDE bound: a type going
- * 52 -> 301 members now reports the same nothing as 52 -> 53, because this gate answers "did
- * a finding appear or disappear", not "by how much" — the numbers are still in both reports.
- *
- * And masking a number can COLLAPSE two keys into one. At the scope this gate actually runs
- * (`lint src test --all`, the project's own config) that costs 3 of 355 keys, every one of
- * them `extract-repeated-expression`, whose message names the expression but not the
- * function, so one expression repeated in two bodies of a single file merges. But the bound
- * is SCOPE-DEPENDENT and the mechanism is not confined to that rule: `string-literal-dup`
- * elides its literal preview at 40 characters, so two long literals in one file sharing a
- * 40-character prefix render the same text and the repetition count was the last thing
- * between them. Zero such pairs exist in the gate's scope today (8 of its 262 findings carry
- * an elided preview and none collide), but forcing the rule on over `test/` as well — where
- * the nested config disables it — surfaces 14 more collapsed keys, and an end-to-end probe
- * over such a pair reports 0 added / 0 removed for a genuine substitution. Treat 3 as the
- * figure for THIS gate, not as a property of the policy.
- *
- * Against the 57% / 78% the same masking would have cost on `duplicate-code`, that is the
- * trade this policy makes.
- *
- * A census of every builtin whose message carries a digit (S173, on the whole `src`+`test` report) found no unmasked
- * coordinate left: `duplicate-code` in BOTH wordings, `unused-local`, `oversized-type`, `complexity`, `anon-type-dup`,
- * `comment-width`, `extract-repeated-expression` and `string-literal-dup` all survive a shifted number with 0 added /
- * 0 removed, and the one rule that does NOT — `fragmented-doc-comment`, whose block tally is its only discriminator —
- * refuses masking on purpose and says so on its own constant. So a claim that a message re-keys on an unrelated edit
- * needs a probe, not an inference: the one such claim on record was a misread of `render`s own headline.
- *
- * Everything here is pure — the CLI layer reads the files, builds the identity
- * map, calls `parseReport` / `tally` / `compare` / `render` and prints. That
- * split is what lets the suite test both normalizations directly rather than
- * through a process.
+ * Everything here is pure: the CLI layer reads the files, builds the identity map, calls
+ * `parseReport` / `tally` / `compare` / `render` and prints, which is what lets the suite test
+ * both normalizations directly rather than through a process.
  */
 @:nullSafety(Strict)
 final class LintDiff {
@@ -290,15 +227,12 @@ final class LintDiff {
 	 * a rule with no declaration passes through byte-identical — the state of every
 	 * builtin but three.
 	 *
-	 * The path work is not a `file`-field concern that leaked in here. A check
-	 * pointing at a SECOND location spells it in the message — `duplicate-code`
-	 * names its partner block `<path>:<line>` — and that path is recorded
-	 * exactly as the scope argument was written, so it carries every spelling
-	 * the `file` field carries. Both were measured on real snapshots: an
-	 * absolute-against-relative pair disagreed on 590 of 2954 findings with only
-	 * the file field normalized, and a `./src`-against-`src` pair on 269 of 468.
-	 * Whatever the file field forgives, the message has to forgive too, or
-	 * `--root` is true by half.
+	 * The path work is not a `file`-field concern that leaked in here. A check pointing at a SECOND
+	 * location spells it in the message — `duplicate-code` names its partner block `<path>:<line>` — and
+	 * that path is recorded exactly as the scope argument was written, so it carries every spelling the
+	 * `file` field carries. With only the file field normalized, an absolute-against-relative pair and a
+	 * `./src`-against-`src` pair each disagree on a large fraction of their findings. Whatever the file
+	 * field forgives, the message has to forgive too, or `--root` is true by half.
 	 */
 	public static function normalizeMessage(rule: String, message: String, root: String, identities: LintMessageIdentities): String {
 		final rooted: String = normalizeQuotedPaths(message, rootPrefix(root));
@@ -335,7 +269,7 @@ final class LintDiff {
 	}
 
 	/**
-	 * `root` reduced to the exact prefix a path in this tree carries: trailing
+	 * `root` reduced to the exact prefix the snapshot's paths carry: trailing
 	 * slashes dropped, empty when there is nothing to strip. Shared by the path
 	 * and the message normalization so the two can never disagree about what
 	 * the root is.
@@ -425,16 +359,14 @@ final class LintDiff {
 	 * The per-rule breakdown: for every rule that MOVED, both snapshot totals and the two
 	 * surpluses.
 	 *
-	 * A rule that moved nothing is left out on purpose. All 180 rules are registered and 38
-	 * of them fire on this tree, so printing every one with its totals would bury the two or
-	 * three that changed — and "which rules exist" is `lint --list-rules`'s question, not
-	 * this gate's.
+	 * A rule that moved nothing is left out on purpose. Most registered rules fire on no given tree, so
+	 * printing every one with its totals would bury the two or three that changed — and "which rules exist"
+	 * is `lint --list-rules`'s question, not this gate's.
 	 *
 	 * Movement is the ADDED/REMOVED surplus, not a difference of the two totals: a finding
 	 * that migrated from one file to another leaves the rule's total untouched while
-	 * genuinely moving, and a summary keyed on totals alone would report that rule as
-	 * silent. So `before -> after` can read `5->5 (+1 -1)`, and that is the row worth
-	 * having.
+	 * genuinely moving, and a summary keyed on totals alone would report that rule as silent. So
+	 * a rule's two totals can be equal while its surplus is not, and that is the row worth having.
 	 *
 	 * Ordered by how much each rule moved, then by id — the reader is looking for the
 	 * biggest mover, and a stable tie-break keeps two runs on one input byte-identical.

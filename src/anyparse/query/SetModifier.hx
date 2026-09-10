@@ -35,11 +35,11 @@ using StringTools;
  * `@:meta`, a conditional region and a keyword such a region merely
  * contributes sit inside the run and survive verbatim.
  *
- * Four shapes are REFUSED rather than guessed at. A bare `public` on a MODULE-LEVEL declaration,
- * because there is no such spelling: measured on 4.3.7, Haxe rejects it on all seven module-level
- * shapes — the five type kinds and a module-level function or var — while `private` is legal on all
- * seven and is the only visibility one can carry. The op wrote it anyway, at rc 0, and the refusal
- * names the edit that expresses the same intent (`-private`, which has always worked).
+ * Four shapes are REFUSED rather than guessed at. A bare `public` on a MODULE-LEVEL declaration, because
+ * there is no such spelling: Haxe rejects it on every module-level shape — the five type kinds and a
+ * module-level function or var — while `private` is legal on all of them and is the only visibility one can
+ * carry. The op wrote it anyway, at rc 0, and the refusal names the edit that expresses the same intent
+ * (`-private`, which has always worked).
  *
  * A run with anything but whitespace BETWEEN two of its keywords — a `#if cpp inline #end`
  * region, or a COMMENT, which is trivia and so no sibling at all — because the first-to-last
@@ -325,11 +325,11 @@ final class SetModifier {
 	 * The tail of a refusal when `changes` would ADD the public-visibility keyword to a declaration
 	 * that sits at the MODULE level, or null when they would not.
 	 *
-	 * Measured on Haxe 4.3.7: `public` is rejected on EVERY module-level shape the language has —
-	 * the five type kinds (`public modifier is not supported for classes / enums / abstracts`) and
-	 * a module-level function or var (`... for module-level fields`). Seven of seven, so the
-	 * refusal is the whole module level and needs no per-kind carve-out. `private` is legal on all
-	 * seven, and is the ONLY visibility a module-level declaration can spell.
+	 * `public` is rejected on EVERY module-level shape the language has — the five type kinds (`public
+	 * modifier is not supported for classes / enums / abstracts`) and a module-level function or var (`...
+	 * for module-level fields`) — so the refusal is the whole module level and needs no per-kind carve-out.
+	 * `private` is legal on every one of them, and is the ONLY visibility a module-level declaration can
+	 * spell.
 	 *
 	 * That is why the message names this op's own `-private` rather than another op: a module-level
 	 * declaration is public unless it says `private`, so "make it public" IS the removal, and

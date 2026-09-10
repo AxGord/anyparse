@@ -134,12 +134,11 @@ final class SourceComments {
 	 * `span` with leading and trailing TRIVIA — whitespace, and any byte inside one of
 	 * `comments` — cut off, or the empty span at `span.from` when it holds nothing else.
 	 *
-	 * A comment is not code the model dropped, it is code no PROJECTION carries: the tree has no
-	 * comment node anywhere, inside a conditional-compilation region or out of it. So a byte range
-	 * built from "what no child covers" reads a comment as unmodelled, and a diagnostic quoting
-	 * that range runs past the construct it names into the next statement's comment. Measured over
-	 * the two real trees `fmt` reaches, that is 1 region of 59 — cosmetic, and only at the ENDS: a
-	 * comment WITHIN the range is content the quote must keep, which is why this trims rather than
+	 * A comment is not code the model dropped, it is code no PROJECTION carries: the tree has no comment
+	 * node anywhere, inside a conditional-compilation region or out of it. So a byte range built from "what
+	 * no child covers" reads a comment as unmodelled, and a diagnostic quoting that range runs past the
+	 * construct it names into the next statement's comment. In practice that is cosmetic, and only at the
+	 * ENDS: a comment WITHIN the range is content the quote must keep, which is why this trims rather than
 	 * filters.
 	 *
 	 * Whitespace goes with it so the two rules cannot disagree about a range ending
@@ -395,8 +394,8 @@ final class SourceComments {
 	 * `normalizeCommentBody` folds such a run into the SAME single space an ordinary line break
 	 * becomes, so a literal find reads `A B` across `A`, a blank line and `B`, matches, and the
 	 * splice then DELETES the separator — two paragraphs become one line with no diagnostic.
-	 * Measured on `HxCasePattern.hx`: the bare `\t//` on line 56 vanished and lines 55 and 57 became
-	 * one 125-column line, inside the configured 140, so the width gate never fired either.
+	 * A bare `//` between two paragraphs vanishes that way, and the merged line
+	 * can land inside the configured width, so the width gate never fires either.
 	 *
 	 * `from` is always CONTENT, never a break: a match beginning on a folded break has a leading
 	 * space in its needle, and `literalReplace`'s leading-boundary rule then moves `from` past the
@@ -430,18 +429,15 @@ final class SourceComments {
 	 * caller that already knows WHICH lines it wants broken passes their body-line indices as
 	 * `wrapAt` instead, and then neither `was` nor the trigger below is consulted.
 	 *
-	 * WHY the op reflows at all: a literal find crossing a comment line break replaces that break
-	 * along with the text around it, so the two lines JOIN — which is the whole T755 scenario (fix a
-	 * phrase spread over two `//` lines) and left one over-long line the width gate refused every
-	 * time the join passed the configured width. Measured on `WriterRefFieldLowering.hx`: 169
-	 * columns against 140. Being able to FIND the text was never the same as being able to edit it
-	 * in place.
+	 * WHY the op reflows at all: a literal find crossing a comment line break replaces that break along
+	 * with the text around it, so the two lines JOIN — which is the whole point of fixing a phrase spread
+	 * over two `//` lines, and it leaves one over-long line the width gate refuses whenever the join passes
+	 * the configured width. Being able to FIND the text is not the same as being able to edit it in place.
 	 *
 	 * It is a REPAIR, not a restyling, and the trigger says so: unless the edit GAINED an over-width
 	 * line — more of them, or a wider widest, the same comparison the caller's width gate makes —
-	 * the body comes back untouched. Without that test a seven-character SHORTENING edit inside one
-	 * of this tree's 210 inherited over-width comment lines re-wrapped the whole paragraph:
-	 * `MemberOrder.hx` went 980 lines to 1029 for an edit the old gate accepted outright.
+	 * the body comes back untouched. Without that test a SHORTENING edit inside an
+	 * inherited over-width comment line re-wraps the whole paragraph it sits in.
 	 *
 	 * `head` is what precedes the body on its own line (`commentHead`), because the body's first
 	 * line is the one line whose width the body does not carry. A line the edit left byte-identical
@@ -451,22 +447,22 @@ final class SourceComments {
 	 * cannot repair.
 	 *
 	 * A blank continuation line's width IS its prefix, so it is kept by construction: a paragraph separator
-	 * survives the reflow rather than being filled into its neighbours. `closerCols` is what the LAST body line
-	 * owes the block's own closer — the two columns of a `*\/` the body span stops short of, zero for a `//` run
-	 * or an unterminated block — added to that one line's measured width and taken off its wrap budget, because a
-	 * one-line doc block over the width by exactly those two columns used to read as legal here. Nothing here ever
-	 * JOINS two lines, which is what keeps the caller's own line breaks intact. What layout it must
-	 * not touch at all is `reflowRefusal`'s question, whichever channel selected the line.
+	 * survives the reflow rather than being filled into its neighbours. `closerCols` is what the LAST body
+	 * line owes the block's own closer — the two columns of a `*\/` the body span stops short of, zero for
+	 * a `//` run or an unterminated block — added to that one line's measured width and taken off its wrap
+	 * budget, because a one-line doc block over the width by exactly those two columns used to read as
+	 * legal here. Nothing here ever JOINS two lines, which is what keeps the caller's own line breaks
+	 * intact. What layout it must not touch at all is `reflowRefusal`'s question, whichever channel
+	 * selected the line.
 	 *
-	 * ## Why `wrapAt` is a second channel and not a tighter `was`
+	 * WHY `wrapAt` IS A SECOND CHANNEL and not a tighter `was`:
 	 *
-	 * `was` can only be read by CONTENT — the body before an edit has different line boundaries from
-	 * the body after it, which is the whole reason the repair caller has one — and over-protecting
-	 * there is the SAFE direction: a line the edit did not touch stays exactly as its author left it.
-	 * For a caller that names lines it is the UNSAFE direction: two identical over-width lines in one
-	 * block protect each other, so the line a finding named comes back unwrapped, the edit is dropped,
-	 * and nothing says why. Tightening the content test would break the repair caller, so the precise
-	 * question got its own parameter instead.
+	 * it can only be read by CONTENT — the body before an edit has different line boundaries from the body
+	 * after it — and over-protecting there is the SAFE direction: a line the edit did not touch stays
+	 * exactly as its author left it. For a caller that names lines it is the UNSAFE direction: two
+	 * identical over-width lines in one block protect each other, so the line a finding named comes back
+	 * unwrapped, the edit is dropped, and nothing says why. Tightening the content test would break the
+	 * repair caller, so the precise question got its own parameter instead.
 	 */
 	public static function wrapCommentBody(
 		body: String, was: String, head: String, continuation: String, metrics: LayoutMetrics, lineRun: Bool, closerCols: Int,
@@ -536,13 +532,11 @@ final class SourceComments {
 	 *
 	 * Every shape refused here is one whose wrapped form is a CORRUPTION no gate in this project can
 	 * see — the writer re-emits a comment interior byte for byte, so `fmt --list` stays clean and no
-	 * rule reads a comment's shape. Measured, each on a real edit that pushed its line past the
-	 * width:
+	 * rule reads a comment's shape. Each is a real shape an edit can push past the width:
 	 *
 	 *  - a SUPPRESSION directive. `Suppression.parseNoqa` reads an empty rule list as EVERY rule, so
 	 *    breaking `// noqa: some-rule` after the colon silently turns one exemption into a blanket
-	 *    one: a live `naming` warning disappeared and lint reported it as an improvement. 24 of this
-	 *    tree's 131 trailing noqa comments are already past 120 columns.
+	 *    one: a live `naming` warning disappears and lint reports it as an improvement.
 	 *  - INDENTATION the author wrote. `CommentStyle`'s own rule is that whitespace beyond the
 	 *    block's common prefix is the author's and survives; a wrapped code sample loses its hanging
 	 *    indent to the bare continuation.
@@ -885,10 +879,10 @@ final class SourceComments {
 	}
 
 	/**
-	 * Skip a comment line-continuation starting at `from` (just past a `\n`): any
-	 * further whitespace and blank lines, plus ONE `marker` per line — the gutter star of a block, or the `//` opener
-	 * every line after the first of a line-comment RUN carries. Returns the index
-	 * of the first content character (or `n`).
+	 * Skip a comment line-continuation starting at `from` (just past a `\n`): any further whitespace and
+	 * blank lines, plus ONE `marker` per line — the gutter star of a block, or the `//` opener every line
+	 * after the first of a line-comment RUN carries. Returns the index of the first content character (or
+	 * `n`).
 	 */
 	private static function skipContinuation(body: String, from: Int, n: Int, marker: String): Int {
 		var i: Int = from;
@@ -949,11 +943,11 @@ final class SourceComments {
 	 * `text` broken at spaces into the chunks of one wrapped comment line: the first laid out behind
 	 * `firstCols` rendered columns, every later one behind `contCols`, none past `width`.
 	 *
-	 * The width it actually wraps at is the NARROWEST that costs the same number of lines as
-	 * `width` does. Filling greedily to the limit is correct and reads wrong: the T698 join, broken
-	 * at the configured 140, left a 137-column line followed by a 42-column orphan inside a run
-	 * whose other lines are 82 — a shape a reviewer flags and the author would rather have avoided
-	 * the op for. Balanced, the same two lines come out at 86 and 93.
+	 * The width it actually wraps at is the NARROWEST that costs the same number of lines as `width` does.
+	 * Filling greedily to the limit is correct and reads wrong: a join broken at the configured width
+	 * leaves a full-width line followed by a short orphan inside a run of much shorter lines — a shape a
+	 * reviewer flags and the author would rather have avoided the op for. Balanced, the two lines come out
+	 * near the same width.
 	 *
 	 * A remainder with no space inside its budget is emitted WHOLE and over-width rather than cut
 	 * mid-word: a 180-character identifier or URL is not a wrapping problem, and splitting it would
@@ -973,9 +967,9 @@ final class SourceComments {
 			final balanced: Array<String> = fillText(text, firstCols, contCols, limit, tab);
 			// The LINE COUNT alone is not the test, because `fillText` short-circuits: below the first
 			// token's own width it stops finding break points and hands the remainder back whole, so the
-			// count FALLS and a one-line over-width answer beats a legal two-line one. Measured: an
-			// 86-character URL followed by prose was refused at 145 columns while the same body with the
-			// space at index 60 wrapped at 150. The candidate must also be no WIDER than greedy.
+			// count FALLS and a one-line over-width answer beats a legal two-line one — a long unbreakable
+			// token followed by prose is the shape that does it. The candidate must also be no WIDER than
+			// greedy.
 			if (balanced.length <= lines && widestChunk(balanced, firstCols, contCols, tab) <= ceiling) return balanced;
 		}
 		return greedy;

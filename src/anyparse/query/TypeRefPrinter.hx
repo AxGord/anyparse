@@ -168,10 +168,10 @@ final class TypeRefPrinter {
 	 * strength of an unrelated edit, and until then it also vetoes a later import of the same
 	 * simple name (`canAddImport`, `moduleImportBinds`).
 	 *
-	 * The length guard is not decoration: on js `Array.resize` is `this.length = len`, so a mark
-	 * ABOVE the current length would pad an `Array<String>` with nulls rather than do nothing —
-	 * measured, `length = 3` on a one-element array yields `["x", null, null]` — and the next
-	 * `pendingImportEdits` would then call `lastIndexOf` on one of them.
+	 * The length guard is not decoration: on js `Array.resize` is `this.length = len`, so a mark ABOVE the
+	 * current length would pad an `Array<String>` with nulls rather than do nothing (`length = 3` on a
+	 * one-element array yields `["x", null, null]`) — and the next `pendingImportEdits` would then call
+	 * `lastIndexOf` on one of them.
 	 */
 	public inline function rollbackPendingImports(mark: Int): Void {
 		if (mark < _pendingImports.length) _pendingImports.resize(mark);
@@ -374,8 +374,8 @@ final class TypeRefPrinter {
 	 * constructors and an imported `enum abstract`'s values (`RefShape.bareConstructorTypeKinds`),
 	 * computed on FIRST ask and cached for the rest of this printer's life.
 	 *
-	 * Importing such a type TAKES those names, and it takes them harder than an import of a type
-	 * takes its own: measured on 4.3.7, `import types.BASection;` (an `enum` declaring `Hash`) makes
+	 * Importing such a type TAKES those names, and it takes them harder than an import of
+	 * a type takes its own: `import types.BASection;` (an `enum` declaring `Hash`) makes
 	 * a bare `Hash` in expression position mean the CONSTRUCTOR in a file whose own package declares
 	 * `class Hash`, and it keeps meaning the constructor beside an explicit `import module.Hash;` —
 	 * in either import order. That is why `shadowedLocally` consults this ABOVE its

@@ -132,8 +132,9 @@ enum abstract PatternCategory(Int) {
 }
 
 /**
- * The `$X` / `$_` metavariable token machinery for structural patterns: substitutes each metavariable with a reserved placeholder
- * identifier the language lexer accepts, so a pattern parses as ordinary source, then maps captured nodes back by placeholder.
+ * The `$X` / `$_` metavariable token machinery for structural patterns: substitutes each metavariable with
+ * a reserved placeholder identifier the language lexer accepts, so a pattern parses as ordinary source,
+ * then maps captured nodes back by placeholder.
  */
 @:nullSafety(Strict)
 final class Metavar {
@@ -442,17 +443,14 @@ final class PatternStar {
 	 * Turn each node that IS the placeholder into a `PatternStar` node
 	 * (name-less: nothing can reference it).
 	 *
-	 * "Is the placeholder" is decided by SPAN, not by kind — childless, and
-	 * occupying exactly the placeholder's own text. That is the same trap
-	 * `64f9eee7` fell into for metavars (`new $x()` collapsed wholesale into a
-	 * match-everything hole because the NewExpr was childless too), and the
-	 * same trap in the other direction: `Metavar.reclassify` answers it with a
-	 * plugin-supplied `identKind`, which cannot serve here because the star has
-	 * to reach a TYPE-argument slot as well (`new $T<...>()` projects `Named`,
-	 * not the identifier kind). A span comparison needs no grammar vocabulary
-	 * and separates the two cases exactly: in `new __APQ_STAR__()` the
-	 * `NewExpr`'s span runs from `new` to `)`, so the placeholder is a PART of
-	 * that node and the node is left named — `validate` then refuses it.
+	 * "Is the placeholder" is decided by SPAN, not by kind — childless, and occupying exactly the
+	 * placeholder's own text. That is the same trap a kind-based test falls into for metavars (`new $x()`
+	 * collapses wholesale into a match-everything hole because the NewExpr is childless too), and the same
+	 * trap in the other direction: `Metavar.reclassify` answers it with a plugin-supplied `identKind`,
+	 * which cannot serve here because the star has to reach a TYPE-argument slot as well (`new $T<...>()`
+	 * projects `Named`, not the identifier kind). A span comparison needs no grammar vocabulary and
+	 * separates the two cases exactly: in `new __APQ_STAR__()` the `NewExpr`'s span runs from `new` to `)`,
+	 * so the placeholder is a PART of that node and the node is left named — `validate` then refuses it.
 	 *
 	 * Runs BEFORE `Metavar.reclassify` so the metavar path never sees the
 	 * placeholder: the star's whole point is that it is not a metavar.

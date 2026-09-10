@@ -99,14 +99,12 @@ final class RawSourceScan {
 	/**
 	 * Whether any SKIP-PARSED file's raw text mentions `name` as a whole word.
 	 *
-	 * The confinement gates — `prefer-final-field`, `prefer-read-only-field`,
-	 * `prefer-final-public-field`, `unused-private` and their kin — all ask the same thing: could
-	 * a file the index cannot read hold a reference or a write the in-file proof missed? They used
-	 * to answer it with `skippedFiles().length > 0`, a whole-PROJECT veto: ONE unparseable file
-	 * anywhere in the scope silenced those rules for every other file. Measured on an 855-file
-	 * tree, adding a directory with three such files to the scope removed 1147 findings and the
-	 * `prefer-final-field` family entirely — a SUPERSET scope reporting FEWER findings, with
-	 * nothing said about it.
+	 * The confinement gates — `prefer-final-field`, `prefer-read-only-field`, `prefer-final-public-field`,
+	 * `unused-private` and their kin — all ask the same thing: could a file the index cannot read hold a
+	 * reference or a write the in-file proof missed? They used to answer it with `skippedFiles().length >
+	 * 0`, a whole-PROJECT veto: ONE unparseable file anywhere in the scope silenced those rules for every
+	 * other file. Adding a directory with three such files to a scope then removed whole rule families — a
+	 * SUPERSET scope reporting FEWER findings, with nothing said about it.
 	 *
 	 * The question is per-NAME, and the identifier is what answers it: a reference or a write to
 	 * `name` — through a subtype, an `@:access` grant, `@:allow`, or reflection by string — must
@@ -118,13 +116,12 @@ final class RawSourceScan {
 	 * Conservative in the same direction as before wherever it cannot see: a skipped file whose
 	 * source was not retained answers true.
 	 *
-	 * `ownerFile` narrows the scan per OWNER, the way `FieldWriteIndex.admits` narrows the write
-	 * bail: a skipped THIRD-PARTY source cannot hold a write into a type the PROJECT declares — it
-	 * cannot name that type — so it is dropped for a project-owned candidate. Omit it to ask the
-	 * unnarrowed question, which is what a subject that may itself be third-party wants. This is
-	 * what lets the library into the index at all: over the Pony fork, an unnarrowed scan over the
-	 * resolution scope loses 10 findings to seven skip-parsing haxelib sources that merely SPELL a
-	 * project member's name, and recovers every one of them per owner.
+	 * `ownerFile` narrows the scan per OWNER, the way `FieldWriteIndex.admits` narrows the write bail: a
+	 * skipped THIRD-PARTY source cannot hold a write into a type the PROJECT declares — it cannot name that
+	 * type — so it is dropped for a project-owned candidate. Omit it to ask the unnarrowed question, which
+	 * is what a subject that may itself be third-party wants. This is what lets the library into the index
+	 * at all: an unnarrowed scan over the resolution scope loses findings to skip-parsing haxelib sources
+	 * that merely SPELL a project member's name, and recovers every one of them per owner.
 	 */
 	public function skippedMayReference(name: String, ?ownerFile: String): Bool {
 		return name.length == 0
@@ -156,9 +153,9 @@ final class RawSourceScan {
 	 * `RefactorSupport.carriesAllowGrant` for `source`, answered from a ONE-SLOT memo on this
 	 * index.
 	 *
-	 * The grant scan is a property of the FILE and every consumer asks it once per MEMBER, so a
-	 * check walking members paid one whole-source `indexOf` per member of every file it looked at.
-	 * Measured on one 416 KB source with 644 members: 423 ms of a 2.4 s `lint --all`, ~19 %.
+	 * The grant scan is a property of the FILE and every consumer asks it once per MEMBER, so a check
+	 * walking members paid one whole-source `indexOf` per member of every file it looked at, which on a
+	 * large source is a substantial share of a whole `lint --all`.
 	 *
 	 * ONE slot, and the index instance owns it: `SymbolIndex.build` allocates a fresh instance per
 	 * check run, and the only index anything holds on to is the resolution one a
@@ -190,10 +187,12 @@ final class RawSourceScan {
 	}
 
 	/**
-	 * Whether `source` spells `name` as a whole WORD — the raw-text proof every scan over an unreadable file reduces to.
+	 * Whether `source` spells `name` as a whole WORD — the raw-text proof every scan over an unreadable
+	 * file reduces to.
 	 *
-	 * Public because the reflection layer asks it of a scope file the parser could not read (`ReflectionScan.runtimeName`),
-	 * where no index has been built over the file at all and `skippedMayReference` therefore cannot answer.
+	 * Public because the reflection layer asks it of a scope file the parser could not read
+	 * (`ReflectionScan.runtimeName`), where no index has been built over the file at all and
+	 * `skippedMayReference` therefore cannot answer.
 	 */
 	public static function mentionsWord(source: String, name: String): Bool {
 		var at: Int = source.indexOf(name);

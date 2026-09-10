@@ -339,8 +339,8 @@ final class CrossRenameMember {
 							memberName: name,
 							isStatic: isStatic,
 							isOverride: isOverride,
-							// A VALUE of an `enum abstract` — the exact member class Haxe resolves from the
-							// expected type. Measured on 4.3.7, a plain abstract's static is NOT one
+							// A VALUE of an `enum abstract` — the exact member class Haxe resolves
+							// from the expected type. A plain abstract's static is NOT one
 							// (`abstract Plain(Int) { public static final PX: Plain; }` with `function f():
 							// Plain return PX;` is `Unknown identifier : PX`), so the host kind alone would
 							// over-claim and `implicitStaticFieldHostKinds` cannot stand in for it. Neither
@@ -625,9 +625,9 @@ final class CrossRenameMember {
 			if (node.kind == 'FieldAccess' && node.name == memberName && children.length > 0) {
 				final recv: QueryNode = children[0];
 				final rn: Null<String> = recv.name;
-				// A `new T()` receiver carries its type in its own name, so it is a candidate even though it
-				// binds nothing - see `receiverIsSourceType`. Without it `new Other().tag()` was never even
-				// offered for resolution and the access silently kept the old name.
+				// A `new T()` receiver carries its type in its own name, so it is a candidate even though
+				// it binds nothing - see `receiverIsSourceType`. Without it `new Other().tag()` was never
+				// even offered for resolution and the access silently kept the old name.
 				final named: Bool = recv.kind == 'IdentExpr' && rn != 'this' && rn != 'super';
 				if (rn != null && (named || recv.kind == 'NewExpr')) out.push({ recv: recv, fa: node });
 			}
@@ -680,12 +680,11 @@ final class CrossRenameMember {
 	 * sibling proof: it unwraps one nullable wrapper and this does not, it has no subtype arm, and
 	 * this one strips type ARGUMENTS off the path while it hands the written text over whole.
 	 *
-	 * Comparing SIMPLE names instead was wrong in BOTH directions, each measured on 4.3.7: a
-	 * receiver written `other.Other` (a same-named module of another package, out of scope) was
-	 * rewritten and the tree then failed to compile with `other.Other has no field newTag`, while
-	 * `new pkg.Other()` — whose node name is the whole path — matched nothing and left
-	 * `pkg.Other has no field tag` behind. That is the last-segment defect the static side removed
-	 * twice (`f3b46467`, `64a4ae5a`), on the INSTANCE side.
+	 * Comparing SIMPLE names instead is wrong in BOTH directions: a receiver written `other.Other` (a
+	 * same-named module of another package, out of scope) is rewritten and the tree then fails to compile
+	 * with `other.Other has no field newTag`, while `new pkg.Other()` — whose node name is the whole path —
+	 * matches nothing and leaves `pkg.Other has no field tag` behind. That is the last-segment defect the
+	 * static side removed twice, on the INSTANCE side.
 	 *
 	 * Residual, all of them MISSES (a left-behind access is a compile error, never a wrong rewrite):
 	 * a reference resolving to nothing proves nothing — a library type, a type outside the scope, an
@@ -823,15 +822,15 @@ final class CrossRenameMember {
 	 *    arguments from its name, so the span is read, not `QueryNode.name`) with one
 	 *    `Null<…>`-style wrapper unwrapped is handed to `SymbolIndex.resolveTypeRefsFrom` FROM THE
 	 *    READING FILE — the same whole-dotted-path / import / same-package / root-package rules
-	 *    the compiler applies, which is why a last-segment match (the defect `f3b46467` and
-	 *    `64a4ae5a` each removed once) cannot creep back in here. It must resolve to exactly ONE
+	 *    the compiler applies, which is why a last-segment match — the defect the static side
+	 *     removed twice — cannot creep back in here. It must resolve to exactly ONE
 	 *    declaration and that one must be the type at the cursor; a return type resolving to
 	 *    nothing (a library type, a wildcard import the index does not model) proves nothing.
 	 *  - The POSITION. Only value slots reached from a `return` through TYPE-TRANSPARENT nodes:
 	 *    a parenthesis, both arms of a ternary or of an `if` expression, and the last statement of
 	 *    each `switch`-expression arm. Each carries the function's return type down unchanged.
 	 *
-	 * Three refusals sit outside that proof, each measured on 4.3.7 rather than assumed: an
+	 * Three refusals sit outside that proof, each a resolution rule rather than an assumption: an
 	 * occurrence the file's own scope BINDS (`var Seam = pick(); return Seam;` reads that local); a
 	 * file declaring a MODULE-level VALUE binding of the name, which beats the expected type and
 	 * which `Refs` does not index — a module-level TYPE of that name does not, being no binding at
@@ -845,8 +844,8 @@ final class CrossRenameMember {
 		// A WHOLE-WORD probe, not a substring one: `RED` occurs inside `COLORED` and inside every
 		// comment that mentions it, and the scan below is not free.
 		if (SourceText.identTokenOffset(source, new Span(0, source.length), target.memberName) < 0) return [];
-		// A MODULE-level VALUE binding of the name shadows the expected type — measured on 4.3.7, a
-		// module-level `var same: Colour` (and a `final` one) wins over
+		// A MODULE-level VALUE binding of the name shadows the expected type:
+		// a module-level `var same: Colour` (and a `final` one) wins over
 		// `function pick(): Colour return same;`, from a module function AND from a class method in
 		// the same file. `Refs` binds neither (the read comes back with no binding span), and a
 		// hosting TYPE is the wrong question for the second one, so the whole file is refused instead.
@@ -881,20 +880,17 @@ final class CrossRenameMember {
 	 *
 	 * A module-level TYPE of that name is NOT one, which is why the question goes to
 	 * `RefShape.moduleValueDeclKinds` and not to `declHostKinds` — that vocabulary names every
-	 * type-declaration kind and omits `VarForm` entirely, so neither list contains the
-	 * other. Compiled and run on 4.3.7: with `class File` in the reading module and
-	 * `enum abstract Colour { var File = 3; }`, `function pick(): Colour return File;` prints 3 — the
-	 * value wins, and refusing the file threw that rewrite away.
+	 * type-declaration kind and omits `VarForm` entirely, so neither list contains the other. With `class
+	 * File` in the reading module and `enum abstract Colour { var File = 3; }`, `function pick(): Colour
+	 * return File;` yields the enum value — the value wins, and refusing the file throws that rewrite away.
 	 *
-	 * A child that NAMES NOTHING is descended into, because the binding it holds sits one level down
-	 * and both such wrappers are load-bearing. A `#if`-guarded binding is a child of the REGION
-	 * (`#if js var same: Colour; #end` projects `(Conditional (VarDecl same …))`) — the
-	 * branch-dependent case no single-target compile catches either. A module-level `final` is a child
-	 * of the `final` keyword's own dispatch node (`final same: Colour = …;` projects
-	 * `(FinalDecl (VarForm same …))`); it slipped the gate entirely while only direct children were
-	 * read, and the rewrite then retargeted a read of that binding to the constant with nothing to
-	 * reject it — measured on 4.3.7, a program printing 1 printed 3 after the rename and still
-	 * compiled.
+	 * A child that NAMES NOTHING is descended into, because the binding it holds sits one level down and
+	 * both such wrappers are load-bearing. A `#if`-guarded binding is a child of the REGION (`#if js var
+	 * same: Colour; #end` projects `(Conditional (VarDecl same …))`) — the branch-dependent case no
+	 * single-target compile catches either. A module-level `final` is a child of the `final` keyword's own
+	 * dispatch node (`final same: Colour = …;` projects `(FinalDecl (VarForm same …))`); reading only
+	 * direct children misses it entirely, and the rewrite then retargets a read of that binding to the
+	 * constant with nothing to reject it — the program changes behaviour and still compiles.
 	 *
 	 * Stopping at a NAMED child is PRUNING, not safety. What
 	 * makes the descent safe at any depth is that the value kinds are module-EXCLUSIVE in this

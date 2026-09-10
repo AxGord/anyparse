@@ -25,13 +25,14 @@ using Lambda;
  * inside one that is already going is left to the outer removal, since two
  * nesting deletion spans would corrupt the file rather than compose.
  *
- * Outside a conditional region a name cannot legally repeat, so a match set
- * that is not wholly conditional means the source is already rejected by the
- * compiler; that stays an `Err` rather than being quietly laundered. Two declarations inside ONE branch are equally illegal, and
- * equally refused: the tree flattens a region's branches into one child list, so the region-level question above cannot tell such
- * a pair from twins — both parents ARE the region — and `CondBranchPath` replays the directives to answer it per
- * BRANCH instead. That reaches the pair one region holds; two SIBLING regions spelling the same condition are
- * still taken together, because a replayed frame is keyed by region occurrence and carries no condition text.
+ * Outside a conditional region a name cannot legally repeat, so a match set that is not wholly conditional
+ * means the source is already rejected by the compiler; that stays an `Err` rather than being quietly
+ * laundered. Two declarations inside ONE branch are equally illegal, and equally refused: the tree flattens
+ * a region's branches into one child list, so the region-level question above cannot tell such a pair from
+ * twins — both parents ARE the region — and `CondBranchPath` replays the directives to answer it per BRANCH
+ * instead. That reaches the pair one region holds; two SIBLING regions spelling the same condition are
+ * still taken together, because a replayed frame is keyed by region occurrence and carries no condition
+ * text.
  *
  * ## The doc comment goes with the member
  *
@@ -86,13 +87,13 @@ final class RemoveMember {
 
 		final shape: RefShape = plugin.refShape();
 		final condKind: Null<String> = shape.conditionalMemberKind;
-		// Several declarations of one name are the SAME logical member spread over conditional
-		// branches — the rule `rename` already applies — so all of them go. Outside a branch the
-		// name cannot legally repeat, so a second UNGUARDED declaration means the source is already
-		// rejected by the compiler; deleting both would quietly launder that, and the refusal names
-		// it instead. Two of them inside ONE branch are not twins either — that is the second
-		// question, and S166 is why it is asked: one call took BOTH copies at rc 0, leaving as its
-		// only evidence a member that had silently ceased to exist.
+		// Several declarations of one name are the SAME logical member spread over conditional branches —
+		// the rule `rename` already applies — so all of them go. Outside a branch the name cannot legally
+		// repeat, so a second UNGUARDED declaration means the source is already rejected by the compiler;
+		// deleting both would quietly launder that, and the refusal names it instead. Two of them inside
+		// ONE branch are not twins either — that is the second question, and it has to be asked: one call
+		// otherwise takes BOTH copies, leaving as its only evidence a member that has silently ceased to
+		// exist.
 		if (members.length > 1) {
 			if (members.exists(m -> condKind == null || m.parent.kind != condKind))
 				return Err('ambiguous — "$memberName" matches ${members.length} members in "$typeName", not all conditional');

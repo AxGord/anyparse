@@ -51,10 +51,9 @@ final class MemberKinds {
 	 * surfaces its name off the inner `HxFinalModifierMember.fn`, so it is a member like `FnMember`
 	 * for `this.<name>` purposes.
 	 *
-	 * That second paragraph is the doc this list LOST. On 2026-07-26 (`969ef368`) an insert put two
-	 * newly-documented constants between it and this declaration, so it went on to lead
-	 * `TYPEDEF_DECL_KIND`, then `DOC_OPEN`, and rode into `SourceComments` with `DOC_OPEN` when S72
-	 * split the module — describing, from there, a kind set nobody could reach it from.
+	 * That second paragraph is the doc this list once LOST: an insert put two newly-documented
+	 * constants between it and this declaration, so it went on to lead a different constant and
+	 * eventually rode into another module with it, describing a kind set nobody could reach it from.
 	 * `CanonicalEdit.docSplittingEdit` refuses that insert shape today; the pin is
 	 * `unit.query.DocOwnerGuardSliceTest.testTheInsertThatStrandedFieldMemberKindsIsRefused`.
 	 */
@@ -253,15 +252,14 @@ final class MemberKinds {
 
 	/**
 	 * Whether `kind` is a member form whose declared NAMES the projected tree does not carry: a `#if`
-	 * region spliced at member scope (`CondSpliceMember`) and a `function` whose name is itself a
-	 * region (`CondNameFnMember`). The two lose their names for DIFFERENT reasons — `CondSpliceMember`
-	 * is raw in the grammar itself (`HxCondSharedBodyMember` swallows the whole region as
-	 * `HxCondSpliceRaw`), while `CondNameFnDecl` models the region structurally as
-	 * `HxConditionalFnName {cond, name, elseifs, elseName}` and only the QUERY PROJECTION drops it to a single
-	 * child, keeping the then-name and losing every `#else` / `#elseif` name. Either way the member
-	 * node answers no `name`, so a scan collecting declared names reads the region as declaring
-	 * nothing. `VarSemiCondInitMember` is deliberately NOT here: only its INITIALIZER is guarded, its
-	 * name sits outside the region and IS exposed.
+	 * region spliced at member scope (`CondSpliceMember`) and a `function` whose name is itself a region
+	 * (`CondNameFnMember`). The two lose their names for DIFFERENT reasons — `CondSpliceMember` is raw in
+	 * the grammar itself (`HxCondSharedBodyMember` swallows the whole region as `HxCondSpliceRaw`), while
+	 * `CondNameFnDecl` models the region structurally as `HxConditionalFnName {cond, name, elseifs,
+	 * elseName}` and only the QUERY PROJECTION drops it to a single child, keeping the then-name and losing
+	 * every `#else` / `#elseif` name. Either way the member node answers no `name`, so a scan collecting
+	 * declared names reads the region as declaring nothing. `VarSemiCondInitMember` is deliberately NOT
+	 * here: only its INITIALIZER is guarded, its name sits outside the region and IS exposed.
 	 *
 	 * The blindness is invisible to a re-parse gate, because a duplicate declaration is a SEMANTIC
 	 * error — so `AddMember` refuses a host carrying one of these, and refuses a member text that is
@@ -315,8 +313,8 @@ final class MemberKinds {
 	 * (`kind.endsWith('Lit') || kind.endsWith('StringExpr')`), on the theory that a literal payload
 	 * the list forgot is still a literal. It admitted two kinds the Haxe grammar declares no
 	 * constant literal, and `Inline` — which DUPLICATES an initializer it is handed as
-	 * side-effect-free — silently changed behaviour on both. Measured on `a9efccd4`:
-	 * `final r = ~/x(\d+)/;` read twice inlined to `(~/x(\d+)/).match(a) ? (~/x(\d+)/).matched(1) : ''`,
+	 * side-effect-free — silently changed behaviour on both: `final r = ~/x(\d+)/;`
+	 * read twice inlined to `(~/x(\d+)/).match(a) ? (~/x(\d+)/).matched(1) : ''`,
 	 * two `EReg` values where the source had one, so the second never matched; `final o = {};`
 	 * compared to itself inlined to `({}) == ({})`, true becoming false. Neither is reported, both
 	 * compile. `LiteralClassificationTest` holds the vocabulary against the grammar's own literal

@@ -97,13 +97,12 @@ final class StdlibDifferential {
 	public static inline final MAX_MAPPINGS: Int = 4000;
 
 	/**
-	 * The pool id every TRIVIAL baseline carries. A candidate that agrees with one of these across
-	 * the whole grid returns an argument -- or a body constant -- unchanged, and is therefore not a
-	 * reimplementation of anything: it is a setter, an accessor, or a guard whose interesting
-	 * behaviour lies outside the grid. Measured on a real 806-file tree: WITHOUT this gate five
-	 * such functions produced 55 of 161 findings, each agreeing with a fistful of identity-shaped
-	 * stdlib calls at once (`urlDecode`, `htmlEscape`, `htmlUnescape`, `Std.string`,
-	 * `replace(v, v, v)`) for one and the same reason.
+	 * The pool id every TRIVIAL baseline carries. A candidate that agrees with one of these across the
+	 * whole grid returns an argument -- or a body constant -- unchanged, and is therefore not a
+	 * reimplementation of anything: it is a setter, an accessor, or a guard whose interesting behaviour
+	 * lies outside the grid. WITHOUT this gate a handful of such functions produce a large share of every
+	 * finding, each agreeing with a fistful of identity-shaped stdlib calls at once (`urlDecode`,
+	 * `htmlEscape`, `htmlUnescape`, `Std.string`, `replace(v, v, v)`) for one and the same reason.
 	 */
 	public static inline final TRIVIAL_ID: String = '(unchanged)';
 
@@ -326,9 +325,8 @@ final class StdlibDifferential {
 	 *
 	 * The module name is FIXED (`Probe.hx`), which is safe only because `dir` belongs to one
 	 * process: the write and the `haxe -cp <dir> --run Probe` that follows it are two steps, so a
-	 * `dir` two runs share lets the second write land between the first run's two steps and the
-	 * first run then reports a fully-formed finding about the other run's function, at exit 0
-	 * (measured: 12 of 12 rounds compiled one process's program twice). `StdlibDupCommand`
+	 * `dir` two runs share lets the second write land between the first run's two steps and the first run
+	 * then reports a fully-formed finding about the other run's function, at exit 0. `StdlibDupCommand`
 	 * resolves that directory per process.
 	 *
 	 * `--work` is an escape hatch, not an isolation mechanism: two runs pointed at the SAME
@@ -368,8 +366,8 @@ final class StdlibDifferential {
 	 *
 	 * Seeding from the body is the same idea that bounds the mapping search, applied to the INPUT
 	 * axis: a function branching on `'.drl'` is decided by strings around `'.drl'`, and by nothing
-	 * in a generic grid. Measured on a real tree: unseeded, six string predicates returned the same
-	 * answer for every grid value and therefore "matched" every shape-compatible pooled call.
+	 * in a generic grid. Unseeded, a string predicate that branches on its own literals returns the
+	 * same answer for every grid value and therefore "matches" every shape-compatible pooled call.
 	 */
 	private static function grid(candidate: StdlibCandidate, type: String): Array<String> {
 		final values: Array<String> = [];

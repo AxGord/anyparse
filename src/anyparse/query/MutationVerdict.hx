@@ -19,9 +19,10 @@ enum MutationVerdictKind {
 }
 
 /**
- * One classified track: the verdict plus the human-readable row detail. `full` carries the SAME detail uncapped, present only when
- * `cap` actually elided something — the caller (`tools/mutation-check.sh`) appends it to the track's own transcript file rather than
- * the console row, so a name `cap`'s ten-item window pushed out is still findable without re-deriving it from the raw utest dump (T703).
+ * One classified track: the verdict plus the human-readable row detail. `full` carries the SAME detail
+ * uncapped, present only when `cap` actually elided something — the caller (`tools/mutation-check.sh`)
+ * appends it to the track's own transcript file rather than the console row, so a name `cap`'s window
+ * pushed out is still findable without re-deriving it from the raw utest dump.
  */
 typedef MutationVerdictResult = {
 	kind: MutationVerdictKind,
@@ -33,14 +34,12 @@ typedef MutationVerdictResult = {
  * `apq mutation-verdict` — turn one parsed utest transcript into a
  * mutation-check verdict.
  *
- * This lives here, and not in `tools/mutation-check.sh`, because the shell
- * copy was a SECOND utest-report parser: `apq test-summary` had existed for
- * exactly this job since before the script was written, and `suite-shard.sh`
- * comments that it reuses it precisely so a divergent parser cannot grow.
- * One grew anyway, and the price is on record — both `fdb44864` ("a red run
- * can no longer be reported SURVIVED") and `ff3f20ae` ("find the utest header
- * by SHAPE") were bugs in the duplicate, 316 changed lines apart, neither
- * reachable by any test because a shell function is not testable.
+ * This lives here, and not in `tools/mutation-check.sh`, because the shell copy was a SECOND utest-report
+ * parser: `apq test-summary` had existed for exactly this job since before the script was written, and
+ * `suite-shard.sh` comments that it reuses it precisely so a divergent parser cannot grow. One grew anyway,
+ * and the price is on record: two separate bugs lived in the duplicate — a red run reported SURVIVED, and a
+ * utest header found by position rather than by SHAPE — neither reachable by any test, because a shell
+ * function is not testable.
  *
  * The classification is PURE over `TestSummaryResult`, so the whole of it is
  * covered by `MutationVerdictTest`; the CLI layer only reads the file and
@@ -113,9 +112,8 @@ class MutationVerdict {
 				counted;
 		}
 		final detail: String = render(cap);
-		// `full` is set only when `cap` actually elided something — an
-		// unconditional second string would make every KILLED row carry a
-		// redundant identical `full`, which is not what T703 asked to fix.
+		// `full` is set only when `cap` actually elided something — an unconditional
+		// second string would make every KILLED row carry a redundant identical `full`.
 		final capped: Bool = failures.length > DETAIL_ITEM_LIMIT || missing.length > DETAIL_ITEM_LIMIT || extra.length > DETAIL_ITEM_LIMIT;
 		final full: Null<String> = capped ? render(items -> items.join(', ')) : null;
 		return missing.length > 0 ? { kind: Mismatch, detail: detail, full: full } : { kind: Killed, detail: detail, full: full };

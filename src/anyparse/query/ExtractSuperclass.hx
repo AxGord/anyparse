@@ -131,8 +131,8 @@ final class ExtractSuperclass {
 		edits.push(headerEdit);
 		// The WRITER gives back the separator a cut left doubled, and it is the only thing
 		// that can: the hand-rolled newline-run collapse that stood here read the whole file
-		// as text, so it also rewrote a run inside a STRING LITERAL or a block comment —
-		// measured, `extract-superclass` on an untouched sibling member shortened a
+		// as text, so it also rewrote a run inside a STRING LITERAL or a block
+		// comment: `extract-superclass` on an untouched sibling member shortened a
 		// multi-line literal by one newline, and every gate stayed green because the result
 		// still parsed and was still canonical.
 		var srcRewrites: Null<Int> = null;

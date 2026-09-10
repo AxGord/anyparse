@@ -68,67 +68,43 @@ typedef CarriedEdits = {
 }
 
 /**
- * Scope-correct, format-preserving move of a TYPE declaration from one
- * file to another, in the same package or across packages, fixing
- * imports across a scope. The largest cross-file refactoring op in the
- * query suite — it relocates a type's source verbatim, carries the
- * imports the type's body depends on, and rewrites every importer that
- * named the type through its old module path.
+ * Scope-correct, format-preserving move of a TYPE declaration from one file to another, in the
+ * same package or across packages, fixing imports across a scope. The largest cross-file
+ * refactoring op in the query suite — it relocates a type's source verbatim, carries the
+ * imports the type's body depends on, and rewrites every importer that named the type through
+ * its old module path.
  *
- * ## The correctness boundary — refuse rather than guess
+ * THE CORRECTNESS BOUNDARY is refuse-rather-than-guess. A cross-package move is SUPPORTED: the
+ * moved body's bare same-package names are priced through the resolution ladder
+ * `DependencyCarry.bindingOf` walks, carried when the source has a statement to carry, and
+ * REFUSED whenever one side can name its binding and the other cannot.
  *
- * A cross-package move is SUPPORTED and has been since S40: the moved body's bare same-package
- * names are priced through the resolution ladder `DependencyCarry.bindingOf` walks, carried when the source has a
- * statement to carry and REFUSED when the two sides would mean different things by one name. What
- * the boundary now protects is that gate — the op refuses rather than guesses whenever one side can
- * name its binding and the other cannot. The paragraph this replaces claimed cross-package was
- * refused outright and called it future work; the CLI help said the same until S41 corrected it.
+ * IMPORT-CARRYING is best-effort. The op carries the source file's EXPLICIT imports the moved
+ * type's body depends on — a `D` written in a type POSITION or as the RECEIVER of a member
+ * access (`D.go()`) inside the decl, for which the source has an `import …D;` / `using …D;` and
+ * the destination does not — plus every unguarded `using` of the source module the destination
+ * lacks, whenever the declaration contains a member access at all.
  *
- * ## Import-carrying is best-effort — and the residual is not always loud
+ * Its residual is NOT reliably loud: the destination does not always fail to COMPILE. A `Moved`
+ * reaching `r.Helper` through its source file's import, moved into a destination whose own
+ * package declares `p.Helper`, comes back bound to `p.Helper` with no diagnostic anywhere. The
+ * upper-initial receiver form is priced now; three shapes stay missed and silent — a bare VALUE
+ * position (`Type.createInstance(Dep, [])`), a constructor PATTERN (`case Red:`, indistinguishable
+ * from a module name to the ladder), and a LOWERCASE receiver (`tools.go()`), traded away so that
+ * every local does not reach the collision gate. The advisory names the first and the third.
  *
- * The op carries the source file's EXPLICIT imports that the moved type's body depends on — a `D`
- * written in a type POSITION or as the RECEIVER of a member access (`D.go()`) inside the decl, for
- * which the source has an `import …D;` / `using …D;` and the destination does not — plus every
- * unguarded `using` of the source module the destination lacks, whenever the declaration contains a
- * member access at all.
+ * THE SPLIT with the neighbouring modules is by EVIDENCE, not by caller. `NameMentionScan` owns
+ * the raw-TEXT question — "does this source spell this name where the compiler would bind it" —
+ * over one lexical mask for every shape of it; `DependencyCarry` owns the INDEX question — "what
+ * does this file bind this name to, and must the source's statement travel with the moved code"
+ * — and every refusal that follows from it. What is left here is the move itself: locate the
+ * declaration, compute its cut, splice it into the destination, and repoint every importer.
  *
- * "A missed import is a LOUD residual — the destination fails to COMPILE, never a silent semantic
- * change" is what this paragraph asserted until 2026-08-31, and it is FALSE. Measured through the
- * base engine on 4.3.7: a `Moved` reaching `r.Helper` through its source file's import, moved into
- * a destination whose own package declares `p.Helper`, came back bound to `p.Helper` — the value
- * `Moved.use()` returns went from 42 to 7, rc 0, three files written and no diagnostic anywhere.
- * The upper-initial receiver form is priced now and that move carries the import.
- * Three shapes are still missed and each is silent in the same way: a bare VALUE position
- * (`Type.createInstance(Dep, [])`), a constructor PATTERN (`case Red:`, indistinguishable from a
- * module name to the ladder), and a LOWERCASE receiver (`tools.go()`), which is deliberately
- * traded away so that every local variable does not reach the collision gate. The advisory names
- * the first and the third.
- *
- * ## Where the pieces live
- *
- * Two questions this file used to answer inline now have their own modules, and the split is by
- * EVIDENCE, not by caller. `NameMentionScan` owns the raw-TEXT question — "does this source spell
- * this name where the compiler would bind it" — over one lexical mask for every shape of it;
- * `DependencyCarry` owns the INDEX question — "what does this file bind this name to, and must the
- * source's statement travel with the moved code" — and every refusal that follows from it. What is
- * left here is the move itself: locate the declaration, compute its cut, splice it into the
- * destination, and repoint every importer.
- *
- * ## Atomicity
- *
- * Every rewritten file is re-parsed before ANY is returned; a rewrite
- * that fails to re-parse turns the whole move into an `Err` and the CLI
- * writes nothing. A move therefore either applies cleanly across all
- * touched files or not at all — there is never a partially-applied,
- * non-parsing multi-file state.
- *
- * Coordinate convention: `line` / `col` are interpreted exactly as
- * `apq refs` PRINTS them (1-based) — identical to `CrossRename`.
- *
- * The op is PURE: it never reads or writes the filesystem. The CLI reads
- * every scope file (including the cursor file and the destination file)
- * and passes them in `scopeFiles`, and decides whether to write the
- * returned rewrites.
+ * ATOMIC: every rewritten file is re-parsed before ANY is returned, so a rewrite that fails to
+ * re-parse turns the whole move into an `Err` and the CLI writes nothing. `line` / `col` are
+ * interpreted exactly as `apq refs` PRINTS them (1-based), identical to `CrossRename`. The op is
+ * PURE: the CLI reads every scope file (cursor and destination included), passes them in
+ * `scopeFiles`, and decides whether to write the returned rewrites.
  */
 @:nullSafety(Strict)
 final class MoveSymbol {
@@ -342,10 +318,9 @@ final class MoveSymbol {
 	): Null<{ span: Span, text: String }> {
 		if (carried.length == 0) return null;
 		// `importAnchor` seats a NAMED path in the destination's own import run — the ordered slot
-		// `add-import` gets — and falls back to the end of the header when it is handed no path. This
-		// used to hand it none, so every carried import was APPENDED past the run: measured on a
-		// destination holding `import other.Zeta;`, carrying `other.Dep` produced `Zeta, Dep` and one
-		// `import-order` finding on a file the op had just written. Same mechanism, one argument.
+		// `add-import` gets — and falls back to the end of the header when it is handed no path. Handing it
+		// none APPENDS every carried import past the run, which draws an `import-order` finding on a file
+		// the op has just written. Same mechanism, one argument.
 		final ordered: Null<ImportAnchor> = orderedCarriedAnchor(destSource, carried, plugin);
 		final anchor: ImportAnchor = ordered ?? importAnchor(destSource, plugin);
 		final lines: Array<String> = ordered == null ? carried : sortedImportLines(carried, ordered.order);
@@ -362,10 +337,10 @@ final class MoveSymbol {
 	 * Haxe tries static extensions in REVERSE declaration order, so where a carried `using` lands decides
 	 * which of two modules wins a method name they share. The ordinary import anchor cannot decide it:
 	 * `ImportOrder.lastHeaderEnd` answers the last plain `import` when the file has one and the last
-	 * statement of ANY import kind otherwise, so the same carried line ranked LAST in a destination
-	 * holding `import a.B; using q.Other;` and FIRST in one holding only `using q.Other;`. Both were
-	 * measured at rc 0 on 4.3.7 and they lose opposite halves: `q.Ext -> q.Other` for the MOVED body in
-	 * the first, `q.Other -> q.Ext` for the destination's OWN call in the second.
+	 * statement of ANY import kind otherwise, so the same carried line ranked LAST in a destination holding
+	 * `import a.B; using q.Other;` and FIRST in one holding only `using q.Other;`. The two lose opposite
+	 * halves — the MOVED body's extension in the first, the destination's OWN call in the second — and
+	 * neither says so.
 	 *
 	 * Declaring the carried line FIRST makes it rank last, deterministically. That is the half worth
 	 * keeping: the destination's existing code is left exactly as it was, and the residual — the moved
@@ -528,13 +503,12 @@ final class MoveSymbol {
 	 * ABOVE the best candidate that there is nothing to do, and each such shape was a corrupting write
 	 * before this asked.
 	 *
-	 * Measured at rc 0 on 4.3.7, both in `move` and in `move-member`: a destination reading
-	 * `#if eval using q.Other; #end import a.B;` anchors below the region, so the carried `using` landed
-	 * under the import and `Dest.d("x")` went from `OTHER` to `EXT` — the destination's own call, which
-	 * is the half this seat exists to protect. And `package p; using q.Other;` on ONE line has no line
-	 * start above the statement that is still below the package declaration, so the carried statement was
-	 * written above `package`, which anyparse re-parses happily and Haxe rejects with
-	 * `Unexpected keyword "package"`.
+	 * Two such shapes, in `move` and in `move-member` alike. A destination reading `#if eval using q.Other;
+	 * #end import a.B;` anchors below the region, so the carried `using` lands under the import and
+	 * silently takes over the destination's own call — the half this seat exists to protect. And `package
+	 * p; using q.Other;` on ONE line has no line start above the statement that is still below the package
+	 * declaration, so the carried statement goes above `package`, which anyparse re-parses happily and Haxe
+	 * rejects with `Unexpected keyword "package"`.
 	 */
 	private static function usingSeatOf(destSource: String, destInfo: FileInfo, ordinary: Int): Int {
 		// An UNGUARDED statement on its own line offers a seat directly above itself, and the FIRST of
@@ -1084,11 +1058,8 @@ final class MoveSymbol {
 	 * same-package visibility, or an `import p.*;` wildcard, both of which the repoint walk cannot see
 	 * because it only ever rewrites statements that already spell the old path, and neither of which
 	 * is confined to the cursor's own package. A sibling module's MAIN type is visible package-wide
-	 * by its bare name, and a SUB-TYPE is not (`Type not found`, compile-proved) — so a main type that
-	 * lands as a sub-type of another module leaves every same-package file that named it with an
-	 * unresolved name. Measured on the Pony tree: moving
-	 * `ButtonCore` out of its own module left `pony/ui/gui/SwitchableList.hx` reading
-	 * `Type not found : ButtonCore`, on the base engine and on the repoint fix alike.
+	 * by its bare name, and a SUB-TYPE is not (`Type not found`) — so a main type that lands as a
+	 * sub-type of another module leaves every same-package file that named it with an unresolved name.
 	 *
 	 * The file has to resolve the name to the MOVED type through its own ladder before an import is
 	 * written into it — a file that means something else by `typeName` is a file this move does not
@@ -1260,7 +1231,7 @@ final class MoveSymbol {
 		//  - `trailingTrimmedSpan` cuts the run a `@:trailOpt(';')` decl written
 		//    WITHOUT its `;` swallows past its own closing brace — the blank line
 		//    and the NEXT declaration's doc comment, which the parser re-stashes as
-		//    that neighbour's leading trivia (the 816bb666 family).
+		//    that neighbour's leading trivia.
 		final parseSpan: Span = declMatch.fullSpan;
 		final declParent: Null<QueryNode> = TreePath.parentOf(cursorTree, declMatch.declNode);
 		final groupSpan: Span = ElementSpan.declGroupSpan(declMatch.declNode, declParent, parseSpan);
@@ -1397,20 +1368,18 @@ final class MoveSymbol {
 	 * `new a.b.T()`, `a.b.T.staticCall()`) cannot be safely repointed — the path it spells
 	 * is the one the move CHANGES, and the type's import path spans several representations.
 	 * Asked in both directions: a same-package move changes `p.Mod.Sub` to `p.Dest.Sub` and
-	 * `p.Mod` to `p.Dest.Mod` exactly as a cross-package one does, so the guard being asked
-	 * cross-package only was the whole of T340. Bare
-	 * `T` references (reached through an import) ARE handled; the import
+	 * `p.Mod` to `p.Dest.Mod` exactly as a cross-package one does, so asking the guard cross-package
+	 * only was the defect. Bare `T` references (reached through an import) ARE handled; the import
 	 * statement itself is excluded. Returns a refusal listing the first
 	 * offending file, or null. Word-bounded so `a.b.Talon` / `xa.b.T` never
 	 * match; import / using statements of the same path are skipped.
 	 *
 	 * COMMENT interiors are skipped as well, and this is the ONE scan in the file where the comment
-	 * question is a REFUSAL rather than an import-writing one. A doc line spelling `a.b.T` is not a
-	 * code reference, so refusing on it blocks a legitimate move and hands its author advice
-	 * ("convert it to a bare T with an import") that means nothing for prose — T511, reproduced at
-	 * rc 1 on a three-file scope whose only mention was a doc block. A STRING literal is deliberately
-	 * NOT skipped: `Type.resolveClass("a.b.T")` is a real reference the move breaks and nothing in
-	 * the repair walk rewrites, so the refusal is the correct answer there.
+	 * question is a REFUSAL rather than an import-writing one. A doc line spelling `a.b.T` is not a code
+	 * reference, so refusing on it blocks a legitimate move and hands its author advice ("convert it to a
+	 * bare T with an import") that means nothing for prose. A STRING literal is deliberately NOT skipped:
+	 * `Type.resolveClass("a.b.T")` is a real reference the move breaks and nothing in the repair walk
+	 * rewrites, so the refusal is the correct answer there.
 	 */
 	private static function qualifiedPathRefusal(
 		index: SymbolIndex, sourceOf: Map<String, String>, oldImportPath: Null<String>, typeName: String, samePackage: Bool,
@@ -1459,9 +1428,8 @@ final class MoveSymbol {
 			// A BLOCK comment whose continuation lines carry no `*` gutter — the
 			// `/**\n\tText\n**/` spelling — is ordinary prose to a per-line prefix test, so the
 			// walk stopped one line below the opener and the cut took only the closing `**/`.
-			// Measured: `move` of `DocRendererTest` wrote a destination beginning `**/` and
-			// refused on the re-parse, with no offset to look at. The lexer already knows where
-			// the comment starts; ask it before reading the text.
+			// The destination then begins `**/` and the move refuses on the re-parse, with no offset to
+			// look at. The lexer already knows where the comment starts; ask it before reading the text.
 			final open: Int = commentStartCovering(comments, prevLineEnd);
 			if (open >= 0 && open < prevLineStart) {
 				start = lineStartOf(source, open);

@@ -670,26 +670,25 @@ final class MoveMember {
 	}
 
 	/**
-	 * Repoints every caller that reached a moved STATIC member as a BARE name through the source
-	 * module's own `import <srcModule>.*;` — the mirror, on the REPOINT side, of the carry S88
-	 * taught `DependencyCarry` (T568).
+	 * Repoints every caller that reached a moved STATIC member as a BARE name through the source module's
+	 * own `import <srcModule>.*;` — the mirror, on the REPOINT side, of the carry `DependencyCarry`
+	 * performs.
 	 *
 	 * `qualifiedReceiverEdits` sees a receiver, `collectBareCallerHits` sees a binding inside the
 	 * source file; a bare name in ANOTHER file has neither, so the whole class was invisible and the
-	 * op wrote `wrote 2 file(s)` at rc 0 over a tree that no longer compiles
-	 * (`Unknown identifier : helper`). Not an edge: 148 module-static wildcard statements across 109
-	 * files of `src/` reach 170 distinct members bare, over 455 name-file pairs.
+	 * op reported success over a tree that no longer compiles (`Unknown identifier : helper`). Not an
+	 * edge: module-static wildcard statements reach members bare all over this project's own `src/`.
 	 *
 	 * Qualified at the destination rather than repaired by carrying `import <destModule>.*;` into the
 	 * caller. A carried wildcard would bring EVERY static of the destination into a file the move was
-	 * never asked about, and Haxe decides two wildcards binding one name by statement order alone
-	 * (measured) — so the repair would rebind names the move never touched. Qualifying edits exactly
+	 * never asked about, and Haxe decides two wildcards binding one name by statement order
+	 * alone — so the repair would rebind names the move never touched. Qualifying edits exactly
 	 * the occurrences that broke, and reuses the import debt (`callerFilesNeedingImport`) and the
 	 * visibility promotion (`outsideCallersOf`) the receiver-qualified path already owes.
 	 *
 	 * The DESTINATION file is asked too, but only outside the destination type: a bare occurrence
-	 * INSIDE it resolves to the type's own member once the move lands (a type's own member wins over
-	 * any imported static, measured), while a sibling type in the same module never saw it that way
+	 * INSIDE it resolves to the type's own member once the move lands (a type's own member wins
+	 * over any imported static), while a sibling type in the same module never saw it that way
 	 * and still needs the qualifier.
 	 */
 	private static function collectWildcardBareEdits(

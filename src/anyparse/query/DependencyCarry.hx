@@ -28,13 +28,9 @@ using Lambda;
  * refusal in this module is a place where the two files' ladders disagree about one simple name
  * and carrying the source's statement would silently rebind one side or the other.
  *
- * Split out of `MoveSymbol` in S81: the file answered "what binds this name here" in seven
- * hand-rolled predicates whose comment policies had drifted apart, and nothing in the tree named
- * the family. Only THREE of the seven could have a lexical policy at all, and they moved to
- * `NameMentionScan`; what is below is the INDEX half, and the difference is load-bearing. 20 of
- * these 29 members — the whole `bindingOf` ladder and every refusal built on it — take no source
- * string, so no comment or string rule can apply to them. The 9 that do take one ask it for span
- * and statement TEXT; the one reference question any of them asks ("does the destination name this
+ * This is the INDEX half of that family and the difference is load-bearing: the questions a comment or
+ * string policy can decide are lexical and live in `NameMentionScan`. Most members here take no source
+ * string at all, and the one reference question any of them asks ("does the destination name this
  * dependency at all") goes through `NameMentionScan.destinationNamesType`.
  */
 @:nullSafety(Strict)
@@ -54,38 +50,33 @@ final class DependencyCarry {
 	 * `usingLinesToCarry`, which is where the skip-rather-than-refuse rule for
 	 * a colliding `using` lives.
 	 *
-	 * Text rather than the `ImportInfo`, because two callers used to spell
-	 * that statement themselves and `raw` is the ALIAS for an `Alias` one:
-	 * either would have emitted `import D;` the moment an alias dependency
-	 * became carriable. The path comes from the project's one decoder
-	 * (`SymbolIndex.pathImportedBy`) and the `as` / `in` suffix from the
-	 * statement's own text, so a bound name is never re-spelled twice.
+	 * Text rather than the `ImportInfo`, because `raw` is the ALIAS for an `Alias` statement: a caller
+	 * spelling the statement itself emits `import D;` the moment an alias dependency becomes carriable. The
+	 * path comes from the project's one decoder (`SymbolIndex.pathImportedBy`) and the `as` / `in` suffix
+	 * from the statement's own text, so a bound name is never re-spelled twice.
 	 *
-	 * A same-package dependency is auto-visible at the destination only when the destination is in that
-	 * same package — the claim here read "the move is same-package" until 2026-08-31, which stopped
-	 * being true at S40. A cross-package move prices such a name through `bindingOf` like any other and
+	 * A same-package dependency is auto-visible at the destination only when the destination is in
+	 * that same package. A cross-package move prices such a name through `bindingOf` like any other and
 	 * refuses when the two sides disagree.
 	 *
-	 * A carry is REFUSED, not performed, when the destination already binds that simple name to a
-	 * different module. Three shapes, all measured on the base engine at 11f22a25, all compiled and
-	 * run to a CHANGED runtime class with rc 0 and no diagnostic: the destination module declares
-	 * the name itself (its own type wins over any import, so the MOVED code silently rebinds to
-	 * it); the destination imports the name from elsewhere (Haxe resolves the last import, so the
-	 * DESTINATION's code silently rebinds to the carried module); and a sibling module of the
-	 * destination's package declares it (an import beats same-package visibility, same rebind).
-	 * The alias spelling is the same defect in different clothes — `import q.Thing as D;` carried
-	 * next to `import r.Thing as D;` produced the identical rebind — and one gate on the BOUND
-	 * name covers both. The destination-side reference test over-counts (a name in a comment or a
-	 * string reads as a use), which is the conservative direction for a refusal.
+	 * A carry is REFUSED, not performed, when the destination already binds that simple name to a different
+	 * module. Three shapes, each rebinding one side with no diagnostic: the destination module declares the
+	 * name itself (its own type wins over any import, so the MOVED code silently rebinds to it); the
+	 * destination imports the name from elsewhere (Haxe resolves the last import, so the DESTINATION's code
+	 * silently rebinds to the carried module); and a sibling module of the destination's package declares
+	 * it (an import beats same-package visibility, same rebind). The alias spelling is the same defect in
+	 * different clothes — `import q.Thing as D;` carried next to `import r.Thing as D;` rebinds identically
+	 * — and one gate on the BOUND name covers both. The destination-side reference test over-counts (a name
+	 * in a comment or a string reads as a use), which is the conservative direction for a refusal.
 	 */
 	public static function dependencyImportLinesToCarry(
 		source: String, declSpan: Span, cursorInfo: FileInfo, destInfo: FileInfo, destSource: String, index: SymbolIndex,
 		plugin: GrammarPlugin, typeRefShape: TypeRefShape, typeName: String
 	): CarryResult {
 		// The type-ref projection and the grammar shape are built ONCE here and threaded down: the
-		// dependency walk and the `using` carry both read them, and a plugin without a parse cache
-		// (which is what the unit suite passes) would otherwise parse the file twice and rebuild a
-		// 227-field shape struct for each.
+		// dependency walk and the `using` carry both read them, and a plugin without a parse cache (which
+		// is what the unit suite passes) would otherwise parse the file twice and rebuild the whole shape
+		// struct for each.
 		final tree: QueryNode = plugin.parseFileTypeRefs(source);
 		final shape: RefShape = plugin.refShape();
 		final depNames: Array<String> = dependencyNames(tree, shape, source, declSpan, cursorInfo, plugin, typeRefShape, typeName);
@@ -121,15 +112,12 @@ final class DependencyCarry {
 			final direct: Null<ImportInfo> = unguardedProviderOf(dep, cursorInfo);
 			// What the SOURCE means by `dep`: its own explicit import when it has one, else the same
 			// resolution ladder the destination is measured on — a dependency reached by same-package
-			// visibility has no import statement to carry and was therefore never checked at all, which
-			// left the headline defect open through a second route (compile-proved: a bare `Dep` from
-			// `p/Dep.hx` moved into a `p/Host.hx` holding `import r.Dep;` returned `r.Dep` where it had
-			// returned `p.Dep`, rc 0, nothing carried, nothing reported).
+			// visibility has no import statement to carry, and leaving it unpriced rebinds it silently at a
+			// destination that imports the same simple name from elsewhere.
 			final wanted: Null<String> = direct != null ? SymbolIndex.pathImportedBy(direct) : bindingOf(dep, cursorInfo, files)?.path;
 			// A MODULE import binds every type the module declares, so the statement that provides
-			// `dep` need not spell it. That rung has been PRICED by `bindingOf` since S29 and carried by
-			// nobody, which cost a refusal naming "no import to carry" over an import that was right
-			// there (compile-proved: the same move writes and the tree types clean once it is carried).
+			// `dep` need not spell it. The rung is PRICED by `bindingOf`, so it must be CARRIED too —
+			// otherwise the move refuses with "no import to carry" over a statement that is right there.
 			final provider: Null<ImportInfo> = direct ?? moduleStatementBinding(dep, wanted, cursorInfo);
 			// A binding the destination has and the moved code does not share is the one thing carrying
 			// cannot repair: whichever of the two wins, code that compiled before means a different
@@ -142,12 +130,12 @@ final class DependencyCarry {
 			if (collision != null) return CarryErr(collision);
 			if (provider == null) {
 				// The unguarded ladder has nothing to bring, which is the silent answer for every
-				// dependency reached through the stdlib, a wildcard or the ambient top level — and was
-				// also the silent answer for a `#if`-guarded import, which DOES have a statement.
-				// 72 destinations of one 767-module sweep lost their guarded block that way, with
-				// nothing naming a file. Asked only where the destination cannot already reach the
-				// name: the collision gate above has just proved that whatever it does reach it by is
-				// one of the source's own candidates, so there is nothing to add.
+				// dependency reached through the stdlib, a wildcard or the ambient top level — and was also
+				// the silent answer for a `#if`-guarded import, which DOES have a statement, so a
+				// destination lost its guarded block with nothing naming a file. Asked only where the
+				// destination cannot already reach the name: the collision gate above has just proved that
+				// whatever it does reach it by is one of the source's own candidates, so there is nothing
+				// to add.
 				if (guardedImportPath(dep, destInfo) != null || bindingOf(dep, destInfo, files) != null) continue;
 				final directives: Array<CondDirective> = cursorDirectives ?? GuardedImportCarry.directivesOf(source, plugin);
 				cursorDirectives = directives;
@@ -191,13 +179,13 @@ final class DependencyCarry {
 	 * stdlib name with no diagnostic, so every caller must decide what an unknown means for its own
 	 * direction rather than fall through.
 	 *
-	 * The order IS Haxe's resolution order, measured on 4.3.7 rather than read off the spec: a type the
-	 * file's own module declares beats an import; an EXPLICIT import beats a WILDCARD one whichever is
-	 * written first; a wildcard beats a sibling module of the same package; and the package beats the
-	 * TOP LEVEL. Among explicit imports the LAST one wins, which is why the fold keeps the last match
-	 * instead of the first. A `#if`-guarded import is skipped here — it binds the name in some
-	 * configurations only, so it is not a rung of any one build's ladder; `guardedImportPath` asks about
-	 * it separately, and the caller refuses on it rather than ranking it.
+	 * The order IS Haxe's resolution order, taken from the compiler's behaviour rather than from the spec:
+	 * a type the file's own module declares beats an import; an EXPLICIT import beats a WILDCARD one
+	 * whichever is written first; a wildcard beats a sibling module of the same package; and the package
+	 * beats the TOP LEVEL. Among explicit imports the LAST one wins, which is why the fold keeps the last
+	 * match instead of the first. A `#if`-guarded import is skipped here — it binds the name in some
+	 * configurations only, so it is not a rung of any one build's ladder; `guardedImportPath` asks about it
+	 * separately, and the caller refuses on it rather than ranking it.
 	 *
 	 * Asked of the DESTINATION it says what a carried import would collide with; asked of the SOURCE it
 	 * says what the moved code means today, which is the only way to price a dependency the source
@@ -229,10 +217,9 @@ final class DependencyCarry {
 	 *  - the name must be one that wildcard BINDS, which `staticNamesOf` answers (the MAIN type
 	 *    only, its statics plus `enum abstract` values and enum constructors) — the same answer the
 	 *    carry reads, so a member the wildcard never provided is never repointed;
-	 *  - a RIVAL module-static wildcard declared LATER in the same file wins the name outright —
-	 *    measured on 4.3.7, two files differing only in the order of `import p.A.*;` and
-	 *    `import p.B.*;` printed `B` and `A` respectively — so such an occurrence never named the
-	 *    source module and is left alone.
+	 *  - a RIVAL module-static wildcard declared LATER in the same file wins the name outright — the
+	 *    order of two `import p.A.*;` / `import p.B.*;` statements is the whole of what decides
+	 *    it — so such an occurrence never named the source module and is left alone.
 	 *
 	 * Asked per OCCURRENCE rather than per name: a hit `Refs` binds to a local, a parameter or the
 	 * file's own member is resolved by the file itself, while its unbound siblings in the same file
@@ -299,10 +286,9 @@ final class DependencyCarry {
 	 * The refusal a DOTTED dependency path owes, or null when it changes nothing.
 	 *
 	 * `dep` can be `Mod.Sub`, because a dotted type path is ONE leaf. Its head is not resolved by any
-	 * import — `import q.Mod;` does NOT make `Mod.Sub` legal (`Type not found : Mod` on 4.3.7) — it is
-	 * a MODULE looked up in the file's own package and then at the top level. So the PACKAGE decides
-	 * it, a same-package move cannot move it, and a cross-package one silently can: compile-run
-	 * through the base engine, `Mod.Sub` went `p.Sub` -> `s.Sub` with rc 0. A lowercase head is a
+	 * import — `import q.Mod;` does NOT make `Mod.Sub` legal (`Type not found : Mod`) — it is a MODULE
+	 * looked up in the file's own package and then at the top level. So the PACKAGE decides it, a
+	 * same-package move cannot move it, and a cross-package one silently can. A lowercase head is a
 	 * fully-qualified path and is absolute everywhere.
 	 */
 	private static function qualifiedHeadRefusal(
@@ -370,9 +356,8 @@ final class DependencyCarry {
 	 * The LAST such statement wins, which is why the fold keeps the last match rather than the first.
 	 *
 	 * A MODULE import binds every type the module declares, not only the one that shares its name:
-	 * `import q.Mod;` makes `q.Mod.Sub` reachable as bare `Sub` — compile-run on 4.3.7, and
-	 * `Type.getClassName` on what it built came back `q.Sub`. Reading only the import's last segment
-	 * left every such name unbound, and an unbound SOURCE name is what the collision gate refuses on.
+	 * `import q.Mod;` makes `q.Mod.Sub` reachable as bare `Sub`. Reading only the import's last segment
+	 * leaves every such name unbound, and an unbound SOURCE name is what the collision gate refuses on.
 	 * An ALIAS is excluded: `import q.Mod as X;` binds X and nothing else.
 	 */
 	private static function importBinding(name: String, info: FileInfo, files: Array<FileInfo>): Null<String> {
@@ -391,22 +376,21 @@ final class DependencyCarry {
 	}
 
 	/**
-	 * The IMPLICIT rungs of the ladder, in their measured order: a sibling MODULE of `info`'s own
+	 * The IMPLICIT rungs of the ladder, in Haxe's own order: a sibling MODULE of `info`'s own
 	 * package first, then each ANCESTOR package above it, nearest first, ending with the TOP LEVEL — a
 	 * module of the root package, visible by simple name from every file in the project exactly as the
 	 * standard library's own top-level types are.
 	 *
-	 * The ancestor rungs are not an extrapolation from the root one: compiled on 4.3.7, `p.sub.deep.C`
-	 * names `p.A` with no import at all while a sibling `q.D` does not (`Type not found : A`), and with
-	 * both `p.A` and `p.sub.A` present the deep file answers `p.sub.A` — nearest first. Modelling only
-	 * the same package and the root left a descendant-package file out of `statementlessRepairEdits`
-	 * entirely, so a move wrote two files at rc 0 over a tree that then read `Type not found`.
+	 * The ancestor rungs are not an extrapolation from the root one: `p.sub.deep.C` names `p.A` with no
+	 * import at all while a sibling `q.D` reads `Type not found : A`, and with both `p.A` and `p.sub.A`
+	 * present the deep file answers `p.sub.A` — nearest first. Modelling only the same package and the root
+	 * leaves a descendant-package file unrepaired, and the move then writes a tree that does not compile.
 	 *
 	 * `isMain` FILTERS every rung, where the module-own branch of `bindingOf` only spells a path with it: a
 	 * sibling module's SUB-module type is not visible by simple name from another file of the package
 	 * — this file's own header proves it, importing `SymbolIndex.ImportKind` from its own package — so
-	 * counting one was a refusal against a binding that does not exist (`Type not found : Dep` on
-	 * 4.3.7). `isPrivate` filters for the same reason one step further in: `private class Dep` in
+	 * counting one was a refusal against a binding that does not exist (`Type not found :
+	 * Dep`). `isPrivate` filters for the same reason one step further in: `private class Dep` in
 	 * `p/Dep.hx` is equally `Type not found` from `p/Host.hx`.
 	 */
 	private static function packageOrTopLevelBinding(name: String, info: FileInfo, files: Array<FileInfo>): Null<String> {
@@ -437,12 +421,11 @@ final class DependencyCarry {
 	 * none. Kept OUT of `bindingOf`'s ladder on purpose: a guarded import is a rung in some builds and
 	 * absent in others, so ranking it would answer one configuration and hide the rest.
 	 *
-	 * The caller uses it as a VETO rather than as an answer. Both directions were compile-run on 4.3.7
-	 * with a destination holding `#if neko import r.Dep; #end`: with the carried line written ABOVE the
-	 * guard the guarded import wins under `-D neko` and the MOVED code rebinds (`q.Dep` -> `r.Dep`);
-	 * with an unguarded import below the guard the carried line lands last and the DESTINATION's own
-	 * code rebinds (`r.Dep` -> `q.Dep`). Both exited 0 with no output. Which of the two happens is
-	 * decided by where the anchor puts the line, so the veto does not ask.
+	 * The caller uses it as a VETO rather than as an answer. With a destination holding `#if neko import
+	 * r.Dep; #end`, a carried line written ABOVE the guard loses to the guarded import under `-D neko` and
+	 * the MOVED code rebinds; one written below it lands last and the DESTINATION's own code rebinds.
+	 * Neither says anything. Which of the two happens is decided by where the anchor puts the line, so the
+	 * veto does not ask.
 	 */
 	private static function guardedImportPath(name: String, info: FileInfo): Null<String> {
 		var found: Null<String> = null;
@@ -460,16 +443,14 @@ final class DependencyCarry {
 	 *
 	 * Only ONE of the two `.*` spellings binds a TYPE. `import pkg.*` brings in each MODULE of `pkg`
 	 * under its main type's name — a SUB-module type stays unbound, which is why `isMain` filters here as
-	 * it does on the package rung. `import pkg.Module.*` binds no type at all: it imports that
-	 * module's STATIC FIELDS, measured on 4.3.7 (`trace(STATIC_FIELD)` prints, `new Mod()` and
-	 * `new Sub()` are both `Type not found`), so it is not a rung and modelling it as one INVENTED a
-	 * binding — which then matched `wanted` and cancelled the very ambient refusal this slice added.
+	 * it does on the package rung. `import pkg.Module.*` binds no type at all: it imports that module's
+	 * STATIC FIELDS (`new Mod()` and `new Sub()` are both `Type not found`), so it is not a rung, and
+	 * modelling it as one INVENTS a binding that matches `wanted` and cancels the ambient refusal.
 	 * Privacy filters what remains: a module-`private` type is not importable by any spelling.
 	 *
-	 * Without this rung a wildcard was simply invisible, and the collision gate read the destination as
-	 * binding nothing: `p/Host.hx` holding `import r.*` next to a moved decl reaching `q.Dep` had the
-	 * carried `import q.Dep;` win over the wildcard, and `Host.dep()` came back `q.Dep` where it had
-	 * been `r.Dep`, rc 0.
+	 * Without this rung a wildcard is invisible and the collision gate reads the destination as binding
+	 * nothing, so a carried `import q.Dep;` wins over a destination's own `import r.*` and silently rebinds
+	 * that file's references.
 	 */
 	private static function wildcardBinding(name: String, info: FileInfo, files: Array<FileInfo>): Null<String> {
 		var found: Null<String> = null;
@@ -487,17 +468,17 @@ final class DependencyCarry {
 	 * providing `Field`.
 	 *
 	 * The unproven YES cannot manufacture a FALSE agreement between two files, which is what every
-	 * membership test on `importCandidates` rests on. For the constructed path to EQUAL a real binding
-	 * path on the other side, that side must hold an import spelling `<path>.<name>` — and on 4.3.7
-	 * such an import means the SUB-TYPE of module `<path>` whenever a module `<path>` exists at all
-	 * (verified with a module `P.hx` and a package `P/` both declaring `Dep`: `import P.Dep;` bound the
-	 * module's sub-type). If `<path>` were only a package, the `import <path>;` this YES was read off
-	 * does not compile at all (`Type not found : P`, verified) — so no source Haxe accepts reaches the
-	 * disagreement, and two files that agree on such a path are naming the same type.
+	 * membership test on `importCandidates` rests on. For the constructed path to EQUAL a real binding path
+	 * on the other side, that side must hold an import spelling `<path>.<name>` — and such an import means
+	 * the SUB-TYPE of module `<path>` whenever a module `<path>` exists at all — with a module `P.hx` and a
+	 * package `P/` both declaring `Dep`, `import P.Dep;` binds the module's sub-type. If `<path>` were only
+	 * a package, the `import <path>;` this YES was read off does not compile at all (`Type not found : P`)
+	 * — so no source Haxe accepts reaches the disagreement, and two files that agree on such a path are
+	 * naming the same type.
 	 *
 	 * A CARRY reads the answer rather than testing membership, so it cannot survive the unproven YES —
-	 * `moduleStatementBinding`, which picks the line a carry writes, deliberately does not call this,
-	 * and the measurement that forced that is recorded there.
+	 * `moduleStatementBinding`, which picks the line a carry writes, deliberately does not call this, and
+	 * the reason is recorded there.
 	 */
 	private static function moduleMayDeclare(path: String, name: String, files: Array<FileInfo>): Bool {
 		final known: Null<FileInfo> = files.find(fi -> fi.module == path);
@@ -516,9 +497,8 @@ final class DependencyCarry {
 	 * `<out-of-scope-module>.<name>`, so such a statement can never match. Admitting them on their own —
 	 * the `moduleMayDeclare` answer, which is right for a membership test and wrong for a carry — makes
 	 * EVERY out-of-scope module import a candidate for EVERY unbound name, `String` / `Int` / `Void` /
-	 * `Array` included: measured over 285 same-package moves on the Pony tree, that priced ambient names
-	 * to paths like `StringTools.String` and `haxe.MainLoop.Void` and turned 62 of 147 accepted moves
-	 * into refusals.
+	 * `Array` included, pricing ambient names to paths like `StringTools.String`
+	 * and `haxe.MainLoop.Void` and turning accepted moves into refusals.
 	 */
 	private static function moduleStatementBinding(name: String, wanted: Null<String>, info: FileInfo): Null<ImportInfo> {
 		if (wanted == null) return null;
@@ -532,14 +512,12 @@ final class DependencyCarry {
 
 	/**
 	 * The module a QUALIFIED type path's head segment names from `info`'s position — the same package chain
-	 * `packageChainOf` walks for a bare type name — its own package, each ancestor above it, then the
-	 * top level, and compile-proved on the head form of its own accord (`p.sub.deep.C` resolves
-	 * `Mod.Sub` against `p.Mod` while a sibling `q.D` reads `Type not found : Mod`). Imports do not
-	 * enter this ladder: `import q.Mod;` does not make
-	 * `Mod.Sub` resolve (`Type not found : Mod` on 4.3.7), which is what makes a head PACKAGE-relative
-	 * and a cross-package move able to rebind it. Null means the head is not a module this index holds,
-	 * which for a head with no package of its own is the ambient top level — the same answer from every
-	 * file, so two nulls agree.
+	 * `packageChainOf` walks for a bare type name — its own package, each ancestor above it, then the top
+	 * level — `p.sub.deep.C` resolves `Mod.Sub` against `p.Mod` while a sibling `q.D` reads `Type not found
+	 * : Mod`. Imports do not enter this ladder: `import q.Mod;` does not make `Mod.Sub` resolve (`Type not
+	 * found : Mod`), which is what makes a head PACKAGE-relative and a cross-package move able to rebind
+	 * it. Null means the head is not a module this index holds, which for a head with no package of its own
+	 * is the ambient top level — the same answer from every file, so two nulls agree.
 	 */
 	private static function headModuleOf(head: String, info: FileInfo, files: Array<FileInfo>): Null<String> {
 		for (pkg in packageChainOf(info.pkg))
@@ -557,8 +535,7 @@ final class DependencyCarry {
 	 * The reconciliation half of the collision gate. `bindingOf` deliberately cannot name a binding that
 	 * comes from a `#if`-guarded import or from a module OUTSIDE the indexed scope — and a refusal built
 	 * on "cannot name it" then fires on the commonest macro-file shape there is, where BOTH files carry
-	 * the same `#if macro import haxe.macro.Expr;`. Measured on the Pony tree: four of eleven changed
-	 * outcomes in a 60-case census were exactly that, and each names a path both sides already agree on.
+	 * the same `#if macro import haxe.macro.Expr;` — a path both sides already agree on.
 	 *
 	 * The set is deliberately not proof of a binding — an entry is a path the statement WOULD produce if
 	 * the module declares `name`, which an out-of-scope module cannot be asked. It is only ever used to
@@ -608,13 +585,13 @@ final class DependencyCarry {
 		// The index holding a module of that name (a root-package `StringTools.hx` of the project's own)
 		// takes the exemption away, which is the case the gate below is really for.
 		//
-		// Dormant until the receiver scan started pricing `Std.int(...)` and `StringTools.trim(...)`:
-		// measured, without this a `using StringTools;` carried past a destination that merely WRITES
-		// `StringTools.trim(x)` was refused, and 2 of 15 accepted Pony `move-member` cases were lost.
+		// Reachable only since the receiver scan started pricing `Std.int(...)` and
+		// `StringTools.trim(...)`: without the exemption a `using StringTools;` carried past a destination
+		// that merely WRITES `StringTools.trim(x)` is refused.
 		if (standing == null && guardedDest == null && wanted.indexOf('.') < 0 && !files.exists(fi -> fi.module == wanted)) return null;
 		// A guarded import at the destination is a rung of SOME build's ladder and of no other, so
-		// whether the carried line wins or loses is a per-configuration question. Refuse either way:
-		// both directions were compile-run to a changed runtime class with rc 0.
+		// whether the carried line wins or loses is a per-configuration
+		// question. Refuse either way: both directions silently rebind one side.
 		if (guardedDest != null && guardedDest != wanted && !importCandidates(dep, cursorInfo, files).contains(guardedDest))
 			return 'the moved code reaches "$dep" as $wanted, and ${destInfo.file} binds "$dep" to $guardedDest inside a `#if` '
 				+ 'guard — under that guard one of the two imports is last and the other loses, silently rebinding either the '
@@ -625,9 +602,9 @@ final class DependencyCarry {
 			// side of the move.
 			return if (!hasProvider)
 				// No carry, so the moved code takes the destination's ladder, and the ladder's visible
-				// rungs are all empty — what is left is the ambient scope. Compile-proved: `p/Date.hx`
-				// shadowing the stdlib `Date` for a same-package source, moved to a destination the
-				// index says nothing about, resolved to the STDLIB `Date` with rc 0.
+				// rungs are all empty — what is left is the ambient scope: a `p/Date.hx` shadowing the
+				// stdlib `Date` for a same-package source, moved to a destination the index says nothing
+				// about, resolves to the STDLIB `Date`.
 				'the moved code reaches "$dep" as $wanted with no import to carry, and nothing in the indexed scope binds '
 					+ '"$dep" at ${destInfo.file} — the moved code would take that file\'s own resolution, which this index '
 					+ 'cannot see; import "$dep" explicitly at the source first, or move the dependency too';
@@ -636,9 +613,9 @@ final class DependencyCarry {
 				&& !importCandidates(dep, destInfo, files).contains(wanted)
 			)
 				// The destination NAMES `dep` and the index cannot say what it means by it, so it means
-				// something ambient — and a carried import outranks the ambient scope. Compile-proved
-				// twice: a stdlib `Date` and a root-package `Dep.hx` at the destination each came back
-				// as the carried module's type instead, rc 0, no output.
+				// something ambient — and a carried import outranks the ambient scope: a stdlib `Date` and
+				// a root-package `Dep.hx` at the destination each come back as the carried module's type
+				// instead.
 				'the moved code reaches "$dep" as $wanted, and ${destInfo.file} references "$dep" while nothing in the '
 					+ 'indexed scope binds it there — it resolves through the ambient top level (a stdlib or top-level type, or '
 					+ 'an out-of-scope package), which a carried import outranks, so carrying it would silently rebind that '
@@ -680,9 +657,8 @@ final class DependencyCarry {
 	 * something else.
 	 *
 	 * Except when the two files spell the SAME statement for `dep`. Two macro modules each carrying
-	 * `#if macro import haxe.macro.Expr;` is the commonest shape in the tree, and there the index can
-	 * name neither side while the two agree perfectly — four of eleven changed outcomes in a 60-case
-	 * `move` census over the Pony tree were exactly that.
+	 * `#if macro import haxe.macro.Expr;` is the commonest shape in the tree,
+	 * and there the index can name neither side while the two agree perfectly.
 	 */
 	private static function unnameableSourceCollision(
 		dep: String, cursorInfo: FileInfo, destInfo: FileInfo, files: Array<FileInfo>, standing: Null<NameBinding>,
@@ -739,18 +715,15 @@ final class DependencyCarry {
 	 * Every UPPER-INITIAL name written as the RECEIVER of a member access inside `declSpan` —
 	 * the `Helper` of `Helper.go()`, of `Helper.CONST` and of `@:build(Helper.make())`.
 	 *
-	 * These are dependencies exactly as a type position is, and until 2026-08-31 the carry could not
-	 * see them at all: the projection it reads answers TYPE positions, so `apq uses Helper` returns 0
-	 * hits on a file whose only reference is `Helper.go()`. The op's own doc called the residue LOUD —
-	 * "the destination fails to COMPILE, never a silent semantic change" — and that claim is FALSE in
-	 * the direction that matters. Measured on 4.3.7 through the base engine: a `Moved` reaching
-	 * `r.Helper` through the source file's `import r.Helper;`, moved into a destination whose own
-	 * package declares a `p.Helper`, came back bound to `p.Helper` — `Moved.use()` went from 42 to 7,
-	 * rc 0, three files written and nothing to read. Priced here, the same move carries the import.
+	 * These are dependencies exactly as a type position is, and the projection the carry reads answers TYPE
+	 * positions only: `uses Helper` returns no hit on a file whose only reference is `Helper.go()`. The
+	 * residue is NOT loud. A `Moved` reaching `r.Helper` through the source file's `import r.Helper;`,
+	 * moved into a destination whose own package declares a `p.Helper`, rebinds to `p.Helper` with nothing
+	 * to read; priced here, the same move carries the import.
 	 *
 	 * Only the receiver slot, not every upper-initial identifier: a VALUE position
 	 * (`Type.createInstance(Bar, [])`) and a constructor pattern (`case Red:`) are the same gap one
-	 * step further out, and both are named in `NEW BACKLOG` rather than smuggled in — a bare `Red` is
+	 * step further out, and both are left out deliberately rather than smuggled in — a bare `Red` is
 	 * an enum CONSTRUCTOR far more often than a module, and `bindingOf` cannot tell the two apart.
 	 *
 	 * A dotted receiver needs no special case: `p.Mod.go()` projects the receiver as a nested member
@@ -776,10 +749,7 @@ final class DependencyCarry {
 	 * Record `name` at `span` — the re-bind an anonymous-structure literal needs, in ONE place.
 	 *
 	 * Both collectors reach here with a narrowed `Null<String>` / `Null<Span>` pair, and a narrowed
-	 * local does not reach a literal whose expected field type is non-nullable; a non-null PARAMETER
-	 * does. `collectDependencyNames` spelled the two re-binding locals inline, and
-	 * `collectReceiverNames` (new in this slice) repeated them, which is the shape `duplicate-code`
-	 * names.
+	 * local does not reach a literal whose expected field type is non-nullable; a non-null PARAMETER does.
 	 */
 	private static function pushNameSpan(out: Array<NameSpan>, name: String, span: Span): Void {
 		out.push({ name: name, span: span });
@@ -802,12 +772,11 @@ final class DependencyCarry {
 	/**
 	 * The source module's `using` statements the destination lacks, appended to `carried`.
 	 *
-	 * A `using` grants STATIC EXTENSIONS, and an extension call spells the METHOD name and nothing else
-	 * — no name scan can see which module supplied it. S40 settled the destination side on exactly that
-	 * evidence (a destination `using` is KEPT unconditionally rather than name-scanned), and the source
-	 * side is the mirror it did not close: the moved body's `s.trim()` arrived at a destination holding
-	 * no `using StringTools;` and read `String has no field trim` at rc 0, one of four census cases
-	 * (`Int has no field hex`, `Array<String> has no field exists`, `Float has no field int`).
+	 * A `using` grants STATIC EXTENSIONS, and an extension call spells the METHOD name and nothing else —
+	 * no name scan can see which module supplied it. The destination side rests on exactly that evidence —
+	 * a destination `using` is KEPT unconditionally rather than name-scanned — and this is its mirror: a
+	 * moved body's `s.trim()` arriving at a destination holding no `using StringTools;` reads `String has
+	 * no field trim`.
 	 *
 	 * Carried unconditionally, with ONE necessary condition the tree can actually answer: a static
 	 * extension is invoked as `expr.method(...)`, so a declaration holding no member access at all can
@@ -826,11 +795,11 @@ final class DependencyCarry {
 		for (imp in cursorInfo.imports) if (!imp.guarded && imp.kind == ImportKind.Using) {
 			final path: Null<String> = SymbolIndex.pathImportedBy(imp);
 			if (path == null) continue;
-			// `!other.guarded` is what makes this the right question. A guarded statement is a rung of
-			// SOME build's ladder and of no other, so a `#if js using StringTools; #end` at the
-			// destination satisfies nothing for the default configuration — compile-proved: without the
-			// filter the move wrote two files at rc 0 and the tree read `String has no field trim` on
-			// neko. It is the same filter `addImportEdit` applies for the same reason.
+			// `!other.guarded` is what makes this the right question. A guarded statement is a rung of SOME
+			// build's ladder and of no other, so a `#if js using StringTools; #end` at the destination
+			// satisfies nothing for the default configuration — without the filter the move writes both
+			// files and the tree then reads `String has no field trim` on neko. It is the same filter
+			// `addImportEdit` applies for the same reason.
 			final already: Bool = destInfo.imports.exists(
 				other -> !other.guarded && other.kind == ImportKind.Using && SymbolIndex.pathImportedBy(other) == path
 			);
@@ -858,14 +827,13 @@ final class DependencyCarry {
 	 * PARAMETER of its own removed.
 	 *
 	 * Two kinds of parameter, subtracted two different ways. The DECLARATION's own (`class Moved<Key>`)
-	 * shadow the whole span and come from the index, so the name goes at once — pricing one asked about
-	 * a type the moved code never means, and `class Mover<Key>` beside a `p/Key.hx` was refused a move
-	 * that was correct. A METHOD's are not indexed at all (the grammar projects no `<...>` list for a
-	 * function at any depth), so they reach the type-ref walk only through the annotations that spell
-	 * them and look exactly like a dependency on a module of that name — and they are subtracted PER
-	 * OCCURRENCE, because `<Dep>` on one method shadows `Dep` inside that method and nowhere else.
-	 * Dropping the NAME instead dropped a sibling `var d:Dep;` from the gate as well, which compile-ran
-	 * to a changed runtime class with rc 0 on a move the base engine refused.
+	 * shadow the whole span and come from the index, so the name goes at once — pricing one asked about a
+	 * type the moved code never means, and `class Mover<Key>` beside a `p/Key.hx` was refused a move that
+	 * was correct. A METHOD's are not indexed at all (the grammar projects no `<...>` list for a function
+	 * at any depth), so they reach the type-ref walk only through the annotations that spell them and look
+	 * exactly like a dependency on a module of that name — and they are subtracted PER OCCURRENCE, because
+	 * `<Dep>` on one method shadows `Dep` inside that method and nowhere else. Dropping the NAME instead
+	 * drops a sibling `var d:Dep;` from the gate as well, which silently changes what the moved code means.
 	 */
 	private static function dependencyNames(
 		tree: QueryNode, shape: RefShape, source: String, declSpan: Span, cursorInfo: FileInfo, plugin: GrammarPlugin,
@@ -963,14 +931,13 @@ final class DependencyCarry {
 	/**
 	 * Does the destination reach `dep`, meaning exactly `wanted`, with NO statement of its own?
 	 *
-	 * Two visibility rungs Haxe grants for free, and a carried import would bind nothing either one
-	 * already binds. The PACKAGE CHAIN — compile-run on 4.3.7, a `package p.q;` module reads a bare
-	 * `Dep` declared `package p;` and a bare `Root` declared at the top level with no import — which
-	 * 281 of the 767 modules one campaign sweep moved received a redundant line for, every one of
-	 * them removed again by the `redundant-import` pass. And the destination's OWN module, which
-	 * `packageOrTopLevelBinding` structurally cannot answer: it skips `info.file` itself and reports
-	 * MAIN types only. That gap wrote `import b.Dest;` and `import b.Dest.Payload;` into `b/Dest.hx`
-	 * itself over a `move-member` into it (T518).
+	 * Two visibility rungs Haxe grants for free, and a carried import would bind nothing either one already
+	 * binds. The PACKAGE CHAIN — a `package p.q;` module reads a bare `Dep` declared `package p;` and a
+	 * bare `Root` declared at the top level with no import — where a carried line is redundant and
+	 * `redundant-import` takes it out again. And the destination's OWN module, which
+	 * `packageOrTopLevelBinding` structurally cannot answer: it skips `info.file` itself and reports MAIN
+	 * types only. That gap wrote `import b.Dest;` and `import b.Dest.Payload;` into `b/Dest.hx` itself over
+	 * a `move-member` into it.
 	 *
 	 * `wanted == null` is never a yes: an unnameable source binding is exactly the case the carry
 	 * must not skip on, and the collision gate above has already had its say about it.
@@ -1008,22 +975,19 @@ final class DependencyCarry {
 	 * `carried` (or folded into `guarded` when the statement is `#if`-guarded), and the refusal a
 	 * carry that would silently rebind owes instead.
 	 *
-	 * A MODULE-static wildcard binds no type at all — measured on 4.3.7, `import m.Mod.*;` brings in
-	 * the MAIN type's static fields and, for an enum main type, its constructors; a SUB-module type's
-	 * statics stay unbound (`Unknown identifier : fromSide`). So nothing the dependency walk asks
-	 * about — a type position, an upper-initial receiver — can ever see one, and the whole class of
-	 * name it provides was invisible to the carry: `move-member` wrote a destination reading
-	 * `Unknown identifier : packOf` at rc 0, `wrote 2 file(s)`, with the advisory calling the miss
-	 * best-effort (T559). For `src/anyparse/macro` that is not an edge: 20 files reach
-	 * `MacroNames.*` this way, 73 reach `ExitCode.*`, and the moved body of the very member S87
-	 * carried by hand reached `WriterLoweringSupport.optFieldAccess` through one.
+	 * A MODULE-static wildcard binds no type at all: `import m.Mod.*;` brings in the MAIN type's static
+	 * fields and, for an enum main type, its constructors, while a SUB-module type's statics stay unbound
+	 * (`Unknown identifier : fromSide`). So nothing the dependency walk asks about — a type position, an
+	 * upper-initial receiver — can ever see one, and without this arm the whole class of name such a
+	 * statement provides is invisible to the carry, which then writes a destination reading `Unknown
+	 * identifier`. Not an edge case: whole packages of this project reach their constants that way.
 	 *
 	 * The refusals are the two ways a carry cannot repair the name. A member the DESTINATION's own
-	 * type declares wins over any import (measured: a class declaring `fromMain` printed `own`, not
-	 * the wildcard's), so the moved body would silently rebind to it. And a second module-static
+	 * type declares wins over any import (a class declaring `fromMain` beats the
+	 * wildcard's), so the moved body would silently rebind to it. And a second module-static
 	 * wildcard at the destination whose module declares any of the same names is decided by
-	 * STATEMENT ORDER — the last one wins, measured, with no diagnostic — so whichever way the
-	 * carried line is seated one of the two files changes meaning.
+	 * STATEMENT ORDER — the last one wins, with no diagnostic — so whichever
+	 * way the carried line is seated one of the two files changes meaning.
 	 */
 	private static function foldWildcardCarry(
 		source: String, declSpan: Span, cursorInfo: FileInfo, destInfo: FileInfo, files: Array<FileInfo>, plugin: GrammarPlugin,
@@ -1066,8 +1030,8 @@ final class DependencyCarry {
 	/**
 	 * The reason a name a module-static wildcard binds cannot survive the move at all, or null.
 	 *
-	 * A member the DESTINATION MODULE declares wins over every imported static — measured on 4.3.7, a
-	 * class declaring `fromMain` printed `own` rather than the wildcard's — so the moved body would
+	 * A member the DESTINATION MODULE declares wins over every imported static —
+	 * a class declaring `fromMain` beats the wildcard's — so the moved body would
 	 * silently rebind to it. Asked whether or not the statement is carried, because carrying is not
 	 * what creates the shadow.
 	 *
@@ -1089,14 +1053,14 @@ final class DependencyCarry {
 	 * The reason a module-static wildcard must not be CARRIED past a rival one the destination
 	 * already has, or null.
 	 *
-	 * A second module-static wildcard declaring a name in common is decided by STATEMENT ORDER — the
-	 * last one wins, measured on 4.3.7 with no diagnostic — so whichever way the carried line is
+	 * A second module-static wildcard declaring a name in common is decided by STATEMENT
+	 * ORDER — the last one wins, with no diagnostic — so whichever way the carried line is
 	 * seated one of the two files changes meaning.
 	 *
-	 * Asked of the whole name SET rather than of the names the moved body uses: an overlap the moved
-	 * code does not touch is still an overlap the DESTINATION's own code may, and this gate has no
-	 * way to tell a used one from an idle one. It costs a refusal on a shape where two wildcard
-	 * modules merely share a name, which no file in this tree does.
+	 * Asked of the whole name SET rather than of the names the moved body uses: an overlap the moved code
+	 * does not touch is still an overlap the DESTINATION's own code may, and this gate has no way to tell a
+	 * used one from an idle one. It costs a refusal on a shape where two wildcard modules merely share a
+	 * name.
 	 */
 	private static function rivalWildcardCollision(
 		provider: WildProvider, wanted: Array<String>, destInfo: FileInfo, files: Array<FileInfo>, shape: RefShape
@@ -1135,9 +1099,8 @@ final class DependencyCarry {
 	/**
 	 * The simple names a module-static wildcard on `holder` binds: every member of its MAIN type that
 	 * is reachable as `MainType.<name>` — a `static` one, an `enum abstract` value (static without
-	 * carrying the modifier, which is what `implicitlyStaticMember` is for), and an enum
-	 * constructor. Measured on 4.3.7: a SUB-module type's statics are NOT bound by the wildcard, so
-	 * only the main type is read.
+	 * carrying the modifier, which is what `implicitlyStaticMember` is for), and an enum constructor.
+	 * A SUB-module type's statics are NOT bound by the wildcard, so only the main type is read.
 	 */
 	private static function staticNamesOf(holder: FileInfo, shape: RefShape): Array<String> {
 		final main: Null<TypeDeclInfo> = holder.types.find(t -> t.isMain);
@@ -1198,8 +1161,8 @@ final class DependencyCarry {
  *
  * The carry needs an error channel because a bound-name COLLISION is not a missing import it can
  * work around: the destination already binds that simple name to a different module, and every
- * way of proceeding changes what some existing code means. Emitting the second binding — what the
- * op did until 2026-08-27 — is the worst of them, because Haxe resolves the last import and says
+ * way of proceeding changes what some existing code means. Emitting the second
+ * binding is the worst of them, because Haxe resolves the last import and says
  * nothing: `import b.Dep;` carried into a destination holding `import p.Dep;` compiled clean and
  * silently retyped the destination's own `new Dep()` from `p.Dep` to `b.Dep`.
  */
@@ -1227,10 +1190,9 @@ typedef NameBinding = {
  * the bare name loses: a type-POSITION occurrence inside the moved declaration, and the REGION a
  * function's type parameter shadows that name over.
  *
- * A method's `<Dep>` shadows `Dep` only inside that method, so the same name can be a parameter at
- * one occurrence and a genuine dependency at another in the same declaration — un-pricing it by
- * NAME dropped the dependency from the gate entirely, which a `pick<Dep>` beside a `var d:Dep;`
- * compile-ran to a changed runtime class with rc 0.
+ * A method's `<Dep>` shadows `Dep` only inside that method, so the same name can be a parameter at one
+ * occurrence and a genuine dependency at another in the same declaration — un-pricing it by NAME drops the
+ * dependency from the gate entirely, which a `pick<Dep>` beside a `var d:Dep;` turns into a silent rebind.
  */
 typedef NameSpan = {
 	var name: String;

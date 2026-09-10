@@ -205,13 +205,11 @@ final class Json {
  * The line-start offsets of ONE source, built once so a span's line/col is a binary search
  * instead of a scan from byte 0.
  *
- * `Span.lineCol` walks the source from the start on EVERY call and a JSON dump asks it twice
- * per node, so a dump is quadratic in file size — invisible until a big file lands in a
- * sampled slot: `ast --json` over a 16 572-line module measured 58.3 s, 88.7 % of it inside
- * that scan, and `unit.query.ApqAstIntegrationTest` went 5.8 s -> 189.8 s the moment an
- * unrelated slice added three files and re-aligned its every-64th-file stride onto that
- * module. RUN-scoped by construction — one instance per render call, no static state
- * (invariant 1).
+ * `Span.lineCol` walks the source from the start on EVERY call and a JSON dump asks it twice per node, so a
+ * dump is quadratic in file size — invisible until a big file lands in a sampled slot: `ast --json` over a
+ * very large module spends nearly all its time inside that scan, and a test whose file stride landed on
+ * such a module went from seconds to minutes. RUN-scoped by construction — one instance per render call, no
+ * static state (invariant 1).
  */
 @:nullSafety(Strict)
 private class LineIndex {

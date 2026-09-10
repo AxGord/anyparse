@@ -51,9 +51,8 @@ private typedef Cursor = {
  *
  * A conditional-compilation branch the defines exclude is skipped at lex time, so the
  * file still earns its `Parsed <path>` line while that branch is typechecked by
- * NOTHING. Measured in this repo, whose configured oracle is `test-js.hxml`: a
- * `final _planted: Int = 'not an int';` planted in the native-sys `#elseif sys`
- * branch of `HaxeSpawn.run` leaves `haxe test-js.hxml --no-output` at exit 0, while the
+ * NOTHING. With a js-targeting oracle, a `final _planted: Int = 'not an int';` planted in
+ * a native-sys `#elseif sys` branch leaves `haxe <hxml> --no-output` at exit 0, while the
  * identical line in the `#if nodejs` branch above it fails with `String should be Int`.
  * Same file, same compile, opposite answers — and a file-level coverage answer says TRUE
  * for both, while `OracleCoverage.uncovered` grants the first offset and declines the

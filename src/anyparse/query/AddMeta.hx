@@ -130,12 +130,11 @@ final class AddMeta {
 	private static function declarationHost(tree: QueryNode, node: QueryNode): Null<QueryNode> {
 		var host: QueryNode = node;
 		var parent: Null<QueryNode> = TreePath.parentOf(tree, host);
-		// The climb asks `typeDeclOf`, not "is my parent a single-child node that starts
-		// earlier". That looser test was true of a `#if` region wrapping ONE type as well,
-		// so a guarded class put its entry ABOVE the `#if` line — and on a target where the
-		// condition is false the entry then annotates whatever declaration follows `#end`.
-		// Measured: `@:keep` asked for on a `#if sys`-guarded class landed on the NEXT
-		// class for every non-sys target, at rc 0, past the parse gate.
+		// The climb asks `typeDeclOf`, not "is my parent a single-child node that starts earlier". That
+		// looser test was true of a `#if` region wrapping ONE type as well, so a guarded class put its
+		// entry ABOVE the `#if` line — and on a target where the condition is false the entry then
+		// annotates whatever declaration follows `#end`. A `@:keep` asked for on a `#if sys`-guarded class
+		// then lands on the NEXT class for every non-sys target, past the parse gate.
 		while (parent != null) {
 			final p: QueryNode = parent;
 			final outer: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(p);

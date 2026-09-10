@@ -88,15 +88,15 @@ final class BoolExprShape {
 	 * reads the node's KIND, and a `Call` / field access / identifier has no kind that says
 	 * `Bool`. This one reads the CONTRACT the enclosing function states instead.
 	 *
-	 * ★ What it actually proves, because the obvious reading is wrong. Haxe does NOT reject
-	 * `function f():Bool return someNullBool;` — `Null<Bool>` unifies with `Bool` silently on
-	 * every target (measured: `--interp` -> `null`, `js` -> `undefined`, `--jvm` -> `false`,
-	 * all exit 0). So a declared `:Bool` is not, by itself, a runtime non-null guarantee.
+	 * ★ What it actually proves, because the obvious reading is wrong. Haxe does NOT reject `function
+	 * f():Bool return someNullBool;` — `Null<Bool>` unifies with `Bool` silently on every target, each
+	 * yielding that target's own null value and compiling clean. So a declared `:Bool` is not, by itself, a
+	 * runtime non-null guarantee.
 	 *
 	 * It does not need to be. The hazard the boolean-collapse gates guard is COMPILE
 	 * ACCEPTANCE under `@:nullSafety(Strict)`, not meaning: `cond ? false : <tail>` and
-	 * `!cond && <tail>` are observationally identical for a null `<tail>` too (18/18 cells on
-	 * `--interp` / `js` / `--jvm`, both guard polarities). And under Strict a `:Bool` function
+	 * `!cond && <tail>` are observationally identical for a null `<tail>` too, on `--interp`
+	 * / `js` / `--jvm` and in both guard polarities. And under Strict a `:Bool` function
 	 * CANNOT host a `return <nullable>;` ("Null safety: Cannot return nullable value of
 	 * Null<Bool> as Bool") — so if the pre-rewrite source compiles, the tail is a non-null
 	 * `Bool` and the post-rewrite source compiles too. Both readings of the world are covered,
@@ -117,11 +117,9 @@ final class BoolExprShape {
 	 *     return isSimpleOperand(node)
 	 *         || (!CONST_OP_KINDS.contains(node.kind) ? false : node.children.foreach(…));
 	 *
-	 * measured on `anyparse/check/PreferInline.hx` and `anyparse/check/TrivialGetter.hx`
-	 * during the first apply-and-compile run of this slice. Refusing for ONE `--fix` pass
-	 * fixes it: the inner ternary flattens first, becomes a provably-`Bool` `&&` / `||`, and
-	 * the outer pair then collapses through the ORIGINAL kind-only proof. Purely structural —
-	 * it never asks whether the sibling rule will in fact reduce, so a tail that can never
+	 * Refusing for ONE `--fix` pass fixes it: the inner ternary flattens first, becomes a provably-`Bool`
+	 * `&&` / `||`, and the outer pair then collapses through the ORIGINAL kind-only proof. Purely
+	 * structural — it never asks whether the sibling rule will in fact reduce, so a tail that can never
 	 * reduce simply keeps its guard, which is the right answer for it too.
 	 */
 	public static function pendingBooleanTernaryTail(operand: QueryNode, shape: RefShape): Bool {
@@ -151,9 +149,8 @@ final class BoolExprShape {
 	 * `try`, a `throw`, a block. Parentheses unwrapped. The shared half of
 	 * `statementLikeOrNullTail`, and a gate in its own right on `prefer-ternary-return`'s VALUE
 	 * arm: `cond ? <a four-line if-expression chain> : x` is not more readable than the two
-	 * statements it replaced, which is the same judgement the boolean arm already makes. Measured
-	 * on anyparse's own `PurityScan.isPure`, whose collapse produced a three-level nest around an
-	 * `if` / `else if` / `else` value.
+	 * statements it replaced, which is the same judgement the boolean arm already makes:
+	 * such a collapse produces a three-level nest around an `if` / `else if` / `else` value.
 	 */
 	public static function statementLikeValue(operand: QueryNode, shape: RefShape): Bool {
 		final kind: String = unwrapParens(operand, shape.parenKind).kind;

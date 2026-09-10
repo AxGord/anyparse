@@ -35,15 +35,14 @@ typedef LexRegion = {
  *
  * ## There is NO forwarder any more — the deprecated `scan` / `skipStringLiteral` are GONE
  *
- * They hardcoded `HaxeLexicalRegions` inside this grammar-agnostic package for the callers that
- * held no `GrammarPlugin` to ask. S55 measured that debt at 65 `collectCommentTokens` call sites
- * across 49 files, plus `collectCommentRegions`, `collectNonCodeRegions`,
- * `activeCodeIdentTokenOffset` and the private `headerScan` behind `typeHeaderInsertOffset` /
- * `typeBodyBraceOffset`; S60 moved every one of them and deleted both functions.
- * `unit.LexicalRegionsSeamTest.testNoQueryOrCheckModuleReachesTheHaxeGrammar` is the pin that keeps
- * them gone: it enumerates the `anyparse.query` + `anyparse.check` modules that name
- * `anyparse.grammar.haxe.*` and asserts the exact allow-list, so a new forwarder — or any other
- * plugin-less reach into one grammar's lexer — fails a test instead of passing review.
+ * They hardcoded `HaxeLexicalRegions` inside this grammar-agnostic package for the callers that held no
+ * `GrammarPlugin` to ask. That debt was every `collectCommentTokens` call site, plus
+ * `collectCommentRegions`, `collectNonCodeRegions`, `activeCodeIdentTokenOffset` and the private
+ * `headerScan` behind `typeHeaderInsertOffset` / `typeBodyBraceOffset`; all of them moved and both
+ * functions are gone. `unit.LexicalRegionsSeamTest.testNoQueryOrCheckModuleReachesTheHaxeGrammar` is the
+ * pin that keeps them gone: it enumerates the `anyparse.query` + `anyparse.check` modules that name
+ * `anyparse.grammar.haxe.*` and asserts the exact allow-list, so a new forwarder — or any other plugin-less
+ * reach into one grammar's lexer — fails a test instead of passing review.
  *
  * ## The seam the consumers use instead, and WHICH of the three shapes to pick
  *
@@ -53,28 +52,26 @@ typedef LexRegion = {
  * `collectNonCodeRegions` / `activeCodeIdentTokenOffset` / `docExtendedSpan` / `commentBlockAt` /
  * `headerScan` and the two wrappers over it now take.
  *
- * TWO deliberate exceptions, each of which would otherwise cost a scan the pre-S60 code never paid:
+ * TWO deliberate exceptions, each of which would otherwise cost a scan nothing paid before:
  *
- *  - **A helper with its own CHEAP GUARD in front of the scan takes a `() -> Array<LexRegion>`**,
- *    so the guard keeps its saving. `RefactorSupport.trailingTrimmedSpan` is the sharpest case —
- *    its one-byte test keeps the whole-file lex off a path a caller may take once per MATCH (14337
- *    times on one `ast --select --source` run, measured) — and `RefactorSupport.docSplittingEdit`
- *    (called once per file per `lint --fix` pass with an EMPTY edit set), `CondDirectives.scan`,
- *    `CondBranchProjection.branchAwareTree`, `MemberBranchScan.seamsOf` with its `eachTypeMember` /
- *    `isGuardedMember` / `declaresMemberNamed` / `exclusiveSpansAt` wrappers,
- *    `MissingVisibility.commentTokens` and `ConstantHoist.commentAbove` are the rest.
+ *  - **A helper with its own CHEAP GUARD in front of the scan takes a `() -> Array<LexRegion>`**, so the
+ *    guard keeps its saving. `RefactorSupport.trailingTrimmedSpan` is the sharpest case — its one-byte
+ *    test keeps the whole-file lex off a path a caller may take once per MATCH — and
+ *    `RefactorSupport.docSplittingEdit` (called once per file per `lint --fix` pass with an EMPTY edit
+ *    set), `CondDirectives.scan`, `CondBranchProjection.branchAwareTree`, `MemberBranchScan.seamsOf`
+ *    with its `eachTypeMember` / `isGuardedMember` / `declaresMemberNamed` / `exclusiveSpansAt`
+ *    wrappers, `MissingVisibility.commentTokens` and `ConstantHoist.commentAbove` are the rest.
  *  - **A helper that reads MORE THAN ONE source takes the plugin's own method as a value**,
- *    `lexicalRegions: (String) -> Array<LexRegion>`, so regions can never be paired with the wrong
- *    text. `Suppression.apply`, `Json.renderRefs`, `Cli.blastRefsSection` / `emitMentionsRefs`,
- *    `MoveSymbol.buildImporterEdits` / `destinationImportEdits` and the `MoveMember` member-group
- *    family take it. That is not decoration: the one real defect this migration introduced was a
- *    single-array hop reaching the destination collision scan
- *    (`MoveSymbol.referencedInDest` then, `NameMentionScan.destinationNamesType` since S81), where
- *    the CURSOR file's regions masked the DESTINATION file's text — invisible to every
- *    byte-identity gate, because no lint or `--fix` path runs `move`.
+ *    `lexicalRegions: (String) -> Array<LexRegion>`, so regions can never be paired with the wrong text.
+ *    `Suppression.apply`, `Json.renderRefs`, `Cli.blastRefsSection` / `emitMentionsRefs`,
+ *    `MoveSymbol.buildImporterEdits` / `destinationImportEdits` and the `MoveMember` member-group family
+ *    take it. That is not decoration: the one real defect this migration introduced was a single-array
+ *    hop reaching the destination collision scan (`NameMentionScan.destinationNamesType`), where the
+ *    CURSOR file's regions masked the DESTINATION file's text — invisible to every byte-identity gate,
+ *    because no lint or `--fix` path runs `move`.
  *
  * The consumers that hold a plugin and ask it directly: `BodySlotGuard`, `Patch`,
- * `RefactorSupport.classifyOccurrences`, `RefactorSupport.nameBoundInRange` and — since S55 —
+ * `RefactorSupport.classifyOccurrences`, `RefactorSupport.nameBoundInRange` and
  * `RawSourceScan.sourceCarriesAllowGrant`.
  */
 @:nullSafety(Strict)
@@ -83,14 +80,11 @@ final class LexicalRegions {
 	/**
 	 * The lexically-scanned non-code region containing `offset`, or null when `offset` is code.
 	 *
-	 * MEASURED AND LEFT LINEAR (T219). The standing proposal was a binary search — the regions are
-	 * sorted and non-overlapping, and two consumers call this inside a loop. In a `--cpu-prof` of
-	 * `lint --all --fix --no-oracle` over 869 Pony files (30.16 s, 22 752 samples, 2466 distinct
-	 * frames, smallest sampled frame 0.041 ms) this function is NOT SAMPLED AT ALL, and neither is
-	 * `offsetWithinComment` beside it. Its two loop consumers bound it from outside:
-	 * `RefactorSupport.carriesAllowGrant` costs 28.8 ms inclusive — 0.095 % — and
-	 * `activeCodeIdentTokenOffset` is not sampled either. Ten lines of binary search would be
-	 * buying a quantity the instrument cannot see.
+	 * LEFT LINEAR deliberately. The regions are sorted and non-overlapping and two consumers call this
+	 * inside a loop, so a binary search looks obvious — but a CPU profile of a full `lint --all --fix` over
+	 * a large tree does not sample this function at all, nor `offsetWithinComment` beside it, and both loop
+	 * consumers are bounded from outside. Ten lines of binary search would buy a quantity the instrument
+	 * cannot see.
 	 */
 	public static function regionAt(offset: Int, regions: Array<LexRegion>): Null<LexRegion> {
 		return regions.find(region -> offset >= region.from && offset < region.to);

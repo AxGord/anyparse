@@ -100,11 +100,10 @@ typedef TestSummaryHeader = {
  * otherwise it carries the first encountered locus (subsequent failures
  * only bump counters).
  *
- * `header` is utest's own end-of-run block — null for tink, and for a
- * transcript truncated before it. Read `header.ok` for the red/green
- * verdict, never the row counts. `noTests` flags utest's "No tests
- * executed." row, which a filter matching no class produces and which
- * would otherwise read as a clean green run. `failureNames` lists every non-OK result row as `<fq.Class>.<method>`.
+ * `header` is utest's own end-of-run block — null for tink, and for a transcript truncated before it. Read
+ * `header.ok` for the red/green verdict, never the row counts. `noTests` flags utest's "No tests executed."
+ * row, which a filter matching no class produces and which would otherwise read as a clean green run.
+ * `failureNames` lists every non-OK result row as `<fq.Class>.<method>`.
  *
  * `counted` says a REPORT was found — utest's header block, a parsed result row,
  * or (for tink) the reporter shape that routed the parse there. It is NOT "some
@@ -258,10 +257,10 @@ final class Cli {
 		final cmd: String = args[0];
 		final registered: Null<CliCommand> = CliRegistry.find(cmd);
 		if (registered == null) {
-			// The nearest real names, NOT the whole help page: `printUsage()` here answered one
-			// mistyped word with 5440 bytes (`apq members Foo`, measured), which is the single
-			// largest thing this CLI printed for a reader who needed a name. `CliRegistry`
-			// owns the wording and the near-miss ranking; the second line names the full list.
+			// The nearest real names, NOT the whole help page: `printUsage()` here answered one mistyped
+			// word with the whole help page, the largest thing this CLI printed for a reader who needed a
+			// name. `CliRegistry` owns the wording and the near-miss ranking; the second line names the
+			// full list.
 			for (line in CliRegistry.unknownCommandLines(cmd)) CliIo.stderr(line);
 			return EXIT_USAGE;
 		}
@@ -331,11 +330,11 @@ typedef FmtRunResult = {
  * quarter of the answer with the confidence of the whole. An empty array means the check said
  * nothing and the run must not invent it; a sum below `declined` means it spoke for only some.
  *
- * `refusals` counts the writer-emit gate's own refusals, per sentence, over EVERY pass, in EDIT
- * SETS rather than findings — the one thing `declined` cannot carry. `declined` is deliberately a
- * FIRST-pass measurement, because a later pass re-reports whatever an earlier edit exposed and summing those would count one finding
- * several times; but a gate refusal that first happens on pass 2 is no re-report, it is the only
- * word anyone gets about why that fix vanished, and it used to reach no report at all.
+ * `refusals` counts the writer-emit gate's own refusals, per sentence, over EVERY pass, in EDIT SETS rather
+ * than findings — the one thing `declined` cannot carry. `declined` is deliberately a FIRST-pass
+ * measurement, because a later pass re-reports whatever an earlier edit exposed and summing those would
+ * count one finding several times; but a gate refusal that first happens on pass 2 is no re-report, it is
+ * the only word anyone gets about why that fix vanished, and it used to reach no report at all.
  *
  * `gateRefusalLines` renders it, in a block of its own under the ledger: an edit-set count and a
  * finding count are different quantities and one header cannot total both.

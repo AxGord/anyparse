@@ -36,9 +36,8 @@ typedef GuardedEdit = {
  * matched inside: `rewrite 'f($A)' '$A + 1'` over `q * f(1)` emitted
  * `q * 1 + 1`.
  *
- * Measured over the Haxe grammar, 400 of 1530 (capture shape x template
- * context) pairs change meaning that way, and 17.9% of the nodes a `$x` could
- * bind in an 806-file corpus are of a paren-sensitive kind.
+ * A large minority of (capture shape x template context) pairs change meaning
+ * that way, and a paren-sensitive kind is common among the nodes a `$x` can bind.
  *
  * ## The mechanism, and why it is not a precedence table
  *
@@ -80,8 +79,8 @@ typedef GuardedEdit = {
  * that DO need one cost a further parse apiece, but only where an edit carries
  * two pairs and one might therefore be redundant.
  *
- * Measured on TM's `FileSystemBase.hx` (2226 lines, 57 matches) against the
- * unguarded 0.36s: 0.45s when no pair is needed, 0.48s when twenty are.
+ * Over a large file with dozens of matches the guard stays within a small
+ * fraction of the unguarded splice, whether or not any pair is needed.
  */
 @:nullSafety(Strict)
 final class ParenGuard {
@@ -251,9 +250,7 @@ final class ParenGuard {
 	 * Only an edit carrying TWO pairs has anything to minimise: edits occupy
 	 * disjoint regions, so a pair in one cannot rescue a site in another, and a
 	 * lone pair was added precisely because its site was unfaithful without it.
-	 * Skipping the rest is what keeps the common case at one probe per nesting
-	 * rather than one per match (measured on a 2226-line file with 57 matches:
-	 * 0.74s -> 0.48s, against 0.36s unguarded).
+	 * Skipping the rest is what keeps the common case at one probe per nesting rather than one per match.
 	 */
 	private static function minimize(probe: Probe, wrap: Array<Bool>, initial: Array<Bool>): Array<Bool> {
 		final perEdit: Map<Int, Int> = [];

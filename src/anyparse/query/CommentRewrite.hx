@@ -29,46 +29,36 @@ private typedef WideLine = {
  * parse tree, so neither `rewrite` nor `set-comment` (one block, whole-text)
  * can do a bulk find/replace across comments. This fills that gap.
  *
- * Every comment body (located by `SourceComments.collectCommentUnits`, which skips
- * string literals) is searched. A UNIT, not a lexer token: a run of contiguous
- * full-line `//` comments is ONE body, so a find spanning two of its lines matches
- * the way it does inside a `/**` block. Per token it could not — a `//` run is N
- * tokens, one per line, and no single body held both halves, so the op answered
- * that the text was absent (T755). In `--regex` mode the raw body is the run too,
- * which is what makes `\s+//\s+` cross a line and what anchors `^` at the run
- * rather than at each line.
+ * Every comment body (located by `SourceComments.collectCommentUnits`, which skips string
+ * literals) is searched. A UNIT, not a lexer token: a run of contiguous full-line `//`
+ * comments is ONE body, so a find spanning two of its lines matches the way it does inside a
+ * `/**` block — per token it could not, no single body holding both halves. In `--regex` mode
+ * the raw body is the run too, which is what makes `\s+//\s+` cross a line and what anchors
+ * `^` at the run rather than at each line.
  *
- * In literal mode `find` is a substring and `replace` is verbatim; in `regex` mode `find` is
- * an `EReg` and `replace` is a template where `${0}` / `${1}` / `${N}` expand to capture group
- * N, `${N+K}` / `${N-K}` shift group N (an integer) by K, and `$$` is a literal `$`. Only
- * comment bodies change — code and the comment delimiters are never touched.
+ * In literal mode `find` is a substring and `replace` is verbatim; in `regex` mode `find` is an
+ * `EReg` and `replace` a template where `${0}` / `${N}` expand to capture group N, `${N+K}` /
+ * `${N-K}` shift group N (an integer) by K, and `$$` is a literal `$`. Only comment bodies
+ * change — code and the comment delimiters are never touched.
  *
- * WIDTH is this op's own concern, because nothing downstream measures a comment. Unless the edit GAINED an over-width line — more of
- * them, or a wider widest, the same comparison the gate below makes — nothing moves at all; when it
- * did, every line the edit produced and made too wide is broken back at spaces into
- * `wrapping.maxLineLength` with the block's own prefix (`SourceComments.wrapCommentBody`), at the
- * narrowest width costing no extra line. A line the edit left byte-identical is never touched, and
- * nothing is ever JOINED, so a caller's own breaks survive; a suppression directive, an author's own
- * indentation, a table row and a bullet are not re-laid-out at all
- * (`reflowSafeLine`). That reflow is what makes the T755 scenario work IN PLACE: a
- * literal find crossing a line break takes the break with it, so the two lines merge, and the width
- * gate refused every merge past the width. What the reflow cannot break — a replacement with no space
- * inside the width — the gate still refuses, and `--allow-wide` skips both.
+ * WIDTH is this op's own concern, because nothing downstream measures a comment. An edit that
+ * GAINED an over-width line has every line it made too wide broken back into
+ * `wrapping.maxLineLength` (`SourceComments.wrapCommentBody` owns that rule and the layouts it
+ * refuses to touch); an edit that gained none moves nothing. What the reflow cannot break — a
+ * replacement with no space inside the width — the gate refuses, and `--allow-wide` skips both.
  *
- * A blank comment line is a PARAGRAPH separator, and it folds into the same single space an ordinary
- * break does, so a literal find could read across it and the splice then deleted it. Such a find is
- * refused (`SourceComments.interiorParagraphBreak`); a deletion still takes its own separator with
- * it, and `--regex` sees the separator in the pattern.
+ * A blank comment line is a PARAGRAPH separator folding into the same single space an ordinary
+ * break does, so a literal find could read across it and the splice then delete it. Such a find
+ * is refused (`SourceComments.interiorParagraphBreak`); a deletion still takes its own separator
+ * with it, and `--regex` sees the separator in the pattern.
  *
  * A replacement carrying a real NEWLINE is re-prefixed with the comment's own continuation
  * (`RefactorSupport.commentContinuation`) before it is spliced, in both modes: the writer
- * re-emits a comment interior byte for byte, so an unguttered line spliced into a doc block
- * is a corruption `fmt --list` calls canonical and every node-based rule is blind to. A
- * replacement line that already carries a gutter is not doubled — see
- * `RefactorSupport.ungutter`, which is also how a caller-supplied gutter is kept out of
- * `set-doc`. The result is canonical + re-parse-validated via
- * `RefactorSupport.canonicalize` (canonical-gated unless `reformat`), so a
- * replacement that would break the parse is rejected.
+ * re-emits a comment interior byte for byte, so an unguttered line spliced into a doc block is a
+ * corruption `fmt --list` calls canonical and every node-based rule is blind to. A replacement
+ * line already carrying a gutter is not doubled (`RefactorSupport.ungutter`, which also keeps a
+ * caller-supplied gutter out of `set-doc`). The result is canonical + re-parse-validated via
+ * `RefactorSupport.canonicalize`, canonical-gated unless `reformat`.
  *
  * The source is never mutated; the caller decides whether to write the result.
  */
@@ -121,16 +111,17 @@ final class CommentRewrite {
 					: literalReplace(body, find, SourceComments.reflowIntoComment(replace, continuation), unit.isLine);
 				final spliced: String = SourceComments.trimPrefixOnlyLines(raw);
 				if (spliced == body) continue;
-				// A merged `//` run's body SPANS the interior openers of its lines 2..N — that is what lets a
-				// find cross a break at all — so a replacement can delete one and turn a comment into CODE.
+				// A merged `//` run's body SPANS the interior openers of its lines 2..N — that is what lets
+				// a find cross a break at all — so a replacement can delete one and turn a comment into
+				// CODE.
 				final orphan: Null<String> = unit.isLine ? runLineWithoutOpener(spliced) : null;
 				if (orphan != null)
 					return Err(
 						'the replacement leaves a line of the `//` run without its opener, which would turn a comment into code:\n$orphan'
 					);
 				// A find crossing a line break takes the break WITH the text around it, so the two lines
-				// join — the T755 scenario, and the reason the width gate refused it. Break the lines the
-				// edit made too wide back into the width instead; a unit that gained none is untouched.
+				// join, which is what the width gate refuses. Break the lines the edit made too wide back
+				// into the width instead; a unit that gained none is untouched.
 				var next: String = spliced;
 				if (metrics != null) {
 					final layout: LayoutMetrics = metrics;
@@ -138,8 +129,8 @@ final class CommentRewrite {
 						spliced, body, SourceComments.commentHead(source, unit), continuation, layout, unit.isLine, unit.to - bodySpan.to
 					);
 				}
-				// A ONE-LINE doc block that has just grown has to be re-opened, or its closer rides the last
-				// content line and the writer eats the space before that line's star (`\t* text */`).
+				// A ONE-LINE doc block that has just grown has to be re-opened, or its closer rides the
+				// last content line and the writer eats the space before that line's star (`\t* text */`).
 				final grown: Bool = next.indexOf('\n') >= 0 && isOneLineDocBlock(source, unit);
 				edits.push({ span: bodySpan, text: grown ? SourceComments.openGrownDocBlock(next, continuation) : next });
 			}
@@ -193,15 +184,15 @@ final class CommentRewrite {
 	 * The first line of a merged `//` run's body that the replacement left without its opener, or
 	 * null when every line after the first still carries one.
 	 *
-	 * A unit's body span reaches from the FIRST opener to the run's last byte, so it covers the
-	 * INTERIOR openers of lines 2..N. That is what lets a find cross a break at all, and it is also
-	 * a way to delete one. Literal mode cannot: `normalizeCommentBody`'s index map makes a break run
-	 * one atomic normalized character, so no match starts or ends inside it. A `--regex` find matches
-	 * the RAW body and has no such protection — and every gate downstream says yes, because the result
-	 * is valid Haxe. Measured: `--regex '/' ''` over `// disabled for now:` + `// var y = 2;` wrote
-	 * `var y = 2;` as a live field, reported `rewrote 1 file(s)`, left `fmt --list` at 0 of 1, and drew
-	 * no lint finding — the linter reported the new member as if a human had written it. Only a blank
-	 * line between the two comments (two units, the pre-merge shape) made the op refuse.
+	 * A unit's body span reaches from the FIRST opener to the run's last byte, so it covers the INTERIOR
+	 * openers of lines 2..N. That is what lets a find cross a break at all, and it is also a way to delete
+	 * one. Literal mode cannot: `normalizeCommentBody`'s index map makes a break run one atomic normalized
+	 * character, so no match starts or ends inside it. A `--regex` find matches the RAW body and has no
+	 * such protection — and every gate downstream says yes, because the result is valid Haxe. `--regex '/'
+	 * ''` over `// disabled for now:` + `// var y = 2;` writes `var y = 2;` as a live field, reports
+	 * success, leaves `fmt --list` clean and draws no lint finding — the linter reads the new member as if
+	 * a human had written it. Only a blank line between the two comments, which makes them two units,
+	 * refuses the op.
 	 *
 	 * The check cannot refuse a legitimate edit: a multi-line replacement is re-prefixed by
 	 * `reflowIntoComment` with the run's own `// ` continuation, and a join — the documented
@@ -247,8 +238,8 @@ final class CommentRewrite {
 		// The baseline is the source CANONICALISED but UNEDITED, not the raw source. Under
 		// `--reformat` — the flag's whole use case being a file that is not canonical — the writer
 		// re-indents everything, so a comment the command never mentioned can cross the width on its
-		// own, and against the raw source that reads as this edit's doing. Measured: a 135-column
-		// `//` at column 0 that the writer moves to three tabs refused an edit to a different line.
+		// own, and against the raw source that reads as this edit's doing — a
+		// `//` at column 0 that the writer moves to three tabs does exactly that.
 		final base: String = switch CanonicalEdit.canonicalize(source, [], reformat, plugin, optsJson) {
 			case Ok(text, _): text;
 			case Err(_): source;
@@ -259,11 +250,10 @@ final class CommentRewrite {
 		// refused a rename that SHORTENED a 155-column line to 154, in exactly the case this
 		// function's own doc promised to allow.
 		if (got.length <= had.length && widestOf(got) <= widestOf(had)) return null;
-		// The DECISION is that aggregate; the LINE NAMED is not. Reporting the file's widest
-		// over-width comment line quoted a line the replacement never touched whenever the file
-		// already held a wider one — measured on this tree's own `LoopGuard.hx`, where an edit that
-		// joined two doc lines into one of 173 columns was refused with "at 279 columns" over a
-		// typedef doc 320 lines away. Blame the widest line the edit ADDED to the set instead.
+		// The DECISION is that aggregate; the LINE NAMED is not. Reporting the file's widest over-width
+		// comment line quotes a line the replacement never touched whenever the file already holds a wider
+		// one — an edit joining two doc lines is then refused over a typedef doc hundreds of lines away.
+		// Blame the widest line the edit ADDED to the set instead.
 		final blamed: WideLine = gainedLine(got, had);
 		return 'the replacement leaves a comment line at ${blamed.cols} columns, past the configured $width'
 			+ ' — supply the line breaks yourself (with the prefix that position needs), or pass --allow-wide:\n${blamed.text}';
@@ -428,15 +418,13 @@ final class CommentRewrite {
 	 * which is indistinguishable from a find that is genuinely absent — the CLI now
 	 * says so in as many words.
 	 *
-	 * The same folding makes the match's OWN boundaries ambiguous, and that half was
-	 * wrong until S123. A find copied out of the normalized body — ` - M2 …`, a bullet
-	 * with the break in front of it — carries that break as its leading character, and
-	 * `map` sends it back to the END of the PREVIOUS raw line: the splice ate the break
-	 * and its ` * `, running two bullets into one line, with the op reporting success.
-	 * So the boundary is mapped as a POSITION, not as a matched character: a leading or
-	 * trailing break run stays where it is and the replacement's own boundary space
-	 * stands for it. Only an EMPTY replacement — a deletion, which has to take its
-	 * separator with it — still consumes the break.
+	 * The same folding makes the match's OWN boundaries ambiguous. A find copied out of the normalized body
+	 * — ` - M2 …`, a bullet with the break in front of it — carries that break as its leading character,
+	 * and `map` sends it back to the END of the PREVIOUS raw line: the splice ate the break and its ` * `,
+	 * running two bullets into one line, with the op reporting success. So the boundary is mapped as a
+	 * POSITION, not as a matched character: a leading or trailing break run stays where it is and the
+	 * replacement's own boundary space stands for it. Only an EMPTY replacement — a deletion, which has to
+	 * take its separator with it — still consumes the break.
 	 */
 	private static function literalReplace(body: String, find: String, replace: String, lineRun: Bool): String {
 		final normalized: { text: String, map: Array<Int> } = SourceComments.normalizeCommentBody(body, lineRun);

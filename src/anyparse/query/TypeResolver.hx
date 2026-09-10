@@ -472,16 +472,14 @@ final class TypeResolver {
 	 * that legitimately declares INSIDE another declaration: `localDeclContinuationKinds` names the
 	 * continuation, and the list head stands in for it.
 	 *
-	 * It over-refuses one measured class in exchange, and deliberately: a local declared under a
+	 * It over-refuses one class in exchange, and deliberately: a local declared under a
 	 * TRANSPARENT wrapper — `untyped var x = 1;` or `@:meta var x = 1;`, which project as a
-	 * `localDeclExprKinds` node inside `UntypedExpr` / `MetaExpr` inside a statement — does escape
-	 * into the enclosing block (measured), yet its parent is the wrapper rather than the block.
+	 * `localDeclExprKinds` node inside `UntypedExpr` / `MetaExpr` inside a statement — does
+	 * escape into the enclosing block, yet its parent is the wrapper rather than the block.
 	 * Admitting it would mean listing the wrapper kinds that "do not scope", which is a NEGATIVE
 	 * list: the next member nobody thought of is a wrong DELETION, not a missed finding, whereas
-	 * the current whitelist fails closed on shapes nobody has thought of. The trade is cheap —
-	 * `untyped var` occurs 10 times in 20 964 real `.hx` files (TM, this repo, the Haxe std and the
-	 * installed haxelib set), all ten being two lines of ONE file duplicated across five library
-	 * versions — and it costs a finding, never a behaviour.
+	 * the current whitelist fails closed on shapes nobody has thought of. The trade is cheap — `untyped
+	 * var` is vanishingly rare across real `.hx` trees — and it costs a finding, never a behaviour.
 	 *
 	 * A SELF-SCOPED binder (`for`, `catch`) has no such parent to ask — it IS the scope it binds
 	 * into — and its arm is a RESTATEMENT, not a gate: `Refs` pushes such a frame only while

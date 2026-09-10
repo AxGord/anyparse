@@ -80,8 +80,8 @@ final class MemberWriteScan {
 	 * Whether any (transitive) subtype of `owner` MENTIONS the inherited member `name` at all —
 	 * the weaker question a rule changing how a member is REACHED must ask, where the write scans
 	 * above ask about mutability. A subtype reads a private INSTANCE field unqualified and it
-	 * resolves; the same bare read of a private STATIC of the superclass is `Unknown identifier`
-	 * (measured on Haxe 4.3.7, `--interp` and `-cpp` alike), so `instance final -> static final`
+	 * resolves; the same bare read of a private STATIC of the superclass is `Unknown
+	 * identifier` (on `--interp` and `-cpp` alike), so `instance final -> static final`
 	 * needs every such read rewritten to `Owner.NAME` — an edit `Check.fix` cannot make, since it
 	 * is handed one file. A mention therefore refuses outright.
 	 *
@@ -151,9 +151,7 @@ final class MemberWriteScan {
 	 * scope. A rewrite that changes a member's property access, visibility or static-ness therefore
 	 * cannot be proved safe in such a file and is declined.
 	 *
-	 * Measured on Haxe 4.3.7 `--interp`, mutating `@:coreApi class sys.net.Socket` /
-	 * `sys.ssl.Socket` / `sys.ssl.Certificate` against their `extern` core types. For a member the
-	 * CORE type declares:
+	 * Mutating a `@:coreApi` class against its `extern` core type, for a member the CORE type declares:
 	 *
 	 *     public var x             -> public final x                  ERR different property access
 	 *     public var x             -> public var x(default, null)     ERR different property access

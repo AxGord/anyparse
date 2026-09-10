@@ -171,11 +171,10 @@ final class ExtractMethod {
 		// the `#end`, so the escape analysis below decides "read after the range" for one
 		// build configuration and against the other. Refuse it, exactly as `rename` does on
 		// this shape. A SEQUENTIAL re-declaration in one block is a different shape and is
-		// NOT refused: it resolves by position, and the extraction it enables was measured
-		// correct.
+		// NOT refused: it resolves by position, and the extraction it enables is correct.
 		// The scope swept is the enclosing FUNCTION, `rename`'s own, so a region
-		// ELSEWHERE in that function carrying the name on an arm refuses too - measured,
-		// and kept: the range's own binding does resolve there, but narrowing it would
+		// ELSEWHERE in that function carrying the name on an arm refuses too -
+		// deliberately: the range's own binding does resolve there, but narrowing it would
 		// mean a second predicate answering the question the shared one already answers.
 		// Swept over the guard's OWN vocabulary, not `LOCAL_DECL_KINDS`: a local
 		// `function g()` on an arm is the same ambiguity, and moving the range's own

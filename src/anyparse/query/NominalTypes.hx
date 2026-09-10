@@ -74,14 +74,14 @@ final class NominalTypes {
 	 * that is not such an application comes back unchanged, and an empty `wrappers` disables the
 	 * peel entirely — which is what every caller that has not thought about it passes.
 	 *
-	 * `wrappers` is `RefShape.memberTransparentWrapperTypeNames`, whose doc carries the rule: a
-	 * wrapper belongs there only when its member set IS its argument's (Haxe's `@:forward`
-	 * `Null<T>`), and the answer may be used ONLY to decide which member a name resolves to. It is
-	 * NOT the value's type: `Null<Int>` still is not an `Int` for an arithmetic or ordered comparison. `null` is not a
-	 * value `<` orders, and what the raw comparison DOES with it is TARGET-SPECIFIC — measured on Haxe 4.3.7, `null >
-	 * 0` is `false` on js and `true` on `-cpp`. That the wrap and the flip happen to agree for a null `Null<Int>` on
-	 * js, `-cpp` and `--interp` alike settles nothing: the same probe has a null `String` operand DISAGREEING on js
-	 * and `--interp` while AGREEING on `-cpp`.
+	 * `wrappers` is `RefShape.memberTransparentWrapperTypeNames`, whose doc carries the rule: a wrapper
+	 * belongs there only when its member set IS its argument's (Haxe's `@:forward` `Null<T>`), and the
+	 * answer may be used ONLY to decide which member a name resolves to. It is NOT the value's type:
+	 * `Null<Int>` still is not an `Int` for an arithmetic or ordered comparison. `null` is not a value `<`
+	 * orders, and what the raw comparison DOES with it is TARGET-SPECIFIC: `null > 0` is `false` on js and
+	 * `true` on `-cpp`. That the wrap and the flip agree for a null `Null<Int>` on js, `-cpp` and
+	 * `--interp` alike settles nothing — a null `String` operand DISAGREES on js and `--interp` while
+	 * agreeing on `-cpp`.
 	 *
 	 * The peel is TEXTUAL over the written annotation, so a typedef that RESOLVES to `Null<T>`
 	 * carries no wrapper to peel and is left alone — following the alias would mean resolving a
@@ -302,13 +302,12 @@ final class NominalTypes {
 		final identKind: Null<String> = shape.identKind;
 		final fieldKind: Null<String> = shape.fieldAccessKind;
 		if (identKind == null || fieldKind == null) return null;
-		// A `$name` interpolation FRAGMENT is an identifier read that the grammar keeps as a leaf
-		// inside the string literal rather than as an `identKind` node, so `pathOf` cannot see it.
-		// It binds exactly like a bare ident, and resolving it is what lets a caller ask about the
-		// operands a SPLIT of the literal would create — `'${dir}pages'` becoming `dir + 'pages'`
-		// re-selects the `+` on `dir`'s type, so a `$name` that answered null left every such
-		// question unprovable (measured: 66 of the 121 report-only `fold-adjacent-string-literals`
-		// findings on `pony/src`).
+		// A `$name` interpolation FRAGMENT is an identifier read that the grammar keeps as a leaf inside
+		// the string literal rather than as an `identKind` node, so `pathOf` cannot see it. It binds
+		// exactly like a bare ident, and resolving it is what lets a caller ask about the operands a SPLIT
+		// of the literal would create — `'${dir}pages'` becoming `dir + 'pages'` re-selects the `+` on
+		// `dir`'s type, so a `$name` answering null leaves every such question unprovable, which is most of
+		// the report-only `fold-adjacent-string-literals` findings on a real tree.
 		final interpIdentKind: Null<String> = shape.stringInterpIdentKind;
 		if (interpIdentKind != null && node.kind == interpIdentKind) {
 			final interpName: Null<String> = node.name;
@@ -368,12 +367,12 @@ final class NominalTypes {
 	 * resolving to no unique declaration.
 	 *
 	 * Deliberately NOT resolved (safe misses, each a null): a bare `f()` / `this.f()` call, whose
-	 * enclosing-type lookup is a different mechanism; a `Type.staticMethod()` whose receiver is a
-	 * SINGLE unbound identifier and whose `Type.method` is NOT in `staticMethodReturns`, since the
-	 * walk will not otherwise guess that an unbound name is a type; and an extension whose first parameter names a
-	 * structural type OTHER than `Iterable` / `Iterator`, or whose ELEMENT type a receiver nominal
-	 * cannot bind (`Iterable<Widget>`, `Iterable<Iterable<A>>`) — the two the layer does model, it
-	 * models by MEMBERSHIP (`StructuralTypes.satisfiesIterable`), never by unification.
+	 * enclosing-type lookup is a different mechanism; a `Type.staticMethod()` whose receiver is a SINGLE
+	 * unbound identifier and whose `Type.method` is NOT in `staticMethodReturns`, since the walk will not
+	 * otherwise guess that an unbound name is a type; and an extension whose first parameter names a
+	 * structural type OTHER than `Iterable` / `Iterator`, or whose ELEMENT type a receiver nominal cannot
+	 * bind (`Iterable<Widget>`, `Iterable<Iterable<A>>`) — the two the layer does model, it models by
+	 * MEMBERSHIP (`StructuralTypes.satisfiesIterable`), never by unification.
 	 *
 	 * `asReceiver` answers about the node in MEMBER-LOOKUP position rather than as a value: a
 	 * member-TRANSPARENT wrapper is peeled off the top, so a `Null<Map<K, V>>` binding answers
@@ -606,8 +605,8 @@ final class NominalTypes {
 	 * and it fails closed for a receiver whose type, or any type in its supertype closure, the run
 	 * does not index.
 	 *
-	 * `usings` is walked BACKWARDS because Haxe resolves static extensions in reverse declaration
-	 * order (measured: `using A; using B;` binds `B.tag`, the reverse binds `A.tag`). The first
+	 * `usings` is walked BACKWARDS because Haxe resolves static extensions in reverse
+	 * declaration order (`using A; using B;` binds `B.tag`, the reverse binds `A.tag`). The first
 	 * module that ANSWERS wins; one declaring the name with a first parameter the receiver does not
 	 * fit answers null and the walk continues to the earlier ones — which is the compiler's own
 	 * behaviour (`using A; using C;` with `C.tag(s:Int)` binds `A.tag(s:String)` for a `String`).
@@ -635,11 +634,9 @@ final class NominalTypes {
 	 *
 	 * `asReceiver` peels a member-TRANSPARENT wrapper off first (`Null<String>` -> `String`), and is
 	 * set ONLY where the answer is about to seed a member lookup. It is deliberately NOT the default:
-	 * an expression's own nominal is what a consumer reads to decide what is legal to DO with the value, and
-	 * `Null<Int>` is not `Int` there. `null` is not a value `<` orders, and what the raw comparison DOES with it is
-	 * TARGET-SPECIFIC — measured on Haxe 4.3.7, `null > 0` is `false` on js and `true` on `-cpp`. That the wrap and
-	 * the flip happen to agree for a null `Null<Int>` on js, `-cpp` and `--interp` alike settles nothing: the same
-	 * probe has a null `String` operand DISAGREEING on js and `--interp` while AGREEING on `-cpp`.
+	 * an expression's own nominal is what a consumer reads to decide what is legal to DO with the
+	 * value, and `Null<Int>` is not `Int` there. `null` is not a value `<` orders, and what the raw
+	 * comparison DOES with it is TARGET-SPECIFIC: `null > 0` is `false` on js and `true` on `-cpp`.
 	 */
 	private static function valueNominalDeep(
 		node: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, chain: ChainTypeContext,
