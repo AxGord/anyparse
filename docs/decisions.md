@@ -63,34 +63,34 @@ decided the question; it may not become a record of runs.
   metadata node; only the metadata NAME is filtered, by the symbol-name rule — `e52665e5`
 - the percent-share guard was to refuse a sign not followed by a digit or `(` → the `(` half
   silences the readings this project writes (`57% (anyparse)`, `9 % (5 of 54)`) and refuses no
-  arithmetic the digit half already misses; the guard that works is per LINE — `c35ae45e`
+  arithmetic the digit half already misses; the guard that works is per LINE — `99a8c023`
 - the recording verb was to be read as SENTENCE-INITIAL and capitalised → a wrapped sentence
   starts its line mid-clause, this project writes emphasis in upper case, and the parenthetical
   and dash-introduced readings are the larger half; the discriminator is clause POSITION —
-  `c35ae45e`
+  `99a8c023`
 - the renamed clone reading was to CONTAIN the exact one → it contains neither by coordinate nor
   by region: an earlier-starting renamed run suppresses the later-starting exact one through the
   earliest-start occurrence filter, so the exact run's tail can lie outside every renamed span.
-  The two readings OVERLAP; a consumer takes their union, never one for the other — `ccbc5822`
+  The two readings OVERLAP; a consumer takes their union, never one for the other — `3c85dfd8`
 - the writer's de-brace support was to move its two `'ExprBody'` literals onto
   `RefShape.expressionBodyKinds`, beside the siblings that went there → there is no `QueryNode`,
   `GrammarPlugin` or `RefShape` at the writer layer (the values are the writer's own enums,
   reached by reflection), so a kind-name seam has nothing to answer, and the two literals are a
   small fraction of the ctor names in that module, none of which has a seam either; paying the
-  debt is a per-grammar de-brace POLICY the writer lowering asks for — `batch/hxqb-S210`
+  debt is a per-grammar de-brace POLICY the writer lowering asks for — `dd059696`
 - `BodyFit.fitLineLayout`'s whole `flat != -1` arm was to be gated on the body's HONEST full flat
   width → it reproduces the fork on a brace-less function body and turns one corpus fixture and
   ten unit pins red, because the same arm places the two-link body of a statement `for`, where
   the head-fit glue is what the fork wants; the seam is shared by callers whose safe default
-  points opposite ways, so a fix belongs at the function-body site — `batch/hxqb-S210`
+  points opposite ways, so a fix belongs at the function-body site — `dd059696`
 - `WrapList` was to be split to clear its `oversized-type` finding → a cluster read puts the large
   majority of its members in ONE component and the obvious `shape*` seam lands inside that
   component, so cutting it leaves the type over both caps; clearing the finding is a designed
   decomposition of the cascade under a no-output-byte-may-change constraint, not a hygiene edit —
-  `batch/hxqb-S210`
+  `dd059696`
 - the close-trail refusal was to be extended to `WrapList.shapeSingleArgGlue`, which builds the
   same closer-after-a-`//` seam → a `//`-tailed sole item does not occur over the real trees the
   reachability probe covered, and on the synthetic source that does fire it the gate does not move
   the fixed point: declining hands the pass back to the leading-break shape, whose output the next
   pass re-glues to the identical bytes, so the gate cost a normalisation pass and bought nothing —
-  `batch/hxqb-S210`
+  `dd059696`
