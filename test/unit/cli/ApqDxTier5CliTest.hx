@@ -81,29 +81,29 @@ class ApqDxTier5CliTest extends Test {
 
 	// --- 2. ast --select cross-project hint ---
 
-	public function testAstSelectTypeNameNoMatchExitsClean(): Void {
-		// `HxCatchClause` is a typedef declared in a different file —
-		// `ast --select` on a single file where the kind is not present
-		// surfaces "Kinds present here: …" plus the new cross-project
-		// hint. Exit stays clean (the walker is read-only).
-		Assert.equals(0, Cli.run([
+	public function testAstSelectTypeNameNoMatchIsAUsageError(): Void {
+		// `HxCatchClause` is a TYPEDEF name, not a kind this grammar's parser projects, so no file
+		// could ever match it — the cross-project hint that fires here is the whole point. This
+		// asserted exit 0 until S201: read-only or not, a spelling nothing can match is the user's
+		// mistake, and a script driving `ast` had no way to tell it from an absent node.
+		Assert.equals(2, Cli.run([
 			'probe',
 			'class C {}',
 			'--select',
 			'HxCatchClause'
-		]), 'ast --select on a TypeName not present in source exits clean');
+		]), 'ast --select on a kind no grammar projects is a usage error');
 	}
 
-	public function testAstSelectLowercaseSelectorStillExitsClean(): Void {
-		// Lowercase selector — the cross-project hint stays silent
-		// (field-shape, not a TypeName). The existing kinds-present
-		// fallback fires.
-		Assert.equals(0, Cli.run([
+	public function testAstSelectLowercaseSelectorIsAlsoAUsageError(): Void {
+		// Lowercase selector — the cross-project hint stays silent (field-shape, not a TypeName),
+		// but the vocabulary verdict is the same: `unknownField` is no kind either, so the exit
+		// follows the spelling and not the shape of the token.
+		Assert.equals(2, Cli.run([
 			'probe',
 			'class C {}',
 			'--select',
 			'unknownField'
-		]), 'ast --select on a lowercase token exits clean with kinds-present fallback');
+		]), 'a lowercase non-kind is a usage error too');
 	}
 
 	// --- 5. self-status --source ---

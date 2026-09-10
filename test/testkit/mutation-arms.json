@@ -2845,6 +2845,44 @@
 			"find": "RawSourceScan.mentionsWord(entry.source, candidate)",
 			"replace": "false",
 			"note": "prefer-inline's reflection gate goes blind to a scope file the parser could not read, so a method an unparseable sibling names by `Reflect.field` is folded inline and answers MISSING under --dce full — the same T867 residue as M-REFLECTION-UNREADABLE-BLIND, in the check that scans names itself"
+		},
+		{
+			"name": "M-KIND-GATE-FAIL-OPEN",
+			"type": "anyparse.query.cli.CliWalk",
+			"method": "rejectUnknownKinds",
+			"force": "false",
+			"note": "the shared --kind vocabulary gate calls every kind known again, so `apq lit 'x' F.hx --kind Literaal` goes back to printing `0 hits` at exit 0 - a typo answering exactly like a scope that genuinely holds no match"
+		},
+		{
+			"name": "M-LIT-SYNTHETIC-KINDS-EMPTY",
+			"type": "anyparse.query.cli.command.LitCommand",
+			"method": "syntheticKinds",
+			"force": "[]",
+			"note": "`apq lit` stops declaring the two kinds it mints itself, so the gate - which reads the grammar and nothing else - refuses the documented `--kind Comment` / `--kind Directive` as typos and every comment or directive hunt becomes a usage error"
+		},
+		{
+			"name": "M-KIND-CLAUSE-POOL-GRAMMAR-ONLY",
+			"type": "anyparse.query.Address",
+			"method": "unknownKindClauses",
+			"find": "final vocabulary: Array<String> = plugin.projectedKinds().concat(alsoKnown);",
+			"replace": "final vocabulary: Array<String> = plugin.projectedKinds();",
+			"note": "the did-you-mean pool shrinks back to the grammar's own vocabulary, so a caller-minted kind stays ADMITTED but unreachable: `--kind Coment` is refused with no spelling named, which is the half of a fail-closed gate that decides whether the refusal helps"
+		},
+		{
+			"name": "M-AST-SELECT-UNKNOWN-KIND-EXIT-OK",
+			"type": "anyparse.query.cli.command.AstCommand",
+			"method": "runAstSelect",
+			"find": "if (Address.unknownSelectorKinds(tree, plugin, selector).length > 0) return EXIT_USAGE;",
+			"replace": "if (Address.unknownSelectorKinds(tree, plugin, selector).length < 0) return EXIT_USAGE;",
+			"note": "`apq ast --select` on a kind no grammar projects goes back to exit 0, so the message says typo and the status says answer - and a script driving ast cannot tell a misspelling from a file that simply holds none"
+		},
+		{
+			"name": "M-AST-SELECT-NO-CROSS-PROJECT-HINT",
+			"type": "anyparse.query.cli.command.AstCommand",
+			"method": "reportAstSelectEmpty",
+			"find": "final crossProjectHint: String = firstKind.length > 0 && firstKind.fastCodeAt(0) >= 'A'.code && firstKind.fastCodeAt(0) <= 'Z'.code",
+			"replace": "final crossProjectHint: String = firstKind.length < 0 && firstKind.fastCodeAt(0) >= 'A'.code && firstKind.fastCodeAt(0) <= 'Z'.code",
+			"note": "a `--select` miss on a TypeName loses the pointer at the multi-file walkers, so the reader of a single-file miss is told the kind is wrong and never that `refs` / `uses` / `blast` are where the declaration would be found"
 		}
 	]
 }

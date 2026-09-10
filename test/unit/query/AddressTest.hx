@@ -205,6 +205,37 @@ class AddressTest extends Test {
 		Assert.equals('', Address.unknownSelectorKinds(tree, plugin, selector).join(', '));
 	}
 
+	/**
+	 * The same vocabulary reading, asked the way a WALKER's `--kind` asks it: no selector, no
+	 * tree, just a list of kind names.
+	 *
+	 * The check had been here since S196 and the walkers simply never asked it — `apq lit 'x'
+	 * F.hx --kind Literaal` answered `0 hits` at exit 0, which is what a correctly spelled kind
+	 * answers over code that holds none.
+	 */
+	public function testUnknownKindsAnswersABareKindList(): Void {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		Assert.equals('Literaal', Address.unknownKinds(plugin, ['Literal', 'Literaal'], []).join(', '));
+		Assert.equals('', Address.unknownKinds(plugin, ['Literal', 'FnMember'], []).join(', '));
+	}
+
+	/**
+	 * A kind the CALLER mints is admitted — and, the half that is easy to leave out, it is in the
+	 * did-you-mean pool as well. `apq lit` mints `Comment` and `Directive` (no grammar projects
+	 * either: they come from a separate scan over the raw source), so a pool read off
+	 * `projectedKinds` alone would refuse `Coment` while naming no spelling that works.
+	 *
+	 * KILLED by arm `M-KIND-CLAUSE-POOL-GRAMMAR-ONLY`, which drops the caller's own kinds from the
+	 * pool and leaves them admitted but unreachable.
+	 */
+	@:pin('control')
+	@:killer('M-KIND-CLAUSE-POOL-GRAMMAR-ONLY')
+	public function testMintedKindIsAdmittedAndSuggestible(): Void {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		Assert.equals('', Address.unknownKinds(plugin, ['Comment'], ['Comment']).join(', '), 'a minted kind is not unknown');
+		Assert.stringContains('did you mean Comment?', Address.unknownKindClauses(plugin, ['Coment'], ['Comment']));
+	}
+
 	public function testSelectAmbiguousListsCandidates(): Void {
 		// Two `trace(x)` statements — the Call selector matches both.
 		switch resolve({ select: 'Call' }) {

@@ -40,10 +40,12 @@ typedef SearchOpts = {
 @:nullSafety(Strict)
 final class SearchCommand implements CliCommand {
 
+	private static final CMD: String = 'search';
+
 	public function new() {}
 
 	public function name(): String {
-		return 'search';
+		return CMD;
 	}
 
 	public function summary(): String {
@@ -106,6 +108,11 @@ final class SearchCommand implements CliCommand {
 		}
 
 		final plugin: GrammarPlugin = CliArgs.pickPlugin(o.lang);
+		// A `--kind` the grammar projects no node for can never match, and before the gate the run
+		// said so only as `0 matches` at exit 0 — the same answer a correct kind gives on code that
+		// simply has none. `search` mints no kind of its own, so the whole vocabulary is the grammar's.
+		final kindFilter: Null<String> = o.kind;
+		if (kindFilter != null && CliWalk.rejectUnknownKinds(CMD, plugin, [kindFilter], [])) return EXIT_USAGE;
 		final parsed: Pattern = try plugin.parsePattern(patternStr) catch (e: Exception) {
 			CliIo.stderr('apq search: pattern: ${e.message}\n');
 			return EXIT_RUNTIME;
@@ -167,11 +174,10 @@ final class SearchCommand implements CliCommand {
 		// kind even appears in the scanned input.
 		if (o.explain && allEntries.length == 0) searchExplainHistogram(parsed.root.kind, collected.kindCounts);
 
-		final shown: Array<{ file: String, source: String, matches: Array<Match> }> =
-			CliWalk.capAndReport(
-				'search', allEntries, o.limit, e -> e.matches.length,
-				(e, k) -> {file: e.file, source: e.source, matches: e.matches.slice(0, k) }, paths.length
-			);
+		final shown: Array<{ file: String, source: String, matches: Array<Match> }> = CliWalk.capAndReport(
+			CMD, allEntries, o.limit, e -> e.matches.length, (e, k) -> {file: e.file, source: e.source, matches: e.matches.slice(0, k) },
+			paths.length
+		);
 		renderSearchResults(shown, o.json, o.flat);
 		return ctx.emptyExit(allEntries.length == 0);
 	}
@@ -334,7 +340,7 @@ final class SearchCommand implements CliCommand {
 		final kindCounts: Map<String, Int> = [];
 		for (path in paths) {
 			final source: String = CliIo.readSourceForParse(path);
-			final tree: Null<QueryNode> = CliWalk.parseWalked('search', plugin.parseFile, path, source, singleFile);
+			final tree: Null<QueryNode> = CliWalk.parseWalked(CMD, plugin.parseFile, path, source, singleFile);
 			if (tree == null) {
 				if (singleFile) return null;
 				continue;
