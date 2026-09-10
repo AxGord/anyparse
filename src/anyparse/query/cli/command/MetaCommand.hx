@@ -41,6 +41,9 @@ typedef MetaOpts = {
 @:nullSafety(Strict)
 final class MetaCommand implements CliCommand {
 
+	/** The flag that names the declaration kind — spelled once, so the kind gate reports the flag the user typed. */
+	private static inline final ON_FLAG: String = '--on';
+
 	private static final CMD: String = 'meta';
 
 	public function new() {}
@@ -117,7 +120,7 @@ final class MetaCommand implements CliCommand {
 		// `--on` is `--kind` under another name — a decl-host kind — and it failed open the same
 		// way: `--on ClassDeclz` printed `0 hits` at exit 0 and never named the spelling.
 		final declKind: Null<String> = onKind;
-		if (declKind != null && CliWalk.rejectUnknownKinds(CMD, plugin, [declKind], [], '--on')) return EXIT_USAGE;
+		if (declKind != null && CliWalk.rejectUnknownKinds(CMD, plugin, [declKind], [], ON_FLAG)) return EXIT_USAGE;
 		final shape: MetaShape = plugin.metaShape();
 
 		final expanded: ExpandedInputs = CliArgs.expandInputs(inputSpecs, '.hx');
@@ -238,8 +241,8 @@ final class MetaCommand implements CliCommand {
 					json = true;
 				case '--arg-contains':
 					argContains = CliArgs.expectValue(args, ++i, '--arg-contains');
-				case '--on':
-					onKind = CliArgs.expectValue(args, ++i, '--on');
+				case ON_FLAG:
+					onKind = CliArgs.expectValue(args, ++i, ON_FLAG);
 				case '--flat':
 					flat = true;
 				case '--limit':
