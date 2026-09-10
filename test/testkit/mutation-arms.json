@@ -2944,6 +2944,51 @@
 			"find": "final crossProjectHint: String = firstKind.length > 0 && firstKind.fastCodeAt(0) >= 'A'.code && firstKind.fastCodeAt(0) <= 'Z'.code",
 			"replace": "final crossProjectHint: String = firstKind.length < 0 && firstKind.fastCodeAt(0) >= 'A'.code && firstKind.fastCodeAt(0) <= 'Z'.code",
 			"note": "a `--select` miss on a TypeName loses the pointer at the multi-file walkers, so the reader of a single-file miss is told the kind is wrong and never that `refs` / `uses` / `blast` are where the declaration would be found"
+		},
+		{
+			"name": "M-DOC-CLAIM-BARE-NUMBER",
+			"type": "anyparse.check.DocMeasurementClaim",
+			"method": "durationAt",
+			"find": "return unit < 0 ? null : { at: at, to: unit, shape: 'a duration' };",
+			"replace": "return { at: at, to: digits, shape: 'a duration' };",
+			"note": "the unit stops being required, so every number in prose reads as a reading and a doc naming the code's own minimum or maximum is reported as one"
+		},
+		{
+			"name": "M-DOC-CLAIM-ARROW-ANY",
+			"type": "anyparse.check.DocMeasurementClaim",
+			"method": "deltaAt",
+			"find": "return left < 0 || right < 0 ? null : { at: left, to: right, shape: 'a before-and-after pair' };",
+			"replace": "return { at: at, to: arrow, shape: 'a before-and-after pair' };",
+			"note": "digits on both sides stop being required, so a function type, a lambda and a map entry described in prose each read as a before-and-after pair"
+		},
+		{
+			"name": "M-DOC-CLAIM-VERB-UNGATED",
+			"type": "anyparse.check.DocMeasurementClaim",
+			"method": "readingAt",
+			"find": "if (isRecordingVerb(source, at, token) && lineHasDigit(source, from, to, at))",
+			"replace": "if (isRecordingVerb(source, at, token))",
+			"note": "the recording verb no longer needs a number beside it, so prose saying what the code itself measures is reported as a reading of a tree"
+		},
+		{
+			"name": "M-DOC-CLAIM-REFERENCE-BLIND",
+			"type": "anyparse.check.DocMeasurementClaim",
+			"method": "insideReference",
+			"force": "false",
+			"note": "a marker inside a path or a URL, and one on a doc-tag line, stop being references, so a pointer at where the numbers live is reported as if it carried them"
+		},
+		{
+			"name": "M-DOC-LENGTH-CONFIG-BLIND",
+			"type": "anyparse.check.DocLength",
+			"method": "maxLinesFor",
+			"force": "DEFAULT_MAX_LINES",
+			"note": "the project's declared maximum stops being read, so a project asking for a shorter contract gets this rule's default and its own long blocks are reported clean"
+		},
+		{
+			"name": "M-DOC-LENGTH-ANY-COMMENT",
+			"type": "anyparse.check.DocLength",
+			"method": "isDocBlock",
+			"force": "true",
+			"note": "a line-comment run and a plain block banner read as doc blocks, so prose that belongs to the statements it stands over is reported as an over-long contract"
 		}
 	]
 }

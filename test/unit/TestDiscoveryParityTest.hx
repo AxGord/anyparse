@@ -138,6 +138,8 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.DefiniteAssignmentGuardTest',
 		'unit.check.DocCommentContinuationCheckTest',
 		'unit.check.DocCoverageCheckTest',
+		'unit.check.DocLengthCheckTest',
+		'unit.check.DocMeasurementClaimCheckTest',
 		'unit.check.DoubleNegationCheckTest',
 		'unit.check.DuplicateCaseCheckTest',
 		'unit.check.DuplicateCaseCondBranchTest',
@@ -1040,6 +1042,13 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.CrossScopeSoundnessTest#testTheScopeHalfHoldingAReflectiveStringDoesNotMatter :: control :: '
 				+ 'M-REFLECTION-SCOPE-PROJECT-ONLY',
 			'unit.check.DeadBinderCounterLoopCheckTest#testFixRewritesMapLoopAndInsertsUsing :: control :: M-SHADOWEXT-TRUE',
+			'unit.check.DocLengthCheckTest#testOnlyADocBlockIsMeasured :: control :: M-DOC-LENGTH-ANY-COMMENT',
+			'unit.check.DocLengthCheckTest#testTheDeclaredMaximumIsRead :: control :: M-DOC-LENGTH-CONFIG-BLIND',
+			'unit.check.DocMeasurementClaimCheckTest#testANumericContractIsNotAReading :: control :: M-DOC-CLAIM-BARE-NUMBER',
+			'unit.check.DocMeasurementClaimCheckTest#testAPointerAtTheRecordIsNotTheRecord :: control :: M-DOC-CLAIM-REFERENCE-BLIND',
+			'unit.check.DocMeasurementClaimCheckTest#testAReadingInsideAStringLiteralIsData :: guard :: ',
+			'unit.check.DocMeasurementClaimCheckTest#testAnArrowNeedsNumbersOnBothSides :: control :: M-DOC-CLAIM-ARROW-ANY',
+			'unit.check.DocMeasurementClaimCheckTest#testTheRecordingVerbNeedsANumberOnItsLine :: control :: M-DOC-CLAIM-VERB-UNGATED',
 			'unit.check.DuplicateCodeCheckTest#testALiteralInteriorDifferenceIsNotACloneWhileItsLayoutTwinIs :: control :: '
 				+ 'M-DUP-CODE-NORM-KEY',
 			'unit.check.ExtractRepeatedExpressionTest#testALiteralInteriorDifferenceSplitsTheGroup :: control :: '
@@ -2098,7 +2107,13 @@ class TestDiscoveryParityTest extends Test {
 			'M-LIT-SYNTHETIC-KINDS-EMPTY',
 			'M-KIND-CLAUSE-POOL-GRAMMAR-ONLY',
 			'M-AST-SELECT-UNKNOWN-KIND-EXIT-OK',
-			'M-AST-SELECT-NO-CROSS-PROJECT-HINT'
+			'M-AST-SELECT-NO-CROSS-PROJECT-HINT',
+			'M-DOC-CLAIM-BARE-NUMBER',
+			'M-DOC-CLAIM-ARROW-ANY',
+			'M-DOC-CLAIM-VERB-UNGATED',
+			'M-DOC-CLAIM-REFERENCE-BLIND',
+			'M-DOC-LENGTH-CONFIG-BLIND',
+			'M-DOC-LENGTH-ANY-COMMENT'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

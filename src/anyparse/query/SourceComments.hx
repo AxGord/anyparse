@@ -791,6 +791,24 @@ final class SourceComments {
 		return -1;
 	}
 
+	/**
+	 * A single-line excerpt of at most `limit` code units of `source` from `at`, never reading past
+	 * `to`, tabs and line breaks flattened to spaces and the ends trimmed.
+	 *
+	 * A finding that quotes the comment it names has to quote ONE line of it: a report is
+	 * line-oriented, and a raw slice of a doc block drags the gutter and the breaks into the middle
+	 * of a message.
+	 */
+	public static function excerptLine(source: String, at: Int, to: Int, limit: Int): String {
+		final end: Int = at + limit < to ? at + limit : to;
+		final buf: StringBuf = new StringBuf();
+		for (i in at ... end) {
+			final c: Int = source.fastCodeAt(i);
+			buf.addChar(c == '\n'.code || c == '\r'.code || c == '\t'.code ? ' '.code : c);
+		}
+		return buf.toString().trim();
+	}
+
 	/** Whether the byte at `at` is a space, tab, carriage return or newline. */
 	private static inline function isSpaceAt(source: String, at: Int): Bool {
 		final code: Int = source.fastCodeAt(at);

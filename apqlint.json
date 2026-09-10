@@ -31,6 +31,12 @@
 		"dead-binder-counter-loop": {
 			"enabled": true
 		},
+		"doc-length": {
+			"enabled": true
+		},
+		"doc-measurement-claim": {
+			"enabled": true
+		},
 		"field-init-in-constructor": {
 			"enabled": true
 		},
