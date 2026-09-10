@@ -110,11 +110,13 @@ final class CliWalk {
 	 * Prints the reason and answers `true` when the run must stop; `null` kinds (the flag was
 	 * never passed) and a fully known set answer `false`.
 	 */
-	public static function rejectUnknownKinds(cmd: String, plugin: GrammarPlugin, kinds: Null<Array<String>>, minted: Array<String>): Bool {
+	public static function rejectUnknownKinds(
+		cmd: String, plugin: GrammarPlugin, kinds: Null<Array<String>>, minted: Array<String>, flag: String = '--kind'
+	): Bool {
 		if (kinds == null) return false;
 		final clauses: String = Address.unknownKindClauses(plugin, kinds, minted);
 		if (clauses.length == 0) return false;
-		CliIo.stderr('apq $cmd: --kind $clauses\n');
+		CliIo.stderr('apq $cmd: $flag $clauses\n');
 		return true;
 	}
 

@@ -236,8 +236,10 @@ final class Address {
 		// noise — `Fix` came back `Div, Add, And`, `*` came back `Eq, Gt, In`. Keep a substring lead
 		// (`Expr` -> `FnExpr` is real) and otherwise demand a distance under half the query, which is
 		// what lets `ClassDeclz` -> `ClassDecl` through and stops `Fix`.
-		final near: Array<String> = EditDistance.closest(kind, vocabulary)
-			.filter(candidate -> candidate.indexOf(kind) >= 0 || EditDistance.between(kind, candidate, kind.length) * 2 < kind.length);
+		final near: Array<String> = kind.length == 0
+			? []
+			: EditDistance.closest(kind, vocabulary)
+				.filter(candidate -> candidate.indexOf(kind) >= 0 || EditDistance.between(kind, candidate, kind.length) * 2 < kind.length);
 		return near.length == 0
 			? '"$kind" is not a node kind this grammar projects'
 			: '"$kind" is not a node kind this grammar projects (did you mean ${near.join(', ')}?)';

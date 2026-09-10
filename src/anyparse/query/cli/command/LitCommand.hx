@@ -452,7 +452,11 @@ final class LitCommand implements CliCommand {
 				case '--exact':
 					exact = true;
 				case '--kind':
-					kindFilter = CliArgs.expectValue(args, ++i, '--kind').split(',');
+					// Segments are trimmed like `--kinds` on the call-graph walkers trims its own, so
+					// `--kind 'Literal, Comment'` names two kinds instead of failing on `" Comment"`.
+					kindFilter = [
+						for (k in CliArgs.expectValue(args, ++i, '--kind').split(',')) StringTools.trim(k)
+					];
 				case '--any-kind':
 					kindFilter = [];
 				case '--include-comments':

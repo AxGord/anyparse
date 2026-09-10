@@ -1145,9 +1145,9 @@ with one message, shared by every place a kind can be typed:
 
 | Where | On an unprojected kind |
 |---|---|
-| `ast --select` / `probe --select` | message + **exit 2** |
+| `ast --select` / `probe --select` | message + **exit 2**; stdout is EMPTY on this branch (no `(no matches)` line, no `--json` document — a usage error has no result to render) |
 | `source --select` | message + exit 1 (a `source` miss was always an error) |
-| `lit --kind` / `search --kind` / `symbols --kind` / `meta --on` | `apq <cmd>: --kind "K" is not a node kind this grammar projects (did you mean …?)` + **exit 2** |
+| `lit --kind` / `search --kind` / `symbols --kind` / `meta --on` | `apq <cmd>: <flag> "K" is not a node kind this grammar projects (did you mean …?)` + **exit 2** — `<flag>` is the one the user typed (`--kind`, or `--on` for `meta`); an EMPTY segment (`--kind "Literal,"`) is rejected with no did-you-mean |
 | `replace-node` / `patch` / `add-meta`, `--kind` narrow or lift | the same clause under the op's own prefix + exit 1 |
 
 The message names the spelling that was rejected and the nearest ones that exist —

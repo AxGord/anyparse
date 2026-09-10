@@ -103,7 +103,7 @@ class ApqKindVocabularyCliTest extends Test {
 		final err: String = CliFixture.captureStderr(() -> rc = Cli.run(['meta', '@:keep', path, '--on', 'ClassDeclz']));
 		Assert.equals(2, rc, 'meta --on must refuse a kind no grammar projects');
 		#if nodejs
-		Assert.stringContains('apq meta: --kind "ClassDeclz" is not a node kind this grammar projects', err);
+		Assert.stringContains('apq meta: --on "ClassDeclz" is not a node kind this grammar projects', err);
 		#end
 		FileSystem.deleteFile(path);
 		#else

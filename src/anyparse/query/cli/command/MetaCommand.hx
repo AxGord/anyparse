@@ -117,7 +117,7 @@ final class MetaCommand implements CliCommand {
 		// `--on` is `--kind` under another name — a decl-host kind — and it failed open the same
 		// way: `--on ClassDeclz` printed `0 hits` at exit 0 and never named the spelling.
 		final declKind: Null<String> = onKind;
-		if (declKind != null && CliWalk.rejectUnknownKinds(CMD, plugin, [declKind], [])) return EXIT_USAGE;
+		if (declKind != null && CliWalk.rejectUnknownKinds(CMD, plugin, [declKind], [], '--on')) return EXIT_USAGE;
 		final shape: MetaShape = plugin.metaShape();
 
 		final expanded: ExpandedInputs = CliArgs.expandInputs(inputSpecs, '.hx');
