@@ -338,7 +338,7 @@ typedef WriteOptions = {
 	 * separator line can overflow the line it rides and the renderer then spends
 	 * several lines to save one. Two `IfArrowContinuationFitsWithRest` probes BRACKET
 	 * that band, and the rest-aware ctor makes those widths honest by charging what the
-	 * render stack still emits after the ternary. `cuddleShape` holds the arithmetic.
+	 * render stack still emits after the ternary. `cuddleShape` says why the tail is charged.
 	 *
 	 * Covers the two one-operand-per-line break shapes — what a broken ternary is — and
 	 * within them only the `beforeLast` separator location, the only one whose shaper

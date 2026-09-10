@@ -75,11 +75,12 @@ class SingleStmtBraces {
 	 *     as a fail-closed guard for a field that would both drop braces and emit one;
 	 *  7. `siblingKeepsBraces` — an if/else de-braces BOTH branches or NEITHER. The probe
 	 *     answers through this function, so it inherits gate 4 instead of copying it, and
-	 *     runs in both directions: a bare branch opposite a brace-keeping sibling GAINS
-	 *     braces through `wrapInBlock`;
+	 *     runs both ways: a bare branch opposite a brace-keeping sibling GAINS braces
+	 *     through `wrapInBlock`, and a loop body, having no sibling, always arrives `false`;
 	 *  8. a BARE `if` in then-position always gains a synthesized brace block, since
-	 *     `if (a) if (b) … else …` reads as a dangling-else puzzle. Adding braces is
-	 *     semantics-safe, so this one runs even under `suppress`.
+	 *     `if (a) if (b) … else …` reads as a dangling-else puzzle. The parse tree has
+	 *     already bound that `else`, so bracing cannot change semantics and this gate runs
+	 *     even under `suppress`.
 	 */
 	public static function unwrapStmt(
 		body: Dynamic, drop: Bool, symmetry: Bool, suppress: Bool, elseFollows: Bool, hasTrailingSemi: Bool, siblingKeepsBraces: Bool,
