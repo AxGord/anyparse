@@ -1607,8 +1607,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.LintDiffTest#testTheByRuleSummaryNamesEveryRuleThatMoved :: control :: M-LINTDIFF-RULE-SUMMARY-BLANK',
 			'unit.query.LintDiffTest#testTheHeadlineStatesTheNetDirection :: control :: M-LINTDIFF-NET-UNSTATED',
 			'unit.query.LiteralClassificationTest#testAKindNamedLikeALiteralIsNotClassifiedAsOne :: control :: M-SAFE-KINDS-SUFFIX-STUB',
-			'unit.query.LiteralClassificationTest#testAnAllocatingLiteralIsRefusedByEveryPredicate :: control :: '
-				+ 'M-PURE-ARG-KINDS-SUFFIX-STUB',
+			'unit.query.LiteralClassificationTest#testAnAllocatingLiteralIsRefusedByEveryPredicate :: control :: M-PURE-ARG-ROOT-ONLY',
 			'unit.query.LiteralClassificationTest#testEveryDeclaredConstantLiteralIsClassifiedByEveryList :: control :: '
 				+ 'M-NON-NULL-RHS-DROP-HEX',
 			'unit.query.LiteralClassificationTest#testThePlainLiteralPredicateFollowsTheVocabularyItIsHanded :: control :: '
@@ -1680,9 +1679,13 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.OpaqueCondRegionScanTest#testTheQuoteStartsAtTheIfEvenWhenTheNodeBeginsBeforeIt :: control :: '
 				+ 'M-OPAQUE-REGION-NODE-SPAN',
 			'unit.query.OpaqueCondRegionScanTest#testTheSplitTryReportsBothOfItsRegions :: control :: M-OPAQUE-REGION-NONE',
+			'unit.query.PatchSliceTest#testATransferUnderADocRewrittenByTheSamePayloadRefused :: control :: '
+				+ 'M-PATCH-STRADDLED-DOC-UNWATCHED',
 			'unit.query.PatchSliceTest#testDocCodeSampleIndentationSurvives :: control :: M-PATCH-COMMENT-SHAPE-CHECKED',
 			'unit.query.PatchSliceTest#testDocPayloadWithASpaceGutterApplies :: control :: M-PATCH-COMMENT-SHAPE-CHECKED',
 			'unit.query.PatchSliceTest#testGrowingPairsUnderOneClassDocAcceptedAtEveryDelta :: control :: M-PATCH-DOCEND-SHIFTS-EVERY-EDIT',
+			'unit.query.PatchSliceTest#testRenamePlusAnUnrelatedInsertElsewhereApplies :: control :: '
+				+ 'M-PATCH-GROWTH-COUNTED-CONTAINER-WIDE',
 			'unit.query.PatchSliceTest#testStringLiteralPerLineIndentStillRefused :: control :: M-PATCH-SHAPE-ALWAYS-SURVIVES',
 			'unit.query.PatchSliceTest#testTransferUnderADocMovedByAnEarlierGrowingPairRefused :: control :: M-PATCH-DOCEND-NEVER-SHIFTS',
 			'unit.query.RefShapeKindProjectionTest#testEveryDeclaredKindNameIsOneTheGrammarProjects :: control :: '
@@ -2069,13 +2072,15 @@ class TestDiscoveryParityTest extends Test {
 			'M-TRIVGET-INERT-SEGMENT-IGNORED',
 			'M-SAFE-KINDS-SUFFIX-STUB',
 			'M-NON-NULL-RHS-DROP-HEX',
-			'M-PURE-ARG-KINDS-SUFFIX-STUB',
+			'M-PURE-ARG-ROOT-ONLY',
 			'M-PLAIN-LITERAL-FROZEN',
 			'M-PLAIN-STRING-VALUE-NO-DELIMITERS',
 			'M-REFLECTION-MEMO-DEAD',
 			'M-REFLECTION-MEMO-STALE',
 			'M-PATCH-DOCEND-SHIFTS-EVERY-EDIT',
 			'M-PATCH-DOCEND-NEVER-SHIFTS',
+			'M-PATCH-STRADDLED-DOC-UNWATCHED',
+			'M-PATCH-GROWTH-COUNTED-CONTAINER-WIDE',
 			'M-SELECT-MISS-NO-KIND-CLAUSE',
 			'M-AND-OPERATOR-TEXT-STALE',
 			'M-PAREN-FREE-ROOTS-ATOMS-ONLY',

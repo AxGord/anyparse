@@ -87,7 +87,7 @@ final class Patch {
 				return Err(discarded('${label}the old fragment is empty — copy it verbatim from `apq source --select`', multi));
 			if (oldText == pairs[i].newText)
 				return Err(discarded('${label}the old and new fragments are identical — nothing to change', multi));
-			final located: { ranges: Array<Located>, error: Null<String> } = locate(slice, oldText, node.kind, label, all);
+			final located: LocateResult = locate(slice, oldText, node.kind, label, all);
 			final failure: Null<String> = located.error;
 			if (failure != null) return Err(discarded(sequencingRefusal(label, failure, slice, placed, oldText, node.kind, all), multi));
 			for (r in located.ranges) {
@@ -134,7 +134,7 @@ final class Patch {
 			+ 'or pass --all to rewrite every occurrence';
 	}
 
-	private static inline function fail(message: String): { ranges: Array<Located>, error: Null<String> } {
+	private static inline function fail(message: String): LocateResult {
 		return { ranges: [], error: message };
 	}
 
@@ -173,15 +173,25 @@ final class Patch {
 		// ONE lexical pass for the whole call. `docExtendedSpan` re-lexes the file on every call, and
 		// asking it per edit cost ~19% on a 17 000-line file with 135 ranges under `--all`.
 		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
-		final watched: Array<{ shifted: Int, owner: String, declared: Int }> = [];
+		final watched: Array<{ region: Span, owner: String, declared: Int }> = [];
+		// One entry per BLOCK, not per edit. An edit starting inside a comment resolves no node
+		// of its own, so every such edit in a payload watches the same enclosing type's doc —
+		// measured at 29 ranges resolving one block on a `--all` run over a 4857-line file, each
+		// re-resolving that block against the spliced tree below.
+		final seen: Array<Int> = [];
 		for (edit in sorted) {
 			final end: Int = docBlockEnd(source, comments, declGroupStart(source, tree, edit.span.from));
-			if (end < 0) continue;
-			final shifted: Int = shiftedDocEnd(sorted, end);
-			if (shifted < 0) continue;
+			if (end < 0 || seen.contains(end)) continue;
+			seen.push(end);
 			final node: Null<QueryNode> = docOwnerNode(source, tree, comments, end);
 			final owner: Null<String> = node?.name;
-			if (node != null && owner != null) watched.push({ shifted: shifted, owner: owner, declared: declSiblingCount(tree, node) });
+			final ownerSpan: Null<Span> = node?.span;
+			if (node == null || owner == null || ownerSpan == null) continue;
+			watched.push({
+				region: new Span(shiftedEnd(sorted, end), shiftedEnd(sorted, ownerSpan.to)),
+				owner: owner,
+				declared: declsInRegion(tree, node, new Span(end, containingEnd(sorted, ownerSpan.to)))
+			});
 		}
 		if (watched.length == 0) return null;
 
@@ -190,10 +200,11 @@ final class Patch {
 		final splicedComments: Array<{ from: Int, to: Int, isLine: Bool }> =
 			SourceComments.collectCommentTokens(plugin.lexicalRegions(spliced));
 		for (w in watched) {
-			final ownerNode: Null<QueryNode> = docOwnerNode(spliced, after, splicedComments, w.shifted);
+			final ownerNode: Null<QueryNode> = docOwnerNode(spliced, after, splicedComments, w.region.from);
 			if (ownerNode == null) continue;
 			final owner: QueryNode = ownerNode;
 			final now: Null<String> = owner.name;
+			if (now == null || now == w.owner) continue;
 			// A RENAME of the documented declaration reaches this point by construction —
 			// the doc's owner name changed because the declaration was renamed, not because
 			// a new one was pushed between them — and refusing it made `patch` decline the
@@ -202,52 +213,69 @@ final class Patch {
 			//
 			// - `siblingDeclares`: a transfer leaves the original declaration standing
 			//   beside the insertion, so BOTH names survive in the container.
-			// - the container GREW: a transfer adds a declaration, a rename does not. This
-			//   half is what catches the COMPOUND payload that inserts a declaration AND
-			//   renames the one it stole the doc from — there the old name is gone, so the
-			//   name test alone reads it as a rename and lets the theft through at rc 0.
+			// - the watched REGION grew: the bytes that held the documented declaration hold
+			//   two now, so something was pushed in under the doc. This half is what catches
+			//   the COMPOUND payload that inserts a declaration AND renames the one it stole
+			//   the doc from — there the old name is gone, so the name test alone reads it as
+			//   a rename and lets the theft through at rc 0.
 			//
-			// A payload that renames the documented declaration and adds an unrelated one to
-			// the same container in one call is refused by the second signal even though
-			// nothing was orphaned. That is the conservative side of a guard whose whole
-			// purpose is to refuse, and the refusal's own remedy — widen the fragment over
-			// the doc block — applies unchanged.
-			final grew: Bool = w.declared >= 0 && declSiblingCount(after, owner) > w.declared;
-			if (now != null && now != w.owner && (siblingDeclares(after, owner, w.owner) || grew))
-				return 'the edit moves the `/**` block above `${w.owner}` onto `$now` — the doc would '
-					+ 'silently transfer to the insertion and `${w.owner}` would be left undocumented. Widen the old fragment upward to '
-					+ 'include the doc block and repeat it in the replacement, so the doc travels with the declaration it documents; a '
-					+ 'declaration\'s doc is trivia OUTSIDE its node, so that widening needs an address that contains it — the enclosing '
-					+ '`--select \'ClassDecl:<Type>\'`, not the member itself';
+			// The growth is read off the REGION and not off the container, because a container
+			// grows for reasons that have nothing to do with this doc: renaming a documented
+			// member and inserting an unrelated one beside it — two pairs that each apply alone
+			// — was refused as a transfer, naming a member the payload never moved.
+			final stands: Bool = siblingDeclares(after, owner, w.owner);
+			final grew: Bool = w.declared >= 0 && declsInRegion(after, owner, w.region) > w.declared;
+			if (stands || grew) return transferRefusal(w.owner, now, stands);
 		}
 		return null;
 	}
 
 	/**
-	 * Where the doc block ending at `docEnd` ends in the SPLICED text — moved by the edits that
-	 * lie entirely BEFORE it and by no others, or `-1` when an edit rewrites the block itself and
-	 * the position carries no meaning to map.
+	 * Where the position `at` lands in the SPLICED text — moved by the edits that lie entirely
+	 * BEFORE it, and, for the one edit that CONTAINS it, mapped onto the end of that edit's
+	 * replacement.
 	 *
-	 * The running total this replaced added EVERY preceding edit's delta. The guard watches the
-	 * doc above the declaration group CONTAINING an edit, so for an edit deep inside a type that
-	 * block is the TYPE's own doc — one block watched once per edit, from a position every later
-	 * edit sits after rather than before. From the second edit on, the recorded end was pushed
-	 * past itself onto whatever declaration the offset landed in, and the transfer/rename
-	 * discriminator then compared a module's declaration count against a type body's, which grows
-	 * by construction. Which multi-pair payloads that refused was decided by the delta's SIZE:
-	 * measured on a 16-line fixture, a first pair growing by 1/5/10 characters applied, by
-	 * 15/20/30 refused naming a static field as the doc's new owner, by 40/60 applied again — a
-	 * refusal WINDOW, which is the signature of a position error and not of a doc that moved.
+	 * The running total this replaced added EVERY preceding edit's delta. An edit whose start
+	 * falls inside a comment resolves no node of its own, so the block it is watched against is
+	 * the enclosing TYPE's — one block, once per such edit (measured on a 4857-line file: 29
+	 * comment-interior ranges under `--all`, one distinct block; 74 ranges landing on member
+	 * declarations, 63 distinct blocks; 10 ranges inside statement bodies, none) — and from the
+	 * second edit on the recorded end was pushed past itself onto whatever declaration the offset
+	 * landed in. The transfer/rename discriminator then compared a module's declaration count
+	 * against a type body's, which grows by construction. Which multi-pair payloads that refused
+	 * was decided by the delta's SIZE: measured on a 16-line fixture, a first pair growing by
+	 * 1/5/10 characters applied, by 15/20/30 refused naming a static field as the doc's new owner,
+	 * by 40/60 applied again — a refusal WINDOW, which is the signature of a position error and
+	 * not of a doc that moved.
+	 *
+	 * The CONTAINING edit answered `-1` and dropped the watch, on the reading that a rewritten
+	 * block carries no position to map. It carries one — the block still ends where the
+	 * replacement does — and skipping was a fail-OPEN: a first pair rewriting the doc's last two
+	 * lines and a second turning `function b() {}` into `function c() {}` above a kept `b` moved
+	 * the block onto `c` at rc 0, with nothing watched at all.
 	 */
-	private static function shiftedDocEnd(sorted: Array<{ span: Span, text: String }>, docEnd: Int): Int {
-		var shifted: Int = docEnd;
+	private static function shiftedEnd(sorted: Array<{ span: Span, text: String }>, at: Int): Int {
+		var shifted: Int = at;
 		// Arithmetic only — no lex, no tree walk — so rescanning the edit list per watched block
 		// stays cheap beside the two lexical passes this guard already pays for.
-		for (edit in sorted) if (edit.span.from < docEnd) {
-			if (edit.span.to > docEnd) return -1;
-			shifted += edit.text.length - (edit.span.to - edit.span.from);
+		for (edit in sorted) if (edit.span.from < at) {
+			final to: Int = edit.span.to;
+			shifted += edit.text.length - (to - edit.span.from);
+			if (to > at) shifted += to - at;
 		}
 		return shifted;
+	}
+
+	/**
+	 * The ORIGINAL end of what `shiftedEnd` maps `at` onto: the end of the edit CONTAINING `at`, or
+	 * `at` itself when no edit does. `shiftedEnd` answers the end of that edit's REPLACEMENT, so the
+	 * baseline count has to be taken over the bytes that replacement consumed — otherwise a fragment
+	 * that renames the documented declaration and merely CARRIES a following sibling reads as a
+	 * region that grew from one declaration to two.
+	 */
+	private static function containingEnd(sorted: Array<{ span: Span, text: String }>, at: Int): Int {
+		for (edit in sorted) if (edit.span.from < at && edit.span.to > at) return edit.span.to;
+		return at;
 	}
 
 	/**
@@ -376,18 +404,47 @@ final class Patch {
 	}
 
 	/**
-	 * How many DECLARATIONS `node`'s container holds — every sibling that is not a modifier /
-	 * annotation prefix, since those are not elements of their own. `-1` when the node has no
+	 * How many of `node`'s container's DECLARATIONS start inside `region` — a modifier /
+	 * annotation prefix is not an element of its own and never counts. `-1` when the node has no
 	 * container, i.e. the count carries no signal and the caller must not read one into it.
 	 *
-	 * The second half of the transfer/rename discriminator: a transfer ADDS a declaration to the
-	 * container, a rename does not. Asked separately from the name test because a payload can
-	 * erase the old name and insert in the same call, which the name test alone reads as a plain
-	 * rename.
+	 * The second half of the transfer/rename discriminator: a transfer splits the bytes the
+	 * documented declaration occupied into two declarations, a rename leaves them holding one.
+	 * Asked separately from the name test because a payload can erase the old name and insert in
+	 * the same call, which the name test alone reads as a plain rename — and asked over the
+	 * REGION rather than the container, because the container-wide count this replaced could not
+	 * tell that growth from an insertion made somewhere else entirely by another pair.
 	 */
-	private static function declSiblingCount(tree: QueryNode, node: QueryNode): Int {
+	private static function declsInRegion(tree: QueryNode, node: QueryNode, region: Span): Int {
 		final parent: Null<QueryNode> = TreePath.parentOf(tree, node);
-		return parent == null ? -1 : parent.children.count(c -> !ElementSpan.isDeclPrefixSibling(c));
+		return parent == null
+			? -1
+			: parent.children.count(c -> {
+				final span: Null<Span> = c.span;
+				return !ElementSpan.isDeclPrefixSibling(c) && span != null && span.from >= region.from && span.from < region.to;
+			});
+	}
+
+	/**
+	 * The refusal, naming the block, the declaration it left and the one it landed on — with the
+	 * tail the signal that fired actually supports.
+	 *
+	 * `stands`: the documented declaration is still there beside the insertion, so the transfer is
+	 * a fact and the message states it. Otherwise the payload ALSO erased that name, and all that
+	 * is established is a region that held one declaration and holds two now: either the old one
+	 * was renamed and a second pushed in under the doc, or a new one was pushed ahead of a rename.
+	 * Nothing in the text tells those apart, and the message used to assert the theft anyway —
+	 * naming a declaration as left undocumented that the payload had renamed.
+	 */
+	private static function transferRefusal(was: String, now: String, stands: Bool): String {
+		final why: String = stands
+			? 'the doc would silently transfer to the insertion and `$was` would be left undocumented'
+			: '`$was` is no longer declared there, so the replacement either renamed it, leaving the doc where it belongs, or '
+				+ 'pushed `$now` in under the doc ahead of it; nothing in the text tells those apart';
+		return 'the edit moves the `/**` block above `$was` onto `$now` — $why. Widen the old fragment upward to include the '
+			+ 'doc block and repeat it in the replacement, so the doc travels with the declaration it documents; a '
+			+ 'declaration\'s doc is trivia OUTSIDE its node, so that widening needs an address that contains it — the '
+			+ 'enclosing `--select \'ClassDecl:<Type>\'`, not the member itself';
 	}
 
 	/**
@@ -441,9 +498,7 @@ final class Patch {
 	 * line-wise fallback — enforcing the exactly-once discipline. A failure is
 	 * reported through `error` (with the multi-pair `label` prefix).
 	 */
-	private static function locate(
-		slice: String, oldText: String, kind: String, label: String, all: Bool
-	): { ranges: Array<Located>, error: Null<String> } {
+	private static function locate(slice: String, oldText: String, kind: String, label: String, all: Bool): LocateResult {
 		final exact: Array<Located> = [];
 		var at: Int = slice.indexOf(oldText);
 		while (at >= 0) {
@@ -754,4 +809,14 @@ private typedef Located = {
 	to: Int,
 	indent: String,
 	dedented: Bool
+};
+
+/**
+ * What `locate` answers: the ranges it placed, or the refusal that says why it placed none.
+ * Exactly one of the two carries the answer — a non-null `error` comes with an empty `ranges`
+ * and discards the whole payload.
+ */
+private typedef LocateResult = {
+	ranges: Array<Located>,
+	error: Null<String>
 };
