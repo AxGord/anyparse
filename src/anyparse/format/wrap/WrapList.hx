@@ -224,41 +224,28 @@ typedef WrapListOptions = {
 }
 
 /**
- * Runtime helper that emits a `Doc` for a delimited list whose layout
- * is driven by a `WrapRules` cascade.
+ * Runtime helper that emits a `Doc` for a delimited list whose layout is driven by
+ * a `WrapRules` cascade.
  *
- * Used by macro-generated writers via a single call inserted at sites
- * tagged with `@:fmt(wrapRules('<optionFieldName>'))` on their `Star`
- * field. The macro feeds in the open / close / separator literals,
- * the per-item `Doc` array, the resolved `WriteOptions`, the inside-
- * delimiter padding `Doc`s and the rule set looked up by name on
- * `opt`. Everything else — flat-length measurement, cascade
- * evaluation, shape selection — happens at runtime in this class.
+ * Used by macro-generated writers through a single call inserted at every site
+ * tagged `@:fmt(wrapRules('<optionFieldName>'))` on its `Star` field. The macro
+ * feeds in the open / close / separator literals, the per-item `Doc` array, the
+ * resolved `WriteOptions`, the inside-delimiter padding `Doc`s and the rule set
+ * looked up by name on `opt`; flat-length measurement, cascade evaluation and
+ * shape selection all happen here at runtime.
  *
- * The `ExceedsMaxLineLength` predicate is resolved without a
- * column-aware probe: the cascade runs twice (`exceeds=false` and
- * `exceeds=true`) and, when the two runs disagree, the result is
- * wrapped in `Group(IfBreak(brkDoc, flatDoc))` so the renderer's
- * standard fit/break decision picks the right mode at layout time.
- * When both runs agree the chosen mode is unconditional and no Group
- * wrap is needed.
+ * The `ExceedsMaxLineLength` predicate is resolved without a column-aware probe:
+ * the cascade runs twice, once per polarity, and when the two runs disagree the
+ * result is wrapped in `Group(IfBreak(brkDoc, flatDoc))` so the renderer's own
+ * fit/break decision picks the mode at layout time. When both runs agree the mode
+ * is unconditional and no `Group` wrap is needed. An item carrying a hardline is
+ * intrinsically un-flattenable and forces the `exceeds=true` branch.
  *
- * Items containing hardlines (e.g. block bodies, multi-line strings)
- * are intrinsically un-flattenable — the cascade is forced to the
- * `exceeds=true` branch in that case.
- *
- * Oversized and staying that way, on purpose. This type carries an
- * `oversized-type` warning for BOTH caps (110 members / max 50, 4458
- * lines / max 2000). A split was measured (2026-09-03) and refused:
- * `hxq clusters WrapList src/anyparse/format/wrap` puts 80 of 105
- * members in ONE component, and 61 of 105 even with `--hubs 25`. The
- * obvious seam — the 17-member `shape*` intercept family — is 901
- * lines and lands entirely INSIDE that component at both hub settings,
- * so cutting it leaves this type at 93 members and 3557 lines, over
- * both caps still. Clearing the finding means moving 60 members and
- * 2458 lines, more than half the file, out of the writer's wrap engine
- * under a no-output-byte-may-change constraint; that is a designed
- * decomposition of the cascade, not a hygiene edit.
+ * Oversized and staying that way, on purpose: this type trips `oversized-type` on
+ * both caps, and clearing it means moving more than half the file out of the
+ * writer's wrap engine under a no-output-byte-may-change constraint — a designed
+ * decomposition of the cascade, not a hygiene edit. `docs/decisions.md` records
+ * the split that was measured and refused.
  */
 class WrapList {
 
@@ -365,8 +352,8 @@ class WrapList {
 		// ω-fnlambda-body-width: the third disjunct opens the SAME re-tag for the `function`-keyword spelling of a lambda item
 		// (`isFunctionInlineBodyItem`) — same defect, same remedy. Its body condition is WIDER than the arrow arm's: any hardline-free
 		// body, not only a plain `if`. The leak warning above does not reach it, because it shares the comprehension arm's
-		// `flatLength >= 0` guard — an item that already forces a break is exactly what it excludes. Measurement, and the residual
-		// asymmetry it leaves on the arrow side, are in that predicate's own doc.
+		// `flatLength >= 0` guard — an item that already forces a break is exactly what it excludes. The residual asymmetry it
+		// leaves on the arrow side is described in that predicate's own doc.
 		var groupified: Null<Array<Doc>> = null;
 		for (i in 0...items.length) if (
 			(comprehensionBodyMeasure && flatLength(items[i]) >= 0) || isArrowPlainIfBody(items[i]) || isFunctionInlineBodyItem(items[i])
@@ -937,16 +924,15 @@ class WrapList {
 	 * gate the resolved shape on the collection FITTING at its own continuation
 	 * indent (`shapeMultiArgCollection` does, via `IfArrowContinuationFits`).
 	 * Without that gate the writer commits a break the renderer would not have
-	 * taken — measured: ungated it cost `wrapping/issue_116_multipass` and two
-	 * `HxComplexItemWrapTest` D2 pins.
+	 * taken.
 	 */
 	public static function renderPivotBreakArm(d: Doc, fitPivot: Bool = false): Null<Doc> {
 		// An item that ALREADY breaks needs no resolution, and resolving one
 		// would be wrong: its pivot may legitimately pick the FLAT arm, whose
 		// hardline comes from a nested item rather than from this list's own
 		// cascade — substituting the break arm there re-lays out a shape both
-		// passes already agree on (measured: it opened the call paren on the
-		// nested-array hug fixtures).
+		// passes already agree on, and it opened the call paren on the
+		// nested-array hug fixtures.
 		return flatLength(d) < 0 ? null : pivotBreakArm(d, fitPivot);
 	}
 
@@ -1017,8 +1003,8 @@ class WrapList {
 				// the whole decision), so a break-side read would answer "leads with
 				// a newline" for every glued body in the tree — and this predicate
 				// drives the cond-wrap engine's close-delimiter placement, which has
-				// nothing to do with where a body was put. Measured: two corpus
-				// files changed their `if (…)` shape from the break-side read alone.
+				// nothing to do with where a body was put: a break-side read moves
+				// the `if (…)` shape of files it has no business touching.
 				// The flat side is the status-quo glue, so a glue that survives its
 				// own probe stays byte-identical everywhere.
 				node = flat;
@@ -1808,48 +1794,36 @@ class WrapList {
 	}
 
 	/**
-	 * Continuation-indent depth (in columns) for break-mode shapes
-	 * (`Nest(cols, …)`). Two indent regimes coexist:
-	 *   - **Cascade-forced break** (`OnePerLine` / `OnePerLineAfterFirst`
-	 *     / `FillLineWithLeadingBreak`): the cascade injects its own
-	 *     hardlines; fork's `calcIndent + additionalIndent` lands at
-	 *     `outer-block-indent + additional` tabs, so `Nest` adds
-	 *     `additional` units only (the outer `Nest` stack contributes the
-	 *     `calcIndent` portion).
-	 *   - **Fit-driven / trivia-driven** (`NoWrap` / `FillLine`): hardlines
-	 *     come from trivia-preserved source breaks or `Fill`'s break-on-
-	 *     overflow; fork positions those at `calcIndent + 1 + additional`
-	 *     (the paren-bump `+1`), matched by `baseCols * (1 + additional)`.
-	 * The probe mode is evaluated at `exceeds=true / firing=∅` before
-	 * threshold enumeration — a heuristic that does not cover cascades
-	 * combining `defaultAdditionalIndent > 0` with `LineLengthLargerThan`
-	 * thresholds. MEASURED INERT (T135 slice, the T111 question): flipping the
-	 * `_ -> false` below to `_ -> true` — the opposite extreme — changes ZERO
-	 * bytes over the whole anyparse tree (1511 files), Pony under BOTH of its
-	 * configs (867 files each), all five haxe-formatter fixtures that configure
-	 * a `lineLength >= n` rule, and four purpose-built configs on
-	 * `functionSignature` / `implementsExtends` that put a `lineLength` rule on
-	 * each side of the forcing/non-forcing split. Two things make it inert: with
-	 * `additional == 0` both arms of the return below are `baseCols`, and no
-	 * BUILT-IN cascade carries a `LineLengthLargerThan` condition, so only a
-	 * user config reaches the predicate at all; and when `breakAsOnePerLine` is
-	 * on, `onePerLineWhenBreaking` collapses FillLine / OnePerLineAfterFirst /
-	 * FillLineWithLeadingBreak / PackedOrOnePerLine to OnePerLine, so every mode
-	 * a rule can select except NoWrap / Keep classifies as forcing and the rule
-	 * CHOICE cannot change the classification. The harness is discriminating:
-	 * dropping `cascadeForcesBreak` from the conjunction below moves
-	 * `src/anyparse/check/PreferIndexAccess.hx`'s lambda-signature continuation
-	 * by one indent level. `complexItemCount` is NOT part
-	 * of that heuristic: it is a static per-list count, known before either
-	 * probe runs, so the caller hands it in and the probe answers the same
-	 * cascade the real decision answers. Passing a hardcoded 0 here made a
-	 * `complexItemCount >= n` rule select the wrap MODE and then compute the
-	 * continuation INDENT as if the list held no complex items. ω-functionsignature-body-aware-
-	 * indent: `compactContinuation` extends the `additional`-only regime to
-	 * FillLine / NoWrap for a function signature. It is the
-	 * `@:fmt(bodyAwareCompactIndent)` flag itself, true for every such wrap;
-	 * the body-emptiness gate it was named for (`opt._fnSigBodyEmpty`) was
-	 * dropped as too narrow in `87c5b0af` and its producer is now gone.
+	 * Continuation-indent depth (in columns) for break-mode shapes (`Nest(cols, …)`).
+	 * Two indent regimes coexist:
+	 *   - **Cascade-forced break** (`OnePerLine` / `OnePerLineAfterFirst` /
+	 *     `FillLineWithLeadingBreak`): the cascade injects its own hardlines, so
+	 *     `Nest` adds the `additional` units only and the outer `Nest` stack
+	 *     contributes the rest.
+	 *   - **Fit-driven / trivia-driven** (`NoWrap` / `FillLine`): the hardlines come
+	 *     from trivia-preserved source breaks or `Fill`'s break-on-overflow, which
+	 *     sit one paren-bump deeper — `baseCols * (1 + additional)`.
+	 *
+	 * The probe mode is evaluated at `exceeds=true / firing=∅` before threshold
+	 * enumeration, a heuristic that does not cover a cascade combining
+	 * `defaultAdditionalIndent > 0` with `LineLengthLargerThan` thresholds. Two
+	 * things make it inert in practice: with `additional == 0` both arms of the
+	 * return below are `baseCols`, and no BUILT-IN cascade carries a
+	 * `LineLengthLargerThan` condition, so only a user config reaches the predicate
+	 * at all; and under `breakAsOnePerLine` every mode a rule can select except
+	 * `NoWrap` / `Keep` classifies as forcing, so the rule CHOICE cannot change the
+	 * classification.
+	 *
+	 * `complexItemCount` is deliberately NOT part of that heuristic: it is a static
+	 * per-list count known before either probe runs, so the caller hands it in and
+	 * the probe answers the same cascade the real decision answers. Passing a
+	 * hardcoded 0 made a `complexItemCount >= n` rule select the wrap MODE and then
+	 * compute the continuation INDENT as if the list held no complex items.
+	 *
+	 * `compactContinuation` extends the `additional`-only regime to `FillLine` /
+	 * `NoWrap` for a function signature. It is the `@:fmt(bodyAwareCompactIndent)`
+	 * flag itself; the body-emptiness gate it was first named for was dropped as too
+	 * narrow and its producer is gone.
 	 */
 	private static function continuationCols(
 		rules: WrapRules, opt: WriteOptions, items: Array<Doc>, measure: WrapItemMeasure, sourceMultilineKeep: Bool,
@@ -2202,67 +2176,37 @@ class WrapList {
 	}
 
 	/**
-	 * ω-item-close-trail — does the LAST entry of `items` end in a line comment?
+	 * Does the LAST entry of `items` end in a line comment?
 	 *
-	 * A `//` runs to end of line, so the close delimiter that a GLUE shape puts
-	 * after the last item cannot share that item's line. The writer already
-	 * refuses to emit it there — `trailingCommentDocGuarded` parks an
-	 * `OptHardlineSkipBeforeHardline` behind the comment and the seam breaks —
-	 * but a break bought that way lands the closer ALONE on the next line, under
-	 * a list that is otherwise packed inline. That reads as a mistake and is one
-	 * editor join away from commenting out the call's terminator.
+	 * A `//` runs to end of line, so the close delimiter a GLUE shape puts after the
+	 * last item cannot share that item's line. The writer already refuses to emit it
+	 * there — `trailingCommentDocGuarded` parks an `OptHardlineSkipBeforeHardline`
+	 * behind the comment and the seam breaks — but a break bought that way lands the
+	 * closer ALONE on the next line under an otherwise packed list, which reads as a
+	 * mistake and is one editor join away from commenting out the call's terminator.
 	 *
 	 * Read by the two multi-arg glue intercepts and by
-	 * `shapeSoleItemCuddledBrackets`, which had already been spelling it inline.
-	 * What the three have in common is that they OVERRIDE a layout the cascade
-	 * had already settled, so declining costs nothing but the override. The
-	 * cascade's OWN answers are deliberately left alone: the same stranded closer
-	 * still comes out of a plain `FillLine`/`noWrap` shape, pinned by
-	 * `HxGroupTrailCommentWriteTest.testCallArgTrailingLineCommentKeepsCloser`
-	 * (fill) and `testSoleArgLayoutUnderNoWrap` (noWrap), which record it as fork
-	 * behaviour this project matches on purpose. Re-wrapping THERE would be a
-	 * policy change, not a fix.
+	 * `shapeSoleItemCuddledBrackets`. What the three have in common is that they
+	 * OVERRIDE a layout the cascade had already settled, so declining costs nothing
+	 * but the override. The cascade's OWN answers are deliberately left alone: the
+	 * same stranded closer still comes out of a plain `FillLine` / `noWrap` shape,
+	 * recorded as fork behaviour this project matches on purpose, and re-wrapping
+	 * THERE would be a policy change rather than a fix. `shapeSingleArgGlue` builds
+	 * the same seam and is deliberately NOT gated — `docs/decisions.md` records why
+	 * the gate was written and reverted.
 	 *
-	 * `shapeSingleArgGlue` builds the same seam and is STILL not gated — and that
-	 * is now a measurement rather than the earlier "four shapes probed, none
-	 * reached it, not a proof". The shape that DOES reach it is narrower than any
-	 * of those four: a sole OBJECT-LITERAL argument WIDE enough to overflow its
-	 * own continuation line, so the `{`-led arm resolves to `hugGlue` instead of
-	 * the leading-break shape. The call then opens `f({`, the literal explodes,
-	 * and the close-trailing `//` strands the `)` one line under a `}` already at
-	 * the statement indent; the BLOCK-comment twin of the same source glues
-	 * (`} /* c *\/);`), which is the one-variable control naming the comment style
-	 * and not the width as the discriminator.
+	 * The item's own `Trivial<T>.trailingComment` slot cannot answer this: it is null
+	 * exactly when the comment was captured by a NESTED construct's close-trailing
+	 * slot (`f(a, { … } // c)` parks it on the object literal), which is why the
+	 * per-element trivia scans never see it. `anyHardline` says only that the item
+	 * breaks SOMEWHERE, which is the precondition of these intercepts rather than a
+	 * discriminator.
 	 *
-	 * Gating it there was written, measured and REVERTED. Two numbers killed it.
-	 * Reachability: instrumented at the head of `shapeSingleArgGlue`, the whole
-	 * Pony tree (870 files) reaches it 25 095 times and anyparse's own
-	 * `src`/`test`/`tools` 96 436 times, with a `//`-tailed sole item in ZERO of
-	 * the 121 531. Effect: on the synthetic source that DOES fire it, the gate
-	 * does not change the fixed point — declining hands the pass back to the
-	 * leading-break shape, whose output the NEXT pass re-reads as source-multiline
-	 * and re-glues through the `noWrap` cascade, landing on the identical bytes
-	 * one rewrite later. So the gate cost a normalisation pass and bought nothing,
-	 * which is the same verdict `testSoleArgLayoutUnderNoWrap` already records for
-	 * that shape: the stranded closer there is the CASCADE's answer, and this
-	 * intercept cannot outvote it.
-	 *
-	 * The item's own `Trivial<T>.trailingComment` slot cannot answer this: it is
-	 * null exactly when the comment was captured by a NESTED construct's
-	 * close-trailing slot (`f(a, { … } // c)` parks it on the object literal),
-	 * which is why the per-element trivia scans never see it. `anyHardline` is
-	 * true here but says only that the item breaks SOMEWHERE — which is the
-	 * precondition of these intercepts, not a discriminator.
-	 *
-	 * One inherited blind spot: `lastVisibleText` is opaque over `Fill*` (which
-	 * item lands last is a render-time decision), so an item whose right spine
+	 * One inherited blind spot: `lastVisibleText` is opaque over `Fill*`, since which
+	 * item lands last is a render-time decision, so an item whose right spine
 	 * dead-ends in a `Fill` answers false and the glue fires. The trivia writer
-	 * splices a close-trailing comment outside any `Fill`, so no such item has
-	 * been observed. `MethodChainEmit` used to carry a SECOND walker for the same
-	 * question, and it disagreed with this one in exactly that direction — it
-	 * decided on the first non-layout `Concat` child where this walk keeps
-	 * scanning left past whitespace-only leaves. It now calls
-	 * `endsWithLineComment` like everyone else.
+	 * splices a close-trailing comment outside any `Fill`, so no such item has been
+	 * observed.
 	 */
 	private static function lastItemEndsWithLineComment(items: Array<Doc>): Bool {
 		return items.length > 0 && endsWithLineComment(items[items.length - 1]);
@@ -2278,8 +2222,9 @@ class WrapList {
 	 * carries a pivot under a cascade whose `noWrap` rules shadow a breaking
 	 * default. Counting a pivot as "this arg breaks" inside the first scan would
 	 * therefore trip its second-breaking-arg bail on almost every multi-arg call
-	 * — measured on this tree, it opened the paren of every
-	 * `f(a, macro false, [ … ], macro false)` that used to hug. Here a pivot only ever NOMINATES a candidate; it never disqualifies one.
+	 * — it opened the paren of every `f(a, macro false, [ … ], macro false)`
+	 * that used to hug. Here a pivot only ever NOMINATES a candidate; it never
+	 * disqualifies one.
 	 *
 	 * Reached only after the first scan proved NO arg carries a hardline, which is
 	 * what lets it ignore that half of its sibling's bail. It also asks only
@@ -2429,65 +2374,44 @@ class WrapList {
 	}
 
 	/**
-	 * ω-solitem-cuddled-brackets: under `wrapping.soleItemCuddledBrackets`, a
-	 * BRACKET-delimited list with exactly ONE element keeps both brackets
-	 * cuddled to that element — `[for (x in xs) f({` … `})]` — instead of the
-	 * cascade's exploded `[` / element / `]` three-line shape.
+	 * Under `wrapping.soleItemCuddledBrackets`, a BRACKET-delimited list with exactly
+	 * ONE element keeps both brackets cuddled to that element — `[for (x in xs) f({`
+	 * … `})]` — instead of the cascade's exploded three-line shape.
 	 *
-	 * The claim is about what a leading break BUYS. `shapeOnePerLine` opens the
-	 * bracket so the element gets a full continuation line; for a SOLE element
-	 * that already lays out across lines, that line is not the one overflowing,
-	 * so the break costs two lines and one indent level and rescues nothing.
-	 * The element's own break settles the width either way.
+	 * The claim is about what a leading break BUYS: `shapeOnePerLine` opens the
+	 * bracket so the element gets a full continuation line, but for a SOLE element
+	 * that already lays out across lines that line is not the one overflowing, so the
+	 * break costs two lines and an indent level and rescues nothing.
 	 *
-	 * FIT PROBE — `IfNaturalFirstLineFitsOpenDelim(lineWidth, openShape,
-	 * glueShape)`, the same primitive `shapeSingleArgGlue` uses to answer the
-	 * mirror-image question from the call side. Its two conjuncts are exactly
-	 * the two ways this cuddle can be wrong, and both are RENDER-time:
-	 *  - the natural first line must FIT — an element with no wrap point of its
-	 *    own (a bare over-wide expression) would otherwise be pinned flat past
-	 *    `lineWidth`, so it falls back to the exploded shape;
-	 *  - that line must END at an open delimiter (`(` / `[` / `{` / `->`) — an
-	 *    element that breaks at an operator or mid-argument instead has no
-	 *    dedented closing run for the `]` to ride, and its cuddled `]` would
-	 *    land at body indent under a continuation line.
-	 * A static walk cannot answer either: the element's breaks live in `Group`s
-	 * the renderer resolves by column. That is why this is a Doc probe and not
-	 * a `WrapConditionType` — a cascade condition is evaluated at emit time,
-	 * where the answer does not exist yet.
+	 * FIT PROBE — `IfNaturalFirstLineFitsOpenDelim`, the same primitive
+	 * `shapeSingleArgGlue` uses from the call side. Its two conjuncts are the two ways
+	 * this cuddle can be wrong, both RENDER-time: the natural first line must FIT, or
+	 * an element with no wrap point of its own is pinned flat past `lineWidth`; and it
+	 * must END at an open delimiter, since an element breaking at an operator has no
+	 * dedented closing run for the `]` to ride. A static walk answers neither — those
+	 * breaks live in `Group`s the renderer resolves by column — which is why this is a
+	 * Doc probe and not a `WrapConditionType`, evaluated where the answer is not known.
 	 *
 	 * Gates, each refusing a shape the probe alone would get wrong:
-	 *  - `NoWrap` is excluded — it already emits the cuddled shape, so wrapping
-	 *    it would only add a probe whose branches agree;
+	 *  - `NoWrap` already emits the cuddled shape, so wrapping it would add a probe
+	 *    whose branches agree;
 	 *  - arrow-body and method-chain elements are excluded, mirroring
-	 *    `shapeSingleArgGlue`'s own two exclusions: both own dedicated glue
-	 *    intercepts above, and the natural-first-line measurer is documented to
-	 *    diverge from render for a chain operand;
-	 *  - an element that STARTS with a hardline, or carries a LEADING `//`
-	 *    comment, keeps the exploded shape — a cuddled `[` would open onto a
-	 *    line the element immediately abandons, or land inside the comment.
-	 *    Both are structural guards rather than pinned behaviour: every
-	 *    leading-comment / leading-break element found so far is already routed
-	 *    away from this shape upstream, so neither fires on a fixture today.
-	 *    The TRAILING `//` half below is the measured one;
-	 *  - an element that does NOT end at a close delimiter
-	 *    (`endsWithCloseDelim`) keeps the exploded shape. The probe answers for
-	 *    the element's FIRST line only; the cuddled `]` rides its LAST one, and
-	 *    that line is back at container indent exactly when the element's own
-	 *    trailing token is the closer of the construct that broke. An element
-	 *    trailing an operand instead — a comprehension whose filter `if`
-	 *    condition wraps and whose body is a bare field access — strands the
-	 *    `]` on a continuation line at body indent, the same defect
-	 *    `isHeadGluedBraceBodyComprehension` refuses for the block-hug shape
-	 *    (`ω-comprehension-closer`);
-	 *  - a TRAILING `//` comment on the element is refused: the cuddled `]`
-	 *    would follow it on the comment line and be swallowed (measured —
-	 *    dropping this conjunct produces `}) // keep me` then a lone `];`).
-	 *    Block comments are fine on both ends and are not excluded.
+	 *    `shapeSingleArgGlue`: both own dedicated glue intercepts, and the
+	 *    natural-first-line measurer diverges from render for a chain operand;
+	 *  - an element that STARTS with a hardline or carries a LEADING `//` comment
+	 *    keeps the exploded shape, since a cuddled `[` would open onto a line the
+	 *    element abandons at once, or land inside the comment. Both are structural
+	 *    guards, not pinned behaviour: every such element found so far is routed away
+	 *    from this shape upstream;
+	 *  - an element that does NOT end at a close delimiter keeps the exploded shape:
+	 *    the probe answers for its FIRST line while the cuddled `]` rides its LAST,
+	 *    which is back at container indent only when the element's trailing token
+	 *    closes the construct that broke;
+	 *  - a TRAILING `//` comment is refused, or the cuddled `]` would follow it on
+	 *    the comment line and be swallowed. Block comments are fine on both ends.
 	 *
-	 * The trailing separator is deliberately dropped from the glued shape (as
-	 * in `shapeSingleArgGlue`): `trailingComma*` describes a list broken one
-	 * element per line, and a cuddled sole element is not that list.
+	 * The trailing separator is dropped from the glued shape, as in
+	 * `shapeSingleArgGlue`: `trailingComma*` describes a list broken one per line.
 	 */
 	private static function shapeSoleItemCuddledBrackets(
 		enabled: Bool, mode: WrapMode, open: String, close: String, items: Array<Doc>, openInside: Doc, closeInside: Doc, lineWidth: Int,
@@ -2613,9 +2537,9 @@ class WrapList {
 	): Null<Doc> {
 		if (mode != FillLineWithLeadingBreak || items.length != 1 || isArrowBodyMarker(items[0]) || isMethodChainItem(items[0]))
 			return null;
-		// ω-item-close-trail is deliberately NOT asked here — measured, not assumed;
-		// see `lastItemEndsWithLineComment`'s own doc for the numbers.
-		// ω-glued-close-opener-line (T173): a closer glued straight after the sole
+		// The close-trail predicate is deliberately NOT asked here — see
+		// `lastItemEndsWithLineComment`'s own doc for why.
+		// A closer glued straight after the sole
 		// argument lands wherever the argument's last rendered line left the pen.
 		// For a collection literal or a nested call that is the head line's own
 		// indent — they emit their close delimiter OUTSIDE their content `Nest` —
@@ -2640,8 +2564,8 @@ class WrapList {
 		// the policy — a bracket-delimited collection owns its multi-line layout,
 		// its `[` IS its wrap point and the head line hugs it — so
 		// `f(c ? [] : [\n\t…\n])` closes at the CALL's indent and its glued `)`
-		// was already right. Measured: without the brace bound that exact shape in
-		// `QueryWalkerLowering` lost its glue for nothing.
+		// was already right; without the brace bound that exact shape loses its
+		// glue for nothing.
 		//
 		// The AUTHORITATIVE brace test lives INSIDE `breakTailCloseNest`, off the
 		// same walk that measures the depth, so bound and measure describe ONE
@@ -2651,9 +2575,8 @@ class WrapList {
 		// only ever by rejecting early, which forfeits a fix rather than making a
 		// wrong one. It earns its place: it is a right-spine walk that stops at
 		// the first visible text, while `breakTailCloseNest` asks `hasForcedBreak`
-		// about a whole subtree per `If*` on the tail path. Interleaved medians
-		// over an 870-file tree, against this slice's base: +1.7% without the
-		// filter, +0.3-0.6% (inside the run-to-run noise) with it.
+		// about a whole subtree per `If*` on the tail path, which is what the
+		// filter keeps off a whole-tree format.
 		//
 		// `flatLength(items[0]) < 0` is a COST GUARD, not a filter — it is
 		// implied, since a `TailBreak` needs a hardline on the resolved spine and
@@ -2792,49 +2715,39 @@ class WrapList {
 	}
 
 	/**
-	 * ω-callparam-multiarg-collection-glue: a `FillLine` / FLWLB MULTI-arg call
-	 * whose SOLE multi-line arg is a BREAKING collection literal (array `[…]` /
-	 * object `{…}` whose first visible Text is `[`/`{` AND that carries an
-	 * internal hardline → renders multi-line) keeps ALL args GLUED to the open
-	 * paren iff the glued flat first line (up to the collection's own break)
-	 * fits `lineWidth`; the collection self-breaks at its `[`/`{` and every
-	 * other arg stays inline — the args before it on the open-paren line, the
-	 * args after it glued onto the collection's close line (`f(a, [\n…\n], b)`).
+	 * A `FillLine` / `FillLineWithLeadingBreak` MULTI-arg call whose SOLE multi-line
+	 * argument is a BREAKING collection literal keeps ALL arguments GLUED to the open
+	 * paren, iff the glued flat first line — up to the collection's own break — fits
+	 * `lineWidth`. The collection self-breaks at its `[` / `{` and every other
+	 * argument stays inline: those before it on the open-paren line, those after it
+	 * glued onto the collection's close line (`f(a, [\n…\n], b)`).
 	 *
-	 * Without this, `shapeFillLine`'s outer `Group` aborts `fitsFlat` on the
-	 * collection's internal hardline and commits MBreak, so the `Fill` breaks
-	 * EVERY soft sep — ALL args open onto their own lines (`f(\n\ta,\n\t[\n…`).
-	 * The glued fixed point (head + flat args inline, only the collection self-
-	 * breaks) is only reached on a LATER write once the source already broke
-	 * (the collection arg's own Doc shifts), so the writer OSCILLATES — write 1
-	 * ≠ write 2. The break decision is SOURCE-DEPENDENT (incoming layout changes
-	 * the collection arg's internal Doc → flips the outer Group), which is
-	 * exactly the non-idempotence. This intercept replaces that source-blind
-	 * Group decision with the deterministic `IfFirstLineExceeds` width probe, so
-	 * the FIRST write already produces the glued fixed point.
+	 * Without the intercept `shapeFillLine`'s outer `Group` aborts `fitsFlat` on the
+	 * collection's internal hardline and commits a break, so the `Fill` breaks EVERY
+	 * soft separator and all arguments open onto their own lines. The glued fixed
+	 * point is then reached only on a LATER write, once the source already broke and
+	 * the collection argument's own Doc shifts — so the writer OSCILLATES, because
+	 * the `Group` decision is SOURCE-DEPENDENT. Replacing it with the deterministic
+	 * `IfFirstLineExceeds` width probe makes the FIRST write produce the fixed point.
 	 *
-	 * Sibling of the block-lambda intercept above: same
-	 * `IfFirstLineExceeds(lineWidth, openShape, glueShape)` O(1) first-line
-	 * width probe + reused `multiArgBlockLambdaGlueShape` (glue all items
-	 * inline with `sep + ' '`; the lone multi-line collection self-breaks).
-	 * `openShape` is the mode's own break shape (`shapeFillLine` /
-	 * `shapeFillLineWithLeadingBreak`) — the unchanged fallback for a too-wide
-	 * glued head. The discriminator is STRUCTURAL + spine-bounded:
-	 *  - `items.length > 1` (DISJOINT from the single-arg / sole-arrow paths,
-	 *    all `items.length == 1`);
-	 *  - EXACTLY ONE arg renders multi-line (`flatLength(...) < 0`), and it is
-	 *    a collection literal (first visible Text `[`/`{`, NOT `(` — a paren-
-	 *    expr / call arg is excluded), NOT an arrow (block-lambda owns the
-	 *    FLWLB gate above) and NOT a method chain (a chain breaks at a `.` dot,
-	 *    not at an open delim — gluing would keep the paren glued where the
-	 *    fork opens it, the documented inc6/inc7 chain-operand wall). Requiring
-	 *    the collection to be the SOLE multi-line arg keeps the all-inline glue
-	 *    a valid fixed point: every OTHER arg is flat, so it rides either the
-	 *    open-paren line (before the collection) or the collection-close line
-	 *    (after it). `flatLength` short-circuits on the first hardline per arg —
-	 *    no full re-measure. The collection may sit at ANY position
-	 *    (`docHelper('_dib', [\n…\n], macro …)` — the canonical churning site —
-	 *    has it in the MIDDLE, not last).
+	 * Sibling of the block-lambda intercept above: the same first-line width probe
+	 * and the same glue shape, with `openShape` — the mode's own break shape — as the
+	 * unchanged fallback for a too-wide glued head.
+	 *
+	 * The discriminator is STRUCTURAL and spine-bounded:
+	 *  - `items.length > 1`, which makes it disjoint from the single-arg and
+	 *    sole-arrow paths;
+	 *  - EXACTLY ONE argument renders multi-line, and it is a collection literal
+	 *    (first visible Text `[` or `{`, never `(` — a paren expression or call
+	 *    argument is excluded), not an arrow (the block-lambda gate above owns that)
+	 *    and not a method chain (a chain breaks at a `.`, so gluing would keep the
+	 *    paren glued where the fork opens it).
+	 *
+	 * Requiring the collection to be the SOLE multi-line argument is what keeps the
+	 * all-inline glue a valid fixed point: every OTHER argument is flat, so it rides
+	 * either the open-paren line or the collection-close line. `flatLength`
+	 * short-circuits on the first hardline per argument, so there is no full
+	 * re-measure, and the collection may sit at ANY position, including the middle.
 	 */
 	private static function shapeMultiArgCollection(
 		mode: WrapMode, open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, closeInside: Doc, cols: Int,
@@ -2853,10 +2766,10 @@ class WrapList {
 		if (lastItemEndsWithLineComment(items)) return null;
 		// ω-complex-item-count (D2): the chunk policy deliberately does NOT
 		// pre-empt this glue. Declining here for a call-bearing collection with
-		// arguments after it was measured over anyparse's own tree and made 21
-		// files worse — `nullSwitch(ident('e'), macro false, [` … `], macro
-		// false)` and `walk(root, {` … `}, out)` both lose their compact hug for
-		// a bracket alone on a line. The glue already answers the width question
+		// arguments after it reads WORSE — `nullSwitch(ident('e'), macro false,
+		// [` … `], macro false)` and `walk(root, {` … `}, out)` both lose their
+		// compact hug for a bracket alone on a line. The glue already answers the
+		// width question
 		// through `IfFirstLineExceeds`, and a collection that carries its own
 		// break has already opened the call; the chunk policy's job is the
 		// element the glue never sees — one that would otherwise stay PACKED on
@@ -2899,7 +2812,7 @@ class WrapList {
 		// also reached with a mode the cascade answered in the FITS state
 		// (`emitZeroThresholdAgree`'s early return, `emitZeroThreshold`'s flat
 		// side), and there the glue would break a collection the line had room for
-		// — measured on a rules-free `fillLine` cascade, `f(a, b, { x: 1, y: 2 })`
+		// — under a rules-free `fillLine` cascade `f(a, b, { x: 1, y: 2 })`
 		// exploded. Gate that population on the fit the caller did not test.
 		// `openShape` IS `shapeByMode(mode, …)` for both modes this intercept
 		// admits, so the fits arm is the pre-slice shape verbatim.
@@ -3300,10 +3213,10 @@ class WrapList {
 					// exactly two children — because that is the only place a
 					// chain parks its decision. Following these ctors at any index
 					// of any `Concat` reads a SUB-construct's own break as this
-					// item's layout: measured, that made a call whose sole
-					// collection argument sits inside a chain segment refuse the
-					// glue it had always taken (`HxArrowBlockBodyOpenSliceTest`'s
-					// crash-report fixture) and drifted three further TM files.
+					// item's layout: that made a call whose sole collection
+					// argument sits inside a chain segment refuse the glue it had
+					// always taken (`HxArrowBlockBodyOpenSliceTest`'s crash-report
+					// fixture) and drifted further files with it.
 					// Deliberate omissions: `Nest` keeps its own ungated arm above
 					// (pre-slice behaviour), and the nested `case _` stays a SKIP —
 					// the hole the `Doc` enum header flags for this walker is
@@ -4117,32 +4030,32 @@ class WrapList {
 	}
 
 	/**
-	 * The exact complement of `isFunctionBlockLambdaItem` on the same `flatLength` axis: a wrap-list item that leads with the
-	 * `function` keyword and carries NO forced break, i.e. one the renderer will lay out inline. `function` is reserved, so a
-	 * first-visible-Text of exactly `function` is unambiguously a function expression; the predicate does not inspect the body, and
-	 * an item that parks none re-tags to itself.
+	 * True iff `item` is a `function`-keyword lambda that carries NO forced break,
+	 * i.e. one the renderer will lay out inline. `function` is reserved, so a
+	 * first-visible-Text of exactly `function` is unambiguously a function
+	 * expression; the predicate does not inspect the body, and an item that parks
+	 * none re-tags to itself.
 	 *
-	 * Such an item parks its body behind a `BodyGroup` whenever the body policy is `fitLine`, and `DocMeasure.flatTokenWidth` /
-	 * `Renderer.fitsFlat` DEFER a `BodyGroup` to width 0 - so the item under-measures and every width-only cascade above it
-	 * (`callParameter`'s `exceedsMaxLineLength`, `methodChain`'s `lineLength >= n`, the statement's own `ifBody: fitLine` fit)
-	 * reads a line short by the whole body. The render side cannot repair it either: `shapeNoWrap` wraps a committed body in
-	 * `Flatten`, and `Renderer.pushStructural`'s single `Group`/`BodyGroup` arm skips `fitsFlat` under `forceFlat`.
+	 * Such an item parks its body behind a `BodyGroup` whenever the body policy is
+	 * `fitLine`, and both `DocMeasure.flatTokenWidth` and `Renderer.fitsFlat` DEFER a
+	 * `BodyGroup` to width 0 — so the item under-measures and every width-only
+	 * cascade above it reads a line short by the whole body. The render side cannot
+	 * repair it either: `shapeNoWrap` wraps a committed body in `Flatten`, and
+	 * `Renderer.pushStructural`'s single `Group` / `BodyGroup` arm skips `fitsFlat`
+	 * under `forceFlat`.
 	 *
-	 * `emit` feeds this into the same `groupifyInlineBodies` re-tag as `isArrowPlainIfBody`: the mechanism was never missing, only
-	 * gated on the ARROW spelling. Measured on a reduction of the Pony site `ServersideStorageDB.save()` under `maxLineLength:
-	 * 140`, with the lambda spelling as the only variable: `(r) -> if (!r) throw ...` at 141 columns breaks, `function(r) if (!r)
-	 * throw ...` at 146 is a FIXED POINT, and the same `function` shape with a 260-character body is an equally immovable 420. The
-	 * SITE itself is not over the limit: it sits at exactly 140 with the `+` continuation laid at the STATEMENT's own indent, which
-	 * is the same root cause one level down.
+	 * `emit` feeds this into the same `groupifyInlineBodies` re-tag as
+	 * `isArrowPlainIfBody`: the mechanism was never missing, only gated on the ARROW
+	 * spelling. Block bodies are excluded by construction — a body carrying a
+	 * hardline hugs and owns its own layout. The gate is NOT position-restricted:
+	 * `emit` serves every wrap list, so an array element leading with `function` is
+	 * re-tagged too, which is what makes it agree with its arrow twin there.
 	 *
-	 * Block bodies are excluded by construction - `flatLength(item) < 0` is `isFunctionBlockLambdaItem`, which hugs, the block
-	 * owning its own layout. The gate is NOT position-restricted: `emit` serves every wrap list, so an array element leading with
-	 * `function` is re-tagged too, which is what makes it agree with its arrow twin there.
-	 *
-	 * Residual, measured under Pony's own `hxformat.json` and left open (T875): this gate accepts ANY hardline-free body while
-	 * `isArrowPlainIfBody` still demands a plain `if`, so for a `for` / `while` / `switch` / `if`-`else` body the `function`
-	 * spelling now measures and the ARROW spelling does not. Not a regression - the arrow side is byte-for-byte as it was - but the
-	 * two gates coincide only for a plain `if`.
+	 * One residual is left open: this gate accepts ANY hardline-free body while
+	 * `isArrowPlainIfBody` still demands a plain `if`, so for a `for` / `while` /
+	 * `switch` / `if`-`else` body the `function` spelling measures and the ARROW
+	 * spelling does not. The arrow side is byte-for-byte as it was, so this is not a
+	 * regression, but the two gates coincide only for a plain `if`.
 	 */
 	private static function isFunctionInlineBodyItem(item: Doc): Bool {
 		return firstVisibleTextIsFunctionKw(item) && flatLength(item) >= 0;
@@ -4212,47 +4125,37 @@ class WrapList {
 	}
 
 	/**
-	 * ω-comprehension-closer: true iff `item`'s multi-line-ness is owned by a
-	 * `{ … }` construct GLUED to the generator head — the only shape for which
-	 * `} ]` is a coherent close, because the `}` has already returned to the
-	 * container's own indent by the time the `]` joins it.
+	 * True iff `item`'s multi-line-ness is owned by a `{ … }` construct GLUED to the
+	 * generator head — the only shape for which `} ]` is a coherent close, because
+	 * the `}` has already returned to the container's own indent by the time the `]`
+	 * joins it.
 	 *
-	 * Two conjuncts, both required:
-	 *  - the last visible Text is `}` — the item's own close is a curly, so
-	 *    there is a `}` for the `]` to ride;
-	 *  - the item's FIRST structural break is immediately preceded by `{`
-	 *    (`firstBreakIsDelimChar`) — i.e. that curly sits at the END of the
-	 *    head line. This is the discriminator: under the padded-bracket regime
-	 *    that `shapeComprehensionBlockHug` gates on, a block-ctor body bypasses
-	 *    the body-policy switch entirely and is emitted `Concat([OptSpace(' '),
-	 *    block])` — glued, first break right after `{`. An EXPRESSION body is
-	 *    emitted `Nest(cols, Concat([Line('\n'), body]))` — pushed to a
-	 *    continuation line, first break right after the head's `)`.
+	 * Two conjuncts, both required: the last visible Text is `}`, so there is a curly
+	 * for the `]` to ride; and the item's FIRST structural break is immediately
+	 * preceded by `{`, i.e. that curly sits at the END of the head line. The second
+	 * is the discriminator — under the padded-bracket regime `shapeComprehensionBlockHug`
+	 * gates on, a block-ctor body bypasses the body-policy switch and is emitted
+	 * glued, breaking right after `{`, while an EXPRESSION body is pushed to a
+	 * continuation line and breaks right after the head's `)`.
 	 *
-	 * WHY the tail test alone is not enough (the bug this conjunct fixes): a
-	 * `}` tail is a property of the LAST token, not of the body's construct.
-	 * A body PUSHED to a continuation line whose final token happens to be a
-	 * curly — a macro reification (`macro if (…) $p{['source', f.field]}`), a
-	 * ternary whose else-branch is an object literal or a `switch` — read as a
-	 * block, took the head-hug shape, and got its `]` glued to a body line at
-	 * BODY indent (`… $p{[…]} ];`). Two canonical closers for one construct in
-	 * one file. The head-glue test refuses all of them: their first break
-	 * precedes their body, so the cuddled-open shape applies and the `]` drops
-	 * to its own line at container indent.
+	 * WHY the tail test alone is not enough: a `}` tail is a property of the LAST
+	 * token, not of the body's construct. A body PUSHED to a continuation line whose
+	 * final token happens to be a curly — a macro reification, a ternary whose else
+	 * branch is an object literal, a `switch` — read as a block, took the head-hug
+	 * shape, and got its `]` glued to a body line at BODY indent, giving one
+	 * construct two canonical closers in one file. The head-glue test refuses all of
+	 * them, since their first break precedes their body.
 	 *
-	 * The refusal is about PLACEMENT, not about the construct: the same
-	 * `switch` (or object literal) written so it opens ON the head line stays
-	 * head-glued and keeps `} ]`, because there the `}` really has come back to
-	 * container indent. Verified both directions in
-	 * `HxComprehensionCloserSliceTest`.
+	 * The refusal is about PLACEMENT, not about the construct: the same `switch` or
+	 * object literal written so it opens ON the head line stays head-glued and keeps
+	 * `} ]`, because there the `}` really has come back to container indent.
 	 *
-	 * Sister-predicate contract: `isCuddleableComprehensionItem` negates THIS
-	 * BODY TEST, so no comprehension is ever both hugged and cuddled, and none
-	 * falls between the two on body shape alone. It is not a total partition of
-	 * comprehensions: the sibling adds its own `for`-only and single-generator
-	 * exclusions (see its doc), so a `while` comprehension and a nested-
-	 * generator one satisfy NEITHER predicate and reach the generic cascade —
-	 * deliberately, and pinned there.
+	 * Sister-predicate contract: `isCuddleableComprehensionItem` negates THIS BODY
+	 * TEST, so no comprehension is ever both hugged and cuddled and none falls
+	 * between the two on body shape alone. It is not a total partition — the sibling
+	 * adds its own `for`-only and single-generator exclusions, so a `while`
+	 * comprehension and a nested-generator one satisfy NEITHER predicate and reach
+	 * the generic cascade, deliberately and pinned there.
 	 */
 	private static function isHeadGluedBraceBodyComprehension(item: Doc): Bool {
 		return lastVisibleText(item) == '}' && firstBreakIsDelimChar(item, '{'.code);
@@ -4421,177 +4324,87 @@ class WrapList {
 	}
 
 	/**
-	 * ω-comprehension-cuddled-open: `true` iff `item` is a `for` comprehension
-	 * element with a NON-block body that already renders multi-line — the shape
-	 * the cuddled-open knob re-lays-out.
+	 * `true` iff `item` is a `for` comprehension element with a NON-block body that
+	 * already renders multi-line — the shape the cuddled-open knob re-lays-out.
 	 *
-	 * `while` comprehensions are EXCLUDED even though they are the sister
-	 * generator form: `HxWhileExpr.body` carries no `@:fmt(bodyPolicy(...))`
-	 * (unlike `HxForExpr.body`), so its body has no policy `Nest` to shift out
-	 * of — cuddling the head leaves the body at CONTAINER indent, level with
-	 * the closing `]`, violating this shape's own one-level contract
-	 * (`testWhileComprehensionNotCuddled`). Wire a body policy on `HxWhileExpr`
-	 * first if `while` comprehensions ever need this.
+	 * `while` comprehensions are EXCLUDED even though they are the sister generator
+	 * form: `HxWhileExpr.body` carries no `@:fmt(bodyPolicy(...))`, so its body has no
+	 * policy `Nest` to shift out of and cuddling the head would leave the body at
+	 * CONTAINER indent, level with the closing `]`, violating this shape's own
+	 * one-level contract. Wire a body policy on `HxWhileExpr` first if `while`
+	 * comprehensions ever need this.
 	 *
-	 * Two gates, both cheap left-spine / flat walks already used by the sibling predicates:
-	 *  - first visible Text is the reserved `for` keyword (exact match —
-	 *    unambiguous, as in `isBlockBodyComprehensionItem`);
-	 *  - the body is NOT a head-glued `{ … }`
-	 *    (`isHeadGluedBraceBodyComprehension`, the exact negation of
-	 *    `isBlockBodyComprehensionItem`'s own body test) — such a body
-	 *    head-hugs through `shapeComprehensionBlockHug`, which runs first
-	 *    and glues `} ]`. That intercept only fires on PADDED brackets, so
-	 *    under tight brackets this gate is the only thing stopping the `}`
-	 *    and the `]` from being split across two lines
-	 *    (`testTightBracketBlockBodyNotCuddled`). An expression body whose
-	 *    last token merely HAPPENS to be `}` (macro reification, object-
-	 *    literal / `switch` tail) is NOT excluded — it is pushed to a
-	 *    continuation line like any other expression body, so its `]`
-	 *    belongs on its own line (ω-comprehension-closer).
+	 * Two gates, both cheap left-spine / flat walks the sibling predicates already
+	 * use: the first visible Text is the reserved `for` keyword, and the body is NOT a
+	 * head-glued `{ … }` (`isHeadGluedBraceBodyComprehension`, the exact negation of
+	 * `isBlockBodyComprehensionItem`'s own body test). Such a body head-hugs through
+	 * `shapeComprehensionBlockHug`, which runs first and glues `} ]`; that intercept
+	 * only fires on PADDED brackets, so under tight brackets this gate is the only
+	 * thing keeping the `}` and the `]` on one line. An expression body whose last
+	 * token merely HAPPENS to be `}` is NOT excluded — it is pushed to a continuation
+	 * line like any other expression body, so its `]` belongs on its own line.
 	 *
-	 * A THIRD gate used to sit here and now lives one function down, in
-	 * `shapeComprehensionCuddledOpen`: `flatLength(item) < 0`, "the item carries
-	 * a forced hardline". It read as a shape question and was a WIDTH one — a
-	 * stand-in for "this comprehension does not fit its line", which held only
-	 * because an item that cannot render flat cannot fit either. The class it
-	 * silently excluded is the one the user reported (S146): an item that renders
-	 * flat perfectly well and still overflows, which under
-	 * `sameLine.comprehensionFor: fitLine` is every long comprehension in a real
-	 * tree. Width is not a property of the ITEM, so the two answers that replace
-	 * it are render-time probes on the SHAPE, not another predicate here.
-	 *
-	 * TWO further gates used to sit here and are GONE: a top-level `else` in the
-	 * item, and a nested second generator. Neither was a property of the BRACKET
-	 * — `[ for (head)` is glued to its own `[` whatever the body turns out to be,
-	 * and where the body lands below that head is the body policy's question
-	 * (`expressionForBody`), which owns its own `Nest`. Keeping them meant the
-	 * two commonest real shapes — a comprehension whose body is an if/else, and
-	 * an outer comprehension holding a second `for` — were the only ones the knob
-	 * refused, which is the layout the user rejected three times. The `else`
-	 * gate's stated hazard (the `else` rendering at CONTAINER indent) belongs to
-	 * a body policy that glues the body to the head line; under the strict
-	 * `comprehensionFor: fitLine` the body starts one level below the head and
-	 * the `else` sits with its own `if`.
+	 * Three gates that used to sit here are gone, and none of them was a property of
+	 * the BRACKET. A `flatLength(item) < 0` test read as a shape question and was a
+	 * WIDTH one, standing in for "this comprehension does not fit its line"; width is
+	 * not a property of the ITEM, so its replacements are render-time probes on the
+	 * SHAPE, one function down. A top-level `else` and a nested second generator were
+	 * excluded for hazards that belong to a body policy gluing the body to the head
+	 * line — `[ for (head)` is glued to its own `[` whatever the body turns out to be,
+	 * and where the body lands below that head is `expressionForBody`'s question,
+	 * which owns its own `Nest`.
 	 */
 	private static function isCuddleableComprehensionItem(item: Doc): Bool {
 		return firstVisibleText(item) == 'for' && !isHeadGluedBraceBodyComprehension(item);
 	}
 
 	/**
-	 * ω-comprehension-cuddled-open: under `wrapping.comprehensionCuddledOpen`,
-	 * a one-element list whose element is an expression-bodied `for`
-	 * comprehension keeps the comprehension HEAD glued to the open delimiter
-	 * (`[ for (x in xs)`) and lets only the body — plus any filter `if` — wrap
-	 * one indent below, with the close delimiter on its own line at container
-	 * indent:
+	 * Under `wrapping.comprehensionCuddledOpen`, a one-element list whose element is
+	 * an expression-bodied `for` comprehension keeps the comprehension HEAD glued to
+	 * the open delimiter (`[ for (x in xs)`) and lets only the body — plus any filter
+	 * `if` — wrap one indent below, with the close delimiter alone at container
+	 * indent. The body's indent comes from the item's OWN body-policy `Nest`, taken
+	 * relative to the line the head sits on, so cuddling shifts the whole body one
+	 * level out compared with `shapeOnePerLine`, the exploded shape this knob
+	 * re-compacts and the mode it is gated to.
 	 *
-	 * ```
-	 * key: [ for (u in list) if (pred(u))
-	 *     ({ a: u.a, b: u.b })
-	 * ],
-	 * ```
+	 * TWO FIT PROBES, one per item class, because what a static walk can measure on
+	 * the item's own Doc decides which probe can answer at all; both fall back to
+	 * `shapeOnePerLine`.
 	 *
-	 * The body's indent comes from the item's OWN body-policy `Nest`, which is
-	 * relative to the line the head sits on — so cuddling the head shifts the
-	 * whole body one level out compared with `shapeOnePerLine`, matching the
-	 * "one indent level from the `[` line" contract.
+	 * A. THE ITEM CANNOT RENDER FLAT — `IfFirstLineExceeds`, whose walk aborts at the
+	 * first hardline, so it measures exactly the open delimiter, its padding and the
+	 * head through its closing `)`. It also defers a body `BodyGroup`, but that is a
+	 * weaker stop and does not generalise: under `sameLine.comprehensionFor: fitLine`
+	 * no `BodyGroup` reaches the item, the walk runs to the end, and the probe would
+	 * measure the WHOLE comprehension — which is why it cannot serve class B. Its
+	 * threshold is a bare `lineWidth` rather than the cond-paren probes'
+	 * `lineWidth + 1`, because the primitive's `>= n` and the pending `OptSpace` an
+	 * assignment or object-field prefix holds back cancel each other.
 	 *
-	 * Gated to the `OnePerLine` resolution: that is the exploded shape this
-	 * knob re-compacts. Every other mode (`NoWrap` fit, the Fill family) either
-	 * already keeps the head on the open line or belongs to a cascade this knob
-	 * makes no claim about.
+	 * B. THE ITEM RENDERS FLAT — `IfWidthExceeds(bodyBreaksWhenGlued,
+	 * IfNaturalFirstLineExceeds(…), openShape)`. The knob promises "head on the `[`
+	 * line, BODY one indent below", so the only cell it can serve is the one where
+	 * the item's own group BREAKS under the glue; where it does not, the glued shape
+	 * packs head and body onto the `[` line with the closer alone underneath, worse
+	 * than the fallback. There is no "the body broke" primitive, but the question is
+	 * arithmetic, so the threshold is SOLVED for `n` rather than calibrated and
+	 * reduces to `col + glueLead + itemWidth > lineWidth` whatever `openShape`
+	 * measures. The PEN COLUMN is the right frame and the fallback line's indent was
+	 * not — the statement prefix before the `[` is what decides whether the body must
+	 * move down, and it does not move between passes, so the layout stays idempotent.
+	 * The inner probe is the head-fit fallback class A gets from its hardline free.
 	 *
-	 * TWO FIT PROBES, one per item class, because what the item's own Doc lets
-	 * a static walk measure is what decides which probe can answer at all. Both
-	 * fall back to `shapeOnePerLine` — the pre-knob layout.
+	 * B ALSO REQUIRES the item's FIRST break to sit right after the head's `)`, since
+	 * only a body-level break delivers the promised shape; where the first break is
+	 * inside the HEAD instead, cuddling spends the whole prefix as head budget and it
+	 * is the head that splits. A wrapping ITERABLE is NOT excluded, because the walk
+	 * resolves every probe to its flat side. Class A needs no such gate: its break is
+	 * the forced one, and where it lands is the body policy's business.
 	 *
-	 * A. THE ITEM CANNOT RENDER FLAT (`flatLength(item) < 0`) —
-	 * `IfFirstLineExceeds(lineWidth, openShape, glueShape)`.
-	 * `flatTokenWidthFirstLine` walks the glued shape flat and aborts at the
-	 * first hardline, so on THIS class it measures exactly
-	 * `open + inner-pad + <head through its closing `)`>` — the item's OWN
-	 * forced break is what stops the walk. It also defers a body `BodyGroup`,
-	 * but that is a second, weaker stop and it does not generalise: under
-	 * `sameLine.comprehensionFor: fitLine` no `BodyGroup` reaches the item at
-	 * all — measured, `DocMeasure.flatTokenWidth`, which defers one to zero,
-	 * returns the item's FULL flat width (138 of 138 on the reported site) —
-	 * so the walk runs to the end and the probe measures the WHOLE
-	 * comprehension. That is why this probe cannot serve class B, and why the
-	 * first reading of the S146 report — "drop the `flatLength` gate and the
-	 * probe already there does the rest" — moved exactly one of the twelve
-	 * probe cells, and moved it into the shape the gate existed to refuse.
-	 *
-	 * The threshold is bare `lineWidth`, NOT the `lineWidth + 1` of the
-	 * cond-paren probes: the primitive fires on `>= n`, and the running `col`
-	 * here trails the rendered column by the pending `OptSpace` that assignment
-	 * / object-field prefixes hold back, so the two offsets already cancel — a
-	 * head landing exactly ON `maxLineLength` cuddles and one column past it
-	 * does not (`testHeadAtLimitCuddles` / `testHeadPastLimitFallsBack`).
-	 *
-	 * B. THE ITEM RENDERS FLAT (S146 + T674): ONE probe,
-	 * `IfWidthExceeds(bodyBreaksWhenGlued, IfNaturalFirstLineExceeds(lineWidth,
-	 * openShape, glueShape), openShape)`. The knob promises "head on the `[`
-	 * line, BODY one indent below", so the only cell it can serve is the one
-	 * where the item's own group BREAKS under the glue. Where it does not, the
-	 * glued shape is a HALF-shape — head and body packed onto the `[` line with
-	 * the close delimiter alone underneath — which is worse than the fallback,
-	 * and it is what an unconditional cuddle produced for `FITTING_ITEM`.
-	 *
-	 * There is no "the body broke" primitive, but the question is arithmetic:
-	 * the item starts at `col + flatTokenWidth(open + openInside)` and its group
-	 * breaks exactly when the item's own flat width does not fit from there.
-	 * `IfWidthExceeds` fires on `col + flatTokenWidth(flatDoc) >= n` with
-	 * `flatDoc = openShape`, so the threshold is SOLVED for `n` rather than
-	 * calibrated: `lineWidth + 1 - glueLead - itemWidth +
-	 * flatTokenWidth(openShape)` reduces to `col + glueLead + itemWidth >
-	 * lineWidth` whatever `openShape` happens to measure, which is what keeps
-	 * this off the ±2-column knife edge three earlier formulations sat on.
-	 *
-	 * The PEN COLUMN is the right frame here and `f.indent` was not. The
-	 * statement prefix before the `[` — `return ` against
-	 * `final cr: Array<String> = ` — is exactly what decides whether the body
-	 * has to move down, and the FALLBACK line's indent cannot see it. It stays
-	 * idempotent because that prefix does not move between passes
-	 * (`testCuddledLayoutIsIdempotent`, `testTheReportedLayoutIsIdempotent`).
-	 *
-	 * The predecessor measured `indent + cols + flatLength(item)` — the line
-	 * `shapeOnePerLine` WOULD give the item — and declined whenever the item
-	 * fitted THERE. That line is one indent level deeper than the glue line and
-	 * blind to the prefix, so it declined the reported T674 site (the item is
-	 * exactly 140 columns at the fallback indent and 164 at the glue column)
-	 * while accepting `FITTING_ITEM` (140 at the glue column, so the body never
-	 * moved). Both cells now answer from the same arithmetic. A cascade that
-	 * resolved `OnePerLine` on a NON-width rule is declined for free rather than
-	 * by a second rule: an item that breaks at the glue column implies the whole
-	 * comprehension overflows (`testInlineBodyComprehensionNotCuddled`).
-	 *
-	 * The inner probe is the head-fit fallback that class A gets for free from
-	 * its hardline — `naturalFirstLineWidth` renders the glued shape
-	 * speculatively, so when the body group breaks under it the measurement is
-	 * the head alone.
-	 *
-	 * B ALSO REQUIRES the item's FIRST break to sit right after the `for`
-	 * head's `)` (`firstBreakIsDelimChar(item, ')')`). The knob promises "head
-	 * on the `[` line, BODY one indent below", and only a body-level break can
-	 * deliver it. Where the item's first break is inside the HEAD instead —
-	 * `comprehensionFor: keep` glues the generator body, so the earliest break
-	 * a filter `if` offers is inside its own CONDITION — cuddling spends the
-	 * whole prefix as head budget and it is the head, not the body, that
-	 * splits. Measured on `testInnerOverflowKeepsOpenBracketAndWrapsBody`,
-	 * which is the ONE cell this gate flips: exploded, the head is one
-	 * 138-column line; cuddled at column 43 it is 169 and the filter's `&&`
-	 * chain breaks. A wrapping ITERABLE is NOT excluded — the walk resolves
-	 * every probe to its flat side, so `for (n in new IntIterator(a, b))` still
-	 * answers `)` and still cuddles (`pony/ui/xml/PixiXmlUi`, two sites, both
-	 * the wanted shape). Class A needs no such gate — its break is the forced
-	 * one, and where it lands is the body policy's business.
-	 *
-	 * The tail mirrors `shapeOnePerLine` exactly — the source / knob trailing
-	 * separator on `appendTrailingComma`, then the per-construct `trailBreak`
-	 * — so switching the head placement never adds or drops a token. The inner
-	 * padding follows the construct's own bracket-spacing policy
-	 * (`openInside`); `closeInside` is dropped because the close delimiter no
-	 * longer shares a line with the body.
+	 * The tail mirrors `shapeOnePerLine` exactly, so switching the head placement
+	 * never adds or drops a token, and `closeInside` is dropped because the close
+	 * delimiter no longer shares a line with the body.
 	 */
 	private static function shapeComprehensionCuddledOpen(
 		enabled: Bool, mode: WrapMode, open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, cols: Int,

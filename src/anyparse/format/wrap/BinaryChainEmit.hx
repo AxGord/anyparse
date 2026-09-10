@@ -8,70 +8,30 @@ import anyparse.format.WriteOptions;
 using Lambda;
 
 /**
- * Runtime helper that emits a `Doc` for a binary-op chain construct
- * (`a || b || c` / `a + b - c + d` — left-assoc nested `BinOp(left,
- * right)` AST collapsed by the caller into a flat `items + ops` pair)
- * whose layout is driven by a `WrapRules` cascade.
+ * Runtime helper that emits a `Doc` for a binary-op chain construct (`a || b || c`,
+ * `a + b - c + d`) whose layout is driven by a `WrapRules` cascade.
  *
- * Format-neutral — the chain extraction happens in a grammar-specific
- * helper that knows the language's BinOp ctors (e.g. `Or` / `And` for
- * the opBoolChain class, `Add` / `Sub` for the opAddSubChain class in
- * Haxe). This engine accepts the pre-built `items:Array<Doc>` (each
- * already rendered through the host writer) interleaved by an
- * `ops:Array<String>` (operator text per gap) and runs the cascade
- * decision + chain shape selection.
+ * Format-neutral: the chain extraction happens in a grammar-specific helper that
+ * knows the language's BinOp ctors, and this engine takes the pre-built
+ * `items: Array<Doc>` — each already rendered through the host writer —
+ * interleaved by an `ops: Array<String>` of one operator text per gap, so
+ * `items.length == ops.length + 1`.
  *
- * `items.length == ops.length + 1` (n operands separated by n-1
- * operators).
+ * Differs from `WrapList.emit` in three ways: a chain has NO open / close
+ * delimiters, since its operands are bare; the operator text differs per position
+ * (a mixed `||` / `&&` chain), so the engine takes a parallel `ops` array rather
+ * than a single separator; and operator PLACEMENT is a second axis on top of the
+ * `WrapMode` — `BeforeLast` starts each continuation line with the operator,
+ * `AfterLast` ends the previous line with it, and the fill shapes pack through
+ * `Fill` so the operator rides ahead of or behind the soft line accordingly.
  *
- * Differs from `WrapList.emit` in three ways:
- *  - chain has NO open/close delimiters (operands are bare);
- *  - the separator between two operands carries an operator text that
- *    differs per position (mixed `||` / `&&` chain in haxe-formatter's
- *    `opBoolChain` class), so the engine accepts a parallel `ops`
- *    array rather than a single `sep`;
- *  - operator placement is implicit in the selected `WrapMode` —
- *    `OnePerLineAfterFirst` puts the operator at the START of each
- *    continuation line (BeforeLast placement, mirroring haxe-formatter
- *    `wrappingLocation: BeforeLast`); `OnePerLine` and `FillLine` put
- *    it at the END of each line that breaks (After placement,
- *    matching haxe-formatter's default for those modes).
- *
- * Mirrors haxe-formatter's `WrappingProcessor.markSingleOpBoolChain` /
- * `markSingleOpAddChain` — both consume a chain of mixed-but-related
- * operators and emit one cascade decision per top-level chain.
- *
- * Modes:
- *  - `NoWrap`               → `items[0] op0 items[1] op1 …` (all inline,
- *    spaces around each op). Location field is irrelevant.
- *  - `OnePerLineAfterFirst` → first operand stays on the call-site
- *    line, remaining operands each on their own indented continuation
- *    line. With `BeforeLast` the op prefixes each continuation
- *    (`dirty = dirty\n\t|| (X)\n\t|| (Y)`); with `AfterLast` the op
- *    suffixes the previous line (`dirty = dirty ||\n\t(X) ||\n\t(Y)`).
- *  - `OnePerLine`           → every operand (including the first) on
- *    its own indented line. With `BeforeLast` every continuation line
- *    starts with `op operand` except the first; with `AfterLast` every
- *    line except the last ends with ` op`.
- *  - `FillLine` /
- *    `FillLineWithLeadingBreak` → soft-line packing through `Fill` —
- *    items pack inline up to line budget; the soft-line between two
- *    operands breaks at the chain's continuation indent when the next
- *    one would overflow. With `BeforeLast` the op rides AHEAD of the
- *    next operand (so a broken soft-line lands the op at the start of
- *    the continuation line); with `AfterLast` the op suffixes the
- *    previous operand (so the broken soft-line lands the next operand
- *    at the start of the continuation line).
- *
- * The `location` axis (`BeforeLast` vs `AfterLast`) is selected per
- * rule via `WrapRule.location` (or the parent
- * `WrapRules.defaultLocation` fallback) and resolved by
- * `WrapList.decideRuleWithLineLengthState` — column-aware variant of
- * `decideRule` that defers `LineLengthLargerThan` evaluation to a
- * caller-supplied predicate so the renderer's column position can
- * gate threshold-firing at layout time. Mirrors haxe-formatter's
- * `wrapping.<class>.location` field on per-rule entries in
- * `WrapConfig.hx`.
+ * That axis is selected per rule by `WrapRule.location`, falling back to
+ * `WrapRules.defaultLocation`, and resolved by
+ * `WrapList.decideRuleWithLineLengthState` — the column-aware variant of
+ * `decideRule` that defers a `LineLengthLargerThan` to a caller-supplied predicate
+ * so the renderer's own column can gate threshold-firing at layout time. The mode
+ * and location vocabularies themselves are documented in
+ * `docs/haxe-format-config.md`.
  */
 @:nullSafety(Strict)
 final class BinaryChainEmit {
@@ -239,58 +199,43 @@ final class BinaryChainEmit {
 	}
 
 	/**
-	 * ω-assign-chain-fill: OVERFLOW-ONLY wrap for a right-associative `=`
-	 * chain (`a = b = c = value`), whose nested `Assign(l, Assign(l, …))`
-	 * spine the caller has already flattened into `items` (n operands, n-1
-	 * implicit `=` gaps). Unlike the cascade-driven `emit`, an assign chain
-	 * has NO `WrapRules` class of its own — the fork never wraps one until
-	 * the line overflows — so the decision is a single probe rather than a
-	 * rule enumeration.
+	 * OVERFLOW-ONLY wrap for a right-associative `=` chain (`a = b = c = value`),
+	 * whose nested `Assign(l, Assign(l, …))` spine the caller has already flattened
+	 * into `items`. An assign chain has NO `WrapRules` class of its own — it is not
+	 * wrapped until the line overflows — so the decision is a single probe rather
+	 * than a rule enumeration.
 	 *
-	 * FLAT SHAPE is built right-nested from the tail so it is byte- AND
-	 * tree-identical to the per-level `Concat([left, ' ', '=', OptSpace(' '),
-	 * right])` the plain lowering emits. The `OptSpace(' ')` is load-bearing:
-	 * it drops the trailing space when the RHS opens with a hardline (a
-	 * break-mode chain / collection on the right of the last `=`), so it must
-	 * NOT be folded into a `Text(' =')` on this side.
+	 * The FLAT SHAPE is built right-nested from the tail so it stays byte- and
+	 * tree-identical to the per-level `Concat` the plain lowering emits. Its
+	 * `OptSpace(' ')` is load-bearing: it drops the trailing space when the RHS opens
+	 * with a hardline, so it must NOT be folded into a `Text(' =')` on this side.
 	 *
-	 * BREAK SHAPE reuses `shapeFillLine(…, AfterLast)` — the established
-	 * binop-chain fill convention. `AfterLast` suffixes the operator to the
-	 * previous operand (`a =\n\tb = value`), which is the only placement that
-	 * reads for an assignment: a continuation line led by `= b` would look
-	 * like a fresh statement. Packing (rather than one-operand-per-line) comes
-	 * for free from the shared `Fill(enriched, Line(' '), 1)` with its
-	 * fork-`>=` tail reserve, and the shared `Nest` puts the continuation at
-	 * one indent level.
+	 * The BREAK SHAPE reuses `shapeFillLine(…, AfterLast)`, the established
+	 * binop-chain fill convention. `AfterLast` suffixes the operator to the previous
+	 * operand (`a =\n\tb = value`), the only placement that reads for an assignment,
+	 * since a continuation line led by `= b` would look like a fresh statement.
+	 * Packing comes for free from the shared `Fill`, and the shared `Nest` puts the
+	 * continuation one indent level in.
 	 *
-	 * GATE is `IfNaturalFirstLineExceeds`, NOT `Group` / `IfLineExceeds`:
-	 * the natural probe resolves inner `Group`s by their OWN `fitsFlat`, so
-	 * `x = call(reallyLongArgs…)` — whose call folds its own arguments —
-	 * has a SHORT natural first line (it ends at the call's open paren), the
-	 * probe does not fire, and the output stays byte-identical to today's.
-	 * A flat-width pivot would measure the un-wrapped RHS and break the `=`
-	 * on every such site. The probe's render arm already honours
-	 * `Frame.forceFlat`, so a chain inside a force-flat region (string
-	 * interpolation) collapses to the flat shape without a `WrapBoundary`
-	 * wrapper — adding one would defeat that.
+	 * The GATE is `IfNaturalFirstLineExceeds`, not `Group` / `IfLineExceeds`: the
+	 * natural probe resolves inner `Group`s by their OWN `fitsFlat`, so
+	 * `x = call(reallyLongArgs…)`, whose call folds its own arguments, has a SHORT
+	 * natural first line and does not fire — where a flat-width pivot would measure
+	 * the un-wrapped RHS and break the `=` at every such site. The probe's render arm
+	 * already honours `Frame.forceFlat`, so a chain inside a force-flat region
+	 * collapses to the flat shape without a `WrapBoundary` wrapper; adding one would
+	 * defeat that.
 	 *
-	 * Threshold is `opt.lineWidth + 1` per the project's width convention:
-	 * every exceeds-maxLineLength probe (including the natural / fits-probe
-	 * family) compares against `lineWidth + 1`, because the render arm fires
-	 * on `>=` while the config predicate means "strictly past the limit".
-	 * On a chain of PLAIN operands the constant is byte-inert (measured): the
-	 * break shape's own `Group` re-runs `fitsFlat`, which is Wadler-inclusive,
-	 * at the same column — so a chain that merely REACHES the limit renders
-	 * flat whichever threshold the probe carries. Where the two gates DISAGREE
-	 * — an operand whose inner `Group` wraps, so the `Group` no longer re-glues
-	 * — the constant is observable at exactly one column, and `+ 1` is the
-	 * correct answer there (measured): a prefix landing ON column `lineWidth`
-	 * stays glued, a bare `lineWidth` would break a line that legally fits.
+	 * The threshold is `opt.lineWidth + 1` per the project's width convention: every
+	 * exceeds-maxLineLength probe compares against `lineWidth + 1`, because the render
+	 * arm fires on `>=` while the config predicate means "strictly past the limit".
+	 * The two gates disagree only where an operand's inner `Group` wraps and no longer
+	 * re-glues, and `+ 1` is right there — a prefix landing ON column `lineWidth`
+	 * stays glued, where a bare `lineWidth` would break a line that legally fits.
 	 *
-	 * The continuation always nests one indent level: unlike `emit` this
-	 * engine takes no `nestSuppress`, because an assignment is a statement-
-	 * level (or call-argument) construct that never sits directly inside a
-	 * cond paren-wrap whose `Nest` it would compound with.
+	 * The continuation always nests one indent level — unlike `emit` this engine takes
+	 * no `nestSuppress`, because an assignment never sits directly inside a cond
+	 * paren-wrap whose `Nest` it would compound with.
 	 */
 	public static function emitAssignChain(items: Array<Doc>, opt: WriteOptions): Doc {
 		// The caller only routes a genuine chain here (its own `case Assign`
@@ -573,9 +518,8 @@ final class BinaryChainEmit {
 	 * at an open delimiter. Note this does NOT require the paren to open — a content-glued paren
 	 * whose head line fits glues too, which is the intended reading of "the break buys nothing".
 	 *
-	 * Measured inert on the fork corpus (946 fixtures, identical pass/fail set): at the fork
-	 * defaults an expression-position `if` branch carries no forced break, so the shape does not
-	 * arise there.
+	 * Inert at the fork defaults, where an expression-position `if` branch carries no forced
+	 * break, so the shape does not arise there at all.
 	 *
 	 * `extraThresholds` non-empty keeps the column-aware tree — a `LineLengthLargerThan` rule at
 	 * a non-`lineWidth` threshold cannot be answered here.
@@ -993,12 +937,11 @@ final class BinaryChainEmit {
 			//
 			// SCOPE `items.length == 2`: the forced `OnePerLineAfterFirst` equals the
 			// fillLine-beforeLast shape only for one gap; 3+-operand chains keep the
-			// glue probe unchanged (no bac488c regression, and
-			// `HxOpAddTrailingParenGlueSliceTest`'s 3-operand glue stays pinned).
-			// Widening MEASURED AND REFUSED by T38: it costs two PASSING fork
-			// goldens + two pinned anyparse shapes for one TM site — full record in
-			// `CollapsePass.commitChainGlue`'s doc (which fixed the 3+-operand
-			// cascade at its real seam, the width-blind forward glue commit).
+			// glue probe unchanged, and `HxOpAddTrailingParenGlueSliceTest`'s
+			// 3-operand glue stays pinned. Widening it is REFUSED — it costs passing
+			// fork goldens and pinned anyparse shapes for one site; the record is in
+			// `CollapsePass.commitChainGlue`'s doc, which fixed the 3+-operand
+			// cascade at its real seam, the width-blind forward glue commit.
 			//
 			// UNREACHABLE-ARM PRUNE `contWidth > opt.lineWidth`: the continuation is
 			// `indent + cols + contWidth` columns wide and `indent + cols >= 0`, so a
@@ -1006,9 +949,9 @@ final class BinaryChainEmit {
 			// probe anyway would be render-inert but NOT walker-inert: the fits arm
 			// is SLOT-INVERTED (see below), so every walker that resolves
 			// `IfArrowContinuationFits` on its flat side would see the forced-break
-			// shape and answer questions about it — measured, that flipped an
-			// enclosing sole-arg call from hugged to opened for a paren whose ternary
-			// branches carry their own chain breaks (`HxTernaryBranchChainIndentTest`).
+			// shape and answer questions about it — that flipped an enclosing
+			// sole-arg call from hugged to opened for a paren whose ternary branches
+			// carry their own chain breaks (`HxTernaryBranchChainIndentTest`).
 			// Pruning the dead arm keeps those shapes on the glue probe by
 			// CONSTRUCTION rather than by a render-time answer no walker sees.
 			//
@@ -1231,79 +1174,44 @@ final class BinaryChainEmit {
 	}
 
 	/**
-	 * ω-ternary-cuddled-braces — the shape an ADMITTED cuddle takes, `cuddled`
-	 * and `plain` being the two already-built candidates. `items`/`ops` are the
-	 * three-operand ternary `ternaryBracesCuddle` admitted, so `items[2]` and
-	 * `ops[1]` are the else branch and its separator, and `closerWidth` is the
-	 * rendered width of the then branch's closing-line closer run, measured by the
-	 * gate on whichever rendering it admitted.
+	 * The shape an ADMITTED ternary cuddle takes, `cuddled` and `plain` being the two
+	 * already-built candidates. `items` / `ops` are the three-operand ternary
+	 * `ternaryBracesCuddle` admitted, and `closerWidth` is the rendered width of the
+	 * then branch's closing-line closer run.
 	 *
-	 * The else branch is measured TWICE, because gluing does not move it — it
-	 * SHIFTS it. The separator line the cuddle removes was `: <else>` at `cols`;
-	 * the line it rides instead is `} : <else>`, wider by the then branch's whole
-	 * closer run and the space after it. That run is why `closerWidth` is a number
-	 * and not a constant: a branch closing `}))` opens its line three columns wide,
-	 * and charging one closer admits a glued line two columns past the limit. An
-	 * else that fit its own line inside the difference does not fit the glued one,
-	 * and the renderer then breaks a branch that was a single line — measured on a
-	 * six-field else whose separator line landed on the limit: one line became
-	 * eight, and the line the cuddle saved brought that back to +6 net.
+	 * The else branch is measured TWICE, because gluing does not move it — it SHIFTS
+	 * it: the separator line the cuddle removes was `: <else>` at `cols`, the line it
+	 * rides instead is `} : <else>`, wider by that whole closer run plus a space. Which
+	 * is why `closerWidth` is a number and not a constant — a branch closing `}))`
+	 * opens its line three columns wide, so charging one closer admits a glued line
+	 * past the limit and the renderer then breaks a branch that had been one line.
 	 *
-	 * So the two widths BRACKET the decision rather than decide it: both failing
-	 * means the else lays out across lines either way and the cuddle is free; both
-	 * fitting means it stays on one line either way and the cuddle is free; only
-	 * the gap between them — fits alone, overflows glued — keeps its separator
-	 * line. `flatTokenWidth` is the right measure on both counts even for an else
-	 * whose break the renderer decides: such a branch reports its whole flat width,
-	 * fails both probes together, and lands in the first free case.
+	 * The two widths BRACKET the decision rather than decide it: both failing means the
+	 * else lays out across lines either way, both fitting means it stays on one line
+	 * either way, and only the gap between them — fits alone, overflows glued — keeps
+	 * its separator line. `flatTokenWidth` is right even for an else whose break the
+	 * renderer decides: it reports the whole flat width and fails both probes together.
 	 *
-	 * Both else probes are `IfArrowContinuationFitsWithRest`, and they stop at
-	 * `opt.lineWidth + 1` because the tail is now CHARGED rather than reserved. The
-	 * line they measure does not end where the branch does — a ternary is followed
-	 * by whatever terminates the statement or the call holding it — and the plain
-	 * ctor compares a column-independent token width that cannot see that tail. The
-	 * rest-aware sibling adds `Renderer.flatTokenWidthOfRestStack`, so the arm sums
-	 * the whole rendered line and the strict `<` still reads "fits inside
-	 * `maxLineLength`". For the statement host that is arithmetically what a single
-	 * reserved column against `opt.lineWidth` did, which is why no calibrated
-	 * fixture moves.
-	 *
-	 * WHY THE TAIL IS MEASURED AND NOT RESERVED, since a constant looks so much
-	 * cheaper. One reserved column is exact for a STATEMENT-position ternary and
-	 * wrong for every other host: one inside a glued call trails `);` and wants
-	 * two, one nested a call deeper trails `));` and wants three, one whose host
-	 * opened its own paren trails nothing and wants none. Widening the reserve
-	 * cannot fix it either, because the two probes want OPPOSITE conservatism — a
-	 * loose glue probe cuddles a line that overflows, and a strict else probe reads
-	 * a fitting else as "breaks anyway, so the cuddle is free" and cuddles it too.
-	 * Swept adversarially at a 140-column limit, a fixed one-column reserve
-	 * exploded the else at every width of a band `|tail - 1|` columns wide,
-	 * costing 3 lines at EACH of them: one such width at a sole call argument
-	 * whose paren opened (tail 0), two consecutive widths at `outer(inner(<ternary>));` (tail 3).
-	 * With the tail read from the render stack the band is empty on both hosts,
-	 * and the knob is never longer than the knob off at any width.
+	 * Both else probes are `IfArrowContinuationFitsWithRest` at `opt.lineWidth + 1`,
+	 * because the tail is CHARGED rather than reserved: the line they measure ends
+	 * where the HOST does, not where the branch does, and the plain ctor's
+	 * column-independent width cannot see that tail. A constant reserve cannot replace
+	 * the reading — one column is exact only for a STATEMENT-position ternary, and the
+	 * two probes want OPPOSITE conservatism, so a loose glue probe cuddles a line that
+	 * overflows while a strict else probe reads a fitting else as "breaks anyway" and
+	 * cuddles it too.
 	 *
 	 * SLOT INVERSION on the `probeGated` layer, the pairing four other consumers of
-	 * this ctor already use: the arm renders `flatDoc` when the continuation FITS,
-	 * and a then branch that fits stays FLAT — it has no closing line to ride — so
-	 * the PRE-KNOB shape is the flat slot and the cuddle the break slot. That
-	 * direction is also what keeps every Doc walker (which resolves this ctor to
-	 * `flatDoc`) reading the pre-knob layout. The structural leg needs no probe
-	 * and takes the guarded shape directly.
-	 *
-	 * The else-fits probe pairs the same way. The inner GLUE probe does NOT: it
-	 * asks whether the GLUED line fits, so fitting is the reason to glue and its
-	 * flat slot holds the cuddle, which means a walker resolving that node reads
-	 * the CUDDLED layout rather than the pre-knob one. `Doc.hx`'s header records
-	 * the disagreement, because the three sites this function builds are the only
-	 * ones where the family's two conventions meet.
-	 *
-	 * The `probeGated` layer is also the one that stays on the PLAIN ctor, and
-	 * not by oversight: it asks about the THEN branch's own continuation line, and under
-	 * the pre-knob shape that line ends at the branch — the `: else` opens a line of
-	 * its own below it. Its tail is empty by construction, so charging the render
-	 * stack there would bill it for a terminator that lands several lines further
-	 * down.
+	 * this ctor already use: the arm renders `flatDoc` when the continuation FITS, and
+	 * a then branch that fits stays FLAT, so the PRE-KNOB shape is the flat slot and
+	 * the cuddle the break slot — which is what keeps every Doc walker reading the
+	 * pre-knob layout. The else-fits probe pairs the same way; the inner GLUE probe
+	 * does NOT, since fitting is its reason to glue, so its flat slot holds the cuddle
+	 * and a walker resolving that node reads the CUDDLED layout; `Doc.hx`'s header
+	 * records the disagreement. `probeGated` itself stays on the PLAIN ctor by design:
+	 * it asks about the THEN branch's continuation line, which under the pre-knob
+	 * shape ends at the branch, so its tail is empty and charging the render stack
+	 * would bill a terminator several lines further down.
 	 */
 	private static function cuddleShape(
 		probeGated: Bool, closerWidth: Int, items: Array<Doc>, ops: Array<String>, opt: WriteOptions, cols: Int, probeWidth: Int,
@@ -1356,7 +1264,7 @@ final class BinaryChainEmit {
 		// A SECOND scan, not a widening of the first: a pivot may only NOMINATE a
 		// branch, never disqualify one, since nearly every nested CALL carries a
 		// pivot and the first scan's second-branch bail would then reject almost
-		// every ternary (measured: it cost `a ? { … } : f(x)` its hug).
+		// every ternary — it cost `a ? { … } : f(x)` its hug.
 		if (idx == -1) for (i in 1...3) if (WrapList.renderPivotBreakArm(items[i]) != null) { // noqa: magic-number
 			if (idx != -1) return -1;
 			idx = i;

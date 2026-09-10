@@ -5,73 +5,39 @@ import anyparse.format.WriteOptions;
 using StringTools;
 
 /**
- * Engine-level adapter for captured C-family line comments (`//…`).
+ * Engine-level adapter for captured C-family line comments (`//…`): a grammar wires
+ * `normalizeLineComment` into its format's `defaultWriteOptions.lineCommentAdapter`
+ * and gets the standard `// foo` ↔ `//foo` policy without plugin code.
  *
- * Lives next to `BlockCommentNormalizer` so any grammar (Haxe, AS3,
- * JS, C/C++, Rust, …) wires `normalizeLineComment` into its format's
- * `defaultWriteOptions.lineCommentAdapter` and gets the standard
- * `// foo` ↔ `//foo` policy without plugin code.
+ * The entry point is RUN-AWARE — callers pass the whole captured contiguous comment
+ * array plus the index of the entry to render, so a run-wide common indent can be
+ * computed; a single-comment slot passes a 1-element array. `run[index]` carries the
+ * `//` delimiter, and for the body-only trailing form callers pass `['//' + body]`.
+ * Non-`//` input is returned untouched, so every captured trivia string can be
+ * routed through here without a type-tag dispatch.
  *
- * The entry point is RUN-AWARE: callers pass the whole captured
- * contiguous comment array plus the index of the entry to render, so a
- * run-wide common indent can be computed. Single-comment slots pass a
- * 1-element array.
+ * `normalizeLineCommentIndent` (default `false`) strips the run's COMMON post-`//`
+ * whitespace prefix from a body whose first non-whitespace character is an ASCII
+ * letter or digit and emits exactly one space, so commented-out code keeps its
+ * relative structure while the shared over-indent goes. An entry that is not
+ * normalisable (empty body, a `//====` divider, a `//!` or `///` marker) neither
+ * contributes to nor breaks the run, yet still rides the same shift when its own
+ * indent opens with the common prefix — that is what keeps a `}` closer or a
+ * string-continuation line aligned with the block it belongs to; one that does not
+ * share the prefix falls through to the legacy path, and a non-`//` entry DOES
+ * break the run.
  *
- * Two knobs drive it, read off the supplied `WriteOptions`:
+ * The common prefix is computed character-wise and literally, so a run mixing tabs
+ * and spaces yields a short or empty prefix — the conservative direction, since
+ * nothing is then stripped. With an empty prefix the pass NEVER adds width: only a
+ * body sitting flush against the slashes picks up the separating space.
  *
- * `normalizeLineCommentIndent` (default `false`) — when on, a body whose
- * first non-whitespace character is an ASCII letter or digit gets its
- * run's COMMON post-`//` whitespace prefix stripped and exactly one
- * space emitted: `'// ' + rest`. Relative indentation inside the run
- * survives, so commented-out code keeps its structure while the shared
- * over-indent goes; a lone over-indented comment collapses to one
- * space. Tabs count as whitespace. Entries that are not normalisable
- * (empty body, dividers like `//====` / `//----` / `//***`, markers
- * like `//!`, `///`-style triple slashes — the third `/` is neither
- * letter nor digit) neither contribute to nor break the run — but one
- * whose own indent opens with the run's common prefix still rides the
- * same shift, so a `}` closer or a string-continuation line stays aligned
- * with the block it belongs to. One that does not share the prefix — a
- * divider sitting flush against the slashes — falls through to the legacy
- * path below. A non-`//` entry (a block comment) DOES break the run.
- *
- * The common prefix is computed character-wise and literally, so a run
- * mixing tabs and spaces yields a short or empty prefix — the
- * conservative direction: nothing is stripped and relative indentation
- * is preserved verbatim. With an empty common prefix the pass NEVER
- * adds width: a body that already starts with whitespace falls through
- * to the legacy path and is re-emitted as authored, and only a body
- * sitting flush against the slashes picks up the single separating
- * space.
- *
- * The pass is idempotent. After one pass every body the pass rewrote
- * reads `' ' + rest`; on the next pass the run's common prefix is
- * `' ' + commonPrefix(rest-whitespace)`, and stripping it before
- * re-emitting one space reproduces the same string, so formatting twice
- * is a fixed point. A body left to the legacy path is stable for the same
- * reason: it did not move, and the members that did move only ever land
- * on that single space.
- *
- * `addLineCommentSpace` — the legacy path, mirroring haxe-formatter's
- * `MarkTokenText.printCommentLine`, used whenever the indent pass does
- * not apply:
- *  - body matches `^[/\*\-\s]+` (decoration runs like `//*****`,
- *    `//---------`, `////`, or already-spaced bodies) → keep tight,
- *    rtrim trailing whitespace
- *  - `addLineCommentSpace == true` → emit `// <trimmed body>` (insert
- *    one space after `//`)
- *  - `addLineCommentSpace == false` → emit `//<trimmed body>` (knob
- *    off: no leading-space pass)
- *
- * `run[index]` is the captured string WITH the `//` delimiter
- * (`leadingComments[i]` and the `collectTrailingFull` close-trail
- * slot store it that way). For the body-only `collectTrailing`
- * trailing form, callers pass `['//' + body]`.
- *
- * Non-`//` input (block comment, plain text, anything else) is
- * returned untouched — the helper short-circuits so callers can
- * route every captured trivia string through here without a type-
- * tag dispatch.
+ * The pass is a fixed point: every body it rewrote reads `' ' + rest`, so the next
+ * run's common prefix begins with that space and stripping it before re-emitting
+ * one space reproduces the same string, while a body left to the legacy path never
+ * moved. That legacy path is `addLineCommentSpace` — a body matching `^[/\*\-\s]+`
+ * (decoration runs, already-spaced bodies) stays tight and rtrimmed, and otherwise
+ * the knob decides between `// <body>` and `//<body>`.
  */
 @:nullSafety(Strict)
 class LineCommentNormalizer {

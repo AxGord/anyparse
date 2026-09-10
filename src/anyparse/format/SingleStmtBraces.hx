@@ -4,113 +4,21 @@ using Lambda;
 using StringTools;
 
 /**
- * Runtime support for the `dropSingleStmtBraces` writer knob (slice
- * ω-single-stmt-braces; JSON key
+ * Runtime support for the `dropSingleStmtBraces` writer knob (JSON
  * `whitespace.bracesConfig.singleStatementBraces: "remove"`).
  *
- * ## Invariant-4 debt, measured and deliberately NOT paid here
+ * `unwrapStmt` is spliced by `WriterLowering` around the body value of every field
+ * carrying `@:fmt(dropSingleStmtBraces)` — the `if`, `for`, `while` and `do-while`
+ * bodies, trivia mode only — and its own doc holds the fail-closed gates that
+ * decide each splice.
  *
- * This module sits in the grammar-agnostic `anyparse.format` package and is Haxe to the
- * bone: it names ~115 distinct Haxe AST constructor strings, relies on the POSITIONAL
- * parameter layout of trivia-synthesised `HxStatementT` values, and CONSTRUCTS one
- * (`Type.createEnum(en, 'ExprBody', …)`). T461 listed its two `'ExprBody'` literals beside
- * seven in `check/` and `query/` that moved onto `RefShape.expressionBodyKinds`; these two
- * CANNOT, and the reason is not effort. There is no `QueryNode`, no `GrammarPlugin` and no
- * `RefShape` at this layer — the values are the writer's own enums, reached by reflection —
- * so a kind-name seam has nothing to answer. Migrating the two literals alone would also
- * buy nothing: they are 2 of ~115, and the other 113 have no seam either.
- *
- * What would actually pay it is a per-grammar DE-BRACE POLICY the writer lowering asks for,
- * so the ctor names live with the grammar that owns them. That is a writer-lowering slice,
- * not a rename; sized here so the next reader does not mistake the two literals for the
- * whole debt.
- *
- * `unwrapStmt` is spliced by `WriterLowering` around the body value of
- * `HxIfStmt.thenBody` / `HxIfStmt.elseBody` / `HxForStmt.body` / `HxWhileStmt.body` / `HxDoWhileStmt.body`
- * (fields carrying `@:fmt(dropSingleStmtBraces)`, trivia mode only). When every safety gate passes it returns the
- * block's single inner statement so the writer emits
- * `if (cond) return x;` instead of `if (cond) { return x; }`; in every
- * other case it returns the original body unchanged (byte-inert).
- *
- * The values are trivia-synthesised enums (`HxStatementT`), reached
- * here as `Dynamic` + enum reflection so this module never references
- * `Context.defineModule`-synthesised types. Positional-parameter
- * layout it relies on (locked by unit tests):
- *  - `BlockStmt(stmts, closeTrailing, openTrailing,
- *    trailingBlankBefore, trailingLeading, trailPresent)`
- *  - `ReturnStmt(value, trailPresent, …)` / `ExprStmt(expr,
- *    trailPresent)` — the trailing-`;` slot sits at index 1.
- * Elements of `stmts` are `anyparse.runtime.Trivial` wrappers (anon
- * structs, field access is portable).
- *
- * SAFETY GATES (a wrong drop changes semantics — every gate fails
- * CLOSED, i.e. keeps the braces):
- *  1. Exactly one statement in the block.
- *  2. No comment in a brace-owned slot the bare statement cannot carry: block `closeTrailing` / `trailingLeading` slots, element `leadingComments`. TWO slots are exceptions, and both travel with the de-braced statement through `hoistTrailingComment`: a same-line element `trailingComment`, and the block's `openTrailing` comment - the one written on the `{` line (`} else { // Call error handlers`), which folds after the bare statement's `;` (`else\n\ttokenError(); // Call error handlers`). The fold site is ONE slot, so the two exceptions are mutually exclusive: a block carrying both keeps its braces. Folding after the statement rather than onto the header line is deliberate - a de-braced body may GLUE to its header (`if (c) f();`), and a comment placed there would comment the statement out.
- *  3. The inner statement must self-terminate when written standalone:
- *     `ReturnStmt` / `ExprStmt` (and the other `@:trailOpt(';')`
- *     kinds) qualify only when their own `trailPresent` is true —
- *     `{ return x }` (no `;`) keeps braces because the braceless form
- *     would not re-parse before a `}`. Declaration statements
- *     (`var` / `final` / local functions) are excluded outright: the
- *     braces scope the binding, dropping them would widen it.
- *  4. Dangling else: when the enclosing construct has a trailing
- *     `else` (`elseFollows`), the candidate keeps its braces iff its
- *     de-braced rendering would END on an `if` that can still absorb
- *     that `else`. The test is the TRAILING SPINE (`tailDanglingIf`),
- *     not a whole-subtree scan: an inner `if` is dangerous only when
- *     nothing seals it before the statement ends — a closing `)` /
- *     `]` / `}` of an enclosing call, index, array, block, switch or
- *     brace-bearing body makes it harmless, while the statement's own
- *     trailing `;` does NOT (Haxe absorbs a `;` before `else`).
- *     A trailing `if` that HAS its own `else` consumes the following
- *     `else` itself, so the spine walk continues into that `else`
- *     branch — for an `else if` chain the question is whether the
- *     FINAL arm lacks an `else`. `Cond*` raw conditional-compilation
- *     regions are opaque: dangerous whenever they sit on the spine.
- *     Every ctor the spine walk does not model falls back to the
- *     whole-subtree `containsIf` scan, i.e. to the pre-slice
- *     over-approximation — unknown shapes fail closed.
- *  5. `suppress` (`opt._ssbSuppress`) — set for the then-body write of
- *     an `if` that has an `else` whose then-body does NOT render with
- *     braces — blocks a nested unwrap under the SAME trailing-spine
- *     test as gate 4: `if (a) while (c) { if (b) x; } else y` must
- *     keep the loop-body braces even though the loop itself carries no
- *     `elseFollows` signal, while `if (a) while (c) { g(); } else y`
- *     de-braces (the loop body ends on a sealed call). Position inside
- *     the then-body is over-approximated to "on the spine"; a
- *     brace-bearing then-body is sealed by its own `}` and so never
- *     arms the frame at all (`WriterLowering.deBraceBodyAccess`).
- *  6. `hasTrailingSemi` — a redundant trailing `;` on the enclosing
- *     statement (the `@:trailOpt(';')` slot, e.g. `for (c) { x; };`).
- *     UNREACHABLE since omega-ssb-trailopt-drop: the writer no longer re-emits
- *     that slot on a brace-droppable field, so every splice passes `false`.
- *     It survives as a fail-closed guard for a future field that both drops
- *     braces and emits a trail. It once mattered because de-bracing would
- *     emit `for (c) x;;`, which anyparse parses but
- *     the Haxe compiler rejects ("Expected }"), so the braces stay.
- *  7. `siblingKeepsBraces` - if/else brace symmetry: an if/else must
- *     de-brace BOTH branches or NEITHER. The probe answers THROUGH
- *     `unwrapStmt`, so it inherits gate 4's trailing-spine precision
- *     verbatim - there is no second copy of the dangling-else test that
- *     could drift from it. Each splice probes the OTHER
- *     branch (via `keepsBraces`) and passes `true` here when that
- *     sibling keeps its braces, so `if (b) { one; } else { a; b; }`
- *     stays fully braced instead of the asymmetric
- *     `if (b) one; else { a; b; }`. Loop bodies (for / while / do) have
- *     no sibling - they always pass `false`. The gate runs in BOTH
- *     directions: a braced branch keeps its braces (fail closed), and a
- *     branch that arrives BARE opposite a brace-keeping sibling GAINS
- *     them through `wrapInBlock` - the same repair direction gate 8
- *     uses - so `if (a) { p(); q(); } else r();` canonicalises to a
- *     fully braced if/else instead of staying asymmetric. The wrap
- *     direction has ONE exemption of its own - an `IfStmt` in ELSE
- *     position, an `else if` chain link whose wrapping would rebuild
- *     the `else { if … }` shape the `collapsible-else-if` rule exists
- *     to remove - and otherwise defers to gate 3's
- *     `innerSelfTerminates`, which excludes both a `;`-less statement
- *     (it would not re-parse inside braces) and an already
- *     brace-bearing body (it would nest a redundant level).
+ * The values are trivia-synthesised enums reached as `Dynamic` through enum
+ * reflection, so this module never references a `Context.defineModule`-synthesised
+ * type; the positional parameter layout it depends on is locked by unit tests, and
+ * a block's `stmts` elements are `Trivial` wrappers whose field access is portable.
+ * The module is grammar-agnostic by package and Haxe by content —
+ * `docs/decisions.md` records why its ctor-name literals have no kind-name seam to
+ * move onto.
  */
 class SingleStmtBraces {
 
@@ -129,11 +37,50 @@ class SingleStmtBraces {
 	 * an `else <keyword>` idiom the writer glues, and a bare loop body leaves the
 	 * pair genuinely asymmetric.
 	 *
-	 * More Haxe ctor names in a grammar-agnostic package - see this class's own
-	 * invariant-4 note above; these three are 3 of ~115 and share its seam.
+	 * More Haxe ctor names in a grammar-agnostic package - they share the missing
+	 * kind-name seam `docs/decisions.md` records for this module.
 	 */
 	private static final SYMMETRY_WRAP_SKIP_CTORS: Array<String> = ['IfStmt', 'SwitchStmt', 'SwitchStmtBare'];
 
+	/**
+	 * Return the block's single inner statement when every gate below passes, so the
+	 * writer emits `if (cond) return x;` instead of `if (cond) { return x; }`, and
+	 * return the body unchanged in every other case.
+	 *
+	 * A wrong drop changes semantics, so every gate fails CLOSED — it keeps the braces:
+	 *
+	 *  1. exactly one statement in the block;
+	 *  2. no comment in a brace-owned slot the bare statement cannot carry. A same-line
+	 *     element `trailingComment` and the block's `openTrailing` comment travel with
+	 *     the statement instead, folding after its `;` rather than onto the header line,
+	 *     where a glued body would comment itself out; the fold site is ONE slot, so a
+	 *     block carrying both keeps its braces;
+	 *  3. the inner statement must self-terminate standalone — a `@:trailOpt(';')` kind
+	 *     only when its own `trailPresent` is true, since the braceless form would not
+	 *     re-parse before a `}`; declarations are excluded outright, their braces scope
+	 *     the binding;
+	 *  4. dangling else: under a trailing `else` the braces stay unless the de-braced
+	 *     rendering ends on something that SEALS an inner `if`. The test walks the
+	 *     trailing SPINE, not the subtree — a closing `)` / `]` / `}` seals, the
+	 *     statement's own `;` does not (Haxe absorbs a `;` before `else`), a trailing
+	 *     `if` with its own `else` continues the walk into that branch, a raw
+	 *     conditional-compilation region is opaque and always dangerous, and a ctor the
+	 *     walk does not model falls back to the whole-subtree scan;
+	 *  5. `suppress` applies that same spine test to a nested unwrap inside the then-body
+	 *     of an `if` whose `else` sibling renders bare; position within the then-body is
+	 *     over-approximated to "on the spine", and a brace-bearing then-body seals itself
+	 *     and never arms the frame;
+	 *  6. `hasTrailingSemi` — a redundant trailing `;` on the enclosing statement.
+	 *     Unreachable while the writer omits that slot on a brace-droppable field, kept
+	 *     as a fail-closed guard for a field that would both drop braces and emit one;
+	 *  7. `siblingKeepsBraces` — an if/else de-braces BOTH branches or NEITHER. The probe
+	 *     answers through this function, so it inherits gate 4 instead of copying it, and
+	 *     runs in both directions: a bare branch opposite a brace-keeping sibling GAINS
+	 *     braces through `wrapInBlock`;
+	 *  8. a BARE `if` in then-position always gains a synthesized brace block, since
+	 *     `if (a) if (b) … else …` reads as a dangling-else puzzle. Adding braces is
+	 *     semantics-safe, so this one runs even under `suppress`.
+	 */
 	public static function unwrapStmt(
 		body: Dynamic, drop: Bool, symmetry: Bool, suppress: Bool, elseFollows: Bool, hasTrailingSemi: Bool, siblingKeepsBraces: Bool,
 		isIfThenBody: Bool
@@ -141,19 +88,16 @@ class SingleStmtBraces {
 		if ((!drop && !symmetry) || body == null) return body;
 		if (!Reflect.isEnumValue(body)) return body;
 		final block: EnumValue = cast body;
-		// Gate 8 repair direction (omega-ssb-wrap): a BARE `if` in then-position gains a
-		// synthesized brace block - `if (a) if (b) ... else ...` reads as a dangling-else
-		// puzzle, so braces are REQUIRED there and fmt self-heals previously unwrapped
-		// sources. Runs even under `suppress` (adding braces is always semantics-safe:
-		// the parse tree already fixed the else binding).
+		// Gate 8, the repair direction: braces are REQUIRED here, so fmt self-heals a
+		// previously unwrapped source.
 		if (drop && isIfThenBody && Type.enumConstructor(block) == 'IfStmt') return wrapInBlock(block, 'BlockStmt');
-		// Gate 7 repair direction (omega-ssb-symmetry-wrap) - see `needsSymmetryWrap`.
-		// This is the ONE direction `symmetry` alone arms.
+		// Gate 7's repair direction - see `needsSymmetryWrap`. This is the ONE direction
+		// `symmetry` alone arms.
 		if (needsSymmetryWrap(block, siblingKeepsBraces)) return wrapInBlock(block, 'BlockStmt');
-		// omega-brace-symmetry: `singleStatementBraces: "symmetric"` asks for the repair
-		// direction WITHOUT the removal one, so everything below - the whole de-brace
-		// decision - is skipped. Gate 8 above is skipped with it: it exists to repair a
-		// shape the REMOVE direction can produce, and under symmetry-only nothing can.
+		// `singleStatementBraces: "symmetric"` asks for the repair direction WITHOUT the
+		// removal one, so everything below - the whole de-brace decision - is skipped.
+		// Gate 8 above is skipped with it: it exists to repair a shape the REMOVE
+		// direction can produce, and under symmetry-only nothing can.
 		if (!drop) return body;
 		// The do-body is the ONE brace-droppable field a suppress frame cannot reach: its
 		// rendering is always followed by the `while (...)` keyword+paren, so no de-braced
@@ -165,14 +109,10 @@ class SingleStmtBraces {
 		// branch keeps its own too. De-bracing one half of an if/else while the other stays
 		// braced (`if (b) return true; else { ... }`) is an asymmetry violation, so fail closed.
 		if (siblingKeepsBraces) return body;
-		// Gate 6 — UNREACHABLE for the fields spliced today, kept as a fail-closed guard.
-		// A redundant trailing `;` on the enclosing statement (`for (…) { x; };`) once
-		// forced the braces to stay, because de-bracing would have emitted `for (…) x;;` -
-		// parsed by anyparse, rejected by the Haxe compiler ("Expected }"). Since
-		// omega-ssb-trailopt-drop the writer no longer RE-EMITS that slot on a
-		// brace-droppable field (`WriterLowering.emitMandatoryRefTrail`), so every splice
-		// passes `false` here and the hazard is gone at the root. The gate survives for a
-		// future field that both drops braces and does emit a trail.
+		// Gate 6. The hazard it guards: de-bracing `for (…) { x; };` would emit
+		// `for (…) x;;`, which anyparse parses and the Haxe compiler rejects. It is gone
+		// at the root — `WriterLowering.emitMandatoryRefTrail` no longer re-emits that
+		// slot on a brace-droppable field, so every splice passes `false` here.
 		if (hasTrailingSemi) return body;
 		// The de-brace decision (gates 1-8) lives in `deBracedElem`, shared with
 		// `hoistTrailingComment` so a same-line trailing comment on the single statement

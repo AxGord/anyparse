@@ -8,60 +8,38 @@ import anyparse.format.WriteOptions;
 using StringTools;
 
 /**
- * Runtime helper that emits a `Doc` for a method-chain construct
- * (`a.b().c().d()` — left-assoc nested `Call(FieldAccess(Call(...)))` /
- * `FieldAccess(Call(FieldAccess(...)))` AST) whose layout is driven by a
+ * Runtime helper that emits a `Doc` for a method-chain construct (`a.b().c().d()`,
+ * a left-associative nest of Call / FieldAccess) whose layout is driven by a
  * `WrapRules` cascade.
  *
- * Format-neutral — the AST walking happens in the macro-generated
- * writer (it knows the grammar's Call/FieldAccess constructors); this
- * engine accepts the pre-built `receiver:Doc` and `segments:Array<Doc>`
- * (each a `.field` or `.field(args)` shaped Doc) and runs the cascade
- * decision + chain shape selection.
+ * Format-neutral: the AST walk lives in the macro-generated writer, which knows the
+ * grammar's Call / FieldAccess constructors, and this engine takes the pre-built
+ * `receiver: Doc` plus `segments: Array<Doc>` (each already `.field` or
+ * `.field(args)` shaped) and runs the cascade decision and shape selection.
  *
- * Differs from `WrapList.emit` in three ways:
- *  - chain has NO open/close/separator delimiters (segments include
- *    their own `.field` lead);
- *  - the receiver renders OUTSIDE the cascade-controlled break (it
- *    appears once, before the first segment);
- *  - chain shapes prepend `Line('\n')` between segments instead of a
- *    delimiter sequence.
+ * Differs from `WrapList.emit` in three ways: a chain has no open / close /
+ * separator delimiters, since each segment carries its own `.field` lead; the
+ * receiver renders OUTSIDE the cascade-controlled break, once, before the first
+ * segment; and the chain shapes prepend `Line('\n')` between segments instead of a
+ * delimiter sequence. `FillLine` falls back to `OnePerLineAfterFirst` — no chain
+ * context has needed a fill semantic.
  *
- * Mirrors fork `WrappingProcessor`'s chain shaping. Modes:
- *  - `NoWrap`           → `receiver seg0 seg1 …` (all inline)
- *  - `OnePerLineAfterFirst` → `receiver seg0 \n+indent seg1 \n+indent …`
- *  - `OnePerLine`       → `receiver \n+indent seg0 \n+indent seg1 …`
- *  - `FillLine`         → falls back to `OnePerLineAfterFirst` (chain
- *    contexts haven't surfaced a fill semantics yet; deferred to a
- *    later slice if a fixture demands it).
+ * The layout POLICY on top of those shapes makes the chain ONE unit. Every shaper
+ * returns the chain MINUS its receiver and `emit` re-attaches it as
+ * `Concat([receiver, <decision>])`, so the renderer reaches the width probe with
+ * the pen at the column where the head actually ENDED rather than at the chain's
+ * flat start, and the Haxe default cascade then breaks to `OnePerLine`. The tail
+ * either fits after the head — one line, even when the head rendered multi-line —
+ * or every link takes its own continuation line and the head line carries no glued
+ * link that could push it past `maxLineLength`. `OnePerLineAfterFirst` survives as
+ * an explicitly configurable mode, no longer as a default.
  *
- * ω-methodchain-all-or-nothing — the layout POLICY on top of those
- * shapes. Every shaper here returns the chain MINUS its receiver, and
- * `emit` re-attaches it as `Concat([receiver, <decision>])`, so the
- * renderer reaches the width probe with the pen at the column where the
- * head actually ENDED rather than at the chain's start measured flat. The
- * Haxe default cascade then breaks to `OnePerLine`, never to
- * `OnePerLineAfterFirst`. Together those two make the chain one unit: the
- * whole tail fits after the head → one line, even when the head rendered
- * multi-line; it does not → every link on its own continuation line and a
- * head line that carries no glued link (so a glued link can no longer push
- * the head past `maxLineLength`). `OnePerLineAfterFirst` survives as an
- * explicitly configurable mode (`methodChain.defaultWrap`); it is just no
- * longer a default.
- *
- * "Every link" is fork's `MarkWrapping.isDotAfterPClose` reading: a `.` is a
- * chain ITEM only when it follows a `)`. A head that is not a call therefore
- * keeps its first segment — `Actuate.tween(…)` stays whole rather than
- * stranding the two-token `Actuate` on a line of its own, which reads heavier
- * than the glued head the policy set out to fix. `headEndsWithCall` carries
- * that structural fact from the macro walk (the innermost segment's operand IS
- * a Call ctor), never from the receiver's rendered text; and the downgrade to
- * `OnePerLineAfterFirst` applies ONLY to a cascade that opted in via
- * `WrapRules.chainItemsAfterCloseParenOnly` — the Haxe policy cascade, or a
- * `wrapping.methodChain` section that names `itemsAfterCloseParenOnly` — so an
- * explicitly configured `onePerLine` that stays silent about the key keeps the
- * fork's literal every-segment semantic (five fork corpus fixtures depend on
- * that).
+ * Which `.` counts as a link is `WrapRules.chainItemsAfterCloseParenOnly`'s
+ * question, and that field's doc owns the contract. `headEndsWithCall` carries the
+ * structural fact behind it from the macro walk — the innermost segment's operand IS
+ * a Call ctor — never from the receiver's rendered text, so a head that is not a
+ * call keeps its first segment glued and `Actuate.tween(…)` stays whole instead of
+ * stranding a two-token receiver on a line of its own.
  */
 class MethodChainEmit {
 

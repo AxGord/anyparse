@@ -72,3 +72,25 @@ decided the question; it may not become a record of runs.
   by region: an earlier-starting renamed run suppresses the later-starting exact one through the
   earliest-start occurrence filter, so the exact run's tail can lie outside every renamed span.
   The two readings OVERLAP; a consumer takes their union, never one for the other — `ccbc5822`
+- the writer's de-brace support was to move its two `'ExprBody'` literals onto
+  `RefShape.expressionBodyKinds`, beside the siblings that went there → there is no `QueryNode`,
+  `GrammarPlugin` or `RefShape` at the writer layer (the values are the writer's own enums,
+  reached by reflection), so a kind-name seam has nothing to answer, and the two literals are a
+  small fraction of the ctor names in that module, none of which has a seam either; paying the
+  debt is a per-grammar de-brace POLICY the writer lowering asks for — `batch/hxqb-S210`
+- `BodyFit.fitLineLayout`'s whole `flat != -1` arm was to be gated on the body's HONEST full flat
+  width → it reproduces the fork on a brace-less function body and turns one corpus fixture and
+  ten unit pins red, because the same arm places the two-link body of a statement `for`, where
+  the head-fit glue is what the fork wants; the seam is shared by callers whose safe default
+  points opposite ways, so a fix belongs at the function-body site — `batch/hxqb-S210`
+- `WrapList` was to be split to clear its `oversized-type` finding → a cluster read puts the large
+  majority of its members in ONE component and the obvious `shape*` seam lands inside that
+  component, so cutting it leaves the type over both caps; clearing the finding is a designed
+  decomposition of the cascade under a no-output-byte-may-change constraint, not a hygiene edit —
+  `batch/hxqb-S210`
+- the close-trail refusal was to be extended to `WrapList.shapeSingleArgGlue`, which builds the
+  same closer-after-a-`//` seam → a `//`-tailed sole item does not occur over the real trees the
+  reachability probe covered, and on the synthetic source that does fire it the gate does not move
+  the fixed point: declining hands the pass back to the leading-break shape, whose output the next
+  pass re-glues to the identical bytes, so the gate cost a normalisation pass and bought nothing —
+  `batch/hxqb-S210`

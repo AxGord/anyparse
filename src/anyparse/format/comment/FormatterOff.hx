@@ -3,45 +3,34 @@ package anyparse.format.comment;
 using StringTools;
 
 /**
- * `// @formatter:off` … `// @formatter:on` — the author's opt-out from
- * formatting, restored over the writer's output.
+ * `// @formatter:off` … `// @formatter:on` — the author's opt-out from formatting,
+ * restored over the writer's output.
  *
- * A layout the writer cannot derive — a colour table packed to a grid, a
- * matrix of coordinates, a switch aligned by hand — has no rule that
- * reproduces it, only a rule that happens not to break it. Encoding such a
- * layout as a config threshold is how `arrayWrap: itemCount >= 20` was born
- * in a consumer project: it fit ONE declaration and silently reflowed three
- * others whose hand layout the author had already marked here.
+ * A layout the writer cannot derive — a colour table packed to a grid, a matrix of
+ * coordinates, a switch aligned by hand — has no rule that reproduces it, only a
+ * rule that happens not to break it, so encoding one as a config threshold fits the
+ * declaration it was cut for and silently reflows the others.
  *
- * The marker is exact — a line comment whose text is `// @formatter:off`,
- * nothing before it but whitespace or code, nothing after it. `//@formatter:off`
- * with no gap is not a marker, and neither is the string `'// @formatter:off'`;
- * both are the fork's behaviour (`CodeLines.skipFormatterOff`), which this
- * mirrors so the corpus stays a valid oracle.
+ * The marker is exact: a line comment whose text is `// @formatter:off`, with
+ * nothing but whitespace or code before it and nothing after it. `//@formatter:off`
+ * with no gap is not a marker and neither is the string `'// @formatter:off'` —
+ * both are the fork's behaviour, mirrored so the corpus stays a valid oracle. A
+ * region runs from the line carrying `off` through the line carrying `on`, both
+ * inclusive, copied byte-for-byte from the source, and to end of file when no `on`
+ * closes it; a second `off` inside a region is ordinary text and an unmatched `on`
+ * is ignored.
  *
- * Region = from the line carrying `off` through the line carrying `on`,
- * both inclusive, copied byte-for-byte from the source. Without a closing
- * `on` the region runs to the end of the file. A second `off` inside a
- * region is ordinary text; an `on` with no open region is ignored.
+ * It is a POST-PASS rather than a Doc because the region is a range of LINES,
+ * orthogonal to the tree — it can open inside a switch and close inside an array
+ * literal. The Doc IR has no node for "these bytes", and giving it one would make
+ * every Doc whose span falls in the range the whole writer's business.
  *
- * ## Why a post-pass and not a Doc
- *
- * The region is a range of LINES, orthogonal to the tree: it can open inside
- * a switch and close inside an array literal. The Doc IR has no node for
- * "these bytes", and giving it one would mean suppressing every Doc whose
- * span falls in the range — the whole writer would have to learn about it.
- * The fork solves it the same way, one stage lower: `CodeLines.buildLines`
- * bypasses line assembly for the region and pushes a `VerbatimCodeLine`.
- *
- * ## Refusal
- *
- * Splicing by line index assumes the markers still delimit the same code
- * after formatting. Two checks defend that, and either failing returns the
- * writer's output UNTOUCHED rather than a mis-spliced file: the region
- * counts must match between source and output, and the code preceding a
- * marker on its own line must match too. The second catches the case that
- * would actually lose bytes — a statement on the line above the marker
- * glued onto it, which the verbatim copy would then overwrite.
+ * Splicing by line index assumes the markers still delimit the same code after
+ * formatting, so two checks defend that and either failing returns the writer's
+ * output UNTOUCHED rather than a mis-spliced file: the region counts must match
+ * between source and output, and so must the code preceding a marker on its own
+ * line. The second is the one that would actually lose bytes — a statement glued
+ * onto the marker's line, which the verbatim copy would overwrite.
  */
 @:nullSafety(Strict)
 final class FormatterOff {

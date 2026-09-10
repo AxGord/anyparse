@@ -5,64 +5,40 @@ import anyparse.core.Doc;
 using StringTools;
 
 /**
- * `sameLine.elseIfCommentReflow` runtime: move the ONE line comment a source
- * wrote between `else` and its nested `if` onto the end of that nested `if`'s
- * head line.
+ * `sameLine.elseIfCommentReflow` runtime: move the ONE line comment a source wrote
+ * between `else` and its nested `if` onto the end of that nested `if`'s head line.
  *
- * WHAT THE WALK PROVES. The knob promises exactly two placements, and both are
- * the same structural position - the first UNCONDITIONAL break after the
- * condition:
+ * Both placements the knob promises are the same structural position — the first
+ * UNCONDITIONAL break after the condition: the break that opens a braced body, so
+ * the comment lands after `{`, or the break the body policy emits after the
+ * condition's `)` for a bare body on the next line. `scan` is therefore an
+ * ACCEPTOR, naming only what a head may contain, and its `case _` is the refusal —
+ * every shape nobody has thought of declines on its own instead of needing a gate
+ * per discovery. Refusal is always whole (`null`), and the caller then emits the
+ * untouched pre-knob layout with the comment where the source put it.
  *
- *  - braced then-body - the break that opens the block's interior, so the
- *    comment lands after `{`: `else if (b) { // note`;
- *  - bare then-body that the body policy puts on the next line - the break the
- *    policy emits after the condition's `)`: `else if (b) // note`.
+ * The CONDITION is opaque: the first `WrapBoundary` the walk meets closes it and is
+ * stepped over without descending, whatever shape the wrap cascade gave its
+ * interior, because descending let a `onePerLine` condition anchor the comment
+ * after `(` where the next pass read the first operand as comment text and lost it.
+ * Boundaries met after the condition are ordinary containers.
  *
- * So `scan` is an ACCEPTOR, not a refuser with a list of exceptions. It walks
- * in two phases (`afterCond`) and names only what a head may contain: invisible
- * or width-only glue, rendered head text, the condition unit, and the container
- * constructors that hold them. Its `case _` is the refusal, which is what makes
- * every shape nobody has thought of - a `Fill`, a width probe, a force-flat
- * region, a `Doc` constructor added next year - decline on its own without a
- * gate per discovery. Refusal is always whole (`null`): the caller then emits
- * the untouched pre-knob layout and the comment stays where the source put it.
+ * `isHeadText` states what a head may render: it opens its body's block, so `{` is
+ * fine, but it never CLOSES one, so a `}` (an empty then-body arrives as the single
+ * token `{}`) or a `;` says the body already finished and walking past it would
+ * re-attribute the comment to the other branch; a `//` already on the line would
+ * swallow the relocated comment, and a newline means this is not the line the
+ * comment would join. The newline clause and the `afterCond` guard on the `Line`
+ * arm are phase assertions kept as cheap statements of the invariant and
+ * deliberately not claimed as tested.
  *
- * THE CONDITION IS OPAQUE. Every `WrapList.emitCondition` return is a
- * `WrapBoundary`, so the FIRST one the walk meets closes the condition and is
- * stepped over without descending. Its interior is head whatever shape the wrap
- * cascade gave it - probes, `Fill`, a nested boundary, a conditional newline
- * right after the open paren - and none of those breaks ends the head line.
- * Descending instead let a `onePerLine` condition anchor the comment after `(`,
- * where the next pass read the first operand as comment text and lost it.
- * Boundaries met AFTER the condition are ordinary containers: the then-body
- * block arrives as `WrapBoundary(BodyGroup(...))`.
- *
- * TEXT ON THE HEAD LINE. `isHeadText` states what a head may render. It opens
- * its body's block, so `{` is fine; it never CLOSES one, so a `}` means the
- * body has already rendered and finished - an EMPTY then-body arrives as the
- * single token `{}` with no interior break, and walking past it anchored the
- * comment on the nested `if`'s own `else`, re-attributing it to the other
- * branch. A `;` says the same thing for a bare body. A `//` already on the line
- * would swallow the relocated comment (the body-side twin of the `AfterKw`
- * refusal on the `else`), and a newline means the head line being measured is
- * not the one the comment would join. The newline clause and the `afterCond`
- * guard on the `Line` arm are phase assertions that no fixture reaches -
- * nothing in an `if` head emits a break before the condition unit, and no
- * `Text` in one carries a newline. They are kept as cheap statements of the
- * invariant, and deliberately NOT claimed as tested.
- *
- * WIDTH, measured rather than assumed. The splice cannot flip the flat-vs-broken
- * answer of any group it lands INSIDE: that group already holds the hardline the
- * comment is anchored to, so it was committed to breaking before the comment
- * arrived. It IS visible to a probe rendered EARLIER on the same line whose test
- * looks ahead at the rest of the stack - notably the `conditionWrapping`
- * cascade, which will open `if (\n\tcond\n)` when the glued head plus the
- * comment exceeds the limit. That is left alone on purpose: hiding the comment
- * from that probe would make the reflow output non-idempotent (the next pass
- * would re-measure and re-wrap it), and the shape it produces is byte-identical
- * to what the writer emits for the same construct written glued by hand. What
- * the knob never does is REFUSE because the glued line got long - an over-long
- * head line is accepted.
+ * The splice cannot flip the flat-vs-broken answer of a group it lands INSIDE —
+ * that group already holds the hardline the comment anchors to — but it IS visible
+ * to a probe rendered earlier on the same line, notably the `conditionWrapping`
+ * cascade. That is deliberate: hiding the comment from the probe would make the
+ * reflow non-idempotent, and the glued shape is byte-identical to the same
+ * construct written glued by hand. An over-long glued head line is accepted; a long
+ * line is never a reason to refuse.
  */
 @:nullSafety(Strict)
 final class ElseIfCommentReflow {
