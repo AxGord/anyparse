@@ -61,3 +61,10 @@ decided the question; it may not become a record of runs.
   message — `da0be5b8`
 - metadata arguments were believed invisible to the query layer → they are children of the
   metadata node; only the metadata NAME is filtered, by the symbol-name rule — `e52665e5`
+- the percent-share guard was to refuse a sign not followed by a digit or `(` → the `(` half
+  silences the readings this project writes (`57% (anyparse)`, `9 % (5 of 54)`) and refuses no
+  arithmetic the digit half already misses; the guard that works is per LINE — `c35ae45e`
+- the recording verb was to be read as SENTENCE-INITIAL and capitalised → a wrapped sentence
+  starts its line mid-clause, this project writes emphasis in upper case, and the parenthetical
+  and dash-introduced readings are the larger half; the discriminator is clause POSITION —
+  `c35ae45e`

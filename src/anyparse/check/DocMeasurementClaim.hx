@@ -272,16 +272,22 @@ final class DocMeasurementClaim implements Check implements DefaultOff implement
 	 * Mid-clause the recording verb is this project's ordinary vocabulary for how a width or a
 	 * region is obtained, and that vocabulary states a contract; only where the verb opens a
 	 * clause does it introduce a claim. Whitespace is required so that a prefix glued on with a
-	 * hyphen stays inside its word.
+	 * hyphen stays inside its word, and a hyphen that ends its own line is a word broken by the
+	 * wrap rather than a break in the prose.
 	 */
 	private static function opensClause(source: String, from: Int, at: Int): Bool {
 		if (at > from && source.fastCodeAt(at - 1) == '('.code) return true;
 		var i: Int = at;
-		while (i > from && (isGutter(source.fastCodeAt(i - 1)) || source.fastCodeAt(i - 1) == '\n'.code)) i--;
+		var wrapped: Bool = false;
+		while (i > from && (isGutter(source.fastCodeAt(i - 1)) || source.fastCodeAt(i - 1) == '\n'.code)) {
+			if (source.fastCodeAt(i - 1) == '\n'.code) wrapped = true;
+			i--;
+		}
 		if (i == at) return false;
 		if (i <= from + OPENER_LENGTH) return true;
 		return switch source.fastCodeAt(i - 1) {
-			case '('.code, '.'.code, ':'.code, ';'.code, '!'.code, '?'.code, '-'.code, EM_DASH: true;
+			case '('.code, '.'.code, ':'.code, ';'.code, '!'.code, '?'.code, EM_DASH: true;
+			case '-'.code: !wrapped;
 			case _: false;
 		};
 	}

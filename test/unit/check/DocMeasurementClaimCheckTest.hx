@@ -194,6 +194,9 @@ class DocMeasurementClaimCheckTest extends Test {
 			violations('class C {\n\t/** The width is measured by the Doc, and the measured sibling keeps it. */\n\tvar x = 1;\n}').length
 		);
 		Assert.equals(0, violations('class C {\n\t/** A Doc-measured predicate, re-measured after the fix. */\n\tvar x = 1;\n}').length);
+		Assert.equals(
+			0, violations('class C {\n\t/** No re-\n\t * measurement of the surrounding context is required. */\n\tvar x = 1;\n}').length
+		);
 	}
 
 	/**
@@ -205,7 +208,7 @@ class DocMeasurementClaimCheckTest extends Test {
 		final chain: Array<Violation> = violations('class C {\n\t// the indent went 0 -> 2 -> 4 -> 6 columns\n}');
 		Assert.equals(1, chain.length);
 		Assert.isTrue(chain[0].message.contains('(1 reading)'), chain[0].message);
-		final pair: Array<Violation> = violations('class C {\n\t// rebuilt at a3588740, and the walk took 44 ms\n}');
+		final pair: Array<Violation> = violations('class C {\n\t// rebuilt at deadbee1, and the walk took 44 ms\n}');
 		Assert.equals(1, pair.length);
 		Assert.isTrue(pair[0].message.contains('(2 readings)'), pair[0].message);
 	}
