@@ -1045,10 +1045,14 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.DocLengthCheckTest#testOnlyADocBlockIsMeasured :: control :: M-DOC-LENGTH-ANY-COMMENT',
 			'unit.check.DocLengthCheckTest#testTheDeclaredMaximumIsRead :: control :: M-DOC-LENGTH-CONFIG-BLIND',
 			'unit.check.DocMeasurementClaimCheckTest#testANumericContractIsNotAReading :: control :: M-DOC-CLAIM-BARE-NUMBER',
+			'unit.check.DocMeasurementClaimCheckTest#testAPercentageShareIsAReadingAndTheRemainderOperatorIsNot :: control :: '
+				+ 'M-DOC-CLAIM-PERCENT-REMAINDER-BLIND',
 			'unit.check.DocMeasurementClaimCheckTest#testAPointerAtTheRecordIsNotTheRecord :: control :: M-DOC-CLAIM-REFERENCE-BLIND',
 			'unit.check.DocMeasurementClaimCheckTest#testAReadingInsideAStringLiteralIsData :: guard :: ',
 			'unit.check.DocMeasurementClaimCheckTest#testAnArrowNeedsNumbersOnBothSides :: control :: M-DOC-CLAIM-ARROW-ANY',
-			'unit.check.DocMeasurementClaimCheckTest#testTheRecordingVerbNeedsANumberOnItsLine :: control :: M-DOC-CLAIM-VERB-UNGATED',
+			'unit.check.DocMeasurementClaimCheckTest#testTheRecordingVerbMidClauseNeedsANumberOnItsLine :: control :: '
+				+ 'M-DOC-CLAIM-VERB-UNGATED',
+			'unit.check.DocMeasurementClaimCheckTest#testTheRecordingVerbOpeningAClauseIsAReading :: control :: M-DOC-CLAIM-CLAUSE-BLIND',
 			'unit.check.DuplicateCodeCheckTest#testALiteralInteriorDifferenceIsNotACloneWhileItsLayoutTwinIs :: control :: '
 				+ 'M-DUP-CODE-NORM-KEY',
 			'unit.check.ExtractRepeatedExpressionTest#testALiteralInteriorDifferenceSplitsTheGroup :: control :: '
@@ -2111,6 +2115,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-DOC-CLAIM-BARE-NUMBER',
 			'M-DOC-CLAIM-ARROW-ANY',
 			'M-DOC-CLAIM-VERB-UNGATED',
+			'M-DOC-CLAIM-PERCENT-REMAINDER-BLIND',
+			'M-DOC-CLAIM-CLAUSE-BLIND',
 			'M-DOC-CLAIM-REFERENCE-BLIND',
 			'M-DOC-LENGTH-CONFIG-BLIND',
 			'M-DOC-LENGTH-ANY-COMMENT'

@@ -2965,9 +2965,24 @@
 			"name": "M-DOC-CLAIM-VERB-UNGATED",
 			"type": "anyparse.check.DocMeasurementClaim",
 			"method": "readingAt",
-			"find": "if (isRecordingVerb(source, at, token) && lineHasDigit(source, from, to, at))",
-			"replace": "if (isRecordingVerb(source, at, token))",
-			"note": "the recording verb no longer needs a number beside it, so prose saying what the code itself measures is reported as a reading of a tree"
+			"find": "if (lineHasDigit(source, from, to, at)) return { at: at, to: token, shape: 'a recording verb beside a number' };",
+			"replace": "return { at: at, to: token, shape: 'a recording verb beside a number' };",
+			"note": "the recording verb no longer needs a number beside it mid-clause, so prose saying what the code itself measures is reported as a reading of a tree"
+		},
+		{
+			"name": "M-DOC-CLAIM-PERCENT-REMAINDER-BLIND",
+			"type": "anyparse.check.DocMeasurementClaim",
+			"method": "percentAt",
+			"find": "if (source.fastCodeAt(i) == '%'.code && numberAfter(source, end, i + 1) >= 0)",
+			"replace": "if (source.fastCodeAt(i) == '%'.code && numberAfter(source, end, i + 1) < 0)",
+			"note": "the remainder guard inverts, so prose about operator precedence reads as a share and a share written as one stops being read at all"
+		},
+		{
+			"name": "M-DOC-CLAIM-CLAUSE-BLIND",
+			"type": "anyparse.check.DocMeasurementClaim",
+			"method": "opensClause",
+			"force": "true",
+			"note": "every position reads as a clause opening, so the recording verb in the passive voice, as an adjective, or glued to a prefix is reported as a claim"
 		},
 		{
 			"name": "M-DOC-CLAIM-REFERENCE-BLIND",
