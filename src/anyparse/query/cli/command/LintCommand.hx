@@ -609,9 +609,11 @@ final class LintCommand implements CliCommand {
 			// Its no-null-value census is OWNER-scoped, not name-scoped — the name-scoped form was
 			// measured and refused five realistic map names on std collisions alone, and
 			// `MapValueScan` documents the replacement. What a narrow set costs it is therefore the
-			// three cross-file doors, not an occurrence count: an `@:access` grant and a subtype
-			// that could store a null through the map, both asked of
-			// `RefactorSupport.resolutionIndexOf(plugin) ?? report`. On the active SUBSET of a
+			// three cross-file doors, not an occurrence count. Two of them — an `@:access` grant
+			// and a subtype that could store a null through the map — are asked of
+			// `RefactorSupport.resolutionIndexOf(plugin) ?? report`; the third,
+			// `privateMemberScanIsSound`, is asked of the REPORT index alone and so narrows with
+			// it. On the active SUBSET of a
 			// project that declares no resolution scope a subtype in an untouched file reads as
 			// absent, which turns an unprovable site into a wrongly PROVEN one — the unsound
 			// direction, unlike the misses the other ids here guard against. Pinned by
