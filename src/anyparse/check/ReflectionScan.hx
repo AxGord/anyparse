@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
+import anyparse.query.RawSourceScan;
 import anyparse.query.RefactorSupport;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
@@ -78,7 +79,7 @@ final class ReflectionScan {
 	 * answers from one file. Declaring them closes it and costs that lint ~1.0s -> ~4.5s.
 	 */
 	public static function reflectionSurface(files: Array<ScopeFile>, plugin: GrammarPlugin): ReflectionSurface {
-		final out: ReflectionSurface = { whole: [], fragments: [] };
+		final out: ReflectionSurface = { whole: [], fragments: [], unreadable: [] };
 		final stringFold: Null<StringFoldSupport> = plugin.stringFoldSupport();
 		if (stringFold == null) return out;
 		final fold: StringFoldSupport = stringFold;
@@ -87,16 +88,17 @@ final class ReflectionScan {
 		// own value, so a file scanned twice doubles that value and turns its `count > self` test true
 		// on nothing at all.
 		//
-		// A scope file the parser cannot read contributes NOTHING here, which is the pre-`scopeFiles`
-		// behaviour kept deliberately: this surface is a set of literal CONTENTS, and an unreadable file
-		// has none to give. What it could give instead is the conservative "may spell it" answer, and
-		// that is a per-NAME question the raw-text proofs already own. MEASURED on the T867 fixture cell
-		// (`CrossScopeSoundnessTest.unreadableExtras`, an unreadable `Reflect.field(a, 'My_Field')` in
-		// the library half): with both skip-parsed proofs cut, three rewrites go through; with only
-		// `RawSourceScan.skippedMayReference` cut and `Naming`'s own unreadable branch live, one; on the
-		// shipped tree, zero. So the conservative half here would be a fourth line behind three, at the
-		// price of a raw scan of every unreadable std source per name — and the direction it errs in is
-		// the one that makes a whole rule silent.
+		// A scope file the parser cannot read contributes no literal CONTENTS — there is no tree to take
+		// them from — so its RAW SOURCE is kept instead, and `runtimeName` asks it the conservative
+		// "may spell it" question per name. It used to contribute nothing at all, on a measurement that
+		// did not cover what it claimed: `CrossScopeSoundnessTest.unreadableExtras` read zero extra
+		// rewrites on the shipped tree, but it selected its cells by comparing the reaching source
+		// against ONE stored constant, so only the cell whose reflective string names a FIELD ever ran.
+		// Selecting by the FORM of the evidence (T921) put an unreadable sibling TWO rewrites and THREE
+		// findings ahead of a readable one — `inline-constant` erasing a constant a `Reflect.field`
+		// reads, `prefer-inline` folding a method one names — which is the direction that compiles and
+		// then fails at run time. The raw scan is per NAME and only over files that failed to parse, of
+		// which a healthy tree has none.
 		//
 		// MEMOISED per run, and validated against the sources rather than expired — `ReflectionMemo`
 		// carries both the measurement (five checks demand this surface per run, four of them paying
@@ -108,7 +110,10 @@ final class ReflectionScan {
 		if (memoised != null) return memoised;
 		for (entry in scope) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) collect(tree, entry.source, fold, out);
+			if (tree != null)
+				collect(tree, entry.source, fold, out)
+			else
+				out.unreadable.push(entry.source);
 		}
 		memo?.setSurface(scope, out);
 		return out;
@@ -158,6 +163,34 @@ final class ReflectionScan {
 		final resolution: Null<Array<ScopeFile>> = RefactorSupport.resolutionSourcesOf(plugin);
 		if (resolution != null) for (entry in resolution) take(entry);
 		return out;
+	}
+
+	/**
+	 * Whether `name` is reached by reflection anywhere in the scope `surface` was taken over — the
+	 * WHOLE member question, in the one place its three halves belong together.
+	 *
+	 * Two of the halves are the surface's own: a plain literal that spells the name, an
+	 * interpolation fragment the run could compute it from. The third is what an UNREADABLE scope
+	 * file can contribute, and it is not a literal at all — the parser gave no tree, so the file
+	 * has no literal CONTENTS to offer and the surface skips it. Its raw text still spells whatever
+	 * `Reflect.field` call it holds, so the conservative answer is a word-boundary mention, exactly
+	 * as `RawSourceScan.skippedMayReference` answers it for an index that HAS the file.
+	 *
+	 * That third half is T867's residue, and it was measured as zero on a fixture that reached one
+	 * cell: `CrossScopeSoundnessTest.unreadableExtras` selected its cells by comparing the reaching
+	 * source against ONE stored constant, so the two S191 cells whose reflective string names a
+	 * METHOD and a CONSTANT never ran. Selecting by the FORM of the evidence instead (T921) put an
+	 * unreadable sibling two rewrites AHEAD of a readable one — `inline-constant` erased a constant
+	 * a `Reflect.field` reads, `prefer-inline` folded a method one names — which is the wrong
+	 * direction for a file the run could not read.
+	 *
+	 * A word mention over-refuses: an ordinary call spells the name too. That is the same trade the
+	 * skipped-file proofs beside it already make, and the alternative is a rewrite that compiles and
+	 * fails at run time.
+	 */
+	public static function runtimeName(surface: ReflectionSurface, name: String): Bool {
+		return surface.whole.contains(name) || runtimeNameFragment(surface.fragments, name)
+			|| surface.unreadable.exists(source -> RawSourceScan.mentionsWord(source, name));
 	}
 
 	/**
@@ -260,10 +293,18 @@ typedef ScopeFile = {
  * gate on its own value. `fragments` holds the deduped static text of every INTERPOLATED literal,
  * each only ever PART of a name the run computes.
  *
- * The two halves take DIFFERENT containment tests, which is why they stay apart: a whole literal is
- * compared against the name, a fragment is asked whether the name could contain IT.
+ * The three halves take DIFFERENT containment tests, which is why they stay apart: a whole literal is compared
+ * against the name, a fragment is asked whether the name could contain IT, and an unreadable source is asked
+ * only whether it spells the name as a word. `runtimeName` is where the member question puts all three together.
  */
 typedef ReflectionSurface = {
 	final whole: Array<String>;
 	final fragments: Array<String>;
+
+	/**
+	 * The RAW SOURCE of every scope file the parser could not read — no literal contents, because
+	 * there is no tree to take them from, and the only honest answer about such a file is that its
+	 * bytes may spell any name. `runtimeName` is where that answer is asked.
+	 */
+	final unreadable: Array<String>;
 };

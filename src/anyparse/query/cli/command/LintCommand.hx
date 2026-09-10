@@ -606,10 +606,17 @@ final class LintCommand implements CliCommand {
 			// declaring type reads as unresolvable and a Map get/set finding re-exposed by an earlier
 			// pass (a nested lookup) is re-skipped, so the fixed-point loop never converges on it.
 			'prefer-index-access',
-			// Its no-null-value census enumerates every occurrence of the map's name across the
-			// scope it is given. On the active SUBSET a writer in an untouched file is invisible,
-			// which would turn an unprovable site into a wrongly PROVEN one — the unsound
-			// direction, unlike the misses the other ids here guard against.
+			// Its no-null-value census is OWNER-scoped, not name-scoped — the name-scoped form was
+			// measured and refused five realistic map names on std collisions alone, and
+			// `MapValueScan` documents the replacement. What a narrow set costs it is therefore the
+			// three cross-file doors, not an occurrence count: an `@:access` grant and a subtype
+			// that could store a null through the map, both asked of
+			// `RefactorSupport.resolutionIndexOf(plugin) ?? report`. On the active SUBSET of a
+			// project that declares no resolution scope a subtype in an untouched file reads as
+			// absent, which turns an unprovable site into a wrongly PROVEN one — the unsound
+			// direction, unlike the misses the other ids here guard against. Pinned by
+			// `CrossScopeSoundnessTest`'s `subtype-map-write` cell (T918, arm
+			// `M-MAPVALUE-SUBTYPE-REPORT-INDEX`).
 			'redundant-map-exists',
 			// prefer-static-extension's shadow gate resolves the receiver type — and its whole
 			// supertype / alias closure — through the index. On the active SUBSET a declaring type
@@ -641,7 +648,10 @@ final class LintCommand implements CliCommand {
 			// prefer-typed-throw's verdict is whole-scope: a `catch (e:String)` ANYWHERE degrades the
 			// rule to report-only. When no resolution scope exists the gate falls back to the file set
 			// it is handed, so on the active SUBSET a catch declared elsewhere reads as absent and a
-			// throw a first pass correctly refused would be boxed by a later one.
+			// throw a first pass correctly refused would be boxed by a later one. Pinned by
+			// `CrossScopeSoundnessTest`'s `string-catch` cell (T919, arm
+			// `M-TYPEDTHROW-CATCH-REPORT-ONLY`) — the one entry on this list whose gate degrades the
+			// RULE rather than a candidate, so its cell carries no in-cell control.
 			'prefer-typed-throw',
 			// orphan-accessor's every deletion gate is whole-project: the property is resolved through
 			// the supertype chain, and the zero-direct-call proof scans every file in report scope. On

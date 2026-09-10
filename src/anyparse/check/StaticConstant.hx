@@ -259,7 +259,7 @@ final class StaticConstant implements Check implements DefaultOff {
 		final init: Null<QueryNode> = ConstantFieldScan.initializerOf(field);
 		if (init == null || !isConstantLiteral(init, ctx.source, ctx.seams)) return;
 		if (MemberWriteScan.writtenInRange(ctx.source, name, span, 0, ctx.source.length)) return;
-		if (ctx.reflected.whole.contains(name) || ReflectionScan.runtimeNameFragment(ctx.reflected.fragments, name)) return;
+		if (ReflectionScan.runtimeName(ctx.reflected, name)) return;
 		if (memberAccessedInFile(ctx.source, name, span)) return;
 		if (!RefactorSupport.privateMemberScanIsSound(ctx.source, ctx.index, name)) return;
 		// A macro-built type's fields are not what the declaration says — a builder that moves

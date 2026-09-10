@@ -12,6 +12,7 @@ import anyparse.query.MemberKinds;
 import anyparse.query.NamingPolicy.FrameworkContract;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.QueryNode;
+import anyparse.query.RawSourceScan;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -297,7 +298,19 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 			reflectScanned = true;
 			for (entry in ReflectionScan.scopeFiles(files, plugin)) {
 				final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-				if (tree != null) collectReflectNames(tree, candidateNames, reflectBlocked, shape);
+				// A scope file the parser could not read still spells whatever `Reflect.field` call it
+				// holds, and the narrow scanner above needs a tree. So it degrades to the same
+				// word-boundary mention every skipped-file proof in the check layer reduces to
+				// (`ReflectionScan.runtimeName` states the trade): an ordinary call spells the name too
+				// and costs one refusal, where the missing answer costs a fold that compiles and then
+				// answers MISSING at run time.
+				if (tree != null)
+					collectReflectNames(tree, candidateNames, reflectBlocked, shape);
+				else
+					for (candidate in candidateNames) if (
+						!reflectBlocked.contains(candidate) && RawSourceScan.mentionsWord(entry.source, candidate)
+					)
+						reflectBlocked.push(candidate);
 			}
 			return reflectBlocked;
 		}
