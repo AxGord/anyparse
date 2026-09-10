@@ -520,6 +520,9 @@ final class RefShapeKindProjectionTest extends Test {
 	 * split that makes `TOKEN_PROBES` a differential rather than a string compare. A source is
 	 * written in the smallest shape that reaches its ctor; several are lifted verbatim from the
 	 * slice fixtures that motivated the ctor (the `CondSplice*` family, `HxCondUnbalancedRegionSliceTest`).
+	 * A few rows are NOT valid Haxe on purpose — `EllipsisStmt`'s `....` is the haxe-formatter corpus
+	 * convention `HxStatement` parses deliberately — because the oracle here is the generated parser,
+	 * not the `haxe` compiler; do not «repair» such a row into code the compiler accepts.
 	 */
 	private static final KIND_SOURCES: Map<String, Array<KindSource>> = [
 		'haxe' => [
@@ -806,8 +809,8 @@ final class RefShapeKindProjectionTest extends Test {
 	 * catch-all matches, the branch before it matches first, on the same prefix. The shape it was
 	 * written for does not reach it either: for a tag whose arguments no expression parses,
 	 * `MetaCall` rewinds, `Meta` takes the NAME, the leftover `(…)` fails in the DECLARATION, and no
-	 * rewind returns to the metadata element to try a later branch — measured, `@:allow(a.*) class C
-	 * {}` is a parse error at the `(`, not a `PlainMeta`.
+	 * rewind returns to the metadata element to try a later branch — measured, `@:x(*) class C {}` is
+	 * a parse error at the `(` and `@:allow(a.*) class C {}` one at the `*`, never a `PlainMeta`.
 	 *
 	 * So the ctor is a name every kind-set consumer can read and no parse can ever produce. Retiring
 	 * it, or ordering it before `Meta`, is a grammar decision with a writer surface
@@ -1393,6 +1396,8 @@ final class RefShapeKindProjectionTest extends Test {
 		Assert.isTrue(emitted.length >= MIN_EMITTED_KINDS, '${emitted.length} distinct kind(s) emitted by the parse arm');
 		final missing: String = emitted.filter(kind -> !projected.contains(kind)).join(', ');
 		Assert.equals('', missing, 'kind(s) a parse emits that the derived vocabulary omits: [$missing]');
+		final reachable: String = (UNREACHABLE_KINDS['haxe'] ?? []).filter(kind -> emitted.contains(kind)).join(', ');
+		Assert.equals('', reachable, 'kind(s) declared unreachable that this corpus DOES emit: [$reachable]');
 	}
 
 	/** Every `.hx` under `dir`, recursively. */
