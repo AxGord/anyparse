@@ -987,7 +987,9 @@ declares none normalizes nothing, and this rule degenerates into `duplicate-code
 nested function's own bindings already lie inside that subtree. The renumbering then restarts at
 each candidate run, so a name's index is a property of the run and not of where its block happens
 to declare it — which is what lets two runs at different depths match, and what makes the mapping
-one-to-one: a copy that SWAPS the roles of two locals renumbers differently and ends the run.
+one-to-one: a copy whose names do not correspond one for one — two standing for one, or one for
+two — renumbers differently and ends the run. A consistent SWAP of two locals is a renaming, so it
+stays a clone.
 
 **Where the render finds a name.** A reference is an identifier leaf and is replaced whole. A
 binder writes its own name in the stretch between its node's start and its first child — the only
@@ -996,11 +998,11 @@ binder normalize too, while a default value and a body are out of reach by const
 binding the grammar spells some other way (the bare single-parameter arrow lambda, whose parameter
 projects as a plain identifier) is left alone: that can cost a clone and never invent one.
 
-**What it does NOT promise.** The exact reading is not a positional subset of this one. Both
-report the maximal run, and normalization can extend a run backwards or grow a bucket until the
-path-earliest occurrence — the anchor both messages point at — changes file; the clone is still
-reported, at a wider span or against a different partner. Compare the two rules by REGION, never
-by `(file, line, col)`.
+**What it does NOT promise.** Neither reading contains the other. Each candidate run is extended
+maximally, but the occurrence filter keeps the EARLIEST-starting run and drops every later one it
+overlaps, so a renamed run that starts one statement sooner suppresses an exact run that reaches
+further — the exact finding is then absent from this rule's coordinates AND its region. Take the
+union of the two rules; never read one as a subset of the other.
 
 Report-only (`NoAutofix`): a renaming makes two copies look alike without making them one idea,
 and only a reader can tell which they are.

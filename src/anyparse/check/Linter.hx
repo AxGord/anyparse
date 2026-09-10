@@ -303,9 +303,9 @@ final class Linter {
 			// switch, so it contains theirs whenever both fire on the same one.
 			new UnnecessarySwitch(),
 			new DuplicateCode(),
-			// Its RENAMED reading, and by construction not disjoint from it: every exact clone is
-			// also a clone under renaming, so the two rules report the same site twice on purpose —
-			// one population per rule id. Both are report-only, so registry order carries no meaning.
+			// Its RENAMED reading: the same clone relation with local names normalized away, so the
+			// two rules deliberately overlap — one population per rule id, and neither one's spans
+			// contain the other's. Both are report-only, so registry order carries no meaning.
 			new DuplicateCodeRenamed(),
 			new ListenerSymmetry(),
 			new StringLiteralDup(),
