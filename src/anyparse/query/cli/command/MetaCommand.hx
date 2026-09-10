@@ -41,10 +41,12 @@ typedef MetaOpts = {
 @:nullSafety(Strict)
 final class MetaCommand implements CliCommand {
 
+	private static final CMD: String = 'meta';
+
 	public function new() {}
 
 	public function name(): String {
-		return 'meta';
+		return CMD;
 	}
 
 	public function summary(): String {
@@ -112,6 +114,10 @@ final class MetaCommand implements CliCommand {
 			return EXIT_USAGE;
 		}
 		final plugin: GrammarPlugin = CliArgs.pickPlugin(o.lang);
+		// `--on` is `--kind` under another name — a decl-host kind — and it failed open the same
+		// way: `--on ClassDeclz` printed `0 hits` at exit 0 and never named the spelling.
+		final declKind: Null<String> = onKind;
+		if (declKind != null && CliWalk.rejectUnknownKinds(CMD, plugin, [declKind], [])) return EXIT_USAGE;
 		final shape: MetaShape = plugin.metaShape();
 
 		final expanded: ExpandedInputs = CliArgs.expandInputs(inputSpecs, '.hx');
@@ -132,13 +138,12 @@ final class MetaCommand implements CliCommand {
 		if (allEntries == null) return EXIT_RUNTIME;
 
 		if (allEntries.length == 0)
-			CliIo.stderr('${CliWalk.emptyWalkerNudge('meta', null, paths.length, paths.length - skipEntries.length, skipEntries, null)}\n');
+			CliIo.stderr('${CliWalk.emptyWalkerNudge(CMD, null, paths.length, paths.length - skipEntries.length, skipEntries, null)}\n');
 
-		final shown: Array<{ file: String, source: String, hits: Array<MetaHit> }> =
-			CliWalk.capAndReport(
-				'meta', allEntries, o.limit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) },
-				paths.length
-			);
+		final shown: Array<{ file: String, source: String, hits: Array<MetaHit> }> = CliWalk.capAndReport(
+			CMD, allEntries, o.limit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) },
+			paths.length
+		);
 		if (o.json) {
 			CliIo.sysPrint(Json.renderMeta(shown));
 		} else {
@@ -277,7 +282,7 @@ final class MetaCommand implements CliCommand {
 		final allEntries: Array<{ file: String, source: String, hits: Array<MetaHit> }> = [];
 		for (path in paths) {
 			final source: String = CliIo.readSourceForParse(path);
-			final tree: Null<QueryNode> = CliWalk.parseWalked('meta', plugin.parseFile, path, source, singleFile, skipEntries);
+			final tree: Null<QueryNode> = CliWalk.parseWalked(CMD, plugin.parseFile, path, source, singleFile, skipEntries);
 			if (tree == null) {
 				// In single-file mode a parse failure is fatal; signal the
 				// caller (null) to return EXIT_RUNTIME. In multi-file mode the

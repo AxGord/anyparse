@@ -96,6 +96,29 @@ final class CliWalk {
 	}
 
 	/**
+	 * The `--kind` vocabulary gate every command that lets a user type a node kind answers
+	 * through — the read walkers (`lit` / `search` / `symbols`) and the edit ops' `--kind`
+	 * narrow / lift alike.
+	 *
+	 * Until this gate the walkers failed OPEN: `apq lit 'x' F.hx --kind Literaal` reported
+	 * `0 hits`, never named `Literaal`, and exited 0, so a typo was indistinguishable from an
+	 * absence and the empty run read as evidence. `minted` carries the synthetic kinds the
+	 * CALLING command mints itself (`apq lit`'s `Comment` / `Directive`) — they are no grammar's
+	 * vocabulary, so only their minter can vouch for them. Everything else comes from
+	 * `GrammarPlugin.projectedKinds`, so this layer spells no kind name of any grammar.
+	 *
+	 * Prints the reason and answers `true` when the run must stop; `null` kinds (the flag was
+	 * never passed) and a fully known set answer `false`.
+	 */
+	public static function rejectUnknownKinds(cmd: String, plugin: GrammarPlugin, kinds: Null<Array<String>>, minted: Array<String>): Bool {
+		if (kinds == null) return false;
+		final clauses: String = Address.unknownKindClauses(plugin, kinds, minted);
+		if (clauses.length == 0) return false;
+		CliIo.stderr('apq $cmd: --kind $clauses\n');
+		return true;
+	}
+
+	/**
 	 * Parse one walked file for the scan subcommands
 	 * (`refs`/`uses`/`meta`/`search`). The behaviour on a parse failure
 	 * depends on how the input was given. When the user named exactly

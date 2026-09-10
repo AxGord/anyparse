@@ -77,7 +77,7 @@ apq search --kind <Kind> <pattern> <files>   # only match nodes of that AST kind
 
 The pattern is a fragment of the target language, parsed by the same grammar plugin, with the metavariable extension described in [Pattern syntax](#pattern-syntax-for-search) below. Each match prints the source location and the bindings of any metavariables.
 
-`--kind <Kind>` restricts matches to nodes whose AST kind equals `<Kind>` (e.g. `VarStmt`, `ParamCtor`, `ClassDecl` — the same vocabulary `ast --select`/`refs --on` use); the pattern still has to match structurally, this only narrows *where*.
+`--kind <Kind>` restricts matches to nodes whose AST kind equals `<Kind>` (e.g. `VarStmt`, `ParamCtor`, `ClassDecl` — the same vocabulary `ast --select`/`refs --on` use); the pattern still has to match structurally, this only narrows *where*. A `<Kind>` this grammar projects no node for is a USAGE error, not an empty result — see [The kind vocabulary is checked](#the-kind-vocabulary-is-checked).
 
 `search` is a **structural** query: the pattern is parsed as code shape. A degenerate pattern that resolves to a single leaf (a bare identifier, a lone metavar, a bare literal — no children) carries no shape and only ever matches that name in expression position. The CLI detects this and emits a non-fatal stderr nudge pointing at the right tool (`refs <name> --decls` for a declaration, `uses <Type>` for a type's consumers, `ast --select` for a subtree), then runs the search anyway.
 
@@ -316,6 +316,13 @@ printed the single-quoted hit and said nothing at all about the other — the 0-
 auto-widen retry fires only when NOTHING matched — while `--exact` could never
 reach the quoted spelling. The 0-hit nudge made it worse by suggesting a widening
 (`--kind Literal,IdentExpr`) that could not have found the missing hit either.
+
+**An explicit `--kind` naming a kind no rule of the grammar projects is REFUSED.**
+`lit` mints two kinds of its own — `Comment` and `Directive`, neither of which any
+grammar projects, since both come from a separate scan over the raw source — and it
+declares them where it mints them, so the shared gate admits exactly those two on top
+of the grammar's vocabulary and nothing else. See
+[The kind vocabulary is checked](#the-kind-vocabulary-is-checked).
 
 **An explicit `--kind` is honoured and ANNOUNCED.** Naming only part of that
 vocabulary is a legitimate narrowing, so it still narrows — but a stderr note says
@@ -1129,6 +1136,39 @@ The descendant combinator is what makes the `file → class → method → local
 addressing path practical: `>` requires knowing the exact intermediate nesting
 (method body blocks etc.), `>>` does not.
 
+### The kind vocabulary is checked
+
+A kind name is checked against what the loaded grammar's parser can actually project
+(`GrammarPlugin.projectedKinds`, generated from the same shape the walker is emitted
+from — no list is spelled by hand anywhere in `anyparse.query`). This is one check
+with one message, shared by every place a kind can be typed:
+
+| Where | On an unprojected kind |
+|---|---|
+| `ast --select` / `probe --select` | message + **exit 2** |
+| `source --select` | message + exit 1 (a `source` miss was always an error) |
+| `lit --kind` / `search --kind` / `symbols --kind` / `meta --on` | `apq <cmd>: --kind "K" is not a node kind this grammar projects (did you mean …?)` + **exit 2** |
+| `replace-node` / `patch` / `add-meta`, `--kind` narrow or lift | the same clause under the op's own prefix + exit 1 |
+
+The message names the spelling that was rejected and the nearest ones that exist —
+`--kind Literaal` answers `did you mean Literal, Interval?`, `--select ClassDeclz`
+answers `ClassDecl`, and `Fix` answers nothing (the did-you-mean over a ~238-kind
+vocabulary demands a substring hit or an edit distance under half the query).
+
+**A kind that IS projected and merely absent stays exit 0.** `ast --select
+DoWhileStmt` over a file with no `do while` found nothing and that IS the answer;
+only a spelling nothing could ever match is the caller's mistake. That distinction is
+the whole contract — before S201 the walkers reported `0 hits` at exit 0 for both, so
+a typo was indistinguishable from an absence and an empty run read as evidence about
+the code.
+
+Two spellings are admitted beyond the grammar's own vocabulary, and neither is
+hard-coded in the checking layer: a `selectKindEquivalence` alias the plugin
+publishes (`--select ClassDecl` reaching a `final class`'s `ClassForm`), and whatever
+the CALLING command mints itself — the tree's root kind (`module`), `apq lit`'s
+`Comment` and `Directive`. A minted kind is in the did-you-mean pool too, so
+`--kind Coment` answers `did you mean Comment?`.
+
 ### Non-features
 
 - Attribute filters (`class[name=Foo]` style). Phase 2+ candidate.
@@ -1201,7 +1241,12 @@ Rules and properties:
   grammar projects, and `refs` / `uses` / `blast` are still the walkers that
   find it. The did-you-mean over the whole vocabulary demands a substring hit
   or an edit distance under half the query, so `ClassDeclz` still suggests
-  `ClassDecl` while `Fix` suggests nothing.
+  `ClassDecl` while `Fix` suggests nothing. Since S201 the unknown-kind half also
+  decides the STATUS: `apq ast --select` exits 2 when a segment names a kind no
+  rule projects and 0 when every kind is real and this file simply holds none —
+  the message and the exit code finally agree. The same vocabulary check runs on
+  every `--kind` (see [The kind vocabulary is
+  checked](#the-kind-vocabulary-is-checked)).
 - Named/pattern addresses are **edit-stable**: they survive edits above them,
   so a chain of ops needs no re-locate step between edits (a position rots as
   soon as an earlier edit shifts lines).

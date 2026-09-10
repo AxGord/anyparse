@@ -51,6 +51,16 @@ final class LitCommand implements CliCommand {
 
 	private static final CMD: String = 'lit';
 
+	/**
+	 * The kind `appendCommentHits` mints. No grammar projects a comment node — the scan is a
+	 * separate string-literal-aware pass over the raw source — so this spelling exists only
+	 * here, and the `--kind` vocabulary gate has to be TOLD about it.
+	 */
+	private static final COMMENT_KIND: String = 'Comment';
+
+	/** The kind `appendDirectiveHits` mints; same story as `COMMENT_KIND` — a directive is trivia, not a node. */
+	private static final DIRECTIVE_KIND: String = 'Directive';
+
 	public function new() {}
 
 	public function name(): String {
@@ -82,6 +92,15 @@ final class LitCommand implements CliCommand {
 			inputSpecs: [],
 			errExit: code
 		};
+	}
+
+	/**
+	 * The kinds this command mints itself, on top of whatever the grammar projects. Returned
+	 * fresh per call rather than held in a shared array — a process-scoped mutable is a
+	 * regression even when it is cheaper (invariant 1).
+	 */
+	private static function syntheticKinds(): Array<String> {
+		return [COMMENT_KIND, DIRECTIVE_KIND];
 	}
 
 	/**
@@ -118,6 +137,10 @@ final class LitCommand implements CliCommand {
 			return EXIT_RUNTIME;
 		}
 		final plugin: GrammarPlugin = io.plugin;
+		// A `--kind` naming a kind neither the grammar projects nor this command mints matched
+		// nothing and SAID nothing: the run printed `0 hits` and exited 0, which reads as an
+		// answer about the code rather than about the spelling.
+		if (CliWalk.rejectUnknownKinds(CMD, plugin, o.kindFilter, syntheticKinds())) return EXIT_USAGE;
 
 		// `lit` matches DECODED literal values; the raw file holds the ESCAPED form,
 		// so a raw-substring pre-filter can false-negative when a searched key
@@ -193,12 +216,12 @@ final class LitCommand implements CliCommand {
 		// a silent `--include-comments`-by-default would flood
 		// doc-comment-heavy queries with noise.
 		final scanComments: Bool = o.includeComments || (kindFilter != null && kindFilter.length == 0)
-			|| effectiveKindFilter.contains('Comment');
+			|| effectiveKindFilter.contains(COMMENT_KIND);
 		// Directive scan is OPT-IN ONLY: `--include-directives`, or `Directive` named in an
 		// explicit `--kind`. Unlike the comment scan it deliberately does NOT ride `--any-kind` —
 		// directive lines are hit surface no `lit` query has ever returned, and widening a flag
 		// that already ships would change what an existing query prints.
-		final scanDirectives: Bool = o.includeDirectives || (kindFilter != null && kindFilter.contains('Directive'));
+		final scanDirectives: Bool = o.includeDirectives || (kindFilter != null && kindFilter.contains(DIRECTIVE_KIND));
 
 		final collected: {
 			entries: Array<{ file: String, source: String, hits: Array<LitHit> }>,
@@ -285,7 +308,7 @@ final class LitCommand implements CliCommand {
 			final bodySpan: Span = SourceComments.commentBody(source, tok);
 			final body: String = source.substring(bodySpan.from, bodySpan.to);
 			final match: Bool = exact ? body == target : body.indexOf(target) >= 0;
-			if (match) out.push(new LitHit('Comment', body, new Span(tok.from, tok.to)));
+			if (match) out.push(new LitHit(COMMENT_KIND, body, new Span(tok.from, tok.to)));
 		}
 	}
 
@@ -309,7 +332,7 @@ final class LitCommand implements CliCommand {
 		for (directive in CondDirectives.scan(source, plugin.refShape(), plugin.lexicalRegions.bind(source))) {
 			final text: String = CondDirectives.text(source, directive);
 			final match: Bool = exact ? text == target : text.indexOf(target) >= 0;
-			if (match) out.push(new LitHit('Directive', text, directive.span));
+			if (match) out.push(new LitHit(DIRECTIVE_KIND, text, directive.span));
 		}
 	}
 

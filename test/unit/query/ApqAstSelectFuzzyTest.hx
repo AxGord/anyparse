@@ -9,39 +9,44 @@ import utest.Assert;
 import utest.Test;
 
 /**
- * `apq ast --select <Kind>` on an unknown kind name must still exit
- * cleanly (an empty result is not an error) and now also surface a
- * fuzzy "Did you mean: …" suggestion drawn from the kinds actually
- * present in the file. The stderr surface is not captured here —
- * exercising the code path is enough; the integration with the
- * existing `findFuzzy` helper is covered by `refs`/`uses` fuzzy
- * tests on the value-binding side.
+ * `apq ast --select <Kind>` on a kind this grammar's parser projects no node for: the
+ * fuzzy "Did you mean: …" suggestion drawn from the kinds actually present in the
+ * file, and — since S201 — a USAGE exit rather than a clean one.
+ *
+ * This class asserted the opposite until S201, on the reading that a read-only
+ * walker's empty result is never an error. The distinction it was missing is the
+ * one T945 names: a kind that IS projected and merely absent here stays exit 0,
+ * because the walk legitimately found nothing; a spelling no rule projects can
+ * never match anything and is the caller's mistake. The stderr surface is not
+ * captured here — `unit.cli.ApqKindVocabularyCliTest` pins the message.
  */
 @:nullSafety(Strict)
 class ApqAstSelectFuzzyTest extends Test {
 
-	public function testUnknownKindIsCleanExit(): Void {
+	public function testUnknownKindIsAUsageError(): Void {
 		#if (sys || nodejs)
 		final fixture: String = writeFixture('class X { var y:Int; }');
-		Assert.equals(0, Cli.run(['ast', '--select', 'NotAKind', fixture]), 'unknown --select kind is an empty result, not an error');
+		// Exit 0 until S201, on the reading that an empty result is never an error. It is not an
+		// empty result: `NotAKind` is a spelling no file could ever match, and a script driving
+		// `ast` had no way to separate it from a node that is simply somewhere else.
+		Assert.equals(2, Cli.run(['ast', '--select', 'NotAKind', fixture]), 'a kind no grammar projects is a usage error');
 		FileSystem.deleteFile(fixture);
 		#else
 		Assert.pass('non-sys target');
 		#end
 	}
 
-	public function testTypoNearKindStillCleanExit(): Void {
+	public function testTypoNearKindIsAUsageError(): Void {
 		#if (sys || nodejs)
 		// `ClassDeclX` is one edit away from `ClassDecl` (Levenshtein
 		// tier 1: dist=1, well inside FUZZY_MAX_DIST). The substring
 		// tier needs the candidate to CONTAIN the query, not the
 		// inverse, so it does not apply here — Levenshtein is what
-		// surfaces the suggestion. Either way the CLI still exits 0
-		// (empty selector result is not an error).
+		// surfaces the suggestion. A typo is exactly the case the
+		// usage exit is for: the suggestion names the fix, and the
+		// status says a fix is needed.
 		final fixture: String = writeFixture('class X {}');
-		Assert.equals(
-			0, Cli.run(['ast', '--select', 'ClassDeclX', fixture]), 'a typo near a real kind name is still an empty result, not an error'
-		);
+		Assert.equals(2, Cli.run(['ast', '--select', 'ClassDeclX', fixture]), 'a typo near a real kind name is a usage error');
 		FileSystem.deleteFile(fixture);
 		#else
 		Assert.pass('non-sys target');
@@ -50,12 +55,12 @@ class ApqAstSelectFuzzyTest extends Test {
 
 	public function testChainStillSurfaceFuzzy(): Void {
 		#if (sys || nodejs)
-		// First kind segment `ClassDeclX` is the fuzzy-source; the
-		// chain syntax must not break extraction. (The selector itself
-		// still matches no nodes, exit 0.)
+		// First kind segment `ClassDeclX` is the fuzzy-source; the chain syntax must not break
+		// extraction. The vocabulary verdict reads EVERY segment, so a chain whose first segment
+		// is a typo is a usage error like the bare form.
 		final fixture: String = writeFixture('class X { var y:Int; }');
 		Assert.equals(
-			0, Cli.run(['ast', '--select', 'ClassDeclX > VarField', fixture]), 'fuzzy extraction must use only the first kind segment'
+			2, Cli.run(['ast', '--select', 'ClassDeclX > VarField', fixture]), 'fuzzy extraction must use only the first kind segment'
 		);
 		FileSystem.deleteFile(fixture);
 		#else

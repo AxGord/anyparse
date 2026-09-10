@@ -113,6 +113,13 @@ final class CliEdit {
 			CliIo.stderr('apq $opName: provide exactly one of --select \'<sel>\', --match \'<pattern>\', or --at <line>[:<col>]\n');
 			return null;
 		}
+		// A `--kind` no rule of the grammar projects failed CLOSED here, but with a message that
+		// blamed the tree: `--at` answered `position 1:1 is not on a "ClassDeclz" node` and the lift
+		// answered `the resolved FnMember node has no enclosing "Fooo" node`, both of which read as
+		// "your cursor is wrong" for what is a misspelling. One check ahead of both branches, so the
+		// two spellings of `--kind` cannot drift apart. The ops mint no kind of their own.
+		final liftKind: Null<String> = kind;
+		if (liftKind != null && CliWalk.rejectUnknownKinds(opName, plugin, [liftKind], [])) return null;
 		if (atSpec != null) {
 			// `--kind` with `--at` narrows to the innermost node of that kind at the cursor.
 			final pos: Null<Position> = resolveAddressPos(opName, source, plugin, atSpec, null, null, null);

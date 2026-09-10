@@ -700,11 +700,18 @@ final class AstCommand implements CliCommand {
 				if ((o.minChildren < 0 || m.children.length >= o.minChildren) && (o.maxChildren < 0 || m.children.length <= o.maxChildren))
 					m
 		];
-		if (raw.length == 0)
+		if (raw.length == 0) {
 			reportAstSelectEmpty(
 				tree, selectExpr, fileLabel, o.minChildren, o.maxChildren, preFilter.length,
 				Address.selectMissHint(tree, source, plugin, selector)
 			);
+			// A kind this grammar projects no node for is a typo against the vocabulary, not an
+			// absence in this file: no file could ever match it, so the run is a USAGE error and a
+			// script driving `ast` can finally tell the two apart. A kind that IS projected and
+			// merely absent here stays exit 0 — a walk that legitimately found nothing is an
+			// answer, not a mistake.
+			if (Address.unknownSelectorKinds(tree, plugin, selector).length > 0) return EXIT_USAGE;
+		}
 		if (o.countOnly) {
 			for (m in raw) CliIo.sysPrint('${m.children.length}\n');
 			return EXIT_OK;

@@ -81,6 +81,10 @@ final class SymbolsCommand implements CliCommand {
 			return EXIT_RUNTIME;
 		}
 		final plugin: GrammarPlugin = io.plugin;
+		// A decl kind the grammar projects no node for silently listed nothing at exit 0 — the
+		// same answer a scope genuinely holding no such declaration gives.
+		final kind: Null<String> = kindFilter;
+		if (kind != null && CliWalk.rejectUnknownKinds('symbols', plugin, [kind], [])) return EXIT_USAGE;
 
 		final files: Array<{ file: String, source: String }> = [
 			for (path in paths)

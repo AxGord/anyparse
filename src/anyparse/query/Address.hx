@@ -153,26 +153,52 @@ final class Address {
 	 * typed against the wrong vocabulary, which today is indistinguishable from a correct
 	 * selector that simply matches nothing HERE.
 	 *
+	 * The tree's own root kind is admitted alongside the grammar's vocabulary: the plugin mints
+	 * it in `parseFile` rather than projecting it, and every top-level `AddressIndex.describe`
+	 * anchor spells it.
+	 */
+	public static function unknownSelectorKinds(tree: QueryNode, plugin: GrammarPlugin, selector: Selector): Array<String> {
+		return unknownKinds(plugin, [for (segment in selector.segments) segment.kind], [tree.kind]);
+	}
+
+	/**
+	 * Which of `kinds` this grammar's parser projects no node for — the one vocabulary check
+	 * behind every kind name a user is allowed to type, a `--select` segment and a walker's
+	 * `--kind` alike.
+	 *
 	 * Read off `GrammarPlugin.projectedKinds`, never a literal list: the check has to hold for
 	 * every grammar the engine can load, and a kind name spelled in this package would be a
 	 * grammar leaking into the generic layer. Two spellings are admitted beyond that vocabulary —
-	 * the kind-equivalence canon of a segment (`--select ClassDecl` reaching a `ClassForm`), and
-	 * the tree's own root kind, which the plugin mints in `parseFile` rather than projecting it
-	 * from the grammar. A grammar publishing NO vocabulary answers empty: no diagnosis is better
-	 * than calling every kind unknown.
+	 * the kind-equivalence canon of a name (`--select ClassDecl` reaching a `ClassForm`), and
+	 * whatever the CALLER mints itself, which arrives in `alsoKnown`: a walker's synthetic kinds
+	 * (`apq lit` mints `Comment` and `Directive`), a tree's root kind. Those belong to the code
+	 * that mints them, which is why they are an argument here instead of a list. A grammar
+	 * publishing NO vocabulary answers empty: no diagnosis is better than calling every kind
+	 * unknown.
 	 */
-	public static function unknownSelectorKinds(tree: QueryNode, plugin: GrammarPlugin, selector: Selector): Array<String> {
+	public static function unknownKinds(plugin: GrammarPlugin, kinds: Array<String>, alsoKnown: Array<String>): Array<String> {
 		final projected: Array<String> = plugin.projectedKinds();
 		if (projected.length == 0) return [];
 		final equiv: Null<KindEquivalence> = plugin.selectKindEquivalence();
 		final out: Array<String> = [];
-		for (segment in selector.segments) {
-			final kind: String = segment.kind;
-			if (kind == tree.kind || projected.contains(kind)) continue;
+		for (kind in kinds) {
+			if (alsoKnown.contains(kind) || projected.contains(kind)) continue;
 			if (equiv != null && projected.contains(equiv.canon(kind))) continue;
 			if (!out.contains(kind)) out.push(kind);
 		}
 		return out;
+	}
+
+	/**
+	 * The unknown-kind clauses for `kinds`, joined with `; ` — empty when every one of them is a
+	 * kind this grammar projects. The walkers' `--kind` gate and the edit ops' `--kind` lift both
+	 * answer with this, so a misspelling reads the same wherever it was typed.
+	 */
+	public static function unknownKindClauses(plugin: GrammarPlugin, kinds: Array<String>, alsoKnown: Array<String>): String {
+		final vocabulary: Array<String> = plugin.projectedKinds().concat(alsoKnown);
+		return [
+			for (kind in unknownKinds(plugin, kinds, alsoKnown)) kindNotProjected(kind, vocabulary)
+		].join('; ');
 	}
 
 	/**
@@ -185,22 +211,9 @@ final class Address {
 	 * "that name lives elsewhere", when what happened is that the kind does not exist at all.
 	 */
 	public static function selectMissHint(tree: QueryNode, source: String, plugin: GrammarPlugin, selector: Selector): String {
-		final projected: Array<String> = plugin.projectedKinds();
+		final vocabulary: Array<String> = plugin.projectedKinds().concat([tree.kind]);
 		final clauses: Array<String> = [
-			for (kind in unknownSelectorKinds(tree, plugin, selector)) {
-				// The pool here is the WHOLE grammar vocabulary (238 kinds on this tree), not the ~11 a file
-				// happens to hold, and `closest`'s flat Levenshtein ceiling of 3 turns every short query into
-				// noise — `Fix` came back `Div, Add, And`, `*` came back `Eq, Gt, In`. Keep a substring lead
-				// (`Expr` -> `FnExpr` is real) and otherwise demand a distance under half the query, which is
-				// what lets `ClassDeclz` -> `ClassDecl` through and stops `Fix`.
-				final near: Array<String> = EditDistance.closest(kind, projected)
-					.filter(
-						candidate -> candidate.indexOf(kind) >= 0 || EditDistance.between(kind, candidate, kind.length) * 2 < kind.length
-					);
-				near.length == 0
-					? '"$kind" is not a node kind this grammar projects'
-					: '"$kind" is not a node kind this grammar projects (did you mean ${near.join(', ')}?)';
-			}
+			for (kind in unknownSelectorKinds(tree, plugin, selector)) kindNotProjected(kind, vocabulary)
 		];
 		final names: String = kindHint(tree, source, plugin, selector);
 		if (names.length > 0) clauses.push(names);
@@ -210,6 +223,24 @@ final class Address {
 	/** Identifier-character test for the name-token word-boundary scan. */
 	private static inline function isIdentChar(c: Int): Bool {
 		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code;
+	}
+
+	/**
+	 * One kind's clause: that no rule of this grammar projects it, plus the nearest spellings of
+	 * `vocabulary` it could have been. `vocabulary` carries the caller's own minted kinds too —
+	 * a `--kind Coment` whose fix is `Comment` has to be able to reach it.
+	 */
+	private static function kindNotProjected(kind: String, vocabulary: Array<String>): String {
+		// The pool here is the WHOLE grammar vocabulary (238 kinds on this tree), not the ~11 a file
+		// happens to hold, and `closest`'s flat Levenshtein ceiling of 3 turns every short query into
+		// noise — `Fix` came back `Div, Add, And`, `*` came back `Eq, Gt, In`. Keep a substring lead
+		// (`Expr` -> `FnExpr` is real) and otherwise demand a distance under half the query, which is
+		// what lets `ClassDeclz` -> `ClassDecl` through and stops `Fix`.
+		final near: Array<String> = EditDistance.closest(kind, vocabulary)
+			.filter(candidate -> candidate.indexOf(kind) >= 0 || EditDistance.between(kind, candidate, kind.length) * 2 < kind.length);
+		return near.length == 0
+			? '"$kind" is not a node kind this grammar projects'
+			: '"$kind" is not a node kind this grammar projects (did you mean ${near.join(', ')}?)';
 	}
 
 	/** A position `<line>[:<col>]`; a missing column snaps to the line's first non-whitespace character. */

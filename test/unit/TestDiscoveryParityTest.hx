@@ -381,6 +381,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.cli.ApqFromFileCliTest',
 		'unit.cli.ApqHxqDxV10CliTest',
 		'unit.cli.ApqHxqDxV8CliTest',
+		'unit.cli.ApqKindVocabularyCliTest',
 		'unit.cli.ApqLitCapHitCliTest',
 		'unit.cli.ApqLitCommentsCliTest',
 		'unit.cli.ApqLitDirectivesCliTest',
@@ -1238,6 +1239,13 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-PROBE-STAGE-ANY-TARGET',
 			'unit.cli.ApqDxTier5CliTest#testTwoProbeProcessesGetSeparateScratchSlots :: guard :: ',
 			'unit.cli.ApqDxTier5CliTest#testTwoProbeProcessesUnderOneTempRootStillGetSeparateSlots :: guard :: ',
+			'unit.cli.ApqKindVocabularyCliTest#testAProjectedKindStillRuns :: guard :: ',
+			'unit.cli.ApqKindVocabularyCliTest#testAstSelectMissKeepsTheCrossProjectPointer :: control :: '
+				+ 'M-AST-SELECT-NO-CROSS-PROJECT-HINT',
+			'unit.cli.ApqKindVocabularyCliTest#testAstSelectProjectedButAbsentKindStaysOk :: guard :: ',
+			'unit.cli.ApqKindVocabularyCliTest#testAstSelectUnprojectedKindIsAUsageError :: control :: M-AST-SELECT-UNKNOWN-KIND-EXIT-OK',
+			'unit.cli.ApqKindVocabularyCliTest#testLitAcceptsTheKindsItMintsItself :: control :: M-LIT-SYNTHETIC-KINDS-EMPTY',
+			'unit.cli.ApqKindVocabularyCliTest#testLitRejectsAnUnprojectedKind :: control :: M-KIND-GATE-FAIL-OPEN',
 			'unit.cli.ApqProgressTtyCliTest#testNoEnvAndNoTerminalIsSilent :: control :: M-PROGRESS-TTY-BLIND',
 			'unit.cli.ApqScratchPathCliTest#testStdlibDupRefusesAWorkDirectoryThatIsASymlink :: control :: M-STDLIB-DUP-WORK-ANY-TARGET',
 			'unit.cli.ApqScratchPathCliTest#testStdlibDupStagesItsProbesInAPerProcessDirectory :: control :: M-STDLIB-DUP-WORKDIR-SHARED',
@@ -1517,6 +1525,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.AddressTest#testAModuleLevelNodeIsAddressedFromTheRootNotByOrdinal :: control :: M-ADDRESS-NO-ROOT-ANCHOR',
 			'unit.query.AddressTest#testAnAmbiguityListingSpellsTheSelectorThatPicksOneCandidate :: control :: '
 				+ 'M-CANDIDATE-LABEL-BARE,M-ADDRESS-NO-ROOT-ANCHOR',
+			'unit.query.AddressTest#testMintedKindIsAdmittedAndSuggestible :: control :: M-KIND-CLAUSE-POOL-GRAMMAR-ONLY',
 			'unit.query.AddressTest#testSelectUnknownKindIsNamedAsUnknown :: control :: M-SELECT-MISS-NO-KIND-CLAUSE',
 			'unit.query.ApqUsesTest#testQualifiedIsOptInSoRewritersKeepTheExactAnswer :: control :: M-USES-QUALIFIED-DEFAULT',
 			'unit.query.ApqUsesTest#testQualifiedSpellingsAcrossTypePositions :: control :: M-USES-EXACT-ONLY',
@@ -2064,7 +2073,12 @@ class TestDiscoveryParityTest extends Test {
 			'M-MAPVALUE-SUBTYPE-REPORT-INDEX',
 			'M-TYPEDTHROW-CATCH-REPORT-ONLY',
 			'M-REFLECTION-UNREADABLE-BLIND',
-			'M-INLINE-UNREADABLE-BLIND'
+			'M-INLINE-UNREADABLE-BLIND',
+			'M-KIND-GATE-FAIL-OPEN',
+			'M-LIT-SYNTHETIC-KINDS-EMPTY',
+			'M-KIND-CLAUSE-POOL-GRAMMAR-ONLY',
+			'M-AST-SELECT-UNKNOWN-KIND-EXIT-OK',
+			'M-AST-SELECT-NO-CROSS-PROJECT-HINT'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
