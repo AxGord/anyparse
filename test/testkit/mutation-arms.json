@@ -2615,6 +2615,14 @@
 			"note": "the subtype / build-macro / interface ABSENCE questions go back to the report index, so `hxq lint <one file> --fix` inserts `inline` on a method a subtype in an unlinted file overrides — the S177 shape in the prefer-inline rule; re-encoded in S190 when the index became a per-candidate thunk"
 		},
 		{
+			"name": "M-INLINE-LOCAL-BUILD-MACRO",
+			"type": "anyparse.check.PreferInline",
+			"method": "considerClass",
+			"find": "MemberWriteScan.carriesBuildMacro(source)",
+			"replace": "false",
+			"note": "the own-file half of the build-macro question stops being asked from the source the run already holds, so every class with a locally-eligible method builds the widest index again to answer hop zero of a closure its own file already decided — 3.21s instead of 0.12s on one file, and 18 of the 23 refusals over src + test paying for it"
+		},
+		{
 			"name": "M-INLINE-REFLECT-REPORT-SCOPE",
 			"type": "anyparse.check.PreferInline",
 			"method": "run",

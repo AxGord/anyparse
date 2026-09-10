@@ -756,6 +756,49 @@ class PreferInlineCheckTest extends Test {
 		Assert.equals(3, new PreferInline().run(report, new HaxeQueryPlugin()).length, 'with no resolution scope all three flag');
 	}
 
+	/**
+	 * The three assignment spellings the hand-written mutator table left out (`>>>=`, `&&=`, `||=`)
+	 * are trivial mutators like every other member of the family, and the grammar's own
+	 * `writeParentKinds` carries them — this is the differential the table's absence hid.
+	 */
+	public function testGrammarDeclaredMutatorFamilyAdmitsTheThreeTheHandTableMissed(): Void {
+		final vs: Array<Violation> = violations(
+			cls('function shr():Void _bits >>>= 1;\n\tfunction both():Void _flag &&= true;\n\tfunction either():Void _flag ||= true;')
+		);
+		Assert.equals(
+			3, vs.length,
+			'the unsigned-shift assignment is a mutator the hand table did not name; the two boolean ones the grammar parses but Haxe '
+			+ '4.3.7 refuses ("The operators ||= and &&= are not supported"), so they are vocabulary parity, not a reachable finding'
+		);
+	}
+
+	/**
+	 * The own-file build-macro refusal must cost NO resolution index. Both gates answer the same
+	 * boolean — the token scan here IS hop zero of the closure `TypeTraits` walks — so the finding
+	 * count cannot tell them apart; the scope THUNK can, and it is what the widest index is built
+	 * from. The token sits in a COMMENT on purpose: a real annotation would be refused one pass
+	 * earlier by `metaBlockedClasses` and this fixture would prove nothing.
+	 */
+	@:pin('control')
+	@:killer('M-INLINE-LOCAL-BUILD-MACRO')
+	public function testOwnFileBuildMacroTokenCostsNoResolutionIndex(): Void {
+		final report: Array<{ file: String, source: String }> = [
+			{
+				file: 'C.hx',
+				source: '// the builder is described here: @:build(b.B.build())\nclass C {\n\tpublic function tag():Int return 1;\n}'
+			}
+		];
+		var demands: Int = 0;
+		function sources(): ResolutionSources {
+			demands++;
+			return { report: report, projectRoots: [], library: new LibrarySources([]) };
+		}
+		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		scoped.setResolutionScope({ declared: true, sources: sources });
+		Assert.equals(0, new PreferInline().run(report, scoped).length, 'a build-macro owner is refused whichever gate answers');
+		Assert.equals(0, demands, 'the owner own source answers the gate, so the widest index is never demanded');
+	}
+
 	private function cls(members: String): String {
 		return 'class C {\n\t$members\n}';
 	}
