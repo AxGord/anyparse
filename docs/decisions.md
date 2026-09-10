@@ -13,8 +13,8 @@ commit message that made it and in the campaign ledger, never in this file and n
 comment (`doc-measurement-claim` reports the latter). A line here may cite the number that
 decided the question; it may not become a record of runs.
 
-**Where the detail is:** the named commit. Follow it with `git show <sha>` for the full argument,
-the fixtures and the numbers.
+**Where the detail is:** the named commit. Most are merges of a slice branch, so read them with
+`git log <sha>^1..<sha>^2` — `git show` on a merge prints the merge line and nothing else.
 
 ---
 
@@ -50,8 +50,8 @@ the fixtures and the numbers.
 - a new `RefShape` field was proposed for the binder kinds → every kind already had a field; what
   was missing was a DERIVATION over eleven of them — `c07d514a`
 - two builds of one commit were believed to drift in test counts → three independent builds of
-  the same commit produced byte-identical counts; the drift was in the harness that killed the
-  runs — `53d58cd4`
+  the same commit produced byte-identical counts; what moves the number is the ambient environment — a
+  `haxelib setup`'d `$HOME`, a populated `bin/` — `53d58cd4`
 - the addressing layer was believed to fail SILENTLY on a bad selector → it always exited
   non-zero with a name hint; what it lacked was a clause naming the KIND — `abda1bcd`
 - a glue form was believed unable to force a body break, so a new primitive was scoped → glue

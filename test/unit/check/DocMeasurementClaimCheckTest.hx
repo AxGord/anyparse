@@ -147,6 +147,18 @@ class DocMeasurementClaimCheckTest extends Test {
 		Assert.equals(182, Linter.builtins().length);
 	}
 
+	/**
+	 * A count written against its total is a census of one tree; a contract counts nothing out of
+	 * anything, and a ratio spelled in words has no digits for the shape to read.
+	 */
+	public function testACountAgainstATotalIsAReading(): Void {
+		final vs: Array<Violation> = violations('class C {\n\t// 198 of 231 findings on one such tree\n}');
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.startsWith('a count against a total'), vs[0].message);
+		Assert.equals(0, violations('class C {\n\t/** One of the two branches always wins. */\n\tvar x = 1;\n}').length);
+		Assert.equals(0, violations('class C {\n\t/** Reads the first of three segments. */\n\tvar x = 1;\n}').length);
+	}
+
 	/** The check's findings on `src`, asked of the check directly so enablement does not apply. */
 	private function violations(src: String): Array<Violation> {
 		return new DocMeasurementClaim().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());

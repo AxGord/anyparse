@@ -83,6 +83,9 @@ final class DocMeasurementClaim implements Check implements DefaultOff implement
 	/** The arrow prose types where the drawn one is unavailable. */
 	private static inline final TYPED_ARROW: String = '->';
 
+	/** The word standing between a count and the total it was counted out of. */
+	private static inline final RATIO_WORD: String = ' of ';
+
 	/** Bytes of the opener no comment word starts before — a scan reaching past it reads code. */
 	private static inline final OPENER_LENGTH: Int = 2;
 
@@ -184,6 +187,8 @@ final class DocMeasurementClaim implements Check implements DefaultOff implement
 		if (isTokenStart(source, from, at)) {
 			final duration: Null<Reading> = durationAt(source, to, at);
 			if (duration != null) return duration;
+			final ratio: Null<Reading> = ratioAt(source, to, at);
+			if (ratio != null) return ratio;
 			final token: Int = tokenEnd(source, to, at);
 			if (isCommitHash(source, at, token)) return { at: at, to: token, shape: 'a commit hash' };
 			if (isWorkId(source, at, token)) return { at: at, to: token, shape: 'a slice or backlog id' };
@@ -204,6 +209,17 @@ final class DocMeasurementClaim implements Check implements DefaultOff implement
 		if (digits == at) return null;
 		final unit: Int = timeUnitEnd(source, to, digits);
 		return unit < 0 ? null : { at: at, to: unit, shape: 'a duration' };
+	}
+
+	/**
+	 * The count-against-a-total starting at `at`, or null. Both sides must be numbers: a census of
+	 * one tree is written that way, while a contract counts nothing out of anything.
+	 */
+	private static function ratioAt(source: String, to: Int, at: Int): Null<Reading> {
+		final digits: Int = numberEnd(source, to, at);
+		if (digits == at || !matchesIgnoringCase(source, to, digits, RATIO_WORD)) return null;
+		final total: Int = numberAfter(source, to, digits + RATIO_WORD.length);
+		return total < 0 ? null : { at: at, to: total, shape: 'a count against a total' };
 	}
 
 	/**

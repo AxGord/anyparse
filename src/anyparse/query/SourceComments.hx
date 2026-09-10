@@ -804,7 +804,8 @@ final class SourceComments {
 		final buf: StringBuf = new StringBuf();
 		for (i in at ... end) {
 			final c: Int = source.fastCodeAt(i);
-			buf.addChar(c == '\n'.code || c == '\r'.code || c == '\t'.code ? ' '.code : c);
+			if (c == '\n'.code || c == '\r'.code) break;
+			buf.addChar(c == '\t'.code ? ' '.code : c);
 		}
 		return buf.toString().trim();
 	}

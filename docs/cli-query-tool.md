@@ -942,13 +942,13 @@ The rule exists because a reading describes one tree at one moment while the cod
 
 **A number is never a marker on its own.** A doc naming the code's own constant — a minimum statement count, a configured maximum, a language floor — states a contract, and a rule that read digits would report every one of them. Each shape asks for something a contract does not have: the unit beside the number, an identifier only a repository issues, a delta between two values, or the verb with a number on its line. The same construction is why a fixture's own claim about its base commit needs no exception in the code: it carries no unit, no id and no hash. A commit hash written beside one IS reported, and deliberately — the hash is the half that goes stale.
 
-**Two exemptions.** A marker inside a path or a URL, and one on a doc-tag line (`@see`), point AT a record instead of carrying one — which is exactly what the rule asks prose to leave behind. And a string literal is never visited at all: the seam is the comment scan, so a hash or a duration inside a fixture's source is data.
+**Two exemptions.** A marker inside a path or a URL, and one on a doc-tag line (`@see`, `@link`), point AT a record instead of carrying one — which is exactly what the rule asks prose to leave behind. And a string literal is never visited at all: the seam is the comment scan, so a hash or a duration inside a fixture's source is data.
 
 Report-only (`NoAutofix`): lifting the numbers out leaves a sentence only its author can finish.
 
 ### `doc-length`: past a point, a contract has become a document
 
-`apq lint --rule doc-length` reports a DOC BLOCK longer than the maximum the project declares — `apqlint.json` (`"doc-length": { "max": N }`), with the check's own default standing for a project that declares none. `DefaultOff` and `Info`, for the reason `comment-width` is: the length at which prose stops being a contract is a project's judgement, not this rule's.
+`apq lint --rule doc-length` reports a DOC BLOCK longer than the maximum the project declares — `apqlint.json` (`"doc-length": { "max": N }`), with the check's own default of 40 standing for a project that declares none. `DefaultOff` and `Info`, for the reason `comment-width` is: the length at which prose stops being a contract is a project's judgement, not this rule's.
 
 Only a doc block is measured. A `//` run and a plain `/* … */` banner belong to the statements they stand over and are left alone whatever their length, so a reader always knows which answer applies to what. There is no comment-to-code ratio here and there will not be one: a share is a metric, and a metric names no block to rewrite.
 
