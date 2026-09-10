@@ -11,10 +11,10 @@ import utest.Test;
 using StringTools;
 
 /**
- * The `doc-measurement-claim` check: a comment carrying a reading of a tree — a duration, a
- * commit hash, a slice or backlog id, a before-and-after pair, the recording verb beside a
- * number, or a claim about the state of this repository — is flagged `Info`, and a comment
- * stating a CONTRACT is not.
+ * The `doc-measurement-claim` check: a comment carrying a reading of a tree — a duration, a share
+ * written with the percent sign, a commit hash, a slice or backlog id, a before-and-after pair, the
+ * recording verb beside a number or opening a claim, or a claim about the state of this repository —
+ * is flagged `Info`, and a comment stating a CONTRACT is not.
  *
  * Every fixture keeps its markers inside a Haxe source STRING, which is also what one of the
  * fixtures asserts about the seam, so this file stands clean under the rule it exercises.
@@ -96,13 +96,14 @@ class DocMeasurementClaimCheckTest extends Test {
 	}
 
 	/**
-	 * The recording verb needs a NUMBER on its line. A rule describing what it measures says so
-	 * in ordinary English, and the verb alone cannot tell that sentence from the record of a run.
+	 * MID-CLAUSE the recording verb needs a NUMBER on its line. A rule describing what it measures
+	 * says so in ordinary English, and the verb alone cannot tell that sentence from the record of
+	 * a run.
 	 * Killed by arm `M-DOC-CLAIM-VERB-UNGATED`.
 	 */
 	@:pin('control')
 	@:killer('M-DOC-CLAIM-VERB-UNGATED')
-	public function testTheRecordingVerbNeedsANumberOnItsLine(): Void {
+	public function testTheRecordingVerbMidClauseNeedsANumberOnItsLine(): Void {
 		Assert.equals(0, violations('class C {\n\t/** The line is measured whole, tabs included. */\n\tvar x = 1;\n}').length);
 		Assert.equals(1, violations('class C {\n\t/** Measured on the fork: 8 files lost their nodes. */\n\tvar x = 1;\n}').length);
 	}
@@ -157,6 +158,56 @@ class DocMeasurementClaimCheckTest extends Test {
 		Assert.isTrue(vs[0].message.startsWith('a count against a total'), vs[0].message);
 		Assert.equals(0, violations('class C {\n\t/** One of the two branches always wins. */\n\tvar x = 1;\n}').length);
 		Assert.equals(0, violations('class C {\n\t/** Reads the first of three segments. */\n\tvar x = 1;\n}').length);
+	}
+
+	/**
+	 * A share written with the percent sign is a reading; the same sign with a number on its RIGHT
+	 * is the remainder operator, and prose about precedence writes both on one line, so no share
+	 * is taken from a line that shows one.
+	 * Killed by arm `M-DOC-CLAIM-PERCENT-REMAINDER-BLIND`.
+	 */
+	@:pin('control')
+	@:killer('M-DOC-CLAIM-PERCENT-REMAINDER-BLIND')
+	public function testAPercentageShareIsAReadingAndTheRemainderOperatorIsNot(): Void {
+		final vs: Array<Violation> = violations('class C {\n\t// 71 % of the tree stays invisible\n}');
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.startsWith('a percentage share in a comment'), vs[0].message);
+		Assert.equals(0, violations('class C {\n\t/** Binds tighter: `2 * 7 % 4` is 6. */\n\tvar x = 1;\n}').length);
+		Assert.equals(0, violations('class C {\n\t/** Left-assoc: `20 % (12 % 7)` is 0. */\n\tvar x = 1;\n}').length);
+	}
+
+	/**
+	 * The recording verb OPENING a clause records something. The same verb mid-clause is this
+	 * project's own vocabulary for how a width or a region is obtained — the passive voice, the
+	 * participle as an adjective, a prefix glued on with a hyphen — and states a contract.
+	 * Killed by arm `M-DOC-CLAIM-CLAUSE-BLIND`.
+	 */
+	@:pin('control')
+	@:killer('M-DOC-CLAIM-CLAUSE-BLIND')
+	public function testTheRecordingVerbOpeningAClauseIsAReading(): Void {
+		final vs: Array<Violation> = violations('class C {\n\t/** Measured on the fork: the walk stayed idempotent. */\n\tvar x = 1;\n}');
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.startsWith('a recording verb opening a claim'), vs[0].message);
+		Assert.equals(1, violations('class C {\n\t/** The gate holds (measured on the fork). */\n\tvar x = 1;\n}').length);
+		Assert.equals(
+			0,
+			violations('class C {\n\t/** The width is measured by the Doc, and the measured sibling keeps it. */\n\tvar x = 1;\n}').length
+		);
+		Assert.equals(0, violations('class C {\n\t/** A Doc-measured predicate, re-measured after the fix. */\n\tvar x = 1;\n}').length);
+	}
+
+	/**
+	 * A chain of arrows is ONE reading: a progression records one observation, and a reading per
+	 * arrow would make the block's own count say more than its prose does. The count travels in
+	 * the message, so a long block says how much of it is being asked for.
+	 */
+	public function testAnArrowChainIsOneReadingAndTheCountTravels(): Void {
+		final chain: Array<Violation> = violations('class C {\n\t// the indent went 0 -> 2 -> 4 -> 6 columns\n}');
+		Assert.equals(1, chain.length);
+		Assert.isTrue(chain[0].message.contains('(1 reading)'), chain[0].message);
+		final pair: Array<Violation> = violations('class C {\n\t// rebuilt at a3588740, and the walk took 44 ms\n}');
+		Assert.equals(1, pair.length);
+		Assert.isTrue(pair[0].message.contains('(2 readings)'), pair[0].message);
 	}
 
 	/** The check's findings on `src`, asked of the check directly so enablement does not apply. */

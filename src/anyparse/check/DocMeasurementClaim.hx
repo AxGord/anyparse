@@ -23,41 +23,42 @@ private typedef Reading = {
 
 /**
  * Flags a comment carrying a READING of a tree rather than a contract — a number with a unit of
- * time, an abbreviated commit hash, a slice or backlog id, a before-and-after pair of numbers,
- * the verb a reading is recorded with standing beside a number, or a sentence pinning its claim
- * to the state of this repository. `Severity.Info`.
+ * time, a share written with the percent sign, an abbreviated commit hash, a slice or backlog id, a
+ * before-and-after pair of numbers, the verb a reading is recorded with, or a sentence pinning its
+ * claim to the state of this repository. `Severity.Info`.
  *
  * A reading describes one tree at one moment, and the code it sits in outlives that moment. The
  * commit message and the project ledger keep the numbers; the comment keeps the conclusion in a
- * phrase. Prose is the one thing in a source tree nothing else reads, which is why the policy
- * needs a rule at all.
+ * phrase. Prose is the one thing nothing else in a source tree reads, hence a rule for it.
  *
  * ## A number is not a reading — what the shapes are for
  *
  * A bare number is never a marker. A doc naming the code's own constant — a minimum statement
- * count, a configured maximum, a language floor — states a contract, and a rule that flagged
- * digits would report every one of them. Each shape therefore asks for something a contract
- * does not have: a unit beside the number, an identifier only a repository issues, a delta
- * between two values, or the recording verb with a number on its line.
+ * count, a configured maximum, a language floor — states a contract, and a rule that flagged digits
+ * would report every one of them. Each shape therefore asks for something a contract does not have:
+ * a unit beside the number, an identifier only a repository issues, a delta between two values, or
+ * the recording verb where it introduces a claim.
  *
- * ## Two exemptions
+ * ## What stays silent
  *
  *  - a REFERENCE rather than a record: a marker inside a path or a URL, and a doc-tag line that
- *    points at one. A pointer to where the numbers live is exactly what this rule asks prose to
- *    leave behind, so flagging it would contradict the rule's own advice.
- *  - a fixture's own contract sentence in `test/` — that it was red or green at the base commit,
- *    or which shape discriminates it. Those sentences carry no unit, no id and no hash, so the
- *    shape set exempts them by construction and no code here names them. A commit hash written
- *    beside one IS flagged, deliberately: the hash is the part that goes stale.
- *
- * A string literal is never visited — the seam is the comment scan, so a hash or a duration
- * inside a fixture's source string is data, not prose.
+ *    points at one. A pointer to where the numbers live is what this rule asks prose to leave
+ *    behind, so flagging it would contradict the rule's own advice.
+ *  - a fixture's own contract sentence in `test/` — red or green at the base commit, or which shape
+ *    discriminates it. Those carry no unit, no id and no hash, so the shape set exempts them by
+ *    construction. A commit hash beside one IS flagged: the hash is the part that goes stale.
+ *  - the percent sign read as the REMAINDER operator: prose showing arithmetic writes a number on
+ *    its right, and no share is taken from a line that does.
+ *  - the recording verb MID-CLAUSE, which is this project's own vocabulary for how a width or a
+ *    region is obtained; only the verb opening a clause records something.
+ *  - a string literal, never visited at all: the seam is the comment scan, so a hash or a duration
+ *    inside a fixture's source string is data, not prose.
  *
  * ## Off by default, and no autofix
  *
- * `DefaultOff`, because what belongs in a comment is a project's own policy and a project that
- * has not declared one should not inherit this one's; a project opts in through `apqlint.json`.
- * The `fix` seam yields nothing, because the sentence that survives the deletion is a judgement.
+ * `DefaultOff`, because what belongs in a comment is a project's own policy and a project that has
+ * not declared one should not inherit this one's; a project opts in through `apqlint.json`. The
+ * `fix` seam yields nothing, because the sentence that survives the deletion is a judgement.
  */
 @:nullSafety(Strict)
 final class DocMeasurementClaim implements Check implements DefaultOff implements NoAutofix {
@@ -82,6 +83,9 @@ final class DocMeasurementClaim implements Check implements DefaultOff implement
 
 	/** The arrow prose types where the drawn one is unavailable. */
 	private static inline final TYPED_ARROW: String = '->';
+
+	/** The dash a sentence is broken with, beside the ASCII one. */
+	private static inline final EM_DASH: Int = 0x2014;
 
 	/** The word standing between a count and the total it was counted out of. */
 	private static inline final RATIO_WORD: String = ' of ';
@@ -120,13 +124,17 @@ final class DocMeasurementClaim implements Check implements DefaultOff implement
 		for (entry in files) {
 			final source: String = entry.source;
 			for (unit in SourceComments.collectCommentUnits(source, plugin.lexicalRegions(source))) {
-				final reading: Null<Reading> = firstReading(source, unit.from, unit.to);
-				if (reading != null) violations.push({
+				final found: Array<Reading> = readings(source, unit.from, unit.to);
+				if (found.length == 0) continue;
+				final first: Reading = found[0];
+				final plural: String = found.length == 1 ? '' : 's';
+				final excerpt: String = SourceComments.excerptLine(source, first.at, unit.to, EXCERPT_LEN);
+				violations.push({
 					file: entry.file,
-					span: new Span(reading.at, reading.to),
+					span: new Span(first.at, first.to),
 					rule: RULE_ID,
 					severity: Severity.Info,
-					message: '${reading.shape} in a comment: ${SourceComments.excerptLine(source, reading.at, unit.to, EXCERPT_LEN)}$ADVICE'
+					message: '${first.shape} in a comment (${found.length} reading$plural): $excerpt$ADVICE'
 				});
 			}
 		}
@@ -170,16 +178,25 @@ final class DocMeasurementClaim implements Check implements DefaultOff implement
 	}
 
 	/**
-	 * The first reading in `[from, to)`, or null. ONE finding per comment: a block carrying
-	 * several of them says the same thing about the same prose, and the reader is being asked to
-	 * rewrite the block either way.
+	 * Every reading in `[from, to)`, in position order, with overlapping ones folded into one: a
+	 * chain of arrows records ONE progression, not a reading per arrow.
+	 *
+	 * Still ONE finding per comment, anchored at the first — the reader is being asked to rewrite
+	 * the whole block either way — but how many the block holds travels in the message, because a
+	 * long block with several of them reads as one line of the report.
 	 */
-	private static function firstReading(source: String, from: Int, to: Int): Null<Reading> {
+	private static function readings(source: String, from: Int, to: Int): Array<Reading> {
+		final found: Array<Reading> = [];
 		for (at in from ... to) {
 			final reading: Null<Reading> = readingAt(source, from, to, at);
-			if (reading != null && !insideReference(source, from, to, reading.at)) return reading;
+			if (reading == null || insideReference(source, from, to, reading.at)) continue;
+			final last: Int = found.length - 1;
+			if (last < 0 || reading.at >= found[last].to)
+				found.push(reading);
+			else if (reading.to > found[last].to)
+				found[last] = { at: found[last].at, to: reading.to, shape: found[last].shape };
 		}
-		return null;
+		return found;
 	}
 
 	/** The reading starting at `at`, or null — the shapes in the order they are cheapest to refuse. */
@@ -189,11 +206,15 @@ final class DocMeasurementClaim implements Check implements DefaultOff implement
 			if (duration != null) return duration;
 			final ratio: Null<Reading> = ratioAt(source, to, at);
 			if (ratio != null) return ratio;
+			final share: Null<Reading> = percentAt(source, from, to, at);
+			if (share != null) return share;
 			final token: Int = tokenEnd(source, to, at);
 			if (isCommitHash(source, at, token)) return { at: at, to: token, shape: 'a commit hash' };
 			if (isWorkId(source, at, token)) return { at: at, to: token, shape: 'a slice or backlog id' };
-			if (isRecordingVerb(source, at, token) && lineHasDigit(source, from, to, at))
-				return { at: at, to: token, shape: 'a recording verb beside a number' };
+			if (isRecordingVerb(source, at, token)) {
+				if (lineHasDigit(source, from, to, at)) return { at: at, to: token, shape: 'a recording verb beside a number' };
+				if (opensClause(source, from, at)) return { at: at, to: token, shape: 'a recording verb opening a claim' };
+			}
 			final phrase: Int = scopePhraseEnd(source, to, at);
 			if (phrase > at) return { at: at, to: phrase, shape: 'a claim about the state of this repository' };
 		}
@@ -220,6 +241,49 @@ final class DocMeasurementClaim implements Check implements DefaultOff implement
 		if (digits == at || !matchesIgnoringCase(source, to, digits, RATIO_WORD)) return null;
 		final total: Int = numberAfter(source, to, digits + RATIO_WORD.length);
 		return total < 0 ? null : { at: at, to: total, shape: 'a count against a total' };
+	}
+
+	/**
+	 * The share written with the percent sign starting at `at`, or null. The sign is the unit, just
+	 * as a duration's is.
+	 *
+	 * A line that ALSO writes the sign with a number on its right is showing the remainder
+	 * operator, and no share is taken from arithmetic: prose about precedence writes both, and the
+	 * share it looks like was never claimed.
+	 */
+	private static function percentAt(source: String, from: Int, to: Int, at: Int): Null<Reading> {
+		final digits: Int = numberEnd(source, to, at);
+		if (digits == at) return null;
+		var sign: Int = digits;
+		if (sign < to && source.fastCodeAt(sign) == ' '.code) sign++;
+		if (sign >= to || source.fastCodeAt(sign) != '%'.code) return null;
+		var end: Int = at;
+		while (end < to && source.fastCodeAt(end) != '\n'.code) end++;
+		for (i in lineStart(source, from, at) ... end) if (source.fastCodeAt(i) == '%'.code && numberAfter(source, end, i + 1) >= 0)
+			return null;
+		return { at: at, to: sign + 1, shape: 'a percentage share' };
+	}
+
+	/**
+	 * Whether the word at `at` OPENS a clause — it is the comment's own first word, it stands
+	 * against an opening parenthesis, or whitespace separates it from the punctuation that closed
+	 * the clause before it.
+	 *
+	 * Mid-clause the recording verb is this project's ordinary vocabulary for how a width or a
+	 * region is obtained, and that vocabulary states a contract; only where the verb opens a
+	 * clause does it introduce a claim. Whitespace is required so that a prefix glued on with a
+	 * hyphen stays inside its word.
+	 */
+	private static function opensClause(source: String, from: Int, at: Int): Bool {
+		if (at > from && source.fastCodeAt(at - 1) == '('.code) return true;
+		var i: Int = at;
+		while (i > from && (isGutter(source.fastCodeAt(i - 1)) || source.fastCodeAt(i - 1) == '\n'.code)) i--;
+		if (i == at) return false;
+		if (i <= from + OPENER_LENGTH) return true;
+		return switch source.fastCodeAt(i - 1) {
+			case '('.code, '.'.code, ':'.code, ';'.code, '!'.code, '?'.code, '-'.code, EM_DASH: true;
+			case _: false;
+		};
 	}
 
 	/**
