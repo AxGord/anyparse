@@ -827,6 +827,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.BuildFailureTest',
 		'unit.query.CachingGrammarPluginTest',
 		'unit.query.CallGraphTest',
+		'unit.query.CallSitesTest',
 		'unit.query.ChangeSigSliceTest',
 		'unit.query.ClassifyOccurrencesTest',
 		'unit.query.CliAtomicWriteSliceTest',
@@ -1536,6 +1537,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.BodySlotGuardSliceTest#testAllowsSoleCatchClauseRemoval :: control :: M-BODYSLOT-LEAD-KEPT',
 			'unit.query.BodySlotGuardSliceTest#testAllowsSoleCatchClauseRemovalWithATrailingComment :: control :: M-BODYSLOT-TRIM-WS-ONLY',
 			'unit.query.BodySlotGuardSliceTest#testAllowsWholeElseBranchRemoval :: control :: M-BODYSLOT-LEAD-KEPT',
+			'unit.query.CallSitesTest#testASecondLocalFunctionOfTheSameNameRefusesTheProof :: control :: M-NAME-CLASH-KINDS-NO-BINDERS',
 			'unit.query.CommentOwnerGuardSliceTest#testACarryDeclarationThatDoesNotHoldIsNotARefusal :: control :: M-COMMENT-CARRY-REFUSES',
 			'unit.query.CommentOwnerGuardSliceTest#testACommentThatKeepsItsPlaceUnderACarryIsAccepted :: control :: '
 				+ 'M-CARRY-CROSSING-ANY-SIDE',
@@ -1593,6 +1595,11 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.ExtractInterfaceSliceTest#testGuardedImplementsRefused :: control :: M-EI-DUP-IMPL-ALLOWED,M-EI-GUARD-FLAT-SCAN',
 			'unit.query.ExtractInterfaceSliceTest#testQualifiedSameNameDoesNotBlock :: control :: M-EI-IMPL-ANY-REFUSED',
 			'unit.query.ExtractInterfaceSliceTest#testSecondInterfaceStillExtracts :: control :: M-EI-IMPL-ANY-REFUSED',
+			'unit.query.FieldRefScanTest#testEveryBinderSpellingIsFoundFromSource :: control :: M-BINDER-KINDS-PARAMS-ONLY',
+			'unit.query.FieldRefScanTest#testEveryFunctionScopeSpellingIsRecognisedFromSource :: control :: '
+				+ 'M-FN-SCOPE-KINDS-DROPS-METHODS',
+			'unit.query.FieldRefScanTest#testTheScopeAndBinderVocabulariesFollowTheShapeTheyAreHanded :: control :: '
+				+ 'M-FN-SCOPE-KINDS-FROZEN',
 			'unit.query.GreedyDeclSpanEditBoundarySliceTest#testAGreedyModuleDeclSpanIsTrimmedToItsOwnLastToken :: control :: '
 				+ 'M-DECL-EDIT-SPAN-UNTRIMMED',
 			'unit.query.LintBaselineTest#testAFindingThatONLYMOVEDIsNotNew :: control :: M-LINT-BASELINE-NO-SUBTRACTION',
@@ -1717,6 +1724,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-ALWAYS-SAME',
 			'M-ARM-ANYNAME',
 			'M-ARM-ROW-OK',
+			'M-BINDER-KINDS-PARAMS-ONLY',
 			'M-BUILDMACRO-TRUE',
 			'M-CLAIM-ALL-RECORDED',
 			'M-CLAIM-CODE-BLIND',
@@ -1737,6 +1745,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-EMPTY-B-ANY-NONEMPTY',
 			'M-FANOUT-FIRST',
 			'M-FIRST-LINE-FIT',
+			'M-FN-SCOPE-KINDS-DROPS-METHODS',
+			'M-FN-SCOPE-KINDS-FROZEN',
 			'M-HASSUBTYPE-FALSE',
 			'M-INHERITS-FALSE',
 			'M-ISSUBTYPE-FALSE',
@@ -1745,6 +1755,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-LINT-BASELINE-NO-SUBTRACTION',
 			'M-LINT-FIX-CENSUS-UNGATED',
 			'M-MEMO-OFF',
+			'M-NAME-CLASH-KINDS-NO-BINDERS',
 			'M-NAMEOUTSIDE-TRUE',
 			'M-NO-INVALIDATE',
 			'M-NO-WIRE',

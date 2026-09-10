@@ -338,7 +338,9 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 				// The self-backed arm deletes nothing outside the owner, so no other file can need an edit.
 				if (c == null || c.inlineGetter != null || c.selfBacked) return null;
 				if (!subtypeIndex.subtypes.subtypeReferencesField(owner, c.field)) return null;
-				final ownerEdits: Null<Array<{ span: Span, text: String }>> = buildFix(cls, src, prop.span, prop.name, prop.isStatic, c);
+				final ownerEdits: Null<Array<{ span: Span, text: String }>> = buildFix(
+					cls, src, prop.span, prop.name, prop.isStatic, c, shape
+				);
 				if (ownerEdits == null) return null;
 				final oe: Array<{ span: Span, text: String }> = ownerEdits;
 				final subtypeSlices: Null<Array<CrossFileEdits>> = BackingFieldRefs.crossFileReadRewrite(
@@ -470,9 +472,9 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		return if (body == null || body.children.length != 1)
 			null
 		else if (body.kind == shape.blockBodyKind)
-			returnedField(body.children[0], 'ReturnStmt')
+			returnedField(body.children[0], 'ReturnStmt', shape)
 		else if ((shape.expressionBodyKinds ?? []).contains(body.kind))
-			returnedField(body.children[0], 'ReturnExpr')
+			returnedField(body.children[0], 'ReturnExpr', shape)
 		else
 			null;
 	}
@@ -493,8 +495,8 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	 * `ReturnExpr`, kind given by `returnKind`) — the name of a bare `IdentExpr`
 	 * or a `this.<name>` `FieldAccess` — else null.
 	 */
-	private static function returnedField(ret: QueryNode, returnKind: String): Null<String> {
-		return ret.kind != returnKind || ret.children.length != 1 ? null : FieldRefScan.fieldRefName(ret.children[0]);
+	private static function returnedField(ret: QueryNode, returnKind: String, shape: RefShape): Null<String> {
+		return ret.kind != returnKind || ret.children.length != 1 ? null : FieldRefScan.fieldRefName(ret.children[0], shape);
 	}
 
 	/**
@@ -515,7 +517,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			final c = classifyProperty(cls, source, file, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass, shape);
 			if (c == null) continue;
 			if (subtypeFieldBlocks(index, className, c.field, c.selfBacked, c.inlineGetter)) continue;
-			final e: Null<Array<{ span: Span, text: String }>> = buildFix(cls, source, prop.span, prop.name, prop.isStatic, c);
+			final e: Null<Array<{ span: Span, text: String }>> = buildFix(cls, source, prop.span, prop.name, prop.isStatic, c, shape);
 			if (e != null) for (edit in e) out.push(edit);
 		}
 	}
@@ -543,7 +545,8 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			inlineGetter: Null<QueryNode>,
 			selfBacked: Bool,
 			metaSpan: Null<Span>
-		}
+		},
+		shape: RefShape
 	): Null<Array<{ span: Span, text: String }>> {
 		final inlineGetter: Null<QueryNode> = c.inlineGetter;
 		if (inlineGetter != null) {
@@ -578,7 +581,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			skipSpans.push(cs);
 		}
 		final renames: Null<Array<{ span: Span, text: String }>> = FieldRename.collectRenameEdits(
-			cls, source, c.field, skipSpans, c.fieldNode, propName, propStatic
+			cls, source, c.field, skipSpans, c.fieldNode, propName, propStatic, shape
 		);
 		if (renames == null) return null;
 		for (e in renames) edits.push(e);
@@ -955,7 +958,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		final assign: QueryNode = ret.children[0];
 		if (assign.kind != 'Assign' || assign.children.length != 2) return null;
 		final value: QueryNode = assign.children[1];
-		return value.kind != 'IdentExpr' || value.name != paramName ? null : FieldRefScan.fieldRefName(assign.children[0]);
+		return value.kind != 'IdentExpr' || value.name != paramName ? null : FieldRefScan.fieldRefName(assign.children[0], shape);
 	}
 
 	/** The name of a setter's single value parameter (its first `Required` / `Optional` child), or null. */
@@ -979,7 +982,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		if (ctor == null) return null;
 		final body: Null<QueryNode> = bodyOf(ctor, shape);
 		if (body == null || body.kind != shape.blockBodyKind) return null;
-		final firstMention: Null<QueryNode> = body.children.find(stmt -> FieldRefScan.mentionsField(stmt, field));
+		final firstMention: Null<QueryNode> = body.children.find(stmt -> FieldRefScan.mentionsField(stmt, field, shape));
 		return firstMention == null ? null : movableInitOf(firstMention, field, shape);
 	}
 
@@ -989,7 +992,8 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	): Null<{ stmt: QueryNode, assign: QueryNode, rhsSpan: Span }> {
 		if (stmt.kind != 'ExprStmt' || stmt.children.length != 1) return null;
 		final assign: QueryNode = stmt.children[0];
-		if (assign.kind != 'Assign' || assign.children.length != 2 || FieldRefScan.fieldRefName(assign.children[0]) != field) return null;
+		if (assign.kind != 'Assign' || assign.children.length != 2 || FieldRefScan.fieldRefName(assign.children[0], shape) != field)
+			return null;
 		final rhs: QueryNode = assign.children[1];
 		if (!isMovableLiteral(rhs, shape)) return null;
 		final rhsSpan: Null<Span> = rhs.span;
@@ -1087,7 +1091,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		final getterSpan: Null<Span> = getterNode.span;
 		return if (getterSpan == null)
 			null
-		else if (BackingFieldRefs.hasExternalRead(cls, trivSet, getterSpan))
+		else if (BackingFieldRefs.hasExternalRead(cls, trivSet, getterSpan, shape))
 			null
 		else
 			{
@@ -1154,7 +1158,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			? findMovableCtorInit(cls, trivGet, shape)
 			: null;
 		final allowStmt: Null<QueryNode> = ci?.stmt;
-		final writes: Null<Array<QueryNode>> = BackingFieldRefs.collectExternalWrites(cls, trivGet, setterSpan, allowStmt);
+		final writes: Null<Array<QueryNode>> = BackingFieldRefs.collectExternalWrites(cls, trivGet, setterSpan, allowStmt, shape);
 		// Too many writes, or a write nested inside a larger expression (unmarkable): keep the
 		// property and just inline the getter. Skip when the getter is already inline or overrides
 		// — inline + override do not mix, and an overriding accessor must stay overridable.
@@ -1179,7 +1183,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 				deleted: [],
 				ctorInit: null,
 				message: messageFor(
-					'setAInline', prop.name, trivGet, BackingFieldRefs.countExternalWrites(cls, trivGet, setterSpan, allowStmt)
+					'setAInline', prop.name, trivGet, BackingFieldRefs.countExternalWrites(cls, trivGet, setterSpan, allowStmt, shape)
 				),
 				bypassStmts: [],
 				inlineGetter: getterNode

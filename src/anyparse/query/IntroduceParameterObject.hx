@@ -149,7 +149,7 @@ final class IntroduceParameterObject {
 		if (declSpan == null) return Refused('"$nameNN" declaration has no source span');
 		final declSpanNN: Span = declSpan;
 
-		final params: Array<QueryNode> = CallSites.leadingParams(declNN);
+		final params: Array<QueryNode> = CallSites.leadingParams(declNN, shape);
 		final rng: Null<{ start: Int, end: Int }> = contiguousRange(params, paramNames);
 		if (rng == null) return Refused('parameters ${paramNames.join(', ')} are not a contiguous run of "$nameNN"\'s parameters');
 		final rngNN: { start: Int, end: Int } = rng;

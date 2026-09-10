@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
 
 using StringTools;
@@ -36,10 +37,13 @@ final class FieldRename {
 	 * anywhere, so a shadowed reference is class-qualified in every method, not only a static one.
 	 */
 	public static function collectRenameEdits(
-		cls: QueryNode, source: String, field: String, skipSpans: Array<Span>, fieldNode: QueryNode, propName: String, propStatic: Bool
+		cls: QueryNode, source: String, field: String, skipSpans: Array<Span>, fieldNode: QueryNode, propName: String, propStatic: Bool,
+		shape: RefShape
 	): Null<Array<{ span: Span, text: String }>> {
 		final edits: Array<{ span: Span, text: String }> = [];
-		return renameWalk(cls, source, field, skipSpans, fieldNode, propName, false, false, cls.name, propStatic, edits) ? edits : null;
+		return renameWalk(cls, source, field, skipSpans, fieldNode, propName, false, false, cls.name, propStatic, edits, shape)
+			? edits
+			: null;
 	}
 
 	/**
@@ -74,17 +78,18 @@ final class FieldRename {
 	 */
 	private static function renameWalk(
 		node: QueryNode, source: String, field: String, skipSpans: Array<Span>, fieldNode: QueryNode, propName: String, inPattern: Bool,
-		shadowsProp: Bool, className: Null<String>, classQualified: Bool, out: Array<{ span: Span, text: String }>
+		shadowsProp: Bool, className: Null<String>, classQualified: Bool, out: Array<{ span: Span, text: String }>, shape: RefShape
 	): Bool {
 		if (node == fieldNode) return true;
 		final span: Null<Span> = node.span;
 		if (span != null && withinAny(skipSpans, span)) return true;
-		if (FieldRefScan.hidesBindingNamed(node, span, source, field)) return false;
-		final nowPattern: Bool = inPattern || node.kind == 'Plain';
+		if (FieldRefScan.hidesBindingNamed(node, span, source, field, shape)) return false;
+		final nowPattern: Bool = inPattern || node.kind == shape.plainCasePatternKind;
 		if (!renameFieldRef(node, span, source, field, propName, shadowsProp, classQualified, className, nowPattern, out)) return false;
-		final childShadows: Bool = shadowsProp || (FieldRefScan.isFnScope(node) && FieldRefScan.functionBindsName(node, propName));
+		final childShadows: Bool = shadowsProp
+			|| (FieldRefScan.isFnScope(node, shape) && FieldRefScan.functionBindsName(node, propName, shape));
 		return renameChildren(
-			node, source, field, skipSpans, fieldNode, propName, nowPattern, childShadows, className, classQualified, out
+			node, source, field, skipSpans, fieldNode, propName, nowPattern, childShadows, className, classQualified, out, shape
 		);
 	}
 
@@ -147,17 +152,19 @@ final class FieldRename {
 	 */
 	private static function renameChildren(
 		node: QueryNode, source: String, field: String, skipSpans: Array<Span>, fieldNode: QueryNode, propName: String, nowPattern: Bool,
-		childShadows: Bool, className: Null<String>, classQualified: Bool, out: Array<{ span: Span, text: String }>
+		childShadows: Bool, className: Null<String>, classQualified: Bool, out: Array<{ span: Span, text: String }>, shape: RefShape
 	): Bool {
+		final staticKind: Null<String> = shape.staticModifierKind;
+		final memberKinds: Array<String> = shape.memberDeclKinds ?? [];
 		var mods: Array<String> = [];
 		for (c in node.children) {
-			final childQualified: Bool = classQualified || (FieldRefScan.isFnScope(c) && mods.contains('Static'));
-			if (!renameWalk(c, source, field, skipSpans, fieldNode, propName, nowPattern, childShadows, className, childQualified, out))
+			final childQualified: Bool = classQualified
+				|| (staticKind != null && FieldRefScan.isFnScope(c, shape) && mods.contains(staticKind));
+			if (!renameWalk(
+				c, source, field, skipSpans, fieldNode, propName, nowPattern, childShadows, className, childQualified, out, shape
+			))
 				return false;
-			mods = switch c.kind {
-				case 'VarMember', 'FinalMember', 'FnMember', 'FinalModifiedMember': [];
-				case _: mods.concat([c.kind]);
-			};
+			mods = memberKinds.contains(c.kind) ? [] : mods.concat([c.kind]);
 		}
 		return true;
 	}

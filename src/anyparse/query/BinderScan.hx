@@ -7,8 +7,8 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
 
 /**
- * Names a construct BINDS that the scope resolver does not see, and the subtree that owns a
- * binding. The resolver indexes declarations; a `case` pattern capture, a bare (unparenthesised)
+ * Which node kinds BIND a name, which names a construct binds that the scope resolver does not see, and the subtree
+ * that owns a binding. The resolver indexes declarations; a `case` pattern capture, a bare (unparenthesised)
  * arrow-lambda parameter and a key-value loop's key are bindings the grammar spells without a
  * declaration node, so a scan that trusts the resolver alone reads them as free references to
  * whatever else carries that name.
@@ -61,6 +61,49 @@ final class BinderScan {
 	public static function casePatternNames(node: QueryNode, casePatternKind: Null<String>, binderKinds: Array<String>): Array<String> {
 		final out: Array<String> = [];
 		collectCasePatternNames(node, false, casePatternKind, binderKinds, out);
+		return out;
+	}
+
+	/**
+	 * EVERY node kind the grammar projects as a NAMED binder — a node whose own `name` slot IS the
+	 * identifier it binds into the enclosing scope. Unioned from the fields that declare each family:
+	 * the parameter slots, the local declarations in their statement, expression, `static` and
+	 * continuation spellings, the local functions in both the plain and the `inline` form, the named
+	 * function literal, the catch clause, the self-scoped iteration nodes with the VALUE binder of a
+	 * key-value iteration, and the case binder.
+	 *
+	 * The COMPLEMENT of `resolverInvisibleBinderNames` below, and why both exist: this is every
+	 * binding the grammar gives a node of its OWN, that one is every binding it does not. A consumer
+	 * asking "does anything here bind that NAME" reads this; a consumer asking "which names does the
+	 * scope resolver not know about" reads the other.
+	 *
+	 * Derived rather than declared, so it cannot fall behind the fields it unions — a grammar gaining
+	 * a binder spelling widens this set with it, and every name it carries is already covered by
+	 * `RefShapeKindProjectionTest`'s declared-against-projected differential. A hand-written copy is
+	 * NOT covered by it: the retired `LambdaParam` kind sat in `FieldRefScan.bindsNameHere` for three
+	 * months matching nothing, and nothing anywhere reported it.
+	 *
+	 * MISSING a binder is the wrong-rewrite direction for every consumer (a reference silently
+	 * re-binds to it), while carrying one that cannot occur costs a refusal, so the union is taken
+	 * whole rather than narrowed.
+	 */
+	public static function binderKinds(shape: RefShape): Array<String> {
+		final out: Array<String> = [];
+		inline function add(kinds: Null<Array<String>>): Void if (kinds != null) for (kind in kinds) if (!out.contains(kind))
+			out.push(kind);
+		inline function addOne(kind: Null<String>): Void if (kind != null && !out.contains(kind)) out.push(kind);
+		add(shape.paramKinds);
+		add(shape.localDeclKinds);
+		add(shape.localDeclContinuationKinds);
+		add(shape.localDeclExprKinds);
+		add(shape.staticLocalDeclKinds);
+		add(shape.localFunctionKinds);
+		add(shape.inlineFunctionKinds);
+		addOne(shape.namedFnExprKind);
+		addOne(shape.catchClauseKind);
+		add(shape.iterationBindingKinds);
+		add(shape.iterationValueBinderKinds);
+		add(shape.casePatternBinderKinds);
 		return out;
 	}
 

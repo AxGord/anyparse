@@ -53,16 +53,17 @@ final class BackingFieldRefs {
 	 * target IS a read (`x += 1` compiles to `x = get_x() + 1`), so it disqualifies. Every other
 	 * `field` occurrence (RHS, call arg, `arr[field]` index, plain read) is a read.
 	 */
-	public static function hasExternalRead(node: QueryNode, field: String, exclude: Span): Bool {
+	public static function hasExternalRead(node: QueryNode, field: String, exclude: Span, shape: RefShape): Bool {
 		final span: Null<Span> = node.span;
 		if (span != null && span.from >= exclude.from && span.to <= exclude.to) return false;
-		if (node.kind == 'Plain') return false;
-		if (FieldRefScan.writeTargetField(node) == field) {
-			if (node.kind != 'Assign') return true;
-			for (i in 1...node.children.length) if (hasExternalRead(node.children[i], field, exclude)) return true;
+		if (node.kind == shape.plainCasePatternKind) return false;
+		if (FieldRefScan.writeTargetField(node, shape) == field) {
+			if (node.kind != shape.assignKind) return true;
+			for (i in 1...node.children.length) if (hasExternalRead(node.children[i], field, exclude, shape)) return true;
 			return false;
 		}
-		return FieldRefScan.fieldRefName(node) == field || node.children.exists(child -> hasExternalRead(child, field, exclude));
+		return FieldRefScan.fieldRefName(node, shape) == field
+			|| node.children.exists(child -> hasExternalRead(child, field, exclude, shape));
 	}
 
 	/**
@@ -98,10 +99,10 @@ final class BackingFieldRefs {
 	 * the caller must fall back to inlining the getter rather than collapsing.
 	 */
 	public static function collectExternalWrites(
-		node: QueryNode, field: String, exclude: Span, allowStmt: Null<QueryNode>
+		node: QueryNode, field: String, exclude: Span, allowStmt: Null<QueryNode>, shape: RefShape
 	): Null<Array<QueryNode>> {
 		final out: Array<QueryNode> = [];
-		return collectExternalWritesInto(node, field, exclude, allowStmt, out) ? out : null;
+		return collectExternalWritesInto(node, field, exclude, allowStmt, out, shape) ? out : null;
 	}
 
 	/**
@@ -110,12 +111,14 @@ final class BackingFieldRefs {
 	 * statement-level list of `collectExternalWrites` is null when it bails, so the message uses this
 	 * position-agnostic count instead).
 	 */
-	public static function countExternalWrites(node: QueryNode, field: String, exclude: Span, allowStmt: Null<QueryNode>): Int {
+	public static function countExternalWrites(
+		node: QueryNode, field: String, exclude: Span, allowStmt: Null<QueryNode>, shape: RefShape
+	): Int {
 		final span: Null<Span> = node.span;
 		if (span != null && span.from >= exclude.from && span.to <= exclude.to) return 0;
 		if (node == allowStmt) return 0;
-		var n: Int = FieldRefScan.writeTargetField(node) == field ? 1 : 0;
-		for (c in node.children) n += countExternalWrites(c, field, exclude, allowStmt);
+		var n: Int = FieldRefScan.writeTargetField(node, shape) == field ? 1 : 0;
+		for (c in node.children) n += countExternalWrites(c, field, exclude, allowStmt, shape);
 		return n;
 	}
 
@@ -179,17 +182,20 @@ final class BackingFieldRefs {
 	 * write's own RHS is still scanned (its write target aside), so a nested write there is caught.
 	 */
 	private static function collectExternalWritesInto(
-		node: QueryNode, field: String, exclude: Span, allowStmt: Null<QueryNode>, out: Array<QueryNode>
+		node: QueryNode, field: String, exclude: Span, allowStmt: Null<QueryNode>, out: Array<QueryNode>, shape: RefShape
 	): Bool {
 		final span: Null<Span> = node.span;
 		if (span != null && span.from >= exclude.from && span.to <= exclude.to) return true;
 		if (node == allowStmt) return true;
-		if (node.kind == 'ExprStmt' && node.children.length == 1 && FieldRefScan.writeTargetField(node.children[0]) == field) {
+		if (
+			node.kind == shape.exprStatementKind && node.children.length == 1
+			&& FieldRefScan.writeTargetField(node.children[0], shape) == field
+		) {
 			out.push(node);
-			return node.children[0].children.foreach(c -> collectExternalWritesInto(c, field, exclude, allowStmt, out));
+			return node.children[0].children.foreach(c -> collectExternalWritesInto(c, field, exclude, allowStmt, out, shape));
 		}
-		return FieldRefScan.writeTargetField(node) != field
-			&& node.children.foreach(c -> collectExternalWritesInto(c, field, exclude, allowStmt, out));
+		return FieldRefScan.writeTargetField(node, shape) != field
+			&& node.children.foreach(c -> collectExternalWritesInto(c, field, exclude, allowStmt, out, shape));
 	}
 
 	/**
@@ -322,8 +328,9 @@ final class BackingFieldRefs {
 			)
 		)
 			return false;
-		final childShadows: Bool = shadowsProp || (FieldRefScan.isFnScope(node) && FieldRefScan.functionBindsName(node, propName));
-		final isWrite: Bool = FieldRefScan.isWriteNodeKind(node.kind);
+		final childShadows: Bool = shadowsProp
+			|| (FieldRefScan.isFnScope(node, shape) && FieldRefScan.functionBindsName(node, propName, shape));
+		final isWrite: Bool = FieldRefScan.isWriteNodeKind(node.kind, shape);
 		for (i in 0...node.children.length) if (!subtypeRefWalk(
 			node.children[i], field, owner, propName, index, source, ownerFileScan, cls2, isWrite && i == 0, childShadows, renameEdits,
 			excludeSpans, shape

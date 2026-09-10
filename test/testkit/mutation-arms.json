@@ -76,6 +76,13 @@
 			"note": "per-row validation reports nothing, so an arm declaring neither cut — or both — is accepted"
 		},
 		{
+			"name": "M-BINDER-KINDS-PARAMS-ONLY",
+			"type": "anyparse.query.BinderScan",
+			"method": "binderKinds",
+			"force": "(shape.paramKinds ?? []).copy()",
+			"note": "the named-binder vocabulary collapses to the parameter slots, so a local declaration, a local function, a catch variable, a loop iterator and a case binder all stop binding their own name - a backing-field reference re-binds to whichever one shadows it and the rename rewrites it anyway"
+		},
+		{
 			"name": "M-BUILDMACRO-TRUE",
 			"type": "anyparse.query.TypeTraits",
 			"method": "transitivelyCarriesBuildMacro",
@@ -234,6 +241,20 @@
 			"note": "FitLine goes back to placing a body by its FIRST line, so a body that cannot render flat glues to the head line again"
 		},
 		{
+			"name": "M-FN-SCOPE-KINDS-DROPS-METHODS",
+			"type": "anyparse.query.FieldRefScan",
+			"method": "fnScopeKinds",
+			"force": "MemberKinds.nestedFunctionKinds(shape)",
+			"note": "the METHOD half of the scope vocabulary is dropped and only the function VALUES remain, so a method body stops counting as a scope that can bind the property name and the `this.` qualifier a shadowed reference needs is never emitted"
+		},
+		{
+			"name": "M-FN-SCOPE-KINDS-FROZEN",
+			"type": "anyparse.query.FieldRefScan",
+			"method": "fnScopeKinds",
+			"force": "['FnMember', 'FinalModifiedMember', 'LocalFnStmt', 'LocalInlineFnStmt', 'FnExpr', 'NamedFnExpr', 'ThinParenLambdaExpr', 'ParenLambdaExpr', 'ThinArrow']",
+			"note": "the derivation is frozen back into the hand copy it replaced - identical for the Haxe grammar and blind to every other, which is exactly the state the census is retiring"
+		},
+		{
 			"name": "M-HASSUBTYPE-FALSE",
 			"type": "anyparse.query.SubtypeGraph",
 			"method": "hasSubtype",
@@ -292,6 +313,13 @@
 			"find": "if (_projectIndexBuilt) return _projectIndex;",
 			"replace": "if (false) return _projectIndex;",
 			"note": "the project index is rebuilt on every demand, so the two field rules pay for it once each per pass instead of sharing one"
+		},
+		{
+			"name": "M-NAME-CLASH-KINDS-NO-BINDERS",
+			"type": "anyparse.query.CallSites",
+			"method": "nameClashKinds",
+			"force": "MemberKinds.FIELD_MEMBER_KINDS.concat(shape.moduleValueDeclKinds)",
+			"note": "the binder half of the ambiguity vocabulary is dropped, so a second local function of the same name no longer clashes and the local-function call set is proven complete while carrying another function's calls"
 		},
 		{
 			"name": "M-NAMEOUTSIDE-TRUE",

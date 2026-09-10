@@ -391,7 +391,7 @@ final class InlineMethod {
 		final declSpanNN: Span = declSpan;
 
 		// Parameter list + names (a nameless param slot cannot be substituted).
-		final params: Array<QueryNode> = CallSites.leadingParams(decl);
+		final params: Array<QueryNode> = CallSites.leadingParams(decl, shape);
 		final paramNames: Array<String> = [];
 		for (p in params) {
 			final pn: Null<String> = p.name;

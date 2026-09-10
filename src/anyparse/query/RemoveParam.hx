@@ -167,7 +167,7 @@ final class RemoveParam {
 	public static function paramSlotEdits(
 		source: String, tree: QueryNode, decl: QueryNode, index: Int, name: String, binding: Int, shape: RefShape
 	): { edits: Array<{ span: Span, text: String }>, error: Null<String>, callSites: Int } {
-		final params: Array<QueryNode> = CallSites.leadingParams(decl);
+		final params: Array<QueryNode> = CallSites.leadingParams(decl, shape);
 		final n: Int = params.length;
 		if (index < 0 || index >= n)
 			return { edits: [], error: 'parameter index $index is out of range 0..${n - 1} — "$name" has $n parameter(s)', callSites: 0 };

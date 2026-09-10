@@ -89,7 +89,7 @@ class FieldRenameTest extends Test {
 		if (cls == null) throw 'the fixture must declare a class';
 		final fieldNode: Null<QueryNode> = firstNamed(cls, 'VarMember', field);
 		if (fieldNode == null) throw 'the fixture must declare a backing field named $field';
-		return FieldRename.collectRenameEdits(cls, source, field, [], fieldNode, propName, propStatic);
+		return FieldRename.collectRenameEdits(cls, source, field, [], fieldNode, propName, propStatic, new HaxeQueryPlugin().refShape());
 	}
 
 	/** The first node of `kind` in pre-order, or null. */
