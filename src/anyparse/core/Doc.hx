@@ -389,7 +389,8 @@ enum Doc {
 	 * Rest-aware sibling of the plain ctor in exactly the sense
 	 * `IfNaturalFirstLineExceedsWithRest` is of `IfNaturalFirstLineExceeds`, and
 	 * every static Doc walker treats the two identically; the difference is
-	 * rendering-time only, so both share the plain ctor's PROBE FAMILY row above.
+	 * rendering-time only, so both share the plain ctor's probe-family row in
+	 * `docs/architecture.md`.
 	 *
 	 * The consumer is `BinaryChainEmit.cuddleShape`'s two ELSE probes. What they
 	 * measure is the ternary's LAST rendered line, and a ternary never owns the end

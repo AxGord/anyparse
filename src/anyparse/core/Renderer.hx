@@ -3575,7 +3575,7 @@ class Renderer {
 				}
 			case _:
 				// Unreachable, and the one of these tails most likely to be TESTED:
-				// this helper owns every PROBE FAMILY ctor the `Doc` header table
+				// this helper owns every PROBE FAMILY ctor the `docs/architecture.md` table
 				// documents, so a new member lands here first. `pushExceedsBranch`
 				// hands seven ctors here through ONE arm and the five arms above cover
 				// all of them. Falling through would push no frame and silently delete

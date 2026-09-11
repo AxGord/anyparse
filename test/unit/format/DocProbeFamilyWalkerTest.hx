@@ -9,7 +9,7 @@ import utest.Test;
 /**
  * PROBE FAMILY walker sweep — the eight spine walkers that enumerated the
  * `If*` ctors by hand and fell through `case _` for the four width probes of
- * the family documented on the `Doc` enum header
+ * the family documented in `docs/architecture.md`
  * (`IfArrowContinuationFits`, `IfIndentWidthExceeds`,
  * `IfNaturalFirstLineExceeds`, `IfGluedFirstLineExceeds`).
  *

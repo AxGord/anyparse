@@ -1391,7 +1391,7 @@ class WrapList {
 				IfNaturalFirstLineExceedsWithRest(_, brk, _), IfNaturalFirstLineFitsOpenDelim(_, brk, _),
 				IfArrowContinuationFits(_, _, _, brk, _), IfArrowContinuationFitsWithRest(_, _, _, brk, _),
 				IfIndentWidthExceeds(_, _, brk, _), IfGluedFirstLineExceeds(_, _, brk, _):
-				// PROBE FAMILY (Doc.hx header table), break side for all four — the
+				// PROBE FAMILY (`docs/architecture.md` table), break side for all four — the
 				// side this right-spine walk already takes, and side-independent for
 				// each: `IfArrowContinuationFits` closes BOTH of its layouts with the
 				// list's own `Text(close)`, its rest-aware sibling pairs two layouts
@@ -1863,7 +1863,7 @@ class WrapList {
 					IfNaturalFirstLineExceedsWithRest(_, b, _), IfNaturalFirstLineFitsOpenDelim(_, b, _),
 					IfArrowContinuationFits(_, _, _, b, _), IfArrowContinuationFitsWithRest(_, _, _, b, _),
 					IfIndentWidthExceeds(_, _, b, _), IfGluedFirstLineExceeds(_, _, b, _):
-					// PROBE FAMILY (Doc.hx header table), break side for all four — the
+					// PROBE FAMILY (`docs/architecture.md` table), break side for all four — the
 					// side this walk already takes, and side-independent for each. The
 					// operator `Text` this scan hunts only counts at `depth == 1`, i.e.
 					// past a `WrapBoundary`; no family member is one, so neither branch
@@ -3175,7 +3175,7 @@ class WrapList {
 				IfArrowContinuationFits(_, _, _, brk, _), IfArrowContinuationFitsWithRest(_, _, _, brk, _):
 				isMethodChainItem(brk);
 			case IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat):
-				// PROBE FAMILY (Doc.hx header table). The two body-placement probes are
+				// PROBE FAMILY (`docs/architecture.md` table). The two body-placement probes are
 				// the one family pair this walker reads on its FLAT side, against the
 				// break side it takes everywhere else, and the reason is this walker's
 				// own dot-break test rather than a content difference. Both branches
@@ -3219,7 +3219,7 @@ class WrapList {
 					// fixture) and drifted further files with it.
 					// Deliberate omissions: `Nest` keeps its own ungated arm above
 					// (pre-slice behaviour), and the nested `case _` stays a SKIP —
-					// the hole the `Doc` enum header flags for this walker is
+					// the hole `docs/architecture.md` flags for this walker is
 					// NARROWED here, not closed.
 					case WrapBoundary(_), Group(_), BodyGroup(_), GroupWithRestProbe(_), Flatten(_), HardFlatten(_), CollapseProbe(_),
 						CollapseAddProbe(_), CollapseBoolProbe(_), CollapseChainProbe(_), ConditionalMarkerZero(_),
@@ -4089,7 +4089,7 @@ class WrapList {
 				IfNaturalFirstLineExceedsWithRest(_, _, flat), IfNaturalFirstLineFitsOpenDelim(_, _, flat),
 				IfArrowContinuationFits(_, _, _, _, flat), IfArrowContinuationFitsWithRest(_, _, _, _, flat),
 				IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat):
-				// PROBE FAMILY (Doc.hx header table), flat side for all four — this
+				// PROBE FAMILY (`docs/architecture.md` table), flat side for all four — this
 				// walker's own side, and side-independent for each.
 				// `IfArrowContinuationFits` opens BOTH of its layouts with the list's
 				// own `Text(open)` and its rest-aware sibling pairs two layouts from
@@ -4189,7 +4189,7 @@ class WrapList {
 				IfNaturalFirstLineExceedsWithRest(_, _, flat), IfNaturalFirstLineFitsOpenDelim(_, _, flat),
 				IfArrowContinuationFits(_, _, _, _, flat), IfArrowContinuationFitsWithRest(_, _, _, _, flat),
 				IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat):
-				// PROBE FAMILY (Doc.hx header table), flat side for all four — this
+				// PROBE FAMILY (`docs/architecture.md` table), flat side for all four — this
 				// walker's own side, and side-independent for each, by the same
 				// argument as `firstVisibleTextIsFunctionKw` above: both
 				// `IfArrowContinuationFits` layouts open with the list's `Text(open)`
@@ -4253,7 +4253,7 @@ class WrapList {
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
 				IfNaturalFirstLineExceedsWithRest(_, _, flat), IfNaturalFirstLineFitsOpenDelim(_, _, flat),
 				IfArrowContinuationFits(_, _, _, _, flat), IfArrowContinuationFitsWithRest(_, _, _, _, flat):
-				// PROBE FAMILY (Doc.hx header table): `IfArrowContinuationFits` keeps
+				// PROBE FAMILY (`docs/architecture.md` table): `IfArrowContinuationFits` keeps
 				// this walker's flat side, and here the choice is load-bearing rather
 				// than free. Its two layouts hold the same argument at DIFFERENT depths
 				// — the break (glued) side is `Concat([Text(open), …, item, …])` with
