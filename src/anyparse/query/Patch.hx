@@ -709,7 +709,7 @@ final class Patch {
 	 * to widen the fragment to whole lines, which this probe exists to name; it only
 	 * reports, and never produces a range to splice.
 	 *
-	 * `midLineTail` below is the mirror, added by S68 with its own fixtures: the two
+	 * `midLineTail` below is the mirror, with its own fixtures: the two
 	 * probes are asked in that order and only one can answer, since an occurrence
 	 * truncated at BOTH ends matches the first arm on its first line and never reaches
 	 * the second.

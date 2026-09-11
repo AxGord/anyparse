@@ -189,8 +189,9 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		_shared.promote(sources.library, this);
 		// Drop the LIBRARY roots the moment the process-scoped tier owns their projections.
 		// Library sources are demanded as `{parseFile, spanInfo}` and only that, and those two
-		// calls are ADJACENT, so holding their roots buys no parses — only peak memory, which is the
-		// whole of what dropping them saves. A later demand the shared tier does not cover simply
+		// calls are ADJACENT, so the generated walker's one-entry root memo already collapses them
+		// and holding their roots buys no parses — it costs only peak memory, which is the whole of
+		// what dropping them saves. A later demand the shared tier does not cover simply
 		// re-parses, which is correct, just slower.
 		for (entry in sources.library.entries()) _rootCache.remove(entry.source);
 		return sources.report.concat(sources.library.entries());

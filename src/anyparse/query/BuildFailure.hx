@@ -25,7 +25,7 @@ enum BuildFailureCause {
 	/** Any other strict-null-safety refusal. */
 	NullSafety;
 
-	/** A forced `return` ahead of the body of an `inline` member (S96). */
+	/** A forced `return` ahead of the body of an `inline` member. */
 	InlineReturn;
 
 	/** The arm registry's own build-macro cross-checks — a `@:killer`/`@:pin` pairing. */

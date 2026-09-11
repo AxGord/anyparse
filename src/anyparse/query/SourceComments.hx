@@ -293,7 +293,7 @@ final class SourceComments {
 	 * `/**` … `**\/` spelling, commented-out code, a free-form paragraph) that line's own
 	 * indentation.
 	 *
-	 * Reading it off the OPENER instead is what this function did until S39, and a gutter-less
+	 * Reading it off the OPENER instead is the wrong answer, and a gutter-less
 	 * block indents its interior one level DEEPER than its delimiters — so every line a splice
 	 * added landed one level short of the text it joined, and flush LEFT when the block sat at
 	 * column 0. Both spellings of the closer are skipped on the way, so a block with no interior

@@ -77,7 +77,8 @@ typedef CarriedEdits = {
  * THE CORRECTNESS BOUNDARY is refuse-rather-than-guess. A cross-package move is SUPPORTED: the
  * moved body's bare same-package names are priced through the resolution ladder
  * `DependencyCarry.bindingOf` walks, carried when the source has a statement to carry, and
- * REFUSED whenever one side can name its binding and the other cannot.
+ * REFUSED when the two sides would mean different things by one name — including when one
+ * side can name its binding and the other cannot.
  *
  * IMPORT-CARRYING is best-effort. The op carries the source file's EXPLICIT imports the moved
  * type's body depends on — a `D` written in a type POSITION or as the RECEIVER of a member
@@ -1166,8 +1167,7 @@ final class MoveSymbol {
 	 * must be in the scope set and on a type declaration, that type must be
 	 * uniquely declared at the cursor, source and
 	 * destination must differ, and both must be indexed. Cross-package is NOT
-	 * refused here and has not been since S40 — this doc said it was until
-	 * 2026-08-31. Returns the validated `MoveTarget` or a `PErr` with the
+	 * refused here. Returns the validated `MoveTarget` or a `PErr` with the
 	 * precise refusal reason.
 	 */
 	private static function resolveMoveTarget(

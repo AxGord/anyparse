@@ -166,8 +166,8 @@ private typedef ReceiverProof = {
  * upper-case pattern identifier, so the leftover is loud, never a silent capture.
  *
  * An `enum abstract` value the compiler resolves from the EXPECTED TYPE renames in RETURN
- * position only (`expectedReturnOffsets`). The expected-type sites still NOT proven, each
- * measured on this repo: an `x == VALUE` comparison, an annotated assignment, an argument in
+ * position only (`expectedReturnOffsets`). The expected-type sites still NOT
+ * proven: an `x == VALUE` comparison, an annotated assignment, an argument in
  * a typed parameter slot, a function with NO return annotation, and the value slots the
  * descent does not model (a block expression's last statement, a `try` expression).
  *
@@ -175,9 +175,8 @@ private typedef ReceiverProof = {
  * of a second enum abstract brings ITS same-named value into simple-name scope, so an
  * un-annotated `function f() return Seam;` silently returns the OTHER abstract's value after
  * the rename instead of failing (verified on 4.3.7). That import path is also the largest
- * un-modelled reference class overall — 453 of the 461 bare return-position sites in this
- * repo are `ExitCode` values read that way inside `: Int` functions, which no expected type
- * can prove.
+ * un-modelled reference class overall — nearly every bare return-position site in this repo is
+ * an `ExitCode` value read that way inside a `: Int` function, which no expected type can prove.
  *
  * Coordinate convention: `line` / `col` are 1-based, exactly as
  * `apq refs` prints them — identical to `Rename` / `CrossRename`.

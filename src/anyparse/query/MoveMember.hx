@@ -852,9 +852,9 @@ final class MoveMember {
 	): Void {
 		final accessPath: String = prep.srcInfo.pkg == '' ? prep.srcTypeName : '${prep.srcInfo.pkg}.${prep.srcTypeName}';
 		// A grant the destination TYPE already carries covers every member it will hold, the moved
-		// one included, so a member-level copy of it is dead text — S87 landed 10 of them across 3
-		// files in one slice, into destinations whose own `@:access(anyparse.macro.WriterLowering)`
-		// was the reason the move was legal in the first place. Only the fully-qualified spelling
+		// one included, so a member-level copy of it is dead text — and a destination whose own
+		// grant is the reason the move was legal in the first place is exactly where such a copy
+		// lands. Only the fully-qualified spelling
 		// counts as a match: a short `@:access(Src)` resolves through the destination's own imports,
 		// and reading one as this path would DROP a grant the moved body needs.
 		if (RefactorSupport.accessGrantsOn(prep.trees[prep.destFile], prep.destDecl.declNode, '@:access').contains(accessPath)) return;

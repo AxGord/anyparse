@@ -511,7 +511,7 @@ final class TypeRefPrinter {
 		if (_pendingImports.exists(p -> p != canonical && SourceText.lastSegment(p) == simple)) return false;
 		// A mention in INERT text — a comment, or the literal text of a string / regex — is masked
 		// out: the scan asks whether anything in this file BINDS the name, and neither binds
-		// anything, while the T15 reading refused the import on the strength of a word in a
+		// anything, while an unmasked reading refuses the import on the strength of a word in a
 		// doc-comment or an assertion message. Only the TEXT is masked: a single-quoted Haxe string
 		// interpolates, so the `Foo` of `'${Foo.x}'` or `'$Foo'` is a real reference and still
 		// vetoes (`inertRegions`).
