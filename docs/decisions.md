@@ -97,20 +97,20 @@ decided the question; it may not become a record of runs.
 - `StructuralTypes.comparableNominalOf`'s ANON-STRUCTURE nominal was to be narrowed so it refutes
   against a provably non-structural other side → even the loosest form of that refutation, on the
   anon nominal's own name, moves no finding on this project or on the Pony fork, so leaving the
-  spelling open costs nothing — `SHA-S211`
+  spelling open costs nothing — `2391816b`
 - the unresolved-nominal default in `StructuralTypes.comparableNominalOf` was to be flipped from
   CLOSED to OPEN → it moves no finding either way; the older reading, that the closed default is
   what lets the refutation fire at all, stopped being true once the configured library joined the
   index, and every refutation that fires today has a resolved declaration on both sides —
-  `SHA-S211`
+  `2391816b`
 - the repeated `checkstyle.json` walk was to be memoised at `HaxeNamingSupport.policyFor` → that
   bought nothing measurable on a full run; the walk had to be memoised at
-  `CachingGrammarPlugin.maxComplexity`, the call site the whole ruleset reaches — `SHA-S211`
+  `CachingGrammarPlugin.maxComplexity`, the call site the whole ruleset reaches — `2391816b`
 - `BodySlotGuard.scan` was to be skipped wherever the pre-filter already knows which edits blank
   something → a CPU profile of a whole `lint --all --fix` puts the entire source-side half well
   inside that command's own run-to-run spread, so no arm could show the difference; `reaching`'s
-  RESULT parse is where that gate would get cheaper — `SHA-S211`
+  RESULT parse is where that gate would get cheaper — `2391816b`
 - `LexicalRegions.regionAt` was to become a binary search over its sorted, non-overlapping regions
   → a CPU profile of a whole `lint --all --fix` does not sample the function at all, nor
   `offsetWithinComment` beside it, and both of its loop consumers are bounded from outside —
-  `SHA-S211`
+  `2391816b`
