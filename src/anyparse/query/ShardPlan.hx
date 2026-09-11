@@ -75,15 +75,12 @@ private typedef ShardEntry = {
 final class ShardPlan {
 
 	/**
-	 * Classes that share MUTABLE STATE outside their own process, pinned to
-	 * shard 0 as ONE group. One path is a fixed constant, not a per-test
-	 * temp: `bin/.last-sweep.json` (the corpus delta baseline, rewritten by
-	 * `HxFormatterCorpusTest` and read by `ApqDxTier5CliTest`). The other
-	 * hazard this group once carried — `/tmp/anyparse-last-probe.hx` — is
-	 * gone: since S170 `apq probe` stages to
-	 * `<temp root>/anyparse-last-probe.<pid>.hx`, so nothing forces a class
-	 * into this group for staging a probe. S178 re-derived the list against
-	 * that narrower reason (below) and it dropped from 8 names to these 2.
+	 * Classes that share MUTABLE STATE outside their own process, pinned to shard 0 as ONE group. One path
+	 * is a fixed constant, not a per-test temp: `bin/.last-sweep.json` (the corpus delta baseline,
+	 * rewritten by `HxFormatterCorpusTest` and read by `ApqDxTier5CliTest`). The other hazard this group
+	 * once carried — a fixed `/tmp` probe path — is gone: `apq probe` stages to `<temp
+	 * root>/anyparse-last-probe.<pid>.hx`, so nothing forces a class into this group for staging a probe,
+	 * and the list below is derived against that narrower reason.
 	 *
 	 * The list is DERIVED, not remembered. `hxq lit '.last-sweep.json' test/`
 	 * finds the baseline's users — the one shared constant left; re-derive
@@ -142,15 +139,12 @@ final class ShardPlan {
 	private static inline final RANK_OTHER: Int = 1000;
 
 	/**
-	 * Measured in-suite self-times from the suite profile (2026-08-17, HEAD
-	 * `ff3f20ae`), in milliseconds. In-suite rather than isolated: an
-	 * isolated run re-pays the ~2.4 s resolution warm-up that the monolith
-	 * pays once, which overstates every class touching the resolution
-	 * library and produces a worse split.
+	 * In-suite self-times from a suite profile, in milliseconds. In-suite rather than isolated: an isolated
+	 * run re-pays the resolution warm-up that the monolith pays once, which overstates every class touching
+	 * the resolution library and produces a worse split.
 	 *
-	 * `unit.ApqDxTier5CliTest` reads 40 rather than the 4510 in that profile:
-	 * `testSelfStatusSourceFlagAccepted` walked the whole `src/` to assert one
-	 * exit code, and has been scoped to a fixture since.
+	 * `unit.ApqDxTier5CliTest` reads far below its profiled cost: `testSelfStatusSourceFlagAccepted`
+	 * walked the whole `src/` to assert one exit code, and has been scoped to a fixture since.
 	 *
 	 * Stale weights cost BALANCE, never correctness — no gate reads them, so
 	 * a class whose cost has drifted lands on a busier shard and nothing else.

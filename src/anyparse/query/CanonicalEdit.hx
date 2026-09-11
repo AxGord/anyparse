@@ -110,13 +110,12 @@ final class CanonicalEdit {
 				);
 		}
 
-		// A re-parse gate cannot see a deletion that empties a brace-less construct's body
-		// slot: the result parses, because the construct pulls the FOLLOWING statement in.
-		// Measured — `remove-element` on the body of `if (flag) log.push("in-branch");` wrote
-		// `if (flag) log.push("after");` and reported success, and `lint --fix`'s
-		// `unused-local` reached the same result from `if (c) var y: Int = 1;`. Both compile.
-		// This is the ONLY structural question the gate asks, and it is asked HERE because
-		// every writer-emit op and every `--fix` wave funnels through this one function.
+		// A re-parse gate cannot see a deletion that empties a brace-less construct's body slot: the result
+		// parses, because the construct pulls the FOLLOWING statement in. `remove-element` on the body of
+		// `if (flag) log.push("in-branch");` writes `if (flag) log.push("after");` and reports success, and
+		// `lint --fix`'s `unused-local` reaches the same result from `if (c) var y: Int = 1;`. Both
+		// compile. This is the ONLY structural question the gate asks, and it is asked HERE because every
+		// writer-emit op and every `--fix` wave funnels through this one function.
 		final emptied: Null<String> = BodySlotGuard.emptiedSlot(source, edits, plugin);
 		if (emptied != null) return Err(emptied);
 
@@ -127,9 +126,8 @@ final class CanonicalEdit {
 		// existed, and the loss was found by a human re-reading a file, not by a run.
 		//
 		// "Every writer-emit op" is the seventeen that reach a write THROUGH here —
-		// every addressed op, plus both `lint --fix` paths and `FixVerifier`. S50 wrote
-		// down that the whole MOVE and EXTRACT family bypasses this; S51 measured it and
-		// found that wrong. `ExtractInterface`, `ExtractSuperclass` and
+		// every addressed op, plus both `lint --fix` paths and `FixVerifier`. The whole MOVE
+		// and EXTRACT family does NOT bypass this. `ExtractInterface`, `ExtractSuperclass` and
 		// `IntroduceParameterObject` reach here through `editKeepingCanonical`, and
 		// `NewFile` has no edit list to ask about — it round-trips a whole file. The
 		// three that genuinely splice with `applyEdits` and never arrive are
@@ -174,35 +172,29 @@ final class CanonicalEdit {
 		final hoisted: Null<String> = carried == null ? null : CommentOwnerGuard.hoistedComment(source, edits, carried, regions);
 		if (hoisted != null) return Err(hoisted);
 
-		// ω-canonical-fixed-point: the result has to satisfy the gate the NEXT
-		// writer-emit op puts on it, and that gate is `writeRoundTrip(s) == s`
-		// after ONE pass. The writer does not always land there in one: a wrap
-		// decision that reads the source line layout the writer itself rewrote
-		// needs two, which is why `apq fmt` loops and warns. A single round trip
-		// here therefore reported `wrote <file>` and left a file its own
-		// `fmt --list` immediately called drifted — measured on Pony's
-		// `tools/src/module/Unpack.hx` under its committed `hxformat.json`:
-		// `apq add-member --reformat` succeeded, and the very next `add-member`
-		// on the same file refused with `file is not in canonical form`.
+		// ω-canonical-fixed-point: the result has to satisfy the gate the NEXT writer-emit op puts on it,
+		// and that gate is `writeRoundTrip(s) == s` after ONE pass. The writer does not always land there
+		// in one: a wrap decision that reads the source line layout the writer itself rewrote needs two,
+		// which is why `apq fmt` loops and warns. A single round trip here therefore reported `wrote
+		// <file>` and left a file its own `fmt --list` immediately called drifted: an `add-member
+		// --reformat` succeeded and the very next `add-member` on the same file refused with `file is not
+		// in canonical form`.
 		//
 		// So the result goes through the SAME loop `fmt` uses, and refuses the same
 		// way: a result that never settles is an error, not a written file — and it
 		// reports the same way too: `Ok` carries `rewrites`, so a caller that wrote a
 		// file the writer needed two passes to settle can say so in `fmt`'s own words
 		// (`FormatFixedPoint.rewritesNote`). That half used to be MUTE, because
-		// `EditResult.Ok` had nowhere to carry a count; the argument is optional, so
-		// the ~280 sites that match `Ok(text)` never noticed it arrive.
+		// `EditResult.Ok` had nowhere to carry a count; the argument is
+		// optional, so the sites that match `Ok(text)` never noticed it arrive.
 		//
-		// BYTE-INERT, not free. The output is identical wherever the writer already
-		// converges, but the confirming pass is not skipped there: `run` short-cuts
-		// only when its input is ALREADY canonical, and the spliced text never is —
-		// that is what makes it spliced. (With an EMPTY edit set it can be: `applyEdits`
-		// hands back `source` unchanged, so a canonical source takes the short-cut and
-		// answers `rewrites: 0`. That is the shape the unit tests drive.) Measured on
-		// this tree's 3 800-line `RefactorSupport.hx`, `apq add-member` went 700 ms to
-		// 850 ms, +21%. No
-		// cheap early-out exists, because the second pass IS the proof and the
-		// gate's own round trip above says nothing about the splice.
+		// BYTE-INERT, not free. The output is identical wherever the writer already converges, but the
+		// confirming pass is not skipped there: `run` short-cuts only when its input is ALREADY canonical,
+		// and the spliced text never is — that is what makes it spliced. (With an EMPTY edit set it can be:
+		// `applyEdits` hands back `source` unchanged, so a canonical source takes the short-cut and answers
+		// `rewrites: 0`. That is the shape the unit tests drive.) On a large file `apq add-member` pays a
+		// whole extra writer pass for it. No cheap early-out exists, because the second pass IS the proof
+		// and the gate's own round trip above says nothing about the splice.
 		//
 		// The `!reformat` gate above stays ONE pass, and the reason is cost, not
 		// disagreement: a source that passes it is by definition a fixed point

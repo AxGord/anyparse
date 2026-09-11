@@ -231,9 +231,9 @@ final class Address {
 	 * a `--kind Coment` whose fix is `Comment` has to be able to reach it.
 	 */
 	private static function kindNotProjected(kind: String, vocabulary: Array<String>): String {
-		// The pool here is the WHOLE grammar vocabulary (238 kinds on this tree), not the ~11 a file
-		// happens to hold, and `closest`'s flat Levenshtein ceiling of 3 turns every short query into
-		// noise — `Fix` came back `Div, Add, And`, `*` came back `Eq, Gt, In`. Keep a substring lead
+		// The pool here is the WHOLE grammar vocabulary, not the handful of kinds a file happens
+		// to hold, and `closest`'s flat Levenshtein ceiling turns every short query into noise —
+		// `Fix` comes back `Div, Add, And` and `*` comes back `Eq, Gt, In`. Keep a substring lead
 		// (`Expr` -> `FnExpr` is real) and otherwise demand a distance under half the query, which is
 		// what lets `ClassDeclz` -> `ClassDecl` through and stops `Fix`.
 		final near: Array<String> = kind.length == 0
@@ -389,13 +389,13 @@ final class Address {
 	}
 
 	/**
-	 * One candidate's line in an ambiguity refusal: its position and kind, plus the SELECTOR that
-	 * addresses that candidate alone when names can spell one. `AddressIndex.describe` already
-	 * answers that — it is the address a position-addressed op echoes back as `target …`, and the
-	 * one the `source` read-guard menu lists — so a listing that stopped at `<line>:<col> Kind`
-	 * was withholding an address the resolver computes for every other caller. Measured on a
-	 * two-region file: `--select 'Conditional'` matched a module-level region and a member-level
-	 * one and offered only `--nth`, while the index spells the second `ClassForm:C >> Conditional`.
+	 * One candidate's line in an ambiguity refusal: its position and kind, plus the SELECTOR that addresses
+	 * that candidate alone when names can spell one. `AddressIndex.describe` already answers that — it is
+	 * the address a position-addressed op echoes back as `target …`, and the one the `source` read-guard
+	 * menu lists — so a listing that stops at `<line>:<col> Kind` withholds an address the resolver
+	 * computes for every other caller: `--select 'Conditional'` over a file with a module-level region and
+	 * a member-level one can offer only `--nth`, while the index spells the second `ClassForm:C >>
+	 * Conditional`.
 	 *
 	 * A candidate only an ORDINAL separates keeps the bare line: `describe` answers `<sel> --nth k`
 	 * there, which is exactly what the message already offers, and repeating it per candidate would
@@ -512,8 +512,7 @@ final class AddressIndex {
 	 * it (a string literal is a named node like any other) for the ordinal form, and nothing in
 	 * the string marks the positional fallback at all — which a `>` inside a name reaches, since
 	 * `Selector.parse` reads it as a child separator and the widened selector then matches
-	 * nothing. Measured on a two-literal fixture: the ambiguity listing offered
-	 * `--select '6:10'`, which is not a selector.
+	 * nothing — the ambiguity listing then offers a bare `<line>:<col>`, which is not a selector.
 	 */
 	public function uniqueSelector(node: QueryNode): Null<String> {
 		final widened: Null<{ selector: String, unique: Bool }> = widenToUnique(node);
@@ -538,8 +537,8 @@ final class AddressIndex {
 
 	/**
 	 * `node`'s segment with the nearest named ancestors prepended until it resolves uniquely,
-	 * and whether it got there — or null when the node is not in this tree at all. The widest
-	 * selector TRIED comes back either way, because `describe`'s ordinal form is built on it.
+	 * and whether it got there — or null when the node does not belong to the tree indexed here. The
+	 * widest selector TRIED comes back either way, because `describe`'s ordinal form is built on it.
 	 *
 	 * Every step prepends with `>>`, so what the walk can express is "somewhere under a named
 	 * ancestor" — and DEPTH is the one thing it cannot say. That is invisible almost everywhere,
@@ -770,8 +769,8 @@ final class AddressIndex {
  * rebuild-per-address regression is invisible to every other gate. It has been dead once already:
  * the two captured locals this class replaces were `var`s the report's own closure wrote, an
  * autofix pass read those writes as dead stores, deleted them and turned the locals `final`, and
- * every finding paid a whole-tree index from then on (measured on one 416 KB source: 56.3s for the
- * JSON report against 2.1s for the text one over the same findings).
+ * every finding paid a whole-tree index from then on, which cost the JSON
+ * report orders of magnitude more than the text one over the same findings.
  */
 @:nullSafety(Strict)
 final class TreeAddresser {

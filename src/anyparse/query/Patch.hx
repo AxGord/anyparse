@@ -170,14 +170,13 @@ final class Patch {
 	private static function docOrphanRefusal(
 		source: String, tree: QueryNode, sorted: Array<{ span: Span, text: String }>, plugin: GrammarPlugin
 	): Null<String> {
-		// ONE lexical pass for the whole call. `docExtendedSpan` re-lexes the file on every call, and
-		// asking it per edit cost ~19% on a 17 000-line file with 135 ranges under `--all`.
+		// ONE lexical pass for the whole call. `docExtendedSpan` re-lexes the file on every call,
+		// and asking it per edit costs a large share of the op on a big file patched with `--all`.
 		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
 		final watched: Array<{ region: Span, owner: String, declared: Int }> = [];
 		// One entry per BLOCK, not per edit. An edit starting inside a comment resolves no node
-		// of its own, so every such edit in a payload watches the same enclosing type's doc —
-		// measured at 29 ranges resolving one block on a `--all` run over a 4857-line file, each
-		// re-resolving that block against the spliced tree below.
+		// of its own, so every such edit in a payload watches the same enclosing type's doc, and
+		// would otherwise re-resolve that one block against the spliced tree below once per edit.
 		final seen: Array<Int> = [];
 		for (edit in sorted) {
 			final end: Int = docBlockEnd(source, comments, declGroupStart(source, tree, edit.span.from));
@@ -235,24 +234,19 @@ final class Patch {
 	 * BEFORE it, and, for the one edit that CONTAINS it, mapped onto the end of that edit's
 	 * replacement.
 	 *
-	 * The running total this replaced added EVERY preceding edit's delta. An edit whose start
-	 * falls inside a comment resolves no node of its own, so the block it is watched against is
-	 * the enclosing TYPE's — one block, once per such edit (measured on a 4857-line file: 29
-	 * comment-interior ranges under `--all`, one distinct block; 74 ranges landing on member
-	 * declarations, 63 distinct blocks; 10 ranges inside statement bodies, none) — and from the
-	 * second edit on the recorded end was pushed past itself onto whatever declaration the offset
-	 * landed in. The transfer/rename discriminator then compared a module's declaration count
-	 * against a type body's, which grows by construction. Which multi-pair payloads that refused
-	 * was decided by the delta's SIZE: measured on a 16-line fixture, a first pair growing by
-	 * 1/5/10 characters applied, by 15/20/30 refused naming a static field as the doc's new owner,
-	 * by 40/60 applied again — a refusal WINDOW, which is the signature of a position error and
-	 * not of a doc that moved.
+	 * The running total this replaced added EVERY preceding edit's delta. An edit whose start falls inside
+	 * a comment resolves no node of its own, so the block it is watched against is the enclosing TYPE's —
+	 * one block however many such edits a payload holds — and from the second edit on the recorded end was
+	 * pushed past itself onto whatever declaration the offset landed in. The transfer/rename discriminator
+	 * then compared a module's declaration count against a type body's, which grows by construction. Which
+	 * multi-pair payloads that refused was decided by the delta's SIZE, so refusals came in a WINDOW: the
+	 * signature of a position error and not of a doc that moved.
 	 *
 	 * The CONTAINING edit answered `-1` and dropped the watch, on the reading that a rewritten
 	 * block carries no position to map. It carries one — the block still ends where the
 	 * replacement does — and skipping was a fail-OPEN: a first pair rewriting the doc's last two
-	 * lines and a second turning `function b() {}` into `function c() {}` above a kept `b` moved
-	 * the block onto `c` at rc 0, with nothing watched at all.
+	 * lines and a second turning `function b() {}` into `function c() {}`
+	 * above a kept `b` moved the block onto `c` with nothing watched at all.
 	 */
 	private static function shiftedEnd(sorted: Array<{ span: Span, text: String }>, at: Int): Int {
 		var shifted: Int = at;
@@ -342,12 +336,11 @@ final class Patch {
 	/**
 	 * Where the `/**` block directly above `at` ends, or -1 when no attached doc block is there.
 	 *
-	 * This asks the pre-lexed `comments` list rather than `RefactorSupport.docExtendedSpan`, which
-	 * re-lexes the whole file per call: a 17 000-line file patched with `--all` resolves 135
-	 * ranges, and one lex each cost ~19% of the op. `startsItsLine` is the same attribution rule
-	 * `docExtendedSpan` applies — a comment sharing its line with preceding code trails THAT
-	 * declaration — and the `/**` test is its `docOnly` clause, which keeps a plain banner comment
-	 * from counting as documentation.
+	 * This asks the pre-lexed `comments` list rather than `RefactorSupport.docExtendedSpan`, which re-lexes
+	 * the whole file per call, so a big file patched with `--all` pays one whole-file lex per resolved
+	 * range. `startsItsLine` is the same attribution rule `docExtendedSpan` applies — a comment sharing its
+	 * line with preceding code trails THAT declaration — and the `/**` test is its `docOnly` clause, which
+	 * keeps a plain banner comment from counting as documentation.
 	 */
 	private static function docBlockEnd(source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, at: Int): Int {
 		var i: Int = at - 1;
@@ -614,19 +607,15 @@ final class Patch {
 	 * corruption: `apq fmt` calls the file canonical either way, no lint rule reads a
 	 * continuation prefix, and this is the only gate that class of damage has.
 	 *
-	 * A COMMENT used to be checked the same way and is not any more. The text this
-	 * function's own comment carried — that the writer's re-base "moves every line of the
-	 * run by ONE amount" — is FALSE for a comment: the writer owns a comment line's
-	 * leading whitespace outright, re-indenting each line of the block onto the
-	 * declaration's indent and writing the project's indent character. So a well-formed
-	 * payload written with a space gutter into a tab-indented site was CORRECTED on the
-	 * way through and then refused as corrupt — measured on the pre-fix build, 302 of 343
-	 * leading-whitespace combinations over one three-line member doc. What a caller can
-	 * still lose inside a comment survives `trim()` (the ` * ` gutter, a code sample's own
-	 * indentation after it) and no writer behaviour was found that changes THAT: 343 of
-	 * 343 combinations and 1018 real doc blocks of this repo came back with their trimmed
-	 * lines intact. Half an assertion with no reachable failing input is not a safety net,
-	 * so the comment case leaves rather than being kept as one.
+	 * A COMMENT used to be checked the same way and is not any more. The text this function's own comment
+	 * carried — that the writer's re-base "moves every line of the run by ONE amount" — is FALSE for a
+	 * comment: the writer owns a comment line's leading whitespace outright, re-indenting each line of the
+	 * block onto the declaration's indent and writing the project's indent character. So a well-formed
+	 * payload written with a space gutter into a tab-indented site was CORRECTED on the way through and
+	 * then refused as corrupt. What a caller can still lose inside a comment survives `trim()` (the ` * `
+	 * gutter, a code sample's own indentation after it) and no writer behaviour was found that changes
+	 * THAT. Half an assertion with no reachable failing input is not a safety net, so the comment case
+	 * leaves rather than being kept as one.
 	 */
 	private static function verbatimSpliceIntact(
 		source: String, edits: Array<{ span: Span, text: String }>, result: String, rewrites: Null<Int>, plugin: GrammarPlugin
@@ -638,18 +627,10 @@ final class Patch {
 			// A single line carries no relative shape, so there is nothing to lose.
 			if (wanted.length < 2) continue;
 			final region: Null<LexRegionKind> = insideVerbatim(source, edit.span, regions);
-			// A COMMENT is not one of them, however verbatim its TEXT is: its per-line
-			// LEADING whitespace belongs to the writer, which re-indents each line of a
-			// block onto the declaration's indent and writes the project's indent
-			// character. Measured on the base build, that made a well-formed payload
-			// written with a space gutter into a tab-indented site read as the corruption
-			// this check exists to catch — 302 of 343 leading-whitespace combinations over
-			// one three-line member doc were refused. Everything a caller can still lose
-			// inside a comment survives `trim()` (the ` * ` gutter, a code sample's own
-			// indentation after it), and no writer behaviour was found that changes THAT:
-			// 343 of 343 combinations and 1018 real doc blocks of this repo came back with
-			// their trimmed lines intact. A check with no reachable failing input is not a
-			// safety net, so a comment leaves here rather than being half-asserted.
+			// A COMMENT is not one of them, however verbatim its TEXT is: its per-line LEADING whitespace
+			// belongs to the writer, which re-indents each line of a block onto the declaration's indent.
+			// This function's own doc records why asserting on that produced false refusals and no
+			// reachable true one.
 			if (region != StringLit && region != RegexLit) continue;
 			// A range stopping mid-line leaves the rest of that line standing behind the
 			// replacement, so its last line is not a whole result line to compare against.
@@ -728,7 +709,7 @@ final class Patch {
 	 * to widen the fragment to whole lines, which this probe exists to name; it only
 	 * reports, and never produces a range to splice.
 	 *
-	 * `midLineTail` below is the mirror, added by S68 with its own fixtures: the two
+	 * `midLineTail` below is the mirror, with its own fixtures: the two
 	 * probes are asked in that order and only one can answer, since an occurrence
 	 * truncated at BOTH ends matches the first arm on its first line and never reaches
 	 * the second.
@@ -755,7 +736,7 @@ final class Patch {
 	 * The mirror probe: a fragment whose LAST line stops mid-line, so it matches only
 	 * the HEAD of a source line while every line above it matches whole.
 	 *
-	 * The shape the campaign actually hit: a fragment copied down to
+	 * The shape this exists for: a fragment copied down to
 	 * `private static function rootMemoValue` — the signature's first words, cut before
 	 * the parameter list — is refused by both arms for the same reason `midLineAnchor`
 	 * exists, and the standing message ("copy it verbatim from `apq source --select`")
@@ -765,8 +746,8 @@ final class Patch {
 	 * Reports only, like its sibling: it never produces a range to splice, because a
 	 * partial-line match is exactly the ambiguity the whole-line rule exists to refuse.
 	 *
-	 * Measured limit, and it is why the two probes are separate rather than one: each allows a
-	 * partial line at ONE end and requires every other line to match whole, so a fragment
+	 * A deliberate limit, and why the two probes are separate rather than one: each allows
+	 * a partial line at ONE end and requires every other line to match whole, so a fragment
 	 * truncated at BOTH ends reaches neither and keeps the generic remedy
 	 * (`testFragmentTruncatedAtBothEndsReachesNeitherProbe`). Widening either to both ends at
 	 * once would have to guess which end the caller meant.

@@ -86,8 +86,8 @@ final class SymbolIndexBuilder {
 	 * The anon-structure field forms `var name:T;` / `final name:T;`, whose DECLARATION sits one
 	 * node deeper than the member: the grammar wraps it in an optional-marker node (`var ?name:T`)
 	 * that owns the name and the annotation. The span-info walk keys every type map on the node
-	 * carrying the `type` field, so a lookup at the MEMBER's own span answers nothing for these
-	 * two - measured on this tree, 4653 of 5223 indexed anon-struct members read as unannotated.
+	 * carrying the `type` field, so a lookup at the MEMBER's own span answers nothing for
+	 * these two, and almost every indexed anon-struct member then reads as unannotated.
 	 */
 	private static final ANON_WRAPPED_FIELD_KINDS: Array<String> = ['VarField', 'FinalField'];
 

@@ -7,10 +7,10 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
 
 /**
- * Which node kinds BIND a name, which names a construct binds that the scope resolver does not see, and the subtree
- * that owns a binding. The resolver indexes declarations; a `case` pattern capture, a bare (unparenthesised)
- * arrow-lambda parameter and a key-value loop's key are bindings the grammar spells without a
- * declaration node, so a scan that trusts the resolver alone reads them as free references to
+ * Which node kinds BIND a name, which names a construct binds that the scope resolver does not see, and the
+ * subtree that owns a binding. The resolver indexes declarations; a `case` pattern capture, a bare
+ * (unparenthesised) arrow-lambda parameter and a key-value loop's key are bindings the grammar spells
+ * without a declaration node, so a scan that trusts the resolver alone reads them as free references to
  * whatever else carries that name.
  *
  * Every collector here produces that SHADOW SET — the names a consumer must subtract before
@@ -183,11 +183,10 @@ final class BinderScan {
 	 * region two statements down that declares the same name. That is the climb the cursor anchor also
 	 * needed, now gated on the binding's identity instead of on its name.
 	 *
-	 * A binding no function owns is a TYPE MEMBER, for which `enclosingFunctionSubtree` answers the
-	 * whole tree. A local declared in some other method shadows the member and binds only to itself, so
-	 * sweeping the module for one would cost working renames and prove nothing (measured: 433 extra
-	 * refusals across the installed haxelib). Such a binding keeps the cursor's own function, which is
-	 * what shipped.
+	 * A binding no function owns is a TYPE MEMBER, for which `enclosingFunctionSubtree` answers the whole
+	 * tree. A local declared in some other method shadows the member and binds only to itself, so sweeping
+	 * the module for one would cost working renames across a large tree and prove nothing. Such a binding
+	 * keeps the cursor's own function, which is what shipped.
 	 *
 	 * Every step widens, which is the safe direction: `exclusiveBranchRedeclaration` recurses through
 	 * everything under the scope it is given, so a scope that is too wide can only over-refuse.

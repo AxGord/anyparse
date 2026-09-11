@@ -12,51 +12,37 @@ using StringTools;
  * The structural half of the writer-emit gate: whether an edit set would leave a
  * brace-less construct's body slot EMPTY.
  *
- * ## Why a re-parse gate cannot see this
+ * `RefactorSupport.canonicalize` asks only whether the spliced result still parses and the
+ * writer settles on it, and for this class of edit the answer is YES while the meaning has
+ * changed — the slot does not stay empty, the parser fills it with whatever statement
+ * follows. Deleting the body of `if (flag) log.push("in-branch");` written above a
+ * `log.push("after");` leaves `if (flag) log.push("after");`: both compile, and the second
+ * prints `after` only when `flag`. A `lint --fix` of `unused-local` on
+ * `if (c) var y: Int = 1;` reaches the same result.
  *
- * `RefactorSupport.canonicalize` asks one question — does the spliced result still
- * parse, and does the writer settle on it. For this class of edit the answer is YES
- * while the meaning has changed, because the slot does not stay empty: the parser
- * fills it with whatever statement follows.
+ * A construct in `ControlFlowSupport.fixedSlotKinds()` holds each of its children in a slot
+ * that must be filled. If the edits blank one of those children whole — delete it, or
+ * replace it with whitespace — the construct is left reaching for the next statement, and
+ * this returns the shape it would have swallowed.
  *
- * ```haxe
- * if (flag) log.push("in-branch");
- * log.push("after");
- * ```
- *
- * `apq remove-element` on `log.push("in-branch")` wrote `if (flag) log.push("after");`
- * — rc 0, `wrote <file>`, no diagnostic. Both versions compile; the first prints
- * `after` unconditionally, the second only when `flag`. `lint --fix` reached the same
- * result from `unused-local` on `if (c) var y: Int = 1;`, one edit inside a 4-file run
- * that otherwise did exactly what it said.
- *
- * ## What it answers
- *
- * A construct in `ControlFlowSupport.fixedSlotKinds()` holds each of its children in a
- * slot that must be filled. If the edits blank one of those children whole — delete it,
- * or replace it with whitespace — the construct is left reaching for the next statement,
- * and this returns the shape it would have swallowed.
- *
- * A second question the first one cannot answer: `surviving` splices a super-span edit's whole
+ * A second question the first cannot answer: `surviving` splices a super-span edit's whole
  * text into every clipped sub-region, so host and slot BOTH read non-blank; and where the
- * REPLACEMENT builds the construct — `a();` ==== `if (c)` in a plain block, or a bare `if (c)`
- * inserted before a statement — no construct in the SOURCE lost anything for the first question
- * to notice. `apq patch` with
- * `if (flag) log.push("x");` ==== `if (flag)` wrote `if (flag)` followed by the next
- * statement — rc 0, `wrote <file>`, and the probe went from printing `in-branch,after` /
- * `after` to printing `after` / nothing. Both are answered on the RESULT: splice, re-parse, and refuse a construct that now covers
- * surviving source the region it came from did not. Everything else answers null.
+ * REPLACEMENT builds the construct — `a();` ==== `if (c)` in a plain block, or a bare
+ * `if (c)` inserted before a statement — no construct in the SOURCE lost anything for the
+ * first question to notice. Both are answered on the RESULT (`reaching`): splice, re-parse,
+ * and refuse a construct that now covers surviving source the region it came from did not.
+ * Everything else answers null.
  *
  * A construct the edits are REMOVING or RESHAPING is not emptied, it is gone, so a host
- * whose own text does not survive is skipped, and so is a slot whose introducing tokens
- * went with it — `if-false-dead-code` deleting a whole `if (false) g();` and a fix that
- * drops an `else g();` branch whole are that shape, not this one.
+ * whose own text does not survive is skipped, and so is a slot whose introducing tokens went
+ * with it — `if-false-dead-code` deleting a whole `if (false) g();` and a fix that drops an
+ * `else g();` branch whole are that shape, not this one.
  *
  * Pure and grammar-agnostic: both the kind vocabulary (`ControlFlowSupport.fixedSlotKinds` /
  * `blockKinds`) and the lexical regions that say which bytes are comment rather than code
- * (`GrammarPlugin.lexicalRegions`) come from the plugin, and a grammar that declares no fixed
- * slot kinds makes the guard inert. The refusal text names the construct by the word the AUTHOR
- * wrote, never by a `QueryNode.kind` — see `constructWord`.
+ * (`GrammarPlugin.lexicalRegions`) come from the plugin, and a grammar that declares no
+ * fixed slot kinds makes the guard inert. The refusal text names the construct by the word
+ * the AUTHOR wrote, never by a `QueryNode.kind` — see `constructWord`.
  */
 @:nullSafety(Strict)
 final class BodySlotGuard {
@@ -79,15 +65,15 @@ final class BodySlotGuard {
 	 * covers surviving text its source counterpart did not — which is the only way to see a
 	 * construct the REPLACEMENT built, since nothing in the source lost anything then.
 	 *
-	 * Neither subsumes the other, measured by disabling each against this guard's own tests:
-	 * without the first, five refusals go green that should not; without the second, seven do.
+	 * Neither subsumes the other: disabling either arm alone turns real refusals green, so only their union
+	 * covers both classes.
 	 *
-	 * Costs two parses per call, one of them free in practice: measured on a 281 KB file, the SOURCE
-	 * parse is served from the run-scoped `CachingGrammarPlugin` cache the caller's own parse filled
-	 * (0 ms), and the whole 55-58 ms is `reaching` — 45 ms of RESULT parse plus 7.5 ms of
-	 * `GrammarPlugin.lexicalRegions` scanning. Nothing in `canonicalize` can supply that parse: `writeRoundTrip`
-	 * goes through a DIFFERENT parser (`HaxeModuleTriviaParser`) whose AST has no QueryNode walker,
-	 * and neither of its round trips gets cheaper when this one has already run.
+	 * Costs two parses per call, one of them free in practice: the SOURCE parse is served from the
+	 * run-scoped `CachingGrammarPlugin` cache the caller's own parse filled, so what is left is
+	 * `reaching`'s RESULT parse plus its `GrammarPlugin.lexicalRegions` scan. Nothing in `canonicalize` can
+	 * supply that parse: `writeRoundTrip` goes through a DIFFERENT parser (`HaxeModuleTriviaParser`) whose
+	 * AST has no QueryNode walker, and neither of its round trips gets cheaper when this one has already
+	 * run.
 	 *
 	 * The pre-filter is only "there is an edit": a pure INSERTION
 	 * builds the same swallow (`add-element` with the bare element `if (c)`) and deletes nothing,
@@ -109,14 +95,10 @@ final class BodySlotGuard {
 	/**
 	 * The first emptied slot at or below `node`, in document order.
 	 *
-	 * MEASURED AND LEFT ALONE (T218). The standing proposal was to skip this walk when the
-	 * pre-filter already knows which edits blank something. A `--cpu-prof` of
-	 * `lint --all --fix --no-oracle` over 869 Pony files (30.16 s, 22 752 samples) prices the whole
-	 * source-side half at 79.3 ms INCLUSIVE — 0.26 % of the run, of which this walk itself is
-	 * 12.5 ms self, 0.041 %. Three interleaved runs of the identical command came in at
-	 * 29.88 / 29.51 / 29.14 s: a 0.74 s spread, ten times the entire thing being optimised. There is
-	 * no arm that could show the difference, so do not re-measure this — measure `reaching`
-	 * (671.6 ms, 2.23 %, nearly all of it the RESULT parse) if this gate ever needs to get cheaper.
+	 * Do not skip this walk when the pre-filter already knows which edits blank something: the whole
+	 * source-side half is a negligible share of a `lint --all --fix` run, well inside that command's own
+	 * run-to-run spread, so no arm could show the difference. `reaching`, nearly all of which is the RESULT
+	 * parse, is where this gate would get cheaper.
 	 */
 	private static function scan(
 		node: QueryNode, source: String, edits: Array<{ span: Span, text: String }>, kinds: Array<String>, blocks: Array<String>,
@@ -144,10 +126,9 @@ final class BodySlotGuard {
 	): Null<String> {
 		final hostSpan: Null<Span> = host.span;
 		if (hostSpan == null) return null;
-		// REDUNDANT with the lead test below, and deliberately kept: measured, disabling
-		// either one alone leaves the suite green because the other catches whole-host
-		// removal, and only disabling BOTH turns `if (c) a();` into a refusal. This one
-		// states the invariant directly; the lead test is a heuristic about tokens.
+		// REDUNDANT with the lead test below, and deliberately kept: either one alone catches whole-host
+		// removal, so the suite stays green until BOTH are disabled and `if (c) a();` becomes a refusal.
+		// This one states the invariant directly; the lead test is a heuristic about tokens.
 		if (blank(surviving(source, hostSpan, edits), plugin)) return null;
 		var previous: Int = hostSpan.from;
 		for (child in host.children) {
@@ -225,23 +206,21 @@ final class BodySlotGuard {
 	 * The first fixed-slot construct the edits would leave REACHING PAST its own end, into source
 	 * text that used to follow it, or null.
 	 *
-	 * The source-side test above asks whether a slot goes blank, and it answers from `surviving` —
-	 * which splices a super-span edit's WHOLE text into every clipped sub-region, so for an edit
-	 * that covers the host, host and slot both read non-blank and nothing fires. Measured:
-	 * `apq patch` with `if (flag) log.push('x');` ==== `if (flag)` wrote `if (flag)` followed by the
-	 * next statement, rc 0 and `wrote <file>`, and the probe went from printing `in-branch,after` /
-	 * `after` to printing `after` / nothing.
+	 * The source-side test above asks whether a slot goes blank, and it answers from `surviving` — which
+	 * splices a super-span edit's WHOLE text into every clipped sub-region, so for an edit that covers the
+	 * host, host and slot both read non-blank and nothing fires: `apq patch` with `if (flag)
+	 * log.push('x');` ==== `if (flag)` writes `if (flag)` followed by the next statement and reports
+	 * success.
 	 *
 	 * And it cannot see the wider half of the same class at all: a construct the REPLACEMENT builds
 	 * (`a();` ==== `if (c)` in a plain block) or one an INSERTION drops in front of a statement. No
 	 * slot went blank there — no construct in the source was involved — yet the next statement is
 	 * inside a branch just the same.
 	 *
-	 * So this one asks the RESULT: splice, re-parse, and compare each construct's end against the
-	 * end of the region it came from. It runs on every edit set, deliberately. A narrower trigger
-	 * — only when an edit takes a source construct's own terminator away — was written first and
-	 * measured: it costs nothing and misses exactly the two shapes above, which is what its own
-	 * mutation now pins.
+	 * So this one asks the RESULT: splice, re-parse, and compare each construct's end against the end of
+	 * the region it came from. It runs on every edit set, deliberately. A narrower trigger — only when an
+	 * edit takes a source construct's own terminator away — misses exactly the two shapes above, which is
+	 * what its own mutation pins.
 	 */
 	private static function reaching(
 		tree: QueryNode, source: String, edits: Array<{ span: Span, text: String }>, kinds: Array<String>, blocks: Array<String>,
@@ -303,13 +282,13 @@ final class BodySlotGuard {
 			if (limit >= 0) {
 				final end: Int = trimmedEnd(at.spliced, at.outComments, span.from, span.to);
 				final finish: Origin = origin(at.disjoint, end, true);
-				// Measured, on the two readings this line got wrong first time round: removing a sole
-				// `catch` left a `TryCatchStmt` whose span ran to the next statement's first character
-				// while its source counterpart stopped at its own `;` — hence `trimmedEnd` on BOTH
-				// sides. And two independent `patch` pairs, one on a brace-less body and one on the
-				// statement after it, wrote `if (flag) log.push('one') + log.push('2');` with the
-				// second statement inside the branch — a replacement authors an end only when it
-				// reaches back into what the construct already owned, not merely by containing it.
+				// Two readings this line has to get right. Removing a sole `catch` leaves a `TryCatchStmt`
+				// whose span runs to the next statement's first character while its source counterpart
+				// stops at its own `;` — hence `trimmedEnd` on BOTH sides. And two independent `patch`
+				// pairs, one on a brace-less body and one on the statement after it, wrote `if (flag)
+				// log.push('one') + log.push('2');` with the second statement inside the branch — a
+				// replacement authors an end only when it reaches back into what the construct already
+				// owned, not merely by containing it.
 				final authored: Bool = finish.editEnd >= 0 && finish.editFrom <= limit;
 				if (!authored && finish.pos > limit) {
 					final where: Position = new Span(start.pos, start.pos).lineCol(at.source);
@@ -531,8 +510,8 @@ final class BodySlotGuard {
 	 * that picks between them.
 	 *
 	 * The unproved wording is deliberate rather than lazy. `{ }` in a value position is an empty
-	 * BLOCK, so `final v = if (c) { } else 22;` trades the refusal for a type error; and the base
-	 * message asserted braces unconditionally, which is half of the defect T217 is about. But the
+	 * BLOCK, so `final v = if (c) { } else 22;` trades the refusal for a type error; and
+	 * asserting braces unconditionally is half of the defect this wording avoids. But the
 	 * position cannot always be proved (see `statementSlot`), and asserting VALUE on an unproved
 	 * position would only move the wrong advice to the other case — a `case` arm is the shape that
 	 * would get it. So the check says what it knows.

@@ -191,8 +191,8 @@ final class AddMember {
 	 * because the first ends the line that text sits on and the second ends an empty one; anything
 	 * between them must be indentation only.
 	 *
-	 * Whether a canonical body HAS that blank line is a config question, not a universal one, and so is
-	 * whether the writer would put it back: measured, this project's own options re-emit it while
+	 * Whether a canonical body HAS that blank line is a config question, not a universal one,
+	 * and so is whether the writer would put it back: this project's own options re-emit it while
 	 * `{"emptyLines": {"maxAnywhereInFile": 2, "beforeRightCurly": "keep"}}` alone only PRESERVES what
 	 * it is given. So the op owes both sides — take the blank as the new member's separator and re-emit
 	 * one below it — and neither the doubling this guards against nor the bare brace the first fix left

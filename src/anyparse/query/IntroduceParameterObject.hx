@@ -73,12 +73,11 @@ final class IntroduceParameterObject {
 	 * `objName`, defaulting to the lower-camel of `typeName`). Returns
 	 * `Ok(rewritten)` or an `Err`. PURE.
 	 *
-	 * `optsJson` is the `hxformat.json` governing the file the caller will write
-	 * this back to. Omitting it is NOT a neutral default: the source then reads as
-	 * drifted under compiled defaults and the edit falls back to a plain splice,
-	 * which silently forfeits the canonical-out half. A canonical source instead
-	 * comes back canonical — and can now be REFUSED where it never was, when the
-	 * writer cannot settle the spliced result; that is the same contract `extract-interface` and `extract-superclass` took in `8576f7c2`.
+	 * `optsJson` is the `hxformat.json` governing the file the caller will write this back to. Omitting it
+	 * is NOT a neutral default: the source then reads as drifted under compiled defaults and the edit falls
+	 * back to a plain splice, which silently forfeits the canonical-out half. A canonical source instead
+	 * comes back canonical — and can now be REFUSED where it never was, when the writer cannot settle the
+	 * spliced result; that is the same contract `extract-interface` and `extract-superclass` carry.
 	 */
 	public static function introduce(
 		source: String, line: Int, col: Int, paramNames: Array<String>, typeName: String, objName: Null<String>, plugin: GrammarPlugin,
@@ -107,12 +106,10 @@ final class IntroduceParameterObject {
 		final typedefText: String = 'typedef $typeName = { ${[for (f in prep.fields) '${f.name}:${f.type}'].join(', ')} }';
 		edits.push({ span: new Span(source.length, source.length), text: '\n\n$typedefText\n' });
 
-		// The WRITER gives back the separator the appended typedef doubles, and it is
-		// the only thing that can: the hand-rolled newline-run collapse that stood here
-		// read the WHOLE FILE as text, so it also shortened a run inside a string
-		// literal or a block comment anywhere in the file — measured, folding two
-		// parameters of one method took an untouched sibling's `"one\n\n\nfour"` down
-		// to `"one\n\nfour"` at rc 0, under this project's own `hxformat.json`.
+		// The WRITER gives back the separator the appended typedef doubles, and it is the only thing that
+		// can: the hand-rolled newline-run collapse that stood here read the WHOLE FILE as text, so it also
+		// shortens a run inside a string literal or a block comment anywhere in the file: folding two
+		// parameters of one method took an untouched sibling's `"one\n\n\nfour"` down to `"one\n\nfour"`.
 		final rewritten: String = switch CanonicalEdit.editKeepingCanonical(source, edits, plugin, optsJson) {
 			case Err(message): return Err(message);
 			case Ok(text, _): text;

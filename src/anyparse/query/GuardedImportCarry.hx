@@ -15,18 +15,16 @@ using Lambda;
  * The `#if`-guarded half of the `move` family's dependency-import carry.
  *
  * A guarded import is a rung of SOME build's ladder and of no other, so it cannot be carried as an
- * unconditional statement — which is why the carry skipped it. Skipping it SILENTLY is the defect:
- * one campaign sweep moved 767 modules and 72 destinations lost
- * `#if (sys || nodejs) import sys.FileSystem; import sys.io.File; #end` with nothing naming a file;
- * the loss showed at build time, one error at a time, and the op's own advisory admitted the class
- * without ever naming an instance.
+ * unconditional statement — which is why the carry skipped it. Skipping it SILENTLY is the defect: a
+ * destination loses `#if (sys || nodejs) import sys.FileSystem; import sys.io.File; #end` with nothing
+ * naming a file, and the loss shows at build time, one error at a time, and the op's own advisory admitted
+ * the class without ever naming an instance.
  *
- * What this module carries is the STATEMENT, re-emitted at the destination under the condition
- * that guards it at the source — `#if <that condition>` around the statements, `#end` after them,
- * one block per distinct condition. Copying the whole REGION was the first shape and it was wrong
- * on real code: a file whose entire body sits inside one `#if (sys || nodejs)` has its type
- * declaration in that region and an `#if` inside a method body, so a whole-region reading refused
- * a move the op had always performed (measured on `unit.CliFixture`, 84 files).
+ * What this module carries is the STATEMENT, re-emitted at the destination under the condition that guards
+ * it at the source — `#if <that condition>` around the statements, `#end` after them, one block per
+ * distinct condition. Copying the whole REGION was the first shape and it was wrong on real code: a file
+ * whose entire body sits inside one `#if (sys || nodejs)` has its type declaration in that region and an
+ * `#if` inside a method body, so a whole-region reading refuses a move the op had always performed.
  *
  * Where ONE condition cannot carry it this module REFUSES and names the file, the condition and
  * the name: two different regions binding one name, a statement nested in more than one region, a
@@ -195,9 +193,8 @@ final class GuardedImportCarry {
 	 * `#if (sys || nodejs) import sys.io.File; #end`, whose last import IS the line above `#end` —
 	 * and they are a whole file apart for the shape `src/anyparse/macro` is written in, where ONE
 	 * `#if macro` wraps the imports, the type declaration and everything else. Seating on the `#end`
-	 * line there wrote the carried import BELOW the class: `import and using may not appear after a
-	 * declaration`, at rc 0, `wrote 2 file(s)` (T558, reproduced on this tree by moving
-	 * `WriterPolicyLowering.buildCaseBodyFitPredicate` into `WriterBraceSymmetryLowering`).
+	 * line there wrote the carried import BELOW the class: `import and using
+	 * may not appear after a declaration`, with the op reporting success.
 	 *
 	 * The last PLAIN import ranks over the last `using` for the same reason
 	 * `ImportOrder.lastHeaderEnd` prefers one: canonical Haxe orders the two runs, and a fresh

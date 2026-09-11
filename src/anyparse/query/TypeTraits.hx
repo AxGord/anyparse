@@ -94,22 +94,20 @@ final class TypeTraits {
 	 *
 	 * `fromFile` is the file of the container the caller is looking at, and naming it is what keeps the
 	 * answer about THAT type. Hop zero is not a written type reference at all — the consumer holds the
-	 * declaration — so resolving it by simple name across the whole index conflated every homonym:
-	 * measured on `~/dev/haxelib` (16182 files, ~100 libraries in ONE index, the eight consumer rules,
-	 * `--all`), the gate removed 16339 findings, of which 14426 were same-simple-name collisions and
-	 * 1913 genuine. ONE `private typedef GL = js.html.webgl.GL2` in heaps' `h3d/impl/GlDriver.hx` — a
-	 * file carrying a `@:build` of its own — silenced every `GL` in lime, hlsdl, hashlink/sdl and
-	 * hashlink/mesa, 9800 findings from one line. Every consumer passes its file; a caller that has
-	 * none keeps the whole-index answer it always got.
+	 * declaration — so resolving it by simple name across the whole index conflated every homonym: over a
+	 * haxelib-wide index the gate removed a large majority of its findings as same-simple-name collisions,
+	 * and ONE `private typedef GL = js.html.webgl.GL2` in a file carrying a `@:build` of its own silenced
+	 * every `GL` in four other libraries. Every consumer passes its file; a caller that has none keeps the
+	 * whole-index answer it always got.
 	 *
-	 * Every hop ABOVE zero IS a written reference, and a Haxe supertype is a simple name most of the
-	 * time, so those resolve through the referring file's own import scope (`buildMacroSupertypes`) and
-	 * widen back to the union whenever that settles nothing. The widening is what is left of the
-	 * conservatism, and it is cheap: of the 1913 the gate still removes, 205 are a token in the type's
-	 * own file, 1375 a grant reached through a fully resolved chain, and 333 reached ONLY through a
-	 * widened hop — a qualified path naming a type outside the scope, `haxe.io.Output` being the whole
-	 * of that class. Deciding those would need the compiler's own std path in the resolution scope;
-	 * nothing the index holds settles them, so do not narrow the widening without adding it.
+	 * Every hop ABOVE zero IS a written reference, and a Haxe supertype is a simple name most of the time,
+	 * so those resolve through the referring file's own import scope (`buildMacroSupertypes`) and widen
+	 * back to the union whenever that settles nothing. The widening is what is left of the conservatism,
+	 * and it is cheap: of the genuine removals most reach their grant through a fully resolved chain, and
+	 * only a minority through a widened hop — a qualified path naming a type outside the scope,
+	 * `haxe.io.Output` being the whole of that class. Deciding those would need the compiler's own std path
+	 * in the resolution scope; nothing the index holds settles them, so do not narrow the widening without
+	 * adding it.
 	 *
 	 * The narrowing can only ever turn a "yes" into a "no", so the consumers that pay for a wrong one
 	 * are the DELETING ones (`trivial-getter`, `inline-constant`, `static-constant`), not only the
@@ -120,8 +118,8 @@ final class TypeTraits {
 	 * `@:autoBuild` reaches subtypes and implementors, so the walk follows `supertypes`, which carries
 	 * `implements` targets as well as `extends`. The per-file test is textual
 	 * (`MemberWriteScan.carriesBuildMacro`), so an unrelated `@:build` elsewhere in the same file counts
-	 * too — the conservative direction, which only ever keeps a field as it is (`ansi`'s `ANSI.hx`,
-	 * whose second type carries the tag, is 6 of the 205). An unretained source ends the same way, as in
+	 * too — the conservative direction, which only ever keeps a field as it is (a module whose SECOND
+	 * type carries the tag is the everyday case). An unretained source ends the same way, as in
 	 * `transitivelyCarriesRtti`.
 	 */
 	public function transitivelyCarriesBuildMacro(typeName: String, ?fromFile: String): Bool {

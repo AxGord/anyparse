@@ -183,15 +183,14 @@ final class ElementSpan {
 	 * written inside a comment's TEXT is content, not an opener.
 	 */
 	public static function trailingTrimmedSpan(source: String, span: Span, regions: () -> Array<LexRegion>): Span {
-		// The loop below can only move `to` when the span's LAST byte is whitespace, or the `/` that
-		// closes a block comment; anything else — `}`, `;`, `)`, an identifier byte — is the node's own
-		// last token and the answer is `span` unchanged. Testing that one byte first keeps the
-		// whole-file comment lex off the common path, which matters because a caller may ask once per
-		// MATCH: `ast --select 'IdentExpr' --source` over `Cli.hx` asks 14337 times, and the lex is
-		// O(file). Measured on that query: 23.8s -> 0.4s, with `--select 'FnMember' --source` 1.08s ->
-		// 0.34s and every window byte-identical. That guard is also why `regions` is a PROVIDER rather
-		// than the array every other helper here takes: an eager `plugin.lexicalRegions(source)` at the
-		// call site would pay the lex the guard exists to avoid, on the same 14337 asks.
+		// The loop below can only move `to` when the span's LAST byte is whitespace, or the `/` that closes
+		// a block comment; anything else — `}`, `;`, `)`, an identifier byte — is the node's own last token
+		// and the answer is `span` unchanged. Testing that one byte first keeps the whole-file comment lex
+		// off the common path, which matters because a caller may ask once per MATCH: `ast --select
+		// 'IdentExpr' --source` over a large file asks once per hit and the lex is O(file), so without the
+		// guard that query is quadratic. It is also why `regions` is a PROVIDER rather than the array every
+		// other helper here takes: an eager `plugin.lexicalRegions(source)` at the call site would pay the
+		// lex the guard exists to avoid, on the same 14337 asks.
 		if (span.to <= span.from || span.to > source.length) return span;
 		final lastByte: Int = source.fastCodeAt(span.to - 1);
 		if (!SourceText.isSpace(lastByte) && lastByte != '/'.code) return span;
@@ -514,10 +513,10 @@ final class ElementSpan {
 	 * element's kind and name, the LINES the cut spans, and the doc block and annotations
 	 * the group fold carries along.
 	 *
-	 * The address is not the defect this answers. `FnMember:f` and `MetaCall:@:pin` are
-	 * distinct selectors and each removes exactly what it names — measured. What the op
-	 * could not say was the SIZE and SHAPE of what it did, so an address that resolved one
-	 * declaration outward reported the same single line as the edit that was meant.
+	 * The address is not the defect this answers. `FnMember:f` and `MetaCall:@:pin` are distinct selectors
+	 * and each removes exactly what it names. What the op could not say was the SIZE and SHAPE of what it
+	 * did, so an address that resolved one declaration outward reported the same single line as the edit
+	 * that was meant.
 	 *
 	 * A cut that stays inside one line counts as that one line: the unit is the line the
 	 * reader will look at, not the bytes.

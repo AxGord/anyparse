@@ -48,7 +48,7 @@ final class StructuralTypes {
 	 * declares, so the anon-structure walk over the index can never see them. A type declaring
 	 * every name in a set is a value the compiler will unify with that structure, and every one
 	 * of these declares its members as METHODS, which is why they pin only FINALIZATION (a
-	 * `(default, null)` field of function type satisfies a structural method — measured).
+	 * `(default, null)` field of function type satisfies a structural method).
 	 *
 	 * `Iterator` and `KeyValueIterator` share one set: the latter is an alias of the former.
 	 */
@@ -59,12 +59,11 @@ final class StructuralTypes {
 	];
 
 	/**
-	 * The language's nullability WRAPPER. Transparent for a structure-field unification —
-	 * measured on Haxe 4.3.7 that `{var x:Null<Int>}` accepts a class declaring `var x:Int` AND
-	 * that `{var x:Int}` accepts `var x:Null<Int>` — so `comparableNominalOf` answers on its
-	 * ARGUMENT rather than on the wrapper. Spelled here rather than read off the grammar shape
-	 * for the reason `MemberLookup.dynamicSupertypeRef` spells `Dynamic`: this layer holds the
-	 * index, not the plugin.
+	 * The language's nullability WRAPPER. Transparent for a structure-field unification — `{var
+	 * x:Null<Int>}` accepts a class declaring `var x:Int` and `{var x:Int}` accepts `var x:Null<Int>` — so
+	 * `comparableNominalOf` answers on its ARGUMENT rather than on the wrapper. Spelled here rather than
+	 * read off the grammar shape for the reason `MemberLookup.dynamicSupertypeRef` spells `Dynamic`: this
+	 * layer holds the index, not the plugin.
 	 */
 	private static final NULLABLE_WRAPPER_TYPE_NAME: String = 'Null';
 
@@ -132,7 +131,7 @@ final class StructuralTypes {
 	 * The write-restriction counterpart of `structuralConformanceForbidsFinal`: whether rewriting
 	 * `field` of `typeName` to a read-only property may break a structural unification. Narrower
 	 * by exactly one kind — a `(default, null)` field of function type DOES satisfy a structural
-	 * `function x():T` (measured), so only a structural `var x:T` pins it.
+	 * `function x():T`, so only a structural `var x:T` pins it.
 	 */
 	public inline function structuralConformanceForbidsWriteRestriction(typeName: String, field: String): Bool {
 		return structuralConformancePins(typeName, field, false);
@@ -336,10 +335,10 @@ final class StructuralTypes {
 	}
 
 	/**
-	 * The shared core of `structuralConformanceForbidsFinal` / `structuralConformanceForbidsWriteRestriction`:
-	 * whether some structure declares `field` in a way `typeName` could no longer satisfy after
-	 * the rewrite. `methodMemberPins` is the one axis the two callers differ on — a structural
-	 * METHOD member forbids `final` but tolerates `(default, null)`.
+	 * The shared core of `structuralConformanceForbidsFinal` /
+	 * `structuralConformanceForbidsWriteRestriction`: whether some structure declares `field` in a way
+	 * `typeName` could no longer satisfy after the rewrite. `methodMemberPins` is the one axis the two
+	 * callers differ on — a structural METHOD member forbids `final` but tolerates `(default, null)`.
 	 *
 	 * Two arms, both requiring `typeName` OR A SUBTYPE of it to declare the structure's WHOLE
 	 * member set (that is what makes the unification possible in the first place): the language's
@@ -375,7 +374,7 @@ final class StructuralTypes {
 	 * subtype arm is not optional: a subtype INHERITS the field under rewrite, so its own
 	 * conformance pins the declaration exactly as the owner's does — a `final` on a superclass
 	 * field is `Inconsistent setter for field x : ctor should be default` at the SUBTYPE's
-	 * unification site, where the same field as a `var` unifies (measured). `seen` stops a cycle
+	 * unification site, where the same field as a `var` unifies. `seen` stops a cycle
 	 * in the adjacency, which is built from simple names and can therefore hold one.
 	 */
 	private function familyDeclaresEveryMember(typeName: String, members: Array<StructureMember>, seen: Array<String>): Bool {
@@ -401,20 +400,18 @@ final class StructuralTypes {
 	}
 
 	/**
-	 * Whether `owner` could carry the structure member `want` — the two halves of a conformance
-	 * PROOF, in place of the name test this used to be.
+	 * Whether `owner` could carry the structure member `want` — the two halves of a conformance PROOF.
 	 *
 	 * First a POSITIVE proof that the member is declared at all (`declaredMemberClosure`, not
 	 * `!lacksMemberClosure`): the absence walk fails closed toward "cannot prove absent", so its
 	 * negation reads an unresolvable supertype as declaring EVERY member and any subclass of a
 	 * type outside the resolution scope conformed to any structure naming the field.
 	 *
-	 * Then a refutation on the two WRITTEN types, because a member set is not a unification. A
-	 * structure's MUTABLE field is INVARIANT — measured against the compiler on Haxe 4.3.7:
-	 * `{var x:Float}` rejects a class declaring `var x:Int`, `{var x:Base}` rejects `var x:Sub`
-	 * (a subtype is not enough), and `{var x:C}` for an abstract `C` with a `@:from Int` rejects
-	 * `var x:Int` (an implicit cast does not bridge a mutable field either). So two nominals that
-	 * differ REFUTE the unification, and no consumer of this predicate may pin on them.
+	 * Then a refutation on the two WRITTEN types, because a member set is not a unification. A structure's
+	 * MUTABLE field is INVARIANT: `{var x:Float}` rejects a class declaring `var x:Int`, `{var x:Base}`
+	 * rejects `var x:Sub` (a subtype is not enough), and `{var x:C}` for an abstract `C` with a `@:from
+	 * Int` rejects `var x:Int` (an implicit cast does not bridge a mutable field either). So two nominals
+	 * that differ REFUTE the unification, and no consumer of this predicate may pin on them.
 	 *
 	 * Both halves only ever REMOVE a pin, and both fail toward keeping it: a member whose type
 	 * either side leaves unwritten, or whose spelling `comparableNominalOf` cannot close, still
@@ -438,34 +435,24 @@ final class StructuralTypes {
 	 *
 	 * Four spellings are open by construction. A type PARAMETER of the declaring type binds to
 	 * whatever the unification site supplies. `Dynamic` unifies with everything. `Null<T>` is
-	 * transparent for this question (measured: `{var x:Null<Int>}` accepts `var x:Int` and the
-	 * reverse), so the wrapper is stripped and its argument answered instead.
+	 * transparent for this question (`{var x:Null<Int>}` accepts `var x:Int` and the reverse), so
+	 * the wrapper is stripped and its argument answered instead. And an ANONYMOUS-STRUCTURE nominal
+	 * is open on the STRUCTURE side: two differently-named anon typedefs of the same shape DO unify
+	 * (`{var x:Shape}` accepts `var x:Shape2`), so comparing anon nominals by NAME would refute a
+	 * unification the compiler performs. Mutable-field invariance still holds THROUGH such a field —
+	 * `{var x:{a:Int}}` rejects a class declaring `var x:D` for a `D` that declares `a:Int` — so the
+	 * class side is not what is open here.
 	 *
-	 * And an ANONYMOUS-STRUCTURE nominal is open too, though not for the reason this doc gave for
-	 * four slices. Measured on 4.3.7, one variable at a time:
-	 * `{var x:{a:Int}}` REJECTS a class declaring `var x:D` for a `D` that declares `a:Int` —
-	 * mutable-field invariance holds here too, so a class does NOT unify into a structural field.
-	 * What is open is the STRUCTURE side: two differently-named anon typedefs of the same shape DO
-	 * unify (`{var x:Shape}` accepts `var x:Shape2`), so comparing anon nominals by NAME would
-	 * refute a unification the compiler performs. Narrowing this to refute only against a provably
-	 * non-structural other side was priced and declined: the loosest possible version — refuting on
-	 * the anon nominal's own name — moves 0 findings on this tree and 0 on the Pony fork.
+	 * A plain `typedef A = C` alias is FOLLOWED, not refused: `{var x:MyInt}` with
+	 * `typedef MyInt = Int` accepts `var x:Int`, so comparing the written spellings would refute a
+	 * unification the compiler performs. An alias whose target does not resolve, or one that
+	 * re-enters itself, is open.
 	 *
-	 * A plain `typedef A = C` alias is FOLLOWED, not refused: measured, `{var x:MyInt}` with
-	 * `typedef MyInt = Int` DOES accept `var x:Int`, so comparing the written spellings would
-	 * refute a unification the compiler performs. An alias whose target does not resolve, or one
-	 * that re-enters itself, is open.
-	 *
-	 * RESIDUAL, deliberately: a nominal that resolves NOWHERE in the index is treated as CLOSED
-	 * and compared by its written simple name. It is wrong for exactly one shape: an out-of-scope
-	 * `typedef` aliasing the other side's nominal, which would be followed if it resolved. Since S103 the
-	 * configured library half IS in the index, so the residual is the std path and whatever no
-	 * configured root reaches — and it is INERT there: flipping the default to OPEN moves 0
-	 * findings on this tree and 0 on the Pony fork, measured on the base engine and on the one
-	 * that types the `var` field form. The older reading of this branch — that the closed default
-	 * is what lets the refutation fire at all — was true before the library joined the index and
-	 * is not true now: every refutation that fires today has a resolved declaration on both
-	 * sides. `unit.check.StructuralConformanceProofTest#testUnresolvableStructureMemberTypeRefutes`
+	 * RESIDUAL, deliberately: a nominal that resolves NOWHERE in the index is treated as CLOSED and
+	 * compared by its written simple name. It is wrong for exactly one shape — an out-of-scope
+	 * `typedef` aliasing the other side's nominal, which would be followed if it resolved — which
+	 * leaves the std path and whatever no configured root reaches, the configured library half being
+	 * indexed. `unit.check.StructuralConformanceProofTest#testUnresolvableStructureMemberTypeRefutes`
 	 * pins the residual, so a future instance is a test change rather than a silent one.
 	 */
 	private function comparableNominalOf(typeSource: String, host: ResolvedType, seen: Array<String>): Null<String> {
@@ -497,7 +484,7 @@ final class StructuralTypes {
  * `memberCouldUnify` then does not apply and only the positive proof runs.
  */
 typedef StructureMember = {
-	/** The member's name — the only half the old name-set test used. */
+	/** The member's name. */
 	var name: String;
 
 	/** The member's VERBATIM declared type source, or null when the structure spells none. */

@@ -129,15 +129,15 @@ final class MemberBranchScan {
 	 * collision question every member-creating op asks, in one place: it lived as three byte-identical
 	 * private copies, each blind to guarded members and so each able to introduce a duplicate.
 	 *
-	 * ANY branch is the whole point, and it is deliberately not relaxed to "any branch that could
-	 * coexist with the caller's". Callers read a `true` as a REFUSAL, so being generous here costs a
-	 * rare rename and being precise costs a rewrite that does not compile. Two shapes make the
-	 * precise version harder than it looks: independent regions can BOTH be defined (`#if A f #end
-	 * #if B f #end` under both flags is `Duplicate class field declaration`, while `#if A f #else f
-	 * #end` compiles either way), and a region NESTED inside a branch is not exclusive with that
-	 * branch either — only sibling branches of one region are. Measured on anyparse src and TM src:
-	 * the independent-region shape occurs zero times, and the 13 same-name branch pairs that do occur
-	 * were written by hand rather than produced by an op — so the relaxation has no demand to serve.
+	 * ANY branch is the whole point, and it is deliberately not relaxed to "any branch that could coexist
+	 * with the caller's". Callers read a `true` as a REFUSAL, so being generous here costs a rare rename
+	 * and being precise costs a rewrite that does not compile. Two shapes make the precise version harder
+	 * than it looks: independent regions can BOTH be defined (`#if A f #end #if B f #end` under both
+	 * flags is `Duplicate class field declaration`, while `#if A f #else f #end` compiles either way),
+	 * and a region NESTED inside a branch is not exclusive with that branch either — only sibling
+	 * branches of one region are. On real trees the independent-region shape does not occur, and the
+	 * same-name branch pairs that do were written by hand rather than produced by an op — so the
+	 * relaxation has no demand to serve.
 	 */
 	public static function declaresMemberNamed(
 		decl: TypeDeclMatch, shape: RefShape, source: String, name: String, regions: () -> Array<LexRegion>
@@ -421,8 +421,8 @@ typedef MemberBranchSeams = {
  * returns a bare object literal, so the type parameter binds to the plain anon `{ nodes,
  * certain }` first and this typedef must unify INTO it. A `final` field lowers to a `never`
  * setter and cannot (`Inconsistent setter for field certain : never should be default`).
- * Measured with one variable, same source, target swapped: `--jvm` rejects it, `-js` and
- * `-neko` accept it. `final` in a structure typedef is fine anywhere the expected type is
+ * One variable, same source, target swapped: `--jvm` rejects it while `-js` and `-neko`
+ * accept it. `final` in a structure typedef is fine anywhere the expected type is
  * written at the literal — see `docs/testing.md` § "The core stays target-independent".
  */
 private typedef MemberRun = {

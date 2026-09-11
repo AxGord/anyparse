@@ -32,9 +32,8 @@ final class Uses {
 	 *
 	 * `includeQualified` widens the match to a QUALIFIED spelling of the same
 	 * simple name. `pkg.Mod.T` reaches the tree as ONE node whose `name` is the
-	 * whole dotted string, so an exact compare never sees it — and a deadness
-	 * census built on that answer calls a live sub-module type dead (measured:
-	 * eleven of them, deleted, `Type not found` in six modules). Report walkers
+	 * whole dotted string, so an exact compare never sees it — and a deadness census built on that answer
+	 * calls a live sub-module type dead, so deleting one leaves `Type not found` behind. Report walkers
 	 * (`uses` / `mentions` / `blast`) pass `true`.
 	 *
 	 * REWRITERS MUST NOT. Renaming `T` has to splice the last segment of

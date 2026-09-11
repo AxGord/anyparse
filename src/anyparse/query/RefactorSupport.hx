@@ -118,24 +118,24 @@ final class RefactorSupport {
 	 * else null (no index reached the call at all — the caller falls back to the single file it holds).
 	 *
 	 * Deliberately gated on `hasDeclaredResolutionScope`, NOT on `hasAnyResolutionScope` the way
-	 * `resolutionIndexOf` beside it is. The proofs this index feeds are name-keyed rather than type-resolved, so a SIMPLE-NAME
-	 * coincidence with a std type decides them: an owner whose simple name collides with a std type
-	 * that HAS subtypes reads as unconfined on that coincidence alone. The direction is safe — an
-	 * unconfined member is kept, its rename refused, its parameter left alone — so the hazard costs
-	 * usefulness rather than correctness, which is exactly why it must not happen by ACCIDENT. A
-	 * DECLARED library is a different matter: the project chose it, and a file the run does not lint
-	 * can legitimately be where the reference lives.
+	 * `resolutionIndexOf` beside it is. The proofs this index feeds are name-keyed rather than
+	 * type-resolved, so a SIMPLE-NAME coincidence with a std type decides them: an owner whose simple name
+	 * collides with a std type that HAS subtypes reads as unconfined on that coincidence alone. The
+	 * direction is safe — an unconfined member is kept, its rename refused, its parameter left alone — so
+	 * the hazard costs usefulness rather than correctness, which is exactly why it must not happen by
+	 * ACCIDENT. A DECLARED library is a different matter: the project chose it, and a file the run does not
+	 * lint can legitimately be where the reference lives.
 	 *
-	 * Read the gate for what it does and not for what its name suggests, because the obvious reading
-	 * is wrong: it does NOT keep the std out of the returned index. `LintCommand.readResolutionLibrary`
-	 * appends the std to the SAME scope as the declared roots and libs, so a project that declares
-	 * anything gets the std in here too. What the gate refuses is a scope that exists ONLY because a
-	 * std was discovered — a project that declared nothing keeps the report index. The narrower
-	 * `resolutionProjectSourcesOf` below is the seam for a proof that must not admit third-party sources at all — a
-	 * FIELD-WRITE proof, and only that. T868 asked whether a name-keyed REFLECTION question belongs there too and the
-	 * answer is no: both such sites now go through `check/ReflectionScan.scopeFiles`, which unions `resolutionSourcesOf`.
-	 * Measured on `CrossScopeSoundnessTest.placementDivergences`, the narrow seam licensed one edit the wide one refuses
-	 * — `unused-private` DELETING a member a reflective string in the library half of the same declared scope still names.
+	 * Read the gate for what it does and not for what its name suggests, because the obvious reading is
+	 * wrong: it does NOT keep the std out of the returned index. `LintCommand.readResolutionLibrary`
+	 * appends the std to the SAME scope as the declared roots and libs, so a project that declares anything
+	 * gets the std in here too. What the gate refuses is a scope that exists ONLY because a std was
+	 * discovered — a project that declared nothing keeps the report index. The narrower
+	 * `resolutionProjectSourcesOf` below is the seam for a proof that must not admit third-party sources at
+	 * all — a FIELD-WRITE proof, and only that; a name-keyed REFLECTION question does NOT belong there, and
+	 * both such sites go through `check/ReflectionScan.scopeFiles`, which unions `resolutionSourcesOf`
+	 * (`CrossScopeSoundnessTest.placementDivergences` prices the difference: the narrow seam licenses an
+	 * edit the wide one refuses).
 	 *
 	 * What BOTH seams answer on a project declaring `resolutionLibs` and no `resolutionRoots` is nothing
 	 * of the project: `projectRoots` is empty, so the narrow seam returns null, and this one returns
@@ -144,13 +144,13 @@ final class RefactorSupport {
 	 * `CrossScopeSoundnessTest.LIBS_ONLY_REGRESSIONS` prices what it costs.
 	 *
 	 * FOUR call sites, and they fail DIFFERENTLY on the narrow report index, which is why each asks
-	 * for this one. `UnusedPrivate.run` feeds `violationFor`, which reports a live member dead (S177),
-	 * and `UnusedPrivate.fix` feeds `referencedElsewhere`, the zero-occurrence proof that lifts a
+	 * for this one. `UnusedPrivate.run` feeds `violationFor`, which otherwise reports a live member
+	 * dead, and `UnusedPrivate.fix` feeds `referencedElsewhere`, the zero-occurrence proof that lifts a
 	 * `#if`-carrying file's whole-file veto. The other two WRITE: `UnusedParameter.run` raises the
 	 * finding to `Warning`, and `Warning` is what removes a parameter whose cross-file callers the
 	 * proof never saw; `Naming.fix` takes ONE index and feeds it to TWO proofs — `RenameRefusal.of`,
-	 * which otherwise lets a single-file rename orphan a cross-file reference to the old name, and
-	 * `reflectionNamesInOtherFiles` (S180), which otherwise never visits the file whose
+	 * which otherwise lets a single-file rename orphan a cross-file reference to the old
+	 * name, and `reflectionNamesInOtherFiles`, which otherwise never visits the file whose
 	 * `Reflect.field(x, 'name')` the rename is about to break. That sharing is why the arm cutting the
 	 * confinement half has to cut the ARGUMENT rather than the local.
 	 */
@@ -184,11 +184,12 @@ final class RefactorSupport {
 	 * `resolutionIndexOf`: the implicit std-only scope declares no roots, so it can only ever answer
 	 * null here anyway, and asking the narrow predicate says why in the code.
 	 *
-	 * TWO consumers left, and both are FIELD-WRITE proofs (`prefer-final-public-field`, `prefer-read-only-field`). The third
-	 * used to be `UnusedPrivate`'s reflection gate, asking a name-keyed question — which files could hold a `Reflect.field(x,
-	 * 'name')` this deletion would break — and T868 moved it out. The argument above does not reach that question: a
-	 * reflective string names no TYPE, so a haxelib can spell a project member without spelling the project, and the exclusion
-	 * a write proof earns a reflection proof does not. Both name-keyed sites now read `check/ReflectionScan.scopeFiles`.
+	 * TWO consumers left, and both are FIELD-WRITE proofs (`prefer-final-public-field`,
+	 * `prefer-read-only-field`). It is deliberately NOT the seam for `UnusedPrivate`'s reflection gate,
+	 * which asks a name-keyed question — which files could hold a `Reflect.field(x, 'name')` a deletion
+	 * would break. The argument above does not reach that question: a reflective string names no TYPE, so a
+	 * haxelib can spell a project member without spelling the project, and the exclusion a write proof
+	 * earns a reflection proof does not. Both name-keyed sites now read `check/ReflectionScan.scopeFiles`.
 	 */
 	public static inline function resolutionProjectSourcesOf(plugin: GrammarPlugin): Null<Array<{ file: String, source: String }>> {
 		final host: Null<SymbolIndexHost> = plugin is SymbolIndexHost ? cast plugin : null;
@@ -556,23 +557,22 @@ final class RefactorSupport {
 	 *
 	 * COMMENTS in the gap are skipped through the shared `commentRegionEnd` scan, because a `(` written
 	 * inside one cannot be a parameter list. Without that, a block comment or a trailing line comment
-	 * between the annotation and the body carried the whole function out of the proof — measured on
-	 * both, each a silent refusal.
+	 * between the annotation and the body carries the whole function out of the proof, silently.
 	 *
-	 * A conditional-compilation directive needs no such arm: probed on `function f(): Colour #if
-	 * (myflag) return X; #else return X; #end`, the conditional BODY node opens AT the `#if`, so the
+	 * A conditional-compilation directive needs no such arm: in `function f(): Colour #if (myflag)
+	 * return X; #else return X; #end` the conditional BODY node opens AT the `#if`, so the
 	 * directive and its parentheses fall inside the body rather than in the gap. Metadata behaves the
 	 * same way — `@:meta("(")` before the body opens at the `@`.
 	 *
-	 * Every OTHER unknown is answered `false`, which is the direction both callers want: a comment
-	 * that does not close before the body, an offset pair that arrives reversed, a `bodyStart` past
-	 * the end of the source. That keeps a `(` the scan cannot attribute from ever reading as absent,
-	 * and it bounds the scan to the window it was handed. Note what the arm does NOT buy: a comment
-	 * can only ever flip a RETURN-type slot, never a constraint slot, because a constraint's `(`
-	 * precedes any comment that could follow it. And this project's own writer refuses to round-trip
-	 * a comment in that gap at all ("the writer round trip would drop the comment"), so the shapes
-	 * the arm accepts are ones no anyparse tool could have produced — a real writer gap, recorded
-	 * here because it is what makes the arm look unreachable on this tree.
+	 * Every OTHER unknown is answered `false`, which is the direction both callers want: a comment that
+	 * does not close before the body, an offset pair that arrives reversed, a `bodyStart` past the end of
+	 * the source. That keeps a `(` the scan cannot attribute from ever reading as absent, and it bounds the
+	 * scan to the window it was handed. Note what the arm does NOT buy: a comment can only ever flip a
+	 * RETURN-type slot, never a constraint slot, because a constraint's `(` precedes any comment that could
+	 * follow it. And this project's own writer refuses to round-trip a comment in that gap at all ("the
+	 * writer round trip would drop the comment"), so the shapes the arm accepts are ones no anyparse tool
+	 * could have produced — a real writer gap, recorded here because it is what makes the arm look
+	 * unreachable.
 	 */
 	public static function isReturnTypeSlot(source: String, typeEnd: Int, bodyStart: Int): Bool {
 		if (typeEnd > bodyStart || bodyStart > source.length) return false;
@@ -613,25 +613,22 @@ final class RefactorSupport {
 	 * `Naming`s `CROSS_ALLOW_GRANT` gate), which is how a scan and the sentence describing it drift
 	 * apart.
 	 *
-	 * Comment, string and regex regions are masked — through `plugin.lexicalRegions`, the seam,
-	 * since S55; this was the last plugin-less `LexicalRegions` read with a single caller, and
+	 * Comment, string and regex regions are masked through `plugin.lexicalRegions`, the seam;
 	 * `SymbolIndex` carries the plugin the memo needs. Masking is a CORRECTNESS fix rather than a
 	 * tightening: a comment is not metadata, and no string literal becomes metadata on the
 	 * declarations of its own file.
 	 *
-	 * The raw scan reported a grant for 22 of anyparse's own 1501 files while
-	 * `apq meta '@:allow' src test` finds ZERO real ones — every hit was a doc comment or a test
-	 * fixture's source-code literal. Withheld findings read exactly like a clean tree, and in
-	 * `Naming` the same hit wrote a refusal sentence naming metadata the file did not carry (T159
-	 * could only reorder that sentence behind a more precise cause; masking removes it).
+	 * An unmasked scan reports a grant for dozens of this project's own files while `apq meta '@:allow' src
+	 * test` finds ZERO real ones — every hit a doc comment or a test fixture's source-code literal.
+	 * Withheld findings read exactly like a clean tree, and in `Naming` the same hit wrote a refusal
+	 * sentence naming metadata the file did not carry.
 	 *
 	 * COST, since consumers call this once per MEMBER: a file that does not mention the tag pays one
 	 * `indexOf` exactly as before, and a file that does pays a full lex per call — the answer is a
 	 * property of the FILE and is not memoised, because a process-scoped cache is what this project's
 	 * first invariant forbids and the run-scoped place for one is the consumer's own file loop. The
-	 * bound is (files mentioning the tag) x (their members): 22 files here, and the project lint gate
-	 * does not move (90.4s -> 91.4s over 1502 files, inside the run-to-run spread). Do not reuse this
-	 * in a hotter loop without hoisting it out of one.
+	 * bound is (files mentioning the tag) x (their members), which leaves the project lint gate inside
+	 * its own run-to-run spread. Do not reuse this in a hotter loop without hoisting it out of one.
 	 *
 	 * The one shape this cannot see is a `@:allow` a BUILD MACRO adds; a check whose action depends
 	 * on that gates on the macro separately (`TypeTraits.transitivelyCarriesBuildMacro`,
@@ -870,14 +867,14 @@ final class RefactorSupport {
 				// where the quote closes. A quote the scan attributes to some other region (a regex
 				// body) is not a literal opener and is stepped over as an ordinary byte.
 				//
-				// REACHABLE, against the reading that a header window — just past the type NAME to the
-				// body `{` — can hold no string: a `@:const` type parameter does. `class X extends
-				// B<"//">` parses here as a `ConstStringType`, and the whole program compiles and runs
-				// on 4.3.7. Drop this arm and the `//` inside the literal opens a line comment that
-				// eats the rest of the header, so `typeHeaderInsertOffset` answers the quote's offset
-				// and `extract-interface` writes its clause INTO the literal —
-				// `class X extends B<" implements IX//">`, which re-parses and passes every gate the op
-				// has. Pinned by `TriviaScanSliceTest.testTypeHeaderInsertOffsetStepsOverAHeaderStringLiteral`.
+				// REACHABLE, against the reading that a header window — just past the type NAME to the body
+				// `{` — can hold no string: a `@:const` type parameter does. `class X extends B<"//">`
+				// parses here as a `ConstStringType`, and the whole program compiles and runs on 4.3.7.
+				// Drop this arm and the `//` inside the literal opens a line comment that eats the rest of
+				// the header, so `typeHeaderInsertOffset` answers the quote's offset and
+				// `extract-interface` writes its clause INTO the literal — `class X extends B<" implements
+				// IX//">`, which re-parses and passes every gate the op has. Pinned by
+				// `TriviaScanSliceTest.testTypeHeaderInsertOffsetStepsOverAHeaderStringLiteral`.
 				final literal: Null<LexRegion> = LexicalRegions.regionAt(i, regions);
 				i = literal != null && literal.from == i ? literal.to : i + 1;
 				tokenEnd = i;

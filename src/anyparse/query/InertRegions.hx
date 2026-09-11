@@ -15,8 +15,8 @@ import anyparse.runtime.Span;
  * the scan report FEWER references, and there a missed reference DELETES or REBINDS a binding, so
  * the raw over-counting scan is what protects them. That reasoning holds for the LITERAL half
  * only: `Type.resolveClass('Foo')` reaches a type through a string, and nothing else sees it. It
- * does not hold for the comment half, and `unused-import` masks comments on its own since
- * 2026-08-27 (see its class doc for the measurement). That split is why this stays a caller-owned
+ * does not hold for the comment half, and `unused-import` masks comments on its
+ * own (see its class doc for why). That split is why this stays a caller-owned
  * mask rather than a change to `referencedInRange`: each consumer decides which of the two inert
  * sources it can afford to ignore.
  *
@@ -43,8 +43,8 @@ final class InertRegions {
 	 * literal only ever costs a refusal. A null `shape` yields the same half for the same reason.
 	 *
 	 * Both the regions and the shape come from the caller because both are the GRAMMAR's
-	 * (`GrammarPlugin.lexicalRegions` / `GrammarPlugin.refShape`) — this class is grammar-agnostic,
-	 * never picks a lexer and, since S188, no longer spells a ctor name of one grammar either. The
+	 * (`GrammarPlugin.lexicalRegions` / `GrammarPlugin.refShape`) — this class is
+	 * grammar-agnostic, never picks a lexer and spells no ctor name of one grammar either. The
 	 * three vocabularies it used to hardcode are `interpolatingStringKinds`,
 	 * `inertTextLiteralKinds` and `stringInterpTextKind` + `stringInterpInertSegmentKinds`.
 	 */

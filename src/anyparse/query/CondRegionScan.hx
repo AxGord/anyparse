@@ -29,10 +29,9 @@ final class CondRegionScan {
 	 * `Conditional`, an expression `ConditionalExpr`, or one of the raw-capture splices.
 	 *
 	 * `RefShape.conditionalRegionKinds` is the whole vocabulary, and the grammar DERIVES it
-	 * (see that field). Until S175 this function spelled three Haxe kinds inline — two exact
-	 * names and a `CondSplice` prefix — inside a core that must not know a grammar's ctor
-	 * names: the same family then had two sources of truth, of which only the other one, the
-	 * shape, a grammar could override. The prefix half also carried the defect the sibling
+	 * (see that field). Spelling the Haxe kinds inline here would put a grammar's ctor names inside a
+	 * core that must not know them, and give the family two sources of truth of which only the other
+	 * one — the shape — a grammar could override. The prefix half also carried the defect the sibling
 	 * `isOpaqueCondRegionKind` documents, one convention-breaking ctor away from silence.
 	 *
 	 * The superset relation is load-bearing rather than incidental: everything opaque IS a
@@ -51,20 +50,18 @@ final class CondRegionScan {
 	 * `#if … #end` region is not a balanced subtree in its position — the fail-closed gate
 	 * `opaqueCondRegions` walks with.
 	 *
-	 * `RefShape.opaqueCondRegionKinds` holds EXACT ctor names, and no grammar writes them: the
-	 * macro derives them from the raw-capture TERMINALS the grammar marks. That is what the
-	 * two earlier spellings of this field could not do. A hand-written list of ten names went
-	 * stale by three in two days — `rename` then rewrote a declaration and left its reference
-	 * inside `return #if nodejs target; #else 2; #end` on the old name, `Unknown identifier :
-	 * target` under `-D nodejs`, no diagnostic, for eighteen days. Reading the list as ctor-name
-	 * PREFIXES closed those three by making the FAMILY the unit, and left a narrower hole of
-	 * the same shape: a ctor named outside the convention. Two already were, and the pin
-	 * guarding the list checked the same convention, so it could not see a third.
+	 * `RefShape.opaqueCondRegionKinds` holds EXACT ctor names, and no grammar writes them: the macro
+	 * derives them from the raw-capture TERMINALS the grammar marks. That is what the two earlier
+	 * spellings of this field could not do. A hand-written list goes stale the moment the grammar gains a
+	 * raw-capture ctor — `rename` then rewrites a declaration and leaves its reference inside `return #if
+	 * nodejs target; #else 2; #end` on the old name, `Unknown identifier : target` under `-D nodejs`,
+	 * with no diagnostic. Reading the list as ctor-name PREFIXES makes the FAMILY the unit and leaves a
+	 * narrower hole of the same shape: a ctor named outside the convention, which the pin guarding the
+	 * list cannot see either, since it checks that same convention.
 	 *
-	 * Measured, by renaming `CondSpliceReturnStmt` to `GuardedReturnStmt` and changing nothing
-	 * else: under the prefix list the reproducer above went from a loud refusal to `apq rename:
-	 * wrote probe/Probe.hx`, exit 0; under this one the refusal is unchanged, because the ctor
-	 * still holds an `HxCondSpliceClosedRegion` and that is what the derivation reads.
+	 * Renaming one such ctor and changing nothing else turns the reproducer above from a loud
+	 * refusal into a silent rewrite under the prefix list, and leaves this one's refusal unchanged:
+	 * the ctor still holds an `HxCondSpliceClosedRegion`, and that is what the derivation reads.
 	 *
 	 * A list that is too WIDE costs almost nothing here, which is why erring that way is
 	 * right: it only decides which nodes the GAP analysis examines, and a ctor whose interior
@@ -248,13 +245,13 @@ final class CondRegionScan {
 	 * An arm's declaration may sit inside a NESTED region: the inner `#end` does not end the outer arm,
 	 * so the scan recurses and attributes it to the arm that holds it.
 	 *
-	 * A declaration AFTER the region is not this shape: it is in effect in every configuration from its
-	 * own position on, which is where the references that could differ live. Neither is a SEQUENTIAL
-	 * re-declaration in one block or in one arm — `ScopeFrame` resolves those by position, so a
-	 * reference past the second declaration answers the second, and `rename` / `extract-method` both
-	 * produce correct output. Measured on a loop body, a try/catch, a case branch, a second binding
-	 * shadowing a parameter, a closure declared between the two, a self-reading `var x = x + 1` and two
-	 * declarations inside ONE arm, each compiled under two `#if` configurations after the edit.
+	 * A declaration AFTER the region is not this shape: it is in effect in every configuration from its own
+	 * position on, which is where the references that could differ live. Neither is a SEQUENTIAL
+	 * re-declaration in one block or in one arm — `ScopeFrame` resolves those by position, so a reference
+	 * past the second declaration answers the second, and `rename` / `extract-method` both produce correct
+	 * output — for a loop body, a try/catch, a case branch, a second binding shadowing a parameter, a
+	 * closure declared between the two, a self-reading `var x = x + 1` and two declarations inside ONE arm
+	 * alike.
 	 *
 	 * One conservative edge: the arm test is `topLevelDeclaredName`, which descends a single-child
 	 * wrapper, so an arm whose only statement is a BLOCK declaring the name counts as declaring it even
@@ -326,15 +323,12 @@ final class CondRegionScan {
 	 * modifier siblings around it, so without this test `declGroupSpan` stopped its
 	 * walk-back at the region and the decl group began AFTER it.
 	 *
-	 * That truncation is silent and it changes MEANING: a reorder (`member-order
-	 * --fix`) moved the declaration out from under its own guard and left the guard
-	 * in place for whichever member slid up into that slot - measured on
-	 * `Pony/pony/TypedPool.hx`, where `#if (!flash && !debug) inline #end` stayed
-	 * put and the `public inline function get_isDestroy` that moved under it became
-	 * `inline inline` (`Duplicate access modifier inline`), and on
-	 * `Pony/pony/events/Listener0.hx`, where four `@:from #if ... extern #else
-	 * @:extern #end` prefixes were left behind and re-attached to unrelated
-	 * properties (`@:from cast functions must be static`).
+	 * That truncation is silent and it changes MEANING: a reorder (`member-order --fix`) moves the
+	 * declaration out from under its own guard and leaves the guard in place for whichever member slides
+	 * up into that slot - a `#if (!flash && !debug) inline #end` stays put and the `public inline
+	 * function` that moves under it becomes `inline inline` (`Duplicate access modifier inline`), and a
+	 * run of `@:from #if ... extern #else @:extern #end` prefixes is left behind and re-attached to
+	 * unrelated properties (`@:from cast functions must be static`).
 	 *
 	 * A region that declares a MEMBER is a different construct entirely - it owns that
 	 * member rather than qualifying the next one - so a region with a child that is
@@ -342,9 +336,8 @@ final class CondRegionScan {
 	 * (`COND_DECL_PREFIX_KEYWORD_KINDS`) is deliberately not folded here. Those keywords
 	 * had to be added: `#if (haxe_ver >= 4.2) enum #else @:enum #end` carries a bare
 	 * `EnumKw` in its true branch, so a modifier-and-annotation-only test read the region
-	 * as a declaration of its own and `move` cut the abstract out from under it, leaving
-	 * `enum` standing in front of the next declaration (`Unexpected @` on
-	 * `Pony/pony/text/TextTools.hx` after moving `AnsiForeground` out).
+	 * as a declaration of its own and `move` cut the abstract out from under it,
+	 * leaving `enum` standing in front of the next declaration (`Unexpected @`).
 	 */
 	public static function isConditionalModifierRegion(node: QueryNode): Bool {
 		return node.kind == MemberKinds.CONDITIONAL_REGION_KIND && node.children.length > 0

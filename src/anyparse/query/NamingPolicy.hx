@@ -38,8 +38,7 @@ enum abstract NamingCategory(String) {
  * It was a `Bool`, and five disjoint mechanisms reached every consumer as one `true`. A yes/no
  * is all the unused checks need, but the naming autofix WRITES a decline sentence from it, and
  * one sentence over five mechanisms is a sentence that is false for four of them: a
- * `private function new()` declined with `the member carries metadata` and carried none. Same
- * defect `13177bff` split out of the ledger, one level down and inside a single sentence.
+ * `private function new()` declined with `the member carries metadata` and carried none.
  *
  * Neutral, like `NamingCategory`: a grammar's projection decides which mechanism applies in ITS
  * language, and the check only maps the answer to a sentence. Backed by `String` for readable
@@ -106,8 +105,9 @@ typedef NamingRule = {
 }
 
 /**
- * The ordered list of `NamingRule`s the `naming` check applies to a file — the first rule whose category / modifier
- * selector matches a declaration governs it. Loaded from a project `checkstyle.json` or the grammar built-in default.
+ * The ordered list of `NamingRule`s the `naming` check applies to a file — the first rule whose category /
+ * modifier selector matches a declaration governs it. Loaded from a project `checkstyle.json` or the
+ * grammar built-in default.
  */
 typedef NamingPolicy = Array<NamingRule>;
 
@@ -200,9 +200,8 @@ typedef NamedDecl = {
  *
  * A project states these in `apqlint.json` (`frameworks`), because that is the only place the fact
  * lives: WHICH framework drives a tree is a property of the project, not of the language, and the
- * metadata that looks like it answers this does not. Measured on one Unity tree, 29 files carry a
- * lifecycle callback and 6 of them carry no `@:nativeGen` at all — `@:nativeGen` answers EMISSION,
- * never INVOCATION.
+ * metadata that looks like it answers this does not. On a real Unity tree, files carrying a lifecycle
+ * callback need not carry `@:nativeGen` at all — `@:nativeGen` answers EMISSION, never INVOCATION.
  *
  * `names` matches a member name EXACTLY (Unity's `Start` / `Update`, Godot's `_ready`); `prefixes`
  * matches a leading fragment (utest discovers a test method by its `test` / `spec` / `setup` /

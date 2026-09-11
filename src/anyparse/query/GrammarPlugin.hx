@@ -324,60 +324,41 @@ interface GrammarPlugin {
 }
 
 /**
- * Plugin-declared contract for `apq refs`. The walker reads these
- * slots and never inspects grammar-specific node types.
+ * Plugin-declared contract for `apq refs`. The walker reads these slots and never inspects
+ * grammar-specific node types.
  *
- * `identKind` is the `QueryNode.kind` value the plugin produces for a
- * bare identifier reference (e.g. `'IdentExpr'` for Haxe). Each such
- * node contributes its `name` slot as a candidate reference.
+ * `identKind` is the `QueryNode.kind` value the plugin produces for a bare identifier
+ * reference (`'IdentExpr'` for Haxe). Each such node contributes its `name` slot as a
+ * candidate reference.
  *
- * `declHostKinds` is the set of node kinds whose own `name` slot is a
- * binding declaration — variables, functions, parameters, types. The
- * walker emits each matching node as a `decl` hit. Decl-host detection
- * takes precedence over identifier detection when a kind appears in
- * both sets.
+ * `declHostKinds` is the set of kinds whose own `name` slot is a binding declaration —
+ * variables, functions, parameters, types. The walker emits each as a `decl` hit, and
+ * decl-host detection takes precedence over identifier detection when a kind is in both sets.
  *
- * `scopeKinds` is the set of node kinds that introduce a fresh lexical
- * scope (function body, block, for-loop, class body, …). The walker
- * pushes a new frame on entering one of these and pops on exit;
- * declarations inside the frame shadow same-named bindings in
- * enclosing frames. A kind can simultaneously be a scope-introducer,
- * a decl-host, and an ident — the three roles are orthogonal.
+ * `scopeKinds` is the set of kinds that introduce a fresh lexical scope (function body,
+ * block, for-loop, class body, …). The walker pushes a frame on entering one and pops on
+ * exit; declarations inside it shadow same-named bindings in enclosing frames. A kind can be
+ * a scope-introducer, a decl-host and an ident at once — the three roles are orthogonal.
  *
- * `writeParentKinds` is the set of node kinds whose first positional
- * child, when an `identKind` node, is a write target rather than a
- * read. The walker reclassifies that child's hit from `Read` to
- * `Write`. The "first positional child" rule is intentional and
- * implicit — sufficient for assign-style ctors in curly-brace
- * grammars (e.g. `Assign(left, right)`, `AddAssign(left, right)`)
- * where the LHS is the binding being modified. Nested LHS shapes
- * (`FieldAccess`, `IndexAccess`, paren-wrapped, etc.) deliberately
- * do not trigger a Write reclassification on inner identifiers —
- * those inner identifiers remain Reads, which matches semantic
- * expectation (`arr[i] = v` reads `arr` and `i`, writes `arr[i]`;
- * `obj.x = 1` reads `obj`, writes `obj.x`).
+ * `writeParentKinds` is the set of kinds whose FIRST POSITIONAL CHILD, when an `identKind`
+ * node, is a write target rather than a read; the walker reclassifies that child's hit from
+ * `Read` to `Write`. The first-positional-child rule is sufficient for assign-style ctors in
+ * curly-brace grammars (`Assign(left, right)`, `AddAssign(left, right)`), where the LHS is
+ * the binding being modified. A nested LHS shape (`FieldAccess`, `IndexAccess`,
+ * paren-wrapped) deliberately does NOT reclassify its inner identifiers, which is what the
+ * semantics say: `arr[i] = v` reads `arr` and `i` and writes `arr[i]`; `obj.x = 1` reads
+ * `obj` and writes `obj.x`. A compound assignment (`x += 1`) classifies as `Write` alone —
+ * `RefKind` carries one classification per hit, and the read-then-write reading folds into
+ * the `--writes` query intent.
  *
- * Phase 3.3 scope: write classification via parent-kind context.
- * Compound assignments (`x += 1`) are classified as `Write` —
- * `RefKind` carries one classification per hit; the read-then-write
- * semantics of compound assigns folds into the `--writes` query
- * intent. Plugin-contract enrichment for transparent-struct decl
- * sites (3.2b) layers on top without breaking this shape.
- *
- * `selfScopeDeclKinds` (Phase 3.2b-α) is the set of scope-introducer
- * kinds whose own `name` slot is a binding declared into THEIR OWN
- * scope frame — the iterator/parameter-on-the-scope-node pattern (Haxe
- * `for (i in xs) …`). Such a kind emits a `Decl` hit (self-bound, like
- * `declHostKinds`) but, unlike `declHostKinds`, the binding is visible
- * only *inside* the construct: a read of `i` after the loop does NOT
- * resolve to it. This is the opposite of `declHostKinds`, where the
- * name binds into the *enclosing* frame and is visible to siblings
- * (function / type names). A kind here must also appear in `scopeKinds`
- * (the walker only self-declares when it pushes a frame) and must NOT
- * appear in `declHostKinds` (the two bind into different frames).
- * Catch-clause and lambda-parameter bindings are NOT covered — they
- * sit on transparent typedef-structs that carry no runtime span, so a
- * correct per-clause/per-param binding span is deferred (3.2b-β).
+ * `selfScopeDeclKinds` is the set of scope-introducer kinds whose own `name` slot binds into
+ * THEIR OWN frame — the iterator-on-the-scope-node pattern (Haxe `for (i in xs) …`). Such a
+ * kind emits a `Decl` hit like `declHostKinds`, but the binding is visible only INSIDE the
+ * construct: a read of `i` after the loop does not resolve to it. A kind here must also
+ * appear in `scopeKinds` (the walker self-declares only where it pushes a frame) and must NOT
+ * appear in `declHostKinds` (the two bind into different frames). Catch-clause and
+ * lambda-parameter bindings are NOT covered: they sit on transparent typedef-structs carrying
+ * no runtime span, so no correct per-clause / per-param binding span is derivable here.
  */
 @:nullSafety(Strict)
 typedef RefShape = {
@@ -389,10 +370,9 @@ typedef RefShape = {
 	 * and the inner form of the `final` spelling. A member operation asks THIS, never
 	 * `declHostKinds`, when its question is "does this module bind that NAME to a value": that
 	 * vocabulary names every TYPE-declaration kind, and a module-level type does not shadow a
-	 * value. Compiled and run on 4.3.7 — with `enum abstract Colour { var File = 3; }` and a reader
-	 * module declaring `class File`, `function pick(): Colour return File;` prints 3, so refusing
-	 * that file loses a correct rewrite. Every type spelling was probed the same way (`class`,
-	 * `interface`, `enum`, `typedef`, `abstract`, `enum abstract`) and all six are inert.
+	 * value. A module-level TYPE is inert here in every spelling: with `enum abstract Colour { var
+	 * File = 3; }` and a reader module declaring `class File`, `function pick(): Colour return
+	 * File;` still yields the enum value, so refusing that file would lose a correct rewrite.
 	 *
 	 * A module-level VALUE does shadow, in both spellings: `var same: Colour` and `final same:
 	 * Colour` each beat the expected type. The `final` one is why `VarForm` is listed rather than
@@ -449,21 +429,18 @@ typedef RefShape = {
 	 * KNOWN GAP, deliberately left open. A declaration written as the BRACE-LESS body of an
 	 * `if` / `while` / `do` / `try` (and of an `else` — see `OrphanElseStmt`) still binds into
 	 * the enclosing frame, where the compiler scopes it to the construct. Wrong, and harmless:
-	 * such a declaration is dead by construction — it IS the whole body, so nothing can read it
-	 * — and the construct occurs ZERO times in ~20 300 real Haxe files (TM 805, this repo 691,
-	 * haxelib 16 182, Haxe std 2 624).
+	 * such a declaration is dead by construction — it IS the whole body, so
+	 * nothing can read it — and the construct does not occur in real Haxe source.
 	 *
-	 * Both mechanisms that would close it cost more than the defect. Listing the constructs in
-	 * `scopeKinds` widens a vocabulary ~15 checks read as "lexical container of a declaration",
-	 * and merges the two arms of `if (c) var a = 1; else var a = 2;` into one frame. Capping the
-	 * body slot inside `Refs` was built and measured: on the same ~20 300 files it fired twice,
-	 * both times WRONGLY — a real braced `untyped { … }` block (`UntypedBlockStmt`, absent from
-	 * `scopeKinds`) had its declarations split one frame apart (`std/js/_std/Reflect.hx`,
-	 * `std/flash/_std/haxe/Resource.hx`), and a multi-statement `#if` region in a body slot took
-	 * the whole region as the body, because the plain tree folds every branch into ONE
-	 * `Conditional` with no branch boundary to take the first statement of. The second has no fix
-	 * at this layer; it needs the branch-aware projection, whose reachability from `Refs.find` on
-	 * the `rename` / `CrossRename` / CLI paths is unestablished.
+	 * Both mechanisms that would close it cost more than the defect. Listing the constructs in `scopeKinds`
+	 * widens a vocabulary a dozen checks read as "lexical container of a declaration", and merges the two
+	 * arms of `if (c) var a = 1; else var a = 2;` into one frame. Capping the body slot inside `Refs` was
+	 * built, and every site it fired on was WRONG — a real braced `untyped { … }` block
+	 * (`UntypedBlockStmt`, absent from `scopeKinds`) had its declarations split one frame apart, and a
+	 * multi-statement `#if` region in a body slot took the whole region as the body, because the plain tree
+	 * folds every branch into ONE `Conditional` with no branch boundary to take the first statement of. The
+	 * second has no fix at this layer; it needs the branch-aware projection, whose reachability from
+	 * `Refs.find` on the `rename` / `CrossRename` / CLI paths is unestablished.
 	 */
 	@:optional var positionScopedKinds: Array<String>;
 
@@ -511,8 +488,8 @@ typedef RefShape = {
 	 *  - REFERENCE ANALYSIS cannot see inside. A binding declared there may be used by a splice
 	 *    from anywhere, invisible to a source scan, so `unused-local` and its kin must not flag it.
 	 *  - A REWRITE inside changes the tree the program BUILDS, not the behaviour of the file it sits
-	 *    in — and the two are not the same edit. Measured: `macro switch x { case A | B: … }`
-	 *    reifies its label as ONE `EBinop(OpOr, …)` value while `case A, B:` reifies as TWO, and
+	 *    in — and the two are not the same edit. `macro switch x { case A | B: … }` reifies its
+	 *    label as ONE `EBinop(OpOr, …)` value while `case A, B:` reifies as TWO, and
 	 *    `default:` reifies as `ESwitch.edef` where `case _:` becomes another entry of `cases`. So a
 	 *    source-equivalent respelling silently hands a macro different data, with nothing rejecting
 	 *    the result. A finding there is also un-actionable even report-only: the reader cannot act
@@ -907,17 +884,13 @@ typedef RefShape = {
 	 * must refuse this one, while a check that only asks "is this a nested function scope"
 	 * must accept it.
 	 *
-	 * It exists because nothing else in this shape names it. `lambdaKinds` deliberately does
-	 * not list it, and the reason first written here - "a named literal's first child is its
-	 * NAME" - was never true of the Haxe projection: `function nn(a) …` projects as
-	 * `NamedFnExpr nn (Required a) (BlockBody …)`, the name on the node's own `name` slot and
-	 * the parameter at `children[0]`, exactly like every anonymous spelling. The REAL reason is
-	 * the one the consumers state: a named literal is not interchangeable with a lambda, because
-	 * eta-reducing it is a two-site rewrite and the name may be the only binding a self-recursive
-	 * body has. Before this entry a consumer asking "every function-value kind" had to hand-write
-	 * the spelling, and two of the five such consumers had simply forgotten it. Read it through
-	 * `RefactorSupport.nestedFunctionKinds`, never on its own.
-	 * Optional — a grammar with no named function literal leaves it unset.
+	 * It exists because nothing else in this shape names it, and `lambdaKinds` deliberately does not list
+	 * it: a named literal is not interchangeable with a lambda, because eta-reducing it is a two-site
+	 * rewrite and the name may be the only binding a self-recursive body has. The projection itself draws
+	 * no such line — `function nn(a) …` projects as `NamedFnExpr nn (Required a) (BlockBody …)`, the name
+	 * on the node's own `name` slot and the parameter at `children[0]`, exactly like every anonymous
+	 * spelling. Read it through `RefactorSupport.nestedFunctionKinds`, never on its own. Optional — a
+	 * grammar with no named function literal leaves it unset.
 	 */
 	@:optional var namedFnExprKind: String;
 
@@ -1253,12 +1226,11 @@ typedef RefShape = {
 	 * compiler oracle, so a rewrite it would break fails SILENTLY, where a Haxe consumer's would
 	 * fail loudly.
 	 *
-	 * `inline-constant` is the one caller: the value of an inlined constant is baked into every
-	 * read site, so a foreign write to the field it leaves behind stops being observed. The
-	 * measurement that scoped this to `inline` alone — `var` -> `final` and
-	 * `var` -> `var(default, null)` emit BYTE-IDENTICAL C# on a `@:nativeGen` class, so no gate
-	 * is warranted there — is recorded on `InlineConstant`. Optional; unset → no declaration is
-	 * foreign-facing, the right default for a grammar with no native-interop annotation.
+	 * `inline-constant` is the one caller: the value of an inlined constant is baked into every read site,
+	 * so a foreign write to the field it leaves behind stops being observed. What scopes this to `inline`
+	 * alone: changing `var` to `final`, or to `var(default, null)`, emits the same C# on a `@:nativeGen`
+	 * class, so no gate is warranted there; the detail is recorded on `InlineConstant`. Optional; unset →
+	 * no declaration is foreign-facing, the right default for a grammar with no native-interop annotation.
 	 */
 	@:optional var nativeInteropDeclMetaName: String;
 
@@ -1619,16 +1591,14 @@ typedef RefShape = {
 	 * production to the terminals it reaches. `HaxeQueryWalker.opaqueCondRegionKinds()` is that
 	 * output, and `HaxeQueryPlugin` hands it straight to this field.
 	 *
-	 * The two field spellings this replaces both failed the same way, in the fail-OPEN direction.
-	 * A hand-written list of ten `CondSplice*` names shipped 2026-08-18; the grammar gained THREE
-	 * more raw-capture ctors two days later, and for eighteen days `rename` rewrote declarations
-	 * while leaving their references inside each new shape untouched, with no diagnostic. Reading
-	 * the list as ctor-name PREFIXES (S167) closed those three and left the next one open: two
-	 * ctors already broke the naming convention, so a third breaker would be invisible to the
-	 * gate AND to the pin that guarded it, since the pin checked the same convention. Deriving
-	 * from the terminal has no convention to break — measured by RENAMING one ctor and nothing
-	 * else, which flipped the prefix gate from a loud refusal to a silent rewrite and leaves this
-	 * one unmoved.
+	 * Both spellings this replaces failed the same way, in the fail-OPEN direction. A hand-written list of
+	 * ctor names goes stale the moment the grammar gains another raw-capture ctor, and `rename` then
+	 * rewrites a declaration while leaving its references inside the new shape untouched, with no
+	 * diagnostic. Reading the list as ctor-name PREFIXES is no better: a ctor breaking the naming
+	 * convention is invisible to the gate AND to the pin guarding it, since the pin checks the same
+	 * convention. Deriving from the terminal has no convention to break — renaming one ctor and nothing
+	 * else flips the prefix gate from a loud refusal to a silent rewrite and leaves this derivation
+	 * unmoved.
 	 *
 	 * The structural conditional kind (`conditionalMemberKind`) is deliberately absent: it keeps
 	 * its guarded material as real children, which every consumer resolves. A kind here whose
@@ -1649,10 +1619,10 @@ typedef RefShape = {
 	 * is modelled — the `opaqueCondRegionKinds` SUPERSET, adding the balanced regions (Haxe
 	 * `Conditional`, `ConditionalExpr` and their per-position siblings).
 	 *
-	 * Read by `CondRegionScan.isConditionalKind`, the question a dozen checks and rewrites ask
-	 * before they descend, collect a span, or decide a statement completes normally. It was
-	 * three hard-coded Haxe spellings inside the grammar-agnostic core until this field existed —
-	 * two sources of truth for one family, of which only the other one a grammar could override.
+	 * Read by `CondRegionScan.isConditionalKind`, the question a dozen checks and rewrites ask before they
+	 * descend, collect a span, or decide a statement completes normally. Without it the grammar-agnostic
+	 * core would hard-code the Haxe spellings — two sources of truth for one family, of which only the
+	 * other could be overridden by a grammar.
 	 *
 	 * Derived, like its subset, from terminals the grammar marks: `@:condRegionCondition` names
 	 * the atom a directive's condition is captured as, and every conditional production carries
@@ -1729,12 +1699,12 @@ typedef RefShape = {
 	 * for it. `Dynamic<T>` is not member-transparent — EVERY field of it is typed `T`,
 	 * so unwrapping it to `T` and then looking `T.m` up would be wrong.
 	 *
-	 * Read ONLY where the question is which member a name resolves to, never to decide what is legal to DO with the
-	 * value: a `Null<Int>` is still not an `Int` for an arithmetic or ordered-comparison purpose. `null` is not a
-	 * value `<` orders, and what the raw comparison DOES with it is TARGET-SPECIFIC — measured on Haxe 4.3.7, `null
-	 * > 0` is `false` on js and `true` on `-cpp`. That the wrap and the flip happen to agree for a null `Null<Int>`
-	 * on js, `-cpp` and `--interp` alike settles nothing: the same probe has a null `String` operand DISAGREEING on
-	 * js and `--interp` while AGREEING on `-cpp`. Optional; unset disables the unwrap.
+	 * Read ONLY where the question is which member a name resolves to, never to decide what is legal to DO
+	 * with the value: a `Null<Int>` is still not an `Int` for an arithmetic or ordered-comparison purpose.
+	 * `null` is not a value `<` orders, and what the raw comparison DOES with it is TARGET-SPECIFIC: `null
+	 * > 0` is `false` on js and `true` on `-cpp`. That the wrap and the flip agree for a null `Null<Int>`
+	 * on js, `-cpp` and `--interp` alike settles nothing — a null `String` operand DISAGREES on js and
+	 * `--interp` while agreeing on `-cpp`. Optional; unset disables the unwrap.
 	 */
 	@:optional var memberTransparentWrapperTypeNames: Array<String>;
 
@@ -1859,9 +1829,9 @@ typedef RefShape = {
 	 * "nothing is tested, nothing can throw" purity fact — it is a transparent single-child wrapper.
 	 * `prefer-comprehension`'s `readEagerKinds` reads a separate one, that the wrapper evaluates its
 	 * child exactly once in place; see that check's own doc for why deriving either list from the
-	 * other would force a wrong answer on one side. Historically it was also the motivating example of a
-	 * LOAD-BEARING type annotation — `final t:T = cast e` is what gives the cast its result type —
-	 * but the annotation decision no longer consults this seam: every inlined local keeps its
+	 * other would force a wrong answer on one side. It is also the motivating example of a
+	 * LOAD-BEARING type annotation — `final t:T = cast e` is what gives the cast its result type
+	 * — but the annotation decision does not consult this seam: every inlined local keeps its
 	 * annotation as an ascription unless the target position provably restates it. Optional; unset
 	 * means the wrapper arm never fires (an unchecked cast falls through to the conservative
 	 * default) and costs that purity reach.
@@ -1914,16 +1884,15 @@ typedef RefShape = {
 	 * `HxStringLitSegment` run, the stretch between two interpolation triggers). Its `name` slot
 	 * carries the literal's raw CONTENT, never a symbol, so a consumer listing what a region
 	 * TOUCHES has to drop it by KIND: the content is arbitrary text and no test on the text can
-	 * tell a file name from an identifier. `apq cond --names` reported `Literal probe.hx` rows
-	 * among the declarations for exactly that reason — 795 / 900 / 1481 of them over `src` + `test`
-	 * for `nodejs` / `sys` / `macro`.
+	 * tell a file name from an identifier. `apq cond --names` reported
+	 * `Literal probe.hx` rows among the declarations for exactly that reason.
 	 *
 	 * Third of the segment triple, beside `stringInterpIdentKind` and `stringInterpBlockKind`, and the only
-	 * one of the three whose name is content rather than a reference. A grammar's non-interpolating string is
-	 * one terminal already named by `stringLiteralKinds`, so the same consumer drops it there — and
-	 * that pairing is what makes the two spellings of one literal answer alike, instead of the
-	 * double-quoted one being kept out only by the quote marks its raw `name` happens to carry.
-	 * Optional; unset leaves such a consumer reporting literal content.
+	 * one of the three whose name is content rather than a reference. A grammar's non-interpolating string
+	 * is one terminal already named by `stringLiteralKinds`, so the same consumer drops it there — and that
+	 * pairing is what makes the two spellings of one literal answer alike, instead of the double-quoted one
+	 * being kept out only by the quote marks its raw `name` happens to carry. Optional; unset leaves such a
+	 * consumer reporting literal content.
 	 */
 	@:optional var stringInterpTextKind: String;
 
@@ -2044,11 +2013,12 @@ typedef RefShape = {
 	 * String-literal node kinds (Haxe `SingleStringExpr` / `DoubleStringExpr`) — every
 	 * kind whose whole span IS a string literal, however the grammar spells the quotes.
 	 *
-	 * Written for `unchecked-nullable`, which skips a numeric-operator node bearing one as an operand (`+` there is string
-	 * concatenation, `n + "x"`, not a numeric use), and read by 38 sites across 23 files by the time anyone checked — so treat it
-	 * as the general seam it became, not as that one check's carve-out. Two readings it now has to serve at once: "this operand
-	 * is a string" and, paired with `stringInterpTextKind`, "this node's name slot carries literal TEXT and not a symbol".
-	 * Optional; unset makes each consumer fall back to its own default, which for `unchecked-nullable` is losing the carve-out.
+	 * Written for `unchecked-nullable`, which skips a numeric-operator node bearing one as an operand (`+`
+	 * there is string concatenation, `n + "x"`, not a numeric use), and read widely across the check layer
+	 * since — so treat it as the general seam it became, not as that one check's carve-out. Two readings it
+	 * now has to serve at once: "this operand is a string" and, paired with `stringInterpTextKind`, "this
+	 * node's name slot carries literal TEXT and not a symbol". Optional; unset makes each consumer fall
+	 * back to its own default, which for `unchecked-nullable` is losing the carve-out.
 	 */
 	@:optional var stringLiteralKinds: Array<String>;
 
@@ -2101,13 +2071,12 @@ typedef RefShape = {
 	 * `DoubleStringExpr` => `"`. Its keys are `stringLiteralKinds` minus
 	 * `interpolatingStringKinds`: a segmented literal's own name slot holds nothing.
 	 *
-	 * Read by `Lit` so a content query answers the two spellings of one literal ALIKE.
-	 * `apq lit needle` over a directory holding `'needle'` and `"needle"` printed the
-	 * single-quoted hit alone and said nothing about the other — the auto-widen that would have
-	 * found it fires only at ZERO hits — and `--exact` could never match the quoted spelling at
-	 * all. The delimiter cannot be guessed from the kind name, which is why this is a map and not
-	 * a key set: a leading-and-trailing-non-identifier-character rule is the same spelling
-	 * heuristic that hid `HexLit` from two other lists.
+	 * Read by `Lit` so a content query answers the two spellings of one literal ALIKE. Without it, `apq lit
+	 * needle` over a directory holding `'needle'` and `"needle"` prints the single-quoted hit alone — the
+	 * auto-widen that would find the other fires only at ZERO hits — and `--exact` can never match the
+	 * quoted spelling. The delimiter cannot be guessed from the kind name, which is why this is a map and
+	 * not a key set: a leading-and-trailing-non-identifier-character rule is the same spelling heuristic
+	 * that hid `HexLit` from two other lists.
 	 *
 	 * Optional; unset makes every string kind's name slot read verbatim, quotes and all, which is
 	 * the behaviour before this field existed.
@@ -2178,11 +2147,8 @@ typedef RefShape = {
 	 * by SEMANTICS — and no predicate over that signature derives it: parametricity admits
 	 * `function f<T>(x: Null<T>): Null<T> return null;` with the same type. The sound
 	 * alternative, gating on a `@:nullSafety` annotation through
-	 * `TypeResolver.isProvablyNonNull`, needs the mode active at BOTH ends and moved 0 of the
-	 * 6 real sites — all four host files carry none at all. So the honest cut is the name.
-	 * Measured: 5 findings to 2 on this project (three `opt.<field> = …` writes after
-	 * `Reflect.copy(HaxeFormat.instance.defaultWriteOptions)`) and 27 to 25 on the Pony fork,
-	 * with nothing added anywhere.
+	 * `TypeResolver.isProvablyNonNull`, needs the mode active at BOTH ends and moves none
+	 * of the real sites, whose host files carry none at all. So the honest cut is the name.
 	 */
 	@:optional var nullableFlowExcludedCalls: Array<String>;
 
@@ -2965,7 +2931,7 @@ typedef RefShape = {
 	 *
 	 * The enumeration is an AUDIT, and must stay one. A name-convention widening
 	 * (`kind.endsWith('Lit')`) stood in for the literal half of this vocabulary and readmitted
-	 * two allocating literals the grammar declares no constant; the measured cost is in
+	 * two allocating literals the grammar declares no constant; the cost is recorded in
 	 * `LiteralClassificationTest`'s doc. So a grammar gaining a pure operator adds it HERE, and
 	 * a kind that is merely spelled like one stays out.
 	 *
@@ -3132,12 +3098,11 @@ typedef RefShape = {
 	 * arrow lambdas, the block-like expressions whose trailing branch is open
 	 * (`if … else`, `for`, `while`, `try … catch`) and the ternary's else branch.
 	 *
-	 * Read by `redundant-parens` for EVERY precedence-gated slot — the three opt-in
-	 * operand arms and the shipped, default-on ternary condition — because all four judge
-	 * the content's root kind alone: `a + (b * untyped c) - d` has an arithmetic root over
-	 * a tail that swallows the `- d` (measured against the compiler: 9 with the pair, 7
-	 * without). The DELIMITED slots do not need it; their own separator bounds the capture,
-	 * which is what the narrower `separatorGreedyExprKinds` is for.
+	 * Read by `redundant-parens` for EVERY precedence-gated slot — the three opt-in operand arms and the
+	 * shipped, default-on ternary condition — because all four judge the content's root kind alone: `a + (b
+	 * * untyped c) - d` has an arithmetic root over a tail that swallows the `- d`, so dropping the pair
+	 * changes the value. The DELIMITED slots do not need it; their own separator bounds the capture, which
+	 * is what the narrower `separatorGreedyExprKinds` is for.
 	 *
 	 * ERR INCLUSIVE. A kind wrongly listed costs a missed cleanup; a kind wrongly omitted
 	 * is a rewrite that changes the parse, and the tree-shape oracle CANNOT catch it —
@@ -3171,12 +3136,11 @@ typedef RefShape = {
 	 * follows, while the compiler binds it to the immediate primary, and the difference is
 	 * a compile error (`@:privateAccess (A.s * B.s) + 1` compiles, the bare form does not).
 	 *
-	 * NOT the same list as `parenRequiredHostKinds`, and deliberately narrower. That one
-	 * answers for a DIRECT paren child and holds statement hosts (`CaseBranch`, the
-	 * `switch` subjects) whose header ends in a hard token — nothing binds across a
-	 * `case … :`, so a pair further inside is ordinary. Reading this rule off that list
-	 * instead measurably over-suppressed: two corpus ternary conditions written as
-	 * `case _: (v <= 2) ? a : b;` stopped being reported. Optional, unset excludes nothing.
+	 * NOT the same list as `parenRequiredHostKinds`, and deliberately narrower. That one answers for a
+	 * DIRECT paren child and holds statement hosts (`CaseBranch`, the `switch` subjects) whose header ends
+	 * in a hard token — nothing binds across a `case … :`, so a pair further inside is ordinary. Reading
+	 * this rule off that list instead over-suppresses: a ternary condition written as `case _: (v <= 2) ? a
+	 * : b;` stops being reported. Optional, unset excludes nothing.
 	 */
 	@:optional var prefixAnnotationKinds: Array<String>;
 
@@ -3189,14 +3153,13 @@ typedef RefShape = {
 	 * child there is a second pair whose presence is a style choice), and the metadata
 	 * kinds (`MetaCall` arguments, a `MetaExpr` annotated expression).
 	 *
-	 * Read by `redundant-parens` for a DIRECT `parenKind` child and, for the metadata
-	 * kinds, along the LEFT EDGE of the annotated expression: this parser models `@:m`
-	 * as wrapping everything that follows, while the compiler binds it to the immediate
-	 * primary, so `@:privateAccess (a * b) + c` needs its pair to hold the annotation over
-	 * the multiplication (measured: the bare form fails with `Cannot access private
-	 * field`). That makes this list a CORRECTNESS gate for the shipped, default-on arms
-	 * rather than an operand-arm concern, so — unlike `parenOpaqueSubtreeKinds` — it is
-	 * read whether or not a project opted an arm in. Optional, unset excludes nothing.
+	 * Read by `redundant-parens` for a DIRECT `parenKind` child and, for the metadata kinds, along the LEFT
+	 * EDGE of the annotated expression: this parser models `@:m` as wrapping everything that follows, while
+	 * the compiler binds it to the immediate primary, so `@:privateAccess (a * b) + c` needs its pair to
+	 * hold the annotation over the multiplication (the bare form fails with `Cannot access private field`).
+	 * That makes this list a CORRECTNESS gate for the shipped, default-on arms rather than an operand-arm
+	 * concern, so — unlike `parenOpaqueSubtreeKinds` — it is read whether or not a project opted an arm in.
+	 * Optional, unset excludes nothing.
 	 */
 	@:optional var parenRequiredHostKinds: Array<String>;
 
@@ -3212,8 +3175,9 @@ typedef RefShape = {
 }
 
 /**
- * Plugin-declared contract for `apq meta`: `metaKinds` are the `QueryNode.kind` values a metadata annotation carries, and
- * `declHostKinds` the kinds that may host one. The meta walker reads these slots and never inspects grammar-specific node types.
+ * Plugin-declared contract for `apq meta`: `metaKinds` are the `QueryNode.kind` values a metadata
+ * annotation carries, and `declHostKinds` the kinds that may host one. The meta walker reads these slots
+ * and never inspects grammar-specific node types.
  */
 @:nullSafety(Strict)
 typedef MetaShape = {
@@ -3239,13 +3203,11 @@ typedef LayoutMetrics = {
  * everything `prefer-enum-abstract`'s autofix has to WRITE, so the check itself spells no
  * target syntax and a grammar that leaves the slot unset keeps the rule report-only.
  *
- * `head` is the declaration head that replaces the source's own `<keyword> <Name>`, with
- * `{name}` standing for the type's name and `{under}` for the underlying primitive the
- * constants share (Haxe: `enum abstract {name}({under}) to {under}`). The `to` clause is
- * part of the template rather than an option because it is what makes the conversion
- * source-compatible: without it every reference that flowed into a slot of the underlying
- * type stops compiling — measured at >= 22 sites in >= 17 files for ONE five-constant type,
- * against zero with it.
+ * `head` is the declaration head that replaces the source's own `<keyword> <Name>`, with `{name}` standing
+ * for the type's name and `{under}` for the underlying primitive the constants share (Haxe: `enum abstract
+ * {name}({under}) to {under}`). The `to` clause is part of the template rather than an option because it is
+ * what makes the conversion source-compatible: without it every reference that flowed into a slot of the
+ * underlying type stops compiling.
  *
  * `bodyOpen` is the character that opens a type body. The fix requires it to be the first
  * non-space character AFTER the type name, which is how it refuses a head carrying anything

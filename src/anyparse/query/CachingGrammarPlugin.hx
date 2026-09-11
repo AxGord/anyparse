@@ -33,13 +33,13 @@ import anyparse.query.StringFold.StringFoldSupport;
  * method delegates straight through; a parse that throws is not cached (a
  * skip-parse file re-parses per check, a negligible minority).
  *
- * Behind them sits ONE process-scoped tier, for the resolution LIBRARY only
- * (`SharedParseTier`): a fresh wrapper per `Cli.run` otherwise means re-parsing the
- * 200+ auto-discovered Haxe std files, plus every declared `resolutionRoots` /
- * `resolutionLibs` source, on every run in the process. Only the library half of a `ResolutionSources` ever enters it,
- * which is what bounds it — a `--fix` loop's per-pass rewritten report sources never do, and the nominal `LibrarySources`
- * type makes feeding it the report half a compile error rather than a convention. Same single-thread rule as the
- * instance caches; same content key, so a library file changed on disk misses.
+ * Behind them sits ONE process-scoped tier, for the resolution LIBRARY only (`SharedParseTier`): a fresh
+ * wrapper per `Cli.run` otherwise means re-parsing every auto-discovered Haxe std file, plus every declared
+ * `resolutionRoots` / `resolutionLibs` source, on every run in the process. Only the library half of a
+ * `ResolutionSources` ever enters it, which is what bounds it — a `--fix` loop's per-pass rewritten report
+ * sources never do, and the nominal `LibrarySources` type makes feeding it the report half a compile error
+ * rather than a convention. Same single-thread rule as the instance caches; same content key, so a library
+ * file changed on disk misses.
  *
  * Under all of them is the run-scoped PARSED-ROOT cache, the one thing the projection
  * caches above could not share: `parseFile`, `parseFileTypeRefs`, `spanTypeInfo` and
@@ -77,7 +77,7 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	/**
 	 * The complexity threshold per DIRECTORY. `maxComplexity` walks up from a file to a
 	 * `checkstyle.json`, reads it off disk and re-derives the threshold, and `Complexity.run` asks
-	 * it once per file: 851 disk walks, 851 JSON parses and 851 re-derivations for ONE config.
+	 * it once per file, so one disk walk, one JSON parse and one re-derivation per file answer ONE config.
 	 *
 	 * Keyed by directory because `ConfigFinder.findUp` starts at a file's own directory, so two
 	 * files sharing one resolve to the same config by construction; two spellings of one directory
@@ -189,12 +189,9 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		_shared.promote(sources.library, this);
 		// Drop the LIBRARY roots the moment the process-scoped tier owns their projections.
 		// Library sources are demanded as `{parseFile, spanInfo}` and only that, and those two
-		// calls are ADJACENT — the generated one-entry root memo already collapsed them before
-		// this cache existed — so holding their roots buys ZERO parses (346 of 1048 sources on
-		// this tree). Measured on a TM lint, three interleaved rounds against BOTH the base and
-		// the un-narrowed variant: keeping them costs +322 MB peak RSS for -7.4%, dropping them
-		// costs +168 MB for -7.2%. The speed difference is 0.04s, inside the noise; the memory
-		// difference is half the bill. A later demand the shared tier does not cover simply
+		// calls are ADJACENT, so the generated walker's one-entry root memo already collapses them
+		// and holding their roots buys no parses — it costs only peak memory, which is the whole of
+		// what dropping them saves. A later demand the shared tier does not cover simply
 		// re-parses, which is correct, just slower.
 		for (entry in sources.library.entries()) _rootCache.remove(entry.source);
 		return sources.report.concat(sources.library.entries());
@@ -427,8 +424,7 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	 * The one method here that memoises a DISK walk rather than a parse. `Complexity.run` asks it
 	 * once per file and the Haxe grammar answers by walking up to a `checkstyle.json`, reading it
 	 * and re-deriving the threshold — the identical walk-and-parse `HaxeNamingSupport.policyFor`
-	 * does, at the call site the FULL ruleset reaches, which is why memoising only `policyFor`
-	 * bought nothing measurable on a full run.
+	 * does, at the call site the FULL ruleset reaches.
 	 *
 	 * Run-scoped like every cache on this class: a fresh wrapper per lint / fix run, never shared
 	 * across threads, never a `static` (`docs/design-principles.md` § 2).
@@ -444,8 +440,8 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	public function controlFlowSupport(): Null<ControlFlowSupport> return _inner.controlFlowSupport();
 
 	/**
-	 * Straight through, NOT memoised. The wrapped scan is 2.7 % of a full `lint --all --fix`
-	 * over 869 files (measured, `--cpu-prof`), and a cache keyed on source content would hold
+	 * Straight through, NOT memoised. The wrapped scan is a small share of a
+	 * full `lint --all --fix`, and a cache keyed on source content would hold
 	 * one array per distinct file for the life of the run to buy a slice of that — while the
 	 * caches above exist because a parse costs orders of magnitude more and is demanded once
 	 * per CHECK. Adding it here on speculation is the shape invariant 1 warns about; add it

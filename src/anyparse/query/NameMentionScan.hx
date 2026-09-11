@@ -15,12 +15,11 @@ using Lambda;
  * PROVEN parse-tree counterpart that answers the same question without the text scan's
  * imprecision.
  *
- * It lives in one module because the family kept growing hand-rolled copies that disagreed. Each
- * copy assembled its own exclusion set and each drifted separately: `qualifiedPathRefusal` and
- * `namesAnyOf` were taught to skip comment interiors in S80 while `referencedInDest` was left
- * counting them, so ONE doc line naming a dependency refused a legitimate carry with advice that
- * means nothing for prose (T535). A reader adding a fourth spelling of the question has to look
- * at the other three first.
+ * It lives in one module because the family kept growing hand-rolled copies that disagreed. Each copy
+ * assembled its own exclusion set and each drifted separately: two of them were taught to skip comment
+ * interiors while a third was left counting them, so ONE doc line naming a dependency refused a legitimate
+ * carry with advice that means nothing for prose. A reader adding a fourth spelling of the question has to
+ * look at the other three first.
  *
  * THE MASK IS ONE, AND IT IS A PROPERTY OF THE LANGUAGE, NOT OF THE CALLER. A comment is never
  * compiled, so an occurrence inside one can never be the reference any of these gates exists for
@@ -69,13 +68,12 @@ final class NameMentionScan {
 	 * type that declares `name` as one spells it all over its own body and the scan cannot tell
 	 * that from a reference to a module of that name, so those declarations' spans are excluded
 	 * alongside the import statements. Excluded by SPAN rather than by a file-wide flag:
-	 * `class Box<Date>` says nothing about a `Date` a SIBLING type in the same module writes, and
-	 * cancelling the whole file on it left that sibling's carry unrefused (compile-run to a changed
-	 * runtime class with rc 0).
+	 * `class Box<Date>` says nothing about a `Date` a SIBLING type in the same module writes,
+	 * and cancelling the whole file on it leaves that sibling's carry unrefused, silently.
 	 *
 	 * And only for a type that declares NO STATIC member, because a class type parameter is not in
-	 * scope inside one — `class Box<Date> { static function tag() return Date.now(); }` compiles and
-	 * answers the STDLIB `Date`, measured on 4.3.7 — so a static member's `Date` is an ambient
+	 * scope inside one — `class Box<Date> { static function tag() return Date.now(); }`
+	 * compiles and answers the STDLIB `Date` — so a static member's `Date` is an ambient
 	 * reference the exclusion would hide. The index carries a member's start offset but not its end,
 	 * so the span cannot be cut around the statics; refusing to exclude at all when the type has any
 	 * is the direction that costs a refusal rather than a rebind.

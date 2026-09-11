@@ -127,7 +127,7 @@ final class Refs {
 	 *
 	 * The constructs are exactly the `selfScopeDeclKinds` ones — a `for`, a catch clause: they
 	 * bind into the frame they open, so `visibleFrom` answers their own span start and would put
-	 * the binding in scope across the header too. Measured against the compiler: `for (i in 0...i)`
+	 * the binding in scope across the header too. Against the compiler: `for (i in 0...i)`
 	 * iterates over the OUTER `i`, and renaming that outer binding must therefore rewrite the
 	 * `0...i` operand. A catch clause carries no expression in its header today, which is why it
 	 * never showed the defect; the floor makes that safety structural instead of incidental.
@@ -289,7 +289,8 @@ final class Refs {
 	}
 
 	/**
-	 * The scope frame `node` opens, primed with the declarations it binds, or null when it opens none. Three kinds open one:
+	 * The scope frame `node` opens, primed with the declarations it binds, or null when it opens none.
+	 * Three kinds open one:
 	 *
 	 * - a grammar `scopeKinds` node — a real lexical scope, which also binds its OWN name when it is a
 	 *   `selfScopeDeclKinds` host (a `for` iterator, a catch-clause exception);
@@ -396,9 +397,9 @@ final class Refs {
 	 * - a declaration that opens a scope of its OWN — a local `function`, a nested type — is
 	 *   visible from its start, because the scope it opens lies inside its span and the binding
 	 *   must be reachable there: a local function recurses;
-	 * - any other declaration is visible only past its own end, so its initializer still reads
-	 *   the enclosing binding of the same name (`var x = x;` binds the outer `x` — measured
-	 *   against the compiler, not assumed);
+	 * - any other declaration is visible only past its own end, so its initializer still reads the
+	 *   enclosing binding of the same name (`var x = x;` binds the outer `x`, which is the compiler's
+	 *   own answer);
 	 * - except that a multi-binding list (`var a = 1, b = a;`) carries its later bindings as
 	 *   CONTINUATION children inside the first one's span, and those do see it. The answer is
 	 *   then the first continuation child's start, which is past the first initializer and

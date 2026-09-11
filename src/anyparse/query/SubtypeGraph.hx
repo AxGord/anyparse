@@ -87,14 +87,16 @@ final class SubtypeGraph {
 	}
 
 	/**
-	 * Whether any (transitive) SUBTYPE of `owner` references the private backing field `field` the trivial-getter collapse would
-	 * DELETE — a subclass reading `owner`'s private `_x` directly breaks with 'Unknown identifier' once `_x` is removed, since
-	 * the rename only rewrites references inside `owner`. The subtype closure is walked DOWNWARD over the index by simple-name
-	 * supertype edges, so only real descendants are visited (a sibling sharing an unresolvable ancestor never false-blocks). A
-	 * subtype declaring its OWN `field` is skipped (a bare reference there binds to that member, not the inherited one); a
-	 * subtype whose declaration span word-boundary-references `field` blocks the collapse, and an unscannable source — or a
-	 * second type carrying `owner`'s own simple name, which the index cannot tell apart from `owner` — blocks conservatively.
-	 * Sound over indexed subtypes; a subtype in an unindexed file is the inherent blind spot the accessor-override gate shares.
+	 * Whether any (transitive) SUBTYPE of `owner` references the private backing field `field` the
+	 * trivial-getter collapse would DELETE — a subclass reading `owner`'s private `_x` directly breaks with
+	 * 'Unknown identifier' once `_x` is removed, since the rename only rewrites references inside `owner`.
+	 * The subtype closure is walked DOWNWARD over the index by simple-name supertype edges, so only real
+	 * descendants are visited (a sibling sharing an unresolvable ancestor never false-blocks). A subtype
+	 * declaring its OWN `field` is skipped (a bare reference there binds to that member, not the inherited
+	 * one); a subtype whose declaration span word-boundary-references `field` blocks the collapse, and an
+	 * unscannable source — or a second type carrying `owner`'s own simple name, which the index cannot tell
+	 * apart from `owner` — blocks conservatively. Sound over indexed subtypes; a subtype in an unindexed
+	 * file is the inherent blind spot the accessor-override gate shares.
 	 */
 	public inline function subtypeReferencesField(owner: String, field: String): Bool {
 		return subtypeDeclMatches(
@@ -338,10 +340,8 @@ final class SubtypeGraph {
 	 * The walk is `eachSubtype`, the memoised subtype adjacency expanded outward from `owner`.
 	 * The consumer used to ask this question by scanning EVERY type in the index and testing
 	 * `isSubtype` on each, which is one supertype-closure walk per type per class -
-	 * O(classes x types) over a corpus, plus an
-	 * `allFiles()` array COPY per class. Measured with `lint --rule prefer-inline` over a haxelib
-	 * prefix: 8.4s / 500 files, 11.5s / 1000, 49.9s / 2000, 322.5s / 4000, against a ~25s parse
-	 * baseline at 4000. The adjacency walk visits only the closure.
+	 * O(classes x types) over a corpus, plus an `allFiles()` array COPY per class, and
+	 * it grows superlinearly with the tree. The adjacency walk visits only the closure.
 	 *
 	 * Without `fromFile` the walk is name-keyed like every other index query: two distinct types
 	 * sharing one simple name both expand. That can only ADD names to the veto list, which is the
@@ -366,10 +366,10 @@ final class SubtypeGraph {
 	 * `TypeDeclInfo.supertypes`, never that array itself, so appending here would rewrite the index
 	 * for every later reader of that type.
 	 *
-	 * Built ONCE per instance, like `_subtypeAdjacency` and for the same reason: the index is
-	 * immutable after construction. The map used to be rebuilt inside the caller, per CALL — a
-	 * whole `allFiles()` x `types` walk per method the naming carve-outs asked about, which is one
-	 * per test method on a test-heavy tree (measured: 2.1s of a 95s project lint).
+	 * Built ONCE per instance, like `_subtypeAdjacency` and for the same reason: the index is immutable
+	 * after construction. The map used to be rebuilt inside the caller, per CALL — a whole `allFiles()` x
+	 * `types` walk per method the naming carve-outs asked about, which is one per test method on a
+	 * test-heavy tree.
 	 */
 	public function supertypeNameUnion(): Map<String, Array<String>> {
 		var names: Null<Map<String, Array<String>>> = _supertypeNames;
@@ -520,17 +520,17 @@ final class SubtypeGraph {
 	 * construction, so one build per instance is sound. The returned array is the LIVE bucket,
 	 * not a copy — read it, never mutate it, or the memo is corrupted for every later caller.
 	 *
-	 * The alias walk is not a refinement, it is the difference between an answer and a wrong one.
-	 * `class Bad extends U` where `typedef U = Util` writes `U` in `supertypes`, so keying on the
-	 * WRITTEN name alone reported `Util` as having no subtype — on a fully parseable tree, no
-	 * skip-parse involved — and every consumer of that answer is a VETO: `unused-private` then
-	 * proposed deleting `Util`'s private constructor, which `Bad`'s `super()` calls (measured:
-	 * `--fix` deleted it, and the tree stopped compiling with `Util does not have a constructor`).
-	 * Filing the subtype under both names is the conservative direction for every consumer that asks WITHOUT
-	 * a file — `subtypeDeclMatches`, `familyDeclaresEveryMember`, and `hasSubtype` / `subtypeMemberNames`
-	 * when no `fromFile` is passed — so for them the alias walk can only ever WITHHOLD, never propose; a
-	 * caller that passes the owner's declaring file reads the declaration-keyed bucket plus the unresolved
-	 * one instead, and THAT path can propose where the simple-name key used to withhold (S200).
+	 * The alias walk is not a refinement, it is the difference between an answer and a wrong one. `class
+	 * Bad extends U` where `typedef U = Util` writes `U` in `supertypes`, so keying on the WRITTEN name
+	 * alone reported `Util` as having no subtype — on a fully parseable tree, no skip-parse involved — and
+	 * every consumer of that answer is a VETO: `unused-private` then proposed deleting `Util`'s private
+	 * constructor, which `Bad`'s `super()` calls — `--fix` deleted it and the tree stopped compiling with
+	 * `Util does not have a constructor`. Filing the subtype under both names is the conservative direction
+	 * for every consumer that asks WITHOUT a file — `subtypeDeclMatches`, `familyDeclaresEveryMember`, and
+	 * `hasSubtype` / `subtypeMemberNames` when no `fromFile` is passed — so for them the alias walk can
+	 * only ever WITHHOLD, never propose; a caller that passes the owner's declaring file reads the
+	 * declaration-keyed bucket plus the unresolved one instead, and THAT path can propose where the
+	 * simple-name key withholds.
 	 *
 	 * Four alias shapes are closed and the walk is transitive over all of them, in either
 	 * order: one hop (`typedef U = Util`), a chain (`typedef A = B; typedef B = Util`), a

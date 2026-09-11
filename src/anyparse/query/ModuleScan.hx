@@ -121,9 +121,9 @@ final class ModuleScan {
 	 * A MULTI-BRANCH region reports a null span, and that is the whole reason this reader needs
 	 *  `source` and the plugin: the grammar projects `#if a … #elseif b … #else … #end` as ONE node
 	 *  whose span covers every branch, with all branches' declarations as flat siblings, so a `using`
-	 *  in one branch and a call in another both fall inside it. Measured, before the gate: a `using
-	 *  Lambda;` in the `#if` arm let `prefer-find --fix` rewrite a loop in the `#else` arm and insert
-	 *  nothing, and the call bound nothing in the build where that arm was live — WORSE than the
+	 *  in one branch and a call in another both fall inside it. Without the gate a `using
+	 *  Lambda;` in the `#if` arm let `prefer-find --fix` rewrite a loop in the `#else` arm and
+	 *  insert nothing, and the call bound nothing in the build where that arm was live — WORSE than the
 	 *  duplicate `using` this whole seam exists to stop. `singleBranchRegion`, the third gate
 	 *  `guardedBodyRegion` already applies for the same flattening, is what decides it; a region it
 	 *  refuses (or cannot read) covers nothing. That over-refuses a `using` and a call in the SAME
@@ -236,10 +236,10 @@ final class ModuleScan {
 	}
 
 	/**
-	 * Which of the two spellings an alias import statement uses — `'as'`, `'in'`, or `''` when
-	 * `stmt` decodes as no alias import at all. The twin of `aliasTargetOf` over the same run scan and the same
-	 * keyword rule, for a rewriter that must re-emit the statement: an `import p.T in U;`
-	 * re-emitted as `as` is a silent style change in a file the caller only meant to repoint.
+	 * Which of the two spellings an alias import statement uses — `'as'`, `'in'`, or `''` when `stmt`
+	 * decodes as no alias import at all. The twin of `aliasTargetOf` over the same run scan and the same
+	 * keyword rule, for a rewriter that must re-emit the statement: an `import p.T in U;` re-emitted as
+	 * `as` is a silent style change in a file the caller only meant to repoint.
 	 */
 	public static function aliasKeywordOf(stmt: String): String {
 		final runs: Array<String> = identRuns(stmt);
@@ -350,17 +350,16 @@ final class ModuleScan {
 	}
 
 	/**
-	 * Append every import-ish declaration reachable from `node` through conditional regions ONLY —
-	 * the walk never enters a type body, so it stays proportional to the file's directive nesting
-	 * rather than its size. `guarded` is false at the file's top level and true once the walk has
-	 * entered a region, so an UNGUARDED top-level import is skipped (it is already in `_importMap` / `_aliasTargets`). `region` tracks the
-	 * innermost region that HAS a span and is carried APART from the flag for that reason: a
-	 * spanless region must still mark the imports under it guarded, and reporting them with a null
-	 * region is what makes a containment test refuse rather than read them as unguarded. It is `c.span`
-	 * and deliberately NOT `c.span ?? region`: falling back to the ENCLOSING span would hand out a
-	 * range WIDER than the region the import actually sits in, and a site inside the outer region but
-	 * outside the inner one would then read as covered — the one direction that emits a call binding
-	 * nothing.
+	 * Append every import-ish declaration reachable from `node` through conditional regions ONLY — the walk
+	 * never enters a type body, so it stays proportional to the file's directive nesting rather than its
+	 * size. `guarded` is false at the file's top level and true once the walk has entered a region, so an
+	 * UNGUARDED top-level import is skipped (it is already in `_importMap` / `_aliasTargets`). `region`
+	 * tracks the innermost region that HAS a span and is carried APART from the flag for that reason: a
+	 * spanless region must still mark the imports under it guarded, and reporting them with a null region
+	 * is what makes a containment test refuse rather than read them as unguarded. It is `c.span` and
+	 * deliberately NOT `c.span ?? region`: falling back to the ENCLOSING span would hand out a range WIDER
+	 * than the region the import actually sits in, and a site inside the outer region but outside the inner
+	 * one would then read as covered — the one direction that emits a call binding nothing.
 	 */
 	private static function collectGuardedImports(
 		node: QueryNode, guarded: Bool, region: Null<Span>, scopeOf: QueryNode -> Null<Span>, out: Array<GuardedImport>

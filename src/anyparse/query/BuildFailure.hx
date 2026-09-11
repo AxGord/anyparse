@@ -16,16 +16,16 @@ using StringTools;
 enum BuildFailureCause {
 
 	/**
-	 * A nullable value reached an anonymous-structure literal whose field is not
-	 * nullable — the fifth arm-authoring blind spot, and the only one of the five
-	 * that no walk over the record and the tree can name (S147).
+	 * A nullable value reached an anonymous-structure literal whose field is not nullable — the fifth
+	 * arm-authoring blind spot, and the only one of the five that no walk over the record and the tree can
+	 * name.
 	 */
 	NullSafetyStructure;
 
 	/** Any other strict-null-safety refusal. */
 	NullSafety;
 
-	/** A forced `return` ahead of the body of an `inline` member (S96). */
+	/** A forced `return` ahead of the body of an `inline` member. */
 	InlineReturn;
 
 	/** The arm registry's own build-macro cross-checks — a `@:killer`/`@:pin` pairing. */

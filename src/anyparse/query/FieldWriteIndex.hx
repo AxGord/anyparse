@@ -125,12 +125,11 @@ typedef ScanCtx = {
  *
  * ## Receiver resolution
  *
- * A write target's receiver resolves to its STATIC declared type — sound under
- * nominal typing: a write through a receiver declared `:Y` targets Y's field
- * (inheritance is the CONSUMER's job — a consumer that must not miss a write arriving
- * through a subtype asks about each subtype too, see `MemberWriteScan.subtypeWriteReaches`,
- * plus `supertypeDeclaresMember` for the other direction). Four receiver shapes resolve; each step that fails
- * falls back to the unresolved bail:
+ * A write target's receiver resolves to its STATIC declared type — sound under nominal typing: a write
+ * through a receiver declared `:Y` targets Y's field (inheritance is the CONSUMER's job — a consumer that
+ * must not miss a write arriving through a subtype asks about each subtype too, see
+ * `MemberWriteScan.subtypeWriteReaches`, plus `supertypeDeclaresMember` for the other direction). Four
+ * receiver shapes resolve; each step that fails falls back to the unresolved bail:
  *
  *  - `this` — the enclosing type, unless the container is an
  *    `underlyingThisTypeKinds` abstract (there `this` is the untyped underlying
@@ -295,13 +294,12 @@ final class FieldWriteIndex {
 	 *
 	 * Condition (2) used to be scope-BLIND — global uniqueness among indexed decls, patched by a
 	 * separate import-shadowing test — and that answers about a type the candidate's file cannot
-	 * even name. Measured on the Pony fork: `Rotor.speed: Single` was freed because the report
-	 * scope declared exactly one plain class `Single`, which `Rotor.hx` neither imports nor shares
+	 * even name. A `Rotor.speed: Single` was freed because the report scope declared
+	 * exactly one plain class `Single`, which `Rotor.hx` neither imports nor shares
 	 * a package with — its `Single` is the std's `@:coreType abstract Single to Float from Float`,
 	 * which any `Int` reaches. The blind form gets that right only while the std happens to be in
-	 * scope (a second `Single` breaks the uniqueness); resolving from `ownerFile` gets it right
-	 * either way — 121 findings with the std, 121 without, where the blind form reported 121 and
-	 * 123.
+	 * scope (a second `Single` breaks the uniqueness); resolving from
+	 * `ownerFile` gets it right either way, with the std in scope or without it.
 	 */
 	public function hasUnresolvedWriteTargeting(field: String, owner: String, ownerFile: String): Bool {
 		var any: Bool = false;

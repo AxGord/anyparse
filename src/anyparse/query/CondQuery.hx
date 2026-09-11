@@ -13,11 +13,10 @@ using StringTools;
  * The DIRECTIVE-DELIMITED BRANCH — what `apq cond` reports, and the one thing at this layer that
  * has to be delimited without a node to point at.
  *
- * A `#if A … #elseif B … #else … #end` region projects as ONE node whose span covers every branch
- * and whose children are all the branches' constructs flattened into a single sibling list: the
- * tree carries no branch boundary at all (`CondBranchProjection` says so of its own input, and
- * S163 re-measured it). So a branch is NOT a node, cannot be addressed by a selector, and cannot
- * be sliced out of a node span.
+ * A `#if A … #elseif B … #else … #end` region projects as ONE node whose span covers every branch and whose
+ * children are all the branches' constructs flattened into a single sibling list: the tree carries no
+ * branch boundary at all (`CondBranchProjection` says so of its own input). So a branch is NOT a node,
+ * cannot be addressed by a selector, and cannot be sliced out of a node span.
  *
  * What does delimit one is the region's own directive line. This class replays
  * `CondDirectives.scan` through a depth stack — the same replay `CondBranchPath.scan` performs
@@ -60,13 +59,12 @@ final class CondQuery {
 	 * Lines of one branch rendered before the rest are folded into a `… +N more line(s)` marker,
 	 * when the caller states no budget of its own.
 	 *
-	 * A cap is not a nicety here. The define this command is most often asked about is the one a
-	 * file uses as its TOP-LEVEL guard, and then a single branch is the whole file: measured on
-	 * this tree, `cond nodejs src/anyparse/query` matches 87 regions and prints 215 434 bytes
-	 * uncapped against 40 750 at this budget, for the same 121 head lines. `--limit` cannot help —
-	 * it counts branches, not lines. Same direction as `lit`'s own flood guard, which folds a
-	 * multi-line hit to its first line plus a count; a body is the payload here, so the budget is
-	 * larger and the marker still names exactly what it dropped.
+	 * A cap is not a nicety here. The define this command is most often asked about is the one a file uses
+	 * as its TOP-LEVEL guard, and then a single branch is the whole file: such a query prints an order of
+	 * magnitude more bytes uncapped than at this budget, for the same head lines. `--limit` cannot help —
+	 * it counts branches, not lines. Same direction as `lit`'s own flood guard, which folds a multi-line
+	 * hit to its first line plus a count; a body is the payload here, so the budget is larger and the
+	 * marker still names exactly what it dropped.
 	 */
 	public static inline final DEFAULT_MAX_BODY: Int = 20;
 
@@ -290,9 +288,8 @@ final class CondQuery {
 	 * KIND — a node whose kind is the grammar's `stringInterpTextKind`, or one of its `stringLiteralKinds`,
 	 * carries literal CONTENT in its name slot BY DECLARATION and contributes no row either. Its
 	 * CHILDREN are still walked: a `$name` (`stringInterpIdentKind`) and a `${ … }`
-	 * (`stringInterpBlockKind`) are real references the branch really does touch. Measured over `src` +
-	 * `test`, this drops 795 / 900 / 1481 `Literal` rows for `nodejs` / `sys` / `macro`, and rows of no
-	 * other kind.
+	 * (`stringInterpBlockKind`) are real references the branch really does touch.
+	 * The filter drops literal-content rows in quantity and rows of no other kind.
 	 *
 	 * The kind filter is what makes the two spellings of ONE literal answer alike. They do not project
 	 * alike and are not meant to: `'x'` is a composite whose text lives in `Literal` CHILD segments —
@@ -301,8 +298,8 @@ final class CondQuery {
 	 * Before the kind filter the first leaked and the second was kept out only by those quote marks,
 	 * which is an accident of the raw spelling and not a contract anything states.
 	 *
-	 * A metadata NAME is a symbol here, decided in S188 and spelled `metadataNamePrefixes` in the
-	 * shape. The argument that settled it is an asymmetry WITHIN one construct rather than a taste
+	 * A metadata NAME is a symbol here, spelled `metadataNamePrefixes` in the shape. The
+	 * argument that settled it is an asymmetry WITHIN one construct rather than a taste
 	 * about what `@:meta` is: `@:access(pkg.Other)` under a `#if` contributed `IdentExpr pkg` and
 	 * `FieldAccess Other` — its ARGUMENT, reached as an ordinary child — while the annotation that
 	 * decides what those two mean contributed nothing, and `@:native('nativeSpelling')` contributed
@@ -315,7 +312,7 @@ final class CondQuery {
 	 * dropped by `carriesLiteralText`, which is `--names`' own semantics (symbol names, not literals)
 	 * and not a second gap.
 	 *
-	 * Two neighbouring gaps recorded here by S178 were re-measured in S181 and are NOT open:
+	 * Two neighbouring gaps that look open are NOT:
 	 *
 	 * - METADATA ARGUMENTS ARE VISIBLE. `QueryNode` carries them as CHILDREN of the metadata node —
 	 *   `@:native('Foo.Bar')` projects `(MetaCall @:native (SingleStringExpr (Literal Foo.Bar)))`,
@@ -475,7 +472,8 @@ typedef CondBranch = {
 
 /**
  * What `apq cond` asked for, as `CondQuery.render` and `CondQuery.keepsBranch` consume it. `maxBody` is the
- * per-branch line budget — `CondQuery.DEFAULT_MAX_BODY` unless the caller says otherwise, and non-positive for no cap.
+ * per-branch line budget — `CondQuery.DEFAULT_MAX_BODY` unless the caller says otherwise, and non-positive
+ * for no cap.
  */
 typedef CondRenderOptions = {
 	final flat: Bool;

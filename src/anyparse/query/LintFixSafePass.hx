@@ -115,8 +115,8 @@ final class LintFixSafePass {
 	 * A diagnostic carries its position as `<path>:<line>: `, so the path is the last
 	 * whitespace-delimited token before the first `:<digits>:` on the line. Anchoring on
 	 * that shape rather than on column 0 is what survives `-D message.reporting=pretty`,
-	 * which prefixes the header with an ANSI-coloured ` ERROR ` badge — measured on Haxe
-	 * 4.3.7. A colon-digit run NOT followed by a second colon is a message, not a position
+	 * which prefixes the header with an ANSI-coloured ` ERROR ` badge. A
+	 * colon-digit run NOT followed by a second colon is a message, not a position
 	 * (`Could not process argument foo:1`), and a candidate with no extension is not a file.
 	 *
 	 * A warning is not why a build failed, in either reporting style, so both spellings of
@@ -253,14 +253,16 @@ final class LintFixSafePass {
 	 * they get the same sentence, differing only in the remedy: one is a flag the user
 	 * passed, the other a key they can add.
 	 *
-	 * REPORT MODE IS NOT AN ARM. A lint that writes nothing has no writes to revert, so there is no net to be missing —
-	 * `Cli.oracleSkippedNote` covers what report mode loses without an oracle (nullSafety trust), which is a different fact.
+	 * REPORT MODE IS NOT AN ARM. A lint that writes nothing has no writes to revert, so there is no net to
+	 * be missing — `Cli.oracleSkippedNote` covers what report mode loses without an oracle (nullSafety
+	 * trust), which is a different fact.
 	 *
-	 * THE TWO ARMS ARE NOT EQUALLY WORTH SAYING, which is why `verbose` gates only one of them. The unconfigured arm
-	 * reports a fact the reader may not know and names a remedy they have not taken, so it speaks always. The `--no-oracle`
-	 * arm narrates back a flag the reader just passed — and `--fix` on a write op passes it for them, so it printed 161
-	 * bytes on EVERY `hxq <op> --write --fix`, while the run's own summary line already carries both consequences it states
-	 * (`N risky-fix rule(s) left report-only (no compiler oracle for this run)`). Under `--verbose` it comes back.
+	 * THE TWO ARMS ARE NOT EQUALLY WORTH SAYING, which is why `verbose` gates only one of them. The
+	 * unconfigured arm reports a fact the reader may not know and names a remedy they have not taken, so it
+	 * speaks always. The `--no-oracle` arm narrates back a flag the reader just passed — and `--fix` on a
+	 * write op passes it for them, so it printed 161 bytes on EVERY `hxq <op> --write --fix`, while the
+	 * run's own summary line already carries both consequences it states (`N risky-fix rule(s) left
+	 * report-only (no compiler oracle for this run)`). Under `--verbose` it comes back.
 	 */
 	public static function netNotice(oracleHxml: Null<String>, noOracle: Bool, verbose: Bool): Null<String> {
 		return if (oracleHxml == null)

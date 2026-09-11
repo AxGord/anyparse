@@ -71,7 +71,7 @@ final class ScopeStack {
 /**
  * One lexical scope's bindings. A name may be bound MORE THAN ONCE in one frame: a
  * position-scoped frame re-declares it (`var x = 1; … var x = "s";` in one block is legal
- * Haxe, and the second declaration takes over from its own position on — measured, `x.length`
+ * Haxe, and the second declaration takes over from its own position on, so `x.length`
  * typechecks after it), while a hoisting frame can carry the same name on two mutually
  * exclusive `#if` arms. `resolve` picks between them BY POSITION; cross-scope shadowing is
  * handled by `ScopeStack.resolveInnermost`, not here.
@@ -94,8 +94,8 @@ final class ScopeFrame {
 	 *
 	 * `0` for an ordinary frame. A construct that binds a name AND spells a HEADER inside its
 	 * own span sets it to the start of its body: a `for` iterator is not in scope in the
-	 * iterable that produces it (`for (i in 0...i)` reads the OUTER `i` — measured), and a
-	 * catch exception is not in scope in the caught-type clause. Without the floor the
+	 * iterable that produces it (`for (i in 0...i)` reads the OUTER `i`), and a catch
+	 * exception is not in scope in the caught-type clause. Without the floor the
 	 * iterator's own span start answers for the whole construct and the header binds to it.
 	 *
 	 * A floor rather than a per-binding rule because the construct can bind more than one name

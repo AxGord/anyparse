@@ -15,15 +15,13 @@ using Lambda;
  * instance member's remaining callers reach the destination, and everything that GENERATES the
  * wiring when the answer is "nothing here does yet".
  *
- * Split out of `MoveMember` in S90, and not along a reference seam — there is none. `hxq
- * clusters MoveMember` puts 45 of its 51 members in ONE component (92% coverage), and the purity
- * census that decides a state split is vacuous here (53 members, 0 non-static, no instance
- * field), which is why S88 refused the split on all three graph axes. What the graph cannot see
- * is that these ten answer a question the other forty-odd never ask: they run only when a move
- * leaves an instance caller behind (`--via`) or when the destination has no constructor to
- * receive the moved state (`--scaffold`). Twelve call sites reach them, ten distinct edges, and
- * only FOUR come from outside the family — so the seam is the family's own interface, not a cut
- * through it.
+ * Split out of `MoveMember`, and not along a reference seam — there is none. A cluster read puts nearly
+ * every member of that file in ONE component, and the purity census that decides a state split is vacuous
+ * there (all-static, no instance field), so no graph axis proposes this cut. What the graph cannot see is
+ * that these members answer a question the rest never ask: they run only when a move leaves an instance
+ * caller behind (`--via`) or when the destination has no constructor to receive the moved state
+ * (`--scaffold`). Only four of the edges into them come from outside the family — so the seam is the
+ * family's own interface, not a cut through it.
  *
  * The four public entry points are exactly those four edges: `resolveViaField` (which field
  * remaining bare instance callers route through), `resolveScaffoldFields` (the destination

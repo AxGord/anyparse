@@ -29,18 +29,16 @@ using Lambda;
  * - `hidesBindingNamed` — does this node bind the field's own name, so the field is hidden
  *   here? Over-answering true refuses the rewrite, again fail-closed.
  *
- * Every kind this module decides by is READ OFF THE HANDED `RefShape`; none is spelled here.
- * The note this replaces said the opposite — that threading a shape through would cost eight
- * signatures and thirteen call sites and "could not express what these ask anyway
- * (`RefShape` names no pattern kind, no `this` identifier and no interpolation-read kind)".
- * All three of those exist: `plainCasePatternKind`, `selfReferenceText` and
- * `stringInterpIdentKind`. The price was real and was paid — the shape is threaded through every external caller of the eight
- * functions (counted by `hxq mentions` at the S204 tip: 16 call sites in `src` across `BackingFieldRefs`, `TrivialGetter`,
- * `FieldRename`, and 9 in `test`; a reading of that tree, not an invariant) — and what it buys is the differential: a name inside a
- * `RefShape` field is checked against the projected vocabulary by
- * `unit.query.RefShapeKindProjectionTest`, and a name in a private array here is checked by
- * nothing. The retired `LambdaParam` kind sat in `bindsNameHere` for three months matching
- * nothing, and that test is what eventually found it.
+ * Every kind this module decides by is READ OFF THE HANDED `RefShape`; none is spelled here. The note this
+ * replaces said the opposite — that threading a shape through would cost eight signatures and thirteen call
+ * sites and "could not express what these ask anyway (`RefShape` names no pattern kind, no `this`
+ * identifier and no interpolation-read kind)". All three of those exist: `plainCasePatternKind`,
+ * `selfReferenceText` and `stringInterpIdentKind`. The price was real and was paid — the shape is threaded
+ * through every external caller of the eight functions — and what it buys is the differential: a name
+ * inside a `RefShape` field is checked against the projected vocabulary by
+ * `unit.query.RefShapeKindProjectionTest`, and a name in a private array here is checked by nothing. The
+ * retired `LambdaParam` kind sat in `bindsNameHere` matching nothing, and that test is what eventually
+ * found it.
  */
 @:nullSafety(Strict)
 final class FieldRefScan {
@@ -51,9 +49,9 @@ final class FieldRefScan {
 	}
 
 	/**
-	 * Whether `kind` is an assignment / compound-assignment / increment / decrement whose first child is its
-	 * write target — the grammar's `writeParentKinds`, whose doc states exactly that contract ("ctors whose
-	 * first positional child carries the binding being modified").
+	 * Whether `kind` is an assignment / compound-assignment / increment / decrement whose first child is
+	 * its write target — the grammar's `writeParentKinds`, whose doc states exactly that contract ("ctors
+	 * whose first positional child carries the binding being modified").
 	 *
 	 * This used to be a hand-written sixteen-name switch, and it was missing `NullCoalAssign`: `_x ??= v`
 	 * IS a write of `_x` that no consumer here saw. Two more names arrive with the shared vocabulary and

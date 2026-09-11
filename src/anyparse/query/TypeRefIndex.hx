@@ -230,18 +230,17 @@ final class TypeRefIndex {
 	 * than project-wide because that is the scope such an alias actually has — a `U` bound in one
 	 * module says nothing about a `U` written in another.
 	 *
-	 * `followGuarded` is the whole `#if` question, and it has OPPOSITE answers on the two sides of
-	 * the subtype relation, so it is the caller's to give. Going DOWN (`subtypesOf`) the answer is a
-	 * veto — offering both branch targets makes MORE types answer "something subtypes me", which is
-	 * the withholding direction, and dropping either is what compile-proved a deleted private
-	 * constructor. Going UP (`closureContains`) the answer is read AFFIRMATIVELY by two autofixes
-	 * that DELETE — `unreachable-catch` removes a clause, `redundant-upcast` removes a cast — and
-	 * offering both makes one type a subtype of two modules no single build agrees on: measured,
-	 * `#if cpp import pkg.A as U; #else import pkg.Bee as U; #end class Both extends U` reported the
-	 * `catch (e:Both)` after `catch (e:A)` AND the one after `catch (e:Bee)` unreachable, and `--fix`
-	 * deleted both clauses. So the upward walk refuses a guarded alias, which is also what
-	 * `SymbolIndexBuilder.aliasTargetPathOf` already does for a guarded TYPEDEF — the two alias kinds
-	 * fail closed together rather than one each way.
+	 * `followGuarded` is the whole `#if` question, and it has OPPOSITE answers on the two sides of the
+	 * subtype relation, so it is the caller's to give. Going DOWN (`subtypesOf`) the answer is a veto —
+	 * offering both branch targets makes MORE types answer "something subtypes me", which is the
+	 * withholding direction, and dropping either is what compile-proved a deleted private constructor.
+	 * Going UP (`closureContains`) the answer is read AFFIRMATIVELY by two autofixes that DELETE —
+	 * `unreachable-catch` removes a clause, `redundant-upcast` removes a cast — and offering both makes one
+	 * type a subtype of two modules no single build agrees on: `#if cpp import pkg.A as U; #else import
+	 * pkg.Bee as U; #end class Both extends U` reports the `catch (e:Both)` after `catch (e:A)` AND the one
+	 * after `catch (e:Bee)` unreachable, and `--fix` deletes both clauses. So the upward walk refuses a
+	 * guarded alias, which is also what `SymbolIndexBuilder.aliasTargetPathOf` already does for a guarded
+	 * TYPEDEF — the two alias kinds fail closed together rather than one each way.
 	 *
 	 * Simple names on both sides: `supertypes` is already reduced that way, and so is every name
 	 * `subtypesOf` is asked about. An alias whose path did not decode carries no edge; a
