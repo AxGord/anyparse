@@ -55,10 +55,9 @@ final class WriterOptFanout {
 	 *
 	 * A composition site threads one opt through several shims in ONE emitted
 	 * expression (`_setSuppressCallRestProbe(_setCallArgChainNest(_setExprPosition(opt)))`).
-	 * Each shim used to clone, so a three-step chain minted three 210-field
-	 * records where one would do: on a real tree 48 % of every `_copyOpt` call
-	 * had a source object the PREVIOUS step had just created, and threading the
-	 * base retired 34.7 % of the calls outright.
+	 * Each shim used to clone, so a three-step chain minted three whole records
+	 * where one would do: most `_copyOpt` calls had a source object the PREVIOUS
+	 * step had just created, and threading the base retires them outright.
 	 *
 	 * `_b` is the chain's ROOT expression. It is spelled with the same
 	 * identifier (`opt`) as the root and sits in the same scope, so the two
@@ -121,8 +120,7 @@ final class WriterOptFanout {
 	 *
 	 * The options typedef is an intersection (`HxModuleWriteOptions =
 	 * WriteOptions & {...}`), and the compiler already merges both halves
-	 * into the resolved anon's own `fields` — measured: 210 for
-	 * `HxModuleWriteOptions`, 21 base + 189 own. The `AExtend` walk is
+	 * into the resolved anon's own `fields`. The `AExtend` walk is
 	 * therefore not what makes the list complete; it only groups the base's
 	 * fields first, and it is insurance against a future compiler
 	 * representation that leaves the halves unmerged.
@@ -130,9 +128,9 @@ final class WriterOptFanout {
 	 * Order inside each group is whatever `AnonType.fields` yields, which is
 	 * ALPHABETICAL, not declaration order — so the emitted clone does NOT
 	 * share a hidden class with a format's hand-written `defaultWriteOptions`
-	 * literal. Harmless at the measured ratio (a handful of root objects
-	 * against ~246 000 clones), but the macro API exposes no declaration
-	 * order, so matching it is not a cheap change.
+	 * literal. Harmless in practice — a handful of root objects against the
+	 * whole clone traffic — but the macro API exposes no declaration order, so
+	 * matching it is not a cheap change.
 	 *
 	 * An empty result means the path did not resolve to an anon; the caller
 	 * falls back to `Reflect.copy` rather than emitting a literal that would
@@ -170,14 +168,13 @@ final class WriterOptFanout {
 	 * Emits a monomorphic structural clone: an object literal naming every
 	 * field of the options struct (`{f1: o.f1, …}`), which the macro knows
 	 * at compile time. `Reflect.copy` on js is a `for…in` walk with a
-	 * dynamic read per field and measured 50.7 % of writer self-CPU
-	 * (245 912 copies × 210 fields on the anyparse tree); the literal is one
+	 * dynamic read per field and dominates writer self-CPU; the literal is one
 	 * hidden class and one store per field. `Object.assign({}, o)` is NOT an
-	 * alternative — it measured 1.8× worse than `Reflect.copy`.
+	 * alternative — it is worse again than `Reflect.copy`.
 	 *
-	 * The helper is deliberately NOT `AInline`: a 210-field literal expanded
-	 * into the ~1000 call sites would add megabytes to the js bundle and
-	 * blow the JVM 64 KB method-body limit. One out-of-line function keeps a
+	 * The helper is deliberately NOT `AInline`: the whole-struct literal
+	 * expanded into every call site would add megabytes to the js bundle and
+	 * blow the JVM method-body limit. One out-of-line function keeps a
 	 * single literal site, so every clone shares one hidden class.
 	 *
 	 * Falls back to `Reflect.copy` when the options type does not resolve
@@ -949,8 +946,8 @@ final class WriterOptFanout {
 	 * call must keep wrapping. Gated on `_suppressPatternRestProbe:Bool`.
 	 *
 	 * The non-trivia struct-Star dispatch (`WriterLowering.emitSepStarList`) reads the
-	 * flag too, since T169 — it is the plain writer's path for a `@:trivia` Star and
-	 * the ONLY path, in both writers, for a Star that has none.
+	 * flag too — it is the plain writer's path for a `@:trivia` Star and the ONLY
+	 * path, in both writers, for a Star that has none.
 	 */
 	private static function setSuppressPatternRestProbeField(optionsCT: ComplexType): Field {
 		return {

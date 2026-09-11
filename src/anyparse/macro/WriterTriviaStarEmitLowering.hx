@@ -34,18 +34,18 @@ using anyparse.macro.MetaInspect;
  *
  * A SIZE split, and named as one: the five members are one closed region of
  * `WriterStarEmitLowering`'s call graph with a single inbound edge, not a
- * layer - they take the whole `StarEmitCtx` and read seven of its fifteen
- * fields, where a layer takes a narrow bundle and answers to several
- * unrelated callers. `WriterStarEmitLowering` was 1957 lines against the
- * 2000-line `oversized-type` cap when they left.
+ * layer - they take the whole `StarEmitCtx` and read about half its fields,
+ * where a layer takes a narrow bundle and answers to several unrelated
+ * callers. `WriterStarEmitLowering` was up against the `oversized-type` line
+ * cap when they left.
  *
  * ⚠️ Star emission FORKS across FOUR sites - `StarFieldLowering.emitStarFieldSteps`
  * and the `lowerStar*Branch` leaves beside it on the parse side,
  * `emitWriterStarField` (struct field) and `lowerEnumStar` (enum ctor) on the
  * writer side. All four stayed where they were. Nothing here is reachable from
- * `lowerEnumStar` - measured on the module's own call graph, the enum arm
- * reaches its trivia emit through `lowerEnumStarTrivia` and shares no member
- * with this one - so no fork half was separated from its twin. A change to
+ * `lowerEnumStar` - the enum arm reaches its trivia emit through
+ * `lowerEnumStarTrivia` and shares no member with this one - so no fork half
+ * was separated from its twin. A change to
  * trivia Star emission still has to visit all four sites, and they still name
  * each other.
  */

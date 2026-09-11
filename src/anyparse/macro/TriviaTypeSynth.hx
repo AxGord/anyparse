@@ -57,21 +57,20 @@ using Lambda;
  *
  * Three sibling `#if macro` modules carry one question each out of this
  * pass. `TriviaPairAltCtor` — what one synthesized Alt constructor looks
- * like, and which extra positional argument each branch shape earns (15
- * members). `TriviaPairSlots` — which synthesized trivia slot a struct
- * field earns, and what its declaration is (23). `TriviaPairConverters`
- * — how a paired `*T` value converts to and from its raw sibling (13).
- * What stayed is the slot-name vocabulary all three and the writer side
- * share, the atomic `defineModule` arm, and `buildTypeDefinition`, which
- * calls the first two.
+ * like, and which extra positional argument each branch shape earns.
+ * `TriviaPairSlots` — which synthesized trivia slot a struct field earns,
+ * and what its declaration is. `TriviaPairConverters` — how a paired `*T`
+ * value converts to and from its raw sibling. What stayed is the slot-name
+ * vocabulary all three and the writer side share, the atomic `defineModule`
+ * arm, and `buildTypeDefinition`, which calls the first two.
  *
- * The seam is NOT a state boundary: this class declares no instance
- * field and every one of its 95 members was static, so a purity census
- * returns 100 % and decides nothing. What binds is the qualified call
- * site — `TriviaTypeSynth.<member>` is spelled 133 times outside this
- * file, 59 of those the ALL-CAPS slot-name constants. Those constants
- * stay: they are the vocabulary every consumer already knows the address
- * of, and moving them would buy no cap and cost 59 receiver rewrites.
+ * The seam is NOT a state boundary: this class declares no instance field
+ * and every member is static, so a purity census decides nothing here. What
+ * binds is the qualified call site — `TriviaTypeSynth.<member>` is spelled
+ * all over the tree, most of it the ALL-CAPS slot-name constants. Those
+ * constants stay: they are the vocabulary every consumer already knows the
+ * address of, and moving them would buy no cap and cost a receiver rewrite
+ * at every site.
  */
 class TriviaTypeSynth {
 

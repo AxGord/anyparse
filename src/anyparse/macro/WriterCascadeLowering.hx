@@ -40,9 +40,9 @@ using Lambda;
  * constructor pattern and nothing else builds one.
  *
  * `hxq clusters` had already isolated this as its own connected
- * component inside `WriterLowering` — 14 members with no member
- * reference into the 223-member core — so the seam was measured
- * before it was cut. The one edge left is `WriterLowering.astPredCallT`,
+ * component inside `WriterLowering`, with no member reference into that
+ * module's core, so the seam was measured before it was cut. The one edge
+ * left is `WriterLowering.astPredCallT`,
  * which stays behind because it reads the build-scoped predicate-root
  * mirror `generate()` sets; it is named qualified here, the same way
  * the four trivia Star modules name it.

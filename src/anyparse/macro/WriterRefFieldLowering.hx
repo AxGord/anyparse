@@ -30,12 +30,11 @@ using anyparse.macro.MetaInspect;
  * itself). `finalizeNonStarField` closes both with the trail, and
  * `emitFieldLeadIn` / `emitKwPrefix` open them with the lead.
  *
- * S117 measured this family as ENTANGLED with the Seq walker - twenty-two
- * members reaching nine outside themselves, seven of which it read as
- * members of the Seq-field region - and priced the two as one joint
- * extraction. The edges were real and the reading was not: five of those
- * seven were separator builders and two were ctor-pattern lookups, so they
- * belonged to neither family. With `WriterFieldSepLowering` and
+ * The same edges were once read as an ENTANGLEMENT with the Seq walker, and
+ * the two families priced as one joint extraction. The edges were real and
+ * the reading was not: most of the disputed members were separator builders
+ * and the rest ctor-pattern lookups, so they belonged to neither family.
+ * With `WriterFieldSepLowering` and
  * `WriterCtorPatternLowering` named as LAYERS, this family reaches nothing
  * in the Seq walker at all - `lowerStruct` calls in at four sites and
  * nothing calls back. The three helpers that looked shared

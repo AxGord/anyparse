@@ -81,8 +81,8 @@ final class WriterArrowValueIfLowering {
 	 * break branch, which is the same output the bare soft `Line`s would give -
 	 * while skipping the group would ALSO skip nothing, since the forced-`Same`
 	 * policies and the soft separators are already in the Doc by then. The
-	 * earlier `flatLength != -1` conjunct was measured to cost `} else {`
-	 * cuddling on block-bodied branches for no gain.
+	 * earlier `flatLength != -1` conjunct cost `} else {` cuddling on
+	 * block-bodied branches for no gain.
 	 *
 	 * Returns `dcExpr` untouched for every type without the meta.
 	 */

@@ -27,8 +27,9 @@ using anyparse.macro.MetaInspect;
  * enters the fit measurement rather than trailing the closing brace.
  *
  * Those four are pure functions of their arguments, and they were the whole of
- * this module until S91. What arrived then is the STATE-CARRYING half of the same
- * question — the twelve members that decide whether a body de-braces at all, and
+ * this module to begin with. What joined them is the STATE-CARRYING half of the
+ * same question — the twelve members that decide whether a body de-braces at all,
+ * and
  * what the mirror wraps it back into:
  *
  *  - `deBraceBodyAccess`, the entry: it substitutes a `@:fmt(dropSingleStmtBraces)`
@@ -44,9 +45,9 @@ using anyparse.macro.MetaInspect;
  *
  * Those twelve read build state, so unlike the first four they are not free to
  * move: each takes a `BraceSymmetryCtx` bundle (below), built once in
- * `WriterLowering`'s constructor and passed as the first argument. The price was
- * seven call sites there; the census that picked this family over its neighbours is
- * in `WriterLowering`'s own doc.
+ * `WriterLowering`'s constructor and passed as the first argument. The price is
+ * the call sites there; why this family moved and its neighbours did not is in
+ * `WriterLowering`'s own doc.
  *
  * `VALUE_BRACE_SYMMETRY_MIN_ARGS` came with them — both its readers are here now,
  * which is what let the class-level `@:access(anyparse.macro.WriterLowering)` go.
@@ -364,7 +365,7 @@ final class WriterBraceSymmetryLowering {
 		// condition evaluated one layer down. Wherever `elseFollows` would turn a de-brace into
 		// a keep, that call answers `true`, `siblingKeepsBraces` goes true and `unwrapStmt`
 		// returns at its own gate-7 keep before `elseFollows` is ever read - so forcing this to
-		// `false` is byte-identical (measured: 1 749 files, 222 of them rewritten by the knob).
+		// `false` is byte-identical over a whole tree.
 		// Kept as the direct spelling of the condition; the chain probe is the one that
 		// actually answers today.
 		final elseFollowsExpr: Expr = elseAccess == null ? macro false : macro $elseAccess != null;

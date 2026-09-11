@@ -318,6 +318,46 @@ Doc primitives:
 
 The renderer commits a group to flat mode if its flat content fits within the remaining width; otherwise it breaks and the inner line breaks become real newlines with current indent.
 
+Every `Doc` ctor carries its own contract in `core/Doc.hx`. What follows is the part that belongs to the enum as a whole, and that a new ctor has to be read against.
+
+### The Doc probe family
+
+The probe family is the set of ctors whose width test reads the frame's INDENT rather than the live pen column, and so answers the same for every sibling rendered at that indent. The column-reading probes — `IfWidthExceeds`, `IfFirstLineExceeds`, `IfLineExceeds`, `IfResidualLineExceeds`, `IfFullLineExceeds`, `IfNaturalFirstLineFitsOpenDelim` — are a separate population and are not rows here.
+
+They look interchangeable and are not. Each divergence below is justified only at its own call sites, and re-deriving one member's behaviour from another is how a wrong "every walker forwards to flatDoc" claim got written once already.
+
+| ctor | probes | fits when | both-branch walkers descend |
+|---|---|---|---|
+| `IfArrowContinuationFits` | `indent + extraIndent + flatWidth` | `< n` (strict — calibrated to a continuation LINE, so the budget excludes the column `n` itself) | both branches (its two branches are genuinely different shapes: head glued vs paren opened) |
+| `IfArrowContinuationFitsWithRest` | the row above PLUS `Renderer.flatTokenWidthOfRestStack` — what the pending work stack still emits on the SAME rendered line after this subtree | `< n`, same strict budget; its consumers pass `lineWidth + 1` because the tail is CHARGED rather than reserved | both branches |
+| `IfIndentWidthExceeds` | `indent + flatWidth` | `<= n` (the `Group` family convention) | FLAT branch only (both branches wrap the same body — see its own doc) |
+| `IfNaturalFirstLineExceeds` | measures `flatDoc`'s natural first line at render time | `< n` | both branches |
+| `IfGluedFirstLineExceeds` | measures `flatDoc`'s natural first line at render time — same measurer as the row above, but called WITHOUT `resolveOpenDelim`, and followed by a second re-measure at the break indent (see its own doc: the width test alone is not the whole verdict) | `<= n` (the `Group` family convention), PLUS two break-side gates that can keep the flat branch even when `n` is exceeded | FLAT branch only (both branches wrap the same body — see its own doc) |
+
+**Fits-strictness is a convention, not a typo.** The last two rows run the SAME measurer (`Renderer.naturalFirstLineWidth`) and disagree at the boundary by one column: `IfNaturalFirstLineExceeds` crosses on `>= n`, `IfGluedFirstLineExceeds` on `> n`. The first is calibrated to a continuation budget, the second to a whole rendered LINE against `maxLineLength`, where landing exactly on the limit fits. Unifying them MOVES the corpora, so the convention stands, and a new member picks its boundary from what it measures, never from the member it borrowed its measurer from.
+
+The single-branch walkers (`DocMeasure`, `WrapList`, `D`, `BinaryChainEmit`, `MethodChainEmit`) are a separate axis again: each picks break-side or flat-side per its OWN contract, not per ctor. `DocMeasure.breakableHeadStep` takes the BREAK side for most of the family because it promises a LOWER bound on head width (a break branch leading with `Line` terminates the head at width 0), but the FLAT side for `IfArrowContinuationFits`, the one probe whose break branch is the WIDER shape. Its rest-aware sibling shares that arm for the family contract rather than for that reason: both of ITS layouts come from one `shape(…)` call with `cuddleLast` flipped, so neither side is wider.
+
+### The compile-time net, and its exact edge
+
+The hand-written SPINE walkers carry an explicit arm per family member, and each one's OUTER switch is exhaustive — no `case _` — so a new ctor added to the enum fails to compile in every one of them instead of silently inheriting a default:
+
+- `BinaryChainEmit.leadingOperandOpensDelim`;
+- `MethodChainEmit.endsWithLineComment`;
+- `WrapList`'s `lastVisibleText`, `firstVisibleText`, `firstVisibleTextIsFunctionKw`, `hasTopLevelElse`, `isMethodChainItem`, `isTopLevelChain`, `chainKeepFlatCandidate`, `bareArrowBodyBreaks`, `startsWithHardline`, `endsWithCloseDelim`, `endsWithCondEnd`.
+
+Several of them also run a nested `case _` over a `Doc` INSIDE their leading/trailing `Concat` scan. Most forward to the recursive call, so the outer switch still catches the new ctor; **`isMethodChainItem`'s is an empty SKIP**, so after its outer compile error is fixed, a new ctor appearing as a `Concat` element there is still dropped. Fix that one by hand.
+
+A FOURTH category is the one a census keeps missing: exhaustive `Doc -> Doc` REBUILDERS, which rebuild every ctor as itself while a caller transforms the children — `D.mapChildren` and `WrapList.groupifyInlineBodies`. Exhaustiveness catches a MISSING arm there and never a WRONG one, so a shared `case A(x), B(x):` arm silently rebuilds both as whichever ctor it names: that is how `groupifyInlineBodies` dropped the rest-awareness of `IfNaturalFirstLineExceedsWithRest`, and it moved no bytes, so no corpus could have found it (`WrapProbeRestAwarenessSliceTest` pins it at the `Doc` level instead). The rule for both: every arm rebuilds AS ITSELF, and a shared arm is only ever legal when it RETURNS rather than reconstructs.
+
+Four more hand-written `Doc` switches keep `case _` DELIBERATELY and are outside the net. `MethodChainEmit.startsWithHardline`, `WrapList.isOPLShape` and `WrapList.isArrowBrkShape` match one exact structural signature each, so "anything else" is their answer, not a hole. `ElseIfCommentReflow.scan` is the fourth and inverts the reason: it ACCEPTS only the ctors it can prove belong to a construct's head line, so its `case _` is a refusal — a ctor added later fails closed there, the reflow declined and the source layout kept, instead of acquiring an anchor by default, which is the answer a new member wants.
+
+Three of the spine walkers diverge from their own side for one family member, and each says why at the arm: `hasTopLevelElse` needs the `Nest`-carrying BREAK branch of the body-placement pair for its depth counter; `isMethodChainItem` reads that pair FLAT so a body separator is not mistaken for a dot-break; `startsWithHardline` reads `IfGluedFirstLineExceeds` FLAT because that probe's break branch opens with a hardline by construction, so a break-side read would answer "leads with a newline" for every glued body in the tree.
+
+`DocProbeFamilyWalkerTest` pins every side of the walkers the family sweep touched; the rest are pinned only by the corpora. `IfArrowContinuationFitsWithRest` needs no rows of its own there: every spine walker reaches it through the SAME alternative list as its plain sibling, so the two cannot answer differently and a regression in either arm is a regression in both.
+
+**Before adding a member**, fill in its probe-family row, and check every walker rather than copying a neighbour's alternative list. If the new member merges into an existing arm, say so here instead of duplicating the sweep.
+
 ### FormatOptions
 
 Writers take a runtime `FormatOptions` parameter controlling indent, line width, comma placement, quote style, and other stylistic choices. The macro generates code that consults these options at each decision point. One writer, multiple outputs — pretty, compact, canonical — without code duplication.

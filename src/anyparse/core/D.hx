@@ -83,13 +83,10 @@ class D {
 	 * one that bites: it aborts the natural first line at the fill's first
 	 * separator, so `WrapList.emitCondition` concludes the condition breaks
 	 * and opens `if (` / `)` onto their own lines around a condition that fit
-	 * on one. Measured, on `lime/system/System.hx:590`,
-	 * `openfl/filesystem/File.hx:2244` and both
-	 * `openfl/geom/PerspectiveProjection.hx` sites: four regions of 89-120
-	 * columns against a 140 limit, all four opened. Those walkers descend the
-	 * FLAT side of an `If*` probe, so gating the fill behind one hands every
-	 * measurement the glued shape it saw before and keeps the fill for the
-	 * case it was built for.
+	 * on one, on conditions that fit well inside the limit. Those walkers
+	 * descend the FLAT side of an `If*` probe, so gating the fill behind one
+	 * hands every measurement the glued shape it saw before and keeps the fill
+	 * for the case it was built for.
 	 *
 	 * `threshold` is the caller's line budget in the `>= n` convention the
 	 * `If*Exceeds` family uses (pass `lineWidth + 1` to break on a strict

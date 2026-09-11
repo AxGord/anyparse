@@ -114,3 +114,14 @@ decided the question; it may not become a record of runs.
   → a CPU profile of a whole `lint --all --fix` does not sample the function at all, nor
   `offsetWithinComment` beside it, and both of its loop consumers are bounded from outside —
   `2391816b`
+- a comment-only slice was to be proved byte-inert by building both revisions to JS and comparing
+  the bytes → the Haxe build is NOT reproducible: rebuilding the SAME tree twice moves the
+  analyzer's switch-arm grouping, so `bin/test.js` and `bin/apq.js` both differ from themselves
+  and an equal pair is one lucky draw, not a proof. The sound form of that oracle is the LINE
+  MULTISET of the generated JS, which is stable across rebuilds and still catches a one-token
+  mutation — MERGE-SHA
+- `Doc.hx`'s module header was to be shortened as prose → most of its length was the `Primitives`
+  list, which DUPLICATED the doc three ctors already carried and was the only doc the rest had;
+  the fix is to move each entry onto its ctor and keep in the header only what belongs to the
+  enum as a whole — MERGE-SHA
+

@@ -62,14 +62,14 @@ final class DocMeasure {
 	 * - `flatTokenWidth` / `Renderer.flatTokenWidthFirstLine` DEFER a `BodyGroup` to width 0,
 	 *   so a plain `if` (no `else`) reports 4 columns — `if (` and nothing more — because its
 	 *   condition and body live inside the construct-level `BodyGroup` that
-	 *   `WriterLowering`'s cond-fit group emits. Measured on a real site: 4, against 93 for
-	 *   the same shape written as a `for`, whose header is not grouped that way.
+	 *   `WriterLowering`'s cond-fit group emits. The same shape written as a `for` reports
+	 *   its whole head, because that header is not grouped that way.
 	 * - `Renderer.naturalFirstLineWidth` walks INTO a `BodyGroup`, but it resolves each soft
 	 *   break by the renderer's own decision at the running column — so for an over-wide
-	 *   condition it reports the width up to the break the renderer will take (measured: 46
-	 *   for a 110-column head that wraps at its `&&`). That is the right answer to "will the
-	 *   glued line overflow" and the wrong one to "would gluing force this construct's own
-	 *   head to wrap", which is what the arrow-body glue needs to know.
+	 *   condition it reports the width up to the break the renderer will take, not the width
+	 *   of the whole head. That is the right answer to "will the glued line overflow" and the
+	 *   wrong one to "would gluing force this construct's own head to wrap", which is what
+	 *   the arrow-body glue needs to know.
 	 *
 	 * So: descend everything (including `BodyGroup`), take each probe's FLAT side, count soft
 	 * separators at their flat width, and stop at the first FORCED break — which for a
@@ -977,8 +977,7 @@ private enum abstract DocTailScan(Int) {
  * every node of the tail spine, and `endsWithForcedCloseLine` — the
  * cuddled-chain gate on the writer's per-link path — wants none of the
  * three, so it passes `null` and the walk allocates nothing at all.
- * Returning a struct from every node instead cost a measured 1.5% of a whole
- * 870-file format pass (interleaved medians 3.759s vs 3.817s).
+ * Returning a struct from every node instead is slower over a whole format pass.
  */
 private typedef TailOut = {
 	var nest: Int;

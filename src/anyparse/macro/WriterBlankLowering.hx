@@ -293,8 +293,8 @@ final class WriterBlankLowering {
 	 * declared meta.
 	 *
 	 * `WrapList.flatLength` is the width measure specifically because it
-	 * DESCENDS `BodyGroup` where `Renderer.fitsFlat` defers it — the T16b
-	 * lesson: anything that reads render-time group state makes the verdict
+	 * DESCENDS `BodyGroup` where `Renderer.fitsFlat` defers it, for the standing
+	 * reason: anything that reads render-time group state makes the verdict
 	 * depend on the source's line shape, and `fmt` then needs a second pass to
 	 * settle.
 	 *
@@ -305,8 +305,8 @@ final class WriterBlankLowering {
 	 * switch's own coordination is INVISIBLE to the measurement that contains
 	 * it. The `SIBLING_PROBING` marker therefore rides down the whole subtree —
 	 * every Star already inside a pre-pass returns it unchanged instead of
-	 * running its own — so each level is measured once and emitted once.
-	 * Depth-15 nesting went from ~6s to flat.
+	 * running its own — so each level is measured once and emitted once, and a
+	 * deeply nested switch stops costing exponentially.
 	 *
 	 * The knob gate keeps the double write off every config that cannot use it:
 	 * the pre-pass runs only when the policy the case bodies will actually

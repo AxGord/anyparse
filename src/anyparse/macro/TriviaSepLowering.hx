@@ -1651,14 +1651,14 @@ final class TriviaSepLowering {
 	 * hardline signal. A collapsed gap must not leave a hardline requirement
 	 * behind — the list has to take exactly the route a blank-free source would
 	 * have taken, or the next `fmt` pass (which sees no blanks) picks a
-	 * different branch and the emit is not idempotent. `macro _t.blankBefore`
-	 * (the pre-slice expression) for every non-opted Star.
+	 * different branch and the emit is not idempotent. A non-opted Star keeps
+	 * the plain `macro _t.blankBefore`.
 	 *
 	 * The gate is deliberately NOT restricted to interior gaps. The blank right
 	 * after the open delimiter is already dropped upstream — it is owned by the
 	 * `afterLeftCurly` family, never reaches the emit (`_si > 0`), and an
-	 * element-0-only carve-out here was measured to change no output — so the
-	 * extra clause would be an untestable special case.
+	 * element-0-only carve-out here changes no output — so the extra clause
+	 * would be an untestable special case.
 	 *
 	 * Consequence worth stating: dropping the requirement also unblocks every
 	 * route the hardline was gating — `_smlKeep` reflow, the Keep matrix grid,
