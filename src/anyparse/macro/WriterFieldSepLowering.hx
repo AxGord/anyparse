@@ -30,13 +30,13 @@ using anyparse.macro.MetaInspect;
  *
  * Like `WriterCtorPatternLowering` this is a LAYER rather than a family, and
  * the inbound side is again what says so: the Seq walker, five Ref-field
- * emitters and one Star emitter all call in. S117 read the same edges as an
- * ENTANGLEMENT between the Seq-field and Ref-field families - seven members
- * one reached into the other - and priced a joint extraction. The edges were
- * real; the reading was not. Four of those seven are these separator
- * builders and two are ctor-pattern lookups, so they belong to neither
- * family: with both layers named, Ref-field reaches nothing in Seq-field but
- * the three naming helpers every family reaches.
+ * emitters and one Star emitter all call in. The same edges were once read as
+ * an ENTANGLEMENT between the Seq-field and Ref-field families, and a joint
+ * extraction was priced off that reading. The edges were real; the reading was
+ * not. Most of those members are these separator builders and the rest are
+ * ctor-pattern lookups, so they belong to neither family: with both layers
+ * named, Ref-field reaches nothing in Seq-field but the three naming helpers
+ * every family reaches.
  *
  * The dependency surface is four fields - `ctx` for the trivia gate, the
  * ctor-pattern bundle for the block-shape switches, and the two naming

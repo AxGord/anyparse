@@ -167,9 +167,8 @@ class Lowering {
 	 * dispatch decision the codegen does not make.
 	 *
 	 * One guardable branch cannot repay the prologue: the single trial it
-	 * saves costs about what the peek itself costs. MEASURED, not argued: a
-	 * threshold of 1 makes 9 more Alts dispatch and parses 9.3% SLOWER
-	 * (356 ms vs 389 ms, calibrated corpus, median of 9 interleaved rounds).
+	 * saves costs about what the peek itself costs, and a threshold of 1
+	 * parses measurably SLOWER over a calibrated corpus.
 	 */
 	private static inline final DISPATCH_MIN_GUARDS: Int = 2;
 

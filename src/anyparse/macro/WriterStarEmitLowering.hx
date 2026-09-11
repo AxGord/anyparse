@@ -527,12 +527,12 @@ final class WriterStarEmitLowering {
 		// `WrapList.emit`; trivia path mirror lives in `triviaSepStarExpr`
 		// (dual-dispatch per [[feedback-wraprules-dispatch-dual-path]]).
 		final groupRestProbe: Bool = starNode.fmtHasFlag('groupRestProbe');
-		// ω-pattern-rest-probe (T169): gated at RUNTIME, like the trivia mirror
+		// ω-pattern-rest-probe: gated at RUNTIME, like the trivia mirror
 		// in `TriviaSepLowering` and the postfix-Star `Call` site — the
 		// suppression is a property of the DESCENT (a case pattern is a matching
 		// shape and never owns the line's overflow), not of the Star. The
 		// backlog note that stood here called this gap plain-only and therefore
-		// invisible to `fmt`; that was wrong. 14 of the 18 struct-field Star
+		// invisible to `fmt`; that was wrong. Most struct-field Star
 		// carriers have no `@:trivia` (every declare-site `<T, …>` list plus
 		// `HxNewExpr.params`, `HxTypeRef.params` and `HxArrowFnType.args`) and
 		// this is their ONLY dispatch in BOTH writers, so
@@ -544,8 +544,9 @@ final class WriterStarEmitLowering {
 		// that opted into `groupRestProbe`, which no grammar but Haxe does.
 		//
 		// STILL OPEN, and the other half of the note that stood here: this call
-		// passes 3 of the ~15 options its trivia mirror does, `complexItemKinds`
-		// among them — the same plain/trivia asymmetry one option over.
+		// passes only a few of the options its trivia mirror does,
+		// `complexItemKinds` among them — the same plain/trivia asymmetry one
+		// option over.
 		final groupRestProbeExpr: Expr = groupRestProbe ? (macro !opt._suppressPatternRestProbe) : (macro false);
 		final listCall: Expr = if (wrapRulesField != null) {
 			final rulesExpr: Expr = optFieldAccess(wrapRulesField);

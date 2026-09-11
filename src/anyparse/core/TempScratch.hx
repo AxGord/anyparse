@@ -6,25 +6,20 @@ import haxe.io.Path;
  * Where this process may put a scratch file, and what keeps its scratch apart from
  * every other process's.
  *
- * ONE reading of both halves, because the question had grown five answers that had
- * drifted from each other — `OracleCache.tempDir`, `CompilerServer.stateFile`,
- * `ProbeCommand.probeTempRoot`, `StdlibDupCommand.stdlibDupWorkDir` and
- * `CliFixture.tempDir` each spelled it differently (`?? '/tmp'` against a
- * `length > 0` guard, `TMPDIR` alone against `TMPDIR`-then-`TEMP`, with and without
- * the trailing-slash trim macOS's own `TMPDIR` needs).
+ * One seat for both halves, because the question had drifted into several
+ * inconsistent spellings across the tree.
  *
  * The two halves answer two different questions and neither substitutes for the
- * other, which is the whole lesson of T700 (S170):
+ * other:
  *
  *  - `root` answers the CALLER's isolation. The suite's private scratch root
  *    (`CliFixture.isolateTempDir`) is a `TMPDIR` it exports, so everything resolved
  *    through here lands inside it and is reaped with it.
  *  - `processToken` answers CONCURRENCY, and it is the half that is easy to think
  *    redundant. `$TMPDIR` is SHARED between workers — on macOS every process of one
- *    user inherits the same `/var/folders/…/T` (verified: it equals
- *    `getconf DARWIN_USER_TEMP_DIR`), and no worker in this campaign sets its own —
- *    so a temp-root base separates nothing between two agents on one machine. Only
- *    the process token does.
+ *    user inherits the same `/var/folders/…/T` (it equals
+ *    `getconf DARWIN_USER_TEMP_DIR`), so a temp-root base separates nothing between
+ *    two agents on one machine. Only the process token does.
  *
  * `root` is a FUNCTION and must stay one: `TMPDIR` is mutated at runtime
  * (`CliFixture.isolateTempDir` exports the run's private root, fixtures stash and

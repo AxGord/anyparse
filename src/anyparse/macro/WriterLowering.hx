@@ -30,9 +30,9 @@ using anyparse.macro.MetaInspect;
  * This is the structural inverse of `Lowering`, which emits parse bodies
  * that consume input and build AST nodes.
  *
- * The writer lowering is SEVERAL modules, split five ways.
+ * The writer lowering is SEVERAL modules, split three ways.
  *
- * SEVEN are LAYERS, one responsibility each - `WriterLoweringSupport` (the
+ * LAYERS, one responsibility each - `WriterLoweringSupport` (the
  * shared field-access / name / `@:fmt`-argument vocabulary),
  * `WriterPolicyLowering` (the `hxformat.json` policy separators),
  * `WriterCascadeLowering` (the `@:fmt(blankLines*)` cascade),
@@ -41,26 +41,23 @@ using anyparse.macro.MetaInspect;
  * the grammar says about a referenced rule's constructors) and
  * `WriterFieldSepLowering` (the gap between a field and the sibling before
  * it). Their members are reached UNQUALIFIED from here - a wildcard import
- * plus the class-level `@:access` - which is what let the first five move
- * without touching a call site, and is why they stayed private. The last
- * two read build state, so they take a bundle as their first argument like
- * the families below; what makes them LAYERS rather than families is the
- * inbound side - every writer shape family calls into both, and five ctx
- * bundles were already exporting members of `WriterCtorPatternLowering` as
- * bound closures before it had a name.
+ * plus the class-level `@:access` - which is why they stayed private. The
+ * last two read build state, so they take a bundle as their first argument
+ * like the families below; what makes them LAYERS rather than families is
+ * the inbound side - every writer shape family calls into both.
  *
- * FOUR carry a trivia Star emit family each - `TriviaTryparseLowering`,
+ * TRIVIA STAR EMIT families, one each - `TriviaTryparseLowering`,
  * `TriviaEofLowering`, `TriviaSepLowering` and `TriviaBlockLowering`. Each
  * is entered from one or two members of `WriterStarEmitLowering` under
  * `@:access`, calls back into the shared lowering utilities
  * (`optFieldAccess`, `astPredCallT`, `buildCascadeEmit`,
  * `blankBefore2ExtrasExpr`, ...) the same way, and types its parameters
  * with this module's sub-module typedefs, which stayed behind - which is
- * why the fifty-four typedefs below the class did not travel with the
- * families that use them.
+ * why the typedefs below the class did not travel with the families that
+ * use them.
  *
- * EIGHT carry a SHAPE FAMILY each - one region of this module's call graph,
- * moved whole: `WriterPrattLowering` (`@:ternary` / `@:infix` / `@:prefix`
+ * SHAPE FAMILIES, one region of this module's call graph each, moved whole:
+ * `WriterPrattLowering` (`@:ternary` / `@:infix` / `@:prefix`
  * / `@:postfix` branches), `WriterKwRefLowering` (the keyword-plus-`Ref`
  * enum branches), `WriterBodyPolicyLowering` (`@:fmt(bodyPolicy)` and its
  * five layouts), `WriterArrowValueIfLowering`
@@ -80,67 +77,52 @@ using anyparse.macro.MetaInspect;
  * `_formatInfo` and `_ctx` are set once in the constructor and never
  * written, so every member is already a pure function of the three.
  *
- * FIVE are PURITY modules, and they came from a different question: not
- * which shape family a member belongs to, but what state it reads. A
- * census of the 127 members found 25 that touch none of `_shape`,
- * `_formatInfo`, `_ctx` or the six bundles, directly or through a callee —
- * pure functions of their arguments. For those, `private function` becomes
- * `private static function` in a sibling module at no call-site cost, so
- * `WriterCondWrapLowering`, `WriterStarPadLowering`,
+ * PURITY modules came from a different question: not which shape family a
+ * member belongs to, but what state it reads. A member that touches none of
+ * `_shape`, `_formatInfo`, `_ctx` or the bundles, directly or through a
+ * callee, is a pure function of its arguments, and for those
+ * `private function` becomes `private static function` in a sibling module
+ * at no call-site cost — `WriterCondWrapLowering`, `WriterStarPadLowering`,
  * `WriterTriviaSlotLowering`, `WriterRefLeadLowering` and
- * `WriterBraceSymmetryLowering` each took one QUESTION worth of them, and
- * `reindentBlockEmit` joined `WriterBlankLowering`. The axis stops there:
- * the other 102 members read build state, and moving one of those is a
- * signature change at every call site. `astPredCallT` is the 25th and
- * stayed anyway — it is pure, but five sibling modules call it QUALIFIED
- * at 11 sites, and it reads the process-scoped `_predRootStatic` that
- * `generate` writes.
+ * `WriterBraceSymmetryLowering` each took one QUESTION worth of them. The
+ * axis stops there: every remaining member reads build state, and moving
+ * one of those is a signature change at every call site. `astPredCallT` is
+ * pure and stayed anyway — sibling modules call it QUALIFIED, and it reads
+ * the process-scoped `_predRootStatic` that `generate` writes.
  *
- * ONE more went to `WriterBraceSymmetryLowering`, and it is a different
- * axis again — the STATE-CARRYING half of a family whose pure half had
- * already left. Re-running the census over the 121 members that remained,
- * but recording the SLICE each member needs rather than a yes/no, says
- * something the pure/impure split cannot: 50 members / 2482 lines reach
- * the instance only through `_ctx.trivia` and `_shape.rules` — one `Bool`
- * and one `Map`. That is one call graph, not a decomposition (it is
- * everything reachable from `isTriviaBearing`), but it prices the families
- * inside it, and the prices differ by twenty-five times. The trivia-paired
- * NAMING vocabulary — `isTriviaBearing`, `writeFnFor`, `ruleCtorPath`,
- * `ruleValueCT` — is the CHEAPEST to free and the WORST to move: 42 lines
- * behind 33 inbound call sites, because `isTriviaBearing` is the hub
- * (fan-in 19) and a hub is what everything else is impure THROUGH. The
- * ctor-pattern lookups are 218 lines behind 25 sites. Brace symmetry is
- * 382 lines behind SEVEN, so brace symmetry moved: twelve members plus
- * `VALUE_BRACE_SYMMETRY_MIN_ARGS`, each now `private static` with a
- * `BraceSymmetryCtx` bundle (`_braceSym`) as its first argument.
+ * `WriterBraceSymmetryLowering` also took the STATE-CARRYING half of its
+ * own family, on a third axis: what SLICE of the instance a member needs
+ * rather than a yes/no. A member reaching the instance only through
+ * `_ctx.trivia` and `_shape.rules` — one `Bool` and one `Map` — travels
+ * with a narrow bundle, and among such families the price is set by fan-in,
+ * not by size. The trivia-paired NAMING vocabulary — `isTriviaBearing`,
+ * `writeFnFor`, `ruleCtorPath`, `ruleValueCT` — is the CHEAPEST to free and
+ * the WORST to move, because `isTriviaBearing` is the hub every other
+ * member is impure THROUGH. Brace symmetry had the fewest inbound sites, so
+ * brace symmetry moved.
  *
- * The LAST split - `WriterCtorPatternLowering`, `WriterFieldSepLowering`,
- * `WriterStarEmitLowering`, `WriterRefFieldLowering` - is the one that
- * cleared the caps, 112 members / 5869 lines down to 47 / 1508, and it
- * turned on rereading an entanglement rather than on new code motion. S117
- * measured that seven members Ref-field reached lived in the Seq-field
- * region and priced the two families as one joint extraction. The edges
- * were real; the reading was not. Judged by what they READ, none of the
- * seven is a Seq-field member: four are separator builders answering "what
- * `Doc` goes BETWEEN two emits", two read only `shape.rules` and answer
- * "which Alt branches match this shape predicate", and the seventh
- * (`beforeTrailSlotAccess`) is a plain Ref-field member that landed in a
- * Seq-field bucket only because its two callers sit in two different Ref
- * sub-families whose nearest common dominator is `lowerStruct`. Name the
- * two LAYERS and the entanglement is gone rather than carried:
- * `WriterRefFieldLowering` reaches nothing in the Seq walker at all,
- * `lowerStruct` calls in at four sites, and its bundle holds neither
- * `_shape` nor `_formatInfo`. Three helpers that read as shared
- * (`buildBodyPolicyForCtorChain`, `buildBoolFlagRawWriteCall`,
+ * One warning the split leaves behind. An ENTANGLEMENT between the
+ * Seq-field and Ref-field families was read off those same edges once and
+ * priced as one joint extraction; the edges were real, the reading was not.
+ * Judged by what they READ, none of the disputed members is a Seq-field
+ * member: most are separator builders answering "what `Doc` goes BETWEEN
+ * two emits", some read only `shape.rules` and answer "which Alt branches
+ * match this shape predicate", and `beforeTrailSlotAccess` is a plain
+ * Ref-field member that landed in a Seq-field bucket only because its two
+ * callers sit in two different Ref sub-families whose nearest common
+ * dominator is `lowerStruct`. Name the two LAYERS and the entanglement is
+ * gone rather than carried: `WriterRefFieldLowering` reaches nothing in the
+ * Seq walker at all, `lowerStruct` calls in at four sites, and its bundle
+ * holds neither `_shape` nor `_formatInfo`. Three helpers that read as
+ * shared (`buildBodyPolicyForCtorChain`, `buildBoolFlagRawWriteCall`,
  * `buildLeftCurlySepExpr`) had both their callers inside the family and
  * came along; `blockEndedPredCheck` and `arrayBracketInsidePolicySpace`
  * did the same on the Star side.
  *
- * That the move is byte-inert is not an inference. This module is
+ * That such a move is byte-inert is not an inference. This module is
  * `#if macro`, so nothing here reaches a JS target's output - only the
- * writer it GENERATES does. A build of the moved tree hashes into the same
- * four-md5 float set an unmoved tree produces, which is the same `cmp`
- * proof the purity moves had.
+ * writer it GENERATES does, and a build of the moved tree hashes into the
+ * same float set an unmoved tree produces.
  *
  * ⚠️ Star emission FORKS across FOUR sites —
  * `StarFieldLowering.emitStarFieldSteps` and the `lowerStar*Branch` leaves
@@ -149,11 +131,11 @@ using anyparse.macro.MetaInspect;
  * `lowerEnumStar`, both now in `WriterStarEmitLowering`. They moved
  * TOGETHER and that is the whole condition on moving them: an extraction
  * taking one and leaving the other would put the pair in two files with
- * nothing naming the other half, which is why S117 refused to take the
- * Star-field region alone. `WriterStarPadLowering` holds plain-Star LEAF
+ * nothing naming the other half, which is why taking the Star-field region
+ * alone was refused. `WriterStarPadLowering` holds plain-Star LEAF
  * emitters taken out from under `emitWriterStarField`; none of them is
- * reachable from `lowerEnumStar` (measured on the call graph), so neither
- * fork half was separated from its twin there either.
+ * reachable from `lowerEnumStar`, so neither fork half was separated from
+ * its twin there either.
  *
  * Generated code references `_dt`, `_dc`, `_dhl`, `_de` etc. — thin
  * wrappers over `Doc` constructors emitted by `WriterCodegen` on the

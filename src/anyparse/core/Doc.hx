@@ -9,343 +9,13 @@ package anyparse.core;
  * (all `Line` nodes become real newlines with indentation).
  *
  * Based on Wadler's "A prettier printer" with adjustments for strict
- * evaluation and Haxe ergonomics.
+ * evaluation and Haxe ergonomics. Every ctor carries its own contract below.
  *
- * PROBE FAMILY — the ctors whose width test reads the frame's INDENT
- * rather than the live pen column, and so answers the same for every
- * sibling rendered at that indent. (The column-reading probes —
- * `IfWidthExceeds`, `IfFirstLineExceeds`, `IfLineExceeds`,
- * `IfResidualLineExceeds`, `IfFullLineExceeds`,
- * `IfNaturalFirstLineFitsOpenDelim` — are a separate population; they are
- * documented in the primitive list below and are NOT rows here.) Three of
- * the five carry a precomputed content width — and one of those three also
- * reads what trails on the same rendered line — two measure `flatDoc` at
- * render time, and the last also carries the indent its break branch lands
- * on. They look interchangeable and are not; each divergence below is
- * justified only at its own call sites, and re-deriving it from one member
- * is how a wrong "every walker forwards to flatDoc" claim got written once
- * already:
- *
- * | ctor | probes | fits when | both-branch walkers descend |
- * |---|---|---|---|
- * | `IfArrowContinuationFits` | `indent + extraIndent + flatWidth` | `< n` (strict — calibrated to a continuation LINE, so the budget excludes the column `n` itself) | both branches (its two branches are genuinely different shapes: head glued vs paren opened) |
- * | `IfArrowContinuationFitsWithRest` | the row above PLUS `Renderer.flatTokenWidthOfRestStack` — what the pending work stack still emits on the SAME rendered line after this subtree | `< n`, same strict budget; its consumers pass `lineWidth + 1` because the tail is CHARGED rather than reserved | both branches |
- * | `IfIndentWidthExceeds` | `indent + flatWidth` | `<= n` (the `Group` family convention) | FLAT branch only (both branches wrap the same body — see its own doc) |
- * | `IfNaturalFirstLineExceeds` | measures `flatDoc`'s natural first line at render time | `< n` | both branches |
- * | `IfGluedFirstLineExceeds` | measures `flatDoc`'s natural first line at render time — same measurer as the row above, but called WITHOUT `resolveOpenDelim`, and followed by a second re-measure at the break indent (see its own doc: the width test alone is not the whole verdict) | `<= n` (the `Group` family convention), PLUS two break-side gates that can keep the flat branch even when `n` is exceeded | FLAT branch only (both branches wrap the same body — see its own doc) |
- *
- * FITS-STRICTNESS ANOMALY, recorded rather than fixed: the last two rows
- * run the SAME measurer (`Renderer.naturalFirstLineWidth`) and disagree
- * at the boundary by one column — `IfNaturalFirstLineExceeds` crosses on
- * `>= n`, `IfGluedFirstLineExceeds` on `> n`. Neither is a typo: the
- * first is calibrated to a continuation budget, the second to a whole
- * rendered LINE against `maxLineLength`, where landing exactly on the
- * limit fits. Unifying them MOVES the corpora, so the convention stands;
- * a new member picks its boundary from what it measures, not from the
- * member it borrowed its measurer from.
- *
- * The single-branch walkers (`DocMeasure`, `WrapList`, `D`,
- * `BinaryChainEmit`, `MethodChainEmit`) are a separate axis again: each
- * picks break-side or flat-side per its OWN contract, not per ctor.
- * `DocMeasure.breakableHeadStep` takes the BREAK side for most of the
- * family because it promises a LOWER bound on head width (a break branch
- * leading with `Line` terminates the head at width 0) but the FLAT side
- * for `IfArrowContinuationFits`, the one probe whose break branch is the
- * WIDER shape. Its rest-aware sibling shares that arm for the family
- * contract rather than for that reason: both of ITS layouts come from one
- * `shape(…)` call with `cuddleLast` flipped, so neither side is wider.
- *
- * THE COMPILE-TIME NET, and its exact edge. Thirteen hand-written SPINE
- * walkers carry an explicit arm per family member, and each one's OUTER
- * switch is exhaustive — no `case _` — so a new ctor added to this enum
- * fails to compile in every one of them instead of silently inheriting a
- * default:
- *
- *  - `BinaryChainEmit.leadingOperandOpensDelim`;
- *  - `MethodChainEmit.endsWithLineComment`;
- *  - `WrapList`'s `lastVisibleText`, `firstVisibleText`,
- *    `firstVisibleTextIsFunctionKw`, `hasTopLevelElse`,
- *    `isMethodChainItem`, `isTopLevelChain`, `chainKeepFlatCandidate`,
- *    `bareArrowBodyBreaks`, `startsWithHardline`, `endsWithCloseDelim`,
- *    `endsWithCondEnd`.
- *
- * Five of the thirteen also run a nested `case _` over a `Doc` INSIDE
- * their leading/trailing `Concat` scan. Four of those forward to the
- * recursive call, so the outer switch still catches the new ctor;
- * `isMethodChainItem`'s is an empty SKIP, so after its outer compile
- * error is fixed, a new ctor appearing as a `Concat` element there is
- * still dropped. Fix that one by hand.
- *
- * A FOURTH category, and the one this census kept missing: exhaustive `Doc -> Doc`
- * REBUILDERS, which rebuild every ctor as itself while a caller transforms the
- * children — `D.mapChildren` and `WrapList.groupifyInlineBodies`. Exhaustiveness
- * catches a MISSING arm there and never a WRONG one, so a shared
- * `case A(x), B(x):` arm silently rebuilds both as whichever ctor it names: that
- * is how `groupifyInlineBodies` dropped the rest-awareness of
- * `IfNaturalFirstLineExceedsWithRest`, and it moved no bytes, so no corpus could
- * have found it (`WrapProbeRestAwarenessSliceTest` pins it at the `Doc` level
- * instead). The rule for both: every arm rebuilds AS ITSELF, and a shared arm is
- * only ever legal when it RETURNS rather than reconstructs.
- *
- * Four more hand-written `Doc` switches keep `case _` DELIBERATELY and are outside
- * the net: `MethodChainEmit.startsWithHardline`,
- * `WrapList.isOPLShape` and `WrapList.isArrowBrkShape` match one exact
- * structural signature each, so "anything else" is their answer, not a
- * hole. `ElseIfCommentReflow.scan` is the fourth and inverts the reason:
- * it ACCEPTS only the ctors it can prove belong to a construct's head
- * line, so its `case _` is a refusal — a ctor added later fails closed
- * there (the reflow is declined, the source layout kept) instead of
- * acquiring an anchor by default, which is the answer a new member wants.
- *
- * THREE of the thirteen diverge from their own side for one family
- * member, and each says why at the arm: `hasTopLevelElse` needs the
- * `Nest`-carrying BREAK branch of the body-placement pair for its depth
- * counter; `isMethodChainItem` reads that pair FLAT so a body separator
- * is not mistaken for a dot-break; `startsWithHardline` reads
- * `IfGluedFirstLineExceeds` FLAT because that probe's break branch opens
- * with a hardline by construction, so a break-side read would answer
- * "leads with a newline" for every glued body in the tree (measured: two
- * corpus files changed their `if (…)` shape from it alone).
- * `DocProbeFamilyWalkerTest` pins every side of the eight walkers the family
- * sweep touched; the other five predate it and are pinned only by the
- * corpora. `IfArrowContinuationFitsWithRest` needs no rows of its own there:
- * every one of the thirteen walkers reaches it through the SAME alternative
- * list as its plain sibling, so the two cannot answer differently and a
- * regression in either arm is a regression in both. Before adding a member,
- * fill in this row for it and check every walker rather than copying a
- * neighbour's alternative list — and if the new member merges into an existing
- * arm, say so here instead of duplicating the sweep.
- *
- * Primitives:
- *
- * - `Empty`          — nothing.
- * - `Text(s)`        — literal string without line breaks.
- * - `Line(flat)`     — a potential line break. In flat mode it becomes `flat`
- *                      (usually `" "` or `""`); in break mode it becomes a
- *                      newline followed by the current indent.
- * - `Nest(n, inner)` — increases the current indent by `n` for breaks inside
- *                      `inner`.
- * - `Group(inner)`   — a unit of fit decision. The renderer measures the flat
- *                      width of `inner` and commits to flat if it fits within
- *                      the remaining width, otherwise to break.
- * - `BodyGroup(inner)` — body-level fit decision. Renderer treats
- *                      `BodyGroup` identically to `Group` for its own
- *                      flat/break choice. `fitsFlat` differs: when
- *                      measuring an outer Group that contains a
- *                      `BodyGroup`, the BG is DEFERRED — its content does
- *                      not contribute to the parent's measurement. The
- *                      parent therefore stays inline even when the inner
- *                      BG would break, which is what lets a multi-line
- *                      block body sit inside a call argument without
- *                      forcing the call's `(...)` onto separate lines,
- *                      and what lets chained FitLines keep the outer body
- *                      inline while the inner body breaks. The trivia
- *                      writer's trailing-comment folder looks specifically
- *                      for `BodyGroup` when splicing a trailing line
- *                      comment.
- * - `Concat(items)`  — sequential concatenation.
- * - `IfBreak(br, fl)`— emit `br` if the enclosing Group is in break mode,
- *                      `fl` if in flat mode. Used for trailing separators
- *                      that should appear only when the list breaks.
- * - `IfWidthExceeds(n, br, fl)` — column-aware sibling of `IfBreak`. At
- *                      render time, the renderer probes whether the
- *                      current column plus `flatWidth(fl)` reaches `n`.
- *                      If yes → emit `br`; else → `fl`. Independent of
- *                      the surrounding Group's flat/break mode. Used by
- *                      `WrapList.emit` to honour `LineLengthLargerThan`
- *                      cascade conditions whose threshold differs from
- *                      `WriteOptions.lineWidth` (the standard `IfBreak`
- *                      pivot) — e.g. opBool's `lineLength >= 140` when
- *                      `maxLineLength = 160`. For threshold equal to
- *                      `lineWidth`, prefer `IfBreak` (cheaper, no per-
- *                      primitive column probe). `fitsFlat` (used by
- *                      enclosing `Group` measurement) forwards to `fl`
- *                      so flat-mode width estimation stays stable
- *                      regardless of the column-aware decision.
- * - `IfFirstLineExceeds(n, br, fl)` — first-line-aware sibling of
- *                      `IfWidthExceeds`. Probes `col + firstLineWidth(fl)`
- *                      against `n` instead of total flat width: forced
- *                      hardlines inside `fl` cap the measurement at the
- *                      first line rather than collapsing to zero. Used
- *                      when the layout decision depends on whether the
- *                      first rendered line of a multi-line subtree
- *                      overflows — e.g. `return <multi-line if-expr>`
- *                      wants the if-expr's HEAD inline with `return`
- *                      when the head fits, even though subsequent
- *                      branches break. The full-width sibling
- *                      `IfWidthExceeds` answers "would the whole flat
- *                      subtree fit", which over-fires for multi-line
- *                      bodies; this sibling answers "would the first
- *                      rendered line fit", matching haxe-formatter's
- *                      `sameLine.returnBody: same` semantics. Group's
- *                      `fitsFlat` forwards to `fl` (same as
- *                      `IfWidthExceeds`) so chain consumers' cascade
- *                      semantic stays unchanged.
- * - `IfLineExceeds(n, br, fl)` — line-length-aware sibling of
- *                      `IfWidthExceeds`. Probes `col +
- *                      flatTokenWidth(fl) + flatTokenWidthOfRestStack`
- *                      against `n` — extends the column-aware probe with
- *                      a lookahead over the rest of the rendering stack
- *                      up to the next forced hardline. Answers "would
- *                      the rendered current line, including everything
- *                      after this primitive on the same source line,
- *                      reach `n` columns?". Closes the architectural
- *                      blindspot where a chain `Group(IfBreak)` sees only
- *                      its own subtree and picks flat even though the
- *                      enclosing assign/binop expression would push the
- *                      line past `lineWidth`. Independent of the
- *                      enclosing Group's flat/break mode (mirrors
- *                      `IfWidthExceeds`); `fitsFlat` forwards to `fl`.
- *                      `BodyGroup` is DEFERRED in both walks
- *                      (Departure 2) — body content does not contribute.
- *                      Slice ω-iflineexceeds-infra introduces this
- *                      primitive; consumers wire in via subsequent
- *                      slices that need line-aware probes outside the
- *                      wrap-engine cascade machinery.
- * - `IfFullLineExceeds(n, br, fl)` — sibling of `IfLineExceeds` with
- *                      a `BodyGroup`-deferring semantic on BOTH
- *                      measures: `flatTokenWidth(fl)` (the primitive's
- *                      own subtree width) DEFERS `BodyGroup` so a lambda
- *                      body BG INSIDE one of `fl`'s segments stays
- *                      measured by its header only — chain probes don't
- *                      over-fire when a chain segment contains a
- *                      multi-line lambda body — and the rest-of-stack
- *                      lookahead defers it too, so a sibling body that
- *                      follows AFTER this primitive on the same source
- *                      line (the `for (cond) BODY` body wrapped in BG by
- *                      `sameLine.forBody=fitLine`, a `case P if (c):`
- *                      guard's body) contributes nothing. Such a body is
- *                      MOVABLE — it drops to its own line whenever the
- *                      shared line overflows — so counting it would
- *                      decide a header's layout by the body's width:
- *                      it tears a fitting case-guard label, and it
- *                      breaks a method chain whose own header line fits
- *                      (ω-header-wrap-ladder). Used by
- *                      `MethodChainEmit` and the paren-open family
- *                      alike. Independent of the enclosing
- *                      Group's flat/break mode (mirrors
- *                      `IfLineExceeds`); `fitsFlat` and cascade-rule
- *                      static walks forward to `fl`. Slice
- *                      ω-iffulllineexceeds-primitive.
- * - `IfNaturalFirstLineExceeds(n, br, fl)` — natural-shape sibling of
- *                      `IfFirstLineExceeds`. Where `IfFirstLineExceeds`
- *                      probes `col + flatTokenWidthFirstLine(fl)` — a
- *                      purely FLAT first-line walk that descends every
- *                      inner `Group`/`IfBreak`/`If*Exceeds` taking the
- *                      FLAT branch — this primitive probes
- *                      `naturalFirstLineWidth(fl, col, indent, width)`:
- *                      it renders `fl` SPECULATIVELY at the current pen,
- *                      resolving each inner Group by its OWN `fitsFlat`
- *                      decision (the real flat/break choice the renderer
- *                      would make at the running column), and measures
- *                      the width of the first PHYSICAL line — up to the
- *                      first naturally-produced hardline (a forced
- *                      `Line('\n')`, an `OptHardline*`, or a soft `Line`
- *                      reached inside a Group that `fitsFlat` chose to
- *                      break). Crosses `n` iff that natural first line
- *                      reaches `n`. This distinguishes a RHS pinned
- *                      NoWrap (keeps its full flat width → crosses →
- *                      break) from a RHS that wraps its own call-args
- *                      (short natural first line, e.g. `foo(` then a
- *                      hardline → does NOT cross → stay inline) — a
- *                      distinction the flat `IfFirstLineExceeds` cannot
- *                      make (it over-measures both). `BodyGroup` is
- *                      DEFERRED (Departure 2, same as the flat siblings).
- *                      Canonical consumer: assignment break-after-`=` on
- *                      a type-param-carrying LHS. `fitsFlat` and the
- *                      static flat walks forward to `fl`;
- *                      `startsWithHardline`/`isOPLShape` recurse `br`
- *                      (break-side leading-edge walkers, mirror the
- *                      `If*Exceeds` siblings). Slice
- *                      ω-ifnaturalfirstlineexceeds-infra.
- * - `Fill(items, sep, ?tailReserve)` — Wadler `fillSep`. In flat mode,
- *                      emits items joined by `sep` flat. In break mode,
- *                      packs items left-to-right: before each `items[i]`
- *                      (i > 0), measures `sep + items[i]` flat from the
- *                      current column; if it fits, emits `sep` flat then
- *                      the item; if it doesn't fit, emits `sep` in break
- *                      mode (so its inner `Line` becomes a hardline at
- *                      the Fill's indent) and starts the item on the
- *                      new line. Items[0] is always emitted at the
- *                      entry column. `BodyGroup` deferral applies inside
- *                      per-item flat measurements, so an item containing
- *                      a multi-line block body still measures by its
- *                      "header" width and packs cleanly with siblings.
- *                      `tailReserve` (default 0) — cols of post-Fill
- *                      same-line content (typically trailing punct +
- *                      close delim emitted OUTSIDE the Fill but on the
- *                      same line as its last packed item). Subtracted
- *                      from per-item-fit budget so the LAST packed item
- *                      leaves room for that tail; mirrors fork's
- *                      `wrapFillLine2AfterLast` accounting where each
- *                      item carries its trailing comma in `firstLineLength`.
- *                      Slice ω-fill-tail-reserve.
- * - `OptSpace(s)`    — optional inline whitespace, dropped when
- *                      immediately followed by a break-mode `Line`
- *                      (hardline). Used by lead emission to keep the
- *                      "lead literal + trailing space" pair byte-
- *                      identical when the value lays out flat, but
- *                      suppress the trailing space when the value
- *                      emits a leading hardline (e.g. `leftCurly=Next`
- *                      on an object literal). Treated as `Text(s)` for
- *                      flat-mode `fitsFlat` measurement so wrapping
- *                      decisions don't shift. Renderer holds OptSpace
- *                      in a small pending buffer; it's flushed before
- *                      any `Text` (or in-flat `Line`) and discarded
- *                      right before a break-mode `Line` writes the
- *                      newline. At end of render any unflushed
- *                      OptSpace is silently dropped (no trailing
- *                      whitespace at EOF).
- * - `OptHardline`    — optional break-mode newline, dropped when the
- *                      last emit was already a hardline (`Line('\n')`
- *                      or another `OptHardline`). Used to coordinate
- *                      between two independent emitters that each want
- *                      a leading newline at the same insertion point —
- *                      e.g. wrap-engine sep `\n` between call args
- *                      followed by the next arg's `leftCurly=Next`
- *                      leading `\n`. Without `OptHardline` the two
- *                      hardlines collide and produce `\n\n` (a
- *                      spurious blank line). Like `Line('\n')`, it
- *                      forces `fitsFlat` to refuse flatten — never
- *                      fits in flat mode. The dropped variant still
- *                      updates `pendingIndent` to the OptHardline's
- *                      own indent, so the next `Text` lands at the
- *                      more-specific (inner) position. Intentional
- *                      blank lines must use plain `Line('\n')` pairs;
- *                      OptHardline is opt-in at the producer site.
- * - `OptHardlineSkipAtOpenDelim` — break-mode newline that drops when
- *                      the last emitted byte is an open delimiter
- *                      (`(`, `[`, `{`), or a prior hardline (mirrors
- *                      `OptHardline`'s collision drop). Used by chain
- *                      shapes (`BinaryChainEmit.shapeOnePerLine`) for
- *                      the leading hardline before items[0]: keeps
- *                      the chain's first operand glued to the
- *                      enclosing open delim (`(items[0]...`) while
- *                      still emitting `\n+indent` in outer-context
- *                      cases (`dirty = chain`, `return chain`) where
- *                      the previous byte is `=` / `n` / etc. Like
- *                      `Line('\n')` and `OptHardline`, forces
- *                      `fitsFlat` to refuse flatten so the enclosing
- *                      Group commits MBreak. The dropped variant
- *                      updates `pendingIndent` to the node's own
- *                      indent so following `Text` lands at the
- *                      correct column.
- * - `OptHardlineSkipBeforeHardline` — break-mode newline that drops
- *                      when the NEXT non-OptSpace emit is itself a
- *                      hardline. Forward-looking mirror of
- *                      `OptHardline`'s drop-on-previous: the renderer
- *                      holds the emit in a `pendingHardline` slot
- *                      (sister to `pendingOptSpace`) and flushes it on
- *                      the first content-bearing emit; a hardline-like
- *                      emit arriving while pending clears it without
- *                      write. Used at `trailFollowExpr`
- *                      (close-trailing-of-Alt-branch-BlockStmt) where
- *                      the parent stmt-list Star's per-element
- *                      separator will itself emit `\n`, so the
- *                      comment-terminator hardline must drop to avoid
- *                      a spurious blank line between consecutive
- *                      `} // comment` / `<next stmt>` siblings. Forces
- *                      `fitsFlat` to refuse flatten.
+ * Before ADDING a ctor read `docs/architecture.md` § "The Doc probe family":
+ * it holds the probe family's per-member calibration table, the
+ * fits-strictness convention a new member picks its boundary from, and the
+ * compile-time net of exhaustive spine walkers that catches a new ctor —
+ * together with the one walker whose nested arm the net does not cover.
  *
  * See `D` for builder helpers and `Renderer` for the layout algorithm.
  */
@@ -364,14 +34,12 @@ enum Doc {
 	 * lands on it, so no emitted-syntax space can ever reach a line
 	 * end. A verbatim leaf is written whole, always.
 	 *
-	 * Omitted means syntax, because syntax is what nearly every `Text`
-	 * in the tree is. The whole mark set is the comment emitters —
-	 * `D.verbatim` over the Doc `BlockCommentNormalizer` hands back, and
-	 * `WriterCodegen`'s three comment helpers via `_dtv` — where marking
-	 * the syntax side would be an open-ended sweep over every `kwLead`,
-	 * separator and delimiter in the writer; that sweep was measured and
-	 * refused (three `kwLead` sites split producer-side moved none of the
-	 * nine offending lines, and `kwLead` has fourteen more binding sites).
+	 * Omitted means syntax, because syntax is what nearly every `Text` in the
+	 * tree is. The whole mark set is the comment emitters — `D.verbatim` over
+	 * what the Doc `BlockCommentNormalizer` hands back, and `WriterCodegen`'s
+	 * comment helpers via `_dtv`; marking the syntax side instead would be an
+	 * open-ended sweep over every `kwLead`, separator and delimiter, and
+	 * splitting the producer sites was tried and refused.
 	 *
 	 * The `_dtv` half is INERT for the Haxe grammar and is not there for
 	 * Haxe: `LineCommentNormalizer` rtrims every `//` body before a Doc
@@ -384,17 +52,15 @@ enum Doc {
 	 * and grammars are plugins.
 	 *
 	 * The flag is deliberately NOT a separate ctor. Every other `Doc`
-	 * walker — measurement, flattening, the thirteen spine walkers —
+	 * walker — the width walks, flattening, the exhaustive spine walkers —
 	 * treats a verbatim leaf identically to a syntax one, so a ctor
-	 * would buy thirteen pass-through arms and thirteen chances to get
-	 * one subtly wrong. A trailing optional parameter is invisible to
+	 * would buy one pass-through arm per walker and one chance each to get
+	 * it subtly wrong. A trailing optional parameter is invisible to
 	 * `case Text(s)` (Haxe matches a ctor's leading arguments) and to
 	 * `Text(s)` construction, so nothing else in the tree changes.
 	 *
-	 * A `Doc → Doc` rewriter must not rebuild a matched leaf as
-	 * `Text(s)` — that silently demotes content to syntax. Today none
-	 * does: `D.mapChildren` and `D.flatten` both return the original
-	 * node for a `Text`.
+	 * A `Doc → Doc` rewriter must not rebuild a matched leaf as `Text(s)` —
+	 * that silently demotes content to syntax. Today none does.
 	 */
 	Text(s: String, ?verbatim: Bool);
 
@@ -412,23 +78,19 @@ enum Doc {
 	 * nor drops it. Omitted means layout, because layout is what nearly
 	 * every `Line` in the tree is.
 	 *
-	 * The whole mark set is again the comment path: `D.verbatim` over the
-	 * Doc `BlockCommentNormalizer` hands back. That covers all four of its
-	 * assembly shapes at once — the three hand-built ones and the macro-
-	 * generated `BlockCommentWriter.writeDoc`, whose `@:sep('\n')` join no
-	 * hand edit can reach.
+	 * The whole mark set is again the comment path: `D.verbatim` over what the
+	 * Doc `BlockCommentNormalizer` hands back. That covers every assembly shape
+	 * at once, the macro-generated `BlockCommentWriter.writeDoc` included, whose
+	 * `@:sep('\n')` join no hand edit can reach.
 	 *
 	 * A GUTTER-LESS block comment is why the flag exists. Its lines are
-	 * re-indented, so the normalizer cannot hand the renderer one `Text`
-	 * holding the whole body — it hands one `Text` PER LINE joined by these
-	 * breaks, and a blank interior line is an EMPTY `Text` that emits
-	 * nothing at all. Without the flag the cap sees a bare run of layout
-	 * line-ends and deletes a line the author wrote. A DOC comment is not
-	 * the exception the flag's first write-up claimed: its blank lines are
-	 * safe only where the author put the ` * ` gutter on them, and a
-	 * genuinely empty interior line inside a `/**` block reaches
-	 * `javadocBytePreserveDoc`, which builds the same empty `Text` between
-	 * two breaks. Measured: base ate both blanks out of such a block.
+	 * re-indented, so the normalizer hands the renderer one `Text` PER LINE
+	 * joined by these breaks, and a blank interior line is an EMPTY `Text` that
+	 * emits nothing at all; without the flag the cap sees a bare run of layout
+	 * line-ends and deletes a line the author wrote. A DOC comment is no
+	 * exception — its blank lines are safe only where the author put the ` * `
+	 * gutter on them, and a genuinely empty interior line reaches
+	 * `javadocBytePreserveDoc`, which builds the same empty `Text`.
 	 *
 	 * Marking the LEAF rather than opening a region is what keeps the mark
 	 * honest at a boundary. The breaks BETWEEN two adjacent comments, and
@@ -438,31 +100,46 @@ enum Doc {
 	 * ("the run sits between two verbatim `Text`s") cannot tell those two
 	 * cases apart and would silently under-apply the cap.
 	 *
-	 * Same shape and same reasons as `Text`'s flag: a trailing optional
-	 * parameter, invisible to `case Line(flat)` and to `Line(flat)`
-	 * construction, so none of the other Doc walkers change. And the same
-	 * standing obligation — a `Doc → Doc` rewriter must not rebuild a matched
-	 * break as `Line(flat)`, which would silently demote content to layout.
-	 * Today nothing does. Of the 62 `case Line` sites in `src`, exactly two
-	 * rebuild the node: `D.verbatim`, which IS the mark, and `D.flatten`,
-	 * carved out below. The other 60 only read it — `DocMeasure` 14,
-	 * `Renderer` 13, `CollapsePass` 5, `ElseIfCommentReflow` 1,
-	 * `D.mapChildren` 1 (it returns the original), and, the easy third to
-	 * forget, 26 under `format/wrap/`: `WrapList` 22, `BinaryChainEmit` 2,
-	 * `MatrixWrap` 1, `MethodChainEmit` 1. `hxq cases Line src` re-derives
-	 * that list; `src/anyparse/macro` holds no `Line` pattern at all.
+	 * Same shape and same reasons as `Text`'s flag — a trailing optional
+	 * parameter no `case Line(flat)` and no `Line(flat)` construction sees —
+	 * and under the same standing obligation: a `Doc → Doc` rewriter must not
+	 * rebuild a matched break as `Line(flat)`. Today nothing does; only
+	 * `D.verbatim`, which IS the mark, and `D.flatten`, carved out below,
+	 * rebuild the node at all (`hxq cases Line src` re-derives the readers).
 	 *
-	 * `D.flatten` is the one rewriter that does replace a `Line`, and it is
-	 * outside the obligation rather than an exception to it: a break whose flat
-	 * text is a newline becomes `Empty` — the force-flat transform DELETES the
-	 * line rather than demoting it, which is its documented line-oriented
-	 * behaviour and predates this flag. Its other arm, `Line(flat) -> Text(flat)`
-	 * for a non-newline flat text, WOULD drop the mark; nothing reaches it today
-	 * because every break the comment path builds is `Line('\n')`.
+	 * `D.flatten` is outside that obligation rather than an exception to it: a
+	 * break whose flat text is a newline becomes `Empty`, so the force-flat
+	 * transform DELETES the line rather than demoting it. Its other arm,
+	 * `Line(flat) -> Text(flat)` for a non-newline flat text, WOULD drop the
+	 * mark; nothing reaches it today, because every break the comment path
+	 * builds is `Line('\n')`.
 	 */
 	Line(flat: String, ?verbatim: Bool);
+
+	/**
+	 * Increases the current indent by `indent` for breaks inside `inner`.
+	 */
 	Nest(indent: Int, inner: Doc);
+
+	/**
+	 * A unit of fit decision. The renderer measures the flat width of `inner`
+	 * and commits to flat when it fits within the remaining width, otherwise
+	 * to break.
+	 */
 	Group(inner: Doc);
+
+	/**
+	 * Body-level fit decision. The renderer treats it identically to `Group`
+	 * for its own flat/break choice; `fitsFlat` does not — measuring an outer
+	 * `Group` that contains one DEFERS it, so its content never contributes to
+	 * the parent's measurement.
+	 *
+	 * That deferral is what lets a multi-line block body sit inside a call
+	 * argument without forcing the call's `(...)` onto separate lines, and what
+	 * lets chained FitLines keep the outer body inline while the inner body
+	 * breaks. The trivia writer's trailing-comment folder looks specifically for
+	 * `BodyGroup` when splicing a trailing line comment.
+	 */
 	BodyGroup(inner: Doc);
 
 	/**
@@ -487,9 +164,56 @@ enum Doc {
 	 */
 	GroupWithRestProbe(inner: Doc);
 	Concat(items: Array<Doc>);
+
+	/**
+	 * Emits `breakDoc` when the enclosing `Group` is in break mode and
+	 * `flatDoc` when it is flat — for a trailing separator that should appear
+	 * only when the list breaks.
+	 */
 	IfBreak(breakDoc: Doc, flatDoc: Doc);
+
+	/**
+	 * Column-aware sibling of `IfBreak`: at render time the renderer probes
+	 * whether the current column plus `flatWidth(flatDoc)` reaches `n`, and
+	 * takes `breakDoc` when it does. Independent of the enclosing `Group`'s
+	 * flat/break mode.
+	 *
+	 * It exists for a cascade condition whose threshold differs from
+	 * `WriteOptions.lineWidth`; for a threshold equal to `lineWidth` prefer
+	 * `IfBreak`, which is cheaper and needs no per-primitive column probe.
+	 * `fitsFlat` forwards to `flatDoc`, so an enclosing `Group`'s flat-mode
+	 * width estimate stays stable whatever the column-aware decision is.
+	 */
 	IfWidthExceeds(n: Int, breakDoc: Doc, flatDoc: Doc);
+
+	/**
+	 * First-line-aware sibling of `IfWidthExceeds`: probes
+	 * `col + firstLineWidth(flatDoc)` against `n`, so a forced hardline inside
+	 * `flatDoc` caps the measurement at the first line instead of collapsing it
+	 * to zero.
+	 *
+	 * `IfWidthExceeds` answers "would the whole flat subtree fit", which
+	 * over-fires for a multi-line body; this one answers "would the first
+	 * rendered line fit" — what `return <multi-line if-expr>` needs to keep the
+	 * if-expr's HEAD inline while its later branches break. `fitsFlat` forwards
+	 * to `flatDoc`, as in `IfWidthExceeds`.
+	 */
 	IfFirstLineExceeds(n: Int, breakDoc: Doc, flatDoc: Doc);
+
+	/**
+	 * Line-length-aware sibling of `IfWidthExceeds` (ω-iflineexceeds-infra):
+	 * probes `col + flatTokenWidth(flatDoc) + flatTokenWidthOfRestStack`
+	 * against `n`, extending the column-aware probe with a lookahead over the
+	 * rest of the rendering stack up to the next forced hardline.
+	 *
+	 * It answers "would the rendered current line, including everything after
+	 * this primitive on the same source line, reach `n` columns?" — closing the
+	 * blind spot where a chain `Group(IfBreak)` sees only its own subtree and
+	 * picks flat while the enclosing assign or binop expression pushes the line
+	 * past `lineWidth`. Independent of the enclosing `Group`'s mode; `fitsFlat`
+	 * forwards to `flatDoc`, and `BodyGroup` is DEFERRED in both walks
+	 * (Departure 2).
+	 */
 	IfLineExceeds(n: Int, breakDoc: Doc, flatDoc: Doc);
 
 	/**
@@ -512,7 +236,44 @@ enum Doc {
 	 * diverge only in the natural-walk resolution.
 	 */
 	IfResidualLineExceeds(n: Int, breakDoc: Doc, flatDoc: Doc);
+
+	/**
+	 * Sibling of `IfLineExceeds` that DEFERS a `BodyGroup` on BOTH measures
+	 * (ω-iffulllineexceeds-primitive).
+	 *
+	 * `flatTokenWidth(flatDoc)` defers one, so a lambda body inside a segment of
+	 * `flatDoc` measures by its header alone and a chain probe does not
+	 * over-fire; the rest-of-stack lookahead defers one too, so a sibling body
+	 * following this primitive on the same source line — a `for (cond) BODY`
+	 * body wrapped by `sameLine.forBody=fitLine`, a `case P if (c):` guard's
+	 * body — contributes nothing. Such a body is MOVABLE: it drops to its own
+	 * line whenever the shared line overflows, so counting it would decide a
+	 * header's layout by the body's width, tearing a fitting case-guard label
+	 * and breaking a method chain whose own header line fits
+	 * (ω-header-wrap-ladder). Independent of the enclosing `Group`'s mode;
+	 * `fitsFlat` and the cascade-rule static walks forward to `flatDoc`.
+	 */
 	IfFullLineExceeds(n: Int, breakDoc: Doc, flatDoc: Doc);
+
+	/**
+	 * Natural-shape sibling of `IfFirstLineExceeds`
+	 * (ω-ifnaturalfirstlineexceeds-infra). Where `IfFirstLineExceeds` probes
+	 * `col + flatTokenWidthFirstLine(flatDoc)` — a purely FLAT first-line walk
+	 * that descends every inner `Group` / `IfBreak` / `If*Exceeds` on its flat
+	 * branch — this one probes `naturalFirstLineWidth(flatDoc, col, indent,
+	 * width)`: it renders `flatDoc` SPECULATIVELY at the current pen, resolving
+	 * each inner `Group` by its OWN `fitsFlat` decision at the running column,
+	 * and measures the first PHYSICAL line, up to the first naturally produced
+	 * hardline.
+	 *
+	 * That distinguishes an RHS pinned `NoWrap`, which keeps its full flat width
+	 * and so crosses, from an RHS that wraps its own call args and so does not —
+	 * a distinction the flat `IfFirstLineExceeds` cannot make, because it
+	 * over-measures both. `BodyGroup` is DEFERRED, as in the flat siblings.
+	 * Canonical consumer: assignment break-after-`=` on a type-param-carrying
+	 * LHS. `fitsFlat` and the static flat walks forward to `flatDoc`;
+	 * `startsWithHardline` / `isOPLShape` recurse `breakDoc`.
+	 */
 	IfNaturalFirstLineExceeds(n: Int, breakDoc: Doc, flatDoc: Doc);
 
 	/**
@@ -636,12 +397,10 @@ enum Doc {
 	 * `);`, one nested a call deeper trails `));`, and one whose host opened its own
 	 * paren trails nothing at all. The plain ctor compares a column-independent
 	 * token width that cannot see any of that, so the knob RESERVED one column and
-	 * was exact for the statement host alone. Measured on a swept adversarial
-	 * corpus, the two probes then straddled a band `|tail - 1|` columns wide in
-	 * which the cuddle exploded an else that had been a single line: one width at a
-	 * `f(<ternary>)` host whose paren opened (tail 0, +3 lines), two consecutive
-	 * widths at an `outer(inner(<ternary>));` host whose `));` the reserve
-	 * under-charges by two (+3 lines each).
+	 * was exact for the statement host alone. Against any other host the two probes
+	 * straddle a band `|tail - 1|` columns wide in which the cuddle explodes an
+	 * else that had been a single line — a host whose own paren opened charges a
+	 * tail the reserve over-counts, a doubly nested one a tail it under-counts.
 	 *
 	 * No constant closes that band, because the two probes want OPPOSITE
 	 * conservatism — a loose glue probe cuddles a line that overflows, and a strict
@@ -652,8 +411,8 @@ enum Doc {
 	 * Both consumers pass `n = opt.lineWidth + 1`: the reserve is gone and the tail
 	 * is charged for real, so the arm's strict `<` still reads "the whole rendered
 	 * line, terminator included, fits inside `maxLineLength`". For the statement
-	 * host that is arithmetically the pre-slice behaviour (tail 1 against a
-	 * threshold one wider), which is why the calibrated fixtures do not move.
+	 * host that is arithmetically the older behaviour (tail 1 against a threshold
+	 * one wider), which is why the calibrated fixtures do not move.
 	 */
 	IfArrowContinuationFitsWithRest(extraIndent: Int, flatWidth: Int, n: Int, breakDoc: Doc, flatDoc: Doc);
 
@@ -686,10 +445,10 @@ enum Doc {
 	 * doubles the visited node count per nested probe, which is 2^depth for
 	 * nested switches; one branch is the whole content for one traversal.
 	 *
-	 * See the PROBE FAMILY table on the enum header for how this ctor's
-	 * fits-strictness and per-walker branch choice compare to its two
-	 * siblings — every member of the family diverges somewhere, and each
-	 * divergence is justified only at its own call sites.
+	 * See `docs/architecture.md` § "The Doc probe family" for how this ctor's
+	 * fits-strictness and per-walker branch choice compare to its siblings —
+	 * every member of the family diverges somewhere, and each divergence is
+	 * justified only at its own call sites.
 	 */
 	IfIndentWidthExceeds(flatWidth: Int, n: Int, breakDoc: Doc, flatDoc: Doc);
 
@@ -720,10 +479,10 @@ enum Doc {
 	 *    both-branch walkers (`CollapsePass.walk`, `Renderer.findCollapseProbe`,
 	 *    `MatrixWrap.isMultiline`) descend the FLAT branch ONLY — as they do for
 	 *    `IfIndentWidthExceeds`, and unlike `IfNaturalFirstLineExceeds`, whose
-	 *    branches are genuinely different shapes. Measured: routing this
-	 *    population through the both-branch ctor moved unrelated collapse-paren
-	 *    decisions in two corpus files, because a probe in the body-glue slot
-	 *    doubles what those walkers see.
+	 *    branches are genuinely different shapes. Routing this population
+	 *    through the both-branch ctor moves unrelated collapse-paren decisions
+	 *    instead, because a probe in the body-glue slot doubles what those
+	 *    walkers see.
 	 *  - `WrapList.startsWithHardline` reads the FLAT side too, again unlike
 	 *    the rest of the family. The break side opens with a hardline BY
 	 *    CONSTRUCTION here, so a break-side read would answer "this body leads
@@ -736,8 +495,8 @@ enum Doc {
 	 * header line, with this body glued after it, actually overflow?", and only
 	 * a speculative render answers it. A flat first-line walk counts a
 	 * condition that the renderer WILL wrap, so it breaks bodies whose glued
-	 * shape was never over-wide (measured: 11 corpus files, most of them
-	 * regressions); `DocMeasure.breakableHead` stops at the first break
+	 * shape was never over-wide, most of them regressions;
+	 * `DocMeasure.breakableHead` stops at the first break
 	 * OPPORTUNITY, which for a construct-group body is its opening `(` — it can
 	 * never fire. The natural walk resolves each inner `Group` (and `BodyGroup`
 	 * — `naturalWidthStructural` treats it as a real group, the Doc stanza
@@ -755,6 +514,24 @@ enum Doc {
 	 * corpus site it does not.
 	 */
 	IfGluedFirstLineExceeds(n: Int, bodyIndent: Int, breakDoc: Doc, flatDoc: Doc);
+
+	/**
+	 * Wadler `fillSep`. Flat mode emits the items joined by `sep` flat; break
+	 * mode packs them left to right — before each item after the first it
+	 * measures `sep + item` flat from the current column, emitting `sep` flat
+	 * and then the item when that fits, and otherwise emitting `sep` in break
+	 * mode, so its inner `Line` becomes a hardline at the Fill's indent and the
+	 * item starts on the new line. The first item is always emitted at the entry
+	 * column.
+	 *
+	 * `BodyGroup` deferral applies inside the per-item flat measurements, so an
+	 * item carrying a multi-line block body still measures by its header width
+	 * and packs cleanly with its siblings. `tailReserve` is the width of the
+	 * post-Fill same-line content — trailing punctuation plus a close delimiter
+	 * emitted OUTSIDE the Fill but on the same line as its last packed item —
+	 * subtracted from the per-item fit budget so that last item leaves room for
+	 * the tail (ω-fill-tail-reserve).
+	 */
 	Fill(items: Array<Doc>, sep: Doc, ?tailReserve: Int);
 
 	/**
@@ -807,8 +584,51 @@ enum Doc {
 	 * render-time decision only.
 	 */
 	FillBreakAfterWrap(items: Array<Doc>, sep: Doc, ?tailReserve: Int);
+
+	/**
+	 * Optional inline whitespace, dropped when a break-mode `Line` immediately
+	 * follows it. Lead emission uses it to keep the lead literal and its
+	 * trailing space byte-identical when the value lays out flat, while
+	 * suppressing that space when the value emits a leading hardline (say
+	 * `leftCurly=Next` on an object literal).
+	 *
+	 * Counts as `Text(s)` for flat-mode `fitsFlat`, so wrapping decisions do
+	 * not shift. The renderer holds it in a small pending buffer, flushes it
+	 * before any `Text` (or an in-flat `Line`) and discards it right before a
+	 * break-mode `Line` writes its newline; one still unflushed at end of render
+	 * is dropped, so no trailing whitespace reaches EOF.
+	 */
 	OptSpace(s: String);
+
+	/**
+	 * Optional break-mode newline, dropped when the last emit was already a
+	 * hardline (`Line('\n')` or another `OptHardline`). It coordinates two
+	 * independent emitters that each want a leading newline at the same
+	 * insertion point — a wrap-engine separator between call args followed by
+	 * the next arg's `leftCurly=Next` leading newline — which would otherwise
+	 * collide into a spurious blank line.
+	 *
+	 * Like `Line('\n')` it forces `fitsFlat` to refuse to flatten. The dropped
+	 * variant still updates `pendingIndent` to its own indent, so the next
+	 * `Text` lands at the more specific inner position. An INTENTIONAL blank
+	 * line must use plain `Line('\n')` pairs; this ctor is opt-in at the
+	 * producer site.
+	 */
 	OptHardline;
+
+	/**
+	 * Break-mode newline that drops when the last emitted byte is an open
+	 * delimiter (`(`, `[`, `{`), or when a hardline already precedes it — the
+	 * same collision drop `OptHardline` makes.
+	 *
+	 * Chain shapes (`BinaryChainEmit.shapeOnePerLine`) use it for the leading
+	 * hardline before the first item: the chain's first operand stays glued to
+	 * an enclosing open delimiter, while an outer context whose previous byte is
+	 * `=` or a name still gets its newline and indent. Like `Line('\n')` and
+	 * `OptHardline` it forces `fitsFlat` to refuse to flatten, so the enclosing
+	 * `Group` commits to break; the dropped variant updates `pendingIndent` to
+	 * its own indent so a following `Text` lands at the right column.
+	 */
 	OptHardlineSkipAtOpenDelim;
 
 	/**
@@ -863,8 +683,8 @@ enum Doc {
 	 * AFTER the next line's indent, producing `<indent> #else` instead
 	 * of `<indent>#else`.
 	 *
-	 * Like `OptSpace`, contributes its width (`1`) to flat-measurement
-	 * walks (`fitsFlat`, `flatTokenWidth*`); like `OptHardlineSkipAtOpenDelim`,
+	 * Like `OptSpace`, contributes one column to the flat-width walks
+	 * (`fitsFlat`, `flatTokenWidth*`); like `OptHardlineSkipAtOpenDelim`,
 	 * the drop decision happens at render time based on `lastEmit`.
 	 */
 	OptSpaceSkipAfterHardline;

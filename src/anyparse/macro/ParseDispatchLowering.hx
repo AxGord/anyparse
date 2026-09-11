@@ -51,10 +51,9 @@ final class ParseDispatchLowering {
 	/**
 	 * Recursively replace every `skipWs(ctx)` call in an expression tree
 	 * with an empty block `{}`. Used by `@:raw` rules to suppress
-	 * whitespace skipping without modifying any of the 50+ emission
-	 * sites. Referenced sub-rules (via Ref) are separate generated
-	 * functions — their own skipWs calls are in their own bodies, not
-	 * in this tree, so they are unaffected.
+	 * whitespace skipping without touching the emission sites themselves.
+	 * A referenced sub-rule (via Ref) is a separate generated function —
+	 * its own skipWs calls live in its own body, out of this walk's reach.
 	 */
 	private static function stripSkipWs(e: Expr): Expr {
 		return isSkipWsStep(e) ? { expr: EBlock([]), pos: e.pos } : ExprTools.map(e, stripSkipWs);

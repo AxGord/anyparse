@@ -334,14 +334,12 @@ private class Frame {
 	grammars expose it as a problem.
 
 	Oversized and staying that way, on purpose. This type carries an `oversized-type`
-	warning for its line count and sits exactly on the 50-member cap, so the three String
-	scans above it are module-level functions and each new member costs one. A split was
-	measured (2026-09-03) and refused: `hxq clusters Renderer src/anyparse/core` puts 44 of
-	53 members in ONE component (38 of 53 with `--hubs 12`), and the largest layer that even
-	LOOKS separable — the 22-member pure-Doc width family (`fitsFlat`, `flatTokenWidth*`,
-	`natural*`, `restNodeWidth`, `embeddedLineWidths`) — is 1049 lines, which leaves this
-	type at 2383 and still over the 2000-line cap. Three of those 22 (`fitsFlat`,
-	`fitsFlatStep`, `flatTokenWidthOfRestStack`) build `Frame` / `MFlat`, so even that cut
+	warning for its line count and sits on the member cap, so the String scans above it are
+	module-level functions and each new member costs one. A split was tried and refused:
+	`hxq clusters Renderer src/anyparse/core` puts most members in ONE component, and the
+	only layer that even LOOKS separable — the pure-Doc width family (`fitsFlat`,
+	`flatTokenWidth*`, `natural*`, `restNodeWidth`, `embeddedLineWidths`) — leaves the type
+	over the line cap anyway, and three of its members build `Frame` / `MFlat`, so the cut
 	would export two of this module's four private state types. One algorithm, one file, one
 	warning — a real decomposition needs the state types designed for it, not a member list
 	carved to reach a number.
@@ -607,46 +605,40 @@ class Renderer {
 	 * nothing: a multi-statement block, or a `{ … }` literal whose own wrap cascade
 	 * committed to breaking at build time.
 	 *
-	 * All three conjuncts are load-bearing, each closing a measured hole:
+	 * All three conjuncts are load-bearing, each closing a hole:
 	 *
 	 *  - `{`-leading alone is NOT "is a block". `x -> { a: 1, b: 2 }` is an object
 	 *    literal whose flat doc also starts with `{`, and a FLAT one rides the head
 	 *    line in full, so breaking after `->` genuinely shortens it. Suppressing that
-	 *    break pushed a fixture from 127 to 141 columns against a 140 budget.
+	 *    break pushes such a literal past the line budget.
 	 *  - `hasForcedBreak` alone is not enough either, in BOTH directions. A non-brace
 	 *    body that breaks internally still gains a shorter head line from the arrow
 	 *    break; and a `{`-leading body can break somewhere OTHER than right after `{`
 	 *    — under `wrapping.objectLiteral.defaultWrap: "keep"` a one-line source
 	 *    literal reproduces its own layout, so `{ onDone: () -> { … }, tag: 1 }` has
-	 *    a forced hardline (the inner block's) while its head line runs on. That took
-	 *    a fixture from 108 to 146 columns.
+	 *    a forced hardline (the inner block's) while its head line runs on, and it
+	 *    overruns the budget too.
 	 *  - `flatTokenWidthFirstLine(flatDoc) <= 1` is what states "breaks before any
-	 *    other token". MEASURED, not assumed: a statement block sits behind a
-	 *    `BodyGroup` whose committed-prefix answer is its bare `{` (0 before W17
-	 *    taught the walk to charge it), and a self-breaking object literal measures
-	 *    exactly 1 (its `{`, then the hardline) — both stay in the population, while
+	 *    other token": a statement block sits behind a `BodyGroup` whose
+	 *    committed-prefix answer is its bare `{`, and a self-breaking object literal
+	 *    measures its `{` and then the hardline — both stay in the population, while
 	 *    the keep-mode literal above measures its whole head run and drops out.
 	 *
 	 * Read STRUCTURALLY — all three walkers resolve every conditional on its flat
 	 * side — so no render-time width measurement can change which arm a construct
 	 * takes. That is a deliberate limit: an object literal that breaks only AT RENDER
 	 * TIME (its own `Group` losing a width probe) answers `false` here, takes the
-	 * arrow break, and then breaks anyway, so its `{` still lands alone. Measured on
-	 * a 40-case width sweep, the gate removes 40 of 56 stranded opens and adds zero
-	 * over-width lines, and the 16 it leaves are all that band — byte-identical to
-	 * the pre-slice writer, since no line of an object-literal rendering changes.
-	 * Closing them needs a width-aware answer, which would make this guard disagree
-	 * with the two natural walks that resolve the same marker without a rest-stack
-	 * term; that trade is a separate slice.
+	 * arrow break, and then breaks anyway, so its `{` still lands alone. The gate
+	 * removes most stranded opens and adds no over-width line; the ones it leaves are
+	 * all that band, and no line of an object-literal rendering changes. Closing them
+	 * needs a width-aware answer, which would make this guard disagree with the two
+	 * natural walks that resolve the same marker without a rest-stack term.
 	 *
-	 * THE THRESHOLD'S SLACK, measured on `a3cc4999`. `<= 0` flips five
-	 * `HxArrowBlockBodyOpenSliceTest` cases, so the lower side was pinned; `<= 2`
-	 * flipped NOTHING in the suite OR the 946-fixture corpus, and the next
-	 * threshold SAMPLED above it that moved anything was `<= 1000` (one case,
-	 * `testKeepModeLiteralBreakingLaterStillBreaks`, whose literal measures 37) —
-	 * 35 values of unguarded slack over a threshold the whole admitted population
-	 * sits EXACTLY on. Bounded by those two samples, not swept: nothing between 3
-	 * and 36 was tried. Closed by
+	 * THE THRESHOLD'S SLACK. `<= 0` flips pinned `HxArrowBlockBodyOpenSliceTest`
+	 * cases, so the lower side is held; ABOVE it the threshold has a wide band of
+	 * unguarded slack, because the whole admitted population sits EXACTLY on `<= 1`
+	 * and nothing between there and a `keep`-mode literal's own head width separates
+	 * them. That upper side is closed by
 	 * `BodyGroupPrefixChargeConsumerTest.testArrowMarkerAdmitsExactlyOneColumn`,
 	 * which rejects a `{a`-headed Doc at width 2 with the other two conjuncts
 	 * asserted TRUE on that same Doc, so the width is the only thing that can
@@ -803,9 +795,7 @@ class Renderer {
 		one the normalizer re-indents line by line. Those are program bytes, not
 		layout, so they are never counted into a run and never dropped: without them
 		this scan reads the flattened buffer with no idea which newline it is looking
-		at, and shortens a literal's VALUE under the compiled default of 1
-		(measured, compiled and run: `"one\n\n\nfour"` came back `"one\n\nfour"`,
-		`length` 10 -> 9).
+		at, and shortens a string literal's VALUE under the compiled default.
 
 		A blank line inside a GUTTER-LESS multi-line block comment reaches the same
 		array from the other end. Those lines get re-indented, so
@@ -816,13 +806,10 @@ class Renderer {
 		whole Doc, so `emitLine` records them here too and the walk below treats them
 		exactly as it treats a literal's newline.
 
-		A DOC comment is not the exception the earlier note in this file claimed.
-		Its blank lines are safe only when the author put the ` * ` gutter on them;
-		a genuinely empty interior line inside a `/**` block reaches
-		`javadocBytePreserveDoc`, which emits the same empty `Text` between two
-		breaks. Measured on both arms at a cap of 0: base ate BOTH blank lines out
-		of `/**`, ` * one`, blank, blank, ` * four`, ` *\/`, and the flag restores
-		them.
+		A DOC comment is no exception. Its blank lines are safe only when the author
+		put the ` * ` gutter on them; a genuinely empty interior line inside a `/**`
+		block reaches `javadocBytePreserveDoc`, which emits the same empty `Text`
+		between two breaks, and without the flag a low cap eats them.
 
 		The mark is on the LEAF, never on a region, and that is what stops the cap
 		UNDER-applying at a comment boundary. The breaks between two adjacent
@@ -836,9 +823,8 @@ class Renderer {
 		before every line end, so a run of blank rows reads as line-end, indent,
 		line-end, indent, … — the walk below skips that indent, and a capped run
 		keeps the indent of the rows it keeps. Without the skip the two knobs were
-		silently mutually exclusive: with `trailingWhitespace` on the scan matched no
-		run at all and `maxAnywhereInFile` did nothing at any value (measured: three
-		blank rows survived a cap of 0).
+		silently mutually exclusive: with `trailingWhitespace` on, the scan matched no
+		run at all and `maxAnywhereInFile` did nothing at any value.
 
 		Pre-condition: `maxBlanks >= 0`; the caller guards `< 0` for
 		unbounded (no-cap) mode.
@@ -1000,33 +986,23 @@ class Renderer {
 	 * the for-header.
 	 *
 	 * That cost is CALIBRATION debt, not a second question, and it belongs to the
-	 * REST-STACK consumers — `flatTokenWidthOfRestStack`'s seven readers (the chain
-	 * probe, `GroupWithRestProbe`, the Fill rest probes, `IfLineExceeds`,
+	 * REST-STACK consumers — `flatTokenWidthOfRestStack`'s readers (the chain probe,
+	 * `GroupWithRestProbe`, the Fill rest probes, `IfLineExceeds`,
 	 * `IfNaturalFirstLineExceedsWithRest`), the only ones that reach this
 	 * classifier. NOT `IfFirstLineExceeds`, which does not read the rest stack at
-	 * all and is exactly the consumer W17 moved onto the charging answer. W16's
-	 * recalibration verdict stands for the rest-stack readers; W17 did not retire
-	 * it, it confined the disagreement to them. Measured (W17, 2026-08-25,
-	 * re-measured at review): charging in BOTH walkers closes the same two Pony
-	 * files, leaves Pony's drift set identical at 80 and the other five
-	 * two-rewrite files untouched, and reformats SIX files here instead of three,
-	 * three of them worse — `for (candidate in candidatesOf(\n\tsource, plugin\n))`,
-	 * `if (index.skippedFiles()\n\t.length == 0)`,
-	 * `for (group in coupled) if (group.exists(f ->\n\thit.contains(f)\n))`.
-	 * Charging the prefix WITHOUT ending the line is free and closes nothing:
-	 * 0 files here, 0 on Pony, census still 7.
+	 * all and is the consumer that was moved onto the charging answer: the
+	 * recalibration verdict holds for the rest-stack readers alone, and the
+	 * disagreement is confined to them. Charging in BOTH walkers reformats more
+	 * files than it closes, several of them to a worse shape; charging the prefix
+	 * WITHOUT ending the line is free and closes nothing.
 	 *
-	 * What the committed-prefix answer closed (W17): `ui/xml/PixiXmlUi.hx` and
-	 * `tools/nodesrc/module/Bmfont.hx`, two of the seven Pony files that needed
-	 * two writer rewrites — suite and corpus byte-unmoved, Pony's drift set
-	 * unmoved at 80 (its OUTPUT moves for exactly those two files, which now
-	 * settle on their pass-1 shape), and three files of this tree reformatted,
-	 * each a call or ternary whose collection argument now GLUES instead of the
+	 * What the committed-prefix answer DID close: fork files that needed two writer
+	 * rewrites and now settle on their pass-1 shape, at the cost of reformatting
+	 * calls and ternaries here whose collection argument now GLUES instead of the
 	 * head opening — the shape `WrapFlatSourceFixedPointTest` already pins as the
-	 * correct fixed point for the same construct. The five that remain are that
-	 * test's three pinned cases plus `net/http/modules/mmodels/Builder.hx` and
-	 * `tools/nodesrc/module/Imagemin.hx`; none of them is a `BodyGroup` question —
-	 * measured, charging in both walkers closes none of them either.
+	 * correct fixed point for the same construct. The two-rewrite cases that remain
+	 * are not `BodyGroup` questions, and charging in both walkers closes none of
+	 * them either.
 	 *
 	 * Stack-based walk — items pushed in reverse so pop order matches
 	 * left-to-right traversal. The `aborted` flag short-circuits
@@ -1587,8 +1563,8 @@ class Renderer {
 				// rest-probe never pulls an inline for/while body onto the header.
 				//
 				// That EXCEPT is not a special case, it is the CURRENT-LINE
-				// question answered correctly, and since W17 `flatFirstLineStep`
-				// answers it the same way under `bgPrefix == true`. The call BELOW
+				// question answered correctly, and `flatFirstLineStep` answers it
+				// the same way under `bgPrefix == true`. The call BELOW
 				// deliberately passes `false` and keeps the LESS accurate answer:
 				// it is this arm's own committed-vs-movable classifier, and a
 				// nested body that is itself COMMITTED would otherwise make every
@@ -1596,19 +1572,15 @@ class Renderer {
 				// what render does; the REST-STACK consumers downstream — this arm
 				// is reached only through `flatTokenWidthOfRestStack` — are simply
 				// calibrated against the deferring one, so charging here wraps
-				// headers that fit. `flatTokenWidthFirstLine`'s doc carries the
-				// measurement and says why this is calibration debt rather than a
-				// second question. RE-MEASURED on `a3cc4999`: flipping this `false`
-				// to `true` leaves the whole suite green and the 946-fixture corpus
-				// byte-identical, and drifts exactly TWO files under `apq fmt
-				// --list` — `check/PreferMapType.hx` and `query/LintFixSafePass.hx`,
-				// both the very `for (…) if (…) { … }` shape named above, both to a
-				// worse shape: the inner call's argument list breaks instead of the
-				// condition. (The count recorded here before was six; that came from
-				// a different, both-walkers arm and does not reproduce for this
-				// literal alone.) Until then a whole-tree byte oracle was all that
-				// guarded it — it names no mechanism and goes quiet the moment the
-				// tree is reformatted. `BodyGroupPrefixChargeConsumerTest`
+				// headers that fit. `flatTokenWidthFirstLine`'s doc says why this
+				// is calibration debt rather than a second question. Flipping this
+				// `false` to `true` leaves the suite green and the corpus
+				// byte-identical, and drifts only the very `for (…) if (…) { … }`
+				// shape named above, to a worse one: the inner call's argument list
+				// breaks instead of the condition. A whole-tree byte oracle was all
+				// that guarded the literal before — it names no mechanism and goes
+				// quiet the moment the tree is reformatted.
+				// `BodyGroupPrefixChargeConsumerTest`
 				// `.testRestStackDefersACommittedNestedBody` now asks this arm its
 				// own question, and is the ONE test the flip flips.
 				if (bgDescend) {
@@ -3176,8 +3148,8 @@ class Renderer {
 		// the tail lands on whichever line the last item ends on,
 		// so only the last item's probe must account for it.
 		// Applying restW per-item is over-pessimistic (regresses
-		// e.g. `wrapping/issue_494_type_parameter` — too-early
-		// break, only 2 of 6 items packed instead of 5).
+		// e.g. `wrapping/issue_494_type_parameter` — it breaks too
+		// early and packs fewer items than fit).
 		// Default `restW=0` preserves byte-equivalent legacy
 		// behavior; sister to `GroupWithRestProbe` at the Group
 		// decision layer.
@@ -3391,9 +3363,9 @@ class Renderer {
 				// population this arm claims: neither carries a rest-stack
 				// term, and a statement block sits behind a `BodyGroup` that
 				// `flatTokenWidth` defers to 0, so their test reduces to
-				// `col >= n` — already-blown lines only. MEASURED for that
-				// population, not assumed: `final cb:Void->Void = () -> {`
-				// with a ~340-char block body stays cuddled at col ~30. A
+				// `col >= n` — already-blown lines only. Confirmed for that
+				// population rather than assumed: a long block body behind
+				// `() -> {` stays cuddled at a low column. A
 				// self-breaking OBJECT LITERAL body is not `BodyGroup`-
 				// deferred, so those walks do see its width — which is why
 				// the two conjuncts above must agree with them rather than

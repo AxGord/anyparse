@@ -106,9 +106,8 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	 * has no other children to displace (a type argument, an `extends` clause) and wrong
 	 * on a `var` / `final`: a declaration's children are its initializer and its
 	 * comma-continuations, and the checks read them positionally — `decl.children[0]` IS
-	 * the initializer in some forty rules. Measured on this tree: tagging
-	 * `HxVarDecl.type` `@:queryType` turned 25611 assertions into 369 failures and 64
-	 * errors across ~50 test classes, every one of them an index that moved.
+	 * the initializer in many rules. Tagging `HxVarDecl.type` `@:queryType` instead
+	 * breaks the suite wholesale, every failure an index that moved.
 	 *
 	 * A dedicated child KIND would not have rescued it either. `declTypeChildKinds`
 	 * already exists for exactly this filtering, and it cannot express the Haxe answer:
@@ -741,9 +740,10 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	 *
 	 * An `Alt` is a DISPATCH point, not a container: each of its ctors materialises its own
 	 * node and is classified on its own, so letting a ctor's verdict flow up into every
-	 * production that can hold the enum is what turns this into the closure S167 measured and
-	 * rejected - seeding on the raw terminals and closing over type MENTIONS reached 244 of the
-	 * Haxe package's 262 modules. Stopping at the dispatch point keeps the answer to the
+	 * production that can hold the enum is what turns this into the closure that was tried
+	 * and rejected - seeding on the raw terminals and closing over type MENTIONS reaches
+	 * nearly every module of the Haxe package. Stopping at the dispatch point keeps the answer
+	 * to the
 	 * question every consumer actually asks: which bytes does THIS node's own span leave
 	 * unmodelled.
 	 */

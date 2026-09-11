@@ -168,10 +168,10 @@ final class WriterPolicyLowering {
 	 * this separator and therefore still wins when it is set.
 	 *
 	 * Without this arm the whole `SameOnBlock` fanout is measurably too
-	 * broad: on `f8ba0a46`, mapping `sameLine.expressionIf: next` onto a
-	 * plain `Same` moved 3 anyparse files instead of 1, and 2 of the 3 read
-	 * WORSE — `[] else {` and `['--code', staged]; else if (…)`, an `else`
-	 * glued to a list-literal branch that had been on its own line.
+	 * broad: mapping `sameLine.expressionIf: next` onto a plain `Same` moves
+	 * files that should not move, and most of them read WORSE — `[] else {`
+	 * and `['--code', staged]; else if (…)`, an `else` glued to a list-literal
+	 * branch that had been on its own line.
 	 */
 	private static function sameLineNonCurlyBlockPolicySwitch(optFlag: Expr, keepExpr: Expr): Expr {
 		return buildPolicySwitch(['anyparse', 'format', 'SameLinePolicy'], optFlag, [

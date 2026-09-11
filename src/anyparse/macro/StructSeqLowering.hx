@@ -36,9 +36,9 @@ using anyparse.macro.MetaInspect;
  * leaves) rides along because it is the same rule shape read through a
  * key rather than a position, and `lowerStruct` dispatches to it.
  *
- * Split out of `Lowering` by the STATE each member reads. The five
- * purity leaves left in `Lowering` after S83 were the last members that
- * read NOTHING; this family reads `_ctx`, `_shape`, `_formatInfo` and the
+ * Split out of `Lowering` by the STATE each member reads. The purity
+ * leaves that stayed in `Lowering` were the last members that read
+ * NOTHING; this family reads `_ctx`, `_shape`, `_formatInfo` and the
  * `_starGates` accumulator, and reaches six members that stayed behind.
  * Those six arrive as callbacks on the bundle rather than as a back
  * reference to the owner, so the bundle IS the dependency surface and
@@ -730,11 +730,11 @@ final class StructSeqLowering {
 		// the per-field `@:trailOpt(';')` literal AFTER the
 		// sub-rule parse, INSIDE the lead/kw commit branch.
 		// Mirrors the mandatory `@:trail` arm above but uses
-		// peek+consume+rewind (no throw on miss) so existing
-		// self-consuming inner stmts (ReturnStmt-pre-S10.3,
-		// ExprStmt, etc.) stay no-op. First consumer:
-		// `HxIfStmt.elseBody` (`if (c) ...; else ...;` —
-		// post-S10.3 ReturnStmt migration target). The
+		// peek+consume+rewind (no throw on miss) so a
+		// self-consuming inner stmt (an `ExprStmt`, or a
+		// `ReturnStmt` that still eats its own `;`) stays a
+		// no-op. First consumer: `HxIfStmt.elseBody`
+		// (`if (c) ...; else ...;`). The
 		// post-switch `lit.trailOptional` block (~L2500) is
 		// gated `!isOptional`, so this arm is the optional+kw
 		// path's sole emitter.
@@ -835,7 +835,7 @@ final class StructSeqLowering {
 		// `collectTrivia` just read back in front of the cursor — so the enclosing
 		// Star re-scans them, and must NOT ALSO be handed them through the stash, or
 		// the same comment is emitted twice and doubles again on every further pass
-		// (`#if a #end` with an own-line `// c` before the class `}` went 1 -> 2 -> 4).
+		// (a `#if a #end` with an own-line `// c` before the class `}` is the shape).
 		// Restoring the INCOMING stash instead keeps both halves right: bytes after
 		// `_absentWsPos` come back through the re-scan, bytes before it — a preceding
 		// empty Star's stash, which no rewind can reach — come back through here.

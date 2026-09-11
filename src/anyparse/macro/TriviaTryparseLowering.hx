@@ -321,9 +321,9 @@ final class TriviaTryparseLowering {
 	 * reason that helper documents: a bare `Fill` is measured as a committed
 	 * break by every `MBreak` first-line probe, and an element run that still
 	 * fits must keep the plain space-joined shape those probes saw before.
-	 * Measured: without the gate, `openfl/geom/PerspectiveProjection.hx`'s
-	 * 89-column `if (#if neko … || #end …)` opened its parens onto three lines.
-	 * `_dwb` restores the `WrapBoundary` the ordinary emit puts around the
+	 * Without the gate a fitting `if (#if neko … || #end …)` opens its parens
+	 * onto three lines instead. `_dwb` restores the `WrapBoundary` the ordinary
+	 * emit puts around the
 	 * element run, so wrap-depth walkers (`WrapList.isTopLevelChain`) still
 	 * count this run one level in.
 	 *
@@ -333,8 +333,8 @@ final class TriviaTryparseLowering {
 	 * trailing) routes the whole Star back to `baseExpr` — the ordinary
 	 * source-faithful emit, which already reproduces such a region byte for
 	 * byte. The probe is a write-time scan of the element array, so a run
-	 * without comments (every region in the 1665-module census) takes the fill
-	 * and one with comments is untouched.
+	 * without comments — every region seen so far — takes the fill and one with
+	 * comments is untouched.
 	 */
 	private static function triviaTryparseFillExpr(c: WriterLowering.TryparseStarCtx, baseExpr: Expr): Expr {
 		// The three ctx fields are spliced straight from `c` rather than
@@ -1052,7 +1052,7 @@ final class TriviaTryparseLowering {
 	 * `nestGluedBody`: it is the same "does the body's container already
 	 * indent relative to the case line" question, and it is live on the GLUE
 	 * outcome (a body that cannot render flat, whose own lines still need the
-	 * `+1`). On the measured outcome the knob is provably inert rather than
+	 * `+1`). On the FIT outcome the knob is provably inert rather than
 	 * ignored — `BodyFit` reaches that branch only when
 	 * `WrapList.flatLength(body) >= 0`, i.e. the body holds no hardline at
 	 * all, so no inner line exists for a `Nest` to move.

@@ -28,9 +28,9 @@ using anyparse.macro.MetaInspect;
  * The six struct-field emitters came out of `StructSeqLowering` for SIZE,
  * not for a new responsibility: same rule shape, same state, so they take
  * that module's `StructSeqCtx` bundle unchanged rather than declaring one
- * here. The five `lowerStar*Branch` leaves came from `Lowering` and are the
- * five members S83 measured as reading NO state at all, so they are static
- * with no bundle and are reached from `Lowering` unqualified. Nothing in
+ * here. The five `lowerStar*Branch` leaves came from `Lowering` and read NO
+ * state at all, so they are static with no bundle and are reached from
+ * `Lowering` unqualified. Nothing in
  * either group reaches back into its former home.
  *
  * Star emission FORKS across four sites, and this module is where the parse
@@ -110,8 +110,8 @@ final class StarFieldLowering {
 		// ω-star-call-gate: the element rule's first-token fact, used to
 		// SKIP the trial in a `@:tryparse` loop whose termination is a
 		// deliberate parse failure. That failure is the loop's normal exit,
-		// so its `throw` is pure waste — measured at ~310 ns plus per-frame
-		// cost on V8, ~186 746 times over the corpus.
+		// so its `throw` is pure waste, and a corpus pays it once per loop
+		// iteration.
 		//
 		// SEMANTICS: skipping the trial also skips its `ctx.recordFail`
 		// bookkeeping, so on MALFORMED input the farthest-fail diagnostic

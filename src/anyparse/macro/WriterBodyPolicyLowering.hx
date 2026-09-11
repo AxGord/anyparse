@@ -30,7 +30,7 @@ using anyparse.macro.MetaInspect;
  * `bodyPolicyWrap`, the family's single door.
  *
  * ⚠️ `buildBodyCoreWrap`'s outer switch is deliberately NOT the place to add
- * an arm - S79 folded its new behaviour into the policy SELECTOR instead,
+ * an arm - the last new behaviour was folded into the policy SELECTOR instead,
  * for the JVM method-size reason that switch documents. Moving the family
  * to its own module does not change that: the constraint is on the
  * GENERATED method, not on this one.
@@ -579,11 +579,11 @@ final class WriterBodyPolicyLowering {
 	 * Why it exists: an arm carries a whole LAYOUT expression, and the layouts of the `if`
 	 * writer are large. Two arms in `buildBodyKeepLayout` plus two in `buildBodyCoreWrap` added
 	 * four more copies of them to ONE generated function, and `HaxeModuleTriviaWriter` — a
-	 * single generated class already 1.22 MB of JS — grew 161 712 bytes and stopped fitting a
-	 * JVM class file: `tools/jvm-portability.hxml` failed with `IO.Overflow("write_ui16")`, the
-	 * 16-bit constant-pool counter. Reverting this ONE field's meta made it pass again, which is
-	 * how the cause was pinned. As a condition folded into the layout choice, the same decision
-	 * adds no layout copy at all.
+	 * single generated class that is already the largest in the tree — grew past what a JVM
+	 * class file holds: `tools/jvm-portability.hxml` failed with `IO.Overflow("write_ui16")`,
+	 * the 16-bit constant-pool counter. Reverting this ONE field's meta made it pass again,
+	 * which is how the cause was pinned. As a condition folded into the layout choice, the
+	 * same decision adds no layout copy at all.
 	 */
 	private static function buildElseSwitchTests(
 		bp: BodyPolicyCtx, opts: WriterLowering.WrapBodyOpts
@@ -739,9 +739,9 @@ final class WriterBodyPolicyLowering {
 		// `else`, the placement `forBody` / `whileBody` / `doWhileBody` chose is
 		// replaced by `Next` before ANY reader sees it — the outer `Keep` switch
 		// below, and the policy switch inside it, both read the selector
-		// `policyFlag` this one feeds. That is the whole S159 fix: S157 gated
-		// `buildBodyFitExpr` instead, so `same` and `keep` had the defect the key
-		// is documented to withdraw and no way to decline it. Folded into the
+		// `policyFlag` this one feeds. Gating `buildBodyFitExpr` instead leaves
+		// `same` and `keep` carrying the defect the key is documented to withdraw,
+		// with no way to decline it. Folded into the
 		// selector rather than added as arms, for the JVM method-size reason the
 		// `omega-else-switch` comment below records.
 		final loopIfElseTest: Null<Expr> = buildLoopBodyIfElseTest(opts);
