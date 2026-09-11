@@ -284,6 +284,19 @@ Full pipeline tests on real-world data. Take a substantial input (the user's ax3
 
 **Added at Phase 4 onwards**, specifically for the AS3→Haxe conversion replacing ax3. The user's ~2000-file corpus is the canonical integration test: the new tool must produce equivalent Haxe output on every file, ideally faster than ax3 and without JVM.
 
+## Proving a comment-only change inert: the build is NOT a byte oracle
+
+A change that touches only comments should leave the compiled output alone, and the obvious way to show it is to build both revisions and `cmp` them. That does not work here, and the failure is silent: **the Haxe build is not reproducible.** Rebuilding the SAME tree twice moves the `-D analyzer-optimize` switch-arm grouping, so `bin/test.js` and `bin/apq.js` each differ from themselves. An equal pair of revisions is one lucky draw, not a proof — and an unequal pair proves nothing either.
+
+Two oracles that do hold, and the discipline both need:
+
+- **Comment-stripped hash per file.** Strip comments with a string-aware scanner (a naive one eats a `//` inside a string literal), collapse whitespace, hash. Compare the touched files against their base revision.
+- **The line MULTISET of the generated JS.** Count lines of `bin/test.js` on both revisions and diff the counters. Stable across rebuilds, because the non-determinism only regroups existing lines; a real code change still shows up.
+
+**Self-test both.** Inject a one-token code mutation — flip a boolean argument, rename a ctor parameter — and confirm the method reports it; then edit a comment and confirm the method stays silent. A method that has not been shown to catch anything is not evidence. The other half of the discipline is the binary you compare against: after a self-test mutation, REBUILD before using that tree as a baseline again, or the "base" you compare with is the mutant.
+
+Neither oracle sees prose, and prose is where such a slice actually breaks things: moving a documented table out of a source file leaves every comment that named its old home pointing at nothing, and no gate in this project reads a cross-reference. Scan the tree for the old location's name after any such move.
+
 ## Mutation checks: testing the tests
 
 The six layers all answer the same question from different angles: does the code do what it is supposed to do? A mutation check asks the inverted question: if the code *stopped* doing it, would anything go red?
