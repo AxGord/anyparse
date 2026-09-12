@@ -281,6 +281,160 @@ class OptionalParamShorthandCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { function f(').length);
 	}
 
+	public function testHoistSoleCoalescingReadFlagged(): Void {
+		final source: String = fnConst('?a:Int', 'final x:Int = a ?? 7;');
+		final vs: Array<Violation> = violations(source);
+		Assert.equals(1, vs.length);
+		Assert.equals('optional-param-shorthand', vs[0].rule);
+		Assert.equals(Severity.Info, vs[0].severity);
+		Assert.equals('prefer a:Int = 7 over ?a:Int with a ?? 7', vs[0].message);
+		Assert.equals('?a:Int', source.substring(vs[0].span.from, vs[0].span.to));
+		Assert.equals(fnConst('a:Int = 7', 'final x:Int = a;'), applyFix(source));
+	}
+
+	public function testHoistInlineConstantDefaultFlagged(): Void {
+		// The `DEFAULT_LIST_WIDTH` shape: a bare identifier bound to a same-class `static
+		// inline final`, which Haxe accepts as a parameter default.
+		final source: String = fnConst('?a:Int', 'final x:Int = a ?? D;');
+		Assert.equals(1, violations(source).length);
+		Assert.equals(fnConst('a:Int = D', 'final x:Int = a;'), applyFix(source));
+	}
+
+	public function testHoistEnumAbstractDefaultFlagged(): Void {
+		final source: String = 'enum abstract Fmt(Int) {\n\tfinal JSON = 0;\n}\n\n'
+			+ 'class C {\n\tstatic function f(?a:Fmt):Void {\n\t\tfinal x:Fmt = a ?? Fmt.JSON;\n\t}\n}';
+		Assert.equals(1, violations(source).length);
+		Assert.isTrue(applyFix(source).indexOf('f(a:Fmt = Fmt.JSON)') != -1);
+	}
+
+	public function testHoistFloatDefaultOnIntParamNotFlagged(): Void {
+		// `w ?? 0.` widens to `Float` and compiles; `w:Int = 0.` does not. The `??` the arm
+		// replaces is not evidence that the fallback fits the DECLARED type.
+		Assert.equals(0, violations(fnConst('?w:Int', 'final x:Float = w ?? 0.;')).length);
+	}
+
+	public function testHoistFloatDefaultOnFloatParamFlagged(): Void {
+		final source: String = fnConst('?w:Float', 'final x:Float = w ?? 0.;');
+		Assert.equals(1, violations(source).length);
+		Assert.equals(fnConst('w:Float = 0.', 'final x:Float = w;'), applyFix(source));
+	}
+
+	public function testHoistIntLiteralOnUnmappedTypeFlagged(): Void {
+		// `UInt` is a type the grammar's literal map never produces, so whether an integer
+		// literal converts is the compiler's question, not the map's — and refusing there
+		// would lose every enum-abstract and `UInt` default.
+		final source: String = fnConst('?c:UInt', 'final x:UInt = c ?? 0x10;');
+		Assert.equals(1, violations(source).length);
+		Assert.equals(fnConst('c:UInt = 0x10', 'final x:UInt = c;'), applyFix(source));
+	}
+
+	public function testHoistCallDefaultNotFlagged(): Void {
+		Assert.equals(0, violations(fnConst('?a:Int', 'final x:Int = a ?? g();')).length);
+	}
+
+	public function testHoistNonInlineStaticFinalDefaultNotFlagged(): Void {
+		// A non-inline `static final` is not a legal parameter default (`Default argument value
+		// should be constant`), so the rewrite would not compile.
+		final source: String =
+			'class C {\n\tstatic final N:Int = 7;\n\tstatic function f(?a:Int):Void {\n\t\tfinal x:Int = a ?? N;\n\t}\n}';
+		Assert.equals(0, violations(source).length);
+	}
+
+	public function testHoistFieldSubjectNotFlagged(): Void {
+		// The `BreadCrumbs` shape: `boxHeight ?? 0.` reads a FIELD, syntactically
+		// indistinguishable from a parameter read. A same-named parameter on ANOTHER
+		// function must not claim it.
+		final source: String = 'class C {\n\tvar boxHeight:Float = 0;\n\tstatic function g(?boxHeight:Float):Void {}\n'
+			+ '\tfunction h():Float {\n\t\treturn boxHeight ?? 0.;\n\t}\n}';
+		Assert.equals(0, violations(source).length);
+	}
+
+	public function testHoistTwoDifferentDefaultsNotFlagged(): Void {
+		Assert.equals(0, violations(fnConst('?a:Int', 'final x:Int = a ?? 7;\n\t\tfinal y:Int = a ?? 8;')).length);
+	}
+
+	public function testHoistSameDefaultTwiceFlagged(): Void {
+		final source: String = fnConst('?a:Int', 'final x:Int = a ?? 7;\n\t\tfinal y:Int = a ?? 7;');
+		Assert.equals(1, violations(source).length);
+		Assert.equals(fnConst('a:Int = 7', 'final x:Int = a;\n\t\tfinal y:Int = a;'), applyFix(source));
+	}
+
+	public function testHoistNullComparisonElsewhereNotFlagged(): Void {
+		Assert.equals(0, violations(fnConst('?a:Int', 'if (a == null) trace(1);\n\t\tfinal x:Int = a ?? 7;')).length);
+	}
+
+	public function testHoistOverrideNotFlagged(): Void {
+		Assert.equals(0, violations('class C extends B {\n\toverride function f(?a:Int):Void {\n\t\tfinal x:Int = a ?? 7;\n\t}\n}').length);
+	}
+
+	public function testHoistInterfaceDeclarationNotFlagged(): Void {
+		Assert.equals(0, violations('interface I {\n\tfunction f(?a:Int):Void;\n}').length);
+	}
+
+	public function testHoistPlainInstanceMethodNotFlagged(): Void {
+		// G5, shared with the redundant-sigil arm: a plain instance method can be overridden
+		// from another file's subclass, and the rewrite changes the parameter's declared type.
+		Assert.equals(0, violations('class C {\n\tfunction f(?a:Int):Void {\n\t\tfinal x:Int = a ?? 7;\n\t}\n}').length);
+	}
+
+	public function testHoistFieldWriteOfSameNameFlagged(): Void {
+		// The commonest constructor idiom, `this.a = a ?? CONST`: `this.a` is a FIELD
+		// reference, not a read of the parameter, so it must not block the hoist. The
+		// completeness scan skips a DOT-QUALIFIED occurrence for exactly this reason — a
+		// parameter is never reached through a `.`.
+		final source: String = 'class C {\n\tpublic var a:Int;\n\n\tpublic function new(?a:Int) {\n\t\tthis.a = a ?? 7;\n\t}\n}';
+		Assert.equals(1, violations(source).length);
+		Assert.isTrue(applyFix(source).indexOf('new(a:Int = 7)') != -1);
+	}
+
+	public function testHoistUnaccountedReadNotFlagged(): Void {
+		// Completeness: a read that is NOT a coalescing left operand still observes `null`,
+		// which the hoist removes from the parameter's value range.
+		Assert.equals(0, violations(fnConst('?a:Int', 'trace(a);\n\t\tfinal x:Int = a ?? 7;')).length);
+	}
+
+	public function testHoistAssignedParamNotFlagged(): Void {
+		Assert.equals(0, violations(fnConst('?a:Int', 'a = 3;\n\t\tfinal x:Int = a ?? 7;')).length);
+	}
+
+	public function testHoistNullDefaultNotFlagged(): Void {
+		// `a:Int = null` is the FIRST arm's input shape — hoisting a `?? null` would make the
+		// two arms rewrite each other forever.
+		Assert.equals(0, violations(fnConst('?a:Int', 'final x:Null<Int> = a ?? null;')).length);
+	}
+
+	public function testHoistNullWrappedTypeUnwrapped(): Void {
+		// `a:Null<Int> = 7` would leave the body type nullable and the reads it feeds broken;
+		// one `Null<>` layer comes off, exactly as the first arm's rewrite does.
+		final source: String = fnConst('?a:Null<Int>', 'final x:Int = a ?? 7;');
+		Assert.equals(1, violations(source).length);
+		Assert.equals(fnConst('a:Int = 7', 'final x:Int = a;'), applyFix(source));
+	}
+
+	public function testHoistUntypedColonDefaultNotFlagged(): Void {
+		// An UNTYPED optional parameter whose default spells a colon of its own. Reading the
+		// annotation with a plain `indexOf(':')` would take that one and emit `c:" = 7`.
+		Assert.equals(0, violations(fnConst('?c = ":"', 'final x:Int = c ?? 7;')).length);
+	}
+
+	public function testHoistShadowedOuterParamNotFlagged(): Void {
+		// The inner local function's own `?a:Int` shadows the outer parameter, so the
+		// coalescing read belongs to the INNER one: only it is rewritten.
+		final source: String = fnConst('?a:Int', 'function g(?a:Int):Void {\n\t\t\tfinal y:Int = a ?? 7;\n\t\t}\n\t\tg();');
+		Assert.equals(1, violations(source).length);
+		final fixed: String = applyFix(source);
+		Assert.isTrue(fixed.indexOf('function g(a:Int = 7)') != -1);
+		Assert.isTrue(fixed.indexOf('f(?a:Int)') != -1);
+	}
+
+	public function testHoistDefaultedParamStaysRedundantSigilArm(): Void {
+		// `?a:Int = 5` already carries a default, so the redundant-sigil arm owns it; the
+		// hoist arm requires a parameter with NONE.
+		final source: String = fnConst('?a:Int = 5', 'final x:Int = a ?? 7;');
+		Assert.equals(1, violations(source).length);
+		Assert.equals(fnConst('a:Int = 5', 'final x:Int = a ?? 7;'), applyFix(source));
+	}
+
 	private function fn(params: String): String {
 		return 'class C {\n\tfunction f($params):Void {}\n}';
 	}
@@ -292,6 +446,15 @@ class OptionalParamShorthandCheckTest extends Test {
 	 */
 	private function fnStatic(params: String): String {
 		return 'class C {\n\tstatic function f($params):Void {}\n}';
+	}
+
+	/**
+	 * The hoist arm's fixture: a `static` function taking `params` with `body` as its body,
+	 * alongside a `static inline final D` to default from. `static` because G5 refuses a
+	 * plain instance method — a subclass in another file could override it.
+	 */
+	private function fnConst(params: String, body: String): String {
+		return 'class C {\n\tstatic inline final D:Int = 7;\n\tstatic function f($params):Void {\n\t\t$body\n\t}\n}';
 	}
 
 	private function violations(source: String): Array<Violation> {
