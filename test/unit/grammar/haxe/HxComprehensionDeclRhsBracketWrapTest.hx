@@ -80,6 +80,17 @@ final class HxComprehensionDeclRhsBracketWrapTest extends Test {
 		+ ' "whitespace": {"bracketConfig": {"comprehensionBrackets": {"openingPolicy": "onlyAfter", "closingPolicy": "before"}}},'
 		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "keep"}}';
 
+	/**
+	 * `CFG_CALL` with `comprehensionFor: fitLine` — the project spelling, which pads
+	 * the comprehension brackets from the same-line policy instead of from an
+	 * explicit `bracketConfig`. The call-host glue is decided under this one.
+	 */
+	private static final CFG_CALL_FITLINE: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
+		+ '"maxLineLength": 140, "comprehensionCuddledOpen": true, "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": ['
+		+ '{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"},{"conditions": ['
+		+ '{"cond": "itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}},'
+		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "fitLine"}}';
+
 	public function new(): Void {
 		super();
 	}
@@ -212,6 +223,64 @@ final class HxComprehensionDeclRhsBracketWrapTest extends Test {
 			+ '\t\t\t\tdispatchNodeUpdate([ for (sceneNode in nodes)\n\t\t\t\t\tif (payload.kind == sceneNode.kind) '
 			+ 'new UpdateNodePropsCommand(this, cast sceneNode, payload)\n\t\t\t\t]);\n\t\t\tcase _:\n\t\t}\n\t}\n}';
 		assertWrite(src, src, CFG_CALL);
+	}
+
+	/**
+	 * A call whose SOLE argument is a CUDDLED-OPEN comprehension keeps the call
+	 * hugged: `dispatchNodeUpdate([ for (head)` on the statement line, the body one
+	 * indent deeper, `]);` back at that indent.
+	 *
+	 * The defect: `WrapList.shapeSingleArgGlue` resolved a `[`-leading sole argument
+	 * with `IfNaturalFirstLineFitsOpenDelim`, which also demands the argument's
+	 * natural first line END at an open delimiter. A cuddled generator head ends at
+	 * its own `)`, so that conjunct failed and the call paren opened — costing two
+	 * lines and an indent level against the identical call carrying a plain array,
+	 * which hugged. Only the WIDTH question belongs to a bracket-delimited argument:
+	 * it emits its own `]`, so the glued closer lands right whatever its first line
+	 * ended on.
+	 */
+	public function testCallArgCuddledComprehensionKeepsTheCallHugged(): Void {
+		final src: String = 'class CallHost {\n\tprivate function run(payload:NodePayload, sceneNodes:Array<SceneNode<NodePayload>>):Vo'
+			+ 'id {\n\t\tdispatchNodeUpdate([for (sceneNode in sceneNodes) if (payload.kind == sceneNode.kind) new UpdateNodePropsCommand'
+			+ 'XX(this, cast sceneNode, payload)]);\n\t}\n}';
+		final expected: String = 'class CallHost {\n\tprivate function run(payload:NodePayload, sceneNodes:Array<SceneNode<NodePayload>'
+			+ '>):Void {\n\t\tdispatchNodeUpdate([ for (sceneNode in sceneNodes)\n'
+			+ '\t\t\tif (payload.kind == sceneNode.kind) new UpdateNodePropsCommandXX(this, cast sceneNode, payload)\n\t\t]);\n\t}\n}';
+		assertWrite(expected, src, CFG_CALL_FITLINE);
+	}
+
+	/**
+	 * The WIDTH side of the same decision. This generator head cannot ride the call
+	 * line, so the cuddle declines and the leading break is taken at the BRACKET —
+	 * the call itself still hugs, because `[` is where a collection wraps.
+	 *
+	 * NEGATIVE pin: byte-identical with the slice reverted. It states that the glue
+	 * never drags an over-wide head onto the call line, which is the failure the
+	 * dropped conjunct would otherwise have to prevent.
+	 */
+	public function testCallArgWideComprehensionHeadOpensTheBracketNotTheCall(): Void {
+		final src: String = 'class WideHead {\n\tprivate function run(payload:NodePayload):Void {\n'
+			+ '\t\tdispatchNodeUpdate([for (sceneNode in _sceneLayerRegistry.collectPendingNodesForPayloadKind(payloadKindXXXXXXXXXXXXXXX'
+			+ 'XXXXXXXXXXXXXXX)) if (payload.kind == sceneNode.kind) sceneNode]);\n\t}\n}';
+		final expected: String = 'class WideHead {\n\tprivate function run(payload:NodePayload):Void {\n\t\tdispatchNodeUpdate([\n'
+			+ '\t\t\tfor (sceneNode in _sceneLayerRegistry.collectPendingNodesForPayloadKind(payloadKindXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX))'
+			+ '\n\t\t\t\tif (payload.kind == sceneNode.kind) sceneNode\n\t\t]);\n\t}\n}';
+		assertWrite(expected, src, CFG_CALL_FITLINE);
+	}
+
+	/**
+	 * The plain-array control for the two fixtures above — same host, same config.
+	 * An array literal sole argument hugged the call before this slice and is
+	 * untouched by it. NEGATIVE pin: the pair is the claim, that a comprehension and
+	 * an array in the same argument position now lay out the same way.
+	 */
+	public function testCallArgPlainArrayKeepsTheCallHugged(): Void {
+		final src: String = 'class PlainArrayArg {\n\tprivate function register():Void {\n\t\tregisterHandlers([alphaHandler, bet'
+			+ 'aHandler, gammaHandler, deltaHandler, epsilonHandler, zetaHandler, etaHandlerx, thetaHandler]);\n\t}\n}';
+		final expected: String = 'class PlainArrayArg {\n\tprivate function register():Void {\n\t\tregisterHandlers([\n'
+			+ '\t\t\talphaHandler,\n\t\t\tbetaHandler,\n\t\t\tgammaHandler,\n\t\t\tdeltaHandler,\n\t\t\tepsilonHandler,\n'
+			+ '\t\t\tzetaHandler,\n\t\t\tetaHandlerx,\n\t\t\tthetaHandler\n\t\t]);\n\t}\n}';
+		assertWrite(expected, src, CFG_CALL_FITLINE);
 	}
 
 	private inline function triviaWrite(src: String, cfg: String): String {

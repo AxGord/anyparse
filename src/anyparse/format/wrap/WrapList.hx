@@ -2633,7 +2633,16 @@ class WrapList {
 		// pinned by `HxComprehensionDeclRhsBracketWrapTest`; the outer-first
 		// priority governs where a CALL-level wrap competes with a nested
 		// PAREN group, not collection literals.
-		if (DocMeasure.firstVisibleTextStartsWith(items[0], '['.code)) return IfNaturalFirstLineFitsOpenDelim(lineWidth, broken, hugGlue);
+		// WIDTH is the only question the probe may ask here. A bracket-delimited
+		// collection always emits its own `]` — at container indent when it broke,
+		// glued to the last item when it packed — so the closer this shape glues
+		// after the argument lands correctly whatever the argument's FIRST line
+		// ended on, which makes the end-on-open-delimiter conjunct its `(`-led
+		// siblings below ask the wrong question for a collection. Asking it anyway
+		// refused one shape and no other: a comprehension whose generator head
+		// `wrapping.comprehensionCuddledOpen` cuddles to the `[`, so the first line
+		// ends at the generator's `)` rather than at an open delimiter.
+		if (DocMeasure.firstVisibleTextStartsWith(items[0], '['.code)) return IfNaturalFirstLineExceeds(lineWidth, broken, hugGlue);
 		// ω-outer-first-wrap (T20): OUTER boundaries win over inner ones. When
 		// breaking at THIS list's own delimiters already yields an argument that
 		// renders as one flat line at its continuation indent, take that shape —

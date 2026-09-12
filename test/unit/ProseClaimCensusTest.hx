@@ -234,6 +234,7 @@ final class ProseClaimCensusTest extends Test {
 		'unit.grammar.haxe.HxComprehensionBracketPolicyTest#testReifiedForHeadIsComprehension :: control',
 		'unit.grammar.haxe.HxComprehensionBracketPolicyTest#testWrappedComprehensionStaysArrayLiteral :: base',
 		'unit.grammar.haxe.HxComprehensionCloserSliceTest#testBlockBodyWithoutCommentKeepsBlockHug :: control',
+		'unit.grammar.haxe.HxComprehensionDeclRhsBracketWrapTest#testCallArgPlainArrayKeepsTheCallHugged :: control',
 		'unit.grammar.haxe.HxFileHeaderCommentSliceTest#testDocOnConditionalWrappedTypeStaysAttached :: base',
 		'unit.grammar.haxe.HxFileHeaderCommentSliceTest#testDocOnSecondDeclIsNotAFileHeader :: base',
 		'unit.grammar.haxe.HxFileHeaderCommentSliceTest#testDocStaysAttachedWhenImportFollowsType :: base',
