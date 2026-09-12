@@ -10,8 +10,18 @@ using Lambda;
 using StringTools;
 
 /**
+ * One member pair whose CURRENT relative order the init phase fixes: `before` must keep running
+ * before `after`, and `kind` names the dependency that says so.
+ */
+typedef InitOrderConstraint = {
+	var before: OrderedMember;
+	var after: OrderedMember;
+	var kind: InitConstraintKind;
+}
+
+/**
  * The INITIALIZER-DEPENDENCY layer of `member-order`: the one reason a reorder of a type's
- * members can change behaviour, asked as four questions and nothing else.
+ * members can change behaviour, asked as three questions and nothing else.
  *
  * Field initializers run in declaration order - statics at class-load, instance fields in the
  * constructor, two independent phases - so moving a member past another is observable exactly
@@ -25,8 +35,8 @@ using StringTools;
  *
  * Three unrelated callers, one per path, which is the other half of the same evidence: the
  * REPORT path asks `initReadsSibling` for the one pair it must skip, the PLAN path asks
- * `blockInitInert` whether a conditional block may take a content rank, and the FIX path asks
- * the two flip predicates whether the whole reorder is safe. None of them reads config, so the
+ * `blockInitInert` whether a conditional block may take a content rank, and the FIX path asks `orderConstraints`
+ * which member pairs the init phase pins in their current relative order. None of them reads config, so the
  * gates cannot disagree - `MemberOrder`'s standing requirement, and the reason the shared
  * `unsafeInitKinds` list lives here as ONE list rather than once per caller.
  *
@@ -61,38 +71,40 @@ final class MemberInitDeps {
 	}
 
 	/**
-	 * Whether a side-effecting field initializer would flip order with a same-phase INITIALIZED
-	 * non-inline field — reordering two initializers changes their relative execution, and the
-	 * side-effecting one's callee may read/mutate state the other observes (invisible to a text
-	 * scan). Exempt as flip partners: an init-less field (contributes no code to the init phase)
-	 * and an `inline` field (this grammar's language requires an inline variable's initializer to
-	 * be a constant, so it is folded at compile time — a grammar supplying `inlineModifierKind`
-	 * without that guarantee must not share this exemption). Under `movableArglessNew` a pure
-	 * argless-`new` allocation is not counted side-effecting (see `sideEffecting`).
+	 * Every member pair whose CURRENT relative order the init phase fixes, so a reorder can be built
+	 * as a linear extension of them instead of being refused whole. Two kinds, the same two questions
+	 * the flip bails used to ask of one candidate permutation: a field initializer that READS a
+	 * same-phase sibling (`SiblingRead`), and a side-effecting field initializer beside another
+	 * INITIALIZED non-inline field of the same phase (`SideEffect`). Exempt as partners in both: an
+	 * init-less field (it contributes no code to the init phase) and an `inline` field (this
+	 * grammar's language requires an inline variable's initializer to be a constant, so it is folded
+	 * at compile time - a grammar supplying `inlineModifierKind` without that guarantee must not
+	 * share the exemption). Under `movableArglessNew` a pure argless-`new` allocation is not counted
+	 * side-effecting (see `sideEffecting`).
+	 *
+	 * Neither question asks where the pair would END UP - `before` and `after` are the pair's own
+	 * source positions - which is what makes the answer permutation-independent, the sort's INPUT
+	 * rather than its judge.
+	 *
+	 * `SiblingRead` pairs are emitted FIRST because the caller names its decline after the first
+	 * constraint holding the reported member: a field that reads its sibling almost always also
+	 * carries a call, so the coarser sentence would otherwise be told for a member whose real
+	 * constraint is a NAMED dependency on the field above it.
 	 */
-	public static function hasSideEffectingFieldFlip(
-		members: Array<OrderedMember>, sorted: Array<OrderedMember>, shape: RefShape, source: String, movableArglessNew: Bool
-	): Bool {
+	public static function orderConstraints(
+		members: Array<OrderedMember>, shape: RefShape, source: String, movableArglessNew: Bool
+	): Array<InitOrderConstraint> {
+		final out: Array<InitOrderConstraint> = [
+			for (m in members) for (g in members) if (initReadsSibling(m, g, source)) constraintOf(m, g, SiblingRead)
+		];
 		final unsafe: Array<String> = unsafeInitKinds(shape);
 		final fields: Array<OrderedMember> = [for (m in members) if (m.isField) m];
 		for (f in fields)
 			if (sideEffecting(f, unsafe, shape, source, movableArglessNew))
 				for (g in fields)
-					if (g.node != f.node && f.isStatic == g.isStatic && g.initNode != null && !g.isInline && orderFlips(f, g, sorted))
-						return true;
-		return false;
-	}
-
-	/**
-	 * Whether a field initializer that textually reads a same-phase sibling field would flip order
-	 * with it (a cross-phase read is safe — statics init first). Exempt as read targets: an INLINE
-	 * sibling (its initializer is a language-mandated constant, folded at compile time, no runtime
-	 * order dependency) and an INIT-LESS sibling (it runs no init code, so the reader sees the
-	 * default value on either side of it).
-	 */
-	public static function hasSiblingReadFlip(members: Array<OrderedMember>, sorted: Array<OrderedMember>, source: String): Bool {
-		for (m in members) for (g in members) if (initReadsSibling(m, g, source) && orderFlips(m, g, sorted)) return true;
-		return false;
+					if (g.node != f.node && f.isStatic == g.isStatic && g.initNode != null && !g.isInline)
+						out.push(constraintOf(f, g, SideEffect));
+		return out;
 	}
 
 	/**
@@ -101,7 +113,7 @@ final class MemberInitDeps {
 	 * after it.
 	 *
 	 * The single answer to that question, asked from both paths: the fix path's
-	 * `hasSiblingReadFlip` pairs it with `orderFlips` to refuse a whole reorder, and
+	 * `orderConstraints` turns it into an EDGE the reorder must respect, and
 	 * `firstOutOfOrder` pairs it with adjacency to drop ONE report. Neither reads config, so the
 	 * two gates cannot disagree — the class doc's standing requirement.
 	 *
@@ -120,17 +132,9 @@ final class MemberInitDeps {
 			&& target.isStatic == owner.isStatic && OccurrenceScan.referencedInRange(source, name, span.from, span.to, []);
 	}
 
-	/** Whether `a` and `b`'s relative order differs between source (`index`) and `sorted`. */
-	private static function orderFlips(a: OrderedMember, b: OrderedMember, sorted: Array<OrderedMember>): Bool {
-		final srcBefore: Bool = a.index < b.index;
-		final sortedBefore: Bool = indexOfNode(sorted, a.node) < indexOfNode(sorted, b.node);
-		return srcBefore != sortedBefore;
-	}
-
-	/** Index of `node` (by identity) in `members`, or -1. */
-	private static function indexOfNode(members: Array<OrderedMember>, node: QueryNode): Int {
-		for (i in 0...members.length) if (members[i].node == node) return i;
-		return -1;
+	/** The pair as a constraint, oriented by CURRENT source position - the order the sort must keep. */
+	private static inline function constraintOf(a: OrderedMember, b: OrderedMember, kind: InitConstraintKind): InitOrderConstraint {
+		return a.index < b.index ? { before: a, after: b, kind: kind } : { before: b, after: a, kind: kind };
 	}
 
 	/**
@@ -165,7 +169,7 @@ final class MemberInitDeps {
 
 	/**
 	 * The node kinds whose presence in a field initializer makes its position observable - an assignment, a call, an allocation. One
-	 * list, two consumers (`hasSideEffectingFieldFlip` and `blockInitInert`), so the flip bail and the block gate cannot drift apart.
+	 * list, two consumers (`orderConstraints` and `blockInitInert`), so the pair constraint and the block gate cannot drift apart.
 	 */
 	private static function unsafeInitKinds(shape: RefShape): Array<String> {
 		final kinds: Array<String> = shape.writeParentKinds.copy();
@@ -183,7 +187,7 @@ final class MemberInitDeps {
 	 * Whether `init` (the initializer of field `owner`) textually reads the name of another
 	 * SAME-PHASE field in `fields` - statics initialise at class-load and instance fields in the
 	 * constructor, so a cross-phase read can never observe declaration order, the same phase gate
-	 * `hasSiblingReadFlip` applies. The scan is a raw identifier-boundary read, so within a phase it
+	 * `initReadsSibling` applies. The scan is a raw identifier-boundary read, so within a phase it
 	 * over-reports (a mention in a comment or a `$name` interpolation counts) - the conservative
 	 * direction for a gate that must refuse anything it cannot prove independent.
 	 */
@@ -200,5 +204,16 @@ final class MemberInitDeps {
 		}
 		return false;
 	}
+
+}
+
+/** Which initializer dependency pins an `InitOrderConstraint`'s pair in its current order. */
+enum abstract InitConstraintKind(Int) {
+
+	/** One of the pair's initializers READS the other field, so swapping them changes what it sees. */
+	final SiblingRead = 0;
+
+	/** One of the pair initializes with a side effect, so swapping them runs the two in the other order. */
+	final SideEffect = 1;
 
 }

@@ -2,6 +2,8 @@ package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.Violation;
+import anyparse.check.MemberInitDeps.InitConstraintKind;
+import anyparse.check.MemberInitDeps.InitOrderConstraint;
 import anyparse.check.MemberOrderReason.OrderKeys;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
@@ -10,6 +12,7 @@ import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
+import haxe.Exception;
 
 using Lambda;
 using StringTools;
@@ -98,13 +101,14 @@ typedef SortPlan = {
  * The `member-order` check and its reordering autofix: verifies a types members follow the canonical rank order (constants, properties,
  * fields, constructor, accessors, instance methods, static methods; public before private) with rank groups blank-line separated, and
  * rewrites them into that order when fixing. Within one rank plain unconditional members carry a sub-order (`subRank`): `inline` members
- * lead, then initialized fields lead init-less ones; the Accessor rank is exempt so a get/set pair keeps its source adjacency. The
- * side-effecting-flip bail counts only flips between the side-effecting initializer and another INITIALIZED same-phase field - an
+ * lead, then initialized fields lead init-less ones; the Accessor rank is exempt so a get/set pair keeps its source adjacency.
+ * The side-effecting constraint pairs the side-effecting initializer only with another INITIALIZED same-phase field - an
  * init-less field runs no code in the init phase, so crossing it is unobservable. The REPORT path skips ONE pair the language itself pins:
  * a member whose initializer READS the sibling immediately above it cannot legally precede that sibling, so `firstOutOfOrder` passes over
  * that pair and keeps scanning. That is per PAIR, not per container - consulting the fix path whole-container `reorderRefusal` here would
- * take the other order findings in the same container with it - and it shares `initReadsSibling` with that refusal, so the two gates
- * cannot disagree. A conditional block still moves as ONE atomic unit, branches and all: `#if` / `#elseif` / `#else` / `#end` is a single
+ * take the other order findings in the same container with it - and it shares `initReadsSibling` with
+ * the constraint set the fix path sorts under, so the two gates cannot disagree. A conditional block
+ * still moves as ONE atomic unit, branches and all: `#if` / `#elseif` / `#else` / `#end` is a single
  * group whose members sort within their own branch, so the construct is regenerated rather than flattened. Such a block sorts by its
  * CONTENT: when every member of the block carries the same `MemberRank`, the block sorts at that rank among the plain members of its
  * section, trailing them WITHIN the rank - crossing a rank boundary is what content ranking is for, position inside one rank is not, save
@@ -128,15 +132,19 @@ typedef SortPlan = {
  * the two disagree and the fix would never converge. A gate on position-sensitive constructs in the CONDITION of the `#if` itself is a
  * documented NO-OP for this grammar: a Haxe conditional-compilation condition is a pure compile-time define expression evaluated before
  * parsing, with no ordered declaration and no `#define`, so nothing in it has a position that could matter - a grammar that grows one must
- * add that gate here. A container whose field initializers make reordering unsafe - or which holds an `#else` shape the branch model
- * refuses (nested, spanning two sections, or with an empty first branch), a conditional region holding bytes no member slot covers, an
+ * add that gate here. A container holding an `#else` shape the branch model refuses (nested, spanning two
+ * sections, or with an empty first branch), a conditional region holding bytes no member slot covers, an
  * `@:meta` run written above a member-level `#if` (covered by no slot at all, so the rebuild would DROP it - `rebuiltSpanCovered`), or a
  * construct whose COEXISTING members span two sections (`splitsCoexistingRegion`: splitting it per section lifts a field out of the region
- * its author wrote, away from the method that uses it, and re-derives a nested condition as a conjunct at the new site) - keeps its order
- * (the finding stays report-only) but still gets its rank-group spacing normalised, including the blank lines that set each member-level
- * `#if`/`#end` block off from its neighbours. One residual report-only case is specific to content ranking: a moved block that flips with
+ * its author wrote, away from the method that uses it, and re-derives a nested condition as a conjunct at the new site) - keeps its
+ * order (the finding stays report-only) but still gets its rank-group spacing normalised, including the blank lines that set each
+ * member-level `#if`/`#end` block off from its neighbours. A FIELD initializer no longer refuses a whole container: the pairs whose
+ * current relative order the init phase fixes come back from `MemberInitDeps.orderConstraints` and the sort is a linear extension
+ * of them, so every member no constraint holds still reaches its canonical slot and only a container they leave nothing to move in
+ * declines (`initPin`). So an emitted edit no longer implies a canonical container, and the finding that survives one carries its
+ * pin as the `declineReason`. One residual report-only case is specific to content ranking: a moved block that flips with
  * a same-phase side-effecting UNCONDITIONAL initializer is flagged and then bails to spacing-only. Demoting the block and re-sorting would
- * close it, but the sole trigger is `hasSideEffectingFieldFlip` - the one gate the `movableArglessNew` option relaxes - so a retry would
+ * close it, but the sole trigger is the side-effecting constraint - the one the `movableArglessNew` option relaxes - so a retry would
  * reintroduce exactly the report/fix option disagreement the config-independent gates exist to prevent. The finding is the same advisory
  * shape the rule already produces for a plain unsafe container, and neither TM nor this repo holds an instance of it. A container in a
  * type that transitively carries a BUILD MACRO is gated separately, and only on the FIX path (`macroBuiltMetaOrderKept`, which needs the
@@ -153,17 +161,12 @@ final class MemberOrder implements Check implements ConfigAware {
 	 * The source lines a single reorder may MOVE before `fix` declines it and emits only the
 	 * spacing part, leaving the finding reported and the order alone.
 	 *
-	 * The reorder is a PERMUTATION of a container's member list, so one member sitting in the
-	 * wrong rank rewrites every member between it and its slot. On this project's own tree the
-	 * cost of that is bimodal, measured over all five pre-existing `member-order` findings:
-	 * `Cli.hx` moves 405 lines for ONE misplaced `inline` marker, and the next largest is
-	 * `OracleCoverage.hx` at 48, then 12, then 10, then a no-op. A budget anywhere in 60..390
-	 * separates them identically; 200 is the middle of that gap.
-	 *
-	 * The 405-line one is why this exists rather than being hypothetical: S11 and S49 each ran
-	 * `--fix`, each got an 812-line diff out of one `info` finding, and each reverted it by
-	 * hand. A fix a reviewer reverts twice is not a fix, and the third answer is not a third
-	 * revert. Splitting such a type is `apq move-member` territory anyway.
+	 * The unit is the genuinely-moved SET (`relocatedLines`), never the container: a member that
+	 * merely shifts because another one crossed it costs a reviewer nothing, so the budget asks how
+	 * much of the type has to be re-read. What it still refuses is a canonical order that is a
+	 * wholesale reshuffle of a large type - a diff a reviewer reverts rather than checks, which is
+	 * what a whole-container permutation of such a type produced twice before the budget existed.
+	 * Splitting the type is `apq move-member` territory anyway.
 	 */
 	private static inline final MAX_RELOCATED_LINES: Int = 200;
 
@@ -297,18 +300,39 @@ final class MemberOrder implements Check implements ConfigAware {
 	}
 
 	/**
-	 * Total source lines the reorder would MOVE: the extent of every member whose
-	 * position in the sorted list differs from its position now. Members that stay
-	 * put cost nothing to review, so they do not count.
+	 * Total source lines the reorder genuinely MOVES: the extent of every member that falls
+	 * outside a longest common subsequence of the current and the sorted list, compared by node
+	 * identity. Members of that subsequence keep their relative order, so a line diff of the
+	 * rebuilt region leaves them untouched and they cost nothing to review.
+	 *
+	 * Counting SLOTS whose occupant changed instead charges the whole container for one member
+	 * crossing it - a constant lifted from the end of a type to the front puts every member
+	 * between into a new slot, while a reader sees ONE line move. The subsequence is weighted by
+	 * line extent rather than by member count because a line diff matches LINES: keeping the
+	 * heaviest common run is what actually minimises the review.
 	 */
 	private static function relocatedLines(members: Array<OrderedMember>, sorted: Array<OrderedMember>, source: String): Int {
-		var lines: Int = 0;
-		for (i in 0...members.length) if (members[i].node != sorted[i].node) {
-			final span: Span = members[i].span;
-			lines++;
+		inline function extentOf(span: Span): Int {
+			var lines: Int = 1;
 			for (at in span.from ... span.to) if (source.fastCodeAt(at) == '\n'.code) lines++;
+			return lines;
 		}
-		return lines;
+		final extent: Array<Int> = [for (m in members) extentOf(m.span)];
+		var total: Int = 0;
+		for (n in extent) total += n;
+		// `sorted` is a permutation of `members`, so a common subsequence of the two is exactly an
+		// increasing run of source indices within `sorted` - the heaviest one is a line-weighted
+		// longest-increasing-subsequence over those indices.
+		final index: Array<Int> = [for (m in sorted) m.index];
+		final run: Array<Int> = [for (_ in index) 0];
+		var kept: Int = 0;
+		for (i in 0...index.length) {
+			var prefix: Int = 0;
+			for (j in 0...i) if (index[j] < index[i] && run[j] > prefix) prefix = run[j];
+			run[i] = prefix + extent[index[i]];
+			if (run[i] > kept) kept = run[i];
+		}
+		return total - kept;
 	}
 
 	/** Whether the grammar supplies the kind-sets the check needs. */
@@ -351,14 +375,13 @@ final class MemberOrder implements Check implements ConfigAware {
 
 	/**
 	 * Emit the reorder edits for `container` when its first layout issue (order or
-	 * spacing) is one of the passed violations and its fields are reorder-safe:
-	 * stable-sort the members by rank, then rebuild the member region as a single
-	 * edit - blank-line separating rank groups and comment-led slots - or, for
+	 * spacing) is one of the passed violations and the rebuild can place its bytes: sort the members by rank within the init phase's
+	 * constraints, then rebuild the member region as a single edit - blank-line separating rank groups and comment-led slots - or, for
 	 * `#if`-guarded members, a rebuilt region with regenerated `#if`/`#end`
 	 * directives. Falls back to in-place slot swaps when an inter-member gap holds
-	 * non-whitespace a rebuild would silently drop. A reorder-unsafe container
-	 * names its gate through `reorderRefusal` and degrades to `emitSpacingOnly`: the blank-line
-	 * normalisation between rank groups still lands, the order stays untouched.
+	 * non-whitespace a rebuild would silently drop. A container whose bytes the rebuild cannot place names its gate through
+	 * `reorderRefusal`, and one the init phase leaves nothing to move in names its constraint through `initPin`; both degrade
+	 * to `emitSpacingOnly`, so the blank-line normalisation between rank groups still lands and the order stays untouched.
 	 */
 	private static function emitReorder(
 		edits: Array<{ span: Span, text: String }>, source: String, container: QueryNode, shape: RefShape, flagged: Map<Int, Violation>,
@@ -371,11 +394,22 @@ final class MemberOrder implements Check implements ConfigAware {
 		if (bad == null) return;
 		final reported: Null<Violation> = flagged[bad.member.span.from];
 		if (reported == null) return;
-		final sorted: Array<OrderedMember> = members.copy();
-		sorted.sort((a, b) -> compareOrder(a, b, plan));
-		final pinned: Null<String> = reorderRefusal(members, sorted, source, shape, movableArglessNew, regions);
+		final constraints: Array<InitOrderConstraint> = MemberInitDeps.orderConstraints(members, shape, source, movableArglessNew);
+		final canonical: Array<OrderedMember> = canonicalSort(members, plan);
+		// A conditional block moves as ONE unit, which no pairwise edge can express, so a linear
+		// extension that interleaves a member into one is dropped for the canonical order - and the
+		// init phase then refuses that order whole, exactly as it did before constraints existed.
+		final constrained: Array<OrderedMember> = constraints.length == 0 ? canonical : constrainedSort(members, plan, constraints);
+		final sorted: Array<OrderedMember> = blocksContiguous(constrained) ? constrained : canonical;
+		final pinned: Null<String> = reorderRefusal(members, source, regions);
 		if (pinned != null) {
 			reported.declineReason = pinned;
+			MemberSpacing.emitSpacingOnly(edits, members, source);
+			return;
+		}
+		final pin: Null<InitOrderConstraint> = initPin(canonical, sorted, bad.member, constraints);
+		if (pin != null) {
+			reported.declineReason = initPinReason(pin.kind);
 			MemberSpacing.emitSpacingOnly(edits, members, source);
 			return;
 		}
@@ -449,43 +483,142 @@ final class MemberOrder implements Check implements ConfigAware {
 	}
 
 	/**
-	 * Why reordering `members` could change behaviour, in the words the finding gets told - or null
-	 * when it cannot. Reordering changes behaviour only via FIELD initializers (they run in
-	 * declaration order; statics at class-load, instance fields in the constructor - independent
-	 * phases). Bails on stranded trivia (an `#else` the branch model could not absorb, an orphan
-	 * comment), on a conditional region holding bytes no member slot covers, or on a field-init
-	 * order flip a text scan cannot prove safe. `movableArglessNew` (the opt-in option) exempts a
-	 * pure argless-`new` allocation from the side-effecting-flip bail - see `isMovableAllocation`.
+	 * Why reordering `members` could change behaviour STRUCTURALLY, in the words the finding gets
+	 * told - or null when it cannot. Bails on stranded trivia (an `#else` the branch model could not
+	 * absorb, an orphan comment), on a conditional region holding bytes no member slot covers, and on
+	 * a construct whose coexisting members span two sections.
+	 *
+	 * The OTHER way a reorder changes behaviour - a FIELD initializer's position - is not a
+	 * container-wide refusal: it comes back from `MemberInitDeps.orderConstraints` as pairs the sort
+	 * satisfies by construction, and only a container those pairs leave nothing to move in declines
+	 * (`initPin`). So a bail here is about bytes the rebuild cannot place, never about what the init
+	 * phase would observe.
 	 *
 	 * It returns the SENTENCE rather than a bool because every one of these bails is permanent for
 	 * the container it fires on: re-running the fixer produces the same refusal for ever, and a
 	 * reader who is not told which gate closed has no way to tell that from a fixer that has not got
 	 * round to the case yet. The caller writes it onto the finding as `Violation.declineReason`.
 	 */
-	private static function reorderRefusal(
-		members: Array<OrderedMember>, sorted: Array<OrderedMember>, source: String, shape: RefShape, movableArglessNew: Bool,
-		regions: Array<LexRegion>
-	): Null<String> {
-		if (hasUnmodelledElse(members, source))
-			return 'the order is pinned: this type holds an `#else` shape the branch model does not represent';
-		if (hasOrphanComment(members, source, regions))
-			return 'the order is pinned: a comment between two members belongs to no member slot, so a reorder would strand it';
-		// Asked BEFORE the side-effect gate although either alone refuses the container: a field that
-		// reads its sibling almost always also carries a call, so the coarser gate would answer first
-		// and the reader would be told "some initializer has a side effect" for a member whose real
-		// constraint is a NAMED dependency on the field above it. Which gate is asked first decides
-		// only the sentence, never the verdict.
-		if (MemberInitDeps.hasSiblingReadFlip(members, sorted, source))
-			return 'the order is pinned: a field initializer here reads a sibling field the reorder would move BELOW it, which '
-				+ 'would read it before it is initialized';
-		if (MemberInitDeps.hasSideEffectingFieldFlip(members, sorted, shape, source, movableArglessNew))
-			return 'the order is pinned: the reorder would flip a side-effecting field initializer past another initialized '
-				+ 'same-phase field, which runs the two in the other order';
-		if (!conditionalRegionsCovered(members, source))
-			return 'the order is pinned: a conditional region holds bytes no member slot covers, so rebuilding it would drop them';
-		if (splitsCoexistingRegion(members))
-			return 'the order is pinned: one conditional construct declares members of two sections, and reordering would split it';
-		return null;
+	private static function reorderRefusal(members: Array<OrderedMember>, source: String, regions: Array<LexRegion>): Null<String> {
+		return if (hasUnmodelledElse(members, source))
+			'the order is pinned: this type holds an `#else` shape the branch model does not represent'
+		else if (hasOrphanComment(members, source, regions))
+			'the order is pinned: a comment between two members belongs to no member slot, so a reorder would strand it'
+		else if (!conditionalRegionsCovered(members, source))
+			'the order is pinned: a conditional region holds bytes no member slot covers, so rebuilding it would drop them'
+		else if (splitsCoexistingRegion(members))
+			'the order is pinned: one conditional construct declares members of two sections, and reordering would split it'
+		else
+			null;
+	}
+
+	/** `members` in canonical order - the permutation the fixer emits when the init phase constrains nothing. */
+	private static function canonicalSort(members: Array<OrderedMember>, plan: SortPlan): Array<OrderedMember> {
+		final sorted: Array<OrderedMember> = members.copy();
+		sorted.sort((a, b) -> compareOrder(a, b, plan));
+		return sorted;
+	}
+
+	/**
+	 * The canonical order restricted to the permutations the init phase allows: a linear extension of
+	 * the constraint edges that takes the canonically-smallest available member at each step, so a
+	 * pinned pair costs only that pair and every member no edge holds still reaches its canonical slot.
+	 *
+	 * Acyclic BY CONSTRUCTION: every edge runs from a lower source position to a higher one, so the
+	 * source order is itself a linear extension and no step can run out of candidates - a step that
+	 * does is a broken invariant, not bad input. Idempotent for the reason the edges are
+	 * permutation-independent: they are read off the pair's CURRENT relative order, which the result
+	 * preserves, and `compareOrder` breaks its last tie on source position.
+	 */
+	private static function constrainedSort(
+		members: Array<OrderedMember>, plan: SortPlan, constraints: Array<InitOrderConstraint>
+	): Array<OrderedMember> {
+		final indegree: Array<Int> = [for (_ in members) 0];
+		for (c in constraints) indegree[c.after.index]++;
+		final taken: Array<Bool> = [for (_ in members) false];
+		final out: Array<OrderedMember> = [];
+		while (out.length < members.length) {
+			var best: Int = -1;
+			for (i in 0...members.length) if (
+				!taken[i] && indegree[i] == 0 && (best < 0 || compareOrder(members[i], members[best], plan) < 0)
+			)
+				best = i;
+			if (best < 0)
+				throw new Exception(
+					'member-order: the init-order constraints hold a cycle, which edges from a lower to a higher '
+						+ 'source position cannot form'
+				);
+			taken[best] = true;
+			out.push(members[best]);
+			for (c in constraints) if (c.before.index == best) indegree[c.after.index]--;
+		}
+		return out;
+	}
+
+	/**
+	 * Whether every conditional block occupies ONE contiguous run of `order`. A block moves as one
+	 * atomic unit, which no pairwise edge can express, so an order that interleaves a member into one
+	 * is dropped: the rebuild would split the construct into two `#if`s of the same condition.
+	 */
+	private static function blocksContiguous(order: Array<OrderedMember>): Bool {
+		final seen: Array<String> = [];
+		var prev: Null<String> = null;
+		for (m in order) {
+			final cond: Null<String> = m.condition;
+			final key: Null<String> = cond == null ? null : groupKey(sectionOf(m.rank), cond, MemberSlots.branchSignatureOf(m));
+			if (key != null && key != prev) {
+				if (seen.contains(key)) return false;
+				seen.push(key);
+			}
+			prev = key;
+		}
+		return true;
+	}
+
+	/** Whether `order` holds every member at its own source position - the sort moved nothing. */
+	private static function orderUnchanged(order: Array<OrderedMember>): Bool {
+		for (i in 0...order.length) if (order[i].index != i) return false;
+		return true;
+	}
+
+	/**
+	 * The init-phase constraint that leaves this reorder nothing to do, or null when it can still move
+	 * something. Two shapes reach it and both are one fact to a reader: `sorted` VIOLATES a constraint
+	 * - only a container whose conditional blocks must stay atomic produces one, since that falls back
+	 * to the canonical order - or `sorted` IS the source order back again while the canonical order
+	 * wanted something else, so every improvement it wanted was pinned.
+	 *
+	 * It names the first constraint holding the REPORTED member, so the finding is told about its own
+	 * pin; with none holding it the container's first constraint still names the gate that closed,
+	 * which beats a finding that says nothing.
+	 */
+	private static function initPin(
+		canonical: Array<OrderedMember>, sorted: Array<OrderedMember>, reported: OrderedMember, constraints: Array<InitOrderConstraint>
+	): Null<InitOrderConstraint> {
+		final at: Array<Int> = [for (_ in sorted) 0];
+		for (i in 0...sorted.length) at[sorted[i].index] = i;
+		final violated: Null<InitOrderConstraint> = constraints.find(c -> at[c.after.index] < at[c.before.index]);
+		return if (violated != null)
+			violated
+		else if (!orderUnchanged(sorted) || orderUnchanged(canonical))
+			null
+		else
+			constraints.find(c -> c.before.node == reported.node || c.after.node == reported.node) ?? constraints[0];
+	}
+
+	/**
+	 * The sentence a container declines with when the init phase pins it, one per constraint kind -
+	 * the same two the whole-container flip bails returned, since the reader's question is unchanged.
+	 */
+	private static function initPinReason(kind: InitConstraintKind): String {
+		return switch kind {
+			case SiblingRead:
+				'the order is pinned: a field initializer here reads a sibling field the reorder would move BELOW it, which '
+					+ 'would read it before it is initialized';
+			case SideEffect:
+				'the order is pinned: the reorder would flip a side-effecting field initializer past another initialized '
+					+ 'same-phase field, which runs the two in the other order';
+		}
 	}
 
 	/**

@@ -624,6 +624,21 @@ dropped the 412-byte `hxformat.json` advisory that the section above removes, so
 end to end the run went 1819 → 206; the two savings are independent and it is the
 1407 that this flag governs.
 
+### `apq lint --fix`: an edit is not a promise the finding is gone
+
+A check may fix part of what a finding reports and decline the rest, so a `--fix` run
+can write an edit AND leave that finding standing. `member-order` is what made this
+ordinary rather than exotic: a container whose field initializers pin one pair is now
+sorted into the best order those pins allow, which moves every member no pin holds and
+leaves the pinned pair — and the finding on it — exactly where they were.
+
+A finding that survives its own check's edit carries the reason in
+`Violation.declineReason`, which is what the unfixed ledger prints. A residue with no
+reason reads as work the fixer has not got round to, and that is the one thing a decline
+must never look like. The ledger's `declined` is a FIRST-pass count, though, so a
+container that reorders on one pass and declines on the next is named by the next run
+over the settled tree rather than by the run that wrote the edit.
+
 ### The cost of a ROUND: batched queries, the TTY progress gate, and the whole-file read guard
 
 Three properties of the read-only commands that are about the price a CALLER

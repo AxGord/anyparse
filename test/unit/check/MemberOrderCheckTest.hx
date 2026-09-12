@@ -63,11 +63,13 @@ class MemberOrderCheckTest extends Test {
 		Assert.equals(0, edits(src).length);
 	}
 
-	/** A field that reads a sibling declared before it, where the sort would flip them, is reported but NOT auto-reordered. */
-	public function testSiblingRefFieldInitNotFixed(): Void {
+	/** A field that reads a sibling declared before it keeps that pair; the rest of the container still sorts. */
+	public function testSiblingRefFieldInitKeepsItsPair(): Void {
 		final src: String = 'class C { public function m():Void {} private var y:Int = 0; public var x:Int = y; }';
 		Assert.isTrue(violations(src).length > 0);
-		Assert.equals(0, edits(src).length);
+		final fixed: String = fixedSource(src);
+		Assert.isTrue(fixed.indexOf('var y') < fixed.indexOf('var x'), 'the reader stays below the field it reads: $fixed');
+		Assert.isTrue(fixed.indexOf('var x') < fixed.indexOf('function m'), 'the fields still sort ahead of the method: $fixed');
 	}
 
 	public function testRegisteredInBuiltins(): Void {
@@ -80,12 +82,14 @@ class MemberOrderCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { public var x = ').length);
 	}
 
-	/** A field init whose CALL reads a sibling (indirect dep) must not be reordered across that sibling. */
-	public function testIndirectFieldDepNotFixed(): Void {
+	/** A field init whose CALL reads a sibling (indirect dep) keeps that pair; the unconstrained members still sort. */
+	public function testIndirectFieldDepKeepsItsPair(): Void {
 		final src: String = 'class C { public function m():Void {} '
 			+ 'private static var log:Int = 0; public static var first:Int = push(); static function push():Int { return log; } }';
 		Assert.isTrue(violations(src).length > 0);
-		Assert.equals(0, edits(src).length);
+		final fixed: String = fixedSource(src);
+		Assert.isTrue(fixed.indexOf('var log') < fixed.indexOf('var first'), 'the caller stays below the field its callee reads: $fixed');
+		Assert.isTrue(fixed.indexOf('var first') < fixed.indexOf('function m('), 'the fields still sort ahead of the method: $fixed');
 	}
 
 	/** A leading line comment travels WITH its member during the reorder (it is part of the member's slot). */
@@ -411,18 +415,18 @@ class MemberOrderCheckTest extends Test {
 	}
 
 	/**
-	 * A reorder-unsafe container (the side-effecting `final` init would flip past
-	 * the `var` fields) degrades to spacing-only edits: the missing blank line
+	 * A container the init phase leaves nothing to move in (the side-effecting `final` init would
+	 * flip past both initialized `var` fields) degrades to spacing-only edits: the missing blank line
 	 * between the rank groups is inserted, the order stays untouched, and the fix
 	 * applied to its own output emits nothing - the order finding remains as a
 	 * report-only advisory.
 	 */
 	public function testUnsafeReorderDegradesToSpacingOnly(): Void {
-		final src: String = 'class C {\n\tpublic var a:Int = 0;\n\tpublic var b:Int;\n\tpublic final t:T = new T();\n\n'
+		final src: String = 'class C {\n\tpublic var a:Int = 0;\n\tpublic var b:Int = 1;\n\tpublic final t:T = new T();\n\n'
 			+ '\tpublic function new() {\n\t\ta = 0;\n\t}\n}';
 		assertOrderAdvisoryOnly(violations(src));
 		Assert.equals(
-			'class C {\n\tpublic var a:Int = 0;\n\tpublic var b:Int;\n\n\tpublic final t:T = new T();\n\n\tpublic function new() {\n'
+			'class C {\n\tpublic var a:Int = 0;\n\tpublic var b:Int = 1;\n\n\tpublic final t:T = new T();\n\n\tpublic function new() {\n'
 			+ '\t\ta = 0;\n\t}\n}',
 			fixedSource(src)
 		);
@@ -437,11 +441,11 @@ class MemberOrderCheckTest extends Test {
 	 * spacing policy apply over the original member order.
 	 */
 	public function testUnsafeReorderCollapsesStrayBlankWithinGroup(): Void {
-		final src: String = 'class C {\n\tpublic var a:Int = 0;\n\n\tpublic var b:Int;\n\tpublic final t:T = new T();\n\n'
+		final src: String = 'class C {\n\tpublic var a:Int = 0;\n\n\tpublic var b:Int = 1;\n\tpublic final t:T = new T();\n\n'
 			+ '\tpublic function new() {\n\t\ta = 0;\n\t}\n}';
 		assertOrderAdvisoryOnly(violations(src));
 		Assert.equals(
-			'class C {\n\tpublic var a:Int = 0;\n\tpublic var b:Int;\n\n\tpublic final t:T = new T();\n\n\tpublic function new() {\n'
+			'class C {\n\tpublic var a:Int = 0;\n\tpublic var b:Int = 1;\n\n\tpublic final t:T = new T();\n\n\tpublic function new() {\n'
 			+ '\t\ta = 0;\n\t}\n}',
 			fixedSource(src)
 		);
@@ -454,7 +458,7 @@ class MemberOrderCheckTest extends Test {
 	 * is disabled there too, so such an edit could never converge.
 	 */
 	public function testUnsafeReorderStrayGapEmitsNoSpacingEdits(): Void {
-		final src: String = 'class C {\n\tpublic var a:Int = 0;\n\t;\n\tpublic var b:Int;\n\tpublic final t:T = new T();\n\n'
+		final src: String = 'class C {\n\tpublic var a:Int = 0;\n\t;\n\tpublic var b:Int = 1;\n\tpublic final t:T = new T();\n\n'
 			+ '\tpublic function new() {\n\t\ta = 0;\n\t}\n}';
 		assertOrderAdvisoryOnly(violations(src));
 		Assert.equals(0, edits(src).length);
@@ -497,17 +501,16 @@ class MemberOrderCheckTest extends Test {
 	}
 
 	/**
-	 * Option OFF (the default) is byte-identical to the pre-option behaviour: the same
-	 * `final t = new T()` container degrades to spacing-only edits, its order untouched.
+	 * Option OFF (the default) keeps the pin the option removes: the same `final t = new T()` counts
+	 * as side-effecting, so it stays under the INITIALIZED var it cannot cross - while still crossing
+	 * the init-less one, which runs no code in the init phase. Under the option it leads both.
 	 */
-	public function testMovableArglessNewOffByteIdentical(): Void {
+	public function testMovableArglessNewOffKeepsThePin(): Void {
 		final src: String = 'class C {\n\tpublic var a:Int = 0;\n\tpublic var b:Int;\n\tpublic final t:T = new T();\n\n'
 			+ '\tpublic function new() {\n\t\ta = 0;\n\t}\n}';
-		Assert.equals(
-			'class C {\n\tpublic var a:Int = 0;\n\tpublic var b:Int;\n\n\tpublic final t:T = new T();\n\n\tpublic function new() {\n'
-			+ '\t\ta = 0;\n\t}\n}',
-			fixedSource(src)
-		);
+		final fixed: String = canonicalizedFix(src);
+		Assert.isTrue(fixed.indexOf('var a') < fixed.indexOf('final t'), 'the pin under the initialized var holds: $fixed');
+		Assert.isTrue(fixed.indexOf('final t') < fixed.indexOf('var b'), 'and the init-less var is still crossed: $fixed');
 	}
 
 	/** An argful `new T(0)` initializer stays blocking even with the option on - only ZERO-argument allocations are movable. */
@@ -516,7 +519,7 @@ class MemberOrderCheckTest extends Test {
 			'class C {\n\tpublic var a:Int = 0;\n\tpublic var b:Int;\n\tpublic final t:T = new T(0);\n\n\tpublic function new() {}\n}';
 		assertOrderAdvisoryOnly(violations(src));
 		final fixed: String = fixedSource(src, movableArglessNewResolver());
-		Assert.isTrue(fixed.indexOf('var b') < fixed.indexOf('final t'), 'argful new NOT moved before the vars: $fixed');
+		Assert.isTrue(fixed.indexOf('var a') < fixed.indexOf('final t'), 'argful new NOT moved above the initialized var: $fixed');
 	}
 
 	/**
@@ -528,14 +531,17 @@ class MemberOrderCheckTest extends Test {
 			'class C {\n\tpublic var a:Int = 0;\n\tpublic var b:Int;\n\tpublic final t:T = new T(a);\n\n\tpublic function new() {}\n}';
 		assertOrderAdvisoryOnly(violations(src));
 		final fixed: String = fixedSource(src, movableArglessNewResolver());
-		Assert.isTrue(fixed.indexOf('var b') < fixed.indexOf('final t'), 'field-referencing new NOT moved before the vars: $fixed');
+		Assert.isTrue(
+			fixed.indexOf('var a') < fixed.indexOf('final t'), 'field-referencing new NOT moved above the field it reads: $fixed'
+		);
 	}
 
-	/** The option does not relax the sibling-read guard: a non-`new` init reading a sibling field still blocks. */
-	public function testSiblingReadStillBlocksUnderOption(): Void {
+	/** The option does not relax the sibling-read guard: a non-`new` init reading a sibling field keeps its pair pinned. */
+	public function testSiblingReadStillPinsItsPairUnderOption(): Void {
 		final src: String = 'class C { public function m():Void {} private var y:Int = 0; public var x:Int = y; }';
 		Assert.isTrue(violations(src).length > 0);
-		Assert.equals(0, edits(src, movableArglessNewResolver()).length, 'sibling-referencing init still blocks under the option');
+		final fixed: String = fixedSource(src, movableArglessNewResolver());
+		Assert.isTrue(fixed.indexOf('var y') < fixed.indexOf('var x'), 'the reader stays below the field it reads: $fixed');
 	}
 
 	/**
@@ -868,7 +874,7 @@ class MemberOrderCheckTest extends Test {
 	/**
 	 * A guarded static whose initializer READS a sibling static keeps its block pinned. Without the
 	 * gate the block would earn rank 1 and outrank `base` (rank 3), and the whole container would
-	 * then degrade to spacing-only - `hasSiblingReadFlip` catches the flip the ranking introduced -
+	 * then degrade to spacing-only - the sibling-read constraint catches the flip the ranking introduced -
 	 * so the unconditional `K` would never reach the top and the finding would never converge. The
 	 * discriminating assertions are therefore the const lift and the convergence, not the pin: with
 	 * the gate reverted `base` still precedes the `#if`, because nothing is reordered at all.
@@ -970,8 +976,8 @@ class MemberOrderCheckTest extends Test {
 	/**
 	 * An unconditional initializer that READS a field inside the block pins it: the gate refuses in
 	 * both directions, since moving the block past that initializer changes what it sees. The pin
-	 * (assertion 1) is what this gate buys - the edit assertion is belt-and-braces, held up by
-	 * `hasSiblingReadFlip` even with the gate reverted.
+	 * (assertion 1) is what this gate buys - the edit assertion is belt-and-braces,
+	 * held up by the sibling-read constraint even with the gate reverted.
 	 */
 	public function testOutsideInitReadingBlockFieldPinsBlock(): Void {
 		final src: String =
@@ -1079,14 +1085,13 @@ class MemberOrderCheckTest extends Test {
 	}
 
 	/**
-	 * The reorder is a PERMUTATION of the whole member list, so one misplaced member rewrites
-	 * every member between it and its slot. On `Cli.hx` that turned ONE `info` finding into an
-	 * 812-line diff, which S11 and S49 each reverted by hand. Past `MAX_RELOCATED_LINES` the fix
-	 * now emits the spacing part only and leaves the order alone; the finding is still reported,
-	 * so nothing is hidden — only the 800-line rewrite is declined.
+	 * The reorder is a PERMUTATION of the whole member list, and a canonical order that
+	 * un-interleaves two ranks moves nearly every member of both. Past `MAX_RELOCATED_LINES` the
+	 * fix now emits the spacing part only and leaves the order alone; the finding is still
+	 * reported, so nothing is hidden — only the whole-type rewrite is declined.
 	 */
 	public function testAnOversizedRelocationIsDeclined(): Void {
-		final src: String = swapWithBody(300);
+		final src: String = interleavedRanks(80, 1);
 		Assert.equals(1, violations(src).length, 'the finding is still reported');
 		Assert.equals(src, fixedSource(src), 'and the order is left exactly as it was');
 	}
@@ -1096,7 +1101,7 @@ class MemberOrderCheckTest extends Test {
 	 * would pass on a fix that had simply stopped working.
 	 */
 	public function testARelocationUnderTheBudgetStillApplies(): Void {
-		final src: String = swapWithBody(3);
+		final src: String = interleavedRanks(3, 1);
 		Assert.equals(1, violations(src).length);
 		Assert.notEquals(src, fixedSource(src), 'a small reorder is still applied');
 	}
@@ -1114,7 +1119,7 @@ class MemberOrderCheckTest extends Test {
 	 * why" for 12 of this project's own 13 residual findings.
 	 */
 	public function testTheOverBudgetDeclineNamesTheBudget(): Void {
-		final over: FixOutcome = fixOutcome(swapWithBody(300));
+		final over: FixOutcome = fixOutcome(interleavedRanks(80, 1));
 		Assert.equals(1, over.reasons.length);
 		Assert.equals(0, over.edits, 'the over-budget container is left alone');
 		final reason: Null<String> = over.reasons[0];
@@ -1126,9 +1131,27 @@ class MemberOrderCheckTest extends Test {
 			reason.indexOf('whole-container permutation') != -1 && reason.indexOf('200 lines') != -1,
 			'the reason names the mechanism and the budget: $reason'
 		);
-		final under: FixOutcome = fixOutcome(swapWithBody(3));
+		final under: FixOutcome = fixOutcome(interleavedRanks(3, 1));
 		Assert.isTrue(under.edits > 0, 'the same shape under the budget IS reordered');
 		Assert.same([null], under.reasons, 'so it declines nothing and says nothing');
+	}
+
+	/**
+	 * ONE member crossing a whole class is NOT an oversized relocation: a `static inline final`
+	 * written at the bottom of a long type leads it after the fix, and every member it passed
+	 * keeps its relative place, so the diff a reviewer reads is that one line.
+	 *
+	 * RED before the budget measured the genuinely-moved SET: counting the slots whose occupant
+	 * changed charged this reorder with the whole class and declined it - the shape a long UI type
+	 * like `DatePicker` reports, where one `TEXT_GUTTER` constant sat below `dispose()` for ever.
+	 */
+	public function testALoneConstantCrossingAWholeClassReorders(): Void {
+		final src: String = trailingConstant(250);
+		Assert.equals(1, violations(src).length);
+		final fixed: String = fixedSource(src);
+		Assert.isTrue(
+			fixed.indexOf('GUTTER') < fixed.indexOf('function m0'), 'the trailing constant leads the class: ${fixed.substr(0, 120)}'
+		);
 	}
 
 	/**
@@ -1147,20 +1170,16 @@ class MemberOrderCheckTest extends Test {
 	 * A plain `public var x:Int = y;` does NOT trip the coarse gate - measured, that fixture
 	 * survived the swapped-gate arm.
 	 *
-	 * The trailing `m()` / `z` pair is NOT decoration. Since the report path learned to skip a
-	 * pair the language pins (`initReadsSibling` in `firstOutOfOrder`), a container whose ONLY
-	 * misorder is `X` over `Y` yields no violation at all - so `fix` is never asked and this
-	 * reason becomes unreachable. The unpinned `public var z` after `public function m` gives the
-	 * container one finding the report still makes, which is what keeps the whole-container
-	 * refusal - and this sentence - live.
+	 * The finding the container reports is a SPACING one, and that is not an accident. Since the report path skips a pair the language
+	 * pins (`initReadsSibling` in `firstOutOfOrder`), the `X` over `Y` misorder is never reported - the missing blank between the two
+	 * rank groups is what the check still says, so `fix` is asked, the pin is named on that finding, and this sentence stays reachable.
 	 */
 	public function testASiblingReadPinNamesTheDependency(): Void {
 		final outcome: FixOutcome = fixOutcome(
-			'class C { private static final Y:Map<String, String> = ["a" => "b"]; public static final X:Array<String> = [for ('
-			+ 'k in Y.keys()) k]; public function m():Void {} public var z:Int = 0; }'
+			'class C {\n\tprivate static final Y:Map<String, String> = ["a" => "b"];\n'
+			+ '\tpublic static final X:Array<String> = [for (k in Y.keys()) k];\n}'
 		);
 		Assert.equals(1, outcome.reasons.length);
-		Assert.equals(0, outcome.edits, 'the pinned container is left alone');
 		final reason: Null<String> = outcome.reasons[0];
 		if (reason == null) {
 			Assert.fail('the sibling-read pin said nothing');
@@ -1211,6 +1230,63 @@ class MemberOrderCheckTest extends Test {
 		Assert.isFalse(vs[0].message.contains('KEYS'), 'and the pinned one is not');
 	}
 
+	/**
+	 * The shape the whole-container refusal used to swallow: a side-effecting initializer pinned
+	 * against the initialized field above it, and a `static inline final` at the bottom that no
+	 * constraint touches. The constant moves to the head of the type, the pinned pair keeps its
+	 * relative order, and the container still reports the member it could not place.
+	 */
+	public function testAPinnedPairStillLetsAnUnconstrainedConstantMove(): Void {
+		final fixed: String = fixedSource(pinnedPairWithFreeConstantSource());
+		Assert.isTrue(fixed.indexOf('GUTTER:Float') < fixed.indexOf('_scale:Float'), 'the unconstrained constant leads the type: $fixed');
+		Assert.isTrue(fixed.indexOf('_scale:Float') < fixed.indexOf('_image:B'), 'the pinned pair keeps its order: $fixed');
+		Assert.isTrue(parses(fixed), 'the partial reorder parses: $fixed');
+		Assert.equals(1, violations(fixed).length, 'the pair it could not place still reports: $fixed');
+	}
+
+	/**
+	 * A second pass over the first one's output emits nothing and names the pin. The constraint set
+	 * is read off the pairs' CURRENT relative order and the linear extension preserves it, so the
+	 * fixer's own result is a fixed point - and the finding that survives it says why.
+	 */
+	public function testThePartialReorderIsAFixedPoint(): Void {
+		final once: String = fixedSource(pinnedPairWithFreeConstantSource());
+		Assert.isTrue(once.indexOf('GUTTER:Float') < once.indexOf('_scale:Float'), 'the first pass moved what it could: $once');
+		final again: FixOutcome = fixOutcome(once);
+		Assert.equals(0, again.edits, 'a second pass moves nothing: $once');
+		final reason: Null<String> = again.reasons[0];
+		if (reason == null) {
+			Assert.fail('the surviving finding said nothing about its pin');
+			return;
+		}
+		Assert.isTrue(reason.indexOf('the order is pinned') == 0, 'a pinned order says so first: $reason');
+		Assert.isTrue(reason.indexOf('side-effecting field initializer') != -1, 'and names the gate that pinned it: $reason');
+	}
+
+	/**
+	 * A sibling-read pin holds its own pair in place and nothing else: the reader stays below the
+	 * field it reads while the unconstrained members of the same container sort into canonical order.
+	 */
+	public function testASiblingReadKeepsItsPairWhileTheRestMoves(): Void {
+		final fixed: String = fixedSource(siblingReadWithFreeMembersSource());
+		Assert.isTrue(fixed.indexOf('final Y') < fixed.indexOf('final X'), 'the reader stays below the sibling it reads: $fixed');
+		Assert.isTrue(fixed.indexOf('var z') < fixed.indexOf('function m'), 'the unconstrained field still relocates: $fixed');
+		Assert.isTrue(parses(fixed), 'the partial reorder parses: $fixed');
+	}
+
+	/** A side-effecting initializer pinned under the field above it, plus a constant no constraint holds. */
+	private inline function pinnedPairWithFreeConstantSource(): String {
+		return 'class C {\n\tprivate var _scale:Float = 4;\n\n\tprivate final _image:B = new B(Assets.get(0));\n\n'
+			+ '\tpublic function new() {}\n\n\tpublic function doThing():Float {\n\t\treturn _scale + GUTTER;\n\t}\n\n'
+			+ '\tprivate static inline final GUTTER:Float = 4;\n}';
+	}
+
+	/** A static field read by the constant below it, beside two members no constraint holds. */
+	private inline function siblingReadWithFreeMembersSource(): String {
+		return 'class C { private static final Y:Map<String, String> = ["a" => "b"]; public static final X:Array<String> = [for ('
+			+ 'k in Y.keys()) k]; public function m():Void {} public var z:Int = 0; }';
+	}
+
 	/** The `Main.iapStore` shape: a single-rank guarded `public var` written behind the private instance field it outranks. */
 	private inline function contentRankedBlockSource(): String {
 		return 'class C {\n\tpublic static var s:Int = 0;\n\n\tpublic final a:S;\n\n\tprivate var p:Int = 0;\n'
@@ -1218,13 +1294,27 @@ class MemberOrderCheckTest extends Test {
 	}
 
 	/**
-	 * A class whose FIRST member is a private static method with `body` filler lines and whose
-	 * second is a public instance method — canonical order wants them swapped, so the relocated
-	 * extent is the big method plus the small one.
+	 * A class of `filler` one-line private methods already in canonical order with a
+	 * `static inline final` written LAST — the long-class shape whose canonical order lifts ONE
+	 * line to the top and leaves every other member in its relative place. Every SLOT changes
+	 * occupant, so a slot-difference measure charges the whole class for that one line.
 	 */
-	private function swapWithBody(body: Int): String {
+	private function trailingConstant(filler: Int): String {
+		final tail: String = [for (i in 0...filler) '\tprivate function m$i():Void {}'].join('\n');
+		return 'class C {\n$tail\n\n\tprivate static inline final GUTTER:Int = 4;\n}\n';
+	}
+
+	/**
+	 * `pairs` public methods and `pairs` private static ones written strictly alternating, each
+	 * carrying `body` filler lines. Canonical order un-interleaves the two ranks, so all but one
+	 * member of each genuinely changes position — a wholesale permutation under any measure.
+	 */
+	private function interleavedRanks(pairs: Int, body: Int): String {
 		final filler: String = [for (i in 0...body) '\t\tvar v$i:Int = $i;'].join('\n');
-		return 'class C {\n\tprivate static function big():Void {\n$filler\n\t}\n\n\tpublic function small():Void {}\n}\n';
+		final members: Array<String> = [
+			for (i in 0...pairs) '\tpublic function m$i():Void {\n$filler\n\t}\n\n\tprivate static function s$i():Void {\n$filler\n\t}'
+		];
+		return 'class C {\n' + members.join('\n\n') + '\n}\n';
 	}
 
 	private function violations(src: String): Array<Violation> {
