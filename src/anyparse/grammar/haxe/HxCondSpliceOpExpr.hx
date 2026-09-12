@@ -57,27 +57,14 @@ package anyparse.grammar.haxe;
  * same divergence for its `tail`. Byte round-trip is exact either way,
  * which is what the region owes.
  *
- * THE MIRROR CASE IS NOT FREE, and that was measured rather than
- * assumed. A POST-operand splice — `A + B #if mobile - 120 #end`,
- * `HxExpr.CondSpliceTail`, 26 regions in 16 files of the same census —
- * is the same shape with the term order reversed (`(op, operand)`
- * pairs), and a `@:postfix('#if') CondSpliceOpTail(operand, inner)`
- * ctor written next to the raw one parses every sampled site and
- * round-trips them byte-for-byte. It still never fires. The postfix
- * dispatch is not an ordered choice: `PrattPostfixLowering.lowerPostfixLoop` emits
- * one `if` / `else if` chain keyed on the operator literal with, in its
- * own words, "no precedence gate and no `_savedPos` rollback — once a
- * postfix operator matches, the body commits". Two branches spelling
- * `#if` therefore compile to two arms of one chain, the first wins
- * unconditionally, and the second is dead code — read out of the
- * generated engine, both arms present, both guarded by the identical
- * `peekLit(ctx,"#if") && … && matchKw(ctx,"#if")`. Reordering does not
- * help either: whichever arm is first COMMITS, so a fragment it cannot
- * represent throws instead of falling through to the raw capture.
- * Reaching those 26 regions needs either a rewind in the postfix loop
- * or an Alt-typed body on `CondSpliceTail` (an `@:peg` enum HAS the
- * rewind), and both change a ctor 26 live regions depend on. A
- * separate slice, with its own fidelity surface — not this one.
+ * THE MIRROR CASE lives in `HxCondSpliceTailBody`, and it took the second of the two routes this note used to leave open.
+ * A POST-operand splice — `A + B #if mobile - 120 #end`, `HxExpr.CondSpliceTail` — cannot be reached by a second
+ * `@:postfix('#if')` ctor: `PrattPostfixLowering.lowerPostfixLoop` emits one `if` / `else if` chain keyed on the operator
+ * literal with, in its own words, "no precedence gate and no `_savedPos` rollback — once a postfix operator matches, the
+ * body commits", so two arms spelling `#if` compile to one chain whose second arm is dead, and reordering only moves
+ * which fragment throws instead of falling through. What works is the Alt-typed body: an `@:peg` enum branch runs inside
+ * `Lowering.tryBranch`, which restores `ctx.pos` on a `ParseError`. The mirror also needs no atom-level operand — its
+ * fragment ENDS on a complete operand, so the Pratt loop is entered on a well-formed expression and stops at the `#end`.
  *
  * LAYOUT IS THIS RULE'S OWN, not the source's — `@:fmt(fillParts)`.
  * The default writer for a trivia-bearing rule replays the gaps: every

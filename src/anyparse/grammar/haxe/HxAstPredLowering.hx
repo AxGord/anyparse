@@ -32,6 +32,7 @@ final class HxAstPredLowering extends AstPredLowering {
 	private static inline final HX_COND_DECL: String = 'anyparse.grammar.haxe.HxConditionalDecl';
 	private static inline final HX_COND_ARGS: String = 'anyparse.grammar.haxe.HxConditionalArgs';
 	private static inline final HX_ELSEIF_DECL: String = 'anyparse.grammar.haxe.HxElseifDecl';
+	private static inline final HX_COND_SPLICE_TAIL_BODY: String = 'anyparse.grammar.haxe.HxCondSpliceTailBody';
 
 	/**
 	 * The keyword a `HxExpr.CondSpliceTail` fragment starts with when it
@@ -572,8 +573,13 @@ final class HxAstPredLowering extends AstPredLowering {
 			// operand, so ask as NESTED.
 			caseBind(HX_EXPR, 'UntypedExpr', [0 => '_o'], at(ident('_o'), macro true)),
 			// `<operand> #if … #end` — only an `else`-led fragment elides
-			// the terminator (see `_condSpliceTailElseLed`).
-			caseBind(HX_EXPR, 'CondSpliceTail', [1 => '_raw'], macro _condSpliceTailElseLed(_raw)),
+			// the terminator (see `_condSpliceTailElseLed`), and only a RAW
+			// body can be one: an `else` keyword is neither an infix
+			// operator nor a comma, so the structured branches never claim
+			// such a fragment.
+			caseBind(HX_EXPR, 'CondSpliceTail', [1 => '_body'], sw(ident('_body'), [
+				caseBind(HX_COND_SPLICE_TAIL_BODY, 'RawTail', [0 => '_raw'], macro _condSpliceTailElseLed(_raw))
+			], macro false)),
 			// Recursion targets (reached through Assign / IfExpr / … —
 			// standalone `{…}` at statement position is BlockStmt).
 			caseOf(HX_EXPR, STMT_BRACE_TERMINAL_CTORS, macro true)

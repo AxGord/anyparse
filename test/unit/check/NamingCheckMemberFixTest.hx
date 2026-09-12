@@ -516,11 +516,12 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 	}
 
 	public function testFixBlocksFieldWithUnresolvableOccurrence(): Void {
-		// A field reference behind a mid-expression `#if` is raw trivia the resolver cannot bind -
-		// an uncovered active-code occurrence. Even with per-binding attribution, an UNRESOLVABLE
-		// occurrence still fails the completeness gate closed, so the field rename is skipped.
+		// A field reference behind a mid-expression `#if` whose fragment carries its own `#else` is
+		// raw trivia the resolver cannot bind - an uncovered active-code occurrence. Even with
+		// per-binding attribution, an UNRESOLVABLE occurrence still fails the completeness gate
+		// closed, so the field rename is skipped.
 		final src: String = 'package pkg;\nclass C {\n\tprivate var __id:Int = 0;\n\tpublic function f():Int {\n'
-			+ '\t\treturn __id #if cpp + __id #end;\n\t}\n}';
+			+ '\t\treturn __id #if cpp + __id #else - __id #end;\n\t}\n}';
 		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
 	}
 

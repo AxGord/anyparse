@@ -786,11 +786,28 @@ class RenameSliceTest extends Test {
 	}
 
 	/**
-	 * The POSTFIX splice form (`CondSpliceTail` - an infix tail spliced onto a complete
-	 * operand) hides an occurrence exactly the same way, and refuses the same way.
+	 * The POSTFIX splice form (`CondSpliceTail` - a fragment spliced onto a complete operand)
+	 * used to hide its occurrence the same way the operand-position one did. It no longer does:
+	 * a leading infix operator reads as `HxCondSpliceOpTail`, the operand after it is a real
+	 * node, and the rename reaches it. Mirror of `testModelledSpliceConditionOccurrenceRenames`
+	 * for the tail side.
 	 */
-	public function testPostfixSpliceOccurrenceRefused(): Void {
+	public function testPostfixOperatorSpliceOccurrenceRenames(): Void {
 		final src: String = 'class B {\n\tstatic function f():Int {\n\t\tvar tag:Int = 1;\n\t\treturn 2 + 3 #if flash + tag #end;\n\t}\n}';
+		final expected: String =
+			'class B {\n\tstatic function f():Int {\n\t\tvar label:Int = 1;\n\t\treturn 2 + 3 #if flash + label #end;\n\t}\n}';
+		assertRename(src, 3, 7, 'label', expected);
+	}
+
+	/**
+	 * The tail fragment neither structured branch can represent - here one carrying its own
+	 * `#else` - still lands in `HxCondSpliceTailBody.RawTail`, and still refuses. The Alt's
+	 * per-branch rewind is what keeps the fallback reachable, so the refusal narrows to exactly
+	 * the fragments that stayed unmodelled.
+	 */
+	public function testNonStructuredPostfixSpliceStillRefused(): Void {
+		final src: String =
+			'class B {\n\tstatic function f():Int {\n\t\tvar tag:Int = 1;\n\t\treturn 2 + 3 #if flash + tag #else - tag #end;\n\t}\n}';
 		assertRenameErr(src, 3, 7, 'label', 'unparsed conditional-compilation region');
 	}
 

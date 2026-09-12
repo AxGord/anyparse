@@ -12,8 +12,9 @@ package anyparse.grammar.haxe;
  *
  *  - `"a" + endl + #if !flash "b" + x + #end "c"` — operand run with
  *    a trailing dangling `+`
- *  - `A + B #if mobile - 120 #end` — infix tail
- *  - `a.wrong || b.wrong #if !mobile || c.wrong #end` — infix tail on a bool chain
+ *  - `a #if m + b #else - b #end` — a POST-operand fragment neither
+ *    `HxCondSpliceOpTail` nor `HxCondSpliceListTail` can read, reached
+ *    through `HxCondSpliceTailBody.RawTail`
  *  - `#if share cond ? new A(...) : #end new B(...)` — half a ternary
  *  - `#if x if (c) g(); else #end h();` — if-head with the else branch outside
  *
@@ -24,13 +25,16 @@ package anyparse.grammar.haxe;
  * NESTING. The regex is a two-branch alternation. The FIRST branch skips
  * over BALANCED inner `#if ... #end` pairs and stops at the first UNMATCHED
  * `#end`, so a splice fragment may itself contain a complete nested
- * conditional. Three live sources need this, and all three were skip-parse
- * until it existed:
+ * conditional. Three live sources were skip-parse until it existed, and two of them still
+ * reach it:
  *
  *  - `lime/system/ThreadPool.hx:829` -- `if (activeJobs #if lime_threads +
  *    __queuedExitEvents #if lime_threads_deque + __queuedWorkEvents #end
- *    #end <= 0)`, a postfix `CondSpliceTail` whose fragment nests one
- *    region.
+ *    #end <= 0)`, a postfix `CondSpliceTail`. Both levels of it
+ *    read structurally now (`HxCondSpliceOpTail`, whose operand
+ *    parse re-enters the postfix splice), so this one no longer reaches the
+ *    regex - the nesting-aware branch still carries any tail fragment that
+ *    falls back to `RawTail`.
  *  - `motion/actuators/SimpleActuator.hx:232` -- `#if (!neko && !hl) if
  *    (Reflect.hasField(target, i) #if flash ... #elseif js ... #end) { ... }
  *    else #end { ... }`, a statement `CondSpliceStmt` whose dangling-else

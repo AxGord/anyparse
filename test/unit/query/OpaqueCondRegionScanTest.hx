@@ -60,6 +60,13 @@ class OpaqueCondRegionScanTest extends Test {
 	/** A postfix tail splice: the node starts at `foo`, so the region is NOT the node's span. */
 	private static final TAIL_SPLICE: String = 'class C {\n\tstatic function f(): Void {\n\t\treturn foo #if target .sys #end;\n\t}\n}\n';
 
+	/**
+	 * An operand-position splice whose node runs PAST its `#end` into the tail operand the
+	 * fragment splices onto - the other direction the node span overshoots the region in.
+	 */
+	private static final OPERAND_RUN_SPLICE: String =
+		'class C {\n\tstatic function f(): String {\n\t\treturn \'a\' + #if flash \'b\' + #end \'c\';\n\t}\n}\n';
+
 	/** A signature-position splice whose shared body follows the `#end`, separated by whitespace only. */
 	private static final SHARED_BODY: String = 'class C {\n\tstatic function foo() #if foo :SomeType #end {\n\t\tbar;\n\t}\n}\n';
 
@@ -101,16 +108,24 @@ class OpaqueCondRegionScanTest extends Test {
 	}
 
 	/**
-	 * A `CondSpliceTail` node begins at the operand BEFORE its `#if`, so quoting the node
-	 * would bury the directive under the leading expression — the real corpus case is a
-	 * hundred characters of call chain, which the 60-char excerpt then cuts before the `#if`
-	 * is ever reached.
+	 * The quote is the unmodelled GAPS, never the node's own span, and a splice node overshoots
+	 * that span in both directions. A `CondSpliceTail` begins at the operand BEFORE its `#if` —
+	 * the real corpus case is a hundred characters of call chain, which the 60-char excerpt then
+	 * cuts before the directive is ever reached — and an operand-position splice runs PAST its
+	 * `#end` into the tail operand, which the writer formats like any other subtree.
+	 *
+	 * The tail form's own quote starts at the CONDITION rather than at the `#if`: the fragment
+	 * is a branch of `HxCondSpliceTailBody`, so the postfix `#if` belongs to `CondSpliceTail`,
+	 * which the writer emits itself and which is therefore no longer an opaque kind. The bytes
+	 * the quote names are exactly the bytes re-emitted verbatim.
 	 */
 	@:pin('control')
 	@:killer('M-OPAQUE-REGION-NODE-SPAN')
-	public function testTheQuoteStartsAtTheIfEvenWhenTheNodeBeginsBeforeIt(): Void {
+	public function testTheQuoteIsTheGapsAndNotTheNodeSpan(): Void {
 		Assert.equals(1, regionsOf(TAIL_SPLICE).length);
-		Assert.equals('#if target .sys #end', quoteOf(TAIL_SPLICE, 0));
+		Assert.equals('target .sys #end', quoteOf(TAIL_SPLICE, 0));
+		Assert.equals(1, regionsOf(OPERAND_RUN_SPLICE).length);
+		Assert.equals("#if flash 'b' + #end", quoteOf(OPERAND_RUN_SPLICE, 0));
 	}
 
 	/**

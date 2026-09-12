@@ -565,16 +565,18 @@ enum HxExpr {
 	CondSpliceExpr(inner: HxCondSpliceExpr);
 
 	/**
-	 * POST-operand token-splice conditional — an infix tail spliced
-	 * onto a complete operand: `A + B #if mobile - 120 #end` /
-	 * `a.wrong || b.wrong #if !mobile || c.wrong #end` (live dogfood shapes). The raw fragment (condition
-	 * + dangling operator run, `#end` swallowed — see
-	 * `HxCondSpliceRaw`) binds tightest as a postfix on the operand;
-	 * the writer re-emits it verbatim with single-space pads around
-	 * the word-like `#if` op.
+	 * POST-operand token-splice conditional — a fragment spliced onto
+	 * a complete operand: `A + B #if mobile - 120 #end` /
+	 * `a.wrong || b.wrong #if !mobile || c.wrong #end` /
+	 * `g(x, y #if FEATURE, z #end)` (live dogfood shapes). The
+	 * fragment binds tightest as a postfix on the operand;
+	 * `HxCondSpliceTailBody` reads it as a leading infix operator, a
+	 * leading comma-separated run, or — when neither structured
+	 * branch fits — the verbatim raw capture the whole shape used to
+	 * take.
 	 */
 	@:postfix('#if') @:fmt(capturePostfixOpSpace)
-	CondSpliceTail(operand: HxExpr, raw: HxCondSpliceRaw);
+	CondSpliceTail(operand: HxExpr, body: HxCondSpliceTailBody);
 
 	/**
 	 * KNOWN DIVERGENCE from the compiler, in what the annotation BINDS TO. This grammar wraps

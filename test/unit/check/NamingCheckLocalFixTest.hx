@@ -171,11 +171,12 @@ class NamingCheckLocalFixTest extends NamingCheckTestBase {
 	}
 
 	public function testFixSkipsLocalReferencedBehindConditional(): Void {
-		// A reference behind a mid-expression `#if` is kept as raw trivia (a CondSpliceTail),
-		// invisible to the resolver - the rename would leave that occurrence dangling, so the
-		// completeness guard bails - skip.
+		// A reference behind a mid-expression `#if` whose fragment carries its own `#else` is kept
+		// as raw trivia (a `CondSpliceTail` with a `RawTail` body), invisible to the resolver - the
+		// rename would leave that occurrence dangling, so the completeness guard bails - skip. A
+		// fragment that is only a leading operator now reads structurally and does NOT skip.
 		final src: String = 'package pkg;\nclass C {\n\tpublic function f() {\n\t\tvar _adjust = 1;\n'
-			+ '\t\tvar x = _adjust #if cpp + _adjust #end;\n\t\ttrace(x);\n\t}\n}';
+			+ '\t\tvar x = _adjust #if cpp + _adjust #else - _adjust #end;\n\t\ttrace(x);\n\t}\n}';
 		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
 	}
 

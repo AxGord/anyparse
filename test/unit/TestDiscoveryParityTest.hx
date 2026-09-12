@@ -554,6 +554,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.grammar.haxe.HxCondSpliceOwnLineSliceTest',
 		'unit.grammar.haxe.HxCondSpliceReturnBlockSliceTest',
 		'unit.grammar.haxe.HxCondSpliceScopeSliceTest',
+		'unit.grammar.haxe.HxCondSpliceTailSliceTest',
 		'unit.grammar.haxe.HxCondTypeSlotSliceTest',
 		'unit.grammar.haxe.HxCondUnbalancedRegionSliceTest',
 		'unit.grammar.haxe.HxCondVarInitSliceTest',
@@ -1694,8 +1695,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.OpaqueCondRegionScanTest#testOnlyTheDirectiveRunsComeOutOfTheGap :: control :: '
 				+ 'M-COND-GAP-KEEPS-DIRECTIVES,M-COND-GAP-SCANS-NOTHING',
 			'unit.query.OpaqueCondRegionScanTest#testTheNoteNamesTheLineTheRegionAndTheReason :: control :: M-OPAQUE-REGION-NONE',
-			'unit.query.OpaqueCondRegionScanTest#testTheQuoteStartsAtTheIfEvenWhenTheNodeBeginsBeforeIt :: control :: '
-				+ 'M-OPAQUE-REGION-NODE-SPAN',
+			'unit.query.OpaqueCondRegionScanTest#testTheQuoteIsTheGapsAndNotTheNodeSpan :: control :: M-OPAQUE-REGION-NODE-SPAN',
 			'unit.query.OpaqueCondRegionScanTest#testTheSplitTryReportsBothOfItsRegions :: control :: M-OPAQUE-REGION-NONE',
 			'unit.query.PatchSliceTest#testATransferUnderADocRewrittenByTheSamePayloadRefused :: control :: '
 				+ 'M-PATCH-STRADDLED-DOC-UNWATCHED',
