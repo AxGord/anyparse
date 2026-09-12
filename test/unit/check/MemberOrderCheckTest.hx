@@ -1072,6 +1072,74 @@ class MemberOrderCheckTest extends Test {
 	}
 
 	/**
+	 * The `ToolNode` shape: a side-effecting private final wedged between public vars whose
+	 * initializers assign each field its OWN default. `null` into a `Null<Int>` / `String` field
+	 * leaves the same value there whichever side of the allocation it runs on, so neither pair is an
+	 * order dependency and the final sorts below both.
+	 */
+	public function testDefaultValueInitFlipsPastSideEffectingInit(): Void {
+		final src: String = 'class C { private final d:D = D.get(); public var color:Null<Int> = null; public var text:String = null; }';
+		Assert.isTrue(violations(src).length > 0);
+		final fixed: String = fixedSource(src);
+		Assert.isTrue(fixed.indexOf('var color') < fixed.indexOf('final d'), 'default-valued var above the side-effecting final: $fixed');
+		Assert.isTrue(fixed.indexOf('var text') < fixed.indexOf('final d'), 'both default-valued vars join their rank: $fixed');
+	}
+
+	/**
+	 * A NON-default initializer still pins, and `Int` is not a null-defaulting head in the first
+	 * place - the exemption refuses this one twice over.
+	 */
+	public function testNonDefaultValueInitStillPinsPastSideEffectingInit(): Void {
+		final src: String = 'class C { private final d:D = D.get(); public var n:Int = 4; }';
+		Assert.isTrue(violations(src).length > 0);
+		Assert.equals(0, edits(src).length);
+	}
+
+	/**
+	 * A value type initialized to its own zero is NOT exempt: an un-run field reads that zero only on
+	 * a static target, and this layer is target-agnostic. Only a `null` into a nullable-typed field
+	 * holds everywhere.
+	 */
+	public function testValueTypeDefaultInitStillPins(): Void {
+		Assert.equals(0, edits('class C { private var b:Bool = false; private final s:Foo = new Foo(1); }').length);
+		Assert.equals(0, edits('class C { private var n:Int = 0; private final s:Foo = new Foo(1); }').length);
+	}
+
+	/** A nullable field initialized to a NON-null value does not hold its default - the pin stands. */
+	public function testNullableFieldWithNonNullInitStillPins(): Void {
+		final src: String = 'class C { private final d:D = D.get(); public var color:Null<Int> = 0; }';
+		Assert.isTrue(violations(src).length > 0);
+		Assert.equals(0, edits(src).length);
+	}
+
+	/** With no annotation the field's type is inferred, and this layer cannot ask what its default is. */
+	public function testUnannotatedNullInitStillPins(): Void {
+		final src: String = 'class C { private final d:D = D.get(); public var color = null; }';
+		Assert.isTrue(violations(src).length > 0);
+		Assert.equals(0, edits(src).length);
+	}
+
+	/** A nominal type the grammar does not name could be an abstract whose implicit cast runs code - refused. */
+	public function testUnknownNominalTypeNullInitStillPins(): Void {
+		final src: String = 'class C { private final d:D = D.get(); public var box:Box = null; }';
+		Assert.isTrue(violations(src).length > 0);
+		Assert.equals(0, edits(src).length);
+	}
+
+	/**
+	 * The exemption is the side-effect arm alone: `seed` holds its own default, so no side-effect pair
+	 * holds it, but the sibling READ of it is still a dependency and the pair keeps its order while the
+	 * rest of the container sorts.
+	 */
+	public function testSiblingReadOfDefaultInitFieldStillPins(): Void {
+		final src: String = 'class C { private static var seed:Null<Int> = null; private static function h():Void {} '
+			+ 'public static var used:Int = f(seed); }';
+		Assert.isTrue(violations(src).length > 0);
+		final fixed: String = fixedSource(src);
+		Assert.isTrue(fixed.indexOf('var seed') < fixed.indexOf('var used'), 'the sibling read keeps its pair: $fixed');
+	}
+
+	/**
 	 * A textual read of an INIT-LESS sibling is no order dependency — the
 	 * sibling runs no init code, the reader sees the default either way.
 	 */

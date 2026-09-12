@@ -79,7 +79,9 @@ final class MemberInitDeps {
 	 * init-less field (it contributes no code to the init phase) and an `inline` field (this
 	 * grammar's language requires an inline variable's initializer to be a constant, so it is folded
 	 * at compile time - a grammar supplying `inlineModifierKind` without that guarantee must not
-	 * share the exemption). Under `movableArglessNew` a pure argless-`new` allocation is not counted
+	 * share the exemption), and a field whose initializer assigns it ITS OWN DEFAULT, which for a target-agnostic answer
+	 * means a `null` into a nullable-typed field (see `initializesToDeclaredDefault`: the assignment runs, but no ordering of
+	 * it against another initializer is observable). Under `movableArglessNew` a pure argless-`new` allocation is not counted
 	 * side-effecting (see `sideEffecting`).
 	 *
 	 * Neither question asks where the pair would END UP - `before` and `after` are the pair's own
@@ -102,7 +104,10 @@ final class MemberInitDeps {
 		for (f in fields)
 			if (sideEffecting(f, unsafe, shape, source, movableArglessNew))
 				for (g in fields)
-					if (g.node != f.node && f.isStatic == g.isStatic && g.initNode != null && !g.isInline)
+					if (
+						g.node != f.node && f.isStatic == g.isStatic && g.initNode != null && !g.isInline
+						&& !initializesToDeclaredDefault(g, shape)
+					)
 						out.push(constraintOf(f, g, SideEffect));
 		return out;
 	}
@@ -203,6 +208,59 @@ final class MemberInitDeps {
 				return true;
 		}
 		return false;
+	}
+
+	/**
+	 * Whether `m`'s field initializer assigns the field ITS OWN DEFAULT value, which nothing in the
+	 * init phase can observe: the field holds that value whether the assignment runs before or after
+	 * any other initializer, so no ordering of the two is distinguishable by any code - including code
+	 * inside a side-effecting sibling initializer that reads back into this instance. Sibling of the
+	 * `isInline` exemption beside it: an inline constant is folded at compile time, a default-value
+	 * assignment is a no-op at run time.
+	 *
+	 * NULL AND ONLY NULL, deliberately. A `= 0` into an `Int` and a `= false` into a `Bool` look like
+	 * the same fact and are not: they hold only where an un-run field already reads its type zero,
+	 * which is a STATIC-target property (`nonNullableTypeNames`, which would have supplied those
+	 * names, says so itself), while a dynamic target leaves it null. This layer is target-agnostic
+	 * infrastructure, so a latent target-dependent unsoundness costs more than the sites it would
+	 * cover. A nullable field reads `null` before its initializer runs on EVERY target, and `= null`
+	 * assigns `null`, so that row alone is unconditional.
+	 *
+	 * Keyed on the DECLARED type, never on the initializer alone - `Null<Int> = 0` is NOT exempt,
+	 * since a reader sees `null` before the flip and `0` after it. Every accepted type name comes from
+	 * `nullDefaultTypeNames`, i.e. from `RefShape`, so a grammar that names none gets no exemption at
+	 * all. Everything else REFUSES for lack of a known default - an unannotated field (the type is
+	 * inferred and this layer has no typer), a structural or function type (no nominal head), and
+	 * every nominal head the shape does not name, which at this layer covers a type parameter, an enum
+	 * and an abstract alike. The abstract is why that tail cannot be admitted wholesale: an `@:from`
+	 * cast turns `= null` into a call no AST scan sees, so the assignment is not the no-op the
+	 * exemption claims.
+	 *
+	 * KNOWN BOUNDARY, deliberately open. "No-op" holds against a READ of the field, not against a
+	 * WRITE to it: a side-effecting initializer whose CALLEE assigns the exempted field runs before a
+	 * default assignment that then clobbers it, and the two orders differ. The DIRECT spelling of that
+	 * is already pinned by the `SiblingRead` arm, which sees the name in the initializer text; only the
+	 * indirect one is left, and closing it needs a call graph this layer does not have.
+	 */
+	private static function initializesToDeclaredDefault(m: OrderedMember, shape: RefShape): Bool {
+		final init: Null<QueryNode> = m.initNode;
+		final declared: Null<QueryNode> = m.node.type;
+		if (init == null || declared == null || init.kind != shape.nullLiteralKind) return false;
+		final head: Null<String> = declared.name;
+		return head != null && nullDefaultTypeNames(shape).contains(head);
+	}
+
+	/**
+	 * The type names whose default value is `null`: the grammar's nullable wrappers, plus the half of
+	 * its own literal types that is not a value type (Haxe's `String`). Derived rather than written,
+	 * so a grammar adding a basic reference type of its own is covered by declaring its literal.
+	 */
+	private static function nullDefaultTypeNames(shape: RefShape): Array<String> {
+		final valueTypes: Array<String> = shape.nonNullableTypeNames ?? [];
+		final literals: Map<String, String> = shape.literalTypeNames ?? [];
+		final out: Array<String> = (shape.nullableWrapperTypeNames ?? []).copy();
+		for (name in literals) if (!valueTypes.contains(name) && !out.contains(name)) out.push(name);
+		return out;
 	}
 
 }
