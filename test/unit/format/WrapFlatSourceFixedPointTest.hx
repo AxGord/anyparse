@@ -100,6 +100,19 @@ class WrapFlatSourceFixedPointTest extends Test {
 		+ '{"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}}}';
 
 	/**
+	 * A Tactics Manager cascade, reduced: `arrayWrap` left to its two
+	 * `exceedsMaxLineLength` runs — which resolve to `Group(IfBreak(…))`, the fit
+	 * pivot — under the same leading-break `callParameter` the object fixtures use.
+	 * Its fixture puts the array FIRST of four arguments, the position the fit
+	 * pivot used to decline.
+	 */
+	private static final CALL_ARG_EXCEEDS_ARRAY: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": '
+		+ '{"maxLineLength": 140, "arrayWrap": {"defaultWrap": "ignore", "rules": [{"conditions": [{"cond": '
+		+ '"exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "exceedsMaxLineLength", '
+		+ '"value": 1}], "type": "packedOrOnePerLine"}]}, "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", '
+		+ '"rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}}';
+
+	/**
 	 * The exceeds cascade for object literals beside a THRESHOLD one for arrays
 	 * (`onePerLine` shadowed by a `totalItemLength <= 140` `noWrap`, the shape
 	 * that emits `IfFirstLineExceeds`). One call, two collection arguments, one
@@ -455,22 +468,58 @@ class WrapFlatSourceFixedPointTest extends Test {
 	}
 
 	/**
-	 * The other gate on the fit pivot: it nominates only the LAST argument. With
-	 * an argument AFTER the literal the glue's closer lands as `}, tail)` on the
-	 * literal's closing line — a shape the opened paren already says better, and
-	 * the one that made `Naming.hx` and `DuplicateCase.hx` drift when the pivot
-	 * was unrestricted (the latter into a TWO-rewrite convergence tail).
+	 * The fit pivot nominates a collection at ANY argument index. With an argument
+	 * AFTER the literal the glue's closer lands as `}, tail)` on the literal's
+	 * closing line — the same shape the committed and threshold routes already
+	 * produce in that position.
+	 *
+	 * The pivot was once restricted to the LAST argument because an unrestricted
+	 * version drove a file into a two-rewrite convergence tail. What answers that is
+	 * the continuation-fit gate, not the index: a fit pivot says the renderer MAY
+	 * break the collection, and only hugging one that would have stayed flat makes
+	 * the passes disagree. The `once == twice` assertion below is this fixture's
+	 * share of holding that.
 	 */
-	public function testCallArgObjectLiteralBeforeAnotherArgumentKeepsTheOpenParen(): Void {
+	public function testCallArgObjectLiteralBeforeAnotherArgumentHugs(): Void {
 		final src: String = 'class C {\n\tstatic function g(): Void {\n\t\tDIVerifier.addProducer(diSummary, { fieldName: field.name, '
 			+ 'producerTypeNames: producerTypeNames, childDITypeName: childDITypeName, kindOfProducer: kind, pos: field.pos }, '
 			+ 'tail);\n\t}\n}';
 		final once: String = write(src, CALL_ARG_EXCEEDS_OBJECT);
 		Assert.isTrue(
-			once.indexOf('DIVerifier.addProducer(\n\t\t\tdiSummary,\n\t\t\t{\n') != -1,
-			'expected the opened paren with the literal on its own lines, got:\n<$once>'
+			once.indexOf('DIVerifier.addProducer(diSummary, {\n\t\t\tfieldName: field.name,') != -1,
+			'expected the compact hug, got:\n<$once>'
+		);
+		Assert.isTrue(
+			once.indexOf('\n\t\t\tpos: field.pos\n\t\t}, tail);') != -1, 'expected the trailing argument on the closer line, got:\n<$once>'
 		);
 		Assert.equals(once, write(once, CALL_ARG_EXCEEDS_OBJECT), 'one round trip must land on the fixed point');
+	}
+
+	/**
+	 * The reported site, reduced: `new Row([ … ], w, h, align)` — an ARRAY fit
+	 * pivot at index 0 of four, nested one level inside itself. Both calls hug
+	 * their array and carry the three scalars after it on the bracket-close line;
+	 * the `new Label(` inside stays exploded, having no container among its own
+	 * arguments.
+	 */
+	public function testCallArgArrayBeforeOtherArgumentsHugs(): Void {
+		final src: String = 'class C {\n\tfunction build(): Void {\n\t\tfinal searchRow: Row = new Row([searchInput, new Row(['
+			+ 'drillsSelected, new Label(t(\'({x} allowed)\', 10087).replace(\'{x}\', \'12\'), new TextFormat('
+			+ 'Typography.fontNameItalic, 11, Colors.BLACK, false, true), boxWidth / 6, 30)], Std.int(boxWidth * 0.461), 30, '
+			+ 'MainAxisAlignment.SPACE_AROUND)], boxWidth, 31, MainAxisAlignment.SPACE_AROUND);\n\t}\n}';
+		final once: String = write(src, CALL_ARG_EXCEEDS_ARRAY);
+		Assert.isTrue(
+			once.indexOf('new Row([\n\t\t\tsearchInput,\n\t\t\tnew Row([\n\t\t\t\tdrillsSelected,') != -1,
+			'expected both arrays hugged to their own head, got:\n<$once>'
+		);
+		Assert.isTrue(
+			once.indexOf(
+				'\n\t\t\t], Std.int(boxWidth * 0.461), 30, MainAxisAlignment.SPACE_AROUND)\n\t\t], boxWidth, 31, '
+				+ 'MainAxisAlignment.SPACE_AROUND);'
+			) != -1,
+			'expected the trailing scalars on each bracket-close line, got:\n<$once>'
+		);
+		Assert.equals(once, write(once, CALL_ARG_EXCEEDS_ARRAY), 'one round trip must land on the fixed point');
 	}
 
 	/**

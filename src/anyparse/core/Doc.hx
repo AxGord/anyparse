@@ -314,6 +314,12 @@ enum Doc {
 	 *    args / at an operand) → open the cond paren
 	 *    (`condition_wrapping_for`, `condition_wrapping_if`).
 	 *
+	 * SECOND CONSUMER, same two questions on a different subject:
+	 * `BodyFit.strictFitLineLayout`, where `flatDoc` is a GLUED body rather than a
+	 * glued `(cond)`. There (b) says the body breaks only inside a delimiter its own
+	 * head line opened, so no part of it renders at the container indent — the
+	 * condition a `@:fmt(strictFitLineBody)` field refuses the glue for.
+	 *
 	 * The natural-first-line semantic (each inner `Group` resolved by its own
 	 * `fitsFlat` at the running column, first physical line measured) is
 	 * shared with `IfNaturalFirstLineExceeds`; the added (b) end-on-open-delim

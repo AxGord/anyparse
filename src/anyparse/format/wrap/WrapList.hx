@@ -2240,9 +2240,9 @@ class WrapList {
 	}
 
 	/**
-	 * One pass of `solePivotCollectionArg`'s scan. `fitLast` admits the ω-fit-pivot
-	 * shape (`Group(IfBreak(…))`, the `exceedsMaxLineLength` two-run answer) at the
-	 * LAST index only.
+	 * One pass of `solePivotCollectionArg`'s scan. `fitPivot` admits the ω-fit-pivot
+	 * shape (`Group(IfBreak(…))`, the `exceedsMaxLineLength` two-run answer) at ANY
+	 * argument index.
 	 *
 	 * TWO passes rather than one widened predicate, and that is the whole point of
 	 * the split: the scan bails on a SECOND candidate, so a widened predicate could
@@ -2254,14 +2254,12 @@ class WrapList {
 	 *
 	 * A `-1` from the strict pass is one of three things — no candidate, two
 	 * candidates, or an arrow/chain bail — and the retry re-derives all three
-	 * identically except that the last item may now qualify, so only the
-	 * no-candidate case can change its answer.
+	 * identically except that a fit pivot may now qualify, so only the no-candidate
+	 * case can change its answer.
 	 */
-	private static function pivotCollectionArgScan(items: Array<Doc>, fitLast: Bool): Int {
+	private static function pivotCollectionArgScan(items: Array<Doc>, fitPivot: Bool): Int {
 		var collIdx: Int = -1;
-		for (i in 0...items.length) if (
-			renderPivotBreakArm(items[i], fitLast && i == items.length - 1) != null && startsWithCollectionDelim(items[i])
-		) {
+		for (i in 0...items.length) if (renderPivotBreakArm(items[i], fitPivot) != null && startsWithCollectionDelim(items[i])) {
 			if (collIdx >= 0) return -1;
 			if (isArrowBodyMarker(items[i]) || isMethodChainItem(items[i])) return -1;
 			collIdx = i;
@@ -2786,14 +2784,14 @@ class WrapList {
 		// ω-fit-pivot-collection-arg: the FIT sibling of the threshold pivot above
 		// — a collection whose cascade resolved to `Group(IfBreak(…))` (the
 		// `exceedsMaxLineLength` two-run shape) rather than to an
-		// `IfFirstLineExceeds` threshold. It nominates only the LAST item, and
-		// that restriction is not re-tested here because BOTH routes into a
-		// non-last `collIdx` already exclude it, by different mechanisms:
-		// `soleMultilineCollectionArg`'s own scan nominates only an arg with a
-		// COMMITTED hardline, which `renderPivotBreakArm` refuses outright; and
-		// `pivotCollectionArgScan`'s strict pass nominates a non-last index only
-		// when the THRESHOLD arm is non-null, which the `thresholdArm != null`
-		// short-circuit below then answers.
+		// `IfFirstLineExceeds` threshold. It nominates a collection at ANY
+		// argument index, like its two siblings: the arguments after it ride the
+		// collection's close line (`new Row([` … `], w, h)`), which is the fixed
+		// point the committed and threshold routes already produce in that
+		// position. Position is not what makes a fit pivot safe — the
+		// continuation-fit gate below is. A fit pivot says the renderer MAY break
+		// the collection, so hugging one that would have stayed flat commits a
+		// break nothing decided and the next pass reads it back differently.
 		final fitArm: Null<Doc> = thresholdArm != null ? null : renderPivotBreakArm(items[collIdx], true);
 		final collArm: Null<Doc> = thresholdArm ?? fitArm;
 		final glueItems: Array<Doc> = collArm == null ? items : [for (i in 0...items.length) i == collIdx ? collArm : items[i]];

@@ -152,6 +152,41 @@ final class BodyFit {
 	}
 
 	/**
+	 * `FitLine` for a body that may break only INSIDE a delimiter its OWN head line
+	 * opened (`@:fmt(strictFitLineBody(...))`).
+	 *
+	 * A glued body renders its continuation at the CONTAINER indent, so a head ending
+	 * at an OPERAND — an `if` whose branches break, a nested comprehension — lands its
+	 * `else`, or its next head, level with the line the container opened and detached
+	 * from a head that sits mid-line. That is the whole hazard behind this field flag.
+	 * A head ending at an open delimiter cannot reach the container indent at all:
+	 * everything below the head belongs to what the head opened.
+	 *
+	 * `IfNaturalFirstLineFitsOpenDelim` asks both halves at the live pen — the glued
+	 * first line must FIT and must END at `(` / `[` / `{` / `->`. The natural walk sees
+	 * a nested probe on its flat side, so a chained spine is measured whole at the
+	 * OUTERMOST link and the links cannot glue one at a time.
+	 *
+	 * `keywordLedBody` is the caller's verdict that the body is itself a keyword-led
+	 * construct, and it is the second half of the same question: only such a body
+	 * carries its continuation inside what its OWN head opened. A value whose head
+	 * happens to end at a delimiter — a lambda, a map entry, a nested comprehension —
+	 * stacks its own closers under the container's, so it keeps the refusal whatever
+	 * its first line looks like.
+	 *
+	 * A body that renders flat keeps the shared `fitLineLayout` answer; the glue
+	 * verdict for a body that cannot is the only thing this function decides.
+	 */
+	public static function strictFitLineLayout(cols: Int, body: Doc, lineWidth: Int, keywordLedBody: Bool): Doc {
+		return if (WrapList.flatLength(body) != -1)
+			fitLineLayout(cols, body, false, lineWidth);
+		else if (!keywordLedBody || lineWidth <= 0)
+			breakLayout(cols, body);
+		else
+			Doc.IfNaturalFirstLineFitsOpenDelim(lineWidth, breakLayout(cols, body), Doc.Concat([Doc.OptSpace(' '), body]));
+	}
+
+	/**
 	 * Width answer for the GLUE outcome: `glued` as written when the header line still
 	 * fits with the body's first line on it, otherwise `body` on the next line one
 	 * indent deeper — the same break shape every other `FitLine` outcome uses.

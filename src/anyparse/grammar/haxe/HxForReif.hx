@@ -27,5 +27,5 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxForReif = {
 	@:lead('(') @:trail(')') var head: HxExpr;
-	@:fmt(bodyPolicy('expressionForBody'), strictFitLineBody) var body: HxExpr;
+	@:fmt(bodyPolicy('expressionForBody'), strictFitLineBody('IfExpr', 'ForExpr', 'ForReifExpr', 'WhileExpr')) var body: HxExpr;
 };

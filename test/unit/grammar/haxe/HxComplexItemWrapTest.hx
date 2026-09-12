@@ -121,7 +121,9 @@ final class HxComplexItemWrapTest extends Test {
 		+ 'action: CANCEL, style: OutlineButton.OUTLINE }, { caption: tr(\'Move Here\', '
 		+ '9945).toUpperCase(), action: MOVE }], true, false, false);\n\t}\n\n}';
 
-	/** `MIDLIST_SRC` under `CONFIG`. */
+	/**
+	 * `MIDLIST_SRC` under EITHER cascade — see `testMidListBreakingContainerKeepsTheGlue`.
+	 */
 	private static final MIDLIST_OUT: String = 'class S5 {\n\n\tpublic function new(source:ListSource) {\n\t\tsuper(WIDTH, HEIGHT, true, '
 		+ 'true, tr(\'Move To\', 10084), null, [\n\t\t\t{ caption: tr(\'Cancel\', 73).toUpperCase(), '
 		+ 'action: CANCEL, style: OutlineButton.OUTLINE },\n\t\t\t{ caption: tr(\'Move Here\', '
@@ -168,12 +170,6 @@ final class HxComplexItemWrapTest extends Test {
 	private static final TRAILING_OUT_NO_COND: String = 'class S4 {\n\n\tpublic function new() {\n\t\tsuper(\n\t\t\t536, 334, true, '
 		+ 'true, t(\'To gain the full editing rights here\'), null,\n\t\t\t[{ title: '
 		+ 't(\'Close\', 76), action: \'shut\', width: 100 }]\n\t\t);\n\t}\n\n}';
-
-	/** `MIDLIST_SRC` under `CONFIG_NO_COND`. */
-	private static final MIDLIST_OUT_NO_COND: String = 'class S5 {\n\n\tpublic function new(source:ListSource) {\n\t\tsuper(\n'
-		+ '\t\t\tWIDTH, HEIGHT, true, true, tr(\'Move To\', 10084), null,\n\t\t\t[\n\t\t\t\t{ caption: tr(\'Cancel\', 73).toUpperCase(), '
-		+ 'action: CANCEL, style: OutlineButton.OUTLINE },\n\t\t\t\t{ caption: tr(\'Move Here\', 9945).toUpperCase(), '
-		+ 'action: MOVE }\n\t\t\t],\n\t\t\ttrue, false, false\n\t\t);\n\t}\n\n}';
 
 	/** `MIDFIT_SRC` under `CONFIG_NO_COND`. */
 	private static final MIDFIT_OUT_NO_COND: String = 'class S6 {\n\n\tprivate function build():Void {\n\t\tregisterLayout(\n'
@@ -247,12 +243,15 @@ final class HxComplexItemWrapTest extends Test {
 
 	/**
 	 * The boundary of that policy: a container whose own elements break keeps the multi-arg-collection
-	 * glue and stays on the argument line, in the middle of the list as at its end. The two configs
-	 * DIFFER here — the counter turns the array's width-driven break into a forced one, which is what
-	 * lets the glue accept it — so this pins both sides.
+	 * glue and stays on the argument line, in the middle of the list as at its end.
+	 *
+	 * The two cascades now AGREE here, so this pin no longer carries the D1 contrast — its siblings do.
+	 * The counter turns the array's width-driven break into a forced one; without it the two
+	 * `exceedsMaxLineLength` runs hand the call a fit pivot, and the glue accepts a nominated collection
+	 * at any argument index. Both roads reach the same fixed point, which is the assertion.
 	 */
 	public function testMidListBreakingContainerKeepsTheGlue(): Void {
-		Assert.equals(MIDLIST_OUT_NO_COND, write(MIDLIST_SRC, CONFIG_NO_COND));
+		Assert.equals(MIDLIST_OUT, write(MIDLIST_SRC, CONFIG_NO_COND));
 		Assert.equals(MIDLIST_OUT, write(MIDLIST_SRC, CONFIG));
 	}
 

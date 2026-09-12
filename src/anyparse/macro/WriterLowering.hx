@@ -1874,16 +1874,16 @@ typedef WrapBodyOpts = {
 	// `elseIf` flag beside it, which still hardcodes `IfStmt`/`IfExpr`.
 	// Null → byte-inert.
 	?elseSwitchArgs: Null<Array<String>>,
-	// omega-strict-fitline-body: true for a body field carrying
-	// `@:fmt(strictFitLineBody)` (`HxForExpr.body` / `HxForReif.body`). Its
-	// `FitLine` layout then answers for the WHOLE body rather than for the
-	// body's FIRST line: a body that renders flat stays on the head line while
-	// it fits, and a body that cannot render flat goes to the next line one
-	// indent deeper instead of gluing its first line to the head. That is the
-	// `refuseGlue` arm of `BodyFit.fitLineLayout`, reached here by a field flag
-	// rather than by the case-body caller's control-flow verdict. False
-	// everywhere else -> byte-inert.
-	?strictFitLine: Bool,
+	// omega-strict-fitline-body: the body ctors from
+	// `@:fmt(strictFitLineBody('<ctor>'…))` (`HxForExpr.body` /
+	// `HxForReif.body`) whose glue may survive. Its `FitLine` layout keeps the
+	// glue only for a body that IS one of those keyword-led constructs AND
+	// whose head line ends at an open delimiter, so nothing below the head can
+	// render at the container indent; every other non-flat body goes to the
+	// next line one indent deeper. That is `BodyFit.strictFitLineLayout`,
+	// reached here by a field flag rather than by the case-body caller's
+	// control-flow verdict, whose refusal is unconditional. Null -> byte-inert.
+	?strictFitLineArgs: Null<Array<String>>,
 	// omega-bracket-body-glue: the runtime flag name from
 	// `@:fmt(bracketBodyGlueIfFlag('<flagName>'))` on a body field
 	// (`HxIfExpr.thenBranch` / `elseBranch`). When `opt.<flagName>` is set and

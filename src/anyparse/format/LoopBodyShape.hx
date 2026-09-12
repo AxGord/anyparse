@@ -1,8 +1,8 @@
 package anyparse.format;
 
 /**
- * Runtime shape probe for the `loopBodyIfElseNext` writer knob (slice
- * omega-loop-body-if-else-next; JSON key `sameLine.loopBodyIfElseNext`).
+ * Runtime shape probes over a BODY VALUE, for the writer knobs whose placement depends on what the body IS rather than
+ * on how wide it renders (`loopBodyIfElseNext`, JSON key `sameLine.loopBodyIfElseNext`; `@:fmt(strictFitLineBody(...))`).
  *
  * `isIfWithElse` is spliced by `WriterLowering` around the body value of
  * `HxForStmt.body` / `HxWhileStmt.body` / `HxDoWhileStmt.body` (the fields
@@ -56,6 +56,21 @@ final class LoopBodyShape {
 		final head: Dynamic = Type.enumParameters(body)[0];
 		if (head == null || Reflect.isEnumValue(head) || !Reflect.hasField(head, elseField)) return false;
 		return Reflect.field(head, elseField) != null;
+	}
+
+	/**
+	 * Is `body` one of the `ctors`?
+	 *
+	 * The question `@:fmt(strictFitLineBody(...))` asks before it lets a non-flat body
+	 * keep its glue: only a body that is ITSELF a keyword-led construct carries its
+	 * continuation inside what its own head opened. A value — a lambda, a map entry, a
+	 * nested comprehension — stacks its closers under the container instead, which is
+	 * the shape that flag refuses.
+	 *
+	 * `false` for a null body and for a non-enum one, as in `isIfWithElse`.
+	 */
+	public static function isOneOfCtors(body: Any, ctors: Array<String>): Bool {
+		return body != null && Reflect.isEnumValue(body) && ctors.contains(Type.enumConstructor(body));
 	}
 
 }

@@ -476,9 +476,14 @@ final class WriterBodyPolicyLowering {
 		// decision, so a wrapped condition (hardlines in its committed shape)
 		// forces the body onto the next line. Multiline non-block bodies keep
 		// the glue branch (the group is already broken; OptSpace flushes).
-		final fitInnerExpr: Expr = if (opts.strictFitLine == true)
-			// omega-strict-fitline-body: the whole body decides, not its first line.
-			macro anyparse.format.BodyFit.fitLineLayout(_cols, _body, false, opt.lineWidth, anyparse.format.BodyFit.SIBLING_NONE, true);
+		final strictCtors: Null<Array<String>> = opts.strictFitLineArgs;
+		final fitInnerExpr: Expr = if (strictCtors != null)
+			// omega-strict-fitline-body: the glue survives only a keyword-led body whose
+			// head line ends at an open delimiter, so no part of it reaches the container
+			// indent. The ctor names come from the grammar flag, never from this macro.
+			macro anyparse.format.BodyFit.strictFitLineLayout(
+				_cols, _body, opt.lineWidth, anyparse.format.LoopBodyShape.isOneOfCtors($bodyValueExpr, $v{strictCtors})
+			);
 		else if (opts.constructFitBody == true)
 			// One soft line, no group of its own — see WrapBodyOpts.constructFitBody.
 			macro _dn(_cols, _dc([_dl(), _body]));

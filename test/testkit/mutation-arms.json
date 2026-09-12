@@ -241,6 +241,14 @@
 			"note": "FitLine goes back to placing a body by its FIRST line, so a body that cannot render flat glues to the head line again"
 		},
 		{
+			"name": "M-STRICT-HEAD-DELIM-OFF",
+			"type": "anyparse.format.BodyFit",
+			"method": "strictFitLineLayout",
+			"find": "\telse if (!keywordLedBody || lineWidth <= 0)",
+			"replace": "\telse if (true)",
+			"note": "restores the blanket refusal, so an expression-`for` whose body is a keyword-led construct opening a delimiter leaves the head line again"
+		},
+		{
 			"name": "M-FN-SCOPE-KINDS-DROPS-METHODS",
 			"type": "anyparse.query.FieldRefScan",
 			"method": "fnScopeKinds",
