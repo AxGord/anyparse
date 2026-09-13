@@ -46,12 +46,6 @@ import anyparse.runtime.Span;
  *   both (`++` / `--`, being single-operand, never match either);
  * - the two l-values are TEXTUALLY IDENTICAL (whitespace-normalized source).
  *
- * The canon crossing this rule has and `prefer-ternary-return` no longer does: collapsing onto an
- * r-value that is ALREADY a ternary writes a three-rung spine `prefer-if-expression-chain` then
- * reports. It is NOT gated: a shape gate on the `return` twin destroys every finding it touches
- * with no replacement, and the replacement here is `prefer-if-expression-assignment` claiming a
- * 2-branch if/else whose r-value spine supplies the third leaf.
- *
  * A null-narrowing guard condition (`x != null && x.f`) is refused ONLY when an r-value is a bool
  * literal -- that collapse hands off to
  * `simplify-boolean-ternary`, whose boolean flattening would lose the

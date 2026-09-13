@@ -114,8 +114,7 @@ final class OracleCoverage {
 
 	/**
 	 * How many source files the oracle's compile READS — standard library and haxelibs
-	 * included, so it is a scale rather than a project file count (915 on Pony, whose own
-	 * share of that is 196). 0 when the set is unknown.
+	 * included, so it is a scale rather than a project file count. 0 when the set is unknown.
 	 */
 	public var size(get, never): Int;
 

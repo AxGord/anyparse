@@ -285,8 +285,8 @@ final class UnusedImport implements Check {
 	 * mechanics, not of the verdict, and `make` caps it there. Short-circuiting it
 	 * into a blanket "cannot verify unused" `Info` discarded the secondary-type,
 	 * enum-ctor, `using` and scope-existence evidence, and reported every guarded
-	 * import of a macro-heavy tree as an unactionable advisory: 50 of them here,
-	 * of which 44 were live and 6 were provably dead.
+	 * import of a macro-heavy tree as an unactionable advisory, the provably dead ones among
+	 * the live.
 	 */
 	private static function addViolation(
 		out: Array<Violation>, file: String, imp: ImportInfo, scan: FileScan, plugin: GrammarPlugin,

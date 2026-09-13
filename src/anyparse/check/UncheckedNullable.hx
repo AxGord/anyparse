@@ -46,10 +46,10 @@ using Lambda;
  * `unguarded-nullable-deref` by SUBJECT (a `Null<T>` used unchecked), never by
  * machinery, and a census that counts it as type-dependent is counting the subject.
  *
- * The gap above was priced rather than assumed: all 13 findings on the 872-file
- * `pony` tree were read by hand and all 13 are genuine numeric contexts (`* SCALE`,
+ * The gap above was priced rather than assumed: every finding on a real tree, read by
+ * hand, is a genuine numeric context (`* SCALE`,
  * `/ 180 * Math.PI`, `Std.int(… * SCALE)`, a `cfg.scale *` product) — the
- * string-operand shape the paragraph warns about occurs ZERO times, so a typechecker
+ * string-operand shape the paragraph warns about does not occur there, so a typechecker
  * would remove nothing. Widening the other way — accepting ANY call whose return is a
  * nullable number instead of the two signatures — is blocked one layer down rather
  * than by inference: `SymbolIndex` stores a return's outer NOMINAL (`Null`), not its

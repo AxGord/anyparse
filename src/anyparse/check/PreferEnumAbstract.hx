@@ -291,10 +291,11 @@ final class PreferEnumAbstract implements Check implements RiskyFix implements G
 	 * `Type.resolveClass('pkg.Name')` anywhere in scope keeps compiling and starts returning null.
 	 * The surface is `ReflectionScan`'s — every plain string literal in scope, plus the static
 	 * fragments of the interpolated ones — narrowed to the files whose raw
-	 * text even MENTIONS a candidate name, since parsing 800 files to find out that nine names appear in
-	 * fifty of them is the same answer for a fraction of the walk — the same answer for the whole-literal
-	 * half, at least: a fragment only has to be CONTAINED in a candidate name, so a file spelling the
-	 * fragment and not the name is filtered out before the fragment test can refuse on it.
+	 * text even MENTIONS a candidate name, since parsing every file in scope to find out that a
+	 * handful of names appear in a few of them is the same answer for a fraction of the walk — the
+	 * same answer for the whole-literal half, at least: a fragment only has to be CONTAINED in a
+	 * candidate name, so a file spelling the fragment and not the name is filtered out before the
+	 * fragment test can refuse on it.
 	 *
 	 * That narrowing reaches the REPORT argument only. `reflectionSurface` unions the resolution sources
 	 * in ITSELF, and their report half is the whole report array, so under a `Cli` run this filter buys

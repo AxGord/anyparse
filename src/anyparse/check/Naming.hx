@@ -729,10 +729,10 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		// it — `affectedFiles`, `publicAffectedFiles`, `sourceByFile` — enumerates the files to edit
 		// from the REPORT scope. Widen the question without widening the enumeration and a member the
 		// wide index calls unconfined is accepted here, its affected set comes back as the declaring
-		// file alone, and the rename lands in that one file: on the two-file `@:access` probe under
-		// `resolutionRoots: ["src"]`, `lint A.hx --rule naming --fix` went from 0 edits back to 2 in
-		// 1 file with the grantee's access left bound to the old name — the same orphan the
-		// single-file path had just been stopped from writing.
+		// file alone, and the rename lands in that one file: on a two-file `@:access` probe under
+		// `resolutionRoots`, a one-file `naming --fix` would rename the member in the declaring file
+		// alone and leave the grantee's access bound to the old name — the same orphan the single-file
+		// path is stopped from writing.
 		//
 		// Asking NARROW here is therefore not a hole. Confinement is monotone: widening the index can
 		// only flip `confined` true -> false, so the wider `RenameRefusal.of` can only DECLINE where
@@ -1750,7 +1750,7 @@ private typedef DeclRename = {
  *
  * The rename path is a long chain of independent proofs, and `Check.fix` has ONE spelling for
  * every failure of any of them: the empty edit list, which is also what a rule with no autofix at
- * all answers. On an 851-file tree that reported 231 findings and wrote nothing, the run could
+ * all answers. On a tree where the rule reports hundreds of findings and writes nothing, the run can
  * therefore say only "its fix was called for these findings and returned no edit; the check
  * declares neither NoAutofix nor a decline reason" — and the first hypothesis a reader forms about
  * a wholesale zero is a gate closing by accident. It was not: `correctedName` had nothing to

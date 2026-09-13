@@ -66,11 +66,11 @@ private typedef InteriorLine = {
  *
  * Unanimity is what separates a corruption from a house style. A block whose every line
  * already starts with one prefix is left alone whatever indent it chose, because that is what
- * a deliberate style looks like and no splice produces it. Reading the first character alone
- * counted markdown bullets as gutters and reported 36 correct blocks across the 2624
- * Haxe-stdlib files, 254 in openfl and 77 in haxe-formatter — with a fix that DELETED the
- * bullet markers. Judging every block against its OPENER's indent instead of its own reported
- * 142 more, in openfl and lime, that simply gutter one level deeper than they open.
+ * a deliberate style looks like and no splice produces it. Reading the first
+ * character alone counts markdown bullets as gutters across the std, openfl
+ * and haxe-formatter — with a fix that DELETES the bullet markers. Judging every block against
+ * its OPENER's indent instead of its own reports the many blocks that simply gutter one level
+ * deeper than they open.
  *
  * Once a block DOES disagree with itself, a guttered one repairs onto the OPENER's indentation, in
  * whichever of its two spellings — `<indent> * ` or the compact `<indent>* ` — more of the block's
@@ -84,9 +84,8 @@ private typedef InteriorLine = {
  *
  * There is deliberately no DOUBLED-gutter arm. The ` *  * ` shape a caller-supplied ` * ` used
  * to produce has no live producer left (`RefactorSupport.ungutter` strips it at the source),
- * and every textual test for it that was tried also matched a nested markdown bullet — over
- * this tree and 679 Pony files the pattern matched exactly two lines and both were bullets in
- * `CollapsePass.hx`.
+ * and every textual test for it also matches a nested markdown bullet, the only shape a real
+ * tree holds.
  *
  * ## Fix
  *
@@ -128,7 +127,8 @@ final class DocCommentContinuation implements Check {
 			if (span != null) flagged.push(span.from);
 		}
 		// ONE lexical pass for the whole file, not one per finding: `fix` is handed every violation
-		// of this rule in the file at once, and a 77-finding block comment paid 77 full re-lexes.
+		// of this rule in the file at once, and a block comment with many findings would pay one full
+		// re-lex per finding.
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (tok in SourceComments.collectCommentTokens(plugin.lexicalRegions(source))) if (!tok.isLine) {
 			final block: Null<JudgedBlock> = judgedBlock(source, tok);

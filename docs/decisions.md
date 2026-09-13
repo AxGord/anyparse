@@ -166,7 +166,7 @@ decided the question; it may not become a record of runs.
   `84c00aeb`
 - `prefer-lambda-expression-body` was to require the collapse to SAVE a line → a construct body
   de-braces line-neutrally by construction, so the strictly-shrink test refused the whole
-  population; the criterion is head-line identity plus an interior that survives — `772d2051`
+  population; the criterion is head-line identity plus an interior that survives — `84c00aeb`
 - `BindingScope`'s local-function lower-bound clamp was expected to change answers → inert:
   `Refs` binds a read before the declaration to the outer binding, so the clamp is the
   fail-closed side of a resolver property and is kept for the day a frame hoists — `3977e25e`

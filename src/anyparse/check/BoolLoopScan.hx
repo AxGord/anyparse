@@ -67,16 +67,16 @@ using StringTools;
  * provably-pure stdlib static. Every other call is impure. `RefactorSupport.isSideEffectFree`
  * would have been the cheaper reach — and the wrong question: it refuses a field access outright,
  * which is exactly what the one CONVERTIBLE site's condition is (`child.nodeType == CData`), so
- * it would have refused all eleven and shipped nothing. When purity cannot be answered at all
+ * it would have refused every site and shipped nothing. When purity cannot be answered at all
  * (no symbol index, or a grammar carrying no type information) the arm refuses, which is the
  * report-only degradation the whole rule family defaults to.
  *
  * The GUARDED flag form (`var f = false; if (g) for … f = true;`) is not claimed: the statement
- * after the declaration must BE the loop. Every guarded flag site measured fails the purity gate
+ * after the declaration must BE the loop. The guarded flag sites fail the purity gate
  * as well, so claiming it would buy nothing and would owe the `&&`/`||` merge reasoning a second
  * time. Neither is a GAP between the declaration and the loop, which `prefer-comprehension` needs
- * and this arm does not — both convertible sites are strictly adjacent, and the two non-adjacent
- * ones are effectful.
+ * and this arm does not — the convertible sites are strictly adjacent, and the
+ * non-adjacent ones are effectful.
  *
  * ## The guarded form (`exists` only)
  *

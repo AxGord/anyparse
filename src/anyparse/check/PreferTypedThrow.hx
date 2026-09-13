@@ -66,8 +66,8 @@ using StringTools;
  * PROJECT throw converted to `haxe.Exception` cannot change which std-internal throws those
  * clauses see. Scanning them only imports a verdict about code the rewrite can never reach.
  *
- * Left in, that verdict was not fail-closed but permanently closed: the std ships ~31 such
- * clauses across 10 files (`haxe.ds.BalancedTree` catches `String`; `haxe.io.Bytes`,
+ * Left in, that verdict was not fail-closed but permanently closed: the std itself
+ * ships such clauses (`haxe.ds.BalancedTree` catches `String`; `haxe.io.Bytes`,
  * `haxe.io.BytesInput`, `haxe.Template`, `sys.Http` and friends catch `Dynamic`), so on any
  * Haxe-equipped machine the implicit std joined the scope and degraded EVERY run — the fix arm
  * opened only under `APQ_NO_STD` / `"resolutionStd": false`, which is to say never.
@@ -161,8 +161,8 @@ final class PreferTypedThrow implements Check implements DefaultOff {
 		if (violations.length > 0 && catchAllInScope(files, plugin, seams)) for (v in violations) {
 			v.message = MSG_DEGRADED;
 			// The same verdict in the slot `--fix` reads. The message is where a REPORT-mode
-			// reader learns why; a `--fix` run prints no findings at all, which is how 161
-			// degraded findings on one tree came to read as "this rule has no autofix".
+			// reader learns why; a `--fix` run prints no findings at all, which is how a tree's
+			// degraded findings come to read as "this rule has no autofix".
 			v.declineReason = DECLINE_CATCH_IN_SCOPE;
 		}
 		return violations;

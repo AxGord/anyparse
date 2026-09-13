@@ -69,7 +69,7 @@ typedef FixVerifyResult = {
  * LANDED for them.
  *
  * The shape the caller's fix ledger is keyed by, and the reason it exists: `Cli`'s ledger is filled
- * by the safe loop alone, so with a `compilerOracle` configured the 13 `RiskyFix` rules contributed
+ * by the safe loop alone, so with a `compilerOracle` configured the `RiskyFix` rules contributed
  * EDITS to the run's summary count and never a FINDING to the per-rule block that says what got no
  * edit — the two numbers a reader compares were measured over two different rule sets.
  *

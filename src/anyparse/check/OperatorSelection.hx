@@ -108,8 +108,8 @@ enum OperatorVerdict {
  *  - `prefer-index-access` and `redundant-tostring` look like the same defect under a
  *    different annotation and MEASURE clean, each for its own reason rather than by luck.
  *    `prefer-index-access` demands POSITIVE proof that the receiver is the language `Map`
- *    abstract, so a user type carrying `@:arrayAccess` beside a `get(k)` is never a candidate
- *    (verified: 0 findings on exactly that fixture). `redundant-tostring` already refuses a
+ *    abstract, so a user type carrying `@:arrayAccess` beside a `get(k)` is never a candidate.
+ *    `redundant-tostring` already refuses a
  *    `+` receiver that is not a class, and in every stringifying context a declared `toString`
  *    wins over an `@:to String` — compile-and-run on Haxe 4.3.7 `--interp` with an
  *    `abstract Tag(String)` declaring both: interpolation, concatenation, `Std.string` and the

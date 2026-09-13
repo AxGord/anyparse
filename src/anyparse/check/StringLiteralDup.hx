@@ -303,9 +303,8 @@ final class StringLiteralDup implements Check implements ConfigAware implements 
 	 * Both halves are load-bearing. The kind gate makes the carve-out POSITIVE — only a construct
 	 * the grammar declares to be a collection literal can ever be a table — which is what keeps it
 	 * from leaking into shapes nobody enumerated. A test of the SHAPE alone ("every child is a
-	 * plain literal") leaks into two
-	 * whole classes on the first review: `new Foo("a", "b", "c")` carries its type as the node's
-	 * NAME rather than as a child, and a conditional-compilation expression
+	 * plain literal") leaks into two whole classes: `new Foo("a", "b", "c")` carries its type as the
+	 * node's NAME rather than as a child, and a conditional-compilation expression
 	 * (`#if js "a" #else "b" #end`) is a run of sibling branch values — both all-literal, neither
 	 * a table. The tighter gate removes exactly the findings the shape-only one did, so closing
 	 * the leak costs nothing.

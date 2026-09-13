@@ -66,8 +66,8 @@ final class ConfigDisagreement {
 	 * `RefactorSupport.widestScopeIndex` hands back is the report files plus an installed library, while
 	 * `hasDeclaredResolutionScope` keeps saying yes. So five checks decide a rewrite without a single file
 	 * of the project they are rewriting, and none of them can tell.
-	 * `test/unit/check/CrossScopeSoundnessTest.LIBS_ONLY_REGRESSIONS` measures what that costs: ten
-	 * writes and four findings the roots-declared arm refuses.
+	 * `test/unit/check/CrossScopeSoundnessTest.LIBS_ONLY_REGRESSIONS` pins
+	 * what that costs: writes and findings the roots-declared arm refuses.
 	 *
 	 * A sentence rather than a repair because there is nothing to repair with — source roots nobody
 	 * declared cannot be invented, and guessing them (the config's own directory, the oracle hxml's
