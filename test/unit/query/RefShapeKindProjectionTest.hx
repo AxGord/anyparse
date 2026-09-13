@@ -240,6 +240,38 @@ final class RefShapeKindProjectionTest extends Test {
 				after: ' class C {}'
 			},
 			{
+				field: 'dispatchedMemberMetaNames',
+				slot: '0',
+				kind: 'Meta',
+				names: NAME_IS,
+				before: '',
+				after: ' class C {}'
+			},
+			{
+				field: 'dispatchedMemberMetaNames',
+				slot: '1',
+				kind: 'Meta',
+				names: NAME_IS,
+				before: '',
+				after: ' class C {}'
+			},
+			{
+				field: 'dispatchedMemberMetaNames',
+				slot: '2',
+				kind: 'Meta',
+				names: NAME_IS,
+				before: '',
+				after: ' class C {}'
+			},
+			{
+				field: 'dispatchedMemberMetaNames',
+				slot: '3',
+				kind: 'Meta',
+				names: NAME_IS,
+				before: '',
+				after: ' class C {}'
+			},
+			{
 				field: 'enumAbstractSyntax',
 				slot: 'bodyOpen',
 				kind: 'EnumAbstractDecl',
@@ -265,6 +297,14 @@ final class RefShapeKindProjectionTest extends Test {
 			},
 			{
 				field: 'implicitConstructorDeclMetaName',
+				slot: '',
+				kind: 'Meta',
+				names: NAME_IS,
+				before: '',
+				after: ' class C {}'
+			},
+			{
+				field: 'implicitConversionMetaName',
 				slot: '',
 				kind: 'Meta',
 				names: NAME_IS,

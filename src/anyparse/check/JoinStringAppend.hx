@@ -5,6 +5,7 @@ import anyparse.check.Check.Violation;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
@@ -371,16 +372,7 @@ final class JoinStringAppend implements Check implements DefaultOff {
 		target: QueryNode, tree: QueryNode, s: Seams, declaredTypeSources: () -> Map<Int, String>
 	): Null<String> {
 		final raw: Null<String> = TypeResolver.identDeclaredTypeSource(target, s.shape, tree, declaredTypeSources, false);
-		return raw == null ? null : unwrapNullableType(StringTools.trim(raw), s.shape);
-	}
-
-	/** `T` from a single `Null<T>` wrapper application (`shape.nullableWrapperTypeNames`), else the input unchanged. */
-	private static function unwrapNullableType(t: String, shape: RefShape): String {
-		final lt: Int = t.indexOf('<');
-		if (lt <= 0 || !t.endsWith('>')) return t;
-		final outer: String = t.substring(0, lt);
-		final wrappers: Array<String> = shape.nullableWrapperTypeNames ?? [];
-		return wrappers.contains(outer) ? t.substring(lt + 1, t.length - 1) : t;
+		return raw == null ? null : NominalTypes.unwrapNullable(StringTools.trim(raw), s.shape.nullableWrapperTypeNames ?? []);
 	}
 
 	/** `term`'s own verbatim source text, wrapped in parens when its root kind is not a provable `+`-safe operand. */

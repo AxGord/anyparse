@@ -322,6 +322,17 @@ interface CrossFileFix {
 }
 
 /**
+ * One fix edit: `text` replaces `[span.from, span.to)`, an empty `text` being a deletion — the
+ * raw shape `Check.fix` returns, named so a producer that threads it through several signatures
+ * does not restate it at each one. Structurally identical to that inline declaration, so the two
+ * spellings unify wherever they meet.
+ */
+typedef FixEdit = {
+	span: Span,
+	text: String
+};
+
+/**
  * One fix edit plus the ATOMIC GROUP it belongs to. `span` / `text` are the raw edit
  * `Check.fix` returns (`text` replaces `[span.from, span.to)`, empty = a deletion);
  * `group` names the unit the edit may only be kept or dropped WITH. A null `group` is

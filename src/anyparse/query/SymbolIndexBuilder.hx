@@ -40,6 +40,9 @@ private typedef MemberSeams = {
 
 	/** The operator-overload annotation NAME (`RefShape.operatorOverloadMetaName`), or null when the grammar has none. */
 	final operatorMetaName: Null<String>;
+
+	/** The implicit-conversion annotation NAME (`RefShape.implicitConversionMetaName`), or null when the grammar has none. */
+	final conversionMetaName: Null<String>;
 	final conditionalKind: Null<String>;
 	final paramKinds: Array<String>;
 };
@@ -463,6 +466,7 @@ final class SymbolIndexBuilder {
 			var runInline: Bool = false;
 			var runMacro: Bool = false;
 			var runOperators: Array<String> = [];
+			var runImplicitConversion: Bool = false;
 			for (child in n.children) {
 				final sp: Null<Span> = child.span;
 				// Enum constructors (`SimpleCtor` / `ParamCtor`) are captured as members too, so a bare
@@ -490,6 +494,7 @@ final class SymbolIndexBuilder {
 							isInline: runInline,
 							isMacro: runMacro,
 							operatorOverloads: runOperators,
+							isImplicitConversion: runImplicitConversion,
 							guarded: guarded
 						});
 					}
@@ -499,6 +504,7 @@ final class SymbolIndexBuilder {
 					runInline = false;
 					runMacro = false;
 					runOperators = [];
+					runImplicitConversion = false;
 				} else if (sp != null && seams.visibilityKinds.contains(child.kind))
 					runVisibility = source.substring(sp.from, sp.to);
 				else if (child.kind == seams.overrideKind)
@@ -512,6 +518,7 @@ final class SymbolIndexBuilder {
 				else {
 					final operatorKind: Null<String> = operatorKindOf(child, seams);
 					if (operatorKind != null) runOperators.push(operatorKind);
+					if (isConversionMeta(child, seams)) runImplicitConversion = true;
 				}
 			}
 		});
@@ -572,6 +579,17 @@ final class SymbolIndexBuilder {
 	}
 
 	/**
+	 * Whether `meta` is the implicit-conversion annotation the grammar names — a `@:from` on an
+	 * abstract member. Unlike `operatorKindOf` the ARGUMENT carries nothing a consumer needs: the
+	 * question is only whether a conversion exists at all, so a bare tag and an argument-bearing
+	 * one answer alike.
+	 */
+	private static function isConversionMeta(meta: QueryNode, seams: MemberSeams): Bool {
+		final metaName: Null<String> = seams.conversionMetaName;
+		return metaName != null && meta.name == metaName && isMetaNodeKind(meta.kind);
+	}
+
+	/**
 	 * The `RefShape` kinds `collectMembers` reads, resolved ONCE per run rather than per
 	 * type: the modifier siblings it recognises and the conditional-compilation host kind
 	 * that marks a member `guarded`.
@@ -584,6 +602,7 @@ final class SymbolIndexBuilder {
 			inlineKind: shape.inlineModifierKind,
 			macroKind: shape.macroModifierKind,
 			operatorMetaName: shape.operatorOverloadMetaName,
+			conversionMetaName: shape.implicitConversionMetaName,
 			conditionalKind: shape.conditionalMemberKind,
 			paramKinds: shape.paramKinds ?? []
 		};

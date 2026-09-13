@@ -111,6 +111,22 @@ final class NominalTypes {
 	}
 
 	/**
+	 * `typeSource` with a leading nullable WRAPPER peeled off — `Null<Foo>` -> `Foo` — or unchanged
+	 * when its head is not one of `wrappers`. The caller names the wrappers because the question
+	 * differs per consumer: a nullability reader passes every name that stays nullable under a
+	 * null-safety meta, a rewriter passes only the one syntactic wrapper it may re-emit.
+	 *
+	 * The whole source must close on the wrapper's own `>`, so a `Null<A>->B` arrow is left alone:
+	 * peeling there would hand back a fragment that no longer names a type.
+	 */
+	public static function unwrapNullable(typeSource: String, wrappers: Array<String>): String {
+		final lt: Int = typeSource.indexOf('<');
+		return lt > 0 && typeSource.endsWith('>') && wrappers.contains(typeSource.substring(0, lt))
+			? typeSource.substring(lt + 1, typeSource.length - 1)
+			: typeSource;
+	}
+
+	/**
 	 * Split a type-argument list on its TOP-LEVEL commas, respecting EVERY delimiter a written
 	 * Haxe type may nest a comma inside — `<…>` arguments, `(…)` multi-constraints, `{…}`
 	 * structures, `[…]` — and the `->` arrow whose `>` is not a bracket closer. So

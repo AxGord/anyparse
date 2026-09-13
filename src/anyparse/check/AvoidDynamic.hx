@@ -1,12 +1,17 @@
 package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.FixEdit;
+import anyparse.check.Check.GroupedEdit;
+import anyparse.check.Check.GroupedFix;
 import anyparse.check.Check.OracleAssisted;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.TypeOracle;
 import anyparse.check.Check.Violation;
+import anyparse.check.ParamAscription.ParamVerdict;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
 import anyparse.query.Refs;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
@@ -23,7 +28,7 @@ using Lambda;
  * checking at that seam; the intent is to surface each one for a narrower type
  * or the sanctioned `Any` top type.
  *
- * ## Usage-inference autofix — LOCALS only, compiler-verified (`RiskyFix`)
+ * ## Usage-inference autofix — LOCALS and pinned PARAMETERS, compiler-verified (`RiskyFix`)
  *
  * `fix` narrows a WHOLE-type `Dynamic` on a local `var` / `final` to the single
  * concrete named type the value PROVABLY ALWAYS HOLDS — every write source, the
@@ -60,12 +65,28 @@ using Lambda;
  * the correct behaviour — those values are `Dynamic` because they hold genuinely dynamic
  * runtime values, and use-inference cannot soundly narrow them.
  *
- * FIELDS, parameters, returns and type arguments are NOT rewritten: a field's
- * uses are cross-file (an external `is` / heterogeneous read compiles both ways
- * yet changes runtime dispatch — unsound even under an oracle), and a type
- * argument / parameter / return needs element-flow / call-site inference. Those
- * stay report-only. Every violation's span still points at the EXACT `Dynamic`
- * token so the local rewrite (and any future one) anchors precisely.
+ * The ASCRIPTION arm rewrites a PARAMETER: when every read of a `Dynamic` parameter
+ * of a type-member function is either `(p : T)` for one `T` or a null comparison, `T`
+ * moves into the signature and each ascription is unwrapped. `T` must resolve to a
+ * CONVERSION-FREE declaration — an abstract carrying a `@:from` member is refused,
+ * because a type in the signature makes the conversion fire on the CALL SITE's static
+ * argument type and run a member the raw `Dynamic` never reached. The method must
+ * also be one whose signature nothing else pins: not `override`, not `dynamic`, not
+ * macro, not generic, bodied, carrying no compiler-dispatch annotation, and either `static` or proven
+ * to be declared by no supertype and redeclared by no subtype.
+ *
+ * Two limits are accepted. The arm sees only `T`'s side of a conversion: an argument whose own static
+ * type declares `@:to T` starts converting where a raw `Dynamic` took it as it was — but that value
+ * was never a `T` at runtime, so the ascription the fix hoists was already a type confusion and the
+ * signature merely exposes it. And call-site compatibility is the compiler oracle's contract, with
+ * its known blindness to the `#if` branches its defines exclude — the limit every risky signature
+ * rewrite in this rule set carries.
+ *
+ * FIELDS, returns and type arguments stay report-only: a field's uses are cross-file
+ * (an external `is` / heterogeneous read compiles both ways yet changes runtime
+ * dispatch — unsound even under an oracle), and a type argument / return needs
+ * element-flow / call-site inference. Every violation's span still points at the EXACT
+ * `Dynamic` token so both rewrites anchor precisely.
  *
  * The check is a `RiskyFix`: even the sound local narrowings apply ONLY under a
  * configured compiler oracle (`apqlint.json` `compilerOracle`), which typechecks
@@ -74,7 +95,7 @@ using Lambda;
  * consumer. Without an oracle the `--fix` run is byte-identical to report-only.
  * `Severity.Info` by default.
  *
- * A second arm converts a `Dynamic` used only as a string-keyed reflect bag
+ * A further arm converts a `Dynamic` used only as a string-keyed reflect bag
  * (`setField` / `field` / `hasField` / `deleteField` / `fields`, via `using Reflect`
  * extension calls or direct `Reflect.*`) to `haxe.DynamicAccess<T>` with map syntax
  * (`bag[k] = v`, `bag[k]`, `bag.exists(k)`, `bag.remove(k)`, `bag.keys()`). `T` unifies
@@ -111,16 +132,21 @@ using Lambda;
  * `excludeMeta` / `boundaryCalls` are read from `apqlint.json`.
  */
 @:nullSafety(Strict)
-final class AvoidDynamic implements Check implements ConfigAware implements RiskyFix implements OracleAssisted {
+final class AvoidDynamic implements Check implements ConfigAware implements RiskyFix implements OracleAssisted implements GroupedFix {
 
 	private static inline final RULE_ID: String = 'avoid-dynamic';
 
 	/** The fix ledger's sentence for a `Dynamic` that is not this fixer's subject at all. */
-	private static inline final DECLINE_NOT_A_LOCAL: String =
-		'the fix narrows a LOCAL variable from its uses; this `Dynamic` is a field, parameter, return type or type argument';
+	private static inline final DECLINE_NOT_A_LOCAL: String = 'the fix narrows a LOCAL variable from its uses, or a type-MEMBER '
+		+ 'function PARAMETER from its ascriptions; this `Dynamic` is a field, a return type, a type argument, a rest parameter, or a '
+		+ 'lambda / local-function parameter';
 
 	/** The fix ledger's sentence for a local the fixer looked at and could not narrow. */
 	private static inline final DECLINE_NOT_PROVEN: String = 'a local, but its uses prove no single plain nominal type to narrow it to';
+
+	/** The fix ledger's sentence for a parameter the ascription arm looked at and refused. */
+	private static inline final DECLINE_PARAM_NOT_PINNED: String = 'a parameter, but its reads are not all ascriptions to one '
+		+ 'conversion-free type, or its method can be overridden';
 
 	/** Call-path roots that mark a local as a Reflect/Json boundary transit — reported distinctly. */
 	private static final DEFAULT_BOUNDARY_CALLS: Array<String> = ['Reflect', 'Json'];
@@ -172,42 +198,80 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 	}
 
 	/**
-	 * Narrow each WHOLE-type `Dynamic` LOCAL among `violations` to a use-inferred
-	 * named type, skipping every unsound shape. Field / parameter / return / type-
-	 * argument violations yield no edit. `RiskyFix`: the caller applies these only
-	 * under a compiler oracle (`FixVerifier`), so a bad inference is reverted, not shipped.
+	 * The flat projection of `fixGrouped` — the `Check.fix` contract, for the callers that never
+	 * split an edit set. Grouping is the ONLY thing dropped here, which is the obligation
+	 * `GroupedFix` states: the two views can never disagree about WHICH edits a fix produces.
 	 */
-	public function fix(
+	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
+		return [
+			for (edit in fixGrouped(source, violations, plugin, index)) { span: edit.span, text: edit.text }
+		];
+	}
+
+	/**
+	 * Narrow each WHOLE-type `Dynamic` LOCAL among `violations` to a use-inferred named type, and
+	 * retype each `Dynamic` PARAMETER its reads pin by ascription, unwrapping those ascriptions.
+	 * Field / return / type-argument violations yield no edit. A local narrowing is independently
+	 * revertible; a parameter rewrite is ONE group. `RiskyFix`: the caller applies these only under
+	 * a compiler oracle (`FixVerifier`), so a bad inference is reverted, not shipped.
+	 */
+	public function fixGrouped(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
-	): Array<{ span: Span, text: String }> {
+	): Array<GroupedEdit> {
 		final shape: RefShape = plugin.refShape();
 		final dynName: Null<String> = shape.rawDynamicTypeName;
 		final tree: Null<QueryNode> = dynName == null ? null : CheckScan.parseOrNull(plugin, source);
 		if (dynName == null || tree == null) return [];
-		final declaredTypes: Map<Int, String> = plugin is TypeInfoProvider ? (cast plugin: TypeInfoProvider).declaredTypes(source) : [];
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		final declaredTypes: Map<Int, String> = provider != null ? provider.declaredTypes(source) : [];
+		final castTargets: Map<Int, String> = provider != null ? provider.castTargetSources(source) : [];
 		// The inferred type must resolve to a provably plain nominal — resolved against the
 		// caller's cross-file index (FixVerifier), or this file alone when invoked directly.
 		final symbols: SymbolIndex = index ?? SymbolIndex.build([{ file: '', source: source }], plugin);
-		final edits: Array<{ span: Span, text: String }> = [];
+		// The parameter arm asks its type gate of the WIDEST index available: an ascription naming a
+		// std abstract (`haxe.DynamicAccess`) is the motivating shape, and only the resolution scope
+		// holds the std. The local arm keeps the narrower index it has always answered against.
+		final scope: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? symbols;
+		final edits: Array<GroupedEdit> = [];
+		var group: Int = 0;
 		for (v in violations) if (v.rule == RULE_ID) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
+			final found: Null<Span> = v.span;
+			if (found == null) continue;
+			// Re-bind to a non-null local — Strict null-safety takes a struct literal's field type
+			// from the declared type, not the narrowed one.
+			final span: Span = found;
 			final decl: Null<QueryNode> = wholeDynamicLocal(tree, source, span, shape, dynName);
-			// Two decline points, and they are not the same answer. The first says the occurrence is
-			// outside this fixer's subject altogether — a field, a parameter, a return, a type
-			// argument; on Pony that is EVERY one of its 470 findings. The second says it IS a local
-			// and its uses pin no single type down. Folded into one sentence, a reader chasing the
-			// second would look for an inference failure that never ran.
-			if (decl == null) {
+			if (decl != null) {
+				final narrowed: Null<String> = inferLocalNarrowType(decl, tree, shape, dynName, declaredTypes, symbols);
+				if (narrowed == null) {
+					v.declineReason = DECLINE_NOT_PROVEN;
+					continue;
+				}
+				// An independently revertible edit: a local's narrowing stands or falls alone.
+				final text: String = narrowed;
+				edits.push({ span: span, text: text, group: null });
+				continue;
+			}
+			// Three decline points, and they are not one answer. The first says the occurrence is
+			// outside this fixer's subjects altogether — a field, a return, a type argument. The
+			// second says it IS a local and its uses pin no single type down; the third that it IS a
+			// parameter whose reads or whose owning method refuse the signature rewrite. Folded into
+			// one sentence, a reader chasing either of the last two would look for a failure that
+			// never ran.
+			final param: ParamVerdict = ParamAscription.rewrite(tree, source, span, shape, dynName, castTargets, scope);
+			if (!param.subject) {
 				v.declineReason = DECLINE_NOT_A_LOCAL;
 				continue;
 			}
-			final narrowed: Null<String> = inferLocalNarrowType(decl, tree, shape, dynName, declaredTypes, symbols);
-			if (narrowed == null) {
-				v.declineReason = DECLINE_NOT_PROVEN;
+			final pinned: Null<Array<FixEdit>> = param.edits;
+			if (pinned == null) {
+				v.declineReason = DECLINE_PARAM_NOT_PINNED;
 				continue;
 			}
-			edits.push({ span: span, text: narrowed });
+			// ONE group per parameter: the signature carries the type the unwrapped reads no longer
+			// state, so keeping either half without the other leaves code that means something else.
+			group++;
+			for (edit in pinned) edits.push({ span: edit.span, text: edit.text, group: group });
 		}
 		return edits;
 	}
@@ -224,9 +288,7 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 	 * `Undetermined` (an unresolved value) yields NO edit — report-only. Public fields /
 	 * properties / params / returns / type-arguments are never edited (the blast-radius gate).
 	 */
-	public function fixWithOracle(
-		source: String, violations: Array<Violation>, plugin: GrammarPlugin, oracle: TypeOracle
-	): Array<{ span: Span, text: String }> {
+	public function fixWithOracle(source: String, violations: Array<Violation>, plugin: GrammarPlugin, oracle: TypeOracle): Array<FixEdit> {
 		return DynamicBag.bagEdits(source, violations, plugin, oracle);
 	}
 
@@ -330,11 +392,7 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 	private static function gatherUses(
 		name: String, bindFrom: Int, tree: QueryNode, shape: RefShape, dynName: String, declaredTypes: Map<Int, String>
 	): NarrowAcc {
-		final targetKeys: Map<String, Bool> = [];
-		for (h in Refs.find(name, tree, shape)) {
-			final b: Null<Span> = h.bindingSpan;
-			if (h.kind != RefKind.Decl && b != null && b.from == bindFrom) targetKeys['${h.span.from}:${h.span.to}'] = true;
-		}
+		final targetKeys: Map<String, Bool> = occurrenceKeysOf(name, bindFrom, tree, shape);
 		final acc: NarrowAcc = {
 			disqualified: false,
 			nullUse: false,
@@ -345,6 +403,20 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 		};
 		classifyOccurrences(tree, tree, null, -1, name, shape, dynName, declaredTypes, targetKeys, acc);
 		return acc;
+	}
+
+	/**
+	 * The `from:to` span keys of every read/write occurrence of `name` that `Refs.find` binds to the
+	 * declaration at `bindFrom` — the set both use classifiers match an identifier node against, so
+	 * neither ever judges a same-named binding from another scope.
+	 */
+	private static function occurrenceKeysOf(name: String, bindFrom: Int, tree: QueryNode, shape: RefShape): Map<String, Bool> {
+		final keys: Map<String, Bool> = [];
+		for (h in Refs.find(name, tree, shape)) {
+			final b: Null<Span> = h.bindingSpan;
+			if (h.kind != RefKind.Decl && b != null && b.from == bindFrom) keys['${h.span.from}:${h.span.to}'] = true;
+		}
+		return keys;
 	}
 
 	/**

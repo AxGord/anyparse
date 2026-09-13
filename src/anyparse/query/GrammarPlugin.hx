@@ -1190,6 +1190,32 @@ typedef RefShape = {
 	@:optional var operatorOverloadMetaName: String;
 
 	/**
+	 * The ANNOTATION name a MEMBER carries to declare an IMPLICIT CONVERSION into its
+	 * enclosing type — Haxe `@:from`, whose body is ordinary code the compiler inserts at
+	 * every seam where a value of the source type is expected as this one.
+	 * `SymbolIndexBuilder` records its presence per member (`SymbolIndex.MemberInfo.
+	 * isImplicitConversion`), which is what `SymbolIndex.resolvesToConversionFreeType`
+	 * answers with: retyping a binding from a top type to such an abstract compiles and then
+	 * RUNS that member, where the wider type ran nothing. A header `from X` clause is NOT
+	 * this — it declares a structural relation and generates no code — so only members count.
+	 * Unset makes every abstract read as carrying no conversion.
+	 */
+	@:optional var implicitConversionMetaName: String;
+
+	/**
+	 * The ANNOTATION names that make a member COMPILER-DISPATCHED — one the compiler selects and
+	 * calls by the STATIC TYPE of its operands rather than by a written call: Haxe `@:from`, `@:op`,
+	 * `@:arrayAccess` and `@:resolve`. Every such member's parameter type IS the dispatch key, so a
+	 * rewrite that narrows one changes which expressions in the whole program select it, at sites
+	 * that name neither the member nor its type.
+	 *
+	 * A superset of `implicitConversionMetaName`, and deliberately a separate seam: that one answers
+	 * what a TYPE does to a value crossing into it, this one what a MEMBER's signature is load-bearing
+	 * for. Unset makes every member read as ordinarily called.
+	 */
+	@:optional var dispatchedMemberMetaNames: Array<String>;
+
+	/**
 	 * The metadata tags whose presence on a TYPE declaration means a MACRO generates that type's
 	 * member set (Haxe `@:build`, `@:autoBuild`, `@:genericBuild`) — the question a rule must ask
 	 * before it acts on the members the declaration happens to hold, since the builder's are not

@@ -1,9 +1,10 @@
 package unit.check;
 
 import anyparse.check.AvoidDynamic;
+import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.Violation;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.runtime.Span;
+import unit.CheckFixture.FixRun;
 import utest.Assert;
 import utest.Test;
 
@@ -240,7 +241,7 @@ class AvoidDynamicNarrowFixTest extends Test {
 		// A file with a field Dynamic AND a narrowable local: only the local is edited.
 		final src: String =
 			'class C {\n\tvar keep:Dynamic;\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tvar y:Foo = x;\n\t}\n}$FOO';
-		final e: Array<{ span: Span, text: String }> = edits(src);
+		final e: Array<FixEdit> = edits(src);
 		Assert.equals(1, e.length);
 		final out: String = apply(src, e);
 		Assert.isTrue(out.indexOf('var keep:Dynamic;') != -1, 'the field Dynamic is untouched');
@@ -264,22 +265,23 @@ class AvoidDynamicNarrowFixTest extends Test {
 	public function testEachDeclinedDynamicSaysWhichOfTheTwoRefusalsItIs(): Void {
 		final src: String = 'class C {\n\tvar keep:Dynamic;\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n'
 			+ '\t\tvar y:Foo = x;\n\t\tvar loose:Dynamic = a;\n\t}\n}$FOO';
-		final run: { violations: Array<Violation>, edits: Array<{ span: Span, text: String }> } = fixed(src);
+		final run: FixRun = fixed(src);
 		Assert.equals(1, run.edits.length, 'only the corroborated local is narrowed');
 		Assert.same([
-			'the fix narrows a LOCAL variable from its uses; this `Dynamic` is a field, parameter, return type or type argument',
+			'the fix narrows a LOCAL variable from its uses, or a type-MEMBER function PARAMETER from its ascriptions; this '
+			+ '`Dynamic` is a field, a return type, a type argument, a rest parameter, or a lambda / local-function parameter',
 			'-',
 			'a local, but its uses prove no single plain nominal type to narrow it to'
 		], [for (v in run.violations) v.declineReason ?? '-']);
 	}
 
-	private inline function apply(src: String, e: Array<{ span: Span, text: String }>): String {
+	private inline function apply(src: String, e: Array<FixEdit>): String {
 		return CheckFixture.applyEdits(src, e);
 	}
 
 	// ---- helpers ----
 
-	private function edits(src: String): Array<{ span: Span, text: String }> {
+	private function edits(src: String): Array<FixEdit> {
 		return fixed(src).edits;
 	}
 
@@ -289,7 +291,7 @@ class AvoidDynamicNarrowFixTest extends Test {
 	 * The violations are what `fix` writes its decline reasons onto, so a test reading those needs
 	 * the same objects the edits came from — and the three-line run/fix preamble lives here once.
 	 */
-	private function fixed(src: String): { violations: Array<Violation>, edits: Array<{ span: Span, text: String }> } {
+	private function fixed(src: String): FixRun {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: AvoidDynamic = new AvoidDynamic();
 		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
@@ -297,7 +299,7 @@ class AvoidDynamicNarrowFixTest extends Test {
 	}
 
 	private function narrow(src: String): Null<String> {
-		final e: Array<{ span: Span, text: String }> = edits(src);
+		final e: Array<FixEdit> = edits(src);
 		return e.length == 0 ? null : e[0].text;
 	}
 

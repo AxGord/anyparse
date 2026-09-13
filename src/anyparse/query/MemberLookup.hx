@@ -223,6 +223,30 @@ final class MemberLookup {
 	}
 
 	/**
+	 * Whether a TRANSITIVE supertype of `typeName` declares `field`, in three values instead of two:
+	 * a reachable ancestor declares it, the whole closure was reachable and none does, or some link
+	 * left the index so absence is unproven. The walk hops a `typedef` written in a heritage clause,
+	 * whose own `supertypes` are empty and whose target lives in `aliasTargetRaw`.
+	 *
+	 * The boolean `supertypeDeclaresMember` folds the last two answers together, which is safe for a
+	 * consumer that only tightens on a POSITIVE answer and wrong for one whose soundness rests on the
+	 * absence. The two walks are kept apart for one reason and it is not the return type: that one
+	 * matches a supertype by SIMPLE NAME across every file, so an out-of-scope base still answers
+	 * `true` for it, while this one resolves each written reference against the declaring file and
+	 * calls an unresolvable link `Unreachable` — each is the conservative direction for its own
+	 * consumer, and neither is a safe substitute for the other.
+	 */
+	public function supertypeMemberProof(typeName: String, field: String): SupertypeProof {
+		final starts: Array<ResolvedType> = _refs.resolvedDeclsNamed(typeName);
+		if (starts.length != 1) return SupertypeProof.Unreachable;
+		final start: ResolvedType = starts[0];
+		// Seeded with the OWNER so a cycle back to it stops there: its own declaration of `field` is
+		// the thing being asked about, never a proof that something above it declares one too.
+		final seen: Array<String> = [_refs.seenKey(start)];
+		return ancestorsProof(start, field, seen);
+	}
+
+	/**
 	 * Whether the type named `typeName` DECLARED IN `file` provably inherits a member
 	 * named `member` from a supertype, resolved through UNAMBIGUOUS, import-aware links
 	 * only. The enclosing type is pinned to its `(file, name)` declaration, so a
@@ -474,6 +498,41 @@ final class MemberLookup {
 		return false;
 	}
 
+	/** `supertypeMemberProof`'s walk: `Declares` short-circuits, an unresolvable link is remembered and reported at the end. */
+	private function ancestorsProof(cur: ResolvedType, field: String, seen: Array<String>): SupertypeProof {
+		var unreachable: Bool = false;
+		for (raw in cur.type.supertypesRaw) if (!dynamicSupertypeRef(raw)) {
+			final anc: Null<ResolvedType> = _refs.resolveTypeRef(raw, cur.file);
+			switch anc == null ? SupertypeProof.Unreachable : hostProof(anc, field, seen) {
+				case SupertypeProof.Declares:
+					return SupertypeProof.Declares;
+				case SupertypeProof.Unreachable:
+					unreachable = true;
+				case SupertypeProof.Absent:
+			}
+		}
+		return unreachable ? SupertypeProof.Unreachable : SupertypeProof.Absent;
+	}
+
+	/**
+	 * The proof for ONE ancestor host and everything above it. A `typedef` in a heritage clause
+	 * records no supertype edge of its own, so the walk hops its alias target the way
+	 * `lacksMemberClosure` does; an alias that is an anonymous structure, one whose target does not
+	 * read, and a `@:forward` abstract all host members this index cannot enumerate, so each is
+	 * `Unreachable` rather than an absence.
+	 */
+	private function hostProof(cur: ResolvedType, field: String, seen: Array<String>): SupertypeProof {
+		// A supertype CYCLE still enumerates the whole closure, so re-entering proves nothing new.
+		if (!_refs.markSeen(cur, seen)) return SupertypeProof.Absent;
+		final t: TypeDeclInfo = cur.type;
+		if (t.members.exists(m -> m.name == field)) return SupertypeProof.Declares;
+		if (t.abstractForwardUnderlying != null) return SupertypeProof.Unreachable;
+		if (t.kind != SymbolIndex.TYPEDEF_DECL_KIND) return ancestorsProof(cur, field, seen);
+		final target: Null<String> = t.isAnonStruct ? null : t.aliasTargetRaw;
+		final next: Null<ResolvedType> = target == null ? null : _refs.resolveTypeRef(target, cur.file);
+		return next == null ? SupertypeProof.Unreachable : hostProof(next, field, seen);
+	}
+
 	/**
 	 * Recursive supertype walk for `inheritsMemberUnambiguously`, cycle-guarded by `seen`. Expressed
 	 * through `inheritsInstanceMemberWalk`, which asks the strictly finer question over the same
@@ -682,5 +741,23 @@ final class MemberLookup {
 		}
 		return found;
 	}
+
+}
+
+/**
+ * The three answers a supertype-closure member walk can give. `Absent` and `Unreachable` are the
+ * two halves the boolean `supertypeDeclaresMember` folds into `false`: one is a proof, the other
+ * is the absence of one.
+ */
+enum abstract SupertypeProof(Int) {
+
+	/** A reachable supertype declares the member. */
+	final Declares = 0;
+
+	/** Every supertype in the closure was reachable and none declares it. */
+	final Absent = 1;
+
+	/** Some supertype link leaves the index, so absence is unproven. */
+	final Unreachable = 2;
 
 }

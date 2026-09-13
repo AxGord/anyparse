@@ -30,7 +30,7 @@ final class CheckFixture {
 	 * `source` with `edits` spliced in, applied last-first so an earlier edit's
 	 * span is still valid when it is applied. The input array is not reordered.
 	 */
-	public static function applyEdits(source: String, edits: Array<{ span: Span, text: String }>): String {
+	public static function applyEdits(source: String, edits: Array<FixEdit>): String {
 		final sorted: Array<{ span: Span, text: String }> = edits.copy();
 		sorted.sort((a, b) -> b.span.from - a.span.from);
 		var out: String = source;
@@ -61,3 +61,12 @@ final class CheckFixture {
 	}
 
 }
+
+/**
+ * One `run` + `fix` pass over a fixture, both halves kept: a test reading the decline reasons the
+ * fix wrote needs the very `Violation` objects the edits came from.
+ */
+typedef FixRun = {
+	final violations: Array<Violation>;
+	final edits: Array<FixEdit>;
+};

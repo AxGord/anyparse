@@ -816,7 +816,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		final containerSource: Null<String> =
 			TypeResolver.identDeclaredTypeSource(init.children[0], shape, tree, declaredTypeSources, true);
 		if (containerSource == null) return null;
-		final container: String = unwrapNullable(containerSource, shape);
+		final container: String = NominalTypes.unwrapNullable(containerSource, shape.nullableWrapperTypeNames ?? []);
 		final nominal: Null<String> = NominalTypes.outerNominalOf(container);
 		final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(container);
 		if (nominal == null || args == null) return null;
@@ -1000,7 +1000,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		// type (`split` -> `Array<String>` regardless), so this path wants the DECLARED type and
 		// must NOT drop optional params (`skipNullableOptionalParam = false`).
 		final typeSrc: Null<String> = TypeResolver.identDeclaredTypeSource(recv, shape, tree, declaredTypeSources, false);
-		return typeSrc != null && unwrapNullable(typeSrc, shape) == stringType;
+		return typeSrc != null && NominalTypes.unwrapNullable(typeSrc, shape.nullableWrapperTypeNames ?? []) == stringType;
 	}
 
 	/**
@@ -1015,19 +1015,6 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 			if (t != null) return t;
 		}
 		return null;
-	}
-
-	/**
-	 * `T` from a single nullable-wrapper application `Null<T>` (the outer name must be
-	 * a `shape.nullableWrapperTypeNames` entry), else `t` unchanged. Input is expected
-	 * whitespace-stripped.
-	 */
-	private static function unwrapNullable(t: String, shape: RefShape): String {
-		final lt: Int = t.indexOf('<');
-		if (lt <= 0 || !t.endsWith('>')) return t;
-		final outer: String = t.substring(0, lt);
-		final wrappers: Array<String> = shape.nullableWrapperTypeNames ?? [];
-		return wrappers.contains(outer) ? t.substring(lt + 1, t.length - 1) : t;
 	}
 
 	/**

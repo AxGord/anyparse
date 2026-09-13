@@ -180,6 +180,16 @@ typedef MemberInfo = {
 	var operatorOverloads: Array<String>;
 
 	/**
+	 * True when the member carries the grammar's implicit-conversion annotation
+	 * (`RefShape.implicitConversionMetaName`) — a `@:from` on an abstract, whose body the
+	 * compiler RUNS wherever a value of the source type is written where this type is
+	 * expected. The fact `resolvesToConversionFreeType` turns on: a rewrite that narrows a
+	 * binding's declared type from a top type to such an abstract compiles and silently
+	 * gains that call. A header `from X` clause generates no code and is not recorded here.
+	 */
+	var isImplicitConversion: Bool;
+
+	/**
 	 * True when the member's DECLARATION sits under a `conditionalMemberKind` host — the
 	 * member is written inside a `#if` region rather than at plain type-body level.
 	 * Mirrors `ImportInfo.guarded`: the declaration genuinely exists, but its presence is
@@ -477,12 +487,20 @@ final class SymbolIndex {
 	 */
 	private final _sources: Map<String, String>;
 
+	/**
+	 * The declaration kinds whose members may declare an implicit conversion
+	 * (`RefShape.underlyingThisTypeKinds` — Haxe's `abstract` and `enum abstract`). Resolved in the
+	 * constructor because the query surface holds no plugin.
+	 */
+	private final _abstractKinds: Array<String>;
+
 	private function new(
 		files: Array<FileInfo>, skipped: Array<String>, sources: Map<String, String>, plugin: GrammarPlugin, thirdParty: Map<String, Bool>
 	) {
 		_files = files;
 		_skipped = skipped;
 		_sources = sources;
+		_abstractKinds = plugin.refShape().underlyingThisTypeKinds ?? [];
 		refs = new TypeRefIndex(files);
 		subtypes = new SubtypeGraph(files, sources, refs);
 		members = new MemberLookup(files, refs);
@@ -644,6 +662,36 @@ final class SymbolIndex {
 	public function resolvesToPlainNominal(typeName: String): Bool {
 		final ds: Array<TypeDeclInfo> = refs.declsNamed(typeName);
 		return ds.length == 1 && PLAIN_NOMINAL_KINDS.contains(ds[0].kind);
+	}
+
+	/**
+	 * Whether the WRITTEN type name `typeName` resolves in the index to EXACTLY ONE declaration free
+	 * of IMPLICIT CONVERSION — a plain nominal, or an abstract no member of which carries the grammar's
+	 * `@:from` and which no build macro can extend with one. A dotted `typeName`
+	 * is resolved as a PATH and a bare one by simple name; a module-relative
+	 * SUB-type path (`Mod.Sub`) resolves as neither and is refused, since only a bare name or a full
+	 * path to a module's MAIN type has a declaration to match.
+	 *
+	 * Looser than `resolvesToPlainNominal` by exactly the abstracts that convert nothing, and the
+	 * difference is what a signature rewrite needs: moving a type from a cast into a parameter makes
+	 * conversion fire on the CALL SITE's static argument type, so an abstract with a conversion member
+	 * would start running code the top type never ran. A header `from X` clause generates no code and
+	 * does not disqualify. A typedef may alias a converting type, and an unresolved name is not
+	 * provable: both yield false.
+	 */
+	public function resolvesToConversionFreeType(typeName: String): Bool {
+		// A written path is resolved AS a path: a plain `Foo` in scope names a different declaration
+		// from `pk.Foo`, and reducing the written form to its last segment would let one vouch for
+		// the other.
+		final ds: Array<TypeDeclInfo> = typeName.indexOf('.') < 0
+			? refs.declsNamed(typeName)
+			: [for (resolved in refs.resolveQualifiedRefAll(typeName)) resolved.type];
+		if (ds.length != 1) return false;
+		final decl: TypeDeclInfo = ds[0];
+		// `hasBuild` disqualifies an abstract outright: the macro can add the `@:from` the member scan
+		// never sees, so the absence of one in the source proves nothing about the compiled type.
+		return PLAIN_NOMINAL_KINDS.contains(decl.kind)
+			|| (_abstractKinds.contains(decl.kind) && !decl.hasBuild && !decl.members.exists(m -> m.isImplicitConversion));
 	}
 
 	/**
