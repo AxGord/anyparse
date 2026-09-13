@@ -28,10 +28,9 @@ using StringTools;
  * ## Why a wildcard makes the shape safe
  *
  * `case _:` / `default:` is the exact opposite of a hazard here: its presence makes the
- * compiler emit a null check ahead of the tag read, and null then lands in the wildcard body.
- * Measured on hxcpp (with and without `-D analyzer-optimize -dce full`), js and eval, for
- * `String`, `Null<Int>` and `enum` subjects, in statement and expression position — every
- * wildcard shape routes null to the wildcard and none faults. A wildcard-less switch over a
+ * compiler emit a null check ahead of the tag read, and null then lands in the wildcard body —
+ * on hxcpp, js and eval alike, for `String`, `Null<Int>` and `enum` subjects, in statement and
+ * expression position, every wildcard shape routes null to the wildcard and none faults. A wildcard-less switch over a
  * NON-enum subject is equally safe: it compiles to plain comparisons, which null simply fails
  * to match, and control falls past the switch.
  *
@@ -127,11 +126,9 @@ final class NullableSwitchMissingNull implements Check implements NoAutofix {
 	 * Report-only, and the trigger is why: the rule fires only where the switch has NO wildcard and no
 	 * null arm, so there is no catch-all body a `case null` could route into.
 	 *
-	 * Until this slice the sentence here read "Route null through the switch's lone wildcard/default arm
-	 * — rewrite its head to `case null, _:`", which described the autofix the rule had before its
-	 * premise was INVERTED (`abbbbd3a`): the old rule flagged a wildcard-carrying switch, the new one
-	 * excludes it by construction, and the commit that swapped them said the autofix went with the old
-	 * premise. The plan outlived the shape it planned for and read as work waiting to be done.
+	 * A "route null through the lone wildcard arm — rewrite its head to `case null, _:`" autofix
+	 * belongs to the inverted premise (flagging a wildcard-carrying switch); this rule excludes
+	 * that shape by construction, so no such plan is waiting to be done.
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex

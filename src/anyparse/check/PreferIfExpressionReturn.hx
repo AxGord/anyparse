@@ -44,7 +44,7 @@ using StringTools;
  *
  * The other two rules defer by ASKING this one (`claimsChain` / `claimsCascade`), gates and all,
  * rather than mirroring the shape: a shape-only deferral silences them wherever this rule refuses
- * on a comment, and S45 measured 14 of 69 findings lost that way with no replacement anywhere.
+ * on a comment, losing findings with no replacement anywhere.
  * The claim is also march-GATED (`marchable`): it may not reach past what the pairwise route
  * already collapsed, or silencing that route CHANGES the fixed point.
  *
@@ -143,8 +143,8 @@ final class PreferIfExpressionReturn implements Check {
 			// a conditional-compilation region is ONE node whose branches are flattened children, no
 			// block at all. `prefer-ternary-return` reads the branch-aware projection and defers to
 			// this rule, so a cascade inside a `#if` region would be deferred to a walk that never
-			// saw it: measured on openfl's `Lib.hx`, where a three-`return` cascade under `#end`
-			// lost its only finding. The else-chain arm is indifferent — it flags a chain head
+			// saw it, and a three-`return` cascade under `#end` would lose its only finding. The
+			// else-chain arm is indifferent — it flags a chain head
 			// wherever the walk reaches one, and an `if` node's own children are the same in both
 			// projections.
 			final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, entry.source);
@@ -193,10 +193,10 @@ final class PreferIfExpressionReturn implements Check {
 	public static function claimsChain(
 		head: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, shape: RefShape
 	): Bool {
-		// March-gated where the REPORT is not: this rule already flagged every valued-return chain
-		// before this slice and its own edit was deferred by the de-nest's, so gating the report
-		// would lose a finding the base had. The CLAIM is what silences the other rule, and it may
-		// only silence where this rule reaches the same text the march did.
+		// March-gated where the REPORT is not: this rule flags every valued-return chain and its own
+		// edit is deferred by the de-nest's, so gating the report would lose a finding. The CLAIM is
+		// what silences the other rule, and it may only silence where this rule reaches the same text
+		// the march did.
 		final seams: Null<Seams> = readSeams(shape);
 		return seams != null && match(head, source, comments, seams, true) != null;
 	}
@@ -222,8 +222,7 @@ final class PreferIfExpressionReturn implements Check {
 	 * rule reports at. Derived separately the two disagree the moment a no-`else` `if` that does NOT
 	 * return sits in front of a cascade: that statement is a rung by SHAPE, so a shape-only walk-back
 	 * runs past it, asks about a head this rule never uses, and gets a `false` it reads as licence to
-	 * collapse — both rules then report one control flow. Measured on heaps' `poly2tri/Point.hx`,
-	 * `cpp/_std/StringBuf.hx` and `php/_std/EReg.hx`.
+	 * collapse — both rules then report one control flow.
 	 */
 	public static function returnRunHead(kids: Array<QueryNode>, at: Int, shape: RefShape): Int {
 		final seams: Null<Seams> = readSeams(shape);
@@ -376,8 +375,8 @@ final class PreferIfExpressionReturn implements Check {
 		if (chain == null) return null;
 		final from: Null<Span> = kids[at].span;
 		final to: Null<Span> = chain.terminal.span;
-		// ALWAYS march-gated: this arm is new, so anything it claims beyond what
-		// `prefer-ternary-return` already marched is a fixed point this slice CHANGED.
+		// ALWAYS march-gated: anything this arm claims beyond what `prefer-ternary-return` already
+		// marched is a CHANGED fixed point.
 		return from == null || to == null ? null : matchChain(chain, new Span(from.from, to.to), source, comments, s, true);
 	}
 
@@ -452,10 +451,9 @@ final class PreferIfExpressionReturn implements Check {
 	 * claim must not reach further than the march did, or the CHANGE of fixed point is the change,
 	 * and a guard cascade nobody asked to fold becomes one expression.
 	 *
-	 * Measured: without this, a full `--fix` over 1029 external files diverged from the base in 45 of
-	 * them, 29 of the diffs turning a `return false;` guard into a rung. Every refusal below mirrors
-	 * a gate `PreferTernaryReturn.pairAt` already applies to the pair it would collapse, read here
-	 * over the whole rung list because the march applies it once per step:
+	 * Without this a full `--fix` turns `return false;` guards into rungs. Every refusal below
+	 * mirrors a gate `PreferTernaryReturn.pairAt` already applies to the pair it would collapse,
+	 * read here over the whole rung list because the march applies it once per step:
 	 *
 	 * - a BOOL LITERAL rung. `isStuckBooleanCollapse` refuses `cond ? true : <not provably Bool>`,
 	 *   and from the second step on the other side of that pair is the accumulated ternary, which

@@ -339,9 +339,9 @@ final class OperatorSelection {
 	 * include is exactly what a narrow run would otherwise miss — but the reverse costs just as
 	 * much: a type declared in the SCANNED files and absent from the resolution scope (a run over
 	 * a directory outside the configured project, the common shape of a probe) resolved to
-	 * nothing, and a verdict of `Unproven` for it silenced findings that were perfectly sound.
-	 * Measured on a two-file fixture whose abstract declares NO overload: preferring the project
-	 * index alone refused the finding, asking both keeps it.
+	 * nothing, and a verdict of `Unproven` for it silences findings that are perfectly sound —
+	 * for an abstract declaring NO overload, the project index alone refuses the finding and
+	 * asking both keeps it.
 	 */
 	private function indexes(): Array<SymbolIndex> {
 		final built: Null<Array<SymbolIndex>> = _indexes;

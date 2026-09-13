@@ -20,9 +20,8 @@ using Lambda;
  * Every member rule keys its enum-abstract exemption off the projected kind: a value is
  * implicitly public, is typed by the abstract rather than by its literal, is PascalCase by
  * convention, and is API even when its own file never reads it. Under a plain abstract all four
- * exemptions lapse at once — measured on one real file, `--fix` rewrote 17 values as
- * `private final Default: Int = 39` and then deleted 15 of them as unused privates. The result
- * did not typecheck, and the whole 214-file wave was rolled back over it.
+ * exemptions lapse at once: `--fix` rewrites the values as `private final Default: Int = 39`
+ * and then deletes them as unused privates, and the result does not typecheck.
  *
  * The conditional match is deliberately coarse: ANY declaration-prefix keyword the region
  * contributes, not the `enum` one specifically (the kind set names no individual keyword).

@@ -41,11 +41,10 @@ private typedef InteriorLine = {
  * It is the only channel in this project that can see the class. The writer re-emits a
  * comment INTERIOR byte for byte, so a corrupted doc block is writer-canonical and
  * `apq fmt --list` reports nothing; comments are trivia and never reach the parse tree,
- * so every node-based rule is blind to them as well. Measured on this repository at the
- * time the rule landed: a doc block corrupted months earlier sat committed in
- * `test/unit/UnusedLocalShadowTest.hx` — one line at a doubled indent, three flush left
- * inside the block — with `fmt --list` clean and the whole builtin rule set silent on it.
- * It was found by a human reading a diff, which is not a gate.
+ * so every node-based rule is blind to them as well. A doc block corrupted long before —
+ * one line at a doubled indent, three flush left inside the block — sits committed with
+ * `fmt --list` clean and the whole builtin rule set silent on it, until a human reads a
+ * diff, which is not a gate.
  *
  * The corruption is produced by the ops that SPLICE text into a comment. `set-doc` owns
  * the gutter and adds it, so a caller who supplies their own gets ` * ` twice;
@@ -217,8 +216,8 @@ final class DocCommentContinuation implements Check {
 				compactLines++;
 		}
 		// UNANIMITY WINS. A block whose every line already agrees on one gutter is a house style,
-		// whatever indent it chose — measured, that is the only shape openfl / lime / the `format`
-		// library produce, and judging it against the OPENER's indent reported 142 correct blocks.
+		// whatever indent it chose — that is the only shape openfl / lime / the `format` library
+		// produce, and judging it against the OPENER's indent reports correct blocks.
 		// What this rule reports is a line disagreeing with its OWN block, which is what a splice
 		// makes and a consistent style never does.
 		final own: String = head.substring(0, star + 1);

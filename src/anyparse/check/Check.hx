@@ -504,13 +504,11 @@ interface NoAutofix {
  * `duplicate-code` names its partner block `<path>:<line>`; `unused-local` names the
  * re-declaration that took a binding over; `oversized-type` quotes the type's line extent.
  * All three re-key on an edit that changed no finding, and the blast-radius gate then
- * reports movement where nothing moved — measured on one writer slice as eight moves
- * (`WrapList` / `WriterLowering` / `Cli` / `SymbolIndex`, 4184 lines against 4194) with
- * total findings 2256 against a base of 2256. A gate waived by reflex has stopped being a
+ * reports movement where nothing moved. A gate waived by reflex has stopped being a
  * gate, so the identity must not carry the drifting quantity.
  *
  * The MESSAGE keeps it. "This type is too big" without a size is useless, and the reader who
- * wants 4184 -> 4194 finds it in the two REPORTS — so identity and message come apart here
+ * wants the extent finds it in the two REPORTS — so identity and message come apart here
  * rather than the numbers coming out of the prose. `lint-diff` itself prints the KEY as its
  * example line, masked digits and all, because that is what it compared; a raw number there
  * would contradict the verdict beside it.
@@ -518,17 +516,15 @@ interface NoAutofix {
  * The check declares this about ITSELF, and `lint-diff` holds no list of rules: the
  * registry is asked which of its checks implement this interface (`Linter.messageIdentities`),
  * so a new rule that quotes a coordinate is covered by writing this one method — never by
- * editing the consumer. That inversion is the point; the hard-coded pair of rule ids it
- * replaced could only ever be right for the rules someone had already tripped over.
+ * editing the consumer. That inversion is the point; a hard-coded pair of rule ids could only
+ * ever be right for the rules someone had already tripped over.
  *
  * What must NOT be masked — and the criterion here is NOT "does this number change only
- * when the code changes". That was the original rule, and it was wrong: it kept
- * `oversized-type`'s member count, `string-literal-dup`'s repetition count and
- * `complexity`'s score, and across three consecutive blast-radius verdicts SIX of the six
- * lines those verdicts reported were bumps of exactly those numbers, with the finding
- * standing unchanged on both sides. A quantity that moves with the code is not thereby a
- * finding; the finding APPEARED when the threshold was crossed, which the key already shows
- * on its own.
+ * when the code changes". That rule is wrong: it keeps `oversized-type`'s member count,
+ * `string-literal-dup`'s repetition count and `complexity`'s score, and a blast-radius
+ * verdict then reports bumps of exactly those numbers with the finding standing unchanged
+ * on both sides. A quantity that moves with the code is not thereby a finding; the finding
+ * APPEARED when the threshold was crossed, which the key already shows on its own.
  *
  * Two things must survive the mask instead:
  *
@@ -539,17 +535,18 @@ interface NoAutofix {
  *    Two rules are kept out of the map for this reason. `duplicate-code`: whichever wording a
  *    finding uses, its ONE coordinate is already masked and its partner path is shared by
  *    every clone against the same file, so the statement COUNT is all that is left, and
- *    blanking it merged 57% (anyparse) / 78% (tm) of that rule's findings into shared keys.
+ *    blanking it merges most of that rule's findings into shared keys.
  *    `fragmented-doc-comment`: its message carries no name and no position at all, so the
  *    block tally is not merely the last discriminator, it is the only one. For the rules
- *    that ARE masked the same collapse costs 3 of 355 keys at this gate's own scope, all
+ *    that ARE masked the same collapse costs a handful of keys, all
  *    `extract-repeated-expression` (one expression, two bodies of one file) — see
- *    `LintDiff` for why that number is scope-dependent.
+ *    `LintDiff` for why that count is scope-dependent.
  *
- * The price paid knowingly: the mask has no MAGNITUDE bound, so a type going 52 -> 301
- * members now reports no movement, exactly as 52 -> 53 does. The gate answers "did a finding
- * appear or disappear", not "by how much"; the two REPORTS still carry every number.
- * `MessageMask`'s anchored primitives stay narrow so that only the intended quantity leaves.
+ * The price paid knowingly: the mask has no MAGNITUDE bound, so a type growing by hundreds
+ * of members reports no movement, exactly as one growing by one does. The gate answers "did
+ * a finding appear or disappear", not "by how much"; the two REPORTS still carry every
+ * number. `MessageMask`'s anchored primitives stay narrow so that only the intended quantity
+ * leaves.
  */
 @:nullSafety(Strict)
 interface VolatileMessage {

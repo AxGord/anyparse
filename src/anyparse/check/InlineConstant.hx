@@ -34,23 +34,21 @@ using StringTools;
  * private static final GENDER:Int = PLAYER_MALE_GENDER;   // -> private static inline final
  * ```
  *
- * Measured live with `haxe --interp`: `static inline final B:Int = A;` compiles and folds when `A`
- * is `static inline` (final OR var — both are valid targets), and it does so REGARDLESS of
- * declaration order, so a forward reference is legal and nothing gates on source position. The
- * `inline` on the TARGET is the single load-bearing gate: against a plain non-inline
- * `static final A`, the very same line fails to compile with
- * "Inline variable initialization must be a constant value".
+ * `static inline final B:Int = A;` compiles and folds when `A` is `static inline` (final OR var —
+ * both are valid targets), and it does so REGARDLESS of declaration order, so a forward reference
+ * is legal and nothing gates on source position. The `inline` on the TARGET is the single
+ * load-bearing gate: against a plain non-inline `static final A`, the very same line fails to
+ * compile with "Inline variable initialization must be a constant value".
  *
  * Only a BARE name resolves, against the owning container's DIRECT children.
  * `isInlinableInitializer` owns the proof, documents every gate, and records why a QUALIFIED
- * `Other.A` is deliberately NOT attempted — twice measured at ZERO yield, over a receiver the
- * check cannot even prove to be a TYPE.
+ * `Other.A` is deliberately NOT attempted.
  *
  * The String exclusion applies TRANSITIVELY for free: `inlineConstantLiteralKinds` omits the
- * string kinds, so a reference to a String constant fails `ConstantFieldScan.isScalarLiteral` on the TARGET; no
- * second check is needed. Likewise the reflection-name and macro-consumption gates cover the new
- * candidates unchanged, because `consider` runs both BEFORE testing the initializer — extending
- * only the initializer predicate routes the reference arm through them automatically.
+ * string kinds, so a reference to a String constant fails `ConstantFieldScan.isScalarLiteral` on
+ * the TARGET; no second check is needed. Likewise the reflection-name and macro-consumption gates
+ * cover the new candidates unchanged, because `consider` runs both BEFORE testing the initializer
+ * — extending only the initializer predicate routes the reference arm through them automatically.
  *
  * Constant ARITHMETIC over references (`static inline final C:Int = A * 2;`, which also compiles)
  * is deliberately OUT OF SCOPE — a known conservative miss, deferred rather than half-proven.
@@ -66,86 +64,76 @@ using StringTools;
  * `final`. Behaviour-neutral: a write to a `static inline var` is already a compile error ("This
  * expression cannot be accessed for writing"), so `final` merely makes the existing immutability
  * explicit. `var` -> `final` changes no ABI and no reflection surface (`Reflect.field` /
- * `Type.getClassFields` are identical for inline var vs inline final, verified). String is accepted
- * here (excluded for the add-inline case) for the same reason: no per-use-site codegen change, only
- * the keyword. The reflection-name and `#if`-divergent gates below still apply, except a self-named
- * event constant (`X = 'X'`) does not self-trip the reflection gate (its own value is subtracted
- * from the reflection-key count). This arm's own initializer test (`isConstLiteral`) stays
- * LITERAL-only — it is not extended to references.
+ * `Type.getClassFields` are identical for inline var vs inline final). String is accepted here
+ * (excluded for the add-inline case) for the same reason: no per-use-site codegen change, only
+ * the keyword. The reflection-name and `#if`-divergent gates below still apply, except a
+ * self-named event constant (`X = 'X'`) does not self-trip the reflection gate (its own value is
+ * subtracted from the reflection-key count). This arm's own initializer test (`isConstLiteral`)
+ * stays LITERAL-only — it is not extended to references.
  *
  * ## The type annotation is PRESERVED (not dropped)
  *
  * The fix inserts only `inline`; it does NOT strip the `:Type` annotation. Dropping it is unsound:
  * `static final X:Float = 5` would re-infer as `Int` (the literal's type), silently changing `X`'s
- * type and every use — the classic Float-constant-becomes-Int hazard. Keeping the annotation is
- * also consistent with the project's explicit-type preference. So `static final X:Int = 5` becomes
- * `static inline final X:Int = 5`.
+ * type and every use — the classic Float-constant-becomes-Int hazard. So `static final X:Int = 5`
+ * becomes `static inline final X:Int = 5`.
  *
- * ## Why String is excluded (hxcpp evidence)
+ * ## Why String is excluded (hxcpp)
  *
  * `inlineConstantLiteralKinds` (the grammar's policy seam) lists only `IntLit` / `HexLit` /
- * `FloatLit` / `BoolLit` and OMITS the string kinds. Measured against hxcpp 4.3 codegen: an inlined
- * String re-emits its full literal (`HX_("...")`) at EVERY use site, duplicating the string's bytes
- * once per use across translation units, whereas a non-inline `static final` keeps exactly one
- * shared copy — with no compensating runtime benefit (both are static-backed, allocation-free). A
- * scalar instead constant-folds to a tiny immediate with zero duplication. So String constants stay
+ * `FloatLit` / `BoolLit` and OMITS the string kinds. Under hxcpp an inlined String re-emits its
+ * full literal (`HX_("...")`) at EVERY use site, duplicating the string's bytes once per use
+ * across translation units, whereas a non-inline `static final` keeps exactly one shared copy —
+ * with no compensating runtime benefit (both are static-backed, allocation-free). A scalar instead
+ * constant-folds to a tiny immediate with zero duplication. So String constants stay
  * `static final`; only scalars are inlined.
  *
- * ## Reflection visibility: the name-as-string gate is MANDATORY (hxcpp evidence)
+ * ## Reflection visibility: the name-as-string gate is MANDATORY (hxcpp)
  *
  * Adding `inline` REMOVES the constant's value from run-time reflection — unlike `var` -> `final`,
- * which is reflection-neutral. Measured on hxcpp 4.3.7 (default `-dce std`): a
- * `public static final X = 5` is reflectively readable, `Reflect.field(Cls, "X")` returns `5`;
- * adding `inline` folds the value into every use site and drops the runtime field storage, so
- * `Reflect.field(Cls, "X")` then returns `null` (the NAME may still stub in `Type.getClassFields` /
- * `Reflect.hasField`, but the VALUE is gone). Any `Reflect.field(o, "X")` read therefore silently
- * degrades to `null` after inlining. This is why the name-as-string gate (gate 4) is MANDATORY, not
- * advisory: a constant whose name appears as any string literal in scope — the shape a reflective
- * read takes — is never inlined.
+ * which is reflection-neutral. On hxcpp a `public static final X = 5` is reflectively readable,
+ * `Reflect.field(Cls, "X")` returns `5`; adding `inline` folds the value into every use site and
+ * drops the runtime field storage, so `Reflect.field(Cls, "X")` then returns `null` (the NAME may
+ * still stub in `Type.getClassFields` / `Reflect.hasField`, but the VALUE is gone). Any
+ * `Reflect.field(o, "X")` read therefore silently degrades to `null` after inlining. This is why
+ * the name-as-string gate (gate 4) is MANDATORY, not advisory: a constant whose name appears as
+ * any string literal in scope — the shape a reflective read takes — is never inlined.
  *
  * ## Macro-consumption gate (public arm)
  *
- * A public constant may be consumed by another module's macro. Instead of the old blanket public
- * exclusion, the check skips a PUBLIC constant only when its owning MODULE (class name) is
- * referenced inside macro-context code anywhere in scope. The detector
- * (`collectMacroConsumedModules` / `isMacroContext`) is deliberately cheap and conservative: a file
- * is macro-context when its source imports `haxe.macro`, contains a `#if macro` / `#elseif macro`
- * region, or declares a `macro function`; every capitalised (type-name) identifier token of such a
- * file — code AND trivia, so a name mentioned only inside a `#if macro` block still counts — is
- * collected, and a public constant whose class name is in that set is left alone. Textual by design
- * (it reaches `#if macro` interiors that project as opaque trivia) and conservative (it only ever
- * KEEPS a constant non-inline). A private constant is off every external module surface, so the gate
- * is public-only.
+ * A public constant may be consumed by another module's macro, so the check skips a PUBLIC
+ * constant when its owning MODULE (class name) is referenced inside macro-context code anywhere
+ * in scope. The detector (`collectMacroConsumedModules` / `isMacroContext`) is deliberately cheap
+ * and conservative: a file is macro-context when its source imports `haxe.macro`, contains a
+ * `#if macro` / `#elseif macro` region, or declares a `macro function`; every capitalised
+ * (type-name) identifier token of such a file — code AND trivia, so a name mentioned only inside a
+ * `#if macro` block still counts — is collected, and a public constant whose class name is in
+ * that set is left alone. Textual by design (it reaches `#if macro` interiors that project as
+ * opaque trivia) and conservative (it only ever KEEPS a constant non-inline). A private constant
+ * is off every external module surface, so the gate is public-only.
  *
- * ## Native-interop gate (public arm) — and what it deliberately does NOT cover
+ * ## Native-interop gate (public arm)
  *
- * A type the grammar marks with `nativeInteropDeclMetaName` (Haxe `@:nativeGen`) is emitted as a plain
- * native type SO THAT code outside this compilation holds it — a C# script, a serializer, an editor
- * inspector. That consumer is invisible to every scan here AND to the project's own compiler oracle, so
- * a rewrite it would break fails SILENTLY, which is the one failure direction this rule set refuses.
- * `inline` is exactly such a rewrite. Measured on Haxe 4.3.7 `-cs` over a `@:nativeGen class`:
- * `public static var X:Float = 0.5` and `public static inline final X:Float = 0.5` emit a
- * BYTE-IDENTICAL class — the field and its static initialiser survive verbatim — while the caller's
- * read changes from `Cls.X` to the literal `0.5`. So the foreign side still has a field to write and
- * this side has stopped reading it. A PUBLIC constant of such a type is skipped (gate 8); a private one
- * is on no foreign surface and still inlines, and the `static inline var` -> `static inline final` arm
- * changes no emission at all, only the keyword.
- *
- * The same measurement is why the gate stops there. On the same `@:nativeGen` class,
- * `public var x` -> `public final x` and `public var x` -> `public var x(default, null)` emit
- * byte-identical C# as well — no `readonly`, no property, the same plain public field a Unity Inspector
- * serialises — so `prefer-final-public-field` / `prefer-read-only-field` need no such carve-out and were
- * deliberately left alone. The marker is the ANNOTATION, not a superclass and not a target: a
- * `@:nativeGen` type need not extend anything (Pony declares `@:nativeGen class Tooltip` with no
- * superclass, and `class PercentSize extends MonoBehaviour` with no annotation), and one source tree is
- * compiled for several targets at once, so "is this the cs build" is not a question a check can ask.
+ * A type the grammar marks with `nativeInteropDeclMetaName` (Haxe `@:nativeGen`) is emitted as a
+ * plain native type SO THAT code outside this compilation holds it — a C# script, a serializer, an
+ * editor inspector. That consumer is invisible to every scan here AND to the project's own
+ * compiler oracle, so a rewrite it would break fails SILENTLY, which is the one failure direction
+ * this rule set refuses. `inline` is exactly such a rewrite: on `-cs` the `@:nativeGen` class
+ * emits the field and its static initialiser verbatim either way, while the caller's read changes
+ * from `Cls.X` to the literal — the foreign side still has a field to write and this side has
+ * stopped reading it. A PUBLIC constant of such a type is skipped (gate 8); a private one is on no
+ * foreign surface and still inlines, and the `static inline var` -> `static inline final` arm
+ * changes no emission at all, only the keyword. The marker is the ANNOTATION, not a superclass
+ * and not a target: a `@:nativeGen` type need not extend anything, and one source tree is
+ * compiled for several targets at once, so "is this the cs build" is not a question a check can
+ * ask.
  *
  * ## Soundness gates (must-skip)
  *
- * 1. VISIBILITY. A non-public constant is always a candidate. A PUBLIC constant is a candidate too
- *    (the blanket public exclusion is lifted), additionally gated by the reflection-name gate
- *    (mandatory — see above) and the macro-consumption gate, which together keep an inlined public
- *    field off any external reflection / macro surface.
+ * 1. VISIBILITY. A non-public constant is always a candidate. A PUBLIC constant is a candidate too,
+ *    additionally gated by the reflection-name gate (mandatory — see above) and the
+ *    macro-consumption gate, which together keep an inlined public field off any external
+ *    reflection / macro surface.
  * 2. STATIC final only. `inline` requires a static field; an instance `final` and a `var` are
  *    skipped, as is an already-`inline` field (nothing to do).
  * 3. COMPILE-TIME CONSTANT initializer only — a bare `inlineConstantLiteralKinds` literal,
@@ -163,19 +151,17 @@ using StringTools;
  *    tooling; inlining would erase its reflective value.
  * 6. NO macro-built OWNER. A `@:build` / `@:autoBuild` / `@:genericBuild` type's fields are not the
  *    fields the declaration holds, so neither arm can reason about them:
- *    `TypeTraits.transitivelyCarriesBuildMacro` declines the whole container. Measured on Haxe
- *    4.3.7 — a builder that rewrites the flagged field's initializer makes the added `inline`
- *    "Inline variable initialization must be a constant value", for a `@:build` on the class and
- *    for an `@:autoBuild` reached through `implements` alike, and in the second shape the class
- *    carries no metadata of its own. This rule consulted no build-macro predicate at all until it
- *    was measured, while the four field rules, `member-order` and `prefer-inline` all took one.
+ *    `TypeTraits.transitivelyCarriesBuildMacro` declines the whole container. A builder that
+ *    rewrites the flagged field's initializer makes the added `inline` "Inline variable
+ *    initialization must be a constant value", for a `@:build` on the class and for an
+ *    `@:autoBuild` reached through `implements` alike — and in the second shape the class carries
+ *    no metadata of its own.
  * 7. ENUM ABSTRACT values are structurally excluded — they live under `EnumAbstractDecl`, not a
  *    `visibilityContainerKinds` host, and are handled by `prefer-enum-abstract`. A `#if`-guarded
  *    member IS scanned: the container walk descends into the region branch by branch, so a
  *    guarded `static final` is judged exactly like its plain sibling (adding `inline` to a scalar
  *    constant is behaviour-preserving in whichever build compiles the branch). A member whose
  *    modifier run only SOME builds see — a `static` carried out of a region — is refused instead.
- *
  * 8. NO foreign-facing OWNER for a PUBLIC constant. A `nativeInteropDeclMetaName` type
  *    (Haxe `@:nativeGen`) is held by code outside the compilation, which keeps writing the field
  *    `inline` leaves behind while every read here is baked — see the native-interop gate above.
@@ -225,8 +211,8 @@ final class InlineConstant implements Check {
 			// Core-API bail: both arms of this rule change a field's PROPERTY ACCESS — `static final`
 			// -> `static inline final`, and `static inline var` -> `static inline final` — and a
 			// `@:coreApi` type's fields are pinned to the access of a core type in the compiler's std
-			// path. Measured on Haxe 4.3.7: `static var X` -> `static inline var X` is already
-			// "Field X has different property access than core type".
+			// path: `static var X` -> `static inline var X` is already "Field X has different property
+			// access than core type".
 			if (tree != null && !MemberWriteScan.coreApiPinsMemberShape(entry.source))
 				walk(
 					violations, entry.file, entry.source, tree, seams, reflected, macroConsumed, false, false, proof,
@@ -385,12 +371,12 @@ final class InlineConstant implements Check {
 		macroConsumed: Array<String>, classPinned: Bool, classNative: Bool, proof: InitProof, branch: MemberBranchSeams, index: SymbolIndex
 	): Void {
 		// Build-macro bail. A macro-built type's fields are not the fields the declaration holds, and
-		// BOTH arms of this rule act on the declaration alone: measured on Haxe 4.3.7, a `@:build`
-		// builder that rewrites this field's initializer turns the added `inline` into "Inline
-		// variable initialization must be a constant value". The grant is inherited through
-		// `implements` / `extends` (`@:autoBuild`), where the class carries no metadata of its own,
-		// so the FILE-scoped text scan beside the `@:coreApi` bail above would miss it — the same
-		// per-owner question the four field rules, `member-order` and `prefer-inline` all ask.
+		// BOTH arms of this rule act on the declaration alone: a `@:build` builder that rewrites this
+		// field's initializer turns the added `inline` into "Inline variable initialization must be a
+		// constant value". The grant is inherited through `implements` / `extends` (`@:autoBuild`),
+		// where the class carries no metadata of its own, so the FILE-scoped text scan beside the
+		// `@:coreApi` bail above would miss it — the same per-owner question the sibling field rules
+		// ask.
 		if (ownerIsMacroBuilt(container, file, index)) return;
 		MemberBranchScan.eachMember(branch, container, child -> seams.members.contains(child.kind), (member, run, certain) -> {
 			// A modifier run only SOME builds see cannot answer `static` / `inline`, both of which
@@ -405,10 +391,10 @@ final class InlineConstant implements Check {
 			// Native-interop bail. A type the grammar marks as emitted for FOREIGN consumption
 			// (`nativeInteropDeclMetaName`) exists so that code outside this compilation holds its
 			// members; adding `inline` bakes the value into every read site here while LEAVING the
-			// field the foreign side writes, so that write silently stops being observed. Measured
-			// on Haxe 4.3.7 `-cs`, `@:nativeGen class`: `static var X = 0.5` and
-			// `static inline final X = 0.5` emit a byte-identical class (the field and its static
-			// initialiser survive verbatim), and the caller's read changes from `Cls.X` to `0.5`.
+			// field the foreign side writes, so that write silently stops being observed: on `-cs` a
+			// `@:nativeGen class` emits `static var X = 0.5` and `static inline final X = 0.5` as a
+			// byte-identical class (the field and its static initialiser survive verbatim), while the
+			// caller's read changes from `Cls.X` to `0.5`.
 			// PUBLIC only — a private constant is on no foreign surface, and the `static inline
 			// var` -> `static inline final` arm below changes no emission at all, only the keyword.
 			final pinned: Bool = sawKeep || classPinned || classNative && exported;
@@ -448,62 +434,29 @@ final class InlineConstant implements Check {
 	 * resolves to an already-`static inline` constant whose own initializer is such a literal.
 	 *
 	 * The reference arm exists because Haxe folds one inline constant into another:
-	 * `static inline final B:Int = A;` compiles and folds when `A` is itself `static inline`
-	 * (verified live with `haxe --interp`, in BOTH declaration orders — a forward reference is
-	 * legal, so nothing here gates on source order). The `inline` on the TARGET is the load-bearing
-	 * gate: with a plain non-inline `static final A`, the very same line fails to compile with
-	 * "Inline variable initialization must be a constant value".
+	 * `static inline final B:Int = A;` compiles and folds when `A` is itself `static inline`, in BOTH
+	 * declaration orders — a forward reference is legal, so nothing here gates on source order. The
+	 * `inline` on the TARGET is the load-bearing gate: with a plain non-inline `static final A`, the
+	 * very same line fails to compile with "Inline variable initialization must be a constant value".
 	 *
 	 * ONE shape resolves: a bare `identKind` name, looked up among the OWNING container's direct
 	 * children (`declaresInlineConstant`). Everything else — a qualified `Other.A`, a deeper
 	 * `pkg.Other.A` chain, arithmetic — is refused.
 	 *
-	 * ## Why the QUALIFIED arm stays out — measured twice, not merely unimplemented
-	 *
-	 * A cross-class `Other.A` was implemented against `SymbolIndex.resolveTypeRefsFrom` and withdrawn,
-	 * then re-costed before any second attempt. The premise is real — `static inline final B:Int =
-	 * Other.A;` compiles and folds when the target is itself `static inline` — but the arm has no INPUT.
-	 * Across 2831 real files (TM 798, anyparse 636, Pony 677, OpenFL 720) exactly TEN `static final`
-	 * fields carry a qualified initializer; NINE are already `inline`, and the tenth is
-	 * `SOME_STRING.length`, which `inline` refuses in EVERY configuration ("Inline variable
-	 * initialization must be a constant value", verified live against both an inline and a non-inline
-	 * target). Yield zero, ceiling zero — the idiom is written WITH the keyword
-	 * (`static inline final C:UInt = Colors.MEDIUM_GREY;`).
-	 *
-	 * That is decisive, because the proof is not close to reachable either. Every hole found emitted a
-	 * `--fix` edit that does not compile in some configuration:
-	 *
-	 *  - the receiver need not be a TYPE at all. A static field of the ENCLOSING class spelled like an
-	 *    in-scope type wins in expression position, so `T.A` reads the VALUE's field while the arm proves
-	 *    the type's constant, and the emitted `inline` then fails to compile (verified live; an INHERITED
-	 *    static does not shadow — Haxe does not inherit statics). The single non-inline site in the whole
-	 *    corpus is exactly this shape, so the arm's real input is dominated by the class it cannot see;
-	 *  - an ALIAS import (`import pkg.Other as Alias;`) never enters simple-name scope — the grammar's
-	 *    `ImportAliasDecl` carries only the alias — so a same-simple-named local type is proven in the
-	 *    real target's place. `ModuleScan.aliasTargetsOf` recovers the target by re-reading the
-	 *    import's own source span for the file it is printing: a per-file text scan, not an index
-	 *    capability, so the arm can only REFUSE an alias-bound receiver, never resolve through it;
-	 *  - an import of a type OUTSIDE the resolution scope (a haxelib module, a file the lint scope
-	 *    excludes) is absent from the candidate set, and unanimity across candidates cannot vet a
-	 *    declaration that was never collected. An `import.hx` is the same hole with no per-file evidence
-	 *    at all — anyparse ignores `import.hx` repo-wide;
-	 *  - a type declared twice through `#if` is deduped BY DESIGN — `SymbolIndexBuilder` keeps the first
-	 *    declaration of a name so `declaringFiles` does not report a phantom ambiguity. This one is now
-	 *    cheap to close: the builder's `GuardedNode` already carries a per-decl `guarded` flag (as
-	 *    `ImportInfo` publishes its own), so plumbing it onto `TypeDeclInfo` and refusing a guarded
-	 *    candidate would also cover the `typedef` / `interface` / `enum` half that counting container
-	 *    NODES could not.
-	 *
-	 * The first attempt found its leaks one at a time and patched each with one more exclusion — the shape
-	 * that says a filter is enumerating harm instead of proving benefit; the receiver hole above came
-	 * later still, from re-reading the corpus rather than the model. Re-adding is therefore gated on YIELD
-	 * FIRST — a corpus that actually holds non-inline qualified constants — and only then on the index
-	 * work, which buys nothing until such a corpus exists.
+	 * The QUALIFIED arm stays out because it has no input (the idiom is written WITH the keyword) and
+	 * its proof is not reachable: the receiver need not be a TYPE at all — a static field of the
+	 * ENCLOSING class spelled like an in-scope type wins in expression position, so `T.A` reads the
+	 * VALUE's field while the arm would prove the type's constant; an ALIAS import never enters
+	 * simple-name scope, so a same-simple-named local type would be proven in the real target's
+	 * place; a type outside the resolution scope (or reached through `import.hx`) is absent from the
+	 * candidate set; and a type declared twice through `#if` is deduped BY DESIGN by
+	 * `SymbolIndexBuilder`. Re-adding is gated on YIELD first — a corpus that actually holds
+	 * non-inline qualified constants — and only then on the index work. See `docs/decisions.md`.
 	 *
 	 * The String exclusion applies transitively for free: `inlineConstantLiteralKinds` omits the string
-	 * kinds, so a reference to a String constant fails `ConstantFieldScan.isScalarLiteral` ON THE TARGET. Constant
-	 * ARITHMETIC over references (`A * 2`, which also compiles) is likewise out of scope — a known
-	 * conservative miss, deferred rather than half-proven.
+	 * kinds, so a reference to a String constant fails `ConstantFieldScan.isScalarLiteral` ON THE
+	 * TARGET. Constant ARITHMETIC over references (`A * 2`, which also compiles) is likewise out of
+	 * scope — a known conservative miss, deferred rather than half-proven.
 	 */
 	private static function isInlinableInitializer(container: QueryNode, init: QueryNode, seams: ConstantFieldSeams): Bool {
 		if (ConstantFieldScan.isScalarLiteral(init, seams)) return true;

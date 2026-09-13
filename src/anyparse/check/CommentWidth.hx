@@ -34,11 +34,10 @@ private typedef WideLine = {
  * renders wider than the project's own `wrapping.maxLineLength`. `Severity.Info`; `fix` breaks
  * the line back at spaces into the same block, carrying the prefix that position needs.
  *
- * The one width in this project nothing measured. The writer owns every CODE line's width and
- * re-emits a comment interior BYTE FOR BYTE, so an over-wide comment line leaves `fmt --list`
- * clean and no other rule reads a comment's shape: 468 lines of this tree stood past its
- * configured 140, one of them at 6641 columns, and the only gate any of them had ever met was a
- * human reading a diff.
+ * The one width nothing else measures. The writer owns every CODE line's width and re-emits a
+ * comment interior BYTE FOR BYTE, so an over-wide comment line leaves `fmt --list` clean and no
+ * other rule reads a comment's shape: the only gate such a line ever meets is a human reading a
+ * diff.
  *
  * ## Off by default, and reported at `Info`
  *
@@ -57,9 +56,8 @@ private typedef WideLine = {
  * and the code is read on BOTH SIDES of it (`lineWithoutComment`), because a short banner between a
  * call head and a long argument leaves nothing to its left and everything to its right: the
  * comment could vanish and the line would still be too long, and the code's width is the
- * formatter's concern. That single gate is the whole difference between 470 lines and the 468
- * this rule reports on its own tree — the two it drops are `// noqa` markers riding 160-column
- * string-literal fixtures.
+ * formatter's concern. That single gate is what drops a `// noqa` marker riding an over-wide
+ * string-literal fixture.
  *
  * ## Report-only, and why — the reason travels in the message
  *
@@ -72,8 +70,7 @@ private typedef WideLine = {
  *    a bullet, a numbered item. One predicate shared with the reflow, so the rule can never
  *    decline a line the reflow would have wrapped, or wrap one it declines.
  *  - a FENCED code block. `reflowRefusal` is per-line and cannot see a ``` fence, whose interior
- *    is flush prose to look at and a code sample to a reader. Tracked per unit here — 212 fence
- *    lines stand in 87 files of this tree.
+ *    is flush prose to look at and a code sample to a reader. Tracked per unit here.
  *  - a comment TRAILING after code. Its continuation would be a new own-line comment the writer
  *    then relocates; `wrapCommentBody` refuses the same shape.
  *  - a raw `#if` region (`CondRegionScan.opaqueCondRegions`). Nothing inside one projects, so
@@ -211,8 +208,8 @@ final class CommentWidth implements Check implements DefaultOff implements Volat
 	 * Every over-width comment line of `source`, each carrying the reason it may not be reflowed
 	 * or null. Two comments on ONE physical line yield it once.
 	 *
-	 * Three passes, cheapest first, because 1548 of this tree's 1778 files carry no candidate at
-	 * all: the per-line shape gates need only the lexical scan, the reflow probe runs once per
+	 * Three passes, cheapest first, because most files carry no candidate at all: the per-line
+	 * shape gates need only the lexical scan, the reflow probe runs once per
 	 * unit that still has an open candidate, and the PARSE — which the raw-`#if` question needs —
 	 * is paid only by a file that reached the end with a finding.
 	 */

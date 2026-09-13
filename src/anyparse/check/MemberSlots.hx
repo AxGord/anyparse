@@ -360,7 +360,7 @@ final class MemberSlots {
 	/**
 	 * The end of a member's OWN source, with any trailing trivia the PARSER folded into its node
 	 * span cut back off. Two expression-body shapes carry a span that reaches the NEXT member's
-	 * first token - measured on this grammar, a body that is an `if` or a `for` (`function f():Void
+	 * first token - on this grammar a body that is an `if` or a `for` (`function f():Void
 	 * if (c) g();`), where the optional-tail lookahead scans past the trivia - so the slot swallows
 	 * that member's leading doc comment and the two slots OVERLAP. An overlap is silent and
 	 * catastrophic downstream: `MemberSpacing.hasNonWhitespaceGap` reads the gap through

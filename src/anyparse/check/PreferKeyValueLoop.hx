@@ -12,15 +12,17 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
 
 /**
- * Flags an INDEXED `for` that only wanted the element — `for (i in 0...X.length)` whose body OPENS with `final
- * v = X[i];` — which Haxe's key-value iteration writes directly: `for (i => v in X)`, with that first statement
- * gone. `Severity.Info`, paired with an autofix. DEFAULT OFF (`DefaultOff`): the two spellings are equivalent,
- * so which one a project wants is a style choice — opt in with `"prefer-keyvalue-loop": { "enabled": true }`.
+ * Flags an INDEXED `for` that only wanted the element — `for (i in 0...X.length)` whose body
+ * OPENS with `final v = X[i];` — which Haxe's key-value iteration writes directly:
+ * `for (i => v in X)`, with that first statement gone. `Severity.Info`, paired with an autofix.
+ * DEFAULT OFF (`DefaultOff`): the two spellings are equivalent, so which one a project wants is
+ * a style choice — opt in with `"prefer-keyvalue-loop": { "enabled": true }`.
  *
- * The index stays BOUND, which is what makes the rewrite worth having over `for (v in X)`: an inner `for (j in
- * i + 1...X.length)`, an `i`-keyed lookup elsewhere in the body, a `trace(i)` — all keep working untouched. A
- * body that never reads `i` again is still rewritten to the key-value form (the transform this rule is
- * specified as); collapsing THAT case to `for (v in X)` is a different rewrite and is deliberately out of scope.
+ * The index stays BOUND, which is what makes the rewrite worth having over `for (v in X)`: an
+ * inner `for (j in i + 1...X.length)`, an `i`-keyed lookup elsewhere in the body, a `trace(i)` —
+ * all keep working untouched. A body that never reads `i` again is still rewritten to the
+ * key-value form (the transform this rule is specified as); collapsing THAT case to
+ * `for (v in X)` is a different rewrite and is deliberately out of scope.
  *
  * ## The shape it accepts
  *
@@ -30,27 +32,51 @@ import anyparse.runtime.Span;
  *
  * ## Soundness gates (all required for a flag)
  *
- * - **`X` is a bare identifier.** A path receiver (`this.items`, `a.b`) is skipped: the type resolution behind the rewrite gate reads a BINDING's annotation, and a check's `run` has no `SymbolIndex` to walk a path with. A bare identifier that binds to a FIELD does resolve and IS accepted.
- * - **`X`'s length cannot move.** `0...X.length` evaluates the bound ONCE; `for (i => v in X)` re-asks the iterator every step, so a body that appends to `X` would turn a terminating loop into a runaway one. Every mention of `X` in the body must therefore be a `length` read or an index READ — see `LoopScan.usedOnlyAsStableCollection`, whose doc also states the limit both rules inherit: the scan is BODY-LOCAL, so an alias handed out before the loop (`register(X); for (…) { tick(); }`) or a call that mutates `X` through a field the callee owns is invisible to it. Closing that class needs whole-program alias analysis; this rule is `Info` and opt-in precisely because it stops short of one.
- * - **Exactly one `X[i]`.** Any OTHER `X[i]` in the body would have to become `v`, which is a rename this rule does not attempt — skipped rather than half-rewritten.
- * - **Nothing writes `i` or `v`.** A range binder and a key binder are both read-only in spirit; a write to either means the loop is doing something this rewrite does not model. (`X` itself needs no separate write gate — a write target is not one of the two positions the stable-collection scan admits.)
- * - **No statement-position re-declaration.** No statement after the consumed declaration re-declares `i`, `v` or `X` as a local `var` / `final`. Binders of OTHER kinds — a `catch` variable, a lambda parameter, a case-pattern capture, a nested loop binder — are NOT scanned, and do not need to be: each of them shadows the moved header binding exactly as it shadowed the block-scoped declaration.
- * - **Distinct names.** `i`, `v` and `X` must be three different names (`for (i => i in i)` is not a rewrite, it is a collision).
- * - **No closure gate is needed.** Unlike its sibling `dead-binder-counter-loop`, this rewrite re-scopes nothing: a block-scoped `final v` and a Haxe loop binder are both fresh per iteration, so a capturing lambda observes the same value either way.
+ * - **`X` is a bare identifier.** A path receiver (`this.items`, `a.b`) is skipped: the type
+ *   resolution behind the rewrite gate reads a BINDING's annotation, and a check's `run` has no
+ *   `SymbolIndex` to walk a path with. A bare identifier that binds to a FIELD does resolve and
+ *   IS accepted.
+ * - **`X`'s length cannot move.** `0...X.length` evaluates the bound ONCE; `for (i => v in X)`
+ *   re-asks the iterator every step, so a body that appends to `X` would turn a terminating loop
+ *   into a runaway one. Every mention of `X` in the body must therefore be a `length` read or an
+ *   index READ — see `LoopScan.usedOnlyAsStableCollection`, whose doc also states the limit both
+ *   rules inherit: the scan is BODY-LOCAL, so an alias handed out before the loop
+ *   (`register(X); for (…) { tick(); }`) or a call that mutates `X` through a field the callee
+ *   owns is invisible to it. Closing that class needs whole-program alias analysis; this rule is
+ *   `Info` and opt-in precisely because it stops short of one.
+ * - **Exactly one `X[i]`.** Any OTHER `X[i]` in the body would have to become `v`, which is a
+ *   rename this rule does not attempt — skipped rather than half-rewritten.
+ * - **Nothing writes `i` or `v`.** A range binder and a key binder are both read-only in spirit;
+ *   a write to either means the loop is doing something this rewrite does not model. (`X` itself
+ *   needs no separate write gate — a write target is not one of the two positions the
+ *   stable-collection scan admits.)
+ * - **No statement-position re-declaration.** No statement after the consumed declaration
+ *   re-declares `i`, `v` or `X` as a local `var` / `final`. Binders of OTHER kinds — a `catch`
+ *   variable, a lambda parameter, a case-pattern capture, a nested loop binder — are NOT scanned,
+ *   and do not need to be: each of them shadows the moved header binding exactly as it shadowed
+ *   the block-scoped declaration.
+ * - **Distinct names.** `i`, `v` and `X` must be three different names (`for (i => i in i)` is
+ *   not a rewrite, it is a collision).
+ * - **No closure gate is needed.** Unlike its sibling `dead-binder-counter-loop`, this rewrite
+ *   re-scopes nothing: a block-scoped `final v` and a Haxe loop binder are both fresh per
+ *   iteration, so a capturing lambda observes the same value either way.
  *
  * ## Rewrite gate (report-only when it fails)
  *
- * A container that RESOLVES to something other than `Array` is not reported at all — the message names a form that would
- * not compile for it. An UNRESOLVED `X` (unannotated, a path, a plugin without `TypeInfoProvider`) still reports, and
- * there the FIX additionally needs the element type provable, because it DROPS the declaration and with it any `:Type`
- * annotation: `X`'s binding must be declared `Array<E>` and the annotation — when the declaration carries one — must be
- * exactly `E`. A widening annotation, or a comment anywhere in the replaced region (through the end of the declaration's
- * line, so a trailing comment cannot silently migrate onto the loop header), leaves the finding report-only.
+ * A container that RESOLVES to something other than `Array` is not reported at all — the message
+ * names a form that would not compile for it. An UNRESOLVED `X` (unannotated, a path, a plugin
+ * without `TypeInfoProvider`) still reports, and there the FIX additionally needs the element
+ * type provable, because it DROPS the declaration and with it any `:Type` annotation: `X`'s
+ * binding must be declared `Array<E>` and the annotation — when the declaration carries one —
+ * must be exactly `E`. A widening annotation, or a comment anywhere in the replaced region
+ * (through the end of the declaration's line, so a trailing comment cannot silently migrate onto
+ * the loop header), leaves the finding report-only.
  *
  * ## Grammar-agnostic
  *
- * Driven by `LoopScan.seamsOf` plus `RefShape.intervalKind`; any unset kind makes the check a no-op. The `length` member
- * name is the one language-specific token, spelled as a constant the way the other member-name-matching checks spell theirs.
+ * Driven by `LoopScan.seamsOf` plus `RefShape.intervalKind`; any unset kind makes the check a
+ * no-op. The `length` member name is the one language-specific token, spelled as a constant the
+ * way the other member-name-matching checks spell theirs.
  */
 @:nullSafety(Strict)
 final class PreferKeyValueLoop implements Check implements DefaultOff {

@@ -46,7 +46,7 @@ using StringTools;
  *
  * Under strict null-safety `expr == true` on a `Null<Bool>` is REQUIRED — `if (x)` on a
  * nullable Bool does not compile — so that `== true` is load-bearing, not redundant. And
- * even where it does compile the four rewrites diverge: measured on hxcpp with a `null`
+ * even where it does compile the four rewrites diverge: on hxcpp with a `null`
  * `Null<Bool>`, `x == true` is `false` and `x != true` is `true`, matching `x` / `!x`,
  * while `x == false` is `false` where `!x` is `true` — so the `false`-literal pair would
  * CHANGE the value. Rather than license two of four on a nullable operand, the check

@@ -80,7 +80,7 @@ using StringTools;
  * evaluates it once. That is observable only when a segment is a property whose getter
  * is not idempotent — and such a getter already makes the ORIGINAL loop incoherent, as
  * each lookup then reads a DIFFERENT map from the one whose keys are being iterated
- * (measured: a fresh-map getter turns `for (k in o.p.keys()) o.p.get(k)` into keys from
+ * (a fresh-map getter turns `for (k in o.p.keys()) o.p.get(k)` into keys from
  * map #1 paired with values from maps #2, #3, …). The rewrite makes that loop coherent
  * rather than making correct code wrong, so it is not gated; the shape restriction above
  * already keeps calls and index accesses — which carry side effects of their own — out

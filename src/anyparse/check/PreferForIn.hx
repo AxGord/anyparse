@@ -41,7 +41,7 @@ using StringTools;
  *
  * The binder's own type annotation is DROPPED — `for (x:T in xs)` is not valid Haxe, and the
  * binder's type comes from the iterator either way. The binder may be a `var`: a `for` binder is
- * WRITABLE in Haxe (measured on `--interp`, `-js` and `-cpp`), so a body that reassigns it
+ * WRITABLE in Haxe, so a body that reassigns it
  * converts as safely as one that does not.
  *
  * ## The inlining arm

@@ -97,7 +97,7 @@ final class ListenerSymmetry implements Check {
 	 *
 	 * The framework has no third answer for this shape: `NoAutofix` is class-wide and
 	 * `Violation.declineReason` is for a fix that exists and withheld itself. Until one of the two moves,
-	 * the honest state is an empty `fix` and this paragraph. Backlog T827.
+	 * the honest state is an empty `fix` and this paragraph.
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex

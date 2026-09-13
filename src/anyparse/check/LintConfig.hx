@@ -188,8 +188,8 @@ final class LintConfig {
 	 * `unused-private` reads directly, and the library half, which `LintCommand.resolutionThunk`
 	 * concatenates the same roots into and which is what the index behind `widestScopeIndex` is built from. Leave it out while
 	 * declaring libs and the scope is declared, holds no file of the project, and those proofs quietly
-	 * answer from the report scope again — measured as `CrossScopeSoundnessTest.LIBS_ONLY_REGRESSIONS`, and
-	 * announced by `ConfigDisagreement.warnMissingProjectRoots`.
+	 * answer from the report scope again — pinned by `CrossScopeSoundnessTest.LIBS_ONLY_REGRESSIONS`,
+	 * and announced by `ConfigDisagreement.warnMissingProjectRoots`.
 	 */
 	public function resolutionRoots(): Array<String> {
 		return _resolutionRoots;

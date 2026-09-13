@@ -73,19 +73,19 @@ using StringTools;
  * ## Why the collapse is type-preserving
  *
  * A Haxe block IS an expression whose value is its last expression, so
- * `(v) -> { push(v); }` already has type `(v : Int) -> Int`, not `-> Void` — verified on
- * 4.3.7 for both the `return` and the bare-expression shape, standalone and in a generic
- * argument position (`array.map`). This check therefore carries none of the
- * expected-type machinery `prefer-arrow-callback` needs: THAT rewrite changes a
- * `function` literal's Void-by-default return into an inferred one, while dropping braces
- * around a single statement changes nothing.
+ * `(v) -> { push(v); }` already has type `(v : Int) -> Int`, not `-> Void`, for both the
+ * `return` and the bare-expression shape, standalone and in a generic argument position
+ * (`array.map`). This check therefore carries none of the expected-type machinery
+ * `prefer-arrow-callback` needs: THAT rewrite changes a `function` literal's Void-by-default
+ * return into an inferred one, while dropping braces around a single statement changes
+ * nothing.
  *
  * The SAME argument carries every control-flow kind, because each one is an expression in
  * its own right and the block's value is therefore already that construct's value:
  *
  * - `if` / `if … else` — an if-EXPRESSION. `() -> { if (c) 1 else 2; }` and
- *   `() -> if (c) 1 else 2` both yield `1` for a true `c` (verified on 4.3.7), and an
- *   else-less `if` is `Void`-typed in BOTH forms, so neither gains nor loses a value.
+ *   `() -> if (c) 1 else 2` both yield `1` for a true `c`, and an else-less `if` is
+ *   `Void`-typed in BOTH forms, so neither gains nor loses a value.
  * - `switch` — a switch-EXPRESSION, its value the matched arm's; the block's value was
  *   already that.
  * - `for` / `while` — `Void`-typed loops, so the block was `Void` before and after.
@@ -99,20 +99,19 @@ using StringTools;
  * emitted body, since the gap between the two is the terminator `emittedEnd` strips. Its
  * position relative to that terminator therefore changes: `tokenError(); // handlers` becomes
  * `tokenError() // handlers`. Any OTHER comment anywhere inside the block but outside the copied
- * expression is dropped by the rebuild (the braces, the `return` keyword and the `;` all go away), so the finding is
- * skipped rather than silently losing it — the family's fail-closed comment guard. A
- * comment INSIDE the expression rides along and the site still fires. That holds on the
- * control-flow arm unchanged: a comment trailing the statement is outside the kept span
- * (which `emittedEnd` lands on the last real token) and refuses the site.
+ * expression is dropped by the rebuild (the braces, the `return` keyword and the `;` all go
+ * away), so the finding is skipped rather than silently losing it — the family's fail-closed
+ * comment guard. A comment INSIDE the expression rides along and the site still fires. That
+ * holds on the control-flow arm unchanged: a comment trailing the statement is outside the kept
+ * span (which `emittedEnd` lands on the last real token) and refuses the site.
  *
  * The kept span is additionally passed through `IfExpressionChain.tokenSpan`, the family's
  * shared trivia normaliser, for a grammar whose node spans run PAST their last token. On
  * the Haxe grammar no end `emittedEnd` can return is preceded by trivia — the two it emits
  * are a descendant's tight span end and a node's own span end, and the Haxe parser closes a
- * statement on its last real token — so the call is a measured NO-OP here and no test
- * discriminates it. It is kept as the family's one way of asking that question rather than
- * as a guard this grammar needs; the refusal of a trailing comment is `emittedEnd`'s doing,
- * not its.
+ * statement on its last real token — so the call is a NO-OP here. It is kept as the family's
+ * one way of asking that question rather than as a guard this grammar needs; the refusal of a
+ * trailing comment is `emittedEnd`'s doing, not its.
  *
  * ## The dangling `else`
  *
@@ -126,9 +125,8 @@ using StringTools;
  * ```
  *
  * Haxe allows a `;` before `else`, so the trailing `else h()` re-parents onto the INNER
- * `if (c)` and the outer else-branch stops running (reproduced with `--interp`). The
- * output still PARSES, so the `--fix` re-parse gate waves it through — nothing but a gate
- * here stops it.
+ * `if (c)` and the outer else-branch stops running. The output still PARSES, so the `--fix`
+ * re-parse gate waves it through — nothing but a gate here stops it.
  *
  * Whether an `else` can follow is a property of the lambda's POSITION, so the walk carries
  * one boolean, `shielded`, computed per child on the way down (`childShielded`):
@@ -148,8 +146,8 @@ using StringTools;
  *   `Conditional` / `ConditionalExpr`, so a following sibling proves nothing there: it may
  *   belong to a different branch, and under the defines that select THIS child's branch the
  *   child is the last thing the region emits. Without that arm
- *   `if (x) #if A cb = () -> { if (c) g(); }; #else … #end else h();` collapsed and the
- *   outer `else` re-parented — the identical break, reproduced with `--interp`.
+ *   `if (x) #if A cb = () -> { if (c) g(); }; #else … #end else h();` collapses and the
+ *   outer `else` re-parents — the identical break.
  *
  * A `;` does NOT shield. That is the whole point of the reproduction: the statement in the
  * hazard IS terminated, and the `else` binds through the `;` anyway.
@@ -166,8 +164,7 @@ using StringTools;
  *
  * The scan guards EVERY arm, not only the control-flow one. `() -> { return if (c) g(); }`
  * emits an else-less `if` exactly as `() -> { if (c) g(); }` does, so the value arms carry
- * the identical hazard — it predates the control-flow arm and was simply unanswerable until
- * the position walk existed to ask about it.
+ * the identical hazard.
  *
  * ## Dropping the statement's terminator
  *
@@ -210,9 +207,9 @@ using StringTools;
  * terminator INTO the value, and the emitted text would carry it: `{ @:privateAccess if (c)
  * h(); }` as a block's sole statement projects one `MetaExpr` spanning the `;`, where the
  * same code with a sibling after it projects the `;` under an interior `ExprStmt`. Such a
- * site is refused. This one predates the control-flow arm and is not caught downstream: the
- * emitted `@:privateAccess if (c) h();` is text `haxe` rejects but THIS parser accepts, so
- * the `--fix` re-parse gate is no net for it.
+ * site is refused, and it is not caught downstream: the emitted `@:privateAccess if (c) h();`
+ * is text `haxe` rejects but THIS parser accepts, so the `--fix` re-parse gate is no net for
+ * it.
  *
  * A reification subtree (`RefShape.opaqueKinds`, Haxe's `macro { … }`) is skipped wholesale,
  * matching the sibling rewrite rules: its interior is spliced code a consumer may
@@ -221,62 +218,54 @@ using StringTools;
  * ## The writer-probe precondition
  *
  * Structural collapsibility is not enough. The collapse changes how the ENCLOSING construct
- * wraps, and nothing in the tree says whether the result reads better. Applied to a real
- * 800-file tree, two shapes came out materially WORSE — all layout, none visible to any gate
- * above:
+ * wraps, and nothing in the tree says whether the result reads better. Two shapes come out
+ * materially WORSE on real code — all layout, none visible to any gate above:
  *
  * - ARG-LIST EXPLOSION. The collapsed head line stops fitting, so the writer breaks the
  *   enclosing CALL apart: `Api.login(email, password, cb -> { … }, false);` becomes
  *   `Api.login(` alone on its line with the arguments re-flowed under it. This clause is
- *   load-bearing on real code, not just on its suite witness: an attempt to exempt the
- *   trailing-argument population from this whole probe (on the theory that its canonicality is
- *   structural) re-flowed three sites in the 800-file tree — two `_thumbnailMethod(path, cb ->
- *   …)` calls opened their argument lists and a `getFolderContentAPI().loadContent(…)` split its
- *   method chain as well. The exemption was reverted; a site the layout probe refuses stays
- *   braced, and the add half leaves the trailing slot alone, so the braced form is simply what
- *   both halves agree on there.
- * - MULTI-LINE CONDITION HOISTED INTO THE ARROW HEAD. The collapsed `if`s own condition is
- *   itself wrapped, so that wrap lives inside the lambda head. This one is now the WRITERs
- *   answer rather than this checks: `BodyFit.arrowConstructHeadWidth` moves such a body to
- *   the continuation line instead of gluing it, so the shape no longer occurs and the
- *   collapse of a construct body is a plain de-brace.
+ *   load-bearing on real code, not just on its suite witness: exempting the trailing-argument
+ *   population from the probe (on the theory that its canonicality is structural) opens
+ *   argument lists and splits method chains. A site the layout probe refuses stays braced, and
+ *   the add half leaves the trailing slot alone, so the braced form is simply what both halves
+ *   agree on there.
+ * - MULTI-LINE CONDITION HOISTED INTO THE ARROW HEAD. The collapsed `if`'s own condition is
+ *   itself wrapped, so that wrap lives inside the lambda head. This one is the WRITER's
+ *   answer rather than this check's: `BodyFit.arrowConstructHeadWidth` moves such a body to
+ *   the continuation line instead of gluing it, so the shape does not occur and the collapse
+ *   of a construct body is a plain de-brace.
  *
  * So a site fires only when the collapse leaves the file NO LONGER than it was and changes
  * the head line in exactly one of two ways:
  *
  * 1. it pulls content UP onto the head line (the collapsed head is longer than the original
- *    one) — the value arms payoff, a `return expr;` or a bare expression joining the `->`; or
+ *    one) — the value arms' payoff, a `return expr;` or a bare expression joining the `->`; or
  * 2. the head loses its body brace and NOTHING else (`headOnlyLostItsBrace`) — the
- *    de-brace-in-place shape, which is what the projects brace policy asks for whenever a
+ *    de-brace-in-place shape, which is what the project's brace policy asks for whenever a
  *    body holds a single statement: braces are a function of the statement COUNT, so a
  *    one-statement body carries none and a body that grows past one gets them back.
  *
- * Clause 2 is why this check no longer requires the collapse to SAVE a line. A construct body
+ * Clause 2 is why this check does not require the collapse to SAVE a line. A construct body
  * de-braces line-neutrally by construction — the `{` leaves the head line and the `}` leaves
  * the closing one, and the statements in between do not move — so a strictly-shrink test
- * refused the whole population on a criterion that says nothing about how the result reads.
- * What it must still refuse is a collapse that reflows some OTHER construct, and that is a
- * different measurement: the arg-list explosion also SHORTENS the head, by 46 columns
- * (measured on `testArgListExplosionRefused`: 63 to 17) where losing a brace shortens it by
- * exactly the two characters of ` {`. An exact string identity separates the two with no
- * threshold to calibrate.
- *
- * Measured on the same 800-file tree: 3 sites fired under the strictly-shrink rule and 8
- * under this one, and the 5 added sites are all pure de-braces — `{` off the head, `}` off
- * the closing line, no interior line touched.
+ * would refuse the whole population on a criterion that says nothing about how the result
+ * reads. What it must still refuse is a collapse that reflows some OTHER construct, and that
+ * is a different measurement: the arg-list explosion also SHORTENS the head, by tens of
+ * columns, where losing a brace shortens it by exactly the two characters of ` {`. An exact
+ * string identity separates the two with no threshold to calibrate.
  *
  * The de-brace clause carries a THIRD requirement the head test cannot express:
  * `interiorSurvives`. Removing the braces moves the body from statement position into
  * EXPRESSION position, where this project's config glues an `if`/`else`'s branches to their
  * conditions instead of keeping them on their own lines — so a site could pass "only a brace
- * left the head" while four interior lines silently became two. The interior must now match
+ * left the head" while four interior lines silently became two. The interior must match
  * line for line, modulo the one `;` the emitted body drops.
  *
  * RESIDUAL: the interior test compares TRIMMED lines, so a pure re-indent inside the body is
- * invisible to it — which is intended (the body does shift one level when its braces go). And a body whose block held
- * blank lines around its single statement loses them with the block (measured: 11 lines to
- * 9) — a content change the head test cannot see; the comment guard above covers comments,
- * blank lines are accepted as part of what de-bracing means here.
+ * invisible to it — which is intended (the body does shift one level when its braces go). And
+ * a body whose block held blank lines around its single statement loses them with the block —
+ * a content change the head test cannot see; the comment guard above covers comments, blank
+ * lines are accepted as part of what de-bracing means here.
  *
  * Why the WHOLE FILE rather than a spliced-out statement: the collapse is the only edit, so
  * the file-level line delta IS the enclosing statement's line delta, and the first divergent
@@ -292,14 +281,10 @@ using StringTools;
  *
  * Cost: one extra `writeRoundTrip` per candidate, plus one per source that has any candidate at
  * all — and `collect` is called by `run` AND again by `fix`, with `lint --fix` iterating to a
- * fixpoint, so a `--fix` run pays that bill twice per pass rather than once. Measured on this
- * repo: `src/anyparse/core/CollapsePass.hx` (1358 lines, 6 structural candidates) goes 0.27s ->
- * 1.86s for a report-only run and 5.95s for `--fix` (2 passes); the whole tree under this rule
- * alone (653 files, 15 candidates in 8 files) goes 12.5s -> 28.5s, and under EVERY rule 32.8s ->
- * 34.5s (+5%); a subtree with no candidate at all pays nothing (`src/anyparse/grammar`, 263
- * files, 0.75s either way), because the BEFORE rendering is skipped when the structural walk
- * found none. A writer failure, including the documented `CommentLossException`, folds to null
- * and REFUSES, so a grammar with no writer makes this check inert rather than unguarded.
+ * fixpoint, so a `--fix` run pays that bill twice per pass rather than once. A subtree with no
+ * candidate at all pays nothing, because the BEFORE rendering is skipped when the structural
+ * walk found none. A writer failure, including the documented `CommentLossException`, folds to
+ * null and REFUSES, so a grammar with no writer makes this check inert rather than unguarded.
  *
  * ## Autofix
  *
@@ -557,9 +542,8 @@ final class PreferLambdaExpressionBody implements Check {
 	 *
 	 * The test is an EXACT string identity rather than a width threshold, and that is what
 	 * separates it from the shape it must keep refusing: an arg-list explosion also shortens the
-	 * head, by a lot (measured on the suite's witness: 63 columns to 17, because the enclosing
-	 * call opened), and a threshold would have to guess where "lost a brace" ends and "reflowed
-	 * the enclosing construct" begins.
+	 * head, by a lot (the enclosing call opens), and a threshold would have to guess where "lost
+	 * a brace" ends and "reflowed the enclosing construct" begins.
 	 */
 	private static function headOnlyLostItsBrace(head: String, collapsedHead: String): Bool {
 		return head.length > BODY_BRACE_TAIL.length && head.substr(head.length - BODY_BRACE_TAIL.length) == BODY_BRACE_TAIL
@@ -711,22 +695,21 @@ final class PreferLambdaExpressionBody implements Check {
 	 * Does `stmt` branch INTERNALLY — an `if` with an `else`, or a `switch`?
 	 *
 	 * Such a body keeps its braces UNLESS the lambda is the TRAILING argument of its call
-	 * (`isTrailingCallArg`) — USER decision, 2026-08-09, refined the same day. The braces are
-	 * not noise in the non-trailing slot:
-	 * they delimit a construct that already has more than one arm, and the collapsed shape puts
-	 * that construct own branch keywords into the lambda argument position — measured on a real
-	 * site, `success -> if (success) API.login(…); else LoadView.hideAsyncMask(),`, where a `;`,
-	 * an `else` and the argument comma end up on one line and the reader has to separate the
+	 * (`isTrailingCallArg`) — a USER decision. The braces are not noise in the non-trailing
+	 * slot: they delimit a construct that already has more than one arm, and the collapsed shape
+	 * puts that construct's own branch keywords into the lambda argument position —
+	 * `success -> if (success) API.login(…); else LoadView.hideAsyncMask(),`, where a `;`, an
+	 * `else` and the argument comma end up on one line and the reader has to separate the
 	 * lambda body from the call argument list by eye. In the TRAILING slot nothing follows the
 	 * body but `)`, so that run of punctuation cannot form and the same code reads fine — the
-	 * shape existed hand-written in the target tree (`forEachChild(item -> if (item.folder)
-	 * checkSessions(item); else addNewFile(item))`) before any rule touched it. A body with ONE
+	 * shape exists hand-written (`forEachChild(item -> if (item.folder) checkSessions(item);
+	 * else addNewFile(item))`). A body with ONE
 	 * arm — an else-less `if`, a `for`, a `while`, a `throw` — carries no ambiguity in either
 	 * slot and always collapses.
 	 *
 	 * Anything that is not a trailing invocation argument (an assignment, a `return` value, a
 	 * non-last argument) answers false and keeps the braces: fail-closed, since only the
-	 * trailing slot was measured.
+	 * trailing slot is known to read well.
 	 *
 	 * The `else` test is the child COUNT, the same discriminator
 	 * `IfExpressionChain.isElseLessConditional` uses from the other side, so an `else if` chain
@@ -810,14 +793,14 @@ final class PreferLambdaExpressionBody implements Check {
 	 * The appended text ends with a NEWLINE, and that is load-bearing rather than cosmetic: the
 	 * splice puts the emitted body where the block was, so without it the enclosing construct's
 	 * closing delimiter would follow a `//` comment ON THE SAME LINE and the collapsed source
-	 * would not parse — measured, `renderedLines` returned null and the site was refused with no
+	 * would not parse — `renderedLines` returns null and the site is refused with no
 	 * diagnostic. The writer normalises the break away for a block comment and keeps it for a
 	 * line comment, which is exactly the difference between the two.
 	 *
 	 * Safe for both comment forms, and for a reason the WRITER supplies rather than this check:
 	 * a `//` comment carries a forced break, so the enclosing construct's closing delimiter
-	 * lands on the next line (measured: the collapsed body renders as
-	 * `else tokenError() // handlers` with `)` below it) and cannot be commented out; a block
+	 * lands on the next line (the collapsed body renders as `else tokenError() // handlers`
+	 * with `)` below it) and cannot be commented out; a block
 	 * comment closes itself. The `--fix` re-parse gate is the backstop either way — a swallowed
 	 * delimiter does not parse, so it fails loudly rather than corrupting the file.
 	 *

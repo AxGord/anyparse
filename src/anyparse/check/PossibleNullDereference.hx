@@ -47,10 +47,8 @@ import anyparse.runtime.Span;
  * engine earns. The exception is the map-membership guard `m.exists(k)`, which
  * `NullFlow` already models for the flow check's seed: this check asks it, through
  * `NullFacts.indexPresent`, for the map reads a dominating guard proves present, and
- * skips them. Measured on the Pony fork, that blindness was reporting 15 sites the
- * author had guarded — a fifth of the rule's findings — and it would have reported the
- * whole `exists()`-guarded residue the field-path work is about to make reachable. The
- * guard must match BOTH operands by source text, so `if (m.exists(k)) m[j].f` stays
+ * skips them; without that the rule reports a fifth of its findings on sites the author had
+ * guarded. The guard must match BOTH operands by source text, so `if (m.exists(k)) m[j].f` stays
  * flagged, and every non-`exists` route to presence (a conditional write
  * `if (!m.exists(k)) m[k] = v;`, a key drawn from `m.keys()`) stays flagged too.
  *

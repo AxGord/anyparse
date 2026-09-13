@@ -42,8 +42,8 @@ using StringTools;
  *   split; afterwards it upgrades the never-reassigned binding and leaves the reassigned one
  *   alone -- `final uid:StringBuf = new StringBuf(); var a:Int = 8;`.
  * - `unused-local` reports every binding of a multi-declarator but REFUSES to cut one: its
- *   autofix deletes the whole LINE, which would take the live siblings with it (commit
- *   `3760a8de`). That refusal stops applying once each binding is its own statement.
+ *   autofix deletes the whole LINE, which would take the live siblings with it. That refusal
+ *   stops applying once each binding is its own statement.
  *
  * ## What is flagged
  *
@@ -84,8 +84,8 @@ using StringTools;
  * ```
  *
  * the head slice trims to `var a = 1 // note` and the appended `;` lands INSIDE the comment,
- * leaving the first declaration unterminated. Measured with the veto removed: the writer's
- * comment-loss detector catches it, but the price is `lint --fix` refusing EVERY fix in that
+ * leaving the first declaration unterminated. Without the veto the writer's comment-loss
+ * detector catches it, but the price is `lint --fix` refusing EVERY fix in that
  * file with `this file cannot be rewritten without losing the comment`. That one shape is what
  * the comment veto is load-bearing for; it stays blunt (any overlap) rather than narrowed to the
  * dangling case, because the narrow test is the subtle one and the miss costs only a finding

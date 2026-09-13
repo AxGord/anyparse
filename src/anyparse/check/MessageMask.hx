@@ -22,9 +22,9 @@ using StringTools;
  * ## Why an anchored mask and not a blanket one
  *
  * The blanket answer — mask every digit run in the message — is what `lint-diff` did for
- * two rules, and its cost is measured: it also ate `duplicate-code`'s statement COUNT and
- * any digit in the partner FILENAME, merging 57% (anyparse) and 78% (tm) of that rule's
- * findings into shared keys, where a real substitution is invisible. An anchor is the
+ * two rules, and its cost is real: it also eats `duplicate-code`'s statement COUNT and any
+ * digit in the partner FILENAME, merging most of that rule's findings into shared keys, where
+ * a real substitution is invisible. An anchor is the
  * narrowest thing that still says WHICH number drifts, and the check passes the same
  * constant it built the message from, so the anchor cannot fall out of step with the
  * wording it points at.

@@ -107,11 +107,11 @@ private typedef FlowCtx = {
 	 *
 	 * `RefactorSupport.nestedFunctionKinds(shape)` and nothing else. It must cover EVERY spelling
 	 * of a function value the grammar projects, or the omitted one is analyzed as straight-line
-	 * code belonging to the enclosing function: this list used to be a hand-written constant here,
-	 * and its missing `ThinArrow` — the bare `v -> …`, the commonest lambda in this tree — made
-	 * `dead-store` report a false positive on any local a bare-arrow callback writes, because the
-	 * lambda's own `return` cleared the backward liveness state. Reading the derived authority is
-	 * what keeps a grammar that adds a spelling from re-opening that hole in silence.
+	 * code belonging to the enclosing function: a hand-written list missing `ThinArrow` — the
+	 * bare `v -> …` — makes `dead-store` report a false positive on any local a bare-arrow
+	 * callback writes, because the lambda's own `return` clears the backward liveness state.
+	 * Reading the derived authority is what keeps a grammar that adds a spelling from re-opening
+	 * that hole in silence.
 	 */
 	var nestedFnKinds: Array<String>;
 	var caseBranchKind: Null<String>;
@@ -154,9 +154,9 @@ private typedef FlowCtx = {
  *
  * ## What it proves
  *
- * The lattice is four-valued per name: `NonNull`, `Null`, `MaybeNull` (a value from a nullable source,
- * pending a narrowing — populated only when a consumer supplies the mechanism-A seed), or `Unknown`. A name
- * is `NonNull`-by-flow at a point when it is non-null on **every** path reaching
+ * The lattice is four-valued per name: `NonNull`, `Null`, `MaybeNull` (a value from a nullable
+ * source, pending a narrowing — populated only when a consumer supplies the mechanism-A seed), or
+ * `Unknown`. A name is `NonNull`-by-flow at a point when it is non-null on **every** path reaching
  * it, and `Null`-by-flow when it is null on every such path — each established
  * only by a flow event: a guard narrowing a branch (a `!= null` then-arm / `== null`
  * else-arm proves non-null; the mirror proves null), or an assignment of a
@@ -164,11 +164,12 @@ private typedef FlowCtx = {
  * the `null` literal is null; a `??=` of a non-null value leaves the target
  * non-null whichever side survives, and its right-hand side's effects are
  * joined in as conditional). It seeds **no** facts from declared types —
- * declared-non-null is the point-wise checks' domain
- * (`TypeResolver.isProvablyNonNull`); this engine is strictly the flow-only complement, so a flow consumer never
- * duplicates a point-wise finding. The one exception is the optional `MaybeNull` seed (mechanism A): when a consumer
- * supplies a `seed` predicate, a local assigned a value the predicate accepts (a nullable source) becomes `MaybeNull`
- * until narrowed, backing the flow-sensitive `unguarded-nullable-deref` — inert for every consumer that passes no seed.
+ * declared-non-null is the point-wise checks' domain (`TypeResolver.isProvablyNonNull`); this
+ * engine is strictly the flow-only complement, so a flow consumer never duplicates a point-wise
+ * finding. The one exception is the optional `MaybeNull` seed (mechanism A): when a consumer
+ * supplies a `seed` predicate, a local assigned a value the predicate accepts (a nullable source)
+ * becomes `MaybeNull` until narrowed, backing the flow-sensitive `unguarded-nullable-deref` —
+ * inert for every consumer that passes no seed.
  *
  * ## Soundness invariant
  *
@@ -198,14 +199,19 @@ private typedef FlowCtx = {
  *   body, so a back-edge never carries a stale fact. A short-circuit boolean
  *   (`a && b` / `a || b`) walks its right-hand side as a conditional path — on
  *   a copy narrowed by the left side (`&&` as a then-arm, `||` as an else-arm) —
- *   and intersects the exit back, so a write inside the RHS never leaks a fact onto the skip path; a plain `??` fallback gets the same conditional join. Narrowing from a condition never keeps a fact for a name the condition itself writes — that comparison may predate the write.
+ *   and intersects the exit back, so a write inside the RHS never leaks a fact onto the skip
+ *   path; a plain `??` fallback gets the same conditional join. Narrowing from a condition
+ *   never keeps a fact for a name the condition itself writes — that comparison may predate
+ *   the write.
  * - **Closures.** A name mutated inside any nested function value is excluded
  *   from both polarities for the whole function (a closure call could reassign it).
  *   The value's own body is not skipped, only separated: it is ANALYZED, as a unit
  *   of its own with its own names (`forEachFunctionUnit`), so a fact established
  *   inside a callback is never carried out of it and one established outside is
  *   never carried in.
- * - **Opaque subtrees.** Macro-reification (`RefShape.opaqueKinds`) is not descended into, and metadata annotations (`META_KINDS`) are skipped entirely — their arguments are compile-time data, never runtime code.
+ * - **Opaque subtrees.** Macro-reification (`RefShape.opaqueKinds`) is not descended into, and
+ *   metadata annotations (`META_KINDS`) are skipped entirely — their arguments are compile-time
+ *   data, never runtime code.
  * - **Auxiliary facts (laundered predicates, aliases, exists-guards).** A Bool
  *   local bound EXACTLY to a null-comparison of a plain own-name ident records a
  *   predicate (`ok => u != null`), so branching on it narrows the compared name
@@ -220,7 +226,13 @@ private typedef FlowCtx = {
  *   calls. Every fact dies on ANY write to a name it mentions (including
  *   `??=`, whose target may be reassigned), on capture (never established for a
  *   closure-mutated name), at shadow entry/exit, and at any join where it does
- *   not hold on both arms. A conjunctive Bool RHS (`ok = a != null && …`, with no `||` anywhere) seeds a one-way `compound` predicate per null-comparison conjunct — narrowing only in the then-arm; a Bool-to-Bool copy (`var ok2 = ok`) aliases the two, so a predicate launders transitively through the alias closure; and a `!(…)` guard flips both the comparison polarity and the combine operator (De Morgan), unwinding nested negations. Anything else — a field or call RHS, or any `||` inside an otherwise-conjunctive RHS — establishes nothing (a refusal is only a safe miss).
+ *   not hold on both arms. A conjunctive Bool RHS (`ok = a != null && …`, with no `||`
+ *   anywhere) seeds a one-way `compound` predicate per null-comparison conjunct — narrowing
+ *   only in the then-arm; a Bool-to-Bool copy (`var ok2 = ok`) aliases the two, so a predicate
+ *   launders transitively through the alias closure; and a `!(…)` guard flips both the
+ *   comparison polarity and the combine operator (De Morgan), unwinding nested negations.
+ *   Anything else — a field or call RHS, or any `||` inside an otherwise-conjunctive RHS —
+ *   establishes nothing (a refusal is only a safe miss).
  *
  * Pure, stateless class (mirrors `TypeResolver`).
  */
@@ -314,9 +326,8 @@ final class NullFlow {
 	 * `nullableFlowExcludedCalls` exists: a parameter's nullability is a contract with CALLERS, and
 	 * this walk is caller-blind, so the dominant idiom — a `Null<T>` argument valid under a mode a
 	 * companion argument establishes (`f(subdivide: Bool, info: Null<Info>)`) — is safe by a
-	 * relational invariant no name-keyed flow can model. Measured over two trees: seeding parameters
-	 * added 10 findings, 9 of them that one shape in a single file and the tenth already carrying the
-	 * author's own `@:nullSafety(Off)`.
+	 * relational invariant no name-keyed flow can model; seeding parameters adds almost nothing but
+	 * that shape.
 	 */
 	public static function analyze(
 		root: QueryNode, shape: RefShape, source: String, visit: (QueryNode, NullFacts) -> Void, ?seed: (QueryNode) -> Bool,
@@ -388,11 +399,10 @@ final class NullFlow {
 	 * (`RefactorSupport.nestedFunctionKinds` — every lambda spelling, the named literal, the local
 	 * `inline function`). Both halves are needed and neither is optional: the engines already REFUSE
 	 * to walk a function value with the enclosing unit's state (it may run at any later time), so a
-	 * spelling that is in neither set is analyzed by NOBODY. That was the state until this walk read
-	 * the value kinds: `dead-store` reported the dead initializer in `function nm(v) { var z = …;
-	 * z = …; }` and at top level, and was silent on the identical body written `v -> { … }` or
-	 * `function(v) { … }` — 2 of 4, measured. The same silence covered all seven flow checks, whose
-	 * consumers never fired inside any lambda at all.
+	 * spelling that is in neither set is analyzed by NOBODY: without the value kinds `dead-store`
+	 * reports the dead initializer in `function nm(v) { var z = …; z = …; }` and at top level, and
+	 * is silent on the identical body written `v -> { … }` or `function(v) { … }`, and the same
+	 * silence covers every flow check, whose consumers then never fire inside any lambda at all.
 	 *
 	 * Finding the BODY takes two rules because a lambda need not carry a body MARKER. `function(v)`
 	 * projects one (`BlockBody` / `ExprBody`, both in `RefShape.functionBodyKinds`) and is found by

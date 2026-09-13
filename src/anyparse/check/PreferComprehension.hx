@@ -95,8 +95,7 @@ using StringTools;
  *
  * A comment sitting in a GAP of the dissolved body's statement list — before the
  * first statement, between two of them, or after the last — is lifted ABOVE the
- * resulting declaration at its indent, rather than dropped (which is what the merge
- * did before, silently, even for a single-statement body). So is one sitting inside
+ * resulting declaration at its indent, rather than dropped. So is one sitting inside
  * the terminal push STATEMENT but outside its ARGUMENT, since the element text is
  * sliced from the argument span alone. Three refusals come with it: a comment
  * INTERSECTING a chain link's declaration (dissolving the statement would strand the
@@ -151,9 +150,9 @@ using StringTools;
  *
  * ## The gap
  *
- * The loop need not be the declaration's immediate sibling. Demanding that it was found
- * ZERO sites in a 809-file application tree, and the shape it was missing is the ordinary
- * one — the intervening statement DECLARES the loop's subject:
+ * The loop need not be the declaration's immediate sibling: demanding that finds nothing on
+ * real code, and the shape it misses is the ordinary one — the intervening statement DECLARES
+ * the loop's subject:
  *
  * ```
  * final substrArr:Array<CodePoint> = [];

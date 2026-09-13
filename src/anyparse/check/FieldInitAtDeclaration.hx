@@ -87,14 +87,10 @@ using Lambda;
  * reintroduces exactly this regression, which still type-checks, still parses, and which
  * nothing downstream catches. What the finer rule would buy is a subclass constructor
  * assigning a CONTEXT-FREE constant to a field BEFORE calling up, and that shape is
- * vanishingly rare. Measured: of the 15 sites the gate removes from the 676-file `pony`
- * tree (34 -> 19), FOURTEEN put the init after the `super(…)` — real hazards, correctly
- * refused — and ONE (`pony/net/cs/SocketClient`, whose `super(host, port, …)` is the
- * constructor's LAST statement) is an over-refusal the finer rule would have kept. On the
- * other two measured trees there is nothing to weigh either way: `TM-Haxe4/src` (798
- * files) and this repo (1254 files) report the rule dormant BEFORE and AFTER, so they
- * neither confirm the figure above nor add to it. At `Severity.Info` — a cosmetic
- * move — one lost cleanup per 676 files does not buy the branch analysis.
+ * vanishingly rare: nearly every site the gate removes on real code puts the init after the
+ * `super(…)` — a real hazard, correctly refused — and the odd over-refusal is a constructor
+ * whose `super(…)` is its LAST statement. At `Severity.Info` — a cosmetic move — that lost
+ * cleanup does not buy the branch analysis.
  *
  * A field whose cross-file write count DIFFERS FROM ONE (a `dispose()` null-out, say)
  * can still move, on the ACCEPTED-CANDIDATE CHAIN: every top-level constructor
@@ -167,12 +163,12 @@ using Lambda;
  * statement before the constructor filled it. Only an `inline` static (a compile-time
  * constant by construction), or a `final` one whose initializer is a scalar literal, could
  * be exempted; a relaxation keyed on the `final` keyword would reopen the regression.
- * Measured cost of the coarse form over openfl (94 findings), lime (21) and heaps (57) is
- * TWO sites, and both are correct refusals — `__contextID = __lastContextID++` and
- * `useWorker = ENABLE` on a `public static var` — so the distinction stays unmade.
+ * The coarse form costs real trees only a couple of sites, and both are correct refusals —
+ * `__contextID = __lastContextID++` and `useWorker = ENABLE` on a `public static var` — so
+ * the distinction stays unmade.
  *
- * Emission order is an OBSERVATION, not a contract: field initializers ran in reverse
- * declaration order on `--interp` and `js`; hxcpp was not measured. Nothing above
+ * Emission order is an OBSERVATION, not a contract: field initializers
+ * run in reverse declaration order on `--interp` and `js`. Nothing above
  * depends on the direction — the gate holds under any permutation — so a target that
  * emits forward changes none of these statements.
  *

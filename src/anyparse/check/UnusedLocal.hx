@@ -72,9 +72,7 @@ private typedef ScanCtx = {
  * rescanned, escape-spelled `${ … }` hole (which carries no parsed
  * expression at all), a cross-file or implicit-`this` reference, an
  * identifier the grammar surfaces under a ctor the walker does not match.
- * (The braceless simple-interpolation read
- * `'$name'` IS indexed as a read — that one is no longer a
- * reason to prefer the scan.) A textual scan catches every reference the
+ * A textual scan catches every reference the
  * compiler can see, at the cost of also counting the name inside comments /
  * strings / a sibling nested scope that re-declares it — which only ever
  * yields a missed finding (a kept binding), never a wrong deletion. Bounding
@@ -90,8 +88,8 @@ private typedef ScanCtx = {
  * - an inner construct re-binds the name over its own region — the AS3-heritage `var item;
  *   for (item in xs) use(item);`, where the `for` iterator is a fresh binding scoped to the loop
  *   and the outer declaration is dead in every compile;
- * - the SAME statement list declares the name again. That is legal, and since `6c1dc26b` the
- *   resolver reads it the way the compiler does: the second declaration is a second BINDING, in
+ * - the SAME statement list declares the name again. That is legal, and the resolver
+ *   reads it the way the compiler does: the second declaration is a second BINDING, in
  *   effect from its own position on, so `var a = 1; var a = 2; return a;` leaves the first dead
  *   while the name still appears below. Only the re-declaration's BINDER TOKEN and everything
  *   past its end are excluded, never its initializer — `var a = a + 1` reads the FIRST binding in
@@ -126,8 +124,7 @@ private typedef ScanCtx = {
  * guarded by `#if` is dead in the configuration that has it and absent in the rest — dead either
  * way. That is the same reasoning `RefactorSupport.exclusiveBranchRedeclaration` records for the
  * mirror shape ("a sibling declaration AFTER the region is safe: it is in effect in every
- * configuration from its own position on"). Verified by building the `--fix` output of a
- * guarded declaration under both configurations. The reverse — a re-declaration ON an arm — is
+ * configuration from its own position on"). The reverse — a re-declaration ON an arm — is
  * refused, by the direct-child rule rather than by this gate.
  *
  * ## Reification is opaque
@@ -291,9 +288,7 @@ final class UnusedLocal implements Check implements VolatileMessage {
 	 * xs) use(item);` belongs to the loop, and every read past the second
 	 * `var a` belongs to the second binding. The two feed ONE exclusion set, and
 	 * the second scan is the same predicate over it, so the refinement can only
-	 * turn a silence into a finding, never a finding into a silence — measured over Pony (867 files),
-	 * anyparse `src test` (1471), the Haxe std (2625) and ~/dev/haxelib (16 744): 21 findings added
-	 * in total, none removed anywhere.
+	 * turn a silence into a finding, never a finding into a silence.
 	 *
 	 * A re-declaration also puts its own position in the message. The name IS
 	 * visible below the finding there, so a bare "unused local" reads as wrong.
@@ -370,8 +365,8 @@ final class UnusedLocal implements Check implements VolatileMessage {
 	 * the declaration at `declSpan` — the first later DIRECT child of `scope` that declares the same
 	 * name — or null when there is none.
 	 *
-	 * Declaring a name twice in one statement list is legal, and since `6c1dc26b` the resolver reads
-	 * it the way the compiler does: the second declaration is a SECOND BINDING, in effect from its
+	 * Declaring a name twice in one statement list is legal, and the resolver reads it the way the
+	 * compiler does: the second declaration is a SECOND BINDING, in effect from its
 	 * own position on, so every read past it belongs to it and the first can be dead while the name
 	 * still appears below. That is invisible to a scan that counts the NAME, which is why
 	 * `var a = 1; var a = 2; return a;` reported nothing.

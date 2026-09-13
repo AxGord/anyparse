@@ -15,19 +15,15 @@ using Lambda;
  * ## The hole it closes
  *
  * A SAFE check's fix is applied unverified. `Cli.reconcileSafePass` — the green-then-red
- * rollback — opens with `if (pre == null || oracleHxml == null) return {reverted: false}`, so it
- * exists ONLY for a run that both configures `apqlint.json` `compilerOracle` and measured the
- * tree green before the writes. Measured on the T445 fixture with S54's closure guard removed,
- * one deleting `dead-store` fix run three ways: `--no-oracle` wrote the corrupting edit, a
- * config with no `compilerOracle` wrote it, and only the oracle arm reverted. Two of the three
- * arms are the project's own documented edit loop and every project that never configured a
- * compiler.
+ * rollback — exists ONLY for a run that both configures `apqlint.json` `compilerOracle` and
+ * measured the tree green before the writes; `--no-oracle` and a config with no
+ * `compilerOracle` — the project's own documented edit loop, and every project that never
+ * configured a compiler — write a corrupting edit unreverted.
  *
  * ## What the compiler actually refuses
  *
- * The rule this guard mirrors was MEASURED on Haxe 4.3.7, not assumed, and the first thing the
- * measurement did was refute the obvious model. A write inside a closure is NOT excluded from
- * definite assignment:
+ * The rule this guard mirrors is the compiler's own (Haxe 4.3.7), and it refutes the obvious
+ * model: a write inside a closure is NOT excluded from definite assignment.
  *
  *   var found; map(t, run -> { found = true; return run; }); return found;      // COMPILES
  *   var found; map(t, run -> { if (c) found = true; return run; }); return found;  // ERROR
@@ -40,7 +36,7 @@ using Lambda;
  *
  * So the compiler walks a lambda body as ordinary code at its position, and the construct that
  * withholds an assignment is the `if` — not the closure. A guard built on the closure asymmetry
- * refuses correct fixes: measured, it declined a real `dead-code` edit whose output compiles.
+ * refuses correct fixes whose output compiles.
  *
  * ## What it answers
  *
@@ -61,19 +57,18 @@ using Lambda;
  * already reads that way is not the fix's doing.
  *
  * Grammar-agnostic: every kind vocabulary comes from `RefShape` and `NullFlow`'s construct sets,
- * and the nested-function set from `RefactorSupport.nestedFunctionKinds`, which S56 made the one
- * authority. A grammar declaring none of them makes the guard inert.
+ * and the nested-function set from `RefactorSupport.nestedFunctionKinds`, the one authority. A
+ * grammar declaring none of them makes the guard inert.
  *
  * ## What it does NOT reach, by construction
  *
  *  - **The memo form.** An edit that deletes a write to a local whose declaration DOES carry an
- *    initializer leaves a tree that typechecks, emits identical bytes and trips no rule — T94's
- *    shape, where `lint --fix` deleted both writes to two closure-captured memo locals and left
- *    them `final = null`. The only observable was wall clock, which is why that defect ran two
- *    weeks. Definite assignment holds there, so this guard is silent BY DESIGN.
+ *    initializer leaves a tree that typechecks, emits identical bytes and trips no rule (two
+ *    closure-captured memo locals left `final = null`, observable only as wall clock). Definite
+ *    assignment holds there, so this guard is silent BY DESIGN.
  *  - **Everything the compiler refuses that this walk reads optimistically.** The loop row above
- *    is the measured example: `while (c) { x = 1; break; }` is an error and this guard is quiet.
- *    Pinned as a deliberate miss rather than left to be discovered.
+ *    is the example: `while (c) { x = 1; break; }` is an error and this guard is quiet. Pinned as
+ *    a deliberate miss rather than left to be discovered.
  *  - **A break two checks make BETWEEN them.** The guard is asked per CHECK, so an edit set that
  *    is sound alone and unsound beside another check's is not seen. `BodySlotGuard` answers the
  *    same way for the same reason; there `RefactorSupport.canonicalize` is the whole-file
@@ -89,11 +84,8 @@ final class DefiniteAssignmentGuard {
 	 *
 	 * Two parses: the SOURCE one is the caller's own, served from the run-scoped
 	 * `CachingGrammarPlugin` cache, and the RESULT one is the real cost. There is no pre-filter in
-	 * front of it, and that is a measured decision rather than an oversight — a version that walked
-	 * the source tree first and returned early when no edit reached a declaration or a write was
-	 * byte-identical in outcome and NOT faster: anyparse `src` + `test` 115.0 s with it against
-	 * 114.1 s without, Pony 869 files 30.0 s either way, both inside the 0.4 s spread of the
-	 * identical binary. The walk it saved cost about what the parse it skipped did.
+	 * front of it by decision, not oversight: a walk of the source tree that returns early when no
+	 * edit reaches a declaration or a write costs about what the parse it skips does.
 	 *
 	 * Unparseable input on either side answers null: the caller's own parse is about to report it in
 	 * its own words.
@@ -176,8 +168,8 @@ final class DefiniteAssignmentGuard {
 	 * finding.
 	 *
 	 * Nested function values are walked THROUGH, not skipped, for the reason the whole analysis
-	 * turns on: measured on Haxe 4.3.7, the compiler treats a lambda body as ordinary code at its
-	 * position, so a local declared there is in the same name space as far as this walk is concerned.
+	 * turns on: the compiler treats a lambda body as ordinary code at its position, so a local
+	 * declared there is in the same name space as far as this walk is concerned.
 	 */
 	private static function collectDeclared(node: QueryNode, vocab: Vocabulary, out: Array<String>): Void {
 		if (vocab.metaKinds.contains(node.kind)) return;
@@ -192,7 +184,7 @@ final class DefiniteAssignmentGuard {
 	 * scope that is not in it is a finding.
 	 *
 	 * ONE construct is analysed rather than walked — the `if`, because it is the only one whose
-	 * omission would make the whole guard vacuous (the T445 shape is a write under an unguarded
+	 * omission would make the whole guard vacuous (the motivating shape is a write under an unguarded
 	 * `if`). Its arms are walked in copies and only what BOTH assign is merged back; an arm that
 	 * exits contributes no path, so its sibling's writes carry. Every other construct — loops,
 	 * switches, `try`, ternaries, short-circuits — is walked as a plain sequence, which is the
@@ -218,10 +210,10 @@ final class DefiniteAssignmentGuard {
 			return;
 		}
 		if (name != null && (node.kind == vocab.identKind || node.kind == vocab.interpIdentKind)) {
-			// Only a read OUTSIDE every nested function value is an ERROR for the compiler.
-			// Measured on Haxe 4.3.7: the same guarded-write shape read from INSIDE the closure
-			// is `Warning: (WVarInit) Local variable found might be used before being
-			// initialized` and compiles, so refusing it would decline a fix the oracle arm keeps.
+			// Only a read OUTSIDE every nested function value is an ERROR for the compiler: the
+			// same guarded-write shape read from INSIDE the closure is `Warning: (WVarInit) Local
+			// variable found might be used before being initialized` and compiles, so refusing it
+			// would decline a fix the oracle arm keeps.
 			if (!nested && ctx.inScope.contains(name) && ctx.candidates.contains(name) && !assigned.contains(name))
 				report(ctx, name, node.span);
 			return;
@@ -306,10 +298,8 @@ final class DefiniteAssignmentGuard {
 	 * (`Local variable a used without being initialized`). This asks for any child that is neither a
 	 * type child nor a continuation, and takes the SPAN as the proof that it is real source.
 	 *
-	 * Measured, not assumed: swapping this for `declInit` leaves every other fixture in
-	 * `DefiniteAssignmentGuardTest` green — the annotated form `var c: Bool;` the two were once
-	 * believed to disagree on is answered identically by both — and flips exactly the
-	 * multi-declarator one.
+	 * The annotated form `var c: Bool;` is answered identically by both; the multi-declarator one
+	 * is the only shape that separates them.
 	 */
 	private static function hasInitializer(node: QueryNode, vocab: Vocabulary): Bool {
 		return node.children.exists(

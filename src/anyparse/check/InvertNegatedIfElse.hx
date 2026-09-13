@@ -145,11 +145,11 @@ final class InvertNegatedIfElse implements Check {
 	 * The swap is an exact complement of the negation only while `!c` and `c` are complementary,
 	 * which the built-in `!` guarantees and an overloaded one does not: an abstract may declare
 	 * both `@:op(!A)` and a `to Bool` coercion that disagree, and then `if (!f) A else B` and
-	 * `if (f) B else A` run different branches (measured on Haxe 4.3.7 / `--interp` with a
-	 * `@:op(!A)` returning the value rather than its complement — `!f` true AND `if (f)` taken).
+	 * `if (f) B else A` run different branches (a `@:op(!A)` returning the value rather than its
+	 * complement makes `!f` true AND `if (f)` taken).
 	 *
-	 * Nothing in the tested trees declares one, so the gate costs a map lookup and stops there:
-	 * `declared` is false and no operand type is ever resolved.
+	 * A tree declaring no such operator pays a map lookup and nothing more: `declared` is false
+	 * and no operand type is ever resolved.
 	 */
 	private static function builtinNot(not: QueryNode, file: String, root: QueryNode, source: String, seams: Seams): Bool {
 		final selection: Null<OperatorSelection> = seams.selection;

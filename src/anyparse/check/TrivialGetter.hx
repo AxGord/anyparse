@@ -56,10 +56,16 @@ using Lambda;
  *    accessor or a plain stored slot is skipped — only the standard `get_` / `set_` resolve.
  * 2. Neither accessor is `dynamic` (re-bindable at runtime — real behaviour).
  * 3. The backing field is private and declared in the SAME class, or is the property itself (the
- *    SELF-BACKED spelling below). Interfaces (no accessor bodies) are skipped wholesale:
- * every class body — plain / `final` / `abstract class` (`CheckScan.isClassBodyKind`) — is inspected.
+ *    SELF-BACKED spelling below). Interfaces (no accessor bodies) are skipped wholesale: every
+ *    class body — plain / `final` / `abstract class` (`CheckScan.isClassBodyKind`) — is inspected.
  * 4. No (transitive) subtype overrides the property accessor or redeclares it
- *    (`SubtypeGraph.subtypeOverridesProperty`) AND no subtype references the private backing field directly (`SubtypeGraph.subtypeReferencesField`) — the collapse deletes the field, and a subclass reading it (private members are subclass-visible) would break; both queries run over report + resolution scope. A subclass merely extending the class without touching the property no longer blocks; an override is attributed to the type declaring the member it overrides, so only an unattributable one keeps an unresolvable subtype hierarchy blocked conservatively.
+ *    (`SubtypeGraph.subtypeOverridesProperty`) AND no subtype references the private backing field
+ *    directly (`SubtypeGraph.subtypeReferencesField`) — the collapse deletes the field, and a
+ *    subclass reading it (private members are subclass-visible) would break; both queries run over
+ *    report + resolution scope. A subclass merely extending the class without touching the
+ *    property does not block; an override is attributed to the type declaring the member it
+ *    overrides, so only an unattributable one keeps an unresolvable subtype hierarchy blocked
+ *    conservatively.
  * 5. When the class `implements` anything and the property is PUBLIC, an implemented interface
  *    may declare it and so require a physical accessor; a COLLAPSING shape is skipped unless every
  *    implemented interface is resolvable in the index and provably lacks it
@@ -67,11 +73,10 @@ using Lambda;
  *    never applies to it.
  * 6. The owner type is not MACRO-BUILT (`TypeTraits.transitivelyCarriesBuildMacro`). This rule
  *    DELETES the getter and the backing field, and a member a `@:build` / `@:autoBuild` /
- *    `@:genericBuild` builder generates around them is in no text this scan reads — measured on
- *    Haxe 4.3.7, a builder adding `function readBacking() return _active` compiles before the
- *    collapse and is `Unknown identifier : _active` after it. Asked per OWNER, not per file: the
- *    `@:autoBuild` grant arrives through `implements` and the class then carries no metadata of
- *    its own. The rule consulted no build-macro predicate at all until it was measured.
+ *    `@:genericBuild` builder generates around them is in no text this scan reads — a builder
+ *    adding `function readBacking() return _active` compiles before the collapse and is
+ *    `Unknown identifier : _active` after it. Asked per OWNER, not per file: the `@:autoBuild`
+ *    grant arrives through `implements` and the class then carries no metadata of its own.
  *
  * ## The `(default, set)` shape-A write decision (three-way)
  *
@@ -139,13 +144,13 @@ using Lambda;
  *
  * Gates: the subtype side is the shared `subtypeOverridesProperty`; `subtypeReferencesField` is
  * exempt (nothing is deleted, so no subtype reference is stranded) and there is no cross-file
- * slice for the same reason. The supertype side is new — an `override` accessor refuses, because
- * a self-backed property can legally sit over a supertype's plain `get_x` and deleting the
- * override would re-point every call on that implementation. One shared gate is over-strict here
- * rather than wrong: `collapseConfinedToBranch` refuses a GUARDED self-backed property whose name
- * appears outside its `#if` region, a rule that exists because the bridged collapse RENAMES the
- * field into the property's name. The self-backed collapse renames nothing, so the refusal costs
- * only a missed finding on a shape neither corpus contains.
+ * slice for the same reason. The supertype side is its own — an `override` accessor refuses,
+ * because a self-backed property can legally sit over a supertype's plain `get_x` and deleting
+ * the override would re-point every call on that implementation. One shared gate is over-strict
+ * here rather than wrong: `collapseConfinedToBranch` refuses a GUARDED self-backed property whose
+ * name appears outside its `#if` region, a rule that exists because the bridged collapse RENAMES
+ * the field into the property's name. The self-backed collapse renames nothing, so the refusal
+ * costs only a missed finding on a shape neither corpus contains.
  *
  * NOTE the interaction with `hxq encapsulate-field`, which emits exactly the self-backed
  * both-trivial shape (`@:isVar var x(get, set)` plus a forwarding pair) as a SEAM for logic the
@@ -210,9 +215,8 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			// Core-API bail: every collapse this rule makes rewrites the property's accessor pair,
 			// and a `@:coreApi` type's members are pinned to the access of a core type in the
-			// compiler's std path — measured, `(get, null)` -> `(default, null)` on
-			// `sys.ssl.Certificate.commonName` is "Field commonName has different property access
-			// than core type".
+			// compiler's std path: `(get, null)` -> `(default, null)` on `sys.ssl.Certificate.commonName`
+			// is "Field commonName has different property access than core type".
 			if (tree == null || MemberWriteScan.coreApiPinsMemberShape(entry.source)) continue;
 			final maxBypass: Int = LintConfig.resolveWith(_resolveConfig, entry.file)
 				.intOption('trivial-getter', 'maxBypassWrites') ?? DEFAULT_MAX_BYPASS_WRITES;
@@ -222,8 +226,8 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			final branch: MemberBranchSeams = MemberBranchScan.seamsOf(shape, entry.source, plugin.lexicalRegions.bind(entry.source));
 			for (cls in CheckScan.classBodies(tree)) {
 				// Build-macro bail. This rule DELETES the getter and the backing field, so a member a
-				// builder generates around them loses its referent: measured on Haxe 4.3.7, a `@:build`
-				// macro adding `function readBacking() return _active` compiles before the collapse and
+				// builder generates around them loses its referent: a `@:build` macro adding
+				// `function readBacking() return _active` compiles before the collapse and
 				// is `Unknown identifier : _active` after it. The grant is inherited through
 				// `implements` / `extends` (`@:autoBuild`), where the class carries no metadata of its
 				// own, which is why the per-owner index question and not the file-scoped text scan
@@ -404,8 +408,8 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	/**
 	 * Whether either accessor carries `override`, which refuses the self-backed collapse. A
 	 * self-backed property can legally sit over an INHERITED accessor method (a supertype
-	 * declaring a plain `get_x` the subclass's `@:isVar var x(get, ...)` then overrides —
-	 * measured to compile), and deleting the override would silently re-point every call on
+	 * declaring a plain `get_x` the subclass's `@:isVar var x(get, ...)` then overrides, which
+	 * compiles), and deleting the override would silently re-point every call on
 	 * the supertype's own implementation. The bridged arm reaches the same shapes through
 	 * `subtypeOverridesProperty` in the other direction; this is its supertype-side twin.
 	 */

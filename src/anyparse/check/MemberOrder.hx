@@ -631,9 +631,8 @@ final class MemberOrder implements Check implements ConfigAware {
 	 * lives that nothing else covers: an `@:meta` run written on the line(s) BEFORE a member-level
 	 * `#if`. `MemberSlots.collectInto` reads such a run into the modifier flags it then RESETS across
 	 * the guard, and `absorbLeadDoc` absorbs comments only, so the annotation belongs to no slot and
-	 * `buildConditionalRegion` drops it outright, silently - measured as two `@SuppressWarnings` lines
-	 * deleted from Pony's `tools/src/module/Module.hx` and one from `src/pony/ui/xml/HeapsXmlUi.hx`,
-	 * both still parsing, both still green. Refusing degrades the container to the spacing-only
+	 * `buildConditionalRegion` drops it outright, silently - a deleted `@SuppressWarnings` line
+	 * still parses and still builds green. Refusing degrades the container to the spacing-only
 	 * fallback instead. Note the first gate is SHARED with `computePlan`, at a different granularity -
 	 * tightening it for a block-local reason also widens this container-wide bail.
 	 */
@@ -1111,7 +1110,7 @@ final class MemberOrder implements Check implements ConfigAware {
 	 * and dispatches on metadata, so the annotated members are exactly the ones whose order it can turn
 	 * into generated output - Pony's `DeclaratorBuilder` turns `@:arg` fields into constructor
 	 * PARAMETERS in that order, so swapping two of them rewrites the signature for every caller with no
-	 * local error (measured on `DTimer` / `Timeline` / `ParseBoy`: the callers fail, four files away).
+	 * local error (the callers fail, files away).
 	 * Which tag matters is unknowable from here - and inventing a per-tag meaning in the core would
 	 * violate the declarative-format invariant - so the relative order of ALL annotated members is
 	 * preserved and only unannotated ones move.

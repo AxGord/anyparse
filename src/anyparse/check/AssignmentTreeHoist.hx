@@ -347,9 +347,9 @@ final class AssignmentTreeHoist {
 	 * whole file. A BLOCK comment in the same position rides inline and the result round-trips, so the
 	 * gate asks `tok.isLine` — refusing those too cost whole sites, because a shape that ALSO carries
 	 * a comment in the if/else glue is declined by `prefer-ternary-assignment` as well and then
-	 * nobody reports it. Measured end to end: the site lost a
-	 * `prefer-ternary-assignment` finding whose own rewrite round-trips fine and gained an
-	 * unfixable one here, because `claims` answers before the writer ever sees the shape.
+	 * nobody reports it: the site loses a `prefer-ternary-assignment` finding whose own rewrite
+	 * round-trips fine and gains an unfixable one here, because `claims` answers before the writer
+	 * ever sees the shape.
 	 */
 	public static function terminalTernaryRungs(chain: IfChain, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: TreeSeams): Int {
 		final tail: Null<TernaryTail> = terminalTail(chain, s);

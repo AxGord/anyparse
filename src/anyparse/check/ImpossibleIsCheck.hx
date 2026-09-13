@@ -100,7 +100,7 @@ final class ImpossibleIsCheck implements Check {
 	 * `redundant-is-check` is the always-TRUE twin and its whole `fix` is
 	 * `CheckScan.simplifyConditionFixes(plugin, source, violations, [isExprKind], _ -> true)`. The
 	 * always-FALSE direction is `_ -> false` over the same kind, and the helper handles it as a
-	 * first-class case rather than as a fallthrough. Backlog T826.
+	 * first-class case rather than as a fallthrough.
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex

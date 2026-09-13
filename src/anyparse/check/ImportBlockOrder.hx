@@ -95,8 +95,10 @@ private typedef UsingWedge = {
  *    both and lets the LAST one win, so their relative order decides which type the short name
  *    means. A plain module import binds EVERY type its module declares, so the name set is read
  *    from the resolution index — this is what catches two modules that each declare a same-named
- *    SECONDARY type, which the module paths alone do not reveal. A duplicated path is the same
- *    refusal by construction (deleting it is `duplicate-import`'s call, not a reorder's);
+ *    SECONDARY type, which the module paths alone do not reveal (`import flash.events.MouseEvent;`
+ *    beside `import pony.ui.touch.Mouse;`, whose module declares a secondary `typedef
+ *    MouseEvent`). A duplicated path is the same refusal by construction (deleting it is
+ *    `duplicate-import`'s call, not a reorder's);
  *  - the run's FIRST import carries a whole-line comment above it — that comment belongs to the
  *    block, not to one import (a header, a license banner, a `CHECKSTYLE:OFF` marker, a group
  *    label), and a reorder can neither move it nor leave it behind without saying something
@@ -113,31 +115,18 @@ private typedef UsingWedge = {
  * one, so the Haxe std is always readable and a project unlocks its own libraries by declaring
  * them in `resolutionLibs`.
  *
- * ## The rule reports far more often than it rewrites — measured, 2026-08-21
+ * ## The rule reports far more often than it rewrites
  *
  * A caller who runs `--fix`, reads `fixed 0 issue(s)` beside a nonzero `import-order` count and
- * concludes the rule has NO autofix is reading the refusals above. Three did. On Pony (851 files,
- * `import-order` enabled in its own `apqlint.json`) all FOUR findings stayed report-only, and
- * every one of the four was a correct refusal:
- *
- *  - `TouchableMouse.hx` — `import flash.events.MouseEvent;` beside `import pony.ui.touch.Mouse;`,
- *    whose module declares a SECONDARY `typedef MouseEvent`. Two imports, one simple name, and
- *    nothing in the two paths says so: precisely the collision the index lookup exists to see.
- *  - `StarlingTouchInput.hx` — the same shape one library over, `TouchManager`'s secondary
- *    `class Touch` against `starling.events.Touch`.
- *  - `Tooltip.hx` — three spellings of `Rect` in one block (`pony.geom.Rect`,
- *    `pony.geom.Rect.Rect`, `unityengine.Rect`).
- *  - `StaticAccess.hx` — the run's first import carries two commented-out imports above it: the
- *    absorbed-leading-comment refusal.
- *
- * So a zero fix count here is the guard working, not a missing fixer. What the run does NOT do is
- * SAY which refusal fired — the finding message reads the same whether the reorder is available
- * or refused. The `prefer-typed-throw` treatment (a second, report-only message once its
- * whole-scope gate closes) is the shape to copy, and the reason it has not been copied is a
- * LENS mismatch, not effort: `run` has no `index` parameter, and answering the refusal from the
- * resolution-scoped index would predict MORE collisions than the report-scoped one `fix` is
- * handed, so the report would claim report-only on findings the fixer then rewrites. Give the two
- * seats one index before giving the message two spellings.
+ * concludes the rule has NO autofix is reading the refusals above: on a real tree every standing
+ * finding is one of them. So a zero fix count here is the guard working, not a missing fixer.
+ * What the run does NOT do is SAY which refusal fired — the finding message reads the same
+ * whether the reorder is available or refused. The `prefer-typed-throw` treatment (a second,
+ * report-only message once its whole-scope gate closes) is the shape to copy, and the reason it
+ * has not been copied is a LENS mismatch, not effort: `run` has no `index` parameter, and
+ * answering the refusal from the resolution-scoped index would predict MORE collisions than the
+ * report-scoped one `fix` is handed, so the report would claim report-only on findings the fixer
+ * then rewrites. Give the two seats one index before giving the message two spellings.
  *
  * ## Options
  *
@@ -444,10 +433,9 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 		// sets `chunkFrom = withLeadingComments(source, lineStart)`, which starts AT the line start and
 		// only ever walks backward, so `chunkFrom > lineStart` is unreachable — and the case that would
 		// have produced it, a line carrying code before the import, never becomes an `ImportLine` at all
-		// (`lineOf` answers null for it). This guard used to be spelled `!=` and to report exactly that
-		// unreachable cause, so every refusal it ever explained was explained wrongly: two real files,
-		// each carrying a comment that says why its import order is deliberate, were told their first
-		// import shared its line with something else.
+		// (`lineOf` answers null for it). Spelled `!=` this guard would report exactly that unreachable
+		// cause, and a file carrying a comment that says why its import order is deliberate would be
+		// told its first import shared its line with something else.
 		if (block[0].chunkFrom < SourceText.startOfLine(source, block[0].declFrom))
 			return 'the block\'s first import carries an absorbed leading comment, written directly above it — such a comment belongs to '
 				+ 'the whole block, so permuting the block would relocate it into the middle or strand it above a different import';

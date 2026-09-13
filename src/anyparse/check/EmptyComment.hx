@@ -41,9 +41,9 @@ private typedef CommentToken = {
  * what the comment SAYS, not a cleanup. It is kept, for the same reason a dashed divider
  * run is: the emptiness is the point.
  *
- * That is not a marginal shape. Measured over this repository's own 636 files, ALL 136
- * findings the rule produced without this gate were paragraph separators and none was
- * stray noise — an autofix would have silently reflowed 136 prose blocks. (The reference
+ * That is not a marginal shape: on this repository every finding the rule produces without
+ * this gate is a paragraph separator and none is stray noise — an autofix would silently
+ * reflow every prose block. (The reference
  * project reports none either way; it writes its multi-paragraph prose as doc comments,
  * whose interiors this rule never inspects.)
  *

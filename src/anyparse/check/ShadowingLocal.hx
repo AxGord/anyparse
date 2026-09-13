@@ -128,9 +128,8 @@ final class ShadowingLocal implements Check implements NoAutofix {
 	 *
 	 * They are two RULES rather than one because the parameter half is a DIFFERENT question from
 	 * the one this rule's own doc advertises ("a LOCAL declaration whose name is already bound"),
-	 * and reusing a lambda parameter name is common idiom. Measured: on the Pony tree the local
-	 * half is 29 findings and the parameter half adds 6; on this project's own sources both are 0.
-	 * A project that opted into `shadowing-local` did not thereby ask for the wider question, so
+	 * and reusing a lambda parameter name is common idiom. A project that opted into
+	 * `shadowing-local` did not thereby ask for the wider question, so
 	 * the parameter half ships `DefaultOff` under its own id and this rule's bar cannot move.
 	 */
 	public static function collect(
@@ -300,11 +299,11 @@ final class ShadowingLocal implements Check implements NoAutofix {
 	 * Note this asks nothing about WHICH binding `shadowedBinding` named. That was FORCED when the
 	 * gate was written: `for (q in xs) { var q = h(q); }` consumes the loop iterator, and the
 	 * enclosing-frame walk named an outer `q` instead, so identity gating would have reported a
-	 * declaration whose whole shape is the deliberate re-bind — 8 of 9 haxelib findings, measured.
+	 * declaration whose whole shape is the deliberate re-bind — most haxelib findings.
 	 * `bindsItself` closes that gap, so identity gating is no longer unsound for this shape. It is
 	 * still not what runs here: swapping a containment test for an identity one is its own
-	 * decision with its own measurement, and `testRebindGateAcceptsShadowedLoopIterator` pins the
-	 * current answer rather than the reason it was reached.
+	 * decision, and `testRebindGateAcceptsShadowedLoopIterator` pins the current answer rather
+	 * than the reason it was reached.
 	 *
 	 * Nested functions are the one region the resolver is not trusted in — see
 	 * `collectNestedFnSpans`.
@@ -381,14 +380,13 @@ final class ShadowingLocal implements Check implements NoAutofix {
 	 *   a return type's field name reads as a binding, and every helper returning
 	 *   `{ node: …, width: … }` out of a function that also takes a `node` is a finding. This project
 	 *   types its edit lists as `Array<{ span: Span, text: String }>` and its inputs as
-	 *   `{ file: String, source: String }`, so that class was ALL 44 of its 44 raw findings — and
-	 *   1 of 7 on the Pony tree. An enum constructor's parameters fall out with them (their host
+	 *   `{ file: String, source: String }`, so that class is every one of its raw findings. An
+	 *   enum constructor's parameters fall out with them (their host
 	 *   is `ParamCtor`, not a function), which is right: nothing encloses them.
 	 * - A leading `_` is this project's "declared unused" marker, exempted by `unused-parameter`
 	 *   on exactly the same test. A binding the body never reads cannot be mistaken for the one it
 	 *   hides, which is the whole mistake this rule names — and the `_` shadowing `_` pair it drops
-	 *   is produced by the dozen wherever the convention is used (15 of 22 on the Pony tree, 4 of
-	 *   48 here).
+	 *   is produced by the dozen wherever the convention is used.
 	 */
 	private static function reportableParam(node: QueryNode, ancestors: Array<QueryNode>, seams: ScopeSeams): Bool {
 		if (!seams.paramKinds.contains(node.kind) || ancestors.length == 0) return false;

@@ -131,7 +131,7 @@ import anyparse.runtime.Span;
  *   conflicting module. Neither breaks a build.
  * - A call inside a `#if … #end` region IS found: the grammar projects a balanced region as a
  *   `Conditional` whose branches are flat children, and this walk descends into it like any other
- *   node (measured, a `StringTools` call in a `#if (sys || nodejs)` statement region is reported).
+ *   node (a `StringTools` call in a `#if (sys || nodejs)` statement region is reported).
  *   Only a region the parser captured RAW has no interior node to find, which is `CondRegionScan`
  *   territory rather than this rule. What conditional compilation does cost here is the INSERT: a
  *   `using` under a region that does not cover the call bytes leaves the site report-only

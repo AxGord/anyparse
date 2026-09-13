@@ -40,8 +40,8 @@ final class FragmentedDocComment implements Check {
 	 * This message carries no name and no position — the tally is not merely the last
 	 * discriminator it has, it is the ONLY one — so masking it collapsed every finding of this
 	 * rule in one file onto a single key and made a substitution between two fragmented
-	 * declarations invisible to `apq lint-diff`. S15 masked it, a review caught it, and it was
-	 * reverted here rather than in the consumer.
+	 * declarations invisible to `apq lint-diff`; the mask is refused here rather than in the
+	 * consumer.
 	 */
 	private static inline final BLOCK_COUNT_LEAD: String = 'documented by ';
 

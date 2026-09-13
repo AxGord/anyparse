@@ -19,8 +19,8 @@ import anyparse.query.NamingPolicy.FrameworkContract;
  * for the same reason the first two do: `resolutionRoots` decides what the resolution scope holds of the
  * project's OWN sources, and what a scope holds is a property of the document SET. A project that
  * declares `resolutionLibs` and leaves the roots out gets a scope that IS declared and is made
- * entirely of installed libraries — the one shape where every cross-scope proof S177, S179 and S180
- * widened quietly answers from the report scope again.
+ * entirely of installed libraries — the one shape where every widened cross-scope proof
+ * quietly answers from the report scope again.
  *
  * Beside `LintConfig` rather than inside it: that class answers for ONE document (or one folded
  * chain), and every question here is about the SET of documents a scope reaches, which is not a
@@ -83,10 +83,9 @@ final class ConfigDisagreement {
 	 * The blind spot of `warnMissingProjectRoots`, which reads the CONFIG and therefore sees a key
 	 * that IS there. A root spelled wrong — a typo, a directory since moved, a path written against
 	 * the wrong base — expands to nothing, `projectRoots` comes back empty, and the run is
-	 * byte-identical to one that never declared the key: measured on a scratch project,
-	 * `"resolutionRoots": ["sources"]` beside a real `src/` let `lint <one file> --rule naming --fix`
-	 * rename a private field and orphan an `@:access` grantee in a second file, with no diagnostic of
-	 * any kind.
+	 * byte-identical to one that never declared the key: `"resolutionRoots": ["sources"]` beside a
+	 * real `src/` lets a one-file `naming --fix` rename a private field and orphan an `@:access`
+	 * grantee in a second file, with no diagnostic of any kind.
 	 *
 	 * Called from `LintCommand.readResolutionRoots` — the only place that learns it, and on FIRST
 	 * DEMAND, so a run whose checks never build the index still pays nothing for the question. The

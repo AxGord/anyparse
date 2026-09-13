@@ -32,7 +32,7 @@ using Lambda;
  * A REFERENCE to a `static inline` constant, never a literal. Two reasons, and the first is hard:
  * Haxe accepts only a compile-time constant as a default, and a plain `static final` is NOT one —
  * `function f(ms:Int = K.NI)` where `NI` is a non-inline `static final` is
- * `Default argument value should be constant` (measured on 4.3). So the rule must read the
+ * `Default argument value should be constant`. So the rule must read the
  * constant's own declaration, and `inline` is the gate. The second reason is division of labour: a
  * repeated LITERAL argument is `magic-number`'s finding, and hoisting it into a named constant is
  * that rule's fix, after which this one sees it.
@@ -56,7 +56,7 @@ using Lambda;
  *   Otherwise the argument cannot be dropped without Haxe's type-directed skipping deciding what
  *   the remaining arguments mean, which is a different program;
  * - the function must be referenced NOWHERE as a value. Adding a default changes its type —
- *   `(Int) -> Void` becomes `(?Int) -> Void`, and the two do not unify (measured) — so a `.bind`,
+ *   `(Int) -> Void` becomes `(?Int) -> Void`, and the two do not unify — so a `.bind`,
  *   a method value or any non-callee occurrence of the name refuses the whole finding.
  *
  * A member NAME declared more than ONCE in the scope is refused outright — by two types, or by

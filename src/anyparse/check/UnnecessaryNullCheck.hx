@@ -28,8 +28,7 @@ import anyparse.runtime.Span;
  * `isProvablyNonNull`. Those types are non-nullable on STATIC targets only, and a file
  * containing `x != null` on one is a dynamic-target file by construction — the
  * comparison does not compile otherwise (`On static platforms, null can't be used as
- * basic type Int`). Measured over 18 882 files (Pony, the Haxe std, `~/dev/haxelib`)
- * the value-type arm yielded 110 findings and every site read was a load-bearing
+ * basic type Int`). Every site the value-type arm would flag on real trees is a load-bearing
  * dynamic-target guard, several inside an explicit `#if neko` / `#if (js && html5)`.
  *
  * `Severity.Info`; `fix` conservatively drops the redundant comparison where a safe span

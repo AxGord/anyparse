@@ -41,23 +41,27 @@ using StringTools;
  * scan over EVERY file in report UNION resolution scope finds ZERO occurrences of
  * the name outside its own declaration (`provablyDeadProjectWide`). A subtype /
  * `@:access` grantee / `@:allow`ed type can only reach the member by NAMING it, so
- * a name that appears nowhere is dead regardless of structure.
- * Neither arm is coarse about skip-parse any more: the confinement
- * gate asks `skippedMayReference` per MEMBER, and the cross-file proof needs no gate at all,
- * since `nameOccursOutside` walks the index's RETAINED sources — skipped files included — with
- * the same word-boundary test. What an unreadable file still costs is a FRAMEWORK contract whose
- * chain root lives in it: that cannot be proven, the member is reported, and `--fix` declines it.
+ * a name that appears nowhere is dead regardless of structure. Neither arm is
+ * coarse about skip-parse: the confinement gate asks `skippedMayReference` per
+ * MEMBER, and the cross-file proof needs no gate at all, since `nameOccursOutside`
+ * walks the index's RETAINED sources — skipped files included — with the same
+ * word-boundary test. What an unreadable file still costs is a FRAMEWORK contract
+ * whose chain root lives in it: that cannot be proven, the member is reported, and
+ * `--fix` declines it.
  *
  * ## Implicitly-reachable members are skipped
  *
  * Constructors, property accessors (`get_` / `set_`, reached via `(get, set)`,
  * not by name), and annotation-bearing members (`@:keep`, abstract `@:from` /
- * `@:op`, ...) can be used without an in-source identifier reference. The grammar marks these via `NamedDecl.implicitReach` — except when a
- * conditional-compilation region sits between the annotation and the declaration,
- * which `AnnotatedMemberScan` recovers; the check never flags them — a missed dead member, never a deleted
- * live one. Members reachable only through a framework or macro across files are skipped too: a `static
- * final` macro-force field (`= SomeType`, via `implicitReach`), and a utest `test*` method whose class
- * transitively extends `Test` (via `NamingSupport.frameworkReachable`, resolved through the cross-file index).
+ * `@:op`, ...) can be used without an in-source identifier reference. The grammar
+ * marks these via `NamedDecl.implicitReach` — except when a conditional-compilation
+ * region sits between the annotation and the declaration, which
+ * `AnnotatedMemberScan` recovers; the check never flags them — a missed dead
+ * member, never a deleted live one. Members reachable only through a framework or
+ * macro across files are skipped too: a `static final` macro-force field
+ * (`= SomeType`, via `implicitReach`), and a utest `test*` method whose class
+ * transitively extends `Test` (via `NamingSupport.frameworkReachable`, resolved
+ * through the cross-file index).
  *
  * ## Members that are public despite no `public` keyword
  *
@@ -65,41 +69,46 @@ using StringTools;
  * from the reference scan (`violationFor`): an `override` member inherits the
  * base's visibility and is invoked polymorphically from unseen code; an
  * `extern class` member is PUBLIC by the extern rule and reached from outside
- * the file (`collectExternTypes` names its enclosing type); an `abstract` member is a contract implemented by
- * subclasses, reachable through every implementor.
+ * the file (`collectExternTypes` names its enclosing type); an `abstract` member
+ * is a contract implemented by subclasses, reachable through every implementor.
  *
- * A FOURTH exemption is not a modifier at all: a member a FRAMEWORK reaches by name, with no call
- * written anywhere. The grammar's `NamingSupport.frameworkReachable` answers that, over the
- * frameworks the language ships (utest's `test` / `spec` / `setup` / `teardown` prefixes on a `Test`
- * subclass) UNIONED with the contracts the project declares in `apqlint.json` (`frameworks`).
- * `unused-public-member` reads that roster through the same predicate and `naming` through the
- * narrower `frameworkOwnsName` (a prefix reaches a member without owning its spelling, unless no
- * rename could keep the fragment), so a project that declares a framework cannot get the carve-out
- * from one rule and not its siblings.
+ * A FOURTH exemption is not a modifier at all: a member a FRAMEWORK reaches by
+ * name, with no call written anywhere. The grammar's
+ * `NamingSupport.frameworkReachable` answers that, over the frameworks the
+ * language ships (utest's `test` / `spec` / `setup` / `teardown` prefixes on a
+ * `Test` subclass) UNIONED with the contracts the project declares in
+ * `apqlint.json` (`frameworks`). `unused-public-member` reads that roster through
+ * the same predicate and `naming` through the narrower `frameworkOwnsName`, so a
+ * project that declares a framework cannot get the carve-out from one rule and not
+ * its siblings.
  *
  * ## Autofix
  *
  * Deletion is CONSERVATIVE: the report stays broad (a member is flagged as soon as
  * it is unreferenced and confined), but `fix` removes one only when every doubt is
  * ruled out, so it never breaks another platform's build. A member is deleted only
- * when its initializer is side-effect-free (a body-bearing method always qualifies, a body-less declaration never —
- * `RefactorSupport.isSideEffectFree`), it is not an abstract-method impl of an
- * `extends` class (`mayImplementAbstractMethod`: Haxe impls carry no `override` and
- * the base's call is invisible to a single-file scan), its enclosing type carries no
- * `@:rtti` (drill-Node serialization by field name), `@:keep`, or `@:build`, and its name appears in no string literal
- * anywhere in the RESOLUTION scope — report files UNION the library, which is `ReflectionScan`'s scope and since T868
- * the only one a name-keyed reflection question is asked in — where it would be a possible `Reflect.field` target.
+ * when its initializer is side-effect-free (a body-bearing method always
+ * qualifies, a body-less declaration never — `RefactorSupport.isSideEffectFree`),
+ * it is not an abstract-method impl of an `extends` class
+ * (`mayImplementAbstractMethod`: Haxe impls carry no `override` and the base's
+ * call is invisible to a single-file scan), its enclosing type carries no `@:rtti`
+ * (drill-Node serialization by field name), `@:keep`, or `@:build`, and its name
+ * appears in no string literal anywhere in the RESOLUTION scope — report files
+ * UNION the library, `ReflectionScan`'s scope, the only one a name-keyed
+ * reflection question is asked in — where it would be a possible `Reflect.field`
+ * target.
  *
  * Conditional compilation (`#if` / `#elseif` / `#else`) refines the reference scan
- * rather than vetoing the file wholesale: a member in a `#if`-carrying file is deleted
- * only when a raw word-boundary scan over EVERY file in report UNION resolution scope
- * finds ZERO occurrences of its name outside its own declaration (`referencedElsewhere`)
- * — raw text sees inside `#if` regions and comments, so zero hits proves it unreferenced
- * in every branch; any occurrence keeps the whole-file veto in force. A separate arm
- * deletes a `private function new() {}` that `run` proved never instantiated (the
- * static-utility idiom), keeping the coarse whole-file `#if` veto (no-`#if` / no-`@:build`
- * gates). The member is removed with its modifier / meta group and whole line, batched
- * per file by the caller.
+ * rather than vetoing the file wholesale: a member in a `#if`-carrying file is
+ * deleted only when a raw word-boundary scan over EVERY file in report UNION
+ * resolution scope finds ZERO occurrences of its name outside its own declaration
+ * (`referencedElsewhere`) — raw text sees inside `#if` regions and comments, so
+ * zero hits proves it unreferenced in every branch; any occurrence keeps the
+ * whole-file veto in force. A separate arm deletes a `private function new() {}`
+ * that `run` proved never instantiated (the static-utility idiom), keeping the
+ * coarse whole-file `#if` veto (no-`#if` / no-`@:build` gates). The member is
+ * removed with its modifier / meta group and whole line, batched per file by the
+ * caller.
  */
 @:nullSafety(Strict)
 final class UnusedPrivate implements Check implements ConfigAware implements FrameworkAware {
@@ -107,8 +116,7 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	/**
 	 * The one decline sentence two gates share: a member of a macro-built type, and a private empty
 	 * constructor of one. Only the MEMBER gate is live — the constructor one is a re-check no finding
-	 * reaches, since `run`'s collector already drops a macro-built type (measured: the same fixture
-	 * reports one finding with the metadata removed and none with it). The name is what keeps the
+	 * reaches, since `run`'s collector already drops a macro-built type. The name is what keeps the
 	 * unreachable half saying the same thing as the live one if it ever starts firing, and keeps the
 	 * `--fix` ledger — which buckets by exact text — from growing two rows for one cause. Every other
 	 * gate spells its sentence inline, at its own condition.
@@ -146,7 +154,7 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	 * plus a deletable private empty constructor: a `private function new() {}` in a
 	 * never-instantiated all-static utility class (no structural `new C`, no reflection
 	 * mention of the class name, no `@:build`, no subtype). The RESOLUTION-scope string-literal contents gathered here
-	 * (`ReflectionScan.reflectionSurface` — report UNION the library, T868) serve TWO readers — `fix`'s per-member reflection gate, and the
+	 * (`ReflectionScan.reflectionSurface` — report UNION the library) serve TWO readers — `fix`'s per-member reflection gate, and the
 	 * constructor arm below, which asks them about the CLASS name. Widening the scope can only
 	 * add contents, so the arm can only stop reporting a constructor, never start.
 	 */
@@ -215,8 +223,8 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	 * class (`mayImplementAbstractMethod`), its enclosing type carries no
 	 * `@:rtti` (drill-Node field-name serialization, via the index), `@:keep`, or
 	 * `@:build`, and its name appears in no string literal anywhere in the RESOLUTION scope — report
-	 * files UNION the library, which is `ReflectionScan`'s scope and since T868 the only one a
-	 * name-keyed reflection question is asked in — where it would be a possible `Reflect.field` target.
+	 * files UNION the library, which is `ReflectionScan`'s scope and the only one a name-keyed
+	 * reflection question is asked in — where it would be a possible `Reflect.field` target.
 	 *
 	 * Conditional compilation refines rather than vetoes wholesale: a file carrying ANY
 	 * `#if` makes the single-file reference scan branch-blind, so a MEMBER in such a file
@@ -239,14 +247,11 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	 *
 	 * EVERY one of those gates writes its own sentence on the finding it declines, so `apq lint
 	 * --fix` names the cause instead of reporting a bare `declined` (`Violation.declineReason`, whose
-	 * only reader is that ledger — no reported byte moves). ELEVEN sites, TEN sentences (the two
-	 * `@:build` sites share `DECLINE_BUILD_MACRO`): the two shape gates in `shapeDecline`, the four
-	 * type-level ones in `memberDeclineReason`, the reflected-name one beside them, the two the
-	 * constructor / conditional arms decide here, and the region one `noteRegionDeclines`
-	 * attributes. The two remaining `continue`s get NONE by intent: a finding
-	 * with no span, and one whose span matches no member of THIS source, are not gates that closed —
-	 * they are a violation this call cannot place, and a sentence there would be invented rather
-	 * than the deciding gate speaking.
+	 * only reader is that ledger — no reported byte moves); the two `@:build` sites share
+	 * `DECLINE_BUILD_MACRO`. The two remaining `continue`s get NONE by intent: a finding with no
+	 * span, and one whose span matches no member of THIS source, are not gates that closed — they
+	 * are a violation this call cannot place, and a sentence there would be invented rather than
+	 * the deciding gate speaking.
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
@@ -420,9 +425,9 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 		// through every implementor, so never dead from the declaring class alone.
 		// The framework question goes to the WIDEST index for the reason the supertype question
 		// below does: the closure to a contract's root can run through a base declared in a
-		// resolution library, and the report index stops at the first supertype it cannot name —
-		// measured, a driver `extends GameBase extends MonoBehaviour` with only `GameBase` outside
-		// the report scope had its declared `Start` proposed for deletion.
+		// resolution library, and the report index stops at the first supertype it cannot name — a
+		// driver `extends GameBase extends MonoBehaviour` with only `GameBase` outside the report
+		// scope would have its declared `Start` proposed for deletion.
 		if (
 			decl.mods.contains('public') || decl.mods.contains('override') || decl.mods.contains('abstract') || decl.implicitReach != null
 			|| support.frameworkReachable(decl, () -> scopeIndex, contracts)

@@ -83,13 +83,13 @@ using StringTools;
  * hold a call, a subtype declaring the property, or a computed name — asked per name, never
  * per run); neither the class nor the member carries `@:keep` (they are reached by machinery
  * no scan models); the method name has ZERO direct call or value references — no `IdentExpr` /
- * `FieldAccess` / string-interpolation ident carries it anywhere in the scope above (report UNION the resolution
- * sources); and no string literal in that scope names it, a possible `Reflect.field` target whose breakage is SILENT at
- * runtime rather than a compile error. An INTERPOLATED string is matched the other way round —
- * `literalOf` answers null for one by contract, so its static `Literal` fragments are collected
- * and a fragment CONTAINED IN the method name blocks the
- * deletion (`'get_$suffix'` may name it at runtime); fragments shorter than an accessor
- * prefix carry no intent and are ignored.
+ * `FieldAccess` / string-interpolation ident carries it anywhere in the scope above (report UNION
+ * the resolution sources); and no string literal in that scope names it, a possible
+ * `Reflect.field` target whose breakage is SILENT at runtime rather than a compile error. An
+ * INTERPOLATED string is matched the other way round — `literalOf` answers null for one by
+ * contract, so its static `Literal` fragments are collected and a fragment CONTAINED IN the
+ * method name blocks the deletion (`'get_$suffix'` may name it at runtime); fragments shorter
+ * than an accessor prefix carry no intent and are ignored.
  *
  * The zero-reference gate is NOT the orphan test: a REAL accessor is invoked through property
  * access and shows zero textual calls too, which is exactly why the orphan test is the
@@ -99,35 +99,26 @@ using StringTools;
  * ## Scope: every scan here reads report UNION the resolution sources
  *
  * There is no narrowed scan left. The accessor-reference scan and the string scan take
- * `ReflectionScan.scopeFiles`, the subtype query reads the resolution index, and since S198 the
- * two UNREADABLE-file probes read it as well — `unreadableDecline` on the fix side and the
- * unreadable arm of `reportOrphan` on the report side, both through `Ctx.scopeIndex`. Each of the
- * three widenings was a live defect first: S191 measured the reference scan, S198 measured these
- * two. MEASURED for the pair, on a two-file project declaring `resolutionRoots` whose sibling does
- * not parse and calls `a.get_reached()` — `hxq lint <the declaring file> --rule orphan-accessor
- * --fix` wrote 2 deletions before and 1 + a DECLINED after, the run over both files writing 1
- * either way; and with the sibling declaring `class D extends A` with `data(get, never)` instead,
- * the narrow run answered `[warning] … has no property to serve` before and the wide run's `[info]
- * … may have no property to serve … B.hx` after. T920.
+ * `ReflectionScan.scopeFiles`, the subtype query reads the resolution index, and the two
+ * UNREADABLE-file probes read it as well — `unreadableDecline` on the fix side and the unreadable
+ * arm of `reportOrphan` on the report side, both through `Ctx.scopeIndex`. Each widening closed a
+ * live defect: a one-file run deleted an accessor a sibling the parser could not read still
+ * called, and reported `has no property to serve` as a warning where a subtype in the sibling
+ * declared the property.
  *
- * Widening the unreadable probe did NOT restore the whole-run veto it was split out of a flag to
- * end, and being asked per NAME is the whole of why: a scope file matters only when its text spells
- * this candidate's own accessor, property or accessor prefix. That was measured only for the PROPERTY, and the premise the slice
- * started from is NOT refuted. The Pony reading (eleven `resolutionLibs`, 3 warnings / 0 declines) is the REPORT side: measured,
- * its fix side declines nothing on either engine because `deletable` refuses first, so `unreadableDecline` is never reached there.
- * The config-less reading is vacuous: the std core the scope discovers is 204 files, 0 of them skip-parse, so no scope width can
- * decline. MEASURED against the shape neither reading covers — `resolutionLibs: ["heaps"]`, one candidate, nothing else — the base
- * wrote 1 edit and this tip writes 0, DECLINED on `heaps/2,1,0/hxsl/Macros.hx`, which spells whole-word `get_` at six lines of
- * macro-generated accessor names and does not parse. One unreadable haxelib source therefore DOES silence the fix over the whole
- * project. That is the fail-CLOSED direction and it is left standing here, but it is a precision loss, not a refuted risk. T1006.
+ * Widening the unreadable probe did not restore the whole-run veto it was split out of a flag to
+ * end, because it is asked per NAME: a scope file matters only when its text spells this
+ * candidate's own accessor, property or accessor prefix. The residual is one skip-parsed haxelib
+ * source spelling a whole-word accessor PREFIX (macro-generated accessor names): it silences the
+ * fix over the whole project. That is the fail-CLOSED direction and it stands, as a precision
+ * loss rather than a refuted risk.
  *
- * What the OWNER narrowing (`RawSourceScan.admits`) is for is finer, and it applies to exactly one of
- * the names. Declaring a subtype is STRUCTURAL — the file has to name the type it extends — so an
- * installed third-party source cannot be the one, and the PROPERTY name is asked per owner in both
- * members. The accessor name and the accessor PREFIX are REFLECTION-shaped: `Reflect.field(o,
- * 'get_data')` in a library reaches a project member without ever spelling the project, which is
- * T868's own argument for why the reflection scan must not take the project-only seam, so those two
- * are asked of every unreadable file in scope.
+ * What the OWNER narrowing (`RawSourceScan.admits`) is for is finer, and it applies to exactly one
+ * of the names. Declaring a subtype is STRUCTURAL — the file has to name the type it extends — so
+ * an installed third-party source cannot be the one, and the PROPERTY name is asked per owner in
+ * both members. The accessor name and the accessor PREFIX are REFLECTION-shaped: `Reflect.field(o,
+ * 'get_data')` in a library reaches a project member without ever spelling the project, so those
+ * two are asked of every unreadable file in scope.
  *
  * What stays narrow is a project declaring NO resolution key, and there it is every scan, because
  * the report set is then the only scope there is. Run the rule whole-project; on a scopeless
@@ -177,20 +168,14 @@ final class OrphanAccessor implements Check implements DefaultOff {
 			// The call scan takes the SAME file set as the reflection scan above it
 			// (`ReflectionScan.scopeFiles`, report UNION the resolution sources) and NOT the report
 			// set. Handed the report set it answered "nothing calls this" from whatever the caller
-			// asked to lint, so `hxq lint <one file> --fix` DELETED a public `get_x` that a sibling
-			// calls by hand — measured on a two-file cell with `resolutionRoots` declared: the narrow
-			// run wrote 2 deletions where the run over both files wrote 1. Widening only ever ADDS
-			// names, so it only ever adds REFUSALS — the same safe direction the reflection scan's
-			// own scope note argues, and a lost refusal here is a compile error at the call site.
+			// asked to lint, so a one-file `--fix` DELETED a public `get_x` that a sibling calls by
+			// hand. Widening only ever ADDS names, so it only ever adds REFUSALS — the same safe
+			// direction the reflection scan's own scope note argues, and a lost refusal here is a
+			// compile error at the call site.
 			//
-			// T922 asked whether the SECOND `scopeFiles` call here — `reflectionSurface` above makes
-			// its own — is worth hoisting. It is not, and the reason is a number rather than a
-			// judgement: ten EXTRA discarded calls spliced into this member measured 3753 / 3816 /
-			// 3842 / 3876 ms for `lint src --rule orphan-accessor --no-oracle` against 3849 / 3896 /
-			// 3901 / 3912 ms with none, i.e. ten of them are invisible inside a ±80 ms round-to-round
-			// band on a ~3.9 s run. A hoist would also have to keep `ReflectionMemo`'s key intact,
-			// which compares the scope's sources element for element. `Naming` carries the same
-			// reading from the other end (12 ms of a 7 s Pony run).
+			// The SECOND `scopeFiles` call here — `reflectionSurface` above makes its own — is not
+			// worth hoisting: the union is invisible against the run, and a hoist would have to keep
+			// `ReflectionMemo`'s key intact, which compares the scope's sources element for element.
 			referenced: referencedAccessorNames(ReflectionScan.scopeFiles(files, plugin), plugin),
 			reflected: reflection.whole,
 			fragments: reflection.fragments,
@@ -339,16 +324,12 @@ final class OrphanAccessor implements Check implements DefaultOff {
 	 * unparseable file, however unrelated, and wrote nothing on any finding to say so.
 	 *
 	 * The index is the RESOLUTION scope and not the report one. A file the caller did not ask to lint
-	 * is exactly what a one-file `--fix` cannot see, and until S198 this probe read the REPORT index:
-	 * MEASURED on a two-file cell with `resolutionRoots` declared, an unparseable sibling calling the
-	 * accessor, `lint <the declaring file> --fix` wrote 2 deletions where the run over both files
-	 * wrote 1 and declined the second. What keeps the widening from bringing the run-wide veto back is
-	 * that the probe is per NAME: a scope file matters only when its text spells THIS candidate's own
-	 * accessor, property or accessor prefix. MEASURED, and it refutes the fear that a declared
-	 * `resolutionLibs` alone would silence the rule — over the Pony fork (eleven `resolutionLibs`,
-	 * `lint src --rule orphan-accessor`) an entirely unnarrowed probe answered 3 warnings and 0
-	 * declines, and on a config-less project reading the machine's Haxe std it left both deletions in
-	 * place. The per-NAME shape was already the whole guard.
+	 * is exactly what a one-file `--fix` cannot see: read from the REPORT index, this probe let a
+	 * one-file run delete an accessor an unparseable sibling calls. What keeps the widening from
+	 * bringing the run-wide veto back is that the probe is per NAME: a scope file matters only when
+	 * its text spells THIS candidate's own accessor, property or accessor prefix, so a declared
+	 * `resolutionLibs` alone does not silence the rule. The per-NAME shape was already the whole
+	 * guard.
 	 *
 	 * Three names, because three different facts can be refuted. `name` covers a written call and a
 	 * whole reflective literal. `prop` covers the one the run-wide flag was really carrying:
@@ -362,7 +343,7 @@ final class OrphanAccessor implements Check implements DefaultOff {
 	private static function unreadableDecline(
 		scopeIndex: SymbolIndex, ownerFile: String, name: String, prop: String, wantGetter: Bool
 	): Null<String> {
-		// The three names do NOT take one scope, and T868 is what splits them. A written call and a
+		// The three names do NOT take one scope. A written call and a
 		// computed accessor name are REFLECTION-shaped: `Reflect.field(o, 'get_data')` in an installed
 		// library reaches a project member without ever spelling the project, so the per-owner
 		// exclusion `RawSourceScan.admits` earns for a structural proof does not carry to them and they
@@ -537,10 +518,6 @@ final class OrphanAccessor implements Check implements DefaultOff {
 	 * so the file has to name the type it extends, and an installed third-party source cannot name a
 	 * project type. Every name this arm asks is of that kind, so unlike the fix side it needs no
 	 * second, unnarrowed probe beside it.
-	 *
-	 * Measured by sweeping this probe set over the rule's own tests: `[]` fails 3 of them, `[name]` 5,
-	 * `[name, prop, prefix]` 2, a match-everything probe 4, dropping the arm-1 guard 2, and this one
-	 * none.
 	 */
 	private static function reportOrphan(
 		out: Array<Violation>, file: String, span: Span, name: String, prop: String, owner: String, wantGetter: Bool, found: Resolution,
@@ -548,9 +525,9 @@ final class OrphanAccessor implements Check implements DefaultOff {
 	): Null<Violation> {
 		// Both report-only arms below carry their own `declineReason`. They are declines in the ledger's
 		// sense — `fix` is called for them and answers no edit — and the sentence that says why is right
-		// here, at the gate that decided. The unreadable arm REPLACED sites that used to reach
-		// `unreadableDecline` and get one, so leaving it unset would have moved this rule backwards in
-		// the very dimension the rest of this commit moves three others forwards.
+		// here, at the gate that decided. The unreadable arm covers sites that otherwise reach
+		// `unreadableDecline` and get one, so leaving it unset would silence a reason the fix side
+		// gives.
 		if (!found.declared && found.unresolved) {
 			out.push(reportOnly(
 				file, span,
@@ -625,9 +602,9 @@ private typedef Ctx = {
 	 * not ask to lint is precisely the file a one-file `--fix` cannot see. The widening is safe
 	 * only because the probes reading it are per NAME and per OWNER: a scope file vetoes a
 	 * deletion when it spells that deletion's own subject, and a THIRD-PARTY one only for a third-party
-	 * candidate — but that narrowing carries ONLY the property name. The accessor name and the accessor PREFIX
-	 * are asked unnarrowed, so an unreadable haxelib source spelling whole-word `get_` DOES silence the fix
-	 * over the whole project (measured on `heaps/hxsl/Macros.hx`). Fail-closed, and a precision loss (T1006).
+	 * candidate — but that narrowing carries ONLY the property name. The accessor name and the
+	 * accessor PREFIX are asked unnarrowed, so an unreadable haxelib source spelling whole-word
+	 * `get_` DOES silence the fix over the whole project. Fail-closed, and a precision loss.
 	 */
 	var scopeIndex: SymbolIndex;
 

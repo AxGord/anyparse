@@ -55,8 +55,8 @@ using StringTools;
  *     ending in `break`, so it is never accepted as the exiting branch.
  *
  * The one non-obvious language fact behind gates 2 and 3 lives in `LoopScan.escapesIteration`: a
- * `break` inside a `switch` inside a loop breaks the LOOP (measured on `--interp` — the C / JS
- * habit is wrong here), so the scan descends into switch bodies; a `break` inside a nested loop
+ * `break` inside a `switch` inside a loop breaks the LOOP (the C / JS habit is wrong here), so
+ * the scan descends into switch bodies; a `break` inside a nested loop
  * binds to that loop, so it does not descend there.
  *
  * ## What the fix re-emits, and when it withholds

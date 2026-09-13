@@ -18,12 +18,12 @@ import anyparse.runtime.Span;
  * identical up to LAYOUT (a literal's own interior compares exactly), in two or
  * more places — a copy-paste clone the user's rule says to always extract into a
  * helper ("duplication is a bug, not a design choice"). Two passes over the same
- * normalized statement stream: a SAME-FILE pass
- * (`scanBlocks`) and a project-wide CROSS-FILE pass (`scanCrossFile`); a same-file
- * pair is reported by the first pass only, never by both. Purely structural (no type
- * information needed). `Info`, REPORT-ONLY — extraction is a refactoring (`hxq
- * extract-method`), and across a file boundary whether to introduce a shared helper is
- * a design decision the tool must not force, so `fix` produces no edits.
+ * normalized statement stream: a SAME-FILE pass (`scanBlocks`) and a project-wide
+ * CROSS-FILE pass (`scanCrossFile`); a same-file pair is reported by the first pass
+ * only, never by both. Purely structural (no type information needed). `Info`,
+ * REPORT-ONLY — extraction is a refactoring (`hxq extract-method`), and across a
+ * file boundary whether to introduce a shared helper is a design decision the tool
+ * must not force, so `fix` produces no edits.
  *
  * ## What is a clone
  *
@@ -33,7 +33,7 @@ import anyparse.runtime.Span;
  *   reports a clone only when its two occurrences sit in DIFFERENT files, pointing the
  *   later at the PATH-earliest occurrence — path-earliest and not scan-earliest,
  *   because the scan order is the order the caller listed the scope, and picking by
- *   it made `lint src test` and `lint test src` name opposite ends of the same
+ *   it would make `lint src test` and `lint test src` name opposite ends of the same
  *   clone. Same-file pairs are skipped by the cross-file pass, so the two passes
  *   partition the clone space with no double-report.
  * - **Token-exact normalization.** Two statements are equal when their source
@@ -43,11 +43,11 @@ import anyparse.runtime.Span;
  *   (`SpanRender`). Layout is not code; a literal's interior is. There is NO
  *   identifier normalization (alpha-renaming): only exact-logic clones match, so the
  *   check has zero false positives by construction — a claim the interior half is
- *   what makes true: measured on this project it removed four cross-file findings,
- *   every one a pair of `--help` blocks whose option column is padded to a different
- *   width, which no shared helper could produce. A comment inside a
- *   statement's span makes it textually different — not a clone; a comment BETWEEN
- *   statements is trivia outside every statement span and does not affect equality.
+ *   what makes true: two `--help` blocks whose option column is padded to a different
+ *   width are not a clone, since no shared helper could produce both. A comment
+ *   inside a statement's span makes it textually different — not a clone; a comment
+ *   BETWEEN statements is trivia outside every statement span and does not affect
+ *   equality.
  * - **Consecutive statements, one block.** A run is a maximal sequence of direct-child
  *   statements of a `ControlFlowSupport.blockKinds()` node (function body / nested
  *   block); the two occurrences may sit in different blocks and different block
@@ -100,18 +100,15 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 	/**
 	 * The prefix both wordings share, spelled once so the two message builders cannot drift.
 	 *
-	 * The statement COUNT in front of it is deliberately NOT masked, unlike every other tally
-	 * S15 masked. The reason is local to this rule. `lint-diff` keys on
+	 * The statement COUNT in front of it is deliberately NOT masked, unlike the other tallies
+	 * `lint-diff` masks. The reason is local to this rule: `lint-diff` keys on
 	 * `(file, rule, severity, message)` with no span; whichever wording a finding uses, its
 	 * one coordinate is already masked (the partner's line in the cross-file form, the
 	 * original's line in the same-file form), and the cross-file partner PATH is shared by
 	 * every clone against that file while the same-file form names no path at all. So the
 	 * count is the LAST thing distinguishing two different clones of one file, and blanking
-	 * it made a substitution invisible — 57% of this rule's findings on anyparse and 78% on
-	 * tm shared a key with a sibling under the old blanket digit mask. Its noise cost is also
-	 * zero where the others' was not: across the campaign's last three blast-radius verdicts
-	 * this rule contributed no lines at all, while `oversized-type` and `string-literal-dup`
-	 * contributed all six.
+	 * it makes a substitution invisible. The count is also stable: it moves only when the
+	 * code moves.
 	 */
 	private static inline final STATEMENT_COUNT_UNIT: String = ' statements duplicated from ';
 
@@ -181,10 +178,10 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 	 * above that position renames every finding pointing at it — a shift in one file re-keys
 	 * clones reported in others. The count and the partner path move only when the code moves.
 	 *
-	 * The masks are anchored rather than blanket. `lint-diff` used to mask every digit run in
-	 * this rule's messages, which also ate the count and any digit in the partner filename:
-	 * 57% (anyparse) and 78% (tm) of this rule's findings shared a key with a sibling, and a
-	 * substitution inside such a group was invisible to the gate.
+	 * The masks are anchored rather than blanket: masking every digit run in this rule's
+	 * messages also eats the count and any digit in the partner filename, most findings then
+	 * share a key with a sibling, and a substitution inside such a group is invisible to the
+	 * gate.
 	 */
 	public function messageIdentity(message: String): String {
 		return maskCoordinate(message, EXACT);
@@ -519,10 +516,9 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 	): Void {
 		// Ordered by file PATH, never by the index the file happened to get from the scan: the
 		// index is the order the CLI handed the scope over, so `lint src test` and `lint test src`
-		// picked opposite ends of every cross-tree clone as the "original" — measured on this
-		// project, 9 findings moved from `test/` to `src/` and back purely on argument order, each
-		// one an added + a removed line in the blast-radius gate. The path is a property of the
-		// file SET, so the pair now agrees. `fa - fb` breaks a tie only when one path is listed
+		// would pick opposite ends of every cross-tree clone as the "original", and each such
+		// flip is an added + a removed line in the blast-radius gate. The path is a property of
+		// the file SET, so the pair agrees. `fa - fb` breaks a tie only when one path is listed
 		// twice, which keeps the comparator total.
 		bucket.sort((a, b) -> {
 			final fa: Int = blockFile[a.b];

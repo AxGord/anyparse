@@ -54,7 +54,7 @@ final class IdenticalOperands implements Check implements NoAutofix {
 	 * (`CheckScan.dropOperandEdit` deletes one operand of a homogeneous chain, and `duplicate-ternary-branches`
 	 * ships that same shape under the same side-effect-free gate). It is deliberately not written, because
 	 * what it would produce is a program that no longer reports the bug — which is the one outcome a
-	 * finding of this kind must not have. Backlog T828 holds the counter-argument.
+	 * finding of this kind must not have.
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex

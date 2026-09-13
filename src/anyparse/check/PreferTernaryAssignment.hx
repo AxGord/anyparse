@@ -22,8 +22,7 @@ import anyparse.runtime.Span;
  *
  * A flat 2-branch whose TERMINAL r-value is ALREADY a ternary belongs to that rule, whose one
  * edit unrolls the spine into rungs. Collapsing onto such a value writes `x = c ? a : p ? q : r`
- * -- a three-rung chain `prefer-if-expression-chain` then reports, on text this fix just wrote
- * (S46 measured 14 sites over 1029 external files taking that rule from 93 findings to 107).
+ * -- a three-rung chain `prefer-if-expression-chain` then reports, on text this fix just wrote.
  * The deferral ASKS that rule (`PreferIfExpressionAssignment.claims`), gates and all, rather than
  * mirroring its shape: a site it refuses -- a comment in a folded region, an else-less conditional
  * in a rung -- keeps its finding here instead of falling through to nobody.
@@ -49,13 +48,9 @@ import anyparse.runtime.Span;
  *
  * The canon crossing this rule has and `prefer-ternary-return` no longer does: collapsing onto an
  * r-value that is ALREADY a ternary writes a three-rung spine `prefer-if-expression-chain` then
- * reports. Measured over the 1029 external files holding any of these findings, a `--rule
- * prefer-ternary-assignment --fix` run alone takes that rule from 93 findings to 107 - 14 sites,
- * 3.3% of this rule's 421. It is NOT gated: the gate S45 built for the `return` twin destroyed
- * every finding it touched with no replacement, and the replacement here needs
- * `prefer-if-expression-assignment` to claim a 2-branch if/else whose r-value spine supplies the
- * third leaf - which means unrolling a terminal ternary inside `AssignmentTreeHoist.ifChainValue`,
- * a recursion this slice did not touch. Filed rather than half-done.
+ * reports. It is NOT gated: a shape gate on the `return` twin destroys every finding it touches
+ * with no replacement, and the replacement here is `prefer-if-expression-assignment` claiming a
+ * 2-branch if/else whose r-value spine supplies the third leaf.
  *
  * A null-narrowing guard condition (`x != null && x.f`) is refused ONLY when an r-value is a bool
  * literal -- that collapse hands off to
