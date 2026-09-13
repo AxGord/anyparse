@@ -100,7 +100,10 @@ class UnusedPrivateDeclineReasonTest extends Test {
 					source: 'class C {\n\t#if js\n\tpublic static function jsOnly(): Int {\n\t\treturn 1;\n\t}\n\t#end\n'
 						+ '\tprivate var _x: Int = 0;\n}\n'
 				},
-				{ file: 'D.hx', source: 'class D {\n\t// C._x is written by the loader.\n}\n' }
+				// A real occurrence, not a comment mention: `OccurrenceScan.inertMask` now excludes
+				// comments from the cross-file scan, so this cell needs actual code text to still
+				// exercise the "which branch reads it" gate.
+				{ file: 'D.hx', source: 'class D {\n\tpublic function f(o: Dynamic): Void {\n\t\to._x = 1;\n\t}\n}\n' }
 			]
 		},
 		{

@@ -2,6 +2,8 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.LexicalRegions.LexRegionKind;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SourceComments;
@@ -19,7 +21,12 @@ using Lambda;
  * inside a comment qualifies nothing, so the dotted-tail test has to know where comments are
  * even for an occurrence outside them. Both hoisted once per file.
  */
-private typedef FileScan = { source: String, excluded: Array<Span>, commentRegions: Array<Span> };
+private typedef FileScan = {
+	source: String,
+	excluded: Array<Span>,
+	commentRegions: Array<Span>,
+	matchMask: Array<Span>
+};
 
 /**
  * Flags `import` / `using` statements whose bound name is never referenced
@@ -201,11 +208,18 @@ final class UnusedImport implements Check {
 			// use) AND the comment regions (a comment resolves no type, so a name spelled only
 			// there is not a use either). String literals are deliberately NOT in it — see the
 			// class doc.
-			final comments: Array<Span> = SourceComments.collectCommentRegions(plugin.lexicalRegions(source));
+			final regions: Array<LexRegion> = plugin.lexicalRegions(source);
+			final comments: Array<Span> = SourceComments.collectCommentRegions(regions);
+			// A REGEX literal is the one additional inert kind safe to fold into the match mask here:
+			// unlike a string literal it is never a `Type.resolveClass('Foo')`-style reflection lookup,
+			// and this check's `fix` deletes every `Warning` with no secondary reflection gate to catch
+			// one — see the class doc. Strings stay OUT of the mask on purpose.
+			final matchMask: Array<Span> = [for (r in regions) if (r.kind == LexRegionKind.RegexLit) new Span(r.from, r.to)];
 			final scan: FileScan = {
 				source: source,
 				excluded: [for (imp in info.imports) imp.span].concat(comments),
-				commentRegions: comments
+				commentRegions: comments,
+				matchMask: matchMask
 			};
 			final ignoreModules: Array<String> = plugin.checkOverrides(info.file)?.unusedImportIgnoreModules ?? [];
 			for (imp in info.imports) if (!moduleIgnored(imp, ignoreModules))
@@ -245,6 +259,18 @@ final class UnusedImport implements Check {
 	/** Whether `imp`'s full module path is in a checkstyle `ignoreModules` list. */
 	private static inline function moduleIgnored(imp: ImportInfo, ignore: Array<String>): Bool {
 		return ignore.contains(imp.raw);
+	}
+
+	/**
+	 * Is `name` referenced as a SIMPLE name anywhere in the file, outside its own import
+	 * statements and outside its comments? The one liveness test every arm of the check asks — see
+	 * `RefactorSupport.referencedUnqualifiedInRange` for why a dotted tail is not
+	 * a reference.
+	 */
+	private static inline function referenced(scan: FileScan, name: String): Bool {
+		return OccurrenceScan.referencedUnqualifiedInRange(
+			scan.source, name, 0, scan.source.length, scan.excluded, scan.commentRegions, scan.matchMask
+		);
 	}
 
 	/**
@@ -311,16 +337,6 @@ final class UnusedImport implements Check {
 	): Bool {
 		final types: Null<Array<String>> = moduleTypes[raw];
 		return types != null && types.exists(name -> name != bound && referenced(scan, name));
-	}
-
-	/**
-	 * Is `name` referenced as a SIMPLE name anywhere in the file, outside its own import
-	 * statements and outside its comments? The one liveness test every arm of the check asks — see
-	 * `RefactorSupport.referencedUnqualifiedInRange` for why a dotted tail is not
-	 * a reference.
-	 */
-	private static function referenced(scan: FileScan, name: String): Bool {
-		return OccurrenceScan.referencedUnqualifiedInRange(scan.source, name, 0, scan.source.length, scan.excluded, scan.commentRegions);
 	}
 
 	/**

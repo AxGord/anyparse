@@ -175,10 +175,13 @@ final class UnusedParameter implements Check implements ConfigAware {
 			// `@:op(A == B) function srNull(a: DT, b: Null<Float>)` down to one argument and the build
 			// failed with `Static @:op functions must accept exactly two arguments`.
 			final operators: Array<Int> = AnnotatedDeclScan.memberStarts(plugin, tree, shape.operatorOverloadMetaName);
+			// Hoisted once per file: a word inside a comment or an inert (non-interpolating) string
+			// no longer reads as a reference to a parameter it merely mentions.
+			final matchMask: Array<Span> = OccurrenceScan.inertMask(entry.source, plugin);
 			for (c in candidates) if (!AnnotatedDeclScan.covers(c.fn.span, operators))
 				checkFunction(
 					violations, entry.file, entry.source, c.fn, c.parent, tree, visibilityKinds, modifierKinds, dynamicKind, shape, index,
-					captured
+					captured, matchMask
 				);
 		}
 		return violations;
@@ -230,8 +233,10 @@ final class UnusedParameter implements Check implements ConfigAware {
 		if (renameFlagged.length > 0 && renameSilenceEnabled(violations)) {
 			final functionKinds: Array<String> = shape.functionKinds ?? [];
 			final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
-			if (functionKinds.length > 0)
-				collectRenameEdits(tree, null, source, shape, functionKinds, opaqueKinds, renameFlagged, index, edits);
+			if (functionKinds.length > 0) {
+				final matchMask: Array<Span> = OccurrenceScan.inertMask(source, plugin);
+				collectRenameEdits(tree, null, source, shape, functionKinds, opaqueKinds, renameFlagged, index, edits, matchMask);
+			}
 		}
 		return CanonicalEdit.dropContainedEdits(edits);
 	}
@@ -307,7 +312,7 @@ final class UnusedParameter implements Check implements ConfigAware {
 	private static function checkFunction(
 		out: Array<Violation>, file: String, source: String, fn: QueryNode, parent: QueryNode, tree: QueryNode,
 		visibilityKinds: Array<String>, modifierKinds: Array<String>, dynamicKind: Null<String>, shape: RefShape, index: SymbolIndex,
-		captured: Array<String>
+		captured: Array<String>, matchMask: Array<Span>
 	): Void {
 		final fnSpan: Null<Span> = fn.span;
 		if (fnSpan == null) return;
@@ -325,7 +330,7 @@ final class UnusedParameter implements Check implements ConfigAware {
 			final pspan: Null<Span> = p.span;
 			if (name == null || pspan == null) continue;
 			if (StringTools.startsWith(name, '_')) continue;
-			if (OccurrenceScan.referencedInRange(source, name, fnSpan.from, fnSpan.to, [pspan])) continue;
+			if (OccurrenceScan.referencedInRange(source, name, fnSpan.from, fnSpan.to, [pspan], matchMask)) continue;
 			final autofixable: Bool = eligible && fnName != null
 				&& RemoveParam.paramSlotEdits(source, tree, fn, pi, fnName, fnSpan.from, shape).error == null;
 			if (!autofixable && capturedAsValue) continue;
@@ -490,7 +495,8 @@ final class UnusedParameter implements Check implements ConfigAware {
 	 */
 	private static function collectRenameEdits(
 		node: QueryNode, parent: Null<QueryNode>, source: String, shape: RefShape, functionKinds: Array<String>,
-		opaqueKinds: Array<String>, renameFlagged: Array<String>, index: Null<SymbolIndex>, edits: Array<{ span: Span, text: String }>
+		opaqueKinds: Array<String>, renameFlagged: Array<String>, index: Null<SymbolIndex>, edits: Array<{ span: Span, text: String }>,
+		matchMask: Array<Span>
 	): Void {
 		if (opaqueKinds.contains(node.kind)) return;
 		if (functionKinds.contains(node.kind)) {
@@ -500,11 +506,12 @@ final class UnusedParameter implements Check implements ConfigAware {
 				final name: Null<String> = p.name;
 				if (pspan == null || name == null) continue;
 				if (!renameFlagged.contains('${pspan.from}:${pspan.to}')) continue;
-				final nameStart: Int = renameNameStart(source, fnSpan, p);
+				final nameStart: Int = renameNameStart(source, fnSpan, p, matchMask);
 				if (nameStart >= 0) edits.push({ span: new Span(nameStart, nameStart + name.length), text: '_$name' });
 			}
 		}
-		for (c in node.children) collectRenameEdits(c, node, source, shape, functionKinds, opaqueKinds, renameFlagged, index, edits);
+		for (c in node.children)
+			collectRenameEdits(c, node, source, shape, functionKinds, opaqueKinds, renameFlagged, index, edits, matchMask);
 	}
 
 
@@ -520,7 +527,7 @@ final class UnusedParameter implements Check implements ConfigAware {
 	 * always the leading identifier (`[?] name : type`), so a type or default
 	 * that repeats the name cannot be mistaken for it.
 	 */
-	private static function renameNameStart(source: String, fnSpan: Span, param: QueryNode): Int {
+	private static function renameNameStart(source: String, fnSpan: Span, param: QueryNode, matchMask: Array<Span>): Int {
 		final name: Null<String> = param.name;
 		if (name == null) return -1;
 		final pspan: Null<Span> = param.span;
@@ -528,9 +535,9 @@ final class UnusedParameter implements Check implements ConfigAware {
 			-1
 		else if (StringTools.startsWith(name, '_'))
 			-1
-		else if (OccurrenceScan.referencedInRange(source, '_$name', fnSpan.from, fnSpan.to, []))
+		else if (OccurrenceScan.referencedInRange(source, '_$name', fnSpan.from, fnSpan.to, [], matchMask))
 			-1
-		else if (OccurrenceScan.referencedInRange(source, name, fnSpan.from, fnSpan.to, [pspan]))
+		else if (OccurrenceScan.referencedInRange(source, name, fnSpan.from, fnSpan.to, [pspan], matchMask))
 			-1
 		else
 			firstIdentOccurrence(source, name, pspan.from, pspan.to);

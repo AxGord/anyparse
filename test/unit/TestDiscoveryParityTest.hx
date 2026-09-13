@@ -889,6 +889,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.MutationVerdictTest',
 		'unit.query.NameMentionScanTest',
 		'unit.query.NewFileSliceTest',
+		'unit.query.OccurrenceScanMatchMaskTest',
 		'unit.query.OpaqueCondRegionScanTest',
 		'unit.query.ParenGuardSliceTest',
 		'unit.query.ParseFailureLocusTest',

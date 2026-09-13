@@ -20,6 +20,15 @@ using Lambda;
 @:nullSafety(Strict)
 final class RawSourceScan {
 
+	/**
+	 * Per-file memo of `OccurrenceScan.inertMask`, keyed by file path. `nameOccursOutside` asks
+	 * for a file's mask once per (candidate, file) pair across a project-wide dead-code sweep
+	 * (`UnusedPrivate.provablyDeadProjectWide`) — the mask is a pure function of that file's own
+	 * bytes, so the SECOND candidate to visit a file gets the first candidate's answer instead of
+	 * relexing it. Run-scoped instance state, on the same footing as `_grantScanSource` below.
+	 */
+	private final _matchMaskByFile: Map<String, Array<Span>> = [];
+
 	/** Every indexed file's `FileInfo`, handed over by the owning index. */
 	private final _files: Array<FileInfo>;
 
@@ -91,7 +100,7 @@ final class RawSourceScan {
 	public function nameOccursOutside(name: String, excludedFile: String, excludedSpan: Span): Bool {
 		for (file => src in _sources) {
 			final excluded: Array<Span> = file == excludedFile ? [excludedSpan] : [];
-			if (OccurrenceScan.referencedInRange(src, name, 0, src.length, excluded)) return true;
+			if (OccurrenceScan.referencedInRange(src, name, 0, src.length, excluded, matchMaskFor(file, src))) return true;
 		}
 		return false;
 	}
@@ -184,6 +193,25 @@ final class RawSourceScan {
 	 */
 	private inline function admits(file: String, ownerFile: Null<String>): Bool {
 		return ownerFile == null || !_thirdParty.exists(file) || _thirdParty.exists(ownerFile);
+	}
+
+	/**
+	 * `OccurrenceScan.inertMask(source, _plugin)` for `file`, computed once and reused by every
+	 * later candidate `nameOccursOutside` walks the index for — see `_matchMaskByFile`.
+	 */
+	private function matchMaskFor(file: String, source: String): Array<Span> {
+		final cached: Null<Array<Span>> = _matchMaskByFile[file];
+		if (cached != null) return cached;
+		// A file the parser SKIPPED keeps the OLD unmasked treatment: this raw scan is the safety
+		// net such a file's reflective / indirect reference leans on when nothing else can prove it
+		// live (`ReflectionScan.reflectionSurface` has no AST to pull a literal from, so it falls
+		// back to raw source in a DIFFERENT bucket `mentionedInStrings` never reads). Masking a
+		// skipped file the same as a parsed one would remove exactly that margin — see
+		// `CrossScopeSoundnessTest.unreadableExtras`, which pins unreadable never licensing MORE
+		// than readable.
+		final built: Array<Span> = _skipped.contains(file) ? [] : OccurrenceScan.inertMask(source, _plugin);
+		_matchMaskByFile[file] = built;
+		return built;
 	}
 
 	/**

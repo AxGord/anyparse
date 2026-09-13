@@ -500,11 +500,11 @@ class UnusedPrivateCheckTest extends Test {
 
 	/**
 	 * Refined #if gate (member arm, comment mention): a dead private member flagged in a
-	 * `#if`-carrying file whose name appears only in a COMMENT in another scope file is
-	 * KEPT — the raw scan counts comment mentions, so the veto stands. Deletion through a
-	 * comment mention is a deliberate non-goal (possible future refinement).
+	 * `#if`-carrying file whose name appears only in a COMMENT in another scope file is DELETED —
+	 * `OccurrenceScan.inertMask` excludes the comment from `nameOccursOutside`, so a mere mention
+	 * no longer stands in for a real occurrence and the whole-file veto does not engage.
 	 */
-	public function testFixKeepsConditionalFileMemberMentionedInComment(): Void {
+	public function testFixDeletesConditionalFileMemberMentionedOnlyInComment(): Void {
 		final cSrc: String =
 			'package pkg;\nclass C {\n\tprivate function foo() {}\n\t#if debug\n\tpublic function dbg() { trace(1); }\n\t#end\n}';
 		final files: Array<{ file: String, source: String }> = [
@@ -515,7 +515,7 @@ class UnusedPrivateCheckTest extends Test {
 		final cViol: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'pkg/C.hx');
 		Assert.equals(1, cViol.length);
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
-		Assert.equals(0, check.fix(cSrc, cViol, new HaxeQueryPlugin(), index).length);
+		Assert.equals(1, check.fix(cSrc, cViol, new HaxeQueryPlugin(), index).length);
 	}
 
 	/**

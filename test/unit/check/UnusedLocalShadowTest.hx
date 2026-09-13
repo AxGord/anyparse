@@ -289,10 +289,14 @@ class UnusedLocalShadowTest extends Test {
 		);
 	}
 
-	/** Every occurrence outside the excluded regions still counts, a comment mention included. */
-	public function testCommentMentionKeepsDeclaration(): Void {
+	/**
+	 * A comment mention is masked out of the reference scan (`OccurrenceScan.inertMask`), so it no
+	 * longer keeps a declaration alive — the outer `item` here is shadowed by the loop's own
+	 * binder and has no real code reference of its own, so it is correctly flagged.
+	 */
+	public function testCommentMentionNoLongerKeepsDeclaration(): Void {
 		Assert.equals(
-			0,
+			1,
 			violations(
 				'class C {\n\tfunction f(xs:Array<String>) {\n\t\tvar item:String;\n\t\t// item is described here\n'
 				+ '\t\tfor (item in xs) trace(item);\n\t}\n}'

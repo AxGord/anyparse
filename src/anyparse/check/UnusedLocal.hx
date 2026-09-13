@@ -44,6 +44,12 @@ private typedef ScanCtx = {
 	var selfScopeDeclKinds: Array<String>;
 	var valueBinderKinds: Array<String>;
 	var conditionalIfKeyword: Null<String>;
+
+	/**
+	 * The file's inert mask (comments, regex, non-interpolating strings) — a word inside one of
+	 * those no longer reads as a reference to a declaration it merely mentions.
+	 */
+	var matchMask: Array<Span>;
 }
 
 /**
@@ -179,7 +185,8 @@ final class UnusedLocal implements Check implements VolatileMessage {
 				localDeclContinuationKinds: shape.localDeclContinuationKinds ?? [],
 				selfScopeDeclKinds: shape.selfScopeDeclKinds,
 				valueBinderKinds: shape.iterationValueBinderKinds ?? [],
-				conditionalIfKeyword: shape.conditionalIfKeyword
+				conditionalIfKeyword: shape.conditionalIfKeyword,
+				matchMask: OccurrenceScan.inertMask(entry.source, plugin)
 			};
 			walk(ctx, tree, null);
 		}
@@ -299,7 +306,7 @@ final class UnusedLocal implements Check implements VolatileMessage {
 		if (scopeSpan == null) return;
 		final excluded: Array<Span> = [declSpan];
 		var note: String = '';
-		if (OccurrenceScan.referencedInRange(ctx.source, name, scopeSpan.from, scopeSpan.to, excluded)) {
+		if (OccurrenceScan.referencedInRange(ctx.source, name, scopeSpan.from, scopeSpan.to, excluded, ctx.matchMask)) {
 			final shadowed: Array<Span> = shadowedRegions(ctx, enclosingScope, name, declSpan);
 			// An INITIALIZER-LESS declaration carries no value of its own, so "its value is never
 			// read" is not what makes it dead — a WRITE does, and a build macro that rewrites the
@@ -315,7 +322,7 @@ final class UnusedLocal implements Check implements VolatileMessage {
 			if (redecl != null && appendRedeclaredRegion(ctx, redecl, name, scopeSpan, shadowed)) claimed = redecl;
 			if (shadowed.length == 0) return;
 			for (region in shadowed) excluded.push(region);
-			if (OccurrenceScan.referencedInRange(ctx.source, name, scopeSpan.from, scopeSpan.to, excluded)) return;
+			if (OccurrenceScan.referencedInRange(ctx.source, name, scopeSpan.from, scopeSpan.to, excluded, ctx.matchMask)) return;
 			if (claimed != null) note = redeclarationNote(ctx, claimed);
 		}
 		ctx.out.push({

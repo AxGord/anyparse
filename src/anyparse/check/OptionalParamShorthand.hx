@@ -210,7 +210,8 @@ final class OptionalParamShorthand implements Check {
 			final scope: HoistScope = {
 				root: tree,
 				resolveIndex: resolveIndex,
-				commentRegions: lazyCommentRegions(plugin, entry.source)
+				commentRegions: lazyCommentRegions(plugin, entry.source),
+				matchMask: lazyMatchMask(plugin, entry.source)
 			};
 			final sites: Array<ParamSite> = [];
 			collectParams(sites, tree, null, null, null, seams);
@@ -240,7 +241,8 @@ final class OptionalParamShorthand implements Check {
 		final scope: HoistScope = {
 			root: tree,
 			resolveIndex: SwitchChain.lazyIndexOf([{ file: '', source: source }], plugin, index),
-			commentRegions: lazyCommentRegions(plugin, source)
+			commentRegions: lazyCommentRegions(plugin, source),
+			matchMask: lazyMatchMask(plugin, source)
 		};
 		final sites: Array<ParamSite> = [];
 		collectParams(sites, tree, null, null, null, seams);
@@ -692,7 +694,8 @@ final class OptionalParamShorthand implements Check {
 		final accounted: Array<Span> = [for (read in sites) read.ident];
 		accounted.push(declSpan);
 		final comments: Array<Span> = scope.commentRegions();
-		if (OccurrenceScan.referencedUnqualifiedInRange(source, name, fnSpan.from, fnSpan.to, accounted, comments)) return null;
+		if (OccurrenceScan.referencedUnqualifiedInRange(source, name, fnSpan.from, fnSpan.to, accounted, comments, scope.matchMask()))
+			return null;
 		final constText: Null<String> = agreedConstant(sites, typeText, seams, scope, source);
 		return constText == null ? null : {
 			typeText: typeText,
@@ -892,6 +895,23 @@ final class OptionalParamShorthand implements Check {
 	}
 
 	/**
+	 * `HoistScope.matchMask`'s producer — the full inert mask (comments, regex, non-interpolating
+	 * strings), lazy for the same reason `lazyCommentRegions` is: a run whose files hold no
+	 * candidate parameter lexes nothing.
+	 */
+	private static function lazyMatchMask(plugin: GrammarPlugin, source: String): () -> Array<Span> {
+		var cached: Null<Array<Span>> = null;
+		function resolve(): Array<Span> {
+			final have: Null<Array<Span>> = cached;
+			if (have != null) return have;
+			final built: Array<Span> = OccurrenceScan.inertMask(source, plugin);
+			cached = built;
+			return built;
+		}
+		return resolve;
+	}
+
+	/**
 	 * Whether a LITERAL of `kind` may stand as the default of a parameter declared `typeText`.
 	 *
 	 * The one type question this arm cannot leave to the `??` it replaces: `p ?? 0.` on a
@@ -1012,6 +1032,15 @@ private typedef HoistScope = {
 	 * a run whose files hold no candidate parameter lexes nothing.
 	 */
 	final commentRegions: () -> Array<Span>;
+
+	/**
+	 * The file's full inert mask (comments, regex, non-interpolating strings), for the
+	 * completeness scan's MATCH test — a parameter name spelled only in a doc comment or an
+	 * unrelated string literal must not read as a real coalescing read. A separate question from
+	 * `commentRegions` above: that one narrows the qualifier test, this one narrows the match
+	 * itself, and conflating them would change the qualifier test's answer too.
+	 */
+	final matchMask: () -> Array<Span>;
 };
 
 /**

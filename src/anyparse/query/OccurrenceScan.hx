@@ -53,8 +53,10 @@ final class OccurrenceScan {
 	 * hex digit, so a plain word-boundary test reads `'\x24name'` as one long
 	 * token and misses a real read (see `interpolationEscapeBefore`).
 	 */
-	public static inline function referencedInRange(source: String, name: String, from: Int, end: Int, excluded: Array<Span>): Bool {
-		return scanReference(source, name, from, end, excluded, null);
+	public static inline function referencedInRange(
+		source: String, name: String, from: Int, end: Int, excluded: Array<Span>, ?matchMask: Array<Span>
+	): Bool {
+		return scanReference(source, name, from, end, excluded, null, matchMask);
 	}
 
 	/**
@@ -87,9 +89,49 @@ final class OccurrenceScan {
 	 * them and costs one scan per file.
 	 */
 	public static inline function referencedUnqualifiedInRange(
-		source: String, name: String, from: Int, end: Int, excluded: Array<Span>, commentRegions: Array<Span>
+		source: String, name: String, from: Int, end: Int, excluded: Array<Span>, commentRegions: Array<Span>, ?matchMask: Array<Span>
 	): Bool {
-		return scanReference(source, name, from, end, excluded, commentRegions);
+		return scanReference(source, name, from, end, excluded, commentRegions, matchMask);
+	}
+
+	/**
+	 * `inertRegions(source, plugin.lexicalRegions(source))` — the one-call form most masking
+	 * callers want. Kept separate so a caller already holding `regions` (or amortizing them across
+	 * several sources, or a project-wide scan that must not re-lex a file per candidate) is not
+	 * forced to relex.
+	 */
+	public static inline function inertMask(source: String, plugin: GrammarPlugin): Array<Span> {
+		return inertRegions(source, plugin.lexicalRegions(source));
+	}
+
+	/**
+	 * The bytes of `source` that can neither BIND nor READ a name, read off the LEXER alone: every
+	 * comment, every regex literal, and every string literal that cannot interpolate. The mask a
+	 * reference scan takes so that a word inside a sentence or an inert literal stops counting as a
+	 * use of the identifier that spells it — the missing half of `referencedInRange` /
+	 * `referencedUnqualifiedInRange`, which otherwise check only identifier boundaries and the
+	 * `excluded` / `commentRegions` spans a caller already knew about.
+	 *
+	 * An INTERPOLATING literal is left out WHOLE. Its `$name` and `${ … }` segments are real reads,
+	 * and only the parse says which bytes are which (`classifyOccurrences`, the tree-backed and
+	 * finer-grained twin of this function). Masking one wholesale would hide a reference — the one
+	 * direction that costs a wrongly kept-dead / wrongly-deleted binding — so the coarse answer here
+	 * keeps every byte of such a literal visible.
+	 *
+	 * Returned in SOURCE ORDER, non-overlapping (the shape `regions` already has), so a caller
+	 * scanning many occurrences against it may binary-search (`offsetWithinSorted`) instead of a
+	 * linear `offsetWithinAny`.
+	 */
+	public static function inertRegions(source: String, regions: Array<LexRegion>): Array<Span> {
+		final out: Array<Span> = [];
+		for (region in regions) {
+			final inert: Bool = switch region.kind {
+				case LineComment, BlockComment, RegexLit: true;
+				case StringLit: !literalInterpolates(source, region);
+			}
+			if (inert) out.push(new Span(region.from, region.to));
+		}
+		return out;
 	}
 
 	/**
@@ -353,7 +395,8 @@ final class OccurrenceScan {
 	 * a non-null `commentRegions` drops dot-qualified occurrences.
 	 */
 	private static function scanReference(
-		source: String, name: String, from: Int, end: Int, excluded: Array<Span>, commentRegions: Null<Array<Span>>
+		source: String, name: String, from: Int, end: Int, excluded: Array<Span>, commentRegions: Null<Array<Span>>,
+		?matchMask: Array<Span>
 	): Bool {
 		final len: Int = name.length;
 		if (len == 0) return false;
@@ -365,7 +408,11 @@ final class OccurrenceScan {
 			final beforeOk: Bool = at == 0 || !SourceText.isIdentChar(source.fastCodeAt(at - 1)) || interpolationEscapeBefore(source, at);
 			final afterIdx: Int = at + len;
 			final afterOk: Bool = afterIdx >= source.length || !SourceText.isIdentChar(source.fastCodeAt(afterIdx));
-			if (beforeOk && afterOk && !offsetWithinAny(at, excluded) && !qualifiedBefore(source, at, commentRegions)) return true;
+			if (
+				beforeOk && afterOk && !offsetWithinAny(at, excluded) && !qualifiedBefore(source, at, commentRegions)
+				&& (matchMask == null || !offsetWithinSorted(at, matchMask))
+			)
+				return true;
 			i = at + 1;
 		}
 		return false;
@@ -396,6 +443,30 @@ final class OccurrenceScan {
 		while (j >= 0 && SourceText.isSpace(source.fastCodeAt(j))) j--;
 		return j >= 0 && source.fastCodeAt(j) == '.'.code && (j <= 0 || source.fastCodeAt(j - 1) != '.'.code)
 			&& !offsetWithinAny(j, commentRegions);
+	}
+
+	/**
+	 * Whether `offset` lies within any SORTED, non-overlapping span of `spans` — binary search over
+	 * the shape `inertRegions` / `GrammarPlugin.lexicalRegions` produce (source order, no overlaps).
+	 * `offsetWithinAny` stays linear for its own callers, where `excluded` / `commentRegions` is
+	 * typically a handful of spans; this one exists for a project-wide scan
+	 * (`RawSourceScan.nameOccursOutside`) that asks it once per OCCURRENCE against a mask that can
+	 * hold hundreds of entries for one large file.
+	 */
+	private static function offsetWithinSorted(offset: Int, spans: Array<Span>): Bool {
+		var lo: Int = 0;
+		var hi: Int = spans.length - 1;
+		while (lo <= hi) {
+			final mid: Int = (lo + hi) >> 1;
+			final s: Span = spans[mid];
+			if (offset < s.from)
+				hi = mid - 1;
+			else if (offset >= s.to)
+				lo = mid + 1;
+			else
+				return true;
+		}
+		return false;
 	}
 
 	/**
@@ -499,19 +570,31 @@ final class OccurrenceScan {
 	 * double-quoted literal never interpolates in Haxe, so it is always inert.
 	 */
 	private static function interpolatingLiteralAt(source: String, at: Int, regions: Array<LexRegion>): Bool {
-		for (region in regions) {
-			if (region.kind != StringLit || at < region.from || at >= region.to) continue;
-			if (source.fastCodeAt(region.from) != "'".code) return false;
-			var i: Int = region.from + 1;
-			while (i < region.to) {
-				if (source.fastCodeAt(i) != '$'.code) {
-					i++;
-					continue;
-				}
+		final region: Null<LexRegion> = LexicalRegions.regionAt(at, regions);
+		return region != null && region.kind == StringLit && literalInterpolates(source, region);
+	}
+
+	/**
+	 * Whether the string literal `region` can interpolate: single-quoted and carrying a `$`
+	 * that is not the escaped `$$`. Decided per LITERAL rather than per occurrence — working out
+	 * which `${...}` region an occurrence falls in costs another scan, and the coarse answer only
+	 * ever vetoes a rename or masks a whole literal. A double-quoted literal never interpolates in
+	 * Haxe, so it is always inert.
+	 */
+	private static function literalInterpolates(source: String, region: LexRegion): Bool {
+		if (source.fastCodeAt(region.from) != "'".code) return false;
+		var i: Int = region.from + 1;
+		while (i < region.to) {
+			if (source.fastCodeAt(i) == '$'.code) {
 				if (i + 1 >= region.to || source.fastCodeAt(i + 1) != '$'.code) return true;
 				i += 2;
+				continue;
 			}
-			return false;
+			// A numeric escape (`\x24`, `$`) spells the same trigger a decoded literal `$`
+			// does (see `interpolationEscapeBefore`) — missing it here would mask a literal whose
+			// only read is an escaped interpolation, hiding a live reference wholesale.
+			if (DOLLAR_ESCAPES.exists(e -> i + e.length <= region.to && source.substr(i, e.length) == e)) return true;
+			i++;
 		}
 		return false;
 	}

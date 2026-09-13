@@ -168,8 +168,13 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 			// project as unmodified — so PRIVATE — fields of a plain abstract, while every one of them
 			// is public API. Left in, the check deleted 15 of one real file's 17 colour constants.
 			final guarded: Array<Int> = EnumAbstractForms.valueStarts(plugin, tree);
+			// Hoisted once per file: a word inside a comment or an inert (non-interpolating) string
+			// no longer reads as a reference to the declaration that spells it.
+			final matchMask: Array<Span> = OccurrenceScan.inertMask(entry.source, plugin);
 			for (decl in support.project(tree)) if (!EnumAbstractForms.isValue(decl.span, guarded)) {
-				final v: Null<Violation> = violationFor(entry.file, entry.source, decl, index, scopeIndex, support, externTypes, contracts);
+				final v: Null<Violation> = violationFor(
+					entry.file, entry.source, decl, index, scopeIndex, support, externTypes, contracts, matchMask
+				);
 				if (v != null) violations.push(v);
 			}
 			collectCtorCandidates(plugin, tree, entry.file, ctorCandidates);
@@ -251,6 +256,8 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 		if (tree == null) return edits;
 		final hasConditional: Bool = fileHasConditional(source);
 		final scopeIndex: Null<SymbolIndex> = RefactorSupport.widestScopeIndex(plugin, index);
+		// Hoisted once per file — see `run`'s twin.
+		final matchMask: Array<Span> = OccurrenceScan.inertMask(source, plugin);
 
 		final memberByFrom: Map<Int, { node: QueryNode, parent: QueryNode, inExtends: Bool }> = [];
 		collectMembers(tree, false, memberByFrom);
@@ -291,7 +298,7 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 					v.declineReason = DECLINE_BUILD_MACRO;
 				continue;
 			}
-			if (hasConditional && referencedElsewhere(node.name, v.file, span, scopeIndex, source)) {
+			if (hasConditional && referencedElsewhere(node.name, v.file, span, scopeIndex, source, matchMask)) {
 				v.declineReason = 'the file carries an `#if` region and the name occurs elsewhere in the resolution scope, so which '
 					+ 'branch reads it is not decidable from here';
 				continue;
@@ -365,12 +372,12 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	 * code under a `#if` arm, a comment or string mention — keeps the member.
 	 */
 	private static function referencedElsewhere(
-		name: Null<String>, file: String, span: Span, scopeIndex: Null<SymbolIndex>, source: String
+		name: Null<String>, file: String, span: Span, scopeIndex: Null<SymbolIndex>, source: String, matchMask: Array<Span>
 	): Bool {
 		return name == null || (
 			scopeIndex != null
 				? scopeIndex.text.nameOccursOutside(name, file, span)
-				: OccurrenceScan.referencedInRange(source, name, 0, source.length, [span])
+				: OccurrenceScan.referencedInRange(source, name, 0, source.length, [span], matchMask)
 		);
 	}
 
@@ -405,7 +412,7 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	 */
 	private static function violationFor(
 		file: String, source: String, decl: NamedDecl, index: SymbolIndex, scopeIndex: SymbolIndex, support: NamingSupport,
-		externTypes: Array<String>, contracts: Array<FrameworkContract>
+		externTypes: Array<String>, contracts: Array<FrameworkContract>, matchMask: Array<Span>
 	): Null<Violation> {
 		final category: NamingCategory = decl.category;
 		if (category != NamingCategory.Field && category != NamingCategory.Method && category != NamingCategory.Constant) return null;
@@ -437,8 +444,8 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 		// ADD subtypes/grants `index` did not have, never remove one it did, so this can only turn
 		// an existing finding OFF — never invent one on a member that is genuinely referenced.
 		final unused: Bool = RefactorSupport.isPrivateMemberConfined(owner, decl.name, source, scopeIndex)
-			? !OccurrenceScan.referencedInRange(source, decl.name, 0, source.length, [span])
-			: provablyDeadProjectWide(decl.name, file, source, span, index, scopeIndex);
+			? !OccurrenceScan.referencedInRange(source, decl.name, 0, source.length, [span], matchMask)
+			: provablyDeadProjectWide(decl.name, file, source, span, index, scopeIndex, matchMask);
 		return unused ? {
 			file: file,
 			span: span,
@@ -471,9 +478,10 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	 * two arms agree, and `--fix` declines the member on the unresolvable `extends`.
 	 */
 	private static function provablyDeadProjectWide(
-		name: String, file: String, source: String, span: Span, index: SymbolIndex, scopeIndex: SymbolIndex
+		name: String, file: String, source: String, span: Span, index: SymbolIndex, scopeIndex: SymbolIndex, matchMask: Array<Span>
 	): Bool {
-		return !OccurrenceScan.referencedInRange(source, name, 0, source.length, [span]) && !index.text.nameOccursOutside(name, file, span)
+		return !OccurrenceScan.referencedInRange(source, name, 0, source.length, [span], matchMask)
+			&& !index.text.nameOccursOutside(name, file, span)
 			&& (scopeIndex == index || !scopeIndex.text.nameOccursOutside(name, file, span));
 	}
 
