@@ -206,8 +206,8 @@ final class UsingScan {
 	 * Why a rewrite is refused when another `using` in the same file could also supply `method` — the THIRD way this seam says
 	 * no, and the one that used to say nothing at all. The refusal it explains is FILE-WIDE: a caller that mixes extension-form
 	 * and qualified rewrites drops both, and the sentence says so rather than implying every dropped rewrite needed the module
-	 * in scope. Narrowing it to the extension-form sites is T829 - the back-link exists (`PreferFind.rewrote`,
-	 * `BoolLoopScan.extensionForm`), so it is a behaviour change with its own measurement, not a wording fix.
+	 * in scope. Narrowing it to the extension-form sites is a behaviour change with its own gate, not a
+	 * wording fix — the back-link exists (`PreferFind.rewrote`, `BoolLoopScan.extensionForm`).
 	 *
 	 * `conflictingUsing` answers a Bool, so the conflicting module is not nameable here; what the
 	 * reader needs is the rule, which is the same in every file it fires on. Written in one place for

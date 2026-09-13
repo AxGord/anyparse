@@ -22,14 +22,14 @@ import anyparse.runtime.Span;
  * - the RETURN form, `for (x in xs) if (cond) return true;` + `return false;`, which becomes
  *   `return xs.exists(x -> cond);`. Its GUARDED variant
  *   `if (g) for (x in xs) if (cond) return true;` collapses to `return g && xs.exists(x -> cond);`
- *   — more than half the real sites measured on a ~800-file application are that one;
+ *   — more than half the real sites are that one;
  * - the FLAG form, `var f:Bool = false;` immediately followed by
  *   `for (x in xs) if (cond) f = true;`, which becomes `final f:Bool = xs.exists(x -> cond);`.
- *   Eleven sites over that same application, and it is the form the code actually writes.
+ *   The form the code actually writes.
  *
  * The flag form carries a gate the return form does not need: the CONDITION must be side-effect
  * free (`PurityScan.isPure`). A `return` leaves the loop at the first match, so the emitted call's
- * short-circuit is invisible; a flag assignment does not, and five of those eleven sites call a
+ * short-circuit is invisible; a flag assignment does not, and real sites call a
  * function that does the loop's work on every element. `BoolLoopScan`'s type doc has the full
  * reasoning and names them.
  *
@@ -48,8 +48,8 @@ import anyparse.runtime.Span;
  * `RiskyFix` the edit is applied speculatively and REVERTED when it breaks the build, and with
  * no compiler oracle configured the check is report-only. It is a `GroupedFix` for the same
  * reason: reverting the rewrite while keeping the `using Lambda;` the fix inserted would leave a
- * file that still compiles, so the verifier could not tell that subset was wrong — measured on
- * the very fixture above, which came back with an orphaned `using` before the grouping landed. `Lambda.foreach` has no such
+ * file that still compiles, so the verifier could not tell that subset was wrong — it comes
+ * back with an orphaned `using`. `Lambda.foreach` has no such
  * collision — no stdlib collection declares `foreach` — which is why `prefer-foreach` ships as
  * an ordinary trusted fix, on the same footing as `prefer-find`.
  *

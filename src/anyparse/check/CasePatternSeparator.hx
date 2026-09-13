@@ -38,25 +38,22 @@ private typedef SeparatorSeams = {
  *  - `pipe` — a branch carrying two or more leading patterns is the finding; the fix turns every
  *    separating `,` into a `|`. Note the layout cost on a LONG label: a comma-separated one that
  *    overflows the line width FILLS its continuation lines, while the joined form is an expression
- *    chain the writer breaks ONE OPERAND PER LINE. Measured over this repository, the comma
- *    direction takes 149 lines out and the pipe direction puts 11 back, nearly all of them in a
- *    single file of wide constant labels.
+ *    chain the writer breaks ONE OPERAND PER LINE, so a file of wide constant labels grows.
  *
  * Only the TOP level of a label is ever touched. A NESTED or-pattern (`case Some(E | F):`) has no
  * comma spelling at all, and it is not the direct child of the pattern wrapper, so neither
- * direction reaches it.
- * Neither is anything inside a REIFICATION subtree (`RefShape.opaqueKinds` — a `macro …`
- * quotation): there the source IS the AST a macro builds, and the two spellings do not build the
- * same one — measured, `macro switch x { case A | B: … }` reifies its label as ONE
+ * direction reaches it. Neither is anything inside a REIFICATION subtree (`RefShape.opaqueKinds`
+ * — a `macro …` quotation): there the source IS the AST a macro builds, and the two spellings do
+ * not build the same one — `macro switch x { case A | B: … }` reifies its label as ONE
  * `EBinop(OpOr, …)` value while `case A, B:` reifies as TWO, so respelling the separator silently
  * changes what a macro reading `Case.values` sees, with nothing rejecting the result.
  *
  * ## Why the pipe direction gates and the comma direction does not
  *
- * SPLITTING an or-pattern into several patterns is always sound. Measured on Haxe 4.3:
- * `case A(n) | B(n):` and `case A(n), B(n):` bind and match identically, with or without a guard,
- * and `case 1 | 2:` is an alternation rather than the bitwise `3` the same tokens would mean in
- * an expression. So the comma direction flags on shape alone.
+ * SPLITTING an or-pattern into several patterns is always sound: `case A(n) | B(n):` and
+ * `case A(n), B(n):` bind and match identically, with or without a guard, and `case 1 | 2:` is an
+ * alternation rather than the bitwise `3` the same tokens would mean in an expression. So the
+ * comma direction flags on shape alone.
  *
  * JOINING is not always sound, because an `=`-capture binds LOOSER than `|` and TIGHTER than `,`:
  * `case v = A | B:` captures the whole alternation and compiles, while `case v = A, B:` is
@@ -72,17 +69,16 @@ private typedef SeparatorSeams = {
  * than part of the fix. Everything else is refused, including shapes the whitelist has never been
  * shown — a `var x` capture, an `=`-capture, an extractor, an array or structure pattern, and the
  * bare WILDCARD, which keeps the ubiquitous `case null, _:` idiom exactly as written. That one is
- * a style call rather than a correctness one: `case null | _:` compiles and behaves identically
- * (measured), but the comma spelling is what the idiom is read by.
+ * a style call rather than a correctness one: `case null | _:` compiles and behaves identically,
+ * but the comma spelling is what the idiom is read by.
  *
  * ## Default OFF
  *
  * Which separator a project writes is a house style, not a defect — and this rule PICKS A SIDE, so
- * running it unasked would rewrite whichever side a codebase had already settled on (309 findings
- * over this repository, every one of them the same way). It ships opt-in (`DefaultOff`): enable it
- * with `"case-pattern-separator": { "enabled": true }`, then set `style` if the comma default is
- * not the house style. An explicit `--rule case-pattern-separator` bypasses enablement, as for any
- * rule.
+ * running it unasked would rewrite whichever side a codebase had already settled on. It ships
+ * opt-in (`DefaultOff`): enable it with `"case-pattern-separator": { "enabled": true }`, then set
+ * `style` if the comma default is not the house style. An explicit `--rule
+ * case-pattern-separator` bypasses enablement, as for any rule.
  *
  * ## Grammar-agnostic
  *
@@ -150,7 +146,7 @@ final class CasePatternSeparator implements Check implements DefaultOff implemen
 	 * That last part holds only where the writer actually re-emits the region. In a VERBATIM one
 	 * — inside a `@formatter:off` block, or inside a string-interpolation literal, both of which
 	 * the writer copies through — the bare character edit survives as written, so `case A | B:`
-	 * becomes `case A , B:`. Measured, and harmless: the result parses, means the same thing, and
+	 * becomes `case A , B:`. Harmless: the result parses, means the same thing, and
 	 * re-canonicalises to nothing (the file still counts as canonical, so no gate reports it). The
 	 * edit span stays one character all the same — widening it to swallow the preceding whitespace
 	 * would rejoin lines inside exactly the regions whose layout a user pinned on purpose.
@@ -361,8 +357,8 @@ final class CasePatternSeparator implements Check implements DefaultOff implemen
 	 * none or several — the demand that refuses a gap this rewrite would have to guess at.
 	 *
 	 * A plain scan is enough because the gap cannot hold a COMMENT: the writer drops any comment
-	 * written inside a case label (measured, for both separators and both comment forms), so such a
-	 * file never round-trips and `RefactorSupport.canonicalize` refuses it before — and again after
+	 * written inside a case label (for both separators and both comment forms), so such a file
+	 * never round-trips and `RefactorSupport.canonicalize` refuses it before — and again after
 	 * — this fix runs. Re-deriving that by hand-parsing comments here would only add a second,
 	 * worse lexer to disagree with the one the tree already came from.
 	 */

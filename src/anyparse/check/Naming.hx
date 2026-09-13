@@ -184,48 +184,38 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		// configured libraries) when present — a field of an `openfl` / `lime` subclass is then
 		// provable rather than blocked as unresolvable. The two CROSS-FILE proofs below take a
 		// DIFFERENT index from this one, and neither takes the report index once the project declares
-		// a resolution scope — confinement moved off it in S179, the reflection scan in S180. With no
-		// declared scope both fall back to `index` exactly as before, which is the state every unit
-		// test holding a bare plugin exercises.
+		// a resolution scope. With no declared scope both fall back to `index`, which is the state
+		// every unit test holding a bare plugin exercises.
 		final resolutionIndex: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
 		// Those two cross-file proofs — is this private member confined, and does another file name
 		// it in a reflection call — share ONE index, and it is the WIDEST rather than the report one.
-		// What `RefactorSupport.widestScopeIndex` gates is NARROWER than its name suggests, and the
-		// sentence that used to stand here got it wrong: it refuses a scope that exists ONLY because a
-		// Haxe std was discovered, so a project declaring nothing keeps the report index. A project
-		// that DID declare `resolutionRoots` / `resolutionLibs` gets the std inside this index too —
-		// `LintCommand.readResolutionLibrary` appends it to the SAME scope — and both proofs are keyed
-		// on a NAME, so a std or haxelib coincidence can decide them. Measured on this project's own
-		// config: 33 `Reflect.<m>(…, "literal")` sites in the std tree the spec covers, ~28 distinct
-		// names. The direction is safe (an extra subtype or reflection name only adds a refusal) so it
-		// costs usefulness, not correctness. T868 settled the fork that used to stand here — the sibling
-		// scan in `UnusedPrivate` took the narrower PROJECT scope, and it was the one that was wrong:
-		// with the reflective string in the LIBRARY half of the same declared scope, the narrow seam
-		// licensed a member DELETION the wide one refuses. Both name-keyed scans now share
+		// `RefactorSupport.widestScopeIndex` refuses a scope that exists ONLY because a Haxe std was
+		// discovered, so a project declaring nothing keeps the report index; a project that DID declare
+		// `resolutionRoots` / `resolutionLibs` gets the std inside this index too, and since both
+		// proofs are keyed on a NAME, a std or haxelib coincidence can decide them. The direction is
+		// safe (an extra subtype or reflection name only adds a refusal), so it costs usefulness, not
+		// correctness. The narrower PROJECT scope is the wrong one for a name-keyed scan: with the
+		// reflective string in the LIBRARY half of the same declared scope, the narrow seam licenses a
+		// member DELETION the wide one refuses. Both name-keyed scans share
 		// `ReflectionScan.scopeFiles`, so `wideIndex` is the CONFINEMENT half's index here and the
-		// reflection scan's FALLBACK for a run with no declared scope, not its scope. That fallback is WIDER than `widestScopeIndex`
-		// was: `resolutionSourcesOf` gates on `hasAnyResolutionScope`, so a project declaring nothing now asks the discovered std
-		// too (the 33 sites above), where the old index kept the report alone — same direction, only refusals are added. And it runs
-		// once per `fix()` call, not once per run (S184 review): measured on a Pony copy, `lint src --rule naming --fix` 7.16s →
-		// 7.69s for the same 31 edits in 5 files; memoising the per-call `scopeFiles` union and its linear dedupe is T905.
+		// reflection scan's FALLBACK for a run with no declared scope, not its scope; that fallback
+		// asks the discovered std too, where the report index alone would not — same direction, only
+		// refusals are added. It runs once per `fix()` call, not once per run.
 		//
-		// This is the decision that lets the SINGLE-FILE rename go ahead, and each half was measured
-		// on its own two-file probe under `resolutionRoots: ["src"]`.
-		// CONFINEMENT (S179): a false "confined" — a subtype or an `@:access` grantee declared in a
-		// file the run does not lint — let `lint A.hx --rule naming --fix` write 2 edits in A alone
-		// and leave `a.My_Field` standing in the grantee, where the same command over `src` writes 3
-		// edits in 2 files. REFLECTION (S180, T861): with `Reflect.field(c, 'My_Field')` in a file the
-		// run does not lint, `lint C.hx --rule naming --fix` wrote 2 edits and the reflective read
-		// went on naming a field that no longer existed, where `lint src` refuses with
-		// `REFLECTION_NAME`.
+		// This is the decision that lets the SINGLE-FILE rename go ahead. CONFINEMENT: a false
+		// "confined" — a subtype or an `@:access` grantee declared in a file the run does not lint —
+		// lets a one-file `--fix` rename the member in that file alone and leave the grantee's access
+		// standing. REFLECTION: with `Reflect.field(c, 'My_Field')` in a file the run does not lint, a
+		// one-file `--fix` renames the field and the reflective read goes on naming a field that no
+		// longer exists, where a project-wide run refuses with `REFLECTION_NAME`.
 		//
 		// Each widening is one-way, and both point the same way. Widening only ever ADDS a subtype /
 		// grant, so `confined` can only go true -> false; it only ever ADDS reflection names, so
 		// `REFLECTION_NAME` only fires more often. So this path can only LOSE a rename to a refusal,
 		// never gain one.
 		final wideIndex: Null<SymbolIndex> = RefactorSupport.widestScopeIndex(plugin, index);
-		// The REPORT index goes to the reflection scan, not `wideIndex`: since T868 the SCOPE is
-		// `ReflectionScan.scopeFiles`', and an index is only the fallback for a run that declared none —
+		// The REPORT index goes to the reflection scan, not `wideIndex`: the SCOPE is
+		// `ReflectionScan.scopeFiles`, and an index is only the fallback for a run that declared none —
 		// where the report set IS the whole world. Handing the wide one would have made the two
 		// interchangeable (on a declared scope it is a subset of what the seam adds anyway) and hidden
 		// which of them the guard actually depends on.
@@ -273,7 +263,7 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 	 * subtypes / `@:access`-grant files), or ANY public one (reachable from anywhere). The single-file
 	 * `fix` skips both (a non-confined member is not provably contained; a public one is refused outright by
 	 * `RenameRefusal.of`); here the rename is proven complete across EVERY affected report file and emitted
-	 * as one atomic multi-file edit set. The declaring file resolves scope-correctly (the T29 occurrence
+	 * as one atomic multi-file edit set. The declaring file resolves scope-correctly (the occurrence
 	 * set + completeness gate), and a collision with a constructor PARAMETER there is repaired by
 	 * qualifying through `this.` rather than refused; each other affected file classifies every occurrence
 	 * of the old name — an `ActiveCode` one is a reference to rename, a `CommentTrivia` one renames along
@@ -706,12 +696,12 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		// member - `RenameRefusal.of` refuses every public declaration, so this is a public member's only path.
 		if (decl.renameUnsafe == true) return null;
 		final isPublic: Bool = decl.mods.contains('public');
-		// `13177bff`'s pattern, one gate later than it reached: this read `if (!crossFileCategory(decl))
-		// return null;`, an undeclared decline. It looked harmless because the per-file path writes a
-		// sentence for the same findings afterwards — and for a PUBLIC method it writes the WRONG one.
-		// `RenameRefusal.of` tests `public` BEFORE it tests `override`, so an override turned away here
-		// mute was reported as `a public member ... the cross-file path owns it, and declined too`, and
-		// the cross-file path had declined because it does not own the declaration at all.
+		// A silent decline here (`return null` on a category this path does not own) is not harmless:
+		// the per-file path writes a sentence for the same findings afterwards, and for a PUBLIC method
+		// it writes the WRONG one — `RenameRefusal.of` tests `public` BEFORE it tests `override`, so a
+		// mute-refused override was reported as owned-and-declined by the cross-file path, which had
+		// declined only because it does not own the declaration at all. So the category is refused
+		// with its own sentence.
 		final category: Null<String> = crossCategoryRefusal(decl);
 		if (category != null) return RenameRefusal.candidate(v, category);
 		final owner: Null<String> = decl.enclosingType;
@@ -739,10 +729,10 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		// it — `affectedFiles`, `publicAffectedFiles`, `sourceByFile` — enumerates the files to edit
 		// from the REPORT scope. Widen the question without widening the enumeration and a member the
 		// wide index calls unconfined is accepted here, its affected set comes back as the declaring
-		// file alone, and the rename lands in that one file: on the two-file `@:access` probe under
-		// `resolutionRoots: ["src"]`, `lint A.hx --rule naming --fix` went from 0 edits back to 2 in
-		// 1 file with the grantee's access left bound to the old name — the same orphan the
-		// single-file path had just been stopped from writing.
+		// file alone, and the rename lands in that one file: on a two-file `@:access` probe under
+		// `resolutionRoots`, a one-file `naming --fix` would rename the member in the declaring file
+		// alone and leave the grantee's access bound to the old name — the same orphan the single-file
+		// path is stopped from writing.
 		//
 		// Asking NARROW here is therefore not a hole. Confinement is monotone: widening the index can
 		// only flip `confined` true -> false, so the wider `RenameRefusal.of` can only DECLINE where
@@ -753,20 +743,17 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		// No reflection guard here, deliberately. `RenameRefusal.of`'s exists because the single-file path
 		// never looks at another file; this path DOES - a public member's affected set is every scope file
 		// mentioning the name (`publicAffectedFiles`), and `otherFileRenameSpans` already refuses on a
-		// name-shaped string literal in any of them. Measured: with a duplicate AST-projected guard
-		// removed, `Reflect.field(x, '__size')` in the declaring file AND in another file both still
-		// refuse. A second mechanism answering the same question would only re-scan the
-		// resolution scope once per candidate for an answer this path already holds.
+		// name-shaped string literal in any of them, in the declaring file and in another file alike.
+		// A second mechanism answering the same question would only re-scan the resolution scope once
+		// per candidate for an answer this path already holds.
 		// Unresolvable hierarchy, and the two causes answer separately: one sentence for both sent a
 		// reader looking for an `@:allow` that a duplicate type name had actually caused.
 		//
 		// The DUPLICATE is asked first, and that order is the point rather than a preference: it is
-		// the cause the index knows EXACTLY, and the one a reader can act on. T159 chose the order
-		// because the grant half was a raw `indexOf` that a `@:allow` in a comment satisfied, so
-		// asked first it claimed metadata a file did not carry AND buried the real duplicate. That
-		// scan is now `RefactorSupport.carriesAllowGrant` — the single reader, comment- and
-		// literal-masked — so the sentence is true when it is written; the order still stands on its
-		// own, since a duplicate type name is the more actionable of two real causes.
+		// the cause the index knows EXACTLY, and the one a reader can act on. The grant half is
+		// `RefactorSupport.carriesAllowGrant` — the single reader, comment- and literal-masked — so
+		// the sentence is true when it is written; the order still stands on its own, since a
+		// duplicate type name is the more actionable of two real causes.
 		final declarers: Array<FileInfo> = index.refs.declaringFiles(ownerName);
 		if (declarers.length != 1)
 			return RenameRefusal.candidate(v, RenameRefusal.crossOwnerNotUnique(ownerName, declarers.map(f -> f.file)));
@@ -1267,8 +1254,7 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 	 * proof that it is the single-file path's job.
 	 *
 	 * A `Null<String>` rather than a `Bool` because the caller must SAY it, and the sentence a reader
-	 * gets is then this gate's own — `13177bff`'s conversion, at the one gate of this path that had not
-	 * taken it.
+	 * gets is then this gate's own.
 	 */
 	private static function crossCategoryRefusal(decl: NamedDecl): Null<String> {
 		final reach: Null<ImplicitReach> = decl.implicitReach;
@@ -1325,17 +1311,11 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		final out: Array<String> = [];
 		if (candidates.length == 0) return out;
 		// The two quoted spellings of each candidate, built ONCE for the whole walk, per candidate so
-		// the skip-parse branch below can still ask about ONE name. The walk is the WIDE scope this
-		// guard gained in S180/T861 — report files UNION the resolution sources, 2764 of them on Pony
-		// against 680 report files — and it runs once per `fix()` call, 49 times in `lint src --rule
-		// naming --fix` there, so interpolating `'$name'` / `"$name"` INSIDE it was two string
-		// allocations per (scope file x candidate).
-		//
-		// THIS is where the widening's cost sits, and it is not where T905 looked. Timed around the
-		// call over three alternating rounds of that Pony command: 629 / 618 / 600 ms in 49 calls
-		// before this hoist, 439 / 436 / 436 ms after — while `ReflectionScan.scopeFiles`, the union
-		// T905 proposed memoising, is 12ms of the same 7s run. Wall clock cannot see either number
-		// (±0.4s between rounds), which is why both are taken at the call and not from `time`.
+		// the skip-parse branch below can still ask about ONE name. The walk is the WIDE scope —
+		// report files UNION the resolution sources — and it runs once per `fix()` call, so
+		// interpolating `'$name'` / `"$name"` INSIDE it would be two string allocations per
+		// (scope file x candidate); that product, not the `scopeFiles` union, is where the widening's
+		// cost sits.
 		//
 		// A quoted spelling is deliberately NOT a verdict: the same text matches a comment, a
 		// `case 'name':` and an asset key, which is exactly the over-refusal the AST projection below
@@ -1348,11 +1328,11 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 			final source: String = entry.source;
 			if (!quoted.exists(forms -> spelled(source, forms))) continue;
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-			// T867: a file the parser could not read still SPELLS the name in quotes, and nothing
-			// downstream can tell a `Reflect.field(x, 'name')` there from a menu key. `continue` here
-			// was the blindness — `SymbolIndex.allFiles()`, which this walked before, drops a
-			// skip-parsed file entirely, so its text reached no reader at all. The conservative answer
-			// is the one `RawSourceScan.skippedMayReference` gives the confinement proof beside it.
+			// A file the parser could not read still SPELLS the name in quotes, and nothing downstream
+			// can tell a `Reflect.field(x, 'name')` there from a menu key; skipping it (as a walk over
+			// `SymbolIndex.allFiles()` would, since that drops a skip-parsed file entirely) is the
+			// blindness. The conservative answer is the one `RawSourceScan.skippedMayReference` gives the
+			// confinement proof beside it.
 			if (tree == null) {
 				for (i => forms in quoted) if (spelled(source, forms) && !out.contains(candidates[i])) out.push(candidates[i]);
 				continue;
@@ -1367,8 +1347,8 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 	 * resolution sources onto, for the runs that have no declared scope and whose whole reflection
 	 * surface is therefore the report set this index was built over.
 	 *
-	 * Skipped files carry their retained source and are included: they are the T867 half, and an index
-	 * that dropped them here would put the blindness back one layer down.
+	 * Skipped files carry their retained source and are included: an index that dropped them here
+	 * would put the skip-parse blindness back one layer down.
 	 */
 	private static function indexSources(index: SymbolIndex): Array<ScopeFile> {
 		final files: Array<String> = [for (fi in index.allFiles()) fi.file].concat(index.skippedFiles());
@@ -1770,7 +1750,7 @@ private typedef DeclRename = {
  *
  * The rename path is a long chain of independent proofs, and `Check.fix` has ONE spelling for
  * every failure of any of them: the empty edit list, which is also what a rule with no autofix at
- * all answers. On an 851-file tree that reported 231 findings and wrote nothing, the run could
+ * all answers. On a tree where the rule reports hundreds of findings and writes nothing, the run can
  * therefore say only "its fix was called for these findings and returned no edit; the check
  * declares neither NoAutofix nor a decline reason" — and the first hypothesis a reader forms about
  * a wholesale zero is a gate closing by accident. It was not: `correctedName` had nothing to
@@ -1848,7 +1828,7 @@ private class RenameRefusal {
 	 * The policy states a format and no way to reach it. THE dominant decline on any project that
 	 * ships a `checkstyle.json`: `CheckstyleConfigLoader` maps each naming check's `format` regex
 	 * onto a rule and attaches no `normalize`, so the check can prove a name wrong and has nothing
-	 * to propose. 198 of 231 findings on one such tree.
+	 * to propose.
 	 */
 	public static inline final NO_NORMALIZER: String =
 		'the naming policy in force states a FORMAT this name fails but no mechanical normalizer that could produce a conforming one — no correction is attached to a category whose rename reaches every file that names it, so the check can say the name is wrong and not what it should be';
@@ -1913,17 +1893,15 @@ private class RenameRefusal {
 	 * The sentence for the mechanism that reaches `reach`'s member without an identifier naming it —
 	 * one gate per `ImplicitReach`, where there used to be one sentence for all five.
 	 *
-	 * `NamedDecl.implicitReach` was a `Bool`, so this refusal said `the member carries metadata` for
-	 * a `private function new()` that carries none — a decline reason that sends the next reader
-	 * after a mechanism the member does not have, which is worse than no reason at all. Same defect
-	 * `13177bff` split out of the run's ledger, one level down and inside a single sentence.
+	 * A decline reason that names a mechanism the member does not have (`the member carries
+	 * metadata` for a `private function new()`) sends the next reader after the wrong thing, which
+	 * is worse than no reason at all — hence one sentence per reach.
 	 *
-	 * THREE of the five are what `of` reaches today, and the count is the measure of the widening
-	 * that gate took: `TypeRegistry` needs a `FinalMember`, whose category is Constant or Field and
-	 * never Method, so while `of` asked the question under `category == Method` the arm that exists
-	 * FOR a `Class<T>` registry could not refuse anything at all. Widening the question to every
-	 * member is what connected it to its own purpose. The two that remain unreachable THROUGH here
-	 * are unreachable rather than dead: `MagicName` and `Accessor` make a Haxe declaration
+	 * THREE of the five are what `of` reaches: `TypeRegistry` needs a `FinalMember`, whose category
+	 * is Constant or Field and never Method, so the question must be asked of every member and not
+	 * under `category == Method`, or the arm that exists FOR a `Class<T>` registry refuses nothing.
+	 * The two that remain unreachable THROUGH here are unreachable rather than dead: `MagicName`
+	 * and `Accessor` make a Haxe declaration
 	 * `reservedName`, so it carries no finding for a rename to be asked about. The switch stays
 	 * total because the gate that keeps each of them away from here lives in another class, and a
 	 * sentence that is right only while a distant gate holds is exactly what this function exists to
@@ -2042,16 +2020,14 @@ private class RenameRefusal {
 		// renaming the override alone orphans it. `implicitReach` is EVERY member's: a member reached
 		// without an identifier naming it is reached that way whatever its category, and the OTHER check
 		// that asks this field (`UnusedPrivate.violationFor`) asks it with no category qualifier at all.
-		// Here it was asked under `category == Method`, which let TWO arms through on a Field or a
-		// Constant: an ANNOTATED member, refused all along when it was a method, and a `TypeRegistry`
-		// constant - whose arm has no other category to be reached in, since `isTypeReferenceInit`
-		// requires a `FinalMember` and a `FinalMember` is Constant or Field and never Method. So the
-		// gate that exists FOR a `Class<T>` registry could not refuse one at all. Measured on the base
-		// engine: `private static final _BAD_ENTRY = SomeType;` - which `unused-private` declines even
-		// to REPORT, because a macro may reach it by NAME - was renamed to `BAD_ENTRY` by
-		// `naming --fix`. A name a rename breaks is broken exactly as a deletion breaks it. WHICH
-		// mechanism is what `implicitReach` names and this refusal repeats, rather than claiming
-		// metadata for all five.
+		// Asking it under `category == Method` would let TWO arms through on a Field or a Constant: an
+		// ANNOTATED member, and a `TypeRegistry` constant - whose arm has no other category to be
+		// reached in, since `isTypeReferenceInit` requires a `FinalMember` and a `FinalMember` is
+		// Constant or Field and never Method - so `private static final _BAD_ENTRY = SomeType;`, which
+		// `unused-private` declines even to REPORT because a macro may reach it by NAME, would be
+		// renamed. A name a rename breaks is broken exactly as a deletion breaks it. WHICH mechanism is
+		// what `implicitReach` names and this refusal repeats, rather than claiming metadata for all
+		// five.
 		if (category == NamingCategory.Method && decl.mods.contains('override')) return OVERRIDE;
 		final reach: Null<ImplicitReach> = decl.implicitReach;
 		if (reach != null) return implicitReach(reach);

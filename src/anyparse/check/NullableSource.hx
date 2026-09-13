@@ -38,8 +38,7 @@ import anyparse.runtime.Span;
  * `Array.pop`, `List.first`, a library's `find` — every member this arc is about is declared
  * OUTSIDE the files under report, so a report-scoped index answers "unknown" for all of them by
  * construction. The caller therefore hands in the RESOLUTION index (report scope + declared roots
- * + libs + std); measured on the Pony fork, that moves the method-call arc from 48 resolved
- * questions of 421 to 194.
+ * + libs + std), which is what makes the method-call arc resolve most of its questions.
  *
  * Which is what makes `excludedCalls` load-bearing HERE and nowhere else in this class. The
  * exclusion is applied to `instanceSigs` when the config is BUILT, and this arc reaches the same
@@ -114,10 +113,10 @@ final class NullableSource {
 	 * read and no type is inferred, only the annotation the author wrote, looked up in `declaredTypes`
 	 * under the declaration's own `span.from` (the binding offset that map is keyed by).
 	 *
-	 * Point-wise this predicate is nearly all noise — measured on the Pony fork, 346 dereferences of a
-	 * `Null<T>`-declared bare identifier, of which 209 of the 259 a flow can reach are already narrowed
-	 * by a guard. It is usable only as a `NullFlow` SEED, where the engine narrows those away; `NullFlow`
-	 * also decides WHICH declarations it asks about (locals, never parameters — see its `analyze` doc).
+	 * Point-wise this predicate is nearly all noise — most dereferences of a `Null<T>`-declared bare
+	 * identifier are already narrowed by a guard. It is usable only as a `NullFlow` SEED, where the
+	 * engine narrows those away; `NullFlow` also decides WHICH declarations it asks about (locals,
+	 * never parameters — see its `analyze` doc).
 	 *
 	 * `Dynamic` / `Any` are excluded by construction: `cfg.returnMarkers` holds the explicit wrapper
 	 * alone, and a deref of an untyped value is not a clear NPE.
@@ -263,8 +262,7 @@ final class NullableSource {
 		// The EXCLUSION list is applied to `instanceSigs` at build time, and this arc reaches the
 		// same call by a different route — an index lookup that never sees that filter. Without
 		// this line an `Array.pop()` a caller asked to be excluded comes back through the index
-		// the moment the index is wide enough to hold `Array` (measured: `LangTable:42`,
-		// `TablePrepare:100-101`, `Renderer.hx` x20 on the Pony fork), and the exclusion reads as
+		// the moment the index is wide enough to hold `Array`, and the exclusion reads as
 		// honoured while being silently void.
 		if (cfg.excludedCalls.contains('${lookupType}.${parts.method}')) return null;
 		final retNominal: Null<String> = idx.members.returnNominalOf(lookupType, parts.method);

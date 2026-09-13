@@ -317,7 +317,7 @@ final class RedundantElse implements Check {
 	 *
 	 * Three conditions, all structural: a `!= null` guard on `subject` encloses this `if`
 	 * (`narrowed`), the KEPT then-branch performs a call / write (with none, the narrowing survives
-	 * and the de-nest is fine — measured), and the else body dereferences `subject`. A LOCAL narrows
+	 * and the de-nest is fine), and the else body dereferences `subject`. A LOCAL narrows
 	 * across the same gap, so this withholds a few fixes it need not; telling a field from a local
 	 * needs resolution this check does not have, and the wrong direction here is a build failure.
 	 */

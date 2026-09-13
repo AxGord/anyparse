@@ -92,7 +92,7 @@ final class AlwaysNullComparison implements Check {
 	 *
 	 * What stops it being a one-line slice is the blast radius, not the mechanism: `dead-null-guard` is a
 	 * `RiskyFix` and this one is not, so the same edits would land unverified on a run with no compiler
-	 * oracle. Backlog T825.
+	 * oracle.
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex

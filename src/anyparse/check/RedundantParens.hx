@@ -119,7 +119,7 @@ using StringTools;
  *   NOT for a safety reason, and the tempting one is false: a pair written inside a
  *   `macro` QUOTATION does reify as `EParenthesis`, but `${ … }` is the reification
  *   ESCAPE — its content is ordinary macro-TIME code, and `macro ${(e)}` builds exactly
- *   what `macro ${e}` builds (measured). The quoted region is separately handled, by
+ *   what `macro ${e}` builds. The quoted region is separately handled, by
  *   `MacroExpr` in `parenOpaqueSubtreeKinds`, and that covers only the OPERAND arms —
  *   `dropsParens` does not gate the delimited arm on `opaque` — so opening this slot
  *   would need `DollarBlockExpr` in `delimitedAllChildKinds`, where its absence is a
@@ -234,8 +234,8 @@ using StringTools;
  * and it declines even that when the RIGHT operand carries a pair of its own
  * (`Math.abs((px - x) + (py - y - h))`). Both pairs are one symmetry the author wrote,
  * only the left is ever removable, and firing there leaves the expression lopsided:
- * worse to read than either keeping or dropping both. Measured on a 798-file corpus,
- * that veto is what separates the clean drops from the disfiguring ones.
+ * worse to read than either keeping or dropping both. On real code that veto is what
+ * separates the clean drops from the disfiguring ones.
  *
  * All four arms are additionally suppressed inside `RefShape.parenOpaqueSubtreeKinds` (a
  * `macro` quotation, where a pair reifies as data; a case pattern, matched
@@ -262,7 +262,7 @@ using StringTools;
  * A METADATA PREFIX. This parser models `@:m` as wrapping the whole expression that
  * follows; the compiler binds it to the immediate primary. So in `@:privateAccess (a * b) + c`
  * the pair is what holds the annotation over the multiplication, and dropping it turns
- * compiling code into `Cannot access private field` — measured, not reasoned. The pair is
+ * compiling code into `Cannot access private field`. The pair is
  * treated as `Required` whenever it sits on the LEFT EDGE of an expression a
  * `RefShape.parenRequiredHostKinds` construct annotates, which the walk carries down as a
  * flag beside `opaque`. A pair further right (`@:privateAccess a + (b * c)`) is not what
@@ -718,8 +718,8 @@ final class RedundantParens implements Check implements ConfigAware {
 	 * A parenthesized RIGHT operand vetoes it. Both pairs together are a SYMMETRY the
 	 * author wrote deliberately (`Math.abs((px - x) + (py - y - h))`), and only the left
 	 * one is ever removable — so firing would leave the expression lopsided, which reads
-	 * worse than either keeping or dropping both. Measured on a 798-file corpus: the
-	 * veto is what separates the clean drops from the disfiguring ones.
+	 * worse than either keeping or dropping both. On real code the veto is what separates
+	 * the clean drops from the disfiguring ones.
 	 */
 	private static function sameFamilyLeftOperand(parent: QueryNode, slots: ParenSlots): Bool {
 		if (parent.children.length != 2 || parent.children[0].kind != slots.parenKind) return false;

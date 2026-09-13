@@ -58,8 +58,8 @@ using StringTools;
  * A `set` whose VALUE argument is an object literal is not flagged at all: `m[k] = v` goes
  * through the `Map` abstract @:arrayAccess write, which does not propagate the map value type
  * into the argument the way `set(k, v)` does, so the literal keeps its own all-`var` inferred
- * structure and fails to unify with any value type carrying even one `final` field (measured
- * on Haxe 4.3.7, through `Null<V>` too). A value that merely CONTAINS a literal
+ * structure and fails to unify with any value type carrying even one `final` field (through
+ * `Null<V>` too). A value that merely CONTAINS a literal
  * (`m.set(k, f({ a: 1 }))`) is unaffected — there the literal is typed against the parameter.
  *
  * ## Cross-file scope
@@ -345,8 +345,8 @@ final class PreferIndexAccess implements Check {
 	 * an anonymous-structure literal keeps its own all-`var` inferred structure and fails to
 	 * unify with a value type carrying even one `final` field — the compiler then reports
 	 * `No @:arrayAccess function for haxe.ds.Map<K, V> accepts arguments of K and { … }`, which
-	 * names neither the literal nor the mutability. Measured on Haxe 4.3.7: an all-`var` target
-	 * accepts the literal, a target with any `final` field does not, through `Null<V>` as well.
+	 * names neither the literal nor the mutability. An all-`var` target accepts the literal, a
+	 * target with any `final` field does not, through `Null<V>` as well.
 	 * Field mutability is not knowable from the call site, so the whole shape is a conservative
 	 * miss, in the same direction as an unresolvable receiver. A value that merely CONTAINS a
 	 * literal (`m.set(k, f({ a: 1 }))`) is unaffected: there the literal is typed against the

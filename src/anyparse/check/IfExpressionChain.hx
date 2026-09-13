@@ -257,9 +257,9 @@ final class IfExpressionChain {
 	 * `return if (c) a else p ? q : r`, which `prefer-if-expression-chain` deliberately leaves alone
 	 * (a terminal rung VALUE holding a ternary is the author's emphasis, not a nested `?:` anyone
 	 * wrote) — while the pairwise route through `prefer-ternary-return` reaches the full
-	 * `return if (c) a else if (p) q else r`. Measured on this tree: both spellings of the same
-	 * control flow converge there today, and only the one-step rewrite reaches it without writing the
-	 * three-rung ternary `prefer-if-expression-chain` then condemns.
+	 * `return if (c) a else if (p) q else r`. Both spellings of the same control flow converge
+	 * there, and only the one-step rewrite reaches it without writing the three-rung ternary
+	 * `prefer-if-expression-chain` then condemns.
 	 *
 	 * Conditions come back paren-UNWRAPPED: the emitted `if (` … `)` supplies its own delimiters, so a
 	 * copied pair would only draw a `redundant-parens` finding on the result.

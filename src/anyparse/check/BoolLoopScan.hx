@@ -46,7 +46,7 @@ using StringTools;
  * ```
  *
  * Stating the contract as the return form made the flag form invisible, and it is the form the
- * measured application actually writes — eleven sites against the return form's own count. The
+ * application actually writes, more often than the return form. The
  * `var` becomes `final`: after the fold the binding is written exactly once, at its declaration.
  *
  * The two sinks are NOT interchangeable, and the difference is the whole reason this arm carries
@@ -56,11 +56,10 @@ using StringTools;
  * `true` (and `foreach` at the first `false`). Everything the condition DOES for the remaining
  * elements would silently stop happening.
  *
- * That is not hypothetical. Of the eleven flag-form sites measured over a ~800-file application,
- * FIVE have a condition that is a call doing the work the loop exists for — `addItem(item, false)`,
- * `itemData.removeLocks(removeList)`, `locks.remove(rm)`, `addSessionToLock(…)`,
- * `removeSessionFromLock(…)`. Each records whether ANY call succeeded while calling on every
- * element. Without the gate the rule corrupts all five; with it, one site converts.
+ * That is not hypothetical: on real code about half the flag-form sites have a condition that is
+ * a call doing the work the loop exists for — `addItem(item, false)`, `locks.remove(rm)`,
+ * `addSessionToLock(…)` — each recording whether ANY call succeeded while calling on every
+ * element. Without the gate the rule corrupts every one of them.
  *
  * Purity is `PurityScan.isPure` — the project's standing answer, shared with
  * `extract-repeated-expression`, `unnecessary-switch` and `join-array-pushes`: safe skeleton
@@ -68,20 +67,20 @@ using StringTools;
  * provably-pure stdlib static. Every other call is impure. `RefactorSupport.isSideEffectFree`
  * would have been the cheaper reach — and the wrong question: it refuses a field access outright,
  * which is exactly what the one CONVERTIBLE site's condition is (`child.nodeType == CData`), so
- * it would have refused all eleven and shipped nothing. When purity cannot be answered at all
+ * it would have refused every site and shipped nothing. When purity cannot be answered at all
  * (no symbol index, or a grammar carrying no type information) the arm refuses, which is the
  * report-only degradation the whole rule family defaults to.
  *
  * The GUARDED flag form (`var f = false; if (g) for … f = true;`) is not claimed: the statement
- * after the declaration must BE the loop. Every guarded flag site measured fails the purity gate
+ * after the declaration must BE the loop. The guarded flag sites fail the purity gate
  * as well, so claiming it would buy nothing and would owe the `&&`/`||` merge reasoning a second
  * time. Neither is a GAP between the declaration and the loop, which `prefer-comprehension` needs
- * and this arm does not — both convertible sites are strictly adjacent, and the two non-adjacent
- * ones are effectful.
+ * and this arm does not — the convertible sites are strictly adjacent, and the
+ * non-adjacent ones are effectful.
  *
  * ## The guarded form (`exists` only)
  *
- * More than half the real sites measured over a ~800-file application put the loop under a
+ * More than half the real sites put the loop under a
  * guard — `if (xs != null) for (x in xs) if (c) return true;` + `return false;` — which reads
  * as `return xs != null && xs.exists(x -> c);`. The guard is evaluated exactly once either way
  * and `&&` narrows from ANY position, so the merge is sound and is claimed.
@@ -89,7 +88,7 @@ using StringTools;
  * The mirror (`if (g) for … return false;` + `return true;`) is deliberately NOT claimed. It
  * needs `!g`, and a guard is typically a null test: `!(xs != null)` narrows nothing, and Haxe's
  * strict null-safety only narrows an `||` chain from its FIRST operand. Rather than gate on the
- * guard's shape for a form no measured site uses, the engine refuses the whole variant.
+ * guard's shape for a form no real site uses, the engine refuses the whole variant.
  *
  * ## Soundness gates
  *
@@ -499,8 +498,8 @@ final class BoolLoopScan {
 	 * - the loop destructures with the FLAG sink, which also proves the assignment targets this
 	 *   name and is the body's only statement;
 	 * - the condition is PURE. The loop visits every element and the emitted call does not, so
-	 *   anything the condition DOES would stop happening for the tail of the collection — the
-	 *   measured application has five such sites and this is what refuses them;
+	 *   anything the condition DOES would stop happening for the tail of the collection — real
+	 *   code has such sites and this is what refuses them;
 	 * - the loop's assignment is the flag's only write in `scope`, which is what licenses `final`.
 	 *
 	 * `scope` is the statement list holding the pair, i.e. exactly the region a block-scoped local

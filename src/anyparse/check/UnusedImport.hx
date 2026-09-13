@@ -47,11 +47,9 @@ private typedef FileScan = {
  * one), and a string is where the trade earns its keep — `Type.resolveClass('Foo')` and the
  * macro family reach a type through one, and nothing else in the check would see them.
  *
- * COMMENTS are masked out, and were not until 2026-08-27. A comment resolves nothing, so the
- * false-positive risk the string case carries does not exist there, and the cost of the blanket
- * bias was measured: masking comments turned up 41 dead imports across this project's own `src`
- * and `test`, all 41 deleted with both binaries still building, and 11 more on the Pony corpus,
- * where the `lint-oracle` compile before and after came back byte-identical.
+ * COMMENTS are masked out. A comment resolves nothing, so the false-positive risk the string
+ * case carries does not exist there, and counting them hides dead imports that delete with the
+ * build still green.
  *
  * ## Dotted tails do not count
  *
@@ -241,9 +239,9 @@ final class UnusedImport implements Check {
 	 * The gate here is one line — `severity == Warning` — but the DECISION it
 	 * reads was taken in `run`, one arm per unverifiable form, so that is where
 	 * each `Violation.declineReason` is written (see the `DECLINE_*` constants).
-	 * A measured 204 of 205 findings on an 851-file tree take this branch, and
-	 * until the reason travelled with them the run reported the rule as having
-	 * withheld an autofix "without saying why".
+	 * Nearly every finding on a real tree takes this branch, and without the reason
+	 * travelling with them the run reports the rule as having withheld an autofix
+	 * "without saying why".
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
@@ -287,8 +285,8 @@ final class UnusedImport implements Check {
 	 * mechanics, not of the verdict, and `make` caps it there. Short-circuiting it
 	 * into a blanket "cannot verify unused" `Info` discarded the secondary-type,
 	 * enum-ctor, `using` and scope-existence evidence, and reported every guarded
-	 * import of a macro-heavy tree as an unactionable advisory: 50 of them here,
-	 * of which 44 were live and 6 were provably dead.
+	 * import of a macro-heavy tree as an unactionable advisory, the provably dead ones among
+	 * the live.
 	 */
 	private static function addViolation(
 		out: Array<Violation>, file: String, imp: ImportInfo, scan: FileScan, plugin: GrammarPlugin,

@@ -66,8 +66,8 @@ using StringTools;
  * PROJECT throw converted to `haxe.Exception` cannot change which std-internal throws those
  * clauses see. Scanning them only imports a verdict about code the rewrite can never reach.
  *
- * Left in, that verdict was not fail-closed but permanently closed: the std ships ~31 such
- * clauses across 10 files (`haxe.ds.BalancedTree` catches `String`; `haxe.io.Bytes`,
+ * Left in, that verdict was not fail-closed but permanently closed: the std itself
+ * ships such clauses (`haxe.ds.BalancedTree` catches `String`; `haxe.io.Bytes`,
  * `haxe.io.BytesInput`, `haxe.Template`, `sys.Http` and friends catch `Dynamic`), so on any
  * Haxe-equipped machine the implicit std joined the scope and degraded EVERY run — the fix arm
  * opened only under `APQ_NO_STD` / `"resolutionStd": false`, which is to say never.
@@ -78,13 +78,11 @@ using StringTools;
  * the whole rule. The edge the exclusion knowingly buys is a project callback handed INTO std
  * and invoked inside a std `try`; a rule that can never act is the worse trade.
  *
- * ## What a closed gate looks like from the outside — measured, 2026-08-21
+ * ## What a closed gate looks like from the outside
  *
- * On Pony (851 files, `prefer-typed-throw` enabled in its own `apqlint.json`) the run reports
- * 161 findings, ALL of them degraded, and `--fix` writes nothing. The project half of that
- * scope carries 86 clauses the gate blocks on — 84 `Dynamic` / `Any` and two
- * `catch (_: String)` in `src/pony/heaps/HeapsAssets.hx` — so a single tree is enough to close
- * the gate permanently, and a caller who reads only `fixed 0 issue(s)` beside a count of 161
+ * On a real tree that catches raw Strings the run reports every finding as degraded and `--fix`
+ * writes nothing: a couple of `catch (_: String)` clauses are enough to close the gate
+ * permanently, and a caller who reads only `fixed 0 issue(s)` beside a nonzero count
  * concludes the rule has NO autofix. It has one; the DEGRADED message is where the run says
  * why, and that message is visible only in report mode. A tree that wants the rewrite has to
  * stop catching raw Strings first, which is the rule's own argument turned around.
@@ -163,8 +161,8 @@ final class PreferTypedThrow implements Check implements DefaultOff {
 		if (violations.length > 0 && catchAllInScope(files, plugin, seams)) for (v in violations) {
 			v.message = MSG_DEGRADED;
 			// The same verdict in the slot `--fix` reads. The message is where a REPORT-mode
-			// reader learns why; a `--fix` run prints no findings at all, which is how 161
-			// degraded findings on one tree came to read as "this rule has no autofix".
+			// reader learns why; a `--fix` run prints no findings at all, which is how a tree's
+			// degraded findings come to read as "this rule has no autofix".
 			v.declineReason = DECLINE_CATCH_IN_SCOPE;
 		}
 		return violations;

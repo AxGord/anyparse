@@ -433,7 +433,7 @@ final class GuardReturn implements Check {
 	 *  - no declared return type -> the function's OWN scope (nested functions and lambdas
 	 *    excluded via `returnScopeStop`) must hold no value-`return`. A block-bodied function
 	 *    with none infers `Void`, and a block body does NOT yield its last expression's value,
-	 *    so the inference is safe; a `throw`-only body infers `Void` too (measured), which is
+	 *    so the inference is safe; a `throw`-only body infers `Void` too, which is
 	 *    why - unlike `explicit-type`, which ANNOTATES rather than inserting a return - no
 	 *    throw guard is needed;
 	 *  - a declared return type -> its SOURCE TEXT must be exactly `voidTypeName`. Without this

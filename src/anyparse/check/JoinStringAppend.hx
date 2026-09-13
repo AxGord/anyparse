@@ -228,7 +228,7 @@ final class JoinStringAppend implements Check implements DefaultOff {
 	 * Whether the `+=` the join COLLAPSES is the language's own.
 	 *
 	 * The rewrite turns N appends into one, so an overloaded `+=` runs its body once instead of N
-	 * times: measured on an `abstract Route(String)` whose `@:op(A += B)` inserts a separator,
+	 * times: on an `abstract Route(String)` whose `@:op(A += B)` inserts a separator,
 	 * `r += 'a'; r += 'b'` is `root/a/b` while the joined `r += 'a' + 'b'` is `root/ab`. The type
 	 * gate cannot catch it — a string-literal term is precisely what makes such a run look
 	 * String-typed — so the proof has to come from the target's DECLARATION.
@@ -422,8 +422,8 @@ private typedef Seams = {
 	/**
 	 * The run OPERATOR table, or null when the grammar declares no operator-overload annotation.
 	 * The join turns N appends into ONE, so an overloaded `+=` runs its own body once instead of
-	 * N times — measured on an `abstract Route(String)` whose `@:op(A += B)` inserts a separator:
-	 * `p += 'a'; p += 'b'` is `root/a/b`, the joined `p += 'a' + 'b'` is `root/ab`. The type gate
+	 * N times — on an `abstract Route(String)` whose `@:op(A += B)` inserts a separator,
+	 * `p += 'a'; p += 'b'` is `root/a/b` and the joined `p += 'a' + 'b'` is `root/ab`. The type gate
 	 * above does not catch it, because a string-literal term is exactly what makes such a run
 	 * look String-typed.
 	 */

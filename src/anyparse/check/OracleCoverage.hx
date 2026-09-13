@@ -11,7 +11,7 @@ using StringTools;
 
 /**
  * WHICH FILES and WHICH REGIONS of them the configured compiler oracle actually
- * compiles — the question a `RiskyFix` verdict depends on and nothing used to ask.
+ * compiles — the question a `RiskyFix` verdict depends on.
  *
  * `FixVerifier` proves a risky edit safe by writing it and running
  * `haxe <hxml> --no-output`: exit 0 keeps the edit, non-zero reverts it. That proof
@@ -20,25 +20,15 @@ using StringTools;
  * list, a `-main` that reaches part of the sources, per-target arms that exclude
  * whole packages. For anything outside that subset the typecheck cannot fail no matter
  * what the edit did, so a green oracle proves exactly nothing, and reporting it as
- * `risky-fix verified` is a claim about a control that could not have fired.
- *
- * Measured on one real tree (Pony @ `b6b94e37`, `lint-oracle.hxml`): the compile reads
- * 915 source files in all, of which 196 are the project's own — 196 of the 679 under
- * `src`, leaving 483, 71 % of the tree, invisible to the oracle. A deliberate
- * `var x:Int = "not an int"` inside `src/pony/unity3d/UTools.hx` leaves
- * `haxe lint-oracle.hxml --no-output` at exit 0; the same edit in `src/pony/Byte.hx`
- * fails it. Same hxml, opposite answers, and only the second one is a verification.
+ * `risky-fix verified` is a claim about a control that could not have fired: a
+ * deliberate `var x:Int = "not an int"` in a file the hxml does not reach leaves the
+ * oracle at exit 0, the same edit in a reached file fails it.
  *
  * The same hole exists one level down, INSIDE a compiled file: a `#if` branch the arm's
  * defines exclude is skipped at lex time, so the file still earns its `Parsed` line while
- * that branch is typechecked by nothing. Measured in THIS repo, whose oracle is
- * `test-js.hxml`: `final _planted: Int = 'not an int';` planted in the native-sys
- * `#elseif sys` branch of `HaxeSpawn.run` leaves `haxe test-js.hxml --no-output` at exit
- * 0, and the same line in the `#if nodejs` branch above it fails with
- * `String should be Int`.
- * `covers` answers TRUE for both, which is why `uncovered` — the answer a caller should
- * be asking — takes the edit's own offsets and hands the region half to
- * `CondRegionLiveness`.
+ * that branch is typechecked by nothing. `covers` answers TRUE for both, which is why
+ * `uncovered` — the answer a caller should be asking — takes the edit's own offsets and
+ * hands the region half to `CondRegionLiveness`.
  *
  * ## How the set is determined
  *
@@ -46,19 +36,15 @@ using StringTools;
  * `Parsed <path>` line per source file it reads, a `Defines:` line opening each arm, and
  * a `Calling macro haxe.macro.Compiler.define (--macro define('x'))` line for an init
  * macro that adds one after that. `--each` pushes the flags in front of it into EVERY
- * `--next` arm. Without it only one arm answers: on Pony's two-arm hxml a leading `-v`
- * reported 175 distinct `src` files and a trailing one 196 (194 and 215 raw lines — a
- * module is parsed again for the macro context), and which arm you get depends on where
- * the flag sits, not on what the oracle compiles. So one
- * `haxe -v --each <hxml> --no-output` from the oracle's own directory names the whole
- * compiled set, across arms, through include chains, through `--macro include(…)` ignore
- * lists, and through any other hxml mechanism this class would otherwise have to model.
+ * `--next` arm; without it only one arm answers, and which arm depends on where the flag
+ * sits, not on what the oracle compiles. So one `haxe -v --each <hxml> --no-output` from
+ * the oracle's own directory names the whole compiled set, across arms, through include
+ * chains, through `--macro include(…)` ignore lists, and through any other hxml mechanism
+ * this class would otherwise have to model.
  *
- * `--no-output` sits AFTER the hxml on purpose — see `probe`, where the difference from
- * the oracle's own compile is measured.
+ * `--no-output` sits AFTER the hxml on purpose — see `probe`.
  *
- * Cost is one compile: 17.45s against 17.37s for the plain oracle typecheck on this
- * project, 3.6s on Pony — `-v` is a print flag, not extra work. The probe pays for
+ * Cost is one compile — `-v` is a print flag, not extra work — and the probe pays for
  * itself the moment one uncovered file is declined, because that file's own full
  * typecheck is then never spawned.
  *
@@ -89,8 +75,7 @@ using StringTools;
  *   afterwards, and one that changes which arm compiles a file is outside what a single
  *   probe can describe.
  * - **`size` counts every source the compile reads**, standard library and haxelibs
- *   included — 915 on Pony, where the project's own share is 196. It is a scale, not
- *   a project file count.
+ *   included. It is a scale, not a project file count.
  */
 @:nullSafety(Strict)
 final class OracleCoverage {
@@ -129,8 +114,7 @@ final class OracleCoverage {
 
 	/**
 	 * How many source files the oracle's compile READS — standard library and haxelibs
-	 * included, so it is a scale rather than a project file count (915 on Pony, whose own
-	 * share of that is 196). 0 when the set is unknown.
+	 * included, so it is a scale rather than a project file count. 0 when the set is unknown.
 	 */
 	public var size(get, never): Int;
 
@@ -188,14 +172,12 @@ final class OracleCoverage {
 	 * pretending to be an answer.
 	 *
 	 * The flag ORDER is the whole fidelity of the claim. `--each` pushes what precedes it
-	 * into every `--next` arm, so `-v --no-output --each <hxml>` — what this ran until now —
-	 * suppresses output in ARMS THE ORACLE LETS EMIT: the oracle's own `haxe <hxml>
-	 * --no-output` appends the flag, which joins the LAST arm only. Measured on a two-arm
-	 * hxml whose first arm names a `-js` output: the oracle emits that file, the old probe
-	 * emitted nothing, the new spelling emits it again. The probe has to run the compile it
-	 * is describing — an arm consuming an earlier arm's output would otherwise fail the
-	 * probe while passing the oracle, and the whole risky phase would decline on a
-	 * difference the probe invented.
+	 * into every `--next` arm, so `-v --no-output --each <hxml>` would suppress output in
+	 * ARMS THE ORACLE LETS EMIT: the oracle's own `haxe <hxml> --no-output` appends the
+	 * flag, which joins the LAST arm only. The probe has to run the compile it is
+	 * describing — an arm consuming an earlier arm's output would otherwise fail the probe
+	 * while passing the oracle, and the whole risky phase would decline on a difference the
+	 * probe invented.
 	 */
 	public static function probe(hxml: String, cwd: Null<String>): OracleCoverage {
 		#if (sys || nodejs)
@@ -257,10 +239,9 @@ final class OracleCoverage {
 	 * compiled set, which is what `covers` answers. Or the file may be compiled while the
 	 * REGION the edit lands in is not: a `#if` branch the arm's defines exclude is skipped
 	 * at lex time, so the file still earns its `Parsed` line and a typecheck after the edit
-	 * cannot fail whatever the edit did. Measured in this repo, whose oracle is
-	 * `test-js.hxml`: a planted `final _planted: Int = 'not an int';` in the native-sys
-	 * `#elseif sys` branch of `HaxeSpawn.run` leaves the oracle at exit 0, and the same line
-	 * in the `#if nodejs` branch above it fails with `String should be Int`.
+	 * cannot fail whatever the edit did (a planted `final _planted: Int = 'not an int';` in a
+	 * branch the oracle's defines exclude leaves it at exit 0; the same line in the compiled
+	 * branch fails with `String should be Int`).
 	 *
 	 * An arm must satisfy BOTH halves at once — read this file AND make every byte of every span live —
 	 * because a region is only ever typechecked by a compile that did both.
@@ -429,7 +410,7 @@ final class OracleCoverage {
 		// not exist — it does not throw, so the catch alone never sees it and `@:nullSafety`
 		// trusts the declaration. Left unhandled every unresolvable path collapses to one
 		// value and `covers` answers TRUE for all of them: the dangerous direction, and the
-		// exact vacuity this class exists to refuse. Measured on Haxe 4.3.7 / hxnodejs.
+		// exact vacuity this class exists to refuse.
 		final resolved: Null<String> = try sys.FileSystem.fullPath(joined) catch (_exception: haxe.Exception) null;
 		return resolved == null || resolved == '' ? joined : resolved;
 	}

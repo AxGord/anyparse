@@ -76,7 +76,7 @@ using StringTools;
  *        satisfies the same index proof as (b). The binding, not the name, is what decides:
  *        written bare, a `case` pattern naming a static inline field COMPARES, while one
  *        naming a LOCAL is a CAPTURE that matches everything and silently kills every later
- *        arm (measured on 4.3.7: `case target:` over a local left `pick('a','a')` and
+ *        arm (`case target:` over a local leaves `pick('a','a')` and
  *        `pick('zzz','a')` both returning the first arm, with only a `WUnusedPattern` on the
  *        dead `case _`). A local SHADOWING a same-named constant reads identically to the
  *        constant, so a name-keyed lookup cannot separate them and a positive binding proof
@@ -637,9 +637,9 @@ final class SwitchChain {
 	 *
 	 * The binding proof is the whole point, and it is POSITIVE. Written bare, a `case` pattern
 	 * that names a static inline field COMPARES against it, while one that names a LOCAL is a
-	 * capture variable that matches everything and silently kills every later arm — measured on
-	 * 4.3.7, where `case target:` over a local left `pick('a','a')` and `pick('zzz','a')` both
-	 * returning the first arm, with nothing louder than a `WUnusedPattern` on the dead `case _`.
+	 * capture variable that matches everything and silently kills every later arm: `case target:`
+	 * over a local leaves `pick('a','a')` and `pick('zzz','a')` both returning the first arm,
+	 * with nothing louder than a `WUnusedPattern` on the dead `case _`.
 	 * A name-keyed lookup cannot tell the two apart: a local SHADOWING a same-named constant
 	 * reads identically. Asking what the occurrence binds to answers both at once, and answers
 	 * null — a refusal — for every reference the per-file resolver cannot place (an

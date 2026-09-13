@@ -76,23 +76,19 @@ final class OversizedType implements Check implements ConfigAware implements Vol
 	private static inline final LINES_UNIT: String = ' lines (max ';
 
 	/**
-	 * The same, for the MEMBER count. Masked too: a type crossing 518 to 519 members re-keys a
-	 * finding that neither appeared nor went away, and measured over the campaign's last three
-	 * slices that re-key WAS the whole blast-radius report. The `(max N)` threshold beside it
-	 * stays unmasked — a configuration change IS a change the gate must show.
+	 * The same, for the MEMBER count. Masked too: a type gaining one member re-keys a finding
+	 * that neither appeared nor went away, and such re-keys are what a blast-radius report is
+	 * made of. The `(max N)` threshold beside it stays unmasked — a configuration change IS a
+	 * change the gate must show.
 	 */
 	private static inline final MEMBERS_UNIT: String = ' members (max ';
 
 	/**
 	 * Share of the members that SURVIVE hub extraction which one `hxq clusters` component
-	 * must hold for the finding to stop pointing at that tool. Chosen from the measured
-	 * distribution over this project's own 19 findings, which is bimodal rather than smooth:
-	 * eleven types sit at 81–100 % (`TriviaTypeSynth` and `MoveMember` at 100, `Lowering`
-	 * and `WriterCodegen` at 99, `Cli` and `Renderer` at 98, `MoveSymbol` 97, `NullFlow` 96,
-	 * `WrapList` 85, `MemberOrder` 84, `WriterLowering` 81) and eight at 30–65 %
-	 * (`TrivialGetter` 65, `RefactorSupport` 50, `SymbolIndex` 45, `HaxeQueryPlugin` 43,
-	 * `HaxeNamingSupport` 41, the two oversized test classes 33/34, `CachingGrammarPlugin` 30).
-	 * Anywhere in 0.66–0.80 splits that gap identically.
+	 * must hold for the finding to stop pointing at that tool. Chosen from the distribution over
+	 * this project's own findings, which is bimodal rather than smooth — a blob's largest
+	 * component holds well over three quarters of its members, a type with a real seam well
+	 * under two thirds — so the value sits in the gap and needs no tuning.
 	 */
 	private static inline final BLOB_SHARE: Float = 0.7;
 
@@ -189,27 +185,23 @@ final class OversizedType implements Check implements ConfigAware implements Vol
 	/**
 	 * BOTH measurements are masked; the two `(max N)` thresholds are not.
 	 *
-	 * The line extent moves whenever the file is reformatted or edited at all — the
-	 * blast-radius gate saw 4184 against 4194 on a slice whose findings had not moved. The
-	 * member count was kept for a while on the argument that it moves only when a member is
-	 * written or deleted, and therefore IS the finding; that argument is wrong, and the numbers
-	 * say so. Writing a member elsewhere in the type moves the count without touching this
-	 * finding, which stood before and stands after — `type 'Cli' has 518 -> 519 members` was one
-	 * added plus one removed on two consecutive slices that never touched this rule, and across
-	 * the campaign's last three verdicts such bumps were SIX of the six lines reported. Crossing
-	 * the limit is what makes the finding appear, and the key shows that on its own.
+	 * The line extent moves whenever the file is reformatted or edited at all. The member count
+	 * seems to move only when a member is written or deleted, and therefore to BE the finding;
+	 * that argument is wrong: writing a member elsewhere in the type moves the count without
+	 * touching this finding, which stood before and stands after, and every such bump is an
+	 * added plus a removed line in the blast-radius gate. Crossing the limit is what makes the
+	 * finding appear, and the key shows that on its own.
 	 *
 	 * Nothing else in the message discriminates by these numbers — the type NAME is there, and
-	 * is unique per file on every tree measured — so masking them merges no two findings. Not a
-	 * guarantee, and the two shapes that would break it are visible from here: `checkType` writes
-	 * `<anonymous>` for a nameless container, and a `#if`/`#else` pair declaring one type twice
-	 * projects two same-named siblings. Neither occurs on this tree. (Contrast `duplicate-code`
-	 * and `fragmented-doc-comment`, whose counts are kept precisely because they are the last
-	 * discriminator their keys have.) Both
-	 * numbers stay in the MESSAGE; only the key loses them.
+	 * is unique per file — so masking them merges no two findings. Not a guarantee, and the two
+	 * shapes that would break it are visible from here: `checkType` writes `<anonymous>` for a
+	 * nameless container, and a `#if`/`#else` pair declaring one type twice projects two
+	 * same-named siblings. (Contrast `duplicate-code` and `fragmented-doc-comment`, whose counts
+	 * are kept precisely because they are the last discriminator their keys have.) Both numbers
+	 * stay in the MESSAGE; only the key loses them.
 	 *
-	 * The price, taken knowingly: no magnitude bound. 52 -> 301 members reports the same nothing
-	 * as 52 -> 53.
+	 * The price, taken knowingly: no magnitude bound — a type growing by hundreds of members
+	 * reports the same nothing as one growing by one.
 	 *
 	 * Crossing a threshold is still reported, in both directions: a type not previously over
 	 * either limit gains a finding, and one already over on members gains the `and N lines`
@@ -292,11 +284,10 @@ final class OversizedType implements Check implements ConfigAware implements Vol
 	 * This ASKS the tool the message names rather than re-deriving its answer — `Clusters` owns
 	 * the definition of a component, and two answers to one question is the defect this project
 	 * keeps finding in itself. The graph is built over the ONE file the type is declared in,
-	 * which is what `apq clusters <Type> <file>` does and what every number in `BLOB_SHARE`'s
-	 * doc was measured with; a whole-project scope is ~25x slower and only adds unresolved-call
-	 * noise. It is also LAZY — built on the first type in a file that is actually over a
-	 * threshold, so a tree where nothing trips this rule pays nothing. Measured over this
-	 * project's 19 findings, the added cost is ~2.5 s of a ~90 s `lint src test --all`.
+	 * which is what `apq clusters <Type> <file>` does and what `BLOB_SHARE` was calibrated
+	 * with; a whole-project scope is far slower and only adds unresolved-call noise. It is also
+	 * LAZY — built on the first type in a file that is actually over a threshold, so a tree
+	 * where nothing trips this rule pays nothing.
 	 *
 	 * FALSE when the graph holds no members for the type — a type of fields with no methods has
 	 * no call graph at all, and `clusters` will say so; pointing the reader at it is honest
@@ -404,14 +395,10 @@ final class OversizedType implements Check implements ConfigAware implements Vol
 	 *
 	 * Two conditions, and each one is load-bearing:
 	 *
-	 * - **the dictated members are at least half** (`dictated >= own`). Measured over this
-	 *   project's nine findings the dictated share is bimodal with nothing in between —
-	 *   `Lowering`, `WriterLowering`, `MoveMember` and the two oversized test classes at 0 %,
-	 *   `MemberOrder` at 9 % (5 of 54: `Check` + `ConfigAware`) and `HaxeNamingSupport` at 11 %
-	 *   (6 of 55: `NamingSupport`), then `CachingGrammarPlugin` at 61 % (34 of 56) and
-	 *   `HaxeQueryPlugin` at 63 % (34 of 54), both implementing FIVE interfaces of which
-	 *   `GrammarPlugin` alone declares 21 members. Any threshold in 0.15–0.60 splits that gap
-	 *   identically; a half is the one that needs no tuning and states the claim directly.
+	 * - **the dictated members are at least half** (`dictated >= own`). Over this project's own
+	 *   findings the dictated share is bimodal with nothing in between — a plugin implementing
+	 *   five interfaces has most of its members dictated, every other oversized type a tenth or
+	 *   fewer — so a half needs no tuning and states the claim directly.
 	 * - **the OWN members are within the cap** (`own <= maxMembers`). Without it a type with 300
 	 *   authored members behind 400 dictated ones would be silenced by the share alone. With it
 	 *   the carve-out can only ever forgive the dictated surface, never a type that is fat in its

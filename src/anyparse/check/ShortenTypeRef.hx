@@ -170,7 +170,7 @@ private typedef ScanContext = {
  *    an import the file ALREADY carries is unaffected, since that import is not this rule's to
  *    justify. Counting SHORTENED occurrences rather than written ones is what keeps a
  *    SUPPRESSED runtime occurrence from lifting the gate for a fix that only reaches
- *    macro-time ones; measured, that is fail-closed policy and not a compile repair, since an
+ *    macro-time ones; that is fail-closed policy and not a compile repair, since an
  *    unguarded runtime occurrence makes the module fail on the restricted target with or
  *    without the import.
  *

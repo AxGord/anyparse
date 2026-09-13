@@ -32,9 +32,8 @@ import anyparse.runtime.Span;
  * with no `exclude`. `unit.query.InnermostScopeSpanParityTest` pins what that costs. The
  * tie-break difference is REAL and it is unreachable: the two answer differently only when two
  * matches share a `span.from` (`BindingScope` keeps the outer, `Rename` the inner), and the
- * Haxe grammar's own `scopeKinds` vocabulary never puts two of its nodes at the same start —
- * measured over a fixture spelling every scope-opening construct, at every offset in it, where
- * the two walks agree. `exclude` is the whole reason the two are kept apart.
+ * Haxe grammar's own `scopeKinds` vocabulary never puts two of its nodes at the same start, so
+ * the two walks agree at every offset. `exclude` is the whole reason the two are kept apart.
  */
 @:nullSafety(Strict)
 final class BindingScope {
@@ -104,13 +103,11 @@ final class BindingScope {
 	 * the declaration are still attributed. `declaringFileRenameSpans` applies the same rule to the
 	 * binding being renamed (`bodyScoped`); this is its counterpart for the OTHER bindings.
 	 *
-	 * MEASURED INERT TODAY, and kept anyway. Swapping this call for `enclosingScopeSpan` leaves
-	 * 13 797 tests green and the whole Pony `lint --all --fix` tree byte-identical (697 edits /
-	 * 210 files / 8 passes, `diff -r` 0), because the clamp can only change an answer for an
-	 * occurrence that `Refs` binds to the local function while sitting BEFORE its declaration —
-	 * and a function-body frame is position-scoped, so `Refs` binds such a read to the outer
-	 * binding instead. The clamp is the fail-closed side of a resolver property, not of a shape
-	 * seen today: make a local-function frame hoist and it starts carrying weight.
+	 * INERT TODAY, and kept anyway: the clamp can only change an answer for an occurrence that
+	 * `Refs` binds to the local function while sitting BEFORE its declaration — and a
+	 * function-body frame is position-scoped, so `Refs` binds such a read to the outer binding
+	 * instead. The clamp is the fail-closed side of a resolver property, not of a shape seen
+	 * today: make a local-function frame hoist and it starts carrying weight.
 	 */
 	private static function visibleRegion(tree: QueryNode, kinds: Array<String>, declFrom: Int, shape: RefShape): Null<Span> {
 		final own: Null<Span> = localFunctionDeclSpan(tree, declFrom, shape);

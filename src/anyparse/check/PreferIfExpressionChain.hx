@@ -33,47 +33,37 @@ using Lambda;
  * if-EXPRESSION. This check owns the remaining direction — a chain the author wrote as nested `?:`
  * in the first place, which no statement-side rule can see.
  *
- * ## What this check ALSO cleans up, and should not have to (S45, measured)
+ * ## What this check ALSO cleans up
  *
  * The statement-side rules (`prefer-ternary-return` / `-assignment`,
- * `prefer-if-expression-return` / `-assignment`) were documented here as already producing that
- * canon from `if` STATEMENTS. They do not. `prefer-ternary-return` collapses onto a value that is
- * ALREADY a ternary, which writes a three-rung chain — a violation of THIS check, on code the
- * collapse just wrote. So a share of what arrives here is not an author's nested `?:` at all; it
- * is a sibling rule's output.
+ * `prefer-if-expression-return` / `-assignment`) do not by themselves produce that canon from
+ * `if` STATEMENTS: `prefer-ternary-return` collapses onto a value that is ALREADY a ternary,
+ * which writes a three-rung chain — a violation of THIS check, on code the collapse just wrote.
+ * So a share of what arrives here is not an author's nested `?:` at all; it is a sibling rule's
+ * output. It is not an oscillation and cannot be: this check's own output holds no ternary rung,
+ * so it is its own fixed point. What it costs is the READER: on
+ * `if (a) return 1; if (b) return 2; return 3;` the report shows ONE `prefer-ternary-return`;
+ * applying it by hand exposes a second whose fix produces `return a ? 1 : b ? 2 : 3` — and the
+ * next run condemns that. A `--rule prefer-ternary-return --fix` run alone leaves the tree
+ * holding a finding that did not exist before it.
  *
- * It is not an oscillation and cannot be: this check's own output holds no ternary rung, so it is
- * its own fixed point, and `--fix` with both enabled converged in four passes. What it costs is
- * the READER. On `if (a) return 1; if (b) return 2; return 3;` the report shows ONE
- * `prefer-ternary-return`; applying it by hand exposes a second whose fix produces
- * `return a ? 1 : b ? 2 : 3` — and the next run condemns that. A `--rule prefer-ternary-return
- * --fix` run alone leaves the tree holding a finding that did not exist before it.
- *
- * Gating `prefer-ternary-return` on the crossing was BUILT AND REJECTED: it removed 70 findings
- * across 13251 external files, every one of them a step the composed `--fix` uses to reach this
- * canon, and it regressed `LintFixFixedPointCliTest.testElseIfChainConverges`. S46 put the fix ONE step away instead,
- * and left this check's trigger alone: `prefer-if-expression-return` now owns the fall-through
- * CASCADE and folds a terminal ternary spine into rungs, and `redundant-else-after-return` and
+ * Gating `prefer-ternary-return` on the crossing is the wrong repair: every such step is one
+ * the composed `--fix` uses to reach this canon. The fix is ONE step away instead, and this
+ * check's trigger is left alone: `prefer-if-expression-return` owns the fall-through CASCADE and
+ * folds a terminal ternary spine into rungs, and `redundant-else-after-return` and
  * `prefer-ternary-return` both defer to it by ASKING it (`claimsChain` / `claimsCascade`), gates
- * and all. Over 8645 external files that moved 202 findings out of those two rules and 149 into
- * this one, exactly one of them losing its site to a double-report removal; a `--fix` driven to a
- * fixed point over the 1029 files holding any of these findings differs from the base in 9, each
- * one either the canon the base could not reach or an author's ternary the base unrolled and this
- * route keeps.
- *
- * S47 closed the ASSIGNMENT half the same way: `prefer-if-expression-assignment` now claims a flat
- * 2-branch whose terminal r-value is a ternary supplying the third leaf, and
- * `prefer-ternary-assignment` defers to it by asking. Over 8645 external files that moved 8
- * findings, each to the SAME line:col, and this check's own count did not change.
+ * and all. The ASSIGNMENT half closes the same way: `prefer-if-expression-assignment` claims a
+ * flat 2-branch whose terminal r-value is a ternary supplying the third leaf, and
+ * `prefer-ternary-assignment` defers to it by asking.
  *
  * ## No claim by `simplify-boolean-ternary`
  *
  * A head that reduces to boolean logic (`a ? false : b ? c : d`) is that check's, asked directly
- * through `SimplifyBooleanTernary.claimedSpans`. Both rules used to report the SAME span and
- * whichever ran first decided the file's fixed point -- registry order under the full set, flag
- * order under `--rule`, same input and same engine. The reduction wins because after it BOTH
- * canons hold, and because whatever it leaves is still reachable here (a `&&` operand IS a host,
- * measured), while the chain rewrite leaves a boolean-literal leaf that check can never see again.
+ * through `SimplifyBooleanTernary.claimedSpans`. Both rules would otherwise report the SAME span
+ * and whichever ran first would decide the file's fixed point -- registry order under the full
+ * set, flag order under `--rule`, same input and same engine. The reduction wins because after
+ * it BOTH canons hold, and because whatever it leaves is still reachable here (a `&&` operand IS
+ * a host), while the chain rewrite leaves a boolean-literal leaf that check can never see again.
  *
  * ## Disjoint from `prefer-ternary-expression` by RUNG COUNT
  *
@@ -99,12 +89,12 @@ using Lambda;
  *   makes transparent inside an arm and nowhere else). This is a READABILITY gate, not a
  *   correctness one: an `if`-expression is a legal
  *   expression atom everywhere a ternary is, and its else-arm parses at the same precedence
- *   as the ternary's, so no slot re-associates (verified on 4.3.7 in a call argument, an
- *   array element and index, an object-literal value, a map value, and the then-arm of an
- *   enclosing ternary). It reads WORSE in most of those, so the whitelist keeps the rewrite
- *   to the positions where a multi-line chain belongs. It also removes the one shape that
- *   would need thought — a chain in the then-arm of an enclosing ternary, whose parent kind
- *   is a chain kind and so is never a host.
+ *   as the ternary's, so no slot re-associates — in a call argument, an array element and
+ *   index, an object-literal value, a map value, and the then-arm of an enclosing ternary
+ *   alike. It reads WORSE in most of those, so the whitelist keeps the rewrite to the
+ *   positions where a multi-line chain belongs. It also removes the one shape that would
+ *   need thought — a chain in the then-arm of an enclosing ternary, whose parent kind is a
+ *   chain kind and so is never a host.
  * - **At least two conditions** (three leaf values) once the inversion below has run. A
  *   single ternary IS the canon and is left alone; this minimum is the whole
  *   disjointness proof against `prefer-ternary-expression`.
@@ -112,9 +102,8 @@ using Lambda;
  *   canon — flagging it would report a fixed point. The count is taken of the SPINE and asked
  *   BEFORE the inversion below folds anything in, so a canonical chain whose last rung VALUE
  *   happens to hold a ternary stays out: nobody wrote THAT as a nested `?:`, and folding it in
- *   inverts the emphasis the author chose (measured on `ShardPlan.compareEntries`). A MIXED
- *   chain (`c1 ? v1 : if (c2) v2 else v3`, which neither this check's predecessor nor
- *   `prefer-ternary-expression` could move) does have one, and converges here.
+ *   inverts the emphasis the author chose. A MIXED chain (`c1 ? v1 : if (c2) v2 else v3`,
+ *   which `prefer-ternary-expression` cannot move) does have one, and converges here.
  * - **No claim by `prefer-switch-expression`.** An equality-shaped chain over a uniform
  *   discriminant tuple in a host THAT check accepts belongs to it, and this check defers by
  *   asking it directly (`PreferSwitchExpression.claims`) rather than mirroring its gate
@@ -126,7 +115,7 @@ using Lambda;
  *   every rung value but the last, and an `if` without its own `else` ends an expression
  *   OPEN: `a ? if (q) p() : b ? r() : s()` would emit
  *   `if (a) if (q) p() else if (b) r() else s()`, where the rest of the chain becomes the
- *   INNER `if`'s else branch — 6 of the 8 input combinations then behave differently, and
+ *   INNER `if`'s else branch — most input combinations then behave differently, and
  *   the output re-parses, so the `--fix` re-parse gate would wave it through. The scan
  *   covers the whole value subtree rather than only its right spine: an else-less `if` in a
  *   delimited interior is harmless, but proving which is which costs more than the rare
@@ -171,11 +160,10 @@ using Lambda;
  * That rewrite is ALWAYS sound and needs no implication between the two conditions — both
  * readings enumerate the same three outcomes, one starting from `a` and the other from `!a`.
  * It also costs nothing: evaluation order is preserved and `a` is evaluated exactly ONCE, as
- * the ternary evaluated it. Measured over all four combinations with a counting probe: zero
- * divergences, and one evaluation of `a` per run against the two a CONJUNCTIVE form
- * (`if (a && b) A else if (a) B else C`) spends whenever `b` is false. Nothing here has to be
- * pure, and there is no depth cap: the loop recurses because it duplicates nothing, so a
- * deeper nest folds in one level per turn and growth is linear.
+ * the ternary evaluated it, where a CONJUNCTIVE form (`if (a && b) A else if (a) B else C`)
+ * spends two evaluations whenever `b` is false. Nothing here has to be pure, and there is no
+ * depth cap: the loop recurses because it duplicates nothing, so a deeper nest folds in one
+ * level per turn and growth is linear.
  *
  * Only the LAST rung can invert, and that is a proof rather than a simplification. A flat
  * chain tests its conditions in order, so a nested rung with more chain behind it would have

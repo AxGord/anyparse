@@ -139,8 +139,8 @@ final class Linter {
 			// the loop a ladder sits in. Both edits are then in flight for one region and
 			// `Cli.computeFileLintEdits` keeps the first, so this one lands and the comprehension is
 			// re-detected on the next `--fix` pass -- the order that composes; the reverse loses the
-			// ladder's `for` header and with it the literal range the fix is gated on. Measured
-			// 2026-08-19: no other builtin claims a value-position `if` chain of string literals
+			// ladder's `for` header and with it the literal range the fix is gated on. No other
+			// builtin claims a value-position `if` chain of string literals
 			// (`prefer-ternary-expression` refuses a three-branch chain), so nothing else is ordered
 			// against it.
 			new PreferLpad(),

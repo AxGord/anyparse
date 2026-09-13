@@ -34,10 +34,10 @@ using StringTools;
  *    are attributed to the SUBTYPE, so `writtenExternally` below would miss them.
  *    Merely HAVING a subtype no longer bails. That gate has two arms with DIFFERENT
  *    reach: the body scan runs over the resolution scope, so a subtype declared in a
- *    configured library root counts, and since S97 the `writtenAnywhere(subtype, …)` arm reads a
+ *    configured library root counts, and the `writtenAnywhere(subtype, …)` arm reads a
  *    write index over that same scope — so a write through a THIRD-PARTY subtype, made in a third
- *    third-party file and therefore absent from the subtype's own body, is seen. That was the
- *    residual blind spot this rule documented; it is closed. `MemberLookup.supertypeDeclaresMember`
+ *    third-party file and therefore absent from the subtype's own body, is seen.
+ *    `MemberLookup.supertypeDeclaresMember`
  *    still bails when a supertype declares the same field.
  * 2. No write to the field NAME anywhere is unresolved
  *    (`FieldWriteIndex.hasUnresolvedWrite`) — an unresolved `recv.field = …` could be
@@ -170,8 +170,8 @@ final class PreferReadOnlyField implements Check {
 		if (index.structural.structuralConformanceForbidsWriteRestriction(owner, name)) return;
 		// Core-API gate: `(default, null)` is a property-access change, and a `@:coreApi` type's
 		// members are pinned to the access of a core type in the compiler's std path that no scope
-		// here holds — measured as "Field <name> has different property access than core type" for
-		// every restriction, `(default, null)` and `(default, never)` alike.
+		// here holds — "Field <name> has different property access than core type" for every
+		// restriction, `(default, null)` and `(default, never)` alike.
 		if (MemberWriteScan.coreApiPinsMemberShape(source)) return;
 		// Every write question about THIS candidate carries its file, so the write index can drop
 		// what a third-party source recorded: a haxelib cannot name a project type. The subtype

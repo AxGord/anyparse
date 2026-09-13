@@ -64,14 +64,13 @@ private typedef HxmlChain = {
  * fingerprint over everything `haxe <hxml> --no-output` would read, and one persisted
  * verdict per (hxml, cwd) pair. On a hit no compiler is spawned at all.
  *
- * ## Why it exists (measured)
+ * ## Why it exists
  *
  * The oracle is a PROJECT-WIDE typecheck on every invocation, regardless of how narrow
- * the lint scope is — 16.1s of a 43s `lint src --all` run on this project, and
- * `tools/battery.sh` paid it twice, since its `build` step had typechecked the same
- * hxml a minute earlier. Deriving the whole fingerprint instead costs ~0.28s: 0.12s for
- * the compiler probe below plus 0.154s to hash 3991 files. That ratio is the entire
- * argument for this class.
+ * the lint scope is, and `tools/battery.sh` paid it twice, since its `build` step had
+ * typechecked the same hxml a minute earlier. Deriving the whole fingerprint instead —
+ * the compiler probe below plus a content hash of every source — costs orders of
+ * magnitude less than the typecheck. That ratio is the entire argument for this class.
  *
  * ## What the fingerprint covers
  *
@@ -115,9 +114,9 @@ private typedef HxmlChain = {
  * already paid for the alternative: the compilation server decides staleness by mtime
  * at ONE-SECOND granularity, so a write landing in the same second as the compile that
  * read the file is invisible and stays invisible, freezing a module at its previous
- * content indefinitely. Measured at 9 wrong verdicts in 10 iterations, including a
- * broken build reported as clean — see the `CompilerServer` class doc, section "Why
- * linted files are invalidated first". A content hash cannot have that failure mode.
+ * content indefinitely — a broken build reported as clean; see the `CompilerServer`
+ * class doc, section "Why linted files are invalidated first". A content hash cannot
+ * have that failure mode.
  *
  * ## Every doubt falls through
  *
@@ -311,9 +310,9 @@ final class OracleCache {
 	}
 
 	/**
-	 * md5 of `data`. Node's native digest is roughly 100x the pure-Haxe implementation,
-	 * and that difference is what makes hashing 3991 files cost 0.154s instead of
-	 * dominating the very typecheck this cache exists to avoid.
+	 * md5 of `data`. Node's native digest is orders of magnitude faster than the pure-Haxe
+	 * implementation, and that difference is what keeps hashing every source from dominating
+	 * the very typecheck this cache exists to avoid.
 	 */
 	private static function md5(data: String): String {
 		return #if nodejs js.node.Crypto.createHash('md5').update(data, 'utf8').digest('hex') #else haxe.crypto.Md5.encode(data) #end;
@@ -490,7 +489,7 @@ final class OracleCache {
 
 	/**
 	 * Ask the compiler to name its own classpath and defines: `haxe -v <-lib …>
-	 * --interp` from the compile root. No `-main`, so nothing runs; measured at 0.12s.
+	 * --interp` from the compile root. No `-main`, so nothing runs and the spawn is cheap.
 	 * Deliberately NOT routed through `CompilerOracle`, whose `invocations` counter is a
 	 * pure spawn counter for `haxe <hxml> --no-output` and is asserted on by the
 	 * no-key gate tests.

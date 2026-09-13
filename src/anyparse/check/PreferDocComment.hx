@@ -302,8 +302,7 @@ final class PreferDocComment implements Check implements DefaultOff {
 	 *
 	 * A strict majority is the point. One heading among nine per-member docs is an author
 	 * grouping two related fields, not a convention — treating it as one would cost every real
-	 * doc in the type. Measured on the consuming project this is the difference between losing
-	 * a model class's nine field docs and keeping them.
+	 * doc in the type (a model class's field docs, on the consuming project).
 	 *
 	 * Keyed on the OWNER rather than the indent: two types in one module hold their members at
 	 * the same depth, so an indent tally let a constants table's headings outvote — and
@@ -438,8 +437,8 @@ final class PreferDocComment implements Check implements DefaultOff {
 	 * label), the next `/**` doc block (a separately-documented sibling proves the run
 	 * cannot label a section spanning it), and the owner's own end.
 	 *
-	 * Measured on the consuming project this is the gate that matters: it is what the
-	 * `constants/` tables — the bulk of the label-shaped findings — trip on.
+	 * On the consuming project this is the gate that matters: it is what the `constants/`
+	 * tables — the bulk of the label-shaped findings — trip on.
 	 */
 	private static function soleInSection(
 		source: String, anchors: Map<Int, Anchor>, stops: Array<CommentTok>, self: Anchor, indent: String

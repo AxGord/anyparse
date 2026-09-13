@@ -31,9 +31,7 @@ import anyparse.runtime.Span;
  * Because it is not the question `shadowing-local` advertises. That rule's own doc says "a LOCAL
  * declaration whose name is already bound"; the parameter was always the OUTER side of it, never
  * the inner. Widening it in place would change what a project already opted into, and reusing a
- * lambda parameter name is common idiom. Measured on the same trees: the local half is 29
- * findings on Pony and 0 on this project; the parameter half adds 6 on Pony and 0 here. Shipping
- * it under its own id, off by default, leaves both bars byte-identical and makes the wider
+ * lambda parameter name is common idiom. Shipping it under its own id, off by default, leaves both bars byte-identical and makes the wider
  * question opt-in (`"rules": { "shadowing-parameter": { "enabled": true } }`, or
  * `--rule shadowing-parameter`).
  *

@@ -50,12 +50,14 @@ import anyparse.runtime.Span;
  *    would miss them; the gate scans each subtype's body and asks the index about the
  *    subtype. Merely HAVING a subtype no longer bails. The two arms have DIFFERENT reach:
  *    the body scan runs over the resolution scope, so a subtype declared in a configured
- *    library root counts, and since S97 the `writtenAnywhere(subtype, …)` arm reads a write index
+ *    library root counts, and the `writtenAnywhere(subtype, …)` arm reads a write index
  *    over that same scope — so a write through a THIRD-PARTY subtype, made in a third
- *    third-party file and therefore absent from the subtype's own body, is seen. That was the
- *    residual blind spot both these rules documented; it is closed. The same gate also bails when a SUPERtype declares
- *    the same field (`MemberLookup.supertypeDeclaresMember`): its property access is
- *    then fixed by that interface / superclass var, which final would violate. An interface-mutability gate extends this to an UNRESOLVABLE implemented interface (which supertypeDeclaresMember treats as absent): out of scope it may still declare a mutable member, so the rewrite is skipped conservatively.
+ *    third-party file and therefore absent from the subtype's own body, is seen. The same gate
+ *    also bails when a SUPERtype declares the same field (`MemberLookup.supertypeDeclaresMember`):
+ *    its property access is then fixed by that interface / superclass var, which final would
+ *    violate. An interface-mutability gate extends this to an UNRESOLVABLE implemented interface
+ *    (which supertypeDeclaresMember treats as absent): out of scope it may still declare a
+ *    mutable member, so the rewrite is skipped conservatively.
  * 3. No unresolved write can target the field
  *    (`FieldWriteIndex.hasUnresolvedWriteTargeting`): a write to the field NAME
  *    whose receiver could not be attributed to a type could be a hidden write to
@@ -97,34 +99,32 @@ import anyparse.runtime.Span;
  * ## Which half of the scope answers which question
  *
  * The LIBRARY half (`resolutionLibs`, the std) is admitted per QUESTION, not per rule, and the
- * split is measured rather than argued. Admitting it to EVERYTHING loses findings, and the
- * losses are not one mechanism: over the Pony fork a whole-scope index costs 12 of 121 findings
- * and gains none — 10 from `SymbolIndex.text.skippedMayReference`, a skip-parsing library source
- * that merely SPELLS the member name (11 when it is the only wide layer), and 2 from structural
- * conformance against a library anonymous structure. So:
+ * split is per question because admitting it to EVERYTHING loses findings, through two
+ * mechanisms: a skip-parsing library source that merely SPELLS the member name
+ * (`SymbolIndex.text.skippedMayReference`), and structural conformance against a library
+ * anonymous structure. So:
  *
  *  - The WRITE index spans the resolution scope with the library half tagged third-party. It is
  *    the index that WANTS the library: a third-party subtype's write is invisible anywhere else.
  *  - The name/type index — `members`, `subtypes`, `traits`, and the skip-parse `text` scan —
  *    spans it too. A library supertype, an implemented library interface and a library `@:build`
- *    are real vetoes the project scope cannot see, and admitting them costs nothing measurable:
- *    Pony's four rules report the identical 121 findings either way.
+ *    are real vetoes the project scope cannot see, and admitting them costs no finding.
  *  - The STRUCTURAL scan alone keeps the PROJECT-scoped index. It matches an anonymous structure
  *    by member NAME set with no type check, over a closure that reads an unresolvable supertype
  *    as declaring everything, so a `MonoBehaviour` subclass conforms to `haxe.macro.Expr.TypePath`
- *    and to `haxe.macro.Type.EnumType`. That is the residual 2, and it is a defect in the
- *    conformance proof — the same wildcard already withholds 3 findings from the project scope
- *    alone — rather than a property of the library.
+ *    and to `haxe.macro.Type.EnumType`. That residual is a defect in the conformance proof —
+ *    the same wildcard already withholds findings from the project scope alone — rather than a
+ *    property of the library.
  *
  * What makes the wide index affordable is that every question a rule asks about ITS OWN candidate
  * carries that candidate's file and is narrowed back to the project half: `FieldWriteIndex.admits`
  * for a write, `RawSourceScan.admits` for the skip-parse scan. A haxelib can neither name a project
  * type nor hold a statically-typed write into one.
  *
- * The one loss S97's split did cost — `Rotor.speed` / `Wards.speed` — was a corrected false proof:
- * both were freed by a claim that `Single` is a project class no builtin converts into, true only
- * while the report scope hid the std's `abstract Single to Float from Float`. That proof now
- * resolves the annotation from the candidate's own file (`FieldWriteIndex.plainClassInScope`), so
+ * The one finding the split does cost is a corrected false proof: a field was freed by a claim
+ * that `Single` is a project class no builtin converts into, true only while the report scope
+ * hid the std's `abstract Single to Float from Float`. That proof resolves the
+ * annotation from the candidate's own file (`FieldWriteIndex.plainClassInScope`), so
  * it answers the same in both scopes instead of by accident in one.
  */
 @:nullSafety(Strict)

@@ -34,8 +34,8 @@ using StringTools;
  * `?x:T` and `x:Null<T> = null` are equivalent for a nullable-defaulted parameter: the `?`
  * widens `x`'s type to `Null<T>` (so the body sees the same nullable value on static
  * targets), and both permit omitting the argument at trailing call sites — the `= null`
- * default and the `?` sigil compile the same calls. No call site changes. A live compiler
- * probe additionally confirmed `x:T = null` types identically: `$type` gives `(?p:Null<T>)
+ * default and the `?` sigil compile the same calls. No call site changes. And
+ * `x:T = null` types identically: `$type` gives `(?p:Null<T>)
  * -> Void` for BOTH `p:Int = null` and `?p:Int`, and the `haxe.PosInfos` call-site auto-fill
  * magic fires in both forms — so the bare-type arm needs no extra gates. For the
  * already-optional arm the equivalence is immediate: an omitted `?x:T` argument already
@@ -43,8 +43,8 @@ using StringTools;
  *
  * For the THIRD arm the equivalence is just as immediate: a default value alone already
  * makes a parameter optional (Haxe permits omitting any trailing argument that has a
- * default, `?` or not), so the `?` adds nothing but the type widening. Measured on Haxe
- * 4.3.7 — `?p:Bool = true` gives the BODY type `Null<Bool>` and the external signature
+ * default, `?` or not), so the `?` adds nothing but the type widening:
+ * `?p:Bool = true` gives the BODY type `Null<Bool>` and the external signature
  * `(?p : Null<Bool>) -> Void`; `p:Bool = true` gives `Bool` and `(?p : Bool) -> Void`. On
  * hxcpp the `?` form degrades the generated signature to `::Dynamic __o_p` with a boxed
  * default and leaves `p` as `::Dynamic` for the whole body (every use is a dynamic unbox);
@@ -75,8 +75,8 @@ using StringTools;
  * doubt):
  *
  * - G1 — a body-less function (`RefShape.noBodyKind`, an interface / abstract method
- *   declaration) is refused. Dropping `?` there changes the contract; measured `Field h has
- *   different type than in I ... error: Bool should be Null<Bool>`.
+ *   declaration) is refused. Dropping `?` there changes the contract (`Field h has
+ *   different type than in I ... error: Bool should be Null<Bool>`).
  * - G2 — refused when the enclosing type carries a supertype clause
  *   (`RefShape.supertypeClauseKinds`) UNLESS the function is the constructor
  *   (`RefShape.constructorName` — a constructor can neither override nor implement; Haxe
@@ -88,7 +88,7 @@ using StringTools;
  *   overrides parent class with different or incomplete type`).
  * - G3 — refused when a `null` literal (`RefShape.nullLiteralKind`) shares a DIRECT PARENT
  *   with an identifier (`RefShape.identKind`) named for the parameter, anywhere in the
- *   enclosing function's subtree. Measured breakages: `if (p == null)` -> `(Eq (IdentExpr p)
+ *   enclosing function's subtree. Breakages: `if (p == null)` -> `(Eq (IdentExpr p)
  *   (NullLit))`; `p = null;` -> `(Assign (IdentExpr p) (NullLit))`; `p == null ? 0 : p`. All
  *   produce `On static platforms, null can't be used as basic type Bool/Int` after the `?`
  *   is dropped. Deliberately a SUPERSET of a strict comparison test (it also refuses e.g.
@@ -107,8 +107,8 @@ using StringTools;
  *
  * Haxe compiles a signature default into `if (name == null) name = CONST;` at the top of the
  * function, so the two spellings are the same program: an omitted argument and an explicitly
- * passed `null` both yield `CONST` in either form, verified on a static target for `String` and
- * for `Int`, including a caller forwarding its own null-valued optional parameter. No call site
+ * passed `null` both yield `CONST` in either form, for `String` and
+ * for `Int` alike, including a caller forwarding its own null-valued optional parameter. No call site
  * changes. The signature form is strictly better — it names the default where a reader looks
  * for it, and under `@:nullSafety` the body sees `T` rather than `Null<T>`, so nothing
  * downstream needs a null proof.
@@ -172,7 +172,7 @@ using StringTools;
  *   enclosing function tests against `null` or switches on, or a parameter whose enclosing
  *   function cannot be found — G1-G4 above; the arm stays silent, not merely downgraded.
  *
- * Fine with NO gate for the third arm (measured): function-value contexts (`var
+ * Fine with NO gate for the third arm: function-value contexts (`var
  * v:(?p:Null<Bool>)->Void = noQ;`, `take(noQ)`, `.bind`) all compile; `p ?? x` compiles;
  * `var n:Null<Int> = p` compiles; a `Null<Int>` VARIABLE passed at a call site compiles;
  * `@:nullSafety(Strict)` adds no constraint; runtime behaviour is identical — an explicit
@@ -393,17 +393,17 @@ final class OptionalParamShorthand implements Check {
 	 * (`RefShape.constructorName`, never inherited-overridable), `static`
 	 * (`RefShape.staticModifierKind`, never virtual), a local or inline-local function
 	 * (`RefShape.localFunctionKinds` / `inlineFunctionKinds`, not a class member at all),
-	 * `inline` (`RefShape.inlineModifierKind` — measured `Field mi is inlined and cannot be
+	 * `inline` (`RefShape.inlineModifierKind` — `Field mi is inlined and cannot be
 	 * overridden`), or a `RefShape.finalModifierMemberKind` node (`public final function
 	 * f(...)`, which the grammar projects as its OWN kind rather than a `Final` modifier
-	 * sibling — measured `Cannot override final method mf`). Anything else — a plain
+	 * sibling — `Cannot override final method mf`). Anything else — a plain
 	 * instance method of a non-final class — CAN be overridden from a subclass in ANOTHER
 	 * file, which G2 cannot see (G2 only reads THIS type's own supertype clause, not
 	 * whether some other file extends it). A seam left unset here simply grants no
 	 * exemption from it (fail closed), never widens one.
 	 *
 	 * Deliberately NOT covering a method of a `final class` (`final class C { … }` cannot
-	 * be extended — measured `Cannot extend a final class`): the grammar projects it as
+	 * be extended — `Cannot extend a final class`): the grammar projects it as
 	 * `(FinalDecl (ClassForm C …))`, so recognising it needs GRANDPARENT tracking `walk`
 	 * does not otherwise carry, and every real site found needing it was already a
 	 * constructor or a `static`. A conservative miss, not a correctness gap.
@@ -427,9 +427,9 @@ final class OptionalParamShorthand implements Check {
 	 * `DeadNullGuard` already use, rather than re-deriving it; or (b) the LHS (first child) of
 	 * an `Assign` (`RefShape.assignKind`) node whose RHS (last child) is the `null` literal —
 	 * anywhere in `node`'s subtree. Narrower than "shares a direct parent with a `null`
-	 * literal": `foo(name, null)` (the parameter and a `null` as sibling call ARGUMENTS) no
-	 * longer matches — measured as the single biggest false-refusal cluster on a real tree (10
-	 * of ~21 sites in one file, each shaped like a trailing-`null` constructor call).
+	 * literal": `foo(name, null)` (the parameter and a `null` as sibling call ARGUMENTS) does
+	 * not match — the single biggest false-refusal cluster on a real tree, each site shaped
+	 * like a trailing-`null` constructor call.
 	 */
 	private static function hasNullComparisonOrAssign(
 		node: QueryNode, name: String, identKind: String, nullLitKind: String, seams: Seams

@@ -20,7 +20,6 @@ using StringTools;
  * cheap prefilter and re-splits every surviving bucket by this renderer. Standing alone it
  * manufactures matches instead: `duplicate-code` bucketed three-gram norms outright and read two
  * `--help` blocks padded to different column widths as a clone, so it keys on this renderer too.
- * The sentence here used to claim all five consumers paired it; two of them did not.
  *
  * A MESSAGE is the opposite job. Its text is quoted back to a reader who is expected to find it
  * in the file, and where the check also offers a fix, that text is the code the fix would write.

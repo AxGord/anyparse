@@ -16,10 +16,11 @@ using Lambda;
 /**
  * Flags a plain string literal that appears three or more times (configurable)
  * in ONE file — a repeated literal the project rule says to hoist into a single
- * named constant, so an edit to the value happens in one place. Report-only, and it SAYS so: like `magic-number`
- * it declares `NoAutofix`, because the constant's NAME is intent a human supplies. An empty edit set alone reads
- * to `--fix` as a rule with nothing to fix, which is what filed work on a gate this rule already had — the
- * declared reason names `apq extract-constant`, which performs the hoist once the name is chosen.
+ * named constant, so an edit to the value happens in one place. Report-only, and it SAYS so:
+ * like `magic-number` it declares `NoAutofix`, because the constant's NAME is intent a human
+ * supplies. An empty edit set alone reads to `--fix` as a rule with nothing to fix — the
+ * declared reason names `apq extract-constant`, which performs the hoist once the name is
+ * chosen.
  *
  * ## What is flagged
  *
@@ -50,40 +51,34 @@ using Lambda;
  *     value duplicated across logic; extracting it would break the annotation's
  *     meaning. Such a literal neither counts toward a group nor is reported.
  *  4. it is NOT an entry of a DATA TABLE — a node of the grammar's OWN
- *     `RefShape.arrayLiteralKind`, outside a case PATTERN, EVERY child of which is a literal: a plain string
- *     literal, a childless leaf of a kind the grammar declares to BE one (`RefShape.literalTypeNames` keys — a
- *     number, a bool), or a map ENTRY (`RefShape.mapLiteralEntryKind`) whose every side is again one of those.
- *     ARITY IS NOT PART OF THE TEST, and was never the concept: a grammar kind-name vocabulary (`['ClassDecl',
- *     'FnMember', …]`), a keyword list, a MIME table, a ONE-name array (`arrayTypeNames: ['Array']`), a
- *     `kind => type` map — those literals are DATA, and the collection IS already the single named place the
- *     advisory asks for, so hoisting one of its entries into a constant leaves the table unreadable and the
- *     value no more centralised than it was. Such an entry neither counts toward a group nor is reported — the same
- *     treatment metadata gets above.
+ *     `RefShape.arrayLiteralKind`, outside a case PATTERN, EVERY child of which is a literal: a
+ *     plain string literal, a childless leaf of a kind the grammar declares to BE one
+ *     (`RefShape.literalTypeNames` keys — a number, a bool), or a map ENTRY
+ *     (`RefShape.mapLiteralEntryKind`) whose every side is again one of those. ARITY IS NOT
+ *     PART OF THE TEST, and was never the concept: a grammar kind-name vocabulary
+ *     (`['ClassDecl', 'FnMember', …]`), a keyword list, a MIME table, a ONE-name array
+ *     (`arrayTypeNames: ['Array']`), a `kind => type` map — those literals are DATA, and the
+ *     collection IS already the single named place the advisory asks for, so hoisting one of
+ *     its entries into a constant leaves the table unreadable and the value no more
+ *     centralised than it was. Such an entry neither counts toward a group nor is reported —
+ *     the same treatment metadata gets above.
  *
  * ### What the table carve-out costs
  *
- * Two landings, each a READING of the tree it was taken on. The carve-out first landed as
- * three-or-more string entries and took this project's `src/` from 375 findings to 262, its grammar
- * plugin from 89 to 9. Dropping the arity floor and admitting map entries took `src` + `test` from
- * 2387 to 2315 on `050c91bb` (src 189 -> 165, test 2198 -> 2150), the grammar plugin from 11 to 0,
- * and the user's Pony tree from 48 to 44 over `src` (92 to 86 over all six roots). Nothing was ADDED
- * in any of those pairs, on either tree.
- * The 72 groups the widening removed split by what is LEFT once their collection entries stop
- * counting: 38 are PURE data — every occurrence was an entry (across one collection or several,
- * which is the criterion's one blind spot: three separate `['haxe']` argument arrays read as three
- * tables and go silent together — a declaration-initialiser-only refinement would close it), and `'String'`
- * nine times is the shape, all nine a value of a `kind => type` or `method => return` map — while 14
- * keep one logic occurrence and 20 keep TWO, one short of the default threshold. That last bucket is
- * the honest price and it has a real shape: `ownedMeta = [':postfix']` beside two
- * `entry.name == ':postfix'` comparisons, and the four Pony sites where a `checkMeta([':asset'])`
- * vocabulary sits beside two `getMeta(':asset')` calls. A project that wants it back sets
- * `string-literal-dup.minOccurrences: 2`. A further 20 findings keep their anchor with a LOWER count,
- * which the blast gate reads as no movement because `messageIdentity` masks the repetition count.
- * Of the 72, 65 fall to the arity relaxation alone and 7 to the map arm. The third arm — a childless
- * NON-string literal, so that `['Map' => 1, 'Array' => 0]` reads as the table it is — moved nothing
- * on either tree, because `'Array'` was already under the threshold once its one-name array stopped
- * counting. It stays because the criterion is 'a collection of only literals' and a number IS one: a
- * type restriction there is exactly the leak-by-category a positive criterion exists to close.
+ * The groups the carve-out silences split by what is LEFT once their collection entries stop
+ * counting: most are PURE data — every occurrence was an entry, across one collection or
+ * several, which is the criterion's one blind spot (three separate `['haxe']` argument arrays
+ * read as three tables and go silent together; a declaration-initialiser-only refinement would
+ * close it) — while some keep one or two logic occurrences, one short of the default threshold.
+ * That last bucket is the honest price and it has a real shape: `ownedMeta = [':postfix']`
+ * beside two `entry.name == ':postfix'` comparisons, or a `checkMeta([':asset'])` vocabulary
+ * beside two `getMeta(':asset')` calls. A project that wants it back sets
+ * `string-literal-dup.minOccurrences: 2`. A finding that keeps its anchor with a LOWER count
+ * reads to the blast gate as no movement, because `messageIdentity` masks the repetition
+ * count. The childless NON-string literal arm — so that `['Map' => 1, 'Array' => 0]` reads as
+ * the table it is — stays because the criterion is 'a collection of only literals' and a
+ * number IS one: a type restriction there is exactly the leak-by-category a positive criterion
+ * exists to close.
  *
  * ## Grouping
  *
@@ -106,42 +101,39 @@ using Lambda;
  * `string-literal-dup.minOccurrences` and `string-literal-dup.minLength`
  * (integer options). An absent or malformed value falls back to the default.
  *
- * ## Why there is no autofix — declined on evidence, 2026-08-21
+ * ## Why there is no autofix — declined on evidence
  *
  * The hoist needs a NAME, and the name IS the change: `PNG8`, `TRIM_MODE`,
  * `WORKSPACE_FOLDER` are decisions about what a value MEANS, and a mechanical
  * `LITERAL_PNG8` reads worse than the repetition it replaces. That is the same
- * argument `magic-number` makes. Three more came out of driving the report over the
- * 851-file Pony tree (105 groups in 52 files) and READING every site; each is a
- * PRECONDITION a future fixer must clear, not a caveat it may document.
+ * argument `magic-number` makes. Three more came out of READING every site of a real
+ * tree's report; each is a PRECONDITION a future fixer must clear, not a caveat it may
+ * document.
  *
- *  - **3 of the 105 anchors are already a constant declaration.** `VSCode.hx` opens
- *    with `private static inline final PRELAUNCH_TASK: String = 'default';`, and the
- *    other 13 occurrences in that group are unrelated uses of the same word in the
- *    JSON the file emits — so the advisory fires ON the extraction that already
- *    happened, and a fixer would hoist a constant's own initialiser into a second
- *    constant.
- *  - **14 of them sit in a module that declares no type at all.** `docgen/DocInclude.hx`
- *    is module-level fields and functions (`apq symbols` reports nothing there), so
- *    there is no host for a `static final` — and the literals are the KEYS of the
- *    table immediately below where a module-level one would go.
- *  - **17 are map-literal keys, and most of the remainder are wire tokens** — a MIME
- *    table, a VS Code `tasks.json` / `launch.json` emitter, `:asset` / `:puper`
- *    metadata names a build macro reads back. The literal IS the format, and naming
- *    it hides the correspondence with the file or annotation it has to match.
+ *  - **An anchor can already be a constant declaration.** A file opens with
+ *    `private static inline final PRELAUNCH_TASK: String = 'default';`, and the other
+ *    occurrences in that group are unrelated uses of the same word in the JSON the file
+ *    emits — so the advisory fires ON the extraction that already happened, and a fixer
+ *    would hoist a constant's own initialiser into a second constant.
+ *  - **A group can sit in a module that declares no type at all** — module-level fields
+ *    and functions (`apq symbols` reports nothing there), so there is no host for a
+ *    `static final`, and the literals are the KEYS of the table immediately below where a
+ *    module-level one would go.
+ *  - **Map-literal keys and wire tokens** — a MIME table, a VS Code `tasks.json` /
+ *    `launch.json` emitter, `:asset` / `:puper` metadata names a build macro reads back.
+ *    The literal IS the format, and naming it hides the correspondence with the file or
+ *    annotation it has to match.
  *
  * The mechanism a caller is likeliest to have heard of — a literal feeding a MACRO
  * cannot be hoisted, because a macro parameter is `Expr` and a macro wanting a
  * literal rejects an identifier (`haxe.macro.Expr should be String … For function
- * argument 'inModule'`) — is real, and did NOT fire here: no Pony group feeds one of
- * the 38 macro functions that tree declares. It is a precondition to gate on when the
- * fixer is written, not the reason the rule stays report-only.
+ * argument 'inModule'`) — is real, and is a precondition to gate on when the fixer is
+ * written, not the reason the rule stays report-only.
  *
- * One shape that is NOT a blocker, checked on 4.3.7 rather than assumed: a hoisted
- * `static final` is legal in a `case` pattern (10 of the groups have an occurrence in
- * one) — Haxe resolves it as a constant there, and a `static var` in that position is
- * a compile ERROR (`pattern variables must be lower-case or with 'var ' prefix`), not
- * a silent capture. Only a lower-case name would capture.
+ * One shape that is NOT a blocker: a hoisted `static final` is legal in a `case` pattern
+ * — Haxe resolves it as a constant there, and a `static var` in that position is a
+ * compile ERROR (`pattern variables must be lower-case or with 'var ' prefix`), not a
+ * silent capture. Only a lower-case name would capture.
  */
 @:nullSafety(Strict)
 final class StringLiteralDup implements Check implements ConfigAware implements NoAutofix implements VolatileMessage {
@@ -308,15 +300,14 @@ final class StringLiteralDup implements Check implements ConfigAware implements 
 	 * (`RefShape.arrayLiteralKind`) whose every child is a DATA ENTRY (`isDataEntry`) — of ANY
 	 * arity, map entries included.
 	 *
-	 * Both halves are load-bearing and each was learned the hard way. The kind gate makes the
-	 * carve-out POSITIVE — only a construct the grammar declares to be a collection literal can
-	 * ever be a table — which is what keeps it from leaking into shapes nobody enumerated. A
-	 * first version tested the SHAPE alone ("every child is a plain literal") and leaked into two
-	 * whole classes on the first review: `new Foo("a", "b", "c")` carries its type as the node's
-	 * NAME rather than as a child, and a conditional-compilation expression
+	 * Both halves are load-bearing. The kind gate makes the carve-out POSITIVE — only a construct
+	 * the grammar declares to be a collection literal can ever be a table — which is what keeps it
+	 * from leaking into shapes nobody enumerated. A test of the SHAPE alone ("every child is a
+	 * plain literal") leaks into two whole classes: `new Foo("a", "b", "c")` carries its type as the
+	 * node's NAME rather than as a child, and a conditional-compilation expression
 	 * (`#if js "a" #else "b" #end`) is a run of sibling branch values — both all-literal, neither
-	 * a table. Measured on this project's `src/`, the tighter gate removes exactly the same 113
-	 * findings the shape-only one did, so closing the leak cost nothing.
+	 * a table. The tighter gate removes exactly the findings the shape-only one did, so closing
+	 * the leak costs nothing.
 	 *
 	 * The homogeneity half then keeps LOGIC out of the collection kind itself, and it is what the
 	 * ARITY floor used to approximate — badly. A floor of three read `arrayTypeNames: ['Array']`

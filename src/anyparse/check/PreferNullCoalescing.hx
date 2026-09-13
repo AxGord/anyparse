@@ -24,8 +24,7 @@ using Lambda;
  * needs a common type from the branches themselves. `taskDataLength = len == null ? 0 : len`
  * with `len:Null<Int64>` compiles and `len ?? 0` does not; an abstract with `@:from Float`
  * and `@:from String` unifies `it.min` with `Math.NEGATIVE_INFINITY` under the ternary and
- * has no common type without it. Neither is visible in the tree, so the oracle is the gate:
- * measured on one library, 3 of 81 sites.
+ * has no common type without it. Neither is visible in the tree, so the oracle is the gate.
  *
  * Two safety constraints:
  *

@@ -32,18 +32,14 @@ typedef ServerState = {
 /**
  * A PERSISTENT Haxe compilation server shared by every `apq` process working on one
  * project — the warm path of the report-mode compiler oracle. `CompilerOracle` spawns
- * a fresh `haxe <hxml> --no-output` per lint run (14.6s on this project, measured); the
- * same typecheck through a server that already holds the compiled modules is 0.4s when
- * nothing changed underneath it, and the cost of recompiling what did otherwise.
+ * a fresh `haxe <hxml> --no-output` per lint run; the same typecheck through a server
+ * that already holds the compiled modules costs only what changed underneath it.
  *
- * MEASURED AGAIN 2026-08-18, and on THIS project it no longer holds: warm 15.2s / 16.0s
- * against cold 16.1s, no speedup at all — a macro-heavy build re-runs its `@:build`
- * macros on the server too, so there is little left for the server to restore. Combined
- * with the always-red warm verdict below, the server here bought a SECOND full typecheck
- * and nothing else: lint 57.9s against 43.3s over 3 interleaved rounds, with findings
- * byte-identical by `apq lint-diff`. This project therefore sets
- * `compilerOracleServer: false`. The class stays — the win is real on a project whose
- * modules the server can actually keep.
+ * On THIS project the warm path buys nothing: a macro-heavy build re-runs its `@:build`
+ * macros on the server too, so there is little left for the server to restore, and with
+ * the always-red warm verdict below the server bought a SECOND full typecheck and nothing
+ * else. This project therefore sets `compilerOracleServer: false`. The class stays — the
+ * win is real on a project whose modules the server can actually keep.
  *
  * The server is spawned DETACHED and deliberately outlives the process that started it —
  * that is the whole point, since a server warmed and killed inside one run would only
@@ -62,27 +58,26 @@ typedef ServerState = {
  * a client that produced no status. The caller then runs the cold `CompilerOracle`, so
  * the warm path can only ever be faster, never a different verdict.
  *
- * ## Why the port is proved before it is believed (measured)
+ * ## Why the port is proved before it is believed
  *
  * An UNRELATED process listening on the port accepts `--connect`, and the compiler
- * client then exits 0 having compiled nothing — verified against an `nc` listener on a
- * project that does NOT typecheck. Trusting that exit status would silently disable the
+ * client then exits 0 having compiled nothing (an `nc` listener on a project that does
+ * NOT typecheck is reported green). Trusting that exit status would silently disable the
  * whole gate. So before any verdict is believed the port must answer a
  * `server/invalidate` display request with a JSON-RPC reply (`isServerReply`), which
  * only a real compilation server produces.
  *
- * ## Why linted files are invalidated first (measured)
+ * ## Why linted files are invalidated first
  *
  * The compilation server decides a module is stale by comparing modification times at
  * ONE-SECOND granularity, so a write landing in the same second as the compile that read
  * the file is invisible — and stays invisible for as long as the file is not written
  * again in a later second. This is not a one-second window: it FREEZES that module at
- * its previous content indefinitely. Measured on Haxe 4.3.7 with a write-then-connect
- * loop: 9 of 10 iterations gave a wrong verdict, including a broken build reported as
- * clean. Every linted path whose modification second is at or after the last compile is
- * therefore `server/invalidate`d first, which the same measurement shows fixes the
- * verdict with no wait at all. Past `MAX_INVALIDATIONS` files one fresh full compile
- * costs less than the round trips, so the recorded server is reaped and rebuilt instead.
+ * its previous content indefinitely, and a broken build is then reported as clean. Every
+ * linted path whose modification second is at or after the last compile is therefore
+ * `server/invalidate`d first, which fixes the verdict with no wait at all. Past
+ * `MAX_INVALIDATIONS` files one fresh full compile costs less than the round trips, so
+ * the recorded server is reaped and rebuilt instead.
  *
  * A file OUTSIDE the linted set, written in the same second as the last compile, stays a
  * residual: a report run never reads it, so nothing can know it changed. It costs one
@@ -100,11 +95,11 @@ typedef ServerState = {
  * ## A warm REJECTION is not believed on its own
  *
  * A compilation server can re-emit a stale null-safety diagnostic for a module it restored
- * from cache instead of recompiling. Measured on this project: ONE site (`StdResolver`
- * bridging a `sys` extern whose declared non-null `String` reads as nullable off the cache)
- * made every fully-cached recompile spuriously red while the cold compile was green. The
- * caller therefore re-runs a warm rejection COLD before reporting it
- * (`Cli.reportOracleVerdict`), so this class can only ever change what a verdict COSTS.
+ * from cache instead of recompiling (on this project a `sys` extern whose declared non-null
+ * `String` reads as nullable off the cache makes every fully-cached recompile spuriously red
+ * while the cold compile is green). The caller therefore re-runs a warm rejection COLD
+ * before reporting it (`Cli.reportOracleVerdict`), so this class can only ever change what a
+ * verdict COSTS.
  *
  * ## Target
  *
@@ -127,14 +122,14 @@ final class CompilerServer {
 
 	private static inline final PORT_SPAN: Int = 40000;
 
-	/** Warm poll budget: `--connect` attempts (each ~0.3s apart) to let a freshly spawned server boot and finish its first full compile. */
+	/** Warm poll budget: short-spaced `--connect` attempts that let a freshly spawned server boot and finish its first full compile. */
 	private static inline final MAX_WARM_ATTEMPTS: Int = 40;
 
 	/**
 	 * Stale-file budget: past this many possibly-stale linted files a fresh full compile
 	 * costs less than a `server/invalidate` round trip each, so the recorded server is
-	 * reaped and a new one started instead. Measured on this project: one round trip
-	 * 0.10-0.12s against a 15.1s cold compile, so the break-even is around 128 files.
+	 * reaped and a new one started instead — the break-even of one round trip against a cold
+	 * compile on this project.
 	 */
 	private static inline final MAX_INVALIDATIONS: Int = 128;
 

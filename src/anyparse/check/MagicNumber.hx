@@ -31,7 +31,19 @@ using StringTools;
  *     not in `RefShape.localDeclKinds`): `var x = 5000;` / `final x = 5000;`
  *     already give the literal a name, which is exactly the extraction the rule
  *     asks for. A literal nested in an initializer expression (`var x = 5000 *
- *     k`) is still in logic and is flagged. A literal that is the direct value of an object-literal field (`RefShape.objectFieldKind`, e.g. `{ value: 30 }`) is likewise declarative data and exempt; a computed field value keeps the literal under the operator and stays flagged. A literal in the index slot of a subscript (`RefShape.indexAccessKind`, e.g. `args[3]`) is a position, not a hidden quantity, and a literal compared against a size-like field access (`RefShape.sizeFieldNames`, e.g. `args.length == 3`) is a structural arity check — both exempt; a computed index (`args[i + 3]`) or a comparison against a plain value (`score == 100`) stays flagged. A literal reaching a string-position method argument (`positionMethodNames`, e.g. `s.charCodeAt(i + 5)` / `s.substr(0, 4)`), directly or through `+` / `-` offset arithmetic (`additiveKinds`), is a position, and a literal offset from a size field (`s.length - 3`) is a count offset — both exempt, while a bare offset with no size sibling (`from + 3`) stays flagged.
+ *     k`) is still in logic and is flagged. A literal that is the direct value of an
+ *     object-literal field (`RefShape.objectFieldKind`, e.g. `{ value: 30 }`) is likewise
+ *     declarative data and exempt; a computed field value keeps the literal under the
+ *     operator and stays flagged. A literal in the index slot of a subscript
+ *     (`RefShape.indexAccessKind`, e.g. `args[3]`) is a position, not a hidden quantity, and a
+ *     literal compared against a size-like field access (`RefShape.sizeFieldNames`, e.g.
+ *     `args.length == 3`) is a structural arity check — both exempt; a computed index
+ *     (`args[i + 3]`) or a comparison against a plain value (`score == 100`) stays flagged. A
+ *     literal reaching a string-position method argument (`positionMethodNames`, e.g.
+ *     `s.charCodeAt(i + 5)` / `s.substr(0, 4)`), directly or through `+` / `-` offset
+ *     arithmetic (`additiveKinds`), is a position, and a literal offset from a size field
+ *     (`s.length - 3`) is a count offset — both exempt, while a bare offset with no size
+ *     sibling (`from + 3`) stays flagged.
  *  3. its numeric value is not in the exempt set `{0, 1, 2}` plus any number
  *     listed in the `magic-number` `ignore` option of a discovered
  *     `apqlint.json`. A negative literal parses as a negation wrapping a

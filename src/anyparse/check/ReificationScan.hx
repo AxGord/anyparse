@@ -13,8 +13,8 @@ using Lambda;
  *
  * Source inside a quotation is not code the file runs — it is the AST the surrounding program
  * BUILDS. A rewrite that is equivalent everywhere else is therefore not equivalent there: it hands
- * the macro different data, and nothing rejects the result. Two measured examples, both of which
- * were live `--fix` bugs before this gate: `macro switch x { case A | B: … }` reifies its label as
+ * the macro different data, and nothing rejects the result. Two examples, both of which
+ * were live `--fix` bugs: `macro switch x { case A | B: … }` reifies its label as
  * ONE `EBinop(OpOr, …)` value while `case A, B:` reifies as TWO, and `default:` reifies as
  * `ESwitch.edef` where `case _:` becomes another entry of `cases`. A finding there is also
  * un-actionable even report-only — the reader cannot act on it without changing what the macro

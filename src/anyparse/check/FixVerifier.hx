@@ -69,7 +69,7 @@ typedef FixVerifyResult = {
  * LANDED for them.
  *
  * The shape the caller's fix ledger is keyed by, and the reason it exists: `Cli`'s ledger is filled
- * by the safe loop alone, so with a `compilerOracle` configured the 13 `RiskyFix` rules contributed
+ * by the safe loop alone, so with a `compilerOracle` configured the `RiskyFix` rules contributed
  * EDITS to the run's summary count and never a FINDING to the per-rule block that says what got no
  * edit — the two numbers a reader compares were measured over two different rule sets.
  *
@@ -587,9 +587,8 @@ final class FixVerifier {
 		final spent: Array<Int> = [0];
 		// SPAWNS, not probes. `spent` is the BUDGET counter and every attempt costs one,
 		// including a probe the writer refused before any compiler ran — so reporting it as
-		// `oracleInvocations` overstated the compiler spawns this file cost, and the summary
-		// line that prints it says "oracle run(s)" in so many words. Measured on a four-edit
-		// set with two refusing probes: 5 reported against 3 real spawns.
+		// `oracleInvocations` would overstate the compiler spawns this file cost, and the
+		// summary line that prints it says "oracle run(s)" in so many words.
 		final spawns: Array<Int> = [0];
 		// `isolateFailers` reads a BOOLEAN oracle, and a probe that could not build a
 		// candidate still has an honest answer for the question the bisect asks — "can this
@@ -598,10 +597,9 @@ final class FixVerifier {
 		// anything is KEPT (a probe writes its candidate to disk to typecheck it — every
 		// exit below then writes back either `before` or a confirmed text), so a
 		// mis-attributed unit can cost applied edits and never correctness. Abandoning here
-		// instead cost the whole file: measured on a four-edit set whose complement the
-		// compiler then CONFIRMED, the abandon applied 0 of 4 edits where the search applies
-		// 2. What the refusal is kept for is the REPORTED cause at the ONE seat that reaches
-		// no complement — see below.
+		// instead would cost the whole file, complement included, where the search still
+		// applies the confirmed half. What the refusal is kept for is the REPORTED cause at
+		// the ONE seat that reaches no complement — see below.
 		var uncanonical: Null<String> = null;
 		function probe(indices: Array<Int>): Bool {
 			final subset: Array<{ span: Span, text: String }> = editsOfUnits(edits, units, indices);

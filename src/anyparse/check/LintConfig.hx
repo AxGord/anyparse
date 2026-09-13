@@ -188,8 +188,8 @@ final class LintConfig {
 	 * `unused-private` reads directly, and the library half, which `LintCommand.resolutionThunk`
 	 * concatenates the same roots into and which is what the index behind `widestScopeIndex` is built from. Leave it out while
 	 * declaring libs and the scope is declared, holds no file of the project, and those proofs quietly
-	 * answer from the report scope again — measured as `CrossScopeSoundnessTest.LIBS_ONLY_REGRESSIONS`, and
-	 * announced by `ConfigDisagreement.warnMissingProjectRoots`.
+	 * answer from the report scope again — pinned by `CrossScopeSoundnessTest.LIBS_ONLY_REGRESSIONS`,
+	 * and announced by `ConfigDisagreement.warnMissingProjectRoots`.
 	 */
 	public function resolutionRoots(): Array<String> {
 		return _resolutionRoots;
@@ -362,15 +362,10 @@ final class LintConfig {
 	 * config (every rule enabled, no overrides) when the chain is empty.
 	 *
 	 * A nested document EXTENDS its ancestors and overrides only the keys it names.
-	 * It used to replace the nearest ancestor wholesale, which is a silent loss: a
-	 * document written as four exemptions for test code inherited neither the
-	 * project's resolution scope, nor its oracle, nor the 38 rules the root opted
-	 * into — and a missing rule does not fail, it finds nothing. This project's own
-	 * history is the evidence: `test/apqlint.json` was created as four relaxations
-	 * and then had `compilerOracle`, `compilerOracleServer` and
-	 * `resolutionRoots`/`resolutionLibs` copied down into it one commit at a time,
-	 * each time somebody noticed another absence, while the 38 opt-in rules were
-	 * never noticed at all.
+	 * Replacing the nearest ancestor wholesale would be a silent loss: a
+	 * document written as a few exemptions for test code would inherit neither the
+	 * project's resolution scope, nor its oracle, nor the rules the root opted into
+	 * — and a missing rule does not fail, it finds nothing.
 	 *
 	 * The merge is per KEY at the top level and per RULE inside `rules`, because
 	 * "disable magic-number for tests" has to keep meaning that and nothing else;

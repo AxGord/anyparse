@@ -57,9 +57,8 @@ import anyparse.runtime.Span;
  * `--rule redundant-trailing-comma` selects it. Whether a list ends on a comma is a
  * project style decision, not a defect - the same call `shorten-type-ref` makes about
  * how qualified a type reference should be. anyparse's own house style KEEPS the
- * trailing comma (1041 would-be findings across `src` + `test`), and a rule whose
- * default verdict contradicts its own repository is one that trains readers to ignore
- * the report.
+ * trailing comma, and a rule whose default verdict contradicts its own repository is one that
+ * trains readers to ignore the report.
  */
 @:nullSafety(Strict)
 final class RedundantTrailingComma implements Check implements DefaultOff {

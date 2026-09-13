@@ -173,12 +173,10 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	 * Why `fix` produced no annotation for a finding — one sentence per gate, written on the
 	 * `Violation` AT the gate that closed (`Violation.declineReason`).
 	 *
-	 * Every one of these is a per-SITE refusal of a rule that fixes plenty elsewhere, and until they
-	 * were written down a full-ruleset run over an 851-file tree reported all 367 of its findings as
-	 * "its fix was called for these findings and returned no edit; the check declares neither
-	 * NoAutofix nor a decline reason". That reads as a rule with no autofix; measured on the same
-	 * tree, the ladder annotates five of seven ordinary shapes and the survivors are the hard ones —
-	 * which is the sentence the reader was owed and could not get.
+	 * Every one of these is a per-SITE refusal of a rule that fixes plenty elsewhere; without them
+	 * the ledger reports every unfixed finding as "the check declares neither NoAutofix nor a
+	 * decline reason", which reads as a rule with no autofix — where the survivors are the hard
+	 * shapes, which is the sentence the reader is owed.
 	 */
 	private static inline final DECLINE_NO_TREE: String =
 		'the file did not re-parse in the fix pass (or the grammar names no local-declaration kind), so no flagged declaration could be located';
@@ -506,8 +504,8 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	 *
 	 * The segment before the last tells the forms apart, because a real type reference the
 	 * compiler prints never carries an upper-case segment anywhere but at the END — a module's
-	 * SECONDARY type comes out as `pack.Sub` with the module dropped (measured: `pkg.Box.Side`
-	 * prints `pkg.Side`). So an upper-case non-final segment IS an owner type and the run is a
+	 * SECONDARY type comes out as `pack.Sub` with the module dropped (`pkg.Box.Side` prints
+	 * `pkg.Side`). So an upper-case non-final segment IS an owner type and the run is a
 	 * class parameter; a lower-case one is a package segment unless it equals `methodName`,
 	 * which the caller supplies ONLY for a function that DECLARES type parameters (null
 	 * otherwise) — without that proof the same shape is an ordinary package-qualified type
@@ -623,17 +621,15 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	 * type checking off for the very binding this rule exists to strengthen, leaving no compiler
 	 * error for the verification pass to revert. `Unknown<…>`, the monomorph spelling refused just
 	 * above, is the SAME failure under a name that cannot be mistaken for a type; `Dynamic` is it
-	 * wearing one that can. (Measured on a real tree: `final f: Dynamic = Fs.createWriteStream(file);`,
-	 * whose type is `js.node.fs.WriteStream`, next to a sibling local left alone because its answer
-	 * was `Unknown<0>`.) A project running `avoid-dynamic` also gains a finding of THAT rule from
-	 * every such annotation. The cost is a correct `Class<Dynamic>` or `Map<String, Dynamic>` left
-	 * report-only, which is the trade the rule's owner asked for.
+	 * wearing one that can (`final f: Dynamic = Fs.createWriteStream(file);` for a value whose
+	 * type is `js.node.fs.WriteStream`). A project running `avoid-dynamic` also gains a finding of
+	 * THAT rule from every such annotation. The cost is a correct `Class<Dynamic>` or
+	 * `Map<String, Dynamic>` left report-only, which is the trade the rule's owner asked for.
 	 *
 	 * A BARE `Void`: not merely unhelpful — `var x:Void` is not a declaration Haxe accepts at all,
 	 * so this is the compiler having answered about some enclosing statement or block rather than
 	 * the initializer, in the one situation where nothing downstream can catch it. `Void` INSIDE a
-	 * type stays admissible: `() -> Void` is an ordinary local type. (Measured on the same tree: 14
-	 * `final h: Void = config.host == null ? …` annotations survived the reply-position gate.)
+	 * type stays admissible: `() -> Void` is an ordinary local type.
 	 */
 	private static function inadmissibleType(t: String): Bool {
 		if (t == 'Void') return true;
@@ -652,10 +648,9 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	 * fully-qualified fallback it emits instead is correct only if the path is REAL. A compiler
 	 * answer is not evidence of that: a display server resolves a file no `-cp` of its hxml covers
 	 * through the implicit process-cwd classpath, and then names every module by its REPO-relative
-	 * path. (Measured: `tests/test/magic/NinjaTest.hx`, built with `-cp tests/test` and declaring
-	 * `package magic;`, was answered `tests.test.magic.NinjaClass` — `Type not found` at that
-	 * spelling, while the declaration one line above got a correct bare `NinjaClass` from the
-	 * structural pass.)
+	 * path (a file built with `-cp tests/test` and declaring `package magic;` is answered
+	 * `tests.test.magic.NinjaClass` — `Type not found` at that spelling, while the structural pass
+	 * gets a correct bare `NinjaClass` for the declaration beside it).
 	 *
 	 * The proof is the resolution index, so only a printer that HAS one can be asked: without it
 	 * `resolvePath` answers null for everything and this would abstain on every qualified

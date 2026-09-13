@@ -35,8 +35,8 @@ using Lambda;
  * STRAND a null-safety narrowing (Haxe carries a narrowing fact into a later `||` operand
  * from the FIRST operand only) right-nests a parenthesised group at the stranded operand
  * instead: `a != null && b != null && p(a.length, b.length)` becomes
- * `a == null || (b == null || !p(a.length, b.length))`, which narrows fine — measured on
- * the compiler. Falling back — a seam-less grammar, or a comment in the condition the
+ * `a == null || (b == null || !p(a.length, b.length))`, which narrows fine.
+ * Falling back — a seam-less grammar, or a comment in the condition the
  * De Morgan rewrite would drop — the old text engine wraps `!(cond)` VERBATIM (`!` strip,
  * NaN-safe `==` / `!=` flip, everything else parenthesised-wrapped), preserving the
  * comment. Either tier is sound and compiles.
@@ -671,16 +671,17 @@ final class GuardContinue implements Check {
 	 * check could never reach it again, and reporting both told the reader to do opposite things.
 	 *
 	 * FIVE conjuncts, and the list is meant to be exhaustive — a missing one silences BOTH rules on a
-	 * site, which is the failure this predicate exists to prevent and which it shipped with twice in
-	 * review. Two are about REACH: `loop-guard` reads `loopStatementKinds` only, so a `do … while` is
-	 * never its business (measured — deferring on one left the site reported by nobody), and its LIFT
+	 * site, which is the failure this predicate exists to prevent. Two are about REACH:
+	 * `loop-guard` reads `loopStatementKinds` only, so a `do … while` is
+	 * never its business (deferring on one would leave the site reported by nobody), and its
+	 * LIFT
 	 * arm demands the body be exactly `blockStmtKind` where this check accepts any block kind. Three
 	 * are about the SITE: `LoopScan.leadingContinueGuard` for the body-level shape (guard first, no
 	 * cascade after it, no comment before or inside it), `IfExpressionChain.childShielded`'s flag for
 	 * the dangling-`else` position gate, and `NegationScan.negationIsClean` for the inversion the
 	 * lifted header has to emit. Dropping either of the last two makes this check defer where
-	 * `loop-guard` declines — measured at 14 such sites over 13251 external files, every one an
-	 * ordered-comparison guard whose flip the negation engine refuses.
+	 * `loop-guard` declines — on real trees every such site is an ordered-comparison guard whose
+	 * flip the negation engine refuses.
 	 *
 	 * What it does NOT ask is whether `loop-guard` is ENABLED. A config that disables it, or a
 	 * `--rule guard-continue` run, therefore silences this shape entirely. That is the same trade every

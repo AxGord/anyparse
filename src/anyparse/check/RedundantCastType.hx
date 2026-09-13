@@ -30,7 +30,7 @@ import anyparse.runtime.Span;
  *
  * ## SEMANTIC NOTE - the trade-off this rule makes (user-approved)
  *
- * Measured on Haxe 4 (`--interp`): `cast(null, Foo)` and `cast null` BOTH yield `null` and
+ * `cast(null, Foo)` and `cast null` BOTH yield `null` and
  * neither throws, so a null value behaves identically. But `cast(<a Bar instance>, Foo)`
  * THROWS while `cast <a Bar instance>` silently yields the `Bar`. The rewrite therefore trades
  * a runtime type check for brevity, and the trade-off is confined to a NON-NULL type mismatch.

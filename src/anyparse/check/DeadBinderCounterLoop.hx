@@ -18,53 +18,76 @@ import anyparse.runtime.Span;
 using StringTools;
 
 /**
- * Flags a `for`-in loop that iterates a collection ONLY to count it — `var i = 0;` immediately followed by `for (x in coll) { …
- * i++; }` where nothing reads the binder `x` — which a range `for` says directly: `for (i in 0...coll.length)`, with the
- * declaration and the trailing increment gone. `Severity.Info`, paired with an autofix. DEFAULT OFF (`DefaultOff`): the input
- * compiles and behaves correctly, so replacing it is a style choice — opt in with `"dead-binder-counter-loop": { "enabled": true }`.
+ * Flags a `for`-in loop that iterates a collection ONLY to count it — `var i = 0;` immediately
+ * followed by `for (x in coll) { … i++; }` where nothing reads the binder `x` — which a range
+ * `for` says directly: `for (i in 0...coll.length)`, with the declaration and the trailing
+ * increment gone. `Severity.Info`, paired with an autofix. DEFAULT OFF (`DefaultOff`): the
+ * input compiles and behaves correctly, so replacing it is a style choice — opt in with
+ * `"dead-binder-counter-loop": { "enabled": true }`.
  *
- * A collection with no `length` is counted through `Lambda.count`, and a `using Lambda;` is inserted when the file lacks
- * one — unless the container's own type declares `count`, where the QUALIFIED `Lambda.count(coll)` is emitted instead
- * (no `using`, and the member never consulted). That costs ONE extra traversal the original did not pay (`count()`
- * walks, then the range loop walks again) — cheap for the containers below, and stated here rather than glossed.
+ * A collection with no `length` is counted through `Lambda.count`, and a `using Lambda;` is
+ * inserted when the file lacks one — unless the container's own type declares `count`, where
+ * the QUALIFIED `Lambda.count(coll)` is emitted instead (no `using`, and the member never
+ * consulted). That costs ONE extra traversal the original did not pay (`count()` walks, then
+ * the range loop walks again) — cheap for the containers below, and stated here rather than
+ * glossed.
  *
  * ## The shape it accepts
  *
- * Two ADJACENT statements in one STATEMENT LIST: a single-variable `var i = 0;` (NOT `final` — the counter is incremented)
- * and a `for (x in coll)` over a bare identifier `coll`, whose braced body of at least two statements ENDS with exactly
- * `i++;`. "Statement list" is `ControlFlowSupport.blockKinds()`, which deliberately EXCLUDES the conditional-compilation
- * node: a `#if` region projects as one node holding every branch's statements as flat siblings, so pairing across it would
- * splice through the `#else` and delete it. A pair written inside a `#if` is therefore not matched at all.
+ * Two ADJACENT statements in one STATEMENT LIST: a single-variable `var i = 0;` (NOT `final` —
+ * the counter is incremented) and a `for (x in coll)` over a bare identifier `coll`, whose
+ * braced body of at least two statements ENDS with exactly `i++;`. "Statement list" is
+ * `ControlFlowSupport.blockKinds()`, which deliberately EXCLUDES the conditional-compilation
+ * node: a `#if` region projects as one node holding every branch's statements as flat
+ * siblings, so pairing across it would splice through the `#else` and delete it. A pair
+ * written inside a `#if` is therefore not matched at all.
  *
  * ## Soundness gates (all required for a flag)
  *
- * - **The binder is dead.** No occurrence of `x` anywhere in the body — proved by a TEXT scan over the body span, not a node walk, because a missed mention here is a licence to DELETE the binder. A bare `'$x'` interpolation read and a `macro` reification subtree are both invisible to the tree and both would produce code that does not compile.
- * - **`i` is a pure counter.** The trailing `i++;` is its ONLY write, nothing after the loop reads it (a range `for` scopes `i` to the loop, whereas the `var` leaves the final count visible), nothing re-declares it in the body, and no closure in the enclosing scope captures it (a closure sees one shared binding where the range binder is per-iteration).
- * - **No `continue`.** In the `for`-in form a `continue` SKIPS the trailing `i++`, so `i` ends below the element count; a range `for` advances regardless. A `break` is fine — both forms stop at the same iteration.
- * - **`coll`'s length cannot move.** `0...coll.length` evaluates the bound ONCE where the `for`-in re-asks the iterator, so every mention of `coll` in the body must be a `length` read or an index read (see `LoopScan.usedOnlyAsStableCollection`, whose doc also states the BODY-LOCAL limit this rule inherits: an alias handed out earlier, or a call mutating `coll` through a field the callee owns, is outside what a per-file check can see).
+ * - **The binder is dead.** No occurrence of `x` anywhere in the body — proved by a TEXT scan
+ *   over the body span, not a node walk, because a missed mention here is a licence to DELETE
+ *   the binder. A bare `'$x'` interpolation read and a `macro` reification subtree are both
+ *   invisible to the tree and both would produce code that does not compile.
+ * - **`i` is a pure counter.** The trailing `i++;` is its ONLY write, nothing after the loop
+ *   reads it (a range `for` scopes `i` to the loop, whereas the `var` leaves the final count
+ *   visible), nothing re-declares it in the body, and no closure in the enclosing scope
+ *   captures it (a closure sees one shared binding where the range binder is per-iteration).
+ * - **No `continue`.** In the `for`-in form a `continue` SKIPS the trailing `i++`, so `i` ends
+ *   below the element count; a range `for` advances regardless. A `break` is fine — both forms
+ *   stop at the same iteration.
+ * - **`coll`'s length cannot move.** `0...coll.length` evaluates the bound ONCE where the
+ *   `for`-in re-asks the iterator, so every mention of `coll` in the body must be a `length`
+ *   read or an index read (see `LoopScan.usedOnlyAsStableCollection`, whose doc also states the
+ *   BODY-LOCAL limit this rule inherits: an alias handed out earlier, or a call mutating `coll`
+ *   through a field the callee owns, is outside what a per-file check can see).
  * - **`i` is an `Int`.** A declared non-`Int` counter cannot be a `...` range binder.
  *
  * ## The collection type must be provable
  *
- * Unlike its sibling `prefer-keyvalue-loop`, this check does NOT report an unresolved container: the replacement TEXT
- * depends on the type (`length` vs `count()`), so a finding it cannot spell would be noise. `coll` must be a bare
- * identifier whose binding is declared as one of the containers below, spelled either bare or `haxe.`-qualified (the
- * match is on the SIMPLE nominal, so an unqualified project type of the same name is the residual — and it fails LOUDLY
- * at compile time). Everything else — a path receiver, a call, an unannotated binding, a range — is silently skipped.
+ * Unlike its sibling `prefer-keyvalue-loop`, this check does NOT report an unresolved
+ * container: the replacement TEXT depends on the type (`length` vs `count()`), so a finding it
+ * cannot spell would be noise. `coll` must be a bare identifier whose binding is declared as
+ * one of the containers below, spelled either bare or `haxe.`-qualified (the match is on the
+ * SIMPLE nominal, so an unqualified project type of the same name is the residual — and it
+ * fails LOUDLY at compile time). Everything else — a path receiver, a call, an unannotated
+ * binding, a range — is silently skipped.
  *
  * - `length` (no `Lambda`): `Array`, `List`.
  * - `count()` (+ `using Lambda;`): `Map` and the concrete `haxe.ds` map types.
  *
- * That list is a WHITELIST on purpose. `Lambda.count` needs an `Iterable`, and "everything the language lets you write `for (x
- * in …)` over" is strictly wider than that: an `Iterator` is accepted by `for` but is CONSUMED by a count, which would silently
- * run the rewritten loop zero times, and `haxe.ds.HashMap` iterates but is an abstract that does not unify with `Iterable` at
- * all. Naming the containers that provably work refuses that class by construction instead of by another exclusion.
+ * That list is a WHITELIST on purpose. `Lambda.count` needs an `Iterable`, and "everything the
+ * language lets you write `for (x in …)` over" is strictly wider than that: an `Iterator` is
+ * accepted by `for` but is CONSUMED by a count, which would silently run the rewritten loop
+ * zero times, and `haxe.ds.HashMap` iterates but is an abstract that does not unify with
+ * `Iterable` at all. Naming the containers that provably work refuses that class by
+ * construction instead of by another exclusion.
  *
  * ## Grammar-agnostic
  *
- * Driven by `LoopScan.seamsOf` plus `RefShape.postIncrKind` / `continueStatementKind` / `exprStatementKind` /
- * `mutableLocalDeclKinds` and `GrammarPlugin.controlFlowSupport`; any unset kind makes the check a no-op. The
- * `length` / `count` member names and the container list are the language-specific tokens, spelled as constants.
+ * Driven by `LoopScan.seamsOf` plus `RefShape.postIncrKind` / `continueStatementKind` /
+ * `exprStatementKind` / `mutableLocalDeclKinds` and `GrammarPlugin.controlFlowSupport`; any
+ * unset kind makes the check a no-op. The `length` / `count` member names and the container
+ * list are the language-specific tokens, spelled as constants.
  */
 @:nullSafety(Strict)
 final class DeadBinderCounterLoop implements Check implements DefaultOff {

@@ -290,13 +290,13 @@ final class RedundantToString implements Check implements DefaultOff {
 	 * Whether the string coercion the context arms rely on provably calls the SAME `toString` the
 	 * explicit call does: `typeName` must be declared in the analysed scope and NO declaration of it
 	 * may be EXTERN. The two genuinely diverge for an extern type, whose methods are declarations
-	 * over a foreign runtime object — measured on Haxe 4.3.7 / js, `extern class Date`'s
-	 * `d.toString()` yields `2023-11-15 00:13:20` where `'$d'`, `Std.string(d)` and `'' + d` all
-	 * yield the native `Wed Nov 15 2023 …`, and `extern class Array`'s `a.toString()` yields `1,2`
-	 * where the same three yield `[1,2]`. A non-extern type is compiled by the compiler that also
-	 * emits the coercion, so there is ONE `toString` and every context reaches it — verified for a
-	 * class, an inherited `toString`, an `abstract` over `Array` and over `Date`, and an
-	 * `enum abstract`. An unresolved, out-of-scope or extern type keeps the conservative default.
+	 * over a foreign runtime object — on js, `extern class Date`'s `d.toString()` yields
+	 * `2023-11-15 00:13:20` where `'$d'`, `Std.string(d)` and `'' + d` all yield the native
+	 * `Wed Nov 15 2023 …`, and `extern class Array`'s `a.toString()` yields `1,2` where the same
+	 * three yield `[1,2]`. A non-extern type is compiled by the compiler that also emits the
+	 * coercion, so there is ONE `toString` and every context reaches it — for a class, an
+	 * inherited `toString`, an `abstract` over `Array` and over `Date`, and an `enum abstract`
+	 * alike. An unresolved, out-of-scope or extern type keeps the conservative default.
 	 */
 	private static function coercionCallsDeclaredToString(typeName: String, ctx: Ctx): Bool {
 		final decls: Array<TypeDeclInfo> = declsOf(typeName, ctx);

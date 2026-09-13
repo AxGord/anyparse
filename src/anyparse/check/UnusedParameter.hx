@@ -156,9 +156,9 @@ final class UnusedParameter implements Check implements ConfigAware {
 		// up, and `eligible` is exactly what turns the finding into the `Warning` whose autofix
 		// removes the parameter. The second proof does not save it — `RemoveParam.paramSlotEdits`
 		// collects call sites from the ONE tree it is handed, so both proofs are blind in the same
-		// direction. Measured on a two-file probe under `resolutionRoots: ["src"]`:
-		// `lint A.hx --rule unused-parameter --fix` cut `helper(a, b)` to `helper(a)` and left the
-		// grantee file's `a.helper(3, 4)` standing. Widening can only ADD a subtype / grant, so it
+		// direction: a one-file `--fix` under `resolutionRoots: ["src"]` cuts `helper(a, b)` to
+		// `helper(a)` and leaves the grantee file's `a.helper(3, 4)` standing. Widening can only
+		// ADD a subtype / grant, so it
 		// can only turn `eligible` OFF — a `Warning` becomes an `Info`, never the reverse, and no
 		// removal is ever invented.
 		final index: SymbolIndex = RefactorSupport.widestScopeIndex(plugin) ?? SymbolIndex.build(files, plugin);

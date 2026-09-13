@@ -71,13 +71,10 @@ import anyparse.runtime.Span;
  *
  * The LIFT arm adds one more, and it is about POSITION rather than shape: the header it emits
  * carries no `else`, so wherever the loop sits somewhere an `else` CAN follow, that trailing
- * `else` rebinds to the emitted header. Measured, not assumed — `hxq lint --fix --rule
- * loop-guard` on `if (p) for (x in xs) { if (x == 0) continue; trace(x); } else trace(0);`
- * produced `if (p) for (x in xs) if (x != 0) { trace(x); } else trace(0);`, the writer even
- * re-indenting the `else` under the inner `if`; on 4.3.7 `--interp` with `trace('ELSE')` in the
- * else-branch, `p == false` printed ELSE once BEFORE and nothing AFTER, while
- * `p == true, xs == [0, 0]` printed nothing BEFORE and ELSE TWICE AFTER — once per skipped
- * element. So the arm runs only in a SHIELDED position. `IfExpressionChain.childShielded`
+ * `else` rebinds to the emitted header: `if (p) for (x in xs) { if (x == 0) continue; trace(x);
+ * } else trace(0);` lifted to `if (p) for (x in xs) if (x != 0) { trace(x); } else trace(0);`
+ * runs the else-branch once per skipped element instead of once when `p` is false.
+ * So the arm runs only in a SHIELDED position. `IfExpressionChain.childShielded`
  * carries one boolean down the walk, seeded true at the module root (nothing follows a
  * top-level declaration but another one) and re-derived per child against
  * `IfExpressionChain.shieldSeams`; it is false only in the then-branch of an else-carrying

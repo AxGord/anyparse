@@ -108,8 +108,8 @@ enum OperatorVerdict {
  *  - `prefer-index-access` and `redundant-tostring` look like the same defect under a
  *    different annotation and MEASURE clean, each for its own reason rather than by luck.
  *    `prefer-index-access` demands POSITIVE proof that the receiver is the language `Map`
- *    abstract, so a user type carrying `@:arrayAccess` beside a `get(k)` is never a candidate
- *    (verified: 0 findings on exactly that fixture). `redundant-tostring` already refuses a
+ *    abstract, so a user type carrying `@:arrayAccess` beside a `get(k)` is never a candidate.
+ *    `redundant-tostring` already refuses a
  *    `+` receiver that is not a class, and in every stringifying context a declared `toString`
  *    wins over an `@:to String` — compile-and-run on Haxe 4.3.7 `--interp` with an
  *    `abstract Tag(String)` declaring both: interpolation, concatenation, `Std.string` and the
@@ -339,9 +339,9 @@ final class OperatorSelection {
 	 * include is exactly what a narrow run would otherwise miss — but the reverse costs just as
 	 * much: a type declared in the SCANNED files and absent from the resolution scope (a run over
 	 * a directory outside the configured project, the common shape of a probe) resolved to
-	 * nothing, and a verdict of `Unproven` for it silenced findings that were perfectly sound.
-	 * Measured on a two-file fixture whose abstract declares NO overload: preferring the project
-	 * index alone refused the finding, asking both keeps it.
+	 * nothing, and a verdict of `Unproven` for it silences findings that are perfectly sound —
+	 * for an abstract declaring NO overload, the project index alone refuses the finding and
+	 * asking both keeps it.
 	 */
 	private function indexes(): Array<SymbolIndex> {
 		final built: Null<Array<SymbolIndex>> = _indexes;

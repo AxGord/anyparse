@@ -60,7 +60,10 @@ using Lambda;
  *   would find the LAST match, so the dedicated break kind is required); the
  *   declaration's initializer must be exactly `null`.
  * - **No key-value loop.** `for (k => v in m)` is skipped — `.find` iterates an
- *   iterable's values, not map key-value pairs. A call iterable (`xs.keys()` / `<expr>.m()`) or a range `a...b` is likewise skipped — a call may yield an `Iterator`, not an `Iterable`, so `Lambda.find` would not compile, and a call result's type is unknowable without types.
+ *   iterable's values, not map key-value pairs. A call iterable (`xs.keys()` / `<expr>.m()`)
+ *   or a range `a...b` is likewise skipped — a call may yield an `Iterator`, not an
+ *   `Iterable`, so `Lambda.find` would not compile, and a call result's type is unknowable
+ *   without types.
  * - **Adjacency.** The loop and its trailing `return` (Form A), or the declaration
  *   and its loop / guard (Form B), must be real, immediately adjacent block siblings.
  * - **A receiver declaring `find` takes the QUALIFIED spelling.** Haxe binds a real member before
@@ -431,13 +434,13 @@ final class PreferFind implements Check {
 	 * Lambda;` the fix inserts is never consulted at the call.
 	 *
 	 * The question is `MemberLookup.memberShadowsExtension`, shared with the three other
-	 * `Lambda`-targeting rules and with `prefer-static-extension`. No container in the resolution
-	 * scope declares `find` (measured on the 4.3 std: `Lambda` alone, and it is static), so this
+	 * `Lambda`-targeting rules and with `prefer-static-extension`. No std container declares an
+	 * instance `find` (`Lambda` alone does, and it is static), so this
 	 * gate is about PROJECT types — a `Repo.find(id)` receiver whose loop would otherwise be
 	 * rewritten into a call that silently retargets to it.
 	 *
 	 * Every step fails closed: no `TypeInfoProvider`, an unresolved receiver, or no index at all
-	 * leaves the answer false, which is exactly the behaviour that shipped before this gate.
+	 * leaves the answer false.
 	 *
 	 * A hit no longer refuses the site — it selects the QUALIFIED spelling `Lambda.find(xs, …)`,
 	 * whose own reachability is the second question bundled here

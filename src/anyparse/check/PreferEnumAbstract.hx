@@ -88,9 +88,8 @@ using StringTools;
  * **The `to <underlying>` clause is always emitted, and that is what keeps the fix
  * single-file.** An `enum abstract T(U)` does not implicitly convert to `U`, so without the
  * clause every reference that flowed into a `U`-typed slot stops compiling; with it, none
- * does. Measured on the motivating project: converting ONE five-constant type without the
- * clause produced >= 22 errors across >= 17 files, and with it the whole project typechecked
- * unchanged — nine such types converted at once, zero other files touched. `to` costs
+ * does — without it one converted type breaks a score of files, with it the whole project
+ * typechecks unchanged and no other file is touched. `to` costs
  * nothing the conversion is for: only a `from` clause would let a bare `U` back in and
  * dissolve the distinct type, and exhaustive `switch` — the payoff — is unaffected.
  *
@@ -221,8 +220,8 @@ final class PreferEnumAbstract implements Check implements RiskyFix implements G
 	 * The same edits, each tagged with the CONTAINER it converts — one group per converted type,
 	 * so the risky-fix verifier's bisect can keep or drop a whole conversion and never half of one.
 	 *
-	 * This is not a nicety. Measured before the grouping existed: a fixture whose one call site
-	 * broke was bisected down to a subset that COMPILED — an `enum abstract` whose first member
+	 * This is not a nicety: without the grouping a fixture whose one call site broke is bisected
+	 * down to a subset that COMPILES — an `enum abstract` whose first member
 	 * kept its `public static inline final A = 'a'`. That is a plain static field on the abstract,
 	 * not a value of it: the type still compiles, `Align.A` still reads, and the member has
 	 * silently left the enumeration a `switch` is checked against. A verifier probing subsets
@@ -292,10 +291,11 @@ final class PreferEnumAbstract implements Check implements RiskyFix implements G
 	 * `Type.resolveClass('pkg.Name')` anywhere in scope keeps compiling and starts returning null.
 	 * The surface is `ReflectionScan`'s — every plain string literal in scope, plus the static
 	 * fragments of the interpolated ones — narrowed to the files whose raw
-	 * text even MENTIONS a candidate name, since parsing 800 files to find out that nine names appear in
-	 * fifty of them is the same answer for a fraction of the walk — the same answer for the whole-literal
-	 * half, at least: a fragment only has to be CONTAINED in a candidate name, so a file spelling the
-	 * fragment and not the name is filtered out before the fragment test can refuse on it.
+	 * text even MENTIONS a candidate name, since parsing every file in scope to find out that a
+	 * handful of names appear in a few of them is the same answer for a fraction of the walk — the
+	 * same answer for the whole-literal half, at least: a fragment only has to be CONTAINED in a
+	 * candidate name, so a file spelling the fragment and not the name is filtered out before the
+	 * fragment test can refuse on it.
 	 *
 	 * That narrowing reaches the REPORT argument only. `reflectionSurface` unions the resolution sources
 	 * in ITSELF, and their report half is the whole report array, so under a `Cli` run this filter buys

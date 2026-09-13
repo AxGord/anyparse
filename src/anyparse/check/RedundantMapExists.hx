@@ -48,8 +48,8 @@ import anyparse.runtime.Span;
  *
  * ## Sister forms deliberately NOT claimed
  *
- * `m.exists(k) ? m.get(k) : d` and the inverted `!m.exists(k) ? d : m[k]` were measured at
- * ZERO sites across a ~800-file application. The first is `prefer-index-access`'s job one
+ * `m.exists(k) ? m.get(k) : d` and the inverted `!m.exists(k) ? d : m[k]` occur at
+ * ZERO sites on a real application. The first is `prefer-index-access`'s job one
  * pass earlier (it rewrites `m.get(k)` to `m[k]`, after which this rule matches); the
  * second would add an inversion arm for a shape nothing in the corpus writes.
  *

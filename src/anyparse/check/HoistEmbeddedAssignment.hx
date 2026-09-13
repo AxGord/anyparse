@@ -55,8 +55,8 @@ private typedef HoistSite = {
  * The tempting rule is "an assignment used as a value" -- and it is wrong, because it breaks a
  * living idiom. `_container.addChild(_resizeDot = createResizeDot(x, y))` is an assignment in
  * value position too, and hoisting it doubles the block for nothing: the write is already in
- * plain sight, one node under the statement's own call. Measured on the projected tree, the two
- * shapes are not near-misses of each other:
+ * plain sight, one node under the statement's own call. On the projected tree the two shapes
+ * are not near-misses of each other:
  *
  * ```
  * c.addChild(_d = mk(1));
@@ -114,7 +114,7 @@ private typedef HoistSite = {
  * - STRICT NULL SAFETY loses a narrowing as soon as there are SEVERAL candidates. A field read
  *   IMMEDIATELY after its own assignment is still narrowed, so a lone hoist typechecks; the
  *   second hoisted statement resets the first field's narrowing, and the literal then rejects
- *   the `Null<T>` read. Measured on Haxe 4.3.7 / `--interp`:
+ *   the `Null<T>` read:
  *   `_a = new L(); _b = new L(); new Row2([_a, _b]);` under `@:nullSafety(Strict)` gives
  *   `Null safety: Cannot use nullable value of Null<L> as an item in Array<L>`, while the same
  *   code with both assignments left inside the literal compiles.

@@ -44,13 +44,11 @@ import anyparse.runtime.Span;
  * A given `if` matches at most one of the two, and the ternary rule enforces that by ASKING
  * this one (`claims`) rather than mirroring the split.
  *
- * That last case is the crossing S46 measured and filed as T381. Collapsed as ONE leaf the
- * ternary rule writes `x = c ? a : p ? q : r`, a three-rung chain `prefer-if-expression-chain`
- * then reports -- on text that fix had just written; 14 sites over 1029 external files took that
- * rule from 93 findings to 107. Unrolled here (`AssignmentTreeHoist.terminalTernaryRungs` decides,
- * `ifChainValue` emits) the same site reaches the canon in ONE edit, and over 8645 external files
- * exactly 8 findings move -- each to the SAME line:col the ternary rule reported, so nothing is
- * orphaned.
+ * That last case is a crossing: collapsed as ONE leaf the ternary rule writes
+ * `x = c ? a : p ? q : r`, a three-rung chain `prefer-if-expression-chain` then reports -- on
+ * text that fix had just written. Unrolled here (`AssignmentTreeHoist.terminalTernaryRungs`
+ * decides, `ifChainValue` emits) the same site reaches the canon in ONE edit, at the SAME
+ * line:col the ternary rule reported, so nothing is orphaned.
  *
  * ## What is flagged
  *

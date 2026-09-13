@@ -41,11 +41,10 @@ private typedef InteriorLine = {
  * It is the only channel in this project that can see the class. The writer re-emits a
  * comment INTERIOR byte for byte, so a corrupted doc block is writer-canonical and
  * `apq fmt --list` reports nothing; comments are trivia and never reach the parse tree,
- * so every node-based rule is blind to them as well. Measured on this repository at the
- * time the rule landed: a doc block corrupted months earlier sat committed in
- * `test/unit/UnusedLocalShadowTest.hx` — one line at a doubled indent, three flush left
- * inside the block — with `fmt --list` clean and the whole builtin rule set silent on it.
- * It was found by a human reading a diff, which is not a gate.
+ * so every node-based rule is blind to them as well. A doc block corrupted long before —
+ * one line at a doubled indent, three flush left inside the block — sits committed with
+ * `fmt --list` clean and the whole builtin rule set silent on it, until a human reads a
+ * diff, which is not a gate.
  *
  * The corruption is produced by the ops that SPLICE text into a comment. `set-doc` owns
  * the gutter and adds it, so a caller who supplies their own gets ` * ` twice;
@@ -67,11 +66,11 @@ private typedef InteriorLine = {
  *
  * Unanimity is what separates a corruption from a house style. A block whose every line
  * already starts with one prefix is left alone whatever indent it chose, because that is what
- * a deliberate style looks like and no splice produces it. Reading the first character alone
- * counted markdown bullets as gutters and reported 36 correct blocks across the 2624
- * Haxe-stdlib files, 254 in openfl and 77 in haxe-formatter — with a fix that DELETED the
- * bullet markers. Judging every block against its OPENER's indent instead of its own reported
- * 142 more, in openfl and lime, that simply gutter one level deeper than they open.
+ * a deliberate style looks like and no splice produces it. Reading the first
+ * character alone counts markdown bullets as gutters across the std, openfl
+ * and haxe-formatter — with a fix that DELETES the bullet markers. Judging every block against
+ * its OPENER's indent instead of its own reports the many blocks that simply gutter one level
+ * deeper than they open.
  *
  * Once a block DOES disagree with itself, a guttered one repairs onto the OPENER's indentation, in
  * whichever of its two spellings — `<indent> * ` or the compact `<indent>* ` — more of the block's
@@ -85,9 +84,8 @@ private typedef InteriorLine = {
  *
  * There is deliberately no DOUBLED-gutter arm. The ` *  * ` shape a caller-supplied ` * ` used
  * to produce has no live producer left (`RefactorSupport.ungutter` strips it at the source),
- * and every textual test for it that was tried also matched a nested markdown bullet — over
- * this tree and 679 Pony files the pattern matched exactly two lines and both were bullets in
- * `CollapsePass.hx`.
+ * and every textual test for it also matches a nested markdown bullet, the only shape a real
+ * tree holds.
  *
  * ## Fix
  *
@@ -129,7 +127,8 @@ final class DocCommentContinuation implements Check {
 			if (span != null) flagged.push(span.from);
 		}
 		// ONE lexical pass for the whole file, not one per finding: `fix` is handed every violation
-		// of this rule in the file at once, and a 77-finding block comment paid 77 full re-lexes.
+		// of this rule in the file at once, and a block comment with many findings would pay one full
+		// re-lex per finding.
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (tok in SourceComments.collectCommentTokens(plugin.lexicalRegions(source))) if (!tok.isLine) {
 			final block: Null<JudgedBlock> = judgedBlock(source, tok);
@@ -217,8 +216,8 @@ final class DocCommentContinuation implements Check {
 				compactLines++;
 		}
 		// UNANIMITY WINS. A block whose every line already agrees on one gutter is a house style,
-		// whatever indent it chose — measured, that is the only shape openfl / lime / the `format`
-		// library produce, and judging it against the OPENER's indent reported 142 correct blocks.
+		// whatever indent it chose — that is the only shape openfl / lime / the `format` library
+		// produce, and judging it against the OPENER's indent reports correct blocks.
 		// What this rule reports is a line disagreeing with its OWN block, which is what a splice
 		// makes and a consistent style never does.
 		final own: String = head.substring(0, star + 1);

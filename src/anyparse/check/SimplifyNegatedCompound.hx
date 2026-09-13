@@ -257,9 +257,9 @@ private typedef Seams = {
 	 * The run OPERATOR table, or null when the grammar declares no operator-overload annotation.
 	 * The engine REBUILDS the condition out of its operator spine, so every operator on that
 	 * spine is re-selected by the rewrite — and an abstract that declares `@:op(A == B)` without
-	 * `@:op(A != B)` makes the flip disagree with the wrap (measured on Haxe 4.3.7 / `--interp`:
-	 * two `Point`-like values the `==` overload calls equal answer `!(a == b)` false and `a != b`
-	 * TRUE, because Haxe does not derive the second overload from the first).
+	 * `@:op(A != B)` makes the flip disagree with the wrap: two `Point`-like values the `==`
+	 * overload calls equal answer `!(a == b)` false and `a != b` TRUE, because Haxe does not
+	 * derive the second overload from the first.
 	 */
 	final selection: Null<OperatorSelection>;
 

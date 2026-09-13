@@ -138,10 +138,10 @@ final class MapValueScan {
 	 * The census is OWNER-scoped, not name-scoped, and that distinction is load-bearing: a
 	 * walk over every file that merely MENTIONS the name reads a same-named binding in an
 	 * unrelated type — or in the standard library, which the resolution scope always carries
-	 * — as evidence against this map. Measured over ten realistic map field names, the
-	 * name-scoped form refused five of them (`cache`, `values`, `index`, `map`, `data`) on
-	 * nothing but a std-library collision, while reporting a message about a stored null
-	 * value. So the reachable set is derived instead: a LOCAL is visible only in its own
+	 * — as evidence against this map. The name-scoped form refuses common field names
+	 * (`cache`, `values`, `index`, `map`, `data`) on nothing but a std-library collision, while
+	 * reporting a message about a stored null value. So the reachable set is derived instead: a
+	 * LOCAL is visible only in its own
 	 * file, and a non-public member only in its declaring file, its subtypes and an
 	 * `@:access` grantee — the same three doors `prefer-final-field` closes.
 	 */

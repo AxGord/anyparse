@@ -125,3 +125,61 @@ decided the question; it may not become a record of runs.
   the fix is to move each entry onto its ctor and keep in the header only what belongs to the
   enum as a whole — `f742fe4c`
 
+- a second reflection guard on `naming`'s cross-file public rename path → `otherFileRenameSpans`
+  already refuses a name-shaped string literal in every affected file, the declaring file
+  included; a second mechanism would only re-scan the scope for an answer the path holds —
+  `5d510620`
+- `ReflectionScan.scopeFiles` was to be memoised per `fix()` call to recover the cost of the
+  widened reflection scope → the union is a sliver of the run; the cost sat in the quoted-name
+  interpolation inside `Naming`'s per-file pre-filter, which was hoisted instead — `b80a7ff0`
+- unreadable scope files were believed to contribute nothing to the reflection surface (a
+  fixture read zero extra rewrites) → the fixture selected only the cell whose reflective string
+  names a FIELD; selected by the form of the evidence, an unreadable sibling licensed rewrites a
+  readable one refuses, so their raw source is kept and asked per name — `05fc93b4`
+- `DefiniteAssignmentGuard` was to refuse on the closure asymmetry (a write inside a lambda not
+  counting) → the compiler walks a lambda body as ordinary code at its position; the `if` is the
+  construct that withholds an assignment, and a closure gate refused correct fixes — `19b89705`
+- a source-tree pre-filter in front of `DefiniteAssignmentGuard`'s result parse → byte-identical
+  outcome and not faster: the walk it saves costs about what the parse it skips does —
+  `19b89705`
+- `NullFlow.declInit` was to serve as `DefiniteAssignmentGuard`'s initializer test → it reports
+  the continuation declarator of `var a, b = 1;` as `a`'s initializer, which the compiler
+  refuses; the guard asks for a real non-type, non-continuation child instead — `19b89705`
+- `orphan-accessor`'s second `ReflectionScan.scopeFiles` call was to be hoisted → invisible
+  inside round-to-round noise, and a hoist must keep `ReflectionMemo`'s element-wise source key
+  intact — `4ad5c407`
+- a declared `resolutionLibs` alone was feared to silence `orphan-accessor` once its unreadable
+  probe read the resolution scope → the probe is per name, so only a skip-parsed library source
+  spelling the candidate's own accessor prefix whole-word declines, and that is the fail-closed
+  precision loss it keeps — `4ad5c407`
+- a `@:nativeGen` carve-out for `prefer-final-public-field` / `prefer-read-only-field` beside
+  `inline-constant`'s → `var` -> `final` and `var` -> `(default, null)` emit byte-identical C#;
+  only `inline` changes what the foreign side observes, so the gate stops at that one rule —
+  `455e0bff`
+- a cross-class `Other.A` reference arm for `inline-constant` → the corpus holds no non-inline
+  qualified constant initializer (the idiom is written WITH the keyword), and the receiver need
+  not be a type at all: a static field of the enclosing class spelled like an in-scope type wins
+  in expression position, so the proof was never reachable — `b49726b2`
+- `prefer-lambda-expression-body` was to exempt the trailing-argument population from its layout
+  probe on the theory that its canonicality is structural → the exemption opened argument lists
+  and split method chains on real code and was reverted; a site the probe refuses stays braced —
+  `84c00aeb`
+- `prefer-lambda-expression-body` was to require the collapse to SAVE a line → a construct body
+  de-braces line-neutrally by construction, so the strictly-shrink test refused the whole
+  population; the criterion is head-line identity plus an interior that survives — `84c00aeb`
+- `BindingScope`'s local-function lower-bound clamp was expected to change answers → inert:
+  `Refs` binds a read before the declaration to the outer binding, so the clamp is the
+  fail-closed side of a resolver property and is kept for the day a frame hoists — `3977e25e`
+- `VolatileMessage` masks were to keep every number that changes only when the code changes →
+  `oversized-type`'s member count, `string-literal-dup`'s repetition count and `complexity`'s
+  score all move with the code while the finding stands, and a blast-radius verdict then reports
+  nothing but those bumps; the criterion is a configured threshold or a last discriminator —
+  `38c99275`
+- `prefer-ternary-return` was to be gated on the three-rung crossing → built and rejected: it
+  removed every step the composed `--fix` uses to reach the if-expression canon and regressed the
+  fixed-point test; the fix was put one step away, with the cascade owned by
+  `prefer-if-expression-return` and the pair rules deferring by asking it — `f6df2bf5`
+- `unused-return-value` was to resolve through `RefactorSupport.resolutionIndexOf` so declared
+  `resolutionRoots` are honoured at any scope → that index folds the roots and every library
+  into one undivided array, and a test tree then floods with `utest.Assert.*` calls whose result
+  the framework's idiom discards; the split belongs in `ResolutionScope` — `38c99275`

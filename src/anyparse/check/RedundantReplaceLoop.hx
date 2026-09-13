@@ -779,11 +779,10 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 	 *
 	 * The answer is an OVER-approximation — it asks whether SOME `S`-free pieces could form `S`
 	 * at a join, not whether `split` can actually produce those pieces — so it errs toward
-	 * refusing arm A, never toward claiming a redundancy that is not there. Measured against
-	 * live `StringTools.replace` over 1647 literal pairs (alphabets of 2 and 3, `|S|` and `|B|`
-	 * up to 4, every input up to length 8): 0 pairs where a fresh `S` appeared and this answered
-	 * false, 126 where it answered true and no input realised one — every one of those a
-	 * self-overlapping same-letter shape such as `S = 'aa'`.
+	 * refusing arm A, never toward claiming a redundancy that is not there: against live
+	 * `StringTools.replace` it never answers false where a fresh `S` appears, and where it
+	 * answers true with no input realising one the shape is a self-overlapping same-letter
+	 * search such as `S = 'aa'`.
 	 */
 	private static function replacementCanReformSearch(search: String, replacement: String): Bool {
 		if (replacement == '') return search.length > 1;

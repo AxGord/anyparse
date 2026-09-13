@@ -17,13 +17,12 @@ using Lambda;
  * parameters, in order, and does nothing else — `x -> f(x)`, `(a, b) -> f(a, b)`, `() -> f()` —
  * and rewrites it to the bare `f`. `Severity.Info`, with an autofix.
  *
- * The rule is a READABILITY one and says nothing about speed. Measured on `-cpp` (hxcpp,
- * interleaved arms in one process, with and without `-D analyzer-optimize`), the reduced `f` is
- * ~10 % SLOWER per call and ~23 % slower per creation than the wrapper it replaces: a static method
- * handed to a function parameter builds a closure object of its own, while the wrapper's body gets
- * the call inlined into it. Do not claim a performance benefit.
+ * The rule is a READABILITY one and says nothing about speed. On hxcpp the reduced `f` is
+ * SLOWER per call and per creation than the wrapper it replaces: a static method handed to a
+ * function parameter builds a closure object of its own, while the wrapper's body gets the
+ * call inlined into it. Do not claim a performance benefit.
  *
- * That number is a statement about TODAY'S hxcpp, not about the code. A static method has no captured
+ * That is a statement about TODAY'S hxcpp, not about the code. A static method has no captured
  * state, so its function value could be a cached singleton rather than a fresh allocation, and the
  * wrapper only wins because inlining hides the same work. The project's position, recorded
  * deliberately: a codegen weakness is not a reason to write the worse expression. The wrapper form
@@ -80,7 +79,7 @@ using Lambda;
  *   parameters of one arity answer the same question, and `fs.FileIO` in the tree that motivated
  *   this rule has exactly that shape;
  * - a local function is accepted, an `inline` local function refused — a method value of one
- *   is `Cannot create closure on inline closure`, a hard compile error (measured on `-cpp`);
+ *   is `Cannot create closure on inline closure`, a hard compile error;
  * - a member of the ENCLOSING type is accepted; an inherited member is not visible here and
  *   is refused for want of evidence;
  * - `Type.member` is accepted when `Type` is declared EXACTLY ONCE in the lint scope and the
@@ -94,7 +93,7 @@ using Lambda;
  *   once is a behaviour change;
  * - the arity must match EXACTLY, and an optional / rest / defaulted parameter on the callee is
  *   refused: `(v:Int, ?k:Int) -> Bool` is not `Int -> Bool`, and the reduced form does not
- *   compile (measured — optional, defaulted and rest all fail the same way);
+ *   compile (optional, defaulted and rest all fail the same way);
  * - a member name declared twice in one type (the two arms of a conditional region) is refused,
  *   since the two arms may disagree about any of the above.
  *

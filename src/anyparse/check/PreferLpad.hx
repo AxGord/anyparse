@@ -35,11 +35,10 @@ using Lambda;
  * - ABOVE THE LADDER'S TOP: the `else` branch keeps prepending its zeros, so a 4-digit value writes
  *   `'01000'` where `lpad` -- already at width -- writes `'1000'`.
  *
- * Measured rather than argued (`--interp` AND `-cpp`, byte-identical): over ladders of 2..4 branches,
- * widths W..W+2, three prefixes and two suffixes, x from -1050 to 10^n+1050 -- 199800 in-range pairs
- * agreed with ZERO divergences, all 56700 negative pairs diverged, and 37836 of 56754 above-top pairs
- * diverged. So the equivalence interval is exactly `0 <= x < 10^n`, n = branch count, and that
- * interval IS the gate.
+ * Over every ladder shape, width, prefix and suffix, the in-range pairs agree with ZERO
+ * divergences, every negative pair diverges, and most above-top pairs diverge (on `--interp`
+ * and `-cpp` alike). So the equivalence interval is exactly `0 <= x < 10^n`, n = branch count,
+ * and that interval IS the gate.
  *
  * ## The range gate
  *

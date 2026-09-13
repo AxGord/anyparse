@@ -44,8 +44,8 @@ using StringTools;
  * ## …and the initializer is a DEFAULT, not the value — the write gate is the OTHER half
  *
  * The lesson above has a second layer that a literal initializer hides completely: an INSTANCE
- * `final` with a declaration initializer can still be REASSIGNED in the constructor. Measured on
- * Haxe 4.3.7 — `final _n:Int = 5;` plus `public function new(f:Bool) if (f) _n = 9;` compiles, and
+ * `final` with a declaration initializer can still be REASSIGNED in the constructor:
+ * `final _n:Int = 5;` plus `public function new(f:Bool) if (f) _n = 9;` compiles, and
  * the two constructions print 5 and 9. The `static` form of the same class rejects that write with
  * `This expression cannot be accessed for writing`, so the promotion would not compile. (Outside a
  * constructor the write is already illegal, for the instance form too.)
@@ -71,8 +71,8 @@ using StringTools;
  *
  * ## Why the promotion is a CROSS-FILE question, and where it fails closed
  *
- * `static` changes how the member is REACHED, not only where it is stored. Measured on Haxe 4.3.7,
- * identical on `--interp` and `-cpp`:
+ * `static` changes how the member is REACHED, not only where it is stored — identically on
+ * `--interp` and `-cpp`:
  *
  *  - a subclass reads an inherited private INSTANCE field unqualified and it resolves; the same
  *    bare read of a private STATIC of the superclass is `Unknown identifier : S_VAL`. Only
@@ -157,7 +157,7 @@ final class StaticConstant implements Check implements DefaultOff {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			// The core-API bail sits beside the build-macro one: promoting an instance field to
 			// `static` moves it out of the instance member set, and for a member a core type declares
-			// that is "Missing field <name> required by core type" (measured, Haxe 4.3.7).
+			// that is "Missing field <name> required by core type".
 			if (tree == null || MemberWriteScan.carriesBuildMacro(entry.source) || MemberWriteScan.coreApiPinsMemberShape(entry.source))
 				continue;
 			walk(tree, {

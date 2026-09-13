@@ -15,13 +15,12 @@ using Lambda;
  *
  * Six checks refuse a rewrite when a member's name might be spelled by a runtime `Reflect` call —
  * `inline-constant` (which erases the field's reflective value), `static-constant` (which moves it
- * off the instance), `prefer-enum-abstract` (which stops the type existing as a runtime class) and the three deletion
- * checks `orphan-accessor` / `unused-public-member` / `unused-private` (the last joined in S184, T868: it had asked
- * the narrower PROJECT scope, and that scope licensed a deletion the wide one refuses). Each of them used to walk the
- * scope itself, and the walks did not agree: two collected interpolation FRAGMENTS, two answered
- * only for PLAIN literals, so `Reflect.field(o, '${p}NAME')` was invisible to one pair and visible
- * to the other. The domain of that scan is what makes the difference sound or silent, so it is
- * asked once, here.
+ * off the instance), `prefer-enum-abstract` (which stops the type existing as a runtime class) and
+ * the three deletion checks `orphan-accessor` / `unused-public-member` / `unused-private`. Left to
+ * walk the scope themselves, the walks did not agree: some collected interpolation FRAGMENTS, some
+ * answered only for PLAIN literals, so `Reflect.field(o, '${p}NAME')` was invisible to one pair and
+ * visible to the other. The domain of that scan is what makes the difference sound or silent, so it
+ * is asked once, here.
  *
  * ONE scan, TWO questions. A MEMBER is reached by its bare name (`Reflect.field(o, 'NAME')`), a
  * TYPE only by its fully-qualified dot path (`Type.resolveClass('pkg.Align')`) — so the containment
@@ -62,21 +61,17 @@ final class ReflectionScan {
 	 * SCOPE — report UNION the resolution sources, never the report set alone. The report set is
 	 * whatever the caller asked to lint, and a caller may ask for ONE file; a literal absent THERE is
 	 * not evidence of absence in the project, so a gate answered from it authorises a rewrite on
-	 * evidence it never had. Measured end to end: `hxq lint <one-file> --fix` converted a type a
-	 * `Type.resolveClass('pkg.Align')` in a sibling file reaches — oracle green, `resolveClass` null
-	 * afterwards. So the scan takes its file set from `scopeFiles` below, which unions `RefactorSupport.resolutionSourcesOf` — the seam
-	 * `UnusedPublicMember.tokenCounts` already reads three lines from its own call of this function, for exactly this reason, and since
-	 * T868 the ONE definition every name-keyed reflection gate shares. Widening the FILE SET only ever ADDS strings, so it only ever adds
-	 * REFUSALS — the safe direction under the nominate-never-disqualify rule, since a LOST refusal is
-	 * a rewrite that compiles and fails at run time. Cost, measured: Pony
-	 * (867 files, 3643 findings) moved 0 added / 0 removed, and a single-file
-	 * lint stayed at ~1.0s. It also does not newly FORCE the library read in a project that declares no
-	 * `resolutionLibs` and enables only default-on rules: 0.63s -> 0.66s there, against 0.14s with
-	 * `APQ_NO_STD=1` — the std was already being demanded by the base arm, not by this change.
+	 * evidence it never had (a one-file `--fix` converting a type a `Type.resolveClass('pkg.Align')`
+	 * in a sibling file reaches: oracle green, `resolveClass` null afterwards). So the scan takes its
+	 * file set from `scopeFiles` below, the ONE definition every name-keyed reflection gate shares.
+	 * Widening the FILE SET only ever ADDS strings, so it only ever adds REFUSALS — the safe direction
+	 * under the nominate-never-disqualify rule, since a LOST refusal is a rewrite that compiles and
+	 * fails at run time. The std is demanded by the base arm already, so this does not newly force
+	 * the library read.
 	 *
 	 * RESIDUAL, and it is a CONFIG fact rather than a defect here: a project that declares no
 	 * `resolutionRoots` has no resolution scope over its OWN sources, so a one-file lint there still
-	 * answers from one file. Declaring them closes it and costs that lint ~1.0s -> ~4.5s.
+	 * answers from one file. Declaring them closes it, at the cost of reading the tree per lint.
 	 */
 	public static function reflectionSurface(files: Array<ScopeFile>, plugin: GrammarPlugin): ReflectionSurface {
 		final out: ReflectionSurface = { whole: [], fragments: [], unreadable: [] };
@@ -90,20 +85,15 @@ final class ReflectionScan {
 		//
 		// A scope file the parser cannot read contributes no literal CONTENTS — there is no tree to take
 		// them from — so its RAW SOURCE is kept instead, and `runtimeName` asks it the conservative
-		// "may spell it" question per name. It used to contribute nothing at all, on a measurement that
-		// did not cover what it claimed: `CrossScopeSoundnessTest.unreadableExtras` read zero extra
-		// rewrites on the shipped tree, but it selected its cells by comparing the reaching source
-		// against ONE stored constant, so only the cell whose reflective string names a FIELD ever ran.
-		// Selecting by the FORM of the evidence (T921) put an unreadable sibling TWO rewrites and THREE
-		// findings ahead of a readable one — `inline-constant` erasing a constant a `Reflect.field`
-		// reads, `prefer-inline` folding a method one names — which is the direction that compiles and
+		// "may spell it" question per name. Dropping it instead lets an unreadable sibling's
+		// `Reflect.field` license rewrites a readable one refuses — `inline-constant` erasing a constant
+		// it reads, `prefer-inline` folding a method it names — which is the direction that compiles and
 		// then fails at run time. The raw scan is per NAME and only over files that failed to parse, of
 		// which a healthy tree has none.
 		//
 		// MEMOISED per run, and validated against the sources rather than expired — `ReflectionMemo`
-		// carries both the measurement (five checks demand this surface per run, four of them paying
-		// the re-walk alone) and the argument for proving staleness impossible instead of hooking
-		// every path that rewrites a report file. A plugin hosting no memo recollects, byte-identically.
+		// carries the argument for proving staleness impossible instead of hooking every path that
+		// rewrites a report file. A plugin hosting no memo recollects, byte-identically.
 		final scope: Array<ScopeFile> = scopeFiles(files, plugin);
 		final memo: Null<ReflectionMemo> = RefactorSupport.reflectionMemoOf(plugin);
 		final memoised: Null<ReflectionSurface> = memo?.surfaceFor(scope);
@@ -123,34 +113,25 @@ final class ReflectionScan {
 	 * Every file a name-keyed reflection gate must consult: `files` UNION the resolution sources,
 	 * deduped by path, and an unparseable one handed BACK rather than dropped.
 	 *
-	 * The ONE definition of that scope, and the answer to T868 — the fork where `check/Naming`'s
-	 * reflection scan asked `RefactorSupport.widestScopeIndex` while `check/UnusedPrivate`'s asked
-	 * `resolutionProjectSourcesOf`, so the same name-keyed question admitted the library and the std at
-	 * one site and not at the other. The WIDE half wins, and not on a fresh judgement: this scan already
-	 * answered it that way for five registered checks, with the cost measured. The narrow seam's own
-	 * argument does not carry over — it reasons that a write to a project type's field must NAME that
-	 * type, which no haxelib can; a reflective string names no type at all, so `Reflect.field(o, 'name')`
-	 * in a library reaches a project member without ever spelling the project. And the two error
-	 * directions are not symmetric: an extra name only DECLINES a rewrite, a missing one lets the rewrite
-	 * through and breaks a call at run time.
+	 * The ONE definition of that scope: a name-keyed question must admit the library and the std at
+	 * every site, or the same name is refused at one gate and rewritten at another. The WIDE half
+	 * wins. The narrow (project-only) seam's argument does not carry over — it reasons that a write
+	 * to a project type's field must NAME that type, which no haxelib can; a reflective string names
+	 * no type at all, so `Reflect.field(o, 'name')` in a library reaches a project member without
+	 * ever spelling the project. And the two error directions are not symmetric: an extra name only
+	 * DECLINES a rewrite, a missing one lets the rewrite through and breaks a call at run time.
 	 *
-	 * Handing back the unreadable files is what lets each reader decide about them ITSELF. Dropping them
-	 * here would decide for both invisibly, and that drop is exactly the T867 blindness — `Naming`'s scan
-	 * walked `SymbolIndex.allFiles()`, which a skip-parsed file is absent from.
+	 * Handing back the unreadable files is what lets each reader decide about them ITSELF. Dropping
+	 * them here would decide for both invisibly — the blindness of a walk over
+	 * `SymbolIndex.allFiles()`, which a skip-parsed file is absent from.
 	 */
 	public static function scopeFiles(files: Array<ScopeFile>, plugin: GrammarPlugin): Array<ScopeFile> {
 		// Once per PATH, deduped through a MAP — the same argument `Cli.resolutionThunk`'s sibling dedupe
-		// makes. ASYMPTOTIC insurance and not a measured win, which is worth saying plainly: the linear
-		// `seen.contains` this replaced was one compare per (scope x scope) pair, and the scope is report
-		// UNION library, so a declared `resolutionLibs` puts thousands of paths in it — measured on Pony
-		// (`resolutionRoots: ["src"]` plus eleven `resolutionLibs`) at 680 report files against a
-		// resolution set of 2764, union 2764, i.e. ~3.8M compares per call over 49 calls in `lint src
-		// --rule naming --fix`. Timed there, the WHOLE of this function is 12ms of that 7s run either way
-		// (V8 compares paths drawn from one array by pointer), so the change buys the shape of the curve
-		// for a scope the project configures, nothing today. T905 read the half-second the S180 widening
-		// cost as this union's; timed side by side in the same run it is the pre-filter in
-		// `Naming.reflectionNamesInOtherFiles` (616ms) against this function's 12ms.
-		// `Bool` values are the flag a Haxe set has to carry.
+		// makes. ASYMPTOTIC insurance rather than a measured win: a linear `seen.contains` is one compare
+		// per (scope x scope) pair, and a declared `resolutionLibs` puts thousands of paths in the scope,
+		// while this whole function is a sliver of a run either way (V8 compares paths drawn from one
+		// array by pointer). The widening's cost sits in `Naming.reflectionNamesInOtherFiles`' pre-filter,
+		// not in this union. `Bool` values are the flag a Haxe set has to carry.
 		final out: Array<ScopeFile> = [];
 		final seen: Map<String, Bool> = [];
 		inline function take(entry: ScopeFile): Void {
@@ -176,13 +157,9 @@ final class ReflectionScan {
 	 * `Reflect.field` call it holds, so the conservative answer is a word-boundary mention, exactly
 	 * as `RawSourceScan.skippedMayReference` answers it for an index that HAS the file.
 	 *
-	 * That third half is T867's residue, and it was measured as zero on a fixture that reached one
-	 * cell: `CrossScopeSoundnessTest.unreadableExtras` selected its cells by comparing the reaching
-	 * source against ONE stored constant, so the two S191 cells whose reflective string names a
-	 * METHOD and a CONSTANT never ran. Selecting by the FORM of the evidence instead (T921) put an
-	 * unreadable sibling two rewrites AHEAD of a readable one — `inline-constant` erased a constant
-	 * a `Reflect.field` reads, `prefer-inline` folded a method one names — which is the wrong
-	 * direction for a file the run could not read.
+	 * That third half is not a no-op: without it an unreadable sibling licenses rewrites a readable
+	 * one refuses — `inline-constant` erasing a constant a `Reflect.field` reads, `prefer-inline`
+	 * folding a method one names — which is the wrong direction for a file the run could not read.
 	 *
 	 * A word mention over-refuses: an ordinary call spells the name too. That is the same trade the
 	 * skipped-file proofs beside it already make, and the alternative is a rewrite that compiles and
@@ -269,15 +246,11 @@ final class ReflectionScan {
 /**
  * One file of the name-keyed reflection scope: its path and its raw source, parseable or not.
  *
- * A transparent alias for the `{ file, source }` pair the whole check layer passes around — declared so the seam that
- * OWNS that scope has a name for its element, and so the members reading it do not each spell the structure out again.
- *
- * T880 asked whether this name belongs in `Check` instead, next to the `run` signature that introduces the pair. MEASURED on this
- * tree: `{ file: String, source: String }` is written 75 times across 39 files of `src` + `test`, one `anon-type-dup` finding.
- * Lifting the name is free at the DECLARATION — the alias is structural, so every `Check` implementor keeps compiling against the
- * anon spelling — but the finding only clears when all 75 sites adopt it, which is a sweep across most of the check layer rather
- * than a slice, and the two neighbourhoods a wave runs in parallel both hold some of those files. So the name stays here and the
- * sweep is a backlog line; a slice adopting it moves the DECLARATION into `Check` first, and the three files importing this one with it.
+ * A transparent alias for the `{ file, source }` pair the whole check layer passes around — declared
+ * so the seam that OWNS that scope has a name for its element, and so the members reading it do not
+ * each spell the structure out again. The alias is structural, so every `Check` implementor keeps
+ * compiling against the anon spelling; lifting the name into `Check`, next to the `run` signature
+ * that introduces the pair, is a sweep across the check layer rather than a change here.
  */
 typedef ScopeFile = {
 	var file: String;

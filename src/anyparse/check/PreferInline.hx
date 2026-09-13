@@ -28,7 +28,7 @@ using Lambda;
  *
  * A method qualifies when its body is one of three BENEFIT classes: (A) an EMPTY block — the call compiles away, and
  * a FUTURE override of an inlined method fails loudly at the overriding site (the same subtype-gate evidence the other
- * classes rely on, asked of report UNION the declared resolution scope since S187 — a subtype in an unlinted file is what
+ * classes rely on, asked of report UNION the declared resolution scope — a subtype in an unlinted file is what
  * the report index cannot see); (B) a single accessor / thin-forward / trivial-mutator expression — a bare field chain, a
  * call through a chain with only chain / literal arguments, an assignment or increment over a chain — which collapses
  * into a direct read / write / forwarded call; (C) a constant / small-arithmetic expression (literals, chains and
@@ -45,7 +45,7 @@ using Lambda;
  *   so any value-position occurrence of the method's name — resolvable or not — skips it.
  *   Detected by a conservative name scan over the REPORT files: a name in value position (not a
  *   call callee) via `IdentExpr` / `FieldAccess` / `SafeFieldAccess` / `ForceFieldAccess`.
- *   Report-scoped deliberately, and NOT a soundness gate: measured on Haxe 4.3.7, a value
+ *   Report-scoped deliberately, and NOT a soundness gate: a value
  *   reference to an `inline` method compiles and returns its value under `--dce std` and
  *   `--dce full` alike, so this gate withholds findings rather than preventing breakage.
  * - An `override` method, and a method OVERRIDDEN by a subtype (`SubtypeGraph.hasSubtype`
@@ -72,8 +72,8 @@ using Lambda;
  *   predicate and the same `apqlint.json` `frameworks` roster the two unused-* rules read. NOT a
  *   soundness gate: marking a utest `test*` method `inline` is legal and changes nothing — utest
  *   discovers by NAME out of `Context.getBuildFields()` at compile time, and an A/B of a `setup` /
- *   sync test / async test / `spec` probe with and without `inline` gave identical discovery and
- *   identical results. It is a BENEFIT gate: the framework does emit a real call
+ *   sync test / async test / `spec` method is discovered and runs identically with and without
+ *   `inline`. It is a BENEFIT gate: the framework does emit a real call
  *   (`execute: function() { this.$test(); }`), one the compiler would fold an inline body into —
  *   but it is ONE call site, run once, so the fold buys nothing the rule exists to buy. The shape
  *   is the rule's largest false-positive class on a test tree.
@@ -117,9 +117,9 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	 * behaviour-preserving under it. Any OTHER metadata refuses the candidate.
 	 *
 	 * Positive by construction, because the harmful side is open-ended and a negative list leaks by
-	 * category: the first version listed `@:native` / `@:functionCode` / `@:extern` and a real-tree run
-	 * still produced 634 wrong findings in one lime file, every one an `@:hlNative` stub whose body is
-	 * `return 0;`. The whole target-binding family (`@:hlNative`, `@:cs.native`, `@:java.native`,
+	 * category: one naming only `@:native` / `@:functionCode` / `@:extern` still lets a real tree's
+	 * `@:hlNative` stubs, whose body is `return 0;`, through by the hundred. The whole
+	 * target-binding family (`@:hlNative`, `@:cs.native`, `@:java.native`,
 	 * `@:python.native`, `@:jsRequire`, `@:selfCall`, ...) and the code-injection family
 	 * (`@:functionTailCode`) redirect or replace the generated call, so the written body is a
 	 * placeholder the backend discards - inlining substitutes the placeholder at the call site and the
@@ -192,36 +192,19 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		// it — because a file outside the lint scope answers all three. So they are asked of report
 		// UNION the declared resolution scope, the repair the unused-* family already carries
 		// (`UnusedPrivate.run`); a plugin declaring no scope falls back to the report index, so a run
-		// with no `resolutionRoots` behaves exactly as before — including a project whose only
-		// resolvable scope is the std library, since the gate is `hasDeclaredResolutionScope`.
+		// with no `resolutionRoots` behaves as before — including a project whose only resolvable
+		// scope is the std library, since the gate is `hasDeclaredResolutionScope`.
 		//
 		// DEMANDED PER CANDIDATE, never on entry. That index reads and parses the whole declared
-		// scope, and S187 forced it here: a one-file `--rule prefer-inline` run went 0.14s -> 3.4s.
-		// The widest index only ever REFUTES a flag, so nothing needs it until a method has survived
-		// every LOCAL gate — `considerClass` returns before touching this thunk when the class offers
-		// no locally-eligible method, and again when the owner's own file carries a build-macro token,
-		// and then no index is built at all, not even the report one. Measured on this tree with
-		// `--rule prefer-inline --no-oracle`, findings identical throughout: a file that reaches
-		// neither gate costs 0.12s, the harness floor.
-		//
-		// What the LOCAL build-macro half bought, and what the reading here got wrong before it: this
-		// file used to be cited as the case that must pay the full build, "its four single-expression
-		// methods all being interface-declared". They are not. A CPU profile of that exact run put
-		// 2815ms of 3210ms under `widest()` — 2707ms of it reading and parsing the declared scope —
-		// and `interfaceRequires` at ZERO calls, because the class never got that far: this doc spells
-		// the build-macro tag, the file-scoped token scan behind `transitivelyCarriesBuildMacro`
-		// matches it anywhere in the source, and the whole index existed to answer that one boolean.
-		// Asked from the source this run already holds it costs nothing: 3.21s -> 0.12s. Over `src` +
-		// `test` the 23 build-macro refusals split 18 own-file against 5 genuinely inherited, and index
-		// demands drop 261 -> 243; 68 of 943 `src` files spell such a token at all. Laziness still only
-		// moves the cost onto the files that need it; over `src` as a whole the shift is inside the
-		// run-to-run spread (~3.5s either way), because only 68 of its 943 files carry the token.
-		//
-		// The whole tree got cheaper for a second reason: the report index used to be built here
-		// EAGERLY as the fallback, so a full run indexed the report set and then the wider set that
-		// contains it. Built inside the thunk, it is skipped whenever a declared scope answers.
-		// `src` 4.63s -> 3.58s, `src` + `test` 4.98s -> 3.70s, Pony's six roots 6.63s -> 6.10s, and
-		// all three report the same findings they did before, name for name.
+		// scope, orders of magnitude above the harness floor for a one-file run. The widest index only
+		// ever REFUTES a flag, so nothing needs it until a method has survived every LOCAL gate —
+		// `considerClass` returns before touching this thunk when the class offers no locally-eligible
+		// method, and again when the owner's own file carries a build-macro token, and then no index
+		// is built at all, not even the report one. The file-scoped token scan behind
+		// `transitivelyCarriesBuildMacro` answers the own-file half from the source this run already
+		// holds; only an INHERITED grant costs the index. The report index is likewise built inside
+		// the thunk, so a full run over a declared scope never indexes the report set and then the
+		// wider set that contains it.
 		//
 		// The price where roots ARE declared: the widest index keys types by SIMPLE name, so a class
 		// named like one the library subclasses reads as having a subtype and goes unflagged
@@ -269,17 +252,17 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 				candidateNames.push(name);
 		});
 		// Pass B: the value-reference gate, over the REPORT trees. It stays report-scoped on purpose
-		// and it is NOT a soundness gate: measured on Haxe 4.3.7, `final f: Void -> Int = h.m;` over
-		// an `inline` method compiles and returns 7 under `--dce std` AND `--dce full` — the compiler
-		// keeps a physical copy for the closure. So a method-value reference in an unlinted file
+		// and it is NOT a soundness gate: `final f: Void -> Int = h.m;` over an `inline` method
+		// compiles and returns the value under `--dce std` AND `--dce full` — the compiler keeps a
+		// physical copy for the closure. So a method-value reference in an unlinted file
 		// cannot break anything the widening would prevent; it would only cost a scope walk to
 		// withhold more findings. What the narrow scope costs is the reverse and it is fine: a value
 		// reference this run cannot see leaves the finding standing, and applying it is still legal.
 		final valueBlocked: Array<String> = [];
 		for (t in trees) collectValueRefs(t.tree, false, candidateNames, valueBlocked, shape);
 		// Pass B2: the REFLECTION gate, over the whole declared scope and demanded per candidate.
-		// Unlike the value gate this one IS soundness: measured on Haxe 4.3.7 under `--dce full`, a
-		// method that is statically called AND read by `Reflect.field(o, 'm')` answers FOUND while
+		// Unlike the value gate this one IS soundness: under `--dce full`, a method that is
+		// statically called AND read by `Reflect.field(o, 'm')` answers FOUND while
 		// plain and MISSING once marked `inline` — the fold removes the only reference DCE counted,
 		// and nothing reports it, at compile time or at run time. (With no static call site `--dce
 		// full` drops the member either way, MISSING both ways, so `inline` is not what breaks THAT
@@ -288,12 +271,9 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		// asked to lint still blocks. The narrow scanner is kept rather than
 		// `ReflectionScan.reflectionSurface`: that surface is EVERY plain literal in scope, and a
 		// method name is a common word, so reading it here would withhold findings by the hundred.
-		// PRICED where the scope is UNDECLARED, which neither measured tree is: `scopeFiles` gates on
-		// `hasAnyResolutionScope`, so a std-only scope makes this gate parse the std where `widest()`
-		// above never does — re-measured as std-discovered against `APQ_NO_STD=1`, finding-identical
-		// either way: one no-config file whose candidates reach the gate (the haxe-formatter fork's
-		// `CodeLine.hx`) 0.11s -> 0.46s, and that fork's whole `src` (36 files) 0.43s -> 0.85s. Extra
-		// refusals are the safe direction; the seconds are the price and they are not zero.
+		// Where the scope is UNDECLARED, `scopeFiles` gates on `hasAnyResolutionScope`, so a std-only
+		// scope makes this gate parse the std where `widest()` above never does. Extra refusals are the
+		// safe direction; the std parse is the price and it is not zero.
 		var reflectScanned: Bool = false;
 		final reflectBlocked: Array<String> = [];
 		function reflectNames(): Array<String> {
@@ -442,9 +422,9 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	 * The `@:` side is a whitelist on purpose. Its complement — the target-binding family
 	 * (`@:native`, `@:hlNative`, `@:cs.native`, `@:java.native`, `@:python.native`, `@:jsRequire`,
 	 * `@:selfCall`) and the code-injection family (`@:functionCode`, `@:functionTailCode`) — is
-	 * open-ended, and a negative list leaks by category: the first version named only `@:native` /
-	 * `@:functionCode` / `@:extern` and a real-tree run still produced 634 wrong findings in one lime
-	 * file, every one an `@:hlNative` stub whose body is `return 0;`. Under those the written body is
+	 * open-ended, and a negative list leaks by category: one naming only `@:native` /
+	 * `@:functionCode` / `@:extern` still lets a real tree's `@:hlNative` stubs, whose body is
+	 * `return 0;`, through by the hundred. Under those the written body is
 	 * a placeholder the backend discards, so inlining substitutes the placeholder at the call site
 	 * and the redirect never happens, turning `native(x) == 0` into `0 == 0`.
 	 *
@@ -557,7 +537,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		// The LOCAL half of the gate runs FIRST and on its own, because everything below it demands the
 		// widest index — the whole declared scope read and indexed. A class offering no locally-eligible
 		// method must not pay for it, which is what makes a lint of a file with no candidate cost the
-		// harness floor instead of the index build (4.29s -> 0.12s on this tree).
+		// harness floor instead of the index build.
 		final locals: Array<{
 			name: String,
 			fn: QueryNode,

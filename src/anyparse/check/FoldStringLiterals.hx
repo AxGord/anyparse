@@ -106,8 +106,9 @@ using StringTools;
  *   trivia trailing its last operand, and replacing that would delete a `// …` ending the
  *   construct's line.
  * - An expression segment carrying a bare `$` outside a nested string
- *   literal, a newline, a BACKSLASH or an UNBALANCED brace or quote cannot enter a `${ … }` block: the real compiler's block scanner neither processes escapes
- *   inside a nested same-quote string nor lexes strings while it counts braces,
+ *   literal, a newline, a BACKSLASH or an UNBALANCED brace or quote cannot enter a
+ *   `${ … }` block: the real compiler's block scanner neither processes escapes inside a
+ *   nested same-quote string nor lexes strings while it counts braces,
  *   so both mis-lex there even though anyparse's own interp scanner accepts
  *   them; a `$` INSIDE a nested string is fine — the block's re-parse reads it
  *   exactly as the bare operand did. A segment carrying the interpolation's OWN
@@ -142,7 +143,7 @@ using StringTools;
  *   clears a target through the `concatFoldingMacros` option, which is a claim about
  *   that target's implementation. A TARGET INTRINSIC is refused by the same gate and by NO
  *   option: it is spelled with `__` at BOTH ends and declared NOWHERE, so both refusals above —
- *   each a question about resolution — read it as an ordinary local call. Measured, 4.3.7:
+ *   each a question about resolution — read it as an ordinary local call, and a folded
  *   `untyped __lua__("{x=" + "1}")` compiles with no diagnostic and emits a call to a function no
  *   runtime declares. Its exemption is a plan that renders as a CONSTANT, narrower than the macro
  *   gate's one-group test — `'a$k'` is a `+` chain the parser desugared, not a constant.
@@ -656,8 +657,7 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 	 * arithmetic estimate is never trusted on its own. It cannot be — it models the
 	 * construct's line as the construct alone, while the writer keeps whatever else the
 	 * line carries (a trailing comment, a following operand it will not break before) on
-	 * it, and an estimate that ignores those was measured making a real TM site's line
-	 * 190 columns wide while predicting 115.
+	 * it, and an estimate that ignores those makes a real line far wider than it predicts.
 	 */
 	private static function settle(ctx: PlanContext, decomposition: Decomposition, filled: Array<Int>, startBudget: Int): Null<Settled> {
 		final first: Null<Rendered> = joinGroups(ctx, decomposition, filled);
@@ -721,7 +721,7 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 	 *  - the run is entered at its first string LITERAL and the operands before it are
 	 *    left alone — where `chainDecomposition` collapses them into one verbatim
 	 *    `${ … }` head, this arm cannot, because `+` is left-associative and the
-	 *    ARITHMETIC they belong to starts on the other side of the `#if`. Measured:
+	 *    ARITHMETIC they belong to starts on the other side of the `#if`:
 	 *    `1 + #if c 2 + 'x' + #end 3` prints `3x3`, and folding the run's own head
 	 *    gives `1 + '${2}x' + 3` — `12x3`. From the first literal ON there is no such
 	 *    question: string concatenation is associative and an `Int` head to its left
@@ -1367,25 +1367,20 @@ final class FoldStringLiterals implements Check implements ConfigAware {
  *  - a call whose TARGET TYPE the index does not carry. The index covers the resolution
  *    scope, and that scope is bounded by the INVOCATION: linting one FILE of a project
  *    cannot see a macro declared in another, so reading "no macro declares this name" as
- *    "not a macro" made `--fix` answer differently depending on how the linter was
+ *    "not a macro" would make `--fix` answer differently depending on how the linter was
  *    called — and the narrow answer is the dangerous one.
  *
- *    The question is asked at TYPE granularity, never by member name. A name test cannot
- *    answer it: the std alone declares thirteen members called `t` (anonymous-structure
- *    fields in `haxe.macro.Type` among them), so "something declares this name" was true
- *    for the very call the refusal exists for, and the hole stayed open in every real CLI
- *    run. What the caller's source DOES say is which type it means — through the import
- *    that binds the call (`import pkg.Lang.t`, `import pkg.Lang`, a wildcard, a `using`)
- *    or through a written qualified receiver — and whether the index carries that type is
- *    a question with one answer. A call the file imports nothing for and writes no
- *    receiver on is local, inherited or global, and no import can make it a macro.
- *
- *    One consequence is worth stating: a WILDCARD or a `using` whose own target the index
- *    cannot see binds every name in the file, so every unresolved call in it is refused.
- *    That is the honest answer — such an import genuinely can route any call into the
- *    package it names — and it costs nothing on a whole-project run, where the package is
- *    in scope. Measured: zero refusals over this repository's own 654 files, four over a
- *    802-file application tree, all four the real macro.
+ *    The question is asked at TYPE granularity, never by member name: the std alone
+ *    declares many members called `t`, so "something declares this name" is true for the
+ *    very call the refusal exists for. What the caller's source DOES say is which type it
+ *    means — through the import that binds the call (`import pkg.Lang.t`, `import pkg.Lang`,
+ *    a wildcard, a `using`) or through a written qualified receiver — and whether the index
+ *    carries that type is a question with one answer. A call the file imports nothing for
+ *    and writes no receiver on is local, inherited or global, and no import can make it a
+ *    macro. A WILDCARD or a `using` whose own target the index cannot see binds every name
+ *    in the file, so every unresolved call in it is refused — the honest answer, since such
+ *    an import genuinely can route any call into the package it names, and free on a
+ *    whole-project run, where the package is in scope.
  */
 @:nullSafety(Strict)
 private class MacroGate {
@@ -1394,8 +1389,8 @@ private class MacroGate {
 	 * What a finding adds when the callee is a TARGET INTRINSIC — a refusal
 	 * `concatFoldingMacros` deliberately does NOT lift, because listing one would be a claim
 	 * about the COMPILER's implementation rather than about a target this project owns, and the
-	 * claim is false: measured on 4.3.7, `untyped __lua__("{x=" + "1}")` compiles with no
-	 * diagnostic at all and emits `__lua__(Std.string("{x=") .. Std.string("1}"))`.
+	 * claim is false: `untyped __lua__("{x=" + "1}")` compiles with no diagnostic at all and
+	 * emits `__lua__(Std.string("{x=") .. Std.string("1}"))`.
 	 *
 	 * It lives here rather than beside `MACRO_REFUSAL` for the reason `OperatorGate.REFUSAL`
 	 * does: the gate that DECIDES a refusal owns the sentence that explains it.
@@ -1437,7 +1432,7 @@ private class MacroGate {
 	 * `+` operators the argument already had, and is the very shape the target wants — but a single
 	 * INTERPOLATED literal is no such thing. Haxe desugars `'a$k'` back into a `+` chain before
 	 * anything reads the argument as syntax, so `__lua__('local q = $k;')` and
-	 * `__lua__("local q = " + k + ";")` emit the identical broken code (measured, 4.3.7). Hence
+	 * `__lua__("local q = " + k + ";")` emit the identical broken code. Hence
 	 * `constant`, which is `PlannedFold`'s answer to that, and not the group COUNT.
 	 */
 	public function intrinsic(calls: Array<CallRef>, constant: Bool): Bool {
@@ -1725,9 +1720,9 @@ private typedef PlannedFold = {
 	 * That is a strictly narrower question than `groups == 1`, and the difference is the whole
 	 * reason this field exists: a lone group holding an expression renders as an INTERPOLATED
 	 * literal, which Haxe desugars back into a `+` chain before anything reads it as syntax.
-	 * Measured on 4.3.7, `untyped __lua__('local q = $k;')` and `untyped __lua__("local q = " + k
-	 * + ";")` emit the SAME broken `__lua__(Std.string(…) .. Std.string(…))`, and `js.Syntax.code`
-	 * rejects both with "must be a string constant".
+	 * `untyped __lua__('local q = $k;')` and `untyped __lua__("local q = " + k + ";")` emit the
+	 * SAME broken `__lua__(Std.string(…) .. Std.string(…))`, and `js.Syntax.code` rejects both with
+	 * "must be a string constant".
 	 */
 	final constant: Bool;
 	final message: String;

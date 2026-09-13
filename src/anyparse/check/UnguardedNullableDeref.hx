@@ -121,9 +121,8 @@ final class UnguardedNullableDeref implements Check implements NoAutofix {
 			// A SECOND resolver, in VALUE mode. The receiver-mode one above peels the `Null<>`
 			// wrapper on purpose — `tmp.trim()` on a `tmp: Null<String>` has to look `trim` up on
 			// `String` — so it answers `Data` for a field declared `Null<Data>`. That is the whole
-			// answer for the question below, and reading it through the receiver arc silently
-			// declared a genuinely nullable initializer non-null (measured: one real seed lost on
-			// TM-Haxe4 before this split).
+			// answer for the question below, and reading it through the receiver arc would silently
+			// declare a genuinely nullable initializer non-null and lose the seed.
 			final valueNominalOf: Null<(QueryNode) -> Null<String>> = CheckScan.typeNominalResolver(
 				entry.source, plugin, tree, entry.file, index
 			);

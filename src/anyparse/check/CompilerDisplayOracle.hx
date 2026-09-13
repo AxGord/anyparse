@@ -20,8 +20,8 @@ using StringTools;
  *
  * The Haxe compilation server invalidates a module by mtime at ONE-SECOND
  * granularity, so a write-then-reverify within the same second reads the STALE
- * module (verified: a fresh write reverting a break is not re-picked-up until >1s
- * later). This oracle therefore does READ-ONLY type queries against files unchanged
+ * module (a fresh write reverting a break is not re-picked-up within that
+ * second). This oracle therefore does READ-ONLY type queries against files unchanged
  * since the warm; the caller applies edits and verifies with a FRESH
  * `CompilerOracle.typecheck` (a new process always reads current bytes). Never route
  * a post-edit typecheck through this server.
@@ -202,9 +202,9 @@ final class CompilerDisplayOracle implements TypeOracle {
 	 * is supposed to answer for. A `@type` request whose offset the compiler cannot map to an
 	 * expression is not refused: it is answered for a DIFFERENT, usually enclosing, expression,
 	 * and the reply is indistinguishable from a good one until its own position is read.
-	 * (Measured: `install/src/NpmInstall.hx@1305@type`, the `a` of a local inside a map
-	 * comprehension's body, replies `p="…:43: lines 43-44"` — the enclosing comprehension two
-	 * lines up — with `haxe.ds.Map<haxe.ds.Map.K, haxe.ds.Map.V>`, type parameters and all.)
+	 * (A `@type` query on the `a` of a local inside a map comprehension's body replies with the
+	 * enclosing comprehension's position two lines up and its `haxe.ds.Map<…>` type, type
+	 * parameters and all.)
 	 *
 	 * The end is INCLUSIVE: `pmax` bounds the expression, and one byte of slack costs at most an
 	 * answer about a construct ending exactly at the cursor, while a strict end would abstain on

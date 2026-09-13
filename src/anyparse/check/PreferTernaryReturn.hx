@@ -225,8 +225,8 @@ final class PreferTernaryReturn implements Check implements CarryingFix {
 		//
 		// The head is walked back to, because the claim covers the WHOLE run and the pair sits at its
 		// end. The question is put to that rule rather than mirrored here: gating on the SHAPE would
-		// silence this rule wherever that one refuses on a comment, and S45 measured what that costs —
-		// 14 findings of 69 with no replacement anywhere.
+		// silence this rule wherever that one refuses on a comment, losing findings with no
+		// replacement anywhere.
 		// The head comes FROM that rule, not from a walk-back mirrored here: a no-`else` `if` that does
 		// not return is a rung by shape and not one it collects, so a local walk-back runs past it and
 		// asks about an index the claiming rule never uses — answering `false` on a cascade it claims
@@ -239,12 +239,11 @@ final class PreferTernaryReturn implements Check implements CarryingFix {
 		// of two that overlap, so the inner reduction is dropped, not deferred. The gate is
 		// deliberately OUTSIDE isStuckBooleanCollapse: a VALUE ternary collapse (neither value a
 		// bool literal) buries the tail just as thoroughly, and that arm never consults the stuck
-		// check at all. Measured on anyparse's own `MagicNumber.childPositionCtx` and
-		// `PurityScan.isPure`, which came out as nested ternary chains until this moved out.
+		// check at all, and a value collapse otherwise comes out as a nested ternary chain.
 		// A STATEMENT-LIKE value (an `if` used as a value, a `switch`, a `try`, a `throw`, a block)
 		// blocks the pair for the same reason the boolean arm already refuses one: a ternary whose
 		// branch is a four-line `if` / `else if` / `else` chain is not more readable than the two
-		// statements it replaced. Measured on anyparse's own `PurityScan.isPure`.
+		// statements it replaced.
 		// A bool-literal-vs-non-provably-Bool pair collapses to a "stuck" boolean ternary
 		// (`cond ? true : g()`) that simplify-boolean-ternary cannot reduce without a typer
 		// — uglier than the guard. Leave it: a fully-reducible boolean guard chain is
@@ -259,8 +258,8 @@ final class PreferTernaryReturn implements Check implements CarryingFix {
 				// BEFORE the cascade claim, because it answers from spans this frame already has while
 				// that one walks a whole cascade and re-runs another rule's gates. It is also the arm that
 				// makes the claim's own refusal safe: `claimsCascade` declines a cascade whose comments it
-				// cannot carry, and until this gate existed that decline handed the very same cascade to
-				// this rule, which folded it and hoisted those comments.
+				// cannot carry, and without this gate that decline would hand the very same cascade to
+				// this rule, which would fold it and hoist those comments.
 				kids,
 				i,
 				next,
@@ -446,14 +445,13 @@ final class PreferTernaryReturn implements Check implements CarryingFix {
 	 * a plain `return`, and marches all the way up. Each step quotes that rung's condition and
 	 * value verbatim and HOISTS everything else in the region to the front of the replacement
 	 * (`preservedComments`), so a per-gate explanation standing between two rungs ends up stacked
-	 * above the pyramid, detached from the gate it explains. Measured on this repo's own
-	 * `MemberOrder.reorderRefusal`: one reported finding on the last of six gates, `--fix` then
-	 * wrote 10 edits over 7 passes and welded both comment blocks to the top.
+	 * above the pyramid, detached from the gate it explains — one reported finding on the last
+	 * gate of a six-gate ladder, and `--fix` welds every comment block to the top.
 	 *
 	 * The narrowing is deliberately the CONJUNCTION of the two candidate rules rather than either
-	 * one. Refusing every cascade tail on SHAPE alone is what `pairAt` already declines to do, and
-	 * S45 measured the price — 14 findings of 69 with no replacement anywhere. Refusing on a
-	 * comment alone would fire on the single pair whose own leading comment stays exactly where it
+	 * one. Refusing every cascade tail on SHAPE alone is what `pairAt` already declines to do,
+	 * since it loses findings with no replacement anywhere. Refusing on a comment alone would
+	 * fire on the single pair whose own leading comment stays exactly where it
 	 * is. Both together name the one shape where a comment provably loses its subject: a march
 	 * long enough to cross a comment that no step of it copies.
 	 *

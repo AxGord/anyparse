@@ -37,7 +37,7 @@ using Lambda;
  * jump scan asks about, so making one bundle serve both would refuse a grammar that answers everything the jump scan needs.
  *
  * `escapesIteration` is where the one non-obvious language fact lives: a `break` inside a `switch` inside a loop breaks
- * the LOOP, not the switch (measured on `--interp`), so the scan DESCENDS into switch bodies — while a `break` inside a
+ * the LOOP, not the switch, so the scan DESCENDS into switch bodies — while a `break` inside a
  * nested `for` / `while` / `do … while` binds to that inner loop, so `inInnerLoop` turns the loop-jump kinds off below
  * one. A nested function or lambda gets neither: its jumps and returns belong to it, so the scan stops at its boundary.
  */
@@ -251,7 +251,7 @@ final class LoopScan {
 	 * jumps bind to IT, so they never escape the outer iteration, while a `return` still does.
 	 *
 	 * A `switch` is descended into deliberately — a `break` there breaks the LOOP, not the switch
-	 * (measured on `--interp`: the C/JS habit is wrong for Haxe). A nested function / lambda
+	 * (the C/JS habit is wrong for Haxe). A nested function / lambda
 	 * (`nestedScopeKinds`) and a reification subtree (`opaqueKinds`) are not descended into at all.
 	 */
 	public static function escapesIteration(node: QueryNode, s: LoopJumpSeams, inInnerLoop: Bool): Bool {
@@ -285,8 +285,8 @@ final class LoopScan {
 	 * It answers about a BODY, which is all it can see. `loop-guard`'s claim on a SITE is wider — the
 	 * loop kind, the body kind, the shielded position and a clean inversion — and `GuardContinue.loopGuardClaims`
 	 * is where those are asked, from state a body-level predicate does not have. Splitting it that way
-	 * is what the deferral costs: get the site-level list wrong and NOBODY reports the site (measured
-	 * twice — 14 ordered-comparison guards over 13251 external files, and every `do … while`).
+	 * is what the deferral costs: get the site-level list wrong and NOBODY reports the site (an
+	 * ordered-comparison guard, a `do … while`).
 	 *
 	 * Three conditions beyond the guard itself, and all three are load-bearing:
 	 *
@@ -323,8 +323,8 @@ final class LoopScan {
 		// Named rather than folded into the return: the folded form is an `if`/return pair
 		// `prefer-ternary-return` collapses onto the ternary below it, and the chain that writes is a
 		// `prefer-if-expression-chain` finding. That cascade is confluent (both `--rule` orders give
-		// the same bytes), so it is not this slice's order-dependent crossing — it is the tool telling
-		// the reader to write something it then reports, on this very file.
+		// the same bytes), so it is not an order-dependent crossing — it is the tool telling the
+		// reader to write something it then reports, on this very file.
 		final glued: Bool = CheckScan.hasCommentMarker(source, bs.from, gs.to);
 		return glued ? null : guard;
 	}
