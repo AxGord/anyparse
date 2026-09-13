@@ -73,15 +73,16 @@ never read the flag. Default `false`.
 brackets. The rule: `[ for (head)` is always cuddled, and the body stays on that head
 line only while the whole comprehension renders flat — otherwise the body drops one
 indent level and the closing bracket takes a line of its own at the `[` line's indent.
-The knob therefore fires exactly when the item's own group BREAKS once glued after
-`[ `, which is a question about the PEN COLUMN, not about the indent: the statement
-prefix ahead of the bracket (`return ` against `final cr: Array<String> = `) is what
-decides whether the body has to move down, and the same item can fit one indent deeper
-while overflowing the glue column. Where the item still fits after `[ `, gluing would
-leave head and body packed on one line with a lone `]` underneath, so the leading-break
-shape is kept instead. A comprehension whose first break sits inside its HEAD rather
-than after the generator's `)` is excluded — only a body-level break can deliver the
-shape the knob promises. Default `false`.
+The knob therefore fires whenever the brackets did not fit on one line, and the only
+question it asks is whether the head `[ for (…)` fits the line it is glued to; the
+body is never consulted. An item that renders flat has its body FORCED one level down,
+because its own fit group would keep the body on the head line whenever `[ head body`
+fits and cannot see the closing bracket — leaving head and body packed on one line with
+a lone `]` underneath, or (with a gate refusing that half-shape) a layout that jumps
+between one line, the leading-break ladder and the cuddle as the line grows by a
+column. A comprehension whose first break sits inside its HEAD rather than after the
+generator's `)` is excluded — only a body-level break can deliver the shape the knob
+promises. Default `false`.
 
 A rules object holds `defaultWrap`, `defaultLocation`, `defaultAdditionalIndent` (Int),
 `rules` (an array of `{type, location, conditions}`) and `itemsAfterCloseParenOnly` (Bool,

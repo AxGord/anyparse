@@ -176,9 +176,9 @@
 			"name": "M-CUDDLE-FALLBACK-INDENT",
 			"type": "anyparse.format.wrap.WrapList",
 			"method": "shapeComprehensionCuddledOpen",
-			"find": "return IfWidthExceeds(bodyBreaksWhenGlued, IfNaturalFirstLineExceeds(lineWidth, openShape, glueShape), openShape);",
-			"replace": "return IfIndentWidthExceeds(cols + itemWidth, lineWidth, IfNaturalFirstLineExceeds(lineWidth, openShape, glueShape), openShape);",
-			"note": "restores the S146 threshold — the cuddle is decided on the line `shapeOnePerLine` would give the item instead of on the glue column, so a comprehension whose item fits one indent deeper but not after `[ ` keeps its own bracket line (T674)"
+			"find": "final item: Null<Doc> = itemFlat < 0 ? items[0] : dropComprehensionBody(items[0]);",
+			"replace": "final item: Null<Doc> = itemFlat < 0 ? items[0] : cols + itemFlat <= lineWidth ? null : dropComprehensionBody(items[0]);",
+			"note": "restores the S146 threshold — a flat item that fits the line `shapeOnePerLine` would give it keeps its own bracket line, so a comprehension whose item fits one indent deeper but not after `[ ` is refused the cuddle (T674)"
 		},
 		{
 			"name": "M-CUDDLE-OFF",

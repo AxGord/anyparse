@@ -2,6 +2,7 @@ package anyparse.format.wrap;
 
 import anyparse.core.Doc;
 import anyparse.core.DocMeasure;
+import anyparse.format.BodyFit;
 import anyparse.format.IndentChar;
 import anyparse.format.WriteOptions;
 
@@ -4375,39 +4376,38 @@ class WrapList {
 	 * level out compared with `shapeOnePerLine`, the exploded shape this knob
 	 * re-compacts and the mode it is gated to.
 	 *
-	 * TWO FIT PROBES, one per item class, because what a static walk can measure on
-	 * the item's own Doc decides which probe can answer at all; both fall back to
-	 * `shapeOnePerLine`.
+	 * ONE QUESTION, asked of the head alone — does `[ for (…)` fit the line it is glued
+	 * to — with `shapeOnePerLine` as the fallback. The threshold is a bare `lineWidth`
+	 * rather than the cond-paren probes' `lineWidth + 1`: the primitive's `>= n` and
+	 * the pending `OptSpace` an assignment prefix holds back cancel each other.
 	 *
-	 * A. THE ITEM CANNOT RENDER FLAT — `IfFirstLineExceeds`, whose walk aborts at the
-	 * first hardline, so it measures exactly the open delimiter, its padding and the
-	 * head through its closing `)`. It also defers a body `BodyGroup`, but that is a
-	 * weaker stop and does not generalise: under `sameLine.comprehensionFor: fitLine`
-	 * no `BodyGroup` reaches the item, the walk runs to the end, and the probe would
-	 * measure the WHOLE comprehension — which is why it cannot serve class B. Its
-	 * threshold is a bare `lineWidth` rather than the cond-paren probes'
-	 * `lineWidth + 1`, because the primitive's `>= n` and the pending `OptSpace` an
-	 * assignment or object-field prefix holds back cancel each other.
+	 * The BODY is never part of that question. An item that cannot render flat carries
+	 * its own hardline after the head; one that renders flat keeps its body behind a
+	 * fit group that glues it to the head line whenever `[ head body` fits — blind to
+	 * the closer behind the glue shape's hardline — so its body is FORCED down
+	 * (`dropComprehensionBody`). Never worse than the ladder: the list is in
+	 * `OnePerLine`, so `[ … ]` did not fit as one line, and the forced shape spends the
+	 * same three lines with the `[` back on the statement line. A gate that asked
+	 * whether the body would break BY ITSELF under the glue made the layout
+	 * non-monotone in width (`[ … ]` at 140 one line, 141–144 the ladder, 145 the
+	 * cuddle): the two columns of ` ]` and the pending space before `[` were outside
+	 * its measure. `HxComprehensionCuddledOpenTest` sweeps that zone.
 	 *
-	 * B. THE ITEM RENDERS FLAT — `IfWidthExceeds(bodyBreaksWhenGlued,
-	 * IfNaturalFirstLineExceeds(…), openShape)`. The knob promises "head on the `[`
-	 * line, BODY one indent below", so the only cell it can serve is the one where
-	 * the item's own group BREAKS under the glue; where it does not, the glued shape
-	 * packs head and body onto the `[` line with the closer alone underneath, worse
-	 * than the fallback. There is no "the body broke" primitive, but the question is
-	 * arithmetic, so the threshold is SOLVED for `n` rather than calibrated and
-	 * reduces to `col + glueLead + itemWidth > lineWidth` whatever `openShape`
-	 * measures. The PEN COLUMN is the right frame and the fallback line's indent was
-	 * not — the statement prefix before the `[` is what decides whether the body must
-	 * move down, and it does not move between passes, so the layout stays idempotent.
-	 * The inner probe is the head-fit fallback class A gets from its hardline free.
+	 * TWO PROBE CTORS carry the one question. An item with its own hardline uses
+	 * `IfFirstLineExceeds`, whose STATIC walk measures the head flat, iterable
+	 * included — a head whose iterable call would wrap is measured whole and refused
+	 * (`testWideHeadFallsBackToLeadingBreak`). A flat item uses
+	 * `IfNaturalFirstLineExceeds`, which the render-time natural walk RESOLVES rather
+	 * than descends: a call hugging the list then sees the ladder's `[` as the
+	 * argument's first line when the head is too wide for the call line, and keeps its
+	 * hug (`testCallArgWideComprehensionHeadOpensTheBracketNotTheCall`); the static
+	 * probe is transparent to that walk, which then reads the over-wide glued head
+	 * and opens the call paren.
 	 *
-	 * B ALSO REQUIRES the item's FIRST break to sit right after the head's `)`, since
-	 * only a body-level break delivers the promised shape; where the first break is
-	 * inside the HEAD instead, cuddling spends the whole prefix as head budget and it
-	 * is the head that splits. A wrapping ITERABLE is NOT excluded, because the walk
-	 * resolves every probe to its flat side. Class A needs no such gate: its break is
-	 * the forced one, and where it lands is the body policy's business.
+	 * A flat item ALSO REQUIRES its FIRST break to sit right after the head's `)`:
+	 * only a body-level break delivers the promised shape, and a first break inside
+	 * the HEAD means cuddling spends the whole prefix as head budget. A wrapping
+	 * ITERABLE is NOT excluded, because the walk resolves every probe to its flat side.
 	 *
 	 * The tail mirrors `shapeOnePerLine` exactly, so switching the head placement
 	 * never adds or drops a token, and `closeInside` is dropped because the close
@@ -4420,20 +4420,45 @@ class WrapList {
 		if (!enabled || mode != OnePerLine || items.length != 1 || !isCuddleableComprehensionItem(items[0])) return null;
 		final itemFlat: Int = flatLength(items[0]);
 		if (itemFlat >= 0 && !firstBreakIsDelimChar(items[0], ')'.code)) return null;
+		final item: Null<Doc> = itemFlat < 0 ? items[0] : dropComprehensionBody(items[0]);
+		if (item == null) return null;
 		final glueShape: Doc = Concat([
 			Text(open),
 			openInside,
-			items[0],
+			item,
 			appendTrailingComma ? Text(sep) : Empty,
 			trailBreak,
 			Text(close)
 		]);
 		final openShape: Doc = shapeOnePerLine(open, close, sep, items, cols, appendTrailingComma, trailBreak, sepBeforeFlags);
-		if (itemFlat < 0) return IfFirstLineExceeds(lineWidth, openShape, glueShape);
-		final glueLead: Int = DocMeasure.flatTokenWidth(Concat([Text(open), openInside]));
-		final itemWidth: Int = DocMeasure.flatTokenWidth(items[0]);
-		final bodyBreaksWhenGlued: Int = lineWidth + 1 - glueLead - itemWidth + DocMeasure.flatTokenWidth(openShape);
-		return IfWidthExceeds(bodyBreaksWhenGlued, IfNaturalFirstLineExceeds(lineWidth, openShape, glueShape), openShape);
+		return itemFlat < 0
+			? IfFirstLineExceeds(lineWidth, openShape, glueShape)
+			: IfNaturalFirstLineExceeds(lineWidth, openShape, glueShape);
+	}
+
+	/**
+	 * `item` — a flat-rendering `for` comprehension — with its body slot forced onto
+	 * the next line, or `null` when no such slot is found.
+	 *
+	 * The slot is what `BodyFit.fitLineLayout` builds for a body that can render
+	 * flat: a fit group around `Nest(cols, Concat([Line(' '), body]))`, at the TAIL
+	 * of the construct's `Concat` (behind the `Empty` an absent optional field leaves
+	 * there). The forced form is `BodyFit.breakLayout` — the same `Nest` over a
+	 * hardline — so the body lands one level below the head exactly where the
+	 * item's own policy would have put it had the head line overflowed. Only the tail
+	 * is walked, and only through the wrappers a construct's Doc puts between its
+	 * `Concat` and the slot: an earlier group in the same `Concat` belongs to the
+	 * head (a wrapping iterable), and a filter `if` INSIDE the body is the body.
+	 */
+	private static function dropComprehensionBody(item: Doc): Null<Doc> {
+		return switch item {
+			case Group(Nest(n, Concat([Line(' '), body]))), BodyGroup(Nest(n, Concat([Line(' '), body]))):
+				BodyFit.breakLayout(n, body);
+			case Concat(parts):
+				BodyFit.rebuiltTail(parts, dropComprehensionBody);
+			case _:
+				null;
+		};
 	}
 
 	/**

@@ -623,7 +623,7 @@ final class BodyFit {
 	 * SKIPS them, the rebuild writes back at the index the search returned, and
 	 * `copy()` carries everything else through untouched.
 	 */
-	private static function rebuiltTail(items: Array<Doc>, f: Doc -> Null<Doc>): Null<Doc> {
+	public static function rebuiltTail(items: Array<Doc>, f: Doc -> Null<Doc>): Null<Doc> {
 		final i: Int = lastNonEmptyIdx(items);
 		if (i < 0) return null;
 		final rebuilt: Null<Doc> = f(items[i]);
