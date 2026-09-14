@@ -2054,12 +2054,7 @@ class WrapList {
 				IfArrowContinuationFitsWithRest(_, _, _, _, flatDoc):
 				stack.push(flatDoc);
 			case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
-				var k: Int = items.length;
-				while (k > 0) {
-					k--;
-					stack.push(items[k]);
-					if (k > 0) stack.push(sep);
-				}
+				DocMeasure.pushFillReversed(stack, items, sep);
 			case Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner),
 				CollapseBoolProbe(inner), CollapseChainProbe(inner):
 				stack.push(inner);

@@ -4,6 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.NodeShape;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
 import anyparse.query.SourceComments;
@@ -121,12 +122,6 @@ final class JoinReturn implements Check {
 
 	/** A valued `return` node has exactly one child: the returned expression. */
 	private static inline final RETURN_VALUE_CHILD_COUNT: Int = 1;
-
-	/** An expression statement wraps exactly one expression (here, the assignment). */
-	private static inline final EXPR_STMT_CHILD_COUNT: Int = 1;
-
-	/** A binary assignment node has exactly [l-value, r-value] children. */
-	private static inline final ASSIGN_CHILD_COUNT: Int = 2;
 
 	public function new() {}
 
@@ -352,22 +347,18 @@ final class JoinReturn implements Check {
 		assign: QueryNode, ret: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, retType: Null<String>,
 		s: Seams, tree: QueryNode, declTypeSources: () -> Map<Int, String>, lambdaSpans: Array<Span>
 	): Null<Match> {
-		final binary: Null<QueryNode> = assignBinaryOf(assign, s);
+		final binary: Null<QueryNode> = NodeShape.assignmentOf(assign, s.exprStmtKind, s.assignKind);
 		if (binary == null) return null;
-		final lhs: QueryNode = binary.children[0];
-		final name: Null<String> = lhs.name;
-		if (lhs.kind != s.identKind || name == null) return null;
-
-		if (ret.kind != s.returnKind || ret.children.length != RETURN_VALUE_CHILD_COUNT) return null;
-		final retIdent: QueryNode = ret.children[0];
-		if (retIdent.kind != s.identKind || retIdent.name != name) return null;
+		final returned: Null<ReturnedAssignment> = NodeShape.returnedAssignment(binary, ret, s.identKind, s.returnKind);
+		if (returned == null) return null;
+		final name: String = returned.name;
 
 		final assignSpan: Null<Span> = assign.span;
 		final rhs: QueryNode = binary.children[1];
 		final rhsSpan: Null<Span> = rhs.span;
 		final retSpan: Null<Span> = ret.span;
-		final lhsSpan: Null<Span> = lhs.span;
-		final retIdentSpan: Null<Span> = retIdent.span;
+		final lhsSpan: Null<Span> = returned.lhs.span;
+		final retIdentSpan: Null<Span> = returned.retIdent.span;
 		if (assignSpan == null || rhsSpan == null || retSpan == null || lhsSpan == null || retIdentSpan == null) return null;
 
 		// `x` must resolve to a local or param -- a bare field write (`this.x = e` spelled `x = e`)
@@ -389,19 +380,6 @@ final class JoinReturn implements Check {
 			text: buildReturn(initSource, annotation, retType, rhs, s.newExprKind),
 			message: 'this assignment and its next-line return can be joined into a single return'
 		}: Match);
-	}
-
-	/**
-	 * The `x = e` binary the statement wraps, or null when the statement is not an
-	 * expression-statement holding exactly one assignment (or the grammar declares neither seam).
-	 */
-	private static function assignBinaryOf(assign: QueryNode, s: Seams): Null<QueryNode> {
-		final exprStmtKind: Null<String> = s.exprStmtKind;
-		final assignKind: Null<String> = s.assignKind;
-		if (exprStmtKind == null || assignKind == null) return null;
-		if (assign.kind != exprStmtKind || assign.children.length != EXPR_STMT_CHILD_COUNT) return null;
-		final binary: QueryNode = assign.children[0];
-		return binary.kind == assignKind && binary.children.length == ASSIGN_CHILD_COUNT ? binary : null;
 	}
 
 	/** The binding the write at `lhsSpan` resolves to; null when no write hit covers exactly that span. */

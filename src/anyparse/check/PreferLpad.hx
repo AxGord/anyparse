@@ -6,6 +6,7 @@ import anyparse.check.UsingScan.UsingHeader;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -300,9 +301,8 @@ final class PreferLpad implements Check implements DefaultOff {
 	/** The decimal integer `node` spells, or null when it is not one (a hex or float spelling included). */
 	private static function intLiteral(node: QueryNode, s: LpadSeams, source: String): Null<Int> {
 		if (!s.numericKinds.contains(node.kind)) return null;
-		final span: Null<Span> = node.span;
-		if (span == null) return null;
-		final text: String = source.substring(span.from, span.to);
+		final text: Null<String> = SourceText.nodeText(node, source);
+		if (text == null) return null;
 		final value: Null<Int> = Std.parseInt(text);
 		return value != null && '$value' == text ? value : null;
 	}

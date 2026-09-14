@@ -7,6 +7,7 @@ import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.NodeShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
@@ -86,9 +87,6 @@ final class SimplifyBooleanBranchAssignment implements Check {
 
 	/** An `if` with an `else` has exactly [condition, then-branch, else-branch] children. */
 	private static inline final IF_ELSE_CHILD_COUNT: Int = 3;
-
-	/** A binary assignment node has exactly [l-value, r-value] children. */
-	private static inline final ASSIGN_CHILD_COUNT: Int = 2;
 
 	/** Fewer targets than this is `prefer-ternary-assignment`'s single-l-value case. */
 	private static inline final MIN_TARGETS: Int = 2;
@@ -216,9 +214,8 @@ final class SimplifyBooleanBranchAssignment implements Check {
 		if (branch.kind != s.blockStmtKind) return null;
 		final out: Array<QueryNode> = [];
 		for (stmt in branch.children) {
-			if (stmt.kind != s.exprStmtKind || stmt.children.length != 1) return null;
-			final assign: QueryNode = stmt.children[0];
-			if (assign.kind != s.assignKind || assign.children.length != ASSIGN_CHILD_COUNT) return null;
+			final assign: Null<QueryNode> = NodeShape.assignmentOf(stmt, s.exprStmtKind, s.assignKind);
+			if (assign == null) return null;
 			out.push(assign);
 		}
 		return out;

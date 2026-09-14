@@ -472,30 +472,6 @@ final class MoveMember {
 	}
 
 	/**
-	 * Strip leading blank lines and every trailing newline (the insert
-	 * frame supplies its own).
-	 */
-	private static function trimBlankEdges(block: String): String {
-		var from: Int = 0;
-		while (from < block.length) {
-			final c: Int = block.fastCodeAt(from);
-			if (c == '\n'.code || c == '\r'.code)
-				from++
-			else
-				break;
-		}
-		var to: Int = block.length;
-		while (to > from) {
-			final c: Int = block.fastCodeAt(to - 1);
-			if (c == '\n'.code || c == '\r'.code)
-				to--
-			else
-				break;
-		}
-		return block.substring(from, to);
-	}
-
-	/**
 	 * Resolve endpoints and run every guard: source type + member (must be
 	 * static), unique same-package destination without a name collision,
 	 * parseable scope, no `using` / static import of the source type.
@@ -1117,7 +1093,7 @@ final class MoveMember {
 						if (e.span.from >= m.cut.from && e.span.from < m.cut.to)
 							{ span: new Span(e.span.from - m.cut.from, e.span.to - m.cut.from), text: e.text }
 				];
-				trimBlankEdges(CanonicalEdit.applyEdits(prep.srcSource.substring(m.cut.from, m.cut.to), shifted));
+				SourceText.trimNewlineEdges(CanonicalEdit.applyEdits(prep.srcSource.substring(m.cut.from, m.cut.to), shifted));
 			}
 		];
 	}

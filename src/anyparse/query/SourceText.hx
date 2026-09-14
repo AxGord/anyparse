@@ -305,6 +305,33 @@ final class SourceText {
 		return nl < 0 ? 0 : nl + 1;
 	}
 
+	/** The source text under `node`'s span, or null when the node carries none. */
+	public static function nodeText(node: QueryNode, source: String): Null<String> {
+		final span: Null<Span> = node.span;
+		return span == null ? null : source.substring(span.from, span.to);
+	}
+
+	/** `block` without its leading and trailing line breaks — the edge trim a cut member block gets before it is re-inserted. */
+	public static function trimNewlineEdges(block: String): String {
+		var from: Int = 0;
+		while (from < block.length) {
+			final c: Int = block.fastCodeAt(from);
+			if (c == '\n'.code || c == '\r'.code)
+				from++
+			else
+				break;
+		}
+		var to: Int = block.length;
+		while (to > from) {
+			final c: Int = block.fastCodeAt(to - 1);
+			if (c == '\n'.code || c == '\r'.code)
+				to--
+			else
+				break;
+		}
+		return block.substring(from, to);
+	}
+
 	/** Whether the occurrence of `name` at `at` in `head` stands alone — no identifier character on either side. */
 	private static inline function standaloneIdentAt(head: String, name: String, at: Int): Bool {
 		final after: Int = at + name.length;

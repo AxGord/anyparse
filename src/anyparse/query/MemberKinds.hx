@@ -657,6 +657,31 @@ final class MemberKinds {
 	}
 
 	/**
+	 * The contiguous run of `modifierKinds` siblings right before `node` in `parent`, nearest first — empty when
+	 * `node` is not a child of `parent` or nothing of those kinds precedes it.
+	 */
+	public static function precedingModifiers(node: QueryNode, parent: QueryNode, modifierKinds: Array<String>): Array<QueryNode> {
+		final siblings: Array<QueryNode> = parent.children;
+		final out: Array<QueryNode> = [];
+		var i: Int = siblings.indexOf(node) - 1;
+		while (i >= 0 && modifierKinds.contains(siblings[i].kind)) {
+			out.push(siblings[i]);
+			i--;
+		}
+		return out;
+	}
+
+	/** `callKind` + `newExprKind` — the invocation kinds whose last child is the trailing argument; whichever the grammar names. */
+	public static function invocationKinds(shape: RefShape): Array<String> {
+		final kinds: Array<String> = [];
+		final callKind: Null<String> = shape.callKind;
+		if (callKind != null) kinds.push(callKind);
+		final newExprKind: Null<String> = shape.newExprKind;
+		if (newExprKind != null) kinds.push(newExprKind);
+		return kinds;
+	}
+
+	/**
 	 * Collect the `from` of every static member under `host` into `out`, returning the modifier-run
 	 * state the host's children leave behind. Descends into every nested member host — a
 	 * member-position `#if` region above all — carrying `incoming` in, because a `static` written

@@ -14,6 +14,16 @@ using StringTools;
  */
 final class DocMeasure {
 
+	/** Push a fill's `items` onto a flat-walk `stack` last first with `sep` between neighbours, so the walk pops them in source order. */
+	public static inline function pushFillReversed(stack: Array<Doc>, items: Array<Doc>, sep: Doc): Void {
+		var k: Int = items.length;
+		while (k > 0) {
+			k--;
+			stack.push(items[k]);
+			if (k > 0) stack.push(sep);
+		}
+	}
+
 	/**
 	 * Walks a `Doc` tree and returns its visible-token width — the same
 	 * width the renderer would emit in flat layout if forced hardlines
@@ -101,12 +111,7 @@ final class DocMeasure {
 					var i: Int = items.length;
 					while (--i >= 0) stack.push(items[i]);
 				case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
-					var k: Int = items.length;
-					while (k > 0) {
-						k--;
-						stack.push(items[k]);
-						if (k > 0) stack.push(sep);
-					}
+					pushFillReversed(stack, items, sep);
 				case Nest(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner), IfBreak(_, inner),
 					IfWidthExceeds(_, _, inner), IfFirstLineExceeds(_, _, inner), IfLineExceeds(_, _, inner),
 					IfResidualLineExceeds(_, _, inner), IfFullLineExceeds(_, _, inner), IfNaturalFirstLineExceeds(_, _, inner),
@@ -321,12 +326,7 @@ final class DocMeasure {
 					IfIndentWidthExceeds(_, _, _, fl), IfGluedFirstLineExceeds(_, _, _, fl):
 					stack.push(fl);
 				case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
-					var k: Int = items.length;
-					while (k > 0) {
-						k--;
-						stack.push(items[k]);
-						if (k > 0) stack.push(sep);
-					}
+					pushFillReversed(stack, items, sep);
 			}
 		}
 		return buf.toString();
@@ -877,12 +877,7 @@ final class DocMeasure {
 				stack.push(inner);
 				return 0;
 			case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
-				var k: Int = items.length;
-				while (k > 0) {
-					k--;
-					stack.push(items[k]);
-					if (k > 0) stack.push(sep);
-				}
+				pushFillReversed(stack, items, sep);
 				return 0;
 			case OptSpace(s):
 				return s.length;

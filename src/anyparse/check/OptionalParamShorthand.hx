@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
@@ -360,19 +361,9 @@ final class OptionalParamShorthand implements Check {
 	 * always a miss, never a match.
 	 */
 	private static function hasModifier(fn: QueryNode, parent: QueryNode, seams: Seams, targetKind: Null<String>): Bool {
-		if (targetKind == null) return false;
-		final sibs: Array<QueryNode> = parent.children;
-		final fnIdx: Int = sibs.indexOf(fn);
-		if (fnIdx < 0) return false;
-		var i: Int = fnIdx - 1;
-		while (i >= 0) {
-			final sib: QueryNode = sibs[i];
-			final isModifier: Bool = seams.visibilityKinds.contains(sib.kind) || seams.modifierKinds.contains(sib.kind);
-			if (!isModifier) break;
-			if (sib.kind == targetKind) return true;
-			i--;
-		}
-		return false;
+		return targetKind != null
+			&& MemberKinds.precedingModifiers(fn, parent, seams.visibilityKinds.concat(seams.modifierKinds))
+				.exists(sib -> sib.kind == targetKind);
 	}
 
 	/**

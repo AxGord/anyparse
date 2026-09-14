@@ -1,8 +1,8 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.check.NullFlowScan.IdentOperand;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
@@ -48,16 +48,13 @@ final class DeadSafeNav implements Check {
 			final declaredTypes: Map<Int, String> = typed.declaredTypes(entry.source);
 			NullFlow.analyze(root, shape, entry.source, (node, facts) -> {
 				if (node.kind != navKind || node.children.length != 1) return;
-				final receiver: QueryNode = node.children[0];
-				final span: Null<Span> = node.span;
-				if (receiver.kind != ident || span == null) return;
-				final name: Null<String> = receiver.name;
-				if (name == null) return;
+				final receiver: Null<IdentOperand> = NullFlowScan.identOperand(node, node.children[0], ident);
+				if (receiver == null) return;
 				// Owned by `unnecessary-safe-nav` when the declared type proves it.
-				if (TypeResolver.isProvablyNonNull(receiver, root, shape, declaredTypes)) return;
-				if (facts.nonNull(name)) violations.push({
+				if (TypeResolver.isProvablyNonNull(receiver.operand, root, shape, declaredTypes)) return;
+				if (facts.nonNull(receiver.name)) violations.push({
 					file: entry.file,
-					span: span,
+					span: receiver.span,
 					rule: 'dead-safe-nav',
 					severity: Severity.Info,
 					message: 'null-safe access is redundant — receiver is already non-null on this path'

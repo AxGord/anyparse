@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.NodeShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -135,14 +136,12 @@ final class UncheckedNullable implements Check implements NoAutofix {
 
 	/** The `Receiver.method` signature `node` matches, or null when it is not a recognised call. */
 	private static function matchedSignature(node: QueryNode, ctx: Ctx): Null<String> {
-		if (node.kind != ctx.callKind || node.children.length < 1) return null;
-		final callee: QueryNode = node.children[0];
-		final method: Null<String> = callee.name;
-		if (callee.kind != ctx.fieldAccessKind || method == null || callee.children.length != 1) return null;
-		final receiver: QueryNode = callee.children[0];
-		final receiverName: Null<String> = receiver.name;
-		if (receiver.kind != ctx.identKind || receiverName == null) return null;
-		for (sig in ctx.sigs) if (sig.receiver == receiverName && sig.method == method) return '${sig.receiver}.${sig.method}';
+		if (node.kind != ctx.callKind) return null;
+		final call: Null<MethodCall> = NodeShape.methodCall(node, ctx.fieldAccessKind);
+		if (call == null) return null;
+		final receiverName: Null<String> = call.receiver.name;
+		if (call.receiver.kind != ctx.identKind || receiverName == null) return null;
+		for (sig in ctx.sigs) if (sig.receiver == receiverName && sig.method == call.method) return '${sig.receiver}.${sig.method}';
 		return null;
 	}
 

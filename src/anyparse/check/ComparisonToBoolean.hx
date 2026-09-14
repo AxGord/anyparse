@@ -4,10 +4,12 @@ import anyparse.check.Check.Violation;
 import anyparse.query.BoolExprShape;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
+import anyparse.query.NodeShape;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeInfoMemo;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
@@ -192,19 +194,11 @@ final class ComparisonToBoolean implements Check {
 	private static function proofOf(
 		file: String, source: String, root: QueryNode, provider: Null<TypeInfoProvider>, index: () -> Null<SymbolIndex>
 	): TypeProof {
-		var casts: Null<Map<Int, String>> = null;
 		return {
 			file: file,
 			root: root,
 			declaredTypes: provider?.declaredTypes(source),
-			castTargets: () -> {
-				final ready: Null<Map<Int, String>> = casts;
-				if (ready != null) return ready;
-				final p: Null<TypeInfoProvider> = provider;
-				final computed: Map<Int, String> = p != null ? p.castTargetSources(source) : [];
-				casts = computed;
-				return computed;
-			},
+			castTargets: TypeInfoMemo.castTargetSources(provider, source),
 			index: index
 		};
 	}
@@ -379,11 +373,11 @@ final class ComparisonToBoolean implements Check {
 	private static function callReturnTypeNominal(other: QueryNode, seams: Seams, proof: TypeProof): Null<String> {
 		final callKind: Null<String> = seams.callKind;
 		final faKind: Null<String> = seams.shape.fieldAccessKind;
-		if (callKind == null || faKind == null || other.kind != callKind || other.children.length == 0) return null;
-		final callee: QueryNode = other.children[0];
-		final method: Null<String> = callee.name;
-		if (callee.kind != faKind || method == null || callee.children.length != 1) return null;
-		final lookup: Null<PinnedLookup> = pinnedLookup(callee.children[0], method, seams.shape, proof);
+		if (callKind == null || other.kind != callKind) return null;
+		final call: Null<MethodCall> = NodeShape.methodCall(other, faKind);
+		if (call == null) return null;
+		final method: String = call.method;
+		final lookup: Null<PinnedLookup> = pinnedLookup(call.receiver, method, seams.shape, proof);
 		if (lookup == null) return null;
 		final recvType: String = lookup.recvType;
 		final written: Null<String> = lookup.index.members.returnNominalOf(recvType, method);

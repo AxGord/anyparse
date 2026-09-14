@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.NodeShape;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -429,15 +430,13 @@ final class NominalTypes {
 		final table: Null<Map<String, String>> = shape.staticMethodReturns;
 		final callKind: Null<String> = shape.callKind;
 		final fieldKind: Null<String> = shape.fieldAccessKind;
-		if (table == null || callKind == null || fieldKind == null) return null;
-		if (node.kind != callKind || node.children.length == 0) return null;
-		final callee: QueryNode = node.children[0];
-		if (callee.kind != fieldKind || callee.children.length != 1) return null;
-		final method: Null<String> = callee.name;
-		final receiver: QueryNode = callee.children[0];
+		if (table == null || callKind == null || node.kind != callKind) return null;
+		final call: Null<MethodCall> = NodeShape.methodCall(node, fieldKind);
+		if (call == null) return null;
+		final receiver: QueryNode = call.receiver;
 		final typeName: Null<String> = receiver.name;
-		if (method == null || typeName == null) return null;
-		final ret: Null<String> = table['$typeName.$method'];
+		if (typeName == null) return null;
+		final ret: Null<String> = table['$typeName.${call.method}'];
 		return ret == null || !TypeResolver.receiverRootIsUnboundType(receiver, root, shape)
 			? null
 			: { typeName: typeName, returnSource: ret };

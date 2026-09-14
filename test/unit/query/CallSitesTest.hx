@@ -3,6 +3,7 @@ package unit.query;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CallSites;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 import utest.Assert;
@@ -131,6 +132,46 @@ class CallSitesTest extends Test {
 				case COk(sites):
 					Assert.fail('a grammar with no $field proved ${sites.length} site(s) complete');
 			}
+		}
+	}
+
+	/**
+	 * The cursor prologue `change-sig` and `remove-param` share: a cursor on the declaration answers
+	 * it, a cursor on a bare call resolves back to it through `Refs`, and each refusal names what the
+	 * cursor missed. Green at base by construction: both ops spelled the prologue inline.
+	 */
+	public function testResolveFnAtCursorFindsTheDeclarationFromEitherEnd(): Void {
+		final source: String = 'class C {\n\tfunction g(a:Int, b:Int):Void {}\n\tfunction h():Void {\n\t\tg(1, 2);\n\t}\n}\n';
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		for (at in [{ line: 2, col: 11 }, { line: 4, col: 3 }]) switch CallSites.resolveFnAtCursor(source, at.line, at.col, plugin, SHAPE) {
+			case FnAt(fn):
+				Assert.equals('g', fn.name);
+				Assert.equals('g', fn.decl.name);
+				Assert.isTrue(MemberKinds.FN_DECL_KINDS.contains(fn.decl.kind));
+				Assert.equals('module', fn.tree.kind);
+			case FnAtErr(message):
+				Assert.fail('${at.line}:${at.col}: $message');
+		}
+		// The kind check stays with the op: a cursor on the class declaration resolves it, and only the
+		// caller's `FN_DECL_KINDS` test — whose message names the op — turns that into a refusal.
+		switch CallSites.resolveFnAtCursor(source, 1, 1, plugin, SHAPE) {
+			case FnAt(fn):
+				Assert.equals('C', fn.name);
+				Assert.isFalse(MemberKinds.FN_DECL_KINDS.contains(fn.decl.kind));
+			case FnAtErr(message):
+				Assert.fail(message);
+		}
+		switch CallSites.resolveFnAtCursor(source, 5, 1, plugin, SHAPE) {
+			case FnAt(fn):
+				Assert.fail('a cursor on a closing brace resolved "${fn.name}"');
+			case FnAtErr(message):
+				Assert.stringContains('is not on a function or a call', message);
+		}
+		switch CallSites.resolveFnAtCursor('class {', 1, 1, plugin, SHAPE) {
+			case FnAt(fn):
+				Assert.fail('an unparseable source resolved "${fn.name}"');
+			case FnAtErr(message):
+				Assert.stringContains('does not parse', message);
 		}
 	}
 

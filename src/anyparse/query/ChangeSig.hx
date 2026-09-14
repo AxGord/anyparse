@@ -1,5 +1,7 @@
 package anyparse.query;
 
+import anyparse.query.CallSites.CursorFn;
+import anyparse.query.CallSites.CursorFnResult;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
@@ -83,27 +85,15 @@ final class ChangeSig {
 	public static function changeSig(
 		source: String, line: Int, col: Int, perm: String, plugin: GrammarPlugin, shape: RefShape
 	): ChangeSigResult {
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
-		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
-
-		// line:col is 1-based, as apq refs / ast --at / source print.
-		final cursor: Int = Span.offsetOf(source, line, col);
-
-		final node: Null<QueryNode> = RefactorSupport.resolveCursorNode(tree, cursor, source);
-		if (node == null) return Err('position $line:$col is not on a function or a call');
-		final cursorNode: QueryNode = node;
-		final targetName: Null<String> = cursorNode.name;
-		if (targetName == null) return Err('position $line:$col is not on a function or a call');
-		final name: String = targetName;
-
-		// Resolve the function declaration node. A cursor already on a
-		// function decl IS that decl; otherwise (a bare call) resolve the
-		// binding back to the decl through the shared resolver — this works
-		// for methods (indexed by `Refs`) but not for local functions
-		// reached via a call.
-		final declNode: Null<QueryNode> = CallSites.resolveFnDecl(cursorNode, tree, name, shape);
-		if (declNode == null) return Err('could not resolve a function binding for "$name" at $line:$col');
-		final decl: QueryNode = declNode;
+		// The cursor resolves through the shared prologue: a cursor already on a function decl IS that
+		// decl; a bare call resolves back to the decl through `Refs` (methods, not local functions).
+		final found: CursorFn = switch CallSites.resolveFnAtCursor(source, line, col, plugin, shape) {
+			case FnAtErr(message): return Err(message);
+			case FnAt(fn): fn;
+		};
+		final tree: QueryNode = found.tree;
+		final decl: QueryNode = found.decl;
+		final name: String = found.name;
 		if (!MemberKinds.FN_DECL_KINDS.contains(decl.kind))
 			return Err('"$name" is not a function (change-sig reorders function parameters)');
 		final declSpan: Null<Span> = decl.span;

@@ -4,6 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.NodeShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
@@ -60,9 +61,6 @@ using StringTools;
  */
 @:nullSafety(Strict)
 final class JoinDeclarationAssignment implements Check {
-
-	/** A binary assignment node has exactly [l-value, r-value] children. */
-	private static inline final ASSIGN_CHILD_COUNT: Int = 2;
 
 	public function new() {}
 
@@ -159,9 +157,8 @@ final class JoinDeclarationAssignment implements Check {
 		final declText: String = source.substring(declSpan.from, declSpan.to - 1).rtrim();
 		if (SourceText.isMultiDeclarator(decl, s.localDeclContinuationKinds)) return null; // never joined
 
-		if (assign.kind != s.exprStmtKind || assign.children.length != 1) return null;
-		final binary: QueryNode = assign.children[0];
-		if (binary.kind != s.assignKind || binary.children.length != ASSIGN_CHILD_COUNT) return null;
+		final binary: Null<QueryNode> = NodeShape.assignmentOf(assign, s.exprStmtKind, s.assignKind);
+		if (binary == null) return null;
 		final lhs: QueryNode = binary.children[0];
 		if (lhs.kind != s.identKind || lhs.name != name) return null;
 		final rhs: QueryNode = binary.children[1];

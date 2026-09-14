@@ -62,6 +62,25 @@ class RunScanTest extends Test {
 		Assert.same(['A.hx:seam', 'C.hx:seam'], out.map(v -> v.file));
 	}
 
+	public function testCollectTypedHandsTheProviderAndTheIndexToEveryBody(): Void {
+		final seen: Array<String> = [];
+		final out: Array<Violation> = RunScan.collectTyped([GOOD_A, BAD, GOOD_C], _plugin, (entry, tree, typed, index, out) -> {
+			seen.push(entry.file);
+			Assert.isTrue(index.declaresTypeInScope('A', entry.file));
+			Assert.isTrue([for (k in typed.declaredTypes(entry.source).keys()) k].length == 0);
+			out.push(violation(entry.file));
+		});
+		Assert.same(['A.hx', 'C.hx'], seen);
+		Assert.same(['A.hx', 'C.hx'], out.map(v -> v.file));
+	}
+
+	public function testCollectTypedAnswersNothingWithoutTypeInformation(): Void {
+		var bodies: Int = 0;
+		final out: Array<Violation> = RunScan.collectTyped([GOOD_A], new UntypedPlugin(), (entry, tree, typed, index, out) -> bodies++);
+		Assert.equals(0, out.length);
+		Assert.equals(0, bodies);
+	}
+
 	public function testCollectHonoursTheParseOverride(): Void {
 		var parses: Int = 0;
 		final out: Array<Violation> =

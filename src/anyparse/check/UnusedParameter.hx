@@ -395,19 +395,10 @@ final class UnusedParameter implements Check implements ConfigAware {
 	private static function isPublicDecl(
 		fn: QueryNode, parent: QueryNode, source: String, visibilityKinds: Array<String>, modifierKinds: Array<String>
 	): Bool {
-		final sibs: Array<QueryNode> = parent.children;
-		final fnIdx: Int = sibs.indexOf(fn);
-		if (fnIdx < 0) return false;
-		var i: Int = fnIdx - 1;
-		while (i >= 0) {
-			final sib: QueryNode = sibs[i];
-			if (!visibilityKinds.contains(sib.kind) && !modifierKinds.contains(sib.kind)) break;
+		return MemberKinds.precedingModifiers(fn, parent, visibilityKinds.concat(modifierKinds)).exists(sib -> {
 			final sspan: Null<Span> = sib.span;
-			if (visibilityKinds.contains(sib.kind) && sspan != null && source.substring(sspan.from, sspan.to).trim() == 'public')
-				return true;
-			i--;
-		}
-		return false;
+			return visibilityKinds.contains(sib.kind) && sspan != null && source.substring(sspan.from, sspan.to).trim() == 'public';
+		});
 	}
 
 	/**
@@ -420,19 +411,9 @@ final class UnusedParameter implements Check implements ConfigAware {
 	private static function isDynamicFn(
 		fn: QueryNode, parent: QueryNode, visibilityKinds: Array<String>, modifierKinds: Array<String>, dynamicKind: Null<String>
 	): Bool {
-		if (dynamicKind == null) return false;
-		final sibs: Array<QueryNode> = parent.children;
-		final fnIdx: Int = sibs.indexOf(fn);
-		if (fnIdx < 0) return false;
-		var i: Int = fnIdx - 1;
-		while (i >= 0) {
-			final sib: QueryNode = sibs[i];
-			final isModifier: Bool = visibilityKinds.contains(sib.kind) || modifierKinds.contains(sib.kind) || sib.kind == dynamicKind;
-			if (!isModifier) break;
-			if (sib.kind == dynamicKind) return true;
-			i--;
-		}
-		return false;
+		return dynamicKind != null
+			&& MemberKinds.precedingModifiers(fn, parent, visibilityKinds.concat(modifierKinds).concat([dynamicKind]))
+				.exists(sib -> sib.kind == dynamicKind);
 	}
 
 	/**

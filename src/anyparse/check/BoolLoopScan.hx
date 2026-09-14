@@ -10,9 +10,11 @@ import anyparse.query.BinderScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.CtorFieldFold;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.NodeShape;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
@@ -158,9 +160,6 @@ final class BoolLoopScan {
 
 	/** An `if` with no `else` has exactly [condition, then-branch] children. */
 	private static inline final IF_NO_ELSE_CHILD_COUNT: Int = 2;
-
-	/** An assignment node has exactly [target, value] children. */
-	private static inline final ASSIGN_CHILD_COUNT: Int = 2;
 
 	/** The flag's ONE write: the loop's own assignment, and nothing else in the enclosing statement list. */
 	private static inline final FLAG_WRITES: Int = 1;
@@ -572,9 +571,8 @@ final class BoolLoopScan {
 	 * anything besides fails here rather than at a gate that would have to enumerate jump kinds.
 	 */
 	private static function flagAssignLiteral(stmt: QueryNode, sink: FlagSink, s: Seams): Null<QueryNode> {
-		if (stmt.kind != sink.exprStmtKind || stmt.children.length != 1) return null;
-		final assign: QueryNode = stmt.children[0];
-		if (assign.kind != sink.assignKind || assign.children.length != ASSIGN_CHILD_COUNT) return null;
+		final assign: Null<QueryNode> = NodeShape.assignmentOf(stmt, sink.exprStmtKind, sink.assignKind);
+		if (assign == null) return null;
 		final target: QueryNode = assign.children[0];
 		final value: QueryNode = assign.children[1];
 		return target.kind == s.identKind && target.name == sink.name && value.kind == s.boolLitKind ? value : null;
@@ -741,10 +739,7 @@ final class BoolLoopScan {
 
 	/** A boolean literal's VALUE, read off its source text; null when the span is missing or the text is neither spelling. */
 	private static function literalValue(lit: QueryNode, source: String): Null<Bool> {
-		final span: Null<Span> = lit.span;
-		if (span == null) return null;
-		final text: String = source.substring(span.from, span.to);
-		return switch (text) {
+		return switch (SourceText.nodeText(lit, source)) {
 			case TRUE_LITERAL: true;
 			case FALSE_LITERAL: false;
 			case _: null;

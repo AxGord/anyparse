@@ -98,10 +98,6 @@ final class Inline {
 		return b == null ? -1 : b.from;
 	}
 
-	private static inline function isSpace(c: Int): Bool {
-		return c == ' '.code || c == '\t'.code || c == '\r'.code;
-	}
-
 	/**
 	 * Free-identifier safety: for every `IdentExpr` in the initializer
 	 * (other than `this`), confirm that
@@ -147,41 +143,6 @@ final class Inline {
 		}
 		walk(node);
 		return out;
-	}
-
-	/**
-	 * The span of bytes to delete for the decl line. The decl span
-	 * (`declSpan`) covers `var <name> = <init>;` including the trailing
-	 * `;`. The deletion is widened to the whole physical line — back to
-	 * the previous line break and forward over the next one — but ONLY
-	 * when the decl owns its line exclusively:
-	 *
-	 *  - everything before `declSpan.from` back to the previous `\n` (or
-	 *    start of file) is whitespace, and
-	 *  - everything after `declSpan.to` up to the next `\n` (or EOF) is
-	 *    whitespace.
-	 *
-	 * Otherwise the decl shares its line with other code / a comment and
-	 * we return null so the caller refuses rather than corrupt that text.
-	 */
-	private static function computeDeclDeleteSpan(source: String, declSpan: Null<Span>): Null<Span> {
-		if (declSpan == null) return null;
-		final from: Int = declSpan.from;
-		final to: Int = declSpan.to;
-
-		var lineStart: Int = from;
-		while (lineStart > 0 && source.charAt(lineStart - 1) != '\n') lineStart--;
-		// Everything in [lineStart, from) must be whitespace.
-		for (i in lineStart ... from) if (!isSpace(source.fastCodeAt(i))) return null;
-
-		var lineEnd: Int = to;
-		while (lineEnd < source.length && source.charAt(lineEnd) != '\n') lineEnd++;
-		// Everything in [to, lineEnd) must be whitespace.
-		for (i in to ... lineEnd) if (!isSpace(source.fastCodeAt(i))) return null;
-		// Consume the trailing line break itself so no blank line is left.
-		if (lineEnd < source.length && source.charAt(lineEnd) == '\n') lineEnd++;
-
-		return new Span(lineStart, lineEnd);
 	}
 
 	/**
@@ -310,7 +271,8 @@ final class Inline {
 		// `;`; the line is removed only when the decl owns it exclusively
 		// (whitespace before, nothing but whitespace + the line break
 		// after) — otherwise we refuse rather than mangle adjacent code.
-		final deleteSpan: Null<Span> = computeDeclDeleteSpan(source, target.decl.span);
+		final declSpan: Null<Span> = target.decl.span;
+		final deleteSpan: Null<Span> = declSpan == null ? null : ElementSpan.ownedLinesSpan(source, declSpan);
 		if (deleteSpan == null) return Err('"$name" declaration shares its line — cannot inline cleanly');
 		edits.push({ span: deleteSpan, text: '' });
 

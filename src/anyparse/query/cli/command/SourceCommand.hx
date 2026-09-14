@@ -4,6 +4,7 @@ import anyparse.query.Address;
 import anyparse.query.SourceText;
 import anyparse.query.cli.CliContext;
 import anyparse.query.cli.CliEdit;
+import anyparse.runtime.CommonPrefix;
 import anyparse.runtime.Span;
 import haxe.Exception;
 import anyparse.query.ExitCode.*;
@@ -107,7 +108,7 @@ final class SourceCommand implements CliCommand {
 			final line: String = lines[n - 1];
 			if (line.trim().length == 0) continue;
 			final lead: String = leadingWhitespace(line);
-			common = common == null ? lead : sharedPrefix(common, lead);
+			common = common == null ? lead : CommonPrefix.of(common, lead);
 			if (common.length == 0) return 0;
 		}
 		return common == null ? 0 : common.length;
@@ -122,14 +123,6 @@ final class SourceCommand implements CliCommand {
 			i++;
 		}
 		return s.substr(0, i);
-	}
-
-	/** The longest common prefix of `a` and `b`. */
-	private static function sharedPrefix(a: String, b: String): String {
-		final limit: Int = a.length < b.length ? a.length : b.length;
-		var i: Int = 0;
-		while (i < limit && a.fastCodeAt(i) == b.fastCodeAt(i)) i++;
-		return a.substr(0, i);
 	}
 
 	/**

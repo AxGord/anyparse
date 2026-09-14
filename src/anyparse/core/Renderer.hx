@@ -1397,12 +1397,7 @@ class Renderer {
 				while (--i >= 0) stack.push(items[i]);
 				return { add: 0, aborted: false };
 			case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
-				var k: Int = items.length;
-				while (k > 0) {
-					k--;
-					stack.push(items[k]);
-					if (k > 0) stack.push(sep);
-				}
+				DocMeasure.pushFillReversed(stack, items, sep);
 				return { add: 0, aborted: false };
 			case Nest(_, inner), Group(inner), GroupWithRestProbe(inner), IfBreak(_, inner), IfWidthExceeds(_, _, inner),
 				IfFirstLineExceeds(_, _, inner), IfLineExceeds(_, _, inner), IfResidualLineExceeds(_, _, inner),
@@ -3678,12 +3673,7 @@ class Renderer {
 					var i: Int = items.length;
 					while (--i >= 0) stack.push(items[i]);
 				case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
-					var k: Int = items.length;
-					while (k > 0) {
-						k--;
-						stack.push(items[k]);
-						if (k > 0) stack.push(sep);
-					}
+					DocMeasure.pushFillReversed(stack, items, sep);
 				case Nest(_, inner), Group(inner), GroupWithRestProbe(inner), IfBreak(_, inner), IfWidthExceeds(_, _, inner),
 					IfFirstLineExceeds(_, _, inner), IfLineExceeds(_, _, inner), IfResidualLineExceeds(_, _, inner),
 					IfFullLineExceeds(_, _, inner), IfNaturalFirstLineExceeds(_, _, inner),

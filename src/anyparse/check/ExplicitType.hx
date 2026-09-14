@@ -9,6 +9,7 @@ import anyparse.query.MemberKinds;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeInfoMemo;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefPrinter;
 import anyparse.runtime.Span;
@@ -694,16 +695,7 @@ final class ExplicitType implements Check implements OracleAssisted {
 		// A cast target lookup costs a SECOND full parse of the file (`castTargetSources`),
 		// so compute it lazily and cache it — a fix whose violations key nothing into `byKey`,
 		// or whose initializers are never casts, never pays for it.
-		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
-		var castTargetsCache: Null<Map<Int, String>> = null;
-		function castTargets(): Map<Int, String> {
-			final existing: Null<Map<Int, String>> = castTargetsCache;
-			if (existing != null) return existing;
-			final p: Null<TypeInfoProvider> = provider;
-			final computed: Map<Int, String> = p != null ? p.castTargetSources(source) : [];
-			castTargetsCache = computed;
-			return computed;
-		}
+		final castTargets: () -> Map<Int, String> = TypeInfoMemo.castTargetSources(RunScan.typeInfoOf(plugin), source);
 		for (v in violations) {
 			final span: Null<Span> = v.span;
 			if (span == null) continue;

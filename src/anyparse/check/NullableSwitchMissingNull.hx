@@ -6,6 +6,7 @@ import anyparse.check.NullFlow.NullFacts;
 import anyparse.check.NullableSource.NullableSourceCfg;
 import anyparse.query.BoolExprShape;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.NodeShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -333,15 +334,12 @@ final class NullableSwitchMissingNull implements Check implements NoAutofix {
 	 */
 	private static function assertionArg(node: QueryNode, s: Seams): Null<QueryNode> {
 		final callKind: Null<String> = s.callKind;
-		final fieldAccessKind: Null<String> = s.fieldAccessKind;
-		if (callKind == null || fieldAccessKind == null || node.kind != callKind || node.children.length != 2) return null;
-		final callee: QueryNode = node.children[0];
-		final method: Null<String> = callee.name;
-		if (callee.kind != fieldAccessKind || method == null || callee.children.length != 1) return null;
-		final recv: QueryNode = callee.children[0];
-		final recvName: Null<String> = recv.name;
-		if (recv.kind != s.identKind || recvName == null) return null;
-		final dotted: String = '${recvName}.${method}';
+		if (callKind == null || node.kind != callKind || node.children.length != 2) return null;
+		final call: Null<MethodCall> = NodeShape.methodCall(node, s.fieldAccessKind);
+		if (call == null) return null;
+		final recvName: Null<String> = call.receiver.name;
+		if (call.receiver.kind != s.identKind || recvName == null) return null;
+		final dotted: String = '${recvName}.${call.method}';
 		final arg: QueryNode = node.children[1];
 		// A direct non-null precondition (`Assert.notNull(x)`) — the plain-ident argument.
 		if (s.nullAssertionCalls.contains(dotted)) return arg.kind == s.identKind ? arg : null;

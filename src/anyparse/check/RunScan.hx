@@ -4,6 +4,7 @@ import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
+import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -53,6 +54,28 @@ final class RunScan {
 		for (entry in files) {
 			final tree: Null<QueryNode> = parseOrNull(plugin, entry.source);
 			if (tree != null) body(entry, tree, seams, out);
+		}
+		return out;
+	}
+
+	/**
+	 * `collect` gated on the grammar's type information and run over the files' symbol index: a plugin that is
+	 * no `TypeInfoProvider` yields no findings and builds no index, so the gate precedes the build, and `body`
+	 * sees both non-null. Restated rather than routed through `collect`, for the reason `collectWith` gives.
+	 */
+	public static function collectTyped(
+		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin,
+		body: (
+			entry:{ file: String, source: String }, tree:QueryNode, typed:TypeInfoProvider, index:SymbolIndex, out:Array<Violation>
+		) -> Void
+	): Array<Violation> {
+		final typed: Null<TypeInfoProvider> = typeInfoOf(plugin);
+		if (typed == null) return [];
+		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final out: Array<Violation> = [];
+		for (entry in files) {
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			if (tree != null) body(entry, tree, typed, index, out);
 		}
 		return out;
 	}

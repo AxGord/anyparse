@@ -83,10 +83,6 @@ final class InlineMethod {
 		};
 	}
 
-	private static inline function isSpace(c: Int): Bool {
-		return c == ' '.code || c == '\t'.code || c == '\r'.code;
-	}
-
 	/**
 	 * Binding kinds that, occurring INSIDE the body expression `E` with a parameter's name,
 	 * shadow that parameter — read off the grammar: a parameter slot, a local declaration (its
@@ -213,10 +209,13 @@ final class InlineMethod {
 	 * inside a subtree walk and derives it once.
 	 */
 	private static function argText(source: String, arg: QueryNode, parenFreeRoots: Array<String>): Null<String> {
-		final sp: Null<Span> = arg.span;
-		if (sp == null) return null;
-		final raw: String = source.substring(sp.from, sp.to);
-		return parenFreeRoots.contains(arg.kind) ? raw : '($raw)';
+		final raw: Null<String> = SourceText.nodeText(arg, source);
+		return if (raw == null)
+			null
+		else if (parenFreeRoots.contains(arg.kind))
+			raw
+		else
+			'($raw)';
 	}
 
 	/** Count identifier nodes named `name` in `node`'s subtree. */
@@ -332,34 +331,6 @@ final class InlineMethod {
 		}
 		walk(arg);
 		return pure;
-	}
-
-	/**
-	 * The span of bytes to delete for the decl: its whole owned lines —
-	 * back over the leading indentation to the previous line break and
-	 * forward over the trailing line break — but ONLY when the decl owns
-	 * those line edges (whitespace-only before `from` on its first line,
-	 * whitespace-only after `to` on its last line). Otherwise the decl
-	 * shares a line with other code and null is returned so the caller
-	 * refuses rather than corrupt that text. Mirrors `Inline`'s
-	 * single-line `computeDeclDeleteSpan`, which generalises unchanged to a
-	 * multi-line member (only the first-line prefix and last-line suffix
-	 * are checked).
-	 */
-	private static function memberDeleteSpan(source: String, declSpan: Span): Null<Span> {
-		final from: Int = declSpan.from;
-		final to: Int = declSpan.to;
-
-		var lineStart: Int = from;
-		while (lineStart > 0 && source.charAt(lineStart - 1) != '\n') lineStart--;
-		for (i in lineStart ... from) if (!isSpace(source.fastCodeAt(i))) return null;
-
-		var lineEnd: Int = to;
-		while (lineEnd < source.length && source.charAt(lineEnd) != '\n') lineEnd++;
-		for (i in to ... lineEnd) if (!isSpace(source.fastCodeAt(i))) return null;
-		if (lineEnd < source.length && source.charAt(lineEnd) == '\n') lineEnd++;
-
-		return new Span(lineStart, lineEnd);
 	}
 
 	/**
@@ -484,7 +455,7 @@ final class InlineMethod {
 		}
 
 		// Delete the now-dead declaration (its whole owned lines).
-		final deleteSpan: Null<Span> = memberDeleteSpan(source, target.declSpan);
+		final deleteSpan: Null<Span> = ElementSpan.ownedLinesSpan(source, target.declSpan);
 		if (deleteSpan == null) return Err('"$name" declaration shares its line with other code — cannot inline cleanly');
 		edits.push({ span: deleteSpan, text: '' });
 

@@ -1,6 +1,7 @@
 package anyparse.format.comment;
 
 import anyparse.format.WriteOptions;
+import anyparse.runtime.CommonPrefix;
 
 using StringTools;
 
@@ -125,17 +126,9 @@ class LineCommentNormalizer {
 			final b: String = run[k].substr(2);
 			if (!isNormalizable(b)) continue;
 			final ws: String = leadingWhitespace(b);
-			common = common == null ? ws : commonPrefix(common, ws);
+			common = common == null ? ws : CommonPrefix.of(common, ws);
 		}
 		return common ?? '';
-	}
-
-	/** Character-wise literal longest common prefix of two strings. */
-	private static function commonPrefix(a: String, b: String): String {
-		final max: Int = a.length < b.length ? a.length : b.length;
-		var i: Int = 0;
-		while (i < max && a.fastCodeAt(i) == b.fastCodeAt(i)) i++;
-		return a.substr(0, i);
 	}
 
 }

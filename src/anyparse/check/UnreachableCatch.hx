@@ -6,7 +6,6 @@ import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
-import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
@@ -58,10 +57,7 @@ final class UnreachableCatch implements Check {
 		final kind: String = catchClauseKind;
 		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
 		final catchAll: Array<String> = shape.catchAllTypeNames ?? [];
-		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
-		if (provider == null) return [];
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
-		return RunScan.collectWith(files, plugin, provider, (entry, tree, typed, violations) -> {
+		return RunScan.collectTyped(files, plugin, (entry, tree, typed, index, violations) -> {
 			final importMap: Map<String, String> = typed.importMap(entry.source);
 			function walk(node: QueryNode): Void {
 				if (opaqueKinds.contains(node.kind)) return;

@@ -3,7 +3,9 @@ package anyparse.query;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
+import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
+import haxe.Exception;
 
 using Lambda;
 
@@ -20,6 +22,24 @@ enum CollectResult {
 
 	COk(sites: Array<QueryNode>);
 	CErr(message: String);
+
+}
+
+/** The function a cursor resolves to, with the tree it lives in and the name it was resolved by. */
+typedef CursorFn = {
+	final tree: QueryNode;
+	final decl: QueryNode;
+	final name: String;
+};
+
+/**
+ * Outcome of `CallSites.resolveFnAtCursor`: the resolved function, or the diagnostic the calling op reports
+ * verbatim (an unparseable source, a cursor on nothing named, a name that binds to no declaration).
+ */
+enum CursorFnResult {
+
+	FnAt(fn: CursorFn);
+	FnAtErr(message: String);
 
 }
 
@@ -70,6 +90,30 @@ enum CollectResult {
  */
 @:nullSafety(Strict)
 final class CallSites {
+
+	/**
+	 * Parse `source` and resolve the function whose declaration or bare call is at `line:col` (1-based, as
+	 * `apq refs` prints them) — the prologue `ChangeSig` and `RemoveParam` share, so the two cannot drift in
+	 * what they accept. The kind check on the resolved declaration stays with the caller: its message names
+	 * the op.
+	 */
+	public static function resolveFnAtCursor(source: String, line: Int, col: Int, plugin: GrammarPlugin, shape: RefShape): CursorFnResult {
+		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return FnAtErr(
+			'source does not parse: $exception'
+		)
+		catch (exception: Exception) return FnAtErr('source does not parse: ${exception.message}');
+		final cursor: Int = Span.offsetOf(source, line, col);
+		final node: Null<QueryNode> = RefactorSupport.resolveCursorNode(tree, cursor, source);
+		if (node == null) return FnAtErr('position $line:$col is not on a function or a call');
+		final targetName: Null<String> = node.name;
+		if (targetName == null) return FnAtErr('position $line:$col is not on a function or a call');
+		final name: String = targetName;
+		final declNode: Null<QueryNode> = resolveFnDecl(node, tree, name, shape);
+		if (declNode == null) return FnAtErr('could not resolve a function binding for "$name" at $line:$col');
+		// Re-bound to non-null locals: the narrowing does not reach into the struct literal.
+		final decl: QueryNode = declNode;
+		return FnAt({ tree: tree, decl: decl, name: name });
+	}
 
 	/**
 	 * The function declaration node the cursor identifies. When the cursor

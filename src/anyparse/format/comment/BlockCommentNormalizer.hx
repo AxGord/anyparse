@@ -5,6 +5,7 @@ import anyparse.core.Doc;
 import anyparse.format.CommentStyle;
 import anyparse.format.IndentChar;
 import anyparse.format.WriteOptions;
+import anyparse.runtime.CommonPrefix;
 
 using StringTools;
 
@@ -97,7 +98,7 @@ class BlockCommentNormalizer {
 			// not interior content. Its ws represents the wrap's structural
 			// indent, not the comment body's indent depth.
 			if (i == last) continue;
-			commonPrefix = commonPrefix == null ? ws : commonPrefixOf(commonPrefix, ws);
+			commonPrefix = commonPrefix == null ? ws : CommonPrefix.of(commonPrefix, ws);
 		}
 		final commonLen: Int = (commonPrefix ?? '').length;
 		final closingWs: String = lines[last].ws;
@@ -308,7 +309,7 @@ class BlockCommentNormalizer {
 			final body: String = lines[i].body;
 			if (body.length == 0) continue;
 			final ws: String = lines[i].ws;
-			commonPrefix = commonPrefix == null ? ws : commonPrefixOf(commonPrefix, ws);
+			commonPrefix = commonPrefix == null ? ws : CommonPrefix.of(commonPrefix, ws);
 		}
 		final cp: String = commonPrefix ?? '';
 		final cpLen: Int = cp.length;
@@ -369,13 +370,6 @@ class BlockCommentNormalizer {
 
 		docs.push(Text('*/'));
 		return Concat(docs);
-	}
-
-	private static function commonPrefixOf(a: String, b: String): String {
-		final lim: Int = a.length < b.length ? a.length : b.length;
-		var j: Int = 0;
-		while (j < lim && a.fastCodeAt(j) == b.fastCodeAt(j)) j++;
-		return a.substr(0, j);
 	}
 
 	/**
@@ -547,7 +541,7 @@ class BlockCommentNormalizer {
 		for (i in 0...lines.length) if (i != 0 || !excludeFirstInline) {
 			final line: StrippedLine = lines[i];
 			if (line.marker || line.content.length == 0) continue;
-			commonPrefix = commonPrefix == null ? line.ws : commonPrefixOf(commonPrefix, line.ws);
+			commonPrefix = commonPrefix == null ? line.ws : CommonPrefix.of(commonPrefix, line.ws);
 		}
 		return (commonPrefix ?? '').length;
 	}

@@ -15,6 +15,16 @@ import anyparse.runtime.Span;
 using Lambda;
 using StringTools;
 
+/** A catch clause's header bytes and the offsets its region readers decode — see `CatchDynamic.catchHeader`. */
+private typedef CatchHeader = {
+	final start: Int;
+	final header: String;
+	final open: Int;
+	final colon: Int;
+	final close: Int;
+	final body: QueryNode;
+};
+
 /**
  * Flags a `catch` clause whose declared exception type is `Dynamic` (or `Any`) — a raw
  * catch-all. The user's rule: use `catch (exception:Exception)`, NOT `catch (e:Dynamic)`.
@@ -207,6 +217,30 @@ final class CatchDynamic implements Check implements ConfigAware implements Vers
 	}
 
 	/**
+	 * The header source of a catch clause — `[span.from, body.from)` — with the offsets of its `(`, first `:` and
+	 * last `)` (each -1 when absent) and its body node; null when the clause or its body carries no span. The
+	 * decoding both region readers share, so a typed and a bare clause are read off the same bytes.
+	 */
+	private static function catchHeader(catchNode: QueryNode, source: String): Null<CatchHeader> {
+		final cs: Null<Span> = catchNode.span;
+		final kids: Array<QueryNode> = catchNode.children;
+		if (cs == null || kids.length == 0) return null;
+		final bodyNode: QueryNode = kids[kids.length - 1];
+		final body: Null<Span> = bodyNode.span;
+		if (body == null) return null;
+		final start: Int = cs.from;
+		final header: String = source.substring(start, body.from);
+		return {
+			start: start,
+			header: header,
+			open: header.indexOf('('),
+			colon: header.indexOf(':'),
+			close: header.lastIndexOf(')'),
+			body: bodyNode
+		};
+	}
+
+	/**
 	 * The `(var:Type)` parameter region of a catch clause, decoded from the header
 	 * source `[span.from, body.from)`: its `from:to` span, the bound variable name, the
 	 * simple nominal type name, and the body node. Null when the clause is untyped (no
@@ -220,25 +254,15 @@ final class CatchDynamic implements Check implements ConfigAware implements Vers
 		typeName: String,
 		body: QueryNode
 	}> {
-		final cs: Null<Span> = catchNode.span;
-		final kids: Array<QueryNode> = catchNode.children;
-		if (cs == null || kids.length == 0) return null;
-		final bodyNode: QueryNode = kids[kids.length - 1];
-		final body: Null<Span> = bodyNode.span;
-		if (body == null) return null;
-		final start: Int = cs.from;
-		final header: String = source.substring(start, body.from);
-		final open: Int = header.indexOf('(');
-		final colon: Int = header.indexOf(':');
-		final close: Int = header.lastIndexOf(')');
-		if (open == -1 || colon == -1 || close == -1 || close <= colon) return null;
-		final typeName: Null<String> = TypeResolver.simpleNominalName(header.substring(colon + 1, close));
+		final h: Null<CatchHeader> = catchHeader(catchNode, source);
+		if (h == null || h.open == -1 || h.colon == -1 || h.close == -1 || h.close <= h.colon) return null;
+		final typeName: Null<String> = TypeResolver.simpleNominalName(h.header.substring(h.colon + 1, h.close));
 		return typeName == null ? null : {
-			from: start + open,
-			to: start + close + 1,
-			varName: header.substring(open + 1, colon).trim(),
+			from: h.start + h.open,
+			to: h.start + h.close + 1,
+			varName: h.header.substring(h.open + 1, h.colon).trim(),
 			typeName: typeName,
-			body: bodyNode
+			body: h.body
 		};
 	}
 
@@ -249,20 +273,10 @@ final class CatchDynamic implements Check implements ConfigAware implements Vers
 	 * can't be found, or the enclosed text is empty (defensive; the grammar always supplies a name).
 	 */
 	private static function catchBareRegion(catchNode: QueryNode, source: String): Null<{ from: Int, to: Int, varName: String }> {
-		final cs: Null<Span> = catchNode.span;
-		final kids: Array<QueryNode> = catchNode.children;
-		if (cs == null || kids.length == 0) return null;
-		final bodyNode: QueryNode = kids[kids.length - 1];
-		final body: Null<Span> = bodyNode.span;
-		if (body == null) return null;
-		final start: Int = cs.from;
-		final header: String = source.substring(start, body.from);
-		final open: Int = header.indexOf('(');
-		final colon: Int = header.indexOf(':');
-		final close: Int = header.lastIndexOf(')');
-		if (open == -1 || close == -1 || close <= open || colon != -1) return null;
-		final varName: String = header.substring(open + 1, close).trim();
-		return varName.length == 0 ? null : { from: start + open, to: start + close + 1, varName: varName };
+		final h: Null<CatchHeader> = catchHeader(catchNode, source);
+		if (h == null || h.open == -1 || h.close == -1 || h.close <= h.open || h.colon != -1) return null;
+		final varName: String = h.header.substring(h.open + 1, h.close).trim();
+		return varName.length == 0 ? null : { from: h.start + h.open, to: h.start + h.close + 1, varName: varName };
 	}
 
 	/**

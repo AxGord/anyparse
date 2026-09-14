@@ -272,6 +272,7 @@ final class ProseClaimCensusTest extends Test {
 		'unit.query.BodySlotGuardSliceTest#testAllowsWholeBracelessIfRemoval :: control',
 		'unit.query.BodySlotGuardSliceTest#testStatementBodyRefusalAdvisesBraces :: control,base',
 		'unit.query.CachingGrammarPluginTest#testProjectionsUnchangedByTheSharedRoot :: vacuity',
+		'unit.query.CallSitesTest#testResolveFnAtCursorFindsTheDeclarationFromEitherEnd :: base',
 		'unit.query.CliAtomicWriteSliceTest#testAChangeSetIsWrittenWholeOrNotAtAll :: base',
 		'unit.query.CliAtomicWriteSliceTest#testAReadOnlyFileIsStillRefused :: base',
 		'unit.query.CliAtomicWriteSliceTest#testAStagingFailureLeavesTheTargetUntouched :: base',

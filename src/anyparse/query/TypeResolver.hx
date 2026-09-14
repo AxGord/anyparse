@@ -108,6 +108,15 @@ final class TypeResolver {
 	}
 
 	/**
+	 * The `TypeInfoMemo.declaredTypeSources` thunk for `plugin` — the span→written-type-source table the ident-type
+	 * resolvers consume, computed on first call and cached; a plugin that is not a `TypeInfoProvider` yields the
+	 * empty map. Shared by every check that threads `declaredTypeSources` into `identDeclaredTypeSource`.
+	 */
+	public static inline function memoizedDeclaredTypeSources(plugin: GrammarPlugin, source: String): () -> Map<Int, String> {
+		return TypeInfoMemo.declaredTypeSources(plugin is TypeInfoProvider ? cast plugin : null, source);
+	}
+
+	/**
 	 * True when `faNode` (a field-access node) is a provably side-effect-free read.
 	 * Three resolved receivers: an anonymous-struct value (fields can't be getters);
 	 * a local/param of a class/abstract type whose member `field` is a plain member;
@@ -831,27 +840,6 @@ final class TypeResolver {
 	}
 
 	/**
-	 * A lazily-memoized accessor for `plugin`'s `TypeInfoProvider.declaredTypeSources(source)`
-	 * map — the span→written-type-source table the ident-type resolvers consume. Returns a
-	 * thunk that computes the map on first call and caches it, so a caller that never reaches
-	 * the resolution path never pays for the parse, and a `plugin` that is not a
-	 * `TypeInfoProvider` yields the empty map. Shared by every check that threads
-	 * `declaredTypeSources` into `identDeclaredTypeSource`.
-	 */
-	public static function memoizedDeclaredTypeSources(plugin: GrammarPlugin, source: String): () -> Map<Int, String> {
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
-		var cache: Null<Map<Int, String>> = null;
-		return function(): Map<Int, String> {
-			final existing: Null<Map<Int, String>> = cache;
-			if (existing != null) return existing;
-			final p: Null<TypeInfoProvider> = provider;
-			final computed: Map<Int, String> = p != null ? p.declaredTypeSources(source) : [];
-			cache = computed;
-			return computed;
-		};
-	}
-
-	/**
 	 * The `valueDeclarationKinds` subset whose declaration binds into the ENCLOSING statement list
 	 * — the statement-position locals with their expression and `static` twins, and the LOCAL
 	 * FUNCTION forms (a bare read of one is a closure read, not a member read). Public because
@@ -903,7 +891,6 @@ final class TypeResolver {
 		return MemberKinds.TYPE_DECL_KINDS.contains(kind) || kind == 'FinalDecl';
 	}
 
-
 	/**
 	 * Every node kind that DECLARES a value binding in `shape` — `blockScopedValueDeclarationKinds`
 	 * plus the parameter kinds, the self-scoped binders (a `for` iterator, a catch exception) and a
@@ -916,7 +903,6 @@ final class TypeResolver {
 			.concat(shape.selfScopeDeclKinds)
 			.concat(shape.iterationValueBinderKinds ?? []);
 	}
-
 
 	/**
 	 * The hit the reference walk emitted for the occurrence of `name` at `refSpan`, or null when
