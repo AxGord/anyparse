@@ -80,7 +80,7 @@ decided the question; it may not become a record of runs.
   identical names; that population is STRUCTURAL (a run of nothing but local declarations has no
   extraction value under either reading), not a threshold question — and a statement-count floor
   keeps logic and declaration runs in the same proportion, so it does not separate them either —
-  `S222-merge`
+  `c9fbce70`
 - the writer's de-brace support was to move its two `'ExprBody'` literals onto
   `RefShape.expressionBodyKinds`, beside the siblings that went there → there is no `QueryNode`,
   `GrammarPlugin` or `RefShape` at the writer layer (the values are the writer's own enums,
