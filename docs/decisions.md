@@ -507,4 +507,4 @@ decided the question; it may not become a record of runs.
   → the helper still leaves a null test at every site and turns two locals into field reads
   across bodies that read `name` a dozen times, so the gate stays spelled inline; the same
   verdict covers the seam ladders (`final k = shape.x; if (k == null) return null;` runs), which
-  Haxe cannot fold without struct spread — merge of `batch/hxqb-S219`
+  Haxe cannot fold without struct spread — `9955d66c`
