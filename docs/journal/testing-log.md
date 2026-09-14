@@ -1,0 +1,4323 @@
+# Testing journal
+
+> **Journal, not contract.** Every number here is a reading of one tree at one moment; the
+> contract lives in [`docs/testing.md`](../testing.md). Each block is the ORIGINAL text of a paragraph
+> that the reference condensed or dropped, moved verbatim under the section it was written in
+> (`From § …` names that section by its heading at the time), in the original order, so
+> `git log -S` and the ledger's citations still resolve (the one edit: a link to a sibling doc
+> gains `../`, and a same-file `#anchor` gains `../<reference>.md`, since this file lives one
+> directory down). A `§` pointer inside moved text names a heading of the reference
+> (`docs/testing.md`), not of this file. Nothing here is a norm, and nothing here is auto-loaded.
+
+## From § (the preamble above the first heading)
+
+Testing a parser platform is not the same as testing application code. A grammar must behave correctly on inputs its author never thought of, and a writer must produce output that the parser can round-trip. Unit tests alone are insufficient. This document describes the six-layer testing strategy that anyparse adopts.
+
+## From § Layer 1: utest unit tests › Which package answers which layer
+
+`test/unit/` was ONE package holding 780 modules. It is now laid out to mirror
+`src/anyparse/*`: **a test class lives in the `unit.<pkg>` that mirrors the
+`anyparse.<pkg>` it primarily exercises.** 795 registered classes (regenerate
+this table with `node bin/test.js --list-classes`, never by hand — the total
+below is the sum of the column and both go stale within a slice):
+
+| package | classes | mirrors | layer |
+|---|---:|---|---|
+| `unit.grammar.haxe` | 346 | `anyparse/grammar/haxe` (+ `checkstyle`, `format`) | 1, 3 — the Haxe grammar, its trivia and its writer |
+| `unit.check` | 256 | `anyparse/check` (+ `config`) | 1 — the analysis/check framework and every rule |
+| `unit.query` | 115 | `anyparse/query` (+ `format`) | 1 — the hxq engine: ops, addressing, symbol index, resolution |
+| `unit.cli` | 41 | `anyparse/query/Cli` | **6 — end-to-end**: a test that drives `Cli.run` on a temp file |
+| `unit.format` | 8 | `anyparse/format` (+ `wrap`, `comment`, `text`, `binary`) | 1, 3 |
+| `unit.lowering` | 8 | `anyparse/macro` (+ `strategy`) | 1 — `macro` is a Haxe keyword, so the package is `lowering` |
+| `unit.grammar` | 5 | `anyparse/grammar/{json,ar,sexpr}` | 1, 3 — the small grammars |
+| `unit.core` | 4 | `anyparse/core` | 1 — the Doc IR and its renderer |
+| `unit.runtime` | 3 | `anyparse/runtime` | 1 |
+| `unit` (root) | 9 | — | INTEGRATION and suite hygiene, listed below |
+
+Two package dirs carry no test class and stay where they are: `unit.miniblock`
+and `unit.miniblockstrict` are the mini grammars the Star-primitive tests parse.
+
+**The root is the residue, and it is named.** Nine registered classes plus five
+helper modules stay in `unit` because they answer to no single package:
+`DeadTestGuardTest` and `TestDiscoveryParityTest` (suite hygiene — they read
+`test/` itself), `MutationArmsTest`, `MutationArmAddressTest` and
+`ProseClaimCensusTest` (the same, over the arm registry, the arms' addresses and
+the prose-claim census), `DiscoveryOnlyProbeTest` (the pin that no hand-written
+line may name), `LexicalRegionAgreementTest` (asserts that the grammar's regions
+and the query layer's AGREE — moving it to either would name a side),
+`ExtensionMethodsExtractionTest` (the same, across `grammar.haxe` and `query`)
+and `SpanModeProbe` (a span probe that is also a fixture for both); plus
+`SourceTree`, `BuildDefines`, `CheckFixture`, `QueryTestHelpers` and `SeamEdit`,
+helper modules shared by tests in several packages.
+
+**What the layout buys.** `APQ_TEST` is a substring filter over the
+fully-qualified name, so the package prefix IS a selector:
+`APQ_TEST=unit.check. node bin/test.js` runs every check test and nothing else;
+`unit.cli.` runs the end-to-end layer alone. `apq shard-plan` can be given a
+package-scoped class list the same way. And `apqlint.json` discovery folds the
+whole chain nearest-first, so a package may now carry its own config relaxing a
+key for that family only, instead of the root config carrying an exemption that
+applies to all 780 files.
+
+## From § Layer 3: Property round-trip tests
+
+Already in place: `test/unit/grammar/JsonRoundTripTest.hx` with ~30 curated cases plus 200 randomly generated ones (both write and parse go through the macro-generated pipeline).
+
+## From § Layer 5: Benchmarks
+
+Neko is not a benchmark target: the neko build of the CLI compiles but its
+artifact dies at module load (measured 2026-08-17). `--jvm` builds and runs
+the core fine, but it is a portability probe, not a delivery target.
+
+## From § Layer 5: Benchmarks › The profiling harness
+
+`tools/ParseProf.hx` is the one that exists today. It builds straight out of
+`src/` with the flags the shipped CLI uses, so what you profile is the codegen
+that ships:
+
+The native twin is `tools/bench-hxcpp.hxml`. Point `HXCPP_COMPILE_CACHE` at a
+persistent directory or every build is a cold ~40 s instead of an incremental
+~12 s, and pass the binary to `tools/bench-ab.sh` as any other arm — an arm
+path that does not end in `.js` is executed directly instead of under `node`:
+
+There is no `--cpu-prof` on a native binary; the equivalent is macOS `sample`,
+and it needs symbols the release link strips. Rebuild the SAME objects with
+`-D no_gcc_strip` into a scratch output — the compile cache makes it a relink,
+so the code being sampled is the code that was timed — then sample the run:
+
+Read the capture per THREAD: hxcpp runs parallel GC threads whose idle
+`__psynch_cvwait` swamps the flat "sort by top of stack" list, so self time has
+to come from the main thread's call-graph subtree (node count minus the sum of
+its children). Frames inside the executable print as `??? + 0x<offset>`; resolve
+them against `nm -n` with a `0x100000000` base.
+
+## From § Layer 5: Benchmarks › Reading a capture: `tools/ProfTop.hx`
+
+No build step — it is a `--run` script over the std library, which is where the
+language policy puts standalone logic. (`--interp` does not work: it eats the
+trailing arguments as its own.) Self time comes from `samples` + `timeDeltas`
+rather than `hitCount`, so a capture taken with a custom `--cpu-prof-interval`
+still reports real microseconds. `--under <fn>` narrows the rollup to samples
+whose stack passes through a frame of that name, which is how one phase of a
+multi-phase harness gets attributed; it matches the rendered row label
+(`functionName  [file]`), and Haxe class names do not survive into JS frame
+names, so `--under phaseWrite` works where `--under CompilerServer` matches
+nothing.
+
+**`spawnSync` and friends are BLOCKED WAIT, not CPU.** A profile samples
+whatever frame is on the stack, and a synchronous child-process call sits there
+for the whole child's lifetime — `spawnSync` at 54.6% means "we waited on
+children for 54.6% of the run". That is worth knowing and it is not our CPU:
+optimising our own code cannot shrink it. Both of the largest wins of
+2026-08-18 came from reading it that way (the warm compiler server bought
+nothing; a single-file lint was paying for a project-wide typecheck), and
+reading it as CPU would have sent the work into the analyser instead.
+
+Read a profile for SHARES and take deltas from a separate unprofiled run:
+`--cpu-prof` overhead is not uniform across trees (+7% anyparse, +15% TM), so a
+profiled before/after pair is not a delta.
+
+## From § Proving a comment-only change inert: the build is NOT a byte oracle
+
+A change that touches only comments should leave the compiled output alone, and the obvious way to show it is to build both revisions and `cmp` them. That does not work here, and the failure is silent: **the Haxe build is not reproducible.** Rebuilding the SAME tree twice moves the `-D analyzer-optimize` switch-arm grouping, so `bin/test.js` and `bin/apq.js` each differ from themselves. An equal pair of revisions is one lucky draw, not a proof — and an unequal pair proves nothing either.
+
+## From § Mutation checks: testing the tests
+
+The six layers all answer the same question from different angles: does the code do what it is supposed to do? A mutation check asks the inverted question: if the code *stopped* doing it, would anything go red?
+
+That question has to be asked separately, because a green suite is not evidence that the suite covers anything. A mechanism can be exercised by no fixture at all and still sit inside a passing run — every test that touches the file happens to take another branch, or asserts on a property the mechanism does not affect. The suite reports success, the coverage number looks fine, and the mechanism is a vacuum: it can be deleted, inverted, or quietly broken by an unrelated refactor and nothing will say so. The only reliable way to find such a vacuum is to break the mechanism on purpose and watch what the suite does.
+
+## From § Mutation checks: testing the tests › The runner
+
+Each *track* in the manifest is one deliberate breakage. The runner gives every track its own git worktree checked out from `HEAD`, applies the track's patch there, builds a private test runner into a private workdir (`tools/worker-build.sh`, see "Parallel tracks" below), runs the requested slice of the suite with the CWD set to that worktree, and classifies the transcript. Tracks run in parallel; `--jobs` defaults to `max(1, min(4, cores/2))`, and an explicit `--jobs` must evaluate to a positive integer (`0` — and `00`, and any other spelling of zero — is rejected rather than clamped, since `xargs -P 0` means unbounded).
+
+Because worktrees come from `HEAD`, uncommitted work in the main tree is invisible to a track. That is deliberate — a track measures a named commit plus one patch, not whatever happens to be lying around — but it means a mutation aimed at uncommitted code has to be committed first, or folded into the patch.
+
+## From § Mutation checks: testing the tests › Manifest format
+
+The patch is a `git diff` rather than a script or a sed expression because the worktree is created from `HEAD`: a diff taken against `HEAD` applies there deterministically, and authoring a track needs no new tooling. Break the mechanism in the main tree, `git diff > x.patch`, revert, add a manifest line.
+
+**Give every track a narrow `APQ_TEST` filter.** A track with `ALL` pays the entire suite for one mutation, and drags in cases whose outcome depends on the environment rather than on the mutation — most notably the corpus harness, which only runs when `ANYPARSE_HXFORMAT_FORK` is set. A filter naming the one or two classes that are supposed to catch the breakage keeps a track at seconds and keeps its verdict about the mutation.
+
+## From § Mutation checks: testing the tests › Verdicts
+
+`SURVIVED` is deliberately stricter than "nothing failed". utest computes `isOk = !(hasFailures || hasErrors || hasWarnings)`, and it auto-adds a `Warning('no assertions')` to any test method that completes without asserting. So a mutation that makes a test stop asserting produces `failures: 0, warnings: 3` and a red run — which a scan for `FAILURE`/`ERROR` rows alone would have reported as a survivor, in the one direction where a wrong answer costs the most. The verdict therefore comes from the header line, and the per-class rows are used only to *name* what went red. A marker the classifier does not recognise leaves a red run unnamed, which surfaces as `RUN-FAIL`, never as `SURVIVED`.
+
+**The classifier is `apq mutation-verdict`, not the script.** `tools/mutation-check.sh` shells out to it and does nothing with the transcript itself:
+
+```sh
+apq mutation-verdict <transcript> [--expect <csv>]   # line 1: verdict, line 2: row detail
+```
+
+It used to carry its own ~130-line awk implementation, which was a *second* utest transcript parser — `apq test-summary` had done that job for longer than the script has existed, and `tools/suite-shard.sh` reuses it precisely so a divergent copy cannot grow. One grew anyway, and the price is on record: both fixes `fdb44864` ("a red run can no longer be reported `SURVIVED`") and `ff3f20ae` ("find the utest header by *shape*") were bugs in the duplicate, 316 changed lines apart, and neither was reachable by a test, because a shell function is not testable. The Haxe classifier is pure over `TestSummaryResult` and covered by `test/unit/query/MutationVerdictTest.hx`.
+
+Two consequences worth knowing. The classifier runs from the **main** tree, never from the track's own build — a track's engine is compiled from the *mutated* source, so a mutation reaching the transcript parser would otherwise grade its own homework; `mutation-check.sh` therefore refuses to start when `bin/apq.js` is missing. And the `--expect` exit code answers *"could this be classified"*, not *"what was the verdict"*: every verdict, `RUN-FAIL` included, exits 0.
+
+Failures *beyond* the expectations do not demote `KILLED` to `MISMATCH`; they are listed on the row as `+extra: …`. A track asks whether the suite notices, and a wider blast radius still answers yes — the extras are reported because they are useful signal about coupling, not because they are a defect.
+
+Exit code: 0 only when every track is `KILLED`. Any other verdict exits 1, so a manifest can guard a mechanism in CI.
+
+The report is one row per track in manifest order, followed by a summary and the workroot path:
+
+The two figures on a row are in different units on purpose: the count of failing *test methods* against the total *assertions* utest reported, since that total is the only run-size figure the header carries — once a run goes red utest stops listing the passing tests, so there is no test-level total to divide by. The name list is capped at the first ten, with `…+N more`; the full set — every list uncapped, not just a re-parse of the raw utest dump — is appended to the track's own transcript whenever the cap actually elided something (T703), and the workroot path points at it.
+
+## From § Mutation checks: testing the tests › Declared arms — the pin metadata's other half
+
+`@:pin('control')` names what a fixture is FOR and `@:killer('<arm>')` names the mutation that must break it, and `testkit.TestDiscovery` refuses to build a control that names no arm. That checks the SHAPE. The name itself was free text: nothing said the arm existed, still addressed live code, or still killed anything — which is the "proof that proves nothing" the metadata was introduced to end, one level down.
+
+`test/testkit/mutation-arms.json` is the registry. One record per arm, naming the type, the member and the cut:
+
+A cut is one of two shapes, and a record must declare exactly one:
+
+- **`force`** — `return <force>;` spliced directly after the member's signature, leaving the rest of the body as dead code. This is the shape S94 ran twenty-two of, and it is roughly a third of the registry — read the split off `node bin/test.js --list-arms` rather than out of this line, which has gone stale once already.
+- **`find`** / **`replace`** — a text fragment replaced inside the member, for a cut a constant cannot express: restoring a removed veto, flipping a precedence, collapsing one classifier code into another. `replace` may be empty, which deletes the fragment. Each of the two is **one string or a LIST of them, of equal length** — see the schema note below.
+
+Both are `hxq patch --select 'FnMember:<method>'` payloads, which is the point: an arm survives every edit that does not rename its member. A stored line number, or a checked-in git patch, does not.
+
+**A fragment cut is N pairs, not one — and the payload always was.** `find` and `replace` each take a string or an array of strings, and an array becomes N `old ==== new` sections in ONE `hxq patch` call (`Patch.patchNodeMany`, which the CLI has driven all along). Every pair is located against the **original** member text, never against what an earlier pair produced, so the list is order-independent and the call is all-or-nothing. `MutationArms.rowErrors` refuses, BY NAME: two lists of different lengths, a pair whose `replace` is its own `find`, an array with no entry in it, a blank fragment inside one, an entry that is not a string, and `force` beside either spelling of `find`. The first two are `Patch`'s own run-time refusals answered at BUILD time instead — both are pure over the two lists the row already carries. The one refusal deliberately left to the run is OVERLAPPING matched ranges: that needs `locate`'s positions, so it needs the tree, and the runner already names it loudly. `unit.MutationArmAddressTest#testEveryFragmentArmStillCutsItsNode` asks the exactly-once question **per pair** and names the pair that rotted (`… pair 2: the stored fragment occurs 0 time(s) …`); `--list-arms` renders a multi-pair cut as `N fragments` and leaves the one-pair `fragment` word alone, which is what keeps every existing row byte-unchanged.
+
+**How much of the registry wanted this, measured on `51ee9584` over 229 arms (161 fragment / 68 force).** A line-level diff of each `find` against its `replace` finds **3** arms whose fragment carries UNCHANGED text purely to bridge two disjoint edits — `M-CLI-COMMANDS-MEMOISED`, `M-CLI-REQUIREMATCH-STATIC`, `M-SSB-FRAME-BLANKET`. Rendering each as two pairs and running it says only the first two are simpler: both apply (`2 fragment pairs applied`), while `M-SSB-FRAME-BLANKET`'s split is REFUSED — `pair 2: the old fragment occurs 2 times`, because its closing `));` is unique only with the bridge standing. So the bridge is load-bearing in one of the three, and the honest number of "simpler as arrays" is **2 of 161**, both left as they are. The case that pays is the other one: a cut that MOVES a statement cannot be written as one pair at all, and `M-FANOUT-FIRST` is the arm that had to settle for something else because of it — its note asks for the `expressionIf` fanout to outrank the specific `comprehensionFor` key, and one pair could only GUARD the specific read (`&& section.expressionIf == null`) rather than permute the two statements. As two pairs it is the permutation: insert the read above `applyExpressionIfFanout`, delete it from below. Measured before re-encoding — the cut applied at `51ee9584`, the tree built, and `unit.grammar.haxe.HxComprehensionForBodyPolicySliceTest#testTheSpecificKeyOutranksTheExpressionIfFanout` was the single failure — so it is re-encoded; had the pin survived, the guard encoding would have stayed and this paragraph would say so.
+
+**Five build errors, all free.** `TestDiscovery` cross-checks the registry against the tree while it is already walking it:
+
+- a `@:killer` naming no declared arm, reported at the fixture's own position;
+- a declared arm no `@:killer` names — an arm exists to kill a pin;
+- a declared arm whose `type` no longer declares that `method`, asked of the COMPILER (`Context.getModule` plus a field lookup), not of the file's text;
+- a declared arm whose `type` names a module no classpath this build reads carries at all — distinct, since S102, from a module this build merely cannot SEE;
+- the registry file itself gone, which every `@:killer` in the tree resolves through.
+
+The third is the one nothing could catch before, because it needs no test run and no sweep — and it is the one that had already happened: S94 recorded that four of the `trivial-getter` lines its arm depends on had already been moved into `check/BackingFieldRefs.hx` by S74, so the dependency stood while the file it named did not.
+
+**The COMPILER cannot answer for macro-time code, and until S102 that REFUSED the arm.** `Context.getModule` types into the context being COMPILED, so a module whose every type sits behind `#if macro` — all 62 modules directly under `src/anyparse/macro/`, 71 with `strategy/` — contributes no type to the test build. The old check collapsed that with a module the classpath does not carry and reported `resolves to no class`, which made the entire macro-time half of the engine unaddressable by an arm: S100 wanted four arms against a `WriterLowering` writer seam and had to cut the config LOADER instead, and on `d86c958b` `anyparse.macro.*` held 0 of the 39 declared arms.
+
+Measured on `d86c958b`, with a probe compiled against `src`:
+
+| asked of | `Context.getModule` answers |
+|---|---|
+| `anyparse.macro.WriterLowering` | `ok, 0 type(s)` |
+| `anyparse.macro.Lowering` | `ok, 0 type(s)` |
+| `anyparse.macro.NoSuchModuleAtAll` | THREW `Type not found` |
+| `anyparse.query.TypeTraits` | `ok, 1 type(s): TInst(TypeTraits)` |
+
+Those are two different facts and separating them is the whole fix. A module the classpath does not carry still stops the build; an arm whose type is real but invisible here is DEFERRED — recorded in `TestRegistry.deferredArms()` and answered by `unit.MutationArmAddressTest`, which resolves the type to the file `tools/mutation-arm.sh` would patch and asks anyparse's own parser for a `FnMember:<method>`. The parser has no blind spot here: a `#if` region is a `Conditional` node whose branches are ordinary children. That walk also answers a question the build macro never asked at all — the runner resolves a type to a file by hand (`for root in src test`), and nothing checked that step either.
+
+A SECOND, unrelated reason lands an arm in that same census, and the passage above does not
+cover it: an arm that spells a `kind` is deferred whatever its module, because the build macro's
+member check asks the typer for a METHOD and a kinded arm does not address one. Three of the
+deferred entries are of this kind and nothing about them is macro-side —
+`M-CLI-COMMANDS-MEMOISED` and `M-CLI-REQUIREMATCH-STATIC` on `anyparse.query.cli`, and
+`M-SHORTEN-IMPORT-THRESHOLD-ONE` on a `FinalMember` constant in `anyparse.check`. So declaring a
+kinded arm costs a line in `testTheDeferredArmCensusNamesTheMacroModuleArms` as well as in the
+arm list, and only a suite RUN says so — `checkArms` does not.
+
+There is no build-macro route around the typer, and both dodges were measured rather than argued: `Context.defined('macro')` reads false inside a macro function during a js build, `Type.resolveClass` at macro runtime answers null for macro-side and runtime-side classes alike, and the obvious `@:build` on a type declared inside `#if macro` is a compiler refusal in as many words — `You cannot use @:build inside a macro`.
+
+The trade is that a macro-module arm's member check moves from a build ERROR to a suite failure. That is not the "declared but unverified" class S96 refused: the check is machine-run on every suite run, it is asked of the real parser rather than of prose, and the whole walk costs 0.42 s including node start-up — ~20 files, one of them `WriterLowering.hx` at 367 KB.
+
+**The FRAGMENT half is checked too now, and the sentence that said otherwise was wrong on both halves.** This section used to read "what the gate does NOT check is whether a FRAGMENT arm's `find` text still occurs: that is `anyparse.query.Patch`'s own matcher, and calling it per arm would run a canonical writer round-trip over every host file". There is no round-trip: `Patch.locate` matches inside the raw `ElementSpan.declEditSpan` slice and never reaches `CanonicalEdit.canonicalize`, which is the only thing that round-trips. S120 measured that and then shipped the check — `unit.MutationArmAddressTest#testEveryFragmentArmStillCutsItsNode` asks `Patch.occurrences` whether each fragment arm's stored text occurs exactly once inside its member's node, and the whole class runs in **0.36 s**. That closes the hole S118 fell into: `M-OPAQUE-REGION-NODE-SPAN` stopped applying when `daf1a095` refactored the member it cuts, and it built green for a whole slice because only the MEMBER was checked, never the fragment.
+
+Two facts the check paid for. **The matcher has to be `Patch`'s, not a substring test:** a plain `indexOf` gate would have wrongly failed **15 of 90** fragment arms, because stored fragments are copied out of `hxq show --select`, which DEDENTS its output — byte-exactness against the file is the exception, not the rule, and `Patch` is the component that already knows this (`references/ops.md`: leading indentation is not part of the match). And a **sixth arm-authoring blind spot**, alongside the five FORCE-renderer ones: a member declared on a SUB-MODULE type cannot be addressed at all. A record's `type` is read twice with two different meanings — as the class the typer resolves, and as the PATH of the file `tools/mutation-arm.sh` patches — and for a sub-module type those two disagree by construction.
+
+**And the FORCE half is checked now too — it was the last third of the registry with no walk at all.** `testEveryFragmentArmStillCutsItsNode` skips an arm with no fragment (`if (find == null) continue;`), so the 68 force arms had exactly one applicability test and it lived inside `tools/mutation-arm.sh`: it ran when the ARM ran. Measured on `bb84ef57`: with a deliberately rotted `find`, `haxe test-js.hxml` exits **0** — the build genuinely does not see it, which is the half of T665 that was true — while the suite reddens in **0.5 s** naming the arm, the type, the member and the reason, which is the half that had gone stale since S120. For force arms neither said anything.
+
+`testEveryForceArmStillOpensABodyToCutInto` asks the same question of the other 68: the member resolves to one node, that node opens a `BlockBody`, nothing but whitespace follows its brace on that line, and the header up to it occurs exactly once inside the member — that header being the fragment `apq patch` is then handed. **It asks the TREE, not a brace balancer.** The runner balances braces in a shell-embedded JS snippet because shell has no parser, and that arithmetic is what once sent a forced `return` inside a return type that opened a brace of its own (`Null<{ … }>`); the body node's span is the answer directly, and its KIND settles the two shapes that cannot be forced at all — an expression body and a bodyless declaration. The two derivations cannot drift quietly: a member the fixture accepts and the balancer misreads makes the runner refuse BY NAME.
+
+⚠️ **The gap it closes is LATENT, and that was measured before the fixture was written**, by mirroring the runner's apply step over every force arm against the current tree: **68 of 68 apply**. This buys a net, not a repair — the discriminating probe had to be constructed (repointing an arm at `GrammarPlugin#langName`, an interface method with no body: build **rc=0**, the new walk red). Two earlier probes did NOT discriminate and are worth knowing: an `ExprBody` hit from `hxq search` was a nested local function, not the member's own body, and a sub-module type (`NoAutofix`) fails at file resolution long before the body question.
+
+At the S126 merge the registry stands at **198 arms / 319 pins** over **796** registered classes, against **241** prose claims, and the arms split **134 fragment / 64 force**. Read them off the binary (`node bin/test.js --list-arms|--list-pins|--list-classes|--list-claims`) rather than out of this line — every one of the five moves within a slice or two.
+
+It renders each record into a patch inside a scratch worktree at `HEAD`, derives the expectation set from the arm's OWN pins in the generated registry — the pin metadata is where that pairing is declared, and one copy of a fact is enough — writes a manifest, and hands it to `tools/mutation-check.sh`. Nothing new classifies a transcript.
+
+**`HEAD` is a fixed point, and `--working-tree` (T694) is the escape hatch for authoring.** The registry itself (`test/testkit/mutation-arms.json`) is always read live off disk — `arm_pins`/`read_arm` never went through `HEAD` — so a brand-new, still-uncommitted arm record was never the problem. What a `HEAD`-based run cannot see is the SOURCE the arm cuts, when that source is itself still uncommitted: the render step (`hxq patch` inside `mutation-arm.sh`'s own scratch worktree) fails outright if the member the arm names does not exist yet at `HEAD`. S156 hit exactly this and verified the shape by hand — apply the `find`/`replace` cut directly on the working tree, rebuild, run the family, restore — because there was no automated path.
+
+`--working-tree` builds BOTH the render worktree (`mutation-arm.sh`'s own `$gen`) and every track worktree `mutation-check.sh` builds from a `git stash create` snapshot instead of `HEAD` (no stash-list entry, the real working tree untouched), falling back to `HEAD` on a clean tree — `mutation-arm.sh` passes the snapshot commit to `mutation-check.sh` via a new `--base <ref>` option so the two stay on the same base. Threading it through both scripts is not a nicety: a track built from plain `HEAD` while the manifest's patch carries context lines from the snapshot either `PATCH-FAIL`s outright, or — the quieter failure — applies cleanly while the track's `HEAD`-based tree is still missing whatever ELSE the snapshot carried (a new fixture the patch does not touch but the arm's own `@:killer` already names), which reads as a misleading `SURVIVED` or `NO-TESTS` for exactly the case the flag exists to make trustworthy.
+
+The flag refuses outright on any UNTRACKED file — `stash create` silently drops those, which is the one way it could make the verdict lie by itself — but it does NOT refuse on ordinary tracked, uncommitted changes beyond the cut, and that is a decision rather than an oversight: no predicate can tell "this uncommitted change is part of the cut" from "this one is unrelated" before the cut has been rendered to compare against, and authoring an arm beside its own feature is precisely the case the flag exists for. What it does instead is print every included change before the run, so the reading stays accountable.
+
+**The contract is "kills its own pin", not "kills exactly one test", and the existing verdicts already say which.** An arm cuts shared engine code, so collateral is inherent rather than a defect: measured on `18fc8e90`, `M-DECLARINGFILES-EMPTY` takes 326 fixtures down and `M-BUILDMACRO-TRUE` 280, while `M-KINDS` takes 3 and `M-ARM-ROW-OK` exactly its own 2.
+
+A `SURVIVED` or `MISMATCH` row is evidence about the FIXTURE, not noise to retry past: S86 deleted a helper because an arm survived the full suite, and S92 had two arms survive and rewrote the fixtures until they discriminated rather than hiding it. This slice's own first sweep produced one of each, and both were defects in the arm records rather than in the fixtures — `M-FANOUT-FIRST` SURVIVED because its cut ADDED a second read of the specific key while leaving the original in place, so the original still won; `M-PATHWALK-NULL` came back `BUILD-FAIL` because the member is `inline` and a forced return ahead of the body is a non-final return the compiler refuses (which is why S94 had hand-special-cased that one). Both are now `find`/`replace` cuts, and the second failure mode is why the registry has that shape at all.
+
+**Cost, measured on `08439aea` (2026-09-07) with 16 cores, `--jobs 4`.** The registry has grown past the point a
+full `--all` sweep is affordable to re-measure per doc update (this table went stale by an order of magnitude the
+last time it quoted one — T702), so the two `--all` rows are an EXTRAPOLATION from a real 12-arm sample, marked as
+such rather than presented as a full run:
+
+| Run | Wall | Verdicts |
+|---|---|---|
+| one arm, whole suite | 53 s | 1 killed |
+| one arm, `--fast` | 17 s | 1 killed |
+| 12 arms, whole suite, `--jobs 4` (measured) | 180 s | 12 killed |
+| 12 arms, `--fast`, `--jobs 4` (measured) | 68 s | 12 killed |
+| `--all` (248 arms), whole suite (extrapolated ×20.7) | ~62 min | — |
+| `--all --fast` (248 arms) (extrapolated ×20.7) | ~23 min | — |
+
+The extrapolation is linear in arm count on purpose, not a hedge: the architecture is N independent
+worktree-plus-build-plus-suite tracks processed in fixed-size `--jobs`-wide batches (`tools/mutation-check.sh`), not
+one process doing more work per arm — the risk profile "A T(2n)/T(n) Ratio Is Not Evidence of Superlinearity" warns
+about does not apply to a batch of independent, same-shaped jobs the way it would to a single growing computation.
+
+**Cadence: `--check-apply` while AUTHORING, `--all --fast` per WAVE, one arm on demand.** A cut is compiled BEFORE it is claimed — `tools/mutation-arm.sh <ARM> --check-apply` answers the one question no walk over the record and the tree can (§ "The five arm-authoring blind spots"), and it runs before the arm has a `@:killer`, which is what makes it an authoring step rather than a cheaper sweep. For the SWEEPS, the `--fast` variant is cheap enough to run at the end of a wave and the full whole-suite `--all` is not — reach for the WHOLE-SUITE form only before a release or when a refactor is supposed to have preserved a coupling, never as a routine per-wave gate at the current registry size. The build-time checks already catch the failure a sweep would otherwise be needed for (an arm pointing at a member that no longer exists), for free, on every build. Run a single arm when you add or edit a pin, which is the moment its claim is actually being made.
+
+**The scratch directory a run leaves behind is documented** — `anyparse-mutarm.*` and the `anyparse-mutcheck.*` it drives, kept on a non-KILLED verdict with the path printed, removed otherwise, and swept at startup once their owner pid is gone: § "Scratch directories: every tool's, and who removes them".
+
+**The whole-suite mode's flake had a mechanism, and it was never the compiler — FIXED (S150).** This section used to carry it as a standing caveat: N concurrent full-suite runs at `--jobs 4` put the oracle-driven CLI end-to-end fixtures under load and they flake there, 11 failure names appearing in one `--all` sweep of a tree and not the next. The recorded suspicion was the oracle — serialize the `haxe <hxml> --no-output` spawn across processes, or lock what the oracle reads. The compiler is not in it at all, and neither lock would have helped: **an in-process lock is vacuous by construction, and a cross-process one would have serialized the wrong thing.**
+
+Every one of those failures is an `ENOENT` on a `$TMPDIR/tmp_…` path. `unit.cli.CliFixture` names a fixture `tmp_<prefix>_<dir|fixture>_${Sys.time()}_$counter`, and neither half carries anything a SECOND process cannot produce: `counter` is a static, so it is unique within a process only, and `Sys.time()` on node is `Date.now() / 1000`, a millisecond clock. Two suite processes started together are lockstep copies of each other — the same classes in the same order — so their counters advance side by side and land in the same millisecond. Whole runs of names coincide, both processes write into ONE directory, and the first teardown deletes the other's fixture mid-test. The colliding counters seen in one pair of runs were 356, 358, 359, 361, 363, 365, 367, 390, 394, 398 and 402 — a narrow band rather than a scatter, which is the lockstep showing, and it is what turns a coincidence into a rate. The oracle-driven fixtures dominated the census for the reason they are the slowest — a fixture directory that stays alive across a `haxe` spawn is a window a sibling has a whole second to delete it in — which is exactly why the family read as "the oracle".
+
+The cut is the queue's second candidate at the only layer that covers every producer: `RunTests.main` calls `CliFixture.isolateTempDir()` before the first fixture is written and removes the root on completion. A per-process ROOT rather than a per-process NAME because the naming is not in one place — TWENTY sites under `test/` build such a path by hand (`hxq search 'Sys.time()' test/`), one of them a FIXED name (`FormatConfigDiscoveryTest`) that no per-name fix could ever have reached, and `OracleCache` / `CompilerServer` key their records by an hxml+cwd hash under the same directory. One root covers every producer, including the ones not written yet.
+
+**The root is CLAIMED, not just created**, in `tools/tmp-lifecycle.sh`'s own shape — `apq-suite.XXXXXX` from `mkdtemp` plus a `.apq-owner` stamp naming the pid, and `apq-suite` added to that script's `TMPL_PREFIXES`. Otherwise this would be the project's FIFTH scratch producer and the only one no sweep can reap; § "Scratch directories" records what the last such omission cost. Three consequences worth stating exactly, because the first draft of this paragraph got the middle one wrong: a COMPLETED run now leaves nothing at all, where the old scheme accumulated (a developer's temp dir held 3 294 stale `tmp_*` entries at the time of the fix); an INTERRUPTED run leaves one directory holding whatever fixtures were live — 17 at the peak, measured by sampling the root every 0.2 s — not an empty one; and that directory is swept once its pid is gone. The teardown goes through `CliFixture.removeScratchRoot`, which refuses any path that is not a claimed root: `removeDir` is a recursive delete, and while probing this seam the runner's teardown was pointed at `repoRoot()` for one build, whereupon the run deleted the entire worktree it was running in.
+
+Measured two ways. Four concurrent whole suites from four worktrees, counting non-green ROWS and the distinct fixtures behind them; and `tools/mutation-arm.sh` over a FIXED 12-arm subset at `--jobs 4`, two sweeps of one tree, where the deciding column is the DRIFT — rows present in exactly one of the two sweeps, since a fragment arm's own constant `+extra` row is stable and subtracts out. `--all` was not affordable: the registry was 236 arms at that base, not the 23 arms / 335 s an earlier revision of the cost table above quoted, so a whole-suite `--all` was already ~45 min a sweep back then — since grown further to 248 arms / ~62 min, the CURRENT figure the table above states (T702).
+
+| measurement | round 1 | round 2 | reading |
+|---|---:|---:|---|
+| 4 concurrent suites, `0430a5eb`, before | 19 rows / 15 fixtures / 7 classes | 2 / 2 / 2 | zero overlap between the two rounds |
+| 4 concurrent suites, `da0be5b8`, before | 12 / 11 / 7 | 38 / 34 / 19 | |
+| 4 concurrent suites, `1edb07e7`, before | 4 / 3 / 3 | 8 / 8 / 4 | one name in common of eleven |
+| 4 concurrent suites, `1edb07e7`, after | 0 / 0 / 0 | 0 / 0 / 0, and a third round 0 | 12 of 12 runs green, 46 072 assertions each |
+| 12 arms `--jobs 4`, `0430a5eb`, before | 52 `+extra` | 44 `+extra` | drift **20 rows / 18 fixtures / 12 classes** |
+| 12 arms `--jobs 4`, `1edb07e7`, after | 39 `+extra` | 39 `+extra` | drift **0** — the two sets are identical |
+
+The 18 drifting fixtures before the fix sit in `CompilerOracleE2ETest` (4), `MoveExtractDocCensusTest` (3), `StringLiteralDupCheckTest` (2), `ExplicitLocalTypeOracleE2ETest` (2), `AvoidDynamicRiskyFixE2ETest` (2), and one each in `MoveCanonicalOutputSliceTest`, `LintConfigCliTest`, `ThreadSafetyCheckTest`, `FixVerifierProbeRefusalE2ETest`, `ExplicitTypeReturnOracleTest`, `ExplicitTypeCheckTest` and `HxComprehensionCloserSliceTest` — the family this caveat used to name, plus eight it did not, while four names it DID list never appeared. The last of the twelve is not itself a flake but a DISPLAY artefact worth knowing when reading any drift census: a row's `+extra` list is truncated at ten names with `…+N more`, so `M-ALWAYS-SAME` going from 46 red fixtures to 45 pushed one honest name out of the visible ten — FIXED (T703): `MutationVerdict.classify` now also emits the same list uncapped whenever `cap` actually elided something, and `tools/mutation-check.sh` appends it to the track's own transcript rather than the console row, so a drift rewrite reads the transcript instead of counting past ten in the printed line. The one-variable manipulation that decided the mechanism before a line was written: the same four concurrent suites, each handed a private `TMPDIR` by the shell, came back 4 of 4 green with byte-identical assertion counts.
+
+**The residue was 2 fixtures and it was a DIFFERENT defect — CLOSED by S170, and the option this paragraph listed second was the wrong one.** An earlier pair of sweeps of the fixed tree drifted by 3 rows, and all three were `unit.cli.ApqDxTier5CliTest.testProbeStagesSourceToTmp` / `testProbeRestagingOverwritesPreviousScratch`; the pair quoted above drifted by 0 because neither fired. Both asserted on the exact content of `/tmp/anyparse-last-probe.hx`, and the diagnosis here — a path `ProbeCommand` hard-codes OUTSIDE `$TMPDIR`, which no temp-root isolation reaches — was exactly right. What it got wrong was calling "accept these two as single-process fixtures" an option: the shared slot was never only a test-side flake, it was a PRODUCT defect, and the same race hands a WORKER a foreign source with exit 0 and no exception (measured: 4 of 12 and 8 of 12 interleaved reads foreign, plus one hybrid file neither process wrote — `docs/cli-query-tool.md` § "`apq probe`: the staged scratch slot"). The product path now resolves per process under the OS temp dir, so the suite's own private root reaches it and the two fixtures are ordinary temp-root fixtures. `--jobs 1` remains a way to isolate a race, no longer the way to isolate THIS one. Every VERDICT was stable across all six arm sweeps, before and after.
+
+**What is NOT covered, and is the same defect one layer out (T706).** The recon fork-path cache is one file per USER (`$HOME/.config/anyparse/fork_path`); `unit.cli.ApqDxTier5CliTest.testReconCacheFileWritesOnEnvResolution` now gives itself a private `HOME` rather than stashing and restoring the developer's real file, but some other fixture still drives `ReconCommand.defaultReconRoot()` under the ambient `HOME` and writes it. That is invisible today only because the write short-circuits on equal content — two worktrees exporting different `ANYPARSE_HXFORMAT_FORK` values bring the shared cross-process write straight back. `unit.cli.ScratchIsolationGateTest` is the gate for the `TMPDIR` half; there is none for `HOME`.
+
+`--fast` never had either problem.
+
+##### Which seams an arm can OWN, decided by blast (S104)
+
+`M-CURLY-CTORS-NONE` was the first arm on a `#if macro` module, and S102 read it as
+"52 fixtures suite-wide, only three pinned". Re-measured on `69d11a37`: **50 fixtures, 0
+errors, and 3 of them carry a pin.** The two extra ERRORs S102 saw on `41034926` were the
+oracle-driven CLI e2e flakes described in the caveat above — the 47 unpinned is what
+reproduces, not the 52. Those 47 are the writer seams S83 (`Lowering` → 5 modules), S85
+(`WriterLowering`'s purity half → 5), S87 (`TriviaTypeSynth` / `WriterCodegen` → 4), S91
+(`WriterBraceSymmetryLowering`'s ctx bundle) and S100 (`SameOnBlock`): passing tests whose
+relationship to the seam nothing recorded.
+
+**Pick the seam by MEASUREMENT, never by list.** Thirteen candidate cuts were rendered
+against `HEAD` and run over the WHOLE suite; the blast decided which became an arm. The
+fixture that dies first and alone is the pin; a diffuse blast has said the seam has no
+single owner, and annotating the widest file anyway would put the pin back where the arc
+started.
+
+| candidate cut | blast, whole suite | outcome |
+|---|---|---|
+| `WriterPolicyLowering#sameLineNonCurlyBlockPolicySwitch` | 2 | `M-NONCURLY-SAME-DROP` |
+| `WriterBlankLowering#blankAroundMultilineExprs` | 2 + 5 oracle-e2e flakes | `M-BLANK-MULTILINE-OFF` |
+| `OperatorLoopLowering#buildWordOpRestoreExpr` | 2 | `M-WORDOP-NO-RESTORE` |
+| `WriterBraceSymmetryLowering#tryCatchesSymmetryWrap` | 4 + 1 flake | `M-TRY-CATCHES-SYM-OFF` |
+| `WriterTriviaSlotLowering#collectFollowingNewlineSignals` | 6, all in one class | `M-NEWLINE-SIGNALS-NONE` |
+| `WriterBraceSymmetryLowering#tryBraceSymmetryWrap` | 7 over 2 classes | `M-TRY-BODY-SYM-OFF` |
+| `WriterOptFanout#setSuppressCallRestProbeField` | 17, half oracle-e2e | not armed — no single owner |
+| `WriterBraceSymmetryLowering#findThenSiblingAccess` | 21 over 5 classes | not armed — no single owner |
+| `WriterBraceSymmetryLowering#deBraceBodyAccess` | 51 over 4 classes | not armed — no single owner |
+| `StarLoopLowering#buildBlockEndedByteCheck` | 119 | not armed — no single owner |
+
+Two of the six new arms get the NARROWEST reading — `KILLED` with no `+extra`, killing
+exactly their own pins: `M-NONCURLY-SAME-DROP` (2 pins, 2 fixtures) and
+`M-BLANK-MULTILINE-OFF` (2 pins, 2 fixtures). `M-WORDOP-NO-RESTORE` has it under `--fast`
+and one collateral fixture suite-wide. The other three get the `+extra` reading the table
+above calls EXPECTED for shared code: 5, 3 and 5 collateral fixtures, every one of them in
+a class the arm's own family owns.
+
+**A cut whose tree does not compile is not evidence about any fixture.** Three more
+candidates came back `BUILD-FAIL` and were dropped rather than re-aimed:
+`WriterCondWrapLowering#detectCondWrapSpan` trips the macro's own guard
+(`@:fmt(condWrap) requires @:trail on the field`), and `TriviaPairAltCtor#isTernaryTrailBranch`
+/ `#isPostfixOpSpaceBranch` both fail with `Lowering.hx: Too many arguments` — those
+predicates decide the SYNTHESISED ctor's arity, so forcing one false desynchronises the
+parse lowering from the paired type rather than removing a behaviour.
+
+**A third shape the FORCE renderer cannot cut**, beside a trailing `// noqa` on the
+signature line (S98) and an `inline` member (S96): a member whose RETURN TYPE opens a brace
+of its own — `Null<{ … }>`, an inline anonymous structure. `mutation-arm.sh` takes the
+header as "every line up to and including the one ending in `{`", which lands on the
+type's brace, and the spliced `return` then sits inside the type. Both such candidates here
+(`detectCondWrapSpan`, `blankAroundMultilineExprs`) needed a `find`/`replace` cut; the
+second is in the registry as one.
+
+**Cost at 50 arms, 16 cores** — S96 measured 23 arms at 130 s:
+
+| Run | Wall | Verdicts |
+|---|---|---|
+| `--all --fast`, `--jobs 4` (default) | 306 s | 50 killed |
+| `--all --fast`, `--jobs 8` | 220 s | 50 killed |
+
+**The cadence holds.** Per-arm cost is flat — 5.65 s at 23 arms, 6.12 s at 50 — because a
+track is one `haxe test-js.hxml` plus a sub-second filtered run, so `--all --fast` grows
+linearly in the arm count and not at all in the suite's size. Five minutes is still a
+per-wave number and still not a per-slice one. Doubling `--jobs` is the only lever, and it
+is worth less than it looks: 4 → 8 buys **1.39×**, not 2× (306 s → 220 s, against 156 s if
+the builds were independent) — the Haxe builds contend with each other on this machine.
+
+##### The narrower cut: one GATE of a helper, not the helper (S105)
+
+S104's four diffuse helpers were re-asked one BRANCH at a time — a `find`/`replace` fragment
+that neutralises ONE gate and leaves the rest of the member standing, or a `force` on one of
+the small runtime predicates the helper calls. Nineteen such cuts were rendered against
+`a873d6b2` and each run over the WHOLE suite. Eleven owned a fixture and became arms, four
+killed NOTHING at all, and four stayed diffuse. `M-CURLY-CTORS-NONE` was re-measured in the
+same sweep and reproduces S104 exactly: **50 FAILURE, 0 ERROR, 3 pinned, 47 unpinned.**
+
+Blast counts below exclude the oracle-driven CLI e2e family — the same flake S96 and S104
+document. It is identified the same way, by turning up under unrelated cuts: five different
+classes appeared across nine of these nineteen runs, never the same set twice, and one cut
+that changes nothing observable (`buildBlockEndedByteCheck` without its whitespace rewind)
+still produced one. `--fast`, the wave cadence, never sees them.
+
+| narrowed cut | blast | outcome |
+|---|---|---|
+| `WriterBraceSymmetryLowering#deBraceBodyAccess` — `isThenBodyExpr` → false | 1 | `M-SSB-WRAP-DIRECTION` |
+| … — `ssbTrailCommentExpr` → null | 3, one class | `M-SSB-TRAIL-COMMENT-OFF` |
+| … — `ssbSuppressCond` → null | 4 over 2 classes | `M-SSB-FRAME-OFF` |
+| … — `thenChainSuppressExpr` → false | 7 over 2 classes | `M-SSB-CHAIN-OFF` (6 pins + 1 `+extra`) |
+| … — `elseSiblingKeepsExpr` → false (gate 7) | **0** | not armed — no fixture at all |
+| … — `elseFollowsExpr` → false | **0** | not armed — no fixture at all |
+| `WriterBraceSymmetryLowering#findThenSiblingAccess` — drop the `baseOptional` exclusion | **0** | not armed — no fixture at all |
+| `SingleStmtBraces#tailSealed` → false | 4, one class | `M-SSB-TAIL-SEALED-NONE` |
+| `SingleStmtBraces#openTrailingOf` → null | 1 | `M-SSB-OPEN-TRAIL-NONE` |
+| `SingleStmtBraces#tailDanglingIf` → false | 4 over 2 classes | `M-SSB-DANGLING-NONE` |
+| `ElseIfCommentReflow#scan` — a post-condition `WrapBoundary` skipped whole | 7, one class | `M-EICR-BOUNDARY-SKIP` |
+| `ElseIfCommentReflow#scan` — `isHeadText` ignored | 4, one class | `M-EICR-HEADTEXT-ANY` |
+| `ElseIfCommentReflow#scan` — `isHardline` dropped | 1 | `M-EICR-SOFTLINE-ANCHOR` |
+| `WriterBodyPolicyLowering#buildElseIfCommentReflowLayout` — the knob unread | 3, one class | `M-EICR-KNOB-IGNORED` |
+| `WriterOptFanout#setSuppressCallRestProbeField` — identity short-circuit removed | **0** | not armed — byte-inert |
+| `WriterOptFanout#setSuppressCallRestProbeField` — copy-on-write removed | 6 over 5 classes | not armed — no single owner |
+| `StarLoopLowering#buildBlockEndedByteCheck` — whitespace rewind off | **0** | not armed — no fixture at all |
+| `StarLoopLowering#buildBlockEndedByteCheck` — the `;` acceptance dropped | 70 over 22 classes | not armed — no single owner |
+| `StarLoopLowering#buildBlockEndedByteCheck` — the schema predicate dropped | 43 over 20 classes | not armed — no single owner |
+
+**The 47 moved for the first time in this arc: 47 → 34.** Six of the nineteen
+`HxSingleStmtBracesSliceTest` fixtures inside that blast now name an arm
+(`testBracedCatchBodySealsTryCatchBeforeElse`, `testDanglingElseThroughLoopBodyKeepsBraces`,
+`testForBodyBlockSealsThenBodyAndKeepsItsOwnBraces`, `testSealedInnerIfDeBracesUnderTrailingElse`,
+`testSwitchSealedInnerIfDeBraces`, `testOpenTrailingCommentTravelsWithTheStatement`), six of the
+eight in `HxElseIfCommentReflowSliceTest`, and `HxTryBraceSymmetrySliceTest#testDanglingElseKeepsBraces`.
+The other 18 pins land on fixtures OUTSIDE that blast, which is the same work in the same
+classes — the registry goes 82 → 113 pins and 54 → 65 arms.
+
+**S104's reading held for the MODULE and was wrong for the GATE.** "At the granularity those
+modules expose, the biggest unpinned cluster has no single-owner seam" is exactly right about
+`deBraceBodyAccess` as a unit: cut whole it takes 51 fixtures over 4 classes. Cut one gate at a
+time it is four separate owners of 1, 3, 4 and 7 — and two more gates nothing exercises. The
+conclusion to carry forward is not "annotate the widest file" and not "this cluster has no
+owner", it is that a 200-line helper is not a seam; the gates inside it are, and each one is a
+`find`/`replace` fragment away from being addressable. Half the `HxSingleStmtBracesSliceTest`
+owners are not in a macro module at all — `tailSealed`, `openTrailingOf` and `tailDanglingIf`
+are ordinary runtime predicates in `anyparse.format.SingleStmtBraces`, and a FORCE arm on each
+is one line of registry.
+
+**Four branches no fixture in the suite notices.** Each is a live gate whose removal changes
+nothing the 14 077 tests can see, which is a statement about the TESTS, not proof the code is
+dead:
+
+- `deBraceBodyAccess`'s gate 7 — the immediate-pair "would the `else` sibling keep its braces"
+  probe. It is folded into the same `||` as the chain probe (`$elseSiblingKeepsExpr ||
+  $thenChainSuppressExpr`), and the chain half answers for every fixture that reaches it.
+- `deBraceBodyAccess`'s `elseFollows` argument, threaded into `unwrapStmt` and
+  `hoistTrailingComment`. The dangling-else shapes it looks like it defends are all held by the
+  suppress frame instead — `ssbSuppressCond` passes its own hard-coded `true` — so forcing this
+  one to `false` costs nothing.
+- `findThenSiblingAccess`'s `BASE_OPTIONAL != true` exclusion: no grammar today pairs
+  `dropSingleStmtBraces` with an optional field ahead of the then-body.
+- `buildBlockEndedByteCheck`'s whitespace rewind — no fixture has trailing whitespace between
+  the element and the byte the check reads. (True of the suite as it stood; NOT true of the code
+  — S111 wrote the fixture that does, and armed it. See "The rewind fires 58 times" below.)
+
+**Two arms with identical blasts, kept on purpose.** `M-SSB-FRAME-OFF` (the macro-level frame
+arming) and `M-SSB-DANGLING-NONE` (the runtime dangling-`if` predicate) kill the SAME four
+fixtures. Nothing in the suite tells the two mechanisms apart, and that is worth recording
+rather than hiding behind one arm: they are different modules, each is separately addressable,
+and a fixture that discriminates them would be a real addition.
+
+**Vacuity, per pinned fixture.** Twenty of the thirty-one meet the bar by construction (`F` —
+a single assertion). Three show the `.F` audit outright (`...F.`, `..FF`, `.F`), and
+`testWrappedConditionAnchorsAfterTheOpenCurly` shows `..F` under the second of its two arms.
+Seven fail leading assertions but keep passing ones (`F.`, `F..`, `F.F`, `FFFF..`) — the arm
+removes a REFUSAL, so the fixture's refusal cases go red together while its idempotence and
+default-off cases stay green; that split is the discrimination, and reshaping the fixture to
+manufacture a leading `.` would only move the same assertion. One is the honest exception S104
+opened: `testKnobOffKeepsEveryPreKnobLayout` shows `FFFF` under `M-EICR-KNOB-IGNORED`, because
+all four of its assertions ARE the knob being off and the cut is exactly "stop reading the
+knob". Its discrimination is the blast: the class has 22 fixtures and this cut takes 3.
+
+**The FORCE renderer's third blind spot is FIXED, not worked around.** S104 named it — a member
+whose RETURN TYPE opens a brace of its own (`Null<{ … }>`, an inline anonymous structure) — and
+routed both cases to `find`/`replace`. `mutation-arm.sh` now finds the body brace by BALANCING
+the member's own braces instead of taking "the first line that ends in `{`": the body's brace is
+the last one that opens at depth 0, and its match has to be the member's final `}`. Re-measured
+on the two members that hit it, the header goes from 1 line to 5 (`blankAroundMultilineExprs`)
+and to 7 (`detectCondWrapSpan`), landing on `} {` and `}> {` — the body's own line, not the
+type's. Braces inside comments, strings, char and regex literals are skipped: without that the
+balance is off by one on any member documenting a closing brace, and `SingleStmtBraces#tailSealed`
+— a plain `Bool` the OLD heuristic handled fine — would have started refusing. A member that
+still does not balance, or whose body opens mid-line, is refused BY NAME rather than rendered
+wrong. All 25 pre-existing FORCE arms render byte-identically under the new logic.
+
+| Run | Wall | Verdicts |
+|---|---|---|
+| `--all --fast`, `--jobs 4` (default), 65 arms | 393 s | 65 killed, 0 survived, 0 mismatch |
+
+**The cadence still holds at 65.** Per-arm cost stays flat — 5.65 s at 23 arms, 6.12 s at 50,
+**6.04 s at 65** — so the eleven new arms cost about 66 s of a per-wave run and nothing at all
+per slice. `--all --fast` is still the per-wave gate and one arm the per-edit one.
+
+##### The ten named candidates: seven owners, three identities, five empty (S107)
+
+S105 handed this slice ten one-line FORCE candidates in `anyparse.format.SingleStmtBraces` and
+four gates (T631) that nothing in the suite exercises. All ten rendered as FORCE with no
+`find`/`replace` fallback, which is the balancing renderer S105 built doing its job. Ten more
+cuts were added along the way — the opposite direction of four predicates, plus a neighbouring
+module — for **19 whole-suite runs** in all (a twentieth did not build, below), each against
+`b2ce7401`; blast counts below exclude the oracle-driven CLI e2e
+family the same way S105 excluded it (`FixVerifier*E2ETest`, `ExplicitLocalTypeOracle*`,
+`ExplicitTypeReturnOracleTest`, `CompilerOracleE2ETest`, `LintPerFileConfigCliTest`,
+`MoveExtractDocCensusTest`), identified as before by turning up under unrelated cuts. **Of the
+25 such rows, 21 were an `ERROR` verdict and 4 a `FAILURE` — and that ratio is NOT a usable
+tell.** S107 wrote it up as one ("an `ERROR` on an oracle fixture is almost certainly the
+flake"), S111 refuted it, and S113 measured what to do instead; the correct rule is below.
+
+| cut | blast (flake family excluded) | outcome |
+|---|---|---|
+| `SingleStmtBraces#unwrapDoBody` → `block` | 2, one class | `M-SSB-DOBODY-KEEP` |
+| `SingleStmtBraces#trySubstBody` → `body` | 7 over 2 classes (6 + 1) | `M-SSB-TRY-SUBST-OFF` |
+| `SingleStmtBraces#tryDeBraced` → `null` | 4, one class | `M-SSB-TRY-DEBRACE-NONE` |
+| `SingleStmtBraces#bareLegalAt` → `false` | 1 | `M-SSB-BARE-ILLEGAL` |
+| `LoopBodyShape#isIfWithElse` → `false` | 3, one class | `M-LOOPIF-NEVER` |
+| `LoopBodyShape#isIfWithElse` → `true` | 2, one class | `M-LOOPIF-ALWAYS` |
+| `SingleStmtBraces#withoutExprTrail` → `null` | 4, one class | not armed — IDENTICAL to `tryDeBraced` |
+| `SingleStmtBraces#singleCleanInner` → `null` | 2, one class | not armed — IDENTICAL to `unwrapDoBody` |
+| `SingleStmtBraces#elseTailDanglingIf` → `false` | 4 over 2 classes | not armed — IDENTICAL to `M-SSB-DANGLING-NONE` |
+| `SingleStmtBraces#tailOperandIndex` → `-1` | 1 | not armed — pins nothing new |
+| `SingleStmtBraces#innerSelfTerminates` → `false` | **50** over 5 classes (39 in one) | not armed — no single owner |
+| `SingleStmtBraces#singleCleanElem` → `null` | **37** over 4 classes (31 in one) | not armed — no single owner |
+| `SingleStmtBraces#symmetryNeedsValueWrap` → `false` | 5 over 2 classes | `M-SSB-VALUE-WRAP-OFF` |
+| `SingleStmtBraces#symmetryNeedsValueWrap` → `true` | **183** over 39 classes | not armed — no single owner |
+| `SingleStmtBraces#containsIf` → `false` | **0** | not armed — no fixture at all |
+| `SingleStmtBraces#containsIf` → `true` | **0** | not armed — no fixture at all |
+| `SingleStmtBraces#bareLegalAt` → `true` | **0** | not armed — no fixture at all |
+| `SingleStmtBraces#tailCatchDanglingIf` → `false` | **0** | not armed — no fixture at all |
+| `SingleStmtBraces#fieldTailDanglingIf` → `false` | **0** | not armed — no fixture at all |
+| `SingleStmtBraces#needsSymmetryWrap` → `false` | — | BUILD-FAIL, see below |
+
+**The unpinned count moves 34 → 30**, and the four it takes are
+`HxSingleStmtBracesSliceTest#testSuppressFrameDoBodyStillUnwraps` plus all three of
+`HxLoopBodyIfElseSliceTest`. The registry goes **113 → 129 pins and 65 → 72 arms**; the other twelve new pins are in
+`HxTryBraceSymmetrySliceTest` (4), `BraceSymmetrySliceTest` (3) and
+`HxSingleStmtBracesSliceTest` (5 — the value-if pair and the two do-body fixtures), all outside
+the census blast.
+
+**Half the wave's yield came from a module nobody had probed.** `anyparse.format.LoopBodyShape`
+is two members — a doc comment and `isIfWithElse` — and forcing that one predicate BOTH ways
+partitions its test class exactly: `false` takes the three fixtures that assert the break
+happens, `true` takes the two that assert it does not. Neither direction alone owns the class;
+the pair does, with disjoint blasts. The named ten were all in the 894-line neighbour, and the
+biggest single-class yield was next door.
+
+**Two identities, structural rather than coincidental.** `withoutExprTrail` has exactly ONE
+caller (`tryDeBraced`'s final `else`) and `singleCleanInner` exactly one (`unwrapDoBody`), so
+each pair is one cut spelled at two depths — `hxq refs <name> src` is the whole check, and it is
+worth running before declaring a second arm. `elseTailDanglingIf` → `false` is a third: it kills
+the same four fixtures as `M-SSB-DANGLING-NONE` (`tailDanglingIf` → `false`), which says the
+whole suite-visible effect of `tailDanglingIf` flows through the `IfStmt` / `IfExpr` else-field
+route and none of it through the loop, try or meta routes — `tailCatchDanglingIf` and
+`fieldTailDanglingIf` forced to `false` change nothing at all. Unlike S105's kept pair
+(`M-SSB-FRAME-OFF` / `M-SSB-DANGLING-NONE`, two different MODULES), these three are a caller and
+its callee in one file, so a second arm would record no second mechanism; the identity is
+recorded here instead.
+
+**The FORCE renderer's fourth blind spot: an `inline` member.** `needsSymmetryWrap` is
+`private static inline`, and prepending a `return` to a body that already ends in one gives
+`src/anyparse/format/SingleStmtBraces.hx:461: Cannot inline a not final return` — a BUILD-FAIL,
+which `mutation-check.sh` reports as its own verdict rather than as a survival, so it cannot be
+mistaken for a vacuum. The workaround is the one S104 used for the other blind spots: a
+`find`/`replace` that rewrites the body EXPRESSION instead of prepending a statement.
+
+**Cost and cadence at 72.** `--all --fast --jobs 4`: **433 s, 72 killed / 0 survived /
+0 mismatch / 0 error** — **6.01 s per arm**, in line with 5.65 s at 23, 6.12 s at 50 and 6.04 s
+at 65 (the same run at 71 arms, taken minutes earlier, was 422 s / 5.94 s). Seven arms cost about
+42 s of a per-wave run and nothing at all per slice, so the per-wave `--all --fast` cadence holds
+unchanged.
+
+###### T631 — the four gates no fixture notices, settled
+
+- **`deBraceBodyAccess` gate 7 (`elseSiblingKeepsExpr`) — DEAD LOGIC, deleted.** Not "the `||`
+  partner answers for the fixtures we have": the partner answers for every possible input.
+  `chainForcesBraces(thenBody, elseBody, …)` ENDS on
+  `keepsBraces(cur, drop, symmetry, suppress, false, false, false)` where `cur` is the else body
+  itself whenever that body is not an `IfStmt` — byte-identical arguments to gate 7 — and when it
+  IS an `IfStmt` gate 7 is constant `false`, because `keepsBraces` with `isIfThenBody = false`
+  asks `ctor == 'BlockStmt'`. So `$elseSiblingKeepsExpr || $thenChainSuppressExpr` was
+  `$thenChainSuppressExpr` for all inputs. Deleting it removes ten lines and one `keepsBraces`
+  tree-walk per then-body splice; the same predicate still runs inside `chainForcesBraces`.
+- **The `elseFollows` argument — DEAD in the current wiring, KEPT, and S105's stated mechanism
+  was wrong.** S105 read it as "held by the suppress frame's own hard-coded `true`". The frame
+  gates unwraps nested DEEPER in the then-body; the direct then-body's own splice is held by the
+  chain probe, which opens with `keepsBraces(thenBody, …, elseBody != null, …)` — this very
+  condition, one layer down. Where `elseFollows` would turn a de-brace into a keep, that call
+  answers `true`, `siblingKeepsBraces` goes true, and `unwrapStmt` returns at its own gate-7 keep
+  before `elseFollows` is read; where it would not, the two arguments agree. It is kept because
+  removing it deletes a predicate EVALUATION (gate 7's removal did not — the same call still
+  runs), and this module's whole register is fail-closed. The subsumption is now written into the
+  code instead of the guess.
+- **`findThenSiblingAccess`'s `BASE_OPTIONAL != true` exclusion — inert by FIELD ORDER, kept.**
+  The mechanism S105 did not name: the probe is `Array.find`, so it takes the FIRST child
+  carrying `dropSingleStmtBraces`. Four structs carry that flag —
+  `HxIfStmt` (`thenBody`, `elseBody`), `HxForStmt`, `HxWhileStmt`, `HxDoWhileStmt` — and only
+  `HxIfStmt` has two, with the required `thenBody` declared before the `@:optional` `elseBody`.
+  First-match already excludes the optional one. A discriminating fixture therefore needs a
+  grammar whose optional brace-dropping field is declared FIRST, i.e. a second grammar
+  declaration — S66's rule — not a Haxe source.
+- **`buildBlockEndedByteCheck`'s whitespace rewind — REACHED, load-bearing, pinned (S111).**
+  The reading below was the honest one from the evidence available, and it was wrong. The premise
+  — "a whitespace byte at `_prevEndPos - 1` requires the element's OWN rule to have consumed
+  trailing whitespace" — is right; what nobody checked is that two rules DO. Instrumenting the
+  rewind and running the engine over the tree fires it 58 times, and one shape flips the answer.
+  See "The rewind fires 58 times" below. The original note, kept because the measurements in it
+  are real: with the rewind removed the engine is byte-identical over the fork corpus
+  (`781 pass / 120 fail / 43 skip-parse`, the histogram diffs to zero lines) and over 1 749
+  `src/` + `test/` files, on top of S105's zero unit fixtures — every one of those oracles is
+  blind to it, which is the actual finding.
+
+**The oracle these settlements rest on, and why the corpus alone could not carry them.**
+`singleStatementBraces` is NOT set in the project's own `hxformat.json`, so the corpus sweep and
+`fmt --list` say nothing about this code. The measurement was a purpose-built one: three `cp -R`
+copies of `src/` + `test/` (1 749 files) under a config that turns the knob ON, formatted by the
+base engine and by each cut's engine, then `diff -rq`. That config rewrites **222 of the 1 749**
+— and a control copy with only the `sameLine … fitLine` keys rewrites **0**, so all 222 are the
+knob. Gate 7 deleted, `elseFollows` forced off, and BOTH together each came back **0 differing
+entries**. The same `cp -R` arm over Pony (872 `.hx` under its own `hxformat.json`, which does not
+set the knob) is quoted as a PAIR rather than an absolute: base `0 of 872 rewritten, 3 failed` and
+slice `0 of 872 rewritten, 3 failed`, with `diff -rq` between the two formatted trees at 0
+entries. The `0 rewritten` on both sides is the tree already sitting at the engine's fixed point
+after the parent's sweep, not a claim that the arm exercised anything.
+
+`ANYPARSE_HXFORMAT_FORK` is unset for the run on purpose: the corpus harness is not what an arm measures, and a verdict must not depend on whether a fork path happens to be exported in the caller's shell.
+
+Every worktree the runner created is removed on exit, including on `INT`/`TERM`/`HUP`. A `worktree remove` that itself fails is swallowed so one bad entry cannot strand the rest — which does mean a stuck worktree can survive as a registered entry, so `git worktree list` is worth a glance after a crashed run. The workroot itself is never deleted: its transcripts, build logs and verdict files are the post-mortem. They accumulate in `TMPDIR` across a long campaign, so a campaign that runs for days is worth sweeping by hand.
+
+##### The rewind fires 58 times, and one shape needs it (S111)
+
+S107 left `StarLoopLowering#buildBlockEndedByteCheck`'s whitespace rewind as "the strongest
+remaining deletion candidate" on three zero-results: 0 unit fixtures, 0 corpus lines, 0 differing
+`src/` + `test/` files. All three are true and none of them is about the rewind. They are about
+the ORACLES: a byte-identical output cannot distinguish "the loop never ran" from "the loop ran
+and the other half of the `||` answered anyway".
+
+**Instrument the loop instead of the output.** A probe build traces once per fire, carrying the
+byte the rewind lands on (`_b`), the byte a rewind-free check would have read (`_bNo`), the
+schema predicate's answer (`_p`), and a source window. Measured over `fmt --list --one-pass src
+test tools` (1 754 files):
+
+| | fires | answer differs |
+|---|---|---|
+| anyparse `src` + `test` + `tools`, 1 754 files | **58** | **0** |
+| the fork corpus, 946 `.hxtest` fixtures | **0** | 0 |
+
+⚠️ **That 58 is all FOUR emitting sites, not this one** — S113 re-measured it per site and got
+39 / 6 / 13 / 0; the byte split below is the same population. See "The rewind is emitted at FOUR
+sites" (S113) further down.
+
+So the corpus is not merely quiet about this code — it never reaches it at all, which is why
+every previous measurement came back zero. The 58 fires split by the byte the rewind lands on:
+47 on `}`, 5 on a comment's last character, **6 on `;`**. Only the six can matter — for the other
+52 the byte is not `;` with or without the rewind, so both readings fall through to the predicate.
+
+**The rules that consume trailing whitespace, named.** Two, and both are deliberate:
+`@:trailOpt(';')` runs its pre-match `skipWs` and does NOT rewind on a miss; and
+`OperatorLoopLowering`'s no-operator-match path explicitly declines to restore `ctx.pos` when the
+consumed run held a newline and no comment (`omega-untyped-keep` — it stashes the newline signal
+into `pendingTrivia` instead, so a `bodyBeforeNewline` slot downstream still fires).
+
+**The discriminating shape is a Haxe source, not a second grammar.** A statement whose own
+terminator was swallowed by something INSIDE it, followed by another statement:
+
+```haxe
+class C { function f() { return macro if (c) foo(); trace(1); } }
+```
+
+`macro if (c) foo();` reifies the whole if-STATEMENT, `;` included, so `ReturnStmt`'s own
+`@:trailOpt(';')` misses, and the miss leaves the following whitespace consumed. The byte check
+is then the only thing that can accept the gap, because `stmtNoSemi` answers `false` for
+`ReturnStmt` by construction — it is absent from `NO_SEMI_STMT_CTORS`, whose own doc says the
+byte check covers "stmts whose own `@:trailOpt(';')` consumed the terminator". Predicate and byte
+check are COMPLEMENTS here, not a subsumption. Without the rewind the BlockBody Star refuses the
+second statement and the function body falls back to `ExprBody(BlockExpr(…))` — `PARSE OK` either
+way, a different tree, and every `apq` query and check reads that tree.
+
+`unit.lowering.StarBlockEndedWsRewindTest` is that fixture plus two guards (the `final r = macro
+…` twin, which the predicate DOES answer for, and an ordinary `foo();`, whose terminator is its
+own last byte). `M-PEB-WS-REWIND-OFF` neutralises the rewind's loop condition and takes **1
+fixture over the WHOLE suite** — its own pin, no `+extra`. That figure IS the vacuum S105 and
+S107 measured, now closed: before this fixture the suite had nothing to say about the rewind at
+all.
+
+**Verdict: KEEP.** The `while` on the hot path stays; the perf question S107 raised is moot.
+
+##### Four more probes, two owners, three refusals (S111)
+
+Continuing S107's method — probe the SMALL neighbours in BOTH directions — over the four unpinned
+owners it named. Blasts are whole-suite, with the oracle-driven CLI-e2e flake family excluded;
+that family is identified the same way as before and one instrument check is worth recording:
+`p1` was first measured at `--jobs 4` alongside five other whole-suite tracks and showed **19
+extra `ERROR` rows** across `unit.cli.Apq*CliTest`; the identical patch re-run at `--jobs 2` showed
+**3**, in different classes. Concurrency, not coupling — quote a blast from the least-loaded run
+you have.
+
+| cut | blast (flakes excluded) | outcome |
+|---|---|---|
+| `WriterLowering#buildBracketBodyGlueTest` → `null` | 5, one class | `M-BRACKET-GLUE-NONE` |
+| `WriterBodyPolicyLowering#buildElseSwitchCases` — the comment gate on `sameGuard` dropped | **1** | `M-ELSE-SWITCH-COMMENT-GLUE` |
+| `WriterBodyPolicyLowering#buildElseSwitchTests` — no cases built | 2, one class | `M-ELSE-SWITCH-TESTS-NONE` |
+| `WriterBodyPolicyLowering#buildElseSwitchCases` — `sameGuard` → `false` | 2, the SAME two | not armed — IDENTICAL to the row above |
+| `WriterLowering#buildBracketBodyGlueTest` — the ctor test dropped, flag kept | 4, a SUBSET of the 5 | not armed — no second mechanism |
+| `WriterLowering#buildBracketBodyGlueTest` → `macro true` | **~200 over 60+ classes** | not armed — no single owner |
+| `SingleStmtBraces#needsSymmetryWrap` → `false` | **16 over 3 classes** | not armed — no single owner |
+| … — the `SYMMETRY_WRAP_SKIP_CTORS` gate ignored | **27 over 4 classes** | not armed — no single owner |
+| … — the `innerSelfTerminates` gate ignored | **56 over 6 classes** (33 in one) | not armed — no single owner |
+
+`buildBracketBodyGlueTest`'s two directions are NOT the `LoopBodyShape` pair: `null` owns one
+class cleanly, `macro true` is diffuse, and the narrowed middle (`macro $flagAccess`, ctor test
+dropped) kills a strict SUBSET of what `null` kills — the one fixture that separates them,
+`testAnArrayLiteralBranchHugsTheHead`, is already in the `null` arm's pin set, so a second arm
+would record no second mechanism. Same reasoning as S107's caller/callee identities, one step
+weaker: subset rather than equality.
+
+**T638 settled, and its premise held only halfway.** `SingleStmtBraces#needsSymmetryWrap` is
+`private static inline`, so a FORCE cut is `Cannot inline a not final return` — S107's fourth
+blind spot, reproduced. A `find`/`replace` that rewrites the body EXPRESSION builds and runs fine,
+so the workaround is confirmed. But the member has **no owner to give the arm**: cut whole it
+takes 16 fixtures over 3 classes, and neither of its two inner gates narrows it — 27 over 4 and
+56 over 6, both WIDER than the whole. It is the `deBraceBodyAccess` situation in reverse: there,
+cutting one gate at a time split a diffuse helper into four owners; here every gate is diffuse and
+the conjunction is the narrowest of the three. Recorded as a refusal, with its numbers.
+
+The unpinned count moves **30 → 29**: the only census fixture these arms reach is
+`ElseSwitchPlacementSliceTest#testACommentBetweenElseAndSwitchDeclinesTheGlue`. The other seven new
+pins land outside the census blast, which is where S107's twelve landed too. Of the 29 that remain,
+**7 are outside this fence** — 4 `unit.cli.LintFixFixedPointCliTest` (called the flake family
+here; S113 re-ran the census at `--jobs 1` and they are ordinary `FAILURE`s naming the cut's own
+effect — real unpinned blast), 2 `unit.check.*`, 1 `unit.query.*`.
+
+##### The extra rows are a function of LOAD — re-run, never classify by verdict kind (S113)
+
+S107 turned its flake census into a tell: *"of the 25 such rows, 21 are an `ERROR` verdict and
+only 4 a `FAILURE`"*, read as "an `ERROR` on an oracle fixture is almost certainly the flake".
+S111 refuted the premise — the identical patch re-run at `--jobs 2` produced **8** extra rows
+instead of 25, with `ERROR`s in different classes — and this slice measured the remedy. Same
+tree, same two patches, nothing else changed:
+
+| run | `M-PEB-WS-REWIND-TRYPARSE-OFF` | `M-PEB-WS-REWIND-SEPSTARTS-OFF` |
+|---|---:|---:|
+| `--jobs 4`, the two whole-suite tracks concurrent | 1 pin + **7 extra** | 1 pin + **1 extra** |
+| `--jobs 1`, the two tracks serial | 1 pin + **0 extra** | 1 pin + **0 extra** |
+
+**The rule: on an unexplained extra row, re-run the SAME patch at a lower `--jobs` before treating
+any of it as a finding — and do not classify by `ERROR`-vs-`FAILURE`.** Three reasons the verdict
+kind cannot carry that weight. S107's own numbers already had 4 of 25 flakes come back `FAILURE`,
+and a `FAILURE` flake is the direction that costs, because it reads as real blast. A row's marker
+string mixes the two anyway: two of the eight rows above are `ERROR ...FE` and `ERROR .FE` — one
+flaky fixture producing a real assertion failure AND an error inside a single run. And the class
+list is not fixed: these eight land in `ExplicitLocalTypeOracleE2ETest` (2),
+`ExplicitTypeReturnOracleTest` (1), `FixVerifierCoverageE2ETest` (3) and `FixVerifierGroupE2ETest`
+(1) — not S107's six, not S105's five.
+
+**Serial buys an EXACT census, not merely a cleaner one.** A whole-suite `M-CURLY-CTORS-NONE` run
+at `--jobs 1` came back **50 failures, 0 `ERROR`** — every row a real assertion failure naming the
+mutation's effect. The hand-maintained exclusion list S104, S105, S107 and S111 each had to
+subtract is therefore an artefact of measuring under load, not a property of those classes. It
+also corrects one entry: S111 filed the four `unit.cli.LintFixFixedPointCliTest` rows of that
+census as "the flake family", and serially they are ordinary `FAILURE`s whose messages name the
+de-nesting the cut removed — real unpinned blast. The price is wall time: the two-arm pair is 57 s
+at `--jobs 4` and 104 s serial, and `M-CURLY-CTORS-NONE` alone is 51 s.
+
+**S150 found what the load was doing, and it is fixed** — the extra rows were fixture
+paths colliding between lockstep suite processes under one shared `$TMPDIR`, not the
+compiler oracle and not a property of those classes; the runner now claims a private temp
+root per process. So `--jobs 1` is no longer the FIRST thing to try for an unexplained
+extra row, and the exclusion lists this subsection subtracts are history rather than
+advice. The one race S150's fix did not reach — T700, the hard-coded
+`/tmp/anyparse-last-probe.hx` staging path — is closed too since S170: the slot resolves
+to `<temp root>/anyparse-last-probe.<pid>.hx`, so the private root reaches it. What survives unchanged is the
+rule the subsection is named for: **do not classify by `ERROR`-vs-`FAILURE`** — the
+verdict kind never carried the information, and a residual flake still reaches you as
+either. Mechanism, cut and the before/after drift: § "Declared arms", the
+whole-suite-mode paragraph.
+
+##### A FRAGMENT arm's whole-suite blast always carries one constant row (S123)
+
+`unit.MutationArmAddressTest#testEveryFragmentArmStillCutsItsNode` asks, for every
+fragment arm in the registry, whether its stored `find` still occurs exactly once
+inside its member. Applying a fragment cut DELETES that text, so while an arm is
+applied its own row answers 0 and the check goes red. S121 spotted the shape;
+measured here at `43d31484` with 161 arms, `--jobs 1`, whole suite:
+
+| arm | cut | `testEveryFragmentArmStillCutsItsNode` in its blast |
+|---|---|---|
+| `M-COMMENT-BOUNDARY-TRAIL-INDEX` | fragment | yes, as `+extra` |
+| `M-KINDS` | fragment | yes, as `+extra` |
+| `M-ELSE-GATE` | fragment | yes, as `+extra` |
+| `M-MEMO-OFF` | fragment | yes, as `+extra` |
+| `M-ARM-FRAGMENT-NONE` | fragment | yes, as its OWN pin |
+| `M-ARM-ROW-OK` | force | no |
+| `M-SEAM-BLIND` | force | no |
+| `M-CUDDLE-OFF` | force | no |
+
+5 of 5 fragment, 0 of 3 force — a clean split, and it corrects one detail of the
+S121 note: `M-KINDS` is a FRAGMENT arm (`find`/`replace` on `HxComplexItems.kinds`),
+so it belongs on the top half of that table, not on the control half. The registry
+is **106 fragment / 55 force of 161** at that base, so two thirds of the arms carry
+the row, and 105 of them carry it as pure collateral.
+
+**Decision: the row stays, and the reading subtracts it.** Three measurements
+decide it against a carve-out that would teach the check to skip the arm currently
+applied.
+
+- **It never changes a verdict.** The row is `+extra`, never in an arm's expectation
+  set, so it can never produce a `MISMATCH`. `--fast` never runs the class at all —
+  it is only in the filter for the `M-ARM-*` arms — so the per-WAVE cadence never
+  sees it.
+- **It carries no information about the arm under test, and that is WHY it can be
+  subtracted rather than suppressed.** A fragment cut is applied by `hxq patch`,
+  which already requires the stored text to occur uniquely in the addressed node.
+  A rotted fragment therefore comes back `BUILD-FAIL`, not `SURVIVED` — the check's
+  answer for that one arm is known before the suite starts.
+- **A carve-out would cost a channel this layer exists to close.** The check has no
+  way to know which arm is applied except an environment variable written by the
+  harness; a variable left set in a shell then silences a real rot in an ordinary
+  run. That is prose retyped as metadata, one level down.
+
+One consequence to know when reading a row: `MutationVerdict.classify` reports
+`Survived` only on a fully green run (`header.ok`), so in whole-suite mode a
+fragment arm can never report `SURVIVED`. A dud fragment arm comes back `MISMATCH`
+with `(missing: <its pins>)` instead — same diagnosis, different word. `--fast`
+gives the clean `SURVIVED`.
+
+##### The rewind is emitted at FOUR sites, and 58 was three sites' sum (S113)
+
+S111 instrumented the block-ended whitespace rewind, read **58 fires** over `fmt --list
+--one-pass src test tools`, and recorded them as `StarLoopLowering.buildBlockEndedByteCheck`'s.
+The same seven-line block is spliced by **four** macro members — `hxq lit '_pebRew' src` returns
+16 mentions, four per site — and instrumenting all four separately splits that 58:
+
+| site | member | what compiles to it | `fmt`, 1 754 files | whole suite |
+|---|---|---|---:|---:|
+| close-peek struct field | `StarLoopLowering#buildBlockEndedByteCheck` | `HxFnBlock.stmts` | **39** | 233 |
+| `@:tryparse`, no close literal | `StarLoopLowering#buildTryparseSepLoop` | `HxConditionalStmt.body` / `elseBody`, `HxElseifStmt.body`, both `HxCondSplice*Open.body` | **6** | 17 |
+| enum branch, lead/trail, `sepStartsElement` | `StarFieldLowering#lowerStarBlockEndedSepStarts` | `HxStatement.BlockStmt`, `HxExpr.BlockExpr`, `HxDoWhileBody.BlockBody` | **13** | 46 |
+| enum branch, lead/trail, no `sepStartsElement` | `StarFieldLowering#lowerStarBlockEndedSepLast` | `unit.miniblock.MiniBlock.Block` | **0** | 0 |
+
+It is the same population, not a different measurement: the byte the rewind lands on splits 47 `}`
+/ 6 `;` / 5 on a comment's last character, exactly S111's split, and all 58 carry `p=true` so the
+answer still differs zero times on this tree. **The attribution was the error, and it propagates
+backwards** — S105's and S107's deletion candidates cut ONE of the four sites, so their
+zero-results covered less than a quarter of the emitted code, not all of it.
+
+**Two of the three unarmed sites take an arm.** The discriminating shape is S111's — `return macro
+if (c) foo();` swallows its own `;`, `ReturnStmt`'s `@:trailOpt(';')` misses, and `stmtNoSemi`
+answers `false` for `ReturnStmt` — routed to each site by its host construct: a nested `{ … }`
+block reaches `lowerStarBlockEndedSepStarts`, a `#if js … #end` region reaches
+`buildTryparseSepLoop`. Instrumented, each fixture fires its own site once and nothing else, with
+`b=';'`, `bNo='\t'` and `p=false` — the rewind decides alone.
+
+| arm | member | blast, `--jobs 1`, whole suite |
+|---|---|---:|
+| `M-PEB-WS-REWIND-TRYPARSE-OFF` | `StarLoopLowering#buildTryparseSepLoop` | **1**, its own pin, `FAILURE FF` |
+| `M-PEB-WS-REWIND-SEPSTARTS-OFF` | `StarFieldLowering#lowerStarBlockEndedSepStarts` | **1**, its own pin, `FAILURE FF` |
+
+`unit.lowering.StarBlockEndedWsRewindSitesTest` is the pair of fixtures plus a plain twin for each
+— a body whose `;` IS its own last byte — and the twins stay green under either arm, which is the
+discrimination. **The consequence differs from the close-peek site's**, which is worth knowing
+because it decides what a future oracle could catch: cutting the rewind at
+`buildBlockEndedByteCheck` leaves `PARSE OK` and a different tree, while cutting it at either of
+these makes the source fail to parse outright (`error at 5:4: unexpected input`).
+
+**The fourth site is a refusal with its number.** `lowerStarBlockEndedSepLast` is live — its byte
+check is EVALUATED 11 times over the whole suite — but the rewind moves in none of them, and it
+moves nowhere on the 1 754-file tree either, because the only grammar that routes to it is
+`unit.miniblock.MiniBlock`, whose two element rules are an identifier regex and a `}`-terminated
+block. Neither can leave trailing whitespace consumed, so `_pebRew` cannot move and an arm on it
+would `SURVIVE` by construction. Reaching it would take a new grammar written for the purpose,
+which is the tautological-pin shape S66 recorded; it stays unarmed.
+
+**The unpinned census is unchanged at 29.** `M-CURLY-CTORS-NONE` re-run whole-suite at
+`--jobs 1` takes 50 fixtures, 21 of them pinned — the same 29 S111 left, distributed 12
+`HxSingleStmtBracesSliceTest`, 4 `LintFixFixedPointCliTest`, 2 each in `HxTriviaWriteTest` /
+`HxValueIfBracketHugSliceTest` / `HxElseIfCommentReflowSliceTest`, and seven singletons. This
+slice's two pins land outside that blast, which is where S107's twelve and S111's seven landed
+too, so the count does not move. The claim census is unchanged at 294 for the usual reason: an
+annotated class contributes no claim line.
+
+##### Three never-probed MEMBERS, and a second module (S124)
+
+S111 said the next owner had to be a second MODULE rather than another gate of the
+894-line `SingleStmtBraces`, and half of that held. Twenty-two candidate cuts were
+rendered against `43d31484` and run over the WHOLE suite in ONE process — the flake
+tell is LOAD, so a serial run is an exact census — with the instrument controlled
+first by re-deriving `M-CURLY-CTORS-NONE` (50 failures, 0 `ERROR`, the distribution
+S113 recorded). Twelve owned a fixture and became arms; ten are refusals with their
+numbers. **The census moved 29 → 25.**
+
+- **`chainForcesBraces` reproduces S105's finding on a new member.** Cut whole it is
+  `M-SSB-CHAIN-OFF`'s territory; cut one probe at a time it is three owners of 2, 5
+  and 4 — and only the TAIL probe is a mechanism nothing else records, the head and
+  chain-middle probes landing inside `M-SSB-CHAIN-OFF`'s own set.
+- **`BodyFit` is the second module S111 asked for** — 763 lines, 22 members, one arm
+  before that slice. Four cuts there own four classes that had NO pin at all
+  (`HxChainStaircaseSliceTest`, `HxFitLineBodyGlueSliceTest`, `HxGlueWidthSliceTest`,
+  `HxArrowBlockIfOverflowSliceTest`), and three of its members — `chainStaircase`,
+  `chainBodyInner`, `isGlueSeparator` — kill the identical four fixtures, one
+  mechanism spelled at three depths.
+- **Refusals, each with its number:** `keepsBraces`'s gate-8 probe forced false takes
+  0 fixtures; `chainForcesBraces`'s chain-middle probe is a strict SUBSET of
+  `M-SSB-CHAIN-OFF`; `unwrapStmt`'s gate-8 wrap is identical to
+  `M-SSB-WRAP-DIRECTION`; `collectBracketBlockCtorPatterns` → `[]` is identical to
+  `M-BRACKET-GLUE-NONE`; `carriesCollapseProbe` is identical to `pinParenGlued` (its
+  only caller); `continuationRescuesArrowBody` is a subset of it; `scanItems`'s
+  refusal propagation is exactly the union of `M-EICR-HEADTEXT-ANY` and
+  `M-EICR-SOFTLINE-ANCHOR`; the semicolon-next-line `else` branch is a subset of
+  `M-EICR-HEADTEXT-ANY`; `isInlineExpr` → false takes 28 over 14 classes; the
+  else-switch `Next` guard widened to `true` owns one fixture.
+
+**"The module is exhausted" was too coarse.** S111 said to stop probing
+`SingleStmtBraces` gates; three never-probed MEMBERS of it still owned fixtures. What
+S105/S107/S111 had refuted was more gates of two specific HELPERS, not the file.
+
+**A replacement that changes LINE STRUCTURE can break a NEIGHBOURING arm's stored
+fragment.** Two arms may live in one member, and a `find` is matched against the
+member's own text: a replacement that deletes or merges lines can delete the text a
+sibling arm stores, and then the sibling comes back `BUILD-FAIL` (`hxq patch` refuses
+a fragment that does not occur) rather than saying anything about a fixture. S124 hit
+it and rewrote its replacement to preserve the line breaks. When two arms share a
+member, check the other one's `find` against your replacement before storing it — or
+keep the replacement line-for-line with the original, which is what makes the two
+independent.
+
+##### The residue is STRUCTURAL, and here is the number that says so (S126)
+
+Five slices worked the unpinned half of `M-CURLY-CTORS-NONE`'s blast down 47 → 34 →
+30 → 29 → 25. This slice asked the prior question — is what is left reducible at all?
+— and answered it with two measurements before writing a single arm.
+
+**Re-measured serially at `d91b8f43`: 50 failures, 0 `ERROR`, 25 pinned / 25
+unpinned** — S113's distribution again, unchanged. Seven of the 25 are outside a
+writer fence (4 `unit.cli.LintFixFixedPointCliTest`, 2 `unit.check.*`, 1
+`unit.query.AddElementSliceTest`), so 18 were in scope.
+
+**The first measurement: do the arms we already have reach them?** All **67** declared
+arms whose type is under `anyparse.format` / `anyparse.macro` / `anyparse.grammar`
+— the census arm itself among them, as the instrument check — were re-run with
+`APQ_TEST` narrowed to the eight classes that hold those 18, in three chunks of ~22
+at `--jobs 4`, two minutes each. The narrowing was controlled first:
+`M-CURLY-CTORS-NONE` under that filter kills **exactly the same 36 fixtures** it kills
+whole-suite inside those eight classes, set-for-set. Result: **1 of the 18** dies under
+any of the other 66, and it dies under two `HaxeFormatConfigLoader` arms that move the
+`sameLineExpressionElse` default rather than under anything addressing the knob it
+guards. Seventeen survive the entire declared writer/format arm set.
+
+**The second measurement: nine new cuts, each run over the WHOLE suite at `--jobs 1`.**
+Six owned a fixture; three were diffuse; and three more cuts came back with a blast of
+**zero**.
+
+| cut | blast, `--jobs 1`, whole suite | outcome |
+|---|---|---|
+| `SingleStmtBraces#deBracedElem` — gate 8's keep loses its then-position qualifier | 3, one class | `M-SSB-GATE8-ANY-POSITION` |
+| `WriterBodyPolicyLowering#buildBodyKeepLayout` — the `elseIf == Next` case dropped | 2, one class | `M-KEEP-ELSEIF-NEXT-OFF` |
+| … — the Keep elseIf switch defaults to the SAME layout | 2, one class | `M-KEEP-ELSEIF-ALWAYS-GLUED` |
+| `WriterLowering#beforeKwSeparator` — the BeforeKwTrailing layer dropped | **1**, its own pin | `M-BEFORE-KW-TRAILING-DROP` |
+| … — the BeforeKwLeading layer dropped | 2, one class | `M-BEFORE-KW-LEADING-DROP` |
+| `WriterTriviaSlotLowering#buildBeforeLeadingSep` → the plain separator | **0** | armed after writing the fixture — see below |
+| `SingleStmtBraces#keepsBraces` — the recursive sibling probe dropped | 22 over 4 classes | not armed — no single owner |
+| `SingleStmtBraces#needsSymmetryWrap` — the `siblingKeepsBraces` conjunct dropped | 32 over 6 classes | not armed — no single owner |
+| `SingleStmtBraces#innerSelfTerminates` — `BlockStmt` / `BlockBody` answer `true` | 54 | not armed — no single owner |
+| `SingleStmtBraces#chainForcesBraces` → `true` | 46 over 6 classes | not armed — no single owner |
+| `WriterBodyPolicyLowering#buildBodyCoreWrap` — `Keep` loses its precedence | 33 over 11 classes | not armed — no single owner |
+| … — the else-switch substitution loses its pass-through | 38 | not armed — no single owner |
+| `WriterLowering#emitOptionalKwBody` — the `AfterKw` slot read nulled | 31 | not armed — no single owner |
+| `SingleStmtBraces#singleCleanElem` — the close-trailing comment gate ignored | **0** | not armed — no fixture at all |
+| `SingleStmtBraces#keepsBraces` — the gate-8 arm answers `false` instead of `drop` | **0** | not armed — no fixture at all |
+| `WriterLowering#valueIfFitSeam` — the block arm gains `_vifFit` | **0** | not armed — no fixture at all |
+| `WriterLowering#valueIfFitSeam` — the block arm never takes the soft gap | **0** | not armed — no fixture at all |
+| `WriterBodyPolicyLowering#buildElseSwitchCases` — the `Next` guard widened to `true` | 1, in `unit.check` | S124's row, reproduced; out of this slice's fence |
+
+**The zero rows are the sharper finding.** `valueIfFitSeam`'s block arm is documented
+as "ONE extra refusal the arrow knob does not need", and forcing it BOTH ways — the
+`LoopBodyShape` method — changes nothing the suite can see. So does dropping
+`singleCleanElem`'s close-trailing gate, and so does flipping `keepsBraces`'s gate-8
+arm. Three more live gates nothing exercises, alongside the four S105 named and the
+one S111 closed.
+
+**The fourth zero was closed rather than recorded.** `buildBeforeLeadingSep` wraps a
+bare non-first Ref's separator so the comments captured in the `BeforeLeading` gap
+reach the output; forcing it to the plain separator left all 14 148 tests green. The
+slot is not dead — it is corpus-only, exactly as S111's whitespace rewind was. The one
+shape that fills it is `lineends/issue_598_multiline_comment_var`: a block comment with
+an internal newline between a member's modifier run and its `var` keyword, which the
+modifier Star's `collectTrailingFull` refuses. On that shape the cut makes `hxq fmt`
+answer `the writer round trip would drop the comment`, while a one-line gap comment and
+a plain member stay byte-identical. `unit.lowering.BeforeLeadingCommentSlotTest` is that
+fixture plus those two guards, and `M-BEFORE-LEADING-COMMENT-DROP` then takes **1**
+fixture over the whole suite — its own pin, no `+extra`.
+
+**The census moves 25 → 22.** Three of the unpinned name an arm now:
+`HxSingleStmtBracesSliceTest#testElseBlockSingleIfCollapsesToElseIf`,
+`HxElseIfCommentReflowSliceTest#testDefaultOptionsAreByteInert` and
+`HxTriviaWriteTest#testSameLineCommentBeforeElseAfterStmtRoundTrip`. The other seven new
+pins land outside that blast, on four fixtures in two classes that had no pin at all
+(`HxElseIfOptionsTest`, plus two `HxTriviaWriteTest` own-line-comment round trips) and on
+the new class.
+
+**Verdict on the remaining 15: structural, and for three separable reasons.**
+
+- **Three are guards against a knob the grammar cannot deliver.**
+  `HxValueIfFitSliceTest#testStatementIfUntouched`,
+  `HxSemicolonBeforeElseSliceTest#testStatementIfSemicolonsUntouched` and
+  `HxValueIfBracketHugSliceTest#testAStatementIfKeepsItsOwnTerminatorAndBreak` assert that
+  a STATEMENT `if` is untouched by a value-`if` knob. `HxIfExpr` declares
+  `bracketBodyGlueIfFlag`, `inlineBlockBodyIfFlag`, `semicolonBeforeSibling`,
+  `valueBraceSymmetry` and `arrowValueIfReflowSite`; `HxIfStmt` declares NONE of them. The
+  separation is a grammar DECLARATION, not a runtime gate, so no cut of a mechanism can
+  reach them — the discriminating mutation is a second grammar, which is S66's
+  tautological-pin shape.
+- **Eight are the primary behaviour of a fail-closed classifier.** The
+  `HxSingleStmtBracesSliceTest` residue is the symmetric de-brace happy path and the "no
+  braces invented" counterweight. Every cut that reaches them reaches most of the class
+  with them: the sibling probe (22), the wrap conjunct (32), the chain probe forced on
+  (46). `testSuppressFrameSealedLoopBodyDeBraces` is the sharpest case — the module answers
+  "safe" through a CHAIN of independent verdicts (`tailSealed`, then `tailOperandIndex`,
+  then `containsIf`), so removing any ONE link leaves the next answering the same, which is
+  why `M-SSB-TAIL-SEALED-NONE` does not take it and why no single cut can.
+- **Four are inertness assertions on the default configuration.** A fixture whose whole
+  claim is "these bytes come back unchanged under the defaults" can only be killed by a cut
+  that moves default rendering, and every such cut this slice measured moved 22 to 54
+  fixtures at once.
+
+That is the end of this line of attack, and it is worth stating as a number rather than as
+a feeling: **17 of 18 survive all 66 existing writer arms, and of nine fresh cuts aimed at
+them only one owned one of them.** The next reduction of this census, if there is one, comes
+from a fixture being REWRITTEN to discriminate — S92's move — not from another arm.
+
+##### The prose already named the mutation, in nine of the fifty-three (S129)
+
+S126 ended the writer residue and left the census itself as the work. Read as a LIST
+rather than as a number, the 241 rows split in a way that decides where to look: only a
+PURE `control` row leaves it, because a `control,base` row that gains a pin merely becomes
+`:: base`. Inside the query / cli / format / `grammar.haxe` fence that is **53 of 125**
+rows, and their docs are not silent about what would break them — nine name the
+discriminating mutation in words ("widening the refusal to any conditional region in the
+run", "a gate keyed on the NAME rather than on the member set", "canonicalising every
+written file unconditionally"). The work was to render each and read the blast.
+
+Thirteen cuts were rendered against `46e8e70f`, each run over the WHOLE suite. Eight owned
+a fixture, one target turned out to be killed by an arm the registry already declared, and
+four are refusals with their numbers.
+
+| cut | blast | outcome |
+|---|---|---|
+| `SetModifier#isModuleLevel` — module level decided by `RefShape.typeDeclKinds` | **1**, its own pin | `M-SETMOD-MODULE-BY-TYPE-KINDS` |
+| `SetModifier#guardedCollision` — a guarded keyword collides with any visibility change | 3, one class | `M-SETMOD-GUARDED-ANY-VISIBILITY` |
+| … — a guarded keyword collides with EVERY change | 4, one class | not armed — the narrower cut above owns the same pin |
+| `ElementSpan#isAnnotationElement` — any non-empty conditional region is an annotation | 2 | `M-META-ELEMENT-ANY-COND-REGION` |
+| `ElementSpan#elementCut` — the doc exception widens to every declaration prefix sibling | **1**, its own pin | `M-CUT-DOC-KEPT-BY-ANY-PREFIX` |
+| `ElementSpan#declGroupSpan` — the forward walk off | 12 over 7 classes | not armed — no single owner |
+| `MoveCommand#canonicalMoveChange` — the was-canonical half dropped | 2, one class | `M-MOVE-CANONICALISE-ALWAYS` |
+| `NameMentionScan#qualifiedPathMention` — the comment exclusion dropped | 3 over 3 classes | `M-QUALPATH-COMMENT-COUNTED` |
+| `NameMentionScan#sourceNamesAny` — comments blanked for BOTH readers | 6 over 3 classes | not armed — see below |
+| `HaxeQueryPlugin#refShape` — `CondBranch` added to `scopeKinds` | 15 over 6 classes | not armed — no single owner |
+| `CommentOwnerGuard#crossedCarry` — the side comparison dropped | **1**, its own pin | `M-CARRY-CROSSING-ANY-SIDE` |
+| `StructuralTypes#structuralConformancePins` — a builtin structural set matched by member NAME | **1**, its own pin | `M-STRUCT-BUILTIN-BY-NAME` |
+| `MemberKinds#descendsToMemberHost` — the typedef arm dropped | 30 over 10 classes | not armed — no single owner |
+| `WriterBraceSymmetryLowering#deBraceBodyAccess` — the frame's span-precision probe dropped | 1, already pinned | not armed — identical to `M-SSB-FRAME-BLANKET` |
+
+**The cheapest row cost no arm at all.** `NameMentionScanTest#testACommentOnlyDestinationMentionDoesNotContestTheCarry`
+was measured against the registry's OWN `M-MOVE-NAMESCAN-COMMENT-COUNTED` before a new cut
+was written for it, and dies there — so it is a pin on an existing arm, which now carries
+two. That check is one whole-suite run and it is worth making before rendering anything: a
+control whose mechanism a sibling arm already cuts needs a `@:killer`, not a registry row.
+
+**Three doc claims were corrected because the measurement refuted them.** Two fixtures said
+the named over-fix "flips this and nothing else" and one said it "flips exactly this"; the
+real blasts are 2, 2 and 3, every extra row inside the same class or its immediate sibling.
+A doc sentence naming a blast is a claim like any other, and the slice that renders the cut
+is the one that can settle it.
+
+**Verified serially, one arm at a time.** All nine were re-run through
+`tools/mutation-arm.sh --jobs 1`: **9 killed, 0 survived, 0 mismatch, 0 error**. That run
+also reproduced the LOAD tell from the other side — the exploratory probes were run two
+whole-suite tracks at a time and carried one to five oracle-driven CLI-e2e rows
+(`AvoidDynamic*E2ETest`, `OracleCacheTest`, `OracleCoverageTest`, `PreferCaseGuardOracleE2ETest`,
+`ExplicitTypeReturnOracleTest`), never the same set twice; the serial verdicts carry none of
+them, and every blast quoted above is the serial number where one exists. Each fragment arm
+carries `unit.MutationArmAddressTest#testEveryFragmentArmStillCutsItsNode` as its one
+constant `+extra`, exactly as S123 recorded.
+
+**Census 241 -> 232, pins 321 -> 330, arms 200 -> 208, classes 796 unchanged.** The fence's
+pure-`control` residue goes 53 -> 44.
+
+###### The residue's chain rows: a rewrite DOES discriminate, and it costs the guarantee (S129)
+
+S126 handed on one experiment: of the 22 unpinned fixtures in `M-CURLY-CTORS-NONE`'s blast,
+eight are the primary behaviour of a fail-closed classifier that answers "safe" through a
+CHAIN (`tailSealed` -> `tailOperandIndex` -> `containsIf`), and its closing sentence was that
+the next reduction "comes from a fixture being REWRITTEN to discriminate, not from another
+arm". Both halves were measured here.
+
+**The census arm reproduces at `46e8e70f`: 50 failures, 0 `ERROR`, 28 pinned / 22 unpinned**
+— S113's and S126's distribution, with the pinned half three larger than S126's 25/25.
+
+**The frame direction is closed, and the instrument says so.** `testSuppressFrameSealedLoopBodyDeBraces`
+is the sharpest of the eight, and its own comment names a mutation ("the blanket frame kept
+every nested body braced here"). Rendering that mutation independently — arming
+`deBraceBodyAccess`'s suppress frame without its span-precision probe — reproduced
+`M-SSB-FRAME-BLANKET` byte for byte in effect: **1 fixture, `testBracedThenBodySealsNestedGuardLoop`,
+already pinned to exactly that arm.** So the mechanism the fixture's prose points at is armed
+already, and it is not this fixture the arm owns.
+
+**The rewrite works.** The fixture's loop body was rewritten from a sealed CALL
+(`while (c) g();`) to a sealed SWITCH holding an `if` — the one shape where `tailSealed` and
+`containsIf` DISAGREE — and re-run: green at base, and under `M-SSB-TAIL-SEALED-NONE` it goes
+red, joining that arm's four existing fixtures in the class for five. A chain-guarded row can
+be moved out of the residue by a rewrite, measured rather than argued.
+
+**And it is refused, for what the rewrite costs.** The discriminating half IS
+`testSwitchSealedInnerIfDeBraces` — the same sealed-switch-with-inner-`if` shape, in the same
+class, already pinned to the same arm — so the census row would retire against a mechanism the
+class already controls. What the rewrite deletes is the fixture's own subject: after it, no
+fixture anywhere asserts that a loop body ending on a sealed CALL de-braces under an armed
+frame, which is the everyday shape and the reason the fixture exists. The additive variant
+(keep the original `assertFmt`, append the switch one) keeps the guarantee and would make the
+row pinnable — and then the pin names `M-SSB-TAIL-SEALED-NONE` while the prose claims the
+frame's span precision, which is S123's "an annotation recording a role the fixture does not
+play is worse than the prose", one level up. Net either way: **-1 census row, -1 real
+guarantee, +1 duplicate pin.** Not shipped.
+
+**So the reading to carry forward is narrower than S126's.** A rewrite CAN discriminate a
+chain-guarded row; what it cannot do is discriminate it against a mechanism the class does not
+already own, because the only disagreement the chain has is the one an existing fixture was
+written for. The residue's chain half is not waiting on effort — it is waiting on a SECOND
+disagreement inside the chain, and the module does not have one today.
+
+## From § Mutation checks: testing the tests › Declared arms — the pin metadata's other half › The five arm-authoring blind spots, and which of them a WALK can see (S147)
+
+Five shapes have each cost a slice, and they had been collected as a LIST rather than as a
+verdict: a trailing `// noqa` on the signature line (S98) · a return type opening a brace of
+its own, `Null<{ … }>` (S104) · an unbalanceable body (S104) · an `inline` member (S96) · a
+narrowed nullable in an anonymous-structure literal (S147). S145 closed the first three for
+the 68 force arms by asking the TREE instead of a shell brace-balancer. This slice asked the
+remaining two the same way — which of the five can be named from the RECORD plus the TREE,
+with no compile of the cut — and got one yes and one no.
+
+| zone | first cost | who can name it | where |
+|---|---|---|---|
+| trailing `// noqa` on the signature line | S98 | the tree | `testEveryForceArmStillOpensABodyToCutInto` — nothing but whitespace after the body's brace |
+| a return type opening its own brace (`Null<{ … }>`) | S104 | the tree | the same walk — the body's `BlockBody` span, never a brace hunt |
+| an unbalanceable body | S104 | the tree | the same walk — the body node's KIND |
+| an `inline` member | S96 | the tree, since S147 | the same walk — the modifier group ahead of the member node |
+| a narrowed nullable in a structure literal | S147 | **the COMPILER, and nothing else** | `tools/mutation-arm.sh --check-apply` |
+
+**Four of the five, and the fourth landed LATENT** — the same shape as S145's: 0 of the 68
+force arms sit on an `inline` member, and 0 carry a `// noqa` on the signature line. The
+discriminating probe repoints `M-HASSUBTYPE-FALSE` at `SubtypeGraph#subtypeReferencesField`,
+which is `inline`: the walk reddens naming the member, and the very same cut, compiled,
+answers `inline-return | src/anyparse/query/SubtypeGraph.hx:92: characters 3-15 : Cannot
+inline a not final return`. The condition over-approximates in exactly one direction and that
+was measured too — an inline member NOBODY CALLS compiles with a leading `return`, because
+inlining happens at the CALL SITE and not at the declaration. An arm on an uncalled member has
+no behaviour to remove, so refusing it costs nothing.
+
+**The fifth is a TYPE question at a program point, and that is why no walk gets it.**
+Reproduced on a real member rather than argued: repointing `M-OPAQUE-REGION-NODE-SPAN` from
+its wrapper cut to the naive one — `"find": "region: region,"`, `"replace": "region: span,"`
+inside `CondRegionScan#opaqueCondRegions`, where `span` is the `Null<Span>` local the
+enclosing `if (span != null && …)` narrows — gives
+
+```
+src/anyparse/query/CondRegionScan.hx:107: lines 107-112 : Null safety: Cannot unify
+{ region : Null<anyparse.runtime.Span>, kind : String, gaps : Array<anyparse.runtime.Span>,
+  formatted : Array<anyparse.runtime.Span> } with anyparse.query.OpaqueCondRegion
+```
+
+and that record is INVISIBLE to everything the tree can be asked. Measured on a probe commit
+carrying exactly it: `haxe test-js.hxml` exits **0**, and the three arm walks — address,
+fragment, force — run **46 assertions, 0 failures**. The fragment walk is doing its job
+perfectly, which is the point: `region: region,` does occur exactly once inside the member.
+What it cannot know is what the REPLACEMENT will type as. The arm's stored cure is the wrapper
+`new Span(span.from, span.to)`, and the only thing that ever said the wrapper was needed was a
+run.
+
+**A candidate static predicate was measured, and it is unsound in both directions.** Its
+syntactic half is easy and narrow: of the 158 fragment arms, **5** have their cut on a
+structure-literal field-value line at all — `M-ADDMETA-ZERO-WIDTH-INSERT`,
+`M-TRIVIASEP-RESTPROBE-UNGATED`, `M-KEEP-ELSEIF-ALWAYS-GLUED`, `M-USES-QUALIFIED-DEFAULT`,
+`M-SHORTEN-IMPORT-THRESHOLD-ONE` — and **0** of those name an identifier the member declares
+`Null<T>`, so today the predicate fires on nothing and has nothing to catch. What stops it
+being shipped anyway is that its OTHER half is not a type lookup but Haxe's narrowing lattice,
+and four probes compiled against `src/` show the lattice deciding one syntactic shape four
+ways:
+
+| the value reaching a non-nullable structure field | result |
+|---|---|
+| a parameter narrowed by `if (x == null) return null;` | compiles |
+| a `Null<T>` FIELD narrowed by the same guard | compiles |
+| a parameter narrowed by a ternary condition | `Null safety: Cannot unify { … }` |
+| a local narrowed by `if (x != null && …)` — the real case | `Null safety: Cannot unify { … }` |
+
+A predicate that flags "a `Null<T>`-declared identifier in a structure-literal field" is a
+false alarm on rows 1–2 and a hit on rows 3–4, and nothing in the RECORD or the TREE separates
+them; `TypeResolver`/`SymbolIndex` answer what a name is DECLARED as, never what it is
+narrowed to at one position. Re-deriving that here would be the belt-and-braces text scan over
+an exact model, with the worse model. So the honest answer is the one this section is named
+for: for this zone a RUN is the only net — and the job is then to make the run cheap and its
+verdict NAMED.
+
+**`--check-apply`: apply the cut, BUILD, and stop.**
+
+It reuses the whole track machinery rather than growing a second one:
+`tools/mutation-check.sh --build-only` creates the worktree at `HEAD`, applies the rendered
+patch and runs `tools/worker-build.sh <dir> test` — and then stops, with no suite. Three
+things it does that a full run does not:
+
+- **It needs no `@:killer`.** An arm is authored cut-first and the pin that names it is
+  written once the cut is known to compile, so `--check-apply` skips the expectation set
+  entirely. The manifest still records `ALL` and no expectation, so the same file re-runs as a
+  full check without `--build-only`.
+- **A `BUILD-FAIL` row NAMES the cause**, out of `apq mutation-verdict --build <log>`:
+  `null-safety-structure` · `null-safety` · `inline-return` · `arm-registry` · `syntax` ·
+  `type` · `other` · `no-error`. That classifier is Haxe (`anyparse.query.BuildFailure`,
+  covered by `unit.query.BuildFailureTest`) for the reason `MutationVerdict` is — the
+  alternative is a `case` ladder inside a shell function, and this repo has the receipts on
+  what that costs. `tools/mutation-check.sh` gained the same naming on its own `BUILD-FAIL`
+  rows, which used to be a bare log path.
+- **An arm whose cut cannot be RENDERED is a row, not an abort.** Outside `--check-apply` an
+  unrenderable record still exits 2 — a sweep of NAMED arms that silently skipped one would
+  report a verdict for a set the caller did not ask for — but a census must not let the first
+  bad record hide the other 225.
+
+`arm-registry` is not an exotic cause there: an arm added to the registry before its
+`@:killer` exists fails `TestDiscovery`'s own cross-check, and that is a build failure of the
+tree rather than of the cut. Naming it is what stops the authoring loop reading it as a defect
+in the cut.
+
+**What `--check-apply` buys is NOT speed, and the brief that asked for it said speed.**
+Measured on one arm (`M-ADMITS-TRUE`) on the same machine, back to back:
+
+| run | wall |
+|---|---|
+| `tools/mutation-arm.sh M-ADMITS-TRUE` (whole suite) | 55.2 s |
+| `… --fast` (only the classes that pin it) | 18.5 s |
+| `… --check-apply` (build only) | 17.6 s |
+
+Dropping the suite saves **0.9 s of 18.5**. The `haxe test-js-common.hxml` build IS the cost of
+a track, and it is unavoidable in every mode — so "make the run cheap" was the wrong axis, and
+this mode is worth having for two other reasons: it needs no `@:killer`, which is the only
+thing that makes it usable at the moment a cut is being written; and its verdict NAMES the
+cause instead of handing over a log path. Read the 3.1× against the whole-suite run as the
+honest figure, and expect nothing against `--fast`.
+
+**The whole registry, censused: `226 tracks: 226 applies, 0 did not build`** (`--all
+--check-apply --jobs 8`, ~19 min wall under concurrent load; a clean 8-arm batch at the same
+`--jobs` ran 30.9 s, i.e. 3.87 s per arm amortised, which puts an undisturbed full census
+around 15 min). So the fifth zone is LATENT today, exactly as the fourth is — every stored cut
+compiles, and what the mode buys is that the next one is checked before it is claimed rather
+than after a wave has gone green around it.
+
+## From § Mutation checks: testing the tests › Declared arms — the pin metadata's other half
+
+##### T659: the two callers are 16 and 0, and the empty one is inert by PROOF (S153)
+
+S111 left `needsSymmetryWrap` as a refusal with three numbers and one instruction — if a seam
+exists it has to come from the CALLER, because both inner gates are WIDER than the conjunction
+they sit in. This slice measured that direction. **Nothing was armed, and T659 closes as "no
+ownable seam".**
+
+**The address it was carried under was wrong, and one command says so.** T659 named
+`WriterBraceSymmetryLowering.needsSymmetryWrap`; the member is `private static inline` on
+`anyparse.format.SingleStmtBraces`, and `hxq mentions needsSymmetryWrap src/anyparse/macro`
+returns nothing at all, while `hxq callers 'SingleStmtBraces.needsSymmetryWrap'
+src/anyparse/format` resolves both call sites in one run. Verify the owning type before quoting
+a member address out of a backlog line — a task's file list is not evidence about where the code
+lives.
+
+**Re-measured at `552954f7`, whole suite, `--jobs 1`**, so the load-driven extra rows S113
+documents cannot appear — and none did: the five transcripts hold no oracle-e2e or `unit.cli.*`
+name at all.
+
+| cut | S111 | S153 | classes |
+|---|---:|---:|---|
+| the member → `false` | 16 | **16** | 3 |
+| … the `SYMMETRY_WRAP_SKIP_CTORS` gate ignored | 27 | **27** | 4 |
+| … the `innerSelfTerminates` gate ignored | 56 | **58** | 5 (33 in one) |
+
+The first two reproduce set-for-set. The third moved +2 and lost a class against S111's "56 over
+6"; the suite grew 14 148 → 14 232 fixtures in between, and this is the cut whose blast tracks
+the class it is widest in. Quote 58 over 5 going forward.
+
+**The two callers, and the blast of forcing each one's use to `false`:**
+
+| call site | what it decides | blast |
+|---|---|---:|
+| `unwrapStmt` — gate 7's repair arm, `return wrapInBlock(block, 'BlockStmt')` | the ONE direction `symmetry` alone arms | **16**, the SAME SET as cutting the member |
+| `deBracedElem` — gate 7's `return null` | refuse the de-brace | **0 — SURVIVED** |
+
+`unwrapStmt`'s failure set is identical to the member's own, name for name, so the member has
+exactly ONE live caller and there is no caller-side split to find: cutting the call site and
+cutting the callee are the same measurement.
+
+**And the zero is not a vacuum — it is a proof.** `innerSelfTerminates` answers `false` for
+`BlockStmt` and `BlockBody` (its own arm, carrying a comment that forbids the flip), so
+`needsSymmetryWrap(block, _) == true` implies `Type.enumConstructor(block) != 'BlockStmt'` — and
+the line IMMEDIATELY after gate 7 in `deBracedElem` is
+`if (Type.enumConstructor(block) != 'BlockStmt') return null;`. Both return `null`, for every
+input that can reach either. That is S105's `elseSiblingKeepsExpr` shape (a constant answer for
+all inputs, not merely for the fixtures we have) with S126's `elseFollows` resolution: **KEEP.**
+Deleting it removes a predicate EVALUATION rather than a spelling, and the guard it duplicates is
+the one `innerSelfTerminates`'s own comment says both callers must supply for themselves if that
+arm ever moves. No oracle here can tell the difference — which is why the subsumption is written
+down instead of tested for.
+
+**The live call site does decompose — by POSITION, and not into a mechanism.** `isIfThenBody` is
+a parameter of `unwrapStmt` and gate 8 one line above already reads it, so the wrap can be
+restricted to one side:
+
+| cut at `unwrapStmt`'s gate 7 | blast | already pinned |
+|---|---:|---:|
+| `!isIfThenBody && needsSymmetryWrap(…)` — the THEN-position wrap off | **7** over 3 classes | 6 of 7 |
+| `isIfThenBody && needsSymmetryWrap(…)` — the ELSE-position wrap off | **12** over 2 classes | 4 of 12 |
+
+The two are a clean decomposition — their union is EXACTLY the 16, sharing three fixtures — and
+neither earns an arm. The narrow half is seven fixtures of which SIX already name an arm
+(`M-SSB-CHAIN-OFF` ×3, `M-SSB-SYMMETRY-ONLY-BLIND`, `M-SSB-VALUE-WRAP-OFF`,
+`M-SSB-CHAIN-TAIL-OFF`), so arming it would buy exactly one pin, and buy it on
+`unit.check.CollapsibleElseIfCheckTest#testFixOutputKeepsBracesOppositeBlockThenBranch` — a lint
+fixture downstream of the writer, not a writer fixture. The wide half's eight unpinned fixtures
+are the `HxSingleStmtBracesSliceTest` residue S126 settled as structural: the symmetric de-brace
+happy path, which every cut that reaches it reaches most of the class with. And `!isIfThenBody`
+is not a gate this module has — gate 7 does not read the position, gate 8 does — so the cut
+MANUFACTURES a mechanism in order to make a blast small enough to arm. That is the arm S142
+forbids, for a count of one.
+
+**Verdict, with the numbers: no ownable seam.** One live caller whose blast is the member's own
+16, one caller that is inert by construction, and a position split whose narrow half is
+six-sevenths already owned. T659 is closed here rather than deferred a fourth time.
+
+##### T623: the macro layer holds 41 of 236, and five of ten cuts on its writer half own a fixture (S155)
+
+T623 was carried as "`anyparse.macro.*` holds 2 arms of the registry's 226 while 60 macro modules
+hold none". Re-counted on `da0be5b8` off `node bin/test.js --list-arms`: the macro layer holds
+**41 of 236** arms over **14 of its 78 classes**. The line was several waves stale — the
+file-header family alone put seven on `TriviaEofLowering`, and S154/S159 put three more on
+`WriterBodyPolicyLowering#buildBodyCoreWrap` in this same wave. Read the count off the binary, never off a task
+line. The question worth asking is the other one: which of the **64** classes that hold none
+could ever hold one.
+
+**Where the 41 already sit answers most of it.** Eleven of the fourteen armed modules are
+Pass 3W — writer lowering — and the other three are Pass 3, where all four arms cut the same
+kind of thing: a REWIND. `M-PEB-WS-REWIND-OFF`, `M-PEB-WS-REWIND-TRYPARSE-OFF` and
+`M-PEB-WS-REWIND-SEPSTARTS-OFF` are three copies of the block-ended byte check's whitespace
+rewind, and `M-WORDOP-NO-RESTORE` is the operator loop's trivia restore. Each removes a REPAIR
+the parser performs, not a step it needs, which is why one shape stops parsing while everything
+else still does. That the rest of the parse side has no such property — `ShapeBuilder` ->
+`Lowering` -> `Codegen` is the path every one of the 14 255 fixtures walks — is an ARGUMENT from
+the pipeline's shape and not a measurement: nothing in those three modules was cut here. What
+WAS measured is the writer's own trunk, and it behaves the way the argument predicts:
+`WriterLowering#isTightLead` -> false takes **1135** fixtures and
+`WriterLoweringSupport#isBareTryparseStar` -> false **1706**, 8 % and 12 % of the suite. Being
+Pass 3W is not enough on its own; the member has to sit on a branch rather than on that trunk.
+
+The 64 by pass, which is the shape of the residue: 16 Pass 3W · 9 Pass 3 · 6 the secondary
+pipelines (`3Q`/`4Q` query-walker, `3S`/`4S` span-info, `3T`/`4T` transform) · 2 codegen
+(`Codegen`, `WriterCodegen`) · 3 Pass 1/2 (`ShapeBuilder`, `strategy.Bin`, `strategy.Lit`) ·
+7 carrying an ω marker (`TriviaTypeSynth`, `TriviaPairAltCtor`, `TriviaPairConverters`,
+`TriviaPairSlots`, `TriviaSlotNames`, `TriviaAnalysis`, `WriterOptFanout` — six type-synth, one
+analysis) · 21 with no pass marker at all — the seven remaining strategies, the name and
+constant tables (`AnnotationKeys`, `MacroNames`, `GeneratedRule`, `PrattMeta`, `MetaInspect`),
+`Build`, `FormatReader`, `StrategyRegistry`, `AstPredLowering`, `RegexFirstBytes`,
+`SpanTypeSynth`, the lexical pair and the paired-shape base. The Pass-3 arms are all one shape —
+a removed repair — and no pass outside 3W and 3 has ever yielded one, so all ten candidates came
+from the 3W group; the ω type-synth half is the one S104 already measured twice, where a forced
+constant desynchronises a SYNTHESISED ctor's arity from the parse lowering and the tree stops
+compiling (`Lowering.hx: Too many arguments`).
+
+**Ten cuts, five owners.** Each was rendered as a FORCE against `da0be5b8` and run over the WHOLE
+suite through a hand-written `tools/mutation-check.sh` manifest (`ALL`, no expectation) — the
+only way to blast-measure a candidate that has no `@:killer` yet, since `--fast` derives its
+filter from the arm's own pins. Ten at `--jobs 3`, then the five finalists again at `--jobs 1`.
+
+| module · member | cut | blast (`--jobs 3`) | at `--jobs 1` | verdict |
+|---|---|---:|---:|---|
+| `WriterTriviaStarDispatch#ownStarHasFlag` | `false` | 5, ONE class | 5, same set | `M-CASE-CTRLFLOW-STAR-FLAG-BLIND` |
+| `WriterLoweringSupport#isBlockShapeEquivalentBranch` | `false` | 5 over 3 | 5, same set | `M-BLOCK-SHAPE-EQUIV-NONE` |
+| `WriterKwRefLowering#subStructStartsWithTightLead` | `false` | 5 over 4 | 5, same set | `M-KWREF-TIGHT-LEAD-BLIND` |
+| `WriterKwRefLowering#subStructStartsWithBareBodyBreaks` | `false` | 3 over 3 | **1** | `M-KWREF-BARE-BODY-BREAKS-BLIND` |
+| `WriterLoweringSupport#isWordStart` | `false` | 10 over 5 | 10, same set | `M-KWLEAD-NEVER-WORD` |
+| `WriterKwRefLowering#subStructStartsWithBodyBreak` | `false` | 15 over ≥5 | — | not armed — no single owner |
+| `WriterKwRefLowering#subStructStartsWithBodyPolicy` | `false` | 40 over ≥6 | — | not armed — no single owner |
+| `WriterCtorBlankLowering#buildMultilinePredicate` | `null` | **0 — SURVIVED** | — | not armed — no fixture at all |
+| `WriterLowering#isTightLead` | `false` | 1135 | — | not armed — the writer's trunk |
+| `WriterLoweringSupport#isBareTryparseStar` | `false` | 1706 | — | not armed — the writer's trunk |
+
+**The `--jobs 1` re-run earned its five tracks — ~7 minutes — on exactly one row.** Four
+finalists reproduce set-for-set; `subStructStartsWithBareBodyBreaks` goes 3 -> **1**, and the two
+rows it sheds are
+`unit.query.IntroduceParameterObjectSliceTest#testTheCliHandsTheOpTheFilesOwnFormatConfig` and
+`unit.query.StdResolverTest#testEnvOverrideFixtureDir` — neither reachable from a writer
+sub-struct probe, and both of the load-driven family S113 says to re-run rather than classify.
+That arm is the narrowest of the five: one cut, one fixture.
+
+**What each cut actually produces**, read off the transcripts rather than argued:
+
+- `ownStarHasFlag` -> false makes `refuseGlueOnControlFlowRoot` unreachable from the case-LIST
+  Star's pre-pass, so `case _: bb();` glues to its own label beside a control-flow body instead
+  of following it down. All five fixtures are `HxCaseBodyControlFlowGlueTest`'s.
+- `isBlockShapeEquivalentBranch` -> false empties `collectBlockShapeEquivalentPatterns` — the
+  member is `isBlockCtorBranch(branch) || branch.fmtHasFlag('blockShape')`, so BOTH disjuncts go
+  and the `@:fmt(blockShape)` bare try-catch ctor is the one the suite notices:
+  `foo() catch (e:Dynamic)` stays glued where the braced form breaks.
+- `subStructStartsWithTightLead` -> false stops stripping the `default` keyword's trailing space,
+  so a `default` label is written `default :`.
+- `subStructStartsWithBareBodyBreaks` -> false writes `try  p()` with two spaces, which the
+  second pass normalises — an idempotence break and nothing else.
+- `isWordStart` -> false strips the keyword's trailing space in front of a WORD lead too, so
+  `static var` glues; the writer then cannot re-parse its own output, which is what takes the six
+  `unit.check.*` fixer fixtures and `RewriteSliceTest` with it. Three pins, seven collateral —
+  the `+extra` reading this table calls expected for shared code, and every extra is the same
+  mechanism seen one layer downstream.
+
+**All five run KILLED against the commit** (`tools/mutation-arm.sh <ARM> … --jobs 3`, whole
+suite). `M-KWREF-BARE-BODY-BREAKS-BLIND` gets the NARROWEST reading — one pin, one fixture, no
+`+extra` at all. The other four carry the `+extra` this table calls expected: 7 for
+`M-KWLEAD-NEVER-WORD` (the six `unit.check.*` fixer fixtures plus `RewriteSliceTest`, all
+downstream of the same glue), 2 for `M-CASE-CTRLFLOW-STAR-FLAG-BLIND` (siblings in the ONE class
+it owns, left unpinned rather than pinned for the count), 2 for `M-KWREF-TIGHT-LEAD-BLIND` in the
+two further classes its cut reaches
+(`HxCaseBodyFitLineSliceTest#testDefaultBranchFitLineFlattens`,
+`HxCaseBodySymmetrySliceTest#testDefaultBranchMultiStatementSpreads` — both `default`-branch
+fixtures, so the same mechanism), and 1 for `M-BLOCK-SHAPE-EQUIV-NONE` —
+`HxTryBraceSymmetrySliceTest#testOverflowBreaksAtTheSeamNotInsideTheCall`, which already names
+two other arms and whose claim is the seam break, not the block-shape equivalence.
+
+**The SURVIVED row is the finding, not the failure.** `buildMultilinePredicate` returns
+`Null<Expr>` and forcing it to `null` — no multiline predicate for the blank-line cascade at all
+— changes nothing 14 255 fixtures can see. That is S105's `elseSiblingKeepsExpr` shape: a
+statement about the TESTS, not proof the code is dead. Filed as T735 rather than armed.
+
+**Cost: 15 whole-suite tracks.** Ten at `--jobs 3` (~9 min wall, the sibling wave loading the
+machine) and five at `--jobs 1` (~7 min). The registry goes **236 -> 241 arms and 378 -> 392
+pins**, the macro layer **41 -> 46 arms over 14 -> 17 of its 78 classes**, and five test classes
+gain their first pin ever
+(`HxCaseBodyControlFlowGlueTest`, `HxCaseBodyPolicySliceTest`, `HxIndentCaseLabelsOptionsTest`,
+`HxSameLineOptionsTest`, `HxStaticLocalStmtSliceTest`).
+
+**What S155 did NOT do, and the residue this leaves.** The ten cuts came from FIVE modules, so
+**59 of the 64 were never probed** and the section's finding is about the five that were — three
+of which turned out to be empty by oversight rather than by shape, since they now hold arms.
+
+- **48 non-3W modules, deliberately.** Nine are the parse trunk, whose whole-suite blast is an
+  argument from the pipeline rather than a measurement (above); six carry the ω type-synth
+  marker, which S104 has twice shown answers BUILD-FAIL rather than a behaviour removal; and the
+  constant tables have no behaviour to force at all. Minting an arm there would be the
+  count-chasing S142 forbids.
+- **11 of the 16 Pass-3W residue modules, for budget** — `BinaryWriterLowering`,
+  `TriviaBlockLowering`, `TriviaTryparseLowering`, `WriterArrowValueIfLowering`,
+  `WriterCascadeLowering`, `WriterChainLowering`, `WriterCondWrapLowering`,
+  `WriterPrattLowering`, `WriterRefLeadLowering`, `WriterStarPadLowering`,
+  `WriterTriviaStarEmitLowering`. This is the largest untouched block and it sits in the ONE
+  group that has ever yielded an arm, so it is where a later slice should start — T737.
+- **The six secondary pipelines** (`QueryWalker*`, `SpanInfo*`, `Transform*`) have their own
+  small fixture families and were simply out of the ten-cut budget — T736.
+
+## From § Test framework: utest 1.13.x › The registration layer is generated
+
+`test/RunTests.hx` carried **758 hand-written `addCase(new X())` lines and 758
+`import unit.…` lines**. Two costs came with that, and only the second is
+obvious:
+
+- A class whose line was never added ran nowhere and said NOTHING. There was no
+  artifact any gate could compare a class list against, so the failure was
+  invisible by construction — the same shape as the 167 test methods S48 found
+  dead behind a build guard.
+- Every parallel worker touched the same file, so a wave of slices conflicted on
+  it by construction.
+
+Registration is now generated. `testkit.TestRegistry` is an empty class built by
+`testkit.TestDiscovery`, which walks every package directory under the test
+classpath root and, for each class it finds, asks **utest's own two questions**:
+
+- does it implement `utest.ITest` (what `Runner.addCase` dispatches on), and
+- does it carry an instance method whose name starts with `test` or `spec`
+  (what `TestBuilder` turns into a fixture — the predicate is a PREFIX test and
+  it does not look at visibility, so a `private function testX` IS a fixture and
+  a `static function testX` is NOT).
+
+Asking utest's questions rather than inventing a marker is the whole design.
+An explicit `@:testCase` marker was rejected for the reason the hand-written
+list is being removed: a forgotten marker is exactly as invisible as a forgotten
+`addCase`. Because the macro and utest ask the same thing, "discovered" and
+"run" cannot drift apart.
+
+**A class that cannot be registered is a build ERROR, never a skip.** Private,
+abstract, sub-module and constructor-taking test classes each stop the build
+naming themselves and the fix. The one deliberate skip is a `utest.Test`
+subclass with NO fixture — a shared base such as `unit.NamingCheckTestBase`;
+`Runner.addITest` builds no fixture for it either and stores no entry, so
+registering it would be a no-op. Those are REPORTED through
+`TestRegistry.baseClasses()` and pinned, so "reports" cannot decay into
+"silently drops". There are six of them: five per-check bases, and
+`unit.grammar.haxe.HxTestHelpers`, whose `extends utest.Test` is not decoration
+— **127 `Hx*` test classes extend it**, and that is what makes each of them a
+`utest.ITest` at all. It carries only protected parse/round-trip helpers and no
+fixture of its own, which is exactly why it is reported rather than registered;
+turning it into a plain class would unmake 127 test classes at once.
+
+**Scope is a whitelist on both edges, not a skip.** The walk covers every
+package directory under the test classpath root, minus the two modules asking
+for which would be circular (the macro and the registry it builds). Root-level
+modules are not walked either — typing `RunTests` from inside the macro that
+builds its registry is the same circle — but a root-level module that is not one
+of the declared entry points (`RunTests`, `_ReconSkipParse`) STOPS THE BUILD
+naming itself and the fix, so a test class dropped there is loud rather than
+invisible. A test class lives in a package — one of the `unit.*` packages the
+next section maps.
+
+The runner prints the registry on demand and exits before any fixture runs:
+
+```sh
+node bin/test.js --list-classes   # every registered class, one per line
+node bin/test.js --list-dead      # fixture-named methods utest will never run
+node bin/test.js --list-bases     # utest.Test subclasses carrying no fixture
+node bin/test.js --list-pins      # @:pin annotations with roles and killers
+node bin/test.js --list-arms      # the declared mutation arms every @:killer resolves into
+```
+
+`--list-classes` is what `tools/suite-shard.sh` feeds to `apq shard-plan
+--classes`, so a shard is filtered by exactly the list one process would have
+registered — nothing re-derives it from source text.
+
+`shard-plan` still has its older `--runner <file>` door, which reads
+`addCase(new X())` calls out of a hand-written runner as an AST shape. Nothing
+in the repo drives it any more — the script uses `--classes`, and `RunTests.hx`
+carries no registration to read — but it is a shipped CLI door with 31 fixtures
+of its own in `unit.query.ShardPlanTest`, including every refusal the
+`--classes` door shares with it, so it stays rather than taking its gates'
+only cover with it. Its bare-name qualification resolves through the runner's
+IMPORTS (falling back to `unit.`), which is why those fixtures now emit an
+`import` per sticky class: the sticky list names `unit.cli.*` and
+`unit.grammar.haxe.*` since the tree was laid out by package.
+
+`unit.TestDiscoveryParityTest` pins the layer, in the T130 shape where the
+shrinkage IS the acceptance test: the class count is a literal, so narrowing the
+discovery predicate by one class turns the suite red instead of quietly running
+one fewer. That trades a silent failure for a loud chore — adding a test class
+needs the number bumped, and the failure message says so. `unit.DiscoveryOnlyProbeTest`
+is the other half: a real test class that no hand-written line names, and none
+may ever name — a registration written for it would delete the only standing
+evidence that discovery, not a list, is what runs it.
+
+**Machine-checkable test metadata.** This campaign writes rich claims in
+test doc comments — an arm that must break the fixture, a sibling it is the
+control for, whether it was red at the base commit, whether an assertion could
+pass vacuously — and until the census below, nothing checked any of them. `@:pin('<role>')` names what a fixture is FOR and
+`@:killer('<arm>')` names the mutation arm that must break it; `TestDiscovery`
+refuses to build a `@:pin('control')` that names no arm, so the reviewer's
+catch becomes a compile error.
+
+It was piloted on ONE class (`unit.grammar.haxe.ComplexItemKindsSeamTest`, S49)
+and is no longer a pilot: S76, S77 and S78 pinned the comprehension slices as
+they landed, and S94 pinned one fixture per rule for the fourteen it audited.
+At `4626138c` that was **32 pins across 18 classes naming 21 arms**; the
+registry slice brought it to **39 pins across 19 classes naming 23 arms**
+(`node bin/test.js --list-pins`). The reservation the pilot text carried —
+"the roles are only worth what the arms behind them are, and an arm nobody ran
+is prose retyped as metadata" — is what the arm registry answers: every arm
+name now resolves to a declared record the build checks and one command runs
+(see "Declared arms" above). What is still NOT rolled out is the metadata on
+the rest of the tree — 46 pins against 14 047 fixtures — and the section below
+counts exactly what that leaves as prose.
+
+## From § Test framework: utest 1.13.x › The prose census: 295 fixtures claim something no annotation records
+
+S96 stated its own residue in one sentence — 39 pins against 14 039 fixtures,
+with the doc-comment conventions the metadata was meant to replace still
+unchecked prose everywhere else. That sentence carried four counts
+("green at base by construction" 41, "vacuous" 54, "by construction" 53,
+"killed by" 9) and **none of the four reproduces**, under any of the four
+instruments tried (see "Controlling the instrument" below). They are gone; what
+follows was measured.
+
+**The predicate.** `testkit.ProseClaims.kindsOf` reads ONE fixture's doc comment,
+normalized to a single line (gutter stripped, line breaks closed up), and
+answers which of four claim kinds it makes:
+
+`testkit.TestDiscovery` asks that of every fixture it discovers, drops the kinds
+an annotation on that fixture already records, and emits the rest as
+`TestRegistry.claims()` — one line per fixture, `<class>#<method> :: <kinds>`.
+
+**What it refuses, and what it lets through.** A gate that counted phrases would
+be noise, so two exclusions are load-bearing and each is measured:
+
+- **the code senses of `control`.** A rule's doc talks about control flow, a
+  control-exit node, a control head, or quotes the role name in backticks. The
+  bare word flags **214** fixtures; blanking those senses first leaves **196**,
+  and all 18 it drops are genuinely about code. A 62-fixture hand audit of what
+  survives (40 sampled from the anchored form, plus the 22 the looser form adds)
+  found **one** false positive, `control-exit`, which is now on the list.
+- **the denials.** "NOT killed by any arm in this slice, and that is what it is
+  here to say" is a fixture stating it has NO arm. One fixture spells that, and
+  without the exclusion it would head the list of fixtures that owe one.
+
+It still lets through, by construction, a claim spelled in a `//` comment beside
+the assertions rather than in the doc block, and a claim in a CLASS doc rather
+than a fixture's (38 classes carry one — the subject here is the fixture, and
+there is no per-class annotation to record anything against).
+
+**The census, at `7331535c`:**
+
+| | fixtures |
+|---|---|
+| fixtures discovered | 14 039 |
+| fixtures whose prose claims something | 295 |
+| — a `control` relationship | 196 |
+| — a base-redness | 113 |
+| — an `arm` | 41 |
+| — a vacuity audit | 12 |
+| of those, recorded by a `@:pin` / `@:killer` | **0** |
+
+**The two vocabularies are disjoint, and that is the finding.** Not one of the
+295 carries any pin, and not one of the 39 pinned fixtures spells "killed by" or
+"control" in its prose — the annotation REPLACED the sentence rather than joining
+it. So at `7331535c` "claims something no annotation records" and "claims
+something" are the same set.
+
+They stopped being the same set on the first merge. S97 landed in the same wave
+with seven new `@:pin('control')` fixtures whose docs DO call themselves controls
+(`unit.check.FieldWriteResolutionScopeTest`, `unit.query.ResolutionProjectFilesTest`),
+and the census stayed at **295** across that merge: seven new control claims, all
+seven recorded, none listed. The `unrecorded` half is not waiting for the
+annotation pass — it is what makes a slice that annotates as it goes cost nothing
+here.
+
+**294 at `69d11a37`, and the one that left did so the right way.** S104 armed
+`unit.format.BraceSymmetrySliceTest#testTheSameTryOutsideAMacroIsStillBraced`, whose doc
+already called it "the KILLER control for the pin above" — a `control` claim in prose that
+now carries `@:pin('control')` + `@:killer('M-TRY-BODY-SYM-OFF')`, so the predicate stops
+listing it and the baseline loses a line. That is the only exit a `control` line has, and
+the only reason this number may move DOWN. Eight new pins landed in that slice; the other
+seven were on fixtures that had claimed nothing, so they cost the baseline nothing — which
+is the property the paragraph above predicted and the first time it has been paid.
+
+**Still 294 after S105's thirty-one pins, and the check is one command.** The biggest pin wave
+this arc has landed moved the baseline by nothing, because the three classes it annotates —
+`HxSingleStmtBracesSliceTest`, `HxElseIfCommentReflowSliceTest`, `HxTryBraceSymmetrySliceTest` —
+contribute ZERO lines to `--list-claims`: their fixture docs describe layouts, not the fixture's
+role, so nothing in them ever read as a claim. Before assuming a wave will shrink the number,
+grep the census for the classes you are about to pin; a wave that touches none of them cannot
+move it, and reporting a shrink that did not happen is worse than reporting no change.
+
+**Still 294 after S107's sixteen pins, and the pre-check was run first.** Of the four classes it
+annotates, three contribute ZERO lines to `--list-claims`
+(`HxLoopBodyIfElseSliceTest`, `HxTryBraceSymmetrySliceTest`, `HxSingleStmtBracesSliceTest`) and
+the fourth contributes ONE — `BraceSymmetrySliceTest`, and that one line belongs to a fixture S104
+already retired by annotating it. So the wave could not move the number in either direction, and
+the census was checked BEFORE the pins landed rather than explained afterwards.
+
+## From § Test framework: utest 1.13.x
+
+#### 283 at `9e7f9b6d`, and why 294 stood for nine slices — the split, measured
+
+S105, S106, S107, S111, S112, S113, S114, S115 and S116 each looked at this number
+and none moved it. The reason is not effort and it is not the classes each wave
+happened to touch; it is arithmetic that nobody had done. S118 did it.
+
+**There is no bucket that needs no arm.** `ProseClaims.records` retires a `control`
+claim ONLY for `roles.contains('control')`, and `TestDiscovery` refuses to build a
+`@:pin('control')` with no `@:killer`; it retires an `arm` claim for any killer at
+all, and refuses to build a `@:killer` with no `@:pin`. So both gateable kinds
+terminate at a declared registry row. The three-way split the arc had been assuming —
+existing arm / truthful non-control role / new arm — has an EMPTY middle:
+
+| of the 294 at `e8c14e66` | claims |
+|---|---|
+| retirable to zero (kinds ⊆ {`arm`, `control`}) | **169** |
+| — in a class whose subject already has a declared arm | **3** |
+| — needing a NEW registry row | **166** |
+| — retirable by a truthful role that needs no arm | **0** |
+| never fully retirable (some kind is `base` or `vacuity`) | **125** |
+
+**125 is the FLOOR, and that is new.** The census is a LIST compared line by line,
+and a line carries every kind its fixture claims. A fixture claiming `control,base`
+that gains `@:pin('control')` does not leave — its line becomes `:: base`. So the
+number can fall by at most the 169 whose every kind is gateable, and 294 was never
+going to reach zero. The 125 breaks down as 60 `base` alone, 28 `control,base`,
+14 `arm,base`, 11 `arm,control,base`, 11 `vacuity` and 1 `control,vacuity`.
+
+**And the arms are roughly one per claim.** The 169 are controls for DIFFERENT
+clauses by construction — that is what a control is for — so a wave of N claims
+costs on the order of N registry rows, not one shared cut. At the current
+5.9–6.3 s per arm, retiring all 169 would take `--all --fast` from ~11 minutes to
+~28. That cost, not oversight, is the whole explanation of the nine-slice plateau.
+
+**The nine-slice-old premise that annotated classes contribute zero claim lines is
+FALSE now.** Measured on `e8c14e66`: 46 classes carry pins, 107 contribute claim
+lines, and **5 classes are in both** — `PreferCaseGuardCheckTest`,
+`PreferStaticExtensionCheckTest`, `RedundantThisCheckTest`,
+`TrivialGetterShapeCollapseTest`, `BraceSymmetrySliceTest` — for 9 claim lines. The
+premise held when it was written and stopped holding without anyone re-measuring it.
+
+**What S118 retired, and how the arms were found.** Eleven lines, 294 -> 283, with
+eleven pins and ten registry rows. Not one arm was invented for the census: three
+guard families had already written the cut into their own fixture docs — "Flipped by
+dropping the `isDocOpener` clause", "Drop the `editEnd` test in `reached` and this
+goes red while every refusal above stays green", "Disable the lead test in
+`BodySlotGuard.emptiedChild` … (measured)" — so the rows transcribe a measurement
+somebody had already made and left as prose. All ten came back `KILLED`, nine of them
+with the narrowest reading (`KILLED`, no `+extra`, exactly their own pins):
+
+| arm | cut | pin it kills |
+|---|---|---|
+| `M-DOCSPLIT-COVERING-TOO` | `CanonicalEdit#docSplittingEdit`, zero-width clause dropped | `testReplacementStartingAtTheOwnerIsAccepted` |
+| `M-DOCSPLIT-BREAKLESS-TOO` | same member, line-break clause dropped | `testModifierInsertOnTheOwnersLineIsAccepted` |
+| `M-DOCSPLIT-OWNER-ANY` | same member, positive owner criterion deleted | `testAppendBeforeAClosingBraceIsAccepted` |
+| `M-DOCSPAN-BANNER-IS-DOC` | `ElementSpan#docExtendedSpan`, `docOnly` force dropped | `testBannerCommentIsNotGuarded` |
+| `M-BODYSLOT-AUTHORED-NEVER` | `BodySlotGuard#reached`, `authored` forced false | `testAllowsAuthoredBodyThatTakesInTheNextStatement` |
+| `M-BODYSLOT-LIMIT-EDIT-END` | `BodySlotGuard#limitOf`, limit becomes the edit's own end | `testAllowsHeaderRewriteOfBracelessConstruct` |
+| `M-BODYSLOT-LEAD-KEPT` | `BodySlotGuard#emptiedChild`, lead test deleted | three: the `else`-branch and both sole-`catch` controls |
+| `M-BODYSLOT-TRIM-WS-ONLY` | `BodySlotGuard#trimmedEnd`, comment tokens no longer trimmed | `testAllowsSoleCatchClauseRemovalWithATrailingComment` |
+| `M-COMMENT-HOIST-BLIND` | `CommentOwnerGuard#hoistedComment` forced null | `testHoistingAcrossADeclaredCarryIsRefused` |
+| `M-COMMENT-CARRY-REFUSES` | same member, the fail-open skip becomes a refusal | `testACarryDeclarationThatDoesNotHoldIsNotARefusal` |
+
+`M-BODYSLOT-LEAD-KEPT` is where the reading paid for itself. Its first run came back
+`KILLED … +extra: testAllowsSoleCatchClauseRemoval, …WithATrailingComment` — two
+sibling controls whose own docs had ALREADY said they reach the whitespace-lead rule.
+Reading the `+extra` column rather than filing it as collateral turned two more prose
+claims into pins, one of them with an arm of its own, and the re-run then came back
+with no `+extra` at all.
+
+**Two fixtures were deliberately left claiming.**
+`DocOwnerGuardSliceTest#testInsertAboveTheDocIsAccepted` says in its own doc "Nothing
+in the guard flips this one; it is here because a guard that refused the FIX would be
+a worse regression than the bug" — a fidelity guard, not a discriminator, and no
+truthful `@:killer` exists for it. `BodySlotGuardSliceTest#testAllowsWholeBracelessIfRemoval`
+pins a PAIR of deliberately redundant lines ("disabling the host-survival test alone,
+or the lead test alone, leaves this green … only disabling BOTH turns it red"), and an
+arm declares exactly one cut; expressing the pair would need a `find` spanning both
+lines and the two comment blocks between them, which rots on any edit to either.
+Both keep their prose claim, which is the correct outcome.
+
+**A fidelity-guard population exists and is visible in the prose.** `HxArrowBlockBodyOpenSliceTest`
+carries five `control` claims whose docs say, in as many words, "byte-identical with the
+gate reverted" and "byte-identical in every configuration". Those are guards, and no arm
+can kill them by construction. They are part of the 166, and they will never leave it.
+
+**One semantic drift worth knowing before the next wave.** The prose `control` claim
+means "this fixture is the control for a sibling"; the `@:pin('control')` ROLE has
+already broadened past that — `unit.MutationArmAddressTest#testEveryDeclaredArmAddressesALiveMember`
+is a primary fixture whose doc never calls itself a control, pinned `control` since S102.
+`ProseClaims.records` treats the two as the same word, so retiring a control claim with
+the role is a slightly weaker statement than it reads as. Fixtures whose role is genuinely
+not "control" can take any other role and still retire an `arm` claim, which is what
+`CommentOwnerGuardSliceTest#testHoistingAcrossADeclaredCarryIsRefused` does with
+`@:pin('guard')` + `@:killer('M-COMMENT-HOIST-BLIND')`.
+
+#### 261 to 248: the `MoveSymbol` tranche, and the residue is `base` by construction (S123)
+
+`MoveSymbolSliceTest` was the largest single family left in the census — **17 rows over
+137 fixtures**. Fourteen arms were written for it, thirteen declared and one deleted, and
+the tranche closed every `control` and `arm` claim in the class. The census went
+**261 → 248**; the file's own rows went **17 → 4**.
+
+| arm | cut | its pins | verdict (`--fast`) |
+|---|---|---|---|
+| `M-MOVE-SIBLINGS-FALSE` | force `false` | `testAMiddleDeclarationWithOneBlankSideKeepsIt` | KILLED, 4 extra |
+| `M-MOVE-SIBLINGS-TRUE` | force `true` | `testCuttingTheLastDeclarationOfAModuleTakesItsSeparator` | KILLED, 7 extra |
+| `M-MOVE-CUT-TAKES-BOTH-RUNS` | drop the `leading && trailing` arm of `cutEditSpan` | `testACutBeforeATrailingCommentKeepsOneSeparator` | KILLED, 0 extra |
+| `M-MOVE-BLANKRUN-END-NOOP` | force `blankRunEnd` to its own start | `testCuttingAMiddleDeclarationLeavesExactlyOneSeparator` | KILLED, 8 extra |
+| `M-MOVE-FQN-COMMENT-MASK-NONE` | empty comment mask in `qualifiedPathRefusal` | `testACommentOnlyFullyQualifiedMentionDoesNotRefuseTheMove` | KILLED, 0 extra |
+| `M-MOVE-FQN-ALIAS-RAW` | `imp.raw` instead of `pathImportedBy` | `testCrossPackageAliasImporterNotMistakenForAnFqnReference` | KILLED, 4 extra |
+| `M-MOVE-ALIAS-SUFFIX-DROPPED` | drop the alias suffix from a repointed statement | `testAliasImporterRepointedKeepingItsBinding`, `testAliasDependencyIsCarriedIntoTheDestination` | KILLED, 4 extra |
+| `M-MOVE-PRIVATE-SIBLING-BINDS` | drop `!t.isPrivate` from the same-package rung | `testPrivateSiblingMainTypeIsNotABinding` | KILLED, 1 extra |
+| `M-MOVE-NAMESCAN-COMMENT-COUNTED` | comment regions out of the EXCLUSION set | `testACommentOnlyMentionIsNotAReference` | KILLED, 0 extra |
+| `M-MOVE-NAMESCAN-FULLSTOP-BLIND` | comment regions out of the QUALIFIER job | `testACommentsTrailingPeriodDoesNotHideTheReferenceOwedARepairImport`, `testTheDestinationCollisionScanReadsTheDestinationsOwnComments` | KILLED, 0 extra |
+| `M-MOVE-USING-MIRROR-ANY-KIND` | mirror a plain destination `import` like a `using` | `testDestinationModuleImportGainsNothingForASecondaryMove` | KILLED, 0 extra |
+| `M-MOVE-PACKAGE-CHAIN-ANY` | every package reads as an ancestor | `testASiblingPackageIsNotAnAncestorSoItIsLeftAlone`, `testBareSamePackageDependencyIsPricedToo` | KILLED, 16 extra |
+| `M-MOVE-RECEIVER-ANY-IDENT` | price every upper-initial identifier, not only a receiver | `testAValuePositionIsStillNotPriced` | KILLED, 0 extra |
+| ~~`M-MOVE-SIBLING-SUBTYPE-BINDS`~~ | drop `t.isMain` from the same-package rung | intended for `testBareSamePackageDependencyIsPricedToo` | **SURVIVED — deleted** |
+
+Two of those rows are the point of running an arm rather than declaring one.
+
+**`M-MOVE-SIBLING-SUBTYPE-BINDS` SURVIVED.** `testBareSamePackageDependencyIsPricedToo`'s
+doc says its second arm "is the one that made the sibling-package walk read `isMain`", so
+dropping `t.isMain` from `DependencyCarry.packageOrTopLevelBinding` looked like the cut its
+own prose named. It changes nothing the fixture can see. The arm was DELETED rather than
+kept as an unverified claim — an arm exists to kill a pin, and one that kills nothing is
+the "proof that proves nothing" this layer replaced. The pin was repointed to
+`M-MOVE-PACKAGE-CHAIN-ANY`, which the ten-arm sweep had already shown killing that fixture
+as collateral.
+
+**The `+extra` column paid for two pins.** `testAliasDependencyIsCarriedIntoTheDestination`
+and `testBareSamePackageDependencyIsPricedToo` both appeared in another arm's extras, which
+is what identified their killer without writing a fourteenth and fifteenth cut.
+
+**The residue is `base`, and `base` cannot be retired.** The four rows left —
+`testAnAmbientTopLevelDependencyIsNotACollision`, and the `base` halves of
+`testCuttingAMiddleDeclarationLeavesExactlyOneSeparator`,
+`testCuttingTheLastDeclarationOfAModuleTakesItsSeparator` and
+`testPrivateSiblingMainTypeIsNotABinding` — claim "green at base", which
+`ProseClaims.records` answers `false` for on purpose (see the class doc: `base` and
+`vacuity` are censused, not gated toward a fix). Reading those four as unfinished work is
+reading the census wrong: they are the fixed floor a `control`-and-`arm` tranche leaves
+behind, and this class is now AT that floor.
+
+#### 248 to 241: the `prefer-final` abstract-rebind tranche, and the class hits ZERO (S125)
+
+`PreferFinalAbstractMethodCheckTest` was the largest family of PURE `control` rows left — the
+only kind that can LEAVE the census, since a `control,base` line merely becomes `:: base`. It
+carried **7 of the 123** pure-control rows and no `base` or `vacuity` row at all, so its floor
+is zero and it reached it: the census went **248 → 241** and the class contributes no line.
+
+Four arms carry all seven, and every cut is a real seam of the abstract-rebind suppression the
+class exists to bound:
+
+| arm | cut | its pins | verdict (`--fast`) |
+|---|---|---|---|
+| `M-PFF-CALLSCAN-ALWAYS` | `CtorFieldWrite#methodCalledOn` force `true` | `testPlainFieldStillFlagged`, `testPlainLocalStillFlagged` | KILLED, 1 extra |
+| `M-PFF-STDLIB-SAFE-NONE` | `abstractMethodMayMutate`, the final-safe whitelist arm becomes `true` | `testStdlibArrayFieldMethodCallStillFlagged`, `testStdlibStringFieldMethodCallStillFlagged` | KILLED, 2 extra |
+| `M-PFF-REBIND-UNRESOLVED` | same member, `abstractRebindsThis` is never asked | `testClassTypedFieldMethodCallStillFlagged`, `testPrivateCtorOnlyNoMetaStillFlagged` | KILLED, 4 extra |
+| `M-SCOPE-LIBRARY-DROPPED` | `CachingGrammarPlugin#resolutionFiles` drops the library half | `testResolutionScopeResolvesLibraryType` | KILLED, 0 extra |
+
+**The seams were picked so the four do NOT collapse into one.** A single `force true` on
+`abstractMethodMayMutate` kills all seven at once — both rules route their mutation signal
+through it — which is a total veto and would have made every pin in the class say the same
+thing. Splitting it three ways along the member's own decision points gives each control a cut
+that discriminates it: the call scan gates the bindings nothing calls, the whitelist arm gates
+the stdlib types, and the resolution arm gates the types the index CAN answer for. Each of the
+three leaves the other two's pins green.
+
+**`M-SCOPE-LIBRARY-DROPPED` is narrower than the arm that also killed its pin.**
+`testResolutionScopeResolvesLibraryType` came up in `M-PFF-REBIND-UNRESOLVED`'s `+extra`, which
+would have been an easy pairing — but that arm takes six fixtures down and this one takes
+exactly its own. The pin names the narrow cut.
+
+**The `+extra` column paid for six more pins.** Every extra row across the four sweeps was a
+fixture in the same class whose own doc already describes the arm's seam — "a method REFERENCE
+(no call) … still flagged", "let the caller's stdlib whitelist decide", "the `this =` lives only
+in `new`, so it IS flagged". Those six now carry the pin the sweep proved, taking the class from
+7 pins to 13. None of them contributed a census row, so this half of the tranche moves the
+number by nothing and records a coupling that nothing recorded before.
+
+#### 232 stays 232: the arm registry answers none of the 44 pure controls left in one fence (S131)
+
+The census's own rule says only a PURE `control` row can leave — a `control,base` row that
+gains a pin merely becomes `:: base` — and S129's cheapest row cost no new arm at all: measured
+against an arm the registry already declared, it died there and needed a `@:killer`. S131 asked
+that question exhaustively of one fence and got a NO, which is worth recording with its number
+rather than re-asking next slice.
+
+At `2d39cdf1` the census is **232**. **116** of those rows lie in `unit.query` (75),
+`unit.grammar` (34), `unit.format` (4) and `unit.cli` (3); **44 of the 116 are pure `control`**,
+the only rows that can leave.
+
+**24 declared arms, run whole-suite, killed 0 of the 44.** The arms were picked by mechanism
+match against the fixtures' own docs — the doc/`docSplittingEdit` family
+(`M-DOCSPLIT-COVERING-TOO`, `M-DOCSPLIT-OWNER-ANY`, `M-DOCSPAN-BANNER-IS-DOC`,
+`M-CUT-DOC-KEPT-BY-ANY-PREFIX`), the comment-owner guard (`M-COMMENT-HOIST-BLIND`,
+`M-COMMENT-WELD-BLIND`, `M-COMMENT-CARRY-REFUSES`, `M-CARRY-CROSSING-ANY-SIDE`), the element-cut
+family (`M-META-ELEMENT-ANY-COND-REGION`, `M-REMOVE-CUT-ANNOTATIONS-NONE`,
+`M-REMOVE-CUT-SUBJECT-RAW`), `M-PATCH-SHAPE-ALWAYS-SURVIVES`, the nine `M-SSB-*` brace arms and
+the four `BodyFit` / `WrapList` width arms (`M-CHAIN-STAIRCASE-OFF`, `M-PAREN-PIN-NONE`,
+`M-ARROW-HEAD-WIDTH-NONE`, `M-FIRST-LINE-FIT`, `M-CUDDLE-OFF`). Every one came back KILLED on its
+own pins; not one `+extra` row was a census row.
+
+**The single apparent hit was LOAD, and the flake tell reproduced exactly.** At `--jobs 4`
+`M-CARRY-CROSSING-ANY-SIDE` reported **8** failures, among them
+`unit.query.ImplicitStdScopeTest#testConfigLessUnresolvableImportStaysInfoAndSurvivesFix` — a
+census row, and six of the eight extras were oracle / resolution e2e fixtures. The same arm at
+`--jobs 1` reported **2**: its own pin plus the constant `MutationArmAddressTest` extra every
+fragment arm carries. Quote the serial number.
+
+**Why the residue is structural, on a second and disjoint population.** Reading all 44 docs, at
+least **14** state in their own prose that they hold with the mechanism reverted — "CONTROL,
+green on both sides", "byte-identical with the gate reverted", "passes with the slice reverted",
+"CONTROL, not a discrimination", "Nothing in the guard flips this one". A fixture no mutation can
+kill cannot carry a `@:killer`, and `@:pin('control')` without one is a build error, so those
+rows have nowhere to go by construction. That is S126's verdict, re-measured on a set that shares
+no class with the one it was measured on.
+
+**One row names a killer nobody can declare locally.**
+`HxGroupRestProbeStructStarTest#testTypeParamsExactlyOnTheLimitStayFlat` says it outright: "no
+arm that turns the rest probe OFF can flip this one: its killer is the opposite mutation, an
+off-by-one that loosens the fit predicate (`>` to `>=` in the exceeds check)". There is no member
+to cut — `exceedsMaxLineLength` reaches `WrapList.matchesWithLineLengthState` as a BOOLEAN
+PARAMETER the renderer computes at layout time through its column-aware probe, so the arm would
+be a global width off-by-one in `Renderer`, whose blast is every wrap fixture in the suite.
+Recorded, not declared: an arm whose kill set is "most of the suite" makes every pin naming it
+say the same thing, which is the total-veto shape the `prefer-final` tranche above already
+rejected.
+
+**A predicate narrowing, measured and REFUSED.** `ProseClaims` reads the word `control` and
+blanks its code senses (`control flow`, `control head`, …). It cannot read DIRECTION: **26 of the
+232** rows' docs mention a control that is some OTHER fixture — "Its control is
+`testSiblingReferenceQualifiedWithAccess` above", "the plain `ForExpr` line below is the
+control", "the control is the same carry with nothing at the destination to collide with". Those
+docs claim no role for the fixture that carries them, so on the face of it they are the same kind
+of false positive `CODE_SENSES` exists to remove. They are not: the discriminator is direction,
+and the same words carry both readings — "The control for the test above: a field type resolvable
+NOWHERE …" IS a self-claim, in a doc that also names another fixture. A phrase list that cannot
+tell "I am the control for X" from "X is my control" would suppress real claims, which is a worse
+detector than the one that exists. The 26 stay on the list, and the number is here so the next
+slice does not re-derive it.
+
+#### The 38 class-doc claims get no type-level pin — measured, not preferred
+
+`ProseClaims` is asked of `ClassField.doc` and never of a `ClassType`'s, so a claim in
+a class doc is invisible to `--list-claims`: **the 38 contribute ZERO of the 294**, and
+a type-level `@:pin` would not shrink the census by one line — it would open a second,
+currently uncounted population. That alone settles the cost side. The content settles the
+rest. Running the predicate over every class doc in `test/` (40 hits, of which 2 are the
+non-fixture `testkit.MutationArms` and `testkit.TestDiscovery`, leaving the 38):
+
+| of the 38 | classes |
+|---|---|
+| whose MEMBERS already claim the same kind | 18 |
+| whose members claim something, of any kind | 20 |
+| with no member claim at all | 18 |
+| already carrying member pins | 3 |
+
+And the ones with no member claim are mostly not fixture-role claims at all. Five are the
+predicate reading a KNOB: "`opt.functionTypeHaxe4:WhitespacePolicy` controls the spacing"
+(`HxArrowFnTypeSliceTest`), "Controls only the `IfStmt` ctor" (`HxElseIfOptionsTest`),
+"Four independent `SameLinePolicy` knobs … control whether" (`HxSameLineOptionsTest`),
+"`tryBody` controls …" (`HxTryBodyOptionsTest`), "upstream's `binopPolicy` controls every
+binary operator" (`HxTypeParamDefaultEqualsOptionsTest`). `CODE_SENSES` carries the
+control-flow senses a FIXTURE doc produces; a class doc describes the SUBJECT, and the
+subject of a formatter test is a knob that controls something. Extending the list for a
+population nothing censuses would be work for no gate.
+
+The rest are narrative INDEXES over the class's own members — "The eleven CONTROL tests
+are green on both sides by construction" (`BodySlotGuardSliceTest`), "Control tests pin
+that the rule stays useful" (`PreferFinalAbstractMethodCheckTest`), "the three controls
+here are the reason the predicate is not wider" (`DocOwnerGuardSliceTest`). A type-level
+`@:pin` on those would have to name ONE killer for a sentence covering N fixtures with N
+different discriminators, which is precisely the "records a role the fixture does not
+play" failure. The honest recording form for a class-doc claim is the member pins it
+summarises — and this slice paid that out on `DocOwnerGuardSliceTest`, whose class-doc
+sentence about "the three controls here" now stands over four annotated members.
+
+**Two of the four kinds are not gateable toward a fix, deliberately.** `arm` and
+`control` have an annotation that retires the line. `base` and `vacuity` have
+none, and inventing one would be prose retyped as metadata — the exact failure
+`TestDiscovery`'s own error message names: neither "was this red at the base
+commit" nor "could this assertion pass trivially" is answerable at build time,
+so a `@:pin('red-at-base')` would assert what nothing checks. Those claims — 113
+base, 12 vacuity, and 71 fixtures whose ONLY reason for being listed is one of
+them — are a register of what is still prose, not a queue.
+
+**The gate is a ratchet, and it is the suite rather than the build.**
+`unit.ProseClaimCensusTest.BASELINE` holds the baseline — 295 lines at `7331535c`,
+283 now; the fixture compares
+them against `TestRegistry.claims()`. A new claim without an annotation fails
+the suite, and so does an annotated one still listed. It is a list and not a
+count on purpose (S70: a scalar merged silently wrong across two branches).
+
+It is NOT a `Context.error`, unlike every other check in this layer, for one
+reason: the list is GENERATED, so regenerating it needs a working binary — and a
+build error would refuse to produce the binary that prints its own answer. The
+arm table does not have that problem because it is hand-written.
+
+**Controlling the instrument.** Three independent measurements of the same tree:
+
+- a scratch build macro reading `ClassField.doc` (python analysis downstream),
+- `testkit.ProseClaims` in Haxe, plain string scanning, no regex,
+- `hxq lit '<phrase>' test/unit --include-comments`.
+
+The first two agree **exactly** — 14 047 fixtures, 297 claims, 196 + 2 control
+(the 2 being this slice's own pinned fixtures, which the predicate correctly
+drops as recorded). The third does not, and the reason is population, not
+matching: `lit` counts comment NODES and string LITERALS anywhere in a file,
+where the census counts DOC COMMENTS ON FIXTURES. For "vacuous" that is 60
+hits against 12 fixtures — the other 48 are assertion messages, `//` notes
+inside method bodies, and docs on helpers.
+
+The obvious second explanation — that a line-oriented tool misses a claim
+wrapped across a doc-comment line break — is real but small, and measuring it
+mattered: **4 of 297**, three `base` and one `arm`. `M-CLAIM-RAW-DOC` is the arm
+that removes the line-joining, so those four plus one fixture of this slice's own
+are what it kills.
+
+**The cost of the annotation pass, deferred here on purpose.** S97 owns
+`test/unit/query/**` and `test/unit/check/**` in the same wave, and that is where
+the work is:
+
+| | count |
+|---|---|
+| gateable claims (`arm` ∪ `control`) | 224 |
+| in 90 distinct test classes | |
+| under `unit.query.*` | 95 |
+| under `unit.check.*` | 89 |
+| under `unit.grammar.haxe.*` | 30 |
+| elsewhere (`format`, `cli`, `core`) | 10 |
+
+Every one of the 41 `arm` claims names its arm in a LOCAL vocabulary — `M1`…`M17`,
+`F1`, `F2`, `no-wildcard-repoint`, `no-binds-filter` — none of which
+`mutation-arms.json` declares. So the pass is not "add 224 metas": each `arm`
+claim needs a registry row (type, member, cut) before its `@:killer` will build,
+and each `control` claim needs a `@:killer` too, since a control naming no arm is
+already a build error. The arms are shared across sibling fixtures within a
+class, so the registry grows by roughly one row per distinct cut rather than per
+fixture — order 60–90 new rows against the 28 declared today, and `--all --fast`
+grows with them (130 s for 23 arms, so ~10 minutes at 110).
+
+**The staging arm is gone.** `test/RunTestsLegacy.hx` — the runner as it was,
+758 hand-written lines unmodified except for the class rename, built by
+`test-js-legacy.hxml` into `bin/test-legacy.js` — existed so every gate could be
+run against the OLD registration and the NEW one and the two compared per class
+and per method. Its switch-over criterion was "one merged wave green"; that wave
+was the merge that landed the registry, and all three files were deleted in the
+next slice, the one that laid this tree out by package. Nothing but the
+comparison depended on them and `RunTests.hx` needed no edit when they went.
+
+What made deleting it a real removal rather than tidying: **no gate BUILT it.**
+`tools/battery.sh` compiles `test-js.hxml` and `bin/apq-js.hxml` and nothing
+else, so the legacy runner could rot silently while `hxq lint` kept scanning it
+— it was carrying 11 findings that were duplicates of the ones the live runner
+already reports.
+
+## From § Test framework: utest 1.13.x › The runner is quiet by default, and one of the two arguments is load-bearing
+
+`RunTests.main` calls `utest.ui.Report.create(runner, NeverShowSuccessResults,
+AlwaysShowHeader)` and installs a per-test stdout capture. Both halves exist for
+one reason: a raw suite run printed **807 979 bytes** where every gate in this
+project reads **six lines**, and for a delegated agent that difference dominates
+the whole cost of a slice.
+
+- `NeverShowSuccessResults` drops the per-method `: OK` listing — 13 488 lines.
+  It drops only PASSING lines: `ReportTools.skipResult` returns `false` for
+  `!stats.isOk` before it ever reads the mode, so failures, errors and warnings
+  still print in full with message and stack.
+- **`AlwaysShowHeader` is load-bearing, not decoration.** Under the default
+  `ShowHeaderWithResults`, `ReportTools.hasHeader` returns FALSE for a green run
+  once success results are hidden — the `successes:` / `errors:` / `failures:`
+  summary would vanish along with the noise and every gate that greps it would
+  silently pass on nothing. Never drop that argument.
+- **The runner prints its own `tests executed: N` line**, counted off
+  `runner.onTestComplete` and emitted from `runner.onComplete`. utest's summary
+  block carries assertions but no test total, and with the per-method rows gone
+  a green transcript had no countable test count at all: `apq test-summary` read
+  `0 tests / 0 assertions` off every quiet log, and `tools/suite-shard.sh`
+  hard-failed on that zero for eighteen slices while reporting
+  `parity: counts not cross-checked`. The listener is registered BEFORE
+  `Report.create` on purpose — the report's own `onComplete` handler calls
+  `process.exit` from inside the dispatch, so anything added after it never
+  runs — and it is counted rather than read off `runner.length`, so a run that
+  dies mid-way prints neither this line nor utest's block and the transcript
+  stays visibly uncountable. The line is read only ALONGSIDE utest's block,
+  because the two are printed together and every test's output comes first:
+  read on its own it is forgeable, and a transcript that died after a failing
+  test whose flushed stdout carried the phrase reported `999 tests` at exit 0.
+  `apq test-summary` now EXITS 1 when it finds no report at all — no header
+  block, no result row, no tink reporter output — naming what it could not
+  find instead of printing four zeros that read exactly like a clean count.
+  The question is whether a report was FOUND, never whether its numbers are
+  zero: a utest "No tests executed." run and a tink suite that ran nothing
+  (`0 Assertions 0 Success 0 Failures 0 Errors`) are both all-zero ANSWERS,
+  and an all-zero test refused the second one outright.
+- The **per-test stdout capture** buffers what each test prints and discards it
+  when the test passes; any non-`Success`/`Ignore` assertation flushes the
+  buffer verbatim first. The CLI e2e tests drive `Cli.run`, which is chatty, and
+  a passing run's chatter explains nothing.
+
+Measured: stdout **807 979 → 359 bytes**.
+
+⚠️ **Only stdout is interceptable, and the asymmetry is measured, not assumed.**
+Patching both `process.stdout.write` and `process.stderr.write` captured
+**118 706 bytes of stdout and ZERO of stderr**, while 74 514 bytes still reached
+the terminal — `Sys.stderr()` on hxnodejs writes a raw fd and bypasses the JS
+stream entirely (the same fact that makes an fd-2-only line unassertable by any
+in-process test). Drop that half at the shell with `2>/dev/null`; no code in the
+runner can do it.
+
+`APQ_TEST_VERBOSE=1` restores both the per-method listing and the captured
+output for a human reading one run.
+
+## From § Guidelines for new tests › A whole DEFECT CLASS gets a roster-driven differential, not one test per site
+
+`unit.check.CrossScopeSoundnessTest` is the shape to copy when the same mistake keeps
+turning up in a new check. Its subject is not a check but an INVARIANT that every check
+owes: a run whose REPORT scope is narrower than its declared resolution scope must not
+write an edit, or raise a finding, that the wider run would refuse.
+
+Three properties make it catch a class rather than a case:
+
+- It iterates **`Linter.builtins()`**, the registry itself, so a check joins by being
+  registered — no list to keep in sync, which is the failure mode a hand-written list has.
+- It is a **differential**: the same fixture twice, with only the report scope moved, and
+  the assertion is a SUBSET relation between the two runs (narrow edits ⊆ wide edits,
+  narrow findings ⊆ wide findings). Nothing has to predict what a check should say — only
+  that widening the scope cannot take an answer away.
+- Divergences it tolerates live in an **explicit named constant**, not in a weakened
+  assertion, so an accepted exception is readable and a new one fails loudly.
+
+It found the class it was written for. Four sites had already been fixed one at a time
+(S177 `UnusedPrivate.violationFor`, S179 `UnusedParameter.checkFunction` and
+`Naming.RenameRefusal.of`, S180 `Naming`'s reflection guard) — reverting each fix makes the
+harness fail, so it would have caught all four at once — and on its first run it found a
+FIFTH nobody had looked for: `UnusedPrivate.run` gathered its reflection gate's string
+contents from the report files alone, so `lint D.hx --rule unused-private --fix` DELETED a
+private member that a sibling file reached through `Reflect.field`.
+
+Its own floor is a non-vacuity guard: a differential over a roster is exactly the shape
+that passes by exercising nothing. Measure the write coverage when you widen it — at
+introduction only 5 rules of ~180 actually produced an edit in any cell.
+
+S184 widened it a second way, and the axis is worth naming because it is NOT the report
+scope: it is WHICH HALF of one declared resolution scope a fact sits in. `scoped`'s
+`LIBRARY_ONLY` placement declares `resolutionRoots` holding one inert file and puts the
+reaching file in the library half alone, so the narrow seam
+(`RefactorSupport.resolutionProjectSourcesOf`) answers with files and simply does not
+contain it, while the wide one (`resolutionSourcesOf`) does. That is the only shape that
+separates the two seams the check layer had forked over for one name-keyed question —
+T868 — and it decided it with a number: the narrow seam licensed
+`edit:unused-private@reflection-unread-in-file`, a member DELETION the wide seam refuses,
+where the reflective string sits in the library half. Both name-keyed scans now read
+`ReflectionScan.scopeFiles`, and `KNOWN_PLACEMENT_DIVERGENCES` is empty by the same
+contract as the other two lists.
+
+The second addition is a one-directional arm and it REFUTED its own premise, which is
+worth more than the code. T867 said the reflection guard was blind to skip-parsed files
+(`Naming.reflectionNamesInOtherFiles` walked `SymbolIndex.allFiles()`, which drops them)
+while the confinement proof beside it had `RawSourceScan.skippedMayReference`. True as
+stated, and unobservable: with the reacher made unparseable,
+`testAnUnreadableReflectiveFileLicensesNothingExtra` is green on the BASE engine, because
+the confinement proof refuses on the same raw text one step LATER — `RenameRefusal.of` asks the reflection guard first and the confinement proof after it, and both must pass. The three-cell probe
+that shows the layering — cut both proofs, 3 rewrites go through; restore only the
+reflection guard's new unreadable branch, 1; ship state, 0 — read as saying the branch was a
+real second line of defence rather than a fix for a live bug.
+
+S199 refuted that reading. The zero was an artefact of the differential's SELECTOR: it picked
+cells by `cell.grantee == B_REFLECT`, so only the cell whose reflective string names a FIELD
+ever ran — and that name was exactly what `Naming`'s own unreadable branch and
+`RawSourceScan.skippedMayReference` already covered. Selecting by the FORM of the evidence
+(T921 — a plain literal in the reacher naming a member the declaring type declares) reaches
+4 of 4 reflective cells, and the two newly reached ones failed at once: an unreadable sibling
+licensed two rewrites and three findings a readable one refuses, `inline-constant` erasing a
+constant a `Reflect.field` reads and `prefer-inline` folding a method one names.
+`ReflectionScan.runtimeName` and `PreferInline`'s own scanner close it by keeping an
+unparseable scope file's raw source in `ReflectionSurface.unreadable`. So the branch WAS a fix
+for a live bug; what made it look otherwise was a test that could not see two of its own cells.
+Measured cost of the closure on the one tree with unparseable files (the haxe-formatter fork,
+2 of 56 skip-parse): `prefer-inline` 6 → 5, the lost finding a plain call the unreadable file
+spells (`indenter.setParsedCode(…)`) — fail-closed, and a tree with no unparseable scope file
+pays nothing (anyparse `src test` 1814 / 0 skip-parse, 2 → 2 findings).
+
+## From § Guidelines for new tests › A guard on `#if sys` is a test that does not run
+
+`sys` is NOT defined by an hxnodejs build, and js/node is the only runner the suite has.
+So a test method whose body sits inside a bare `#if sys` compiles to its `#else` arm — by
+local convention `Assert.pass('non-sys target')` — and reports a success while asserting
+nothing. It compiles, it is green, and it is dead. Guard anything that needs a filesystem
+or a process with `#if (sys || nodejs)`.
+
+The rule was written down years before anything enforced it, and the pre-existing
+population was never swept: at `1514f108` the tree carried **218 bare `#if sys` guard
+sites across 23 test classes — 167 whole test methods**, and the emitted `bin/test.js`
+held exactly **178** `Assert.pass('non-sys target')` calls (a preprocessor simulation over
+`test/` and a text count over the bundle agreed on that number). Widening every guard took
+the bundle's count to 0 and the real assertions in those 23 classes from 76 to 318.
+
+`unit.DeadTestGuardTest` is what makes the return loud. It walks `test/`, reads every
+directive through `CondDirectives.scan` (the shared reader, so a `#if` inside a comment or
+a string fixture is not a guard) and evaluates each condition with
+`CondRegionLiveness.evaluate` against the flag set `unit.BuildDefines` reads out of the
+running build via `#if <flag>`. Any guard the build cannot prove LIVE fails the suite,
+naming the file, the line and the remedy — with one disclosed exception, `BuildDefines`'
+own `#if <flag>` probes, which are unprovable by construction because they ARE the
+question. Note "cannot prove live", not "is dead": a condition the reader cannot delimit
+(`#if (a` continued on the next line is legal Haxe that still compiles its body out)
+carries no condition span, and is reported rather than skipped.
+
+Two design points worth keeping: it is a suite gate rather than a lint check because
+"`sys` is dead" is a property of ONE build, not of the language — `src/` carries
+`#elseif sys` on purpose at six sites for the neko/hxcpp targets — so a rule would need a
+`deadDefines` config key, which is the original defect one level up: a claim about the
+build that nothing verifies. And `BuildDefines` is a separate module holding no test
+method, because asking `#if sys` is unprovable by construction and therefore has to be
+exempt; keeping the exemption in a module with nothing to swallow keeps it from becoming a
+hiding place.
+
+## From § Guidelines for new tests › "Does the writer touch this shape?" is TWO measurements, not one
+
+Feeding a reported layout back through the writer and getting the same bytes proves only that
+the shape is a fixed point. It does NOT prove the writer is neutral about it — the writer may be
+actively PRODUCING that shape from every other spelling, which is the case a report is usually
+about. The second measurement is the one that decides: write the layout you WANT, format it, and
+see whether it survives.
+
+Measured on S157's reported site, under the reporting tree's own `hxformat.json`
+(`sameLine.forBody: "fitLine"`): `for (…) if (c) { … } else { … }` formats to itself, and the
+broken-out form the report asked for formats back INTO it. One direction says "nothing touches
+this"; the pair says the writer owns the shape and only a knob can hold the other one.
+
+The generalisation for any layout report: the answer is a 2x2 — {reported form, wanted form} x
+{knob off, knob on} — and a slice brief that quotes only the reported-form cell has measured a
+quarter of the question. The same grid is what a fixture pair should assert, which is why the
+slice test carries a `@:pin('guard')` on the re-join direction: no arm of that slice can flip it
+(the knob's flag short-circuits ahead of the shape probe, so an off knob answers the same whatever
+the probe is cut to), and without it the re-join is a fact nothing in the suite records.
+
+When the second cell turns out to have NO knob behind it — the writer owns the shape and no config
+value declines it — the finding is the same shape as a missing feature and belongs in the report
+with its measurement, not in a fixture: assert what the writer does today, say in the doc which
+configurations are stuck with it, and let the absence be visible rather than implied.
+
+## From § Running tests
+
+```sh
+haxe test-js.hxml           # compile the runner to bin/test.js
+node bin/test.js            # the whole suite, one process (~30s)
+tools/suite-shard.sh -n 4   # the same suite across 4 processes (~14s)
+APQ_TEST=RemoveParam node bin/test.js   # one class, for the edit loop
+```
+
+Those two figures were ~21s and ~9s until the `#if sys` guard sweep above revived 167
+test methods that had been compiling to `Assert.pass`. The 23 revived classes cost 7.5s
+together, of which `ApqAstIntegrationTest` — a whole-tree engine walk that nothing had
+run since it was written — is 6.0s. `DeadTestGuardTest` itself is 0.06s.
+
+js/node is the only runner. The suite itself is not target-independent —
+`CompilerOracleE2ETest` calls `js.node.Fs` directly to pin fixture mtimes —
+so there is no neko or `--interp` build of `RunTests`, and the neko/interp
+hxml files that used to sit beside `test-js.hxml` were deleted rather than
+left as runners that no longer compile.
+
+Both `test-js-common.hxml` and `bin/apq-js-common.hxml` pass
+`-D analyzer-optimize`, so the suite exercises the codegen that ships.
+
+## From § Running tests › The assertion count is a per-machine fact, not a build artifact (T716)
+
+A gate that greps `tests executed:` off a transcript names a fixed number per
+commit — 14 304 test METHODS at `615b2a3e`, checked three separate ways in
+one audit: the same binary run twice, and a SECOND binary independently
+built from a second `git worktree add` of the identical commit
+(`haxe bin/apq-js.hxml && haxe test-js.hxml` from scratch). All three gave
+`tests executed: 14304` / `assertations: 46182`, byte-for-byte. **Two builds
+of one commit do not drift on this machine** — the earlier standing worry
+that they might was not reproduced here.
+
+What DOES move `assertations:` is the process's ambient environment, not the
+build. Two classes in this tree read something outside the git tree and
+change how many `Assert.*` calls their body reaches:
+
+- **`unit.query.HaxelibResolverTest.testLibSourceDirResolvesRealInstalledLib`**
+  is the only site whose ASSERTION COUNT depends on the ambient `$HOME` /
+  haxelib-setup state. It is not the only test that spawns the real `haxelib`
+  binary — `unit.cli.ResolutionScopeCliTest.testResolutionLibsMissingLibIsGraceful`
+  does too, through a `resolutionLibs` config entry naming a lib that does not
+  exist — but that one asserts `HaxelibResolver.invocations` merely
+  INCREASED and the run's exit code, both true whether or not `haxelib
+  libpath` finds a repository to fail inside, so its own assertion count
+  never moves. This one calls `HaxelibResolver.libSourceDir('utest')`, which
+  shells out to `haxelib libpath utest`. A `$HOME` that has run `haxelib setup`
+  resolves the path and the test asserts three things (absolute, ends with
+  `/src`, exists on disk); a `$HOME` that has not makes `haxelib libpath`
+  exit 1 ("Please run `haxelib setup` first"), `libSourceDir` returns `null`,
+  and the test takes its own documented graceful-skip branch —
+  `Assert.pass('haxelib not on PATH…')` — one assertion instead of three.
+  Reproduced directly: `haxelib libpath utest` under the real developer
+  `$HOME` prints the utest source root; under a freshly created `$HOME` (an
+  empty directory, the same private-HOME shape `unit.cli.ApqReconCliTest`
+  already uses to force its own usage-error branch) it fails with that exact
+  message. Isolated with `APQ_TEST=unit.query.` on one binary: **8354
+  assertions under the real `$HOME`, 8352 under a scratch one** — a diff of
+  2, on the identical 2117 tests, and every other class in the package (117
+  checked, one full pass each HOME) held steady. This is the mechanism
+  behind the earlier "`APQ_TEST=unit.query.` gives 8316 under a real `HOME`
+  and 8314 under a private one" measurement (T709) — the codebase has moved
+  since, so the absolute numbers changed; the shape (diff of 2, exactly one
+  class) did not.
+- **`unit.query.PatchSliceTest.testCliPreviewAndWriteBothAnnounceThemselvesOnStderr`**
+  guards on `sys.FileSystem.exists('bin/apq.js')` — a path relative to the
+  process's CWD, on purpose (its own doc comment: "a missing `bin/apq.js` is
+  not a failing contract") — and takes a one-assertion skip branch instead of
+  its normal five when the engine has not been built yet from wherever the
+  runner's CWD sits. Same shape as the `$HOME` case above: an ambient,
+  per-checkout precondition, not a build non-determinism. This is the
+  mechanism behind the "7 fewer assertions in a worktree with an empty
+  `bin/`" trap.
+
+**Neither is a bug to fix.** Both tests document their own graceful
+degradation on purpose — the alternative is a hard failure on every fresh
+clone or container that has not yet run `haxelib setup` or built
+`bin/apq.js`, which is worse than a documented `±N`. Every worker in this
+project runs with both preconditions already met (a real developer `$HOME`
+with `haxelib setup` done, `bin/apq.js` built before the suite runs), which
+is why the six-reading main-tree census this slice's brief quoted never saw
+either move: **read `tests executed` as the number a gate can require
+exactly; read `assertations` as that number, `±` up to 6 (2 from
+`HaxelibResolverTest`, up to 4 from `PatchSliceTest`) on an environment
+missing one of the two preconditions above.**
+
+Not reproduced in this audit: a difference between two builds of the SAME
+commit under IDENTICAL preconditions. The `TMPDIR` fixture collision this
+section documents below is fixed (S150); the `HOME`-keyed fork-path cache
+write (T706, below) is real but invisible in a same-fork-path environment
+because the write short-circuits on equal content. No other axis (oracle
+cache warmth, directory-walk order, wall-clock date) produced a difference
+across this audit's two-worktree, two-independent-build, three-run
+comparison.
+
+## From § Running tests › The core stays target-independent
+
+- **A bare `import js.node.…` at module scope.** The *uses* were already
+  behind `#if nodejs`; the import was not, and an import is resolved
+  unconditionally. Guard the import with the same condition as its uses.
+- **A `final` field in a structure `typedef` that a bare object literal has
+  to be inferred INTO.** A `final` structure field lowers to a `never`
+  setter. Where the expected type is written at the literal (a declared
+  local, field, parameter or return type) that costs nothing — `GrammarPlugin.LayoutMetrics`
+  keeps its `final` fields and builds for every target. The error appears
+  where the literal's own anonymous type is inferred FIRST and the typedef
+  then has to unify with it, typically through a type parameter: a lambda
+  returning `{ nodes: …, certain: … }` binds `fold`'s `S` to the plain
+  anon `{ nodes, certain }`, and a `MemberRun -> MemberRun -> MemberRun`
+  join no longer fits (`Inconsistent setter for field certain : never
+  should be default`).
+
+  Measured on `MemberBranchScan.MemberRun`, one variable — same source,
+  same flags, target swapped: `--jvm` rejects it; `-js` and `-neko` both
+  accept it. Not measured on hxcpp. So this is not "js versus static
+  targets": it is `--jvm` being strict where the others are lax, which is
+  exactly what makes a `--jvm` build worth running. The reverse also
+  holds — a shape where the join is a top-level function rather than a
+  lambda is rejected on `-js` too, so `final` here is not a
+  target-conditional style choice but a real unification constraint.
+
+A `--jvm` build of a minimal parse+lint harness is the cheapest way to
+re-check this. That harness is committed:
+
+```sh
+haxe tools/jvm-portability.hxml     # ~9s; parser + writer + every builtin check
+java -jar bin/jvm-portability.jar   # prints the gate line and a census line
+```
+
+## From § Running tests › The core stays target-independent › What the probe actually covers — NOT a package
+
+The trigger has been written as "run it if you touched `src/anyparse/query`
+or `src/anyparse/check`", and that reads as a coverage claim the probe does
+not make. Those two paths are the probe's **default input** — the files it
+READS and lints (`JvmPortability.DEFAULT_SCOPE`). What it **compiles** is a
+different set entirely: `-main JvmPortability` with `-cp src -cp tools`, and
+Haxe types only the modules that main reaches. Measured on the jar built at
+`1c225caf`, 3346 `anyparse/*` class entries:
+
+| package | classes in jar | modules with no class in the jar |
+|---|---|---|
+| `anyparse/grammar` | 1525 | — |
+| `anyparse/check` | 1215 | 11 of 234 |
+| `anyparse/query` | 439 | **65 of 129**, plus all 87 files under `query/cli` |
+| `anyparse/format` | 86 | 20 of 27 |
+| `anyparse/core` | 68 | 7 of 13 |
+| `anyparse/runtime` | 13 | 4 of 15 |
+
+`anyparse/query/cli` contributes **zero** entries — the CLI is not reachable
+from this `-main`, so no command module is typed for `--jvm` at all. Nor are
+half the top-level `query` modules: `Address`, `Patch`, `ReplaceNode`,
+`Selector`, `Engine`, `NewFile`, `MoveSymbol`, `MutationVerdict`,
+`StdlibDifferential` and the rest of the addressing/mutation family are
+absent, as are `OracleCache`, `CompilerServer`, `CompilerOracle`,
+`HaxeSpawn`, `FixVerifier` and `OracleCoverage` on the `check` side. A few of
+those emit nothing by construction (`ExitCode` is all-inline, `Severity` an
+`enum abstract`); most are simply never reached.
+
+So: a green probe after a slice in `query/cli` proves the slice's code
+compiles for **js**, and nothing more. `tools/battery.sh` already gets this
+right in its own trigger — it re-runs the probe when anything under `src`,
+`tools/JvmPortability.hx` or the hxml moved, deliberately not narrowing to
+the two linted packages — and it is the prose around it that was wrong.
+Widening what the probe TYPES is a separate question: the honest way is a
+`--macro include('anyparse.query.cli')`, which trades build time for
+coverage and would first have to survive `-lib hxnodejs` not being there.
+
+## From § Running tests › The core stays target-independent › Reading the two output lines
+
+```
+gate: files=485 wrote=485 threw=0 lintdiff=1+0-
+census @ 1c225caf: checks=180 findings=839 — a reading of THIS tree, not an invariant — …
+  phases: roundtrip=2.6s lint=11.8s
+```
+
+The split is deliberate, and it exists because the numbers were being read as
+one kind of thing when they are two.
+
+**The gate line is the verdict.** `wrote == files` and `threw == 0` are the
+invariant — `writeRoundTrip` throws only on a parse failure or a comment
+loss, never on a formatting difference. `lintdiff=1+0-` is fixed too: it is
+`JvmPortability.lintDiffProbe`'s own embedded self-test of `LintDiff`'s
+normalization (two hand-written JSON report fixtures compared against each
+other, nothing to do with `src/`), forcing the macro-generated `LintDiff`
+JSON parser to actually build under `--jvm` — a `-main` target only compiles
+what it reaches, so without that call neither `LintDiff` nor its parser would
+be exercised by the probe at all. `1+0-` is that helper's own documented
+right answer (the duplicate-code pair differs only in a `./` and a line
+number, which normalization erases, leaving the new dead-code record as the
+one real surplus) — a T747 investigation confirmed it is exactly that fixed
+self-check, not a JS/JVM lint desync, before recording it here.
+
+**The census line is a reading, and it is stamped with the commit it was
+taken on.** `checks`, `findings` and `files` are all functions of the whole
+tree: a doc reflow moves `findings`, a new rule moves `checks`, a new file
+moves `files`. The stamp (`git describe --always --dirty`, or `unknown`) is
+there because this exact number was quoted twice in a row as a fixed
+expectation and was wrong both times — 1183 written where the tree said 1177,
+then 1177 where it said 929 — each time a correct number measured one commit
+before the header it was written into. **Take the census on YOUR base with a
+freshly built jar; never copy one from a queue header, a brief or this file.**
+
+`findings` was renamed from `violations` in the same change, and it now means
+something it did not before: `Linter.run` is called WITH a per-file config
+resolver and `applyEnablement: true`, so the probe answers the same rule set
+the project's own `apqlint.json` declares. Before that it passed no resolver,
+which skips the enablement pass entirely — every registered rule counted,
+including the 42 that declare `Check.DefaultOff` and are OFF unless a project
+opts in, so registering one moved the number by its whole finding count with
+nothing in the code having changed. On `1c225caf` the config-blind count was
+927 and the config-aware one is 839; the 88-finding gap is exactly two rules
+the project does not enable — `asymmetric-branch-braces` (86) and
+`default-repeated-argument` (2) — confirmed by re-running `apq lint` over the
+same two directories with every rule force-enabled (909 findings, the same two
+rules as its surplus over the configured run). T783 had already measured the
+same mechanism twice, at 893 -> 1180.
+
+It is still NOT the same number as `apq lint src/anyparse/query
+src/anyparse/check --all` (821 on that commit): that run joins a `SymbolIndex`
+over the declared `resolutionRoots`, which the cross-file checks read and this
+probe has no business building. Close, for the same reason it should be —
+comparable in kind, not equal.
+
+## From § Running tests › Parallel shards: one suite, N processes
+
+The previous section parallelises *workers*. This one parallelises a *single* suite run. `tools/suite-shard.sh` splits the registered test classes into N `APQ_TEST` filters and runs one `node bin/test.js` per shard. The split itself is not the script's — the script asks the runner for its class list (`node bin/test.js --list-classes`) and hands it to `apq shard-plan --classes <list> --shards N [--format lines|filters]`, which applies every gate below and prints the plan; the script spawns processes and waits. That division is the reason the gates are testable at all (`test/unit/query/ShardPlanTest.hx`), which they were not while they were awk:
+
+```sh
+tools/suite-shard.sh                      # 4 shards (default)
+tools/suite-shard.sh -n 6                 # the measured knee on a 16-core box
+tools/suite-shard.sh --verify             # + a monolith run, counts compared
+tools/suite-shard.sh --expect <T>/<A>     # + compare to YOUR last known-good pair
+tools/suite-shard.sh --plan-only          # print the plan, run nothing
+tools/suite-shard.sh --bin /tmp/w1/test.js  # a private worker build (previous section)
+tools/suite-shard.sh --keep               # keep the work directory even on success
+```
+
+`--verify` and `--expect` are mutually exclusive — the first measures the pair the second asserts. Do not copy a literal into `--expect` out of this document: the totals move with every slice, and a stale pair fails a run that is fine.
+
+Measured on Mac15,9 / 16 CPU at `11423 tests / 24066 assertions`, wall time of the parallel region (end-to-end including planning in brackets):
+
+| shards | wall | speedup |
+|---:|---:|---:|
+| 1 | 21.8 s (22.4 s) | 1.0x |
+| 2 | 13.8–14.1 s (14.5–14.9 s) | 1.6x |
+| 4 | 8.5–8.9 s (9.5–9.9 s) | 2.5x |
+| 6 | 6.8–6.9 s (8.2–8.3 s) | 3.2x |
+| 8 | 6.9 s (8.5–8.6 s) | 3.2x |
+
+Past six shards the curve is flat: what remains is the sticky group below plus the per-process warm-up each shard re-pays (roughly 2.4 s of std/haxelib resolution parsing that a single process pays once). The default stays at 4 because the extra shards buy ~1.5 s at the price of that warm-up multiplied again — worth asking for explicitly on a many-core machine, not worth defaulting to on a small one.
+
+**The sticky group.** Every shard process claims a PRIVATE temp root before it writes a fixture (`unit.cli.CliFixture.isolateTempDir`, § "Declared arms"), so fixture paths cannot collide between shards and the compiler-server records under them are per-process too. That sentence used to read "most tests write unique per-run temp directories … so they parallelise freely", and S150 showed it was false: the names were unique within ONE process and two processes started together produced the same ones. The conclusion held; the reason did not. ONE path is still a fixed constant and is *not* safe to split: `bin/.last-sweep.json` (the corpus Δ-baseline, rewritten by `HxFormatterCorpusTest` and read by `ApqDxTier5CliTest`). The second used to be `/tmp/anyparse-last-probe.hx` (`ProbeCommand.STAGE_PROBE_PATH`, the slot `apq probe` overwrote and the Tier-5 tests read back byte-for-byte); since S170 that slot resolves per process under the caller's temp root, so it no longer forces anything into the group. The eight classes are still pinned to shard 0 as one block — the group has not been re-derived against the narrower reason (T812).
+
+That list is derived, not remembered: `hxq lit 'probe' test/` finds every class holding an exact `'probe'` string leaf (since S188 the default kind set is the grammar's whole string-content vocabulary, so the old `--kind Literal` here now prints a note about the spelling it drops) (read each hit — one of them is a fixture *method* named `probe`, not the subcommand), and `hxq lit '.last-sweep.json' test/` finds the baseline's users. Re-derive it when adding a test that stages a probe or touches the sweep baseline. A writer left outside the group does not fail the run: it races the read-back assertion in a window of well under a millisecond, so it shows up weeks later as an unreproducible flake. Better still is to make the path configurable so the block can shrink.
+
+**Parity is a gate, not a hope.** A sharded run that silently drops a class still reports green, so `apq shard-plan` refuses to emit a plan unless the union of the shard lists equals the registration list exactly. Three specifics worth knowing:
+
+- The class list comes from the RUNNER, not from a source file: `node bin/test.js --list-classes` prints the generated registry, which is by construction exactly what one process would register. Nine registered classes do not end in `Test` — five end in `Probe`, four *begin* with it — so both a `*Test` suffix filter and a `*Probe` glob drop tests silently; the suffix filter loses 43 of them, and nothing else notices. The older `--runner <file>` door still exists and still reads `addCase(new X())` as an AST shape rather than text, so constructor arity and dotted-vs-bare names are structure too and anything it cannot name is a REFUSAL quoting the line; `test/RunTests.hx` simply holds no such line any more. Its predecessor was a search pattern plus a regex strip, and it dropped `addCase(prebuilt)` and `addCase(new A(), new B())` in silence — a class registered either way ran in no shard while class parity still passed.
+- `APQ_TEST` is a **substring** match over the fully-qualified class name. A name that is a substring of another would run in two shards and inflate the totals, so the generator hard-fails on any such pair rather than producing a plausible-looking wrong number.
+- The sticky list is hand-maintained (`ShardPlan.STICKY_CLASSES`), so every pinned name must still be registered — otherwise a rename un-pins a class in silence and the race comes back. The per-class weights next to it only balance the split; no gate reads them, so a stale weight costs balance and never correctness.
+- Test and assertion totals grow with every slice, so no literal is pinned in the script. Class parity plus the no-collision gate plus a non-empty, green shard is what makes the totals trustworthy; `--verify` (pays for a monolith run, and fails on a monolith that is red as well as on one that disagrees) and `--expect T/A` are the explicit cross-checks when you want the totals proved rather than argued.
+
+Exit status is 0 only when every shard is green *and* parity holds. A red shard, an empty shard, a collision, an unnameable registration, an un-pinned sticky class, a misplaced class or a count mismatch all exit non-zero and keep the work directory — the shard logs when the run got that far, the plan files when it refused earlier. Kept, not leaked: on green the directory is removed, and `--keep` overrides both ways — see § "Scratch directories: every tool's, and who removes them".
+
+**When to shard, when not.** Shard the full battery during a slice — after the `APQ_TEST`-filtered edit loop, when you want the whole suite as a checkpoint. Run the **monolith** for the final pre-commit run of a slice or campaign, and any time the shard plan itself changed (a new sticky-state test, a new fixed shared path, a new class whose name overlaps another).
+
+Sharding moves the suite along two axes at once, and they fail in opposite directions. It changes **ordering** — cross-class effects like a warm cache one class leaves for the next, or a first-in-pays-the-warm-up cost, appear or vanish depending on which classes share a process, so a bug that only fires when A runs before B is invisible to a run that puts them in different processes. And it adds **concurrency** that the monolith never had: classes that used to be merely sequential now run simultaneously against one working tree, one `/tmp`, one `$HOME`. The monolith is the insurance against the first; the sticky group is the insurance against the second. One monolith per slice buys the first cheaply — nothing buys the second except keeping the shared-path inventory honest.
+
+## From § Running tests › The shard runner's last line is a verdict, and each shard is checked against its own exit code
+
+Two slices in a row reported that `tools/suite-shard.sh` disagreed with itself,
+and the two reports contradicted each other — one said the aggregate claimed a
+failure the per-shard lines denied, the other that the shards were green while
+the monolith caught the failure. S122 reproduced both by injecting a known
+failing assertion into a named class (`unit.core.BodyGroupPrefixChargeConsumerTest`,
+shard 3 of 4) and re-running at `-n 1`, `-n 4` and `-n 8`. **Neither was a
+defect.** At `-n 4` the run printed
+
+```
+shard 0:  202 classes /  3206 tests /   7516 assertions / 0 failures / 0 errors (exit 0)
+shard 1:  196 classes /  3372 tests /   6615 assertions / 0 failures / 0 errors (exit 0)
+shard 2:  198 classes /  3791 tests /  10196 assertions / 0 failures / 0 errors (exit 0)
+shard 3:  198 classes /  3764 tests /  21429 assertions / 1 failures / 0 errors (exit 1)
+--- suite-shard: 794 classes / 14133 tests / 45756 assertions / 1 failures / 0 errors in 14.256s across 4 shards ---
+```
+
+The aggregate is the SUM. `0 + 0 + 0 + 1 = 1`, the failing shard's own line
+carries the `1` and the `(exit 1)`, and the same holds at 1 and at 8 shards.
+The second report is the `--verify` arm doing its job: a monolith that exits
+non-zero while every shard is green already prints
+`suite-shard.sh: the monolith run is RED (exit N, ...) while the shards are green`
+on stderr and `parity: monolith run RED (...)` on stdout. **Both accounts were
+artefacts of reading a different line**, which makes the defect the OUTPUT, not
+the counting.
+
+Probing the third hypothesis — is a shard that DIES counted at all? — found the
+real one. A test double that killed shard 0 after a single result row produced:
+
+```
+shard 0:  202 classes /     1 tests /      1 assertions / 0 failures / 0 errors (exit 1)
+--- suite-shard: 794 classes / 10928 tests / 38241 assertions / 1 failures / 0 errors ... ---
+parity: counts not cross-checked (class parity OK: 794 placed; producer count == REGISTERED_CLASSES (794))
+```
+
+3205 tests never ran. Every printed count reads green, stderr carried NOTHING,
+and the last line of the whole run said `class parity OK`. That note is true and
+is a statement about the PLAN — every registered class was dealt onto exactly
+one shard — which stays true while a shard dies with a quarter of the suite
+unrun. The cause: `apq test-summary` parsed the one surviving
+`testName: OK .` row into `1 tests / 1 assertions / 0 failures / 0 errors` and
+exited **0**, so the caller added a truncated prefix to its total as though the
+missing tests had passed. Only `(exit 1)` and the process exit code dissented.
+
+Three changes, all in the reporting layer:
+
+- **`apq test-summary --exit-status <N>`** hands the parser the status the run
+  actually returned and reconciles the two. A non-zero status with nothing
+  failing in the report, or a zero status with failures in it, prints an
+  `exit-status disagreement:` line after the counts and exits 1. The counts line
+  is printed either way — a caller that parses it must keep getting it, so a
+  disagreement is an extra line, never a withheld answer. Covered by
+  `unit.cli.ApqTestSummaryExitStatusCliTest` (7 cases, both directions plus the
+  no-flag control), and by arm `M-EXIT-STATUS-AGREES`.
+- **The shard line names a shard that did not finish**, and its counts are
+  marked partial:
+  `shard 0: 202 classes / 1 tests / 1 assertions / 0 failures / 0 errors (exit 1)  <-- did NOT finish: these counts are partial`,
+  with `the totals above are a SUM OF WHAT RAN, not a total` on stderr.
+- **The last line is always a verdict** — `suite-shard: PASS — 794 classes /
+  14132 tests / 45755 assertions over 4 shards`, or
+  `suite-shard: FAILED — shard 3 is red (1 failures / 0 errors)`. Read that one;
+  every line above it is a measurement, and a measurement of a red run still
+  reads as a table of numbers. A red shard also gets its locus printed on stdout
+  (`  shard 3 first failure: <test>  line:N  <message>`) — `test-summary`
+  already computed it and the script used to throw it away.
+
+The opt-in `--verify` design is unchanged and is not the bug: a monolith
+cross-check would defeat the sharding, and
+`parity: counts not cross-checked (class parity OK: N placed)` is a statement of
+what the run did.
+
+One trap paid for on the way, worth knowing for any shell in this repo:
+**BSD `sed`'s BRE has no `\|`**. The first cut of the locus line used
+`s/^first \(failure\|error\):/…/p`, which matched nothing on macOS and printed
+nothing at all — silently, because a `sed -n` that matches nothing is a
+successful command. A reporting fix that reports nothing is the same class of
+defect it was fixing.
+
+## From § Running tests › A span is a CODEPOINT offset — a census that slices bytes measures a different file
+
+`Span.from`/`Span.to`, and therefore every `@from-to` in `hxq ast --spans`, count
+**codepoints**, not bytes. On a file whose earlier lines are pure ASCII the two
+agree, which is what makes this expensive: a census works on hundreds of files
+and gets a plausible number.
+
+Measured cost: S117 built a purity census that sliced member bodies by byte
+offset and reported **34 pure methods in `WriterLowering` and 19 in `Lowering`**.
+Slicing by codepoints gives **0 and 5**, and those 5 are exactly the leaves an
+earlier slice had already named. It nearly published a refutation that was its
+own arithmetic, and caught it only because the number looked too good. This
+codebase makes the trap likelier than most: the `ω-` markers used in comments
+are multi-byte and they sit ABOVE the members a census wants to read.
+
+The helper already exists and it is one command: **`hxq source <file> --select
+'<Kind>:<name>'`** prints exactly that node's raw source. A census that slices
+the file itself is reimplementing it — and reimplementing the unit conversion
+too. When a census genuinely needs its own slicing, decode to a string first
+(`bytes.decode('utf-8')` in Python, `File.getContent` in Haxe) and index THAT;
+never index the byte buffer.
+
+`hxq ast --help` used to call `--spans` a "byte-range annotation", which is where
+at least one census got the idea. It now says codepoint.
+
+## From § The per-slice battery › Scratch directories: every tool's, and who removes them
+
+Four tools create a directory under `TMPDIR`. Until S134 two of them never
+removed it, and on 2026-09-05 that reached 99 % disk — 51 GiB free of
+3.6 TiB — with 125 `anyparse-mutcheck.*` directories holding **46.6 GB**,
+one of them from a crashed run still holding **105 registered git
+worktrees** at a long-dead commit.
+
+**Five, since S150** — the suite process claims one too. `unit.cli.CliFixture.isolateTempDir`
+is `mkdtemp` plus the same `.apq-owner` stamp, so a run that is SIGKILLed (the common case
+under an agent harness) is reaped by the sweep below exactly like the other four; the runner
+removes it itself on any completion, red or green. It is the one entry whose failure column
+is not "path printed": nothing prints, because the directory holds only fixtures and the
+transcript is the artifact. Why it exists at all — two suite processes under one shared
+`$TMPDIR` generate the SAME fixture names and delete each other's files — is
+§ "Declared arms", the whole-suite-mode paragraph.
+
+`--keep` on any of the four keeps it — that is the debugging escape hatch,
+and `mutation-arm.sh --keep` forwards it to the `mutation-check.sh` it
+drives, so both directories survive together — **and, since T738, "keeps"
+means past this process's own exit, not just past its own cleanup.** The
+sweep predicate below reads "stamped owner is gone" identically for a
+CRASHED run and a `--keep` run that finished normally, because the owner
+process has exited either way; a `--keep` run that only skipped its OWN
+`tmpl_discard` call left the directory exposed to the very NEXT run's
+startup sweep with nothing distinguishing it from an abandoned one —
+measured (S155): a saved workroot with 10 transcripts was gone by the time
+the wave's finalists started. The fix is a marker file
+(`tmpl_mark_keep`, `.apq-keep`) that `tmpl_is_orphan` checks before anything
+else and treats as permanently NOT orphan; all four tools write it, but only
+on an EXPLICIT `--keep` (or `suite-shard.sh --plan-only`'s internal
+equivalent) — never on a bare "kept because this run failed / was red"
+without `--keep`, which stays exactly as before and ages out through the
+ordinary grace-period sweep. That scoping is deliberate, not an
+afterthought: a marker that fired on every non-green exit would make it
+PERMANENT, and this file's own header already prices what an unbounded
+kept-forever set costs (46.6 GB, 125 directories) — a marker exempt from
+its own sweep for every red run would reopen exactly that hole one layer
+in. Verified with two consecutive runs: claim a directory, mark it kept,
+backdate its mtime and stamp past `TMPL_GRACE_SECONDS`, and a second
+`tmpl_sweep` still leaves it standing — a directory with no marker under the
+same conditions does not. `tmp-lifecycle.sh --list`'s STATE column now reads
+`KEEP` for a marked directory rather than reusing `ORPHAN`/`live`, which
+would have hidden exactly this distinction from the hand tool too.
+
+**The recorded blame was half wrong.** `battery.sh` and `suite-shard.sh`
+were already correct: their scratch directory is deleted on green and kept
+on red BY DESIGN, so the ~2.8 GB of orphaned `apq-battery.*` was twenty
+failed or killed runs behaving as documented. The two that leaked
+unconditionally were `mutation-check.sh` — whose header said the workroot is
+"never deleted", at ~23 MB of private build per track, so one `--all` sweep
+of the 208 arms is **~4.8 GB kept forever** — and `mutation-arm.sh`, which
+`exec`ed into mutation-check and so took its own EXIT trap out of the
+process. It now runs mutation-check as a child.
+
+**SIGKILL is the half no trap closes**, and it is the common case here: the
+agent harness kills a session outright. Measured by SIGKILLing a 6-arm run:
+295 MB and 6 registered worktrees left, plus 25 orphaned `haxe`/`node`
+children still writing into the directory. So every one of the four sweeps
+orphans at STARTUP, in `tools/tmp-lifecycle.sh`.
+
+**The sweep predicate, and why it is safe with siblings running.** Several
+workers run these tools at once — the normal state of a campaign — so an
+age-only sweep would delete live work. A claimed directory carries a stamp
+naming its owner's pid, and a directory is swept only when all of:
+
+* its basename is one of this project's four prefixes plus mktemp's six
+  template characters, **directly** under the scratch root — every other
+  shape is refused out loud (five refusal shapes are exercised, including
+  the repo root and `$HOME`);
+* its stamped owner is gone (`kill -0` fails). A REUSED pid reads as alive,
+  so pid reuse can only ever make the sweep keep too much;
+* nothing has written into it for `TMPL_GRACE_SECONDS` (300) — the newest
+  mtime among its **top-level entries**, because a grandchild appending to a
+  track log does not move the directory's own mtime.
+
+A directory with no stamp predates the change; age is then all there is, so
+it needs `TMPL_LEGACY_SECONDS` (6h) of silence. That window is what protects
+a sibling still running a pre-fix copy out of their own worktree — which
+happened during S134 and is visible in `--list` as an owner-less row.
+
+**Deregistration, not just deletion.** `git worktree prune` only forgets
+entries whose directory is GONE, so a leaked directory keeps its
+registration alive indefinitely. Removal comes first and the prune second,
+never the reverse.
+
+`tools/tmp-lifecycle.sh --list` prints every scratch directory with its
+owner pid, ORPHAN/live verdict, idle seconds and size; `--sweep` runs the
+predicate by hand; `--help` is the whole rationale. `APQ_TMP_NO_SWEEP=1`
+turns the startup sweep off.
+
+**Two shell facts this cost, both worth knowing before editing any of these
+scripts.** A failing LAST command in an EXIT trap REPLACES the script's exit
+status — measured on bash 3.2.57, `exit 7` under such a trap exits 1, and so
+does `exit 0` — so every cleanup call inside a trap ends `|| true`, or a
+refused cleanup silently turns a green gate red. And an async child of a
+shell WITHOUT job control inherits SIGINT set to IGNORE, and a script cannot
+trap a signal ignored on entry: any A/B of the signal traps must run the
+target in the foreground or `set -m`, or both arms measure nothing.
+
+## From § The per-slice battery › The shard plan's own producer is cross-checked against a hand-maintained count
+
+`tools/suite-shard.sh` derives everything — the plan, the filters, the class total —
+from ONE list, `node bin/test.js --list-classes`. That makes its closing
+`class parity OK` note a statement about placement (every listed class is dealt onto
+exactly one shard, no name is a substring of another, no shard is empty) and NOT about
+completeness: a producer that silently dropped a class hands over a shorter list and
+every downstream check agrees with it. Only `--verify`, which pays for a monolith run,
+could see that — and `tools/battery.sh` does pass `--verify` on every non-`--quick`
+run, so the battery is covered.
+
+A plain `tools/suite-shard.sh -n 4` is not, and that is the form used mid-slice. It now
+compares the produced count against `REGISTERED_CLASSES` in
+`unit.TestDiscoveryParityTest` — a literal a human bumps when a test class is added or
+removed, and therefore not derived from the generator under test — BEFORE any shard
+runs, and refuses on a mismatch naming both numbers. It is advisory only if the literal
+cannot be read (a rename in that file must not fail a green suite), and the pin's own
+assertion inside the run stays the authority.
+
+## From § The per-slice battery › The JS build is not reproducible — a binary `cmp` needs the base built TWICE
+
+`haxe bin/apq-js.hxml` on an UNCHANGED tree does not always emit the same bytes.
+Measured over three builds of one base revision, `bin/apq.js` came out
+`a4bf82eb`, `bcda1b01`, `bcda1b01`, and `bin/test.js` drifted the same way: a
+switch-arm pair floats in the generated output. Nothing about the program
+changes, and no gate in this project reads a binary hash — but the moment one
+does, the naive form of that gate is wrong.
+
+So a check of the shape "the change is codegen-neutral, `cmp` proves it" is not a
+check: a single before/after pair says nothing, because the two builds could
+differ on an EMPTY change. Build the BASE arm at least twice, collect the set of
+hashes it produces, and require the patched build's hash to fall inside that set.
+A patched hash outside it is evidence; one inside it is the strongest statement
+this build can make.
+
+The same applies to `-D dump=pretty` output and to any "is the generated code
+unchanged" argument in a slice report. Say which arm produced which hash and how
+many times each arm was built, or do not quote hashes at all.
+
+## From § The per-slice battery › A file the oracle's hxml never compiles is permanently un-autofixable
+
+Sibling of the section above, on the WRITE side. `lint --fix` splits its rules
+into a safe set and a RISKY set, and the risky ones are applied only when a
+compiler oracle can typecheck the result. A file outside the oracle hxml's
+compile set — `test/_ReconSkipParse.hx` is the standing example, a fixture whose
+whole purpose is to not compile — can therefore never receive a risky fix. It is
+reported every run and fixed by none.
+
+`--no-oracle` is NOT the escape, and reaching for it is the natural mistake: it
+does not relax the requirement, it removes the thing that satisfies it, so every
+risky rule goes report-only for the whole run ("risky fixes stay report-only (no
+compiler oracle for this run)"). The two real escapes:
+
+- Apply the edit with the op the rule's fixer would have used — `remove-import`
+  for `redundant-import` / `unused-import`, `remove-member` for a dead member,
+  `patch` for anything smaller. The op re-parses and canonicalises, so the file
+  ends in the same state the fixer would have left it in; what is missing is only
+  the compiler's confirmation, which for this file does not exist anyway.
+- Or bring the file into the oracle's compile set, when it is a file that SHOULD
+  compile and its absence is the accident.
+
+Both are deliberate acts, which is the point: a fix nothing can verify should not
+land silently. What was wrong was only that the state had no name — the finding
+came back every run with no way to reach a fixed point, and reading the summary
+gave no hint that this file could never leave it.
+
+## From § The per-slice battery › The move family: the one op family with its own byte capture
+
+`lint --all`, a `--fix` tree, `fmt --list` and the refs / rename / safe-delete
+fixtures between them run every check and every fixer — and not one of them ever
+calls `move`, `move-member`, `pull-up` or `push-down`. A seam refactor across 109
+files therefore shipped a `MoveSymbol` scan reading the CURSOR file's comment
+regions while scanning the DESTINATION's text, with the whole suite green; it was
+caught by the author's own forwarding audit, not by a gate.
+
+`test/unit/query/MoveFamilyCaptureTest.hx` is that gate: five fixtures — a doc block on
+the moved declaration, a `using` line to carry, an importer to repoint, a
+`#if`-guarded member, a cross-package static move, plus comments and string
+literals spelling the moved names — driven through the four ops with the FULL
+bytes of every changed file pinned. Pure and in-memory (no temp directory), 5
+tests / 17 assertions in 0.02 s, so it costs the suite nothing measurable.
+
+```sh
+APQ_TEST=MoveFamilyCapture node bin/test.js   # the move family alone, ~0.3 s
+```
+
+## From § The per-slice battery › The corpus is a gate for the WRITER, not for every input the writer reads
+
+946 fixtures is a lot of Haxe, and the reflex is to read a `sweep --diff` of
+`0 fixtures changed` as "nothing about layout moved". Measured twice, it does not
+carry that much:
+
+- S61's four comment-lexer mutations moved **0 of 946**; the unit pins were the
+  only killers.
+- S63 broke the `@:fmt(complexItems)` classifier outright — the generated
+  predicate made to answer an empty list for every element — and the corpus again
+  moved **0 of 946**, verdicts identical, while the same binary failed **21
+  assertions** in `HxComplexItemWrapTest`, `HxContainerItemWrapTest` and
+  `ComplexItemKindsSeamTest`.
+
+The snapshot the corpus writes is a per-fixture PASS/FAIL verdict, not the output
+bytes, so a fixture already failing can change what it emits and still count as
+unchanged; and no fixture happens to put a call-bearing container in an argument
+list at a width where the chunk policy decides anything. Treat a corpus Δ0 as
+evidence that the fixtures' VERDICTS held, and reach for a byte capture — a
+`fmt --write` tree diffed against the other arm, or the unit pins for the
+mechanism you touched — when the question is whether the bytes held.
+
+## From § The per-slice battery › Reproducing the corpus census: `apq sweep --run`
+
+`781 pass / 120 fail / 43 skip-parse` is quoted as a gate in over a hundred
+slice reports, and until S131 the only thing that could produce it was a full
+`node bin/test.js` under `$ANYPARSE_HXFORMAT_FORK`. `apq sweep` read that run's
+snapshot back — it has never run the corpus — and `apq fmt`, the shipping
+formatter, could not open a `.hxtest` at all: it read the whole three-section
+file and answered `unexpected input`, which reads as a parser defect. A gate
+whose number nothing can re-derive is one bad refactor away from being
+decorative.
+
+```sh
+apq sweep --run                                # re-derive the census, ~0.7s
+apq sweep --run --diff bin/.last-sweep.json    # pair it against the snapshot
+apq sweep --run --corpus <dir> --save <path>   # a census of any fixture tree
+```
+
+`--run` walks every `.hxtest` under `$ANYPARSE_HXFORMAT_FORK/test/testcases`
+(or `--corpus <dir>`) and prints the SAME six-counter line the snapshot reader
+prints, from one copy of the formatting code, so the two forms can be compared
+by eye. `--save` writes the snapshot schema the harness writes, and `--diff`
+keys both sides through the same normaliser — so the pairing is per fixture,
+not per total. Measured on `2d39cdf1`: `946 of 946` fixtures agree, status for
+status, and the totals line is byte-identical to the harness's.
+
+It is a SECOND driver over the same engine, deliberately not a shared one. If
+`SweepCorpus` and `HxFormatterCorpusTest` ever disagree, `--diff` names the
+fixtures — which a shared predicate could not do.
+
+**What the gap actually was.** The measurement is worth recording, because four
+of the five hypotheses about it were wrong in a way that reads plausible:
+
+| Difference | Fixtures | What it did |
+|---|---|---|
+| the trailing `\n` | 779 of 781 PASS | `.hxtest` sections are padded with one `\n` that the reader strips from `expected`; the writer emits `finalNewline`, so a self-comparison is one byte long by construction and can never pass |
+| `disableFormatting` / `excludes` | 2 | driver-level meta-config: the fork's formatter never ran, so `expected` is empty and the writer must not run either |
+| the comment-loss guard | 5 | `writeRoundTrip` refuses to hand back output that dropped a comment; the harness calls the writer directly and compares the lossy bytes. Both call it FAIL — verified in both arms, since `APQ_ALLOW_COMMENT_LOSS=1` turns the refusal into the plain byte-diff and moves no count |
+| MALFORMED / SKIP\_CONFIG | 1 + 1 | one CLI error bucket where the harness has three |
+
+`apq writer-equals <fixture>.hxtest <same>.hxtest` was already the per-fixture
+predicate for everything except that first row — which is why it reported a
+byte-diff on 779 fixtures that PASS. `apq recon --probe <fixture>
+--writer-equals` already normalises the newline and is the single-fixture form;
+`--run` is the whole-corpus one.
+
+**`apq fmt` refuses a `.hxtest` by name** rather than reporting a parse failure,
+and names both replacements. The refusal is not cosmetic: `fmt --write` on a
+fixture, had it learned to read the input section, would have overwritten the
+fixture with a third of itself.
+
+## From § The per-slice battery › The step graph: four branches, one join
+
+`build` stays sequential because everything else executes what it produces. Its
+third compile is a TYPECHECK, not a build: `haxe recon.hxml --no-output` is the
+only gate that reaches `test/_ReconSkipParse.hx`. `-main RunTests` now types every
+module in a package under `test/` — the discovery macro asks the compiler for each
+one, so an orphaned helper in `test/unit/` can no longer rot — but `_ReconSkipParse`
+sits at the test ROOT, and discovery skips root-level modules because those are
+entry points. So that module had no gate at all and could rot against any `src/`
+signature it calls — measured
+by planting `private static function s17PlantedDefect(): Int { return 'not an Int'; }`
+in it: `haxe test-js.hxml` and `haxe bin/apq-js.hxml` both stayed exit 0, the new
+step failed the run with `recon.hxml did not typecheck`. `--no-output` writes no
+artifact at all, and it costs ~2.6s inside a stretch the ~25s test compile already
+owns. It used to be that `--no-output` was ALSO what kept concurrent workers off one
+artifact, because `recon.hxml` named the machine-global `/tmp/recon.js`; since S171 the
+hxml writes the repo-relative `bin/recon.js` like every other hxml here, so a worker
+that builds it for real is isolated by its own worktree. The clobber that motivated
+that: 3 concurrent rounds from two worktrees, both builds exit 0 every round, and the
+single surviving `/tmp/recon.js` was one tree's twice and the other's once — the loser
+then drills a grammar it did not build.
+
+Inside a branch the order is a real dependency; across branches there is none
+that matters: all four read `src`, and each branch's writes are read only by
+itself. The suite branch is not read-only — it rewrites `bin/.last-sweep.json`
+and rotates `.prev-sweep.json` (probe staging stopped being a shared path in
+S170: it resolves under this process's own temp root) — but its
+own corpus step is the only consumer, and the jvm probe's
+`bin/jvm-portability.jar` has none. Check that again before adding a fifth
+branch rather than inheriting the claim: `tools/suite-shard.sh`'s shared-path
+inventory was written for shard-vs-shard, not for branch-vs-branch. `HXQ_QUIET=1` is exported
+between the build and the fork, and that ordering is load-bearing in both
+directions: set earlier it would let a stale binary through the launcher's
+own probe, set later a branch would decide to rebuild `bin/apq.js` while
+three others are executing it.
+
+Concurrency must not cost a result, so two properties are built in rather
+than hoped for.
+
+**Every branch is collected.** A red suite no longer stops the run: it fails
+the verdict and the other three branches still report. Three broken things
+are reported as three, because "one step failed and three never ran" is the
+summary this script exists to prevent. Each branch queues its failures to a
+file that the driver replays after the join — a branch subshell's own
+`verdict` variable is a copy that would be thrown away.
+
+**A step has three outcomes, never two.** The driver writes down, at launch,
+the step labels each branch PROMISES to record; after the join a promised
+label with no row becomes `not run` — printed as such in the timing table and
+failing the verdict on its own. That covers the anticipated case (corpus
+after a red suite: the sweep snapshot proves nothing) and, more importantly,
+the unanticipated one, where a branch aborts somewhere its author never
+considered. `skipped` is the only benign third state, and only where the
+script decided the step does not apply — the jvm probe on an untouched core,
+which prints `skipped  neither src/ nor the probe moved since <base>`. The trigger diffs
+`src` plus the probe's own two files, because that is what it COMPILES; an earlier
+trigger naming only `src/anyparse/query` and `src/anyparse/check` — the packages the
+probe LINTS by default — self-skipped on a slice that added a field to a `@:peg`
+structure typedef, which is precisely the structure-unification regression this probe
+exists to catch.
+
+No branch prints while they run (the driver announces the fork, and that is
+the only line): interleaved stdout from four concurrent steps is unusable. Each branch writes its own `.out`/`.err` pair
+and the driver replays them, stream by stream, in a fixed order — so the
+transcript reads exactly like the old sequential one, with the same
+`=== step ===` headers.
+
+One consequence is worth stating, because the transcript hides it. The
+`--verify` monolith now runs beside three CPU-heavy branches, up to nine
+`node`/`haxe` processes deep. It still buys what it is for — a monolith is one
+in-order process, so the ordering insurance survives — but it is no longer
+ISOLATED. A suite failure that reproduces under the battery and not under a
+bare `tools/suite-shard.sh --verify` is a load artefact, not a slice
+regression; re-run the suite alone before believing it.
+
+## From § The per-slice battery › The cross-config `--one-pass` arm
+
+The `fmt` branch's first two arms pair each tree with its own
+`hxformat.json` — this repo's sources under this repo's config, the fork's
+sources under the fork's. Between them they cover two (tree, config) pairs
+and no third, and the third is where the writer's convergence tail lives: a
+file settles in one rewrite under one config and needs two under another, so
+"`--one-pass` is green here" says nothing about any config but ours. Measured
+on `a3cc4999`: under a second real-world config, three files of THIS repo
+(`check/DuplicateCase.hx`, `check/UnnecessarySwitch.hx`, `macro/Lowering.hx`)
+need a second rewrite, and neither the battery, the suite nor the corpus
+could see them.
+
+The third arm closes that. It formats `src test tools` under
+`tools/xconfig-hxformat.json` — a vendored, fully specified 751-line config
+kept in the repo so the arm is hermetic and its baseline stays meaningful
+when the tree it came from moves. Vendoring is not a convenience: the source
+tree's working copy of that file already differs from its committed one in
+four wrap knobs, so reading it live would have made the baseline
+non-deterministic. Re-vendor from a commit. The arm runs on a scratch root of
+SYMLINKS (`$work/xconfig/src -> $repo/src`, with the vendored config at that
+root) rather than by swapping this repo's own `hxformat.json`: config
+discovery walks up from each file's directory lexically, so the symlink root
+supplies the config, and an interrupted battery cannot leave the repo holding
+a foreign config the way a swap could. The symlinks are not themselves a write
+barrier — what keeps the tree untouched is that the arm only ever reads.
+
+What it gates is narrow on purpose. `--list` is NOT a gate here — under a
+foreign config the whole tree legitimately drifts, 301 of 1529 files at the
+time of writing, and that number carries no verdict. The gate is the
+`--one-pass` SET, compared for EQUALITY against a baseline written into
+`branch_fmt`. Equality rather than a ceiling, because a file leaving the set
+is progress in the convergence tail and belongs in the list just as much as a
+file joining it.
+
+A set comparison alone would be satisfiable by a PARTIAL run — `check/` and
+`macro/` are walked early, so an abort after them leaves exactly the three
+baseline paths behind — so the arm additionally requires the run's own
+`apq fmt --list:` summary line, which is printed last and is therefore the
+completion proof. Both of `fmt`'s summary lines are replayed to stderr rather
+than re-derived, so no count is hardcoded here to drift, and every other
+stderr line is replayed too: this arm silences the config advisory
+(`APQ_NO_CONFIG_WARN=1`, since the vendored config's unimplemented-key list is
+pure noise) and would otherwise have no stderr visibility at all.
+
+Cost: 14.7s inside the `fmt` branch, which runs 25s against the `lint`
+branch's 131s — the battery's wall time went 173.1s to 173.7s, i.e. nothing.
+
+## From § The per-slice battery › Why `compilerOracleServer` is off here
+
+Lint is the battery's largest branch — about 70s of its own, both trees — and
+`apqlint.json` sets `"compilerOracleServer": false` on purpose. Measured
+2026-08-18 on this project, BEFORE it declared `resolutionRoots` (2026-08-25).
+The comparison between the two arms still holds; the absolute seconds and the
+finding count do not. `lint src --all` does not contain the `test` root, so that
+root is no longer deduped away — it is read and parsed on every such run. See
+"The project declares its own sources as `resolutionRoots`" below.
+
+| | lint `src --all` |
+|---|---|
+| `compilerOracleServer: true` | 57.95 / 58.39 / 57.75 s |
+| `compilerOracleServer: false` | 43.45 / 43.79 / 42.83 s |
+
+Three interleaved rounds, non-overlapping — **25 % (14.5 s) of every lint run**,
+for findings that are byte-identical: `apq lint-diff` over the two
+`--format json` snapshots reports `1407 findings (base 1407) — 0 added /
+0 removed`, and that includes all 41 `explicit-local-type` findings, the
+oracle-assisted rule.
+
+Two independent reasons, both measured rather than assumed:
+
+- **The warm path is not warm here.** A `haxe --connect` typecheck of
+  `test-js.hxml` takes 15.2 s and 16.0 s on consecutive runs against a cold
+  16.1 s — no speedup at all. A macro-heavy build re-runs its `@:build` macros
+  on the server too, so there is little left for it to restore.
+- **Its verdict is rejected every run.** The server re-emits stale null-safety
+  diagnostics for two `FileSystem.fullPath` sites the cold compiler accepts
+  (`CompilerServer.realPath`, `StdResolver.resolveSymlink` — both already
+  bridged through an explicit `Null<String>`, and both still red off the
+  cache). By design a warm REJECTION is never believed on its own, so
+  `Cli.reportOracleVerdict` re-runs it cold — which is where the second full
+  typecheck comes from.
+
+Neither is a defect in `CompilerServer`: the class is written so it can only
+change what a verdict COSTS, and here that cost is negative. It stays for
+projects whose modules a server can actually keep. To see the warm diagnostics
+yourself, read the port out of `$TMPDIR/apq-oracle-*.json` and run
+`haxe --connect <port> test-js.hxml --no-output`.
+
+## From § The per-slice battery › `--no-oracle` for the edit loop
+
+What remains after that is the cold typecheck itself, and it is PROJECT-WIDE
+regardless of how narrow the lint scope is. It is the largest single cost in the
+edit loop — the "lint the file I just touched" call, run dozens of times a slice.
+
+```sh
+hxq lint <file> --all --no-oracle    # ~5s instead of ~25s
+```
+
+Measured 2026-08-25 — this tree's sources at `0f931d2d`, its `apqlint.json`
+carrying the `resolutionRoots` the next section explains — on
+`src/anyparse/check/ReflectionScan.hx` (11 KB), medians of three interleaved
+runs:
+
+| | `--no-oracle` | oracle, cold | oracle, verdict reused |
+|---|---|---|---|
+| single-file lint | 5.1 s | 24.5 s | 5.5 s |
+
+`haxe test-js.hxml --no-output` on its own is 18.0 s / 17.9 s — 18.0 of the
+19.4 s difference, so nearly all of it. The "verdict reused" column is the
+`OracleCache` hit and it only survives while NOTHING on the classpath changed —
+in an edit loop every run after an edit is the cold column, so read the middle
+one as the real cost.
+
+Read the dateline as part of the table. Both halves moved since they were first
+written down, for unrelated reasons: the typecheck grew with the tree (16.1 s
+when the sections below measured it, 18.0 s here), and the lint half got slower
+on PURPOSE on 2026-08-25, when the project declared its own sources as
+`resolutionRoots` (1.05 s → 5.1 s — next section). The three figures this
+section used to quote — 2.2 s, 18.7 s, 16.1 s — are all stale, and only the
+first two are stale for the `resolutionRoots` reason.
+
+Findings are byte-identical (`lint-diff` over `src/anyparse/check`:
+`468 findings (base 468) — 0 added / 0 removed`); the flag changes what the run
+can PROVE, not what it finds, and it says so on stderr rather than pretending a
+verdict. **Do not use it for a gate** — the battery, a pre-commit lint, or
+anything whose output is a verdict runs the oracle, because declining a gate can
+only ever weaken one.
+
+**With `--fix` the flag means MORE than it does in report mode.** It used to
+mean less: the fix path read the configured `compilerOracle` regardless, so
+`--fix --no-oracle` still spawned the project-wide typecheck and still reverted
+its own wave — reported twice as "the output is byte-identical with and without
+the flag", which it was, because the flag reached nothing. It now means what its
+name says, in both modes: the compiler is not asked anything, so the safe-pass
+revert net is OFF (a fix that breaks the build STAYS on disk, which is the only
+way an iteration loop can see the fixer raw), `RiskyFix` rules stay report-only
+and `OracleAssisted` rules are inert. The run says so on a dedicated stderr line
+of its own (`compiler oracle SKIPPED (--no-oracle)`), which is also why the
+report-only tails now read "no compiler oracle for this run" rather than "no
+compilerOracle configured" — with the flag the project HAS one. That is strictly
+more dangerous than the report-mode flag, and the same rule applies with more
+force: never in a gate. The workaround the old behaviour forced — temporarily
+deleting `compilerOracle` from the project's own `apqlint.json` — is unnecessary now,
+and was always the worse spelling of the same thing: it edits a TRACKED file, so it
+outlives the one run that wanted it and shows up in the next `git status`.
+
+## From § The per-slice battery › The project declares its own sources as `resolutionRoots`
+
+`apqlint.json` declares `"resolutionRoots": ["src", "test"]` — the project's OWN
+tree, not a library. That reads like a no-op (those are the files the gate lints
+anyway) and is anything but: the roots are the RESOLUTION scope, and the report
+scope is whatever the caller typed on the command line. Five checks refuse a
+rewrite when a name could be spelled by a runtime `Reflect` / `Type.resolveClass`
+call, and that refusal is only as wide as the strings the run was given. Without
+the roots, `hxq lint <one-file>` answers "nothing in this project reflects that
+name" from ONE file.
+
+The two-file probe that shows it, run in this tree with the key removed and then
+restored (`Alpha.hx` declares `public static final PROBE_TOKEN`, `Beta.hx` calls
+`Reflect.field(o, "PROBE_TOKEN")`; `Gamma.hx` / `Delta.hx` are the same pair
+under `test/`, spelling `PROBE_TOKEN2`, so the nested config answers for them):
+
+| `--rule inline-constant` on | no `resolutionRoots` | roots declared |
+|---|---|---|
+| `src/t102probe/Alpha.hx` alone | reports the finding | silent |
+| `src/t102probe` (both files) | silent | silent |
+| `test/t102probe/Gamma.hx` alone | reports the finding | silent |
+| `test/t102probe` (both files) | silent | silent |
+| `--fix` on `Alpha.hx` alone | `fixed 1 issue(s)`, writes `inline` | `fixed 0 issue(s)` |
+
+The base column contradicts itself: the one-file answer is the opposite of the
+two-file answer over the same code. Changing `Beta.hx`'s literal to a name no
+constant carries makes BOTH columns report the finding, which is what pins the
+literal — rather than anything incidental about the config — as the
+discriminator. `test/unit/LintScopeGateTest` asserts the roots COVER the paths
+the gate lints, so the config cannot silently drift back.
+
+What it costs, interleaved base/roots arms, medians of three:
+
+| | no roots | roots | note |
+|---|---|---|---|
+| `lint ReflectionScan.hx --all --no-oracle` (11 KB) | 1.06 s | 4.85 s | a second round of the same pair read 1.05 / 5.13 |
+| `lint InlineConstant.hx --all --no-oracle` (41 KB) | 1.22 s | 5.18 s | |
+| `lint RefactorSupport.hx --all --no-oracle` (282 KB) | 2.51 s | 6.16 s | |
+| `lint test/unit/check/LintScopeGateTest.hx --all --no-oracle` | 0.69 s | 4.61 s | the nested config, below |
+| `lint <file> --rule prefer-single-quotes --no-oracle` | 0.12 s | 0.10 s | no whole-scope check runs |
+| `lint src test --all --no-oracle` | 92.97 s | 92.92 s | 2256 findings, `lint-diff` 0 added / 0 removed |
+| `refs` / `fmt --list` / `source` on one file | 0.10–0.13 s | 0.10–0.13 s | not a lint path |
+
+Run-to-run drift on the roots arm is a few per cent of a four-second number, so
+read the ratio (~4.5x) rather than the second decimal.
+
+So the tax is a flat ~4 s, flat because it is one thing: reading and parsing the
+1490 `.hx` the run is not already reporting on. A `--cpu-prof` of the roots arm
+puts ~40 % of its 4.9 s in the generated `parseHx*` atoms, 5.2 % in
+`ReflectionScan.collect` and 4.2 % in `unused-public-member`'s `countTokens` —
+nothing redundant to remove, and the scope stays LAZY, which is what the
+`--rule prefer-single-quotes` row proves.
+
+**What escapes the tax is not "project-wide runs", it is the exact `src test`
+spelling.** A library entry is deduped against the REPORT paths by absolute path
+before its source is read, so a report scope that already contains both roots
+pays nothing — and `lint src test` is the only such spelling this project uses
+(`tools/battery.sh`, `branch_lint`). Every narrower scope pays in full, directory
+scopes included: `lint src/anyparse/runtime --all --no-oracle` (15 files) is
+1.17 s → 5.60 s, and it drops the same class of false positive the single-file
+row does — three `unused-public-member` warnings on members the rest of the tree
+calls (`ParseReport.recordFail`, `ParseReport.recordUnknownField`,
+`Span.offsetOf`). `lint src --all` is in that group too, which is why the two
+`compilerOracleServer` / `OracleCache` sections above now carry a
+pre-`resolutionRoots` stamp.
+
+The single-file lint also gets more accurate, not just slower — the report-scope
+gates were producing false positives at the same time the reflection gates were
+producing false permissions. `lint RefactorSupport.hx --all` drops from 64
+findings to 15; all 49 are `unused-public-member` on members the rest of the tree
+calls. The roots arm's findings came back a strict SUBSET everywhere they were
+checked — 64 → 15 on that file, 12 → 9 on `src/anyparse/runtime`, 1 → 0 on
+`ReflectionScan.hx`, and 0 added in every arm-to-arm `lint-diff`. The mechanism
+guarantees that direction for the five reflection gates and for the whole-scope
+occurrence scans (`unused-public-member`, `unused-private`): a wider file set can
+only ADD evidence of use, hence only remove findings and add refusals. It is not
+a proof for the resolution scope's other consumers — `redundant-this`,
+`prefer-index-access`, `map-keys-lookup` — where more resolution could in
+principle let a check fire that used to bail; nothing was measured firing that
+way, but read the subset property as an observation there rather than a law.
+
+`["src"]` alone would cost 3.27 s instead of 5.13 s (both from the second round),
+and was rejected on measurement: with `test/` out of the resolution scope,
+`lint src --all` reports 3 `unused-public-member` findings that
+`lint src test --all` does not — deletion candidates whose only callers are
+tests. Half-closing the hole in exactly the shape being closed is not a saving.
+
+**`test/apqlint.json` USED to have to declare them too, and the reason it no
+longer does is the interesting half.** Config discovery once stopped at the FIRST
+`apqlint.json` above the linted file and took it WHOLESALE — a nested document
+inherited nothing — so the root key governed `src/` and nothing else: with it
+declared only there, the `Gamma.hx` / `Delta.hx` pair under `test/` still reported
+the finding for `Gamma.hx` alone and refused over both, and a one-file lint under
+`test/` ran in 0.69 s because it had no project scope at all. Declaring
+`"resolutionRoots": ["../src", "../test"]` in the nested document closed it and
+took a one-file lint there to 4.61 s.
+
+It was the fourth key copied down into that document in six weeks
+(`compilerOracle`, `compilerOracleServer`, then the two resolution keys), each
+added the day somebody noticed another absence, and the root's 38 opt-in RULES
+were never noticed at all — a missing rule does not fail, it silently finds
+nothing, so 741 files under `test/` were linted by a reduced set from 2026-07-14
+to 2026-08-26. `discover` now folds the whole CHAIN of documents, nearest first,
+and a nested one overrides only the keys it names (per key at the top level, per
+rule inside `rules`, per key inside one rule entry; arrays replace wholesale;
+`"inherit": false` ends the chain at that document). The walk also stops at a
+PROJECT ROOT — the first ancestor holding `.git` or `haxelib.json`, that
+directory's own document included: a nearest-only lookup reaches a stray
+`apqlint.json` in `/tmp` or `$HOME` only when the project ships none of its own,
+but a CHAIN folds it in regardless, and `compilerOracle` names an hxml
+`CompilerOracle.typecheck` EXECUTES. `test/apqlint.json` is back to the four
+relaxations it was written as, and `LintScopeGateTest` +
+`LintConfigInheritanceTest` assert that both documents still answer the same
+resolution scope — now because it is inherited, not because it was copied.
+
+Turning the 38 rules on over `test/` moved the finding count there from 740 to
+2102 (`hxq lint --format json --all test --no-oracle`), the bulk of it
+`import-order` 620, `redundant-trailing-comma` 388 and `prefer-typed-throw` 223 —
+all genuine and all mechanically fixable, none of them a false positive on test
+code. Fixing them is not this slice's business; knowing that the number moved
+because a rule set arrived, not because the code changed, is.
+
+A second edge that turns out NOT to exist, since a stated mechanism outlived its
+code: discovery starts at the DIRECTORY of the path it is given, so the
+command-line argument `test` looks like it should resolve the ROOT document (its
+directory is the repo root) while `test/unit/Foo.hx` resolves the nested one. It
+does not. `Cli.runLint` expands every spec to `.hx` FILES first and resolves a
+config per file, so `hxq lint test`, `hxq lint test/unit`, `hxq lint 'test/**/*.hx'`
+and `hxq lint src test` all answer `test/apqlint.json` for a file under `test/` —
+measured by rule histogram, where `magic-number` / `doc-coverage` /
+`string-literal-dup` (disabled only by the nested document) are absent from every
+spelling. What IS still spelling-dependent is narrower and worth knowing: the
+whole-run project settings — `compilerOracle`, its compile dir, and
+`compilerOracleServer` — come from `resolveConfig(paths[0])`, the config of the
+FIRST expanded path. Two commands over the same files can therefore differ in
+which oracle transport they use if a nested document overrides those keys. With
+the chain in place this project's nested document overrides none of them, so
+every spelling agrees; a project whose nested document DOES override an oracle
+key would still see it.
+
+## From § The per-slice battery › A `resolutionLibs`-only config gets none of that, and the tool can only say so
+
+The section above is written from the inside of a project that declares the key.
+The shape it does not cover is the one a real repository out there has: `apqlint.json`
+declaring `resolutionLibs` and NO `resolutionRoots`. That is not "a project with no
+resolution scope" — the scope is DECLARED, `hasDeclaredResolutionScope()` answers yes,
+and it holds installed libraries plus the std. What it holds none of is any OTHER source
+of the project — the run's own report files are in it, and nothing else of the project
+is, because `resolutionLibs` names haxelibs and only `resolutionRoots` carries the
+project's own tree. That key feeds BOTH halves of the scope —
+`ResolutionSources.projectRoots` directly, and the library half through the concat in
+`LintCommand.resolutionThunk` — so leaving it out starves both:
+`RefactorSupport.resolutionProjectSourcesOf` answers null on the empty `projectRoots`,
+and the index behind `widestScopeIndex` is the report files plus an installed library.
+Every consumer meanwhile believes it asked the wider one, because
+`hasDeclaredResolutionScope()` still says yes.
+
+Which half costs what is measured rather than assumed — a one-variable matrix over the
+fixture below: `projectRoots` emptied with the sibling still in the library gave ONE
+divergence, the sibling removed from the library with `projectRoots` full gives
+THIRTEEN. The single `projectRoots` entry was `unused-private`'s reflection scan; the
+other thirteen come through the index. Both are the same missing key.
+
+**The `projectRoots` half of that matrix is now ZERO — re-measured at S184 on the same
+fixture, `projectRoots` emptied and the sibling still in the library, 0 divergences.**
+T868 moved that one scan off `RefactorSupport.resolutionProjectSourcesOf` and onto
+`ReflectionScan.scopeFiles`, which unions `resolutionSourcesOf` and so still sees a
+sibling the library half holds. `LIBS_ONLY_REGRESSIONS` is unchanged at fourteen, because
+a libs-only scope has the sibling in NEITHER half; what shrank is the cost of declaring
+`resolutionLibs` and `resolutionRoots` where the roots do not happen to cover the sibling.
+No name-keyed proof reads the narrow seam any more — its two remaining consumers are
+field-WRITE proofs, where the argument for excluding third-party sources does hold.
+
+Measured end to end on a two-file scratch project — `A.hx` declares
+`private var My_Field` AND reads it once in a method of its own, `B.hx` carries
+`@:access(pkg.A)` and reads `a.My_Field` — under
+`hxq lint src/pkg/A.hx --rule naming --fix --no-oracle`. The in-file read is why the
+count below is 2: the declaration and that read are one edit each, and a fixture without
+it reports `1 edit(s)` for the same defect.
+
+| `apqlint.json` | outcome |
+|---|---|
+| `{"resolutionLibs": ["utest"]}` | `2 edit(s)` — `My_Field` becomes `_myField` in `A.hx`, `B.hx` still reads `a.My_Field`: code that no longer compiles |
+| the same plus `"resolutionRoots": ["src"]` | `0 edit(s)` — `fix DECLINED — the private member is not provably confined to this file` |
+
+The differential prices the whole class rather than that one route:
+`CrossScopeSoundnessTest.LIBS_ONLY_REGRESSIONS` runs the file's six two-file cells
+over `Linter.builtins()` twice, once with the reaching file in both halves of the
+scope and once with `projectRoots` empty and an installed library in the other half,
+and pins what only the second arm produces — **14 cells: 10 writes and 4 findings**, `naming` renaming a
+field five of the six routes reach, `unused-parameter` dropping a parameter three
+cross-file callers still pass, `unused-private` deleting two live members. Every one
+of them is a repair S177, S179 and S180 shipped, undone by a config gap.
+
+**And there is nothing to repair it with, which is why the fix is a sentence.** Source
+roots nobody declared cannot be invented; the two ways to guess them — the directory
+holding `apqlint.json`, or the `-cp` entries of the `compilerOracle` hxml — would
+silently widen what every such project resolves against, and pay the ~4 s tax measured
+above for a scope its owner never asked for. So `ConfigDisagreement.warnMissingProjectRoots`
+prints one line, once per process, naming the shape, the report count and the key
+(`LintCommand.warnScopeNotices`; pinned by `LintScopeGateTest.testALibsOnlyScopeIsNamedAsAGap`,
+killed by arm `M-SCOPE-GAP-SILENT`). Unlike its two neighbours there it is NOT gated on
+the run consulting a setting: the missing roots are a property of the resolution scope
+every check shares, and gating it on a hand-kept roster of the five checks that read the
+half would fail open the day a sixth joins them.
+
+The count in that sentence is per PATH, and getting it wrong was this slice's own bug,
+caught in review by a reproduction: an early version returned silent as soon as ANY
+config in the scope declared roots, reasoning that the run resolves the UNION of every
+document's keys. True of the keys, false of the COVERAGE — with a root `apqlint.json`
+declaring `resolutionRoots: ["src"]` and a sibling `other/apqlint.json` (`inherit: false`)
+declaring only libs, `lint src/pkg/A.hx other/pkg2/C.hx --rule naming --fix` renamed
+`C.My_Field` and orphaned `other/pkg2/D.hx`, silently. It now answers per path and says
+`N of M file(s)`.
+
+It stays silent for a scope whose every path resolves a config declaring roots, and for a
+project that declares no resolution at all. The second is a deliberate scoping choice, not
+a covered case: the outcome there is identical (the same `--fix` writes the same orphan,
+with no diagnostic), and firing on every config-less project — every foreign repo `hxq`
+is ever pointed at — would be noise rather than a finding.
+
+Pony was exactly that shape, read on 2026-09-08: `apqlint.json` at HEAD `86344552`
+declares 6 `resolutionLibs` and no `resolutionRoots`, its working tree that day declared
+11 and no roots — and its own `lint-oracle.hxml` opens with `-cp src`, so the roots it
+never declared were written down one file away. Declaring `"resolutionRoots": ["src"]`
+there that day (uncommitted, by the user's own instruction) silenced the notice and took a one-file
+`lint --all --no-oracle` of `src/pony/Config.hx` from 5.76 s to 7.38 s — the tree read
+this whole section prices — with the file's own findings unchanged (73 before, 73 after
+on the larger `src/pony/Tools.hx`, 0 added / 0 removed). The key changes REFUSALS, not
+reports, which is exactly what it is for.
+
+**That notice answers a CONFIG question, and a config question cannot see a root that is
+declared and spelled wrong** — a typo, a directory since moved, a path written against
+the wrong base. It expands to no `.hx`, `projectRoots` comes back empty, and the run is
+byte-identical to one that never declared the key: reproduced in review with
+`{"resolutionLibs":["utest"],"resolutionRoots":["sources"]}` beside a real `src/`, where
+`lint <one file> --rule naming --fix` renamed the field and orphaned the grantee with no
+diagnostic at all.
+
+So there is a second sentence, and it lives where the truth is:
+`ConfigDisagreement.warnUnreachableProjectRoots`, called from
+`LintCommand.readResolutionRoots`, which expands each root SEPARATELY so the one that
+matched nothing can be named. It is lazy — a run whose checks never demand the index
+still pays nothing, which is why a report-mode `--rule naming` stays quiet while
+`--rule unused-private` (whose `run` asks for the wide index) prints it. It is not a
+"zero sources read" test either: the roots are deduped against the report set, so
+`lint src` under `"resolutionRoots": ["src"]` legitimately reads zero of them. Per-root
+expansion costs the dedup that one whole-spec call gave for free, so the reader carries
+the `seen` map forward across roots — two overlapping roots indexing one file twice is
+what trips the resolver's ambiguity gate.
+
+Both notices are pinned at their message seam (`LintScopeGateTest`) AND at their wiring
+(`LintConfigCliTest.testTheScopeGapNoticesReachTheRun`, which runs a real
+`Cli.run(['lint', ...])` over a temp project and reads stderr). Three arms cut the three
+places it can silently go wrong: `M-SCOPE-GAP-SILENT` (the message returns null),
+`M-SCOPE-GAP-UNWIRED` (the call disappears from `warnScopeNotices` — the same effect as
+moving it below `runLint`'s `--fix` early return), `M-SCOPE-GAP-ROOT-UNWIRED` (the same
+for the unreachable-root call).
+
+## From § The per-slice battery › The safe pass reverts the file the compiler blames, not the wave
+
+`lint --fix`'s safe pass is applied under a net (`LintFixSafePass`): typecheck
+before the writes, write, typecheck again, and a green-then-red transition is
+the fixes' own doing. The rollback used to be ALL-OR-NOTHING, and the message
+
+```
+apq lint --fix: the safe fixes broke a build that was green — REVERTED N file(s), nothing was written
+```
+
+did not name which file did it. On the campaign that motivated this, one bad
+edit hid 227 good files, and each bad edit MASKED the next — a queue of defects
+could only be found one round-trip at a time, which is how that wave came to be
+bisected by hand across six root causes.
+
+The net now ATTRIBUTES before it reverts. A compiler diagnostic carries its
+position as `<path>:<line>: `, so the files it blames are one parse away
+(`LintFixSafePass.errorFiles`); matched against the files this run wrote by
+segment-aligned path suffix (the compiler spells positions relative to the
+hxml's directory, the lint knows them by whatever path the caller passed), that
+is the implicated set. Those files revert, the oracle is asked again, and a
+green answer keeps everything else.
+
+**Which diagnostic shapes the parser claims** — each one has a test, and each
+was measured on Haxe 4.3.7 rather than assumed:
+
+- the classic one-line form, `src/A.hx:20: characters 3-8 : Type not found : Foo`;
+- `-D message.reporting=pretty`, which Pony's own `tools/build.hxml` sets: the
+  header is `<ESC>[30;41m ERROR <ESC>[0m src/A.hx:3: characters 3-31` and the
+  block continues over an excerpt and a caret line. The badge means the path is
+  NOT the line's first token, which is why the parser anchors on the
+  `:<digits>:` shape and strips ANSI CSI sequences instead of reading column 0.
+  A project's `lint-oracle.hxml` need not set pretty (Pony's does not), so a
+  parser tested only against the oracle looks correct and then fails on the
+  project that does;
+- warnings in BOTH spellings (` : Warning :` and the pretty `WARNING` badge) are
+  skipped — a deprecation notice in an untouched library is not why a build
+  failed, and treating it as one would implicate a file this run wrote;
+- a colon-digit run with no second colon is a message, not a position
+  (`Could not process argument foo:1`), and a candidate with no extension is not
+  a file.
+
+Anything the parser does not recognise yields NO implicated file, and that
+degrades to the old whole-wave revert **with the reason printed** — never to
+"nothing to revert". The three fallback reasons a run can print are
+`the compiler blames no file this run wrote`, `every file this run wrote is
+implicated`, and `the errors still blamed new files after 4 narrowing round(s)`.
+
+Two shapes the attribution has to respect:
+
+- **A cross-file fix is one unit.** `applyCrossFileRenames` commits a rename's
+  whole component together; reverting half of it is worse than reverting all of
+  it. Each committed component is recorded, and an implicated file pulls its
+  whole component back with it — transitively, since two passes can couple
+  overlapping sets.
+- **The error can name a file the wave never wrote** — the broken thing is the
+  CALLER of an edited declaration. There is nothing to narrow to, so the run
+  falls back to the whole-wave revert, says that is what happened, and names the
+  files the compiler blamed instead of leaving the reader to guess. When that
+  surrender comes AFTER a round has already run, the notice reports the errors
+  from the round that gave up, not the ones the wave started with: the round-1
+  text would name files the narrowing had already rolled back and hide the one
+  that actually blocked it.
+
+Either way the run still exits `EXIT_RUNTIME` and still skips the risky-fix and
+oracle-assisted passes — a partially-kept wave is a failure that wrote files,
+not a success, and the notice says how many stayed on disk.
+
+Cost is why this attributes rather than bisects: ONE oracle spawn per round, and
+a round only happens when the previous round's errors blamed new files —
+`LintFixSafePass.NARROW_ROUNDS` (4) caps it, so the granular path costs 1 extra
+project-wide typecheck in the common single-culprit case and at most 4. A
+per-file bisect over the same wave is O(log n) spawns at best and O(n) when the
+failures are scattered, on a typecheck that costs seconds each. Measured on the
+853-file Pony tree with one deliberately-broken file, against the pre-change
+binary on the same tree:
+
+| | result | wall clock |
+|---|---|---|
+| all-or-nothing | `REVERTED 192 file(s), nothing was written`, culprit unnamed | 40.5 s |
+| attribute-first | `REVERTED 1 of 192 file(s), KEPT the other 191 on disk`, culprit named | 44.9 s |
+
+The 4.4 s difference is accounted for by the one extra project-wide typecheck
+the narrowing spent (3.6 s cold on that tree). On a wave that does NOT break the
+build the path is not entered at all: the same tree with no broken file gives
+`fixed 658 issue(s) in 228 file(s)` on both binaries (the wording the line carried
+at the time; the number is the edit count it still reports).
+
+## From § The per-slice battery › The `--fix` summary counts EDITS, and is not a verdict about a rule
+
+The line reads
+
+```
+apq lint --fix: 4 edit(s) in 1 file(s) over 3 pass(es)
+```
+
+and its number is EDIT SPANS applied. A check answers with one span per site it
+rewrites, so ONE `naming` finding on a local read three times is four spans, and
+a fix whose result exposes a further finding adds that pass's spans on top. It
+used to print as `fixed N issue(s)`, which read as a finding count and did not
+match the number the reader had just counted in the plain `lint` report —
+measured at 4 for 3 findings on a cascading fold, and at 4 for exactly ONE
+finding with no cascade anywhere in the run. Only the label changed; every
+number in the transcripts quoted below was printed by the run that produced it,
+under the older wording.
+
+**The finding total is deliberately not beside it**, and the reason is the same
+defect one level up. The edit count sums the safe fixed-point loop AND the risky
+and oracle-assisted phases, while the only finding count the run holds — the
+`ledger` — is filled by the safe loop alone: `applyLintPass` records it,
+`verifyRiskyFixes` never receives it, and with no `compilerOracle` that phase
+does not even RUN its checks. Measured on one file with one `prefer-null-coalescing`
+finding: `lint` prints `1 info(s)` and `lint --fix --no-oracle` would have printed
+`0 finding(s) reported on pass 1` beside its own edit count. Two numbers on one
+line measured over two rule sets is exactly the shape this wording was fixed to
+stop making, so the line carries one. The finding total belongs to a plain
+`lint`, which runs every rule; what each rule DECLINED is the block below.
+
+A finding `lint --fix` reports and does not fix has several different causes,
+and the run used to report them all the same way — with silence. Its one
+sentence on the subject spelled the ambiguity out instead of resolving it:
+
+```
+A reported finding stays unfixed when the check has no autofix, or when its
+fix declined here …
+```
+
+and it printed **only when `fixedCount == 0`**, so the full-ruleset Pony run —
+`fixed 668 issue(s) in 234 file(s)` — said nothing whatever about the 2746
+findings it left alone. Three readers took the first branch of that `or`; two
+of them filed work on it, and **both rules had a working fix**:
+
+- `import-order` — its four Pony findings are correct refusals by a guard that
+  already existed with two regression tests (two imports in the block bind the
+  same simple name, which Haxe resolves to the LAST one, so permuting them
+  rebinds the name);
+- `prefer-typed-throw` — 161 findings, every one degraded by the project-wide
+  catch-clause gate (86 blocking clauses on that tree). The reason was on each
+  finding's MESSAGE, and a `--fix` run prints no findings at all.
+
+The engine could not tell the two apart either: `Check.fix` answers an empty
+array for a rule that has no autofix and for a rule whose gate closed, and
+nothing on the interface said which. Two opt-in seams close that, and neither
+is required before the output improves:
+
+- **`Check.NoAutofix`** — a marker plus `noAutofixReason()`, for a rule that is
+  report-only BY DESIGN. Answers *could this rule ever fix?*
+- **`Violation.declineReason`** — an optional field the check writes AT the site
+  that declined: in `run` for a whole-scope gate, inside `fix` for a per-site one
+  (`fix` receives the caller's own violation objects, so a note set there reaches
+  the reporter). Answers *why did it decline HERE* — the question that cost the
+  two tasks, and the one a marker interface cannot answer.
+
+**The default carries the honest answer, because the driver measures instead of
+guessing.** `computeFileLintEdits` is the one place in the tool that knows what a
+check answered for a given set of its own findings, so per rule the run records
+first-pass findings reported, findings handed to `fix` that came back with no edit
+at all, and edits produced anywhere in the run. That last number needs no
+declaration behind it: a rule that produced an edit somewhere HAS an autofix, so
+its silence elsewhere is a decline whatever it says about itself.
+
+The block prints after — never appended to — the summary line, which every gate
+and doc quotes and which stays one sentence. On the 851-file Pony scope:
+
+```
+apq lint --fix: fixed 668 issue(s) in 234 file(s) over 10 pass(es), risky-fix verified: 61 file(s) applied, 0 reverted to report-only, oracle-assisted: 3 file(s) applied, 3 reverted to report-only (compiler rejected)
+apq lint --fix: 2746 reported finding(s) in 44 rule(s) got NO edit from their own check:
+  magic-number 417: no autofix by design — the finding asks for a NAME, and only the author knows it — an auto-hoisted CONST_7 restates the digit behind an indirection
+  explicit-local-type 367: fix DECLINED, 3 distinct reason(s) over 367 finding(s) — and this rule has an oracle-assisted pass besides, counted on the summary line above
+      357× no structural rule names the initializer type — the ladder spells a literal, a bare `new` of a PROVABLY non-generic type, a homogeneous array literal, and a call / index / identifier whose declared type this run can read; …
+      7× the declaration carries no initializer, and every rule this check has infers the type FROM one
+      3× the only type on offer is `Dynamic` / `Any` / `Void`, which an annotation must not spell — …
+  naming 231: fix DECLINED, 6 distinct reason(s) over 231 finding(s)
+      198× the naming policy in force states a FORMAT this name fails but no mechanical normalizer that could produce a conforming one — a policy adapted from a project `checkstyle.json` carries the regex only, so the check can say the name is wrong and not what it should be
+      15× the cross-file rename cannot enumerate who reaches the owner — the scope holds a file the grammar could not parse, or the declaring file carries an `@:allow` granting an unenumerable type, or the owner's simple name is not declared in exactly one file
+      7× the method is an `override`, so its name is the SUPERTYPE declaration's — renaming this one alone would leave it overriding nothing
+      ... +3 more reason(s), 11 finding(s)
+  doc-coverage 223: no autofix by design — a generated doc restates the member name; the sentence a reader needs is the one only its author can write
+  unused-import 204 of 205: fix DECLINED, 4 distinct reason(s) over 204 finding(s)
+      110× declaration not in lint scope, cannot verify unused (lint with its source module included) — the module is declared in no file this run read, so a SECONDARY top-level type or a bare enum constructor of it could be the reference that keeps the import alive; …
+      54× `#if`-guarded, so advisory only: delete it by hand — the verdict holds in every branch, but the canonicaliser normalises the module-level import block ONLY, so deleting a span inside a `#if` region leaves the emptied line behind as a second blank
+      25× extension use not tracked — the module's extension methods are known neither to the std probe nor to the report index, so a `.method(` call on any receiver could be resolving through it
+      ... +1 more reason(s), 15 finding(s)
+  duplicate-code 202: no autofix by design — whether the copies are one idea or a coincidence — and where the shared factor belongs — is a design judgement
+  ... +38 more rule(s), 1102 finding(s)
+apq lint --fix: 12 rule(s) never enter this ledger — the risky-fix path owns them (avoid-dynamic, dead-null-guard, hoist-embedded-assignment, prefer-case-guard, prefer-enum-abstract, prefer-exists, prefer-inline, prefer-interpolation, prefer-map-type, prefer-null-coalescing, redundant-import, shorten-type-ref); the summary line above is their whole verdict.
+apq lint --fix: a rule above that declared NOTHING is not thereby a rule that CANNOT fix — a decline most often needs a WIDER scope than this run (a member rename must see every file that could collide). Re-run over the project root, and see `Check.NoAutofix` / `Violation.declineReason` for what a rule owes its reader here.
+```
+
+Six verdicts, ordered by how strong the evidence behind them is:
+
+| the row says | what it means |
+|---|---|
+| `no autofix by design — <reason>` | the rule implements `NoAutofix` |
+| `fix DECLINED — <reason>` | the rule wrote ONE `declineReason`, and it covers every declined finding |
+| `fix DECLINED, N distinct reason(s) over M finding(s)` + `<count>× <reason>` lines | the rule declines per ARM, and each arm's share is counted |
+| `fix declined here, yet the rule produced N edit(s) elsewhere` | measured; no declaration needed |
+| `its fix was called … and returned no edit; the check declares neither` | the honest default |
+| `… and this rule has an oracle-assisted pass besides` | appended for an `OracleAssisted` rule, which has a second fix path this ledger never sees |
+
+A `RiskyFix` rule is the one case with no row at all — it is excluded from the
+safe loop, so no `fix` of its own is ever called there. Those are named once at
+the end rather than shown as silent zeroes; on Pony `avoid-dynamic` alone reports
+470 findings, and a "what did not get fixed" block that simply omitted the
+largest rule on the tree would invite its own misreading. An `OracleAssisted`
+rule is the opposite case and easy to get wrong: unless it is ALSO risky it does
+run in the safe loop, so it has a row, and its extra pass is noted on that row.
+
+**The conversion is deliberately partial.** Four report-only rules declare
+`NoAutofix` — `magic-number`, `doc-coverage`, `duplicate-code`, `complexity` —
+and five declare their decline — `prefer-typed-throw`, `import-order`,
+`unused-import`, `explicit-local-type`, `naming`. A measured 20 more report-only
+builtins are left on the default arm, which reads strictly better than the
+sentence it replaces and never claims what it cannot prove. A rule that always
+fixes needs no conversion at all: a rule whose findings all got an edit is not
+listed.
+
+## From § The per-slice battery › The `--fix` summary counts EDITS, and is not a verdict about a rule › A rule that declines for several DIFFERENT reasons gets one line per reason
+
+The first three conversions each had one gate, so the ledger recorded the first
+`declineReason` it saw and printed it as the rule's whole verdict. The three
+biggest undeclared declines on Pony do not: `unused-import` declines through
+four arms, `explicit-local-type` three, `naming` six. Naming whichever the file
+walk reached first states a quarter of an answer with the confidence of the
+whole, so `RuleFixOutcome.reasons` counts them, sorted by share, capped at three
+with the tail totalled. Two properties the block keeps:
+
+- a rule with ONE reason covering every declined finding keeps the exact
+  single-line `fix DECLINED — <reason>` bytes it always printed;
+- a rule that spoke for only SOME of its declines prints
+  `<k>× — the check declared no reason for these` rather than letting the
+  reasons it gave stand for the rest. The reason totals and `declined` are
+  counted over the same findings, at the same call site, so they compare.
+
+## From § The per-slice battery › The `--fix` summary counts EDITS, and is not a verdict about a rule
+
+##### What the three biggest declines turned out to be
+
+All three are legitimate refusals, and the sentence each owed its reader is now
+attached at the gate that closes. Measured on the 851-file Pony scope, and each
+share verified against the source rather than counted:
+
+| rule | 100% of its declines |
+|---|---|
+| `unused-import` 204 | 110 the declaring module is outside the lint scope · 54 the import is `#if`-guarded (the `ac539d13` Info cap) · 25 a `using` whose extension set is unknown · 15 a wildcard whose symbol set is unknown. `fix` deletes exactly the `Warning`s, so every `Info` the check emits IS a decline; each arm's reason OPENS with the same constant its reported message is built from, so the two cannot drift. |
+| `explicit-local-type` 367 | 357 no structural rule names the initializer type · 7 no initializer at all · 3 `Dynamic` / `Any` / `Void`. Not a gate closing wrongly: on a synthetic file the ladder annotates 5 of 7 ordinary shapes, and Pony's 367 are the residue previous `--fix` passes left, and not one of them is a bare literal — 76 generic-or-unindexed `new`, 18 array literals (empty or comprehension), 138 calls whose return type this scope cannot read, and 125 other unpinnable initializers. |
+| `naming` 231 | 198 the policy states a FORMAT and carries no `normalize` · 15 an unprovable cross-file hierarchy · 7 `override` · 5 not a member (a type / enum value) · 3 grammar-marked rename-unsafe · 3 an unconfined private member. |
+
+`naming`'s dominant cause is worth its own queue item, because it is a
+capability gap rather than a refusal. `HaxeNamingSupport.policyFor` prefers a
+discovered `checkstyle.json`, and `CheckstyleConfigLoader.load` maps each naming
+check's `format` regex onto a rule and attaches **no `normalize`** — so
+`correctedName` has nothing to return and every finding on such a project
+declines. One-variable matrix, same file and the SAME regex
+(`MethodName` `^[a-z][a-zA-Z0-9_]*$`), only the policy's origin differing:
+
+```
+checkstyle.json present  →  fixed 0 issue(s) in 0 file(s)   (naming 1: fix DECLINED — …no mechanical normalizer…)
+checkstyle.json absent   →  fixed 2 issue(s) in 1 file(s)   (declaration and call site both renamed)
+```
+
+The fix is not "invent a normalizer per regex": `correctedName` already verifies
+its candidate against the rule's OWN format, so attaching the built-in
+normalizer for the category would be self-checking. Wiring one in as a
+three-line mutation flips the first arm immediately, which is what
+`LintFixFixedPointCliTest.testCheckstyleDerivedPolicyDeclinesTheRenameItsOwnFormatDemands`
+pins — landing the widening means retiring that assertion on purpose, and
+measuring what the rename set gains on a real tree. Note also that the loader
+DROPS each check's `tokens` (`MemberName` is configured twice on Pony, once for
+`CLASS/PUBLIC/PRIVATE/TYPEDEF` and once for `ENUM`, and only the first rule can
+ever apply) — the same widening has to decide what `tokens` means first.
+
+## From § The per-slice battery › The `--fix` run says which rules it EXERCISED, and the answer is 48 of 179
+
+Every slice of the `hxq-bugs` campaign closes on one proof: `hxq lint --all
+--fix --no-oracle` over the whole Pony fork, run by the base engine and by the
+slice engine into two `cp -R` copies, byte-compared across the six roots. The
+figure — **702 edits / 209 files / 8 passes** — has been reproduced on both arms
+by ten consecutive slices. Nobody asked which of the registered rules that run
+actually touches.
+
+It touches 48. Measured on `845b0809`, whole-repo copy, six roots:
+
+```
+apq lint --fix: rule census — of the 175 rule(s) this run was given, 48 produced an edit, 31 reported and got none, 10 were never asked, 86 reported nothing at all. Comparing what this run wrote against another engine is evidence about the first group and about none of the other three.
+  exercised: collapsible-else-if, collapsible-if, cond-assign-merge, dead-code, …
+```
+
+175 rather than the 179 `--list-rules` prints, because the denominator is
+`activeChecks` — the rules enabled for at least one file of the scope. The four
+Pony leaves out are `unused-public-member` (its `apqlint.json` disables it) and
+three `DefaultOff` checks its config never turns on (`asymmetric-branch-braces`,
+`default-repeated-argument`, `shadowing-parameter`). The four buckets partition
+that set by construction, so the counts sum to it and a reader can check the
+arithmetic on the line itself.
+
+What each bucket is worth as evidence:
+
+| bucket | Pony | what byte-identity across two engines proves |
+|---|---|---|
+| produced an edit | 48 | the rule's whole report → fix → gate → write path, on real code |
+| reported, got no edit | 31 | that the DECLINE reproduced — real, but nothing about the fix |
+| never asked | 10 | nothing: `RiskyFix` rules stay report-only with no oracle |
+| reported nothing at all | 86 | nothing: the rule ran over 872 files and matched none |
+
+`trivial-getter` is in the last bucket, and S74 measured why: **zero occurrences
+in every corpus this project owns** — anyparse `src test` (1711 files), the Pony
+working tree and its `git HEAD` (872 and 871), the haxe-formatter fork. Its
+`--fix` path has no real-tree arm at all. It is not alone; the bucket holds 86.
+
+##### The cheap census is wrong in both directions — 10 of 48 rules
+
+The obvious way to get this number without touching the tool is to lint the tree
+before and after the fix pass with `--format json` and call a rule exercised when
+its finding count dropped. Measured against the ledger's own per-rule `edits`
+tally, that method gets **10 of 48 wrong**, and the two totals (46 vs 48) nearly
+cancel so the error is invisible:
+
+- **4 false positives.** `avoid-dynamic` (470 → 469) and `shorten-type-ref`
+  (83 → 54) are `RiskyFix` rules the netless run never asks to fix at all;
+  `redundant-map-exists` (5 → 4) and `string-literal-dup` (88 → 86) declined
+  every finding. All four fell because ANOTHER rule's edit deleted the shape
+  they were reporting on. Confirmed by isolated runs — `--rule <id> --fix` over
+  the same six roots writes **0 edits in 0 files** for each of the four.
+- **6 false negatives.** `dead-code`, `duplicate-case`, `inline-constant`,
+  `join-declaration-assignment`, `join-single-use-local` and `unused-case-binder`
+  report NOTHING on the pre-fix tree and fix real sites on a later pass, once
+  another rule's edit exposed the shape. `--rule duplicate-case --fix` in
+  isolation reports zero findings; in the full run it produces edits.
+
+A before/after count diff is a statement about the tree, and the question is
+about the rule. Only the driver knows which check answered with which edits, and
+it already recorded it — `RuleFixOutcome.edits` has been filled since the ledger
+was built, and was never printed.
+
+##### The policy: the arm names what it proved, and no fixture corpus is checked in
+
+S74 left the choice open — check in a fixture corpus for the rules the real trees
+have exhausted, or stop demanding a corpus arm from them. Neither. A fixture
+corpus for 86 rules is a second codebase to maintain whose only reader is a gate,
+and S74's own 11-file one bought 10 findings for ONE rule; and simply excusing
+those rules leaves the vacuous quote available to the next slice. The census is
+the third option and it costs two lines of stderr per `--fix` run, computed from
+numbers already in hand.
+
+The NAMES printed are the exercised ones, not the silent ones. That is the short
+list on a real tree (48 of 175) and the only short answer there is on a one-file
+run, where the silent list would be 170-odd ids of noise; and it is the positive
+form of the claim, so a slice author looking for their own rule gets an answer
+rather than an absence to interpret. It prints on `--fix` only — a report run
+writes nothing and so proves nothing to qualify.
+
+##### How many past proofs this affects: 2 slices, 14 rules
+
+Of the 16 slices merged after `56a7f2a8` (S72, where the arm became the standard
+close), exactly two edited a check whose rule the arm does not exercise:
+
+- **S73** (`14e6a85f`, the `SymbolIndex` split) touched 47 check files, 14 of
+  them rules the arm never reaches — 10 silent (`comparison-to-boolean`,
+  `dead-binder-counter-loop`, `field-init-in-constructor`, `impossible-cast`,
+  `impossible-is-check`, `redundant-this`, `redundant-upcast`, `static-constant`,
+  `trivial-getter`, `unreachable-catch`) and 4 never asked or never enabled
+  (`prefer-case-guard`, `prefer-enum-abstract`, `redundant-import`,
+  `unused-public-member`). Its byte-identity result said nothing about any of
+  them; what covered them was the unit suite, which is a weaker net than the one
+  the slice reported.
+- **S74** (`2f3eff38`, the `TrivialGetter` split) touched exactly one, and knew
+  it — that is where the measurement came from.
+
+Fourteen rules over sixteen slices is a small number, and it is small because the
+campaign has mostly been decomposing oversized types rather than changing check
+behaviour. The census is cheap insurance against the slice where it is not.
+
+## From § The per-slice battery › The fourteen rules S73 touched that its own arm cannot reach
+
+S93 measured which rules the campaign's deciding arm exercises (48 of 175) and then
+checked the landed slices against that. One slice came out badly: **S73** (`14e6a85f`,
+the `SymbolIndex` split into seven layers) touched 47 check files, and 14 of them are
+rules the arm never triggers — so its headline result, 209 files rewritten byte-identically
+by two engines, said nothing about any of the fourteen. S94 went and measured what, if
+anything, did.
+
+The short answer: **the evidence existed, nothing named it, and two call sites of the 27
+were genuinely uncovered.** Both are now fixtures, and all sixteen are `@:pin`ned so the
+next deletion is loud.
+
+##### The per-rule verdict
+
+Every rule below is reached by the `--fix` run and produces nothing. The middle column is
+the method S73 rewrote the call to — `index.foo(…)` became `index.<facet>.foo(…)` — and the
+right column the mutation arm that kills the rule's own fixture. Measured on `087e33d2`,
+one arm per build, full suite per arm.
+
+| rule | S73-rewritten call(s) | killing arm |
+|---|---|---|
+| `comparison-to-boolean` | `paths.resolvePathFinalMemberTypeSource` · `members.returnNominalOf` · `members.memberDeclarationsOf` · `structural.isAnonStructType` · `refs.declaringFiles` | M-PATHWALK-NULL (6) |
+| `dead-binder-counter-loop` | `members.memberShadowsExtension` | M-SHADOWEXT-TRUE (2) |
+| `field-init-in-constructor` | `members.typeProvablyLacksMember` | M-LACKSMEMBER-FALSE (6) |
+| `impossible-cast` | `subtypes.unrelatedClasses` | M-UNRELATED-FALSE (2) |
+| `impossible-is-check` | `subtypes.unrelatedClasses` | M-UNRELATED-FALSE (3) |
+| `redundant-this` | `members.inheritsMemberUnambiguously` | M-INHERITS-FALSE (6) |
+| `redundant-upcast` | `subtypes.isSubtype` | M-ISSUBTYPE-FALSE (4) |
+| `static-constant` | `traits.transitivelyCarriesBuildMacro` | M-BUILDMACRO-TRUE (10) |
+| `trivial-getter` | `traits.transitivelyCarriesBuildMacro` · `subtypes.{subtypeOverridesProperty, subtypeReferencesField, subtypeFiles, isSubtype}` · `members.{typeProvablyLacksMember, typeDeclaresMember, supertypeDeclaresMember}` | M-SUBOVERRIDE-TRUE (83) |
+| `unreachable-catch` | `subtypes.isSubtype` | M-ISSUBTYPE-FALSE (3) |
+| `prefer-case-guard` | `refs.declaringFiles` ×2 | M-DECLARINGFILES-EMPTY (4) |
+| `prefer-enum-abstract` | `subtypes.hasSubtype` · `traits.transitivelyCarriesRtti` | M-HASSUBTYPE-FALSE (1) |
+| `redundant-import` | `refs.declaringFiles` | M-DECLARINGFILES-EMPTY (6) |
+| `unused-public-member` | `traits.transitivelyCarriesRtti` · `text.nameOccursOutside` | M-NAMEOUTSIDE-TRUE (26) |
+
+**14 of 14 rules have a fixture that dies when a method S73 moved stops answering.** Counted
+by call site rather than by rule it is **25 of 27** — the two misses are below. An arm forces
+one layer method to a constant (`false` / `true` / `[]` / `null`); the parenthesised figure is
+how many fixtures of that rule's own class flipped.
+
+##### Three claims in the brief, re-measured
+
+- **"Ten of them are SILENT."** True for 12 of the 14, not for the 10 named. Force-enabled
+  one at a time over the six Pony roots, `unused-public-member` reports **183** findings and
+  `prefer-enum-abstract` **1**; the other twelve report **0**. `unused-public-member` is
+  outside the arm because Pony's `apqlint.json` disables it, and `prefer-enum-abstract`
+  because it is `RiskyFix` and a netless run never asks it — neither is silence. What IS
+  true of all fourteen: over anyparse's own `src test` (1740 files) they report **0**
+  findings between them, so no corpus this project owns can ever cover them.
+- **"Check none is cascade-only" (T583).** None is, and the census answers it by
+  construction rather than by inspection: `exerciseCensus` reads the ledger ACCUMULATED over
+  every pass, so a rule that reports nothing on pass 1 and fixes on pass 6 lands in
+  `exercised`, not in `reported nothing at all`. All six of T583's cascade-only rules are in
+  the exercised list of the run reproduced here (702 edits / 209 files / 8 passes,
+  175 / 48 / 31 / 10 / 86). Run in isolation the fourteen give `0 edit(s) in 0 file(s) over
+  1 pass(es)` and a census of `14 → 0 exercised, 0 reported, 4 never asked, 10 silent`.
+- **"S73's byte-identity said nothing about them."** True of the arm and false of the tree.
+  What covered them was the unit suite, and the suite is not a weaker net HERE: a fixture of
+  every one of the fourteen dies when the moved method stops answering. What was missing was
+  the statement, which is what the pins now are.
+
+##### Half of the risk was never a test's job
+
+A pure move can go wrong two ways: the call is rewired to the wrong facet, or the method's
+body changed on the way. The first cannot happen silently — the seven layers declare **55
+public methods and share not one name**, so `index.members.isSubtype` does not compile. The
+second is covered: each of the 19 methods the fourteen rules reach has at least one killing
+class in the suite. What is left at an UNCOVERED call site is neither: two same-typed
+arguments swapped in the rewritten call, which compiles and no arm can see. That is the
+residual, and it is why the two uncovered sites were worth closing rather than declaring.
+
+##### The two that were uncovered, and why they were the same shape
+
+Both are the RIGHT-HAND operand of a short-circuiting `||` whose left operand every existing
+fixture already satisfied:
+
+- `BackingFieldRefs.classifyOwnerBinding` — `typeDeclaresMember(c, field) || supertypeDeclaresMember(c, field)`.
+  Neither polarity of `M-SUPERDECLARES` moved a single `trivial-getter` fixture.
+  `TrivialGetterShapeCollapseTest#testForeignHierarchyBackingNameStaysAccountedFor` closes it:
+  a class in the scanned file spells the backing name, is no subtype of the owner and does
+  not declare the name — only the supertype half can account for it, and an occurrence the
+  walk cannot account for blocks the collapse. The foreign supertype has to live in a file
+  the scan does NOT read: declaring it beside the real subtype puts its `private var _label`
+  into the walk, and a declaration name is none of the shapes `attributeOccurrence` binds, so
+  it blocks for an unrelated reason. `affectedSubtypeFiles` reads only subtype-declaring and
+  `@:access` files while the index reads them all — that gap is what the fixture needs.
+- `PreferEnumAbstract.fixGrouped` — `hasSubtype(plan.name) || transitivelyCarriesRtti(plan.name)`.
+  `PreferEnumAbstractCheckTest#testFixRefusesAnRttiHomonym` closes it, and finding a reachable
+  shape took a measurement: `@:rtti` ON the container is refused earlier (`conversionPlan`
+  returns null when the preceding sibling is a metadata node) and a SUPERTYPE carrying it is
+  refused earlier still (`headEdit` demands the body opener immediately after the type name,
+  so no `extends` clause survives). Both would have been fixtures that pass for the wrong
+  reason. The one live route is the index's simple-name resolution — a HOMONYM in another
+  module carries the meta, `transitivelyCarriesRtti` finds it by name, and the conversion is
+  declined for a type that never carried it.
+
+##### What a gate now reads
+
+`@:pin('control')` + `@:killer('<arm>')` on one fixture per rule, plus the two new ones:
+sixteen entries, listed verbatim in
+`unit.TestDiscoveryParityTest#testThePilotPinsReachTheGeneratedRegistry`. Deleting or
+renaming a pinned fixture fails that assertion by name; `testkit.TestDiscovery` already
+refuses to build a `control` that names no arm. The arm ids encode the constant they force
+(`-TRUE` / `-FALSE` / `-EMPTY` / `-NULL`) because several methods only discriminate in one
+direction and a bare method name would not say which.
+
+**These pins guard behaviour that already held.** They are red against no commit; what makes
+them evidence is the arm, not a base-tree failure. Reproducing one: replace the named method's
+body in `src/anyparse/query/<Layer>.hx` with the constant the arm id spells, rebuild
+`test-js.hxml`, and the pinned fixture flips. Collateral is expected and is not a defect —
+`M-BUILDMACRO-TRUE` moves 407 assertions across 21 classes — because the arms mutate shared
+engine code rather than anything this slice added.
+
+## From § The per-slice battery › The oracle answers for what it COMPILED, not for what you linted
+
+`haxe <compilerOracle> --no-output` exiting 0 is the strongest gate this project
+has, and it is authoritative only over the files that compile ran through. That
+set is NOT the lint scope, and on a real multi-target tree the gap is large and
+completely silent.
+
+Measured on Pony. Its `lint-oracle.hxml` has two arms, neko and nodejs, and each
+ends in `--macro include('pony', true, [ … ])` — whose third argument is an
+IGNORE list, 47 entries long. `pony.unity3d` and `pony.pixi` are both on it, on
+both arms, so no configuration in that repo typechecks either package. Nor could
+one: `haxe -cp src --no-output -neko … --macro include('pony.unity3d', true)`
+stops at
+
+    src/pony/unity3d/ui/TextureButton.hx:3: characters 8-22 :
+    You cannot access the cs package while targeting neko (for cs.NativeArray)
+
+and the externs those packages need — `unityhx` / `hugs` for `pony.unity3d`,
+`pixijs` for `pony.pixi` — are not installed haxelibs at all. The ignore list is
+not laziness; it is the only way an hxml that types the rest of the library can
+exist.
+
+The size of the hole, on the campaign's own full-ruleset `--fix` run over the
+851-file Pony lint scope: 234 files written, **32 of them (13.7 %) under
+`pony.unity3d.*` / `pony.pixi.*`** — a write set the green oracle says nothing
+about. The run's own summary is worded in exactly those terms and it is easy to
+over-read: `risky-fix verified: 61 file(s) applied` and `oracle-assisted: 3
+file(s) applied, 3 reverted to report-only (compiler rejected)` count the files
+the compiler could SEE. Nothing there is false; it simply does not extend to a
+subtree the compile never entered.
+
+**The risky-fix path now MEASURES that set instead of assuming it.**
+`anyparse.check.OracleCoverage` runs one `haxe -v --each <hxml> --no-output` from
+the oracle's own directory and reads its `Parsed <path>` lines. That is the
+compiled set, named by the compiler itself — across `--next` arms, through
+include chains, through a `--macro include(…)` ignore list and through whatever
+a future hxml invents, none of which the engine has to model. `--each` is what
+makes it whole: without it exactly one arm answers — on Pony's two-arm hxml a
+leading `-v` reported 175 distinct `src` files and a trailing one 196 (194 and
+215 raw `Parsed` lines; a module is parsed again for the macro context), and
+which arm you get depends on where the flag sits rather than on what the oracle
+compiles. `FixVerifier` then DECLINES a risky edit set whose file falls outside
+the set — before writing anything — and the summary says which:
+
+(915 is every source the compile READS — std and haxelibs included. The
+project's own share of it is 196, which is the number that matters against the
+679 files under `src`.)
+
+Measured on Pony `b6b94e37`, `--rule prefer-null-coalescing` over the whole
+`src`, same tree both arms: the base binary wrote 39 files and reported all 39
+as `risky-fix verified`; the gated one writes 11. The 28 files it stops writing
+are EXACTLY the 28 the oracle never compiles, and the difference in the other
+direction is 0 — the gate does not buy its honesty by refusing everything. It
+is also 2.9x faster (141.0 s -> 48.0 s), because those 28 whole-project
+typechecks are no longer spawned: here the honest answer is the cheap one. The
+probe costs one compile (17.45 s against 17.37 s for the plain oracle typecheck
+of this project — `-v` is a print flag, not extra work) and is taken lazily,
+only once some risky check actually has a candidate. It also needs a spawn
+buffer far past Node's 1 MiB default: 815 KB of `-v` output for Pony's two arms,
+2.1 MB for this project's own `test-js.hxml`. An overflow costs the whole risky
+phase, not a wrong decline — node reports it as a spawn error with a null status,
+which the probe reads as an unknown compiled set.
+
+The PREMISE is measured too, in `OracleCoverageTest`, because everything above
+rests on it: the identical `var x:Int = "not an int"` leaves
+`haxe lint-oracle.hxml --no-output` at exit 0 from `src/pony/unity3d/UTools.hx`
+and fails it from `src/pony/Byte.hx`. One variable, opposite verdicts.
+
+**The same hole exists one level down, inside a compiled file, and is measured
+the same way.** A `#if` branch the arm's defines exclude is skipped at lex time,
+so the file still earns its `Parsed` line while that branch is typechecked by
+nothing: `final _planted: Int = 'not an int';` in the native-sys `#elseif sys`
+branch of `HaxeSpawn.run` leaves `haxe test-js.hxml --no-output` at exit 0, and
+the same line in the `#if nodejs` branch above it fails with
+`String should be Int` — while `covers` answers TRUE for the file either way and
+`uncovered` declines only the second, naming the branch. So the probe splits its transcript into ARMS — one per
+`Defines:` line, each owning the files parsed after it and the defines it
+declares (that line's names plus the `--macro define(...)` calls that follow,
+which is the only way `nodejs` is visible at all) — and `OracleCoverage.uncovered`
+asks `CondRegionLiveness` whether the edit's own span is in a branch some
+compiling arm proves live. Arms are never unioned: `#if (a && b)` with an `a`
+from one arm and a `b` from another is live under neither.
+
+The define list is POSITIVE-ONLY, and that asymmetry is the whole soundness
+argument: a listed flag is proved, an unlisted one is UNKNOWN and never false,
+so `#if !whatever` can never claim a region no compile produced and every doubt
+costs a decline instead of a permission.
+
+That makes the honest number much lower than the file answer implied, which is
+the point of measuring it. Conditional branch openings in files the oracle DOES
+compile — every one of them previously counted as covered:
+
+| tree | branch openings | provably live |
+|---|---|---|
+| anyparse (`test-js.hxml`, 1522 of 1525 scope files compiled) | 1267 | 483 |
+| Pony (`lint-oracle.hxml`, 196 of 868 scope files compiled) | 1056 | 37 |
+
+Pony's figure is dominated by 399 `#if (haxe_ver >= x)` comparisons and the 447
+`#else` branches whose openers those comparisons leave unknown. Deciding them
+needs a second implementation of the compiler's own version comparison, and a
+wrong one claims coverage that does not exist — so they stay unknown.
+
+The `--each` flag ORDER is part of the claim. `--each` pushes what precedes it
+into every arm, so `-v --no-output --each <hxml>` suppresses output in arms the
+oracle's own `haxe <hxml> --no-output` lets EMIT (that flag joins the last arm
+only). Measured on a two-arm hxml whose first arm names a `-js` output: the
+oracle emits that file, the old probe spelling emitted nothing. The probe has to
+run the compile it is describing, so `--no-output` sits after the hxml.
+
+The limits, stated in full because a gate that overstates its own reach is the
+thing this section is about.
+
+- **Coverage the probe cannot establish is not coverage.** A `haxe -v` that will
+  not run, exits non-zero, or names no parsed file stops the whole risky phase
+  and puts its reason on the summary line — the same outcome as a project with
+  no `compilerOracle` key at all, which is the honest reading of an oracle whose
+  reach is unknown.
+- **A define the probe cannot SEE costs a decline.** An arm's define list is the
+  compiler's `Defines:` line plus the `--macro define(...)` calls the same
+  transcript reports; a define set from inside a BUILD macro appears in neither,
+  and a condition comparing a define's VALUE (`haxe_ver >= 4.2`) has nothing to
+  compare against. Both leave the region unknown and the edit report-only. Never
+  the other way round: absence is never read as "not defined", so no amount of
+  nesting can turn a flag the probe missed into a coverage claim.
+- **The set is a snapshot**, probed once per run. A fix that removes the last
+  reference to a module can drop it out of the compiled set afterwards; the
+  common direction (a fix that adds a reference) only leaves the snapshot
+  conservative.
+- **The oracle-assisted path is deliberately NOT gated this way.** It annotates
+  files the compile never enters on purpose (the display server answers for
+  them, and does so correctly), its safety resting on the annotator's own
+  abstentions instead — `ExplicitLocalTypeOracleAbstainTest` is that scenario end
+  to end, over a file outside the hxml's `-cp`. Its `oracle-assisted: N file(s)
+  applied, M reverted` line therefore still counts only what the compiler could
+  see, exactly as described above.
+
+**A second, sharper instance: the deleted code COMPILED.** The oracle's blind
+spot above is a subtree it never entered. This one is inside the subtree it did
+enter, and the exit code is still 0 — because the rewrite is a behaviour change
+the type system has no opinion about. `unnecessary-null-check` read
+`public var esVersion: Int = null;` in `pony`'s `create.section.Build`, called
+the operand non-null on the strength of the written `Int`, and `--fix` deleted
+`if (esVersion != null)` from around the line that emits the `js-es$esVersion`
+compiler flag. The result typechecks on every target the oracle builds, so the
+run reported green; the emitted hxml simply started carrying `js-esnull`
+unconditionally. The user found it in a code review, not in a build.
+
+The rule this adds to the one above: **the oracle can only ever confirm that a
+fix still compiles, never that it still means the same thing.** A rule whose
+edit DELETES a guard has to prove the guard is dead from the source itself,
+because the only gate downstream of it agrees with any well-typed program. Two
+proofs of that kind carry the fix that closed this defect, and both are local
+syntax rather than a project setting: a declaration whose own initialiser is the
+literal `null` is nullable whatever its written type says, and a comparison
+against `null` on a value-typed operand does not COMPILE on a static target
+(`On static platforms, null can't be used as basic type Int`), so its presence
+proves the file's target is one where `Int` is nullable. Measured over 18 882
+files (Pony, the Haxe std, `~/dev/haxelib`), the value-type arm those two gates
+withdrew produced 115 findings; 14 distinct sites read, 13 were load-bearing
+dynamic-target guards — five of them inside an explicit `#if neko` /
+`#if js` / `#if (js && html5)` region.
+
+Two consequences worth carrying to any project, not just this one:
+
+- **Read the oracle's own exclusion list before trusting its exit code.** Any
+  tree with per-target packages — flash-only, cpp-only, an engine binding — has
+  the same shape, and the excluded packages are usually the ones with the most
+  foreign coupling, which is to say the ones where a bad rewrite is least likely
+  to be a compile error. `OracleCoverage` now reads that list for you on the
+  risky-fix path, and by asking the compiler rather than by parsing the hxml —
+  but it is one consumer of the exit code, not all of them, so the reflex still
+  belongs to anyone quoting a green oracle at a file.
+- **A rule whose failure mode inside such a subtree is SILENT has to gate
+  itself.** A rewrite the compiler would reject is caught eventually, in the
+  worst case by the next real build; a rewrite that compiles and changes what
+  the emitted code does is caught by nothing. `inline-constant`'s
+  native-interop gate (`RefShape.nativeInteropDeclMetaName`, Haxe
+  `@:nativeGen`) is the worked example: `inline` bakes a constant into every
+  read site while leaving the field a foreign consumer still writes, and the
+  types that consumer holds are precisely the ones no oracle here compiles. The
+  same file also records the measurement that scoped the gate to `inline` alone
+  — `var` -> `final` and `var` -> `var(default, null)` emit byte-identical C#
+  on a `@:nativeGen` class, so the neighbouring field rules took no gate.
+
+## From § The per-slice battery › The verdict cache: one tree, one typecheck
+
+What the gates cannot decline they can at least stop paying twice. Before it
+compiles anything, `Cli.reportOracleVerdict` derives a CONTENT fingerprint of
+the whole compile input and reuses the recorded verdict only while that
+fingerprint still matches (`anyparse.check.OracleCache`). Interleaved, three
+rounds, `lint src --all` — again pre-`resolutionRoots` (2026-08-25), so the
+−37 % holds while the absolute seconds and the 699-file finding line do not:
+
+| | run |
+|---|---|
+| cold, no record | 40.7 s (base binary: 40.7 / 39.5 / 40.9 s) |
+| unchanged tree | 25.2 / 25.4 s |
+
+**−37 %**, and the cold arm is not measurably slower than the base — deriving
+the fingerprint costs ~0.28 s against a 16.1 s typecheck (18.0 s when
+re-measured 2026-08-25, so the ratio has only improved). Findings are
+byte-identical between the two arms (`0 errors, 54 warnings, 1356 infos in 699
+files`, same stdout to the byte).
+
+The key covers the compiler's own `Defines:` line (Haxe version plus every
+resolved library version), every hxml in the include chain, and every `.hx`
+under every classpath directory — where the directory list is the hxml's `-cp`
+roots, the compile directory itself (the compiler carries it implicitly, as the
+empty entry of its `Classpath:` line), and the entries the COMPILER names for
+the hxml's `-lib` set. That last part is what closes the haxelib hole: the
+library directories are never guessed, so their sources, their transitive
+dependencies, `extraLibs` and the Haxe std all enter the key by content. One
+`haxe -v <-lib …> --interp Std` spawn buys it, measured at 0.12 s.
+
+**Content only — never mtime.** That is not a style preference: the compilation
+server's mtime rule at one-second granularity gave 9 wrong verdicts in 10
+iterations here, including a broken build reported as clean (see § "Why
+`compilerOracleServer` is off here" and the `CompilerServer` class doc). A
+content hash has no such failure mode — break a compiled file in the same second
+you read it and the very next `lint` reports `compiler oracle REJECTED` with the
+compiler's own error text.
+
+`--fix` never consults it, by construction: `FixVerifier` writes files and then
+asks whether the project still compiles, so it calls `CompilerOracle` directly.
+`APQ_NO_ORACLE_CACHE` declines the cache process-wide — a weakening-only switch,
+since declining a cache costs time and cannot change a verdict. The residual
+holes it does NOT cover (non-`.hx` compile-time inputs, a classpath a `--macro`
+adds while typing, environment-supplied defines) are listed in the class doc;
+they are why this is a report-mode fast path and nothing more.
+
+## From § The per-slice battery › `apq oracle` — the battery's hand-off
+
+The battery used to typecheck the same hxml twice: its `build` step compiles
+`test-js.hxml`, and its `lint` step then asked the compiler the same question a
+minute later. The oracle now LEADS the lint branch, so it overlaps the
+suite/corpus/fmt/jvm branches, and `lint` — the very next step in the same
+branch — hits the cache. It sits there rather than in the driver as a
+background job because a branch subshell cannot `wait` on a pid that is not
+its own child; the wall-clock moment it starts is the same either way.
+
+It cannot lie. There is no flag that asserts "this already typechecked" — the
+compiler always runs, and only an observed verdict is stored, so a misuse
+(running it on a tree that does not build) records a rejection, which is the
+truth. A tree that moves between the two steps simply misses the fingerprint and
+is compiled again. Its exit status is not a battery gate: the `lint` step reads
+the same verdict and fails there, with the compiler's error text.
+
+One property worth knowing: the store is a single slot per (hxml, cwd) pair, so
+alternating between two tree states misses every time. That is the cost side of
+never keeping a verdict that could be wrong.
+
+The baseline is four plain files per commit in `$ANYPARSE_BLAST_CACHE`
+(`~/anyparse-blast-cache` by default) — two lint snapshots, the corpus sweep
+snapshot, and a two-integer suite line. Keeping them outside the repo is
+deliberate: they are machine-local measurement state, and a committed one would
+conflict on every slice. `--snapshot` writes them, and only on green, so a red
+or half-run tree cannot move the baseline under the next comparison.
+
+## From § The per-slice battery › `fmt --verify` — the invariant the round trip cannot check
+
+A correct formatter changes only WHITESPACE. `apq fmt --verify <paths>` formats
+each file in memory, strips every whitespace character from the input and from
+the output, and reports the first place the two disagree — file, source line, and
+a window of each side. It never writes.
+
+This catches a class the writer's own round-trip gate is blind to by
+construction. That gate asks "does the output re-parse to the same tree", so a
+writer defect whose output THIS parser still accepts passes it: `apq
+self-status`, `fmt --list` and `lint` all stayed green on a tree where
+`@:forward(a, #if f b, #end, c)` no longer compiled under `haxe`. One `--verify`
+pass over an 846-file tree found four such sites.
+
+Read the count, not just the exit status. `--verify` can only speak about files
+the writer would actually REWRITE — an already-canonical tree gives it a
+denominator of zero and reports a clean audit for the wrong reason, which is why
+the battery points it at the fork tree rather than at `src test tools`. The line
+it prints carries all three numbers: divergences, reformatted files, and files it
+could not format at all.
+
+Some policies change tokens on purpose — a trailing comma, braces around a single
+statement, an optional semicolon — and those are reported too. The rule stays
+"whitespace only" rather than encoding a policy list, because the defect it exists
+to surface is by definition one nobody has classified yet.
+
+## From § The per-slice battery › A comment interior and a string literal are outside every gate
+
+`fmt --verify` bounds the WRITER. Nothing bounds an EDIT OP that splices text
+INTO a region the writer re-emits byte for byte — a block comment's interior, a
+string or a regex literal. There the indentation IS the content, and every gate
+this project has reads past it: the writer re-emits the region verbatim, so `fmt
+--list` calls the file canonical; no lint rule reads a doc comment's ` * `
+continuation prefix; `self-status` only asks whether the file parses; and the
+compiler oracle type-checks a file whose comments it never looks at. A patch that
+lands one space too deep inside a doc block — or that changes the VALUE of a
+multi-line string by shifting its lines — produces a green run in every column.
+
+`hxq patch`'s line-wise arm did exactly that until 2026-08-22. It spliced at the
+matched line's first NON-whitespace byte, so the source's own indentation stayed
+standing and the replacement's was added on top of it. Code hid the defect (the
+writer re-indents code, so it never reached the file); comments and strings did
+not. It was found by reading `git diff` by eye, which is the only reader it had.
+
+The fix went where such a fix belongs: a postcondition INSIDE the op
+(`Patch.verbatimSpliceIntact`), not a new lint rule. A rule over doc-comment
+continuation prefixes would have to guess intent — a comment interior is
+legitimately free-form (ASCII art, indented code samples, nested lists) — and it
+could only ever speak after the damage was committed. The postcondition is exact
+instead: the op knows which bytes it synthesised and which region they landed in,
+so it compares the spliced block's RELATIVE per-line indentation across the writer
+round trip and refuses when it moved unevenly. A uniform shift is the writer
+re-basing the block onto its site, which is legal; a first-line-only shift is the
+defect, and no uniform shift can explain it.
+
+The general shape, worth asking of every new mutation op whose payload can reach a
+comment or a literal: **when an op writes into a region the writer COPIES rather
+than re-derives, the op is the last thing that can check it.**
+
+##### The same region, the other direction: a find copied out of the NORMALIZED body
+
+`hxq patch` writes INTO a comment. `hxq comment-rewrite` first has to FIND a place
+in one, and it matches against a normalized copy of the body — every line break,
+plus the ` * ` continuation after it, folded to a single space. That folding is
+what makes a multi-line find work at all, and it is also the only place in the
+tool where one normalized character stands for a run of raw ones.
+
+S121 hit the consequence while editing a bullet list and reported it as a measured
+fact. A find copied out of the normalized rendering carries the break in FRONT of
+its bullet as a leading space, and `normalizeCommentBody`'s index map sends that
+space back to the START of the run — the `\n` at the end of the PREVIOUS raw line.
+The splice therefore began there, ate the break and its ` * `, and ran two bullets
+into one line. Reproduced here on a four-line doc block: with
+`find = ' - M2 …'` the op printed `rewrote 1 file(s)`, exit 0, and left
+
+```
+ * - M1 the first bullet with some text - M2 the SECOND bullet with some text
+```
+
+Every gate stayed green, exactly as this section's opening paragraph predicts:
+the file parses, the writer re-emits the interior verbatim so `fmt --list` reports
+0 of 1, and no lint rule reads a continuation prefix. S121 only saw it because a
+FOURTH rewrite happened to trip the width guard.
+
+**Eight boundary shapes, measured before and after.** The fix is a POSITION
+mapping, not a match on the string: a leading or trailing break run stays where it
+is and the replacement's own boundary space stands for it. Only an EMPTY
+replacement — a deletion, which has to take its separator with it — still consumes
+the break, and that row is why "always keep the break" is the wrong fix: it leaves
+a bare ` *` line where a removed bullet was.
+
+| # | find / replace at the boundary | before | after |
+|---|---|---|---|
+| 1 | leading space, replacement keeps it | M1 and M2 run on | fixed |
+| 2 | no leading space (S121's workaround) | correct | unchanged |
+| 3 | leading space, EMPTY replacement | clean delete | unchanged |
+| 4 | trailing space, replacement keeps it | M2 and M3 run on | fixed |
+| 5 | leading space that maps to a REAL space | correct | unchanged |
+| 6 | leading space, replacement drops it | glued with no space at all | fixed |
+| 7 | leading space across a BLANK ` *` line | paragraph break destroyed | fixed |
+| 8 | break INTERIOR to the match (a multi-line find) | joins — documented | unchanged |
+
+Row 7 is the sharpest: `skipContinuation` swallows consecutive newlines, so a
+whole paragraph separator folds into the same single space and was destroyed by
+the same arithmetic. Row 8 is the half that must NOT change — a find spanning two
+lines is the op's documented multi-line capability, and its two fixtures
+(`testLiteralMultilineFindWithPrefixes`, `testLiteralMultilineFindWithoutPrefixes`)
+are the other side of the acceptance.
+
+Both boundaries are pinned, and separately: `M-COMMENT-BOUNDARY-BREAK-KEPT` cuts
+the rule as a whole (rows 1, 4, 6, 7 go red), `M-COMMENT-BOUNDARY-TRAIL-INDEX`
+restores an index confusion the first cut of this slice shipped — `needle` read at
+a NORMALIZED-body offset, out of range for every match past offset 0 — which left
+the trailing half of the rule DEAD while every leading fixture passed. That arm
+kills exactly one fixture and nothing else; it exists because the eight-row matrix
+caught the dead half and no single-boundary fixture could have.
+
+`apq lint-diff --old A.json --new B.json [--root <prefix>] [--label <name>]`
+compares two `apq lint --format json` reports as multisets of
+`(file, rule, severity, message)`. Line, column and address are deliberately not
+part of the key — they move under any edit above them, so keying on them would
+report half the tree after a one-line insertion. Two normalizations come from
+measured false positives rather than anticipation.
+
+`--root` strips a path prefix from whichever side carries it (a relative and an
+absolute snapshot of one tree otherwise disagreed on 1812 of 2954 findings), and
+it reaches the paths a message quotes as well as the `file` field, because
+`duplicate-code` names its partner block by path.
+
+The second is the same hazard one field over: a rule that writes a source
+MEASUREMENT into its own prose re-keys on an edit that changed no finding.
+`oversized-type` quotes the type's line extent, and one writer slice therefore
+printed eight moves — `WrapList` 4184 against 4194, plus `WriterLowering`, `Cli`
+and `SymbolIndex` — with total findings 2256 against a base of 2256. Every writer
+slice in that campaign waived the blast gate for this reason alone, and a gate
+waived by reflex has stopped being a gate.
+
+The fix is a declaration a check makes about ITSELF (`Check.VolatileMessage`,
+one method returning the message with its volatile parts masked), collected by
+`Linter.messageIdentities` and handed to `lint-diff`. `lint-diff` holds no list
+of rules: a new rule that quotes a coordinate joins by writing that method, and
+the consumer never changes. The masks are ANCHORED on a literal fragment the
+check itself wrote (`MessageMask.maskAfter` / `maskBefore`), so exactly one
+number leaves the key — `oversized-type`'s line extent goes, its member count
+stays, because that one moves only when a member is written. The blanket
+digit mask this replaced could not express that split at all, and on
+`duplicate-code` it also ate the statement count and any digit in the partner
+filename: 57% (anyparse) and 78% (tm) of that rule's findings shared a key with a
+sibling, where a substitution was invisible. The message keeps every number
+either way — identity and prose come apart, the numbers do not leave the report.
+
+Both snapshots are normalized at COMPARE time, so a baseline cached before a
+declaration existed still compares clean against a run made after it: adding a
+`VolatileMessage` needs no re-snapshot.
+
+Its two non-zero exits are different on purpose, and the battery treats them
+differently: **1** means the comparison ran and the snapshots disagree, which
+`--allow-blast` waives; **2** means it could not run at all — a snapshot
+missing, unreadable or malformed, or the flags wrong — and that fails the
+battery whatever flags you pass. Waiving expected movement must never waive a
+gate that never executed.
+
+The battery prints where its own time went, and the rows marked `*` OVERLAP:
+they are the four branches' steps, running at once, and they sum to far more
+than the elapsed time. The table therefore closes on two different numbers —
+`concurrent span`, the wall clock of the parallel region, and `TOTAL (wall)`,
+the real end-to-end elapsed time — and neither is a measurement of the code.
+
+Those numbers measure the battery. A benchmark arm runs ALONE and
+SEQUENTIALLY on an otherwise idle machine; a battery row runs beside three
+other branches, up to nine `node`/`haxe` processes deep, and moves by tens of
+percent with ambient load. Never quote one as a benchmark result — see "The
+profiling harness" above for how a real arm is measured.
+
+## From § The per-slice battery › `--list` and `--write` disagreed across runs, and only the tool could see it
+
+`apq fmt --list` is a gate this campaign runs after every slice. It and `--write`
+decide from the SAME comparison — `writeRoundTrip(source) == source` — so within
+one run they cannot disagree. Across runs they did: `--write` rewrote a file and
+the very next `--list` reported that file again.
+
+The reason is that the writer's output is not always its own fixed point. A wrap
+decision that reads the SOURCE line layout gets a different answer once the writer
+has rewritten that layout. Measured 2026-08-22 with
+`wrapping.objectLiteral.defaultWrap` set to `fillLineWithLeadingBreak`: one `fmt
+--write` over the Pony tree rewrote 173 of 854 files and the next `fmt --list`
+still reported 163 of them; a second `--write` settled every one. The mechanism is
+one early return — a source-MULTILINE object literal is force-one-per-lined BEFORE
+the wrap cascade is consulted, and the leading break the cascade emits on pass 1
+is exactly what makes the literal multiline. It is faithful to the fork, which
+reproduces the same two-pass convergence on the same file under the same config;
+what was NOT faithful is a `--write` whose result its own `--list` rejects.
+
+Five other wrap knobs share the shape on the same corpus — `anonType` (33 files),
+`callParameter` (2), `arrayWrap`, `anonFunctionSignature`, `typeParameter` (one
+each) — so this is a bug SHAPE, not a bug: any list whose layout can be decided
+from source newlines instead of from the cascade.
+
+`fmt` therefore writes the FIXED POINT (`anyparse.query.FormatFixedPoint`), not
+one round trip — and neither swallows nor tolerates what it works around:
+
+- a file that needed more than one rewrite is REPORTED on stderr with the count.
+  A silent loop would turn a writer defect into a permanent tax nobody can see;
+- a file that never settles is a FAILURE in every mode and its bytes are left
+  alone. Churning a file forever is worse than declining to format it, and
+  `--list` has to fail on exactly the files `--write` cannot fix — otherwise the
+  two disagree again at the other end.
+
+It costs nothing where it does not apply: a canonical file answers `source` on the
+first round trip and nothing else runs, so a green tree — the gate's normal case —
+pays zero extra round trips. Measured 0 files needing a second rewrite over `src`,
+`test`, and the whole Pony tree under every config this project ships.
+
+The general shape is the sister of "A comment interior and a string literal are
+outside every gate": **a gate that reads the same component the defect lives in
+cannot see the defect — make the component check its own postcondition.**
+
+## From § The per-slice battery › A Pony writer blast pair needs all SIX roots, not `src` alone
+
+A before/after byte comparison of the writer against the user's Pony fork —
+`cp -R` two copies, format both with the base engine and the slice engine,
+`diff -rq` — is complete only when it covers every root the fork ships `.hx`
+under: `src tools tests socketTests install docgen`. Two slices paid for
+comparing `src` alone: S146 measured `src` only and missed
+`tools/src/module/Build.hx`; S156, running the identical `src`-only
+comparison, missed a DIFFERENT file of the same shape,
+`tools/src/module/CfgModule.hx`. Neither miss showed up as a wrong verdict —
+each comparison answered a narrower question than the one it was asked, and
+the tree the answer was silently narrower than kept a real writer-affecting
+file outside either engine's reach.
+
+Copy the WHOLE repo (`cp -R /Users/axg/dev/libs/Pony /tmp/pony-SNNN`, never
+`cp -R .../Pony/src`): beyond missing files under the other five roots, a
+`src`-only copy also loses the fork's root `apqlint.json` / `hxformat.json`,
+so it silently measures a DIFFERENT config than the fork actually runs
+under, not just a smaller file set. `diff -rq` the two formatted copies
+afterward — a root-scoped `find <root> -name '*.hx' | wc -l` count is not a
+substitute for comparing the copies themselves.
+
+## From § The per-slice battery › Every `fmt` summary that reports a count names BOTH quantities
+
+Three real lines, each from the run named beside it — the two `fmt` runs are the
+Pony tree under its own config, the `--verify` one is the fork tree the battery
+audits:
+
+```
+apq fmt: rewrote 23 of 870 file(s), 3 failed
+apq fmt --list: 0 of 1510 file(s) would be rewritten          # src test tools
+apq fmt --verify: 0 of 6 reformatted file(s) changed more than whitespace (36 scanned, 0 could not be formatted)
+```
+
+The `--write` line used to print `formatted N file(s)` — the change count with
+no denominator — and `--list` printed nothing at all unless a file failed. Both
+readings cost a measurement arm in this campaign. `formatted 0 file(s), 3
+failed` over a tree of 870 read as "the run was inert", and nothing on the line
+separated that reading from the true one; `--list`'s silence made a run that
+scanned a whole project and a run that matched three files look identical. The
+fourth mode still reports no count: `fmt <one-file>` with no flags writes the
+formatted source to stdout, gofmt-style, and the output IS the answer.
+
+And the denominator alone was not enough, because one word still spoke for two
+causes. A file the run could not answer FOR (it did not parse, its re-emission
+would drop a comment) and a file the HOST refused to write are different facts,
+and the second one was reported as the first:
+
+```
+apq fmt: rewrote 0 of 3 file(s), 1 failed, 2 could not be written
+```
+
+That cost a fourth measurement arm. A `cp -R` copy of the Haxe stdlib kept its
+`444` mode bits, so `fmt --write` wrote NOTHING and said `rewrote 0 of 2625
+file(s), 1692 failed` — read as a source-side verdict, which let a before/after
+comparison be accepted while both of its sides were the same untouched copy. The
+exit status was never the half that lied: a write failure rides in `failed` and
+has always exited non-zero, and it stays that way — a `--write` run that could
+write nothing did not leave the tree canonical. Only `--write` can produce an
+unwritable file, so the clause is absent by construction in every other mode.
+
+The counts themselves were re-measured over the Pony tree with the engine at
+`0c2dbdfa`, in the context the reports came from — 870 files reached through
+per-file config discovery, 3 of them unparseable — against a `cmp` of
+before/after copies: 81 of 81, 0 of 0, and 23 of 23. Neither the over-report nor
+the under-report reproduces; what did was the missing denominator, and one
+direction nobody had filed: a write that THROWS (a read-only file) took the
+whole run down with an uncaught host error, so a run that had already rewritten
+part of the tree printed no summary at all. `formatOneFile` now catches it,
+names the file, and counts it apart from a parse failure under its own word —
+the read side had been caught from the start, and still shares `failed` with the
+parse failures. The other 31 `writeFile` call sites in `Cli` still share the
+hazard.

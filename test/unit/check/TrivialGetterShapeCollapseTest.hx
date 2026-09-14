@@ -616,7 +616,7 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 	 *
 	 * This guards behaviour that already held; what it adds is reach. This rule and
 	 * `prefer-enum-abstract` are the two whose rewritten call sites no fixture exercised
-	 * (docs/testing.md § "The fourteen rules S73 touched that its own arm cannot reach"), and
+	 * (docs/testing.md § "Rules the deciding arm cannot reach are pinned one fixture per rule"), and
 	 * both are the right-hand operand of a short-circuiting `||` whose left operand every
 	 * existing fixture already satisfied.
 	 */
