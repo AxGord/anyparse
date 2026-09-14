@@ -2,11 +2,13 @@
 
 The formatter reads the project's `hxformat.json` (discovered by walking up from each
 file, `FormatConfigDiscovery`). The **keys** are the fork's; the **accepted values** are
-not all of them, and three of the useful ones exist only here. Until this file, every
-accepted string lived in exactly one place — the `switch` arms of
-`anyparse.grammar.haxe.HaxeFormatValues` — so a config that named a value it does not know
-was silently ignored and read as "the feature is not wired". That misreading produced
-three separate false defect reports in one campaign; this page is the fix.
+not all of them, and some of the useful ones exist only here. This page is the value
+reference: the schema is `HxFormatConfig.hx` and the `format/HxFormat*Section.hx` typedefs
+beside it, the ingest is `HaxeFormatConfigLoader`, and a knob's SEMANTICS — what each value
+does at its site — is the doc of the field that carries it (`HxModuleWriteOptions` /
+`WriteOptions` for the knob, the grammar field carrying the matching `@:fmt(...)` for the
+layout). Where a row below says "see its field doc", that doc is the contract and this row
+is the index.
 
 **A value the reader does not recognise leaves the option at its previous setting.** No
 error, no warning. So the first debugging step for "the key does nothing" is to check the
@@ -49,40 +51,16 @@ Alongside them, on `wrapping` itself: `maxLineLength` (Int), `arrayMatrixWrap` (
 `trailingComma`, `comprehensionCuddledOpen` (Bool), `methodChainCuddledLinks` (Bool),
 `soleItemCuddledBrackets` (Bool), `ternaryCuddledBraces` (Bool).
 
-All four cuddle keys are **anyparse extensions** — the fork has no such concept
-(`grep -i cuddl` over the whole fork returns nothing), so their shapes were derived
-here, not copied. `ternaryCuddledBraces` lets a broken ternary's `:` and its else
-branch's opening delimiter ride on the then branch's own closing line (`} : {`) instead of opening a
-continuation line that would hold nothing but `: {`; the `?` gap is untouched. It
-fires only when the then branch has a closing line to ride — a forced or
-renderer-decided break whose closing brace lands at the indent of the line the
-branch started on. A flat then branch has no closing line to ride, so a ternary whose
-branches both fit is never rebuilt onto one line, and the else branch must itself open a
-delimited body for the `} : {` shape to be legible at all. It also declines when the glue
-would COST lines: gluing shifts the else right by the then branch's whole closing-line
-closer run plus a space (two columns for a bare `}`, four for a `}))`), so an else that
-fits its own separator line but not the line it would ride keeps the separator. That
-width guard reads the ternary's REAL trailing width off the render stack — the `;` a
-statement host adds, the `);` a glued call argument adds, nothing at all when the host
-opened its own paren — so the band's edges move with the host instead of sitting on one
-reserved column (`Doc.IfArrowContinuationFitsWithRest`). Within the two break shapes it
-covers, only the `beforeLast` separator location is affected: the `afterLast` shapers
-never read the flag. Default `false`.
-
-`comprehensionCuddledOpen` governs a comprehension that is the SOLE item of its
-brackets. The rule: `[ for (head)` is always cuddled, and the body stays on that head
-line only while the whole comprehension renders flat — otherwise the body drops one
-indent level and the closing bracket takes a line of its own at the `[` line's indent.
-The knob therefore fires whenever the brackets did not fit on one line, and the only
-question it asks is whether the head `[ for (…)` fits the line it is glued to; the
-body is never consulted. An item that renders flat has its body FORCED one level down,
-because its own fit group would keep the body on the head line whenever `[ head body`
-fits and cannot see the closing bracket — leaving head and body packed on one line with
-a lone `]` underneath, or (with a gate refusing that half-shape) a layout that jumps
-between one line, the leading-break ladder and the cuddle as the line grows by a
-column. A comprehension whose first break sits inside its HEAD rather than after the
-generator's `)` is excluded — only a body-level break can deliver the shape the knob
-promises. Default `false`.
+All four cuddle keys are **anyparse extensions** — the fork has no such concept, so their
+shapes were derived here, not copied — and each is documented on its `WriteOptions` field:
+`ternaryCuddledBraces` (a broken ternary's `:` and the else branch's opening delimiter ride
+the then branch's own closing line, `} : {`, only when the then branch has a closing line to
+ride and the glue would not cost lines; the width guard reads the ternary's real trailing
+width off the render stack through `Doc.IfArrowContinuationFitsWithRest`),
+`comprehensionCuddledOpen` (a comprehension that is the sole item of its brackets keeps
+`[ for (head)` on the open line whenever the head fits, with the body one level down and
+the `]` on its own line), `methodChainCuddledLinks` and `soleItemCuddledBrackets`
+(`HxFormatWrappingSection`'s doc says what each recognises). All default `false`.
 
 A rules object holds `defaultWrap`, `defaultLocation`, `defaultAdditionalIndent` (Int),
 `rules` (an array of `{type, location, conditions}`) and `itemsAfterCloseParenOnly` (Bool,
@@ -108,8 +86,8 @@ Every value also accepts its capitalised spelling (`OnePerLine`, `FillLine`, …
 
 `ignore` is the one that answers "how do I get a canonical layout?": it is the **only**
 mode that COLLAPSES a list the source broke — every other mode either preserves the source
-form or only breaks a long one. Measured, `objectLiteral` with `defaultWrap: "ignore"` plus
-an `itemCount >= n` rule: a source-broken `{x: 1, y: 2}` collapses to one line, and a
+form or only breaks a long one. With `objectLiteral` at `defaultWrap: "ignore"` plus an
+`itemCount >= n` rule, a source-broken `{x: 1, y: 2}` collapses to one line, and a
 source-flat three-item literal breaks one-per-line. The fork's `WrappingType` has no
 `ignore`, so no corpus fixture selects it — which is exactly why it went unnoticed.
 
@@ -180,7 +158,7 @@ without it `api.load(profile -> { … })` puts its own single argument on a sepa
 indent deeper. And the multi-line half MUST be the lambda-specific condition: written as the
 plain `hasMultilineItems` it also fires when the multi-line element is the COLLECTION, which
 sends `new Row([` … `], w, h)` one-argument-per-line and takes the bracket off the head —
-measured over one real tree, that spelling changed 65 files where the correct one changes 13.
+on a real tree that spelling touches several times as many files as the correct one.
 There is no `containerItemCount >= n` — no cascade has needed to count them.
 
 **`hasMultilineLambdaItems` crosses the kinds array with the rendered items.** It holds when at
@@ -208,21 +186,15 @@ answer says so rather than quietly removing your rule.
 
 `beforeLast` or `afterLast` — which side of the separator the break falls on.
 
-## `sameLine.*` — the full key list (33 keys)
+## `sameLine.*` — the key list
 
 `HxFormatSameLineSection` (`src/anyparse/grammar/haxe/format/HxFormatSameLineSection.hx`)
-declares 33 `sameLine.*` fields. Before this section the file you are reading named 9 of
-them with a real default/values write-up (10 if a passing mention counts — `grep -oE
-'sameLine\.[A-Za-z]+' docs/haxe-format-config.md` returns 10 distinct names, but
-`doWhileBody` was only named in passing inside the `loopBodyIfElseNext` do-while
-subsection, never documented on its own); the other 24 lived only in
-`HxFormatSameLineSection`'s doc-comment, which is where its own doc points a reader who
-hits a key that "does nothing". The table below is sourced from that doc-comment, from
-`HxModuleWriteOptions`'s own (more detailed, per-field) doc-comment, and from the actual
-default values in `HaxeFormat.defaultWriteOptions` — and every key is cross-checked
-against `HaxeFormatConfigLoader.applySameLine` / `applySameLineBodies` /
-`applyExpressionIfFanout`: all 33 are read unconditionally (`if (section.<key> != null)
-opt.<key> = …`), so none of the 33 is a dead field the loader silently drops.
+declares the keys, and every one of them is read unconditionally by
+`HaxeFormatConfigLoader.applySameLine` / `applySameLineBodies` / `applyExpressionIfFanout`
+(`if (section.<key> != null) opt.<key> = …`), so none is a dead field the loader silently
+drops. The table gives each key's kind, compiled default and governed site; a key whose
+row says "see its field doc" has its full contract on the `HxModuleWriteOptions` or
+`HxFormatSameLineSection` field of that name.
 
 **`Default` is the COMPILED baseline — `HaxeFormat.instance.defaultWriteOptions`,
 what a bare file with no discoverable `hxformat.json` gets.** Six keys
@@ -253,10 +225,10 @@ applies.
 | `whileBody` | same/next/fitLine/keep | `keep` (bare) / `next` (any config loaded) | statement-`while` body placement; re-baselined |
 | `doWhileBody` | same/next/fitLine/keep | `keep` (bare) / `next` (any config loaded) | `do <body> while (…);` body placement (maps to the runtime `doBody` field); re-baselined |
 | `returnBody` | same/next/fitLine/keep | `fitLine` | separator between `return` and its value |
-| `returnBodySingleLine` | same/next/fitLine/keep | `fitLine` | refines `returnBody` for return values that are NOT a control-flow/block construct (`if`/`for`/`while`/`switch`/`try`/`{…}` keep using `returnBody`) — wired via `@:fmt(bodyPolicySingleLine('returnBodySingleLine', …))` on `HxStatement.ReturnStmt`, confirmed live in the grammar. `HxFormatSameLineSection`'s doc-comment on `returnBody` used to call this knob "parsed and silently dropped"; fixed in source (T160) |
+| `returnBodySingleLine` | same/next/fitLine/keep | `fitLine` | refines `returnBody` for return values that are NOT a control-flow/block construct (`if`/`for`/`while`/`switch`/`try`/`{…}` keep using `returnBody`) — wired via `@:fmt(bodyPolicySingleLine('returnBodySingleLine', …))` on `HxStatement.ReturnStmt` |
 | `catchBody` | same/next/fitLine/keep | `next` | separator between a `catch (name:Type)` header's `)` and its body |
-| `tryBody` | same/next/fitLine/keep | `next` | separator between `try` and its body (`HxTryCatchStmt.body`), orthogonal to `whitespace.tryPolicy` (the `try{` vs `try {` inline gap); NOT re-baselined (outside the `ω-D6`/`ω-D7` block), so `next` holds whether or not a config is loaded, unless a project's own `hxformat.json` sets `"tryBody": "same"` as an explicit override — the AxGord fork's does, which is what the field's doc-comment used to describe as the compiled default; fixed in source (T160) |
-| `caseBody` | same/next/fitLine/keep | `keep` (bare) / `next` (any config loaded) | statement-switch single-stmt case-body placement (`HxCaseBranch.body` / `HxDefaultBranch.stmts`); `fitLine` measures the whole `case <patterns>: <body>` against `lineWidth`; re-baselined, see the note above the table — its own field doc-comment already states the `next` reading and was not stale |
+| `tryBody` | same/next/fitLine/keep | `next` | separator between `try` and its body (`HxTryCatchStmt.body`), orthogonal to `whitespace.tryPolicy` (the `try{` vs `try {` inline gap); NOT re-baselined (outside the `ω-D6`/`ω-D7` block), so `next` holds whether or not a config is loaded, unless a project's own `hxformat.json` sets `"tryBody": "same"` as an explicit override |
+| `caseBody` | same/next/fitLine/keep | `keep` (bare) / `next` (any config loaded) | statement-switch single-stmt case-body placement (`HxCaseBranch.body` / `HxDefaultBranch.stmts`); `fitLine` measures the whole `case <patterns>: <body>` against `lineWidth`; re-baselined, see the note above the table |
 | `expressionCase` | same/next/fitLine/keep | `keep` | same shape, selected instead of `caseBody` for an expression-position switch (`var x = switch … { case Y: 1; }`) — dispatch is on `opt._inExprPosition`, not an OR of the two keys (see the position trap below) |
 | `functionBody` | same/next/fitLine/keep | `next` | separator between a function declaration's `()` and a single-expression body (`function f() trace("hi");`); `BlockBody` and the `;`-only `NoBody` are unaffected |
 | `anonFunctionBody` | same/next/fitLine/keep | `same` | expression-position sibling of `functionBody`, for `HxFnExpr.body`'s `ExprBody` branch (e.g. `function() trace(i)`) |
@@ -264,12 +236,12 @@ applies.
 | `expressionIf` | same/next/fitLine/keep | n/a — no single default, see Governs | body placement for the expression-position counterparts of `if`/`for` (array comprehensions and any value-position `if`/`for`). One JSON key fans into three runtime knobs (`expressionIfBody` / `expressionElseBody` / `expressionForBody`); ABSENT, each of the three keeps its OWN compiled default — `same` / `same` / `keep`, not a uniform value (not re-baselined the way `ifBody`'s sextet is — `expressionIfBody`/`expressionElseBody`/`expressionForBody` are outside the `ω-D6`/`ω-D7` block). PRESENT, `keep`/`same` propagate to all three; `next`/`fitLine` propagate only to the if/else pair, never to `expressionForBody` (a `for` has no `else` sibling, so the arrow-body/comprehension-filter fallback that `next`/`fitLine` would otherwise break stays intact) — `comprehensionFor` is the way to set the `for` case specifically, and it is read AFTER this fanout so it always wins |
 | `comprehensionFor` | same/next/fitLine/keep | absent → `keep` | the SPECIFIC override of `expressionForBody`, read after the `expressionIf` fanout — see its own section below |
 | `elseIf` | same/next | `same` | keyword placement for a nested `if` inside an `else` (`else if (…)` inline vs. `else` alone then `if` one indent deeper); overrides `elseBody` for the `IfStmt` ctor |
-| `elseSwitch` | same/next/keep | `keep` | keyword placement for a nested `switch` inside an `else`, the `elseIf` twin for the other keyword-headed branch — see "The three keys S67 added" below |
+| `elseSwitch` | same/next/keep | `keep` | keyword placement for a nested `switch` inside an `else`, the `elseIf` twin for the other keyword-headed branch — see "Three keys with a position trap" below and its field doc |
 | `fitLineIfWithElse` | bool | `false` | when `false`, an `ifBody`/`elseBody` of `fitLine` degrades to `next` for an `if` that carries an `else` (fitting one branch and breaking the other reads as inconsistent); `true` keeps `fitLine` unconditionally |
 | `fitLineBodyGlue` | bool | `false` | when a `fitLine` construct body (`if`/`for`/`while`) does not fit the header line AND the next line would not rescue it either (its flat width still exceeds the continuation indent), stay glued to the header and break inside the body instead of moving down a line and an indent step; also reaches an arrow-lambda body that is itself a parenthesised expression. Neither this knob nor `fitLine` itself decides whether a body parked inside a LAMBDA item is counted in the enclosing line's width — that is a separate mechanism, see "A `fitLine` body parked inside a lambda item" below |
-| `loopBodyIfElseNext` | bool | `false` | see the dedicated section below (S159's paragraph, left as-is by this slice) |
+| `loopBodyIfElseNext` | bool | `false` | see the dedicated section below and its field doc |
 | `conditionalExprFit` | bool | `false` | break an expression-scope `#if … #end` region at its directive seams, the way an `if`/`else if`/`else` chain breaks, when the glued form does not fit the line; off (default) keeps the layout purely source-driven |
-| `ifElseSemicolonNextLine` | bool | **`true`** | when the statement-`if` then-branch is a bare (non-block) statement ending in `;` and the branch carries an `else`, put that `else` on the next line instead of gluing it after the `;` (`if (c) foo();` / `else bar();` rather than `if (c) foo(); else bar();`). Undocumented in any doc-comment in either source file (no class-level mention, no field-level `/**…*/`); this description is derived from its one consumer, `WriterFieldSepLowering.hx` (the `@:fmt(semicolonNextLineElse)` flag on `HxIfStmt.elseBody`). Trivia-mode only: the plain (Fast) writer canonicalises `;` presence, so this knob is inert there and the flag-based separator is used instead; it also never fires in expression position (`opt._inExprPosition`), which is `sameLineExpressionElse`'s job. Note the default is `true`, unlike every other bare-Bool `sameLine` knob in this table, which default `false` |
+| `ifElseSemicolonNextLine` | bool | **`true`** | when the statement-`if` then-branch is a bare (non-block) statement ending in `;` and the branch carries an `else`, put that `else` on the next line instead of gluing it after the `;` (`if (c) foo();` / `else bar();` rather than `if (c) foo(); else bar();`). Consumed by `WriterFieldSepLowering` through the `@:fmt(semicolonNextLineElse)` flag on `HxIfStmt.elseBody`. Trivia-mode only: the plain (Fast) writer canonicalises `;` presence, so this knob is inert there and the flag-based separator is used instead; it also never fires in expression position (`opt._inExprPosition`), which is `sameLineExpressionElse`'s job. Note the default is `true`, unlike every other bare-Bool `sameLine` knob in this table, which default `false` |
 | `expressionIfWithBlocks` | bool | `false` | collapses a `BlockExpr` branch body's CONTENTS onto one line regardless of width (`{ … }` survives, its interior flattens); glues nothing and never moves `else` — see the closing paragraph of the `expressionIfWithBrackets` section below for the distinction |
 | `expressionIfWithBrackets` | bool | `false` | see the dedicated section below |
 | `expressionIfArrowBodyReflow` | bool | `false` | when `true`, a value-`if`/`else` chain that is the direct body of an arrow lambda becomes one width-decided unit — flat when it fits, one branch per line (each value glued to its own condition) when it does not — instead of each branch following the `expressionIf` policy independently. Reach extends slightly beyond the immediate arrow body: a `cast(…, T)` operand, an `untyped`/`@:meta` prefix, and an enclosing value-`if`'s condition also re-flow. A comment anywhere on the chain's `else`-spine refuses the reflow whole |
@@ -282,9 +254,8 @@ lowercase-camelCase the schema declares — `"Same"` / `"FitLine"` / `"Keep"` ar
 DIFFERENT string from `"same"` / `"fitLine"` / `"keep"` to Haxe's enum-abstract-from-string
 equality, so a capitalised spelling here is not silently ignored, it is a hard parse
 failure: `apq fmt` exits 1 with `invalid HxFormat<…>Policy value: "Same"` and leaves the
-file unformatted** (measured: `sameLine.ifElse`, `sameLine.ifBody` and `sameLine.elseIf`
-all reject `"Same"` this way — every `sameLine.*` value type does, since all three enum
-abstracts behind it declare only the lowercase spellings). This is the opposite of the
+file unformatted** — every `sameLine.*` value type does this, since all three enum
+abstracts behind it declare only the lowercase spellings. This is the opposite of the
 `wrapping.*` cascades' `defaultWrap`/`rules[].type`, which DO also accept a capitalised
 spelling (`OnePerLine`, `FillLine`, …) — a different vocabulary with its own reader.
 
@@ -347,31 +318,16 @@ Neither gate is position-restricted — `emit` serves every wrap list, so an arr
 leading with `function` is re-tagged just like a call argument, which is what makes the two
 spellings agree there.
 
-Until S183 only the first gate existed, and the asymmetry was measurable at one variable.
-Under `maxLineLength: 140` with `ifBody: fitLine`, at the same site, statement at two tabs:
-
-```haxe
-// 141 columns — the arrow gate reveals the body's width, so this breaks correctly
-if (s != orig[k]) table.where(client == $key && key == $k).update(['value' => (s: DBV)], (r) -> if (!r) throw 'Cannot save storage');
-
-// 146 columns — a FIXED POINT before S183: re-emitted unchanged, over the limit
-if (s != orig[k]) table.where(client == $key && key == $k).update(['value' => (s: DBV)], function(r) if (!r) throw 'Cannot save storage');
-```
-
-The overflow was unbounded, not a threshold effect: the same shape with a 260-character
-body sat at 420 columns and still moved nothing. With the width visible it breaks at every
-point the construct owns — the statement body first (`ifBody: fitLine`), then `methodChain`,
-then the call parens — and only an unbreakable string literal can still exceed the limit.
-
 **The two gates coincide only for a plain `if` body.** The `function` gate accepts any
 hardline-free body; `isArrowPlainIfBody` still demands `if` with no top-level `else`. So for
-a `for` / `while` / `switch` / `if`-`else` body the `function` spelling now measures and the
-ARROW spelling does not — measured under Pony's own `hxformat.json`, where
-`function(r) for (q in r) f(q)` as the last argument went from a 149-column line to a correct
-break while `(r) -> for (q in r) f(q)` is byte-identical before and after. That residual is
-open (T875); closing it means one spelling-agnostic "does this item park a hardline-free
-`BodyGroup`?" predicate, which also has to be weighed against the landed thin-arrow if-else
-path `isArrowPlainIfBody`'s `else` clause protects.
+a `for` / `while` / `switch` / `if`-`else` body the `function` spelling measures and the
+ARROW spelling does not. That residual is open; closing it means one spelling-agnostic "does
+this item park a hardline-free `BodyGroup`?" predicate, which also has to be weighed against
+the thin-arrow if-else path `isArrowPlainIfBody`'s `else` clause protects. The overflow the
+gates close is unbounded, not a threshold effect (the columns are in
+`docs/journal/haxe-format-config-log.md`); with the width visible a body breaks at every point
+the construct owns — the statement body first (`ifBody: fitLine`), then `methodChain`, then
+the call parens — and only an unbreakable string literal can still exceed the limit.
 
 Body policies OTHER than `fitLine` are untouched by all of this: `next` puts the body on its
 own line unconditionally, so there is nothing to hide, and a block body is excluded at the
@@ -385,22 +341,17 @@ position (`opt._inExprPosition`), NOT an OR — setting only `caseBody` and test
 `return switch` reads as "the key does nothing". `Same` / `FitLine` OVERRIDE a source
 break; only `Keep` reads it. Full detail in `HxFormatSameLineSection`'s own doc.
 
-## The three keys S67 added, and the position trap each of them has
+## Three keys with a position trap: `elseSwitch`, `singleStatementBraces: symmetric`, `conditionalCompilationBinop`
 
 **`sameLine.elseSwitch: "same" | "next" | "keep"`** — keyword placement for a `switch`
 BRANCH of an `if`, the twin of `sameLine.elseIf` for the other keyword-headed statement a
-branch idiomatically carries. `"same"` glues it (`if (c) switch s { … } else switch s { … }`),
-`"next"` puts it on its own line, `"keep"` (the DEFAULT) has no opinion and lets the field's
-`ifBody` / `elseBody` (`expressionIfBody` / `expressionElseBody`) policy decide. The default
-differs from `elseIf`'s (`Same`) on purpose: this key is new and must leave every existing
-config's bytes alone. It reaches BOTH the statement `if` and the value `if`, and BOTH branches
-of each — S138 armed the then-branch after the user reported the two halves of one `if`/`else`
-coming back laid out differently, and stated the rule as SYMMETRY. A glued then-`switch` also
-closes in its head's own column, so the `else` cuddles that `}` the way it already cuddles a
-block's — two seams, not one, and the second is why `if (c) switch … }` + newline + `else` was
-never the right half-way answer. One refusal, on either branch: a comment written between the keyword and the `switch`
-declines the glue — both seams — and the source layout is kept byte for byte, because the glued
-layout has no channel for that comment.
+branch idiomatically carries; the values, the `keep` default (deliberately unlike `elseIf`'s
+`same`, so an existing config's bytes stay put) and the second seam a glued then-`switch`
+owns are on `HxModuleWriteOptions.elseSwitch`. It reaches BOTH the statement `if` and the
+value `if`, and BOTH branches of each — the rule is SYMMETRY. One refusal, on either branch:
+a comment written between the keyword and the `switch` declines the glue — both seams — and
+the source layout is kept byte for byte, because the glued layout has no channel for that
+comment.
 
 **`whitespace.bracesConfig.singleStatementBraces: "symmetric"`** — the ADD direction of a
 policy that until now only removed. An if/else (or try/catch group, or value-`if`) with
@@ -428,15 +379,10 @@ normalisation wired only on the terminal reaches `#elseif` alone.
 
 **`sameLine.comprehensionFor: "same" | "next" | "fitLine" | "keep"`** places the BODY of an
 expression-position `for` — the array-comprehension generator (`[for (x in xs) <body>]`) and any
-value-position `for`. It reaches `HxForExpr.body` / `HxForReif.body` through the same
-`@:fmt(bodyPolicy('expressionForBody'))` knob `sameLine.expressionIf` fans out into, and is read
-AFTER that fanout, so the specific key outranks the general one: `expressionIf: "same"` with
-`comprehensionFor: "next"` breaks the comprehension body and nothing else.
-
-The four values are the engine's own `BodyPolicy`, so they mean here exactly what they mean on
-`forBody` / `ifBody`: `same` on the head's line, `next` on its own line one level in, `keep`
-reproduces the source break, and `fitLine` glues a body whose first line fits the head line and
-breaks one whose does not.
+value-position `for`. The contract is `HxFormatSameLineSection.comprehensionFor`'s field doc: it
+reaches `HxForExpr.body` / `HxForReif.body` through the same `expressionForBody` knob
+`sameLine.expressionIf` fans out into and is read AFTER that fanout, so the specific key outranks
+the general one; the four values are the engine's own `BodyPolicy`.
 
 Two traps:
 
@@ -451,22 +397,20 @@ Two traps:
    "closingPolicy": "before"}` and pick the body policy you actually want — that is what this
    repository's own fixtures do.
 
-Until 2026-09-04 the key did nothing BUT the padding: `same` / `next` / `fitLine` / `keep` produced
-byte-identical output for every input, so no config value could move a comprehension body.
-
 ## `sameLine.loopBodyIfElseNext` — the one loop body whose `else` has nothing to pair with
 
 **`sameLine.loopBodyIfElseNext: true | false`** (default `false`) breaks a `for` / `while` /
 `do … while` header away from a body that is an `if` carrying an `else`, putting the whole
-`if`/`else` on the next line one indent step in. A `Bool`, like its nine `sameLine` neighbours
+`if`/`else` on the next line one indent step in. A `Bool`, like its `sameLine` neighbours
 (`fitLineIfWithElse`, `fitLineBodyGlue`, `expressionIfWithBlocks`, `expressionIfFit`,
 `expressionIfWithBrackets`, `expressionIfArrowBodyReflow`, `ifElseSemicolonNextLine`,
 `conditionalExprFit`, `elseIfCommentReflow`) — it does not pick a placement, it withdraws ONE shape
-from the placement `forBody` / `whileBody` / `doWhileBody` already decided.
+from the placement `forBody` / `whileBody` / `doWhileBody` already decided. The contract is
+`HxModuleWriteOptions.loopBodyIfElseNext`'s field doc; this section is the config author's view.
 
 It reaches EVERY placement, because it is a substitution on the placement VALUE rather than on one
 layout: for this one body shape the writer reads `next` where the config said `fitLine`, `same` or
-`keep`, before any layout is chosen. Measured on the reported site, one variable at a time:
+`keep`, before any layout is chosen. One variable at a time:
 
 | `forBody` | knob off (or absent) | knob on |
 |---|---|---|
@@ -480,17 +424,11 @@ ones `next` emits — and every OFF cell is byte-identical to what that placemen
 key existed. `next` already breaks every loop body, the guard idiom included, which is the cost this
 key exists to avoid.
 
-S157 shipped the key gated on the `FitLine` LAYOUT, so the `same` and `keep` rows of this table both
-read "glued / glued": a config on either had the reported defect and no way to decline the key that
-was documented for it. S159 moved the gate onto the policy value (`WriterBodyPolicyLowering.`
-`buildBodyCoreWrap`, one ternary over `BodyPolicy.Next`) and wired `HxDoWhileStmt.body` as well.
-
 ```jsonc
 "sameLine": { "forBody": "fitLine", "whileBody": "fitLine", "loopBodyIfElseNext": true }
 ```
 
-Reported site (`src/pony/unity3d/UTools.hx`), off — the `}` and the `else` sit at the LOOP's
-indent, so the `else` reads as a branch of the `for`:
+Off — the `}` and the `else` sit at the LOOP's indent, so the `else` reads as a branch of the `for`:
 
 ```haxe
 		for (i in 0...a.Length) if (skip) {
@@ -519,21 +457,20 @@ records this in both directions.)
 The predicate is exactly `LoopBodyShape.isIfWithElse`: the body's ctor is `IfStmt` AND its
 `elseBody` field is non-null. Nothing else. (`do … while` needs one unwrap first — its body is an
 `HxDoWhileBody`, so the same `if` arrives as `ExprBody(IfExpr(…))` and the field is `elseBranch`.)
-Two neighbouring shapes look like they belong and do not, measured over one real 872-file tree
-(all six source roots):
+Two neighbouring shapes look like they belong and do not:
 
-- **An `if` with NO `else` — 64 further files.** This is the deliberate `for (x in xs) if (c) …`
-  guard idiom, and the whole reason the gate reads the body's shape instead of being a body policy:
+- **An `if` with NO `else`.** This is the deliberate `for (x in xs) if (c) …` guard idiom, and
+  the whole reason the gate reads the body's shape instead of being a body policy:
   `forBody: "next"` moves the guard idiom under the header too. Nothing here is dangling — the
   header line's own `{`, or its single statement, is what the reader pairs with.
-- **A `switch` body — 19 files.** `for (e in data) switch e {` … `}` has no keyword outside the
+- **A `switch` body.** `for (e in data) switch e {` … `}` has no keyword outside the
   braces: the `}` at the loop's indent closes the `{` on the header line, which is the same visual
   contract the guard idiom has. The defect this key exists for is a SECOND keyword (`else`)
   appearing at the loop's indent with nothing on the header line to pair it with, and a `switch`
   body never produces one.
 
 That asymmetry is why the key is named for its predicate rather than for the broader
-"branching body": the wider name would promise coverage the predicate does not have, over 19 sites
+"branching body": the wider name would promise coverage the predicate does not have, over sites
 whose glued form the reporter's own layout rule endorses.
 
 ### `do … while`
@@ -564,9 +501,6 @@ and on:
 			} while (skip);
 ```
 
-The population is 0 in both configs measured here (no `hxformat.json` in either tree sets
-`doWhileBody` at all), so this arm of the key is carried by pins rather than by a corpus.
-
 ## `sameLine.expressionIfWithBrackets` — one knob, three seams, and they have to agree
 
 **`sameLine.expressionIfWithBrackets: true | false`** (default `false`; the fork has no such key,
@@ -583,41 +517,19 @@ return if (c) [
 
 It owns THREE seams, not one: the body placement (the `[` comes up to the head), the branch's
 optional `;` (dropped before an `else`, because `];` cannot cuddle) and the pre-`else` gap (a plain
-space, so the `else` reaches the `]`). Two of them read the flag alone; until S154 the OPEN seam was
-folded one level deeper, into the layout policy INSIDE `WriterBodyPolicyLowering.buildBodyCoreWrap`'s
-`Keep` switch — so under `sameLine.expressionIf: "keep"` the knob dropped the `;`, pulled `else` up to
-the `]`, and left the `[` on a line of its own. Half a shape, and the half the knob exists to prevent:
-
-```haxe
-// pre-S154, `expressionIf: "keep"` + `expressionIfWithBrackets: true`
-return if (c)
-	[
-		oneLongElementName,
-		anotherLongElementName
-	] else
-	[];
-```
-
-S154 moved the substitution onto the policy VALUE, the seam S159 took for `loopBodyIfElseNext`, so
-every placement consults the knob before a layout is chosen. Measured on one broken source (`[` on
-its own line, `];`, `else` on the next), one variable at a time:
-
-| `expressionIf` | knob off (or absent) | knob on, pre-S154 | knob on, S154 |
-|---|---|---|---|
-| `same` | source shape | **hugged + cuddled** | hugged + cuddled |
-| `next` | source shape | **hugged + cuddled** | hugged + cuddled |
-| `keep` | source shape (preserved whole) | `] else` only, `[` left behind | **hugged + cuddled** |
-
-`keep` decides the LAYOUT POLICY — it never decides whether an explicit knob applies; with the knob
-absent it still preserves the source whole, which is the vacuity guard in
-`unit.grammar.haxe.HxValueIfBracketHugSliceTest`. The `same` row is what proves the defect was the
-placement and not the knob: the identical source already reached the target bytes there.
+space, so the `else` reaches the `]`). All three read the flag ALONE, never the resolved layout, and
+the substitution sits on the policy VALUE (the seam `loopBodyIfElseNext` uses), so `same` / `next` /
+`keep` emit ONE byte-identical result under the knob while every knob-off cell keeps the bytes it
+had — `keep` decides the LAYOUT POLICY, never whether an explicit knob applies (the vacuity guard is
+`unit.grammar.haxe.HxValueIfBracketHugSliceTest`). The field doc on
+`HxFormatSameLineSection.expressionIfWithBrackets` is the contract, including why the open seam
+could not live inside the layout policy.
 
 The curly twin is a different question and needs no key. `sameLine.expressionIfWithBlocks` collapses
 a block body's CONTENTS and glues nothing; the `} else {` shape comes from `sameLine.expressionIf`
-itself, whose `next` resolves the pre-`else` gap to `SameOnBlock` (S100). So a value-`if` with block
+itself, whose `next` resolves the pre-`else` gap to `SameOnBlock`. So a value-`if` with block
 branches hugs its head and cuddles its `else` under `same` and `next` with or without
-`expressionIfWithBlocks` — measured on the same broken source in both trees' configs.
+`expressionIfWithBlocks`.
 
 ## Where to look when a key still does nothing
 

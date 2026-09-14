@@ -466,3 +466,25 @@ decided the question; it may not become a record of runs.
   what `-main JvmPortability` reaches, and `query/cli` contributes zero jar entries, so a green
   probe after a `cli` slice proves js only; the battery's trigger diffs `src` — `a28edf4c` (the
   reach), `a4d15e21` (the trigger)
+- CoreIR as a materialised IR between lowering and codegen (pass 3 emits `CoreIR`, pass 4
+  serialises it to `Expr`) → the emitters produce `haxe.macro.Expr` directly and use CoreIR's
+  vocabulary conceptually; a `CoreIR → Expr` serializer would double the code with no observable
+  benefit, so nothing outside `Strategy.lower`'s signature builds or matches one — `b3e9d0dd`
+- strategies lowering their own nodes (`Kw` to `Seq([Lit, Not(Re)])`, `Pratt` to a `Host` loop)
+  → every shipped strategy is annotate-only and returns `null` from `lower`; `Lowering` reads
+  the `lit.*` / `kw.*` / `pratt.*` slots and emits the shape itself — `b3e9d0dd`
+- the registry catching a strategy that declares `ctxFields` without `cacheKeyContributors`, or
+  two strategies with a same-named helper → only ownership conflicts and dependency cycles are
+  checked; no shipped strategy contributes runtime state, so neither check was needed — `b3e9d0dd`
+- formats composed by inheritance (`Json5Format extends JsonFormat`, an `override var` per
+  differing field) → the reference formats are `final`, Haxe has no `override var`, and a
+  `(default, null)` property cannot be assigned from a subclass; a derived format is a clone
+  that spells its whole vocabulary — `b1cdccf3`
+- "parsing loses formatting" as a principle (the writer never sees whitespace or comments) → the
+  trivia-mode parser records comments and the blank / newline shape as data on the AST for the
+  `keep` policies; the writer is still one `format(ast, options)` pass, but what it can keep is
+  the grammar's decision, not a writer limitation — `d3d4778e`
+- a shared module for the module-level typedefs under `WriterLowering` → nearly every one has a
+  single consumer and each is the bundle the constructor BUILDS for one collaborator, so the
+  declaration belongs at the producing end, and typedefs do not count toward `oversized-type` —
+  `7777c4f0`

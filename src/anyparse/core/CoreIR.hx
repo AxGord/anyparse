@@ -55,20 +55,12 @@ enum BinKind {
  * cannot be expressed here is either wrapped in `Host` as an escape
  * hatch or is a signal that CoreIR needs to grow.
  *
- * Design rules (see `docs/architecture.md` and
- * `docs/cross-family-contract.md`):
- *
- * - **Family-agnostic.** No primitive may bake in curly-brace, Lisp or
- *   ML assumptions. A method call is `Seq([fieldAccess, Lit("("),
- *   args, Lit(")")])`, not a dedicated `MethodCall` node.
- * - **No statement/expression distinction.** That is a family concern,
- *   not a core one.
- * - **Reversible.** Every primitive must have a sensible writer-side
- *   counterpart; if emitting `X` is nonsensical, `X` is the wrong
- *   primitive.
- * - **Host is a smell.** Overuse means a primitive is missing. Only
- *   Pratt loops and indent push/pop are expected to need it in the
- *   base library.
+ * The design rules a new primitive is read against — family-agnostic,
+ * no statement/expression distinction, reversible for the writer, `Host`
+ * is a smell — are `docs/architecture.md` § "Design principles for CoreIR"
+ * and the checklist in `docs/cross-family-contract.md`; the shipped
+ * lowering emits `Expr` directly and uses this vocabulary conceptually
+ * (`docs/architecture.md` § "Five-pass macro pipeline").
  */
 enum CoreIR {
 
