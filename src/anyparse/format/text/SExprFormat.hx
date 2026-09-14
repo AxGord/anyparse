@@ -19,7 +19,7 @@ using StringTools;
  * backslash escapes. Used by `apq ast` as the default (non-JSON)
  * output. The library never acquires a built-in "S-expr" concept — this
  * file is the entire vocabulary; users wanting a dialect (R7RS reader,
- * lispy DSL, etc.) clone or subclass.
+ * lispy DSL, etc.) clone it.
  *
  * Writer-driven slice — the parser-side regex on `SAtomLit` /
  * `SQuotedStringLit` exists only so the macro pipeline's ShapeBuilder

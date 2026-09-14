@@ -330,6 +330,17 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	 * and the `elseifs` Star's inter-element / trailing-pad separators.
 	 */
 	conditionalExprFit: Bool,
+
+	/**
+	 * When the statement-`if` then-branch is a bare statement ending in `;` and the branch
+	 * carries an `else`, put that `else` on the next line instead of gluing it after the `;`
+	 * (`if (c) foo();` / `else bar();`). Trivia-mode writer only — the plain writer
+	 * canonicalises `;` presence, so the question is meaningless there — and statement
+	 * position only (`_inExprPosition` hands a value-`if` to `sameLineExpressionElse`). Fed by
+	 * `sameLine.ifElseSemicolonNextLine`; consumed by `WriterFieldSepLowering` through the
+	 * `@:fmt(semicolonNextLineElse)` flag on `HxIfStmt.elseBody`. Default `true`, unlike the
+	 * other bare-`Bool` `sameLine` knobs.
+	 */
 	ifElseSemicolonNextLine: Bool,
 	afterFieldsWithDocComments: CommentEmptyLinesPolicy,
 

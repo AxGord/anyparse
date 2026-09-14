@@ -20,9 +20,10 @@ using StringTools;
  *
  * All literal characters, policies and escape handling for JSON live
  * here — the writer reads them from this instance instead of hardcoding
- * them. A user who needs JSON5 or HJSON subclasses (or clones) this
- * file and overrides the relevant fields; the library core never
- * acquires a built-in notion of "JSON" beyond this one class.
+ * them. A user who needs JSON5 or HJSON clones this file and changes the
+ * relevant fields (the class is `final`, and a `(default, null)` field
+ * cannot be overridden); the library core never acquires a built-in
+ * notion of "JSON" beyond this one class.
  *
  * Singleton: one shared instance is enough, since the format is pure
  * configuration with no per-parse state.

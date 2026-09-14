@@ -11,82 +11,37 @@ import haxe.macro.Context;
 import haxe.macro.Expr;
 
 /**
- * Lit strategy — owns literal text glue.
+ * Lit strategy — owns literal text glue. Annotate-only: each tag below sets `lit.*` slots on the
+ * shape node (`AnnotationKeys`), and `Lowering` / `WriterLowering` read them in passes 3/4.
  *
- * Metadata handled:
- *  - `@:lit("text")`                — whole node matches a literal. If
- *                                     the meta carries multiple args
- *                                     (`@:lit("true","false")`) the
- *                                     node matches any of them and
- *                                     Lowering chooses a branch per
- *                                     the sidecar build-spec.
- *  - `@:lead("open")`               — emit `Lit("open")` before the
- *                                     node's inner match.
- *  - `@:trail("close")`             — emit `Lit("close")` after.
- *  - `@:trailOpt("close")`          — like `@:trail` but the close
- *                                     literal is optional on parse:
- *                                     parser emits `matchLit` (peek +
- *                                     consume-if-present) instead of
- *                                     `expectLit`. The writer keeps
- *                                     emitting the literal as canonical
- *                                     output. Source-fidelity (preserve
- *                                     presence) is a separate slice.
- *                                     Sets `lit.trailText` and
- *                                     `lit.trailOptional:true`.
- *  - `@:wrap("o","c")`              — shorthand for `@:lead`+`@:trail`.
- *  - `@:sep(",")`                   — separator between elements of a
- *                                     `Star` child of this node.
- *  - `@:sep(",", tailRelax)`        — opt-in: make the intent explicit
- *                                     that a sep immediately before the
- *                                     close terminator is accepted as
- *                                     tail (no required following
- *                                     element). Mirrors the current
- *                                     implicit close-peek behaviour
- *                                     (`Lowering.hx:emitStarFieldSteps`
- *                                     L1 — "tolerate trailing sep
- *                                     before close") and earmarks
- *                                     consumers for the BlockBody
- *                                     refactor. Sets
- *                                     `lit.sepTailRelax:true`.
- *  - `@:sep(";", tailRelax, blockEnded)` — opt-in: between two elements,
- *                                     sep may be omitted when the prior
- *                                     element ended with `}` or `;`
- *                                     (parser-side byte-level check on
- *                                     `_prevEndPos - 1`); writer-side uses
- *                                     `DocMeasure.endsWithCloseBrace` on
- *                                     each element's rendered Doc.
- *                                     `blockEnded` must come AFTER
- *                                     `tailRelax` — `@:sep(";",
- *                                     blockEnded)` is rejected at compile
- *                                     time (second arg must match
- *                                     `tailRelax` ident). Sets
- *                                     `lit.sepBlockEnded:true`.
- *  - `@:sep(";", tailRelax, blockEnded('<predicate>'))` — option b2 form
- *                                     (Session 6): in addition to the
- *                                     byte-check `}` / `;`, the Star
- *                                     primitive calls a schema-instance
- *                                     predicate
- *                                     (`schema.instance.<predicate>(_arr[_arr.length
- *                                     - 1])`) on the just-pushed element
- *                                     to decide sep-elision by AST shape.
- *                                     Required to cover ident-terminated
- *                                     stmts (`x is String` — Slice 43) and
- *                                     `]`-terminated stmts (`[1,2,3]` —
- *                                     Slice 39) which the byte-check can't
- *                                     cover safely. Reaches the predicate
- *                                     through the same channel as
- *                                     `trailOptParseGate` (see
- *                                     `Lowering.buildBlockEndedPredicateCall`).
- *                                     Sets both `lit.sepBlockEnded:true`
- *                                     and `lit.sepBlockEndedPredicate:<name>`.
- *  - `@:sepAlt(";")`               — opt-in alternate separator,
- *                                     accepted alongside `@:sep` by the
- *                                     tolerant close-driven loop (an
- *                                     optional `,` OR `;` between
- *                                     elements). Sets `lit.sepAltText`.
+ * - `@:lit("text")` — the whole node matches a literal; several args (`@:lit("true", "false")`)
+ *   match any of them and the lowering picks a branch per the sidecar build-spec.
+ * - `@:lead("open")` / `@:trail("close")` — emit the literal before / after the node's inner
+ *   match; `@:wrap("o", "c")` is both.
+ * - `@:trailOpt("close")` — like `@:trail`, but optional on parse (`matchLit` instead of
+ *   `expectLit`); the writer re-emits it canonically, source presence tracked in the
+ *   `<field>TrailPresent` synth slot. Sets `lit.trailText` and `lit.trailOptional`.
+ * - `@:sep(",")` — separator between the elements of a `Star` child of this node.
+ * - `@:sep(",", tailRelax)` — a separator right before the close terminator is accepted as a
+ *   tail (the close-peek loop already tolerates it; the ident makes the contract explicit).
+ *   Sets `lit.sepTailRelax`.
+ * - `@:sep(",", sepFaithful)` — source-fidelity separator mode: the parse captures a
+ *   per-element `sepAfter` and the writer re-emits the separator iff it was there — no byte
+ *   check, no knob. Excludes a third argument. Sets `lit.sepFaithful`.
+ * - `@:sep(";", tailRelax, blockEnded)` — between two elements the separator may be omitted
+ *   when the prior element ended with `}` or `;` (a byte check on `_prevEndPos - 1`; the
+ *   writer's twin is `DocMeasure.endsWithCloseBrace`). Must follow `tailRelax`. Sets
+ *   `lit.sepBlockEnded`.
+ * - `@:sep(";", tailRelax, blockEnded('<predicate>'[, sepStartsElement]))` — additionally asks
+ *   the named predicate on the just-pushed element to decide elision by AST shape (a generated
+ *   `AstPreds` function for a format declaring `astPreds`, else a schema-instance method —
+ *   `Lowering.buildBlockEndedPredicateCall`); `sepStartsElement` says a separator byte after a
+ *   block-ended element begins the NEXT element, for a grammar whose separator can also be an
+ *   element (`EmptyStmt`). Sets `lit.sepBlockEndedPredicate` and `lit.sepStartsElement`.
+ * - `@:sepAlt(";")` — an alternate separator accepted alongside `@:sep` by the tolerant
+ *   close-driven loop. Sets `lit.sepAltText`.
  *
- * Pass 2 (annotate) writes results under the `lit.*` namespace on the
- * shape node; Lowering and Codegen read them back in pass 3/4.
+ * Every argument-shape refusal is a `fatalError` in the `annotate*` helpers below.
  */
 class Lit implements Strategy {
 

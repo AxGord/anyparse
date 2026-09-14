@@ -79,9 +79,11 @@ User type annotated with metadata
 
 Passes 1, 3, 4, 5 are the common framework. Pass 2 is where all strategies live. Adding a new strategy = adding one file with an implementation of the `Strategy` interface. See `strategies.md` for the plugin contract.
 
+**As shipped, passes 3 and 4 are one pass.** `Lowering` and its `*Lowering` siblings emit `haxe.macro.Expr` for each rule directly, describing the rules in CoreIR's vocabulary conceptually; nothing outside `Strategy.lower`'s signature constructs or matches a `CoreIR` value (`Lowering`'s class doc records the reason — a `CoreIR → Expr` serializer would double the code with no observable benefit — and `docs/decisions.md` the line). CoreIR stays the design contract: the primitive set a strategy's `lower` may return and the family-neutral vocabulary `cross-family-contract.md` checks a proposal against.
+
 ### Entry points — not every build runs all five
 
-`Build` exposes one `@:build` entry per artefact, and each takes the passes it needs. `buildParser` runs all five. `buildWriter` and `buildQueryWalker` run 1, 3, 4, 5 over their own lowering. `buildTransform` and `buildLexicalScan` need only the BASE shape, so the strategy-annotate, trivia and span passes are skipped.
+`Build` exposes one `@:build` entry per artefact, and each takes the passes it needs. `buildParser` runs all five. `buildWriter` runs 1, 2, 3, 4, 5 over the writer lowering (it registers the same strategies through `Build.registerStrategies`); `buildQueryWalker` runs 1, 3, 4, 5 over its own lowering with no strategy pass. `buildTransform` and `buildLexicalScan` need only the BASE shape, so the strategy-annotate, trivia and span passes are skipped.
 
 `buildLexicalScan` is the smallest of them and the one worth knowing about, because it answers a question no parse can: **which bytes of a source are not code**, over raw and possibly unparseable text. It reads the grammar's `@:lexical` / `@:balanced` / `@:re` / `@:lead` / `@:trail` / `@:lit` plus the format's comment delimiters, lowers them to one region spec per non-code shape (`LexicalLowering`) and emits a specialised byte walk plus the two entries every consumer calls (`LexicalCodegen`). `anyparse.grammar.haxe.HaxeLexicalRegions` is its production consumer, `unit.minilex.MiniLexScan` the second-grammar pin that proves nothing about Haxe survives inside the macro. See `strategies.md` § Lexical.
 
@@ -89,57 +91,7 @@ Passes 1, 3, 4, 5 are the common framework. Pass 2 is where all strategies live.
 
 CoreIR is a small enum of parser primitives that strategies lower into and codegen consumes. It is intentionally minimal. Any node that cannot be expressed in existing primitives is either wrapped in `Host` (an escape hatch) or is a signal that CoreIR needs to grow.
 
-```haxe
-enum CoreIR {
-  // structural
-  Empty;
-  Seq(items:Array<CoreIR>);
-  Alt(items:Array<CoreIR>);
-  Star(item:CoreIR, ?sep:CoreIR);
-  Opt(item:CoreIR);
-  Ref(ruleName:String);
-
-  // lexical
-  Lit(s:String);
-  Re(pattern:String);
-
-  // lookahead
-  And(item:CoreIR);   // positive
-  Not(item:CoreIR);   // negative
-
-  // capture and backreference
-  Capture(label:String, inner:CoreIR);
-  Backref(label:String);
-
-  // binding and expression-reference for context-dependent fields
-  Bind(name:String, inner:CoreIR);
-  ExprRef(e:haxe.macro.Expr);
-
-  // construction
-  Build(typePath:String, ctor:String, fields:Array<{name:String, ir:CoreIR}>);
-
-  // binary primitives (used by BinaryStrategy)
-  Bin(kind:BinKind);
-  Count(len:CoreIR, item:CoreIR);
-  Switch(discr:CoreIR, cases:Map<Int,CoreIR>);
-
-  // transformation (bytes → typed value)
-  Decode(name:String, inner:CoreIR);
-
-  // escape hatch: opaque host code wrapping an inner CoreIR
-  Host(code:haxe.macro.Expr, inner:CoreIR);
-}
-
-enum BinKind {
-  U8; U16LE; U16BE; U32LE; U32BE; U64LE; U64BE;
-  I8; I16LE; I16BE; I32LE; I32BE; I64LE; I64BE;
-  F32LE; F32BE; F64LE; F64BE;
-  Varint; Zigzag;
-  BytesFixed(n:Int);
-  BytesVar(len:CoreIR);
-  Magic(expected:haxe.io.Bytes);
-}
-```
+The enum itself, with each primitive's one-line contract, is `anyparse.core.CoreIR` (`src/anyparse/core/CoreIR.hx`, `#if macro`); `BinKind` beside it is the binary primitive vocabulary (declared for the `Bin` strategy; like every other slot, `bin.*` is emitted directly today). Read the primitives there in their groups — structural (`Empty`, `Seq`, `Alt`, `Star`, `Opt`, `Ref`), lexical (`Lit`, `Re`), lookahead (`And`, `Not`), capture and backreference (`Capture`, `Backref`), binding for context-dependent fields (`Bind`, `ExprRef`), construction (`Build`), binary (`Bin`, `Count`, `Switch`), transformation (`Decode`) and the `Host` escape hatch — and keep the list there, not here.
 
 ### Design principles for CoreIR
 
@@ -152,20 +104,24 @@ enum BinKind {
 
 A strategy is a Haxe class implementing the `Strategy` interface. Each strategy owns a set of metadata tags, knows how to annotate ShapeTree nodes, and optionally lowers them into CoreIR. Strategies never emit Haxe code directly — they work through CoreIR.
 
-Current plan for strategies:
+The strategies `Build` registers (the list is `Build.registerStrategies`, called by `buildParser` and `buildWriter`; each class's `ownedMeta` is the authoritative tag list):
 
 | Strategy | Owns meta | Purpose |
 |---|---|---|
-| `BaseShape` | — | `enum→Alt`, `class→Seq`, `Array<T>→Star`, `Null<T>→Opt`, `abstract→Terminal`. |
-| `Lit` | `@:lit`, `@:lead`, `@:trail`, `@:wrap`, `@:sep` | Literal text glue between fields. |
-| `Re` | `@:re` | Regex terminals for primitive-wrapping abstracts. |
-| `Kw` | `@:kw` | Keyword with word boundary — sugar for `Lit + Not`. |
+| `BaseShape` (a pass, not a plugin) | — | `enum→Alt`, `class→Seq`, `Array<T>→Star`, `Null<T>→Opt`, `abstract→Terminal`. |
+| `Lit` | `@:lit`, `@:lead`, `@:trail`, `@:trailOpt`, `@:wrap`, `@:sep`, `@:sepAlt` | Literal text glue between fields. |
+| `Re` | `@:re`, `@:captureGroup` | Regex terminals for primitive-wrapping abstracts. |
+| `Kw` | `@:kw` | Keyword with word boundary. |
 | `Skip` | `@:skip`, `@:ws` | Cross-cutting whitespace/comment consumption. |
-| `Capture` | `@:capture`, `@:match` | Backreferences for context-dependent grammars like XML tag matching. |
-| `Pratt` | `@:infix`, `@:prefix`, `@:op` | Operator-precedence parsing for expression languages. |
-| `Indent` | `@:indent(same/block/gt/suspend)` | Indent-sensitive grammars (Python, YAML block). |
-| `Binary` | `@:u8/u16/.../magic/tag/tagMask/fromTag/lenPrefix/countPrefix/decode` | Binary format primitives. |
-| `Recovery` (future) | `@:commit`, `@:recover` | Error recovery for tolerant mode. |
+| `Pratt` | `@:infix` | Operator-precedence climbing for binary infix operators. |
+| `Prefix` | `@:prefix` | Unary prefix operators, bound tighter than any infix. |
+| `Postfix` | `@:postfix` | Left-recursive postfix operators (field access, index, no-arg call). |
+| `Ternary` | `@:ternary` | Mixfix `a ? b : c`, merged into the Pratt dispatch chain. |
+| `Bin` | `@:bin`, `@:magic`, `@:align`, `@:length` | Binary format primitives. |
+
+Planned, not shipped: `Capture` (`@:capture`, `@:match` — backreferences for XML-style tag matching), `Indent` (`@:indent(same/block/gt/suspend)`), `Recovery` (`@:commit`, `@:recover`, Tolerant mode only).
+
+Every shipped strategy is annotate-only: `lower` returns `null`, and `Lowering` interprets the namespaced slots the strategy wrote (`lit.*`, `kw.*`, `pratt.*`, …). The `lower` hook is the plugin contract for a strategy that needs its own CoreIR shape; none does today.
 
 Strategies compose through ordered annotation passes with declared dependencies (`runsAfter`, `runsBefore`). Conflicts on metadata ownership are caught at registration time.
 
@@ -189,7 +145,7 @@ final class JsonFormat implements TextFormat {
   public var entrySep(default, null):String        = ",";
   public var whitespace(default, null):String      = " \t\n\r";
   public var lineComment(default, null):Null<String>     = null;
-  public var blockComment(default, null):Null<BlockComment> = null;
+  public var blockComment(default, null):Null<BlockCommentDelims> = null;
   public var keySyntax(default, null):KeySyntax    = KeySyntax.Quoted;
   public var stringQuote(default, null):Array<String> = ['"'];
   public var fieldLookup(default, null):FieldLookup    = FieldLookup.ByName;
@@ -219,7 +175,7 @@ The macro:
 2. Reads its field initializers as compile-time constants.
 3. Generates a parser specialized for `User` using JsonFormat's literals and policies.
 
-**Critical property**: there is no built-in notion of "JSON". `JsonFormat` is an ordinary Haxe class in a library package. Users who need JSON5, HJSON, or their own format write their own format class, inheriting from `JsonFormat` if useful, and apply it to their schemas. The library core knows nothing about specific formats.
+**Critical property**: there is no built-in notion of "JSON". `JsonFormat` is an ordinary Haxe class in a library package. Users who need JSON5, HJSON, or their own format write their own format class — a clone of `JsonFormat` with the differing fields changed; the shipped formats are `final` and one class spells one format (`formats.md` § "Format composition — one class per format") — and apply it to their schemas. The library core knows nothing about specific formats.
 
 Format families:
 
@@ -240,14 +196,17 @@ The runtime is what macro-generated parsers use at runtime. It is small and has 
 
 ```
 anyparse.runtime/
-├── Input.hx         — byte stream abstraction (StringInput, BytesInput, ...)
+├── Input.hx         — byte stream abstraction (StringInput.hx, BytesInput.hx)
 ├── Span.hx          — {from, to} with lazy line/col resolution
 ├── LineIndex.hx     — per-source line-start prefix index for repeated line/col lookups
-├── ParseError.hx    — span + message + expected + severity
+├── ParseError.hx    — span + message + expected + severity (Severity.hx)
 ├── ParseResult.hx   — wrapper: { value, span, errors, complete }
 ├── Node.hx          — AST node metadata wrapper for Tolerant mode
 ├── Parser.hx        — context: input, pos, errors, cache, indentStack, captures, cancelled
-└── ParseCache.hx    — interface + NoOpCache (real cache used in incremental mode)
+├── ParseCache.hx    — interface; NoOpCache.hx is the default (a real cache is for incremental mode)
+├── Trivial.hx       — the source-fidelity wrapper a `@:trivia` Star element parses into
+├── UnknownField.hx  — an input key the schema has no field for, collected rather than dropped
+└── EditDistance.hx  — the ceilinged Levenshtein every did-you-mean shares
 ```
 
 Key design properties:
@@ -279,11 +238,12 @@ Every `@:peg`-annotated type generates two parser artifacts:
 - Cache, cancellation, token stream — all configurable on the `Parser` context.
 - Required for IDE, linters, refactor tools, anything showing user-facing error messages.
 
-**Current implementation status: Fast-mode only.** The real pipeline is
+**Current implementation status: Fast-mode codegen.** The real pipeline is
 `@:build`-driven (`Build.buildParser` on a marker class, e.g. `JValueFastParser`);
-Tolerant-mode codegen is stubbed (see roadmap Phase 2 non-deliverables). The
-mode-selection API below and the "Tolerant by default" policy are the *planned*
-design, not current behavior:
+`buildParser`'s `spans` option sets `Mode.Tolerant` and synthesises the span-bearing
+`*S` types, but error collection and `@:commit` / `@:recover` recovery are not
+implemented (see roadmap Phase 2 non-deliverables). The mode-selection API below and
+the "Tolerant by default" policy are the *planned* design, not current behavior:
 
 ```haxe
 // PLANNED — not implemented yet
@@ -362,24 +322,15 @@ Three of the spine walkers diverge from their own side for one family member, an
 
 Writers take a runtime `FormatOptions` parameter controlling indent, line width, comma placement, quote style, and other stylistic choices. The macro generates code that consults these options at each decision point. One writer, multiple outputs — pretty, compact, canonical — without code duplication.
 
-Writer philosophy (load-bearing decision): **parsing is lossy, writing is `format(ast, options)`**. We do not preserve whitespace, comments, or formatting choices. Instead, we provide good formatters parameterized by options. If byte-identical round-trip matters, an optional detector pass can infer options from a sample; but the default is canonical output per chosen options.
-
-See `testing.md` for why this is the right trade-off and what use cases are preserved.
+Writer philosophy (load-bearing decision): **writing is `format(ast, options)`** — the writer regenerates output from the AST and the options, never by patching the source text. What the AST carries decides what survives: the plain parser drops whitespace, comments and layout choices, so its writer produces the canonical output for the chosen options; the trivia-mode parser (`@:trivia` Stars parse into `anyparse.runtime.Trivial<T>`) records comments and the blank-line / newline shape as data on the AST, and the `keep` policies read that data — still one pass through the same writer, not a source-preserving second one. `design-principles.md` § 6 states the rule and what it does and does not promise.
 
 ### A `#if` region the parser captured raw
 
 One AST, one writer has exactly one boundary, and it is conditional compilation. A `#if ... #end` region whose bytes are not a balanced subtree IN THEIR GRAMMATICAL POSITION — a `try {` whose `catch` closes in another region, an `else` whose `if` is outside it, a dangling operator, a bare `case` label — cannot be a node, so the grammar falls back to a raw byte capture (Haxe: `CondSpliceStmt` / `CondSpliceTail` / `CondSharedBodyDecl` / `MetaCondStmt` / …, listed in `RefShape.opaqueCondRegionKinds` — a list no grammar writes: a region can only be captured raw through a TERMINAL, so the grammar marks its raw-capture terminals `@:condRegionRaw` and the query-walker macro walks each ctor's own production to the terminals it reaches). The bytes the fallback ctor leaves unmodelled project no nodes, so the writer re-emits exactly those verbatim while reformatting everything around them — several of the ctors do keep children INSIDE the region, and those are formatted like any other subtree (`OpaqueCondRegion.formatted`) — and the name-driven mutating ops refuse over such a region rather than part-applying. One collector answers both consumers: `anyparse.query.CondRegionScan.opaqueCondRegions`. The nearest thing to a bracket test anywhere on the capture path is `HxCondBlockOpenRaw`'s `\{\s*#end` — a token-SHAPE constraint picking WHICH raw ctor a region takes, never whether it is raw at all.
 
-**The predicate is the grammar's fallback ctor, never a bracket count** — worth stating outright, because the bracket reading is the one the shape invites and it has been proposed and refuted twice. Measured 2026-09-07 over three trees (this project's `src`, 934 files; the Pony fork's `src`, 680; the haxe-formatter corpus inputs, the 897 of 946 that `fmt` processes) — 1580 `#if ... #end` regions, 59 captured raw, of which this project contributes 0:
+**The predicate is the grammar's fallback ctor, never a bracket count** — worth stating outright, because the bracket reading is the one the shape invites and it has been proposed and refuted twice (the census over three trees that decided it is in `docs/journal/architecture-log.md`). Most raw regions balance their braces and a brace rule would miss every one of them, while the one region it does flag formats fine — and that false positive is a defect of the metric rather than a near miss: a brace count over the region's code bytes adds up BOTH mutually exclusive arms of `#if a … { #else … { #end … }`, and no configuration of the file ever holds both — so "how the brackets balance" is not even well defined over a region with an `#else`. `unit.query.OpaqueCondRegionScanTest` pins one fixture per class (construct-cutting with balanced braces, construct-cutting with unbalanced braces, unbalanced-yet-formatted), and the mutation arm `M-OPAQUE-REGION-BRACE-DELTA` is the refuted rule itself.
 
-| | braces EQUAL | braces UNEQUAL |
-|---|---|---|
-| **captured raw** | 34 | 25 |
-| **formatted** | 1520 | 1 |
-
-A brace rule would therefore report none of 34 raw regions, and would report one region that formats. That single false positive is a defect of the metric rather than a near miss: a brace count over the region's code bytes adds up BOTH mutually exclusive arms of `#if a … { #else … { #end … }`, and no configuration of the file ever holds both — so "how the brackets balance" is not even well defined over a region with an `#else`. `unit.query.OpaqueCondRegionScanTest` pins one fixture per class (construct-cutting with balanced braces, construct-cutting with unbalanced braces, unbalanced-yet-formatted), and the mutation arm `M-OPAQUE-REGION-BRACE-DELTA` is the refuted rule itself.
-
-**What the refusal does NOT read is the region's own DIRECTIVES.** They lie in the unmodelled byte runs like everything else the model dropped, and they carry identifier-shaped tokens that name no binding: a `#if` condition names build flags, `#end` and `#else` name nothing. Read as ordinary bytes they refused correct work — a rename of a local `debug` standing beside `#if debug` was declined by the directive that guards it, fail-CLOSED and therefore invisible. `CondDirectives.scan` delimits the directive runs (keyword plus condition) and `CondRegionScan.opaqueCondRegionMentioning` scans only what is left; the branch bodies between them are untouched, so a reference written inside the region still refuses. The directive KEYWORDS were already exempt through `SourceText.mentionsIdent`, which skips an identifier directly preceded by `#`, which is why the CONDITION was the surviving half of the same mistake. Measured over the Pony fork: 20 of 872 files hold a raw region and 18 of them lose a name from their refusal set — 19 (file, name) pairs, every name a compile-time define (`haxe_ver` twelve times, then `starling`, `mobile`, `js`, `ios`, `hxbitmini`, `display`), and not one of them a name the file's own tree carries. This project's `src` + `test` hold no raw region at all, so a whole-tree lint is byte-identical across the change.
+**What the refusal does NOT read is the region's own DIRECTIVES.** They lie in the unmodelled byte runs like everything else the model dropped, and they carry identifier-shaped tokens that name no binding: a `#if` condition names build flags, `#end` and `#else` name nothing. Read as ordinary bytes they refused correct work — a rename of a local `debug` standing beside `#if debug` was declined by the directive that guards it, fail-CLOSED and therefore invisible. `CondDirectives.scan` delimits the directive runs (keyword plus condition) and `CondRegionScan.opaqueCondRegionMentioning` scans only what is left; the branch bodies between them are untouched, so a reference written inside the region still refuses. The directive KEYWORDS were already exempt through `SourceText.mentionsIdent`, which skips an identifier directly preceded by `#`, which is why the CONDITION was the surviving half of the same mistake. Every name the change freed on a real tree was a compile-time define and none was a name the file's own tree carried (the Pony reading is in the journal).
 
 The directive reader is given NO lexical mask here, and that is the more precise read rather than a shortcut. Every other consumer of `CondDirectives.scan` asks the lexer which `#if` is real, because it is scanning ordinary source where one may sit in a comment or a string. Inside a region the parser captured raw the two directions are not symmetric: masking a directive-shaped token that turns out to live in a comment or a string can only drop a mention living in that same comment or string — a refusal the scan already calls one it would rather not make — while failing to mask a real directive keeps a refusal that is simply wrong, and the reader does lose directives after an unterminated literal. So no lexical answer can make the gate fail OPEN, and consulting one can make it refuse where it should not.
 
@@ -410,17 +361,17 @@ anyparse.query/
 
 ### A command is a thing, not a `case` arm
 
-Each of the CLI's 69 commands is the same four parts — a name, the line it contributes to `apq --help`, its own `--help` page, and the run. Written as a `case` arm plus a `printXUsage` plus a `runX` plus a literal in the top-level usage text, nothing holds the four together: a command can be dispatched and never listed, or listed and never dispatched, and only a reader notices.
+Every CLI command is the same four parts — a name, the line it contributes to `apq --help`, its own `--help` page, and the run. Written as a `case` arm plus a `printXUsage` plus a `runX` plus a literal in the top-level usage text, nothing holds the four together: a command can be dispatched and never listed, or listed and never dispatched, and only a reader notices.
 
 `CliCommand` makes the four parts one type and `CliRegistry` makes the inventory explicit — the same answer the test suite got when its hand-written runner became a generated registry. A command that is not in the registry does not exist; one that is gets its `--help` line from its own `summary()`.
 
-The migration is **complete** (S69 piloted the seam on three commands of three shapes; S70 moved the other 66, merge `91bf07d9`). `Cli` is now four members — `main`, `run`, `dispatch`, `printUsage` — where `dispatch` is a registry lookup plus the unknown-subcommand path and `printUsage` a loop over `CliRegistry.commands()`. Every command lives under `src/anyparse/query/cli/command/`, one module per command, except the two whose exclusive members did not fit one type under the 50 / 2000 caps and are split by concern (`LintCommand` + `LintFixDriver` + `LintFixVerify` + `LintFixLedger`; `ReconCommand` + `ReconPredict`). `apq --help` is byte-identical to the pre-migration page: nine over-long names were hand-aligned to no rule, and `CliRegistry` carries that as data (`helpGap`) rather than normalising a user-visible column. Eight module-level types (`TestSummary*`, `ReconCluster`, `RuleEdits`, `FmtRunResult`, `RuleFixOutcome`) still sit in `Cli.hx` because tests in three packages resolve them through `import anyparse.query.Cli`.
+`Cli` is four members — `main`, `run`, `dispatch`, `printUsage` — where `dispatch` is a registry lookup plus the unknown-subcommand path and `printUsage` a loop over `CliRegistry.commands()`. Every command lives under `src/anyparse/query/cli/command/`, one module per command, except the two whose exclusive members did not fit one type under the member / line caps and are split by concern (`LintCommand` + `LintFixDriver` + `LintFixVerify` + `LintFixLedger`; `ReconCommand` + `ReconPredict`). `apq --help` kept the page the hand-written dispatcher printed: the over-long names were hand-aligned to no rule, and `CliRegistry` carries that as data (`helpGap`) rather than normalising a user-visible column. Eight module-level types (`TestSummary*`, `ReconCluster`, `RuleEdits`, `FmtRunResult`, `RuleFixOutcome`) still sit in `Cli.hx` because tests in three packages resolve them through `import anyparse.query.Cli`.
 
 ### Invariant 1 at this layer
 
 The support modules hold no state — every member is a pure function of its arguments plus the process — and `CliRegistry.commands()` allocates a fresh command per call rather than memoising a shared array, because a shared registry is the process-scoped shape invariant 1 exists to keep out, however stateless today's implementations happen to be.
 
-What a run legitimately needs to remember goes on `CliContext`, an instance created per invocation and handed to the command. `--exit-on-empty` is the live example: parsed once by the dispatcher, consumed much later by whichever find-walker the run ended in. `Cli` carried it across that gap in a `private static var` — the one piece of process-scoped mutable state in the CLI, and the shape a second run in the same process can observe. A field on a per-run instance is the same value with none of that; that static went with the last `case` arm in S70; nothing in the CLI layer is process-scoped now, and nothing mechanical pins that a command stays stateless (a `static var` on a `CliCommand` is caught by no lint rule and no test — an open item).
+What a run legitimately needs to remember goes on `CliContext`, an instance created per invocation and handed to the command. `--exit-on-empty` is the live example: parsed once by the dispatcher, consumed much later by whichever find-walker the run ended in. `Cli` carried it across that gap in a `private static var` — the one piece of process-scoped mutable state in the CLI, and the shape a second run in the same process can observe. A field on a per-run instance is the same value with none of that; that static went with the last `case` arm; nothing in the CLI layer is process-scoped now, and nothing mechanical pins that a command stays stateless (a `static var` on a `CliCommand` is caught by no lint rule and no test — an open item).
 
 ## Cross-family IR
 
