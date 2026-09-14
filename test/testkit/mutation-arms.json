@@ -967,7 +967,7 @@
 			"type": "anyparse.check.DuplicateCode",
 			"method": "normalizeStmt",
 			"find": "text: SpanRender.renderSpan(ctx.source, span.from, span.to, node, holes),",
-			"replace": "text: normalized.norm,",
+			"replace": "text: CheckScan.normalizeSpan(ctx.source, span.from, span.to).norm,",
 			"note": "statements compare on the whitespace-collapsed norm again, so two runs differing only inside a string literal bucket into one three-gram and are reported as a clone"
 		},
 		{
@@ -976,6 +976,13 @@
 			"method": "boundNames",
 			"force": "[]",
 			"note": "no name is a local binding any more, so the renamed reading normalizes nothing and degenerates into the exact one — two copies differing only in what their locals are called stop being a clone"
+		},
+		{
+			"name": "M-DUP-CODE-RENAMED-GATE-RAW",
+			"type": "anyparse.check.DuplicateCode",
+			"method": "gateNonWs",
+			"force": "CheckScan.normalizeSpan(stmt.text, 0, stmt.text.length).nonWs",
+			"note": "the content gate measures each copy's own bytes again, binder names and hole markers included, so a run whose bytes are mostly long names passes on the anchor's spelling and is reported as a renamed clone"
 		},
 		{
 			"name": "M-EXTRACT-REPEAT-RENDER-SPLIT",

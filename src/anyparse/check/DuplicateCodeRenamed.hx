@@ -27,9 +27,11 @@ import anyparse.runtime.Span;
  * ## What it inherits
  *
  * Everything else is `duplicate-code`'s contract, engine and all — the block seam, the
- * layout-insensitive literal-exact render, the content gate, the non-overlapping occurrence rule,
- * the same-file and cross-file passes. `Info`, REPORT-ONLY: extraction is a refactoring and
- * whether two renamed copies are one idea is a design judgement, so `fix` emits nothing.
+ * layout-insensitive literal-exact render, the non-overlapping occurrence rule, the same-file and
+ * cross-file passes — and the content gate, measured on what the renaming keeps, so a run that is
+ * mostly its binder names can pass the exact reading and not this one. `Info`, REPORT-ONLY:
+ * extraction is a refactoring and whether two renamed copies are one idea is a design judgement, so
+ * `fix` emits nothing.
  */
 @:nullSafety(Strict)
 @:access(anyparse.check.DuplicateCode)

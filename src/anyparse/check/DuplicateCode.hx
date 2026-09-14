@@ -3,7 +3,6 @@ package anyparse.check;
 import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.check.Check.VolatileMessage;
-import anyparse.check.CheckScan.NormalizedSpan;
 import anyparse.check.SpanRender.SpanOverride;
 import anyparse.query.BinderScan;
 import anyparse.query.ControlFlow.ControlFlowSupport;
@@ -61,7 +60,9 @@ import anyparse.runtime.Span;
  *   can go unreported — a sound under-report, never a false clone.
  * - **Content gate.** A run must hold at least `MIN_STATEMENTS` statements AND at
  *   least `MIN_NON_WS_CHARS` non-whitespace characters, so a triple of trivial
- *   one-liners (`i++; j++; k++;`) is not flagged.
+ *   one-liners (`i++; j++; k++;`) is not flagged. The count is taken on the text the
+ *   comparison keys on (`gateNonWs`), so under the renamed reading a binder weighs what its
+ *   placeholder does and both copies of a clone measure the same.
  * - Runs entirely inside an `opaqueKinds` (macro reification) subtree are skipped —
  *   their identifiers may be spliced from elsewhere.
  *
@@ -290,8 +291,7 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 	/**
 	 * The comparison view of the statement at `span`: `SpanRender.renderSpan` — whitespace
 	 * BETWEEN tokens collapsed to a single space, whitespace INSIDE a token copied byte for
-	 * byte, the ends trimmed — plus the count of non-whitespace characters (the content-gate
-	 * metric) from `CheckScan.normalizeSpan`.
+	 * byte, the ends trimmed.
 	 *
 	 * The render and not the norm, because the norm is the key this rule REPORTS on with no
 	 * further test. `tail-merge` and `redundant-case-body` pair it with
@@ -303,13 +303,11 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 	 * to compare against, and what lets the type doc's "zero false positives" claim stand.
 	 */
 	private static function normalizeStmt(ctx: DupCtx, node: QueryNode, span: Span, names: Null<Array<String>>): DupStmt {
-		final normalized: NormalizedSpan = CheckScan.normalizeSpan(ctx.source, span.from, span.to);
 		final holes: Array<SpanOverride> = holeOverrides(ctx, node, names);
 		return {
 			text: SpanRender.renderSpan(ctx.source, span.from, span.to, node, holes),
 			renamed: holes.length > 0,
-			span: span,
-			nonWs: normalized.nonWs
+			span: span
 		};
 	}
 
@@ -435,11 +433,26 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 		return len;
 	}
 
-	/** Total non-whitespace characters across `len` statements of `stmts` from `start`. */
+	/**
+	 * Non-whitespace characters across `len` statements of `stmts` from `start`, counted on the text
+	 * the comparison keys on (`gateNonWs`), so both copies of a clone measure the same and renaming a
+	 * binder in either cannot flip the gate.
+	 */
 	private static function runNonWs(stmts: Array<DupStmt>, start: Int, len: Int): Int {
+		final names: Array<String> = [];
 		var total: Int = 0;
-		for (i in start ... start + len) total += stmts[i].nonWs;
+		for (i in start ... start + len) total += gateNonWs(stmts[i], names);
 		return total;
+	}
+
+	/**
+	 * What the content gate measures of one statement: its non-whitespace characters as `commonRun`
+	 * compares it, a renamed-away binder weighing what its placeholder does rather than what the copy
+	 * happened to call it.
+	 */
+	private static function gateNonWs(stmt: DupStmt, names: Array<String>): Int {
+		final text: String = renumbered(stmt, names);
+		return CheckScan.normalizeSpan(text, 0, text.length).nonWs;
 	}
 
 	/**
@@ -582,12 +595,13 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 
 }
 
-/** A block statement: its RENDERED comparison text (`SpanRender`), source span, and non-whitespace-character count. */
+/**
+ * A block statement: its RENDERED comparison text (`SpanRender`), whether that text carries a hole, and its source span.
+ */
 typedef DupStmt = {
 	var text: String;
 	var renamed: Bool;
 	var span: Span;
-	var nonWs: Int;
 }
 
 /** A (block-index, statement-index) coordinate into the per-file collected block list. */

@@ -72,6 +72,15 @@ decided the question; it may not become a record of runs.
   by region: an earlier-starting renamed run suppresses the later-starting exact one through the
   earliest-start occurrence filter, so the exact run's tail can lie outside every renamed span.
   The two readings OVERLAP; a consumer takes their union, never one for the other — `3c85dfd8`
+- the renamed reading's bare-declaration clones were to be a CONTENT-GATE artefact (the gate
+  summed each copy's raw bytes, names included, so a name-heavy run was thought to pass on its
+  names alone) → a declaration's bytes are mostly its keyword, type and initializer, not its
+  name: measured on the renumbered text the gate drops about one finding in eighty and leaves
+  nearly every bare-declaration run standing, and the exact reading reports the same runs under
+  identical names; that population is STRUCTURAL (a run of nothing but local declarations has no
+  extraction value under either reading), not a threshold question — and a statement-count floor
+  keeps logic and declaration runs in the same proportion, so it does not separate them either —
+  `S222-merge`
 - the writer's de-brace support was to move its two `'ExprBody'` literals onto
   `RefShape.expressionBodyKinds`, beside the siblings that went there → there is no `QueryNode`,
   `GrammarPlugin` or `RefShape` at the writer layer (the values are the writer's own enums,
