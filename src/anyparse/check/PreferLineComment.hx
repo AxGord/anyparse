@@ -7,6 +7,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
+import anyparse.runtime.CommonPrefix;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -271,7 +272,7 @@ final class PreferLineComment implements Check implements DefaultOff {
 		for (line in lines) if (line.rtrim() != '') {
 			final seen: Null<String> = common;
 			final lead: String = leadingWhitespace(line);
-			common = seen == null ? lead : sharedPrefix(seen, lead);
+			common = seen == null ? lead : CommonPrefix.of(seen, lead);
 		}
 		return common ?? '';
 	}
@@ -285,14 +286,6 @@ final class PreferLineComment implements Check implements DefaultOff {
 			i++;
 		}
 		return line.substr(0, i);
-	}
-
-	/** The longest common prefix of `a` and `b`. */
-	private static function sharedPrefix(a: String, b: String): String {
-		final limit: Int = a.length < b.length ? a.length : b.length;
-		var i: Int = 0;
-		while (i < limit && a.fastCodeAt(i) == b.fastCodeAt(i)) i++;
-		return a.substr(0, i);
 	}
 
 	/**

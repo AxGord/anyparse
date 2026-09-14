@@ -5,6 +5,7 @@ import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
+import anyparse.query.SourceText;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
@@ -325,10 +326,8 @@ final class PreferInterpolation implements Check implements RiskyFix implements 
 	private static function render(arg: QueryNode, source: String, identKind: String): Null<String> {
 		final argName: Null<String> = arg.name;
 		if (arg.kind == identKind && argName != null) return '\'$$$argName\'';
-		final span: Null<Span> = arg.span;
-		if (span == null) return null;
-		final src: String = source.substring(span.from, span.to);
-		return !interpolationSafe(src) ? null : '\'$${$src}\'';
+		final src: Null<String> = SourceText.nodeText(arg, source);
+		return src == null || !interpolationSafe(src) ? null : '\'$${$src}\'';
 	}
 
 	/**

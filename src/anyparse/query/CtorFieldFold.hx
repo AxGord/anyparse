@@ -444,6 +444,23 @@ final class CtorFieldFold {
 	}
 
 	/**
+	 * `stmt` read as an expression statement wrapping a two-operand assignment, with the spans both carry;
+	 * null when the shape or a span is missing. The two conditional-fold readers decode their branch's
+	 * assignment through it so they cannot drift.
+	 */
+	private static function assignmentParts(stmt: QueryNode, shape: RefShape): Null<AssignmentParts> {
+		final stmtSpan: Null<Span> = stmt.span;
+		final assign: Null<QueryNode> = NodeShape.assignmentOf(stmt, shape.exprStatementKind, shape.assignKind);
+		final assignSpan: Null<Span> = assign?.span;
+		return stmtSpan == null || assign == null || assignSpan == null ? null : {
+			stmtSpan: stmtSpan,
+			assign: assign,
+			assignSpan: assignSpan,
+			target: assign.children[0]
+		};
+	}
+
+	/**
 	 * `stmt` read as `if (<param> != null) <field> = <param>;` — the guard must be a bare
 	 * `!= null` test of the very identifier assigned, the branch a single assignment
 	 * statement (braced or not), and there must be no `else`. `terminator` carries the
@@ -456,26 +473,22 @@ final class CtorFieldFold {
 		final param: Null<String> = nullGuardParamName(stmt, shape);
 		final branch: Null<QueryNode> = guardedSoleStatement(stmt, shape);
 		if (stmtSpan == null || param == null || branch == null) return null;
-		final branchSpan: Null<Span> = branch.span;
-		if (branch.kind != shape.exprStatementKind || branch.children.length != 1 || branchSpan == null) return null;
-		final assign: QueryNode = branch.children[0];
-		final assignSpan: Null<Span> = assign.span;
-		if (assign.kind != shape.assignKind || assign.children.length != 2 || assignSpan == null) return null;
-		final target: QueryNode = assign.children[0];
-		final targetSpan: Null<Span> = target.span;
-		final value: QueryNode = assign.children[1];
+		final parts: Null<AssignmentParts> = assignmentParts(branch, shape);
+		if (parts == null) return null;
+		final targetSpan: Null<Span> = parts.target.span;
+		final value: QueryNode = parts.assign.children[1];
 		return if (targetSpan == null || value.kind != shape.identKind || value.name != param)
 			null
 		else if (!statementCommentFree(source, stmtSpan, targetSpan))
 			null
-		else if (!CtorFieldWrite.ctorTargetIsField(target, fieldFrom, fieldName, container, shape))
+		else if (!CtorFieldWrite.ctorTargetIsField(parts.target, fieldFrom, fieldName, container, shape))
 			null
 		else
 			{
 				stmt: stmtSpan,
 				target: targetSpan,
 				param: param,
-				terminator: source.substring(assignSpan.to, branchSpan.to)
+				terminator: source.substring(parts.assignSpan.to, parts.stmtSpan.to)
 			};
 	}
 
@@ -628,17 +641,14 @@ final class CtorFieldFold {
 		final sole: Bool = !braced || branch.children.length == 1;
 		final first: Null<QueryNode> = branchOpeningStatement(branch, braced);
 		if (condSpan == null || first == null || (!sole && !MemberKinds.isSideEffectFree(cond, shape))) return null;
-		final firstSpan: Null<Span> = first.span;
-		if (first.kind != shape.exprStatementKind || first.children.length != 1 || firstSpan == null) return null;
-		final assign: QueryNode = first.children[0];
-		final assignSpan: Null<Span> = assign.span;
-		if (assign.kind != shape.assignKind || assign.children.length != 2 || assignSpan == null) return null;
-		final target: QueryNode = assign.children[0];
-		final targetSpan: Null<Span> = target.span;
-		final valueSpan: Null<Span> = assign.children[1].span;
+		final parts: Null<AssignmentParts> = assignmentParts(first, shape);
+		if (parts == null) return null;
+		final firstSpan: Span = parts.stmtSpan;
+		final targetSpan: Null<Span> = parts.target.span;
+		final valueSpan: Null<Span> = parts.assign.children[1].span;
 		return if (targetSpan == null || valueSpan == null)
 			null
-		else if (!CtorFieldWrite.ctorTargetIsField(target, fieldFrom, fieldName, container, shape))
+		else if (!CtorFieldWrite.ctorTargetIsField(parts.target, fieldFrom, fieldName, container, shape))
 			null
 		else if (OccurrenceScan.referencedInRange(source, fieldName, valueSpan.from, valueSpan.to, []))
 			null
@@ -652,7 +662,7 @@ final class CtorFieldFold {
 				condition: cond,
 				value: valueSpan,
 				sole: sole,
-				terminator: source.substring(assignSpan.to, firstSpan.to)
+				terminator: source.substring(parts.assignSpan.to, firstSpan.to)
 			};
 	}
 
@@ -793,6 +803,14 @@ private typedef ConditionalCtorInit = {
 	final value: Span;
 	final sole: Bool;
 	final terminator: String;
+};
+
+/** A spanned `target = value;` statement taken apart — see `CtorFieldFold.assignmentParts`. */
+private typedef AssignmentParts = {
+	final stmtSpan: Span;
+	final assign: QueryNode;
+	final assignSpan: Span;
+	final target: QueryNode;
 };
 
 /**

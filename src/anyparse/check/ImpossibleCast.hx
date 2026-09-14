@@ -5,7 +5,6 @@ import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
-import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
@@ -53,10 +52,7 @@ final class ImpossibleCast implements Check implements NoAutofix {
 		if (checkedCastKind == null) return [];
 		final kind: String = checkedCastKind;
 		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
-		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
-		if (provider == null) return [];
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
-		return RunScan.collectWith(files, plugin, provider, (entry, tree, typed, violations) -> {
+		return RunScan.collectTyped(files, plugin, (entry, tree, typed, index, violations) -> {
 			final declaredTypes: Map<Int, String> = typed.declaredTypes(entry.source);
 			final castTargets: Map<Int, String> = typed.castTargetSources(entry.source);
 			function walk(node: QueryNode): Void {

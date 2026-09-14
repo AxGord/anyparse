@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.query.BoolExprShape;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
@@ -212,7 +213,7 @@ final class OperatorSelection {
 		if (!declared(kinds)) return Builtin;
 		var verdict: OperatorVerdict = Builtin;
 		for (operand in operands) {
-			verdict = worse(verdict, operandVerdict(unwrapped(operand), kinds, types));
+			verdict = worse(verdict, operandVerdict(BoolExprShape.unwrapParens(operand, _parenKind), kinds, types));
 			if (verdict.match(Overloaded(_))) return verdict;
 		}
 		return verdict;
@@ -243,7 +244,7 @@ final class OperatorSelection {
 		final out: Array<QueryNode> = [];
 		function collect(current: QueryNode): Void {
 			for (child in current.children) {
-				final operand: QueryNode = unwrapped(child);
+				final operand: QueryNode = BoolExprShape.unwrapParens(child, _parenKind);
 				if (operand.kind == node.kind)
 					collect(operand)
 				else
@@ -252,14 +253,6 @@ final class OperatorSelection {
 		}
 		collect(node);
 		return out;
-	}
-
-	/** `node` with any parenthesis wrappers peeled off. */
-	private function unwrapped(node: QueryNode): QueryNode {
-		final parenKind: Null<String> = _parenKind;
-		var current: QueryNode = node;
-		while (parenKind != null && current.kind == parenKind && current.children.length == 1) current = current.children[0];
-		return current;
 	}
 
 	/**

@@ -10,12 +10,14 @@ import anyparse.query.BoolExprShape;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.MemberKinds;
+import anyparse.query.NodeShape;
 import anyparse.query.NominalTypes;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeInfoMemo;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefPrinter;
 import anyparse.query.TypeResolver;
@@ -292,16 +294,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		MemberKinds.indexNodesByKind(tree, locals, byKey);
 		// A cast target lookup costs a second full parse (`castTargetSources`), so compute
 		// it lazily and cache it — a run whose locals are never casts never pays for it.
-		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
-		var castTargetsCache: Null<Map<Int, String>> = null;
-		function castTargets(): Map<Int, String> {
-			final existing: Null<Map<Int, String>> = castTargetsCache;
-			if (existing != null) return existing;
-			final p: Null<TypeInfoProvider> = provider;
-			final computed: Map<Int, String> = p != null ? p.castTargetSources(source) : [];
-			castTargetsCache = computed;
-			return computed;
-		}
+		final castTargets: () -> Map<Int, String> = TypeInfoMemo.castTargetSources(RunScan.typeInfoOf(plugin), source);
 		// A variable-receiver method call needs the receiver's declared type SOURCE (verbatim,
 		// so `Null<String>` survives — `declaredTypes` would collapse it to the outer `Null`),
 		// resolved lazily and cached like the cast targets above.
@@ -957,16 +950,13 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		final table: Null<Map<String, String>> = shape.stringLiteralMethodReturns;
 		final callKind: Null<String> = shape.callKind;
 		final faKind: Null<String> = shape.fieldAccessKind;
-		if (table == null || callKind == null || faKind == null) return null;
-		if (init.kind != callKind || init.children.length == 0) return null;
-		final callee: QueryNode = init.children[0];
-		if (callee.kind != faKind || callee.children.length != 1) return null;
-		final method: Null<String> = callee.name;
-		if (method == null) return null;
-		final ret: Null<String> = table[method];
+		if (table == null || callKind == null || init.kind != callKind) return null;
+		final call: Null<MethodCall> = NodeShape.methodCall(init, faKind);
+		if (call == null) return null;
+		final ret: Null<String> = table[call.method];
 		return if (ret == null)
 			null
-		else if (receiverIsString(callee.children[0], shape, tree, declaredTypeSources))
+		else if (receiverIsString(call.receiver, shape, tree, declaredTypeSources))
 			ret
 		else
 			null;

@@ -563,9 +563,33 @@ final class ElementSpan {
 		return i < siblings.length ? siblings[i] : null;
 	}
 
+	/**
+	 * The whole physical lines `span` owns — back over the leading indentation to the previous line break and
+	 * forward over the trailing one — or null when the span shares a line edge with other text: only
+	 * whitespace may sit before it on its first line and after it on its last, else a deletion would corrupt
+	 * what shares the line. `lineDeletionSpan` is the one-sided, never-null form.
+	 */
+	public static function ownedLinesSpan(source: String, span: Span): Null<Span> {
+		final from: Int = span.from;
+		final to: Int = span.to;
+		var lineStart: Int = from;
+		while (lineStart > 0 && source.charAt(lineStart - 1) != '\n') lineStart--;
+		for (i in lineStart ... from) if (!isLineSpace(source.fastCodeAt(i))) return null;
+		var lineEnd: Int = to;
+		while (lineEnd < source.length && source.charAt(lineEnd) != '\n') lineEnd++;
+		for (i in to ... lineEnd) if (!isLineSpace(source.fastCodeAt(i))) return null;
+		if (lineEnd < source.length && source.charAt(lineEnd) == '\n') lineEnd++;
+		return new Span(lineStart, lineEnd);
+	}
+
 	/** `n` with its noun, singular or plural — the one place the report's `s` is decided. */
 	private static inline function counted(n: Int, noun: String): String {
 		return n == 1 ? '$n $noun' : '$n ${noun}s';
+	}
+
+	/** Whitespace inside a line — a line break is the edge `ownedLinesSpan` scans up to, never skipped. */
+	private static inline function isLineSpace(c: Int): Bool {
+		return c == ' '.code || c == '\t'.code || c == '\r'.code;
 	}
 
 	/**

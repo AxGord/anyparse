@@ -1,8 +1,8 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.check.NullFlowScan.IdentOperand;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -41,26 +41,16 @@ final class AlwaysNullComparison implements Check {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final shape: RefShape = plugin.refShape();
-		final equalityKinds: Array<String> = shape.equalityKinds ?? [];
-		final identKind: Null<String> = shape.identKind;
-		final nullLitKind: Null<String> = shape.nullLiteralKind;
-		if (equalityKinds.length == 0 || identKind == null || nullLitKind == null) return [];
-		final nullLit: String = nullLitKind;
-		final ident: String = identKind;
-		final eqKind: Null<String> = shape.eqKind;
-		return RunScan.collect(files, plugin, (entry, tree, violations) -> {
+		return RunScan.collectWith(files, plugin, NullFlowScan.seamsOf(shape), (entry, tree, s, violations) -> {
 			NullFlow.analyze(tree, shape, entry.source, (node, facts) -> {
-				if (!equalityKinds.contains(node.kind) || node.children.length != 2) return;
-				final operand: Null<QueryNode> = NullFlow.nullComparisonOperand(node, ident, nullLit);
-				final span: Null<Span> = node.span;
-				if (operand == null || span == null) return;
-				final name: Null<String> = operand.name;
-				if (name == null) return;
-				if (facts.isNull(name)) {
+				final compared: Null<IdentOperand> = NullFlowScan.nullComparedOperand(node, s);
+				if (compared == null) return;
+				if (facts.isNull(compared.name)) {
+					final eqKind: Null<String> = s.eqKind;
 					final alwaysTrue: Bool = eqKind != null && node.kind == eqKind;
 					violations.push({
 						file: entry.file,
-						span: span,
+						span: compared.span,
 						rule: 'always-null-comparison',
 						severity: Severity.Info,
 						message: alwaysTrue

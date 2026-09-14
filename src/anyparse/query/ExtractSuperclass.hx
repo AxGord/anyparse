@@ -108,7 +108,9 @@ final class ExtractSuperclass {
 		if (stranded.length > 0)
 			return Err('pulled-up member(s) reference member(s) staying behind: ${stranded.join(', ')} — add them to the set or refactor');
 
-		final blocks: Array<String> = [for (m in moved) trimNewlineEdges(srcSource.substring(m.cut.from, m.cut.to))];
+		final blocks: Array<String> = [
+			for (m in moved) SourceText.trimNewlineEdges(srcSource.substring(m.cut.from, m.cut.to))
+		];
 		final pkg: String = ModuleScan.packageOf(tree);
 		final imports: Array<String> = carriedImports(tree, blocks);
 		// The count is the WRITER's, not the extraction's, and it reaches the user only
@@ -347,27 +349,6 @@ final class ExtractSuperclass {
 		return ElementSpan.blankExtendedSpan(
 			source, ElementSpan.lineExtendedSpan(source, ElementSpan.docExtendedSpan(source, groupSpan, regions))
 		);
-	}
-
-	/** Strip leading / trailing newlines from a cut block. */
-	private static function trimNewlineEdges(block: String): String {
-		var from: Int = 0;
-		while (from < block.length) {
-			final c: Int = block.fastCodeAt(from);
-			if (c == '\n'.code || c == '\r'.code)
-				from++
-			else
-				break;
-		}
-		var to: Int = block.length;
-		while (to > from) {
-			final c: Int = block.fastCodeAt(to - 1);
-			if (c == '\n'.code || c == '\r'.code)
-				to--
-			else
-				break;
-		}
-		return block.substring(from, to);
 	}
 
 }

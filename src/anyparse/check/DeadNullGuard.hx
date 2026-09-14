@@ -2,8 +2,8 @@ package anyparse.check;
 
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
+import anyparse.check.NullFlowScan.IdentOperand;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
@@ -51,29 +51,19 @@ final class DeadNullGuard implements Check implements RiskyFix {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final shape: RefShape = plugin.refShape();
-		final equalityKinds: Array<String> = shape.equalityKinds ?? [];
-		final identKind: Null<String> = shape.identKind;
-		final nullLitKind: Null<String> = shape.nullLiteralKind;
-		if (equalityKinds.length == 0 || identKind == null || nullLitKind == null) return [];
-		final nullLit: String = nullLitKind;
-		final ident: String = identKind;
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
-		return RunScan.collect(files, plugin, (entry, root, violations) -> {
+		return RunScan.collectWith(files, plugin, NullFlowScan.seamsOf(shape), (entry, root, s, violations) -> {
 			final declaredTypes: Map<Int, String> = provider != null ? provider.declaredTypes(entry.source) : [];
 			NullFlow.analyze(root, shape, entry.source, (node, facts) -> {
-				if (!equalityKinds.contains(node.kind) || node.children.length != 2) return;
-				final operand: Null<QueryNode> = NullFlow.nullComparisonOperand(node, ident, nullLit);
-				final span: Null<Span> = node.span;
-				if (operand == null || span == null) return;
-				final name: Null<String> = operand.name;
-				if (name == null) return;
+				final compared: Null<IdentOperand> = NullFlowScan.nullComparedOperand(node, s);
+				if (compared == null) return;
 				// Owned by `unnecessary-null-check` when the declared type proves it — the SAME
 				// predicate it reports on, so a value-typed operand the null-comparison variant
 				// declines falls to this check's flow proof instead of between the two.
-				if (TypeResolver.isProvablyNonNullAtNullComparison(operand, root, shape, declaredTypes)) return;
-				if (facts.nonNull(name)) violations.push({
+				if (TypeResolver.isProvablyNonNullAtNullComparison(compared.operand, root, shape, declaredTypes)) return;
+				if (facts.nonNull(compared.name)) violations.push({
 					file: entry.file,
-					span: span,
+					span: compared.span,
 					rule: 'dead-null-guard',
 					severity: Severity.Info,
 					message: 'null check is redundant — operand is already non-null on this path'

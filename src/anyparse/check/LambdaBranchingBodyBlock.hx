@@ -4,6 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.ParseError;
@@ -183,16 +184,6 @@ final class LambdaBranchingBodyBlock implements Check {
 		return s.switchKinds.contains(body.kind) || s.conditionalKinds.contains(body.kind) && body.children.length >= IF_ELSE_CHILD_COUNT;
 	}
 
-	/** `callKind` + `newExprKind` — the invocation kinds whose last child is the trailing argument. */
-	private static function callKindsOf(shape: RefShape): Array<String> {
-		final kinds: Array<String> = [];
-		final callKind: Null<String> = shape.callKind;
-		if (callKind != null) kinds.push(callKind);
-		final newExprKind: Null<String> = shape.newExprKind;
-		if (newExprKind != null) kinds.push(newExprKind);
-		return kinds;
-	}
-
 	private static function readSeams(plugin: GrammarPlugin): Null<Seams> {
 		final shape: RefShape = plugin.refShape();
 		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
@@ -207,7 +198,7 @@ final class LambdaBranchingBodyBlock implements Check {
 			blockKinds: support.blockKinds(),
 			conditionalKinds: conditionalKinds,
 			switchKinds: switchKinds,
-			callKinds: callKindsOf(shape),
+			callKinds: MemberKinds.invocationKinds(shape),
 			opaqueKinds: shape.opaqueKinds ?? []
 		};
 	}

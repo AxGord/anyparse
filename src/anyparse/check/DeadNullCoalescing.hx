@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.check.NullFlowScan.IdentOperand;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
@@ -48,16 +49,13 @@ final class DeadNullCoalescing implements Check {
 			final declaredTypes: Map<Int, String> = typed.declaredTypes(entry.source);
 			NullFlow.analyze(root, shape, entry.source, (node, facts) -> {
 				if (node.kind != coalKind || node.children.length != 2) return;
-				final left: QueryNode = node.children[0];
-				final span: Null<Span> = node.span;
-				if (left.kind != ident || span == null) return;
-				final name: Null<String> = left.name;
-				if (name == null) return;
+				final left: Null<IdentOperand> = NullFlowScan.identOperand(node, node.children[0], ident);
+				if (left == null) return;
 				// Owned by `redundant-null-coalescing` when the declared type proves it.
-				if (TypeResolver.isProvablyNonNull(left, root, shape, declaredTypes)) return;
-				if (facts.nonNull(name)) violations.push({
+				if (TypeResolver.isProvablyNonNull(left.operand, root, shape, declaredTypes)) return;
+				if (facts.nonNull(left.name)) violations.push({
 					file: entry.file,
-					span: span,
+					span: left.span,
 					rule: 'dead-null-coalescing',
 					severity: Severity.Info,
 					message: 'right operand is dead — left operand is already non-null on this path'

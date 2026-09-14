@@ -187,7 +187,7 @@ final class InheritanceMove {
 		src: Parsed, target: Parsed, srcFile: String, m: Resolved, dir: Direction, memberName: String, targetType: String,
 		plugin: GrammarPlugin
 	): MoveResult {
-		final block: String = trimBlankEdges(src.source.substring(m.cut.from, m.cut.to));
+		final block: String = SourceText.trimNewlineEdges(src.source.substring(m.cut.from, m.cut.to));
 		final bodyClose: Null<Int> = typeBodyClose(target.source, findTargetDecl(target, targetType));
 		if (bodyClose == null) return Err('"$targetType" has no brace body to receive the member');
 		var wsStart: Int = bodyClose;
@@ -347,27 +347,6 @@ final class InheritanceMove {
 		if (bodyClose >= source.length) bodyClose = source.length - 1;
 		while (bodyClose >= bodySpan.from && SourceText.isSpace(source.fastCodeAt(bodyClose))) bodyClose--;
 		return bodyClose < bodySpan.from || source.fastCodeAt(bodyClose) != '}'.code ? null : bodyClose;
-	}
-
-	/** Strip leading / trailing newlines from a cut block. Mirrors `MoveMember`. */
-	private static function trimBlankEdges(block: String): String {
-		var from: Int = 0;
-		while (from < block.length) {
-			final c: Int = block.fastCodeAt(from);
-			if (c == '\n'.code || c == '\r'.code)
-				from++
-			else
-				break;
-		}
-		var to: Int = block.length;
-		while (to > from) {
-			final c: Int = block.fastCodeAt(to - 1);
-			if (c == '\n'.code || c == '\r'.code)
-				to--
-			else
-				break;
-		}
-		return block.substring(from, to);
 	}
 
 }

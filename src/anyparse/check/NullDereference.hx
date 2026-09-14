@@ -2,8 +2,8 @@ package anyparse.check;
 
 import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
+import anyparse.check.NullFlowScan.IdentOperand;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -58,14 +58,11 @@ final class NullDereference implements Check implements NoAutofix {
 					final sole: Bool = soleChildKinds.contains(node.kind) && node.children.length == 1;
 					final first: Bool = firstChildKinds.contains(node.kind) && node.children.length >= 1;
 					if (!sole && !first) return;
-					final receiver: QueryNode = node.children[0];
-					final span: Null<Span> = node.span;
-					if (receiver.kind != ident || span == null) return;
-					final name: Null<String> = receiver.name;
-					if (name == null) return;
-					if (facts.isNull(name)) violations.push({
+					final receiver: Null<IdentOperand> = NullFlowScan.identOperand(node, node.children[0], ident);
+					if (receiver == null) return;
+					if (facts.isNull(receiver.name)) violations.push({
 						file: entry.file,
-						span: span,
+						span: receiver.span,
 						rule: 'null-dereference',
 						severity: Severity.Warning,
 						message: 'null dereference — receiver is null on every path reaching it; this access throws at runtime'

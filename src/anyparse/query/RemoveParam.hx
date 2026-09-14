@@ -1,5 +1,7 @@
 package anyparse.query;
 
+import anyparse.query.CallSites.CursorFn;
+import anyparse.query.CallSites.CursorFnResult;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
@@ -81,22 +83,13 @@ final class RemoveParam {
 	public static function removeParam(
 		source: String, line: Int, col: Int, index: Int, plugin: GrammarPlugin, shape: RefShape
 	): RemoveParamResult {
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err('source does not parse: $exception')
-		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
-
-		// line:col is 1-based, as apq refs / ast --at / source print.
-		final cursor: Int = Span.offsetOf(source, line, col);
-
-		final node: Null<QueryNode> = RefactorSupport.resolveCursorNode(tree, cursor, source);
-		if (node == null) return Err('position $line:$col is not on a function or a call');
-		final cursorNode: QueryNode = node;
-		final targetName: Null<String> = cursorNode.name;
-		if (targetName == null) return Err('position $line:$col is not on a function or a call');
-		final name: String = targetName;
-
-		final declNode: Null<QueryNode> = CallSites.resolveFnDecl(cursorNode, tree, name, shape);
-		if (declNode == null) return Err('could not resolve a function binding for "$name" at $line:$col');
-		final decl: QueryNode = declNode;
+		final found: CursorFn = switch CallSites.resolveFnAtCursor(source, line, col, plugin, shape) {
+			case FnAtErr(message): return Err(message);
+			case FnAt(fn): fn;
+		};
+		final tree: QueryNode = found.tree;
+		final decl: QueryNode = found.decl;
+		final name: String = found.name;
 		if (!MemberKinds.FN_DECL_KINDS.contains(decl.kind))
 			return Err('"$name" is not a function (remove-param removes a function parameter)');
 		final declSpan: Null<Span> = decl.span;

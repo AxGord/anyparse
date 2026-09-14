@@ -502,3 +502,9 @@ decided the question; it may not become a record of runs.
   closure of its own → strict null safety then rejects every null test on a captured local inside
   the CALLER's lambda (a generic callee that forwards the callback), so both gated helpers restate
   the loop — `2f161084`
+- a `{name, span}` helper for the two-slot presence gate every declaration reader opens with
+  (`final name = decl.name; final span = decl.span; if (name == null || span == null) return …`)
+  → the helper still leaves a null test at every site and turns two locals into field reads
+  across bodies that read `name` a dozen times, so the gate stays spelled inline; the same
+  verdict covers the seam ladders (`final k = shape.x; if (k == null) return null;` runs), which
+  Haxe cannot fold without struct spread — merge of `batch/hxqb-S219`

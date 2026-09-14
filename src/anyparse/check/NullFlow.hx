@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.query.BoolExprShape;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.MemberKinds;
+import anyparse.query.NodeShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceText;
 import anyparse.runtime.Span;
@@ -1604,13 +1605,11 @@ final class NullFlow {
 	 * `handleRelationalAssertCall`).
 	 */
 	private static function dottedAssertCallee(node: QueryNode, ctx: FlowCtx): Null<String> {
-		if (ctx.fieldAccessKind == null || node.children.length < 2) return null;
-		final callee: QueryNode = node.children[0];
-		final method: Null<String> = callee.name;
-		if (callee.kind != ctx.fieldAccessKind || method == null || callee.children.length != 1) return null;
-		final recv: QueryNode = callee.children[0];
-		final recvName: Null<String> = recv.name;
-		return recv.kind != ctx.identKind || recvName == null ? null : '${recvName}.${method}';
+		if (node.children.length < 2) return null;
+		final call: Null<MethodCall> = NodeShape.methodCall(node, ctx.fieldAccessKind);
+		if (call == null) return null;
+		final recvName: Null<String> = call.receiver.name;
+		return call.receiver.kind != ctx.identKind || recvName == null ? null : '${recvName}.${call.method}';
 	}
 
 	/**

@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.BoolExprShape;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
@@ -552,18 +553,11 @@ final class SwitchChain {
 	 * shape test is the single place a bad condition is rejected.
 	 */
 	private static function flattenConjunction(node: QueryNode, seams: ChainSeams): Array<QueryNode> {
-		final n: QueryNode = unwrapParens(node, seams.parenKind);
+		final n: QueryNode = BoolExprShape.unwrapParens(node, seams.parenKind);
 		final andKind: Null<String> = seams.andKind;
 		return andKind != null && n.kind == andKind && n.children.length == BINARY_CHILD_COUNT
 			? flattenConjunction(n.children[0], seams).concat(flattenConjunction(n.children[1], seams))
 			: [n];
-	}
-
-	/** `node` with every `parenKind` wrapper stripped. */
-	private static function unwrapParens(node: QueryNode, parenKind: Null<String>): QueryNode {
-		var n: QueryNode = node;
-		while (parenKind != null && n.kind == parenKind && n.children.length == 1) n = n.children[0];
-		return n;
 	}
 
 	/**

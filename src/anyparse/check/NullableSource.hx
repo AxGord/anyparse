@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.NodeShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
@@ -286,13 +287,9 @@ final class NullableSource {
 	 * `crossFileReturnCallSource` — or null when `receiver` is not a field-access call.
 	 */
 	private static function methodCallParts(receiver: QueryNode, cfg: NullableSourceCfg): Null<{ recv: QueryNode, method: String }> {
-		if (cfg.callKind == null || cfg.fieldAccessKind == null || receiver.kind != cfg.callKind || receiver.children.length < 1)
-			return null;
-		final callee: QueryNode = receiver.children[0];
-		final method: Null<String> = callee.name;
-		if (callee.kind != cfg.fieldAccessKind || method == null || callee.children.length != 1) return null;
-		final recv: QueryNode = callee.children[0];
-		return { recv: recv, method: method };
+		if (cfg.callKind == null || receiver.kind != cfg.callKind) return null;
+		final call: Null<MethodCall> = NodeShape.methodCall(receiver, cfg.fieldAccessKind);
+		return call == null ? null : { recv: call.receiver, method: call.method };
 	}
 
 }

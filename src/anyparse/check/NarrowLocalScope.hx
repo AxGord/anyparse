@@ -7,6 +7,7 @@ import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.NodeShape;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
@@ -119,9 +120,6 @@ final class NarrowLocalScope implements Check {
 
 	/** The rule id, reported on every finding and accepted by `--rule`. */
 	private static inline final RULE_ID: String = 'narrow-local-scope';
-
-	/** A binary assignment node has exactly [l-value, r-value] children. */
-	private static inline final ASSIGN_CHILD_COUNT: Int = 2;
 
 	public function new() {}
 
@@ -318,9 +316,8 @@ final class NarrowLocalScope implements Check {
 		for (stmt in block.children) {
 			final span: Null<Span> = stmt.span;
 			if (span == null || first.from < span.from || first.to > span.to) continue;
-			if (stmt.kind != s.exprStmtKind || stmt.children.length != 1) return null;
-			final binary: QueryNode = stmt.children[0];
-			if (binary.kind != s.assignKind || binary.children.length != ASSIGN_CHILD_COUNT) return null;
+			final binary: Null<QueryNode> = NodeShape.assignmentOf(stmt, s.exprStmtKind, s.assignKind);
+			if (binary == null) return null;
 			final lhs: QueryNode = binary.children[0];
 			final lhsSpan: Null<Span> = lhs.span;
 			return if (lhs.kind != s.identKind || lhs.name != name || lhsSpan == null)

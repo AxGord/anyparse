@@ -6,6 +6,7 @@ import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
+import anyparse.query.SourceText;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.query.SymbolIndex;
@@ -468,9 +469,8 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 	 * loop is then not this pattern and is left alone, exactly as before parameters were admitted.
 	 */
 	private static function operandOf(node: QueryNode, root: QueryNode, fns: Array<QueryNode>, source: String, s: Seams): Null<Operand> {
-		final span: Null<Span> = node.span;
-		if (span == null) return null;
-		final src: String = source.substring(span.from, span.to);
+		final src: Null<String> = SourceText.nodeText(node, source);
+		if (src == null) return null;
 		final literal: Null<StringLiteral> = s.strings.literalOf(node, source);
 		if (literal != null) return { literal: literal.content, paramBindingFrom: null, src: src };
 		if (node.kind != s.identKind || fns.length == 0) return null;

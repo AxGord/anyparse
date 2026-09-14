@@ -7,6 +7,7 @@ import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
+import anyparse.runtime.CommonPrefix;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -268,7 +269,7 @@ final class DocCommentContinuation implements Check {
 			// delimiters is a style — and it may still hold an indented sample, which would otherwise
 			// make every flush line of it read as the line that fell away.
 			if (shallow && first) return null;
-			if (!shallow) deep = deep == null ? lead : commonPrefix(deep, lead);
+			if (!shallow) deep = deep == null ? lead : CommonPrefix.of(deep, lead);
 			first = false;
 		}
 		final prefix: Null<String> = deep;
@@ -284,13 +285,6 @@ final class DocCommentContinuation implements Check {
 			gutter: false,
 			lines: lines
 		};
-	}
-
-	/** The longest prefix `a` and `b` share; every caller passes leading whitespace. */
-	private static function commonPrefix(a: String, b: String): String {
-		var i: Int = 0;
-		while (i < a.length && i < b.length && a.fastCodeAt(i) == b.fastCodeAt(i)) i++;
-		return a.substring(0, i);
 	}
 
 	/**

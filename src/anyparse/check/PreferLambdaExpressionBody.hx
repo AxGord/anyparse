@@ -7,6 +7,7 @@ import anyparse.query.CondRegionScan;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.FormatConfigDiscovery;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
@@ -558,25 +559,6 @@ final class PreferLambdaExpressionBody implements Check {
 		return before.length == after.length ? -1 : shared;
 	}
 
-	/**
-	 * Bundle the kinds this check reads, or null when the grammar leaves the check nothing to
-	 * match: no anonymous-function-literal kind (see the body — without it the exclusion that
-	 * keeps this check off `prefer-arrow-callback`'s node cannot be made), no arrow lambda
-	 * kind, no block kind, or neither collapsible statement kind.
-	 * The invocation kinds a TRAILING lambda argument can sit in — `callKind` and
-	 * `newExprKind`. Both project the callee as their first child and the arguments after
-	 * it, so "is the last child" answers "is the trailing argument". Either seam unset just
-	 * narrows the relaxation `branchesInternally` grants.
-	 */
-	private static function callKindsOf(shape: RefShape): Array<String> {
-		final kinds: Array<String> = [];
-		final callKind: Null<String> = shape.callKind;
-		if (callKind != null) kinds.push(callKind);
-		final newExprKind: Null<String> = shape.newExprKind;
-		if (newExprKind != null) kinds.push(newExprKind);
-		return kinds;
-	}
-
 	private static function readSeams(plugin: GrammarPlugin): Null<Seams> {
 		final shape: RefShape = plugin.refShape();
 		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
@@ -616,7 +598,7 @@ final class PreferLambdaExpressionBody implements Check {
 				.concat(shape.loopStatementKinds ?? [])
 				.concat(throwKinds),
 			branchingKinds: shape.switchKinds ?? [],
-			callKinds: callKindsOf(shape),
+			callKinds: MemberKinds.invocationKinds(shape),
 			shield: shield,
 			terminatedKinds: terminatedKinds
 		};
