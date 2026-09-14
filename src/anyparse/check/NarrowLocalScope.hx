@@ -134,13 +134,7 @@ final class NarrowLocalScope implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = readSeams(plugin);
-		if (seams == null) return [];
-		final resolved: Seams = seams;
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collectWith(files, plugin, readSeams(plugin), (entry, tree, resolved, violations) -> {
 			for (m in collectMatches(tree, entry.source, resolved, plugin.lexicalRegions(entry.source))) violations.push({
 				file: entry.file,
 				span: m.declSpan,
@@ -148,30 +142,23 @@ final class NarrowLocalScope implements Check {
 				severity: Severity.Info,
 				message: 'local \'${m.name}\' is used only inside a nested block; move its declaration there'
 			});
-		}
-		return violations;
+		});
 	}
 
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final seams: Null<Seams> = readSeams(plugin);
-		if (seams == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final byKey: Map<String, Match> = [];
-		for (m in collectMatches(tree, source, seams, plugin.lexicalRegions(source))) byKey['${m.declSpan.from}:${m.declSpan.to}'] = m;
+		return RunScan.editsWith(plugin, source, readSeams(plugin), (tree, seams) -> {
+			final byKey: Map<String, Match> = [];
+			for (m in collectMatches(tree, source, seams, plugin.lexicalRegions(source))) byKey['${m.declSpan.from}:${m.declSpan.to}'] = m;
 
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
-			final m: Null<Match> = byKey['${span.from}:${span.to}'];
-			if (m == null) continue;
-			edits.push({ span: m.removeSpan, text: '' });
-			edits.push({ span: new Span(m.insertAt, m.insertAt), text: '${m.indent}${m.declText};\n' });
-		}
-		return CanonicalEdit.dropContainedEdits(edits);
+			final edits: Array<{ span: Span, text: String }> = [];
+			RunScan.eachMatched(violations, byKey, (m, _) -> {
+				edits.push({ span: m.removeSpan, text: '' });
+				edits.push({ span: new Span(m.insertAt, m.insertAt), text: '${m.indent}${m.declText};\n' });
+			});
+			return CanonicalEdit.dropContainedEdits(edits);
+		});
 	}
 
 	/** Bundle the required `RefShape` / control-flow kinds, or null when a required one is unset (the check is then a no-op). */

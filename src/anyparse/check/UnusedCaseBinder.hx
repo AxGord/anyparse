@@ -9,7 +9,6 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 using Lambda;
 
@@ -153,26 +152,18 @@ final class UnusedCaseBinder implements Check {
 		final seams: Null<CaseSeams> = CasePatternScan.seamsOf(plugin);
 		if (seams == null || violations.length == 0) return [];
 		final resolved: CaseSeams = seams;
-		final file: String = violations[0].file;
-		for (violation in violations) if (violation.file != file)
-			throw new Exception('$RULE_ID: fix() takes ONE file\'s violations, got $file and ${violation.file}');
-		final parsed: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (parsed == null) return [];
-		final tree: QueryNode = parsed;
-		final constants: Array<String> = CasePatternScan.declaredConstantNames(resolved, [tree]);
-		final resolvedIndex: SymbolIndex = index ?? SymbolIndex.build([{ file: file, source: source }], plugin);
-		final byKey: Map<String, Candidate> = [];
-		for (candidate in collect(resolved, tree, source, constants, resolvedIndex))
-			byKey['${candidate.span.from}:${candidate.span.to}'] = candidate;
+		final file: String = RunScan.oneFile(violations, RULE_ID);
+		return RunScan.edits(plugin, source, tree -> {
+			final constants: Array<String> = CasePatternScan.declaredConstantNames(resolved, [tree]);
+			final resolvedIndex: SymbolIndex = index ?? SymbolIndex.build([{ file: file, source: source }], plugin);
+			final byKey: Map<String, Candidate> = [];
+			for (candidate in collect(resolved, tree, source, constants, resolvedIndex))
+				byKey['${candidate.span.from}:${candidate.span.to}'] = candidate;
 
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (violation in violations) {
-			final span: Null<Span> = violation.span;
-			if (span == null) continue;
-			final candidate: Null<Candidate> = byKey['${span.from}:${span.to}'];
-			if (candidate != null) for (edit in candidate.edits) edits.push(edit);
-		}
-		return CanonicalEdit.dropContainedEdits(edits);
+			final edits: Array<{ span: Span, text: String }> = [];
+			RunScan.eachMatched(violations, byKey, (candidate, _) -> for (edit in candidate.edits) edits.push(edit));
+			return CanonicalEdit.dropContainedEdits(edits);
+		});
 	}
 
 	/** Every unread binder in `tree`, in document order. */

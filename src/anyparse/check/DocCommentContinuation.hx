@@ -113,19 +113,15 @@ final class DocCommentContinuation implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final violations: Array<Violation> = [];
-		for (entry in files) scan(violations, entry.file, entry.source, plugin.lexicalRegions(entry.source));
-		return violations;
+		return RunScan.gather(
+			files, (entry, violations) -> scan(violations, entry.file, entry.source, plugin.lexicalRegions(entry.source))
+		);
 	}
 
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final flagged: Array<Int> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span != null) flagged.push(span.from);
-		}
+		final flagged: Array<Int> = RunScan.spanStarts(violations);
 		// ONE lexical pass for the whole file, not one per finding: `fix` is handed every violation
 		// of this rule in the file at once, and a block comment with many findings would pay one full
 		// re-lex per finding.

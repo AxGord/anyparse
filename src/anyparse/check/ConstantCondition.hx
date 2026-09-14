@@ -64,17 +64,13 @@ final class ConstantCondition implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = resolveSeams(plugin);
-		if (seams == null) return [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null)
+		return RunScan.collectWith(
+			files, plugin, resolveSeams(plugin),
+			(entry, tree, seams, violations) ->
 				walk(
 					violations, entry.file, entry.source, tree, seams.boolLitKind, seams.branchKinds, seams.blockKinds, seams.emptyStmtKind
-				);
-		}
-		return violations;
+				)
+		);
 	}
 
 	/**
@@ -93,21 +89,17 @@ final class ConstantCondition implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final seams: Null<Seams> = resolveSeams(plugin);
-		if (seams == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
 
 		// The reported span is the CONDITION (children[0]); match a
 		// suppression-filtered violation back to its branch by that span.
-		final flagged: Array<String> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span != null) flagged.push('${span.from}:${span.to}');
-		}
-		final edits: Array<{ span: Span, text: String }> = [];
-		collectBranchEdits(tree, null, source, seams.boolLitKind, seams.branchKinds, seams.blockKinds, seams.emptyStmtKind, flagged, edits);
-		return CanonicalEdit.dropContainedEdits(edits);
+		return RunScan.editsWith(plugin, source, resolveSeams(plugin), (tree, seams) -> {
+			final flagged: Array<String> = RunScan.spanKeys(violations);
+			final edits: Array<{ span: Span, text: String }> = [];
+			collectBranchEdits(
+				tree, null, source, seams.boolLitKind, seams.branchKinds, seams.blockKinds, seams.emptyStmtKind, flagged, edits
+			);
+			return CanonicalEdit.dropContainedEdits(edits);
+		});
 	}
 
 	/** Walk `node`, flagging every branch whose condition is a boolean literal. */

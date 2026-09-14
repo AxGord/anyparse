@@ -98,17 +98,10 @@ final class PreferIndexAccess implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final cfg: Null<Cfg> = config(plugin);
-		if (cfg == null) return [];
-		final c: Cfg = cfg;
-		final violations: Array<Violation> = [];
 		// A path receiver's member types resolve cross-file; the index is built at most once, on
 		// first demand, because most runs never reach a path receiver that cleared every other gate.
 		final resolveSymbols: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
-			final root: QueryNode = tree;
+		return RunScan.collectWith(files, plugin, config(plugin), (entry, root, c, violations) -> {
 			final declaredTypes: Map<Int, String> = c.typed.declaredTypes(entry.source);
 			final declaredTypeSources: Map<Int, String> = c.typed.declaredTypeSources(entry.source);
 			// The invisible-binder scan is per FILE while the implicit-`this` gate is per site, and
@@ -136,27 +129,24 @@ final class PreferIndexAccess implements Check {
 					message: m.isSet ? SET_MESSAGE : GET_MESSAGE
 				})
 			);
-		}
-		return violations;
+		});
 	}
 
 	/** Rewrite each flagged `get` to `m[k]` and each statement-position `set` to `m[k] = v`, trusting `run`'s validated spans. */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final cfg: Null<Cfg> = config(plugin);
-		if (cfg == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final byKey: Map<String, Match> = [];
-		collect(
-			tree, null, cfg, (call, parentKind) -> structuralMatch(call, parentKind, cfg),
-			m -> byKey['${m.callSpan.from}:${m.callSpan.to}'] = m
-		);
-		return CanonicalEdit.dropContainedEdits(CheckScan.collectSpanEdits(violations, byKey, (m, _) -> {
-			final text: Null<String> = editText(m, source);
-			return text == null ? null : { span: m.callSpan, text: text };
-		}));
+		return RunScan.editsWith(plugin, source, config(plugin), (tree, cfg) -> {
+			final byKey: Map<String, Match> = [];
+			collect(
+				tree, null, cfg, (call, parentKind) -> structuralMatch(call, parentKind, cfg),
+				m -> byKey['${m.callSpan.from}:${m.callSpan.to}'] = m
+			);
+			return CanonicalEdit.dropContainedEdits(CheckScan.collectSpanEdits(violations, byKey, (m, _) -> {
+				final text: Null<String> = editText(m, source);
+				return text == null ? null : { span: m.callSpan, text: text };
+			}));
+		});
 	}
 
 	/**
@@ -176,7 +166,7 @@ final class PreferIndexAccess implements Check {
 		final exprStmtKind: Null<String> = shape.exprStatementKind;
 		final mapTypes: Array<String> = shape.mapAbstractTypeNames ?? [];
 		if (identKind == null || callKind == null || fieldKind == null || exprStmtKind == null || mapTypes.length == 0) return null;
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		if (provider == null) return null;
 		final typed: TypeInfoProvider = provider;
 		return {
@@ -226,12 +216,11 @@ final class PreferIndexAccess implements Check {
 	): Null<Match> {
 		final m: Null<Match> = structuralMatch(call, parentKind, cfg);
 		if (m == null) return null;
-		final matched: Match = m;
-		if (!receiverIsMap(matched.recv, root, declaredTypes, declaredTypeSources, cfg, symbols, file, invisibleBinders)) return null;
+		if (!receiverIsMap(m.recv, root, declaredTypes, declaredTypeSources, cfg, symbols, file, invisibleBinders)) return null;
 		for (i in 1...call.children.length) {
-			if (containsFragileNullGuard(call.children[i], matched.callSpan, root, declaredTypes, cfg)) return null;
+			if (containsFragileNullGuard(call.children[i], m.callSpan, root, declaredTypes, cfg)) return null;
 		}
-		return matched;
+		return m;
 	}
 
 	/** The rewrite text for `m`, or null when it is a `set` outside statement position (no safe expression form). */

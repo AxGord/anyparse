@@ -88,7 +88,7 @@ final class PreferFinal implements Check {
 		final scopeKinds: Array<String> = shape.scopeKinds;
 		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
 		final index: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		final abstractKinds: Array<String> = shape.underlyingThisTypeKinds ?? [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);

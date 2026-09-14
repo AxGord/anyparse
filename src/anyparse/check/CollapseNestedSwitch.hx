@@ -7,7 +7,6 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 using StringTools;
 
@@ -174,14 +173,7 @@ final class CollapseNestedSwitch implements Check implements DefaultOff {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = resolveSeams(plugin);
-		if (seams == null) return [];
-		final resolved: Seams = seams;
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final parsed: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (parsed == null) continue;
-			final tree: QueryNode = parsed;
+		return RunScan.collectWith(files, plugin, resolveSeams(plugin), (entry, tree, resolved, violations) -> {
 			for (candidate in collect({ tree: tree, source: entry.source, seams: resolved })) violations.push({
 				file: entry.file,
 				span: candidate.span,
@@ -189,8 +181,7 @@ final class CollapseNestedSwitch implements Check implements DefaultOff {
 				severity: Severity.Info,
 				message: MESSAGE
 			});
-		}
-		return violations;
+		});
 	}
 
 	/**
@@ -206,24 +197,16 @@ final class CollapseNestedSwitch implements Check implements DefaultOff {
 		final seams: Null<Seams> = resolveSeams(plugin);
 		if (seams == null || violations.length == 0) return [];
 		final resolved: Seams = seams;
-		final file: String = violations[0].file;
-		for (violation in violations) if (violation.file != file)
-			throw new Exception('$RULE_ID: fix() takes ONE file\'s violations, got $file and ${violation.file}');
-		final parsed: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (parsed == null) return [];
-		final tree: QueryNode = parsed;
-		final byKey: Map<String, Candidate> = [];
-		for (candidate in collect({ tree: tree, source: source, seams: resolved }))
-			byKey['${candidate.span.from}:${candidate.span.to}'] = candidate;
+		RunScan.assertOneFile(violations, RULE_ID);
+		return RunScan.edits(plugin, source, tree -> {
+			final byKey: Map<String, Candidate> = [];
+			for (candidate in collect({ tree: tree, source: source, seams: resolved }))
+				byKey['${candidate.span.from}:${candidate.span.to}'] = candidate;
 
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (violation in violations) {
-			final span: Null<Span> = violation.span;
-			if (span == null) continue;
-			final candidate: Null<Candidate> = byKey['${span.from}:${span.to}'];
-			if (candidate != null) edits.push({ span: candidate.span, text: candidate.text });
-		}
-		return CanonicalEdit.dropContainedEdits(edits);
+			return CanonicalEdit.dropContainedEdits(
+				CheckScan.collectSpanEdits(violations, byKey, (candidate, _) -> ({ span: candidate.span, text: candidate.text }))
+			);
+		});
 	}
 
 	/** Every collapsible arm in `scan`'s source, in document order. */

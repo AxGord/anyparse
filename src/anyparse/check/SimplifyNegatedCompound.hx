@@ -105,16 +105,15 @@ final class SimplifyNegatedCompound implements Check {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = readSeams(plugin, files);
 		if (seams == null) return [];
-		final s: Seams = seams;
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			// The type resolver walks the whole resolution scope, so it is built only for a file
 			// that actually holds the shape — most files skip it entirely.
-			if (tree == null || !hasShape(tree, s)) continue;
-			for (c in candidates(
-				tree, null, entry.source, s, CheckScan.typeNominalResolver(entry.source, plugin, tree, entry.file), []
-			)) violations.push({
+			if (tree == null || !hasShape(tree, seams)) continue;
+			for (
+				c in candidates(tree, null, entry.source, seams, CheckScan.typeNominalResolver(entry.source, plugin, tree, entry.file), [])
+			) violations.push({
 				file: entry.file,
 				span: c.span,
 				rule: 'simplify-negated-compound',
@@ -134,23 +133,17 @@ final class SimplifyNegatedCompound implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		if (violations.length == 0) return [];
-		final seams: Null<Seams> = readSeams(plugin, [{ file: violations[0].file, source: source }]);
-		if (seams == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final s: Seams = seams;
-		final types: Null<(QueryNode) -> Null<String>> = CheckScan.typeNominalResolver(source, plugin, tree, violations[0].file, index);
-		final bySpan: Map<String, Candidate> = [];
-		for (c in candidates(tree, null, source, s, types, [])) bySpan['${c.span.from}:${c.span.to}'] = c;
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
-			final c: Null<Candidate> = bySpan['${span.from}:${span.to}'];
-			if (c != null) edits.push({ span: c.span, text: c.text });
-		}
-		return edits;
+		return violations.length == 0
+			? []
+			: RunScan.editsWith(plugin, source, readSeams(plugin, [{ file: violations[0].file, source: source }]), (tree, seams) -> {
+				final s: Seams = seams;
+				final types: Null<(QueryNode) -> Null<String>> = CheckScan.typeNominalResolver(
+					source, plugin, tree, violations[0].file, index
+				);
+				final bySpan: Map<String, Candidate> = [];
+				for (c in candidates(tree, null, source, s, types, [])) bySpan['${c.span.from}:${c.span.to}'] = c;
+				return CheckScan.collectSpanEdits(violations, bySpan, (c, _) -> ({ span: c.span, text: c.text }));
+			});
 	}
 
 	/**

@@ -105,8 +105,7 @@ final class RedundantMapExists implements Check implements DefaultOff {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final cfg: Null<Cfg> = config(plugin);
 		if (cfg == null) return [];
-		final c: Cfg = cfg;
-		final valueSeams: Null<ValueSeams> = MapValueScan.seamsOf(c.shape);
+		final valueSeams: Null<ValueSeams> = MapValueScan.seamsOf(cfg.shape);
 		// The REPORT index deliberately, not `lazySymbolIndex` (which prefers the resolution
 		// one): `MapValueScan` reads its `skippedFiles` as the "nothing is hidden from the
 		// scan" proof, and on any project with libraries configured the resolution index's
@@ -119,14 +118,10 @@ final class RedundantMapExists implements Check implements DefaultOff {
 			return built;
 		};
 		final proven: Map<String, Bool> = [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
-			final root: QueryNode = tree;
-			final declaredTypes: Map<Int, String> = c.typed.declaredTypes(entry.source);
-			final declaredTypeSources: Map<Int, String> = c.typed.declaredTypeSources(entry.source);
-			collect(root, entry.source, root, declaredTypes, declaredTypeSources, c, m -> {
+		return RunScan.collect(files, plugin, (entry, root, violations) -> {
+			final declaredTypes: Map<Int, String> = cfg.typed.declaredTypes(entry.source);
+			final declaredTypeSources: Map<Int, String> = cfg.typed.declaredTypeSources(entry.source);
+			collect(root, entry.source, root, declaredTypes, declaredTypeSources, cfg, m -> {
 				final proof: Bool = isProven(m, entry.file, entry.source, root, valueSeams, resolveSymbols(), plugin, proven);
 				violations.push({
 					file: entry.file,
@@ -139,8 +134,7 @@ final class RedundantMapExists implements Check implements DefaultOff {
 					declineReason: proof ? null : DECLINE_REASON
 				});
 			});
-		}
-		return violations;
+		});
 	}
 
 	/**
@@ -155,8 +149,6 @@ final class RedundantMapExists implements Check implements DefaultOff {
 		final cfg: Null<Cfg> = config(plugin);
 		if (cfg == null) return [];
 		final c: Cfg = cfg;
-		final valueSeams: Null<ValueSeams> = MapValueScan.seamsOf(c.shape);
-		if (valueSeams == null) return [];
 		// The REPORT index, exactly as in `run`: the census reads its `skippedFiles` as the
 		// "nothing is hidden" proof and derives its own wider scope for the subtype and
 		// access-grant lookups. Handing it the RESOLUTION index instead makes that gate
@@ -164,19 +156,18 @@ final class RedundantMapExists implements Check implements DefaultOff {
 		// while the report still says the site is fixable.
 		if (index == null) return [];
 		final report: SymbolIndex = index;
-		final root: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (root == null) return [];
-		final tree: QueryNode = root;
-		final declaredTypes: Map<Int, String> = c.typed.declaredTypes(source);
-		final declaredTypeSources: Map<Int, String> = c.typed.declaredTypeSources(source);
-		final proven: Map<String, Bool> = [];
-		final file: String = violations.length > 0 ? violations[0].file : '';
-		return CanonicalEdit.dropContainedEdits(CheckScan.applyBySpan(plugin, source, violations, [c.ternaryKind], (node, span) -> {
-			final m: Null<Match> = match(node, source, tree, declaredTypes, declaredTypeSources, c);
-			return m == null || !isProven(m, file, source, tree, valueSeams, report, plugin, proven)
-				? null
-				: { span: span, text: '${m.readSource} ?? ${m.fallbackSource}' };
-		}));
+		return RunScan.editsWith(plugin, source, MapValueScan.seamsOf(c.shape), (tree, valueSeams) -> {
+			final declaredTypes: Map<Int, String> = c.typed.declaredTypes(source);
+			final declaredTypeSources: Map<Int, String> = c.typed.declaredTypeSources(source);
+			final proven: Map<String, Bool> = [];
+			final file: String = violations.length > 0 ? violations[0].file : '';
+			return CanonicalEdit.dropContainedEdits(CheckScan.applyBySpan(plugin, source, violations, [c.ternaryKind], (node, span) -> {
+				final m: Null<Match> = match(node, source, tree, declaredTypes, declaredTypeSources, c);
+				return m == null || !isProven(m, file, source, tree, valueSeams, report, plugin, proven)
+					? null
+					: { span: span, text: '${m.readSource} ?? ${m.fallbackSource}' };
+			}));
+		});
 	}
 
 	/**
@@ -290,9 +281,10 @@ final class RedundantMapExists implements Check implements DefaultOff {
 	): Null<Int> {
 		final bindingFrom: Null<Int> = TypeResolver.identBindingFrom(recv, root, cfg.shape);
 		if (bindingFrom == null) return null;
-		final at: Int = bindingFrom;
-		final typeName: Null<String> = declaredTypes[at];
-		return typeName != null && MapNominal.isMap(typeName, declaredTypeSources[at], cfg.mapTypes, cfg.nullableWrappers) ? at : null;
+		final typeName: Null<String> = declaredTypes[bindingFrom];
+		return typeName != null && MapNominal.isMap(typeName, declaredTypeSources[bindingFrom], cfg.mapTypes, cfg.nullableWrappers)
+			? bindingFrom
+			: null;
 	}
 
 	/** Resolve the per-grammar seams + type provider, or null when the grammar lacks a needed kind / type info. */
@@ -309,7 +301,7 @@ final class RedundantMapExists implements Check implements DefaultOff {
 		final existsMethods: Array<String> = shape.mapExistsMethods ?? [];
 		final mapTypes: Array<String> = shape.mapAbstractTypeNames ?? [];
 		if (existsMethods.length == 0 || mapTypes.length == 0) return null;
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		return provider == null ? null : {
 			shape: shape,
 			typed: provider,

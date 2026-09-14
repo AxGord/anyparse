@@ -147,12 +147,7 @@ final class HoistEmbeddedAssignment implements Check implements DefaultOff imple
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final spine: Null<Spine> = spineOf(plugin);
-		if (spine == null) return [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collectWith(files, plugin, spineOf(plugin), (entry, tree, spine, violations) -> {
 			for (site in sites(tree, spine)) for (assign in site.assigns) {
 				final span: Null<Span> = assign.span;
 				final name: Null<String> = targetName(assign);
@@ -164,8 +159,7 @@ final class HoistEmbeddedAssignment implements Check implements DefaultOff imple
 					message: 'assignment to `$name` is buried inside a data structure — hoist it in front of the statement'
 				});
 			}
-		}
-		return violations;
+		});
 	}
 
 	/**
@@ -181,37 +175,31 @@ final class HoistEmbeddedAssignment implements Check implements DefaultOff imple
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final spine: Null<Spine> = spineOf(plugin);
-		if (spine == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final flagged: Array<String> = [];
-		for (violation in violations) {
-			final span: Null<Span> = violation.span;
-			if (span != null) flagged.push(spanKey(span));
-		}
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (site in sites(tree, spine)) {
-			final stmtSpan: Null<Span> = site.stmt.span;
-			if (stmtSpan == null) continue;
-			var prefix: String = '';
-			var complete: Bool = true;
-			final pending: Array<{ span: Span, text: String }> = [];
-			for (assign in site.assigns) {
-				final span: Null<Span> = assign.span;
-				final name: Null<String> = targetName(assign);
-				if (span == null || name == null || !flagged.contains(spanKey(span))) {
-					complete = false;
-					break;
+		return RunScan.editsWith(plugin, source, spineOf(plugin), (tree, spine) -> {
+			final flagged: Array<String> = RunScan.spanKeys(violations);
+			final edits: Array<{ span: Span, text: String }> = [];
+			for (site in sites(tree, spine)) {
+				final stmtSpan: Null<Span> = site.stmt.span;
+				if (stmtSpan == null) continue;
+				var prefix: String = '';
+				var complete: Bool = true;
+				final pending: Array<{ span: Span, text: String }> = [];
+				for (assign in site.assigns) {
+					final span: Null<Span> = assign.span;
+					final name: Null<String> = targetName(assign);
+					if (span == null || name == null || !flagged.contains(spanKey(span))) {
+						complete = false;
+						break;
+					}
+					prefix += '${source.substring(span.from, span.to)};\n';
+					pending.push({ span: span, text: name });
 				}
-				prefix += '${source.substring(span.from, span.to)};\n';
-				pending.push({ span: span, text: name });
+				if (!complete || pending.length == 0) continue;
+				for (edit in pending) edits.push(edit);
+				edits.push({ span: new Span(stmtSpan.from, stmtSpan.from), text: prefix });
 			}
-			if (!complete || pending.length == 0) continue;
-			for (edit in pending) edits.push(edit);
-			edits.push({ span: new Span(stmtSpan.from, stmtSpan.from), text: prefix });
-		}
-		return edits;
+			return edits;
+		});
 	}
 
 	private static inline function spanKey(span: Span): String {

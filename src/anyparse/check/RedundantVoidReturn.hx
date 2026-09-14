@@ -46,20 +46,17 @@ final class RedundantVoidReturn implements Check {
 		final voidKind: Null<String> = shape.voidReturnKind;
 		final fnKinds: Array<String> = shape.functionKinds ?? [];
 		final bodyKinds: Array<String> = shape.functionBodyKinds ?? [];
-		if (voidKind == null || fnKinds.length == 0 || bodyKinds.length == 0) return [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
-			for (span in collect(tree, voidKind, fnKinds, bodyKinds)) violations.push({
-				file: entry.file,
-				span: span,
-				rule: 'redundant-void-return',
-				severity: Severity.Info,
-				message: 'redundant trailing return; — control falls off the end of the function'
+		return voidKind == null || fnKinds.length == 0 || bodyKinds.length == 0
+			? []
+			: RunScan.collect(files, plugin, (entry, tree, violations) -> {
+				for (span in collect(tree, voidKind, fnKinds, bodyKinds)) violations.push({
+					file: entry.file,
+					span: span,
+					rule: 'redundant-void-return',
+					severity: Severity.Info,
+					message: 'redundant trailing return; — control falls off the end of the function'
+				});
 			});
-		}
-		return violations;
 	}
 
 	/**

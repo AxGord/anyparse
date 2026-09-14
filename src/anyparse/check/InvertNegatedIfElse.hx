@@ -59,14 +59,10 @@ final class InvertNegatedIfElse implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = resolveSeams(plugin, files);
-		if (seams == null) return [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(violations, entry.file, tree, tree, entry.source, seams);
-		}
-		return violations;
+		return RunScan.collectWith(
+			files, plugin, resolveSeams(plugin, files),
+			(entry, tree, seams, violations) -> walk(violations, entry.file, tree, tree, entry.source, seams)
+		);
 	}
 
 	/**
@@ -80,21 +76,13 @@ final class InvertNegatedIfElse implements Check {
 	): Array<{ span: Span, text: String }> {
 		if (violations.length == 0) return [];
 		final file: String = violations[0].file;
-		final seams: Null<Seams> = resolveSeams(plugin, [{ file: file, source: source }]);
-		if (seams == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final root: QueryNode = tree;
-		final byKey: Map<String, QueryNode> = [];
-		MemberKinds.indexNodesByKind(root, seams.ifKinds, byKey);
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final vspan: Null<Span> = v.span;
-			if (vspan == null) continue;
-			final ifNode: Null<QueryNode> = byKey['${vspan.from}:${vspan.to}'];
-			if (ifNode != null) inversionEdits(ifNode, file, root, source, seams, edits);
-		}
-		return edits;
+		return RunScan.editsWith(plugin, source, resolveSeams(plugin, [{ file: file, source: source }]), (root, seams) -> {
+			final byKey: Map<String, QueryNode> = [];
+			MemberKinds.indexNodesByKind(root, seams.ifKinds, byKey);
+			final edits: Array<{ span: Span, text: String }> = [];
+			RunScan.eachMatched(violations, byKey, (ifNode, _) -> inversionEdits(ifNode, file, root, source, seams, edits));
+			return edits;
+		});
 	}
 
 	/**

@@ -76,12 +76,8 @@ final class AsymmetricBranchBraces implements Check implements DefaultOff implem
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = resolveSeams(plugin);
-		if (seams == null) return [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) for (found in collect(tree, seams)) violations.push({
+		return RunScan.collectWith(files, plugin, resolveSeams(plugin), (entry, tree, seams, violations) -> {
+			for (found in collect(tree, seams)) violations.push({
 				file: entry.file,
 				span: found.span,
 				rule: RULE_ID,
@@ -90,8 +86,7 @@ final class AsymmetricBranchBraces implements Check implements DefaultOff implem
 					? 'the then branch is braced and the else branch is not - brace both or neither'
 					: 'the else branch is braced and the then branch is not - brace both or neither'
 			});
-		}
-		return violations;
+		});
 	}
 
 	public function fix(

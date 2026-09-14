@@ -260,23 +260,19 @@ final class UnusedPublicMember implements Check implements DefaultOff implements
 			naming: plugin.namingSupport(),
 			contracts: contracts
 		};
-		final out: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collect(files, plugin, (entry, tree, out) -> {
 			// The resolution index carries the report files too, but only when a scope reached the
 			// run at all — fall back to the report index rather than skipping the file. The token
 			// map covers the file either way (`tokenCounts` unions the report set in by path).
 			final scope: SymbolIndex = wide.fileInfo(entry.file) == null ? index : wide;
 			final info: Null<FileInfo> = scope.fileInfo(entry.file);
-			if (info == null) continue;
+			if (info == null) return;
 			final branch: MemberBranchSeams = MemberBranchScan.seamsOf(
 				plugin.refShape(), entry.source, plugin.lexicalRegions.bind(entry.source)
 			);
 			final regions: Array<LexRegion> = plugin.lexicalRegions(entry.source);
 			for (cls in CheckScan.classBodies(tree)) considerClass(out, cls, entry.source, index, scope, info, ctx, branch, regions);
-		}
-		return out;
+		});
 	}
 
 	/**

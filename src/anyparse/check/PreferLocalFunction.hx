@@ -102,12 +102,7 @@ final class PreferLocalFunction implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final s: Null<Seams> = readSeams(plugin);
-		if (s == null) return [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collectWith(files, plugin, readSeams(plugin), (entry, tree, s, violations) -> {
 			for (m in collectMatches(tree, entry.source, s, plugin.lexicalRegions(entry.source))) violations.push({
 				file: entry.file,
 				span: m.reportSpan,
@@ -115,28 +110,25 @@ final class PreferLocalFunction implements Check {
 				severity: Severity.Info,
 				message: MSG
 			});
-		}
-		return violations;
+		});
 	}
 
 	/** Emit each flagged site's edit batch — the declaration removal, the hoist, and the collapsed assignment. */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final s: Null<Seams> = readSeams(plugin);
-		if (s == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final wanted: Map<String, Bool> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span != null) wanted['${span.from}:${span.to}'] = true;
-		}
-		return [
-			for (m in collectMatches(
-				tree, source, s, plugin.lexicalRegions(source)
-			)) if (wanted.exists('${m.reportSpan.from}:${m.reportSpan.to}')) for (e in m.edits) e
-		];
+		return RunScan.editsWith(plugin, source, readSeams(plugin), (tree, s) -> {
+			final wanted: Map<String, Bool> = [];
+			for (v in violations) {
+				final span: Null<Span> = v.span;
+				if (span != null) wanted['${span.from}:${span.to}'] = true;
+			}
+			return [
+				for (m in collectMatches(
+					tree, source, s, plugin.lexicalRegions(source)
+				)) if (wanted.exists('${m.reportSpan.from}:${m.reportSpan.to}')) for (e in m.edits) e
+			];
+		});
 	}
 
 	/**

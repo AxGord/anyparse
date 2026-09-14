@@ -49,46 +49,40 @@ final class SimplifyBooleanReturnChain implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final ctx: Null<Ctx> = context(plugin);
-		if (ctx == null) return [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
-			for (chain in collectChains(tree, ctx)) if (reducible(chain, entry.source, ctx)) violations.push({
-				file: entry.file,
-				span: chain.span,
-				rule: 'simplify-boolean-return-chain',
-				severity: Severity.Info,
-				message: 'this boolean guard chain can be a single boolean return'
-			});
-		}
-		return violations;
+		return RunScan.collectWith(files, plugin, context(plugin), (entry, tree, ctx, violations) -> {
+			for (chain in collectChains(tree, ctx)) if (reducible(chain, entry.source, ctx))
+				violations.push({
+					file: entry.file,
+					span: chain.span,
+					rule: 'simplify-boolean-return-chain',
+					severity: Severity.Info,
+					message: 'this boolean guard chain can be a single boolean return'
+				});
+		});
 	}
 
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		final ctx: Null<Ctx> = context(plugin);
-		if (ctx == null || violations.length == 0) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final bySpan: Map<String, Chain> = [];
-		for (chain in collectChains(tree, ctx)) bySpan['${chain.span.from}:${chain.span.to}'] = chain;
-		// The type probe licenses the ordered-comparison FLIP inside a negated guard condition
-		// (`if (x < 0) return false;` -> `x >= 0 && …` for an `Int` x); without it the negation
-		// keeps the sound `!(x < 0)` wrap. `run` builds none — see `reducible`.
-		final types: Null<(QueryNode) -> Null<String>> = CheckScan.typeNominalResolver(source, plugin, tree, violations[0].file, index);
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
-			final chain: Null<Chain> = bySpan['${span.from}:${span.to}'];
-			if (chain == null) continue;
-			final expr: Null<String> = ctx.support.reduceBooleanGuardChain(chain.conds, chain.lits, chain.finalLit, source, types);
-			if (expr != null) edits.push({ span: span, text: 'return $expr;' });
-		}
-		return edits;
+		return ctx == null || violations.length == 0
+			? []
+			: RunScan.edits(plugin, source, tree -> {
+				final bySpan: Map<String, Chain> = [];
+				for (chain in collectChains(tree, ctx)) bySpan['${chain.span.from}:${chain.span.to}'] = chain;
+				// The type probe licenses the ordered-comparison FLIP inside a negated guard condition
+				// (`if (x < 0) return false;` -> `x >= 0 && …` for an `Int` x); without it the negation
+				// keeps the sound `!(x < 0)` wrap. `run` builds none — see `reducible`.
+				final types: Null<(QueryNode) -> Null<String>> = CheckScan.typeNominalResolver(
+					source, plugin, tree, violations[0].file, index
+				);
+				final edits: Array<{ span: Span, text: String }> = [];
+				RunScan.eachMatched(violations, bySpan, (chain, span) -> {
+					final expr: Null<String> = ctx.support.reduceBooleanGuardChain(chain.conds, chain.lits, chain.finalLit, source, types);
+					if (expr != null) edits.push({ span: span, text: 'return $expr;' });
+				});
+				return edits;
+			});
 	}
 
 	/**

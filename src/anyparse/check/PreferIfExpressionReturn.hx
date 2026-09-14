@@ -133,28 +133,22 @@ final class PreferIfExpressionReturn implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = readSeams(plugin.refShape());
-		if (seams == null) return [];
 		final blockKinds: Array<String> = blockKindsOf(plugin);
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			// BRANCH-AWARE, and the cascade arm is why. A cascade is a SIBLING relation, so it is
-			// only visible where the statements share a statement list — and in the plain projection
-			// a conditional-compilation region is ONE node whose branches are flattened children, no
-			// block at all. `prefer-ternary-return` reads the branch-aware projection and defers to
-			// this rule, so a cascade inside a `#if` region would be deferred to a walk that never
-			// saw it, and a three-`return` cascade under `#end` would lose its only finding. The
-			// else-chain arm is indifferent — it flags a chain head
-			// wherever the walk reaches one, and an `if` node's own children are the same in both
-			// projections.
-			final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		// BRANCH-AWARE, and the cascade arm is why. A cascade is a SIBLING relation, so it is
+		// only visible where the statements share a statement list — and in the plain projection
+		// a conditional-compilation region is ONE node whose branches are flattened children, no
+		// block at all. `prefer-ternary-return` reads the branch-aware projection and defers to
+		// this rule, so a cascade inside a `#if` region would be deferred to a walk that never
+		// saw it, and a three-`return` cascade under `#end` would lose its only finding. The
+		// else-chain arm is indifferent — it flags a chain head
+		// wherever the walk reaches one, and an `if` node's own children are the same in both
+		// projections.
+		return RunScan.collectWith(files, plugin, readSeams(plugin.refShape()), (entry, tree, seams, violations) -> {
 			final comments: Array<{ from: Int, to: Int, isLine: Bool }> =
 				SourceComments.collectCommentTokens(plugin.lexicalRegions(entry.source));
 			walk(tree, violations, entry.file, entry.source, comments, seams);
 			walkCascades(tree, violations, entry.file, entry.source, comments, seams, blockKinds);
-		}
-		return violations;
+		}, CheckScan.parseBranchAwareOrNull);
 	}
 
 	public function fix(

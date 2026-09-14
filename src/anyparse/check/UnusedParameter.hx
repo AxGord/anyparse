@@ -162,10 +162,7 @@ final class UnusedParameter implements Check implements ConfigAware {
 		// can only turn `eligible` OFF — a `Warning` becomes an `Info`, never the reverse, and no
 		// removal is ever invented.
 		final index: SymbolIndex = RefactorSupport.widestScopeIndex(plugin) ?? SymbolIndex.build(files, plugin);
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collect(files, plugin, (entry, tree, violations) -> {
 			final candidates: Array<{ fn: QueryNode, parent: QueryNode }> = [];
 			walk(candidates, tree, null, functionKinds, opaqueKinds, supertypeClauseKinds, noBodyKind);
 			final captured: Array<String> = valueCapturedNames(tree);
@@ -183,8 +180,7 @@ final class UnusedParameter implements Check implements ConfigAware {
 					violations, entry.file, entry.source, c.fn, c.parent, tree, visibilityKinds, modifierKinds, dynamicKind, shape, index,
 					captured, matchMask
 				);
-		}
-		return violations;
+		});
 	}
 
 	/**
@@ -205,8 +201,6 @@ final class UnusedParameter implements Check implements ConfigAware {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		final shape: RefShape = plugin.refShape();
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
 		// A finding's severity IS the fix dispatch: `Warning` = a provably-removable
 		// parameter (an eligible local / confined-private method with a complete in-file
 		// call set), removed by `collectFixEdits`; `Info` = a public / unconfined method,
@@ -214,31 +208,33 @@ final class UnusedParameter implements Check implements ConfigAware {
 		// `renameSilence` is opted in. The two sets never overlap within one function —
 		// a function's flagged parameters share its removability — so their edits are
 		// disjoint.
-		final removeFlagged: Array<String> = [];
-		final renameFlagged: Array<String> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
-			final key: String = '${span.from}:${span.to}';
-			if (v.severity == Severity.Warning)
-				removeFlagged.push(key);
-			else if (v.severity == Severity.Info)
-				renameFlagged.push(key);
-		}
-		final edits: Array<{ span: Span, text: String }> = [];
-		if (removeFlagged.length > 0) {
-			final handled: Array<Int> = [];
-			collectFixEdits(tree, tree, source, shape, removeFlagged, handled, edits);
-		}
-		if (renameFlagged.length > 0 && renameSilenceEnabled(violations)) {
-			final functionKinds: Array<String> = shape.functionKinds ?? [];
-			final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
-			if (functionKinds.length > 0) {
-				final matchMask: Array<Span> = OccurrenceScan.inertMask(source, plugin);
-				collectRenameEdits(tree, null, source, shape, functionKinds, opaqueKinds, renameFlagged, index, edits, matchMask);
+		return RunScan.edits(plugin, source, tree -> {
+			final removeFlagged: Array<String> = [];
+			final renameFlagged: Array<String> = [];
+			for (v in violations) {
+				final span: Null<Span> = v.span;
+				if (span == null) continue;
+				final key: String = '${span.from}:${span.to}';
+				if (v.severity == Severity.Warning)
+					removeFlagged.push(key);
+				else if (v.severity == Severity.Info)
+					renameFlagged.push(key);
 			}
-		}
-		return CanonicalEdit.dropContainedEdits(edits);
+			final edits: Array<{ span: Span, text: String }> = [];
+			if (removeFlagged.length > 0) {
+				final handled: Array<Int> = [];
+				collectFixEdits(tree, tree, source, shape, removeFlagged, handled, edits);
+			}
+			if (renameFlagged.length > 0 && renameSilenceEnabled(violations)) {
+				final functionKinds: Array<String> = shape.functionKinds ?? [];
+				final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
+				if (functionKinds.length > 0) {
+					final matchMask: Array<Span> = OccurrenceScan.inertMask(source, plugin);
+					collectRenameEdits(tree, null, source, shape, functionKinds, opaqueKinds, renameFlagged, index, edits, matchMask);
+				}
+			}
+			return CanonicalEdit.dropContainedEdits(edits);
+		});
 	}
 
 	/**

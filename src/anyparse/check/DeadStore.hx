@@ -190,18 +190,11 @@ final class DeadStore implements Check {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final shape: RefShape = plugin.refShape();
-		final identKind: Null<String> = shape.identKind;
-		if (identKind == null) return [];
-		final id: String = identKind;
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collectWith(files, plugin, shape.identKind, (entry, tree, id, violations) -> {
 			NullFlow.forEachFunctionUnit(
 				tree, shape, (body, paramNames) -> analyzeBody(violations, entry.file, entry.source, body, shape, id, paramNames)
 			);
-		}
-		return violations;
+		});
 	}
 
 	/**
@@ -222,28 +215,28 @@ final class DeadStore implements Check {
 		final shape: RefShape = plugin.refShape();
 		final assignKind: Null<String> = shape.assignKind;
 		final mutableDeclKinds: Array<String> = shape.mutableLocalDeclKinds ?? [];
-		if (assignKind == null && mutableDeclKinds.length == 0 || MemberWriteScan.carriesBuildMacro(source)) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final root: QueryNode = tree;
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
-		final flow: Null<ControlFlowSupport> = plugin.controlFlowSupport();
-		final ctx: FixCtx = {
-			source: source,
-			root: root,
-			shape: shape,
-			assignKind: assignKind,
-			mutableDeclKinds: mutableDeclKinds,
-			declTypeChildKinds: shape.declTypeChildKinds ?? [],
-			emptyFlagKinds: flow != null ? flow.emptyFlagKinds() : [],
-			fieldAccessKind: shape.fieldAccessKind,
-			declaredTypes: provider != null ? provider.declaredTypes(source) : [],
-			index: index,
-			flagged: [for (v in violations) if (v.span != null) '${v.span.from}:${v.span.to}']
-		};
-		final edits: Array<{ span: Span, text: String }> = [];
-		walkFix(tree, ctx, edits);
-		return edits;
+		return assignKind == null && mutableDeclKinds.length == 0 || MemberWriteScan.carriesBuildMacro(source)
+			? []
+			: RunScan.edits(plugin, source, tree -> {
+				final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+				final flow: Null<ControlFlowSupport> = plugin.controlFlowSupport();
+				final ctx: FixCtx = {
+					source: source,
+					root: tree,
+					shape: shape,
+					assignKind: assignKind,
+					mutableDeclKinds: mutableDeclKinds,
+					declTypeChildKinds: shape.declTypeChildKinds ?? [],
+					emptyFlagKinds: flow != null ? flow.emptyFlagKinds() : [],
+					fieldAccessKind: shape.fieldAccessKind,
+					declaredTypes: provider != null ? provider.declaredTypes(source) : [],
+					index: index,
+					flagged: RunScan.spanKeys(violations)
+				};
+				final edits: Array<{ span: Span, text: String }> = [];
+				walkFix(tree, ctx, edits);
+				return edits;
+			});
 	}
 
 	/** Whether `node`'s span is one `run` flagged. */

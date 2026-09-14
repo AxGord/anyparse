@@ -77,7 +77,6 @@ final class ReflectionScan {
 		final out: ReflectionSurface = { whole: [], fragments: [], unreadable: [] };
 		final stringFold: Null<StringFoldSupport> = plugin.stringFoldSupport();
 		if (stringFold == null) return out;
-		final fold: StringFoldSupport = stringFold;
 		// The file set is `scopeFiles`' to define, and the de-duplication with it: `whole` keeps
 		// duplicates on purpose, since `inline-constant` COUNTS occurrences and subtracts a constant's
 		// own value, so a file scanned twice doubles that value and turns its `count > self` test true
@@ -101,7 +100,7 @@ final class ReflectionScan {
 		for (entry in scope) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree != null)
-				collect(tree, entry.source, fold, out)
+				collect(tree, entry.source, stringFold, out)
 			else
 				out.unreadable.push(entry.source);
 		}

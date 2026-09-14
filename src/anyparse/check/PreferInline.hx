@@ -320,22 +320,18 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final wanted: Array<String> = [];
-		for (v in violations) {
-			final s: Null<Span> = v.span;
-			if (s != null) wanted.push('${s.from}:${s.to}');
-		}
-		final edits: Array<{ span: Span, text: String }> = [];
-		final shape: RefShape = plugin.refShape();
-		final branch: MemberBranchSeams = MemberBranchScan.seamsOf(shape, source, plugin.lexicalRegions.bind(source));
-		for (cls in CheckScan.classBodies(tree)) forEachMethod(cls, branch, shape, (name, fn, mods, metas) -> {
-			final span: Null<Span> = fn.span;
-			if (span == null || mods.exists(m -> m == shape.inlineModifierKind) || !wanted.contains('${span.from}:${span.to}')) return;
-			edits.push({ span: new Span(span.from, span.from), text: 'inline ' });
+		return RunScan.edits(plugin, source, tree -> {
+			final wanted: Array<String> = RunScan.spanKeys(violations);
+			final edits: Array<{ span: Span, text: String }> = [];
+			final shape: RefShape = plugin.refShape();
+			final branch: MemberBranchSeams = MemberBranchScan.seamsOf(shape, source, plugin.lexicalRegions.bind(source));
+			for (cls in CheckScan.classBodies(tree)) forEachMethod(cls, branch, shape, (name, fn, mods, metas) -> {
+				final span: Null<Span> = fn.span;
+				if (span == null || mods.exists(m -> m == shape.inlineModifierKind) || !wanted.contains('${span.from}:${span.to}')) return;
+				edits.push({ span: new Span(span.from, span.from), text: 'inline ' });
+			});
+			return edits;
 		});
-		return edits;
 	}
 
 	/** `node` with a wrapping value-return peeled (an arrow `return EXPR` body projects the wrapper). */

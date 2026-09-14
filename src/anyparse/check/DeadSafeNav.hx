@@ -4,7 +4,6 @@ import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
-import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
@@ -45,14 +44,7 @@ final class DeadSafeNav implements Check {
 		if (safeNavKind == null || identKind == null) return [];
 		final navKind: String = safeNavKind;
 		final ident: String = identKind;
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
-		if (provider == null) return [];
-		final typed: TypeInfoProvider = provider;
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
-			final root: QueryNode = tree;
+		return RunScan.collectWith(files, plugin, RunScan.typeInfoOf(plugin), (entry, root, typed, violations) -> {
 			final declaredTypes: Map<Int, String> = typed.declaredTypes(entry.source);
 			NullFlow.analyze(root, shape, entry.source, (node, facts) -> {
 				if (node.kind != navKind || node.children.length != 1) return;
@@ -71,24 +63,19 @@ final class DeadSafeNav implements Check {
 					message: 'null-safe access is redundant — receiver is already non-null on this path'
 				});
 			});
-		}
-		return violations;
+		});
 	}
 
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		final marker: String = '?.';
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
+		return RunScan.spanEdits(violations, (_, span) -> {
 			final rel: Int = source.substring(span.from, span.to).indexOf(marker);
-			if (rel < 0) continue;
+			if (rel < 0) return null;
 			final at: Int = span.from + rel;
-			edits.push({ span: new Span(at, at + marker.length), text: '.' });
-		}
-		return edits;
+			return { span: new Span(at, at + marker.length), text: '.' };
+		});
 	}
 
 }

@@ -135,62 +135,50 @@ final class LoopGuard implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = readSeams(plugin);
-		if (seams == null) return [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+		return RunScan.collectWith(files, plugin, readSeams(plugin), (entry, tree, seams, violations) -> {
 			// The module root is shielded: nothing follows a top-level declaration but another
 			// one, so no `else` can reach a loop that inherits its exposure from there.
-			if (tree != null)
-				walk(
-					tree, violations, entry.file, entry.source, seams, true,
-					CheckScan.typeNominalResolver(entry.source, plugin, tree, entry.file)
-				);
-		}
-		return violations;
+			walk(
+				tree, violations, entry.file, entry.source, seams, true,
+				CheckScan.typeNominalResolver(entry.source, plugin, tree, entry.file)
+			);
+		});
 	}
 
 	/** Lift each flagged loop's leading guard into an inverted `if` header, replacing the body block. */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final seams: Null<Seams> = readSeams(plugin);
-		if (seams == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final byGuard: Map<String, Candidate> = [];
-		indexCandidates(tree, source, seams, byGuard, true);
-		final types: Null<(QueryNode) -> Null<String>> = violations.length == 0
-			? null
-			: CheckScan.typeNominalResolver(source, plugin, tree, violations[0].file, index);
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
-			final m: Null<Candidate> = byGuard['${span.from}:${span.to}'];
-			if (m == null) continue;
-			final bodySpan: Null<Span> = m.body.span;
-			final guardSpan: Null<Span> = m.guard.span;
-			if (bodySpan == null || guardSpan == null) continue;
-			final rest: String = source.substring(guardSpan.to, bodySpan.to - 1);
-			final headerCond: Null<QueryNode> = m.headerCond;
-			if (headerCond == null) {
-				edits.push({ span: bodySpan, text: 'if (${invert(m.cond, source, seams, types)}) {$rest}' });
-				continue;
-			}
-			final headerSpan: Null<Span> = headerCond.span;
-			final andOp: Null<String> = seams.andOperatorText;
-			if (headerSpan == null || andOp == null) continue;
-			final kept: String = source.substring(headerSpan.from, headerSpan.to);
-			final lhs: String = seams.negation.andLowerPrecedenceKinds.contains(headerCond.kind) ? '($kept)' : kept;
-			edits.push({
-				span: headerSpan,
-				text: '$lhs $andOp ${invert(m.cond, source, seams, types, seams.negation.andKind)}'
+		return RunScan.editsWith(plugin, source, readSeams(plugin), (tree, seams) -> {
+			final byGuard: Map<String, Candidate> = [];
+			indexCandidates(tree, source, seams, byGuard, true);
+			final types: Null<(QueryNode) -> Null<String>> = violations.length == 0
+				? null
+				: CheckScan.typeNominalResolver(source, plugin, tree, violations[0].file, index);
+			final edits: Array<{ span: Span, text: String }> = [];
+			RunScan.eachMatched(violations, byGuard, (m, _) -> {
+				final bodySpan: Null<Span> = m.body.span;
+				final guardSpan: Null<Span> = m.guard.span;
+				if (bodySpan == null || guardSpan == null) return;
+				final rest: String = source.substring(guardSpan.to, bodySpan.to - 1);
+				final headerCond: Null<QueryNode> = m.headerCond;
+				if (headerCond == null) {
+					edits.push({ span: bodySpan, text: 'if (${invert(m.cond, source, seams, types)}) {$rest}' });
+					return;
+				}
+				final headerSpan: Null<Span> = headerCond.span;
+				final andOp: Null<String> = seams.andOperatorText;
+				if (headerSpan == null || andOp == null) return;
+				final kept: String = source.substring(headerSpan.from, headerSpan.to);
+				final lhs: String = seams.negation.andLowerPrecedenceKinds.contains(headerCond.kind) ? '($kept)' : kept;
+				edits.push({
+					span: headerSpan,
+					text: '$lhs $andOp ${invert(m.cond, source, seams, types, seams.negation.andKind)}'
+				});
+				edits.push({ span: bodySpan, text: '{$rest}' });
 			});
-			edits.push({ span: bodySpan, text: '{$rest}' });
-		}
-		return CanonicalEdit.dropContainedEdits(edits);
+			return CanonicalEdit.dropContainedEdits(edits);
+		});
 	}
 
 	/** Bundle the required + optional `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */

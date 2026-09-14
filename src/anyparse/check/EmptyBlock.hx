@@ -75,23 +75,19 @@ final class EmptyBlock implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
 
 		// Statement-list kinds: a no-else `if (cond) {}` is safe to DELETE only
 		// when it sits in one of these; as a single-statement branch body its
 		// removal would strand the enclosing branch. Absent seam -> never delete.
-		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
-		final blockKinds: Array<String> = support != null ? support.blockKinds() : [];
+		return RunScan.edits(plugin, source, tree -> {
+			final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
+			final blockKinds: Array<String> = support != null ? support.blockKinds() : [];
 
-		final flagged: Array<String> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span != null) flagged.push('${span.from}:${span.to}');
-		}
-		final edits: Array<{ span: Span, text: String }> = [];
-		collectEmptyFixes(tree, null, null, source, blockKinds, flagged, edits, plugin.refShape());
-		return CanonicalEdit.dropContainedEdits(edits);
+			final flagged: Array<String> = RunScan.spanKeys(violations);
+			final edits: Array<{ span: Span, text: String }> = [];
+			collectEmptyFixes(tree, null, null, source, blockKinds, flagged, edits, plugin.refShape());
+			return CanonicalEdit.dropContainedEdits(edits);
+		});
 	}
 
 	/** Walk `node`, flagging every empty control-flow block reached. */

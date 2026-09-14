@@ -76,12 +76,7 @@ final class ListenerSymmetry implements Check {
 			addRe: ~/^add(\w+Listeners?)$/,
 			removeRe: ~/^remove(\w+Listeners?)$/
 		};
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(violations, entry.file, entry.source, tree, cfg);
-		}
-		return violations;
+		return RunScan.collect(files, plugin, (entry, tree, violations) -> walk(violations, entry.file, entry.source, tree, cfg));
 	}
 
 	/**

@@ -116,18 +116,11 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = readSeams(plugin.refShape());
-		if (seams == null) return [];
-		final s: Seams = seams;
-		final typed: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		final typed: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+		return RunScan.collectWith(files, plugin, readSeams(plugin.refShape()), (entry, tree, s, violations) -> {
 			final types: Null<Map<Int, String>> = typed?.declaredTypeSources(entry.source);
 			walk(tree, tree, entry.file, entry.source, types, s, violations);
-		}
-		return violations;
+		});
 	}
 
 	/**
@@ -139,20 +132,14 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final seams: Null<Seams> = readSeams(plugin.refShape());
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (seams == null || tree == null) return [];
-		final s: Seams = seams;
-		final typed: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
-		final types: Null<Map<Int, String>> = typed?.declaredTypeSources(source);
-		final wanted: Array<String> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span != null) wanted.push('${span.from}:${span.to}');
-		}
-		final edits: Array<{ span: Span, text: String }> = [];
-		fixWalk(tree, tree, source, types, s, wanted, edits);
-		return CanonicalEdit.dropContainedEdits(edits);
+		return RunScan.editsWith(plugin, source, readSeams(plugin.refShape()), (tree, s) -> {
+			final typed: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+			final types: Null<Map<Int, String>> = typed?.declaredTypeSources(source);
+			final wanted: Array<String> = RunScan.spanKeys(violations);
+			final edits: Array<{ span: Span, text: String }> = [];
+			fixWalk(tree, tree, source, types, s, wanted, edits);
+			return CanonicalEdit.dropContainedEdits(edits);
+		});
 	}
 
 	/** Bundle this check's kinds on top of the shared loop seams, or null when one is unset (the check is then a no-op). */

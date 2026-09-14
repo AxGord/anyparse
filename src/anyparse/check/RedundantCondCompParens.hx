@@ -97,11 +97,7 @@ final class RedundantCondCompParens implements Check {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		if (violations.length == 0) return [];
-		final flagged: Array<String> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span != null) flagged.push('${span.from}:${span.to}');
-		}
+		final flagged: Array<String> = RunScan.spanKeys(violations);
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (site in sites(source, plugin)) if (flagged.contains('${site.condition.from}:${site.condition.to}')) {
 			final lead: String = CondDirectives.isIdentCharAt(source, site.condition.from - 1) ? ' ' : '';

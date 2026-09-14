@@ -187,12 +187,7 @@ final class CondAssignMerge implements Check implements DefaultOff {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = readSeams(plugin);
-		if (seams == null) return [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collectWith(files, plugin, readSeams(plugin), (entry, tree, seams, violations) -> {
 			for (m in collectMatches(tree, entry.source, seams, plugin.lexicalRegions(entry.source))) violations.push({
 				file: entry.file,
 				span: m.span,
@@ -200,8 +195,7 @@ final class CondAssignMerge implements Check implements DefaultOff {
 				severity: Severity.Info,
 				message: message(m)
 			});
-		}
-		return violations;
+		});
 	}
 
 	/**
@@ -213,17 +207,15 @@ final class CondAssignMerge implements Check implements DefaultOff {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final seams: Null<Seams> = readSeams(plugin);
-		if (seams == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final byKey: Map<String, Match> = [];
-		for (m in collectMatches(tree, source, seams, plugin.lexicalRegions(source))) byKey['${m.span.from}:${m.span.to}'] = m;
+		return RunScan.editsWith(plugin, source, readSeams(plugin), (tree, seams) -> {
+			final byKey: Map<String, Match> = [];
+			for (m in collectMatches(tree, source, seams, plugin.lexicalRegions(source))) byKey['${m.span.from}:${m.span.to}'] = m;
 
-		return CanonicalEdit.dropContainedEdits(CheckScan.collectSpanEdits(violations, byKey, (m, _) -> {
-			final text: Null<String> = m.text;
-			return text == null ? null : { span: m.span, text: text };
-		}));
+			return CanonicalEdit.dropContainedEdits(CheckScan.collectSpanEdits(violations, byKey, (m, _) -> {
+				final text: Null<String> = m.text;
+				return text == null ? null : { span: m.span, text: text };
+			}));
+		});
 	}
 
 	/**

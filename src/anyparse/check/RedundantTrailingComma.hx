@@ -80,25 +80,16 @@ final class RedundantTrailingComma implements Check implements DefaultOff {
 			params: shape.paramKinds ?? [],
 			mandatory: shape.mandatoryTrailingCommaChildKinds ?? []
 		};
-		if (kinds.hosts.length == 0 && kinds.params.length == 0) return [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(violations, entry.file, entry.source, tree, kinds);
-		}
-		return violations;
+		return kinds.hosts.length == 0 && kinds.params.length == 0
+			? []
+			: RunScan.collect(files, plugin, (entry, tree, violations) -> walk(violations, entry.file, entry.source, tree, kinds));
 	}
 
 	/** Delete each flagged comma. */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span != null) edits.push({ span: ElementSpan.lineExtendedSpan(source, span), text: '' });
-		}
-		return edits;
+		return RunScan.spanEdits(violations, (_, span) -> ({ span: ElementSpan.lineExtendedSpan(source, span), text: '' }));
 	}
 
 	private static inline function isCloser(c: String): Bool {

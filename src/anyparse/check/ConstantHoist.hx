@@ -221,9 +221,8 @@ final class ConstantHoist {
 		if (!scalar && ctx.plugin.stringFoldSupport()?.literalOf(init, ctx.source) == null) return null;
 		final type: Null<TypeDeclMatch> = RefactorSupport.uniqueTypeDeclNamed(ctx.tree, ownerName, ctx.classKinds);
 		if (type == null) return null;
-		final match: TypeDeclMatch = type;
-		if (!receivable(match, name, ownerName, span, ctx, () -> regions)) return null;
-		final brace: Null<Int> = RefactorSupport.typeBodyBraceOffset(ctx.source, match, ownerName, regions);
+		if (!receivable(type, name, ownerName, span, ctx, () -> regions)) return null;
+		final brace: Null<Int> = RefactorSupport.typeBodyBraceOffset(ctx.source, type, ownerName, regions);
 		if (brace == null) return null;
 		final member: Null<HoistedConstant> = ctx.support.hoistedConstant(declarationTextOf(ctx.source, span), scalar);
 		if (member == null) return null;
@@ -359,9 +358,8 @@ final class ConstantHoist {
 		while (at < source.length && (source.fastCodeAt(at) == ' '.code || source.fastCodeAt(at) == '\t'.code)) at++;
 		final comment: Null<Span> = SourceComments.commentBlockAt(source, at, regions);
 		if (comment == null) return null;
-		final block: Span = comment;
-		final newline: Int = source.indexOf('\n', block.from);
-		return block.from == at && (newline < 0 || newline >= block.to) ? block : null;
+		final newline: Int = source.indexOf('\n', comment.from);
+		return comment.from == at && (newline < 0 || newline >= comment.to) ? comment : null;
 	}
 
 	/**

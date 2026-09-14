@@ -59,16 +59,11 @@ final class SelfAssignment implements Check {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final shape: RefShape = plugin.refShape();
-		final assignKind: Null<String> = shape.assignKind;
-		if (assignKind == null) return [];
 		final identKind: String = shape.identKind;
 		final scopeKinds: Array<String> = shape.scopeKinds;
 		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
 		final localDeclKinds: Array<String> = shape.localDeclKinds ?? [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collectWith(files, plugin, shape.assignKind, (entry, tree, assignKind, violations) -> {
 			final locals: Array<{ name: String, scope: Span, declEnd: Int }> = [];
 			final candidates: Array<{ span: Span, name: String }> = [];
 			collect(tree, null, entry.source, assignKind, identKind, scopeKinds, opaqueKinds, localDeclKinds, locals, candidates);
@@ -78,15 +73,15 @@ final class SelfAssignment implements Check {
 			// name still resolves to the field, so an earlier `x = x` may force `set_x`.
 			for (c in candidates) if (locals.exists(
 				l -> l.name == c.name && l.scope.from <= c.span.from && c.span.to <= l.scope.to && l.declEnd <= c.span.from
-			)) violations.push({
-				file: entry.file,
-				span: c.span,
-				rule: 'self-assignment',
-				severity: Severity.Warning,
-				message: 'this local variable is assigned to itself'
-			});
-		}
-		return violations;
+			))
+				violations.push({
+					file: entry.file,
+					span: c.span,
+					rule: 'self-assignment',
+					severity: Severity.Warning,
+					message: 'this local variable is assigned to itself'
+				});
+		});
 	}
 
 	/**
@@ -101,20 +96,14 @@ final class SelfAssignment implements Check {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
-		if (support == null) return [];
-		final assignKind: Null<String> = plugin.refShape().assignKind;
-		if (assignKind == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-
-		final flagged: Array<String> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span != null) flagged.push('${span.from}:${span.to}');
-		}
-		final edits: Array<{ span: Span, text: String }> = [];
-		collectDeletions(tree, source, support.blockKinds(), assignKind, flagged, edits);
-		return edits;
+		return support == null
+			? []
+			: RunScan.editsWith(plugin, source, plugin.refShape().assignKind, (tree, assignKind) -> {
+				final flagged: Array<String> = RunScan.spanKeys(violations);
+				final edits: Array<{ span: Span, text: String }> = [];
+				collectDeletions(tree, source, support.blockKinds(), assignKind, flagged, edits);
+				return edits;
+			});
 	}
 
 	/**

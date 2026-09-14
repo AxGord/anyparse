@@ -208,13 +208,7 @@ final class GuardReturn implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final read: Null<Seams> = readSeams(plugin);
-		if (read == null) return [];
-		final s: Seams = read;
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collectWith(files, plugin, readSeams(plugin), (entry, tree, s, violations) -> {
 			final file: String = entry.file;
 			final source: String = entry.source;
 			final types: Null<(QueryNode) -> Null<String>> = CheckScan.typeNominalResolver(source, plugin, tree, file);
@@ -230,36 +224,26 @@ final class GuardReturn implements Check {
 					message: 'this trailing if can invert into an early-return guard'
 				});
 			});
-		}
-		return violations;
+		}, CheckScan.parseBranchAwareOrNull);
 	}
 
 	/** Invert each flagged trailing `if` into an `if (!cond) return TAIL;` guard, de-nesting its then-branch. */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final seams: Null<Seams> = readSeams(plugin);
-		if (seams == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, source);
-		if (tree == null) return [];
-		final byIf: Map<String, Candidate> = [];
-		walk(tree, source, seams, [], null, m -> {
-			final span: Null<Span> = m.ifNode.span;
-			if (span != null) byIf['${span.from}:${span.to}'] = m;
-		});
-		final types: Null<(QueryNode) -> Null<String>> = violations.length == 0
-			? null
-			: CheckScan.typeNominalResolver(source, plugin, tree, violations[0].file, index);
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
-			final m: Null<Candidate> = byIf['${span.from}:${span.to}'];
-			if (m == null) continue;
-			final edit: Null<{ span: Span, text: String }> = editFor(m, source, seams, types);
-			if (edit != null) edits.push(edit);
-		}
-		return CanonicalEdit.dropContainedEdits(edits);
+		return RunScan.editsWith(plugin, source, readSeams(plugin), (tree, seams) -> {
+			final byIf: Map<String, Candidate> = [];
+			walk(tree, source, seams, [], null, m -> {
+				final span: Null<Span> = m.ifNode.span;
+				if (span != null) byIf['${span.from}:${span.to}'] = m;
+			});
+			final types: Null<(QueryNode) -> Null<String>> = violations.length == 0
+				? null
+				: CheckScan.typeNominalResolver(source, plugin, tree, violations[0].file, index);
+			return CanonicalEdit.dropContainedEdits(
+				CheckScan.collectSpanEdits(violations, byIf, (m, _) -> (editFor(m, source, seams, types)))
+			);
+		}, CheckScan.parseBranchAwareOrNull);
 	}
 
 	/** The local declaration node a top-level statement holds, or null — see `RefactorSupport.topLevelDeclaredNode`. */

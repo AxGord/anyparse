@@ -40,18 +40,14 @@ final class AssignmentInCondition implements Check implements NoAutofix {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final shape: RefShape = plugin.refShape();
-		final assignKind: Null<String> = shape.assignKind;
-		if (assignKind == null) return [];
 		final firstKinds: Array<String> = shape.conditionFirstChildKinds ?? [];
 		final lastKinds: Array<String> = shape.conditionLastChildKinds ?? [];
 		if (firstKinds.length == 0 && lastKinds.length == 0) return [];
 		final parenKind: Null<String> = shape.parenKind;
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(violations, entry.file, tree, assignKind, parenKind, firstKinds, lastKinds);
-		}
-		return violations;
+		return RunScan.collectWith(
+			files, plugin, shape.assignKind,
+			(entry, tree, assignKind, violations) -> walk(violations, entry.file, tree, assignKind, parenKind, firstKinds, lastKinds)
+		);
 	}
 
 	/** Report-only: `=` vs `==` is the author's intent, not ours to rewrite. */

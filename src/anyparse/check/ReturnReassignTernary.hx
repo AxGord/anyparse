@@ -183,12 +183,11 @@ final class ReturnReassignTernary implements Check implements DefaultOff {
 	private static function matchesIn(source: String, plugin: GrammarPlugin, s: Seams): Array<Match> {
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
-		final root: QueryNode = tree;
 		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
 		final nestedFnSpans: Array<Span> = [];
-		collectNestedFnSpans(root, s.nestedFnKinds, nestedFnSpans);
+		collectNestedFnSpans(tree, s.nestedFnKinds, nestedFnSpans);
 		final out: Array<Match> = [];
-		collectMatches(root, source, comments, s, root, nestedFnSpans, false, out);
+		collectMatches(tree, source, comments, s, tree, nestedFnSpans, false, out);
 		return out;
 	}
 

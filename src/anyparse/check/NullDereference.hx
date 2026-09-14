@@ -47,37 +47,31 @@ final class NullDereference implements Check implements NoAutofix {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final shape: RefShape = plugin.refShape();
-		final identKind: Null<String> = shape.identKind;
-		if (identKind == null) return [];
-		final ident: String = identKind;
 		// Field-shaped receivers must be the node's sole child; index/call receivers
 		// are the first of several (index expression / call arguments follow).
 		final soleChildKinds: Array<String> = [for (k in [shape.fieldAccessKind, shape.forceFieldAccessKind]) if (k != null) k];
 		final firstChildKinds: Array<String> = [for (k in [shape.indexAccessKind, shape.callKind]) if (k != null) k];
-		if (soleChildKinds.length == 0 && firstChildKinds.length == 0) return [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
-			NullFlow.analyze(tree, shape, entry.source, (node, facts) -> {
-				final sole: Bool = soleChildKinds.contains(node.kind) && node.children.length == 1;
-				final first: Bool = firstChildKinds.contains(node.kind) && node.children.length >= 1;
-				if (!sole && !first) return;
-				final receiver: QueryNode = node.children[0];
-				final span: Null<Span> = node.span;
-				if (receiver.kind != ident || span == null) return;
-				final name: Null<String> = receiver.name;
-				if (name == null) return;
-				if (facts.isNull(name)) violations.push({
-					file: entry.file,
-					span: span,
-					rule: 'null-dereference',
-					severity: Severity.Warning,
-					message: 'null dereference — receiver is null on every path reaching it; this access throws at runtime'
+		return soleChildKinds.length == 0 && firstChildKinds.length == 0
+			? []
+			: RunScan.collectWith(files, plugin, shape.identKind, (entry, tree, ident, violations) -> {
+				NullFlow.analyze(tree, shape, entry.source, (node, facts) -> {
+					final sole: Bool = soleChildKinds.contains(node.kind) && node.children.length == 1;
+					final first: Bool = firstChildKinds.contains(node.kind) && node.children.length >= 1;
+					if (!sole && !first) return;
+					final receiver: QueryNode = node.children[0];
+					final span: Null<Span> = node.span;
+					if (receiver.kind != ident || span == null) return;
+					final name: Null<String> = receiver.name;
+					if (name == null) return;
+					if (facts.isNull(name)) violations.push({
+						file: entry.file,
+						span: span,
+						rule: 'null-dereference',
+						severity: Severity.Warning,
+						message: 'null dereference — receiver is null on every path reaching it; this access throws at runtime'
+					});
 				});
 			});
-		}
-		return violations;
 	}
 
 	public function fix(

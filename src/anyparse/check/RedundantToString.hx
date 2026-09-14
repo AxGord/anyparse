@@ -108,11 +108,10 @@ final class RedundantToString implements Check implements DefaultOff {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = resolveSeams(plugin);
 		if (seams == null) return [];
-		final resolved: Seams = seams;
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final context: Null<Ctx> = contextFor(plugin, entry.source, resolved, index);
+			final context: Null<Ctx> = contextFor(plugin, entry.source, seams, index);
 			if (context == null) continue;
 			for (found in collect(context)) {
 				final blocker: Null<String> = found.blocker;
@@ -147,11 +146,7 @@ final class RedundantToString implements Check implements DefaultOff {
 		final scope: SymbolIndex = index ?? SymbolIndex.build([{ file: '', source: source }], plugin);
 		final context: Null<Ctx> = contextFor(plugin, source, seams, scope);
 		if (context == null) return [];
-		final wanted: Array<String> = [];
-		for (violation in violations) {
-			final span: Null<Span> = violation.span;
-			if (span != null) wanted.push(spanKey(span));
-		}
+		final wanted: Array<String> = RunScan.spanKeys(violations);
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (found in collect(context)) {
 			final edit: Null<{ span: Span, text: String }> = found.edit;
@@ -182,7 +177,7 @@ final class RedundantToString implements Check implements DefaultOff {
 	private static function contextFor(plugin: GrammarPlugin, source: String, seams: Seams, index: SymbolIndex): Null<Ctx> {
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return null;
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		return {
 			root: tree,
 			source: source,

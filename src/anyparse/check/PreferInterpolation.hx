@@ -149,14 +149,7 @@ final class PreferInterpolation implements Check implements RiskyFix implements 
 		final matches: Null<Array<ScanMatch>> = scanSource(source, plugin, true, true);
 		if (matches == null) return [];
 		final byKey: Map<String, ScanMatch> = [for (m in matches) '${m.span.from}:${m.span.to}' => m];
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
-			final m: Null<ScanMatch> = byKey['${span.from}:${span.to}'];
-			if (m != null) edits.push({ span: m.span, text: m.replacement });
-		}
-		return edits;
+		return CheckScan.collectSpanEdits(violations, byKey, (m, _) -> ({ span: m.span, text: m.replacement }));
 	}
 
 	/**
@@ -178,7 +171,7 @@ final class PreferInterpolation implements Check implements RiskyFix implements 
 		final parsed: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (parsed == null) return null;
 		final tree: QueryNode = parsed;
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		final matches: Array<ScanMatch> = [];
 		scan(matches, {
 			source: source,

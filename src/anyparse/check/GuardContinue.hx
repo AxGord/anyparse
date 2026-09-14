@@ -131,45 +131,30 @@ final class GuardContinue implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = readSeams(plugin);
-		if (seams == null) return [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+		return RunScan.collectWith(files, plugin, readSeams(plugin), (entry, tree, seams, violations) -> {
 			// The module root is shielded, for the reason `loop-guard` seeds the same flag true
 			// there: nothing follows a top-level declaration but another one.
-			if (tree != null)
-				walk(
-					tree, tree, violations, entry.file, entry.source, seams, true,
-					CheckScan.typeNominalResolver(entry.source, plugin, tree, entry.file)
-				);
-		}
-		return violations;
+			walk(
+				tree, tree, violations, entry.file, entry.source, seams, true,
+				CheckScan.typeNominalResolver(entry.source, plugin, tree, entry.file)
+			);
+		});
 	}
 
 	/** De-nest each flagged trailing `if` into an `if (!cond) continue;` guard, replacing the `if` statement. */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final seams: Null<Seams> = readSeams(plugin);
-		if (seams == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final byIf: Map<String, Candidate> = [];
-		indexCandidates(tree, tree, source, seams, byIf, true);
-		final types: Null<(QueryNode) -> Null<String>> = violations.length == 0
-			? null
-			: CheckScan.typeNominalResolver(source, plugin, tree, violations[0].file, index);
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
-			final m: Null<Candidate> = byIf['${span.from}:${span.to}'];
-			if (m == null) continue;
-			final edit: Null<{ span: Span, text: String }> = editFor(m, source, seams, types);
-			if (edit != null) edits.push(edit);
-		}
-		return CanonicalEdit.dropContainedEdits(edits);
+		return RunScan.editsWith(plugin, source, readSeams(plugin), (tree, seams) -> {
+			final byIf: Map<String, Candidate> = [];
+			indexCandidates(tree, tree, source, seams, byIf, true);
+			final types: Null<(QueryNode) -> Null<String>> = violations.length == 0
+				? null
+				: CheckScan.typeNominalResolver(source, plugin, tree, violations[0].file, index);
+			return CanonicalEdit.dropContainedEdits(
+				CheckScan.collectSpanEdits(violations, byIf, (m, _) -> (editFor(m, source, seams, types)))
+			);
+		});
 	}
 
 	/** The local declaration node a top-level statement holds, or null — see `RefactorSupport.topLevelDeclaredNode`. */

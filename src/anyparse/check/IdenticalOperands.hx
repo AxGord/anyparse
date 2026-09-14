@@ -39,12 +39,9 @@ final class IdenticalOperands implements Check implements NoAutofix {
 		final comparisonKinds: Array<String> = shape.comparisonKinds ?? [];
 		if (comparisonKinds.length == 0) return [];
 		final callKind: Null<String> = shape.callKind;
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(violations, entry.file, entry.source, tree, comparisonKinds, callKind);
-		}
-		return violations;
+		return RunScan.collect(
+			files, plugin, (entry, tree, violations) -> walk(violations, entry.file, entry.source, tree, comparisonKinds, callKind)
+		);
 	}
 
 	/**

@@ -52,14 +52,10 @@ final class DeadCode implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
-		if (support == null) return [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, entry.source);
-			if (tree != null) walk(violations, entry.file, tree, support);
-		}
-		return violations;
+		return RunScan.collectWith(
+			files, plugin, plugin.controlFlowSupport(), (entry, tree, support, violations) -> walk(violations, entry.file, tree, support),
+			CheckScan.parseBranchAwareOrNull
+		);
 	}
 
 	/**
@@ -71,20 +67,14 @@ final class DeadCode implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
-		if (support == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, source);
-		if (tree == null) return [];
 
-		final flagged: Array<String> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span != null) flagged.push('${span.from}:${span.to}');
-		}
-		final edits: Array<{ span: Span, text: String }> = [];
-		collectDeletions(tree, source, support, flagged, edits);
-		// A nested dead run sits inside an outer one; keep only the outer deletion.
-		return CanonicalEdit.dropContainedEdits(edits);
+		return RunScan.editsWith(plugin, source, plugin.controlFlowSupport(), (tree, support) -> {
+			final flagged: Array<String> = RunScan.spanKeys(violations);
+			final edits: Array<{ span: Span, text: String }> = [];
+			collectDeletions(tree, source, support, flagged, edits);
+			// A nested dead run sits inside an outer one; keep only the outer deletion.
+			return CanonicalEdit.dropContainedEdits(edits);
+		}, CheckScan.parseBranchAwareOrNull);
 	}
 
 	/**

@@ -67,7 +67,7 @@ final class DynamicBag {
 		final tree: Null<QueryNode> = dynName == null ? null : CheckScan.parseOrNull(plugin, source);
 		if (dynName == null || tree == null) return [];
 		final ctx: DynCtx = AvoidDynamic.buildCtx(shape, dynName);
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		final declaredTypes: Map<Int, String> = provider != null ? provider.declaredTypes(source) : [];
 		final imports: Map<String, String> = provider != null ? provider.importMap(source) : [];
 		final usingReflect: Bool = hasUsingReflect(tree);

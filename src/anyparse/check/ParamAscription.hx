@@ -208,14 +208,13 @@ final class ParamAscription {
 		if (body == null || body.kind == shape.noBodyKind) return null;
 		final owning: Null<TypeDeclMatch> = enclosingTypeOf(chain);
 		if (owning == null) return null;
-		final host: TypeDeclMatch = owning;
-		if (carries(mods, shape.staticModifierKind)) return host;
+		if (carries(mods, shape.staticModifierKind)) return owning;
 		// Downward: a subtype redeclaring the method makes the signature a family contract. Upward: a
 		// supertype or implemented interface declaring the name pins it from above, and there a family
 		// scan looks in the wrong direction entirely. An ancestor the closure cannot reach proves neither.
-		final family: Null<Array<OverrideFamilyMember>> = symbols.subtypes.overrideFamilyOf(host.name, method);
-		return family != null && family.length == 0 && symbols.members.supertypeMemberProof(host.name, method) == SupertypeProof.Absent
-			? host
+		final family: Null<Array<OverrideFamilyMember>> = symbols.subtypes.overrideFamilyOf(owning.name, method);
+		return family != null && family.length == 0 && symbols.members.supertypeMemberProof(owning.name, method) == SupertypeProof.Absent
+			? owning
 			: null;
 	}
 
@@ -318,9 +317,12 @@ final class ParamAscription {
 	 */
 	private static function wrappedNullable(typeSource: String, shape: RefShape): Null<String> {
 		final wrapper: Null<String> = nullableWrapperName(shape);
-		if (wrapper == null) return null;
-		final name: String = wrapper;
-		return TypeResolver.stripWs(headOfTypeSource(typeSource)) == name ? typeSource : '$name<$typeSource>';
+		return if (wrapper == null)
+			null
+		else if (TypeResolver.stripWs(headOfTypeSource(typeSource)) == wrapper)
+			typeSource
+		else
+			'$wrapper<$typeSource>';
 	}
 
 	/**

@@ -52,12 +52,7 @@ final class PreferFinalClass implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = resolveSeams(plugin);
-		if (seams == null) return [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collectWith(files, plugin, resolveSeams(plugin), (entry, tree, seams, violations) -> {
 			for (c in collect(tree, seams.metaName, seams.metaKinds, seams.plainKind, seams.finalKind)) violations.push({
 				file: entry.file,
 				span: c.metaSpan,
@@ -67,8 +62,7 @@ final class PreferFinalClass implements Check {
 					? 'redundant @:final meta on an already-final class — remove it'
 					: 'use the final class modifier instead of the @:final meta'
 			});
-		}
-		return violations;
+		});
 	}
 
 	/**
@@ -81,21 +75,14 @@ final class PreferFinalClass implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final seams: Null<Seams> = resolveSeams(plugin);
-		if (seams == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final byKey: Map<String, Candidate> = [];
-		for (c in collect(tree, seams.metaName, seams.metaKinds, seams.plainKind, seams.finalKind))
-			byKey['${c.metaSpan.from}:${c.metaSpan.to}'] = c;
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
-			final c: Null<Candidate> = byKey['${span.from}:${span.to}'];
-			if (c != null) for (e in editsFor(c, source)) edits.push(e);
-		}
-		return edits;
+		return RunScan.editsWith(plugin, source, resolveSeams(plugin), (tree, seams) -> {
+			final byKey: Map<String, Candidate> = [];
+			for (c in collect(tree, seams.metaName, seams.metaKinds, seams.plainKind, seams.finalKind))
+				byKey['${c.metaSpan.from}:${c.metaSpan.to}'] = c;
+			final edits: Array<{ span: Span, text: String }> = [];
+			RunScan.eachMatched(violations, byKey, (c, _) -> for (e in editsFor(c, source)) edits.push(e));
+			return edits;
+		});
 	}
 
 	/**

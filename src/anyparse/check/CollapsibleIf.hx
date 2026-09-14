@@ -39,12 +39,7 @@ final class CollapsibleIf implements Check {
 		final ifKinds: Array<String> = shape.ifStatementKinds ?? [];
 		if (ifKinds.length == 0) return [];
 		final blockStmtKind: Null<String> = shape.blockStmtKind;
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(violations, entry.file, tree, ifKinds, blockStmtKind);
-		}
-		return violations;
+		return RunScan.collect(files, plugin, (entry, tree, violations) -> walk(violations, entry.file, tree, ifKinds, blockStmtKind));
 	}
 
 	/** Merge each flagged outer `if` with its nested `if` via `&&`. */
@@ -57,35 +52,35 @@ final class CollapsibleIf implements Check {
 		if (ifKinds.length == 0 || andOp == null) return [];
 		final blockStmtKind: Null<String> = shape.blockStmtKind;
 		final wrapKinds: Array<String> = shape.andLowerPrecedenceKinds ?? [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
 
-		final nodeByKey: Map<String, QueryNode> = [];
-		indexIfs(tree, ifKinds, nodeByKey);
+		return RunScan.edits(plugin, source, tree -> {
+			final nodeByKey: Map<String, QueryNode> = [];
+			indexIfs(tree, ifKinds, nodeByKey);
 
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final vspan: Null<Span> = v.span;
-			if (vspan == null) continue;
-			final outer: Null<QueryNode> = nodeByKey['${vspan.from}:${vspan.to}'];
-			if (outer == null || outer.children.length != 2) continue;
-			final outerCond: QueryNode = outer.children[0];
-			final thenBranch: QueryNode = outer.children[1];
-			final innerIf: QueryNode = unwrapBlock(thenBranch, blockStmtKind);
-			if (!ifKinds.contains(innerIf.kind) || innerIf.children.length != 2) continue;
-			final innerCond: QueryNode = innerIf.children[0];
-			final innerThen: QueryNode = innerIf.children[1];
-			final cs: Null<Span> = outerCond.span;
-			final ts: Null<Span> = thenBranch.span;
-			final ics: Null<Span> = innerCond.span;
-			final its: Null<Span> = innerThen.span;
-			if (cs == null || ts == null || ics == null || its == null) continue;
-			final merged: String = '${wrap(source.substring(cs.from, cs.to), outerCond, wrapKinds)} $andOp '
+			final edits: Array<{ span: Span, text: String }> = [];
+			for (v in violations) {
+				final vspan: Null<Span> = v.span;
+				if (vspan == null) continue;
+				final outer: Null<QueryNode> = nodeByKey['${vspan.from}:${vspan.to}'];
+				if (outer == null || outer.children.length != 2) continue;
+				final outerCond: QueryNode = outer.children[0];
+				final thenBranch: QueryNode = outer.children[1];
+				final innerIf: QueryNode = unwrapBlock(thenBranch, blockStmtKind);
+				if (!ifKinds.contains(innerIf.kind) || innerIf.children.length != 2) continue;
+				final innerCond: QueryNode = innerIf.children[0];
+				final innerThen: QueryNode = innerIf.children[1];
+				final cs: Null<Span> = outerCond.span;
+				final ts: Null<Span> = thenBranch.span;
+				final ics: Null<Span> = innerCond.span;
+				final its: Null<Span> = innerThen.span;
+				if (cs == null || ts == null || ics == null || its == null) continue;
+				final merged: String = '${wrap(source.substring(cs.from, cs.to), outerCond, wrapKinds)} $andOp '
 				+ wrap(source.substring(ics.from, ics.to), innerCond, wrapKinds);
-			edits.push({ span: cs, text: merged });
-			edits.push({ span: ts, text: source.substring(its.from, its.to) });
-		}
-		return edits;
+				edits.push({ span: cs, text: merged });
+				edits.push({ span: ts, text: source.substring(its.from, its.to) });
+			}
+			return edits;
+		});
 	}
 
 	/**

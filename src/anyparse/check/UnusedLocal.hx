@@ -168,10 +168,7 @@ final class UnusedLocal implements Check implements VolatileMessage {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final shape: RefShape = plugin.refShape();
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collect(files, plugin, (entry, tree, violations) -> {
 			final ctx: ScanCtx = {
 				out: violations,
 				file: entry.file,
@@ -186,8 +183,7 @@ final class UnusedLocal implements Check implements VolatileMessage {
 				matchMask: OccurrenceScan.inertMask(entry.source, plugin)
 			};
 			walk(ctx, tree, null);
-		}
-		return violations;
+		});
 	}
 
 	/**
@@ -218,7 +214,7 @@ final class UnusedLocal implements Check implements VolatileMessage {
 		// index it falls back to the conservative base predicate. A side-effecting
 		// or unprovable initializer is reported but left in place for the author.
 		final treeRoot: QueryNode = tree;
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		final declaredTypes: Map<Int, String> = provider != null ? provider.declaredTypes(source) : [];
 
 		for (v in violations) if (v.severity == Severity.Warning) {

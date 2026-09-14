@@ -72,17 +72,14 @@ final class ModifierOrder implements Check {
 		final shape: RefShape = plugin.refShape();
 		final order: Array<String> = shape.modifierOrderKinds ?? [];
 		final members: Array<String> = shape.memberDeclKinds ?? [];
-		if (order.length == 0 || members.length == 0) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final flagged: Array<Int> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span != null) flagged.push(span.from);
-		}
-		final edits: Array<{ span: Span, text: String }> = [];
-		reorderWalk(edits, source, tree, ranking(shape, order, members), flagged);
-		return edits;
+		return order.length == 0 || members.length == 0
+			? []
+			: RunScan.edits(plugin, source, tree -> {
+				final flagged: Array<Int> = RunScan.spanStarts(violations);
+				final edits: Array<{ span: Span, text: String }> = [];
+				reorderWalk(edits, source, tree, ranking(shape, order, members), flagged);
+				return edits;
+			});
 	}
 
 	/** Bundle the grammar's modifier-order config, resolving the `final`-keyword rank against the active `order`. */

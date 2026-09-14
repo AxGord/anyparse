@@ -170,11 +170,7 @@ final class PreferDocComment implements Check implements DefaultOff {
 	): Array<{ span: Span, text: String }> {
 		final seams: Null<Seams> = resolveSeams(plugin);
 		if (seams == null) return [];
-		final flagged: Array<Int> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span != null) flagged.push(span.from);
-		}
+		final flagged: Array<Int> = RunScan.spanStarts(violations);
 		return [
 			for (rewrite in rewrites(source, plugin, seams)) if (flagged.contains(rewrite.comment.from)) for (edit in rewrite.edits) edit
 		];

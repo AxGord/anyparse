@@ -244,8 +244,7 @@ final class FieldInitInConstructor implements Check implements DefaultOff {
 		final newName: String = name;
 		final member: Null<HoistedConstant> = support.hoistedConstant('final $newName:$annotation = ${site.defaultText};', true);
 		if (member == null) return null;
-		final emitted: HoistedConstant = member;
-		final rule: Null<NamingRule> = ConstantHoist.constantRule(support.policyFor(file), emitted.mods);
+		final rule: Null<NamingRule> = ConstantHoist.constantRule(support.policyFor(file), member.mods);
 		if (rule == null || !rule.format.match(newName)) return null;
 		if (ConstantHoist.staticsForbidden(tree, decl, plugin)) return null;
 		if (OccurrenceScan.referencedInRange(source, newName, 0, source.length, [])) return null;
@@ -254,7 +253,7 @@ final class FieldInitInConstructor implements Check implements DefaultOff {
 		final at: Null<Int> = constantsRankSplice(site.container, decl, source, shape, ownerName, plugin.lexicalRegions(source));
 		if (at == null) return null;
 		_runClaims.claim(ownerName, newName, idx);
-		stage(inserts, at, '\n\t${emitted.text}');
+		stage(inserts, at, '\n\t${member.text}');
 		return newName;
 	}
 

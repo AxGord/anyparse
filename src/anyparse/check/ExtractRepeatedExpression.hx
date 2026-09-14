@@ -126,13 +126,9 @@ final class ExtractRepeatedExpression implements Check implements VolatileMessag
 		final functionUnitKinds: Array<String> = (shape.functionKinds ?? []).concat(shape.lambdaKinds ?? []);
 		final exclusiveConditionalKinds: Array<String> = (shape.branchConditionKinds ?? []).concat(shape.switchKinds ?? []);
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
-			final root: QueryNode = tree;
+		return RunScan.collect(files, plugin, (entry, root, violations) -> {
 			final purity: Null<PurityCtx> = PurityScan.contextOf(plugin, entry.source, root, index);
-			if (purity == null) continue;
+			if (purity == null) return;
 			final resolved: PurityCtx = purity;
 			final ctx: Ctx = {
 				fieldAccessKind: faK,
@@ -146,8 +142,7 @@ final class ExtractRepeatedExpression implements Check implements VolatileMessag
 			final units: Array<QueryNode> = [];
 			collectUnits(root, functionUnitKinds, units);
 			for (unit in units) analyzeUnit(violations, entry.file, entry.source, unit, ctx);
-		}
-		return violations;
+		});
 	}
 
 	/** No mechanical edit — extraction (and where the `final` belongs) is an author decision. */

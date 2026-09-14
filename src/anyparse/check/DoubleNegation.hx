@@ -50,14 +50,10 @@ final class DoubleNegation implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = resolveSeams(plugin, files);
-		if (seams == null) return [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(violations, entry.file, tree, tree, entry.source, seams);
-		}
-		return violations;
+		return RunScan.collectWith(
+			files, plugin, resolveSeams(plugin, files),
+			(entry, tree, seams, violations) -> walk(violations, entry.file, tree, tree, entry.source, seams)
+		);
 	}
 
 	/**

@@ -97,21 +97,17 @@ final class UnguardedNullableDeref implements Check implements NoAutofix {
 		final soleChildKinds: Array<String> = [for (k in [shape.fieldAccessKind, shape.forceFieldAccessKind]) if (k != null) k];
 		final firstChildKinds: Array<String> = [for (k in [shape.indexAccessKind, shape.callKind]) if (k != null) k];
 		if (soleChildKinds.length == 0 && firstChildKinds.length == 0) return [];
-		final cfg: Null<NullableSourceCfg> = NullableSource.build(shape, shape.nullableFlowExcludedCalls ?? []);
-		if (cfg == null) return [];
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		final built: Null<NullableSourceCfg> = NullableSource.build(shape, shape.nullableFlowExcludedCalls ?? []);
+		if (built == null) return [];
+		final cfg: NullableSourceCfg = built;
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		if (provider == null) return [];
-		final typed: TypeInfoProvider = provider;
-		final cfgValue: NullableSourceCfg = cfg;
 		// The RESOLUTION index, not the report one — `NullableSource`'s class doc says why, and why
 		// the exclusion list has to be re-applied inside the arc once it is this wide.
 		final index: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? SymbolIndex.build(files, plugin);
 		final ctx: Ctx = { ident: ident, soleChildKinds: soleChildKinds, firstChildKinds: firstChildKinds };
 		final declTypeChildKinds: Array<String> = shape.declTypeChildKinds ?? [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collectWith(files, plugin, provider, (entry, tree, typed, violations) -> {
 			final root: QueryNode = tree;
 			final declaredTypes: Map<Int, String> = typed.declaredTypes(entry.source);
 			final returnTypes: Map<Int, String> = typed.returnTypes(entry.source);
@@ -127,19 +123,18 @@ final class UnguardedNullableDeref implements Check implements NoAutofix {
 				entry.source, plugin, tree, entry.file, index
 			);
 			final seed: (QueryNode) -> Bool = rhs ->
-				NullableSource.describe(rhs, root, declaredTypes, returnTypes, cfgValue, index, nominalOf) != null;
+				NullableSource.describe(rhs, root, declaredTypes, returnTypes, cfg, index, nominalOf) != null;
 			// The annotation is evidence only where the INITIALIZER has none. `NullFlow` reaches this
 			// seed whenever the initializer named no nullable SOURCE, which is also true of an
 			// initializer the resolver typed and typed as NOT nullable — there the `Null<T>` is a
 			// redundant annotation, and seeding it warns about a dereference no path can fault.
 			final declaredNullable: (QueryNode) -> Bool = decl ->
-				NullableSource.declaredNullable(decl, declaredTypes, cfgValue)
-					&& !NullableSource.initTypeIsNonNull(NullFlow.declInit(decl, declTypeChildKinds), cfgValue, valueNominalOf);
+				NullableSource.declaredNullable(decl, declaredTypes, cfg)
+				&& !NullableSource.initTypeIsNonNull(NullFlow.declInit(decl, declTypeChildKinds), cfg, valueNominalOf);
 			NullFlow.analyze(
 				tree, shape, entry.source, (node, facts) -> checkDeref(violations, entry.file, node, facts, ctx), seed, declaredNullable
 			);
-		}
-		return violations;
+		});
 	}
 
 	public function fix(

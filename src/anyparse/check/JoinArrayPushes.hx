@@ -234,11 +234,10 @@ final class JoinArrayPushes implements Check {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null) return [];
-		final resolved: Seams = seams;
 		final symbols: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
 		final writes: () -> FieldWriteIndex = lazyWriteIndex(files, plugin);
 		return [
-			for (entry in files) for (m in collectMatches(plugin, entry.source, resolved, symbols, writes))
+			for (entry in files) for (m in collectMatches(plugin, entry.source, seams, symbols, writes))
 				{
 					file: entry.file,
 					span: m.span,
@@ -268,12 +267,7 @@ final class JoinArrayPushes implements Check {
 		final byKey: Map<String, Match> = [];
 		for (m in collectMatches(plugin, source, seams, symbols, writes)) byKey['${m.span.from}:${m.span.to}'] = m;
 		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
-			final m: Null<Match> = byKey['${span.from}:${span.to}'];
-			if (m != null) for (edit in m.edits) edits.push(edit);
-		}
+		RunScan.eachMatched(violations, byKey, (m, _) -> for (edit in m.edits) edits.push(edit));
 		return CanonicalEdit.dropContainedEdits(edits);
 	}
 
@@ -651,10 +645,9 @@ final class JoinArrayPushes implements Check {
 		final s: Seams = ctx.seams;
 		final purity: Null<PurityCtx> = ctx.purity();
 		if (purity == null) return false;
-		final scan: PurityCtx = purity;
 		for (push in run) {
 			if (referencesName(push.arg, push.name, s)) return false;
-			if (!constantElement(push.arg, scan, s)) return false;
+			if (!constantElement(push.arg, purity, s)) return false;
 			if (!CtorFieldWrite.contextFreeRhs(push.arg, container, statics, s.shape, true, _ -> true)) return false;
 		}
 		return true;

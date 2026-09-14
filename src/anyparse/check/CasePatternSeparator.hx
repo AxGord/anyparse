@@ -125,16 +125,10 @@ final class CasePatternSeparator implements Check implements DefaultOff implemen
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<SeparatorSeams> = seamsOf(plugin);
-		if (seams == null) return [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collectWith(files, plugin, seamsOf(plugin), (entry, tree, seams, violations) -> {
 			final pipe: Bool = pipeStyle(LintConfig.resolveWith(_resolveConfig, entry.file));
 			walk(violations, entry.file, tree, seams, pipe);
-		}
-		return violations;
+		});
 	}
 
 	/**
@@ -154,26 +148,21 @@ final class CasePatternSeparator implements Check implements DefaultOff implemen
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		if (violations.length == 0) return [];
-		final seams: Null<SeparatorSeams> = seamsOf(plugin);
-		if (seams == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final byKey: Map<String, QueryNode> = [];
-		MemberKinds.indexNodesByKind(tree, [seams.scan.caseBranchKind], byKey);
-		final pipe: Bool = pipeStyle(LintConfig.resolveWith(_resolveConfig, violations[0].file));
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (violation in violations) {
-			final span: Null<Span> = violation.span;
-			if (span == null) continue;
-			final branch: Null<QueryNode> = byKey['${span.from}:${span.to}'];
-			if (branch == null) continue;
-			final produced: Array<{ span: Span, text: String }> = pipe
-				? pipeEdits(seams, source, branch)
-				: commaEdits(seams, source, branch);
-			for (edit in produced) edits.push(edit);
-		}
-		return edits;
+		return violations.length == 0
+			? []
+			: RunScan.editsWith(plugin, source, seamsOf(plugin), (tree, seams) -> {
+				final byKey: Map<String, QueryNode> = [];
+				MemberKinds.indexNodesByKind(tree, [seams.scan.caseBranchKind], byKey);
+				final pipe: Bool = pipeStyle(LintConfig.resolveWith(_resolveConfig, violations[0].file));
+				final edits: Array<{ span: Span, text: String }> = [];
+				RunScan.eachMatched(violations, byKey, (branch, _) -> {
+					final produced: Array<{ span: Span, text: String }> = pipe
+						? pipeEdits(seams, source, branch)
+						: commaEdits(seams, source, branch);
+					for (edit in produced) edits.push(edit);
+				});
+				return edits;
+			});
 	}
 
 	/**

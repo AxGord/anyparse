@@ -11,7 +11,6 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 using Lambda;
 using StringTools;
@@ -129,19 +128,13 @@ final class ComparisonToBoolean implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = resolveSeams(plugin);
-		if (seams == null) return [];
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		// Lazy: the resolution scope reads the configured libraries, and only the two RESOLVED
 		// proofs demand it — after every cheaper arm on every candidate has failed.
 		final index: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collectWith(files, plugin, resolveSeams(plugin), (entry, tree, seams, violations) -> {
 			walk(violations, tree, seams, proofOf(entry.file, entry.source, tree, provider, index));
-		}
-		return violations;
+		});
 	}
 
 	/**
@@ -175,10 +168,8 @@ final class ComparisonToBoolean implements Check {
 		if (maybeEqKind == null || maybeRoot == null) return [];
 		final eqKind: String = maybeEqKind;
 		final root: QueryNode = maybeRoot;
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
-		final file: String = violations[0].file;
-		for (violation in violations) if (violation.file != file)
-			throw new Exception('$RULE_ID: fix() takes ONE file\'s violations, got $file and ${violation.file}');
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+		final file: String = RunScan.oneFile(violations, RULE_ID);
 		// `lazySymbolIndex` prefers the run's resolution scope, then the caller's report index, and
 		// only then builds over `source` alone — enough for a same-file receiver type.
 		final resolver: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex([{ file: file, source: source }], plugin, index);

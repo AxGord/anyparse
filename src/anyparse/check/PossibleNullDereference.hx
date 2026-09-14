@@ -77,17 +77,13 @@ final class PossibleNullDereference implements Check implements NoAutofix {
 		final derefKinds: Array<String> = [for (k in [shape.fieldAccessKind, shape.forceFieldAccessKind]) if (k != null) k];
 		final cfg: Null<NullableSourceCfg> = NullableSource.build(shape);
 		if (identKind == null || derefKinds.length == 0 || cfg == null) return [];
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
-		if (provider == null) return [];
-		final typed: TypeInfoProvider = provider;
 		final cfgValue: NullableSourceCfg = cfg;
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+		if (provider == null) return [];
 		// The RESOLUTION index, not the report one — `NullableSource`'s class doc says why, and why
 		// the exclusion list has to be re-applied inside the arc once it is this wide.
 		final index: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? SymbolIndex.build(files, plugin);
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collectWith(files, plugin, provider, (entry, tree, typed, violations) -> {
 			final declaredTypes: Map<Int, String> = typed.declaredTypes(entry.source);
 			final returnTypes: Map<Int, String> = typed.returnTypes(entry.source);
 			final nominalOf: Null<(QueryNode) -> Null<String>> = CheckScan.typeNominalResolver(
@@ -101,8 +97,7 @@ final class PossibleNullDereference implements Check implements NoAutofix {
 				guarded: existsGuardedReads(tree, shape, entry.source)
 			};
 			walk(violations, entry.file, tree, tree, declaredTypes, returnTypes, nominalOf, ctx);
-		}
-		return violations;
+		});
 	}
 
 	/** No safe single edit — report-only. */

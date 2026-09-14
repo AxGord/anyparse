@@ -158,21 +158,18 @@ final class ExplicitType implements Check implements OracleAssisted {
 		// Function hosts are the member kinds that are not fields; a missing fields
 		// or functions set leaves the check with nothing useful to do.
 		final functions: Array<String> = [for (k in memberKinds) if (!fields.contains(k)) k];
-		if (fields.length == 0 || functions.length == 0) return [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
-			// checkstyle `Type.ignoreEnumAbstractValues` (default true) toggles the enum-abstract-value exemption.
-			final ignoreEA: Bool = plugin.checkOverrides(entry.file)?.explicitTypeIgnoreEnumAbstract ?? true;
-			final ea: Null<String> = ignoreEA ? enumAbstract : null;
-			// The same exemption for the values of an enum abstract written `@:enum` (or through the
-			// `#if` version guard): they project under a plain abstract, and annotating one with its
-			// literal's type is a compile error (`Int should be <the abstract>`).
-			final guarded: Array<Int> = ignoreEA ? EnumAbstractForms.valueStarts(plugin, tree) : [];
-			walk(violations, entry.file, entry.source, tree, null, fields, functions, params, bodies, ea, guarded);
-		}
-		return violations;
+		return fields.length == 0 || functions.length == 0
+			? []
+			: RunScan.collect(files, plugin, (entry, tree, violations) -> {
+				// checkstyle `Type.ignoreEnumAbstractValues` (default true) toggles the enum-abstract-value exemption.
+				final ignoreEA: Bool = plugin.checkOverrides(entry.file)?.explicitTypeIgnoreEnumAbstract ?? true;
+				final ea: Null<String> = ignoreEA ? enumAbstract : null;
+				// The same exemption for the values of an enum abstract written `@:enum` (or through the
+				// `#if` version guard): they project under a plain abstract, and annotating one with its
+				// literal's type is a compile error (`Int should be <the abstract>`).
+				final guarded: Array<Int> = ignoreEA ? EnumAbstractForms.valueStarts(plugin, tree) : [];
+				walk(violations, entry.file, entry.source, tree, null, fields, functions, params, bodies, ea, guarded);
+			});
 	}
 
 	/**
@@ -191,16 +188,17 @@ final class ExplicitType implements Check implements OracleAssisted {
 		final fields: Array<String> = shape.fieldDeclKinds ?? [];
 		final params: Array<String> = shape.paramKinds ?? [];
 		final fixable: Array<String> = fields.concat(params);
-		if (fixable.length == 0) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final edits: Array<{ span: Span, text: String }> = [];
-		collectInitializerEdits(tree, source, violations, shape, plugin, fixable, edits);
-		final memberKinds: Array<String> = shape.memberDeclKinds ?? [];
-		final functions: Array<String> = [for (k in memberKinds) if (!fields.contains(k)) k];
-		collectVoidReturnEdits(tree, source, shape, violations, functions, memberKinds, edits);
-		collectInheritedParamEdits(tree, source, violations, plugin, index, functions, params, edits);
-		return edits;
+		return fixable.length == 0
+			? []
+			: RunScan.edits(plugin, source, tree -> {
+				final edits: Array<{ span: Span, text: String }> = [];
+				collectInitializerEdits(tree, source, violations, shape, plugin, fixable, edits);
+				final memberKinds: Array<String> = shape.memberDeclKinds ?? [];
+				final functions: Array<String> = [for (k in memberKinds) if (!fields.contains(k)) k];
+				collectVoidReturnEdits(tree, source, shape, violations, functions, memberKinds, edits);
+				collectInheritedParamEdits(tree, source, violations, plugin, index, functions, params, edits);
+				return edits;
+			});
 	}
 
 	/**
@@ -696,7 +694,7 @@ final class ExplicitType implements Check implements OracleAssisted {
 		// A cast target lookup costs a SECOND full parse of the file (`castTargetSources`),
 		// so compute it lazily and cache it — a fix whose violations key nothing into `byKey`,
 		// or whose initializers are never casts, never pays for it.
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		var castTargetsCache: Null<Map<Int, String>> = null;
 		function castTargets(): Map<Int, String> {
 			final existing: Null<Map<Int, String>> = castTargetsCache;

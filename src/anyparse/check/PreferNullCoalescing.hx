@@ -66,42 +66,33 @@ final class PreferNullCoalescing implements Check implements RiskyFix implements
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = resolveSeams(plugin);
-		if (seams == null) return [];
 		final shape: RefShape = plugin.refShape();
-		final typed: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		final typed: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+		return RunScan.collectWith(files, plugin, resolveSeams(plugin), (entry, tree, seams, violations) -> {
 			final declaredTypes: Null<Map<Int, String>> = typed?.declaredTypes(entry.source);
 			walk(violations, entry.file, entry.source, tree, tree, shape, declaredTypes, seams);
-		}
-		return violations;
+		});
 	}
 
 	/** Rewrite each flagged null-guard ternary to `<guarded> ?? <fallback>`. */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final seams: Null<Seams> = resolveSeams(plugin);
-		if (seams == null) return [];
 		final shape: RefShape = plugin.refShape();
-		final typed: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
-		final root: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (root == null) return [];
-		final rootNode: QueryNode = root;
-		final declaredTypes: Null<Map<Int, String>> = typed?.declaredTypes(source);
-		return CheckScan.applyBySpan(plugin, source, violations, [seams.ternaryKind], (node, span) -> {
-			final m: Null<{ guarded: QueryNode, fallback: QueryNode }> = match(node, source, rootNode, shape, declaredTypes, seams);
-			if (m == null) return null;
-			final guardedSpan: Null<Span> = m.guarded.span;
-			final fallbackSpan: Null<Span> = m.fallback.span;
-			if (guardedSpan == null || fallbackSpan == null) return null;
-			final guardedSrc: String = source.substring(guardedSpan.from, guardedSpan.to);
-			final fallbackSrc: String = source.substring(fallbackSpan.from, fallbackSpan.to);
-			final fallbackText: String = needsParens(m.fallback, seams) ? '($fallbackSrc)' : fallbackSrc;
-			return { span: span, text: '$guardedSrc ?? $fallbackText' };
+		final typed: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+		return RunScan.editsWith(plugin, source, resolveSeams(plugin), (rootNode, seams) -> {
+			final declaredTypes: Null<Map<Int, String>> = typed?.declaredTypes(source);
+			return CheckScan.applyBySpan(plugin, source, violations, [seams.ternaryKind], (node, span) -> {
+				final m: Null<{ guarded: QueryNode, fallback: QueryNode }> = match(node, source, rootNode, shape, declaredTypes, seams);
+				if (m == null) return null;
+				final guardedSpan: Null<Span> = m.guarded.span;
+				final fallbackSpan: Null<Span> = m.fallback.span;
+				if (guardedSpan == null || fallbackSpan == null) return null;
+				final guardedSrc: String = source.substring(guardedSpan.from, guardedSpan.to);
+				final fallbackSrc: String = source.substring(fallbackSpan.from, fallbackSpan.to);
+				final fallbackText: String = needsParens(m.fallback, seams) ? '($fallbackSrc)' : fallbackSrc;
+				return { span: span, text: '$guardedSrc ?? $fallbackText' };
+			});
 		});
 	}
 

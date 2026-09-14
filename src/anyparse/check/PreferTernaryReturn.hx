@@ -86,18 +86,15 @@ final class PreferTernaryReturn implements Check implements CarryingFix {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = resolveSeams(plugin);
-		if (seams == null) return [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, entry.source);
-			if (tree != null)
+		return RunScan.collectWith(
+			files, plugin, resolveSeams(plugin),
+			(entry, tree, seams, violations) ->
 				walk(
 					violations, entry.file, entry.source, tree, seams, null,
 					SourceComments.collectCommentTokens(plugin.lexicalRegions(entry.source))
-				);
-		}
-		return violations;
+				),
+			CheckScan.parseBranchAwareOrNull
+		);
 	}
 
 	public function fix(
@@ -128,11 +125,7 @@ final class PreferTernaryReturn implements Check implements CarryingFix {
 		final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, source);
 		if (tree == null) return [];
 
-		final flagged: Array<String> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span != null) flagged.push('${span.from}:${span.to}');
-		}
+		final flagged: Array<String> = RunScan.spanKeys(violations);
 		final edits: Array<CarryingEdit> = [];
 		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
 		collectFixes(tree, source, seams, null, flagged, edits, SourceComments.collectCommentTokens(regions), regions);

@@ -82,14 +82,12 @@ final class RedundantBypassAccessor implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final ctx: Null<Ctx> = context(plugin);
-		if (ctx == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final flagged: Array<String> = [for (v in violations) if (v.span != null) '${v.span.from}:${v.span.to}'];
-		final edits: Array<{ span: Span, text: String }> = [];
-		collectEdits(tree, flagged, edits);
-		return edits;
+		return RunScan.editsWith(plugin, source, context(plugin), (tree, ctx) -> {
+			final flagged: Array<String> = [for (v in violations) if (v.span != null) '${v.span.from}:${v.span.to}'];
+			final edits: Array<{ span: Span, text: String }> = [];
+			collectEdits(tree, flagged, edits);
+			return edits;
+		});
 	}
 
 	/** Bundle the seams the check needs, or null when the grammar has no assignment kind. */

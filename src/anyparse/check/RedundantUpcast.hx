@@ -54,14 +54,10 @@ final class RedundantUpcast implements Check {
 		if (checkedCastKind == null) return [];
 		final kind: String = checkedCastKind;
 		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		if (provider == null) return [];
-		final typed: TypeInfoProvider = provider;
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collectWith(files, plugin, provider, (entry, tree, typed, violations) -> {
 			final root: QueryNode = tree;
 			final declaredTypes: Map<Int, String> = typed.declaredTypes(entry.source);
 			final castTargets: Map<Int, String> = typed.castTargetSources(entry.source);
@@ -86,8 +82,7 @@ final class RedundantUpcast implements Check {
 				for (c in node.children) walk(c);
 			}
 			walk(tree);
-		}
-		return violations;
+		});
 	}
 
 	public function fix(

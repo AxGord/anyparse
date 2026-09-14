@@ -55,15 +55,10 @@ final class ImpossibleIsCheck implements Check {
 		if (isExprKind == null) return [];
 		final kind: String = isExprKind;
 		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		if (provider == null) return [];
-		final typed: TypeInfoProvider = provider;
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
-			final root: QueryNode = tree;
+		return RunScan.collectWith(files, plugin, provider, (entry, tree, typed, violations) -> {
 			final declaredTypes: Map<Int, String> = typed.declaredTypes(entry.source);
 			function walk(node: QueryNode): Void {
 				if (opaqueKinds.contains(node.kind)) return;
@@ -73,7 +68,7 @@ final class ImpossibleIsCheck implements Check {
 					final typeSpan: Null<Span> = node.children[1].span;
 					if (span != null && typeSpan != null) {
 						final sName: Null<String> = TypeResolver.simpleNominalName(
-							TypeResolver.identTypeName(operand, root, shape, declaredTypes)
+							TypeResolver.identTypeName(operand, tree, shape, declaredTypes)
 						);
 						final tName: Null<String> = TypeResolver.simpleNominalName(entry.source.substring(typeSpan.from, typeSpan.to));
 						if (sName != null && tName != null && index.subtypes.unrelatedClasses(sName, tName)) violations.push({
@@ -88,8 +83,7 @@ final class ImpossibleIsCheck implements Check {
 				for (c in node.children) walk(c);
 			}
 			walk(tree);
-		}
-		return violations;
+		});
 	}
 
 	/**

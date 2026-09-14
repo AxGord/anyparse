@@ -113,24 +113,18 @@ final class MissingVisibility implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final resolved: Null<Seams> = resolveSeams(plugin);
-		if (resolved == null) return [];
 		// Re-bound to a non-null local: strict null-safety narrowing does not reach into an
 		// anonymous struct literal.
-		final seams: Seams = resolved;
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walk({
+		return RunScan.collectWith(
+			files, plugin, resolveSeams(plugin), (entry, tree, seams, violations) -> walk({
 				out: violations,
 				file: entry.file,
 				seams: seams,
 				source: entry.source,
 				comments: commentTokens(entry.source, seams, plugin.lexicalRegions.bind(entry.source)),
 				guarded: EnumAbstractForms.valueStarts(plugin, tree)
-			}, tree, false);
-		}
-		return violations;
+			}, tree, false)
+		);
 	}
 
 	/**
@@ -159,34 +153,27 @@ final class MissingVisibility implements Check {
 		// Re-bound to non-null locals: strict null-safety narrowing does not reach into an
 		// anonymous struct literal.
 		final seams: Seams = resolved;
-		final resolvedKeyword: Null<String> = seams.keyword;
-		if (resolvedKeyword == null) return [];
-		final keyword: String = resolvedKeyword;
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		var visRank: Int = -1;
-		for (v in seams.visibility) {
-			final r: Int = seams.order.indexOf(v);
-			if (r > visRank) visRank = r;
-		}
-		final flagged: Array<Int> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span != null) flagged.push(span.from);
-		}
-		final edits: Array<{ span: Span, text: String }> = [];
-		insertWalk({
-			edits: edits,
-			seams: seams,
-			source: source,
-			comments: commentTokens(source, seams, plugin.lexicalRegions.bind(source)),
-			visRank: visRank,
-			keyword: keyword,
-			flagged: flagged,
-			index: index,
-			guarded: EnumAbstractForms.valueStarts(plugin, tree)
-		}, tree, false);
-		return edits;
+		return RunScan.editsWith(plugin, source, seams.keyword, (tree, keyword) -> {
+			var visRank: Int = -1;
+			for (v in seams.visibility) {
+				final r: Int = seams.order.indexOf(v);
+				if (r > visRank) visRank = r;
+			}
+			final flagged: Array<Int> = RunScan.spanStarts(violations);
+			final edits: Array<{ span: Span, text: String }> = [];
+			insertWalk({
+				edits: edits,
+				seams: seams,
+				source: source,
+				comments: commentTokens(source, seams, plugin.lexicalRegions.bind(source)),
+				visRank: visRank,
+				keyword: keyword,
+				flagged: flagged,
+				index: index,
+				guarded: EnumAbstractForms.valueStarts(plugin, tree)
+			}, tree, false);
+			return edits;
+		});
 	}
 
 	/**

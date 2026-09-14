@@ -155,7 +155,6 @@ final class OrphanAccessor implements Check implements DefaultOff {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		_deletable = [];
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
-		final out: Array<Violation> = [];
 		// Supertypes resolve over report UNION resolution scope: a base class in a configured
 		// library (openfl's DisplayObject) declares the property slot a report-only index cannot
 		// see, and reading it as absent would flag every inherited accessor. It is ALSO the
@@ -182,20 +181,17 @@ final class OrphanAccessor implements Check implements DefaultOff {
 			scopeIndex: wide,
 			retainedMeta: plugin.refShape().retainedDeclMetaName
 		};
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collect(files, plugin, (entry, tree, out) -> {
 			// The resolution index carries the report files too, but only when a scope reached
 			// the run at all — fall back to the report index rather than skipping the file.
 			final scope: SymbolIndex = wide.fileInfo(entry.file) == null ? index : wide;
 			final info: Null<FileInfo> = scope.fileInfo(entry.file);
-			if (info == null) continue;
+			if (info == null) return;
 			final branch: MemberBranchSeams = MemberBranchScan.seamsOf(
 				plugin.refShape(), entry.source, plugin.lexicalRegions.bind(entry.source)
 			);
 			for (cls in CheckScan.classBodies(tree)) considerClass(out, cls, scope, info, ctx, branch);
-		}
-		return out;
+		});
 	}
 
 	/**

@@ -113,12 +113,7 @@ final class WhileTrueCondition implements Check implements DefaultOff {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = readSeams(plugin);
-		if (seams == null) return [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collectWith(files, plugin, readSeams(plugin), (entry, tree, seams, violations) -> {
 			for (m in collectMatches(tree, entry.source, seams, plugin, entry.file, null)) violations.push({
 				file: entry.file,
 				span: m.span,
@@ -126,8 +121,7 @@ final class WhileTrueCondition implements Check implements DefaultOff {
 				severity: Severity.Info,
 				message: m.text == null ? MESSAGE + COMMENT_NOTE : MESSAGE
 			});
-		}
-		return violations;
+		});
 	}
 
 	/** Replace each flagged loop with the header-condition form plus, where the exiting branch had one, its lifted run. */

@@ -40,14 +40,10 @@ final class PreferCaseWildcard implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final defaultBranchKind: Null<String> = plugin.refShape().defaultBranchKind;
-		if (defaultBranchKind == null) return [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(violations, entry.file, tree, defaultBranchKind);
-		}
-		return violations;
+		return RunScan.collectWith(
+			files, plugin, plugin.refShape().defaultBranchKind,
+			(entry, tree, defaultBranchKind, violations) -> walk(violations, entry.file, tree, defaultBranchKind)
+		);
 	}
 
 	/**

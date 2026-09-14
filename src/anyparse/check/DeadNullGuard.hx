@@ -57,12 +57,8 @@ final class DeadNullGuard implements Check implements RiskyFix {
 		if (equalityKinds.length == 0 || identKind == null || nullLitKind == null) return [];
 		final nullLit: String = nullLitKind;
 		final ident: String = identKind;
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
-			final root: QueryNode = tree;
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+		return RunScan.collect(files, plugin, (entry, root, violations) -> {
 			final declaredTypes: Map<Int, String> = provider != null ? provider.declaredTypes(entry.source) : [];
 			NullFlow.analyze(root, shape, entry.source, (node, facts) -> {
 				if (!equalityKinds.contains(node.kind) || node.children.length != 2) return;
@@ -83,8 +79,7 @@ final class DeadNullGuard implements Check implements RiskyFix {
 					message: 'null check is redundant — operand is already non-null on this path'
 				});
 			});
-		}
-		return violations;
+		});
 	}
 
 	public function fix(

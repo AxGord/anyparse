@@ -40,41 +40,35 @@ final class DuplicateTernaryBranches implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final ternaryKind: Null<String> = plugin.refShape().ternaryKind;
-		if (ternaryKind == null) return [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(violations, entry.file, entry.source, tree, ternaryKind);
-		}
-		return violations;
+		return RunScan.collectWith(
+			files, plugin, plugin.refShape().ternaryKind,
+			(entry, tree, ternaryKind, violations) -> walk(violations, entry.file, entry.source, tree, ternaryKind)
+		);
 	}
 
 	/** Collapse each flagged ternary to its (identical) branch when the condition is pure. */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final ternaryKind: Null<String> = plugin.refShape().ternaryKind;
-		if (ternaryKind == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
 
-		final nodeByKey: Map<String, QueryNode> = [];
-		indexTernaries(tree, ternaryKind, nodeByKey);
+		return RunScan.editsWith(plugin, source, plugin.refShape().ternaryKind, (tree, ternaryKind) -> {
+			final nodeByKey: Map<String, QueryNode> = [];
+			indexTernaries(tree, ternaryKind, nodeByKey);
 
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
-			final node: Null<QueryNode> = nodeByKey['${span.from}:${span.to}'];
-			if (node == null || node.children.length != TERNARY_CHILD_COUNT) continue;
-			// Only safe to drop the condition when evaluating it has no side effect.
-			if (!MemberKinds.isSideEffectFree(node.children[0], plugin.refShape())) continue;
-			final branchSpan: Null<Span> = node.children[1].span;
-			if (branchSpan == null) continue;
-			edits.push({ span: span, text: source.substring(branchSpan.from, branchSpan.to) });
-		}
-		return edits;
+			final edits: Array<{ span: Span, text: String }> = [];
+			for (v in violations) {
+				final span: Null<Span> = v.span;
+				if (span == null) continue;
+				final node: Null<QueryNode> = nodeByKey['${span.from}:${span.to}'];
+				if (node == null || node.children.length != TERNARY_CHILD_COUNT) continue;
+				// Only safe to drop the condition when evaluating it has no side effect.
+				if (!MemberKinds.isSideEffectFree(node.children[0], plugin.refShape())) continue;
+				final branchSpan: Null<Span> = node.children[1].span;
+				if (branchSpan == null) continue;
+				edits.push({ span: span, text: source.substring(branchSpan.from, branchSpan.to) });
+			}
+			return edits;
+		});
 	}
 
 	private static function walk(out: Array<Violation>, file: String, source: String, node: QueryNode, ternaryKind: String): Void {

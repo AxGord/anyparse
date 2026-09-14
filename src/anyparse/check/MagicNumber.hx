@@ -85,10 +85,7 @@ final class MagicNumber implements Check implements ConfigAware implements NoAut
 		final functionKinds: Array<String> = shape.functionKinds ?? [];
 		if (numericKinds.length == 0 || functionKinds.length == 0) return [];
 		final cfg: MagicNumberCfg = buildCfg(shape, numericKinds, functionKinds);
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collect(files, plugin, (entry, tree, violations) -> {
 			// Exempt base: a project checkstyle `MagicNumber.ignoreNumbers`, else the built-in default;
 			// the apqlint `ignore` list adds to it.
 			final base: Array<Float> = plugin.checkOverrides(entry.file)?.magicNumberIgnore ?? EXEMPT;
@@ -96,8 +93,7 @@ final class MagicNumber implements Check implements ConfigAware implements NoAut
 				.numberListOption('magic-number', 'ignore') ?? [];
 			final exempt: Array<Float> = base.concat(ignore);
 			walk(violations, entry.file, tree, null, false, false, cfg, exempt);
-		}
-		return violations;
+		});
 	}
 
 	/** No mechanical autofix — a literal cannot be auto-named. */

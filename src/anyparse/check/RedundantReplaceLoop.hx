@@ -10,7 +10,6 @@ import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TreePath;
-import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -215,18 +214,12 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = readSeams(plugin);
-		if (seams == null) return [];
-		final s: Seams = seams;
-		final typed: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
-		if (typed == null) return [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
-			final declaredTypes: Map<Int, String> = typed.declaredTypes(entry.source);
-			walk(tree, tree, entry.file, entry.source, declaredTypes, s, violations);
-		}
-		return violations;
+		return seams == null
+			? []
+			: RunScan.collectWith(files, plugin, RunScan.typeInfoOf(plugin), (entry, tree, typed, violations) -> {
+				final declaredTypes: Map<Int, String> = typed.declaredTypes(entry.source);
+				walk(tree, tree, entry.file, entry.source, declaredTypes, seams, violations);
+			});
 	}
 
 	/** Collapse each ARM-A (fixable) violation's whole `while` loop to its single body statement, verbatim. */
@@ -234,21 +227,15 @@ final class RedundantReplaceLoop implements Check implements DefaultOff {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		final seams: Null<Seams> = readSeams(plugin);
-		if (seams == null) return [];
-		final s: Seams = seams;
-		final typed: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
-		if (typed == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final declaredTypes: Map<Int, String> = typed.declaredTypes(source);
-		final wanted: Array<String> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span != null) wanted.push('${span.from}:${span.to}');
-		}
-		final edits: Array<{ span: Span, text: String }> = [];
-		fixWalk(tree, tree, source, declaredTypes, s, wanted, edits);
-		return CanonicalEdit.dropContainedEdits(edits);
+		return seams == null
+			? []
+			: RunScan.editsWith(plugin, source, RunScan.typeInfoOf(plugin), (tree, typed) -> {
+				final declaredTypes: Map<Int, String> = typed.declaredTypes(source);
+				final wanted: Array<String> = RunScan.spanKeys(violations);
+				final edits: Array<{ span: Span, text: String }> = [];
+				fixWalk(tree, tree, source, declaredTypes, seams, wanted, edits);
+				return CanonicalEdit.dropContainedEdits(edits);
+			});
 	}
 
 	/** Bundle the required `RefShape` kinds + `StringFoldSupport`, or null when any is unset (the check is then a no-op). */

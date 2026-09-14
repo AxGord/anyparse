@@ -151,22 +151,19 @@ final class ExpectedType {
 	): Void {
 		if (castKind == null) return;
 		final kind: String = castKind;
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		if (provider == null) return;
 		final typed: TypeInfoProvider = provider;
 		final shape: RefShape = plugin.refShape();
 		final resolutionIndex: () -> SymbolIndex = lazyResolutionIndex(files, plugin);
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
-			final root: QueryNode = tree;
+		for (entry in CheckScan.parseAll(plugin, files)) {
 			final scan: CastScan = {
 				file: entry.file,
-				root: root,
+				root: entry.tree,
 				types: fileTypes(shape, typed, entry.source),
 				resolutionIndex: resolutionIndex
 			};
-			eachCastInPosition(root, kind, shape, site -> report(site, scan));
+			eachCastInPosition(entry.tree, kind, shape, site -> report(site, scan));
 		}
 	}
 

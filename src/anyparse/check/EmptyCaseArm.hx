@@ -9,7 +9,6 @@ import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 using StringTools;
 
@@ -150,9 +149,7 @@ final class EmptyCaseArm implements Check {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		if (violations.length == 0) return [];
-		final file: String = violations[0].file;
-		for (violation in violations) if (violation.file != file)
-			throw new Exception('$RULE_ID: fix() takes ONE file\'s violations, got $file and ${violation.file}');
+		final file: String = RunScan.oneFile(violations, RULE_ID);
 		final scan: Null<Scan> = scanOf(plugin);
 		if (scan == null) return [];
 		final ctx: Null<Ctx> = contextOf(scan, plugin, file, source, index ?? SymbolIndex.build([{ file: file, source: source }], plugin));
@@ -175,7 +172,7 @@ final class EmptyCaseArm implements Check {
 		final statementKinds: Array<String> = shape.switchStatementKinds ?? [];
 		final openTypes: Array<String> = shape.openSwitchSubjectTypes ?? [];
 		if (statementKinds.length == 0 || openTypes.length == 0) return null;
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		return provider == null ? null : {
 			seams: seams,
 			shape: shape,

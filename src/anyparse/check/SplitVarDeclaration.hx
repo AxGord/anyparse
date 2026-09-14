@@ -137,12 +137,7 @@ final class SplitVarDeclaration implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = readSeams(plugin);
-		if (seams == null) return [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collectWith(files, plugin, readSeams(plugin), (entry, tree, seams, violations) -> {
 			final matches: Array<Match> = [];
 			collectMatches(tree, entry.source, blockedRegions(entry.source, seams, plugin.lexicalRegions(entry.source)), seams, matches);
 			for (m in matches) violations.push({
@@ -152,23 +147,22 @@ final class SplitVarDeclaration implements Check {
 				severity: Severity.Info,
 				message: 'this declaration binds ${m.count} variables; split it into one declaration per statement'
 			});
-		}
-		return violations;
+		}, CheckScan.parseBranchAwareOrNull);
 	}
 
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final seams: Null<Seams> = readSeams(plugin);
-		if (seams == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, source);
-		if (tree == null) return [];
-		final matches: Array<Match> = [];
-		collectMatches(tree, source, blockedRegions(source, seams, plugin.lexicalRegions(source)), seams, matches);
-		final byKey: Map<String, Match> = [];
-		for (m in matches) byKey['${m.span.from}:${m.span.to}'] = m;
+		return RunScan.editsWith(plugin, source, readSeams(plugin), (tree, seams) -> {
+			final matches: Array<Match> = [];
+			collectMatches(tree, source, blockedRegions(source, seams, plugin.lexicalRegions(source)), seams, matches);
+			final byKey: Map<String, Match> = [];
+			for (m in matches) byKey['${m.span.from}:${m.span.to}'] = m;
 
-		return CanonicalEdit.dropContainedEdits(CheckScan.collectSpanEdits(violations, byKey, (m, _) -> ({ span: m.span, text: m.text })));
+			return CanonicalEdit.dropContainedEdits(
+				CheckScan.collectSpanEdits(violations, byKey, (m, _) -> ({ span: m.span, text: m.text }))
+			);
+		}, CheckScan.parseBranchAwareOrNull);
 	}
 
 	/** Bundle the required `RefShape` / control-flow kinds, or null when a required one is unset (the check is then a no-op). */

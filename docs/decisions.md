@@ -498,3 +498,7 @@ decided the question; it may not become a record of runs.
   single consumer and each is the bundle the constructor BUILDS for one collaborator, so the
   declaration belongs at the producing end, and typedefs do not count toward `oversized-type` —
   `7777c4f0`
+- the gated check-entry helper `RunScan.collectWith<S>` was to delegate to `collect` through a
+  closure of its own → strict null safety then rejects every null test on a captured local inside
+  the CALLER's lambda (a generic callee that forwards the callback), so both gated helpers restate
+  the loop — `S218-merge`

@@ -60,12 +60,10 @@ final class SimplifyBooleanTernary implements Check {
 		final shape: RefShape = seams.shape;
 		final ternaryKind: String = seams.ternaryKind;
 		final support: BooleanLogicSupport = seams.support;
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(violations, entry.file, entry.source, tree, ternaryKind, support, shape, null, false);
-		}
-		return violations;
+		return RunScan.collect(
+			files, plugin,
+			(entry, tree, violations) -> walk(violations, entry.file, entry.source, tree, ternaryKind, support, shape, null, false)
+		);
 	}
 
 	public function fix(
@@ -75,30 +73,26 @@ final class SimplifyBooleanTernary implements Check {
 		if (seams == null || violations.length == 0) return [];
 		final ternaryKind: String = seams.ternaryKind;
 		final support: BooleanLogicSupport = seams.support;
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
 
-		final shape: RefShape = seams.shape;
-		final nodeBySpan: Map<String, QueryNode> = [];
-		final licenceBySpan: Map<String, Bool> = [];
-		indexTernaries(tree, source, ternaryKind, shape, null, false, nodeBySpan, licenceBySpan);
-		// The type probe licenses the ordered-comparison FLIP inside a negated condition
-		// (`(x < 0) ? false : p == true` -> `x >= 0 && p == true` for an `Int` x); without it
-		// the negation keeps the sound `!(x < 0)` wrap. `run` builds none — see `walk`.
-		final types: Null<(QueryNode) -> Null<String>> = CheckScan.typeNominalResolver(source, plugin, tree, violations[0].file, index);
+		return RunScan.edits(plugin, source, tree -> {
+			final shape: RefShape = seams.shape;
+			final nodeBySpan: Map<String, QueryNode> = [];
+			final licenceBySpan: Map<String, Bool> = [];
+			indexTernaries(tree, source, ternaryKind, shape, null, false, nodeBySpan, licenceBySpan);
+			// The type probe licenses the ordered-comparison FLIP inside a negated condition
+			// (`(x < 0) ? false : p == true` -> `x >= 0 && p == true` for an `Int` x); without it
+			// the negation keeps the sound `!(x < 0)` wrap. `run` builds none — see `walk`.
+			final types: Null<(QueryNode) -> Null<String>> = CheckScan.typeNominalResolver(source, plugin, tree, violations[0].file, index);
 
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
-			final node: Null<QueryNode> = nodeBySpan['${span.from}:${span.to}'];
-			if (node == null) continue;
-			final key: String = '${span.from}:${span.to}';
-			final replacement: Null<String> = support.simplifyBooleanTernary(node, source, types, licenceBySpan[key] == true);
-			if (replacement == null) continue;
-			edits.push({ span: span, text: replacement });
-		}
-		return edits;
+			final edits: Array<{ span: Span, text: String }> = [];
+			RunScan.eachMatched(violations, nodeBySpan, (node, span) -> {
+				final key: String = '${span.from}:${span.to}';
+				final replacement: Null<String> = support.simplifyBooleanTernary(node, source, types, licenceBySpan[key] == true);
+				if (replacement == null) return;
+				edits.push({ span: span, text: replacement });
+			});
+			return edits;
+		});
 	}
 
 	/**

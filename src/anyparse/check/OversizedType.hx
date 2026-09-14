@@ -137,12 +137,9 @@ final class OversizedType implements Check implements ConfigAware implements Vol
 		final containerKinds: Array<String> = shape.visibilityContainerKinds ?? [];
 		final memberKinds: Array<String> = shape.memberDeclKinds ?? [];
 		if (containerKinds.length == 0 || memberKinds.length == 0) return [];
-		final violations: Array<Violation> = [];
 		var index: Null<SymbolIndex> = null;
 		var indexAsked: Bool = false;
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collect(files, plugin, (entry, tree, violations) -> {
 			final config: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
 			var graph: Null<CallGraph> = null;
 			final cfg: OversizedCfg = {
@@ -166,8 +163,7 @@ final class OversizedType implements Check implements ConfigAware implements Vol
 				}
 			};
 			walk(violations, entry.file, entry.source, tree, cfg);
-		}
-		return violations;
+		});
 	}
 
 	/** Splitting a type is a design decision, not a mechanical autofix — report-only. */

@@ -73,11 +73,7 @@ final class FragmentedDocComment implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final flagged: Array<Int> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span != null) flagged.push(span.from);
-		}
+		final flagged: Array<Int> = RunScan.spanStarts(violations);
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (run in adjacentBlockRuns(source, plugin.lexicalRegions(source))) if (flagged.contains(run[0].from)) {
 			final bodies: Array<String> = run.map(cleanBlockBody.bind(source));
