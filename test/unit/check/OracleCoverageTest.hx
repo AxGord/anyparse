@@ -108,7 +108,7 @@ final class OracleCoverageTest extends Test {
 	 * A `Parsed` line before any `Defines:` line opens an arm with an EMPTY define set: the file
 	 * still counts as compiled, and none of its conditional regions is provable.
 	 *
-	 * Measured NOT to happen with Haxe 4.3.7 — `haxe -v --each` prints `Classpath:` then
+	 * Observed NOT to happen with the compiler — `haxe -v --each` prints `Classpath:` then
 	 * `Defines:` before parsing anything, once per `--next` arm and NOT again for the macro
 	 * context (verified on this project, whose build macros run, and on a two-arm hxml where the
 	 * count is exactly 2). This pins the fallback anyway, because the alternative to an empty
@@ -241,7 +241,7 @@ final class OracleCoverageTest extends Test {
 	/**
 	 * The probe must run the compile it DESCRIBES. `--each` pushes what precedes it into every
 	 * arm, so a `--no-output` written before it suppresses output the oracle's own
-	 * `haxe <hxml> --no-output` lets the earlier arms emit. Measured here by the emission itself:
+	 * `haxe <hxml> --no-output` lets the earlier arms emit. Pinned here by the emission itself:
 	 * arm 1 names a `-js` output, and after the probe that file exists — under the old flag order
 	 * it did not, and an hxml whose later arm consumed an earlier one's output would have failed
 	 * the probe while passing the oracle.

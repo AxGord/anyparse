@@ -31,10 +31,10 @@ import utest.Test;
  *
  * The overlap is UNREACHABLE through the six rules that share the seam today: every insert anchor
  * is a zero-width offset inside the module header, `editsOverlapAny` needs an accepted edit to
- * contain it STRICTLY, and every edit those rules build sits inside a type member's body. Measured
- * over 2649 files (this project's `src` + `test`, the `haxe-formatter` fork, Pony's `src` +
- * `tools`): 7 (rule, file) pairs produce edits at all, 6 of them carry a `using` insert, and the
- * overlap branch is taken ZERO times. So these fixtures address the three implementations at their
+ * contain it STRICTLY, and every edit those rules build sits inside a type member's body. Over
+ * this project's `src` + `test`, the `haxe-formatter` fork and Pony only a handful of (rule, file)
+ * pairs produce edits at all, most of them carry a `using` insert, and the overlap branch is
+ * taken ZERO times. So these fixtures address the three implementations at their
  * own API rather than through a source file — the contract is what shipped wrong, and a caller one
  * refactor away from a header-spanning edit is what it protects.
  *

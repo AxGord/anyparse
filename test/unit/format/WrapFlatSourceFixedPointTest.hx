@@ -22,10 +22,10 @@ import utest.Test;
  * `writeRoundTrip(s) == s` — the canonical gate every writer-emit mutation op
  * is built on — fails after one pass.
  *
- * Measured on the Pony tree under its own `hxformat.json`: three files
- * (`HasAssetBuilder.hx`, `NinjaBuilder.hx`, `UTools.hx`) took two rewrites,
- * all three on the inline anon type hint of `testAnonTypeFillLineOnOverflow`.
- * haxe-formatter 1.18.0 reproduces both passes byte-for-byte on the same
+ * On the Pony tree under its own `hxformat.json` every file that took two
+ * rewrites did so on the inline anon type hint of
+ * `testAnonTypeFillLineOnOverflow`. haxe-formatter reproduces both passes
+ * byte-for-byte on the same
  * config, so the shape is inherited from the fork's
  * `MarkWrapping.anonTypeWrapping` (`!isOriginalSameLine` →
  * `wrapChildOneLineEach`) rather than an anyparse regression — but the fork
@@ -48,7 +48,7 @@ class WrapFlatSourceFixedPointTest extends Test {
 		+ '{"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "fillLine"}]}}}';
 
 	/**
-	 * The widest measured instance — 163 of 854 Pony files under this one
+	 * The widest instance — a large share of Pony's files under this one
 	 * value. `fillLineWithLeadingBreak` breaks after `{` and then PACKS, so
 	 * pass 1 writes `x: 1, y: 2` on one continuation line and pass 2 splits
 	 * it.
@@ -523,21 +523,20 @@ class WrapFlatSourceFixedPointTest extends Test {
 	}
 
 	/**
-	 * The two files W17 closed — the part of the tail (2 of 7) that IS a
+	 * The two files the `bgPrefix` charge closed — the part of the tail that IS a
 	 * `BodyGroup` question. Both are a call whose object-literal argument breaks only at
 	 * RENDER time and whose remaining arguments end in a group committed to
 	 * breaking — a `{`-bodied lambda, or a ternary the cascade has already
 	 * broken.
 	 *
-	 * MEASURED direction (base `f9ca91fc`, `ast --writer-output` chained three
-	 * times over
-	 * `src/pony/ui/xml/PixiXmlUi.hx` and `tools/nodesrc/module/Bmfont.hx`):
+	 * The direction, read off `ast --writer-output` chained three times over
+	 * Pony's `PixiXmlUi.hx` and `Bmfont.hx`:
 	 * pass 1 reads a source-FLAT literal, GLUES the argument list, and the
 	 * renderer then writes the literal's own newlines into the file. Pass 2
 	 * reads those newlines, force-commits the literal to one-per-line — and
 	 * `Renderer.flatFirstLineStep` deferred that now-committed `BodyGroup` to
 	 * zero width and KEPT WALKING, so the argument list's first-line probe
-	 * measured a header the renderer never emits and OPENED the list. Pass 3
+	 * read a header the renderer never emits and OPENED the list. Pass 3
 	 * re-settles on the opened shape, which is what `fmt` used to write.
 	 *
 	 * So the fix changes nothing on pass 1 — base and fixed pass-1 output are
@@ -581,126 +580,43 @@ class WrapFlatSourceFixedPointTest extends Test {
 
 	/**
 	 * The writer shapes of the convergence tail, PINNED AS STILL DIVERGENT
-	 * (ω-canonical-fixed-point). Each needs two writer rewrites under the config
-	 * beside it.
+	 * (ω-canonical-fixed-point). Each needs two writer rewrites under the config beside
+	 * it; the tail is a property of a CONFIG, not of a file, and under this project's own
+	 * `hxformat.json` it is empty.
 	 *
-	 * THE POPULATION, re-measured at `dd188575`. Pony's committed `hxformat.json`
-	 * over its 867 sources leaves FIVE: `tools/src/module/Unpack.hx` and
-	 * `src/pony/net/http/modules/mmodels/Builder.hx` (case body),
-	 * `src/pony/magic/builder/DIBuilder.hx` (value-`if` branch),
-	 * `src/pony/magic/builder/HasSignalBuilder.hx` (ternary under a sole-argument
-	 * call) and `tools/nodesrc/module/Imagemin.hx` (method chain). THIS tree read
-	 * under that same config adds THREE, not the two recorded before —
-	 * `check/DuplicateCase.hx` and `check/UnnecessarySwitch.hx` (both on an
-	 * `ifBody: fitLine` host) and `macro/Lowering.hx` (case body). Under Pony's
-	 * WORKING-tree config the count is ZERO, and under this project's own
-	 * `hxformat.json` it is zero too: the tail is a property of a CONFIG, not of a
-	 * file.
-	 *
-	 * TWO root causes, not one. The paragraph that stood here named a single one —
-	 * "a static measure reads a collection whose break the RENDERER decides" — for
-	 * every file in the list, and that is wrong for two of them. The discriminator
-	 * is one config edit: replace the collection's cascade with a RULES-FREE one
-	 * (`{"defaultWrap": "onePerLine", "rules": []}`), which answers the same mode in
-	 * both fit states and therefore cannot emit a pivot at all.
-	 * `testTailMechanismSplitsOnTheLiteralCascade` runs it on the three sources
-	 * below.
-	 *
-	 *  - MECHANISM A, and the old wording is right for it: a static measure reads a
-	 *    collection whose break the RENDERER decides. The cascade carries a
-	 *    fit-dependent `noWrap` SHADOW over a breaking `defaultWrap`
-	 *    (`totalItemLength <= 140` in both real Pony configs), so a source-FLAT
-	 *    literal reaches its host as `emitZeroThresholdAgree`'s `IfFirstLineExceeds`
-	 *    pivot while the same
-	 *    literal, once the writer's own output has broken it, is force-committed by
-	 *    the Star that does not reflow source newlines. The host measure answers
-	 *    differently and the enclosing shape flips. Committing the cascade makes
-	 *    every one of these CONVERGE. Six of the eight: `Unpack.hx`,
-	 *    `mmodels/Builder.hx` and `Lowering.hx` through `BodyFit.fitLineLayout` on a
-	 *    `caseBody: fitLine` host; `DuplicateCase.hx` and `UnnecessarySwitch.hx`
-	 *    through that same measure on an `ifBody: fitLine` host; `DIBuilder.hx`
-	 *    through the value-`if` branch. Only the first and last of those three hosts
-	 *    have a fixture here — the `ifBody: fitLine` pair has none yet.
+	 * TWO root causes, not one; the discriminator is one config edit — replace the
+	 * collection's cascade with a RULES-FREE one (`{"defaultWrap": "onePerLine",
+	 * "rules": []}`), which answers the same mode in both fit states and therefore
+	 * cannot emit a pivot at all (`testTailMechanismSplitsOnTheLiteralCascade`):
+	 *  - MECHANISM A: a static measure reads a collection whose break the RENDERER
+	 *    decides. The cascade carries a fit-dependent `noWrap` SHADOW over a breaking
+	 *    `defaultWrap`, so a source-FLAT literal reaches its host as
+	 *    `emitZeroThresholdAgree`'s `IfFirstLineExceeds` pivot while the same literal,
+	 *    once the writer's own output has broken it, is force-committed by the Star
+	 *    that does not reflow source newlines; the host measure answers differently
+	 *    and the enclosing shape flips. Committing the cascade makes these CONVERGE.
+	 *    Hosts: `BodyFit.fitLineLayout` on a `caseBody: fitLine` or `ifBody: fitLine`
+	 *    host, and the value-`if` branch — the `ifBody: fitLine` host has no fixture yet.
 	 *  - MECHANISM B, no pivot anywhere: `DocMeasure.flatTokenWidth` DEFERS a
-	 *    `BodyGroup` to 0, so the width a CASCADE reads for an item ALREADY
-	 *    committed to breaking collapses between the two passes. It is the class
+	 *    `BodyGroup` to 0, so the width a CASCADE reads for an item ALREADY committed
+	 *    to breaking collapses between the two passes — the class
 	 *    ω-committed-objectlit-glue closed inside `shapeSingleArgGlue`'s `{`-branch,
-	 *    met here through the cascade's own INPUT rather than through a shaper's
-	 *    probe, and it SURVIVES a rules-free cascade — which is what proves it is
-	 *    not mechanism A. Measured, one width per pass:
-	 *     · `HasSignalBuilder.hx` — `WrapList.measureItems` reports 227 for the sole
-	 *       `FFun(<ternary>)` argument on pass 1 and 15 on pass 2, which turns
-	 *       `callParameter`'s `itemCount <= 1 && totalItemLength <= 100` `noWrap` ON
-	 *       and glues `FFun(setcontroll` where pass 1 had opened the paren
-	 *       (`shapeSingleArgGlue` is not reached at all on pass 2).
-	 *     · `Imagemin.hx` — `MethodChainEmit.measureSegments` reports 173 for the
-	 *       receiver on pass 1 and 60 on pass 2, total 195 against 82, which glues
-	 *       `}).then(completeHandler)` onto the literal's close brace. It has no
-	 *       fixture here yet; the sole-argument-call host above carries the pin for
-	 *       both.
+	 *    met here through the cascade's own INPUT, and it SURVIVES a rules-free
+	 *    cascade, which is what proves it is not mechanism A. Hosts: a ternary under a
+	 *    sole-argument call (pinned here) and a method chain (no fixture yet).
 	 *
-	 * The two mechanisms STACK, and that is what a THREE-rewrite file is:
-	 * `tools/src/create/ides/VSCode.hx` under Pony's committed config plus
-	 * `arrayWrap: {"defaultWrap": "fillLine", "rules": []}` —
-	 * `testStackedMechanismsNeedThreeRewrites`. `defaultWrap` alone does NOT
-	 * reproduce it: the shipped `arrayWrap` rules shadow it and the file converges,
-	 * so the `rules: []` is load-bearing.
+	 * The two mechanisms STACK, and that is what a THREE-rewrite file is
+	 * (`testStackedMechanismsNeedThreeRewrites`; its `rules: []` is load-bearing, since the
+	 * shipped `arrayWrap` rules shadow `defaultWrap` and the file then converges).
+	 * `testMultiArgFillPacksACommittedBodyOnPassTwo` is mechanism B in a third host.
 	 *
-	 * `src/anyparse/query/Cli.hx` is mechanism B in a third host —
-	 * `testMultiArgFillPacksACommittedBodyOnPassTwo`. It is NOT
-	 * `shapeMultiArgCollection`, which `shapeMultiArgBlockLambda` claims first and
-	 * which never sees the divergent list.
-	 *
-	 * Candidate fixes measured on this tree and Pony's. The first one SHIPPED
-	 * (W17); the rest did not, and every one of those reformats anyparse's OWN
-	 * tree, whose `apq fmt src test --list` is otherwise EMPTY:
-	 *
-	 *  - SHIPPED (W17): `Renderer.flatFirstLineStep` adopting `restNodeWidth`'s
-	 *    committed-`BodyGroup` answer (charge its first-line prefix, END the line)
-	 *    for the `IfFirstLineExceeds` consumer ONLY — `restNodeWidth`'s own
-	 *    committed-vs-movable classifier keeps the deferring answer, which is what
-	 *    the `bgPrefix` flag selects. Closed `PixiXmlUi.hx` and `Bmfont.hx`; suite
-	 *    and corpus byte-unmoved; Pony's drift set unmoved at 80, its OUTPUT moving
-	 *    for exactly those two files (both now settle on their pass-1 shape); three
-	 *    files reformatted here, each a call or ternary whose collection argument
-	 *    now glues instead of the head opening — the shape
-	 *    `testCallArgObjectLiteralGluesOnFirstPass` and
-	 *    `testTernaryBranchObjectLiteralHugsOnFirstPass` already pin as correct.
-	 *    Charging in BOTH walkers instead reformats 6 files here, 3 of them worse,
-	 *    because a nested body that is itself COMMITTED then reads as committed
-	 *    to the rest-of-stack lookahead too. That reading is what render does —
-	 *    the cond-wrap consumers are simply calibrated against the deferring
-	 *    answer, so `bgPrefix` DEFERS W16's recalibration verdict for them
-	 *    rather than retiring it. Charging the prefix WITHOUT ending the line is
-	 *    free (0 files here, 0 on Pony, Pony census still 7) and closes nothing.
-	 *  - `DocMeasure.flatTokenWidth` descending a `BodyGroup` (the measure
-	 *    `WrapList.measureItems` reads): closes three, opens `IRPC.hx`, reformats
-	 *    74 files here — and makes `src/anyparse/core/CollapsePass.hx` itself a
-	 *    two-rewrite file.
-	 *  - resolving the pivot for the `BodyFit`/case-sibling measures: closes the
-	 *    two case-body files, reformats 7 here and 8 more on Pony. It cannot be
-	 *    narrowed to the divergent population, because the discriminator is
-	 *    whether the list's Star reflows source newlines and `HxExpr.ArrayExpr` is
-	 *    the ONLY Star in the Haxe grammar that does — every call-parameter list
-	 *    in this tree is in the same population as Pony's object literals.
-	 *  - `BodyFit.fitLineLayout` sending a body that does not fit ON ITS OWN LINE
-	 *    to the glue gate instead of the break shape (W17): closes ONE case-body
-	 *    file, reformats 10 here — every one of them a `for`/`if` body glued onto
-	 *    its header — and adds two files to Pony's drift set. Rejected.
-	 *  - saturating a COMMITTED item's width in `WrapList.measureItems` to
-	 *    `MAX_ITEM_LEN`, so a `totalItemLength <= n` rule can never fire on a list
-	 *    that cannot render flat — mechanism B's false premise, stated the way
-	 *    ω-committed-objectlit-glue states it for `IfArrowContinuationFits`: closes
-	 *    TWO of the ten reduced shapes (`DIBuilder.hx`, `HasSignalBuilder.hx`) and
-	 *    takes `VSCode.hx` from three rewrites to two, while reformatting 11 files
-	 *    of THIS tree, +117/-87, net +30 lines, max added column 137. Saturating
-	 *    only the `total` axis and leaving `maxLen`/`minLen`/`equalLens` alone
-	 *    measures IDENTICALLY. Rejected on that trade.
-	 *
-	 * So the writer defect is left standing for all eight and reported (`apq fmt`
-	 * warns), and the CONSUMER that was silently harmed by it —
-	 * `RefactorSupport.canonicalize` — was fixed instead. When a fix does land,
-	 * these three become `Assert.equals` on `once` and `twice`; do not delete them.
+	 * Of the candidate fixes only `Renderer.flatFirstLineStep` adopting `restNodeWidth`'s
+	 * committed-`BodyGroup` answer for the `IfFirstLineExceeds` consumer shipped (the
+	 * `bgPrefix` flag); every other candidate reformats this project's own tree, which is
+	 * otherwise a fixed point — each is one line in `docs/decisions.md`. So the writer
+	 * defect is left standing and reported (`apq fmt` warns), and the CONSUMER silently
+	 * harmed by it — `RefactorSupport.canonicalize` — was fixed instead. When a fix does
+	 * land, these become `Assert.equals` on `once` and `twice`; do not delete them.
 	 */
 	public function testConvergenceTailStillNeedsTwoRewrites(): Void {
 		final cases: Array<{ name: String, src: String, config: String }> = [
@@ -739,9 +655,8 @@ class WrapFlatSourceFixedPointTest extends Test {
 	 * the NEXT such op puts on the file it wrote is `writeRoundTrip(s) == s` after
 	 * ONE pass. For a source the writer cannot settle in one, a single round trip
 	 * there reported `wrote <file>` and left a file its own `fmt --list` called
-	 * drifted — measured with `apq add-member --reformat` on Pony's
-	 * `tools/src/module/Unpack.hx`, after which the very next `add-member` refused
-	 * with `file is not in canonical form`.
+	 * drifted — seen with `apq add-member --reformat` on a Pony file, after which
+	 * the very next `add-member` refused with `file is not in canonical form`.
 	 *
 	 * `edits` is empty deliberately: the defect is in the FINALISE, not in any
 	 * splice, so the smallest statement of it is "canonicalise this source and the
@@ -819,14 +734,14 @@ class WrapFlatSourceFixedPointTest extends Test {
 	 * `BodyGroup` to 0. Zero then satisfies the cascade's `totalItemLength <= 100`
 	 * `noWrap` rule, so the call glued on pass 2 what it had opened on pass 1.
 	 *
-	 * MEASURED (base `ee9f7a51`, `ast --writer-output` chained three times):
-	 * pass 1 opens `recordResolution(` with the `{` on its own line, pass 2
-	 * glues `recordResolution({`, pass 3 reproduces pass 2 — a two-rewrite
+	 * Read off `ast --writer-output` chained three times: pass 1 opens
+	 * `recordResolution(` with the `{` on its own line, pass 2 glues
+	 * `recordResolution({`, pass 3 reproduces pass 2 — a two-rewrite
 	 * convergence, NOT an oscillation. Sweeping the literal's flat width one
-	 * column at a time under this cascade gives a CONTIGUOUS two-sided band,
-	 * `flatTokenWidth` 101..127: below 101 the `totalItemLength <= 100` rule
-	 * glues on pass 1 already, above 127 the continuation probe (`8 + 4 + W <
-	 * 140` at this indent) stops fitting and the glued shape wins on pass 1.
+	 * column at a time under this cascade gives a CONTIGUOUS two-sided band:
+	 * under the `totalItemLength <= 100` rule it glues on pass 1 already, and
+	 * once the continuation probe stops fitting at this indent the glued shape
+	 * wins on pass 1. The source below sits inside that band.
 	 *
 	 * The fix answers the question the premise allows: a committed literal
 	 * glues. That is also the shape `testCallArgObjectLiteralGluesOnFirstPass`
@@ -858,7 +773,7 @@ class WrapFlatSourceFixedPointTest extends Test {
 	 * flat, so it carries no hardline, the continuation probe has a real question
 	 * to answer, and the answer is the one that was already right: open the
 	 * paren and leave the literal flat on its own line. Byte-identical to the
-	 * pre-slice output — verified against a base-engine build of `ee9f7a51`.
+	 * pre-slice output, verified against a base-engine build.
 	 */
 	public function testSoleUncommittedObjectLiteralArgKeepsTheOpenParen(): Void {
 		final src: String = 'class C {\n\tstatic function g(): Void {\n\t\tregisterDeferredResolutionForVerifiedProducerFields'
@@ -973,10 +888,10 @@ class WrapFlatSourceFixedPointTest extends Test {
 	 * (ω-canonical-fixed-point).
 	 *
 	 * `src/anyparse/query/Cli.hx`'s `limitEntries(...)` is a fixed point under
-	 * this project's own `hxformat.json`, so nothing here observes it; 14 of 78
-	 * single-knob config arms do. Under a COMMITTED literal cascade the
-	 * trailing `(e, k) -> {…}` argument measures `DocMeasure.flatTokenWidth` 66
-	 * on pass 1 and 10 on pass 2 — the `BodyGroup` deferral — so
+	 * this project's own `hxformat.json`, so nothing here observes it; a share
+	 * of the single-knob config arms do. Under a COMMITTED literal cascade the
+	 * trailing `(e, k) -> {…}` argument measures its real `DocMeasure.flatTokenWidth`
+	 * on pass 1 and a deferred one on pass 2 — the `BodyGroup` deferral — so
 	 * `shapeFillLineWithLeadingBreak`'s `FillBreakAfterWrap` wraps before that
 	 * argument on pass 1 and packs it on pass 2.
 	 *

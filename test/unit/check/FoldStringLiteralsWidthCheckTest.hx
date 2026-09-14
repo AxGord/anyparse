@@ -354,9 +354,9 @@ class FoldStringLiteralsWidthCheckTest extends FoldStringLiteralsCheckTestBase {
 	 * merge back: `--fix` ping-ponged to the pass cap with a byte-identical file. A
 	 * split is licensed by the lines it TOUCHES being over-wide, so this plans NOTHING.
 	 *
-	 * Measured geometry (tab 4): head 139, reification line 142, limit 140 — the
-	 * one-column margin is DELIBERATE (140 vs 141 flips this into the progress
-	 * fixture's shape). The reification line alone must stay finding-free too: its
+	 * Geometry (tab 4): head 139, reification line 142, limit 140 — the one-column
+	 * margin is DELIBERATE (one more column flips this into the progress fixture's
+	 * shape). The reification line alone must stay finding-free too: its
 	 * single `\n` is terminal, so there is no seam and nothing to plan — if the seam
 	 * model ever changes, this guard keeps the fixture honest.
 	 */
@@ -398,11 +398,11 @@ class FoldStringLiteralsWidthCheckTest extends FoldStringLiteralsCheckTestBase {
 	/**
 	 * MIDDLE-SANDWICH precision, accept side. The chain merges a literal pair on EITHER
 	 * side of the irreducible line, so the plan changes a line above it and a line below
-	 * it and leaves the 142-column line between them alone. Measured as one contiguous
+	 * it and leaves the 142-column line between them alone. Taken as one contiguous
 	 * window, that untouched line entered both maxima and pinned them EQUAL — the gate
 	 * read "no improvement" and refused a plan that narrowed every line it touched, so
-	 * `--fix` recovered one pair per pass through the inner-chain descent (2 edits over
-	 * 3 passes). Differenced by CONTENT it is on neither side, and the whole chain folds
+	 * `--fix` recovered one pair per pass through the inner-chain descent. Differenced
+	 * by CONTENT it is on neither side, and the whole chain folds
 	 * in ONE pass. The assertion spans the construct — both merges AND the untouched
 	 * line between them — so no half of it can pass on the unchanged source.
 	 */

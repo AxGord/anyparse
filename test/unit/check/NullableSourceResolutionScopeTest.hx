@@ -14,8 +14,8 @@ import utest.Test;
  *
  * Every member this family asks about — `Array.pop`, a library's `find` — is declared OUTSIDE the
  * files under report, so a REPORT-scoped index answers "unknown" for all of them by construction
- * and the arc was silently dead wherever it mattered. Measured on the Pony fork: 48 of 421
- * method-call questions resolved through the report index, 194 through the resolution index.
+ * and the arc was silently dead wherever it mattered: on the Pony fork the resolution index
+ * resolves several times as many method-call questions as the report index does.
  *
  * The same widening is what makes `RefShape.nullableFlowExcludedCalls` load-bearing HERE: the
  * exclusion is applied to `instanceSigs` at build time, and this arc reaches the same call by an

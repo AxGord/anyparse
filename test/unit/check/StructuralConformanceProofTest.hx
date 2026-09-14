@@ -18,12 +18,12 @@ using Lambda;
  * The absence walk fails closed toward "cannot prove absent", so its negation read an
  * UNRESOLVABLE supertype as declaring every member: a class extending a type outside the
  * resolution scope conformed to any structure that merely named the candidate. And a member set
- * is not a unification — measured against the compiler on Haxe 4.3.7, a structural `var x:Float`
+ * is not a unification — checked against the compiler, a structural `var x:Float`
  * rejects a class declaring `var x:Int`, `var x:Base` rejects `var x:Sub` (a mutable structure
  * field is INVARIANT, a subtype is not enough), and `var x:C` for an abstract `C` with a
  * `@:from Int` rejects `var x:Int` (an implicit cast does not bridge one either).
  *
- * Three spellings measured the OTHER way and are therefore open, each with a fixture below: a
+ * Three spellings go the OTHER way and are therefore open, each with a fixture below: a
  * plain `typedef MyInt = Int` alias IS accepted by a structural `x:MyInt` against `var x:Int`,
  * and so is `Null<Int>` against `Int` in both directions. A type PARAMETER, `Dynamic` and an
  * anonymous-structure nominal are open by construction.
@@ -32,10 +32,9 @@ using Lambda;
  * form the refutation could see. The index keyed a member's `typeSource` on the MEMBER node while
  * the span-info walk keys it on the node carrying the annotation, and for the explicit
  * `var x:T;` / `final x:T;` forms those are one node apart — the grammar wraps the declaration in
- * an optional-marker node (`var ?x:T`) that owns the name and the type. Measured when that was
- * fixed: 4653 of 5223 indexed anon-struct members read as unannotated, 2897 `var` plus 1756
- * `final`, against 570 shorthand ones that did not; on the Pony fork, 38 of 264.
- * `testExplicitVarFormStructureRefutesToo` is the discriminator and
+ * an optional-marker node (`var ?x:T`) that owns the name and the type. Before that was fixed
+ * nearly every indexed anon-struct member of this project read as unannotated, and a share of
+ * the Pony fork's did too. `testExplicitVarFormStructureRefutesToo` is the discriminator and
  * `SymbolIndexBuilder.typeInfoKeyOf` is the seam. The four structures the Pony fork withheld
  * findings against are still written shorthand (`{app:String, debug:Bool}`,
  * `{d:EventDispatcher, n:String}`, `{min:Time, max:Time}`).
@@ -175,8 +174,8 @@ class StructuralConformanceProofTest extends Test {
 	 * grammar node apart — the declaration a `var` / `final` anon field carries sits inside an
 	 * optional-marker wrapper (`var ?x:T`), and the span-info walk keys the type maps on THAT
 	 * node while the index used to read them at the member's own span. Every `var` and `final`
-	 * field in every indexed structure therefore read as unannotated (4653 of 5223 members on
-	 * this tree), and the refutation half could never fire on one.
+	 * field in every indexed structure therefore read as unannotated, and the refutation half
+	 * could never fire on one.
 	 */
 	@:pin('control')
 	@:killer('M-STRUCT-ANON-VAR-KEY')
@@ -191,7 +190,7 @@ class StructuralConformanceProofTest extends Test {
 	 * The RESIDUAL, pinned rather than described: a nominal that resolves NOWHERE is compared by
 	 * its written simple name, so an out-of-scope `typedef MyInt = Int` refutes a `var x:Int` the
 	 * compiler unifies with it. That is the one shape `comparableNominalOf` is unsound for, and
-	 * this fixture is the only place it exists — a census of both trees moved 0 findings in
+	 * this fixture is the only place it exists — a census of both trees moved no finding in
 	 * either direction when the default was flipped to OPEN, on the base engine and on this one.
 	 * The day a real instance appears, flipping the default becomes a behaviour change and the
 	 * arm below stops being a no-op on the corpus.

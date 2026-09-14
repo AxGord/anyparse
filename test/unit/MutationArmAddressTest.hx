@@ -42,12 +42,10 @@ typedef ArmSite = {
  * stops the build instead of a sweep. It has one blind spot, and it is not a
  * small one. A module whose every type sits behind `#if macro` contributes no
  * type to a non-macro build, so `Context.getModule('anyparse.macro.WriterLowering')`
- * answers `ok, 0 type(s)` — measured on `d86c958b` — and the whole macro-time
- * half of the engine (`WriterLowering` 109 members, `Lowering` 77,
- * `WriterCodegen`, `TriviaTypeSynth`, the five `Writer*Lowering` modules S85 and
- * S87 split out) was unaddressable by an arm because of it. S100 hit the wall
- * head-on: four arms it wanted against a writer seam had to cut the config
- * LOADER instead.
+ * answers `ok, 0 type(s)`, and the whole macro-time half of the engine
+ * (`WriterLowering`, `Lowering`, `WriterCodegen`, `TriviaTypeSynth`, the
+ * `Writer*Lowering` modules) was unaddressable by an arm because of it: arms
+ * wanted against a writer seam had to cut the config LOADER instead.
  *
  * The parser has no such blind spot — a `#if` region is a `Conditional` node
  * whose branches are ordinary children — so this walk answers for a macro-time
@@ -60,7 +58,7 @@ typedef ArmSite = {
  * The FRAGMENT half was written off here as needing a canonical writer
  * round-trip per host file. It does not: `Patch.locate` runs on the raw slice,
  * long before `CanonicalEdit.canonicalize` is reached, so the last fixture below
- * asks that matcher directly and costs one extra parse of the ~20 host files.
+ * asks that matcher directly and costs one extra parse of the host files.
  */
 @:nullSafety(Strict)
 final class MutationArmAddressTest extends Test {
@@ -78,7 +76,7 @@ final class MutationArmAddressTest extends Test {
 	 *
 	 * Reads the REAL registry, which is the point: this is the only instrument that
 	 * can see a macro-time member, so a fixture over a table of its own would leave
-	 * the hole exactly where S100 found it. The pure half of the same question —
+	 * the hole exactly where it was found. The pure half of the same question —
 	 * a dotted type becoming a path — is `unit.MutationArmsTest`, on a table of its
 	 * own, and `M-ARM-PATH-FLAT` cuts the member both of them go through.
 	 */
@@ -155,15 +153,13 @@ final class MutationArmAddressTest extends Test {
 	 *
 	 * The build macro checks an arm's TYPE and its MEMBER, so a rename or a move stops the
 	 * build. It never checked the fragment, and a refactor that rewrites a member's body
-	 * leaves the arm pointing at text that no longer occurs — twice, measured: S103 found
-	 * `M-ROOTS-THIRDPARTY` had silently stopped applying after an extraction, and
-	 * `M-OPAQUE-REGION-NODE-SPAN` built green for a whole slice after `daf1a095` and was
-	 * caught only by RUNNING it.
+	 * leaves the arm pointing at text that no longer occurs: `M-ROOTS-THIRDPARTY` once silently
+	 * stopped applying after an extraction, and `M-OPAQUE-REGION-NODE-SPAN` built green for a
+	 * whole slice and was caught only by RUNNING it.
 	 *
-	 * A plain substring test over the host FILE cannot take the job, and the measurement says
-	 * so rather than the reasoning: of the 69 fragment arms at `a45a05d9`, three match only
-	 * through the whitespace-insensitive fallback and four occur TWICE in the file while
-	 * occurring once in the node, so a strict substring gate would fail seven healthy arms and
+	 * A plain substring test over the host FILE cannot take the job: some fragment arms match
+	 * only through the whitespace-insensitive fallback and some occur TWICE in the file while
+	 * occurring once in the node, so a strict substring gate would fail healthy arms and
 	 * stop the build where there is no defect. What made the faithful check look expensive was
 	 * a claim this fixture refutes: `Patch.locate` runs on the raw slice, long before
 	 * `CanonicalEdit.canonicalize` is reached, so no writer round-trip is involved at all.
@@ -225,7 +221,7 @@ final class MutationArmAddressTest extends Test {
 	 * `force` instead, and nothing checked those at all: that walk skips an arm with no
 	 * fragment, and the build macro only asks the typer that the member exists. Their one
 	 * applicability test lived inside `tools/mutation-arm.sh`, so it ran when the ARM ran —
-	 * the same "only a run can tell you" that cost S118 a whole green slice on a rotted
+	 * the same "only a run can tell you" that has cost a whole green slice on a rotted
 	 * fragment, in the half that had no walk yet.
 	 *
 	 * What the runner needs is narrow, and the tree states all of it: the member resolves
@@ -234,11 +230,11 @@ final class MutationArmAddressTest extends Test {
 	 * brace on its line, the member is not `inline`, and the header up to the brace occurs
 	 * exactly once inside the member — that header being the fragment `apq patch` is handed.
 	 *
-	 * The `inline` condition is the FOURTH arm-authoring blind spot, and the last of the
-	 * five a walk can answer (S147). A forced `return` ahead of an inline body is a
-	 * non-final return the compiler refuses, which is why S94 hand-special-cased one arm
-	 * and S96 re-encoded `M-PATHWALK-NULL` as `find`/`replace` — nothing said so until the
-	 * arm ran. It over-approximates in one direction, measured: an inline member NOBODY
+	 * The `inline` condition is the last arm-authoring blind spot a walk can answer. A
+	 * forced `return` ahead of an inline body is a non-final return the compiler refuses,
+	 * which is why one arm was hand-special-cased and `M-PATHWALK-NULL` re-encoded as
+	 * `find`/`replace` — nothing said so until the arm ran. It over-approximates in one
+	 * direction: an inline member NOBODY
 	 * CALLS compiles with a leading return, because inlining happens at the call site. An
 	 * arm on an uncalled member has no behaviour to remove, so refusing it costs nothing.
 	 *

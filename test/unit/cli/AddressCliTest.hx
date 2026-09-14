@@ -341,7 +341,7 @@ class AddressCliTest extends Test {
 	 * `resolveAddressPos` hands both on as a bare position, and `ElementSpan.declGroupSpan` then
 	 * walks forward to the declaration the modifier precedes. Asked to remove a MODIFIER, the op
 	 * removed the whole `private typedef Helper` DECLARATION and reported `wrote <file>` at rc 0 —
-	 * silent work destruction, and the reason S90 had to route around it with `patch`.
+	 * silent work destruction, and the reason a slice once had to route around it with `patch`.
 	 *
 	 * The leading assertions are the reachability proof: the fixture's declaration is present
 	 * before the call, and still byte-for-byte present after it.

@@ -198,9 +198,9 @@ class PossibleNullDereferenceTest extends Test {
 	}
 
 	/**
-	 * The guard this check was blind to until S135: `NullFlow` already modelled `m.exists(k)`
-	 * for the flow check's seed, and the point-wise walk never asked it. Measured on the Pony
-	 * fork, 15 of 65 findings were sites the author had guarded.
+	 * The guard this check used to be blind to: `NullFlow` already modelled `m.exists(k)`
+	 * for the flow check's seed, and the point-wise walk never asked it. On the Pony fork a
+	 * quarter of the findings were sites the author had guarded.
 	 */
 	@:pin('control')
 	@:killer('M-EXISTS-GUARD-BLIND')
@@ -251,10 +251,10 @@ class PossibleNullDereferenceTest extends Test {
 	}
 
 	/**
-	 * The shape S132 measured as the whole valuable residue of the type-resolver's "don't know"
-	 * set: a Map behind a multi-hop field path across files, guarded by `exists`. Seven of the
-	 * ten positions whose answer would change a finding are this, and closing the field-path gap
-	 * without this guard would have shipped all seven as false positives.
+	 * The shape that is the whole valuable residue of the type-resolver's "don't know"
+	 * set: a Map behind a multi-hop field path across files, guarded by `exists`. Most of the
+	 * positions whose answer would change a finding are this, and closing the field-path gap
+	 * without this guard would have shipped every one of them as a false positive.
 	 *
 	 * Both halves are asserted together because either alone is vacuous: the guarded half passes
 	 * on its own whenever the resolver simply cannot type the path.

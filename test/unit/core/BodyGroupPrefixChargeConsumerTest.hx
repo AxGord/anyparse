@@ -7,80 +7,44 @@ import utest.Assert;
 import utest.Test;
 
 /**
- * The two RENDER-DECISION consumers of `Renderer`'s first-line walk, pinned at
- * the seam they share: the `bgPrefix` flag of
- * `flatTokenWidthFirstLineWithBreak`, which decides what a nested `BodyGroup`
- * contributes to the width of the line it sits on. `true` charges a COMMITTED
- * one its own first-line prefix and ends the line there; `false` defers every
- * one of them (zero width, no line end).
+ * The two RENDER-DECISION consumers of `Renderer`'s first-line walk, pinned at the seam they share: the `bgPrefix`
+ * flag of `flatTokenWidthFirstLineWithBreak`, which decides what a nested `BodyGroup` contributes to the width of
+ * the line it sits on. `true` charges a COMMITTED one its own first-line prefix and ends the line there; `false`
+ * defers every one (zero width, no line end).
  *
- * EVERY CASE HERE IS GREEN AT BASE BY CONSTRUCTION — this slice changed no
- * renderer behaviour. They are controls over unchanged code, so their evidence
- * is the MUTATION each is paired with. The seven below flip nearly disjoint
- * sets; the last two exist for the vacuity audit, proving that the two
- * deferred-answer assertions and the inline-body control are reachable too. All
- * measured on `a3cc4999`, and the 946-fixture corpus stays at 781/120/43 under
- * every one of them — no corpus fixture guards any of this.
- *
+ * EVERY CASE HERE IS GREEN AT BASE BY CONSTRUCTION — the slice that added them changed no renderer behaviour. They
+ * are controls over unchanged code, so their evidence is the MUTATION each is paired with; the mutations flip
+ * nearly disjoint sets, the last two cases exist for the vacuity audit, and no corpus fixture guards any of this.
  * Mutations of `Renderer.hx`, and what each one turns red:
  *
- *  1. `flatFirstLineStep`'s `BodyGroup` arm never charges —
- *     `testBlockBodyChargesItsBareBrace`, the `equals(17, …)` assertion of
- *     `testArrowMarkerAdmitsExactlyOneColumn` (the keep-mode literal's walk no
- *     longer stops at the nested body and runs on to 26), and the pre-existing
+ *  1. `flatFirstLineStep`'s `BodyGroup` arm never charges — `testBlockBodyChargesItsBareBrace`, the exact-width
+ *     assertion of `testArrowMarkerAdmitsExactlyOneColumn`, and
  *     `WrapFlatSourceFixedPointTest.testCommittedBodyGroupPrefixConvergesOnFirstPass`.
- *  2. `selfBreakingBraceBody`'s `<= 1` becomes `<= 0` —
- *     `testArrowMarkerAdmitsExactlyOneColumn` plus five
+ *  2. `selfBreakingBraceBody`'s `<= 1` becomes `<= 0` — `testArrowMarkerAdmitsExactlyOneColumn` plus
  *     `HxArrowBlockBodyOpenSliceTest` cases.
- *  3. The same `<= 1` becomes `<= 2` — `testArrowMarkerAdmitsExactlyOneColumn`
- *     ONLY.
- *  4. The same `<= 1` becomes `<= 1000` — `testArrowMarkerAdmitsExactlyOneColumn`
- *     plus `testKeepModeLiteralBreakingLaterStillBreaks`.
- *  5. `restNodeWidth`'s `flatTokenWidthFirstLineWithBreak(innerDoc, false)`
- *     becomes `true` — `testRestStackDefersACommittedNestedBody` ONLY.
- *  6. `flatFirstLineStep` charges under BOTH accuracies (W17's both-true arm) —
- *     `testRestStackDefersACommittedNestedBody` plus the two DEFERRED-answer
- *     assertions of `testBlockBodyChargesItsBareBrace`.
- *  7. `restNodeWidth`'s `BodyGroup` arm charges unconditionally (its
- *     `prefix.broke` test dropped) — BOTH rest-stack cases here plus four
- *     pre-existing ones (`testGuardLabelFitDoesNotCountBody`,
- *     `testGuardRejoinsSourceBrokenLabelThatFits`,
- *     `testIfChainHeaderFitsBodyDrops`, `testWhileChainHeaderFitsBodyDrops`).
+ *  3. The same `<= 1` becomes `<= 2` — `testArrowMarkerAdmitsExactlyOneColumn` ONLY.
+ *  4. The same `<= 1` becomes `<= 1000` — `testArrowMarkerAdmitsExactlyOneColumn` plus
+ *     `testKeepModeLiteralBreakingLaterStillBreaks`.
+ *  5. `restNodeWidth`'s `flatTokenWidthFirstLineWithBreak(innerDoc, false)` becomes `true` —
+ *     `testRestStackDefersACommittedNestedBody` ONLY.
+ *  6. `flatFirstLineStep` charges under BOTH accuracies — `testRestStackDefersACommittedNestedBody` plus the
+ *     two DEFERRED-answer assertions of `testBlockBodyChargesItsBareBrace`.
+ *  7. `restNodeWidth`'s `BodyGroup` arm charges unconditionally (its `prefix.broke` test dropped) — BOTH
+ *     rest-stack cases here plus `testGuardLabelFitDoesNotCountBody`, `testGuardRejoinsSourceBrokenLabelThatFits`,
+ *     `testIfChainHeaderFitsBodyDrops` and `testWhileChainHeaderFitsBodyDrops`.
  *
- * Rows 3 and 4 UNDERSTATE what one assertion buys: `isFalse(selfBreakingBraceBody(past))`
- * on a Doc measuring 2 fails for EVERY threshold at or above 2, so it closes the
- * whole slack in one go, and row 2 closes the other side. The threshold is pinned
- * at exactly 1 in both directions.
+ * Rows 3 and 4 understate what one assertion buys: `isFalse(selfBreakingBraceBody(past))` on a Doc measuring 2
+ * fails for EVERY threshold at or above 2, and row 2 closes the other side, so the threshold is pinned at exactly
+ * 1 in both directions.
  *
- * WHY EACH ONE WAS MISSING.
- *
- * The CHARGE itself was already pinned, end-to-end and under one config, by
- * `testCommittedBodyGroupPrefixConvergesOnFirstPass` through the
- * `IfFirstLineExceeds` probe. What had nothing was its SECOND consumer:
- * reverting the charge at `selfBreakingBraceBody`'s call site alone left the
- * suite green and the corpus byte-identical, because a block body measures 0
- * deferred and 1 charged and the threshold `<= 1` admits both. That path cannot
- * be pinned end-to-end at all, so `testBlockBodyChargesItsBareBrace` asserts the
- * two widths themselves — and note what that does NOT cover: which of the two
- * the call site ASKS for is still unpinnable by construction, and stays so after
- * this class.
- *
- * The THRESHOLD had one-sided coverage. `<= 0` flipped five arrow cases, but
- * `<= 2` flipped nothing in the suite or the corpus, and the next threshold
- * sampled above it that moved anything was `<= 1000` — 35 values of slack over a
- * threshold the whole admitted population sits exactly on. Nothing between 3 and
- * 36 was tried; the slack is bounded by those two samples, not swept. The `{a`
- * fixture sits one column past the boundary and closes that side, with the other
- * two conjuncts asserted TRUE on the same Doc so the `false` verdict can only
- * come from the width.
- *
- * `restNodeWidth`'s `false` had nothing in `test/` at all. Its guard was the
- * whole-tree `apq fmt --list` — two files drift when it is flipped,
- * `check/PreferMapType.hx` and `query/LintFixSafePass.hx`, both the very
- * `for (…) if (…) { … }` shape that arm's own comment names — plus a Pony A/B.
- * Both are whole-tree byte oracles: they answer only when some file's layout
- * happens to tip, they name no mechanism, and they go silent the moment the tree
- * is reformatted. The render case below asks the walker its own question.
+ * WHY EACH ONE WAS MISSING. The CHARGE itself was pinned end-to-end through the `IfFirstLineExceeds` probe, but
+ * its SECOND consumer had nothing: reverting the charge at `selfBreakingBraceBody`'s call site alone left the
+ * suite green and the corpus byte-identical, because a block body measures 0 deferred and 1 charged and `<= 1`
+ * admits both — so `testBlockBodyChargesItsBareBrace` asserts the two widths themselves (which of the two the call
+ * site ASKS for stays unpinnable by construction). The threshold had one-sided coverage, and the `{a` fixture one
+ * column past the boundary closes the other side. `restNodeWidth`'s `false` had only whole-tree byte oracles (`apq
+ * fmt --list`, a Pony A/B), which answer only when some file's layout happens to tip and name no mechanism; the
+ * render case below asks the walker its own question.
  */
 @:nullSafety(Strict)
 @:access(anyparse.core.Renderer)

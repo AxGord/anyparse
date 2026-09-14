@@ -25,9 +25,9 @@ import utest.Test;
  * to re-sort it. The run printed a success line while leaving a `member-order` finding IT had
  * just created, and a byte-identical second invocation of the same command then fixed it.
  *
- * Measured on the Pony corpus (867 files, oracle configured): the second invocation fixed 5 more
- * issues in 3 more files; with the follow-up round the first invocation reaches that same tree
- * byte for byte, and a second invocation fixes 0.
+ * On the Pony corpus with an oracle configured the second invocation used to fix a few more
+ * issues; with the follow-up round the first invocation reaches that same tree byte for byte,
+ * and a second invocation fixes nothing.
  */
 @:nullSafety(Strict)
 final class LintFixFollowUpRoundTest extends Test {

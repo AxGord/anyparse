@@ -1227,7 +1227,7 @@ class MemberOrderCheckTest extends Test {
 	 * that some initializer somewhere has a side effect.
 	 *
 	 * `X`'s initializer READS `Y`, so canonical order (public constant before private) would read
-	 * `Y` before it is built. This is the one of this project's 13 residual `member-order` findings
+	 * `Y` before it is built. This is the one residual `member-order` finding of this project
 	 * that is not the budget - `HaxeNamingSupport.MODIFIER_KINDS`, whose initializer comprehends
 	 * `MOD_KIND_TO_NAME.keys()` - copied down to two members, and it reports the same sentence.
 	 *
@@ -1235,8 +1235,8 @@ class MemberOrderCheckTest extends Test {
 	 * fixture keeps the CALL rather than reading the sibling plainly: `Y.keys()` makes the coarser
 	 * side-effecting-flip gate true as well, so a `reorderRefusal` that asked that one first
 	 * answers with the vaguer sentence and fails the second assertion while the first still passes.
-	 * A plain `public var x:Int = y;` does NOT trip the coarse gate - measured, that fixture
-	 * survived the swapped-gate arm.
+	 * A plain `public var x:Int = y;` does NOT trip the coarse gate - that fixture survived
+	 * the swapped-gate arm.
 	 *
 	 * The finding the container reports is a SPACING one, and that is not an accident. Since the report path skips a pair the language
 	 * pins (`initReadsSibling` in `firstOutOfOrder`), the `X` over `Y` misorder is never reported - the missing blank between the two
@@ -1260,7 +1260,7 @@ class MemberOrderCheckTest extends Test {
 	}
 
 	/**
-	 * T545, the report half: a public constant whose initializer READS the private constant above
+	 * The report half: a public constant whose initializer READS the private constant above
 	 * it is not out of order — canonical order (public constant first) would read the map before
 	 * it is built, so the language forbids exactly what the rule asks for. `--fix` already refused
 	 * this container; the REPORT still named it, which is a finding with no legal answer.

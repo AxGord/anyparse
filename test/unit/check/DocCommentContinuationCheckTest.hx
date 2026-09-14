@@ -46,8 +46,8 @@ class DocCommentContinuationCheckTest extends Test {
 	 * The Haxe-standard-library / OpenFL doc style: no gutter at all, body indented one level
 	 * under the opener, markdown bullets inside. Reading only the FIRST CHARACTER of the opening
 	 * interior line counted a `*` bullet as a gutter and reported every line of such a block —
-	 * measured, 36 findings over the 2624 stdlib files and 254 over openfl, and the fix DELETED
-	 * the bullet markers. A gutter star is followed by whitespace; a bullet's is the whole marker.
+	 * hundreds of findings over the stdlib and openfl, and the fix DELETED the bullet markers.
+	 * A gutter star is followed by whitespace; a bullet's is the whole marker.
 	 */
 	public function testGutterlessBulletBlockIgnored(): Void {
 		final src: String = 'class C {\n\t/**\n\t\tThis value controls the messages, a sum of some of these flags:\n\n'
@@ -64,7 +64,7 @@ class DocCommentContinuationCheckTest extends Test {
 	/**
 	 * A block whose every line already agrees on ONE gutter is a house style, whatever indent it
 	 * chose — here one level deeper than its opener, which is how openfl and lime write theirs.
-	 * Judging it against the OPENER's indent reported 142 correct blocks across those two
+	 * Judging it against the OPENER's indent flagged every correct block of those two
 	 * libraries. What the rule reports is a line disagreeing with its own block.
 	 */
 	public function testUnanimousBlockAtItsOwnIndentIgnored(): Void {
@@ -110,7 +110,7 @@ class DocCommentContinuationCheckTest extends Test {
 
 	/**
 	 * A block written in the COMPACT `<indent>*` spelling end to end is a house style, not a
-	 * corruption — it is the only shape the rule found on 868 Pony files, and flagging it would
+	 * corruption — it is the only shape the rule found on the Pony fork, and flagging it would
 	 * have made a prose-rewriting rule a style police. The block picks the spelling ITS OWN lines
 	 * use, so a consistent block is silent whichever one it chose.
 	 */
@@ -145,8 +145,8 @@ class DocCommentContinuationCheckTest extends Test {
 
 	/**
 	 * A NESTED bullet is content too, and it is why the doubling arm is not widened to the
-	 * ` *  * ` form: over this tree and 679 Pony files that pattern matched exactly two lines
-	 * and both were nested bullets like this one.
+	 * ` *  * ` form: over this tree and the Pony fork that pattern matched only lines
+	 * that were nested bullets like this one.
 	 */
 	public function testNestedBulletNotFlagged(): Void {
 		Assert.equals(0, violations('class C {\n\t/**\n\t * Items:\n\t *     * nested\n\t */\n\tfunction f() {}\n}').length);
@@ -246,13 +246,13 @@ class DocCommentContinuationCheckTest extends Test {
 	 * deeper than its delimiters and carries no star at all. The rule required a gutter star on the
 	 * first interior line, so this whole family fell through.
 	 *
-	 * ⚠️ The 227 lines in 23 files S23 measured are NOT this family's — that population is what the
-	 * STAR arm found on this repository's own ` * `-guttered tree, and an earlier draft of this doc
-	 * claimed it as evidence for the gutter-less arm. The arm's real evidence is a producer/detector
-	 * pair the slice ran end to end: `hxq comment-rewrite` at the base commit, splicing a line into
+	 * ⚠️ The population the STAR arm found on this repository's own ` * `-guttered tree is NOT this
+	 * family's, and an earlier draft of this doc claimed it as evidence for the gutter-less arm. The
+	 * arm's real evidence is a producer/detector
+	 * pair run end to end: `hxq comment-rewrite` at the base commit, splicing a line into
 	 * the stdlib's own `haxe/ds/StringMap.hx` doc, landed it at column 0; `fmt --list` called the
 	 * result canonical and the rule at base reported nothing; this arm reports exactly that line, and
-	 * its `--fix` reproduces byte for byte what the fixed splice writes. Across 4599 external files
+	 * its `--fix` reproduces byte for byte what the fixed splice writes. Across the external corpora
 	 * the arm's own finding count is zero.
 	 */
 	public function testGutterlessBlockBrokenIndentReported(): Void {
@@ -265,7 +265,7 @@ class DocCommentContinuationCheckTest extends Test {
 	}
 
 	/**
-	 * A line SHALLOWER than the delimiters, not merely at them — what a hand edit or a pre-S23 splice
+	 * A line SHALLOWER than the delimiters, not merely at them — what a hand edit or an old splice
 	 * into an indented block leaves. An earlier draft aborted the whole judgement on any line whose
 	 * indentation did not start with the block's, which acquitted this outright.
 	 */
@@ -299,7 +299,7 @@ class DocCommentContinuationCheckTest extends Test {
 		Assert.equals(0, violations(src).length);
 	}
 
-	/** A block at column 0 whose interior sits at one tab, with one line flush left — the S38 shape. */
+	/** A block at column 0 whose interior sits at one tab, with one line flush left. */
 	public function testGutterlessTypeLevelFlushLeftLineReported(): Void {
 		final src: String = '/**\n\tOne line.\nLost every level.\n\tThree.\n**/\nclass C {}';
 		Assert.equals(1, violations(src).length);
@@ -378,7 +378,7 @@ class DocCommentContinuationCheckTest extends Test {
 	 * HAND-ASSEMBLED after a zero-kill mutation arm: dropping the clause that requires an interior
 	 * line to start with the block's indent killed nothing against the fixtures then present, and
 	 * neither did the two stdlib shapes that motivated it — they are acquitted one clause earlier.
-	 * This is the shape that actually needs it, and no real file in 4599 external ones produced it.
+	 * This is the shape that actually needs it, and no real external file produced it.
 	 */
 	public function testGutterlessSpaceInteriorUnderTabDelimitersIgnored(): Void {
 		final src: String =

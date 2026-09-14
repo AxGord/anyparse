@@ -13,15 +13,15 @@ import utest.Test;
  *
  * Counting a transcript answers what it SAYS. It cannot answer whether the
  * process that wrote it reached the end, and that gap is what let a shard
- * runner print a green report over a red run. Measured on 2026-09-06 with a
- * test double that killed one of four shards after a single test row:
+ * runner print a green report over a red run. A test double that killed one of
+ * four shards after a single test row showed it:
  *
- *   shard 0:  202 classes /     1 tests /      1 assertions / 0 failures / 0 errors (exit 1)
- *   --- suite-shard: 794 classes / 10928 tests / 38241 assertions / 1 failures / 0 errors ... ---
- *   parity: counts not cross-checked (class parity OK: 794 placed; ...)
+ *   shard 0:  N classes /     1 tests /      1 assertions / 0 failures / 0 errors (exit 1)
+ * --- suite-shard: N classes / M tests / K assertions / 1 failures / 0 errors ... ---
+ * parity: counts not cross-checked (class parity OK: N placed; ...)
  *
- * Every printed count is green, the aggregate is 3205 tests short of the
- * 14 133 the same tree produces intact, and stderr carried nothing at all:
+ * Every printed count is green, the aggregate is thousands of tests short of
+ * what the same tree produces intact, and stderr carried nothing at all:
  * `test-summary` parsed the one surviving `testName: OK .` row into
  * `1 tests / 1 assertions / 0 failures / 0 errors` and exited 0, so the
  * caller added a partial prefix to its total as though the missing tests had

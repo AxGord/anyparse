@@ -8,7 +8,7 @@ import utest.Assert;
 import utest.Test;
 
 /**
- * T734: `apq: <hxformat.json>: N key(s) hxq does not implement …` is printed
+ * `apq: <hxformat.json>: N key(s) hxq does not implement …` is printed
  * by `HaxeFormatConfigDiagnostics.warn`, the sole caller of which is
  * `FormatConfigDiscovery.discover`. `warn` dedupes on its own
  * `reported: Array<String>` (a config PATH, not a source file); `discover`
@@ -18,7 +18,7 @@ import utest.Test;
  * `discover` call returns from the directory cache before `warn` is ever
  * reached a second time, regardless of what `reported` does.
  *
- * Measured by mutation (S160 review, T734 round 2): deleting
+ * Shown by mutation: deleting
  * `if (reported.contains(path)) return;` from `warn` entirely and rerunning
  * this class's ORIGINAL same-directory fixture still passed — proof the
  * fixture could not tell working dedup from none at all. The fix is TWO
@@ -28,9 +28,9 @@ import utest.Test;
  * time for the SAME config path, and only `reported`'s own dedup — not the
  * directory cache — can still hold the line count at one.
  *
- * Investigation found the dedup already correct (measured directly with
+ * Investigation found the dedup already correct (checked directly with
  * `apq fmt --list` on two real files, and via the JVM portability probe's
- * 482-file run — one line either way); this test is the pin so a future
+ * whole run — one line either way); this test is the pin so a future
  * change to the memo key (e.g. switching it to something per-directory
  * instead of per-config-path) fails loudly here instead of only reading as
  * "noisier gate transcripts".

@@ -13,7 +13,7 @@ import utest.Test;
  * End-to-end probe for `apq sweep --run` — the corpus census re-derived
  * from the fixtures rather than read out of `bin/.last-sweep.json`.
  *
- * Why it exists: `781 pass / 120 fail / 43 skip-parse` is quoted as a gate in
+ * Why it exists: the corpus verdict (`N pass / N fail / N skip-parse`) is quoted as a gate in
  * every slice of this project, and the only thing that could produce it was a
  * full `node bin/test.js` under `$ANYPARSE_HXFORMAT_FORK`. `apq sweep` read
  * that run's snapshot back and `apq fmt` could not even open a `.hxtest`. A

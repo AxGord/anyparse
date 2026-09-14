@@ -357,7 +357,7 @@ class NamingCheckTest extends NamingCheckTestBase {
 
 	/**
 	 * The built-in convention states no `ignoreExtern` — it has no config to state one in — so it
-	 * states the same answer checkstyle defaults to. Measured before the gate landed:
+	 * states the same answer checkstyle defaults to. Before the gate landed,
 	 * `lint --fix --rule naming` rewrote `var Bad_Field:Int;` inside an `extern class` to
 	 * `var _badField:Int;`, which changes WHICH external symbol the program reads and which no
 	 * compiler oracle can catch. The non-extern twin below is the control: every one of these four
@@ -462,7 +462,7 @@ class NamingCheckTest extends NamingCheckTestBase {
 	 * The BUILT-IN convention keeps governing an interface method, and that divergence is the point.
 	 * `ignoreExtern` reached `defaults()` because an extern member's name is a FOREIGN contract and a
 	 * rename of it is silently wrong; an interface method's name is the project's own, and the rename
-	 * is complete (measured: declaration, every implementor and every call site, or a refusal). What
+	 * is complete (declaration, every implementor and every call site, or a refusal). What
 	 * checkstyle's skip protects is FIDELITY to a `checkstyle.json` - a label naming a check whose
 	 * author excluded this declaration - and the built-in convention has no `checkstyle.json` to be
 	 * faithful to.
@@ -476,7 +476,7 @@ class NamingCheckTest extends NamingCheckTestBase {
 
 	/**
 	 * `policyFor` walked up to the project `checkstyle.json`, read it and rebuilt its rules for EVERY
-	 * file — 851 disk walks, 851 JSON parses and 851 policy builds for ONE config on the Pony scope.
+	 * file — one disk walk, one JSON parse and one policy build PER FILE for ONE config.
 	 * The memo is keyed by DIRECTORY because `ConfigFinder.findUp` walks up from a file's own
 	 * directory, so two files sharing one resolve to the same config by construction; two directories
 	 * resolving to the SAME config still build twice, which is the residue that key trades for its

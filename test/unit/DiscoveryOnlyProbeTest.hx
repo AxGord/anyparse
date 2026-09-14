@@ -9,7 +9,7 @@ import utest.Test;
  * test class that NO hand-written line names.
  *
  * The hand-written runner it was measured against — `test/RunTestsLegacy.hx`,
- * 758 `addCase(new X())` lines — did not mention this class, deliberately, and
+ * one `addCase(new X())` line per class — did not mention this class, deliberately, and
  * is gone as of the second merged wave. Under that layer this fixture was
  * registered nowhere, ran nowhere, and the transcript said nothing at all
  * about it: that silence was the defect, and it was not observable from inside

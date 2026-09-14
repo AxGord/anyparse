@@ -8,8 +8,8 @@ import utest.Runner;
  * The registration layer is GENERATED: `testkit.TestRegistry` is built by
  * `testkit.TestDiscovery`, which walks every package under `test/` and
  * registers each `utest.Test` subclass that carries a fixture. This file
- * used to carry one hand-written `addCase(new X())` per class — 758 of
- * them, plus 758 imports — and a forgotten line there was a test that
+ * used to carry one hand-written `addCase(new X())` per class, plus its
+ * import, and a forgotten line there was a test that
  * silently never ran, with nothing in the transcript to say so.
  *
  * What is NOT generated is everything below: the `APQ_TEST` filter, the
@@ -25,10 +25,10 @@ class RunTests {
 		// millisecond clock, so two suite processes started together — a parallel mutation-arm
 		// sweep, a `suite-shard.sh` shard set, a second worker on the same machine — generate the
 		// SAME names under one shared `$TMPDIR` and delete each other's files mid-test. A private
-		// temp root per process is what keeps them apart. A COMPLETED run now leaves nothing at
+		// temp root per process is what keeps them apart. A COMPLETED run leaves nothing at
 		// all where the old scheme accumulated; an INTERRUPTED one leaves one claimed directory
-		// holding whatever fixtures were live (17 at the peak, measured), and `tmp-lifecycle.sh`
-		// reaps that once this pid is gone.
+		// holding whatever fixtures were live, and `tmp-lifecycle.sh` reaps that once this pid
+		// is gone.
 		final scratch: String = CliFixture.isolateTempDir();
 		final runner: Runner = new Runner();
 
@@ -55,10 +55,10 @@ class RunTests {
 		}
 		TestRegistry.addAll(addCase);
 		// Quiet by DEFAULT. utest's own default is `ShowSuccessResultsWithNoErrors`,
-		// which prints one line per passing method: on this suite that is 13 488 lines
-		// / ~800 KB, against the six-line summary every gate actually reads. For a
-		// delegated run that single difference dominates the whole token cost, so the
-		// listing is off unless asked for.
+		// which prints one line per passing method: on this suite that is thousands of
+		// lines against the six-line summary every gate actually reads. For a delegated
+		// run that single difference dominates the whole token cost, so the listing is
+		// off unless asked for.
 		//
 		// `NeverShowSuccessResults` drops ONLY the passing lines — `ReportTools.skipResult`
 		// returns false for `!stats.isOk`, so every failure, error and warning still
@@ -72,17 +72,17 @@ class RunTests {
 		//
 		// `APQ_TEST_VERBOSE=1` restores the per-method listing for a human reading one run.
 		// A passing test's own stdout is noise. The CLI e2e tests drive `Cli.run`,
-		// which prints progress and summaries; on a green suite that is ~119 KB nobody
+		// which prints progress and summaries; on a green suite that is output nobody
 		// reads, and for a delegated run it is pure token cost. Buffer each test's
 		// stdout and DISCARD it when the test passes; a test with any non-Success
 		// assertation gets its buffer flushed verbatim, so a failure keeps the context
 		// that explains it.
 		//
 		// Only stdout is interceptable. `Sys.stderr()` on hxnodejs writes a RAW FD and
-		// bypasses `process.stderr.write` entirely — measured: patching both captured
-		// 118 706 bytes of stdout and 0 of stderr, while 74 514 bytes still reached the
-		// terminal. That half can only be dropped at the shell (`2>/dev/null`), which
-		// is why the protocol says so rather than this code pretending to handle it.
+		// bypasses `process.stderr.write` entirely: patching both captures every byte of
+		// stdout and none of stderr. That half can only be dropped at the shell
+		// (`2>/dev/null`), which is why the protocol says so rather than this code
+		// pretending to handle it.
 		final verbose: Bool = Sys.getEnv('APQ_TEST_VERBOSE') != null;
 		#if nodejs
 		if (!verbose) {

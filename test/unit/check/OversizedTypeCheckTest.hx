@@ -135,9 +135,8 @@ class OversizedTypeCheckTest extends Test {
 		// BOTH measurements leave the key, the two CONFIGURED thresholds stay. The member count
 		// used to stay too, on the argument that a type crossing the limit IS the finding — but
 		// crossing it is what makes the finding APPEAR, which the key already shows, while the
-		// count then drifts on every unrelated member added anywhere in the type. Measured over
-		// this campaign's last three blast-radius verdicts, that drift produced two of the six
-		// reported lines and none of them was a real movement.
+		// count then drifts on every unrelated member added anywhere in the type. That drift has
+		// produced blast-radius lines none of which was a real movement.
 		Assert.isTrue(identity.contains('# members (max 50)'), 'the member count leaves the key - it drifts');
 		Assert.isTrue(identity.contains('# lines (max 2000)'), 'so does the line extent');
 		Assert.equals(identity, check.messageIdentity(identity), 'and the normalization is idempotent');
@@ -155,12 +154,12 @@ class OversizedTypeCheckTest extends Test {
 	}
 
 	/**
-	 * The message the finding ENDS with is the T478 half of this rule: when connected
+	 * The message the finding ENDS with is the no-seam half of this rule: when connected
 	 * components find no seam, saying "see hxq clusters" costs the reader a run of a tool that
 	 * will answer "the whole type is one component". `blob(51)` is that shape by construction —
-	 * every member calls the next two, wrapping, so no cut of the 10 % of members auto mode is
-	 * allowed to extract as hubs disconnects it. Measured on this exact fixture: 51 members,
-	 * 6 hubs, components 37 + 8, so the largest holds 37 of 45 = 82 % and clears `BLOB_SHARE`.
+	 * every member calls the next two, wrapping, so no cut of the small share of members auto
+	 * mode is allowed to extract as hubs disconnects it. Geometry of this exact fixture: 51 members,
+	 * 6 hubs, components 37 + 8, so the largest holds well over `BLOB_SHARE` of the non-hub members.
 	 */
 	public function testOneComponentTypeIsToldThereIsNoMemberSeam(): Void {
 		final vs: Array<Violation> = violations(blob(51));
@@ -179,8 +178,8 @@ class OversizedTypeCheckTest extends Test {
 	/**
 	 * The other arm, and the one that keeps the first honest: the SAME member count split into
 	 * two halves that never call across still gets the old wording, because `hxq clusters` has
-	 * a real answer for it. Measured: 51 members, 1 hub, components 25 + 25 — the largest holds
-	 * 25 of 50 = 50 %, under `BLOB_SHARE`.
+	 * a real answer for it. Geometry: 51 members, 1 hub, components 25 + 25 — the largest holds
+	 * exactly half of the non-hub members, under `BLOB_SHARE`.
 	 */
 	public function testATypeWithTwoComponentsStillPointsAtClusters(): Void {
 		final vs: Array<Violation> = violations(halves(51));
@@ -272,8 +271,8 @@ class OversizedTypeCheckTest extends Test {
 	/**
 	 * The other half of `contractFacade`: a MINORITY dictated share carves nothing. 5 dictated + 50
 	 * of its own = 55, and 50 own members are within the cap — so without the share test this type
-	 * would fall silent, which is what a plain subtraction would have done to `MemberOrder` (5 of
-	 * 54 dictated) and `HaxeNamingSupport` (6 of 55) on this very tree.
+	 * would fall silent, which is what a plain subtraction would have done to real types of this
+	 * project whose dictated share is a small minority.
 	 *
 	 * GREEN at base — it guards the share test. Its arm is dropping `dictated >= own`.
 	 */

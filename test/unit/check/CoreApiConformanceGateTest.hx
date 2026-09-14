@@ -25,7 +25,7 @@ import utest.Test;
  * `@:buildXml` as `@:build` used to shield them BY ACCIDENT. Removing that accident left them
  * with no gate at all, which is what this one restores.
  *
- * What the pin forbids was measured on Haxe 4.3.7 `--interp`, mutating `sys.net.Socket` /
+ * What the pin forbids was established on the compiler itself, mutating `sys.net.Socket` /
  * `sys.ssl.Socket` / `sys.ssl.Certificate` against their `extern` core types: every change of a
  * member's PROPERTY ACCESS (`final`, `(default, null)`, `(default, never)`, `static inline var`),
  * of its VISIBILITY, and of its instance-vs-static placement is an error. Member ORDER is free,
@@ -126,7 +126,7 @@ class CoreApiConformanceGateTest extends Test {
 	}
 
 	/**
-	 * The control. `inline` on a method is LEGAL under `@:coreApi` (measured on both an instance
+	 * The control. `inline` on a method is LEGAL under `@:coreApi` (checked on both an instance
 	 * and a static method), so this rule must not take the gate — and it already declines such a
 	 * class through its own inline-neutral metadata whitelist, which is what the second assert
 	 * pins. If the gate is ever widened to `prefer-inline`, this test still passes, so the reason

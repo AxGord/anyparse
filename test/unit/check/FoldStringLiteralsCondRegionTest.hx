@@ -79,8 +79,8 @@ class FoldStringLiteralsCondRegionTest extends FoldStringLiteralsCheckTestBase {
 
 	/**
 	 * The ARITHMETIC head is left alone. `+` is left-associative and the addition the
-	 * run's leading numbers belong to starts on the other side of the `#if`: measured on
-	 * Haxe 4.3.7, `1 + #if c 2 + 'x' + #end 3` prints `3x3` while folding the head to
+	 * run's leading numbers belong to starts on the other side of the `#if`: on the
+	 * compiler, `1 + #if c 2 + 'x' + #end 3` prints `3x3` while folding the head to
 	 * `'${2}x'` prints `12x3`. Entering at the first literal makes that question moot.
 	 */
 	public function testArithmeticHeadIsNotFolded(): Void {

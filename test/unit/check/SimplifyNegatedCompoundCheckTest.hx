@@ -91,7 +91,7 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 		// `String` is NOT a totally-ordered nominal. It carries no NaN — which is why it once
 		// licensed the flip — but Haxe has no non-nullable string type, so `s:String` proves
 		// nothing about null, and with a null operand `!(s < t)` is `true` where `s >= t` is
-		// `false` (measured on `--interp`, `js` and `neko`, all four ordered operators). The flip
+		// `false` (checked on `--interp`, `js` and `neko`, all four ordered operators). The flip
 		// is declined, and on this arm a decline is an outright refusal: the wrap IS the input.
 		final source: String = wrapTyped('var b = !(s < t);', 's:String, t:String');
 		Assert.equals(0, violations(source).length);

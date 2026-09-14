@@ -17,34 +17,31 @@ using StringTools;
  * `--fix` runs a check's edits through one of two nets. A `RiskyFix` check is typechecked and
  * reverted per candidate (`FixVerifier`), and left report-only wholesale when no
  * `compilerOracle` is configured. EVERY other check is applied UNVERIFIED — and until this
- * slice the only thing behind them was `Cli.reconcileSafePass`, which returns at its first
+ * census the only thing behind them was `Cli.reconcileSafePass`, which returns at its first
  * line without an oracle. So the safe/risky split is the whole of the classification, it is a
  * DECLARATION rather than a measurement, and a new builtin joins the unverified side by
  * saying nothing. This test makes joining it deliberate.
  *
- * ## The measured half, and where it came from
+ * ## The observed half, and where it came from
  *
- * The declaration says nothing about what a fix DOES, so the class of each fix was measured
+ * The declaration says nothing about what a fix DOES, so the class of each fix was observed
  * rather than read: every `Check.fix` / `fixGrouped` / `fixWithOracle` call site was
  * instrumented in a scratch build and `lint --all --fix` run over this project's `src` + `test`
- * and over a copy of Pony (869 files), once without an oracle and once with. 60 of the
- * builtins produced an edit at all — the rest never fired on that corpus, which is the honest
- * limit of a measured census.
+ * and over a copy of Pony, once without an oracle and once with. Only part of the builtins
+ * produced an edit at all — the rest never fired on that corpus, which is the honest limit
+ * of such a census.
  *
- * Of the 895 edits the two no-oracle arms produced, **12 SAFE rules emitted a pure deletion**
- * (`dead-code`, `dead-store`, `duplicate-case`, `join-array-pushes`, `join-single-use-local`,
- * `narrow-local-scope`, `prefer-static-extension`, `unnecessary-null-check`, `unused-import`,
- * `unused-local`, `unused-parameter`, `unused-private`) accounting for 182 edits, and 30 more
- * emitted a REPLACEMENT shorter than the span it covers — another 536. That is the number that
- * refused the obvious repair: demoting deleting safe fixes to report-only without an oracle
- * costs 20 % of the run's edits, `unused-import`'s 84 among them, and demoting the shrinking
- * ones as well costs 80 %.
+ * A dozen SAFE rules emitted a pure deletion (`dead-code`, `dead-store`, `duplicate-case`,
+ * `join-array-pushes`, `join-single-use-local`, `narrow-local-scope`,
+ * `prefer-static-extension`, `unnecessary-null-check`, `unused-import`, `unused-local`,
+ * `unused-parameter`, `unused-private`) and many more a REPLACEMENT shorter than the span it
+ * covers. That is what refused the obvious repair: demoting deleting safe fixes to report-only
+ * without an oracle costs a fifth of the run's edits, and demoting the shrinking ones as well
+ * costs most of them.
  *
  * `DefiniteAssignmentGuard` is what landed instead: it refuses the one class of deleting edit
- * the language itself refuses, per check, with no compiler, and cost nothing measurable: Pony 869 files,
- * interleaved, base 29.6 / 29.9 s against this slice 30.0 / 30.1 s — inside the 0.4 s spread
- * of the identical binary — with both trees byte-identical at 697 edits in 210 files, and
- * anyparse src + test byte-identical at 106 edits in 43 files. Zero refusals on either.
+ * the language itself refuses, per check, with no compiler, at no measurable cost — both trees
+ * byte-identical under it, with zero refusals on either.
  */
 class BuiltinFixClassCensusTest extends Test {
 
@@ -131,8 +128,8 @@ class BuiltinFixClassCensusTest extends Test {
 	 * `redundant-is-check`), the helper carries that direction as a first-class case, and the fix is
 	 * simply not written. `listener-symmetry` is the third: two of its three finding classes are design
 	 * intent, but `not adjacent` is a member permutation `MemberOrder.fixWalk` already computes and
-	 * `member-order` does not report, so a class-wide stamp would have asserted the opposite. Each names
-	 * its backlog id in its own `fix` doc-comment (T825 / T826 / T827).
+	 * `member-order` does not report, so a class-wide stamp would have asserted the opposite. Each says
+	 * so in its own `fix` doc-comment.
 	 *
 	 * Nothing at runtime distinguishes the last three from a rule that CANNOT fix, which is exactly why
 	 * they are written down: the next author to reach for a `NoAutofix` stamp on one of them has to edit
@@ -208,7 +205,7 @@ class BuiltinFixClassCensusTest extends Test {
 	 * two contradictory things about itself.
 	 *
 	 * A `guard`, not a `control`: nothing decides this in one member, so no source cut expresses it. What
-	 * it protects is the pairing this slice created — eleven rules gained the marker and
+	 * it protects is the pairing this slice created — the rules that gained the marker and
 	 * `default-repeated-argument` was deliberately left without it BECAUSE it carries `CrossFileFix`.
 	 */
 	@:pin('guard')

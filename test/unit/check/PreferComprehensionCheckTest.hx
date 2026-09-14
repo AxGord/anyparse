@@ -584,7 +584,7 @@ class PreferComprehensionCheckTest extends Test {
 	}
 
 	public function testWhileConditionReadingTheArrayNotFlagged(): Void {
-		// The load-bearing gate, measured on the real tree: `while (a.length < 11) a.push('')`
+		// The load-bearing gate, found on the real tree: `while (a.length < 11) a.push('')`
 		// cannot be a comprehension at all — the condition reads the array being accumulated, and
 		// the comprehension's own array is not that binding. It falls out of the SAME
 		// self-reference gate the `for` iterable already goes through.

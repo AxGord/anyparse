@@ -304,7 +304,7 @@ class DocRendererTest extends Test {
 			D.softline(),
 			D.text(']')
 		]));
-		// tabWidth=2 → 3 cols → 1 tab + 1 space.
+		// tabWidth=2: three columns are one tab and one space.
 		final expected: String = '[\n\t a\n]';
 		Assert.equals(expected, Renderer.render(doc, 2, Tab, 2));
 	}
@@ -544,7 +544,7 @@ class DocRendererTest extends Test {
 		// by the column-aware probe. Here flat side is 5 cols, brk
 		// side is 50 cols. Outer Group with budget 80 fits the flat
 		// shape — Group commits to MFlat, IfWidthExceeds probes col 0
-		// vs threshold 10 → 5 < 10 → flat fires.
+		// against threshold 10, the flat side is under it, so flat fires.
 		final brk: Doc = D.text('BREAKBREAKBREAKBREAKBREAKBREAKBREAKBREAKBREAKBREAK');
 		final flat: Doc = D.text('FLATX');
 		final doc: Doc = D.group(IfWidthExceeds(10, brk, flat));
@@ -1086,7 +1086,7 @@ class DocRendererTest extends Test {
 	 *
 	 * No source fixture reaches it. Removing the flat arm's `recordTextLineEnds`
 	 * call killed NOTHING in the whole suite until this pin existed — nothing in
-	 * it, and nothing in the corpus harness's 946 fixtures, renders a captured
+	 * it, and nothing in the corpus harness's fixtures, renders a captured
 	 * block comment inside a force-flat region — so, like `testACapRunStopsAtTheFirstTextLineEnd`
 	 * above, the coverage has to be a Doc built by hand.
 	 *
@@ -1103,7 +1103,7 @@ class DocRendererTest extends Test {
 
 
 	/**
-	 * PIN (T325) at the Doc level, and the ONLY exercise of `blankRunEnd`'s
+	 * PIN at the Doc level, and the ONLY exercise of `blankRunEnd`'s
 	 * blindness to `\r`. Under `trailingWhitespace` the renderer writes the frame
 	 * indent before every blank row's line end, so the buffer reads
 	 * `a` `\r\n` `  ` `\r\n` `  ` `\r\n` `  ` `b` — a run the old scan could not
@@ -1117,7 +1117,7 @@ class DocRendererTest extends Test {
 	 *
 	 * One assertion over the whole render: at `maxConsecutiveBlanks: 1` the three
 	 * line ends collapse to two AND the kept blank row keeps its two columns of
-	 * indent. RED at `4ae8f42f`, which caps nothing here and answers all three.
+	 * indent. RED at base, which caps nothing here and answers all three.
 	 */
 	private function testACRLFBlankRunCarryingIndentIsStillCapped(): Void {
 		final doc: Doc = D.nest(2, D.concat([D.text('a'), D.line(), D.line(), D.line(), D.text('b')]));

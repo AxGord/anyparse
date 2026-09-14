@@ -9,10 +9,10 @@ import utest.Test;
  * The walk progress heartbeat, gated on stderr being a TERMINAL.
  *
  * `scanned N/M files…` was written for a human watching a long walk and for a
- * watchdog reading a redirected stream. It is also, unconditionally, 38 stderr
- * lines / 1289 bytes per `src`-wide walk of this tree — measured 2026-09-07 at
- * 935 files, `lit` / `refs` / `mentions` alike — and a model pays that on every
- * walk. `2>/dev/null` is not the answer and that is the whole point: the same
+ * watchdog reading a redirected stream. It is also, unconditionally, dozens of
+ * stderr lines per `src`-wide walk, `lit` / `refs` / `mentions` alike — and a
+ * model pays that on every walk. `2>/dev/null` is not the answer and that is
+ * the whole point: the same
  * stream carries the `--limit` cap line, the `refs` member-access warning, and
  * for a mutation op the ONLY channel a refusal has, so silencing the channel
  * silences a refusal too.

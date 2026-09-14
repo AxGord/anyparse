@@ -385,7 +385,7 @@ class RedundantParensTierArmsTest extends RedundantParensOperandArmsTestBase {
 
 	/**
 	 * `++` and `+` are spelled from the same character, but for POSTFIX content the lexer's
-	 * maximal munch lands on the reading the drop intended: measured on the compiler,
+	 * maximal munch lands on the reading the drop intended: on the compiler,
 	 * `a+b+++c` is `a + b++ + c` (1+1+1 = 3, `b` left at 2) and `a-b---c` is `a - b-- - c`.
 	 * So the fix's weld guard is belt-and-braces here — it is load-bearing for the
 	 * LEADING-operator content these arms refuse (`a-(--p * q)`, pinned by

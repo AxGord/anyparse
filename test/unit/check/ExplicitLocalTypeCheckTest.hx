@@ -249,12 +249,12 @@ class ExplicitLocalTypeCheckTest extends ExplicitLocalTypeCheckTestBase {
 	/**
 	 * Every shape above that stays report-only now says WHY, on the finding itself.
 	 *
-	 * A full-ruleset run over an 851-file tree reported all 367 of this rule's findings as
+	 * A full-ruleset run over a real tree reported every one of this rule's findings as
 	 * `its fix was called for these findings and returned no edit; the check declares neither
 	 * NoAutofix nor a decline reason` — which reads as a rule that cannot fix, while the ladder
-	 * annotates five of seven ordinary shapes on the same engine. The residue is the hard cases,
-	 * and that is a sentence the reader was owed: measured with the reasons in place, those 367
-	 * split 357 uninferable / 7 initializer-less / 3 inadmissible.
+	 * annotates most ordinary shapes on the same engine. The residue is the hard cases,
+	 * and that is a sentence the reader was owed: with the reasons in place, nearly all of them
+	 * are uninferable and the rest initializer-less or inadmissible.
 	 */
 	public function testFixSaysWhyEachSkippedShapeGotNoAnnotation(): Void {
 		assertDeclineReason('var m = new Map();', 'no structural rule names the initializer type');

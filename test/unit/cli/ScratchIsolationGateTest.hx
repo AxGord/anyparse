@@ -14,7 +14,7 @@ import sys.FileSystem;
  * `RunTests.main` calls `CliFixture.isolateTempDir()` before it registers a single fixture, and
  * that call is the whole of what keeps two concurrent suite processes — a `mutation-arm.sh`
  * sweep, a `suite-shard.sh` shard set, a second worker on the same machine — from generating the
- * same fixture directory name and deleting each other's files mid-test (S150). Nothing checked
+ * same fixture directory name and deleting each other's files mid-test. Nothing checked
  * it: delete the call and this suite stays green, because the damage lands in ANOTHER process's
  * transcript and only under concurrency.
  *
@@ -54,7 +54,7 @@ final class ScratchIsolationGateTest extends Test {
 	 * `removeScratchRoot` refuses a path it did not claim, rather than deleting it.
 	 *
 	 * The teardown it guards is a recursive delete registered on `onComplete`, so a wrong
-	 * argument is an `rm -rf` of whatever that argument names — measured the hard way while
+	 * argument is an `rm -rf` of whatever that argument names — learned the hard way while
 	 * this seam was being probed: the runner's `isolateTempDir()` was swapped for `repoRoot()`
 	 * for one build, and the run removed the worktree it was running in. `removeDir` itself is
 	 * tolerant of a missing path, so WITHOUT the guard this call is a silent no-op and the

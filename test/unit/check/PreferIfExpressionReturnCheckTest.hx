@@ -98,7 +98,7 @@ class PreferIfExpressionReturnCheckTest extends Test {
 	/**
 	 * A trailing `// …` after a branch's `;` rides that branch's slot into the rebuilt chain.
 	 *
-	 * S46 briefly REFUSED this site, on a probe that had no `hxformat.json` beside it: under compiled
+	 * An earlier slice briefly REFUSED this site, on a probe that had no `hxformat.json` beside it: under compiled
 	 * defaults the rebuilt chain fits one line, the writer cannot keep a `//` there, and `--fix`
 	 * answered `the edit cannot be applied without losing the comment`. Under a config that WRAPS the
 	 * branches - this project's own - the same edit lands and the comment survives, so the refusal was
@@ -314,7 +314,7 @@ class PreferIfExpressionReturnCheckTest extends Test {
 	/**
 	 * A rung condition is copied paren-UNWRAPPED, the way `PreferIfExpressionChain.spine` unwraps its
 	 * own: the emitted `if (` … `)` supplies the delimiters, so a copied pair only draws a
-	 * `redundant-parens` finding on the result. Measured on openfl\'s `Tile.__findTileset`, where a
+	 * `redundant-parens` finding on the result. Seen on openfl\'s `Tile.__findTileset`, where a
 	 * source `(parent is Tilemap)` reached the rebuilt chain with both pairs while the pairwise route
 	 * emitted it bare - the same input, two spellings of the output.
 	 */
@@ -329,7 +329,7 @@ class PreferIfExpressionReturnCheckTest extends Test {
 	 * BRANCH-AWARE projection. It has to: `prefer-ternary-return` reads that projection and now defers
 	 * to this one, and in the plain projection a `#if` region is ONE node whose branches are flattened
 	 * children with no statement list at all - so the pair would be deferred to a walk that never saw
-	 * it. Measured on openfl\'s `Lib.isXMLName`, whose three-`return` cascade under `#end` lost its
+	 * it. Seen on openfl\'s `Lib.isXMLName`, whose three-`return` cascade under `#end` lost its
 	 * only finding that way.
 	 */
 	public function testCascadeInsideConditionalRegionClaimed(): Void {

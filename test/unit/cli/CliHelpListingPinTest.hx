@@ -10,21 +10,21 @@ using StringTools;
 /**
  * `apq --help` and five usage pages, pinned as the BYTES the pre-seam binary printed.
  *
- * Wave 2 moved 66 commands out of `Cli.dispatch`, and each of them carried four
+ * The decomposition wave moved every command out of `Cli.dispatch`, and each carried four
  * parts across: the name, the `--help` line, the usage page and the run. Three of
  * the four have a natural gate — the run is compared invocation by invocation, the
  * name is what `dispatch` looks up. The `--help` line has none, because the only
  * other place it exists after the move is `summary()` itself: a fixture that asks
  * `CliRegistry.helpLine` what `summary()` says cannot fail, whatever the move did
- * to the text. S69 shipped exactly that fixture and watched it survive an arm that
- * rewords a summary.
+ * to the text. The first wave shipped exactly that fixture and watched it survive an
+ * arm that rewords a summary.
  *
  * So the expectations below are the SECOND instance of the declaration, and they
  * come from outside this tree: `node bin/apq.js --help` and `node bin/apq.js <cmd>
- * --help` run against the worktree built at base `3deca1d3`, copied verbatim. They
+ * --help` run against the worktree built at base, copied verbatim. They
  * discriminate every part of the rendering at once — the summary text, the padding
  * column, the over-long-name gaps, and the ORDER, which is now the registration
- * order in `CliRegistry.commands()` rather than 69 hand-placed literals.
+ * order in `CliRegistry.commands()` rather than hand-placed literals.
  *
  * KILLED by: rewording any `summary()`; dropping a command from `commands()`;
  * swapping two entries of `commands()`; changing `HELP_NAME_WIDTH` or `helpGap`.

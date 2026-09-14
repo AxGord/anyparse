@@ -513,7 +513,7 @@ class GuardReturnCheckTest extends Test {
 	/**
 	 * The positive twin of `testAnnotatedNonVoidUnreachableTailNotFlagged`: WITHOUT an annotation
 	 * the same body infers `Void` - a `throw`-only path does not make the return type a free
-	 * monomorph (measured on Haxe 4.3.7) - so no throw guard stands between the arm and the fix.
+	 * monomorph (checked on the compiler) - so no throw guard stands between the arm and the fix.
 	 */
 	public function testUnannotatedThrowThenTailFlagged(): Void {
 		Assert.equals(

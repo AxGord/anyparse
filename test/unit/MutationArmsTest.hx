@@ -12,11 +12,11 @@ import utest.Test;
  * file, and never of `test/testkit/mutation-arms.json`. That is the whole
  * discipline: the build macro already validated the real table, so a fixture
  * reading it back could not fail — it would be derived from the same
- * declaration the acceptance is generated from (S66). A table of its own is a
+ * declaration the acceptance is generated from. A table of its own is a
  * second instance, and a defect can actually be put in it.
  *
- * These pins guard behaviour this slice INTRODUCES, so they are red against
- * `4626138c` only in the sense that nothing they name exists there. What makes
+ * These pins guard behaviour introduced together with the reader, so they were
+ * red at base only in the sense that nothing they name existed. What makes
  * them evidence is the arm: `M-ARM-ANYNAME` and `M-ARM-ROW-OK` cut the two
  * functions below, and each fixture's leading assertion is chosen to survive
  * the cut so a kill proves the fixture reached the code rather than missed it.
@@ -145,7 +145,7 @@ final class MutationArmsTest extends Test {
 	 * `parse` to a constant takes the whole arm table with it, every `@:killer`
 	 * in the tree stops resolving, and the mutant does not COMPILE — a
 	 * `BUILD-FAIL`, which is the absence of a verdict rather than a kill.
-	 * Measured, not reasoned: run
+	 * Reproduce it rather than reason about it: run
 	 * `hxq patch test/testkit/MutationArms.hx --select 'FnMember:parse'` with
 	 * `return { arms: [], errors: [] };` and the test build stops in
 	 * `TestDiscovery`.
@@ -219,8 +219,8 @@ final class MutationArmsTest extends Test {
 	/**
 	 * A multi-pair cut reads back as its own list of fragments, and the rendered line says so.
 	 *
-	 * The scalar spelling is that same list with one element, which is what keeps all 161
-	 * existing fragment records — and every `--list-arms` row they produce — byte-unchanged.
+	 * The scalar spelling is that same list with one element, which is what keeps every
+	 * existing fragment record — and every `--list-arms` row they produce — byte-unchanged.
 	 */
 	@:pin('guard')
 	public function testAMultiPairCutCarriesEveryFragment(): Void {

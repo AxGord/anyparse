@@ -11,9 +11,9 @@ import utest.Test;
  * End-to-end probe for `apq lint --no-oracle`.
  *
  * The compiler oracle is a PROJECT-WIDE `haxe <hxml> --no-output` regardless of
- * how narrow the lint scope is — measured at 16.1s of an 18.7s single-file run
- * on this project, which makes it the inner loop's largest single cost.
- * `--no-oracle` declines it; a single-file lint then takes 2.2s.
+ * how narrow the lint scope is — nearly the whole of a single-file run on this
+ * project, which makes it the inner loop's largest single cost. `--no-oracle`
+ * declines it.
  *
  * What these pin is that declining a gate can only ever WEAKEN a verdict:
  * findings are untouched, and the run can never turn a skipped typecheck into a

@@ -6,12 +6,12 @@ using StringTools;
  * The prose conventions a fixture's doc comment uses to claim a role, read as
  * data — the other half of `@:pin` / `@:killer`.
  *
- * S96 made the metadata real: a `@:killer` naming no declared arm stops the
- * build, and so does an arm whose member has moved. It then stated its own
- * residue: 39 pins against 14 039 fixtures, and the doc-comment conventions the
- * metadata was meant to replace still unchecked prose everywhere else. This
- * class is the predicate that finds that prose, so the gap can be counted and
- * kept from growing.
+ * The metadata is real — a `@:killer` naming no declared arm stops the build,
+ * and so does an arm whose member has moved — but pins cover a small fraction
+ * of the fixtures, and the doc-comment conventions the metadata was meant to
+ * replace are still unchecked prose everywhere else. This class is the
+ * predicate that finds that prose, so the gap can be counted and kept from
+ * growing.
  *
  * Four claim kinds, and they are not equal. TWO of them have an annotation that
  * can retire the claim — an `arm` claim is recorded by `@:killer`, a `control`
@@ -26,7 +26,7 @@ using StringTools;
  * them of the tree's real doc comments; `unit.ProseClaimCensusTest` asks them of
  * hand-written sentences of its own, which is a SECOND instance of the
  * declaration — a fixture reading back the census the macro already computed
- * could not fail (S66).
+ * could not fail.
  */
 @:nullSafety(Strict)
 final class ProseClaims {
@@ -49,7 +49,7 @@ final class ProseClaims {
 	 * A rule about `if` / `while` / `#if` regions talks about control flow, a
 	 * control-exit node, a control head; a check's doc quotes the role NAME in
 	 * backticks. None of those is a fixture calling itself the control for a
-	 * sibling, and without this list the word alone flags 16 fixtures that claim
+	 * sibling, and without this list the word alone flags fixtures that claim
 	 * nothing.
 	 */
 	private static final CODE_SENSES: Array<String> = [
@@ -142,8 +142,8 @@ final class ProseClaims {
 	 *
 	 * `M-CLAIM-CODE-BLIND` cuts this member, and it is a FRAGMENT arm rather than a
 	 * forced return because the member is `inline`: a forced return ahead of an
-	 * inlined body is a non-final return the compiler refuses, which is how S96's
-	 * M-PATHWALK-NULL came back BUILD-FAIL.
+	 * inlined body is a non-final return the compiler refuses, which is how a forced-return
+	 * `M-PATHWALK-NULL` once came back BUILD-FAIL.
 	 */
 	private static inline function withoutCodeSenses(text: String): String {
 		return without(text, CODE_SENSES);

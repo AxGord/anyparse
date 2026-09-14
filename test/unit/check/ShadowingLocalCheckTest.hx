@@ -84,8 +84,8 @@ class ShadowingLocalCheckTest extends Test {
 	/**
 	 * With an outer local of the same name the finding was already reported — it named the WRONG
 	 * binding. The iterator is the one in effect where the declaration sits, and it is nearer, so
-	 * the walk must reach it first. This is the shape T95 measured: 9 haxelib findings gated on
-	 * binding identity, 8 of them this misattribution.
+	 * the walk must reach it first. This is the shape that made up nearly every haxelib finding
+	 * gated on binding identity.
 	 */
 	public function testLoopIteratorOutranksTheOuterLocalItAlsoHides(): Void {
 		final found: Array<Violation> = violations(
@@ -258,7 +258,7 @@ class ShadowingLocalCheckTest extends Test {
 	 * The BAR pin for this rule, and the control for its sibling. A nested function's parameter
 	 * hides an enclosing local exactly as a redeclaration does, and every spelling of it is silent
 	 * HERE — the parameter is only ever the OUTER side of the question this rule asks. Widening the
-	 * inner side in place would have added 6 findings on the Pony tree and 44 on this project's own
+	 * inner side in place would have added findings on the Pony tree and on this project's own
 	 * sources to a bar projects already opted into, so that half shipped as `shadowing-parameter`
 	 * (`DefaultOff`) instead, and this answer must not move: three parameter spellings plus the
 	 * block control, ONE finding.

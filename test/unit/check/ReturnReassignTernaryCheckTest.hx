@@ -280,7 +280,7 @@ class ReturnReassignTernaryCheckTest extends Test {
 		// neither names the NAMED function literal or the local `inline function` — so their bodies
 		// INHERITED the enclosing method's `: Int` and were analyzed as if annotated.
 		//
-		// Measured, on the very shape the check's own doc names: at base this fired and `--fix`
+		// On the very shape the check's own doc names: at base this fired and `--fix`
 		// produced `return c ? [] : x;`, which the compiler rejects with
 		// `Map<String, Int> should be Array<Unknown<0>>`.
 		final named: String = fn(

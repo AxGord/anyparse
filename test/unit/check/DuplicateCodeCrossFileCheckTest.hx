@@ -305,8 +305,8 @@ class DuplicateCodeCrossFileCheckTest extends Test {
 		// The ORDER the caller listed the scope in must not decide which end of a clone is the
 		// "original". At base it did: the anchor was `bucket[0]` after a sort on the file's
 		// SCAN INDEX, so handing the same two files over in the other order moved the finding
-		// from `Z.hx` to `A.hx` and swapped the path the message names. Measured on this
-		// project, `lint src test` and `lint test src` disagreed on 9 findings each way.
+		// from `Z.hx` to `A.hx` and swapped the path the message names. On this project
+		// `lint src test` and `lint test src` disagreed on a handful of findings each way.
 		final a: { file: String, source: String } = file('A.hx', clone('A'));
 		final z: { file: String, source: String } = file('Z.hx', clone('Z'));
 		final forward: Array<Violation> = violations([a, z]);
@@ -320,14 +320,14 @@ class DuplicateCodeCrossFileCheckTest extends Test {
 	}
 
 	public function testMessageIdentityKeepsTheStatementCount(): Void {
-		// The one tally S15 did NOT mask, and the arm that proves the decision was made rather
+		// The one tally deliberately NOT masked, and the arm that proves the decision was made rather
 		// than forgotten. `lint-diff` keys on `(file, rule, severity, message)` with no span; both
 		// coordinates in this message are already masked and the partner path is shared by every
 		// clone against that file, so the COUNT is the last thing telling two different clones in
-		// one file apart. Blanking it made a substitution invisible — 57% of this rule's findings
-		// on anyparse shared a key with a sibling under the old blanket digit mask — and its noise
-		// cost is zero: over the campaign's last three blast-radius verdicts this rule contributed
-		// no lines while two masked rules contributed all six.
+		// one file apart. Blanking it made a substitution invisible — over half of this rule's
+		// findings on anyparse shared a key with a sibling under the old blanket digit mask — and
+		// its noise cost is zero: blast-radius verdicts get no lines from this rule while the
+		// masked rules contribute theirs.
 		final check: DuplicateCode = new DuplicateCode();
 		final three: String = check.run([file('A.hx', clone('A')), file('Z.hx', clone('Z'))], new HaxeQueryPlugin())[0].message;
 		final four: String = check.run([file('A.hx', longerClone('A')), file('Z.hx', longerClone('Z'))], new HaxeQueryPlugin())[0].message;

@@ -490,13 +490,13 @@ class ImportBlockOrderCheckTest extends Test {
 	}
 
 	/**
-	 * T230, REFUTED and pinned as a control: a plain import from ANOTHER package between two
+	 * REFUTED and pinned as a control: a plain import from ANOTHER package between two
 	 * `unit.*` runs does NOT split the block, so a misplaced import after it is still reported.
 	 *
 	 * The claim was that `test/RunTests.hx` had a blind spot — its `import utest.Runner;` splitting
-	 * the ~700 `unit.*` imports into two trivially-sorted blocks, letting a misplaced one pass. It
+	 * the `unit.*` imports into two trivially-sorted blocks, letting a misplaced one pass. It
 	 * does not: a run ends at a blank line, a `using` / wildcard / alias, a block comment or a
-	 * non-import declaration, and a plain import is none of those. Measured on the base build, the
+	 * non-import declaration, and a plain import is none of those. On the base build the
 	 * real file reported `import 'unit.grammar.haxe.HxSoleArgGluedCloseDedentTest' is out of order in its block`
 	 * and one `--fix` pass sorted the whole thing, tail included.
 	 *

@@ -13,12 +13,12 @@ import utest.Test;
  * lines above the arrow pair that keeps its two spellings separate.
  *
  * The defect is LATENT, and this class exists because that is what makes it
- * unpinnable end to end: swept over 868 Pony files with `fmt --write`, the
- * unfixed and fixed writers produced BYTE-IDENTICAL trees (7 of 868 rewritten
- * in both), and so did a POISON arm that made the same mistake in the opposite
+ * unpinnable end to end: swept over the Pony tree with `fmt --write`, the
+ * unfixed and fixed writers produced BYTE-IDENTICAL trees (the same few files
+ * rewritten in both), and so did a POISON arm that made the same mistake in the opposite
  * direction (the plain ctor rebuilt as the rest-aware one). The same harness
  * DOES detect a writer change through this very function — dropping the
- * `flatLength` gate on its `BodyGroup` arm moved 8 of 868 files — so the null
+ * `flatLength` gate on its `BodyGroup` arm moves files — so the null
  * result is a measurement, not a blind spot. What is left to assert is the
  * function's own contract, at the `Doc` level.
  */

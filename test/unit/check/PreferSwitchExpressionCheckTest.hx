@@ -333,7 +333,7 @@ class PreferSwitchExpressionCheckTest extends Test {
 	 * THE refusal this widening exists for. A bare identifier bound to a LOCAL is the one
 	 * operand class the compiler does not protect: `case target:` is a CAPTURE, so the
 	 * emitted switch matches EVERYTHING and the chain's second and third arms become dead
-	 * code. Measured on 4.3.7 — `pick('a', 'a')` and `pick('zzz', 'a')` both returned 1,
+	 * code. On the compiler, `pick('a', 'a')` and `pick('zzz', 'a')` both returned 1,
 	 * with only a `WUnusedPattern` warning on the now-unreachable `case _`.
 	 */
 	public function testBareLocalOperandNotFlagged(): Void {
@@ -389,7 +389,7 @@ class PreferSwitchExpressionCheckTest extends Test {
 
 	/**
 	 * A local SHADOWING a same-class constant of the same name — the ONE refusal a name-keyed
-	 * gate gets wrong, and the reason the proof asks the resolver. Measured on 4.3.7: a pattern
+	 * gate gets wrong, and the reason the proof asks the resolver. On the compiler a pattern
 	 * identifier does not see locals at all, so `case alpha:` next to `final alpha = 'x';`
 	 * resolves to NOTHING and becomes a capture — `f('x')`, `f('y')`, `f('zzz')` and `f('a')`
 	 * ALL returned 1, with two `WUnusedPattern` warnings the only complaint. The names are

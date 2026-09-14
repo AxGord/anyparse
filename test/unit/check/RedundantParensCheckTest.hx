@@ -146,7 +146,7 @@ class RedundantParensCheckTest extends Test {
 	/**
 	 * A right-greedy construct is bounded by the `]` that ends the slot, so it needs no pair
 	 * of its own — `arr[untyped i]`, `arr[cast i]` and `arr[@:privateAccess b.v]` all compile
-	 * and evaluate as their parenthesized spellings do (measured against the compiler). This
+	 * and evaluate as their parenthesized spellings do (checked against the compiler). This
 	 * is the delimited arm, where the content's precedence is irrelevant; the operand arms'
 	 * `rightGreedyExprKinds` gate has nothing to protect here.
 	 */
@@ -169,7 +169,7 @@ class RedundantParensCheckTest extends Test {
 	/**
 	 * An index holds exactly ONE expression, so it is no splicing host: `macro a[$a{args}]`
 	 * and `macro a[($a{args})]` both build an array-literal index, differing only by the
-	 * transparent `EParenthesis` (measured with `ExprTools.toString`). Nothing for the splice
+	 * transparent `EParenthesis` (compared with `ExprTools.toString`). Nothing for the splice
 	 * gate to protect, and the ordinary delimited-slot rule unwraps.
 	 */
 	public function testIndexSlotIsNotASplicingHost(): Void {
@@ -179,7 +179,7 @@ class RedundantParensCheckTest extends Test {
 	/**
 	 * A map-literal KEY is an operand of `=>`, not a bracket-bounded slot — the pair is what
 	 * stops the ternary from swallowing the arrow, and dropping it makes the compiler report
-	 * `Unexpected =>` (measured). The index twin above is what a real bracket slot looks
+	 * `Unexpected =>`. The index twin above is what a real bracket slot looks
 	 * like.
 	 */
 	public function testMapLiteralKeyNotFlagged(): Void {

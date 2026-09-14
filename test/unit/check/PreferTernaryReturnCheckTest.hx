@@ -228,7 +228,7 @@ class PreferTernaryReturnCheckTest extends Test {
 	 * An OWN-LINE comment between the two statements is not about either value — the rule still
 	 * COMPUTES the leading-block hoist, unchanged, and this pins that it does.
 	 *
-	 * What changed under it in S86 is who has the last word: the edit now declares the three
+	 * What changed under it is who has the last word: the edit now declares the three
 	 * ranges it quotes verbatim, and `CanonicalEdit.canonicalize` refuses to WRITE this one,
 	 * because the comment stood after `a` and `1` in the source and stands before both here.
 	 * `testTheRunOfOneHoistIsRefusedAtTheSeam` is that verdict; keep the two together, since this
@@ -270,7 +270,7 @@ class PreferTernaryReturnCheckTest extends Test {
 	 * return type is the proof `provablyBoolOperand` cannot supply — under
 	 * `@:nullSafety(Strict)` the original `return g();` cannot compile unless `g()` is a
 	 * non-null `Bool`, and without Strict the guard / ternary / `&&` forms are
-	 * observationally identical anyway (measured over `{null,true,false}` x `{true,false}`
+	 * observationally identical anyway (checked over `{null,true,false}` x `{true,false}`
 	 * on `--interp`, `js` and `--jvm`).
 	 */
 	public function testCallTailInBoolFunctionFlagged(): Void {
@@ -365,7 +365,7 @@ class PreferTernaryReturnCheckTest extends Test {
 	 * The mid-reduction gate is INDEPENDENT of the stuck-boolean one: a VALUE ternary collapse
 	 * (neither value a bool literal) buries the tail just as thoroughly, and never consults the
 	 * stuck check at all. `dropContainedEdits` keeps the OUTER of two overlapping edits, so the
-	 * inner reduction is dropped rather than deferred — measured on anyparse's own
+	 * inner reduction is dropped rather than deferred — seen on anyparse's own
 	 * `MagicNumber.childPositionCtx`, which came out as `p ? i >= 1 : q ? c : false`.
 	 */
 	public function testValueCollapseOntoPendingTernaryNotFlagged(): Void {
@@ -411,7 +411,7 @@ class PreferTernaryReturnCheckTest extends Test {
 	 * rung by SHAPE but not one it collects — a no-`else` `if` that does not return a value — cannot
 	 * pull this rule's walk-back past the real head. Derived locally it did: the deferral asked about
 	 * an index the claiming rule never uses, answered `false`, and both rules reported one control
-	 * flow. Measured on heaps' `poly2tri/Point.hx`, `cpp/_std/StringBuf.hx` and `php/_std/EReg.hx`.
+	 * flow. Seen on heaps' `poly2tri/Point.hx`, `cpp/_std/StringBuf.hx` and `php/_std/EReg.hx`.
 	 *
 	 * Both spellings of that statement, plus the control with nothing in front of the cascade.
 	 */
@@ -439,16 +439,16 @@ class PreferTernaryReturnCheckTest extends Test {
 	}
 
 	/**
-	 * T546 — the CASCADE narrowing, as a one-variable matrix over ONE cascade: only WHERE the
+	 * The CASCADE narrowing, as a one-variable matrix over ONE cascade: only WHERE the
 	 * comment sits changes between the arms.
 	 *
 	 * A cascade tail is not a local edit. Folding it makes the rung above eligible on the next
 	 * pass — its follower is now a plain `return` — so the fixed-point loop marches the whole
 	 * chain into a ternary pyramid, and every step hoists whatever comment stands between two
-	 * rungs to the front of the replacement (`preservedComments`). Measured on this repo's own
-	 * `MemberOrder.reorderRefusal`: one reported finding, after which `--fix` wrote 10 edits over
-	 * 7 passes and stacked two per-gate explanations above a seven-level pyramid — one of them
-	 * the note that warned against exactly that transformation.
+	 * rungs to the front of the replacement (`preservedComments`). On this repo's own
+	 * `MemberOrder.reorderRefusal` one reported finding became a many-pass march that stacked two
+	 * per-gate explanations above a deep pyramid — one of them the note that warned against
+	 * exactly that transformation.
 	 *
 	 * `prefer-if-expression-return` declines BOTH cascades here — its `carrier` accepts a comment
 	 * after a rung's value only when it sits on that value's own line — so neither arm has a
@@ -457,12 +457,11 @@ class PreferTernaryReturnCheckTest extends Test {
 	 * carry, and handed the same cascade to this rule, which hoisted them.
 	 *
 	 * The first two assertions PASS at base, so a failure here is this pin's own claim rather
-	 * than a fixture that never reached the code. What kills each, MEASURED by reverting one
+	 * than a fixture that never reached the code. What kills each, found by reverting one
 	 * thing at a time:
 	 *
 	 *  - the TRAILING arm is killed by arm `M-PTR-RIDES-NEVER`, which neutralises
-	 *    `ridesItsBranch` (`F..`). It is not
-	 *    decoration: `buildEdit` splices a guard-line comment after the `?` value instead of
+	 *    `ridesItsBranch` (`F..`). It is not decoration: `buildEdit` splices a guard-line comment after the `?` value instead of
 	 *    hoisting it, and every later step of the march finds it inside the else value it copies
 	 *    whole.
 	 *  - the OWN-LINE arm is killed by arm `M-PTR-CASCADE-NEVER-STRANDS`, which neutralises
@@ -475,9 +474,9 @@ class PreferTernaryReturnCheckTest extends Test {
 	 *    hold it are the older `testOwnLineCommentBetweenStatementsStillHoists` and
 	 *    `testBothPositionsSplitCorrectly`: both drop to 0 edits with the exception removed.
 	 *
-	 * S45 measured what refusing cascade tails on SHAPE alone would cost — 14 findings of 69
-	 * with no replacement anywhere — which is why the narrowing is the conjunction of shape and
-	 * comment rather than either one.
+	 * Refusing cascade tails on SHAPE alone would leave a fifth of the findings with no
+	 * replacement anywhere, which is why the narrowing is the conjunction of shape and comment
+	 * rather than either one.
 	 */
 	@:pin('control')
 	@:killer('M-PTR-RIDES-NEVER')
@@ -495,10 +494,10 @@ class PreferTernaryReturnCheckTest extends Test {
 	}
 
 	/**
-	 * T553 — the run-of-ONE hoist, re-decided against the clause now that it is written, and the
+	 * The run-of-ONE hoist, re-decided against the clause now that it is written, and the
 	 * answer is that the clause DOES reach it: the framework refuses the edit.
 	 *
-	 * S84 kept this hoist deliberately and asked for the decision to be revisited. The two tests
+	 * The hoist was kept deliberately and the decision asked to be revisited. The two tests
 	 * that pin it — `testOwnLineCommentBetweenStatementsStillHoists` and
 	 * `testBothPositionsSplitCorrectly` — are UNCHANGED and still pass, and that is the shape of
 	 * the decision rather than an oversight: the rule goes on COMPUTING the fold (the first three
@@ -510,13 +509,12 @@ class PreferTernaryReturnCheckTest extends Test {
 	 * Why the decision went this way rather than "the clause does not reach a run of one": the
 	 * comment stood after `a` and `1` in the source and stands before both in the replacement,
 	 * which is the same fact the cascade march produces, only one step long. What made it
-	 * arguable was cost, and the cost is MEASURED at zero — `--all --fix` over the Pony fork
-	 * (702 edits / 209 files / 8 passes) and over this repo's own `src` + `test` (111 edits / 59
-	 * files / 4 passes) are byte-identical with and without the declaration, and neither run
-	 * produces a single carry refusal. The shape is real (this fixture) and rare.
+	 * arguable was cost, and the cost is zero — `--all --fix` over the Pony fork and over this
+	 * repo's own `src` + `test` are byte-identical with and without the declaration, and neither
+	 * run produces a single carry refusal. The shape is real (this fixture) and rare.
 	 *
 	 * Killed by arm `M-COMMENT-HOIST-BLIND` (`CommentOwnerGuard.hoistedComment` returning
-	 * null). The second cut S84 named — `buildEdit` declaring an empty carry — reaches the
+	 * null). The second cut once named — `buildEdit` declaring an empty carry — reaches the
 	 * same seam from the producer's side and has no declared arm of its own.
 	 */
 	@:pin('control')

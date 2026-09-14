@@ -9,8 +9,8 @@ import utest.Test;
 /**
  * `DefiniteAssignmentGuard` — the compiler-free half of `lint --fix`'s revert net.
  *
- * The hole it closes, measured on the T445 fixture with S54's closure guard removed and one
- * deleting fix run three ways: `--no-oracle` wrote the corrupting edit, a config with no
+ * The hole it closes, shown on the unguarded-`if` fixture with the closure guard removed and
+ * one deleting fix run three ways: `--no-oracle` wrote the corrupting edit, a config with no
  * `compilerOracle` wrote it, and only the oracle arm reverted. Two of those three arms are
  * the project's own documented edit loop and every project that never configured a compiler.
  *
@@ -19,7 +19,7 @@ import utest.Test;
  */
 class DefiniteAssignmentGuardTest extends Test {
 
-	/** The T445 shape: after the edit the only write to `found` is under an unguarded `if`. */
+	/** The unguarded-`if` shape: after the edit the only write to `found` is under an unguarded `if`. */
 	private static inline final GUARDED_CLOSURE: String = 'class C { static function scan(t: String): Bool { var found = false;'
 		+ ' map(t, run -> { if (t == null) found = true; return run; }); return found; } }';
 
@@ -92,7 +92,7 @@ class DefiniteAssignmentGuardTest extends Test {
 	}
 
 	public function testAReadInsideTheClosureIsOnlyAWarningSoItIsNotRefused(): Void {
-		// Measured: the same guarded write read from INSIDE the closure is
+		// The same guarded write read from INSIDE the closure is
 		// `Warning: (WVarInit) Local variable found might be used before being initialized` and
 		// COMPILES. The oracle arm would keep that edit, so this one must too.
 		final src: String = 'class C { static function scan(t: String): Bool { var found = false;'

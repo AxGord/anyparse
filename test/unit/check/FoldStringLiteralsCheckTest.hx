@@ -268,7 +268,7 @@ class FoldStringLiteralsCheckTest extends FoldStringLiteralsCheckTestBase {
 	 * swallow the following `c`. Compile-and-run confirms both spellings print `aBBBc`
 	 * on `--interp` and `-js`.
 	 *
-	 * Pinned at 0 findings until this slice: the seam refused the whole group because a
+	 * Pinned at zero until this slice: the seam refused the whole group because a
 	 * blunt "carries any `\x` / `\u` escape" test could not tell a hidden trigger from
 	 * an ordinary `\x41`.
 	 */
@@ -359,9 +359,9 @@ class FoldStringLiteralsCheckTest extends FoldStringLiteralsCheckTestBase {
 	}
 
 	/**
-	 * The three shapes the haxe 4.3.7 std actually held, which is where the precondition was
-	 * measured: 8 of the 175 hunks a full `--fix` produced over that tree put a `'` inside a
-	 * `${ … }`, and every one of them is one of these. The last is the sharpest — the operand is
+	 * The three shapes the Haxe std actually held, which is where the precondition came from:
+	 * the few hunks of a full `--fix` over that tree that put a `'` inside a `${ … }` are every
+	 * one of them one of these. The last is the sharpest — the operand is
 	 * ITSELF an interpolated literal, so merging nests an interpolation inside an interpolation,
 	 * the very thing the walk already refuses to do from the other direction.
 	 *

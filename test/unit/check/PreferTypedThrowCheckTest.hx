@@ -347,7 +347,7 @@ class PreferTypedThrowCheckTest extends Test {
 
 	/**
 	 * The degraded verdict has to reach `--fix`, which prints no findings at all — which is exactly
-	 * how 161 degraded findings on one tree came to be read as "this rule has no autofix" and a queue
+	 * how a tree's worth of degraded findings came to be read as "this rule has no autofix" and a queue
 	 * item was written on it. `declineReason` is that verdict in the slot the fix ledger reads, and
 	 * asserting it is a SUBSTRING of the message pins the two spellings to one constant.
 	 */

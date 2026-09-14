@@ -9,11 +9,12 @@ import utest.Test;
  * The prose census: which fixtures claim a role in words that no annotation
  * records, and the ratchet that keeps that list from growing in silence.
  *
- * S96 left this as its stated residue — 39 pins against 14 039 fixtures, with
- * the doc-comment conventions the metadata was meant to replace still unchecked
- * prose everywhere else. `testkit.ProseClaims` is the predicate; `BASELINE`
- * below is what it found at `7331535c`, and `TestRegistry.claims()` is what it
- * finds now. A slice that writes one more such sentence has to add its line
+ * The metadata layer left this as its stated residue: pins cover a small share
+ * of the fixtures, and the doc-comment conventions the metadata was meant to
+ * replace are still unchecked prose everywhere else. `testkit.ProseClaims` is the
+ * predicate; `BASELINE` below is what it found when the census was last
+ * regenerated, and `TestRegistry.claims()` is what it finds now. A slice that
+ * writes one more such sentence has to add its line
  * here, which is one command:
  *
  * ```
@@ -21,11 +22,11 @@ import utest.Test;
  * ```
  *
  * (already sorted by the macro; a STALE `bin/test.js` makes that print the
- * previous tree's answer, which is how S70 lost an afternoon.)
+ * previous tree's answer.)
  *
  * The predicate fixtures below ask their questions of hand-written sentences,
  * never of the tree — a fixture reading back the census the macro just computed
- * is derived from the declaration it is meant to check and could not fail (S66).
+ * is derived from the declaration it is meant to check and could not fail.
  * `BASELINE` is the one exception and it is not a discrimination: it is a
  * snapshot, and it is named as one.
  */
@@ -51,11 +52,9 @@ final class ProseClaimCensusTest extends Test {
 	private static final PLAIN_SENTENCE: String = 'The fix walks the member list once and stops at the first modifier.';
 
 	/**
-	 * The census as it stood at `a45a05d9` plus this slice, one line per
-	 * fixture whose prose claims something no `@:pin` / `@:killer` records.
-	 * It was 283 lines carrying 39 `arm` claims; the 30 outside
-	 * `unit.grammar.haxe` now name a declared arm, and the 9 that remain are
-	 * all in that package.
+	 * The census as it stood when last regenerated, one line per fixture whose
+	 * prose claims something no `@:pin` / `@:killer` records; no `arm` line is left —
+	 * every fixture that names its killer carries `@:killer`.
 	 *
 	 * Two of the four kinds have an exit: an `arm` line leaves by gaining a
 	 * `@:killer`, a `control` line by gaining `@:pin('control')`. `base` and
@@ -63,28 +62,16 @@ final class ProseClaimCensusTest extends Test {
 	 * commit" at build time — so those lines are a register of what is still
 	 * prose, not a queue.
 	 *
-	 * S142 measured what the `control` half actually is, and it is not a queue
-	 * either. At 235 lines, 107 were PURE `control` — the only shape that can
-	 * leave — over 65 classes, 38 of which hold exactly one. Thirty of those
-	 * 107 sit in 17 classes that ALREADY declare an arm; all 38 of those arms
-	 * were run and none of the 30 went red, so the cheap shape S129 found — a
-	 * line dying under an arm already declared — is empty here. At least 17 of
-	 * the 107 say in their own words that they are unchanged either way:
-	 * byte-identical with the gate reverted, already cuddled before the gate,
-	 * green on both sides. An arm forced onto one of those is the vacuous pin
-	 * this layer exists to prevent, and all five lines of
-	 * `HxArrowBlockBodyOpenSliceTest`, the densest class, are of that kind.
-	 *
-	 * On the densest class whose fixtures are gate controls rather than outcome
-	 * pins — `FieldInitAtDeclarationCheckTest`, 4 lines — four hand cuts found
-	 * no narrow discriminating seam: what flips those four flips 33 to 38 of
-	 * the 72 fixtures in that class, while the two narrow cuts that do exist
-	 * (2 and 3 failures) flip other fixtures instead. Three classes probed by
-	 * hand cost six cuts and yielded ONE retirable line,
-	 * `ShortenTypeRefCheckTest#testASingleSurvivingOccurrenceEarnsNoImport`,
-	 * whose `IMPORT_THRESHOLD` is a narrow seam: cutting 2 to 1 fails four
-	 * fixtures and all four are in that class. So the rate is roughly one arm
-	 * per LINE, not per class.
+	 * The `control` half is not a queue either. Many pure `control` lines sit in
+	 * classes that ALREADY declare an arm, and running those arms turns none of
+	 * them red; a good share say in their own words that they are unchanged either
+	 * way — byte-identical with the gate reverted, already cuddled before the gate,
+	 * green on both sides. An arm forced onto one of those is the vacuous pin this
+	 * layer exists to prevent. Where a class's fixtures are gate controls rather
+	 * than outcome pins, hand cuts find no narrow discriminating seam: what flips
+	 * those fixtures flips half the class, and the rare retirable line is one whose
+	 * own threshold is a narrow seam. So the rate is roughly one arm per LINE, not
+	 * per class.
 	 *
 	 * So a `control` line has a mechanical exit but not always an honest one.
 	 * Retire one only where a cut exists that flips THAT fixture and few
@@ -219,6 +206,7 @@ final class ProseClaimCensusTest extends Test {
 		'unit.cli.ResolutionScopeCliTest#testConfigLessProjectStaysConservativeOnUnresolvableType :: control',
 		'unit.cli.ResolutionScopeCliTest#testSymlinkedSpellingOfTheSameTreeStillDedups :: base',
 		'unit.core.BodyGroupPrefixChargeConsumerTest#testRestStackAlsoDefersAnInlineNestedBody :: control',
+		'unit.core.DocRendererTest#testACRLFBlankRunCarryingIndentIsStillCapped :: base',
 		'unit.format.BraceSymmetrySliceTest#testTheSameBlockOutsideAMacroIsStillDeBraced :: control',
 		'unit.format.WrapFlatSourceFixedPointTest#testMultiArgFillPacksACommittedBodyOnPassTwo :: control,base',
 		'unit.format.WrapProbeRestAwarenessSliceTest#testArrowRestAwareProbeKeepsItsCtor :: control,base',

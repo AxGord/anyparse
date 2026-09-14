@@ -134,13 +134,13 @@ class LintSliceTest extends Test {
 
 	/**
 	 * A name appearing only in a COMMENT is not a reference — a comment resolves nothing, so the
-	 * import is unused and deletable. Until 2026-08-27 this test pinned the opposite, under the name
+	 * import is unused and deletable. This test used to pin the opposite, under the name
 	 * `testCommentMentionIsConservativelyUsed`, and `InertRegions` documents the reason: the raw
 	 * over-counting scan is what protects the `unused-*` family from deleting a live binding. That
 	 * reason is real for a STRING (reflection reaches a type through one) and empty for a comment,
-	 * and the cost was measured before the reversal — masking comments turned up 41 dead imports in
-	 * `src` + `test`, every one of which was deleted with both binaries still building, and 11 more
-	 * on the Pony corpus, where the two `lint-oracle` compiles came back byte-identical. The string
+	 * and the cost was checked before the reversal — masking comments turned up dozens of dead
+	 * imports in `src` + `test`, every one of which was deleted with both binaries still building,
+	 * and more on the Pony corpus, where the two `lint-oracle` compiles came back byte-identical. The string
 	 * half is the control below.
 	 */
 	public function testCommentMentionIsNotAReference(): Void {
@@ -419,10 +419,10 @@ class LintSliceTest extends Test {
 		Assert.equals(1, duplicates('import a.b.Three as V;\nimport a.b.Three as V;\n'));
 		// The UNGUARDED shape of the same confusion, and the one that deletes: two statements
 		// binding one name to different modules. Haxe accepts them and the LAST one wins
-		// (compiled on 4.3.7 — `new U().who()` traced `Two`), so deleting the second silently
-		// rebinds `U` to the first. Keyed on `raw` both read as `Alias|U|U`; measured against the
-		// base engine, it reported `duplicate import 'U'` on line 4 and `--fix` would have taken
-		// it. No `#if` involved, so this arm is independent of the builder's dedup key.
+		// (compiled — `new U().who()` traced `Two`), so deleting the second silently
+		// rebinds `U` to the first. Keyed on `raw` both read as `Alias|U|U`; the base engine
+		// reported `duplicate import 'U'` on line 4 and `--fix` would have taken it. No `#if`
+		// involved, so this arm is independent of the builder's dedup key.
 		Assert.equals(
 			0,
 			new DuplicateImport().run([

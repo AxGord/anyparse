@@ -310,8 +310,8 @@ class LintFixFixedPointCliTest extends Test {
 	/**
 	 * A `RiskyFix` rule this run could not verify is never handed to the safe loop either, so no
 	 * `fix` of its own is ever called and its row would be a silent zero. On Pony `avoid-dynamic`
-	 * alone reports 470 findings; a block about what did not get fixed that simply omits the largest
-	 * rule on the tree invites its own misreading, so those rules are named once at the end.
+	 * alone is the largest rule by far; a block about what did not get fixed that simply omits the
+	 * largest rule on the tree invites its own misreading, so those rules are named once at the end.
 	 *
 	 * The caller decides which rules those are, and since `FixVerifier` began carrying per-rule
 	 * tallies it passes an EMPTY list whenever the risky phase actually ran — see
@@ -340,7 +340,7 @@ class LintFixFixedPointCliTest extends Test {
 	}
 
 	/**
-	 * Seventy-odd rules report on a real tree (74 on Pony), so the block names the biggest few and
+	 * Dozens of rules report on a real tree, so the block names the biggest few and
 	 * totals the rest — otherwise the answer to "what did not get fixed" is a wall nobody reads.
 	 */
 	@:access(anyparse.query.Cli)
@@ -367,8 +367,8 @@ class LintFixFixedPointCliTest extends Test {
 	 * The ledger recorded the FIRST `Violation.declineReason` it saw and printed it as the rule's
 	 * whole verdict, which was right while every converted rule declined for a single cause. The
 	 * first rule to write the field per-ARM declines for four different ones on a single real tree
-	 * — `unused-import` on Pony: 110 out-of-scope, 54 `#if`-guarded, 25 unknown `using`, 15 unknown
-	 * wildcard — and naming whichever the file walk reached first states a quarter of the answer
+	 * — `unused-import`: out-of-scope, `#if`-guarded, unknown `using`, unknown wildcard —
+	 * and naming whichever the file walk reached first states a quarter of the answer
 	 * with the confidence of the whole.
 	 */
 	@:access(anyparse.query.Cli)
@@ -433,7 +433,7 @@ class LintFixFixedPointCliTest extends Test {
 	 *
 	 * The loader used to map each naming check's `format` onto a rule and attach no `normalize`, so
 	 * `correctedName` had nothing to return and every finding declined: `fixed 0` against `fixed 2`,
-	 * with 198 of an 851-file tree's 231 findings taking the first arm. `CheckstyleConfigLoader.ruleFor`
+	 * with most of a real tree's findings taking the first arm. `CheckstyleConfigLoader.ruleFor`
 	 * now asks `HaxeNamingSupport.normalizerFor` for the corrections the built-in policy attaches to the
 	 * rule's own category, so both arms write the same edits.
 	 *

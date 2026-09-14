@@ -52,7 +52,7 @@ class NullableSwitchMissingNullCheckTest extends Test {
 		Assert.equals(1, violations(mod('function f(e:Null<Colour>):Int { return switch e { case Red: 1; case Green: 2; }; }')).length);
 	}
 
-	/** A wildcard makes the compiler emit the null check — measured surviving on hxcpp / js / eval. */
+	/** A wildcard makes the compiler emit the null check — survives on hxcpp / js / eval. */
 	public function testWildcardNotFlagged(): Void {
 		Assert.equals(0, violations(mod('function f(e:Null<Colour>):Void { switch e { case Red: trace(1); case _: trace(0); } }')).length);
 	}
@@ -85,7 +85,7 @@ class NullableSwitchMissingNullCheckTest extends Test {
 		Assert.equals(0, violations(mod('function f(x:Null<Int>):Void { switch x { case 1: trace(1); case 2: trace(2); } }')).length);
 	}
 
-	/** An `enum abstract` value IS its underlying primitive — measured surviving on hxcpp. */
+	/** An `enum abstract` value IS its underlying primitive — survives on hxcpp. */
 	public function testEnumAbstractSubjectNotFlagged(): Void {
 		Assert.equals(0, violations(mod('function f(m:Null<Mode>):Void { switch m { case On: trace(1); case Off: trace(2); } }')).length);
 	}

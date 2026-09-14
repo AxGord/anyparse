@@ -849,10 +849,10 @@ class UnusedPrivateCheckTest extends Test {
 	 *
 	 * `run` gathered the string-literal contents `fix`'s reflection gate consults from the REPORT
 	 * files alone, so `Reflect.field(d, 'secretThing')` in a file the run does not lint contributed
-	 * nothing and the member read as reachable by nobody. Measured on a two-file probe under
-	 * `resolutionRoots: ["src"]` before the fix: `lint D.hx --rule unused-private --fix` deleted the
+	 * nothing and the member read as reachable by nobody. On a two-file probe under
+	 * `resolutionRoots: ["src"]` before the fix, `lint D.hx --rule unused-private --fix` deleted the
 	 * field and the reflective read went on naming it. The contents come from the whole RESOLUTION scope now — report UNION
-	 * `resolutionRoots` UNION the library half, through `ReflectionScan.scopeFiles` shared with `naming` (S184, T868: the
+	 * `resolutionRoots` UNION the library half, through `ReflectionScan.scopeFiles` shared with `naming` (the
 	 * project-only scope licensed a deletion the wide one refuses) — which only ever ADDS strings — so the gate can
 	 * only KEEP a member, never newly delete one.
 	 */

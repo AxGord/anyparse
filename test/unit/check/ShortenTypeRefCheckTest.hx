@@ -166,7 +166,7 @@ class ShortenTypeRefCheckTest extends Test {
 		final out: String = applyFix(inClass('', '\t\tg(pkg.deep.Foo.make());\n\t\tg(pkg.deep.Foo.other());\n'));
 		// The raw edit anchors on the `package` statement's own end and now brings the blank line
 		// canonical Haxe puts between the package and the import block with it (`ImportAnchor.lead`)
-		// — until 2026-08-27 it did not, and only the `lint --fix` canonicalisation that runs after
+		// — it used not to, and only the `lint --fix` canonicalisation that runs after
 		// this raw path restored it.
 		Assert.equals('package app;\n\nimport pkg.deep.Foo;\n\n', out.substring(0, out.indexOf('class C')));
 		Assert.isTrue(out.indexOf('g(Foo.make());') != -1 && out.indexOf('g(Foo.other());') != -1, 'both shortened, got: $out');
@@ -299,7 +299,7 @@ class ShortenTypeRefCheckTest extends Test {
 	 * and would say nothing about this gate. The suppressed runtime occurrence used to lift it,
 	 * leaving a module-level import behind macro-time uses only.
 	 *
-	 * Measured on a js target, that import did not introduce the breakage — the unguarded
+	 * On a js target that import did not introduce the breakage — the unguarded
 	 * `sys.io.File.b()` the suppression leaves in place fails on js by itself, with or without the
 	 * import — so this is the fail-closed reading of the gate rather than a compile repair.
 	 *
@@ -568,7 +568,7 @@ class ShortenTypeRefCheckTest extends Test {
 	/**
 	 * A `macro` function's body typechecks ONLY in the macro context, so a `sys.*` path is legal
 	 * there on every target. A module-level import resolves in EVERY context, so hoisting the path
-	 * out of the body breaks the module on js / flash — measured on Pony's `pony.text.TextTools`,
+	 * out of the body breaks the module on js / flash — seen on Pony's `pony.text.TextTools`,
 	 * whose neko + nodejs oracle is blind to it by construction.
 	 */
 	public function testMacroOnlyBodyEarnsNoImport(): Void {

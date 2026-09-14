@@ -92,7 +92,7 @@ class SimplifyBooleanTernaryCheckTest extends Test {
 	 * The shared claim IS the fix for the order-dependence with `prefer-if-expression-chain`, and
 	 * its whole value is that the two answers cannot diverge: a deferral built on a second walk
 	 * carrying its own copy of this check's gate would drift the moment one of them moved — the
-	 * defect S46's review found after correcting one side of a two-sided derivation. Both go
+	 * defect a review found after correcting one side of a two-sided derivation. Both go
 	 * through `walkClaims`, so there is one gate and one traversal.
 	 *
 	 * CANNOT COMPILE at base: no `claimedSpans` exists there.
@@ -168,8 +168,8 @@ class SimplifyBooleanTernaryCheckTest extends Test {
 	 * THE FLAGSHIP REGRESSION: a `String`-typed ordered comparison keeps its `!( … )` wrap.
 	 * Before this rule threaded a type resolver it flipped ordered comparisons UNCONDITIONALLY,
 	 * so `(s < t) ? false : a && b` became `s >= t && a && b` — and with `s = null` the original
-	 * yields `true` while the rewrite yields `false` (measured on `--interp` and `js`, Haxe
-	 * 4.3.7). Haxe has no non-nullable string type, so a `String` declaration proves nothing
+	 * yields `true` while the rewrite yields `false` (checked on `--interp` and `js`).
+	 * Haxe has no non-nullable string type, so a `String` declaration proves nothing
 	 * about null and the flip is never licensed.
 	 */
 	public function testStringOrderedComparisonKeepsWrap(): Void {

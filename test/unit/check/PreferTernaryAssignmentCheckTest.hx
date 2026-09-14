@@ -150,8 +150,8 @@ class PreferTernaryAssignmentCheckTest extends Test {
 	 *
 	 * RED at base, where this rule claimed it and collapsed it onto a value that is ALREADY a
 	 * ternary — writing the three-rung `x = a ? 1 : p ? q : r`, which `prefer-if-expression-chain`
-	 * then reports, on the text this fix had just written. Measured by S46 at 14 sites over 1029
-	 * external files, taking that rule from 93 findings to 107. The site keeps a finding at the
+	 * then reports, on the text this fix had just written. Seen at a dozen sites over the
+	 * external corpora, each adding a finding to that rule. The site keeps a finding at the
 	 * SAME line, from `prefer-if-expression-assignment`, whose single edit IS the canon.
 	 */
 	public function testTernaryTailedElseIsNotFlagged(): Void {
@@ -171,8 +171,8 @@ class PreferTernaryAssignmentCheckTest extends Test {
 	/**
 	 * A comment inside that ternary keeps the site HERE, because the claiming rule refuses it.
 	 *
-	 * The deferral asks the other rule for its whole derivation, gates and all — the shape S46
-	 * measured a mirror losing 14 of 69 sites to. A shape-only deferral would silence this check
+	 * The deferral asks the other rule for its whole derivation, gates and all — the shape a
+	 * mirror was seen losing a fifth of its sites to. A shape-only deferral would silence this check
 	 * wherever the other one fails closed on a comment, and nobody would report the site at all.
 	 */
 	public function testCommentInTheTernaryTailKeepsTheFindingHere(): Void {

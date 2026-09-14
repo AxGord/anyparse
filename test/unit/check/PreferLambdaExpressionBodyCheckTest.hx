@@ -403,8 +403,8 @@ class PreferLambdaExpressionBodyCheckTest extends Test {
 	/**
 	 * SYMPTOM (a), ARG-LIST EXPLOSION. The collapsed head line no longer fits, so the writer
 	 * breaks the ENCLOSING call's argument list apart: `Api.authenticate(` is left alone on its
-	 * own line with the arguments re-flowed under it. The head line loses 46 characters (63 ->
-	 * 17), but the rendering is LINE-NEUTRAL at 9 lines either way, so CLAUSE 1 is what refuses
+	 * own line with the arguments re-flowed under it. The head line loses most of its width,
+	 * but the rendering is LINE-NEUTRAL either way, so CLAUSE 1 is what refuses
 	 * this site and clause 2 never runs on it — the clause-2 pin is
 	 * `testOrphanArrowWithBlankLinesRefused`. Nothing structural distinguishes this site from an
 	 * accepted one — only the rendering does.
@@ -418,8 +418,8 @@ class PreferLambdaExpressionBodyCheckTest extends Test {
 	/**
 	 * DE-BRACE IN PLACE. The body is too wide for the head line, so it stays one line down and
 	 * the collapse removes exactly the braces: the head loses its ` {`, the closing `});`
-	 * becomes `);`, and no interior line moves — line-neutral at 9 lines either way, head two
-	 * characters shorter (40 -> 38). Clause 2 accepts it: a one-statement body carries no
+	 * becomes `);`, and no interior line moves — line-neutral either way, head two
+	 * characters shorter. Clause 2 accepts it: a one-statement body carries no
 	 * braces under the brace policy, and saving a line was never the point. Recorded here as
 	 * the shape that used to be refused for being line-neutral.
 	 */
@@ -450,7 +450,7 @@ class PreferLambdaExpressionBodyCheckTest extends Test {
 	 * This used to be refused for two reasons at once: the collapse was line-neutral, and the
 	 * writer hoisted the wrapped condition into the arrow head. The writer no longer does that
 	 * (`BodyFit.arrowConstructHeadWidth` moves the body to the continuation line), so what is
-	 * left is a plain de-brace — 11 lines either way, head shortened by its ` {` and nothing
+	 * left is a plain de-brace — the same line count either way, head shortened by its ` {` and nothing
 	 * else — and clause 2 accepts it. The real-tree site this fixture was drawn from is the one
 	 * the whole slice exists for.
 	 */

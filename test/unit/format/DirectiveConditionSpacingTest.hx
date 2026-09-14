@@ -12,7 +12,7 @@ import utest.Test;
  * expression tree, so `whitespace.binopPolicy` (which acts on operator NODES) has never
  * reached it and the authored spelling survived byte for byte.
  *
- * The user asked for it (2026-09-03): `#if (js||flash)` should read `#if (js || flash)`.
+ * The user asked for it: `#if (js||flash)` should read `#if (js || flash)`.
  * The knob is a BOOL, not a policy of its own: the direction comes from the config's
  * `binopPolicy`, so the condition's `&&` / `||` cannot drift from the code's.
  *

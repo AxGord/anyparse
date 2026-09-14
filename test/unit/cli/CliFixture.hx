@@ -117,13 +117,12 @@ final class CliFixture {
 	 * Two suite processes started together are lockstep copies of each other, the same classes
 	 * in the same order, so their counters advance side by side and land in the same
 	 * millisecond: whole runs of names coincide, both write into ONE directory, and the first
-	 * teardown deletes the other's fixture mid-test. Measured on `0430a5eb` with four
-	 * concurrent suites: 19 non-green ROWS over 15 distinct fixtures in 7 classes, every one
-	 * of them an `ENOENT` on a `$TMPDIR/tmp_…` path — and 0 with a private `TMPDIR` per
-	 * process.
+	 * teardown deletes the other's fixture mid-test. Four concurrent suites show it as a run
+	 * of non-green rows across several classes, every one of them an `ENOENT` on a
+	 * `$TMPDIR/tmp_…` path — and none with a private `TMPDIR` per process.
 	 *
 	 * A per-process ROOT rather than a per-process NAME because the naming is not in one
-	 * place: TWENTY sites under test/ build such a path by hand — one of them a FIXED name no
+	 * place: many sites under test/ build such a path by hand — one of them a FIXED name no
 	 * per-name fix could ever have reached — and `OracleCache` / `CompilerServer` key their
 	 * records by an hxml+cwd hash under the same directory. One root covers every producer,
 	 * including the ones not written yet.
@@ -266,7 +265,7 @@ final class CliFixture {
 	 * `node bin/apq.js` there answers `MODULE_NOT_FOUND`, and the fixture reads as a failure of
 	 * whatever the arm cut rather than of its own environment. Two classes carried a private copy
 	 * of this guard and a third an inline one; the fourth fixture of the family had none, and it
-	 * was `+extra` in EVERY non-fast arm run for as long as it existed (T876/T898).
+	 * was `+extra` in EVERY non-fast arm run for as long as it existed.
 	 */
 	public static function engineOrSkip(): Null<String> {
 		final engine: String = 'bin/apq.js';

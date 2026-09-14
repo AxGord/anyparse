@@ -200,8 +200,8 @@ class DeadStoreTest extends Test {
 		// one function-value kind missing from `NullFlow.NESTED_FN_KINDS` — so the body was walked as
 		// straight-line code and its own `return` cleared the backward liveness state, making both memo
 		// writes read as dead on every path. `--fix` then deleted them: identical output, and the index
-		// rebuilt per invocation (measured on this shape — 1 build vs 30 over 30 findings, byte-equal
-		// results). That is the silent 31x regression this check once shipped.
+		// rebuilt per invocation (one build per finding instead of one, byte-equal results). That is
+		// the silent regression this check once shipped.
 		final src: String = 'class C { static function r(fs:Array<String>):Array<String> { var t:Null<String> = null;'
 			+ ' var ix:Null<Array<String>> = null; return emit(fs, v -> { final tr = treeOf(v); var cur = ix;'
 			+ ' if (cur == null || t != tr) { cur = build(tr); t = tr; ix = cur; } return cur[0]; }); } }';
@@ -473,7 +473,7 @@ class DeadStoreTest extends Test {
 	 * prevents — and `forEachFunctionUnit` enumerated only `RefShape.functionKinds`, which names no
 	 * lambda spelling. So the identical body reported at top level and inside `function nm(v)` (a
 	 * `LocalFnStmt`, which IS in that set) and was silent inside `v -> { … }` and
-	 * `function(v) { … }`: 2 of 4, measured on the base binary. Every function VALUE is a unit now.
+	 * `function(v) { … }`: half the spellings. Every function VALUE is a unit now.
 	 */
 	public function testLambdaBodyIsItsOwnAnalysisUnit(): Void {
 		final src: String = 'class C { static function f(a:Array<Int>):Int { a.map(v -> { var x = v * 2; x = v * 3; return x; });'
@@ -511,7 +511,7 @@ class DeadStoreTest extends Test {
 	 * unreportable from BOTH sides — it is not an own name of the lambda unit, and the enclosing
 	 * unit excludes every name the lambda touches. Without that, `x = 1` as a callback's last
 	 * statement would read as dead on every path while the enclosing code reads it on the next
-	 * invocation; the S54 memo and accumulator pins above are the measured cost of getting it wrong.
+	 * invocation; the memo and accumulator pins above are the cost of getting it wrong.
 	 */
 	public function testLambdaCapturedOuterLocalStaysUnreported(): Void {
 		Assert.equals(
