@@ -135,7 +135,81 @@ class DuplicateCodeRenamedCheckTest extends Test {
 		Assert.equals(0, exact(source).length);
 	}
 
-	/** An exact clone is a clone under renaming too, so this rule reports every site the other one does. */
+	/**
+	 * The content gate measures the text the comparison keys on. Three declarations sharing nothing
+	 * but their shape clear the gate on their raw bytes — the long names are most of them — and fall
+	 * under it once each name weighs what its placeholder does, so the renamed reading is silent;
+	 * with every copy measured on its own bytes again (the arm) the run comes back as a clone.
+	 */
+	@:pin('control')
+	@:killer('M-DUP-CODE-RENAMED-GATE-RAW')
+	public function testDeclarationsWhoseBytesAreMostlyTheirNamesAreNotAClone(): Void {
+		final source: String = src([
+			'class C {',
+			'\tfunction f(alphaValue:Int, betaValue:Int):Void {',
+			'\t\tfinal firstTotal = alphaValue;',
+			'\t\tfinal secondTotal = betaValue;',
+			'\t\tfinal thirdTotal = firstTotal;',
+			'\t}',
+			'\tfunction g(gammaValue:Int, deltaValue:Int):Void {',
+			'\t\tfinal leftTotal = gammaValue;',
+			'\t\tfinal rightTotal = deltaValue;',
+			'\t\tfinal lastTotal = leftTotal;',
+			'\t}',
+			'}'
+		]);
+		Assert.equals(0, violations(source).length);
+		Assert.equals(0, exact(source).length);
+	}
+
+	/**
+	 * The same three declarations with an initializer the copies really share clear the gate, so what
+	 * the pin above filters is the name-only run and not every declaration run.
+	 */
+	public function testDeclarationsSharingTheirInitializersAreAClone(): Void {
+		final source: String = src([
+			'class C {',
+			'\tfunction f(alphaValue:Int, betaValue:Int):Void {',
+			'\t\tfinal firstTotal:Int = Math.max(alphaValue, betaValue);',
+			'\t\tfinal secondTotal:Int = Math.min(alphaValue, betaValue);',
+			'\t\tfinal thirdTotal:Int = Math.max(firstTotal, secondTotal);',
+			'\t}',
+			'\tfunction g(gammaValue:Int, deltaValue:Int):Void {',
+			'\t\tfinal leftTotal:Int = Math.max(gammaValue, deltaValue);',
+			'\t\tfinal rightTotal:Int = Math.min(gammaValue, deltaValue);',
+			'\t\tfinal lastTotal:Int = Math.max(leftTotal, rightTotal);',
+			'\t}',
+			'}'
+		]);
+		Assert.equals(1, violations(source).length);
+		Assert.equals(0, exact(source).length);
+	}
+
+	/**
+	 * The exact reading holes nothing, so its gate text is the raw render and an identically-named
+	 * copy of the name-heavy run stays its clone: the placeholder measure narrows this rule's
+	 * population and leaves the other rule's where it was.
+	 */
+	public function testTheExactReadingKeepsAnIdenticallyNamedDeclarationRun(): Void {
+		final source: String = src([
+			'class C {',
+			'\tfunction f(alphaValue:Int, betaValue:Int):Void {',
+			'\t\tfinal firstTotal = alphaValue;',
+			'\t\tfinal secondTotal = betaValue;',
+			'\t\tfinal thirdTotal = firstTotal;',
+			'\t}',
+			'\tfunction g(alphaValue:Int, betaValue:Int):Void {',
+			'\t\tfinal firstTotal = alphaValue;',
+			'\t\tfinal secondTotal = betaValue;',
+			'\t\tfinal thirdTotal = firstTotal;',
+			'\t}',
+			'}'
+		]);
+		Assert.equals(1, exact(source).length);
+		Assert.equals(0, violations(source).length);
+	}
+
+	/** An exact clone with no local binding in play is a clone under renaming too: the two readings compare and gate the same text. */
 	public function testAnExactCloneIsReportedByBothReadings(): Void {
 		final source: String = src([
 			'class C {',

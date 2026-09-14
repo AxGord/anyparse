@@ -1062,6 +1062,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.DuplicateCodeCheckTest#testALiteralInteriorDifferenceIsNotACloneWhileItsLayoutTwinIs :: control :: '
 				+ 'M-DUP-CODE-NORM-KEY',
 			'unit.check.DuplicateCodeRenamedCheckTest#testALocalsOnlyRenamingIsAClone :: control :: M-DUP-CODE-RENAMED-BINDERS',
+			'unit.check.DuplicateCodeRenamedCheckTest#testDeclarationsWhoseBytesAreMostlyTheirNamesAreNotAClone :: control :: '
+				+ 'M-DUP-CODE-RENAMED-GATE-RAW',
 			'unit.check.ExtractRepeatedExpressionTest#testALiteralInteriorDifferenceSplitsTheGroup :: control :: '
 				+ 'M-EXTRACT-REPEAT-RENDER-SPLIT',
 			'unit.check.FieldInitInConstructorCheckTest#testConstantLandsInTheConstantsRank :: control :: M-LACKSMEMBER-FALSE',
@@ -1868,6 +1870,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-RENDER-SPAN-TOKENS',
 			'M-DUP-CODE-NORM-KEY',
 			'M-DUP-CODE-RENAMED-BINDERS',
+			'M-DUP-CODE-RENAMED-GATE-RAW',
 			'M-EXTRACT-REPEAT-RENDER-SPLIT',
 			'M-OPAQUE-REGION-TRIVIA-KEPT',
 			'M-PEB-WS-REWIND-TRYPARSE-OFF',

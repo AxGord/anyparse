@@ -13,6 +13,8 @@ import anyparse.query.CanonicalEdit;
 import anyparse.query.format.LintFormat;
 import anyparse.query.format.Text;
 import anyparse.runtime.Span;
+import haxe.DynamicAccess;
+import haxe.Json;
 import utest.Assert;
 import utest.Test;
 
@@ -513,8 +515,9 @@ class LintSliceTest extends Test {
 	}
 
 	/**
-	 * `LintFormat.json` emits one record per violation that round-trips
-	 * through `haxe.Json.parse` with resolved line/severity/rule.
+	 * `LintFormat.json` emits one record per violation that round-trips through `Json.parse`
+	 * with resolved line/severity/rule — and the finding's whole region: `endLine`/`endCol` is the
+	 * span's exclusive end in the same 1-based convention as `line`/`col`.
 	 */
 	public function testJsonFormat(): Void {
 		final src: String = 'package pkg;\nimport a.b.Unused;\nclass C {}';
@@ -522,13 +525,32 @@ class LintSliceTest extends Test {
 		final vs: Array<Violation> = new UnusedImport().run([{ file: file, source: src }].concat(declaringStubs()), plugin());
 		Assert.equals(1, vs.length);
 		final sourceOf: Map<String, String> = [file => src];
-		final parsed: Array<Dynamic> = haxe.Json.parse(LintFormat.json(vs, sourceOf));
+		final parsed: Array<Dynamic> = Json.parse(LintFormat.json(vs, sourceOf));
 		Assert.equals(1, parsed.length);
 		final rec: Dynamic = parsed[0];
 		Assert.equals(file, rec.file);
 		Assert.equals(2, Std.int(rec.line));
 		Assert.equals('warning', rec.severity);
 		Assert.equals('unused-import', rec.rule);
+		Assert.equals(2, Std.int(rec.endLine));
+		Assert.equals('import a.b.Unused;'.length + 1, Std.int(rec.endCol), 'the end is exclusive: one past the statement');
+	}
+
+	/** A finding with no span leaves all four coordinates null rather than absent. */
+	public function testJsonRecordOfASpanlessFindingKeepsItsCoordinateKeys(): Void {
+		final spanless: Violation = {
+			file: 'F.hx',
+			span: null,
+			rule: 'demo',
+			severity: Severity.Warning,
+			message: 'no position'
+		};
+		final records: Array<DynamicAccess<Null<Any>>> = Json.parse(LintFormat.json([spanless], ['F.hx' => '']));
+		final bare: DynamicAccess<Null<Any>> = records[0];
+		Assert.isTrue(bare.exists('endLine'), 'the key is present on a spanless record');
+		Assert.isNull(bare['line']);
+		Assert.isNull(bare['endLine']);
+		Assert.isNull(bare['endCol']);
 	}
 
 	/**

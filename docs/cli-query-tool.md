@@ -396,7 +396,7 @@ Every mutation op resolves its target through one shared address layer (`anypars
 | `--match '<pattern>'`| An `apq search` structural pattern (`$x` metavars); the matched node is the target |
 | `--nth <k>`          | Picks the k-th (1-based, document order) of several `--select` / `--match` matches |
 
-- Named/pattern addresses are **edit-stable**: they survive edits above them, so a chain of ops needs no re-locate step between edits. On a position / `--match` resolution the op echoes the target's **canonical selector** to stderr (`apq <op>: target FnMember:walk`), and `lint --format json` records carry the same thing in an `address` field.
+- Named/pattern addresses are **edit-stable**: they survive edits above them, so a chain of ops needs no re-locate step between edits. On a position / `--match` resolution the op echoes the target's **canonical selector** to stderr (`apq <op>: target FnMember:walk`), and `lint --format json` records carry the same thing in an `address` field (record shape: § "Output JSON schemas").
 - An ambiguous `--select` / `--match` fails with a candidate listing ready for an `--nth` pick, and each row a NAME can address alone also carries the selector that does it (`AddressIndex.uniqueSelector` — `#2 4:2 Conditional  --select 'ClassDecl:C >> Conditional'`); a row only an ordinal separates stays bare. Every widening step prepends a NAMED ancestor with `>>`, so a node hanging directly off the nameless root is singled out by a final root-anchored `module > X` attempt, tried only for a direct child of the root. The listing asks the index for "names cannot single this out" as an ABSENCE rather than sniffing `describe`'s rendered string, because a node's name is arbitrary text.
 - A `--select` that matched nothing says WHY when it can: two clauses after a leading em dash — the unknown KIND (`--select "FnMembr:f" matched no nodes — "FnMembr" is not a node kind this grammar projects (did you mean FnMember?)`) and the known name under another kind (`"f" exists as 12:9 FnDecl:f; try --select "FnDecl:f"`). A kind that IS projected and merely absent here gets no clause. `apq source` carries the same tail; `apq ast --select` answers the unknown-kind clause ALONE (its `Kinds present here: …` listing answers the wrong question for a spelling no file could match) and keeps the cross-project pointer at `refs` / `uses` / `blast`, since a TypeName typed into `--select` is the commonest way to reach a kind no grammar projects.
 - `--kind <Kind>` combined with `--select` / `--match` LIFTS the resolved node to its innermost enclosing `<Kind>` — a pattern matches the expression (`addCase(x)` = the `Call`), while a statement edit wants the `ExprStmt`. With `--at` it keeps its original meaning: the innermost node of `<Kind>` at the cursor.
@@ -462,6 +462,16 @@ Node = {
 { "hits": [ { "file": "path/to/input", "annotation": "@:foo", "args": ["arg1", "arg2"],
               "decl": { "kind": "class" | ..., "name": "thingItIsAttachedTo", "span": Span } }, ... ] }
 ```
+
+#### `lint --format json`
+
+```
+[ { "file": "path/to/input", "line": 12, "col": 3, "endLine": 14, "endCol": 2,
+    "severity": "error" | "warning" | "info", "rule": "unused-import", "message": "…",
+    "address": "FnMember:f" /* optional */ }, ... ]
+```
+
+The one surface that predates the envelope convention: a BARE top-level array (`LintDiff.parseReport` wraps it before parsing). `line`/`col` is the finding's span START and `endLine`/`endCol` its EXCLUSIVE end — the same convention as `Span.end`, so `[line:col, endLine:endCol)` is the region and two findings' regions can be tested for nesting from the report alone; all four are `null` (not omitted) on a finding with no span. `address` is the canonical selector of § "Op addressing", omitted when no node resolves. `lint-diff` and `--baseline` key on `(file, rule, severity, message)` only and skip every other key on read, so a snapshot written before `endLine`/`endCol` existed compares against one written after with no delta.
 
 ### Kind vocabulary
 

@@ -131,10 +131,10 @@ final class LintDiffCommand implements CliCommand {
 		CliIo.sysPrint('a finding of it moved between files, which is the case a comparison of\n');
 		CliIo.sysPrint('totals hides. The headline also states the NET, so the pair\n');
 		CliIo.sysPrint('`N findings (base M)` cannot be read backwards.\n');
-		CliIo.sysPrint('Line, column and address are deliberately not part of the key —\n');
-		CliIo.sysPrint('they move under any edit above them, and `apq lint --format json`\n');
-		CliIo.sysPrint('records DO carry all three (file, line, col, severity, rule,\n');
-		CliIo.sysPrint('message, address) for any caller that wants them.\n');
+		CliIo.sysPrint('Line, column, span end and address are deliberately not part of the\n');
+		CliIo.sysPrint('key — they move under any edit above them, and `apq lint --format json`\n');
+		CliIo.sysPrint('records DO carry them all (file, line, col, endLine, endCol, severity,\n');
+		CliIo.sysPrint('rule, message, address) for any caller that wants them.\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('The MEASUREMENTS a message quotes are masked too, and each check\n');
 		CliIo.sysPrint('declares its own: a type going 518 -> 519 members, a clone block\n');

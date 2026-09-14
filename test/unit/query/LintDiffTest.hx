@@ -47,6 +47,30 @@ class LintDiffTest extends Test {
 		Assert.equals(1, LintDiff.render(result, 'anyparse', EXAMPLE_LIMIT).length, 'a clean run renders one headline line');
 	}
 
+	/**
+	 * The span end a newer engine writes is not part of the key and not required on read: a
+	 * snapshot carrying `endLine`/`endCol` — null on a spanless finding — keys exactly as one
+	 * written without them, in both directions, so a baseline taken before the field existed
+	 * still compares clean against a report taken after.
+	 */
+	public function testASnapshotWithSpanEndsKeysAsOneWithout(): Void {
+		final withEnds: String = reportOf([
+			'{"file": "src/A.hx", "line": 12, "col": 3, "endLine": 14, "endCol": 2, "severity": "warning", "rule": "unused-import",'
+			+ ' "message": "import a.B is unused", "address": "FnMember:f"}',
+			'{"file": "src/B.hx", "line": null, "col": null, "endLine": null, "endCol": null, "severity": "info", "rule": "member-order",'
+			+ ' "message": "member out of order"}'
+		]);
+		final without: String = reportOf([
+			record('src/A.hx', 'warning', 'unused-import', 'import a.B is unused'),
+			record('src/B.hx', 'info', 'member-order', 'member out of order')
+		]);
+		Assert.equals(2, LintDiff.parseReport(withEnds).length, 'the unmodelled keys are skipped, null or not');
+		final forward: LintDiffResult = diff(without, withEnds, '');
+		final backward: LintDiffResult = diff(withEnds, without, '');
+		Assert.equals(0, forward.addedTotal + forward.removedTotal, 'a snapshot without the ends against one with them');
+		Assert.equals(0, backward.addedTotal + backward.removedTotal, 'and the other way round');
+	}
+
 	public function testSurplusIsCountedPerOccurrenceNotPerKey(): Void {
 		final before: String = reportOf([
 			record('src/A.hx', 'warning', 'magic-number', 'magic number'),

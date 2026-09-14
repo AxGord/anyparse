@@ -6,11 +6,13 @@ package anyparse.query.format.json;
  * the macro-generated `LintReportJsonParser` (ByName struct lowering), which
  * roots on the `LintReportJson` envelope holding an array of these.
  *
- * A real record also carries `line`, `col` and `address`. All three are
- * deliberately NOT modelled and are dropped by the `UnknownPolicy.Skip`
- * inherited from `JsonFormat`: every one of them moves when an unrelated
- * edit shifts lines, so keying on them would report a whole file as
- * removed-and-re-added after a one-line insertion above it.
+ * A real record also carries `line`, `col`, `endLine`, `endCol` and
+ * `address`. All five are deliberately NOT modelled and are dropped by the
+ * `UnknownPolicy.Skip` inherited from `JsonFormat`: every one of them moves
+ * when an unrelated edit shifts lines, so keying on them would report a
+ * whole file as removed-and-re-added after a one-line insertion above it —
+ * and the skip is what lets a snapshot written before the span end existed
+ * still be read.
  *
  * The four modelled keys are REQUIRED rather than `@:optional`. The lint
  * report writer emits all four on every record, so a record missing one is

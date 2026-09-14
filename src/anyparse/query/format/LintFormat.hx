@@ -19,11 +19,13 @@ final class LintFormat {
 
 	/**
 	 * Render `violations` as a pretty-printed JSON array of
-	 * `{file, line, col, severity, rule, message}` records. A violation with
-	 * no span resolves `line`/`col` to null. `addressOf` (when given) adds an
-	 * `address` field — the finding's canonical edit-stable selector
-	 * (`Address.describe`), directly usable as a mutation-op `--select`
-	 * argument. Escaping is delegated to `Json.stringify`.
+	 * `{file, line, col, endLine, endCol, severity, rule, message}` records: `line`/`col`
+	 * is the span's start and `endLine`/`endCol` its EXCLUSIVE end, both 1-based as every
+	 * other `Span` this CLI prints, so a consumer can ask whether two findings' regions
+	 * nest. A violation with no span resolves all four to null. `addressOf` (when given)
+	 * adds an `address` field — the finding's canonical edit-stable selector
+	 * (`Address.describe`), directly usable as a mutation-op `--select` argument.
+	 * Escaping is delegated to `Json.stringify`.
 	 */
 	public static function json(
 		violations: Array<Violation>, sourceOf: Map<String, String>, ?addressOf: Violation -> Null<String>
@@ -84,13 +86,17 @@ final class LintFormat {
 		return buf.toString();
 	}
 
-	/** One JSON record for a violation; null span yields null line/col. */
+	/** One JSON record for a violation; a null span yields null coordinates. */
 	private static function recordOf(v: Violation, index: LineIndex): Dynamic {
+		final span: Null<Span> = v.span;
 		final pos: Null<Position> = posOf(v, index);
+		final end: Null<Position> = span == null ? null : index.lineColAt(span.to);
 		return {
 			file: v.file,
 			line: pos?.line,
 			col: pos?.col,
+			endLine: end?.line,
+			endCol: end?.col,
 			severity: v.severity.label(),
 			rule: v.rule,
 			message: v.message
