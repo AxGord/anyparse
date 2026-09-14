@@ -7,10 +7,13 @@ import anyparse.check.SpanRender.SpanOverride;
 import anyparse.query.BinderScan;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+
+using Lambda;
 
 /**
  * Flags a run of three or more consecutive statements that appears, byte-for-byte
@@ -65,6 +68,10 @@ import anyparse.runtime.Span;
  *   placeholder does and both copies of a clone measure the same.
  * - Runs entirely inside an `opaqueKinds` (macro reification) subtree are skipped —
  *   their identifiers may be spliced from elsewhere.
+ * - **Bare runs are not clones.** A run whose every statement is a local declaration or a plain
+ *   assignment to a name (dotted or not), with no value, a name or a literal on the right, is not
+ *   reported under either reading: a row of slot fills has nothing to extract. A statement the seams
+ *   (`bareKinds`) cannot place is not bare, so an unclassifiable run stays a finding.
  *
  * ## Grammar-agnostic
  *
@@ -193,6 +200,11 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 		return stmt.renamed ? renumber(stmt.text, names) : stmt.text;
 	}
 
+	/** A value that fills a slot without computing anything: a name or a literal. */
+	private static inline function isSlotValue(k: DupBareKinds, node: QueryNode): Bool {
+		return isName(k, node) || isLiteral(k, node);
+	}
+
 	/**
 	 * Both readings of one clone engine over a file set: collect each file's blocks once, then run
 	 * the same-file and the cross-file pass over that single collection. `mode` decides the rule id
@@ -212,6 +224,7 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 		} : null;
 		final blockKinds: Array<String> = support.blockKinds();
 		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
+		final bare: DupBareKinds = bareKinds(shape);
 		final violations: Array<Violation> = [];
 		final perFile: Array<DupFile> = [];
 		for (entry in files) {
@@ -222,7 +235,8 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 				source: entry.source,
 				blockKinds: blockKinds,
 				opaqueKinds: opaqueKinds,
-				binders: binders
+				binders: binders,
+				bare: bare
 			};
 			collectBlocks(tree, ctx, null, blocks);
 			perFile.push({ file: entry.file, source: entry.source, blocks: blocks });
@@ -307,6 +321,7 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 		return {
 			text: SpanRender.renderSpan(ctx.source, span.from, span.to, node, holes),
 			renamed: holes.length > 0,
+			bare: isBareStmt(ctx.bare, node),
 			span: span
 		};
 	}
@@ -400,9 +415,8 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 		for (k in 1...bucket.length) {
 			final later: DupPos = bucket[k];
 			final len: Int = commonRun(blocks, anchor, later);
-			if (len < MIN_STATEMENTS) continue;
+			if (!reportableRun(blocks, anchor, len)) continue;
 			if (anchor.b == later.b && later.i - anchor.i < len) continue;
-			if (runNonWs(blocks[anchor.b], anchor.i, len) < MIN_NON_WS_CHARS) continue;
 			final laterStmts: Array<DupStmt> = blocks[later.b];
 			findings.push({
 				span: new Span(laterStmts[later.i].span.from, laterStmts[later.i + len - 1].span.to),
@@ -553,8 +567,7 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 			final laterFile: Int = blockFile[later.b];
 			if (laterFile == anchorFile) continue;
 			final len: Int = commonRun(blocks, anchor, later);
-			if (len < MIN_STATEMENTS) continue;
-			if (runNonWs(blocks[anchor.b], anchor.i, len) < MIN_NON_WS_CHARS) continue;
+			if (!reportableRun(blocks, anchor, len)) continue;
 			final laterStmts: Array<DupStmt> = blocks[later.b];
 			findings.push({
 				span: new Span(laterStmts[later.i].span.from, laterStmts[later.i + len - 1].span.to),
@@ -593,14 +606,112 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 		return grams;
 	}
 
+	/**
+	 * Whether a shared run of `len` statements from `anchor` is a clone worth reporting: long
+	 * enough, over the content gate, and not bare.
+	 */
+	private static function reportableRun(blocks: Array<Array<DupStmt>>, anchor: DupPos, len: Int): Bool {
+		if (len < MIN_STATEMENTS) return false;
+		final stmts: Array<DupStmt> = blocks[anchor.b];
+		return runNonWs(stmts, anchor.i, len) >= MIN_NON_WS_CHARS && !bareRun(stmts, anchor.i, len);
+	}
+
+	/**
+	 * Whether every statement of the `len` from `start` is bare — a row of slot fills, which has
+	 * nothing to extract and is not a finding under either reading.
+	 */
+	private static function bareRun(stmts: Array<DupStmt>, start: Int, len: Int): Bool {
+		for (i in start ... start + len) if (!stmts[i].bare) return false;
+		return true;
+	}
+
+	/**
+	 * The seams the bare-run filter reads, unioned once per scan: every local declaration spelling
+	 * (statement, static and continuation), the constant literal kinds with the inert text literals
+	 * (a regex among them), and the collection literal kinds an empty spelling can carry.
+	 */
+	private static function bareKinds(shape: RefShape): DupBareKinds {
+		final declKinds: Array<String> = [];
+		final literalKinds: Array<String> = MemberKinds.constantLiteralKinds(shape);
+		final emptyCollectionKinds: Array<String> = [];
+		inline function addOne(out: Array<String>, kind: Null<String>): Void if (kind != null && !out.contains(kind)) out.push(kind);
+		inline function add(out: Array<String>, kinds: Null<Array<String>>): Void if (kinds != null) for (kind in kinds) addOne(out, kind);
+		add(declKinds, shape.localDeclKinds);
+		add(declKinds, shape.staticLocalDeclKinds);
+		add(declKinds, shape.localDeclContinuationKinds);
+		add(literalKinds, shape.inertTextLiteralKinds);
+		addOne(emptyCollectionKinds, shape.arrayLiteralKind);
+		addOne(emptyCollectionKinds, shape.objectLiteralKind);
+		return {
+			shape: shape,
+			declKinds: declKinds,
+			continuationKinds: shape.localDeclContinuationKinds ?? [],
+			typeChildKinds: shape.declTypeChildKinds ?? [],
+			literalKinds: literalKinds,
+			emptyCollectionKinds: emptyCollectionKinds
+		};
+	}
+
+	/**
+	 * Whether `stmt` is BARE: a local declaration, or a plain assignment to a name, whose value is
+	 * absent, a name or a literal — a slot fill. A statement the seams cannot place is not bare, so
+	 * an unclassifiable run stays a finding.
+	 */
+	private static function isBareStmt(k: DupBareKinds, stmt: QueryNode): Bool {
+		if (k.declKinds.contains(stmt.kind)) return isBareDecl(k, stmt);
+		if (stmt.kind != k.shape.exprStatementKind || stmt.children.length != 1) return false;
+		final assign: QueryNode = stmt.children[0];
+		return assign.kind == k.shape.assignKind && assign.children.length == 2 && isName(k, assign.children[0])
+			&& isSlotValue(k, assign.children[1]);
+	}
+
+	/**
+	 * A declaration is bare when its own value, if any, is a slot value and every continuation
+	 * declaration it carries is bare in turn; a type annotation child is not a value.
+	 */
+	private static function isBareDecl(k: DupBareKinds, decl: QueryNode): Bool {
+		var values: Int = 0;
+		for (child in decl.children) if (!k.typeChildKinds.contains(child.kind)) {
+			if (k.continuationKinds.contains(child.kind)) {
+				if (!isBareDecl(k, child)) return false;
+			} else {
+				values++;
+				if (values > 1 || !isSlotValue(k, child)) return false;
+			}
+		}
+		return true;
+	}
+
+	/** An identifier leaf, or a field access whose only child is a name — a dotted path is one name. */
+	private static function isName(k: DupBareKinds, node: QueryNode): Bool {
+		return node.kind == k.shape.identKind
+			? node.children.length == 0
+			: node.kind == k.shape.fieldAccessKind && node.children.length == 1 && isName(k, node.children[0]);
+	}
+
+	/**
+	 * A literal kind whose segments, if any, are all inert text (an interpolation hole is a read), a
+	 * negated numeric literal, or an empty collection literal.
+	 */
+	private static function isLiteral(k: DupBareKinds, node: QueryNode): Bool {
+		final shape: RefShape = k.shape;
+		if (k.literalKinds.contains(node.kind))
+			return node.children.foreach(segment -> MemberKinds.isInertStringSegmentKind(segment.kind, shape));
+		if (k.emptyCollectionKinds.contains(node.kind)) return node.children.length == 0;
+		final numeric: Null<Array<String>> = shape.numericLiteralKinds;
+		return node.kind == shape.negationKind && node.children.length == 1 && numeric != null && numeric.contains(node.children[0].kind);
+	}
+
 }
 
 /**
- * A block statement: its RENDERED comparison text (`SpanRender`), whether that text carries a hole, and its source span.
+ * A block statement: its RENDERED comparison text (`SpanRender`), whether
+ * that text carries a hole, whether it is bare, and its source span.
  */
 typedef DupStmt = {
 	var text: String;
 	var renamed: Bool;
+	var bare: Bool;
 	var span: Span;
 }
 
@@ -648,14 +759,15 @@ typedef DupMode = {
 }
 
 /**
- * The vocabularies one file's block walk needs. `binders` null is the reading that normalizes no
- * name, where every statement's key is its raw render.
+ * The vocabularies one file's block walk needs. `binders` null is the reading that normalizes
+ * no name, where every statement's key is its raw render; `bare` is read under both.
  */
 typedef DupCtx = {
 	var source: String;
 	var blockKinds: Array<String>;
 	var opaqueKinds: Array<String>;
 	var binders: Null<DupBinders>;
+	var bare: DupBareKinds;
 }
 
 /**
@@ -667,4 +779,18 @@ typedef DupBinders = {
 	var scopeKinds: Array<String>;
 	var binderKinds: Array<String>;
 	var identKind: String;
+}
+
+/**
+ * The grammar seams the bare-run filter reads, beside the shape they come from: the local
+ * declaration kinds with their continuation and type-annotation children, the literal kinds, and
+ * the collection literal kinds whose empty spelling is a literal too.
+ */
+typedef DupBareKinds = {
+	var shape: RefShape;
+	var declKinds: Array<String>;
+	var continuationKinds: Array<String>;
+	var typeChildKinds: Array<String>;
+	var literalKinds: Array<String>;
+	var emptyCollectionKinds: Array<String>;
 }

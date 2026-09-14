@@ -963,6 +963,13 @@
 			"note": "no byte is ever inside a token, so the display renderer collapses whitespace INSIDE a string literal again and a finding advertises a call the fix would not write"
 		},
 		{
+			"name": "M-DUP-CODE-BARE-RUN-OFF",
+			"type": "anyparse.check.DuplicateCode",
+			"method": "bareRun",
+			"force": "false",
+			"note": "no run is bare any more, so a row of declarations and field fills whose values are names and literals is reported as a clone again under both readings, though nothing in it can be extracted"
+		},
+		{
 			"name": "M-DUP-CODE-NORM-KEY",
 			"type": "anyparse.check.DuplicateCode",
 			"method": "normalizeStmt",

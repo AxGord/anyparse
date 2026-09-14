@@ -713,6 +713,10 @@ A rule that writes a source MEASUREMENT into its own prose re-keys on an edit th
 
 Its two non-zero exits are different on purpose: **1** means the comparison ran and the snapshots disagree, which `--allow-blast` waives; **2** means it could not run at all — a snapshot missing, unreadable or malformed — and that fails the battery whatever flags you pass. Waiving expected movement must never waive a gate that never executed.
 
+### `tools/clone-census.py` — the clone-rule census
+
+`tools/clone-census.py <label> <t2-report> <t1-report> <repo-root> [--after <t2> <t1>] [--removed FILE]` reads the `duplicate-code-renamed` and `duplicate-code` reports (`--flat` text or `--format json`, taken with the CWD at the repo root) and prints findings, families, occurrences, the purely-renamed and cross-file shares, and the bare-run share — the last one by a text regex that is deliberately NOT the engine's predicate (`DuplicateCode.isBareStmt` is structural), so that `--after` can print how the two readings agree on what a filter change removed and kept. Runs are resolved through `hxq ast --json`, so the tool needs `hxq` on the PATH and honours `HXQ_BIN`; `--cache DIR` keeps each file's `hxq ast --json` output across runs, and without it nothing is left under `TMPDIR`. Both reports of an `--after` pair are resolved against the one `<repo-root>` given, so run it on the tree the reports describe.
+
 ### Scratch directories: every tool's, and who removes them
 
 Five tools create a directory under `TMPDIR`, and every one removes it or leaves it claimed for the startup sweep — a directory kept forever is how a disk fills.
