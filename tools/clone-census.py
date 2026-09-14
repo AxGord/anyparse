@@ -24,8 +24,6 @@ import json
 import os
 import re
 import subprocess
-import sys
-import tempfile
 
 LINE = re.compile(r'^(\S+?):(\d+):(\d+): \[info\] (\d+) statements duplicated from (?:(\S+?):)?(?:line )?(\d+)')
 MESSAGE = re.compile(r'^(\d+) statements duplicated from (?:(\S+?):)?(?:line )?(\d+)')
@@ -68,20 +66,32 @@ def family(f):
 
 
 class Runs:
-    """Statement runs resolved through the AST, cached per file and per label."""
+    """Statement runs resolved through the AST of ONE tree (`root`): both reports of an `--after` pair are
+    resolved against it, so run the tool on the tip tree whose files the base report still describes."""
 
     def __init__(self, label, root, cache):
         self.label, self.root, self.cache = label, root, cache
         self.index = {}
         self.lines = {}
-        os.makedirs(cache, exist_ok=True)
+        self.trees = {}
+        if cache:
+            os.makedirs(cache, exist_ok=True)
 
     def ast(self, file):
-        p = os.path.join(self.cache, self.label + '__' + file.replace('/', '__') + '.json')
-        if not os.path.exists(p):
+        """One `hxq ast --json` per file per process; the disk cache is opt-in because a directory reused on
+        another tree resolves runs against stale spans."""
+        if file in self.trees:
+            return self.trees[file]
+        p = os.path.join(self.cache, self.label + '__' + file.replace('/', '__') + '.json') if self.cache else None
+        if p and os.path.exists(p):
+            tree = json.load(open(p))
+        else:
             r = subprocess.run(['hxq', 'ast', file, '--json'], cwd=self.root, capture_output=True, text=True)
-            open(p, 'w').write(r.stdout)
-        return json.load(open(p))
+            tree = json.loads(r.stdout)
+            if p:
+                open(p, 'w').write(r.stdout)
+        self.trees[file] = tree
+        return tree
 
     def nodes_at(self, file):
         """(startLine, startCol) -> [(node, siblings, index)], outermost first."""
@@ -205,7 +215,7 @@ def main():
     ap.add_argument('t2')
     ap.add_argument('t1')
     ap.add_argument('root')
-    ap.add_argument('--cache', default=os.path.join(tempfile.gettempdir(), 'clone-census-cache'))
+    ap.add_argument('--cache', default=None, help='keep each `hxq ast --json` output here across runs (opt-in: keyed by label + path, so a directory reused on another tree resolves runs against stale spans)')
     ap.add_argument('--after', nargs=2, metavar=('T2_AFTER', 'T1_AFTER'))
     ap.add_argument('--removed', help='append the removed families, one per line, to this file')
     args = ap.parse_args()

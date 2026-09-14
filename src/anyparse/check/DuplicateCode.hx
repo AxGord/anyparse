@@ -69,9 +69,9 @@ using Lambda;
  * - Runs entirely inside an `opaqueKinds` (macro reification) subtree are skipped —
  *   their identifiers may be spliced from elsewhere.
  * - **Bare runs are not clones.** A run whose every statement is a local declaration or a plain
- *   assignment to a name, with no value, a name or a literal on the right, is not reported under
- *   either reading: a row of slot fills has nothing to extract. A statement the seams cannot place
- *   is not bare, so an unclassifiable run stays a finding.
+ *   assignment to a name (dotted or not), with no value, a name or a literal on the right, is not
+ *   reported under either reading: a row of slot fills has nothing to extract. A statement the seams
+ *   (`bareKinds`) cannot place is not bare, so an unclassifiable run stays a finding.
  *
  * ## Grammar-agnostic
  *
