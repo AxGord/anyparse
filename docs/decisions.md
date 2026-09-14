@@ -501,4 +501,4 @@ decided the question; it may not become a record of runs.
 - the gated check-entry helper `RunScan.collectWith<S>` was to delegate to `collect` through a
   closure of its own → strict null safety then rejects every null test on a captured local inside
   the CALLER's lambda (a generic callee that forwards the callback), so both gated helpers restate
-  the loop — `S218-merge`
+  the loop — `2f161084`
