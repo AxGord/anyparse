@@ -114,7 +114,7 @@ function testRandomCases() {
 
 **Every grammar gets one**. When a new grammar is added, a round-trip test is part of the pull request. No grammar is "done" until it has passing round-trip tests.
 
-Already in place: `test/unit/grammar/JsonRoundTripTest.hx` with ~30 curated cases plus 200 randomly generated ones (both write and parse go through the macro-generated pipeline).
+Already in place: `test/unit/grammar/JsonRoundTripTest.hx`, a curated set plus seeded random cases (both write and parse go through the macro-generated pipeline).
 
 ## Layer 4: Cross-family round-trip tests
 
@@ -212,7 +212,7 @@ Full pipeline tests on real-world data. Take a substantial input (the user's ax3
 
 ## Proving a comment-only change inert: the build is NOT a byte oracle
 
-A change that touches only comments should leave the compiled output alone, and the obvious way to show it is to build both revisions and `cmp` them. That does not work here, and the failure is silent: **the Haxe build is not reproducible.** Rebuilding the SAME tree twice moves the `-D analyzer-optimize` switch-arm grouping, so `bin/test.js` and `bin/apq.js` each differ from themselves. An equal pair of revisions is one lucky draw, not a proof — and an unequal pair proves nothing either.
+A change that touches only comments should leave the compiled output alone, and the obvious way to show it is to build both revisions and `cmp` them. That does not work here, and the failure is silent: **the Haxe build is not reproducible** (§ "The JS build is not reproducible — a binary `cmp` needs the base built TWICE"), so an equal pair of revisions is one lucky draw, not a proof — and an unequal pair proves nothing either.
 
 Two oracles that do hold, and the discipline both need:
 
@@ -558,9 +558,9 @@ It is a portability PROBE, not a dependency: nothing anyparse ships needs a JVM.
 #### Reading the two output lines
 
 ```
-gate: files=485 wrote=485 threw=0 lintdiff=1+0-
-census @ 1c225caf: checks=180 findings=839 — a reading of THIS tree, not an invariant — …
-  phases: roundtrip=2.6s lint=11.8s
+gate: files=N wrote=N threw=0 lintdiff=1+0-
+census @ <sha>: checks=N findings=N — a reading of THIS tree, not an invariant — …
+  phases: roundtrip=… lint=…
 ```
 
 **The gate line is the verdict.** `wrote == files` and `threw == 0` are the invariant — `writeRoundTrip` throws only on a parse failure or a comment loss, never on a formatting difference. `lintdiff=1+0-` is fixed too: it is `JvmPortability.lintDiffProbe`'s own embedded self-test of `LintDiff`'s normalization (two hand-written JSON fixtures, nothing to do with `src/`), which forces the macro-generated `LintDiff` JSON parser to actually build under `--jvm`; `1+0-` is that helper's documented right answer, not a JS/JVM lint desync.
@@ -598,7 +598,7 @@ The previous section parallelises *workers*. This one parallelises a *single* su
 
 ```sh
 tools/suite-shard.sh                      # 4 shards (default)
-tools/suite-shard.sh -n 6                 # the measured knee on a 16-core box
+tools/suite-shard.sh -n 6                 # more shards, for a many-core box
 tools/suite-shard.sh --verify             # + a monolith run, counts compared
 tools/suite-shard.sh --expect <T>/<A>     # + compare to YOUR last known-good pair
 tools/suite-shard.sh --plan-only          # print the plan, run nothing
@@ -739,7 +739,7 @@ The suite's is `unit.cli.CliFixture.isolateTempDir` — `mkdtemp` plus the same 
 
 ### The JS build is not reproducible — a binary `cmp` needs the base built TWICE
 
-`haxe bin/apq-js.hxml` on an UNCHANGED tree does not always emit the same bytes: a switch-arm pair floats in the generated output. No gate in this project reads a binary hash — but the moment one does, the naive form is wrong: a single before/after pair says nothing, because the two builds could differ on an EMPTY change. Build the BASE arm at least twice, collect the set of hashes it produces, and require the patched build's hash to fall inside that set; a patched hash outside it is evidence. The same applies to `-D dump=pretty` output and to any "is the generated code unchanged" argument in a slice report — say which arm produced which hash and how many times each arm was built, or do not quote hashes at all. The line MULTISET of the generated JS is the stable alternative (§ "Proving a comment-only change inert").
+`haxe bin/apq-js.hxml` on an UNCHANGED tree does not always emit the same bytes: rebuilding the SAME tree twice moves the `-D analyzer-optimize` switch-arm grouping, so `bin/test.js` and `bin/apq.js` each differ from themselves. No gate in this project reads a binary hash — but the moment one does, the naive form is wrong: a single before/after pair says nothing, because the two builds could differ on an EMPTY change. Build the BASE arm at least twice, collect the set of hashes it produces, and require the patched build's hash to fall inside that set; a patched hash outside it is evidence. The same applies to `-D dump=pretty` output and to any "is the generated code unchanged" argument in a slice report — say which arm produced which hash and how many times each arm was built, or do not quote hashes at all. The line MULTISET of the generated JS is the stable alternative (§ "Proving a comment-only change inert").
 
 ### A file the oracle's hxml never compiles is permanently un-autofixable
 

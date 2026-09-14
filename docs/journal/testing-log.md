@@ -5,10 +5,11 @@
 > that the reference condensed or dropped, moved verbatim under the section it was written in
 > (`From § …` names that section by its heading at the time), in the original order, so
 > `git log -S` and the ledger's citations still resolve (the one edit: a link to a sibling doc
-> gains `../`, since this file lives one directory down). Nothing here is a norm, and nothing
-> here is auto-loaded.
+> gains `../`, and a same-file `#anchor` gains `../<reference>.md`, since this file lives one
+> directory down). A `§` pointer inside moved text names a heading of the reference
+> (`docs/testing.md`), not of this file. Nothing here is a norm, and nothing here is auto-loaded.
 
-## From § (top)
+## From § (the preamble above the first heading)
 
 Testing a parser platform is not the same as testing application code. A grammar must behave correctly on inputs its author never thought of, and a writer must produce output that the parser can round-trip. Unit tests alone are insufficient. This document describes the six-layer testing strategy that anyparse adopts.
 
@@ -57,6 +58,10 @@ package-scoped class list the same way. And `apqlint.json` discovery folds the
 whole chain nearest-first, so a package may now carry its own config relaxing a
 key for that family only, instead of the root config carrying an exemption that
 applies to all 780 files.
+
+## From § Layer 3: Property round-trip tests
+
+Already in place: `test/unit/grammar/JsonRoundTripTest.hx` with ~30 curated cases plus 200 randomly generated ones (both write and parse go through the macro-generated pipeline).
 
 ## From § Layer 5: Benchmarks
 
@@ -111,6 +116,10 @@ reading it as CPU would have sent the work into the analyser instead.
 Read a profile for SHARES and take deltas from a separate unprofiled run:
 `--cpu-prof` overhead is not uniform across trees (+7% anyparse, +15% TM), so a
 profiled before/after pair is not a delta.
+
+## From § Proving a comment-only change inert: the build is NOT a byte oracle
+
+A change that touches only comments should leave the compiled output alone, and the obvious way to show it is to build both revisions and `cmp` them. That does not work here, and the failure is silent: **the Haxe build is not reproducible.** Rebuilding the SAME tree twice moves the `-D analyzer-optimize` switch-arm grouping, so `bin/test.js` and `bin/apq.js` each differ from themselves. An equal pair of revisions is one lucky draw, not a proof — and an unequal pair proves nothing either.
 
 ## From § Mutation checks: testing the tests
 
@@ -2334,6 +2343,12 @@ coverage and would first have to survive `-lib hxnodejs` not being there.
 
 ## From § Running tests › The core stays target-independent › Reading the two output lines
 
+```
+gate: files=485 wrote=485 threw=0 lintdiff=1+0-
+census @ 1c225caf: checks=180 findings=839 — a reading of THIS tree, not an invariant — …
+  phases: roundtrip=2.6s lint=11.8s
+```
+
 The split is deliberate, and it exists because the numbers were being read as
 one kind of thing when they are two.
 
@@ -2385,6 +2400,16 @@ comparable in kind, not equal.
 ## From § Running tests › Parallel shards: one suite, N processes
 
 The previous section parallelises *workers*. This one parallelises a *single* suite run. `tools/suite-shard.sh` splits the registered test classes into N `APQ_TEST` filters and runs one `node bin/test.js` per shard. The split itself is not the script's — the script asks the runner for its class list (`node bin/test.js --list-classes`) and hands it to `apq shard-plan --classes <list> --shards N [--format lines|filters]`, which applies every gate below and prints the plan; the script spawns processes and waits. That division is the reason the gates are testable at all (`test/unit/query/ShardPlanTest.hx`), which they were not while they were awk:
+
+```sh
+tools/suite-shard.sh                      # 4 shards (default)
+tools/suite-shard.sh -n 6                 # the measured knee on a 16-core box
+tools/suite-shard.sh --verify             # + a monolith run, counts compared
+tools/suite-shard.sh --expect <T>/<A>     # + compare to YOUR last known-good pair
+tools/suite-shard.sh --plan-only          # print the plan, run nothing
+tools/suite-shard.sh --bin /tmp/w1/test.js  # a private worker build (previous section)
+tools/suite-shard.sh --keep               # keep the work directory even on success
+```
 
 `--verify` and `--expect` are mutually exclusive — the first measures the pair the second asserts. Do not copy a literal into `--expect` out of this document: the totals move with every slice, and a stale pair fails a run that is fine.
 

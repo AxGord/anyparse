@@ -428,7 +428,7 @@ decided the question; it may not become a record of runs.
   ownable seam — `51ee9584`
 - "the module is exhausted" after three slices of probing `SingleStmtBraces` gates → three
   never-probed MEMBERS of the same file still owned fixtures; what was refuted was more gates of
-  two specific helpers, not the file — `43d31484` (the reading), `d91b8f43` (its ceiling: the
+  two specific helpers, not the file — `7aa8455a` (the reading), `2a571a21` (its ceiling: the
   residue is structural)
 - rewriting a chain-guarded fixture so an existing arm discriminates it, to retire a census row
   → the rewrite works and is refused: the discriminating shape is already pinned to the same arm
@@ -461,7 +461,7 @@ decided the question; it may not become a record of runs.
   included — `e4d0a9d9`
 - `resolutionRoots: ["src"]` alone, to halve the read+parse tax → with `test/` out of the scope
   `lint src --all` reports deletion candidates whose only callers are tests, which is the hole
-  the key closes; both roots — `ed809ca8`
+  the key closes; both roots — `c4a33dc1`
 - widening the jvm probe's trigger claim to "a package" (`query`, `check`) → the probe compiles
   what `-main JvmPortability` reaches, and `query/cli` contributes zero jar entries, so a green
   probe after a `cli` slice proves js only; the battery's trigger diffs `src` — `a28edf4c` (the

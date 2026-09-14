@@ -4,7 +4,7 @@ This document is the CONTRACT of the CLI built on top of anyparse: the exit-code
 
 ## What this is
 
-A command-line tool over source files in any language anyparse has a grammar for: structural search, navigation, metadata indexing, lint, and scope-correct source rewriting. The engine is parameterised over `(GrammarPlugin, ParseResult, Query)` — nothing in the engine references concrete AST node types of any single language (§ "Universalization invariant"). Day-1 scope is Haxe-only, but adding the next language is a config-only change (a preset alias + the grammar plugin itself), not a code change in the query engine. What v1 deliberately was NOT — a rewriter, type-aware, an LSP, a dependency-graph builder, a project loader — is history now; the rewriting ops, the call graph and `resolutionRoots` all shipped, and the journal records that scope as it stood.
+A command-line tool over source files in any language anyparse has a grammar for: structural search, navigation, metadata indexing, lint, and scope-correct source rewriting. The engine is parameterised over `(GrammarPlugin, ParseResult, Query)` — nothing in the engine references concrete AST node types of any single language (§ "Universalization invariant"). Day-1 scope is Haxe-only, but adding the next language is a config-only change (a preset alias + the grammar plugin itself), not a code change in the query engine. Three of v1's five "NOT" decisions have since been lifted — the rewriting ops, the call graph (`callees` / `callers` / `reach`) and project resolution (`resolutionRoots`, the compiler oracle's hxml) shipped; type resolution is confined to the lint layer's `TypeResolver` (`refs` / `rename` stay lexical), and it is still not an LSP — a one-shot CLI per invocation. The journal records the v1 scope as it stood.
 
 ## Naming convention
 
@@ -20,7 +20,7 @@ Future language presets follow the same pattern: `as3q`, `pyq`, etc. Each preset
 - An ARGV fault — a flag given no value, a `--limit` that is not a non-negative integer, a `--lang` naming no registered plugin, a `--kind` / `--select` segment naming a kind the grammar does not project — raises `UsageFailure`, which `Cli.run` catches: one sentence on stderr, named with the subcommand, and exit 2. A plain `throw` from a command module still reaches `main` as a raw stack, which is what an internal bug wants; a new flag read through `CliArgs.expectValue` inherits the usage path, a hand-rolled `throw` does not.
 - An unknown subcommand prints two lines — the miss with the nearest real names (`apq: unknown subcommand "members" — did you mean: add-member, move-member, remove-member?`) and where the full list is — never the whole help page. The ranking is `CliWalk.findFuzzy` (contiguous substring, then Levenshtein within 3), the same matcher the walkers' own did-you-mean uses, plus one plural probe in `CliRegistry.nearest`; nothing close enough means no clause at all rather than a fabricated one.
 - A read-only walker exits 0 on zero hits — an absence is an answer — unless `--exit-on-empty` (alias `--require-match`) is passed. A mutation op exits 1 on every refusal, and every refusal is ONE stderr line; a mutation op without `--write` is PRINT-ONLY and exits 0.
-- `lint` exits non-zero only when `--fail-on <sev>` selects a severity present in the findings; `lint-diff` exits 1 when the snapshots disagree and 2 when it could not compare at all; `mutation-verdict` exits 0 for every verdict (its exit answers "could this be classified"); `fmt` exits non-zero if any file failed to parse, could not be written, or (under `--one-pass`) did not settle in one rewrite; `self-status --strict` exits non-zero on any skip-parse; `test-summary` exits 1 when it finds no report at all, and 1 on an `--exit-status` disagreement.
+- `lint` exits 1 when `--fail-on <sev>` selects a severity present in the findings, when the scope matches no `.hx`, when the compiler oracle REJECTS the tree in report mode (`apq lint: compiler oracle REJECTED — build does not typecheck`), and under `--fix` when the safe pass had to revert (`docs/testing.md` § "The safe pass reverts the file the compiler blames, not the wave"); `lint-diff` exits 1 when the snapshots disagree and 2 when it could not compare at all; `mutation-verdict` exits 0 for every verdict (its exit answers "could this be classified"); `fmt` exits non-zero if any file failed to parse, could not be written, or (under `--one-pass`) did not settle in one rewrite; `self-status --strict` exits non-zero on any skip-parse; `test-summary` exits 1 when it finds no report at all, and 1 on an `--exit-status` disagreement.
 
 ## Command surface
 
@@ -46,10 +46,10 @@ Multi-file by construction: every scope argument is a file, a directory (walked 
 | `symbols` | `apq symbols <scope...> [options]` | top-level type declarations across a scope; `--kind` is vocabulary-checked |
 | `importers` | `apq importers <module> <scope...> [options]` | files importing a module |
 | `declares` | `apq declares <type> <scope...> [options]` | declaration site(s) of ONE type by simple name or qualified path; more than one row = ambiguous, none = not declared |
-| `callees` / `callers` | `apq callees <Type.method\|method> <scope>... [options]` | approximate call graph (name + declared-type resolution, virtual edges, `Ref` edges for lambdas / `.bind`); a `callers` result with no edge and unresolved sites in scope SAYS it is not proof of absence |
-| `reach` | `apq reach --from <Type.method> --to <Type.method\|Type.*> <scope>... [options]` | shortest call path per pair; `--to` repeatable |
-| `clusters` | `apq clusters <TypeName> <scope>... [options]` | connected components over intra-type call edges after top-fan-in hubs go to a utils bucket (`--hubs N`, `0` = off); scope the type's OWN package, never the whole tree |
-| `gates` | `apq gates [<scope>...] [--flat] [--limit N] [--mechanism <name>]` | `@:fmt(trailOptParseGate/trailOptShapeGate)` annotations + predicate names (parser-dev) |
+| `callees` / `callers` | `apq callees <Type.method\|method> <file-or-dir-or-glob>... [options]` / `apq callers <Type.method\|method> <file-or-dir-or-glob>... [options]` | approximate call graph (name + declared-type resolution, virtual edges, `Ref` edges for lambdas / `.bind`); a `callers` result with no edge and unresolved sites in scope SAYS it is not proof of absence |
+| `reach` | `apq reach --from <Type.method> --to <Type.method\|Type.*> <file-or-dir-or-glob>... [options]` | shortest call path per pair; `--to` repeatable |
+| `clusters` | `apq clusters <TypeName> <file-or-dir-or-glob>... [options]` | connected components over intra-type call edges after top-fan-in hubs go to a utils bucket (`--hubs N`, `0` = off); scope the type's OWN package, never the whole tree |
+| `gates` | `apq gates [<file-or-dir-or-glob>...] [--flat] [--limit N] [--mechanism <name>]` | `@:fmt(trailOptParseGate/trailOptShapeGate)` annotations + predicate names (parser-dev) |
 | `self-status` | `apq self-status [<file/dir/glob>...] [--strict] [--source]` | every `.hx` the plugin cannot parse, `SKIP <path> :: LINE:COL expected="<X>"`; `--strict` is the CI guard |
 
 ### Reading one file
@@ -62,7 +62,7 @@ Multi-file by construction: every scope argument is a file, a directory (walked 
 | `writer-probe` | `apq writer-probe [options] <file>` | trivia and plain writer outputs side by side |
 | `strip` | `apq strip [options] <file> [<file2> ...] --replace <pat> --with <repl> [...]` | sed-strip + parse-check; explicitly multi-file, takes no directory or glob; `--dry-run` is the typo guard |
 | `recon` | `apq recon [<dir>] [--top N \| --all] [--cluster <substr> [--source]]` | skip-parse drill over a corpus (default `$ANYPARSE_HXFORMAT_FORK/test/testcases`), `--probe <file> [--writer-equals]` for one file; caches the fork path per USER under `$HOME/.config/anyparse/fork_path` |
-| `sweep` | `apq sweep [--file <path>] [--prev <path>] [--diff <path>] [--save <path>]` | READS the corpus snapshot the suite wrote; `--run` re-derives it (`docs/testing.md` § "Reproducing the corpus census: `apq sweep --run`"); a pathless `--diff` compares the tree with itself |
+| `sweep` | `apq sweep [--file <path>] [--prev <path>] [--diff <path>] [--save <path>]` | READS the corpus snapshot the suite wrote; `--run` re-derives it (`docs/testing.md` § "Reproducing the corpus census: `apq sweep --run`"); a pathless `--diff` defaults to `bin/.prev-sweep.json`, which the corpus harness rotates before every write, and the run says so (`… this compared the last two runs of this tree, not a change against its base`) — a slice gate names the base snapshot it saved with `--save` |
 
 ### Lint and the analysis layer
 
@@ -92,12 +92,12 @@ Scope-correct edits driven by the `refs` / `Scope` binding resolver: everything 
 | `inline-method` | `apq inline-method <file> (<line>[:<col>] \| --select 'FnMember:<name>' \| --match '<pattern>') [options]` |
 | `extract-var` | `apq extract-var <file> (<line>:<col> \| --match '<expr-pattern>') <name> [--write]` |
 | `add-param` | `apq add-param <file> (<line>[:<col>] \| --select 'FnMember:<name>' \| --match '<pattern>') <paramText> [--write]` |
-| `change-sig` | `apq change-sig <file> (<line>:<col> \| --select 'FnMember:<name>' \| --match '<pattern>') <perm>` (perm = comma-separated 0-based new order) |
-| `remove-param` | `apq remove-param <file> (<line>:<col> \| --select 'FnMember:<name>' \| --match '<pattern>') <index> [--write]` (0-based) |
+| `change-sig` | `apq change-sig <file> (<line>:<col> \| --select 'FnMember:<name>' \| --match '<pattern>') <perm>  (perm = comma-separated 0-based new order, e.g. 2,0,1)` |
+| `remove-param` | `apq remove-param <file> (<line>:<col> \| --select 'FnMember:<name>' \| --match '<pattern>') <index> [--write]  (index = 0-based parameter to remove)` |
 | `move` | `apq move <file> (<line>:<col> \| --select 'ClassDecl:<Name>' \| --match '<pattern>') <dest-file> --scope <dir> [--write]` — a type to another file; importers repointed, a `using` carried |
 | `move-member` | `apq move-member <srcFile> <member[,member...]> --to <DestType> --scope <dir> [options]` — any package if all static; `--closure` / `--scaffold` |
 | `extract-interface` | `apq extract-interface <srcFile> <IfaceName> [options]` |
-| `pull-up` / `push-down` | `apq pull-up <srcFile> <member> --to <superclass> --scope <dir> [options]` |
+| `pull-up` / `push-down` | `apq pull-up <srcFile> <member> --to <superclass> --scope <dir> [options]` / `apq push-down <srcFile> <member> --to <subclass> --scope <dir> [options]` |
 | `extract-superclass` | `apq extract-superclass <srcFile> <SuperName> --members m1,m2 [options]` |
 | `make-final` | `apq make-final <file> <field> [--scope <dir>] [options]` — a never-reassigned `var` field to `final` |
 | `introduce-parameter-object` | `apq introduce-parameter-object <file> (<l>:<c> \| --select \| --match) --params a,b --as <TypeName> [options]` |

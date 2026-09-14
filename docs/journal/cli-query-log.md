@@ -5,10 +5,11 @@
 > that the reference condensed or dropped, moved verbatim under the section it was written in
 > (`From § …` names that section by its heading at the time), in the original order, so
 > `git log -S` and the ledger's citations still resolve (the one edit: a link to a sibling doc
-> gains `../`, since this file lives one directory down). Nothing here is a norm, and nothing
-> here is auto-loaded.
+> gains `../`, and a same-file `#anchor` gains `../<reference>.md`, since this file lives one
+> directory down). A `§` pointer inside moved text names a heading of the reference
+> (`docs/cli-query-tool.md`), not of this file. Nothing here is a norm, and nothing here is auto-loaded.
 
-## From § (top)
+## From § (the preamble above the first heading)
 
 This document specifies the CLI query tool built on top of anyparse. It is the design baseline — the phased work plan lives in [cli-query-roadmap.md](../cli-query-roadmap.md).
 
@@ -20,7 +21,7 @@ The long-term ambition is a **universal AST-grep**: structural search, navigatio
 
 Day-1 scope is Haxe-only, but the engine boundary is set up so that adding the next language is a config-only change (a preset alias + the grammar plugin itself), not a code change in the query engine.
 
-## From § (top)
+## From § What this is NOT
 
 ### What this is NOT
 
@@ -76,9 +77,9 @@ Output is deterministic so the tool is usable in CI and diff-based workflows.
 
 Find AST subtrees matching a pattern.
 
-The pattern is a fragment of the target language, parsed by the same grammar plugin, with the metavariable extension described in [Pattern syntax](#pattern-syntax-for-search) below. Each match prints the source location and the bindings of any metavariables.
+The pattern is a fragment of the target language, parsed by the same grammar plugin, with the metavariable extension described in [Pattern syntax](../cli-query-tool.md#pattern-syntax-for-search-frozen-for-v1) below. Each match prints the source location and the bindings of any metavariables.
 
-`--kind <Kind>` restricts matches to nodes whose AST kind equals `<Kind>` (e.g. `VarStmt`, `ParamCtor`, `ClassDecl` — the same vocabulary `ast --select`/`refs --on` use); the pattern still has to match structurally, this only narrows *where*. A `<Kind>` this grammar projects no node for is a USAGE error, not an empty result — see [The kind vocabulary is checked](#the-kind-vocabulary-is-checked).
+`--kind <Kind>` restricts matches to nodes whose AST kind equals `<Kind>` (e.g. `VarStmt`, `ParamCtor`, `ClassDecl` — the same vocabulary `ast --select`/`refs --on` use); the pattern still has to match structurally, this only narrows *where*. A `<Kind>` this grammar projects no node for is a USAGE error, not an empty result — see [The kind vocabulary is checked](../cli-query-tool.md#the-kind-vocabulary-is-checked).
 
 `search` is a **structural** query: the pattern is parsed as code shape. A degenerate pattern that resolves to a single leaf (a bare identifier, a lone metavar, a bare literal — no children) carries no shape and only ever matches that name in expression position. The CLI detects this and emits a non-fatal stderr nudge pointing at the right tool (`refs <name> --decls` for a declaration, `uses <Type>` for a type's consumers, `ast --select` for a subtree), then runs the search anyway.
 
@@ -313,7 +314,7 @@ reach the quoted spelling. The 0-hit nudge made it worse by suggesting a widenin
 grammar projects, since both come from a separate scan over the raw source — and it
 declares them where it mints them, so the shared gate admits exactly those two on top
 of the grammar's vocabulary and nothing else. See
-[The kind vocabulary is checked](#the-kind-vocabulary-is-checked).
+[The kind vocabulary is checked](../cli-query-tool.md#the-kind-vocabulary-is-checked).
 
 **An explicit `--kind` is honoured and ANNOUNCED.** Naming only part of that
 vocabulary is a legitimate narrowing, so it still narrows — but a stderr note says
@@ -838,7 +839,7 @@ runtime, which is how the suite's private root reaches every producer), while
 the process token is resolved once, which is what makes a slot single per
 process rather than per call.
 
-## From § (top)
+## From § Mutation commands (source rewriting)
 
 ### Mutation commands (source rewriting)
 
@@ -902,7 +903,7 @@ Three things about it are load-bearing, and each was measured rather than assume
 
 The window is a `lint` feature, not an op feature: `apq lint <file> --range <from>:<to>` takes a 1-based inclusive line window over a scope of exactly one file, and narrows the report AND `--fix` alike. It selects FINDINGS, never EDITS — a check whose fix is atomic across sites (`unused-parameter` rewrites the signature and every call-site argument) still writes wherever its own fix says, off a finding inside the window; clipping that would leave the file broken. Under `--fix` the window is re-applied on every fixed-point pass against the file's current bytes, so a fix that changes the line count shifts what a later pass sees — bounded, and documented on `LintRange`.
 
-## From § (top)
+## From § Mutation commands (source rewriting)
 
 #### `comment-width`: the one width nothing measured
 
@@ -1291,7 +1292,7 @@ Rules and properties:
   rule projects and 0 when every kind is real and this file simply holds none —
   the message and the exit code finally agree. The same vocabulary check runs on
   every `--kind` (see [The kind vocabulary is
-  checked](#the-kind-vocabulary-is-checked)).
+  checked](../cli-query-tool.md#the-kind-vocabulary-is-checked)).
 - Named/pattern addresses are **edit-stable**: they survive edits above them,
   so a chain of ops needs no re-locate step between edits (a position rots as
   soon as an earlier edit shifts lines).
@@ -1443,7 +1444,7 @@ All schemas share one span type:
 
 `line` and `col` are both 1-based — the single coordinate convention shared by every `apq` / `hxq` surface (`refs`, `ast --at`, `source`, the refactoring ops, and this JSON output).
 
-**Kind vocabulary.** The string values of `kind` (in `ast.Node.kind`, `meta.decl.kind`, and the `ast --select` selector input) come from one **plugin-defined vocabulary** shared across all three surfaces. For a typical curly-brace language the kinds are short lowercase names like `class`, `function`, `field`, `case`. The vocabulary is published by each grammar plugin as part of its public contract. See [Kind vocabulary](#kind-vocabulary) for the Haxe plugin's published list and how to discover any kind via `apq ast`.
+**Kind vocabulary.** The string values of `kind` (in `ast.Node.kind`, `meta.decl.kind`, and the `ast --select` selector input) come from one **plugin-defined vocabulary** shared across all three surfaces. For a typical curly-brace language the kinds are short lowercase names like `class`, `function`, `field`, `case`. The vocabulary is published by each grammar plugin as part of its public contract. See [Kind vocabulary](../cli-query-tool.md#kind-vocabulary) for the Haxe plugin's published list and how to discover any kind via `apq ast`.
 
 ## From § Output formats › Output JSON schemas (v1, finalized) › `ast`
 
