@@ -508,3 +508,10 @@ decided the question; it may not become a record of runs.
   across bodies that read `name` a dozen times, so the gate stays spelled inline; the same
   verdict covers the seam ladders (`final k = shape.x; if (k == null) return null;` runs), which
   Haxe cannot fold without struct spread — `9955d66c`
+- the structure track was to split every source file past two thousand lines of CODE once the
+  comment slices had run → after them no file is past it: the threshold had been set against TOTAL
+  lines, and the largest remaining module (`format/wrap/WrapList`) is one responsibility by its own
+  class doc, its `oversized-type` grant and a fresh cluster read — a lower cap would only catch
+  `Renderer` one edit later; the flat `check/` layout stays (fan-in is uniform, the verb prefix
+  already groups, `Linter.builtins()` is the index) — `ddb1de08`
+
