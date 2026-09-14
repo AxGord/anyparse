@@ -1,179 +1,40 @@
 package anyparse.grammar.haxe.format;
 
 /**
- * `wrapping` section of `hxformat.json`.
+ * `wrapping` section of `hxformat.json`. `maxLineLength` → `lineWidth`. Every `WrapRules`
+ * cascade key feeds the `HxModuleWriteOptions` knob of the same family — `arrayWrap` →
+ * `arrayLiteralWrap`, `anonType`, `methodChain`, `opBoolChain`, `opAddSubChain`,
+ * `callParameter`, `objectLiteral`, `conditionWrapping` → `conditionWrap`,
+ * `ternaryExpression` → `ternaryWrap`, `functionSignature`, `anonFunctionSignature`,
+ * `metadataCallParameter`, `typeParameter`, `multiVar`, `casePattern`,
+ * `expressionWrapping` — through `HaxeFormatConfigLoader.wrapRulesFromConfig`, which ingests
+ * `rules` verbatim and drops a rule with an unmodelled predicate so the cascade falls
+ * through; the defaults mirror the fork's rule sets and are stated on
+ * `HaxeFormat.default*Wrap`, the site of each knob on `HxModuleWriteOptions`.
  *
- *  - `maxLineLength`: int → `lineWidth`.
- *  - `arrayWrap`: `WrapRules` cascade → `arrayLiteralWrap` (slice
- *    ω-arraylit-wraprules).
- *  - `anonType`: `WrapRules` cascade → `anonTypeWrap` (slice
- *    ω-anontype-wraprules).
- *  - `methodChain`: `WrapRules` cascade → `methodChainWrap` (slices
- *    ω-methodchain-wraprules-capability + ω-methodchain-emit — knob,
- *    loader, and writer-time chain extractor all wired).
- *  - `opBoolChain`: `WrapRules` cascade → `opBoolChainWrap` (slice
- *    ω-binop-wraprules — drives `||` / `&&` chain break shape;
- *    knob + loader + macro-time dispatch all wired).
- *  - `opAddSubChain`: `WrapRules` cascade → `opAddSubChainWrap` (same
- *    slice — drives `+` / `-` chain break shape).
- *  - `callParameter`: `WrapRules` cascade → `callParameterWrap` (slice
- *    ω-wrapping-callParameter-ingest — knob, loader, and writer
- *    dispatch via `@:fmt(wrapRules('callParameterWrap'))` on
- *    `HxExpr.Call.args` and `HxNewExpr.args` are now wired).
- *  - `objectLiteral`: `WrapRules` cascade → `objectLiteralWrap` (slice
- *    ω-wrapping-objectLiteral-ingest — knob, default, and writer
- *    dispatch via `@:fmt(wrapRules('objectLiteralWrap'))` on
- *    `HxObjectLit.fields` were already wired before this slice; only
- *    the loader-side mapping was missing). CAVEAT, measured
- *    2026-08-22: this cascade is consulted only for a literal the
- *    SOURCE kept on ONE line. A source-multiline literal is
- *    force-one-per-lined before the cascade runs (the Star carries no
- *    `@:fmt(reflowSourceMultiline)`), mirroring the fork's
- *    `MarkWrapping.objectLiteralWrapping`, which returns early on
- *    `!isOriginalSameLine`. A break-mode default therefore does not
- *    reach its own output: pass 1's leading break makes the literal
- *    multiline, so pass 2 lands on OnePerLine instead. `apq fmt`
- *    absorbs that by writing the FIXED POINT and reporting the extra
- *    rewrite (`FormatFixedPoint`); `anonType`, `callParameter`,
- *    `arrayWrap`, `anonFunctionSignature` and `typeParameter`
- *    share the shape.
- *  - `conditionWrapping`: `WrapRules` cascade → `conditionWrap` (slice
- *    ω-condition-wrap-ingest — foundational scaffold). Drives wrap
- *    shape for statement-condition parens (`if (cond)`, `for (item in
- *    coll)`, `while (cond)`, `switch (expr)`). The loader path is wired
- *    here; the engine + grammar `@:fmt(condWrap(…))` wiring lands in a
- *    follow-up slice. Defaults match anyparse's pre-slice behaviour
- *    (`NoWrap`, no rules) so this scaffold is Δpass=0.
- *  - `ternaryExpression`: `WrapRules` cascade → `ternaryWrap` (slice
- *    ω-ternary-wrap). Drives break shape for the `? :` ternary —
- *    `WriterLowering`'s `@:ternary` branch now dispatches to
- *    `BinaryChainEmit.emit` with items=[cond, then, else] and
- *    ops=['?', ':']. Default `{rules: [], NoWrap}` is byte-equivalent
- *    to the prior flat emit.
- *  - `functionSignature`: `WrapRules` cascade → `functionSignatureWrap`.
- *    Drives break shape for named function parameter lists
- *    (`HxFnDecl.params`). Slice ω-functionsignature-wrap-ingest landed
- *    the loader path; slice ω-wraplist-additional-indent added the
- *    `defaultAdditionalIndent` knob on `WrapRules`; the follow-up
- *    grammar slice opted `HxFnDecl.params` into
- *    `@:fmt(wrapRules('functionSignatureWrap'))`. Defaults match
- *    fork's `wrapping.functionSignature`:
- *    `{rules: [], defaultMode: FillLine, defaultAdditionalIndent: 1}`.
- *  - `anonFunctionSignature`: `WrapRules` cascade →
- *    `anonFunctionSignatureWrap`. Drives break shape for anonymous-
- *    function parameter lists — `HxFnExpr.params` (`function(...)`),
- *    `HxParenLambda.params` (`(...) => body`), and
- *    `HxThinParenLambda.params` (`(...) -> body`). Slice
- *    ω-anonFunctionSignature-wrap-ingest landed the foundational scaffold
- *    (loader + grammar opt-in) with fork-mirror defaults:
- *    `{rules: [itemCount>=7 → FillLine, totalItemLength>=80 → FillLine,
- *    exceedsMaxLineLength → FillLine], defaultMode: NoWrap,
- *    defaultAdditionalIndent: 1}`.
- *  - `metadataCallParameter`: `WrapRules` cascade →
- *    `metadataCallParameterWrap`. Drives break shape for metadata-call
- *    argument lists — `HxMetaCallArgs.args` (`@:overload(args)`,
- *    `@:keep(args)`, …). Slice ω-metadataCallParameter-wrap-ingest
- *    landed the cascade with fork-mirror defaults:
- *    `{rules: [totalItemLength>=140 → FillLine,
- *    lineLength>=160 → FillLine, exceedsMaxLineLength → FillLine],
- *    defaultMode: NoWrap}`. Replaces the legacy `sepList` Group-with-
- *    softlines layout that propagated inner FnExpr param breaks outward
- *    as `@:overload(\n\tfunction(...)\n)`; NoWrap keeps the meta-call
- *    parens tight even when the inner expression wraps internally.
- *  - `typeParameter`: `WrapRules` cascade → `typeParameterWrap`. Drives
- *    break shape for type-parameter lists — declare-site
- *    (`HxClassDecl.typeParams`, `HxTypedefDecl.typeParams`,
- *    `HxFnDecl.typeParams`, `HxFnExpr.typeParams`,
- *    `HxEnumDecl.typeParams`, `HxAbstractDecl.typeParams`,
- *    `HxInterfaceDecl.typeParams`) and use-site (`HxTypeRef.params`).
- *    Slice ω-typeparameter-wrap-ingest landed the cascade with
- *    fork-mirror defaults: `{rules: [anyItemLength>=50 → FillLine,
- *    totalItemLength>=70 → FillLine], defaultMode: NoWrap}`. Short
- *    `<T>` / `<K, V>` lists stay flat; long lists pack Wadler-style.
- *  - `multiVar`: `WrapRules` cascade → `multiVarWrap`. Drives break
- *    shape for multi-variable declaration binding lists
- *    (`var a = 1, b = 2, c = 3;` — `HxVarDecl.more`). Slice
- *    ω-multivar-wrap-ingest landed the cascade with fork-mirror
- *    defaults: `{rules: [allItemLengths < 15 → FillLine,
- *    lineLength >= 80 → OnePerLineAfterFirst,
- *    exceedsMaxLineLength → OnePerLineAfterFirst], defaultMode: NoWrap}`.
- *    Short bindings pack inline; wide bindings break one-per-line with
- *    the first binding kept inline with `var`. The fork's rule 1
- *    `anyItemLength <= n` (MIN ≤ n) is mapped to `AllItemLengthsLessThan`
- *    (MAX ≤ n) — anyparse has no min≤n condition; the two coincide on
- *    every corpus target.
- *  - `casePattern`: `WrapRules` cascade → `casePatternWrap`. Drives break
- *    shape for comma-separated `case` pattern lists (`case A, B, C:` —
- *    `HxCaseBranch.patterns`). Slice ω-casepattern-wrap-ingest landed the
- *    cascade with fork-mirror defaults (`config/WrapConfig.hx`
- *    `wrapping.casePattern`): `{rules: [itemCount > 2 → FillLine,
- *    exceedsMaxLineLength → FillLine], defaultMode: NoWrap}`. Single/double
- *    patterns stay flat; lists of three or more pack Wadler-style.
- *  - `expressionWrapping`: `WrapRules` cascade →
- *    `expressionWrappingWrap` (slice
- *    ω-expressionwrapping-cascade-ingest — foundational scaffold).
- *    Drives break shape for parenthesised expressions (`(expr)` —
- *    haxe-formatter `expressionWrapping` class). The loader path
- *    is wired here; the engine + grammar `@:fmt(parenWrapRules(…))`
- *    wiring lands in a follow-up slice (a prior writer-time prototype
- *    at `WriterLowering`'s `isWrapShape` branch surfaced an outer-
- *    chain wrap-priority issue — when `obj.y = (expr)` exceeds
- *    `maxLineLength`, the outer `opAddSubChain` cascade commits
- *    MBreak before the paren's cascade probe runs, so the resulting
- *    Doc stacks two `Nest`s and over-indents the paren content. Fork
- *    resolves this with a 2-pass marker phase that decides paren
- *    wrap FIRST, then re-evaluates chain wrap; the follow-up slice
- *    needs an equivalent Doc-level mechanism). Fork-mirror default
- *    matches `default-hxformat.json`:
- *    `{rules: [], defaultMode: NoWrap}` — opt-out by default, so
- *    every cascade-less config stays byte-identical and the loader
- *    scaffold is Δpass=0.
+ * Two mappings deserve a note. The fork's `multiVar` rule `anyItemLength <= n` (MIN ≤ n) is
+ * mapped to `AllItemLengthsLessThan` (MAX ≤ n) — anyparse has no min≤n condition, and the two
+ * coincide on every corpus target. The `objectLiteral` cascade is consulted only for a
+ * literal the SOURCE kept on ONE line: a source-multiline literal is force-one-per-lined
+ * before the cascade runs (the Star carries no `@:fmt(reflowSourceMultiline)`), mirroring
+ * the fork's `objectLiteralWrapping`, which returns early on `!isOriginalSameLine`. A
+ * break-mode default therefore does not reach its own output in one pass — pass 1's leading
+ * break makes the literal multiline, so pass 2 lands on OnePerLine; `apq fmt` absorbs that
+ * by writing the FIXED POINT and reporting the extra rewrite (`FormatFixedPoint`).
+ * `anonType`, `callParameter`, `arrayWrap`, `anonFunctionSignature` and `typeParameter` share
+ * the shape. `conditionWrapping` and `expressionWrapping` are loader-side scaffolds whose
+ * engine wiring is partial; the paren cascade in particular waits on a Doc-level mechanism
+ * that decides paren wrap BEFORE the enclosing chain commits its break, the fork's two-pass
+ * marker order — a writer-time prototype had the chain commit first and over-indented.
  *
- * Slice ω-peg-byname-array lifted the prior `@:peg` ByName Array<T>
- * limitation, so every cascade above now ingests `rules` from
- * `hxformat.json` verbatim (rules with the still-unmodelled
- * `lineLength >= n` predicate are silently dropped at load time so the
- * cascade falls through to the next rule).
- *
- *  - `arrayMatrixWrap`: string → `arrayMatrixWrap` (slice
- *    ω-arraymatrix-wrap). Not a `WrapRules` cascade — a three-way enum
- *    policy (`noMatrixWrap` / `matrixWrapNoAlign` / `matrixWrapWithAlign`)
- *    selecting whether the writer preserves a source-detected matrix
- *    grid and whether columns are right-aligned. Default (config absent)
- *    is `matrixWrapWithAlign`, matching haxe-formatter. Resolved via
- *    `ArrayMatrixWrap.resolve`; unknown strings fall back to the format
- *    default.
- *  - `comprehensionCuddledOpen`: bool → `comprehensionCuddledOpen` (slice
- *    ω-comprehension-cuddled-open). Also not a cascade — a Bool layout
- *    policy on the array/map `[…]` whose SOLE element is an expression-
- *    bodied `for` comprehension: when the list lays out multi-line and the
- *    segment through the comprehension head's closing `)` still fits, the
- *    head rides the `[` line (`[ for (x in xs)`) and only the body wraps,
- *    one indent below. Default `false` (config absent) keeps the pre-slice
- *    leading-break layout byte-identical. Block-bodied, nested and `while`
- *    comprehensions are deliberately excluded — see
- *    `WriteOptions.comprehensionCuddledOpen`.
- *  - `methodChainCuddledLinks`: bool → `methodChainCuddledLinks` (slice
- *    ω-methodchain-cuddled-links). Also not a cascade — a Bool layout
- *    policy on the two dot-break method-chain shapes: a link whose
- *    PRECEDING link rendered multi-line and ended in a dedented closing-
- *    delimiter run (`})`) starts on that closing line instead of on its own
- *    indented line, giving the compact fluent shape
- *    `…(…, {…}).applied(… -> {…}).fault(…)`. Default `false` (config
- *    absent) keeps the pre-slice exploded layout byte-identical. Keep-mode
- *    and comment-bearing chains, and links whose predecessor breaks only by
- *    width, are deliberately excluded — see
- *    `WriteOptions.methodChainCuddledLinks`.
- *  - `soleItemCuddledBrackets`: bool → `soleItemCuddledBrackets` (slice
- *    ω-solitem-cuddled-brackets). Also not a cascade — a Bool layout policy
- *    on a `[…]` list holding exactly ONE element: when that element already
- *    owns a wrap point of its own, both brackets stay cuddled to it
- *    (`[for (x in xs) f({` … `})]`) instead of the `[` breaking onto its own
- *    line and the element nesting one level deeper. Default `false` (config
- *    absent) keeps the pre-slice leading-break layout byte-identical. The
- *    fit is a render-time probe, so an element with no wrap point of its own
- *    is never pinned flat past `maxLineLength` — see
- *    `WriteOptions.soleItemCuddledBrackets`.
+ * Four keys are not cascades: `arrayMatrixWrap` (string → `ArrayMatrixWrap.resolve`, default
+ * `matrixWrapWithAlign`, whether a source-detected matrix grid is preserved and its columns
+ * right-aligned); and three `Bool` layout policies defaulting to `false` (absent = byte-inert),
+ * documented on their `WriteOptions` fields — `comprehensionCuddledOpen` (a sole
+ * expression-bodied `for` comprehension keeps its head on the `[` line when it fits),
+ * `methodChainCuddledLinks` (a link after a multi-line predecessor that ends in a dedented
+ * `})` starts on that closing line) and `soleItemCuddledBrackets` (a `[…]` holding exactly ONE
+ * element that owns a wrap point of its own keeps both brackets cuddled to it).
  */
 @:peg typedef HxFormatWrappingSection = {
 

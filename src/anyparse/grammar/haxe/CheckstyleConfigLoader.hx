@@ -156,48 +156,42 @@ final class CheckstyleConfigLoader {
 	}
 
 	/**
-	 * The rules ONE checkstyle naming check contributes: its neutral category, narrowed by whatever
-	 * of its `tokens` this model can express. Empty for a check that is not naming-family — the "not
-	 * a clone" boundary — and a LIST because `MemberName` is two questions written as one entry.
+	 * The rules ONE checkstyle naming check contributes: its neutral category, narrowed by
+	 * whatever of its `tokens` this model can express. Empty for a check that is not
+	 * naming-family — the "not a clone" boundary — and a LIST because `MemberName` is two
+	 * questions written as one entry.
 	 *
-	 * `tokens` used to be dropped, and dropping it does not merely widen a rule, it can KILL one. A
-	 * project configuring `MemberName` twice — `['CLASS', 'PUBLIC', 'PRIVATE', 'TYPEDEF']` and
-	 * `['ENUM']`, different regexes — got two rules of the same category with the same empty
-	 * selector, and `applicableRule` takes the FIRST that matches: the `ENUM` rule could never apply
-	 * to anything. The autofix half is worse. `MemberNameCheck.checkField` returns on `f.isStatic(p)`
-	 * before it matches anything, so a `public static var CACHE_FILE` is not a member name to that
-	 * check at all; reading it as one produced 55 of an 851-file tree's 231 findings, and every one of
-	 * them would have been RENAMED the moment a normalizer was attached — `ENVKEY` to `_envkey`,
-	 * against a format its project wrote for instance fields.
+	 * `tokens` must not be dropped: dropping it does not merely widen a rule, it can KILL one.
+	 * A project configuring `MemberName` twice with different token sets and regexes gets two
+	 * rules of the same category with the same empty selector, and `applicableRule` takes the
+	 * FIRST that matches, so the second can never apply. The autofix half is worse:
+	 * `MemberNameCheck.checkField` returns on `f.isStatic(p)` before it matches anything, so a
+	 * `public static var CACHE_FILE` is not a member name to that check at all; reading it as
+	 * one would RENAME every such constant (`ENVKEY` to `_envkey`) the moment a normalizer was
+	 * attached, against a format its project wrote for instance fields.
 	 *
-	 * What a token can become here, and what it cannot:
+	 * What a token can become here, and what it cannot: `PUBLIC` / `PRIVATE`, `STATIC` /
+	 * `NOTSTATIC`, `INLINE` / `NOTINLINE` are modifier selectors and become `requireMods` /
+	 * `forbidMods` (see `pair`). `ENUM` on `MemberName` selects enum CONSTRUCTORS
+	 * (`checkEnumFields`), this model's `EnumValue`, not a field at all — the discriminator the
+	 * two entries lacked. `CLASS` / `ABSTRACT` / `TYPEDEF` on `MemberName`, and every `TypeName`
+	 * token, select the enclosing (or declared) TYPE KIND, which `NamedDecl` carries no notion
+	 * of: they are read only to decide whether a field rule is contributed at all, and then
+	 * IGNORED — a rule that over-reports beats one that silently governs nothing. Two rules of
+	 * one category distinguished ONLY by such a token still collapse onto one selector;
+	 * separating them needs a kind on `NamedDecl`, a change to the grammar's projection, not to
+	 * this adapter. `LocalVariableName` / `ParameterName` declare a `tokens` field they never
+	 * read, and `CatchParameterName` does not even extend `NameCheckBase`; dropping theirs is
+	 * what checkstyle itself does.
 	 *
-	 * - `PUBLIC` / `PRIVATE`, `STATIC` / `NOTSTATIC`, `INLINE` / `NOTINLINE` are modifier selectors,
-	 *   and become `requireMods` / `forbidMods` — see `pair`.
-	 * - `ENUM` on `MemberName` selects enum CONSTRUCTORS (`checkEnumFields`), which is this model's
-	 *   `EnumValue` and not a field at all. That is the discriminator the two entries lacked.
-	 * - `CLASS` / `ABSTRACT` / `TYPEDEF` on `MemberName`, and every `TypeName` token, select the
-	 *   enclosing (or declared) TYPE KIND. `NamedDecl` carries no such thing: a declaration knows its
-	 *   category, its modifiers and the NAME of its enclosing type, never that type's kind. They are
-	 *   read only to decide whether a field rule is contributed at all, and are then IGNORED — a rule
-	 *   that over-reports beats one that silently governs nothing. Two rules of one category
-	 *   distinguished ONLY by such a token still collapse onto one selector and the later is still
-	 *   unreachable; separating them needs a kind on `NamedDecl`, which is a change to the grammar's
-	 *   projection, not to this adapter.
-	 * - `LocalVariableName` / `ParameterName` declare a `tokens` field they never read, and
-	 *   `CatchParameterName` does not even extend `NameCheckBase`. Dropping theirs is what checkstyle
-	 *   itself does.
-	 *
-	 * `props.ignoreExtern` rides the same selector, as one more `forbidMods` entry — see `ruleFor`. It
-	 * is `NameCheckBase`'s, so every check here but `CatchParameterName` carries it, and its default is
-	 * TRUE. ONE deliberate divergence: checkstyle gates its class / enum / typedef arms on the extern
-	 * flag and its ABSTRACT arm on nothing, in all five checks that have one — an `extern abstract`'s
-	 * members are reported there and exempt here. `NamedDecl` carries no type KIND (the boundary the
-	 * `CLASS` / `ABSTRACT` bullet above states), so the distinction is unrepresentable, and the
-	 * direction the gap is closed in is the one that declines to rename an external contract.
-	 *
-	 * `EnumValueName` is not a checkstyle check at all; it stays as the neutral spelling of this
-	 * model's `EnumValue` category, so a config can address that category directly.
+	 * `props.ignoreExtern` rides the same selector, as one more `forbidMods` entry (see
+	 * `ruleFor`). It is `NameCheckBase`'s, so every check here but `CatchParameterName` carries
+	 * it, default TRUE. ONE deliberate divergence: checkstyle gates its class / enum / typedef
+	 * arms on the extern flag and its ABSTRACT arm on nothing — an `extern abstract`'s members
+	 * are reported there and exempt here. `NamedDecl` carries no type KIND, so the distinction
+	 * is unrepresentable, and the gap is closed in the direction that declines to rename an
+	 * external contract. `EnumValueName` is not a checkstyle check at all; it stays as the
+	 * neutral spelling of this model's `EnumValue` category, so a config can address it.
 	 */
 	private static function rulesOf(type: String, format: String, tokens: Array<String>, ignoreExtern: Bool): Array<NamingRule> {
 		return switch type {

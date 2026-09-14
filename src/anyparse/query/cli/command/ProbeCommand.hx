@@ -228,10 +228,10 @@ final class ProbeCommand implements CliCommand {
 	 * The scratch path THIS process stages to: `$STAGE_PROBE_ENV` when set,
 	 * else `<temp root>/anyparse-last-probe.<pid>.hx`.
 	 *
-	 * Both halves are load-bearing and neither alone is enough, measured.
-	 * The temp root answers the caller's own isolation — the suite's
-	 * `CliFixture.isolateTempDir` (S150) puts every fixture under a private
-	 * root, and staging now lands there and is reaped with it. But two
+	 * Both halves are load-bearing and neither alone is enough. The temp
+	 * root answers the caller's own isolation — the suite's
+	 * `CliFixture.isolateTempDir` puts every fixture under a private root,
+	 * and staging lands there and is reaped with it. But two
 	 * WORKERS on one machine share `$TMPDIR`: on macOS every process of one
 	 * user inherits the same `/var/folders/…/T`, and nothing in the campaign
 	 * sets its own. So the pid is what actually separates two `apq probe`
@@ -284,8 +284,8 @@ final class ProbeCommand implements CliCommand {
 		// `docs/cli-query-tool.md` scopes the refusal to the node runner
 		// because of it. Nothing in this repo compiles this branch: the
 		// `--jvm` portability probe reaches `anyparse.query` and
-		// `anyparse.query.format.json` only (measured — 0 of 3346 jar entries
-		// under `anyparse/query/cli`), and every hxml that DOES reach this
+		// `anyparse.query.format.json` only (no jar entry under
+		// `anyparse/query/cli`), and every hxml that DOES reach this
 		// file passes `-lib hxnodejs`. It exists for the hxcpp target the
 		// project has not built yet.
 		return !sys.FileSystem.exists(path) || !sys.FileSystem.isDirectory(path);

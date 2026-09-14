@@ -275,12 +275,11 @@ final class MoveCommand implements CliCommand {
 	 *
 	 * A move is a VERBATIM span splice: `MoveSymbol` cuts a declaration out with `cutEditSpan` and
 	 * pastes it in, and the writer never runs. So a file that was writer-canonical before the move
-	 * can come back with whitespace the writer would never emit. Measured on Pony at the base
-	 * commit: cutting the last declaration out of a `#if macro … #end` region left `}` + blank +
-	 * `#end`, and cutting the FIRST one left `#if macro` + blank — a blank line immediately inside
-	 * a region boundary, which the writer collapses. One of 15 successful moves over the first 60
-	 * modules produced a file `fmt --list` then flagged; the whole family is invisible to the op's
-	 * own gate, which only re-parses.
+	 * can come back with whitespace the writer would never emit: cutting the last declaration out
+	 * of a `#if macro … #end` region leaves `}` + blank + `#end`, and cutting the FIRST one leaves
+	 * `#if macro` + blank — a blank line immediately inside a region boundary, which the writer
+	 * collapses, so `fmt --list` flags the file; the whole family is invisible to the op's own
+	 * gate, which only re-parses.
 	 *
 	 * Canonical-in / canonical-out, decided PER FILE against that file's own discovered
 	 * `hxformat.json` — the same config `apq fmt` would use, because canonicality asked under

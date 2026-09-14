@@ -1,147 +1,44 @@
 package anyparse.grammar.haxe;
 
 /**
- * If-statement grammar.
+ * If-statement grammar: `if (cond) thenBody [else elseBody]`. The condition is wrapped in
+ * mandatory parentheses (`@:lead('(')` / `@:trail(')')` on `cond`); the then-body is a bare
+ * `HxStatement` Ref; the else-body is `@:optional @:kw('else')` — the `else` keyword is the
+ * commit point. A bare non-`;`-terminated then-body before `else` (`if (c) foo() else { … }`)
+ * is accepted by the `ExprStmt` trail gate (the `;` is optional when `else` immediately
+ * follows, consumed-not-stored); with NO `else` before a block-end (`{ if (c) foo() }`) it
+ * is still rejected — relaxing `;` before `}` would break the Star-loop statement boundary.
  *
- * Structure: `if (cond) thenBody [else elseBody]`.
+ * `@:fmt(sameLine("sameLineElse"))` on `elseBody` makes the separator between the then-body
+ * and `else` runtime-switchable (`} else {` vs `}\n    else {`). `@:fmt(shapeAware)` (ψ₉)
+ * opts that flag into shape-awareness on the preceding sibling: a non-block `thenBody`
+ * forced onto its own line suppresses the space in favour of a hardline regardless of the
+ * flag. `@:fmt(semicolonNextLineElse)` (ψ₆) is the inline-shape counterpart: when the
+ * then-body is forced inline, `else` breaks onto its own line if the then-body's trailing
+ * `;` was present in source AND `opt.ifElseSemicolonNextLine` is true (haxe-formatter's
+ * `markElse` Semicolon branch). Both live on `HxIfStmt.elseBody` ONLY — `HxIfExpr.elseBranch`
+ * is governed by `sameLineExpressionElse` and keeps `else` glued.
  *
- * The condition is wrapped in mandatory parentheses (`@:lead('(')` /
- * `@:trail(')')` on the `cond` field — the trail-on-Ref pattern that
- * `StructSeqLowering.lowerStruct` already supports). The then-body is a bare
- * `HxStatement` Ref field — any statement branch (including
- * `BlockStmt`) is accepted. The else-body is `@:optional @:kw('else')`
- * — the `else` keyword is the commit point; when absent, `elseBody` is
- * null.
+ * `@:fmt(elseIf)` on `elseBody` activates the `opt.elseIf:KeywordPlacement` knob: when the
+ * else branch is itself an `if`, the separator is picked from `opt.elseIf`, so `else if
+ * (...)` stays inline even though `elseBody=Next` pushes other branches to the next line.
+ * `@:fmt(elseIfCommentReflow)` opts the `elseIf` glue path into `opt.elseIfCommentReflow`: on
+ * the `Same` arm only, the `kwGapDoc` separator drops to a plain space and the one captured
+ * `//` comment is spliced into the built body Doc by `ElseIfCommentReflow.insertHeadTrail`
+ * at the first UNCONDITIONAL break after the condition; the splice fails closed to the
+ * untouched layout on any other trivia shape or when no anchor is found (a flat body, an
+ * EMPTY then-body, a head already carrying a trailing `//`). Trivia mode only.
  *
- * `@:fmt(sameLine("sameLineElse"))` on `elseBody` makes the writer's
- * separator between the then-body and `else` runtime-switchable: when
- * the flag is true (haxe-formatter default) the separator is a plain
- * space (`} else {`); when false it becomes a hardline at the current
- * indent level (`}\n    else {`).
- *
- * `@:fmt(shapeAware)` (no argument — ψ₉) opts the sameLine flag into
- * shape-awareness on the preceding sibling: when `thenBody` is a
- * non-block statement whose bodyPolicy forced it onto its own line,
- * the space is suppressed in favour of a hardline regardless of the
- * flag — a lone `else` on the same line as a semicolon-terminated
- * body makes no sense. Other sameLine sites (`HxDoWhileStmt.cond`,
- * `HxTryCatchStmt.catches`) intentionally omit this flag because
- * `while`/`catch` are integral to the loop/try structure and stay
- * inline with the preceding body terminator regardless of shape.
- *
- * `@:fmt(semicolonNextLineElse)` on `elseBody` (no argument — ψ₆
- * principle) is the inline-shape counterpart of `shapeAware`. When the
- * then-body is forced inline (`sameLine.ifBody:same`) `shapeAware`'s own
- * gate suppresses the break, so a `;`-terminated non-block then-body
- * would otherwise glue `else` (`if (c) foo; else …`). This flag breaks
- * `else` onto its own line in that case when the then-body's trailing
- * `;` was present in source AND `opt.ifElseSemicolonNextLine` is true —
- * mirroring haxe-formatter's `MarkSameLine.markElse` Semicolon branch
- * (`sameLine.ifElseSemicolonNextLine`, default true). Block then-bodies
- * (close on `}`, no trailing `;`) and no-`;` non-block bodies keep
- * gluing. The flag lives on `HxIfStmt.elseBody` ONLY — the value-
- * position twin `HxIfExpr.elseBranch` shares the `shapeAware` +
- * `@:trailOpt` shape but is a value expression governed by
- * `sameLineExpressionElse`, so it intentionally omits this flag and
- * keeps `else` glued (`final x = if (a) b; else c`).
- *
- * `@:fmt(elseIf)` on `elseBody` (no argument — ψ₆ principle) activates
- * the `opt.elseIf:KeywordPlacement` knob for the `IfStmt` ctor only:
- * when the else branch is itself an if, the separator between `else`
- * and the nested if is picked from `opt.elseIf` instead of the field's
- * own bodyPolicy, so `else if (...)` stays inline by default even
- * though `elseBody=Next` pushes non-if branches to the next line.
- *
- * `@:fmt(elseIfCommentReflow)` on `elseBody` (no argument - psi-6
- * principle) opts the `elseIf` glue path into the `opt.elseIfCommentReflow`
- * writer knob (JSON `sameLine.elseIfCommentReflow`). The mechanism is a
- * two-part swap on the `elseIf`-ctor `Same` arm ONLY: the `kwGapDoc`
- * separator - which renders the captured `<field>KwLeading` comments on
- * their own lines and pushes the nested `if` to the next line - drops to a
- * plain space, and the one comment is spliced into the ALREADY-BUILT body
- * Doc by `anyparse.format.ElseIfCommentReflow.insertHeadTrail`. That splice
- * anchors it at the first UNCONDITIONAL break after the condition, which is
- * the single position both promised placements share: after the then-body
- * block's `{` when the body is braced, after the condition's `)` when the
- * body policy breaks a bare body onto the next line. The condition is
- * stepped over as one opaque `WrapBoundary`, so a wrapped condition's own
- * breaks are never mistaken for the end of the head.
- *
- * Two gates, both failing closed to the untouched `Same` layout, so the
- * comment can never be dropped or duplicated: the `elseBody` kw-trivia
- * slots must hold EXACTLY one `//` comment and no same-line `AfterKw`
- * comment, and the splice must find its anchor - it returns `null` for a
- * body that renders flat, for an EMPTY then-body (`{}` closes on the head
- * line, so the next break already belongs to the nested `if`'s own `else`),
- * for a head that already carries a trailing `//` or a rendered `;`, and for
- * any Doc shape it cannot name.
- *
- * Width never causes a refusal - an over-long glued head line is accepted,
- * as with the case-emitter trail comment - though the relocated comment
- * does stay visible to a `conditionWrapping` probe measuring the whole
- * rendered line, which is what keeps the reflow output a fixed point.
- *
- * Trivia mode only - the plain writer has no comments. `sameLine.elseBody:
- * "keep"` disables the reflow: a `Keep` policy routes the whole else
- * through `buildBodyKeepLayout`'s own `Same` arm, which the knob does not
- * reach - coherent, since "keep" asks for the source shape. The flag lives
- * on `HxIfStmt.elseBody` ONLY; the value-position twin `HxIfExpr.elseBranch`
- * is deliberately out of scope.
- *
- * `@:fmt(fitLineIfWithElse)` on BOTH `thenBody` and `elseBody` (ψ₁₂)
- * gates the `FitLine` body policy on sibling-else presence at runtime:
- * when `opt.fitLineIfWithElse` is `false` (default) and the `if` has
- * an `else` clause, the body falls back to `Next` layout (hardline +
- * indent + body) regardless of the `FitLine` policy. Matches haxe-
- * formatter's `sameLine.fitLineIfWithElse: @:default(false)` — fitting
- * one half of an if/else on one line and breaking the other reads as
- * inconsistent, so the default degrades both halves together. The
- * macro discovers the sibling field name via `lowerStruct`'s
- * `optionalBodyFieldName` scan, so only the flag needs to be present
- * here — no explicit sibling reference.
- *
- * `@:fmt(elseSwitch('elseSwitch', 'SwitchStmt', 'SwitchStmtBare'))` on BOTH `thenBody`
- * and `elseBody` (omega-else-switch) - when the branch value is a `switch` statement and
- * `opt.elseSwitch` is `Same`, the resolved body policy is substituted with `Same`, so the
- * `switch` glues to its keyword's line the way `elseIf` glues a nested `if`. It was armed on
- * `elseBody` alone until S138; the user read a pair of `switch` branches coming back with one
- * glued and one on its own line and named the defect himself - the two halves of one
- * `if`/`else` must be laid out the same way.
- *
- * The THEN branch owns a SECOND seam the else branch never needed. A glued `switch` closes
- * with a `}` in the `if` head's own column, so the `shapeAware` hardline below - which fires
- * on every non-block ctor - would strand the `else` under a close it is flush with. The
- * separator therefore asks the PREVIOUS FIELD whether it glued (`PrevBodyInfo.headGlue`,
- * built where the body is emitted), never this field's meta, and routes a glued close to the
- * `sameLineElse` policy exactly as a curly close is routed. Both seams decline together on a
- * comment captured between the head and the `switch`, which is the same fail-closed answer
- * `buildElseSwitchCases` gives the `else` side.
- *
- * `@:fmt(dropSingleStmtBraces)` on BOTH `thenBody` and `elseBody` (ω-single-stmt-braces; also on `HxForStmt.body` /
- * `HxWhileStmt.body` / `HxDoWhileStmt.body`) opts the field into the `opt.dropSingleStmtBraces` writer knob (JSON
- * `whitespace.bracesConfig.singleStatementBraces: "remove"`): a `{ single; }` block body is substituted with its bare inner
- * statement (via `anyparse.format.SingleStmtBraces.unwrapStmt`) before any layout / shape dispatch, so `if (c) { return x; }`
- * emits as `if (c) return x;`. Trivia mode only; every safety gate (dangling-else incl. the `_ssbSuppress` then-body frame,
- * comments, terminator presence, declaration scoping) fails closed — braces kept. Default off, byte-inert. Dangling else is
- * resolved correctly by construction: the inner `if` greedily consumes the nearest `else`, leaving outer `if`s with no else branch.
- *
- * A bare non-`;`-terminated then-body before `else` (e.g.
- * `if (c) foo() else { … }`) is accepted via the Slice-X2 extension to
- * the Slice-V `ExprStmt` trail gate: the trailing `;` is optional when
- * an `else` keyword immediately follows (an `ExprStmt` followed by
- * `else` is only ever an if-then-body in valid Haxe). The `;` is
- * consumed-not-stored, so the AST is identical to the `;`-terminated
- * form. No grammar metadata change is needed here — the relaxation
- * lives entirely in the parser gate.
- *
- * Documented limitation (pinned): a bare non-`;` then-body with NO
- * `else` at all and a block-end terminator (`{ if (c) foo() }`) is
- * still rejected. Relaxing `;` before `}` is the Slice-V unguarded
- * catch-all danger zone (it would break the Star-loop statement
- * boundary). Exit criterion: a future slice that introduces a
- * positionally-scoped soft-terminator for if/while/for bodies could
- * lift this for all single-statement bodies without touching the
- * general `ExprStmt` boundary mechanism.
+ * `@:fmt(fitLineIfWithElse)` on BOTH bodies (ψ₁₂) gates the `FitLine` policy on sibling-else
+ * presence: when `opt.fitLineIfWithElse` is `false` (default) and the `if` has an `else`, the
+ * body falls back to `Next` — fitting one half and breaking the other reads as inconsistent.
+ * `@:fmt(elseSwitch('elseSwitch', 'SwitchStmt', 'SwitchStmtBare'))` on BOTH bodies: a `switch`
+ * branch under `opt.elseSwitch == Same` glues to its keyword's line the way `elseIf` glues a
+ * nested `if`. The THEN branch owns a SECOND seam: a glued `switch` closes with a `}` in the
+ * `if` head's column, so the separator asks the PREVIOUS FIELD whether it glued
+ * (`PrevBodyInfo.headGlue`) and routes a glued close to `sameLineElse` as a curly close is
+ * routed. `@:fmt(dropSingleStmtBraces)` on BOTH bodies opts into `opt.dropSingleStmtBraces`
+ * (`SingleStmtBraces.unwrapStmt`, trivia mode only, every safety gate fails closed).
  */
 @:peg
 typedef HxIfStmt = {

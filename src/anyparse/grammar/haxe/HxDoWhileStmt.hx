@@ -1,46 +1,34 @@
 package anyparse.grammar.haxe;
 
 /**
- * Do-while loop grammar.
+ * Do-while loop grammar: `do body while (cond);`.
  *
- * Shape: `do body while (cond);`.
+ * The `do` keyword and trailing `;` are consumed at the enum-branch level (`@:kw('do')
+ * @:trail(';')` on the `DoWhileStmt` ctor in `HxStatement`); this typedef describes the
+ * remainder: a body (`HxDoWhileBody` — block / nested do-while / bare expr) followed by a
+ * `while` keyword with a parenthesised condition. `@:kw('while')` and `@:lead('(')` on the
+ * same field are emitted sequentially (D50); `@:trail(')')` closes the condition.
  *
- * The `do` keyword and trailing `;` are consumed at the enum-branch
- * level (`@:kw('do') @:trail(';')` on the `DoWhileStmt` ctor in
- * `HxStatement`). This typedef describes the remainder: a body
- * (`HxDoWhileBody` alt-enum — block / nested do-while / bare expr)
- * followed by a `while` keyword with a parenthesised condition.
+ * `@:fmt(sameLine("sameLineDoWhile"))` on `cond` makes the separator between the body and
+ * `while` runtime-switchable: a plain space (`} while (…);`) when the flag is on, a hardline
+ * otherwise.
  *
- * The `cond` field combines `@:kw('while')` and `@:lead('(')` on the
- * same field — both are emitted sequentially (D50). The `@:trail(')')`
- * closes the parenthesised condition.
+ * `@:fmt(bodyPolicy("doBody"))` on `body` places a non-block body relative to `do` — same
+ * line, always next line, or fit-line (ψ₅). `@:fmt(dropSingleStmtBraces)` (ω-single-stmt-braces)
+ * maps a single-`ExprStmt` `BlockBody` onto a bare `ExprBody` when `opt.dropSingleStmtBraces`
+ * is set (`do { x(); } while (c);` → `do x() while (c);`, no `;` before `while` — modern Haxe
+ * rejects it there) — see `anyparse.format.SingleStmtBraces.unwrapDoBody`. Block bodies always
+ * take a single space regardless of the policy: the `{` carries its own layout via `blockBody`.
  *
- * `@:fmt(sameLine("sameLineDoWhile"))` on `cond` makes the writer's
- * separator between the body and `while` runtime-switchable: when the
- * flag is true the separator is a plain space (`} while (…);`); when
- * false it becomes a hardline (`}\nwhile (…);`).
+ * `@:fmt(loopBodyIfElseNext(...))` is the loop-shape gate the `for` / `while` bodies carry:
+ * when `sameLine.loopBodyIfElseNext` is on and the body is an `if` that owns an `else`, the
+ * placement is replaced by `next` so the `else` stops sitting at the `do`'s own indent. The
+ * body arrives wrapped as `ExprBody(IfExpr(…))` — hence the fourth argument, the ctor
+ * `LoopBodyShape.isIfWithElse` unwraps before probing.
  *
- * `@:fmt(bodyPolicy("doBody"))` on `body` controls how a non-block body is placed relative to
- * `do` — same line, always next line, or fit-line (ψ₅). `@:fmt(dropSingleStmtBraces)`
- * (ω-single-stmt-braces) additionally maps a single-`ExprStmt` `BlockBody` onto a bare
- * `ExprBody` when `opt.dropSingleStmtBraces` is set (`do { x(); } while (c);` → `do x() while
- * (c);`, no `;` before `while` — modern Haxe rejects it there) — see
- * `anyparse.format.SingleStmtBraces.unwrapDoBody`. Block bodies (`{ … }`) always take a single
- * space regardless of the policy: the `{` carries its own layout via `blockBody`.
- *
- * `@:fmt(loopBodyIfElseNext(...))` (S159) is the loop-shape gate the `for` /
- * `while` bodies already carried: when `sameLine.loopBodyIfElseNext` is on and
- * the body is an `if` that owns an `else`, the chosen placement is replaced by
- * `next` so the `else` stops sitting at the `do`'s own indent. The body here is
- * an `HxDoWhileBody`, so the `if` arrives wrapped as `ExprBody(IfExpr(…))` —
- * hence the fourth argument, the one ctor `LoopBodyShape.isIfWithElse` unwraps
- * before probing.
- *
- * Field-level `@:trailOpt(';')` covers nested-do-while: in
- * `do do x; while(a); while(b);` the outer body is
- * `InnerDoWhile(inner)`; the `;` after inner's `)` is consumed at
- * this field-level slot (mirrors pre-slice-53 behaviour when body
- * was `HxStatement` carrying its own `@:trailOpt(';')`).
+ * Field-level `@:trailOpt(';')` covers a nested do-while: in `do do x; while(a); while(b);`
+ * the outer body is `InnerDoWhile(inner)` and the `;` after the inner `)` is consumed at this
+ * slot.
  */
 @:peg
 typedef HxDoWhileStmt = {

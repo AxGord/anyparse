@@ -1,107 +1,44 @@
 package anyparse.grammar.haxe;
 
 /**
- * Try-catch statement grammar (block-body form).
+ * Try-catch statement grammar (block-body form): `try body catch (name:Type) catchBody
+ * [catch ...]` where `body` and each catch clause's `body` are full `HxStatement`s;
+ * bare-expression bodies live on the sibling ctor `HxStatement.TryCatchStmtBare`. The `try`
+ * keyword is consumed at the enum-branch level. The `catches` Star uses `@:tryparse`
+ * termination (D49) — without it the last-field heuristic would select EOF mode.
  *
- * Shape: `try body catch (name:Type) catchBody [catch ...]` where
- * `body` and each catch clause's `body` are full `HxStatement`s
- * (typically `BlockStmt`). Bare-expression bodies live on the
- * sibling ctor `HxStatement.TryCatchStmtBare` (typedef
- * `HxTryCatchStmtBare`) — see source-order disambiguation in
- * `HxStatement`.
+ * `@:fmt(bodyPolicy('tryBody'), kwPolicy('tryPolicy'))` on `body` (ω-tryBody) wraps the
+ * `try`→body separator through `WriterLowering.bodyPolicyWrap` in `kwOwnsInlineSpace` mode:
+ * `bodyPolicy('tryBody')` drives the placement axis, and under the `Same` layout the inline
+ * gap routes through `opt.tryPolicy` (After/Both → space, None/Before → empty) so
+ * `tryPolicy=None` collapses to `try{…}`; the kw-policy logic is consolidated in the wrap.
  *
- * The `try` keyword is consumed at the enum-branch level
- * (`@:kw('try')` on the `TryCatchStmt` ctor in `HxStatement`).
- * This typedef describes the remainder: a statement body followed
- * by one or more catch clauses.
+ * `@:fmt(sameLine('sameLineCatch'), bareBodyBreaks)` on `catches` makes the separator before
+ * each catch runtime-switchable AND shape-aware: `Same` → space, `Next` → hardline, and
+ * `bareBodyBreaks` forces a hardline whenever the preceding body is non-block regardless of
+ * `sameLineCatch`, so a bare body breaks before AND after under the `tryBody=Next` default.
  *
- * The `catches` array uses `@:tryparse` termination (D49) — the
- * loop terminates when the next token fails to parse as
- * `HxCatchClause` (i.e. no `catch` keyword found). Without
- * `@:tryparse`, the last-field heuristic would select EOF mode.
+ * `@:fmt(bodyPolicyOverride('UntypedBlockStmt', 'untypedBody'))` on `body` flips the
+ * body-policy flag from `tryBody` to `untypedBody` at runtime for `try untyped { … }`
+ * (haxe-formatter's `markUntyped`). `@:fmt(beforeNewlineSlotFirst)` on `body` extends the
+ * `<field>BeforeNewline:Bool` synth slot to a FIRST Ref field, paired with
+ * `@:fmt(forwardNewlineForBody)` on `HxStatement.TryCatchStmt` (Case 3 OMITS the post-kw
+ * `skipWs(ctx)` so the inner first-field's `collectTrivia` captures `newlineBefore`), which
+ * the writer forwards into `bodyPolicyWrap` for the `Keep` dispatch.
  *
- * `@:fmt(bodyPolicy('tryBody'), kwPolicy('tryPolicy'))` on `body`
- * (ω-tryBody) wraps the `try`→body separator through
- * `WriterLowering.bodyPolicyWrap` in `kwOwnsInlineSpace` mode. The
- * `bodyPolicy('tryBody')` flag drives the body-placement axis at
- * runtime (Same/Next/FitLine/Keep). The `kwPolicy('tryPolicy')`
- * companion names the parent ctor's sibling `WhitespacePolicy` knob
- * — under the `Same` body layout, the inline gap routes through
- * `opt.tryPolicy` (After/Both → space, None/Before → empty) so
- * `tryPolicy=None` + `tryBody=Same` collapses to `try{…}` while
- * default `tryPolicy=After` + `tryBody=Same` keeps `try {…}`. The
- * parent Case 3's `subStructStartsWithBodyPolicy` strip predicate
- * still fires (kw-trail-space slot is null), so the kw-policy logic
- * is consolidated inside the wrap.
+ * omega-try-brace-symmetry: `@:fmt(tryBraceSymmetry('catches', 'BlockStmt'))` on `body` and
+ * `@:fmt(tryCatchBraceSymmetry('body', 'BlockStmt'))` on `catches` substitute both halves
+ * under ONE group verdict, so the try body and every catch body are braced together or bare
+ * together — the try/catch twin of `SingleStmtBraces` gate 7; `@:fmt(tryDeBrace)` on both
+ * opts this STATEMENT form into the de-brace direction. Haxe rejects a `;` in front of
+ * `catch`, so every body but the last renders with its `;` slot cleared, `ExprStmt` only.
  *
- * `@:fmt(sameLine('sameLineCatch'), bareBodyBreaks)` on `catches`
- * makes the writer's separator between the body and the first catch,
- * and between consecutive catches, both runtime-switchable AND shape-
- * aware. The `sameLine('sameLineCatch')` flag drives policy: `Same`
- * → space (`} catch (…)`); `Next` → hardline (`}\ncatch (…)`). The
- * `bareBodyBreaks` companion (ω-tryBody-next-default + sameLineCatch-
- * shape-aware) forces a hardline before each catch whenever the
- * preceding body is non-block (e.g. `ExprStmt`), regardless of
- * `sameLineCatch`. Pairs with `tryBody=Next` default: a non-block
- * body breaks before via `bodyPolicy('tryBody')`, so the catch must
- * also break to keep the multi-line `try\n\tBARE;\ncatch (…)\n\tBARE;`
- * layout coherent. Block bodies fall through to the policy-driven
- * separator as before — `try { … } catch (…)` stays inline under
- * `sameLineCatch=Same`.
- *
- * `@:fmt(bodyPolicyOverride('UntypedBlockStmt', 'untypedBody'))` on
- * `body` (slice ω-untyped-body-stmt-override) flips the body-policy
- * flag from `tryBody` to `untypedBody` at runtime when the body is
- * `HxStatement.UntypedBlockStmt` (i.e. `try untyped { … }`). Mirrors
- * haxe-formatter's `markUntyped` rule: `sameLine.untypedBody` applies
- * to the gap before the `untyped` keyword whenever the parent token
- * is not a Block-typed `BrOpen`. The `try` body slot is non-block, so
- * `untypedBody=Next` (`try\n\tuntyped {…}`) wins over the default
- * `tryBody=Same` (`try untyped {…}`). Block-stmt Star context (e.g.
- * `{ untyped {…} }`) has no override and keeps the Star's `\n<indent>`
- * separator unchanged, so `untypedBody` stays inert there — matching
- * haxe-formatter's BrOpen-parent exception. Independently, the inner
- * `untyped`→`{` gap is governed by `HxUntypedFnBody.block`'s
- * `@:fmt(leftCurly)` (slice ω-untyped-leftCurly): under
- * `leftCurly=Next` the brace lands on its own line, so
- * `try untyped\n<indent>{…}` is reachable from `tryBody=Same` +
- * `leftCurly=Next` and full Allman `try\n<indent>untyped\n<indent>{…}`
- * from `untypedBody=Next` + `leftCurly=Next`.
- *
- * `@:fmt(beforeNewlineSlotFirst)` on `body` (slice ω-untyped-keep-trybody)
- * extends the `<field>BeforeNewline:Bool` synth slot to a FIRST Ref field
- * (the default predicate `isBareNonFirstRef` excludes first fields). Pairs
- * with parent Alt-branch `@:fmt(forwardNewlineForBody)` on
- * `HxStatement.TryCatchStmt` — that flag tells `Lowering`'s Case 3 to OMIT
- * the post-kw `skipWs(ctx)` so the inner first-field's `collectTrivia`
- * scans the gap between `try` and the body's first token, capturing
- * `newlineBefore` onto the synth slot. The writer's bare-Ref bodyPolicy
- * path then forwards `bodyOnSameLineExpr = !value.bodyBeforeNewline` into
- * `bodyPolicyWrap`, which drives the `Keep` dispatch — closing the
- * `untypedBody=Keep` source-shape channel for `try\n\tuntyped {…}`.
- *
- * omega-try-brace-symmetry adds the brace-symmetry pair. `@:fmt(tryBraceSymmetry('catches',
- * 'BlockStmt'))` on `body` and `@:fmt(tryCatchBraceSymmetry('body', 'BlockStmt'))` on `catches`
- * substitute both halves under ONE group verdict, so the try body and every catch body are braced
- * together or bare together — the try/catch twin of `SingleStmtBraces` gate 7. `@:fmt(tryDeBrace)`
- * on both opts this STATEMENT form into the de-brace direction; the value forms carry the metas
- * without it and only ever ADD braces, since a de-braced value body has no terminator of its own.
- * Position matters on the way out: Haxe rejects a `;` in front of `catch`, so every body but the
- * last renders with its trailing-`;` slot cleared and only an `ExprStmt` — whose terminator is that
- * slot alone — is accepted there.
- *
- * `@:fmt(constructFitGroup('body', 'catches'))` on the TYPEDEF splices the whole construct into one
- * `BodyGroup`, the shape the condWrap path already builds for `if` / `for` / `while` out of their
- * CONDITION field. A try/catch has no condition, so without it the body and the `catch` seams each
- * answered the width question on their own line, and the seam answered AFTER the body had broken —
- * which squeezed a de-braced `try f(a, b) catch (e) g();` into breaking INSIDE the
- * call. The companion `@:fmt(constructFitSep)` on `catches` makes the seam before each
- * `catch` a SOFT line the group owns, and `@:fmt(constructFitBody)` on every body field does the
- * same for the body seam. Both matter: with the body still answering for its own line it GLUED to
- * `try` while the `catch` below it had already broken. Breaking them together gives the LADDER an
- * `if` with an `else` produces — each body on its own indented line, the keyword back at the
- * statement indent — which is the right analogy, since a `catch` follows a try body exactly as an
- * `else` follows a then-body.
+ * `@:fmt(constructFitGroup('body', 'catches'))` on the TYPEDEF splices the whole construct
+ * into one `BodyGroup`, the shape the condWrap path builds for `if` / `for` / `while` out of
+ * their CONDITION field; without it each seam answered the width question on its own line,
+ * squeezing a de-braced `try f(a, b) catch (e) g();` into breaking INSIDE the call.
+ * `constructFitSep` on `catches` and `constructFitBody` on every body field make each seam
+ * a SOFT line the group owns, so they break together into an if/else ladder.
  */
 @:peg
 @:fmt(constructFitGroup('body', 'catches'))

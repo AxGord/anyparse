@@ -1,92 +1,44 @@
 package anyparse.grammar.haxe;
 
 /**
- * A class member in the Phase 3 skeleton grammar.
+ * A class member: `VarMember` — `var name:Type;`; `FinalMember` — `final name:Type = init;`,
+ * the same `HxVarDecl` body with `@:kw('final')` instead of `@:kw('var')` (mirrors
+ * `HxStatement.FinalStmt`); `FnMember` — `function name(...):Ret body` (see `HxFnDecl`);
+ * plus the `final`-modifier, guarded-initializer, conditional and splice forms documented on
+ * their ctors. Each constructor uses `@:kw` for its introducer keyword so the generated
+ * parser enforces a word boundary (`finalists` is not `final` followed by `ists`).
  *
- * Three forms are recognised:
- *  - `VarMember` — `var name:Type;` — a plain mutable field
- *    declaration with a mandatory type annotation and a trailing
- *    semicolon.
- *  - `FinalMember` — `final name:Type = init;` — an immutable field
- *    declaration. The body shape is identical to `VarMember`'s
- *    (`HxVarDecl` covers optional `:Type` and optional `= init`), the
- *    only difference is `@:kw('final')` instead of `@:kw('var')`.
- *    Mirrors `HxStatement.FinalStmt` at the statement level.
- *  - `FnMember`  — `function name():ReturnType {}` — a function
- *    declaration with fixed empty parameter list and empty body (see
- *    `HxFnDecl` for the current limitations).
+ * The trailing `;` on `VarMember` and `FinalMember` is `@:trailOpt(';')` writer-gated by
+ * `@:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))` — the byte twin of
+ * `HxStatement.VarStmt` / `FinalStmt`: the `;` may be omitted when the field initializer
+ * ends in `}` (`= function() { … }`), Haxe's rule that a `}`-closed initializer needs no
+ * terminator. Trivia mode preserves the source's `;` presence verbatim through the generic
+ * `isAltTrailOptBranch` `trailPresent` synth slot; plain mode always emits `;` unless the
+ * gate fires.
  *
- * Each constructor uses `@:kw` for its introducer keyword (`var`,
- * `final`, `function`) so the generated parser enforces a word
- * boundary on the match and `classy` does not look like a truncated
- * `class`, `finalists` does not look like `final` followed by `ists`.
- * The trailing `;` on `VarMember` and `FinalMember` is
- * `@:trailOpt(';')` writer-gated by
- * `@:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))` — the byte
- * twin of `HxStatement.VarStmt` / `FinalStmt`. The `;` is consumed
- * when present and may be omitted when the field initializer ends in
- * `}` (`= function() { … }`, `= switch (e) { … }`, recursive
- * `= try { … } catch …`), matching Haxe's rule that a `}`-closed
- * initializer needs no terminator. Trivia mode preserves the source's
- * `;` presence verbatim through the generic `isAltTrailOptBranch`
- * `trailPresent` synth slot; plain mode falls back to always emitting
- * `;` unless the gate fires.
+ * `@:fmt(propagateFieldLevelVar)` on `VarMember` / `FinalMember`
+ * (ω-fieldlevel-var-value-expr-indent) threads `_setFieldLevelVar` into the `decl` writer
+ * call so the descendant `HxVarDecl.init` write knows it is a class-member initializer; the
+ * `indentValueIfCtor('IfExpr', 'indentComplexValueExpressions')` entry on `init` then forces
+ * its value-expr indent regardless of the config knob, mirroring haxe-formatter's
+ * `Indenter.isFieldLevelVar`. Local-var statements reach `HxVarDecl` through
+ * `HxStatement.VarStmt` / `HxExpr.VarExpr`, never this ctor, and stay knob-gated.
  *
- * `@:fmt(propagateFieldLevelVar)` on `VarMember` / `FinalMember` (slice
- * ω-fieldlevel-var-value-expr-indent) threads `_setFieldLevelVar` into the
- * `decl` writer call so the descendant `HxVarDecl.init` write knows it is a
- * class-member initializer. The
- * `indentValueIfCtor('IfExpr', 'indentComplexValueExpressions')` entry on
- * `init` then forces its value-expr indent regardless of the config knob —
- * a member `var x = if (…) … else …` (or `= untyped if …`) indents its
- * branches one step deeper. Mirrors haxe-formatter's
- * `Indenter.isFieldLevelVar`, which sets `indentComplexValueExpressions`
- * true for any field-level var/assignment RHS. Local-var statements reach
- * `HxVarDecl` through `HxStatement.VarStmt` / `HxExpr.VarExpr`, never this
- * ctor, so they keep the flag false and stay knob-gated.
+ * `final` reaches this enum (instead of being consumed as a member modifier) because
+ * `HxMemberDecl.modifiers` carries `Array<HxMemberModifier>` — the modifier enum without
+ * `Final`; the legacy `final var x:Int;` form is consequently not accepted at the member
+ * position. The one case where member-position `final` IS a modifier — `final [static|inline
+ * …] function f()` — is handled by `FinalModifiedMember`, tried via ordered first-match
+ * BEFORE `FinalMember` (it requires the `function` keyword). See `HxFinalModifierMember`.
  *
- * `final` reaching this enum (instead of being consumed as a member
- * modifier) is enabled by `HxMemberDecl.modifiers` carrying
- * `Array<HxMemberModifier>` — the modifier enum without `Final`. The
- * sealed-class top-level form `final class Foo {}` keeps `Final` via
- * the broader `HxModifier` enum on `HxTopLevelDecl.modifiers`. The
- * legacy `final var x:Int;` form (modifier on `var`) is consequently
- * not accepted at the member position; modern `final x:Int;` is the
- * idiomatic spelling.
- *
- * The one case where member-position `final` IS a modifier — the
- * non-overridable method form `final [static|inline …] function f()` —
- * is handled by `FinalModifiedMember`, tried via ordered first-match
- * BEFORE `FinalMember` (it requires the `function` keyword, so plain
- * `final x:Int;` and the rejected `final var x;` fall through to
- * `FinalMember`). See `HxFinalModifierMember`.
- *
- * `Conditional` covers `#if <cond> <members> [#elseif …] [#else …]
- * #end` preprocessor regions wrapping whole member declarations — the
- * member-scope completion of the cond-comp arc (`HxDecl.Conditional`
- * at decl scope, `HxStatement.Conditional` at stmt scope,
- * `HxMemberModifier.Conditional` for a modifier run). `@:kw('#if')`
- * dispatches with a non-word-char boundary check (so `#iff` is
- * rejected); `@:trail('#end')` consumes the closing directive after
- * `HxConditionalMember` parses the cond atom, the member body Star,
- * the optional `#elseif` chain, and the optional `#else` clause.
- *
- * Position at the end of the enum is by convention (mirror of
- * `HxDecl.Conditional`); branch order does not matter for `#if`
- * because no other `HxClassMember` ctor keyword starts with `#`. A
- * member-level `#if` is reached here only AFTER the modifier-scope
- * `HxMemberModifier.Conditional` is tried via the modifiers Star and
- * rolls back: its `@:trail('#end')` fails on the member introducer
- * keyword (`function` / `var` / `final`), `tryBranch` restores
- * `ctx.pos`, and dispatch falls through to this ctor — the same
- * shared-keyword rollback as `PackageDecl` to `PackageEmpty`. A pure
- * modifier-conditional (`#if X public #end function f()`) still
- * resolves at modifier scope and never reaches this ctor.
- *
- * The single `Conditional` ctor here covers class, interface, and
- * abstract member contexts — all three use `Array<HxMemberDecl>`
- * (`HxClassDecl.members`, `HxInterfaceDecl.members`,
- * `HxAbstractDecl.members`).
+ * `Conditional` covers `#if <cond> <members> [#elseif …] [#else …] #end` regions wrapping
+ * whole member declarations: `@:kw('#if')` dispatches with a non-word-char boundary check;
+ * `@:trail('#end')` consumes the closing directive after `HxConditionalMember` parses the
+ * region. A member-level `#if` is reached here only AFTER the modifier-scope
+ * `HxMemberModifier.Conditional` is tried via the modifiers Star and rolls back (its
+ * `@:trail('#end')` fails on the member introducer keyword) — the `PackageDecl` to
+ * `PackageEmpty` shared-keyword rollback; a pure modifier-conditional never reaches this
+ * ctor. The single `Conditional` ctor covers class, interface and abstract member contexts.
  */
 @:peg
 enum HxClassMember {

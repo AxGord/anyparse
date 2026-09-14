@@ -225,12 +225,10 @@ final class StdlibDupCommand implements CliCommand {
 	 * to `<dir>/Probe.hx` under one fixed module name, and the run then spawns
 	 * `haxe -cp <dir> --run Probe` — so two runs sharing a directory race between the write and
 	 * the compile, and the loser compiles the OTHER run's program. The verdict that comes back is
-	 * not a crash: it is a plausible, fully-formed finding about the wrong function, at exit 0.
-	 * Measured on the machine-global `<temp root>/apq-stdlib-dup` this used to resolve to: two
-	 * concurrent runs over two one-candidate scopes, 12 rounds, and the two processes reported
-	 * IDENTICAL findings in every round — 7 of 12 wrong for one and 5 of 12 for the other, one of
-	 * them naming `StringTools.endsWith` for a function that begins-with and claiming agreement
-	 * on 484 generated inputs.
+	 * not a crash: it is a plausible, fully-formed finding about the wrong function, at exit 0 —
+	 * on a machine-global directory two concurrent runs over disjoint scopes reported IDENTICAL
+	 * findings, one of them naming `StringTools.endsWith` for a function that begins-with and
+	 * claiming agreement on every generated input.
 	 *
 	 * `--work <dir>` still names it outright, which is what a caller wanting to keep the probes
 	 * uses; the default is the one that had to stop being shared.
@@ -260,16 +258,16 @@ final class StdlibDupCommand implements CliCommand {
 	 * Whether staging may own `path` as its work directory.
 	 *
 	 * `FileSystem.exists` FOLLOWS a symlink, so without this a link planted at the slot is
-	 * ADOPTED: `File.saveContent` writes the generated probe through it, and — new in S171 —
+	 * ADOPTED: `File.saveContent` writes the generated probe through it, and
 	 * `removeStagedWorkDir` then deletes every non-directory entry of whatever it points at.
-	 * The write half was always there; the delete half is what makes the guard non-optional.
+	 * The delete half is what makes the guard non-optional.
 	 * An absent target is fine — that is the ordinary first run.
 	 *
 	 * Check-then-use, so not atomic: a link planted in the window between still wins. The
 	 * process token in the name is what closes the case that needs timing — an attacker has
 	 * to guess the slot before the process that owns it exists — and this check is what stops
 	 * the case that needs none, a link left lying at a predictable path. Same shape and same
-	 * limits as `ProbeCommand.isStageTargetSafe`, which S170 shipped for the sibling command.
+	 * limits as `ProbeCommand.isStageTargetSafe` on the sibling command.
 	 */
 	private static function isWorkDirSafe(path: String): Bool {
 		#if nodejs
@@ -281,7 +279,7 @@ final class StdlibDupCommand implements CliCommand {
 		// `sys.FileSystem` has no `lstat` and `exists` FOLLOWS the link, so this branch
 		// catches a plain file and nothing else. Weaker than the contract on purpose, and
 		// nothing in this repo compiles it — every hxml reaching this file passes
-		// `-lib hxnodejs`, and the `--jvm` probe carries 0 of 3346 entries under
+		// `-lib hxnodejs`, and the `--jvm` probe carries no entry under
 		// `anyparse/query/cli`.
 		return !FileSystem.exists(path) || FileSystem.isDirectory(path);
 		#end

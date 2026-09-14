@@ -8,61 +8,39 @@ import anyparse.runtime.Span;
  *
  * `(q: Int) -> q > 0` and `function(q) return q > 0` route their parameter through
  * `HxLambdaParam` / `HxParam`, so it reaches the query tree as a `Required` node — a
- * `HaxeQueryPlugin.DECL_HOST_KINDS` entry, i.e. a binder. The bare spelling `q -> q > 0`
- * does not: `HxExpr.ThinArrow` is an ordinary right-associative Pratt infix operator whose
- * BOTH operands are typed `HxExpr`, so the parameter arrives as a plain `IdentExpr` and
- * `Refs` reads it as a reference to whatever encloses the lambda.
+ * `HaxeQueryPlugin.DECL_HOST_KINDS` entry, i.e. a binder. The bare spelling `q -> q > 0` does
+ * not: `HxExpr.ThinArrow` is an ordinary right-associative Pratt infix operator whose BOTH
+ * operands are typed `HxExpr`, so the parameter arrives as a plain `IdentExpr` and `Refs`
+ * reads it as a reference to whatever encloses the lambda. That asymmetry is a WRITER
+ * decision (the infix path already emits ` -> `), and it must not be a RESOLVER one: left
+ * alone, `refs` bound the parameter and its body reads to an enclosing same-named local,
+ * `rename` of that outer binding rewrote the lambda too, and `rename` addressed AT the
+ * parameter renamed the outer binding instead — all three re-parse and compile, so the
+ * re-parse gate cannot see them.
  *
- * That asymmetry is a WRITER decision (the infix path already emits ` -> ` and needs no
- * paren-lambda machinery for the one-parameter form), and it must not be a RESOLVER one.
- * Left alone it was silent in three ways at once:
- *
- *  - `refs q` reported the parameter as a `Read` bound to an enclosing `q`, and the body's
- *    read bound there too — so a lambda that shadows an outer local looked like two extra
- *    uses of it;
- *  - `rename` on that outer binding rewrote the parameter and its body reads along with it,
- *    and a `--scope` rename of a FIELD did so to every same-named arrow parameter in reach;
- *  - `rename` addressed AT the parameter renamed the outer binding and every use of it
- *    instead. All three re-parse and still compile, so the re-parse gate cannot see them.
- *
- * The fix belongs here rather than in each consumer — `Refs` is the resolver behind
- * `shadowing-local`, `join-override-chain`, `prefer-switch-expression-assignment` and
- * `try-catch-null-guard`, and `TrivialGetter` had already grown a private `case 'ThinArrow'`
- * arm reading `children[0]` for exactly this. One pass over the query tree replaces that
- * `IdentExpr` with the same `Required` node the parenthesised form produces, so nothing
- * downstream has to learn that arrows exist.
- *
- * The parameter's SCOPE is the other half and lives in the plugin's vocabulary:
- * `ThinArrow` joins `POSITION_SCOPED_SCOPE_KINDS` beside `ThinParenLambdaExpr` /
- * `ParenLambdaExpr` / `FnExpr`, so the binding is confined to the lambda and a read after
- * `->`'s body still resolves outward.
- *
+ * The fix belongs here rather than in each consumer — `Refs` is the resolver behind several
+ * checks. One pass over the query tree replaces that `IdentExpr` with the same `Required`
+ * node the parenthesised form produces, so nothing downstream has to learn that arrows
+ * exist. The parameter's SCOPE is the other half and lives in the plugin's vocabulary:
+ * `ThinArrow` joins `POSITION_SCOPED_SCOPE_KINDS` beside the paren-lambda kinds, so the
+ * binding is confined to the lambda and a read after `->`'s body still resolves outward.
  * Spans stay RAW-source offsets: the synthesized node covers the same bytes the `IdentExpr`
- * did, so `--at`, `--select` and every span-driven edit address real source. Only the query
- * tree is rewritten — the writer runs off the parse AST, which is untouched, so formatting
- * stays byte-exact.
+ * did, so every span-driven edit addresses real source; only the query tree is rewritten —
+ * the writer runs off the untouched parse AST.
  *
  * ## What is NOT re-projected
  *
  * A `ThinArrow` whose left operand is anything but a bare `IdentExpr` is left alone. Haxe
  * spells no such lambda — every other parameter shape goes through the parenthesised form —
- * so the node is either inside a construct this grammar parses permissively or not a lambda
- * at all, and inventing a binder there would bind a name the compiler never binds. The
- * `ThinArrow` scope frame still opens for it; for `Refs` an empty frame resolves outward
- * exactly as no frame would (`ScopeStack.resolveInnermost` walks past it, and
- * `currentPositionScoped` answers what the enclosing frame did).
- *
- * The CONVERSE is an assumption, not a proof: a bare-identifier left operand is taken to BE
- * a lambda parameter. Haxe offers no other reading in expression position — but a metadata
- * ARGUMENT is not expression position in that sense, which is why `walk` skips annotations
- * outright rather than filtering them here.
- *
- * `scopeKinds` has one consumer that does not share `Refs`' reading of an empty frame:
- * `ScopeFrames.childScopeNames` RESETS the visible-name set at any `scopeKinds` child, so a
- * `ThinArrow` now resets it where the enclosing frame used to pass through. Inert by
- * construction rather than by measurement — its only consumers (`redundant-else`,
- * `guard-return`) hoist into a statement list, and every Haxe statement-list kind is itself
- * position-scoped, so the set at every hoist target was already empty.
+ * so inventing a binder there would bind a name the compiler never binds; the `ThinArrow`
+ * scope frame still opens for it, and for `Refs` an empty frame resolves outward exactly as
+ * no frame would. The CONVERSE is an assumption: a bare-identifier left operand is taken to
+ * BE a lambda parameter. Haxe offers no other reading in expression position — but a
+ * metadata ARGUMENT is not expression position in that sense, which is why `walk` skips
+ * annotations outright. `ScopeFrames.childScopeNames` RESETS the visible-name set at any
+ * `scopeKinds` child, so a `ThinArrow` now resets it where the enclosing frame used to pass
+ * through — inert by construction: its only consumers hoist into a statement list, and every
+ * Haxe statement-list kind is itself position-scoped, so the set there was already empty.
  */
 @:nullSafety(Strict)
 final class HxArrowParamProjection {
@@ -108,8 +86,8 @@ final class HxArrowParamProjection {
 	 * unevaluated expression handed to a macro, and `A` there names nothing the compiler
 	 * binds. Manufacturing a binder for it was not merely inert: `Required` is a
 	 * `HaxeNamingSupport` PARAMETER category, so `naming` began reporting the annotation's
-	 * own text and `--fix` rewrote `@:foo(A -> B)` to `@:foo(a -> B)` - measured, and the
-	 * shape `@:op(A * B)` sits one operator away from a contract-bearing spelling. Skipping
+	 * own text and `--fix` rewrote `@:foo(A -> B)` to `@:foo(a -> B)`, and the shape
+	 * `@:op(A * B)` sits one operator away from a contract-bearing spelling. Skipping
 	 * the subtree leaves annotations exactly as they were before this pass existed.
 	 *
 	 * Only the annotation node is skipped, never its host: `@:baz(P -> Q) var v = 1;`

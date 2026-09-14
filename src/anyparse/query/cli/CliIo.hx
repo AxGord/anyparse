@@ -103,7 +103,7 @@ final class CliIo {
 	}
 
 	/**
-	 * T746 stderr sibling: `Sys.stderr()` on nodejs is `Fs.writeSync(2, …)` — a
+	 * Stderr sibling of the EPIPE guard: `Sys.stderr()` on nodejs is `Fs.writeSync(2, …)` — a
 	 * SYNCHRONOUS raw fd write that never touches the `process.stderr` Writable
 	 * stream object, so `Cli.main`'s `process.stderr.on('error', …)` EPIPE guard
 	 * (which only fires for an ASYNC stream write) never sees this path's
@@ -195,11 +195,11 @@ final class CliIo {
 	 * off; with neither set the answer is whether stderr is a terminal.
 	 *
 	 * The TTY default is the point. The progress line was written for a human
-	 * (and for a watchdog reading a redirected stream), and it costs a model 38
-	 * stderr lines / 1289 bytes per `src`-wide walk of this tree — measured, at
-	 * 935 files — which cannot be silenced with `2>/dev/null` because the same
-	 * stream carries the `--limit` cap line, the `refs` member-access warning and,
-	 * for a mutation op, the ONLY channel a refusal has.
+	 * (and for a watchdog reading a redirected stream), and it costs a model a
+	 * stderr line per progress step of a `src`-wide walk — which cannot be
+	 * silenced with `2>/dev/null` because the same stream carries the `--limit`
+	 * cap line, the `refs` member-access warning and, for a mutation op, the
+	 * ONLY channel a refusal has.
 	 */
 	public static function progressEnabled(progressEnv: Null<String>, noProgressSet: Bool, stderrTty: Bool): Bool { // noqa: prefer-inline
 		return progressEnv != null && progressEnv != '' ? progressEnv != '0' : !noProgressSet && stderrTty;
@@ -236,10 +236,10 @@ final class CliIo {
 	 * itself. One file is a change set of one, so this is `writeFiles` of a single member.
 	 *
 	 * `File.saveContent` opens with truncation, so a write that fails PART WAY leaves the source
-	 * file destroyed rather than unchanged. Measured on a 10 MB volume filled to zero free blocks:
-	 * `fmt --write` over five files reported `rewrote 3 of 5 file(s), 2 failed` and left the two
-	 * failures at 0 bytes — the per-file catch turns the crash into a message and then goes on to
-	 * the next file, so a full disk zeroes a tree one source file at a time. Staging the bytes
+	 * file destroyed rather than unchanged: on a volume with no free blocks `fmt --write` reported
+	 * the failures and left them at 0 bytes — the per-file catch turns the crash into a message
+	 * and then goes on to the next file, so a full disk zeroes a tree one source file at a time.
+	 * Staging the bytes
 	 * beside the target and renaming them into place makes each write all-or-nothing: the same run
 	 * leaves every file byte-identical and still reports.
 	 *

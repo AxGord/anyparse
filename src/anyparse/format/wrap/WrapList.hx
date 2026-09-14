@@ -4367,51 +4367,43 @@ class WrapList {
 	}
 
 	/**
-	 * Under `wrapping.comprehensionCuddledOpen`, a one-element list whose element is
-	 * an expression-bodied `for` comprehension keeps the comprehension HEAD glued to
-	 * the open delimiter (`[ for (x in xs)`) and lets only the body — plus any filter
-	 * `if` — wrap one indent below, with the close delimiter alone at container
-	 * indent. The body's indent comes from the item's OWN body-policy `Nest`, taken
-	 * relative to the line the head sits on, so cuddling shifts the whole body one
-	 * level out compared with `shapeOnePerLine`, the exploded shape this knob
-	 * re-compacts and the mode it is gated to.
+	 * Under `wrapping.comprehensionCuddledOpen`, a one-element list whose element is an
+	 * expression-bodied `for` comprehension keeps the comprehension HEAD glued to the open
+	 * delimiter (`[ for (x in xs)`) and lets only the body — plus any filter `if` — wrap one
+	 * indent below, with the close delimiter alone at container indent. The body's indent comes
+	 * from the item's OWN body-policy `Nest`, taken relative to the line the head sits on, so
+	 * cuddling shifts the whole body one level out compared with `shapeOnePerLine`, the exploded
+	 * shape this knob re-compacts and the mode it is gated to.
 	 *
-	 * ONE QUESTION, asked of the head alone — does `[ for (…)` fit the line it is glued
-	 * to — with `shapeOnePerLine` as the fallback. The threshold is a bare `lineWidth`
-	 * rather than the cond-paren probes' `lineWidth + 1`: the primitive's `>= n` and
-	 * the pending `OptSpace` an assignment prefix holds back cancel each other.
-	 *
-	 * The BODY is never part of that question. An item that cannot render flat carries
-	 * its own hardline after the head; one that renders flat keeps its body behind a
-	 * fit group that glues it to the head line whenever `[ head body` fits — blind to
-	 * the closer behind the glue shape's hardline — so its body is FORCED down
-	 * (`dropComprehensionBody`). Never worse than the ladder: the list is in
-	 * `OnePerLine`, so `[ … ]` did not fit as one line, and the forced shape spends the
-	 * same three lines with the `[` back on the statement line. A gate that asked
-	 * whether the body would break BY ITSELF under the glue made the layout
-	 * non-monotone in width (`[ … ]` at 140 one line, 141–144 the ladder, 145 the
-	 * cuddle): the two columns of ` ]` and the pending space before `[` were outside
-	 * its measure. `HxComprehensionCuddledOpenTest` sweeps that zone.
+	 * ONE QUESTION, asked of the head alone — does `[ for (…)` fit the line it is glued to — with
+	 * `shapeOnePerLine` as the fallback. The threshold is a bare `lineWidth` rather than the
+	 * cond-paren probes' `lineWidth + 1`: the primitive's `>= n` and the pending `OptSpace` an
+	 * assignment prefix holds back cancel each other. The BODY is never part of that question:
+	 * an item that cannot render flat carries its own hardline after the head; one that renders
+	 * flat keeps its body behind a fit group that glues it to the head line whenever `[ head
+	 * body` fits — blind to the closer behind the glue shape's hardline — so its body is FORCED
+	 * down (`dropComprehensionBody`). Never worse than the ladder: the list is in `OnePerLine`,
+	 * so `[ … ]` did not fit as one line, and the forced shape spends the same three lines with
+	 * the `[` back on the statement line. A gate that asked whether the body would break BY
+	 * ITSELF under the glue made the layout non-monotone in width, because the two columns of
+	 * ` ]` and the pending space before `[` were outside its measure;
+	 * `HxComprehensionCuddledOpenTest` sweeps that zone.
 	 *
 	 * TWO PROBE CTORS carry the one question. An item with its own hardline uses
-	 * `IfFirstLineExceeds`, whose STATIC walk measures the head flat, iterable
-	 * included — a head whose iterable call would wrap is measured whole and refused
-	 * (`testWideHeadFallsBackToLeadingBreak`). A flat item uses
-	 * `IfNaturalFirstLineExceeds`, which the render-time natural walk RESOLVES rather
-	 * than descends: a call hugging the list then sees the ladder's `[` as the
-	 * argument's first line when the head is too wide for the call line, and keeps its
-	 * hug (`testCallArgWideComprehensionHeadOpensTheBracketNotTheCall`); the static
-	 * probe is transparent to that walk, which then reads the over-wide glued head
-	 * and opens the call paren.
+	 * `IfFirstLineExceeds`, whose STATIC walk measures the head flat, iterable included — a head
+	 * whose iterable call would wrap is measured whole and refused. A flat item uses
+	 * `IfNaturalFirstLineExceeds`, which the render-time natural walk RESOLVES rather than
+	 * descends: a call hugging the list then sees the ladder's `[` as the argument's first line
+	 * when the head is too wide for the call line, and keeps its hug; the static probe is
+	 * transparent to that walk, which then reads the over-wide glued head and opens the call
+	 * paren. A flat item ALSO REQUIRES its FIRST break to sit right after the head's `)`: only a
+	 * body-level break delivers the promised shape, and a first break inside the HEAD means
+	 * cuddling spends the whole prefix as head budget. A wrapping ITERABLE is NOT excluded,
+	 * because the walk resolves every probe to its flat side.
 	 *
-	 * A flat item ALSO REQUIRES its FIRST break to sit right after the head's `)`:
-	 * only a body-level break delivers the promised shape, and a first break inside
-	 * the HEAD means cuddling spends the whole prefix as head budget. A wrapping
-	 * ITERABLE is NOT excluded, because the walk resolves every probe to its flat side.
-	 *
-	 * The tail mirrors `shapeOnePerLine` exactly, so switching the head placement
-	 * never adds or drops a token, and `closeInside` is dropped because the close
-	 * delimiter no longer shares a line with the body.
+	 * The tail mirrors `shapeOnePerLine` exactly, so switching the head placement never adds or
+	 * drops a token, and `closeInside` is dropped because the close delimiter no longer shares a
+	 * line with the body.
 	 */
 	private static function shapeComprehensionCuddledOpen(
 		enabled: Bool, mode: WrapMode, open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, cols: Int,

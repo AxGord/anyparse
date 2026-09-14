@@ -1754,15 +1754,18 @@ typedef SameLineShapeAwareCtx = {
  *   - `bodyOnSameLineExpr`  — runtime `Bool` driving the `Keep` branch's flat-vs-break choice.
  *   - `kwPolicyFlagName`    — name of a sibling `WhitespacePolicy` knob driving the `Same` separator (kw-policy mode).
  *   - `afterTrailExpr`      — runtime access to captured after-kw trailing comment (forces `Next` shape).
- *   - `beforeLeadingExpr`   — runtime access to the `Array<String>` of own-line comments captured before a bare-Ref body (forces `Next` shape; composes with `afterTrailExpr`).
+ *   - `beforeLeadingExpr`   — runtime access to the `Array<String>` of own-line comments captured before a
+ *     bare-Ref body (forces `Next` shape; composes with `afterTrailExpr`).
  *   - `indentObjArgs`       — `(ctorName, optField, lcField)` triple for the `indentObjGuardedNext` rule.
  *   - `policyOverrides`     — list of `(ctorName, flagName)` pairs cascading the runtime body-policy override.
  *   - `bodyAllmanIndentArgs`— `(ctorName, optField)` pair for the multi-line Allman+indent override.
  *   - `widthAware`          — when `true`, the `Same` branch routes through `IfWidthExceeds` for line-fit-aware break.
  *   - `ifExprIndentArgs`    — `(ctorName, optField)` pair for the IfExpr-as-value RHS-style indent in flat path.
  *   - `fallbackFlagName`    — name of a fallback `BodyPolicy` flag activated when the sibling `else` is absent.
- *   - `inlineBlockBodyArgs` — `(flagName)` 1-tuple for the inline-collapse override on `BlockExpr` bodies (ω-expression-if-with-blocks).
- *   - `singleLineFlagName`  — name of the `BodyPolicy` knob used when the value is NOT a control-flow / block ctor (ω-return-body-single-line).
+ *   - `inlineBlockBodyArgs` — `(flagName)` 1-tuple for the inline-collapse override on `BlockExpr` bodies
+ *     (ω-expression-if-with-blocks).
+ *   - `singleLineFlagName`  — name of the `BodyPolicy` knob used when the value is NOT a control-flow / block ctor
+ *     (ω-return-body-single-line).
  *   - `singleLineMultiCtors`— value ctor names treated as multi-line (keep the base policy); all other ctors read `singleLineFlagName`.
  */
 typedef WrapBodyOpts = {

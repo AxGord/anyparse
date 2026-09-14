@@ -7,53 +7,44 @@ import anyparse.runtime.Span;
 using StringTools;
 
 /**
- * Haxe `BooleanLogicSupport`: reduces a ternary with a boolean-literal branch to
- * an equivalent boolean expression. The four mixed forms collapse via
- * short-circuit `&&` / `||` (`cond ? true : x` -> `cond || x`, `cond ? false : x`
- * -> `!cond && x`, `cond ? x : true` -> `!cond || x`, `cond ? x : false` ->
- * `cond && x`), and the two pure-literal forms collapse to `cond` / `!cond`. A mixed form reduces only when its non-literal branch
- * is a provably non-null `Bool` (a boolean-operator result); a `null` literal, bare identifier or call/field branch is left alone.
+ * Haxe `BooleanLogicSupport`: reduces a ternary with a boolean-literal branch to an
+ * equivalent boolean expression. The four mixed forms collapse via short-circuit `&&` /
+ * `||` (`cond ? true : x` -> `cond || x`, `cond ? false : x` -> `!cond && x`, `cond ? x :
+ * true` -> `!cond || x`, `cond ? x : false` -> `cond && x`), and the two pure-literal forms
+ * collapse to `cond` / `!cond`. A mixed form reduces only when its non-literal branch is a
+ * provably non-null `Bool` (a boolean-operator result); a `null` literal, bare identifier or
+ * call/field branch is left alone. `cond ? X : X` with the same literal both sides is left
+ * alone: collapsing it would drop `cond`, discarding any side effect of evaluating it.
  *
- * Any negation is pushed inward by De Morgan — `!(a == null || b == null)`
- * becomes `a != null && b != null`, not `!(a == null || b == null)` — so the
- * result reads as plain boolean logic. Each operand is parenthesised only when it
- * binds strictly looser than the joining operator, so precedence (and meaning) is
- * preserved; the re-parse gate in the fix pipeline rejects anything malformed.
+ * Any negation is pushed inward by De Morgan — `!(a == null || b == null)` becomes `a !=
+ * null && b != null` — so the result reads as plain boolean logic. Each operand is
+ * parenthesised only when it binds strictly looser than the joining operator, so precedence
+ * is preserved; the re-parse gate in the fix pipeline rejects anything malformed.
  *
- * ONE order licence serves the whole engine. `negate` — the shared negation every entry
- * point runs through — keeps an ordered comparison (`< <= > >=`) wrapped `!(a < b)` rather
- * than flipping it to `a >= b`, since the two differ whenever an operand is a NaN or a
- * `null`. It flips only when the caller's type resolver proves BOTH operands drawn from a
- * value set `<` orders totally (`TOTAL_ORDER_TYPES`) or written as a literal of a totally
- * ordered kind (`TOTAL_ORDER_LITERAL_KINDS`), which removes both cases they differ in.
- * `==` / `!=` flip either way (equivalent under NaN and null alike). There is no
- * unconditional-flip mode: it existed for the ternary / guard-chain reductions, which
- * passed no resolver and so silently miscompiled `(s < t) ? false : a && b` for a null
- * `s:String` (`true` before, `false` after — measured on `--interp` and `js`). Those two
- * now thread `typeNominalOf` like every other consumer.
+ * ONE order licence serves the whole engine. `negate` — the shared negation every entry point
+ * runs through — keeps an ordered comparison (`< <= > >=`) wrapped `!(a < b)` rather than
+ * flipping it to `a >= b`, since the two differ whenever an operand is a NaN or a `null`. It
+ * flips only when the caller's type resolver proves BOTH operands drawn from a value set `<`
+ * orders totally (`TOTAL_ORDER_TYPES`) or written as a literal of a totally ordered kind
+ * (`TOTAL_ORDER_LITERAL_KINDS`). `==` / `!=` flip either way. There is no unconditional-flip
+ * mode: a reduction that passed no resolver silently miscompiled `(s < t) ? false : a && b`
+ * for a null `s:String`, so every consumer threads `typeNominalOf`.
  *
  * `negateCondition` exposes that engine to `guard-continue` / `guard-return` / `loop-guard`,
  * which additionally ask `negateConditionDeclinesFlip` and REFUSE a site whose flip was
- * declined — they invert purely so a block reads better, and `if (!(a < b))` reads worse than
- * the positive branch it replaces. The ternary / guard-chain reductions do NOT refuse: they
- * are eliminating a ternary or a multi-statement chain outright, and a `!( … )` operand is
- * already their normal output for any opaque condition (`f() ? false : x` -> `!f() && x`), so
- * the wrap keeps a real simplification that a refusal would throw away.
+ * declined — they invert purely so a block reads better, and `if (!(a < b))` reads worse
+ * than the positive branch it replaces. The ternary / guard-chain reductions do NOT refuse:
+ * they eliminate a ternary or a multi-statement chain outright, and a `!( … )` operand is
+ * already their normal output for any opaque condition.
  *
- * `simplifyNegatedCompound` runs that same engine over a `!( … )` node and offers the
- * result only when the unary-`!` count strictly falls. Two operand shapes reach it —
- * `negatedOperandOf` is the single test for both: a `&&` / `||` compound, which De Morgan
- * distributes (`!(!a || b)` -> `a && !b`), and a lone comparison, whose operator flips
- * (`!(x < 0)` -> `x >= 0` where the order gate licenses it, `!(a == b)` -> `a != b` always).
- * The one worth gate is what implements the order licence for the second arm: a flip costs no
- * `!`, a declined flip costs one, and the wrap it would emit is the input verbatim.
- *
- * A `!(compound)` condition also sheds redundant parens on the way through (the `Not` case
- * unwraps a single `ParenExpr`), a meaning-preserving change since `wrap` re-adds every
- * precedence-required paren.
- *
- * `cond ? X : X` with the same literal both sides is left alone: collapsing it
- * would drop `cond`, discarding any side effect of evaluating it.
+ * `simplifyNegatedCompound` runs that same engine over a `!( … )` node and offers the result
+ * only when the unary-`!` count strictly falls. Two operand shapes reach it
+ * (`negatedOperandOf` is the single test for both): a `&&` / `||` compound, which De Morgan
+ * distributes (`!(!a || b)` -> `a && !b`), and a lone comparison, whose operator flips where
+ * the order gate licenses it (`!(a == b)` -> `a != b` always). The worth gate implements the
+ * order licence for the second arm: a flip costs no `!`, a declined flip costs one, and the
+ * wrap it would emit is the input verbatim. A `!(compound)` condition also sheds redundant
+ * parens on the way through, meaning-preserving since `wrap` re-adds every required paren.
  */
 @:nullSafety(Strict)
 final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
@@ -75,9 +66,9 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 	 * agree for them. The criterion is the NAME, not a value blacklist: `<` must BE the built-in
 	 * total order on the type. Among the built-in scalar comparisons two values break it — a NaN,
 	 * which inhabits `Float` alone, and a `null`: with a null operand `!(a < b)` is true where
-	 * `a >= b` is false, for all four ordered operators (measured on `--interp`, `js` and `neko`,
-	 * Haxe 4.3.7). Ruling those two out is NOT sufficient on its own, so do not admit a nominal on
-	 * that test alone: a Haxe abstract may define `@:op(A < B)` and `@:op(A >= B)` independently,
+	 * `a >= b` is false, for all four ordered operators on every target. Ruling those two out is
+	 * NOT sufficient on its own, so do not admit a nominal on that test alone: a Haxe abstract
+	 * may define `@:op(A < B)` and `@:op(A >= B)` independently,
 	 * and a non-complementary pair disagrees with no NaN and no null in sight.
 	 *
 	 * `String` is deliberately NOT here, and its absence is what the list's name now guards. A
@@ -430,18 +421,18 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 	/**
 	 * Negate an `&&` chain into its `||` disjunction, right-nesting a parenthesised group at
 	 * every null-test operand whose narrowing a FLAT chain would strand. Haxe carries a
-	 * narrowing fact into a later `||` operand from the chain's FIRST operand only — measured
-	 * on the compiler: in `a == null || b == null || p(a.length, b.length)` the `a` fact
-	 * reaches operand 3 while the `b` fact does not, yet the right-nested
-	 * `a == null || (b == null || p(…))` narrows fine, a fact also crossing INTO a later group.
+	 * narrowing fact into a later `||` operand from the chain's FIRST operand only: in
+	 * `a == null || b == null || p(a.length, b.length)` the `a` fact reaches the last operand
+	 * while the `b` fact does not, yet the right-nested `a == null || (b == null || p(…))`
+	 * narrows fine, a fact also crossing INTO a later group.
 	 * Grouping is pure `||` associativity — order, short-circuit and evaluation count are
 	 * untouched — so the rewrite is sound even where the scan over-detects.
 	 *
 	 * The scan is syntactic, no type information: a group opens at the EARLIEST operand
 	 * (index 1 or later) that is a bare null comparison (`x != null`, possibly negated or
 	 * parenthesised — the one operand shape null safety reads a fact from; `is` does not
-	 * narrow nullability, measured) naming an identifier some LATER operand (index 2 or
-	 * later) mentions, and the tail then re-scans within the group, where that operand's
+	 * narrow nullability) naming an identifier some LATER operand (index 2 or later)
+	 * mentions, and the tail then re-scans within the group, where that operand's
 	 * fact is a first-operand fact again — a second stranded null test nests a second group.
 	 * A chain with no such pair joins flat, byte-identical to the plain binary fold.
 	 */

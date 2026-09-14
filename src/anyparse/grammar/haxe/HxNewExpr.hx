@@ -1,56 +1,40 @@
 package anyparse.grammar.haxe;
 
 /**
- * Grammar for `new T(args)` constructor call expressions.
+ * Grammar for `new T(args)` constructor call expressions: `new ClassName<params>(arg1, arg2,
+ * ...)`. The `new` keyword is consumed at the enum-branch level (`@:kw('new')` on the
+ * `NewExpr` ctor in `HxExpr`); this typedef describes the remainder.
  *
- * Shape: `new ClassName(arg1, arg2, ...)`.
+ * `type` is `HxNewTypeName` — `HxTypeName`'s byte-twin with an optional `\$?` prefix on the
+ * first ident segment for macro type-reification (`new $tp()`, `new $tp.Sub(args)`). Module-
+ * and pack-qualified constructor paths round-trip via the regex's dotted continuation — a
+ * single-segment terminal would leave `.Sub(...)` to be mis-absorbed by postfix field-access.
+ * The `$` prefix is kept LOCAL to the constructor-target slot rather than widening
+ * `HxTypeName` itself, so the `HxType.Named` vs `HxType.DollarType` dispatch contract is
+ * preserved — a `$`-bearing `HxTypeName` on `HxTypeRef.name` would shadow `DollarType` since
+ * `Named` is the first `HxType` branch. Like `HxTypeName` and `HxIdentLit`, the terminal is a
+ * `@:rawString abstract(String) from String to String`, so `(ne.type : String)` comparisons
+ * work directly.
  *
- * The `new` keyword is consumed at the enum-branch level (`@:kw('new')`
- * on the `NewExpr` ctor in `HxExpr`). This typedef describes the
- * remainder: a constructor type name followed by a parenthesised,
- * comma-separated argument list.
+ * `params` carries the optional angle-bracketed type-parameter list for `new Map<K, V>()`.
+ * Byte-twin of `HxTypeRef.params` — the same `@:optional @:lead('<') @:trail('>') @:sep(',')`
+ * shape over `Array<HxType>`; an empty Star degrades to no output via the standard
+ * optional-Star Lowering path.
  *
- * `type` is `HxNewTypeName` — `HxTypeName`'s byte-twin with an optional
- * `\$?` prefix on the first ident segment for macro type-reification
- * (`new $tp()`, `new $tp.Sub(args)`). Module- and
- * pack-qualified constructor paths round-trip via the regex's dotted
- * continuation — `new haxe.Exception(...)`, `new haxe.ds.StringMap(...)` — a single-segment terminal here would leave `.Sub(...)`
- * to be mis-absorbed by postfix field-access. The `$` prefix is intentionally kept LOCAL to the constructor-target slot
- * (rather than widening `HxTypeName` itself) so the documented
- * `HxType.Named` vs `HxType.DollarType` dispatch contract is preserved
- * — a `$`-bearing `HxTypeName` on `HxTypeRef.name` would shadow
- * `DollarType` since `Named` is the first `HxType` branch. Like `HxTypeName` and `HxIdentLit`, the terminal is `@:rawString
- * abstract(String) from String to String`, so call-site string comparisons (`(ne.type : String)`) work directly.
+ * The argument list reuses the sep-peek Star field pattern of `HxFnDecl.params` and
+ * `HxExpr.Call`. It carries `@:trivia` so the args' Star collects per-element `Trivial<HxExpr>`
+ * source trivia and the writer drives layout through `triviaSepStarExpr`.
+ * `@:fmt(ignoreSourceNewlinesForWrap)` mirrors `HxFnDecl.params`: under the DEFAULT (non-keep)
+ * `callParameter` config the intrinsic Ignore semantic DROPS the per-argument source newlines
+ * so the wrap cascade — not the source grid — drives layout; under a `callParameter`
+ * `defaultWrap: keep` config the `triviaSepStarExpr` `_keepEmit` gate (resolved via
+ * `cascadeIsKeep`) wins over Ignore and the per-element `newlineBefore` swap preserves the
+ * source per-argument line breaks.
  *
- * `params` carries the optional angle-bracketed type-parameter list
- * for `new Map<K, V>()` / `new Holder<A, B, C>(args)`. Byte-twin of
- * `HxTypeRef.params` — same `@:optional @:lead('<') @:trail('>')
- * @:sep(',')` shape over `Array<HxType>`, so the full type Alt
- * (named, function, anon-struct) composes naturally as a type-param.
- * Empty Star degrades to no output via the standard optional-Star Lowering path.
- *
- * The argument list reuses the sep-peek Star field pattern — same as
- * function parameters in `HxFnDecl` and call args in `HxExpr.Call`.
- * It carries `@:trivia` so the args' Star collects per-element
- * `Trivial<HxExpr>` source trivia (the same routing as
- * `HxFnDecl.params`) and the writer drives layout through
- * `triviaSepStarExpr`. `@:fmt(ignoreSourceNewlinesForWrap)` mirrors
- * `HxFnDecl.params`: under the DEFAULT (non-keep) `callParameter`
- * config the intrinsic Ignore semantic DROPS the per-argument source
- * newlines so the wrap cascade (FillLine / OnePerLine / …) — not the
- * source grid — drives layout, byte-identical to the prior no-trivia
- * path. Under a `callParameter` `defaultWrap: keep` config the
- * `triviaSepStarExpr` `_keepEmit` gate (resolved via `cascadeIsKeep`)
- * wins over Ignore and the per-element `newlineBefore` swap preserves
- * the source per-argument line breaks (the
- * `new FastMatrix3(a, b, c,\n d, e, f, …)` grid).
- *
- * `@:fmt(trailingCommaRemovable)` (slice ω-multiline-trailing-comma-
- * remove) opts the argument list into `wrapping.trailingComma`: under
- * `remove` a broken argument list never ends with a `,`, whatever the
- * source had and whatever `trailingCommas.callArgumentDefault` asks for.
- * The trailing separator is optional here, so the removal direction is
- * always syntactically safe.
+ * `@:fmt(trailingCommaRemovable)` (ω-multiline-trailing-comma-remove) opts the argument list
+ * into `wrapping.trailingComma`: under `remove` a broken argument list never ends with a `,`,
+ * whatever the source had and whatever `trailingCommas.callArgumentDefault` asks for. The
+ * trailing separator is optional here, so the removal direction is always syntactically safe.
  */
 @:peg
 typedef HxNewExpr = {

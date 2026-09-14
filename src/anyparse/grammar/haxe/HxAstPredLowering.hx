@@ -850,68 +850,38 @@ final class HxAstPredLowering extends AstPredLowering {
 	}
 
 	/**
-	 * Classify a `HxExpr.ArrayExpr` by its first element so the writer
-	 * picks the matching `whitespace.bracketConfig.*` inner-padding policy
-	 * and the matching wrap cascade. One grammar ctor covers three fork
-	 * bracket kinds; the distinction lives in the first element shape:
+	 * Classify a `HxExpr.ArrayExpr` by its first element so the writer picks the matching
+	 * `whitespace.bracketConfig.*` inner-padding policy and the matching wrap cascade. One
+	 * grammar ctor covers three fork bracket kinds; the distinction lives in the first element
+	 * shape: a `HxComprehension.GENERATOR_CTORS` constructor as the BARE first element →
+	 * comprehension (2); `Arrow` (`k => v`) as the first element, reached through any run of the
+	 * transparent wrappers `ParenExpr` / `MetaExpr` / `ConditionalExpr` / `ConditionalArgs` →
+	 * map literal (1); anything else, or a null first element → array literal (0).
 	 *
-	 *  - a `HxComprehension.GENERATOR_CTORS` constructor (`[for …]` /
-	 *    `[while …]`) as the BARE first element → comprehension (2). That
-	 *    list has a module of its own because
-	 *    `HaxeFormat.isComprehensionGenerator` reads it too and neither
-	 *    side can host it — the measurement is recorded there;
-	 *  - `Arrow` (`k => v`) as the first element, reached through any run
-	 *    of the transparent wrappers `ParenExpr` / `MetaExpr` /
-	 *    `ConditionalExpr` / `ConditionalArgs` → map literal (1);
-	 *  - anything else, or a null first element (empty list) → array
-	 *    literal (0) — the default tight bracket has no padding either
-	 *    way.
+	 * Why a wrapper is transparent to the MAP answer and opaque to the COMPREHENSION one:
+	 * `@:foo k => v`, `(k => v)` and a `#if`-guarded `k => v` are all still map ENTRIES — the
+	 * wrapper decorates the entry, not the list. A generator ctor behind a wrapper is not an
+	 * array comprehension at all but a `for` / `while` EXPRESSION used as an element, so the
+	 * recursion clamps every wrapped answer to 1-or-0 — where the fork lands too: its
+	 * `determinBkChildren` returns `Comprehension` only when the first non-comment CHILD TOKEN of
+	 * `[` is `for` / `while`. The paren form does not compile (`Unexpected =>`); it is carried
+	 * anyway so the bracket kind does not flip while an edit is half-typed.
 	 *
-	 * Why a wrapper is transparent to the MAP answer and opaque to the
-	 * COMPREHENSION one: `@:foo k => v`, `(k => v)` and a `#if`-guarded
-	 * `k => v` are all still map ENTRIES — the wrapper decorates the entry,
-	 * not the list. A generator ctor behind a wrapper is not an array
-	 * comprehension at all but a `for` / `while` EXPRESSION used as an
-	 * element (`[(for (k in ks) k)]` is a parenthesised loop), so the
-	 * recursion clamps every wrapped answer to 1-or-0. That clamp is also
-	 * where the fork lands: `determinBkChildren` returns `Comprehension`
-	 * only when the first non-comment CHILD TOKEN of `[` is `for` / `while`,
-	 * and `@:foo`, `(` and `#if` each break that loop out into the arrow
-	 * scan, which finds no arrow and answers `ArrayLiteral`.
+	 * Consumed by `@:fmt(bracketKindPad)` emission (`WriterLowering.arrayBracketInsidePolicySpace`:
+	 * 1 → `mapLiteralBrackets*`, 2 → `comprehensionBrackets*`, default → `arrayLiteralBrackets*`)
+	 * and by `@:fmt(mapWrapRules(…))` (`WriterLowering.mapWrapFor`: kind 1 → `wrapping.mapWrap`,
+	 * else `wrapping.arrayWrap`). Two knobs, ONE answer — a list that is a map to the padding and
+	 * an array to the cascade would read as arbitrary.
 	 *
-	 * Three of the four wrappers carry COMPILING Haxe — `[@:foo 1 => 2,
-	 * 3 => 4]`, `[#if flag 1 => 2, #end 3 => 4]` and `[#if flag 1 => 2
-	 * #else 3 => 4 #end]` all type as `Map<Int, Int>` on 4.3.7. The paren
-	 * form does not (`Unexpected =>`); it is carried anyway so the bracket
-	 * kind does not flip while an edit is half-typed.
-	 *
-	 * Consumed by `@:fmt(bracketKindPad)` emission
-	 * (`WriterLowering.arrayBracketInsidePolicySpace`), whose runtime
-	 * switch maps 1 → `mapLiteralBrackets*`, 2 → `comprehensionBrackets*`,
-	 * default → `arrayLiteralBrackets*`; and by `@:fmt(mapWrapRules(…))`
-	 * (`WriterLowering.mapWrapFor`), which sends kind 1 to
-	 * `wrapping.mapWrap` and everything else to `wrapping.arrayWrap`. Two
-	 * knobs, ONE answer — a list that is a map to the padding and an array
-	 * to the cascade would read as arbitrary to the user.
-	 *
-	 * What still diverges from the fork token scan
-	 * (`TokenTreeCheckUtils.determinBkChildren`, which looks for ANY `=>`
-	 * at BRACKET depth 0 — only `[` / `]` count there, so parens and braces
-	 * are transparent to it): a list whose arrow is not on the FIRST
-	 * element (`[x, a => b]`); an arrow nested deeper than a wrapper chain
-	 * (`[c ? (a => b) : (c => d)]`, `[f({a: 1 => 2})]`); and an arrow that
-	 * lives only in an `#elseif` branch, which neither conditional arm
-	 * walks. Closing the first needs the whole ELEMENT LIST, and no call
-	 * site hands one over — every one passes the first element alone
-	 * (`_arr[0].node` from `mapWrapFor` and from the trivia padding path,
-	 * `_args[0]` from the plain one) — so it would cost one
-	 * `arrayBracketKind` call per element on the array-emit path. Closing
-	 * the second needs a general subtree walk that stops at every nested
-	 * `[`. Neither buys a shape that compiles as Haxe (all three are
-	 * `Unexpected =>` on 4.3.7), so both stay open. The `#elseif` tail
-	 * does compile, and it is open only for want of a fixture — but it is
-	 * two LOOPS, not two reads: `elseifs` is an array, and each
-	 * `HxElseifArgs` carries a body list of its own.
+	 * What still diverges from the fork token scan (which looks for ANY `=>` at BRACKET depth 0):
+	 * a list whose arrow is not on the FIRST element (`[x, a => b]`); an arrow nested deeper than
+	 * a wrapper chain (`[c ? (a => b) : (c => d)]`); and an arrow that lives only in an `#elseif`
+	 * branch, which neither conditional arm walks. Closing the first needs the whole ELEMENT
+	 * LIST, and every call site hands over the first element alone; closing the second needs a
+	 * general subtree walk that stops at every nested `[`. Neither buys a shape that compiles as
+	 * Haxe, so both stay open. The `#elseif` tail does compile and is open only for want of a
+	 * fixture — two LOOPS, not two reads: `elseifs` is an array, and each `HxElseifArgs` carries
+	 * a body list of its own.
 	 */
 	private function arrayBracketKindField(): Field {
 		inline function rec(e: Expr): Expr return { expr: ECall(ident('arrayBracketKind'), [e]), pos: Context.currentPos() };

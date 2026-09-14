@@ -13,7 +13,7 @@ using StringTools;
  * separator bug was exactly that shape — `@:forward(a, #if f b, #end, c)`
  * parses here and dies in `haxe` — so `self-status`, `fmt --list` and `lint`
  * were all green on a tree that no longer compiled. Comparing bytes instead of
- * trees is what catches it, and one pass over 846 files found four such sites.
+ * trees is what catches it, and a single pass over a real tree found several such sites.
  *
  * ## What it deliberately does NOT know
  *

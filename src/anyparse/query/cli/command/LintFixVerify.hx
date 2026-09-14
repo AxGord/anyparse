@@ -301,10 +301,10 @@ final class LintFixVerify {
 		switch reportOracleVerdict(oracleHxml, oracleDir, paths, warmServer) {
 			case Confirmed:
 				// The qualifier is not hedging: what the compile confirms is the code it TYPECHECKED,
-				// and an hxml routinely reads a fraction of the lint scope (196 of 868 files on one
-				// measured project) while a `#if` branch its defines exclude is skipped inside a file
-				// it does read (measured on this repo: 483 of 1267 conditional branches in scope are
-				// provably compiled). `OracleCoverage` answers that question per edit for `--fix`;
+				// and an hxml routinely reads a fraction of the lint scope, while a `#if` branch its
+				// defines exclude is skipped inside a file it does read (well under half of the
+				// conditional branches in scope are provably compiled). `OracleCoverage` answers
+				// that question per edit for `--fix`;
 				// report mode does not probe, so the honest thing here is to say what the claim covers
 				// rather than to imply the whole scope.
 				CliIo.stderr(
@@ -363,8 +363,8 @@ final class LintFixVerify {
 		final declined: Bool = !warmServer || EnvFlag.isSet('APQ_NO_ORACLE_SERVER');
 		// A warm CONFIRM stands as it is; a warm REJECTION is re-run COLD before it is reported.
 		// A compilation server can re-emit a stale null-safety diagnostic for a module it restored
-		// from cache rather than recompiled — measured here: one site made every cached recompile
-		// of this project spuriously red while the cold compile was green. So a rejection always
+		// from cache rather than recompiled — one such site made every cached recompile of this
+		// project spuriously red while the cold compile was green. So a rejection always
 		// carries the cold compiler's own verdict and error text, and the server can only ever
 		// change what a verdict COSTS.
 		return switch (declined ? null : CompilerServer.typecheck(hxml, dir, paths)) {
@@ -449,7 +449,7 @@ final class LintFixVerify {
 		final candidates: Array<{ file: String, before: String, after: String }> = [];
 		// Per-file EDIT counts, so the run's "fixed N issue(s)" stays one unit: the safe loop
 		// contributes edits, and a phase that reports FILES would silently shrink the total
-		// (37 files carrying ~400 annotations once read as "37 issues").
+		// (a few dozen files carrying hundreds of annotations once read as that many issues).
 		final editsPerFile: Map<String, Int> = [];
 		// One WHOLE-SET run per check, findings grouped per file — the same scope contract
 		// as `FixVerifier.verify` and the safe loop's `fullScopeIds`: a per-file run
@@ -459,8 +459,8 @@ final class LintFixVerify {
 		// KNOWINGLY NOT INDEPENDENTLY COVERED: no test can distinguish this line from a direct
 		// `check.run`, because no `OracleAssisted` builtin can produce an edit inside a
 		// quotation anyway — the display server has no typed AST for reified source, so `typeAt`
-		// returns nothing there (measured: with this line reverted, a quoted untyped local is still
-		// left alone). What the suite does cover is the shared entry itself and the identical wiring
+		// returns nothing there (with this line reverted, a quoted untyped local is still left
+		// alone). What the suite does cover is the shared entry itself and the identical wiring
 		// in `FixVerifier.verify`, which IS discriminating. Keep this line spelled the same as that
 		// one so the two cannot drift apart unnoticed.
 		final findingsByCheck: Array<{ check: Check, all: Array<Violation> }> = [
@@ -663,8 +663,8 @@ final class LintFixVerify {
 	 * The oracle-assisted phase used to be the last thing that touched the tree, so nothing read
 	 * `entry.source` afterwards and the drift was invisible. `followUpRound` reads it: an unsynced
 	 * file is re-linted from its PRE-annotation bytes and written back over the verified edit, so
-	 * the annotation is silently lost and the round is blind to this phase besides. Measured on a
-	 * file taking both a risky `inline` and an oracle-assisted `:Int` — the `inline` survived, the
+	 * the annotation is silently lost and the round is blind to this phase besides: on a file
+	 * taking both a risky `inline` and an oracle-assisted `:Int`, the `inline` survived, the
 	 * return type did not, and `--fix` counted both. A REVERTED candidate is already back at
 	 * `before` on disk, which is what `entry.source` still holds, so it is left alone.
 	 */

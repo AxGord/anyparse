@@ -43,8 +43,8 @@ final class LintFixDriver {
 
 	/**
 	 * Cap on the per-file DECLINE lines a `--fix` phase prints. A decline is the common case
-	 * on a partially-covered tree (483 of 679 files on the tree that motivated the gate), not
-	 * the rare one a revert is, so an uncapped list buries the summary it belongs to.
+	 * on a partially-covered tree, not the rare one a revert is, so an uncapped list buries
+	 * the summary it belongs to.
 	 */
 	public static inline final DECLINE_LINES_SHOWN: Int = 20;
 
@@ -54,8 +54,8 @@ final class LintFixDriver {
 	/**
 	 * How many distinct decline reasons ONE rule's row spells out before it summarises the rest.
 	 * Smaller than the rule cap on purpose: a reason is a full sentence, and the row it hangs
-	 * under is already the answer to "which rule" — three is the whole of every real case measured
-	 * (`unused-import`'s four arms are the widest, and the fourth is 15 of 204 findings).
+	 * under is already the answer to "which rule" — three covers every real case
+	 * (`unused-import`'s four arms are the widest, and the fourth is rare).
 	 */
 	public static inline final DECLINED_REASONS_SHOWN: Int = 3;
 
@@ -196,9 +196,9 @@ final class LintFixDriver {
 		);
 		// What the run did NOT fix, per rule. Its own block, not a tail on the line above, which is
 		// what every gate and doc quotes and stays one sentence. It also prints on a PRODUCTIVE
-		// run, which the tail it replaces did not — `fixed 0` was the only trigger, so this 668-fix
-		// tree said nothing whatever about the 161 findings it declined, and a productive run is
-		// exactly where the misreading lands.
+		// run, which the tail it replaces did not — `fixed 0` was the only trigger, so a run that
+		// fixed hundreds said nothing whatever about the findings it declined, and a productive
+		// run is exactly where the misreading lands.
 		LintFixLedger.printUnfixedLedger(ledger, checks, split.risky, oracleAssisted, risky.ledgered, fixedCount, verbose);
 		// The summary says HOW MANY reverted; these say WHICH, and by which rule. One line per
 		// revert, nothing else: attributing three of them on an 809-file tree otherwise costs an
@@ -299,11 +299,10 @@ final class LintFixDriver {
 					// PER-EDIT, not per-FILE. The gate round-trips the whole spliced file, so one
 					// check's un-writable fix used to discard every other check's edits for this
 					// file — on every pass, since each pass recomputes the same set and is refused
-					// again. Measured over 8645 external files: 2 files where one refused edit set
-					// (`modifier-order` reordering across a `/*inline*/`, `cond-region-merge`
-					// emitting text that does not re-parse) cost 100+ landable edits from twenty-odd
-					// other rules. The salvage runs ONLY here, so a file nothing refuses pays exactly
-					// the one round trip it always did.
+					// again: one refused edit set (`modifier-order` reordering across a `/*inline*/`,
+					// `cond-region-merge` emitting text that does not re-parse) cost every landable
+					// edit from every other rule in the file. The salvage runs ONLY here, so a file
+					// nothing refuses pays exactly the one round trip it always did.
 					final blamed: Array<String> = [];
 					settled = salvageFileLintEdits(entry.source, groups, message, cached, optsByFile[entry.file], blamed);
 					// EVERY pass, not just the first: `noted` already dedupes per file, so the
@@ -557,9 +556,9 @@ final class LintFixDriver {
 	 *
 	 * A source the writer cannot round-trip AT ALL is told apart FIRST, by asking the gate with an
 	 * EMPTY edit set: no subset of edits changes that answer, so there is nothing to bisect and every
-	 * contributing group takes the file-level sentence. That case is the bulk of it — 50 of the 54
-	 * refusals measured over 8645 external files, the same files `apq fmt --write` refuses — which is
-	 * why "the rule proposed what the writer refuses" explains almost none of this defect.
+	 * contributing group takes the file-level sentence. That case is the bulk of it — the same
+	 * files `apq fmt --write` refuses — which is why "the rule proposed what the writer refuses"
+	 * explains almost none of this defect.
 	 *
 	 * The granularity is the CHECK, not the edit, because that is where a fix is atomic: splitting one
 	 * check's set would apply a signature edit without its call-site edits. Greedy in check order, so
@@ -576,16 +575,16 @@ final class LintFixDriver {
 				// The loop's OWN predicate, never `contributes` — that one excludes an OVERLAPPED
 				// group, and on this arm nothing is ever written, so such a group's edits did not land
 				// either. Read through `contributes` it got no refusal row and the ledger then credited
-				// it with edits on a run that wrote nothing. This arm is 50 of the 54 refusals measured
-				// over 8645 files, so it is the common path, not the corner.
+				// it with edits on a run that wrote nothing. This arm is the common path, not the
+				// corner.
 				for (group in groups) if (group.edits.length > 0 && group.refusal == null) group.refusal = message;
 				return null;
 		}
 		// Overlap is RE-DERIVED on the bisect arm against the SURVIVING set, never read off the collection pass. A
 		// group deferred because it overlapped one the gate then REFUSES would otherwise never be
 		// offered at all — and every pass recomputes the same state, so its edits would be lost for
-		// ever: the very defect this salvage exists to close, one level down. Measured before the
-		// re-derivation: a `redundant-parens` edit inside the region a refused
+		// ever: the very defect this salvage exists to close, one level down. Without the
+		// re-derivation a `redundant-parens` edit inside the region a refused
 		// `prefer-if-expression-assignment` fix covered stayed unwritten across every pass, and the run
 		// blamed only the rule that was actually refused.
 		final kept: Array<RuleEdits> = [];
@@ -699,10 +698,9 @@ final class LintFixDriver {
 	 * of and refused the rest of.
 	 *
 	 * The ledger read a non-empty edit list as "this rule answered", and every finding in the same
-	 * call that it had refused went unmentioned: no `declined` count, no reason, no row. Measured on
-	 * this project's own tree, `member-order` declined 13 of its 26 findings and the run named 11 —
-	 * the two missing ones were containers whose reorder was refused while their BLANK-LINE fix
-	 * landed, so the rule's edit count for that file was non-zero and the refusal disappeared.
+	 * call that it had refused went unmentioned: no `declined` count, no reason, no row — a
+	 * `member-order` container whose reorder was refused while its BLANK-LINE fix landed made the
+	 * rule's edit count for that file non-zero, and the refusal disappeared.
 	 *
 	 * Only a finding the check itself SPOKE for is counted here. A silent one cannot be: the call
 	 * returned edits, so "no edit for this finding" is not derivable from the edit list — a check is
@@ -835,7 +833,7 @@ final class LintFixDriver {
 	 * that created it: `--fix` printed a success line, and a byte-identical second invocation of the
 	 * same command fixed more. The motivating pair is `prefer-inline` and `member-order` - marking a
 	 * method `inline` moves it under the within-rank sub-order, and the loop that would have re-sorted
-	 * it had already finished. Measured on Pony (867 files, oracle configured): 5 fixes in 3 files.
+	 * it had already finished.
 	 *
 	 * `converge` is the caller's own loop, passed as a closure because it owns the run-wide counters;
 	 * it takes the active set and answers how many fixes the round made. The net restores the bytes

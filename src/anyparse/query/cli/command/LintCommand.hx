@@ -258,8 +258,8 @@ final class LintCommand implements CliCommand {
 		// `--no-oracle` skips the typecheck entirely rather than faking its verdict:
 		// the note below says the compiler was not asked, so nothing downstream can
 		// read an unproved run as a proved one. It exists because the oracle is a
-		// PROJECT-WIDE typecheck regardless of how narrow the lint scope is — 16.1s of
-		// an 18.7s single-file run, which is the inner loop's largest single tax.
+		// PROJECT-WIDE typecheck regardless of how narrow the lint scope is — nearly the
+		// whole of a single-file run, the inner loop's largest single tax.
 		final oracleExit: Null<Int> = o.noOracle
 			? LintFixVerify.oracleSkippedNote(oracleHxml)
 			: LintFixVerify.reportModeOracle(oracleHxml, oracleDir, paths, oracleConfig?.compilerOracleServer() ?? false);
@@ -438,15 +438,14 @@ final class LintCommand implements CliCommand {
 	public static function realPath(path: String): String {
 		// `FileSystem.fullPath` is DECLARED to return a non-null `String` and on hxnodejs RETURNS NULL
 		// for a path that does not exist — it does not throw, so a bare try/catch never sees it and
-		// `@:nullSafety` trusts the declaration (measured on Haxe 4.3.7 / hxnodejs; the same fact is
-		// recorded at `OracleCoverage.hx`). Unbridged, a path that fails to resolve keys this map under
+		// `@:nullSafety` trusts the declaration (the same fact is recorded at `OracleCoverage.hx`).
+		// Unbridged, a path that fails to resolve keys this map under
 		// the string "null", and two such paths — one report, one library — collapse onto ONE key, which
 		// silently drops a library file. The catch stays for the targets where it DOES throw.
 		//
 		// NOT also guarded against `''`, unlike `OracleCoverage.canonical`: probed on node,
 		// `fs.realpathSync('')` and `path.resolve('')` both answer the cwd, so neither branch can
-		// produce one, and a guard no input can reach is a claim about behaviour nobody measured.
-		// Mutations: dropping the null bridge fails 1 test, replacing the body with `absolutePath` 2.
+		// produce one, and a guard no input can reach is a claim about behaviour nobody probed.
 		final full: Null<String> = try FileSystem.fullPath(path) catch (exception: Exception) null;
 		return full ?? FileSystem.absolutePath(path);
 	}
@@ -458,10 +457,9 @@ final class LintCommand implements CliCommand {
 	 * Separable from the library half because of what a write scan may believe. A declared root is the
 	 * project's OWN source, so a file there can assign a project type's field; a haxelib and the Haxe
 	 * std cannot — the dependency runs the other way. Admitting them to a scan keyed on a member NAME
-	 * therefore only ever suppresses: measured over the Pony fork, folding the library into
-	 * `prefer-final-public-field` / `prefer-read-only-field`'s write index lost 16 of 109 findings
-	 * (`speed`, `panel`, `timer`, `ready`, `names` — every one a name the std also spells) and gained
-	 * none.
+	 * therefore only ever suppresses: folding the library into `prefer-final-public-field` /
+	 * `prefer-read-only-field`'s write index loses every finding whose field name the std also
+	 * spells (`speed`, `panel`, `timer`, `ready`, `names`) and gains none.
 	 */
 	private static function readResolutionRoots(
 		roots: Array<String>, reportPaths: Map<String, Bool>
@@ -617,7 +615,7 @@ final class LintCommand implements CliCommand {
 			// project that declares no resolution scope a subtype in an untouched file reads as
 			// absent, which turns an unprovable site into a wrongly PROVEN one — the unsound
 			// direction, unlike the misses the other ids here guard against. Pinned by
-			// `CrossScopeSoundnessTest`'s `subtype-map-write` cell (T918, arm
+			// `CrossScopeSoundnessTest`'s `subtype-map-write` cell (arm
 			// `M-MAPVALUE-SUBTYPE-REPORT-INDEX`).
 			'redundant-map-exists',
 			// prefer-static-extension's shadow gate resolves the receiver type — and its whole
@@ -651,7 +649,7 @@ final class LintCommand implements CliCommand {
 			// rule to report-only. When no resolution scope exists the gate falls back to the file set
 			// it is handed, so on the active SUBSET a catch declared elsewhere reads as absent and a
 			// throw a first pass correctly refused would be boxed by a later one. Pinned by
-			// `CrossScopeSoundnessTest`'s `string-catch` cell (T919, arm
+			// `CrossScopeSoundnessTest`'s `string-catch` cell (arm
 			// `M-TYPEDTHROW-CATCH-REPORT-ONLY`) — the one entry on this list whose gate degrades the
 			// RULE rather than a candidate, so its cell carries no in-cell control.
 			'prefer-typed-throw',
@@ -674,9 +672,9 @@ final class LintCommand implements CliCommand {
 			// siblings on this list share (`orphan-accessor` and `unused-public-member` above,
 			// `static-constant` below), and it gates the FINDING rather than the fix. On the
 			// active SUBSET a `Reflect.field(o, "NAME")` in an unchanged file reads as absent, so a
-			// constant pass 1 correctly refused is marked `inline` by pass 2 — measured on a
-			// two-file fixture where the whole-set REPORT named one finding and the same command's
-			// `--fix` reported `fixed 2 issue(s) over 3 pass(es)`.
+			// constant pass 1 correctly refused is marked `inline` by pass 2 — on a two-file
+			// fixture the whole-set REPORT names one finding and the same command's `--fix` fixes
+			// two.
 			'inline-constant',
 			// static-constant's reachability gates are all whole-project: the subtype MENTION gate
 			// (a subtype's unqualified read of a private static does not resolve) and the
@@ -854,12 +852,10 @@ final class LintCommand implements CliCommand {
 	 * either end be omitted: this one is a FILTER, and a silently clamped window would
 	 * narrow a fix run to a region the caller never asked for.
 	 *
-	 * T711 sibling: `--range 1x:2` / `--range 1:2x` used to pass a raw `Std.parseInt`
-	 * on each bound, which parses a leading digit PREFIX and silently drops trailing
-	 * garbage — `--range 1,2` (no colon at all) was already caught by the `colon <= 0`
-	 * guard below, but a colon WITH a garbage-suffixed bound was not.
-	 * `SourceText.parseStrictInt` is the shared whole-token digit check `apq source
-	 * --range` already uses.
+	 * A raw `Std.parseInt` on each bound parses a leading digit PREFIX and silently drops
+	 * trailing garbage, so `--range 1x:2` / `--range 1:2x` passed while `--range 1,2` (no
+	 * colon at all) was caught by the `colon <= 0` guard below. `SourceText.parseStrictInt`
+	 * is the shared whole-token digit check `apq source --range` already uses.
 	 */
 	private static function parseLintRange(spec: String): Null<LintRange> {
 		final colon: Int = spec.indexOf(':');
@@ -883,9 +879,9 @@ final class LintCommand implements CliCommand {
 	 * already thinned.
 	 *
 	 * One function rather than two branches in `runLint` because that function sits AT its
-	 * complexity budget — measured: either refusal written inline took it to 22 against a max
-	 * of 20 — and because a refusal that reads the whole argv belongs beside its sibling
-	 * rather than in the middle of the run.
+	 * complexity budget — either refusal written inline takes it past the limit — and because
+	 * a refusal that reads the whole argv belongs beside its sibling rather than in the middle
+	 * of the run.
 	 */
 	private static function optionScopeError(o: LintOpts, paths: Array<String>): Null<Int> {
 		// REFUSED rather than ignored. `--baseline` narrows what the run REPORTS; `--fix` acts on

@@ -23,9 +23,8 @@ final class LintFixLedger {
 	 * A check answers with one span per site it rewrites, so ONE `naming` finding on a local read
 	 * three times is four spans; a fix whose result exposes a further finding adds that pass's
 	 * spans on top of them. Printed as `fixed N issue(s)` it read as a finding count and disagreed
-	 * with the number the reader had just counted in the plain `lint` report — measured at 4 for 3
-	 * findings on a cascading fold, and at 4 for exactly ONE finding with no cascade anywhere in
-	 * the run.
+	 * with the number the reader had just counted in the plain `lint` report — four spans for
+	 * exactly ONE finding with no cascade anywhere in the run.
 	 *
 	 * The finding total is still not here beside it, and the reason it was given is now half fixed
 	 * rather than true. `edits` sums the safe loop AND the risky and oracle-assisted phases, while
@@ -72,9 +71,9 @@ final class LintFixLedger {
 	 * and which of the things that can mean happened to each.
 	 *
 	 * The summary line answered none of that. Its ambiguous companion tail printed ONLY when the run
-	 * changed nothing, so a 668-fix tree said not one word about the 161 findings it declined; and the
+	 * changed nothing, so a productive run said not one word about the findings it declined; and the
 	 * tail itself spelled the ambiguity out rather than resolving it ("the check has no autofix, or when
-	 * its fix declined here"), which three readers resolved the wrong way and two of them filed work on.
+	 * its fix declined here"), which readers resolved the wrong way and filed work on.
 	 *
 	 * A row counts the DECLINED findings, not the reported ones — a finding whose check answered
 	 * with an edit is not news — so a run that fixed everything it reported, and a clean run, both
@@ -122,8 +121,8 @@ final class LintFixLedger {
 		// decline as a total one. The other direction is not that case at all: `reported` is a
 		// PASS-1 count the driver fills in `applyLintPass`, so a caller that drives
 		// `computeFileLintEdits` on its own (every test here, and any future embedder) leaves it at
-		// zero while `declined` counts real findings — and the label then read `unused-local 2 of 0`,
-		// a ratio out of a total that is smaller than its own part.
+		// zero while `declined` counts real findings — and the label then read as a ratio out of
+		// a total smaller than its own part (`unused-local` declining more than it reported).
 		for (row in rows.slice(0, LintFixDriver.DECLINED_RULES_SHOWN)) {
 			final label: String = row.count >= row.reported ? '${row.rule} ${row.count}' : '${row.rule} ${row.count} of ${row.reported}';
 			lines.push('  $label: ${row.verdict}\n');
@@ -311,8 +310,8 @@ final class LintFixLedger {
 	 * the arithmetic on the line itself.
 	 *
 	 * The NAMES printed are the exercised ones rather than the silent ones. That is the SHORT list
-	 * on a real tree (48 of 175 on Pony) and the only short answer there is on a one-file run,
-	 * where the silent list would be 170-odd ids of pure noise; and it is the positive form of the
+	 * on a real tree and the only short answer there is on a one-file run, where the silent list
+	 * would be nearly every rule id, pure noise; and it is the positive form of the
 	 * claim, so a reader looking for their own rule gets an answer instead of an absence to
 	 * interpret.
 	 */

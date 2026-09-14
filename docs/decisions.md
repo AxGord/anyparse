@@ -183,3 +183,103 @@ decided the question; it may not become a record of runs.
   `resolutionRoots` are honoured at any scope → that index folds the roots and every library
   into one undivided array, and a test tree then floods with `utest.Assert.*` calls whose result
   the framework's idiom discards; the split belongs in `ResolutionScope` — `38c99275`
+- the ternary's `?` / `:` were to join `HxCondSpliceOpLit` so a half-ternary `#if` splice parses
+  as two terms → a hand-indented ternary region follows the ternary's two-level convention and a
+  FLAT term run has one indent level to give, so `fmt` starts rewriting a file it left alone;
+  the ternary keeps the raw capture and its rename refusal — `76a7186c`
+- a fifth paren-nesting level in `HxPpCondLit`'s `#if` condition regex → the `@:re` line runs past
+  the column limit and no recursion-free shape exists (a JS regex has no `(?R)`, a counting scan is
+  not a terminal); depth-limited nesting stays until a real site demands more — `07294564`
+- a structured `HxConditionalSemiExpr` reading of a self-terminating expression-position `#if …;
+  #end` region → its writer reflows the multi-line region onto one line and drifts modules the
+  formatter leaves alone; the region stays a raw capture re-emitted line by line — `ab7270df`
+- `@:sep(',', sepFaithful)` on the guarded anon-field body Star to admit the comma short form →
+  it makes the separator mandatory between the `;`-terminated elements real source uses, trading
+  working modules for a shape no dependency tree contains — `07294564`
+- widening `HxAbstractDecl.clauses` to a cond-comp-aware wrapper struct instead of a
+  `Conditional` branch on `HxAbstractClause` → forces every `clauses[i]` consumer through an
+  unwrap for a rare construct and breaks the parallel with the heritage scope — `07294564`
+- an optional alternate-header slot on `HxClassDecl` for the shared-body `#if` region → field
+  position is load-bearing for the writer's trivia slots, so a slot between `heritage` and
+  `members` moves every class declaration's slot, and a `#else`-keyed member ctor would make
+  `HxConditionalMember.body` swallow the clause; the region is its own `HxDecl` ctor — `ea9977a9`
+- a per-branch-`;` conditional as a new `HxExpr` ctor after `ConditionalExpr` (so `HxVarDecl.init`
+  reaches it for free) → built and reverted: a statement-scope `@meta` routes through
+  `HxExpr.MetaExpr`, so the ctor claimed statement regions too and the `ExprStmt` then lacked its
+  `;` after `#end`; the widening lives at member scope — `414ce5d1`
+- an unconditional ordered-comparison flip for the ternary / guard-chain reductions (no type
+  resolver) → `!(a < b)` and `a >= b` differ under `null`, so `(s < t) ? false : a && b`
+  miscompiled for a null `s:String`; every consumer threads `typeNominalOf` — `f323e0f9`
+- `String` in `TOTAL_ORDER_TYPES` (no NaN, so the flip looked safe) → Haxe has no non-nullable
+  string type, so a declared `String` proves nothing about null and the flip is unsound; only a
+  string LITERAL is licensed — `26a571a6`
+- deleting the comprehension carve-out in `reflowSourceMultiline` to admit `ForReifExpr` as a
+  generator → fixed the reification fixture and broke a keep-wrapping one (net zero); the fix is
+  positional in the parser, which clears the stash newline after the open `[` — `3417bc83`
+- admitting `ForReifExpr` was said to need a depth-0 `=>` scan because the fork calls the
+  reification fixture a map LITERAL → the fork's `determinBkChildren` returns `Comprehension`
+  from its first-child loop before it scans for `=>`, and pads that very fixture — `ac425169`
+- a general expression-position ctor for the self-terminating `#if …; #end` raw shape → it
+  claimed a switch's guarded `case` region, which `HxConditionalCase` parses only because the
+  case-body statement Star FAILS there; the ctor requires a leading metadata Ref — `c808ed0b`
+- a Pratt-loop rewind for the dangling-operator `#if` splice → prefix and postfix do not live in
+  the loop, so an ATOM-level operand plus a `@:tryparse` Star rewind parses the run without
+  touching it — `76a7186c`
+- source-faithful (trivia-replay) layout for a token-splice operand run → one expression laid out
+  as many ways as the source spells it, with no break point on a flat source; the rule owns its
+  layout through `fillParts` — `c80010de`
+- an `import` arm on `HxCondDeclPrefix` so a `#if` region with dangling trailing metadata rides
+  `HxTopLevelDecl.meta` → the metadata Star is tried before the decl dispatch, so every
+  import-only region re-routes away from `HxConditionalDecl` and its blank-line cascades; a
+  trailing meta Star is additive instead — `07294564`
+- `padLeading` on the trailing-metadata Star of a conditional region → it fires on an EMPTY Star
+  too and inserts a blank line before `#end` in every module-level region; `padTrailing` alone —
+  `07294564`
+- `#else` / `#elseif` branches needed no trailing-metadata slot ("no observed source dangles
+  metadata off an alternative branch") → `#if macro <imports> #else @:autoBuild(...) #end
+  interface X {}` is valid Haxe the grammar rejected, and `cond-region-merge` proposes that form
+  — `b0050d10`
+- `@:trailOpt(';')` on `HxFnBody.CondBody` to absorb a `;` written outside the region → the two
+  trailers together make every `CondBody` source unparseable; the stray `;` stays a sibling
+  `EmptySemiMember` — `142b7bb2`
+- `bodyPolicyForCtor('CondBody', 'functionBody')` on `HxFnDecl.body` so a whole-body `#if` region
+  keeps its own-line placement → the policy defaults to `Next` and breaks the same-line sources
+  that round-trip today; it needs `Keep`-style source fidelity — `142b7bb2`
+- `condInit` placed AFTER `init` on `HxVarDecl` → it shifts the trivia slot the writer reads for
+  the blank line after a declaration and silently drops the blank after every `var x = try {...}
+  catch {...}`; it sits between `type` and `init` — `73c1b711`
+- the `expressionIfWithBrackets` hug folded into the layout policy inside `buildBodyCoreWrap`, one
+  level below the outer `Keep` switch → `sameLine.expressionIf: keep` got the two close seams and
+  not the open one; the hug keys on the policy VALUE at all three seams — `bd58ae13`
+- refusing the arrow-body value-`if` reflow on a captured comment in ONE direction only → the
+  chain rendered half re-flowed and half in policy shape; an `else`-spine walk covers members
+  below and `_arrowValueIfBlocked` members above — `42d03a31`
+- `loopBodyIfElseNext` gated on the `FitLine` LAYOUT alone → a config on `same` / `keep` could not
+  decline the defect the key names; the substitution sits on the policy VALUE — `7ec1a81a`
+- the fork's leading `lineLength >= 160` method-chain rule with a static width that descended into
+  `BodyGroup` content → fired for chains the renderer keeps flat (multi-line lambda bodies
+  inflated the total) and regressed the corpus; re-adopted once `chainItemLength` defers
+  BodyGroup content as `fitsFlat` does — `4e74819d`
+- `sameLine.expressionIf: next` mapped to `Keep` on `sameLineExpressionElse` as a stand-in for a
+  shape-aware dispatch → a value-`if` with a `{ … }` branch and a source break before `else`
+  kept that break forever while its statement twin joined to `} else {`; mapping it onto a plain
+  `Same` instead glues a bracket-closed branch (`[] else {`); `next` maps to `SameOnBlock`, which
+  is `Same` only after a CURLY close — `8e7b149e`
+- deriving the Haxe lexical-region scan from a full PARSE → refused permanently: the scan is
+  handed raw source with no promise it parses, and a parsed tree carries no node for a string
+  literal in a `#if` condition, a `#error` message or a quoted object key — an unmasked region
+  costs a refusal, a missed one costs a delete — `8867c7e7`
+- a writer-time `expressionWrapping` (paren) cascade at `WriterLowering`'s `isWrapShape` branch →
+  when `obj.y = (expr)` exceeds the width the outer `opAddSubChain` cascade commits its break
+  before the paren's probe runs, stacking two `Nest`s; needs a Doc-level "paren wrap first" order
+  (the fork's two-pass marker phase) — `35585070`
+- a lazy `#if`-region note in `fmt` (parse only the files `fmt` leaves unchanged, or only the ones
+  it rewrites) → on an already-canonical tree the first is the identity and the second deletes
+  the whole output; the second front end is the whole cost — `5c77e498`
+- asking the WRITER's own tree for the declined `#if` regions instead of a second parse → the
+  trivia parser's tree carries no spans and records nothing for a `@:rawString` terminal;
+  exposing the decline from there is a parser change — `daf1a095`
+- gating the comprehension cuddle on whether the BODY would break by itself under the glue → the
+  layout became non-monotone in width (one line, then the ladder, then the cuddle as the width
+  grows) because the closer's two columns and the pending space before `[` were outside the
+  measure; the body is forced down and only the head is asked — `6b314d7d`

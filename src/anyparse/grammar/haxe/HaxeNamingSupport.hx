@@ -42,8 +42,8 @@ final class HaxeNamingSupport implements NamingSupport {
 	 * The neutral modifier every member declaration of an INTERFACE carries. `HInterface` is a
 	 * `ClassFlag` exactly as `HExtern` is, and checkstyle reads both off the same `d.flags` of the
 	 * same `checkClassType` arm, so the interface question travels the selector machinery
-	 * `EXTERN_MOD` already opened rather than a type KIND on `NamedDecl` — the thing `98ff574c`
-	 * named as the change this adapter cannot make.
+	 * `EXTERN_MOD` already opened rather than a type KIND on `NamedDecl` — the change this
+	 * adapter cannot make.
 	 *
 	 * Only `MethodNameCheck` reads it: it returns on `d.flags.contains(HInterface)` before it looks
 	 * at a single field, while `MemberName` / `ConstantName` have no such arm and go on governing an
@@ -58,7 +58,7 @@ final class HaxeNamingSupport implements NamingSupport {
 	 *
 	 * STATED BOUNDARY, inherited from that same test: a member inside a conditional-compilation
 	 * region has the `Conditional` as its PARENT, so it is conferred neither modifier and a
-	 * `#if js function Bad_Method():Void; #end` inside an interface is still reported (measured).
+	 * `#if js function Bad_Method():Void; #end` inside an interface is still reported.
 	 * Closing it means threading the enclosing type down the walk as `enclosingExtern` is threaded,
 	 * which would move the `public` conferral too — a wider change than this arm, and one whose
 	 * blast radius reaches every rule that selects on visibility.
@@ -161,16 +161,16 @@ final class HaxeNamingSupport implements NamingSupport {
 	];
 
 	/**
-	 * The effective policy of each directory `policyFor` has already resolved, so an 851-file scope
-	 * walks up to `checkstyle.json`, reads it and builds its rules ONCE per directory instead of once
-	 * per file — measured at 851 disk walks, 851 JSON parses and 851 policy builds for one config.
+	 * The effective policy of each directory `policyFor` has already resolved, so a scope walks up
+	 * to `checkstyle.json`, reads it and builds its rules ONCE per directory instead of once per
+	 * file — one disk walk, one JSON parse and one policy build per config, not per file.
 	 *
 	 * RUN-SCOPED, and that is the whole of what makes it legitimate: `HaxeQueryPlugin.namingSupport()`
 	 * answers a NEW `HaxeNamingSupport` on every call, so this map's lifetime is one check invocation
 	 * and never the process's. A `static` here would be faster still and would be a REGRESSION —
-	 * `docs/design-principles.md` § 2 measures what process-scoped caches do to a parallel parse
-	 * (8 threads, 247 228 of 479 415 nodes, 132 failures, zero exceptions), and parallelism here is
-	 * PROCESSES, which a run-scoped field cannot corrupt.
+	 * `docs/design-principles.md` § 2 holds what process-scoped caches do to a parallel parse
+	 * (nodes silently lost, zero exceptions), and parallelism here is PROCESSES, which a
+	 * run-scoped field cannot corrupt.
 	 *
 	 * Keyed by DIRECTORY, not by file: `ConfigFinder.findUp` walks up from a file's own directory, so
 	 * two files sharing one resolve to the same config by construction. Two spellings of one directory
@@ -311,10 +311,10 @@ final class HaxeNamingSupport implements NamingSupport {
 		// checkstyle's `ignoreExtern` defaults to TRUE and every `NameCheckBase` check honours it. The
 		// built-in convention has no config to state that in, so it states it here — once, over every
 		// rule, rather than as a literal in each, where the rule added next is the one that forgets.
-		// A member of an `extern` type is named by the contract that type binds to: measured on this
-		// tree before the gate landed, `lint --fix --rule naming` rewrote `var Bad_Field:Int;` inside
-		// an `extern class` to `var _badField:Int;`, which changes WHICH external symbol the program
-		// reads and which no compiler oracle can catch.
+		// A member of an `extern` type is named by the contract that type binds to: without the gate
+		// `lint --fix --rule naming` rewrote `var Bad_Field:Int;` inside an `extern class` to
+		// `var _badField:Int;`, which changes WHICH external symbol the program reads and which no
+		// compiler oracle can catch.
 		for (rule in policy) rule.forbidMods.push(EXTERN_MOD);
 		return policy;
 	}

@@ -365,7 +365,7 @@ final class SweepCommand implements CliCommand {
 	 *
 	 * `bin/.prev-sweep.json` is not a baseline anybody chose: the corpus harness overwrites
 	 * it with the preceding run's snapshot before every write. So `--diff` with no path
-	 * compares the last TWO runs of this tree — and when both of them ran after the edit
+	 * compares the last TWO runs of the same tree — and when both of them ran after the edit
 	 * under test, which is the whole of a fresh worktree's history, 0 is the only answer it
 	 * can give. That line has been quoted as a slice gate; it is not one, and a gate that
 	 * cannot fail has to say so rather than print a pass.

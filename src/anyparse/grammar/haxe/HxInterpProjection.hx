@@ -9,43 +9,36 @@ using Lambda;
 /**
  * Re-projects the interpolation a `Literal` string fragment HIDES.
  *
- * `HxStringLitSegment` matches a run of plain characters and escapes, stopping
- * only at a RAW `$` — deliberately, because `@:rawString` keeps the author's
- * spelling for the writer. But Haxe decodes escapes BEFORE it scans a
- * single-quoted literal for interpolation, so `'\x24a'` is a read of the local
- * `a`, `'\x24{a}'` is `${a}`, and `'\x24\x24a'` is the escaped-dollar text `$a`
- * (see `HxStringEscape`). The parser sees ONE `Literal` in each case, and every
- * consumer reading that tree — the `unused-local` / `dead-store` /
- * `no-underscore-prefix` reference scans through `RefShape.stringInterpIdentKind`,
- * `StringFoldSupport.literalOf`'s "is this a PLAIN literal" answer, `rename`'s
- * interpolation-read blind-spot refusal — inherits the blindness. `unused-local`
- * measurably DELETED a local read only through such a literal.
+ * `HxStringLitSegment` matches a run of plain characters and escapes, stopping only at a RAW
+ * `$` — deliberately, because `@:rawString` keeps the author's spelling for the writer. But
+ * Haxe decodes escapes BEFORE it scans a single-quoted literal for interpolation, so
+ * `'\x24a'` is a read of the local `a`, `'\x24{a}'` is `${a}`, and `'\x24\x24a'` is the
+ * escaped-dollar text `$a` (see `HxStringEscape`). The parser sees ONE `Literal` in each
+ * case, and every consumer reading that tree — the reference scans through
+ * `RefShape.stringInterpIdentKind`, `StringFoldSupport.literalOf`'s "is this a PLAIN
+ * literal" answer, `rename`'s interpolation-read blind-spot refusal — inherits the
+ * blindness; `unused-local` DELETED a local read only through such a literal.
  *
- * The fix belongs here rather than in each of those scans: one pass over the
- * query tree splits such a `Literal` into the segments the compiler sees, using
- * the SAME node kinds and span convention the parser emits for the raw spelling
- * (`Ident` spanning `$name`, `Dollar` spanning `$$`, `LoneDollar`, `Block`
- * spanning `${ … }`), so nothing downstream needs to learn a new shape.
- *
- * Spans stay RAW-source offsets throughout: a synthesized node covers the bytes
- * that SPELL it, so `--at`, `rename` and every span-driven edit address real
- * source. Only the query tree is rewritten — the writer runs off the parse AST,
- * which is untouched, so formatting stays byte-exact.
+ * The fix belongs here rather than in each of those scans: one pass over the query tree
+ * splits such a `Literal` into the segments the compiler sees, using the SAME node kinds and
+ * span convention the parser emits for the raw spelling (`Ident` spanning `$name`, `Dollar`
+ * spanning `$$`, `LoneDollar`, `Block` spanning `${ … }`), so nothing downstream needs to
+ * learn a new shape. Spans stay RAW-source offsets throughout: a synthesized node covers the
+ * bytes that SPELL it, so `--at`, `rename` and every span-driven edit address real source.
+ * Only the query tree is rewritten — the writer runs off the untouched parse AST.
  *
  * ## What is NOT modelled
  *
  * A `${ … }` the rescan DISCOVERS — one the parser did not, because its `$` was
- * escape-spelled — carries no child expression: reconstructing one would mean
- * parsing text that does not exist contiguously in the source (the braces may
- * themselves be escape-spelled) and inventing spans for it. Childless is the
- * honest shape, and it is the REFUSING one for the two seams that ask about
- * literal content: `literalOf` and `segmentsOf` both reject a literal holding a
- * `Block`, so no fold or requote is built on a block anyparse cannot read.
- * Identifiers inside such a block stay invisible to reference scans, and `rename`
- * — which consults neither seam and looks only for `Ident` — does not refuse for
- * them either; that gap predates this pass and is not narrowed by it. A block the
- * parser DID read keeps its subtree: the rescan reuses the parser's node whenever
- * the spans agree, which is every raw `${ … }` in the literal.
+ * escape-spelled — carries no child expression: reconstructing one would mean parsing text
+ * that does not exist contiguously in the source (the braces may themselves be
+ * escape-spelled) and inventing spans for it. Childless is the honest shape, and it is the
+ * REFUSING one for the two seams that ask about literal content: `literalOf` and
+ * `segmentsOf` both reject a literal holding a `Block`, so no fold or requote is built on a
+ * block anyparse cannot read. Identifiers inside such a block stay invisible to reference
+ * scans, and `rename` — which consults neither seam and looks only for `Ident` — does not
+ * refuse for them either; that gap predates this pass. A block the parser DID read keeps its
+ * subtree: the rescan reuses the parser's node whenever the spans agree.
  */
 @:nullSafety(Strict)
 final class HxInterpProjection {

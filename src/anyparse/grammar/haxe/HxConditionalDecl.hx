@@ -1,125 +1,44 @@
 package anyparse.grammar.haxe;
 
 /**
- * Body of a `#if <cond> <decls> [#else <decls>] #end` preprocessor-
- * guarded module-level region. Mirror of `HxConditionalMod` at the
- * top-level declaration scope: the enclosing `HxDecl.Conditional` ctor
- * consumes the `#if` keyword and the trailing `#end`; this typedef
- * covers the content between them — the condition atom, the then-body
- * Star of further declarations, and an optional `#else` clause with
- * its own decl Star.
+ * Body of a `#if <cond> <decls> [#elseif <cond> <decls>]* [#else <decls>] #end`
+ * preprocessor-guarded module-level region: the enclosing `HxDecl.Conditional` ctor
+ * consumes the `#if` keyword and the trailing `#end`; this typedef covers the content between.
  *
- * Element type is `HxTopLevelDecl` (not bare `HxDecl`) so leading
- * metadata + modifiers inside the conditional region parse uniformly:
- * `#if cond @:meta private class Foo {} #end` works through the same
- * meta + modifier Stars used at module top level. The body's
- * `@:tryparse` Star terminates when the next token isn't a recognised
- * `HxTopLevelDecl` start — `#else` and `#end` fail every modifier and
- * decl-keyword dispatch path, so the loop naturally stops there.
+ * Element type is `HxTopLevelDecl` (not bare `HxDecl`) so leading metadata + modifiers
+ * inside the region parse uniformly through the same meta + modifier Stars used at module
+ * top level. The body's `@:tryparse` Star terminates when the next token is not a recognised
+ * `HxTopLevelDecl` start — `#elseif`, `#else` and `#end` fail every modifier and decl-keyword
+ * dispatch path. Nested `#if` is supported transitively through `HxDecl.Conditional`.
+ * `elseifs:Array<HxElseifDecl>` sits between `body` and `elseBody`, each clause carrying the
+ * `#elseif` keyword on its first field's metadata (`HxCatchClause` precedent); the position
+ * before `elseBody` is mandatory so the clause loop terminates before the optional `#else`.
+ * `@:optional @:kw('#else') @:tryparse var elseBody` uses the kw-led optional Star path
+ * (`emitOptionalKwStarFieldSteps`): `#else` is the commit point, a miss leaves `null`.
  *
- * Nested `#if` is supported transitively through the body re-entering
- * `HxDecl.Conditional` via the dispatch enum's `@:kw('#if')` ctor.
+ * Writer-side output mirrors `HxConditionalMod`: `@:fmt(padLeading, padTrailing,
+ * conditionalBodyIndent)` on `body` and `elseBody` adds a leading + trailing pad around each
+ * Star when non-empty, closing the `#if`/`#else`/`#end` boundary gaps; the pads switch from
+ * a space to a hardline when the first body element's `newlineBefore` slot is set. Both
+ * Stars also opt into the inter-element blank-line cascade of `HxModule.decls`
+ * (`blankLinesBetweenSameCtorByLevel`, `blankLinesOnTransitionAcross`, plus the head/tail
+ * transparent-wrapper pair so a nested `#if … #end` still routes through the leaf
+ * classifier), so `betweenImports` fires inside a `#if php` body too.
  *
- * `#elseif` chained-clause support landed in slice ω-cond-comp-elseif:
- * `elseifs:Array<HxElseifDecl>` Star sits between `body` and `elseBody`.
- * Each clause is a `HxElseifDecl` typedef carrying the `#elseif`
- * keyword on its first field's metadata (HxCatchClause precedent), so
- * the Star's `@:tryparse` loop dispatches per-iteration and naturally
- * terminates when the next token isn't `#elseif`. Empty Star degrades
- * to `_de()` (no output). Position before `elseBody` is mandatory so
- * the clause loop fully terminates before the optional `#else`.
- *
- * Writer-side output mirrors `HxConditionalMod`: the
- * `@:fmt(padLeading, padTrailing, conditionalBodyIndent)` flag pair on `body` and `elseBody`
- * adds a leading + trailing pad around each Star when non-empty,
- * closing the `#if`/`#else`/`#end` boundary gaps that the default
- * internal-only sep leaves glued. The pads switch from a literal space
- * to a hardline when the first body element's `newlineBefore` slot is
- * set (captured via `@:trivia`), reproducing the multi-line shape the
- * fork's import fixtures exercise (`#if php\nimport php.Lib;\n#end`).
- *
- * Slice ω-bug-2c-inner-star opted `body` and `elseBody` into the
- * inter-element blank-line cascade (mirror of `HxModule.decls`):
- * `blankLinesBetweenSameCtorByLevel` for adjacent imports / usings,
- * `blankLinesOnTransitionAcross` for the import↔using boundary, plus
- * the head/tail transparent-wrapper meta pair so a nested `#if … #end`
- * inside the body still routes through the leaf classifier. Drives
- * fork's `imports_and_using_all` fixture — between two `import …;`
- * decls inside a `#if php` body, fork's `betweenImports=1 +
- * betweenImportsLevel=all` config now fires the same blank-line
- * override anyparse's top-level Star already honored.
- *
- * `trailingMeta` captures metadata left DANGLING at the end of the region
- * - tags that belong to the declaration AFTER `#end`, written inside
- * the guard so they apply only under the condition. Two lime modules
- * need it:
- *
- * ```haxe
- * #if (lime_cffi && !macro)
- * import lime._internal.backend.native.NativeCFFI;
- *
- * @:access(lime._internal.backend.native.NativeCFFI)
- * #end
- * @:access(haxe.io.Bytes)
- * abstract DataPointer(DataPointerType) to DataPointerType
- * ```
- *
- * (`lime/utils/DataPointer.hx`, `lime/tools/HXProject.hx`.)
- *
- * Without the slot the `body` Star's last iteration parses the `@:access`
- * into a `HxTopLevelDecl.meta` prefix, then fails on the mandatory
- * `decl` field when it reaches `#end`, rewinds, and leaves the metadata
- * unconsumed in front of the outer `@:trail('#end')`.
- *
- * The obvious alternative was to widen `HxCondDeclPrefix` with an
- * `import` arm so the WHOLE region rides `HxTopLevelDecl.meta` as a
- * `HxMetadata.Conditional` - the routing trick that arm's doc already
- * describes for `#if (haxe_ver >= 4.0) enum #else @:enum #end`. It was
- * implemented, measured, and rejected: the metadata Star is tried
- * BEFORE the decl dispatch, so an `import` arm makes the meta path win
- * for import-ONLY regions too, re-routing the 25 fork fixtures that
- * put an `import` inside a `#if` (`emptylines/imports_and_using_*`,
- * `emptylines/issue_49_imports_with_conditional`,
- * `sameline/issue_504_conditional_import`, ...) away from this typedef
- * and its blank-line cascades. A trailing Star here is strictly
- * additive: it is empty for every shape that parsed before, so no
- * existing routing moves.
- *
- * It carries `@:fmt(padTrailing)` and NOT `padLeading`. The pad pair is
- * documented as firing only when the Star is non-empty; measured, the
- * leading pad fires on an EMPTY Star as well and inserted a blank line
- * before `#end` in every module-level `#if` region in a real project
- * tree (50 files of `hxq fmt --list` drift, none of them related to
- * dangling metadata). `padTrailing` alone closes the gap before `#end`
- * without that side effect. The gap between the last body decl and the
- * metadata is left to `body`'s own `padTrailing`, which costs the blank
- * line the source had there - a byte-fidelity gap, not a parse or
- * re-parse one: the emitted form round-trips through the parser
- * unchanged.
- *
- * `#else` and `#elseif` now carry the same slot (`elseTrailingMeta` here,
- * `trailingMeta` on `HxElseifDecl`). The claim they did not need one — "no observed
- * source dangles metadata off an alternative branch" — was only true until one did:
- * `#if macro <imports> #else @:autoBuild(...) #end interface X {}` is valid Haxe that
- * this grammar rejected outright, because the `#if` branch committed the region to
- * this production and the alternative branch then had nowhere to put the metadata.
- * It is also what `cond-region-merge` proposes for the two-region form, so the check
- * had a finding it could never apply.
- *
- * LAYOUT WART on one shape: when the alternative branch holds ONLY metadata (an empty
- * body Star), the close renders as `@:keep #end` on one line rather than on its own.
- * The result is valid, re-parses, and is a fixed point, so the canonical gate holds —
- * but `padTrailing` on the meta Star takes its newline signal from a non-empty
- * preceding body, and there is none here.
- *
- * `@:optional @:kw('#else') @:tryparse var elseBody:Null<Array<…>>`
- * uses the kw-led optional Star path (Lowering's
- * `emitOptionalKwStarFieldSteps`, slice ω-cond-comp-engine). The path
- * splices the kw-Ref commit machinery with the tryparse Star loop —
- * `#else` is the commit point, miss leaves the field `null` so the
- * writer skips the entire clause. Direct path eliminates the
- * pre-engine-slice Ref-wrapper companion typedef (one extra fn frame
- * + wrapper struct alloc per `#else` hit + extra paired `*T` synth).
+ * `trailingMeta` captures metadata left DANGLING at the end of the region — tags that
+ * belong to the declaration AFTER `#end`, written inside the guard so they apply only under
+ * the condition (`#if lime_cffi import …; @:access(NativeCFFI) #end @:access(Bytes) abstract
+ * D(…)`). Without the slot the `body` Star's last iteration parses the `@:access` into a
+ * `HxTopLevelDecl.meta` prefix, fails on the mandatory `decl` field at `#end`, rewinds, and
+ * leaves the metadata unconsumed in front of the outer `@:trail('#end')`. A trailing Star is
+ * strictly additive — empty for every shape that parsed before; widening `HxCondDeclPrefix`
+ * with an `import` arm instead would let the metadata Star (tried BEFORE the decl dispatch)
+ * claim every import-ONLY region and strip it of these cascades. It carries
+ * `@:fmt(padTrailing)` and NOT `padLeading`: the leading pad fires on an EMPTY Star and
+ * would insert a blank line before `#end` in every module-level region. `#else` / `#elseif`
+ * carry the same slot (`elseTrailingMeta`, `HxElseifDecl.trailingMeta`): `#if macro <imports>
+ * #else @:autoBuild(...) #end interface X {}` is valid Haxe. LAYOUT WART: an alternative
+ * branch holding ONLY metadata renders `@:keep #end` on one line.
  */
 @:peg
 typedef HxConditionalDecl = {
