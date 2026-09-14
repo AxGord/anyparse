@@ -375,12 +375,7 @@ final class CheckScan {
 	 * property getter behind a plain field read.
 	 */
 	public static function mutationKinds(shape: RefShape): Array<String> {
-		final kinds: Array<String> = shape.writeParentKinds.copy();
-		final callKind: Null<String> = shape.callKind;
-		if (callKind != null) kinds.push(callKind);
-		final newExprKind: Null<String> = shape.newExprKind;
-		if (newExprKind != null) kinds.push(newExprKind);
-		return kinds;
+		return shape.writeParentKinds.concat(MemberKinds.invocationKinds(shape));
 	}
 
 	/**

@@ -55,7 +55,7 @@ final class MemberInitDeps {
 	 * shared by the report path, which resolves no per-file config.
 	 */
 	public static function blockInitInert(block: Array<OrderedMember>, all: Array<OrderedMember>, shape: RefShape, source: String): Bool {
-		final unsafe: Array<String> = unsafeInitKinds(shape);
+		final unsafe: Array<String> = CheckScan.mutationKinds(shape);
 		for (m in block) {
 			final init: Null<QueryNode> = m.initNode;
 			if (!m.isField || init == null) continue;
@@ -99,7 +99,7 @@ final class MemberInitDeps {
 		final out: Array<InitOrderConstraint> = [
 			for (m in members) for (g in members) if (initReadsSibling(m, g, source)) constraintOf(m, g, SiblingRead)
 		];
-		final unsafe: Array<String> = unsafeInitKinds(shape);
+		final unsafe: Array<String> = CheckScan.mutationKinds(shape);
 		final fields: Array<OrderedMember> = [for (m in members) if (m.isField) m];
 		for (f in fields)
 			if (sideEffecting(f, unsafe, shape, source, movableArglessNew))
@@ -170,17 +170,6 @@ final class MemberInitDeps {
 		if (newExprKind == null || init.kind != newExprKind) return false;
 		final span: Null<Span> = init.span;
 		return span != null && source.substring(span.from, span.to).rtrim().endsWith('()');
-	}
-
-	/**
-	 * The node kinds whose presence in a field initializer makes its position observable - an assignment, a call, an allocation. One
-	 * list, two consumers (`orderConstraints` and `blockInitInert`), so the pair constraint and the block gate cannot drift apart.
-	 */
-	private static function unsafeInitKinds(shape: RefShape): Array<String> {
-		final kinds: Array<String> = shape.writeParentKinds.copy();
-		if (shape.callKind != null) kinds.push(shape.callKind);
-		if (shape.newExprKind != null) kinds.push(shape.newExprKind);
-		return kinds;
 	}
 
 	/** Whether `node`'s subtree contains a node of any kind in `kinds`. */
