@@ -9,8 +9,8 @@ import utest.Test;
  * haxe-formatter fork. The body's opening `{` is the head of a `BodyGroup` that
  * every static width measure defers to width 0, so the flat width used for the
  * `functionSignature` exceedsMaxLineLength wrap decision came up one column
- * short: a 141-column signature measured as 140 and stayed hugged (over the
- * limit) instead of opening. The `{` must count toward the signature line width.
+ * short: a signature one column past the limit read as exactly the limit and stayed hugged
+ * (over the limit) instead of opening. The `{` must count toward the signature line width.
  * Guard: a signature at EXACTLY the limit (140) stays on one line. Identifiers
  * are synthetic and bear no relation to any downstream code.
  */

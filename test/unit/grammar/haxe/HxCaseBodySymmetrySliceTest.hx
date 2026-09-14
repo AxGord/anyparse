@@ -9,81 +9,42 @@ import utest.Test;
 /**
  * ω-case-sibling-symmetry — per-SWITCH placement for `FitLine` case bodies.
  *
- * T16 decided each case body on its own, so one body that landed below its
- * label left its short siblings inline. The result reads as an accident of
- * measurement rather than a shape the author chose. This slice makes the
- * decision per switch: if ANY case body renders on the line(s) BELOW its
- * label, every sibling body goes below its label too. If none does, the
- * output is byte-for-byte what T16 produced.
+ * Deciding each case body on its own left one body below its label and its short siblings
+ * inline, a shape that reads as an accident. The decision is per switch: if ANY case body
+ * renders on the line(s) BELOW its label, every sibling body goes below its label too; if
+ * none does, the output is byte-for-byte what per-body placement produced.
  *
- * MECHANISM, and why it is split across emitter and renderer: the emitter
- * knows every sibling's shape and FLAT width but not the indent; the
- * renderer knows the indent but never sees the sibling set. The cases
- * Star's `@:fmt(caseSiblingSymmetry(...))` pre-pass hands ONE number to
- * every sibling body and `BodyFit` turns it into an `IfIndentWidthExceeds`
- * probe. Since all siblings render at the same indent and receive the same
- * number, they cannot disagree.
+ * The split between emitter and renderer is what the fixtures probe: the emitter knows every
+ * sibling's shape and FLAT width but not the indent, the renderer knows the indent but never
+ * sees the sibling set, so the cases Star's `@:fmt(caseSiblingSymmetry(...))` pre-pass hands
+ * ONE number to every sibling body and `BodyFit` turns it into an `IfIndentWidthExceeds`
+ * probe. Since all siblings render at the same indent and receive the same number, they
+ * cannot disagree.
  *
- * WHAT COUNTS AS A TRIGGER — any unit that is below its label, by either of
- * two channels.
+ * What counts as a trigger is the construct's own contract
+ * (`HxCasePredLowering.caseUnitStructuralBreakField` and the `BodyFit` docs); the fixtures
+ * here pin each channel. A multi-statement, refused (`&&` / `||` outermost) or
+ * `CondSpliceCase` body leads STRUCTURALLY, with no width read at all; the widest unit's flat
+ * width is the fallback channel. An empty body, a GLUED body (block / lambda / `{`-opening
+ * value, whose first line shares the label line) and a body refused by a COMMENT never lead,
+ * though a glued body still moves under someone else's trigger. A glue the width gate turns
+ * into a break at the live pen column is the known residual, pinned by
+ * `HxGlueWidthSliceTest.testGlueTurnedBreakIsNotASiblingSymmetryTrigger`.
  *
- * STRUCTURAL, decided without measuring anything
- * (`caseUnitStructuralBreak_HxSwitchCase`):
- *  - a MULTI-STATEMENT body — two or more statements cannot share the label
- *    line at any budget;
- *  - a REFUSED body — one statement whose outermost expression is `&&` or
- *    `||`, which `refuseFlatOnComplexExpr` refuses inline;
- *  - a `CondSpliceCase` region — the body it shares after `#end` is
- *    mandatory and renders below the labels it was split from at every
- *    budget.
- * The pre-pass substitutes `BodyFit.SIBLING_FORCE_BREAK` on the first such
- * unit and skips the width measurement entirely.
+ * A `#if`-GUARDED CASE REGION IS NOT ONE ELEMENT (ω-if-leader-case-symmetry): whole, it
+ * always answers `-1` — its Doc carries the directive hardlines — so it could FOLLOW a
+ * sibling's break and never LEAD one. The Star's generated `caseSiblingUnits_HxSwitchCase`
+ * flattener expands the region into the inner case ELEMENTS of every branch (the maximum
+ * across the alternatives is the conservative trigger) and each is judged on the terms above.
+ * `CondSpliceCase` (byte-verbatim labels, still LEADS as one structural unit) and a
+ * pattern-scope conditional (`case #if js "a" #else "b" #end:`, a plain `CaseBranch`) stay
+ * whole; `HxCondSpliceSwitchOpen.cases` is opted in like a switch, while
+ * `HxConditionalCase.body` / `elseBody` and `HxElseifCase.body` are deliberately NOT, so the
+ * enclosing switch's verdict flows into the region instead of a per-region pre-pass
+ * overwriting it.
  *
- * WIDTH, the original channel and now the fallback: the widest unit's flat
- * width does not fit at the switch's indent — or some unit measures `-1`
- * AND holds a single keyword-led control-flow statement, which
- * `BodyFit.fitLineLayout` refuses the glue, so it renders below its own
- * label (`HxCaseBodyControlFlowGlueTest`).
- *
- * NOT triggers, and each for its own reason:
- *  - an EMPTY body (`case X:` with no statements) — there is no body to
- *    place below the label, and a forced break would have nothing to move;
- *  - a GLUED body (a block / lambda / `{`-opening value) — its FIRST line
- *    SHARES the label line, so it is not a below-label placement. It still
- *    MOVES under someone else's trigger; it just never leads. An all-glued
- *    comparator table therefore stays glued;
- *  - a glue that the width gate turns into a break. That verdict is reached
- *    at the LIVE PEN COLUMN, which no emitter-side walk can see, so the
- *    pre-pass never learns of it. The known residual, pinned by
- *    `HxGlueWidthSliceTest.testGlueTurnedBreakIsNotASiblingSymmetryTrigger`;
- *  - a body refused by a COMMENT (a leading comment on the body's
- *    first statement, or a trailing comment captured on the label — an
- *    ORPHAN trailing comment in the body stopped refusing at
- *    omega-case-trail-comment-inline, see
- *    `HxCaseBodyTrailCommentInlineTest`). Those live in trivia slots the structural
- *    predicate cannot read without answering differently per AST family —
- *    see `HxCasePredLowering.caseUnitStructuralBreakField`.
- *
- * A `#if`-GUARDED CASE REGION IS NOT ONE ELEMENT (ω-if-leader-case-symmetry).
- * Measured whole it always answers `-1` — its Doc carries the directive
- * hardlines — so it could FOLLOW a sibling's break and never LEAD one. The
- * Star's generated `caseSiblingUnits_HxSwitchCase` flattener expands the
- * region into the inner case ELEMENTS of every branch (`#if` / `#elseif` /
- * `#else` are alternatives, so the maximum across them is the conservative
- * trigger) and each is judged on the terms above — by width AND by shape, so
- * a multi-statement case inside a region leads too. Two shapes stay whole:
- * `CondSpliceCase`, whose labels are byte-verbatim so it has no inner case
- * list (it still LEADS, as ONE unit and structurally — the body it shares
- * after `#end` is always below those labels), and a pattern-scope
- * conditional (`case #if js "a" #else "b" #end:`), which is a plain
- * `CaseBranch` that already measures flat.
- * `HxCondSpliceSwitchOpen.cases` is opted in for the same reason a switch is;
- * `HxConditionalCase.body` / `elseBody` and `HxElseifCase.body` are
- * deliberately NOT, so the enclosing switch's verdict flows into the region
- * instead of a per-region pre-pass overwriting it.
- *
- * Per `feedback_unit_test_trivia_writer.md`: the knobs are visible only
- * through `HaxeModuleTriviaParser` / `HaxeModuleTriviaWriter`.
+ * Per `feedback_unit_test_trivia_writer.md`: the knobs are visible only through
+ * `HaxeModuleTriviaParser` / `HaxeModuleTriviaWriter`.
  */
 @:nullSafety(Strict)
 final class HxCaseBodySymmetrySliceTest extends Test {
@@ -193,7 +154,7 @@ final class HxCaseBodySymmetrySliceTest extends Test {
 
 	public function testTriggerFlipsAtTheWidestSiblingsBoundary(): Void {
 		// Both halves in one test: the break half alone does not
-		// discriminate (a narrower budget breaks under T16 too).
+		// discriminate (a narrower budget breaks under per-body placement too).
 		final fits: String = write(MIXED_SRC, json(40));
 		Assert.isTrue(
 			fits.indexOf('case 2: cc(ddddddddddddddd);') != -1, 'exactly maxLineLength on the WIDEST sibling stays inline: <$fits>'
@@ -371,9 +332,9 @@ final class HxCaseBodySymmetrySliceTest extends Test {
 		// BOTH branches, so a switch nested d deep used to cost 2^d — twice
 		// over: once in writer invocations (the pre-pass re-entered nested
 		// pre-passes) and once in Doc-walk node visits (`CollapsePass` and its
-		// two both-branch siblings descended break AND flat). Measured on the
-		// shape below: depth 15 took 6.0s and depth 17 took 23.4s before the
-		// fix, 0.13s after — flat with the knobs off.
+		// two both-branch siblings descended break AND flat). On the shape
+		// below the cost grew by seconds per depth step before the fix and is
+		// flat after — with the knobs off.
 		// utest has no timing assertion, so this pins the OUTPUT only —
 		// correct and idempotent at a depth that used to cost seconds. On the
 		// pre-fix engine this very fixture still PASSED, just slowly, so the
@@ -390,8 +351,8 @@ final class HxCaseBodySymmetrySliceTest extends Test {
 
 	/**
 	 * Probe1 shape: the only over-wide body sits inside a `#if` region.
-	 * Measured whole, the region's Doc carries directive hardlines and
-	 * answers `-1`, so before this slice it could only FOLLOW a sibling's
+	 * Whole, the region's Doc carries directive hardlines and answers
+	 * `-1`, so before this slice it could only FOLLOW a sibling's
 	 * break — the switch kept the mixed shape. The flattener measures the
 	 * region's inner case ELEMENT instead, so it now LEADS: all three
 	 * bodies drop below their labels.
@@ -460,7 +421,7 @@ final class HxCaseBodySymmetrySliceTest extends Test {
 	 * line is 60+ columns and would read as an enormous width.
 	 *
 	 * A guard, NOT a discriminator — byte-identical on the pre-slice
-	 * engine, which measured the whole region as `-1` anyway.
+	 * engine, which read the whole region as `-1` anyway.
 	 */
 	public function testGlueInsideARegionIsNotATrigger(): Void {
 		final out: String = write(GLUED_REGION_SRC, json(140));

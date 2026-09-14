@@ -14,7 +14,7 @@ import utest.Test;
  * own cuddled head. The `CFG_OFF` arm differs from `CFG_ON` in that one key, so an arm
  * that hard-wires the hug on fails against it. `CFG_KEEP_ON` / `CFG_KEEP_OFF`
  * are the same pair under the third body placement, `sameLine.expressionIf:
- * keep` — the one the knob was blind to until S154, because its OPEN seam sat
+ * keep` — the one the knob was blind to for a while, because its OPEN seam sat
  * inside a policy switch the `Keep` arm bypasses while its two CLOSE seams read
  * the flag alone.
  *
@@ -25,8 +25,7 @@ import utest.Test;
  *
  * The expected strings are NOT derived from the grammar that generates the
  * writer — they were typed from the user's own statement of the rule and then
- * confirmed byte-for-byte, which is what makes them able to kill an arm (the
- * S66 lesson about a pin built from the declaration it tests).
+ * confirmed byte-for-byte, which is what makes them able to kill an arm (the lesson about a pin built from the declaration it tests).
  *
  * `testTheFlatComprehensionStaysOnOneLine` is the flat clause of the rule and
  * answers the same under both configs: a comprehension that renders flat keeps
@@ -144,7 +143,7 @@ final class HxValueIfBracketHugSliceTest extends Test {
 		+ '\t\t\ttraceSomethingHere(1);\n\t\t\t1;\n\t\t};\n\t\telse {\n\t\t\ttraceSomethingHere(2);\n\t\t\t2;\n' + '\t\t}\n\t}\n}';
 
 	/**
-	 * What S100 makes of `BLOCK_SEMI` under either config: the curly close joins its `else` and the
+	 * What ω-same-on-block makes of `BLOCK_SEMI` under either config: the curly close joins its `else` and the
 	 * optional `;` goes with the break it justified — `sameLine.expressionIf: next` now means
 	 * `SameOnBlock` for the gap, and the bracket knob is not what decides it.
 	 */
@@ -229,13 +228,13 @@ final class HxValueIfBracketHugSliceTest extends Test {
 
 	/**
 	 * The knob is keyed on the `[` ctor, so a BLOCK-valued branch answers the same under BOTH configs —
-	 * which is still what this pin measures. S100 changed WHAT that answer is: the curly close side became
-	 * `SameLinePolicy.SameOnBlock`, fanned out of `sameLine.expressionIf: next` (which both configs here
-	 * set), so the `};` and the break now go the way the statement twin has always gone. The S79 note that
-	 * this twin "would be a new behaviour with no corpus consumer" was true at `56a7f2a8` and is not any
-	 * more: the user reported the shape off a swept Pony tree, 5 files carry it there and 1 here.
+	 * which is still what this pin measures. ω-same-on-block changed WHAT that answer is: the curly close
+	 * side became `SameLinePolicy.SameOnBlock`, fanned out of `sameLine.expressionIf: next` (which both
+	 * configs here set), so the `};` and the break now go the way the statement twin has always gone. The
+	 * earlier note that this twin "would be a new behaviour with no corpus consumer" was true then and is
+	 * not any more: the user reported the shape off a swept Pony tree, and files there and here carry it.
 	 * `expressionIfWithBlocks` is still not the seam — it collapses a block body's CONTENTS and hugs
-	 * nothing, on either side of S100.
+	 * nothing, on either side of that change.
 	 */
 	public function testABlockValuedBranchIsUntouchedByTheBracketKnob(): Void {
 		Assert.equals(BLOCK_JOINED, HxWriteFixture.triviaWrite(BLOCK_SEMI, CFG_ON));
@@ -252,7 +251,7 @@ final class HxValueIfBracketHugSliceTest extends Test {
 	 * The whole rule under `sameLine.expressionIf: keep`, on a source where neither half is already
 	 * there: the `[` comes up to the branch head AND the `];` / `else` break closes to `] else [];`.
 	 * One string carries both halves, so an engine that fixes only the close still fails it — which is
-	 * exactly what the pre-S154 engine did here, dropping the `;` and cuddling the `else` while leaving
+	 * exactly what the earlier engine did here, dropping the `;` and cuddling the `else` while leaving
 	 * the `[` on its own line. `keep` decides the layout POLICY, never whether an explicit knob applies.
 	 */
 	@:pin('control')

@@ -16,61 +16,37 @@ import utest.Test;
  * Before this slice both knobs understood only `Same` / `Keep` / `Next`:
  * the runtime `_flatCase` gate answered a BOOLEAN "flatten now?", so
  * `FitLine` matched no arm and degenerated to `Next` — every body broke,
- * including bodies that trivially fit. The slice adds the sibling
- * `_fitCase` gate, which hands the body to
- * `anyparse.format.BodyFit.fitLineLayout` — the one emitter that also
- * serves `WriterLowering.buildBodyFitExpr`'s bare-Ref `FitLine` bodies
- * (`return` / `if` / `for`).
+ * including bodies that trivially fit. The sibling `_fitCase` gate hands
+ * the body to `anyparse.format.BodyFit.fitLineLayout`, the emitter that
+ * also serves `WriterLowering.buildBodyFitExpr`'s bare-Ref `FitLine` bodies.
  *
- * TWO OUTCOMES, and which one applies is NOT a width question:
+ * TWO OUTCOMES, and which one applies is NOT a width question. A body that
+ * can render on one line (`WrapList.flatLength >= 0`) becomes
+ * `BodyGroup(Nest(cols, [Line, body]))` and the renderer's `fitsFlat`
+ * decides from the live column plus the flat width of ` <body>` with its
+ * `;` and any folded trailing comment. A body that cannot (a block, a wrap
+ * cascade that refuses one line, a source-multi-line literal) GLUES to the
+ * label, the same shape `Same` gives. The flat-length question is asked
+ * FIRST, and that ordering is the whole idempotence story: `Renderer.fitsFlat`
+ * DEFERS a nested `BodyGroup` while `WrapList.flatLength` DESCENDS one, and
+ * only source-multi-line literals are wrapped in a `BodyGroup` — so asking
+ * width first answered differently for two source shapes of ONE AST and
+ * `fmt` needed a second pass (the 3-pass and two-source-shapes fixtures).
  *
- *  - The body can render on one line (`WrapList.flatLength >= 0`, i.e. no
- *    hardline anywhere in its Doc) → `BodyGroup(Nest(cols, [Line, body]))`,
- *    and the renderer's `fitsFlat` decides from the live column (the
- *    `case <patterns>:` header is already emitted) plus the flat width of
- *    ` <body>` including its `;` and any folded trailing comment.
- *  - The body cannot (a block, a wrap cascade that refuses one line, a
- *    source-multi-line literal the emitter keeps broken) → it GLUES to the
- *    label, the same shape `Same` gives, with no measurement at all.
+ * BOUNDARY CONTRACT: on the fit outcome a case line of exactly
+ * `maxLineLength` columns stays inline and one column more breaks (`Group`
+ * fit is `<= lineWidth`; no `width + 1` calibration). The GLUE outcome got
+ * its own width answer from ω-glue-width (`BodyFit.glueLayout`, pinned by
+ * `HxGlueWidthSliceTest`); every fixture here is one where it says stay.
  *
- * The flat-length question is asked FIRST, and that ordering is the whole
- * idempotence story: `Renderer.fitsFlat` DEFERS a nested `BodyGroup` while
- * `WrapList.flatLength` DESCENDS one, and the writer wraps
- * source-multi-line literals in a `BodyGroup` and single-line ones not — so
- * measuring first answered differently for the two source shapes of ONE
- * AST, and `fmt` needed a second pass to settle (pinned below by the
- * 3-pass and two-source-shapes tests).
- *
- * BOUNDARY CONTRACT, and its scope: on the MEASURED outcome a case line of
- * exactly `maxLineLength` columns stays inline and one column more breaks
- * (`Group` fit is `<= lineWidth`; no `width + 1` calibration here). The
- * GLUE outcome was originally placed without measurement of any kind, so
- * its case line could exceed `maxLineLength` without bound; ω-glue-width
- * (`BodyFit.glueLayout`, pinned by `HxGlueWidthSliceTest`) gave it a width
- * answer of its own — the body moves to the next line when the glued line
- * overflows AND moving it fixes the overflow. Everything below still holds:
- * the glue is the same shape `Same` gives whenever that answer says stay,
- * which is every fixture in this class.
- *
- * COMPOSITION:
- *  - `refuseFlatOnComplexExpr` wins over the fit measurement — an
- *    `A && B` body breaks even when it fits.
- *  - `alignInlineSwitchCaseBody` reaches the fit path as `BodyFit`'s
- *    `nestGluedBody`: LIVE on the glue outcome (whose body has inner lines
- *    that may want the `+1` continuation indent), and provably inert on the
- *    measured outcome — a body that reaches it holds no hardline at all, so
- *    there is no inner line for a `Nest` to move.
- *  - Comments: a case-label trailing comment refuses the fit path outright
- *    (it would land on the wrong side of the emitter-owned separator, and
- *    it forces a physical break regardless) and an own-line comment before
- *    the body keeps the break; a comment trailing the BODY rides inline and
- *    counts toward the fit measure.
- *  - `flatChildOpt`'s child-policy fanout stays gated on the COMMITTED
- *    `_flatCase` only — pinned, because the fit path's own placement is
- *    still undecided at that point.
- *
- * Per `feedback_unit_test_trivia_writer.md`: the knobs are visible only
- * through `HaxeModuleTriviaParser` / `HaxeModuleTriviaWriter`.
+ * COMPOSITION: `refuseFlatOnComplexExpr` wins over the fit (an `A && B`
+ * body breaks even when it fits); `alignInlineSwitchCaseBody` reaches the
+ * fit path as `BodyFit.nestGluedBody`, live on the glue outcome and inert on
+ * the fit outcome; a case-label trailing comment refuses the fit path, an
+ * own-line comment before the body keeps the break, a comment trailing the
+ * BODY rides inline and counts toward the fit; `flatChildOpt`'s fanout stays
+ * gated on the COMMITTED `_flatCase` only. The knobs are visible only through
+ * `HaxeModuleTriviaParser` / `HaxeModuleTriviaWriter`.
  */
 @:nullSafety(Strict)
 final class HxCaseBodyFitLineSliceTest extends Test {

@@ -15,42 +15,33 @@ import utest.Test;
  *  1. WIDTH BLINDNESS. Under `sameLine.comprehensionFor: fitLine` the list runs
  *     the `defaultComprehensionWrap` cascade, whose only rule is
  *     `exceedsMaxLineLength` — a pure width question. A filter `if` inside the
- *     generator parks its then-branch behind a `BodyGroup` (`sameLine.ifBody:
- *     fitLine`, reached through `HxIfExpr.thenBranch`'s `noSiblingFallback`),
- *     and every static width measure DEFERS a `BodyGroup` to width 0. The sole
- *     item therefore under-measured, the cascade answered `NoWrap`, and the
- *     overflow was absorbed by whatever inner construct broke first — typically
- *     the filter `if`'s own condition parens. `WrapList.emit` now re-tags the
- *     item's hardline-free `BodyGroup`s as render-identical `Group`s (the
- *     `groupifyInlineBodies` mechanism that already served over-long arrow-`if`
- *     call args), so the cascade sees the width it is asked to weigh.
+ *     generator parks its then-branch behind a `BodyGroup`, and every static
+ *     width read DEFERS a `BodyGroup` to width 0, so the sole item
+ *     under-counted, the cascade answered `NoWrap`, and the overflow was
+ *     absorbed by whatever inner construct broke first. `WrapList.emit` now
+ *     re-tags the item's hardline-free `BodyGroup`s as render-identical
+ *     `Group`s (`groupifyInlineBodies`), so the cascade sees the width it is
+ *     asked to weigh.
  *
  *  2. TWO ±1 COLUMN SKEWS AT THE BOUNDARY, each of which let a comprehension
  *     one column past the limit stay put. The bracket's own fit was blind to
  *     the same-line tail after `]` (the statement `;`), so `emit` now routes a
  *     fit-cascade comprehension through `GroupWithRestProbe`. And
- *     `HxVarDecl.init`'s `@:fmt(breakAfterLeadOnOverflow('type'))` gate 1 —
- *     armed by any type-param LHS — resolves that bracket's Group one column
- *     EARLIER than the renderer does (the renderer holds the post-`=`
- *     `OptSpace` pending; the probe spends it), so it broke the `=` where the
- *     renderer would have opened the bracket. A comprehension RHS now disarms
- *     gate 1: its `[` IS its wrap point, which is the documented reason that
- *     probe exists. BOTH arms are load-bearing for the `+1` fixture below —
- *     reverting either one alone turns it red.
+ *     `HxVarDecl.init`'s `@:fmt(breakAfterLeadOnOverflow('type'))` gate 1
+ *     resolves that bracket's Group one column EARLIER than the renderer does
+ *     (the renderer holds the post-`=` `OptSpace` pending; the probe spends
+ *     it), so it broke the `=` where the renderer would have opened the
+ *     bracket. A comprehension RHS now disarms gate 1: its `[` IS its wrap
+ *     point. BOTH arms are load-bearing for the `+1` fixture below — reverting
+ *     either one alone turns it red.
  *
  * Boundary contract pinned below: a comprehension whose glued line lands
- * EXACTLY on `maxLineLength` stays flat; one column past it opens the bracket.
- * The same threshold holds for a type-param LHS, a bare-name LHS, a plain
- * assignment and a map comprehension — the four host shapes that used to
- * disagree.
- *
- * The two halves are gated differently on purpose and the fixtures cover both
- * sides: the `emit` half needs `comprehensionBracketsOpen == After` (the fit
- * cascade's own precondition, from `sameLine.comprehensionFor: fitLine`), while
- * the gate-1 disarm is config-independent — a comprehension's bracket is its
- * wrap point under every bracket policy.
- *
- * Identifiers are synthetic; the shapes are anonymised from a real project tree.
+ * EXACTLY on `maxLineLength` stays flat; one column past it opens the bracket,
+ * for a type-param LHS, a bare-name LHS, a plain assignment and a map
+ * comprehension alike — the four host shapes that used to disagree. The `emit`
+ * half needs `comprehensionBracketsOpen == After` (the fit cascade's own
+ * precondition); the gate-1 disarm is config-independent. Identifiers are
+ * synthetic; the shapes are anonymised from a real project tree.
  */
 @:nullSafety(Strict)
 final class HxComprehensionDeclRhsBracketWrapTest extends Test {

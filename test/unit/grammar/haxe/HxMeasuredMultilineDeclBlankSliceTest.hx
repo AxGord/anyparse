@@ -20,8 +20,7 @@ import utest.Test;
  * the whitespace `MarkWrapping` has already committed — a rendering property —
  * which is what the measured channel reproduces.
  *
- * The four pins were verified RED against the base commit `4cae819a`: each
- * gap came back with no blank line. Four controls are green at base BY
+ * The four pins are RED at base: each gap came back with no blank line. Four controls are green at base BY
  * CONSTRUCTION (they assert the gap does NOT change) and each names the
  * mutation that flips it — see their own doc comments. The ninth method,
  * `testWriterIsItsOwnFixedPoint`, is neither: it is a forward guard on the

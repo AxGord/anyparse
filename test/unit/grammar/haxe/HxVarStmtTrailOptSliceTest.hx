@@ -66,17 +66,17 @@ class HxVarStmtTrailOptSliceTest extends HxTestHelpers {
 	}
 
 	public function testVarFollowedBySecondVarNoSemi(): Void {
-		// Pre-S10.4: `var x = 5` (no `;`) followed by another statement was
-		// accepted because the per-stmt `@:trailOpt(';')` was position-
-		// agnostic. After S10.4 the BlockBody Star owns sep emission and
+		// Before the BlockBody Star owned sep emission: `var x = 5` (no `;`) followed
+		// by another statement was accepted because the per-stmt `@:trailOpt(';')` was
+		// position-agnostic. Now the BlockBody Star owns sep emission and
 		// `;` between non-block-ended stmts is required — matches real
 		// Haxe's strict rejection.
 		Assert.raises(parseFunctionBody.bind('var x = 5\nvar y = 6;'));
 	}
 
 	public function testFinalFollowedBySecondFinalNoSemi(): Void {
-		// Sister contract of `testVarFollowedBySecondVarNoSemi` — S10.5
-		// migrated `FinalStmt` to BlockBody Star sep-ownership, so the
+		// Sister contract of `testVarFollowedBySecondVarNoSemi` — `FinalStmt`
+		// migrated to BlockBody Star sep-ownership, so the
 		// same strict-rejection contract applies to `final` declarations.
 		Assert.raises(parseFunctionBody.bind('final x = 5\nfinal y = 6;'));
 	}

@@ -248,7 +248,7 @@ class ExtractInterfaceSliceTest extends Test {
 	 * The EDITED source must come back canonical, not just the CREATED one — the
 	 * asymmetry the sibling commit left standing.
 	 *
-	 * RED at the base commit. ` implements IBase` looks like the safest edit an op can
+	 * RED at base. ` implements IBase` looks like the safest edit an op can
 	 * make, and it is still a WRITER decision: on a header already near the limit the
 	 * splice pushes the line past it, where the writer breaks the trailing clause onto
 	 * a continuation line. A verbatim splice cannot know that, so the source was
@@ -272,7 +272,7 @@ class ExtractInterfaceSliceTest extends Test {
 	}
 
 	/**
-	 * CONTROL — green at the base commit BY CONSTRUCTION, and it must stay green.
+	 * CONTROL — green at base BY CONSTRUCTION, and it must stay green.
 	 *
 	 * A span-splice op is FORMAT-PRESERVING, and canonicalising the edited file must
 	 * not turn it into a reformatter: a source nobody ever ran `fmt` over keeps its own

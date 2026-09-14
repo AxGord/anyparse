@@ -33,9 +33,9 @@ using Lambda;
  * `HaxeQueryWalker.projectedKinds()`, emitted by `QueryWalkerLowering` from the same grammar
  * shape the walk itself is generated from. Nothing else in the tree compares them.
  *
- * The catch on the first run was `LambdaParam`: dead since `327ae658` (2026-05-22) turned
+ * The catch on the first run was `LambdaParam`: dead since the grammar turned
  * `HxLambdaParam` from a `@:spanned('LambdaParam')` typedef into an `Optional` / `Required`
- * Alt enum, and left the retired kind behind in three kind lists and two doc sentences. Its
+ * Alt enum, and left the retired kind behind in kind lists and doc sentences. Its
  * repair is a DELETION, not a grammar edit — the two ctors that replaced it were already
  * declared, so minting the old kind again would change the tree every consumer reads.
  *
@@ -50,29 +50,29 @@ using Lambda;
 @:nullSafety(Strict)
 final class RefShapeKindProjectionTest extends Test {
 
-	/** Floor under the number of `RefShape` fields the declared side reads (178 of 238 on this tree). */
+	/** Floor under the number of `RefShape` fields the declared side reads. */
 	private static inline final MIN_KIND_FIELDS: Int = 160;
 
-	/** Floor under the distinct kind names those fields declare (202 on this tree). */
+	/** Floor under the distinct kind names those fields declare. */
 	private static inline final MIN_DECLARED_KINDS: Int = 185;
 
-	/** Floor under the projected vocabulary the declarations are checked against (238 on this tree). */
+	/** Floor under the projected vocabulary the declarations are checked against. */
 	private static inline final MIN_PROJECTED_KINDS: Int = 220;
 
 	/**
-	 * Floor under the distinct kinds the parse arm sees the tree's own sources emit (140 of the
-	 * 238 projected, over 516 files — 137 before this arm learned to descend the `type` SLOT).
+	 * Floor under the distinct kinds the parse arm sees the tree's own sources emit (a few more
+	 * since this arm learned to descend the `type` SLOT).
 	 *
 	 * The gap is what this repo happens to spell: no `do while`, no `untyped`, no `overload`, no `>>>=`, so
 	 * a ctor for one of those cannot be seen missing from here. That direction used to be the declared-side
-	 * arm's job alone and is now `KIND_SOURCES`', which covers the 98 kinds this corpus does not reach.
+	 * arm's job alone and is now `KIND_SOURCES`', which covers the kinds this corpus does not reach.
 	 */
 	private static inline final MIN_EMITTED_KINDS: Int = 130;
 
 	/** Floor under the number of `.hx` files the parse arm reaches — an empty walk asserts nothing. */
 	private static inline final MIN_PARSED_FILES: Int = 450;
 
-	/** Floor under the token-bearing slots the capture differential probes (35 on this tree). */
+	/** Floor under the token-bearing slots the capture differential probes. */
 	private static inline final MIN_TOKEN_SLOTS: Int = 28;
 
 	/** A capture probe whose projected node NAMES the token: the assertion is name EQUALITY. */
@@ -136,10 +136,9 @@ final class RefShapeKindProjectionTest extends Test {
 	 * (`unit.check.PreferEnumAbstractCheckTest`, over the produced fix text) — recorded here so the
 	 * census admits the slot by ADDRESS and a second template slot cannot join it in silence.
 	 *
-	 * Addressed by `<field>#<slot>` and not by field, which is the S203 repair: the exemption used to
-	 * name `enumAbstractSyntax` WHOLE, and the same structure's `bodyOpen: '{'` is a real token the
-	 * parser does capture — freed as a template by a field it merely shares, and probed by nothing
-	 * for it.
+	 * Addressed by `<field>#<slot>` and not by field: an exemption naming `enumAbstractSyntax` WHOLE
+	 * also freed the same structure's `bodyOpen: '{'`, a real token the parser does capture — a
+	 * template by a field it merely shares, and probed by nothing for it.
 	 */
 	private static final TEMPLATE_SLOTS: Array<String> = ['enumAbstractSyntax#head'];
 
@@ -497,9 +496,9 @@ final class RefShapeKindProjectionTest extends Test {
 	 * A kind set names a spelling and never the rule that owns it, so each of these is
 	 * admitted for every rule that spells it at once. All are deliberate, and every pair is named here because the next reader
 	 * audits THIS list and not the grammar: the modifier ctors are declared identically by `HxModifier` / `HxMemberModifier` /
-	 * `HxCondModPrefix` and a consumer wants all three; `Conditional` is the `#if` wrapper on sixteen rules; `EnumKw` is the
-	 * `enum` keyword on both `HxCondDeclPrefix` and `HxCondModPrefix`; the body ctors (`BlockBody` / `ExprBody`) are shared by
-	 * the three function-body enums; `Required` / `Optional` are the param splits of `HxParam` AND `HxLambdaParam`, and ALSO
+	 * `HxCondModPrefix` and a consumer wants all three; `Conditional` is the `#if` wrapper shared by every conditional rule;
+	 * `EnumKw` is the `enum` keyword on both `HxCondDeclPrefix` and `HxCondModPrefix`; the body ctors (`BlockBody` / `ExprBody`)
+	 * are shared by the three function-body enums; `Required` / `Optional` are the param splits of `HxParam` AND `HxLambdaParam`, and ALSO
 	 * the bare `name: Type` labels of `HxAnonField` / `HxAnonVarBody`; `Plain` is `HxAnonVarBody`'s and `HxCasePatternBody`'s,
 	 * where `FieldRefScan.bindsNameHere` handles only the case-pattern one, so the overlap costs a false negative and never a
 	 * wrong rewrite; `Arrow` is the only CROSS-CATEGORY pair, `HxExpr.Arrow` (`=>` in a map literal or case extractor) against
@@ -544,8 +543,8 @@ final class RefShapeKindProjectionTest extends Test {
 	 * and the smallest source that emits them.
 	 *
 	 * The parse arm above reads the repo's OWN sources, so a kind this repo does not happen to spell
-	 * is watched by nothing there — measured on this tree, 140 of the 238 projected kinds are
-	 * emitted by 516 files under `PARSE_ROOTS`, leaving 98 unwatched. This table closes the census
+	 * is watched by nothing there — a large share of the projected kinds is emitted by no file
+	 * under `PARSE_ROOTS`. This table closes the census
 	 * from the other end: every projected kind is emitted by exactly one row here, or is named in
 	 * `UNREACHABLE_KINDS` with the reason no source can produce it. A ctor the grammar declares and
 	 * no input can reach fails HERE, by name, instead of living on in the vocabulary as a name every
@@ -851,7 +850,7 @@ final class RefShapeKindProjectionTest extends Test {
 	 * catch-all matches, the branch before it matches first, on the same prefix. The shape it was
 	 * written for does not reach it either: for a tag whose arguments no expression parses,
 	 * `MetaCall` rewinds, `Meta` takes the NAME, the leftover `(…)` fails in the DECLARATION, and no
-	 * rewind returns to the metadata element to try a later branch — measured, `@:x(*) class C {}` is
+	 * rewind returns to the metadata element to try a later branch: `@:x(*) class C {}` is
 	 * a parse error at the `(` and `@:allow(a.*) class C {}` one at the `*`, never a `PlainMeta`.
 	 *
 	 * So the ctor is a name every kind-set consumer can read and no parse can ever produce. Retiring
@@ -866,7 +865,7 @@ final class RefShapeKindProjectionTest extends Test {
 	 * grammar never projects, and the ONE exemption is the sentinel the shape itself names.
 	 *
 	 * Killed by arm M-PROJECTED-KINDS-ALT-ONLY, which drops the `@:spanned` half of the shape
-	 * walk: `CatchClause`, `KeyValueBinder` and `VarMore` are declared by six kind sets
+	 * walk: `CatchClause`, `KeyValueBinder` and `VarMore` are declared by several kind sets
 	 * between them and stop being projected, while the floors below stay satisfied — so the
 	 * subset assertion is what goes red, not the census. Killed also by arm M-DECL-HOST-KIND-STALE, which puts a retired
 	 * name back into `DECL_HOST_KINDS` - the mutation is on the HAND-WRITTEN side, the one that produced this slice's real
@@ -980,8 +979,8 @@ final class RefShapeKindProjectionTest extends Test {
 	 *
 	 * `isKindKeyedMap` answers YES on one projected key, so a map that is PART kind-keyed would be
 	 * read as wholly kind-keyed and its other keys reported as kind names the grammar never
-	 * projects — a true failure with a misleading message. On this tree no map is mixed, and this
-	 * is what says so rather than assuming it.
+	 * projects — a true failure with a misleading message. That no map is mixed is asserted here
+	 * rather than assumed.
 	 */
 	public function testEveryMapFieldIsKeyedByKindOrByNothing(): Void {
 		for (lang in CliArgs.langNames()) {
@@ -1013,8 +1012,9 @@ final class RefShapeKindProjectionTest extends Test {
 	 *
 	 * Both exemptions are checked against the shape, and they are checked at the granularity they are written at: a
 	 * KEYWORD exemption names a field and the shape has to still declare it, a TEMPLATE exemption names a
-	 * `<field>#<slot>` and the shape has to still hold that slot. The second half is the S203 repair — freeing a
-	 * template by FIELD also freed `enumAbstractSyntax.bodyOpen`, a real `{` the parser captures, and nothing probed it.
+	 * `<field>#<slot>` and the shape has to still hold that slot. The second half is what a per-field exemption got
+	 * wrong: freeing a template by FIELD also freed `enumAbstractSyntax.bodyOpen`, a real `{` the parser captures, and
+	 * nothing probed it.
 	 */
 	public function testEveryTokenBearingSlotIsProbedOrDeclaredATemplate(): Void {
 		for (lang in CliArgs.langNames()) {
@@ -1048,10 +1048,11 @@ final class RefShapeKindProjectionTest extends Test {
 	 * smallest source that can carry it, and the parse has to carry the declared kind over it. The oracle is the generated parser,
 	 * whose author is not the hand-typed shape's — which is what keeps this from being a string compare with extra steps.
 	 *
-	 * WHAT the parse has to show is the probe's `names` mode, not one rule for all 35 slots. Twenty of them project a NAME and the
-	 * assertion is equality with the token; three carry the token as the head of a projected name; twelve name nothing the token could be,
-	 * and there span containment is the strongest true statement. The expected name is never written down — it is the shape's own text —
-	 * so a token that drifts is still read out of the shape and the arm goes red on the parse rather than on an equality nobody wrote.
+	 * WHAT the parse has to show is the probe's `names` mode, not one rule for every slot. Most of them project a NAME and the
+	 * assertion is equality with the token; a few carry the token as the head of a projected name; the rest name nothing the token
+	 * could be, and there span containment is the strongest true statement. The expected name is never written down — it is the shape's
+	 * own text — so a token that drifts is still read out of the shape and the arm goes red on the parse rather than on an equality
+	 * nobody wrote.
 	 *
 	 * KILLED by arm `M-AND-OPERATOR-TEXT-STALE`, which respells `andOperatorText` as the single `&`: still a real
 	 * Haxe operator, so the probe source still parses — and projects `BitAnd`, so nothing in the tree changes except
@@ -1216,13 +1217,13 @@ final class RefShapeKindProjectionTest extends Test {
 
 	/**
 	 * Whether `value` is a map KEYED BY KIND — DERIVED, where the classification used to be a
-	 * hand list. S188 added `stringLiteralDelimiters` and had to classify it by eye, which is a
-	 * step the next map field would have skipped in silence.
+	 * hand list. Adding `stringLiteralDelimiters` meant classifying it by eye, a step the next map
+	 * field would have skipped in silence.
 	 *
 	 * ANY projected key, not every one. A map keyed by kind whose entry has gone STALE is
 	 * precisely what the subset arm exists to report, and an all-keys rule would answer "not
-	 * kind-keyed" for exactly that map and bury the stale name instead. The split is wide on
-	 * this tree — 6 of 6 and 1 of 1 against 0 of 2, 3, 6, 9 and 9 — and
+	 * kind-keyed" for exactly that map and bury the stale name instead. The split is wide — every
+	 * kind-keyed map has all of its keys projected and every other map none — and
 	 * `testEveryMapFieldIsKeyedByKindOrByNothing` is what keeps it wide.
 	 */
 	private static function isKindKeyedMap(value: Any, projected: Array<String>): Bool {
@@ -1308,7 +1309,7 @@ final class RefShapeKindProjectionTest extends Test {
 	 * An empty string is not name-shaped, so a shape slot declaring one demands a probe and gets a red arm — there
 	 * is no token to capture and no name to mean, and silence on it would be the same fail-open one layer down.
 	 *
-	 * The leading-character half is the S203 repair. `.` / `<` / `>` / `,` are admitted because `Array<String>` and
+	 * The leading-character half closes a hole the census had. `.` / `<` / `>` / `,` are admitted because `Array<String>` and
 	 * `haxe.macro.Expr.Position` are names, and admitting them CHARACTER-wise let a slot spelling one of them ALONE read as a name
 	 * and skip the census. No live slot is spelled that way, which is why the hole cost nothing and could stay open indefinitely;
 	 * a name has to begin with a letter or `_`, and that is now the predicate rather than an observation about today's fields.
@@ -1401,10 +1402,10 @@ final class RefShapeKindProjectionTest extends Test {
 	 * Every distinct kind in the subtree at `node`, the `type` SLOT included.
 	 *
 	 * A declared type is a slot and not a child (`QueryNode.type` says why), so a walk over
-	 * `children` alone never reaches the type vocabulary: measured on this tree, descending it adds
-	 * `ConditionalType`, `NamedParam`, `OptionalNamedParam`, `Positional` and `DollarType` to what a
-	 * source can be seen to emit, and 3 of those 5 are reached by the repo's own sources — the arms
-	 * below were blind to every one of them, in the ONE direction they exist to watch.
+	 * `children` alone never reaches the type vocabulary: descending it adds `ConditionalType`,
+	 * `NamedParam`, `OptionalNamedParam`, `Positional` and `DollarType` to what a source can be seen
+	 * to emit, some of them reached by the repo's own sources — the arms below were blind to every
+	 * one of them, in the ONE direction they exist to watch.
 	 */
 	private static function collectKinds(node: QueryNode, out: Array<String>): Void {
 		if (!out.contains(node.kind)) out.push(node.kind);

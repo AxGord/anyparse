@@ -21,7 +21,7 @@ import utest.Test;
  *  - element 0 is hugged by the head (`new Stack([` … `], w, 46)`);
  *  - a container that carries its OWN break has already opened the call, so the multi-arg-collection
  *    glue keeps it on the argument line (`super(W, H, …, [` … `], true, false, false)`) — declining
- *    there was measured over anyparse's own tree and made 21 files worse.
+ *    there was tried over anyparse's own tree and made files worse.
  * What is left is the container that FITS and would ride along in the fill packing, which is the
  * shape `TRAILING_SRC` and `MIDFIT_SRC` pin.
  *
@@ -209,7 +209,7 @@ final class HxComplexItemWrapTest extends Test {
 
 	/**
 	 * An enum-constructor pattern parses as a `Call` and a switch subject is a genuine array of calls,
-	 * so both are counted and exploded one element per line unless suppressed. Measured before the
+	 * so both are counted and exploded one element per line unless suppressed. Reproduced before the
 	 * gate existed; this fixture goes red if `@:fmt(suppressComplexItems)` is removed from
 	 * `HxCasePattern.expr` / `HxSwitchStmt(Bare).expr`. It does NOT discriminate against the pre-slice
 	 * writer — nothing counted anything there — which is exactly why it is worth keeping.
@@ -273,7 +273,7 @@ final class HxComplexItemWrapTest extends Test {
 	 * `defaultAdditionalIndent`.
 	 *
 	 * ONE write pass over a ONE-LINE source is what discriminates, and both halves of that
-	 * matter. Measured on the pre-fix writer with this exact config: pass 1 over the one-line
+	 * matter. On the pre-fix writer with this exact config: pass 1 over the one-line
 	 * source gives three tabs, pass 2 over pass 1's output gives two, pass 3 reproduces pass 2.
 	 * So `fmt` reported the shape as "needed 2 rewrites to reach its fixed point" rather than as
 	 * wrong output — which is why no corpus run and no `fmt --list` gate ever saw it, and why a
@@ -281,7 +281,7 @@ final class HxComplexItemWrapTest extends Test {
 	 *
 	 * What makes pass 2 land on the right indent is NOT source-multiline keeping: with the rule
 	 * removed, the already-broken list collapses back to one line, so nothing here is preserving
-	 * the source layout. The actual second-pass route is unidentified — recorded as measured
+	 * the source layout. The actual second-pass route is unidentified — recorded as observed
 	 * rather than guessed. Its consequence for this file: the `THREE_CALLS_OUT` line in
 	 * `testLayoutsAreIdempotent` is vacuous with respect to THIS fix (the pre-fix writer
 	 * satisfies it too, verified — reverting turns exactly this one test red, not two). It pins

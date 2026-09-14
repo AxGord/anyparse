@@ -14,17 +14,17 @@ import utest.Test;
  * back with whitespace the writer would never emit. The op's own gate only re-parses, and a
  * stray blank line parses fine, so nothing reported it.
  *
- * Measured at base over the first 60 modules of a real Pony tree: 15 moves succeeded and 1 of
- * them left a file `fmt --list` then flagged — `src/pony/db/TableMacro.hx`, whose class was the
+ * At base, over a run of moves through a real Pony tree, one left a file `fmt
+ * --list` then flagged — `src/pony/db/TableMacro.hx`, whose class was the
  * last thing inside a `#if macro … #end` region, cut to `}` + blank + `#end`. Cutting the FIRST
  * declaration out of a region is the mirror (`#if macro` + blank). Re-running the same census
- * against the fix moved that one arm to clean and left the other 14 byte-identical.
+ * against the fix moved that one arm to clean and left the others byte-identical.
  *
  * The gate is canonical-in / canonical-out, decided PER FILE against that file's own discovered
  * config: a file already non-canonical on disk is left exactly as the splice produced it, so a
  * move inside a repo whose layout another formatter owns rewrites nothing it was not asked to.
  * That is also what makes the fix a provable no-op wherever the spliced result is already
- * canonical — every case the census measured green.
+ * canonical — every case the census found green.
  *
  * The assertions are FIXED-POINT rather than hardcoded bytes: format the file the move wrote and
  * require the content not to move. Each is paired with a claim about the move itself, so a test
@@ -63,8 +63,8 @@ final class MoveCanonicalOutputSliceTest extends Test {
 	/**
 	 * CONTROL: a source file that was ALREADY non-canonical is left exactly as the splice
 	 * produced it. Dropping the was-canonical half of the gate — canonicalising every written
-	 * file unconditionally, the obvious simpler spelling — flips this. Measured
-	 * whole-suite, `M-MOVE-CANONICALISE-ALWAYS` takes this fixture and the drifted-destination
+	 * file unconditionally, the obvious simpler spelling — flips this: whole-suite,
+	 * `M-MOVE-CANONICALISE-ALWAYS` takes this fixture and the drifted-destination
 	 * twin below it, and nothing outside this class. It is what keeps a move inside a foreign repo from reformatting code it did not touch.
 	 */
 	@:pin('control')

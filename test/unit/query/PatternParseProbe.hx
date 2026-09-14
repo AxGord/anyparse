@@ -89,7 +89,7 @@ class PatternParseProbe extends Test {
 	public function testExprPatternWithTrailingSemicolon(): Void {
 		// `trace($_);` — a call written as a statement. The Stmt attempt
 		// parses it but its first statement is a synthetic `ExprStmt`
-		// wrapper; per the S1 fix the Stmt extractor rejects a bare
+		// wrapper; per the Stmt-extractor fix the Stmt extractor rejects a bare
 		// `ExprStmt` so the cascade falls to the Expr attempt. The pattern
 		// is therefore an Expr rooted at the bare `Call` — matchable at
 		// every subtree (incl. argument / sub-expression position), not
@@ -104,7 +104,7 @@ class PatternParseProbe extends Test {
 	}
 
 	public function testBareExpressionPatternIsNotStmtWrapped(): Void {
-		// S1 red-green: a bare expression pattern (`$x + $x`) must NOT
+		// Red-green: a bare expression pattern (`$x + $x`) must NOT
 		// resolve to an `ExprStmt`-rooted Stmt pattern. The synthetic
 		// `ExprStmt` wrapper only unifies in statement position, so real
 		// `+` expressions in var-init / argument / sub-expression position
@@ -121,7 +121,7 @@ class PatternParseProbe extends Test {
 	}
 
 	public function testRealStatementPatternStaysStmt(): Void {
-		// S1 regression guard: the bare-`ExprStmt` rejection must NOT
+		// Regression guard: the bare-`ExprStmt` rejection must NOT
 		// affect non-expression statements. `if`/`return` are not
 		// `ExprStmt`, so they still resolve via the Stmt attempt.
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
@@ -153,7 +153,7 @@ class PatternParseProbe extends Test {
 		// A metavar in a NAME slot must not swallow its own node when that node is
 		// childless. `new $x()` used to reclassify wholesale into a lone `Metavar`,
 		// which matches EVERY node: `final $n:$t = new $x();` and the shapeless
-		// `final $n = $v;` both returned 7781 hits over TM's src.
+		// `final $n = $v;` both returned the same enormous hit count over TM's src.
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final pattern: Pattern = plugin.parsePattern("new $x()");
 		Assert.equals('NewExpr', pattern.root.kind, 'argumentless new must keep its kind - got ${pattern.root.kind}');

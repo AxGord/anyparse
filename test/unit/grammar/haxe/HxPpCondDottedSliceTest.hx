@@ -9,7 +9,7 @@ import utest.Assert;
  * condition atom — `HxPpCondLit`'s identifier alternative extended with a
  * `(?:\.[A-Za-z_][A-Za-z0-9_]*)*` tail, mirroring `HxTypeName`.
  *
- * Real-world motivation (10 files across three trees): haxe std's
+ * Real-world motivation (files across three trees): haxe std's
  * `#if target.unicode` (`UnicodeString.hx`, `haxe/crypto/Sha1.hx`,
  * `haxe/crypto/Md5.hx`, `haxe/crypto/Sha256.hx`,
  * `haxe/format/JsonParser.hx`) and `#if target.utf16`

@@ -8,8 +8,8 @@ import utest.Test;
  * overflows BREAKS the chain beforeLast when the paren fits its own continuation
  * line, leaving the delimited group intact and the break at the outer boundary.
  *
- * The class of the operator INSIDE the paren is not a gate (T37 retired that
- * restriction — a deliberate divergence from fork `unwrapAddOps`, which keeps a
+ * The class of the operator INSIDE the paren is not a gate (that restriction
+ * was retired — a deliberate divergence from fork `unwrapAddOps`, which keeps a
  * ternary-inner paren glued). Only a paren too wide to fit the continuation falls
  * through to the glue probe. Identifiers are synthetic.
  */
@@ -88,9 +88,9 @@ final class HxOpAddParenInnerBreakTest extends Test {
 	}
 
 	/**
-	 * RE-PINNED (T37): a ternary-inner paren BREAKS the chain, exactly as an
-	 * opAddSub-inner one does. The operand class of the paren contents was this arm
-	 * gate until T37 and is no longer — the rule is that a break inside an inner `()`
+	 * RE-PINNED: a ternary-inner paren BREAKS the chain, exactly as an
+	 * opAddSub-inner one does. The operand class of the paren contents was this arm's
+	 * gate once and is no longer — the rule is that a break inside an inner `()`
 	 * is less preferable than a break at an outer boundary, and `?` vs `-` inside the
 	 * group says nothing about which boundary is outer. Deliberate divergence from
 	 * fork `unwrapAddOps`. The paren still has to FIT its own continuation line; a

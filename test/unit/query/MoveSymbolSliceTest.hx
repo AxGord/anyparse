@@ -326,8 +326,8 @@ class MoveSymbolSliceTest extends Test {
 		Assert.equals('package pkg;\n\n/** the bar */\ntypedef Bar = {\n\tfinal y:Int;\n}\n', newA);
 		// Byte-exact on the destination too: only the decl's OWN text moves, so the
 		// blank line the cut also removed does not arrive as a stray blank run — and the
-		// destination ends in the ONE newline it arrived with. Until 2026-08-27 this
-		// assertion read `}\n\n`: the cut span reaches over the decl's line terminator, so
+		// destination ends in the ONE newline it arrived with. This assertion once
+		// read `}\n\n`: the cut span reaches over the decl's line terminator, so
 		// `declText` carried one newline and the destination's own was re-added on top of
 		// it, leaving every move's destination one blank line past canonical.
 		Assert.equals('package pkg;\n\nclass B {}\n\ntypedef Foo = {\n\tfinal x:Int;\n}\n', newB);
@@ -468,7 +468,7 @@ class MoveSymbolSliceTest extends Test {
 	 * like any other, and keeps its binding. It used to be invisible twice over: an alias
 	 * statement's `raw` is the ALIAS, so `filesImportingModule` did not list the file and the
 	 * per-statement match did not fire either, and `importStatementText` had no alias suffix to
-	 * emit even if it had. Compile-proved on Haxe 4.3.7 — the file was left on
+	 * emit even if it had. Compile-proved — the file was left on
 	 * `import p.Thing as T;` after `Thing` moved into `p/Host.hx`, and the tree failed with
 	 * `Module p.Thing does not define type Thing` / `Type not found : T`.
 	 *
@@ -502,7 +502,7 @@ class MoveSymbolSliceTest extends Test {
 	 * import of it becomes redundant once the type is local and is deleted; an alias import does
 	 * not, because the destination's code names the type through the ALIAS and nothing else binds
 	 * it. Deleting it left `p/Host.hx` compiling against a module that no longer defines the type
-	 * (`Module p.Thing does not define type Thing` / `Type not found : T`, Haxe 4.3.7), and
+	 * (`Module p.Thing does not define type Thing` / `Type not found : T`), and
 	 * `import p.Host.Thing as T;` inside `p/Host.hx` — a module aliasing its own sub-type — was
 	 * compiled to confirm the repointed form is legal.
 	 */
@@ -582,7 +582,7 @@ class MoveSymbolSliceTest extends Test {
 	 * the destination, spelled as the statement that bound it. The carry filter kept `Import` /
 	 * `Using` and dropped `Alias`, so the declaration arrived at a file with no binding for `D`;
 	 * letting the kind through alone would have emitted `import D;`, since `raw` is the ALIAS.
-	 * Compile-proved on Haxe 4.3.7: before, the moved tree stopped at
+	 * Compile-proved: before, the moved tree stopped at
 	 * `q/Host.hx:11: characters 21-22 : Type not found : D`; after, it compiles.
 	 *
 	 * The `in` spelling is asserted beside `as` — one `ImportKind`, told apart only by the
@@ -614,8 +614,8 @@ class MoveSymbolSliceTest extends Test {
 
 	/**
 	 * A dependency import is REFUSED, not carried, when the destination already binds that simple
-	 * name to a different module — the shape that made `move` a silent miscompile. Measured on
-	 * 11f22a25 and compile-run on Haxe 4.3.7: with `p/Host.hx` holding `import r.Dep;` and the
+	 * name to a different module — the shape that made `move` a silent miscompile. Compile-proved
+	 * on the base engine: with `p/Host.hx` holding `import r.Dep;` and the
 	 * moved decl reaching `q.Dep`, the op wrote both files, the tree compiled with rc 0 and no
 	 * diagnostic, and `Host`'s own `new Dep()` traced `q.Dep` where it had traced `r.Dep`.
 	 *
@@ -818,7 +818,7 @@ class MoveSymbolSliceTest extends Test {
 	 *
 	 * The comment spelling of both arms is pinned elsewhere — `testACommentOnlyMentionIsNotAReference`
 	 * for the import and `testACommentOnlyMentionDoesNotRefuseAPrivateType` for the private refusal —
-	 * and since S80 a comment counts for neither. What is pinned HERE is the STRING mention, and the
+	 * and a comment counts for neither. What is pinned HERE is the STRING mention, and the
 	 * two arms in one fixture: the TEXT scan (`NameMentionScan.sourceNamesAny`) counts it, which is the
 	 * conservative direction wherever the answer WRITES an import (a redundant import costs a lint
 	 * advisory, a missing one costs the build), while the PROVEN scan (`NameMentionScan.nodeNamesAny`)
@@ -857,12 +857,12 @@ class MoveSymbolSliceTest extends Test {
 	 * A comment ending in a PERIOD, directly above a line that starts with the moved type's name.
 	 *
 	 * `NameMentionScan.sourceNamesAny` uses its comment regions for TWO unrelated jobs, and this pins
-	 * the second. The first is the MASK: since S80 an occurrence inside a comment is not counted at all.
+	 * the second. The first is the MASK: an occurrence inside a comment is not counted at all.
 	 * The second is the QUALIFICATION test — a name a `.` precedes is spelled fully qualified and owes
 	 * no import, and `qualifiedBefore` only believes that `.` when it is not itself inside a comment.
 	 * Hand the scan no regions and a comment's own full stop becomes that `.` — the last real reference
 	 * in the file goes uncounted, the repair import is never written, and the source file stops
-	 * compiling with `Type not found`. Measured: with the regions dropped this fixture loses
+	 * compiling with `Type not found`. With the regions dropped this fixture loses
 	 * `import p.Host.Moved;` and nothing else changes.
 	 *
 	 * So the discriminator the two jobs draw together is comment-ADJACENT (counted, here) against
@@ -897,7 +897,7 @@ class MoveSymbolSliceTest extends Test {
 	 *
 	 * `NameMentionScan.destinationNamesType` (`MoveSymbol.referencedInDest` when this pin was written)
 	 * is handed a region array, and the file it scans is `destSource` — two things a single-array hop
-	 * can silently disagree about. It did: a seam refactor across 109 files passed the CURSOR file's
+	 * can silently disagree about. It did: a seam refactor across the whole tree passed the CURSOR file's
 	 * regions into this scan, and every gate the campaign runs stayed green, because no capture drives
 	 * a move op at all. Here the cursor file's comment is a doc block near its top and the
 	 * destination's is deep inside a method, so the two region sets cannot stand in for each other:
@@ -905,7 +905,7 @@ class MoveSymbolSliceTest extends Test {
 	 * the NEXT line is seen, which is the refusal; with the cursor's, that same `.` reads as a
 	 * qualification and the import is carried — silently rebinding the destination's own `Dep`.
 	 *
-	 * The mention here is comment-ADJACENT, not comment-interior, which is why S81's T535 fix leaves
+	 * The mention here is comment-ADJACENT, not comment-interior, which is why the comment-interior mask leaves
 	 * this pin green: the refusal is owed to `Dep.tag()` on the following line, not to the note above
 	 * it. The interior spelling is pinned in `unit.query.NameMentionScanTest`.
 	 *
@@ -1072,8 +1072,8 @@ class MoveSymbolSliceTest extends Test {
 	/**
 	 * Two files spelling the SAME import statement for a dependency the index cannot name is not a
 	 * collision — it is the commonest macro-module shape there is (`#if macro import haxe.macro.Expr;`
-	 * on both sides), and four of eleven changed outcomes in a 60-case `move` census over the Pony tree
-	 * were exactly that. Both halves of the reconciliation are exercised: the statement that binds the
+	 * on both sides), and a share of the changed outcomes in a `move` census over the Pony tree were
+	 * exactly that. Both halves of the reconciliation are exercised: the statement that binds the
 	 * name directly, and the MODULE import that binds it as one of the module's other types.
 	 */
 	public function testTheSameUnnameableImportOnBothSidesIsNotACollision(): Void {
@@ -1190,7 +1190,7 @@ class MoveSymbolSliceTest extends Test {
 			}
 		}
 		Assert.equals('package p;\n\nimport q.Dep;\n\nclass Mover {\n\tvar d:Dep;\n}\n', move('package p;\n'));
-		// `q.Dep` sorts before `q.Other`, and since S92 the carried line takes the run's own slot
+		// `q.Dep` sorts before `q.Other`, and the carried line takes the run's own slot
 		// rather than being appended past it.
 		Assert.equals(
 			'package p;\n\nimport q.Dep;\nimport q.Other;\n\nclass Mover {\n\tvar d:Dep;\n}\n', move('package p;\n\nimport q.Other;\n')
@@ -1209,7 +1209,7 @@ class MoveSymbolSliceTest extends Test {
 	}
 
 	/**
-	 * `import pkg.Module.*` binds NO TYPE — it imports that module's STATIC FIELDS, measured on 4.3.7
+	 * `import pkg.Module.*` binds NO TYPE — it imports that module's STATIC FIELDS
 	 * (`trace(STATIC_FIELD)` prints; `new Mod()` and `new Sub()` are both `Type not found`). Modelling
 	 * it as a rung invented a binding, and the invented binding EQUALLED `wanted`, which cancelled the
 	 * ambient refusal one line later: the destination's `Sub` (the root-package module) came back as
@@ -1279,8 +1279,8 @@ class MoveSymbolSliceTest extends Test {
 			'references "Date" while nothing in the indexed scope binds it'
 		);
 		// A class type parameter is NOT in scope inside a STATIC member — `class Box<Date> { static
-		// function tag() return Date.now(); }` compiles and answers the STDLIB `Date`, measured on
-		// 4.3.7 — so excluding the whole declaration hid an ambient reference that a carried import
+		// function tag() return Date.now(); }` compiles and answers the STDLIB `Date` — so
+		// excluding the whole declaration hid an ambient reference that a carried import
 		// would outrank. A type declaring any static member gets no exclusion at all.
 		assertErrContains(
 			move('package p;\n\nclass Box<Date> {\n\tvar b:Date;\n\n\tpublic static function tag():String return Date.now();\n}'),
@@ -2048,7 +2048,7 @@ class MoveSymbolSliceTest extends Test {
 	 * The SOURCE keeps every import it had, including the one the departed declaration was the
 	 * last TYPE-POSITION user of. This is a decision, not an omission: the only reference
 	 * machinery this layer has for the source file is `sourceStillUsesType`, which reads type
-	 * positions only — measured, `apq uses Helper` returns 0 hits on a file whose only reference
+	 * positions only: `apq uses Helper` returns no hit on a file whose only reference
 	 * is `Helper.go()`. An arm that dropped the import on that evidence was built and run, and it
 	 * deleted the import this fixture's remaining `Helper.go()` needs, at rc 0 with a file that
 	 * still parses; `unused-import` answers the same question with the resolution index and is
@@ -2241,8 +2241,8 @@ class MoveSymbolSliceTest extends Test {
 	 * The same widening turns a silent break into a refusal where carrying cannot help: a SECONDARY
 	 * type of the module the declaration is leaving is `Type not found` from anywhere else, so there is
 	 * no statement to write. Compile-proved on the shape — the base engine writes two files at rc 0 and
-	 * the tree then reads `Type not found : Sib` — and it is the whole refusal cost this arm adds to the
-	 * Pony census (2 of 133), both of them exactly this.
+	 * the tree then reads `Type not found : Sib` — and the whole refusal cost this arm adds to the
+	 * Pony census is a couple of cases, both of them exactly this.
 	 */
 	public function testAStaticReceiverOnASiblingSubTypeIsRefused(): Void {
 		assertErrContains(MoveSymbol.moveType('p/Mover.hx', 3, 7, 'p/Host.hx', [
@@ -2262,8 +2262,8 @@ class MoveSymbolSliceTest extends Test {
 	 *
 	 * Only the `Dep` half is observable here: `Type` resolves to nothing on either side and produces no
 	 * refusal either way. The control is the boundary this slice deliberately did not cross; widening the
-	 * scan to every upper-initial identifier flips it, and that arm was measured on the Pony census — 4
-	 * more refusals of 131 accepted, every one of them compile-proved correct, and ZERO changed diffs.
+	 * scan to every upper-initial identifier flips it, and on the Pony census that arm adds a few
+	 * refusals, every one of them compile-proved correct, and changes no diff.
 	 */
 	@:pin('control')
 	@:killer('M-MOVE-RECEIVER-ANY-IDENT')
@@ -2343,16 +2343,16 @@ class MoveSymbolSliceTest extends Test {
 	/**
 	 * A mention that appears ONLY in a COMMENT is NOT the reference an import exists for.
 	 *
-	 * S62 pinned the opposite here, deliberately: the text scan passed the comment spans on to the
+	 * An earlier pin here said the opposite, deliberately: the text scan passed the comment spans on to the
 	 * qualification test and never tested the occurrence itself against them, on the reasoning that
 	 * keeping an import a file no longer needs costs a lint advisory while dropping one it does need
 	 * costs the build. The second half is true and the first half is not the whole cost: a comment is
 	 * never compiled, so an occurrence inside one cannot be the reference the import repairs, and
-	 * writing it created the very coupling the move was removing — measured as T512, where a scope
-	 * file whose only `Thing` was a doc line came back carrying `import b.Holder.Thing;` at rc 0 with
+	 * writing it created the very coupling the move was removing: a scope file whose only `Thing`
+	 * was a doc line came back carrying `import b.Holder.Thing;` at rc 0 with
 	 * nothing said about it.
 	 *
-	 * Since S81 that mask is `NameMentionScan.sourceNamesAny`'s, shared by every shape of the question
+	 * That mask is `NameMentionScan.sourceNamesAny`'s, shared by every shape of the question
 	 * the move family asks — the write side here, and the refuse side in
 	 * `unit.query.NameMentionScanTest`.
 	 *
@@ -2390,7 +2390,7 @@ class MoveSymbolSliceTest extends Test {
 	 * The ordinary import anchor cannot decide this: it answers the last plain `import` when the file
 	 * has one and the last statement of ANY import kind otherwise, so the same carried line landed on
 	 * opposite sides of the run depending on a shape that has nothing to do with the question. Both
-	 * halves were measured at rc 0 on 4.3.7 — `q.Ext -> q.Other` for the moved body with an import
+	 * halves are compile-proved — `q.Ext -> q.Other` for the moved body with an import
 	 * present, `q.Other -> q.Ext` for the DESTINATION's own call without one. Both fixtures are here
 	 * because only the pair discriminates.
 	 */
@@ -2423,8 +2423,8 @@ class MoveSymbolSliceTest extends Test {
 	/**
 	 * A destination whose own `using` run sits inside a `#if` region with a plain import BELOW it
 	 * offers no seat: the region cannot be entered (the carried statement must be unconditional) and
-	 * the ordinary anchor is under the import, hence under the region. Writing there was measured at
-	 * rc 0 taking `Dest.d("x")` from `OTHER` to `EXT` — the destination's OWN call, which is the half
+	 * the ordinary anchor is under the import, hence under the region. Writing there compiles at
+	 * rc 0 and takes `Dest.d("x")` from `OTHER` to `EXT` — the destination's OWN call, which is the half
 	 * the seat exists to protect — so the answer is a refusal naming the statement.
 	 */
 	public function testAGuardedDestinationUsingRunBelowTheAnchorIsRefused(): Void {
@@ -2462,7 +2462,7 @@ class MoveSymbolSliceTest extends Test {
 
 	/**
 	 * String interpolation is executable code, and the UNBRACED `'$Moved'` form projects as its own
-	 * kind — `RefShape.stringInterpIdentKind`, which the shape names and ~20 checks already read. A
+	 * kind — `RefShape.stringInterpIdentKind`, which the shape names and many checks already read. A
 	 * proven scan that asked only for `identKind` caught the braced `'${Moved}'` and lost this one, so
 	 * a module-private type whose last reference was `'v=$Moved'` moved at rc 0 and the source then
 	 * read `Unknown identifier : Moved`.
@@ -2535,8 +2535,8 @@ class MoveSymbolSliceTest extends Test {
 
 	/**
 	 * A `using` grants STATIC EXTENSIONS and an extension call spells the method name and nothing else,
-	 * so no name scan can see which module supplied it — the same evidence on which S40 keeps a
-	 * DESTINATION `using` unconditionally. Without the mirror the moved body's `s.trim()` arrived at a
+	 * so no name scan can see which module supplied it — the same evidence on which a DESTINATION
+	 * `using` is kept unconditionally. Without the mirror the moved body's `s.trim()` arrived at a
 	 * destination with no `using StringTools;` and read `String has no field trim` at rc 0.
 	 */
 	public function testASourceUsingIsCarriedIntoTheDestination(): Void {
@@ -2694,7 +2694,7 @@ class MoveSymbolSliceTest extends Test {
 	 * A DOTLESS path no module in the index spells is the AMBIENT TOP LEVEL, and both sides mean the
 	 * same type by it — so a destination that merely WRITES `StringTools.lpad(...)` is not a collision.
 	 * Green at base only because nothing priced a receiver there at all; once `StringTools.trim(s)` is
-	 * a dependency the ambient arm of the collision gate fires on it, and 2 of 15 accepted Pony
+	 * a dependency the ambient arm of the collision gate fires on it, and a few accepted Pony
 	 * `move-member` cases were refused before this exemption existed.
 	 */
 	public function testAnAmbientTopLevelDependencyIsNotACollision(): Void {
@@ -2733,7 +2733,7 @@ class MoveSymbolSliceTest extends Test {
 
 	/**
 	 * A statementless file can reach a moved ENUM through its CONSTRUCTORS and never spell the type at
-	 * all — S41's own Pony case was `pony/ServiceProvider.hx` reaching `pony.Or.OrState` only through
+	 * all — the Pony case that motivated it was `pony/ServiceProvider.hx` reaching `pony.Or.OrState` only through
 	 * `case A(cb)`. The repoint walk was taught the constructor names then; the repair walk scans the
 	 * same set now, and a scan of the type name alone leaves this file unrepaired.
 	 */
@@ -2758,8 +2758,8 @@ class MoveSymbolSliceTest extends Test {
 	 * `*` or `@` — so a `/**\n\tText\n**\/` block matched only on its closing line, and the cut took
 	 * the `**\/` and left the opener behind. The destination then began with a bare `**\/` and stopped
 	 * parsing; the op refused with `parse failed` and no position, which is how the shape stayed
-	 * invisible. Measured on a real 1127-line test module. The walk now asks the lexer where the
-	 * comment starts before reading any line's text.
+	 * invisible. The walk now asks the lexer where the comment starts before reading any line's
+	 * text.
 	 */
 	public function testAGutterlessDocBlockTravelsWholeWithTheDeclaration(): Void {
 		final doc: String = '/**\n\tThe kind of doc block that has no gutter.\n\tSecond line, still prose.\n**/\n';
@@ -2782,7 +2782,7 @@ class MoveSymbolSliceTest extends Test {
 	 * `qualifiedPathRefusal` is a raw `indexOf` over each scope file with only the import statements
 	 * excluded, so a doc line naming the path read as a code reference and blocked a legitimate move
 	 * at rc 1 — with advice ("convert it to a bare Thing, with an import") that means nothing for
-	 * prose. Reproduced as T511 on the base engine over exactly this three-file scope.
+	 * prose. Reproduced on the base engine over exactly this three-file scope.
 	 *
 	 * Two controls, because a refusal gate that stops refusing is worth nothing on its own. A REAL
 	 * `a.Thing.go()` in the same slot still refuses — that is the reference the gate exists for. And

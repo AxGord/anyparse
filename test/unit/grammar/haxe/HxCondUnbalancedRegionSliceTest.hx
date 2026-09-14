@@ -167,7 +167,7 @@ class HxCondUnbalancedRegionSliceTest extends HxTestHelpers {
 	 * The `#else` requirement in `HxCondBlockOpenRaw` keeps
 	 * `CondSpliceBlockOpen` off it, so the OPENER stays a `CondSpliceStmt`
 	 * that binds the shared `g();` as its tail. The CLOSER region is a
-	 * `CondSpliceBlockTail` since S115 - it closes the `try` and carries a
+	 * `CondSpliceBlockTail` - it closes the `try` and carries a
 	 * block of its own - and the `return` after `#end` is a sibling
 	 * statement, no longer swallowed as a tail.
 	 */
@@ -221,7 +221,7 @@ class HxCondUnbalancedRegionSliceTest extends HxTestHelpers {
 	 * A NON-empty block-tail body is a real statement list, so it round-trips
 	 * byte for byte the way any other block does - the collapse above is the
 	 * block writer's ordinary empty-body answer, not a special case.
-	 * No @:pin: this fixture SURVIVES M-COND-BLOCK-TAIL-NEVER, measured. With
+	 * No @:pin: this fixture SURVIVES M-COND-BLOCK-TAIL-NEVER. With
 	 * the terminal cut the region falls back to CondSpliceStmt, whose raw
 	 * capture reproduces these bytes byte for byte too - a round trip is a
 	 * fidelity guard here, not a discriminator, and the three fixtures that

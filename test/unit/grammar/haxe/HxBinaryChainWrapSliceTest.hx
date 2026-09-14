@@ -25,29 +25,12 @@ import utest.Assert;
  * for haxe-formatter default-config fixtures (issue_187 default,
  * issue_179 long throw).
  *
- * Cases:
- *  - `testShortBoolChainStaysFlat`: short `||` chain fits → `NoWrap`
- *    inline (`a || b || c`).
- *  - `testLongBoolChainBreaksOPLAfterFirst`: long `||` chain exceeds
- *    line width → `OPLAfterFirst` shape: items[0] flat, continuations
- *    `\n+indent || items[i]` (BeforeLast op placement).
- *  - `testMixedBoolOpsCollapseIntoOneChain`: `a || b && c` gathered as
- *    ONE chain at outermost prec — items=[a,b,c], ops=['||','&&']. All
- *    operators land at same indent on break.
- *  - `testLongAddSubChainBreaksOPLAfterFirst`: long `+` string concat
- *    chain breaks identically — `\n+indent + items[i]` continuation.
- *  - `testCustomConfigOnePerLine`: `hxformat.json` overriding
- *    `opBoolChain.defaultWrap: onePerLine` switches the cascade default
- *    → `OnePerLine` shape (After op placement, every operand on its
- *    own indented line).
- *  - `testNonChainOpFallsBackToG1`: `<<` is not in the chain class set
- *    → falls through to existing G.1 per-binary Group emission. Smoke
- *    that the chain-class guard is correct.
- *  - `testNullCoalShortChainStaysFlat`: a short `??` chain that fits stays
- *    inline (NoWrap) -- the null-coalescing analog of the `||` short-chain
- *    case. (Overflow-glued `??` is covered by `HxBinopGroupWrapSliceTest`.)
- *  - `testIdempotencyLongBoolChain`: round-trip stable after the new
- *    chain emission shape.
+ * The fixtures pin each shape from a fitting and an overflowing chain,
+ * mixed `||` / `&&` gathered as ONE chain at the outermost precedence, a
+ * config override to `onePerLine`, the chain-class guard (`<<` falls
+ * through to per-binary Group emission), a short `??` chain staying flat
+ * (the overflow-glued `??` case is `HxBinopGroupWrapSliceTest`'s), and
+ * round-trip stability of the new emission shape.
  */
 class HxBinaryChainWrapSliceTest extends HxTestHelpers {
 

@@ -67,8 +67,8 @@ class CommentRewriteSliceTest extends Test {
 	/**
 	 * A literal find spanning two consecutive `//` lines, written with a plain newline.
 	 *
-	 * It matched NOTHING until this slice, and the op said so — `no comment body in 1 file(s)
-	 * contains the find text` — about text plainly present in the file (T755). The lexer's tokens
+	 * It matched NOTHING before the runs were merged, and the op said so — `no comment body in 1 file(s)
+	 * contains the find text` — about text plainly present in the file. The lexer's tokens
 	 * are one per LINE for `//`, so no single body held both halves; a `/**` block, whose body is
 	 * the whole thing, had worked all along. `collectCommentUnits` merges the run into one body,
 	 * and the two spellings of a comment now answer the same.
@@ -104,8 +104,8 @@ class CommentRewriteSliceTest extends Test {
 	 *
 	 * The weaker spelling — a find joining the two comment TEXTS — cannot fail: with the run guard
 	 * removed the merged body still HOLDS the code between them, so `alpha beta` is absent either
-	 * way. The find has to quote the code for the fixture to discriminate (measured: that spelling
-	 * stayed green under a `contiguousLineComments` that merged everything).
+	 * way. The find has to quote the code for the fixture to discriminate (that spelling stayed
+	 * green under a `contiguousLineComments` that merged everything).
 	 */
 	public function testCodeBetweenLineCommentsEndsTheRun(): Void {
 		final src: String = 'class C {\n\t// alpha\n\tvar x = 1;\n\t// beta\n\tvar y = 2;\n}';
@@ -139,7 +139,7 @@ class CommentRewriteSliceTest extends Test {
 	 * The unit's body span reaches over the INTERIOR openers of lines 2..N, which is what lets a
 	 * find cross a break — and what let `--regex '/' ''` delete one, turning `// var y = 2;` into a
 	 * live field. Every gate downstream said yes: valid Haxe, so the re-parse passed, `fmt --list`
-	 * read 0 of 1, and lint reported the new member as if a human had written it.
+	 * read the file as canonical, and lint reported the new member as if a human had written it.
 	 */
 	@:pin('control')
 	@:killer('M-COMMENT-RUN-OPENER-UNGUARDED')
@@ -381,9 +381,9 @@ class CommentRewriteSliceTest extends Test {
 	 * TEXTS. An edit necessarily changes the text of the line it edits, so under text identity every
 	 * touched over-width line read as a newly gained one and the op refused a rename that SHORTENED a
 	 * 155-column line to 154 — in exactly the case the gate's own doc promised to allow. The REFLOW
-	 * reads the same comparison, which is what keeps it a repair: measured on `MemberOrder.hx`, whose
-	 * doc holds a 6641-column line, a seven-character shortening edit left the file at 978 lines,
-	 * byte-identical to the same edit under `--allow-wide`.
+	 * reads the same comparison, which is what keeps it a repair: on a file whose doc holds a line
+	 * thousands of columns wide, a shortening edit leaves the file byte-identical to the same edit
+	 * under `--allow-wide`.
 	 */
 	public function testEditingAWideLineShorterNotRefused(): Void {
 		final wide: String = 'An existing sentence that already runs on and on and on and on and on and on and on and on '
@@ -430,8 +430,8 @@ class CommentRewriteSliceTest extends Test {
 	/**
 	 * Making an already over-width line WIDER is still refused when nothing can break it — otherwise
 	 * the gate would let a long line grow without limit as long as no second one appeared, which is
-	 * what a count-only comparison does (measured: dropping the `widest` half killed no fixture until
-	 * this one).
+	 * what a count-only comparison does (dropping the `widest` half killed no fixture until this
+	 * one).
 	 *
 	 * The fixture is deliberately space-free: a wrappable widening reflows now, so the only input left
 	 * that can reach the gate at an unchanged line COUNT is one the reflow hands back whole.
@@ -469,9 +469,9 @@ class CommentRewriteSliceTest extends Test {
 	 * the same source canonicalised but unedited - so a file that already holds a wider line is not
 	 * refused for holding it. What changed is WHICH line the message quotes.
 	 *
-	 * At the base commit this refusal read `at 253 columns` and quoted a doc line the replacement
-	 * never touched, in a file whose only fault was owning it. That is how the guard blocked S45 on
-	 * two files and read as broken.
+	 * At the base commit this refusal quoted a doc line the replacement never touched, in a file
+	 * whose only fault was owning it. That is how the guard blocked a whole slice on two files and
+	 * read as broken.
 	 */
 	public function testWidthRefusalNamesTheLineTheEditAdded(): Void {
 		final untouched: String = ''.rpad('w', 250);
@@ -578,12 +578,12 @@ class CommentRewriteSliceTest extends Test {
 	 * A literal find crossing a `//` run's line break takes the break with it, so the two lines JOIN —
 	 * and the join is now REFLOWED back into the configured width instead of refused.
 	 *
-	 * That join is the whole T755 scenario, fixing a phrase spread over two `//` lines, and the width
-	 * gate turned it down every time the joined line passed the width. Measured on
-	 * `WriterRefFieldLowering.hx` under that file's 140: the run at lines 92-96 has siblings of 80 to
-	 * 84, an edit to the phrase spanning lines 92 and 93 joined them into 169 columns and was refused,
-	 * and the same edit now comes back as 86 and 93. Being able to FIND the text was never the same as
-	 * being able to edit it in place. Killed by arm `M-COMMENT-REFLOW-ABSENT`.
+	 * That join is the whole scenario of fixing a phrase spread over two `//` lines, and the width
+	 * gate turned it down every time the joined line passed the width: in a real run of short
+	 * sibling lines, an edit to a phrase spanning the break joined two of them into a line past the
+	 * file's width and was refused, and the same edit now comes back as two lines inside it. Being
+	 * able to FIND the text was never the same as being able to edit it in place. Killed by arm
+	 * `M-COMMENT-REFLOW-ABSENT`.
 	 */
 	@:pin('control')
 	@:killer('M-COMMENT-REFLOW-ABSENT')
@@ -656,11 +656,11 @@ class CommentRewriteSliceTest extends Test {
 	 *
 	 * `normalizeCommentBody` folds a blank continuation line into the SAME single space an ordinary
 	 * break becomes, so `A B` matched across `A`, a bare `//` and `B` — and the splice then deleted the
-	 * separator, merging two paragraphs into one line with no diagnostic anywhere. Measured on
-	 * `HxCasePattern.hx`, whose line 56 is a bare `\t//` between two paragraphs: an edit that SHORTENED
-	 * the text around it (a long `@:fmt(...)` name cut to a short one) merged lines 55 and 57 into 125
-	 * columns — inside that file's 140, so the width gate never fired either, and a longer replacement
-	 * would have been refused for its width rather than for the separator it ate.
+	 * separator, merging two paragraphs into one line with no diagnostic anywhere. In a real doc
+	 * with a bare `\t//` between two paragraphs, an edit that SHORTENED the text around it (a long
+	 * `@:fmt(...)` name cut to a short one) merged the paragraphs into one line inside the file's
+	 * width, so the width gate never fired either, and a longer replacement would have been refused
+	 * for its width rather than for the separator it ate.
 	 * Killed by arm `M-COMMENT-PARAGRAPH-UNGUARDED`.
 	 */
 	@:pin('control')
@@ -697,7 +697,7 @@ class CommentRewriteSliceTest extends Test {
 	}
 
 	/**
-	 * T770 answered: a deletion does NOT own the blank line in front of a list's first item.
+	 * A deletion does NOT own the blank line in front of a list's first item.
 	 *
 	 * That separator is the lead's boundary with the LIST, so taking it glued the rest of the list onto
 	 * the lead — and silently, since the join lands inside the width and no gate in this project reads a
@@ -747,11 +747,10 @@ class CommentRewriteSliceTest extends Test {
 	 * A match beginning in the MIDDLE of a line is reflowed too — the replacement's first line lands
 	 * behind whatever already stood there, and that offset used to be the caller's to count.
 	 *
-	 * T732 measured 119 columns from exactly this shape and read it as a defect of the width gate. It is
-	 * not: the gate compares against the CONFIGURED width, and the same shape reproduced at 123 columns
-	 * on `HxFormatSameLineSection.hx` is inside that file's own 140. What was missing is the reflow —
-	 * the identical edit written long enough to cross the width was REFUSED at 160 columns there and now
-	 * comes back as two lines of 80 and 82.
+	 * A report read this shape as a defect of the width gate. It is not: the gate compares against
+	 * the CONFIGURED width, and the reported join was inside its file's own width. What was missing
+	 * is the reflow — the identical edit written long enough to cross the width was REFUSED there and
+	 * now comes back as two lines inside it.
 	 *
 	 * This fixture is not that file: `cr` passes no options, so it measures against the plugin's
 	 * compiled default of 160, where its own join is 177 columns and reflows to 92 and 91.
@@ -781,9 +780,9 @@ class CommentRewriteSliceTest extends Test {
 	 *
 	 * `Suppression.parseNoqa` reads an empty rule list as EVERY rule, and every gate here says the
 	 * result is fine: the writer re-emits a comment interior byte for byte so `fmt --list` is clean, the
-	 * re-parse passes, and LINT ITSELF REPORTS FEWER FINDINGS, which reads as progress. Measured on a
-	 * 133-column trailing probe, a live `naming` warning disappeared. 24 of this tree's 131 trailing
-	 * noqa comments are already past 120 columns.
+	 * re-parse passes, and LINT ITSELF REPORTS FEWER FINDINGS, which reads as progress. On a trailing
+	 * probe past the width, a live `naming` warning disappeared — and trailing noqa comments past the
+	 * width are common in a real tree.
 	 *
 	 * The directive here stands on its OWN line inside a `//` run, so `reflowSafeLine` is the only guard
 	 * it can reach — as a TRAILING comment it was refused by the trailing-comment test first and pinned
@@ -856,9 +855,9 @@ class CommentRewriteSliceTest extends Test {
 	 *
 	 * `fillText` hands a remainder back whole when no break point fits, so at a small enough limit
 	 * the line COUNT falls and a one-line over-width answer beat a legal two-line one — the
-	 * balancer accepted it and the gate then refused the edit. Measured: an 86-character URL
-	 * followed by prose was REFUSED at 168 columns while the same body with its first space at
-	 * index 60 wrapped happily. The acceptance test compares WIDTH as well as line count.
+	 * balancer accepted it and the gate then refused the edit: a long URL followed by prose was
+	 * REFUSED over the width while the same body with an earlier first space wrapped happily. The
+	 * acceptance test compares WIDTH as well as line count.
 	 * Killed by arm `M-COMMENT-REFLOW-COUNT-ONLY`.
 	 */
 	@:pin('control')
@@ -872,12 +871,12 @@ class CommentRewriteSliceTest extends Test {
 	}
 
 	/**
-	 * T780: the reflow measures the BODY, which stops two characters short of the block's `*\/`, so a
+	 * The reflow measures the BODY, which stops two characters short of the block's `*\/`, so a
 	 * one-line doc block the edit left at exactly one or two columns over came back unwrapped — and
 	 * the width gate, which measures the PHYSICAL line, then refused the edit outright.
 	 *
 	 * Two failures of one blindness, and this is the louder of the two: `comment-width` merely
-	 * reported the closer as a decline reason on 20 lines of this tree, while HERE a legitimate edit
+	 * reported the closer as a decline reason on a few lines of a real tree, while HERE a legitimate edit
 	 * was rejected with `the replacement leaves a comment line at 141 columns` and nothing to do about
 	 * it but `--allow-wide`. Both widths are pinned because the whole class is 141 and 142 — the
 	 * closer is two columns and the body span concedes exactly those.
@@ -910,7 +909,7 @@ class CommentRewriteSliceTest extends Test {
 	}
 
 	/**
-	 * T771 answered — KEEP the gutter-less continuation, and this is what it looks like.
+	 * KEEP the gutter-less continuation, and this is what it looks like.
 	 *
 	 * A one-line PLAIN `/* … *\/` the edit grows past the width wraps into a continuation carrying the
 	 * block's own indentation and NO star. Inventing a ` * ` would change the comment's KIND, and
@@ -921,7 +920,7 @@ class CommentRewriteSliceTest extends Test {
 	 *
 	 * The reported "column 0" is not the reflow's doing either: the continuation IS the block's own
 	 * indent, and the writer's canonical form for a gutter-less block prepends the opener's indent to
-	 * each interior line — measured, `\t/* a\n\tb *\/` canonicalises to `\t/* a\n\t\tb *\/`, while the
+	 * each interior line: `\t/* a\n\tb *\/` canonicalises to `\t/* a\n\t\tb *\/`, while the
 	 * same shape at column 0 has nothing to prepend and stays there.
 	 * Killed by arm `M-COMMENT-CONTINUATION-ALWAYS-GUTTER`.
 	 */

@@ -64,7 +64,7 @@ class HxCastSliceTest extends HxTestHelpers {
 	}
 
 	public inline function testWriterCastIsBoolTight(): Void {
-		// The pre-Slice-46 fixture-failing case: `cast (x) is Bool`
+		// The fixture-failing case before the cast slice: `cast (x) is Bool`
 		// round-trips as `cast(x) is Bool` with tight cast paren.
 		writerEquals(
 			'class C { function m():Void { (cast (x) is Bool); } }', 'class C {\n\tfunction m():Void {\n\t\t(cast(x) is Bool);\n\t}\n}\n',

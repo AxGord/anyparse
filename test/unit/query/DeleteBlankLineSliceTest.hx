@@ -112,7 +112,7 @@ class DeleteBlankLineSliceTest extends Test {
 
 	/**
 	 * FIRST member of the type body. This pins the OUTCOME, not the span: the writer caps
-	 * the gap under `{` at one blank whatever the cut did — measured, a hand-built two-blank
+	 * the gap under `{` at one blank whatever the cut did — a hand-built two-blank
 	 * opening comes back as one under every config reachable here — so the assertion holds
 	 * against the fix, against the defect and against an over-consuming fix alike. It is here
 	 * because the position is worth a regression guard, and named so nobody mistakes it for

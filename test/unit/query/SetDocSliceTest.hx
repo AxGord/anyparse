@@ -45,7 +45,7 @@ class SetDocSliceTest extends Test {
 	 * construction (nothing stripped anything then); its value is the mutation that leaves it
 	 * standing. Returning `RefactorSupport.ungutter` to the identity flips
 	 * `testCallerSuppliedGutterIsStripped` here and `testCallerSuppliedGutterIsNotDoubled` in
-	 * `CommentRewriteSliceTest`, and those two ONLY — measured; this test does not move, which is
+	 * `CommentRewriteSliceTest`, and those two ONLY; this test does not move, which is
 	 * what says the strip reads the whitespace and not the star.
 	 */
 	public function testFlushBulletSurvives(): Void {

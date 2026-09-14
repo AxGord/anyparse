@@ -18,8 +18,8 @@ import utest.Test;
  * with it, so a text it repeated — a bare `//` separator is the everyday case — has fewer
  * occurrences in the result than in the source, and every LATER occurrence drew the block index of
  * an EARLIER one. A surviving multi-comment block then reported a weld between two comments that
- * never moved, naming code hundreds of lines from the deletion. Measured on S117: 11 of 44
- * whole-member deletions were refused this way, and the workaround was to route them through
+ * never moved, naming code hundreds of lines from the deletion. In one real slice a quarter of
+ * the whole-member deletions were refused this way, and the workaround was to route them through
  * `move-member`, which bypasses the seam entirely.
  *
  * What replaced the queue is arithmetic: a comment no edit covers is copied verbatim, so its offset

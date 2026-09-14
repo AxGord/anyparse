@@ -178,7 +178,7 @@ class LiteralVocabularyTest extends Test {
 	 * The content set follows whatever vocabulary it is HANDED — the half a frozen list also
 	 * satisfies, and the one every other fixture here leaves unproved.
 	 *
-	 * Measured in review: `contentKinds` replaced by a literal `['Literal', 'DoubleStringExpr']` —
+	 * Found in review: `contentKinds` replaced by a literal `['Literal', 'DoubleStringExpr']` —
 	 * exactly the defect this slice removes — passes every other fixture in this class, because all
 	 * of them read the Haxe shape and that frozen pair is wide enough for it. Only a vocabulary this
 	 * grammar does not use separates a derivation from a copy.

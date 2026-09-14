@@ -16,7 +16,7 @@ import utest.Test;
  * The layer seam of `SymbolIndex`: each cross-file question is owned by one query layer reached
  * as a field on the index, and the index itself no longer declares any of them.
  *
- * The suite already proves the ANSWERS did not move — 13 940 tests over the same corpus. What no
+ * The suite already proves the ANSWERS did not move — the whole suite over the same corpus. What no
  * other test can see is the STRUCTURE, which is the whole content of the change: a facade that
  * kept delegating one-liners would leave every one of these names on `SymbolIndex` and pass the
  * rest of the suite unchanged. Both halves of each assertion are needed — "absent from the index"

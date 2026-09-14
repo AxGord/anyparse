@@ -13,7 +13,7 @@ import utest.Assert;
  * `HxCondDeclPrefix` as the body element type of `HxConditionalMeta` /
  * `HxElseifMeta` — plus the integer `#if` condition atom.
  *
- * Both gaps come from openfl: 92 of its 114 unparseable modules are
+ * Both gaps come from openfl: most of its unparseable modules are
  * `#if (haxe_ver >= 4.0) enum #else @:enum #end abstract Name(T)` (every
  * `openfl.display.*` enum-abstract), and `#if 0` guards commented-out
  * regions in `utils/_internal/Lib.hx`, `AssetsMacro.hx`, `ShaderMacro.hx`.

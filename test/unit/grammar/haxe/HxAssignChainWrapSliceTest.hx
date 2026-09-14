@@ -106,8 +106,8 @@ final class HxAssignChainWrapSliceTest extends Test {
 	public function testFittingAssignChainStaysFlat(): Void {
 		// Two `=` operators, 65 columns -- comfortably inside the limit. The
 		// chain routes through the new emit and must come back untouched.
-		// HONEST SCOPE: measured non-discriminating for the probe threshold --
-		// it stays green even with the probe wired to fire at column 0, because
+		// HONEST SCOPE: non-discriminating for the probe threshold -- it stays
+		// green even with the probe wired to fire at column 0, because
 		// the break shape's own `Group` re-glues a chain this short. It guards
 		// against an UNCONDITIONAL break shape, not against the constant.
 		final src: String = 'class Sample {\n\n\tfunction run() {\n\t\t_seg1.onDone = _seg2.onDone = _seg3.onDone = pickHandler;\n\t}\n\n}';
@@ -116,8 +116,8 @@ final class HxAssignChainWrapSliceTest extends Test {
 
 	public function testAssignChainAtExactlyMaxLineLengthStaysFlat(): Void {
 		// Statement line = exactly 140 columns. Stays flat.
-		// HONEST SCOPE: same as above -- measured non-discriminating for the
-		// threshold. The probe measures the chain EXPRESSION only (the statement
+		// HONEST SCOPE: same as above -- non-discriminating for the threshold.
+		// The probe measures the chain EXPRESSION only (the statement
 		// `;` is a sibling `Text` outside the measured Doc), and the break
 		// shape's `Group` re-glues anything that still fits, so this stays flat
 		// under `lineWidth`, `lineWidth + 1` and a zero threshold alike. It

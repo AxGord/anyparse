@@ -202,7 +202,7 @@ class HxDollarReifSliceTest extends HxTestHelpers {
 	}
 
 	public function testMacroFinalTypedExpr(): Void {
-		// The real Lowering.hx:1543 shape: `macro final _x:Int = ctx.pos`.
+		// The real `Lowering` shape: `macro final _x:Int = ctx.pos`.
 		switch initOf('class C { var x = macro final _x:Int = ctx.pos; }') {
 			case MacroExpr(FinalExpr({
 				name: nm,
@@ -247,7 +247,7 @@ class HxDollarReifSliceTest extends HxTestHelpers {
 	}
 
 	public function testMacroThrowNewExpr(): Void {
-		// The real Lowering.hx:3516 driver shape:
+		// The real `Lowering` driver shape:
 		// `macro throw new anyparse.runtime.ParseError(...)`.
 		switch initOf('class C { var x = macro throw new E("boom"); }') {
 			case MacroExpr(ThrowExpr(NewExpr(_))):
@@ -279,7 +279,7 @@ class HxDollarReifSliceTest extends HxTestHelpers {
 	}
 
 	public function testDollarFinalNameMacroSite(): Void {
-		// The exact WriterLowering.hx:1620 site shape:
+		// The exact `WriterLowering` site shape:
 		// `final $localName:$fieldCT = $fieldAccess;`. The `$`-name is this
 		// slice; `:$fieldCT` is Slice T (DollarType); `= $fieldAccess` is
 		// DollarIdentExpr — all three compose in one HxVarDecl.

@@ -13,9 +13,9 @@ import utest.Assert;
 
 /**
  * A declaration that is nothing but its own `#if X #end` prefix, at the three
- * scopes T15's member-position slice left open.
+ * scopes the member-position slice left open.
  *
- * T15 made `class C { #if swc #end }` legal by turning `HxMemberDecl.member`
+ * That slice made `class C { #if swc #end }` legal by turning `HxMemberDecl.member`
  * into `@:optional @:absentOn('}')`: the region is claimed one level earlier by
  * the metadata Star (`HxMetadata.Conditional` takes an empty body), so what was
  * missing was a member declaration that is only a prefix. The identical shape
@@ -27,7 +27,7 @@ import utest.Assert;
  *
  * The writer half is separate and was pre-existing: a BLANK line between a
  * prefix-only region and what follows was dropped at every scope, including
- * the member one T15 had just opened. It is NOT the same answer as a blank
+ * the member one it had just opened. It is NOT the same answer as a blank
  * after ordinary metadata — the fork deletes that one
  * (`emptylines/issue_384_macro_classes_with_metadata`) and keeps this one
  * (`emptylines/after_vars_before_conditionals` even MOVES a blank to the far
@@ -121,7 +121,7 @@ class HxOrphanPrefixDeclSliceTest extends HxTestHelpers {
 
 	/**
 	 * A prefix-only region followed by a member that already has one carries
-	 * a trailing comment through the absent branch's rewind. T15's slice paid
+	 * a trailing comment through the absent branch's rewind. The member-position slice paid
 	 * for this once — the branch stashed AND rewound the same trivia and the
 	 * comment doubled on every pass — and no gate reports it, so the check is
 	 * a second write over the first write's output.

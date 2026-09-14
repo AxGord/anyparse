@@ -22,7 +22,7 @@ import utest.Test;
  * Walks `src/anyparse/`, parses each `.hx` through `HaxeQueryPlugin`, renders it as an
  * S-expr and applies `Engine.truncate` and a sample selector; the two JSON paths
  * (`Json.renderTree`, and `Json.renderMatches` with the `Cli.sourceWindows` that feeds it)
- * run on one file in `JSON_SAMPLE_STRIDE` — see that constant for the measurement behind
+ * run on one file in `JSON_SAMPLE_STRIDE` — see that constant for the reason behind
  * the split. The test passes when no file triggers a non-`ParseError` exception in the
  * engine path. Parse failures on individual files are reported but do not fail the test —
  * Phase 3 grammar coverage is an independent concern.
@@ -35,10 +35,10 @@ class ApqAstIntegrationTest extends Test {
 	 * One file in this many gets the two JSON render paths.
 	 *
 	 * Every other engine path in the walk is cheap — parse + `Text.render` + `truncate`
-	 * + `select` over all 764 files under `src/anyparse` measured 4.9s. The two JSON
-	 * paths over the same set measured 438s of the 443s total (anyparse's JSON writer
-	 * emits 3.8 MB of pretty-printed output for a 127 KB source, ~2 MB/s), which is
-	 * twenty times the whole suite. The stride keeps them exercised on a deterministic
+	 * + `select` over every file under `src/anyparse` takes seconds. The two JSON paths
+	 * over the same set take almost all of the wall time (anyparse's JSON writer emits
+	 * pretty-printed output many times the size of its source), a multiple of the whole
+	 * suite. The stride keeps them exercised on a deterministic
 	 * spread of the sorted list instead; the JSON writer's throughput is a separate
 	 * concern, and `jsonRendered` is asserted against `walked / stride` so the sample
 	 * cannot silently shrink. `Cli.sourceWindows` rides the same stride — it lexes the

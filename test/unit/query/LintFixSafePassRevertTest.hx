@@ -29,7 +29,7 @@ class LintFixSafePassRevertTest extends Test {
 	public function testTheOracleLessComplementRefusesTheEditTheOracleArmReverts(): Void {
 		// The judgement below is ORACLE-CONDITIONAL by construction: `Cli.reconcileSafePass`
 		// returns `{reverted: false}` before reaching `classify` when no `compilerOracle` is
-		// configured or the pre-measurement is absent. Measured on the T445 fixture with S54's
+		// configured or the pre-measurement is absent. On the deleting-fix fixture with the
 		// closure guard removed: `--no-oracle` wrote the corrupting edit, a config without
 		// `compilerOracle` wrote it, and only the oracle arm reverted.
 		//
@@ -248,7 +248,7 @@ class LintFixSafePassRevertTest extends Test {
 
 	public function testTheNoticeNamesTheFileItRolledBack(): Void {
 		// The message this replaces said only `REVERTED N file(s), nothing was written` — on a
-		// 228-file wave that is a bisect, one compile at a time, to learn which file it meant.
+		// wave of files that is a bisect, one compile at a time, to learn which file it meant.
 		final notice: String = LintFixSafePass.revertNotice(
 			SafePassNarrowing.Narrowed(['/p/B.hx'], 1), 3, '/p/B.hx:4: characters 1-2 : boom'
 		);
@@ -269,7 +269,7 @@ class LintFixSafePassRevertTest extends Test {
 	public function testAPrettyReportedDiagnosticIsAttributedDespiteItsAnsiBadge(): Void {
 		// `-D message.reporting=pretty` (Pony's own tools/build.hxml sets it) puts an
 		// ANSI-coloured ` ERROR ` badge before the position, so the path is NOT the line's first
-		// token. Verbatim shape, measured on Haxe 4.3.7.
+		// token. Verbatim shape.
 		final esc: String = String.fromCharCode(27);
 		final errors: String = '$esc[30;41m ERROR $esc[0m src/Main5.hx:3: characters 3-31\n\n 3 | $esc[2m  $esc[0m$esc[1mfinal a: Int = '
 			+ '\'not an int\';$esc[0m\n   |   $esc[31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^$esc[0m\n   | String should be Int';
@@ -320,7 +320,7 @@ class LintFixSafePassRevertTest extends Test {
 	/**
 	 * BOTH netless arms say the net is off, and each names the remedy it actually has.
 	 *
-	 * S59 measured the reach table and found arm B silent: a run with no `compilerOracle`
+	 * The reach table showed arm B silent: a run with no `compilerOracle`
 	 * configured wrote the same corrupting edit `--no-oracle` wrote, and said nothing —
 	 * while the flag arm printed a skip line. The silent arm is the state every foreign
 	 * project starts in, so it is the one that needed the sentence most.
@@ -334,7 +334,7 @@ class LintFixSafePassRevertTest extends Test {
 		// the config key, not the flag, so the two collapse to one sentence — and this arm is
 		// the one `verbose` does NOT gate, so a quiet run still gets it.
 		Assert.equals(unconfigured, LintFixSafePass.netNotice(null, true, false) ?? '');
-		// A configured oracle the run DECLINED keeps S59's wording — the remedy there is to
+		// A configured oracle the run DECLINED keeps its own wording — the remedy there is to
 		// drop the flag, and naming the config key would be advice the user already took. It
 		// waits for `--verbose`; `LintFixQuietDefaultTest` owns why.
 		final declined: String = LintFixSafePass.netNotice('build.hxml', true, true) ?? '';

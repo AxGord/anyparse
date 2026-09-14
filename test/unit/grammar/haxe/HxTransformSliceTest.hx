@@ -96,7 +96,7 @@ class HxTransformSliceTest extends Test {
 		final out: String = HxModuleWriter.write(HxModuleAst.transform(ast, {
 			hxIntLit: doubleInt
 		}));
-		// 21 -> 42, 50 -> 100. The `Int` type names are HxTypeName, not
+		// Both literals are doubled. The `Int` type names are HxTypeName, not
 		// HxIntLit, so they are untouched.
 		Assert.isTrue(out.indexOf('= 42;') != -1, 'first int literal not doubled in: <$out>');
 		Assert.isTrue(out.indexOf('= 100;') != -1, 'second int literal not doubled in: <$out>');

@@ -39,17 +39,13 @@ import utest.Test;
  *    marker for a body carrying an `OptHardline*` atom.
  *
  * The second half matters only under a config whose cascade resolves to
- * `NoWrap` - e.g. a `callParameter` rule `itemCount <= 1 -> noWrap`, or
- * `defaultWrap: "noWrap"`. Tests at compiled defaults cannot see it, so
- * the sole-argument shapes are pinned twice: once at defaults and once
- * through `CFG_NOWRAP`.
- *
- * The corrupting seam was confined to the postfix `Call` Star (`Call`,
- * `super(...)`, a chain segment's args, a call nested inside metadata)
- * and its method-chain twin. Every other comma-separated group - `new`
- * args, array literals, object/anon-struct literals, declaration
- * parameter lists, anon-type fields - already breaks before its closer;
- * those are pinned here so the fix cannot regress them.
+ * `NoWrap` (a `callParameter` rule `itemCount <= 1 -> noWrap`, or
+ * `defaultWrap: "noWrap"`); tests at compiled defaults cannot see it, so
+ * the sole-argument shapes are pinned twice, at defaults and through
+ * `CFG_NOWRAP`. The corrupting seam was confined to the postfix `Call` Star
+ * and its method-chain twin; every other comma-separated group already
+ * breaks before its closer, and those are pinned here so the fix cannot
+ * regress them.
  */
 class HxGroupTrailCommentWriteTest extends Test {
 

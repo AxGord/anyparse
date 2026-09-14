@@ -8,12 +8,10 @@ import utest.Test;
 
 /**
  * `sameLine.elseSwitch` - the `elseIf` twin for the OTHER keyword-headed statement an `else`
- * idiomatically carries. The user asked for it by name (2026-09-03), choosing `same`,
- * because a `switch` else-body reads like `else if`, and Pony writes ten of them - ALL TEN in
- * the two-line shape, none on one line (parent census on `44c95603`; the brief's "10 one-line /
- * 10 two-line / 1 braced" was wrong).
+ * idiomatically carries. The user asked for it by name, choosing `same`, because a `switch` else-body reads like `else if`, and
+ * Pony writes every one of its own in the two-line shape, none on one line (the brief's census, which had them split, was wrong).
  *
- * S138 armed the THEN branch as well, after the user read a pair of `switch` branches coming
+ * The THEN branch is armed as well, after the user read a pair of `switch` branches coming
  * back with one glued and one on its own line and named the defect himself: SYMMETRICALLY -
  * the two halves of one `if`/`else` must be laid out the same way. That half
  * owns a second seam, the close: a glued `switch` ends with a `}` in the `if` head's own
@@ -27,7 +25,7 @@ import utest.Test;
  *
  * ⚠️ EVERY assertion here goes through the TRIVIA writer. The plain writer captures no
  * source-newline and no comment slots, so a `Keep` assertion against it passes vacuously and a
- * comment assertion FAILS vacuously - measured, on this very class's first draft. Trivia mode is
+ * comment assertion FAILS vacuously - as this very class's first draft did. Trivia mode is
  * also what `hxq fmt` and the Pony sweep run, so it is the mode the knob was asked for.
  */
 @:nullSafety(Strict)
@@ -44,7 +42,7 @@ class ElseSwitchPlacementSliceTest extends Test {
 	 * and glue every branch on their own - the knob then decides NOTHING and an assertion on it
 	 * passes with the whole feature disabled. `M-ELSE-SWITCH-TESTS-NONE` reported MISMATCH against
 	 * the first draft of `testTheValueIfThenBranchGluesAsWell` for exactly that reason; the
-	 * `else`-side value test above it had been vacuous the same way since S67.
+	 * `else`-side value test above it had been vacuous the same way since it was written.
 	 */
 	private static final EXPR_NEXT: String = '$BASE, "sameLine": {"expressionIf": "next"}}';
 
@@ -125,8 +123,8 @@ class ElseSwitchPlacementSliceTest extends Test {
 	 *
 	 * `buildElseSwitchCases` guards the `Same` arm on an empty leading-comment run. The mutation
 	 * audit is why this asserts exact bytes rather than "the comment is still there": with the guard
-	 * REMOVED the comment survives too, so a presence assertion cannot see the arm at all (measured —
-	 * the arm ran green against the first version of this test). What the guard actually buys is the
+	 * REMOVED the comment survives too, so a presence assertion cannot see the arm at all (the arm
+	 * ran green against the first version of this test). What the guard actually buys is the
 	 * LAYOUT: without it the `switch` drops to the outer indent, one level shallower than the author
 	 * wrote it, because the glue half-applies. Exact equality is the only assertion that separates
 	 * the two.

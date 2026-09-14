@@ -13,17 +13,10 @@ import utest.Test;
  * `BodyFit.fitLineLayout` places a body that cannot render flat
  * (`WrapList.flatLength == -1`) on the label line, because no budget makes
  * it fit and its FIRST line is a real line that does. For a `{`-opening
- * VALUE — a block, an object literal, a lambda — that reads right: the
- * brace ends the label line and the interior is plainly the body's.
- *
- * For a keyword-led STATEMENT it does not. The construct's own
+ * VALUE that reads right. For a keyword-led STATEMENT it does not: its own
  * continuation lines (`else if`, `} while`, `catch`, a region's `#else` /
  * `#end`) are siblings of its head, so glued they render at the HEAD's
- * indent — the case LABEL's own column under
- * `indentation.alignInlineSwitchCaseBody`, one level under it at the
- * default. In neither case do they sit under the body they continue, so
- * the statement reads as if it had escaped the branch (shown here at the
- * aligned setting, where it is starkest):
+ * indent and the statement reads as if it had escaped the branch:
  *
  * ```
  * case PAIR(a, b): if (p(k))
@@ -32,37 +25,26 @@ import utest.Test;
  *     b[k] = v;
  * ```
  *
- * This slice sends such a body below its label instead, where the head and
- * its arms share one indent one level under `case`. The refusal is by STATEMENT KIND (`caseBodyControlFlowRoot`), not by
- * shape: a `{`-opening value keeps the glue it was given deliberately, and
- * a control-flow body that DOES render flat (`case X: if (c) x();`) is
- * untouched — it never reaches the glue branch at all. A `@:meta` prefix is
- * transparent to the question, so the predicate recurses through it on both
- * routes the parser takes (`MetaExpr` for `if` / `for` / `while` / `switch`
- * / `try`, `MetaStmt` for `do … while`) and answers about the statement
- * underneath: `@:meta if (c) { … }` is refused, `@:meta { … }` still glues.
+ * Such a body goes below its label instead, where the head and its arms
+ * share one indent one level under `case`. The refusal is by STATEMENT KIND
+ * (`caseBodyControlFlowRoot`), not by shape: a `{`-opening value keeps its
+ * glue, a control-flow body that DOES render flat (`case X: if (c) x();`)
+ * never reaches the glue branch, and a `@:meta` prefix is transparent.
  *
  * SIBLING SYMMETRY. A refused body is below its label, so the per-switch
  * rule of omega-case-sibling-symmetry applies and every sibling follows it
- * down. The verdict cannot be taken by the structural pre-pass, which
- * measures nothing: `case X: if (c) x();` and `case X: if (c) { x(); }`
- * have the SAME statement kind and only the width measure tells them
- * apart. It is taken in the WIDTH loop instead — a unit that measures `-1` AND has
- * a control-flow body root forces the break, exactly as a multi-statement
- * body does structurally. Both halves hang off ONE meta
- * (`@:fmt(refuseGlueOnControlFlowRoot)` on the case-body Star, which the
- * case-LIST Star reads back at macro time), so a grammar can never get the
- * spread without the placement that justifies it.
+ * down. The structural pre-pass cannot take the verdict — `case X: if (c) x();`
+ * and `case X: if (c) { x(); }` have the SAME statement kind — so it is taken
+ * in the WIDTH loop: a unit that reads `-1` AND has a control-flow body root
+ * forces the break. Both halves hang off ONE meta
+ * (`@:fmt(refuseGlueOnControlFlowRoot)` on the case-body Star, read back by the
+ * case-LIST Star), so a grammar never gets the spread without the placement.
  *
- * GUARDS vs DISCRIMINATORS. Stash-verified against the pre-slice engine:
- * every test here FAILS there except
- * `testAFlatControlFlowBodyStaysInline`,
+ * Every test here FAILS on the pre-slice engine except the four guards against
+ * over-firing: `testAFlatControlFlowBodyStaysInline`,
  * `testGluedValueBodiesStayGluedAndDoNotTrigger`,
- * `testAMetadataWrappedBlockStaysGlued` and `testKnobOffIsInert`, which are
- * the guards against over-firing.
- *
- * Per `feedback_unit_test_trivia_writer.md`: the knobs are visible only
- * through `HaxeModuleTriviaParser` / `HaxeModuleTriviaWriter`.
+ * `testAMetadataWrappedBlockStaysGlued` and `testKnobOffIsInert`. The knobs are
+ * visible only through `HaxeModuleTriviaParser` / `HaxeModuleTriviaWriter`.
  */
 @:nullSafety(Strict)
 final class HxCaseBodyControlFlowGlueTest extends Test {

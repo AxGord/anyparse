@@ -114,7 +114,7 @@ final class HxFitLineBodyGlueSliceTest extends Test {
 
 	/**
 	 * A body that FITS at the continuation indent still takes its own line, knob or no knob. This is the half
-	 * `continuationRescuesBody` adds over a bare glue-width probe: measured on the header line alone the body's first
+	 * `continuationRescuesBody` adds over a bare glue-width probe: read on the header line alone, the body's first
 	 * line fits (the paren opens, so that line is two columns), and the glue would cost a third line for a shape that
 	 * renders in two.
 	 */

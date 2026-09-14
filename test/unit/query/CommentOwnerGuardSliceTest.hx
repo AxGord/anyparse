@@ -15,9 +15,8 @@ import utest.Test;
  * governs; `docSplittingEdit` pins whose declaration a doc block documents; this pins that a
  * comment keeps the code it stands above.
  *
- * The measured incident is `prefer-ternary-return` marching up the six-gate cascade in this
- * repo's own `MemberOrder.reorderRefusal` — 10 edits over 7 passes that welded two per-gate
- * explanations into one block above a seven-level ternary pyramid, one of them the note warning
+ * The incident is `prefer-ternary-return` marching up the six-gate cascade in this repo's own `MemberOrder.reorderRefusal` — a
+ * run of passes that welded two per-gate explanations into one block above a deep ternary pyramid, one of them the note warning
  * against exactly that transformation. It re-parsed, it was byte-canonical, `fmt --list` was
  * clean and every lint rule was silent, so the only thing that could have caught it was a human
  * re-reading the file.
@@ -135,7 +134,7 @@ class CommentOwnerGuardSliceTest extends Test {
 	 * The CARRY criterion, on the shape the block criterion above provably cannot see: ONE comment
 	 * block, so `detachedComment` has nothing to weld and returns before it looks at anything.
 	 *
-	 * This is the closure S84 wrote down as a backlog item and could not reach: "moved across code
+	 * This is the closure an earlier slice wrote down as a backlog item and could not reach: "moved across code
 	 * that survived" is undecidable from the two texts, because an in-place rewrite changes the
 	 * same bytes a hoist does. The edit DECLARES the ranges it quotes verbatim, and the question
 	 * becomes arithmetic — `// why zero` stood after `gate()` and `11` in the source and stands

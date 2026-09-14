@@ -15,7 +15,7 @@ import utest.Test;
  * escapes around them.
  *
  * They are green at base BY CONSTRUCTION and say so: the class did not exist there, so
- * there is no arm of this file that can be red at `1218170f`. They are a
+ * there is no arm of this file that can be red at base. They are a
  * characterization pin on behaviour the extraction had to carry over unchanged — what
  * actually proves the move is the full suite and the corpus sweep, both byte-identical
  * across it.

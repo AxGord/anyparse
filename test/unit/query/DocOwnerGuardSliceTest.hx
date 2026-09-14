@@ -125,21 +125,21 @@ class DocOwnerGuardSliceTest extends Test {
 	}
 
 	/**
-	 * The incident T554 reports, reduced to the two declarations it actually needed — and the
+	 * The stranded-paragraph incident, reduced to the two declarations it actually needed — and the
 	 * reason this slice restored a paragraph rather than only writing a guard.
 	 *
 	 * `MemberKinds.FIELD_MEMBER_KINDS` carried a doc naming what its kinds MEAN and who asks
-	 * (`Rename`, `Inline`). On 2026-07-26 commit `969ef368` inserted two newly-documented
+	 * (`Rename`, `Inline`). A commit once inserted two newly-documented
 	 * constants at that declaration, which is the zero-width-insert-with-a-line-break shape:
 	 * the doc stayed put and the insert slid under it. From then on the paragraph led
 	 * `TYPEDEF_DECL_KIND`, then `DOC_OPEN`, and travelled into `SourceComments` with `DOC_OPEN`
-	 * in S72's module split, where a reader found it welded to a one-line doc about `/**`.
+	 * in a later module split, where a reader found it welded to a one-line doc about `/**`.
 	 *
 	 * So the mechanism was the doc-splitting INSERT, not the comment WELD the brief expected:
 	 * `CommentOwnerGuard.detachedComment` cannot see this one at all, because an insert adds
 	 * text and the two comments involved were only ever ONE block (whitespace between them).
 	 * The half that could see it is `docSplittingEdit`, and it has refused this shape since
-	 * S23 — so this test GUARDS PRE-EXISTING BEHAVIOUR and is not base-red. Its value is that
+	 * long before — so this test GUARDS PRE-EXISTING BEHAVIOUR and is not base-red. Its value is that
 	 * the incident now has a fixture: the next reader who finds a stranded paragraph can check
 	 * in one run whether the seam would still let it happen.
 	 */

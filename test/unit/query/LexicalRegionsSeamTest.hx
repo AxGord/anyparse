@@ -23,8 +23,8 @@ using StringTools;
  * the question without editing core code — and the debt stayed invisible because the only
  * grammar that ever asked was Haxe.
  *
- * RED AT BASE, and by the seam itself: `plugin.lexicalRegions(source)` does not compile at
- * `3d5bf593`, so the whole class fails to build there rather than failing an assertion. The
+ * RED AT BASE, and by the seam itself: `plugin.lexicalRegions(source)` does not compile
+ * at base, so the whole class fails to build there rather than failing an assertion. The
  * behaviour half is a characterization pin — the answers must be byte-identical to what the
  * old `LexicalRegions.scan` gave, which `testForwarderAgreesWithTheSeam` states directly and
  * the corpus sweep confirms wholesale.
@@ -62,7 +62,7 @@ class LexicalRegionsSeamTest extends Test {
 	/**
 	 * The move is behaviour-preserving: the grammar implementation and the seam answer the same
 	 * thing. The deprecated `LexicalRegions` forwarder this used to compare against as well is
-	 * gone since S60 — every consumer now reaches the scan through the plugin — so what remains
+	 * gone — every consumer now reaches the scan through the plugin — so what remains
 	 * is the arm that would go red if `HaxeQueryPlugin.lexicalRegions` ever stopped delegating.
 	 */
 	public function testGrammarImplementationAgreesWithTheSeam(): Void {
@@ -76,8 +76,8 @@ class LexicalRegionsSeamTest extends Test {
 	 * sources through one wrapper each get their own answer, and a source asked twice is
 	 * re-lexed rather than served from a map that would live as long as the run.
 	 *
-	 * Deliberate, not an omission: the scan is 2.7 % of a full `lint --all --fix` over 869 files
-	 * (`--cpu-prof`), against a parse that is demanded once per CHECK. A cache added on
+	 * Deliberate, not an omission: the scan is a small share of a full `lint --all --fix` under
+	 * `--cpu-prof`, against a parse that is demanded once per CHECK. A cache added on
 	 * speculation is exactly the process-lifetime state invariant 1 is about, even when it is
 	 * instance-scoped.
 	 */
@@ -105,7 +105,7 @@ class LexicalRegionsSeamTest extends Test {
 	/**
 	 * THE ACCEPTANCE PIN, in the "shrinkage IS the test" shape: the grammar-agnostic packages
 	 * `anyparse.query`, `anyparse.check` and `anyparse.format` may name ANY `anyparse.grammar.*`
-	 * package in EXACTLY six modules, and this asserts the list rather than a count.
+	 * package in EXACTLY the modules on this list, and this asserts the list rather than a count.
 	 *
 	 *  - `check/LintConfig.hx` and `check/config/ApqLintConfig.hx` — `apqlint.json` IS a JSON
 	 *    document, so the config reader consumes `anyparse.grammar.json.JValue` as its value type.
@@ -120,19 +120,19 @@ class LexicalRegionsSeamTest extends Test {
 	 *    hand `JsonFormat.instance` and `anyparse.grammar.sexpr.SValue` / `SValueWriter` to the
 	 *    generated writers. Same relation as the two config readers, in the other direction.
 	 *
-	 * Everything else must reach a grammar through `GrammarPlugin`. Before S60 the exception was
+	 * Everything else must reach a grammar through `GrammarPlugin`. The last exception was
 	 * `LexicalRegions.scan` / `skipStringLiteral`, a deprecated forwarder that hardcoded the Haxe
-	 * lexer for 65 `collectCommentTokens` call sites — the path that gates every DELETE in the
+	 * lexer for every `collectCommentTokens` call site — the path that gates every DELETE in the
 	 * tool. Both are gone; this test is what stops the next one being added quietly.
 	 *
-	 * WIDENED BY S68, and the widening is what caught the last one. Until then the prefix was
+	 * WIDENED LATER, and the widening is what caught the last one. Until then the prefix was
 	 * `anyparse.grammar.haxe.` alone, so the pin could not see `format/text/JsonFormat.hx` naming
-	 * `anyparse.grammar.json.JIntLit` and four siblings — a format class for ONE grammar sitting in
-	 * the grammar-agnostic `format` package. The class moved to `anyparse.grammar.json` (T476, and
+	 * `anyparse.grammar.json.JIntLit` and its siblings — a format class for ONE grammar sitting in
+	 * the grammar-agnostic `format` package. The class moved to `anyparse.grammar.json` (and
 	 * `HaxeFormat` was already there); the prefix is now every grammar, and `namesAGrammar` states
 	 * the two exemptions.
 	 *
-	 * The old form of this arm also recorded that `anyparse.format` contributed NO entry — measured,
+	 * The old form of this arm also recorded that `anyparse.format` contributed NO entry — true then,
 	 * and no longer true in that spelling: what it really recorded is that no format module reaches a
 	 * grammar's LEXER, since `format`'s debt was never an import but a Haxe state machine written out
 	 * INLINE (the `'…'` interpolation / `$$` / `~/…/` lexer `CommentInventory` carried for the
@@ -175,11 +175,11 @@ class LexicalRegionsSeamTest extends Test {
 	 * only that grammar can ever opt into, and nothing but a reader noticing
 	 * stood between the macro and the next one.
 	 *
-	 * RED AT BASE `3977e25e` with EIGHT hits from two mechanisms. Six sat in
+	 * RED AT BASE with hits from two mechanisms. Most sat in
 	 * `WriterLowering.buildFnBodyEmptyCheck`, which dispatched on the literal
 	 * strings `HxFnBody` / `HxFnBodyT` / `HxFnExprBody` / `HxFnExprBodyT` to pick
 	 * which set of BODY CTORS to emit, and named two of them again in its
-	 * `fatalError` text. The other two emitted a direct call to
+	 * `fatalError` text. The others emitted a direct call to
 	 * `anyparse.grammar.haxe.HxComplexItems.kinds` — one in `WriterLowering`, one
 	 * in `TriviaSepLowering`, the plain and trivia halves of one flag.
 	 *
@@ -222,13 +222,13 @@ class LexicalRegionsSeamTest extends Test {
 	 * Two exemptions, and only two. A COMMENT may name any grammar — this file's own
 	 * class doc does. And `@:schema(anyparse.grammar.json.JsonFormat)` is invariant 5
 	 * working as designed: a schema selecting the FORMAT that gives it its literal
-	 * vocabulary. Sixteen typed-JSON models under `query/format/json` carry exactly that
-	 * one binding and nothing else, so counting it would put sixteen entries on the
+	 * vocabulary. The typed-JSON models under `query/format/json` carry exactly that
+	 * one binding and nothing else, so counting it would put every one of them on the
 	 * allow-list and say nothing about any of them.
 	 *
-	 * A STRING literal is NOT exempt, unlike the pre-S68 form of this arm: the debt that
-	 * moved `JsonFormat` into `anyparse.grammar.json` was five string literals
-	 * (`'anyparse.grammar.json.JIntLit'` and its four siblings) naming terminal types, and
+	 * A STRING literal is NOT exempt, unlike the earlier form of this arm: the debt that
+	 * moved `JsonFormat` into `anyparse.grammar.json` was a handful of string literals
+	 * (`'anyparse.grammar.json.JIntLit'` and its siblings) naming terminal types, and
 	 * a pin that masked strings could not see the thing it exists for.
 	 */
 	private function namesAGrammar(source: String, at: Int, regions: Array<LexRegion>): Bool {

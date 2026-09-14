@@ -335,7 +335,7 @@ class CrossRenameMemberSliceTest extends Test {
 	 * `resolvesToSourceType` asks `SubtypeGraph.isSubtype`, whose walk could not follow an import
 	 * alias upward, so `s.speak()` was not proven to reach the renamed member and was left standing:
 	 * `apq rename` reported `wrote 1 file(s)` and the tree failed with `p.Derived has no field tag`
-	 * on Haxe 4.3.7 (the same fixture with the classes named `Owner` / `Derived`). It now writes both
+	 * (the same fixture with the classes named `Owner` / `Derived`). It now writes both
 	 * files and compiles. A HALF-applied rename, not a missing finding — which is why this arm sits
 	 * beside the written-`extends` one rather than in a lint test.
 	 */
@@ -716,8 +716,8 @@ class CrossRenameMemberSliceTest extends Test {
 
 	/**
 	 * A DOTTED return type must name the declaring module WHOLE, never merely share its last
-	 * segment — the defect `f3b46467` removed from the static-receiver match and `64a4ae5a` from
-	 * `move-member`. Both functions here are written `.Colour`; only the one spelling THIS
+	 * segment — the defect the static-receiver match and `move-member` each had to shed.
+	 * Both functions here are written `.Colour`; only the one spelling THIS
 	 * module's path renames, and the foreign `other.Colour` one survives byte-for-byte.
 	 */
 	public function testExpectedReturnDottedTypeMatchesTheWholeModulePath(): Void {
@@ -736,8 +736,8 @@ class CrossRenameMemberSliceTest extends Test {
 	}
 
 	/**
-	 * A member INHERITED from a base class SHADOWS the expected-type resolution — verified on
-	 * Haxe 4.3.7, `class Main extends Base` whose `Base` declares `public var SAME:Colour` prints
+	 * A member INHERITED from a base class SHADOWS the expected-type resolution — compile-proved:
+	 * `class Main extends Base` whose `Base` declares `public var SAME:Colour` prints
 	 * the FIELD's value from `function inherited():Colour return SAME;`. `Refs` resolves
 	 * lexically, in one file, and cannot see that declaration, so the index is asked instead. The
 	 * sibling class that inherits nothing still renames, so the input satisfies neither half.
@@ -825,7 +825,7 @@ class CrossRenameMemberSliceTest extends Test {
 	}
 
 	/**
-	 * Only an `enum abstract` VALUE is expected-type-resolvable. Measured on Haxe 4.3.7, a PLAIN
+	 * Only an `enum abstract` VALUE is expected-type-resolvable. Compile-proved: a PLAIN
 	 * abstract's static is not — `abstract Plain(Int) { public static final PX:Plain; }` with
 	 * `function f():Plain return PX;` is `Unknown identifier : PX` — so the scan must not claim
 	 * that site, whose bare `PX` cannot be this member under any reading.
@@ -864,7 +864,7 @@ class CrossRenameMemberSliceTest extends Test {
 	}
 
 	/**
-	 * A MODULE-level VALUE binding of the name shadows the expected type — measured on Haxe 4.3.7, a
+	 * A MODULE-level VALUE binding of the name shadows the expected type — compile-proved: a
 	 * module-level `var SAME:Colour` wins over `function pick():Colour return SAME;` both from a
 	 * module function and from a class method in the same file, and `Refs` binds neither read. The
 	 * whole FILE is refused, in all five spellings the gate has to reach: a plain `var`; a `#if`-
@@ -914,7 +914,7 @@ class CrossRenameMemberSliceTest extends Test {
 	}
 
 	/**
-	 * A module-level TYPE of the value's name shadows NOTHING. Compiled and run on Haxe 4.3.7: with
+	 * A module-level TYPE of the value's name shadows NOTHING. Compiled and run: with
 	 * `class File` in the reading module and `enum abstract Colour { var File = 3; }`,
 	 * `function pick():Colour return File;` prints 3 — the value wins. The gate asked
 	 * `declHostKinds`, whose type-declaration kinds refused the whole file, and the correct rewrite
@@ -989,7 +989,7 @@ class CrossRenameMemberSliceTest extends Test {
 	}
 
 	/**
-	 * An EXPLICIT `static` inside an `enum abstract` is not a value: measured on Haxe 4.3.7,
+	 * An EXPLICIT `static` inside an `enum abstract` is not a value — compile-proved:
 	 * `public static final PX:Colour = RED;` with `function f():Colour return PX;` is
 	 * `Identifier 'PX' is not part of Colour`. The host kind alone accepts it, so the modifier is
 	 * read as well — the twin of the plain-abstract guard, one host kind over.

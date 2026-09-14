@@ -24,7 +24,7 @@ import utest.Assert;
  * inside an HxExpr-position parse (var initialiser RHS, array element,
  * call argument, etc.).
  *
- * Unblocks 17 fork fixtures whose only parse-blocker is array
+ * Unblocks the fork fixtures whose only parse-blocker is array
  * comprehension; not all flip to pass because most have additional
  * orthogonal blockers (regex literals, postfix `++`, etc.).
  */

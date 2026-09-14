@@ -56,7 +56,7 @@ class ApqSourceSelectTest extends Test {
 	}
 
 	/**
-	 * The same for the conditional DECL-KEYWORD prefix S41 taught `declGroupSpan` about: a
+	 * The same for the conditional DECL-KEYWORD prefix `declGroupSpan` learned: a
 	 * replacement copied out of this read used to drop the `enum` of `enum abstract`, which is
 	 * a compile-breaking silent edit rather than a lost annotation.
 	 */
@@ -66,7 +66,7 @@ class ApqSourceSelectTest extends Test {
 
 	/**
 	 * CONTROL, green at base BY CONSTRUCTION: an ANNOTATION addressed on its OWN still prints
-	 * alone. `declGroupSpan` stops at one (S36), so the read follows the ops there too — and
+	 * alone. `declGroupSpan` stops at one, so the read follows the ops there too — and
 	 * a fold that walked forward off it would flip exactly this.
 	 */
 	public function testSelectOnTheAnnotationItselfStillSpansOnlyIt(): Void {
@@ -146,7 +146,7 @@ class ApqSourceSelectTest extends Test {
 
 	/**
 	 * CONTROL, green at base: an ANNOTATION addressed on its own still prints only itself, since
-	 * `declGroupSpan` stops at one (S36). Removing that stop makes this window the whole
+	 * `declGroupSpan` stops at one. Removing that stop makes this window the whole
 	 * `[@:keep public function f]` group and flips exactly this.
 	 */
 	public function testAstSourceOnTheAnnotationItselfPrintsOnlyIt(): Void {
@@ -180,7 +180,7 @@ class ApqSourceSelectTest extends Test {
 	/**
 	 * A `@:trailOpt` declaration written WITHOUT its terminator parses with a span that runs on
 	 * PAST its own closing brace — over the blank line and the NEXT declaration's doc comment,
-	 * which the parser re-stashes as that neighbour's leading trivia (the 816bb666 family). The
+	 * which the parser re-stashes as that neighbour's leading trivia (the greedy-span family). The
 	 * window is `trailingTrimmedSpan`-ed for that reason, in `Patch`'s own order; without the
 	 * trim the read hands back a fragment carrying a neighbour's documentation and
 	 * `replace-node` writes it straight back in.

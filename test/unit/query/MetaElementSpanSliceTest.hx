@@ -9,12 +9,12 @@ import utest.Test;
 
 /**
  * A `@:meta` is an element in its OWN right — `--select 'MetaCall:@:access'`
- * names it, `apq source --select` prints its seventeen bytes alone, and the
+ * names it, `apq source --select` prints it alone, and the
  * mutation ops echo it back as their target. `declGroupSpan` used to walk
  * FORWARD off it to the declaration it decorates, so the span every op
  * COMPUTED was the whole `[@:meta modifiers… decl]` group: `remove-element`
  * on a module-level `@:access` deleted the annotation AND the entire class
- * (137 lines to 12 on the file that found this), at rc 0, reporting
+ * (the file that found this shrank to a stub), at rc 0, reporting
  * `wrote <file>`, and leaving a file that still parses — invisible to the
  * re-parse gate by construction.
  *
@@ -92,7 +92,7 @@ final class MetaElementSpanSliceTest extends Test {
 	/**
 	 * The doc block above an annotation documents the DECLARATION under it, which
 	 * is staying — so the delete must not extend back over it. Found by dogfooding
-	 * on a real 79-line Pony class, after the span fix above already had the type
+	 * on a real Pony class, after the span fix above already had the type
 	 * surviving: `remove-element --select 'MetaCall:@:access'` still deleted the
 	 * class's own doc block, because the doc extension is unconditional for every
 	 * other target and a declaration is the only thing that can orphan one.
@@ -124,7 +124,7 @@ final class MetaElementSpanSliceTest extends Test {
 	 * A `#if … #end` region holding nothing but annotations IS an annotation — the
 	 * grammar's own `HxMetadata` enum counts `Conditional` among its four metadata
 	 * forms. Addressing one emptied the WHOLE FILE at rc 0, the same signature as
-	 * the plain-annotation case; the first correction pass covered three of the four
+	 * the plain-annotation case; the first correction pass covered the other
 	 * ctors and disclosed this one as a mutation-testing gap, which understated it.
 	 */
 	public function testRemoveConditionalAnnotationRegionKeepsTheType(): Void {
@@ -136,7 +136,7 @@ final class MetaElementSpanSliceTest extends Test {
 	 * CONTROL: a region holding a MODIFIER is not an annotation — `#if debug public
 	 * #end` reads as the declaration's first token exactly like a bare `public`, so
 	 * it still takes its member. Widening the exception to every conditional
-	 * modifier region, which is the obvious over-fix, flips this. Measured whole-suite,
+	 * modifier region, which is the obvious over-fix, flips this: whole-suite,
 	 * `M-META-ELEMENT-ANY-COND-REGION` takes this fixture and one sibling
 	 * (`RemoveMemberDocSliceTest#testDocAboveTheGuardGoesWithTheMember`).
 	 */

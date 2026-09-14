@@ -405,7 +405,8 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 	/**
 	 * A deep chain of refusals. Each link re-states the `Same` layout, and re-splicing
 	 * the body Doc into both arms of that decision instead of binding it once made the
-	 * work double per link - 31s at sixteen links, against 0.1s with the knob off.
+	 * work double per link - exponential in the length of the chain this fixture builds,
+	 * against nothing with the knob off.
 	 * Asserted on OUTPUT, not on timing: a suite assert on wall clock is a flake, but
 	 * the exponential shape cannot produce this answer in reasonable time either way.
 	 */

@@ -58,7 +58,7 @@ class ImplicitStdScopeTest extends Test {
 	 * implicit scope in and a member named `writeByte` is vetoed by the hundreds of occurrences in
 	 * `haxe.io`, so `unused-private --fix` silently stops deleting it.
 	 *
-	 * Measured, not theorised: pointing `widestScopeIndex` at `hasAnyResolutionScope` instead of
+	 * Proved by mutation: pointing `widestScopeIndex` at `hasAnyResolutionScope` instead of
 	 * `hasDeclaredResolutionScope` turns the deletion below into `fixed 0 issue(s)`.
 	 */
 	public function testImplicitStdScopeDoesNotVetoUnusedPrivateDeletion(): Void {

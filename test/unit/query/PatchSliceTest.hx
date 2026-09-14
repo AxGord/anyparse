@@ -129,7 +129,7 @@ class PatchSliceTest extends Test {
 	/**
 	 * The COMPOUND payload, and the hole the name test alone leaves: insert a declaration above
 	 * the documented member AND rename that member in one call. The old name is gone, so the
-	 * transfer/rename discriminator reads it as a rename — and lets S23's theft through at rc 0,
+	 * transfer/rename discriminator reads it as a rename — and lets the doc-transfer theft through at rc 0,
 	 * doc sitting above the insertion, file parsing, every gate green. Found by review of the
 	 * relaxation, not by any pin the relaxation shipped with; the two pure shapes it was mutated
 	 * against cannot see it. The container-GREW signal is what refuses it, and dropping that
@@ -277,16 +277,16 @@ class PatchSliceTest extends Test {
 	}
 
 	/**
-	 * T907 — a multi-pair payload each of whose pairs applies alone was refused as a doc
+	 * A multi-pair payload each of whose pairs applies alone was refused as a doc
 	 * TRANSFER, and WHICH deltas refuse was decided by arithmetic rather than by the edit.
 	 * Both pairs sit under the same class-level doc block, so the guard watches that one block
 	 * once per edit — and it mapped the block's end into the spliced text by the TOTAL delta of
 	 * every preceding edit, including the edits that lie AFTER it. From the second edit on the
-	 * recorded end was pushed past itself, and where it landed decided the verdict: MEASURED on
-	 * this fixture at base, padding the first pair by 1/5/10 characters applied, by 15/20/30
-	 * refused naming `LIB` as the doc's new owner, and by 40/60 applied again. A refusal WINDOW
-	 * is the signature of a position error, not of a doc that moved, so the fixture sweeps the
-	 * range instead of pinning one delta — three of its eight cells were red at base.
+	 * recorded end was pushed past itself, and where it landed decided the verdict: on this
+	 * fixture at base, small paddings of the first pair applied, a middle band refused naming
+	 * `LIB` as the doc's new owner, and larger ones applied again. A refusal WINDOW is the
+	 * signature of a position error, not of a doc that moved, so the fixture sweeps the range
+	 * instead of pinning one delta — a band of its cells was red at base.
 	 */
 	@:pin('control')
 	@:killer('M-PATCH-DOCEND-SHIFTS-EVERY-EDIT')
@@ -720,7 +720,7 @@ class PatchSliceTest extends Test {
 	/**
 	 * The MIRROR shape, and the one the campaign actually tripped over: a fragment whose
 	 * LAST line stops mid-line. Both arms miss it for the same reason as its sibling above,
-	 * but until S68 only the START had a probe, so this one fell through to "copy it
+	 * but only the START used to have a probe, so this one fell through to "copy it
 	 * verbatim from `apq source --select`" — advice describing a fragment that WAS copied
 	 * verbatim, merely not to the end of its line. The refusal now names the line the
 	 * fragment stops inside.
@@ -814,8 +814,8 @@ class PatchSliceTest extends Test {
 	 * verbatim-splice postcondition compared the pre-writer replacement against the
 	 * post-writer result and demanded ONE shared shift across the run, so every payload
 	 * the writer re-guttered read as the per-line corruption the check exists to catch —
-	 * measured on the base build, 302 of 343 leading-whitespace combinations over this
-	 * very shape were refused. Killed by arm `M-PATCH-COMMENT-SHAPE-CHECKED`.
+	 * on the base build, most leading-whitespace combinations over this very shape were
+	 * refused. Killed by arm `M-PATCH-COMMENT-SHAPE-CHECKED`.
 	 */
 	@:pin('control')
 	@:killer('M-PATCH-COMMENT-SHAPE-CHECKED')

@@ -345,3 +345,55 @@ decided the question; it may not become a record of runs.
 - saturating a COMMITTED item's width in `WrapList.measureItems` to `MAX_ITEM_LEN` → closes two of
   the reduced tail shapes and takes one file from three rewrites to two while reformatting eleven
   files of this tree; saturating the `total` axis alone measures identically — `62ca1493`
+- the modifier/metadata straddle (`#if x @:a #else extern #end`) blamed for a modifier-prefix
+  region failing to parse → the bisection put the defect on the missing `#else` arm of
+  `HxConditionalMod`; the straddle is a second, independent gap — `406a923d`
+- reusing `@:fmt(suppressComplexItems)` to switch the rest probe off inside a case pattern → a
+  switch SUBJECT sets it too, and a subject's call must still wrap at `maxLineLength + 1`, so the
+  pattern needs a flag of its own — `e7c99aa5`
+- the ungated `emitSepStarList` rest probe filed as plain-only and unreachable by any fixture → a
+  struct Star without `@:trivia` routes the TRIVIA writer through the same dispatch, so `fmt` saw
+  the gap — `7ea1182a`
+- a static read for the `FitLine` glue overflow (a flat first-line walk, or
+  `DocMeasure.breakableHead`) → the flat walk counts a condition the renderer will wrap and
+  drifts corpus files, and `breakableHead` stops at the construct's own `(`; only the natural
+  first-line walk from the live pen column answers — `76749df6`
+- a renderer-wide rule that a run of close delimiters glues only when their openers share a line
+  → a multi-argument list closing on a trailing lambda or object hug WANTS the glue and every
+  corpus fixture pinning it broke; the rule lives at the sole-argument shape decision — `f11a2a75`
+- `ExtractInterface` / `ExtractSuperclass` / `IntroduceParameterObject` bypassing the
+  `docSplittingEdit` guard, as the brief said → they reach it through `editKeepingCanonical`;
+  nothing fires because every insertion the family makes lands at a member list's end, at EOF or
+  above a first declaration's trivia — `12988dbf`
+- the comment-width gate comparing over-width line TEXTS before and after an edit → any edit of
+  a wide line reads as a newly gained one and a SHORTENING rename is refused; the gate compares
+  COUNT and WIDEST — `01c78ae6`
+- `anyItemLength >= n` as a width proxy for the complex-element wrap condition, and declining the
+  multi-arg-collection glue for a call-bearing container → the proxy also explodes `case [A, B]`
+  patterns and switch-subject arrays, and declining the glue over this tree makes files worse —
+  `d21e7783` (the proxy), `2f30b0bc` (the glue)
+- modelling `import pkg.Module.*` as a binding rung for the move gate → it binds no TYPE (only the
+  module's statics), the invented binding equalled the wanted one and cancelled the ambient
+  refusal — `521d044c`
+- `move` dropping a source import its departed declaration was the last TYPE-POSITION user of →
+  `sourceStillUsesType` reads type positions only, so the arm deleted an import a remaining
+  `Helper.go()` needs at rc 0; the hand-off is `unused-import`'s — `ab784602`
+- refusing a rename whose name a `#if` CONDITION spells → a condition names build flags and no
+  grammar resolves one against a binding, so the refusal declined correct work with a
+  real-looking reason — `d5f6411b`
+- a memo on the grammar plugin's lexical-region scan → the scan is a small share of a full
+  `lint --all --fix` against a parse demanded once per check, and a speculative cache is the
+  process-lifetime state invariant 1 forbids — `2ed13deb`
+- `lint-diff` losing a normalization because a `66 added / 9 removed` verdict read as fewer
+  findings → the headline's net is +57 and the reader's own per-rule tally already said so; the
+  headline now states the net beside both surpluses — `a28edf4c`
+- exempting a template slot from the token census by FIELD → the same structure's `bodyOpen: '{'`
+  is a real token the parser captures and was freed with it; exemptions are addressed by
+  `<field>#<slot>` — `c04f877e`
+- deciding a `#if` region's opacity by whether its braces balance → most raw-captured regions
+  balance and the one unbalanced count is a nested `#if` / `#else` adding both arms; the predicate
+  is whether the bytes are a balanced subtree in their grammatical position — `f34c5db0`
+- counting a comment-interior mention as a reference the move family owes an import for (on the
+  reading that a redundant import costs an advisory while a missing one costs the build) → a
+  comment is never compiled, and writing the import created the coupling the move was removing —
+  `76982f3c`

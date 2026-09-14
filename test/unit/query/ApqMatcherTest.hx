@@ -87,7 +87,7 @@ class ApqMatcherTest extends Test {
 	}
 
 	public function testVarDeclPatternMatchesEveryPosition(): Void {
-		// S2 red-green: a Haxe `var` decl surfaces as three
+		// Red-green: a Haxe `var` decl surfaces as three
 		// position-specific kinds — module `VarDecl`, class-field
 		// `VarMember`, local `VarStmt` (all wrap the same `HxVarDecl`).
 		// `var $v = 0` parses via the Decl attempt to `VarDecl`; the
@@ -217,7 +217,7 @@ class Y {
 	}
 
 	public function testVarEquivalenceIsScoped(): Void {
-		// S2 negative control, widened for B0: the var-decl equivalence must not
+		// Negative control: the var-decl equivalence must not
 		// over-collapse into the function or `final` families that now have groups
 		// of their own. Positive and negatives share one input — `var v = 0` and
 		// `final c = 0` differ by the keyword alone — so a broken group flips this

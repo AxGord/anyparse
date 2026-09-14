@@ -270,7 +270,7 @@ class ShardPlanTest extends Test {
 	/** A pinned class missing from the list is refused through `--classes` too. */
 	public function testAClassListMissingAPinnedClassIsRefused(): Void {
 		// Padding so the list clears the `--shards 2` floor on its own — `STICKY_CLASSES`
-		// is down to 2 (S178), and without this the run would hit the "exceeds registered
+		// is down to 2, and without this the run would hit the "exceeds registered
 		// classes" gate before reaching the one this test means.
 		final listed: Array<String> = ShardPlan.STICKY_CLASSES.filter(name -> name != 'unit.cli.ApqDxTier5CliTest')
 			.concat(['unit.PaddingOneTest', 'unit.PaddingTwoTest']);
@@ -328,7 +328,7 @@ class ShardPlanTest extends Test {
 	/** A runner registering every pinned class except `omitted`. */
 	private function runnerWithout(omitted: String): String {
 		// Padding so the class count clears the `--shards 2` floor on its own —
-		// `STICKY_CLASSES` is down to 2 (S178), and without this the run would hit
+		// `STICKY_CLASSES` is down to 2, and without this the run would hit
 		// the "exceeds registered classes" gate before reaching the one this test means.
 		return build(
 			ShardPlan.STICKY_CLASSES.filter(name -> name != omitted), ['addCase(new PaddingOneTest());', 'addCase(new PaddingTwoTest());']

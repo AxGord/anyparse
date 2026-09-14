@@ -171,7 +171,7 @@ class CheckstyleConfigLoaderTest extends Test {
 	/**
 	 * `MemberNameCheck.checkField` returns on `f.isStatic(p)` before it consults a single token, so a
 	 * static field is not a member NAME to checkstyle — it is a `ConstantName` candidate. Reading it
-	 * as one produced 55 of an 851-file tree's 231 naming findings, every one an UPPER_SNAKE static,
+	 * as one produced a quarter of a real tree's naming findings, every one an UPPER_SNAKE static,
 	 * and each would have been renamed toward the format the project wrote for its instance fields.
 	 */
 	public function testMemberNameNeverGovernsAStatic(): Void {
@@ -255,7 +255,7 @@ class CheckstyleConfigLoaderTest extends Test {
 	/**
 	 * The autofix half a `checkstyle.json` cannot state. A config-derived rule used to carry no
 	 * `normalize` at all, so `Naming.correctedName` had nothing to return and every finding such a
-	 * policy produced was report-only BY CONSTRUCTION — 198 of an 851-file tree's 231. The
+	 * policy produced was report-only BY CONSTRUCTION — most of a real tree's findings. The
 	 * corrections are the grammar's: a rule gets the ones the built-in policy attaches to ITS
 	 * category, and none for a category the built-in itself leaves report-only.
 	 */

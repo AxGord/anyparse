@@ -9,14 +9,14 @@ import utest.Test;
  * the body lands below that head is `comprehensionFor`'s question, not the
  * bracket's.
  *
- * S76 had put a `hasTopLevelElse` veto on the cuddle here, reasoning that an
+ * An earlier slice had put a `hasTopLevelElse` veto on the cuddle here, reasoning that an
  * `expressionIf: next` if/else body carries a break of its own and would leave
  * the `else` at the CONTAINER line's indent. That is true only while the body is
  * GLUED to the head line, which is what `comprehensionFor: same` (and the old
  * non-strict `fitLine`) does; the veto paid for it by moving the `for` off its
  * `[`, and the user rejected exactly that — three times, on
- * `pony/math/Matrix.hx`. S78 removed the veto and made `fitLine` place the whole
- * body instead of only its first line, so the two levels of the reported
+ * `pony/math/Matrix.hx`. Removing the veto and making `fitLine` place the whole
+ * body instead of only its first line means the two levels of the reported
  * expression now agree AND the `else` sits with its own `if`
  * (`testNestedComprehensionsUnderFitLineStaircase`).
  *

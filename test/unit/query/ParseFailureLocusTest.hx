@@ -17,8 +17,8 @@ using StringTools;
  * the callers that merely skip a file they cannot parse — and `walkRoot` never sees the source, so
  * all it could raise was a bare `parse failed`. Every op re-parses its own rewrite and reports the
  * result, so that string was the whole diagnosis for a `move` whose destination stopped parsing:
- * no offset, no line, nothing to open an editor at. Measured on a real move of a 1127-line test
- * module, where the cause turned out to be a doc comment cut in half.
+ * no offset, no line, nothing to open an editor at. On a real move of a
+ * long test module, the cause turned out to be a doc comment cut in half.
  *
  * The fix raises the parser's OWN error at the null-root seam (`HaxeQueryPlugin.treeFromRoot`),
  * where the source is in hand. These pins assert the two paths that reach it: the immediate one,

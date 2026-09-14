@@ -14,14 +14,14 @@ using StringTools;
 /**
  * The one seat every `apq` write goes through, and the two failures it had none of.
  *
- * `writeFile` was reached UNCAUGHT from 31 call sites, so one unwritable file took the whole run
- * down with a raw host error, no summary line, and part of the tree already rewritten — measured:
- * `lint --fix` over three files with the second read-only rewrote the first, died on the second,
- * and never reached the third. And the write itself was `File.saveContent`, which opens with
- * TRUNCATION, so a write that fails part way leaves the source file destroyed rather than
- * unchanged. Measured on a 10 MB volume filled to zero free blocks: `fmt --write` over five files
- * reported `rewrote 3 of 5 file(s), 2 failed` and left two of them at 0 bytes — the per-file catch
- * turns the crash into a message and then goes on to zero the next file.
+ * `writeFile` was reached UNCAUGHT from every call site, so one unwritable file took the whole run
+ * down with a raw host error, no summary line, and part of the tree already rewritten: `lint --fix`
+ * over three files with the second read-only rewrote the first, died on the second, and never
+ * reached the third. And the write itself was `File.saveContent`, which opens with TRUNCATION, so
+ * a write that fails part way leaves the source file destroyed rather than unchanged. On a volume
+ * filled to zero free blocks, `fmt --write` over a handful of files reported some rewritten and
+ * some failed, and left the failed ones at 0 bytes — the per-file catch turns the crash into a
+ * message and then goes on to zero the next file.
  *
  * Neither condition can be staged from inside a test process: a full filesystem needs a
  * filesystem, and the sentence the run prints goes to `Sys.stderr`, a raw fd on hxnodejs that no
@@ -29,7 +29,7 @@ using StringTools;
  * answers, the bytes on disk after a refused write, and the staging path itself, blocked with a
  * directory so that the stage fails at exactly the point a full disk would have made it fail.
  *
- * Measured at base: the two run-level pins ERROR, the uncaught `EACCES` never reaching their
+ * At base: the two run-level pins ERROR, the uncaught `EACCES` never reaching their
  * assertions at all; the staging pin FAILS on both of its own; the other three pass. Those three
  * are green at base BY CONSTRUCTION and say so on their own doc — an in-place write kept a file's
  * mode, wrote THROUGH a symlink, and refused a read-only file for free, and a rename does none of
@@ -198,9 +198,9 @@ final class CliAtomicWriteSliceTest extends Test {
 	 * `chmod 444` still stops a write, which a bare stage-and-rename would not have.
 	 *
 	 * `rename(2)` needs write permission on the DIRECTORY, not on the file, so a naked
-	 * stage-and-rename silently replaces a read-only file that `File.saveContent` refuses — measured
-	 * on node directly: the in-place write threw `EACCES`, the temporary and rename succeeded and
-	 * left the file at 0644. `stageWrite` asks the kernel the same question by opening the target for
+	 * stage-and-rename silently replaces a read-only file that `File.saveContent` refuses — on node
+	 * directly, the in-place write throws `EACCES` while the temporary and rename succeed and leave
+	 * the file at 0644. `stageWrite` asks the kernel the same question by opening the target for
 	 * append, which writes nothing.
 	 *
 	 * GREEN AT BASE BY CONSTRUCTION, and deliberately so: it is driven through `fmt`, the one op that

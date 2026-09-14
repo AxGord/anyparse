@@ -13,9 +13,8 @@ using Lambda;
  * `move` and the `#if`-GUARDED half of its dependency-import carry.
  *
  * A guarded import cannot be reproduced as an unconditional statement, so the carry skipped it —
- * silently. One campaign sweep moved 767 modules and 72 destinations lost
- * `#if (sys || nodejs) import sys.FileSystem; import sys.io.File; #end` with nothing naming a
- * file; the loss showed one compile error at a time, long after the refactor. The op's own
+ * silently. In one campaign sweep dozens of destinations lost `#if (sys || nodejs) import sys.FileSystem; import sys.io.File;
+ * #end` with nothing naming a file; the loss showed one compile error at a time, long after the refactor. The op's own
  * advisory admitted the class and never named an instance, which is the delete-gating failure
  * shape one op over: a rewrite that cannot be proven must REFUSE by name, not proceed quietly.
  *
@@ -39,7 +38,7 @@ final class MoveGuardedImportCarryTest extends Test {
 	private static final CARRIED_BLOCK: String = '#if (sys || nodejs)\nimport sys.FileSystem;\nimport sys.io.File;\n#end';
 
 	/**
-	 * The headline shape, reproduced from the 767-module sweep: the moved body reaches two names
+	 * The headline shape, reproduced from the Pony-tree sweep: the moved body reaches two names
 	 * only through a `#if`-guarded import block, and the destination is a bare module.
 	 *
 	 * At base the destination received `import haxe.io.Path;` and NOT the guarded pair, so
@@ -125,8 +124,8 @@ final class MoveGuardedImportCarryTest extends Test {
 
 	/**
 	 * The SOURCE keeps its guarded imports, exactly as it keeps every other import the departed
-	 * declaration was the last user of. Measured while writing this slice: `lint --rule
-	 * unused-import` reports the now-unused UNGUARDED import and says nothing about the guarded
+	 * declaration was the last user of. `lint --rule unused-import` reports the now-unused
+	 * UNGUARDED import and says nothing about the guarded
 	 * one, so the residue the op leaves is not fully swept by the pass its advisory points at.
 	 */
 	public function testTheSourceKeepsItsGuardedImportsAfterTheCarry(): Void {
@@ -139,9 +138,9 @@ final class MoveGuardedImportCarryTest extends Test {
 	}
 
 	/**
-	 * T493: a dependency the DESTINATION's own package already provides needs no statement, and
-	 * carrying one writes a line that binds nothing. 281 of the 767 modules one sweep moved
-	 * received one of these, every one removed again by the `redundant-import` pass.
+	 * A dependency the DESTINATION's own package already provides needs no statement, and
+	 * carrying one writes a line that binds nothing — a large share of the modules one sweep
+	 * moved received one of these, every one removed again by the `redundant-import` pass.
 	 */
 	public function testADependencyInTheDestinationsOwnPackageIsNotGivenARedundantImport(): Void {
 		final changes: Array<MoveChange> = okChanges('a/Src.hx', 5, 7, 'b/Host.hx', [
@@ -199,7 +198,7 @@ final class MoveGuardedImportCarryTest extends Test {
 	}
 
 	/**
-	 * T492, both arms. A MODULE import binding a SUB-MODULE type carries when the module is in the
+	 * Both arms: a MODULE import binding a SUB-MODULE type carries when the module is in the
 	 * SCOPE index, and is silently skipped when it is not — the scope is the RESOLUTION index as
 	 * well as the rewrite set, so a dependency outside it binds nothing the op can name. Green at
 	 * base: this pins the boundary and the remedy (`widen --scope`), which is what the op's
@@ -231,7 +230,7 @@ final class MoveGuardedImportCarryTest extends Test {
 	 * `MoveSymbol.importAnchor` seats a NAMED path inside the run (the slot `add-import` gets) and
 	 * falls back to the end of the header when handed no path. `carriedImportEdit` handed it none,
 	 * so every carried import was APPENDED past the run and `move` / `move-member` wrote files their
-	 * own `import-order` check reports — measured, one finding per carry that sorted before an
+	 * own `import-order` check reports: one finding per carry that sorted before an
 	 * import the destination already had.
 	 *
 	 * Both halves are asserted here because one edit can only sit at ONE offset: `haxe.io.Bytes` and
@@ -245,7 +244,7 @@ final class MoveGuardedImportCarryTest extends Test {
 		// `haxe.io.Bytes` is met FIRST by the dependency walk on purpose: it is the one that sorts BEFORE
 		// the destination's `haxe.io.Path`, so a seat taken from the first line alone would put the whole
 		// block above `Path`. Written the other way round the two anchors coincide with the fallback and
-		// the last assertion cannot tell them apart — measured, the arm that drops the same-slot
+		// the last assertion cannot tell them apart — the arm that drops the same-slot
 		// requirement survived the whole suite until this order was fixed.
 		final two: String = 'package a;\n\nimport haxe.io.Bytes;\nimport haxe.zip.Entry;\n\nclass Src {\n\tpublic static function read(p: '
 			+ 'String): String {\n\t\tfinal b: Bytes = Bytes.ofString(p);\n\t\tfinal e: Entry = null;\n'

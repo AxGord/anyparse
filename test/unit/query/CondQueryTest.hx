@@ -319,7 +319,7 @@ class CondQueryTest extends Test {
 	 * kind.
 	 *
 	 * CONTROL for the metadata half. KILLED by arm `M-COND-NAMES-DROP-META-NAME`, which leaves the
-	 * identifier test alone — the pre-S188 answer, and the one a grammar declaring no
+	 * identifier test alone — the earlier answer, and the one a grammar declaring no
 	 * `metadataNamePrefixes` still gets.
 	 */
 	@:pin('control')

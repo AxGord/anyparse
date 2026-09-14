@@ -148,7 +148,7 @@ final class HxOpAddTrailingParenGlueSliceTest extends Test {
 	 * Gate discrimination for `hasBareParenTail` on the HARDLINE path: the same ladder as a Div
 	 * NUMERATOR (`a + (ladder) / d`) leads with `(` but does not END with its `)`, so the tail is not
 	 * a bare paren and the chain keeps its leading break. Dropping the `endsWithCloseDelim` conjunct
-	 * makes this input glue — measured, so the conjunct is load-bearing here and not merely inherited
+	 * makes this input glue, so the conjunct is load-bearing here and not merely inherited
 	 * from the hardline-free sibling. Source is written ALREADY BROKEN because the flat spelling of
 	 * this shape is not a writer fixed point (a pre-existing, unrelated non-idempotence); this layout
 	 * re-formats to itself.

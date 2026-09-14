@@ -95,8 +95,8 @@ class LintDiffTest extends Test {
 	public function testADotSlashScopeSpellingNormalizesWithoutARoot(): Void {
 		// `apq lint ./src` and `apq lint src` describe one tree and record two
 		// spellings, in the file field AND in the partner path a duplicate-code
-		// message quotes. Measured on a real pair before this was handled: 269 of
-		// 468 findings read as added-and-removed.
+		// message quotes. On a real pair before this was handled, over half of the
+		// findings read as added-and-removed.
 		final before: String = reportOf([record('./src/A.hx', 'info', 'duplicate-code', crossDup(4, './src/B.hx', 501))]);
 		final after: String = reportOf([record('src/A.hx', 'info', 'duplicate-code', crossDup(4, 'src/B.hx', 501))]);
 		final result: LintDiffResult = diff(before, after, '');
@@ -155,8 +155,8 @@ class LintDiffTest extends Test {
 	public function testDuplicateCodeSubstitutionWithinOneFileIsReported(): Void {
 		// This case READ 0/0 until the mask became anchored. `lint-diff` used to blank every
 		// digit run in a duplicate-code message, which ate the statement count and any digit in
-		// the partner filename as well as the line — 57% (anyparse) and 78% (tm) of that rule's
-		// findings sat in a key shared with a sibling, and swapping one for the other was
+		// the partner filename as well as the line — most of that rule's findings on a real tree
+		// sat in a key shared with a sibling, and swapping one for the other was
 		// invisible to the gate. Anchoring the mask on the message's own tail leaves the count
 		// and the path in the key, which is what makes this pair move.
 		final before: String = reportOf([record('src/A.hx', 'info', 'duplicate-code', crossDup(3, 'src/B.hx', 110))]);
@@ -188,8 +188,8 @@ class LintDiffTest extends Test {
 	/**
 	 * The case this seam was built for: a type's LINE EXTENT drifts under any edit to the
 	 * file, so the gate reported movement on a writer slice whose findings had not moved
-	 * (`WrapList` 4184 -> 4194, and three more, against a total of 2256 versus a base of
-	 *  2256). Since S15 the MEMBER count is masked as well, so both arms here read 0/0; the
+	 * (a handful of types whose line extents moved while the totals stayed equal). The MEMBER
+	 *  count is masked as well, so both arms here read 0/0; the
 	 *  arm pinning the difference between a masked measurement and a kept one lives on
 	 *  `duplicate-code`, whose count is the last discriminator its key has.
 	 */
@@ -207,12 +207,12 @@ class LintDiffTest extends Test {
 			record('src/W.hx', 'warning', 'oversized-type', oversized('WrapList', '109 members (max 50) and 4184 lines (max 2000)'))
 		]);
 		final growth: LintDiffResult = diff(before, grown, '');
-		// The member count LEAVES the key too, since S15. It used to stay, on the argument that
+		// The member count LEAVES the key too. It used to stay, on the argument that
 		// crossing the limit is the finding — but crossing it is what makes the finding APPEAR,
 		// which the key shows on its own, while the count then drifts on every unrelated member
-		// added anywhere in the type. Measured across the campaign's last three blast-radius
-		// verdicts, that drift produced two of the six lines reported and none was real
-		// movement. The type NAME stays in the message, so nothing else here discriminates by
+		// added anywhere in the type. Across a campaign's blast-radius verdicts that drift
+		// produced a share of the lines reported and none was real movement. The type NAME
+		// stays in the message, so nothing else here discriminates by
 		// the number — unlike `duplicate-code`, whose count is kept for exactly that reason.
 		Assert.equals(0, growth.addedTotal, 'a member count drift is not a finding either');
 		Assert.equals(0, growth.removedTotal);
@@ -356,8 +356,8 @@ class LintDiffTest extends Test {
 	}
 
 	public function testOversizedTypeMemberBumpIsMaskedAway(): Void {
-		// The movement the S15 mask absorbs, in the shape that actually reached the campaign's
-		// verdicts: `type 'Cli' has 518 -> 519 members`, printed as one added plus one removed
+		// The movement the mask absorbs, in the shape that actually reached the campaign's
+		// verdicts: `type 'Cli' has N -> N+1 members`, printed as one added plus one removed
 		// on two consecutive slices that had not touched the rule at all.
 		final before: String = reportOf([
 			record('src/C.hx', 'warning', 'oversized-type', oversized('Cli', '518 members (max 50)'))
@@ -376,8 +376,8 @@ class LintDiffTest extends Test {
 	 * the run that produced this test, re-counting both JSON reports in another language.
 	 *
 	 * A rule that moved nothing is deliberately absent: which rules EXIST is
-	 * `lint --list-rules`'s question — 180 are registered and 38 of them fire on this tree,
-	 * so printing every one would bury the two that moved.
+	 * `lint --list-rules`'s question — most registered rules fire nowhere, so printing every
+	 * one would bury the two that moved.
 	 */
 	@:pin('control')
 	@:killer('M-LINTDIFF-RULE-SUMMARY-BLANK')
@@ -426,7 +426,7 @@ class LintDiffTest extends Test {
 	/**
 	 * A finding that migrated between files leaves its rule's two totals equal, so a summary
 	 * built from the totals alone would report that rule as silent. The row is built from the
-	 * SURPLUSES instead, which is what makes `1->1 (+1 -1)` a row worth printing.
+	 * SURPLUSES instead, which is what makes an `N->N (+1 -1)` row worth printing.
 	 */
 	public function testARuleWhoseTotalsAreEqualStillShowsItsMovement(): Void {
 		final before: String = reportOf([record('src/A.hx', 'warning', 'unused-import', 'import a.B is unused')]);
@@ -443,9 +443,9 @@ class LintDiffTest extends Test {
 	/**
 	 * The headline states the net as well as the two surpluses, and the redundancy is the point:
 	 * the only recorded misreading of this tool inverted the `N findings (base M)` pair — a
-	 * verdict of 66 added / 9 removed was read as 57 findings FEWER, and the contradiction was
-	 * filed as a normalization this module was missing. 66 - 9 = +57, which is what the same
-	 * reader's own per-rule tally had already said.
+	 * verdict with more added than removed was read as findings FEWER, and the contradiction was
+	 * filed as a normalization this module was missing, when the same reader's own per-rule tally
+	 * had already said the net was positive.
 	 */
 	@:pin('control')
 	@:killer('M-LINTDIFF-NET-UNSTATED')

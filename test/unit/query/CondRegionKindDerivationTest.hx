@@ -20,27 +20,27 @@ using StringTools;
  * that is asked of the grammar's own DECLARATIONS rather than of anything anybody keeps.
  *
  * `RefShape.opaqueCondRegionKinds` began as an exhaustive list of ctor names, and it was stale
- * within two days of shipping: the gate landed 2026-08-18 naming ten `CondSplice*` ctors, and
- * 2026-08-20 the grammar gained three more raw-capture ctors - `CondSpliceReturnStmt`,
- * `CondSpliceReturnExpr` and `MetaCondStmt`. Nothing connects the two edits, nothing failed, and
- * for eighteen days every name-driven mutating op wrote SILENTLY over such a region - the
- * reproducer below renames a declaration and leaves its only other reference on the old name,
- * which compiles until someone builds with the flag defined.
+ * within days of shipping: the gate landed naming the `CondSplice*` ctors of its day, and the
+ * grammar then gained more raw-capture ctors - `CondSpliceReturnStmt`, `CondSpliceReturnExpr`
+ * and `MetaCondStmt`. Nothing connects the two edits, nothing failed, and for weeks every
+ * name-driven mutating op wrote SILENTLY over such a region - the reproducer below renames a
+ * declaration and leaves its only other reference on the old name, which compiles until someone
+ * builds with the flag defined.
  *
- * S167 made the field a list of ctor-name PREFIXES, which closed those three and left a narrower
- * hole of the same shape: a ctor named outside the convention. Two already were, spelled in full
- * beside the family prefix, and the coverage pin guarding the list checked the SAME convention -
- * so a third breaker would have been invisible to both.
+ * A list of ctor-name PREFIXES closed those and left a narrower hole of the same shape: a ctor
+ * named outside the convention. Two already were, spelled in full beside the family prefix, and
+ * the coverage pin guarding the list checked the SAME convention - so a third breaker would have
+ * been invisible to both.
  *
- * S175 removed the convention from the question. A conditional region can only be captured raw
- * through a TERMINAL, so the grammar marks its raw-capture terminals `@:condRegionRaw` and the
- * query-walker macro walks each ctor's own production to the terminals it reaches. A ctor's NAME
- * enters nothing.
+ * The derivation removed the convention from the question. A conditional region can only be
+ * captured raw through a TERMINAL, so the grammar marks its raw-capture terminals
+ * `@:condRegionRaw` and the query-walker macro walks each ctor's own production to the terminals
+ * it reaches. A ctor's NAME enters nothing.
  *
- * MEASURED, and the measurement is a probe that is NOT in the tree: renaming `HxStatement`'s
- * `CondSpliceReturnStmt` to `GuardedReturnStmt` - one token, same production, same terminal - and
- * changing nothing else. Under the prefix list the reproducer below went from the refusal quoted
- * in `testTheReturnStatementSpliceIsSeenByTheGate` to `apq rename: wrote probe/Probe.hx`, exit 0,
+ * PROVED by a probe that is NOT in the tree: renaming `HxStatement`'s `CondSpliceReturnStmt` to
+ * `GuardedReturnStmt` - one token, same production, same terminal - and changing nothing else.
+ * Under the prefix list the reproducer below went from the refusal quoted in
+ * `testTheReturnStatementSpliceIsSeenByTheGate` to `apq rename: wrote probe/Probe.hx`, exit 0,
  * leaving `final renamed:Int = 1;` beside `return #if nodejs target;`. Under the derivation
  * `GuardedReturnStmt` appears in `HaxeQueryWalker.opaqueCondRegionKinds()` with no edit anywhere
  * and the refusal is byte-identical. The probe was reverted: a bogus ctor is not shippable
@@ -91,7 +91,7 @@ class CondRegionKindDerivationTest extends Test {
 	 * `CondSpliceReturnExpr`, reached through an expression body rather than a block. It is a
 	 * separate grammar ctor added in the same slice, and a fix that named one and not the
 	 * other would pass a pin written only against the first. Live shape:
-	 * `Pony/src/pony/ui/touch/TouchableBase.hx:66`, the one site of this kind in 872 files.
+	 * `Pony/src/pony/ui/touch/TouchableBase.hx:66`, the one site of this kind in the Pony tree.
 	 */
 	private static final RETURN_EXPR_SPLICE: String =
 		'class Probe {\n\tstatic var target:Int = 1;\n\tstatic function g():Int return #if nodejs target; #else 2; #end\n}\n';
@@ -148,7 +148,7 @@ class CondRegionKindDerivationTest extends Test {
 	/**
 	 * The metadata-prefixed region, whose ctor no prefix reaches. It is the standing evidence
 	 * that the family convention is not the whole story: `MetaCondStmt` was added in the same
-	 * 2026-08-20 series as the two `return` ctors, carries the same raw terminal, and a fix
+	 * series as the two `return` ctors, carries the same raw terminal, and a fix
 	 * that only widened the `CondSplice` prefix would have left it fail-OPEN.
 	 */
 	@:pin('control')
@@ -219,8 +219,8 @@ class CondRegionKindDerivationTest extends Test {
 	 * Deriving the ctor list from the terminals moved the failure point rather than removing
 	 * it: a ctor can no longer fall out of the gate by being named unconventionally, but a new
 	 * raw-capture TERMINAL added without `@:condRegionRaw` would take every ctor built on it
-	 * out with it. Terminals are the far smaller and far more stable set - nine against the
-	 * fourteen ctors that reuse them - and they are recognisable from their own pattern: a
+	 * out with it. Terminals are the far smaller and far more stable set - fewer than the
+	 * ctors that reuse them - and they are recognisable from their own pattern: a
 	 * capture that walks over a conditional-compilation directive must SPELL one.
 	 *
 	 * So the fixture reads every `@:re` under the grammar package, keeps the ones whose
@@ -253,8 +253,8 @@ class CondRegionKindDerivationTest extends Test {
 	/**
 	 * The region vocabulary is the raw-capture one WIDENED, not a second list beside it.
 	 *
-	 * `isConditionalKind` answers a question a dozen checks and rewrites ask before they
-	 * descend, collect a span or call a statement complete, and until S175 it answered from
+	 * `isConditionalKind` answers a question many checks and rewrites ask before they
+	 * descend, collect a span or call a statement complete, and it used to answer from
 	 * three Haxe spellings hard-coded in the grammar-agnostic core - `Conditional`,
 	 * `ConditionalExpr` and a `CondSplice` prefix. That was two sources of truth for one
 	 * family, and the hand-written one was also INCOMPLETE: the same grammar declares
@@ -365,7 +365,7 @@ class CondRegionKindDerivationTest extends Test {
 				if (owner == null) continue;
 				if (hit.annotation == SPANNED_MARKER && hit.args.length == 1) spanned[owner] = hit.args[0];
 				// An ENUM is a dispatch point, not a container: its ctors are classified one by one
-				// below, and taking its own name into the closure is the over-wide walk S167 rejected.
+				// below, and taking its own name into the closure is the over-wide walk the prefix list rejected.
 				if (hit.annotation != PEG_MARKER || hit.declKind == 'EnumDecl') continue;
 				final into: Array<String> = [];
 				for (node in nodesNamed(tree, owner)) typesUnder(node, into);

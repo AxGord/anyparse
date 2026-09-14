@@ -327,7 +327,7 @@ class HxPrattOpsTest extends HxTestHelpers {
 	}
 
 	// -------- `%` binds TIGHTER than `*` / `/` --------
-	// Runtime-verified against Haxe 4.3.7 (`haxe --interp`):
+	// Runtime-verified with `haxe --interp`:
 	//   2 * 7 % 4  == 6    => 2 * (7 % 4)     (not (2 * 7) % 4 == 2)
 	//   8 / 4 % 3  == 8    => 8 / (4 % 3)     (not (8 / 4) % 3 == 2)
 	//   100 % 7 * 3 % 4 == 6 => (100 % 7) * (3 % 4)

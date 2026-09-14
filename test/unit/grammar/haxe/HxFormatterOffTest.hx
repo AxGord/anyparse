@@ -89,7 +89,7 @@ class HxFormatterOffTest extends Test {
 	 * exists because that one is NOT discriminating: its marker sits on a single-line literal,
 	 * so a line-only scanner that knew nothing of strings would read the comment body as
 	 * `// @formatter:off";` — trailing quote and semicolon included — which is not the exact
-	 * marker text and opens nothing. MEASURED: replacing `FormatterOff`'s `CommentScan` with a
+	 * marker text and opens nothing. Replacing `FormatterOff`'s `CommentScan` with a
 	 * naive `//`-to-end-of-line walk left the whole suite green. Here the marker line ends at a
 	 * real newline INSIDE the literal, so the naive body is exactly the marker and the region
 	 * opens — which is what makes the seam observable.

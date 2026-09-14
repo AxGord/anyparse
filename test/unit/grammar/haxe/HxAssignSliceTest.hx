@@ -9,73 +9,29 @@ import utest.Assert;
 /**
  * Phase 3 assignment-slice tests for the macro-generated Haxe parser.
  *
- * Covers the right-associative Pratt operators at precedence 1. The
- * `Pratt.annotate` strategy accepts an optional third `@:infix` arg
- * (`'Left'` / `'Right'`, default `'Left'`), and `PrattPostfixLowering.lowerPrattLoop`
- * picks `nextMinPrec = prec` for right-associative branches instead of
- * `prec + 1` for left-associative, so same-prec chains fold right
- * instead of left.
+ * Covers the right-associative Pratt operators at precedence 1. The `Pratt.annotate` strategy
+ * accepts an optional third `@:infix` arg (`'Left'` / `'Right'`, default `'Left'`), and
+ * `PrattPostfixLowering.lowerPrattLoop` picks `nextMinPrec = prec` for right-associative
+ * branches instead of `prec + 1` for left-associative, so same-prec chains fold right instead
+ * of left.
  *
- * Three shipping waves share this file:
- *  - parens + right-assoc slice: `=`, `+=`, `-=`.
- *  - bitwise + shifts + arithmetic compound assigns slice: `*=`,
- *    `/=`, `%=`. Same right-assoc concept, same prec 1, no new
- *    macro work — only new ctors on `HxExpr`.
- *  - bitwise/shift compound assigns slice (β): `<<=`, `>>=`, `>>>=`,
- *    `|=`, `&=`, `^=`. Again same right-assoc concept, same prec 1,
- *    zero macro changes. Purpose of the slice is to validate that
- *    the D33 longest-match sort disambiguates the dense new conflict
- *    set (`>>>=`/`>>>`/`>>=`/`>>`/`>=`, `<<=`/`<<`/`<=`, `|=`/`||`,
- *    `&=`/`&&`) without any code change — every test below that
- *    looks like a "base op still works" regression guard is in fact
- *    the spot check for that sort.
- *  - boolean compound assigns slice (Slice 15): `&&=`, `||=`. Same
- *    right-assoc concept, same prec 1, zero macro changes. The new
- *    conflict set is the densest yet: `&&=` (len 3) must beat both
- *    `&&` (len 2) and `&=` (len 2); `||=` (len 3) must beat `||`
- *    (len 2) and `|=` (len 2) — three distinct operators sharing a
- *    2-char prefix. The mis-fire sentinels below (`a && b` → `And`,
- *    `a || b` → `Or`) are the spot check that the 3-char ops did
- *    not swallow the shorter logical operators.
+ * The compound assigns arrived in waves that share this file — `=`, `+=`, `-=`; the
+ * arithmetic `*=`, `/=`, `%=`; the bitwise and shift `<<=`, `>>=`, `>>>=`, `|=`, `&=`, `^=`;
+ * the boolean `&&=`, `||=` — each the same right-assoc concept at the same prec with no new
+ * macro work, only new ctors on `HxExpr`. What the later waves validate is the longest-match
+ * sort over a dense conflict set (`>>>=` / `>>>` / `>>=` / `>>` / `>=`, `<<=` / `<<` / `<=`,
+ * `|=` / `||`, `&=` / `&&`, `&&=` / `&&` / `&=`, `||=` / `||` / `|=`): every test below that
+ * looks like a "base op still works" regression guard is the spot check that a longer operator
+ * did not swallow a shorter one.
  *
- * Grammar coverage in this file:
- *  - `a = 1`, `a += 1`, `a -= 1`, `a *= 1`, `a /= 1`, `a %= 1`,
- *    `a <<= 1`, `a >>= 1`, `a >>>= 1`, `a |= 1`, `a &= 1`, `a ^= 1`
- *    — per-op smoke for each of the twelve assignment ctors.
- *  - `a = b = 1` — right-fold: `Assign(a, Assign(b, 1))`.
- *  - `a += b -= 1` — mixed-op right-fold (first wave).
- *  - `a *= b /= 1` — mixed-op right-fold (second wave).
- *  - `a *= b += 1` — cross-wave right-fold, proves wave-1 and
- *    wave-2 compose inside a single chain.
- *  - `a |= b &= c` — bitwise right-fold (third wave).
- *  - `a <<= b >>= c` — shift right-fold (third wave).
- *  - `a += b *= c ^= 1` — triple-wave right-fold, proves waves 1+2+3
- *    compose inside a single chain.
- *  - `a = b + 1` — `+` binds tighter than `=`.
- *  - `a + 1 = 2` — lowest-precedence proof: `=` at prec 1 sits
- *    below `+` at prec 8, so the `+` subtree folds first and the
- *    whole `a + 1` ends up on the left of the `=`. The result has
- *    an `Add` as its `Assign` lvalue, which is semantically
- *    nonsensical but structurally correct — a later semantic pass
- *    would reject it. Note: this is a precedence check, not an
- *    associativity check — both left- and right-associative `=`
- *    produce the same shape here because the RHS (`2`) is a single
- *    atom with no same-prec chain. The real right-associativity
- *    proof is the `a = b = 1` test above.
- *  - `a = b == c` — `==` binds tighter than `=`.
- *  - `a |= b << 2` — `<<` at prec 7 binds tighter than `|=` at
- *    prec 1 (third-wave cross-precedence with a higher level).
- *  - `a >>= b + 1` — `+` at prec 8 binds tighter than `>>=` at
- *    prec 1 (third-wave cross-precedence against a different higher
- *    level).
- *  - `a << b`, `a >> b`, `a | b` — regression guards that shipping
- *    the 3-char `>>=`/`<<=` and 2-char `|=`/`&=` compound assigns
- *    did not accidentally shadow the shorter base operators under
- *    the D33 longest-match sort.
- *  - `a = (b = c)` — cross-concept smoke with the parens slice.
- *  - `a = ;` — missing right operand rejected.
- *  - `a >>>= ;` — missing right operand rejected for a 4-char op,
- *    proving the longest-match commit still reaches the RHS parse.
+ * The shapes pinned: per-op smoke for every assignment ctor; right-folds within and across
+ * waves (`a = b = 1` → `Assign(a, Assign(b, 1))`, `a += b *= c ^= 1`); precedence against
+ * higher levels (`a = b + 1`, `a |= b << 2`, `a >>= b + 1`); the lowest-precedence proof
+ * `a + 1 = 2`, whose `Add` lvalue is structurally correct and semantically nonsensical (a
+ * precedence check, not an associativity one — the RHS is a single atom, and `a = b = 1` is
+ * the real right-associativity proof); the mis-fire sentinels `a && b` → `And` and
+ * `a || b` → `Or`; the cross-concept `a = (b = c)`; and the missing-RHS rejections `a = ;`
+ * and `a >>>= ;`, the latter proving the longest-match commit still reaches the RHS parse.
  */
 class HxAssignSliceTest extends HxTestHelpers {
 

@@ -13,7 +13,7 @@ import utest.Test;
  * Verifies item 3(b): the derivable `staticMethodReturns` values are ANSWERED by the
  * resolution index itself once std is joined — `MemberLookup.returnNominalOf` resolves
  * `Date.now` → `Date` and `Context.resolvePath` → `String` straight from the std
- * declarations, so the T36 table is redundant when std is indexed (it stays only as
+ * declarations, so the hand table is redundant when std is indexed (it stays only as
  * the import-safe config-less fallback). Skips when no std is installed.
  */
 class StdResolverReturnTypeTest extends Test {

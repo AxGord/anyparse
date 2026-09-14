@@ -26,7 +26,7 @@ using StringTools;
  * widening that was supposed to make such a gap harmless made a WORSE one: two of the consuming
  * predicates ended with a NAME-CONVENTION stub (`|| kind.endsWith('Lit') ||
  * kind.endsWith('StringExpr')`) that admitted every projected kind whose spelling happens to end
- * that way, including two the grammar declares no constant literal. Measured on `a9efccd4`, through
+ * that way, including two the grammar declares no constant literal. Through
  * `apq inline`, which DUPLICATES an initializer it is told is side-effect-free:
  *
  *  - `final r = ~/x(\d+)/; return r.match(a) ? r.matched(1) : '';` inlined to
@@ -88,7 +88,7 @@ class LiteralClassificationTest extends Test {
 	 * Every kind the grammar declares a constant literal is classified by EVERY consuming list.
 	 *
 	 * One assertion per list, each naming the kinds it is missing, because the lists are what drift:
-	 * five of the six were missing `HexLit` at the same time and the two that carried a stub hid it
+	 * nearly every one was missing `HexLit` at the same time and the two that carried a stub hid it
 	 * from themselves. `NON_NULL_RHS_KINDS` is asked about the vocabulary MINUS the null literal —
 	 * the one member of it whose value IS null — which is a real exclusion and not a gap.
 	 *
@@ -139,9 +139,8 @@ class LiteralClassificationTest extends Test {
 	 * by `testAnAllocatingLiteralIsRefusedByEveryPredicate`, on parsed nodes rather than kind names.
 	 *
 	 * The kind list comes from the GENERATED projected vocabulary, so this half needs no maintenance
-	 * to keep covering the grammar: measured on `a9efccd4` the convention admitted nine of 238
-	 * projected kinds and the shape declares seven of those, the two extras being the regex and
-	 * object literals.
+	 * to keep covering the grammar: the convention admitted a handful of projected kinds beyond
+	 * what the shape declares, the extras being the regex and object literals.
 	 *
 	 * CONTROL for the fail-open direction. KILLED by arm `M-SAFE-KINDS-SUFFIX-STUB`.
 	 */
@@ -314,11 +313,11 @@ class LiteralClassificationTest extends Test {
 	}
 
 	/**
-	 * The side-effect-free vocabulary follows the shape it is HANDED — the half a frozen 36-name
+	 * The side-effect-free vocabulary follows the shape it is HANDED — the half a frozen name
 	 * array also satisfied, and the reason two copies of one could drift apart unnoticed for months.
 	 *
 	 * The operator half is the part no other fixture reaches: `constantLiteralKinds` covers the
-	 * literals, and the identifier / grouping kinds are single fields, but the 25 operator names were
+	 * literals, and the identifier / grouping kinds are single fields, but the operator names were
 	 * spelled THREE times in this engine — `MemberKinds.SAFE_KINDS`, `InlineMethod.PURE_ARG_KINDS`
 	 * and `PreferInline.CONST_OP_KINDS` — and the third disagreed with the first two in both
 	 * directions at once (it carried `Is`, it lacked `BitNot`).

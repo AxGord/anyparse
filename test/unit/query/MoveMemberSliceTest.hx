@@ -1179,7 +1179,7 @@ class MoveMemberSliceTest extends Test {
 
 	/**
 	 * `move-member` shares `MoveSymbol.dependencyImportLinesToCarry` with `move`, so it shared the
-	 * silent-miscompile too: measured on 11f22a25 and compile-run on Haxe 4.3.7, moving a static
+	 * silent-miscompile too — compile-proved on the base engine: moving a static
 	 * whose body reaches `q.Dep` into a destination holding `import r.Dep;` wrote both files with
 	 * rc 0 and no diagnostic, and the DESTINATION's own `Dest.local()` came back `q.Dep` where it
 	 * had been `r.Dep`. The gate lives at the shared seat, so both ops refuse on the same sentence;
@@ -1211,16 +1211,16 @@ class MoveMemberSliceTest extends Test {
 	/**
 	 * The destination never receives an import of its OWN module.
 	 *
-	 * Both spellings were written by the base engine (T518): `import b.Dest;` for the module's main
+	 * Both spellings were written by the base engine: `import b.Dest;` for the module's main
 	 * type and `import b.Dest.Payload;` for a typedef declared beside it, straight into `b/Dest.hx`.
 	 * The carry priced each dependency against `packageOrTopLevelBinding`, which skips `info.file`
 	 * itself and answers MAIN types only, so neither rung ever covered the destination's own module —
 	 * and a source import naming exactly what the destination already declares came through as a
 	 * dependency to carry.
 	 *
-	 * Severity, measured rather than assumed: the ticket recorded this as
+	 * Severity, compile-proved rather than assumed: the ticket recorded this as
 	 * `Importing private declarations from a module is not allowed`, a hard error one step later.
-	 * It is not. On Haxe 4.3.7 a module importing its own sub-module type compiles at rc 0 even when
+	 * It is not. A module importing its own sub-module type compiles at rc 0 even when
 	 * that type is `private`; the error fires only for a FOREIGN module importing a private one. So
 	 * the defect is a wrong, coupling-creating statement rather than a broken build — which is why
 	 * this pin asserts the destination's WHOLE text and not just the absence of one line.
@@ -1247,12 +1247,12 @@ class MoveMemberSliceTest extends Test {
 
 	/**
 	 * A bare name the SOURCE binds through a module-static wildcard (`import a.Names.*;`) travels
-	 * with the moved body: the statement is carried, and the destination compiles (T559).
+	 * with the moved body: the statement is carried, and the destination compiles.
 	 *
 	 * The base engine wrote a destination reading `Unknown identifier : packOf` — rc 0,
 	 * `wrote 2 file(s)`, and an advisory calling the miss best-effort. It is not an edge:
-	 * `src/anyparse/macro` reaches `MacroNames.*` this way in 20 files and `ExitCode.*` in 73, and
-	 * the very member S87 repaired by hand reached `WriterLoweringSupport.optFieldAccess` through one.
+	 * `src/anyparse/macro` reaches `MacroNames.*` and `ExitCode.*` this way throughout, and a
+	 * member once repaired by hand reached `WriterLoweringSupport.optFieldAccess` through one.
 	 */
 	public function testModuleStaticWildcardIsCarried(): Void {
 		final changes: Array<MoveChange> = okChanges(
@@ -1299,7 +1299,7 @@ class MoveMemberSliceTest extends Test {
 
 	/**
 	 * A second module-static wildcard at the destination declaring the same name is decided by
-	 * STATEMENT ORDER — Haxe resolves the last one, measured, with no diagnostic — so whichever way
+	 * STATEMENT ORDER — Haxe resolves the last one, compile-proved, with no diagnostic — so whichever way
 	 * the carried line is seated one of the two files changes meaning. The base engine wrote it and
 	 * turned the moved `label('y')` from `y-A` into `y-C`, rc 0.
 	 */
@@ -1335,7 +1335,7 @@ class MoveMemberSliceTest extends Test {
 
 	/**
 	 * The member-level `@:access` is not written when the destination TYPE already grants the same
-	 * path at CLASS level — S87 landed 10 such dead lines across 3 files in one slice (T560).
+	 * path at CLASS level — a real move can land several such dead lines in one slice.
 	 *
 	 * Its control is `testSiblingReferenceQualifiedWithAccess` above, where the destination carries
 	 * no grant and the meta must still appear.
@@ -1376,7 +1376,7 @@ class MoveMemberSliceTest extends Test {
 	 *
 	 * `MoveSymbol.importAnchor` seats a NAMED path in the run — the ordered slot `add-import` gets —
 	 * and falls back to the end of the header when handed no path. `carriedImportEdit` handed it
-	 * none, so every carried import was APPENDED past the run: measured on a destination holding
+	 * none, so every carried import was APPENDED past the run: on a destination holding
 	 * `import haxe.io.Path;`, carrying `haxe.io.Bytes` produced `Path, Bytes` and one `import-order`
 	 * finding on a file `move-member` had just written. Same mechanism, one argument.
 	 *

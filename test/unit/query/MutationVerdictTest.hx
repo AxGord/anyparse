@@ -145,7 +145,7 @@ class MutationVerdictTest extends Test {
 	}
 
 	/**
-	 * `cap` elides past ten names; `full` is the escape hatch (T703) — present
+	 * `cap` elides past ten names; `full` is the escape hatch — present
 	 * only when it did, so a caller reading two lines by habit sees no change
 	 * and one reading a third only has to check it is non-empty.
 	 */

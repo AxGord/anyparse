@@ -13,8 +13,8 @@ using StringTools;
  *
  * The defect it closes: a replacement template is written in AST terms (`$A * 2`
  * reads "the capture, times two") but expands as TEXT, and text has no
- * precedence. Over the Haxe grammar, 400 of 1530 (capture shape x template
- * context) pairs used to come out meaning something else — silently, and
+ * precedence. Over the Haxe grammar, a large share of the (capture shape x
+ * template context) pairs used to come out meaning something else — silently, and
  * re-parseably.
  *
  * Each test below is one arm of that grid, plus the two directions the guard
@@ -145,8 +145,8 @@ class ParenGuardSliceTest extends Test {
 	/**
 	 * The one residual, pinned so a grammar fix flips it VISIBLY rather than
 	 * quietly: the guard's oracle is this parser, and this parser models a bare
-	 * `cast e` as bounded while the compiler binds it to the right. Measured
-	 * against Haxe 4.3.7: `final s:String = cast o * 2;` compiles (the cast takes
+	 * `cast e` as bounded while the compiler binds it to the right —
+	 * compile-proved: `final s:String = cast o * 2;` compiles (the cast takes
 	 * the product) and `(cast o) * 2` is "Int should be String". So the splice
 	 * below is faithful to the TREE and not to the compiler, and stays bare.
 	 * `@:meta e` — the other kind named alongside it in

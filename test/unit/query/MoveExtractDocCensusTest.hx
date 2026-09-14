@@ -11,9 +11,8 @@ import utest.Test;
 using StringTools;
 
 /**
- * The doc-ownership census of the MOVE / EXTRACT family — measured, because the
- * brief that ordered it had the membership wrong, and so did the body comment in
- * `RefactorSupport.canonicalize` that this commit corrects alongside it.
+ * The doc-ownership census of the MOVE / EXTRACT family — run rather than argued, because the brief that ordered it had
+ * the membership wrong, and so did the body comment in `RefactorSupport.canonicalize` that was corrected alongside it.
  *
  * THREE ops build their result with `RefactorSupport.applyEdits` and so never
  * reach the `docSplittingEdit` guard: `MoveMember` (`move-member`), `MoveSymbol`

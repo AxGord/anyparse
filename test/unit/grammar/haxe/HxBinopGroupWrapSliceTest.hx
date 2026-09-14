@@ -24,29 +24,13 @@ import utest.Assert;
  * a Group would produce `dirty\n\t= dirty || …` instead of the desired
  * `dirty = dirty\n\t|| …`.
  *
- * Cases:
- *  - `testShortChainStaysFlat`: `var x:Bool = a || b || c;` fits in 80
- *    cols; renderer commits all Lines to flat → byte-identical to pre-
- *    slice output (regression guard for the silent-on-flat invariant).
- *  - `testLongChainBreaks`: `var dirty:Bool = a || b || c || d || e || f
- *    || g || h || i;` exceeds 80 cols; outer Or-Group commits MBreak →
- *    each `||` lands on a new line at indent + cols.
- *  - `testNestedChainBreaksBoth`: `(a || b || c) && (d || e || f)` with
- *    each parenthesised subchain wide enough to break independently.
- *  - `testTightIntervalStaysFlat`: `var r:Iterator<Int> = a...b;` keeps
- *    `a...b` flat regardless of column position (Interval is tight).
- *  - `testAssignmentBreakLandsInsideRhs`: `var dirty:Bool = a || b || c
- *    || d || e || f;` with prec=1 RHS (`||`) wide enough to break — the
- *    `=` itself stays flat, only the RHS Or-Group breaks.
- *  - `testRightAssocNullCoalChainStaysGlued`: `a ?? b ?? c ?? d ?? e ?? f`
- *    stays glued past the width -- `??` routes through the chain engine
- *    under a NoWrap cascade, never breaking at the operator (fork parity).
- *  - `testIsAsymmetricStaysGlued`: `x is SomeType` keeps single-pair
- *    flat even with the asymmetric writer path (smoke for the
- *    `isAsymmetric` branch composing with the new Group wrap).
- *  - `testIdempotencyRoundTrip`: parse(write(parse(write(parse(s))))) ==
- *    write(parse(s)) for a long-chain assignment — pre-existing
- *    invariant must survive the new emission shape.
+ * The fixtures pin the silent-on-flat invariant (a fitting chain is
+ * byte-identical to pre-slice output), the break of an overflowing chain
+ * and of two parenthesised subchains independently, the tight `Interval`
+ * staying flat at any column, the assignment break landing inside the RHS,
+ * a right-assoc `??` chain staying glued past the width (fork parity), the
+ * asymmetric `is` path composing with the Group wrap, and round-trip
+ * idempotency of a long-chain assignment.
  */
 class HxBinopGroupWrapSliceTest extends HxTestHelpers {
 

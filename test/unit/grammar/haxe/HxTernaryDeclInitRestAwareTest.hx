@@ -66,7 +66,7 @@ final class HxTernaryDeclInitRestAwareTest extends Test {
 	}
 
 	/**
-	 * The declaration's physical line is 141 -- 139 measured columns plus the
+	 * The declaration's physical line is 141 -- 139 rendered columns plus the
 	 * un-flushed `= ` space and the trailing `;`: the ternary WRAPS.
 	 */
 	public function testTernaryDeclInitWrapsWhenPendingSpaceOverflows(): Void {

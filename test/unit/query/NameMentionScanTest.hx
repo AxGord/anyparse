@@ -14,10 +14,9 @@ using StringTools;
  * file — pinned through the op that consumes it.
  *
  * The module answers "does this source spell this name where the compiler would bind it" in three
- * shapes, and until S81 each shape assembled its own exclusion set and drifted on its own
- * schedule: S80 taught `qualifiedPathRefusal` and `namesAnyOf` to skip comment interiors and left
- * the destination collision scan counting them, so ONE doc line naming a dependency refused a
- * legitimate carry (T535). The policy the module now states once is that the mask is a property
+ * shapes, and each shape used to assemble its own exclusion set and drift on its own schedule: `qualifiedPathRefusal` and
+ * `namesAnyOf` were taught to skip comment interiors while the destination collision scan was left counting them, so ONE doc
+ * line naming a dependency refused a legitimate carry. The policy the module now states once is that the mask is a property
  * of the LANGUAGE, not of the caller: a comment is never compiled, so it never counts, whether the
  * answer WRITES an import or REFUSES the move; a string CAN be read back by `Reflect` or a macro
  * and nothing rewrites one, so it always counts.
@@ -32,11 +31,11 @@ final class NameMentionScanTest extends Test {
 
 	/**
 	 * The DESTINATION collision scan, comment-INTERIOR against a real reference and against a string
-	 * — T535 and the two controls that say why it is not simply "count less".
+	 * — the refused carry and the two controls that say why it is not simply "count less".
 	 *
 	 * The gate exists because a carried `import q.Dep;` outranks whatever the destination's own
-	 * ambient scope binds `Dep` to, so its own references silently change meaning. Compile-proved on
-	 * 4.3.7 for the middle arm: a root-package `Dep.x()` returning 2, moved past a carried
+	 * ambient scope binds `Dep` to, so its own references silently change meaning. Compile-proved
+	 * for the middle arm: a root-package `Dep.x()` returning 2, moved past a carried
 	 * `import c.Dep;`, returned 1 at rc 0 with nothing said. And compile-proved for the first arm
 	 * that there is nothing to protect: the same carry past a destination whose only `Dep` is a doc
 	 * line left every observable value unchanged, so the refusal was pure loss — a move a user asked
@@ -45,7 +44,7 @@ final class NameMentionScanTest extends Test {
 	 *
 	 * The STRING arm is the half that must NOT move with it. A literal can be a by-name lookup and
 	 * nothing in the repair walk rewrites one, so it stays a reference on both sides of the question
-	 * — the same split S80 fixed `qualifiedPathRefusal` to.
+	 * — the same split `qualifiedPathRefusal` was fixed to.
 	 */
 	@:pin('control')
 	@:killer('M-MOVE-NAMESCAN-COMMENT-COUNTED')
@@ -70,9 +69,9 @@ final class NameMentionScanTest extends Test {
 	}
 
 	/**
-	 * The FULLY-QUALIFIED path refusal, same two lexical contexts — the pin that keeps S81's rewrite
+	 * The FULLY-QUALIFIED path refusal, same two lexical contexts — the pin that keeps the rewrite
 	 * of that scan (a hand-rolled `indexOf` loop, now the shared `qualifiedPathMention`) from
-	 * quietly changing the policy S80 chose.
+	 * quietly changing the policy the earlier scan chose.
 	 *
 	 * A move repoints every code reference it can name and leaves a string alone, so a file spelling
 	 * `p.Mover` inside `Type.resolveClass` is broken by the move and nothing repairs it: refusing is

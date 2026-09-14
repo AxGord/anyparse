@@ -14,18 +14,17 @@ using StringTools;
  * failing build rather than paraphrased: the classifier reads compiler prose,
  * so a hand-shaped approximation of that prose would pin nothing. The two that
  * matter most are the two arm-authoring blind spots that reach the compiler —
- * a nullable in a structure literal (S147) and a forced return ahead of an
- * `inline` body (S96).
+ * a nullable in a structure literal and a forced return ahead of an `inline` body.
  */
 @:nullSafety(Strict)
 class BuildFailureTest extends Test {
 
-	/** The measured S147 line, from cutting `region: region` to `region: span`. */
+	/** The real line from cutting `region: region` to `region: span`. */
 	private static final NULL_SAFETY_STRUCTURE: String = 'src/anyparse/query/CondRegionScan.hx:107: lines 107-112 : Null safety: Cannot '
 		+ 'unify { region : Null<anyparse.runtime.Span>, kind : String, gaps : ' + 'Array<anyparse.runtime.Span>,'
 		+ ' formatted : Array<anyparse.runtime.Span> } with anyparse.query.OpaqueCondRegion';
 
-	/** utest emits this on every build of this tree — it must never be read as the failure. */
+	/** utest emits this on every build of this project — it must never be read as the failure. */
 	private static final DEPRECATION_WARNING: String = '/Users/x/haxelib/utest/1,13,2/src/utest/utils/TestBuilder.hx:12: characters 1-7 :'
 		+ ' Warning : (WDeprecatedEnumAbstract) `@:enum abstract` is deprecated in favor of `enum abstract`';
 

@@ -19,7 +19,7 @@ import utest.Test;
  * would glue moves to the continuation line, so the exploded condition renders one level
  * deeper than it did when this fixture was written. The property under test is unchanged —
  * the condition paren still explodes rather than fill-wrapping with the paren glued — and
- * the fork corpus does not move either way (delta-pass 0 / delta-fail 0 over 946 cases).
+ * the fork corpus does not move either way.
  */
 @:nullSafety(Strict)
 final class HxIfExprCondWrapSliceTest extends Test {

@@ -185,7 +185,7 @@ class ExtractMethodSliceTest extends Test {
 	 * The one-arm half of the same ambiguity, which is what the escape analysis actually gets wrong
 	 * here: `return v` binds to the arm's declaration, so the range's own `v` reads as dead after
 	 * the range and no return slot is emitted — correct under `-D js`, and a dangling `v` in every
-	 * other configuration. Measured: with the guard comparing arms only, this extraction wrote a
+	 * other configuration. With the guard comparing arms only, this extraction wrote a
 	 * file `--interp` rejected with `Unknown identifier : v`.
 	 */
 	public function testRefuseCondArmPlusPrecedingSibling(): Void {

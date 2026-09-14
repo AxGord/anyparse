@@ -209,7 +209,7 @@ class AddressTest extends Test {
 	 * The same vocabulary reading, asked the way a WALKER's `--kind` asks it: no selector, no
 	 * tree, just a list of kind names.
 	 *
-	 * The check had been here since S196 and the walkers simply never asked it — `apq lit 'x'
+	 * The check had been here already and the walkers simply never asked it — `apq lit 'x'
 	 * F.hx --kind Literaal` answered `0 hits` at exit 0, which is what a correctly spelled kind
 	 * answers over code that holds none.
 	 */

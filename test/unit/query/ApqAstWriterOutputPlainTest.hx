@@ -38,7 +38,7 @@ class ApqAstWriterOutputPlainTest extends Test {
 		#if (sys || nodejs)
 		// Smoke-level: both dispatch paths exit cleanly on the same
 		// anon-struct input. Byte-level divergence between the two
-		// pipelines (the actual Slice-26 regression check) lives in
+		// pipelines (the actual regression check) lives in
 		// `ApqWriterEqualsCliTest` — there each pipeline is anchored
 		// against its OWN concrete expected bytes, so silent
 		// convergence would force one assertion to fail.
