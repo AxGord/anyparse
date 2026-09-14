@@ -83,7 +83,7 @@ Passes 1, 3, 4, 5 are the common framework. Pass 2 is where all strategies live.
 
 ### Entry points — not every build runs all five
 
-`Build` exposes one `@:build` entry per artefact, and each takes the passes it needs. `buildParser` runs all five. `buildWriter` and `buildQueryWalker` run 1, 3, 4, 5 over their own lowering. `buildTransform` and `buildLexicalScan` need only the BASE shape, so the strategy-annotate, trivia and span passes are skipped.
+`Build` exposes one `@:build` entry per artefact, and each takes the passes it needs. `buildParser` runs all five. `buildWriter` runs 1, 2, 3, 4, 5 over the writer lowering (it registers the same strategies through `Build.registerStrategies`); `buildQueryWalker` runs 1, 3, 4, 5 over its own lowering with no strategy pass. `buildTransform` and `buildLexicalScan` need only the BASE shape, so the strategy-annotate, trivia and span passes are skipped.
 
 `buildLexicalScan` is the smallest of them and the one worth knowing about, because it answers a question no parse can: **which bytes of a source are not code**, over raw and possibly unparseable text. It reads the grammar's `@:lexical` / `@:balanced` / `@:re` / `@:lead` / `@:trail` / `@:lit` plus the format's comment delimiters, lowers them to one region spec per non-code shape (`LexicalLowering`) and emits a specialised byte walk plus the two entries every consumer calls (`LexicalCodegen`). `anyparse.grammar.haxe.HaxeLexicalRegions` is its production consumer, `unit.minilex.MiniLexScan` the second-grammar pin that proves nothing about Haxe survives inside the macro. See `strategies.md` § Lexical.
 
@@ -104,7 +104,7 @@ The enum itself, with each primitive's one-line contract, is `anyparse.core.Core
 
 A strategy is a Haxe class implementing the `Strategy` interface. Each strategy owns a set of metadata tags, knows how to annotate ShapeTree nodes, and optionally lowers them into CoreIR. Strategies never emit Haxe code directly — they work through CoreIR.
 
-The strategies `Build` registers (the list is `Build.buildParser`'s `registry.register(new …)` lines; each class's `ownedMeta` is the authoritative tag list):
+The strategies `Build` registers (the list is `Build.registerStrategies`, called by `buildParser` and `buildWriter`; each class's `ownedMeta` is the authoritative tag list):
 
 | Strategy | Owns meta | Purpose |
 |---|---|---|

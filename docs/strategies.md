@@ -6,7 +6,7 @@ See `architecture.md` for the overall macro pipeline and how strategies fit into
 
 ## The interface
 
-`anyparse.core.Strategy` (`src/anyparse/core/Strategy.hx`, `#if macro`) is the contract, and each member's doc there is the authority on what it must do: `name` (stable, used in dependency declarations and errors), `runsAfter` / `runsBefore` (the ordering constraints), `ownedMeta` (the tags this strategy exclusively owns), `appliesTo` (does this shape node concern me), `annotate` (write my namespaced slots — pass 2, no lowering), `lower` (return a CoreIR subtree or `null` to leave the node to base lowering — pass 3), and `runtimeContribution` (`anyparse.core.RuntimeContrib`: context fields, helper methods and packrat cache-key contributions the generated parser must carry). `anyparse.macro.StrategyRegistry` is the thing that consumes it — it validates ownership, topo-sorts and runs the annotate walk — and `Build.buildParser` is where the shipped strategies are registered.
+`anyparse.core.Strategy` (`src/anyparse/core/Strategy.hx`, `#if macro`) is the contract, and each member's doc there is the authority on what it must do: `name` (stable, used in dependency declarations and errors), `runsAfter` / `runsBefore` (the ordering constraints), `ownedMeta` (the tags this strategy exclusively owns), `appliesTo` (does this shape node concern me), `annotate` (write my namespaced slots — pass 2, no lowering), `lower` (return a CoreIR subtree or `null` to leave the node to base lowering — pass 3), and `runtimeContribution` (`anyparse.core.RuntimeContrib`: context fields, helper methods and packrat cache-key contributions the generated parser must carry). `anyparse.macro.StrategyRegistry` is the thing that consumes it — it validates ownership, topo-sorts and runs the annotate walk — and `Build.registerStrategies` is where the shipped strategies are registered (called by `buildParser` and `buildWriter`).
 
 ## Rules of engagement
 
@@ -28,7 +28,7 @@ A strategy's `lower` function returns a new `CoreIR` subtree for the node it own
 
 ### Strategies do not emit Haxe code
 
-Strategies emit CoreIR. Codegen (pass 4) turns CoreIR into `haxe.macro.Expr`. A strategy that directly calls `macro ...` is wrong — it should be emitting CoreIR with `Host` as the escape hatch if nothing else works.
+Strategies never emit `haxe.macro.Expr`: their contribution is the slots `annotate` writes and, for one that needs its own shape, a CoreIR subtree from `lower`; as shipped every strategy returns `null` and `Lowering` emits the parser expression from the slots directly (`docs/architecture.md` § "Five-pass macro pipeline"). A strategy that directly calls `macro ...` is wrong — `Host` is the escape hatch if nothing else works.
 
 ### The engine never spells a grammar's own type or constructor
 
@@ -316,21 +316,19 @@ Owns: `@:kw`.
 
 Owns: `@:skip`, `@:ws`.
 
-Cross-cutting. Does not lower nodes directly. Instead, pushes the active skip regex onto `LoweringCtx.skipStack` when entering a scope, and base lowering inserts `currentSkip` before each `Lit`/`Re` terminal in that scope.
-
-`@:ws` means "use the active format's `whitespace` field as the skip pattern for every terminal in this grammar"; the `@:skip("regex")` form with a user-provided pattern is declared but not yet read.
+Cross-cutting and annotate-only: `@:ws` on a rule root records `skip.active`, which nothing reads yet; the generated `skipWs(ctx)` — spaces, tabs, LF, CR and the BOM plus the format's comment delimiters, `Codegen.skipWsField`; the format's `whitespace` field is not consulted — is emitted before every terminal by the lowering whether or not the tag is present, so today the tag documents intent. `LoweringCtx.skipStack` is declared for a future scoped skip and is never pushed; the `@:skip("regex")` form with a user-provided pattern is owned but not read.
 
 ### Pratt, Prefix, Postfix, Ternary
 
 Owns: `@:infix` (Pratt), `@:prefix` (Prefix), `@:postfix` (Postfix), `@:ternary` (Ternary).
 
-Operator-precedence parsing for expression languages, split by operator shape into four annotate-only strategies that write `pratt.*` / `prefix.*` / `postfix.*` / `ternary.*` slots on the enum branches they own. `PrattPostfixLowering` reads them (`Lowering`'s branch classifier reads `prefix.op`): the branches of a Pratt-enabled enum are split into atoms (every non-operator branch, routed through the ordinary Alt lowering as `parseXxxAtom`) and operators, and the rule becomes a precedence-climbing loop `parseXxx(ctx, ?minPrec)` whose operator dispatch is sorted longest-literal-first, so `<=` is tried before `<` whatever the declaration order. Prefix operators recurse into the atom function and so bind tighter than any infix; postfix operators loop inside the atom wrapper and bind tighter still; a ternary is merged into the infix dispatch chain and is right-associative by construction (its middle and right operands parse at `minPrec = 0`). What each branch shape must look like, and which forms are still refused at compile time, is each class's doc.
+Operator-precedence parsing for expression languages, split by operator shape into four annotate-only strategies that write `pratt.*` / `prefix.*` / `postfix.*` / `ternary.*` slots on the enum branches they own. `PrattPostfixLowering` reads them (`ParseDispatchLowering.branchShape` classifies a `prefix.op` branch first): the branches of a Pratt-enabled enum are split into atoms (every non-operator branch, routed through the ordinary Alt lowering as `parseXxxAtom`) and operators, and the rule becomes a precedence-climbing loop `parseXxx(ctx, ?minPrec)` whose operator dispatch is sorted longest-literal-first, so `<=` is tried before `<` whatever the declaration order. Prefix operators recurse into the atom function and so bind tighter than any infix; postfix operators loop inside the atom wrapper and bind tighter still; a ternary is merged into the infix dispatch chain and is right-associative by construction (its middle and right operands parse at `minPrec = 0`). What each branch shape must look like, and which forms are still refused at compile time, is each class's doc.
 
 ### Bin
 
 Owns: `@:bin`, `@:magic`, `@:align`, `@:length`.
 
-Binary format primitives: fixed-width ASCII strings and ASCII-encoded integers, a variable byte run whose length another field holds, a leading length prefix, a magic prefix on a typedef, alignment padding. Its `bin.*` slots are emitted by `StructSeqLowering` (parse) and `BinaryWriterLowering` (write); `CoreIR.BinKind` is the vocabulary those shapes are described in. A binary format declares an empty `whitespace`, so the skip before each terminal is empty. `anyparse.format.binary.ArFormat` with the `ar` archive grammar under `anyparse.grammar.ar` is the shipped consumer.
+Binary format primitives: fixed-width ASCII strings and ASCII-encoded integers, a variable byte run whose length another field holds, a leading length prefix, a magic prefix on a typedef, alignment padding. Its `bin.*` slots are emitted by `StructSeqLowering` (parse) and `BinaryWriterLowering` (write); `CoreIR.BinKind` is the vocabulary those shapes are described in. Binary entries never call `skipWs` (`Codegen.skipWsField`'s own doc). `anyparse.format.binary.ArFormat` with the `ar` archive grammar under `anyparse.grammar.ar` is the shipped consumer.
 
 ### Planned: Capture, Indent, Recovery
 
@@ -350,7 +348,7 @@ High-level procedure:
 4. **Implement `annotate`**: write into namespaced slots. Do not lower yet.
 5. **Implement `lower`**: produce `CoreIR`, or return `null` and let `Lowering` interpret your slots — which is what every shipped strategy does.
 6. **Declare `runtimeContribution`**: if you need a field on the Parser context or a helper method, declare it. Strategies that do not need runtime state return empty arrays.
-7. **Register it**: one `registry.register(new …)` line in `Build.buildParser`.
+7. **Register it**: one `registry.register(new …)` line in `Build.registerStrategies`.
 8. **Write tests**: a small `@:peg` type using your metadata, compile it, assert the generated code behaves correctly.
 
 ## Error cases the framework catches at registration

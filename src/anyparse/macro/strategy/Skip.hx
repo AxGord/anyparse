@@ -12,19 +12,16 @@ import haxe.macro.Expr;
 using Lambda;
 
 /**
- * Skip strategy — cross-cutting whitespace / comment consumption.
+ * Skip strategy — cross-cutting whitespace / comment consumption, annotate-only.
  *
- * Phase 2 recognises `@:ws` as "use the active format's `whitespace`
- * field as the skip pattern for every terminal in this grammar". The
- * strategy's annotate pushes that pattern onto `LoweringCtx.skipStack`
- * when it sees the annotation on the root of a rule; Codegen reads the
- * active skip state and emits a `skipWs(ctx)` call immediately before
- * each `Lit`/`Re` emission.
- *
- * There is deliberately no CoreIR primitive for skip — it's purely a
- * codegen concern driven by shared lowering state. A future Phase-3
- * `@:skip("regex")` form will reuse the same slot with a user-provided
- * pattern instead of the format default.
+ * `@:ws` on a rule root marks it `skip.active`, which records intent and is read
+ * by nothing yet: the generated `skipWs(ctx)` (`Codegen.skipWsField` — spaces,
+ * tabs, LF, CR, the BOM, plus the format's comment delimiters) is emitted before
+ * every terminal by the lowering whether or not the tag is present, and the
+ * format's `whitespace` field is not consulted. `LoweringCtx.skipStack` is
+ * declared for a future scoped skip and is never pushed; a `@:skip("regex")` form
+ * with a user-provided pattern is owned but not read. There is deliberately no
+ * CoreIR primitive for skip — it is a codegen concern.
  */
 class Skip implements Strategy {
 

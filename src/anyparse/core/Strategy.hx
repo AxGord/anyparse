@@ -11,14 +11,15 @@ import anyparse.core.ShapeTree;
  * `ShapeNode`s with namespaced slots (`annotate`), and optionally
  * lowers them into CoreIR (`lower`).
  *
- * Strategies never emit `haxe.macro.Expr` directly. They work through
- * CoreIR; codegen (pass 4 of the macro pipeline) turns CoreIR into
- * concrete expressions. A strategy that calls `macro ...` inline is
- * wrong — it should either emit a plain CoreIR subtree or, as a last
- * resort, a `Host` node wrapping the imperative code.
+ * Strategies never emit `haxe.macro.Expr`: their contribution is the
+ * slots `annotate` writes and, for one that needs its own shape, a
+ * CoreIR subtree from `lower`; as shipped every strategy returns `null`
+ * and `Lowering` emits the parser expression from the slots directly
+ * (`docs/architecture.md` § "Five-pass macro pipeline"). A strategy
+ * that calls `macro ...` inline is wrong.
  *
- * See `docs/strategies.md` for the full design discussion, the list of
- * planned strategies, and the registration rules the framework enforces.
+ * See `docs/strategies.md` for the full design discussion, the strategy
+ * table, and the registration rules the framework enforces.
  */
 interface Strategy {
 

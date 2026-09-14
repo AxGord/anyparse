@@ -13,7 +13,7 @@ typedef BuildField = {
 };
 
 /**
- * Binary primitive encoding kinds used by the `Binary` strategy.
+ * Binary primitive encoding kinds — the vocabulary the `Bin` strategy's slots are described in.
  *
  * Fixed-width integer types use the suffix convention `UNlE`/`UNbE` or
  * `INlE`/`INbE` for little/big endian respectively. `Varint`/`Zigzag`

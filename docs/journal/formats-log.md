@@ -85,6 +85,8 @@ interface BinaryFormat extends Format {
 }
 ```
 
+Binary formats do not need whitespace, comments, string escapes, or key quoting. They do need tag layouts, which live in grammar metadata (`@:tag`, `@:tagMask`, `@:fromTag`) rather than in the format class. The format describes the format-wide conventions; grammar metadata describes per-field layout.
+
 ## From § Writing a format
 
 1. **Decide which family it belongs to.** Most config-like formats are `TextFormat`. Binary protocols are `BinaryFormat`. Markup is `TagTreeFormat`. Etc.

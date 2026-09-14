@@ -9,6 +9,10 @@
 > directory down). A `§` pointer inside moved text names a heading of the reference
 > (`docs/architecture.md`), not of this file. Nothing here is a norm, and nothing here is auto-loaded.
 
+## From § Five-pass macro pipeline › Entry points — not every build runs all five
+
+`Build` exposes one `@:build` entry per artefact, and each takes the passes it needs. `buildParser` runs all five. `buildWriter` and `buildQueryWalker` run 1, 3, 4, 5 over their own lowering. `buildTransform` and `buildLexicalScan` need only the BASE shape, so the strategy-annotate, trivia and span passes are skipped.
+
 ## From § CoreIR — the internal representation
 
 ```haxe

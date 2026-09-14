@@ -229,7 +229,11 @@ typedef WriteOptions = {
 	 * than the Haxe extension) alongside the other cascade-independent
 	 * layout policies the wrap engine reads directly; the element shape it
 	 * recognises is Haxe's, exactly as for the sibling
-	 * `WrapList.isBlockBodyComprehensionItem`.
+	 * `WrapList.isBlockBodyComprehensionItem`. A comprehension whose first
+	 * break sits inside its head rather than after the generator's `)` is
+	 * excluded, and an item that renders flat has its body forced one level
+	 * down so the `]` never sits alone under a packed line
+	 * (`WrapList.shapeComprehensionCuddledOpen`).
 	 */
 	comprehensionCuddledOpen: Bool,
 

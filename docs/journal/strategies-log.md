@@ -48,6 +48,10 @@ typedef RuntimeContrib = {
 };
 ```
 
+## From § Rules of engagement › Strategies do not emit Haxe code
+
+Strategies emit CoreIR. Codegen (pass 4) turns CoreIR into `haxe.macro.Expr`. A strategy that directly calls `macro ...` is wrong — it should be emitting CoreIR with `Host` as the escape hatch if nothing else works.
+
 ## From § `@:fmt(...)` — the writer-lowering handler vocabulary
 
 **The measurement, on this tree.** 335 `@:fmt(...)` annotations across the shipped
@@ -287,6 +291,8 @@ Owns: `@:re`.
 Sugar for "keyword with word boundary". Lowers `@:kw("true")` to `Seq([Lit("true"), Not(Re("[A-Za-z0-9_]"))])`. Handles the common bug where `true` matches the start of `trueish`.
 
 ## From § Planned strategies › Skip
+
+Cross-cutting. Does not lower nodes directly. Instead, pushes the active skip regex onto `LoweringCtx.skipStack` when entering a scope, and base lowering inserts `currentSkip` before each `Lit`/`Re` terminal in that scope.
 
 `@:ws` is shorthand for `@:skip('[ \t\n\r]*')`.
 

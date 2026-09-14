@@ -15,19 +15,16 @@ using Lambda;
 /**
  * Re strategy — owns regex-matched terminals.
  *
- * Reads `@:re("pattern")` on `Terminal` shape nodes (typically
- * abstracts over a primitive type such as `JStringLit`/`JNumberLit`)
- * and stores the pattern under the `re.pattern` annotation slot.
- *
- * Lowering emits `CoreIR.Re(pattern)` for these nodes and Codegen
- * consults the fixed decoder table (keyed on `base.underlying`) to
- * transform the matched slice into the abstract's underlying value:
- *
- *   - `Float`  → `Std.parseFloat(matched)`
- *   - `String` → JSON-aware unescape via `JsonFormat.instance.unescapeChar`
- *
- * The decoder table is intentionally a short closed set in Phase 2;
- * Phase 3+ will generalise once a third case demonstrates the need.
+ * Reads `@:re("pattern")` on `Terminal` shape nodes (typically abstracts over a
+ * primitive type such as `JStringLit` / `JNumberLit`) and stores the pattern under
+ * the `re.pattern` slot; `@:captureGroup(n)` (exactly one integer literal, `n >= 1`
+ * — group 0 is the whole match and the default) selects the group whose text
+ * becomes the value, under `re.captureGroup`; the position still advances by the
+ * whole match. Both slots are read by `TerminalParseLowering`, which emits the
+ * anchored `EReg` match and decodes the slice by the abstract's underlying type —
+ * `Float` / `Int` / `Bool` directly, a `String` only through `@:unescape` (the
+ * `@:schema` format's `unescapeChar`), `@:decode("pkg.Class.method")` or
+ * `@:rawString`, which that module reads itself.
  */
 class Re implements Strategy {
 

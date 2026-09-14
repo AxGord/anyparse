@@ -44,7 +44,7 @@ For MessagePack, CBOR, BSON, protobuf, and similar formats.
 
 `anyparse.format.binary.BinaryFormat`: `endianness` (`Endianness`: Big | Little), the tag space (`tagSize`, `magicBytes` — an optional file signature), and the length encodings (`lengthEncoding`, `countEncoding`: `LengthEncoding`).
 
-Binary formats do not need whitespace, comments, string escapes, or key quoting. They do need tag layouts, which live in grammar metadata (`@:tag`, `@:tagMask`, `@:fromTag`) rather than in the format class. The format describes the format-wide conventions; grammar metadata describes per-field layout.
+Binary formats do not need whitespace, comments, string escapes, or key quoting. They do need tag layouts, which live in grammar metadata rather than in the format class — today the `Bin` strategy's `@:bin` / `@:magic` / `@:align` / `@:length`; the tagged-union tags (`@:tag`, `@:tagMask`, `@:fromTag`) are planned with the first tagged format and exist nowhere yet. The format describes the format-wide conventions; grammar metadata describes per-field layout.
 
 ### `TagTreeFormat` — XML and SGML descendants
 
@@ -92,7 +92,7 @@ final class Json5Format implements TextFormat {
 }
 ```
 
-A handful of differing fields is the entire differential between JSON and JSON5 at the format level — but it is a CLONE, not a subclass: the shipped `JsonFormat` is a `final class`, and a `(default, null)` property cannot be assigned from a subclass anyway (Haxe has no `override var`), so a derived format spells its whole vocabulary. `JsonFormat`'s own doc says the same ("subclasses or clones"); the composition rule below is what that reduces to.
+A handful of differing fields is the entire differential between JSON and JSON5 at the format level — but it is a CLONE, not a subclass: the shipped `JsonFormat` is a `final class`, and a `(default, null)` property cannot be assigned from a subclass anyway (Haxe has no `override var`), so a derived format spells its whole vocabulary. `JsonFormat`'s own doc says clone; the composition rule below is what that reduces to.
 
 ### Example: MessagePack
 

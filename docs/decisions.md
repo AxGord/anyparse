@@ -479,7 +479,8 @@ decided the question; it may not become a record of runs.
 - formats composed by inheritance (`Json5Format extends JsonFormat`, an `override var` per
   differing field) → the reference formats are `final`, Haxe has no `override var`, and a
   `(default, null)` property cannot be assigned from a subclass; a derived format is a clone
-  that spells its whole vocabulary — `b1cdccf3`
+  that spells its whole vocabulary — `b1cdccf3` (where the contradiction was born), `S217-merge`
+  (where it was decided)
 - "parsing loses formatting" as a principle (the writer never sees whitespace or comments) → the
   trivia-mode parser records comments and the blank / newline shape as data on the AST for the
   `keep` policies; the writer is still one `format(ast, options)` pass, but what it can keep is
