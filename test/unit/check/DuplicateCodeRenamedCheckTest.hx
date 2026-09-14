@@ -1,11 +1,15 @@
 package unit.check;
 
 import anyparse.check.Check;
+import anyparse.check.CheckScan;
 import anyparse.check.DuplicateCode;
 import anyparse.check.DuplicateCodeRenamed;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.QueryNode;
 import utest.Assert;
 import utest.Test;
 
@@ -16,6 +20,7 @@ import utest.Test;
  * exact reading answers on the same source, because the two rules are one engine and the exact
  * one must not widen.
  */
+@:access(anyparse.check.DuplicateCode)
 class DuplicateCodeRenamedCheckTest extends Test {
 
 	/**
@@ -136,10 +141,12 @@ class DuplicateCodeRenamedCheckTest extends Test {
 	}
 
 	/**
-	 * The content gate measures the text the comparison keys on. Three declarations sharing nothing
-	 * but their shape clear the gate on their raw bytes — the long names are most of them — and fall
-	 * under it once each name weighs what its placeholder does, so the renamed reading is silent;
-	 * with every copy measured on its own bytes again (the arm) the run comes back as a clone.
+	 * The content gate measures the text the comparison keys on. Three declarations sharing only
+	 * their shape and one operator clear the gate on their raw bytes — the long names are most of
+	 * them — and fall under it once each name weighs what its placeholder does, so the renamed
+	 * reading is silent; with every copy measured on its own bytes again (the arm) the run comes
+	 * back as a clone. The operator keeps the run out of the bare-run filter, so the gate alone
+	 * decides.
 	 */
 	@:pin('control')
 	@:killer('M-DUP-CODE-RENAMED-GATE-RAW')
@@ -147,12 +154,12 @@ class DuplicateCodeRenamedCheckTest extends Test {
 		final source: String = src([
 			'class C {',
 			'\tfunction f(alphaValue:Int, betaValue:Int):Void {',
-			'\t\tfinal firstTotal = alphaValue;',
+			'\t\tfinal firstTotal = alphaValue + betaValue;',
 			'\t\tfinal secondTotal = betaValue;',
 			'\t\tfinal thirdTotal = firstTotal;',
 			'\t}',
 			'\tfunction g(gammaValue:Int, deltaValue:Int):Void {',
-			'\t\tfinal leftTotal = gammaValue;',
+			'\t\tfinal leftTotal = gammaValue + deltaValue;',
 			'\t\tfinal rightTotal = deltaValue;',
 			'\t\tfinal lastTotal = leftTotal;',
 			'\t}',
@@ -187,19 +194,20 @@ class DuplicateCodeRenamedCheckTest extends Test {
 
 	/**
 	 * The exact reading holes nothing, so its gate text is the raw render and an identically-named
-	 * copy of the name-heavy run stays its clone: the placeholder measure narrows this rule's
-	 * population and leaves the other rule's where it was.
+	 * copy of the name-heavy run (its operator keeping it out of the bare-run filter) stays its
+	 * clone: the placeholder measure narrows this rule's population and leaves the other rule's
+	 * where it was.
 	 */
 	public function testTheExactReadingKeepsAnIdenticallyNamedDeclarationRun(): Void {
 		final source: String = src([
 			'class C {',
 			'\tfunction f(alphaValue:Int, betaValue:Int):Void {',
-			'\t\tfinal firstTotal = alphaValue;',
+			'\t\tfinal firstTotal = alphaValue + betaValue;',
 			'\t\tfinal secondTotal = betaValue;',
 			'\t\tfinal thirdTotal = firstTotal;',
 			'\t}',
 			'\tfunction g(alphaValue:Int, betaValue:Int):Void {',
-			'\t\tfinal firstTotal = alphaValue;',
+			'\t\tfinal firstTotal = alphaValue + betaValue;',
 			'\t\tfinal secondTotal = betaValue;',
 			'\t\tfinal thirdTotal = firstTotal;',
 			'\t}',
@@ -265,6 +273,142 @@ class DuplicateCodeRenamedCheckTest extends Test {
 		);
 	}
 
+	/**
+	 * THE discriminating fixture for the bare-run filter: five declarations whose values are a
+	 * literal, an empty literal, a negative literal and a name match up to renaming and clear the
+	 * content gate, and are still not a clone — a row of slot fills has nothing to extract. With
+	 * the filter cut (the arm) the run comes back under this reading.
+	 */
+	@:pin('control')
+	@:killer('M-DUP-CODE-BARE-RUN-OFF')
+	public function testABareDeclarationRunIsNotAClone(): Void {
+		final source: String = src([
+			'class C {',
+			'\tfunction f(alpha:Int):Void {',
+			'\t\tfinal total:Int = 0;',
+			'\t\tfinal label:String = "none";',
+			'\t\tfinal items:Array<Int> = [];',
+			'\t\tfinal limit:Int = -1;',
+			'\t\tvar current:Int = alpha;',
+			'\t}',
+			'\tfunction g(beta:Int):Void {',
+			'\t\tfinal sum:Int = 0;',
+			'\t\tfinal name:String = "none";',
+			'\t\tfinal list:Array<Int> = [];',
+			'\t\tfinal cap:Int = -1;',
+			'\t\tvar cursor:Int = beta;',
+			'\t}',
+			'}'
+		]);
+		Assert.equals(0, violations(source).length);
+		Assert.equals(0, exact(source).length);
+	}
+
+	/**
+	 * A constructor's row of field fills — a parameter or a literal into each field — is the
+	 * assignment spelling of the same bare run, and no clone either.
+	 */
+	public function testABareAssignmentRunIsNotAClone(): Void {
+		final source: String = src([
+			'class C {',
+			'\tfunction f(alpha:Int, beta:String):Void {',
+			'\t\tthis.total = alpha;',
+			'\t\tthis.label = beta;',
+			'\t\tthis.count = 0;',
+			'\t\tthis.items = null;',
+			'\t}',
+			'\tfunction g(gamma:Int, delta:String):Void {',
+			'\t\tthis.total = gamma;',
+			'\t\tthis.label = delta;',
+			'\t\tthis.count = 0;',
+			'\t\tthis.items = null;',
+			'\t}',
+			'}'
+		]);
+		Assert.equals(0, violations(source).length);
+		Assert.equals(0, exact(source).length);
+	}
+
+	/**
+	 * One call in the row is what an extraction would carry, so the same declarations with a
+	 * `trace` after them stay a clone: the filter drops a run of slot fills, not a run that holds
+	 * one.
+	 */
+	@:pin('guard')
+	public function testABareRunWithOneCallIsAClone(): Void {
+		final source: String = src([
+			'class C {',
+			'\tfunction f(alpha:Int):Void {',
+			'\t\tfinal total:Int = 0;',
+			'\t\tfinal label:String = "none";',
+			'\t\tfinal items:Array<Int> = [];',
+			'\t\tfinal limit:Int = -1;',
+			'\t\tvar current:Int = alpha;',
+			'\t\ttrace(total, label, items, limit, current);',
+			'\t}',
+			'\tfunction g(beta:Int):Void {',
+			'\t\tfinal sum:Int = 0;',
+			'\t\tfinal name:String = "none";',
+			'\t\tfinal list:Array<Int> = [];',
+			'\t\tfinal cap:Int = -1;',
+			'\t\tvar cursor:Int = beta;',
+			'\t\ttrace(sum, name, list, cap, cursor);',
+			'\t}',
+			'}'
+		]);
+		final vs: Array<Violation> = violations(source);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('6 statements duplicated') == 0, vs[0].message);
+		Assert.equals(0, exact(source).length);
+	}
+
+	/**
+	 * The predicate statement by statement: a slot value is a name, dotted or not, or a literal —
+	 * an empty collection and a negated number are literals, an interpolation hole is a read — and
+	 * a statement the seams cannot place is not bare, so with the assignment or the declaration
+	 * seam undeclared the same statement keeps its run.
+	 */
+	public function testBarenessIsReadOffTheSeamsAndFailsClosed(): Void {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final shape: RefShape = plugin.refShape();
+		final stmts: Array<QueryNode> = bodyStatements(plugin, src([
+			'class C {',
+			'\tfunction f(alpha:Int):Void {',
+			'\t\tvar a:Int;',
+			'\t\tvar b = 1, c = alpha;',
+			'\t\tfinal d = -1;',
+			'\t\tfinal e = [];',
+			'\t\tfinal g = {};',
+			"\t\tfinal h = 'plain';",
+			'\t\tfinal i = this.alpha;',
+			'\t\tthis.total = alpha;',
+			"\t\tfinal j = 'seen $alpha';",
+			'\t\tfinal k = [1];',
+			'\t\tfinal l = -alpha;',
+			'\t\tfinal m = new Map();',
+			'\t\tvar n = 1, o = f();',
+			'\t\ttotal += 1;',
+			'\t\ttotal = f();',
+			'\t}',
+			'}'
+		]));
+		final kinds: DupBareKinds = DuplicateCode.bareKinds(shape);
+		final bare: Array<Bool> = stmts.map(stmt -> DuplicateCode.isBareStmt(kinds, stmt));
+		Assert.same([
+			true, true, true, true, true, true, true, true, false, false, false, false, false, false, false
+		], bare);
+		final noAssign: RefShape = Reflect.copy(shape);
+		Reflect.deleteField(noAssign, 'assignKind');
+		Assert.isFalse(
+			DuplicateCode.isBareStmt(DuplicateCode.bareKinds(noAssign), stmts[7]), 'no assignment seam, so the field fill is not bare'
+		);
+		final noDecl: RefShape = Reflect.copy(shape);
+		Reflect.deleteField(noDecl, 'localDeclKinds');
+		Assert.isFalse(
+			DuplicateCode.isBareStmt(DuplicateCode.bareKinds(noDecl), stmts[0]), 'no declaration seam, so the declaration is not bare'
+		);
+	}
+
 	public function testRegisteredInBuiltinsAsDefaultOff(): Void {
 		final check: Null<Check> = Linter.byId('duplicate-code-renamed');
 		Assert.notNull(check);
@@ -318,6 +462,25 @@ class DuplicateCodeRenamedCheckTest extends Test {
 
 	private function src(lines: Array<String>): String {
 		return lines.join('\n');
+	}
+
+	/** The direct-child statements of the first block the grammar's block seam names in `source`. */
+	private function bodyStatements(plugin: HaxeQueryPlugin, source: String): Array<QueryNode> {
+		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
+		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		if (support == null || tree == null) throw 'the fixture must parse under a grammar with a block seam';
+		final blockKinds: Array<String> = support.blockKinds();
+		function firstBlock(node: QueryNode): Null<QueryNode> {
+			if (blockKinds.contains(node.kind)) return node;
+			for (child in node.children) {
+				final found: Null<QueryNode> = firstBlock(child);
+				if (found != null) return found;
+			}
+			return null;
+		}
+		final block: Null<QueryNode> = firstBlock(tree);
+		if (block == null) throw 'the fixture holds no block';
+		return block.children;
 	}
 
 }

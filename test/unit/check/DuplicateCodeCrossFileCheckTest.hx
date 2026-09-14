@@ -257,6 +257,34 @@ class DuplicateCodeCrossFileCheckTest extends Test {
 		Assert.equals('3 statements duplicated from src/Foo.hx:3 — extract a shared helper (report-only, cross-file)', vs[0].message);
 	}
 
+	/** The cross-file pass applies the same bare-run filter: a row of field fills shared by two files is no clone. */
+	public function testABareRunAcrossFilesIsNotAClone(): Void {
+		Assert.equals(
+			0, violations([
+				file('A.hx', [
+					'class A {',
+					'\tfunction f(alpha:Int, beta:String):Void {',
+					'\t\tthis.total = alpha;',
+					'\t\tthis.label = beta;',
+					'\t\tthis.count = 0;',
+					'\t\tthis.items = null;',
+					'\t}',
+					'}'
+				]),
+				file('B.hx', [
+					'class B {',
+					'\tfunction g(alpha:Int, beta:String):Void {',
+					'\t\tthis.total = alpha;',
+					'\t\tthis.label = beta;',
+					'\t\tthis.count = 0;',
+					'\t\tthis.items = null;',
+					'\t}',
+					'}'
+				])
+			]).length
+		);
+	}
+
 	public function testDuplicateCodeStillSingleBuiltin(): Void {
 		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
 		Assert.equals(1, [for (id in ids) if (id == 'duplicate-code') id].length);

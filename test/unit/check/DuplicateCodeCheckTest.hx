@@ -230,6 +230,68 @@ class DuplicateCodeCheckTest extends Test {
 		Assert.isTrue(StringTools.startsWith(vs[0].message, '3 statements duplicated'));
 	}
 
+	/**
+	 * THE discriminating fixture for the bare-run filter under the exact reading: four identically
+	 * named declarations filled with a literal, an empty literal, a negative literal and a name clear
+	 * the content gate and are still not a clone — a row of slot fills has nothing to extract. With
+	 * the filter cut (the arm) the run comes back.
+	 */
+	@:pin('control')
+	@:killer('M-DUP-CODE-BARE-RUN-OFF')
+	public function testABareDeclarationRunIsNotAClone(): Void {
+		Assert.equals(
+			0, violations(src([
+				'class C {',
+				'\tfunction f():Void {',
+				'\t\tfinal total:Int = 0;',
+				'\t\tfinal label:String = "none";',
+				'\t\tfinal items:Array<Int> = [];',
+				'\t\tfinal limit:Int = -1;',
+				'\t\tvar current:Int = total;',
+				'\t}',
+				'\tfunction g():Void {',
+				'\t\tfinal total:Int = 0;',
+				'\t\tfinal label:String = "none";',
+				'\t\tfinal items:Array<Int> = [];',
+				'\t\tfinal limit:Int = -1;',
+				'\t\tvar current:Int = total;',
+				'\t}',
+				'}'
+			])).length
+		);
+	}
+
+	/**
+	 * One call in the row is what an extraction would carry, so the same declarations with a
+	 * `trace` after them stay a clone: the filter drops a run of slot fills, not a run that holds
+	 * one.
+	 */
+	@:pin('guard')
+	public function testABareRunWithOneCallIsAClone(): Void {
+		final vs: Array<Violation> = violations(src([
+			'class C {',
+			'\tfunction f():Void {',
+			'\t\tfinal total:Int = 0;',
+			'\t\tfinal label:String = "none";',
+			'\t\tfinal items:Array<Int> = [];',
+			'\t\tfinal limit:Int = -1;',
+			'\t\tvar current:Int = total;',
+			'\t\ttrace(total, label, items, limit, current);',
+			'\t}',
+			'\tfunction g():Void {',
+			'\t\tfinal total:Int = 0;',
+			'\t\tfinal label:String = "none";',
+			'\t\tfinal items:Array<Int> = [];',
+			'\t\tfinal limit:Int = -1;',
+			'\t\tvar current:Int = total;',
+			'\t\ttrace(total, label, items, limit, current);',
+			'\t}',
+			'}'
+		]));
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('6 statements duplicated') == 0, vs[0].message);
+	}
+
 	public function testRegisteredInBuiltins(): Void {
 		Assert.notNull(Linter.byId('duplicate-code'));
 		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];

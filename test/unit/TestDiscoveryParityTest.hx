@@ -1059,8 +1059,12 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.DocMeasurementClaimCheckTest#testTheRecordingVerbMidClauseNeedsANumberOnItsLine :: control :: '
 				+ 'M-DOC-CLAIM-VERB-UNGATED',
 			'unit.check.DocMeasurementClaimCheckTest#testTheRecordingVerbOpeningAClauseIsAReading :: control :: M-DOC-CLAIM-CLAUSE-BLIND',
+			'unit.check.DuplicateCodeCheckTest#testABareDeclarationRunIsNotAClone :: control :: M-DUP-CODE-BARE-RUN-OFF',
+			'unit.check.DuplicateCodeCheckTest#testABareRunWithOneCallIsAClone :: guard :: ',
 			'unit.check.DuplicateCodeCheckTest#testALiteralInteriorDifferenceIsNotACloneWhileItsLayoutTwinIs :: control :: '
 				+ 'M-DUP-CODE-NORM-KEY',
+			'unit.check.DuplicateCodeRenamedCheckTest#testABareDeclarationRunIsNotAClone :: control :: M-DUP-CODE-BARE-RUN-OFF',
+			'unit.check.DuplicateCodeRenamedCheckTest#testABareRunWithOneCallIsAClone :: guard :: ',
 			'unit.check.DuplicateCodeRenamedCheckTest#testALocalsOnlyRenamingIsAClone :: control :: M-DUP-CODE-RENAMED-BINDERS',
 			'unit.check.DuplicateCodeRenamedCheckTest#testDeclarationsWhoseBytesAreMostlyTheirNamesAreNotAClone :: control :: '
 				+ 'M-DUP-CODE-RENAMED-GATE-RAW',
@@ -1868,6 +1872,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-ELSE-SWITCH-CLOSE-NONE',
 			'M-ELSE-SWITCH-CLOSE-COMMENT',
 			'M-RENDER-SPAN-TOKENS',
+			'M-DUP-CODE-BARE-RUN-OFF',
 			'M-DUP-CODE-NORM-KEY',
 			'M-DUP-CODE-RENAMED-BINDERS',
 			'M-DUP-CODE-RENAMED-GATE-RAW',
