@@ -109,7 +109,7 @@ final class HxComprehensionForBodyPolicySliceTest extends Test {
 	}
 
 	/**
-	 * `fitLine` asks whether the WHOLE body renders flat, not whether its FIRST line fits (S78) — an if/else
+	 * `fitLine` asks whether the WHOLE body renders flat, not whether its FIRST line fits — an if/else
 	 * body never does, so it leaves the head line. On THIS input that is byte-identical to `next`, which is
 	 * why the pair is discriminated one arm down, on a body that DOES render flat:
 	 * `testFitLinePullsUpABodyThatFits` collapses it, `testNextPutsTheBodyOnItsOwnLine`'s value would not.

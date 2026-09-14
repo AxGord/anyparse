@@ -129,7 +129,7 @@ class PatchSliceTest extends Test {
 	/**
 	 * The COMPOUND payload, and the hole the name test alone leaves: insert a declaration above
 	 * the documented member AND rename that member in one call. The old name is gone, so the
-	 * transfer/rename discriminator reads it as a rename — and lets S23's theft through at rc 0,
+	 * transfer/rename discriminator reads it as a rename — and lets the doc-transfer theft through at rc 0,
 	 * doc sitting above the insertion, file parsing, every gate green. Found by review of the
 	 * relaxation, not by any pin the relaxation shipped with; the two pure shapes it was mutated
 	 * against cannot see it. The container-GREW signal is what refuses it, and dropping that
@@ -720,7 +720,7 @@ class PatchSliceTest extends Test {
 	/**
 	 * The MIRROR shape, and the one the campaign actually tripped over: a fragment whose
 	 * LAST line stops mid-line. Both arms miss it for the same reason as its sibling above,
-	 * but until S68 only the START had a probe, so this one fell through to "copy it
+	 * but only the START used to have a probe, so this one fell through to "copy it
 	 * verbatim from `apq source --select`" — advice describing a fragment that WAS copied
 	 * verbatim, merely not to the end of its line. The refusal now names the line the
 	 * fragment stops inside.

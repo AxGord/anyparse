@@ -15,8 +15,8 @@ import utest.Test;
  * Nothing anywhere pinned the end coordinate. The dumps are wide (`ApqAstIntegrationTest`
  * renders thousands of them) but only ever asked not to crash.
  *
- * That mattered the moment `spanToJson` stopped scanning the source per call: S67 replaced
- * `Span.lineCol`'s walk-from-byte-0 with a binary search over a line index, and the only thing
+ * That mattered the moment `spanToJson` stopped scanning the source per call: `Span.lineCol`'s
+ * walk-from-byte-0 became a binary search over a line index, and the only thing
  * standing behind "it answers what the scan answered" was a byte-comparison of two dumps run by
  * hand. This is the standing version of that comparison.
  *

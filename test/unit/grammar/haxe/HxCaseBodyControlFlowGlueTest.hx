@@ -37,14 +37,14 @@ import utest.Test;
  * and `case X: if (c) { x(); }` have the SAME statement kind — so it is taken
  * in the WIDTH loop: a unit that reads `-1` AND has a control-flow body root
  * forces the break. Both halves hang off ONE meta
- * (`@:fmt(refuseGlueOnControlFlowRoot)` on the case-body Star, read back by
- * the case-LIST Star at macro time), so a grammar can never get the spread
- * without the placement that justifies it.
+ * (`@:fmt(refuseGlueOnControlFlowRoot)` on the case-body Star, read back by the
+ * case-LIST Star), so a grammar never gets the spread without the placement.
  *
- * Every test here FAILS on the pre-slice engine except the four guards
- * against over-firing (flat control-flow body, glued value bodies, the
- * metadata-wrapped block, knob off). The knobs are visible only through
- * `HaxeModuleTriviaParser` / `HaxeModuleTriviaWriter`.
+ * Every test here FAILS on the pre-slice engine except the four guards against
+ * over-firing: `testAFlatControlFlowBodyStaysInline`,
+ * `testGluedValueBodiesStayGluedAndDoNotTrigger`,
+ * `testAMetadataWrappedBlockStaysGlued` and `testKnobOffIsInert`. The knobs are
+ * visible only through `HaxeModuleTriviaParser` / `HaxeModuleTriviaWriter`.
  */
 @:nullSafety(Strict)
 final class HxCaseBodyControlFlowGlueTest extends Test {

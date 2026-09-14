@@ -204,7 +204,7 @@ final class HxComprehensionCloserSliceTest extends Test {
 	}
 
 	/**
-	 * A NESTED-generator comprehension used to be the second neither-predicate shape and leading-broke its `[`. Since S78 the
+	 * A NESTED-generator comprehension used to be the second neither-predicate shape and leading-broke its `[`. The
 	 * generator-count veto is gone, so it cuddles like every other `for` item and only its curly tail stays on the next line.
 	 */
 	public function testNestedGeneratorBraceTailCuddles(): Void {

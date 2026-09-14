@@ -62,7 +62,7 @@ class LexicalRegionsSeamTest extends Test {
 	/**
 	 * The move is behaviour-preserving: the grammar implementation and the seam answer the same
 	 * thing. The deprecated `LexicalRegions` forwarder this used to compare against as well is
-	 * gone since S60 — every consumer now reaches the scan through the plugin — so what remains
+	 * gone — every consumer now reaches the scan through the plugin — so what remains
 	 * is the arm that would go red if `HaxeQueryPlugin.lexicalRegions` ever stopped delegating.
 	 */
 	public function testGrammarImplementationAgreesWithTheSeam(): Void {

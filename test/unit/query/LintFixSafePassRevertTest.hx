@@ -248,7 +248,7 @@ class LintFixSafePassRevertTest extends Test {
 
 	public function testTheNoticeNamesTheFileItRolledBack(): Void {
 		// The message this replaces said only `REVERTED N file(s), nothing was written` — on a
-		// 228-file wave that is a bisect, one compile at a time, to learn which file it meant.
+		// wave of files that is a bisect, one compile at a time, to learn which file it meant.
 		final notice: String = LintFixSafePass.revertNotice(
 			SafePassNarrowing.Narrowed(['/p/B.hx'], 1), 3, '/p/B.hx:4: characters 1-2 : boom'
 		);
@@ -334,7 +334,7 @@ class LintFixSafePassRevertTest extends Test {
 		// the config key, not the flag, so the two collapse to one sentence — and this arm is
 		// the one `verbose` does NOT gate, so a quiet run still gets it.
 		Assert.equals(unconfigured, LintFixSafePass.netNotice(null, true, false) ?? '');
-		// A configured oracle the run DECLINED keeps S59's wording — the remedy there is to
+		// A configured oracle the run DECLINED keeps its own wording — the remedy there is to
 		// drop the flag, and naming the config key would be advice the user already took. It
 		// waits for `--verbose`; `LintFixQuietDefaultTest` owns why.
 		final declined: String = LintFixSafePass.netNotice('build.hxml', true, true) ?? '';

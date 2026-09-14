@@ -311,8 +311,8 @@ class BodySlotGuardSliceTest extends Test {
 
 	/**
 	 * CONTROL, and a correction to the brief that queued this slice: removing the SOLE `catch`
-	 * clause is NOT the brace-less-body class. Haxe accepts a catch-less `try` — on `-js` and
-	 * `--interp`, braced and brace-less, statement and expression form, all rc 0 —
+	 * clause is NOT the brace-less-body class. Haxe 4.3.7 accepts a catch-less `try` — on `-js`
+	 * and `--interp`, braced and brace-less, statement and expression form, all rc 0 —
 	 * so the result is valid code that means what the edit says, and the guard must stay out of
 	 * the way.
 	 *

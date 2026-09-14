@@ -88,7 +88,7 @@ class LiteralClassificationTest extends Test {
 	 * Every kind the grammar declares a constant literal is classified by EVERY consuming list.
 	 *
 	 * One assertion per list, each naming the kinds it is missing, because the lists are what drift:
-	 * five of the six were missing `HexLit` at the same time and the two that carried a stub hid it
+	 * nearly every one was missing `HexLit` at the same time and the two that carried a stub hid it
 	 * from themselves. `NON_NULL_RHS_KINDS` is asked about the vocabulary MINUS the null literal —
 	 * the one member of it whose value IS null — which is a real exclusion and not a gap.
 	 *

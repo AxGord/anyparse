@@ -154,7 +154,7 @@ final class HxCaseBodySymmetrySliceTest extends Test {
 
 	public function testTriggerFlipsAtTheWidestSiblingsBoundary(): Void {
 		// Both halves in one test: the break half alone does not
-		// discriminate (a narrower budget breaks under T16 too).
+		// discriminate (a narrower budget breaks under per-body placement too).
 		final fits: String = write(MIXED_SRC, json(40));
 		Assert.isTrue(
 			fits.indexOf('case 2: cc(ddddddddddddddd);') != -1, 'exactly maxLineLength on the WIDEST sibling stays inline: <$fits>'

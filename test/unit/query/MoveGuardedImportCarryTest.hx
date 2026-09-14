@@ -38,7 +38,7 @@ final class MoveGuardedImportCarryTest extends Test {
 	private static final CARRIED_BLOCK: String = '#if (sys || nodejs)\nimport sys.FileSystem;\nimport sys.io.File;\n#end';
 
 	/**
-	 * The headline shape, reproduced from the 767-module sweep: the moved body reaches two names
+	 * The headline shape, reproduced from the Pony-tree sweep: the moved body reaches two names
 	 * only through a `#if`-guarded import block, and the destination is a bare module.
 	 *
 	 * At base the destination received `import haxe.io.Path;` and NOT the guarded pair, so

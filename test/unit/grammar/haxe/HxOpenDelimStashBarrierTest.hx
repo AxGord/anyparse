@@ -25,26 +25,25 @@ import utest.Test;
  * scan reads as "a comprehension element genuinely starts on its own line
  * after `[`". The bracket then broke open on a source line the source never had.
  *
- * The fix is positional, not a classifier tweak: consuming the open literal
- * PROVES the elements are inside the bracket, so both trivia-Star open-lit
- * emitters (`lowerTriviaStarBranch` for an Alt branch, `emitTriviaStar
- * FieldSteps` for a struct field) push `stashNewlineClearExpr` right after
- * their `expectLit`. Only the newline / blank signals are cleared; leading
- * COMMENTS keep travelling, which is a separate, still-open mis-attribution
- * (`function(a, b)\n\t// c\n\treturn [x]` puts `// c` inside the bracket)
- * and deliberately out of this slice. The counter-example keeps the fix
- * honest: a newline that really IS between `[` and the first element must
- * still break the bracket open — deleting the classifier's carve-out
- * instead passes this file's first assertion and fails that one.
+ * The fix is positional, not a classifier tweak: consuming the open literal PROVES the
+ * elements are inside the bracket, so both trivia-Star open-lit emitters
+ * (`lowerTriviaStarBranch` for an Alt branch, `emitTriviaStarFieldSteps` for a struct
+ * field) push `stashNewlineClearExpr` right after their `expectLit`. Only the newline /
+ * blank signals are cleared; leading COMMENTS keep travelling — a separate, still-open
+ * mis-attribution (`function(a, b)\n\t// c\n\treturn [x]` puts `// c` inside the bracket).
+ * The barrier is wider than the reported bug: the two emitters serve every `@:lead` +
+ * `@:trivia` Star, so an object literal or anon type written flat after a break and Keep
+ * mode move too (`testBareObjectLiteralOnItsOwnLineStaysFlat`,
+ * `testKeepModeHonoursOnlyInBracketNewlines`); every other construct is byte-identical.
  *
- * The barrier is wider than the reported bug: the two emitters serve every
- * `@:lead` + `@:trivia` Star in the grammar. Base-vs-new over a probe file,
- * three families move — an array or comprehension bracket (the report), an
- * object literal or anon type written flat on the line after a break, and
- * Keep mode; every other construct comes back byte-identical.
- * `testBareObjectLiteralOnItsOwnLineStaysFlat` and
- * `testKeepModeHonoursOnlyInBracketNewlines` pin the widened scope. Two
- * fixtures are green at base BY CONSTRUCTION and say so on their own doc.
+ * Which cut kills which fixture: dropping the barrier from `lowerTriviaStarBranch` kills
+ * `testBracelessAnonFnBodyComprehensionStaysFlat` and `testNewlineBeforeOpenBracketStaysFlat`;
+ * dropping it from `emitTriviaStarFieldSteps` kills `testBracelessAnonFnBodyObjectLiteralStaysFlat`;
+ * widening the clear to `leadingComments` kills `testLeadingCommentSurvivesTheBarrier`. Two are
+ * green at base BY CONSTRUCTION: `testInBracketNewlineStillBreaksOpen` is the over-reach guard
+ * (its newline really IS inside the bracket, and deleting the classifier's carve-out instead
+ * fails it), while `testBlockStatementComprehensionStaysFlat` produces no stash at all — a
+ * control that pins only that nothing changed there.
  */
 @:nullSafety(Strict)
 class HxOpenDelimStashBarrierTest extends Test {

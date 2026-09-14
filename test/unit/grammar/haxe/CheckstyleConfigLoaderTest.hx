@@ -255,7 +255,7 @@ class CheckstyleConfigLoaderTest extends Test {
 	/**
 	 * The autofix half a `checkstyle.json` cannot state. A config-derived rule used to carry no
 	 * `normalize` at all, so `Naming.correctedName` had nothing to return and every finding such a
-	 * policy produced was report-only BY CONSTRUCTION — 198 of an 851-file tree's 231. The
+	 * policy produced was report-only BY CONSTRUCTION — most of a real tree's findings. The
 	 * corrections are the grammar's: a rule gets the ones the built-in policy attaches to ITS
 	 * category, and none for a category the built-in itself leaves report-only.
 	 */

@@ -69,9 +69,9 @@ final class NameMentionScanTest extends Test {
 	}
 
 	/**
-	 * The FULLY-QUALIFIED path refusal, same two lexical contexts — the pin that keeps S81's rewrite
+	 * The FULLY-QUALIFIED path refusal, same two lexical contexts — the pin that keeps the rewrite
 	 * of that scan (a hand-rolled `indexOf` loop, now the shared `qualifiedPathMention`) from
-	 * quietly changing the policy S80 chose.
+	 * quietly changing the policy the earlier scan chose.
 	 *
 	 * A move repoints every code reference it can name and leaves a string alone, so a file spelling
 	 * `p.Mover` inside `Type.resolveClass` is broken by the move and nothing repairs it: refusing is

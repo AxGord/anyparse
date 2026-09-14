@@ -134,7 +134,7 @@ class CommentOwnerGuardSliceTest extends Test {
 	 * The CARRY criterion, on the shape the block criterion above provably cannot see: ONE comment
 	 * block, so `detachedComment` has nothing to weld and returns before it looks at anything.
 	 *
-	 * This is the closure S84 wrote down as a backlog item and could not reach: "moved across code
+	 * This is the closure an earlier slice wrote down as a backlog item and could not reach: "moved across code
 	 * that survived" is undecidable from the two texts, because an in-place rewrite changes the
 	 * same bytes a hoist does. The edit DECLARES the ranges it quotes verbatim, and the question
 	 * becomes arithmetic — `// why zero` stood after `gate()` and `11` in the source and stands

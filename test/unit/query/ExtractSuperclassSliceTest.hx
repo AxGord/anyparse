@@ -214,7 +214,7 @@ class ExtractSuperclassSliceTest extends Test {
 	 * A blank-line run INSIDE a string literal must survive a cut somewhere else in
 	 * the file.
 	 *
-	 * RED at the base commit, where the edited source was finished by a hand-rolled
+	 * RED at base, where the edited source was finished by a hand-rolled
 	 * `collapseBlankRuns` — a whole-file scan that shortened any run of 3+ newlines to
 	 * one blank line, with no idea where literals and comments start. It ran over the
 	 * WHOLE file, so pulling up `alpha` silently deleted a newline from `banner`'s
@@ -257,7 +257,7 @@ class ExtractSuperclassSliceTest extends Test {
 	/**
 	 * The EDITED source must come back canonical, not just the CREATED one.
 	 *
-	 * RED at the base commit: `extends Base ` is a verbatim splice, and on a header
+	 * RED at base: `extends Base ` is a verbatim splice, and on a header
 	 * already near the limit it pushes the line past it — where the writer wraps the
 	 * trailing `implements` clause onto a continuation line. The source was canonical
 	 * one second before the op ran and drifted the moment it returned, which is the

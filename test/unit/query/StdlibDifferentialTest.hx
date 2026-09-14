@@ -42,7 +42,7 @@ class StdlibDifferentialTest extends Test {
 	 * A candidate that returns one of its own arguments unchanged is measured against that
 	 * baseline alongside the pool, and the baseline is flagged as trivial. Without it a
 	 * pass-through setter agrees with every identity-shaped stdlib call at once -- a handful of
-	 * such functions produced a third of the findings on a real tree before this gate existed.
+	 * such functions swamped the findings on a real tree before this gate existed.
 	 */
 	public function testTrivialBaselineAccompaniesEveryEnumeration(): Void {
 		final candidate: StdlibCandidate = one('class C {\n\tfunction set_value(value:String):String return value;\n}');

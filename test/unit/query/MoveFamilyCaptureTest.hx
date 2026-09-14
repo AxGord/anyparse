@@ -205,8 +205,8 @@ final class MoveFamilyCaptureTest extends Test {
 
 	/**
 	 * `move` of a type whose dependencies are reached through a `#if`-GUARDED import block, into a
-	 * destination that already spells the SAME condition — the exact shape 72 destinations of one
-	 * 767-module sweep lost, plus the merge that keeps the destination from ending up with two
+	 * destination that already spells the SAME condition — the exact shape a Pony-tree sweep lost
+	 * at many destinations, plus the merge that keeps the destination from ending up with two
 	 * regions saying the same thing.
 	 *
 	 * Captured in full because both halves are decisions, not tokens: which statements the carry

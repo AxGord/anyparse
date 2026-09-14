@@ -115,11 +115,11 @@ final class HxCallParamOuterFirstWrapSliceTest extends Test {
 	}
 
 	/**
-	 * Fits+1 edge, RE-PINNED (T37). One column wider than the fixture above, so the
-	 * argument would be 141 columns on its continuation line and T20 flat-argument
+	 * Fits+1 edge, RE-PINNED. One column wider than the fixture above, so the
+	 * argument would be 141 columns on its continuation line and the flat-argument
 	 * rung declines. The argument carries a top-level binary seam whose tail is a bare
 	 * paren, so the next rung applies: the call still opens and the argument wraps at
-	 * its own `+`, leaving the paren group intact — instead of the pre-T37 glue that
+	 * its own `+`, leaving the paren group intact — instead of the earlier glue that
 	 * broke INSIDE the paren. The at-limit sibling above is the discriminator for the
 	 * boundary: these two must never render the same shape.
 	 */

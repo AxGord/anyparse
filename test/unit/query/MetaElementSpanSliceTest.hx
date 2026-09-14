@@ -92,7 +92,7 @@ final class MetaElementSpanSliceTest extends Test {
 	/**
 	 * The doc block above an annotation documents the DECLARATION under it, which
 	 * is staying — so the delete must not extend back over it. Found by dogfooding
-	 * on a real 79-line Pony class, after the span fix above already had the type
+	 * on a real Pony class, after the span fix above already had the type
 	 * surviving: `remove-element --select 'MetaCall:@:access'` still deleted the
 	 * class's own doc block, because the doc extension is unconditional for every
 	 * other target and a declaration is the only thing that can orphan one.
@@ -124,7 +124,7 @@ final class MetaElementSpanSliceTest extends Test {
 	 * A `#if … #end` region holding nothing but annotations IS an annotation — the
 	 * grammar's own `HxMetadata` enum counts `Conditional` among its four metadata
 	 * forms. Addressing one emptied the WHOLE FILE at rc 0, the same signature as
-	 * the plain-annotation case; the first correction pass covered three of the four
+	 * the plain-annotation case; the first correction pass covered the other
 	 * ctors and disclosed this one as a mutation-testing gap, which understated it.
 	 */
 	public function testRemoveConditionalAnnotationRegionKeepsTheType(): Void {

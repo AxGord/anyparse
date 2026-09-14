@@ -277,7 +277,7 @@ class HxCondModSliceTest extends HxTestHelpers {
 	}
 
 	public function testEnumAbstractDeclPrefixStaysMetaClaimed(): Void {
-		// openfl's 92-module shape - HxCondDeclPrefix territory, untouched.
+		// openfl's shape - HxCondDeclPrefix territory, untouched.
 		final ast: HxModule = HaxeModuleParser.parse('#if (haxe_ver >= 4.0) enum #else @:enum #end abstract E(Int) {}');
 		Assert.equals(1, ast.decls[0].meta.length);
 		Assert.equals(0, ast.decls[0].modifiers.length);

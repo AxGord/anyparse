@@ -274,8 +274,8 @@ class CondBranchSplitTest extends Test {
 
 	/**
 	 * MEMBER position: the comment tokens `MemberBranchScan.seamsOf` collects are what keeps a
-	 * `#else` written inside a COMMENT from splitting a modifier run — and until S60 nothing
-	 * asserted it. Handing `seamsOf` an empty comment set left the whole suite green, at base as
+	 * `#else` written inside a COMMENT from splitting a modifier run — and nothing used to
+	 * assert it. Handing `seamsOf` an empty comment set left the whole suite green, at base as
 	 * well as after the migration, so the gap is older than the move; this arm closes it.
 	 *
 	 * The fixture is discriminating by construction: `public` and the method are two children of

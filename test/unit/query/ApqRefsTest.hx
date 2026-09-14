@@ -189,7 +189,7 @@ class ApqRefsTest extends Test {
 
 	/**
 	 * Make the GRAMMAR the authority for the question the missing entry answered wrong: every kind
-	 * that binds a parameter — every function VALUE (`RefactorSupport.nestedFunctionKinds`, the S56
+	 * that binds a parameter — every function VALUE (`RefactorSupport.nestedFunctionKinds`, the
 	 * authority) and every function DECLARATION (`functionKinds`) — must open a scope frame, or its
 	 * parameters collect into the enclosing one. `NamedFnExpr` was the sixth sighting of that
 	 * duplicate-set class in this campaign; a plugin adding a seventh spelling fails HERE rather

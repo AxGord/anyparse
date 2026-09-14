@@ -818,7 +818,7 @@ class MoveSymbolSliceTest extends Test {
 	 *
 	 * The comment spelling of both arms is pinned elsewhere — `testACommentOnlyMentionIsNotAReference`
 	 * for the import and `testACommentOnlyMentionDoesNotRefuseAPrivateType` for the private refusal —
-	 * and since S80 a comment counts for neither. What is pinned HERE is the STRING mention, and the
+	 * and a comment counts for neither. What is pinned HERE is the STRING mention, and the
 	 * two arms in one fixture: the TEXT scan (`NameMentionScan.sourceNamesAny`) counts it, which is the
 	 * conservative direction wherever the answer WRITES an import (a redundant import costs a lint
 	 * advisory, a missing one costs the build), while the PROVEN scan (`NameMentionScan.nodeNamesAny`)
@@ -1072,8 +1072,8 @@ class MoveSymbolSliceTest extends Test {
 	/**
 	 * Two files spelling the SAME import statement for a dependency the index cannot name is not a
 	 * collision — it is the commonest macro-module shape there is (`#if macro import haxe.macro.Expr;`
-	 * on both sides), and four of eleven changed outcomes in a 60-case `move` census over the Pony tree
-	 * were exactly that. Both halves of the reconciliation are exercised: the statement that binds the
+	 * on both sides), and a share of the changed outcomes in a `move` census over the Pony tree were
+	 * exactly that. Both halves of the reconciliation are exercised: the statement that binds the
 	 * name directly, and the MODULE import that binds it as one of the module's other types.
 	 */
 	public function testTheSameUnnameableImportOnBothSidesIsNotACollision(): Void {
@@ -1190,7 +1190,7 @@ class MoveSymbolSliceTest extends Test {
 			}
 		}
 		Assert.equals('package p;\n\nimport q.Dep;\n\nclass Mover {\n\tvar d:Dep;\n}\n', move('package p;\n'));
-		// `q.Dep` sorts before `q.Other`, and since S92 the carried line takes the run's own slot
+		// `q.Dep` sorts before `q.Other`, and the carried line takes the run's own slot
 		// rather than being appended past it.
 		Assert.equals(
 			'package p;\n\nimport q.Dep;\nimport q.Other;\n\nclass Mover {\n\tvar d:Dep;\n}\n', move('package p;\n\nimport q.Other;\n')
@@ -2535,8 +2535,8 @@ class MoveSymbolSliceTest extends Test {
 
 	/**
 	 * A `using` grants STATIC EXTENSIONS and an extension call spells the method name and nothing else,
-	 * so no name scan can see which module supplied it — the same evidence on which S40 keeps a
-	 * DESTINATION `using` unconditionally. Without the mirror the moved body's `s.trim()` arrived at a
+	 * so no name scan can see which module supplied it — the same evidence on which a DESTINATION
+	 * `using` is kept unconditionally. Without the mirror the moved body's `s.trim()` arrived at a
 	 * destination with no `using StringTools;` and read `String has no field trim` at rc 0.
 	 */
 	public function testASourceUsingIsCarriedIntoTheDestination(): Void {
@@ -2733,7 +2733,7 @@ class MoveSymbolSliceTest extends Test {
 
 	/**
 	 * A statementless file can reach a moved ENUM through its CONSTRUCTORS and never spell the type at
-	 * all — S41's own Pony case was `pony/ServiceProvider.hx` reaching `pony.Or.OrState` only through
+	 * all — the Pony case that motivated it was `pony/ServiceProvider.hx` reaching `pony.Or.OrState` only through
 	 * `case A(cb)`. The repoint walk was taught the constructor names then; the repair walk scans the
 	 * same set now, and a scan of the type name alone leaves this file unrepaired.
 	 */

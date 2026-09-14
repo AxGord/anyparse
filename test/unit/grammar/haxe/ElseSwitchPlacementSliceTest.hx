@@ -42,7 +42,7 @@ class ElseSwitchPlacementSliceTest extends Test {
 	 * and glue every branch on their own - the knob then decides NOTHING and an assertion on it
 	 * passes with the whole feature disabled. `M-ELSE-SWITCH-TESTS-NONE` reported MISMATCH against
 	 * the first draft of `testTheValueIfThenBranchGluesAsWell` for exactly that reason; the
-	 * `else`-side value test above it had been vacuous the same way since S67.
+	 * `else`-side value test above it had been vacuous the same way since it was written.
 	 */
 	private static final EXPR_NEXT: String = '$BASE, "sameLine": {"expressionIf": "next"}}';
 

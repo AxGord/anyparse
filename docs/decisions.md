@@ -371,7 +371,7 @@ decided the question; it may not become a record of runs.
 - `anyItemLength >= n` as a width proxy for the complex-element wrap condition, and declining the
   multi-arg-collection glue for a call-bearing container → the proxy also explodes `case [A, B]`
   patterns and switch-subject arrays, and declining the glue over this tree makes files worse —
-  `2f30b0bc`
+  `d21e7783` (the proxy), `2f30b0bc` (the glue)
 - modelling `import pkg.Module.*` as a binding rung for the move gate → it binds no TYPE (only the
   module's statics), the invented binding equalled the wanted one and cancelled the ambient
   refusal — `521d044c`
@@ -384,9 +384,6 @@ decided the question; it may not become a record of runs.
 - a memo on the grammar plugin's lexical-region scan → the scan is a small share of a full
   `lint --all --fix` against a parse demanded once per check, and a speculative cache is the
   process-lifetime state invariant 1 forbids — `2ed13deb`
-- mapping `sameLine.expressionIf: next` onto a plain `Same` to join a value-`if`'s `else` to its
-  curly close → moves more files than the report named and glues an `else` onto list literals
-  the source left alone; `SameOnBlock` answers per delimiter — `8e7b149e`
 - `lint-diff` losing a normalization because a `66 added / 9 removed` verdict read as fewer
   findings → the headline's net is +57 and the reader's own per-rule tally already said so; the
   headline now states the net beside both surpluses — `a28edf4c`

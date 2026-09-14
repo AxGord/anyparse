@@ -4,10 +4,10 @@ import utest.Assert;
 import utest.Test;
 
 /**
- * omega-opadd-trailing-paren-break, T37 widening: a 2-operand `a OP (bare
- * paren)` whose rendered line overflows wraps at its OWN operator whenever the
+ * omega-opadd-trailing-paren-break, the paren-inner widening: a 2-operand `a OP
+ * (bare paren)` whose rendered line overflows wraps at its OWN operator whenever the
  * paren operand fits the continuation line it would land on — the delimited
- * group stays intact and the break lands at the outer seam. Before T37 the arm
+ * group stays intact and the break lands at the outer seam. Before the widening the arm
  * was gated on the paren wrapping a same-class opAddSub subexpression, so the
  * `'literal' + (ternary)` family fell through to the glue probe and broke
  * INSIDE the parens.
@@ -41,11 +41,11 @@ final class HxChainOuterOperatorWrapSliceTest extends Test {
 
 	/**
 	 * THE REPORTED SHAPE. The sole argument is `'<58-char literal>' + (ternary)`;
-	 * flat on its own continuation line it measures 154 columns, so T20's
+	 * flat on its own continuation line it measures 154 columns, so the
 	 * flat-argument rung declines. The argument carries a top-level `+` whose
 	 * tail is a bare paren that DOES fit its continuation (77 columns at the
 	 * chain's indent), so the chain wraps there and the ternary's parens stay
-	 * whole. Pre-T37 this glued the call open and broke inside the parens.
+	 * whole. Before the widening this glued the call open and broke inside the parens.
 	 */
 	public function testOverflowingSoleArgWrapsAtItsTopLevelOperator(): Void {
 		final src: String = '$HEAD\t\t\tfinal queryRows:RowCursor = _datasource.execute(\'SELECT itempath_movedfromsource FROM items WHERE '
@@ -56,7 +56,7 @@ final class HxChainOuterOperatorWrapSliceTest extends Test {
 	}
 
 	/**
-	 * IDEMPOTENCY, the other direction: the pre-T37 GLUE layout of the fixture
+	 * IDEMPOTENCY, the other direction: the earlier GLUE layout of the fixture
 	 * above converts to the operator wrap and then stays. Source-shape
 	 * independence — the writer reaches the same fixed point from either input.
 	 */
@@ -70,9 +70,9 @@ final class HxChainOuterOperatorWrapSliceTest extends Test {
 	}
 
 	/**
-	 * T20 REGRESSION PIN — green before and after this slice, by design. The
+	 * FLAT-ARGUMENT REGRESSION PIN — green before and after this slice, by design. The
 	 * shape-sibling with a 16-character shorter literal: the argument fits FLAT on
-	 * its continuation line, so T20's rung wins and the chain must not wrap at its
+	 * its continuation line, so the flat-argument rung wins and the chain must not wrap at its
 	 * operator. This and the reported shape above differ only in the literal
 	 * length, which is what makes the pair a boundary rather than two unrelated
 	 * shapes.
@@ -88,12 +88,12 @@ final class HxChainOuterOperatorWrapSliceTest extends Test {
 	/**
 	 * WIDTH BOUNDARY, fits edge — and a BUGFIX pin. The argument line measures
 	 * EXACTLY 140 columns at its continuation indent, so it fits and stays flat.
-	 * The pre-T37 gate was `IfLineExceeds(maxLineLength)`, which fires on `>=`
+	 * The earlier gate was `IfLineExceeds(maxLineLength)`, which fires on `>=`
 	 * over a column that is exact in a call-argument continuation (no pending
 	 * `OptSpace`, no trailing `;` on that line): it broke a line that fits. The
 	 * gate is now `IfFullLineExceeds(maxLineLength + 1)`, whose `n > width` form
 	 * charges the pending space, so BOTH contexts read the physical line.
-	 * Reverting the `+ 1` turns this red (together with T20's continuation
+	 * Reverting the `+ 1` turns this red (together with the flat-argument continuation
 	 * pin); the ctor half is pinned at the statement context by
 	 * `HxOpAddParenInnerBreakTest.testOpAddSubInnerParenBreaksBeforeLast`.
 	 */
@@ -110,7 +110,7 @@ final class HxChainOuterOperatorWrapSliceTest extends Test {
 	/**
 	 * WIDTH BOUNDARY, exceeds-by-one edge: one column wider than the fixture
 	 * above, so the chain wraps at its operator. This one does NOT discriminate
-	 * against reverting the slice — the pre-T37 engine produced the same bytes
+	 * against reverting the slice — the earlier engine produced the same bytes
 	 * here (an opAddSub tail was already on this arm, one column too eagerly). It
 	 * bounds the boundary from the other side: the pair must never render the same
 	 * shape, and only the at-limit sibling proves which side moved.
@@ -129,7 +129,7 @@ final class HxChainOuterOperatorWrapSliceTest extends Test {
 	 * RUNG-4 FALLBACK, static prune. The operator continuation (`contWidth`)
 	 * measures 150 columns, so it could not fit at ANY indent and the arm is skipped at
 	 * lowering (`contWidth > maxLineLength`): the glue probe keeps the call
-	 * hugged and the paren opens, exactly as before T37. The prune is not merely
+	 * hugged and the paren opens, exactly as before the widening. The prune is not merely
 	 * a render-time optimisation — the fits probe is slot-inverted, so an emitted
 	 * but unfirable arm would still be what flat-side walkers see.
 	 */
@@ -169,7 +169,7 @@ final class HxChainOuterOperatorWrapSliceTest extends Test {
 	 * decision — `naturalGluableStructural` resolves `IfArrowContinuationFits`
 	 * on its flat side, which is the SLOT-INVERTED forced-break shape here — so
 	 * it reads a first line that does not end at an open delimiter and opens its
-	 * own parens, costing one indent level against the pre-T37 hug. The band is
+	 * own parens, costing one indent level against the earlier hug. The band is
 	 * `maxLineLength - indent - cols < contWidth <= maxLineLength`; it cannot be
 	 * closed statically (the chain does not know its render indent) and closing
 	 * it at the walker belongs to the Doc.hx slot-inversion follow-up. It occurs
