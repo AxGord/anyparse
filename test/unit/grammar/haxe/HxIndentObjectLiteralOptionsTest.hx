@@ -247,8 +247,8 @@ class HxIndentObjectLiteralOptionsTest extends Test {
 		// ω-expressionif-collapse — a source-multiline object literal that is
 		// the DIRECT value of a value-yielded `if`/`else` branch collapses to
 		// single-line under `sameLine.expressionIf != Keep` (default `Same`).
-		// Verified byte-for-byte against fork CLI (Haxe Formatter 1.18.0,
-		// default config) 2026-06-07: `var x = if (cond) {a: 1, b: 2} else
+		// Verified byte-for-byte against the fork CLI under its default
+		// config: `var x = if (cond) {a: 1, b: 2} else
 		// {a: 3, b: 4};` — `shouldCollapseInExpressionIf` collapses the
 		// fitting object branch value. The earlier assertion pinned the
 		// pre-collapse behaviour; this is the fork-aligned update.

@@ -65,7 +65,7 @@ class HxArrowParamOptionalNamedSliceTest extends HxTestHelpers {
 	}
 
 	public function testStdlibParseIntSignature(): Void {
-		// js/Lib.hx:75 and flash/Lib.hx:104, verbatim shape.
+		// `js/Lib.hx` and `flash/Lib.hx`, verbatim shape.
 		final v: HxVarDecl = parseSingleVarDecl('class Foo { static var parseInt:(string:String, ?radix:Int) -> Float; }');
 		final fn: HxArrowFnType = expectArrowFnType(v.type);
 		Assert.equals(2, fn.args.length);

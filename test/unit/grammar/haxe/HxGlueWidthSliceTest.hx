@@ -9,28 +9,24 @@ import utest.Test;
 /**
  * ω-glue-width — a width answer for the `FitLine` GLUE outcome.
  *
- * Under any `sameLine` body policy set to `fitLine`, a body that cannot
- * render flat (`WrapList.flatLength == -1`: a nested construct holding a
- * block, a `#if`, a `{`-lambda argument) takes the GLUE outcome. Before
- * this slice that outcome was placed WITHOUT any measurement, so the header
- * line grew with the body and could run past `maxLineLength` unbounded.
- * `BodyFit.glueLayout` now owns the answer for all three writer sites that
- * emit such a glue — `BodyFit.fitLineLayout` (case bodies and the plain
- * bare-Ref path), `WriterLowering.buildBodyFitExpr`'s construct-group arm
- * (`ifBody` / `forBody` / `whileBody`) and its single-line-flag arm
- * (`return`-style bodies) — through one `Doc.IfGluedFirstLineExceeds`.
+ * Under any `sameLine` body policy set to `fitLine`, a body that cannot render
+ * flat (`WrapList.flatLength == -1`) takes the GLUE outcome, which used to be
+ * placed without any width read, so the header line could run past
+ * `maxLineLength` unbounded. `BodyFit.glueLayout` now owns the answer for all
+ * three writer sites that emit such a glue — `BodyFit.fitLineLayout`,
+ * `WriterLowering.buildBodyFitExpr`'s construct-group arm and its
+ * single-line-flag arm — through one `Doc.IfGluedFirstLineExceeds`.
  *
  * THE DECISION IS THREE CONJUNCTS, and each has its own fixture below:
  *
- *  1. Does the glued shape overflow? Measured by the NATURAL first-line
- *     walk (`Renderer.naturalFirstLineWidth`) from the live pen column: a
+ *  1. Does the glued shape overflow? Read by the NATURAL first-line walk
+ *     (`Renderer.naturalFirstLineWidth`) from the live pen column: a
  *     speculative render that resolves each inner `Group` by its own
- *     `fitsFlat`. The static alternatives were both measured and both fail
- *     — a flat first-line walk counts a condition the renderer WILL wrap
- *     (11 corpus files drifted, most of them regressions), and
- *     `DocMeasure.breakableHead` stops at the first break OPPORTUNITY,
- *     which for a construct-group body is its own `(`.
- *  2. Would breaking FIX it? The same body is re-measured at the column it
+ *     `fitsFlat`. Both static alternatives fail — a flat first-line walk
+ *     counts a condition the renderer WILL wrap (corpus files drifted, most
+ *     of them regressions), and `DocMeasure.breakableHead` stops at the
+ *     first break OPPORTUNITY, which for a construct-group body is its own `(`.
+ *  2. Would breaking FIX it? The same body is re-read at the column it
  *     would break to, and a body still over-wide there keeps the glue.
  *     Mirrors the fit-gate in `Renderer.collapseParenCommitsOpen`: when the
  *     inner cannot be made a single fitting line, opening does not help.
@@ -39,20 +35,16 @@ import utest.Test;
  *     columns and strands the brace — `Renderer.selfBreakingBraceBody`
  *     records the same verdict for the arrow-body marker.
  *
- * FITS CONVENTION: `<= maxLineLength` on both probes (the `Group` family's,
- * not the strict `<` of the natural-first-line sibling) — this probe is
- * calibrated to a whole rendered LINE, and a line landing exactly on the
- * limit is a line that fits. The fixture below pins all four edges:
- * its glued line is 131 columns and its broken body line 105, so the
- * break window is exactly `maxLineLength` in [105, 130].
+ * FITS CONVENTION: `<= maxLineLength` on both probes (the `Group` family's, not
+ * the strict `<` of the natural-first-line sibling) — this probe is calibrated to
+ * a whole rendered LINE, and a line landing exactly on the limit fits. The fixture
+ * below pins all four edges: its glued line is 131 columns and its broken body
+ * line 105, so the break window is exactly `maxLineLength` in [105, 130].
  *
- * NOT A SYMMETRY TRIGGER: a glue that this probe turns into a break does
- * NOT make its case siblings break (ω-case-sibling-symmetry's widest-
- * sibling pre-pass consumes bodies through `WrapList.flatLength`, and a
- * glued body answers `-1` there before and after this slice). Pinned below.
- *
- * Per `feedback_unit_test_trivia_writer.md`: the knobs are visible only
- * through `HaxeModuleTriviaParser` / `HaxeModuleTriviaWriter`.
+ * NOT A SYMMETRY TRIGGER: a glue this probe turns into a break does NOT make
+ * its case siblings break (the widest-sibling pre-pass reads bodies through
+ * `WrapList.flatLength`, where a glued body answers `-1`). Pinned below. The
+ * knobs are visible only through `HaxeModuleTriviaParser` / `HaxeModuleTriviaWriter`.
  */
 @:nullSafety(Strict)
 final class HxGlueWidthSliceTest extends Test {

@@ -15,9 +15,8 @@ import utest.Test;
  * governs; `docSplittingEdit` pins whose declaration a doc block documents; this pins that a
  * comment keeps the code it stands above.
  *
- * The measured incident is `prefer-ternary-return` marching up the six-gate cascade in this
- * repo's own `MemberOrder.reorderRefusal` — 10 edits over 7 passes that welded two per-gate
- * explanations into one block above a seven-level ternary pyramid, one of them the note warning
+ * The incident is `prefer-ternary-return` marching up the six-gate cascade in this repo's own `MemberOrder.reorderRefusal` — a
+ * run of passes that welded two per-gate explanations into one block above a deep ternary pyramid, one of them the note warning
  * against exactly that transformation. It re-parsed, it was byte-canonical, `fmt --list` was
  * clean and every lint rule was silent, so the only thing that could have caught it was a human
  * re-reading the file.

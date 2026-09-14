@@ -8,8 +8,8 @@ import utest.Test;
  * left open. That slice re-tags an arrow body's hardline-free `BodyGroup` as a `Group` so
  * the arg's true width reaches the call cascade; a plain `if` whose body is a `{}`-BLOCK
  * carries hardlines, so it cannot be re-tagged and its width stays invisible — every
- * static measure sees `if (` and nothing else (measured: `flatTokenWidth` = 4 for the
- * whole construct, against 93 for the same shape written as a `for`).
+ * static measure sees `if (` and nothing else (`flatTokenWidth` answers the width of that token
+ * alone for the whole construct, against the real width for the same shape written as a `for`).
  *
  * The consequence is an arrow-body probe that can never fire for that population: the
  * body glues to the header line however wide its own head is, and the `if`'s condition

@@ -18,7 +18,7 @@ using StringTools;
  * is attributable to the knob rather than to a second config key. Both configs come from real project `hxformat.json`s,
  * because the glue this slice changes only exists under `forBody` / `whileBody: fitLine`: `PROJECT_CONFIG` pairs that
  * with `singleStatementBraces: "remove"` and `fitLineBodyGlue: true`, `REPORTED_CONFIG` with `"symmetric"` braces --
- * the combination the S157 report came from, where the then-branch keeps the braces that put a `}` on the header line.
+ * the combination the report came from, where the then-branch keeps the braces that put a `}` on the header line.
  */
 @:nullSafety(Strict)
 final class HxLoopBodyIfElseSliceTest extends Test {
@@ -127,13 +127,13 @@ final class HxLoopBodyIfElseSliceTest extends Test {
 		'class C {\n\n\tfunction pick(flag:Bool):Void {\n\t\tif (flag)\n\t\t\ttakeFirst();\n\t\telse\n\t\t\ttakeSecond();\n\t}\n\n}';
 
 	/**
-	 * The SECOND config instance: the `hxformat.json` of the tree the S157 site was reported from, reduced to the keys
+	 * The SECOND config instance: the `hxformat.json` of the tree the site was reported from, reduced to the keys
 	 * that decide this shape. It differs from `PROJECT_CONFIG` in the one key that produces the reported bytes:
 	 * `singleStatementBraces` is `"symmetric"`, not `"remove"`, so a single-statement then-branch keeps the braces its
 	 * `else` sibling has - which is what leaves a `}` on the header's own line and the `else` at the LOOP's indent.
 	 *
-	 * At S157 the reduction was measured byte-identical to that file's full 8027-byte form on all twelve fixtures below,
-	 * in both knob states. It drops the `wrapping` rule sets, the `comments` section and most of `whitespace`, so a
+	 * The reduction was byte-identical to that file's full form on every fixture below, in both knob states. It
+	 * drops the `wrapping` rule sets, the `comments` section and most of `whitespace`, so a
 	 * fixture added later that carries a wrapped call, an object literal or an interior comment can diverge with nothing
 	 * here to notice it.
 	 */
@@ -265,9 +265,9 @@ final class HxLoopBodyIfElseSliceTest extends Test {
 	}
 
 	/**
-	 * The whole 4x2 placement table on the reported site, in one pin. S157 shipped the key gated on the `FitLine`
-	 * LAYOUT, so `same` and `keep` produced the reported defect and the key documented for them was silent; S159 moved
-	 * the gate onto the policy VALUE, upstream of every layout, and all four placements answer it.
+	 * The whole 4x2 placement table on the reported site, in one pin. The key first shipped gated on the `FitLine`
+	 * LAYOUT, so `same` and `keep` produced the reported defect and the key documented for them was silent; the gate
+	 * then moved onto the policy VALUE, upstream of every layout, and all four placements answer it.
 	 *
 	 * Off (or absent, which is the same `false`) every placement keeps the bytes it had before the key existed:
 	 * `fitLine` / `same` glue whatever the source did, `keep` reproduces the glued source, `next` breaks every body.
@@ -291,8 +291,8 @@ final class HxLoopBodyIfElseSliceTest extends Test {
 	 *
 	 * Only the third assertion can fail under an arm - it is the table pin's `on/keep` cell again. The one that earns this pin
 	 * its own place is the SECOND: `keep` reproducing a hand-broken source is the only proof in this file that `"keep"` reaches
-	 * `BodyPolicy.Keep` at all rather than degrading to `Same`, which is what `HxFormatBodyPolicy` claimed until S159 read the
-	 * loader.
+	 * `BodyPolicy.Keep` at all rather than degrading to `Same`, which is what `HxFormatBodyPolicy` once claimed before the
+	 * loader was read.
 	 */
 	@:pin('control')
 	@:killer('M-LOOPIF-KEEP-BLIND')
@@ -323,10 +323,10 @@ final class HxLoopBodyIfElseSliceTest extends Test {
 	}
 
 	/**
-	 * `do ... while` glues an `if`/`else` to its keyword under every placement but `next`, and until S159 the key did
-	 * not reach it: it is wired on `HxDoWhileStmt.body`, whose value is an `HxDoWhileBody`, so the `if` arrives as
+	 * `do ... while` glues an `if`/`else` to its keyword under every placement but `next`, and the key used not to
+	 * reach it: it is wired on `HxDoWhileStmt.body`, whose value is an `HxDoWhileBody`, so the `if` arrives as
 	 * `ExprBody(IfExpr(...))` where the `for` / `while` twin has a bare `IfStmt(...)`. The one-level unwrap in
-	 * `LoopBodyShape.isIfWithElse` is what closes it, and this pin is S157's `guard` record turned into a control.
+	 * `LoopBodyShape.isIfWithElse` is what closes it, and this pin is the earlier `guard` record turned into a control.
 	 */
 	@:pin('control')
 	@:killer('M-LOOPIF-NOWRAP')

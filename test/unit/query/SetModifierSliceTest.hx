@@ -24,7 +24,7 @@ class SetModifierSliceTest extends Test {
 	private static inline final PRIVATE_FN: String = 'package p;\nclass C {\n\tprivate function f(): Int return 1;\n}';
 
 	/**
-	 * A module-level `private typedef`, the T577 fixture: `class C` and a module-private helper type
+	 * A module-level `private typedef`: `class C` and a module-private helper type
 	 * beside it. Line 4 column 1 is the `private` keyword, which the cursor convention reads as the
 	 * declaration's first token.
 	 */
@@ -154,7 +154,7 @@ class SetModifierSliceTest extends Test {
 	 * recomputed run came back spliced BELOW the `#end`, beside the visibility still standing above it.
 	 *
 	 * The change is `-private` and not the visibility FLIP this test used to drive: the shape is a
-	 * module-level type, and S92 measured that Haxe rejects `public` on every module-level kind, so the
+	 * module-level type, and Haxe rejects `public` on every module-level kind, so the
 	 * flip pinned a splice position with an edit whose output does not compile. The insertion arm — no
 	 * keyword to splice over, so the new one goes in FRONT of the region — is pinned separately by
 	 * `testAVisibilityAddedBeforeAConditionalDeclKeywordRegion`, which adds the one visibility a
@@ -187,10 +187,10 @@ class SetModifierSliceTest extends Test {
 	/**
 	 * CONTROL for the refusal's edge: a region BEFORE the whole run, and a region BETWEEN the run
 	 * and the declaration, are both outside the splice and stay served. Widening the refusal to
-	 * "any conditional region in the run" flips this. Measured whole-suite,
+	 * "any conditional region in the run" flips this: whole-suite,
 	 * `M-SETMOD-GUARDED-ANY-VISIBILITY` takes this fixture and two siblings in this
 	 * class, and nothing outside it. The widening would also take with it the shape
-	 * every one of Pony's ten conditional modifier regions actually has.
+	 * every one of Pony's conditional modifier regions actually has.
 	 */
 	@:pin('control')
 	@:killer('M-SETMOD-GUARDED-ANY-VISIBILITY')
@@ -282,9 +282,9 @@ class SetModifierSliceTest extends Test {
 	 * that works.
 	 *
 	 * The op used to write it: `wrote src/M.hx` at rc 0, a file anyparse re-parses, and
-	 * `haxe -cp src --no-output M` answering `public modifier is not supported for enums`. Measured
-	 * on 4.3.7 across all seven module-level shapes — five type kinds plus a module-level function
-	 * and var — `public` is rejected on every one, so the refusal needs no per-kind carve-out.
+	 * `haxe -cp src --no-output M` answering `public modifier is not supported for enums`. Across
+	 * every module-level shape — the type kinds plus a module-level function and var — `public` is
+	 * rejected, so the refusal needs no per-kind carve-out.
 	 *
 	 * The leading assertion is the fixture's reachability proof: `-private` on the SAME address
 	 * succeeds on the base engine and on this one, so a failure below is the claim failing, not the
@@ -366,7 +366,7 @@ class SetModifierSliceTest extends Test {
 	}
 
 	/**
-	 * THE user-facing answer behind both halves of T577: how a module-level `private` is removed.
+	 * THE user-facing answer behind both halves of the refusal: how a module-level `private` is removed.
 	 * `-private` does it on every module-level kind Haxe has, and has always done so — this test
 	 * guards PRE-EXISTING behaviour, and passes unchanged on the base engine. It is here because
 	 * the refusal above points every caller at it, so a regression would silently turn that

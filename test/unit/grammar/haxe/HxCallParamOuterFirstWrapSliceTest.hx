@@ -14,9 +14,8 @@ import utest.Test;
  * alone, which glues the prefix whenever the argument's natural first line
  * ends at an open delimiter. A `'literal' + (ternary)` argument satisfies that
  * test for the wrong reason — the first line ends at `(` only BECAUSE the inner
- * paren decided to open at the hugged column. The call therefore stayed glued
- * and the break landed one level too deep, even though opening the call parens
- * would have put the whole argument on one fitting line.
+ * paren decided to open at the hugged column — so the call stayed glued and
+ * the break landed one level too deep.
  *
  * The fix is an outer-first probe ahead of the glue decision: when
  * `indent + oneIndent + flatWidth(arg)` fits `maxLineLength`, commit to the
@@ -25,32 +24,24 @@ import utest.Test;
  * forced hardline, so an argument that cannot be one line never qualifies.
  *
  * SCOPE. The priority governs a CALL-level wrap competing with a nested PAREN
- * group. A `[`-leading sole argument (array literal / comprehension) is
- * excluded: a bracket-delimited collection owns its own multi-line layout and
- * the call hugs it — that policy predates this slice and is pinned by
+ * group. A `[`-leading sole argument is excluded: a bracket-delimited
+ * collection owns its own multi-line layout and the call hugs it — pinned by
  * `HxComprehensionDeclRhsBracketWrapTest` plus the negative fixture below.
  * `{`-leading object literals already took an equivalent continuation-fit
  * probe before this slice and are untouched.
  *
  * BOUNDARY. The threshold is `maxLineLength + 1` against the arm's strict
  * `<`, i.e. a continuation line landing exactly ON the limit still fits. Both
- * edges are pinned: at the limit the parens open, one column past them the
- * decision falls through. Neither fixture is redundant — narrowing the
- * threshold to `maxLineLength` turns the at-limit fixture red, widening it to
- * `maxLineLength + 2` turns the past-limit one red (verified by editing the
- * constant, not only by reverting the slice).
+ * edges are pinned and neither fixture is redundant: narrowing the threshold
+ * to `maxLineLength` turns the at-limit fixture red, widening it to
+ * `maxLineLength + 2` turns the past-limit one red.
  *
  * Fixture sources are anonymised, length-preserving renames of a real project
- * tree; every case asserts a fixed point as well as the shape.
- *
- * The fixture literals are DOUBLE-quoted on purpose and stay that way: several
- * carry a `$entryId` / `$rowId` that single quotes would interpolate, silently
- * changing the bytes under test. `prefer-single-quotes` and
- * `fold-adjacent-string-literals` therefore report ~130 advisories against
- * this file (info severity, hidden without `--all`). They are left
- * unsuppressed deliberately: the only region-scoped suppression the linter
- * offers takes no rule names, so silencing them would blind every other check
- * over the fixtures too.
+ * tree; every case asserts a fixed point as well as the shape. The literals are
+ * DOUBLE-quoted on purpose (several carry a `$entryId` / `$rowId` that single
+ * quotes would interpolate), so the `prefer-single-quotes` and
+ * `fold-adjacent-string-literals` advisories against this file stay
+ * unsuppressed — a region-scoped suppression takes no rule names.
  */
 @:nullSafety(Strict)
 final class HxCallParamOuterFirstWrapSliceTest extends Test {

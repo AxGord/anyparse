@@ -16,13 +16,12 @@ using Lambda;
  * `filesImportingModule`), plus the pure `moduleOf` string logic and
  * the skip-parse exclusion contract.
  *
- * Sitting EXACTLY on the 100-member `oversized-type` cap for test types
- * as of 2026-09-03, so the 101st method reports. Measured and left
- * alone: two sibling suites are already OVER it and unowned
- * (`MemberOrderCheckTest` at 102, `MoveSymbolSliceTest` at 138 / 2725
- * lines), so splitting the one type that is merely AT the cap buys no
- * warning and no clarity. Whoever adds the 101st method decides then —
- * the natural cut is the pure-string `moduleOf` group away from the
+ * Sitting EXACTLY on the 100-member `oversized-type` cap for test types,
+ * so the next method reports. Left alone on purpose: sibling suites are
+ * already OVER it and unowned (`MemberOrderCheckTest`,
+ * `MoveSymbolSliceTest`), so splitting the one type that is merely AT the
+ * cap buys no warning and no clarity. Whoever adds the next method decides
+ * then — the natural cut is the pure-string `moduleOf` group away from the
  * fixture-driven cross-file queries.
  */
 class SymbolIndexSliceTest extends Test {

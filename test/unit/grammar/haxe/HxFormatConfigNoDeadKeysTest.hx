@@ -17,8 +17,8 @@ import unit.cli.CliFixture;
  * It exists because the config carried TWELVE such keys (`afterBlocks`, `interfaceEmptyLines`'s
  * `beginType` / `endType`, `commaPolicy`, `catchPolicy`, the two bracket policies, three
  * `bracesConfig` entries and two `parenConfig` entries), and `HaxeFormatConfigDiagnostics` said
- * so on stderr on EVERY hxq invocation that loaded the config — measured 412 bytes, ~100 tokens,
- * per write op, per lint, per `fmt`. `tools/battery.sh` carries a comment about working around
+ * so on stderr on EVERY hxq invocation that loaded the config — a few hundred bytes per
+ * write op, per lint, per `fmt`. `tools/battery.sh` carries a comment about working around
  * it, because merging that line into the `fmt` gate's stdout made the gate read "some file
  * drifted" on every run. The keys were removed and hxq's answer for this tree did not move,
  * because a key with no schema field never reached the writer in the first place.

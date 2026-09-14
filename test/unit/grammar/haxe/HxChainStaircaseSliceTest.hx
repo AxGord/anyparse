@@ -7,12 +7,12 @@ import utest.Assert;
 import utest.Test;
 
 /**
- * T135 — the chained-`FitLine` staircase gate.
+ * The chained-`FitLine` staircase gate.
  *
  * A control-flow construct whose `fitLine` body is another such construct
  * that in turn carries one — three links or more — used to glue link by
  * link, because `Renderer.fitsFlat` DEFERS a nested `BodyGroup` (Departure
- * 2). Each link therefore measured its own header plus the next link's
+ * 2). Each link therefore counted its own header plus the next link's
  * header and nothing below that, so the chain kept gluing until some link's
  * OWN content overflowed — at the deepest column in the chain, where the
  * only thing left to break was that link's CONDITION. The reported shape is

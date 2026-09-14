@@ -14,19 +14,17 @@ import utest.Test;
 
 /**
  * A MODULE-level declaration's raw span reaches to the start of the next declaration, so it
- * owns the bytes between them — including the next declaration's own doc comment. Census over
- * this tree: 1013 of 14 055 module-level declarations (7.2%) have a span longer than their own
- * last token, 5062 lines / 239 001 bytes in total, worst single 140 lines
- * (`TypedefDecl` in `src/anyparse/check/PreferMapType.hx`); 668 of them are `FinalDecl`, 345
- * `TypedefDecl`, and no other kind. Member spans are tight, which is why the asymmetry keeps
- * being rediscovered as a bug in the READING commands.
+ * owns the bytes between them — including the next declaration's own doc comment. A census
+ * over this project's own tree finds a notable share of module-level declarations with a span
+ * longer than their own last token, every one of them a `FinalDecl` or a `TypedefDecl`. Member
+ * spans are tight, which is why the asymmetry keeps being rediscovered as a bug in the READING
+ * commands.
  *
  * It is not one, and that is what this suite pins: every op addressed at such a declaration
  * goes through `ElementSpan.declEditSpan`, whose `trailingTrimmedSpan` walks the swallowed
  * whitespace and comments back off before anything reads or writes them. The report that
- * started the slice measured a 2648-line `--select 'TypedefDecl:RefShape'` window and read it
- * as the greedy span; `RefShape` is a genuinely 2648-line declaration, and the window was
- * exactly its own bytes.
+ * started the slice read a very long `--select 'TypedefDecl:RefShape'` window as the greedy
+ * span; `RefShape` is a genuinely long declaration, and the window was exactly its own bytes.
  *
  * `testAGreedyModuleDeclSpanIsTrimmedToItsOwnLastToken` is the control: the other two are about
  * ops behaving, and both pass trivially against a fixture whose raw span is not greedy in the

@@ -656,7 +656,7 @@ class TypeRefPrinterTest extends Test {
 		final p: TypeRefPrinter = printer(src);
 		p.print('m.Middle');
 		// The fresh line opens the file, so it owns the blank line before the first declaration —
-		// `ImportAnchor.trail`. Until 2026-08-27 it wrote none and the result was non-canonical.
+		// `ImportAnchor.trail`. It used to write none, and the result was non-canonical.
 		Assert.equals('import m.Middle;\n\nclass C {}\n', applyImports(p, src));
 	}
 

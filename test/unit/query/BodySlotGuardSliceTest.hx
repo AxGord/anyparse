@@ -17,8 +17,8 @@ import utest.Test;
  *
  * Removing the sole body of a brace-less construct used to SUCCEED: the result
  * re-parsed, so the only gate there was passed it, and the construct silently took the
- * FOLLOWING statement as its new body. Measured before the guard, on a file whose
- * `run(false)` printed `B`:
+ * FOLLOWING statement as its new body. Before the guard, on a file whose `run(false)`
+ * printed `B`:
  *
  * ```
  * if (c) b.add("A");   ->   if (c) b.add("B");
@@ -29,17 +29,17 @@ import utest.Test;
  * nothing. `apq lint --fix` reached the identical result through `unused-local` on
  * `if (c) var y: Int = 1;`.
  *
- * The eight refusal tests written for the guard's first slice are RED against `1218170f`
- * (8 failures / 9 successes of 17 assertions). Six of them WROTE the corrupted file and
- * reported success; `do` and `catch` failed there on the re-parse gate instead, with a message
- * that names nothing about the cause — the second thing the guard buys. Nine more refusals came
- * with the RESULT-side question that followed: a non-blank replacement that drops the body, one
- * that is itself an unfinished construct, one that is no construct at all, a construct the
- * replacement BUILDS over a plain statement, one an INSERTION drops in, and a swallow whose end
- * lands in a second, unrelated edit — every one of them measured on a program that stopped
- * printing at rc 0.
+ * The refusal tests written for the guard's first slice are RED at base. Most of them
+ * WROTE the corrupted file and reported success; `do` and `catch` failed there on the
+ * re-parse gate instead, with a message that names nothing about the cause — the second
+ * thing the guard buys. More refusals came with the RESULT-side question that followed: a
+ * non-blank replacement that drops the body, one that is itself an unfinished construct,
+ * one that is no construct at all, a construct the replacement BUILDS over a plain
+ * statement, one an INSERTION drops in, and a swallow whose end lands in a second,
+ * unrelated edit — every one of them reproduced on a program that stopped printing at
+ * rc 0.
  *
- * The eleven CONTROL tests are green on both sides by construction and are the other half of
+ * The CONTROL tests are green on both sides by construction and are the other half of
  * the pin: a guard that refused a `case` arm, a braced body, an ordinary block statement, a
  * sole `catch` clause, a header rewritten over its own body or a body somebody braced by hand
  * would be a worse regression than the bug, since those edits mean exactly what they say.
@@ -140,8 +140,8 @@ class BodySlotGuardSliceTest extends Test {
 
 	/**
 	 * A bare `catch` body. Like `do`, this one the re-parse gate already rejected at base —
-	 * `error at 3:29: unexpected input (expected //)`, which names nothing about the cause;
-	 * measured on `1218170f`. The guard replaces that with a refusal that says which
+	 * `error at 3:29: unexpected input (expected //)`, which names nothing about the cause.
+	 * The guard replaces that with a refusal that says which
 	 * construct lost its body.
 	 */
 	public function testRefusesBracelessCatchBody(): Void {
@@ -174,10 +174,10 @@ class BodySlotGuardSliceTest extends Test {
 	}
 
 	/**
-	 * A replacement that is NOT blank and still drops the body — the shape S30 left open.
+	 * A replacement that is NOT blank and still drops the body — the shape the first slice left open.
 	 * `apq patch` with `if (flag) log.push('x');` ==== `if (flag)` wrote `if (flag)` followed by
-	 * the NEXT statement, which parses and silently re-binds it into the branch: measured on a
-	 * program that went from printing `in-branch,after` / `after` to printing `after` / nothing,
+	 * the NEXT statement, which parses and silently re-binds it into the branch — on a program
+	 * that went from printing `in-branch,after` / `after` to printing `after` / nothing,
 	 * rc 0 and `wrote <file>` throughout.
 	 *
 	 * Neither source-side test can see it. The pre-filter reads the edit TEXT, and `if (flag)` is
@@ -311,8 +311,8 @@ class BodySlotGuardSliceTest extends Test {
 
 	/**
 	 * CONTROL, and a correction to the brief that queued this slice: removing the SOLE `catch`
-	 * clause is NOT the brace-less-body class. Haxe 4.3.7 accepts a catch-less `try` — measured
-	 * on `-js` and `--interp`, braced and brace-less, statement and expression form, all rc 0 —
+	 * clause is NOT the brace-less-body class. Haxe accepts a catch-less `try` — on `-js` and
+	 * `--interp`, braced and brace-less, statement and expression form, all rc 0 —
 	 * so the result is valid code that means what the edit says, and the guard must stay out of
 	 * the way.
 	 *
@@ -365,7 +365,7 @@ class BodySlotGuardSliceTest extends Test {
 	 * takes the `else` keyword with it, so the `if` is being reshaped rather than left
 	 * reaching, and the guard must stay out of the way. Disable the lead
 	 * test in `BodySlotGuard.emptiedChild` and every refusal test above stays
-	 * green while this one goes red (measured) — the three membership controls cannot see
+	 * green while this one goes red — the three membership controls cannot see
 	 * that line at all.
 	 *
 	 * It goes through `canonicalize` because an `else` branch is not a NODE: no addressed op
@@ -384,7 +384,7 @@ class BodySlotGuardSliceTest extends Test {
 	 * emptied, it is gone. `if-false-dead-code` deleting a whole `if (false) g();` is this
 	 * shape.
 	 *
-	 * It pins the PAIR, not one line. Measured: disabling the host-survival test alone, or
+	 * It pins the PAIR, not one line: disabling the host-survival test alone, or
 	 * the lead test alone, leaves this green — each covers whole-host removal on its own —
 	 * and only disabling BOTH turns it red. The sibling control above is the one that pins
 	 * the lead test by itself.
@@ -418,7 +418,7 @@ class BodySlotGuardSliceTest extends Test {
 	}
 
 	/**
-	 * T217, the BRACKETED slot: emptying a CONDITION must not advise braces.
+	 * The BRACKETED slot: emptying a CONDITION must not advise braces.
 	 *
 	 * Reproduced on the base build — `apq patch` blanking the `cond1` of `if (cond1) trace('a');`
 	 * answered `this would leave the IfStmt at 6:3 with an empty IdentExpr slot … brace the body
@@ -431,7 +431,7 @@ class BodySlotGuardSliceTest extends Test {
 	}
 
 	/**
-	 * T217, the VALUE slot: emptying the branch of an `if` EXPRESSION must not advise braces either,
+	 * The VALUE slot: emptying the branch of an `if` EXPRESSION must not advise braces either,
 	 * for the opposite reason — `{ }` there is an empty BLOCK, so `final v = if (c) { } else 22;`
 	 * trades the refusal for a type error. Base build answered `empty IntLit slot … brace the body
 	 * first`, which is the exact wrong advice this pins.
@@ -441,7 +441,7 @@ class BodySlotGuardSliceTest extends Test {
 	}
 
 	/**
-	 * T217, the BODY slot, and the CONTROL for the two above: a statement construct still gets the
+	 * The BODY slot, and the CONTROL for the two above: a statement construct still gets the
 	 * braces advice, which is right there. Green at base in substance and red in wording — the base
 	 * message names `IfStmt`, which `assertRemedy` refuses through `KIND_LEAKS`.
 	 *
@@ -453,7 +453,7 @@ class BodySlotGuardSliceTest extends Test {
 	}
 
 	/**
-	 * T217, the propagated statement position: a `catch` body inside a STATEMENT `try` is braceable,
+	 * The propagated statement position: a `catch` body inside a STATEMENT `try` is braceable,
 	 * and the first version of this rewrite got it wrong by reading the immediate parent — a
 	 * `CatchClause`'s parent is `TryCatchStmt`, which is no block kind, so it was told to put an
 	 * EXPRESSION where braces are exactly right. `statementSlot` passes the position DOWN through
@@ -464,7 +464,7 @@ class BodySlotGuardSliceTest extends Test {
 	}
 
 	/**
-	 * T217, the shape SELF-REVIEW found after the first draft: a brace-less `if` that is the FIRST
+	 * The shape SELF-REVIEW found after the first draft: a brace-less `if` that is the FIRST
 	 * statement of a `case` arm. `blockKinds()` is the `dead-code` / `empty-block` vocabulary and
 	 * deliberately holds no `CaseBranch`, so the parent walk stops at the `switch` and the position
 	 * is unproved — the draft asserted VALUE there and told the author to put an EXPRESSION where

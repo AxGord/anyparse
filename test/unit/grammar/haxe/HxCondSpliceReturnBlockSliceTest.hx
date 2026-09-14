@@ -52,7 +52,7 @@ class HxCondSpliceReturnBlockSliceTest extends HxTestHelpers {
 	/**
 	 * A following STATEMENT is a sibling, not the region's tail. This is the arm that actually runs
 	 * in a block body: `HxStatement.ReturnStmt` sends the region down the atom dispatch, where
-	 * `CondSpliceExpr`'s mandatory `tail` was happy to be the next statement — measured, `trace(3);`
+	 * `CondSpliceExpr`'s mandatory `tail` was happy to be the next statement — `trace(3);`
 	 * parsed as that tail. `CondSpliceReturnStmt` ends the region at its own `#end`.
 	 *
 	 * `parseBody` is the PLAIN parser on purpose: the first cut of this ctor parsed under trivia and

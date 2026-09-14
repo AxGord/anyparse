@@ -13,8 +13,7 @@ import utest.Test;
  * `HxFnExpr.body` is `@:optional @:absentOn(...)`, and `Lowering.
  * emitAbsentOnRefField` runs a `collectTrivia` for that absence peek. In
  * trivia mode any signal it finds is parked in `ctx.pendingTrivia`, and on
- * the PRESENT branch it stays parked — nothing between it and the body
- * drains it. So for
+ * the PRESENT branch nothing between it and the body drains it. So for
  *
  * ```
  * var t = function(a, b)
@@ -23,9 +22,8 @@ import utest.Test;
  *
  * the newline that precedes `return` travelled past `[` and was drained by
  * the ARRAY's element 0, whose `newlineBefore` the `reflowSourceMultiline`
- * scan (`TriviaSepLowering.triviaSepPredicateScanExpr`) reads as "a
- * comprehension element genuinely starts on its own line after `[`". The
- * bracket then broke open on a source line the source never had.
+ * scan reads as "a comprehension element genuinely starts on its own line
+ * after `[`". The bracket then broke open on a source line the source never had.
  *
  * The fix is positional, not a classifier tweak: consuming the open literal
  * PROVES the elements are inside the bracket, so both trivia-Star open-lit
@@ -34,39 +32,19 @@ import utest.Test;
  * their `expectLit`. Only the newline / blank signals are cleared; leading
  * COMMENTS keep travelling, which is a separate, still-open mis-attribution
  * (`function(a, b)\n\t// c\n\treturn [x]` puts `// c` inside the bracket)
- * and deliberately out of this slice.
- *
- * The counter-example is what keeps the fix honest: a newline that really
- * IS between `[` and the first element must still break the bracket open.
- * Deleting the carve-out in the classifier instead — the blunt fix S16
- * priced — passes this file's first assertion and fails that one.
+ * and deliberately out of this slice. The counter-example keeps the fix
+ * honest: a newline that really IS between `[` and the first element must
+ * still break the bracket open — deleting the classifier's carve-out
+ * instead passes this file's first assertion and fails that one.
  *
  * The barrier is wider than the reported bug: the two emitters serve every
- * `@:lead` + `@:trivia` Star in the grammar. Measured base-vs-new over a
- * probe file, three families move — an array or comprehension bracket (the
- * report), an object literal or anon type written flat on the line after a
- * break, and Keep mode; Allman braces, parameter and argument lists, lambda
- * bodies, case bodies, ternary branches and `#if` regions all came back
- * byte-identical. `testBareObjectLiteralOnItsOwnLineStaysFlat` and
- * `testKeepModeHonoursOnlyInBracketNewlines` are here so the widened scope
- * is pinned rather than only described.
- *
- * Mutation coverage, measured: dropping the barrier from
- * `lowerTriviaStarBranch` kills
- * `testBracelessAnonFnBodyComprehensionStaysFlat` and
- * `testNewlineBeforeOpenBracketStaysFlat`; dropping it from
- * `emitTriviaStarFieldSteps` kills
- * `testBracelessAnonFnBodyObjectLiteralStaysFlat`; widening the clear to
- * `leadingComments` kills `testLeadingCommentSurvivesTheBarrier`.
- *
- * Two are green at base BY CONSTRUCTION, and they are not the same kind of
- * guard. `testInBracketNewlineStillBreaksOpen` IS the over-reach guard —
- * its newline really is inside the bracket, so it fails the moment the
- * barrier reaches too far, and it is also what the blunt alternative (S16
- * priced the carve-out deletion at net 0) would fail.
- * `testBlockStatementComprehensionStaysFlat` cannot fail from over-reach at
- * all: its shape produces no stash, so the barrier is a literal no-op on
- * it. It is a control — it pins only that nothing changed there.
+ * `@:lead` + `@:trivia` Star in the grammar. Base-vs-new over a probe file,
+ * three families move — an array or comprehension bracket (the report), an
+ * object literal or anon type written flat on the line after a break, and
+ * Keep mode; every other construct comes back byte-identical.
+ * `testBareObjectLiteralOnItsOwnLineStaysFlat` and
+ * `testKeepModeHonoursOnlyInBracketNewlines` pin the widened scope. Two
+ * fixtures are green at base BY CONSTRUCTION and say so on their own doc.
  */
 @:nullSafety(Strict)
 class HxOpenDelimStashBarrierTest extends Test {

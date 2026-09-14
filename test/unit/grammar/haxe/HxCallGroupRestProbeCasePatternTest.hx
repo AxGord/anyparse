@@ -35,16 +35,13 @@ import utest.Test;
  * for the whole pattern subtree; `_suppressComplexItems` could not be reused,
  * because a switch SUBJECT sets it too and a subject must keep wrapping.
  *
- * T170: at THIS set-site the CALL flag is now fully subsumed. The `Call` gate
- * reads both flags, so dropping `suppressCallRestProbe` from `HxCasePattern.expr`
- * leaves this whole class, the rest of the suite AND the 946-fixture corpus
- * unchanged. The FLAG stays load-bearing: three hardcoded lowering set-sites never read the
- * meta at all (nested call arg, chain operand incl. `??`, and the collection
- * element arm that CLEARS it). But this is the ONLY `suppressCallRestProbe`
- * occurrence in the whole grammar, and at this set-site it is provably
- * redundant rather than merely unobserved — the gate is `!A && !B` and B is set
- * over the same subtree and never cleared, so M1 was green a priori, not by
- * discovery. Removing it is a grammar edit this slice does not own.
+ * At THIS set-site the CALL flag is fully subsumed: the `Call` gate reads both
+ * flags, so dropping `suppressCallRestProbe` from `HxCasePattern.expr` leaves this
+ * class, the suite and the corpus unchanged. The FLAG stays load-bearing at the
+ * hardcoded lowering set-sites that never read the meta (nested call arg, chain
+ * operand incl. `??`, the collection element arm that CLEARS it), but here it is
+ * provably redundant — the gate is `!A && !B` and B is set over the same subtree
+ * and never cleared. Removing it is a grammar edit this class does not own.
  */
 @:nullSafety(Strict)
 final class HxCallGroupRestProbeCasePatternTest extends Test {
@@ -79,7 +76,7 @@ final class HxCallGroupRestProbeCasePatternTest extends Test {
 		+ '{"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "fillLine", "location": "beforeLast"}]}}}';
 
 	/**
-	 * ω-pattern-rest-probe / T170: the ONE shape in this class where the wider
+	 * ω-pattern-rest-probe: the ONE shape in this class where the wider
 	 * flag is the only thing holding the line. The object literal's element arm
 	 * CLEARS `_suppressCallRestProbe` for a field value, so the ctor below it
 	 * cannot be reached by the call flag at all — only
@@ -126,15 +123,15 @@ final class HxCallGroupRestProbeCasePatternTest extends Test {
 	 * pre-existing anyparse-vs-fork gap this pins as neither introduced nor
 	 * worsened).
 	 *
-	 * ⚠️ T170 — what this method does NOT do any more is ATTRIBUTE that to
+	 * ⚠️ What this method does NOT do is ATTRIBUTE that to
 	 * `@:fmt(suppressCallRestProbe)`, which is what its previous comment claimed.
 	 * `HxCasePattern.expr` carries BOTH suppress flags and the `Call` gate reads
 	 * `!opt._suppressCallRestProbe && !opt._suppressPatternRestProbe`, so either
-	 * one alone keeps this ctor glued. Measured, three mutation arms on that one
-	 * `@:fmt`: drop `suppressCallRestProbe` → this method OK (and the whole suite
-	 * AND the 946-fixture corpus unchanged — the case-pattern set-site of the call
-	 * flag is unobservable); drop `suppressPatternRestProbe` → OK; drop BOTH →
-	 * 3 assertion failures. It pins the invariant and neither flag.
+	 * one alone keeps this ctor glued: dropping `suppressCallRestProbe` leaves this
+	 * method, the suite and the corpus unchanged (the case-pattern set-site of the
+	 * call flag is unobservable), dropping `suppressPatternRestProbe` leaves it
+	 * green too, and only dropping BOTH fails it. It pins the invariant and neither
+	 * flag.
 	 * `testCasePatternCtorInsideACollectionStaysGlued` is the arm that DOES
 	 * discriminate the wider flag; `testCoalesceOperandDoesNotOverWrap` and the
 	 * sibling chain-operand / nested-arg classes are where
@@ -152,7 +149,7 @@ final class HxCallGroupRestProbeCasePatternTest extends Test {
 	}
 
 	/**
-	 * T170's discriminating control for the SUBSUMING flag, at the one position
+	 * The discriminating control for the SUBSUMING flag, at the one position
 	 * inside a case pattern the call flag provably cannot reach: a ctor in an
 	 * object-literal FIELD VALUE, whose element arm sets
 	 * `_suppressCallRestProbe = false` so a nested call in a real value still
@@ -255,7 +252,7 @@ final class HxCallGroupRestProbeCasePatternTest extends Test {
 	 * `@:fmt(suppressComplexItems)` sits on the switch SUBJECT as well as on the
 	 * case pattern, so reusing it for the rest probe is the cheap-looking move —
 	 * and it is wrong: a subject is a real expression whose call must still wrap
-	 * at `maxLineLength + 1`. Measured on that shortcut, this header stayed flat
+	 * at `maxLineLength + 1`. On that shortcut this header stayed flat
 	 * at 141 columns, the one invariant the whole Pony sweep had held at zero.
 	 */
 	public function testSwitchSubjectKeepsItsRestProbe(): Void {

@@ -41,7 +41,7 @@ class HxMaxAnywhereInFileSliceTest extends Test {
 	}
 
 	/**
-	 * RE-FIXTURED (T324). The old fixture was a `package;` header followed by three
+	 * RE-FIXTURED. The old fixture was a `package;` header followed by three
 	 * blank lines, and its expected output came from the `afterPackage` default, not
 	 * from the cap: disabling `capConsecutiveBlanks` entirely did not flip it, so the
 	 * name claimed a mechanism the assertion never exercised.
@@ -110,7 +110,7 @@ class HxMaxAnywhereInFileSliceTest extends Test {
 	 * PIN. A blank run inside a multi-line STRING LITERAL is program content, not
 	 * layout — the cap must not reach it, at any cap value.
 	 *
-	 * RED at `a727f9d1`: the cap was a text scan over the flattened render buffer,
+	 * RED at base: the cap was a text scan over the flattened render buffer,
 	 * where a literal's newline is indistinguishable from a line break the renderer
 	 * chose, so base answers `"one\nfive"` — all three blank lines gone and the
 	 * string's VALUE changed.
@@ -131,7 +131,7 @@ class HxMaxAnywhereInFileSliceTest extends Test {
 	 * BOTH sides of the boundary: the code run collapses to one blank and the
 	 * literal's own run survives whole, in one assertion.
 	 *
-	 * RED at `a727f9d1` (base answers `"one\n\nfive"`). The code half is what keeps
+	 * RED at base (base answers `"one\n\nfive"`). The code half is what keeps
 	 * the pin from passing on a build where the cap never runs at all.
 	 */
 	public function testTheCapTrimsCodeBlanksBesideALiteralThatKeepsItsOwn(): Void {
@@ -143,7 +143,7 @@ class HxMaxAnywhereInFileSliceTest extends Test {
 
 
 	/**
-	 * PIN (T323). A blank run inside a GUTTER-LESS multi-line block comment is a
+	 * PIN. A blank run inside a GUTTER-LESS multi-line block comment is a
 	 * line the AUTHOR wrote, and the cap must not reach it either — the other half
 	 * of the same defect the string-literal pins above cover.
 	 *
@@ -153,7 +153,7 @@ class HxMaxAnywhereInFileSliceTest extends Test {
 	 * `Text` that emits nothing. Base therefore sees three bare layout line-ends
 	 * and eats one.
 	 *
-	 * RED at `4ae8f42f`: base answers a comment body of `one` + ONE blank + `four`.
+	 * RED at base: base answers a comment body of `one` + ONE blank + `four`.
 	 *
 	 * ONE assertion so neither half passes alone — the comment keeps BOTH of its
 	 * blank lines while the three-blank run between the two statements UNDER it, in
@@ -165,7 +165,7 @@ class HxMaxAnywhereInFileSliceTest extends Test {
 	 * (The first fixture written for this pin put the run between two class MEMBERS
 	 * instead. It looked like the same control and was not — that gap is normalised
 	 * by an `emptyLines` section rule, so the half survived the cap being disabled
-	 * entirely. Same vacuity as the T324 fixture two methods up.)
+	 * entirely. Same vacuity as the re-fixtured one two methods up.)
 	 */
 	public function testAGutterlessBlockCommentBlankRunIsNotACapCandidate(): Void {
 		final src: String = 'class Main {\n\tfunction f() {\n\t\t/* one\n\n\n\t\tfour */\n\t\ta();\n\n\n\n\t\tb();\n\t}\n}\n';
@@ -176,7 +176,7 @@ class HxMaxAnywhereInFileSliceTest extends Test {
 
 
 	/**
-	 * PIN (T323), the OTHER assembly path. A gutter-less comment whose close sits
+	 * PIN, the OTHER assembly path. A gutter-less comment whose close sits
 	 * at the wrap column routes through the MACRO writer
 	 * (`BlockCommentWriter.writeDoc`, `@:sep('\n')` join) rather than through one
 	 * of `BlockCommentNormalizer`'s hand-built Docs — a path no hand edit reaches,
@@ -191,7 +191,7 @@ class HxMaxAnywhereInFileSliceTest extends Test {
 	 * the wrap column) — that is the writer's pre-existing shape here, unchanged by
 	 * this slice, and the assertion carries it rather than papering over it.
 	 *
-	 * RED at `4ae8f42f`: base answers `one` + no blank at all + `four`.
+	 * RED at base: base answers `one` + no blank at all + `four`.
 	 */
 	public function testTheMacroJoinedCommentPathKeepsItsBlankRun(): Void {
 		final src: String = '/* one\n\n\n four */\n\n\nclass X {}\n';
@@ -202,12 +202,12 @@ class HxMaxAnywhereInFileSliceTest extends Test {
 
 
 	/**
-	 * PIN (T325). `indentation.trailingWhitespace: true` makes every blank row
+	 * PIN. `indentation.trailingWhitespace: true` makes every blank row
 	 * carry the block's indent, so the rendered run reads line-end, indent,
 	 * line-end, indent, … — and the cap's scan, which looked for line-ends with
 	 * nothing between them, matched no run at all.
 	 *
-	 * RED at `4ae8f42f`: base leaves all three blank rows standing under a cap of
+	 * RED at base: base leaves all three blank rows standing under a cap of
 	 * ZERO — two config keys silently mutually exclusive, with nothing said on
 	 * either side.
 	 */
@@ -222,7 +222,7 @@ class HxMaxAnywhereInFileSliceTest extends Test {
 
 
 	/**
-	 * PIN (T325), the other direction: a cap that SEES an indented blank row must
+	 * PIN, the other direction: a cap that SEES an indented blank row must
 	 * also keep the indent on the rows it keeps, not collapse them to bare
 	 * line-ends. Under `trailingWhitespace: true` a bare one would be a row the
 	 * knob says should carry the block's indent.
@@ -230,7 +230,7 @@ class HxMaxAnywhereInFileSliceTest extends Test {
 	 * Sister of the cap-0 pin above, and the pair is what makes the count matter:
 	 * three source rows, one kept WITH its two tabs, two dropped WITH theirs.
 	 *
-	 * RED at `4ae8f42f`: base leaves all three rows standing.
+	 * RED at base: base leaves all three rows standing.
 	 */
 	public function testTheCapKeepsTheIndentOnTheBlankRowItKeeps(): Void {
 		final src: String = 'class Main {\n\tfunction f() {\n\t\ta();\n\n\n\n\t\tb();\n\t}\n}\n';
@@ -243,13 +243,13 @@ class HxMaxAnywhereInFileSliceTest extends Test {
 
 
 	/**
-	 * PIN (T323), and the correction of a claim this campaign carried for a
-	 * slice: a DOC comment is NOT exempt. Its blank lines are safe only where the
+	 * PIN, and the correction of a claim carried for a while: a DOC comment is
+	 * NOT exempt. Its blank lines are safe only where the
 	 * author put the ` * ` gutter on them — a genuinely empty interior line goes
 	 * through `javadocBytePreserveDoc`, which emits the same empty `Text` between
 	 * two breaks as the gutter-less block does.
 	 *
-	 * RED at `4ae8f42f`: base answers `* one` immediately followed by `* four`,
+	 * RED at base: base answers `* one` immediately followed by `* four`,
 	 * both blank lines gone out of a haxedoc block.
 	 *
 	 * The code half is cap-decided (`maxAnywhereInFile: 9` keeps three blanks
@@ -265,7 +265,7 @@ class HxMaxAnywhereInFileSliceTest extends Test {
 
 
 	/**
-	 * PIN, where T323 and T325 meet: under `trailingWhitespace: true` a marked
+	 * PIN, where the two defects meet: under `trailingWhitespace: true` a marked
 	 * break writes the block's indent BEFORE its line end, so the offset
 	 * `emitLine` records has to be the one the LINE END lands on, not the one the
 	 * indent starts at. Recording it one indent too early leaves the cap unable to
@@ -280,11 +280,12 @@ class HxMaxAnywhereInFileSliceTest extends Test {
 	 * their two tabs, and the three-blank run between the two statements is gone
 	 * at a cap of 0.
 	 *
-	 * READ THE RED CAREFULLY. This pin is RED at `4ae8f42f` on its CODE half
-	 * only: base leaves all three statement rows standing, because under
-	 * `trailingWhitespace` the cap matched no run at all (T325). Base happens to
-	 * keep the COMMENT rows for the same reason, so this fixture is not a second
-	 * base-RED witness for T323 — the gutter-less and doc-comment pins above are.
+	 * READ THE RED CAREFULLY. This pin is RED at base on its CODE half only:
+	 * base leaves all three statement rows standing, because under
+	 * `trailingWhitespace` the cap matched no run at all. Base happens to keep
+	 * the COMMENT rows for the same reason, so this fixture is not a second
+	 * base-RED witness for the comment defect — the gutter-less and doc-comment
+	 * pins above are.
 	 */
 	public function testAMarkedBreakRecordsTheOffsetItsLineEndLandsOn(): Void {
 		final src: String = 'class Main {\n\tfunction f() {\n\t\t/* one\n\n\n\t\tfour */\n\t\ta();\n\n\n\n\t\tb();\n\t}\n}\n';

@@ -42,7 +42,7 @@ class FieldRefScanTest extends Test {
 	/**
 	 * One real Haxe spelling per function-scope kind — the SECOND instance the derivation is
 	 * pinned against, parsed by the grammar rather than read off the same shape fields. One row is
-	 * grammar-only: `() => 1` (`ParenLambdaExpr`) parses under the tolerant grammar but Haxe 4.3.7
+	 * grammar-only: `() => 1` (`ParenLambdaExpr`) parses under the tolerant grammar but Haxe
 	 * refuses it (`Unexpected =>`) — the same dead-vocabulary position `&&=` / `||=` hold in
 	 * `WRITE_SPELLINGS`; the row stays because the PROJECTION is what the pin compares against.
 	 */
@@ -151,8 +151,8 @@ class FieldRefScanTest extends Test {
 	/**
 	 * `functionBindsName` finds every binding spelling the LANGUAGE has, again from real source.
 	 *
-	 * The eighteen names this used to spell in a private switch are now
-	 * `BinderScan.binderKinds`, derived from eleven `RefShape` fields. Same discipline as above:
+	 * The names this used to spell in a private switch are now
+	 * `BinderScan.binderKinds`, derived from `RefShape` fields. Same discipline as above:
 	 * the rows are SOURCE, the grammar decides what each projects, and the coverage assertion
 	 * fails when the derivation gains a kind no row reaches.
 	 *
@@ -188,7 +188,7 @@ class FieldRefScanTest extends Test {
 	 * `moduleValueDeclKinds`, and the second is what excludes it.
 	 *
 	 * CONTROL for the derivation itself. KILLED by arm `M-FN-SCOPE-KINDS-FROZEN`, which freezes
-	 * the answer to this grammar's nine names — invisible to both fixtures above.
+	 * the answer to this grammar's own names — invisible to both fixtures above.
 	 */
 	@:pin('control')
 	@:killer('M-FN-SCOPE-KINDS-FROZEN')
@@ -241,7 +241,7 @@ class FieldRefScanTest extends Test {
 		final declared: Array<String> = SHAPE.writeParentKinds;
 		final covered: Array<String> = [for (spelling in WRITE_SPELLINGS) spelling.kind];
 		// `BoolAndAssign` / `BoolOrAssign` are the documented exception: the grammar parses `&&=`
-		// and `||=` and Haxe 4.3.7 refuses them, so no row can reach them from real source. Every
+		// and `||=` and Haxe refuses them, so no row can reach them from real source. Every
 		// OTHER declared write kind must have one, which is what fails when a grammar gains an
 		// operator this fixture has not been taught.
 		final unreachable: Array<String> = ['BoolAndAssign', 'BoolOrAssign'];

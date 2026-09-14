@@ -24,7 +24,7 @@ import utest.Assert;
  *
  * Twin of Slice 30 / 39 / 42 mechanically: direct ctor-name match in
  * the gate, plus the same `*Assign`-RHS carve-out so `x = a is Int`
- * keeps `;` strict (Slice 19 carve-out path).
+ * keeps `;` strict (the carve-out path).
  *
  * Corpus driver: `whitespace/issue_605_operator_is`
  * (`{x is String}` as the sole content of an outer brace-block —

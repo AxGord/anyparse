@@ -171,7 +171,7 @@ class CheckstyleConfigLoaderTest extends Test {
 	/**
 	 * `MemberNameCheck.checkField` returns on `f.isStatic(p)` before it consults a single token, so a
 	 * static field is not a member NAME to checkstyle — it is a `ConstantName` candidate. Reading it
-	 * as one produced 55 of an 851-file tree's 231 naming findings, every one an UPPER_SNAKE static,
+	 * as one produced a quarter of a real tree's naming findings, every one an UPPER_SNAKE static,
 	 * and each would have been renamed toward the format the project wrote for its instance fields.
 	 */
 	public function testMemberNameNeverGovernsAStatic(): Void {

@@ -11,9 +11,9 @@ import utest.Test;
  * — and the gate that reads the second one.
  *
  * Both replace work that used to be redone per CALLER ASK rather than per file: the supertype map
- * was rebuilt from `allFiles()` x `types` for every method the framework carve-outs asked about
- * (2.1s of a 95s project lint), and the `@:allow` scan re-read the whole source for every member a
- * confinement gate looked at (423ms of a 2.4s lint of one 416 KB file, ~19%). Neither changes an
+ * was rebuilt from `allFiles()` x `types` for every method the framework carve-outs
+ * asked about, and the `@:allow` scan re-read the whole source for every member a
+ * confinement gate looked at. Neither changes an
  * answer, so nothing else in the suite can tell a live memo from a dead one — which is what these
  * tests are for, and why each asserts the MECHANISM (the same map object comes back; the gate
  * consults the slot) and not only the answer.

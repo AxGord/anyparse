@@ -25,7 +25,7 @@ import utest.Test;
  *
  * Sister to D5: dogfood track on `test/unit/*.hx` writes case arms
  * inline; fork-canonical breaks them. D6 closes the largest remaining
- * dogfood writer-equals fail class (67 of 188 post-D5).
+ * dogfood writer-equals fail class.
  */
 @:nullSafety(Strict)
 class HxCaseBodySameLineSliceTest extends Test {

@@ -18,9 +18,8 @@ using StringTools;
  * The predicate is NOT how the braces balance, which is the reading the shape invites and
  * the one this class exists to refute: the first two fixtures are the same region with the
  * same number of `{` and `}`, differing only in a trailing `else`, and only one of them is
- * opaque. Re-measured 2026-09-07 over three trees (this project, the Pony fork, the
- * haxe-formatter corpus inputs — 1580 regions between them): 34 of the 59 captured raw have an
- * equal brace count, so a brace rule would report 25 of them and miss 34; and the one region
+ * opaque. Over three real trees (this project, the Pony fork, the haxe-formatter corpus inputs), most of the
+ * regions captured raw have an equal brace count, so a brace rule would miss the majority; and the one region
  * whose braces do NOT balance yet formats is unbalanced only to a count over the region's own
  * text, which adds up both mutually exclusive arms of a nested `#if` / `#else`.
  *
@@ -86,7 +85,7 @@ class OpaqueCondRegionScanTest extends Test {
 	 * The class a brace count gets wrong in the OTHER direction. The OUTER region holds two `{`
 	 * and one `}` — a text count adds up both mutually exclusive arms of the region nested in it
 	 * — and it is an ordinary `Conditional` the writer formats; only the INNER region is captured
-	 * raw. Live shape: `Pony/src/pony/flash/HaxeInit.hx:26`, the one region of the 1580 measured
+	 * raw. Live shape: `Pony/src/pony/flash/HaxeInit.hx:26`, the one region over three real trees
 	 * that a brace rule calls unbalanced while `fmt` reformats it.
 	 */
 	private static final NESTED_ARMS: String = 'class C {\n\tstatic function f(c: Bool, d: Bool): Void {\n\t\t#if outer\n'
@@ -110,7 +109,7 @@ class OpaqueCondRegionScanTest extends Test {
 	/**
 	 * The quote is the unmodelled GAPS, never the node's own span, and a splice node overshoots
 	 * that span in both directions. A `CondSpliceTail` begins at the operand BEFORE its `#if` —
-	 * the real corpus case is a hundred characters of call chain, which the 60-char excerpt then
+	 * the real corpus case is a long call chain, which the 60-char excerpt then
 	 * cuts before the directive is ever reached — and an operand-position splice runs PAST its
 	 * `#end` into the tail operand, which the writer formats like any other subtree.
 	 *
@@ -199,7 +198,7 @@ class OpaqueCondRegionScanTest extends Test {
 	 * another region — while everything from its own `{` on is an ordinary statement the
 	 * writer formats. The old single sentence said the writer re-emits the whole region
 	 * byte-for-byte, and the quoted range ran from the first raw byte to the last, straight
-	 * over that statement; on the Pony fork 9 of 31 regions were that shape. The `…` is where
+	 * over that statement; on the Pony fork a good share of the regions were that shape. The `…` is where
 	 * the formatted block was.
 	 */
 	@:pin('control')
@@ -220,8 +219,8 @@ class OpaqueCondRegionScanTest extends Test {
 	 * An EXPLICIT `--list` builds no notes at all, and everything else still does.
 	 *
 	 * The notes are a second front end — one full projection parse per file that has a `#if` —
-	 * and that is +19.9% on the whole-tree `fmt --list --one-pass` gate, measured as
-	 * interleaved medians. `--list` is the machine mode a gate spells; a human surveying a
+	 * and that costs the whole-tree `fmt --list --one-pass` gate a noticeable share of its
+	 * time. `--list` is the machine mode a gate spells; a human surveying a
 	 * directory types `fmt <dir>`, which implies the same listing and keeps the notes. Nothing
 	 * about the FILE decides it: both real trees are already canonical, so "only for an
 	 * unchanged file" is the identity and its inverse deletes every note there is.
@@ -238,12 +237,12 @@ class OpaqueCondRegionScanTest extends Test {
 	 * The three classes a `#if` region falls into, and the two of them a brace-delta rule
 	 * answers wrong.
 	 *
-	 * Construct-cutting with BALANCED braces is the MAJORITY — 34 of the 59 raw regions over
-	 * the three trees — and a brace rule reports none of them. Construct-cutting with
+	 * Construct-cutting with BALANCED braces is the MAJORITY over three real trees, and a
+	 * brace rule reports none of them. Construct-cutting with
 	 * unbalanced braces is the one class it gets right. The third is its false positive:
 	 * braces that do not balance over the region TEXT while the region is an ordinary
 	 * `Conditional` the writer formats, because the count added up both mutually exclusive
-	 * arms of a nested `#if` / `#else` — one region in 1580, and no configuration of the file
+	 * arms of a nested `#if` / `#else` — one region in three trees, and no configuration of the file
 	 * ever holds both arms.
 	 *
 	 * The arm IS the refuted rule: keep a record only where the region's brace counts differ,
@@ -275,11 +274,10 @@ class OpaqueCondRegionScanTest extends Test {
 	 * identifier-shaped tokens that name no binding: a condition names build flags, `#end` and
 	 * `#else` name nothing. So the gate refused a rename of a local `debug` because the region
 	 * that mentions it is `#if debug`, and a local `end` because of the region's own closer —
-	 * fail-CLOSED, so safe, and wrong in both cases. Measured over the Pony fork: 20 of 872 files
-	 * hold an opaque region, all 20 lose names from their refusal set, and the whole dropped
-	 * multiset is the directive keywords plus `haxe_ver` / `starling` / `mobile` / `js` / `ios` /
-	 * `hxbitmini` / `display` — every one a compile-time define, and in 19 of the 20 files not
-	 * even a name the tree carries.
+	 * fail-CLOSED, so safe, and wrong in both cases. Over the Pony fork, every file holding an
+	 * opaque region loses names from its refusal set, and the whole dropped multiset is the
+	 * directive keywords plus `haxe_ver` / `starling` / `mobile` / `js` / `ios` / `hxbitmini` /
+	 * `display` — every one a compile-time define, and almost never a name the tree carries.
 	 *
 	 * The three fixtures are one triple: the SAME region and the SAME name, differing only in
 	 * whether the name is also written in a branch BODY. Asserting the refusal alone would pass

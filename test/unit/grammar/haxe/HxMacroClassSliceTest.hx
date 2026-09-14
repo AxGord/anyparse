@@ -37,7 +37,7 @@ import utest.Assert;
  * and are an out-of-scope follow-up.
  *
  * Sources containing `$name` are DOUBLE-quoted: a single-quoted Haxe
- * string interpolates `$name` (the recurring Slice 4 fixture miss).
+ * string interpolates `$name` (the recurring fixture miss).
  */
 class HxMacroClassSliceTest extends HxTestHelpers {
 

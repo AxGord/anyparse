@@ -11,7 +11,7 @@ import utest.Test;
  *
  * ⚠️ THIS CLASS EXISTS BECAUSE A MUTATION ARM SURVIVED. `Json.spanToJson` emits `start` and
  * `end`; an arm that made `end` compute from `span.from` - so EVERY span in every dump ended
- * where it started - ran the whole `unit.query` package (1982 tests, 7393 assertions) GREEN.
+ * where it started - ran the whole `unit.query` package GREEN.
  * Nothing anywhere pinned the end coordinate. The dumps are wide (`ApqAstIntegrationTest`
  * renders thousands of them) but only ever asked not to crash.
  *

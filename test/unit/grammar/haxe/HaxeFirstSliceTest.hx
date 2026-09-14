@@ -25,7 +25,7 @@ import utest.Test;
  * These tests are hand-written rather than sourced from the user's
  * haxe-formatter fork test corpus — the formatter corpus covers the
  * full language (ternaries, macros, switch, type parameters, …) and
- * would be ~95% red against the skeleton grammar. Corpus integration
+ * would be almost entirely red against the skeleton grammar. Corpus integration
  * is a later Phase 3 milestone, once the grammar covers enough
  * constructs for the signal to dominate the noise.
  */

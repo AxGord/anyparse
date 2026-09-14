@@ -153,7 +153,7 @@ class PatternParseProbe extends Test {
 		// A metavar in a NAME slot must not swallow its own node when that node is
 		// childless. `new $x()` used to reclassify wholesale into a lone `Metavar`,
 		// which matches EVERY node: `final $n:$t = new $x();` and the shapeless
-		// `final $n = $v;` both returned 7781 hits over TM's src.
+		// `final $n = $v;` both returned the same enormous hit count over TM's src.
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final pattern: Pattern = plugin.parsePattern("new $x()");
 		Assert.equals('NewExpr', pattern.root.kind, 'argumentless new must keep its kind - got ${pattern.root.kind}');

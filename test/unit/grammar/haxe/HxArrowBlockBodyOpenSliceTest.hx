@@ -25,8 +25,7 @@ using StringTools;
  * Each test states its revert behaviour: DISCRIMINATES (fails with the guarded
  * arm reverted), DISCRIMINATES the second conjunct (fails only when
  * `hasForcedBreak` is dropped), or CONTROL (byte-identical in every
- * configuration). Measured, not assumed: reverting the arm fails exactly the
- * five DISCRIMINATES tests; dropping the conjunct fails exactly one.
+ * configuration). Verified by reverting: the arm reverted fails exactly the DISCRIMINATES tests; dropping the conjunct fails exactly one.
  * Identifiers and strings are synthetic or length-preserving anonymizations and
  * bear no relation to any downstream code.
  */
@@ -177,7 +176,7 @@ final class HxArrowBlockBodyOpenSliceTest extends Test {
 
 	/**
 	 * CONTROL: block-bodied arrows in NON-chain over-wide contexts (`+` operand, `==`/`||` operand, `&&` condition,
-	 * `??` operand) keep `{` cuddled either way -- measured byte-identical with the gate reverted. The two-indent-level
+	 * `??` operand) keep `{` cuddled either way -- byte-identical with the gate reverted. The two-indent-level
 	 * body of the first two is a SEPARATE known nest-depth quirk, pinned here so a later fix is visible.
 	 */
 	public function testNonChainBlockBodiedArrowsUnchanged(): Void {

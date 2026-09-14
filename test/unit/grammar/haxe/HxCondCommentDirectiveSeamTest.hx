@@ -26,33 +26,26 @@ import utest.Test;
  * came back as `...SoundTransform;#end`.
  *
  * Two emitter shapes produced the glue, both in the shared cond-comp
- * tryparse-Star assembly:
- *
- *  1. EMPTY arm - the arm holds only comments (`_arr.length == 0`), so the
- *     `padTrailing` newline before the close marker was skipped entirely
- *     and the marker landed on the last comment's line.
- *  2. SAME-LINE arm - the arm's first element had no source newline before
- *     it (`#if a var q:Int; // t`), so `padTrailing` resolved to a SPACE.
- *     A space before `#end` is right after code and wrong after a `//`
- *     comment.
+ * tryparse-Star assembly: an EMPTY arm (only comments, `_arr.length == 0`),
+ * where the `padTrailing` newline before the close marker was skipped
+ * entirely; and a SAME-LINE arm (`#if a var q:Int; // t`), where
+ * `padTrailing` resolved to a SPACE — right after code, wrong after a `//`
+ * comment.
  *
  * The fix keeps the pad decision but forces the hardline whenever the last
  * thing the Star emitted is a line comment, adds a forward-looking
  * `OptHardlineSkipBeforeHardline` guard for the arms that emit no pad at
  * all, and folds the same signal into the field's `padTrailing` so the
  * PARENT drops the leading separator it would otherwise put before the next
- * field (that space lands after the new break and indents `#elseif` one
- * column). Block-style comments do not terminate at a newline, so their
+ * field. Block-style comments do not terminate at a newline, so their
  * same-line glue is legal and stays.
  *
  * SCOPE. Adjacent pre-existing defects this class deliberately does NOT
  * cover, because they are comment LOSS rather than directive glue and need
- * parser work, not a writer break:
- *  - a comment-only `#if` arm at STATEMENT scope drops its comment entirely
- *    (`#if a` + `// only` + `#end` re-emits as `#if a` + `#end`), as does a
- *    trailing comment after a statement inside such an arm;
- *  - the same at cond-PARAM scope (`function f(#if a b:Int, // t` + `#end`).
- * Both are identical before and after this fix.
+ * parser work: a comment-only `#if` arm at STATEMENT scope drops its comment
+ * entirely (as does a trailing comment after a statement inside such an arm),
+ * and the same at cond-PARAM scope. Both are identical before and after
+ * this fix.
  */
 class HxCondCommentDirectiveSeamTest extends Test {
 

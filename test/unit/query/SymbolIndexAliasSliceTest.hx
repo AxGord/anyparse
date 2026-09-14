@@ -17,8 +17,7 @@ import utest.Test;
  * `typedef U = Util` puts `U` in `supertypes`, so keying the adjacency on the WRITTEN name alone
  * answered "`Util` has no subtype" on a fully parseable tree; every consumer reads that answer as
  * a licence, and `unused-private --fix` deleted a private constructor that `Bad`s `super()`
- * calls (verified against Haxe 4.3.7: the tree then failed with `Util does not have a
- * constructor`).
+ * calls (compile-proved: the tree then failed with `Util does not have a constructor`).
  */
 class SymbolIndexAliasSliceTest extends Test {
 
@@ -148,7 +147,7 @@ class SymbolIndexAliasSliceTest extends Test {
 	 * The direction that gap erred in was the DELETING one, and it is compile-proved: with
 	 * `#if js import p.First as U; #else import p.Second as U; #end class Both extends U`, the
 	 * non-js compilation is `Both extends Second`, `Second` was reported as having no subtype,
-	 * and `unused-private --fix` removed its private constructor — Haxe 4.3.7 then refused the
+	 * and `unused-private --fix` removed its private constructor — the compiler then refused the
 	 * tree with `p.Second does not have a constructor`. The deletion arm of that is pinned in
 	 * `UnusedPrivateCheckTest`; this one pins the index answer both orders round.
 	 *
@@ -231,7 +230,7 @@ class SymbolIndexAliasSliceTest extends Test {
 		// UPWARD the same region answers NEITHER, and that asymmetry is the point. `hasSubtype` is a
 		// veto: naming both targets makes more types answer "something subtypes me", which withholds.
 		// `isSubtype` is read affirmatively by autofixes that DELETE, and `Both` is a subtype of
-		// exactly one of these per compilation — measured, offering both made `unreachable-catch`
+		// exactly one of these per compilation — offering both made `unreachable-catch`
 		// report the clause after `catch (e:$first)` AND the one after `catch (e:$second)`, and
 		// `--fix` deleted both. So a guarded alias is refused here, as a guarded TYPEDEF already is.
 		Assert.isFalse(extending.subtypes.isSubtype('Both', first), 'a guarded alias is not followed upward ($first)');

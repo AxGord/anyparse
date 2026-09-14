@@ -10,8 +10,7 @@ import utest.Test;
  * The key is declared `HxFormatBodyPolicy` and sits in the `sameLine`
  * section next to `forBody` / `expressionIf`, but until this slice its ONLY
  * consumer was `HaxeFormatConfigLoader.applyComprehensionForPadding`, which
- * reads it as a bracket-padding trigger. Measured on the base binary:
- * `same` / `next` / `fitLine` / `keep` gave four BYTE-IDENTICAL outputs for
+ * reads it as a bracket-padding trigger. On the base binary `same` / `next` / `fitLine` / `keep` gave four BYTE-IDENTICAL outputs for
  * both a flat and a source-broken comprehension, so no config value could
  * move a comprehension body at all.
  *
@@ -26,8 +25,8 @@ import utest.Test;
  * they mean on every other body knob: `same` puts the body on the head's
  * line, `next` on its own line one level in, `keep` reproduces the source
  * break, and `fitLine` keeps a body that RENDERS FLAT on the head line while it fits and
- * puts one that cannot render flat on its own line one level in. S78 made that
- * last clause strict: it used to ask only whether the body's FIRST line fits,
+ * puts one that cannot render flat on its own line one level in. That last
+ * clause is strict: it used to ask only whether the body's FIRST line fits,
  * which glued an if/else head to the `for` and left its `else` below.
  *
  * Bracket padding is NOT part of the change — it stays coupled to

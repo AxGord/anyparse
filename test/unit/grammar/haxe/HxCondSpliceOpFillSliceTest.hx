@@ -13,10 +13,9 @@ import utest.Test;
  * `opBeforeNewline`, and the gaps before `#end` and before the tail read their
  * own `BeforeNewline` slots. Every one of those is a hardline when the source
  * had a newline there and a space when it did not, so the SAME tree laid out
- * as many different ways as the source could spell it. Measured on the TM site
- * (`src/crashdumper/SystemData.hx:135-140`) with 42 legal whitespace spellings
- * of one expression: the pre-slice writer produced **39 distinct outputs**,
- * including one 238-column line from a source written flat — the width limit
+ * as many different ways as the source could spell it. On the TM site (`src/crashdumper/SystemData.hx`),
+ * over every legal whitespace spelling of one expression, the pre-slice writer produced almost as many
+ * distinct outputs, including a line far past the limit from a source written flat — the width limit
  * was not enforced inside the region at all, because there was no decision to
  * enforce it with. The two TM sites that carry this shape
  * (`crashdumper/SystemData.hx`, `crashdumper/CrashDumper.hx`) disagreed with
@@ -37,7 +36,7 @@ import utest.Test;
  * rule's field order and no edit here can reorder it. That was checked rather
  * than argued — a projection net tokenizes a file, expands every conditional
  * both ways, and compares the two token streams before and after formatting;
- * over 1665 real modules it reports zero movement, and it catches both
+ * over the real corpus it reports zero movement, and it catches both
  * illegal seam moves when they are injected deliberately.
  */
 @:nullSafety(Strict)
@@ -94,8 +93,8 @@ final class HxCondSpliceOpFillSliceTest extends Test {
 
 	/**
 	 * No line of the canonical output passes the configured limit. The
-	 * flat-source spelling above used to give one of 238 columns against a
-	 * 140-column budget, so this is the property the fill exists to restore.
+	 * flat-source spelling above used to give one far past the 140-column
+	 * budget, so this is the property the fill exists to restore.
 	 */
 	public function testCanonicalOutputRespectsTheLineWidth(): Void {
 		for (line in triviaWrite(SYSTEM_DATA).split('\n')) {
@@ -106,13 +105,13 @@ final class HxCondSpliceOpFillSliceTest extends Test {
 	}
 
 	/**
-	 * A region that already fits keeps its bytes. Eight of the ten regions in
-	 * a 1665-module census are this shape — a single-line `#if c <operand> <op>
+	 * A region that already fits keeps its bytes. Most regions in the real
+	 * corpus are this shape — a single-line `#if c <operand> <op>
 	 * #end <tail>` inside a condition — and the fill must be invisible to
 	 * them, INCLUDING to the probes that decide whether `if (` opens onto its
 	 * own line. It is not invisible on its own: a bare `Fill` reads as a
 	 * committed break to `Renderer.naturalFirstLineGluable`, which opened the
-	 * parens of all four such regions in the census. `D.fillOnOverflow` gates
+	 * parens of every such region in the census. `D.fillOnOverflow` gates
 	 * the fill behind an `IfLineExceeds` so every measurement still descends
 	 * the plain space-joined shape.
 	 */

@@ -5,58 +5,43 @@ import utest.Test;
 
 /**
  * ω-group-rest-probe on a STRUCT-FIELD Star, and the dual-dispatch fork it used to
- * have (T169, closed by the gate in `WriterLowering.emitSepStarList`).
+ * have (closed by the gate in `WriterLowering.emitSepStarList`).
  *
  * `@:fmt(groupRestProbe)` makes a list's outer Group charge the same-line tail
  * after its close delimiter to the fit probe, so `typedef Foo<A, B> = Rhs;` wraps
  * its type parameters when the ASSIGNMENT is what pushes the line past the limit.
- * 21 grammar sites carry the flag. 18 are struct-field Stars: every declare-site
- * `<T, …>` list in the language (class / interface / enum / enum-ctor / abstract /
- * typedef / function / anon-function head, plus the two `…Head` twins) and
- * `HxNewExpr.params` / `HxTypeRef.params` / `HxArrowFnType.args`, then
- * `HxFnDecl.params`, `HxCondNameFnDecl.params`, `HxNewExpr.args` and
- * `HxObjectLit.fields`. Three more are enum-ctor payloads: `HxType.Anon`,
- * `HxExpr.ArrayExpr` and `HxExpr.Call`. Only the last four of the 18 carry
- * `@:trivia`. This census is the canonical one — the `WriterLowering` comment
- * quotes its 14-of-18 figure from here.
+ * Most grammar sites carrying the flag are struct-field Stars: every declare-site
+ * `<T, …>` list in the language, `HxNewExpr.params` / `HxTypeRef.params` /
+ * `HxArrowFnType.args`, `HxFnDecl.params`, `HxCondNameFnDecl.params`,
+ * `HxNewExpr.args` and `HxObjectLit.fields`; the rest are enum-ctor payloads
+ * (`HxType.Anon`, `HxExpr.ArrayExpr`, `HxExpr.Call`). Few struct Stars carry `@:trivia`.
  *
  * They reach the engine through THREE dispatches, all now gated:
  *
  *  - `WriterLowering.emitSepStarList`, the non-trivia struct-Star dispatch. It is
- *    the ONLY path for a Star without `@:trivia` — 14 of the 18, in BOTH writers —
- *    and it is the plain writer's path for the other four. It passes
- *    `groupRestProbe && !opt._suppressPatternRestProbe`, and until T169 it passed a
+ *    the ONLY path for a Star without `@:trivia` — most of them, in BOTH writers —
+ *    and the plain writer's path for the rest. It passes
+ *    `groupRestProbe && !opt._suppressPatternRestProbe`, and used to pass a
  *    macro-time constant instead: a case pattern sets that flag over its whole
  *    subtree precisely so nothing below it charges the trailing guard to its own
  *    fit, and this dispatch was not listening.
  *  - `TriviaSepLowering`'s no-trivia branch, taken by a `@:trivia` struct Star or an
  *    enum-Alt Star in the trivia writer. Same expression.
  *  - `WriterLowering.lowerPostfixSepListCall`, the `HxExpr.Call` gate, shared by
- *    both writers. It passes
- *    `!opt._suppressCallRestProbe && !opt._suppressPatternRestProbe`.
+ *    both writers. It passes `!opt._suppressCallRestProbe && !opt._suppressPatternRestProbe`.
  *
  * The backlog note at the fixed site called the gap plain-only and therefore
- * unreachable by any fixture, since `writeRoundTrip` / `fmt` / every canonical gate
- * drive the trivia writer. That was wrong, and the third test below is the
- * counter-example: 14 of the 18 carriers have no `@:trivia`, so the TRIVIA writer
- * reached the ungated dispatch as well and `fmt` saw the gap.
+ * unreachable by any fixture, since every canonical gate drives the trivia writer.
+ * That was wrong, and the third test below is the counter-example: a Star without
+ * `@:trivia` routes the TRIVIA writer through the ungated dispatch as well, so `fmt`
+ * saw the gap. (`lowerEnumStarPlain`, the plain path of the enum-ctor carriers,
+ * passes no `groupRestProbe` option at all — a separate gap, not covered here.)
  *
- * (`lowerEnumStarPlain`, the plain path of the three enum-ctor carriers, passes no
- * `groupRestProbe` option at all, so the flag is a silent no-op there — a separate
- * gap, not covered here.)
- *
- * Mutation arms named per assertion in the method docs below:
- *
- *  - `M-PATTERN-RESTPROBE-UNSET` — drop `suppressPatternRestProbe` from
- *    `HxCasePattern.expr`, the flag's only grammar set-site.
- *  - M4, measured but NOT declared — `groupRestProbe: $v{false}` at the
- *    non-trivia dispatch. Its only killer in this class is
- *    `testTypeParamsRestProbeTheAssignmentTail`; both pattern tests survive
- *    it, because turning the probe off entirely also leaves a pattern flat.
- *  - `M-TRIVIASEP-RESTPROBE-UNGATED` — strip
- *    `&& !opt._suppressPatternRestProbe` from `TriviaSepLowering`.
- *  - `M-SEPSTAR-RESTPROBE-UNGATED` — revert this slice's gate, restoring
- *    the macro-time constant.
+ * Mutation arms, named per assertion in the method docs below: `M-PATTERN-RESTPROBE-UNSET`
+ * (drop `suppressPatternRestProbe` from `HxCasePattern.expr`); M4, run but NOT declared
+ * (`groupRestProbe: $v{false}` at the non-trivia dispatch — only
+ * `testTypeParamsRestProbeTheAssignmentTail` kills it); `M-TRIVIASEP-RESTPROBE-UNGATED`
+ * (strip the pattern conjunct from `TriviaSepLowering`); `M-SEPSTAR-RESTPROBE-UNGATED` (revert the gate).
  */
 @:nullSafety(Strict)
 final class HxGroupRestProbeStructStarTest extends Test {
@@ -130,7 +115,7 @@ final class HxGroupRestProbeStructStarTest extends Test {
 	}
 
 	/**
-	 * T169's TRIVIA arm — the counter-example to "the plain writer is the only way
+	 * The TRIVIA arm — the counter-example to "the plain writer is the only way
 	 * in", and the reason the gate could not stay deferred. `HxTypeRef.params` has
 	 * no `@:trivia`, so even the trivia writer routes it through
 	 * `emitSepStarList`; before the gate, the type-parameter list inside a case

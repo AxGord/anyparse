@@ -18,22 +18,22 @@ using Lambda;
  * matching hit classified as `decl` / `read` / `write` per the
  * plugin's `RefShape`.
  *
- * Covers across Phase 3.1 → 3.3:
- *  - Bare identifier read collection (3.1).
- *  - VarStmt / FnDecl / ClassDecl decl-host detection (3.1).
- *  - HxParam binding via the `Required` enum-ctor name slot (3.1).
+ * Covers:
+ *  - Bare identifier read collection.
+ *  - VarStmt / FnDecl / ClassDecl decl-host detection.
+ *  - HxParam binding via the `Required` enum-ctor name slot.
  *  - Field-access exclusion: `obj.foo` is `FieldAccess`, not
- *    `IdentExpr`; only the receiver `obj` qualifies as a read (3.1).
+ *    `IdentExpr`; only the receiver `obj` qualifies as a read.
  *  - Lexical scope: inner local shadows outer field; function
  *    bodies do not cross-resolve; read `bindingSpan` points at the
- *    innermost enclosing decl (3.2).
+ *    innermost enclosing decl.
  *  - Write classification: direct `IdentExpr` child of an assign
  *    ctor (bare / compound / null-coalescing) reclassifies to Write;
  *    nested LHS shapes (`FieldAccess`, `IndexAccess`) keep their
- *    inner identifiers as Reads (3.3).
+ *    inner identifiers as Reads.
  *  - Self-scoped decls: the `for` / array-comprehension iterator binds
  *    into the loop's own scope (visible inside the body, shadowing an
- *    outer same-named decl; not visible after the loop) (3.2b-α).
+ *    outer same-named decl; not visible after the loop).
  */
 class ApqRefsTest extends Test {
 
@@ -128,7 +128,7 @@ class ApqRefsTest extends Test {
 
 	/**
 	 * The literal's own NAME binds into the ENCLOSING body, position-scoped from the literal
-	 * onward. Measured against the compiler rather than assumed: `var f = function nn(x) …;`
+	 * onward. Compile-proved rather than assumed: `var f = function nn(x) …;`
 	 * followed by `nn(4)` compiles, while the same call one line ABOVE the literal, or after the
 	 * enclosing block closes, is `Unknown identifier` — so this is `declHostKinds`' treatment of a
 	 * local `function` statement, not `selfScopeDeclKinds`' treatment of a `for` iterator.
@@ -613,7 +613,7 @@ class ApqRefsTest extends Test {
 
 	/**
 	 * A local takes effect past its own initializer, so the initializer still reads the enclosing
-	 * binding of the same name. Measured: with a field `n = 3`, `var n:Int = n + 1; return n;`
+	 * binding of the same name: with a field `n = 3`, `var n:Int = n + 1; return n;`
 	 * returns 4.
 	 */
 	public function testALocalsOwnInitializerReadsTheEnclosingBinding(): Void {
@@ -630,7 +630,7 @@ class ApqRefsTest extends Test {
 
 	/**
 	 * The later bindings of a multi-`var` list sit INSIDE the first one's span, and they do see it:
-	 * measured, `var n:Int = 100, m:Int = n;` binds `m` to 100 while the enclosing field holds 3. So
+	 * `var n:Int = 100, m:Int = n;` binds `m` to 100 while the enclosing field holds 3. So
 	 * the first binding takes effect at the continuation, not at the end of the whole statement.
 	 */
 	public function testAMultiVarContinuationSeesTheBindingBeforeIt(): Void {
@@ -666,7 +666,7 @@ class ApqRefsTest extends Test {
 
 	/**
 	 * A TYPE body hoists: a method may read a field declared BELOW it and the compiler binds it
-	 * (measured - the shape returns `later + 1`). Position-scoping must not reach a type frame.
+	 * (the shape returns `later + 1`). Position-scoping must not reach a type frame.
 	 */
 	public function testATypeBodyStillHoistsItsMembers(): Void {
 		final source: String = 'class X { function f():Int return later + 1; var later:Int = 5; }';
@@ -710,7 +710,7 @@ class ApqRefsTest extends Test {
 	/**
 	 * A `for` binder is NOT in scope in the loop's own HEADER. Ground truth: `var i = 3; for (i in
 	 * 0...i)` iterates three times, so `0...i` reads the OUTER `i` — and a rename of that outer
-	 * binding has to rewrite the range operand with it (measured: skipping it silently re-resolves
+	 * binding has to rewrite the range operand with it (skipping it silently re-resolves
 	 * the range to a same-named field and changes the iteration count).
 	 *
 	 * The loop node's span covers the header as well as the body, so the binder's own span start
@@ -1130,7 +1130,7 @@ class ApqRefsTest extends Test {
 	}
 
 	/**
-	 * And it HOISTS, so a member may read one declared BELOW it. Measured:
+	 * And it HOISTS, so a member may read one declared BELOW it:
 	 * `enum abstract EA(Int) to Int { final A = B + 1; final B = 1; }` compiles and prints `A` as 2.
 	 */
 	public function testEnumAbstractMembersHoist(): Void {
@@ -1170,14 +1170,14 @@ class ApqRefsTest extends Test {
 
 	/**
 	 * A local RE-declared in ONE block takes over from its own position. Re-declaring a local in
-	 * the same block is legal Haxe and the second declaration wins from there on — measured against
-	 * 4.3.7: `var x:Int = 1; var x:String = null; x.length` typechecks, which it could not if the
+	 * the same block is legal Haxe and the second declaration wins from there on — compile-proved:
+	 * `var x:Int = 1; var x:String = null; x.length` typechecks, which it could not if the
 	 * read still carried `Int`.
 	 *
 	 * The frame kept the FIRST binding per name, so every read past the shadow answered the
 	 * earlier declaration's TYPE. openfl's `AMF3Reader.readObjectVector` is the specimen: three
 	 * reads of `header:AMF3ObjectHeader = null` resolved to the `var header:Int = readInt()` above
-	 * them, which is a non-null proof handed to nine deleting checks.
+	 * them, which is a non-null proof handed to every deleting check.
 	 */
 	public function testASecondDeclarationOfOneNameTakesOverFromItsPosition(): Void {
 		final source: String = 'class X { function f():Void { var h:Int = 1; use(h); var h:String = null; use(h); } }';
@@ -1246,7 +1246,7 @@ class ApqRefsTest extends Test {
 		// The call sits OUTSIDE the declaration's span, so it resolves only if the name binds into the
 		// ENCLOSING frame. Counting the two hits is not enough: moving the kind from `declHostKinds` to
 		// `selfScopeDeclKinds` - the swap `RefShape`'s contract forbids - still emits a Decl and a Read,
-		// and only this assertion fails (measured: it is the sole failing mark of this test under that
+		// and only this assertion fails (it is the sole failing mark of this test under that
 		// mutation). Adding the kind to `selfScopeDeclKinds` while it STAYS a decl host is a no-op, since
 		// the parent frame's decl-host collection binds the name there either way.
 		Assert.equals(decls[0].span.from, reads[0].bindingSpan?.from, 'the call must bind to the $keyword declaration');

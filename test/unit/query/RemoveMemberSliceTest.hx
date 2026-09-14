@@ -250,7 +250,7 @@ class RemoveMemberSliceTest extends Test {
 	 * one without the other, so the pair cannot compile whatever guards it. It is the state a
 	 * `replace-node` leaves when its replacement re-declares the member it was aimed at — and one
 	 * `remove-member` call used to take BOTH, at rc 0, leaving as its only evidence a member that
-	 * had silently ceased to exist (S166 met it twice in one slice). The region-level check above
+	 * had silently ceased to exist (one slice met it twice). The region-level check above
 	 * cannot see the shape, because both parents ARE the region.
 	 *
 	 * The assertion is the COUNT in the message, not merely that an Err came back: every other

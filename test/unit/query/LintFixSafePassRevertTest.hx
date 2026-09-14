@@ -29,7 +29,7 @@ class LintFixSafePassRevertTest extends Test {
 	public function testTheOracleLessComplementRefusesTheEditTheOracleArmReverts(): Void {
 		// The judgement below is ORACLE-CONDITIONAL by construction: `Cli.reconcileSafePass`
 		// returns `{reverted: false}` before reaching `classify` when no `compilerOracle` is
-		// configured or the pre-measurement is absent. Measured on the T445 fixture with S54's
+		// configured or the pre-measurement is absent. On the deleting-fix fixture with the
 		// closure guard removed: `--no-oracle` wrote the corrupting edit, a config without
 		// `compilerOracle` wrote it, and only the oracle arm reverted.
 		//
@@ -269,7 +269,7 @@ class LintFixSafePassRevertTest extends Test {
 	public function testAPrettyReportedDiagnosticIsAttributedDespiteItsAnsiBadge(): Void {
 		// `-D message.reporting=pretty` (Pony's own tools/build.hxml sets it) puts an
 		// ANSI-coloured ` ERROR ` badge before the position, so the path is NOT the line's first
-		// token. Verbatim shape, measured on Haxe 4.3.7.
+		// token. Verbatim shape.
 		final esc: String = String.fromCharCode(27);
 		final errors: String = '$esc[30;41m ERROR $esc[0m src/Main5.hx:3: characters 3-31\n\n 3 | $esc[2m  $esc[0m$esc[1mfinal a: Int = '
 			+ '\'not an int\';$esc[0m\n   |   $esc[31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^$esc[0m\n   | String should be Int';
@@ -320,7 +320,7 @@ class LintFixSafePassRevertTest extends Test {
 	/**
 	 * BOTH netless arms say the net is off, and each names the remedy it actually has.
 	 *
-	 * S59 measured the reach table and found arm B silent: a run with no `compilerOracle`
+	 * The reach table showed arm B silent: a run with no `compilerOracle`
 	 * configured wrote the same corrupting edit `--no-oracle` wrote, and said nothing —
 	 * while the flag arm printed a skip line. The silent arm is the state every foreign
 	 * project starts in, so it is the one that needed the sentence most.

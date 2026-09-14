@@ -219,7 +219,7 @@ class ExtractSuperclassSliceTest extends Test {
 	 * one blank line, with no idea where literals and comments start. It ran over the
 	 * WHOLE file, so pulling up `alpha` silently deleted a newline from `banner`'s
 	 * literal: the result still parsed, `fmt --list` still called it canonical, and the
-	 * only witness was the string's length at runtime (measured: 20 -> 19).
+	 * only witness was the string's length at runtime, one byte shorter.
 	 *
 	 * The WRITER already gives back the separator a cut doubles, and it cannot damage a
 	 * literal doing so — not because it knows what one is (it does not: see the config

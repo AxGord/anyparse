@@ -10,8 +10,7 @@ import utest.Test;
  *
  * The reported source is `pony.magic.builder.DIVerifier.recordResolution`,
  * read by eye out of a swept Pony tree: `}` on its own line, `else {` on the
- * next. Measured on `f8ba0a46` under Pony's own `hxformat.json`, three probes
- * on the same construct gave three answers — an already-cuddled value-`if`
+ * next. Under Pony's own `hxformat.json`, three probes on the same construct gave three answers — an already-cuddled value-`if`
  * stayed cuddled, the reported broken one KEPT its break, and the statement
  * twin of the identical break JOINED. One construct, two layouts, decided by
  * value-vs-statement position alone.
@@ -24,17 +23,16 @@ import utest.Test;
  * mishits". This is that fixture. `next` now maps to `SameOnBlock`, which the
  * shape-aware separator answers per DELIMITER: a curly close cuddles, a
  * bracket close keeps its source shape (its glue is
- * `expressionIfWithBrackets`, S79), and a non-block branch keeps the forced
+ * `expressionIfWithBrackets`), and a non-block branch keeps the forced
  * break it already had.
  *
- * The cheaper-looking fix is refuted by measurement, not by argument: mapping
- * `next` onto a plain `Same` moved 3 anyparse files instead of 1 and made 2 of
- * them WORSE — `[] else {` and `['--code', staged]; else if (…)`, an `else`
+ * The cheaper-looking fix is refuted by the tree, not by argument: mapping `next` onto a plain `Same` moved more anyparse
+ * files than the report named and made some of them WORSE — `[] else {` and `['--code', staged]; else if (…)`, an `else`
  * glued onto a list literal the source had left alone.
  *
  * Every config here is Pony-shaped and states `expressionIfWithBrackets`
  * nowhere, so the bracket fixture measures the `SameOnBlock` bracket arm and
- * not S79's knob.
+ * not the bracket knob.
  */
 @:nullSafety(Strict)
 final class HxValueIfCurlyElseJoinSliceTest extends Test {
@@ -99,7 +97,7 @@ final class HxValueIfCurlyElseJoinSliceTest extends Test {
 		super();
 	}
 
-	/** The report itself: his source in, his target bytes out. RED on `f8ba0a46`. */
+	/** The report itself: his source in, his target bytes out. RED at base. */
 	@:pin('control')
 	@:killer('M-EXPR-ELSE-KEEP')
 	public function testTheReportedValueIfJoinsItsElseToTheCurlyClose(): Void {
@@ -110,8 +108,8 @@ final class HxValueIfCurlyElseJoinSliceTest extends Test {
 	 * The joined layout is a fixed point — a layout slice that is not idempotent corrupts
 	 * a corpus on the second sweep.
 	 *
-	 * It was declared a COST filter when this class was written, because it is green on
-	 * `f8ba0a46` too (`Keep` reproduces an already-cuddled source) and the arm registry
+	 * It was declared a COST filter when this class was written, because it is green at
+	 * base too (`Keep` reproduces an already-cuddled source) and the arm registry
 	 * could not then address the macro-time code that decides the join. It can now:
 	 * `M-CURLY-CTORS-NONE` empties the curly branch-ctor set the shape-aware separator
 	 * switches on, every value-`if` branch falls to the hardline arm, and the fixed point
@@ -149,7 +147,7 @@ final class HxValueIfCurlyElseJoinSliceTest extends Test {
 		Assert.equals(BRACKET, HxWriteFixture.triviaWrite(BRACKET, CFG_NEXT));
 	}
 
-	/** `};` is not a join either, so the `;` goes with the break it used to justify. RED on `f8ba0a46`. */
+	/** `};` is not a join either, so the `;` goes with the break it used to justify. RED at base. */
 	@:pin('control')
 	@:killer('M-EXPR-ELSE-KEEP')
 	@:killer('M-EXPR-ELSE-PLAIN-SAME')
@@ -161,14 +159,14 @@ final class HxValueIfCurlyElseJoinSliceTest extends Test {
 	 * With no `else` the same slot holds the enclosing statement's terminator, and dropping it there
 	 * emits code that does not compile — so the drop is gated on a following sibling.
 	 *
-	 * This was S100's declared COST filter, and the reason it gave has been removed rather than
-	 * restated: the gate is MACRO-time, in `WriterLowering.semicolonBeforeSiblingWrap`, and
+	 * This was declared a COST filter when written, and the reason it gave has been removed rather
+	 * than restated: the gate is MACRO-time, in `WriterLowering.semicolonBeforeSiblingWrap`, and
 	 * `TestDiscovery.checkArms` used to resolve an arm's `type` with `Context.getModule` in the
 	 * test build, where every `anyparse/macro/*` module sits behind `#if macro` and answers with
 	 * no types at all — so a row naming `anyparse.macro.WriterLowering` failed the build with
-	 * `resolves to no class`. S102 separated that answer from a module the classpath does not
-	 * carry, and `M-SBE-UNGATED` now cuts the `_sbeSibling &&` out of the gate itself. Measured:
-	 * it is the only fixture in this class the cut takes down.
+	 * `resolves to no class`. That answer is now separated from a module the classpath does not
+	 * carry, and `M-SBE-UNGATED` cuts the `_sbeSibling &&` out of the gate itself; it is the only
+	 * fixture in this class the cut takes down.
 	 */
 	@:pin('control')
 	@:killer('M-SBE-UNGATED')

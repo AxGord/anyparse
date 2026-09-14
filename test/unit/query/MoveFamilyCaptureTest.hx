@@ -16,12 +16,12 @@ using Lambda;
  * Every other campaign-wide capture (`lint --all`, a `--fix` tree, `fmt --list`, the refs / rename /
  * safe-delete fixtures) runs a check or a fixer; none of them ever calls a move op. That is why a
  * refactor of the shared lexical seam could hand the destination collision scan
- * (`MoveSymbol.referencedInDest` then, `NameMentionScan.destinationNamesType` since S81) the CURSOR
- * file's comment regions while it was scanning the DESTINATION's text, ship it across 109 files, and
- * leave the whole suite green — the defect was caught by the worker's own forwarding audit, not by a
- * gate.
+ * (`MoveSymbol.referencedInDest` then, `NameMentionScan.destinationNamesType` now) the CURSOR
+ * file's comment regions while it was scanning the DESTINATION's text, ship it across the whole
+ * tree, and leave the whole suite green — the defect was caught by the worker's own forwarding
+ * audit, not by a gate.
  *
- * So this class is the gate that was missing: seventeen fixtures driven through the four ops, with
+ * So this class is the gate that was missing: a set of fixtures driven through the four ops, with
  * the FULL resulting bytes of every changed file pinned. It is deliberately not a set of `contains`
  * assertions — the regression it exists for changed a decision, not a token, and the only assertion
  * that catches "a decision moved" without knowing which decision is the whole file.
@@ -31,14 +31,14 @@ using Lambda;
  * cross-package static move, and comments and string literals that spell the moved names. The last
  * four are the comment-policy defects, and their discriminator is the CHANGED-FILE COUNT rather than
  * any byte: a file whose only mention of the moved type sits inside a comment must not appear in the
- * list at all, in either direction (T511 refused the move over one, T512 wrote a real import into
- * one), a destination must never be handed an import of its own module (T518), and a destination
- * whose only mention of a CARRIED dependency is a comment must not veto the carry (T535).
+ * list at all, in either direction (the base engine refused a move over one and wrote a real import
+ * into another), a destination must never be handed an import of its own module, and a destination
+ * whose only mention of a CARRIED dependency is a comment must not veto the carry.
  *
- * S90 added four more for the REPOINT side of the module-static wildcard S88 taught the CARRY
- * side (T568): a bare caller that only that wildcard bound, a rival wildcard that outranks it, a
- * local that shadows it, and a sub-module source type it never bound at all. Three are RED at
- * base; the fourth says in its own doc that it is not, and why it is here anyway.
+ * Four more cover the REPOINT side of the module-static wildcard the CARRY side already knew: a
+ * bare caller that only that wildcard bound, a rival wildcard that outranks it, a local that
+ * shadows it, and a sub-module source type it never bound at all. Three are RED at base; the
+ * fourth says in its own doc that it is not, and why it is here anyway.
  *
  * Pure and in-memory: each op is driven through its own `Array<{file, source}>` entry point, so
  * there is no temp directory, no ordering between tests and no cost worth measuring. Run it alone
@@ -253,7 +253,7 @@ final class MoveFamilyCaptureTest extends Test {
 
 	/**
 	 * `move` over a scope file whose ONLY mention of the moved type is a fully-qualified path inside a
-	 * COMMENT — T511, which the base engine refused at rc 1 with advice ("convert it to a bare Mover,
+	 * COMMENT — which the base engine refused at rc 1 with advice ("convert it to a bare Mover,
 	 * with an import") that means nothing for prose.
 	 *
 	 * Captured in full rather than as an `Ok` assertion because the interesting half is what does NOT
@@ -282,7 +282,7 @@ final class MoveFamilyCaptureTest extends Test {
 
 	/**
 	 * `move` over a same-package sibling whose ONLY mention of the moved type is a bare name inside a
-	 * COMMENT — T512, the silent half: the base engine wrote a real `import b.Holder.Thing;` into that
+	 * COMMENT — the silent half: the base engine wrote a real `import b.Holder.Thing;` into that
 	 * file at rc 0 and said nothing, creating the coupling the move was removing.
 	 *
 	 * The discriminator is again the change COUNT: two files here, three on the base engine.
@@ -310,7 +310,7 @@ final class MoveFamilyCaptureTest extends Test {
 	/**
 	 * `move-member` into a destination whose OWN module declares both dependencies the moved body
 	 * reaches — its main type and a typedef beside it. The base engine carried the source's statements
-	 * verbatim and wrote `import b.Dest;` and `import b.Dest.Payload;` into `b/Dest.hx` itself (T518).
+	 * verbatim and wrote `import b.Dest;` and `import b.Dest.Payload;` into `b/Dest.hx` itself.
 	 *
 	 * The whole destination is pinned because the absence of two lines is not the only thing at stake:
 	 * an import edit and a member insertion share the same file, and a guard that skips the wrong one
@@ -341,12 +341,12 @@ final class MoveFamilyCaptureTest extends Test {
 
 	/**
 	 * `move` into a destination whose ONLY mention of the carried dependency sits inside a COMMENT —
-	 * T535, the third and last of the family's drifted comment policies and the one S80 left standing
+	 * the third and last of the family's drifted comment policies and the one left standing longest,
 	 * because flipping it turns a REFUSAL into a WRITE.
 	 *
 	 * The base engine exits 1 here with "references \"Dep\" while nothing in the indexed scope binds it
-	 * there", advice about aliasing an import that names nothing in the file. Compile-proved on 4.3.7
-	 * that there is nothing to protect: carrying `import c.Dep;` past a destination whose only `Dep` is
+	 * there", advice about aliasing an import that names nothing in the file. Compile-proved that
+	 * there is nothing to protect: carrying `import c.Dep;` past a destination whose only `Dep` is
 	 * a doc line left every observable value unchanged, while the same carry past a destination that
 	 * really calls an ambient `Dep.x()` changed its answer from 2 to 1 at rc 0 — which is the refusal
 	 * this gate keeps, pinned beside this one in `NameMentionScanTest`.
@@ -381,7 +381,7 @@ final class MoveFamilyCaptureTest extends Test {
 
 	/**
 	 * `move-member` of a body that reaches a name through a MODULE-STATIC wildcard
-	 * (`import a.Names.*;`) — the statement is carried, so the destination compiles (T559).
+	 * (`import a.Names.*;`) — the statement is carried, so the destination compiles.
 	 *
 	 * The base engine writes both files at rc 0 and leaves the destination reading
 	 * `Unknown identifier : packOf`; its advisory called the whole class best-effort. Captured in
@@ -414,14 +414,14 @@ final class MoveFamilyCaptureTest extends Test {
 
 	/**
 	 * `move-member` into a destination whose WHOLE body — imports, declaration and all — sits inside
-	 * one `#if macro`, carrying a `#if`-guarded import into it (T558).
+	 * one `#if macro`, carrying a `#if`-guarded import into it.
 	 *
 	 * The shape `src/anyparse/macro` is written in, and the one the merge seat was blind to: the
 	 * region's `#end` is the last line of the file, so seating above it wrote the carried import
 	 * BELOW the class — `import and using may not appear after a declaration`, at rc 0,
-	 * `wrote 2 file(s)`. Reproduced on this tree by moving
+	 * `wrote 2 file(s)`. Reproduced in the repo's own tree by moving
 	 * `WriterPolicyLowering.buildCaseBodyFitPredicate` into `WriterBraceSymmetryLowering`, where the
-	 * base engine's write turned 1 compile error into 11.
+	 * base engine's write multiplied the compile errors.
 	 *
 	 * Captured in full because the discriminator is a POSITION, not a token: the same line, one
 	 * declaration further up.
@@ -451,7 +451,7 @@ final class MoveFamilyCaptureTest extends Test {
 	/**
 	 * `move-member` of a body reading a PRIVATE static sibling into a destination whose type already
 	 * grants `@:access` to the source — the member-level copy the base engine writes is dead text
-	 * (T560), and S87 landed 10 of them across 3 files in one slice.
+	 * — and a real move can land several of them in one slice.
 	 *
 	 * Captured in full rather than as an absence assertion because the meta is not the only thing
 	 * the arm decides: the sibling call is qualified back to `Src.hidden()` in the same pass, and a
@@ -481,7 +481,7 @@ final class MoveFamilyCaptureTest extends Test {
 	}
 
 	/**
-	 * The T568 headline: a caller that reached the moved STATIC as a BARE name through the source
+	 * The headline case: a caller that reached the moved STATIC as a BARE name through the source
 	 * module's own `import a.Src.*;`. Neither existing scan could see it — `qualifiedReceiverEdits`
 	 * needs a receiver and `collectBareCallerHits` only walks the SOURCE file — so the base engine
 	 * returned Ok with TWO changed files and left `helper(1)` standing over a type that no longer
@@ -533,7 +533,7 @@ final class MoveFamilyCaptureTest extends Test {
 	/**
 	 * Two files reach a bare `helper` through a module-static wildcard and only ONE of them meant the
 	 * source module. `a/Rival.hx` declares `import c.Other.*;` BELOW `import a.Src.*;`, and Haxe
-	 * resolves the LAST wildcard — measured on 4.3.7, two files differing only in that order printed
+	 * resolves the LAST wildcard — compile-proved: two files differing only in that order print
 	 * `B` and `A` — so its call never named `Src` and must survive the move untouched.
 	 *
 	 * RED at base (2 changed files, not 3, and `a/Wild.hx` absent). The discriminator for the
@@ -637,7 +637,7 @@ final class MoveFamilyCaptureTest extends Test {
 	}
 
 	/**
-	 * A move out of a SUB-MODULE type, which a module-static wildcard never bound: measured on 4.3.7,
+	 * A move out of a SUB-MODULE type, which a module-static wildcard never bound: compile-proved,
 	 * `import a.Src.*;` brings in the MAIN type's statics only, so `a/User.hx`'s bare `helper` resolves
 	 * through the `z.Free.*` wildcard above it and is none of this move's business — it prints 10, not
 	 * 2. `mainStatic()` in the same expression is what the `a.Src.*` statement is actually there for.

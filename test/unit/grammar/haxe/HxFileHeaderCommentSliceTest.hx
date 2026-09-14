@@ -13,7 +13,7 @@ import utest.Test;
  * / `using` decl, read off a scan of the WHOLE decl array — so a module
  * whose first decl is a documented TYPE and whose `import` sits BELOW it
  * had a blank line pushed between the doc comment and the declaration it
- * documents, on every `fmt` pass, idempotently (T396).
+ * documents, on every `fmt` pass, idempotently.
  *
  * The header is now classified from the decl the comment actually leads:
  * a file header introduces the module's package / import section, not a
@@ -28,7 +28,7 @@ final class HxFileHeaderCommentSliceTest extends Test {
 	}
 
 	/**
-	 * T396 pin — RED at base: the writer put a blank line between the doc
+	 * RED at base: the writer put a blank line between the doc
 	 * comment's closing gutter and `class F`.
 	 */
 	public function testDocStaysAttachedWhenImportFollowsType(): Void {
@@ -39,7 +39,7 @@ final class HxFileHeaderCommentSliceTest extends Test {
 	}
 
 	/**
-	 * T396 pin, `using` arm — RED at base for the same reason.
+	 * The `using` arm — RED at base for the same reason.
 	 */
 	public function testDocStaysAttachedWhenUsingFollowsType(): Void {
 		final src: String = '/**\n * Doc for F.\n */\nclass F {\n\tpublic function new() {}\n}\n\nusing Lambda;';
@@ -135,7 +135,7 @@ final class HxFileHeaderCommentSliceTest extends Test {
 	}
 
 	/**
-	 * T396 pin, conditional-wrapped type — RED at base: the doc was detached
+	 * Conditional-wrapped type — RED at base: the doc was detached
 	 * from the `#if`-guarded declaration it documents.
 	 */
 	public function testDocOnConditionalWrappedTypeStaysAttached(): Void {

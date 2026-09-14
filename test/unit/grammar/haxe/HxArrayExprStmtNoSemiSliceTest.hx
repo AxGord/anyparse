@@ -18,7 +18,7 @@ import utest.Assert;
  *
  * Twin of Slice 30 (`ObjectLit`): direct ctor-name match in the gate,
  * plus the same `*Assign`-RHS carve-out so `x = [1, 2, 3]` keeps `;`
- * strict (Slice 19 carve-out path).
+ * strict (the carve-out path).
  *
  * Corpus driver: `sameline/issue_365_array_comprehension`
  * (`[if (foo) bar else foo, …]` as sole stmt of fn body).

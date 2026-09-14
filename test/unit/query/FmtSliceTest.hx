@@ -98,8 +98,8 @@ class FmtSliceTest extends Test {
 	 * file where every further `--write` leaves it, or the `--list` gate that
 	 * runs next disagrees with the `--write` that just ran.
 	 *
-	 * `objectLiteral.defaultWrap` is the widest instance — 163 of 854 Pony
-	 * files under `fillLineWithLeadingBreak` — and the shape reduces to this
+	 * `objectLiteral.defaultWrap` is the widest instance — a large share of the
+	 * Pony files under `fillLineWithLeadingBreak` — and the shape reduces to this
 	 * one: a SINGLE-LINE literal wraps on rewrite 1, which makes it
 	 * source-MULTILINE, which force-one-per-lines it on rewrite 2 (the cascade
 	 * is never consulted for a multiline literal). The pass-1 shape the

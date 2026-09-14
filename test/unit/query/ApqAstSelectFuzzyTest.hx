@@ -11,11 +11,10 @@ import utest.Test;
 /**
  * `apq ast --select <Kind>` on a kind this grammar's parser projects no node for: the
  * fuzzy "Did you mean: …" suggestion drawn from the kinds actually present in the
- * file, and — since S201 — a USAGE exit rather than a clean one.
+ * file, and a USAGE exit rather than a clean one.
  *
- * This class asserted the opposite until S201, on the reading that a read-only
- * walker's empty result is never an error. The distinction it was missing is the
- * one T945 names: a kind that IS projected and merely absent here stays exit 0,
+ * This class used to assert the opposite, on the reading that a read-only
+ * walker's empty result is never an error. The distinction it was missing: a kind that IS projected and merely absent here stays exit 0,
  * because the walk legitimately found nothing; a spelling no rule projects can
  * never match anything and is the caller's mistake. The stderr surface is not
  * captured here — `unit.cli.ApqKindVocabularyCliTest` pins the message.
@@ -26,7 +25,7 @@ class ApqAstSelectFuzzyTest extends Test {
 	public function testUnknownKindIsAUsageError(): Void {
 		#if (sys || nodejs)
 		final fixture: String = writeFixture('class X { var y:Int; }');
-		// Exit 0 until S201, on the reading that an empty result is never an error. It is not an
+		// Exit 0 used to be the answer, on the reading that an empty result is never an error. It is not an
 		// empty result: `NotAKind` is a spelling no file could ever match, and a script driving
 		// `ast` had no way to separate it from a node that is simply somewhere else.
 		Assert.equals(2, Cli.run(['ast', '--select', 'NotAKind', fixture]), 'a kind no grammar projects is a usage error');

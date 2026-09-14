@@ -95,11 +95,11 @@ class IntroduceParameterObjectSliceTest extends Test {
 
 	/**
 	 * PIN. The op used to finish with `collapseBlankRuns` — a byte-identical private
-	 * copy of the whole-file text scan deleted from the two extract ops in `8576f7c2`
-	 * — so folding two parameters of ONE method also shortened every blank run
+	 * copy of the whole-file text scan the two extract ops had already shed — so
+	 * folding two parameters of ONE method also shortened every blank run
 	 * anywhere else in the file, including inside a string literal.
 	 *
-	 * RED at `a727f9d1`: base answers a body holding `"one\n\nfour"` for an untouched
+	 * RED at base: base answers a body holding `"one\n\nfour"` for an untouched
 	 * sibling method, at `Ok`. The fold's own three assertions are in the same test
 	 * so the pin cannot pass on a build where the op refuses or does nothing.
 	 *
@@ -130,7 +130,7 @@ class IntroduceParameterObjectSliceTest extends Test {
 	 * The generated typedef and the folded call now come back in the writer's own
 	 * spelling for the config that governs the file.
 	 *
-	 * RED at `a727f9d1`: base leaves the file drifted, so `writeRoundTrip(text)`
+	 * RED at base: base leaves the file drifted, so `writeRoundTrip(text)`
 	 * differs from `text`. The `contains` guard is in the same assertion chain so a
 	 * build that refuses the fold cannot satisfy it.
 	 */
@@ -160,7 +160,7 @@ class IntroduceParameterObjectSliceTest extends Test {
 	 * back to the plain splice, and the file comes back `args:Args` — the
 	 * canonical-out half switched off with no diagnostic anywhere.
 	 *
-	 * RED at `a727f9d1`: the op has no such parameter there, and the raw splice
+	 * RED at base: the op has no such parameter there, and the raw splice
 	 * writes `args:Args` whatever the file's config says.
 	 */
 	public function testTheCliHandsTheOpTheFilesOwnFormatConfig(): Void {

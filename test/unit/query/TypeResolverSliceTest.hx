@@ -327,7 +327,7 @@ class TypeResolverSliceTest extends Test {
 	 * the shadow carried the earlier declaration's type into the proof — and a value type there IS
 	 * the proof. openfl's `AMF3Reader.readObjectVector` is the specimen: `var header:Int =
 	 * readInt()` above `var header:AMF3ObjectHeader = null` affirmed non-null for a reference the
-	 * compiler types as a nullable class, under nine checks whose fix deletes.
+	 * compiler types as a nullable class, under every check whose fix deletes.
 	 */
 	public function testAReDeclaredLocalIsProvedOnItsOwnType(): Void {
 		final src: String = 'class C { function f():Void { var v:Int = 0; use(v); var v:C = mk(); if (v != null) g(); }'

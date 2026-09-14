@@ -10,11 +10,10 @@ import utest.Test;
  *
  * The defect this closes: `WrapList.shapeSingleArgGlue` built its glued shape
  * as `open + arg + close`, appending the call's own closer wherever the sole
- * argument's last rendered line left the pen. For an object / array literal or
- * a nested call that is the argument's own base indent — they emit their close
- * delimiter OUTSIDE their content `Nest` — and the glue is right. A ternary or
- * value-`if` closes its last branch INSIDE its `? :` continuation nest, one
- * level deeper, so the call's `)` landed one indent BELOW its own `(`:
+ * argument's last rendered line left the pen. An object / array literal or a
+ * nested call emits its close delimiter OUTSIDE its content `Nest`, so the glue
+ * is right; a ternary or value-`if` closes its last branch INSIDE its `? :`
+ * continuation nest, so the call's `)` landed one indent BELOW its own `(`:
  *
  * ```
  * kind: FFun(setcontroll        <- `(` opens at 6 tabs
@@ -24,38 +23,25 @@ import utest.Test;
  *     })                        <- `}` right at 7; `)` one level too deep
  * ```
  *
- * Found on a real formatter run over a 153-file tree, where two sites regressed
- * against what the same tree held before the run and one more had carried the
- * shape by hand.
- *
  * SCOPE — sole-argument lists, which is all this shaper is ever reached for. A
  * MULTI-argument list closing on a trailing lambda or object hug
- * (`f(a, e -> {\n\t...\n})`, `if (c && f(x ->\n\t...\n))`) glues a closer below its
- * opener too, and there that shape is WANTED: nine corpus fixtures pin it. A
- * renderer-wide reading of the same invariant, tried first, broke every one of
- * them, which is why the rule lives at this one shape decision instead.
+ * (`f(a, e -> {\n\t...\n})`) glues a closer below its opener too, and there that
+ * shape is WANTED: corpus fixtures pin it. A renderer-wide reading of the same
+ * invariant, tried first, broke every one of them, which is why the rule lives
+ * at this one shape decision instead.
  *
  * MEASURE — `DocMeasure.breakTailCloseNest` reports the `Nest` depth of the
  * argument's broken-tail closing line, or `-1` when the tail is not a closing
- * line at all. It is structural, never a width probe, so no render-time
- * decision can move a call's shape. Whether such a construct breaks at its
- * `? :` at all IS a width decision though, so the walk necessarily reads a slot
- * the output may not take, so the rule is bounded to closing lines opened by a
- * BRACE and the bracket fixture below is that bound's discriminator.
- *
- * The bound is asked twice, and only one half is pinned. `breakTailCloseNest`
- * tests it INSIDE its own walk (authoritative — same slot as the depth), while
- * `DocMeasure.endsWithCloseBrace` runs in front of it purely to skip that walk
- * cheaply, resolving `If*` to the flat slot. Removing BOTH turns the bracket
- * fixture red; removing only the in-walk one turns NOTHING red, because no
- * shape in the corpus, this tree or the Pony tree closes on different
- * delimiters in its two slots. That half is therefore carried on argument, not
- * on evidence — said here so the next reader does not mistake it for tested.
- *
- * The fixtures are `+`-split across lines to stay inside the line limit, which
- * `fold-adjacent-string-literals` reports three times (info severity, hidden
- * without `--all`). Merging them is what the limit forbids, so they stay — the
- * same trade `HxCallParamOuterFirstWrapSliceTest` documents for its own ~130.
+ * line at all: structural, never a width probe, so no render-time decision can
+ * move a call's shape. Whether such a construct breaks at its `? :` at all IS a
+ * width decision, so the walk reads a slot the output may not take; the rule is
+ * therefore bounded to closing lines opened by a BRACE, and the bracket fixture
+ * below is that bound's discriminator. `DocMeasure.endsWithCloseBrace` runs in
+ * front purely to skip the walk cheaply; removing the in-walk test alone turns
+ * nothing red because no shape in any real tree closes on different delimiters
+ * in its two slots — carried on argument, not on evidence. The fixtures are
+ * `+`-split across lines to stay inside the line limit, which
+ * `fold-adjacent-string-literals` reports; merging them is what the limit forbids.
  */
 @:nullSafety(Strict)
 final class HxSoleArgGluedCloseDedentTest extends Test {

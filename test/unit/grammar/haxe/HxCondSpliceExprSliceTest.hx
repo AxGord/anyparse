@@ -13,51 +13,41 @@ import utest.Assert;
  * Expression-position `#if`: which regions carry NODES and which stay a
  * raw byte span.
  *
- * A census over 1646 real modules (TM `src/`, `lime/src`, `openfl/src`)
- * found ELEVEN `HxExpr.CondSpliceExpr` regions in nine files — the
- * production whose `raw` is a verbatim byte capture with no nodes inside
- * it. Three shapes, and this class pins the verdict for each:
+ * A census over real modules (TM `src/`, `lime/src`, `openfl/src`) found a
+ * handful of `HxExpr.CondSpliceExpr` regions — the production whose `raw` is a
+ * verbatim byte capture with no nodes inside — in three shapes, pinned here:
  *
- *  - **Balanced value per branch, `;` inside the guard** (2 sites,
- *    `openfl/ui/Mouse.hx:61,66`) — `var supportsCursor(default,
- *    null):Bool = #if !mobile true; #else false; #end`. MODELLED
- *    (`HxVarSemiCondInitDecl` binds the property-accessor clause that
- *    was pushing the member out).
- *  - **Dangling infix operator** (8 sites: `+` in TM `SystemData.hx:137`
- *    and `CrashDumper.hx:307`, `||` in `openfl/geom/PerspectiveProjection
- *    .hx:116`, `openfl/display/BitmapData.hx:2229,2239`,
- *    `openfl/display3D/textures/TextureBase.hx:289`, `&&` in
- *    `lime/utils/Preloader.hx:233`, `lime/system/System.hx:590`) —
- *    MODELLED, `HxCondSpliceOpExpr`, see
- *    `testDanglingInfixOperatorRegionIsModelled`.
- *  - **Half ternary** (1 site, TM `popups/fileDialog/FileDialog.hx:91`) —
- *    RAW, and the reason is fidelity rather than parsing; see
- *    `testHalfTernaryRegionStaysRaw`.
+ *  - **Balanced value per branch, `;` inside the guard** (`openfl/ui/Mouse.hx`)
+ *    — `var supportsCursor(default, null):Bool = #if !mobile true; #else
+ *    false; #end`. MODELLED (`HxVarSemiCondInitDecl` binds the
+ *    property-accessor clause that was pushing the member out).
+ *  - **Dangling infix operator** (`+` in TM `SystemData.hx` / `CrashDumper.hx`,
+ *    `||` in `openfl/geom/PerspectiveProjection.hx` / `openfl/display/BitmapData.hx`
+ *    / `openfl/display3D/textures/TextureBase.hx`, `&&` in
+ *    `lime/utils/Preloader.hx` / `lime/system/System.hx`) — MODELLED,
+ *    `HxCondSpliceOpExpr`, see `testDanglingInfixOperatorRegionIsModelled`.
+ *  - **Half ternary** (TM `popups/fileDialog/FileDialog.hx`) — RAW, and the
+ *    reason is fidelity rather than parsing; see `testHalfTernaryRegionStaysRaw`.
  *
- * The dangling-operator shape was refused once, on a measurement that is
- * still true: modelling it as `{cond, expr:HxExpr, op, tail:HxExpr}`
- * needs the Pratt loop to REWIND an operator whose right operand fails to
- * parse, and `PrattPostfixLowering.lowerPrattLoop` emits no such path — every branch
- * is `left = HxExpr.Add(left, parseHxExpr(ctx, prec + 1))` with zero
- * `try` and zero `catch` in the whole generated loop, and 41 of its 42
- * `ctx.pos = _savedPos` writes are the min-precedence gate. What does not
- * follow is the refusal. `expr` does not have to be a full-precedence
- * expression: prefix and the whole postfix loop live in
- * `parseHxExprAtom`, so an ATOM-level operand covers everything the eight
- * sites put between their operators and stops at the operator. The
- * fragment is then a Star of `(operand, operator)` pairs, and a Star's
- * element rewind — `@:tryparse` — has shipped since
- * `HxConditionalExpr.elseifs`. The operator loop is never entered, so it
- * never needs to unwind, and `a + ;` still errors at the `+` because
- * nothing outside a `#if` region reaches the ctor. Full reasoning on
- * `HxCondSpliceOpExpr`.
+ * The dangling-operator shape was refused once, on a reading that is still
+ * true: modelling it as `{cond, expr:HxExpr, op, tail:HxExpr}` needs the
+ * Pratt loop to REWIND an operator whose right operand fails to parse, and
+ * `PrattPostfixLowering.lowerPrattLoop` emits no such path — every branch is
+ * `left = HxExpr.Add(left, parseHxExpr(ctx, prec + 1))` with no `try` in
+ * the whole generated loop, and its `ctx.pos = _savedPos` writes are the
+ * min-precedence gate. What does not follow is the refusal. `expr` does not
+ * have to be a full-precedence expression: prefix and the whole postfix loop
+ * live in `parseHxExprAtom`, so an ATOM-level operand covers everything the
+ * real sites put between their operators and stops at the operator. The
+ * fragment is then a Star of `(operand, operator)` pairs with the `@:tryparse`
+ * element rewind. The operator loop is never entered, so it never needs to
+ * unwind, and `a + ;` still errors at the `+` because nothing outside a `#if`
+ * region reaches the ctor. Full reasoning on `HxCondSpliceOpExpr`.
  *
- * `HxCondSpliceRaw`'s verbatim capture is still what keeps the remaining
- * shapes parsing and byte-round-tripping, and `RefactorSupport`'s
- * unparsed-region guard still reads exactly those raw spans — it walks
- * the parts of an opaque node's span NO CHILD covers, so it narrowed to
- * the directive keywords and the operator slices by itself when the
- * operands became nodes.
+ * `HxCondSpliceRaw`'s verbatim capture still keeps the remaining shapes parsing
+ * and byte-round-tripping, and `RefactorSupport`'s unparsed-region guard walks the
+ * parts of an opaque node's span NO CHILD covers, so it narrowed to the directive
+ * keywords and the operator slices by itself.
  */
 @:nullSafety(Strict)
 class HxCondSpliceExprSliceTest extends HxTestHelpers {
@@ -172,8 +162,8 @@ class HxCondSpliceExprSliceTest extends HxTestHelpers {
 	 * `HxCondSpliceOpLit` makes this region parse as two terms and every
 	 * operand a node, but a FLAT term run has one indent level to give and
 	 * the site is hand-indented on the ternary's two-level convention, so
-	 * `hxq fmt` starts rewriting a file it left alone. Measured, recorded
-	 * on `HxCondSpliceOpLit`, and reversible in one token.
+	 * `hxq fmt` starts rewriting a file it left alone. Recorded on
+	 * `HxCondSpliceOpLit`, and reversible in one token.
 	 */
 	public function testHalfTernaryRegionStaysRaw(): Void {
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\t_p = #if FEATURE_SHARE\n\t\t\tshare\n\t\t\t\t? new A(1)\n'

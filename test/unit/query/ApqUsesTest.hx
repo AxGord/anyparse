@@ -177,8 +177,8 @@ class ApqUsesTest extends Test {
 	public function testQualifiedSubModuleTypeIsFoundBySimpleName(): Void {
 		// `pkg.Mod.Sub` reaches the type-ref tree as ONE `Named` leaf carrying the whole
 		// dotted string, so an exact-name walker never sees it — and a deadness census
-		// built on `uses` then called a live sub-module type dead (eleven of them, and
-		// `Type not found` in six modules).
+		// built on `uses` then called a live sub-module type dead (several of them, and
+		// `Type not found` in the modules that used them).
 		final source: String = 'class X { function f(o:WriterLowering.WrapBodyOpts):Void {} }';
 		final hits: Array<UsesHit> = usesQualifiedIn(source, 'WrapBodyOpts');
 		Assert.equals(1, hits.length, 'qualified sub-module type ref expected, got ${describe(hits)}');

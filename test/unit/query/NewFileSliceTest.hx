@@ -348,8 +348,8 @@ class NewFileSliceTest extends Test {
 	 * A created file is measured by the SAME one-pass gate every writer-emit op
 	 * puts on its input (`writeRoundTrip(s) == s`), and the writer does not always
 	 * land there in one pass — a wrap decision that reads the source line layout it
-	 * then rewrote needs two, which is why `apq fmt` loops and warns. Measured:
-	 * piping Pony's `tools/src/module/Unpack.hx` through `apq new --raw -` wrote a
+	 * then rewrote needs two, which is why `apq fmt` loops and warns: piping
+	 * Pony's `tools/src/module/Unpack.hx` through `apq new --raw -` wrote a
 	 * file its own `fmt --list` immediately called drifted, after which the next
 	 * `add-member` on it refused with `file is not in canonical form`.
 	 *

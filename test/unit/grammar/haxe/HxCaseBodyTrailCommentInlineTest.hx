@@ -23,38 +23,28 @@ import utest.Test;
  * case BOLD: bold = cast(d, Bool);
  * ```
  *
- * The comment never needed the body out of the way. It renders on its own line(s) at LABEL indent after the body, which is
- * where the `nestBody` path already put it whenever the body was non-empty
- * (issue_392) — so the fit path emits the body placement first and the
- * trail docs after it, at label level.
+ * The comment never needed the body out of the way: it renders at LABEL
+ * indent after the body, where the `nestBody` path already put it whenever
+ * the body was non-empty (issue_392).
  *
  * NARROWED TO `FitLine` ON PURPOSE. `_flatCase` (`Same`, and `Keep` on
  * same-line source) keeps the empty-trail requirement: it is the policy the
  * fork corpus runs under, and this is a placement change, not a parity fix.
  * `_fitCase` is opt-in per project, so the relaxation lands only where the
- * knob was chosen. Measured accordingly: the fork corpus runs the DEFAULT
- * config and comes out byte-identical per fixture, while a tree formatted
- * with `caseBody` / `expressionCase: fitLine` does move — which is the
- * point of the slice, not a regression in it.
+ * knob was chosen: the fork corpus under its DEFAULT config comes out
+ * byte-identical, while a tree formatted with `caseBody` /
+ * `expressionCase: fitLine` does move — the point of the slice.
  *
- * MEASUREMENT. An element carrying trail docs cannot render on one line, so
- * the sibling pre-pass measures it as `-1` and it contributes NOTHING to
- * the widest-sibling width — the same answer a glued body gives. It
- * therefore never LEADS a spread, and its own over-wide body still breaks
- * on its own through the `BodyGroup` the fit path wraps it in (which holds
- * the BODY alone — the trail docs sit outside it). It does FOLLOW: under
- * someone else's trigger it goes below its label with everyone.
+ * WIDTH. An element carrying trail docs cannot render on one line, so the
+ * sibling pre-pass reads it as `-1` and it contributes NOTHING to the
+ * widest-sibling width — the same answer a glued body gives. It never LEADS a
+ * spread; its own over-wide body still breaks through the `BodyGroup` the fit
+ * path wraps around the BODY alone; and it does FOLLOW someone else's trigger.
  *
- * GUARDS vs DISCRIMINATORS. Stash-verified against the pre-slice engine:
- * `testATrailCommentBodyJoinsItsLabel` and
- * `testABlankAfterTheTrailCommentIsPreserved` are the two that FAIL there.
- * Every other test here is a guard — byte-identical before the slice —
- * pinning that the relaxation left untouched the shapes that must keep
- * their placement, and that the newly-inline unit still follows a trigger
- * and still contributes no width.
- *
- * Per `feedback_unit_test_trivia_writer.md`: the knobs are visible only
- * through `HaxeModuleTriviaParser` / `HaxeModuleTriviaWriter`.
+ * `testATrailCommentBodyJoinsItsLabel` and `testABlankAfterTheTrailCommentIsPreserved`
+ * FAIL on the pre-slice engine; every other test here is a guard, byte-identical
+ * before the slice. The knobs are visible only through `HaxeModuleTriviaParser` /
+ * `HaxeModuleTriviaWriter`.
  */
 @:nullSafety(Strict)
 final class HxCaseBodyTrailCommentInlineTest extends Test {
@@ -93,7 +83,7 @@ final class HxCaseBodyTrailCommentInlineTest extends Test {
 	/**
 	 * A blank line before the orphan comment on the LAST case — the position
 	 * where a following case cannot claim the comment as its own leading one.
-	 * Measured: the blank detaches it from the body Star here too, so this
+	 * The blank detaches it from the body Star here too, so this
 	 * case's body was ALREADY inline before the relaxation. The fixture pins
 	 * that the trailBB blank channel came through untouched.
 	 */

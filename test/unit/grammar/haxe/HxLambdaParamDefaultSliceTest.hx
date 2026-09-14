@@ -17,23 +17,17 @@ import utest.Assert;
  * expression-side twin `HxLambdaParamBody` did not — its docstring
  * asserted that "arrow / anon-function lambdas in Haxe do not support
  * per-parameter default values at the syntactic level", which is simply
- * false (verified against Haxe 4.3: `function(a:Int = 1) return a` and
+ * false (compile-proved: `function(a:Int = 1) return a` and
  * `(b:Int = 2) -> b` both compile and evaluate). The fix is the byte-twin
  * slot on `HxLambdaParamBody`, appended LAST because parse and emit walk
  * a struct rule's fields in declaration order and `name : Type = default`
  * is the Haxe surface token order.
  *
- * Note the gap covered BOTH the typed and the untyped default form —
- * `function(a = 1) {}` failed identically to `function(a:Int = 1) {}`,
- * because the param Star closed on `)` and never expected an `=`.
- *
- * Real-world source: 14 Haxe stdlib modules, all `@:overload` externs of
- * the shape
- * `@:overload(function(?type:String, replace:String = "") : HTMLDocument {})`.
- * The metadata wrapper is incidental. Representative sites:
- *  - `js/html/CanvasRenderingContext2D.hx:73` — `= NONZERO` (bare ident)
- *  - `js/html/Document.hx:471` — `= cast 4294967295` (a `cast` expr, not a literal)
- *  - `php/Global.hx:1052` — `= ""` (string literal)
+ * The gap covered BOTH the typed and the untyped default form, because the
+ * param Star closed on `)` and never expected an `=`. Real-world source: the
+ * Haxe stdlib's `@:overload` externs, of the shape
+ * `@:overload(function(?type:String, replace:String = "") : HTMLDocument {})`
+ * — a bare ident, a `cast` expression or a string literal as the default.
  *
  * Exactly one AST shape moves, and it is pinned by
  * `testDefaultedParenLambdaAstMove`: `(a = 1) -> b` was
@@ -46,16 +40,11 @@ import utest.Assert;
  * lead only AFTER the param Star closes, and `lowerEnum`'s `tryBranch`
  * restores `ctx.pos` when that lead is absent — so `(a = 1)` still lands
  * on `ParenExpr`, `[(a = 1) => b]` still lands on the map-entry `Arrow`,
- * and the paren-less thin form `x -> x = 1` never reaches this body at
- * all.
+ * and the paren-less thin form `x -> x = 1` never reaches this body.
  *
- * Known writer gap, deliberately not pinned here: a block comment written
- * between the `=` and the default expression is dropped, the same way
- * `HxLambdaParam` drops one in its `type` slot. It is a pre-existing
- * trivia gap of the lambda-param family that this slice makes reachable
- * (the input used to be a parse error); it belongs with the other
- * param-comment gaps around `HxParamCommentWriteTest`, not with a test
- * that would cement the loss.
+ * Known writer gap, deliberately not pinned here: a block comment between
+ * the `=` and the default expression is dropped, as `HxLambdaParam` drops one
+ * in its `type` slot — a trivia gap that belongs with `HxParamCommentWriteTest`.
  */
 @:nullSafety(Strict)
 class HxLambdaParamDefaultSliceTest extends HxTestHelpers {
@@ -131,7 +120,7 @@ class HxLambdaParamDefaultSliceTest extends HxTestHelpers {
 	}
 
 	public function testStdlibOverloadExternShape(): Void {
-		// js/html/HTMLDocument.hx:47 verbatim shape — the motivating site.
+		// The stdlib `HTMLDocument` extern's verbatim shape — the motivating site.
 		final source: String = '@:overload(function(?type:String, replace:String = "") : HTMLDocument {})\nextern class X {}';
 		final module: HxModule = HaxeModuleParser.parse(source);
 		Assert.equals(1, module.decls.length);
@@ -261,7 +250,7 @@ class HxLambdaParamDefaultSliceTest extends HxTestHelpers {
 				Assert.fail('expected ThinParenLambdaExpr, got ${thin.init}');
 		}
 		// A multi-param `=>` lambda DOES reach `HxParenLambda`, which shares
-		// `HxLambdaParam`, so the slot lands there too. Note Haxe 4.3.7
+		// `HxLambdaParam`, so the slot lands there too. Note that Haxe
 		// rejects this shape outright (`Unexpected =>`) — `HxParenLambda` is
 		// a permissive-superset rule, so this pins grammar behaviour, not
 		// valid Haxe.

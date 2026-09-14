@@ -563,7 +563,7 @@ class RenameSliceTest extends Test {
 	 * The re-declaration shape that stays REFUSED: the name is declared on two mutually exclusive
 	 * conditional-compilation arms. Only one arm exists in any one build, and the `return v` past
 	 * the `#end` resolves to exactly one of them - so renaming either arm rewrites the reference
-	 * for that configuration and leaves the other reading the old name. Measured: renaming EITHER
+	 * for that configuration and leaves the other reading the old name. Renaming EITHER
 	 * arm of this shape makes the file stop compiling under one of `--interp` / `-js`.
 	 */
 	public function testExclusiveCondArmRedeclarationRefused(): Void {
@@ -577,7 +577,7 @@ class RenameSliceTest extends Test {
 	 * The SECOND refusing shape, and the one a two-arm-only guard silently lets through: the name
 	 * on ONE arm plus a sibling declaration BEFORE the region. In the configuration the arm is
 	 * compiled out of, `return v` falls through to the sibling; in the other it belongs to the arm.
-	 * Measured against a guard that only compared arms with each other: renaming either declaration
+	 * Against a guard that only compared arms with each other, renaming either declaration
 	 * wrote a file that `--interp` rejected with `Unknown identifier : v` while `-js` still
 	 * compiled, so a single-configuration check could not see it.
 	 */
@@ -590,7 +590,7 @@ class RenameSliceTest extends Test {
 	/**
 	 * A declaration nested one region deeper is the same ambiguity, and the arm scan has to recurse
 	 * to see it: the inner arm holds TWO statements, so the single-child descent that reaches a
-	 * lone-statement region does not apply. Measured: without the recursion both this and the
+	 * lone-statement region does not apply. Without the recursion both this and the
 	 * pre-change engine wrote a file neither `--interp` nor `-js` compiled.
 	 */
 	public function testNestedCondArmDeclarationRefused(): Void {
@@ -749,12 +749,12 @@ class RenameSliceTest extends Test {
 	 * directly preceded by `#`, which is what `testDirectiveKeywordIsNotAMention` below pins - and
 	 * that exemption is exactly why the CONDITION was the surviving half of the same mistake.
 	 *
-	 * Measured before it moved, on a compilable analogue of this fixture (`#if myflag`, a local
-	 * `myflag`, both arms reachable): `xya` without the define and `xbya` with it, byte-identical
-	 * before and after the rename. Over the Pony fork, 18 of the 20 files holding an opaque region
-	 * lose a name from their refusal set, 19 (file, name) pairs in all, and every one of the names
-	 * is a compile-time define - `haxe_ver` twelve times, then `starling`, `mobile`, `js`, `ios`,
-	 * `hxbitmini`, `display` - none of them so much as a name the file's own tree carries.
+	 * Compile-proved before it moved, on a compilable analogue of this fixture (`#if myflag`, a
+	 * local `myflag`, both arms reachable): `xya` without the define and `xbya` with it,
+	 * byte-identical before and after the rename. Over the Pony fork, nearly every file holding an
+	 * opaque region loses a name from its refusal set, and every one of the names is a compile-time
+	 * define - `haxe_ver` most often, then `starling`, `mobile`, `js`, `ios`, `hxbitmini`,
+	 * `display` - none of them so much as a name the file's own tree carries.
 	 *
 	 * Asserted on the whole program so the two halves cannot be satisfied apart: the binding moves
 	 * to `label` in both its positions AND `#if flash` keeps its bytes. A run that rewrote the

@@ -167,7 +167,7 @@ class HxConditionalMemberSliceTest extends HxTestHelpers {
 	 * The absent branch of `@:absentOn` rewinds the cursor past the trivia it just
 	 * scanned, so the enclosing member Star re-scans those bytes — handing them to
 	 * the Star a SECOND time through `ctx.pendingTrivia` duplicated the comment, and
-	 * the duplicate doubled again on every further writer pass (1 -> 2 -> 4). The
+	 * the duplicate doubled again on every further writer pass. The
 	 * absent branch therefore restores the INCOMING stash, not the freshly-scanned
 	 * one. Asserting idempotence as well as equality is what catches the compounding
 	 * half: a single-pass equality check alone passes on output that still grows.

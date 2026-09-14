@@ -50,8 +50,8 @@ class HxBlockCommentCloseWriteTest extends Test {
 
 	/**
 	 * No interior content line → no frame (`commonPrefix` null): the close used to
-	 * keep its ABSOLUTE ws and re-absorb the renderer's nest every write (0→2→4→6
-	 * tabs, unbounded). It must land at the wrap column and stay.
+	 * keep its ABSOLUTE ws and re-absorb the renderer's nest every write (the indent
+	 * doubling per pass, unbounded). It must land at the wrap column and stay.
 	 */
 	public function testTwoLineCommentCloseIsStable(): Void {
 		final twoLine: String = 'class C {\n\tfunction f(): Void {\n\t\t/*\n\t\tnote*/\n\t\ttrace("z");\n\t}\n}\n';

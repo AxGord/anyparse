@@ -12,11 +12,10 @@ import utest.Test;
  * cannot repair it either - `shapeNoWrap` wraps a committed body in `Flatten` and `Renderer.pushStructural` skips `fitsFlat` under
  * force-flat - so the result is a FIXED POINT of any width.
  *
- * Numbers, each a reading of the artefact named. The reduction the defect was first measured on (Pony identifiers, statement at two
- * tabs) sat at 146 columns under `maxLineLength: 140`, against 141 for its arrow twin, which broke correctly - the one-variable
- * probe, the only difference being the lambda spelling. THIS file's controls are a second reduction with synthetic identifiers: 159
- * columns for the plain case and 420 for the 260-character body, both fixed points before the slice. The Pony SITE itself is not
- * over the limit - it sits at exactly 140 with the `+` continuation laid at the STATEMENT's own indent, which
+ * The reduction the defect was first seen on (Pony identifiers, statement at two tabs) sat past `maxLineLength`, and so did
+ * its arrow twin, which broke correctly - the one-variable probe, the only difference being the lambda spelling. THIS file's
+ * controls are a second reduction with synthetic identifiers, both fixed points before the slice. The Pony SITE itself is
+ * not over the limit - it sits at exactly the limit with the `+` continuation laid at the STATEMENT's own indent, which
  * `testTheConcatenatedThrowNoLongerContinuesAtTheStatementIndent` is the reduction of.
  *
  * The mechanism that fixes it was never missing, only GATED on the ARROW spelling: `WrapList.emit` already re-tags a hardline-free
@@ -27,8 +26,8 @@ import utest.Test;
  *
  * The two gates coincide only for a plain `if` body: the new one accepts any hardline-free body, `isArrowPlainIfBody` still demands
  * `if` with no top-level `else`. So for a `for` / `while` / `switch` / `if`-`else` body the `function` spelling now measures and the
- * arrow spelling does not (T875) - measured under Pony's own `hxformat.json`, where `function(r) for (q in r) f(q)` goes from a
- * 149-column line to a correct break while `(r) -> for (q in r) f(q)` is byte-identical on both engines. Not a regression, and no
+ * arrow spelling does not - under Pony's own `hxformat.json`, `function(r) for (q in r) f(q)` goes from an over-limit
+ * line to a correct break while `(r) -> for (q in r) f(q)` is byte-identical on both engines. Not a regression, and no
  * fixture here: under THIS file's config both spellings already break correctly for that body, so a fixture would be vacuous.
  *
  * Identifiers are fully synthetic. Every case asserts idempotence as well as the shape.

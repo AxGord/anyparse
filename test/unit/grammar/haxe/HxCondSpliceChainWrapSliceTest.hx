@@ -27,9 +27,8 @@ import utest.Test;
  * carries a real hardline for `Renderer.embeddedLineWidths` to find. The
  * previous expectation had the tail wrapped, and that wrap was an artifact of
  * the source's own newline: the same construct written on one line already
- * glued the tail — over the limit — on the pre-slice writer. Measured over
- * 1665 real modules, the over-140 line count is 866 before and 866 after, so
- * nothing in the corpus moved; the cost is recorded here rather than hidden.
+ * glued the tail — over the limit — on the pre-slice writer. Over the real corpus the over-limit line
+ * count is the same before and after, so nothing moved; the cost is recorded here rather than hidden.
  */
 @:nullSafety(Strict)
 final class HxCondSpliceChainWrapSliceTest extends Test {

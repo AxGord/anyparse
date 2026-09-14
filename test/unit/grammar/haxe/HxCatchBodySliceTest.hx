@@ -124,7 +124,7 @@ class HxCatchBodySliceTest extends Test {
 
 	public function testCatchWithBodyStillParses(): Void {
 		// Regression sentinel — the present-body path is byte-identical
-		// to the pre-Slice-3 required-Ref path.
+		// to the earlier required-Ref path.
 		final out: String = writeWith('class M { function f():Void { try { a; } catch (e:Any) { b; } } }', BodyPolicy.Next);
 		Assert.isTrue(out.indexOf(') {') != -1, 'expected `) {` (block body) unaffected in: <$out>');
 	}

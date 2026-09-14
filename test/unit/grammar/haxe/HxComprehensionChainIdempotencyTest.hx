@@ -9,7 +9,7 @@ import utest.Test;
  * parent (method chain, binary `+`) used to lower to a bare counted `Group`
  * when the source was compact, but to a width-0-deferred `BodyGroup` once a
  * prior pass exploded it (`[`->`[`+newline+`for`). So the SAME comprehension
- * measured wide on one pass and ~0 on the next, flipping the parent's wrap
+ * read wide on one pass and near zero on the next, flipping the parent's wrap
  * decision -> non-idempotent. The fix forces a comprehension to ALWAYS count
  * (bare `Group`, real width), making the parent measure trivia-independent.
  * Identifiers are synthetic.

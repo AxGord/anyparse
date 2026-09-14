@@ -144,8 +144,8 @@ final class HxMethodChainAllOrNothingSliceTest extends Test {
 
 	/**
 	 * DISCRIMINATES: the head renders multi-line, so the tail starts at column
-	 * 9 and fits with room to spare. Measured FLAT (the pre-slice probe) the
-	 * chain reads 186 columns and dot-breaks.
+	 * 9 and fits with room to spare. Read FLAT (the pre-slice probe) the
+	 * chain is far over the limit and dot-breaks.
 	 */
 	public function testTailGluesOntoAMultilineHeadsClosingLine(): Void {
 		Assert.equals(MULTILINE_HEAD_EXP, triviaWrite(MULTILINE_HEAD_SRC));

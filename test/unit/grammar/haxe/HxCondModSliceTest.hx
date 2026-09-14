@@ -27,26 +27,17 @@ import utest.Assert;
  * modifier/metadata straddle it was first blamed on. The straddle is a
  * second, independent gap that the same region shape needs.
  *
- * 107 modules across four dogfood trees carry it:
- *
- *  - Pony, 100 modules - `#if (haxe_ver >= 4.2) extern #else @:extern
- *    #end` in front of an inline abstract method, bare or behind a
- *    metadata tag; the tag is `@:from`, `@:to`, `@:op(...)` (18 distinct
- *    operator spellings) or `@:nullSafety(Off)`, and 82 modules carry
- *    more than one region. The four tag families are covered below; only
- *    the counts are approximate, the file:line references are exact;
- *  - lime, 3 - `ArrayBufferView` repeats the Pony shape, while
- *    `NativeWindow` and `System` carry TWO tokens per branch:
- *    `#if (haxe_ver>=4.0) private enum #else @:enum private #end
- *    abstract Name(Int)`;
- *  - the Haxe standard library, 3 - `js`/`flash` `_std/haxe/Json.hx`
- *    lines 25-28 (`@:native("JSON") extern`, metadata AND a modifier in
- *    ONE branch, at type level, spread over four lines) and
- *    `haxe/macro/Compiler.hx`, whose spliced token is the `macro`
- *    keyword;
- *  - swf, 1 - `AnimateLibraryExporter`, where a PRECEDING `private` is
- *    what forces the region into the modifier Star instead of the
- *    metadata one.
+ * The shape is common across the dogfood trees: Pony's
+ * `#if (haxe_ver >= 4.2) extern #else @:extern #end` in front of an inline
+ * abstract method, bare or behind a `@:from` / `@:to` / `@:op(...)` /
+ * `@:nullSafety(Off)` tag (the four tag families are covered below); lime's
+ * `NativeWindow` and `System` with TWO tokens per branch
+ * (`#if (haxe_ver>=4.0) private enum #else @:enum private #end abstract
+ * Name(Int)`); the standard library's `_std/haxe/Json.hx` (`@:native("JSON")
+ * extern`, metadata AND a modifier in ONE branch at type level, spread over
+ * lines) and `haxe/macro/Compiler.hx`, whose spliced token is the `macro`
+ * keyword; and swf's `AnimateLibraryExporter`, where a PRECEDING `private`
+ * forces the region into the modifier Star instead of the metadata one.
  *
  * The regression half pins the other side of the contract. Which Star
  * claims a prefix region is decided by field order, not lookahead
@@ -58,9 +49,8 @@ import utest.Assert;
  * `#if`.
  *
  * Writer assertions use `writerEquals` / `triviaRoundTrip` (byte-exact)
- * rather than `roundTrip` wherever the shape allows it: `roundTrip` only
- * asserts idempotency, and the writer's known `#else#end` gap re-parses
- * to itself, so an idempotency-only check would pass on it.
+ * rather than `roundTrip` wherever the shape allows it: `roundTrip` only asserts
+ * idempotency, and the writer's known `#else#end` gap re-parses to itself.
  */
 class HxCondModSliceTest extends HxTestHelpers {
 
@@ -133,7 +123,7 @@ class HxCondModSliceTest extends HxTestHelpers {
 	}
 
 	public function testBareExternElseAtExtern(): Void {
-		// Pony's dominant shape (95 of its 100 modules), e.g. pony/Or.hx:19.
+		// Pony's dominant shape, e.g. `pony/Or.hx`.
 		final mods: Array<HxMemberModifier> =
 			memberModifiers('class C { #if (haxe_ver >= 4.2) extern #else @:extern #end public inline function f():Void {} }');
 		Assert.equals(3, mods.length);

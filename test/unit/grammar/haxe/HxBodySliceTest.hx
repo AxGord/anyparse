@@ -288,9 +288,9 @@ class HxBodySliceTest extends HxTestHelpers {
 		}
 	}
 
-	// Post-Slice-44 (ω-slice-X3): a bare expr as the last stmt of a
-	// block elides its `;` via the parse-time peek-`}` disjunct. Pre-
-	// Slice-44 this test asserted `function f():Void { 1 }` throws on
+	// ω-slice-X3: a bare expr as the last stmt of a block elides its
+	// `;` via the parse-time peek-`}` disjunct. Before it this test
+	// asserted `function f():Void { 1 }` throws on
 	// the missing `;`; the new gate accepts it because `}` is the next
 	// non-trivia byte. Multi-stmt boundary (`1 2` no `;`) still throws
 	// — see `HxStmtBlockEndNoSemiSliceTest.testBareCallFollowedByIdentRegression`.

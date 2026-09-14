@@ -11,11 +11,9 @@ import utest.Test;
  * deciding whether the `case P if (cond):` label fits, and a genuinely
  * overlong guard must keep ladder lines indented.
  *
- * Repro from TM `DropDownList.hx` (2026-08-11): a guard label of 117
- * visible columns (maxLineLength 140) was torn open because the writer
- * measured label PLUS the glued one-line body (170 cols) even though the
- * `caseBody: fitLine` policy then dropped the body to its own line
- * anyway. Flip threshold measured at exactly label+space+body = 141.
+ * Repro from TM `DropDownList.hx`: a guard label well inside `maxLineLength` was torn open because the
+ * writer counted label PLUS the glued one-line body even though the `caseBody: fitLine` policy then
+ * dropped the body to its own line anyway. The flip threshold sits at exactly label+space+body = limit + 1.
  *
  * Second defect on the SAME path: when the guard condition genuinely
  * overflows, the ladder emits the first operand line and the closing

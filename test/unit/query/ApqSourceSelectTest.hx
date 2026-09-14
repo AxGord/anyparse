@@ -180,7 +180,7 @@ class ApqSourceSelectTest extends Test {
 	/**
 	 * A `@:trailOpt` declaration written WITHOUT its terminator parses with a span that runs on
 	 * PAST its own closing brace — over the blank line and the NEXT declaration's doc comment,
-	 * which the parser re-stashes as that neighbour's leading trivia (the 816bb666 family). The
+	 * which the parser re-stashes as that neighbour's leading trivia (the greedy-span family). The
 	 * window is `trailingTrimmedSpan`-ed for that reason, in `Patch`'s own order; without the
 	 * trim the read hands back a fragment carrying a neighbour's documentation and
 	 * `replace-node` writes it straight back in.

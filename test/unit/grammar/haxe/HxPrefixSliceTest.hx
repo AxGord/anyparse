@@ -28,7 +28,7 @@ import utest.Assert;
  *    roll back, and let the prefix branch consume the literal before
  *    recursing.
  *  - `-x + 1`, `!x && y`, `~x | 1` — prefix applies before infix
- *    climb. These are the load-bearing Sub-2 correctness tests: the
+ *    climb. These are the load-bearing prefix-recursion correctness tests: the
  *    prefix recursion targets the ATOM function (`parseHxExprAtom`),
  *    not the loop (`parseHxExpr`), so the outer Pratt loop picks up
  *    the binary operator around the prefix result. Trees shape as

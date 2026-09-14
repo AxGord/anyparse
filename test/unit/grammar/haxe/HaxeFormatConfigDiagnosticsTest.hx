@@ -20,10 +20,8 @@ import utest.Test;
  * it, so both drop paths — an unknown key, and a wrap rule naming an
  * unmodelled predicate — are correct at runtime and must stay silent in
  * their EFFECT. What these tests pin is the other half: that the drop is
- * observable. Measured on the three real configs this project touches, the
- * silent surface was 12 / 19 / 19 keys plus three of the fork's own
- * shipped condition strings; implementing those three predicates and
- * `wrapping.mapWrap` took it to 12 / 18 / 18 keys and no wrap settings.
+ * observable. On the real configs this project touches, the silent surface was a dozen-odd keys each plus three of the fork's
+ * own shipped condition strings; implementing those three predicates and `wrapping.mapWrap` left the keys and no wrap settings.
  *
  * The collection itself is grammar-agnostic — it lives on
  * `anyparse.runtime.Parser` and is emitted by the ByName struct

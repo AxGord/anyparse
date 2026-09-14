@@ -18,11 +18,10 @@ import utest.Test;
  * also run (the skipped-file scan, structural conformance, the declaration-site lookup) only
  * lose findings when a haxelib and the std join them.
  *
- * S95 measured folding the library half into the write index as 16 of 109 Pony findings lost.
- * S97 re-measured it as 18 of 112 lost and 0 gained, and refuted the stated mechanism: 10 of the
- * losses are `SymbolIndex.text.skippedMayReference`, 3 are structural conformance against a
- * library anonymous structure, 5 are `declarationSiteOf` going ambiguous on a shared SIMPLE name
- * — and NONE is the write index. So the library now IS in the write index, tagged third-party
+ * Folding the library half into the write index lost a share of the Pony findings and gained none, and a second
+ * census refuted the stated mechanism: the losses are `SymbolIndex.text.skippedMayReference`, structural
+ * conformance against a library anonymous structure, and `declarationSiteOf` going ambiguous on a shared SIMPLE
+ * name — and NONE is the write index. So the library now IS in the write index, tagged third-party
  * and narrowed per owner, which is what closes the third-party-subtype blind spot
  * (`unit.check.FieldWriteResolutionScopeTest`); the name-keyed scans stay on the project view
  * this class pins.

@@ -82,7 +82,7 @@ class ApqSourceDedentTest extends Test {
 	}
 
 	public function testDedentLineKeepsRelativeIndent(): Void {
-		// Strip 2 of 3 -> one level of relative indent remains.
+		// Strip two of the three tabs -> one level of relative indent remains.
 		Assert.equals('\tg();', SourceCommand.dedentLine('\t\t\tg();', 2));
 	}
 
