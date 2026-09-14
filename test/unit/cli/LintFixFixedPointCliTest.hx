@@ -310,8 +310,8 @@ class LintFixFixedPointCliTest extends Test {
 	/**
 	 * A `RiskyFix` rule this run could not verify is never handed to the safe loop either, so no
 	 * `fix` of its own is ever called and its row would be a silent zero. On Pony `avoid-dynamic`
-	 * alone reports 470 findings; a block about what did not get fixed that simply omits the largest
-	 * rule on the tree invites its own misreading, so those rules are named once at the end.
+	 * alone is the largest rule by far; a block about what did not get fixed that simply omits the
+	 * largest rule on the tree invites its own misreading, so those rules are named once at the end.
 	 *
 	 * The caller decides which rules those are, and since `FixVerifier` began carrying per-rule
 	 * tallies it passes an EMPTY list whenever the risky phase actually ran — see
@@ -433,7 +433,7 @@ class LintFixFixedPointCliTest extends Test {
 	 *
 	 * The loader used to map each naming check's `format` onto a rule and attach no `normalize`, so
 	 * `correctedName` had nothing to return and every finding declined: `fixed 0` against `fixed 2`,
-	 * with 198 of an 851-file tree's 231 findings taking the first arm. `CheckstyleConfigLoader.ruleFor`
+	 * with most of a real tree's findings taking the first arm. `CheckstyleConfigLoader.ruleFor`
 	 * now asks `HaxeNamingSupport.normalizerFor` for the corrections the built-in policy attaches to the
 	 * rule's own category, so both arms write the same edits.
 	 *

@@ -246,7 +246,7 @@ class PreferIfExpressionAssignmentCheckTest extends Test {
 	 * A rung condition is not a leaf: `p == 1 /* why *\/ ? q : r` projects `(Eq @48-65 …)` whose
 	 * span runs THROUGH the comment to the `?`, so a raw `source.substring` of that piece welds it
 	 * into an emitted `if ( … )` head. A LINE comment then swallows the `)` the rebuild puts after
-	 * it and the writer refuses the whole file — measured end to end before the gate existed: the
+	 * it and the writer refuses the whole file — seen end to end before the gate existed: the
 	 * site lost a `prefer-ternary-assignment` finding whose own rewrite round-trips fine and gained
 	 * an unfixable one here.
 	 */
@@ -300,7 +300,7 @@ class PreferIfExpressionAssignmentCheckTest extends Test {
 	 * The parser folds the statement's own `;` INTO such a conditional, so copying it into the
 	 * chain terminal and appending the rebuild's own `;` writes `… else if (z) 2;;` — which
 	 * anyparse re-parses and Haxe rejects. `unitValue` applies that gate to the r-value ROOT,
-	 * which after the unroll is a different node; measured by deleting both gates, where exactly
+	 * which after the unroll is a different node; shown by deleting both gates, where exactly
 	 * that text is what the fixer wrote.
 	 */
 	public function testElseLessConditionalAsTheNewTerminalLeavesItUnclaimed(): Void {

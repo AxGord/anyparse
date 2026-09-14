@@ -91,7 +91,7 @@ class PreferLpadCheckTest extends Test {
 		Assert.isTrue(fixEdits(src).length > 0);
 	}
 
-	/** A negative low bound is the divergence the differential measured at 100%: reported, never written. */
+	/** A negative low bound is the one divergence the differential found: reported, never written. */
 	public function testNegativeLowBoundReportedWithoutFix(): Void {
 		final src: String = "class C {\n\tfunction f() {\n\t\tfor (i in -5...100) g(if (i < 10) 'p0$i' else 'p$i');\n\t}\n}";
 		Assert.equals(1, violations(src).length);

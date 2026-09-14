@@ -96,7 +96,7 @@ class ExplicitLocalTypeOracleE2ETest extends Test {
 	 * The oracle-assisted path leaves a quoted local alone, driven through the real `apq lint --fix`
 	 * with a real oracle and display server.
 	 *
-	 * HONEST LIMIT: this pins the BEHAVIOUR, not the gate. Measured with `Cli`'s `Linter.collect`
+	 * HONEST LIMIT: this pins the BEHAVIOUR, not the gate. With `Cli`'s `Linter.collect`
 	 * wiring reverted, the quoted local is still not annotated — the display server has no typed AST
 	 * for reified source, so `fixWithOracle` gets no type for that position and proposes nothing. The
 	 * gate is therefore belt over braces here, and the assertion below would stay green without it.

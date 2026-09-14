@@ -108,7 +108,7 @@ class WhileTrueConditionCheckTest extends Test {
 	}
 
 	public function testBreakInSwitchInKeptBranchNotFlagged(): Void {
-		// In Haxe a `break` inside a `switch` inside a loop breaks the LOOP (measured on --interp),
+		// In Haxe a `break` inside a `switch` inside a loop breaks the LOOP (checked on --interp),
 		// so the scan must descend into switch bodies and refuse here exactly as for a bare break.
 		Assert.equals(
 			0,

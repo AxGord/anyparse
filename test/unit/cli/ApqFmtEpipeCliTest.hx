@@ -38,8 +38,8 @@ class ApqFmtEpipeCliTest extends Test {
 	 * The engine has to EXIST for any of that to be measured, and in a mutation track it does
 	 * not: `CliFixture.engineOrSkip` is the family's one owner of that question. Without it
 	 * this fixture spawned `node bin/apq.js` against a worktree with no engine and reported
-	 * `MODULE_NOT_FOUND` as a failed EPIPE contract — `+extra` on every non-fast arm run
-	 * (T876/T898), which is exactly the reading an arm's verdict must not carry.
+	 * `MODULE_NOT_FOUND` as a failed EPIPE contract — `+extra` on every non-fast arm run,
+	 * which is exactly the reading an arm's verdict must not carry.
 	 */
 	public function testEpipeOnStdoutExitsQuietly(): Void {
 		#if (sys || nodejs)

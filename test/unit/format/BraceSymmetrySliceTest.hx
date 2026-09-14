@@ -8,7 +8,7 @@ import utest.Test;
  * `whitespace.bracesConfig.singleStatementBraces: "symmetric"` - the ADD direction of a policy
  * that until now only ever removed.
  *
- * The user decided it (2026-09-03), choosing the ADD direction, with the boundary stated:
+ * The user decided it, choosing the ADD direction, with the boundary stated:
  * an if/else with EXACTLY ONE braced branch gets the other braced; a bare single statement with
  * NO braced sibling is left alone. That second half is what makes this not "brace everything" -
  * Pony's `if (d.length != 4) throw '…';` must survive untouched, and `testABareBranchWithNoBracedSiblingIsUntouched`
@@ -113,14 +113,14 @@ class BraceSymmetrySliceTest extends Test {
 	}
 
 	/**
-	 * T507 — a value-`if` then-branch that the repair WRAPS must not also re-emit the `;` the
+	 * A value-`if` then-branch that the repair WRAPS must not also re-emit the `;` the
 	 * source wrote after it. The `;` lives in the grammar's `@:trailOpt(';')` slot; the wrap lifts
 	 * the branch expression into an `ExprStmt` inside a synthesized block, which carries the
 	 * terminator itself, so emitting the slot as well puts a second `;` after the closing brace.
 	 *
 	 * Found by the Pony sweep, not by a fixture: `pony/text/ParseBoy.hx` and
 	 * `pony/text/tpl/TplPut.hx` came out `};` on the line before `else`. Haxe accepts it (the
-	 * whole library typechecked and its 142 munit tests passed on the swept tree), so nothing but
+	 * whole library typechecked and its munit suite passed on the swept tree), so nothing but
 	 * a human reading the diff could have caught it.
 	 *
 	 * The first assertion is the VACUITY GUARD: with the wrap not firing at all there would be no
@@ -165,7 +165,7 @@ class BraceSymmetrySliceTest extends Test {
 	}
 
 	/**
-	 * T508 — inside a `macro …` reification the code is DATA, so a brace level is part of the
+	 * Inside a `macro …` reification the code is DATA, so a brace level is part of the
 	 * value the macro returns, not layout. `pony/magic/builder/MegaSaveBuilder.hx` came out
 	 * `macro try { $b{exprs}; } catch (…)`, i.e. `EBlock(exprs)` → `EBlock([EBlock(exprs)])` — an
 	 * added scope in every class that build-macro touches, with no test in Pony that runs it.
@@ -212,7 +212,7 @@ class BraceSymmetrySliceTest extends Test {
 	}
 
 	/**
-	 * T505 — the WRAP direction keeps two skip lists, one per position:
+	 * The WRAP direction keeps two skip lists, one per position:
 	 * `SingleStmtBraces.SYMMETRY_WRAP_SKIP_CTORS` (`IfStmt` / `SwitchStmt` / `SwitchStmtBare`) for
 	 * a statement branch, and the tail of `@:fmt(valueBraceSymmetry(…))` (`IfExpr` / `SwitchExpr` /
 	 * `SwitchExprBare` / `ObjectLit`) for a value one. Teaching one does not teach the other, and

@@ -202,14 +202,14 @@ class OptionalParamShorthandCheckTest extends Test {
 	}
 
 	public function testRedundantSigilInlineMemberFlagged(): Void {
-		// G5 exemption: `inline` — measured `Field mi is inlined and cannot be overridden`.
+		// G5 exemption: `inline` — the compiler says `Field mi is inlined and cannot be overridden`.
 		Assert.equals(1, violations('class C { inline function f(?a:Int = 5):Void {} }').length);
 	}
 
 	public function testRedundantSigilSiblingCallArgsFlagged(): Void {
 		// G3' narrowing proof: `a` and `null` are sibling ARGUMENTS of one call, not compared
 		// or assigned to each other — this must be FLAGGED now (it was the single biggest
-		// false-refusal cluster on a real tree: 10 of ~21 sites in one file, all shaped like
+		// false-refusal cluster on a real tree: half the sites in one file, all shaped like
 		// `new TextFormat(fontName, 12, color, false, null, null, null, null, ...)`).
 		Assert.equals(1, violations(fnBody('foo(a, null);')).length);
 	}

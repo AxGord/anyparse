@@ -44,73 +44,43 @@ typedef TestCensus = {
 };
 
 /**
- * Build macro behind `testkit.TestRegistry` — it DISCOVERS the suite's test
- * classes instead of taking a hand-written list.
- *
- * `test/RunTests.hx` used to carry one `addCase(new X())` per class, 758 of
- * them, each needing its own `import`. Two costs came with that: a class
- * whose line was never added ran nowhere and said nothing (S48 found 167
- * test methods dead behind a build guard for the same reason — a
- * registration that nothing cross-checks), and every parallel worker
- * touched the same file, so a wave of slices conflicted on it by
- * construction.
+ * Build macro behind `testkit.TestRegistry` — it DISCOVERS the suite's test classes
+ * instead of taking a hand-written list, which is a registration nothing cross-checks
+ * (a class whose line was never added ran nowhere and said nothing) and a file every worker touches.
  *
  * **The predicate is utest's own, deliberately.** `utest.utils.TestBuilder`
- * turns a method into a fixture when it is NOT static and its name starts
- * with `test` or `spec`; `utest.Runner.addITest` then runs a case only if
- * it implements `utest.ITest`. This macro asks exactly those two questions,
- * so "discovered" and "run" cannot drift apart. An explicit marker
- * (`@:testCase` on the class) was rejected for the opposite reason: it
- * re-creates the silently-missing-test failure one level up, since a
- * forgotten marker is as invisible as a forgotten `addCase`.
+ * turns a method into a fixture when it is NOT static and its name starts with
+ * `test` or `spec`; `utest.Runner.addITest` then runs a case only if it
+ * implements `utest.ITest`. This macro asks exactly those two questions, so
+ * "discovered" and "run" cannot drift apart. An explicit marker (`@:testCase` on
+ * the class) was rejected: a forgotten marker is as invisible as a forgotten `addCase`.
  *
- * **A class that cannot be registered is a build ERROR, never a skip.**
- * Private, abstract, sub-module or constructor-taking test classes are the
- * shapes that would otherwise be dropped in silence; each stops the build
- * naming itself and the fix. The one deliberate SKIP is a `utest.Test`
- * subclass with no fixture at all (a shared base class such as
- * `unit.check.NamingCheckTestBase`): utest registers no fixtures for it either,
- * so registering it would be a no-op — it is reported through
- * `TestRegistry.baseClasses()` rather than assumed.
+ * **A class that cannot be registered is a build ERROR, never a skip.** Private,
+ * abstract, sub-module or constructor-taking test classes each stop the build naming
+ * themselves and the fix. The one deliberate SKIP is a `utest.Test` subclass with no
+ * fixture at all (a shared base class): utest registers no fixtures for it either, and
+ * it is reported through `TestRegistry.baseClasses()` rather than assumed.
  *
  * **Scope is a whitelist on both edges, not a skip.** The walk covers every
- * package directory under the test classpath root, minus the two modules
- * asking for which would be circular (`SELF_MODULES`). Root-level modules are
- * not walked either — typing `RunTests` from inside the macro that builds its
- * registry is the same circle — but a root-level module that is not one of the
- * declared entry points STOPS THE BUILD naming itself, so a test class dropped
- * there is loud rather than invisible. A test class lives in a package;
- * `unit`, like every existing one.
+ * package directory under the test classpath root, minus the modules asking for
+ * which would be circular (`SELF_MODULES`); a root-level module that is not a
+ * declared entry point STOPS THE BUILD naming itself. A test class lives in a package.
  *
- * **The arm registry is checked BOTH ways at build time.**
- * `mutation-arms.json` beside this file declares one record per mutation arm —
- * the layer, the member and the cut — so a `@:killer` naming no declared arm
- * stops the build the way a control naming no arm already did, a declared arm
- * nobody names stops it too, and an arm whose member has been renamed or moved
- * out from under it stops it before anyone runs a sweep. Running one is
- * `tools/mutation-arm.sh <NAME>`.
+ * **The arm registry is checked BOTH ways at build time.** A `@:killer` naming
+ * no declared arm, a declared arm nobody names, and an arm whose member has been
+ * renamed or moved out from under it each stop the build before anyone runs a
+ * sweep (`tools/mutation-arm.sh <NAME>`).
  *
  * **What the typer cannot answer, the parser does.** A module whose every type
- * sits behind `#if macro` contributes NO type to this build, so asking the
- * compiler whether `anyparse.macro.WriterLowering` declares a member is asking
- * the wrong instrument — and until this slice the answer, `resolves to no
- * class`, refused the arm and left the whole macro-time half of the engine
- * unaddressable by one. `moduleTypes` now separates the two answers
- * `Context.getModule` gives: an absent module still stops the build, while an
- * arm whose type is real but invisible here is recorded in
+ * sits behind `#if macro` contributes NO type to this build; `moduleTypes`
+ * separates that answer from an absent module, and such an arm is recorded in
  * `TestRegistry.deferredArms()` and answered by `unit.MutationArmAddressTest`,
  * which parses the very file `tools/mutation-arm.sh` would patch.
  *
- * **No state.** Everything the macro emits is a fresh literal built per call
- * (`classNames()` returns a new array each time), so the generated
- * registration holds no `static var` — invariant 1.
- *
- * **No `#if macro` guard, and that is enforced.** The obvious spelling wraps
- * the helpers below in one; this module is only ever typed in macro context
- * (nothing but `@:build` names it), so the guard buys nothing — and
- * `unit.DeadTestGuardTest`, the gate S48 built, fails the suite on a
- * conditional region this build cannot prove live. It caught the first draft
- * of this file.
+ * **No state.** Everything the macro emits is a fresh literal built per call, so
+ * the generated registration holds no `static var` — invariant 1. **No `#if macro`
+ * guard, and that is enforced:** this module is only ever typed in macro context,
+ * and `unit.DeadTestGuardTest` fails the suite on a region this build cannot prove live.
  */
 class TestDiscovery {
 
@@ -407,9 +377,9 @@ class TestDiscovery {
 	 * The second half is what makes the registry more than a name list. An arm is
 	 * a recipe against one member; a slice that renames or moves that member
 	 * leaves the recipe pointing at nothing, and until somebody RUNS the arm
-	 * nothing says so — four of the `trivial-getter` lines S94's arm depends on had
-	 * already been moved into another file by S74, before the pin naming that arm
-	 * was ever read back. Asking the compiler costs nothing here: every module an
+	 * nothing says so — lines an arm depended on have been moved into another file
+	 * before the pin naming that arm was ever read back. Asking the compiler costs
+	 * nothing here: every module an
 	 * arm names is in the test build already — but it can only be asked about a
 	 * module this build TYPES. A module whose types are all behind `#if macro`
 	 * contributes none, and that is a third answer, not a failure: the arm goes
@@ -457,7 +427,7 @@ class TestDiscovery {
 	 *
 	 * The two answers `Context.getModule` gives for a module it produces no class from
 	 * are NOT the same fact, and the whole macro-time half of the engine sits on the
-	 * difference. Measured on `d86c958b` with a probe compiled against `src`:
+	 * difference. A probe compiled against `src` shows it:
 	 * `anyparse.macro.NoSuchModuleAtAll` THROWS `Type not found`, while
 	 * `anyparse.macro.WriterLowering` and `anyparse.macro.Lowering` each answer `ok, 0
 	 * type(s)` — the file is on the classpath and every type in it is behind
@@ -465,7 +435,7 @@ class TestDiscovery {
 	 * function's predecessor did, made every macro-time member unaddressable by an arm
 	 * and made a typo indistinguishable from one.
 	 *
-	 * There is no build-macro route around that, and both dodges were measured rather
+	 * There is no build-macro route around that, and both dodges were tried rather
 	 * than argued. `Context.getModule` types into the context being COMPILED, not the
 	 * one the macro runs in — `Context.defined('macro')` reads false inside a macro
 	 * function during a js build, and `Type.resolveClass` at macro runtime answers null

@@ -13,7 +13,7 @@ using StringTools;
 
 /**
  * End-to-end probes for the DX Tier-5 batch — six hxq usability wins
- * collected from a Slice-51 retrospective:
+ * collected from a retrospective:
  *  1. `refs`/`uses` 0-hit + lowercase camelCase name → sniff
  *     `src/anyparse/macro/*.hx` for a `<name>Field` Field-builder; when
  *     found, append a "macro-emitted helper" hint pointing at the
@@ -27,10 +27,10 @@ using StringTools;
  *  3. `apq probe` always stages the source bytes to a scratch slot so a
  *     follow-up `strip` / `recon --probe` / `writer-equals` can target them
  *     without re-heredoc-ing, and prints the RESOLVED path. Stdin source
- *     path also stages (avoids a second stdin read). Since S170 the slot is
- *     `$APQ_PROBE_PATH`, else `<temp root>/anyparse-last-probe.<pid>.hx` —
- *     it used to be one hard-coded `/tmp` path for the whole machine, which
- *     handed a second worker's source to the first one's `strip` (T700).
+ *     path also stages (avoids a second stdin read). The slot is
+ * `$APQ_PROBE_PATH`, else `<temp root>/anyparse-last-probe.<pid>.hx` —
+ * it used to be one hard-coded `/tmp` path for the whole machine, which
+ * handed a second worker's source to the first one's `strip`.
  *  4. `ANYPARSE_HXFORMAT_FORK` persistent cache — `defaultReconRoot`
  *     writes the env-supplied path to `~/.config/anyparse/fork_path`
  *     on every successful resolution AND falls back to that cache when
@@ -84,7 +84,7 @@ class ApqDxTier5CliTest extends Test {
 	public function testAstSelectTypeNameNoMatchIsAUsageError(): Void {
 		// `HxCatchClause` is a TYPEDEF name, not a kind this grammar's parser projects, so no file
 		// could ever match it — the cross-project hint that fires here is the whole point. This
-		// asserted exit 0 until S201: read-only or not, a spelling nothing can match is the user's
+		// used to assert exit 0: read-only or not, a spelling nothing can match is the user's
 		// mistake, and a script driving `ast` had no way to tell it from an absent node.
 		Assert.equals(2, Cli.run([
 			'probe',
@@ -237,7 +237,7 @@ class ApqDxTier5CliTest extends Test {
 	}
 	/**
 	 * Two `probe` PROCESSES, each with its own private temp root, must stage to
-	 * two different files — the S150 isolation mechanism (`RunTests.main` ->
+	 * two different files — the per-process isolation mechanism (`RunTests.main` ->
 	 * `CliFixture.isolateTempDir`) applied to the probe slot. A hard-coded
 	 * absolute slot makes both processes name one path, so whichever ran second
 	 * owns the bytes and the first one's follow-up `strip` / `recon --probe`
@@ -256,7 +256,7 @@ class ApqDxTier5CliTest extends Test {
 	 * `mutation-check.sh` builds the arm's worktree with `worker-build.sh <dir>
 	 * test` — the test runner only — and `bin/` is gitignored, so the fresh
 	 * worktree has no `bin/apq.js` at all and this method takes its not-built
-	 * branch. Measured: under `M-PROBE-SLOT-CONST` the three IN-PROCESS probe
+	 * branch. Under `M-PROBE-SLOT-CONST` the three IN-PROCESS probe
 	 * fixtures go red and this pair stays green. Those three kill the arm; this
 	 * pair is what proves the fix end to end.
 	 */
@@ -283,7 +283,7 @@ class ApqDxTier5CliTest extends Test {
 
 	/**
 	 * The shape the campaign actually runs in: two workers share ONE `$TMPDIR`
-	 * (measured — on macOS every process of one user inherits the same
+	 * (on macOS every process of one user inherits the same
 	 * `/var/folders/…/T`, and no worker sets its own). A temp-root base alone
 	 * therefore separates nothing; the slot name has to carry the writing
 	 * process's own identity too.

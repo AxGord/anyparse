@@ -156,7 +156,7 @@ class ApqDxTier4CliTest extends Test {
 		final saved: Null<String> = Sys.getEnv('ANYPARSE_HXFORMAT_FORK');
 		final savedHome: Null<String> = Sys.getEnv('HOME');
 		// Scope HOME too — `resolveForkPath` falls back to the `$HOME/.config/anyparse/fork_path`
-		// cache (`2ff3a397`), which resolves a fork and turns this into a clean run. Restore is
+		// cache, which resolves a fork and turns this into a clean run. Restore is
 		// inline and re-raises, for the reason spelled out in the twin.
 		var raised: Null<Exception> = null;
 		try {

@@ -20,59 +20,40 @@ import sys.io.File;
 
 /**
  * The differential pin between the THREE answers this project holds to "which bytes of a Haxe
- * file are not code": the hand byte scanner
- * behind the seam (`HaxeLexicalRegions.scan`, reached as `GrammarPlugin.lexicalRegions`), the
- * writer's comment lexer (`HaxeLexicalRegions.scanComments`, reached as the
- * `anyparse.format.comment.CommentScan` the guard is handed), and the GENERATED PARSER's literal
- * nodes. The first two are separate functions of one class and must stay so — see below. Nothing pinned them
+ * file are not code": the hand byte scanner behind the seam (`HaxeLexicalRegions.scan`, reached
+ * as `GrammarPlugin.lexicalRegions`), the writer's comment lexer (`HaxeLexicalRegions.scanComments`,
+ * reached as the `anyparse.format.comment.CommentScan` the guard is handed), and the GENERATED
+ * PARSER's literal nodes. The first two are separate functions of one class and must stay so. Nothing pinned them
  * against each other before this class, and `RefactorSupport.collectCommentTokens` — most of the
  * tool — reads the first one to gate DELETES.
  *
- * ## The contract, stated before any assertion
- *
- * The three answers are not interchangeable, and a pin that hid the differences would prove
- * nothing. What each one is:
- *
+ * The three answers are not interchangeable, and a pin that hid the differences would prove nothing:
  *  - **The scanner** emits FLAT, non-overlapping, OUTERMOST regions. A `${ … }` interpolation
- *    hole is CODE inside a string literal, but the region model has no way to say so: the whole
- *    `'…'` literal is ONE `StringLit`, holes included, and a literal nested in a hole opens no
- *    region of its own. That flatness is deliberate — `LexicalRegions.regionAt` returns the FIRST
- *    containing region, so nesting could not be expressed anyway.
- *  - **`scanComments`** answers only about comments, and it walks INTO an interpolation
- *    hole, because a comment written there is a comment the writer must not delete. It therefore
+ *    hole is CODE inside a string literal, but the whole `'…'` literal is ONE `StringLit`, holes
+ *    included, and a literal nested in a hole opens no region of its own — deliberate, since
+ *    `LexicalRegions.regionAt` returns the FIRST containing region and could not express nesting.
+ *  - **`scanComments`** answers only about comments, and it walks INTO an interpolation hole,
+ *    because a comment written there is a comment the writer must not delete. It therefore
  *    reports a token the scanner deliberately does not — the one place the two legitimately
  *    disagree, pinned by name in `testCommentInsideAnInterpolationHoleIsTheOneDisagreement`.
- *  - **The tree** carries a node per literal, nested ones included, and carries NO comments at
- *    all (they are trivia). Its literal nodes are `SingleStringExpr` / `DoubleStringExpr` /
- *    `RegexLit`; reduced to the outermost of those, its spans are directly comparable to the
- *    scanner's — same `[from, to)` convention, delimiters included on both sides.
- *
- * ## What is asserted, and why that shape catches the two historical corruptions
+ *  - **The tree** carries a node per literal, nested ones included, and NO comments (trivia).
+ *    Its literal nodes are `SingleStringExpr` / `DoubleStringExpr` / `RegexLit`; reduced to the
+ *    outermost of those, its spans are directly comparable to the scanner's — same `[from, to)`
+ *    convention, delimiters included on both sides.
  *
  * The load-bearing arm is `testEveryTreeLiteralIsExactlyOneScannerRegion`: every outermost
- * literal NODE must be an EXACTLY-equal scanner region. Exact rather than contained is what makes
- * it a pin on both failure directions the scanner's own doc records:
+ * literal NODE must be an EXACTLY-equal scanner region. Exact rather than contained pins both
+ * failure directions the scanner's own doc records: `skipStringLiteral` once mis-paired the quotes
+ * of `'${cond ? '// note' : X}'`, so the `//` inside opened a comment region OVER LIVE SOURCE and
+ * `unused-import --fix` deleted an import that line was using (under-reaching leaves the outer
+ * literal's node span matching NO region); and a regex body may legally contain a comment opener
+ * (`~/[\/*]/`), which without the regex arm started a phantom block comment running to EOF
+ * (over-reaching swallows every later literal, so their node spans match no region either).
  *
- *  - `skipStringLiteral` mis-paired the quotes of `'${cond ? '// note' : X}'`, so the region ended
- *    mid-expression and the `//` inside opened a comment region OVER LIVE SOURCE —
- *    `unused-import --fix` then deleted an import that line was using. Under-reaching that way
- *    leaves the outer literal's node span matching NO region.
- *  - a regex body may legally contain a comment opener (`~/[\/*]/`), and without the regex arm
- *    that opener started a phantom block comment running to EOF. Over-reaching that way swallows
- *    every later literal, so their node spans match no region either.
- *
- * Both corruptions are fixed today; this class is what keeps them fixed, and what makes the next
- * divergence visible instead of silent.
- *
- * ## Scope and cost
- *
- * The sweeps run over `src` and `test` — 1553 files, both arms measured at 2.0 s wall together,
- * of which the parse is nearly all. The same two arms were also run once, out of tree, over the
- * haxe-formatter `.hxtest` corpus (1890 sources), Pony, the haxe-formatter sources and the Haxe
- * 4.3.7 standard library: 6784 sources, ZERO comment divergences and ZERO tree literals missing
- * from the scanner. The three classes of literal the tree cannot see are all scanner-ONLY and are
- * pinned as fixtures below, not as a sweep, precisely because they are a property of Haxe rather
- * than of this project's sources.
+ * The sweeps run over `src` and `test`, and the same two arms were run once, out of tree, over the
+ * haxe-formatter corpus, Pony, the haxe-formatter sources and the Haxe standard library with no
+ * divergence. The three classes of literal the tree cannot see are all scanner-ONLY and are pinned
+ * as fixtures below, not as a sweep, because they are a property of Haxe rather than of this project's sources.
  */
 @:nullSafety(Strict)
 class LexicalRegionAgreementTest extends Test {
@@ -180,7 +161,7 @@ class LexicalRegionAgreementTest extends Test {
 	 * refuse a round trip that would delete it — and is NOT one for the scanner, whose flat region
 	 * model cannot nest a comment inside a string and whose consumers must never see a comment
 	 * region opened inside a literal. Both answers are correct for their reader. The construct
-	 * does not occur in any of the 6784 sources measured, which is why the sweeps above are green.
+	 * does not occur in any real source swept, which is why the sweeps above are green.
 	 */
 	public function testCommentInsideAnInterpolationHoleIsTheOneDisagreement(): Void {
 		final block: String = "class C { var a = '${ /* c */ x }'; }";
@@ -200,10 +181,10 @@ class LexicalRegionAgreementTest extends Test {
 	 * survives only as trivia — and a quoted object-literal KEY, which the projection folds into
 	 * the field node's name slot. The scanner sees all three.
 	 *
-	 * This is the measured reason a tree-derived `lexicalRegions` cannot replace the scan: over
-	 * the haxe-formatter corpus 34 of 1775 PARSED sources carry such a literal, and over Pony plus
-	 * the Haxe 4.3.7 standard library 83 of 3340. The direction is uniformly scanner-only, which
-	 * is the safe one — an unmasked region costs a refusal, never a delete.
+	 * This is the reason a tree-derived `lexicalRegions` cannot replace the scan: a small but real
+	 * share of parsed sources in every corpus swept carries such a literal. The direction is
+	 * uniformly scanner-only, which is the safe one — an unmasked region costs a refusal, never a
+	 * delete.
 	 */
 	public function testTheTreeCannotSeeAStringLiteralInThreePositions(): Void {
 		assertScannerOnlyLiteral("package p;\n#if (haxe_ver >= '4.0.0')\nclass C {}\n#end", "'4.0.0'");
@@ -215,8 +196,8 @@ class LexicalRegionAgreementTest extends Test {
 	 * The other half of the same crux: the ops run this scan on RAW, possibly mid-edit text, and
 	 * a parse has NO answer there — `RefactorSupport.nameBoundInRange` says so in code, falling
 	 * back to the pure text scan the moment `classifyOccurrences` reports a parse failure. Both
-	 * fixtures here fail to parse and both are answered by the scanner. Measured over the corpus,
-	 * 115 of 1890 sources (6.1 %) do not parse at all.
+	 * fixtures here fail to parse and both are answered by the scanner, and a visible share of
+	 * the corpus does not parse at all.
 	 */
 	public function testTheScannerAnswersWhereNoParseCan(): Void {
 		assertUnparseableButScanned('class C { /* open\nvar a = 1;', 1);
@@ -289,9 +270,9 @@ class LexicalRegionAgreementTest extends Test {
 
 	/**
 	 * The two comment lexers on the shapes that DISCRIMINATE them. The whole-tree sweep above is
-	 * green on 6784 real sources and stays green when `CommentInventory`'s regex arm is deleted —
-	 * measured, an explicit mutation arm — because no real file carries a regex body holding a
-	 * comment opener. A sweep that cannot fail on a mutation is not pinning it, so the adversarial
+	 * green on every real source and stays green when `CommentInventory`'s regex arm is deleted
+	 * (an explicit mutation arm), because no real file carries a regex body holding a comment
+	 * opener. A sweep that cannot fail on a mutation is not pinning it, so the adversarial
 	 * shapes are named here: each is one where a lexer missing an arm opens a comment over live
 	 * source, which is the corruption class this whole class exists for.
 	 */

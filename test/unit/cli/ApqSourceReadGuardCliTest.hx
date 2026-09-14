@@ -12,11 +12,9 @@ import utest.Test;
  * budget, with the selector menu the reader needed in order to narrow it.
  *
  * `source` is the gate-blessed replacement for `cat`, and with no `--range` /
- * `--select` it behaved exactly like one. Measured on one real session: 7 files,
- * 1270 lines dumped whole, ~100 of them used (≈8%), two files needed nothing at
- * all. On THIS tree the three largest `src` files cost 262 830 / 186 685 /
- * 168 070 bytes of stdout — 617 585 for the three, against 6 994 for the three
- * refusals that replace them.
+ * `--select` it behaved exactly like one. In a real session most of the lines
+ * dumped whole went unused, and a refusal costs a small fraction of the bytes
+ * the dump of a large file does.
  *
  * The reason it is a TOOL fix and not a discipline one: `--select` needs a member
  * NAME, and on first contact with a file the only way to learn one was to dump

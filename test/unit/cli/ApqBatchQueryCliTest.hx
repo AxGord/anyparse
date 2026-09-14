@@ -10,11 +10,10 @@ import utest.Test;
  * unambiguous.
  *
  * One name per process is one ROUND per name at the call site, and a round is
- * the whole context re-sent. Measured on this tree 2026-09-07: three
- * `refs <name> src --decls` calls cost 5108 bytes of output over 3 rounds; the
- * same three names batched cost 1191 bytes over 1. What a batch does NOT buy is
- * CPU — the walkers pre-filter by raw substring, so a name costs 0.23 s whether
- * it is alone or not; the saving is rounds and stderr.
+ * the whole context re-sent; batching the names cuts the output to a fraction
+ * and the rounds to one. What a batch does NOT buy is CPU — the walkers
+ * pre-filter by raw substring, so a name costs the same whether it is alone or
+ * not; the saving is rounds and stderr.
  *
  * THE GRAMMAR. The second positional of every one of these commands is a SCOPE
  * spec today, and several of them are legal (`apq refs X src test`), so "the

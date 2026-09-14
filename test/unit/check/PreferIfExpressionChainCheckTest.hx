@@ -532,7 +532,7 @@ class PreferIfExpressionChainCheckTest extends Test {
 	/**
 	 * The edit replaces the ternary only, never the parens around it — which is the whole reason
 	 * this host is safe. Dropping them would let a FOLLOWING operand bind into the `else` branch:
-	 * measured on `-cpp` and `--interp`, `h - if (c) 1.0 else 2.0 - ih` is 118 where the
+	 * on `-cpp` and `--interp` alike, `h - if (c) 1.0 else 2.0 - ih` is 118 where the
 	 * parenthesised form is 78, and both compile, so nothing would catch the change.
 	 */
 	public function testParenthesisedOperandKeepsItsParens(): Void {

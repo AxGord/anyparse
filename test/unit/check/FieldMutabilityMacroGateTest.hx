@@ -18,12 +18,12 @@ import utest.Test;
  * every non-inline `var` field and moves the assignment into the constructor. `var` -> `final`
  * then gives `Static final variable must be initialized`, and a field promoted to `static` gives
  * `Cannot access static field from a class instance`, raised from inside the
- * builder. Ten fields in one file of the reporting tree, 25 types overall.
+ * builder.
  *
  * Which rules take the gate was itself a gap. `inline-constant` and `trivial-getter` consulted NO
  * build-macro predicate — not `@:build`, not `@:autoBuild`, not `@:genericBuild` — while the four
  * field rules, `member-order` and `prefer-inline` all did; the residue was visible in the
- * `@:genericBuild` fixture of `43ce9697` and left alone there. Both were measured on Haxe 4.3.7
+ * `@:genericBuild` fixture and left alone there. Both were tried on the compiler
  * before being gated: a builder that rewrites a `static final`'s initializer makes `inline-constant`'s
  * rewrite "Inline variable initialization must be a constant value", and a builder that reads the
  * backing field makes `trivial-getter`'s collapse `Unknown identifier`. Both compile before the fix
@@ -115,7 +115,7 @@ class FieldMutabilityMacroGateTest extends Test {
 	/**
 	 * `inline-constant` adds `inline` to a `static final` scalar, and a builder that REWRITES that
 	 * field's initializer makes the result "Inline variable initialization must be a constant value"
-	 * — measured on Haxe 4.3.7 with `@:build` on the class and with `@:autoBuild` reached through
+	 * — reproduced with `@:build` on the class and with `@:autoBuild` reached through
 	 * `implements`, which is the shape the file itself carries no metadata for. The rule consulted no
 	 * build-macro predicate at all until then; `@:coreApi`'s gate landed beside it and left this one.
 	 */
@@ -128,7 +128,7 @@ class FieldMutabilityMacroGateTest extends Test {
 
 	/**
 	 * `trivial-getter` DELETES the getter and the backing field, so a member the builder generates
-	 * around them loses its referent — measured, `Unknown identifier : _active` from inside the macro.
+	 * around them loses its referent — `Unknown identifier : _active` from inside the macro.
 	 * Same three spellings, same control.
 	 */
 	public function testATrivialGetterOfAMacroBuiltTypeIsNotCollapsed(): Void {

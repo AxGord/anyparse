@@ -46,8 +46,8 @@ class DocCommentContinuationCheckTest extends Test {
 	 * The Haxe-standard-library / OpenFL doc style: no gutter at all, body indented one level
 	 * under the opener, markdown bullets inside. Reading only the FIRST CHARACTER of the opening
 	 * interior line counted a `*` bullet as a gutter and reported every line of such a block —
-	 * measured, 36 findings over the 2624 stdlib files and 254 over openfl, and the fix DELETED
-	 * the bullet markers. A gutter star is followed by whitespace; a bullet's is the whole marker.
+	 * hundreds of findings over the stdlib and openfl, and the fix DELETED the bullet markers.
+	 * A gutter star is followed by whitespace; a bullet's is the whole marker.
 	 */
 	public function testGutterlessBulletBlockIgnored(): Void {
 		final src: String = 'class C {\n\t/**\n\t\tThis value controls the messages, a sum of some of these flags:\n\n'
@@ -246,13 +246,13 @@ class DocCommentContinuationCheckTest extends Test {
 	 * deeper than its delimiters and carries no star at all. The rule required a gutter star on the
 	 * first interior line, so this whole family fell through.
 	 *
-	 * ⚠️ The 227 lines in 23 files S23 measured are NOT this family's — that population is what the
-	 * STAR arm found on this repository's own ` * `-guttered tree, and an earlier draft of this doc
-	 * claimed it as evidence for the gutter-less arm. The arm's real evidence is a producer/detector
-	 * pair the slice ran end to end: `hxq comment-rewrite` at the base commit, splicing a line into
+	 * ⚠️ The population the STAR arm found on this repository's own ` * `-guttered tree is NOT this
+	 * family's, and an earlier draft of this doc claimed it as evidence for the gutter-less arm. The
+	 * arm's real evidence is a producer/detector
+	 * pair run end to end: `hxq comment-rewrite` at the base commit, splicing a line into
 	 * the stdlib's own `haxe/ds/StringMap.hx` doc, landed it at column 0; `fmt --list` called the
 	 * result canonical and the rule at base reported nothing; this arm reports exactly that line, and
-	 * its `--fix` reproduces byte for byte what the fixed splice writes. Across 4599 external files
+	 * its `--fix` reproduces byte for byte what the fixed splice writes. Across the external corpora
 	 * the arm's own finding count is zero.
 	 */
 	public function testGutterlessBlockBrokenIndentReported(): Void {
@@ -265,7 +265,7 @@ class DocCommentContinuationCheckTest extends Test {
 	}
 
 	/**
-	 * A line SHALLOWER than the delimiters, not merely at them — what a hand edit or a pre-S23 splice
+	 * A line SHALLOWER than the delimiters, not merely at them — what a hand edit or an old splice
 	 * into an indented block leaves. An earlier draft aborted the whole judgement on any line whose
 	 * indentation did not start with the block's, which acquitted this outright.
 	 */
@@ -299,7 +299,7 @@ class DocCommentContinuationCheckTest extends Test {
 		Assert.equals(0, violations(src).length);
 	}
 
-	/** A block at column 0 whose interior sits at one tab, with one line flush left — the S38 shape. */
+	/** A block at column 0 whose interior sits at one tab, with one line flush left. */
 	public function testGutterlessTypeLevelFlushLeftLineReported(): Void {
 		final src: String = '/**\n\tOne line.\nLost every level.\n\tThree.\n**/\nclass C {}';
 		Assert.equals(1, violations(src).length);

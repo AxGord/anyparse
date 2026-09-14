@@ -30,7 +30,7 @@ class UnguardedNullableDerefTest extends Test {
 	 * `Reflect.copy` is seeded through `NullableSource.crossFileReturnCallSource`, which needs
 	 * the INDEX to hold a type of that name whose member returns a `Null<T>`. A one-file probe
 	 * never reaches that arc at all, so a fixture written as one passes whatever the exclusion
-	 * list says — measured: it survived `M-NULLABLE-FLOW-EXCLUDE-NONE` while its `Array.pop`
+	 * list says — it survived `M-NULLABLE-FLOW-EXCLUDE-NONE` while its `Array.pop`
 	 * neighbours died. `other` is the same signature under a name the list does not carry, and
 	 * it is what makes the pair discriminate.
 	 */
@@ -475,8 +475,8 @@ class UnguardedNullableDerefTest extends Test {
 	 * SEMANTICS — and parametricity admits `function f<T>(x: Null<T>): Null<T> return null;`
 	 * with exactly that type, so nothing over the signature separates the two. The sound
 	 * alternative, `TypeResolver.isProvablyNonNull`, needs `@:nullSafety` active at both ends
-	 * and moved 0 of the 6 real sites this exclusion moves: three `opt.<field> = …` writes
-	 * after `Reflect.copy(HaxeFormat.instance.defaultWriteOptions)` in this project and two
+	 * and moves NONE of the real sites this exclusion moves: `opt.<field> = …` writes
+	 * after `Reflect.copy(HaxeFormat.instance.defaultWriteOptions)` in this project and
 	 * `s.<field> = …` writes in `pony/pixi/PixiExtends.hx`, whose arguments are a non-null
 	 * field and a required parameter.
 	 *
@@ -503,7 +503,7 @@ class UnguardedNullableDerefTest extends Test {
 	}
 
 	/**
-	 * The exists-guard widened by S135: an EARLY-RETURN test, and a key that is a field path
+	 * The exists-guard widened: an EARLY-RETURN test, and a key that is a field path
 	 * rather than a plain ident. The real site is
 	 * `pony/src/pony/ui/touch/starling/touchManager/touchInputs/StarlingTouchInputVisualized.hx:69`,
 	 * which this rule reported twice until the guard reached both shapes. The control asserts
@@ -566,8 +566,8 @@ class UnguardedNullableDerefTest extends Test {
 	/**
 	 * A PARAMETER declared `Null<T>` is NOT seeded from its annotation: nullability there is a
 	 * contract with callers this walk cannot see, and the dominant idiom is an argument valid
-	 * under a mode a companion argument establishes. Measured over two real trees, seeding
-	 * parameters added 10 findings of which 9 were that one shape.
+	 * under a mode a companion argument establishes. Over two real trees, seeding
+	 * parameters added findings nearly all of which were that one shape.
 	 */
 	public function testDeclaredNullableParamNotFlagged(): Void {
 		Assert.equals(0, violations('class C { function f(e: Null<Char>) { e.width; } }').length);

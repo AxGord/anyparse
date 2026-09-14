@@ -14,7 +14,7 @@ import utest.Test;
  * rather than merged — and the default destination is `<TypeName>.hx` beside the
  * source, so no flag is needed to hit it.
  *
- * Measured on the base commit: with a sibling `Helper.hx` present,
+ * On the base commit, with a sibling `Helper.hx` present,
  * `apq extract-interface C.hx Helper` replaced that class, its doc and its
  * members with the generated interface, reported `wrote 2 file(s)` at rc 0, and
  * the preview had called the same file `created`. `--out <srcFile>` was worse

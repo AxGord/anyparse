@@ -10,12 +10,12 @@ using Lambda;
  * Pins the GENERATED registration layer — `testkit.TestRegistry`, built by
  * `testkit.TestDiscovery`.
  *
- * `test/RunTests.hx` used to carry 758 hand-written `addCase(new X())` lines
- * and their 758 imports. The cost was never the typing: a class whose line
+ * `test/RunTests.hx` used to carry a hand-written `addCase(new X())` line and
+ * an import per class. The cost was never the typing: a class whose line
  * was never added ran nowhere and said nothing, and no gate had an artifact
  * to compare against. This class is that artifact.
  *
- * THE SHAPE IS T130's — the shrinkage IS the acceptance test. The registered
+ * THE SHRINKAGE IS THE ACCEPTANCE TEST. The registered
  * NAMES are pinned, so narrowing the discovery predicate by one class turns the
  * suite red instead of quietly running one fewer, and the failure names the
  * class that vanished. That trades one silent failure for one loud chore:
@@ -30,10 +30,10 @@ using Lambda;
  * regenerated on every test added.
  *
  * Two more hand-maintained name lists live in this class and neither states
- * its own ordering rule anywhere else (T717): the pin census in
+ * its own ordering rule anywhere else: the pin census in
  * `testThePilotPinsReachTheGeneratedRegistry` is ALPHABETICAL by
- * `ClassName#testMethod` (matching `TestRegistry.pins()`'s own sort — verified
- * over all 418 entries); the arm census in `testTheArmRegistryReachesTheGeneratedRegistry`
+ * `ClassName#testMethod` (matching `TestRegistry.pins()`'s own sort); the arm
+ * census in `testTheArmRegistryReachesTheGeneratedRegistry`
  * follows `test/testkit/mutation-arms.json`'s own DECLARATION order, not
  * alphabetical — a new arm is appended where the JSON puts it, not where it
  * would sort. Both `Assert.same` calls there report a computed missing/extra
@@ -70,10 +70,10 @@ class TestDiscoveryParityTest extends Test {
 	 * The fully-qualified name of every class discovery must register, sorted.
 	 *
 	 * A COUNT was the obvious shape and it is the one representation that merges
-	 * silently and wrongly. Measured on 2026-09-04: the base was 768, two slices
-	 * each added ONE test class, and each wrote 769. Git took the second 769 as
-	 * text already applied — no conflict, both merges clean — and the tree then
-	 * claimed 769 while registering 770. A scalar cannot do better: every branch
+	 * silently and wrongly: two slices that each add ONE test class both write the
+	 * same incremented number, git takes the second as text already applied — no
+	 * conflict, both merges clean — and the tree then claims one class fewer than
+	 * it registers. A scalar cannot do better: every branch
 	 * that increments writes the same token, so a merge has nothing to disagree
 	 * about. A floor (`>= N`) merges harmlessly too, but it cannot name what
 	 * vanished and does not notice a class removed without a bump; the user chose
@@ -86,8 +86,8 @@ class TestDiscoveryParityTest extends Test {
 	 *
 	 * REGENERATE with `node bin/test.js --list-classes | LC_ALL=C sort` — and
 	 * REBUILD `bin/test.js` first. The probe reads the binary, not the tree: right
-	 * after a merge it answered 769 for a tree that registers 770, so the
-	 * verification step itself lied until `haxe test-js.hxml` had run. `LC_ALL=C`
+	 * after a merge it answers the previous tree's list, so the verification step
+	 * itself lies until `haxe test-js.hxml` has run. `LC_ALL=C`
 	 * is not decoration either: the assertion sorts the registry with
 	 * `Reflect.compare`, which is code-unit order, while a default macOS `sort`
 	 * collates by locale and puts a different list in front of you.
@@ -969,7 +969,7 @@ class TestDiscoveryParityTest extends Test {
 	 * A fixture-named method utest will never run — `static function testX`,
 	 * or one on a class that does not implement `utest.ITest`. The tree has
 	 * none today; this pin is what makes the first one arrive loudly instead
-	 * of joining the 167 dead methods S48 found.
+	 * of joining the dead methods a build guard once hid.
 	 */
 	public function testTheDeadFixtureCensusIsEmpty(): Void {
 		Assert.same([], TestRegistry.deadTests(), 'no fixture-named method is unreachable to utest');
@@ -984,9 +984,9 @@ class TestDiscoveryParityTest extends Test {
 	 * its own — this is the runtime half, and it is what keeps the metas from
 	 * being dropped in a refactor without anything noticing.
 	 *
-	 * Two hundred and sixty-three entries over sixty-nine classes, and still not a conversion of the
-	 * tree: sixteen are the seam coverage for the fourteen rules S73 touched
-	 * that its deciding arm cannot reach (docs/testing.md § "The fourteen rules S73 touched that its own arm cannot reach"),
+	 * Hundreds of entries over dozens of classes, and still not a conversion of the tree: some
+	 * are the seam coverage for the rules a slice touched that its deciding arm cannot reach
+	 * (docs/testing.md § "The fourteen rules S73 touched that its own arm cannot reach"),
 	 * where the arm name is the whole point — it is the only record that the fixture reaches the
 	 * moved code, and deleting the fixture now fails HERE rather than silently.
 	 */
@@ -2140,8 +2140,8 @@ class TestDiscoveryParityTest extends Test {
 	 * declare them at all.
 	 *
 	 * `anyparse/macro/*` is behind `#if macro`, so a non-macro build types none of it and
-	 * `Context.getModule` answers `ok, 0 type(s)` rather than throwing. Until S102 that
-	 * answer was collapsed with a module the classpath does not carry, and the whole
+	 * `Context.getModule` answers `ok, 0 type(s)` rather than throwing. That answer used to
+	 * be collapsed with a module the classpath does not carry, and the whole
 	 * macro-time half of the engine was unaddressable by an arm. This census is the build
 	 * macro naming what it handed on; `unit.MutationArmAddressTest` is what answers it,
 	 * out of the parser rather than the typer.
@@ -2216,7 +2216,7 @@ class TestDiscoveryParityTest extends Test {
 
 	/**
 	 * Enriches a plain failure message with the specific names two hand-maintained
-	 * lists disagree on (T717), so a divergence names the vanished or added record
+	 * lists disagree on, so a divergence names the vanished or added record
 	 * instead of leaving only the failing test METHOD to go on — `Assert.same`
 	 * discards its own computed diff whenever a caller passes a custom message. A
 	 * pass appends nothing: `baseMsg` reaches `Assert.same` unchanged.

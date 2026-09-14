@@ -118,7 +118,7 @@ class ApqHxqDxV8CliTest extends Test {
 
 	public function testStripPerPatternSoleBlockerExitsOk(): Void {
 		// One pattern alone unblocks parse; sibling pattern is redundant.
-		// VERDICT: "1 of 2 patterns unblock alone".
+		// VERDICT: one of the two patterns unblocks alone.
 		#if (sys || nodejs)
 		final input: String = CliFixture.write('apq_strip_pp', 'class C { var x = test( ; }');
 		Assert.equals(0, Cli.run([

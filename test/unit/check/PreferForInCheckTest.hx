@@ -51,7 +51,7 @@ class PreferForInCheckTest extends Test {
 	}
 
 	public function testVarBinderFixed(): Void {
-		// A `for` binder IS writable in Haxe (measured on --interp, -js and -cpp), so a `var`
+		// A `for` binder IS writable in Haxe (checked on --interp, -js and -cpp), so a `var`
 		// binding the body reassigns converts as safely as a `final` one.
 		Assert.equals(
 			fn('for (cp in it) {\n\t\t\tcp = 0;\n\t\t\tuse(cp);\n\t\t}'),

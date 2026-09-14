@@ -99,7 +99,7 @@ class ApqSourceMetaArgCliTest extends Test {
 		#if (sys || nodejs)
 		final f: String = writeFile('a\nb\n');
 		Assert.equals(2, Cli.run(['source', f, '--range', 'foo']), 'non-int range');
-		// T711: `Std.parseInt` parses a PREFIX and silently drops trailing
+		// `Std.parseInt` parses a PREFIX and silently drops trailing
 		// garbage (`Std.parseInt('205,225') == 205`) — a comma typo for the
 		// `:` separator used to read as the single line `205` with exit 0
 		// instead of a usage error naming the expected `L:L2` form.

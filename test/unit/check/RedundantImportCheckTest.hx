@@ -186,7 +186,7 @@ class RedundantImportCheckTest extends Test {
 
 	/**
 	 * A package wildcard declaring the same name is NOT a second binder: an explicit module import
-	 * outranks a wildcard in EITHER statement order (measured on 4.3.7), and the module import
+	 * outranks a wildcard in EITHER statement order (checked on the compiler), and the module import
 	 * survives the deletion — so the wildcard can never become the winner and the finding stands.
 	 */
 	public function testPackageWildcardDoesNotSuppressTheFinding(): Void {

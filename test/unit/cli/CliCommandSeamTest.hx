@@ -18,10 +18,10 @@ import sys.io.File;
  * The command seam — `CliCommand` + `CliRegistry` + `CliContext` — and the two
  * things a decomposition wave can silently break.
  *
- * S69 moved three commands of three different shapes (`cases` a read-only
- * walk, `set-comment` a single-file edit, `make-final` a `--scope` edit) out of
- * `Cli.dispatch`'s 200-line switch onto a registry the dispatcher reads. S70
- * repeats that move for the remaining 66, and each repetition can go wrong in
+ * The first wave moved three commands of three different shapes (`cases` a
+ * read-only walk, `set-comment` a single-file edit, `make-final` a `--scope`
+ * edit) out of `Cli.dispatch`'s switch onto a registry the dispatcher reads. The
+ * next repeats that move for the remaining commands, and each repetition can go wrong in
  * exactly two ways that nothing else notices:
  *
  * - the command is registered but never LISTED, because `printUsage` still
@@ -44,14 +44,14 @@ import sys.io.File;
 class CliCommandSeamTest extends Test {
 
 	/**
-	 * The three `apq --help` lines S69's registry took over, byte for byte as
-	 * the hand-written list printed them at base `cbde910e`.
+	 * The three `apq --help` lines the registry took over, byte for byte as
+	 * the hand-written list printed them at base.
 	 *
 	 * Written out here rather than derived from `summary()`, deliberately: a
 	 * pin built from the same declaration the code renders from cannot fail.
 	 * These bytes come from the BASE binary's output, so they discriminate
 	 * both halves of the rendering — the summary text AND the padding rule.
-	 * KILLED by `CliRegistry.HELP_NAME_WIDTH` 13 -> 12, and by any edit to a
+	 * KILLED by narrowing `CliRegistry.HELP_NAME_WIDTH` by one, and by any edit to a
 	 * piloted command's `summary()`.
 	 */
 	private static final PILOTED_HELP_LINES: Array<String> = [
@@ -87,7 +87,7 @@ class CliCommandSeamTest extends Test {
 	 * The lookup runs before the switch, so a leftover arm is unreachable — it
 	 * compiles, it never runs, and it keeps a second copy of the command's
 	 * entry point alive for someone to edit. This is the arm that catches a
-	 * half-finished S70 move.
+	 * half-finished move.
 	 */
 	public function testARegisteredCommandHasNoLeftoverDispatchArm(): Void {
 		#if (sys || nodejs)
@@ -108,7 +108,7 @@ class CliCommandSeamTest extends Test {
 	 * `--exit-on-empty` is a fact about ONE invocation, and the next one in the
 	 * same process must not see it.
 	 *
-	 * CONTROL at base `cbde910e`, where `dispatch` reset its `private static var`
+	 * CONTROL at base, where `dispatch` reset its `private static var`
 	 * on entry — the pin exists because moving that flag onto `CliContext` is
 	 * what removes the static, and nothing else would notice it coming back.
 	 * KILLED by arm `M-CLI-REQUIREMATCH-STATIC`, which gives

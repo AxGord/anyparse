@@ -15,7 +15,7 @@ import utest.Test;
  * never mentioned `Literaal`, and exited 0 — the same answer a correctly spelled kind gives
  * over code that genuinely holds none, so an empty run read as evidence about the code rather
  * than about the spelling. `search --kind` and `symbols --kind` did the same; `ast --select`
- * named the bad kind (S196) but still exited 0, so no script could tell the two apart.
+ * named the bad kind but still exited 0, so no script could tell the two apart.
  *
  * Driven through `Cli.run` IN PROCESS rather than as a child process: a child-process fixture
  * skips wherever `bin/apq.js` is not built, the mutation tracks included, and these assertions
@@ -183,7 +183,7 @@ class ApqKindVocabularyCliTest extends Test {
 	}
 
 	/**
-	 * `ast --select` on a kind no rule of the grammar projects: S196 gave it the message and
+	 * `ast --select` on a kind no rule of the grammar projects: the message came first and
 	 * left it at exit 0, so a script driving `ast` still could not tell a typo from an absence.
 	 *
 	 * KILLED by arm `M-AST-SELECT-UNKNOWN-KIND-EXIT-OK`, which drops the usage return and puts
@@ -224,7 +224,7 @@ class ApqKindVocabularyCliTest extends Test {
 	}
 
 	/**
-	 * The `ast` miss message itself, which no test covered when S196 wrote it: the vocabulary
+	 * The `ast` miss message itself, which no test covered when it was written: the vocabulary
 	 * clause AND the cross-project pointer, which is orthogonal to it — a TypeName typed into
 	 * `--select` is the commonest way to reach a kind no grammar projects, and `ast` is
 	 * single-file, so the walkers that would find the declaration have to be named.

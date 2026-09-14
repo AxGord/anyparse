@@ -13,10 +13,9 @@ import utest.Test;
  * What the command replaces is a two-step route with a GUESS in it: `lit --include-directives`
  * reaches a directive's text — the only thing about a region no node carries — but answers with a
  * `line:col` and nothing more, so the region's extent stays unknown and every site costs one
- * `source --range` over a window whose end is estimated. Measured on this tree for the define
- * `nodejs` over `src/anyparse/query`: 87 regions, 88 commands, 57 497 bytes of stdout, and 25 of
- * the 87 estimated windows never reached their own `#end`. `apq cond nodejs src/anyparse/query`
- * is one command and 40 750 bytes.
+ * `source --range` over a window whose end is estimated. For one define over one package that
+ * route is a command per region, and a good share of the estimated windows never reach their own
+ * `#end`; `apq cond` is one command and less output.
  *
  * The expectations below are the RENDERING — indentation, tag list, and the order branches come
  * out in. The mechanism they sit on (a branch is delimited by its directives, not by a node) is
@@ -92,7 +91,7 @@ class ApqCondCliTest extends Test {
 
 	/**
 	 * An expression-position `#if` is printed VERBATIM and marked `raw span`, under `--names` as
-	 * much as by default — the user-reported requirement this command must not miss: 2 of the 10
+	 * much as by default — the user-reported requirement this command must not miss: some of the
 	 * sites in the session that asked for it were this shape, and going silent on them is the one
 	 * failure mode worse than not having the command.
 	 */
@@ -186,7 +185,7 @@ class ApqCondCliTest extends Test {
 	 * A region matches on the define its condition MENTIONS, which is the difference from the route
 	 * this replaces: `#if (sys || nodejs)` is a site of both flags and matches neither `#if sys`
 	 * nor `#if nodejs` as text. The `lit` arm is the comparison, not decoration — it is how the
-	 * reported session missed 75 of the 87 sites in one scope.
+	 * reported session missed most of the sites in one scope.
 	 */
 	public function testACompoundConditionIsFoundWhereATextSearchMissesIt(): Void {
 		#if nodejs

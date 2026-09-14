@@ -13,16 +13,16 @@ import utest.Test;
  * What a `--fix` run says when it wrote NOTHING, which is the run it usually is.
  *
  * `--fix` behind a write op is scoped to the lines one edit touched, so it lands zero edits
- * most times it is asked — and it printed ~1450 bytes of rule accounting about them anyway:
+ * most times it is asked — and it printed a page of rule accounting about them anyway:
  * the per-rule unfixed ledger, the never-asked list, and the census, every sentence of which
- * is a statement about what the run WROTE. Measured on one `hxq lint <one file> --fix
- * --no-oracle` with no edit to make: 1819 bytes of stderr, of which 206 was the summary line
- * that carries the whole verdict.
+ * is a statement about what the run WROTE. On a zero-edit `hxq lint <one file> --fix
+ * --no-oracle` the summary line that carries the whole verdict was a small fraction of the
+ * stderr.
  *
  * So the accounting is gated on `edits > 0 || --verbose`, and the pin below is the pair — silent
  * on a zero-edit run, unchanged on a productive one. `LintFixSafePass.netNotice`'s
  * `--no-oracle` arm is the same shape and is asserted beside it: `--fix` on a write op passes
- * that flag for the reader, so narrating it back cost 161 bytes on every single one.
+ * that flag for the reader, so narrating it back cost a line on every single one.
  */
 @:nullSafety(Strict)
 class LintFixQuietDefaultTest extends Test {

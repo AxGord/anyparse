@@ -7,32 +7,26 @@ import utest.Assert;
 import utest.Test;
 
 /**
- * PROBE FAMILY walker sweep — the eight spine walkers that enumerated the
- * `If*` ctors by hand and fell through `case _` for the four width probes of
- * the family documented in `docs/architecture.md`
- * (`IfArrowContinuationFits`, `IfIndentWidthExceeds`,
+ * PROBE FAMILY walker sweep — the eight spine walkers that enumerated the `If*` ctors by hand
+ * and fell through `case _` for the four width probes of the family documented in
+ * `docs/architecture.md` (`IfArrowContinuationFits`, `IfIndentWidthExceeds`,
  * `IfNaturalFirstLineExceeds`, `IfGluedFirstLineExceeds`).
  *
- * `IfNaturalFirstLineExceeds` already had an arm everywhere; the other three
- * did not, so each walker silently answered its default (`false` / `null` /
- * "not visited") for any subtree sitting behind one. The hole predates the
- * family — before ω-inc5-cont the ctors appeared only on single-arg arrow
- * calls — but ω-case-sibling-symmetry and ω-glue-width put one on every
- * coordinated case body and every glued construct body, so the walkers now
- * meet them routinely.
+ * `IfNaturalFirstLineExceeds` already had an arm everywhere; the other three did not, so each
+ * walker silently answered its default (`false` / `null` / "not visited") for any subtree sitting
+ * behind one — and ω-case-sibling-symmetry and ω-glue-width put one on every coordinated case
+ * body and every glued construct body, so the walkers meet them routinely.
  *
- * Both corpora are 0-diff across the sweep, which is the byte net but also
- * the reason nothing in the end-to-end suite pins the new arms (the same
- * situation `DocMeasureFirstVisibleTextTest` records for its own promotion).
- * These cases pin them directly: every walker × newly-covered ctor is asserted
- * both to REACH the arm (the answer moves off the old default) and to read the
- * side the walker's contract picks. Most pairs need two assertions — a fixture
- * and its mirror — but where the walker returns a VALUE rather than a Bool
- * (`lastVisibleText`, `firstVisibleText`) one assertion does both jobs, since
- * the opposite branch carries a different token.
+ * Both corpora are byte-unmoved across the sweep, which is the byte net but also the reason
+ * nothing in the end-to-end suite pins the new arms (the same situation
+ * `DocMeasureFirstVisibleTextTest` records for its own promotion). These cases pin them directly:
+ * every walker × newly-covered ctor is asserted both to REACH the arm (the answer moves off the
+ * old default) and to read the side the walker's contract picks. Most pairs need a fixture and
+ * its mirror; where the walker returns a VALUE rather than a Bool (`lastVisibleText`,
+ * `firstVisibleText`) one assertion does both jobs, since the opposite branch carries a
+ * different token.
  *
- * SIDE per walker, derived from each walker's own contract rather than
- * copied from a neighbour:
+ * SIDE per walker, derived from each walker's own contract rather than copied from a neighbour:
  *
  * | walker | `IfArrowContinuationFits` | `IfIndentWidthExceeds` / `IfGluedFirstLineExceeds` |
  * |---|---|---|
@@ -45,13 +39,12 @@ import utest.Test;
  * | `WrapList.isMethodChainItem` | break | FLAT (diverges — see below) |
  * | `WrapList.isTopLevelChain` | break | break |
  *
- * The two body-placement probes wrap the SAME body object on both sides,
- * differing only in the separator before it, so a walker asking about
- * subtree CONTENT gets one answer either way and keeps its own established
- * side. The two divergences are the walkers that ask about SHAPE:
- * `hasTopLevelElse` counts `Nest` depth and only the break branch is
- * `Nest`-wrapped by construction; `isMethodChainItem` looks for a hardline
- * followed by a `.`, which the break branch's body separator would forge.
+ * The two body-placement probes wrap the SAME body object on both sides, differing only in the
+ * separator before it, so a walker asking about subtree CONTENT gets one answer either way and
+ * keeps its own established side. The two divergences are the walkers that ask about SHAPE:
+ * `hasTopLevelElse` counts `Nest` depth and only the break branch is `Nest`-wrapped by
+ * construction; `isMethodChainItem` looks for a hardline followed by a `.`, which the break
+ * branch's body separator would forge.
  */
 @:nullSafety(Strict)
 @:access(anyparse.format.wrap.BinaryChainEmit)

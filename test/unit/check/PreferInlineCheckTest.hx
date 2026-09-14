@@ -708,7 +708,7 @@ class PreferInlineCheckTest extends Test {
 	 * a defect of soundness, and the second assertion is what proves the loss is the SCOPE's doing:
 	 * with no resolution scope the same two files both flag. Keying the graph by qualified name is
 	 * the repair and it is not this rule's to make — the graph answers `unused-private`,
-	 * `unused-public-member` and `prefer-final-abstract-method` on the same key (T913).
+	 * `unused-public-member` and `prefer-final-abstract-method` on the same key, so it is a filed defect.
 	 */
 	@:pin('control')
 	@:killer('M-INLINE-SUBTYPE-REPORT-INDEX')

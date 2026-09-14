@@ -44,7 +44,7 @@ class ApqReconCliTest extends Test {
 		final saved: Null<String> = Sys.getEnv('ANYPARSE_HXFORMAT_FORK');
 		final savedHome: Null<String> = Sys.getEnv('HOME');
 		// `resolveForkPath` falls back to the `$HOME/.config/anyparse/fork_path` cache that
-		// `2ff3a397` added the day AFTER this test was written; with a real HOME the run
+		// was added after this test was written; with a real HOME the run
 		// resolves a fork and exits 0, so reaching the usage error needs both sources scoped.
 		// Both writes are process-wide and utest runs no teardown, so the restore sits inline and
 		// any throw is re-raised after it — an empty HOME leaking on would re-point the

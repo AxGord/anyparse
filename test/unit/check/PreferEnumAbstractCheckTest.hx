@@ -472,7 +472,7 @@ class PreferEnumAbstractCheckTest extends Test {
 	 * the conservative answer and the only live route into this operand.
 	 *
 	 * This guards behaviour that already held; what it adds is reach. This rule and
-	 * `trivial-getter` are the two whose S73-rewritten call sites no fixture exercised
+	 * `trivial-getter` are the two whose rewritten call sites no fixture exercised
 	 * (docs/testing.md § "The fourteen rules S73 touched that its own arm cannot reach"), and
 	 * both are the right-hand operand of a short-circuiting `||` whose left operand every
 	 * existing fixture already satisfied.

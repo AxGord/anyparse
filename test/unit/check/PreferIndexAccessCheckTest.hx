@@ -447,9 +447,9 @@ class PreferIndexAccessCheckTest extends Test {
 	 * `m[k] = { … }` goes through the `Map` abstract @:arrayAccess write, whose overload
 	 * resolution does not propagate the map value type into the argument the way a plain
 	 * `set(k, v)` call does — the literal keeps its own all-`var` inferred structure and fails
-	 * to unify with any value type carrying even one `final` field. Measured on Haxe 4.3.7
-	 * against this project's own `DefaultRepeatedArgument` / `RedundantLambdaWrapper` value
-	 * typedefs, which are all-`final`: the rewrite this check used to emit did not compile.
+	 * to unify with any value type carrying even one `final` field. Against this project's own
+	 * `DefaultRepeatedArgument` / `RedundantLambdaWrapper` value typedefs, which are
+	 * all-`final`, the rewrite this check used to emit did not compile.
 	 */
 	@:pin('control')
 	@:killer('M-PIA-OBJLIT-SET-FLAGGED')

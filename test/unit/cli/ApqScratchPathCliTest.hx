@@ -16,25 +16,25 @@ using StringTools;
  * Two commands that used to answer one worker with another worker's data, because the
  * path they read or staged into was named once for the whole machine.
  *
- * This is the same defect class S170 closed for `apq probe` (T700), in the two other
+ * This is the same defect class already closed for `apq probe`, in the two other
  * commands that carried it, and the reason it is worth its own suite is that neither
  * failure has a symptom: both processes exit 0 and both answers look right.
  *
  *  1. `apq test-summary` with no positional source read the constant `/tmp/test.out`.
- *     Measured on the pre-fix binary, two workers each writing their own suite log
- *     there and each summarising it, 12 interleaved rounds: one read a transcript it
- *     had not written 7 times, the other 6, every one at exit 0 — and in one round
- *     BOTH read a TORN interleave (`6 tests / 5 assertions`) that neither had written.
+ *     On the pre-fix binary, two workers each writing their own suite log there and
+ * each summarising it read a transcript they had not written in about half the
+ * rounds, every one at exit 0 — and once BOTH read a TORN interleave that neither
+ * had written.
  *     The fix is NOT a per-process path: a transcript is written by a different
  *     process, so nothing this one knows about itself can name it. `$APQ_TEST_OUT` or
  *     a usage error.
  *  2. `apq stdlib-dup` staged its generated probe as `<temp root>/apq-stdlib-dup/Probe.hx`
  *     — one directory and one fixed module name for the machine — and then spawned
  *     `haxe -cp <dir> --run Probe`. Two runs race between the write and the spawn.
- *     Measured, two one-candidate scopes, 12 rounds: both processes reported IDENTICAL
- *     findings every round, 7 of 12 wrong for one and 5 of 12 for the other, one of
- *     them naming `StringTools.endsWith` for a begins-with function and claiming
- *     agreement on 484 generated inputs. The work directory is per process now.
+ *     Two one-candidate scopes run side by side reported IDENTICAL findings every
+ * round, each wrong about half the time, one of them naming `StringTools.endsWith`
+ * for a begins-with function and claiming agreement on every generated input. The
+ * work directory is per process now.
  *
  * `$TMPDIR` is NOT what separates two workers and no fixture here may assume it is: on
  * macOS every process of one user inherits the same `/var/folders/…/T` (verified equal to
@@ -156,8 +156,8 @@ class ApqScratchPathCliTest extends Test {
 	 * A work directory that is a SYMLINK is refused, not adopted.
 	 *
 	 * `FileSystem.exists` follows the link, so without the guard the run stages its probe
-	 * through it AND — new in S171 — deletes every non-directory entry of whatever it points
-	 * at when the run ends. The sibling command grew this guard in S170
+	 * through it AND deletes every non-directory entry of whatever it points at when the run
+	 * ends. The sibling command carries the same guard
 	 * (`ProbeCommand.isStageTargetSafe`); this is the same one, and the victim file is what
 	 * makes the fixture discriminate: under `M-STDLIB-DUP-WORK-ANY-TARGET` the link is
 	 * adopted and `keepme.txt` is gone.
@@ -189,7 +189,7 @@ class ApqScratchPathCliTest extends Test {
 	 * machine-global file.
 	 *
 	 * `guard`, not `control`, for TWO independent reasons and either alone is enough. The
-	 * one S170 recorded: `mutation-check.sh` builds an arm's worktree with
+	 * one recorded for `apq probe`: `mutation-check.sh` builds an arm's worktree with
 	 * `worker-build.sh <dir> test` — the runner only — and `bin/` is gitignored, so the
 	 * fresh worktree has no `bin/apq.js` and this method takes its not-built branch. The
 	 * one it did not: even WITH an engine there a child runs a PRE-BUILT binary, so a cut
@@ -269,8 +269,8 @@ class ApqScratchPathCliTest extends Test {
 		Sys.putEnv('TEMP', tempStash);
 		if (raised != null) throw raised;
 		// The scope being candidate-free is what keeps a COMPILER out of the suite:
-		// `StdlibDifferential.interpret` spawns `haxe` per candidate with a 300 000 ms
-		// timeout. Nothing else here would notice a scan change that starts finding one —
+		// `StdlibDifferential.interpret` spawns `haxe` per candidate with a long timeout.
+		// Nothing else here would notice a scan change that starts finding one —
 		// the fixture would simply get slow, with no line saying why.
 		Assert.isTrue(
 			err.indexOf('drove 0 candidate(s)') != -1,

@@ -41,7 +41,7 @@ class LintReportChannelSliceTest extends Test {
 	/**
 	 * A machine format carries every finding the run produced; the text report still caps.
 	 *
-	 * RED at base on the two machine arms (both answered 1 of 2). The text arms are green at base
+	 * RED at base on the two machine arms (both answered the capped count). The text arms are green at base
 	 * BY CONSTRUCTION and are the discriminator: lift the cap for every format and the third
 	 * assertion goes red while the machine ones stay green.
 	 */

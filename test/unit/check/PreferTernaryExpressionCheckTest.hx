@@ -189,8 +189,8 @@ class PreferTernaryExpressionCheckTest extends Test {
 	 * licenses a bare `?:` there — but an if-expression can only REACH that position already
 	 * parenthesized (`if (c) p else q[i]` parses the index into the then-branch), and the
 	 * paren is a delimited host in its own right. So the receiver case is flagged by the
-	 * PAREN, not by the index slot, and the edit lands inside the parens it keeps — measured
-	 * identical on the pre-`IndexAccess` engine, i.e. not this arm's doing.
+	 * PAREN, not by the index slot, and the edit lands inside the parens it keeps — identical
+	 * on the pre-`IndexAccess` engine, i.e. not this arm's doing.
 	 */
 	public function testIndexSlotFlagged(): Void {
 		final es: Array<{ span: Span, text: String }> =

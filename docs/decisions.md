@@ -283,3 +283,64 @@ decided the question; it may not become a record of runs.
   layout became non-monotone in width (one line, then the ladder, then the cuddle as the width
   grows) because the closer's two columns and the pending space before `[` were outside the
   measure; the body is forced down and only the head is asked — `6b314d7d`
+- retiring the prose census's `control` lines by minting an arm per line → the rate is about one
+  arm per LINE, not per class, and a blunt arm on a fixture that is unchanged either way is the
+  vacuous pin the layer exists to prevent — `8a849023`
+- pinning the registered test classes as a COUNT → two branches that each add one class write the
+  same incremented number and git merges them clean, so the tree claimed one class fewer than it
+  registered; only a name list conflicts or merges both — `2caca4ed`
+- checking fragment arms with a plain substring test over the host FILE → some arms match only
+  through the whitespace-insensitive fallback and some occur twice in the file while once in the
+  node, so a strict gate fails healthy arms; the matcher `hxq patch` itself uses runs on the raw
+  slice and costs no writer round trip — `21d87213`
+- deriving `lexicalRegions` from the parse tree instead of the byte scanner → directive text and
+  quoted object-literal keys carry no node, a visible share of real sources does not parse at
+  all, and every divergence is scanner-only — `8867c7e7`
+- a build-macro route around `Context.getModule` answering `ok, 0 type(s)` for a `#if macro`
+  module (`Context.defined('macro')`, `Type.resolveClass`, a `@:build` on a type inside
+  `#if macro`) → each answers for the wrong context or is refused outright; the two answers are
+  separated instead and such arms are deferred to the parser — `9fa8c596`
+- arming the fourth block-ended Star rewind site (`lowerStarBlockEndedSepLast`) → its byte check
+  is evaluated suite-wide and the rewind never moves, because the only grammar routing to it has
+  no element rule that can leave trailing whitespace consumed — `7ad3ee1f`
+- sweeping `selfBreakingBraceBody`'s threshold slack instead of bounding it → nothing between the
+  two sampled thresholds moved anything in the suite or the corpus, so one fixture a column past
+  the boundary closes that side — `9e1db129`
+- demoting deleting (or shrinking) safe fixes to report-only when no compiler oracle is configured
+  → a fifth (or most) of a run's edits go with them, `unused-import`'s among the first;
+  `DefiniteAssignmentGuard` refuses the one deleting class the language itself refuses instead —
+  `6f684346`
+- a whole-resolution-scope (library included) write index for the field-immutability rules →
+  loses findings and gains none: a skip-parsing library source that merely spells the member name
+  vetoes, and structural conformance against a library structure vetoes past what can unify —
+  `cd79cfb4`
+- `import-block-order` blind to a foreign-package import splitting a `unit.*` run → a run ends
+  only at a blank line, a `using` / wildcard / alias, a comment or a non-import declaration; the
+  real file reported and one `--fix` sorted it — `2ed13deb`
+- refusing `prefer-ternary-return` cascade tails on SHAPE alone → a fifth of the findings would
+  have no replacement from any rule, so the narrowing is the conjunction of shape and comment —
+  `12683df6`
+- `TypeResolver.isProvablyNonNull` in place of the `Reflect.copy` name exclusion for the nullable
+  seed → it needs `@:nullSafety` active at both ends and moves none of the real sites the
+  exclusion moves — `daf1a095`
+- a finer super-call gate for `field-init-at-declaration` keeping an init that precedes `super(…)`
+  → a `super` call need not be a top-level statement (a branch-conditional one is legal Haxe), so
+  "precedes THE super call" often has no answer; the coarse gate's one lost cleanup per hundreds
+  of files is the accepted price — `508172fc`
+- `DocMeasure.flatTokenWidth` descending a `BodyGroup` to close the convergence tail → closes
+  three files and opens one, reformats dozens of this tree's files and makes `CollapsePass.hx`
+  itself a two-rewrite file — `f57325e5`
+- resolving the `BodyFit` / case-sibling pivot for the convergence tail → reformats files here and
+  on Pony and cannot be narrowed to the divergent population, because `HxExpr.ArrayExpr` is the
+  only Star that reflows source newlines, so every call-parameter list is in the same population —
+  `f57325e5`
+- `BodyFit.fitLineLayout` sending a body that does not fit on its own line to the glue gate →
+  closes one case-body file and glues a `for` / `if` body onto its header in ten others, plus two
+  more Pony drifts — `5c1cffd5`
+- charging a committed `BodyGroup` in BOTH first-line walkers (`flatFirstLineStep` and
+  `restNodeWidth`) → a nested committed body then reads as committed to the rest-of-stack
+  lookahead too and files reformat for the worse; charging the prefix without ending the line is
+  free and closes nothing — `5c1cffd5`
+- saturating a COMMITTED item's width in `WrapList.measureItems` to `MAX_ITEM_LEN` → closes two of
+  the reduced tail shapes and takes one file from three rewrites to two while reformatting eleven
+  files of this tree; saturating the `total` axis alone measures identically — `62ca1493`

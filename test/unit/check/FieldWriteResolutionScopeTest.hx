@@ -11,13 +11,13 @@ import utest.Test;
  * Which HALF of a resolution scope the two field-immutability rules read, and with what owner
  * narrowing.
  *
- * S95 put the write proof on the PROJECT scope (report UNION the declared `resolutionRoots`) and
- * measured the obvious wider variant — the whole resolution scope, library included — down. That
- * measurement re-run on this slice's base: a whole-scope index costs 12 of 121 findings and gains
- * none, and the losses are NOT one mechanism — 10 from `SymbolIndex.text.skippedMayReference` (a
- * skip-parsing library source that merely SPELLS the member name), 2 from structural conformance
- * against a library anonymous structure, and 0 from `declarationSiteOf`, whose 5 the write index
- * had already absorbed by holding the resolution-scoped index itself.
+ * The write proof sits on the PROJECT scope (report UNION the declared `resolutionRoots`); the
+ * obvious wider variant — the whole resolution scope, library included — loses findings and
+ * gains none, and the losses are NOT one mechanism: most from
+ * `SymbolIndex.text.skippedMayReference` (a skip-parsing library source that merely SPELLS the
+ * member name), a few from structural conformance against a library anonymous structure, and
+ * none from `declarationSiteOf`, whose share the write index had already absorbed by holding the
+ * resolution-scoped index itself.
  *
  * So the two halves answer different questions, and the split is per QUESTION, not per rule:
  *
@@ -151,7 +151,7 @@ class FieldWriteResolutionScopeTest extends Test {
 
 	/**
 	 * The same unresolved write in a declared `resolutionRoots` module DOES veto: those are the
-	 * project's own files, which is the whole reason S95 widened past the lint scope. The arm that
+	 * project's own files, which is the whole reason the proof widened past the lint scope. The arm that
 	 * kills it is the one tagging the project roots third-party — the library array carries them,
 	 * so the partition has to subtract them explicitly.
 	 */
@@ -179,7 +179,7 @@ class FieldWriteResolutionScopeTest extends Test {
 	 * hole in every proof — but only for a candidate it could reach, and a haxelib cannot name
 	 * a project type, so it reaches none of them. Unnarrowed the scan is keyed on the member
 	 * NAME alone, so any library source that merely SPELLS `slot` silences the rule: over the
-	 * Pony fork that is 11 of 121 findings, from seven skip-parsing haxelib sources.
+	 * Pony fork that is a tenth of the findings, from a handful of skip-parsing haxelib sources.
 	 *
 	 * This is what admitting the library to the checks' index must not cost, so it passes
 	 * before the slice too — there the library is not in that index at all. The arm that kills

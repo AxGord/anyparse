@@ -237,7 +237,7 @@ class FoldStringLiteralsCandidateGateTest extends FoldStringLiteralsCheckTestBas
 	 * declaration anywhere: the fall-through then reads the call as local, inherited or global and
 	 * lets it through. Fail-OPEN, on exactly the family that never resolves.
 	 *
-	 * Measured on Haxe 4.3.7: `untyped __lua__("{x=" + "1}")` compiles with NO diagnostic and emits
+	 * On the compiler itself, `untyped __lua__("{x=" + "1}")` compiles with NO diagnostic and emits
 	 * `__lua__(Std.string("{x=") .. Std.string("1}"))` — a call to a Lua function no runtime
 	 * declares; `js.Syntax.code` rejects the same shape with "must be a string constant".
 	 */

@@ -325,7 +325,7 @@ class PreferExistsCheckTest extends Test {
 
 	public function testInsertedUsingIsAtomicWithItsRewrites(): Void {
 		// Reverting the rewrite while KEEPING the inserted `using` leaves a file that still
-		// compiles, so the verifier could not tell that subset was wrong — measured as an orphaned
+		// compiles, so the verifier could not tell that subset was wrong — seen as an orphaned
 		// `using Lambda;` on a Map-receiver fixture before the grouping landed.
 		final src: String = file('for (x in xs) if (x > 2) return true;\n\t\treturn false;', false);
 		final edits: Array<GroupedEdit> = grouped(src);

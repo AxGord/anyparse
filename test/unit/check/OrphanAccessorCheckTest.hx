@@ -663,16 +663,16 @@ import utest.Test;
 	}
 
 	/**
-	 * T920: the fix side's unreadable probe reads the RESOLUTION scope, so a skip-parsing file the
+	 * The fix side's unreadable probe reads the RESOLUTION scope, so a skip-parsing file the
 	 * caller never asked to lint still refuses the deletion.
 	 *
-	 * Until S198 it read the REPORT index, which a one-file `--fix` fills with one file — so the very
-	 * sibling that makes the deletion unsafe was invisible to the only gate that asks about it. S191
-	 * had widened the accessor-CALL scan next to it and left this one narrow, which is why the shape
-	 * survived a slice that was looking straight at it. MEASURED end to end on a two-file project
+	 * It used to read the REPORT index, which a one-file `--fix` fills with one file — so the very
+	 * sibling that makes the deletion unsafe was invisible to the only gate that asks about it. The
+	 * accessor-CALL scan next to it had been widened while this one was left narrow, which is why the
+	 * shape survived a slice that was looking straight at it. End to end on a two-file project
 	 * declaring `resolutionRoots`, the sibling unparseable and calling `a.get_reached()`:
-	 * `hxq lint <the declaring file> --rule orphan-accessor --fix` wrote 2 deletions where the run
-	 * over both files wrote 1 and declined the second. Both arms now write 1 and decline.
+	 * `hxq lint <the declaring file> --rule orphan-accessor --fix` wrote both deletions where the run
+	 * over both files wrote one and declined the second. Both arms now write one and decline.
 	 *
 	 * RED at base.
 	 */
@@ -699,7 +699,7 @@ import utest.Test;
 	 *
 	 * The two members ask DIFFERENT names — this one the property alone — so neither fixture answers
 	 * for the other, and a repair of either alone leaves the rule confidently wrong in one direction.
-	 * MEASURED at the CLI on the same two-file shape, the sibling declaring `class D extends A` with
+	 * At the CLI on the same two-file shape, the sibling declaring `class D extends A` with
 	 * `data(get, never)`: the narrow run answered `[warning] get_data has no property to serve` while
 	 * the run over both files answered `[info] … may have no property to serve … B.hx`.
 	 *
@@ -721,7 +721,7 @@ import utest.Test;
 	 * The half of the widened probe that must NOT be narrowed per owner: a skip-parsing THIRD-PARTY
 	 * source spelling the ACCESSOR still declines a project-owned deletion.
 	 *
-	 * This is T868's argument one seam over. `RawSourceScan.admits` excludes an installed source from a
+	 * This is the library-half argument one seam over. `RawSourceScan.admits` excludes an installed source from a
 	 * proof about a project type because such a source cannot NAME that type — sound for a write and
 	 * for a subtype, and NOT sound here: `Reflect.field(o, 'get_data')` in a library reaches a project
 	 * member without spelling the project at all, and the accessor PREFIX is the same shape one step
@@ -729,7 +729,7 @@ import utest.Test;
 	 * property is asked per owner — the twin below.
 	 *
 	 * RED at base — the report index it read held no library at all, so nothing declined and the
-	 * deletion went through. Measured: the base-shaped cut `M-ORPHAN-UNREADABLE-REPORT-SCOPE` names
+	 * deletion went through. The base-shaped cut `M-ORPHAN-UNREADABLE-REPORT-SCOPE` names
 	 * this fixture among the three it kills.
 	 */
 	@:pin('control')

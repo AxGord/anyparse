@@ -852,8 +852,8 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 	 * camelCase spelling, because the capital that marks every other segment boundary does not exist
 	 * for a digit. `_u5_7` (an age band "U5 - 7") would fuse to `_u57` - a different reading, and one
 	 * `_u1_14` and `_u11_4` would BOTH land on - so the finding stays report-only rather than being
-	 * "corrected" into a worse name. Measured on a real tree: without this guard the split renamed
-	 * four such age-band fields.
+	 * "corrected" into a worse name. On a real tree, without this guard the split renamed
+	 * several such age-band fields.
 	 */
 	public function testFixRefusesAFieldWhoseUnderscoreSeparatesTwoDigitRuns(): Void {
 		final src: String = 'package pkg;\n\nclass C {\n\tprivate final _u5_7:Int = 1;\n\n\tpublic function f() { return _u5_7; }\n}';
@@ -896,15 +896,15 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 	/**
 	 * The three refusals above, now each saying which gate closed.
 	 *
-	 * `naming` reported 231 findings on an 851-file tree and wrote nothing, by either the per-file or
+	 * `naming` reported hundreds of findings on a real tree and wrote nothing, by either the per-file or
 	 * the cross-file path, and the run could say only `its fix was called for these findings and
 	 * returned no edit; the check declares neither NoAutofix nor a decline reason`. The rename path is
 	 * a chain of independent proofs and `Check.fix` answers all of their failures with the same empty
 	 * array, so "which one" was unanswerable from outside — and the first hypothesis anyone forms
-	 * about a wholesale zero is a gate closing by accident. Measured with the reasons in place it is
-	 * not: 198 of the 231 are a policy that states a format and carries no normalizer, and the rest
-	 * split across these gates (7 override, 5 non-member, 3 rename-unsafe, 3 unconfined, 15 an
-	 * unprovable cross-file hierarchy).
+	 * about a wholesale zero is a gate closing by accident. With the reasons in place it is
+	 * not: most are a policy that states a format and carries no normalizer, and the rest
+	 * split across these gates (override, non-member, rename-unsafe, unconfined, an unprovable
+	 * cross-file hierarchy).
 	 */
 	public function testEveryRefusedRenameNamesItsGate(): Void {
 		Assert.equals(
@@ -939,8 +939,8 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 	}
 
 	/**
-	 * The gate `testEveryRefusedRenameNamesItsGate` measured the largest share of, now open. 198 of
-	 * that run's 231 declines were one sentence — the policy came from a `checkstyle.json`, which
+	 * The gate `testEveryRefusedRenameNamesItsGate` found the largest share of, now open. Most of
+	 * that run's declines were one sentence — the policy came from a `checkstyle.json`, which
 	 * states a format and no correction, so `correctedName` had nothing to return — and the proof was
 	 * a ONE-VARIABLE matrix: same source, same finding, the same `MethodName` regex, only the
 	 * policy's ORIGIN differing, `fixed 0` against `fixed 2`. Both arms now write the same two edits,
@@ -973,7 +973,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 	 * the member does not have. `NamedDecl` carried a `Bool` for "reachable without an identifier
 	 * naming it", five disjoint mechanisms answered it, and one sentence spoke for all five — so a
 	 * `private function new()` declined with `the member carries metadata` and carries none.
-	 * Measured on the base engine, `lint --fix --rule naming` on exactly this fixture printed that
+	 * On the base engine `lint --fix --rule naming` on exactly this fixture printed that
 	 * sentence for both findings.
 	 *
 	 * ONE-VARIABLE matrix: two members of one class, one finding each, under one `MethodName` regex
@@ -1047,8 +1047,8 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 	 * Every other confinement fixture in this part puts the subtype / grant in the report scope, where
 	 * the report index sees it. Here the `@:access` grantee lives in a file the run does not lint but
 	 * the project's declared `resolutionRoots` do cover — and asked of the report index the member
-	 * reads as confined, which is the single-file rename's whole licence. Measured on a two-file probe
-	 * before the fix: `lint C.hx --rule naming --fix` wrote 2 edits in C.hx alone and left the
+	 * reads as confined, which is the single-file rename's whole licence. On a two-file probe
+	 * before the fix, `lint C.hx --rule naming --fix` wrote both edits in C.hx alone and left the
 	 * grantee's `c.My_Field` bound to a name that no longer existed. The widest index answers
 	 * `NOT_CONFINED` instead, and the cross-file path declines too (its own gate reads the report
 	 * index, on purpose — see `crossFileCandidate`), so the finding is reported and nothing is written.
@@ -1088,17 +1088,17 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 	}
 
 	/**
-	 * The REFLECTION guard and the REPORT SCOPE — T861, the last of the four report-index sites and
+	 * The REFLECTION guard and the REPORT SCOPE — the last of the four report-index sites and
 	 * the one that had never been probed.
 	 *
 	 * `reflectionNamesInOtherFiles` walked `index.allFiles()` and `index` was the REPORT index, so a
 	 * `Reflect.field(c, 'My_Field')` in a file the run does not lint contributed no name and the guard
-	 * had nothing to refuse on. Measured on a two-file probe under `resolutionRoots: ["src"]` before
-	 * the fix: `lint C.hx --rule naming --fix` wrote 2 edits in C.hx and left the reflective read
+	 * had nothing to refuse on. On a two-file probe under `resolutionRoots: ["src"]` before
+	 * the fix, `lint C.hx --rule naming --fix` wrote its edits in C.hx and left the reflective read
 	 * naming a field that no longer existed, where the same command over `src` refused with
 	 * `REFLECTION_NAME`. The scan took the WIDEST index for a while — the one the confinement proof beside it already took
-	 * in S179 — and since T868 it takes neither: the SCOPE is `ReflectionScan.scopeFiles`, shared with `unused-private`
-	 * and five other checks, and the index it is handed is only the fallback for a run that declared no scope. That is why
+	 * — and now takes neither: the SCOPE is `ReflectionScan.scopeFiles`, shared with `unused-private`
+	 * and other checks, and the index it is handed is only the fallback for a run that declared no scope. That is why
 	 * the arm cuts the seam call rather than the index argument; cutting the argument is a no-op now, which is the point.
 	 *
 	 * The second half of the fix is what makes THIS fixture able to reach the guard at all: the scan

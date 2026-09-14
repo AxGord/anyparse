@@ -251,11 +251,11 @@ class AvoidDynamicNarrowFixTest extends Test {
 	/**
 	 * Every declined `Dynamic` says WHY, and the two refusals are not one answer.
 	 *
-	 * This is Pony's largest rule at 470 findings, and every one of them used to answer "the check
+	 * This is Pony's largest rule by far, and every one of its findings used to answer "the check
 	 * declares neither NoAutofix nor a decline reason": its `fix` is only ever called by
 	 * `FixVerifier`, whose own re-collect threw the note away. The SPLIT matters as much as the note
-	 * — 436 of those findings are not this fixer's subject at all and 34 are locals whose uses pin no
-	 * single type down, so one sentence for both would send a reader looking for an inference failure
+	 * — most of those findings are not this fixer's subject at all and the rest are locals whose uses
+	 * pin no single type down, so one sentence for both would send a reader looking for an inference failure
 	 * that never ran.
 	 *
 	 * Three positions in one fixture, so a run that wrote one reason everywhere fails: a field, a

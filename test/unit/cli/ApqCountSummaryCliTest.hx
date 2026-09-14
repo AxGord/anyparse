@@ -23,9 +23,9 @@ import utest.Test;
  *
  * Three recorded defects of one shape: a summary whose WORDING promises one
  * quantity and whose VALUE is a different one. `fmt --write` was reported
- * saying `formatted 0 file(s), 3 failed` while 24 files were rewritten, and
- * once saying 5 where 4 differed; `lint --fix` said `fixed 4 issue(s)` for
- * three findings. Each cost a real measurement arm, because the line is the
+ * saying `formatted 0 file(s)` while files were rewritten, and once
+ * over-reporting by one; `lint --fix` said `fixed 4 issue(s)` for three
+ * findings. Each cost a real measurement arm, because the line is the
  * only thing a reader has in the middle of a long run.
  *
  * Every `fmt` assertion here compares the line against the BYTES — a snapshot
@@ -78,9 +78,9 @@ final class ApqCountSummaryCliTest extends Test {
 	}
 
 	/**
-	 * The T163 shape. A run that rewrote nothing must still say how many files it
+	 * The inert-looking run. A run that rewrote nothing must still say how many files it
 	 * CONSIDERED — `formatted 0 file(s)` alone is what read as "the run was inert"
-	 * on a tree of 870, and nothing on the line could tell that reading apart from
+	 * on a large tree, and nothing on the line could tell that reading apart from
 	 * the true one.
 	 */
 	public function testWriteOnACanonicalTreeStillNamesItsDenominator(): Void {
@@ -140,9 +140,9 @@ final class ApqCountSummaryCliTest extends Test {
 	}
 
 	/**
-	 * The T400 shape, and the reason the word was split at all. A `cp -R` copy of a
+	 * The read-only copy, and the reason the word was split at all. A `cp -R` copy of a
 	 * read-only tree kept its `444` mode bits, so `fmt --write` wrote NOTHING and said
-	 * `rewrote 0 of 2625 file(s), 1692 failed` — the same word a parse failure earns.
+	 * `rewrote 0 of N file(s), M failed` — the same word a parse failure earns.
 	 * Read as a source-side verdict, that line let an external comparison arm be
 	 * accepted while both of its sides were the identical untouched copy.
 	 *

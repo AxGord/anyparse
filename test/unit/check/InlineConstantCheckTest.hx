@@ -390,7 +390,7 @@ class InlineConstantCheckTest extends Test {
 
 	/**
 	 * A NON-inline `static final` target is a COMPILE ERROR to reference from an inline
-	 * initializer ("Inline variable initialization must be a constant value" - measured), so the
+	 * initializer ("Inline variable initialization must be a constant value"), so the
 	 * reference proves nothing. `@:keep` on the target makes the fixture's expected total 0.
 	 */
 	public function testRefToNonInlineTargetNotFlagged(): Void {
@@ -474,7 +474,7 @@ class InlineConstantCheckTest extends Test {
 	 * A PUBLIC constant of a `@:nativeGen` type is not inlined. The annotation is the grammar's
 	 * `nativeInteropDeclMetaName`: the type is emitted as a plain native type so that code OUTSIDE
 	 * this compilation holds it, and `inline` bakes every read here while leaving the field that
-	 * foreign side writes. Measured on Haxe 4.3.7 `-cs`: the emitted class is byte-identical either
+	 * foreign side writes. On the `-cs` target the emitted class is byte-identical either
 	 * way, only the call site changes.
 	 */
 	public function testNativeInteropPublicConstantSkipped(): Void {

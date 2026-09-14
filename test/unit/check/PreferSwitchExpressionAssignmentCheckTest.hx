@@ -561,7 +561,7 @@ class PreferSwitchExpressionAssignmentCheckTest extends Test {
 	 * means the region no longer talks about one binding, which is the same reason to bail as a
 	 * read. Killer for the arm that narrows the shared helper to `RefKind.Read` — with the Decl
 	 * arm gone the fix fires and collapses a `var` whose name a comprehension binder shadows,
-	 * and nothing else in 13 796 tests notices.
+	 * and nothing else in the whole suite notices.
 	 */
 	public function testARedeclarationInsideTheSwitchRefusesTheCollapse(): Void {
 		final shadowed: String =

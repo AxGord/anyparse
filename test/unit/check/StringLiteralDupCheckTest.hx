@@ -167,10 +167,10 @@ class StringLiteralDupCheckTest extends Test {
 	public function testTableEntryDoesNotInflateCodeGroup(): Void {
 		// THE FALSE-NEGATIVE PRICE, in its exact shape. At base the table entry counted as the
 		// third occurrence and the group was flagged; it no longer counts, so the two LOGIC
-		// sites stay below `minOccurrences` and nothing is reported. Measured over this
-		// project's `src/`: of the 113 groups the carve-out removes, 53 still hold two
-		// non-table occurrences like this one, 44 hold one, and 16 were pure vocabulary. A
-		// project that wants them back configures `string-literal-dup.minOccurrences: 2`.
+		// sites stay below `minOccurrences` and nothing is reported. Over this project's
+		// `src/` about half the groups the carve-out removes still hold two non-table
+		// occurrences like this one, most of the rest hold one, and a few were pure vocabulary.
+		// A project that wants them back configures `string-literal-dup.minOccurrences: 2`.
 		Assert.equals(0, violations(body('var v = ["aaaa", "bbbb", "cccc"]; trace("aaaa"); trace("aaaa");')).length);
 	}
 

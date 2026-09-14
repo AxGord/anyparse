@@ -10,8 +10,8 @@ import utest.Test;
  * assigned from a DIFFERENT module that the run never lints.
  *
  * That module is reachable — the project declares it under `apqlint.json` `resolutionRoots`, the
- * key whose whole purpose is that a narrow lint still answers over the whole project — but until
- * S95 neither rule looked there: both built their `FieldWriteIndex` from the report files alone.
+ * key whose whole purpose is that a narrow lint still answers over the whole project — but
+ * neither rule used to look there: both built their `FieldWriteIndex` from the report files alone.
  * The reproduction was `hxq lint src/anyparse/core --fix`, which turned three `public var` on
  * `LoweringCtx` into `public final` and left the project unable to compile, `src/anyparse/macro/Build.hx`
  * assigning all three. Under `--no-oracle` there is no revert net, so the broken tree stays on disk.

@@ -132,7 +132,7 @@ class LintScopeGateTest extends Test {
 	 * The third scope shape, and the only one the tool cannot repair: `resolutionLibs` declared and
 	 * `resolutionRoots` absent, which is what a real project out there looks like.
 	 *
-	 * Measured end to end on a two-file scratch project before this test was written:
+	 * Seen end to end on a two-file scratch project before this test was written:
 	 * `hxq lint A.hx --rule naming --fix` renamed a private field and left B.hx, an `@:access`
 	 * grantee, reading the old name — code that no longer compiles — while the same command under a
 	 * config adding `"resolutionRoots": ["src"]` DECLINED, naming confinement. Both arms of that probe
@@ -206,7 +206,7 @@ class LintScopeGateTest extends Test {
 	 * `hxq lint <file> --all --no-oracle` answers every reflection gate from the ONE file it was
 	 * handed, exactly the way the four tests above describe.
 	 *
-	 * Measured on a two-file probe in this tree with the key absent: `--fix --rule inline-constant`
+	 * On a two-file probe with the key absent: `--fix --rule inline-constant`
 	 * over the declaring file ALONE reported `fixed 1 issue(s)` and wrote `inline` onto a constant
 	 * that a sibling file spells as `Reflect.field(o, "PROBE_TOKEN")`, while the same command over
 	 * BOTH files refused — the one-file answer contradicted the two-file one. With the key it
@@ -216,9 +216,9 @@ class LintScopeGateTest extends Test {
 	 * The assertion is COVERAGE, and over EVERY config that governs a linted file: the roots must
 	 * span what the project's own gate lints (`tools/battery.sh` runs
 	 * `hxq lint --format json --all src test`), since a narrower root leaves the same hole one
-	 * directory smaller — dropping `test` measured 3 `unused-public-member` false positives across
+	 * directory smaller — dropping `test` surfaces `unused-public-member` false positives across
 	 * `src/` that the full scope suppresses. Declaring the roots only in the ROOT
-	 * document once left all 741 files under `test/` blind, because a nested
+	 * document once left the whole of `test/` blind, because a nested
 	 * `apqlint.json` REPLACED its parent; it now extends it, so one declaration
 	 * covers both trees and this assertion covers the fold.
 	 */
@@ -227,7 +227,7 @@ class LintScopeGateTest extends Test {
 		// BOTH probes, because the ANSWER has to hold for a file under either tree — but only the
 		// ROOT document declares the key now. `test/apqlint.json` used to need its own copy, since
 		// discovery stopped at the FIRST apqlint.json above the linted file and took it WHOLESALE;
-		// measured then, the same two-file probe under `test/` reported the finding for the file
+		// then the same two-file probe under `test/` reported the finding for the file
 		// alone and refused over both. `LintConfig.discover` now folds the whole chain, so this
 		// asserts INHERITANCE: revert it and the `test/` probe answers an empty scope again.
 		for (probe in [

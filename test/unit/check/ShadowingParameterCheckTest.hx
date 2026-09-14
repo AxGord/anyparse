@@ -18,10 +18,9 @@ import utest.Test;
  * of the outer side — so the pins here cover only what differs: which declaration family is
  * reported, and the two false-positive classes the parameter side brings with it.
  *
- * The DECISION, pinned by name: this is a separate rule id and it is `DefaultOff`. Measured on the
- * same two trees before it shipped — the Pony tree, 869 files: `shadowing-local` 29, this 6; this
- * project's `src test`, 1554 files: `shadowing-local` 0, this 0 (44 before the anonymous-structure
- * gate). Both existing bars stay byte-identical, which is the point of the separate id.
+ * The DECISION, pinned by name: this is a separate rule id and it is `DefaultOff`. On the Pony
+ * tree and on this project's own sources both existing bars stay byte-identical, which is the
+ * point of the separate id.
  */
 class ShadowingParameterCheckTest extends Test {
 
@@ -79,7 +78,7 @@ class ShadowingParameterCheckTest extends Test {
 	/**
 	 * A leading `_` is this project's declared-unused marker, exempted by `unused-parameter` on
 	 * exactly the same test: a binding the body never reads cannot be mistaken for the one it hides.
-	 * It is also what keeps the `_` shadowing `_` pair out — 15 of 22 raw findings on the Pony tree.
+	 * It is also what keeps the `_` shadowing `_` pair out — most of the raw findings on the Pony tree.
 	 */
 	public function testUnderscoreParameterExempt(): Void {
 		Assert.equals(0, violations('class C { function f(_:Int, a:Array<Int>) { a.map(_ -> 1); } }').length);
@@ -101,9 +100,9 @@ class ShadowingParameterCheckTest extends Test {
 
 	/**
 	 * The DECISION, as a gate rather than as prose: this rule is a registered builtin AND it is off
-	 * until a project asks for it. `shadowing-local`'s bar was 29 findings on the Pony tree and 0 on
-	 * this project's own sources before this rule shipped, and both stay exactly there because this
-	 * half never enters a default report.
+	 * until a project asks for it. `shadowing-local`'s bar on the Pony tree and on this project's
+	 * own sources stays exactly where it was before this rule shipped, because this half never
+	 * enters a default report.
 	 */
 	public function testRegisteredInBuiltinsAndOffByDefault(): Void {
 		Assert.notNull(Linter.byId('shadowing-parameter'));

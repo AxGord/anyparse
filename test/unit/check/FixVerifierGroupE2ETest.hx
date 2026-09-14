@@ -167,8 +167,8 @@ final class FixVerifierGroupE2ETest extends Test {
 		Assert.equals(0, result.partials.length, 'a single unit is not bisected, so no partial is reported');
 		Assert.equals(1, result.reverted.length, 'the file reverts whole');
 		// A revert names WHICH file and WHICH rule. Counting them alone forced an md5 snapshot of
-		// 809 files plus eleven single-rule runs to identify three reverts on a real tree, and still
-		// left two unattributed — the pair is the whole diagnostic.
+		// the whole tree plus a single-rule run per rule to identify a few reverts on a real tree,
+		// and still left some unattributed — the pair is the whole diagnostic.
 		Assert.equals('$dir/Main.hx', result.reverted[0].file);
 		Assert.equals('table-fake', result.reverted[0].rule);
 		Assert.equals(DEPENDENT_MAIN, File.getContent('$dir/Main.hx'), 'disk is byte-identical to the input');

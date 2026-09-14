@@ -79,9 +79,8 @@ class CommentWidthCheckTest extends Test {
 	 * The COMMENT has to be what puts the line over. Code already past the width would still be
 	 * over with the comment deleted, and its width is the formatter's business, not this rule's.
 	 *
-	 * This gate is the whole difference between 470 over-width comment lines in this tree and the
-	 * 468 the rule reports: the two it drops are `// noqa` markers riding 160-column string-literal
-	 * fixtures in `FoldStringLiteralsWidthCheckTest`. Asserted beside the narrow-code case, which
+	 * This gate is what keeps the `// noqa` markers riding over-width string-literal fixtures in
+	 * `FoldStringLiteralsWidthCheckTest` out of the report. Asserted beside the narrow-code case, which
 	 * IS a finding, so a rule that dropped every trailing comment would fail the pair.
 	 * Killed by arm `M-COMMENT-WIDTH-CODE-BLIND`.
 	 */
@@ -255,8 +254,8 @@ class CommentWidthCheckTest extends Test {
 	/**
 	 * A one-line block whose `*\/` shares the line is over-width by exactly the closer, and the body span stops two
 	 * characters short of it — so the reflow used to read a 141-column line as 139, decline it, and the rule reported
-	 * the closer as the reason. `closerCols` gives that one line its two columns back, and the twenty lines of this tree
-	 * in this state (all at 141 or 142) became ordinary fixable findings. Killed by arm `M-COMMENT-WIDTH-CLOSER-UNSEEN`.
+	 * the closer as the reason. `closerCols` gives that one line its two columns back, and such lines become
+	 * ordinary fixable findings. Killed by arm `M-COMMENT-WIDTH-CLOSER-UNSEEN`.
 	 */
 	@:pin('control')
 	@:killer('M-COMMENT-WIDTH-CLOSER-UNSEEN')

@@ -116,8 +116,8 @@ class SimplifyBooleanReturnChainCheckTest extends Test {
 	 * THE FLAGSHIP REGRESSION: a `String`-typed ordered guard condition keeps its `!( … )` wrap.
 	 * Before this rule threaded a type resolver the chain reducer flipped ordered comparisons
 	 * UNCONDITIONALLY, so this chain reduced to `s >= t && !b` — and with `s = null` the guard
-	 * chain returns `true` while that rewrite returns `false` (measured on `--interp` and `js`,
-	 * Haxe 4.3.7). Haxe has no non-nullable string type, so a `String` declaration proves
+	 * chain returns `true` while that rewrite returns `false` (checked on `--interp` and
+	 * `js`). Haxe has no non-nullable string type, so a `String` declaration proves
 	 * nothing about null and the flip is never licensed.
 	 */
 	public function testStringOrderedGuardKeepsWrap(): Void {

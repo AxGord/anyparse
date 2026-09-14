@@ -8,8 +8,8 @@ import utest.Test;
  * `apq lit` (and the shared `CliWalk.effectiveAutoLimit` / `limitEntries` / `reportCapHit` seam it
  * and six sibling walkers go through) truncates by `--limit` SILENTLY and in file order — an
  * explicit `--limit 40` over a big scope can cut the visible output at some alphabetically early
- * file with nothing on stderr to say so (S106 chased a structure that did not exist because of
- * exactly this — the census needed `--limit 9999`, and nothing told it to). `reportCapHit` is the
+ * file with nothing on stderr to say so (a census once chased a structure that did not exist
+ * because of exactly this — it needed a far larger `--limit`, and nothing told it to). `reportCapHit` is the
  * fix: one stderr line naming the cap, how many files made it into the output, how many files the
  * scan scope held, and the last file whose hits are shown — stdout and the exit code untouched.
  *

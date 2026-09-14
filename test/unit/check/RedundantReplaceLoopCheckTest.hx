@@ -91,7 +91,7 @@ class RedundantReplaceLoopCheckTest extends Test {
 	/**
 	 * The two-space squeeze. `' '` does not contain `'  '`, so the old arm-A condition held and
 	 * the autofix collapsed the loop — but `replace` is `split(S).join(B)`, and two adjacent
-	 * joins spell a fresh `'  '`: measured on Haxe 4.3.7 `--interp`,
+	 * joins spell a fresh `'  '`: on `--interp`,
 	 * `'a    b'.replace('  ', ' ')` is `'a  b'`, while the loop returns `'a b'`.
 	 */
 	@:pin('control') @:killer('M-SEAM-BLIND')

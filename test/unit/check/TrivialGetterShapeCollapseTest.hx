@@ -165,7 +165,7 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 	/**
 	 * A NEGATIVE numeric ctor-init relocates. `-1` projects as `negationKind(IntLit 1)`, so a
 	 * predicate reading only the literal kinds saw an operator node and pushed the write onto the
-	 * `@:bypassAccessor` arm — measured in review beside a byte-equivalent `255`, which folded clean.
+	 * `@:bypassAccessor` arm — caught in review beside a byte-equivalent `255`, which folded clean.
 	 * Both spellings the projection produces are asserted: the integer and the float.
 	 *
 	 * CONTROL for the negation descent. KILLED by arm `M-TRIVGET-NO-NEGATION-DESCENT`.
@@ -615,7 +615,7 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 	 * reads them all, which is exactly the gap this fixture needs.
 	 *
 	 * This guards behaviour that already held; what it adds is reach. This rule and
-	 * `prefer-enum-abstract` are the two whose S73-rewritten call sites no fixture exercised
+	 * `prefer-enum-abstract` are the two whose rewritten call sites no fixture exercised
 	 * (docs/testing.md § "The fourteen rules S73 touched that its own arm cannot reach"), and
 	 * both are the right-hand operand of a short-circuiting `||` whose left operand every
 	 * existing fixture already satisfied.
@@ -822,8 +822,8 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 	 * both files, exactly as the written-`extends` control does.
 	 *
 	 * Compile-proved rather than only asserted structurally: `lint --rule trivial-getter --fix` over
-	 * the two files produced 5 edits in 2 files — the control's own figure — and Haxe 4.3.7 accepts
-	 * the rewritten tree. Both spellings, since the grammar projects `in` and `as` alike.
+	 * the two files produced the control's own edit count, and the compiler accepts the rewritten
+	 * tree. Both spellings, since the grammar projects `in` and `as` alike.
 	 */
 	public function testAliasImportedSupertypeRewritesBothFiles(): Void {
 		for (imports in ['import p.Owner as O;\n', 'import p.Owner in O;\n']) {

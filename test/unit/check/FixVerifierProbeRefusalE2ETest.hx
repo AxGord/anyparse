@@ -165,7 +165,7 @@ final class FixVerifierProbeRefusalE2ETest extends Test {
 	 * A refusing probe must not throw away the salvageable complement.
 	 *
 	 * RED at the base commit, which abandoned the whole bisect on the first refusal and
-	 * reverted the file: 0 of 4 edits applied, one `reverted` row, disk byte-identical to
+	 * reverted the file: no edit applied, one `reverted` row, disk byte-identical to
 	 * the input. The complement the search does reach is confirm-typechecked before it is
 	 * written — that gate is what makes continuing safe, and it is why a mis-attributed
 	 * unit can only ever cost that unit.
@@ -218,7 +218,7 @@ final class FixVerifierProbeRefusalE2ETest extends Test {
 	 * probe attempt cost one, refused or not, and `Cli.bisectTail` prints the total as
 	 * "$n oracle run(s)".
 	 *
-	 * Measured against `CompilerOracle.invocations` rather than against a hand-derived
+	 * Asserted against `CompilerOracle.invocations` rather than against a hand-derived
 	 * number, so the assertion cannot drift with the fixture: `verify` spawns exactly one
 	 * typecheck of its own (the baseline) on top of whatever the single bisected file
 	 * costs, and there is one file and one rule here.
@@ -293,7 +293,7 @@ final class FixVerifierProbeRefusalE2ETest extends Test {
 		// The BISECT was entered and produced this verdict. Without this the fixture could
 		// pass through the full-set canonical gate instead — which also answers
 		// `NotCanonical`, from a site the search never reaches — and the cause assertion
-		// below would prove nothing about the search. Measured: the first version of this
+		// below would prove nothing about the search. The first version of this
 		// fixture did exactly that, and a mutation that flattened the cause flipped nothing.
 		Assert.equals(1, result.partials.length, 'the full set reached the compiler and was bisected');
 		Assert.equals(1, result.reverted.length, 'one (file, rule) pair reverted whole');
@@ -310,9 +310,9 @@ final class FixVerifierProbeRefusalE2ETest extends Test {
 
 	/**
 	 * RED at the base commit, and separately the guard on a regression this slice's own
-	 * first draft introduced — measured, not assumed: at base the search is ABANDONED on
-	 * the first refusal, so this seat is never reached at all (base reports
-	 * `oracleInvocations` 7 from the budget counter and a `NotCanonical` cause).
+	 * first draft introduced — verified, not assumed: at base the search is ABANDONED on
+	 * the first refusal, so this seat is never reached at all (base reports the budget
+	 * counter as `oracleInvocations` and a `NotCanonical` cause).
 	 *
 	 * A refusal seen ANYWHERE in the search must not be allowed to speak for a complement
 	 * the compiler read and refused for itself. Hoisting one cause for every zero-applied

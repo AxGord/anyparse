@@ -20,15 +20,15 @@ import utest.Test;
  * the rules the root opted into — and a rule that is not in the set does not fail, it
  * finds nothing. This project's own `test/apqlint.json` had `compilerOracle`,
  * `compilerOracleServer` and `resolutionRoots`/`resolutionLibs` copied down into it
- * over four commits in six weeks, each time somebody noticed another absence, while
- * the root's 38 opt-in rules were never noticed at all and 741 files under `test/`
- * were linted with a reduced rule set for six weeks.
+ * commit by commit, each time somebody noticed another absence, while the root's
+ * opt-in rules were never noticed at all and the whole of `test/` was linted with a
+ * reduced rule set for weeks.
  *
- * Six of the first eight cases go red on a `discover` that stops at the first document;
+ * Most of the first cases go red on a `discover` that stops at the first document;
  * the two that do not — nearest-wins and `"inherit": false` — are GUARDS on the new
  * semantics rather than discriminators, since wholesale replacement agrees with both by
  * construction, and each says so at its own definition. Verified by reverting, not
- * reasoned: 13 of the 29 assertions fail with the three source files restored.
+ * reasoned: nearly half the assertions fail with the three source files restored.
  */
 @:nullSafety(Strict)
 class LintConfigInheritanceTest extends Test {
@@ -71,8 +71,8 @@ class LintConfigInheritanceTest extends Test {
 		#if (sys || nodejs)
 		// The whole point of per-RULE merging: a nested document that switches ONE rule off
 		// keeps every other rule its ancestor opted into. A wholesale `rules` merge would
-		// leave `explicit-local-type` off here, which is the shape that left 741 files
-		// linted by a reduced rule set.
+		// leave `explicit-local-type` off here, which is the shape that left the whole test
+		// tree linted by a reduced rule set.
 		final root: String = tree(
 			'{"rules": {"explicit-local-type": {"enabled": true}, "magic-number": {"severity": "error"}}}',
 			'{"rules": {"magic-number": {"enabled": false}}}'
@@ -203,10 +203,10 @@ class LintConfigInheritanceTest extends Test {
 	public function testTheProjectsOwnNestedConfigIsItsSixRelaxationsAndNothingElse(): Void {
 		#if (sys || nodejs)
 		// The acceptance test for the shrinkage: `test/apqlint.json` is back to the
-		// exemptions it was written as — the original four, plus the two the user added on
-		// 2026-09-02 from S15's measurement (`duplicate-code` 644 findings / `prefer-typed-throw`
-		// 223, 85% of the test tree's stream, both correct checks whose fix test code cannot
-		// take) — and every key it used to carry a copy of now reaches it through the chain.
+		// exemptions it was written as — the original four, plus the two the user added
+		// (`duplicate-code` and `prefer-typed-throw`, the bulk of the test tree's stream, both
+		// correct checks whose fix test code cannot take) — and every key it used to carry a
+		// copy of now reaches it through the chain.
 		// Both halves matter — the relaxations must still apply, and the project settings must
 		// be the ROOT's, resolved against the ROOT's directory.
 		final repo: String = CliFixture.repoRoot();
@@ -216,9 +216,9 @@ class LintConfigInheritanceTest extends Test {
 		Assert.equals(src.compilerOracleDir(), test.compilerOracleDir(), 'so is the directory it compiles from');
 		// NOT `Assert.equals(src…, test…)`: the ctor defaults an undeclared
 		// `compilerOracleServer` to false, so comparing the two answers false == false and
-		// would pass with no inheritance at all. The VALUE is the assertion — `21dcdd8a`
-		// turned the warm server off at the root ("costs 25% and buys nothing") and the
-		// nested copy kept it on for six weeks, so a `true` here is that copy coming back.
+		// would pass with no inheritance at all. The VALUE is the assertion — the root turned
+		// the warm server off (it cost time and bought nothing) and the nested copy kept it
+		// on for weeks, so a `true` here is that copy coming back.
 		Assert.isFalse(test.compilerOracleServer(), 'test/ takes the root\'s warm-server answer, which is off');
 		Assert.isFalse(src.compilerOracleServer(), 'and the root is where that answer is declared');
 		Assert.same(src.resolutionRoots(), test.resolutionRoots(), 'so is the resolution scope');

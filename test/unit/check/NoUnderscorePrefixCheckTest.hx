@@ -482,7 +482,7 @@ class NoUnderscorePrefixCheckTest extends Test {
 
 	/**
 	 * A binding declared inside a macro reification subtree never competes for a target name: the naming
-	 * projection returns at `MacroExpr`, so it is not even a FINDING, let alone a candidate. Measured,
+	 * projection returns at `MacroExpr`, so it is not even a FINDING, let alone a candidate. Checked,
 	 * not inferred - this source reports exactly one violation. Replaces the fixture that claimed to
 	 * exercise `fix`'s unresolvable-candidate gate; it never reached it, and no reachable input for
 	 * that gate is known (see the comment on the gate).

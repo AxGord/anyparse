@@ -29,8 +29,8 @@ import utest.Test;
  *   could also supply the method, and said nothing about it — `prefer-lpad` because the branch was
  *   the left half of a `&&` that short-circuited past `appendUsingInsert`, the other two because
  *   they returned `[]` at the decision point. The ledger then reported the rule as one that
- *   withheld an edit "without saying why", which is the sentence S169 spent a slice removing from
- *   the one rule that had it.
+ *   withheld an edit "without saying why", which is the sentence a whole slice was spent removing
+ * from the one rule that had it.
  * - **The `Guarded` branch named findings it never decided.** It writes its sentence on every
  *   violation it is handed, and all four callers handed it the WHOLE `run` output — including
  *   findings the fix had already skipped for their own cause (an unproven range in `prefer-lpad`,

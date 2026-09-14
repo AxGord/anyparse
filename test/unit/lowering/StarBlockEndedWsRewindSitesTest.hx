@@ -22,16 +22,15 @@ import utest.Test;
  *   `HxStatement.BlockStmt`, `HxExpr.BlockExpr` and `HxDoWhileBody.BlockBody` compile
  *   to. A nested `{ … }` block.
  *
- * Instrumenting all four loops over `fmt --list --one-pass src test tools` (1 754 files)
- * splits the 58 fires S111 recorded as one site's: 39 close-peek, 6 tryparse, 13
- * enum-branch, 0 for the fourth. Over the whole suite the same probe reads 233 / 17 / 46 / 0.
- * The fourth site — `StarFieldLowering.lowerStarBlockEndedSepLast`, the enum-branch Star WITHOUT
- * `sepStartsElement` — is live but unreachable by the rewind: its byte check is evaluated
- * 11 times suite-wide and the rewind moves in none of them, because the only grammar that
+ * Instrumenting all four loops over the formatter sweep and over the whole suite splits the
+ * fires once recorded as one site's across the close-peek, tryparse and enum-branch sites, with
+ * none at the fourth. The fourth site — `StarFieldLowering.lowerStarBlockEndedSepLast`, the
+ * enum-branch Star WITHOUT `sepStartsElement` — is live but unreachable by the rewind: its byte
+ * check is evaluated suite-wide and the rewind moves in none of those evaluations, because the only grammar that
  * routes to it (`unit.miniblock.MiniBlock`) has no element rule that can leave trailing
  * whitespace consumed. It stays unarmed, by measurement rather than by omission.
  *
- * The discriminating shape is the one S111 found: `return macro if (c) foo();` reifies the
+ * The discriminating shape: `return macro if (c) foo();` reifies the
  * whole if-STATEMENT, `;` included, so `ReturnStmt`'s own `@:trailOpt(';')` misses and
  * leaves the newline and indent consumed. `stmtNoSemi` answers `false` for `ReturnStmt`,
  * so the byte check is the only thing that can accept the gap — predicate and byte check

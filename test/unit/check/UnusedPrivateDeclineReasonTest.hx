@@ -10,7 +10,7 @@ import utest.Assert;
 import utest.Test;
 
 /**
- * T865: every gate `unused-private`s autofix declines a member at SAYS which gate it was.
+ * Every gate `unused-private`s autofix declines a member at SAYS which gate it was.
  *
  * `apq lint --fix` reports a per-rule unfixed ledger, and its only input for the sentence is
  * `Violation.declineReason` — the field the check writes at the refusal site. `unused-private`

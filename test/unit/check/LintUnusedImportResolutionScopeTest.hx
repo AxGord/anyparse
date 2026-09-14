@@ -91,10 +91,10 @@ class LintUnusedImportResolutionScopeTest extends Test {
 
 	/**
 	 * `fix` deletes exactly the `Warning`s, so every `Info` this check emits IS a decline — and the
-	 * run had no way to say so. On an 851-file tree `lint --fix` reported `unused-import 204 of 205:
-	 * fix declined here, yet the rule produced 2 edit(s) elsewhere in this run — so it HAS an autofix
-	 * and withheld it, without saying why`, and the four arms behind those 204 are four different
-	 * answers (110 out-of-scope, 54 `#if`-guarded, 25 unknown `using`, 15 unknown wildcard).
+	 * run had no way to say so. On a real tree `lint --fix` reported `unused-import <declined> of
+	 * <reported>: fix declined here, yet the rule produced N edit(s) elsewhere in this run — so it
+	 * HAS an autofix and withheld it, without saying why`, and the four arms behind those declines
+	 * are four different answers (out-of-scope, `#if`-guarded, unknown `using`, unknown wildcard).
 	 *
 	 * Each arm now writes its own `Violation.declineReason`, composed from the SAME constant its
 	 * reported message is built from, so the report and the ledger cannot drift apart. A deletable

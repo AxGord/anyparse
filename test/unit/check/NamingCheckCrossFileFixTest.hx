@@ -327,9 +327,9 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 	 *
 	 * The OWNER arm used to block for the same reason and no longer does — `isSubtype` now follows a
 	 * typedef hop upward, so `a:Alias` where `typedef Alias = C` is resolved as the owner itself and
-	 * the rename lands in both files. Compile-proved on Haxe 4.3.7 rather than asserted structurally
-	 * alone: `lint --rule naming --fix` over the three files rewrote `C` and `D` (4 edits in 2 files)
-	 * and the result compiles, where the previous engine declined the whole rewrite as incomplete.
+	 * the rename lands in both files. Compile-proved rather than asserted structurally alone:
+	 * `lint --rule naming --fix` over the three files rewrote `C` and `D` and the result compiles,
+	 * where the previous engine declined the whole rewrite as incomplete.
 	 */
 	public function testCrossFileFixThroughTypedefAliasedReceiver(): Void {
 		final dSrc: String = 'package pkg;\nclass D extends C {\n\tpublic function g(a:Alias) { return a.size; }\n}';
@@ -551,7 +551,7 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 	 * `Foreign` extends a type this scope does not declare, so it is neither proven family nor proven
 	 * unrelated.
 	 *
-	 * Measured, so the doc does not overclaim: this fixture is refused by the COMPLETENESS gate as well —
+	 * Checked, so the doc does not overclaim: this fixture is refused by the COMPLETENESS gate as well —
 	 * the public member's affected set includes every file mentioning the name, and `Foreign`'s own
 	 * declaration is an occurrence no receiver attributes. It guards that the family feature did not turn
 	 * this case into a rename; the unprovable-family refusal ITSELF is discriminated by
@@ -782,7 +782,7 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 	}
 
 	/**
-	 * `13177bff`'s pattern at the one gate of this path that had not taken it: the category test was
+	 * The declared-decline pattern at the one gate of this path that had not taken it: the category test was
 	 * `if (!crossFileCategory(decl)) return null;`, an UNDECLARED decline. It read as harmless
 	 * because the per-file path writes a sentence for the same findings afterwards — and for a PUBLIC
 	 * override it writes the WRONG one, because `RenameRefusal.of` tests `public` before it tests
@@ -930,7 +930,7 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 
 	/**
 	 * Precedence, and it is not a preference. The duplicate half is a thing the index knows exactly,
-	 * so it is the cause a reader can act on. When T159 wrote this the `@:allow` half was a raw
+	 * so it is the cause a reader can act on. When this was written the `@:allow` half was a raw
 	 * substring scan a COMMENT satisfied, and asked grant-first this fixture claimed metadata the
 	 * file does not carry and buried the actionable cause — the split had turned the old sentence\'s
 	 * hedging `or` into a categorical assertion. The scan is now masked

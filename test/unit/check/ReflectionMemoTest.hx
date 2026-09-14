@@ -11,8 +11,8 @@ import utest.Test;
  * is, this one pins that memoising the answer cannot change it.
  *
  * The surface is one walk of every file in that scope, five registered checks demand it per run,
- * and each used to recompute the whole thing (measured on Pony, 680 report files against a
- * resolution scope of 2764: ~0.12s per repeat demand, 0.57s of an 18s `lint src`). The memo that
+ * and each used to recompute the whole thing, a visible but small share of a Pony `lint src`. The
+ * memo that
  * ends the repeat has exactly one way to be wrong, and it is the silent one: answering about the
  * text of an EARLIER `--fix` pass. A pass rewrites a report entry's `source` in place, so a name a
  * pass has just written into a `Reflect.field(o, 'NAME')` must veto the next rewrite of `NAME`, and

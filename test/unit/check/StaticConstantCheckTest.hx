@@ -97,7 +97,7 @@ class StaticConstantCheckTest extends Test {
 	/**
 	 * THE hole a green unit suite could not see and a real-tree typecheck did: an INSTANCE `final`
 	 * with a declaration initializer is still writable in the CONSTRUCTOR, so the literal is a
-	 * DEFAULT and not the value. Measured — the two constructions print 5 and 9 — while the `static`
+	 * DEFAULT and not the value. The two constructions print different values, while the `static`
 	 * form rejects the same write with `This expression cannot be accessed for writing`.
 	 */
 	public function testConstructorReassignedFinalRefused(): Void {
@@ -127,7 +127,7 @@ class StaticConstantCheckTest extends Test {
 		Assert.equals(0, violations('class C {\n\tpublic final n:Int = 5;\n\tfunction f():Int return n;\n}').length);
 	}
 
-	/** `this.NAME` is `Cannot access static field NAME from a class instance` — measured. */
+	/** `this.NAME` is `Cannot access static field NAME from a class instance`. */
 	public function testThisQualifiedReadRefused(): Void {
 		Assert.equals(0, violations('class C {\n\tprivate final _n:Int = 5;\n\tfunction f():Int return this._n;\n}').length);
 	}
@@ -139,7 +139,7 @@ class StaticConstantCheckTest extends Test {
 
 	/**
 	 * A subtype's UNQUALIFIED read of a private static is `Unknown
-	 * identifier` — measured; the fix would have to reach the subtype's file.
+	 * identifier`; the fix would have to reach the subtype's file.
 	 */
 	public function testSubtypeReadRefused(): Void {
 		Assert.equals(
@@ -162,7 +162,7 @@ class StaticConstantCheckTest extends Test {
 		);
 	}
 
-	/** `Reflect.field(instance, "_n")` returns the value for an instance field and null for a static one — measured. */
+	/** `Reflect.field(instance, "_n")` returns the value for an instance field and null for a static one. */
 	public function testReflectedNameRefused(): Void {
 		Assert.equals(
 			0,
@@ -250,8 +250,8 @@ class StaticConstantCheckTest extends Test {
 	/**
 	 * …but only a REAL one. The gate was `source.indexOf('@:allow') >= 0`, so a file merely TALKING
 	 * about the tag — its own doc comment, a fixture literal — silently lost every finding this rule
-	 * and five others would have made. Measured on anyparse itself: 22 of its 1501 files tripped the
-	 * raw scan and `apq meta '@:allow' src test` finds ZERO real grants, so every one of them was this.
+	 * and five others would have made. On anyparse itself a couple of dozen files tripped the raw
+	 * scan while `apq meta '@:allow' src test` finds ZERO real grants, so every one of them was this.
 	 *
 	 * The arms have to be a PAIR: the negative one alone stays green under the raw scan, which is
 	 * exactly how the defect survived. String and comment are separate arms because the masking runs

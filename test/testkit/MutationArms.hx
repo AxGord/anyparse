@@ -200,8 +200,8 @@ final class MutationArms {
 	 * Where the cut lands, as one token — `<type>#<method>` for the ordinary member arm and
 	 * `<type>#<kind>:<method>` for an arm addressing anything else.
 	 *
-	 * The default kind stays UNSPELLED so 97 of 98 existing rows are byte-unchanged, and the
-	 * one that is not says what it addresses. `selectorOf` reads the second half back; the
+	 * The default kind stays UNSPELLED so an ordinary member row is byte-unchanged, and a
+	 * row that is not says what it addresses. `selectorOf` reads the second half back; the
 	 * rendered line is the only place the runner's address is written down, so both the
 	 * `--list-arms` output and `TestRegistry.deferredArms()` go through here.
 	 */

@@ -37,7 +37,7 @@ import utest.Test;
  * The pins go through the private statics the driver is made of (`@:access`), because the output
  * itself is a `Sys.stderr` write with no seam a test can read.
  *
- * S34 added the other half of the same silence, and one wording. A refusal that first lands on a
+ * The other half of the same silence, and one wording. A refusal that first lands on a
  * LATER pass is not a re-report, so it cannot go into `declined` (a first-pass count, kept
  * comparable with `reported`) — it went nowhere at all, and `gateRefusalLines` is the block it
  * reaches now. And a file can be in BOTH `changedFiles` and `noted` since the backstop started
@@ -195,8 +195,8 @@ class LintFixDeclineWiringSliceTest extends Test {
 	 *
 	 * The writer-emit gate round-trips the WHOLE spliced file, so its verdict is per FILE: at base
 	 * `modifier-order`'s reorder across a `/*inline*\/` comment took `prefer-single-quotes`'s edit
-	 * down with it, on every pass, and the file was written not at all. Measured over 8645 external
-	 * files: 2 files, 310 landable edits from twenty-odd rules thrown away between them.
+	 * down with it, on every pass, and the file was written not at all. Over the external corpora
+	 * a couple of files threw away hundreds of landable edits from twenty-odd rules between them.
 	 *
 	 * RED at base on every assertion — `salvageFileLintEdits` does not exist there, so the file
 	 * does not compile.
@@ -305,8 +305,8 @@ class LintFixDeclineWiringSliceTest extends Test {
 	 * A source the WRITER cannot round-trip is not bisected, and every contributing rule is told
 	 * the file-level reason.
 	 *
-	 * This is the bulk of the defect, not the headline: 50 of the 54 refusals measured over 8645
-	 * external files are the file's own bytes, the same ones `apq fmt --write` refuses — and no
+	 * This is the bulk of the defect, not the headline: nearly every refusal over the external
+	 * corpora is the file's own bytes, the same ones `apq fmt --write` refuses — and no
 	 * subset of edits changes that answer, so asking the gate once per check would only pay N round
 	 * trips to learn it again. RED at base (no `salvageFileLintEdits`).
 	 */
@@ -342,7 +342,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 	 * Nothing is written on that arm, so a group deferred at collection did not land its edits
 	 * either — but the loop read `contributes`, which excludes an overlapped group, so it got no
 	 * refusal row and `ledgerFileLintEdits` then credited it with edits on a run that wrote
-	 * nothing. This is the arm that fires for 50 of the 54 refusals measured over 8645 files, so
+	 * nothing. This is the arm that fires for nearly every refusal over the external corpora, so
 	 * it is the common path. Found by review after the bisect arm's own re-derivation shipped.
 	 */
 	public function testASourceLevelRefusalBlamesAnOverlappedGroupToo(): Void {
@@ -454,7 +454,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 	 * `reported` is filled ONLY by the driver's pass-1 report loop in `applyLintPass`, so a caller
 	 * that drives `computeFileLintEdits` itself — the pins above, and any embedder — leaves it at
 	 * zero while `declined` counts real findings. The label's only test was `count == reported`, so
-	 * the else arm fired and the run printed `unused-local 2 of 0`: a ratio out of a total smaller
+	 * the else arm fired and the run printed a part over a total of ZERO: a ratio out of a total smaller
 	 * than its own part, in the one block that exists to explain why a fix vanished.
 	 *
 	 * RED at base, where the same ledger renders ` of 0`.
@@ -558,8 +558,8 @@ class LintFixDeclineWiringSliceTest extends Test {
 	 * The dead channel this closes: `FixVerifier` re-collects its violations through its own
 	 * `Linter.collect` (deliberately — that is where the reification and noqa gates apply) and hands
 	 * THOSE objects to `fix`, so a reason a check writes lands where nothing outside that function
-	 * can read it. Measured before the fix: decline reasons added to `shorten-type-ref` and
-	 * `avoid-dynamic` left both Pony ledgers BYTE-IDENTICAL, for all 13 `RiskyFix` rules.
+	 * can read it. Before the fix, decline reasons added to `shorten-type-ref` and
+	 * `avoid-dynamic` left both Pony ledgers BYTE-IDENTICAL, for every `RiskyFix` rule.
 	 *
 	 * Two rows, three states. `Partly.hx` — the check spoke for 3 of its 5 findings and the oracle
 	 * declined the file, so the check's sentence covers 3 and the oracle's covers the OTHER 2:
@@ -612,8 +612,8 @@ class LintFixDeclineWiringSliceTest extends Test {
 	 * The hole this pins is not a rule's: `noteFixOutcome` returned the moment the edit list was
 	 * non-empty, so every finding the same call had declined vanished from the run's output. The
 	 * whole ledger block is keyed off `declined != 0`, so the rule got no row at all, no reason,
-	 * and nothing anywhere said a finding had been withheld. Measured on this project's own tree
-	 * before the fix: `member-order` declined 13 findings and the run named 11 - the two it lost
+	 * and nothing anywhere said a finding had been withheld. On this project's own tree before
+	 * the fix, `member-order` declined more findings than the run named - the ones it lost
 	 * were containers whose reorder it refused while their blank-line fix landed.
 	 *
 	 * Deliberately built from a SYNTHETIC group, not from a real check: the accounting belongs to
@@ -688,8 +688,8 @@ class LintFixDeclineWiringSliceTest extends Test {
 	 *
 	 * `default-repeated-argument` is the whole of the case: its per-file `fix` returns nothing BY
 	 * CONSTRUCTION, because the argument sites it deletes are in other files, and every edit it makes
-	 * arrives through `crossFileFix`. Measured on this project's own `src` + `test`, the rule lands
-	 * 46 edits in 11 files — so the row that read "the run will not say which it is" was about a rule
+	 * arrives through `crossFileFix`. On this project's own `src` + `test` the rule lands dozens
+	 * of edits — so the row that read "the run will not say which it is" was about a rule
 	 * that does fix, on a seam the row never asked. The id list is derived from the check objects in
 	 * `ledgerLines`, so a rule gaining the seam gets the sentence without a `Cli` edit.
 	 *
@@ -848,7 +848,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 	#if (sys || nodejs)
 	/**
 	 * One risky-fix phase where the CHECK spoke and the VERIFIER also had an answer for the same
-	 * (rule, file) pair — the shape T407 turns on, and the one no earlier fixture could express.
+	 * (rule, file) pair — the shape the per-finding decline turns on, and the one no earlier fixture could express.
 	 *
 	 * `Partly.hx` sits outside the oracle's compiled set and carries 3 findings the check declined
 	 * itself; `Whole.hx` sits in a region no compiled arm makes live and every one of its findings

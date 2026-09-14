@@ -262,8 +262,8 @@ class RedundantParensOperandArmsTest extends RedundantParensOperandArmsTestBase 
 	 * A construct that captures everything to its RIGHT, sitting at the right edge of the
 	 * content, makes the parentheses load-bearing in EVERY precedence-gated slot: the
 	 * whitelists judge the content's ROOT, and `a + (b * untyped c) - d` has an arithmetic
-	 * root over a tail that swallows the `- d` once the pair is gone (measured against the
-	 * real compiler: 9 with the parentheses, 7 without). The default-on ternary-condition
+	 * root over a tail that swallows the `- d` once the pair is gone (on the real compiler
+	 * the two spellings evaluate to different numbers). The default-on ternary-condition
 	 * arm is reached too, with no opt-in at all.
 	 */
 	public function testRightGreedyContentTailIsRefusedInEverySlot(): Void {
@@ -311,7 +311,7 @@ class RedundantParensOperandArmsTest extends RedundantParensOperandArmsTestBase 
 	/**
 	 * This parser models `@:m` as wrapping the whole expression that follows, but the real
 	 * compiler binds the annotation to the immediate primary — so a pair at the LEFT EDGE
-	 * under a metadata prefix is what holds the annotation over its operand. Measured:
+	 * under a metadata prefix is what holds the annotation over its operand. On the compiler
 	 * `@:privateAccess (A.s * B.s) + 1` compiles, `@:privateAccess A.s * B.s + 1` fails with
 	 * `Cannot access private field`. The pair is load-bearing in every slot, the default-on
 	 * ternary arm included.

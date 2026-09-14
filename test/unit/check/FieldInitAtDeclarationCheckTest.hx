@@ -572,10 +572,9 @@ class FieldInitAtDeclarationCheckTest extends Test {
 	 * The load-bearing premise of the "deliberately COARSER" argument, under test rather than
 	 * only argued: a `super(…)` need not be a top-level statement, so "the init precedes THE
 	 * super call" often has no answer at all and the gate refuses the whole constructor
-	 * instead. A branch-conditional base-constructor call is legal Haxe — verified on 4.3.7
-	 * `--interp`, where `if (c) super(1) else super(2);` and a one-sided `if (f) super(7);`
-	 * both compile and run. Measured against the two binaries: 1 violation before the gate,
-	 * 0 after.
+	 * instead. A branch-conditional base-constructor call is legal Haxe — verified on the
+	 * compiler, where `if (c) super(1) else super(2);` and a one-sided `if (f) super(7);`
+	 * both compile and run. The gate turns the one violation here into none.
 	 */
 	public function testSuperInsideBranchNotMoved(): Void {
 		final src: String = 'class C extends B { var a:Int; public function new(f:Bool) { if (f) super(); a = 1; } }';
@@ -586,9 +585,9 @@ class FieldInitAtDeclarationCheckTest extends Test {
 	 * The ACCEPTED over-refusal, as a decision under test rather than a paragraph of prose. This
 	 * is the `pony/net/cs/SocketClient` shape: the init sits BEFORE the `super(…)`, so it does
 	 * NOT cross the base-constructor boundary and the finer rule would keep it. The coarse gate
-	 * refuses it anyway, and the class doc argues that one lost cleanup per 676 files is the
-	 * right price. Measured: 1 violation before the gate, 0 after. Whoever implements the finer
-	 * rule flips THIS assertion back to 1.
+	 * refuses it anyway, and the class doc argues that one lost cleanup per hundreds of files is
+	 * the right price. The gate turns the one violation here into none; whoever implements the
+	 * finer rule flips THIS assertion back to 1.
 	 */
 	public function testInitBeforeSuperStillNotMoved(): Void {
 		final src: String = 'class C extends B { var _x:Int; public function new() { _x = 1; super(); } function s():Void { _x = 2; } }';
@@ -598,9 +597,8 @@ class FieldInitAtDeclarationCheckTest extends Test {
 	/**
 	 * `holdsSuperCall` matches a CALL whose callee is the bare `super` identifier, deliberately
 	 * NOT any `super` reference at all: `super.foo()` is a base-MEMBER access on an already
-	 * constructed base, which the prologue does not race. The branch had no coverage. Measured:
-	 * 1 violation before the gate and 1 after — this fixture is the one the gate must leave
-	 * alone.
+	 * constructed base, which the prologue does not race. The branch had no coverage. The gate
+	 * leaves the one violation here standing — this fixture is the one it must leave alone.
 	 */
 	public function testSuperMemberCallStillMoved(): Void {
 		final src: String = 'class C extends B { var _a:Array<Int>; public function new() { super.foo(); _a = new Array<Int>(); } }';

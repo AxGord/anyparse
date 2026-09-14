@@ -47,7 +47,7 @@ class ApqFromFileCliTest extends Test {
 		final fixture: String = CliFixture.write('apq_fromfile', 'class C {\n\tvar x:Int;\n}\n');
 		final element: String = CliFixture.write('apq_element', "function f():Void { trace('$x'); }");
 		// Append into the class body (point at the `class` keyword). `1:1`, not the `1:0` this
-		// test was born with: `aee95f54` (addressing v2) moved every position argument onto
+		// test was born with: addressing v2 moved every position argument onto
 		// `Address`, which rejects a 0 column as malformed — 1-based is the unified convention.
 		Assert.equals(0, Cli.run(['add-element', fixture, '--append', '1:1', '--from-file', element, '--write']));
 		final result: String = File.getContent(fixture);
