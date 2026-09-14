@@ -394,7 +394,7 @@ class PreferStaticExtensionCheckTest extends Test {
 	 *
 	 * The reason was in the finding's MESSAGE all along — that is what makes the silence expensive
 	 * rather than merely incomplete: `apq lint --fix`'s ledger reads `declineReason`, so a run that
-	 * declined 162 of these reported "it HAS an autofix and withheld it, without saying why" over
+	 * declined every one of these reported "it HAS an autofix and withheld it, without saying why" over
 	 * findings whose own text spelled the reason out.
 	 *
 	 * RED at base on the two `notNull` assertions (the field was never written); the third one —

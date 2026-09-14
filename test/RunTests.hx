@@ -8,8 +8,8 @@ import utest.Runner;
  * The registration layer is GENERATED: `testkit.TestRegistry` is built by
  * `testkit.TestDiscovery`, which walks every package under `test/` and
  * registers each `utest.Test` subclass that carries a fixture. This file
- * used to carry one hand-written `addCase(new X())` per class — 758 of
- * them, plus 758 imports — and a forgotten line there was a test that
+ * used to carry one hand-written `addCase(new X())` per class, plus its
+ * import, and a forgotten line there was a test that
  * silently never ran, with nothing in the transcript to say so.
  *
  * What is NOT generated is everything below: the `APQ_TEST` filter, the

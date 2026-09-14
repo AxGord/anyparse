@@ -205,7 +205,7 @@ class BuiltinFixClassCensusTest extends Test {
 	 * two contradictory things about itself.
 	 *
 	 * A `guard`, not a `control`: nothing decides this in one member, so no source cut expresses it. What
-	 * it protects is the pairing this slice created — eleven rules gained the marker and
+	 * it protects is the pairing this slice created — the rules that gained the marker and
 	 * `default-repeated-argument` was deliberately left without it BECAUSE it carries `CrossFileFix`.
 	 */
 	@:pin('guard')

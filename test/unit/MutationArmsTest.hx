@@ -219,8 +219,8 @@ final class MutationArmsTest extends Test {
 	/**
 	 * A multi-pair cut reads back as its own list of fragments, and the rendered line says so.
 	 *
-	 * The scalar spelling is that same list with one element, which is what keeps all 161
-	 * existing fragment records — and every `--list-arms` row they produce — byte-unchanged.
+	 * The scalar spelling is that same list with one element, which is what keeps every
+	 * existing fragment record — and every `--list-arms` row they produce — byte-unchanged.
 	 */
 	@:pin('guard')
 	public function testAMultiPairCutCarriesEveryFragment(): Void {

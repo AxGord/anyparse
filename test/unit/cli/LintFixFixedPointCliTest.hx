@@ -340,7 +340,7 @@ class LintFixFixedPointCliTest extends Test {
 	}
 
 	/**
-	 * Seventy-odd rules report on a real tree (74 on Pony), so the block names the biggest few and
+	 * Dozens of rules report on a real tree, so the block names the biggest few and
 	 * totals the rest — otherwise the answer to "what did not get fixed" is a wall nobody reads.
 	 */
 	@:access(anyparse.query.Cli)
@@ -367,8 +367,8 @@ class LintFixFixedPointCliTest extends Test {
 	 * The ledger recorded the FIRST `Violation.declineReason` it saw and printed it as the rule's
 	 * whole verdict, which was right while every converted rule declined for a single cause. The
 	 * first rule to write the field per-ARM declines for four different ones on a single real tree
-	 * — `unused-import` on Pony: 110 out-of-scope, 54 `#if`-guarded, 25 unknown `using`, 15 unknown
-	 * wildcard — and naming whichever the file walk reached first states a quarter of the answer
+	 * — `unused-import`: out-of-scope, `#if`-guarded, unknown `using`, unknown wildcard —
+	 * and naming whichever the file walk reached first states a quarter of the answer
 	 * with the confidence of the whole.
 	 */
 	@:access(anyparse.query.Cli)

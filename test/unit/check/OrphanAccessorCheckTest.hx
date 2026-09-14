@@ -752,8 +752,8 @@ import utest.Test;
 	 * word (`data`, `value`, `name`) any library spells by accident. Asked unnarrowed it is the one of
 	 * the four names that could turn a declared `resolutionLibs` into a project-wide veto.
 	 *
-	 * That risk is a HYPOTHESIS, and the measurement went the other way: over the Pony fork (eleven
-	 * `resolutionLibs`) a probe with NO owner narrowing at all answered 3 warnings and 0 declines, and
+	 * That risk is a HYPOTHESIS, and the measurement went the other way: over the Pony fork a probe
+	 * with NO owner narrowing at all answered a few warnings and no decline, and
 	 * on a config-less project reading the machine's Haxe std it left both deletions standing. Read
 	 * that as weak evidence and not as a verdict — Pony's three properties are `asset_bytes`,
 	 * `internal_storage_path` and `sdl_error`, which is the opposite of the common word the narrowing

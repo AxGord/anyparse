@@ -476,7 +476,7 @@ class NamingCheckTest extends NamingCheckTestBase {
 
 	/**
 	 * `policyFor` walked up to the project `checkstyle.json`, read it and rebuilt its rules for EVERY
-	 * file — 851 disk walks, 851 JSON parses and 851 policy builds for ONE config on the Pony scope.
+	 * file — one disk walk, one JSON parse and one policy build PER FILE for ONE config.
 	 * The memo is keyed by DIRECTORY because `ConfigFinder.findUp` walks up from a file's own
 	 * directory, so two files sharing one resolve to the same config by construction; two directories
 	 * resolving to the SAME config still build twice, which is the residue that key trades for its

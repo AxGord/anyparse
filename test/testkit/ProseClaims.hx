@@ -142,8 +142,8 @@ final class ProseClaims {
 	 *
 	 * `M-CLAIM-CODE-BLIND` cuts this member, and it is a FRAGMENT arm rather than a
 	 * forced return because the member is `inline`: a forced return ahead of an
-	 * inlined body is a non-final return the compiler refuses, which is how a forced
-	 * return on an inlined member once came back BUILD-FAIL.
+	 * inlined body is a non-final return the compiler refuses, which is how a forced-return
+	 * `M-PATHWALK-NULL` once came back BUILD-FAIL.
 	 */
 	private static inline function withoutCodeSenses(text: String): String {
 		return without(text, CODE_SENSES);

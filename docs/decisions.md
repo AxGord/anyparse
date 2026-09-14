@@ -307,9 +307,10 @@ decided the question; it may not become a record of runs.
   two sampled thresholds moved anything in the suite or the corpus, so one fixture a column past
   the boundary closes that side — `9e1db129`
 - demoting deleting (or shrinking) safe fixes to report-only when no compiler oracle is configured
-  → a fifth (or most) of a run's edits go with them, `unused-import`'s among the first;
-  `DefiniteAssignmentGuard` refuses the one deleting class the language itself refuses instead —
-  `6f684346`
+  → the pure-deletion fixes are a fifth of a no-oracle run's edits (`unused-import`'s among
+  them) and the shrinking replacements most of the rest, so the demotion would gut the edit loop
+  that exists to say no compiler; `DefiniteAssignmentGuard` refuses the one deleting class the
+  language itself refuses instead — `6f684346`
 - a whole-resolution-scope (library included) write index for the field-immutability rules →
   loses findings and gains none: a skip-parsing library source that merely spells the member name
   vetoes, and structural conformance against a library structure vetoes past what can unify —

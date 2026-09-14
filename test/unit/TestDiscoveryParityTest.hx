@@ -52,7 +52,7 @@ class TestDiscoveryParityTest extends Test {
 	 *
 	 * Five are shared bases for one check's tests. The sixth,
 	 * `unit.grammar.haxe.HxTestHelpers`, reads like the surprise and is not
-	 * one: 127 `Hx*` test classes extend it, so its `extends utest.Test` is
+	 * one: the `Hx*` test classes extend it, so its `extends utest.Test` is
 	 * what makes each of THEM a `utest.ITest`. It carries parse / round-trip
 	 * helpers and no fixture of its own, which is exactly why discovery
 	 * reports it rather than registering it.

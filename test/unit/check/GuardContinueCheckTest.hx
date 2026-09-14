@@ -666,7 +666,7 @@ class GuardContinueCheckTest extends Test {
 	/**
 	 * A leading guard whose ORDERED comparison the inversion refuses to flip (an unresolvable
 	 * operand type leaves `<` NaN-unsafe): `loop-guard` declines the lift, so this check must keep
-	 * its finding. Shape-only deferral dropped 14 such sites across 13251 external files with
+	 * its finding. Shape-only deferral dropped such sites across the external corpus with
 	 * nothing reporting them, which is what made the deferral ask for `loop-guard`'s whole claim.
 	 */
 	public function testKeepsASiteWhoseLeadingGuardInvertsUncleanly(): Void {

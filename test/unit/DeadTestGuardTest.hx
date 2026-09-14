@@ -19,10 +19,9 @@ import sys.io.File;
  * supplies `sys.FileSystem` / `sys.io.File` without the flag. A test method whose body sits
  * inside a bare `#if sys` therefore compiles to its `#else` arm, which in this repo is
  * `Assert.pass('non-sys target')`: the method reports a success and asserts nothing. At the
- * fork point of the slice that added this gate the tree held 218 such guard sites across 23
- * classes — 167 whole test methods and 178 compiled `Assert.pass('non-sys target')` calls,
- * counted twice over (a preprocessor simulation over `test/`, and the literal's occurrence
- * count in the emitted `bin/test.js`) with the two counts agreeing exactly.
+ * time this gate was added the tree held hundreds of such guard sites, counted twice over (a
+ * preprocessor simulation over `test/`, and the literal's occurrence count in the emitted
+ * `bin/test.js`) with the two counts agreeing exactly.
  *
  * ## Why a suite gate rather than a lint check
  *

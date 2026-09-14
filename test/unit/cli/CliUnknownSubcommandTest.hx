@@ -9,8 +9,8 @@ import utest.Test;
 /**
  * `apq <not-a-command>` answers with the nearest real names, not with the whole help page.
  *
- * The dispatcher used to call `printUsage()` here: `apq members Foo` printed 5440 bytes —
- * ~1360 tokens — of the full command listing at a reader who mistyped one word. The listing is
+ * The dispatcher used to call `printUsage()` here: `apq members Foo` printed the whole
+ * command listing at a reader who mistyped one word. The listing is
  * still one command away and the second line names it; what arrives by default is the answer.
  *
  * `CliRegistry.unknownCommandLines` returns the lines instead of printing them for the reason
@@ -45,7 +45,7 @@ class CliUnknownSubcommandTest extends Test {
 	 * The notice is TWO lines and neither of them is the command listing.
 	 *
 	 * The byte bound is the point of the slice, so it is asserted rather than described: the
-	 * full help page is 5440 bytes and every plausible rewording of two lines fits far under
+	 * full help page is kilobytes and every plausible rewording of two lines fits far under
 	 * the bound below, so this can only fail by someone printing the listing again.
 	 */
 	public function testTheNoticeIsTwoShortLinesAndPointsAtTheHelp(): Void {

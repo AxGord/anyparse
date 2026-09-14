@@ -53,8 +53,8 @@ final class ProseClaimCensusTest extends Test {
 
 	/**
 	 * The census as it stood when last regenerated, one line per fixture whose
-	 * prose claims something no `@:pin` / `@:killer` records; the `arm` lines that
-	 * remain are all in `unit.grammar.haxe`.
+	 * prose claims something no `@:pin` / `@:killer` records; no `arm` line is left —
+	 * every fixture that names its killer carries `@:killer`.
 	 *
 	 * Two of the four kinds have an exit: an `arm` line leaves by gaining a
 	 * `@:killer`, a `control` line by gaining `@:pin('control')`. `base` and
