@@ -397,3 +397,72 @@ decided the question; it may not become a record of runs.
   reading that a redundant import costs an advisory while a missing one costs the build) → a
   comment is never compiled, and writing the import created the coupling the move was removing —
   `76982f3c`
+- an `ERROR`-vs-`FAILURE` verdict kind as the tell for a flaky extra row in a whole-suite arm
+  sweep → the extra rows were a function of LOAD (the same patch at a lower `--jobs` produced a
+  different set), and the load was two suite processes deleting each other's fixtures under one
+  `$TMPDIR`; never classify an extra row by verdict kind — `226b3653` (the rule), `9f3d453f`
+  (the mechanism)
+- `--check-apply` (apply an arm's cut and build, no suite) was asked for as a SPEED win → the
+  `haxe test-js.hxml` build IS the cost of a track in every mode, so dropping the suite saves
+  almost nothing against `--fast`; what the mode buys is a cut checked before it has a `@:killer`,
+  and a `BUILD-FAIL` that names its cause — `a6ae7dbb`
+- a static predicate over the arm record and the tree for the narrowed-nullable blind spot (a
+  `find`/`replace` whose replacement reads a `Null<T>` local an enclosing `if` narrows) → Haxe's
+  narrowing lattice decides one syntactic shape several ways and `TypeResolver` answers what a
+  name is DECLARED as, so the predicate is unsound in both directions; only a compile of the cut
+  answers — `a6ae7dbb`
+- the `deBraceBodyAccess` gate-7 probe (`elseSiblingKeepsExpr`) was read as "held by the `||`
+  partner for the fixtures we have" and kept → the partner answers for EVERY input (the chain
+  probe ends on the byte-identical call, and gate 7 is constant `false` for an `IfStmt` else
+  body), so it was dead logic and was deleted; the `elseFollows` argument beside it is dead in the
+  current wiring for a different reason than the one stated and is kept because removing it
+  deletes a predicate EVALUATION — `518e7d45`
+- an arm on `DependencyCarry.packageOrTopLevelBinding` dropping `t.isMain`, the cut the
+  fixture's own doc named → it changed nothing the fixture could see, so the arm was deleted
+  rather than kept as an unverified claim and the pin repointed at the arm whose sweep had
+  already killed the fixture as collateral — `93bdd299`
+- a caller-side seam for `SingleStmtBraces.needsSymmetryWrap`, after both of its inner gates
+  proved WIDER than the conjunction → its one live caller's blast is the member's own, the other
+  caller is inert by PROOF (the next line returns the same `null` for every input that reaches
+  it), and the position split that remains would manufacture a mechanism for a count of one; no
+  ownable seam — `51ee9584`
+- "the module is exhausted" after three slices of probing `SingleStmtBraces` gates → three
+  never-probed MEMBERS of the same file still owned fixtures; what was refuted was more gates of
+  two specific helpers, not the file — `43d31484` (the reading), `d91b8f43` (its ceiling: the
+  residue is structural)
+- rewriting a chain-guarded fixture so an existing arm discriminates it, to retire a census row
+  → the rewrite works and is refused: the discriminating shape is already pinned to the same arm
+  in the same class, and the rewrite deletes the everyday shape the fixture exists to guard —
+  net one census row for one real guarantee — `2d39cdf1`
+- narrowing `ProseClaims` so a doc that names some OTHER fixture as its control stops counting →
+  the same words carry both readings ("the control for the test above" IS a self-claim), so a
+  phrase list would suppress real claims; the rows stay listed — `08015cd3`
+- a type-level `@:pin` for the claims that live in CLASS docs → `ProseClaims` is asked of
+  `ClassField.doc` only, so those claims contribute nothing to the census and a type-level pin
+  would open a second, uncounted population; the honest record is the member pins it summarises
+  — `9924b5cc`
+- a confirmation threshold (a doc, an annotation, more than N lines) or a specificity rule before
+  `remove-element` takes a member → in a tree whose lint enables `prefer-doc-comment` the
+  threshold fires on nearly every correct use and the rule refuses an address that is already
+  correct; the fix is the report line naming what was cut — `d91b8f43`
+- a checked-in fixture corpus for the rules a real tree's `--fix` run never exercises, or
+  excusing those rules from the closing arm → a corpus is a second codebase whose only reader is
+  a gate, and excusing leaves the vacuous quote available; the `--fix` run prints a rule census
+  instead — `087e33d2`
+- `hxq lit '<phrase>' test/unit --include-comments` as the instrument for the prose-claim census
+  → it counts comment NODES and string literals anywhere in a file where the census counts DOC
+  COMMENTS ON FIXTURES; the two agree on nothing but the direction — `7331535c`
+- `compilerOracleServer` for this project's lint branch → a macro-heavy build re-runs its `@:build`
+  macros on the server so the warm path is no faster, and the server re-emits stale null-safety
+  diagnostics the cold compiler accepts, so every warm verdict is re-run cold; off in
+  `apqlint.json` — `21dcdd8a`
+- keying the oracle verdict cache on mtime → the compilation server's one-second mtime rule
+  reported a broken build as clean; the key is the CONTENT of every compile input, libraries
+  included — `e4d0a9d9`
+- `resolutionRoots: ["src"]` alone, to halve the read+parse tax → with `test/` out of the scope
+  `lint src --all` reports deletion candidates whose only callers are tests, which is the hole
+  the key closes; both roots — `ed809ca8`
+- widening the jvm probe's trigger claim to "a package" (`query`, `check`) → the probe compiles
+  what `-main JvmPortability` reaches, and `query/cli` contributes zero jar entries, so a green
+  probe after a `cli` slice proves js only; the battery's trigger diffs `src` — `a28edf4c` (the
+  reach), `a4d15e21` (the trigger)

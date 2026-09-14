@@ -986,7 +986,7 @@ class TestDiscoveryParityTest extends Test {
 	 *
 	 * Hundreds of entries over dozens of classes, and still not a conversion of the tree: some
 	 * are the seam coverage for the rules a slice touched that its deciding arm cannot reach
-	 * (docs/testing.md § "The fourteen rules S73 touched that its own arm cannot reach"),
+	 * (docs/testing.md § "Rules the deciding arm cannot reach are pinned one fixture per rule"),
 	 * where the arm name is the whole point — it is the only record that the fixture reaches the
 	 * moved code, and deleting the fixture now fails HERE rather than silently.
 	 */

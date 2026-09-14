@@ -15,7 +15,7 @@ Each phase has a goal, deliverables, and an explicit exit condition. A phase is 
 **Deliverables**:
 - 10 representative queries written by hand against the anyparse Haxe codebase, covering all four commands (`ast`, `search`, `refs`, `meta`).
 - Each query annotated with what it returns and why it is useful in a real workflow.
-- Resolution of the open questions parked in [cli-query-tool.md](cli-query-tool.md#open-questions):
+- Resolution of the open questions parked in [cli-query-tool.md](cli-query-tool.md#open-questions-deferred-to-later-phases):
   - Metavariable reuse semantics (structural equality vs unification).
   - Star-children matching (adjacent vs anywhere).
   - Whitespace and comments in patterns (ignored vs significant).
