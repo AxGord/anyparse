@@ -238,8 +238,7 @@ final class ProbeCommand implements CliCommand {
 	 * processes, and without it the old fixed `/tmp` slot let worker B's
 	 * source answer worker A's `strip` — exit 0, no exception, a plausible
 	 * WRONG answer. Overlapping writes were worse than that: two truncating
-	 * opens interleaved produced a HYBRID file (A's 23 bytes carrying a
-	 * residual `}` of B's 24) that neither process ever wrote.
+	 * opens interleaved produced a HYBRID file that neither process ever wrote.
 	 *
 	 * The single-slot intent survives whole. It was never "one slot per
 	 * machine" — it is "a chained `recon --probe` targets the LAST probe,

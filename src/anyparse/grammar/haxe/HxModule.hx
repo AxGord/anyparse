@@ -1,44 +1,42 @@
 package anyparse.grammar.haxe;
 
 /**
- * Root grammar type for a multi-declaration Haxe module — zero or more top-level
- * declarations. `@:peg` marks the entry point; `@:schema(HaxeFormat)` binds the grammar to
- * `HaxeFormat` so the macro pipeline's `FormatReader` reads its `whitespace` field at
- * compile time; `@:ws` activates whitespace skipping before every literal and regex match.
- * `decls` is a `Star<Ref>` with NO `@:lead` / `@:trail` — the absence of `@:trail` selects
- * the EOF-terminated loop variant in `StarFieldLowering.emitStarFieldSteps` (D22): the
- * parser keeps parsing decls until `ctx.pos` reaches `ctx.input.length`, and any trailing
- * non-whitespace text fails the inner `parseHxTopLevelDecl` call. The element type is
- * `HxTopLevelDecl` (metadata + modifiers + `HxDecl`). An empty source yields `{decls: []}`.
+ * Root grammar type for a multi-declaration Haxe module — zero or more top-level declarations. `@:peg`
+ * marks the entry point; `@:schema(HaxeFormat)` binds the grammar to `HaxeFormat` so the macro
+ * pipeline's `FormatReader` reads its `whitespace` field at compile time; `@:ws` activates whitespace
+ * skipping before every literal and regex match. `decls` is a `Star<Ref>` with NO `@:lead` / `@:trail`
+ * — the absence of `@:trail` selects the EOF-terminated loop variant in
+ * `StarFieldLowering.emitStarFieldSteps`: the parser keeps parsing decls until `ctx.pos` reaches
+ * `ctx.input.length`, and any trailing non-whitespace text fails the inner `parseHxTopLevelDecl` call.
+ * The element type is `HxTopLevelDecl` (metadata + modifiers + `HxDecl`). An empty source yields
+ * `{decls: []}`.
  *
- * The `@:fmt` cluster on `decls` is the module-level blank-line cascade, evaluated per
- * element pair in the trivia-mode EOF Star path (`TriviaEofLowering.triviaEofStarExpr`) in
- * this priority: after-ctor overrides, then same-kind-by-level, then cross-subset
- * transition, then before-ctor, then the source-driven binary `blankBefore` slot. Every
- * count is an OVERRIDE, not a floor. `blankLinesAtHeadIfCtor(...'beforePackage')` /
- * `blankLinesAfterCtor(...'afterPackage')` — blank lines before / after a `PackageDecl` /
- * `PackageEmpty`. `blankLinesOnTransitionAcross('decl', imports, '|', usings,
- * 'beforeUsing')` — fires on a cross-subset boundary in either direction.
- * `blankLinesBetweenSameCtorByLevel(...)` — two entries, imports and usings, firing
- * `betweenImports` between consecutive same-kind elements whose path payloads differ at
- * `betweenImportsLevel` per the `betweenImportsPathDiffers` adapter.
- * `blankLinesBetweenSameCtorTailTransparent` /
- * `...HeadTransparent('decl', 'Conditional', …)` — a `#if … #end` element is classified by
- * its last / first leaf through the `betweenImports{Tail,Head}LeafClassify` adapters, so
- * `#end → import` and `import → #if … import` boundaries take the same cascades. That
- * five-meta cluster is MIRRORED, same arg strings, on `HxConditionalDecl.body` /
+ * The `@:fmt` cluster on `decls` is the module-level blank-line cascade, evaluated per element pair in
+ * the trivia-mode EOF Star path (`TriviaEofLowering.triviaEofStarExpr`) in this priority: after-ctor
+ * overrides, then same-kind-by-level, then cross-subset transition, then before-ctor, then the
+ * source-driven binary `blankBefore` slot. Every count is an OVERRIDE, not a floor.
+ * `blankLinesAtHeadIfCtor(...'beforePackage')` / `blankLinesAfterCtor(...'afterPackage')` — blank
+ * lines before / after a `PackageDecl` / `PackageEmpty`. `blankLinesOnTransitionAcross` has two
+ * entries — `imports '|' usings → beforeUsing` and `imports + usings '|' type decls → beforeType` —
+ * each firing on a cross-subset boundary in either direction. `blankLinesBetweenSameCtorByLevel(...)`
+ * — two entries, imports and usings, firing `betweenImports` between consecutive same-kind elements
+ * whose path payloads differ at `betweenImportsLevel` per the `betweenImportsPathDiffers` adapter.
+ * `blankLinesBetweenSameCtorTailTransparent` / `...HeadTransparent('decl', 'Conditional', …)` — a `#if
+ * … #end` element is classified by its last / first leaf through the
+ * `betweenImports{Tail,Head}LeafClassify` adapters, so `#end → import` and `import → #if … import`
+ * boundaries take the same cascades. That six-meta cluster (both transitions, both same-kind-by-level
+ * entries, tail and head transparency) is MIRRORED, same arg strings, on `HxConditionalDecl.body` /
  * `elseBody` and `HxElseifDecl.body`; edit all three sites in lockstep.
  *
- * Predicate-gated variants `blankLinesAfterCtorIf` / `blankLinesBeforeCtorIf('decl',
- * 'multiline', …)` gate on the grammar-derived structural `multiline` predicate
- * (`WriterLowering.buildMultilinePredicate`), the fork's `betweenTypes` vs
- * `betweenSingleLineTypes` discrimination; `blankLinesBeforeCtorIfPrevNot(…, '|',
- * 'Conditional', …)` suppresses the before-override after a conditional, and
- * `blankLinesAfterCtorIfTailLeafNull('decl', 'Conditional', 'tailLeafKeepsBlankAfterConditional',
- * 'afterConditionalBlock')` forces the after-count when the conditional's tail leaf is
- * neither an import / using nor a type decl. `multilineWhenLeadingTriviaSpansLines('meta',
- * 'decl')` OR-s into the `multiline` predicate an element whose leading trivia holds a
- * comment or whose metadata sits on its own line.
+ * Predicate-gated variants `blankLinesAfterCtorIf` / `blankLinesBeforeCtorIf('decl', 'multiline', …)`
+ * gate on the grammar-derived structural `multiline` predicate
+ * (`WriterLowering.buildMultilinePredicate`), the fork's `betweenTypes` vs `betweenSingleLineTypes`
+ * discrimination; `blankLinesBeforeCtorIfPrevNot(…, '|', 'Conditional', …)` suppresses the
+ * before-override after a conditional, and `blankLinesAfterCtorIfTailLeafNull('decl', 'Conditional',
+ * 'tailLeafKeepsBlankAfterConditional', 'afterConditionalBlock')` forces the after-count when the
+ * conditional's tail leaf is neither an import / using nor a type decl.
+ * `multilineWhenLeadingTriviaSpansLines('meta', 'decl')` OR-s into the `multiline` predicate an
+ * element whose leading trivia holds a comment or whose metadata sits on its own line.
  */
 @:peg
 @:schema(anyparse.grammar.haxe.HaxeFormat)

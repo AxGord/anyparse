@@ -270,9 +270,9 @@ final class HxAstPredLowering extends AstPredLowering {
 	/**
 	 * `endsWithCloseBrace(e) → Bool` — true iff `e` is a control-flow
 	 * expression whose `}` may serve as a statement terminator on the
-	 * rhs of `var x = …` / `final x = …`. Drives the writer-side
-	 * `@:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))` gate on
-	 * `HxClassMember.VarMember` / `FinalMember` (drop the `;` iff true).
+	 * rhs of `var x = …` / `final x = …`. The writer-side gate on `HxClassMember.VarMember` /
+	 * `FinalMember` and the `HxStatement` var family asks it through
+	 * `varDeclTailEndsWithCloseBrace`, of the LAST binding (drop the `;` iff true).
 	 *
 	 * True (brace-terminated): `SwitchExpr` / `SwitchExprBare` /
 	 * `BlockExpr` / `ObjectLit` / `MacroClassExpr` outright; `FnExpr`
@@ -335,9 +335,8 @@ final class HxAstPredLowering extends AstPredLowering {
 	 * is brace-terminated while the token before the `;` is `2`.
 	 *
 	 * Drives `@:fmt(optionalSemicolon('varDeclTailEndsWithCloseBrace'))`
-	 * on the `var` / `final` family. Reading the HEAD's `init` there —
-	 * which is what the plain-mode `trailOptShapeGate('endsWithCloseBrace',
-	 * 'init')` still does — drops the `;` off that statement and emits
+	 * on the `var` / `final` family, and its `trailOptShapeGate` twin. Reading the
+	 * HEAD's `init` there instead drops the `;` off that statement and emits
 	 * `var a = { … }, b = 2` before a `}`, which is `Missing ;`.
 	 */
 	private function varDeclTailEndsWithCloseBraceField(): Field {

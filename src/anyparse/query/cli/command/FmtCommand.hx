@@ -253,8 +253,8 @@ final class FmtCommand implements CliCommand {
 	 * The per-mode run summary `apq fmt` RETURNS for its caller to print.
 	 *
 	 * Every mode states BOTH quantities — how many files the run considered and
-	 * how many it acted on. One number alone is what let `formatted 0 file(s),
-	 * 3 failed` read as "the run was inert" on an 870-file tree: nothing on the
+	 * how many it acted on. One number alone is what let a summary of the form `formatted 0 file(s),
+	 * N failed` read as "the run was inert" on a large tree: nothing on the
 	 * line separated that reading from the true one. `--list` said nothing at
 	 * all unless a file failed, so its drift count was reported nowhere.
 	 *
@@ -462,7 +462,7 @@ final class FmtCommand implements CliCommand {
 		// the same `formatted == source` comparison, so they cannot disagree within
 		// a run — they disagreed ACROSS runs, because a writer whose output is not
 		// its own fixed point left `--write` one pass short of where the next
-		// `--list` looked. `FormatFixedPoint` carries the measured instance.
+		// `--list` looked. `FormatFixedPoint` documents the instance.
 		final roundTrip: (text:String) -> Null<String> = text -> plugin.writeRoundTrip(text, optsJson);
 		final fixedPoint: FormatFixedPointResult = try FormatFixedPoint.run(roundTrip, source) catch (exception: Exception) {
 			CliIo.stderr('apq fmt: $path: ${exception.message}\n');
@@ -603,7 +603,7 @@ final class FmtCommand implements CliCommand {
 	 * PARSER change, not an exposure of something already there.
 	 *
 	 * Two sentences, because two things are true: a region whose node kept CHILDREN inside it
-	 * is unbalanced in its HEAD only (`CondSharedBodyDecl`, `CondSpliceBlockOpen`,
+	 * is unbalanced in its HEAD only (e.g. `CondSharedBodyDecl`, `CondSpliceBlockOpen`,
 	 * `CondSpliceBlockTail`), and the writer reformats the statements past the `#end`, so those
 	 * get their own sentence and a quote that stops at the first child. What decides it is the
 	 * TREE, not the ctor name, so a grammar that gives an existing ctor a structural field

@@ -124,11 +124,14 @@ final class HaxeFormat implements TextFormat {
 	 * Haxe-specific knobs are present in the defaulted struct — generated writers cast this
 	 * value to `HxModuleWriteOptions` at entry.
 	 *
-	 * Every default MIRRORS haxe-formatter's `@:default` for the same key (its `sameLine`,
-	 * `lineEnds`, `whitespace`, `emptyLines`, `indentation` and `wrapping` sections, including the
-	 * ported wrap-rule cascades), so an unconfigured tree formats the way the fork formats it;
-	 * the value semantics live on `HxModuleWriteOptions` and on the grammar fields that consume
-	 * each knob. The deliberate DIVERGENCES, each a decision rather than an omission:
+	 * Every default mirrors haxe-formatter's `@:default` for the same key EXCEPT the eight
+	 * source-preserving compiled defaults — `ifBody` / `elseBody` / `forBody` / `whileBody` /
+	 * `doBody` / `caseBody` are `Keep` (fork: `Next`) and `afterLeftCurly` / `beforeRightCurly`
+	 * are `Keep` (fork: `Remove`) — so a file with NO discoverable `hxformat.json` keeps the
+	 * shape its author wrote; `HaxeFormatConfigLoader.loadHxFormatJson` re-baselines those eight
+	 * to the fork value before applying any key, so any loaded config, even `{}`, formats the
+	 * way the fork formats. `expressionForBody` is `Keep` (fork `Same`; see
+	 * `HxFormatSameLineSection`). The other deliberate divergences, each a decision:
 	 *
 	 * - `returnBody` is `FitLine` where the fork says `Same` — the fork's `Same` wraps long
 	 *   values via its separate `wrapping.maxLineLength` pass, which corresponds to our `FitLine`.
@@ -138,20 +141,11 @@ final class HaxeFormat implements TextFormat {
 	 *   same-line-ness, so a multi-line source body keeps its `VarStmt` `@:trailOpt(';')`
 	 *   cascade instead of collapsing.
 	 * - `leftCurly` exposes only `Same` / `Next` — the fork's `Before` / `Both` collapse to `Next`,
-	 *   and its inline `None` shape is not modelled; the global value cascades into every
-	 *   per-construct `*LeftCurly` / `*EmptyCurly` / `*RightCurly` knob, a per-construct sub-key
-	 *   overriding the cascade (the fork's `getCurlyPolicy` precedence).
+	 *   and its inline `None` shape is not modelled. Each of the three globals (`leftCurly`,
+	 *   `emptyCurly`, `rightCurly`) cascades into its own per-construct knobs, a per-construct
+	 *   sub-key winning over the cascade (the fork's `getCurlyPolicy` precedence).
 	 * - `anonFuncParens` is `None` — the fork's `auto` heuristic is not modelled and collapses to
 	 *   tight `function(args)`.
-	 * - `objectFieldColon` is `After` (`{a: 0}`), `typeHintColon` `None` (`x:Int`) and
-	 *   `typeCheckColon` `Both` (`("" : String)`) — three `:` sites with three upstream
-	 *   conventions, each mirrored separately.
-	 * - `betweenImportsLevel` is `All` and the inter-member blank counts collapse any positive
-	 *   value to one blank (the emission path is a boolean contributor, not a count loop).
-	 * - The `multiline` predicate behind `afterMultilineDecl` / `beforeMultilineDecl` /
-	 *   `betweenSingleLineTypes` is grammar-derived at compile time by
-	 *   `WriterLowering.buildMultilinePredicate` from the `@:fmt(multilineWhen*)` /
-	 *   `@:fmt(multilineCtor)` annotations — zero runtime reflection.
 	 */
 	public var defaultWriteOptions(default, null): HxModuleWriteOptions = {
 		indentChar: Tab,

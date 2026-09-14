@@ -137,9 +137,8 @@ final class LintFixLedger {
 		// carries per-(rule, file) tallies and `ledgerRiskyTallies` folds them into rows here. What
 		// is left is the run that never asked those rules at all — no oracle, an oracle that would
 		// not start, a tree that does not typecheck — and for that the disclaimer is the answer.
-		// An `OracleAssisted` rule that is not also risky DOES run in the safe loop, so it has a row
-		// either way; listing it as absent was the first version of this line and it contradicted
-		// the row three lines above it.
+		// An `OracleAssisted` rule that is not also risky DOES run in the safe
+		// loop, so it has a row either way and must not be listed as absent.
 		if (riskyIds.length > 0)
 			lines.push(
 				'apq lint --fix: ${riskyIds.length} rule(s) are absent from this ledger — the risky-fix path never ran them this '
@@ -354,16 +353,15 @@ final class LintFixLedger {
 	 * `risky` is passed so a run that could NOT verify its risky rules can name them: a `RiskyFix`
 	 * check is excluded from the safe loop, so on such a run no `Check.fix` of its own is ever
 	 * called and its row would be a silent zero. Naming them is what keeps the block from reading
-	 * as though it LOST the largest rule on the tree — on Pony `avoid-dynamic` alone reports 470 —
-	 * and the summary line above already carries why the phase did not run.
+	 * as though it LOST the largest rule on the tree, and the summary line above already carries why the phase did not run.
 	 *
 	 * `riskyLedgered` says the opposite happened: the phase ran, `FixVerifier` tallied it, and
 	 * `ledgerRiskyTallies` folded those tallies into rows here. Then the list must be empty, or the
 	 * footer would disclaim a rule whose own row sits three lines above it.
 	 *
 	 * `oracleAssisted` is a third case and was got wrong first time round: such a rule DOES run in
-	 * the safe loop (unless it is risky too), so it has a row here — its extra oracle pass is noted
-	 * ON that row rather than by claiming the rule is absent.
+	 * the safe loop (unless it is risky too), so it has a row either way and
+	 * must not be listed as absent — its extra oracle pass is noted ON that row.
 	 *
 	 * It returns the lines instead of writing them because `CliIo.stderr` is a process write with
 	 * no seam a test can read, and the census is exactly the kind of block a later edit drops
@@ -374,13 +372,13 @@ final class LintFixLedger {
 		fixedCount: Int, verbose: Bool
 	): Array<String> {
 		// A run that WROTE NOTHING owes this block nothing, and that is the common run: `--fix`
-		// behind a write op is scoped to the lines one edit touched, so it lands 0 edits most
-		// times it is asked, and printed ~1450 bytes of rule accounting about them anyway. Every
+		// behind a write op is scoped to the lines one edit touched, so it usually
+		// lands no edit, and a block of rule accounting about nothing is noise. Every
 		// sentence here is a statement ABOUT WHAT THE RUN WROTE — which rules produced an edit,
 		// which declined one, which were never asked — so with no edits there is no claim left to
 		// make that the summary line above does not already carry. A PRODUCTIVE run still prints
-		// it in full: that was the whole point of splitting it out of the summary tail, and the
-		// 668-fix tree that said nothing about its own 161 declines is the incident behind it.
+		// it in full: that was the whole point of splitting it out of the summary tail, and a run
+		// of hundreds of fixes that said nothing about its own declines is the incident behind it.
 		if (fixedCount == 0 && !verbose) return [];
 		// Empty when the risky phase RAN: its rules then have rows of their own here, and the
 		// footer that names them as absent would contradict the row three lines above it.

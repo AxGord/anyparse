@@ -186,9 +186,8 @@ final class LintFixDriver {
 
 		final baselineTail: String = safePass.tail;
 		final skipTail: String = LintFixLedger.skippedTail(noted, changedFiles);
-		// Names the per-ROUND budget, not the run total: `passes` spans both rounds now, so the old
-		// wording produced `over 12 pass(es) (stopped at 10 passes …)` — a line that reads as a
-		// contradiction rather than as the two budgets it actually reports.
+		// Names the per-ROUND budget, not the run total: `passes` spans both rounds now, so the old wording paired the run total with
+		// the round budget in one parenthesis — a line that reads as a contradiction rather than as the two budgets it actually reports.
 		final capTail: String = hitCap ? ' (a round stopped at its $maxPasses-pass budget — re-run if more remain)' : '';
 		CliIo.stderr(
 			'${LintFixLedger.lintFixSummary(fixedCount, changedFiles.length, passes)}$skipTail$capTail$baselineTail$riskyTail$oracleTail'
@@ -201,8 +200,8 @@ final class LintFixDriver {
 		// run is exactly where the misreading lands.
 		LintFixLedger.printUnfixedLedger(ledger, checks, split.risky, oracleAssisted, risky.ledgered, fixedCount, verbose);
 		// The summary says HOW MANY reverted; these say WHICH, and by which rule. One line per
-		// revert, nothing else: attributing three of them on an 809-file tree otherwise costs an
-		// md5 snapshot before and after plus one run per candidate rule.
+		// revert, nothing else: attributing them on a large tree otherwise costs
+		// an md5 snapshot before and after plus one run per candidate rule.
 		for (r in risky.reverts)
 			CliIo.stderr('apq lint --fix: risky-fix REVERTED ${r.file} (${r.rule}): ${LintFixVerify.revertCauseText(r.cause)}\n');
 		// And WHICH code the oracle cannot speak for at all. The count alone would leave the

@@ -419,8 +419,8 @@ final class SourceCommand implements CliCommand {
 	 * whole files of which it needs a small fraction. And the discipline the skill
 	 * states ("read the member by name") cannot be followed on first contact,
 	 * because `--select` demands a name you do not have yet — so the honest fix is
-	 * for the tool to hand the NAMES back instead of the bytes; the largest `src`
-	 * files cost a six-figure token count each when read whole.
+	 * for the tool to hand the NAMES back instead of the bytes; the largest
+	 * `src` files cost tens of thousands of tokens each when read whole.
 	 *
 	 * `HXQ_SOURCE_MAX_LINES` sets the budget (default `DEFAULT_MAX_LINES`); `0`
 	 * switches the gate off entirely, and `--all` prints the file whole. A file that
@@ -509,7 +509,7 @@ final class SourceCommand implements CliCommand {
 		// A node spanning ONE line is not worth addressing: whoever reads its
 		// neighbour reads it too, and on a Haxe module the one-liners are the
 		// package, every import, every modifier annotation and every typedef field —
-		// 20 of the 50 entries this file yields, none of them what a reader wants.
+		// most of the entries a module yields, none of them what a reader wants.
 		// A LINE COUNT is the grammar-agnostic form of that judgement; a kind list
 		// would be a Haxe-shaped one, and the menu has to survive the next grammar.
 		// If the filter empties the menu (a file of one-liners), the unfiltered list

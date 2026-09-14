@@ -325,9 +325,8 @@ final class HaxeNamingSupport implements NamingSupport {
 	 *
 	 * A checkstyle naming check declares a `format` and no correction, so a policy loaded from one
 	 * reached `Naming.correctedName` with `normalize == null` and every finding it produced was
-	 * report-only BY CONSTRUCTION: 198 of the 231 `naming` findings on an 851-file tree, where the
-	 * SAME regex fixed two of them the moment the identical policy came from the built-in default
-	 * instead. The corrections are the grammar's, not the config's, so they are taken from
+	 * report-only BY CONSTRUCTION — the SAME regex fixed its findings the moment the identical policy
+	 * came from the built-in default instead. The corrections are the grammar's, not the config's, so they are taken from
 	 * `defaults()`: the candidate set for a category is exactly the `normalize` functions the built-in
 	 * policy attaches to THAT category, and a category the built-in leaves report-only — a type, an
 	 * enum value, whose rename reaches every file that names it — gets none here either.
@@ -739,9 +738,8 @@ final class HaxeNamingSupport implements NamingSupport {
 	 * line in the same place (`MethodNameCheck.checkField` returns on `isGetter() || isSetter()` before
 	 * any format is matched) and nowhere else: `MemberName` does NOT exempt a FIELD spelled `get_x`,
 	 * so neither does this. Invisible under the built-in convention by construction — its Method format
-	 * `^[a-z][a-zA-Z0-9_]*$` accepts every name that opens with `get_` / `set_` — and reached only by a
-	 * project config strict enough to reject an underscore, where it was measured at three spurious
-	 * findings for one property pair.
+	 * `^[a-z][a-zA-Z0-9_]*$` accepts every name that opens with `get_` / `set_` —
+	 * and reached only by a project config strict enough to reject an underscore.
 	 */
 	private static function isReservedName(category: NamingCategory, name: String): Bool {
 		return DISCARD_NAME_PATTERN.match(name) || DUNDER_NAME_PATTERN.match(name) || category == NamingCategory.Method

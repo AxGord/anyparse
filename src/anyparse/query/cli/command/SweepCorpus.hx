@@ -50,9 +50,9 @@ typedef SweepCorpusResult = {
  * it. The predicate it reproduces is `HxFormatterCorpusTest.runCategory`, step for step:
  * three `\n---\n` sections or `MALFORMED`; `disableFormatting` / `excludes` in the fixture's
  * own config mean the fork's formatter never ran, so the expected section is empty and the
- * writer must not run either; the config loads (`SKIP_CONFIG` when it does not), probed
- * through `layoutMetrics`, which builds the same write options the round trip would; the
- * input parses (`SKIP_PARSE`) and writes (`SKIP_WRITE`); one trailing `\n` comes off the
+ * writer must not run either; the config loads (`SKIP_CONFIG` when it does not), probed through `layoutMetrics`,
+ * which builds the same write options the round trip would, so the failure surfaces before the parse as in the
+ * harness; the input parses (`SKIP_PARSE`) and writes (`SKIP_WRITE`); one trailing `\n` comes off the
  * emitted text, because `.hxtest` sections carry one `\n` of padding that the fixture reader
  * already stripped from `expected` — without this every PASS reads as a one-byte FAIL; byte
  * equality decides `PASS` / `FAIL`.
@@ -61,7 +61,7 @@ typedef SweepCorpusResult = {
  * agrees: `writeRoundTrip` refuses to hand back output that dropped a comment while the
  * harness compares the lossy bytes — a refusal cannot be byte-equal to an expected section
  * that still carries the comment, so both call it `FAIL` (setting `APQ_ALLOW_COMMENT_LOSS`
- * turns the refusal into the plain byte-diff and does not move the count). And the harness
+ * turns the refusal into the plain byte-diff and does not move the `FAIL` count). And the harness
  * enumerates named subdirectories where this walks the tree, so a fixture in a directory the
  * harness does not list shows up here as an `ADDED` row under `--diff` rather than silently
  * in neither.

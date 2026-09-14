@@ -3,38 +3,36 @@ package anyparse.grammar.haxe;
 /**
  * Function-body shape on `HxFnDecl.body`. Five forms, in DISPATCH order:
  *
- * `UntypedBlockBody(body:HxUntypedFnBody)` — `untyped { stmts }` with the `untyped` keyword
- * as a pre-block modifier (`function f():Type untyped { body }`). The kw + `HxFnBlock`
- * payload live inside the `HxUntypedFnBody` Seq wrapper so this branch is a single-Ref Case
- * 3 with no own `@:kw`. Branch-level `@:fmt(bodyPolicy('untypedBody'))` drives the
- * parent→`untyped` separator via `bodyPolicyWrap`; the parent `HxFnDecl.body`'s leftCurly
- * Case 5 routes this ctor through `spacePrefixCtors` + `ctorHasBodyPolicy` (an empty
- * separator), so the inner wrap is the sole source of the kw-leading transition, and the
- * `untyped`→`{` gap is governed by `HxUntypedFnBody.block`'s `@:fmt(leftCurly)`. Must appear
- * before `BlockBody` so the inner `untyped` peek (via `tryBranch` rollback) fires before the
- * bare-`{` dispatch.
+ * `UntypedBlockBody(body:HxUntypedFnBody)` — `untyped { stmts }` with the `untyped` keyword as a pre-block
+ * modifier (`function f():Type untyped { body }`). The kw + `HxFnBlock` payload live inside the
+ * `HxUntypedFnBody` Seq wrapper so this branch is a single-Ref Case 3 with no own `@:kw`. The
+ * parent→`untyped` separator is wired at the PARENT: `HxFnDecl.body` carries
+ * `@:fmt(bodyPolicyForCtor('UntypedBlockBody', 'untypedBody'))`, which replaces this ctor's `sep + write`
+ * pair in the leftCurly Case 5 chain with a `bodyPolicyWrap` (`Same`, the default, cuddles `function f():
+ * T untyped { … }`; `Next` pushes `untyped` onto its own line). The branch itself carries no `bodyPolicy`;
+ * the `untyped`→`{` gap is `HxUntypedFnBody.block`'s `@:fmt(leftCurly)`. Must appear before `BlockBody` so
+ * the inner `untyped` peek (via `tryBranch` rollback) fires before the bare-`{` dispatch.
  *
- * `BlockBody(block:HxFnBlock)` — `{ stmts }`. The `{`-leading peek, the brace policy, the
- * `@:trivia` capture and the orphan-trivia trailing slots all sit inside the Seq-typedef
- * wrapper (see `HxFnBlock`). `NoBody` — `;` only, the shape of an interface method or
- * `@:overload` stub, dispatched by the `;` literal. `CondBody` — a `#if` region occupying
- * the whole body slot; its branch doc explains why it precedes `ExprBody`.
+ * `BlockBody(block:HxFnBlock)` — `{ stmts }`. The `{`-leading peek, the brace policy, the `@:trivia`
+ * capture and the orphan-trivia trailing slots all sit inside the Seq-typedef wrapper (see `HxFnBlock`).
+ * `NoBody` — `;` only, the shape of an interface method or `@:overload` stub, dispatched by the `;`
+ * literal. `CondBody` — a `#if` region occupying the whole body slot; its branch doc explains why it
+ * precedes `ExprBody`.
  *
- * `ExprBody(expr:HxExpr)` — single-expression body, optionally terminated by `;`
- * (`function foo() trace("hi");` or, as the last member before `}`, without it). The
- * catch-all tried LAST; `tryBranch`'s rollback ensures the literal-led siblings win on
- * shared input. `@:trailOpt(';')` consumes the terminator when present and tracks its source
- * presence — the writer re-emits it byte-faithfully (single-Ref Alt `trailPresent` arg, the
- * `HxStatement.ExprStmt` mirror). The signature→body separator is runtime-switchable via the
- * PARENT `HxFnDecl.body`'s `@:fmt(bodyPolicyForCtor('ExprBody', 'functionBody'))`: `Next`
- * (default) emits a hardline + Nest, `Same` a single space, `Keep` reproduces the source
- * newline-or-not via the parent struct's `bodyBeforeNewline:Bool` synth slot. The wrap lives
- * at the parent for the same reason `UntypedBlockBody`'s does: the signature→body gap is
- * consumed by the parent struct's pre-field `skipWs` BEFORE this branch's sub-rule probes,
- * so a branch-local slot would always read "no newline".
+ * `ExprBody(expr:HxExpr)` — single-expression body, optionally terminated by `;` (`function foo()
+ * trace("hi");` or, as the last member before `}`, without it). The catch-all tried LAST; `tryBranch`'s
+ * rollback ensures the literal-led siblings win on shared input. `@:trailOpt(';')` consumes the terminator
+ * when present and tracks its source presence — the writer re-emits it byte-faithfully (single-Ref Alt
+ * `trailPresent` arg, the `HxStatement.ExprStmt` mirror). The signature→body separator is
+ * runtime-switchable via the PARENT `HxFnDecl.body`'s `@:fmt(bodyPolicyForCtor('ExprBody',
+ * 'functionBody'))`: `Next` (default) emits a hardline + Nest, `Same` a single space, `Keep` reproduces
+ * the source newline-or-not via the parent struct's `bodyBeforeNewline:Bool` synth slot. The wrap lives at
+ * the parent for the same reason `UntypedBlockBody`'s does: the signature→body gap is consumed by the
+ * parent struct's pre-field `skipWs` BEFORE this branch's sub-rule probes, so a branch-local slot would
+ * always read "no newline".
  *
- * `HxFnBlock` is trivia-bearing, which transitively makes this enum bearing — paired type
- * `HxFnBodyT` synthesised by `TriviaTypeSynth`.
+ * `HxFnBlock` is trivia-bearing, which transitively makes this enum bearing — paired type `HxFnBodyT`
+ * synthesised by `TriviaTypeSynth`.
  */
 @:peg
 enum HxFnBody {
@@ -73,7 +71,7 @@ enum HxFnBody {
 	 *
 	 * Second consequence: a region whose branches are single EXPRESSIONS projects here too
 	 * (`function f() #if a { 1; } #else { 2; } #end`), the more accurate of the two readings, at
-	 * one layout cost: a trailing `;` written OUTSIDE the region is no longer absorbed by
+	 * one layout cost: a trailing `;` written OUTSIDE the region is not absorbed by
 	 * `ExprBody`'s `@:trailOpt(';')` and lands as a sibling `EmptySemiMember`. Adding
 	 * `@:trailOpt(';')` here does NOT recover it — the two trailers together make every
 	 * `CondBody` source unparseable. A second layout cost: `HxFnDecl.body` wires

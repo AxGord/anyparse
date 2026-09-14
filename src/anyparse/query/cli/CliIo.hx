@@ -14,12 +14,10 @@ import sys.FileSystem;
  * world: the two output streams, file reads and the crash-safe staged file
  * write, stdin, and the progress line a long walk prints.
  *
- * It exists because every one of the 69 commands needs some of it: `stderr`
- * alone had 165 call sites inside `Cli` before this module, `sysPrint` 143.
- * Moving a command out of `Cli` onto the command registry (`CliCommand`) is
- * only mechanical once the IO it calls is reachable from outside `Cli`, so
- * this module is the prerequisite half of that decomposition, not a
- * convenience grab-bag.
+ * It exists because every command needs some of it: moving a command out of
+ * `Cli` onto the command registry (`CliCommand`) is only mechanical once the IO
+ * it calls is reachable from outside `Cli`, so this module is the prerequisite
+ * half of that decomposition, not a convenience grab-bag.
  *
  * Every member is a pure function of its arguments plus the process — the
  * module holds NO state, which is what keeps a CLI run free of the

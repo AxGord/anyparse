@@ -1,35 +1,35 @@
 package anyparse.grammar.haxe.format;
 
 /**
- * `sameLine` section of `hxformat.json`. Each key maps onto the `HxModuleWriteOptions` knob of
- * the same name unless noted; the knob's semantics live there and on the grammar field that
- * consumes it. `ifElse` / `tryCatch` / `doWhile` are two-way same-line knobs for whether
- * `else` / `catch` / `while` sit on the same line as their preceding block. `ifBody` /
- * `elseBody` / `forBody` / `whileBody` / `doWhileBody` (→ `doBody`) / `returnBody` /
- * `returnBodySingleLine` / `catchBody` / `tryBody` / `functionBody` / `untypedBody` /
- * `caseBody` / `expressionCase` are three-way body-placement knobs (`same` / `next` /
- * `fitLine`, plus `keep`); `elseIf` and `elseSwitch` are keyword-placement knobs;
- * `expressionTry` is the same-line knob for an expression-position `try`.
+ * `sameLine` section of `hxformat.json`. Each key maps onto the `HxModuleWriteOptions` knob of the same name
+ * unless noted; a knob's value semantics live on the grammar field carrying the matching `@:fmt(...)`, and
+ * every key's kind, compiled default and governed site is tabulated in `docs/haxe-format-config.md` §
+ * `sameLine.*`. `ifElse` / `tryCatch` / `doWhile` are two-way same-line knobs for whether `else` / `catch` /
+ * `while` sit on the same line as their preceding block. `ifBody` / `elseBody` / `forBody` / `whileBody` /
+ * `doWhileBody` (→ `doBody`) / `returnBody` / `returnBodySingleLine` / `catchBody` / `tryBody` /
+ * `functionBody` / `untypedBody` / `caseBody` / `expressionCase` are three-way body-placement knobs (`same` /
+ * `next` / `fitLine`, plus `keep`); `elseIf` and `elseSwitch` are keyword-placement knobs; `expressionTry` is
+ * the same-line knob for an expression-position `try`.
  *
- * `caseBody` and `expressionCase` feed the same Star body site, dispatched on
- * `opt._inExprPosition` rather than OR-ed: `same` and `fitLine` both OVERRIDE a source break,
- * only `keep` reads the source form. So setting `caseBody` alone and testing on a `return
- * switch …` (an EXPRESSION-position switch, governed by `expressionCase`) leaves the source
- * shape untouched and reads exactly like a writer that cannot re-join at all.
+ * `caseBody` and `expressionCase` feed the same Star body site, dispatched on `opt._inExprPosition` rather
+ * than OR-ed: `same` and `fitLine` both OVERRIDE a source break, only `keep` reads the source form. So setting
+ * `caseBody` alone and testing on a `return switch …` (an EXPRESSION-position switch, governed by
+ * `expressionCase`) leaves the source shape untouched and reads exactly like a writer that cannot re-join at
+ * all.
  *
- * `expressionIf` fans out into the three runtime knobs `expressionIfBody` /
- * `expressionElseBody` / `expressionForBody` (absent, each keeps its own compiled default —
- * they are NOT uniform) and also drives the per-`else` gap `sameLineExpressionElse`: `same`
- * → `Same`, `keep` → `Keep`, `next` → `SameOnBlock` (the `else` cuddles to a `}` close and
- * keeps its forced break after every other shape), `fitLine` → `Same`.
- * `expressionIfWithBlocks` is a body-CONTENTS flattener for `BlockExpr` branches and nothing
- * else: it never pulls `else` up to a `}` (that is `expressionIf: next`) and never hugs a
- * branch value to its head (that is `expressionIfWithBrackets`, for `[` only).
+ * `expressionIf` fans `keep` / `same` out into all three runtime knobs `expressionIfBody` /
+ * `expressionElseBody` / `expressionForBody` and `next` / `fitLine` into the if/else pair only (absent, each
+ * keeps its own compiled default — `Same` / `Same` / `Keep`, NOT uniform), and also drives the per-`else` gap
+ * `sameLineExpressionElse`: `same` → `Same`, `keep` → `Keep`, `next` → `SameOnBlock` (the `else` cuddles to a
+ * `}` close and keeps its forced break after every other shape), `fitLine` → `Same`. `expressionIfWithBlocks`
+ * is a body-CONTENTS flattener for `BlockExpr` branches and nothing else: it never pulls `else` up to a `}`
+ * (that is `expressionIf: next`) and never hugs a branch value to its head (that is
+ * `expressionIfWithBrackets`, for `[` only).
  *
- * `fitLineIfWithElse`, `loopBodyIfElseNext`, `expressionIfArrowBodyReflow`,
- * `elseIfCommentReflow` and `conditionalExprFit` are `Bool` knobs documented on their
- * `HxModuleWriteOptions` fields; the reflow knobs refuse as a WHOLE whenever a captured
- * comment sits where the glued layout would misplace it, and keep the fork's layout.
+ * `fitLineIfWithElse`, `loopBodyIfElseNext`, `expressionIfArrowBodyReflow`, `elseIfCommentReflow` and
+ * `conditionalExprFit` are `Bool` knobs documented on their `HxModuleWriteOptions` fields (`fitLineIfWithElse`
+ * on `HxIfStmt`); the reflow knobs refuse as a WHOLE whenever a captured comment sits where the glued layout
+ * would misplace it, and keep the fork's layout.
  */
 @:peg typedef HxFormatSameLineSection = {
 

@@ -1,44 +1,44 @@
 package anyparse.grammar.haxe;
 
 /**
- * Statement grammar for Haxe function bodies. Branches in source order — keyword-dispatched
- * branches first, block statement next, the expression-statement catch-all last; every
- * shared keyword (`switch`, `try`, `function`, `return`) is resolved by `tryBranch` rollback
- * in source order. Sub-typedef contracts live on those types.
+ * Statement grammar for Haxe function bodies. Branches in source order — keyword-dispatched branches first,
+ * block statement next, the expression-statement catch-all last; every shared keyword (`switch`, `try`,
+ * `function`, `return`) is resolved by `tryBranch` rollback in source order. Sub-typedef contracts live on
+ * those types.
  *
- * `StaticVarStmt` / `StaticFinalStmt` — `static var|final name = init;` static locals, the
- * byte-twin of `VarStmt` / `FinalStmt` through the kw+lead single-Ref pattern. `VarStmt` /
- * `FinalStmt` — local declarations reusing `HxVarDecl`; the trailing `;` is `@:trailOpt(';')`,
- * shape-gated on write via `@:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))` so `var
- * foo = switch (x) { … }` emits no redundant `;`. `ReturnStmt` — `return expr`, tried before
- * `VoidReturnStmt` (`return;`, Lowering Case 0 with a trail literal, D48); `@:trailOpt(';')`
- * (Haxe allows `return expr` before `}`) with trivia mode preserving the source's `;` via the
- * `trailPresent` synth slot. `@:fmt(bodyPolicy('returnBody'))` on `value` routes the
- * `return`→value separator through the runtime `BodyPolicy` switch (default `FitLine`), and
- * the opt-in `@:fmt(widthAware)` makes `Same` width-aware (an `IfWidthExceeds` wrap — the
- * probe sums every token of the flat shape, so a multi-line value whose first line fits can
- * still break). `indentValueIfCtor('ObjectLit', …)` / `('IfExpr', …)` on `value` mirror the
- * `HxVarDecl.init` entries. `ThrowStmt` — `throw expr;` with `@:fmt(bodyPolicy('throwBody'))`,
- * default `Same` because haxe-formatter leaves `throw <expr>` inline. `IfStmt`, `WhileStmt`,
- * `ForStmt`, `DoWhileStmt` (`@:trail(';')` after the inner typedef) dispatch into their typedefs.
- * `SwitchStmt` / `SwitchStmtBare` share `@:kw('switch')`; the bare form is tried when
- * `@:lead('(')` fails. `TryCatchStmt` / `TryCatchStmtBare` share `@:kw('try')`; the block
- * form carries `@:fmt(tryPolicy)` (the kw-trail-space axis, orthogonal to `tryBody` through
- * `bodyPolicyWrap`'s `kwOwnsInlineSpace` mode), the bare form does NOT — its first field's
- * `bareBodyBreaks` strips the kw-trailing-space slot, so the flag would silently no-op.
+ * `StaticVarStmt` / `StaticFinalStmt` — `static var|final name = init;` static locals, the byte-twin of
+ * `VarStmt` / `FinalStmt` through the kw+lead single-Ref pattern. `VarStmt` / `FinalStmt` — local declarations
+ * reusing `HxVarDecl`; the trailing `;` is `@:trailOpt(';')`, shape-gated on write via
+ * `@:fmt(trailOptShapeGate('varDeclTailEndsWithCloseBrace'), optionalSemicolon(…))` — the predicate asks the
+ * LAST binding of a multi-var declaration, the one that owns the `;` — so `var foo = switch (x) { … }` emits
+ * no redundant `;`. On parse the `;` is optional for every `var` / `final` — looser than Haxe (`var x = 5\nvar
+ * y = 6` is accepted) — and harmless because the writer only emits the gate's canonical form. `ReturnStmt` —
+ * `return expr`, tried before `VoidReturnStmt` (`return;`, Lowering Case 0 with a trail literal);
+ * `@:trailOpt(';')` (Haxe allows `return expr` before `}`) with trivia mode preserving the source's `;` via
+ * the `trailPresent` synth slot. `@:fmt(bodyPolicy('returnBody'))` on `value` routes the `return`→value
+ * separator through the runtime `BodyPolicy` switch (default `FitLine`), and the opt-in `@:fmt(widthAware)`
+ * makes `Same` width-aware (an `IfWidthExceeds` wrap — the probe sums every token of the flat shape, so a
+ * multi-line value whose first line fits can still break). `indentValueIfCtor('ObjectLit', …)` / `('IfExpr',
+ * …)` on `value` mirror the `HxVarDecl.init` entries. `ThrowStmt` — `throw expr;` with
+ * `@:fmt(bodyPolicy('throwBody'))`, default `Same` because haxe-formatter leaves `throw <expr>` inline.
+ * `IfStmt`, `WhileStmt`, `ForStmt`, `DoWhileStmt` (`@:trail(';')` after the inner typedef) dispatch into their
+ * typedefs. `SwitchStmt` / `SwitchStmtBare` share `@:kw('switch')`; the bare form is tried when `@:lead('(')`
+ * fails. `TryCatchStmt` / `TryCatchStmtBare` share `@:kw('try')`; the block form carries `@:fmt(tryPolicy)`
+ * (the kw-trail-space axis, orthogonal to `tryBody` through `bodyPolicyWrap`'s `kwOwnsInlineSpace` mode), the
+ * bare form does NOT — its first field's `bareBodyBreaks` strips the kw-trailing-space slot, so the flag would
+ * silently no-op.
  *
- * `UntypedBlockStmt(body:HxUntypedFnBody)` — `untyped { stmts }` as a block-shape statement
- * with no `;`, before `BlockStmt` so the inner `untyped` peek fires first; it carries NO
- * `bodyPolicy('untypedBody')` (a stmt-level inner wrap would stack with parent separators;
- * `HxTryCatchStmt.body`'s `bodyPolicyOverride` handles `try untyped`) and `@:fmt(blockShape)`
- * so shape-aware writers treat it as block-equivalent. `Conditional` — `#if … #end` at
- * statement scope around `HxConditionalStmt`. `LocalFnStmt` / `LocalInlineFnStmt` — named
- * local functions reusing `HxFnDecl`; an anonymous `function()` fails `HxFnDecl.name` and
- * rolls back to `ExprStmt` → `HxExpr.FnExpr`. `BlockStmt` — `{ stmts }`, Case 4. `EmptyStmt`
- * — a lone `;`. `ExprStmt` — `expr;`, last because it has no keyword guard; its `;` is
- * `@:trailOpt(';')` gated parser-side via `@:fmt(trailOptParseGate('stmtExprNoSemi'))`:
- * REQUIRED (the statement Star relies on `expectLit` throwing for boundary detection)
- * UNLESS the parsed expression is brace-terminated (the `endsWithCloseBrace` set).
+ * `UntypedBlockStmt(body:HxUntypedFnBody)` — `untyped { stmts }` as a block-shape statement with no `;`,
+ * before `BlockStmt` so the inner `untyped` peek fires first; it carries NO `bodyPolicy('untypedBody')` (a
+ * stmt-level inner wrap would stack with parent separators; `HxTryCatchStmt.body`'s `bodyPolicyOverride`
+ * handles `try untyped`) and `@:fmt(blockShape)` so shape-aware writers treat it as block-equivalent.
+ * `Conditional` — `#if … #end` at statement scope around `HxConditionalStmt`. `LocalFnStmt` /
+ * `LocalInlineFnStmt` — named local functions reusing `HxFnDecl`; an anonymous `function()` fails
+ * `HxFnDecl.name` and rolls back to `ExprStmt` → `HxExpr.FnExpr`. `BlockStmt` — `{ stmts }`, Case 4.
+ * `EmptyStmt` — a lone `;`. `ExprStmt` — `expr;`, last because it has no keyword guard; its `;` is
+ * `@:trailOpt(';')` gated parser-side via `@:fmt(trailOptParseGate('stmtExprNoSemi'))`: REQUIRED (the
+ * statement Star relies on `expectLit` throwing for boundary detection) UNLESS the parsed expression is
+ * brace-terminated (the `endsWithCloseBrace` set).
  */
 @:peg
 enum HxStatement {

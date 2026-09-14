@@ -167,7 +167,7 @@ final class LintFixVerify {
 	 * `noteFixOutcome` in the risky path's own words: `reported` takes the findings, `edits`
 	 * takes what landed, and a file where nothing landed contributes its findings to `declined`
 	 * under whatever sentence the verifier already recorded for that (file, rule) pair. Until
-	 * this existed the 13 `RiskyFix` rules put edits into the run's summary count and never a
+	 * this existed the `RiskyFix` rules put edits into the run's summary count and never a
 	 * finding into the block that says what got no edit — the two numbers a reader compares were
 	 * measured over two different rule sets, and the block had to say so instead of answering.
 	 *
@@ -262,8 +262,7 @@ final class LintFixVerify {
 		if (declined.length == 0) return '';
 		var edits: Int = 0;
 		// DISTINCT files, because the word on the line is "file(s)": `declined` holds one entry
-		// per (file, RULE), and with 13 risky rules in the registry one uncovered file tripping
-		// three of them would otherwise read as three.
+		// per (file, RULE), so one uncovered file tripping several risky rules would otherwise read as several.
 		final files: Array<String> = [];
 		for (entry in declined) {
 			edits += entry.edits;

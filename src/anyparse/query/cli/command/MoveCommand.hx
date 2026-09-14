@@ -286,8 +286,7 @@ final class MoveCommand implements CliCommand {
 	 * compiled defaults answers about a style the project does not use. A file already
 	 * non-canonical on disk keeps exactly what the splice produced, so a move inside a repo whose
 	 * layout another formatter owns rewrites nothing it was not asked to. That gate is also what
-	 * makes this a provable no-op wherever the spliced result is already canonical — every case
-	 * the census measured green.
+	 * makes this a provable no-op wherever the spliced result is already canonical.
 	 *
 	 * The write goes through `FormatFixedPoint`, not one round trip, because a writer whose output
 	 * is not its own fixed point would leave the file one pass short of where the next `fmt --list`

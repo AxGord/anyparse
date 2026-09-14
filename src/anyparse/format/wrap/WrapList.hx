@@ -348,7 +348,8 @@ class WrapList {
 		// newly-visible width OUT through the returned Doc into an enclosing
 		// construct's measure, flipping e.g. a `callParameter`
 		// `totalItemLength <= n` rule and opening a call paren that used to hug
-		// the bracket. Host positions are out of this slice's remit, so the gate keeps the re-tag where it decides something.
+		// the bracket. Host positions are not this gate's to decide, so it keeps the re-tag where it
+		// decides something.
 		//
 		// ω-fnlambda-body-width: the third disjunct opens the SAME re-tag for the `function`-keyword spelling of a lambda item
 		// (`isFunctionInlineBodyItem`) — same defect, same remedy. Its body condition is WIDER than the arrow arm's: any hardline-free
@@ -2630,8 +2631,7 @@ class WrapList {
 		// or `for`/`while`/map comprehension — is excluded. A bracket-delimited
 		// collection owns its own multi-line layout: its `[` IS its wrap point,
 		// so the call hugs it and only the bracket opens
-		// (`dispatch([\n\t…\n]);`). That policy predates this slice and is
-		// pinned by `HxComprehensionDeclRhsBracketWrapTest`; the outer-first
+		// (`dispatch([\n\t…\n]);`). That policy is pinned by `HxComprehensionDeclRhsBracketWrapTest`; the outer-first
 		// priority governs where a CALL-level wrap competes with a nested
 		// PAREN group, not collection literals.
 		// WIDTH is the only question the probe may ask here. A bracket-delimited

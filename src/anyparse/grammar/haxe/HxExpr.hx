@@ -1,44 +1,40 @@
 package anyparse.grammar.haxe;
 
 /**
- * Haxe expression grammar: atoms, unary prefix, postfix, one ternary and the binary-operator
- * suite across eleven precedence levels. Atoms, prefix and postfix are all reached through
- * `parseHxExprAtom` (the postfix wrapper around `parseHxExprAtomCore`); operator branches
- * carry `@:infix(op, prec[, 'Right'])` so the Pratt strategy generates a precedence-climbing
- * loop around the atom parser.
+ * Haxe expression grammar: atoms, unary prefix, postfix, one ternary and the binary-operator suite across
+ * eleven precedence levels. Atoms, prefix and postfix are all reached through `parseHxExprAtom` (the postfix
+ * wrapper around `parseHxExprAtomCore`); operator branches carry `@:infix(op, prec[, 'Right'])` so the Pratt
+ * strategy generates a precedence-climbing loop around the atom parser.
  *
- * Atom order is load-bearing wherever two branches share a prefix, resolved by `tryBranch`
- * rollback in source order: `HexLit` and `FloatLit` before `IntLit` (`[0-9]+` would stop at
- * `0x` / `3.`); `RegexLit` before the `@:prefix('~')` ctor; `ObjectLit` before `BlockExpr`
- * (the strict `key: value` shape is tried first; an empty `{}` is the zero-field literal);
- * `ECheckTypeExpr` `(e : T)` before `ParenExpr` before `ParenLambdaExpr` (`(x) => e` and
- * `(x : T) => e` route through the first two plus the prec-0 infix `=>`);
- * `NewExpr` and `MetaExpr` before `IdentExpr`; `${` before `$name{` before `$ident`;
- * `IdentExpr` last among the atoms — its terminal is the guarded
- * `HxExprIdentLit`, which rejects control-flow keywords up front so a failed keyword-atom
- * branch fail-rewinds honestly instead of re-matching its keyword as a call head.
- * `SingleStringExpr` is a declarative `HxInterpString` (`Literal` / `Dollar` / `Block` /
- * `Ident` segments under `@:raw`); `DoubleStringExpr` decodes escapes via `@:unescape`
- * (D53). `VarExpr` / `FinalExpr` / `ThrowExpr` are keyword-atom mirrors of the statement
- * forms without the statement terminator, reached when an `HxExpr` is parsed directly.
+ * Atom order is load-bearing wherever two branches share a prefix, resolved by `tryBranch` rollback in source
+ * order: `HexLit` and `FloatLit` before `IntLit` (`[0-9]+` would stop at `0x` / `3.`); `RegexLit` before the
+ * `@:prefix('~')` ctor; `ObjectLit` before `BlockExpr` (the strict `key: value` shape is tried first; an empty
+ * `{}` is the zero-field literal); `ECheckTypeExpr` `(e : T)` before `ParenExpr` before `ParenLambdaExpr`
+ * (`(x) => e` and `(x : T) => e` route through the first two plus the prec-0 infix `=>`); `NewExpr` and
+ * `MetaExpr` before `IdentExpr`; `${` before `$name{` before `$ident`; `IdentExpr` last among the atoms — its
+ * terminal is the guarded `HxExprIdentLit`, which rejects control-flow keywords up front so a failed
+ * keyword-atom branch fail-rewinds honestly instead of re-matching its keyword as a call head.
+ * `SingleStringExpr` is a declarative `HxInterpString` (`Literal` / `Dollar` / `Block` / `Ident` segments
+ * under `@:raw`); `DoubleStringExpr` is the `@:rawString` terminal `HxDoubleStringLit` — the slice is kept
+ * verbatim, escapes undecoded (its doc says why `@:unescape` is not used). `VarExpr` / `FinalExpr` /
+ * `ThrowExpr` are keyword-atom mirrors of the statement forms without the statement terminator, reached when
+ * an `HxExpr` is parsed directly.
  *
- * Prefix (`-` `!` `~`) recurses into the atom parser, so it binds tighter than any infix
- * (`-x * 2` is `Mul(Neg(x), 2)`). Postfix (`.name`, `?.name`, `!.name`, `[expr]`, `(args)`,
- * `++`, `--`) is left-recursive in the atom wrapper and binds tighter than both prefix and
- * infix (`-a.b` is `Neg(FieldAccess(a, b))`); `?.` / `!.` are one two-char literal each so
- * `a != b`, `a ?? b` and `a ? b : c` fall through to the Pratt loop untouched. The field
- * suffix is `HxFieldNameLit` (an optional `$` for `obj.$name`).
+ * Prefix (`-` `!` `~`) recurses into the atom parser, so it binds tighter than any infix (`-x * 2` is
+ * `Mul(Neg(x), 2)`). Postfix (`.name`, `?.name`, `!.name`, `[expr]`, `(args)`, `++`, `--`) is left-recursive
+ * in the atom wrapper and binds tighter than both prefix and infix (`-a.b` is `Neg(FieldAccess(a, b))`); `?.`
+ * / `!.` are one two-char literal each so `a != b`, `a ?? b` and `a ? b : c` fall through to the Pratt loop
+ * untouched. The field suffix is `HxFieldNameLit` (an optional `$` for `obj.$name`).
  *
- * Infix tiers, tightest first: `%` alone (Haxe binds it TIGHTER than `*` `/`); `*` `/`; `+`
- * `-`; shifts; `|` `&` `^`; comparisons, `...` (writer-tight) and `is` (ASYMMETRIC — its right
- * operand is `HxType`, routed through `parseHxType`; word-boundary dispatch so `island` is
- * not `is`); `&&`; `||`; `??` (right-assoc); the ternary `? :` (`@:ternary('?', ':',
- * 1)`, both trailing operands at `minPrec = 0`, so right-assoc is
- * inherent; `captureTernaryTrail` keeps the same-line comments before `?` and `:`);
- * and prec 0 — every assignment, `=>` (right-assoc) and `in` (left-assoc, reached only via a
- * `macro $x in $y` reification). Declaration order within a tier is readability only:
- * `lowerPrattLoop` sorts operators by literal length descending. `SwitchExpr` /
- * `SwitchExprBare` carry `@:fmt(propagateExprPosition)` so cases route through `expressionCase`.
+ * Infix tiers, tightest first: `%` alone (Haxe binds it TIGHTER than `*` `/`); `*` `/`; `+` `-`; shifts; `|`
+ * `&` `^`; comparisons, `...` (`@:fmt(intervalPolicy)` — `whitespace.intervalPolicy`, default `none`) and `is`
+ * (ASYMMETRIC — its right operand is `HxType`, routed through `parseHxType`; word-boundary dispatch so
+ * `island` is not `is`); `&&`; `||`; `??` (right-assoc); the ternary `? :` (`@:ternary('?', ':', 1)`, both
+ * trailing operands at `minPrec = 0`, so right-assoc is inherent; `captureTernaryTrail` keeps the same-line
+ * comments before `?` and `:`); and prec 0 — every assignment, `=>` (right-assoc) and `in` (left-assoc,
+ * reached only via a `macro $x in $y` reification). Declaration order within a tier is readability only:
+ * `lowerPrattLoop` sorts operators by literal length descending. `SwitchExpr` / `SwitchExprBare` carry
+ * `@:fmt(propagateExprPosition)` so cases route through `expressionCase`.
  */
 @:peg
 enum HxExpr {
@@ -226,8 +222,7 @@ enum HxExpr {
 	 * Token-splice `#if` region whose fragment is a run of complete
 	 * operands each followed by an operator whose right operand lives
 	 * after the `#end` — see `HxCondSpliceOpExpr`. Dispatched BEFORE
-	 * the raw `CondSpliceExpr` so the eight dangling-operator census
-	 * sites and the one half-ternary keep their operands as nodes.
+	 * the raw `CondSpliceExpr` so a dangling-operator fragment keeps its operands as nodes.
 	 */
 	@:kw('#if')
 	CondSpliceOpExpr(inner: HxCondSpliceOpExpr);

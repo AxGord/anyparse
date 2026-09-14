@@ -398,9 +398,9 @@ final class LintCommand implements CliCommand {
 		// root reached through a symlink (a `resolutionRoots` entry naming a linked tree, a report path
 		// spelled through macOS's `/tmp` -> `/private/tmp`) keeps a different string for the same file
 		// and the whole dedup misses. `realPath` resolves the link.
-		// A MAP, not an array: the library always carries the ~200 std files, so a linear `contains`
-		// over the report would be one string compare per (report x library) pair — ~160k on an
-		// 800-file project, for a lookup that is answered in one hash.
+		// A MAP, not an array: the library always carries the std files, so a linear `contains` over
+		// the report would be one string compare per (report x library) pair, for a lookup that is
+		// answered in one hash.
 		final reportPaths: Map<String, Bool> = [for (f in files) realPath(f.file) => true];
 		var projectRoots: Null<Array<{ file: String, source: String }>> = null;
 		var library: Null<Array<{ file: String, source: String }>> = null;
@@ -604,8 +604,8 @@ final class LintCommand implements CliCommand {
 			// declaring type reads as unresolvable and a Map get/set finding re-exposed by an earlier
 			// pass (a nested lookup) is re-skipped, so the fixed-point loop never converges on it.
 			'prefer-index-access',
-			// Its no-null-value census is OWNER-scoped, not name-scoped — the name-scoped form was
-			// measured and refused five realistic map names on std collisions alone, and
+			// Its no-null-value census is OWNER-scoped, not name-scoped — the
+			// name-scoped form refused realistic map names on std collisions alone, and
 			// `MapValueScan` documents the replacement. What a narrow set costs it is therefore the
 			// three cross-file doors, not an occurrence count. Two of them — an `@:access` grant
 			// and a subtype that could store a null through the map — are asked of
@@ -853,8 +853,8 @@ final class LintCommand implements CliCommand {
 	 * narrow a fix run to a region the caller never asked for.
 	 *
 	 * A raw `Std.parseInt` on each bound parses a leading digit PREFIX and silently drops
-	 * trailing garbage, so `--range 1x:2` / `--range 1:2x` passed while `--range 1,2` (no
-	 * colon at all) was caught by the `colon <= 0` guard below. `SourceText.parseStrictInt`
+	 * trailing garbage, so `--range 1x:2` / `--range 1:2x` would pass while `--range 1,2` (no
+	 * colon at all) is caught by the `colon <= 0` guard below. `SourceText.parseStrictInt`
 	 * is the shared whole-token digit check `apq source --range` already uses.
 	 */
 	private static function parseLintRange(spec: String): Null<LintRange> {

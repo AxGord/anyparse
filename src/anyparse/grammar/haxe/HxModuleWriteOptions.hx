@@ -19,44 +19,43 @@ import anyparse.format.wrap.WrapRules;
 import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
 
 /**
- * Write options specific to the Haxe module grammar (`HxModule`), mixed into the base
- * `WriteOptions` shape via struct intersection so the macro-generated writer sees one fully
- * populated struct at runtime. Defaults live in `HaxeFormat.defaultWriteOptions`;
- * `hxformat.json` ingest lives in `HaxeFormatConfigLoader`, whose per-key docs name the JSON
- * path each knob answers to. A knob's SEMANTICS — what each value does at the site — is the
- * contract of the grammar field that carries the matching `@:fmt(...)` meta, and lives in
- * that field's doc; this typedef only names the knob families:
+ * Write options specific to the Haxe module grammar (`HxModule`), mixed into the base `WriteOptions` shape via
+ * struct intersection so the macro-generated writer sees one fully populated struct at runtime. Defaults live
+ * in `HaxeFormat.defaultWriteOptions`; `hxformat.json` ingest lives in `HaxeFormatConfigLoader`; the JSON path
+ * each knob answers to is the schema field in `format/HxFormat*Section.hx` / `HxFormatConfig.hx`, tabulated in
+ * `docs/haxe-format-config.md`. A knob's SEMANTICS — what each value does at the site — is the contract of the
+ * grammar field that carries the matching `@:fmt(...)` meta, and lives in that field's doc; this typedef only
+ * names the knob families:
  *
  * - Same-line policies (`SameLinePolicy`: `sameLineElse`, `sameLineCatch`, `sameLineDoWhile`,
- *   `sameLineExpressionElse`, `expressionTry`); `Keep` reads a trivia-mode source-shape slot
- *   and degrades to `Same` in plain mode.
- * - Body-placement policies (`BodyPolicy`: `ifBody` … `untypedBody`, `caseBody` /
- *   `expressionCase`, `returnBody` / `throwBody`, the `expression*Body` trio); `Same` keeps
- *   the body inline, `Next` pushes it one indent deeper, `FitLine` keeps it flat when it
- *   fits within `lineWidth`, `Keep` preserves the source layout. A block body (`{ … }`)
- *   carries its own hardlines, so the separator before `{` ignores the policy.
- * - Brace placement and empty bodies (`BracePlacement` / `EmptyCurly` /
- *   `RightCurlyPlacement`, global plus per-construct `objectLiteral*`, `anonType*`,
- *   `anonFunction*`, `block*`); the loader cascades the global `lineEnds.*` value into every
- *   per-construct knob, and a per-construct sub-key overrides the cascade.
- * - Whitespace policies (`WhitespacePolicy` around `:` / `=` / `->` / `&` and the
- *   keyword-to-paren gaps `ifPolicy` … `tryPolicy`); a value with no padding point at a
- *   site is accepted for parity and produces nothing.
+ *   `sameLineExpressionElse`, `expressionTry`); `Keep` reads a trivia-mode source-shape slot and degrades to
+ *   `Same` in plain mode.
+ * - Body-placement policies (`BodyPolicy`: `ifBody` … `untypedBody`, `caseBody` / `expressionCase`,
+ *   `returnBody` / `throwBody`, the `expression*Body` trio); `Same` keeps the body inline, `Next` pushes it
+ *   one indent deeper, `FitLine` keeps it flat when it fits within `lineWidth`, `Keep` preserves the source
+ *   layout. A block body (`{ … }`) carries its own hardlines, so the separator before `{` ignores the policy.
+ * - Brace placement and empty bodies (`BracePlacement` / `EmptyCurly` / `RightCurlyPlacement`, global plus
+ *   per-construct `objectLiteral*`, `anonType*`, `anonFunction*`, `block*`); the loader cascades each global
+ *   `lineEnds.leftCurly` / `emptyCurly` / `rightCurly` value into its own per-construct knobs, and a
+ *   per-construct sub-key overrides the cascade.
+ * - Whitespace policies (`WhitespacePolicy` around `:` / `=` / `->` / `&` and the keyword-to-paren gaps
+ *   `ifPolicy` … `tryPolicy`); a value with no padding point at a site is accepted for parity and produces
+ *   nothing.
  * - Trailing commas (`trailingComma*`, effective only when the enclosing Group breaks).
- * - Wrap-rules cascades (`WrapRules`, evaluated by `WrapList.emit` / `BinaryChainEmit.emit`:
- *   the helper measures item count and max/total flat width, runs the cascade for both
- *   `exceeds` values and picks `NoWrap` / `OnePerLine` / `OnePerLineAfterFirst` /
- *   `FillLine`, wrapping the result in `Group(IfBreak(brk, flat))` when the two disagree).
- * - Blank-line knobs: class-member policies and `Int` counts (an `Int` is an OVERRIDE of the
- *   source count, not a floor; any positive inter-member count collapses to one blank),
- *   type-body head/tail blanks, statement-block interior blanks, and the module-level
- *   cascade whose priority order is documented on `HxModule.decls`.
+ * - Wrap-rules cascades (`WrapRules`, evaluated by `WrapList.emit` / `BinaryChainEmit.emit`: the helper
+ *   measures item count and max/total flat width, runs the cascade for both `exceeds` values and picks
+ *   `NoWrap` / `OnePerLine` / `OnePerLineAfterFirst` / `FillLine`, wrapping the result in `Group(IfBreak(brk,
+ *   flat))` when the two disagree).
+ * - Blank-line knobs: class-member policies and `Int` counts (an `Int` is an OVERRIDE of the source count, not
+ *   a floor; any positive inter-member count collapses to one blank), type-body head/tail blanks,
+ *   statement-block interior blanks, and the module-level cascade whose priority order is documented on
+ *   `HxModule.decls`.
  * - Indentation, interpolation and metadata line-end flags.
  *
- * Underscore-prefixed fields are internal write-time channels, not user-facing knobs: no
- * JSON loader entry, no `hxformat.json` ingest. They are set by a `@:fmt(propagate*)` /
- * `setBoolFlagFromStarCtor` meta on the descending field and propagate through the standard
- * opt-fanout copy; each field's own doc names its setter and its readers.
+ * Underscore-prefixed fields are internal write-time channels, not user-facing knobs: no JSON loader entry, no
+ * `hxformat.json` ingest. They are set by a `@:fmt(propagate*)` / `setBoolFlagFromStarCtor` meta on the
+ * descending field and propagate through the standard opt-fanout copy; each field's own doc names its setter
+ * and its readers.
  */
 typedef HxModuleWriteOptions = WriteOptions & {
 	sameLineElse: SameLinePolicy,
@@ -333,6 +332,12 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	conditionalExprFit: Bool,
 	ifElseSemicolonNextLine: Bool,
 	afterFieldsWithDocComments: CommentEmptyLinesPolicy,
+
+	/**
+	 * `Keep` honours the source blank between class members, `Remove` strips it. A strip policy removes only the SOURCE
+	 * blank: an add policy on the same slot (`afterFieldsWithDocComments = One`, the inter-member counts) still inserts
+	 * one, so `Remove` + `One` yields a blank after a doc-commented member.
+	 */
 	existingBetweenFields: KeepEmptyLinesPolicy,
 
 	/**
@@ -358,7 +363,17 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	interfaceBetweenFunctions: Int,
 	interfaceAfterVars: Int,
 	betweenEnumCtors: Int,
+
+	/**
+	 * Blank lines forced between a class / interface / abstract body's `{` and its first member (`endType`: before its
+	 * `}`), the fork's `classEmptyLines.beginType` / `endType`; `0` (the default) defers to `afterLeftCurly` /
+	 * `beforeRightCurly`. Enum, `enum abstract` and typedef bodies read their own dedicated knobs below, not these.
+	 */
 	beginType: Int,
+
+	/**
+	 * The `}`-side twin of `beginType`.
+	 */
 	endType: Int,
 	// ω-enum-begin-end: dedicated enum-body begin/end blank knobs (fork's
 	// `enumEmptyLines: TypedefFieldsEmptyLinesConfig`, `@:default(0)`). Kept
@@ -390,7 +405,19 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	typedefBetweenFields: Int,
 	typedefExistingBetweenFields: KeepEmptyLinesPolicy,
 	typedefEndType: Int,
+
+	/**
+	 * `Keep` / `Remove` for the source blank between a `{` and its first item — a type body, a block body that opts in
+	 * through `@:fmt(keepCurlyBlanks)`, an anon type's fields (`beforeRightCurly`: before the matching `}`). On a type
+	 * body it is consulted only while `beginType` / `endType` is `0` — a positive count wins and inserts regardless of
+	 * source. Compiled default `Keep`; `HaxeFormatConfigLoader` re-baselines both to the fork's `Remove` on any JSON load.
+	 */
 	afterLeftCurly: KeepEmptyLinesPolicy,
+
+	/**
+	 * `Keep` / `Remove` for the source blank between a body's last item and its `}` — the mirror of `afterLeftCurly`,
+	 * same sites, same `endType` precedence, same `Remove` re-baseline on JSON load.
+	 */
 	beforeRightCurly: KeepEmptyLinesPolicy,
 
 	/**
@@ -547,7 +574,18 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	functionTypeHaxe3: WhitespacePolicy,
 	intervalPolicy: WhitespacePolicy,
 	arrowFunctions: WhitespacePolicy,
+
+	/**
+	 * Blank lines forced AFTER a `package` directive by the `blankLinesAfterCtor` cascade on `HxModule.decls` — an
+	 * override of the source count, like every count in that cascade (the fork's `emptyLines.afterPackage`).
+	 */
 	afterPackage: Int,
+
+	/**
+	 * Blank lines forced BEFORE a leading `package` directive, read once at file head by the `blankLinesAtHeadIfCtor`
+	 * cascade on `HxModule.decls` — an override of the source count. Default `0` keeps the file's leading edge tight
+	 * against `package …;`, `1` starts the file with a blank line (the fork's `emptyLines.beforePackage`).
+	 */
 	beforePackage: Int,
 	beforeUsing: Int,
 	betweenImports: Int,
@@ -587,6 +625,12 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	 * type. Site: `@:fmt(afterFileHeaderCommentBlanks)` on `HxModule.decls`.
 	 */
 	afterFileHeaderComment: Int,
+
+	/**
+	 * Exact blanks BETWEEN two consecutive block-style comments wherever block–block boundaries occur in a
+	 * `leadingComments` array or a trailing-orphan array, except the slot `afterFileHeaderComment` already claims.
+	 * Site: `@:fmt(betweenMultilineCommentsBlanks)` on `HxModule.decls` and the class / interface / abstract member Stars.
+	 */
 	betweenMultilineComments: Int,
 
 	/**
