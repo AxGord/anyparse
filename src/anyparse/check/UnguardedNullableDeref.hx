@@ -8,6 +8,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
 
 /**
@@ -99,12 +100,14 @@ final class UnguardedNullableDeref implements Check implements NoAutofix {
 		final built: Null<NullableSourceCfg> = NullableSource.build(shape, shape.nullableFlowExcludedCalls ?? []);
 		if (built == null) return [];
 		final cfg: NullableSourceCfg = built;
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+		if (provider == null) return [];
 		// The RESOLUTION index, not the report one — `NullableSource`'s class doc says why, and why
 		// the exclusion list has to be re-applied inside the arc once it is this wide.
 		final index: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? SymbolIndex.build(files, plugin);
 		final ctx: Ctx = { ident: ident, soleChildKinds: soleChildKinds, firstChildKinds: firstChildKinds };
 		final declTypeChildKinds: Array<String> = shape.declTypeChildKinds ?? [];
-		return RunScan.collectWith(files, plugin, RunScan.typeInfoOf(plugin), (entry, tree, typed, violations) -> {
+		return RunScan.collectWith(files, plugin, provider, (entry, tree, typed, violations) -> {
 			final root: QueryNode = tree;
 			final declaredTypes: Map<Int, String> = typed.declaredTypes(entry.source);
 			final returnTypes: Map<Int, String> = typed.returnTypes(entry.source);

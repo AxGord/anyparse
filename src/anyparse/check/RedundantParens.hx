@@ -370,7 +370,6 @@ final class RedundantParens implements Check implements ConfigAware {
 				final lead: String = separator(source, span.from - 1, text.charCodeAt(0) ?? 0);
 				final trail: String = separator(source, span.to, text.charCodeAt(text.length - 1) ?? 0);
 				edits.push({ span: span, text: '$lead$text$trail' });
-
 			});
 			return edits;
 		});

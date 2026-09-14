@@ -212,7 +212,6 @@ final class PreferSafeNav implements Check implements VersionGated {
 		RunScan.eachMatched(violations, assigns, (guard, _) -> {
 			final pair: Null<Array<{ span: Span, text: String }>> = assignEdits(guard, source);
 			if (pair != null) for (e in pair) edits.push(e);
-
 		});
 		for (e in CheckScan.applyBySpan(plugin, source, violations, spanIndexKinds, (node, span) -> {
 			// An `if` the ASSIGNMENT arm owns is folded into its declaration above, not rewritten

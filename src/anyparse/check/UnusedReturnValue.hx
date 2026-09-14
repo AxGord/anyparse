@@ -7,6 +7,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
@@ -119,6 +120,8 @@ final class UnusedReturnValue implements Check implements ConfigAware implements
 		if (callKind == null || exprStmtKind == null) return [];
 		final callK: String = callKind;
 		final stmtK: String = exprStmtKind;
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+		if (provider == null) return [];
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
 		final ctx: Ctx = {
 			shape: shape,
@@ -130,7 +133,7 @@ final class UnusedReturnValue implements Check implements ConfigAware implements
 			opaqueKinds: shape.opaqueKinds ?? [],
 			index: index
 		};
-		return RunScan.collectWith(files, plugin, RunScan.typeInfoOf(plugin), (entry, tree, typed, violations) -> {
+		return RunScan.collectWith(files, plugin, provider, (entry, tree, typed, violations) -> {
 			final extra: Null<Array<String>> = LintConfig.resolveWith(_resolveConfig, entry.file)
 				.stringListOption('unused-return-value', 'allow');
 			final allow: Array<String> = extra == null ? DEFAULT_ALLOW : DEFAULT_ALLOW.concat(extra);

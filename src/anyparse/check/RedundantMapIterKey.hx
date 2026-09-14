@@ -65,7 +65,6 @@ final class RedundantMapIterKey implements Check {
 			RunScan.eachMatched(violations, nodeByKey, (node, _) -> {
 				final cut: Null<Span> = keyPrefixSpan(node, source, s.valueBinderKinds);
 				if (cut != null) edits.push({ span: cut, text: '' });
-
 			});
 			return edits;
 		});

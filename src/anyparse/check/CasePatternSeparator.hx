@@ -160,7 +160,6 @@ final class CasePatternSeparator implements Check implements DefaultOff implemen
 						? pipeEdits(seams, source, branch)
 						: commaEdits(seams, source, branch);
 					for (edit in produced) edits.push(edit);
-
 				});
 				return edits;
 			});

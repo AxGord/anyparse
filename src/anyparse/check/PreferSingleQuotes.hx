@@ -80,7 +80,6 @@ final class PreferSingleQuotes implements Check {
 				final replacement: Null<String> = single(node, source, support);
 				if (replacement == null) return;
 				edits.push({ span: span, text: replacement });
-
 			});
 			return edits;
 		});

@@ -90,7 +90,6 @@ final class SimplifyBooleanTernary implements Check {
 				final replacement: Null<String> = support.simplifyBooleanTernary(node, source, types, licenceBySpan[key] == true);
 				if (replacement == null) return;
 				edits.push({ span: span, text: replacement });
-
 			});
 			return edits;
 		});

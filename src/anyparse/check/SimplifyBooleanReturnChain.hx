@@ -80,7 +80,6 @@ final class SimplifyBooleanReturnChain implements Check {
 				RunScan.eachMatched(violations, bySpan, (chain, span) -> {
 					final expr: Null<String> = ctx.support.reduceBooleanGuardChain(chain.conds, chain.lits, chain.finalLit, source, types);
 					if (expr != null) edits.push({ span: span, text: 'return $expr;' });
-
 				});
 				return edits;
 			});

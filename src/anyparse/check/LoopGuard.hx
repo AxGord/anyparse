@@ -176,7 +176,6 @@ final class LoopGuard implements Check {
 					text: '$lhs $andOp ${invert(m.cond, source, seams, types, seams.negation.andKind)}'
 				});
 				edits.push({ span: bodySpan, text: '{$rest}' });
-
 			});
 			return CanonicalEdit.dropContainedEdits(edits);
 		});

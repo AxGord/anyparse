@@ -7,6 +7,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
 
 /**
@@ -77,10 +78,12 @@ final class PossibleNullDereference implements Check implements NoAutofix {
 		final cfg: Null<NullableSourceCfg> = NullableSource.build(shape);
 		if (identKind == null || derefKinds.length == 0 || cfg == null) return [];
 		final cfgValue: NullableSourceCfg = cfg;
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+		if (provider == null) return [];
 		// The RESOLUTION index, not the report one — `NullableSource`'s class doc says why, and why
 		// the exclusion list has to be re-applied inside the arc once it is this wide.
 		final index: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? SymbolIndex.build(files, plugin);
-		return RunScan.collectWith(files, plugin, RunScan.typeInfoOf(plugin), (entry, tree, typed, violations) -> {
+		return RunScan.collectWith(files, plugin, provider, (entry, tree, typed, violations) -> {
 			final declaredTypes: Map<Int, String> = typed.declaredTypes(entry.source);
 			final returnTypes: Map<Int, String> = typed.returnTypes(entry.source);
 			final nominalOf: Null<(QueryNode) -> Null<String>> = CheckScan.typeNominalResolver(

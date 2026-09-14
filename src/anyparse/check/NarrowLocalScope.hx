@@ -156,7 +156,6 @@ final class NarrowLocalScope implements Check {
 			RunScan.eachMatched(violations, byKey, (m, _) -> {
 				edits.push({ span: m.removeSpan, text: '' });
 				edits.push({ span: new Span(m.insertAt, m.insertAt), text: '${m.indent}${m.declText};\n' });
-
 			});
 			return CanonicalEdit.dropContainedEdits(edits);
 		});
