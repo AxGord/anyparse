@@ -1,171 +1,39 @@
 package anyparse.grammar.haxe;
 
 /**
- * Grammar for a single `case pattern: body` branch inside a switch.
+ * Grammar for a single `case pattern: body` branch inside a switch; the `case` keyword is consumed at the
+ * enum-branch level (`@:kw('case')` on `HxSwitchCase.CaseBranch`).
  *
- * The `case` keyword is consumed at the enum-branch level
- * (`@:kw('case')` on the `CaseBranch` ctor in `HxSwitchCase`).
- * This typedef describes the remainder: a comma-separated pattern
- * list followed by a colon, then zero or more body statements.
+ * `patterns` is a `@:sep(',') @:trail(':')` Star of `HxCasePattern`; each element's `expr` parses as `HxExpr`
+ * and carries the optional `if (cond)` guard (see `HxCasePattern`). `@:fmt(wrapRules('casePatternWrap'))`
+ * routes the list through `WrapList.emit` with the `casePatternWrap` cascade; the Star has no `@:lead`, so the
+ * first pattern stays inline. `@:fmt(beforeNewlineSlotFirst)` (ω-casepattern-keep) opts this FIRST field into
+ * the source-newline-before capture (paired with `@:fmt(forwardNewlineForBody)` on the parent ctor): the synth
+ * `patternsBeforeNewline:Bool` slot lets the writer reproduce `case\n\t{pattern}` verbatim under
+ * `opt.leftCurly == Next`.
  *
- * `patterns` is a `@:sep(',') @:trail(':')` Star of `HxCasePattern`
- * — the same Star+sep+trail shape as `HxFnDecl.typeParams`. A single
- * `case A:` is a one-element list; `case A, B, C:` (Haxe multi-value
- * case) is the multi-element form. Each element's `expr` parses as
- * `HxExpr` — identifiers, literals, and constructor-like patterns
- * (`Foo(x, y)` parses as a `Call` expression) all work without new
- * grammar types.
- *
- * The element type widened from `HxExpr` to `HxCasePattern` to carry
- * an optional `if (cond)` guard (`case P if (c):`). Only the element
- * type changes; the Star's `@:sep(',') @:trail(':')` shape is
- * unchanged, so no `Lowering` constraint is touched. Haxe binds one
- * guard to the whole list, so it attaches to the last parsed element
- * and round-trips byte-identically. See `HxCasePattern` for the
- * element-wrap rationale. Full pattern matching (extractors) is
- * future work.
- *
- * `@:fmt(wrapRules('casePatternWrap'))` (slice ω-casepattern-wrap-ingest)
- * routes the comma-separated pattern list through `WrapList.emit` with
- * the `casePatternWrap` cascade (fork-mirror of `wrapping.casePattern`):
- * single/double patterns stay flat (`NoWrap`), three-or-more pack
- * Wadler-style via `FillLine`, overflow also fills. The Star has no
- * `@:lead`, so `WrapList` derives `open=''`/`close=':'`/`sep=','` — the
- * first pattern stays inline after the upstream `case ` keyword and the
- * `:` glues to the last pattern.
- *
- * `@:fmt(beforeNewlineSlotFirst)` (slice ω-casepattern-keep) opts this
- * FIRST field into the source-newline-before capture channel. Paired
- * with `@:fmt(forwardNewlineForBody)` on the parent `HxSwitchCase.
- * CaseBranch` ctor (which omits the post-`case` `skipWs`), the field's
- * pre-field `collectTrivia` scans the `case`→pattern gap and records
- * `newlineBefore` onto the synth `patternsBeforeNewline:Bool` slot. The
- * writer's struct-Star emit reads the slot and, when `opt.leftCurly ==
- * Next` (the `lineEnds.leftCurly: before`/`both` configs), wraps the
- * pattern Doc in `_dn(_cols, _dc([_dhl, …]))` so `case\n\t{pattern}`
- * round-trips verbatim. Byte-inert otherwise: `leftCurly == Same` and
- * absent source newline (`case {pattern}`) both keep the pattern glued
- * to the upstream `case ` keyword.
- *
- * The body uses `@:tryparse` to force try-parse termination on the
- * last field (D49). The try-parse loop breaks when the next token
- * is `case`, `default`, or `}` — none of which parse as an
- * `HxStatement`.
- *
- * `@:fmt(nestBody)` makes the writer wrap the body Doc in an extra
- * indent level, so statements drop onto their own line below the
- * `case pattern:` header at body-indent instead of inline.
- *
- * `@:fmt(bodyPolicy('caseBody', 'expressionCase'))` (ω-case-body-policy
- * + ω-case-body-keep + ω-expression-case-keep-default) exposes the
- * dual `WriteOptions` knobs that gate single-stmt-flat emission. The
- * writer skips the `nestBody` indent and emits `case X: foo();` flat
- * when the body has exactly one statement with no leading or
- * orphan-trailing comments AND either:
- *  - either flag is `Same` (override — always flatten); or
- *  - either flag is `Keep` and `Trivial<T>.newlineBefore` of the body's
- *    first element is `false` (preserve same-line source shape).
- * `caseBody` defaults to `Next`; `expressionCase` defaults to `Keep`
- * (so author-written `case X: foo();` round-trips byte-identically).
- * Multi-stmt bodies keep the multiline `nestBody` shape regardless.
- *
- * ω-case-body-fitline adds the DEFERRED sibling of that gate: when the
- * dispatched flag is `FitLine`, the same single-stmt eligibility fires
- * `_fitCase` instead of `_flatCase`, and the Star hands the body to
- * `anyparse.format.BodyFit.fitLineLayout` — the one emitter that also
- * serves `WriterLowering.buildBodyFitExpr`'s bare-Ref bodies, so
- * `case X: expr;` and `return expr;` cannot drift apart. That emitter
- * first asks whether the body can render on one line AT ALL
- * (`WrapList.flatLength(body) >= 0` — no hardline anywhere in its Doc):
- *  - yes → `BodyGroup(Nest(cols, [Line, body]))`. The renderer's
- *    `fitsFlat` sees the live column (the `case <patterns>:` header is
- *    already emitted) plus the flat width of ` <body>`; at
- *    `<= lineWidth` the body stays inline, otherwise the WHOLE body
- *    drops one indent deeper rather than wrapping inside the value's own
- *    delimiters.
- *  - no → the body GLUES to the label with an `OptSpace`, the same shape
- *    `Same` produces. No measurement happens (none would be meaningful),
- *    so the case line may exceed `lineWidth`.
- * Asking the flat-length question FIRST NARROWS this decision's dependence on the
- * source line shape; it does NOT remove it, which is what the sentence here
- * claimed before W17 measured it. `fitsFlat` DEFERS a nested `BodyGroup` while
- * `WrapList.flatLength` DESCENDS one, so the flat-length question does close
- * every shape `fitsFlat` alone got wrong. What it leaves open is a collection
- * whose cascade answers a NON-breaking mode and which the RENDERER then breaks
- * on width: source-flat it is a conditional Group (`flatLength >= 0`, the
- * MEASURED arm, body below the label), and once the writer's own newline is in
- * the file the trivia path force-commits the list (`flatLength == -1`, the GLUE
- * arm). Same AST, two answers, two writer rewrites. One-variable repro under
- * Pony's `objectLiteral` cascade (`totalItemLength <= 140` -> `noWrap`, default
- * `onePerLine`): a four-field literal totalling UNDER 140 takes two rewrites
- * through this path, and the same literal padded OVER 140 — cascade
- * `onePerLine`, so its hardline is already there on pass 1 — takes one. Those
- * are `tools/src/module/Unpack.hx` and `net/http/modules/mmodels/Builder.hx` of
- * the convergence tail; the pin in `unit.WrapFlatSourceFixedPointTest` records
- * the `fitLineLayout` fix that was measured for them and rejected.
- * `refuseFlatOnComplexExpr` gates BOTH paths, so a refused body breaks
- * even when it fits; a case label carrying its own trailing comment is
- * refused by `_fitCase` too (the comment would land on the wrong side of
- * the emitter-owned separator, and it forces a physical break anyway).
- *
- * `@:fmt(flatChildOpt('A=B', ...))` (ω-expression-case-flat-fanout) opts
- * the body's child writer call into a copy-on-flat opt-fanout: when the
- * runtime flat gate fires, the body's element is written with a
- * `Reflect.copy(opt)` whose listed fields are overridden by the named
- * sibling fields. For Haxe, this swaps `ifBody`/`elseBody`/`forBody` for
- * `expressionCase` itself — when the case body is flattened, the inner
- * control-flow inherits the same shape choice the user picked for the
- * case body (`Same` → force inline, `Keep` → preserve source). Using
- * `expressionCase` as the swap source instead of the separate
- * `expressionIfBody`/`expressionElseBody`/`expressionForBody` knobs
- * avoids interfering with `HxIfExpr.thenBranch`/`HxIfExpr.elseBranch`
- * (which read those knobs directly for `var x = if (a) b else c` style
- * literals — `fitline_arrow_body_if.hxtest` would otherwise regress).
- * The fanout propagates through subsequent recursive writer calls (since
- * the copy is passed as `opt` to the child) — block-bodied descendants
- * reset naturally because their wrap policies are not gated on these
- * knobs.
- *
- * `@:fmt(propagateExprPosition)` (ω-issue-423-mech-a) flips the
- * runtime `_writerOpt` from a flat-only copy to an always-copy whose
- * `_inExprPosition` field is set to `true` unconditionally. The dual-
- * flag `bodyPolicy('caseBody', 'expressionCase')` flat-gate consults
- * `opt._inExprPosition` at runtime: descendants of a case body see
- * `true` and their case-body sites pick the expression-position
- * `expressionCase` policy (default `Keep`, flatten on same-line
- * source); top-level statement-position case bodies see `false` and
- * pick the statement-position `caseBody` policy (default `Next`,
- * break). Mirrors fork's `isReturnExpression` walk-up heuristic in
- * `MarkSameLine.markCase` — a case nested in another case's body is
- * treated as expression-position.
- *
- * `@:fmt(refuseFlatOnComplexExpr)` (ω-issue-423-mech-b) adds a body-
- * shape AND-clause to the runtime flat-gate via the plugin-supplied
- * generated `caseBodyRefusesFlat` predicate (`HxAstPredLowering`
- * tables). A case body whose single statement
- * is `A && B` or `A || B` refuses inline regardless of the dual flat-
- * gate's verdict, so `case PRESSED: A || B;` breaks even at
- * expression-position where `expressionCase=Keep` + same-line source
- * would otherwise flatten. Empirical scope (probed against fork CLI)
- * is just the logical operators — every other binop, ternary, and
- * assignment variant nests hierarchically in fork's token tree and
- * stays inline. Mirrors fork's `markExpressionCase` body-shape check
- * (`dblDot.children.length == 2 && second.tok != CommentLine`).
- *
- * `@:fmt(refuseGlueOnControlFlowRoot)` (omega-case-body-controlflow-glue)
- * adds the second body-shape gate, on the `FitLine` path only: a body
- * that cannot render flat AND whose single statement is keyword-led
- * control flow (the generated `caseBodyControlFlowRoot` predicate) takes
- * the BREAK shape instead of gluing onto the case label. Such a
- * construct's continuation lines (`else if`, `} while`, `catch`, a
- * region's `#else` / `#end`) are siblings of its head, so glued they
- * render at the HEAD's indent — which under
- * `indentation.alignInlineSwitchCaseBody` is the case LABEL's own column,
- * and at the default one level under it. Either way the arms line up
- * with, or above, the body they belong to, and the statement reads as if
- * it had left the branch. A `{`-opening VALUE
- * (block, object literal, lambda) is untouched — its brace ends the label
- * line and its interior is unambiguously the body's.
+ * `body` uses `@:tryparse` termination on the last field: the loop breaks on `case`, `default` or `}`, none of
+ * which parse as an `HxStatement`. `@:fmt(nestBody)` wraps the body Doc in an extra indent level.
+ * `@:fmt(bodyPolicy('caseBody', 'expressionCase'))` exposes the dual knobs that gate single-stmt-flat
+ * emission: `case X: foo();` is emitted flat when the body has exactly one statement with no leading or
+ * orphan-trailing comments AND either flag is `Same`, or either flag is `Keep` and the body's first element
+ * has no `newlineBefore` (compiled default `Keep` for both; `HaxeFormatConfigLoader` re-baselines `caseBody`
+ * to the fork's `Next` on any JSON load). Under `FitLine` the same eligibility fires `_fitCase` and hands the
+ * body to `anyparse.format.BodyFit.fitLineLayout`, the emitter that also serves bare-Ref bodies: a body that
+ * can render on one line at all becomes `BodyGroup(Nest(cols, [Line, body]))` — inline when it fits the live
+ * line, else the WHOLE body drops one indent deeper; a body that cannot GLUES to the label. Asking the
+ * flat-length question first narrows the dependence on the source line shape but does not remove it: a
+ * collection whose cascade answers a non-breaking mode and which the renderer then breaks on width still takes
+ * two passes (`unit.WrapFlatSourceFixedPointTest`). Fan-out flags: `@:fmt(flatChildOpt('A=B', ...))` writes
+ * the body's element, when the flat gate fires, with a `Reflect.copy(opt)` whose `ifBody`/`elseBody`/`forBody`
+ * are overridden by `expressionCase` itself, so nested control flow inherits the case body's shape choice
+ * without touching the `expressionIfBody` knobs `HxIfExpr` reads. `@:fmt(propagateExprPosition)` sets
+ * `_inExprPosition = true` on an always-copy, so a case nested in another case's body picks the
+ * expression-position `expressionCase` policy. `@:fmt(refuseFlatOnComplexExpr)` AND-s the generated
+ * `caseBodyRefusesFlat` predicate into the flat gate: an `A && B` / `A || B` body refuses inline.
+ * `@:fmt(refuseGlueOnControlFlowRoot)` gates the `FitLine` path: a body that cannot render flat AND whose
+ * single statement is keyword-led control flow takes the BREAK shape — glued, its `else if` / `} while` /
+ * `catch` continuation lines would render at the head's indent and read as if they had left the branch.
  */
 @:peg
 typedef HxCaseBranch = {

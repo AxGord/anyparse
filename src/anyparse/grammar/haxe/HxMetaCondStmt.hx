@@ -13,15 +13,13 @@ package anyparse.grammar.haxe;
  * `HxStatement.ExprStmt(MetaExpr(…))`, and `HxMetaExpr.expr` is an
  * EXPRESSION, so the region there can only be an expression-position
  * splice. The last such ctor is `HxExpr.CondSpliceExpr`, whose MANDATORY
- * `tail` then parsed the NEXT STATEMENT as part of the region: measured on
- * `Logable.hx`, `l_origTrace = Log.trace;` projected as
- * `MetaExpr(@SuppressWarnings, CondSpliceExpr(Assign l_origTrace …))`.
+ * `tail` then parsed the NEXT STATEMENT as part of the region: `l_origTrace = Log.trace;`
+ * projected as `MetaExpr(@SuppressWarnings, CondSpliceExpr(Assign l_origTrace …))`.
  * Silent, because the writer re-emits the raw fragment plus the absorbed
  * tail verbatim and the file round-trips byte-exactly.
  *
- * The metadata is also what keeps this ctor NARROW. A general
- * expression-position ctor for the same raw shape was built and measured
- * before this one, and it claimed a construct that only parses today
+ * The metadata is also what keeps this ctor NARROW. A general expression-position
+ * ctor for the same raw shape claims a construct that only parses today
  * because nothing in the statement Star matches it: a switch's guarded
  * `case` region, where `HxConditionalCase` relies on the case-body
  * statement Star FAILING (`Pony/pony/Tools.hx:128` re-indented one level).
@@ -32,8 +30,7 @@ package anyparse.grammar.haxe;
  * Dispatched BEFORE `ExprStmt`, which is the ctor that would otherwise win
  * with the swallow. It carries NO trail slot: a `;` written after the
  * `#end` becomes its own `EmptyStmt` and round-trips, whereas
- * `@:trailOpt(';')` made the writer invent one (measured on the `return`
- * twin).
+ * `@:trailOpt(';')` made the writer invent one (as on the `return` twin).
  */
 @:peg
 typedef HxMetaCondStmt = {

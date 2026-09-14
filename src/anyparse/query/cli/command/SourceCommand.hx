@@ -54,8 +54,8 @@ final class SourceCommand implements CliCommand {
 	 * Whole-file read budget in lines when `HXQ_SOURCE_MAX_LINES` says nothing.
 	 *
 	 * 120 is a file a reader can hold at once — roughly a small class with its doc
-	 * comments. Past it the selector menu is cheaper than the bytes, measured: the
-	 * session that motivated the gate dumped 1270 lines to use ~100.
+	 * comments. Past it the selector menu is cheaper than the bytes: the session
+	 * that motivated the gate used a small fraction of what it dumped.
 	 */
 	private static inline final DEFAULT_MAX_LINES: Int = 120;
 
@@ -217,7 +217,7 @@ final class SourceCommand implements CliCommand {
 		// anyway — but with the prefix on its own line the read handed back a declaration
 		// WITHOUT its `@:keep` / `#if (haxe_ver >= 4.2) enum #end`, and feeding that straight
 		// back to `replace-node` dropped it at rc 0. An ANNOTATION addressed on its own still
-		// prints alone: `declGroupSpan` stops at one (S36), so the read follows the ops there
+		// prints alone: `declGroupSpan` stops at one, so the read follows the ops there
 		// too. The fold also stops BELOW the doc block, which plain `replace-node` leaves
 		// alone as well — its `--with-doc` arm and a replacement opening with a block comment
 		// are the two that do reach it.
@@ -415,14 +415,12 @@ final class SourceCommand implements CliCommand {
 	 * ahead (short enough, or the budget is switched off).
 	 *
 	 * WHY a gate-blessed reader refuses: `source` with no `--range` / `--select`
-	 * behaves exactly like `cat`, and that is what a model reaches for. Measured on
-	 * one real session: 7 files, 1270 lines dumped whole, ~100 of them needed (≈8%),
-	 * two of the files needed nothing at all. And the discipline the skill states
-	 * ("read the member by name") cannot be followed on first contact, because
-	 * `--select` demands a name you do not have yet — so the honest fix is for the
-	 * tool to hand the NAMES back instead of the bytes. On this tree the three
-	 * largest `src` files cost 262 830 / 186 685 / 168 070 bytes of stdout, ~155K
-	 * tokens for the three.
+	 * behaves exactly like `cat`, and that is what a model reaches for — dumping
+	 * whole files of which it needs a small fraction. And the discipline the skill
+	 * states ("read the member by name") cannot be followed on first contact,
+	 * because `--select` demands a name you do not have yet — so the honest fix is
+	 * for the tool to hand the NAMES back instead of the bytes; the largest
+	 * `src` files cost tens of thousands of tokens each when read whole.
 	 *
 	 * `HXQ_SOURCE_MAX_LINES` sets the budget (default `DEFAULT_MAX_LINES`); `0`
 	 * switches the gate off entirely, and `--all` prints the file whole. A file that
@@ -511,7 +509,7 @@ final class SourceCommand implements CliCommand {
 		// A node spanning ONE line is not worth addressing: whoever reads its
 		// neighbour reads it too, and on a Haxe module the one-liners are the
 		// package, every import, every modifier annotation and every typedef field —
-		// 20 of the 50 entries this file yields, none of them what a reader wants.
+		// most of the entries a module yields, none of them what a reader wants.
 		// A LINE COUNT is the grammar-agnostic form of that judgement; a kind list
 		// would be a Haxe-shaped one, and the menu has to survive the next grammar.
 		// If the filter empties the menu (a file of one-liners), the unfiltered list

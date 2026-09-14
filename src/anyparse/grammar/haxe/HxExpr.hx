@@ -1,355 +1,40 @@
 package anyparse.grammar.haxe;
 
 /**
- * Haxe expression grammar — arrow operator, array/map literals, ternary,
- * null-coalescing, and the full infix/prefix/postfix suite.
+ * Haxe expression grammar: atoms, unary prefix, postfix, one ternary and the binary-operator suite across
+ * eleven precedence levels. Atoms, prefix and postfix are all reached through `parseHxExprAtom` (the postfix
+ * wrapper around `parseHxExprAtomCore`); operator branches carry `@:infix(op, prec[, 'Right'])` so the Pratt
+ * strategy generates a precedence-climbing loop around the atom parser.
  *
- * Atom constructors plus five unary-prefix constructors (including
- * `++`/`--` pre-increment/decrement) plus five postfix constructors
- * (field access, index access, call, `++`/`--` post-increment/decrement)
- * plus one
- * ternary operator plus thirty-five binary-operator constructors
- * across eleven precedence levels. Atoms, prefix and postfix are all
- * reached through a single `parseHxExprAtom` call — internally split
- * into `parseHxExprAtom` (the wrapper) and `parseHxExprAtomCore` (the
- * pure leaf + prefix dispatcher) when postfix branches are present.
- * Operator branches carry `@:infix(op, prec)` (or `@:infix(op, prec,
- * 'Right')`) metadata so the Pratt strategy sees them and `Lowering`
- * generates a precedence-climbing loop wrapping the atom parser.
+ * Atom order is load-bearing wherever two branches share a prefix, resolved by `tryBranch` rollback in source
+ * order: `HexLit` and `FloatLit` before `IntLit` (`[0-9]+` would stop at `0x` / `3.`); `RegexLit` before the
+ * `@:prefix('~')` ctor; `ObjectLit` before `BlockExpr` (the strict `key: value` shape is tried first; an empty
+ * `{}` is the zero-field literal); `ECheckTypeExpr` `(e : T)` before `ParenExpr` before `ParenLambdaExpr`
+ * (`(x) => e` and `(x : T) => e` route through the first two plus the prec-0 infix `=>`); `NewExpr` and
+ * `MetaExpr` before `IdentExpr`; `${` before `$name{` before `$ident`; `IdentExpr` last among the atoms — its
+ * terminal is the guarded `HxExprIdentLit`, which rejects control-flow keywords up front so a failed
+ * keyword-atom branch fail-rewinds honestly instead of re-matching its keyword as a call head.
+ * `SingleStringExpr` is a declarative `HxInterpString` (`Literal` / `Dollar` / `Block` / `Ident` segments
+ * under `@:raw`); `DoubleStringExpr` is the `@:rawString` terminal `HxDoubleStringLit` — the slice is kept
+ * verbatim, escapes undecoded (its doc says why `@:unescape` is not used). `VarExpr` / `FinalExpr` /
+ * `ThrowExpr` are keyword-atom mirrors of the statement forms without the statement terminator, reached when
+ * an `HxExpr` is parsed directly.
  *
- * **Atom branches** — all leaves, no operators:
+ * Prefix (`-` `!` `~`) recurses into the atom parser, so it binds tighter than any infix (`-x * 2` is
+ * `Mul(Neg(x), 2)`). Postfix (`.name`, `?.name`, `!.name`, `[expr]`, `(args)`, `++`, `--`) is left-recursive
+ * in the atom wrapper and binds tighter than both prefix and infix (`-a.b` is `Neg(FieldAccess(a, b))`); `?.`
+ * / `!.` are one two-char literal each so `a != b`, `a ?? b` and `a ? b : c` fall through to the Pratt loop
+ * untouched. The field suffix is `HxFieldNameLit` (an optional `$` for `obj.$name`).
  *
- *  - `HexLit` — hexadecimal integer `0x20` / `0XFF`. `@:re @:rawString`
- *    terminal (`HxHexLit`), source-verbatim like `RegexLit`. **Must
- *    appear before `IntLit`**: the integer regex `[0-9]+` would match
- *    the leading `0` and stop, leaving `x20` unconsumed. No overlap
- *    with `FloatLit` (hex has no fractional/exponent form).
- *  - `FloatLit` — decimal with mandatory fractional part (`3.14`,
- *    `1.0e-3`). **Must appear before `IntLit`**: the enum-branch
- *    try-loop iterates in source order, and `3.14` has to be
- *    matched as one float, not `IntLit(3)` followed by stray `.14`.
- *    A bare `42` fails the float regex on the missing `.` and rolls
- *    back to `IntLit`.
- *  - `IntLit` — positive integer (`42`).
- *  - `BoolLit` — `true` / `false`. The `@:lit` multi-literal case in
- *    `Lowering` emits `matchKw` (word-boundary aware) so `trueish`
- *    does not eagerly consume `true`.
- *  - `NullLit` — `null`. Same word-boundary treatment via `expectKw`
- *    in the single-`@:lit` zero-arg case.
- *  - `RegexLit` — EReg literal `~/pattern/flags`. `@:re @:rawString`
- *    terminal (`HxRegexLit`), source-verbatim like `DoubleStringExpr`.
- *    Declared before the `@:prefix('~')` ctor so the atom dispatch
- *    tries the `~/` literal before bitwise-not.
- *  - `ArrayExpr` — array / map literal `[elems]`. Uses `@:lead('[')
- *    @:trail(']') @:sep(',')` — Case 4 in `lowerEnumBranch`, same
- *    pattern as `BlockStmt`. No conflict with postfix `IndexAccess`
- *    (`@:postfix('[', ']')`) because atoms and postfix are separate
- *    dispatch loops. Map literals `[k => v, k2 => v2]` work naturally
- *    because each element is a full expression and `Arrow` is an infix
- *    operator inside the element parse.
- *  - `ObjectLit` — anonymous object literal `{name: value, ...}`.
- *    Wraps `HxObjectLit` typedef. The `@:lead('{')` inside the typedef
- *    drives `tryBranch` peek — non-`{` input rolls back to the next
- *    atom candidate. Statement-level ambiguity with `BlockStmt` (also
- *    `@:lead('{')`) is deferred: only exercised in pure expression
- *    contexts (fn args, RHS of binops, initializers) where no
- *    statement parser competes. Expression-level ambiguity with
- *    `BlockExpr` (also `@:lead('{')`) is resolved by source order
- *    plus `tryBranch` rollback — see `BlockExpr` below.
- *  - `BlockExpr` — block-form expression `{stmt1; stmt2; ...; expr;}`,
- *    e.g. `var x = { trace("hi"); 5; }`,
- *    `return { switch y { case A: 1; } }`. `Array<HxStatement>` between
- *    `{` `}`, no sep — same shape as `HxStatement.BlockStmt`. Placed
- *    AFTER `ObjectLit` so the strict `key: value` shape is tried first;
- *    on inner-shape failure (no `:` after the first identifier, or `;`
- *    instead of `,`/`}`), `tryBranch` (Lowering Case wrapper) rolls back
- *    `ctx.pos` to before `{` and BlockExpr is tried next. Empty `{}` is
- *    consumed by ObjectLit (zero-field Star) — block-vs-object
- *    disambiguation only kicks in for non-empty bodies.
- *  - `ECheckTypeExpr` — type-check expression `(expr : Type)`. Wraps
- *    `HxECheckType` typedef carrying `expr:HxExpr` after `(` and
- *    `type:HxType` after `:` with closing `)`. Same field-pair shape
- *    as `HxTypedCast` (`cast(target, type)`), differing only in the
- *    inner separator (`:` vs `,`) and the writer-side spacing knob
- *    (`@:fmt(typeCheckColon)` defaults to `Both`, emitting `("" : String)`
- *    with surrounding spaces). Placed BEFORE `ParenExpr` and
- *    `ParenLambdaExpr` so a typed map key `(x : Int) => body` parses as
- *    a check-type key + prec-0 infix `=>` (mirroring haxe-formatter's
- *    `Binop(OpArrow, ECheckType(...), body)`), which gives the spaced
- *    `:` and spaced `=>` for free; placed BEFORE `ParenExpr` so bare
- *    `(expr)` only matches when the inner `:` is absent and `tryBranch`
- *    rolls ECheckType back. Followed by postfix the usual way:
- *    `("" : String).length` parses as
- *    `FieldAccess(ECheckTypeExpr(...), "length")`.
- *  - `ParenExpr` — parenthesised expression `(inner)`. The
- *    `@:wrap('(', ')')` metadata is handled by the `Lit` strategy,
- *    which writes `lit.leadText = '('` and `lit.trailText = ')'`.
- *    `Lowering.lowerEnumBranch` Case 3 (single-`Ref` wrapping) reads
- *    both and emits the `expectLit('(') → parseHxExpr → expectLit(')')`
- *    sequence — no Lowering-level change was needed to support
- *    parens. The inner call re-enters `parseHxExpr` at `minPrec = 0`
- *    (default), so parens fully reset precedence and any operator
- *    is allowed inside the group.
- *  - `ParenLambdaExpr` — parenthesised lambda `(params) => body`.
- *    Wraps `HxParenLambda` typedef. Placed **last** among the paren
- *    atoms (after `ECheckTypeExpr` and `ParenExpr`) so it only catches
- *    the forms that CANNOT parse as an expression key: `() => e`,
- *    `(x, y) => e`, `(?x) => e`. Single-expression keys `(x) => e` and
- *    `(x : Int) => e` route through `ParenExpr` / `ECheckTypeExpr` +
- *    prec-0 infix `=>` instead (correct `:` and `=>` spacing).
- *  - `DoubleStringExpr` — double-quoted string literal (`"hello"`).
- *    Escape sequences (`\"`, `\\`, `\n`, `\r`, `\t`) decoded via
- *    inline walk-and-unescape loop generated by `@:unescape` (D53)
- *    using `HaxeFormat.unescapeChar`.
- *  - `SingleStringExpr` — single-quoted string literal with
- *    interpolation (`'hello $name, ${x + 1}!'`). Parsed by a
- *    declarative grammar: `HxInterpString` typedef wraps
- *    `Array<HxStringSegment>` between `'` delimiters. Segments are
- *    `Literal` (plain text + escapes), `Dollar` (`$$` → `$`),
- *    `Block` (`${expr}` — recursive `HxExpr`), `Ident` (`$name`).
- *    All string-content rules use `@:raw` to suppress `skipWs` —
- *    whitespace inside the string is significant.
- *  - `NewExpr` — `new T(args)` constructor call. The `new` keyword
- *    is the commit point (`@:kw('new')`); the type name and argument
- *    list are parsed by `HxNewExpr`. Must appear before `IdentExpr`
- *    so `new` is not consumed as an identifier.
- *  - `MetaExpr` — `@:meta expr` / `@:meta(args) expr` expression-level
- *    metadata wrapper. Wraps `HxMetaExpr` typedef carrying the
- *    `HxMetadata` regex slice plus a recursive `HxExpr`. Placed before
- *    `IdentExpr` so the leading `@` is committed by the meta regex
- *    before the bare-identifier catch-all is tried; non-`@` input fails
- *    the regex on the first byte and `tryBranch` rolls back. Used by
- *    `@:privateAccess (X).object` and similar argument-position metas.
- *  - `IdentExpr` — bare identifier (`other`). **Must appear last**
- *    among the pure atom branches: the identifier regex is permissive and would otherwise match `null` / `true` / `false` as bare identifiers. The terminal is the guarded `HxExprIdentLit` (not the plain `HxIdentLit`): control-flow keywords are rejected up front so a failed keyword-atom branch fail-rewinds honestly instead of re-matching its keyword as a call head (`if (a == b)` → `Call(IdentExpr if, …)`), which would poison ordered-choice fallbacks like `CondSpliceStmt`.
- *  - `DollarBlockExpr` / `DollarReifExpr` / `DollarIdentExpr` — macro
- *    reification escapes (`${expr}`, `$name{expr}`, `$ident`). Exact
- *    expression-position mirror of the `HxStringSegment` interpolation
- *    grammar (`Block` / `Ident`): the only structural addition is the
- *    named-reification middle form `$i{}` / `$v{}` / `$p{}` / `$a{}` /
- *    `$b{}` / `$e{}`, carried by the `HxDollarReif` typedef (`name`
- *    ident then `@:lead("{")` recursive `HxExpr`, closed by the ctor's
- *    `@:trail("}")` — same ctor-wraps-typedef shape as `NewExpr`/
- *    `HxNewExpr`; enum-ctor params cannot carry inline metadata so the
- *    brace lead lives on the typedef field). Declared in
- *    this order so `tryBranch` resolves the shared `$` prefix: `${`
- *    (longest) before `$`, and the brace-bearing `$name{…}` before the
- *    bare `$ident` (the latter is reached only when no `{` follows).
- *    These are purely syntactic — no reification semantics are applied;
- *    the forms exist so anyparse can self-parse its own build macros.
- *  - `VarExpr` / `FinalExpr` — expression-position `var`/`final`
- *    local-binding declarations (`var name:Type = init`,
- *    `final _x:Int = ctx.pos`). Keyword-atom mirror of
- *    `HxStatement.VarStmt` / `FinalStmt`, reusing the same
- *    `HxVarDecl` typedef verbatim — the only difference is the
- *    absence of `@:trailOpt(';')` / `@:fmt(trailOptShapeGate(...))`:
- *    an expression has no statement terminator, the enclosing
- *    statement owns any `;`. Reached when an `HxExpr` is parsed
- *    directly (notably the `MacroExpr` operand: `macro var x = e`,
- *    `macro final _x:Int = ctx.pos`); statement-position `var`/`final`
- *    still binds `HxStatement.VarStmt`/`FinalStmt`, declared before
- *    the `ExprStmt` catch-all. Exists so anyparse can self-parse the
- *    `macro var`/`macro final` reifications its own build macros use.
- *  - `ThrowExpr` — expression-position `throw <expr>`. Bottom-typed
- *    control-flow keyword-atom, the direct analog of the existing
- *    `ReturnExpr` and the expression mirror of `HxStatement.ThrowStmt`,
- *    reusing the same single `value:HxExpr` child — the only
- *    difference from `ThrowStmt` is the absence of the statement-only
- *    `@:trail(';')` / `@:fmt(bodyPolicy('throwBody'))`: an expression
- *    has no statement terminator, the enclosing statement owns any
- *    `;`. Reached when an `HxExpr` is parsed directly (notably the
- *    `MacroExpr` operand: `macro throw new ParseError(...)`);
- *    statement-position `throw e;` still binds `HxStatement.ThrowStmt`,
- *    declared before the `ExprStmt` catch-all. Exists so anyparse can
- *    self-parse the `macro throw` reifications its own build macros use.
- *
- * **Prefix branches** — unary operators, symbolic only. Each
- * `@:prefix(op)` ctor consumes its literal, recurses into the atom
- * parser for the operand, and constructs itself around the result.
- * Prefix binds tighter than any binary infix because the recursion
- * targets the atom function, not the Pratt loop — so `-x * 2` parses
- * as `Mul(Neg(x), 2)`, not `Neg(Mul(x, 2))`. Prefix has no precedence
- * value: all three operators share "one atom consumed, one ctor
- * built", and nesting (`--x`, `!!x`, `-!x`) falls out of the same
- * recursion-into-atom pattern with no extra machinery. Prefix
- * branches sit after the pure atoms in source order so the regex- and
- * literal-based atom branches get first attempt on input like `-5`
- * (FloatLit/IntLit fail on the leading `-`, then the prefix branch
- * consumes it and recurses).
- *
- *  - `Neg` — `-` unary minus.
- *  - `Not` — `!` logical not.
- *  - `BitNot` — `~` bitwise not.
- *
- * **Postfix branches** — left-recursive suffix operators. Each
- * `@:postfix(op)` or `@:postfix(open, close)` ctor applies to an
- * already-parsed atom and builds itself around the result. Postfix
- * lives in the atom wrapper function (`parseHxExprAtom`), which calls
- * `parseHxExprAtomCore` for the underlying leaf/prefix value and then
- * repeatedly peeks each postfix op on the accumulator. The loop
- * terminates when no postfix matches.
- *
- * Binding-tightness invariants (locked in by tests in
- * `HxPostfixSliceTest`):
- *
- *  - **Postfix binds tighter than Pratt infix.** `a.b + c` parses as
- *    `Add(FieldAccess(a, b), c)`, not `FieldAccess(a, Add(b, c))`.
- *    The Pratt loop calls `parseHxExprAtom`, which returns the
- *    postfix-extended atom in one step; the `+` is seen only after
- *    `FieldAccess(a, b)` is already built.
- *  - **Postfix binds tighter than unary prefix.** `-a.b` parses as
- *    `Neg(FieldAccess(a, b))`, not `FieldAccess(Neg(a), b)`. The
- *    prefix ctor `Neg` recurses into the atom wrapper for its
- *    operand (via `recurseFnName` in `Lowering`), so the wrapper
- *    applies postfix to `a` before the prefix ctor wraps the result.
- *  - **Postfix is left-recursive.** `a.b.c` parses as
- *    `FieldAccess(FieldAccess(a, b), c)` because the postfix loop
- *    keeps extending `left` until no further postfix matches.
- *
- *  - `FieldAccess` — `.name` member access. The suffix is parsed as
- *    an `HxFieldNameLit` (the identifier terminal with an optional
- *    leading `$` for macro field-reification — `obj.$name`), so the
- *    field name ends up in the ctor as a single identifier string,
- *    `$` included for the reification form. No module path or type
- *    parameter syntax yet; the recursive `obj.${expr}` form is out of
- *    scope (a regex terminal cannot carry a nested expression).
- *  - `SafeFieldAccess` / `ForceFieldAccess` — `?.name` (Haxe 4.3
- *    null-safe navigation) and `!.name` (the haxe-formatter corpus's
- *    force/assert-navigation form) member access. Structural clones of
- *    `FieldAccess` differing only by the postfix literal; the suffix is
- *    the same `HxFieldNameLit`, so they round-trip through the generic
- *    postfix writer path (`operand` + `?.`/`!.` + `field`) with zero
- *    writer fork. The whole `?.` / `!.` is one two-char postfix literal
- *    rather than a bare postfix `?` / `!` plus a `.`: a bare postfix
- *    `!` would mis-fire on `a != b` (its `!` peeled off `!=`) and a
- *    bare postfix `?` would collide with the ternary `?` / `??`. As a
- *    two-char literal the postfix peek only matches when the next two
- *    chars are exactly `?.` / `!.`, so `a ?? b`, `a ? b : c`,
- *    `a != b` all fall through the postfix loop into the Pratt loop
- *    untouched (postfix runs in the atom wrapper, the ternary /
- *    null-coalescing operators in the separate Pratt loop after it).
- *    `@:fmt(methodChain(...))` is intentionally omitted — the corpus
- *    forms are short and the plain postfix emit is byte-faithful;
- *    chain-layout for `?.`/`!.` is a deferred formatting follow-up.
- *    Left-recursive like `FieldAccess`: `obj!.field!.length` →
- *    `ForceFieldAccess(ForceFieldAccess(obj, field), length)`. The
- *    recursive `obj?.${expr}` computed-safe-nav form is out of scope
- *    (same regex-terminal limit as `FieldAccess`).
- *  - `IndexAccess` — `[expr]` index. The inner expression is parsed
- *    via `parseHxExpr` (not the atom wrapper), resetting precedence
- *    so arbitrary operators are allowed inside the brackets.
- *  - `Call` — `(args)` function/method call. Handles both zero-arg
- *    `f()` and N-arg `f(a, b, c)` through a single ctor with a
- *    comma-separated argument list. The `@:sep(',')` on the ctor
- *    feeds `lit.sepText` on the branch node (via Lit strategy), and
- *    `lowerPostfixLoop`'s Star-suffix variant emits the sep-peek
- *    loop — same pattern as Case 4 in `lowerEnumBranch`.
- *
- * **Ternary branch** — mixfix `? :` operator. `@:ternary('?', ':', 1)`
- * declares the opening operator, middle separator, and precedence.
- * `PrattPostfixLowering.lowerPrattLoop` merges it into the operator dispatch chain
- * alongside binary `@:infix` branches — longest-match sort (D33)
- * resolves `??` (len 2) vs `?` (len 1) automatically. Both middle
- * and right operands parse at `minPrec = 0` (full expression), so
- * right-associativity is inherent: `a ? b : c ? d : e` yields
- * `Ternary(a, b, Ternary(c, d, e))`. Assignments are accepted in
- * ternary branches: `a ? b : c = d` yields `Ternary(a, b, Assign(c, d))`.
- * `@:fmt(captureTernaryTrail)` grows two trivia-mode slots holding the
- * same-line comments trailing the first two operands (before `?` and
- * before `:`) — the else-branch's is already owned by the enclosing
- * construct's trailing slot.
- *
- * **Operator branches** — all binary infix. Each `@:infix(op, prec)`
- * carries the operator literal and its precedence; higher precedence
- * binds tighter. The optional third argument `'Left'` / `'Right'`
- * selects associativity (default is left). Eleven precedence levels
- * are populated (0-10, with ternary at 1 and null-coalescing at 2),
- * following the Haxe reference table:
- *
- *  - prec 10 — `%` (modulo, left-assoc). Haxe binds `%` TIGHTER than
- *    `*` and `/`, so it owns a tier of its own ABOVE the multiplicative
- *    one. Runtime-verified on Haxe 4.3.7 (`haxe --interp`):
- *    `2 * 7 % 4` is 6 (`2 * (7 % 4)`, not `(2 * 7) % 4` = 2),
- *    `8 / 4 % 3` is 8 (`8 / (4 % 3)`, not `(8 / 4) % 3` = 2), and
- *    `100 % 7 * 3 % 4` is 6 (`(100 % 7) * (3 % 4)`, not the same-tier
- *    left-assoc reading `((100 % 7) * 3) % 4` = 2). Left-associative
- *    within its own tier: `20 % 12 % 7` is 1 (`(20 % 12) % 7`, not
- *    `20 % (12 % 7)` = 0). Prefix `-` / `~` / `!` still bind tighter
- *    (`~3 % 4` is 0 = `(~3) % 4`, not `~(3 % 4)` = -4), and every
- *    looser tier below is unchanged (`1 + 7 % 4` is 4, `1 << 3 % 2`
- *    is 2).
- *  - prec 9 — `*` `/` (multiplicative, left-assoc). One mutual tier, so
- *    `8 / 4 * 2` is `(8 / 4) * 2` = 4.
- *  - prec 8 — `+` `-` (additive, left-assoc)
- *  - prec 7 — `<<` `>>` `>>>` (shift, left-assoc)
- *  - prec 6 — `|` `&` `^` (bitwise, left-assoc)
- *  - prec 5 — `==` `!=` `<=` `>=` `<` `>` (comparison, left-assoc),
- *    `...` (interval / range), and `is` (runtime type-check, left-assoc).
- *    The interval branch is tight-spaced in the writer via `@:fmt(tight)`
- *    on the ctor so `0...n` stays compact; arithmetic (`+`, `-`, `*`,
- *    `/`, `%`) at prec 8-10 binds tighter, so `0...n + 1` parses as `0...(n + 1)`
- *    matching Haxe's convention. The `is` operator is **asymmetric**:
- *    its right operand is `HxType`, not `HxExpr`. Lowering detects the
- *    cross-type Ref and routes the right operand through `parseHxType`
- *    instead of recursing into the Pratt loop; the writer mirrors via
- *    `writeFnFor(rightRef)`. Word-boundary dispatch (`matchKw` instead
- *    of `matchLit`) ensures `island` does not eagerly consume `is`.
- *  - prec 4 — `&&` (logical and, left-assoc)
- *  - prec 3 — `||` (logical or, left-assoc)
- *  - prec 2 — `??` (null-coalescing, **right-assoc**)
- *  - prec 1 — `? :` (ternary, via `@:ternary`)
- *  - prec 0 — `=` `+=` `-=` `*=` `/=` `%=` `<<=` `>>=` `>>>=` `|=`
- *    `&=` `^=` `??=` `=>` (assignment + arrow, **right-assoc**), and
- *    `in` (iterator / membership binder, **left-assoc**). Haxe's
- *    `OpIn` has priority 10 — looser than the arrow `=>` (9), tighter
- *    than assignment `=` (11). anyparse collapses Haxe's arrow and
- *    assignment tiers into a single prec 0, so `in` maps to that same
- *    loosest tier. The infix `in` branch is reached only via a
- *    `macro $x in $y` reification (e.g. building an `EFor` head in a
- *    build macro); a real `for (a in b)` loop is the dedicated
- *    `@:kw('for')` HxForStmt production, not this branch. It is never
- *    chained with an adjacent operator in the corpus, so the
- *    left-assoc / prec-0 placement is the Haxe-faithful choice for the
- *    isolated form. Word-boundary dispatch (`matchKw`, auto-selected
- *    by `ParseDispatchLowering.endsWithWordChar`) keeps `index` / `internal` from
- *    being mis-read as `in` (same mechanism as the `is` operator).
- *
- * Declaration order inside each precedence level puts longer literals
- * first (`<=` before `<`, `>>>` before `>>` before `>`, `>>>=` before
- * `>>=`) for human readability. Correctness does NOT depend on this
- * order — `PrattPostfixLowering.lowerPrattLoop` sorts operators by literal length
- * descending before emitting the dispatch chain, so the generated
- * parser always attempts the longer prefix first regardless of how
- * the grammar author orders the branches. Without that sort, input
- * `a <= b` would parse as `Lt(a, <error>)` because the naive
- * `matchLit(ctx, "<")` consumes one character and strands the `=`.
- * Same story for `<<` vs `<`, `>>>` vs `>>` vs `>`, `&&` vs `&`,
- * `||` vs `|`, `*=` vs `*`, `>>>=` vs `>>>` vs `>>=` vs `>>`, `<<=`
- * vs `<<` vs `<=`, `|=` vs `||`, `&=` vs `&&`, `??` vs `?`, and
- * every other shared-prefix pair — each conflict is resolved at macro
- * time by the length-desc sort.
- *
- * **Arrow operator (`=>`)**: handled via a hybrid approach. Single-
- * ident lambdas (`x => body`) and map literal entries (`[k => v]`)
- * parse naturally through `Arrow` as a prec-0 right-associative
- * infix operator (D33 longest-match resolves `=>` vs `=`). Multi-
- * param and zero-param lambdas (`(x, y) => body`, `() => body`)
- * parse via `ParenLambdaExpr` atom with `tryBranch` backtracking.
- * Switch case `=>` is deferred.
- *
- * **Value-position switch** (`SwitchExpr` / `SwitchExprBare`): a switch
- * parsed as an `HxExpr` (rather than `HxStatement.SwitchStmt`) is by
- * grammar in value position — `directionIndex += switch (e) {…}`,
- * `var x = switch …`, `f(switch …)`. Its ctors carry
- * `@:fmt(propagateExprPosition)` so the descendant cases see
- * `opt._inExprPosition = true` and route their body-placement through
- * the `expressionCase` policy (default `Keep`, preserve same-line
- * source) instead of the statement-position `caseBody` policy (default
- * `Next`, break). Mirrors the fork's `MarkSameLine.markCase` →
- * `isReturnExpression` parent-walk: a value-yielding switch's short
- * `case X: e;` bodies stay glued. Same channel as the `ParenExpr` /
- * `ReturnExpr` ctors above. Statement-position `SwitchStmt` does NOT
- * carry the flag, so its bodies keep the `caseBody`-default break.
+ * Infix tiers, tightest first: `%` alone (Haxe binds it TIGHTER than `*` `/`); `*` `/`; `+` `-`; shifts; `|`
+ * `&` `^`; comparisons, `...` (`@:fmt(intervalPolicy)` — `whitespace.intervalPolicy`, default `none`) and `is`
+ * (ASYMMETRIC — its right operand is `HxType`, routed through `parseHxType`; word-boundary dispatch so
+ * `island` is not `is`); `&&`; `||`; `??` (right-assoc); the ternary `? :` (`@:ternary('?', ':', 1)`, both
+ * trailing operands at `minPrec = 0`, so right-assoc is inherent; `captureTernaryTrail` keeps the same-line
+ * comments before `?` and `:`); and prec 0 — every assignment, `=>` (right-assoc) and `in` (left-assoc,
+ * reached only via a `macro $x in $y` reification). Declaration order within a tier is readability only:
+ * `lowerPrattLoop` sorts operators by literal length descending. `SwitchExpr` / `SwitchExprBare` carry
+ * `@:fmt(propagateExprPosition)` so cases route through `expressionCase`.
  */
 @:peg
 enum HxExpr {
@@ -452,67 +137,53 @@ enum HxExpr {
 	TypedCastExpr(info: HxTypedCast);
 
 	/**
-	 * KNOWN DIVERGENCE from the compiler, in the EXTENT of the operand. This grammar parses
-	 * it as an atom, so `x + b * cast c - d` projects as `(x + b * cast c) - d`; the compiler
-	 * takes the whole expression, giving `x + b * cast (c - d)` — measured, 7 against this
-	 * model's 9. A metadata annotation diverges the same way (see `MetaExpr`).
+	 * KNOWN DIVERGENCE from the compiler, in the EXTENT of the operand. This grammar parses it
+	 * as an atom, so `x + b * cast c - d` projects as `(x + b * cast c) - d`; the compiler takes
+	 * the whole expression, giving `x + b * cast (c - d)`. A metadata annotation diverges the
+	 * same way (see `MetaExpr`).
 	 *
 	 * The consequence reaches any transform that treats the tree as the last word: a
-	 * before/after AST comparison cannot see either divergence, because BOTH sides are built
-	 * by this parser and agree. `redundant-parens` is the one that met it, and it does not
-	 * ask the tree — `RefShape.rightGreedyExprKinds` names `CastExpr` on the COMPILER's
-	 * answer, and `parenRequiredHostKinds` covers the metadata case, both from a live probe.
-	 * Widening the operand here would fix it at the root and let those entries go; the cost
-	 * is a re-measure of every corpus fixture that contains a bare `cast`.
+	 * before/after AST comparison cannot see either divergence, because BOTH sides are built by
+	 * this parser and agree. `redundant-parens` is the one that met it, and it does not ask the
+	 * tree — `RefShape.rightGreedyExprKinds` names `CastExpr` on the COMPILER's answer, and
+	 * `parenRequiredHostKinds` covers the metadata case, both from a live probe. Widening the
+	 * operand here would fix it at the root and let those entries go; the cost is a re-measure
+	 * of every corpus fixture that contains a bare `cast`.
 	 */
 	@:kw('cast') @:fmt(atomOperand, tightOnParenOperand('ParenExpr', 'ECheckTypeExpr'))
 	CastExpr(operand: HxExpr);
 
 	/**
-	 * `return` whose whole value is a SELF-TERMINATING token-splice `#if`
-	 * region - a raw fragment whose last token before `#end` is a `;`, so
-	 * nothing after the `#end` belongs to it:
-	 * `function get_touchScreen():Bool return #if ios true; #else false; #end`
-	 * (`Pony/pony/ui/touch/TouchableBase.hx:313`). See
+	 * `return` whose whole value is a SELF-TERMINATING token-splice `#if` region — a raw
+	 * fragment whose last token before `#end` is a `;`, so nothing after the `#end` belongs to
+	 * it: `function get_touchScreen():Bool return #if ios true; #else false; #end`. See
 	 * `HxCondSpliceClosedRaw` for the `;` discriminator.
 	 *
-	 * WHY THIS EXISTS AS ITS OWN CTOR rather than as a general
-	 * expression-scope one. `ReturnExpr(value: HxExpr)` sends such a region
-	 * down the ordinary atom dispatch, where the last `#if` ctor is
-	 * `HxExpr.CondSpliceExpr` - a `{raw, tail}` swallow whose `tail` is a
-	 * MANDATORY expression parse starting after `#end`. At a member
-	 * boundary that tail is the NEXT MEMBER's leading `public` / `static`
-	 * word read as an `IdentExpr`, so the member carried a modifier it does
-	 * not own and `member-order --fix` moved the two together - silently
-	 * turning a public field private while the file still compiled. This is
-	 * the `HxFnBody.CondBody`-before-`ExprBody` fix one level down: there
-	 * the region IS the body, here it is the VALUE of a `return`.
+	 * WHY THIS EXISTS AS ITS OWN CTOR rather than as a general expression-scope one.
+	 * `ReturnExpr(value: HxExpr)` sends such a region down the ordinary atom dispatch, where the
+	 * last `#if` ctor is `HxExpr.CondSpliceExpr` — a `{raw, tail}` swallow whose `tail` is a
+	 * MANDATORY expression parse starting after `#end`. At a member boundary that tail is the
+	 * NEXT MEMBER's leading `public` / `static` word read as an `IdentExpr`, so the member
+	 * carried a modifier it does not own and `member-order --fix` moved the two together —
+	 * silently turning a public field private while the file still compiled. This is the
+	 * `HxFnBody.CondBody`-before-`ExprBody` fix one level down: there the region IS the body,
+	 * here it is the VALUE of a `return`.
 	 *
-	 * A general `HxExpr` ctor for the same raw shape was built and MEASURED
-	 * before this narrower one, and it is why the `return` keyword rides
-	 * the ctor. A raw terminal matches ANY bytes, so at expression-STATEMENT
-	 * position it claimed two constructs that only parse today because
-	 * nothing in the statement Star matches them: a switch's guarded
-	 * `case` region (`HxConditionalCase` relies on the case-body statement
-	 * Star failing - `Pony/pony/Tools.hx:128` re-indented one level), and a
-	 * `@:meta`-prefixed statement region, which then gained a written `;`
-	 * after its `#end` (`Pony/pony/Logable.hx:233`). Both are `hxq fmt`
-	 * drift on files the formatter leaves alone today. Keying the ctor on
-	 * `return` keeps it out of statement position entirely.
+	 * A general `HxExpr` ctor for the same raw shape is why the `return` keyword rides the ctor:
+	 * a raw terminal matches ANY bytes, so at expression-STATEMENT position it claims two
+	 * constructs that only parse today because nothing in the statement Star matches them — a
+	 * switch's guarded `case` region (`HxConditionalCase` relies on the case-body statement Star
+	 * failing) and a `@:meta`-prefixed statement region, which then gains a written `;` after
+	 * its `#end`. Keying the ctor on `return` keeps it out of statement position entirely.
 	 *
-	 * Cost, stated plainly: the swallow SURVIVES everywhere this ctor does
-	 * not reach - a statement-position `@:meta`-prefixed region still
-	 * absorbs the next statement (`Logable.hx:234`, where
-	 * `l_origTrace = Log.trace;` projects as a child of the region above
-	 * it), and so does a block-scope `return` region, which goes through
-	 * `HxStatement.ReturnStmt` and not through here. Closing those needs
-	 * the raw region to stop being reachable from `ExprStmt`, or the
-	 * structured `HxConditionalSemiExpr` reading whose writer reflows the
-	 * region onto one line (measured: two Pony modules newly drifting).
-	 * Both are slices of their own. A MULTI-LINE region is reached too: it has to
-	 * be re-indented when the `return` glues onto its `#if`, which the terminal
-	 * does through `@:writeNormalize('reindentBlock')` —
-	 * `HxCondSpliceClosedRaw` carries the fixture that measured it.
+	 * Cost, stated plainly: the swallow SURVIVES everywhere this ctor does not reach — a
+	 * statement-position `@:meta`-prefixed region still absorbs the next statement, and so does
+	 * a block-scope `return` region, which goes through `HxStatement.ReturnStmt`. Closing those
+	 * needs the raw region to stop being reachable from `ExprStmt`, or the structured
+	 * `HxConditionalSemiExpr` reading, whose writer reflows the region onto one line and
+	 * drifts files the formatter leaves alone. A MULTI-LINE region is reached too: it has to be
+	 * re-indented when the `return` glues onto its `#if`, which the terminal does through
+	 * `@:writeNormalize('reindentBlock')`.
 	 */
 	@:kw('return')
 	CondSpliceReturnExpr(inner: HxCondSpliceClosedRegion);
@@ -551,8 +222,7 @@ enum HxExpr {
 	 * Token-splice `#if` region whose fragment is a run of complete
 	 * operands each followed by an operator whose right operand lives
 	 * after the `#end` — see `HxCondSpliceOpExpr`. Dispatched BEFORE
-	 * the raw `CondSpliceExpr` so the eight dangling-operator census
-	 * sites and the one half-ternary keep their operands as nodes.
+	 * the raw `CondSpliceExpr` so a dangling-operator fragment keeps its operands as nodes.
 	 */
 	@:kw('#if')
 	CondSpliceOpExpr(inner: HxCondSpliceOpExpr);

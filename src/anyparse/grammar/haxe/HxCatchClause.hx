@@ -1,60 +1,39 @@
 package anyparse.grammar.haxe;
 
 /**
- * Catch clause grammar (block-body form).
+ * Catch clause grammar (block-body form): `catch (name[:Type]) body`.
  *
- * Shape: `catch (name[:Type]) body`.
+ * The `catch` keyword, opening `(` and closing `)` all sit on the `param` wrapper field —
+ * `@:kw('catch')` emits `expectKw`, `@:lead('(')` emits `expectLit`, both sequentially (D50),
+ * and `@:trail(')')` emits the matching closer after the inner shape parses. The inner shape
+ * (name + optional `:Type`) lives in `HxCatchParam` so the type annotation can be omitted
+ * (`catch (_)`); a single field cannot combine `@:optional` with a mandatory `@:trail`, so
+ * the closer is hoisted onto the always-present wrapper. `body` is a bare `HxStatement` Ref
+ * — any statement branch is accepted; the bare-expression sibling `HxCatchClauseStmtBare`
+ * carries the same param field with `body:HxExpr`.
  *
- * The `catch` keyword, opening `(`, and closing `)` all sit on the
- * `param` wrapper field — `@:kw('catch')` emits `expectKw`, `@:lead('(')`
- * emits `expectLit`, both sequentially (D50), and `@:trail(')')` emits
- * the matching closer after the inner shape parses. The inner shape
- * (name + optional `:Type`) lives in `HxCatchParam` so the type
- * annotation can be omitted (`catch (_)`); a single field can't combine
- * `@:optional` with a mandatory `@:trail`, so the closer is hoisted onto
- * the always-present wrapper. The `body` is a bare `HxStatement` Ref —
- * any statement branch (including `BlockStmt`) is accepted. The
- * bare-expression sibling `HxCatchClauseStmtBare` carries the same param
- * field with `body:HxExpr`.
+ * `body` is `@:optional` with `@:absentOn('}')` peek-ahead — a body-less `catch (e:Type)`
+ * directly followed by the enclosing block close (`} catch (e:Any)\n}`) treats the body as
+ * absent instead of failing the `HxStatement` parse. There is no lead / keyword / trailing
+ * token before a catch body, so `@:absentOn` (not the `@:lead`-commit-point form) is the
+ * correct optional mechanism — the mirror of `HxFnExpr.body`'s `@:optional @:absentOn(',',
+ * ')', ';', '}', ']')`. The terminator set is just `}`; a statement never starts with `}`,
+ * so a real catch body is never mis-classified as absent. The body-less form is invalid Haxe,
+ * but the haxe-formatter reference round-trips it verbatim — round-trip outranks semantic
+ * validation. Byte-perfect re-emit of the body-less form (the writer must emit no body
+ * token; `@:fmt(bodyPolicy('catchBody'))` operates on a present body) is a deferred
+ * follow-up; a present body's codegen path is unchanged (optional-but-present == required).
  *
- * `body` is `@:optional` with `@:absentOn('}')` peek-ahead — a
- * body-less `catch (e:Type)` directly followed by the enclosing
- * block close (`} catch (e:Any)\n}`) treats the body as absent
- * instead of failing the `HxStatement` parse. There is no lead /
- * keyword / trailing token before a catch body, so `@:absentOn`
- * (not the `@:lead`-commit-point form) is the correct optional
- * mechanism — exact mirror of `HxFnExpr.body`'s
- * `@:optional @:absentOn(',', ')', ';', '}', ']')`. The terminator
- * set is just `}` because that is the only context the
- * recon-confirmed cluster reaches (the do-while/try-catch
- * `whitespace/issue_583_*` fixtures, post-Slice-2 multi-var); a
- * statement never starts with `}`, so a real catch body is never
- * mis-classified as absent. This is invalid Haxe (a catch needs a
- * body) but the haxe-formatter reference round-trips it verbatim —
- * anyparse philosophy is round-trip over Haxe semantic validation.
- * Byte-perfect re-emit of the body-less form (the writer must emit
- * no body token; `@:fmt(bodyPolicy('catchBody'))` operates on a
- * present body) is a deferred follow-up — newly-parsing fixtures
- * land in `fail` until then (the Slice S1 / Slice 2 caveat pattern).
- * The 482 already-passing fixtures all have a body, so their
- * codegen path is byte-identical (optional-but-present == required).
- *
- * `@:fmt(bodyPolicy('catchBody'))` on `body` (slice ω-catch-body)
- * routes the `)`→body separator through the runtime `BodyPolicy`
- * switch, mirroring `HxIfStmt.thenBody` / `HxForStmt.body` /
- * `HxWhileStmt.body`. `Same` keeps `} catch (e:T) body;` flat;
- * `Next` always pushes the body to the next line at one indent
- * level deeper; `FitLine` keeps it flat when it fits within
- * `lineWidth`, otherwise breaks. Block bodies (`{ … }`) are
- * shape-aware — `bodyPolicyWrap`'s block-ctor detection routes
- * them through `sameLayoutExpr` regardless of the policy, so
- * the typical `} catch (e:T) { … }` stays inline. `@:fmt(constructFitBody)` alongside it makes the `FitLine`
- * layout a SOFT line owned by the enclosing `constructFitGroup` (see `HxTryCatchStmt`), so this body
- * and the try body break together instead of each answering for its own line.
- *
- * Default is `Next` mirroring haxe-formatter's `sameLine.catchBody:
- * @:default(Next)` and the sibling `forBody` / `whileBody`
- * defaults; only non-block bodies see the difference.
+ * `@:fmt(bodyPolicy('catchBody'))` on `body` (ω-catch-body) routes the `)`→body separator
+ * through the runtime `BodyPolicy` switch, mirroring `HxIfStmt.thenBody` / `HxForStmt.body`
+ * / `HxWhileStmt.body`: `Same` keeps `} catch (e:T) body;` flat, `Next` always pushes the
+ * body to the next line one indent deeper, `FitLine` keeps it flat when it fits within
+ * `lineWidth`. Block bodies are shape-aware — `bodyPolicyWrap`'s block-ctor detection routes
+ * them through `sameLayoutExpr` regardless of the policy, so `} catch (e:T) { … }` stays
+ * inline. `@:fmt(constructFitBody)` alongside it makes the `FitLine` layout a SOFT line owned
+ * by the enclosing `constructFitGroup` (see `HxTryCatchStmt`), so this body and the try body
+ * break together instead of each answering for its own line. The default is `Next`,
+ * haxe-formatter's `sameLine.catchBody` default; only non-block bodies see the difference.
  */
 @:peg
 @:spanned('CatchClause')

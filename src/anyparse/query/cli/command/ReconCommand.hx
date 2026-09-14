@@ -653,7 +653,7 @@ final class ReconCommand implements CliCommand {
 	 * 2), tries each via the plugin's trivia parser, and clusters the
 	 * failures by a normalised forward-locus key so the histogram shows
 	 * the actual stuck CONSTRUCT, not the parser's terminator carousel
-	 * (`expected="//"` is 90%+ of the raw signal and is dropped).
+	 * (`expected="//"` dominates the raw signal and is dropped).
 	 *
 	 * Replaces the standalone `test/_ReconSkipParse.hx` + `/tmp/recon.js`
 	 * dance — same clustering logic, but in-process with the rest of

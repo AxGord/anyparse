@@ -1,218 +1,35 @@
 package anyparse.grammar.haxe.format;
 
 /**
- * `sameLine` section of `hxformat.json`.
+ * `sameLine` section of `hxformat.json`. Each key maps onto the `HxModuleWriteOptions` knob of the same name
+ * unless noted; a knob's value semantics live on the grammar field carrying the matching `@:fmt(...)`, and
+ * every key's kind, compiled default and governed site is tabulated in `docs/haxe-format-config.md` §
+ * `sameLine.*`. `ifElse` / `tryCatch` / `doWhile` are two-way same-line knobs for whether `else` / `catch` /
+ * `while` sit on the same line as their preceding block. `ifBody` / `elseBody` / `forBody` / `whileBody` /
+ * `doWhileBody` (→ `doBody`) / `returnBody` / `returnBodySingleLine` / `catchBody` / `tryBody` /
+ * `functionBody` / `untypedBody` / `caseBody` / `expressionCase` are three-way body-placement knobs (`same` /
+ * `next` / `fitLine`, plus `keep`); `elseIf` and `elseSwitch` are keyword-placement knobs; `expressionTry` is
+ * the same-line knob for an expression-position `try`.
  *
- * `ifElse` / `tryCatch` / `doWhile` are two-way same-line knobs
- * (τ₁) driving whether `else` / `catch` / `while` sit on the same
- * line as their preceding block.
+ * `caseBody` and `expressionCase` feed the same Star body site, dispatched on `opt._inExprPosition` rather
+ * than OR-ed: `same` and `fitLine` both OVERRIDE a source break, only `keep` reads the source form. So setting
+ * `caseBody` alone and testing on a `return switch …` (an EXPRESSION-position switch, governed by
+ * `expressionCase`) leaves the source shape untouched and reads exactly like a writer that cannot re-join at
+ * all.
  *
- * `ifBody` / `elseBody` / `forBody` / `whileBody` are three-way
- * body-placement knobs (ψ₄) driving whether a non-block body sits
- * on the same line as its `if (…)` / `for (…)` / `while (…)` header,
- * always moves to the next line, or lays out on a fit-or-break basis.
+ * `expressionIf` fans `keep` / `same` out into all three runtime knobs `expressionIfBody` /
+ * `expressionElseBody` / `expressionForBody` and `next` / `fitLine` into the if/else pair only (absent, each
+ * keeps its own compiled default — `Same` / `Same` / `Keep`, NOT uniform), and also drives the per-`else` gap
+ * `sameLineExpressionElse`: `same` → `Same`, `keep` → `Keep`, `next` → `SameOnBlock` (the `else` cuddles to a
+ * `}` close and keeps its forced break after every other shape), `fitLine` → `Same`. `expressionIfWithBlocks`
+ * is a body-CONTENTS flattener for `BlockExpr` branches and nothing else: it never pulls `else` up to a `}`
+ * (that is `expressionIf: next`) and never hugs a branch value to its head (that is
+ * `expressionIfWithBrackets`, for `[` only).
  *
- * `doWhileBody` (ψ₅) is the same three-way body-placement knob for
- * the body of `do body while (…);`. The JSON key matches haxe-
- * formatter's `sameLine.doWhileBody` field; the loader maps it onto
- * the runtime `doBody` option on `HxModuleWriteOptions`.
- *
- * `elseIf` (ψ₈) is a two-value keyword-placement knob for the nested
- * `if` inside an `else` clause. `"same"` (default) keeps `else if`
- * inline; `"next"` moves the nested `if` onto its own line at one
- * indent level deeper. The loader maps this onto the runtime
- * `elseIf` option on `HxModuleWriteOptions`.
- *
- * `fitLineIfWithElse` (ψ₁₂) is a boolean gate on the `FitLine` body
- * policy for `if`-statement bodies (both then- and else-branch) when
- * the enclosing `if` carries an `else`. When `false` (default) an
- * `ifBody=fitLine` / `elseBody=fitLine` degrades to `Next` for such
- * `if`s; `true` keeps `FitLine` active regardless of the else clause.
- * The loader maps this onto the runtime `fitLineIfWithElse` option on
- * `HxModuleWriteOptions`.
- *
- * `expressionTry` (ω-expression-try) is a two-way same-line knob for
- * the separator between the body of an expression-position `try` and
- * its `catch` clauses (`var x = try foo() catch (_:Any) null;`). It
- * is independent of `tryCatch` (statement-form), matching haxe-
- * formatter's `sameLine.expressionTry` field. Default `same`. The
- * loader maps it onto the runtime `expressionTry` option on
- * `HxModuleWriteOptions`.
- *
- * `returnBody` (ω-return-body) is the same three-way body-placement
- * knob shape as `ifBody`, gating the separator between `return` and
- * its value expression. The loader maps it onto the runtime
- * `returnBody` option on `HxModuleWriteOptions`. The sibling
- * `returnBodySingleLine` knob refines the policy for return values
- * that are NOT a control-flow / block construct (literals, idents,
- * ternaries, calls, …) — wired via
- * `@:fmt(bodyPolicySingleLine('returnBodySingleLine', …))` on
- * `HxStatement.ReturnStmt`, and read unconditionally by
- * `HaxeFormatConfigLoader.applySameLineBodies` like every other key
- * in this class (T160: an earlier revision of this sentence claimed
- * it was "parsed and silently dropped" — measured false).
- *
- * `catchBody` (ω-catch-body) is the same three-way body-placement
- * knob shape as `ifBody`, gating the separator between the `)` of
- * a catch clause's `(name:Type)` header and its body. The loader
- * maps it onto the runtime `catchBody` option on
- * `HxModuleWriteOptions`. Default `Next` mirrors haxe-formatter's
- * `sameLine.catchBody: @:default(Next)`.
- *
- * `caseBody` (ω-case-body-policy) is the same three-way body-placement
- * knob shape as `ifBody`, gating whether a single-stmt switch case body
- * sits on the same line as `case X:` or moves to a fresh line at one
- * indent level deeper. The loader maps it onto the runtime `caseBody`
- * option on `HxModuleWriteOptions`. Default `Next` matches haxe-
- * formatter's `sameLine.caseBody: @:default(Next)`. `expressionCase`
- * is the sibling knob for switches used in expression position
- * (`var x = switch ... { case Y: 1; }`); the loader maps it onto the
- * runtime `expressionCase` option. Both knobs feed the same Star body
- * site at runtime, dispatched on `opt._inExprPosition` (ω-issue-423-
- * mech-a) rather than OR-ed: `Same` flattens a single-stmt body
- * unconditionally, `Keep` flattens only when the source had it on the
- * case line, and `FitLine` (ω-case-body-fitline) defers the choice to
- * the renderer — a body that can render on one line stays inline while
- * `case <patterns>: <body>` fits `maxLineLength` and moves one indent
- * deeper past it, while a body that cannot render on one line at all
- * (block, refusing wrap cascade, kept multi-line literal) glues to the
- * label as `same` does. See `anyparse.format.BodyFit`.
- *
- * `Same` and `FitLine` both OVERRIDE a source break — a `case X:` whose body
- * the author wrote on the next line is re-joined when the policy says so. Only
- * `Keep` reads the source form. That is worth stating because the two knobs are
- * dispatched on position rather than OR-ed: setting `caseBody` alone and testing
- * on a `return switch …` (an EXPRESSION-position switch, so `expressionCase`
- * governs it) leaves the source shape untouched, and reads exactly like a writer
- * that cannot re-join at all.
- *
- * `functionBody` (ω-functionBody-policy) is the same three-way body-
- * placement knob shape as `ifBody`, gating the separator between the
- * `()` of a function declaration's parameter list and its body when
- * the body is a single expression (`function f() trace("hi");`).
- * The loader maps it onto the runtime `functionBody` option on
- * `HxModuleWriteOptions`. Default `Next` matches upstream haxe-
- * formatter's `sameLine.functionBody: @:default(Next)`; opting into
- * `Same` keeps the body inline. `BlockBody` (`function f() { … }`)
- * and `NoBody` (`function f();`) are unaffected — the knob lives on
- * `HxFnBody.ExprBody` only.
- *
- * `untypedBody` (ω-untyped-body-policy) is the same three-way body-
- * placement knob shape as `ifBody`, gating the parent→`untyped`
- * separator at `HxFnBody.UntypedBlockBody` (`function f():T untyped {
- * … }`). The loader maps it onto the runtime `untypedBody` option on
- * `HxModuleWriteOptions`. Default `Same` matches haxe-formatter's
- * `sameLine.untypedBody: @:default(Same)`. Setting `"next"` pushes
- * `untyped` onto its own line at one indent level deeper; `"keep"`
- * preserves source (degrades to `Same` in plain mode); `"fitLine"`
- * fits-or-breaks. Stmt-level form `HxStatement.UntypedBlockStmt`
- * (incl. `try untyped { … }`) is deferred to a follow-up slice —
- * duplicating the wrap would stack with parent body-policy / block-
- * stmt separators producing double spaces / spurious blank lines.
- *
- * `tryBody` (ω-tryBody) is the same three-way body-placement knob
- * shape as `catchBody`, gating the separator between the `try`
- * keyword and its body at `HxTryCatchStmt.body`. The loader maps
- * it onto the runtime `tryBody` option on `HxModuleWriteOptions`.
- * Default `Next` (`HaxeFormat.instance.defaultWriteOptions.tryBody`),
- * matching upstream haxe-formatter's `sameLine.tryBody: @:default(next)`
- * (T160: an earlier revision of this sentence claimed the shipped
- * default was `Same`, diverging from upstream to match the AxGord
- * fork's project-level `hxformat.json` — measured false; the AxGord
- * config's own `"tryBody": "same"` entry is what makes THAT project
- * render `Same`, an explicit override like any other, not the
- * compiled default). Co-exists with the
- * `whitespace.tryPolicy` knob via the `kwOwnsInlineSpace` mode in
- * `WriterLowering.bodyPolicyWrap` — `tryBody=Same` + `tryPolicy=None`
- * still collapses to `try{…}`, decoupling the two semantic axes
- * (body inline-vs-break vs kw-trail-space).
- *
- * `expressionIf` (ω-expr-body-keep) is the body-placement knob for
- * the expression-position counterparts of `if`/`for` (the typedefs
- * driving array comprehensions and any value-position `if`/`for`).
- * The loader fans this single JSON key out into three runtime knobs
- * — `expressionIfBody` / `expressionElseBody` / `expressionForBody` —
- * because haxe-formatter exposes only one config key for the trio.
- * No SINGLE default: absent, each of the three keeps its own compiled
- * default — `Same` / `Same` / `Keep` — not a uniform `Keep` (T160: an
- * earlier revision of this sentence claimed the trio's default was
- * uniformly `Keep`; measured false against
- * `HaxeFormat.instance.defaultWriteOptions`, which the loader's `base`
- * copies from verbatim when the JSON key is absent). Statement-level
- * counterparts (`ifBody` / `elseBody` / `forBody`) keep their own
- * defaults — the divergence is intentional.
- *
- * The same key also drives the per-`else` GAP — `sameLineExpressionElse`,
- * read by `HxIfExpr.elseBranch`: `same` maps to `Same`, `keep` to `Keep`
- * (source-preserving), `next` to `SameOnBlock`, so the `else` cuddles to a
- * `}` close (`} else {`) and keeps its forced break after every other
- * shape; `fitLine` falls through to `Same`. Before S100 `next` mapped to
- * `Keep` here, and a value-`if` with a `{ … }` branch then reproduced
- * whatever break the source happened to carry while the STATEMENT twin of
- * the same construct joined — one construct, two layouts, decided by
- * position alone.
- *
- * `expressionIfWithBlocks` (ω-expression-if-with-blocks) is an
- * orthogonal `Bool` knob (default `false`) that collapses
- * `BlockExpr` bodies on `HxIfExpr.thenBranch` / `elseBranch` to a
- * single line when set. Mirrors haxe-formatter's
- * `sameLine.expressionIfWithBlocks: false` — the body's brace pair
- * survives but its contents flatten regardless of width. Wired via
- * `@:fmt(inlineBlockBodyIfFlag('expressionIfWithBlocks'))` on both
- * branches; non-block bodies fall through to the `expressionIf*`
- * cascade unchanged.
- *
- * What it does NOT do, spelled out because the name invites the other
- * reading: it GLUES nothing. It never pulls `else` up to a `}` (that is
- * `expressionIf`, whose `next` value gives the gap `SameOnBlock`), and it
- * never hugs a branch value to its head (that is
- * `expressionIfWithBrackets`, and only for `[`). Measured at `f8ba0a46` on
- * the reported `} else {` shape: turning this knob on flattened BOTH block
- * bodies onto one line and STILL left `else` on a line of its own. It is
- * a body-CONTENTS flattener, and nothing else.
- *
- * Which leaves the block twin of the bracket hug needing NO key. Since
- * S100 the `next` value of `expressionIf` resolves the pre-`else` gap to
- * `SameOnBlock`, and the block-ctor arm of the body wrap brings the `{`
- * up to the head, so a value-`if` with block branches comes back
- * `if (c) {` … `} else {` under `same` AND under `next`, with this
- * flattener on or off. Only `keep` reproduces a source break there,
- * which is what `keep` is for.
- *
- * omega-arrow-value-if-reflow: `expressionIfArrowBodyReflow` (default
- * `false`, absent = fork parity) is a `Bool` knob for the ONE context
- * the `expressionIf` cascade cannot canonicalise - a value-`if`/`else`
- * chain in an arrow-lambda body. When set, the chain
- * becomes a width-decided unit: it renders flat
- * (`(a, b) -> if (c) -1 else 0`) when it fits, and one arm per line with
- * each branch value glued to its own condition when it does not. Off,
- * the `expressionIf` policy decides each branch on its own and even a
- * flat-fitting chain still explodes. Wired via
- * `@:fmt(arrowValueIfReflow('expressionIfArrowBodyReflow'))` on the
- * `HxIfExpr` typedef plus `@:fmt(arrowValueIfReflowSite)` on both
- * branches. A chain carrying a comment anywhere on its `else`-spine -
- * including one trailing its LAST branch value, whose slot belongs to
- * that value or to the enclosing list element rather than to the `if` -
- * refuses the reflow as a WHOLE and keeps the policy-driven shape; the
- * reach is `_inArrowLambdaBody`, which also covers a `cast` operand, an
- * `untyped` / `@:meta` prefix and an enclosing value-`if`'s condition.
- *
- * omega-elseif-comment-reflow: `elseIfCommentReflow` (default `false`,
- * absent = fork parity) is a `Bool` knob for the ONE comment position the
- * `elseIf` glue cannot canonicalise - a single `//` line comment written
- * between `else` and its nested `if`. Off, that comment forces the
- * three-line fork layout (`else` alone on its line, the comment one indent
- * deeper, the nested `if` back at the outer indent). On, the link glues
- * (`} else if (b) {`) and the comment becomes a trailing comment at the end
- * of the nested `if`'s head line - after the then-body's `{` when it is
- * braced, after the condition's `)` when the body policy already puts a bare
- * body on the next line. Wired via `@:fmt(elseIfCommentReflow)` on
- * `HxIfStmt.elseBody`; statement position only. A block comment, more than
- * one comment, a comment cuddled to the `else` itself, a nested `if` head
- * that already carries its own trailing `//`, an empty then-body, and a body
- * that offers no provable head-line anchor all refuse and keep the knob-off
- * layout - as
- * does `elseBody: "keep"`, whose `Keep` layout path the knob does not reach.
+ * `fitLineIfWithElse`, `loopBodyIfElseNext`, `expressionIfArrowBodyReflow`, `elseIfCommentReflow` and
+ * `conditionalExprFit` are `Bool` knobs documented on their `HxModuleWriteOptions` fields (`fitLineIfWithElse`
+ * on `HxIfStmt`); the reflow knobs refuse as a WHOLE whenever a captured comment sits where the glued layout
+ * would misplace it, and keep the fork's layout.
  */
 @:peg typedef HxFormatSameLineSection = {
 
@@ -292,16 +109,16 @@ package anyparse.grammar.haxe.format;
 	 * is deliberately NOT covered: `expressionIfWithBlocks` collapses a block
 	 * body's CONTENTS and hugs nothing.
 	 *
-	 * All three seams read the flag ALONE. Until S154 the HUG read the flag AND
-	 * the resolved layout: it sat inside the policy switch that the outer `Keep`
-	 * arm of `WriterBodyPolicyLowering.buildBodyCoreWrap` bypasses, so under
-	 * `sameLine.expressionIf: keep` the knob dropped the `;`, pulled `else` up to
-	 * the `]` and left the `[` on a line of its own -- the same half shape the two
-	 * close seams exist to prevent, mirrored. The substitution now sits on the
-	 * policy VALUE, the seam S159 took for `loopBodyIfElseNext`, so `same` / `next`
-	 * / `keep` emit ONE byte-identical result under the knob while every knob-off
-	 * cell keeps the bytes it had. `keep` decides the layout POLICY; it never
-	 * decides whether an explicit knob applies.
+	 * All three seams read the flag ALONE, never the resolved layout: a hug that
+	 * sat inside the policy switch which the outer `Keep` arm of
+	 * `WriterBodyPolicyLowering.buildBodyCoreWrap` bypasses would, under
+	 * `sameLine.expressionIf: keep`, drop the `;` and pull `else` up to the `]`
+	 * while leaving the `[` on a line of its own -- the half shape the two close
+	 * seams exist to prevent, mirrored. The substitution sits on the policy
+	 * VALUE (the seam `loopBodyIfElseNext` uses), so `same` / `next` / `keep`
+	 * emit ONE byte-identical result under the knob while every knob-off cell
+	 * keeps the bytes it had. `keep` decides the layout POLICY; it never decides
+	 * whether an explicit knob applies.
 	 */
 	@:optional var expressionIfWithBrackets: Bool;
 

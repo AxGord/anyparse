@@ -1,249 +1,62 @@
 package anyparse.grammar.haxe;
 
 /**
- * Expression-position `if` — `if (cond) thenBranch [else elseBranch]`
- * used where a value is expected (object-literal field, call argument,
- * RHS of assignment, array element, etc.).
+ * Expression-position `if` — `if (cond) thenBranch [else elseBranch]` used where a value is expected.
+ * Structurally parallel to `HxIfStmt` but both branches are `HxExpr`; the statement construct still dispatches
+ * through `HxStatement.IfStmt` because `IfStmt` sits ahead of `ExprStmt` in `HxStatement`. Dangling-else
+ * follows the same rule: the nearest enclosing `if` greedily consumes the next `else`.
  *
- * Structurally parallel to `HxIfStmt` but both branches are `HxExpr`,
- * not `HxStatement` — no block-statement fallthrough. The
- * statement-level construct still dispatches through
- * `HxStatement.IfStmt(HxIfStmt)` because enum-branch source order puts
- * `IfStmt` ahead of `ExprStmt` in `HxStatement` — the `if` keyword is
- * consumed by the statement branch before the expression parser ever
- * looks at it.
+ * `thenBranch` carries `@:trailOpt(';')`: Haxe accepts an optional `;` terminating the then-branch before
+ * `else` (`final x = if (c) a; else b;`); the `;` is consumed, not stored, and the source-presence synth slot
+ * decides re-emission. `@:fmt(semicolonBeforeSibling('elseBranch', 'sameLineExpressionElse'))` lets
+ * `whitespace.semicolonBeforeElse` answer that slot from the policy, but ONLY when `elseBranch` is non-null:
+ * with NO `else` the same slot can be holding the ENCLOSING statement's terminator, and dropping it there
+ * would emit code that does not compile. `@:fmt(valueBraceSymmetry('<sibling>', 'BlockExpr', 'ExprStmt',
+ * 'IfExpr', 'SwitchExpr', 'SwitchExprBare', 'ObjectLit'))` on BOTH branches — under `singleStatementBraces:
+ * "remove"` a branch whose SIBLING is a `{ … }` block gains braces of its own (the value twin of
+ * `SingleStmtBraces` gate 7, built by the same `wrapInBlock` with a lift into `ExprStmt`); an `else if` chain
+ * member and a brace-LED value are excluded, and the skip lists of the two positions must agree per ctor
+ * family (`unit.format.BraceSymmetrySliceTest`). When the wrap fires on `thenBranch` the `@:trailOpt` slot is
+ * suppressed — the synthesized block already carries the terminator, so the source `;` would land after the
+ * closing brace.
  *
- * `thenBranch` carries `@:trailOpt(';')`: Haxe accepts an optional
- * `;` terminating the then-branch before `else` (or before the
- * enclosing context when there is no `else`), e.g.
- * `final x = if (c) a; else b;` — the formatter emits this shape, and
- * `if (c) TPath({...}); else if (c) ...; else ...;` in macro code is
- * the common form. Without it the `;` had no host and the parse
- * failed. The `;` is consumed, not stored — the AST is identical to
- * the no-semicolon form. Same `@:trailOpt(';')` meta as
- * `HxStatement.VarStmt`/`FinalStmt` (there paired with
- * `trailOptShapeGate`); here the source-presence synth slot decides
- * re-emission, so `preserve` keeps a byte-exact `if-expr; else`
- * layout for the corpus fixtures that pin one.
+ * Layout: `@:fmt(bodyPolicy('ifBody', 'expressionIfBody'))` / `bodyPolicy('elseBody', 'expressionElseBody')` —
+ * the dual form reads the second knob under `opt._inExprPosition`, the statement knob otherwise; the
+ * expression knobs are distinct from `HxIfStmt`'s, compiled default `Same` for both (`expressionForBody`
+ * `Keep`), and the `sameLine.expressionIf` key fans `keep` / `same` into all three and `next` / `fitLine` into
+ * the if/else pair only. `elseBranch` carries `@:fmt(sameLine('sameLineExpressionElse'))` for the pre-`else`
+ * gap (`Keep` consults the synth `elseBranchBeforeKwNewline` slot) and `@:fmt(shapeAware)`: a non-block
+ * `thenBranch` under `Next` / `FitLine` forces a hardline before `else`; a block-shape `thenBranch` keeps a
+ * flag-driven separator, split by delimiter — a CURLY close reads `sameLinePolicySwitch` (`SameOnBlock` falls
+ * through to a space, so `} else {` cuddles), a BRACKET close reads `sameLineNonCurlyBlockPolicySwitch`
+ * (`SameOnBlock` routes to `Keep`, so gluing `]` stays `expressionIfWithBrackets`'s job).
+ * `@:fmt(elseSwitch(...))` on BOTH branches is the value twin of the statement form's meta (see `HxIfStmt`).
+ * `@:fmt(elseIf)` on `elseBranch` routes an `else if` chain through `opt.elseIf` instead of
+ * `expressionElseBody`. `@:fmt(noSiblingFallback('ifBody'))` on `thenBranch` swaps `opt.expressionIfBody` for
+ * `opt.ifBody` when `elseBranch` is null (the fork's `markIf` short-circuits for an arrow-body or
+ * comprehension-filter `if`) — the inverse polarity of `HxIfStmt`'s `fitLineIfWithElse`.
  *
- * `@:fmt(semicolonBeforeSibling('elseBranch'))` on `thenBranch`
- * (omega-semi-before-else) — under `whitespace.semicolonBeforeElse`
- * that slot answers from the policy instead of source presence, but
- * ONLY when `elseBranch` is non-null. The `;` before an `else` is
- * inert: Haxe accepts the chain with or without it, and even a
- * `var`-valued branch (`if (c) var x = 1 else var y = 2`) compiles
- * both ways — so `never` may drop it. With NO `else` the same slot
- * can be holding the ENCLOSING statement's terminator (the value-`if` ate it
- * on the way in and the grammar has nowhere else to park it), and dropping it
- * there would emit code that does not compile; every policy value therefore
- * falls back to source presence in that shape.
+ * `@:fmt(inlineBlockBodyIfFlag('expressionIfWithBlocks'))` on both branches flattens a `BlockExpr` body to
+ * `{stmt;}` under the knob (opt-in; trivia-mode `//` comments inside the block break syntax, as in the fork).
+ * `@:fmt(bracketBodyGlueIfFlag('expressionIfWithBrackets'))` is the `[` sibling and owns THREE seams keyed on
+ * the flag alone: the branch value hugs its head, the `@:trailOpt(';')` slot is dropped when an `elseBranch`
+ * follows, and the pre-`else` gap becomes a plain space — without the close seams a source that wrote `];` on
+ * its own line keeps `else` on the next one. `@:fmt(indentValueIfCtor('ObjectLit', 'indentObjectLiteral',
+ * 'objectLiteralLeftCurly'))` on `thenBranch` drops the Next-layout's outer Nest for a multi-line object
+ * literal under `indentObjectLiteral=false`; `elseBranch` does not carry it because its optional-kw path is
+ * excluded from the gate. `@:fmt(propagateValueIfBranch)` on both branches sets `opt._inValueIfBranch` on the
+ * direct value write, read by `HxObjectLit`'s `reflowInExprPosition`.
  *
- * `expressionIfWithBrackets` OVERRIDES that policy for the one shape it owns:
- * when the knob hugs a `[` branch value to its head, the `;` before `else`
- * goes whatever `semicolonBeforeElse` says, because `];` cannot cuddle. The
- * matching pre-`else` gap is forced with it -- see `elseBranch` below.
- *
- * `@:fmt(valueBraceSymmetry('<sibling>', 'BlockExpr', 'ExprStmt', 'IfExpr', 'ObjectLit'))` on BOTH
- * branches (omega-value-brace-symmetry) — under `whitespace.bracesConfig.singleStatementBraces:
- * "remove"` a branch whose SIBLING is a `{ … }` block gains braces of its own, the value twin of
- * `SingleStmtBraces` gate 7. That gate keys on the statement block kind and cannot see a block
- * EXPRESSION, which is why the two branches carry the meta rather than `dropSingleStmtBraces`. The
- * block is built by the SAME `SingleStmtBraces.wrapInBlock`, given `BlockExpr` and a lift that
- * raises the branch expression into `ExprStmt`. An `else if` chain member and a brace-LED value
- * (an object literal, which a block would re-open in statement position) are excluded. This skip
- * list and the statement one (`SingleStmtBraces.SYMMETRY_WRAP_SKIP_CTORS`) are INDEPENDENT — they
- * are keyed on ctor names and the two positions have different ctors — so what they have to agree
- * on is the ANSWER, per ctor family — pinned by the matrix in
- * `unit.format.BraceSymmetrySliceTest`. `ObjectLit` is the one legitimate
- * asymmetry, since a `{` in statement position opens a block and the statement list has nothing
- * to disagree with.
- *
- * When the wrap DOES fire on `thenBranch`, the `@:trailOpt` slot above is suppressed
- * (`WriterLowering.valueBraceSymmetryTrailDrop`): the synthesized block already carries the
- * branch terminator inside itself, so re-emitting the slot puts the source semicolon back after
- * the closing brace and the branch reads `};` in front of `else`. Haxe accepts that, which is why
- * only the Pony sweep caught it (`ParseBoy.hx`, `TplPut.hx`). The drop is conditioned on the wrap
- * rather than unconditional the way the statement side is (omega-ssb-trailopt-drop), because with
- * NO `else` that slot can be holding the ENCLOSING statement terminator.
- *
- * Dangling-else follows the same rule as `HxIfStmt`: the nearest
- * enclosing `if` greedily consumes the next `else`, so
- * `if (a) if (b) x else y` binds `else y` to the inner `if`.
- *
- * `@:fmt(bodyPolicy('expressionIfBody'))` on `thenBranch` and
- * `@:fmt(bodyPolicy('expressionElseBody'))` on `elseBranch` — distinct
- * from `HxIfStmt`'s `ifBody` / `elseBody` knobs because expression-
- * position `if` needs different default behaviour. Default `Keep`
- * preserves source layout via the `<field>BeforeNewline:Bool` synth
- * slot (then-branch via the bare-Ref non-first synth, else-branch via
- * the existing optional-kw `BodyOnSameLine` synth). Matches haxe-
- * formatter's `sameLine.expressionIf: @:default(Keep)`. The single
- * JSON key `sameLine.expressionIf` fans out into all three expression
- * body knobs at load time. Single-line branches under any policy
- * stay flat — short flat-fitting expression-`if` (object field
- * values, call args) is unaffected.
- *
- * `elseBranch` carries `@:fmt(sameLine('sameLineExpressionElse'))` —
- * the SameLinePolicy companion for the pre-`else` gap, distinct from
- * statement-`if`'s `sameLineElse`. Default `Same` matches the
- * pre-slice hardcoded space behaviour. JSON `sameLine.expressionIf`
- * fans out unconditionally (`same`→`Same`, `keep`→`Keep`,
- * `next`→`SameOnBlock`, `fitLine`→`Same`) —
- * the pre-`else` gap has no arrow-body interaction, so the
- * BodyPolicy Next/FitLine gate does not apply here. `Keep` consults
- * the synth `elseBranchBeforeKwNewline` slot (computed against the
- * preceding field's last non-whitespace position via `_prevEnd`,
- * see `Lowering.hx` ω-prev-content-end).
- *
- * `@:fmt(shapeAware)` on `elseBranch` (parity with
- * `HxIfStmt.elseBody`) — when the preceding sibling `thenBranch`'s
- * runtime ctor is non-block (anything other than `BlockExpr` /
- * `ObjectLit`) AND `expressionElseBody` is `Next` / `FitLine`, the
- * pre-`else` separator switches to a hardline regardless of the
- * `sameLineExpressionElse` flag.
- * A block-shape `thenBranch` keeps a flag-driven separator, and since S100
- * the block arm is SPLIT by delimiter: a CURLY close reads
- * `sameLinePolicySwitch`, where `SameOnBlock` falls through to a plain
- * space, so `} else {` cuddles whatever the source wrote; a BRACKET close
- * reads `sameLineNonCurlyBlockPolicySwitch`, where `SameOnBlock` routes to
- * the `Keep` slot, so a `]` close keeps its source shape and gluing it
- * stays `expressionIfWithBrackets`'s job.
- * `Same`-policy and `Keep`+inline-slot
- * suppress the shape-aware break (matches the gate at
- * `WriterLowering.hx:2670+`).
- *
- * `@:fmt(elseSwitch('elseSwitch', 'SwitchExpr', 'SwitchExprBare'))` on BOTH branches
- * (omega-else-switch) — the value-position twin of the statement form's meta, with the same
- * two seams: a `switch` branch value glues to its keyword's line under `opt.elseSwitch ==
- * Same`, and a glued THEN branch's close cuddles the following `else` through
- * `PrevBodyInfo.headGlue`. Armed on `thenBranch` in S138, so a value-`if` whose two branches
- * are both `switch` comes back symmetric rather than half-glued. `HxIfStmt` carries the
- * fuller account.
- *
- * `@:fmt(elseIf)` on `elseBranch` — when the body is itself an
- * `HxIfExpr` (recursive `else if (...)` chain), the body-placement
- * dispatch consults `opt.elseIf:KeywordPlacement` (default `Same`)
- * instead of `expressionElseBody`, so `else if` cuddles inline
- * regardless of the outer body policy. The `findCtorPattern` lookup
- * in `bodyPolicyWrap` tries both `IfStmt` and `IfExpr` ctor names so
- * the same `opt.elseIf` knob covers statement and expression forms.
- * `fitLineIfWithElse` is intentionally absent — the expression form
- * uses the inverse-polarity `noSiblingFallback('ifBody')` mechanism
- * on `thenBranch` (below) for the no-else fallback case.
- *
- * `@:fmt(inlineBlockBodyIfFlag('expressionIfWithBlocks'))` on both
- * branches — runtime override that bypasses the policy-decided
- * layout when `opt.expressionIfWithBlocks == true` AND the body's
- * runtime ctor is `BlockExpr`. Wraps the body's writeCall result in
- * `D.flatten(…)` to collapse `{<hardline>stmt;<hardline>}` to
- * `{stmt;}` regardless of width. Mirrors fork's
- * `sameLine.expressionIfWithBlocks` knob (`MarkSameLine.markBody`
- * with `includeBrOpen=true` triggers `markBlockBody` Same-policy
- * collapse). Non-BlockExpr bodies and `expressionIfWithBlocks=false` fall through to the
- * regular `bodyPolicy` cascade.
- *
- * `@:fmt(bracketBodyGlueIfFlag('expressionIfWithBrackets'))` is the `[`
- * sibling of that meta, and owns THREE seams rather than one: the branch
- * value hugs its head (`bodyPolicyWrap`), the `@:trailOpt(';')` slot above
- * is dropped when an `elseBranch` follows (`semicolonBeforeSiblingWrap`), and
- * the pre-`else` gap becomes a plain space (`beforeKwSeparator`).
- * The last two are the CLOSE side: under `sameLine.expressionIf: next` the
- * gap resolves to `SameOnBlock`, and the shape-aware switch routes that to
- * the source-preserving `Keep` slot on its BRACKET arm — deliberately, so
- * the S100 curly cuddle leaves `]` alone — so without these two seams a
- * source that wrote `];` on its own line keeps `else` on the next one no
- * matter what the knob says, and the hug reads as half a shape.
- * Keyed on the `[` ctor, so a block-valued or
- * plain-valued branch is byte-identical either way -- and keyed on the FLAG
- * alone at all three seams. The hug used to be folded into the layout policy
- * inside `buildBodyCoreWrap`, one level below the outer `Keep` switch, so
- * `sameLine.expressionIf: keep` got the two close seams and not the open one;
- * S154 moved it onto the policy VALUE, the seam S159 took for
- * `loopBodyIfElseNext`. Caveat: under
- * Trivia mode `// line comments` inside the block body fold against
- * the next token and break syntax — same limitation as fork; the
- * knob is opt-in.
- *
- * `@:fmt(noSiblingFallback('ifBody'))` on `thenBranch` — runtime
- * fallback when the next optional sibling (`elseBranch`) is null:
- * `bodyPolicyWrap` swaps `opt.expressionIfBody` for `opt.ifBody`
- * before any ctor / Keep / Next / FitLine dispatch fires. Mirrors
- * fork's `MarkSameLine.markIf` short-circuits onto `ifBody` for
- * `parent.tok==Arrow` (arrow-body if-without-else) and
- * `isComprehensionFilterIf` (no-else filter form): under
- * `expressionIf=next` the body would otherwise force-break and
- * regress `item -> if (cond) body` and `[for (x in xs) if (cond) x]`.
- * The "inverse polarity" relative to `HxIfStmt`'s
- * `fitLineIfWithElse` is intentional — `fitLineIfWithElse` degrades
- * `FitLine` to `Next` when an `else` IS present; this knob degrades
- * `Next/FitLine/...` to a separate flag when `else` is ABSENT.
- *
- * `@:fmt(indentValueIfCtor('ObjectLit', 'indentObjectLiteral',
- * 'objectLiteralLeftCurly'))` on `thenBranch` — subtractive variant of
- * the meta carried by `HxVarDecl.init` / `HxObjectField.value` /
- * `HxStatement.ReturnStmt`. When the body is a multi-line ObjectLit AND
- * `indentObjectLiteral=false` AND `objectLiteralLeftCurly=Next`, the
- * default `bodyPolicyWrap` Next-layout's outer Nest is dropped so the
- * obj-lit's `{` aligns with the `if` keyword's column instead of one
- * indent step deeper. Single-line obj-lit bodies (and any other ctor)
- * fall through to the default `Nest(_cols, …)`. Mirrors haxe-formatter's
- * `indentation.indentObjectLiteral=false` rule for the
- * `if (cond)\n{...}` shape. Asymmetry: `elseBranch` does NOT carry the
- * meta — its optional `@:kw('else')` Ref routes through
- * `bodyPolicyWrap`'s kw-trivia slot path (`nextLayoutKwGapDoc`) which
- * the current gate excludes; threading `indentObjArgs` into that helper
- * is deferred until a corpus consumer needs it.
- *
- * `@:fmt(propagateValueIfBranch)` on both branches — sets the narrow
- * `opt._inValueIfBranch` flag on the branch's direct value writer call
- * (via `_setValueIfBranch`, which gates on `opt._inExprPosition` so a
- * statement-position `if` never flips it). Read by `HxObjectLit.fields`
- * (`@:fmt(reflowInExprPosition)`) so a source-multiline object literal
- * that is the immediate branch value collapses to single-line — mirroring
- * haxe-formatter's rule of collapsing object literals only when they are
- * the value of a value-yielded `if`/`else` branch. The flag is cleared on
- * any deeper expression-position descent (`_setExprPosition` resets it),
- * so an object literal nested as e.g. a call argument inside the branch
- * (`if (c) f({obj})`) keeps its source-multiline shape.
- *
- * `@:fmt(arrowValueIfReflowSite)` on both branches, paired with the
- * TYPE-level `@:fmt(arrowValueIfReflow('expressionIfArrowBodyReflow',
- * 'elseBranch', 'IfExpr'))` (omega-arrow-value-if-reflow) - the one
- * context the `expressionIf` cascade cannot canonicalise: a value-if
- * chain in an arrow-lambda body. The type-level meta declares the runtime
- * gate locals and wraps the whole node in a `Group`; the field-level flags
- * make both branch policies read `Same` and turn the pre-`else` gap into a
- * soft `Line`, so the chain has exactly ONE break axis and the group
- * decides it for every arm at once: flat when it fits, `if (c) v` /
- * `else if (c) v` / `else v` one per line when it does not. The group is
- * gated on `!opt._inValueIfBranch` so only the OUTERMOST member of an
- * `else if` chain opens one; the nested members inherit it and contribute
- * their soft `Line`s. The thenBranch override additionally requires
- * `elseBranch != null`, leaving an else-less arrow-body `if`
- * (`item -> if (c) body`) on its `noSiblingFallback` answer. Default
- * `false` keeps the per-branch policy cascade (fork parity).
- *
- * The reflow is REFUSED, for the chain as a whole, when any member carries
- * a captured comment - forcing `Same` would put a `//` inline next to a
- * branch value. Both directions are covered because neither alone is
- * enough: the `spineField` / `spineCtor` args drive an `else`-spine walk
- * so a member sees comments BELOW it, and a refusing member stamps
- * `opt._arrowValueIfBlocked` on its branch writes so members below see a
- * refusal ABOVE them. With one only, the chain rendered half re-flowed and
- * half in policy shape. `_arrowValueIfBlocked` is a dedicated field rather
- * than a clear of `_inArrowLambdaBody`, which is shared with the
- * object-literal arrow knobs and would have switched those off inside the
- * refused branch.
- *
- * RESIDUAL - "in an arrow-lambda body" is `_inArrowLambdaBody`'s reach,
- * which is wider than the immediate body: the flag survives into a
- * `cast(<if>, T)` operand, past an `untyped` / `@:meta` prefix, and into
- * an enclosing value-`if`'s CONDITION (`if (if (a) b else c) x else y`).
- * All three re-flow under the knob. Measured non-corrupt and idempotent,
- * and the meta-prefix case is arguably the wanted answer, so they are
- * recorded rather than gated; tightening to the strict DIRECT body would
- * mean `_setExprPosition`-style clears on the cast operand and the
- * condition field.
+ * `@:fmt(arrowValueIfReflowSite)` on both branches, paired with the TYPE-level
+ * `@:fmt(arrowValueIfReflow('expressionIfArrowBodyReflow', 'elseBranch', 'IfExpr', …))`, is the one context
+ * the `expressionIf` cascade cannot canonicalise: a value-if chain in an arrow-lambda body. The type-level
+ * meta wraps the node in a `Group`, the field flags make both branch policies read `Same` and the pre-`else`
+ * gap a soft `Line`, so the chain has ONE break axis decided for every arm at once; only the OUTERMOST chain
+ * member opens the group (`!opt._inValueIfBranch`). The reflow is REFUSED for the chain as a whole when any
+ * member carries a captured comment, in both directions (an `else`-spine walk sees comments BELOW,
+ * `opt._arrowValueIfBlocked` stamps a refusal for members ABOVE). `_inArrowLambdaBody` also reaches a
+ * `cast(<if>, T)` operand, a prefix keyword and an enclosing value-`if`'s CONDITION, which re-flow under the
+ * knob too; recorded rather than gated.
  */
 @:peg
 @:fmt(arrowValueIfReflow('expressionIfArrowBodyReflow', 'elseBranch', 'IfExpr', 'expressionIfFit'))

@@ -167,10 +167,10 @@ final class CliWalk {
 	/**
 	 * `parseWalked` for a walk that carries SEVERAL query keys — one parse per
 	 * file serving every name in a batch, which is the whole saving a batched
-	 * `refs A B C -- src` buys: `refs` is 0.23 s per name on this tree (935
-	 * files) because the raw-substring pre-filter already skips the files that
-	 * cannot hold the name, so what a batch removes is not CPU but ROUNDS — one
-	 * process, one progress stream, one nudge pass instead of N.
+	 * `refs A B C -- src` buys: a single `refs` is already cheap because the
+	 * raw-substring pre-filter skips the files that cannot hold the name, so
+	 * what a batch removes is not CPU but ROUNDS — one process, one progress
+	 * stream, one nudge pass instead of N.
 	 *
 	 * `searchKeys` null OR EMPTY means NO pre-filter: no key is no evidence, so
 	 * no file may be skipped on it. A non-empty list skips a file only when NONE
@@ -251,7 +251,7 @@ final class CliWalk {
 	 * `apq refs A B C src` was SILENT before this — the first positional is the
 	 * name, every later one a scope spec, so `B` and `C` expanded to nothing and
 	 * the walk answered for `src` alone with exit 0 and not a word about the two
-	 * arguments it dropped. Measured on this tree 2026-09-07. That is why the
+	 * arguments it dropped. That is why the
 	 * batch separator is a bare `--` rather than a "last positional is the scope"
 	 * rule: `apq refs X src test` is a legal two-scope call today, and reading its
 	 * `src` as a name would silently change what it answers.
@@ -277,8 +277,8 @@ final class CliWalk {
 					+ 'e.g. "$$x.field", "func($$x)"), or look up by name: apq refs <name> --decls / apq uses <Type>. Searching anyway.';
 			// `HexLit` was missing and `StringLit` / `RawString` name nothing this grammar projects, so
 			// `apq search '0xFF'` fell through to the identifier arm and advised `apq refs` / `apq uses`
-			// on a literal. Measured in review of S188; the principled form is a shape field, which is
-			// the same question T901 / T902 park for the operator tables.
+			// on a literal. The principled form is a shape field, the same question the operator
+			// tables park.
 			case 'Literal', 'BoolLit', 'IntLit', 'FloatLit', 'HexLit', 'SingleStringExpr', 'DoubleStringExpr':
 				'${prefix}is a bare literal — for literal-content lookup use: apq lit \'$patternStr\' <files>. Searching anyway.';
 			case _:
@@ -400,9 +400,9 @@ final class CliWalk {
 	 * (an explicit `--limit N` or the `AUTO_LIMIT_THRESHOLD` default resolved by `effectiveAutoLimit`)
 	 * actually cut `allEntries` down to `shown`. Names the cap, how many files carry what got shown,
 	 * how many files the scan scope held, and the last file whose hits reached the output — the exact
-	 * spot a silent truncation reads as "the structure doesn't exist past here" (S106: an unannounced
-	 * `--limit 40` cut a whole-repo census alphabetically at one file, with nothing on stderr to say
-	 * so, and the census needed `--limit 9999` before anyone noticed).
+	 * spot a silent truncation reads as "the structure doesn't exist past here" (an unannounced
+	 * default limit once cut a whole-repo census alphabetically at one file, with nothing on stderr
+	 * to say so).
 	 *
 	 * A no-op when nothing was capped: `cappedLimit < 0` (unbounded) or `totalHits <= cappedLimit`
 	 * (the whole result already fit). `--limit 0` still names the cap as `0` — pass the SAME

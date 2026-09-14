@@ -61,59 +61,40 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		implements ParsedRootProvider implements FunctionTypeProvider {
 
 	/**
-	 * Binding-declaration kinds shared by `refShape` and `metaShape`
-	 * so the two contracts cannot drift. Top-level type decls,
-	 * statement-level var bindings (plus their expression-position
-	 * `VarExpr` / `FinalExpr` twins — `macro var x = e` — wrapping the
-	 * same `HxVarDecl`), class-member bindings, function
-	 * parameters (`HxParam`'s three Alt branches, reused verbatim by `HxLambdaParam`'s `Optional`
-	 * / `Required`), and enum constructors (`SimpleCtor` / `ParamCtor`) so an annotation on
-	 * an `enum E { @:kw('x') A; }` ctor attributes to that ctor — the
-	 * `MetaCall` and ctor nodes flatten as spanned siblings, so
-	 * `Meta.followingDeclHost` resolves once the kind is a host.
-	 * Anon-struct fields (`VarField` / `FinalField` / `FnField`, the
-	 * `var` / `final` / `function` forms of `HxAnonField`) so
-	 * `typedef T = { @:meta var f; }` field metadata + the field
-	 * binding surface — the bare `name:Type` forms reuse the
-	 * `Required` / `Optional` entries above. Reached only once
-	 * `appendNodes` descends the anon `type` (see `isAnonType`).
-	 * `VarMore` is the `@:spanned('VarMore')` struct carrying every binding
-	 * AFTER the first in `var a = 1, b = 2;` — without it those bindings had
-	 * no declaration node at all, so `Refs` could not resolve their uses and
-	 * every declaration-walking check was blind to them. `KeyValueBinder` is
-	 * the same lift for the VALUE binder of `for (k => v in m)`: the loop
-	 * node's own name is the KEY, so `v` had no declaration node either. It
-	 * is a decl host rather than a `selfScopeDeclKinds` entry because it
-	 * opens no scope of its own — it binds into the frame the LOOP opens,
-	 * which is what `Refs.collectIntoMulti` does with a decl-host child.
-	 * `LocalFnStmt` and `LocalInlineFnStmt` are the two projections of a local
-	 * `function` statement - the grammar folds the `inline` keyword into its own
-	 * ctor instead of pairing a modifier - and both bind their name into the
-	 * ENCLOSING body while opening a scope of their own for their parameters
-	 * (see the matching pair in `scopeKinds`). They are decl hosts, not
-	 * `selfScopeDeclKinds` entries, for the mirror of `KeyValueBinder`'s reason: the scope they
-	 * open is not the one their own name lives in. `NamedFnExpr` - the same `function` keyword in
-	 * VALUE position, `final f = function nn(a) { … }` - binds its name the same way, measured
-	 * against the compiler rather than assumed: the name is readable AFTER the literal in the
-	 * enclosing block (`final f = function nn(x) …; nn(4)` compiles) and nowhere else - not
-	 * before it, not outside that block, both `Unknown identifier`. Self-recursion needs no extra
-	 * entry: the binding is position-scoped at the literal's own start, which precedes its body.
-	 * Without this entry the literal's name was no declaration at all, so a self-recursive call
-	 * and every later read of the name bound to whatever ELSE in scope carried it, and renaming
-	 * that outer binding rewrote the literal's own recursive call.
+	 * Binding-declaration kinds shared by `refShape` and `metaShape` so the two contracts cannot
+	 * drift: top-level type decls, statement-level var bindings (plus their expression-position
+	 * `VarExpr` / `FinalExpr` twins wrapping the same `HxVarDecl`), class-member bindings,
+	 * function parameters (`HxParam`'s three Alt branches, reused verbatim by `HxLambdaParam`),
+	 * enum constructors (`SimpleCtor` / `ParamCtor`, so an annotation on a ctor attributes to it
+	 * — the `MetaCall` and ctor nodes flatten as spanned siblings, and `Meta.followingDeclHost`
+	 * resolves once the kind is a host), and anon-struct fields (`VarField` / `FinalField` /
+	 * `FnField`, reached once `appendNodes` descends the anon `type`; the bare `name:Type` forms
+	 * reuse `Required` / `Optional`).
 	 *
-	 * The three `final` / `abstract` type-declaration forms name themselves through
-	 * their own ctors, so each needs its own entry. `ClassForm` is the inner form of a
-	 * `final class`, which projects as `FinalDecl(ClassForm …)`: the NAME sits on the
-	 * inner node and `FinalDecl` carries none, so the wrapper is deliberately absent
-	 * here - the same normalisation `SELECT_KIND_EQUIVALENCE` and
-	 * `RefactorSupport.typeDeclOf` already apply. `AbstractClassDecl` (`abstract
-	 * class`) and `EnumAbstractDecl` (`enum abstract`) are ctors of their own rather
-	 * than modifier variants of `ClassDecl` / `AbstractDecl`, and both name
-	 * themselves. Without the three, such a type name was no declaration at all:
-	 * `refs` reported zero hits on the definition itself, and every consumer pairing a
-	 * declaration with its uses was blind to it. They join `HOISTING_SCOPE_KINDS`,
-	 * which already names all three for the mirror reason.
+	 * `VarMore` is the `@:spanned('VarMore')` struct carrying every binding AFTER the first in
+	 * `var a = 1, b = 2;` — without it those bindings had no declaration node and `Refs` could
+	 * not resolve their uses. `KeyValueBinder` is the same lift for the VALUE binder of `for (k
+	 * => v in m)`: the loop node's own name is the KEY. It is a decl host rather than a
+	 * `selfScopeDeclKinds` entry because it opens no scope of its own — it binds into the frame
+	 * the LOOP opens, which is what `Refs.collectIntoMulti` does with a decl-host child.
+	 *
+	 * `LocalFnStmt` and `LocalInlineFnStmt` are the two projections of a local `function`
+	 * statement (the grammar folds the `inline` keyword into its own ctor), and both bind their
+	 * name into the ENCLOSING body while opening a scope of their own for their parameters (see
+	 * `scopeKinds`); decl hosts, not `selfScopeDeclKinds`, because the scope they open is not the
+	 * one their own name lives in. `NamedFnExpr` — the same keyword in VALUE position, `final f =
+	 * function nn(a) { … }` — binds its name the same way: the compiler makes it readable AFTER
+	 * the literal in the enclosing block and nowhere else, and self-recursion needs no extra
+	 * entry because the binding is position-scoped at the literal's own start. Without this
+	 * entry a self-recursive call bound to whatever ELSE in scope carried the name.
+	 *
+	 * The three `final` / `abstract` type-declaration forms name themselves through their own
+	 * ctors, so each needs its own entry. `ClassForm` is the inner form of a `final class`, which
+	 * projects as `FinalDecl(ClassForm …)`: the NAME sits on the inner node and `FinalDecl`
+	 * carries none, so the wrapper is deliberately absent — the normalisation
+	 * `SELECT_KIND_EQUIVALENCE` and `RefactorSupport.typeDeclOf` already apply.
+	 * `AbstractClassDecl` and `EnumAbstractDecl` are ctors of their own and name themselves.
+	 * They join `HOISTING_SCOPE_KINDS`, which names all three for the mirror reason.
 	 */
 	private static final DECL_HOST_KINDS: Array<String> = [
 		'VarDecl',
@@ -186,7 +167,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 *
 	 * `enum abstract` gets its own ctor rather than reusing `AbstractDecl`, so it needs its own
 	 * entry. Its members hoist like any other type body's: `final A = B + 1; final B = 1;`
-	 * compiles and evaluates `A` to 2 — measured, not assumed.
+	 * compiles and evaluates `A` to 2.
 	 */
 	private static final HOISTING_SCOPE_KINDS: Array<String> = [
 		'ClassDecl',
@@ -200,46 +181,38 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	];
 
 	/**
-	 * Scope kinds whose declarations take effect only from their own position onward - every
+	 * Scope kinds whose declarations take effect only from their own position onward — every
 	 * construct above whose body is a statement list or a parameter list. Haxe hoists neither a
-	 * local `var` nor a local `function` (a call before its declaration is `Unknown identifier`),
-	 * so a reference that precedes one binds to whatever encloses it: the member of the same
-	 * name, most often.
+	 * local `var` nor a local `function` (a call before its declaration is `Unknown
+	 * identifier`), so a reference that precedes one binds to whatever encloses it: the member
+	 * of the same name, most often.
 	 *
 	 * `CatchClause` is surfaced by `appendNodes` from the `@:spanned('CatchClause')` paired
 	 * struct; it opens a scope (the clause body) and self-binds the exception name into that
-	 * frame (see `selfScopeDeclKinds`).
+	 * frame (see `selfScopeDeclKinds`). A parameter needs no entry of its own: a function frame
+	 * pre-collects only its own params (the walk stops at the body's `BlockBody`), so they stay
+	 * visible to the whole body while the body's own declarations become position-scoped.
 	 *
-	 * A local `function f(...) {...}` statement opens its own frame - without it sibling local
+	 * A local `function f(...) {...}` statement opens its own frame — without it sibling local
 	 * fns' same-named params collect into the ENCLOSING function's frame and reads mis-bind
-	 * across siblings (the CallGraph `span` collision). `inline function` is the same construct
-	 * with the keyword folded into its own ctor, and it is the form this project's Haxe style
-	 * prescribes for a local helper - the two must never diverge HERE. They deliberately do
-	 * diverge in `functionKinds` / `localFunctionKinds` below, which measure complexity units
-	 * rather than scopes; a consumer that wants the scope reading unions `inlineFunctionKinds`
-	 * back in - there are several, so enumerate them with
-	 * `hxq mentions inlineFunctionKinds src/` rather than trusting a list here.
-	 *
-	 * A parameter needs no entry of its own: a function frame pre-collects only its own params
-	 * (the walk stops at the body's `BlockBody`), so they stay visible to the whole body while
-	 * the body's own declarations become position-scoped.
+	 * across siblings. `inline function` is the same construct with the keyword folded into its
+	 * own ctor, and it is the form this project's Haxe style prescribes for a local helper — the
+	 * two must never diverge HERE. They deliberately do diverge in `functionKinds` /
+	 * `localFunctionKinds` below, which measure complexity units rather than scopes; a consumer
+	 * that wants the scope reading unions `inlineFunctionKinds` back in (enumerate them with
+	 * `hxq mentions inlineFunctionKinds src/` rather than trusting a list here).
 	 *
 	 * `ThinArrow` is the bare `arg -> body` lambda, and it belongs here for the same reason the
-	 * two parenthesised forms and `FnExpr` do: it binds a parameter, and that parameter dies at
-	 * the body's end. The grammar spells it as a Pratt infix ctor rather than a lambda ctor, so
-	 * its parameter reaches the tree as an `IdentExpr` - `HxArrowParamProjection` re-labels it
-	 * `Required` before any consumer sees it. Without BOTH halves the parameter was a read of
-	 * whatever enclosed the lambda: `refs` mis-bound it, and `rename` rewrote the two together.
-	 *
-	 * `NamedFnExpr` is `function nn(a) { … }` in VALUE position, and it belongs here for exactly
-	 * the reason the anonymous `FnExpr` does - it binds a parameter that dies at the body's end.
-	 * The reasoning was never applied to it, so its parameter collected into the ENCLOSING
-	 * function's frame and an outer read of the same name resolved to it: measured on
-	 * `var q = 1; final f = function nn(q:Int) { … }; trace(q + …)`, the trace read bound to the
-	 * literal's parameter, and `rename` of either binding silently rewrote the other. The
-	 * anonymous spelling one line above was correct throughout, which is what kept it hidden.
-	 * The name `nn` itself does NOT live in this frame - it binds into the enclosing body, so it
-	 * is a `DECL_HOST_KINDS` entry too; see the pair of paragraphs there.
+	 * two parenthesised forms and `FnExpr` do: it binds a parameter that dies at the body's end.
+	 * The grammar spells it as a Pratt infix ctor, so its parameter reaches the tree as an
+	 * `IdentExpr` — `HxArrowParamProjection` re-labels it `Required` before any consumer sees
+	 * it. Without BOTH halves the parameter was a read of whatever enclosed the lambda.
+	 * `NamedFnExpr` is `function nn(a) { … }` in VALUE position and belongs here for exactly the
+	 * reason the anonymous `FnExpr` does; without it the parameter collected into the ENCLOSING
+	 * function's frame and an outer read of the same name resolved to it (the anonymous spelling
+	 * one line above was correct throughout, which kept it hidden). The name `nn` itself does
+	 * NOT live in this frame — it binds into the enclosing body, so it is a `DECL_HOST_KINDS`
+	 * entry too.
 	 */
 	private static final POSITION_SCOPED_SCOPE_KINDS: Array<String> = [
 		'FnDecl',
@@ -291,66 +264,43 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	];
 
 	/**
-	 * Search-only kind-equivalence. One Haxe declaration keyword surfaces as
-	 * several position-specific `QueryNode` kinds — a `var` is module-level
-	 * `VarDecl`, class-field `VarMember`, local `VarStmt`; a `function` is
-	 * `FnDecl` / `FnMember` / `LocalFnStmt`; a `final` binding is `VarForm` /
-	 * `FinalMember` / `FinalStmt` — while a pattern always parses through the
-	 * Decl attempt and lands on the module-level kind. Without an equivalence
-	 * such a pattern matches NOTHING outside module scope (the S2 dogfood gap),
-	 * and `search --explain` says so: `pattern root kind "FnDecl" NOT present in
-	 * any scanned file`.
+	 * Search-only kind-equivalence. One Haxe declaration keyword surfaces as several
+	 * position-specific `QueryNode` kinds — a `var` is module-level `VarDecl`, class-field
+	 * `VarMember`, local `VarStmt`; a `function` is `FnDecl` / `FnMember` / `LocalFnStmt`; a
+	 * `final` binding is `VarForm` / `FinalMember` / `FinalStmt` — while a pattern always parses
+	 * through the Decl attempt and lands on the module-level kind. Without an equivalence such
+	 * a pattern matches NOTHING outside module scope, and `search --explain` says so.
 	 *
-	 * Carried on the `Pattern` and consulted only by the search `Matcher`, so the
-	 * `QueryNode` tree keeps the precise per-position kinds: `ast` / `--select` /
-	 * `refs` / `meta` vocabulary — including the published `--on VarMember` — is
-	 * unchanged, and `DECL_HOST_KINDS` above stays correct (it intentionally
-	 * distinguishes the positions for scope/decl-host resolution).
-	 *
-	 * A module-level `final` names itself ONE LEVEL DOWN: `final x = 1;` projects
-	 * as `FinalDecl(VarForm x …)`, the same wrapper shape as `final class`
-	 * (`FinalDecl(ClassForm …)`). `FinalDecl` therefore carries no name and one
-	 * extra child, and can never unify with the flat `FinalMember` / `FinalStmt` —
-	 * the matcher compares the name slot and the child COUNT. So the group is keyed
+	 * Carried on the `Pattern` and consulted only by the search `Matcher`, so the `QueryNode`
+	 * tree keeps the precise per-position kinds: `ast` / `--select` / `refs` / `meta` vocabulary
+	 * is unchanged, and `DECL_HOST_KINDS` above stays correct. A module-level `final` names
+	 * itself ONE LEVEL DOWN: `final x = 1;` projects as `FinalDecl(VarForm x …)`, so `FinalDecl`
+	 * carries no name and one extra child and can never unify with the flat `FinalMember` /
+	 * `FinalStmt` (the matcher compares the name slot and the child COUNT); the group is keyed
 	 * on the named inner `VarForm`, and `parsePattern` re-roots the pattern onto it
-	 * (`HaxePatternFragment.rerootFinalVarDecl`), the same normalisation
-	 * `moduleValueDeclKinds` below already applies.
+	 * (`HaxePatternFragment.rerootFinalVarDecl`).
 	 *
-	 * A group holds only the variants whose span carries NOTHING but the family
-	 * keyword, and that is a correctness rule rather than taste: this same relation
-	 * drives `Rewrite.rewrite` and `--match` addressing, which splice over the
-	 * MATCHED node's span. A variant that consumes an extra modifier keyword into
-	 * its own span therefore loses it — measured, `final function sealed()`
+	 * A group holds only the variants whose span carries NOTHING but the family keyword, and
+	 * that is a correctness rule rather than taste: this same relation drives `Rewrite.rewrite`
+	 * and `--match` addressing, which splice over the MATCHED node's span. A variant that
+	 * consumes an extra modifier keyword into its own span loses it — `final function sealed()`
 	 * (`FinalModifiedMember`, span starts at `final`) and a local `inline function`
-	 * (`LocalInlineFnStmt`, span starts at `inline`) both come back stripped of
-	 * their modifier by a `function $n(…)` rewrite, silently and re-parseably.
-	 * `(Public)` / `(Static)` are safe for the opposite reason: they project as
-	 * SIBLING leaves outside the member's span. The same rule retroactively explains
-	 * the var family's omission of `StaticVarStmt` / `StaticFinalStmt` — their spans
-	 * start at `static`.
+	 * (`LocalInlineFnStmt`, span starts at `inline`) both come back stripped of their modifier by
+	 * a `function $n(…)` rewrite, silently and re-parseably. `(Public)` / `(Static)` are safe
+	 * for the opposite reason: they project as SIBLING leaves outside the member's span. The
+	 * same rule explains the var family's omission of `StaticVarStmt` / `StaticFinalStmt`.
+	 * `SELECT_KIND_EQUIVALENCE` below DOES fold `FinalModifiedMember` onto `FnMember`, and search
+	 * deliberately does not follow it: `--select` is a read-only projection with no rewriting
+	 * consumer. The residual gap — no pattern reaches a `final function` or a local `inline
+	 * function` — is left open on purpose: closing it needs a rewrite-safe split, not a wider
+	 * constant. The groups also stay per-keyword (`var $v = 0` must not match a `final` binding),
+	 * and expression-position forms are outside the criterion.
 	 *
-	 * That settles the one question `--select` cannot: `SELECT_KIND_EQUIVALENCE`
-	 * below DOES fold `FinalModifiedMember` onto `FnMember`, and search deliberately
-	 * does not follow it. `--select` is a read-only projection with no rewriting
-	 * consumer, so folding there costs nothing; the same fold here would deform
-	 * code. The residual gap — no pattern reaches a `final function` or a local
-	 * `inline function` at all — is left open on purpose: closing it needs a
-	 * rewrite-safe split (a wider relation for the read-only `search` command, or a
-	 * refusal in `Rewrite` for modifier-carrying variants), not a wider constant.
-	 *
-	 * The groups also stay per-keyword: `var $v = 0` must not match a `final`
-	 * binding (different keyword, immutability semantics) and neither matches a
-	 * function. Expression-position forms (`FnExpr`, `NamedFnExpr`, the lambdas,
-	 * `VarExpr` / `FinalExpr`) are outside the criterion — the relation covers
-	 * declaration positions only.
-	 *
-	 * One asymmetry is kept because the alternative is worse: a module-level `final`
-	 * matches AS the `VarForm`, whose span starts after the `final` keyword, so a
-	 * rewrite through it re-emits the keyword and the canonical gate rejects the
-	 * whole result (`result does not parse`) instead of writing it. Loud, and that
-	 * spelling occurs zero times in either corpus measured (TM `src/`, this repo's
-	 * `src/`); a member or local `final`, whose span does start at the keyword,
-	 * rewrites correctly.
+	 * One asymmetry is kept because the alternative is worse: a module-level `final` matches AS
+	 * the `VarForm`, whose span starts after the `final` keyword, so a rewrite through it
+	 * re-emits the keyword and the canonical gate rejects the whole result (`result does not
+	 * parse`) instead of writing it — loud, and that spelling is rare; a member or local
+	 * `final`, whose span does start at the keyword, rewrites correctly.
 	 */
 	private static final SEARCH_KIND_EQUIVALENCE: KindEquivalence = new KindEquivalence([
 		['VarDecl', 'VarMember', 'VarStmt'],
@@ -625,14 +575,12 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		// for-loop iterator).
 		//
 		// A lambda parameter reached the same list through a
-		// `@:spanned('LambdaParam')` typedef until `327ae658` split
-		// `HxLambdaParam` into an `Optional` / `Required` Alt enum. Both
-		// ctors were already decl-hosts for `HxParam`, so the split needed
-		// no vocabulary edit — and the retired `LambdaParam` kind sat in
-		// this list, in `HaxeNamingSupport.categoryOf` and in
-		// `FieldRefScan.bindsNameHere` for three months, matching nothing
-		// and reported by nothing. `RefShapeKindProjectionTest` is what
-		// found it, and is what keeps the next one from lasting.
+		// `@:spanned('LambdaParam')` typedef until `HxLambdaParam` became
+		// an `Optional` / `Required` Alt enum; the retired `LambdaParam`
+		// kind then sat in this list, in `HaxeNamingSupport.categoryOf` and
+		// in `FieldRefScan.bindsNameHere`, matching nothing and reported by
+		// nothing. `RefShapeKindProjectionTest` is what keeps the next
+		// retired kind from lasting.
 		//
 		// Write-parent kinds: ctors on `HxExpr` whose first positional
 		// child carries the binding being modified. `Assign(left, right)`
@@ -818,8 +766,8 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			// goes INSIDE the existing parens and the rule adds no punctuation. This matters for a
 			// ternary in operand position: `h - ih - (c ? a : b)` is legal as `h - ih - (if …)`, but
 			// only WITH the parens; drop them and a following operand binds into the `else` branch
-			// (measured: `h - if (c) 1.0 else 2.0 - ih` is 118, the parenthesised form 78, and both
-			// compile). Requiring the parens in the SOURCE is what makes this host safe.
+			// (`h - if (c) 1.0 else 2.0 - ih` compiles to a different value than the parenthesised
+			// form). Requiring the parens in the SOURCE is what makes this host safe.
 			ifExpressionChainHostKinds: SWITCH_EXPRESSION_HOST_KINDS.concat(
 				['ThinArrow', 'ThinParenLambdaExpr', 'ParenLambdaExpr', 'ParenExpr']
 			)
@@ -1126,8 +1074,8 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			// `DollarBlockExpr` — the MACRO reification `${ … }` — is bound by the same
 			// two hard tokens and is ABSENT, but only conservatively: `${ … }` is the
 			// reification ESCAPE, its content is macro-TIME code, and `macro ${(e)}`
-			// builds exactly what `macro ${e}` builds (measured — no `EParenthesis`
-			// survives). The pair that DOES reify is one written in the quoted region,
+			// builds exactly what `macro ${e}` builds (no `EParenthesis` survives).
+			// The pair that DOES reify is one written in the quoted region,
 			// which `parenOpaqueSubtreeKinds` covers. Listing this kind is untaken work,
 			// not a refused hazard.
 			delimitedAllChildKinds: [

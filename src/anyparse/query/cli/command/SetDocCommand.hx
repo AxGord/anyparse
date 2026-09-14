@@ -75,47 +75,10 @@ final class SetDocCommand implements CliCommand implements PostWriteFix {
 	}
 
 	/**
-	 * `apq new <path> (--class | --implements <iface>) [--field <m>]...
-	 * [--bodies -] [--write]` — create a new module deterministically: derive
-	 * the package + class name from <path>, assemble the scaffold (interface
-	 * method stubs with sliced signatures + carried imports, or verbatim
-	 * `--field` members), and run it through the writer so the result is
-	 * canonical-or-rejected and the file is never written on a parse failure.
-	 * Create-only: an existing path is refused. `--bodies -` reads `@@ <method>`
-	 * sections from stdin (see `NewFile`); a method without a section is left as
-	 * a NotImplementedException stub (reported on stderr). Without `--write` the
-	 * source goes to stdout.
-	 * `apq new <path> (--class | --implements <iface> | --kind <k>) [--extends <T>]...
-	 * [--open] [--field <m>]... [--bodies -] [--write]` — create a new module
-	 * deterministically: derive the package + class name from <path>, assemble the
-	 * scaffold (interface method stubs with sliced signatures + carried imports, or
-	 * verbatim `--field` members), and run it through the writer so the result is
-	 * canonical-or-rejected and the file is never written on a parse failure.
-	 * `--kind` (default class) picks class / interface / enum / typedef; `--extends`
-	 * adds a superclass (class) or super-interfaces (interface); `--open` drops the
-	 * `final` on a class. Create-only: an existing path is refused. `--bodies -`
-	 * reads `@@ <method>` sections from stdin (see `NewFile`); a method without a
-	 * section is left as a NotImplementedException stub (reported on stderr).
-	 * Without `--write` the source goes to stdout.
-	 * `apq new <path> (--class | --implements <iface> | --kind <k>) [--extends <T>]...
-	 * [--open] [--underlying <T>] [--from <T>]... [--to <T>]... [--field <m>]...
-	 * [--bodies -] [--write]` — create a new module deterministically: derive the
-	 * package + class name from <path>, assemble the scaffold (interface method
-	 * stubs with sliced signatures + carried imports, or verbatim `--field`
-	 * members), and run it through the writer so the result is canonical-or-
-	 * rejected and the file is never written on a parse failure. `--kind` (default
-	 * class) picks class / interface / enum / typedef / abstract; `--extends` adds
-	 * a superclass (class) / super-interfaces (interface) / struct extension
-	 * (typedef); `--underlying`/`--from`/`--to` shape an abstract; `--open` drops
-	 * the `final` on a class. Create-only: an existing path is refused. `--bodies -`
-	 * reads `@@ <method>` sections from stdin (see `NewFile`); a method without a
-	 * section is left as a NotImplementedException stub (reported on stderr).
-	 * Without `--write` the source goes to stdout.
-	 * `apq set-doc <file> <line>:<col> (<text> | --from-file | -) [--reformat]
-	 * [--write]` — add or replace the doc-comment of the declaration at the
-	 * cursor (see `SetDoc`). The text (inline / file / stdin via `resolveCodeArg`)
-	 * is formatted into a doc-comment block and spliced before the decl, leaving
-	 * the declaration itself untouched; the result is writer-formatted and
+	 * `apq set-doc <file> <line>:<col> (<text> | --from-file | -) [--reformat] [--write]` — add or
+	 * replace the doc-comment of the declaration at the cursor (see `SetDoc`). The text (inline /
+	 * file / stdin via `resolveCodeArg`) is formatted into a doc-comment block and spliced before
+	 * the decl, leaving the declaration itself untouched; the result is writer-formatted and
 	 * re-parse-validated (canonical-gated unless `--reformat`).
 	 */
 	private static function runSetDoc(args: Array<String>, fix: Bool): Int {

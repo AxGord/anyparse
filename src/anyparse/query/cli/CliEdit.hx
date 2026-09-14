@@ -47,8 +47,8 @@ final class CliEdit {
 	 * an op is about to write, in `apq fmt`'s exact words.
 	 *
 	 * Silent for the healthy counts and for a `null` — an `EditResult.Ok` from a
-	 * producer that never ran the loop measured nothing, and inventing a "1" for it
-	 * would claim a measurement nobody made.
+	 * producer that never ran the loop counted nothing, and inventing a "1" for it
+	 * would claim a count nobody took.
 	 *
 	 * Called on the FINALISE, not on the write, so it fires in preview mode too:
 	 * the finding is about the WRITER, and a preview is where a user is still
@@ -282,7 +282,7 @@ final class CliEdit {
 	 * LINES this write changed and no others.
 	 *
 	 * `--no-oracle` is not a default to be talked out of. The oracle is a project-wide build
-	 * — measured at 46.5s against 4.8s without it on this tree — which no per-edit step can
+	 * — an order of magnitude over the lint itself — which no per-edit step can
 	 * pay; and without it every RiskyFix and OracleAssisted rule stays report-only, so what
 	 * lands automatically behind someone's edit is the SAFE half only. `runLint` prints that
 	 * it had no net, so the run says so rather than implying a verification it did not do.

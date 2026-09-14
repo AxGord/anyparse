@@ -79,8 +79,8 @@ typedef FmtFileResult = {
 	 * run over a `cp -R` tree read as "nothing to do" and pass as a measurement arm.
 	 *
 	 * A READ failure is an environment fact too and still rides under the shared
-	 * word — `chmod 000` on one file of two gives `rewrote 1 of 2 file(s), 1 failed`,
-	 * the same shape one syscall to the left. It is left alone deliberately: the
+	 * word — a `chmod 000` file reports as `failed`, the same shape one syscall to
+	 * the left. It is left alone deliberately: the
 	 * write side is the one that produced the vacuous arm, and a second word wants
 	 * its own fixture rather than a widened claim here.
 	 */
@@ -253,8 +253,8 @@ final class FmtCommand implements CliCommand {
 	 * The per-mode run summary `apq fmt` RETURNS for its caller to print.
 	 *
 	 * Every mode states BOTH quantities — how many files the run considered and
-	 * how many it acted on. One number alone is what let `formatted 0 file(s),
-	 * 3 failed` read as "the run was inert" on an 870-file tree: nothing on the
+	 * how many it acted on. One number alone is what let a summary of the form `formatted 0 file(s),
+	 * N failed` read as "the run was inert" on a large tree: nothing on the
 	 * line separated that reading from the true one. `--list` said nothing at
 	 * all unless a file failed, so its drift count was reported nowhere.
 	 *
@@ -280,9 +280,9 @@ final class FmtCommand implements CliCommand {
 		// And the two CAUSES of a failure are never folded into each other either.
 		// `failed` is a file the run could not answer FOR — it did not parse, or its
 		// re-emission would drop a comment; an unwritable one it answered for exactly
-		// and the HOST refused the write. Under one word, `rewrote 0 of 2625 file(s),
-		// 1692 failed` on a `cp -R` copy whose mode bits stayed `444` read as a
-		// source-side verdict and was accepted as a measurement arm — the run had
+		// and the HOST refused the write. Under one word, a run over a `cp -R` copy
+		// whose mode bits stayed `444` read as a source-side verdict and was accepted
+		// as a measurement arm — the run had
 		// written nothing at all, and both arms of the comparison were the untouched
 		// copy. The tail stays shared because only a `--write` run reaches the write
 		// site at all, and `--write` outranks `--list` in the mode chain below — NOT
@@ -462,7 +462,7 @@ final class FmtCommand implements CliCommand {
 		// the same `formatted == source` comparison, so they cannot disagree within
 		// a run — they disagreed ACROSS runs, because a writer whose output is not
 		// its own fixed point left `--write` one pass short of where the next
-		// `--list` looked. `FormatFixedPoint` carries the measured instance.
+		// `--list` looked. `FormatFixedPoint` documents the instance.
 		final roundTrip: (text:String) -> Null<String> = text -> plugin.writeRoundTrip(text, optsJson);
 		final fixedPoint: FormatFixedPointResult = try FormatFixedPoint.run(roundTrip, source) catch (exception: Exception) {
 			CliIo.stderr('apq fmt: $path: ${exception.message}\n');
@@ -539,8 +539,8 @@ final class FmtCommand implements CliCommand {
 				//
 				// It stays a per-file failure only because the write is now all-or-nothing.
 				// Continuing past a TRUNCATING write is what turned a full disk into a tree
-				// of empty source files: measured, five files on a volume with no free
-				// blocks gave `rewrote 3 of 5 file(s), 2 failed` and two files of 0 bytes.
+				// of empty source files: a run on a volume with no free blocks reported some
+				// files rewritten and left them at 0 bytes.
 				try CliIo.writeFile(path, formatted) catch (failure: WriteFailure) {
 					CliIo.stderr('apq fmt: ${failure.message}\n');
 					return {
@@ -583,84 +583,46 @@ final class FmtCommand implements CliCommand {
 	 *
 	 * `fmt` reformats such a file normally and silently declines the region inside it, which is
 	 * the one outcome a reader cannot tell from a bug: the lines around it moved, these did not,
-	 * and nothing said why. A user lost time to exactly that twice — `} catch (_:Dynamic) {` and
-	 * its `}` left on two lines while the statements above them were normalised, because the
-	 * `try` opens in one region and the `catch` closes in another.
-	 *
-	 * Same class of event as the comment-loss refusal on `GrammarPlugin.writeRoundTrip`, and
-	 * reported for the same reason: the writer is DECLINING rather than damaging, and a decline
-	 * nobody is told about reads as a defect. It is not a refusal though — the rest of the file
-	 * is formatted and written — so it is a note, never a failure and never a `--verify`
-	 * divergence: the region is byte-identical, which is precisely what that invariant asserts.
+	 * and nothing said why (`} catch (_:Dynamic) {` and its `}` left on two lines while the
+	 * statements above them were normalised, because the `try` opens in one region and the
+	 * `catch` closes in another). Same class of event as the comment-loss refusal on
+	 * `GrammarPlugin.writeRoundTrip`, reported for the same reason: the writer is DECLINING
+	 * rather than damaging. It is not a refusal though — the rest of the file is formatted and
+	 * written — so it is a note, never a failure and never a `--verify` divergence.
 	 *
 	 * Unconditional rather than behind a flag, because the reader who needs it is the one who
 	 * did NOT know to ask. Not a lint rule either: a region like this is often the only way to
-	 * write what it writes, so a check firing on it would be reporting correct code. The volume
-	 * that would have justified a flag is not there — measured, 0 regions over this project's
-	 * own 1757 files, 31 over the Pony fork, 28 over the 946-fixture formatter corpus.
-	 * The cost is one extra parse per file that HAS a `#if` (451 of 1757 here, +19.9% on the
-	 * whole-tree `fmt --list` gate as interleaved medians, nothing on a single-file run); a file
-	 * without one never reaches it, and an EXPLICIT `--list` skips it altogether — the first line
-	 * of the body has the reading.
+	 * write what it writes, so a check firing on it would be reporting correct code. The cost is
+	 * one extra parse per file that HAS a `#if`; a file without one never reaches it, and an
+	 * EXPLICIT `--list` skips it altogether (the first line of the body). A lazy variant does
+	 * not exist: deferring the parse to the files `fmt` leaves UNCHANGED is the identity on an
+	 * already-canonical tree, and its inverse — notes only for a file `fmt` rewrites — deletes
+	 * the whole output on that same tree. Nor can the WRITER answer instead of a second parse:
+	 * `writeRoundTrip` parses with `HaxeModuleTriviaParser`, whose tree carries no spans and
+	 * records nothing for a `@:rawString` terminal, so exposing the decline from there is a
+	 * PARSER change, not an exposure of something already there.
 	 *
-	 * ## Two sentences, because two things are true
+	 * Two sentences, because two things are true: a region whose node kept CHILDREN inside it
+	 * is unbalanced in its HEAD only (e.g. `CondSharedBodyDecl`, `CondSpliceBlockOpen`,
+	 * `CondSpliceBlockTail`), and the writer reformats the statements past the `#end`, so those
+	 * get their own sentence and a quote that stops at the first child. What decides it is the
+	 * TREE, not the ctor name, so a grammar that gives an existing ctor a structural field
+	 * cannot leave a hand-kept list stale. `RefShape.opaqueCondRegionKinds` stays the WIDE set —
+	 * the mutating ops' fail-closed gate reads it through
+	 * `CondRegionScan.opaqueCondRegionMentioning` — and only this note reads the narrower fact.
 	 *
-	 * A region whose node kept CHILDREN inside it is unbalanced in its HEAD only, and the old
-	 * single sentence claimed the writer re-emits the whole thing byte-for-byte. Measured over the
-	 * Pony fork's 31 regions: 22 are wholly raw (`CondSpliceStmt` 13, `CondSpliceCase` 3,
-	 * `CondSpliceTail` 3, `CondSpliceExpr` 2, `CondSpliceMember` 1, `CondSpliceBlockClose` 1) and
-	 * 9 are head-only (`CondSharedBodyDecl` 4, `CondSpliceBlockOpen` 4, `CondSpliceBlockTail` 1),
-	 * where the quoted range ran past the `#end` over statements the writer reformats — invisible
-	 * in the output only because the excerpt truncates at sixty characters. Those get their own
-	 * sentence and a quote that stops at the first child.
-	 *
-	 * What decides it is the TREE, not the ctor name, so a grammar that gives an existing ctor a
-	 * structural field cannot leave a hand-kept list stale. `RefShape.opaqueCondRegionKinds` stays
-	 * the WIDE set — it is what the mutating ops' fail-closed gate reads through
-	 * `CondRegionScan.opaqueCondRegionMentioning`, and a head that spells a type name must keep
-	 * refusing a rename — and only this note reads the narrower fact.
-	 *
-	 * ## The lazy variant does not exist, and the writer cannot answer either
-	 *
-	 * Deferring the parse to the files `fmt` leaves UNCHANGED removes none of that cost. Both real
-	 * trees this runs over are ALREADY canonical — `0 of 1757` here, `0 of 680` over the Pony
-	 * fork's `src` —
-	 * so "unchanged" is every file and the rule is the identity on exactly the gate it was proposed
-	 * for. Its inverse, notes only for a file `fmt` rewrites, is free on that gate and deletes the
-	 * whole output instead: 31 of 31 Pony regions sit in files that are already canonical. Nor is
-	 * there anything to optimise in the walk — short-circuiting `CondRegionScan.opaqueCondRegions`
-	 * AFTER the parse measured 11.09 s against the full note's 11.01 s, while skipping the parse as
-	 * well measured 9.56 s. The whole cost is a SECOND FRONT END.
-	 *
-	 * Taking that front end away by asking the WRITER instead was the standing proposal, and it
-	 * does not survive being read. `writeRoundTrip` parses with `HaxeModuleTriviaParser`
-	 * (`{trivia: true}`); spans exist only under `{spans: true}`, where `SpanTypeSynth` adds the
-	 * trailing `_span` argument, and `anyparse.runtime.Trivial` carries eleven fields, none of them
-	 * an offset. So the writer's tree cannot name a region's line, its span or its quote whatever
-	 * it recorded — and it records nothing: a `@:rawString` terminal reaches
-	 * `WriterLowering.lowerTerminal` by the same path a string literal does, and the one generated
-	 * query walker is `buildQueryWalker(HxModule, HaxeModuleSpanParser)`, over the SPAN parser's
-	 * paired AST rather than this one. Exposing the decline is therefore a PARSER change — have
-	 * the trivia parse record each opaque ctor's own byte range — not an exposure of something
-	 * already there.
-	 *
-	 * Handed BACK rather than printed, for the reason the summary line above is: `Sys.stderr()`
-	 * on hxnodejs is a raw fd, so a printed sentence is unassertable and this family's recorded
-	 * defects were all wording that disagreed with the tree it described.
-	 *
-	 * A second parse of the file, not the writer's own tree — `writeRoundTrip` builds a trivia
-	 * tree the projection does not speak. A parse failure here is swallowed: `fmt` has already
-	 * formatted the file successfully, so a disagreement between the two front ends is not a
-	 * fact about formatting and must not take the run down over it.
+	 * Handed BACK rather than printed, for the reason the summary line is: `Sys.stderr()` on
+	 * hxnodejs is a raw fd, so a printed sentence is unassertable. A parse failure here is
+	 * swallowed: `fmt` has already formatted the file, so a disagreement between the two front
+	 * ends is not a fact about formatting and must not take the run down.
 	 */
 	public static function opaqueCondRegionNotes(
 		plugin: GrammarPlugin, path: String, source: String, listedExplicitly: Bool = false
 	): Array<String> {
 		// ω-region-note-list: the notes are OFF when `--list` was SPELLED and on when list mode was
 		// merely implied. The flag is the machine mode — one line per drifted path, which is what a
-		// whole-tree gate asks for — and this second front end is what costs that gate +19.9%
-		// (10.44 s against 8.83 s as interleaved medians over 1 760 files, S109 and S114 measuring
-		// the same figure before). A human surveying a directory types `fmt <dir>` and never has to
+		// whole-tree gate asks for — and this second front end is a measurable share of that
+		// gate's cost. A human surveying a directory types `fmt <dir>` and never has to
 		// know the flag exists, which is the reader these notes were written for; `--write`,
 		// `--verify` and a single file to stdout keep them too. The gate lives HERE rather than at
 		// the call site because the parse below is the whole cost, and because a fixture can then

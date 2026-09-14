@@ -35,49 +35,36 @@ typedef SweepCorpusResult = {
 };
 
 /**
- * Re-derives the corpus census that `bin/.last-sweep.json` records —
- * `apq sweep --run`'s engine.
+ * Re-derives the corpus census that `bin/.last-sweep.json` records — `apq sweep --run`'s
+ * engine.
  *
- * The numbers `781 pass / 120 fail / 43 skip-parse` are quoted as a gate in
- * every slice of this project, and until this walker existed the ONLY thing
- * that could produce them was `node bin/test.js` under
- * `$ANYPARSE_HXFORMAT_FORK` — `apq sweep` reads that run's snapshot and
- * `apq fmt` cannot even open a `.hxtest` (it reads the whole three-section
- * file and reports `unexpected input`). A gate nothing else can re-derive is
- * one bad refactor away from being decorative.
+ * The pass / fail / skip-parse counts are quoted as a gate in every slice of this project,
+ * and until this walker existed the ONLY thing that could produce them was `node bin/test.js`
+ * under `$ANYPARSE_HXFORMAT_FORK` — `apq sweep` reads that run's snapshot and `apq fmt` cannot
+ * even open a `.hxtest` (it reads the whole three-section file and reports `unexpected
+ * input`). A gate nothing else can re-derive is one bad refactor away from being decorative.
  *
- * This is a SECOND driver over the same engine, deliberately not a shared
- * one: it walks the fixtures itself and classifies with its own code, so
- * `apq sweep --run --diff bin/.last-sweep.json` is a real cross-check of the
- * snapshot rather than a restatement of it. The predicate it reproduces is
- * `HxFormatterCorpusTest.runCategory`, step for step:
+ * This is a SECOND driver over the same engine, deliberately not a shared one: it walks the
+ * fixtures itself and classifies with its own code, so `apq sweep --run --diff
+ * bin/.last-sweep.json` is a real cross-check of the snapshot rather than a restatement of
+ * it. The predicate it reproduces is `HxFormatterCorpusTest.runCategory`, step for step:
+ * three `\n---\n` sections or `MALFORMED`; `disableFormatting` / `excludes` in the fixture's
+ * own config mean the fork's formatter never ran, so the expected section is empty and the
+ * writer must not run either; the config loads (`SKIP_CONFIG` when it does not), probed through `layoutMetrics`,
+ * which builds the same write options the round trip would, so the failure surfaces before the parse as in the
+ * harness; the input parses (`SKIP_PARSE`) and writes (`SKIP_WRITE`); one trailing `\n` comes off the
+ * emitted text, because `.hxtest` sections carry one `\n` of padding that the fixture reader
+ * already stripped from `expected` — without this every PASS reads as a one-byte FAIL; byte
+ * equality decides `PASS` / `FAIL`.
  *
- * 1. three `\n---\n` sections or `MALFORMED`;
- * 2. `disableFormatting` / `excludes` in the fixture's own config mean the
- *    fork's formatter never ran, so the expected section is empty and the
- *    writer must not run either;
- * 3. the config loads (`SKIP_CONFIG` when it does not) — probed through
- *    `layoutMetrics`, which builds the same write options the round trip
- *    would, so the failure surfaces before the parse exactly as it does in
- *    the harness;
- * 4. the input parses (`SKIP_PARSE`) and writes (`SKIP_WRITE`);
- * 5. one trailing `\n` comes off the emitted text, because `.hxtest`
- *    sections carry one `\n` of padding that the fixture reader already
- *    stripped from `expected` — without this every PASS reads as a
- *    one-byte FAIL, which is exactly what `apq writer-equals F F` did on
- *    779 of the 781 passing fixtures;
- * 6. byte equality decides `PASS` / `FAIL`.
- *
- * Two places where this driver's mechanism differs from the harness's and
- * the VERDICT still agrees, both measured over all 946 fixtures:
- * `writeRoundTrip` refuses to hand back output that dropped a comment while
- * the harness compares the lossy bytes — a refusal cannot be byte-equal to
- * an expected section that still carries the comment, so both call it
- * `FAIL` (5 fixtures; setting `APQ_ALLOW_COMMENT_LOSS` turns the refusal
- * into the plain byte-diff and does not move the count). And the harness
- * enumerates ten named subdirectories where this walks the tree, so a
- * fixture in a directory the harness does not list would show up here as an
- * `ADDED` row under `--diff` rather than silently in neither.
+ * Two places where this driver's mechanism differs from the harness's and the VERDICT still
+ * agrees: `writeRoundTrip` refuses to hand back output that dropped a comment while the
+ * harness compares the lossy bytes — a refusal cannot be byte-equal to an expected section
+ * that still carries the comment, so both call it `FAIL` (setting `APQ_ALLOW_COMMENT_LOSS`
+ * turns the refusal into the plain byte-diff and does not move the `FAIL` count). And the harness
+ * enumerates named subdirectories where this walks the tree, so a fixture in a directory the
+ * harness does not list shows up here as an `ADDED` row under `--diff` rather than silently
+ * in neither.
  */
 @:nullSafety(Strict)
 final class SweepCorpus {

@@ -3,44 +3,27 @@ package anyparse.grammar.haxe;
 /**
  * Grammar type for a Haxe interface declaration.
  *
- * Structurally identical to `HxClassDecl` — a keyword-introduced
- * name with optional declare-site type parameters followed by a
- * close-peek Star field of members inside braces. Shares
- * `HxMemberDecl` for member declarations, so interfaces accept the
- * same `var`/`function` members with optional modifiers.
+ * Structurally identical to `HxClassDecl`: a keyword-introduced name with optional
+ * declare-site type parameters, a heritage clause list, and a close-peek Star of members
+ * inside braces. Shares `HxMemberDecl` for members. Semantic differences between interfaces
+ * and classes (no function bodies, no `static`, mandatory `public`; `implements` never
+ * matching in interface position) are not the parser's responsibility — they belong to a
+ * later analysis pass.
  *
- * `typeParams` is the symmetric close-peek-Star sibling of
- * `HxFnDecl.typeParams` — `HxTypeParamDecl` element type carrying
- * `name` and optional single-bound `constraint` (`<T:Foo>`).
- * Defaults and multi-bound syntax are deferred.
+ * `typeParams` is the symmetric close-peek-Star sibling of `HxFnDecl.typeParams`
+ * (`HxTypeParamDecl` elements: `name` plus optional single-bound `constraint`). `heritage` is
+ * the same bare `Array<HxHeritageClause>` field as `HxClassDecl.heritage` (`@:trivia
+ * @:tryparse @:fmt(padLeading, lineLengthAwareSeps)`).
  *
- * Semantic differences between interfaces and classes (no function
- * bodies, no `static`, mandatory `public`) are not the parser's
- * responsibility — they belong to a later analysis pass.
- *
- * `heritage` is the same bare `Array<HxHeritageClause>` field as
- * `HxClassDecl.heritage` (`@:trivia @:tryparse @:fmt(padLeading,
- * lineLengthAwareSeps)`), placed between `typeParams` and `members`.
- * Haxe interfaces use `extends` (repeatable); the shared
- * `HxHeritageClause` enum also carries `implements`, which simply never
- * matches in interface position. The parser does not police that
- * distinction — semantic analysis is a later pass.
- *
- * The `members` field carries the same `interMemberBlankLines` knob as
- * `HxClassDecl.members` and `HxAbstractDecl.members`, but uses the
- * 6-arg form to route the per-pair counts through the dedicated
- * `interfaceBetweenVars` / `interfaceBetweenFunctions` /
- * `interfaceAfterVars` `HxModuleWriteOptions` fields instead of the
- * shared `betweenVars` / `betweenFunctions` / `afterVars`. Defaults are
- * all `0`, matching haxe-formatter's `InterfaceFieldsEmptyLinesConfig`
- * (interfaces stay tight unless the user opts in via
- * `hxformat.json`'s `emptyLines.interfaceEmptyLines`). The
- * trivia-aware empty-line knobs `afterFieldsWithDocComments`,
- * `existingBetweenFields`, and `beforeDocCommentEmptyLines` are
- * shared with `HxClassDecl.members` and `HxAbstractDecl.members` —
- * interface fields opt into the same engine paths so a doc-commented
- * function in interface scope (e.g. `issue_385_single_line_doc_comment_fields`)
- * gets the same trailing blank line as in class/abstract scope.
+ * `members` carries the same `interMemberBlankLines` knob as `HxClassDecl.members` and
+ * `HxAbstractDecl.members`, but the 6-arg form routes the per-pair counts through the
+ * dedicated `interfaceBetweenVars` / `interfaceBetweenFunctions` / `interfaceAfterVars`
+ * `HxModuleWriteOptions` fields instead of the shared `betweenVars` / `betweenFunctions` /
+ * `afterVars`; their defaults are `0` (interfaces stay tight unless `hxformat.json`'s
+ * `emptyLines.interfaceEmptyLines` opts in). The trivia-aware knobs
+ * `afterFieldsWithDocComments`, `existingBetweenFields` and `beforeDocCommentEmptyLines` are
+ * shared with class and abstract scope, so a doc-commented interface function gets the same
+ * trailing blank line.
  */
 @:peg
 @:fmt(multilineWhenFieldNonEmpty('members'))

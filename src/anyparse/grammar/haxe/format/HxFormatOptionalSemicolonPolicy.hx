@@ -23,12 +23,10 @@ package anyparse.grammar.haxe.format;
  *   line that follows a `;`-less brace-terminated statement (reproduce
  *   on an unpatched build with `if (c)\n\treturn { a: 1 }\n\n\tfinal
  *   q = 2;`), so `"never"` turns a stable file into one that loses a
- *   blank line on the NEXT format pass. Measured over TM: 1 file of 805.
- *   `"preserve"` and `"always"` are both fmt-idempotent there.
+ *   blank line on the NEXT format pass; `"preserve"` and `"always"` are both fmt-idempotent.
  *
  * `"never"` also feeds the width policies a shorter line, so a value
- * that no longer fits — or now does — may re-flow around the dropped
- * byte. Measured over TM: 2 of 125 hunks.
+ * that no longer fits — or now does — may re-flow around the dropped byte.
  *
  * Mapped by `HaxeFormatConfigLoader.applyWhitespaceToggles` onto the
  * runtime `HxModuleWriteOptions.optionalSemicolon`

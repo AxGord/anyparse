@@ -366,8 +366,7 @@ typedef ResolvedInputs = {
  * The pair every `--`-then-scope argv parser builds identically before it starts consuming
  * argv itself: an empty scope-spec accumulator and the `--` separator index `routePositional`
  * reads. Named so the shared prologue collapses to one call instead of repeating the same two
- * declarations command by command — the last residue `duplicate-code` still named once S166
- * carried off the rest of the per-command scaffold.
+ * declarations command by command — the last residue `duplicate-code` still named after the rest of the per-command scaffold was shared.
  */
 typedef PositionalScan = {
 	var inputSpecs: Array<String>;

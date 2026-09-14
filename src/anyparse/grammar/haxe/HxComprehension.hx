@@ -12,8 +12,7 @@ package anyparse.grammar.haxe;
  * `HaxeFormat.isComprehensionGenerator` tests a `Type.enumConstructor`
  * against it. Neither of those two can host it: the lowering lives behind
  * `#if macro`, so no runtime consumer could read it back, and reading the
- * list off `HaxeFormat` fails the macro build outright — measured, with
- * `You cannot use @:build inside a macro`, because `HaxeFormat` reaches
+ * list off `HaxeFormat` fails the macro build outright with `You cannot use @:build inside a macro`, because `HaxeFormat` reaches
  * `anyparse.format.comment.BlockCommentNormalizer` (a fully qualified
  * reference in its `blockCommentAdapter` field, not an import) and that
  * reaches the `@:build`-generated `BlockCommentParser`.
@@ -46,30 +45,17 @@ final class HxComprehension {
 	 * `ForExpr`, while `[for (k => v.q in m) …]` and a reified `macro [for ($i{n} in xs) …]` head both
 	 * fall through to this ctor.
 	 *
-	 * It was held OUT until this slice because adding it turned `other/for_with_macro_reification.hxtest`
-	 * PASS -> FAIL, and S16 isolated where: the first-element source-newline scan in
-	 * `TriviaSepLowering.triviaSepPredicateScanExpr` carves comprehensions out of the
-	 * `reflowSourceMultiline` suppression, and element 0 was inheriting a newline captured BEFORE the
-	 * `[` — so a bracket the source wrote flat broke open the moment this ctor started answering
-	 * "comprehension". Deleting the carve-out instead made that fixture pass and cost
-	 * `wrapping/issue_238_keep_wrapping_nowrap.hxtest`: net 0, refused with the number.
-	 *
-	 * What unblocked the append is positional and lives in the PARSER, not in either classifier —
-	 * `Lowering.lowerTriviaStarBranch` and `StarFieldLowering.emitTriviaStarFieldSteps` clear the pending stash
-	 * newline right after their open literal, because consuming `[` proves the elements are inside it.
-	 * With that in place the append moves ZERO corpus fixtures (both named above stay PASS), and
-	 * `HxComprehensionBracketPolicyTest.testReifiedForHeadIsComprehension` pins what it buys:
-	 * `[for (k => v.q in m) k]` now takes the comprehension bracket policy.
+	 * Admitting it depends on a PARSER property, not on either classifier: `Lowering.lowerTriviaStarBranch`
+	 * and `StarFieldLowering.emitTriviaStarFieldSteps` clear the pending stash newline right after their
+	 * open literal, because consuming `[` proves the elements are inside it. Without that, element 0
+	 * inherited a newline captured BEFORE the `[` and the first-element source-newline scan in
+	 * `TriviaSepLowering.triviaSepPredicateScanExpr` broke a flat-written bracket open the moment this
+	 * ctor answered "comprehension". `HxComprehensionBracketPolicyTest.testReifiedForHeadIsComprehension`
+	 * pins what the entry buys: `[for (k => v.q in m) k]` takes the comprehension bracket policy.
 	 *
 	 * NOT the whole story for `arrayBracketKind`, which reads this list through
-	 * `HxAstPredLowering.arrayBracketKindField`: what S16 landed there is only the reachable HALF of a
-	 * whole-list `=>` scan — a wrapper recursion on the FIRST element; the whole-list half stays open by
-	 * design.
-	 *
-	 * The note that stood here before the append said the reification fixture is a map comprehension the
-	 * fork calls a map LITERAL, and that the append needed a depth-0 `=>` scan. Both halves are measured
-	 * wrong: `determinBkChildren` returns `Comprehension` from its first-child loop before it ever scans
-	 * for `=>`, and under a comprehension-padded config the fork pads that very fixture.
+	 * `HxAstPredLowering.arrayBracketKindField`: only the reachable HALF of a whole-list `=>` scan lands
+	 * there — a wrapper recursion on the FIRST element; the whole-list half stays open by design.
 	 */
 	public static final GENERATOR_CTORS: Array<String> = ['ForExpr', 'ForReifExpr', 'WhileExpr'];
 

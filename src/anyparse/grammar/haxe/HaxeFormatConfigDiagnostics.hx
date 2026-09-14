@@ -25,15 +25,8 @@ import haxe.Exception;
  * the other half: the config author got no signal at all, so a knob that
  * does nothing is indistinguishable from a knob that works.
  *
- * Measured 2026-08-25 on three real configs (anyparse's own,
- * `Pony/hxformat.json`, `horse_game/hxformat.json`): 12, 19 and 19
- * unimplemented keys respectively, plus three of the fork's own shipped
- * condition strings (`equalItemLengths`, `allItemLengths <= n`,
- * `anyItemLength <= n`) that dropped a whole rule each. Re-measured the
- * same day after those three predicates and `wrapping.mapWrap` were
- * implemented: 12 / 18 / 18 keys and no wrap settings at all. What is
- * left is the per-rule `additionalIndent` and a handful of whitespace /
- * brace policies.
+ * Real configs each carry a dozen or so unimplemented keys — the per-rule
+ * `additionalIndent` and a handful of whitespace / brace policies.
  *
  * Analysis and reporting are split on purpose: `diagnose` is a pure function of the config text and is what tests assert
  * on, while `warn` is the boundary shell that knows the file the text came from and owns the once-per-path stderr line.
@@ -90,7 +83,7 @@ final class HaxeFormatConfigDiagnostics {
 	 * understood, when `APQ_NO_CONFIG_WARN=1`, and on a target with no
 	 * stderr.
 	 *
-	 * T160 sibling of `CliIo.stderr`'s EPIPE guard: `Sys.stderr()` on
+	 * Sibling of `CliIo.stderr`'s EPIPE guard: `Sys.stderr()` on
 	 * nodejs is a synchronous `Fs.writeSync(2, …)` that never touches the
 	 * `process.stderr` stream object, so a closed downstream reader (this
 	 * is the FIRST line of most gate transcripts, per the class doc above)

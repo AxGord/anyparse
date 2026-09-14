@@ -275,20 +275,18 @@ final class MoveCommand implements CliCommand {
 	 *
 	 * A move is a VERBATIM span splice: `MoveSymbol` cuts a declaration out with `cutEditSpan` and
 	 * pastes it in, and the writer never runs. So a file that was writer-canonical before the move
-	 * can come back with whitespace the writer would never emit. Measured on Pony at the base
-	 * commit: cutting the last declaration out of a `#if macro … #end` region left `}` + blank +
-	 * `#end`, and cutting the FIRST one left `#if macro` + blank — a blank line immediately inside
-	 * a region boundary, which the writer collapses. One of 15 successful moves over the first 60
-	 * modules produced a file `fmt --list` then flagged; the whole family is invisible to the op's
-	 * own gate, which only re-parses.
+	 * can come back with whitespace the writer would never emit: cutting the last declaration out
+	 * of a `#if macro … #end` region leaves `}` + blank + `#end`, and cutting the FIRST one leaves
+	 * `#if macro` + blank — a blank line immediately inside a region boundary, which the writer
+	 * collapses, so `fmt --list` flags the file; the whole family is invisible to the op's own
+	 * gate, which only re-parses.
 	 *
 	 * Canonical-in / canonical-out, decided PER FILE against that file's own discovered
 	 * `hxformat.json` — the same config `apq fmt` would use, because canonicality asked under
 	 * compiled defaults answers about a style the project does not use. A file already
 	 * non-canonical on disk keeps exactly what the splice produced, so a move inside a repo whose
 	 * layout another formatter owns rewrites nothing it was not asked to. That gate is also what
-	 * makes this a provable no-op wherever the spliced result is already canonical — every case
-	 * the census measured green.
+	 * makes this a provable no-op wherever the spliced result is already canonical.
 	 *
 	 * The write goes through `FormatFixedPoint`, not one round trip, because a writer whose output
 	 * is not its own fixed point would leave the file one pass short of where the next `fmt --list`

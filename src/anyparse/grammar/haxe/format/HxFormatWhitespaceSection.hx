@@ -1,176 +1,38 @@
 package anyparse.grammar.haxe.format;
 
 /**
- * `whitespace` section of a haxe-formatter `hxformat.json` config.
+ * `whitespace` section of a haxe-formatter `hxformat.json` config. Only keys whose runtime knob exists on
+ * `HxModuleWriteOptions` are modelled; missing keys (`catchPolicy`, `ternaryPolicy`, …) are silently dropped
+ * by the ByName struct parser's `UnknownPolicy.Skip` and land with their writer knob. Each policy key feeds
+ * the knob of the same name (`objectFieldColonPolicy` → `objectFieldColon`, `typeHintColonPolicy` →
+ * `typeHintColon`, `typeCheckColonPolicy` → `typeCheckColon`, `typeParamOpenPolicy` / `typeParamClosePolicy`,
+ * `functionTypeHaxe4Policy` / `functionTypeHaxe3Policy`, `arrowFunctionsPolicy`, `ifPolicy` / `forPolicy` /
+ * `whilePolicy` / `switchPolicy` / `tryPolicy`); the nested `parenConfig.*. openingPolicy` sub-keys feed
+ * `funcParamParens` / `callParens` / `anonFuncParens`, and `bracesConfig.anonTypeBraces` /
+ * `objectLiteralBraces` feed the `*BracesOpen` / `*BracesClose` pair. A knob's value semantics live on the
+ * grammar field carrying the matching `@:fmt(...)`, or on the knob itself. The five keyword-gap policies
+ * (`ifPolicy` / `forPolicy` / `whilePolicy` / `switchPolicy` / `tryPolicy`) gate only the space AFTER the
+ * keyword: `after` (the compiled default) emits `if (cond)` / `try {`, `onlyBefore` / `none` collapse to
+ * `if(cond)` / `try{`; `tryPolicy` reaches the block-body `TryCatchStmt` only.
  *
- * Only keys whose runtime knob already exists on `HxModuleWriteOptions`
- * are modelled here. Missing keys (`catchPolicy`, `ternaryPolicy`, …)
- * are silently dropped by the ByName struct parser's
- * `UnknownPolicy.Skip` — each is modelled when its matching writer
- * knob lands.
+ * Two mappings are not one-to-one. `binopPolicy` feeds `typeParamDefaultEquals` — upstream's key controls
+ * spacing of every binary operator, and it routes to the only binop site the writer exposes as a knob; a
+ * future binop site adopting its own `@:fmt` flag should extend this mapping rather than introduce a separate
+ * JSON key. `typeCheckColonPolicy` is kept separate from `typeHintColonPolicy` so the type-annotation default
+ * can stay `None` (`x:Int`) while the type-check default stays `Around` (`(e : T)`) — upstream's two `:` sites
+ * use opposite conventions.
  *
- * Key → knob wiring:
- *
- * ψ₇:
- *  - `objectFieldColonPolicy` feeds `opt.objectFieldColon`.
- *
- * ω-E-whitespace:
- *  - `typeHintColonPolicy` feeds `opt.typeHintColon` (the `:` on
- *    `HxVarDecl.type`, `HxParam.type`, `HxFnDecl.returnType`).
- *  - `parenConfig` is the nested section that houses
- *    `parenConfig.funcParamParens.openingPolicy`, feeding
- *    `opt.funcParamParens` (the space before the `(` on
- *    `HxFnDecl.params`).
- *
- * ω-call-parens:
- *  - `parenConfig.callParens.openingPolicy` feeds `opt.callParens`
- *    (the space before the `(` on `HxExpr.Call.args`).
- *
- * ω-typeparam-spacing:
- *  - `typeParamOpenPolicy` feeds `opt.typeParamOpen` (the `<` of every
- *    type-parameter list, both `HxTypeRef.params` and the declare-site
- *    `typeParams` fields).
- *  - `typeParamClosePolicy` feeds `opt.typeParamClose` (the matching
- *    `>`). Combined `typeParamOpenPolicy: "after"` +
- *    `typeParamClosePolicy: "before"` produces `Array< Int >`.
- *
- * ω-anontype-braces:
- *  - `bracesConfig.anonTypeBraces.openingPolicy` feeds
- *    `opt.anonTypeBracesOpen` (the `{` of `HxType.Anon`).
- *  - `bracesConfig.anonTypeBraces.closingPolicy` feeds
- *    `opt.anonTypeBracesClose` (the matching `}`). Combined
- *    `openingPolicy: "around"` + `closingPolicy: "around"` produces
- *    `{ x:Int }`.
- *
- * ω-typeparam-default-equals:
- *  - `binopPolicy` feeds `opt.typeParamDefaultEquals` (the `=` joining
- *    a declare-site type-parameter to its default type on
- *    `HxTypeParamDecl.defaultValue`). Upstream's `binopPolicy` controls
- *    spacing of every binary operator; here it routes to the only
- *    binop site the writer currently exposes as a knob. Future binop
- *    sites adopting their own `@:fmt(...)` flag should extend this
- *    mapping rather than introduce a separate JSON key.
- *
- * ω-line-comment-space:
- *  - `addLineCommentSpace` feeds `opt.addLineCommentSpace`. Bool — when
- *    `true` (haxe-formatter default) `//foo` is rewritten to `// foo`;
- *    decoration runs (`//*****`, `//------`, `////`) survive tight. The
- *    knob is consumed by `anyparse.format.comment.LineCommentNormalizer.normalizeLineComment`
- *    inside the writer's leading / trailing line-comment helpers.
- *
- * ω-line-comment-indent:
- *  - `normalizeLineCommentIndent` feeds `opt.normalizeLineCommentIndent`.
- *    Bool, default `false` (absent = byte-inert). When `true` the leading
- *    whitespace of a `//` body is normalised to exactly one space, and
- *    across a CONTIGUOUS run of `//` entries the run's common post-`//`
- *    indent is stripped first — `//foo` becomes `// foo`, while a block of
- *    commented-out code keeps its relative indentation and loses only the
- *    shared over-indent. A lone over-indented comment collapses to a
- *    single space; tabs after `//` count as whitespace and normalise the
- *    same way. When a run shares no common indent — a member sits flush
- *    against `//`, or members disagree on tab-vs-space — the pass never
- *    adds width: an already-indented body is re-emitted as authored and
- *    only a flush body gains the separating space.
- *    Only an ASCII-letter/digit-headed body feeds the fold; every other
- *    body — an empty `//`, a divider (`//====`, `//----`, `//***`), a marker
- *    (`//!`), a `///`-style triple slash, a `}` closer — neither
- *    contributes to nor breaks its run, but rides the run's shift when
- *    its own indent opens with that common prefix, and is otherwise left
- *    to the `addLineCommentSpace` path. A block-comment entry DOES break
- *    the run. Consumed alongside that knob by
- *    `anyparse.format.comment.LineCommentNormalizer.normalizeLineComment`.
- *
- * ω-arrow-fn-type:
- *  - `functionTypeHaxe4Policy` feeds `opt.functionTypeHaxe4` (the `->`
- *    separator inside a new-form arrow function type, `HxArrowFnType.
- *    ret`'s `@:lead('->')`). `Around` (default) emits
- *    `(Int) -> Bool`; `None` keeps the tight `(Int)->Bool` form. The
- *    sibling `functionTypeHaxe3Policy` (old-form curried `Int->Bool`)
- *    feeds `opt.functionTypeHaxe3` via the same enum / same collapse —
- *    default `None` emits the tight `Int->Bool`, `"around"` flips to
- *    spaced `Int -> Bool`.
- *
- * ω-arrow-fn-expr:
- *  - `arrowFunctionsPolicy` feeds `opt.arrowFunctions` (the `->`
- *    separator inside a parenthesised arrow lambda expression,
- *    `HxThinParenLambda.body`'s `@:lead('->')`). `Around` (default)
- *    emits `(arg) -> body`; `None` keeps the tight `(arg)->body` form.
- *    Independent of `functionTypeHaxe4Policy` (the type-position
- *    sibling). The single-ident infix form `arg -> body`
- *    (`HxExpr.ThinArrow`) rides the Pratt infix path which adds
- *    surrounding spaces by default and is unaffected.
- *
- * ω-check-type:
- *  - `typeCheckColonPolicy` feeds `opt.typeCheckColon` (the `:` inside
- *    a type-check expression `(expr : Type)`, `HxECheckType.type`'s
- *    `@:lead(':')`). `Around` (default) emits `("" : String)`; `None`
- *    keeps the tight `("":String)` form. Separate from
- *    `typeHintColonPolicy` so the type-annotation default can stay
- *    `None` (`x:Int`) while the type-check default stays `Around` —
- *    upstream's two `:` sites use opposite conventions.
- *
- * ω-if-policy:
- *  - `ifPolicy` feeds `opt.ifPolicy` (the gap between the `if` keyword
- *    and the opening `(` of the condition; consumed by both
- *    `HxStatement.IfStmt` and `HxExpr.IfExpr` via `@:fmt(ifPolicy)` on
- *    the ctor). `After` (default) emits `if (cond)` with a single space;
- *    `Before` / `None` (mapped from `"onlyBefore"` / `"none"`) collapse
- *    to `if(cond)`. The "before" relative to `if` keyword leans on
- *    surrounding context (e.g. `return if(...)` already has space
- *    before `if` from the preceding token) — this knob only controls
- *    the after-`if` gap.
- *
- * ω-control-flow-policies:
- *  - `forPolicy` / `whilePolicy` / `switchPolicy` feed
- *    `opt.forPolicy` / `opt.whilePolicy` / `opt.switchPolicy`. Same
- *    shape as `ifPolicy` — gates the trailing space after `for`,
- *    `while`, `switch`. Consumed by `HxStatement.ForStmt` /
- *    `HxExpr.ForExpr`, `HxStatement.WhileStmt` / `HxExpr.WhileExpr`,
- *    and all four switch ctors (parens / bare × stmt / expr) via
- *    `@:fmt(<knobName>)`. Default `After`; `"onlyBefore"` / `"none"`
- *    collapse the gap.
- *
- * ω-try-policy:
- *  - `tryPolicy` feeds `opt.tryPolicy`. Same shape as `ifPolicy` —
- *    gates the trailing space after the `try` keyword. Consumed by
- *    `HxStatement.TryCatchStmt` only (block-body form) via
- *    `@:fmt(tryPolicy)`. Default `After` emits `try {`;
- *    `"onlyBefore"` / `"none"` collapse to `try{`. The bare-body
- *    sibling `TryCatchStmtBare` does NOT carry the flag — its first
- *    field's `@:fmt(bareBodyBreaks)` triggers the
- *    `stripKwTrailingSpace` predicate which gates the slot to `null`
- *    regardless of policy.
- *
- * ω-string-interp-noformat:
- *  - `formatStringInterpolation` feeds `opt.formatStringInterpolation`.
- *    Bool — when `true` (default) `${expr}` segments are re-rendered
- *    by recursing into the parsed `HxExpr`; when `false` the writer
- *    emits the parser-captured byte slice between `${` and `}`
- *    verbatim, preserving the author's exact spacing inside the
- *    braces. Consumed via the trivia-pair synth ctor's positional
- *    `sourceText:String` arg on `HxStringSegmentT.Block`, populated
- *    by Lowering Case 3 when the grammar ctor carries
- *    `@:fmt(captureSource)`.
- *
- * ω-compress-successive-paren:
- *  - `compressSuccessiveParenthesis` feeds
- *    `opt.compressSuccessiveParenthesis`. Bool — when `true`
- *    (haxe-formatter default) a call-arg open `(` glues tight to a
- *    following object-literal `{` argument (`TPath({…})`); when `false`
- *    a leading space is kept (`TPath( {…})`), mirroring the fork's
- *    `successiveParenthesis` policy that removes the brace's `Before`
- *    spacing only under compression. Consumed by the `HxExpr.Call`
- *    paren-open Star in `WriterLowering.lowerPostfixStar`.
- *
- * ω-optional-semicolon (E11):
- *  - `optionalSemicolon` feeds `opt.optionalSemicolon`
- *    (`anyparse.format.OptionalSemicolon`). Normalizes the trailing `;`
- *    Haxe lets a `}`-terminated statement omit — `"preserve"` (default,
- *    byte-inert) keeps the authored choice, `"always"` emits it on
- *    every participating slot, `"never"` drops it wherever the slot's
- *    shape gate proves it optional. Consumed by the
- *    `@:fmt(optionalSemicolon(...))` writer flag on the `@:trailOpt(';')`
- *    binding / `return` terminators.
+ * `addLineCommentSpace` (default `true`) rewrites `//foo` to `// foo` while decoration runs (`//*****`,
+ * `//----`) survive tight. `normalizeLineCommentIndent` (default `false`, an anyparse extension) normalises
+ * the leading whitespace of a `//` body to one space, and across a CONTIGUOUS run of `//` entries strips the
+ * run's common post-`//` indent first, so a block of commented-out code keeps its relative indentation and
+ * loses only the shared over-indent; only an ASCII-letter/digit-headed body feeds the fold, every other body
+ * (an empty `//`, a divider, a `//!` marker, a `///`, a `}` closer) rides the run's shift when its own indent
+ * opens with the common prefix and is otherwise left to the `addLineCommentSpace` path, and a block-comment
+ * entry breaks the run. Both are consumed by
+ * `anyparse.format.comment.LineCommentNormalizer.normalizeLineComment`. `compressSuccessiveParenthesis`
+ * (`true` by default) glues a call-arg `(` to a following object-literal `{`. `formatStringInterpolation` and
+ * `optionalSemicolon` are documented on their `HxModuleWriteOptions` fields.
  */
 @:peg typedef HxFormatWhitespaceSection = {
 

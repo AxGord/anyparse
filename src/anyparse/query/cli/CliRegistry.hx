@@ -227,8 +227,8 @@ final class CliRegistry {
 	 * names, and where the full list is.
 	 *
 	 * It replaces a `printUsage()` call, and that is the whole point. The dispatcher used to
-	 * answer an unknown subcommand with the ENTIRE help page — measured 5440 bytes on `apq
-	 * members Foo`, ~1360 tokens — for a reader who mistyped one word and needs one word back.
+	 * answer an unknown subcommand with the ENTIRE help page — kilobytes on `apq members Foo` —
+	 * for a reader who mistyped one word and needs one word back.
 	 * The list is still one command away and is named here; what the reader gets by default is
 	 * the answer.
 	 *

@@ -22,11 +22,10 @@ final class TestSummaryCommand implements CliCommand {
 	 * DIFFERENT process (`node bin/test.js > …`), so nothing this process knows about itself —
 	 * its pid, its cwd — can name the file it is meant to read; the old `/tmp/test.out` named
 	 * one file for the whole machine, and two workers each writing their own suite log there
-	 * answered each other's questions. Measured on the pre-fix binary, 12 interleaved rounds:
-	 * one worker read a transcript it had not written 7 times, the other 6, every one of them at
-	 * exit 0 with plausible counts — and in one round BOTH read a TORN interleave (`6 tests /
-	 * 5 assertions`) that neither had written. An env var is the only thing that scales with
-	 * the caller's own isolation, so it is the only default offered.
+	 * answered each other's questions — a transcript one had not written, at exit 0 with
+	 * plausible counts, and in one round a TORN interleave that neither had written. An env
+	 * var is the only thing that scales with the caller's own isolation, so it is the only
+	 * default offered.
 	 */
 	private static inline final TRANSCRIPT_ENV: String = 'APQ_TEST_OUT';
 
@@ -168,10 +167,9 @@ final class TestSummaryCommand implements CliCommand {
 	 * ways, and each prints a report that reads GREEN on its own:
 	 *
 	 *  - exited non-zero, reports no failing test — the run died before
-	 *    finishing (measured: a shard killed after one row summarised to
-	 *    `1 tests / 1 assertions / 0 failures / 0 errors` at exit 0, and the
-	 *    caller then added those counts to its total as if 3205 missing tests
-	 *    had passed);
+	 *    finishing (a shard killed after one row summarised to a single green
+	 *    test at exit 0, and the caller then added those counts to its total as
+	 *    if the missing thousands had passed);
 	 *  - exited zero, reports failures — the runner swallowed its own verdict.
 	 *
 	 * The counts line is still printed either way: a caller that parses it

@@ -17,10 +17,8 @@ using StringTools;
  * The read-only walk `lit --include-directives` leaves half-finished. That flag reaches a
  * directive's text, which is the only thing about a region no node carries — but it answers with a
  * `line:col` and nothing else, so the region's extent is still unknown and each site costs one
- * `source --range` with a guessed end line. Measured on this tree for the define `nodejs` over
- * `src/anyparse/query`: 87 regions, so 88 commands (one `lit`, then one `source --range` per site) and 57 497
- * bytes of stdout — and 25 of the 87 guessed windows did not reach their own `#end`, so the real figure is over
- * 110 commands. `apq cond nodejs src/anyparse/query` is one command and 40 750 bytes, or 27 807 with `--names`.
+ * `source --range` with a guessed end line — a guessed window routinely stops short of its own
+ * `#end`. `apq cond <define> <scope>` is one command answering the whole set.
  *
  * The delimiting mechanism, and why a branch cannot simply be selected, is `CondQuery`'s: a region
  * projects as ONE node covering every branch, so a branch is delimited by its DIRECTIVES, not by a

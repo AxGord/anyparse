@@ -1,121 +1,44 @@
 package anyparse.grammar.haxe;
 
 /**
- * Single field entry in an anonymous structure type.
+ * Single field entry in an anonymous structure type — the field-KIND dispatch only. Leading
+ * metadata (`@:optional x:Int`) is carried by the `HxAnonMember` wrapper typedef, which
+ * `HxType.Anon` iterates — the `HxMemberDecl` to `HxClassMember` split at the anon level.
  *
- * This enum is the field-KIND dispatch only. Leading metadata
- * (`@:optional x:Int`, `@:lead('(') var v:T;`, ...) is carried by the
- * `HxAnonMember` wrapper typedef, which `HxType.Anon` iterates — the
- * same `HxMemberDecl` to `HxClassMember` split at the anon-struct
- * level. `HxAnonField` itself never sees the metadata prefix.
+ * `Conditional(inner:HxConditionalAnonField)` — a `#if <cond> <fields> [#elseif ...] [#else
+ * <fields>] #end` preprocessor-guarded run of whole fields, dispatched by `@:kw('#if')` and
+ * closed by `@:trail('#end')` on the ctor. The branch has to sit on this enum rather than on
+ * the `HxAnonMember` wrapper because `HxAnonMember` is a struct typedef with no alternatives
+ * to add one to. A `#if` reaching this dispatch has already been offered to, and rejected by,
+ * the wrapper's metadata Star (`HxMetadata.Conditional` fails its own `@:trail('#end')` as
+ * soon as the region body holds a field rather than tags, and the try-parse Star rewinds),
+ * so `#if <tags> #end var x:T;` and `#if <fields> #end` stay unambiguous.
  *
- * Branches:
+ * `Optional(field:HxAnonFieldBody)` — the optional short form `?name:Type`, dispatched by
+ * `@:lead('?')`. `ExtendsField(type:HxTypeRef)` — a structure-extension clause `> Type`
+ * (`typedef Bar = {> Foo, var x:Int}`), dispatched by `@:lead('>')`; it sits in the same
+ * comma/semicolon list as the fields, so multiple extensions and a following field list
+ * compose through the `@:sep(',') @:sepAlt(';')` loop. `HxTypeRef` is the precise target —
+ * Haxe structure extension only takes a type path — and the `>` is unambiguous at the
+ * field-dispatch point (the type-param close `>` is consumed inside `HxTypeRef.params`).
+ * `VarField(body:HxAnonVarBody)` — class-notation mutable field `var name:Type;`, the shape
+ * of `HxClassMember.VarMember`: `@:kw('var')` enforces a word boundary, the per-branch
+ * `@:trailOpt(';')` consumes the terminator if present (optional so that `var x:{var
+ * name:Int;}` — inner `}` immediately followed by outer `}` — parses), and `HxAnonVarBody`
+ * captures an optional post-keyword `?` (`var ?name:Type`) around the inner `HxVarDecl`.
+ * `FinalField(body:HxAnonVarBody)` — `final name:Type;`, mirroring `HxClassMember.FinalMember`
+ * with the identical body. `FnField(decl:HxFnDecl)` — `function name(params):Ret;` or with a
+ * `{ … }` body, mirroring `HxClassMember.FnMember`; the terminator is owned by `HxFnBody`.
+ * `Required(field:HxAnonFieldBody)` — the canonical short form `name:Type`, matched when the
+ * next token is the field name. `HxAnonFieldBody` is shared by `Optional` and `Required`.
  *
- *  - `Conditional(inner:HxConditionalAnonField)` - a `#if <cond>
- *    <fields> [#elseif ...] [#else <fields>] #end` preprocessor-guarded
- *    run of whole fields (`typedef Data = { var pixels:Bytes; #if
- *    (haxe_ver < 4) var colorTable:Null<Bytes>; #else var
- *    ?colorTable:Bytes; #end }` - format/bmp/Data.hx). Dispatched by
- *    `@:kw('#if')`, closed by `@:trail('#end')` on the ctor; the body
- *    lives in `HxConditionalAnonField`. Listed first per the
- *    kw-before-lead-before-catch-all convention (`HxParam`); `#` shares
- *    no prefix with `?`, `>`, `var`, `final`, `function` or a name
- *    terminal, so dispatch order carries no meaning here.
- *
- *    The branch has to sit on this enum rather than on the
- *    `HxAnonMember` wrapper because `HxAnonMember` is a struct typedef -
- *    it has no alternatives to add one to. A `#if` reaching this
- *    dispatch has already been offered to, and rejected by, the
- *    wrapper's metadata Star (`HxMetadata.Conditional` fails its own
- *    `@:trail('#end')` as soon as the region body holds a field rather
- *    than tags, and the try-parse Star rewinds), so the
- *    `#if <tags> #end var x:T;` and `#if <fields> #end` forms stay
- *    unambiguous.
- *
- *  - `Optional(field:HxAnonFieldBody)` — the optional short form
- *    `?name:Type` (`{?name:String}`). Dispatched by `@:lead('?')`.
- *
- *  - `ExtendsField(type:HxTypeRef)` — a structure-extension clause
- *    `> Type` inside an anon struct (`typedef Bar = {> Foo, var
- *    x:Int}`, `typedef T_3<S,T,R> = {> T_2<S,T>, v2:R}`). Dispatched
- *    by `@:lead('>')`. Because the clause sits in the same
- *    comma/semicolon list as the fields, it parses as one element of
- *    the existing `HxType.Anon` `fields` Star — multiple extensions
- *    (`{> A, > B, ...}`) and a following field list compose for free
- *    through the `@:sep(',') @:sepAlt(';')` loop. `HxTypeRef` (named
- *    + optional type params) is the precise target — Haxe structure
- *    extension only takes a type path, never an inline anon. The `>`
- *    is unambiguous at the field-dispatch point: no field name starts
- *    with `>`, and the type-param close `>` is consumed inside
- *    `HxTypeRef.params`, a different production. Single-Ref `@:lead`
- *    branch — same generic writer/synth path as `HxType.DollarType`
- *    (`@:lead("$")`); zero core/writer/synth ripple. The writer's
- *    default tight emit (`>Foo`) differs from haxe-formatter's spaced
- *    `> Foo`, so newly-parsing structure-extension fixtures land
- *    byte-`fail` pending a follow-up writer-spacing slice — the
- *    parse-additive skip-parse reduction is this slice's goal.
- *
- *  - `VarField(body:HxAnonVarBody)` — class-notation mutable field
- *    `var name:Type;`. Same shape as `HxClassMember.VarMember`:
- *    `@:kw('var')` enforces a word boundary, the per-branch
- *    `@:trailOpt(';')` consumes the terminator if present.
- *    `HxAnonVarBody` wraps the decl with an Alt-enum-split that
- *    captures an optional post-keyword `?` (`var ?name:Type`,
- *    fork fixtures `sameline/issue_104_typedef_with_finals`,
- *    `wrapping/issue_110_max_length`, `indentation/issue_86_…`).
- *    The inner `HxVarDecl` covers the optional `:Type` and optional
- *    `= init`. Slice 25 flipped `@:trail` → `@:trailOpt`: the trailing
- *    `;` is optional so that `var x:{var name:Int;}` (inner anon close
- *    `}` immediately followed by outer anon close `}` with no field-
- *    level `;`) parses. Parser-side relaxation is unconditional
- *    (mirrors `HxClassMember.VarMember` from Slice 13); `HxType.Anon`'s
- *    existing `@:sepAlt(';')` close-driven loop handles the gap
- *    between adjacent fields.
- *
- *  - `FinalField(body:HxAnonVarBody)` — class-notation immutable field
- *    `final name:Type;` (and the optional form `final ?name:Type`).
- *    Mirrors `HxClassMember.FinalMember`; body shape is identical to
- *    `VarField` including the `HxAnonVarBody` wrapper for the `?`
- *    flag and the Slice 25 `@:trailOpt(';')` relaxation, only the
- *    introducer keyword differs.
- *
- *  - `FnField(decl:HxFnDecl)` — class-notation function field
- *    `function name(params):Ret;` (interface-method shape) or with a
- *    `{ … }` body. Mirrors `HxClassMember.FnMember`; the `function`
- *    keyword is the `@:kw` dispatcher and the terminator (`;` for the
- *    `NoBody` signature form, `}` for a braced body) is owned by
- *    `HxFnBody`, not a per-branch `@:trail` — same as `FnMember`.
- *
- *  - `Required(field:HxAnonFieldBody)` — the canonical short form
- *    `name:Type`. No keyword/lead — the branch matches when the next
- *    token is the field name (`HxIdentLit`).
- *
- * The body of the short forms is `HxAnonFieldBody` (`name : Type`),
- * shared by `Optional` and `Required` so the `?` marker dispatches at
- * the Alt-enum level without duplicating the name-and-type body.
- *
- * Branch order matters. The lead-dispatched branches `Optional`
- * (`@:lead('?')`) and `ExtendsField` (`@:lead('>')`) come first, then
- * the keyword-dispatched class-notation branches (`@:kw` enforces a
- * word boundary so a field literally named `vars` is not mistaken for
- * `var`, nor `functions` for `function`), then the fallthrough
- * `Required` catch-all LAST — its first token is `HxIdentLit`, which
- * would otherwise shadow the keyword branches. This mirrors the
- * `HxStatement` / `HxClassMember` pattern where keyword-/lead-
- * dispatched branches precede the no-guard catch-all.
- *
- * Multi-field anon (`{ var a:T; var b:T; }`) parses in every build:
- * `HxType.Anon` opts into `@:sepAlt(';')`, which in the non-trivia
- * build (`{trivia:false}`, used by both `HaxeParser` and the span
- * parser `apq` uses) selects a close-driven loop that consumes an
- * OPTIONAL `,` OR `;` between fields plus an optional trailing
- * separator. `VarField`/`FinalField` keep their `@:trail(';')` (the
- * field eats its own `;`); the loop tolerates that as well as
- * `;`-separated short fields, classic `,`, mixed, and `{}`.
- *
- * The Alt-enum-split shape (over a Boolean presence flag) was chosen
- * because the macro pipeline currently supports `@:optional` only on
- * `Ref` and `Star` fields.
+ * Branch order matters: the lead-dispatched branches first, then the keyword-dispatched
+ * class-notation branches (`@:kw` enforces a word boundary so a field named `vars` is not
+ * `var`), then the `Required` catch-all LAST — its first token is `HxIdentLit`, which would
+ * otherwise shadow the keyword branches. The Alt-enum split (over a Boolean presence flag)
+ * was chosen because the macro pipeline supports `@:optional` only on `Ref` and `Star`
+ * fields. `HxType.Anon`'s `@:sepAlt(';')` close-driven loop consumes an OPTIONAL `,` OR `;`
+ * between fields plus an optional trailing separator, tolerating the field's own `;`.
  */
 @:peg
 enum HxAnonField {

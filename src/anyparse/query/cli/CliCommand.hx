@@ -10,8 +10,8 @@ package anyparse.query.cli;
  * held them together, so a command could be dispatched and never listed, or
  * listed and never dispatched, and only a reader would notice.
  *
- * This is the same answer S49 gave the test suite: the registry IS the
- * inventory. A command that is not in `CliRegistry.commands()` does not exist,
+ * This is the same answer the test suite has: the registry IS the inventory.
+ * A command that is not in `CliRegistry.commands()` does not exist,
  * and one that is gets its help line for free.
  *
  * An implementation MUST be stateless — no instance fields. The registry hands

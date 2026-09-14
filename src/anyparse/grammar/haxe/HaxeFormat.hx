@@ -118,535 +118,34 @@ final class HaxeFormat implements TextFormat {
 	public var nullLiteral(default, null): Null<String> = 'null';
 
 	/**
-	 * Default `WriteOptions` for Haxe output: tab indent, 4-column tab
-	 * width, terminal newline. Generated Haxe writers use this struct
-	 * when the caller omits the `options` argument to `write()`.
+	 * Default `WriteOptions` for Haxe output: tab indent, 4-column tab width, terminal newline.
+	 * Generated Haxe writers use this struct when the caller omits the `options` argument to
+	 * `write()`. Declared as `HxModuleWriteOptions` (not the base `WriteOptions`) so the
+	 * Haxe-specific knobs are present in the defaulted struct — generated writers cast this
+	 * value to `HxModuleWriteOptions` at entry.
 	 *
-	 * Declared as `HxModuleWriteOptions` (not the base `WriteOptions`)
-	 * so Haxe-specific knobs (`sameLine*` from τ₁, `trailingComma*`
-	 * from τ₂, …) are present in the defaulted struct — generated
-	 * writers cast this value to `HxModuleWriteOptions` at entry.
+	 * Every default mirrors haxe-formatter's `@:default` for the same key EXCEPT the eight
+	 * source-preserving compiled defaults — `ifBody` / `elseBody` / `forBody` / `whileBody` /
+	 * `doBody` / `caseBody` are `Keep` (fork: `Next`) and `afterLeftCurly` / `beforeRightCurly`
+	 * are `Keep` (fork: `Remove`) — so a file with NO discoverable `hxformat.json` keeps the
+	 * shape its author wrote; `HaxeFormatConfigLoader.loadHxFormatJson` re-baselines those eight
+	 * to the fork value before applying any key, so any loaded config, even `{}`, formats the
+	 * way the fork formats. `expressionForBody` is `Keep` (fork `Same`; see
+	 * `HxFormatSameLineSection`). The other deliberate divergences, each a decision:
 	 *
-	 * Same-line defaults match haxe-formatter's `sameLine` defaults
-	 * (`ifElse`/`tryCatch`/`doWhile` are all same-line by default).
-	 *
-	 * Trailing-comma defaults mirror haxe-formatter's `trailingComma`
-	 * defaults — all groups are `false` by default; the trailing `,`
-	 * only appears when the user opts in per group.
-	 *
-	 * Body-placement defaults (ψ₄ + ψ₁₀a) are `Next` for the five
-	 * statement-form `*Body` knobs (`ifBody`, `elseBody`, `forBody`,
-	 * `whileBody`, `doBody`) — non-block bodies of `if` / `else` /
-	 * `for` / `while` / `do` sit on the next line, matching
-	 * haxe-formatter's
-	 * `sameLine.{ifBody,elseBody,forBody,whileBody,doWhileBody}:
-	 * @:default(Next)`. Opting into `Same` (same-line body) or
-	 * `FitLine` requires an explicit `hxformat.json` override.
-	 * `returnBody` and `throwBody` are the exceptions — `returnBody`
-	 * (ω-return-body, see below) defaults to `FitLine` because
-	 * haxe-formatter's effective `sameLine.returnBody: @:default(Same)`
-	 * semantics wrap long values via a separate
-	 * `wrapping.maxLineLength` pass; `throwBody` (slice
-	 * ω-throw-body-same-default) defaults to `Same` because
-	 * haxe-formatter has no `throwBody` knob and leaves
-	 * `throw <expr>` inline regardless of length, deferring any wrap
-	 * to the value's own chain/fill rules.
-	 *
-	 * `returnBody` (ω-return-body) defaults to `FitLine` — `return
-	 * value;` stays on one line when the value fits within
-	 * `lineWidth`, otherwise the value breaks to the next line at one
-	 * indent level deeper. This mirrors haxe-formatter's effective
-	 * `sameLine.returnBody: @:default(Same)` semantics: their `Same`
-	 * wraps long values via a separate `wrapping.maxLineLength` pass,
-	 * which corresponds to our `FitLine` rather than strict `Same`.
-	 * Opting into strict `Same` (no wrap) or `Next` (always-break) /
-	 * `Keep` (preserve source) requires a `sameLine.returnBody`
-	 * override in `hxformat.json`.
-	 *
-	 * `throwBody` (ω-throw-body) shares the `returnBody` shape but
-	 * defaults to `Same`, not `FitLine` — `throw value;` always stays
-	 * flat at the kw-side. haxe-formatter has no `throwBody` knob and
-	 * leaves the `throw <expr>` separator inline regardless of length;
-	 * any wrap happens inside the value via its own chain/fill rules
-	 * (slice ω-throw-body-same-default, supersedes the original
-	 * FitLine-mirror-returnBody default). `Next` / `FitLine` / `Keep`
-	 * remain available for users constructing `HxModuleWriteOptions`
-	 * programmatically; the JSON loader still does not parse a
-	 * `sameLine.throwBody` key.
-	 *
-	 * `catchBody` (ω-catch-body) defaults to `Next`, matching haxe-
-	 * formatter's `sameLine.catchBody: @:default(Next)` and the
-	 * sibling `ifBody`/`forBody`/`whileBody`/`doBody` defaults. Drives
-	 * the `)`→body separator at `HxCatchClause.body`. Block bodies
-	 * stay inline regardless via `bodyPolicyWrap`'s block-ctor
-	 * detection, so the typical `} catch (e:T) { … }` round-trip is
-	 * unaffected; only non-block catch bodies (`} catch (e:T)
-	 * trace(e);`) see a hardline by default. Opting into `Same`,
-	 * `FitLine` or `Keep` requires an explicit `hxformat.json`
-	 * override (`"sameLine": { "catchBody": "same" | "fitLine" |
-	 * "keep" }`).
-	 *
-	 * `functionBody` (ω-functionBody-policy) defaults to `Next` —
-	 * `function f() expr;` pushes the body onto a fresh line at one
-	 * indent level deeper, matching upstream haxe-formatter's
-	 * `sameLine.functionBody: @:default(Next)`. Setting `"sameLine":
-	 * { "functionBody": "same" }` keeps the body inline with a single
-	 * space between the `()` and the body expression. The knob lives
-	 * on `HxFnBody.ExprBody`; `BlockBody` (`function f() { … }`) is
-	 * unaffected — its layout is owned by `leftCurly`. `NoBody`
-	 * (`function f();` interface stub) is unaffected.
-	 *
-	 * `untypedBody` (ω-untyped-body-policy) defaults to `Same` —
-	 * `function f():T untyped { … }` cuddles `untyped` after the
-	 * function header by default, matching haxe-formatter's
-	 * `sameLine.untypedBody: @:default(Same)`. Setting `"sameLine":
-	 * { "untypedBody": "next" }` pushes `untyped` onto its own line
-	 * at one indent level deeper. The knob is consumed at
-	 * `HxFnBody.UntypedBlockBody` (fn-decl modifier form). Stmt-level
-	 * `HxStatement.UntypedBlockStmt` (incl. `try untyped { … }` and
-	 * block-stmt `{ untyped { … } }`) is deferred to a follow-up
-	 * slice — a duplicate inner wrap would stack with the parent
-	 * body-policy / block-stmt separators and produce double spaces
-	 * / spurious blank lines. Inline-expression variants
-	 * (`HxExpr.UntypedExpr`, single-expr `untyped expr`) ride a
-	 * different path and stay unaffected.
-	 *
-	 * `caseBody` defaults to `Next` — single-stmt switch case bodies
-	 * stay on a fresh line below `case X:` for non-expression statement
-	 * bodies (block, var, if-stmt, …). `expressionCase` defaults to
-	 * `Keep` (ω-expression-case-keep-default) — when
-	 * the body's first element had no preceding source newline, the
-	 * `case X: foo();` shape is preserved; otherwise the body keeps the
-	 * source's multiline layout. Setting either to `Same` flattens
-	 * single-stmt bodies unconditionally; setting either to `FitLine`
-	 * (ω-case-body-fitline) hands the same-vs-next choice to
-	 * `anyparse.format.BodyFit`, which measures the flat
-	 * `case <patterns>: <body>` line against `lineWidth` when the body can
-	 * render on one line and glues it to the label when it cannot.
-	 * `caseBody` corresponds to
-	 * haxe-formatter's `sameLine.caseBody: @:default(Next)`;
-	 * `expressionCase` to `sameLine.expressionCase: @:default(Same)`.
-	 * We pick `Keep` over upstream's `Same` to avoid a `;`-cascade regression
-	 * — Keep gates on source same-line-ness so multi-line source bodies
-	 * keep their VarStmt `@:trailOpt(';')` cascade behaviour.
-	 *
-	 * `tryBody` (ω-tryBody) defaults to `Next` — matches upstream
-	 * haxe-formatter's `sameLine.tryBody: @:default(next)`. Drives
-	 * the body-placement axis at `HxTryCatchStmt.body`. Block bodies
-	 * stay inline regardless — the typical `try { … }` round-trip
-	 * routes through `bodyPolicyWrap`'s block-ctor path where
-	 * `leftCurly` controls the `{` position. Non-block bodies
-	 * (`ExprStmt`, etc.) get pushed to the next line at one indent
-	 * level deeper (`try\n\tBARE;`). Architecturally orthogonal to
-	 * `tryPolicy`: when `tryBody=Same` is opted into via JSON, the
-	 * inline gap routes through `opt.tryPolicy` (`After`/`Both` →
-	 * space, `None`/`Before` → empty) via the `kwOwnsInlineSpace`
-	 * mode in `bodyPolicyWrap`, so `tryPolicy=None` + `tryBody=Same`
-	 * still collapses to `try{…}` while default `tryPolicy=After` +
-	 * `tryBody=Same` keeps `try {…}`. Opting into `Same`/`FitLine`/
-	 * `Keep` requires an explicit `hxformat.json` override
-	 * (`"sameLine": { "tryBody": "same" | "fitLine" | "keep" }`).
-	 *
-	 * `elseIf` (ψ₈) defaults to `Same` — the nested `if` inside an
-	 * `else` clause stays on the same line as `else`, matching
-	 * haxe-formatter's `sameLine.elseIf: @:default(Same)`. This knob
-	 * overrides `elseBody` specifically when the else branch's
-	 * statement is an `IfStmt` — keeping the `else if (...)` idiom
-	 * inline even though `elseBody=Next` would otherwise push the
-	 * nested if to the next line.
-	 *
-	 * Left-curly default (ψ₆) is `Same` — `{` stays on the same line
-	 * as the preceding token (`class F {` / `function f() {`). This
-	 * mirrors haxe-formatter's `lineEnds.leftCurly: @:default(After)`
-	 * and keeps pre-ψ₆ byte-identical output. Flipping to `Next`
-	 * requires an explicit `hxformat.json` override
-	 * (`"lineEnds": { "leftCurly": "before" }` or `"both"`).
-	 *
-	 * Object-literal left-curly default (ω-objectlit-leftCurly) is
-	 * `Same` — object-literal braces stay cuddled on the previous line
-	 * (`var x = {…}`, `f({…})`). Global `lineEnds.leftCurly` cascades
-	 * into this knob (slice ω-objectlit-leftCurly-cascade), mirroring
-	 * haxe-formatter's `MarkLineEnds.getCurlyPolicy(ObjectDecl)`
-	 * precedence — `lineEnds.leftCurly: "both"` flips both
-	 * `opt.leftCurly` AND `opt.objectLiteralLeftCurly` to `Next`. Per-
-	 * construct override `"lineEnds": { "objectLiteralCurly": { "leftCurly":
-	 * "<value>" } }` wins. Short literals chosen flat by the wrap
-	 * cascade stay cuddled even under `Next` — the wrap engine wires
-	 * `WrapList.emit`'s `(leadFlat, leadBreak)` so `Group(IfBreak)`
-	 * picks cuddled vs Allman per literal's own flat/break decision.
-	 *
-	 * Empty-curly default (ω-empty-curly-break) is `Same` — empty
-	 * bodies stay flat (`class C {}`, `function f() {}`). `Break`
-	 * emits empty bodies across two lines with `}` on its own line at
-	 * the parent's indent (`class C {\n}`). Mirrors haxe-formatter's
-	 * `lineEnds.emptyCurly: @:default(Same)`. Driven via
-	 * `@:fmt(emptyCurlyBreak)` on body Stars (`HxClassDecl.members`,
-	 * `HxFnBlock.stmts`, etc.).
-	 *
-	 * Object-field colon default (ψ₇) is `After` — `{a: 0}`, matching
-	 * haxe-formatter's `whitespace.objectFieldColonPolicy:
-	 * @:default(After)`. This diverges from the pre-ψ₇ output
-	 * (`{a:0}`, i.e. `None`) because the corpus reference expects the
-	 * spaced form. Callers who want byte-identical pre-ψ₇ layout must
-	 * pass `objectFieldColon: WhitespacePolicy.None` explicitly.
-	 *
-	 * Type-hint colon default (ω-E-whitespace) is `None` — `x:Int`,
-	 * `f():Void`. Matches the pre-slice layout and haxe-formatter's
-	 * `whitespace.typeHintColonPolicy: @:default(None)`. Callers who
-	 * want `x : Int` around the colon must pass `typeHintColon:
-	 * WhitespacePolicy.Both` explicitly (or set
-	 * `whitespace.typeHintColonPolicy: "around"` in `hxformat.json`).
-	 *
-	 * Type-check colon default (ω-check-type) is `Both` — `("" : String)`
-	 * with surrounding spaces. Matches haxe-formatter's
-	 * `whitespace.typeCheckColonPolicy: @:default(Around)`. Diverges
-	 * from `typeHintColon`'s `None` default because the type-check `:`
-	 * (inside `(expr : Type)`) follows the opposite upstream convention
-	 * from the type-annotation `:` (`x:Int`). Callers who want the
-	 * tight `("":String)` form must pass `typeCheckColon:
-	 * WhitespacePolicy.None` explicitly.
-	 *
-	 * Func-param-parens default (ω-E-whitespace) is `None` — no space
-	 * before the opening `(` of `HxFnDecl.params`. Matches the pre-
-	 * slice layout and haxe-formatter's
-	 * `whitespace.parenConfig.funcParamParens.openingPolicy:
-	 * @:default(None)`.
-	 *
-	 * Call-parens default (ω-call-parens) is `None` — no space before
-	 * the opening `(` of `HxExpr.Call.args`. Matches the pre-slice
-	 * layout and haxe-formatter's
-	 * `whitespace.parenConfig.callParens.openingPolicy:
-	 * @:default(None)`.
-	 *
-	 * Anon-func-parens default (ω-anon-fn-paren-policy) is `None` — no
-	 * space between `function` and the opening `(` of an
-	 * `HxExpr.FnExpr(fn:HxFnExpr)` anonymous function (tight
-	 * `function(args)…`). The pre-slice writer hardcoded a trailing
-	 * space on the `function` kw (yielding `function (args)…`); the
-	 * `None` default flips to the upstream haxe-formatter shape so the
-	 * common idiom `function() {…}` round-trips byte-identically.
-	 * Callers who want `function (args)…` must pass
-	 * `anonFuncParens: WhitespacePolicy.Before` (or `Both`)
-	 * explicitly, or set
-	 * `whitespace.parenConfig.anonFuncParamParens.openingPolicy:
-	 * "before"` in `hxformat.json`.
-	 *
-	 * `anonFuncParamParensKeepInnerWhenEmpty` default
-	 * (ω-anon-fn-empty-paren-inner-space) is `false` — an empty
-	 * anonymous-function parameter list emits the tight `function()`.
-	 * Setting `whitespace.parenConfig.anonFuncParamParens.removeInnerWhenEmpty:
-	 * false` in `hxformat.json` flips the runtime knob to `true`,
-	 * yielding `function ( ) body` (haxe-formatter parity).
-	 *
-	 * `fitLineIfWithElse` default (ψ₁₂) is `false` — when an `if` has
-	 * an `else` and the body policies are `FitLine`, the bodies fall
-	 * back to the `Next` layout instead of flat-or-break. Matches
-	 * haxe-formatter's `sameLine.fitLineIfWithElse: @:default(false)`.
-	 * Flipping to `true` requires an explicit `hxformat.json` override
-	 * (`"sameLine": { "fitLineIfWithElse": true }`).
-	 *
-	 * `afterFieldsWithDocComments` default (ω-C-empty-lines-doc) is
-	 * `One` — one blank line after any class member whose leading
-	 * trivia carries a doc comment. Matches haxe-formatter's
-	 * `emptyLines.afterFieldsWithDocComments: @:default(One)`. Opting
-	 * into `Ignore` (respect source blank-line count) or `None` (strip
-	 * the blank line) requires an explicit `hxformat.json` override
-	 * (`"emptyLines": { "afterFieldsWithDocComments": "ignore" | "none" }`).
-	 *
-	 * `existingBetweenFields` default (ω-C-empty-lines-between-fields)
-	 * is `Keep` — source blank lines between class members survive
-	 * round-trip, matching haxe-formatter's
-	 * `emptyLines.classEmptyLines.existingBetweenFields:
-	 * @:default(Keep)`. Opting into `Remove` (strip every blank line
-	 * between siblings regardless of source) requires an explicit
-	 * `hxformat.json` override (`"emptyLines": { "classEmptyLines":
-	 * { "existingBetweenFields": "remove" } }`).
-	 *
-	 * `beforeDocCommentEmptyLines` default (ω-C-empty-lines-before-doc)
-	 * is `One` — one blank line before any class member whose leading
-	 * trivia carries a doc comment. Matches haxe-formatter's
-	 * `emptyLines.beforeDocCommentEmptyLines: @:default(One)`. Opting
-	 * into `Ignore` (respect source blank-line count) or `None` (strip
-	 * the blank line) requires an explicit `hxformat.json` override
-	 * (`"emptyLines": { "beforeDocCommentEmptyLines": "ignore" | "none" }`).
-	 *
-	 * Inter-member blank-line defaults (ω-interblank-defaults) match
-	 * haxe-formatter's `emptyLines.classEmptyLines`:
-	 * `betweenFunctions: 1`, `afterVars: 1`, `betweenVars: 0`. One
-	 * blank line is inserted between two sibling functions, and at a
-	 * `var` → `function` or `function` → `var` transition.
-	 * Consecutive vars stay tight. Opting out of these blank-line
-	 * gates requires an explicit `hxformat.json` override
-	 * (`"emptyLines": { "classEmptyLines": { "betweenFunctions": 0,
-	 * "afterVars": 0 } }`). The defaults were kept at `0` for the
-	 * initial ω-interblank plumbing slice to land the infrastructure
-	 * and audit unit/corpus deltas independently; this slice flips
-	 * them to the upstream values.
-	 *
-	 * Interface inter-member blank-line defaults (ω-iface-interblank)
-	 * are all 0: consecutive interface members stay tight regardless of
-	 * kind, matching haxe-formatter InterfaceFieldsEmptyLinesConfig
-	 * defaults (betweenVars: 0, betweenFunctions: 0, afterVars: 0).
-	 * Opting in requires an explicit hxformat.json override:
-	 * "emptyLines": { "interfaceEmptyLines": { "betweenFunctions": 1 } }.
-	 * The interface knobs are independent of the class/abstract
-	 * betweenVars / betweenFunctions / afterVars fields so the two
-	 * member-bodies can be tuned separately.
-	 *
-	 * Typedef-rhs `=` spacing default (ω-typedef-assign) is `Both` —
-	 * `typedef Foo = Bar;`, matching haxe-formatter's
-	 * `whitespace.binopPolicy: @:default(Around)` for the typedef-rhs
-	 * site. Callers who want the pre-slice tight `typedef Foo=Bar;`
-	 * layout must pass `typedefAssign: WhitespacePolicy.None` explicitly.
-	 *
-	 * Type-param default `=` spacing default (ω-typeparam-default-equals)
-	 * is `Both` — `<T = Int>` / `<T:Foo = Bar>`, matching haxe-formatter's
-	 * `whitespace.binopPolicy: @:default(Around)` for the type-param-
-	 * default site. Callers who want the tight `<T=Int>` layout (the
-	 * `_none` corpus variant) must pass
-	 * `typeParamDefaultEquals: WhitespacePolicy.None` explicitly, or
-	 * load `whitespace.binopPolicy: "none"` via the JSON config.
-	 *
-	 * Type-param `<>` spacing defaults (ω-typeparam-spacing) are both
-	 * `None` — `Array<Int>` and `class Foo<T>` stay tight, matching
-	 * haxe-formatter's `whitespace.typeParamOpenPolicy: @:default(None)`
-	 * and `whitespace.typeParamClosePolicy: @:default(None)`. Opting
-	 * into the spaced form requires explicit `hxformat.json` overrides:
-	 * `"whitespace": { "typeParamOpenPolicy": "after",
-	 * "typeParamClosePolicy": "before" }` produces `Array< Int >`.
-	 *
-	 * Anon-type `{}` interior spacing defaults (ω-anontype-braces) are
-	 * both `None` — `{x:Int}` stays tight. haxe-formatter's
-	 * `bracesConfig.anonTypeBraces` defaults to `{openingPolicy: Before,
-	 * closingPolicy: OnlyAfter}` whose effective inside-spaces are also
-	 * none, so the tight form matches upstream's default output for the
-	 * inside-of-braces axis. Opting into the spaced form requires:
-	 * `"whitespace": { "bracesConfig": { "anonTypeBraces":
-	 * { "openingPolicy": "around", "closingPolicy": "around" } } }`
-	 * which produces `{ x:Int }`.
-	 *
-	 * Object-literal `{}` interior spacing defaults (ω-objectlit-braces)
-	 * are both `None` — `{a: 1}` stays tight. haxe-formatter's
-	 * `bracesConfig.objectLiteralBraces` defaults to `{openingPolicy:
-	 * Before, closingPolicy: OnlyAfter}` whose effective inside-spaces
-	 * are also none. Opting into the spaced form requires:
-	 * `"whitespace": { "bracesConfig": { "objectLiteralBraces":
-	 * { "openingPolicy": "around", "closingPolicy": "around" } } }`
-	 * which produces `{ a: 1 }`.
-	 *
-	 * `addLineCommentSpace` default (ω-line-comment-space) is `true` —
-	 * captured `//foo` line comments are re-emitted as `// foo` when
-	 * the body's first non-decoration character is alphanumeric or
-	 * other non-`[/\*\-\s]` content. Decoration runs (`//*******`,
-	 * `//---------`, `////////////`) survive tight. Matches haxe-
-	 * formatter's `whitespace.addLineCommentSpace: @:default(true)`.
-	 * Setting to `false` requires
-	 * `"whitespace": { "addLineCommentSpace": false }` in
-	 * `hxformat.json`.
-	 *
-	 * `expressionTry` default (ω-expression-try) is `Same` — the
-	 * expression-position `try ... catch ...` form stays on one line,
-	 * matching haxe-formatter's `sameLine.expressionTry:
-	 * @:default(Same)`. Independent of `sameLineCatch` (statement-
-	 * form). Setting to `Next` requires
-	 * `"sameLine": { "expressionTry": "next" }` in `hxformat.json`.
-	 *
-	 * `indentCaseLabels` default (ω-indent-case-labels) is `true` — the
-	 * `case` / `default` labels of a `switch` body are indented one
-	 * level inside the surrounding `{ ... }` (matching haxe-formatter's
-	 * `indentation.indentCaseLabels: @:default(true)`). Setting to
-	 * `false` keeps the labels flush with the `switch` keyword and
-	 * requires `"indentation": { "indentCaseLabels": false }` in
-	 * `hxformat.json`.
-	 *
-	 * `indentObjectLiteral` default (ω-indent-objectliteral) is `true` —
-	 * an `ObjectLit` value placed on the right-hand side of `=`/`:`/`(`
-	 * /`[`/keyword picks up one extra indent step in front of `{` when
-	 * `objectLiteralLeftCurly` is `Next` / `both` (Allman), matching
-	 * haxe-formatter's `indentation.indentObjectLiteral: @:default(true)`
-	 * rule which only fires for own-line `{`. Setting to `false`
-	 * requires `"indentation": { "indentObjectLiteral": false }` in
-	 * `hxformat.json` and disables the extra indent. Under `Same`
-	 * (cuddled) leftCurly the knob is inert in both directions. The
-	 * gate fires only at sites tagged with `@:fmt(indentValueIfCtor(
-	 * 'ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'))` in
-	 * the grammar (currently `HxVarDecl.init` and `HxObjectField.value`).
-	 *
-	 * `indentComplexValueExpressions` default (ω-indent-complex-value-expr)
-	 * is `false` — an `IfExpr` value on `=`/`:`/`(`/`[`/keyword RHS
-	 * renders without an extra indent step (matching haxe-formatter's
-	 * `indentation.indentComplexValueExpressions: @:default(false)`).
-	 * Setting to `true` requires
-	 * `"indentation": { "indentComplexValueExpressions": true }` in
-	 * `hxformat.json` and adds one indent step to the value's hardlines
-	 * (the `{ … } else { … }` block bodies of `var x = if (cond) … else …;`
-	 * shift one tab right). The gate fires only at sites tagged with
-	 * `@:fmt(indentValueIfCtor('IfExpr', 'indentComplexValueExpressions'))`
-	 * in the grammar (currently `HxVarDecl.init`).
-	 *
-	 * `functionTypeHaxe4` default (ω-arrow-fn-type) is `Both` — the `->`
-	 * separator inside a new-form arrow function type
-	 * (`HxArrowFnType.ret`) emits `(args) -> ret` with surrounding
-	 * spaces, matching haxe-formatter's
-	 * `whitespace.functionTypeHaxe4Policy: @:default(Around)`. Setting
-	 * to `None` produces the tight `(args)->ret` form and requires
-	 * `"whitespace": { "functionTypeHaxe4Policy": "none" }` in
-	 * `hxformat.json`. The old-form curried arrow `Int->Bool` is on a
-	 * separate axis (`@:fmt(functionTypeHaxe3)` on `HxType.Arrow` →
-	 * `opt.functionTypeHaxe3`, default `None` — see field doc below).
-	 *
-	 * `functionTypeHaxe3` default is `None` — the `->`
-	 * separator inside an old-form curried arrow type (`HxType.Arrow`)
-	 * emits `Int->Bool` tight, matching haxe-formatter's
-	 * `whitespace.functionTypeHaxe3Policy: @:default(None)`. Setting to
-	 * `Both` (via `"whitespace": { "functionTypeHaxe3Policy": "around" }`)
-	 * flips to spaced `Int -> Bool`. Independent of `functionTypeHaxe4`,
-	 * so a config can space one arrow form while keeping the other
-	 * tight.
-	 *
-	 * `arrowFunctions` default (ω-arrow-fn-expr) is `Both` — the `->`
-	 * separator inside a parenthesised arrow lambda expression
-	 * (`HxThinParenLambda.body`) emits `(params) -> body` with
-	 * surrounding spaces, matching haxe-formatter's
-	 * `whitespace.arrowFunctionsPolicy: @:default(Around)`. Setting to
-	 * `None` produces the tight `(params)->body` form and requires
-	 * `"whitespace": { "arrowFunctionsPolicy": "none" }` in
-	 * `hxformat.json`. Independent of `functionTypeHaxe4` (the type-
-	 * position knob); the single-ident infix form `arg -> body`
-	 * (`HxExpr.ThinArrow`) is on the Pratt infix path which already
-	 * adds surrounding spaces by default and is unaffected.
-	 *
-	 * `ifPolicy` default (ω-if-policy) is `After` — the gap between the
-	 * `if` keyword and the opening `(` of its condition is a single
-	 * space, producing `if (cond)` for both `HxStatement.IfStmt` and
-	 * `HxExpr.IfExpr`. Matches the pre-slice fixed trailing space on
-	 * the `if` keyword and haxe-formatter's effective default. Setting
-	 * to `None` (or the JSON-side `"onlyBefore"`) collapses the gap to
-	 * `if(cond)` and requires `"whitespace": { "ifPolicy": "onlyBefore" }`
-	 * (or `"none"`) in `hxformat.json`.
-	 *
-	 * `forPolicy` / `whilePolicy` / `switchPolicy` defaults
-	 * (ω-control-flow-policies) are `After` — same shape as `ifPolicy`,
-	 * driven by `@:fmt(forPolicy)` on `HxStatement.ForStmt` /
-	 * `HxExpr.ForExpr`, `@:fmt(whilePolicy)` on `HxStatement.WhileStmt`
-	 * / `HxExpr.WhileExpr`, and `@:fmt(switchPolicy)` on all four switch
-	 * ctors (parens / bare × stmt / expr). Matches haxe-formatter's
-	 * `whitespace.{forPolicy,whilePolicy,switchPolicy}: @:default(After)`.
-	 *
-	 * `tryPolicy` default (ω-try-policy) is `After` — same shape as
-	 * `ifPolicy`, driven by `@:fmt(tryPolicy)` on
-	 * `HxStatement.TryCatchStmt` (block-body form only; the bare-body
-	 * sibling's `bareBodyBreaks` predicate gates the slot to `null`).
-	 * Matches haxe-formatter's `whitespace.tryPolicy: @:default(After)`.
-	 *
-	 * `afterPackage` default (ω-after-package) is `1` — exact number of
-	 * blank lines between the top-level `package …;` directive and the
-	 * next decl. Override semantics: the source-captured blank-line
-	 * count is replaced with this value, so `0` strips an existing
-	 * blank line and `2` doubles one regardless of source. Matches
-	 * haxe-formatter's `emptyLines.afterPackage: @:default(1)`. Driven
-	 * by
-	 * `@:fmt(blankLinesAfterCtor('decl', 'PackageDecl', 'PackageEmpty', 'afterPackage'))`
-	 * on `HxModule.decls` and consumed by the trivia-mode EOF Star path
-	 * in `TriviaEofLowering.triviaEofStarExpr`.
-	 *
-	 * `beforePackage` default (ω-before-package) is `0` — exact number of
-	 * blank lines emitted at file head BEFORE the leading `package …;`
-	 * directive. Override semantics, head-of-Star only: the source-
-	 * captured blank-line count is replaced once at the start of the
-	 * module. `0` (default) keeps the file leading edge tight against
-	 * `package …;` even when the source had blank lines before it; `1`
-	 * inserts one blank line so the file starts with a leading newline.
-	 * Matches haxe-formatter's `emptyLines.beforePackage: @:default(0)`.
-	 * Driven by
-	 * `@:fmt(blankLinesAtHeadIfCtor('decl', 'PackageDecl', 'PackageEmpty', 'beforePackage'))`
-	 * on `HxModule.decls` and consumed by the head-emit splice in
-	 * `TriviaEofLowering.triviaEofStarExpr` (head-of-Star override fires
-	 * once before the per-element loop).
-	 *
-	 * `beforeUsing` default (ω-imports-using-blank) is `1` — exact number
-	 * of blank lines between an `import` (or any non-`using`) decl and
-	 * the following `using` decl at module top level. Override
-	 * semantics: the source-captured blank-line count is replaced with
-	 * this value at the `import → using` transition, so `0` strips an
-	 * existing blank line and `2` doubles one regardless of source.
-	 * Consecutive `using` decls fall through to the source-driven
-	 * binary `blankBefore` flag. Matches haxe-formatter's
-	 * `emptyLines.importAndUsing.beforeUsing: @:default(1)`. Driven by
-	 * `@:fmt(blankLinesBeforeCtor('decl', 'UsingDecl', 'UsingWildDecl', 'beforeUsing'))`
-	 * on `HxModule.decls` and consumed by the trivia-mode EOF Star path
-	 * in `TriviaEofLowering.triviaEofStarExpr`.
-	 *
-	 * `betweenImports` default (ω-imports-using-between) is `0` — exact
-	 * number of blank lines between two consecutive same-kind imports
-	 * (or two consecutive same-kind usings) whose dotted-ident paths
-	 * fall into different groups at `betweenImportsLevel`. Override
-	 * semantics: the source-captured blank-line count is replaced on a
-	 * level-mismatch boundary. Same-level pairs fall through to the
-	 * source-driven `blankBefore` flag. Matches haxe-formatter's
-	 * `emptyLines.importAndUsing.betweenImports: @:default(0)`.
-	 *
-	 * `betweenImportsLevel` default (ω-imports-using-between) is `All` —
-	 * granularity of the level test for `betweenImports`. `All` treats
-	 * every same-kind boundary as a level mismatch (one blank between
-	 * every pair); `FirstLevelPackage` … `FifthLevelPackage` compare
-	 * the first N dot-separated segments; `FullPackage` compares the
-	 * full path. Matches haxe-formatter's
-	 * `BetweenImportsEmptyLinesLevel: @:default(All)`. Driven together
-	 * with `betweenImports` by
-	 * `@:fmt(blankLinesBetweenSameCtorByLevel('decl', Ctor1, [Ctor2, …],
-	 * 'betweenImportsLevel', 'betweenImports',
-	 * 'betweenImportsPathDiffers'))` on `HxModule.decls` and consumed
-	 * by the trivia-mode EOF Star path in
-	 * `TriviaEofLowering.triviaEofStarExpr`. The path-comparison helper
-	 * is wired through the format-neutral
-	 * `WriteOptions.betweenImportsPathDiffers` adapter slot, defaulted
-	 * to `HxBetweenImportsLevel.pathDiffers`.
-	 *
-	 * `beforeType` default (ω-imports-using-before-type) is `1` — exact
-	 * number of blank lines the writer emits at the import/using →
-	 * type-decl transition (current decl is `ClassDecl` /
-	 * `InterfaceDecl` / `AbstractDecl` / `EnumDecl` / `TypedefDecl` /
-	 * `FnDecl`, previous decl is an import or using directive).
-	 * Override semantics: the source-captured blank-line count is
-	 * replaced with this value at the transition, so `0` strips an
-	 * existing blank line and `2` doubles one regardless of source.
-	 * Matches haxe-formatter's `emptyLines.importAndUsing.beforeType:
-	 * @:default(1)`. Driven by
-	 * `@:fmt(blankLinesOnTransitionAcross('decl', 'ImportDecl',
-	 * 'ImportWildDecl', 'UsingDecl', 'UsingWildDecl', '|', 'ClassDecl',
-	 * 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'FinalDecl',
-	 * 'AbstractClassDecl', 'EnumAbstractDecl', 'TypedefDecl',
-	 * 'FnDecl', 'beforeType'))` on `HxModule.decls`,
-	 * `HxConditionalDecl.body` / `elseBody`, and `HxElseifDecl.body`
-	 * (mirrored cluster), consumed by the trivia-mode EOF Star path in
-	 * `TriviaEofLowering.triviaEofStarExpr`. Conditional transparency
-	 * from the generated `betweenImportsTailLeafClassify` /
-	 * `betweenImportsHeadLeafClassify` typed predicates extends to this
-	 * transition automatically — both share the `'decl'` classifier.
-	 *
-	 * `afterMultilineDecl` / `beforeMultilineDecl` defaults
-	 * (ω-after-multiline) are both `1` — exact number of blank lines the
-	 * writer emits around a multi-line top-level type/function decl
-	 * (Class/Interface/Abstract/Enum with non-empty members, or FnDecl
-	 * with non-empty BlockBody). Override semantics. Matches
-	 * haxe-formatter's `emptyLines.betweenTypes: @:default(1)` and
-	 * `emptyLines.betweenSingleLineTypes: @:default(0)` discrimination —
-	 * the predicate-gated variant fires only on multi-line shapes, so
-	 * runs of single-line type decls fall through to the source-driven
-	 * blank-line slot (no override). Driven by
-	 * `@:fmt(blankLinesAfterCtorIf('decl', 'multiline', 'ClassDecl', …, 'afterMultilineDecl'))`
-	 * and the symmetric `BeforeCtorIf` on `HxModule.decls`. The
-	 * predicate `'multiline'` is grammar-derived at compile time —
-	 * `WriterLowering.buildMultilinePredicate` walks each ctor's arg
-	 * type, reading typedef-level
-	 * `@:fmt(multilineWhenFieldNonEmpty(<arrayField>))` /
-	 * `@:fmt(multilineWhenFieldShape(<refField>))` and ctor-level
-	 * `@:fmt(multilineCtor)` annotations on the relevant grammar types
-	 * (`HxClassDecl` / `HxInterfaceDecl` / `HxAbstractDecl` / `HxEnumDecl` /
-	 * `HxFnDecl` / `HxFnBlock` / `HxFnBody.BlockBody`). Zero runtime
-	 * reflection — the macro emits direct field access + `length > 0`
-	 * comparison.
+	 * - `returnBody` is `FitLine` where the fork says `Same` — the fork's `Same` wraps long
+	 *   values via its separate `wrapping.maxLineLength` pass, which corresponds to our `FitLine`.
+	 * - `throwBody` is `Same` — the fork has no `throwBody` knob and leaves `throw <expr>` inline
+	 *   regardless of length, deferring any wrap to the value's own chain / fill rules.
+	 * - `expressionCase` is `Keep` where the fork says `Same` — `Keep` gates on source
+	 *   same-line-ness, so a multi-line source body keeps its `VarStmt` `@:trailOpt(';')`
+	 *   cascade instead of collapsing.
+	 * - `leftCurly` exposes only `Same` / `Next` — the fork's `Before` / `Both` collapse to `Next`,
+	 *   and its inline `None` shape is not modelled. Each of the three globals (`leftCurly`,
+	 *   `emptyCurly`, `rightCurly`) cascades into its own per-construct knobs, a per-construct
+	 *   sub-key winning over the cascade (the fork's `getCurlyPolicy` precedence).
+	 * - `anonFuncParens` is `None` — the fork's `auto` heuristic is not modelled and collapses to
+	 *   tight `function(args)`.
 	 */
 	public var defaultWriteOptions(default, null): HxModuleWriteOptions = {
 		indentChar: Tab,
@@ -1256,45 +755,25 @@ final class HaxeFormat implements TextFormat {
 	}
 
 	/**
-	 * Default `WrapRules` cascade for postfix `.method(args)` chains —
-	 * ported from haxe-formatter's `wrapping.methodChain` rule set in
-	 * `resources/default-hxformat.json` (AxGord fork). Slice
-	 * ω-linelen-static added the runtime infra for `lineLength >= n`
-	 * (initially evaluated statically against `totalItemFlatLength`).
-	 * Slice ω-linelen-methodchain-baseline first tried to adopt upstream's
-	 * leading `lineLength >= 160` rule and reverted: static eval used
-	 * `MethodChainEmit.chainItemLength` which descended into `BodyGroup`
-	 * content, while the renderer's `fitsFlat` defers BG content
-	 * (Departure 2). Multi-line lambda / block / struct-lit bodies
-	 * inflated `total` and the rule fired for chains the renderer would
-	 * (and the corpus expected to) keep flat — `issue_576_switch_indentation`
-	 * regressed. Slice ω-chain-itemlen-bg-defer aligned `chainItemLength`
-	 * with `fitsFlat`'s BG-defer and re-adopted the leading rule (full
-	 * 6-rule cascade now matches upstream). Slice
-	 * ω-methodchain-threshold-aware migrated `MethodChainEmit.emit` off
-	 * the legacy column-blind `decide` evaluator onto
-	 * `decideWithLineLengthState` + `IfWidthExceeds` — at default
-	 * `lineWidth=160` the leading `LineLengthLargerThan: 160` collapses
-	 * cleanly to the existing `exceeds` semantic via the standard
-	 * `IfBreak` pivot; user-modified `lineWidth` now routes the answer
-	 * through the renderer's column-aware probe. The cascade also covers
-	 * the common cases via `IfBreak`-split between `NoWrap` and the break
-	 * mode, picked at render time by the parent `Group`.
+	 * Default `WrapRules` cascade for postfix `.method(args)` chains — ported from haxe-formatter's
+	 * `wrapping.methodChain` rule set, the full cascade including the leading `lineLength >= 160`
+	 * rule. That rule is sound only because `MethodChainEmit.chainItemLength` defers `BodyGroup`
+	 * content the way the renderer's `fitsFlat` does: a static width that descends into a
+	 * multi-line lambda / block / struct-literal body inflates the total and fires for chains
+	 * the renderer keeps flat. `MethodChainEmit.emit` evaluates through
+	 * `decideWithLineLengthState` + `IfWidthExceeds`, so at the default `lineWidth` the leading
+	 * rule collapses to the `exceeds` semantic via the standard `IfBreak` pivot, and a modified
+	 * `lineWidth` routes the answer through the renderer's column-aware probe.
 	 *
-	 * ω-methodchain-all-or-nothing DIVERGES FROM UPSTREAM here, by user
-	 * decision: every break mode is `OnePerLine`, where the fork's rule
-	 * set says `OnePerLineAfterFirst`. A broken chain therefore leaves its
-	 * head line bare instead of gluing the first link to it — the
-	 * companion half of `MethodChainEmit`'s head-end-column probe. This is
-	 * the one place the ported cascade no longer matches
-	 * `resources/default-hxformat.json`; read it before concluding that a
-	 * disagreeing fork corpus fixture is a bug (ten chain fixtures fail on
-	 * this divergence, one — `callparam_single_arg_method_chain` — passes
-	 * only because of it).
+	 * ω-methodchain-all-or-nothing DIVERGES FROM UPSTREAM here, by user decision: every break
+	 * mode is `OnePerLine`, where the fork's rule set says `OnePerLineAfterFirst`. A broken chain
+	 * therefore leaves its head line bare instead of gluing the first link to it — the companion
+	 * half of `MethodChainEmit`'s head-end-column probe. This is the one place the ported cascade
+	 * no longer matches the fork; read it before concluding that a disagreeing fork corpus
+	 * fixture is a bug.
 	 *
-	 * Returned as a fresh struct on each call so test code that mutates
-	 * the `defaultWriteOptions.methodChainWrap` substruct doesn't
-	 * corrupt the singleton.
+	 * Returned as a fresh struct on each call so test code that mutates the
+	 * `defaultWriteOptions.methodChainWrap` substruct does not corrupt the singleton.
 	 */
 	public static function defaultMethodChainWrap(): WrapRules {
 		return {
@@ -1351,8 +830,8 @@ final class HaxeFormat implements TextFormat {
 	 * adopt **one hard limit** (`lineWidth`) and drop fork's two leading
 	 * soft-threshold rules (`lineLength >= 140 → OnePerLineAfterFirst`
 	 * and `lineLength >= 140 → FillLine`). Soft thresholds are a
-	 * Haxe-formatter author's stylistic choice ("wrap proactively at
-	 * 87% of hard limit"), not universal truth — JSON / AS3 / future
+	 * Haxe-formatter author's stylistic choice (wrap proactively well
+	 * short of the hard limit), not universal truth — JSON / AS3 / future
 	 * grammars inherit anyparse-core defaults and should not pay the
 	 * per-cascade `IfWidthExceeds(140, …)` render-probe cost or carry a
 	 * Haxe-specific aesthetic. Users who want fork-style aesthetic for

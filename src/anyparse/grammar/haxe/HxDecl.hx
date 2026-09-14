@@ -1,93 +1,40 @@
 package anyparse.grammar.haxe;
 
 /**
- * A top-level declaration in a Haxe module.
+ * A top-level declaration in a Haxe module. Forms recognised, in source order (which is
+ * dispatch order):
  *
- * Forms recognised (in source order, which is dispatch order):
- *  - `PackageDecl` / `PackageEmpty` — `package foo.bar;` and the bare
- *    `package;` directive (slice ω-toplevel-package). `@:kw('package')`
- *    drives both branches; `PackageDecl(path:HxTypeName)` is tried
- *    first to consume a dotted path, and the nullary `PackageEmpty`
- *    catches the no-name shape via `tryBranch` rollback when
- *    `HxTypeName`'s regex fails on the bare `;`. Real Haxe accepts at
- *    most one `package` per module at the very top, but the parser
- *    does not enforce position or count — semantic policing belongs to
- *    a later analysis pass, not the grammar.
- *  - `ImportDecl` / `UsingDecl` — `import foo.bar.Baz;` and
- *    `using foo.bar.Util;` (slice ω-toplevel-import-using). Each
- *    carries `@:kw('import') / @:kw('using')` plus `@:trail(';')`;
- *    the payload is the same dotted-ident `HxTypeName` regex that
- *    `PackageDecl` uses, so single-segment (`import L;`),
- *    sub-module (`import Module.SubType;`), and pack-qualified
- *    (`import haxe.io.Bytes;`) forms all parse through one ctor.
- *  - `ImportWildDecl` / `UsingWildDecl` — wildcard form
- *    `import haxe.*;` and `using foo.bar.*;` (slice
- *    ω-toplevel-import-wild). Same `@:kw / @:trail` pair as the plain
- *    ctors; payload is `HxWildPath`, a regex requiring a literal `.*`
- *    suffix. Branch order places the wildcard ctors BEFORE the plain
- *    ones so `tryBranch` rollback tries the longer match first and
- *    falls through to the plain `HxTypeName` ctor when the `.*` tail
- *    isn't present (mirrors the `PackageDecl` → `PackageEmpty`
- *    rollback).
- *  - `ImportAliasDecl` / `ImportAliasInDecl` — single-symbol aliased
- *    import, modern `import Std.is as isOfType;` (slice
- *    ω-import-as-alias) and legacy pre-Haxe-4 `import Std.is in
- *    isOfType;` (slice ω-import-in-alias). Payloads are `HxImportAlias`
- *    / `HxImportAliasIn` (path + mandatory `as` / `in <ident>` suffix
- *    respectively) — two struct shapes rather than one shared shape
- *    with a keyword choice, because the writer must re-emit whichever
- *    spelling the source used verbatim (an `in` import is never
- *    rewritten to `as`). Both are placed BEFORE the plain `ImportDecl`
- *    so `tryBranch` attempts the longer match first; a missing `as` /
- *    `in` rolls back to the plain ctor (same longer-match-first
- *    pattern as `ImportWildDecl` → `ImportDecl`). Order between the
- *    two alias ctors themselves does not matter — `as` and `in` are
- *    mutually exclusive keywords, so at most one ever matches a given
- *    import. `using ... as ...` / `using ... in ...` are not legal
- *    Haxe and get no twin ctors; wildcard imports never carry an alias
- *    (`import foo.*` only) so there is no `ImportWildAliasDecl` either.
+ * `PackageDecl` / `PackageEmpty` — `package foo.bar;` and the bare `package;` directive.
+ * `@:kw('package')` drives both; `PackageDecl(path:HxTypeName)` is tried first, and the
+ * nullary `PackageEmpty` catches the no-name shape via `tryBranch` rollback when
+ * `HxTypeName`'s regex fails on the bare `;`. Position and count are not policed.
+ * `ImportDecl` / `UsingDecl` — `@:kw('import') / @:kw('using')` plus `@:trail(';')` over the
+ * same dotted-ident `HxTypeName` regex `PackageDecl` uses, so single-segment, sub-module and
+ * pack-qualified forms all parse through one ctor. `ImportWildDecl` / `UsingWildDecl` — the
+ * wildcard form over `HxWildPath` (a literal `.*` suffix), placed BEFORE the plain ctors so
+ * `tryBranch` tries the longer match first. `ImportAliasDecl` / `ImportAliasInDecl` —
+ * single-symbol aliased import, modern `as` and legacy pre-Haxe-4 `in`; two struct shapes
+ * (`HxImportAlias` / `HxImportAliasIn`) rather than one with a keyword choice, because the
+ * writer must re-emit whichever spelling the source used. Both precede the plain
+ * `ImportDecl`; order between the two does not matter since `as` and `in` are mutually
+ * exclusive. `using ... as` is not legal Haxe and gets no twin; a wildcard import never
+ * carries an alias.
  *
- *    Like `Package*`, the parser does not enforce ordering or
- *    position of imports relative to other top-level decls; semantic
- *    policing belongs to a later analysis pass.
- *  - `ClassDecl` — `class Name { ... }` wrapping an `HxClassDecl`.
- *  - `TypedefDecl` — `typedef Name = Type[;]` wrapping an `HxTypedefDecl`.
- *    Carries `@:trailOpt(';')` — the trailing semicolon is optional on
- *    parse (real Haxe accepts both `typedef Foo = Int;` and
- *    `typedef Foo = Int`, and the bare `}` form `typedef T = { x:Int }`
- *    is the dominant convention for anon typedefs in the wild). The
- *    writer keeps emitting `;` as canonical output; preserving source
- *    presence is a separate slice.
- *  - `EnumDecl` — `enum Name { ... }` wrapping an `HxEnumDecl`.
- *  - `InterfaceDecl` — `interface Name { ... }` wrapping an `HxInterfaceDecl`.
- *  - `AbstractDecl` — `abstract Name(Type) [from T]* [to T]* { ... }`
- *    wrapping an `HxAbstractDecl`.
- *  - `VarDecl` — `var name [:Type] [= init];` module-level variable
- *    declaration (slice ω-toplevel-var-fn). Reuses `HxVarDecl` from the
- *    class-member / statement grammar. The `@:kw('var')` lives here, the
- *    body has the same shape, and `@:trailOpt(';')` mirrors
- *    `HxStatement.VarStmt`'s relaxation so a `}`-terminated rhs at module
- *    level (rare, but possible) parses without a trailing semicolon.
- *    Top-level `var`/`function` are not part of Haxe's stable surface
- *    syntax, but the AxGord/haxe-formatter corpus contains plain-snippet
- *    fixtures that drop the `class { ... }` wrapper to keep the test
- *    bodies focused — the formatter accepts module-level `var`/`function`
- *    in those snippets, and so do we to unblock the corpus.
- *  - `FnDecl` — `function name(...) [:Ret] { stmts | expr | ; }` module-
- *    level function declaration (slice ω-toplevel-var-fn). Reuses
- *    `HxFnDecl` from the class-member grammar. The `@:kw('function')`
- *    lives here. Body shape (block / no-body) is unchanged from the
- *    inside-class form.
+ * `ClassDecl` — `class Name { ... }` wrapping an `HxClassDecl`. `TypedefDecl` — `typedef Name
+ * = Type[;]` wrapping an `HxTypedefDecl`; carries `@:trailOpt(';')` because real Haxe accepts
+ * both spellings and the bare `}` form is the dominant convention for anon typedefs (the
+ * writer emits `;` as canonical output). `EnumDecl`, `InterfaceDecl`, `AbstractDecl` wrap
+ * their `Hx*Decl` sub-rule. `VarDecl` — `var name [:Type] [= init];` module-level variable,
+ * reusing `HxVarDecl` with the `@:kw('var')` here and `@:trailOpt(';')` mirroring
+ * `HxStatement.VarStmt`; `FnDecl` — module-level `function`, reusing `HxFnDecl`. Top-level
+ * `var`/`function` are not part of Haxe's stable surface syntax, but the haxe-formatter
+ * corpus contains plain-snippet fixtures that drop the `class { ... }` wrapper, and the
+ * formatter accepts them, so this grammar does too.
  *
- * Each branch except `Package*`, `Import*`, `Using*`, `VarDecl`, and
- * `FnDecl` carries no `@:kw` — the enclosed sub-rule's first field
- * already consumes the introducer keyword (`class`, `typedef`,
- * `enum`, `interface`, `abstract`). The kw-led ctors break this
- * symmetry because their payloads (`HxVarDecl`, `HxFnDecl`, the bare
- * `HxTypeName` / `HxWildPath` path on `Package*` / `Import*` /
- * `Using*`) intentionally omit the introducer — the keyword is owned
- * by the calling context (`HxClassMember`, `HxStatement`, now
- * `HxDecl`).
+ * Each branch except `Package*`, `Import*`, `Using*`, `VarDecl` and `FnDecl` carries no
+ * `@:kw` — the enclosed sub-rule's first field already consumes the introducer keyword. The
+ * kw-led ctors break this symmetry because their payloads intentionally omit the introducer
+ * — the keyword is owned by the calling context (`HxClassMember`, `HxStatement`, `HxDecl`).
  */
 @:peg
 enum HxDecl {

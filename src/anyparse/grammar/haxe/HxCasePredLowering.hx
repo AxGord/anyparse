@@ -145,10 +145,9 @@ final class HxCasePredLowering extends AstPredLowering {
 	 *
 	 * The predicate answers on KIND alone and is asked only on the glue
 	 * outcome, so it never touches a body that fits on one line — `case X: if
-	 * (c) x();` is the measured outcome and stays inline. It is also the
-	 * AST half of the sibling-symmetry verdict: `caseUnitControlFlowBody_*`
-	 * pairs it with the pre-pass's own `flatLength == -1` measurement, which is
-	 * the bit no AST walk can supply.
+	 * (c) x();` fits and stays inline. It is also the AST half of the
+	 * sibling-symmetry verdict: `caseUnitControlFlowBody_*` pairs it with the
+	 * pre-pass's own `flatLength == -1` verdict, the bit no AST walk can supply.
 	 */
 	private function caseBodyControlFlowRootField(): Field {
 		final recurse: Expr = {
@@ -315,10 +314,9 @@ final class HxCasePredLowering extends AstPredLowering {
 	 * `HxConditionalCase.body` reads `opt.conditionalPolicy`), and the
 	 * pre-pass measures every unit at the switch's own indent while
 	 * `IfIndentWidthExceeds` evaluates each body at ITS indent — so under
-	 * those policies a region can still come out asymmetric. Measured
-	 * byte-identical to the pre-slice engine there, so that is a limitation
-	 * carried forward rather than introduced; a depth-aware unit width is a
-	 * separate slice.
+	 * those policies a region can still come out asymmetric — a limitation
+	 * carried forward from the engine before the pre-pass, not introduced by
+	 * it; a depth-aware unit width is a separate slice.
 	 */
 	private function addCaseSiblingUnitField(): Field {
 		final regionOf: Expr = sw(ident('n'), [caseBind(HX_SWITCH_CASE, 'Conditional', [0 => '_i'], ident('_i'))], macro null);
@@ -339,66 +337,40 @@ final class HxCasePredLowering extends AstPredLowering {
 	}
 
 	/**
-	 * `caseUnitStructuralBreak_<ElemRule>(c) → Bool` — true iff ONE case
-	 * unit's body renders on the line(s) BELOW its own label whatever the
-	 * budget, so the per-switch symmetry verdict can be reached without a
-	 * width comparison at all. Consumed by the
-	 * `@:fmt(caseSiblingSymmetry(…))` pre-pass
-	 * (`WriterBlankLowering.caseSiblingWidthProbeExpr`), which drops the whole
-	 * widest-sibling measurement for `BodyFit.SIBLING_FORCE_BREAK` on the
-	 * first unit that answers true.
+	 * `caseUnitStructuralBreak_<ElemRule>(c) → Bool` — true iff ONE case unit's body renders on
+	 * the line(s) BELOW its own label whatever the budget, so the per-switch symmetry verdict can
+	 * be reached without a width comparison at all. Consumed by the `@:fmt(caseSiblingSymmetry(…))`
+	 * pre-pass (`WriterBlankLowering.caseSiblingWidthProbeExpr`), which drops the whole
+	 * widest-sibling measurement for `BodyFit.SIBLING_FORCE_BREAK` on the first unit that answers
+	 * true.
 	 *
-	 * The verdict is the body statement COUNT plus the flat-refusal gate,
-	 * on `CaseBranch.body` and `DefaultBranch.stmts` alike:
+	 * The verdict is the body statement COUNT plus the flat-refusal gate, on `CaseBranch.body`
+	 * and `DefaultBranch.stmts` alike: two or more statements — true, the body cannot share the
+	 * label line; exactly one statement that `caseBodyRefusesFlat` refuses (an outermost `&&` /
+	 * `||`) — true, the same placement reached through the shape gate; exactly one statement
+	 * otherwise — false, which deliberately covers a GLUED body (a lambda / block / object literal
+	 * whose Doc carries a hardline: its FIRST line shares the label line, so a triggered switch
+	 * still moves it, it just never leads); ZERO statements — false, there is nothing to move.
 	 *
-	 *  - two or more statements — the body cannot share the label line, so
-	 *    it already sits below it;
-	 *  - exactly one statement that `caseBodyRefusesFlat` refuses (an
-	 *    outermost `&&` / `||`) — the same placement, reached through the
-	 *    shape gate instead of the count;
-	 *  - exactly one statement otherwise — false, and that deliberately
-	 *    covers a GLUED body (a lambda / block / object literal whose Doc
-	 *    carries a hardline). Its FIRST line shares the label line, which is
-	 *    not a below-label placement; a triggered switch still moves it, it
-	 *    just never leads;
-	 *  - ZERO statements — false. There is no body to place, and a forced
-	 *    break would have nothing to move.
+	 * `CondSpliceCase` is true with no check at all: it splits a case's LABELS from the body they
+	 * share after `#end`, and that body is MANDATORY (`HxCondSpliceCase.tail`, plus whatever
+	 * `rest` absorbs) and renders BELOW those labels at every budget. A `Conditional` region never
+	 * reaches this predicate AS ITSELF: the pre-pass flattens it through `caseSiblingUnits_*`
+	 * first, so the predicate runs per INNER unit. Every other ctor is false.
 	 *
-	 * `CondSpliceCase` is true with no check at all. It splits a case's
-	 * LABELS from the body they share after `#end`, and that body is
-	 * MANDATORY (`HxCondSpliceCase.tail`, plus whatever `rest` absorbs) and
-	 * renders on the line(s) BELOW those labels at every budget — there is no
-	 * count to take and no width that could put it back on a label line. A
-	 * `Conditional` region, by contrast, never reaches this predicate AS
-	 * ITSELF: the pre-pass flattens it through `caseSiblingUnits_*` first, so
-	 * the predicate runs per INNER unit and a multi-statement case inside a
-	 * `#if` leads the outer spread like any other unit. Every other ctor is
-	 * false.
+	 * A single CONTROL-FLOW statement is deliberately not listed, even though
+	 * `BodyFit.fitLineLayout` refuses it the glue: the same statement kind covers `case X: if (c)
+	 * x();`, which fits on one line and stays there. That verdict needs the width measure, so it
+	 * lives in the pre-pass's own loop through the sibling predicate `caseUnitControlFlowBody_*`.
 	 *
-	 * A single CONTROL-FLOW statement is deliberately not listed above, even
-	 * though `BodyFit.fitLineLayout` refuses it the glue: the same statement
-	 * kind covers `case X: if (c) x();`, which fits on one line and stays
-	 * there. The verdict needs the width measure, so it lives in the pre-pass's
-	 * own loop through the sibling predicate `caseUnitControlFlowBody_*`.
-	 *
-	 * RESIDUAL: two shapes that render below their label are not trigger inputs
-	 * HERE — a body element with leading comments, and a label carrying its own
-	 * trailing comment. (A body Star with ORPHAN trailing comments was a third
-	 * until omega-case-trail-comment-inline made it flatten instead.) Nothing in
-	 * those trees resists the question; the obstacle is generated-table
-	 * UNIFORMITY. One predicate name emits ONE body, shared by the plain /
-	 * trivia / spans AST families, and the slots holding those shapes are
-	 * trivia-family-specific — so reading them would make one predicate answer
-	 * differently per family for the same tree.
-	 *
-	 * The residual is NARROWER than it looks, because the pre-pass's width loop
-	 * closes half of it as a side effect. A comment-refused body still renders
-	 * below its label, so its element Doc measures `-1`; if its single statement
-	 * is control-flow, `caseUnitControlFlowBody_*` — which reads only the KIND,
-	 * never the trivia — answers true and the switch DOES spread. So the shapes
-	 * still outside the trigger set are exactly the comment-refused bodies whose
-	 * statement is not control-flow. Closing those needs a trivia-aware channel,
-	 * which is a separate slice.
+	 * RESIDUAL: a body element with leading comments and a label carrying its own trailing
+	 * comment render below the label but are not trigger inputs HERE — one predicate name emits
+	 * ONE body shared by the plain / trivia / spans AST families, and the slots holding those
+	 * shapes are trivia-family-specific, so reading them would make one predicate answer
+	 * differently per family for the same tree. The width loop closes half of it as a side
+	 * effect (a comment-refused body measures `-1`, and a control-flow statement then spreads the
+	 * switch through `caseUnitControlFlowBody_*`); the comment-refused bodies whose statement is
+	 * not control-flow need a trivia-aware channel.
 	 */
 	private function caseUnitStructuralBreakField(): Field {
 		inline function verdict(rule: String, fieldName: String, holder: String): Expr {
@@ -437,7 +409,7 @@ final class HxCasePredLowering extends AstPredLowering {
 	 * `case X: if (c) { x(); }` are the SAME statement kind, and only the width
 	 * measure separates the one that stays inline from the one that is refused.
 	 * So this predicate is consumed inside the pre-pass's WIDTH loop, gated on
-	 * the unit having measured `-1` — the bit no AST walk can supply.
+	 * the unit's width probe answering `-1` — the bit no AST walk can supply.
 	 *
 	 * `CondSpliceCase` answers false: its shared body already triggers
 	 * structurally, and its labels are byte-verbatim so it carries no body

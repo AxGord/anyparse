@@ -1,51 +1,30 @@
 package anyparse.grammar.haxe;
 
 /**
- * For-loop statement grammar.
+ * For-loop statement grammar: `for (varName in iterable) body`.
  *
- * Shape: `for (varName in iterable) body`.
+ * The opening `(` is a literal lead on the `varName` field; the `in` keyword is a `@:kw` lead
+ * on `iterable` (word-boundary enforced via `expectKw`) and the closing `)` its literal trail.
+ * The `body` is a bare `HxStatement` Ref — any statement branch (including `BlockStmt`) is
+ * accepted; the expression parser returns cleanly on `)` because no Pratt/postfix operator
+ * matches it.
  *
- * The opening `(` is a literal lead on the `varName` field. The `in`
- * keyword is a `@:kw` lead on the `iterable` field (word-boundary
- * enforced via `expectKw`). The closing `)` is a literal trail on the
- * `iterable` field. The `body` is a bare `HxStatement` Ref — any
- * statement branch (including `BlockStmt`) is accepted.
+ * ω-condwrap-forstmt: `@:fmt(condWrap('conditionWrap'))` on `varName` (start of the cond
+ * span) paired with `@:fmt(condWrapEnd)` on `iterable` (end of the span) routes the
+ * `(varName in iterable)` paren group through `WrapList.emitCondition`. A single-field
+ * `@:fmt(condWrap)` is insufficient because the open paren lives on `varName.@:lead` and the
+ * close paren on `iterable.@:trail`; the span engine wraps everything between the two
+ * literals in one Group/IfBreak decided by `opt.conditionWrap` plus the rest-of-line
+ * measurement. Mirrors the fork's `markPWrapping` `ForLoop` dispatch to `wrapCondition`.
  *
- * Zero Lowering changes for parsing: `@:kw` + `@:trail` on the same
- * field already work in `lowerStruct` — kw lead emits `expectKw`
- * (line 912-914), trail emits `expectLit` (line 985-987). The
- * expression parser returns cleanly on `)` because no Pratt/postfix
- * operator matches it.
- *
- * ω-condwrap-forstmt: writer-side opt-in to the `conditionWrapping`
- * cascade — `@:fmt(condWrap('conditionWrap'))` on `varName` (start of
- * cond span) paired with `@:fmt(condWrapEnd)` on `iterable` (end of
- * cond span) routes the `(varName in iterable)` paren group through
- * `WrapList.emitCondition`. Single-field `@:fmt(condWrap)` is
- * insufficient here because the open paren lives on `varName.@:lead`
- * and the close paren on `iterable.@:trail`; the span engine wraps
- * everything between the two literals in a single Group/IfBreak
- * decided by `opt.conditionWrap` plus the rest-of-line measurement.
- * Mirrors fork's `markPWrapping` `ForLoop` dispatch to `wrapCondition`.
- *
- * Map key-value iteration `for (k => v in m)` is supported via the
- * optional `valueName` field — `@:optional @:lead('=>')`, the same
- * optional-single-Ref-with-literal-commit pattern as
- * `HxParamBody.defaultValue` (`@:optional @:lead('=')`) and
- * `HxFnDecl.returnType` (`@:optional @:lead(':')`). Plain single-iter
- * `for (v in m)` leaves it null (the `=>` peek fails on `in`). It
- * sits inside the `conditionWrap` span (`varName` start … `iterable`
- * end); the generic optional-Ref writer path emits ` => v` when
- * present.
- *
- * The slot holds `HxKeyValueBinder` — a `@:spanned('KeyValueBinder')`
- * one-field wrapper — rather than the bare `HxIdentLit` it started
- * as. A Terminal projects no `QueryNode`, so the value binder used to
- * be invisible to `refs` / `rename` and to every declaration-walking
- * check; the wrapper gives it a name and a span of its own. Only the
- * field's TYPE changed — the `=>` lead, the field's position and the
- * writer path are the ones the bare terminal already used, so the
- * emitted bytes are unchanged.
+ * Map key-value iteration `for (k => v in m)` goes through the optional `valueName` field —
+ * `@:optional @:lead('=>')`, the optional-single-Ref-with-literal-commit pattern of
+ * `HxParamBody.defaultValue` and `HxFnDecl.returnType`. Plain `for (v in m)` leaves it null
+ * (the `=>` peek fails on `in`); it sits inside the `conditionWrap` span and the generic
+ * optional-Ref writer path emits ` => v` when present. The slot holds `HxKeyValueBinder` — a
+ * `@:spanned('KeyValueBinder')` one-field wrapper — rather than a bare `HxIdentLit`, because
+ * a Terminal projects no `QueryNode` and the value binder would be invisible to `refs` /
+ * `rename` and to every declaration-walking check; the emitted bytes are unchanged.
  */
 @:peg
 typedef HxForStmt = {

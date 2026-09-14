@@ -44,11 +44,11 @@ final class ExtractInterfaceCommand implements CliCommand {
 	 * ops that GENERATE a whole module and hand it to `writeFiles`.
 	 *
 	 * `extract-interface` and `extract-superclass` build the destination's complete
-	 * text; an occupied path is therefore overwritten, never merged. Measured on the
-	 * base commit: `apq extract-interface C.hx Helper` with a sibling `Helper.hx`
-	 * present replaced that class, its doc and its members with the generated
-	 * interface, reported `wrote 2 file(s)` at rc 0, and the preview had called the
-	 * same file `created`. No flag was needed — the default `--out` is the type name,
+	 * text; an occupied path is therefore overwritten, never merged: without this
+	 * check `apq extract-interface C.hx Helper` with a sibling `Helper.hx` present
+	 * replaced that class, its doc and its members with the generated interface,
+	 * reported the write at rc 0, and the preview had called the same file
+	 * `created`. No flag was needed — the default `--out` is the type name,
 	 * so any name that collides with a sibling module destroys it.
 	 *
 	 * The rule is the create-only one `apq new` already states; these two are the only

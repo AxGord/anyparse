@@ -15,9 +15,7 @@ package anyparse.grammar.haxe;
  * A production `{expr:HxExpr, op}` with `expr` at full precedence
  * cannot work: the Pratt loop consumes the trailing operator and then
  * throws on the missing right operand, and `PrattPostfixLowering.lowerPrattLoop`
- * emits no failure rewind (measured: zero `try` and zero `catch`
- * across its 14.5 KB, 41 of 42 `ctx.pos = _savedPos` writes being the
- * min-precedence gate). Nothing here asks it to. The rewind this
+ * emits no failure rewind (its only position writes are the min-precedence gate). Nothing here asks it to. The rewind this
  * production needs is the one a Star ALREADY has — `@:tryparse` on
  * `HxCondSpliceOpExpr.terms` rolls the last, operator-less operand
  * back so the `#end` is still there for the field after it.

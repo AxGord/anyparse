@@ -1,138 +1,33 @@
 package anyparse.grammar.haxe.format;
 
 /**
- * `emptyLines` section of a haxe-formatter `hxformat.json` config.
+ * `emptyLines` section of a haxe-formatter `hxformat.json` config. Only keys whose runtime knob exists on
+ * `HxModuleWriteOptions` are modelled; the rest (`finalNewline`, `betweenTypes`, `lineCommentsBetweenTypes`,
+ * `afterReturn`, `beforeBlocks`, `enumAbstractEmptyLines`, `macroClassEmptyLines`, `conditionalsEmptyLines`,
+ * …) are silently dropped by the ByName struct parser's `UnknownPolicy.Skip` and land with their writer knob.
+ * Each modelled key feeds the knob of the same name; every `Int` is an OVERRIDE of the source-captured count,
+ * not a floor (`0` strips a blank the source had, `2` emits two the source lacked), except
+ * `betweenSingleLineTypes`, which is insertion-only (`0` leaves the slot source-driven).
  *
- * Only keys whose runtime knob already exists on `HxModuleWriteOptions`
- * are modelled here. Missing keys (`finalNewline`, `betweenTypes`,
- * `lineCommentsBetweenTypes`, `lineCommentsBetweenFunctions`,
- * `beforeRightCurly`, `afterLeftCurly`,
- * `afterReturn`, `beforeBlocks`, `afterBlocks`, `enumAbstractEmptyLines`,
- * `macroClassEmptyLines`,
- * `conditionalsEmptyLines`, …) are silently dropped
- * by the ByName struct parser's `UnknownPolicy.Skip` — each is
- * modelled when its matching writer knob lands.
+ * Nested sections share the fork's `EmptyLinesFieldsConfig` shape (`HxFormatClassEmptyLinesConfig`) across
+ * `classEmptyLines` / `externClassEmptyLines` / `abstractEmptyLines`, and only the sub-keys with a runtime
+ * knob are consumed: `existingBetweenFields` (class; the extern variant feeds `externExistingBetweenFields`),
+ * `betweenStaticFunctions` (abstract, through the static-function cascade arm on `HxAbstractDecl.members`);
+ * the other per-slot sub-keys share the global runtime knobs, last-write wins for a config that mixes
+ * sections. `interfaceEmptyLines` feeds the dedicated `interfaceBetweenVars` / `interfaceBetweenFunctions` /
+ * `interfaceAfterVars` knobs (0/0/0 defaults, the fork's `InterfaceFieldsEmptyLinesConfig`);
+ * `enumEmptyLines.betweenFields` feeds the dedicated `betweenEnumCtors`; `typedefEmptyLines` feeds four
+ * DEDICATED `typedef*` knobs, kept separate from the class scopes' shared ones because the typedef-RHS anon
+ * renders through the `@:sep`-Star writer path, not the class-body Star path (the fork's distinct
+ * `TypedefFieldsEmptyLinesConfig`), all defaulting to the no-blank baseline. `importAndUsing` feeds
+ * `beforeUsing` / `betweenImports` / `betweenImportsLevel` / `beforeType`.
  *
- * `afterFieldsWithDocComments` (ω-C-empty-lines-doc) feeds
- * `opt.afterFieldsWithDocComments`.
- *
- * `beforeDocCommentEmptyLines` (ω-C-empty-lines-before-doc) feeds
- * `opt.beforeDocCommentEmptyLines`.
- *
- * `classEmptyLines` nested section (ω-C-empty-lines-between-fields)
- * feeds `opt.existingBetweenFields`
- * through `HxFormatClassEmptyLinesConfig.existingBetweenFields`. Only
- * the `existingBetweenFields` sub-key is modelled today; the other
- * per-slot sub-keys (`beginType`, `endType`, `betweenVars`, …) are
- * modelled when their matching writer knobs land.
- *
- * `externClassEmptyLines` nested section
- * (ω-extern-existing-between-split-leading). Reuses
- * `HxFormatClassEmptyLinesConfig` (fork shares the
- * `EmptyLinesFieldsConfig` shape across regular / extern / macro class
- * scopes). Only the `existingBetweenFields` sub-key is consumed today
- * (feeds `opt.externExistingBetweenFields`); the other per-slot
- * sub-keys land alongside their extern-scoped runtime knobs as future
- * fixtures need them.
- *
- * `interfaceEmptyLines` nested section (ω-iface-interblank) feeds
- * `opt.interfaceBetweenVars`,
- * `opt.interfaceBetweenFunctions`, `opt.interfaceAfterVars` through
- * `HxFormatInterfaceEmptyLinesConfig`. Mirrors `classEmptyLines` for
- * interface members but with separate runtime knobs and 0/0/0 defaults
- * matching haxe-formatter's `InterfaceFieldsEmptyLinesConfig`.
- *
- * `enumEmptyLines` nested section (ω-enum-empty-lines).
- * Drives blank-line behaviour inside `enum` bodies — its `betweenFields`
- * sub-key feeds the dedicated `opt.betweenEnumCtors` knob; the rest
- * (`existingBetweenFields`, `beginType`, `endType`) share the global
- * runtime knobs with class / interface / abstract sections (last-write
- * wins for fixtures that mix sections).
- *
- * `typedefEmptyLines` nested section
- * (ω-typedef-between-fields). Drives blank-line behaviour inside a
- * `typedef Foo = { … }` anonymous-struct body via DEDICATED runtime
- * knobs (`opt.typedefBeginType`, `opt.typedefBetweenFields`,
- * `opt.typedefExistingBetweenFields`, `opt.typedefEndType`) — kept
- * separate from the class / enum scopes' shared knobs because the
- * typedef-RHS anon renders through the `@:sep`-Star writer path, not the
- * class-body Star path that consumes the shared `beginType` / `endType`.
- * Mirrors fork's distinct `TypedefFieldsEmptyLinesConfig`. All four
- * knobs default to the no-blank baseline (`0` / `Keep`), so fixtures
- * that omit `typedefEmptyLines` see no blank-line rewriting here.
- *
- * `abstractEmptyLines` nested section
- * (ω-abstract-static-fn-cascade). Reuses `HxFormatClassEmptyLinesConfig`
- * (fork shares `ClassFieldsEmptyLinesConfig` across class / abstract /
- * extern scopes). Only the `betweenStaticFunctions` sub-key is consumed
- * today (feeds the shared `opt.betweenStaticFunctions` knob through the
- * static-function cascade arm on `HxAbstractDecl.members`); the other
- * per-slot sub-keys share the global runtime knobs with the
- * `classEmptyLines` section (last-write wins for fixtures that mix
- * sections), landing alongside their abstract-scoped runtime knobs as
- * future fixtures need them.
- *
- * `afterPackage` (ω-after-package) feeds
- * `opt.afterPackage`. Non-negative Int — exact number of blank lines
- * the writer emits between a top-level `package …;` directive and the
- * next declaration. Override semantics, not floor: the source-captured
- * blank-line count is always replaced with this value, so `0` strips
- * any blank line after `package` even when the source had one and `2`
- * emits two blank lines even when the source had none. Default `1`
- * matches haxe-formatter's `emptyLines.afterPackage: @:default(1)`.
- *
- * `beforePackage` (ω-before-package) feeds
- * `opt.beforePackage`. Non-negative Int — exact number of blank lines
- * the writer emits at file head BEFORE a leading `package …;` decl.
- * Override semantics, head-of-Star only: applied once at the start of
- * the module. Default `0` matches haxe-formatter's
- * `emptyLines.beforePackage: @:default(0)`.
- *
- * `importAndUsing` nested section (ω-imports-using-blank)
- * feeds `opt.beforeUsing` through `HxFormatImportAndUsingConfig`.
- * Mirrors haxe-formatter's `emptyLines.importAndUsing` group;
- * `beforeUsing` (ω-imports-using-blank) and
- * `betweenImports` + `betweenImportsLevel` (ω-imports-using-between)
- * are modelled today, the remaining sub-key (`beforeType`) is
- * modelled when its matching writer knob lands.
- *
- * `afterFileHeaderComment` / `betweenMultilineComments`
- * (ω-fileheader-multiline-comments). Non-negative Int knobs that drive
- * the writer's per-leadingComments-array blank-line policy. See
- * `HxModuleWriteOptions.afterFileHeaderComment` /
- * `HxModuleWriteOptions.betweenMultilineComments` for full semantics.
- *
- * `maxAnywhereInFile` (ω-max-anywhere-in-file) feeds
- * `opt.maxConsecutiveBlanks` on the generic base `WriteOptions`.
- * Non-negative Int — the writer's final-pass cap on consecutive
- * `lineEnd` runs in the rendered output: at most this many blank lines
- * between any two non-empty lines. Default `1` matches haxe-formatter's
- * `emptyLines.maxAnywhereInFile: @:default(1)`. `0` strips every blank
- * line in the file; `-1` would mean "unbounded" but the JSON loader
- * never produces that value — the runtime `-1` sentinel is reserved for
- * non-Haxe grammars whose defaults leave the cap off.
- *
- * `betweenSingleLineTypes` (ω-between-single-line-types) feeds
- * `opt.betweenSingleLineTypes`. Non-negative Int — number of
- * blank lines emitted between any consecutive pair of single-line type
- * decls (typedef / class / interface / abstract / enum where neither
- * matches the grammar-derived `multiline` predicate). Insertion-only:
- * `0` (default, matches haxe-formatter's
- * `emptyLines.betweenSingleLineTypes: @:default(0)`) leaves the slot
- * source-driven; `>0` forces that many blanks regardless of source.
- *
- * `uniformStatementBlanks` (ω-uniform-statement-blanks /
- * ω-uniform-element-blanks) feeds `opt.uniformStatementBlanks`. Anyparse
- * extension with no haxe-formatter counterpart, so it defaults to
- * `"keep"` (byte-inert) and never re-baselines at JSON-load entry.
- * `"collapse"` applies the "separators that separate everything separate
- * nothing" rule inside a statement block AND inside an array literal —
- * when every interior gap between adjacent elements is blank the blanks
- * carry no grouping information and all get stripped, but a SELECTIVE
- * mix of blank / adjacent gaps expresses grouping and is kept byte-exact
- * (a leading comment on an INTERIOR element also keeps the list untouched).
- * Object literals, anon types and argument lists deliberately stay out.
- * See `UniformStatementBlanksPolicy` for the full contract.
+ * `maxAnywhereInFile` feeds the base `WriteOptions.maxConsecutiveBlanks`, the writer's final-pass cap on
+ * consecutive blank lines; the loader never produces the runtime `-1` ("unbounded") sentinel, which is
+ * reserved for non-Haxe grammars. `uniformStatementBlanks` is an anyparse extension with no fork counterpart,
+ * so it defaults to `"keep"` (byte-inert) and never re-baselines at JSON-load entry; `"collapse"` applies the
+ * "separators that separate everything separate nothing" rule inside a statement block AND an array literal
+ * (object literals, anon types and argument lists stay out) — see `UniformStatementBlanksPolicy`.
  */
 @:peg typedef HxFormatEmptyLinesSection = {
 

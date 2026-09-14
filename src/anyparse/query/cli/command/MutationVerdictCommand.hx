@@ -47,7 +47,7 @@ final class MutationVerdictCommand implements CliCommand {
 	 * transcript for `tools/mutation-check.sh`, printing the verdict on the
 	 * first line and the row detail on the second — plus a THIRD line, the same
 	 * detail with every list uncapped, but only when `cap` (MutationVerdict) actually
-	 * elided something (T703); absent otherwise, so a caller reading two lines with
+	 * elided something; absent otherwise, so a caller reading two lines with
 	 * `read -r` sees no change and one reading a third only has to check it is non-empty.
 	 *
 	 * Two lines rather than JSON on purpose: the caller is a shell script, and
