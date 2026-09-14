@@ -5,7 +5,6 @@ import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
-import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
@@ -53,15 +52,8 @@ final class ImpossibleCast implements Check implements NoAutofix {
 		if (checkedCastKind == null) return [];
 		final kind: String = checkedCastKind;
 		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
-		if (provider == null) return [];
-		final typed: TypeInfoProvider = provider;
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
-			final root: QueryNode = tree;
+		return RunScan.collectWith(files, plugin, RunScan.typeInfoOf(plugin), (entry, tree, typed, violations) -> {
 			final declaredTypes: Map<Int, String> = typed.declaredTypes(entry.source);
 			final castTargets: Map<Int, String> = typed.castTargetSources(entry.source);
 			function walk(node: QueryNode): Void {
@@ -70,7 +62,7 @@ final class ImpossibleCast implements Check implements NoAutofix {
 					final span: Null<Span> = node.span;
 					if (span != null) {
 						final sName: Null<String> = TypeResolver.simpleNominalName(
-							TypeResolver.identTypeName(node.children[0], root, shape, declaredTypes)
+							TypeResolver.identTypeName(node.children[0], tree, shape, declaredTypes)
 						);
 						final tName: Null<String> = TypeResolver.simpleNominalName(TypeResolver.castTargetWithin(span, castTargets));
 						if (sName != null && tName != null && index.subtypes.unrelatedClasses(sName, tName)) violations.push({
@@ -85,8 +77,7 @@ final class ImpossibleCast implements Check implements NoAutofix {
 				for (c in node.children) walk(c);
 			}
 			walk(tree);
-		}
-		return violations;
+		});
 	}
 
 	public function fix(

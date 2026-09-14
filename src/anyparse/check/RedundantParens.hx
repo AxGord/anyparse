@@ -329,14 +329,12 @@ final class RedundantParens implements Check implements ConfigAware {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final shape: RefShape = plugin.refShape();
-		if (shape.parenKind == null) return [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final slots: ParenSlots = slotsOf(shape, entry.file);
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(violations, entry.file, entry.source, tree, slots, SlotKind.Plain, false, false);
-		}
-		return violations;
+		return shape.parenKind == null
+			? []
+			: RunScan.collect(files, plugin, (entry, tree, violations) -> {
+				final slots: ParenSlots = slotsOf(shape, entry.file);
+				walk(violations, entry.file, entry.source, tree, slots, SlotKind.Plain, false, false);
+			});
 	}
 
 	/**
@@ -350,35 +348,32 @@ final class RedundantParens implements Check implements ConfigAware {
 		final shape: RefShape = plugin.refShape();
 		if (shape.parenKind == null) return [];
 		final slots: ParenSlots = slotsOf(shape, violations[0].file);
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
 
-		final siteByKey: Map<String, ParenSite> = [];
-		indexParens(tree, slots, SlotKind.Plain, false, false, siteByKey);
+		return RunScan.edits(plugin, source, tree -> {
+			final siteByKey: Map<String, ParenSite> = [];
+			indexParens(tree, slots, SlotKind.Plain, false, false, siteByKey);
 
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
-			final site: Null<ParenSite> = siteByKey['${span.from}:${span.to}'];
-			if (site == null) continue;
-			final inner: Null<Span> = BoolExprShape.unwrapParens(site.node, slots.parenKind).span;
-			if (inner == null) continue;
-			final text: String = source.substring(inner.from, inner.to);
-			if (!site.dropsParens) {
-				edits.push({ span: span, text: '($text)' });
-				continue;
-			}
-			// A parenthesis can be the ONLY thing separating its content from a
-			// neighbouring token, and dropping it bare welds the two — into one identifier
-			// (`return(a);` before it, `(s)is String` after), which still PARSES and so
-			// survives the caller's re-parse, or into one longer operator
-			// (`a-(-b * c)` -> `a--b * c`), which does not. Re-separate either side.
-			final lead: String = separator(source, span.from - 1, text.charCodeAt(0) ?? 0);
-			final trail: String = separator(source, span.to, text.charCodeAt(text.length - 1) ?? 0);
-			edits.push({ span: span, text: '$lead$text$trail' });
-		}
-		return edits;
+			final edits: Array<{ span: Span, text: String }> = [];
+			RunScan.eachMatched(violations, siteByKey, (site, span) -> {
+				final inner: Null<Span> = BoolExprShape.unwrapParens(site.node, slots.parenKind).span;
+				if (inner == null) return;
+				final text: String = source.substring(inner.from, inner.to);
+				if (!site.dropsParens) {
+					edits.push({ span: span, text: '($text)' });
+					return;
+				}
+				// A parenthesis can be the ONLY thing separating its content from a
+				// neighbouring token, and dropping it bare welds the two — into one identifier
+				// (`return(a);` before it, `(s)is String` after), which still PARSES and so
+				// survives the caller's re-parse, or into one longer operator
+				// (`a-(-b * c)` -> `a--b * c`), which does not. Re-separate either side.
+				final lead: String = separator(source, span.from - 1, text.charCodeAt(0) ?? 0);
+				final trail: String = separator(source, span.to, text.charCodeAt(text.length - 1) ?? 0);
+				edits.push({ span: span, text: '$lead$text$trail' });
+
+			});
+			return edits;
+		});
 	}
 
 	/**

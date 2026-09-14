@@ -129,12 +129,7 @@ final class PreferForIn implements Check implements DefaultOff {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = readSeams(plugin);
-		if (seams == null) return [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collectWith(files, plugin, readSeams(plugin), (entry, tree, seams, violations) -> {
 			for (m in collectMatches(tree, entry.source, seams)) violations.push({
 				file: entry.file,
 				span: m.span,
@@ -142,8 +137,7 @@ final class PreferForIn implements Check implements DefaultOff {
 				severity: Severity.Info,
 				message: 'this hand-rolled iterator loop can be a for-in loop (for (x in it))'
 			});
-		}
-		return violations;
+		});
 	}
 
 	/** Replace each flagged loop — plus its iterator declaration, where the inlining arm fired — with the `for` form. */
@@ -151,9 +145,7 @@ final class PreferForIn implements Check implements DefaultOff {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		final seams: Null<Seams> = readSeams(plugin);
-		if (seams == null) return [];
-		final s: Seams = seams;
-		return CheckScan.applyTextMatches(plugin, source, violations, (tree, src) -> collectMatches(tree, src, s));
+		return seams == null ? [] : CheckScan.applyTextMatches(plugin, source, violations, (tree, src) -> collectMatches(tree, src, seams));
 	}
 
 	/** Bundle the `RefShape` kinds this check reads, or null when a required one is unset (the check is then a no-op). */

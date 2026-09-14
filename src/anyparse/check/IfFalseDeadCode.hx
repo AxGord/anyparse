@@ -4,9 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 using StringTools;
 
@@ -83,13 +81,7 @@ final class IfFalseDeadCode implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
-			if (tree != null) walk(violations, entry.file, entry.source, tree);
-		}
-		return violations;
+		return RunScan.collect(files, plugin, (entry, tree, violations) -> walk(violations, entry.file, entry.source, tree));
 	}
 
 	public function fix(

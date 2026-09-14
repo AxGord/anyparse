@@ -4,7 +4,6 @@ import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
-import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
@@ -45,14 +44,7 @@ final class DeadNullCoalescing implements Check {
 		if (nullCoalesceKind == null || identKind == null) return [];
 		final coalKind: String = nullCoalesceKind;
 		final ident: String = identKind;
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
-		if (provider == null) return [];
-		final typed: TypeInfoProvider = provider;
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
-			final root: QueryNode = tree;
+		return RunScan.collectWith(files, plugin, RunScan.typeInfoOf(plugin), (entry, root, typed, violations) -> {
 			final declaredTypes: Map<Int, String> = typed.declaredTypes(entry.source);
 			NullFlow.analyze(root, shape, entry.source, (node, facts) -> {
 				if (node.kind != coalKind || node.children.length != 2) return;
@@ -71,8 +63,7 @@ final class DeadNullCoalescing implements Check {
 					message: 'right operand is dead — left operand is already non-null on this path'
 				});
 			});
-		}
-		return violations;
+		});
 	}
 
 	public function fix(

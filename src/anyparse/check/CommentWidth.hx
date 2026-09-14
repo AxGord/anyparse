@@ -160,9 +160,8 @@ final class CommentWidth implements Check implements DefaultOff implements Volat
 		final file: String = violations[0].file;
 		final metrics: Null<LayoutMetrics> = plugin.layoutMetrics(FormatConfigDiscovery.discover(file));
 		if (metrics == null) return [];
-		final layout: LayoutMetrics = metrics;
 		final wanted: Array<Int> = [for (v in violations) if (v.span != null) (v.span: Span).from];
-		final wide: Array<WideLine> = classify(source, plugin, layout);
+		final wide: Array<WideLine> = classify(source, plugin, metrics);
 		for (v in violations) {
 			final span: Null<Span> = v.span;
 			final line: Null<WideLine> = span == null ? null : wide.find(w -> w.from == span.from);
@@ -178,7 +177,7 @@ final class CommentWidth implements Check implements DefaultOff implements Volat
 			final bodySpan: Span = SourceComments.commentBody(source, unit);
 			final body: String = source.substring(bodySpan.from, bodySpan.to);
 			final continuation: String = SourceComments.commentContinuation(source, unit);
-			final next: String = reflow(source, unit, body, open, layout, unit.to - bodySpan.to);
+			final next: String = reflow(source, unit, body, open, metrics, unit.to - bodySpan.to);
 			if (next == body) continue;
 			// A ONE-LINE doc block that has just grown has to be re-opened, or its closer rides the
 			// last content line and the writer eats the space before that line's star. The block's

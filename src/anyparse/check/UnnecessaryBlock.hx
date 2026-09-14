@@ -62,13 +62,7 @@ final class UnnecessaryBlock implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final resolved: Null<Seams> = resolveSeams(plugin);
-		if (resolved == null) return [];
-		final seams: Seams = resolved;
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collectWith(files, plugin, resolveSeams(plugin), (entry, tree, seams, violations) -> {
 			for (block in unwrappable(tree, seams)) {
 				final span: Null<Span> = block.span;
 				if (span != null) violations.push({
@@ -79,8 +73,7 @@ final class UnnecessaryBlock implements Check {
 					message: 'redundant block — these statements need no extra { } scope'
 				});
 			}
-		}
-		return violations;
+		}, CheckScan.parseBranchAwareOrNull);
 	}
 
 	/**
@@ -93,22 +86,19 @@ final class UnnecessaryBlock implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final resolved: Null<Seams> = resolveSeams(plugin);
-		if (resolved == null) return [];
-		final seams: Seams = resolved;
-		final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, source);
-		if (tree == null) return [];
-		final approved: Map<String, Bool> = [];
-		for (block in unwrappable(tree, seams)) {
-			final span: Null<Span> = block.span;
-			if (span != null) approved['${span.from}:${span.to}'] = true;
-		}
-		return CheckScan.applyBySpan(
-			plugin, source, violations, [seams.blockStmtKind], (node, span) -> approved['${span.from}:${span.to}'] != true ? null : {
-				span: span,
-				text: source.substring(span.from + 1, span.to - 1).trim()
+		return RunScan.editsWith(plugin, source, resolveSeams(plugin), (tree, seams) -> {
+			final approved: Map<String, Bool> = [];
+			for (block in unwrappable(tree, seams)) {
+				final span: Null<Span> = block.span;
+				if (span != null) approved['${span.from}:${span.to}'] = true;
 			}
-		);
+			return CheckScan.applyBySpan(
+				plugin, source, violations, [seams.blockStmtKind], (node, span) -> approved['${span.from}:${span.to}'] != true ? null : {
+					span: span,
+					text: source.substring(span.from + 1, span.to - 1).trim()
+				}
+			);
+		}, CheckScan.parseBranchAwareOrNull);
 	}
 
 	/**

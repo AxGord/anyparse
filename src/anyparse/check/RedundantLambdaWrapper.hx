@@ -152,7 +152,7 @@ final class RedundantLambdaWrapper implements Check implements DefaultOff {
 		final seams: Seams = resolved;
 		final parsed: Array<{ file: String, source: String, tree: QueryNode }> = CheckScan.parseAll(plugin, files);
 		final types: Map<String, Null<Map<String, Signature>>> = collectTypes(parsed, seams);
-		final typeInfo: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		final typeInfo: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		final functionTypes: Null<FunctionTypeProvider> = plugin is FunctionTypeProvider ? cast plugin : null;
 		final shape: RefShape = plugin.refShape();
 		final violations: Array<Violation> = [];

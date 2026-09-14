@@ -94,14 +94,10 @@ final class CatchDynamic implements Check implements ConfigAware implements Vers
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams = readKinds(plugin);
-		if (seams == null) return [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(violations, entry.file, entry.source, tree, seams.kind, seams.catchAll);
-		}
-		return violations;
+		return RunScan.collectWith(
+			files, plugin, readKinds(plugin),
+			(entry, tree, seams, violations) -> walk(violations, entry.file, entry.source, tree, seams.kind, seams.catchAll)
+		);
 	}
 
 	/**
@@ -121,47 +117,48 @@ final class CatchDynamic implements Check implements ConfigAware implements Vers
 		final callKind: String = seams.callKind;
 		final fieldKind: String = seams.fieldKind;
 		final identKind: String = seams.identKind;
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final root: QueryNode = tree;
-		final flagged: Map<String, Bool> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span != null) flagged['${span.from}:${span.to}'] = true;
-		}
-		final file: String = violations.length > 0 ? violations[0].file : '';
-		final fixLogging: Bool = LintConfig.resolveWith(_resolveConfig, file).boolOption('catch-dynamic', 'fixLoggingUses') ?? false;
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
-		final importMap: Map<String, String> = provider != null ? provider.importMap(source) : [];
-		// The shared printer owns the short-name / add-import / fully-qualified decision (imports,
-		// aliases, module-local and same-package bindings, sorted insert) — this rule used to
-		// hand-roll a weaker version of it.
-		final printer: TypeRefPrinter = TypeRefPrinter.forFile(source, root, importMap, plugin, RefactorSupport.resolutionIndexOf(plugin));
-		final exceptionPath: String = seams.exceptionPath;
-		final edits: Array<{ span: Span, text: String }> = [];
-		var rewroteNonConditional: Bool = false;
-		function walk(node: QueryNode, insideConditional: Bool): Void {
-			if (node.kind == kind) {
-				// A conditional region gets the qualified path and no import: a top-level import
-				// would be unused in a build where the branch is compiled out.
-				final exText: String = insideConditional ? exceptionPath : printer.print(exceptionPath).text;
-				final catchEdits: Array<{ span: Span, text: String }> = catchRewriteEdits(
-					node, source, catchAll, exText, flagged, fixLogging, callKind, fieldKind, identKind
-				);
-				if (catchEdits.length > 0) {
-					for (e in catchEdits) edits.push(e);
-					if (!insideConditional) rewroteNonConditional = true;
-				}
+		return RunScan.edits(plugin, source, root -> {
+			final flagged: Map<String, Bool> = [];
+			for (v in violations) {
+				final span: Null<Span> = v.span;
+				if (span != null) flagged['${span.from}:${span.to}'] = true;
 			}
-			final childCond: Bool = insideConditional || (condKind != null && node.kind == condKind);
-			for (c in node.children) walk(c, childCond);
-		}
-		walk(root, false);
-		// The printer records a promise per `print` call, including for clauses that turned out
-		// unrewritable; the promises are only MATERIALISED when a non-conditional rewrite actually
-		// landed and needs the short name.
-		if (rewroteNonConditional) for (importEdit in printer.pendingImportEdits()) edits.push(importEdit);
-		return edits;
+			final file: String = violations.length > 0 ? violations[0].file : '';
+			final fixLogging: Bool = LintConfig.resolveWith(_resolveConfig, file).boolOption('catch-dynamic', 'fixLoggingUses') ?? false;
+			final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+			final importMap: Map<String, String> = provider != null ? provider.importMap(source) : [];
+			// The shared printer owns the short-name / add-import / fully-qualified decision (imports,
+			// aliases, module-local and same-package bindings, sorted insert) — this rule used to
+			// hand-roll a weaker version of it.
+			final printer: TypeRefPrinter = TypeRefPrinter.forFile(
+				source, root, importMap, plugin, RefactorSupport.resolutionIndexOf(plugin)
+			);
+			final exceptionPath: String = seams.exceptionPath;
+			final edits: Array<{ span: Span, text: String }> = [];
+			var rewroteNonConditional: Bool = false;
+			function walk(node: QueryNode, insideConditional: Bool): Void {
+				if (node.kind == kind) {
+					// A conditional region gets the qualified path and no import: a top-level import
+					// would be unused in a build where the branch is compiled out.
+					final exText: String = insideConditional ? exceptionPath : printer.print(exceptionPath).text;
+					final catchEdits: Array<{ span: Span, text: String }> = catchRewriteEdits(
+						node, source, catchAll, exText, flagged, fixLogging, callKind, fieldKind, identKind
+					);
+					if (catchEdits.length > 0) {
+						for (e in catchEdits) edits.push(e);
+						if (!insideConditional) rewroteNonConditional = true;
+					}
+				}
+				final childCond: Bool = insideConditional || (condKind != null && node.kind == condKind);
+				for (c in node.children) walk(c, childCond);
+			}
+			walk(root, false);
+			// The printer records a promise per `print` call, including for clauses that turned out
+			// unrewritable; the promises are only MATERIALISED when a non-conditional rewrite actually
+			// landed and needs the short name.
+			if (rewroteNonConditional) for (importEdit in printer.pendingImportEdits()) edits.push(importEdit);
+			return edits;
+		});
 	}
 
 	/** `haxe.Exception` is Haxe 4.1; a project declaring an older `languageVersion` does not get this rewrite. */

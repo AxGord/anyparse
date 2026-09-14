@@ -46,38 +46,29 @@ final class RedundantMapIterKey implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final s: Null<Seams> = readSeams(plugin.refShape());
-		if (s == null) return [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(violations, entry.file, entry.source, tree, s);
-		}
-		return violations;
+		return RunScan.collectWith(
+			files, plugin, readSeams(plugin.refShape()),
+			(entry, tree, s, violations) -> walk(violations, entry.file, entry.source, tree, s)
+		);
 	}
 
 	/** Drop the `_ => ` discarded-key prefix from each flagged loop header. */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final s: Null<Seams> = readSeams(plugin.refShape());
-		if (s == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
 
-		final nodeByKey: Map<String, QueryNode> = [];
-		indexFor(tree, s.forStmtKind, nodeByKey);
+		return RunScan.editsWith(plugin, source, readSeams(plugin.refShape()), (tree, s) -> {
+			final nodeByKey: Map<String, QueryNode> = [];
+			indexFor(tree, s.forStmtKind, nodeByKey);
 
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
-			final node: Null<QueryNode> = nodeByKey['${span.from}:${span.to}'];
-			if (node == null) continue;
-			final cut: Null<Span> = keyPrefixSpan(node, source, s.valueBinderKinds);
-			if (cut != null) edits.push({ span: cut, text: '' });
-		}
-		return edits;
+			final edits: Array<{ span: Span, text: String }> = [];
+			RunScan.eachMatched(violations, nodeByKey, (node, _) -> {
+				final cut: Null<Span> = keyPrefixSpan(node, source, s.valueBinderKinds);
+				if (cut != null) edits.push({ span: cut, text: '' });
+
+			});
+			return edits;
+		});
 	}
 
 	/** The loop kind and the value-binder kinds, or null when the grammar names no `for` statement (the check is then a no-op). */

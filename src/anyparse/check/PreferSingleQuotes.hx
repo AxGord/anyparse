@@ -70,25 +70,20 @@ final class PreferSingleQuotes implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final support: Null<StringFoldSupport> = plugin.stringFoldSupport();
-		if (support == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
 
-		final nodeBySpan: Map<String, QueryNode> = [];
-		indexLiterals(tree, source, support, nodeBySpan);
+		return RunScan.editsWith(plugin, source, plugin.stringFoldSupport(), (tree, support) -> {
+			final nodeBySpan: Map<String, QueryNode> = [];
+			indexLiterals(tree, source, support, nodeBySpan);
 
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
-			final node: Null<QueryNode> = nodeBySpan['${span.from}:${span.to}'];
-			if (node == null) continue;
-			final replacement: Null<String> = single(node, source, support);
-			if (replacement == null) continue;
-			edits.push({ span: span, text: replacement });
-		}
-		return edits;
+			final edits: Array<{ span: Span, text: String }> = [];
+			RunScan.eachMatched(violations, nodeBySpan, (node, span) -> {
+				final replacement: Null<String> = single(node, source, support);
+				if (replacement == null) return;
+				edits.push({ span: span, text: replacement });
+
+			});
+			return edits;
+		});
 	}
 
 	/** Walk `node`, flagging each convertible double-quoted literal. */

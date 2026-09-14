@@ -158,11 +158,10 @@ final class JoinBranchCall implements Check {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null) return [];
-		final resolved: Seams = seams;
 		final symbols: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final ctx: Null<Ctx> = contextOf(plugin, entry.source, resolved, symbols);
+			final ctx: Null<Ctx> = contextOf(plugin, entry.source, seams, symbols);
 			if (ctx == null) continue;
 			walk(ctx.root, violations, entry.file, ctx);
 		}
@@ -177,13 +176,12 @@ final class JoinBranchCall implements Check {
 		final files: Array<{ file: String, source: String }> = [{ file: violations[0].file, source: source }];
 		final ctx: Null<Ctx> = contextOf(plugin, source, seams, RefactorSupport.lazySymbolIndex(files, plugin, index));
 		if (ctx == null) return [];
-		final resolved: Ctx = ctx;
 		final edits: Array<{ span: Span, text: String }> =
 			CheckScan.applyBySpan(plugin, source, violations, [for (kind in seams.byKind.keys()) kind], (node, span) -> {
-				final pos: Null<IfPosition> = positionOf(node, resolved.seams);
+				final pos: Null<IfPosition> = positionOf(node, ctx.seams);
 				// The index was built from `byKind`'s own keys, so every node reaching here has one.
 				if (pos == null) throw new Exception('join-branch-call: no claimed position for indexed kind ${node.kind}');
-				final m: Null<Match> = match(node, resolved, pos);
+				final m: Null<Match> = match(node, ctx, pos);
 				return m == null ? null : { span: span, text: buildText(m, pos) };
 			});
 		return CanonicalEdit.dropContainedEdits(edits);
@@ -214,10 +212,9 @@ final class JoinBranchCall implements Check {
 	): Bool {
 		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null) return false;
-		final resolved: Seams = seams;
-		final pos: Null<IfPosition> = positionOf(head, resolved);
+		final pos: Null<IfPosition> = positionOf(head, seams);
 		if (pos == null || pos.statement) return false;
-		return match(head, ctxOn(plugin, source, root, comments, resolved, symbols), pos) != null;
+		return match(head, ctxOn(plugin, source, root, comments, seams, symbols), pos) != null;
 	}
 
 	/** The source text of `span`. */
@@ -349,9 +346,8 @@ final class JoinBranchCall implements Check {
 		if (varying == NO_VARYING) return null;
 		final purity: Null<PurityCtx> = ctx.purity();
 		if (purity == null) return null;
-		final scan: PurityCtx = purity;
-		if (!hoistedPure(first, varying, scan)) return null;
-		for (b in chain.branches) if (!PurityScan.isPure(b.cond, scan)) return null;
+		if (!hoistedPure(first, varying, purity)) return null;
+		for (b in chain.branches) if (!PurityScan.isPure(b.cond, purity)) return null;
 		return assemble(head, chain, calls, varying, ctx);
 	}
 

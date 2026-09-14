@@ -4,7 +4,6 @@ import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
-import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
@@ -46,14 +45,7 @@ final class RedundantCast implements Check {
 		final shape: RefShape = seams.shape;
 		final typedCastKinds: Array<String> = seams.typedCastKinds;
 		final opaqueKinds: Array<String> = seams.opaqueKinds;
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
-		if (provider == null) return [];
-		final typed: TypeInfoProvider = provider;
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
-			final root: QueryNode = tree;
+		return RunScan.collectWith(files, plugin, RunScan.typeInfoOf(plugin), (entry, tree, typed, violations) -> {
 			final declaredTypeSources: Map<Int, String> = typed.declaredTypeSources(entry.source);
 			final castTargets: Map<Int, String> = typed.castTargetSources(entry.source);
 			final importMap: Map<String, String> = typed.importMap(entry.source);
@@ -62,7 +54,7 @@ final class RedundantCast implements Check {
 				if (typedCastKinds.contains(node.kind)) {
 					final span: Null<Span> = node.span;
 					if (span != null && node.children.length == 1) {
-						final operandSource: Null<String> = operandType(node.children[0], root, shape, declaredTypeSources);
+						final operandSource: Null<String> = operandType(node.children[0], tree, shape, declaredTypeSources);
 						final targetSource: Null<String> = TypeResolver.castTargetWithin(span, castTargets);
 						if (
 							operandSource != null && targetSource != null
@@ -79,8 +71,7 @@ final class RedundantCast implements Check {
 				for (c in node.children) walk(c);
 			}
 			walk(tree);
-		}
-		return violations;
+		});
 	}
 
 	public function fix(

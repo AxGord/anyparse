@@ -144,21 +144,14 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = readSeams(plugin);
-		if (seams == null) return [];
-		final s: Seams = seams;
-		final typed: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
-		final violations: Array<Violation> = [];
+		final typed: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		// Lazy: only the `count()` arm asks the index, so a project holding no map-counted loop
 		// never builds the resolution scope.
 		final index: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collectWith(files, plugin, readSeams(plugin), (entry, tree, s, violations) -> {
 			final types: Null<Map<Int, String>> = typed?.declaredTypeSources(entry.source);
 			walk(tree, tree, entry.file, entry.source, types, s, index, lazyQualified(tree, entry.source, plugin, index), violations);
-		}
-		return violations;
+		});
 	}
 
 	/**
@@ -172,46 +165,44 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final seams: Null<Seams> = readSeams(plugin);
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (seams == null || tree == null) return [];
-		final s: Seams = seams;
-		final typed: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
-		final types: Null<Map<Int, String>> = typed?.declaredTypeSources(source);
-		// The SAME lazy resolver the report pass used, falling back to a one-file index when the
-		// caller supplied none — the two passes must reach the same verdict, because the shadow now
-		// picks the call SPELLING rather than dropping the site.
-		final symbols: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(
-			[{ file: '', source: source }], plugin, RefactorSupport.resolutionIndexOf(plugin) ?? index
-		);
-		final header: UsingHeader = UsingScan.headerOf(tree, source, plugin);
-		final lambdaBlocked: Bool = UsingScan.conflictingUsing(
-			UsingScan.usingModules(header), LAMBDA_MODULE, COUNT_METHOD, plugin, symbols, []
-		);
-		// Keyed by finding rather than a bare key list: the per-site `lambdaBlocked` skip below owes the
-		// finding it drops a reason, and a `wanted` that carried only keys had nothing to write it on.
-		final wanted: Map<String, Violation> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span != null) wanted['${span.from}:${span.to}'] = v;
-		}
-		final collected: Array<CountEdit> = [];
-		fixWalk(tree, tree, source, types, s, wanted, lambdaBlocked, symbols, lazyQualified(tree, source, plugin, symbols), collected);
-		// The containment filter runs BEFORE the `using` decision, not after: a nested rewrite whose
-		// edit an enclosing one swallows is not in the output, so neither is the `count()` that
-		// needed `Lambda` — deciding first would leave an unused `using Lambda;` behind, which
-		// widens static-extension resolution for the whole file.
-		final edits: Array<{ span: Span, text: String }> = CanonicalEdit.dropContainedEdits([for (c in collected) c.edit]);
-		// The insert is asked for only when a SURVIVING edit is the `count()` form, and
-		// `appendUsingInsert` answering false is its refusal, in either of the two ways it comes: the
-		// file declares `using Lambda;` only inside a `#if` region that leaves a rewritten call out, or
-		// an accepted rewrite already covers the byte the declaration would be spliced at. Neither the
-		// extension call nor a second, unguarded declaration is safe, so the whole edit set goes.
-		// The refusal may name only the findings whose rewrite SURVIVED the containment filter: a
-		// violation `wanted` never matched, and one whose edit an enclosing rewrite swallowed, both get
-		// no edit for their own reason, which is not the `using` gate's doing.
-		final accepted: Array<Violation> = keptViolations(collected, edits, violations);
-		return !keptNeedsLambda(collected, edits) || UsingScan.appendUsingInsert(header, LAMBDA_MODULE, edits, accepted) ? edits : [];
+		return RunScan.editsWith(plugin, source, readSeams(plugin), (tree, s) -> {
+			final typed: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+			final types: Null<Map<Int, String>> = typed?.declaredTypeSources(source);
+			// The SAME lazy resolver the report pass used, falling back to a one-file index when the
+			// caller supplied none — the two passes must reach the same verdict, because the shadow now
+			// picks the call SPELLING rather than dropping the site.
+			final symbols: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(
+				[{ file: '', source: source }], plugin, RefactorSupport.resolutionIndexOf(plugin) ?? index
+			);
+			final header: UsingHeader = UsingScan.headerOf(tree, source, plugin);
+			final lambdaBlocked: Bool = UsingScan.conflictingUsing(
+				UsingScan.usingModules(header), LAMBDA_MODULE, COUNT_METHOD, plugin, symbols, []
+			);
+			// Keyed by finding rather than a bare key list: the per-site `lambdaBlocked` skip below owes the
+			// finding it drops a reason, and a `wanted` that carried only keys had nothing to write it on.
+			final wanted: Map<String, Violation> = [];
+			for (v in violations) {
+				final span: Null<Span> = v.span;
+				if (span != null) wanted['${span.from}:${span.to}'] = v;
+			}
+			final collected: Array<CountEdit> = [];
+			fixWalk(tree, tree, source, types, s, wanted, lambdaBlocked, symbols, lazyQualified(tree, source, plugin, symbols), collected);
+			// The containment filter runs BEFORE the `using` decision, not after: a nested rewrite whose
+			// edit an enclosing one swallows is not in the output, so neither is the `count()` that
+			// needed `Lambda` — deciding first would leave an unused `using Lambda;` behind, which
+			// widens static-extension resolution for the whole file.
+			final edits: Array<{ span: Span, text: String }> = CanonicalEdit.dropContainedEdits([for (c in collected) c.edit]);
+			// The insert is asked for only when a SURVIVING edit is the `count()` form, and
+			// `appendUsingInsert` answering false is its refusal, in either of the two ways it comes: the
+			// file declares `using Lambda;` only inside a `#if` region that leaves a rewritten call out, or
+			// an accepted rewrite already covers the byte the declaration would be spliced at. Neither the
+			// extension call nor a second, unguarded declaration is safe, so the whole edit set goes.
+			// The refusal may name only the findings whose rewrite SURVIVED the containment filter: a
+			// violation `wanted` never matched, and one whose edit an enclosing rewrite swallowed, both get
+			// no edit for their own reason, which is not the `using` gate's doing.
+			final accepted: Array<Violation> = keptViolations(collected, edits, violations);
+			return !keptNeedsLambda(collected, edits) || UsingScan.appendUsingInsert(header, LAMBDA_MODULE, edits, accepted) ? edits : [];
+		});
 	}
 
 	/** Whether any SURVIVING edit is the `count()` form — matched by span, since the containment filter rebuilds the list. */

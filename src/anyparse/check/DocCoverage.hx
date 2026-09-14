@@ -92,12 +92,7 @@ final class DocCoverage implements Check implements ConfigAware implements NoAut
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = resolveSeams(plugin);
-		if (seams == null) return [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collectWith(files, plugin, resolveSeams(plugin), (entry, tree, seams, violations) -> {
 			final config: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
 			final cfg: DocCfg = {
 				requireTypeDoc: config.boolOption(RULE_ID, 'requireTypeDoc') ?? DEFAULT_REQUIRE_TYPE_DOC,
@@ -108,8 +103,7 @@ final class DocCoverage implements Check implements ConfigAware implements NoAut
 				violations, entry.file, entry.source, tree, seams, cfg,
 				CheckScan.docBlockEnds(entry.source, plugin.lexicalRegions(entry.source))
 			);
-		}
-		return violations;
+		});
 	}
 
 	/** Documenting a public declaration is an authoring decision, not a mechanical autofix — report-only. */

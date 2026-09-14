@@ -248,13 +248,10 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 		// where nothing overloads the concatenation operator the gate never builds an index and
 		// never resolves an operand type, which is what keeps it free for most projects.
 		final selection: Null<OperatorSelection> = OperatorSelection.of(plugin, files);
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collect(files, plugin, (entry, tree, violations) -> {
 			final operators: OperatorGate = new OperatorGate(selection, seams, entry.file, entry.source, tree);
 			final ctx: Null<PlanContext> = contextFor(plugin, seams, entry.source, FormatConfigDiscovery.discover(entry.file), operators);
-			if (ctx == null) continue;
+			if (ctx == null) return;
 			// The whitelist is resolved PER FILE: `apqlint.json` is discovered by walking up
 			// from each file, so one run can span several configs, and reading the first
 			// file's would apply one project's claim about its macros to another's.
@@ -268,8 +265,7 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 				severity: Severity.Info,
 				message: planned.message
 			});
-		}
-		return violations;
+		});
 	}
 
 	/**
@@ -285,12 +281,9 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 	): Array<{ span: Span, text: String }> {
 		final seams: Null<Seams> = resolveSeams(plugin);
 		if (seams == null || violations.length == 0) return [];
-		final file: String = violations[0].file;
-		for (violation in violations) if (violation.file != file)
-			throw new Exception('$RULE_ID: fix() takes ONE file\'s violations, got $file and ${violation.file}');
+		final file: String = RunScan.oneFile(violations, RULE_ID);
 		final ctx: Null<PlanContext> = contextFor(plugin, seams, source, FormatConfigDiscovery.discover(file));
 		if (ctx == null) return [];
-		final planContext: PlanContext = ctx;
 		// The macro-argument refusal is a property of a construct's ANCESTRY and of a
 		// cross-file symbol index, neither of which `fix` is handed — `applyBySpan` finds
 		// a node by its span alone, and `source` is one file. `run` already decided it, so
@@ -301,7 +294,7 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 				&& v.message.indexOf(OperatorGate.REFUSAL) == -1
 		);
 		return CheckScan.applyBySpan(plugin, source, fixable, seams.candidateKinds, (node, span) -> {
-			final planned: Null<PlannedFold> = plan(planContext, node);
+			final planned: Null<PlannedFold> = plan(ctx, node);
 			// The violation's span is the NODE's — `applyBySpan` keys on it — but the edit is the
 			// narrower OPERAND extent, so trivia the node's span absorbs past its last operand
 			// (a trailing `// …`, the line break) is left where the author put it.

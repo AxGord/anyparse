@@ -80,11 +80,10 @@ final class RedundantAscription implements Check implements DefaultOff {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = resolveSeams(plugin);
 		if (seams == null) return [];
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		if (provider == null) return [];
-		final typed: TypeInfoProvider = provider;
 		final violations: Array<Violation> = [];
-		for (entry in files) scanFile(entry, plugin, seams, typed, violations);
+		for (entry in files) scanFile(entry, plugin, seams, provider, violations);
 		return violations;
 	}
 

@@ -86,9 +86,9 @@ final class EmptyDocTag implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final violations: Array<Violation> = [];
-		for (entry in files) scan(violations, entry.file, entry.source, plugin.lexicalRegions(entry.source));
-		return violations;
+		return RunScan.gather(
+			files, (entry, violations) -> scan(violations, entry.file, entry.source, plugin.lexicalRegions(entry.source))
+		);
 	}
 
 	/**
@@ -100,11 +100,7 @@ final class EmptyDocTag implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final flagged: Array<Int> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span != null) flagged.push(span.from);
-		}
+		final flagged: Array<Int> = RunScan.spanStarts(violations);
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (tok in SourceComments.collectCommentTokens(plugin.lexicalRegions(source))) if (isDoc(source, tok)) {
 			final lines: Array<Span> = interiorLines(source, tok);

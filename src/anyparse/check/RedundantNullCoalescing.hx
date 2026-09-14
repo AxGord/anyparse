@@ -4,7 +4,6 @@ import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
-import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
@@ -40,16 +39,10 @@ final class RedundantNullCoalescing implements Check {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = resolveSeams(plugin);
 		if (seams == null) return [];
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
-		if (provider == null) return [];
-		final typed: TypeInfoProvider = provider;
 		final coalKind: String = seams.coalKind;
 		final opaqueKinds: Array<String> = seams.opaqueKinds;
 		final shape: RefShape = seams.shape;
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collectWith(files, plugin, RunScan.typeInfoOf(plugin), (entry, tree, typed, violations) -> {
 			final root: QueryNode = tree;
 			final declaredTypes: Map<Int, String> = typed.declaredTypes(entry.source);
 			function walk(node: QueryNode): Void {
@@ -67,8 +60,7 @@ final class RedundantNullCoalescing implements Check {
 				for (c in node.children) walk(c);
 			}
 			walk(tree);
-		}
-		return violations;
+		});
 	}
 
 	public function fix(

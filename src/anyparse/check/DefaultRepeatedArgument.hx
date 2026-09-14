@@ -95,12 +95,11 @@ final class DefaultRepeatedArgument implements Check implements DefaultOff imple
 		_plans.clear();
 		final resolved: Null<Seams> = resolveSeams(plugin);
 		if (resolved == null) return [];
-		final seams: Seams = resolved;
-		final parsed: Array<Parsed> = parseAll(plugin, files, seams);
-		final scope: Scope = collectDeclarations(parsed, seams);
+		final parsed: Array<Parsed> = parseAll(plugin, files, resolved);
+		final scope: Scope = collectDeclarations(parsed, resolved);
 		final census: Map<String, Map<String, Array<CallSite>>> = [];
-		for (entry in parsed) collectCalls(census, entry, scope, seams);
-		return report(census, scope, seams);
+		for (entry in parsed) collectCalls(census, entry, scope, resolved);
+		return report(census, scope, resolved);
 	}
 
 	/** Every edit lands through `crossFileFix` — the argument sites are in other files. */
@@ -445,19 +444,15 @@ final class DefaultRepeatedArgument implements Check implements DefaultOff imple
 	}
 
 	private static function parseAll(plugin: GrammarPlugin, files: Array<{ file: String, source: String }>, seams: Seams): Array<Parsed> {
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		final shape: RefShape = plugin.refShape();
 		final out: Array<Parsed> = [];
-		for (entry in files) {
-			final parsedTree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (parsedTree == null) continue;
-			// A narrowed local never reaches a non-nullable field of an anonymous structure literal.
-			final tree: QueryNode = parsedTree;
+		for (entry in CheckScan.parseAll(plugin, files)) {
 			final binders: Map<String, Bool> = [];
-			collectBinders(tree, binders, seams);
+			collectBinders(entry.tree, binders, seams);
 			out.push({
 				file: entry.file,
-				tree: tree,
+				tree: entry.tree,
 				shape: shape,
 				binders: binders,
 				declaredTypes: provider?.declaredTypes(entry.source),

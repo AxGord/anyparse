@@ -110,10 +110,7 @@ final class PreferArrowCallback implements Check {
 		if (fnKind == null || callKind == null) return [];
 		final getIndex: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
 		final declTrees: Map<String, Null<QueryNode>> = [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collect(files, plugin, (entry, tree, violations) -> {
 			final ctx: Ctx = makeCtx(entry.file, entry.source, tree, plugin, shape, fnKind, callKind, getIndex, declTrees);
 			walkArgHosts(ctx, tree, (call, arg, span) -> {
 				final verdict: Verdict = verdictOf(ctx, call, arg);
@@ -127,8 +124,7 @@ final class PreferArrowCallback implements Check {
 				});
 				return true;
 			});
-		}
-		return violations;
+		});
 	}
 
 	/** Rewrite each fixable flagged literal to its arrow form (report-only findings yield no edit). */
@@ -138,27 +134,28 @@ final class PreferArrowCallback implements Check {
 		final shape: RefShape = plugin.refShape();
 		final fnKind: Null<String> = shape.fnExprKind;
 		final callKind: Null<String> = shape.callKind;
-		if (fnKind == null || callKind == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final getIndex: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex([], plugin, index);
-		final wanted: Map<String, Bool> = [];
-		for (v in violations) {
-			final s: Null<Span> = v.span;
-			if (s != null) wanted['${s.from}:${s.to}'] = true;
-		}
-		final file: String = violations.length > 0 ? violations[0].file : '';
-		final ctx: Ctx = makeCtx(file, source, tree, plugin, shape, fnKind, callKind, getIndex, []);
-		final edits: Array<{ span: Span, text: String }> = [];
-		walkArgHosts(ctx, tree, (call, arg, span) -> {
-			if (!wanted.exists('${span.from}:${span.to}')) return false;
-			if (verdictOf(ctx, call, arg) == Fixable) {
-				final text: Null<String> = rewrite(ctx, arg);
-				if (text != null) edits.push({ span: span, text: text });
-			}
-			return true;
-		});
-		return edits;
+		return fnKind == null || callKind == null
+			? []
+			: RunScan.edits(plugin, source, tree -> {
+				final getIndex: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex([], plugin, index);
+				final wanted: Map<String, Bool> = [];
+				for (v in violations) {
+					final s: Null<Span> = v.span;
+					if (s != null) wanted['${s.from}:${s.to}'] = true;
+				}
+				final file: String = violations.length > 0 ? violations[0].file : '';
+				final ctx: Ctx = makeCtx(file, source, tree, plugin, shape, fnKind, callKind, getIndex, []);
+				final edits: Array<{ span: Span, text: String }> = [];
+				walkArgHosts(ctx, tree, (call, arg, span) -> {
+					if (!wanted.exists('${span.from}:${span.to}')) return false;
+					if (verdictOf(ctx, call, arg) == Fixable) {
+						final text: Null<String> = rewrite(ctx, arg);
+						if (text != null) edits.push({ span: span, text: text });
+					}
+					return true;
+				});
+				return edits;
+			});
 	}
 
 	/** Whether `node` hosts call arguments — a call or a `new` construction. */

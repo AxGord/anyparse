@@ -59,11 +59,8 @@ final class UnnecessaryNullCheck implements Check {
 		if (equalityKinds.length == 0 || nullLitKind == null) return [];
 		final nullLit: String = nullLitKind;
 		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+		return RunScan.collect(files, plugin, (entry, tree, violations) -> {
 			final root: QueryNode = tree;
 			final declaredTypes: Map<Int, String> = provider != null ? provider.declaredTypes(entry.source) : [];
 			function walk(node: QueryNode): Void {
@@ -86,8 +83,7 @@ final class UnnecessaryNullCheck implements Check {
 				for (c in node.children) walk(c);
 			}
 			walk(tree);
-		}
-		return violations;
+		});
 	}
 
 	public function fix(

@@ -184,16 +184,11 @@ final class HoistBranchStringAffix implements Check implements DefaultOff {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = readSeams(plugin);
-		if (seams == null) return [];
-		final resolved: Seams = seams;
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null)
-				walk(tree, null, violations, entry.file, contextOf(entry.source, resolved, plugin.lexicalRegions(entry.source)));
-		}
-		return violations;
+		return RunScan.collectWith(
+			files, plugin, readSeams(plugin),
+			(entry, tree, resolved, violations) ->
+				walk(tree, null, violations, entry.file, contextOf(entry.source, resolved, plugin.lexicalRegions(entry.source)))
+		);
 	}
 
 	public function fix(

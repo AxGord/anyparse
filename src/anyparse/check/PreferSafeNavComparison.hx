@@ -154,13 +154,7 @@ final class PreferSafeNavComparison implements Check implements VersionGated {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = readSeams(plugin.refShape());
-		if (seams == null) return [];
-		final s: Seams = seams;
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collectWith(files, plugin, readSeams(plugin.refShape()), (entry, tree, s, violations) -> {
 			for (r in collectRuns(tree, entry.source, s)) violations.push({
 				file: entry.file,
 				span: new Span(r.from, r.to),
@@ -168,30 +162,26 @@ final class PreferSafeNavComparison implements Check implements VersionGated {
 				severity: Severity.Info,
 				message: 'this null-check chain can be safe navigation (?.)'
 			});
-		}
-		return violations;
+		});
 	}
 
 	/** Replace each flagged run with the last conjunct's text, its junction dots turned into `?.`. */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final seams: Null<Seams> = readSeams(plugin.refShape());
-		if (seams == null) return [];
-		final s: Seams = seams;
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final wanted: Array<String> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span != null && v.rule == RULE_ID) wanted.push('${span.from}:${span.to}');
-		}
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (r in collectRuns(tree, source, s)) if (wanted.contains('${r.from}:${r.to}')) {
-			final edit: Null<{ span: Span, text: String }> = rewrite(r, source);
-			if (edit != null) edits.push(edit);
-		}
-		return CanonicalEdit.dropContainedEdits(edits);
+		return RunScan.editsWith(plugin, source, readSeams(plugin.refShape()), (tree, s) -> {
+			final wanted: Array<String> = [];
+			for (v in violations) {
+				final span: Null<Span> = v.span;
+				if (span != null && v.rule == RULE_ID) wanted.push('${span.from}:${span.to}');
+			}
+			final edits: Array<{ span: Span, text: String }> = [];
+			for (r in collectRuns(tree, source, s)) if (wanted.contains('${r.from}:${r.to}')) {
+				final edit: Null<{ span: Span, text: String }> = rewrite(r, source);
+				if (edit != null) edits.push(edit);
+			}
+			return CanonicalEdit.dropContainedEdits(edits);
+		});
 	}
 
 	/** `??` and `?.` are Haxe 4.3; a project declaring an older `languageVersion` does not get this rewrite. */

@@ -93,15 +93,11 @@ final class Complexity implements Check implements ConfigAware implements NoAuto
 			caseBranchKind: shape.caseBranchKind ?? '',
 			switchKinds: shape.switchKinds ?? []
 		};
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collect(files, plugin, (entry, tree, violations) -> {
 			final max: Int = LintConfig.resolveWith(_resolveConfig, entry.file)
 				.intOption('complexity', 'max') ?? plugin.maxComplexity(entry.file) ?? DEFAULT_MAX_COMPLEXITY;
 			walk(violations, entry.file, tree, cfg, max);
-		}
-		return violations;
+		});
 	}
 
 	/** Complexity has no mechanical autofix — report-only. */

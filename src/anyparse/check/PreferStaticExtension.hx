@@ -197,7 +197,6 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null) return [];
-		final s: Seams = seams;
 		final violations: Array<Violation> = [];
 		// The receiver / conflict gates resolve cross-file; the index is built at most once, on
 		// first demand, because most files hold no call on a configured module at all.
@@ -207,7 +206,7 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 			if (options.modules.length == 0) continue;
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
-			for (candidate in candidates(tree, entry.source, entry.file, s, options, plugin, symbols)) violations.push({
+			for (candidate in candidates(tree, entry.source, entry.file, seams, options, plugin, symbols)) violations.push({
 				file: entry.file,
 				span: candidate.callSpan,
 				rule: RULE_ID,
@@ -236,79 +235,79 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		// would silently resolve the wrong `apqlint.json`).
 		final file: String = violations[0].file;
 		final options: Options = readOptions(LintConfig.resolveWith(_resolveConfig, file));
-		if (options.modules.length == 0) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final root: QueryNode = tree;
-		final header: UsingHeader = UsingScan.headerOf(root, source, plugin);
-		// `Cli` hands `fix` the REPORT-scoped index, but the gates must re-derive on the SAME
-		// scope `run` proved them on — the plugin's resolution index (report files UNION the
-		// libraries and the std). Without this a std-typed receiver reads as unresolvable here,
-		// every finding degrades to report-only, and the autofix silently never fires.
-		final resolution: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
-		final byKey: Map<String, Candidate> = [];
-		for (candidate in candidates(root, source, file, s, options, plugin, () -> resolution))
-			byKey['${candidate.callSpan.from}:${candidate.callSpan.to}'] = candidate;
-		final edits: Array<{ span: Span, text: String }> = [];
-		final needsUsing: Array<String> = [];
-		// The findings whose rewrites actually reached `edits`. Only they are harmed if the `using`
-		// insert is refused below, so only they may be told why: a site this loop skipped was skipped
-		// for its OWN reason, and handing it the insert's sentence would be inventing one.
-		final accepted: Array<Violation> = [];
-		for (violation in violations) {
-			final span: Null<Span> = violation.span;
-			if (span == null) continue;
-			final candidate: Null<Candidate> = byKey['${span.from}:${span.to}'];
-			if (candidate == null || candidate.verdict != Verdict.Fixable) continue;
-			// A rewrite without the module in scope does not compile, so a file that lacks the
-			// `using` and forbids inserting one is refused before any edit is built — and so is one
-			// whose only `using` is guarded by a `#if` region this call sits outside of, where neither
-			// spelling works: the extension call binds nothing in the builds that region is compiled
-			// out of, and a second, unguarded declaration would re-target every extension call the
-			// region's own code makes.
-			//
-			// These four gates are PER-SITE and they fire on a finding `run` already judged `Fixable`,
-			// so `declineReasonFor` wrote nothing on it — the reason has to be written here, at the gate
-			// that decided, on the caller's own violation objects (`Cli` hands `fix` the array `run`
-			// built, which is what makes a note here reach the reporter; `ImportBlockOrder.noteDecline`
-			// writes the field the same way, though it targets a known set and overwrites where
-			// `UsingScan.noteDeclineWhereUnset` yields to a sentence already there). Left unset, the
-			// ledger reported these as a rule that "withheld it,
-			// without saying why" — the defect this rule's `run` side no longer has.
-			final scope: UsingScope = UsingScan.usingScopeAt(header, candidate.module, [span.from]);
-			if (scope == UsingScope.Guarded) {
-				violation.declineReason = UsingScan.guardedUsingDecline(candidate.module, 'this call');
-				continue;
-			}
-			if (!options.addUsing && scope != UsingScope.InScope) {
-				violation.declineReason = 'the file has no `using ${candidate.module}` and this project sets addUsing:false, so the'
-					+ ' extension call would not resolve';
-				continue;
-			}
-			final pair: Null<Array<{ span: Span, text: String }>> = rewriteEdits(candidate, source);
-			if (pair == null) {
-				violation.declineReason = 'a comment sits inside the region the rewrite deletes, and dropping a comment silently is'
-					+ ' never acceptable';
-				continue;
-			}
-			// No reason on THIS one, and that is not an oversight: the gate fires only once `edits`
-			// holds an accepted rewrite, so this `fix` call returns a NON-EMPTY edit set — unless the
-			// `using` insert below is refused wholesale, the one path that empties it, and a deferred
-			// site is deliberately not among the `accepted` that refusal speaks for. Either way the
-			// site is genuinely deferred to the next fixpoint pass, and the pass that reports it is the
-			// one where it gets no edit; a sentence here would name a gate that did not decide it.
-			if (CanonicalEdit.editsOverlapAny(pair, edits)) continue;
-			for (edit in pair) edits.push(edit);
-			accepted.push(violation);
-			if (scope == UsingScope.Absent && !needsUsing.contains(candidate.module)) needsUsing.push(candidate.module);
-		}
-		// The insert is the LAST thing built and the first that can fail wholesale: it anchors in the
-		// header while every rewrite sits in a body, so an accepted rewrite covering that byte refuses
-		// the declaration outright. Keeping the rewrites then ships extension calls with nothing to bind
-		// them — the whole set goes, and the sites that have no reason yet get this one.
-		if (appendUsingInserts(header, needsUsing, edits)) return edits;
-		UsingScan.noteDeclineWhereUnset(accepted, UsingScan.coveredUsingDecline(needsUsing));
-		return [];
+		return options.modules.length == 0
+			? []
+			: RunScan.edits(plugin, source, root -> {
+				final header: UsingHeader = UsingScan.headerOf(root, source, plugin);
+				// `Cli` hands `fix` the REPORT-scoped index, but the gates must re-derive on the SAME
+				// scope `run` proved them on — the plugin's resolution index (report files UNION the
+				// libraries and the std). Without this a std-typed receiver reads as unresolvable here,
+				// every finding degrades to report-only, and the autofix silently never fires.
+				final resolution: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
+				final byKey: Map<String, Candidate> = [];
+				for (candidate in candidates(root, source, file, s, options, plugin, () -> resolution))
+					byKey['${candidate.callSpan.from}:${candidate.callSpan.to}'] = candidate;
+				final edits: Array<{ span: Span, text: String }> = [];
+				final needsUsing: Array<String> = [];
+				// The findings whose rewrites actually reached `edits`. Only they are harmed if the `using`
+				// insert is refused below, so only they may be told why: a site this loop skipped was skipped
+				// for its OWN reason, and handing it the insert's sentence would be inventing one.
+				final accepted: Array<Violation> = [];
+				for (violation in violations) {
+					final span: Null<Span> = violation.span;
+					if (span == null) continue;
+					final candidate: Null<Candidate> = byKey['${span.from}:${span.to}'];
+					if (candidate == null || candidate.verdict != Verdict.Fixable) continue;
+					// A rewrite without the module in scope does not compile, so a file that lacks the
+					// `using` and forbids inserting one is refused before any edit is built — and so is one
+					// whose only `using` is guarded by a `#if` region this call sits outside of, where neither
+					// spelling works: the extension call binds nothing in the builds that region is compiled
+					// out of, and a second, unguarded declaration would re-target every extension call the
+					// region's own code makes.
+					//
+					// These four gates are PER-SITE and they fire on a finding `run` already judged `Fixable`,
+					// so `declineReasonFor` wrote nothing on it — the reason has to be written here, at the gate
+					// that decided, on the caller's own violation objects (`Cli` hands `fix` the array `run`
+					// built, which is what makes a note here reach the reporter; `ImportBlockOrder.noteDecline`
+					// writes the field the same way, though it targets a known set and overwrites where
+					// `UsingScan.noteDeclineWhereUnset` yields to a sentence already there). Left unset, the
+					// ledger reported these as a rule that "withheld it,
+					// without saying why" — the defect this rule's `run` side no longer has.
+					final scope: UsingScope = UsingScan.usingScopeAt(header, candidate.module, [span.from]);
+					if (scope == UsingScope.Guarded) {
+						violation.declineReason = UsingScan.guardedUsingDecline(candidate.module, 'this call');
+						continue;
+					}
+					if (!options.addUsing && scope != UsingScope.InScope) {
+						violation.declineReason = 'the file has no `using ${candidate.module}` and this project sets addUsing:false, so the'
+						+ ' extension call would not resolve';
+						continue;
+					}
+					final pair: Null<Array<{ span: Span, text: String }>> = rewriteEdits(candidate, source);
+					if (pair == null) {
+						violation.declineReason = 'a comment sits inside the region the rewrite deletes, and dropping a comment silently is'
+						+ ' never acceptable';
+						continue;
+					}
+					// No reason on THIS one, and that is not an oversight: the gate fires only once `edits`
+					// holds an accepted rewrite, so this `fix` call returns a NON-EMPTY edit set — unless the
+					// `using` insert below is refused wholesale, the one path that empties it, and a deferred
+					// site is deliberately not among the `accepted` that refusal speaks for. Either way the
+					// site is genuinely deferred to the next fixpoint pass, and the pass that reports it is the
+					// one where it gets no edit; a sentence here would name a gate that did not decide it.
+					if (CanonicalEdit.editsOverlapAny(pair, edits)) continue;
+					for (edit in pair) edits.push(edit);
+					accepted.push(violation);
+					if (scope == UsingScope.Absent && !needsUsing.contains(candidate.module)) needsUsing.push(candidate.module);
+				}
+				// The insert is the LAST thing built and the first that can fail wholesale: it anchors in the
+				// header while every rewrite sits in a body, so an accepted rewrite covering that byte refuses
+				// the declaration outright. Keeping the rewrites then ships extension calls with nothing to bind
+				// them — the whole set goes, and the sites that have no reason yet get this one.
+				if (appendUsingInserts(header, needsUsing, edits)) return edits;
+				UsingScan.noteDeclineWhereUnset(accepted, UsingScan.coveredUsingDecline(needsUsing));
+				return [];
+			});
 	}
 
 	/**
@@ -320,7 +319,7 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		final callKind: Null<String> = shape.callKind;
 		final fieldKind: Null<String> = shape.fieldAccessKind;
 		if (callKind == null || fieldKind == null) return null;
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		return provider == null ? null : {
 			shape: shape,
 			typed: provider,

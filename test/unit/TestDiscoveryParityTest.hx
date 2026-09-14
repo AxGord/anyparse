@@ -327,6 +327,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.ReificationGateFixPathTest',
 		'unit.check.ReificationGateTest',
 		'unit.check.ReturnReassignTernaryCheckTest',
+		'unit.check.RunScanTest',
 		'unit.check.SelfAssignmentCheckTest',
 		'unit.check.ShadowingCaseBinderCheckTest',
 		'unit.check.ShadowingLocalCheckTest',

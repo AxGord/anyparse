@@ -137,11 +137,10 @@ final class ShadowingLocal implements Check implements NoAutofix {
 	): Array<Violation> {
 		final seams: Null<ScopeSeams> = seamsOf(plugin.refShape(), parameters, ruleId);
 		if (seams == null) return [];
-		final resolved: ScopeSeams = seams;
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) scan(tree, tree, [], false, resolved, entry.file, violations);
+			if (tree != null) scan(tree, tree, [], false, seams, entry.file, violations);
 		}
 		return violations;
 	}

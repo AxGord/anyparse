@@ -263,14 +263,13 @@ final class CasePatternScan {
 	): Null<String> {
 		final armSpan: Null<Span> = arm.span;
 		if (armSpan == null) return null;
-		final at: Span = armSpan;
 		final path: Null<Array<QueryNode>> = TreePath.pathTo(root, arm);
 		if (path == null) return null;
 		for (step in 0...path.length) {
 			final node: QueryNode = path[path.length - 1 - step];
 			if (seams.scope.functionKinds.contains(node.kind)) {
 				if (declaresNamed(seams.scope.paramKinds, node.children, name)) return 'parameter';
-				if (declaresBefore(seams, node, arm, at, name)) return 'local';
+				if (declaresBefore(seams, node, arm, armSpan, name)) return 'local';
 			}
 			if (!seams.scope.classLikeKinds.contains(node.kind)) continue;
 			if (declaresNamed(seams.scope.memberDeclKinds, node.children, name)) return 'field';
@@ -310,12 +309,11 @@ final class CasePatternScan {
 		if (containsAnyKind(arm, seams.opaqueKinds)) return null;
 		final found: Null<Array<PatternBinder>> = binders(seams, arm);
 		if (found == null) return null;
-		final all: Array<PatternBinder> = found;
 		final groups: Array<Array<PatternBinder>> = [];
 		final seen: Array<String> = [];
-		for (binder in all) if (!seen.contains(binder.name)) {
+		for (binder in found) if (!seen.contains(binder.name)) {
 			seen.push(binder.name);
-			groups.push(all.filter(b -> b.name == binder.name));
+			groups.push(found.filter(b -> b.name == binder.name));
 		}
 		return groups;
 	}
@@ -375,11 +373,10 @@ final class CasePatternScan {
 		final kind: String = node.kind;
 		final span: Null<Span> = node.span;
 		if (span == null) return false;
-		final at: Span = span;
 		return if (kind == seams.identKind)
-			scanIdentPattern(seams, node, at, whole, out)
+			scanIdentPattern(seams, node, span, whole, out)
 		else if (seams.binderKinds.contains(kind))
-			scanBinderPattern(seams, node, at, whole, out)
+			scanBinderPattern(seams, node, span, whole, out)
 		else if (kind == seams.assignKind)
 			scanAssignPattern(seams, node, out)
 		else if (kind == seams.callKind)

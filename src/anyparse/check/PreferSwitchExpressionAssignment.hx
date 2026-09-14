@@ -141,12 +141,7 @@ final class PreferSwitchExpressionAssignment implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = readSeams(plugin);
-		if (seams == null) return [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collectWith(files, plugin, readSeams(plugin), (entry, tree, seams, violations) -> {
 			final comments: Array<{ from: Int, to: Int, isLine: Bool }> =
 				SourceComments.collectCommentTokens(plugin.lexicalRegions(entry.source));
 			final matches: Array<Match> = [];
@@ -158,26 +153,24 @@ final class PreferSwitchExpressionAssignment implements Check {
 				severity: Severity.Info,
 				message: m.message
 			});
-		}
-		return violations;
+		});
 	}
 
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final seams: Null<Seams> = readSeams(plugin);
-		if (seams == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
-		final matches: Array<Match> = [];
-		collectMatches(tree, tree, source, comments, seams, matches);
-		final byKey: Map<String, Match> = [];
-		for (m in matches) byKey['${m.declSpan.from}:${m.declSpan.to}'] = m;
+		return RunScan.editsWith(plugin, source, readSeams(plugin), (tree, seams) -> {
+			final comments: Array<{ from: Int, to: Int, isLine: Bool }> =
+				SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
+			final matches: Array<Match> = [];
+			collectMatches(tree, tree, source, comments, seams, matches);
+			final byKey: Map<String, Match> = [];
+			for (m in matches) byKey['${m.declSpan.from}:${m.declSpan.to}'] = m;
 
-		return CanonicalEdit.dropContainedEdits(
-			CheckScan.collectSpanEdits(violations, byKey, (m, _) -> ({ span: m.editSpan, text: m.text }))
-		);
+			return CanonicalEdit.dropContainedEdits(
+				CheckScan.collectSpanEdits(violations, byKey, (m, _) -> ({ span: m.editSpan, text: m.text }))
+			);
+		});
 	}
 
 	/** Bundle the required `RefShape` / control-flow kinds, or null when a required one is unset (the check is then a no-op). */

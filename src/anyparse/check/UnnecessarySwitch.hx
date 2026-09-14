@@ -157,11 +157,10 @@ final class UnnecessarySwitch implements Check {
 	private static function candidates(seams: Seams, plugin: GrammarPlugin, source: String, index: SymbolIndex): Array<Candidate> {
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
-		final root: QueryNode = tree;
-		final purity: Null<PurityCtx> = PurityScan.contextOf(plugin, source, root, index);
+		final purity: Null<PurityCtx> = PurityScan.contextOf(plugin, source, tree, index);
 		if (purity == null) return [];
 		final out: Array<Candidate> = [];
-		walk(seams, purity, root, source, false, null, out);
+		walk(seams, purity, tree, source, false, null, out);
 		return out;
 	}
 

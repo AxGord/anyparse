@@ -70,12 +70,7 @@ final class DuplicateImport implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) if (v.severity == Severity.Warning) {
-			final span: Null<Span> = v.span;
-			if (span != null) edits.push({ span: span, text: '' });
-		}
-		return edits;
+		return RunScan.spanEdits(violations, (v, span) -> v.severity == Severity.Warning ? {span: span, text: '' } : null);
 	}
 
 }

@@ -8,7 +8,6 @@ import anyparse.query.NamingPolicy.NamedDecl;
 import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.NamingPolicy.NamingPolicy;
 import anyparse.query.NamingPolicy.NamingRule;
-import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
@@ -175,13 +174,8 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 
 	@:access(anyparse.check.UnusedParameter)
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final support: Null<NamingSupport> = plugin.namingSupport();
-		if (support == null) return [];
 		final shape: RefShape = plugin.refShape();
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collectWith(files, plugin, plugin.namingSupport(), (entry, tree, support, violations) -> {
 			final config: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
 			final options: Options = {
 				params: config.boolOption(RULE_ID, 'params') ?? DEFAULT_PARAMS,
@@ -191,8 +185,7 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 				silenceGuard: config.enabledFor(UNUSED_PARAMETER_ID) && UnusedParameter.renameSilenceLive(config)
 			};
 			for (decl in support.project(tree)) checkDecl(violations, entry.file, entry.source, tree, decl, shape, options);
-		}
-		return violations;
+		});
 	}
 
 	/**
@@ -203,69 +196,64 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		if (violations.length == 0) return [];
-		final support: Null<NamingSupport> = plugin.namingSupport();
-		if (support == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final policy: NamingPolicy = support.policyFor(violations[0].file);
-		final shape: RefShape = plugin.refShape();
-		// Resolved per fix() call from the findings' own file, exactly as `run` resolves `params` /
-		// `locals`: the option governs a GATE inside the rename, so it belongs to the fix path.
-		final config: LintConfig = LintConfig.resolveWith(_resolveConfig, violations[0].file);
-		final allowInheritedShadow: Bool = config.boolOption(RULE_ID, 'allowInheritedShadow') ?? DEFAULT_ALLOW_INHERITED_SHADOW;
-		// The inherited-member proof walks the FULL supertype closure, so it resolves through the
-		// plugin's resolution scope (report files UNION the configured libraries) when present,
-		// exactly as the `naming` field rename does; the report-scoped index is the fallback.
-		final resolutionIndex: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
-		final flaggedFroms: Array<Int> = [];
-		for (v in violations) {
-			final s: Null<Span> = v.span;
-			if (s != null) flaggedFroms.push(s.from);
-		}
-		// Every flagged binding's derived target, resolved BEFORE any rename is emitted: two
-		// bindings differing only in underscore count (`_a` / `__a`) strip to the same name, and
-		// neither can see the other through `collidesInScope` - that scans the PRE-fix source,
-		// where each occurrence still carries its own prefix. Renaming both would merge two
-		// bindings into one, silently and compilably (Haxe permits the shadowing).
-		final candidates: Array<Candidate> = [];
-		for (decl in support.project(tree)) {
-			final span: Null<Span> = decl.span;
-			if (span == null || !flaggedFroms.contains(span.from)) continue;
-			final target: Null<String> = strippedName(decl, policy, shape);
-			if (target == null) continue;
-			// A candidate whose occurrence set does not resolve can never be renamed, so it must not
-			// CLAIM the target either - leaving it in the set would block a provable sibling's rename
-			// over a conflict that can never materialise. NO REACHABLE INPUT IS CURRENTLY KNOWN: every
-			// kind this rule flags resolves (checked across Required / Optional / Rest /
-			// VarStmt / FinalStmt / VarMore / KeyValueBinder / ForStmt / comprehension binder /
-			// LocalFnStmt / LocalInlineFnStmt), and a binding inside a reification subtree never
-			// reaches here at all - `HaxeNamingSupport.walk` returns at `MacroExpr`, so it is never
-			// projected as a candidate. The line stays as a precondition on the claim set, deliberately
-			// untested rather than removed: it was added for the local `inline function`, whose
-			// occurrence set the resolver could not build until `LocalInlineFnStmt` became a decl host,
-			// and the next kind that lands in that state must not repeat the regression.
-			if (Rename.renameOccurrences(source, tree, span.from, shape).length == 0) continue;
-			// Re-bind to a non-null final: strict null-safety does not narrow inside a struct literal.
-			final name: String = target;
-			candidates.push({
-				decl: decl,
-				target: name,
-				// A local `function` statement opens a scope of its own, but the scope its NAME binds
-				// into is the enclosing body - the one two sibling local functions share.
-				scope: BindingScope.enclosingScopeSpan(tree, functionScopeKinds(shape), span.from, shape)
+		return violations.length == 0
+			? []
+			: RunScan.editsWith(plugin, source, plugin.namingSupport(), (tree, support) -> {
+				final policy: NamingPolicy = support.policyFor(violations[0].file);
+				final shape: RefShape = plugin.refShape();
+				// Resolved per fix() call from the findings' own file, exactly as `run` resolves `params` /
+				// `locals`: the option governs a GATE inside the rename, so it belongs to the fix path.
+				final config: LintConfig = LintConfig.resolveWith(_resolveConfig, violations[0].file);
+				final allowInheritedShadow: Bool = config.boolOption(RULE_ID, 'allowInheritedShadow') ?? DEFAULT_ALLOW_INHERITED_SHADOW;
+				// The inherited-member proof walks the FULL supertype closure, so it resolves through the
+				// plugin's resolution scope (report files UNION the configured libraries) when present,
+				// exactly as the `naming` field rename does; the report-scoped index is the fallback.
+				final resolutionIndex: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
+				final flaggedFroms: Array<Int> = RunScan.spanStarts(violations);
+				// Every flagged binding's derived target, resolved BEFORE any rename is emitted: two
+				// bindings differing only in underscore count (`_a` / `__a`) strip to the same name, and
+				// neither can see the other through `collidesInScope` - that scans the PRE-fix source,
+				// where each occurrence still carries its own prefix. Renaming both would merge two
+				// bindings into one, silently and compilably (Haxe permits the shadowing).
+				final candidates: Array<Candidate> = [];
+				for (decl in support.project(tree)) {
+					final span: Null<Span> = decl.span;
+					if (span == null || !flaggedFroms.contains(span.from)) continue;
+					final target: Null<String> = strippedName(decl, policy, shape);
+					if (target == null) continue;
+					// A candidate whose occurrence set does not resolve can never be renamed, so it must not
+					// CLAIM the target either - leaving it in the set would block a provable sibling's rename
+					// over a conflict that can never materialise. NO REACHABLE INPUT IS CURRENTLY KNOWN: every
+					// kind this rule flags resolves (checked across Required / Optional / Rest /
+					// VarStmt / FinalStmt / VarMore / KeyValueBinder / ForStmt / comprehension binder /
+					// LocalFnStmt / LocalInlineFnStmt), and a binding inside a reification subtree never
+					// reaches here at all - `HaxeNamingSupport.walk` returns at `MacroExpr`, so it is never
+					// projected as a candidate. The line stays as a precondition on the claim set, deliberately
+					// untested rather than removed: it was added for the local `inline function`, whose
+					// occurrence set the resolver could not build until `LocalInlineFnStmt` became a decl host,
+					// and the next kind that lands in that state must not repeat the regression.
+					if (Rename.renameOccurrences(source, tree, span.from, shape).length == 0) continue;
+					// Re-bind to a non-null final: strict null-safety does not narrow inside a struct literal.
+					final name: String = target;
+					candidates.push({
+						decl: decl,
+						target: name,
+						// A local `function` statement opens a scope of its own, but the scope its NAME binds
+						// into is the enclosing body - the one two sibling local functions share.
+						scope: BindingScope.enclosingScopeSpan(tree, functionScopeKinds(shape), span.from, shape)
+					});
+				}
+				final edits: Array<{ span: Span, text: String }> = [];
+				for (i in 0...candidates.length) {
+					final c: Candidate = candidates[i];
+					if (claimedByAnother(candidates, i)) continue;
+					final rename: Null<Array<Span>> = renameSpansFor(
+						c.decl, c.target, source, tree, shape, plugin, resolutionIndex, allowInheritedShadow
+					);
+					if (rename != null) for (occ in rename) edits.push({ span: occ, text: c.target });
+				}
+				return edits;
 			});
-		}
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (i in 0...candidates.length) {
-			final c: Candidate = candidates[i];
-			if (claimedByAnother(candidates, i)) continue;
-			final rename: Null<Array<Span>> = renameSpansFor(
-				c.decl, c.target, source, tree, shape, plugin, resolutionIndex, allowInheritedShadow
-			);
-			if (rename != null) for (occ in rename) edits.push({ span: occ, text: c.target });
-		}
-		return edits;
 	}
 
 	/**

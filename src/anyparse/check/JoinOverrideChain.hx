@@ -178,11 +178,10 @@ final class JoinOverrideChain implements Check implements DefaultOff {
 	private static function matches(source: String, plugin: GrammarPlugin, s: Seams, index: SymbolIndex): Array<Match> {
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
-		final root: QueryNode = tree;
-		final purity: Null<PurityCtx> = PurityScan.contextOf(plugin, source, root, index);
+		final purity: Null<PurityCtx> = PurityScan.contextOf(plugin, source, tree, index);
 		if (purity == null) return [];
 		final out: Array<Match> = [];
-		collect(root, root, source, SourceComments.collectCommentTokens(plugin.lexicalRegions(source)), s, purity, out);
+		collect(tree, tree, source, SourceComments.collectCommentTokens(plugin.lexicalRegions(source)), s, purity, out);
 		return out;
 	}
 

@@ -139,12 +139,7 @@ final class JoinReturn implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = readSeams(plugin);
-		if (seams == null) return [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collectWith(files, plugin, readSeams(plugin), (entry, tree, seams, violations) -> {
 			final comments: Array<{ from: Int, to: Int, isLine: Bool }> =
 				SourceComments.collectCommentTokens(plugin.lexicalRegions(entry.source));
 			final declTypeSources: () -> Map<Int, String> = TypeResolver.memoizedDeclaredTypeSources(plugin, entry.source);
@@ -159,29 +154,27 @@ final class JoinReturn implements Check {
 				severity: Severity.Info,
 				message: m.message
 			});
-		}
-		return violations;
+		}, CheckScan.parseBranchAwareOrNull);
 	}
 
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final seams: Null<Seams> = readSeams(plugin);
-		if (seams == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, source);
-		if (tree == null) return [];
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
-		final declTypeSources: () -> Map<Int, String> = TypeResolver.memoizedDeclaredTypeSources(plugin, source);
-		final lambdaSpans: Array<Span> = [];
-		collectLambdaSpans(tree, seams.shape.lambdaKinds ?? [], lambdaSpans);
-		final matches: Array<Match> = [];
-		collectMatches(tree, source, comments, null, seams, tree, declTypeSources, lambdaSpans, matches);
-		final byKey: Map<String, Match> = [];
-		for (m in matches) byKey['${m.declSpan.from}:${m.declSpan.to}'] = m;
+		return RunScan.editsWith(plugin, source, readSeams(plugin), (tree, seams) -> {
+			final comments: Array<{ from: Int, to: Int, isLine: Bool }> =
+				SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
+			final declTypeSources: () -> Map<Int, String> = TypeResolver.memoizedDeclaredTypeSources(plugin, source);
+			final lambdaSpans: Array<Span> = [];
+			collectLambdaSpans(tree, seams.shape.lambdaKinds ?? [], lambdaSpans);
+			final matches: Array<Match> = [];
+			collectMatches(tree, source, comments, null, seams, tree, declTypeSources, lambdaSpans, matches);
+			final byKey: Map<String, Match> = [];
+			for (m in matches) byKey['${m.declSpan.from}:${m.declSpan.to}'] = m;
 
-		return CanonicalEdit.dropContainedEdits(
-			CheckScan.collectSpanEdits(violations, byKey, (m, _) -> ({ span: m.editSpan, text: m.text }))
-		);
+			return CanonicalEdit.dropContainedEdits(
+				CheckScan.collectSpanEdits(violations, byKey, (m, _) -> ({ span: m.editSpan, text: m.text }))
+			);
+		}, CheckScan.parseBranchAwareOrNull);
 	}
 
 	/**
@@ -382,13 +375,12 @@ final class JoinReturn implements Check {
 		final hits: Array<RefHit> = Refs.find(name, tree, s.shape);
 		final binding: Null<Span> = writeBindingOf(hits, lhsSpan);
 		if (binding == null) return null;
-		final b: Span = binding;
-		if (!TypeResolver.mayBeLocalOrParam(tree, b.from, s.localDeclKinds, s.paramKinds)) return null;
-		if (!referencesPermitCollapse(hits, b, retIdentSpan, assignSpan, lambdaSpans)) return null;
+		if (!TypeResolver.mayBeLocalOrParam(tree, binding.from, s.localDeclKinds, s.paramKinds)) return null;
+		if (!referencesPermitCollapse(hits, binding, retIdentSpan, assignSpan, lambdaSpans)) return null;
 
 		if (droppedComment(assignSpan, rhsSpan, retSpan.to, comments)) return null;
 
-		final annotation: Null<String> = declTypeSources()[b.from];
+		final annotation: Null<String> = declTypeSources()[binding.from];
 		final initSource: String = source.substring(rhsSpan.from, rhsSpan.to);
 		final keySpan: Span = assignSpan;
 		return ({

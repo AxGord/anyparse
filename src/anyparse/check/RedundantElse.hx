@@ -94,18 +94,15 @@ final class RedundantElse implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = resolveSeams(plugin);
-		if (seams == null) return [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, entry.source);
-			if (tree != null)
+		return RunScan.collectWith(
+			files, plugin, resolveSeams(plugin),
+			(entry, tree, seams, violations) ->
 				walk(
 					violations, entry.file, entry.source, tree, seams,
 					SourceComments.collectCommentTokens(plugin.lexicalRegions(entry.source))
-				);
-		}
-		return violations;
+				),
+			CheckScan.parseBranchAwareOrNull
+		);
 	}
 
 	/**
@@ -117,19 +114,13 @@ final class RedundantElse implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final seams: Null<Seams> = resolveSeams(plugin);
-		if (seams == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, source);
-		if (tree == null) return [];
 
-		final flagged: Array<String> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span != null) flagged.push('${span.from}:${span.to}');
-		}
-		final edits: Array<{ span: Span, text: String }> = [];
-		collectDeNests(tree, source, seams, [], SourceComments.collectCommentTokens(plugin.lexicalRegions(source)), flagged, edits, []);
-		return CanonicalEdit.dropContainedEdits(edits);
+		return RunScan.editsWith(plugin, source, resolveSeams(plugin), (tree, seams) -> {
+			final flagged: Array<String> = RunScan.spanKeys(violations);
+			final edits: Array<{ span: Span, text: String }> = [];
+			collectDeNests(tree, source, seams, [], SourceComments.collectCommentTokens(plugin.lexicalRegions(source)), flagged, edits, []);
+			return CanonicalEdit.dropContainedEdits(edits);
+		}, CheckScan.parseBranchAwareOrNull);
 	}
 
 	/**

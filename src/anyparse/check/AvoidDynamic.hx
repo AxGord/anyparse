@@ -186,7 +186,7 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 			final boundaryCalls: Array<String> = cfg.stringListOption(RULE_ID, 'boundaryCalls') ?? DEFAULT_BOUNDARY_CALLS;
 			final found: Array<Violation> = [];
 			walk(found, entry.file, entry.source, tree, null, false, ctx, excludeMeta, boundaryCalls);
-			final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+			final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 			final declaredTypes: Map<Int, String> = provider != null ? provider.declaredTypes(entry.source) : [];
 			final imports: Map<String, String> = provider != null ? provider.importMap(entry.source) : [];
 			DynamicBag.annotateBags(
@@ -222,7 +222,7 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 		final dynName: Null<String> = shape.rawDynamicTypeName;
 		final tree: Null<QueryNode> = dynName == null ? null : CheckScan.parseOrNull(plugin, source);
 		if (dynName == null || tree == null) return [];
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		final declaredTypes: Map<Int, String> = provider != null ? provider.declaredTypes(source) : [];
 		final castTargets: Map<Int, String> = provider != null ? provider.castTargetSources(source) : [];
 		// The inferred type must resolve to a provably plain nominal — resolved against the

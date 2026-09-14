@@ -48,10 +48,7 @@ final class AlwaysNullComparison implements Check {
 		final nullLit: String = nullLitKind;
 		final ident: String = identKind;
 		final eqKind: Null<String> = shape.eqKind;
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collect(files, plugin, (entry, tree, violations) -> {
 			NullFlow.analyze(tree, shape, entry.source, (node, facts) -> {
 				if (!equalityKinds.contains(node.kind) || node.children.length != 2) return;
 				final operand: Null<QueryNode> = NullFlow.nullComparisonOperand(node, ident, nullLit);
@@ -72,8 +69,7 @@ final class AlwaysNullComparison implements Check {
 					});
 				}
 			});
-		}
-		return violations;
+		});
 	}
 
 	/**

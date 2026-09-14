@@ -288,11 +288,7 @@ final class FieldInitAtDeclaration implements Check {
 		final shape: RefShape = plugin.refShape();
 		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (_: Exception) null;
 		if (tree == null) return [];
-		final moving: Array<Int> = [];
-		for (v in violations) {
-			final vSpan: Null<Span> = v.span;
-			if (vSpan != null) moving.push(vSpan.from);
-		}
+		final moving: Array<Int> = RunScan.spanStarts(violations);
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;

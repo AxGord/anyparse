@@ -200,13 +200,7 @@ final class OptionalParamShorthand implements Check {
 		final seams: Seams = buildSeams(plugin);
 		if (seams.params.length == 0) return [];
 		final resolveIndex: () -> Null<SymbolIndex> = SwitchChain.lazyIndexOf(files, plugin);
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final parsed: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (parsed == null) continue;
-			// Re-bound to a non-null local: strict null-safety takes a struct literal's field
-			// type from the declared type, not the narrowed one.
-			final tree: QueryNode = parsed;
+		return RunScan.collect(files, plugin, (entry, tree, violations) -> {
 			final scope: HoistScope = {
 				root: tree,
 				resolveIndex: resolveIndex,
@@ -216,8 +210,7 @@ final class OptionalParamShorthand implements Check {
 			final sites: Array<ParamSite> = [];
 			collectParams(sites, tree, null, null, null, seams);
 			for (site in sites) report(violations, entry.file, entry.source, site, seams, scope);
-		}
-		return violations;
+		});
 	}
 
 	/**
@@ -233,32 +226,26 @@ final class OptionalParamShorthand implements Check {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		final seams: Seams = buildSeams(plugin);
-		if (seams.params.length == 0) return [];
-		final parsed: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (parsed == null) return [];
-		// Re-bound to a non-null local — see `run`.
-		final tree: QueryNode = parsed;
-		final scope: HoistScope = {
-			root: tree,
-			resolveIndex: SwitchChain.lazyIndexOf([{ file: '', source: source }], plugin, index),
-			commentRegions: lazyCommentRegions(plugin, source),
-			matchMask: lazyMatchMask(plugin, source)
-		};
-		final sites: Array<ParamSite> = [];
-		collectParams(sites, tree, null, null, null, seams);
-		final byKey: Map<String, ParamSite> = [];
-		for (site in sites) {
-			final span: Null<Span> = site.node.span;
-			if (span != null) byKey['${span.from}:${span.to}'] = site;
-		}
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
-			final site: Null<ParamSite> = byKey['${span.from}:${span.to}'];
-			if (site != null) collectEdits(edits, source, span, site, seams, scope);
-		}
-		return edits;
+		return seams.params.length == 0
+			? []
+			: RunScan.edits(plugin, source, tree -> {
+				final scope: HoistScope = {
+					root: tree,
+					resolveIndex: SwitchChain.lazyIndexOf([{ file: '', source: source }], plugin, index),
+					commentRegions: lazyCommentRegions(plugin, source),
+					matchMask: lazyMatchMask(plugin, source)
+				};
+				final sites: Array<ParamSite> = [];
+				collectParams(sites, tree, null, null, null, seams);
+				final byKey: Map<String, ParamSite> = [];
+				for (site in sites) {
+					final span: Null<Span> = site.node.span;
+					if (span != null) byKey['${span.from}:${span.to}'] = site;
+				}
+				final edits: Array<{ span: Span, text: String }> = [];
+				RunScan.eachMatched(violations, byKey, (site, span) -> collectEdits(edits, source, span, site, seams, scope));
+				return edits;
+			});
 	}
 
 	/**

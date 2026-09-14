@@ -151,20 +151,15 @@ final class TailMerge implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = resolveSeams(plugin);
-		if (seams == null) return [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) for (c in scan(tree, entry.source, seams)) violations.push({
+		return RunScan.collectWith(files, plugin, resolveSeams(plugin), (entry, tree, seams, violations) -> {
+			for (c in scan(tree, entry.source, seams)) violations.push({
 				file: entry.file,
 				span: c.tailSpan,
 				rule: RULE_ID,
 				severity: Severity.Info,
 				message: message(c.count)
 			});
-		}
-		return violations;
+		});
 	}
 
 	/**
@@ -176,22 +171,16 @@ final class TailMerge implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final seams: Null<Seams> = resolveSeams(plugin);
-		if (seams == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
 
-		final flagged: Array<String> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span != null) flagged.push('${span.from}:${span.to}');
-		}
-		final edits: Array<{ span: Span, text: String }> = [
-			for (c in scan(
-				tree, source, seams
-			)) if (c.fixable && flagged.contains('${c.tailSpan.from}:${c.tailSpan.to}')) { span: c.removeSpan, text: '' }
-		];
-		return CanonicalEdit.dropContainedEdits(edits);
+		return RunScan.editsWith(plugin, source, resolveSeams(plugin), (tree, seams) -> {
+			final flagged: Array<String> = RunScan.spanKeys(violations);
+			final edits: Array<{ span: Span, text: String }> = [
+				for (c in scan(
+					tree, source, seams
+				)) if (c.fixable && flagged.contains('${c.tailSpan.from}:${c.tailSpan.to}')) { span: c.removeSpan, text: '' }
+			];
+			return CanonicalEdit.dropContainedEdits(edits);
+		});
 	}
 
 	/** The reported wording; `count` is at least 1. */

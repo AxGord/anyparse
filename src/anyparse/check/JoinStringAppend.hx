@@ -119,12 +119,7 @@ final class JoinStringAppend implements Check implements DefaultOff {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = readSeams(plugin, files);
-		if (seams == null) return [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collectWith(files, plugin, readSeams(plugin, files), (entry, tree, seams, violations) -> {
 			final comments: Array<{ from: Int, to: Int, isLine: Bool }> =
 				SourceComments.collectCommentTokens(plugin.lexicalRegions(entry.source));
 			final declaredTypeSources: () -> Map<Int, String> = TypeResolver.memoizedDeclaredTypeSources(plugin, entry.source);
@@ -133,35 +128,35 @@ final class JoinStringAppend implements Check implements DefaultOff {
 			// The operator gate is asked LAST, after every cheaper gate has passed: the per-file type
 			// resolver it needs is built on first demand, so a run that never gets this far never
 			// pays for one — and on a tree that overloads nothing the answer is one index lookup.
-			for (m in matches) if (builtinAppend(m, seams, entry.file, entry.source, tree)) violations.push({
-				file: entry.file,
-				span: m.anchorSpan,
-				rule: RULE_ID,
-				severity: Severity.Info,
-				message: 'this run of ${m.termCount} statements on `${m.target}` can be joined into a single append'
-			});
-		}
-		return violations;
+			for (m in matches) if (builtinAppend(m, seams, entry.file, entry.source, tree))
+				violations.push({
+					file: entry.file,
+					span: m.anchorSpan,
+					rule: RULE_ID,
+					severity: Severity.Info,
+					message: 'this run of ${m.termCount} statements on `${m.target}` can be joined into a single append'
+				});
+		});
 	}
 
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		if (violations.length == 0) return [];
-		final seams: Null<Seams> = readSeams(plugin, [{ file: violations[0].file, source: source }]);
-		if (seams == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
-		final declaredTypeSources: () -> Map<Int, String> = TypeResolver.memoizedDeclaredTypeSources(plugin, source);
-		final matches: Array<Match> = [];
-		collectMatches(tree, tree, source, comments, seams, declaredTypeSources, matches);
-		final byKey: Map<String, Match> = [];
-		for (m in matches) byKey['${m.anchorSpan.from}:${m.anchorSpan.to}'] = m;
+		return violations.length == 0
+			? []
+			: RunScan.editsWith(plugin, source, readSeams(plugin, [{ file: violations[0].file, source: source }]), (tree, seams) -> {
+				final comments: Array<{ from: Int, to: Int, isLine: Bool }> =
+					SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
+				final declaredTypeSources: () -> Map<Int, String> = TypeResolver.memoizedDeclaredTypeSources(plugin, source);
+				final matches: Array<Match> = [];
+				collectMatches(tree, tree, source, comments, seams, declaredTypeSources, matches);
+				final byKey: Map<String, Match> = [];
+				for (m in matches) byKey['${m.anchorSpan.from}:${m.anchorSpan.to}'] = m;
 
-		return CanonicalEdit.dropContainedEdits(
-			CheckScan.collectSpanEdits(violations, byKey, (m, _) -> ({ span: m.editSpan, text: m.replacementText }))
-		);
+				return CanonicalEdit.dropContainedEdits(
+					CheckScan.collectSpanEdits(violations, byKey, (m, _) -> ({ span: m.editSpan, text: m.replacementText }))
+				);
+			});
 	}
 
 	/** Bundle the required grammar seams, or null when a required one is unset (the check is then a no-op). */

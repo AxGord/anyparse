@@ -237,12 +237,7 @@ final class PreferComprehension implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = readSeams(plugin.refShape());
-		if (seams == null) return [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collectWith(files, plugin, readSeams(plugin.refShape()), (entry, tree, seams, violations) -> {
 			for (m in collectMatches(tree, entry.source, seams, plugin.refShape(), plugin.lexicalRegions(entry.source))) violations.push({
 				file: entry.file,
 				span: m.span,
@@ -250,8 +245,7 @@ final class PreferComprehension implements Check {
 				severity: Severity.Info,
 				message: 'this empty-array declaration and push-only for loop can be an array comprehension ([for])'
 			});
-		}
-		return violations;
+		});
 	}
 
 	/**
@@ -271,21 +265,14 @@ final class PreferComprehension implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final seams: Null<Seams> = readSeams(plugin.refShape());
-		if (seams == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final byKey: Map<String, Array<{ span: Span, text: String }>> = [];
-		for (m in collectMatches(tree, source, seams, plugin.refShape(), plugin.lexicalRegions(source)))
-			byKey['${m.span.from}:${m.span.to}'] = m.edits;
-		final out: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
-			final edits: Null<Array<{ span: Span, text: String }>> = byKey['${span.from}:${span.to}'];
-			if (edits != null) for (e in edits) out.push(e);
-		}
-		return CanonicalEdit.dropContainedEdits(out);
+		return RunScan.editsWith(plugin, source, readSeams(plugin.refShape()), (tree, seams) -> {
+			final byKey: Map<String, Array<{ span: Span, text: String }>> = [];
+			for (m in collectMatches(tree, source, seams, plugin.refShape(), plugin.lexicalRegions(source)))
+				byKey['${m.span.from}:${m.span.to}'] = m.edits;
+			final out: Array<{ span: Span, text: String }> = [];
+			RunScan.eachMatched(violations, byKey, (edits, _) -> for (e in edits) out.push(e));
+			return CanonicalEdit.dropContainedEdits(out);
+		});
 	}
 
 	/** Bundle the required + optional `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */

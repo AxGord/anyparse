@@ -70,9 +70,9 @@ final class EnglishComments implements Check implements NoAutofix {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final violations: Array<Violation> = [];
-		for (entry in files) scan(violations, entry.file, entry.source, plugin.lexicalRegions(entry.source));
-		return violations;
+		return RunScan.gather(
+			files, (entry, violations) -> scan(violations, entry.file, entry.source, plugin.lexicalRegions(entry.source))
+		);
 	}
 
 	/** Report-only — translating a comment into English is a human task, not a mechanical rewrite. */

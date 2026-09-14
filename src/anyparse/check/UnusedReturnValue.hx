@@ -7,7 +7,6 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
@@ -120,9 +119,6 @@ final class UnusedReturnValue implements Check implements ConfigAware implements
 		if (callKind == null || exprStmtKind == null) return [];
 		final callK: String = callKind;
 		final stmtK: String = exprStmtKind;
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
-		if (provider == null) return [];
-		final typed: TypeInfoProvider = provider;
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
 		final ctx: Ctx = {
 			shape: shape,
@@ -134,18 +130,14 @@ final class UnusedReturnValue implements Check implements ConfigAware implements
 			opaqueKinds: shape.opaqueKinds ?? [],
 			index: index
 		};
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collectWith(files, plugin, RunScan.typeInfoOf(plugin), (entry, tree, typed, violations) -> {
 			final extra: Null<Array<String>> = LintConfig.resolveWith(_resolveConfig, entry.file)
 				.stringListOption('unused-return-value', 'allow');
 			final allow: Array<String> = extra == null ? DEFAULT_ALLOW : DEFAULT_ALLOW.concat(extra);
 			final declaredTypes: Map<Int, String> = typed.declaredTypes(entry.source);
 			final returnTypes: Map<Int, String> = typed.returnTypes(entry.source);
 			walk(violations, entry.file, tree, tree, declaredTypes, returnTypes, allow, ctx);
-		}
-		return violations;
+		});
 	}
 
 	/** No safe single edit — using or ignoring the result is an author decision. */
@@ -237,18 +229,17 @@ final class UnusedReturnValue implements Check implements ConfigAware implements
 		if (recv.kind != ctx.identKind) return null;
 		final recvName: Null<String> = recv.name;
 		if (recvName == null) return null;
-		final name: String = recvName;
 		final selfText: Null<String> = ctx.selfReferenceText;
-		final nominal: Null<String> = if (selfText != null && name == selfText)
+		final nominal: Null<String> = if (selfText != null && recvName == selfText)
 			memberReturn(root, callee.span, method, ctx);
 		else {
 			// An instance receiver resolves through its declared type; an unbound name is a
 			// static / type receiver, looked up by its own name.
 			final bindingFrom: Null<Int> = TypeResolver.identBindingFrom(recv, root, ctx.shape);
-			final lookupType: Null<String> = bindingFrom == null ? name : declaredTypes[bindingFrom];
+			final lookupType: Null<String> = bindingFrom == null ? recvName : declaredTypes[bindingFrom];
 			lookupType == null ? null : ctx.index.members.returnNominalOf(lookupType, method);
 		}
-		return discarded(nominal, '${name}.${method}()');
+		return discarded(nominal, '${recvName}.${method}()');
 	}
 
 	/** The enclosing type's `member` return nominal (for `this.` / implicit-`this` calls), or null. */

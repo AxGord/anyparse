@@ -125,20 +125,13 @@ final class MapKeysLookup implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final cfg: Null<Cfg> = readCfg(plugin);
-		if (cfg == null) return [];
-		final c: Cfg = cfg;
-		final violations: Array<Violation> = [];
 		// Cross-file member types are needed only by a loop that already cleared every structural
 		// gate, which most runs never have — so the index is built at most once, on first demand.
 		final resolveSymbols: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collectWith(files, plugin, readCfg(plugin), (entry, tree, c, violations) -> {
 			final declaredTypes: Null<Map<Int, String>> = c.typed?.declaredTypes(entry.source);
 			walk(tree, tree, entry.file, declaredTypes, c, resolveSymbols, violations);
-		}
-		return violations;
+		});
 	}
 
 	/**
@@ -162,11 +155,7 @@ final class MapKeysLookup implements Check {
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (cfg == null || tree == null || MemberWriteScan.carriesBuildMacro(source)) return [];
 		final c: Cfg = cfg;
-		final wanted: Array<String> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span != null) wanted.push('${span.from}:${span.to}');
-		}
+		final wanted: Array<String> = RunScan.spanKeys(violations);
 		final edits: Array<{ span: Span, text: String }> = [];
 		fixWalk(tree, source, c, wanted, edits);
 		return CanonicalEdit.dropContainedEdits(edits);
@@ -189,7 +178,7 @@ final class MapKeysLookup implements Check {
 		final fieldKind: Null<String> = shape.fieldAccessKind;
 		final indexKind: Null<String> = shape.indexAccessKind;
 		if (forKind == null || identKind == null || callKind == null || fieldKind == null || indexKind == null) return null;
-		final typed: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		final typed: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		return {
 			shape: shape,
 			forKind: forKind,

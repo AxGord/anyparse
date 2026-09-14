@@ -94,12 +94,7 @@ final class UncheckedNullable implements Check implements NoAutofix {
 			identKind: identKindValue,
 			sigs: sigs
 		};
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(violations, entry.file, tree, ctx);
-		}
-		return violations;
+		return RunScan.collect(files, plugin, (entry, tree, violations) -> walk(violations, entry.file, tree, ctx));
 	}
 
 	/** No safe single edit — report-only. */

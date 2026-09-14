@@ -87,10 +87,9 @@ final class ShadowingCaseBinder implements Check implements NoAutofix {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<CaseSeams> = CasePatternScan.seamsOf(plugin);
 		if (seams == null) return [];
-		final resolved: CaseSeams = seams;
-		final context: CaseRunContext = CasePatternScan.runContextOf(resolved, files, plugin);
+		final context: CaseRunContext = CasePatternScan.runContextOf(seams, files, plugin);
 		final violations: Array<Violation> = [];
-		for (entry in context.parsed) collect(resolved, context.constants, context.index, entry.file, entry.tree, violations);
+		for (entry in context.parsed) collect(seams, context.constants, context.index, entry.file, entry.tree, violations);
 		return violations;
 	}
 

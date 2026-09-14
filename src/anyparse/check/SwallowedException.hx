@@ -73,12 +73,9 @@ final class SwallowedException implements Check implements NoAutofix {
 		final blockKind: Null<String> = shape.blockStmtKind;
 		if (catchKind == null || blockKind == null) return [];
 		final exitKinds: Array<String> = shape.controlExitKinds ?? [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(violations, entry.file, entry.source, tree, catchKind, blockKind, exitKinds);
-		}
-		return violations;
+		return RunScan.collect(
+			files, plugin, (entry, tree, violations) -> walk(violations, entry.file, entry.source, tree, catchKind, blockKind, exitKinds)
+		);
 	}
 
 	/** Report-only — resolving a swallowed exception (handle it, or rethrow) is a human decision. */

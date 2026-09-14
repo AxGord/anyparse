@@ -9,9 +9,7 @@ import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 using StringTools;
 using Lambda;
@@ -118,20 +116,14 @@ final class PreferFind implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = readSeams(plugin);
-		if (seams == null) return [];
-		final s: Seams = seams;
-		final violations: Array<Violation> = [];
 		// Lazy: the resolution scope reads the std and the configured libraries, and only a recovered
 		// loop demands it — a file holding none never forces the index.
 		final index: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
-		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
-			if (tree != null)
-				walk(tree, entry.file, entry.source, s, memberProbe(entry.source, plugin, tree, entry.file, index), violations);
-		}
-		return violations;
+		return RunScan.collectWith(
+			files, plugin, readSeams(plugin),
+			(entry, tree, s, violations) ->
+				walk(tree, entry.file, entry.source, s, memberProbe(entry.source, plugin, tree, entry.file, index), violations)
+		);
 	}
 
 	/**
@@ -154,64 +146,62 @@ final class PreferFind implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final s: Null<Seams> = readSeams(plugin);
-		if (s == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
 		// The emitted `xs.find(...)` must reach `Lambda.find`. Haxe resolves static extensions in
 		// REVERSE declaration order and the inserted `using Lambda;` goes ABOVE any existing run,
 		// so a second `using` declaring `find` would win the new call — refuse the whole file
 		// rather than emit a silently retargeted one. The gates run on the plugin's resolution
 		// index when it has one, the caller's otherwise.
-		final symbols: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
-		final header: UsingHeader = UsingScan.headerOf(tree, source, plugin);
-		final conflicted: Bool = UsingScan.conflictingUsing(
-			UsingScan.usingModules(header), LAMBDA_MODULE, FIND_METHOD, plugin, () -> symbols, []
-		);
-		final byKey: Map<String, FixCandidate> = [];
-		// The same file the violations name, so the shadow proof resolves imports from where the
-		// loop is written — the report pass proved it against exactly that context.
-		final file: String = violations.length == 0 ? '' : violations[0].file;
-		// The SAME lazy resolver the report pass used, falling back to a one-file index when the
-		// caller supplied none — the two passes must reach the same verdict, because the shadow now
-		// picks the call SPELLING rather than dropping the site: a fix pass blind to it would emit
-		// the extension form for a finding the report wrote as qualified.
-		collectFixCandidates(
-			tree, source, s,
-			memberProbe(source, plugin, tree, file, RefactorSupport.lazySymbolIndex([{ file: file, source: source }], plugin, symbols)),
-			byKey
-		);
-		final edits: Array<{ span: Span, text: String }> = [];
-		// Only an EXTENSION-form rewrite needs `Lambda` in scope; a qualified one names the module
-		// outright, so a file whose every claimed site is shadowed gets the calls and no import.
-		var rewrote: Bool = false;
-		// The findings whose loop actually became an edit, and the ONLY ones the refusals below may
-		// name: a `byKey` miss got no edit for its own reason, and the `using` gate did not decide it.
-		final accepted: Array<Violation> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
-			final cand: Null<FixCandidate> = byKey['${span.from}:${span.to}'];
-			if (cand == null) continue;
-			final candEdits: Null<Array<{ span: Span, text: String }>> = buildEdits(cand, source, s);
-			if (candEdits == null || CanonicalEdit.editsOverlapAny(candEdits, edits)) continue;
-			for (e in candEdits) edits.push(e);
-			accepted.push(v);
-			if (!cand.qualified) rewrote = true;
-		}
-		// The conflict is decided BEFORE the loop (it reads only the header) and answered AFTER it, so
-		// the refusal can name the findings whose rewrites it takes down. Answering at the decision
-		// point returned an empty set and wrote nothing at all, which the ledger reads as a rule that
-		// withheld an edit without saying why.
-		if (conflicted) {
-			UsingScan.noteDeclineWhereUnset(accepted, UsingScan.conflictingUsingDecline(LAMBDA_MODULE, FIND_METHOD));
-			return [];
-		}
-		// `false` is the refusal, in either of the two ways it comes: the file declares `using Lambda;`
-		// only inside a `#if` region that leaves a rewritten call out, or an accepted rewrite already
-		// covers the byte the declaration would be spliced at. Neither the extension call nor a second,
-		// unguarded declaration is safe, so the whole edit set goes.
-		return rewrote && !UsingScan.appendUsingInsert(header, LAMBDA_MODULE, edits, accepted) ? [] : edits;
+		return RunScan.editsWith(plugin, source, readSeams(plugin), (tree, s) -> {
+			final symbols: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
+			final header: UsingHeader = UsingScan.headerOf(tree, source, plugin);
+			final conflicted: Bool = UsingScan.conflictingUsing(
+				UsingScan.usingModules(header), LAMBDA_MODULE, FIND_METHOD, plugin, () -> symbols, []
+			);
+			final byKey: Map<String, FixCandidate> = [];
+			// The same file the violations name, so the shadow proof resolves imports from where the
+			// loop is written — the report pass proved it against exactly that context.
+			final file: String = violations.length == 0 ? '' : violations[0].file;
+			// The SAME lazy resolver the report pass used, falling back to a one-file index when the
+			// caller supplied none — the two passes must reach the same verdict, because the shadow now
+			// picks the call SPELLING rather than dropping the site: a fix pass blind to it would emit
+			// the extension form for a finding the report wrote as qualified.
+			collectFixCandidates(
+				tree, source, s,
+				memberProbe(source, plugin, tree, file, RefactorSupport.lazySymbolIndex([{ file: file, source: source }], plugin, symbols)),
+				byKey
+			);
+			final edits: Array<{ span: Span, text: String }> = [];
+			// Only an EXTENSION-form rewrite needs `Lambda` in scope; a qualified one names the module
+			// outright, so a file whose every claimed site is shadowed gets the calls and no import.
+			var rewrote: Bool = false;
+			// The findings whose loop actually became an edit, and the ONLY ones the refusals below may
+			// name: a `byKey` miss got no edit for its own reason, and the `using` gate did not decide it.
+			final accepted: Array<Violation> = [];
+			for (v in violations) {
+				final span: Null<Span> = v.span;
+				if (span == null) continue;
+				final cand: Null<FixCandidate> = byKey['${span.from}:${span.to}'];
+				if (cand == null) continue;
+				final candEdits: Null<Array<{ span: Span, text: String }>> = buildEdits(cand, source, s);
+				if (candEdits == null || CanonicalEdit.editsOverlapAny(candEdits, edits)) continue;
+				for (e in candEdits) edits.push(e);
+				accepted.push(v);
+				if (!cand.qualified) rewrote = true;
+			}
+			// The conflict is decided BEFORE the loop (it reads only the header) and answered AFTER it, so
+			// the refusal can name the findings whose rewrites it takes down. Answering at the decision
+			// point returned an empty set and wrote nothing at all, which the ledger reads as a rule that
+			// withheld an edit without saying why.
+			if (conflicted) {
+				UsingScan.noteDeclineWhereUnset(accepted, UsingScan.conflictingUsingDecline(LAMBDA_MODULE, FIND_METHOD));
+				return [];
+			}
+			// `false` is the refusal, in either of the two ways it comes: the file declares `using Lambda;`
+			// only inside a `#if` region that leaves a rewritten call out, or an accepted rewrite already
+			// covers the byte the declaration would be spliced at. Neither the extension call nor a second,
+			// unguarded declaration is safe, so the whole edit set goes.
+			return rewrote && !UsingScan.appendUsingInsert(header, LAMBDA_MODULE, edits, accepted) ? [] : edits;
+		});
 	}
 
 	/**

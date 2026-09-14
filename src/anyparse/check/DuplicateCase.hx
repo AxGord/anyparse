@@ -40,20 +40,15 @@ final class DuplicateCase implements Check {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final shape: RefShape = plugin.refShape();
-		final declared: Null<String> = shape.caseBranchKind;
-		if (declared == null) return [];
-		final caseBranchKind: String = declared;
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null)
+		return RunScan.collectWith(
+			files, plugin, shape.caseBranchKind,
+			(entry, tree, caseBranchKind, violations) ->
 				walk(
 					violations, entry.file, entry.source, tree,
 					{ caseBranchKind: caseBranchKind, conditionalKind: shape.conditionalMemberKind },
 					CondBranchPath.scan(entry.source, shape, plugin.lexicalRegions(entry.source))
-				);
-		}
-		return violations;
+				)
+		);
 	}
 
 	/** `fix` deletes the later (dead) duplicate arm; the writer round-trip re-canonicalises the switch. */

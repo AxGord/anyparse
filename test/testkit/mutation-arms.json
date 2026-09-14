@@ -1536,8 +1536,8 @@
 			"name": "M-JSUL-BARE-IDENT-NOT-SAFE",
 			"type": "anyparse.check.JoinSingleUseLocal",
 			"method": "readPositionIsSafe",
-			"find": "evaluatedOnceEagerly(steps, s) && nothingImpureBefore(steps, s) && (init.kind == s.identKind || !pathIsConditional(steps, s));",
-			"replace": "evaluatedOnceEagerly(steps, s) && nothingImpureBefore(steps, s) && !pathIsConditional(steps, s);",
+			"find": "&& (init.kind == s.identKind || !pathIsConditional(path, s));",
+			"replace": "&& !pathIsConditional(path, s);",
 			"note": "the bare-identifier exemption goes, so a plain local read is refused on a conditional path even though reading it has no effect at all"
 		},
 		{
@@ -2164,8 +2164,8 @@
 			"name": "M-DECL-INIT-RECEIVER-MODE-NOMINAL",
 			"type": "anyparse.check.UnguardedNullableDeref",
 			"method": "run",
-			"find": "NullFlow.declInit(decl, declTypeChildKinds), cfgValue, valueNominalOf);",
-			"replace": "NullFlow.declInit(decl, declTypeChildKinds), cfgValue, nominalOf);",
+			"find": "NullFlow.declInit(decl, declTypeChildKinds), cfg, valueNominalOf);",
+			"replace": "NullFlow.declInit(decl, declTypeChildKinds), cfg, nominalOf);",
 			"note": "the initializer is typed through the RECEIVER arc, which peels `Null<>`, so a field declared `Null<T>` reads as non-null and its seed is dropped"
 		},
 		{

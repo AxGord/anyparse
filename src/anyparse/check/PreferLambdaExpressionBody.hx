@@ -389,9 +389,7 @@ final class PreferLambdaExpressionBody implements Check {
 		if (seams == null || violations.length == 0) return [];
 		// The layout config comes from the violation's own path — the precondition renders the
 		// whole file, so `fix` must measure under exactly the settings `run` measured with.
-		final file: String = violations[0].file;
-		for (violation in violations) if (violation.file != file)
-			throw new Exception('$RULE_ID: fix() takes ONE file\'s violations, got $file and ${violation.file}');
+		final file: String = RunScan.oneFile(violations, RULE_ID);
 		final byKey: Map<String, Match> = [];
 		for (m in collect(plugin, source, seams, FormatConfigDiscovery.discover(file))) byKey['${m.span.from}:${m.span.to}'] = m;
 		return CanonicalEdit.dropContainedEdits(CheckScan.collectSpanEdits(violations, byKey, (m, _) -> ({ span: m.span, text: m.text })));
@@ -421,9 +419,7 @@ final class PreferLambdaExpressionBody implements Check {
 		// No writer, or a writer that declines this file: fail closed. A grammar with no
 		// writer makes the check inert rather than leaving every collapse unmeasured.
 		final before: Null<Array<String>> = renderedLines(plugin, source, optsJson);
-		if (before == null) return [];
-		final beforeLines: Array<String> = before;
-		return found.filter(m -> paysForItself(plugin, source, m, optsJson, beforeLines));
+		return before == null ? [] : found.filter(m -> paysForItself(plugin, source, m, optsJson, before));
 	}
 
 	/**

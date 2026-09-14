@@ -180,11 +180,6 @@ final class StringLiteralDup implements Check implements ConfigAware implements 
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final support: Null<StringFoldSupport> = plugin.stringFoldSupport();
-		if (support == null) return [];
-		// Re-bound: a narrowed local never reaches an anonymous-structure literal whose expected
-		// field type is non-nullable.
-		final folds: StringFoldSupport = support;
 		// Both shape lookups are per-RUN, not per-file, and both build a fresh struct on every
 		// call — `refShape()` a 227-field one. Hoisted out of the loop for that reason; only
 		// `minLen` below is genuinely per-file, since it comes from the discovered config.
@@ -195,10 +190,7 @@ final class StringLiteralDup implements Check implements ConfigAware implements 
 		// declares none, which simply leaves a table string-only.
 		final literals: Null<Map<String, String>> = shape.literalTypeNames;
 		final literalKinds: Array<String> = literals == null ? [] : [for (kind in literals.keys()) kind];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collectWith(files, plugin, plugin.stringFoldSupport(), (entry, tree, folds, violations) -> {
 			final config: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
 			final minOcc: Int = positiveOr(config.intOption(RULE_ID, 'minOccurrences'), DEFAULT_MIN_OCCURRENCES);
 			final ctx: ScanCtx = {
@@ -211,8 +203,7 @@ final class StringLiteralDup implements Check implements ConfigAware implements 
 				minLen: positiveOr(config.intOption(RULE_ID, 'minLength'), DEFAULT_MIN_LENGTH)
 			};
 			scanFile(violations, entry.file, entry.source, tree, ctx, minOcc);
-		}
-		return violations;
+		});
 	}
 
 	/** No mechanical autofix — the constant's name is intent a human supplies (like `magic-number`). */

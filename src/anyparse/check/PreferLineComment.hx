@@ -110,11 +110,7 @@ final class PreferLineComment implements Check implements DefaultOff {
 	): Array<{ span: Span, text: String }> {
 		final kinds: LineCommentKinds = decisionKinds(plugin.refShape());
 		if (kinds.blocks.length == 0) return [];
-		final flagged: Array<Int> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span != null) flagged.push(span.from);
-		}
+		final flagged: Array<Int> = RunScan.spanStarts(violations);
 		return [
 			for (rewrite in rewrites(
 				source, plugin, kinds

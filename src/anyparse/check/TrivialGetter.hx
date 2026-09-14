@@ -265,22 +265,20 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	): Array<{ span: Span, text: String }> {
 		// No findings, nothing to fix — and every finding names the ONE file this call is about, so
 		// the early return is what lets `violations[0].file` below be read unconditionally.
-		if (violations.length == 0) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final file: String = violations[0].file;
-		final maxBypass: Int = LintConfig.resolveWith(_resolveConfig, file)
-			.intOption('trivial-getter', 'maxBypassWrites') ?? DEFAULT_MAX_BYPASS_WRITES;
-		final wanted: Array<String> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span != null) wanted.push('${span.from}:${span.to}');
-		}
-		final edits: Array<{ span: Span, text: String }> = [];
-		final shape: RefShape = plugin.refShape();
-		final branch: MemberBranchSeams = MemberBranchScan.seamsOf(shape, source, plugin.lexicalRegions.bind(source));
-		for (cls in CheckScan.classBodies(tree)) collectClassFixEdits(cls, source, file, wanted, index, edits, maxBypass, branch, shape);
-		return CanonicalEdit.dropContainedEdits(edits);
+		return violations.length == 0
+			? []
+			: RunScan.edits(plugin, source, tree -> {
+				final file: String = violations[0].file;
+				final maxBypass: Int = LintConfig.resolveWith(_resolveConfig, file)
+					.intOption('trivial-getter', 'maxBypassWrites') ?? DEFAULT_MAX_BYPASS_WRITES;
+				final wanted: Array<String> = RunScan.spanKeys(violations);
+				final edits: Array<{ span: Span, text: String }> = [];
+				final shape: RefShape = plugin.refShape();
+				final branch: MemberBranchSeams = MemberBranchScan.seamsOf(shape, source, plugin.lexicalRegions.bind(source));
+				for (cls in CheckScan.classBodies(tree))
+					collectClassFixEdits(cls, source, file, wanted, index, edits, maxBypass, branch, shape);
+				return CanonicalEdit.dropContainedEdits(edits);
+			});
 	}
 
 	/**
@@ -324,26 +322,25 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		if (span == null) return null;
 		final source: Null<String> = sourceByFile[v.file];
 		if (source == null) return null;
-		final src: String = source;
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, src);
+		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return null;
 		final maxBypass: Int = LintConfig.resolveWith(_resolveConfig, v.file)
 			.intOption('trivial-getter', 'maxBypassWrites') ?? DEFAULT_MAX_BYPASS_WRITES;
 		final shape: RefShape = plugin.refShape();
-		final branch: MemberBranchSeams = MemberBranchScan.seamsOf(shape, src, plugin.lexicalRegions.bind(src));
+		final branch: MemberBranchSeams = MemberBranchScan.seamsOf(shape, source, plugin.lexicalRegions.bind(source));
 		for (cls in CheckScan.classBodies(tree)) {
 			final className: Null<String> = cls.name;
 			if (className == null) continue;
 			final owner: String = className;
-			final t = memberTables(cls, src, branch);
+			final t = memberTables(cls, source, branch);
 			for (prop in t.properties) if (prop.span.from == span.from) {
 				if (subtypeBlocks(subtypeIndex, className, prop.name)) return null;
-				final c = classifyProperty(cls, src, v.file, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass, shape);
+				final c = classifyProperty(cls, source, v.file, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass, shape);
 				// The self-backed arm deletes nothing outside the owner, so no other file can need an edit.
 				if (c == null || c.inlineGetter != null || c.selfBacked) return null;
 				if (!subtypeIndex.subtypes.subtypeReferencesField(owner, c.field)) return null;
 				final ownerEdits: Null<Array<{ span: Span, text: String }>> = buildFix(
-					cls, src, prop.span, prop.name, prop.isStatic, c, shape
+					cls, source, prop.span, prop.name, prop.isStatic, c, shape
 				);
 				if (ownerEdits == null) return null;
 				final oe: Array<{ span: Span, text: String }> = ownerEdits;

@@ -9,7 +9,6 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
@@ -94,32 +93,24 @@ final class NullableSwitchMissingNull implements Check implements NoAutofix {
 		final seams: Null<Seams> = readSeams(shape);
 		if (seams == null) return [];
 		final s: Seams = seams;
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
-		if (provider == null) return [];
-		final typed: TypeInfoProvider = provider;
 		// The RESOLUTION index, not the report one — `NullableSource`'s class doc says why, and why
 		// the exclusion list has to be re-applied inside the arc once it is this wide.
 		final index: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? SymbolIndex.build(files, plugin);
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
-			final root: QueryNode = tree;
+		return RunScan.collectWith(files, plugin, RunScan.typeInfoOf(plugin), (entry, tree, typed, violations) -> {
 			final declaredTypes: Map<Int, String> = typed.declaredTypes(entry.source);
 			final returnTypes: Map<Int, String> = typed.returnTypes(entry.source);
 			final ctx: FileCtx = {
 				file: entry.file,
-				root: root,
+				root: tree,
 				declaredTypes: declaredTypes,
 				declaredTypeSources: typed.declaredTypeSources(entry.source),
 				returnTypes: returnTypes,
 				s: s,
 				index: index
 			};
-			final seed: Null<(QueryNode) -> Bool> = makeSeed(s.cfg, root, declaredTypes, returnTypes, index);
+			final seed: Null<(QueryNode) -> Bool> = makeSeed(s.cfg, tree, declaredTypes, returnTypes, index);
 			NullFlow.analyze(tree, shape, entry.source, (node, facts) -> checkSwitch(violations, node, facts, ctx), seed);
-		}
-		return violations;
+		});
 	}
 
 	/**

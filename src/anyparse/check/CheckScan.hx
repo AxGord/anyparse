@@ -273,7 +273,6 @@ final class CheckScan {
 	): Array<{ span: Span, text: String }> {
 		final tree: Null<QueryNode> = parseOrNull(plugin, source);
 		if (tree == null) return [];
-		final root: QueryNode = tree;
 		final shape: RefShape = plugin.refShape();
 		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
 		final blockKinds: Array<String> = support != null ? support.blockKinds() : [];
@@ -296,10 +295,10 @@ final class CheckScan {
 			condKind: shape.conditionalMemberKind
 		};
 		final parents: Map<QueryNode, QueryNode> = [];
-		fillParents(root, parents);
-		final frames: Map<QueryNode, Array<String>> = ScopeFrames.frameIndex(root, seams);
+		fillParents(tree, parents);
+		final frames: Map<QueryNode, Array<String>> = ScopeFrames.frameIndex(tree, seams);
 		final byKey: Map<String, QueryNode> = [];
-		MemberKinds.indexNodesByKind(root, flaggedKinds, byKey);
+		MemberKinds.indexNodesByKind(tree, flaggedKinds, byKey);
 		return nonOverlappingEdits(
 			collectSpanEdits(violations, byKey, (node, _) -> conditionEdit(node, alwaysTrueOf(node), parents, frames, source, seams))
 		);
@@ -352,7 +351,7 @@ final class CheckScan {
 	public static function typeNominalResolver(
 		source: String, plugin: GrammarPlugin, tree: QueryNode, file: String, ?index: SymbolIndex, asReceiver: Bool = false
 	): Null<(QueryNode) -> Null<String>> {
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		if (provider == null) return null;
 		final declaredTypes: Map<Int, String> = provider.declaredTypes(source);
 		final shape: RefShape = plugin.refShape();
@@ -641,11 +640,10 @@ final class CheckScan {
 	public static function escapesConditionalRegion(name: String, declSpan: Span, tree: QueryNode, shape: RefShape): Bool {
 		final region: Null<Span> = enclosingConditionalRegion(tree, declSpan, shape.conditionalMemberKind);
 		if (region == null) return false;
-		final r: Span = region;
 		for (h in Refs.find(name, tree, shape)) if (h.kind != RefKind.Decl) {
 			final bs: Null<Span> = h.bindingSpan;
-			if (bs == null || bs.from < r.from || bs.to > r.to) continue;
-			if (h.span.from < r.from || h.span.to > r.to) return true;
+			if (bs == null || bs.from < region.from || bs.to > region.to) continue;
+			if (h.span.from < region.from || h.span.to > region.to) return true;
 		}
 		return false;
 	}

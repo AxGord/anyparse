@@ -250,13 +250,7 @@ final class SwitchChain {
 		rule: String, message: (String) -> String
 	): Array<Violation> {
 		final resolveIndex: () -> Null<SymbolIndex> = lazyIndexOf(files, plugin);
-		final out: Array<Violation> = [];
-		for (entry in files) {
-			final parsed: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (parsed == null) continue;
-			// Re-bind to a non-null local — Strict null-safety takes a struct literal's field type
-			// from the declared type, not the narrowed one.
-			final tree: QueryNode = parsed;
+		return RunScan.collect(files, plugin, (entry, tree, out) -> {
 			final file: String = entry.file;
 			final source: String = entry.source;
 			final scope: ChainScope = { root: tree, resolveIndex: resolveIndex };
@@ -274,8 +268,7 @@ final class SwitchChain {
 					message: message(subject)
 				});
 			});
-		}
-		return out;
+		});
 	}
 
 	/**
@@ -292,11 +285,7 @@ final class SwitchChain {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, seams: ChainSeams, hostAccepts: Null<String> -> Bool,
 		?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final flagged: Array<Int> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span != null) flagged.push(span.from);
-		}
+		final flagged: Array<Int> = RunScan.spanStarts(violations);
 		if (flagged.length == 0) return [];
 		final parsed: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (parsed == null) return [];

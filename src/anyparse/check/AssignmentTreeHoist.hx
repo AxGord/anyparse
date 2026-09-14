@@ -357,8 +357,7 @@ final class AssignmentTreeHoist {
 		final rhsSpan: Null<Span> = terminalRvalue(chain, s)?.span;
 		if (rhsSpan == null) return 0;
 		// Re-bind: a narrowed Null<T> read does not carry its narrowing into the closure.
-		final span: Span = rhsSpan;
-		if (comments.exists(tok -> tok.isLine && tok.from >= span.from && tok.to <= span.to)) return 0;
+		if (comments.exists(tok -> tok.isLine && tok.from >= rhsSpan.from && tok.to <= rhsSpan.to)) return 0;
 		for (pair in tail.pairs) if (IfExpressionChain.holdsElseLessConditional(pair.value, s.conditionalKinds)) return 0;
 		return IfExpressionChain.isElseLessConditional(tail.terminal, s.conditionalKinds) ? 0 : tail.pairs.length;
 	}

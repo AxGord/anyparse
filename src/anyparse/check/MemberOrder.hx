@@ -198,15 +198,11 @@ final class MemberOrder implements Check implements ConfigAware {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final shape: RefShape = plugin.refShape();
 		if (!applicable(shape)) return [];
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+		return RunScan.collect(files, plugin, (entry, tree, violations) -> {
 			final accessors: Map<Int, Bool> = provider != null ? provider.propertyAccessors(entry.source) : [];
 			walk(violations, entry.file, entry.source, tree, shape, accessors, plugin.lexicalRegions(entry.source));
-		}
-		return violations;
+		});
 	}
 
 	/**
@@ -221,29 +217,30 @@ final class MemberOrder implements Check implements ConfigAware {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		final shape: RefShape = plugin.refShape();
-		if (!applicable(shape)) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
-		final accessors: Map<Int, Bool> = provider != null ? provider.propertyAccessors(source) : [];
-		final movableArglessNew: Bool = violations.length > 0
-			&& LintConfig.resolveWith(_resolveConfig, violations[0].file).boolOption('member-order', 'movableArglessNew') == true;
-		// Keyed by the flagged member's slot start, the same coordinate `firstLayoutIssue` re-derives
-		// on this path — so a container that declines can write its reason onto the very finding that
-		// reported it, rather than the caller inferring one from an empty edit list.
-		final flagged: Map<Int, Violation> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span != null) flagged[span.from] = v;
-		}
-		final edits: Array<{ span: Span, text: String }> = [];
-		// The file this pass is rewriting, for the build-macro gate: every violation a fix pass is
-		// handed belongs to ONE file, the same source the per-file config option above is read from.
-		// Null when the pass carries no violation — nothing to reorder anyway — which the gate reads
-		// as "no file named" and answers from the whole index, as it did before it could be told.
-		final file: Null<String> = violations.length > 0 ? violations[0].file : null;
-		fixWalk(edits, source, tree, shape, flagged, accessors, movableArglessNew, index, file, plugin.lexicalRegions(source));
-		return edits;
+		return !applicable(shape)
+			? []
+			: RunScan.edits(plugin, source, tree -> {
+				final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+				final accessors: Map<Int, Bool> = provider != null ? provider.propertyAccessors(source) : [];
+				final movableArglessNew: Bool = violations.length > 0
+				&& LintConfig.resolveWith(_resolveConfig, violations[0].file).boolOption('member-order', 'movableArglessNew') == true;
+				// Keyed by the flagged member's slot start, the same coordinate `firstLayoutIssue` re-derives
+				// on this path — so a container that declines can write its reason onto the very finding that
+				// reported it, rather than the caller inferring one from an empty edit list.
+				final flagged: Map<Int, Violation> = [];
+				for (v in violations) {
+					final span: Null<Span> = v.span;
+					if (span != null) flagged[span.from] = v;
+				}
+				final edits: Array<{ span: Span, text: String }> = [];
+				// The file this pass is rewriting, for the build-macro gate: every violation a fix pass is
+				// handed belongs to ONE file, the same source the per-file config option above is read from.
+				// Null when the pass carries no violation — nothing to reorder anyway — which the gate reads
+				// as "no file named" and answers from the whole index, as it did before it could be told.
+				final file: Null<String> = violations.length > 0 ? violations[0].file : null;
+				fixWalk(edits, source, tree, shape, flagged, accessors, movableArglessNew, index, file, plugin.lexicalRegions(source));
+				return edits;
+			});
 	}
 
 	/**

@@ -271,12 +271,9 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		final locals: Array<String> = shape.localDeclKinds ?? [];
 		if (locals.length == 0) return [];
 		final opaque: Array<String> = shape.opaqueKinds ?? [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(violations, entry.file, entry.source, tree, locals, opaque);
-		}
-		return violations;
+		return RunScan.collect(
+			files, plugin, (entry, tree, violations) -> walk(violations, entry.file, entry.source, tree, locals, opaque)
+		);
 	}
 
 	/**
@@ -295,7 +292,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		MemberKinds.indexNodesByKind(tree, locals, byKey);
 		// A cast target lookup costs a second full parse (`castTargetSources`), so compute
 		// it lazily and cache it — a run whose locals are never casts never pays for it.
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		var castTargetsCache: Null<Map<Int, String>> = null;
 		function castTargets(): Map<Int, String> {
 			final existing: Null<Map<Int, String>> = castTargetsCache;
@@ -489,7 +486,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	 * every nominal the oracle names, and accumulates the imports its short forms rely on.
 	 */
 	public static function printerFor(source: String, tree: QueryNode, plugin: GrammarPlugin): TypeRefPrinter {
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		final importMap: Map<String, String> = provider != null ? provider.importMap(source) : [];
 		return TypeRefPrinter.forFile(source, tree, importMap, plugin, RefactorSupport.resolutionIndexOf(plugin));
 	}

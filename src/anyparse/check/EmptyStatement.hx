@@ -51,13 +51,11 @@ final class EmptyStatement implements Check {
 		final catchClauseKind: Null<String> = shape.catchClauseKind;
 		if (blockStmtKind != null) blockKinds.push(blockStmtKind);
 		if (catchClauseKind != null) blockKinds.push(catchClauseKind);
-		if (emptyKinds.length == 0 && blockKinds.length == 0) return [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(violations, entry.file, entry.source, tree, emptyKinds, blockKinds);
-		}
-		return violations;
+		return emptyKinds.length == 0 && blockKinds.length == 0
+			? []
+			: RunScan.collect(
+				files, plugin, (entry, tree, violations) -> walk(violations, entry.file, entry.source, tree, emptyKinds, blockKinds)
+			);
 	}
 
 	/** Delete each flagged empty statement. */

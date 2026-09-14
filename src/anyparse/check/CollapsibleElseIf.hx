@@ -107,20 +107,15 @@ final class CollapsibleElseIf implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = resolveSeams(plugin);
-		if (seams == null) return [];
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) for (span in collectElseBlockSpans(tree, entry.source, seams)) violations.push({
+		return RunScan.collectWith(files, plugin, resolveSeams(plugin), (entry, tree, seams, violations) -> {
+			for (span in collectElseBlockSpans(tree, entry.source, seams)) violations.push({
 				file: entry.file,
 				span: span,
 				rule: 'collapsible-else-if',
 				severity: Severity.Info,
 				message: 'this else block wraps a single if — collapse it to else if'
 			});
-		}
-		return violations;
+		});
 	}
 
 	/**
@@ -131,16 +126,14 @@ final class CollapsibleElseIf implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final seams: Null<Seams> = resolveSeams(plugin);
-		if (seams == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final byKey: Map<String, Span> = [];
-		for (span in collectElseBlockSpans(tree, source, seams)) byKey['${span.from}:${span.to}'] = span;
+		return RunScan.editsWith(plugin, source, resolveSeams(plugin), (tree, seams) -> {
+			final byKey: Map<String, Span> = [];
+			for (span in collectElseBlockSpans(tree, source, seams)) byKey['${span.from}:${span.to}'] = span;
 
-		return CanonicalEdit.dropContainedEdits(
-			CheckScan.collectSpanEdits(violations, byKey, (block, _) -> ({ span: block, text: interiorText(source, block) }))
-		);
+			return CanonicalEdit.dropContainedEdits(
+				CheckScan.collectSpanEdits(violations, byKey, (block, _) -> ({ span: block, text: interiorText(source, block) }))
+			);
+		});
 	}
 
 	/**

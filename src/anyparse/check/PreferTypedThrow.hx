@@ -177,35 +177,33 @@ final class PreferTypedThrow implements Check implements DefaultOff {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final seams: Null<Seams> = readSeams(plugin);
-		if (seams == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final wanted: Map<String, Bool> = [];
-		var anyFixable: Bool = false;
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null || v.message != MSG_FIXABLE) continue;
-			wanted['${span.from}:${span.to}'] = true;
-			anyFixable = true;
-		}
-		if (!anyFixable) return [];
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
-		final importMap: Map<String, String> = provider != null ? provider.importMap(source) : [];
-		final printer: TypeRefPrinter = TypeRefPrinter.forFile(
-			source, tree, importMap, plugin, index ?? RefactorSupport.resolutionIndexOf(plugin)
-		);
-		final edits: Array<{ span: Span, text: String }> = [];
-		walkThrows(tree, seams, false, (literal, insideConditional) -> {
-			final span: Null<Span> = literal.span;
-			if (span == null || !wanted.exists('${span.from}:${span.to}')) return;
-			// A conditional region gets the qualified path and no import: a top-level import
-			// would be unused in a build where the branch is compiled out.
-			final typeText: String = insideConditional ? seams.exceptionPath : printer.print(seams.exceptionPath).text;
-			edits.push({ span: span, text: 'new $typeText(${source.substring(span.from, span.to)})' });
+		return RunScan.editsWith(plugin, source, readSeams(plugin), (tree, seams) -> {
+			final wanted: Map<String, Bool> = [];
+			var anyFixable: Bool = false;
+			for (v in violations) {
+				final span: Null<Span> = v.span;
+				if (span == null || v.message != MSG_FIXABLE) continue;
+				wanted['${span.from}:${span.to}'] = true;
+				anyFixable = true;
+			}
+			if (!anyFixable) return [];
+			final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+			final importMap: Map<String, String> = provider != null ? provider.importMap(source) : [];
+			final printer: TypeRefPrinter = TypeRefPrinter.forFile(
+				source, tree, importMap, plugin, index ?? RefactorSupport.resolutionIndexOf(plugin)
+			);
+			final edits: Array<{ span: Span, text: String }> = [];
+			walkThrows(tree, seams, false, (literal, insideConditional) -> {
+				final span: Null<Span> = literal.span;
+				if (span == null || !wanted.exists('${span.from}:${span.to}')) return;
+				// A conditional region gets the qualified path and no import: a top-level import
+				// would be unused in a build where the branch is compiled out.
+				final typeText: String = insideConditional ? seams.exceptionPath : printer.print(seams.exceptionPath).text;
+				edits.push({ span: span, text: 'new $typeText(${source.substring(span.from, span.to)})' });
+			});
+			if (edits.length > 0) for (importEdit in printer.pendingImportEdits()) edits.push(importEdit);
+			return edits;
 		});
-		if (edits.length > 0) for (importEdit in printer.pendingImportEdits()) edits.push(importEdit);
-		return edits;
 	}
 
 	/**

@@ -58,19 +58,15 @@ final class RedundantThis implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final ctx: Null<Ctx> = context(plugin);
-		if (ctx == null) return [];
-		final violations: Array<Violation> = [];
 		// The inheritance index is consulted only by a `this.name` that misses the same-file
 		// member scan (an inherited base member or a `using` extension) — rare — so it is built
 		// at most once per run, on first demand, via the shared lazy builder. When the plugin
 		// carries a resolution scope, that builder resolves supertypes against library roots too.
 		final resolveSymbols: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walkMembers(violations, entry.file, tree, entry.source, ctx, null, [], resolveSymbols);
-		}
-		return violations;
+		return RunScan.collectWith(
+			files, plugin, context(plugin),
+			(entry, tree, ctx, violations) -> walkMembers(violations, entry.file, tree, entry.source, ctx, null, [], resolveSymbols)
+		);
 	}
 
 	/** Drop the `this.` qualifier of each flagged access, leaving the bare field name. */

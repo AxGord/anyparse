@@ -169,10 +169,7 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collect(files, plugin, (entry, tree, violations) -> {
 			final config: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
 			final requested: Int = requestedOrder(config);
 			// A module whose whole body is `#if`-guarded keeps its import block inside the region, so the
@@ -200,63 +197,59 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 					message: 'import \'${offender.path}\' is out of order in its block'
 				});
 			}
-		}
-		return violations;
+		});
 	}
 
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		if (violations.length == 0) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (tree == null) return [];
-		final config: LintConfig = LintConfig.resolveWith(_resolveConfig, violations[0].file);
-		final requested: Int = requestedOrder(config);
-		final header: QueryNode = ImportOrder.headerRootOf(tree, source, plugin);
-		final flagged: Array<Int> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span != null) flagged.push(span.from);
-		}
-		final moduleTypes: Map<String, Array<String>> = moduleTypesOf(index);
-		final edits: Array<{ span: Span, text: String }> = [];
-		// A merged wedge REWRITES the region its runs live in, so a run it takes over must not also
-		// get the per-run reorder edit below: the two spans overlap and the caller batches both.
-		final merged: Array<Int> = [];
-		final wedges: Array<UsingWedge> = wedgesOf(source, header, config);
-		final scopeTypes: Map<String, Array<String>> = wedges.length == 0 ? moduleTypes : moduleTypesOf(widestIndex(plugin, index));
-		for (wedge in wedges) {
-			if (!flagged.contains(wedge.usings[0].declFrom)) continue;
-			if (!mergeable(wedge, source, scopeTypes)) continue;
-			final order: Int = fixOrder(requested, ImportOrder.pathsOf(wedge.imports));
-			final sorted: Array<ImportLine> = wedge.imports.copy();
-			ArraySort.sort(sorted, (a, b) -> ImportOrder.compare(order, a.path, b.path));
-			final block: String = [for (line in sorted) source.substring(line.chunkFrom, line.chunkTo)].join('');
-			final group: String = [for (line in wedge.usings) source.substring(line.chunkFrom, line.chunkTo)].join('');
-			final text: String = '$block\n$group';
-			for (line in wedge.imports) merged.push(line.declFrom);
-			edits.push({ span: new Span(wedge.from, wedge.to), text: text });
-		}
-		for (block in blocksOf(source, header)) {
-			if (block.exists(line -> merged.contains(line.declFrom))) continue;
-			if (!block.exists(line -> flagged.contains(line.declFrom))) continue;
-			// A refusal is the ANSWER to "why did this rule not fix my file", and until it was
-			// written down here the run answered it with silence — which two readers took for
-			// "this rule has no autofix" while the guard below was doing exactly its job.
-			final refusal: Null<String> = reorderRefusal(block, source, moduleTypes);
-			if (refusal != null) {
-				noteDecline(violations, block, refusal);
-				continue;
-			}
-			final order: Int = fixOrder(requested, ImportOrder.pathsOf(block));
-			final sorted: Array<ImportLine> = block.copy();
-			ArraySort.sort(sorted, (a, b) -> ImportOrder.compare(order, a.path, b.path));
-			final from: Int = block[0].chunkFrom;
-			final to: Int = block[block.length - 1].chunkTo;
-			final text: String = [for (line in sorted) source.substring(line.chunkFrom, line.chunkTo)].join('');
-			if (text != source.substring(from, to)) edits.push({ span: new Span(from, to), text: text });
-		}
-		return edits;
+		return violations.length == 0
+			? []
+			: RunScan.edits(plugin, source, tree -> {
+				final config: LintConfig = LintConfig.resolveWith(_resolveConfig, violations[0].file);
+				final requested: Int = requestedOrder(config);
+				final header: QueryNode = ImportOrder.headerRootOf(tree, source, plugin);
+				final flagged: Array<Int> = RunScan.spanStarts(violations);
+				final moduleTypes: Map<String, Array<String>> = moduleTypesOf(index);
+				final edits: Array<{ span: Span, text: String }> = [];
+				// A merged wedge REWRITES the region its runs live in, so a run it takes over must not also
+				// get the per-run reorder edit below: the two spans overlap and the caller batches both.
+				final merged: Array<Int> = [];
+				final wedges: Array<UsingWedge> = wedgesOf(source, header, config);
+				final scopeTypes: Map<String, Array<String>> = wedges.length == 0 ? moduleTypes : moduleTypesOf(widestIndex(plugin, index));
+				for (wedge in wedges) {
+					if (!flagged.contains(wedge.usings[0].declFrom)) continue;
+					if (!mergeable(wedge, source, scopeTypes)) continue;
+					final order: Int = fixOrder(requested, ImportOrder.pathsOf(wedge.imports));
+					final sorted: Array<ImportLine> = wedge.imports.copy();
+					ArraySort.sort(sorted, (a, b) -> ImportOrder.compare(order, a.path, b.path));
+					final block: String = [for (line in sorted) source.substring(line.chunkFrom, line.chunkTo)].join('');
+					final group: String = [for (line in wedge.usings) source.substring(line.chunkFrom, line.chunkTo)].join('');
+					final text: String = '$block\n$group';
+					for (line in wedge.imports) merged.push(line.declFrom);
+					edits.push({ span: new Span(wedge.from, wedge.to), text: text });
+				}
+				for (block in blocksOf(source, header)) {
+					if (block.exists(line -> merged.contains(line.declFrom))) continue;
+					if (!block.exists(line -> flagged.contains(line.declFrom))) continue;
+					// A refusal is the ANSWER to "why did this rule not fix my file", and until it was
+					// written down here the run answered it with silence — which two readers took for
+					// "this rule has no autofix" while the guard below was doing exactly its job.
+					final refusal: Null<String> = reorderRefusal(block, source, moduleTypes);
+					if (refusal != null) {
+						noteDecline(violations, block, refusal);
+						continue;
+					}
+					final order: Int = fixOrder(requested, ImportOrder.pathsOf(block));
+					final sorted: Array<ImportLine> = block.copy();
+					ArraySort.sort(sorted, (a, b) -> ImportOrder.compare(order, a.path, b.path));
+					final from: Int = block[0].chunkFrom;
+					final to: Int = block[block.length - 1].chunkTo;
+					final text: String = [for (line in sorted) source.substring(line.chunkFrom, line.chunkTo)].join('');
+					if (text != source.substring(from, to)) edits.push({ span: new Span(from, to), text: text });
+				}
+				return edits;
+			});
 	}
 
 	/** The `order` option as an `ImportOrder` id, or -1 for `any` (the default, and any unrecognised value). */

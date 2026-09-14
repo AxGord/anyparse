@@ -152,10 +152,8 @@ final class JoinSingleUseLocal implements Check {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = readSeams(plugin);
-		if (seams == null) return [];
-		final s: Seams = seams;
-		return [
-			for (entry in files) for (m in collect(entry.source, plugin, s)) ({
+		return seams == null ? [] : [
+			for (entry in files) for (m in collect(entry.source, plugin, seams)) ({
 				file: entry.file,
 				span: m.declSpan,
 				rule: 'join-single-use-local',
@@ -174,12 +172,7 @@ final class JoinSingleUseLocal implements Check {
 		for (m in collect(source, plugin, seams)) byKey['${m.declSpan.from}:${m.declSpan.to}'] = m;
 
 		final selected: Array<Match> = [];
-		for (v in violations) {
-			final vspan: Null<Span> = v.span;
-			if (vspan == null) continue;
-			final m: Null<Match> = byKey['${vspan.from}:${vspan.to}'];
-			if (m != null) selected.push(m);
-		}
+		RunScan.eachMatched(violations, byKey, (m, _) -> selected.push(m));
 
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (m in selected) if (!readSwallowed(m, selected)) {
@@ -208,11 +201,10 @@ final class JoinSingleUseLocal implements Check {
 	private static function collect(source: String, plugin: GrammarPlugin, s: Seams): Array<Match> {
 		final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, source);
 		if (tree == null) return [];
-		final root: QueryNode = tree;
 		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
 		final declTypeSources: () -> Map<Int, String> = TypeResolver.memoizedDeclaredTypeSources(plugin, source);
 		final out: Array<Match> = [];
-		collectMatches(root, source, comments, s, root, declTypeSources, out);
+		collectMatches(tree, source, comments, s, tree, declTypeSources, out);
 		return out;
 	}
 
@@ -324,15 +316,14 @@ final class JoinSingleUseLocal implements Check {
 		if (CheckScan.escapesConditionalRegion(name, declSpan, tree, s.shape)) return null;
 		final read: Null<RefHit> = soleReadHit(name, declSpan, tree, s.shape);
 		if (read == null) return null;
-		final readHit: RefHit = read;
 		// ADJACENCY: `pathTo` is the gate -- it yields null unless the read sits inside the
 		// IMMEDIATELY following sibling, so a read further down the list never matches.
-		if (!readPositionIsSafe(next, readHit.span, init, s)) return null;
+		if (!readPositionIsSafe(next, read.span, init, s)) return null;
 
 		if (!annotationIsNeutral(declTypeSources()[declNameFrom], init, s, tree, declTypeSources)) return null;
 		if (commentInDroppedRegion(comments, dropSpan)) return null;
 
-		final tokenFrom: Int = SourceText.identTokenOffset(source, readHit.span, name);
+		final tokenFrom: Int = SourceText.identTokenOffset(source, read.span, name);
 		if (tokenFrom < 0) return null;
 		if (unindexedNameUse(name, declSpan, tokenFrom, tree, s)) return null;
 		if (initIdentRebound(init, declSpan, tokenFrom, tree, s)) return null;
@@ -571,10 +562,8 @@ final class JoinSingleUseLocal implements Check {
 	 */
 	private static function readPositionIsSafe(next: QueryNode, readSpan: Span, init: QueryNode, s: Seams): Bool {
 		final path: Null<Array<QueryNode>> = pathToSpan(next, readSpan);
-		if (path == null) return false;
-		final steps: Array<QueryNode> = path;
-		return
-			evaluatedOnceEagerly(steps, s) && nothingImpureBefore(steps, s) && (init.kind == s.identKind || !pathIsConditional(steps, s));
+		return path != null && evaluatedOnceEagerly(path, s) && nothingImpureBefore(path, s)
+			&& (init.kind == s.identKind || !pathIsConditional(path, s));
 	}
 
 	/** Whether any comment overlaps `dropSpan`, the declaration line the fix deletes whole. */

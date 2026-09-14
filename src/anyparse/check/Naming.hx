@@ -101,14 +101,9 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final support: Null<NamingSupport> = plugin.namingSupport();
-		if (support == null) return [];
 		final contracts: Array<FrameworkContract> = LintConfig.frameworksFor(_resolveConfig, files);
 		final indexOf: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
+		return RunScan.collectWith(files, plugin, plugin.namingSupport(), (entry, tree, support, violations) -> {
 			// The values of an enum abstract written `@:enum` (or through the `#if` version guard)
 			// project as fields of a plain abstract, where the FIELD naming rule governs them — and an
 			// enum value is PascalCase by convention, so each one reads as a violation.
@@ -122,9 +117,9 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 				if (span != null) byStart[span.from] = decl;
 			}
 			final reported: Array<Violation> = violationsFor(entry.file, decls, support.policyFor(entry.file));
-			for (v in reported) if (!frameworkOwned(v, byStart, support, indexOf, contracts)) violations.push(v);
-		}
-		return violations;
+			for (v in reported) if (!frameworkOwned(v, byStart, support, indexOf, contracts))
+				violations.push(v);
+		});
 	}
 
 	/**
@@ -439,9 +434,7 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		final span: Null<Span> = v.span;
 		if (span == null) return false;
 		final decl: Null<NamedDecl> = byStart[span.from];
-		if (decl == null) return false;
-		final named: NamedDecl = decl;
-		return support.frameworkOwnsName(named, index, contracts);
+		return decl != null && support.frameworkOwnsName(decl, index, contracts);
 	}
 
 	/** The first rule in `policy` applicable to `decl` (category + modifier filters), or null. */
@@ -616,16 +609,14 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		final rewritten: String = CanonicalEdit.applyEdits(source, edits);
 		final newTree: Null<QueryNode> = CheckScan.parseOrNull(plugin, rewritten);
 		if (newTree == null) return null;
-		final tr: QueryNode = newTree;
-		final mismatch: Array<Capture> = Rename.captureMismatch(rewritten, tr, renameSpans, resolved, newName, declFrom, shape);
+		final mismatch: Array<Capture> = Rename.captureMismatch(rewritten, newTree, renameSpans, resolved, newName, declFrom, shape);
 		if (mismatch.length == 0) return null;
 		final reachable: Bool = Rename.selfReachableBindingAt(source, tree, declFrom, shape);
 		final qualification: Null<Qualification> = Rename.qualifyCaptured(
-			rewritten, tr, mismatch, newName, shape, reachable, resolutionIndex, file
+			rewritten, newTree, mismatch, newName, shape, reachable, resolutionIndex, file
 		);
 		if (qualification == null) return null;
-		final q: Qualification = qualification;
-		switch Rename.verifyQualified(q, renameSpans, resolved, newName, declFrom, plugin, shape) {
+		switch Rename.verifyQualified(qualification, renameSpans, resolved, newName, declFrom, plugin, shape) {
 			case RenameResult.Ok(_):
 			case RenameResult.Err(_):
 				return null;
@@ -636,7 +627,7 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		final starts: Array<Int> = [for (s in sorted) s.from];
 		final targets: Array<Int> = [];
 		final captured: Array<{ span: Span, text: String }> = [];
-		for (offset in q.insertions) {
+		for (offset in qualification.insertions) {
 			final orig: Int = preRewriteOffset(sorted, delta, offset);
 			if (starts.contains(orig)) {
 				targets.push(orig);
@@ -1407,7 +1398,7 @@ final class Naming implements Check implements CrossFileFix implements ConfigAwa
 		ownerName: String, plugin: GrammarPlugin, shape: RefShape, resolutionIndex: SymbolIndex, ownerBound: Array<Span>,
 		ignore: Array<Span>, seenOwner: Array<Int>, seenIgnore: Array<Int>
 	): Void {
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		final declared: Map<Int, String> = provider != null ? provider.declaredTypes(source) : [];
 		final hitsByName: Map<String, Array<RefHit>> = Refs.findMulti(recvNames, tree, shape);
 		for (cand in typed) {

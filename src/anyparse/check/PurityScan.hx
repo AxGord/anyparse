@@ -73,7 +73,7 @@ final class PurityScan {
 		final fieldAccessKind: Null<String> = shape.fieldAccessKind;
 		final callKind: Null<String> = shape.callKind;
 		if (fieldAccessKind == null || callKind == null) return null;
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		final declaredTypes: Map<Int, String> = provider != null ? provider.declaredTypes(source) : [];
 		return {
 			shape: shape,

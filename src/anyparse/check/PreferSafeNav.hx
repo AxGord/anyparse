@@ -180,15 +180,9 @@ final class PreferSafeNav implements Check implements VersionGated {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = readSeams(plugin);
-		if (seams == null) return [];
-		final violations: Array<Violation> = [];
 		final getIndex: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
 		final shape: RefShape = plugin.refShape();
-		for (entry in files) {
-			final parsed: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (parsed == null) continue;
-			final tree: QueryNode = parsed;
+		return RunScan.collectWith(files, plugin, readSeams(plugin), (entry, tree, seams, violations) -> {
 			final bindings: Array<{ name: String, scope: Span, declEnd: Int }> = [];
 			collectBindings(tree, null, seams, bindings);
 			final declaredTypes: () -> Map<Int, String> = TypeResolver.memoizedDeclaredTypeSources(plugin, entry.source);
@@ -197,8 +191,7 @@ final class PreferSafeNav implements Check implements VersionGated {
 				return index != null && TypeResolver.isPlainFieldRead(subject, tree, shape, declaredTypes(), index);
 			};
 			walk(tree, violations, entry.file, entry.source, bindings, fieldProver(tree, entry.source, plugin, seams), plainRead, seams);
-		}
-		return violations;
+		});
 	}
 
 	/**
@@ -210,26 +203,22 @@ final class PreferSafeNav implements Check implements VersionGated {
 	): Array<{ span: Span, text: String }> {
 		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null) return [];
-		final s: Seams = seams;
-		final ternaryKind: Null<String> = s.ternaryKind;
-		final spanIndexKinds: Array<String> = ternaryKind == null ? s.ifKinds : s.ifKinds.concat([ternaryKind]);
+		final ternaryKind: Null<String> = seams.ternaryKind;
+		final spanIndexKinds: Array<String> = ternaryKind == null ? seams.ifKinds : seams.ifKinds.concat([ternaryKind]);
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		final assigns: Map<String, AssignGuard> = [];
-		if (tree != null) collectAssignGuards(tree, source, s, assigns);
+		if (tree != null) collectAssignGuards(tree, source, seams, assigns);
 		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
-			final guard: Null<AssignGuard> = assigns['${span.from}:${span.to}'];
-			if (guard == null) continue;
+		RunScan.eachMatched(violations, assigns, (guard, _) -> {
 			final pair: Null<Array<{ span: Span, text: String }>> = assignEdits(guard, source);
 			if (pair != null) for (e in pair) edits.push(e);
-		}
+
+		});
 		for (e in CheckScan.applyBySpan(plugin, source, violations, spanIndexKinds, (node, span) -> {
 			// An `if` the ASSIGNMENT arm owns is folded into its declaration above, not rewritten
 			// in place — its statement-arm reading (if any) must not also fire.
 			if (assigns.exists('${span.from}:${span.to}')) return null;
-			final m: Null<Candidate> = candidate(node, source, s);
+			final m: Null<Candidate> = candidate(node, source, seams);
 			if (m == null) return null;
 			final stmtSpan: Null<Span> = m.stmt.span;
 			final rootSpan: Null<Span> = m.rootIdent.span;
@@ -626,7 +615,7 @@ final class PreferSafeNav implements Check implements VersionGated {
 	 * that never saw it.
 	 */
 	private static function fieldProver(tree: QueryNode, source: String, plugin: GrammarPlugin, s: Seams): (String, Span) -> Bool {
-		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		if (provider == null || s.fieldDeclKinds.length == 0) return (_, _) -> false;
 		final accessors: Map<Int, Bool> = provider.propertyAccessors(source);
 		final scopes: Array<TypeScope> = [];

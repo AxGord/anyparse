@@ -8,7 +8,6 @@ import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * Flags a switch arm whose body its IMMEDIATE NEIGHBOUR already carries, in the two
@@ -103,13 +102,7 @@ final class RedundantCaseBody implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<CaseSeams> = CasePatternScan.seamsOf(plugin);
-		if (seams == null) return [];
-		final resolved: CaseSeams = seams;
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final parsed: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (parsed == null) continue;
+		return RunScan.collectWith(files, plugin, CasePatternScan.seamsOf(plugin), (entry, parsed, resolved, violations) -> {
 			for (candidate in collect(resolved, parsed, entry.source)) violations.push({
 				file: entry.file,
 				span: candidate.span,
@@ -119,8 +112,7 @@ final class RedundantCaseBody implements Check {
 					? 'this case body is identical to the catch-all that follows it; the arm is redundant'
 					: 'this case body is identical to the next arm\'s; merge the two labels into one case'
 			});
-		}
-		return violations;
+		});
 	}
 
 	/**
@@ -135,22 +127,15 @@ final class RedundantCaseBody implements Check {
 		final seams: Null<CaseSeams> = CasePatternScan.seamsOf(plugin);
 		if (seams == null || violations.length == 0) return [];
 		final resolved: CaseSeams = seams;
-		final file: String = violations[0].file;
-		for (violation in violations) if (violation.file != file)
-			throw new Exception('$RULE_ID: fix() takes ONE file\'s violations, got $file and ${violation.file}');
-		final parsed: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
-		if (parsed == null) return [];
-		final byKey: Map<String, Candidate> = [];
-		for (candidate in collect(resolved, parsed, source)) byKey['${candidate.span.from}:${candidate.span.to}'] = candidate;
+		RunScan.assertOneFile(violations, RULE_ID);
+		return RunScan.edits(plugin, source, parsed -> {
+			final byKey: Map<String, Candidate> = [];
+			for (candidate in collect(resolved, parsed, source)) byKey['${candidate.span.from}:${candidate.span.to}'] = candidate;
 
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (violation in violations) {
-			final span: Null<Span> = violation.span;
-			if (span == null) continue;
-			final candidate: Null<Candidate> = byKey['${span.from}:${span.to}'];
-			if (candidate != null) edits.push({ span: candidate.editSpan, text: candidate.editText });
-		}
-		return disjoint(edits);
+			final edits: Array<{ span: Span, text: String }> = [];
+			RunScan.eachMatched(violations, byKey, (candidate, _) -> edits.push({ span: candidate.editSpan, text: candidate.editText }));
+			return disjoint(edits);
+		});
 	}
 
 	/** Every foldable adjacent pair in `tree`, in document order. */
