@@ -702,8 +702,13 @@ branch_fmt() {
     # `TriviaPairConverters.hx` that it was in `TriviaTypeSynth.hx`, and
     # `TriviaTypeSynth.hx` now reaches its fixed point in one rewrite. The set
     # is still four files and the other three are untouched.
+    #
+    # `DuplicateCase.hx` left the set when the check entry loops moved into
+    # `RunScan`: its `run()` lost the `for (entry in files)` preamble whose
+    # shape needed the second rewrite under this config, and the file now
+    # reaches its fixed point in one pass. Progress in the tail, recorded as
+    # the rule above demands; the other three entries are untouched.
     cat > "$work/fmt-xconfig.base" <<'XCFG'
-src/anyparse/check/DuplicateCase.hx
 src/anyparse/check/UnnecessarySwitch.hx
 src/anyparse/macro/ParseDispatchLowering.hx
 src/anyparse/macro/TriviaPairConverters.hx
