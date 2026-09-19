@@ -35,7 +35,11 @@ interface ParsedRootProvider {
 	/** The `spanTypeInfo` projection of an already-parsed root — the empty bundle when `root` is null. */
 	public function spanTypeInfoFromRoot(root: Null<Any>, source: String): SpanTypeInfo;
 
-	/** The `importMap` projection of an already-parsed root — the empty map when `root` is null. */
-	public function importMapFromRoot(root: Null<Any>, source: String): Map<String, String>;
+	/**
+	 * The `importMap` projection of an already-parsed root — the empty map when `root` is null.
+	 * `path` carries the same meaning as on `TypeInfoProvider.importMap`: with it the projection
+	 * also yields the module's ambient bindings.
+	 */
+	public function importMapFromRoot(root: Null<Any>, source: String, ?path: String): Map<String, String>;
 
 }

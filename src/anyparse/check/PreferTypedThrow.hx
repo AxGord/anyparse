@@ -188,7 +188,7 @@ final class PreferTypedThrow implements Check implements DefaultOff {
 			}
 			if (!anyFixable) return [];
 			final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
-			final importMap: Map<String, String> = provider != null ? provider.importMap(source) : [];
+			final importMap: Map<String, String> = provider != null ? provider.importMap(source, violations[0].file) : [];
 			final printer: TypeRefPrinter = TypeRefPrinter.forFile(
 				source, tree, importMap, plugin, index ?? RefactorSupport.resolutionIndexOf(plugin)
 			);

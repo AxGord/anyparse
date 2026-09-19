@@ -103,6 +103,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.SpanModeProbe',
 		'unit.TestDiscoveryParityTest',
 		'unit.check.AlwaysNullComparisonTest',
+		'unit.check.AmbientImportSubtypeShieldTest',
 		'unit.check.AnonTypeDupCheckTest',
 		'unit.check.AssignmentInConditionCheckTest',
 		'unit.check.AsymmetricBranchBracesCheckTest',
@@ -808,6 +809,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.AddMetaSliceTest',
 		'unit.query.AddParamSliceTest',
 		'unit.query.AddressTest',
+		'unit.query.AmbientImportResolutionTest',
 		'unit.query.ApqAstChildCountTest',
 		'unit.query.ApqAstIntegrationTest',
 		'unit.query.ApqAstSelectFuzzyTest',
@@ -1027,6 +1029,14 @@ class TestDiscoveryParityTest extends Test {
 			'unit.ProseClaimCensusTest#testAnArmSentenceIsReadAsAnArmClaim :: control :: M-CLAIM-NOKINDS',
 			'unit.ProseClaimCensusTest#testTheCodeSenseOfControlIsNotAControlClaim :: control :: M-CLAIM-CODE-BLIND',
 			'unit.ProseClaimCensusTest#testTheTwoUnrecordableKindsStayOnTheList :: control :: M-CLAIM-NOKINDS',
+			'unit.check.AmbientImportSubtypeShieldTest#testAWrittenAliasIsPinnedToNothingRatherThanToItsNamesake :: control :: '
+				+ 'M-AMBIENT-ALIAS-PINNED',
+			'unit.check.AmbientImportSubtypeShieldTest#testTheAmbientlyImportedTypeKeepsTheShieldAndTheNamesakeLosesIt :: control :: '
+				+ 'M-AMBIENT-IMPORT-BAND',
+			'unit.check.AmbientImportSubtypeShieldTest#testTheChainIsReadEvenWhenItsFileIsOutsideTheAnalysedSet :: control :: '
+				+ 'M-AMBIENT-IMPORT-BAND',
+			'unit.check.AmbientImportSubtypeShieldTest#testTheWildcardTierShieldsTheTypeTheSupertypeReallyNames :: control :: '
+				+ 'M-AMBIENT-IMPORT-BAND',
 			'unit.check.BuiltinFixClassCensusTest#testEveryDeclaredNoAutofixRuleAnswersNoEdit :: control :: M-NO-AUTOFIX-STILL-EDITS',
 			'unit.check.BuiltinFixClassCensusTest#testNoAutofixReasonIsNotTheRuleNameReadBack :: control :: '
 				+ 'M-NO-AUTOFIX-REASON-IS-THE-RULE-NAME',
@@ -1565,6 +1575,27 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-CANDIDATE-LABEL-BARE,M-ADDRESS-NO-ROOT-ANCHOR',
 			'unit.query.AddressTest#testMintedKindIsAdmittedAndSuggestible :: control :: M-KIND-CLAUSE-POOL-GRAMMAR-ONLY',
 			'unit.query.AddressTest#testSelectUnknownKindIsNamedAsUnknown :: control :: M-SELECT-MISS-NO-KIND-CLAUSE',
+			'unit.query.AmbientImportResolutionTest#testAChainThatCannotBeBoundedIsReportedUnbounded :: control :: M-AMBIENT-CHAIN-ROOT',
+			'unit.query.AmbientImportResolutionTest#testAFilesOwnImportOutranksTheAmbientOne :: guard :: ',
+			'unit.query.AmbientImportResolutionTest#testAModuleAbsentFromDiskHasNoChainAtAll :: control :: M-AMBIENT-DISK-BLIND',
+			'unit.query.AmbientImportResolutionTest#testAmbientSourceOutranksTheSamePackageNamesake :: control :: M-AMBIENT-IMPORT-BAND',
+			'unit.query.AmbientImportResolutionTest#testAmbientUsingAndWildcardBindTheirTypesBySimpleName :: control :: '
+				+ 'M-AMBIENT-CHAIN-EMPTY',
+			'unit.query.AmbientImportResolutionTest#testAnAmbientSourceThatCannotBeReadLeavesTheChainUnbounded :: control :: '
+				+ 'M-AMBIENT-UNREADABLE-BOUNDED',
+			'unit.query.AmbientImportResolutionTest#testAnAmbientSourceThatDoesNotParseLeavesTheChainUnbounded :: control :: '
+				+ 'M-AMBIENT-UNPARSED-EMPTY',
+			'unit.query.AmbientImportResolutionTest#testAnExplicitImportOutranksEveryWildcardOne :: control :: M-AMBIENT-IMPORT-BAND',
+			'unit.query.AmbientImportResolutionTest#testAnOwnRootPackageImportOutranksTheAmbientNamesake :: control :: '
+				+ 'M-AMBIENT-IMPORT-BAND',
+			'unit.query.AmbientImportResolutionTest#testTheChainIsOrderedNearestFirst :: control :: M-AMBIENT-CHAIN-ROOT',
+			'unit.query.AmbientImportResolutionTest#testTheChainReachesTheSourceRootAndStopsThere :: control :: M-AMBIENT-CHAIN-ROOT',
+			'unit.query.AmbientImportResolutionTest#testTheEngineResolvesThroughAChainItDidNotComputeItself :: control :: '
+				+ 'M-AMBIENT-IMPORT-BAND',
+			'unit.query.AmbientImportResolutionTest#testTheImportMapCarriesAmbientBindingsOnlyWhenGivenAPath :: control :: '
+				+ 'M-AMBIENT-IMPORT-MAP',
+			'unit.query.AmbientImportResolutionTest#testTheNearestAmbientSourceWinsAndTheParentStillBinds :: control :: '
+				+ 'M-AMBIENT-IMPORT-BAND',
 			'unit.query.ApqUsesTest#testQualifiedIsOptInSoRewritersKeepTheExactAnswer :: control :: M-USES-QUALIFIED-DEFAULT',
 			'unit.query.ApqUsesTest#testQualifiedSpellingsAcrossTypePositions :: control :: M-USES-EXACT-ONLY',
 			'unit.query.ApqUsesTest#testQualifiedSubModuleTypeIsFoundBySimpleName :: control :: M-USES-EXACT-ONLY',
@@ -2146,7 +2177,15 @@ class TestDiscoveryParityTest extends Test {
 			'M-DOC-CLAIM-CLAUSE-BLIND',
 			'M-DOC-CLAIM-REFERENCE-BLIND',
 			'M-DOC-LENGTH-CONFIG-BLIND',
-			'M-DOC-LENGTH-ANY-COMMENT'
+			'M-DOC-LENGTH-ANY-COMMENT',
+			'M-AMBIENT-CHAIN-EMPTY',
+			'M-AMBIENT-CHAIN-ROOT',
+			'M-AMBIENT-IMPORT-BAND',
+			'M-AMBIENT-IMPORT-MAP',
+			'M-AMBIENT-DISK-BLIND',
+			'M-AMBIENT-UNREADABLE-BOUNDED',
+			'M-AMBIENT-UNPARSED-EMPTY',
+			'M-AMBIENT-ALIAS-PINNED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

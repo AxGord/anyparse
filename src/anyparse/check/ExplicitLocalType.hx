@@ -366,7 +366,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		if (tree == null) return [];
 		final byKey: Map<String, QueryNode> = [];
 		MemberKinds.indexNodesByKind(tree, locals, byKey);
-		final printer: TypeRefPrinter = LiteralInfer.printerFor(source, tree, plugin);
+		final printer: TypeRefPrinter = LiteralInfer.printerFor(source, tree, plugin, violations[0]?.file);
 		final maxAnon: Int = maxAnonLen(violations);
 		final fields: Array<String> = shape.fieldDeclKinds ?? [];
 		final functions: Array<String> = [

@@ -44,6 +44,20 @@ final class ConfigFinder {
 	}
 
 	/**
+	 * EVERY `filename` from `path`'s directory up to and INCLUDING `stopDir`, NEAREST FIRST —
+	 * the bound a chain has when the caller can COMPUTE where the walk ends instead of
+	 * recognising it by a marker file, which is what a source root derived from a module's
+	 * package is.
+	 *
+	 * A `stopDir` the walk is not UNDER ends it at `path`'s own directory: an unresolvable bound
+	 * yields the shortest chain, never the longest — climbing past a bound would let an ancestor
+	 * nobody named decide what this file sees.
+	 */
+	public static inline function findUpTo(path: String, filename: String, stopDir: String): ConfigChain {
+		return walkUp(path, filename, false, null, stopDir);
+	}
+
+	/**
 	 * Walk up from `path`'s directory looking for a file named `filename` and
 	 * return its content, or null when none is found, it cannot be read, or the
 	 * target has no file IO.
@@ -65,18 +79,31 @@ final class ConfigFinder {
 		return found.length == 0 ? null : found[0];
 	}
 
+	/** Whether a readable FILE exists at `path` — the one existence probe outside a walk, so the IO stays here. */
+	public static function fileExists(path: String): Bool {
+		return #if (sys || nodejs) sys.FileSystem.exists(path) && !sys.FileSystem.isDirectory(path) #else false #end;
+	}
+
+	/** Whether `dir` lies strictly beneath `bound` — the walk may climb while it does, and stops AT `bound`. */
+	private static inline function under(dir: String, bound: String): Bool {
+		return dir != bound && dir.indexOf('$bound/') == 0;
+	}
+
 	/**
 	 * The shared walk: from `path`'s directory upward, collecting each readable
 	 * `filename` and the path of each one that exists but cannot be read.
 	 * `stopAtFirst` answers the nearest one only — and, faithful to the contract
 	 * `findUpFile` has always had, treats an unreadable nearest match as no match at
-	 * all rather than walking past it. `boundary` ends the walk AFTER the directory
-	 * holding one of its files, so a project root's own document is still read.
+	 * all rather than walking past it. `boundary` ends the walk AFTER the directory holding one of its
+	 * files, so a project root's own document is still read; `stopDir` ends it after that directory itself.
 	 */
-	private static function walkUp(path: String, filename: String, stopAtFirst: Bool, ?boundary: Array<String>): ConfigChain {
+	private static function walkUp(
+		path: String, filename: String, stopAtFirst: Bool, ?boundary: Array<String>, ?stopDir: String
+	): ConfigChain {
 		final out: Array<ConfigFile> = [];
 		final unreadable: Array<String> = [];
 		#if (sys || nodejs)
+		final bound: Null<String> = stopDir == null ? null : sys.FileSystem.absolutePath(stopDir);
 		var dir: String = haxe.io.Path.directory(sys.FileSystem.absolutePath(path));
 		while (dir != '') {
 			final candidate: String = '$dir/$filename';
@@ -91,7 +118,9 @@ final class ConfigFinder {
 				}
 				if (stopAtFirst) return { documents: out, unreadable: unreadable };
 			}
-			if (marksProjectRoot(dir, boundary)) break;
+			// A computed bound the walk is not UNDER cannot be reached by climbing, and climbing past
+			// it is the fail-open direction — an ancestor nobody asked for decides what this file sees.
+			if (marksProjectRoot(dir, boundary) || bound != null && !under(dir, bound)) break;
 			final parent: String = haxe.io.Path.directory(dir);
 			if (parent == dir) break;
 			dir = parent;

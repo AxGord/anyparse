@@ -321,6 +321,27 @@ interface GrammarPlugin {
 	 */
 	public function checkOverrides(path: String): Null<CheckOverrides>;
 
+	/**
+	 * The AMBIENT import sources in scope for the module stored at `path` with package `pkg` —
+	 * files whose import / using statements bind names in that module although the module spells
+	 * none of them. A Haxe per-directory `import.hx`, a C# `global using` file and a language's
+	 * prelude are all this shape; the file name and the rule that finds the chain are the
+	 * grammar's, never the engine's.
+	 *
+	 * NEAREST FIRST: entry 0's bindings OUTRANK every later entry's for a simple name both bind,
+	 * and the module's OWN statements outrank the whole chain. `pkg` is the package the index read
+	 * off the module, for a grammar whose directory layout mirrors its package namespace and whose
+	 * chain therefore stops at a source root it can compute.
+	 *
+	 * `bounded` is false when that stop point could not be established, which is the signal for a
+	 * consumer that PINS a reference to one declaration to refuse instead — an ambient binding the
+	 * engine cannot see outranks a same-package type, so an unbounded chain cannot be resolved
+	 * against, only withheld from.
+	 *
+	 * A grammar with no ambient-import concept returns an empty, bounded chain.
+	 */
+	public function ambientImportSources(path: String, pkg: String): AmbientImports;
+
 }
 
 /**
@@ -3288,4 +3309,31 @@ typedef CheckOverrides = {
 
 	/** `empty-block` active — false when checkstyle `EmptyBlock.option` allows empty blocks. */
 	@:optional var emptyBlockEnabled: Bool;
+};
+
+/**
+ * One ambient import source: the file whose import / using statements reach a module that does
+ * not spell them, and that file's text.
+ *
+ * `source` travels with `file` because the engine must PARSE it with the same plugin that found
+ * it, and a caller narrowed to one file would otherwise have no way to read a chain member
+ * outside its own scope.
+ */
+typedef AmbientImportSource = {
+	var file: String;
+	var source: String;
+};
+
+/**
+ * The whole ambient chain of one module: its `sources` NEAREST FIRST, and whether the chain
+ * could be `bounded` at the source root the grammar's layout defines.
+ *
+ * The two travel together because they are one answer: a chain read only part of the way up is
+ * not a shorter chain, it is an unusable one — the names the missing part binds would outrank a
+ * same-package declaration, so a consumer pinning a reference to one declaration must refuse on
+ * `bounded == false` rather than resolve against what it did read.
+ */
+typedef AmbientImports = {
+	var sources: Array<AmbientImportSource>;
+	var bounded: Bool;
 };

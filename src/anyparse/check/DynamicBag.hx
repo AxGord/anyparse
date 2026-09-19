@@ -70,7 +70,7 @@ final class DynamicBag {
 		final ctx: DynCtx = DynamicShape.buildCtx(shape, dynName);
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		final declaredTypes: Map<Int, String> = provider != null ? provider.declaredTypes(source) : [];
-		final imports: Map<String, String> = provider != null ? provider.importMap(source) : [];
+		final imports: Map<String, String> = provider != null ? provider.importMap(source, violations[0]?.file) : [];
 		final usingReflect: Bool = hasUsingReflect(tree);
 		final edits: Array<{ span: Span, text: String }> = [];
 		var importAdded: Bool = false;

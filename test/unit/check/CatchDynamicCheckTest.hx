@@ -203,8 +203,9 @@ class CatchDynamicCheckTest extends Test {
 		// The outer catch-all uses its value only for logging; a nested inner catch (Exception)
 		// is not a catch-all and must be left byte-for-byte untouched. The rewrite QUALIFIES
 		// rather than importing: the file already carries a bare `Exception` token that no import
-		// here binds, so it resolves through something this rule cannot see (an `import.hx`, a
-		// same-package type) — adding `import haxe.Exception;` would silently retarget it.
+		// here binds, so it resolves through something this fixture gives the rule no way to see (a
+		// same-package type, an ambient source this in-memory file has no directory for) — adding
+		// `import haxe.Exception;` would silently retarget it.
 		final out: String = applyFixLogging(
 			"class C { public function f():Void { try a() catch (msg:Dynamic) { trace('err: $msg'); try b() catch (e:Exception) {"
 			+ ' recover(); } } } }'

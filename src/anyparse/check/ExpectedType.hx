@@ -160,7 +160,7 @@ final class ExpectedType {
 			final scan: CastScan = {
 				file: entry.file,
 				root: entry.tree,
-				types: fileTypes(shape, typed, entry.source),
+				types: fileTypes(shape, typed, entry.source, entry.file),
 				resolutionIndex: resolutionIndex
 			};
 			eachCastInPosition(entry.tree, kind, shape, site -> report(site, scan));
@@ -176,13 +176,13 @@ final class ExpectedType {
 	}
 
 	/** ONE file's type information, gathered from the provider the calling check already holds. */
-	public static function fileTypes(shape: RefShape, typed: TypeInfoProvider, source: String): FileTypes {
+	public static function fileTypes(shape: RefShape, typed: TypeInfoProvider, source: String, ?path: String): FileTypes {
 		return {
 			shape: shape,
 			source: source,
 			declaredTypeSources: typed.declaredTypeSources(source),
 			castTargets: typed.castTargetSources(source),
-			importMap: typed.importMap(source),
+			importMap: typed.importMap(source, path),
 			wrapperNames: shape.nullableWrapperTypeNames ?? []
 		};
 	}

@@ -207,9 +207,9 @@ final class LiteralInfer {
 	 * resolution index. The printer owns the short-name / add-import / fully-qualified decision for
 	 * every nominal the oracle names, and accumulates the imports its short forms rely on.
 	 */
-	public static function printerFor(source: String, tree: QueryNode, plugin: GrammarPlugin): TypeRefPrinter {
+	public static function printerFor(source: String, tree: QueryNode, plugin: GrammarPlugin, ?path: String): TypeRefPrinter {
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
-		final importMap: Map<String, String> = provider != null ? provider.importMap(source) : [];
+		final importMap: Map<String, String> = provider != null ? provider.importMap(source, path) : [];
 		return TypeRefPrinter.forFile(source, tree, importMap, plugin, RefactorSupport.resolutionIndexOf(plugin));
 	}
 

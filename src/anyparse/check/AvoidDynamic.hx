@@ -188,7 +188,7 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 			walk(found, entry.file, entry.source, tree, null, false, ctx, excludeMeta, boundaryCalls);
 			final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 			final declaredTypes: Map<Int, String> = provider != null ? provider.declaredTypes(entry.source) : [];
-			final imports: Map<String, String> = provider != null ? provider.importMap(entry.source) : [];
+			final imports: Map<String, String> = provider != null ? provider.importMap(entry.source, entry.file) : [];
 			DynamicBag.annotateBags(
 				found, entry.source, tree, shape, ctx, dynName, declaredTypes, imports, DynamicBag.hasUsingReflect(tree)
 			);

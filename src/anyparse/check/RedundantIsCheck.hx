@@ -55,7 +55,7 @@ final class RedundantIsCheck implements Check {
 			final root: QueryNode = tree;
 			final declaredTypes: Map<Int, String> = typed.declaredTypes(entry.source);
 			final declaredTypeSources: Map<Int, String> = typed.declaredTypeSources(entry.source);
-			final importMap: Map<String, String> = typed.importMap(entry.source);
+			final importMap: Map<String, String> = typed.importMap(entry.source, entry.file);
 			function walk(node: QueryNode): Void {
 				if (opaqueKinds.contains(node.kind)) return;
 				if (node.kind == kind && node.children.length == 2) {

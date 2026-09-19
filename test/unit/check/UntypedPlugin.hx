@@ -108,4 +108,9 @@ final class UntypedPlugin implements GrammarPlugin {
 		throw new NotImplementedException();
 	}
 
+	/** The documented answer for a grammar with no ambient-import concept, so the gate this class probes is what fails. */
+	public function ambientImportSources(path: String, pkg: String): AmbientImports {
+		return { sources: [], bounded: true };
+	}
+
 }

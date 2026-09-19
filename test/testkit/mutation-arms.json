@@ -3032,6 +3032,65 @@
 			"method": "isDocBlock",
 			"force": "true",
 			"note": "a line-comment run and a plain block banner read as doc blocks, so prose that belongs to the statements it stands over is reported as an over-long contract"
+		},
+		{
+			"name": "M-AMBIENT-CHAIN-EMPTY",
+			"type": "anyparse.grammar.haxe.HaxeAmbientImports",
+			"method": "chainFor",
+			"force": "{ sources: [], bounded: true }",
+			"note": "the grammar reports no ambient source for any module and calls the empty chain bounded, so every name an `import.hx` binds is invisible again while nothing refuses to pin"
+		},
+		{
+			"name": "M-AMBIENT-CHAIN-ROOT",
+			"type": "anyparse.grammar.haxe.HaxeAmbientImports",
+			"method": "sourceRootOf",
+			"force": "null",
+			"note": "no module has a computable source root, so the chain shrinks to the module's own directory and every ancestor ambient source is lost"
+		},
+		{
+			"name": "M-AMBIENT-IMPORT-BAND",
+			"type": "anyparse.query.TypeRefIndex",
+			"method": "tierOf",
+			"force": "localTier(fromFile.ambientImports.length)",
+			"note": "every candidate is reached at the WEAKEST tier, so the precedence collapses flat: an explicit import no longer outranks a wildcard one, the module's own statements no longer outrank the chain, a nearer ambient source no longer outranks a farther one, and an ambient binding no longer outranks a same-package namesake"
+		},
+		{
+			"name": "M-AMBIENT-IMPORT-MAP",
+			"type": "anyparse.grammar.haxe.HaxeQueryPlugin",
+			"method": "importMap",
+			"force": "importMapFromRoot(parseRoot(source), source)",
+			"note": "the import map drops the path it was given, so every type-aware reader of it sees a module's own imports and never what its ambient chain binds"
+		},
+		{
+			"name": "M-AMBIENT-DISK-BLIND",
+			"type": "anyparse.grammar.haxe.HaxeAmbientImports",
+			"method": "chainFor",
+			"find": "\t\tif (!ConfigFinder.fileExists(path)) return { sources: [], bounded: true };\n",
+			"replace": "",
+			"note": "the chain is walked for a module that is not on disk, so an analysed source with an invented path takes the ambient bindings of whatever directory its path happens to name"
+		},
+		{
+			"name": "M-AMBIENT-UNREADABLE-BOUNDED",
+			"type": "anyparse.grammar.haxe.HaxeAmbientImports",
+			"method": "chainFor",
+			"find": "bounded: root != null && walk.unreadable.length == 0",
+			"replace": "bounded: root != null",
+			"note": "an ambient source that exists and could not be read is reported as a complete chain, so a consumer pins a reference against bindings the engine never saw"
+		},
+		{
+			"name": "M-AMBIENT-UNPARSED-EMPTY",
+			"type": "anyparse.query.SymbolIndexBuilder",
+			"method": "ambientImportsOf",
+			"force": "[]",
+			"note": "an ambient source that does not parse is reported as binding NOTHING instead of as unknown, so the reader stays pinnable against a chain member the engine could not read"
+		},
+		{
+			"name": "M-AMBIENT-ALIAS-PINNED",
+			"type": "anyparse.query.SubtypeGraph",
+			"method": "buildAdjacency",
+			"find": "final direct: Null<ResolvedType> = pinnable && !aliased && written != ''",
+			"replace": "final direct: Null<ResolvedType> = pinnable && written != ''",
+			"note": "a written supertype the file binds as an ALIAS is pinned to whichever same-named declaration package proximity picks, and the declaration the alias really names loses its shield"
 		}
 	]
 }

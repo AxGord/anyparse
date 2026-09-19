@@ -136,7 +136,7 @@ final class CatchDynamic implements Check implements ConfigAware implements Vers
 			final file: String = violations.length > 0 ? violations[0].file : '';
 			final fixLogging: Bool = LintConfig.resolveWith(_resolveConfig, file).boolOption('catch-dynamic', 'fixLoggingUses') ?? false;
 			final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
-			final importMap: Map<String, String> = provider != null ? provider.importMap(source) : [];
+			final importMap: Map<String, String> = provider != null ? provider.importMap(source, file) : [];
 			// The shared printer owns the short-name / add-import / fully-qualified decision (imports,
 			// aliases, module-local and same-package bindings, sorted insert) — this rule used to
 			// hand-roll a weaker version of it.
