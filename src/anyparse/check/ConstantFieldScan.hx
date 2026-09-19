@@ -87,6 +87,20 @@ final class ConstantFieldScan {
 			&& init.children.length == 1 && seams.numericKinds.contains(init.children[0].kind);
 	}
 
+	/**
+	 * Whether `init` is a compile-time-constant SCALAR initializer under `plugin`'s grammar — a bare
+	 * `inlineConstantLiteralKinds` literal or a `negationKind` over a numeric one. The same proof
+	 * `inline-constant` applies before adding `inline`, published so `naming`'s constant-hoist arm asks THIS
+	 * question rather than re-deriving it: both act on the answer by emitting an `inline` keyword, and
+	 * a second opinion about what folds would be a second, worse copy of the policy. False when the
+	 * grammar leaves a seam the proof needs unset (see `seams`). String literals are absent by
+	 * construction — `inlineConstantLiteralKinds` omits them (see the hxcpp note on `InlineConstant`).
+	 */
+	public static function isConstantScalarInitializer(init: QueryNode, plugin: GrammarPlugin): Bool {
+		final resolved: Null<ConstantFieldSeams> = seams(plugin);
+		return resolved != null && isScalarLiteral(init, resolved);
+	}
+
 }
 
 /**

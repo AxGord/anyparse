@@ -1,8 +1,5 @@
 package anyparse.check;
 
-import anyparse.check.MemberOrder.BranchInfo;
-import anyparse.check.MemberOrder.MemberRank;
-import anyparse.check.MemberOrder.OrderedMember;
 import anyparse.query.CondDirectives;
 import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
@@ -14,6 +11,51 @@ import anyparse.runtime.Span;
 
 using Lambda;
 using StringTools;
+
+/**
+ * One type-member paired with its canonical-order rank and its full source slot (leading doc +
+ * modifier/`@:meta` run + decl), for the order check and the reordering autofix. `hasMeta` says
+ * the slot carries an annotation, which is what pins a member's relative position inside a type
+ * whose build macro reads the field list in declaration order (`macroBuiltMetaOrderKept`).
+ *
+ * Slots are DISJOINT and each ends at the member's own last code byte: the parser stretches some
+ * expression-body spans over the trailing trivia, and `ownSourceEnd` cuts that back off
+ * - an overlap would make the reorder duplicate or strand a neighbour's doc comment.
+ */
+typedef OrderedMember = {
+	var node: QueryNode;
+	var rank: MemberRank;
+	var index: Int;
+	var span: Span;
+	var isField: Bool;
+	var isStatic: Bool;
+	var isInline: Bool;
+	var hasMeta: Bool;
+	var initNode: Null<QueryNode>;
+
+	var condition: Null<String>;
+	var branch: Null<BranchInfo>;
+	var regionFrom: Int;
+	var regionTo: Int;
+
+	var leadTrivia: String;
+	var leadFrom: Int;
+}
+
+/**
+ * Where a member sits inside a branched `#if` / `#elseif` / `#else` / `#end` construct.
+ * The grammar flattens EVERY branch into one `Conditional` node, so the branch a member
+ * was declared in is recovered from the construct's directive lines (`assignBranches`)
+ * and carried here - it is part of the member's identity, not layout the sort may drop.
+ * `opens` is the construct's whole branch shape, shared by all its members: `opens[k - 1]`
+ * is the directive text opening branch `k` (branch 0 is opened by the `#if` itself), so
+ * two constructs merge into one block only when their shapes are equal. A negative
+ * `index` marks a construct `assignBranches` refused to model - the reorder bails on it.
+ */
+typedef BranchInfo = {
+	var index: Int;
+	var opens: Array<String>;
+}
 
 /**
  * The COLLECTION half of `member-order`: turning a container's raw child list into the
@@ -61,6 +103,43 @@ final class MemberSlots {
 		final out: Array<OrderedMember> = [];
 		collectInto(out, container, source, shape, comments, [], null, accessors);
 		return out;
+	}
+
+	/** Whether a line in `source[from,to)` starts (after indentation) with `#else` or `#elseif`. */
+	public static function hasBranchDirective(source: String, from: Int, to: Int): Bool {
+		for (line in source.substring(from, to).split('\n')) {
+			final t: String = StringTools.ltrim(line);
+			if (t.startsWith('#else')) return true;
+		}
+		return false;
+	}
+
+	/**
+	 * Whether the container holds an `#else` / `#elseif` the branch model could not absorb: a
+	 * construct `assignBranches` refused, or a directive between two members that are not an
+	 * ascending branch pair of ONE construct. `opens` is compared by identity because
+	 * `assignBranches` hands every member of a construct the same array - two constructs of
+	 * equal shape are still two constructs, and a directive between them is not a branch
+	 * boundary. A construct whose FIRST branch is empty lands here too: its directive then sits
+	 * between an outside member and an inside one, which no branch pair explains.
+	 */
+	public static function hasUnmodelledElse(members: Array<OrderedMember>, source: String): Bool {
+		for (m in members) {
+			final b: Null<BranchInfo> = m.branch;
+			if (b != null && b.index < 0) return true;
+		}
+		for (i in 0...members.length - 1) if (hasBranchDirective(source, members[i].span.to, members[i + 1].span.from)) {
+			final before: Null<BranchInfo> = members[i].branch;
+			final after: Null<BranchInfo> = members[i + 1].branch;
+			// A construct whose FIRST branch is empty puts its own `#if` AND the
+			// openings it skips in this gap. The directives then belong to the
+			// construct `after` is in, not to a boundary between two walked members,
+			// so the gap is accounted for as long as the gap OPENS that construct.
+			if (after != null && after.index > 0 && opensConstruct(source, members[i].span.to, members[i + 1].span.from)) continue;
+			if (before == null || after == null) return true;
+			if (before.opens != after.opens || after.index <= before.index) return true;
+		}
+		return false;
 	}
 
 	/** The canonical-order rank of a member given its static / public flags and whether it is a field. */
@@ -396,4 +475,49 @@ final class MemberSlots {
 		return i == 0 || source.charAt(i - 1) == '\n';
 	}
 
+	/**
+	 * Whether a line in `source[from,to)` starts (after indentation) with the
+	 * conditional-open keyword - the gap begins a new construct rather than continuing one.
+	 */
+	private static function opensConstruct(source: String, from: Int, to: Int): Bool {
+		return source.substring(from, to).split('\n').exists(line -> StringTools.ltrim(line).startsWith('#if'));
+	}
+
+}
+
+/**
+ * The canonical member-order ranks - a smaller rank sorts earlier. Fields precede
+ * the constructor precede accessors precede methods; within each group public
+ * precedes private; static fields lead (immutable `final` / constant before mutable
+ * `var`), static methods trail. Non-static property fields (those with a `(get, set)`-style
+ * accessor clause) sub-split ahead of the plain fields: a read-only property (stored read)
+ * before a getter property, both before the `final` field, before the plain `var`. A
+ * distinct type rather than a bare `Int` so a rank can never be confused with an unrelated
+ * count; the two `@:op` forwards give it the `<` ordering and `-` difference that the sort
+ * comparator and `firstOutOfOrder` need (Haxe otherwise forbids ordered comparison on an
+ * abstract).
+ */
+enum abstract MemberRank(Int) {
+	final StaticPublicImmutableField = 0;
+	final StaticPublicMutableField = 1;
+	final StaticPrivateImmutableField = 2;
+	final StaticPrivateMutableField = 3;
+	final PublicReadOnlyProperty = 4;
+	final PublicGetterProperty = 5;
+	final PublicImmutableField = 6;
+	final PublicMutableField = 7;
+	final PrivateReadOnlyProperty = 8;
+	final PrivateGetterProperty = 9;
+	final PrivateImmutableField = 10;
+	final PrivateMutableField = 11;
+	final Constructor = 12;
+	final Accessor = 13;
+	final PublicMethod = 14;
+	final PrivateMethod = 15;
+	final StaticPublicMethod = 16;
+	final StaticPrivateMethod = 17;
+
+	@:op(A < B) static function lt(a: MemberRank, b: MemberRank): Bool;
+
+	@:op(A - B) static function sub(a: MemberRank, b: MemberRank): Int;
 }

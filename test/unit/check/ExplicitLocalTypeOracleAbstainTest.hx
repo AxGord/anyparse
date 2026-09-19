@@ -7,6 +7,7 @@ import sys.io.File;
 import anyparse.check.CompilerDisplayOracle;
 import anyparse.check.CompilerOracle;
 import anyparse.check.ExplicitLocalType;
+import anyparse.check.LiteralInfer;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
 import unit.cli.CliFixture;
@@ -133,30 +134,30 @@ class ExplicitLocalTypeOracleAbstainTest extends Test {
 	// --- Dynamic / Any are never an admissible answer ---
 
 	public function testRejectsDynamic(): Void {
-		Assert.isNull(ExplicitLocalType.normalizeInferredType('Dynamic', [], 80));
+		Assert.isNull(LiteralInfer.normalizeInferredType('Dynamic', [], 80));
 	}
 
 	public function testRejectsAny(): Void {
-		Assert.isNull(ExplicitLocalType.normalizeInferredType('Any', [], 80));
+		Assert.isNull(LiteralInfer.normalizeInferredType('Any', [], 80));
 	}
 
 	public function testRejectsDynamicComponent(): Void {
-		Assert.isNull(ExplicitLocalType.normalizeInferredType('Array<Dynamic>', [], 80));
+		Assert.isNull(LiteralInfer.normalizeInferredType('Array<Dynamic>', [], 80));
 	}
 
 	/** A name merely CONTAINING `Dynamic` is a different type and stays admissible. */
 	public function testKeepsDynamicNamedType(): Void {
-		Assert.equals('DynamicBag', ExplicitLocalType.normalizeInferredType('DynamicBag', [], 80));
+		Assert.equals('DynamicBag', LiteralInfer.normalizeInferredType('DynamicBag', [], 80));
 	}
 
 	/** `var x:Void` is not a declaration Haxe accepts — the answer is about some enclosing statement. */
 	public function testRejectsBareVoid(): Void {
-		Assert.isNull(ExplicitLocalType.normalizeInferredType('Void', [], 80));
+		Assert.isNull(LiteralInfer.normalizeInferredType('Void', [], 80));
 	}
 
 	/** `Void` inside a type is ordinary — a callback local keeps its annotation. */
 	public function testKeepsFunctionReturningVoid(): Void {
-		Assert.equals('() -> Void', ExplicitLocalType.normalizeInferredType('() -> Void', [], 80));
+		Assert.equals('() -> Void', LiteralInfer.normalizeInferredType('() -> Void', [], 80));
 	}
 
 	/**

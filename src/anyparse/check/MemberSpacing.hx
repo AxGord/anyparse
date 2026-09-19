@@ -1,12 +1,29 @@
 package anyparse.check;
 
-import anyparse.check.MemberOrder.DirectiveGap;
-import anyparse.check.MemberOrder.LayoutIssue;
-import anyparse.check.MemberOrder.OrderedMember;
+import anyparse.check.MemberSlots.OrderedMember;
 import anyparse.runtime.Span;
 
 using Lambda;
 using StringTools;
+
+/**
+ * One container's first layout finding: the member the check flags plus the
+ * violation message describing what is wrong (member order vs group spacing).
+ */
+typedef LayoutIssue = {
+	var member: OrderedMember;
+	var message: String;
+}
+
+/**
+ * The two optional blank-line edits `directiveGapEdits` computes for one cross-condition
+ * member gap: `ifEdit` the blank before the gap's `#if`, `endEdit` the blank after its
+ * `#end`; each null when that blank already exists or the gap has no such directive.
+ */
+typedef DirectiveGap = {
+	var ifEdit: Null<{ span: Span, text: String }>;
+	var endEdit: Null<{ span: Span, text: String }>;
+}
 
 /**
  * The BLANK-LINE half of `member-order`: what has to sit in the gap BETWEEN two collected
@@ -132,9 +149,8 @@ final class MemberSpacing {
 	 * leading `#if` / trailing `#end` (no member pair spans them) are exempt, as is an `#else`
 	 * gap (same condition on both sides).
 	 */
-	@:access(anyparse.check.MemberOrder)
 	public static function firstDirectiveSpacingIssue(members: Array<OrderedMember>, source: String): Null<LayoutIssue> {
-		if (MemberOrder.hasUnmodelledElse(members, source)) return null;
+		if (MemberSlots.hasUnmodelledElse(members, source)) return null;
 		for (i in 0...members.length - 1) {
 			final gap: DirectiveGap = directiveGapEdits(members[i], members[i + 1], source);
 			if (gap.ifEdit != null) return { member: members[i + 1], message: 'a member-level #if is not preceded by a blank line' };
@@ -190,11 +206,10 @@ final class MemberSpacing {
 	 * move still gets that block visually separated from its neighbours (the CheckBox shape).
 	 * Exempts a container with an unmodelled `#else`, as the check does.
 	 */
-	@:access(anyparse.check.MemberOrder)
 	private static function emitDirectiveSpacing(
 		edits: Array<{ span: Span, text: String }>, members: Array<OrderedMember>, source: String
 	): Void {
-		if (MemberOrder.hasUnmodelledElse(members, source)) return;
+		if (MemberSlots.hasUnmodelledElse(members, source)) return;
 		for (i in 0...members.length - 1) {
 			final gap: DirectiveGap = directiveGapEdits(members[i], members[i + 1], source);
 			final ifEdit: Null<{ span: Span, text: String }> = gap.ifEdit;

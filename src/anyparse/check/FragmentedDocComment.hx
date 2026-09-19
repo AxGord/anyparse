@@ -10,11 +10,6 @@ import anyparse.runtime.Span;
 using StringTools;
 
 /**
- * A comment token from `RefactorSupport.collectCommentTokens`.
- */
-typedef CommentTok = { from: Int, to: Int, isLine: Bool };
-
-/**
  * Flags a declaration's doc that is split across SEVERAL adjacent block comments
  * (each separately opened and closed) instead of one — a common artifact of a doc
  * edit that inserted a second block rather than replacing the first, which reads as
@@ -54,7 +49,6 @@ final class FragmentedDocComment implements Check {
 	public function description(): String {
 		return 'a declaration documented by several adjacent comment blocks instead of one';
 	}
-
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		return [

@@ -111,7 +111,7 @@ final class ExplicitType implements Check implements OracleAssisted {
 			final vspan: Null<Span> = v.span;
 			if (vspan != null) flagged['${vspan.from}:${vspan.to}'] = true;
 		}
-		final printer: TypeRefPrinter = ExplicitLocalType.printerFor(source, tree, plugin);
+		final printer: TypeRefPrinter = LiteralInfer.printerFor(source, tree, plugin);
 		final seams: ReturnSeams = {
 			source: source,
 			file: violations[0].file,
@@ -265,7 +265,7 @@ final class ExplicitType implements Check implements OracleAssisted {
 		// parameters — `<` right after the name token. Without that proof the same shape is an
 		// ordinary package-qualified type whose package tail happens to match the method name.
 		final generic: Bool = s.source.fastCodeAt(nameAt + name.length) == '<'.code;
-		final norm: Null<String> = ExplicitLocalType.normalizeWith(ret, s.printer, MAX_ANON_LEN, {
+		final norm: Null<String> = LiteralInfer.normalizeWith(ret, s.printer, MAX_ANON_LEN, {
 			file: s.file,
 			methodName: generic ? name : null
 		}, at);

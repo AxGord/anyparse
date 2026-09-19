@@ -217,7 +217,7 @@ final class ConstantHoist {
 		if (owner == null || node == null) return null;
 		final ownerName: String = owner;
 		final init: QueryNode = node.children[0];
-		final scalar: Bool = InlineConstant.isConstantScalarInitializer(init, ctx.plugin);
+		final scalar: Bool = ConstantFieldScan.isConstantScalarInitializer(init, ctx.plugin);
 		if (!scalar && ctx.plugin.stringFoldSupport()?.literalOf(init, ctx.source) == null) return null;
 		final type: Null<TypeDeclMatch> = RefactorSupport.uniqueTypeDeclNamed(ctx.tree, ownerName, ctx.classKinds);
 		if (type == null) return null;

@@ -1,9 +1,28 @@
 package anyparse.check;
 
-import anyparse.check.PreferMapType.Scope;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
+
+/**
+ * What one file's header binds, for the two name-resolution questions `prefer-map-type` asks: does a
+ * short `IntMap` here MEAN `haxe.ds.IntMap`, and is `Map` free to be written? `imports` maps a
+ * plain `import a.b.X;` / `using a.b.X;`'s simple name to its full path, `aliases` holds every
+ * simple name an `import … as/in Y;` binds (the grammar does not expose the aliased path, so such
+ * a name is never provable), `wildcards` holds each wildcard's package, `declared` holds every type
+ * this MODULE declares, and `aliasTargets` maps each module-declared typedef / abstract to the type
+ * it stands for — ONE hop, the chain being the reader's to follow. `mapFree` is the precomputed
+ * `Map` answer — it is a property of the file, not of a site, so every candidate in the file shares
+ * it.
+ */
+typedef Scope = {
+	var imports: Map<String, String>;
+	var aliases: Array<String>;
+	var wildcards: Array<String>;
+	var declared: Array<String>;
+	var aliasTargets: Map<String, String>;
+	var mapFree: Bool;
+}
 
 /**
  * The NAME-BINDING half of `prefer-map-type`: reading one file's header into the `Scope`
@@ -14,9 +33,31 @@ import anyparse.runtime.Span;
  * declarations and one-hop type aliases; nothing in it knows what a map is. Split out of
  * `PreferMapType`, which keeps the questions asked OF the resolved scope.
  */
-@:access(anyparse.check.PreferMapType)
 @:nullSafety(Strict)
 final class MapScopeScan {
+
+	/** The unified map abstract's simple name — what every rewrite writes. */
+	public static inline final UNIFIED_MAP: String = 'Map';
+
+	/**
+	 * The ANNOTATION type-reference kind, spelled literally: `RefShape` carries no field naming
+	 * it, and it needs a different position rule from the clause kind below. Both are declared in
+	 * `TypeRefShape.typeRefKinds`, so a grammar missing either makes the check a no-op.
+	 */
+	public static inline final ANNOTATION_TYPE_KIND: String = 'TypeRef';
+
+	/**
+	 * The CLAUSE type-reference kind — a return type, a heritage entry, a type-parameter
+	 * constraint, an abstract's underlying / `from` / `to` type, an `is` operand. Only the return
+	 * type of these is an annotation, which is why it needs its own position rule.
+	 */
+	public static inline final CLAUSE_TYPE_KIND: String = 'Named';
+
+	/** The fully-qualified prefix a self-proving reference carries. */
+	public static inline final QUALIFIED_PREFIX: String = '$MAP_MODULE_PACKAGE.';
+
+	/** The package the four rewritable map implementations live in — the target of every name proof. */
+	public static inline final MAP_MODULE_PACKAGE: String = 'haxe.ds';
 
 	/** The wildcard import's trailing segment, stripped to recover the imported package. */
 	private static inline final WILDCARD_SUFFIX: String = '.*';
@@ -53,9 +94,9 @@ final class MapScopeScan {
 			mapFree: false
 		};
 		collectScope(tree, typeDecls, shape.aliasingDeclKinds ?? [], nameHosts, scope);
-		final boundMap: Null<String> = scope.imports[PreferMapType.UNIFIED_MAP];
-		scope.mapFree = !scope.declared.contains(PreferMapType.UNIFIED_MAP) && !scope.aliases.contains(PreferMapType.UNIFIED_MAP)
-			&& (boundMap == null || boundMap == PreferMapType.QUALIFIED_PREFIX + PreferMapType.UNIFIED_MAP);
+		final boundMap: Null<String> = scope.imports[MapScopeScan.UNIFIED_MAP];
+		scope.mapFree = !scope.declared.contains(MapScopeScan.UNIFIED_MAP) && !scope.aliases.contains(MapScopeScan.UNIFIED_MAP)
+			&& (boundMap == null || boundMap == MapScopeScan.QUALIFIED_PREFIX + MapScopeScan.UNIFIED_MAP);
 		return scope;
 	}
 
@@ -102,7 +143,7 @@ final class MapScopeScan {
 	private static function aliasTargetOf(node: QueryNode): Null<String> {
 		var head: Null<QueryNode> = null;
 		for (child in node.children) {
-			if (child.kind != PreferMapType.ANNOTATION_TYPE_KIND && child.kind != PreferMapType.CLAUSE_TYPE_KIND) break;
+			if (child.kind != MapScopeScan.ANNOTATION_TYPE_KIND && child.kind != MapScopeScan.CLAUSE_TYPE_KIND) break;
 			final span: Null<Span> = child.span;
 			if (span == null) break;
 			final current: Null<Span> = head?.span;
