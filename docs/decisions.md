@@ -518,22 +518,22 @@ decided the question; it may not become a record of runs.
   holding an `import.hx` → it recognised such a directory from the INDEXED file list, so a run
   whose scope did not include the ambient file pinned the supertype to the same-package namesake
   and left the ambiently imported type unshielded — the exact shape the S200 review had fixed,
-  reachable again through a narrow lint; the gate is now the chain's own `bounded` flag — `S226-merge`
+  reachable again through a narrow lint; the gate is now the chain's own `bounded` flag — `2c0f8087`
 - one choke point in `SymbolIndexBuilder.extractFileInfo` was to carry the ambient imports too →
   that function sees ONE file, while a chain member is usually another indexed file whose own
   imports the same pass has not extracted yet, so the fold is a second pass over the built
-  records and falls back to parsing only a member outside the indexed set — `S226-merge`
+  records and falls back to parsing only a member outside the indexed set — `2c0f8087`
 - the ambient-import seam was to take the module's path alone → the chain must stop where the
   compiler stops it, at the source root, and that root is the module's directory minus one
   segment per package segment, so the seam takes the package the index already holds rather than
-  inventing a second notion of root or reading a build's command line — `S226-merge`
+  inventing a second notion of root or reading a build's command line — `2c0f8087`
 - ambient precedence was to be one flat order, own imports → ambient chain → same-package → the
   three bands the first pass of this slice shipped → the compiler ranks by import KIND before it
   ranks by distance or ownership: an explicit import outranks every wildcard one, so a farther
   ambient `import a.T;` beats a nearer ambient `import b.*;` and beats the reader's own `import
   b.*;`, and a flat order pinned the wrong declaration in both — two tiers, explicit above
-  wildcard, with own > nearest > farther inside each — `S226-merge`
+  wildcard, with own > nearest > farther inside each — `2c0f8087`
 - a ROOT-package type was to be reached only as a package-less global, never as an explicit import
   → `import T;` on a package-less module is an explicit import like any other and the compiler
   ranks it as one, so skipping the path comparison for an empty package let an ambient namesake
-  outrank it — `S226-merge`
+  outrank it — `2c0f8087`
