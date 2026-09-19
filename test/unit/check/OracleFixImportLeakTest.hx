@@ -12,7 +12,7 @@ import utest.Test;
 using StringTools;
 
 /**
- * The oracle-assisted fixers' IMPORT ACCOUNTING: `ExplicitLocalType.normalizeWith` ends in a
+ * The oracle-assisted fixers' IMPORT ACCOUNTING: `LiteralInfer.normalizeWith` ends in a
  * print, printing is what promises `TypeRefPrinter` an import, and the promises are materialised
  * once per file on `edits.length > 0`. So a candidate the fixer ABSTAINS from after printing
  * leaves its promise behind, and the next admissible candidate carries it into the file.

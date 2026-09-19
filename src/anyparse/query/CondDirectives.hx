@@ -15,7 +15,7 @@ using Lambda;
  * A directive is not a node. A `Conditional` region projects its BRANCH STATEMENTS as children and
  * the directive text itself survives only as trivia on the line, so every consumer that needs the
  * text has to read the source — and until this class there was no shared read, only per-caller
- * probes: `CondBranchProjection.gapHasBranchDirective` and `MemberOrder.hasBranchDirective` answer
+ * probes: `CondBranchProjection.gapHasBranchDirective` and `MemberSlots.hasBranchDirective` answer
  * "does a branch open in this gap", and `MemberSlots.extractConditionText` recovers ONE region's
  * condition from its node span. None of them enumerates directives, so the
  * consumers of this class — the `redundant-condcomp-parens` and `cond-region-merge` checks and
@@ -23,7 +23,7 @@ using Lambda;
  * this class's condition NORMALISATION (`normalizeCondition` / `isBalancedParenWrapped` /
  * `stripOuterParens`) but still reads its own condition text off a node span; the older probes
  * have NOT been migrated onto this reader otherwise; folding them in
- * (and with them the hardcoded `#end` / `#else` spellings in `MemberOrder`, `CondAssignMerge`,
+ * (and with them the hardcoded `#end` / `#else` spellings in `MemberOrder`, `MemberSlots`, `CondAssignMerge`,
  * `IfFalseDeadCode` and `TailMerge`) is the follow-up that would make the first sentence true of the
  * whole engine rather than of this class's own consumers.
  *

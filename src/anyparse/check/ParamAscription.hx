@@ -36,7 +36,6 @@ using StringTools;
  * Split out of `AvoidDynamic`, which keeps the primary rule and the local-narrowing autofix, the same
  * way the bag arm lives in `DynamicBag`.
  */
-@:access(anyparse.check.AvoidDynamic)
 @:nullSafety(Strict)
 final class ParamAscription {
 
@@ -62,7 +61,7 @@ final class ParamAscription {
 	 * about.
 	 */
 	private static function wholeDynamicParam(tree: QueryNode, span: Span, shape: RefShape, dynName: String): Null<ParamSubject> {
-		final param: Null<QueryNode> = AvoidDynamic.innermostContaining(tree, span, shape.paramKinds ?? []);
+		final param: Null<QueryNode> = DynamicShape.innermostContaining(tree, span, shape.paramKinds ?? []);
 		if (param == null || param.kind == shape.restParamKind) return null;
 		final wrapped: Null<Bool> = dynamicIsWholeParamType(param, span, shape, dynName);
 		final name: Null<String> = param.name;
@@ -134,7 +133,7 @@ final class ParamAscription {
 		// handled by refusing a generic method outright).
 		final path: String = headOfTypeSource(withoutNullableWrapper(written, shape));
 		if (
-			!AvoidDynamic.isNominalName(path) || !AvoidDynamic.acceptableType(path, dynName) || typeParameterOf(host, path, symbols)
+			!DynamicShape.isNominalName(path) || !DynamicShape.acceptableType(path, dynName) || typeParameterOf(host, path, symbols)
 			|| !symbols.resolvesToConversionFreeType(path)
 		)
 			return null;
@@ -265,7 +264,7 @@ final class ParamAscription {
 	private static function paramReads(
 		subject: ParamSubject, tree: QueryNode, shape: RefShape, castTargets: Map<Int, String>
 	): Null<ParamReads> {
-		final targetKeys: Map<String, Bool> = AvoidDynamic.occurrenceKeysOf(subject.name, subject.bindFrom, tree, shape);
+		final targetKeys: Map<String, Bool> = DynamicShape.occurrenceKeysOf(subject.name, subject.bindFrom, tree, shape);
 		final reads: ParamReads = { ascriptions: [], types: [], nullCompared: false };
 		return collectParamReads(tree, null, subject.name, shape, castTargets, targetKeys, reads) ? reads : null;
 	}

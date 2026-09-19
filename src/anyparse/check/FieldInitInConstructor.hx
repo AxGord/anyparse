@@ -2,7 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
-import anyparse.check.MemberOrder.MemberRank;
+import anyparse.check.MemberSlots.MemberRank;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.CtorFieldFold;
 import anyparse.query.CtorFieldWrite;

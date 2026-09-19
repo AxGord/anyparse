@@ -1,7 +1,7 @@
 package anyparse.check;
 
-import anyparse.check.MemberOrder.MemberRank;
-import anyparse.check.MemberOrder.OrderedMember;
+import anyparse.check.MemberSlots.MemberRank;
+import anyparse.check.MemberSlots.OrderedMember;
 
 /**
  * The `compareOrder` keys for ONE pair of members, computed by `MemberOrder` and handed here.

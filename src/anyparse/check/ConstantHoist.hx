@@ -183,8 +183,8 @@ final class ConstantHoist {
 	 *    UNBRACED `case` arm is a deliberate conservative miss — an arm is not a statement block here
 	 *    (a braced arm hoists fine). A `var` may be written; a multi-binding list carries a continuation
 	 *    node as its last child; a declaration without an initializer has no child at all;
-	 *  - the initializer is a compile-time constant — the scalar proof `inline-constant` owns
-	 *    (`InlineConstant.isConstantScalarInitializer`), or a PLAIN string literal, which is exactly
+	 *  - the initializer is a compile-time constant — the scalar proof the constant-field checks share
+	 *    (`ConstantFieldScan.isConstantScalarInitializer`), or a PLAIN string literal, which is exactly
 	 *    what `StringFoldSupport.literalOf` answers (an interpolated one reads locals and is refused
 	 *    there);
 	 *  - the enclosing type is a CLASS declared in this file, and one the language lets hold a static
@@ -217,7 +217,7 @@ final class ConstantHoist {
 		if (owner == null || node == null) return null;
 		final ownerName: String = owner;
 		final init: QueryNode = node.children[0];
-		final scalar: Bool = InlineConstant.isConstantScalarInitializer(init, ctx.plugin);
+		final scalar: Bool = ConstantFieldScan.isConstantScalarInitializer(init, ctx.plugin);
 		if (!scalar && ctx.plugin.stringFoldSupport()?.literalOf(init, ctx.source) == null) return null;
 		final type: Null<TypeDeclMatch> = RefactorSupport.uniqueTypeDeclNamed(ctx.tree, ownerName, ctx.classKinds);
 		if (type == null) return null;

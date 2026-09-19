@@ -248,20 +248,6 @@ final class InlineConstant implements Check {
 	}
 
 	/**
-	 * Whether `init` is a compile-time-constant SCALAR initializer under `plugin`'s grammar — a bare
-	 * `inlineConstantLiteralKinds` literal or a `negationKind` over a numeric one. The same proof this
-	 * check applies before adding `inline`, published so `naming`'s constant-hoist arm asks THIS
-	 * question rather than re-deriving it: both act on the answer by emitting an `inline` keyword, and
-	 * a second opinion about what folds would be a second, worse copy of the policy. False when the
-	 * grammar leaves a seam the proof needs unset (see `ConstantFieldScan.seams`). String literals are absent by
-	 * construction — `inlineConstantLiteralKinds` omits them (see the hxcpp note on this class).
-	 */
-	public static function isConstantScalarInitializer(init: QueryNode, plugin: GrammarPlugin): Bool {
-		final resolved: Null<ConstantFieldSeams> = ConstantFieldScan.seams(plugin);
-		return resolved != null && ConstantFieldScan.isScalarLiteral(init, resolved);
-	}
-
-	/**
 	 * Whether `meta` is an annotation that pins a member in place — the grammar's RETAINED tag
 	 * (nothing may delete this declaration) or its REFLECTED one (its member names are runtime data).
 	 * Two questions with one answer here: inlining moves the value out of the field either way. A

@@ -1,8 +1,8 @@
 package anyparse.check;
 
-import anyparse.check.AvoidDynamic.DynCtx;
 import anyparse.check.Check.TypeOracle;
 import anyparse.check.Check.Violation;
+import anyparse.check.DynamicShape.DynCtx;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
@@ -27,7 +27,6 @@ using StringTools;
  * Split out of `AvoidDynamic`, which keeps the primary rule — finding raw `Dynamic` in a
  * declared type position — and the unrelated local-narrowing autofix.
  */
-@:access(anyparse.check.AvoidDynamic)
 @:nullSafety(Strict)
 final class DynamicBag {
 
@@ -57,8 +56,10 @@ final class DynamicBag {
 	 */
 	private static final BAG_METHODS: Array<String> = ['setField', 'field', 'hasField', 'deleteField', 'fields'];
 
-	/** The DynamicAccess bag edits for `violations`; `oracle` (optional) resolves the value-type inference tail. */
-	@:access(anyparse.check.AvoidDynamic)
+	/**
+	 * The DynamicAccess bag edits for `violations`, which the caller has already narrowed to its own rule: the arm
+	 * reads no rule id, since the id belongs to the rule. `oracle` (optional) resolves the value-type inference tail.
+	 */
 	public static function bagEdits(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?oracle: TypeOracle
 	): Array<{ span: Span, text: String }> {
@@ -66,17 +67,17 @@ final class DynamicBag {
 		final dynName: Null<String> = shape.rawDynamicTypeName;
 		final tree: Null<QueryNode> = dynName == null ? null : CheckScan.parseOrNull(plugin, source);
 		if (dynName == null || tree == null) return [];
-		final ctx: DynCtx = AvoidDynamic.buildCtx(shape, dynName);
+		final ctx: DynCtx = DynamicShape.buildCtx(shape, dynName);
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		final declaredTypes: Map<Int, String> = provider != null ? provider.declaredTypes(source) : [];
 		final imports: Map<String, String> = provider != null ? provider.importMap(source) : [];
 		final usingReflect: Bool = hasUsingReflect(tree);
 		final edits: Array<{ span: Span, text: String }> = [];
 		var importAdded: Bool = false;
-		for (v in violations) if (v.rule == AvoidDynamic.RULE_ID) {
+		for (v in violations) {
 			final span: Null<Span> = v.span;
 			if (span == null) continue;
-			final decl: Null<QueryNode> = fixableBagDecl(tree, source, span, shape, ctx, dynName);
+			final decl: Null<QueryNode> = fixableBagDecl(tree, source, span, ctx, dynName);
 			if (decl == null) continue;
 			final bag: Null<BagUses> = bagUsesOf(decl, tree, source, shape, ctx, usingReflect, dynName);
 			if (bag == null) continue;
@@ -109,7 +110,6 @@ final class DynamicBag {
 	 * only (the report has no oracle). All positions and visibilities are re-messaged; the
 	 * blast-radius gate applies only to the FIX.
 	 */
-	@:access(anyparse.check.AvoidDynamic)
 	public static function annotateBags(
 		found: Array<Violation>, source: String, tree: QueryNode, shape: RefShape, ctx: DynCtx, dynName: String,
 		declaredTypes: Map<Int, String>, imports: Map<String, String>, usingReflect: Bool
@@ -118,7 +118,7 @@ final class DynamicBag {
 		for (v in found) {
 			final span: Null<Span> = v.span;
 			if (span == null) continue;
-			final decl: Null<QueryNode> = AvoidDynamic.wholeDynamicDecl(tree, source, span, shape, dynName, declKinds);
+			final decl: Null<QueryNode> = DynamicShape.wholeDynamicDecl(tree, source, span, dynName, declKinds);
 			if (decl == null) continue;
 			final bag: Null<BagUses> = bagUsesOf(decl, tree, source, shape, ctx, usingReflect, dynName);
 			if (bag == null) continue;
@@ -133,13 +133,10 @@ final class DynamicBag {
 	 * public field's type is an API change, and a property's accessor signatures would need
 	 * to change too. Reuses `wholeDynamicDecl` for the char / child-containment test.
 	 */
-	@:access(anyparse.check.AvoidDynamic)
-	private static function fixableBagDecl(
-		tree: QueryNode, source: String, span: Span, shape: RefShape, ctx: DynCtx, dynName: String
-	): Null<QueryNode> {
-		final local: Null<QueryNode> = AvoidDynamic.wholeDynamicDecl(tree, source, span, shape, dynName, ctx.localKinds);
+	private static function fixableBagDecl(tree: QueryNode, source: String, span: Span, ctx: DynCtx, dynName: String): Null<QueryNode> {
+		final local: Null<QueryNode> = DynamicShape.wholeDynamicDecl(tree, source, span, dynName, ctx.localKinds);
 		if (local != null) return local;
-		final field: Null<QueryNode> = AvoidDynamic.wholeDynamicDecl(tree, source, span, shape, dynName, ctx.fieldKinds);
+		final field: Null<QueryNode> = DynamicShape.wholeDynamicDecl(tree, source, span, dynName, ctx.fieldKinds);
 		if (field == null) return null;
 		final fs: Null<Span> = field.span;
 		return fs == null || isProperty(source, fs, span) || isPublicMember(tree, field, ctx) ? null : field;
@@ -177,7 +174,6 @@ final class DynamicBag {
 		}
 		return false;
 	}
-
 
 	/**
 	 * The bag's reflect operations and written values when `decl` is used EXCLUSIVELY as a
@@ -349,7 +345,7 @@ final class DynamicBag {
 			if (t == null && oracle != null) {
 				final ws: Null<Span> = w.span;
 				final raw: Null<String> = ws == null ? null : oracle.typeAt(file, ws.to - 1);
-				t = raw == null ? null : ExplicitLocalType.normalizeInferredType(raw, imports, BAG_MAX_ANON);
+				t = raw == null ? null : LiteralInfer.normalizeInferredType(raw, imports, BAG_MAX_ANON);
 			}
 			if (t == null) {
 				hasUnresolved = true;
@@ -426,7 +422,6 @@ final class DynamicBag {
 	 * Whether the innermost function containing `declFrom` has an explicit
 	 * `Dynamic` return type — a bag returned there flows out as Dynamic (safe).
 	 */
-	@:access(anyparse.check.AvoidDynamic)
 	private static function enclosingFnReturnsDynamic(
 		tree: QueryNode, declFrom: Int, shape: RefShape, ctx: DynCtx, source: String, dynName: String
 	): Bool {
@@ -448,7 +443,7 @@ final class DynamicBag {
 		walk(tree);
 		final fn: Null<QueryNode> = best;
 		if (fn == null) return false;
-		final ret: Null<QueryNode> = AvoidDynamic.returnTypeNode(fn, ctx);
+		final ret: Null<QueryNode> = DynamicShape.returnTypeNode(fn, ctx);
 		final rs: Null<Span> = ret?.span;
 		return rs != null && source.substring(rs.from, rs.to).trim() == dynName;
 	}

@@ -223,7 +223,7 @@ class DeadStoreTest extends Test {
 	}
 
 	public function testBareArrowAccumulatorExcluded(): Void {
-		// `ExplicitLocalType.inadmissibleType` in shape: an accumulator a driver's bare-arrow callback
+		// `LiteralInfer.inadmissibleType` in shape: an accumulator a driver's bare-arrow callback
 		// writes, read after the driver returns. Both the initializer and the write were flagged, and
 		// `--fix` stripped `var found:Bool = false` to `var found:Bool;` — which the compiler rejects
 		// (`Local variable found used without being initialized`), so the next project-wide fixpoint run
@@ -234,7 +234,7 @@ class DeadStoreTest extends Test {
 	}
 
 	public function testBareArrowNegatedAccumulatorExcluded(): Void {
-		// The `ExplicitLocalType.spellable` twin of the same shape — the accumulator starts `true` and
+		// The `LiteralInfer.spellable` twin of the same shape — the accumulator starts `true` and
 		// the callback clears it, so a stripped initializer makes it answer "spellable" for every input
 		// instead of abstaining on the unproven ones.
 		final src: String = 'class C { static function s(p:String):Null<String> { var placed:Bool = true;'

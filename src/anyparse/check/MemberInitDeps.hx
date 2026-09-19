@@ -1,6 +1,6 @@
 package anyparse.check;
 
-import anyparse.check.MemberOrder.OrderedMember;
+import anyparse.check.MemberSlots.OrderedMember;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;

@@ -4,6 +4,7 @@ import anyparse.check.Check.GroupedEdit;
 import anyparse.check.Check.GroupedFix;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
+import anyparse.check.MapScopeScan.Scope;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.ModuleScan;
 import anyparse.query.QueryNode;
@@ -24,26 +25,6 @@ private typedef Candidate = {
 	var span: Span;
 	var message: String;
 	var edits: Array<{ span: Span, text: String }>;
-}
-
-/**
- * What one file's header binds, for the two name-resolution questions this rule asks: does a
- * short `IntMap` here MEAN `haxe.ds.IntMap`, and is `Map` free to be written? `imports` maps a
- * plain `import a.b.X;` / `using a.b.X;`'s simple name to its full path, `aliases` holds every
- * simple name an `import … as/in Y;` binds (the grammar does not expose the aliased path, so such
- * a name is never provable), `wildcards` holds each wildcard's package, `declared` holds every type
- * this MODULE declares, and `aliasTargets` maps each module-declared typedef / abstract to the type
- * it stands for — ONE hop, the chain being the reader's to follow. `mapFree` is the precomputed
- * `Map` answer — it is a property of the file, not of a site, so every candidate in the file shares
- * it.
- */
-typedef Scope = {
-	var imports: Map<String, String>;
-	var aliases: Array<String>;
-	var wildcards: Array<String>;
-	var declared: Array<String>;
-	var aliasTargets: Map<String, String>;
-	var mapFree: Bool;
 }
 
 /** The resolved per-file seams the candidate walk threads through, so no node visit re-derives them. */
@@ -215,34 +196,11 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 	/** The rule's stable identifier — the `apqlint.json` key and the `--rule` selector. */
 	private static inline final RULE_ID: String = 'prefer-map-type';
 
-	/** The package the four rewritable map implementations live in — the target of every name proof. */
-	private static inline final MAP_MODULE_PACKAGE: String = 'haxe.ds';
-
-	/** The unified map abstract's simple name — what every rewrite writes. */
-	private static inline final UNIFIED_MAP: String = 'Map';
-
 	/** An empty constructor argument list — the only one this rule rewrites (the `NewLiteral` precedent). */
 	private static inline final EMPTY_ARGUMENT_LIST: String = '()';
 
-	/**
-	 * The ANNOTATION type-reference kind, spelled literally: `RefShape` carries no field naming
-	 * it, and it needs a different position rule from the clause kind below. Both are declared in
-	 * `TypeRefShape.typeRefKinds`, so a grammar missing either makes the check a no-op.
-	 */
-	private static inline final ANNOTATION_TYPE_KIND: String = 'TypeRef';
-
-	/**
-	 * The CLAUSE type-reference kind — a return type, a heritage entry, a type-parameter
-	 * constraint, an abstract's underlying / `from` / `to` type, an `is` operand. Only the return
-	 * type of these is an annotation, which is why it needs its own position rule.
-	 */
-	private static inline final CLAUSE_TYPE_KIND: String = 'Named';
-
 	/** The grammar's name/type pair inside an anonymous-structure field — transparent to the position walk. */
 	private static inline final FIELD_PAIR_KIND: String = 'Plain';
-
-	/** The fully-qualified prefix a self-proving reference carries. */
-	private static inline final QUALIFIED_PREFIX: String = '$MAP_MODULE_PACKAGE.';
 
 	/** The finding message when the rewrite is available — the only message `fix` acts on. */
 	private static inline final MSG_FIXABLE: String = 'this concrete map type can be the unified Map<K, V> syntax';
@@ -358,7 +316,7 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 
 	/** The edit replacing the concrete map's name token at `at` with the unified name. */
 	private static inline function nameEdit(at: Int, name: String): { span: Span, text: String } {
-		return { span: new Span(at, at + name.length), text: UNIFIED_MAP };
+		return { span: new Span(at, at + name.length), text: MapScopeScan.UNIFIED_MAP };
 	}
 
 	/**
@@ -368,7 +326,7 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 	 */
 	private static function candidatesOf(source: String, plugin: GrammarPlugin): Array<Candidate> {
 		final typeRefKinds: Array<String> = plugin.typeRefShape().typeRefKinds;
-		if (!typeRefKinds.contains(ANNOTATION_TYPE_KIND) || !typeRefKinds.contains(CLAUSE_TYPE_KIND)) return [];
+		if (!typeRefKinds.contains(MapScopeScan.ANNOTATION_TYPE_KIND) || !typeRefKinds.contains(MapScopeScan.CLAUSE_TYPE_KIND)) return [];
 		final tree: Null<QueryNode> = CheckScan.parseTypeRefsOrNull(plugin, source);
 		if (tree == null) return [];
 		final shape: RefShape = plugin.refShape();
@@ -422,10 +380,10 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 		child: QueryNode, parent: QueryNode, isReturnSlot: Bool, parentAccepted: Bool, seams: Seams
 	): Bool {
 		return if (parent.kind == seams.newExprKind)
-			child.kind == CLAUSE_TYPE_KIND
+			child.kind == MapScopeScan.CLAUSE_TYPE_KIND
 		else if (parent.kind == FIELD_PAIR_KIND || seams.typeRefKinds.contains(parent.kind))
 			parentAccepted
-		else if (child.kind == CLAUSE_TYPE_KIND)
+		else if (child.kind == MapScopeScan.CLAUSE_TYPE_KIND)
 			isReturnSlot
 		else
 			seams.declHostKinds.contains(parent.kind);
@@ -599,7 +557,7 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 		final impliedKey: Null<String> = CONCRETE_MAP_KEY_TYPES[concrete];
 		final writesOwnKey: Bool = impliedKey == null || impliedKey == '';
 		final nominal: String = annotation.substring(0, open).trim();
-		return if (nominal == UNIFIED_MAP || nominal == QUALIFIED_PREFIX + UNIFIED_MAP)
+		return if (nominal == MapScopeScan.UNIFIED_MAP || nominal == MapScopeScan.QUALIFIED_PREFIX + MapScopeScan.UNIFIED_MAP)
 			split.more && (writesOwnKey ? keyProven(split.first, scope) : split.first == impliedKey)
 		else if (resolveConcreteMap(nominal, scope) != concrete)
 			false
@@ -742,15 +700,15 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 	 * outright when the module declares that name or an alias binds it (see the class doc).
 	 */
 	private static function resolveConcreteMap(name: String, scope: Scope): Null<String> {
-		if (name.startsWith(QUALIFIED_PREFIX)) {
-			final simple: String = name.substr(QUALIFIED_PREFIX.length);
+		if (name.startsWith(MapScopeScan.QUALIFIED_PREFIX)) {
+			final simple: String = name.substr(MapScopeScan.QUALIFIED_PREFIX.length);
 			return CONCRETE_MAP_KEY_TYPES.exists(simple) ? simple : null;
 		}
 		if (!CONCRETE_MAP_KEY_TYPES.exists(name) || scope.declared.contains(name) || scope.aliases.contains(name)) return null;
 		final imported: Null<String> = scope.imports[name];
 		return if (imported != null)
-			imported == QUALIFIED_PREFIX + name ? name : null
-		else if (scope.wildcards.contains(MAP_MODULE_PACKAGE))
+			imported == MapScopeScan.QUALIFIED_PREFIX + name ? name : null
+		else if (scope.wildcards.contains(MapScopeScan.MAP_MODULE_PACKAGE))
 			name
 		else
 			null;

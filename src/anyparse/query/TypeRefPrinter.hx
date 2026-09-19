@@ -829,7 +829,7 @@ final class TypeRefPrinter {
 	 * already-imported or always-in-scope path and leaves everything else fully qualified; it
 	 * never inserts an import (there is no tree to anchor one against and no source to prove
 	 * the short name free). The form a caller with no parsed file can still use soundly, and
-	 * the one `ExplicitLocalType.normalizeInferredType`'s public pure signature keeps.
+	 * the one `LiteralInfer.normalizeInferredType`'s public pure signature keeps.
 	 */
 	public static function importsOnly(importMap: Map<String, String>): TypeRefPrinter {
 		return new TypeRefPrinter(null, null, importMap, null, null);
