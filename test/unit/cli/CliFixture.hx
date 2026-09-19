@@ -70,6 +70,25 @@ final class CliFixture {
 	}
 
 	/**
+	 * Write each `{name, source}` into a fresh unique temp directory, creating the intermediate
+	 * directories a NESTED `name` (`lib/deep/Deep.hx`) asks for, and return the directory path.
+	 *
+	 * The nested counterpart of `writeDir`: a fixture whose subject is where a file SITS — a
+	 * per-directory ambient source, a package layout — cannot be written flat.
+	 */
+	public static function writeTree(prefix: String, files: Array<{ name: String, source: String }>): String {
+		counter++;
+		final root: String = '${TempScratch.root()}/tmp_${prefix}_tree_${Sys.time()}_$counter';
+		FileSystem.createDirectory(root);
+		for (f in files) {
+			final target: String = '$root/${f.name}';
+			FileSystem.createDirectory(Path.directory(target));
+			File.saveContent(target, f.source);
+		}
+		return root;
+	}
+
+	/**
 	 * Recursively delete `dir` and everything beneath it, tolerant of a
 	 * missing path — a `dir` that does not exist is a silent no-op. The
 	 * teardown counterpart to `writeDir`, centralizing the

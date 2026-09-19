@@ -64,6 +64,19 @@ typedef ImportInfo = {
 }
 
 /**
+ * One ambient source's imports as they reach a file that does not spell them: the source `file`
+ * they were read from, and the statements it carries.
+ *
+ * Grouped rather than flattened because the group is what carries PRECEDENCE — a nearer source
+ * outranks a farther one for a simple name both bind — and because a consumer that reports or
+ * rewrites such a statement needs the file its `span` belongs to.
+ */
+typedef AmbientImportGroup = {
+	var file: String;
+	var imports: Array<ImportInfo>;
+}
+
+/**
  * One top-level type declaration. `kind` is the grammar's decl-node
  * kind string (`ClassDecl` / `InterfaceDecl` / `EnumDecl` /
  * `TypedefDecl` / `AbstractDecl`); `isMain` is true when the type's
@@ -382,6 +395,25 @@ typedef FileInfo = {
 	var types: Array<TypeDeclInfo>;
 
 	/**
+	 * The imports this file receives from an AMBIENT source it does not spell — a per-directory
+	 * `import.hx`, a global-using file — NEAREST group first, so an earlier group's binding of a
+	 * simple name outranks a later one's and the file's own `imports` outrank the whole chain.
+	 *
+	 * Deliberately NOT merged into `imports`: a rule judging the file's own import list must not
+	 * see a statement the file does not carry, and every `span` here addresses the GROUP's file,
+	 * never this one, so an edit driven off one would land in the wrong file.
+	 */
+	var ambientImports: Array<AmbientImportGroup>;
+
+	/**
+	 * False when the ambient chain could not be bounded at its source root, so names the chain
+	 * binds may be missing. An ambient binding OUTRANKS a same-package type, so a consumer that
+	 * PINS a written reference to one declaration must refuse on a false rather than resolve
+	 * against a chain it knows is short.
+	 */
+	var ambientImportsBounded: Bool;
+
+	/**
 	 * Simple names of every type referenced in an `@:access(...)` metadata in
 	 * this file — types this file grants itself private access to. Drives
 	 * `hasAccessGrant`, the second gate of a cross-file-safe private-member rename.
@@ -638,15 +670,20 @@ final class SymbolIndex {
 	public function fileImportsMemberName(file: String, name: String): Bool {
 		final host: Null<FileInfo> = _files.find(f -> f.file == file);
 		if (host == null) return false;
-		for (imp in host.imports) switch imp.kind {
-			case ImportKind.Import:
-				final dot: Int = imp.raw.lastIndexOf('.');
-				if ((dot < 0 ? imp.raw : imp.raw.substr(dot + 1)) == name) return true;
-			case ImportKind.Alias:
-				if (imp.alias == name) return true;
-			case ImportKind.Wild, ImportKind.Using:
+		// An AMBIENT source's static import binds the bare name here exactly as one written in the file
+		// would, and the answer is read as a veto, so the two lists answer as a union.
+		function binds(imports: Array<ImportInfo>): Bool {
+			for (imp in imports) switch imp.kind {
+				case ImportKind.Import:
+					final dot: Int = imp.raw.lastIndexOf('.');
+					if ((dot < 0 ? imp.raw : imp.raw.substr(dot + 1)) == name) return true;
+				case ImportKind.Alias:
+					if (imp.alias == name) return true;
+				case ImportKind.Wild, ImportKind.Using:
+			}
+			return false;
 		}
-		return false;
+		return binds(host.imports) || host.ambientImports.exists(g -> binds(g.imports));
 	}
 
 	/**

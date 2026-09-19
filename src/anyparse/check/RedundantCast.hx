@@ -48,7 +48,7 @@ final class RedundantCast implements Check {
 		return RunScan.collectWith(files, plugin, RunScan.typeInfoOf(plugin), (entry, tree, typed, violations) -> {
 			final declaredTypeSources: Map<Int, String> = typed.declaredTypeSources(entry.source);
 			final castTargets: Map<Int, String> = typed.castTargetSources(entry.source);
-			final importMap: Map<String, String> = typed.importMap(entry.source);
+			final importMap: Map<String, String> = typed.importMap(entry.source, entry.file);
 			function walk(node: QueryNode): Void {
 				if (opaqueKinds.contains(node.kind)) return;
 				if (typedCastKinds.contains(node.kind)) {

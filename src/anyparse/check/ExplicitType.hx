@@ -111,7 +111,7 @@ final class ExplicitType implements Check implements OracleAssisted {
 			final vspan: Null<Span> = v.span;
 			if (vspan != null) flagged['${vspan.from}:${vspan.to}'] = true;
 		}
-		final printer: TypeRefPrinter = LiteralInfer.printerFor(source, tree, plugin);
+		final printer: TypeRefPrinter = LiteralInfer.printerFor(source, tree, plugin, violations[0].file);
 		final seams: ReturnSeams = {
 			source: source,
 			file: violations[0].file,

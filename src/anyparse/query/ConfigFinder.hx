@@ -44,6 +44,19 @@ final class ConfigFinder {
 	}
 
 	/**
+	 * EVERY `filename` from `path`'s directory up to and INCLUDING `stopDir`, NEAREST FIRST —
+	 * the bound a chain has when the caller can COMPUTE where the walk ends instead of
+	 * recognising it by a marker file, which is what a source root derived from a module's
+	 * package is.
+	 *
+	 * A `stopDir` that is not an ancestor of `path`'s directory ends the walk at that directory,
+	 * so an unresolvable bound yields the shortest chain rather than the longest.
+	 */
+	public static inline function findUpTo(path: String, filename: String, stopDir: String): ConfigChain {
+		return walkUp(path, filename, false, null, stopDir);
+	}
+
+	/**
 	 * Walk up from `path`'s directory looking for a file named `filename` and
 	 * return its content, or null when none is found, it cannot be read, or the
 	 * target has no file IO.
@@ -70,13 +83,16 @@ final class ConfigFinder {
 	 * `filename` and the path of each one that exists but cannot be read.
 	 * `stopAtFirst` answers the nearest one only — and, faithful to the contract
 	 * `findUpFile` has always had, treats an unreadable nearest match as no match at
-	 * all rather than walking past it. `boundary` ends the walk AFTER the directory
-	 * holding one of its files, so a project root's own document is still read.
+	 * all rather than walking past it. `boundary` ends the walk AFTER the directory holding one of its
+	 * files, so a project root's own document is still read; `stopDir` ends it after that directory itself.
 	 */
-	private static function walkUp(path: String, filename: String, stopAtFirst: Bool, ?boundary: Array<String>): ConfigChain {
+	private static function walkUp(
+		path: String, filename: String, stopAtFirst: Bool, ?boundary: Array<String>, ?stopDir: String
+	): ConfigChain {
 		final out: Array<ConfigFile> = [];
 		final unreadable: Array<String> = [];
 		#if (sys || nodejs)
+		final bound: Null<String> = stopDir == null ? null : sys.FileSystem.absolutePath(stopDir);
 		var dir: String = haxe.io.Path.directory(sys.FileSystem.absolutePath(path));
 		while (dir != '') {
 			final candidate: String = '$dir/$filename';
@@ -91,7 +107,7 @@ final class ConfigFinder {
 				}
 				if (stopAtFirst) return { documents: out, unreadable: unreadable };
 			}
-			if (marksProjectRoot(dir, boundary)) break;
+			if (marksProjectRoot(dir, boundary) || dir == bound) break;
 			final parent: String = haxe.io.Path.directory(dir);
 			if (parent == dir) break;
 			dir = parent;

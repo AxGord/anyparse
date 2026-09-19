@@ -126,9 +126,9 @@ import anyparse.runtime.Span;
  *   the wrong one. An EXTENSION call is the same miss from the other end: the method is not a member
  *   of the receiver's type, so it names no return type to read — a chain of them never resolves
  *   however many `--fix` passes run.
- * - An `import.hx`-provided `using` is invisible (anyparse ignores `import.hx` repo-wide):
- *   worst case an inserted `using` that was already implied, or a conservative miss of a
- *   conflicting module. Neither breaks a build.
+ * - An ambient `using` reaches TYPE RESOLUTION but not this walk, which
+ *   reads the file own `using` run (`UsingScan`): worst case an inserted `using` that was
+ *   already implied, or a conservative miss of a conflicting module. Neither breaks a build.
  * - A call inside a `#if … #end` region IS found: the grammar projects a balanced region as a
  *   `Conditional` whose branches are flat children, and this walk descends into it like any other
  *   node (a `StringTools` call in a `#if (sys || nodejs)` statement region is reported).

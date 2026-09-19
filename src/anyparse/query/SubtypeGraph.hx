@@ -609,20 +609,16 @@ final class SubtypeGraph {
 		if (built != null) return built;
 		final adjacency: SubtypeAdjacency = { simple: [], qualified: [], unresolved: [] };
 		final aliases: Map<String, Array<String>> = aliasEdges();
-		// A per-directory `import.hx` applies to every module in that directory and below and
-		// OUTRANKS a same-package type (compiler-verified), and this layer does not read it — so a
-		// supertype written under one cannot be pinned to a declaration and stays unresolved.
-		final importHxDirs: Array<String> = [
-			for (f in _files) if (f.file.substr(f.file.lastIndexOf('/') + 1) == 'import.hx')
-				f.file.substring(0, f.file.lastIndexOf('/') + 1)
-		];
 		for (fi in _files) {
 			// An `import pkg.Util as U;` binds `U` in THIS file and nowhere else, so its hop is
 			// read off the file's own imports rather than from the project-wide `aliasEdges` a
 			// `typedef` earns. It is consulted inside the walk, not only on the written name, so
 			// the two alias kinds compose in either order.
 			final importAliases: Map<String, Array<String>> = TypeRefIndex.importAliasEdges(fi, true);
-			final pinnable: Bool = !importHxDirs.exists(d -> fi.file.substr(0, d.length) == d);
+			// An AMBIENT binding outranks a same-package type, so a file whose ambient chain could
+			// not be bounded may reach a supertype through a statement the index never read: the
+			// written reference cannot be pinned to a declaration and stays unresolved.
+			final pinnable: Bool = fi.ambientImportsBounded;
 			for (t in fi.types) {
 				// A type naming one simple name TWICE (two differently-qualified supertypes reducing to
 				// it) lands in that bucket once — `supertypes.contains` reported it once per scan too.

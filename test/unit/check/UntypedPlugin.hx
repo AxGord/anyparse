@@ -108,4 +108,8 @@ final class UntypedPlugin implements GrammarPlugin {
 		throw new NotImplementedException();
 	}
 
+	public function ambientImportSources(path: String, pkg: String): AmbientImports {
+		throw new NotImplementedException();
+	}
+
 }

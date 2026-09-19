@@ -434,8 +434,8 @@ final class InlineConstant implements Check {
 	 * ENCLOSING class spelled like an in-scope type wins in expression position, so `T.A` reads the
 	 * VALUE's field while the arm would prove the type's constant; an ALIAS import never enters
 	 * simple-name scope, so a same-simple-named local type would be proven in the real target's
-	 * place; a type outside the resolution scope (or reached through `import.hx`) is absent from the
-	 * candidate set; and a type declared twice through `#if` is deduped BY DESIGN by
+	 * place; a type outside the resolution scope is absent from the candidate set (one reached through an
+	 * ambient `import.hx` no longer is); and a type declared twice through `#if` is deduped BY DESIGN by
 	 * `SymbolIndexBuilder`. Re-adding is gated on YIELD first — a corpus that actually holds
 	 * non-inline qualified constants — and only then on the index work. See `docs/decisions.md`.
 	 *

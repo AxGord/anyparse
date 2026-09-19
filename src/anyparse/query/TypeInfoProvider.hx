@@ -87,7 +87,13 @@ interface TypeInfoProvider {
 	 * the original path is not exposed by the grammar), wildcard imports, and `using`
 	 * are excluded. Lets a consumer canonicalize a bare type reference to an FQN and
 	 * thus tell `Eof` (imported `haxe.io.Eof`) from a qualified `sys.io.Eof`.
+	 *
+	 * `path` is where `source` is stored, and passing it adds the bindings the module
+	 * receives from an AMBIENT import source it does not spell (`ambientImportSources`) —
+	 * outranked by the module's own imports, a nearer source outranking a farther one. A
+	 * caller that omits it gets the module's own imports only, which is every binding a
+	 * grammar with no ambient-import concept has.
 	 */
-	public function importMap(source: String): Map<String, String>;
+	public function importMap(source: String, ?path: String): Map<String, String>;
 
 }

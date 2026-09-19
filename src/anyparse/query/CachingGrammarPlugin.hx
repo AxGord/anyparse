@@ -4,6 +4,7 @@ import anyparse.check.ReflectionMemo;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.FunctionTypeProvider;
+import anyparse.query.GrammarPlugin.AmbientImports;
 import anyparse.query.GrammarPlugin.CheckOverrides;
 import anyparse.query.GrammarPlugin.LayoutMetrics;
 import anyparse.query.GrammarPlugin.MetaShape;
@@ -14,6 +15,7 @@ import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.Pattern.KindEquivalence;
 import anyparse.query.SpanTypeInfoProvider;
 import anyparse.query.StringFold.StringFoldSupport;
+import haxe.io.Path;
 
 /**
  * A `GrammarPlugin` decorator that memoizes `parseFile` / `parseFileTypeRefs` by source
@@ -85,6 +87,17 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	 * or one that does not configure `CyclomaticComplexity`), so reads go through `exists`.
 	 */
 	private final _maxComplexityCache: Map<String, Null<Int>> = [];
+
+	/**
+	 * The ambient-import chain per DIRECTORY and package, memoised for the run: the seam walks a
+	 * file's ancestors on disk and reads each source it finds, and every file of one directory with
+	 * one package gets the same chain by construction.
+	 *
+	 * Instance state, like every cache above it — a chain is a read of the tree at one moment, and a
+	 * pass that rewrites an ambient source must not be answered from a chain read before it
+	 * (invariant 1: nothing here is process-scoped).
+	 */
+	private final _ambientImportCache: Map<String, AmbientImports> = [];
 
 	/**
 	 * The scope-wide reflection surface `check/ReflectionScan` collects, memoised for the run like
@@ -430,7 +443,7 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	 * across threads, never a `static` (`docs/design-principles.md` § 2).
 	 */
 	public function maxComplexity(path: String): Null<Int> {
-		final dir: String = haxe.io.Path.directory(path);
+		final dir: String = Path.directory(path);
 		if (_maxComplexityCache.exists(dir)) return _maxComplexityCache[dir];
 		final max: Null<Int> = _inner.maxComplexity(path);
 		_maxComplexityCache[dir] = max;
@@ -454,6 +467,20 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	public function knownExtensionMethods(modulePath: String): Null<Array<String>> return _inner.knownExtensionMethods(modulePath);
 
 	public function checkOverrides(path: String): Null<CheckOverrides> return _inner.checkOverrides(path);
+
+	/**
+	 * The ambient chain per directory + package. The seam's answer is a function of the file's
+	 * DIRECTORY, its package and the tree on disk, so one file of a directory pays the walk and
+	 * its siblings read the memo.
+	 */
+	public function ambientImportSources(path: String, pkg: String): AmbientImports {
+		final key: String = '${Path.directory(path)}#$pkg';
+		final cached: Null<AmbientImports> = _ambientImportCache[key];
+		if (cached != null) return cached;
+		final chain: AmbientImports = _inner.ambientImportSources(path, pkg);
+		_ambientImportCache[key] = chain;
+		return chain;
+	}
 
 	/**
 	 * `SpanTypeInfoProvider`: the five span-indexed maps, memoized by source. When the
@@ -500,18 +527,22 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	public function castTargetSources(source: String): Map<Int, String> return spanTypeInfo(source).castTargetSources;
 
 	/** `TypeInfoProvider`: forward + memoize the import simple-name → FQN map per source. */
-	public function importMap(source: String): Map<String, String> {
-		final cached: Null<Map<String, String>> = _importMapCache[source];
+	public function importMap(source: String, ?path: String): Map<String, String> {
+		// The AMBIENT half of the answer depends on where the source is stored, so the path joins the
+		// key, length-prefixed: nothing else keeps a path and a source from spelling one key two ways.
+		final located: String = path ?? '';
+		final key: String = '${located.length}:$located$source';
+		final cached: Null<Map<String, String>> = _importMapCache[key];
 		if (cached != null) return cached;
 		final provider: Null<ParsedRootProvider> = _rootProvider;
 		final inner: Null<TypeInfoProvider> = _inner is TypeInfoProvider ? cast _inner : null;
 		final result: Map<String, String> = if (provider != null)
-			provider.importMapFromRoot(rootOf(provider, source), source);
+			provider.importMapFromRoot(rootOf(provider, source), source, path);
 		else if (inner != null)
-			inner.importMap(source);
+			inner.importMap(source, path);
 		else
 			[];
-		_importMapCache[source] = result;
+		_importMapCache[key] = result;
 		return result;
 	}
 

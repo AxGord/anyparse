@@ -1470,6 +1470,10 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		return content == null ? null : try CheckstyleConfigLoader.loadOverrides(content) catch (exception: Exception) null;
 	}
 
+	public function ambientImportSources(path: String, pkg: String): AmbientImports {
+		return HaxeAmbientImports.chainFor(path, pkg);
+	}
+
 	/**
 	 * `TypeInfoProvider`: maps each typed declaration's binding-span `from` to the
 	 * SIMPLE name of its nominal declared type, recovered from the grammar AST
@@ -1588,8 +1592,8 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 * a type param shadows an import of the same name within its scope, so a bare
 	 * reference to it must not resolve to the import (drops the rare collision).
 	 */
-	public function importMap(source: String): Map<String, String> {
-		return importMapFromRoot(parseRoot(source), source);
+	public function importMap(source: String, ?path: String): Map<String, String> {
+		return importMapFromRoot(parseRoot(source), source, path);
 	}
 
 	/**
@@ -1597,10 +1601,23 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 * import walk and the type-parameter sweep both read THIS root, where the
 	 * source-taking form parsed once for each of them. The empty map on a null root.
 	 */
-	public function importMapFromRoot(root: Null<Any>, source: String): Map<String, String> {
+	public function importMapFromRoot(root: Null<Any>, source: String, ?path: String): Map<String, String> {
 		final out: Map<String, String> = [];
 		final tree: Null<QueryNode> = try treeFromRoot(root, source, false) catch (exception: Exception) null;
 		if (tree == null) return out;
+		// FARTHEST ambient source first, so a nearer one overwrites it and the module's own
+		// statements below overwrite the whole chain — the compiler's order, verified against it.
+		// The recursive projection is handed no path, which is what stops the chain from having one.
+		// An EMPTY path is the "no file to locate" value a check with no violation to read one off
+		// carries, and walking a chain from the process cwd for it would answer a different tree.
+		if (path != null && path != '') {
+			final chain: Array<AmbientImportSource> = ambientImportSources(path, packageOfTree(tree)).sources;
+			var i: Int = chain.length - 1;
+			while (i >= 0) {
+				final ambient: AmbientImportSource = chain[i--];
+				for (name => imported in importMapFromRoot(parseRoot(ambient.source), ambient.source)) out[name] = imported;
+			}
+		}
 		for (node in tree.children) if (node.kind == 'ImportDecl') {
 			final raw: Null<String> = node.name;
 			if (raw != null) {
@@ -1726,6 +1743,12 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 */
 	public function functionTypeArity(typeSource: String): Null<Int> {
 		return HxFunctionTypeArity.of(typeSource);
+	}
+
+	/** The package a projected module tree declares, empty for a root-package module. */
+	private static function packageOfTree(tree: QueryNode): String {
+		for (node in tree.children) if (node.kind == 'PackageDecl') return node.name ?? '';
+		return '';
 	}
 
 }

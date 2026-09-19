@@ -259,7 +259,7 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 		final index: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin);
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final plan: Null<FilePlan> = planFor(entry.source, plugin, index, null);
+			final plan: Null<FilePlan> = planFor(entry.source, plugin, index, null, entry.file);
 			if (plan == null) continue;
 			for (path in plan.plans) for (target in path.targets) violations.push({
 				file: entry.file,
@@ -337,7 +337,7 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 		// the empty `wanted` has already returned above — it exists for a caller that hands in
 		// violations it built itself.
 		final scope: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
-		final plan: Null<FilePlan> = planFor(source, plugin, scope, wanted);
+		final plan: Null<FilePlan> = planFor(source, plugin, scope, wanted, violations[0].file);
 		if (plan == null) return [];
 		// One bucket can serve SEVERAL paths (the printer merges imports landing on one anchor), so
 		// the group is the bucket and every path in it binds its own rewrites to that same unit.
@@ -406,7 +406,7 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 	 * promised to the printer here can no longer be taken back at the emit site.
 	 */
 	private static function planFor(
-		source: String, plugin: GrammarPlugin, index: Null<SymbolIndex>, wanted: Null<Array<String>>
+		source: String, plugin: GrammarPlugin, index: Null<SymbolIndex>, wanted: Null<Array<String>>, ?path: String
 	): Null<FilePlan> {
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		// The type-refs projection is the same tree PLUS one `TypeRef` node per nominal in a
@@ -431,7 +431,7 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 		};
 		final occurrences: Array<Occurrence> = [];
 		scan(refsTree, context, false, false, false, occurrences);
-		final printer: TypeRefPrinter = printerFor(source, scoped, plugin, index);
+		final printer: TypeRefPrinter = printerFor(source, scoped, plugin, index, path);
 		final plans: Array<PathPlan> = [];
 		for (path in distinctPaths(occurrences)) {
 			final targets: Array<Span> = [];
@@ -475,9 +475,11 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 	}
 
 	/** A printer over `source` with the file's plain-import map and the run's resolution index. */
-	private static function printerFor(source: String, tree: QueryNode, plugin: GrammarPlugin, index: Null<SymbolIndex>): TypeRefPrinter {
+	private static function printerFor(
+		source: String, tree: QueryNode, plugin: GrammarPlugin, index: Null<SymbolIndex>, ?path: String
+	): TypeRefPrinter {
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
-		return TypeRefPrinter.forFile(source, tree, provider != null ? provider.importMap(source) : [], plugin, index);
+		return TypeRefPrinter.forFile(source, tree, provider != null ? provider.importMap(source, path) : [], plugin, index);
 	}
 
 	/** The written paths of `occurrences`, deduplicated, in first-seen order — the plan's iteration order. */

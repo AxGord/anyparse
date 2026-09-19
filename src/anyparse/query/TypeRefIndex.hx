@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.SymbolIndex.FileInfo;
+import anyparse.query.SymbolIndex.ImportInfo;
 import anyparse.query.SymbolIndex.ImportKind;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
@@ -103,16 +104,31 @@ final class TypeRefIndex {
 			final qualified: Array<ResolvedType> = resolveQualifiedRefAll(raw);
 			return qualified.length > 0 ? qualified : moduleRelativeRefAll(raw, fromFile);
 		}
-		final matches: Array<ResolvedType> = [];
-		final seen: Array<String> = [];
-		for (fi in _files) for (t in fi.types) if (t.name == raw && simpleRefInScope(fromFile, fi, t)) {
-			final key: String = '${fi.file}#${t.name}';
-			if (!seen.contains(key)) {
-				seen.push(key);
-				matches.push({ file: fi, type: t });
+		// Three PRECEDENCE bands, each checked against the compiler rather than assumed: what the
+		// module declares itself or names in its own imports outranks what an AMBIENT source names, a NEARER ambient
+		// source outranks a farther one, and every ambient binding outranks a same-package type of
+		// the same simple name. Only the ambient band is decided here — an own reference and a
+		// same-package one still answer TOGETHER, which is the ambiguity this layer has always
+		// reported, so a project with no ambient source gets the set it always got.
+		final strong: Array<ResolvedType> = [];
+		final ambient: Array<Array<ResolvedType>> = [for (_ in fromFile.ambientImports) []];
+		final samePackage: Array<ResolvedType> = [];
+		for (fi in _files) for (t in fi.types) if (t.name == raw) {
+			if (fi.file == fromFile.file || namedByImports(fromFile.imports, fi, t))
+				strong.push({ file: fi, type: t })
+			else {
+				var band: Int = -1;
+				for (i in 0...fromFile.ambientImports.length) if (band < 0 && namedByImports(fromFile.ambientImports[i].imports, fi, t))
+					band = i;
+				if (band >= 0)
+					ambient[band].push({ file: fi, type: t })
+				else if (fi.pkg == fromFile.pkg || fi.pkg == '')
+					samePackage.push({ file: fi, type: t });
 			}
 		}
-		return matches;
+		if (strong.length > 0) return deduped(strong.concat(samePackage));
+		for (band in ambient) if (band.length > 0) return deduped(band);
+		return deduped(samePackage);
 	}
 
 	/**
@@ -162,11 +178,6 @@ final class TypeRefIndex {
 		return ds.length == 1 ? ds[0] : null;
 	}
 
-	/** The import path naming type `t` in file `fi`: its module when `t` is the module main type, else `module.name`. */
-	private inline function importPathFor(fi: FileInfo, t: TypeDeclInfo): String {
-		return t.isMain ? fi.module : '${fi.module}.${t.name}';
-	}
-
 	/**
 	 * Every decl the MODULE-RELATIVE form `Mod.Sub` names FROM `fromFile` — a sub-module type
 	 * qualified by its own module's name, which Haxe accepts wherever the MODULE itself can be
@@ -197,33 +208,6 @@ final class TypeRefIndex {
 	}
 
 	/**
-	 * Whether a bare simple reference in `fromFile` resolves to type `t` of file `fi`:
-	 * `fi` shares `fromFile`'s package, or `fromFile` names `t` through an explicit
-	 * `import` / `using` (its raw equals `t`'s import path) or a `pkg.*` wildcard over
-	 * `fi`'s package.
-	 */
-	private function simpleRefInScope(fromFile: FileInfo, fi: FileInfo, t: TypeDeclInfo): Bool {
-		if (fi.pkg == fromFile.pkg) return true;
-		// A ROOT-package type (`Array`, `Math`, a package-less project module) is visible by
-		// simple name from every file, with no import — the rule that puts the std top level in
-		// scope, so a member type such as `Array<T>.length` resolves from any package.
-		if (fi.pkg == '') return true;
-		final path: String = importPathFor(fi, t);
-		final wild: String = '${fi.pkg}.*';
-		for (imp in fromFile.imports) switch imp.kind {
-			case ImportKind.Import, ImportKind.Using:
-				// A module import carries EVERY type the module declares into simple-name scope,
-				// not just its main one — `import pkg.Mod;` makes a sub-module `pkg.Mod.Sub`
-				// referable as `Sub`, which is how a response typedef beside its main type is used.
-				if (imp.raw == path || (!t.isMain && imp.raw == fi.module)) return true;
-			case ImportKind.Wild:
-				if (imp.raw == wild) return true;
-			case ImportKind.Alias:
-		}
-		return false;
-	}
-
-	/**
 	 * ONE file's import-alias edges: the alias a `import pkg.Util as U;` statement binds -> the
 	 * SIMPLE name of every path it points at. An ARRAY because a `#if` region may bind one
 	 * alias name to a different target per branch. The import twin of `aliasEdges`, and per-FILE rather
@@ -249,17 +233,30 @@ final class TypeRefIndex {
 	 */
 	public static function importAliasEdges(fi: FileInfo, followGuarded: Bool): Map<String, Array<String>> {
 		final edges: Map<String, Array<String>> = [];
-		for (imp in fi.imports) if (imp.kind == ImportKind.Alias && (followGuarded || !imp.guarded)) {
-			final alias: Null<String> = imp.alias;
-			final target: Null<String> = imp.aliasTarget;
-			if (alias == null || target == null) continue;
-			final simple: String = SourceText.lastSegment(target);
-			if (simple == alias) continue;
-			final bucket: Array<String> = edges[alias] ?? [];
-			if (!bucket.contains(simple)) bucket.push(simple);
-			edges[alias] = bucket;
+		// An alias bound by an AMBIENT source binds in this file too, and the map is already a
+		// multi-valued union that every reader treats as "any of these may be meant" — so an ambient
+		// target joins the bucket rather than replacing it, which is the withholding direction on both
+		// sides of the subtype relation.
+		inline function collect(imports: Array<ImportInfo>): Void {
+			for (imp in imports) if (imp.kind == ImportKind.Alias && (followGuarded || !imp.guarded)) {
+				final alias: Null<String> = imp.alias;
+				final target: Null<String> = imp.aliasTarget;
+				if (alias == null || target == null) continue;
+				final simple: String = SourceText.lastSegment(target);
+				if (simple == alias) continue;
+				final bucket: Array<String> = edges[alias] ?? [];
+				if (!bucket.contains(simple)) bucket.push(simple);
+				edges[alias] = bucket;
+			}
 		}
+		collect(fi.imports);
+		for (group in fi.ambientImports) collect(group.imports);
 		return edges;
+	}
+
+	/** The import path naming type `t` in file `fi`: its module when `t` is the module main type, else `module.name`. */
+	private static inline function importPathFor(fi: FileInfo, t: TypeDeclInfo): String {
+		return t.isMain ? fi.module : '${fi.module}.${t.name}';
 	}
 
 	/** The last segment of a dotted module path — `pkg.Mod` -> `Mod`, a root-package `Mod` unchanged. */
@@ -283,7 +280,52 @@ final class TypeRefIndex {
 	private static function moduleRefInScope(fromFile: FileInfo, fi: FileInfo): Bool {
 		if (fi.pkg == fromFile.pkg) return true;
 		final wild: String = '${fi.pkg}.*';
-		return fromFile.imports.exists(imp -> imp.kind == ImportKind.Wild && imp.raw == wild);
+		inline function supplies(imports: Array<ImportInfo>): Bool {
+			return imports.exists(imp -> imp.kind == ImportKind.Wild && imp.raw == wild);
+		}
+		// An ambient source's wildcard supplies the qualifier exactly as the file's own would, and
+		// this is a membership question with no precedence in it — a module either can be named by
+		// its simple name here or cannot — so the two lists answer as a union.
+		return supplies(fromFile.imports) || fromFile.ambientImports.exists(g -> supplies(g.imports));
+	}
+
+	/**
+	 * Whether `imports` NAMES type `t` of file `fi` by simple name — some statement's raw equals
+	 * `t`'s import path, or a `pkg.*` wildcard covers `fi`'s package.
+	 *
+	 * Takes the statement LIST rather than the referring file so one predicate answers both for a
+	 * file's own imports and for an ambient source's: precedence between the two is the caller's,
+	 * the shape of a binding is not. A same-package or ROOT-package type (`Array`, `Math`, a
+	 * package-less project module) needs no import at all and is not this predicate's business.
+	 */
+	private static function namedByImports(imports: Array<ImportInfo>, fi: FileInfo, t: TypeDeclInfo): Bool {
+		if (fi.pkg == '') return false;
+		final path: String = importPathFor(fi, t);
+		final wild: String = '${fi.pkg}.*';
+		for (imp in imports) switch imp.kind {
+			case ImportKind.Import, ImportKind.Using:
+				// A module import carries EVERY type the module declares into simple-name scope,
+				// not just its main one — `import pkg.Mod;` makes a sub-module `pkg.Mod.Sub`
+				// referable as `Sub`, which is how a response typedef beside its main type is used.
+				if (imp.raw == path || (!t.isMain && imp.raw == fi.module)) return true;
+			case ImportKind.Wild:
+				if (imp.raw == wild) return true;
+			case ImportKind.Alias:
+		}
+		return false;
+	}
+
+	/** `matches` with one entry per `(declaring file, name)` — the identity `resolveTypeRefAll` answers in. */
+	private static function deduped(matches: Array<ResolvedType>): Array<ResolvedType> {
+		final out: Array<ResolvedType> = [];
+		final seen: Array<String> = [];
+		for (m in matches) {
+			final key: String = '${m.file.file}#${m.type.name}';
+			if (seen.contains(key)) continue;
+			seen.push(key);
+			out.push(m);
+		}
+		return out;
 	}
 
 }

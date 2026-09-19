@@ -58,7 +58,7 @@ final class UnreachableCatch implements Check {
 		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
 		final catchAll: Array<String> = shape.catchAllTypeNames ?? [];
 		return RunScan.collectTyped(files, plugin, (entry, tree, typed, index, violations) -> {
-			final importMap: Map<String, String> = typed.importMap(entry.source);
+			final importMap: Map<String, String> = typed.importMap(entry.source, entry.file);
 			function walk(node: QueryNode): Void {
 				if (opaqueKinds.contains(node.kind)) return;
 				final clauses: Array<QueryNode> = [for (c in node.children) if (c.kind == kind) c];

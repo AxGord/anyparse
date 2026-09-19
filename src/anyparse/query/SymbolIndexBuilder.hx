@@ -1,5 +1,7 @@
 package anyparse.query;
 
+import anyparse.query.GrammarPlugin.AmbientImportSource;
+import anyparse.query.GrammarPlugin.AmbientImports;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.Refs.RefKind;
@@ -10,6 +12,7 @@ import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
 import haxe.Exception;
+import haxe.io.Path;
 
 using StringTools;
 using Lambda;
@@ -129,7 +132,17 @@ final class SymbolIndexBuilder {
 				entry.file, entry.source, tree, accessors, writeAccessors, returnTypes, typeSources, shape, memberSeams, abstractKinds
 			));
 		}
+		attachAmbientImports(infos, plugin, shape, memberSeams, abstractKinds, provider);
 		return { files: infos, skipped: skipped, sources: sources };
+	}
+
+	/**
+	 * Whether an INDEXED path and an ambient source's path name one file. The index carries paths as
+	 * the caller spelled them, the chain carries what the walk resolved, so equality alone answers
+	 * only when both are absolute; a relative indexed path is the tail of its own absolute form.
+	 */
+	private static inline function sameFile(indexed: String, resolved: String): Bool {
+		return resolved == indexed || resolved.endsWith('/$indexed');
 	}
 
 	/** Whether `kind` is a metadata node — a bare `@:x` (`Meta`) or an argument-bearing `@:x(...)` (`MetaCall`). */
@@ -342,6 +355,10 @@ final class SymbolIndexBuilder {
 			module: module,
 			imports: imports,
 			types: types,
+			// Filled by `attachAmbientImports` once every file's own imports exist; a chain member is
+			// usually an indexed file, and its extracted list is not there while this pass runs.
+			ambientImports: [],
+			ambientImportsBounded: true,
 			accessGrants: collectAccessGrants(tree, shape)
 		};
 	}
@@ -962,6 +979,74 @@ final class SymbolIndexBuilder {
 		// as a type reference would resolve to nothing where the simple name resolves fine.
 		final nominal: Null<String> = NominalTypes.outerNominalOf(head);
 		return nominal != null && head.split('.').foreach(SourceText.isIdentifier) ? head : nominal;
+	}
+
+	/**
+	 * Fill every file's ambient imports from the chain the plugin finds for it.
+	 *
+	 * A SECOND pass because a chain member is usually an indexed file too, and then its already
+	 * extracted imports are the ones to use — the pass that builds them has not finished while the
+	 * first one runs. A member OUTSIDE the indexed set is parsed here instead, which is what lets a
+	 * run narrowed to one file still see a chain member its scope does not cover.
+	 *
+	 * Every memo is a local of this call: a chain is a read of the tree at one moment, so nothing
+	 * here may outlive the run.
+	 */
+	private static function attachAmbientImports(
+		infos: Array<FileInfo>, plugin: GrammarPlugin, shape: RefShape, memberSeams: MemberSeams, abstractKinds: Array<String>,
+		provider: Null<TypeInfoProvider>
+	): Void {
+		final chains: Map<String, AmbientImports> = [];
+		final extracted: Map<String, Array<ImportInfo>> = [];
+		for (fi in infos) {
+			final key: String = '${Path.directory(fi.file)}#${fi.pkg}';
+			var chain: Null<AmbientImports> = chains[key];
+			if (chain == null) {
+				chain = plugin.ambientImportSources(fi.file, fi.pkg);
+				chains[key] = chain;
+			}
+			fi.ambientImportsBounded = chain.bounded;
+			fi.ambientImports = [
+				for (ambient in chain.sources) if (!sameFile(fi.file, ambient.file))
+					{
+						file: ambient.file,
+						imports: ambientImportsOf(ambient, infos, extracted, plugin, shape, memberSeams, abstractKinds, provider)
+					}
+			];
+		}
+	}
+
+	/**
+	 * One ambient source's import statements, read through the SAME extraction a file's own go
+	 * through so there is no second import scanner to keep in step.
+	 *
+	 * An indexed file's already-extracted list wins over a re-read: a pass that rewrote it holds the
+	 * current text, while the chain carries what was on disk when the plugin walked. A source that
+	 * does not parse contributes nothing.
+	 */
+	private static function ambientImportsOf(
+		ambient: AmbientImportSource, infos: Array<FileInfo>, extracted: Map<String, Array<ImportInfo>>, plugin: GrammarPlugin,
+		shape: RefShape, memberSeams: MemberSeams, abstractKinds: Array<String>, provider: Null<TypeInfoProvider>
+	): Array<ImportInfo> {
+		// The memo comes FIRST: one ambient source serves every file below it, so the scan for its
+		// indexed record runs once per source rather than once per reader.
+		final memo: Null<Array<ImportInfo>> = extracted[ambient.file];
+		if (memo != null) return memo;
+		final indexed: Null<FileInfo> = infos.find(f -> sameFile(f.file, ambient.file));
+		final tree: Null<QueryNode> = indexed != null ? null : try plugin.parseFile(ambient.source) catch (_: Exception) null;
+		final imports: Array<ImportInfo> = if (indexed != null)
+			indexed.imports;
+		else if (tree == null)
+			[];
+		else
+			extractFileInfo(
+				ambient.file, ambient.source, tree, provider != null ? provider.propertyAccessors(ambient.source) : [],
+				provider != null ? provider.propertyWriteAccessors(ambient.source) : [],
+				provider != null ? provider.returnTypes(ambient.source) : [],
+				provider != null ? provider.declaredTypeSources(ambient.source) : [], shape, memberSeams, abstractKinds
+			).imports;
+		extracted[ambient.file] = imports;
+		return imports;
 	}
 
 }

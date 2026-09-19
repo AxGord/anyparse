@@ -3032,6 +3032,35 @@
 			"method": "isDocBlock",
 			"force": "true",
 			"note": "a line-comment run and a plain block banner read as doc blocks, so prose that belongs to the statements it stands over is reported as an over-long contract"
+		},
+		{
+			"name": "M-AMBIENT-CHAIN-EMPTY",
+			"type": "anyparse.grammar.haxe.HaxeAmbientImports",
+			"method": "chainFor",
+			"force": "{ sources: [], bounded: true }",
+			"note": "the grammar reports no ambient source for any module and calls the empty chain bounded, so every name an `import.hx` binds is invisible again while nothing refuses to pin"
+		},
+		{
+			"name": "M-AMBIENT-CHAIN-ROOT",
+			"type": "anyparse.grammar.haxe.HaxeAmbientImports",
+			"method": "sourceRootOf",
+			"force": "null",
+			"note": "no module has a computable source root, so the chain shrinks to the module's own directory and every ancestor ambient source is lost"
+		},
+		{
+			"name": "M-AMBIENT-IMPORT-BAND",
+			"type": "anyparse.query.TypeRefIndex",
+			"method": "resolveTypeRefAll",
+			"find": "\t\tif (strong.length > 0) return deduped(strong.concat(samePackage));\n\t\tfor (band in ambient) if (band.length > 0) return deduped(band);\n\t\treturn deduped(samePackage);",
+			"replace": "\t\tfinal union: Array<ResolvedType> = strong.concat(samePackage);\n\t\tfor (band in ambient) for (m in band) union.push(m);\n\t\treturn deduped(union);",
+			"note": "the precedence bands collapse into one union, so an ambient binding no longer outranks a same-package namesake and a nearer ambient source no longer outranks a farther one — every such reference goes ambiguous"
+		},
+		{
+			"name": "M-AMBIENT-IMPORT-MAP",
+			"type": "anyparse.grammar.haxe.HaxeQueryPlugin",
+			"method": "importMap",
+			"force": "importMapFromRoot(parseRoot(source), source)",
+			"note": "the import map drops the path it was given, so every type-aware reader of it sees a module's own imports and never what its ambient chain binds"
 		}
 	]
 }
