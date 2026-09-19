@@ -527,4 +527,13 @@ decided the question; it may not become a record of runs.
   compiler stops it, at the source root, and that root is the module's directory minus one
   segment per package segment, so the seam takes the package the index already holds rather than
   inventing a second notion of root or reading a build's command line — `S226-merge`
-
+- ambient precedence was to be one flat order, own imports → ambient chain → same-package → the
+  three bands the first pass of this slice shipped → the compiler ranks by import KIND before it
+  ranks by distance or ownership: an explicit import outranks every wildcard one, so a farther
+  ambient `import a.T;` beats a nearer ambient `import b.*;` and beats the reader's own `import
+  b.*;`, and a flat order pinned the wrong declaration in both — two tiers, explicit above
+  wildcard, with own > nearest > farther inside each — `S226-merge`
+- a ROOT-package type was to be reached only as a package-less global, never as an explicit import
+  → `import T;` on a package-less module is an explicit import like any other and the compiler
+  ranks it as one, so skipping the path comparison for an empty package let an ambient namesake
+  outrank it — `S226-merge`

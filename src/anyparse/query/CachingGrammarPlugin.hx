@@ -93,9 +93,9 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	 * file's ancestors on disk and reads each source it finds, and every file of one directory with
 	 * one package gets the same chain by construction.
 	 *
-	 * Instance state, like every cache above it — a chain is a read of the tree at one moment, and a
-	 * pass that rewrites an ambient source must not be answered from a chain read before it
-	 * (invariant 1: nothing here is process-scoped).
+	 * Instance state, like every cache above it — never process-scoped (invariant 1). RUN-scoped, not
+	 * pass-scoped: one decorator serves every pass of a `--fix` run, so a pass that REWRITES an ambient
+	 * source would still be answered from the chain the first pass read. Nothing edits one today.
 	 */
 	private final _ambientImportCache: Map<String, AmbientImports> = [];
 

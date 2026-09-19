@@ -36,12 +36,35 @@ class AmbientImportSubtypeShieldTest extends Test {
 		}
 	];
 
+	/** A WILDCARD namesake tree: the compiler resolves `Sub`'s supertype through the explicit ambient import. */
+	private static final WILD_TREE: Array<{ name: String, source: String }> = [
+		{ name: 'lib/import.hx', source: 'import a.T;\n' },
+		{ name: 'a/T.hx', source: utilityClass('a', 'T') },
+		{ name: 'b/T.hx', source: utilityClass('b', 'T') },
+		{
+			name: 'lib/Sub.hx',
+			source: 'package lib;\n\nimport b.*;\n\nclass Sub extends T {\n\n\tpublic function new() {\n\t\tsuper();\n\t}\n\n}\n'
+		}
+	];
+
+	/** An ALIAS namesake tree: the written `U` is bound by the ambient alias, which this layer does not resolve. */
+	private static final ALIAS_TREE: Array<{ name: String, source: String }> = [
+		{ name: 'lib/import.hx', source: 'import a.T as U;\n' },
+		{ name: 'a/T.hx', source: utilityClass('a', 'T') },
+		{ name: 'lib/U.hx', source: utilityClass('lib', 'U') },
+		{ name: 'other/U.hx', source: utilityClass('other', 'U') },
+		{
+			name: 'lib/Sub.hx',
+			source: 'package lib;\n\nclass Sub extends U {\n\n\tpublic function new() {\n\t\tsuper();\n\t}\n\n}\n'
+		}
+	];
+
 	@:pin('control')
 	@:killer('M-AMBIENT-IMPORT-BAND')
 	public function testTheAmbientlyImportedTypeKeepsTheShieldAndTheNamesakeLosesIt(): Void {
 		#if (sys || nodejs)
 		Assert.equals(
-			'lib/Exception.hx,other/Zzzunique.hx', constructorFindings(false),
+			'lib/Exception.hx,other/Zzzunique.hx', constructorFindings(TREE, false),
 			'the subtype resolves to the ambiently imported `pkg.Exception`, so only the same-package namesake is reported'
 		);
 		#else
@@ -54,9 +77,35 @@ class AmbientImportSubtypeShieldTest extends Test {
 	public function testTheChainIsReadEvenWhenItsFileIsOutsideTheAnalysedSet(): Void {
 		#if (sys || nodejs)
 		Assert.equals(
-			'lib/Exception.hx,other/Zzzunique.hx', constructorFindings(true),
+			'lib/Exception.hx,other/Zzzunique.hx', constructorFindings(TREE, true),
 			'an ambient source the run was not given still decides what the subtype references'
 		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-AMBIENT-IMPORT-BAND')
+	public function testTheWildcardTierShieldsTheTypeTheSupertypeReallyNames(): Void {
+		#if (sys || nodejs)
+		Assert.equals(
+			'b/T.hx', constructorFindings(WILD_TREE, false),
+			'the supertype resolves through the ambient EXPLICIT import, so `a.T` keeps its shield and only the wildcard namesake loses one'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-AMBIENT-ALIAS-PINNED')
+	public function testAWrittenAliasIsPinnedToNothingRatherThanToItsNamesake(): Void {
+		#if (sys || nodejs)
+		// The written `U` is bound by an ALIAS this layer does not follow, so no declaration of `U` may
+		// be claimed as the supertype's owner — every namesake keeps its shield instead of one being
+		// picked at random by package proximity.
+		Assert.equals('', constructorFindings(ALIAS_TREE, false), 'an unresolvable alias withholds the edge from every namesake');
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -66,10 +115,10 @@ class AmbientImportSubtypeShieldTest extends Test {
 	 * The tree-relative names of the files `unused-private` reports a constructor on, comma-joined in
 	 * report order. `withoutAmbient` withholds the ambient source itself from the analysed set.
 	 */
-	private function constructorFindings(withoutAmbient: Bool): String {
+	private function constructorFindings(tree: Array<{ name: String, source: String }>, withoutAmbient: Bool): String {
 		#if (sys || nodejs)
-		final root: String = CliFixture.writeTree('apq_ambient_shield', TREE);
-		final analysed: Array<{ name: String, source: String }> = withoutAmbient ? TREE.filter(e -> !e.name.endsWith('import.hx')) : TREE;
+		final root: String = CliFixture.writeTree('apq_ambient_shield', tree);
+		final analysed: Array<{ name: String, source: String }> = withoutAmbient ? tree.filter(e -> !e.name.endsWith('import.hx')) : tree;
 		final files: Array<{ file: String, source: String }> = [
 			for (entry in analysed) { file: '$root/${entry.name}', source: entry.source }
 		];

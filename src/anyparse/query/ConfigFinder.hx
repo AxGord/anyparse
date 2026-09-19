@@ -49,8 +49,9 @@ final class ConfigFinder {
 	 * recognising it by a marker file, which is what a source root derived from a module's
 	 * package is.
 	 *
-	 * A `stopDir` that is not an ancestor of `path`'s directory ends the walk at that directory,
-	 * so an unresolvable bound yields the shortest chain rather than the longest.
+	 * A `stopDir` the walk is not UNDER ends it at `path`'s own directory: an unresolvable bound
+	 * yields the shortest chain, never the longest — climbing past a bound would let an ancestor
+	 * nobody named decide what this file sees.
 	 */
 	public static inline function findUpTo(path: String, filename: String, stopDir: String): ConfigChain {
 		return walkUp(path, filename, false, null, stopDir);
@@ -76,6 +77,16 @@ final class ConfigFinder {
 	public static function findUpFile(path: String, filename: String): Null<ConfigFile> {
 		final found: Array<ConfigFile> = walkUp(path, filename, true).documents;
 		return found.length == 0 ? null : found[0];
+	}
+
+	/** Whether a readable FILE exists at `path` — the one existence probe outside a walk, so the IO stays here. */
+	public static function fileExists(path: String): Bool {
+		return #if (sys || nodejs) sys.FileSystem.exists(path) && !sys.FileSystem.isDirectory(path) #else false #end;
+	}
+
+	/** Whether `dir` lies strictly beneath `bound` — the walk may climb while it does, and stops AT `bound`. */
+	private static inline function under(dir: String, bound: String): Bool {
+		return dir != bound && dir.indexOf('$bound/') == 0;
 	}
 
 	/**
@@ -107,7 +118,9 @@ final class ConfigFinder {
 				}
 				if (stopAtFirst) return { documents: out, unreadable: unreadable };
 			}
-			if (marksProjectRoot(dir, boundary) || dir == bound) break;
+			// A computed bound the walk is not UNDER cannot be reached by climbing, and climbing past
+			// it is the fail-open direction — an ancestor nobody asked for decides what this file sees.
+			if (marksProjectRoot(dir, boundary) || bound != null && !under(dir, bound)) break;
 			final parent: String = haxe.io.Path.directory(dir);
 			if (parent == dir) break;
 			dir = parent;

@@ -41,7 +41,14 @@ class AmbientImportResolutionTest extends Test {
 		{ name: 'src/own/import.hx', source: 'import a.T;\n' },
 		{ name: 'src/own/Own.hx', source: 'package own;\n\nimport b.T;\n\nclass Own {}\n' },
 		{ name: 'src/wild/import.hx', source: 'import a.*;\n' },
-		{ name: 'src/wild/Wild.hx', source: 'package wild;\n\nclass Wild {}\n' }
+		{ name: 'src/wild/Wild.hx', source: 'package wild;\n\nclass Wild {}\n' },
+		{ name: 'src/T.hx', source: 'class T {}\n' },
+		{ name: 'src/wildown/import.hx', source: 'import a.T;\n' },
+		{ name: 'src/wildown/Own.hx', source: 'package wildown;\n\nimport b.*;\n\nclass Own {}\n' },
+		{ name: 'src/lib/wild/import.hx', source: 'import b.*;\n' },
+		{ name: 'src/lib/wild/Near.hx', source: 'package lib.wild;\n\nclass Near {}\n' },
+		{ name: 'src/rootimp/import.hx', source: 'import a.T;\n' },
+		{ name: 'src/rootimp/Own.hx', source: 'package rootimp;\n\nimport T;\n\nclass Own {}\n' }
 	];
 
 	@:pin('control')
@@ -87,6 +94,113 @@ class AmbientImportResolutionTest extends Test {
 		});
 		#else
 		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-AMBIENT-IMPORT-BAND')
+	public function testAnExplicitImportOutranksEveryWildcardOne(): Void {
+		#if (sys || nodejs)
+		withTree(root -> {
+			final index: SymbolIndex = indexOf(root);
+			Assert.equals(
+				'$root/src/a/T.hx', declaringFile(index, 'T', '$root/src/wildown/Own.hx'),
+				'an ambient EXPLICIT import outranks the reader own wildcard, which the compiler ranks below it'
+			);
+			Assert.equals(
+				'$root/src/a/T.hx', declaringFile(index, 'T', '$root/src/lib/wild/Near.hx'),
+				'a FARTHER ambient explicit import outranks a NEARER ambient wildcard — the tier decides before the distance'
+			);
+		});
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-AMBIENT-IMPORT-BAND')
+	public function testAnOwnRootPackageImportOutranksTheAmbientNamesake(): Void {
+		#if (sys || nodejs)
+		withTree(root -> {
+			final index: SymbolIndex = indexOf(root);
+			Assert.equals(
+				'$root/src/T.hx', declaringFile(index, 'T', '$root/src/rootimp/Own.hx'),
+				'`import T;` on a package-less module is an explicit import like any other and outranks the chain'
+			);
+		});
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-AMBIENT-DISK-BLIND')
+	public function testAModuleAbsentFromDiskHasNoChainAtAll(): Void {
+		#if (sys || nodejs)
+		final host: String = CliFixture.writeTree('apq_ambient_offdisk', [{ name: 'import.hx', source: 'import a.T;\n' }]);
+		// The analysed paths name no file under `host` — only the DIRECTORY is real. A chain read for
+		// them would be the chain of a module that does not exist.
+		final files: Array<{ file: String, source: String }> = [
+			{ file: '$host/lib/Plain.hx', source: 'package lib;\n\nclass Plain {}\n' },
+			{ file: '$host/lib/T.hx', source: 'package lib;\n\nclass T {}\n' },
+			{ file: '$host/a/T.hx', source: 'package a;\n\nclass T {}\n' }
+		];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		Assert.equals(
+			'$host/lib/T.hx', declaringFile(index, 'T', '$host/lib/Plain.hx'),
+			'an ambient source beside an invented path binds nothing, so the same-package type still answers'
+		);
+		CliFixture.removeDir(host);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-AMBIENT-UNPARSED-EMPTY')
+	public function testAnAmbientSourceThatDoesNotParseLeavesTheChainUnbounded(): Void {
+		#if (sys || nodejs)
+		final root: String = CliFixture.writeTree('apq_ambient_unparsed', [
+			{ name: 'src/lib/import.hx', source: 'import a.T; ){{ not haxe\n' },
+			{ name: 'src/lib/Plain.hx', source: 'package lib;\n\nclass Plain {}\n' }
+		]);
+		final index: SymbolIndex = indexOfTree(root, ['src/lib/import.hx', 'src/lib/Plain.hx']);
+		Assert.isFalse(
+			boundedAt(index, '$root/src/lib/Plain.hx', 'Plain'),
+			'a chain member whose bindings could not be read binds an unknown set, so the reader is not pinnable'
+		);
+		CliFixture.removeDir(root);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-AMBIENT-UNREADABLE-BOUNDED')
+	public function testAnAmbientSourceThatCannotBeReadLeavesTheChainUnbounded(): Void {
+		#if nodejs
+		final root: String = CliFixture.writeTree('apq_ambient_unreadable', [
+			{ name: 'src/lib/import.hx', source: 'import a.T;\n' },
+			{ name: 'src/lib/Plain.hx', source: 'package lib;\n\nclass Plain {}\n' }
+		]);
+		js.node.Fs.chmodSync('$root/src/lib/import.hx', 0);
+		final readable: Bool = try {
+			sys.io.File.getContent('$root/src/lib/import.hx');
+			true;
+		} catch (_: haxe.Exception) false;
+		if (readable)
+			Assert.pass('this runner reads a mode-0 file — nothing to withhold')
+		else {
+			final index: SymbolIndex = indexOfTree(root, ['src/lib/Plain.hx']);
+			Assert.isFalse(
+				boundedAt(index, '$root/src/lib/Plain.hx', 'Plain'),
+				'a source that EXISTS and could not be read leaves the chain short, so the reader is not pinnable'
+			);
+		}
+		js.node.Fs.chmodSync('$root/src/lib/import.hx', 384);
+		CliFixture.removeDir(root);
+		#else
+		Assert.pass('node-only: the mode change has no portable spelling');
 		#end
 	}
 
@@ -232,6 +346,18 @@ class AmbientImportResolutionTest extends Test {
 		#if (sys || nodejs)
 		final files: Array<{ file: String, source: String }> = [
 			for (entry in TREE) { file: '$root/${entry.name}', source: sys.io.File.getContent('$root/${entry.name}') }
+		];
+		return SymbolIndex.build(files, new HaxeQueryPlugin());
+		#else
+		return SymbolIndex.build([], new HaxeQueryPlugin());
+		#end
+	}
+
+	/** The index over exactly `names` of the tree at `root`, paths as written — for a narrow-scope fixture. */
+	private function indexOfTree(root: String, names: Array<String>): SymbolIndex {
+		#if (sys || nodejs)
+		final files: Array<{ file: String, source: String }> = [
+			for (name in names) { file: '$root/$name', source: sys.io.File.getContent('$root/$name') }
 		];
 		return SymbolIndex.build(files, new HaxeQueryPlugin());
 		#else

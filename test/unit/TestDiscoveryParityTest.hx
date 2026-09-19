@@ -1029,9 +1029,13 @@ class TestDiscoveryParityTest extends Test {
 			'unit.ProseClaimCensusTest#testAnArmSentenceIsReadAsAnArmClaim :: control :: M-CLAIM-NOKINDS',
 			'unit.ProseClaimCensusTest#testTheCodeSenseOfControlIsNotAControlClaim :: control :: M-CLAIM-CODE-BLIND',
 			'unit.ProseClaimCensusTest#testTheTwoUnrecordableKindsStayOnTheList :: control :: M-CLAIM-NOKINDS',
+			'unit.check.AmbientImportSubtypeShieldTest#testAWrittenAliasIsPinnedToNothingRatherThanToItsNamesake :: control :: '
+				+ 'M-AMBIENT-ALIAS-PINNED',
 			'unit.check.AmbientImportSubtypeShieldTest#testTheAmbientlyImportedTypeKeepsTheShieldAndTheNamesakeLosesIt :: control :: '
 				+ 'M-AMBIENT-IMPORT-BAND',
 			'unit.check.AmbientImportSubtypeShieldTest#testTheChainIsReadEvenWhenItsFileIsOutsideTheAnalysedSet :: control :: '
+				+ 'M-AMBIENT-IMPORT-BAND',
+			'unit.check.AmbientImportSubtypeShieldTest#testTheWildcardTierShieldsTheTypeTheSupertypeReallyNames :: control :: '
 				+ 'M-AMBIENT-IMPORT-BAND',
 			'unit.check.BuiltinFixClassCensusTest#testEveryDeclaredNoAutofixRuleAnswersNoEdit :: control :: M-NO-AUTOFIX-STILL-EDITS',
 			'unit.check.BuiltinFixClassCensusTest#testNoAutofixReasonIsNotTheRuleNameReadBack :: control :: '
@@ -1573,9 +1577,17 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.AddressTest#testSelectUnknownKindIsNamedAsUnknown :: control :: M-SELECT-MISS-NO-KIND-CLAUSE',
 			'unit.query.AmbientImportResolutionTest#testAChainThatCannotBeBoundedIsReportedUnbounded :: control :: M-AMBIENT-CHAIN-ROOT',
 			'unit.query.AmbientImportResolutionTest#testAFilesOwnImportOutranksTheAmbientOne :: guard :: ',
+			'unit.query.AmbientImportResolutionTest#testAModuleAbsentFromDiskHasNoChainAtAll :: control :: M-AMBIENT-DISK-BLIND',
 			'unit.query.AmbientImportResolutionTest#testAmbientSourceOutranksTheSamePackageNamesake :: control :: M-AMBIENT-IMPORT-BAND',
 			'unit.query.AmbientImportResolutionTest#testAmbientUsingAndWildcardBindTheirTypesBySimpleName :: control :: '
 				+ 'M-AMBIENT-CHAIN-EMPTY',
+			'unit.query.AmbientImportResolutionTest#testAnAmbientSourceThatCannotBeReadLeavesTheChainUnbounded :: control :: '
+				+ 'M-AMBIENT-UNREADABLE-BOUNDED',
+			'unit.query.AmbientImportResolutionTest#testAnAmbientSourceThatDoesNotParseLeavesTheChainUnbounded :: control :: '
+				+ 'M-AMBIENT-UNPARSED-EMPTY',
+			'unit.query.AmbientImportResolutionTest#testAnExplicitImportOutranksEveryWildcardOne :: control :: M-AMBIENT-IMPORT-BAND',
+			'unit.query.AmbientImportResolutionTest#testAnOwnRootPackageImportOutranksTheAmbientNamesake :: control :: '
+				+ 'M-AMBIENT-IMPORT-BAND',
 			'unit.query.AmbientImportResolutionTest#testTheChainIsOrderedNearestFirst :: control :: M-AMBIENT-CHAIN-ROOT',
 			'unit.query.AmbientImportResolutionTest#testTheChainReachesTheSourceRootAndStopsThere :: control :: M-AMBIENT-CHAIN-ROOT',
 			'unit.query.AmbientImportResolutionTest#testTheEngineResolvesThroughAChainItDidNotComputeItself :: control :: '
@@ -2169,7 +2181,11 @@ class TestDiscoveryParityTest extends Test {
 			'M-AMBIENT-CHAIN-EMPTY',
 			'M-AMBIENT-CHAIN-ROOT',
 			'M-AMBIENT-IMPORT-BAND',
-			'M-AMBIENT-IMPORT-MAP'
+			'M-AMBIENT-IMPORT-MAP',
+			'M-AMBIENT-DISK-BLIND',
+			'M-AMBIENT-UNREADABLE-BOUNDED',
+			'M-AMBIENT-UNPARSED-EMPTY',
+			'M-AMBIENT-ALIAS-PINNED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

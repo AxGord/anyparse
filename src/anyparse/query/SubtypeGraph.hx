@@ -635,9 +635,14 @@ final class SubtypeGraph {
 					// Only the WRITTEN reference carries a path to resolve, and it is filed per
 					// reference rather than per denotation for the reason above; every name the alias
 					// walk adds below is reached by simple name alone and stays in the unresolved half.
-					final direct: Null<ResolvedType> = pinnable && i < t.supertypesRaw.length
-						? _refs.resolveTypeRef(t.supertypesRaw[i], fi)
-						: null;
+					// An ALIAS binds a simple name to a path the resolver does not follow, and the compiler
+					// lets that binding OUTRANK a same-package type of the same name — so a written SIMPLE
+					// reference this file aliases would be pinned to the wrong declaration and stays
+					// unresolved instead. Covers an alias from the file's own imports and from its ambient
+					// chain alike, since `importAliases` unions both.
+					final written: String = i < t.supertypesRaw.length ? t.supertypesRaw[i] : '';
+					final aliased: Bool = written.indexOf('.') < 0 && importAliases.exists(written);
+					final direct: Null<ResolvedType> = pinnable && !aliased && written != '' ? _refs.resolveTypeRef(written, fi) : null;
 					if (direct != null)
 						fileSubtypeOnce(adjacency.qualified, _refs.seenKey(direct), qualifiedKeys, fi, t);
 					else

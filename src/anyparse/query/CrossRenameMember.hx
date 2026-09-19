@@ -187,7 +187,8 @@ final class CrossRenameMember {
 	/** The advisory appended to every successful member rename. */
 	private static final ADVISORY: String = 'member rename resolves instance receivers, switch subjects and expected-type returns via '
 		+ 'declared types only — unresolved receivers and subjects ('
-		+ 'chained calls, un-annotated locals, casts, a `Null<T>`-wrapped annotation'
+		+ 'chained calls, un-annotated locals, casts, a `Null<T>`-wrapped annotation, a type named by an '
+		+ 'ALIAS import, the file own or an ambient one'
 		+ '), an expected-type value OUTSIDE return position (`x == VALUE`, an annotated assignment, a '
 		+ 'typed argument) or in a function with no return annotation, an enum-abstract value brought into '
 		+ 'scope by importing its type, super-access, `using` extension calls, aliased-import homonyms, '
@@ -686,10 +687,11 @@ final class CrossRenameMember {
 	 *
 	 * Residual, all of them MISSES (a left-behind access is a compile error, never a wrong rewrite):
 	 * a reference resolving to nothing proves nothing — a library type, a type outside
-	 * the scope, an ALIASED import (the grammar does not expose the original path) and a
+	 * the scope, an ALIASED import — the file's own or one its ambient chain
+	 * carries, since the resolver matches a statement's path and never the name an alias binds — and a
 	 * `Null<T>`-wrapped receiver, whose path reduces to `Null`. A type reaching the file through an
-	 * AMBIENT source is no longer among them: the resolver reads that chain alongside the file's own
-	 * import list.
+	 * AMBIENT import or wildcard is no longer among them: the resolver reads that chain alongside the
+	 * file's own import list, at the precedence the compiler gives each.
 	 *
 	 * The one arm that can still authorise a rewrite on unproven evidence is the SUBTYPE one:
 	 * `isSubtype` walks `TypeDeclInfo.supertypes`, which are SIMPLE names, so a resolved subtype

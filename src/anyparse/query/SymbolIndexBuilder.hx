@@ -5,6 +5,7 @@ import anyparse.query.GrammarPlugin.AmbientImports;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.Refs.RefKind;
+import anyparse.query.SymbolIndex.AmbientImportGroup;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ImportInfo;
 import anyparse.query.SymbolIndex.ImportKind;
@@ -997,7 +998,7 @@ final class SymbolIndexBuilder {
 		provider: Null<TypeInfoProvider>
 	): Void {
 		final chains: Map<String, AmbientImports> = [];
-		final extracted: Map<String, Array<ImportInfo>> = [];
+		final extracted: Map<String, Null<Array<ImportInfo>>> = [];
 		for (fi in infos) {
 			final key: String = '${Path.directory(fi.file)}#${fi.pkg}';
 			var chain: Null<AmbientImports> = chains[key];
@@ -1005,14 +1006,25 @@ final class SymbolIndexBuilder {
 				chain = plugin.ambientImportSources(fi.file, fi.pkg);
 				chains[key] = chain;
 			}
-			fi.ambientImportsBounded = chain.bounded;
-			fi.ambientImports = [
-				for (ambient in chain.sources) if (!sameFile(fi.file, ambient.file))
-					{
-						file: ambient.file,
-						imports: ambientImportsOf(ambient, infos, extracted, plugin, shape, memberSeams, abstractKinds, provider)
-					}
-			];
+			var bounded: Bool = chain.bounded;
+			final groups: Array<AmbientImportGroup> = [];
+			for (ambient in chain.sources) if (!sameFile(fi.file, ambient.file)) {
+				final imports: Null<Array<ImportInfo>> = ambientImportsOf(
+					ambient, infos, extracted, plugin, shape, memberSeams, abstractKinds, provider
+				);
+				// A source that does not PARSE is a chain member whose bindings are unknown, which is the
+				// same state as one that could not be read: the reader must not be pinned against it, and
+				// an empty group would claim it binds nothing.
+				if (imports == null)
+					bounded = false
+				else {
+					// Re-bound: strict null-safety does not carry a narrowed local into a structure literal.
+					final read: Array<ImportInfo> = imports;
+					groups.push({ file: ambient.file, imports: read });
+				}
+			}
+			fi.ambientImportsBounded = bounded;
+			fi.ambientImports = groups;
 		}
 	}
 
@@ -1025,19 +1037,18 @@ final class SymbolIndexBuilder {
 	 * does not parse contributes nothing.
 	 */
 	private static function ambientImportsOf(
-		ambient: AmbientImportSource, infos: Array<FileInfo>, extracted: Map<String, Array<ImportInfo>>, plugin: GrammarPlugin,
+		ambient: AmbientImportSource, infos: Array<FileInfo>, extracted: Map<String, Null<Array<ImportInfo>>>, plugin: GrammarPlugin,
 		shape: RefShape, memberSeams: MemberSeams, abstractKinds: Array<String>, provider: Null<TypeInfoProvider>
-	): Array<ImportInfo> {
+	): Null<Array<ImportInfo>> {
 		// The memo comes FIRST: one ambient source serves every file below it, so the scan for its
 		// indexed record runs once per source rather than once per reader.
-		final memo: Null<Array<ImportInfo>> = extracted[ambient.file];
-		if (memo != null) return memo;
+		if (extracted.exists(ambient.file)) return extracted[ambient.file];
 		final indexed: Null<FileInfo> = infos.find(f -> sameFile(f.file, ambient.file));
 		final tree: Null<QueryNode> = indexed != null ? null : try plugin.parseFile(ambient.source) catch (_: Exception) null;
-		final imports: Array<ImportInfo> = if (indexed != null)
+		final imports: Null<Array<ImportInfo>> = if (indexed != null)
 			indexed.imports;
 		else if (tree == null)
-			[];
+			null;
 		else
 			extractFileInfo(
 				ambient.file, ambient.source, tree, provider != null ? provider.propertyAccessors(ambient.source) : [],

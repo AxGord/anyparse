@@ -29,17 +29,26 @@ final class HaxeAmbientImports {
 	 * segment removed per package segment — no second notion of root, and nothing about the
 	 * invoking command line to know.
 	 *
-	 * `bounded` is false when that stripping does not land on a root because some directory name
-	 * does not match its package segment. The walk then reads only the module's own directory:
-	 * the shortest chain, and the answer a consumer must refuse to pin against.
+	 * `bounded` is false whenever the chain is knowingly SHORT: the stripping did not land on a root
+	 * because a directory name does not match its package segment, or a source that exists could not be
+	 * read. A module absent from disk has no chain at all and is bounded — there is nothing short about
+	 * it. A short chain binds names this answer does not carry, so a consumer that pins a reference to
+	 * one declaration must refuse on a false rather than resolve against it.
 	 */
 	public static function chainFor(path: String, pkg: String): AmbientImports {
+		// A module that is not ON DISK has no directory to walk and no ambient source that could reach
+		// it — an analysed source with an invented path would otherwise take its chain from the process
+		// directory, which is a different tree. Bounded, because there is no chain to be short about.
+		if (!ConfigFinder.fileExists(path)) return { sources: [], bounded: true };
 		final root: Null<String> = sourceRootOf(path, pkg);
 		final stop: String = named(root ?? Path.directory(path));
+		final walk: ConfigChain = ConfigFinder.findUpTo(path, AMBIENT_FILE, stop);
 		final chain: Array<AmbientImportSource> = [
-			for (doc in ConfigFinder.findUpTo(path, AMBIENT_FILE, stop).documents) { file: doc.path, source: doc.content }
+			for (doc in walk.documents) { file: doc.path, source: doc.content }
 		];
-		return { sources: chain, bounded: root != null };
+		// A source that EXISTS and could not be read leaves the chain knowingly short, and a short chain
+		// binds names this answer does not carry — the one state a consumer must refuse to pin against.
+		return { sources: chain, bounded: root != null && walk.unreadable.length == 0 };
 	}
 
 	/**
