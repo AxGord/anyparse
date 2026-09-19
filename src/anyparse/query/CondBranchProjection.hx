@@ -189,7 +189,7 @@ final class CondBranchProjection {
 	 * Whether a branch directive (`elseKeywords`, e.g. `#else` / `#elseif`) opens inside
 	 * `[from, to)` of `source` — one gap between two consecutive children of a conditional
 	 * region. Comment text is masked out first, so a `#else` written inside a block comment does
-	 * not split a run. Mirrors `MemberOrder.hasBranchDirective`.
+	 * not split a run. Mirrors `MemberSlots.hasBranchDirective`.
 	 *
 	 * The keyword is anchored at the start of each ltrimmed line OF THE GAP SUBSTRING, not of the
 	 * real source line — the gap's first line therefore anchors mid-line, at `from`. That is

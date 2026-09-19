@@ -8,7 +8,7 @@ import utest.Test;
 /**
  * Pure-part coverage of the `explicit-local-type` compiler-oracle TAIL — the display
  * XML parsing (`CompilerDisplayOracle.parseTypeResponse`) and the type normalization
- * / rejection / import-aware shortening (`ExplicitLocalType.normalizeInferredType`),
+ * / rejection / import-aware shortening (`LiteralInfer.normalizeInferredType`),
  * both compiler-free so they run on every host.
  */
 class ExplicitLocalTypeOracleTest extends Test {

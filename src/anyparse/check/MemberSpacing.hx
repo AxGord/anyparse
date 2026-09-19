@@ -20,7 +20,7 @@ typedef LayoutIssue = {
  * member gap: `ifEdit` the blank before the gap's `#if`, `endEdit` the blank after its
  * `#end`; each null when that blank already exists or the gap has no such directive.
  */
-typedef DirectiveGap = {
+private typedef DirectiveGap = {
 	var ifEdit: Null<{ span: Span, text: String }>;
 	var endEdit: Null<{ span: Span, text: String }>;
 }

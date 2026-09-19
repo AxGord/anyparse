@@ -183,8 +183,8 @@ final class ConstantHoist {
 	 *    UNBRACED `case` arm is a deliberate conservative miss — an arm is not a statement block here
 	 *    (a braced arm hoists fine). A `var` may be written; a multi-binding list carries a continuation
 	 *    node as its last child; a declaration without an initializer has no child at all;
-	 *  - the initializer is a compile-time constant — the scalar proof `inline-constant` owns
-	 *    (`InlineConstant.isConstantScalarInitializer`), or a PLAIN string literal, which is exactly
+	 *  - the initializer is a compile-time constant — the scalar proof the constant-field checks share
+	 *    (`ConstantFieldScan.isConstantScalarInitializer`), or a PLAIN string literal, which is exactly
 	 *    what `StringFoldSupport.literalOf` answers (an interpolated one reads locals and is refused
 	 *    there);
 	 *  - the enclosing type is a CLASS declared in this file, and one the language lets hold a static

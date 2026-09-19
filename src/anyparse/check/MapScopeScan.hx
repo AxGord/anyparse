@@ -94,9 +94,9 @@ final class MapScopeScan {
 			mapFree: false
 		};
 		collectScope(tree, typeDecls, shape.aliasingDeclKinds ?? [], nameHosts, scope);
-		final boundMap: Null<String> = scope.imports[MapScopeScan.UNIFIED_MAP];
-		scope.mapFree = !scope.declared.contains(MapScopeScan.UNIFIED_MAP) && !scope.aliases.contains(MapScopeScan.UNIFIED_MAP)
-			&& (boundMap == null || boundMap == MapScopeScan.QUALIFIED_PREFIX + MapScopeScan.UNIFIED_MAP);
+		final boundMap: Null<String> = scope.imports[UNIFIED_MAP];
+		scope.mapFree = !scope.declared.contains(UNIFIED_MAP) && !scope.aliases.contains(UNIFIED_MAP)
+			&& (boundMap == null || boundMap == QUALIFIED_PREFIX + UNIFIED_MAP);
 		return scope;
 	}
 
@@ -143,7 +143,7 @@ final class MapScopeScan {
 	private static function aliasTargetOf(node: QueryNode): Null<String> {
 		var head: Null<QueryNode> = null;
 		for (child in node.children) {
-			if (child.kind != MapScopeScan.ANNOTATION_TYPE_KIND && child.kind != MapScopeScan.CLAUSE_TYPE_KIND) break;
+			if (child.kind != ANNOTATION_TYPE_KIND && child.kind != CLAUSE_TYPE_KIND) break;
 			final span: Null<Span> = child.span;
 			if (span == null) break;
 			final current: Null<Span> = head?.span;

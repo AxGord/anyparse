@@ -6,7 +6,6 @@ import anyparse.query.Refs;
 import anyparse.runtime.Span;
 
 using StringTools;
-using Lambda;
 
 /** Resolved kind sets + config-independent names threaded through the walk, built once per run. */
 typedef DynCtx = {

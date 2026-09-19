@@ -59,10 +59,11 @@ typedef BranchInfo = {
 
 /**
  * The COLLECTION half of `member-order`: turning a container's raw child list into the
- * `OrderedMember` slots the check and its autofix then reason over. That is one job with
- * one entry point (`collectMembers`) and four sub-answers no other part of the rule asks
- * for — a member's canonical rank, its full source slot, the `#if` condition stack it was
- * declared under, and which branch of that construct it sits in.
+ * `OrderedMember` slots the check and its autofix then reason over. It owns the member
+ * MODEL the whole rule speaks in — `OrderedMember`, `BranchInfo`, `MemberRank` — and
+ * every answer read off the raw children: a member's canonical rank, its full source slot, the `#if`
+ * condition stack it was declared under, which branch of the construct it sits in, and whether that
+ * construct has a branch shape the model refuses (`hasUnmodelledElse`).
  *
  * Split out of `MemberOrder`, which keeps the questions asked OF the collected slots
  * (are they in order, is reordering safe, how are they spaced, how is the region rebuilt).
