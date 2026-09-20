@@ -108,23 +108,15 @@ final class TypeRefIndex {
 			final qualified: Array<ResolvedType> = resolveQualifiedRefAll(raw);
 			return qualified.length > 0 ? qualified : moduleRelativeRefAll(raw, fromFile);
 		}
-		// PRECEDENCE, each step checked against the compiler rather than assumed. The tiers are the
-		// order `tierOf` lays out; the STRONGEST non-empty one is the whole answer.
-		final chain: Int = fromFile.ambientImports.length;
-		final tiers: Array<Array<ResolvedType>> = [for (_ in 0...tierCount(chain)) []];
-		// Whether a tier only the CHAIN can fill has a member. Nothing else may collapse the tiers: a
-		// file with no ambient binding must get the set this layer always answered, ambiguity included.
-		var chainFilled: Bool = false;
-		for (fi in _files) for (t in fi.types) if (t.name == raw) {
-			final tier: Int = tierOf(fromFile, fi, t);
-			if (tier >= 0) {
-				tiers[tier].push({ file: fi, type: t });
-				if (chainTier(tier, chain)) chainFilled = true;
-			}
-		}
-		if (!chainFilled) return deduped(tiers[OWN_EXPLICIT_TIER].concat(tiers[ownWildTier(chain)]).concat(tiers[localTier(chain)]));
-		for (tier in tiers) if (tier.length > 0) return deduped(tier);
-		return [];
+		final withGuarded: Array<ResolvedType> = inScopeAll(raw, fromFile, true);
+		// A `#if`-guarded import statement is in one build and absent from another, so a tier resting
+		// only on guarded statements cannot decide ONE declaration: the answer is the UNION of the two
+		// configurations, which is the ambiguity every pinning consumer already refuses on. With no
+		// ambient group that union is provably the set above — every tier a guarded statement can fill
+		// is one the answer already concatenates — so the second view is asked for only with a chain.
+		return fromFile.ambientImports.length == 0 || !hasGuardedImport(fromFile)
+			? withGuarded
+			: deduped(withGuarded.concat(inScopeAll(raw, fromFile, false)));
 	}
 
 	/**
@@ -172,6 +164,29 @@ final class TypeRefIndex {
 		}
 		final ds: Array<ResolvedType> = resolvedDeclsNamed(typeName);
 		return ds.length == 1 ? ds[0] : null;
+	}
+
+	/**
+	 * Every declaration a simple `raw` is in scope of from `fromFile`, at the PRECEDENCE `tierOf`
+	 * lays out: the STRONGEST non-empty tier is the whole answer. `guardedVisible` false reads the
+	 * configuration in which every `#if`-guarded import statement is absent — see `resolveTypeRefAll`.
+	 */
+	private function inScopeAll(raw: String, fromFile: FileInfo, guardedVisible: Bool): Array<ResolvedType> {
+		final chain: Int = fromFile.ambientImports.length;
+		final tiers: Array<Array<ResolvedType>> = [for (_ in 0...tierCount(chain)) []];
+		// Whether a tier only the CHAIN can fill has a member. Nothing else may collapse the tiers: a
+		// file with no ambient binding must get the set this layer always answered, ambiguity included.
+		var chainFilled: Bool = false;
+		for (fi in _files) for (t in fi.types) if (t.name == raw) {
+			final tier: Int = tierOf(fromFile, fi, t, guardedVisible);
+			if (tier >= 0) {
+				tiers[tier].push({ file: fi, type: t });
+				if (chainTier(tier, chain)) chainFilled = true;
+			}
+		}
+		if (!chainFilled) return deduped(tiers[OWN_EXPLICIT_TIER].concat(tiers[ownWildTier(chain)]).concat(tiers[localTier(chain)]));
+		for (tier in tiers) if (tier.length > 0) return deduped(tier);
+		return [];
 	}
 
 	/**
@@ -326,9 +341,9 @@ final class TypeRefIndex {
 	 * An ALIAS statement answers false: the alias binds a name this predicate is not given, so
 	 * resolving one is a separate question no consumer of this layer asks yet.
 	 */
-	private static function namedByExplicitImport(imports: Array<ImportInfo>, fi: FileInfo, t: TypeDeclInfo): Bool {
+	private static function namedByExplicitImport(imports: Array<ImportInfo>, fi: FileInfo, t: TypeDeclInfo, guardedVisible: Bool): Bool {
 		final path: String = importPathFor(fi, t);
-		for (imp in imports) switch imp.kind {
+		for (imp in imports) if (guardedVisible || !imp.guarded) switch imp.kind {
 			case ImportKind.Import, ImportKind.Using:
 				if (imp.raw == path || (!t.isMain && imp.raw == fi.module)) return true;
 			case ImportKind.Wild, ImportKind.Alias:
@@ -342,10 +357,15 @@ final class TypeRefIndex {
 	 * import — the file's own wildcard included — so it is a separate predicate rather than an arm of
 	 * the one above. A root-package type has no package to wildcard over.
 	 */
-	private static function namedByWildcardImport(imports: Array<ImportInfo>, fi: FileInfo): Bool {
+	private static function namedByWildcardImport(imports: Array<ImportInfo>, fi: FileInfo, guardedVisible: Bool): Bool {
 		if (fi.pkg == '') return false;
 		final wild: String = '${fi.pkg}.*';
-		return imports.exists(imp -> imp.kind == ImportKind.Wild && imp.raw == wild);
+		return imports.exists(imp -> imp.kind == ImportKind.Wild && imp.raw == wild && (guardedVisible || !imp.guarded));
+	}
+
+	/** Whether any import statement `fromFile` resolves through — its own or an ambient group's — is `#if`-guarded. */
+	private static function hasGuardedImport(fromFile: FileInfo): Bool {
+		return fromFile.imports.exists(imp -> imp.guarded) || fromFile.ambientImports.exists(g -> g.imports.exists(imp -> imp.guarded));
 	}
 
 	/**
@@ -358,13 +378,13 @@ final class TypeRefIndex {
 	 *  - 2 + n + k — the wildcard imports of ambient group `k`.
 	 *  - 2 + 2n — a same-package or root-package type, named by nothing.
 	 */
-	private static function tierOf(fromFile: FileInfo, fi: FileInfo, t: TypeDeclInfo): Int {
+	private static function tierOf(fromFile: FileInfo, fi: FileInfo, t: TypeDeclInfo, guardedVisible: Bool): Int {
 		final groups: Array<AmbientImportGroup> = fromFile.ambientImports;
 		final chain: Int = groups.length;
-		if (fi.file == fromFile.file || namedByExplicitImport(fromFile.imports, fi, t)) return OWN_EXPLICIT_TIER;
-		for (i in 0...chain) if (namedByExplicitImport(groups[i].imports, fi, t)) return OWN_EXPLICIT_TIER + 1 + i;
-		if (namedByWildcardImport(fromFile.imports, fi)) return ownWildTier(chain);
-		for (i in 0...chain) if (namedByWildcardImport(groups[i].imports, fi)) return ownWildTier(chain) + 1 + i;
+		if (fi.file == fromFile.file || namedByExplicitImport(fromFile.imports, fi, t, guardedVisible)) return OWN_EXPLICIT_TIER;
+		for (i in 0...chain) if (namedByExplicitImport(groups[i].imports, fi, t, guardedVisible)) return OWN_EXPLICIT_TIER + 1 + i;
+		if (namedByWildcardImport(fromFile.imports, fi, guardedVisible)) return ownWildTier(chain);
+		for (i in 0...chain) if (namedByWildcardImport(groups[i].imports, fi, guardedVisible)) return ownWildTier(chain) + 1 + i;
 		return fi.pkg == fromFile.pkg || fi.pkg == '' ? localTier(chain) : -1;
 	}
 

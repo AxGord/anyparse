@@ -113,4 +113,9 @@ final class UntypedPlugin implements GrammarPlugin {
 		return { sources: [], bounded: true };
 	}
 
+	/** The documented answer for a grammar with no ambient-import concept: no file is such a source. */
+	public function ambientImportGovernance(path: String): Null<AmbientImportGovernance> {
+		return null;
+	}
+
 }

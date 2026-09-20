@@ -1,6 +1,7 @@
 package anyparse.grammar.haxe;
 
 import anyparse.query.ConfigFinder;
+import anyparse.query.GrammarPlugin.AmbientImportGovernance;
 import anyparse.query.GrammarPlugin.AmbientImportSource;
 import anyparse.query.GrammarPlugin.AmbientImports;
 import haxe.io.Path;
@@ -19,6 +20,9 @@ final class HaxeAmbientImports {
 
 	/** The file name Haxe reads a directory's ambient imports from. */
 	private static inline final AMBIENT_FILE: String = 'import.hx';
+
+	/** The extension of a Haxe module file — what an `import.hx` governs and what it is not. */
+	private static inline final MODULE_EXTENSION: String = 'hx';
 
 	/**
 	 * The `import.hx` chain in scope for the module at `path` with package `pkg`, nearest first.
@@ -52,6 +56,23 @@ final class HaxeAmbientImports {
 	}
 
 	/**
+	 * The modules `path` governs when `path` IS a directory's ambient source: every module stored in
+	 * that directory and below it. The subtree is not cut at a nested ambient source, because a
+	 * nested one EXTENDS its parents rather than replacing them — and an ambient source is not itself
+	 * a module, so the walk skips them.
+	 *
+	 * `bounded` is false when a directory on the way down could not be listed or a module could not
+	 * be read: the governed set is then short, and short is unusable rather than smaller — see
+	 * `GrammarPlugin.ambientImportGovernance`.
+	 */
+	public static function governanceFor(path: String): Null<AmbientImportGovernance> {
+		if (Path.withoutDirectory(path) != AMBIENT_FILE) return null;
+		final governed: Array<AmbientImportSource> = [];
+		final complete: Bool = collectModules(named(Path.directory(path)), governed);
+		return { governs: governed, bounded: complete };
+	}
+
+	/**
 	 * `dir` as a directory an absolute-path resolution can name. A relative module path whose
 	 * package consumes every segment leaves the EMPTY string, which names the process directory to a
 	 * reader and nothing at all to a path resolver — and a stop point that resolves to nothing bounds
@@ -59,6 +80,41 @@ final class HaxeAmbientImports {
 	 */
 	private static inline function named(dir: String): String {
 		return dir == '' ? '.' : dir;
+	}
+
+	/** Every module stored under `dir` with its text, ambient sources excluded; false when one could not be read. */
+	private static function collectModules(dir: String, out: Array<AmbientImportSource>): Bool {
+		#if (sys || nodejs)
+		final entries: Null<Array<String>> = try sys.FileSystem.readDirectory(dir) catch (_: haxe.Exception) null;
+		if (entries == null) return false;
+		var complete: Bool = true;
+		for (name in entries) {
+			final child: String = '$dir/$name';
+			// EVERY io call here answers `null` rather than throwing: the governed subtree reaches past the
+			// scope a run was given, so a dangling symlink whose stat throws would take the whole lint down.
+			final isDir: Null<Bool> = try sys.FileSystem.isDirectory(child) catch (_: haxe.Exception) null;
+			if (isDir == null) {
+				complete = false;
+				continue;
+			}
+			if (isDir) {
+				if (!collectModules(child, out)) complete = false;
+				continue;
+			}
+			if (name == AMBIENT_FILE || Path.extension(name) != MODULE_EXTENSION) continue;
+			final text: Null<String> = try sys.io.File.getContent(child) catch (_: haxe.Exception) null;
+			if (text == null)
+				complete = false
+			else {
+				// Re-bound: strict null-safety does not carry a narrowed local into a structure literal.
+				final read: String = text;
+				out.push({ file: child, source: read });
+			}
+		}
+		return complete;
+		#else
+		return false;
+		#end
 	}
 
 	/**

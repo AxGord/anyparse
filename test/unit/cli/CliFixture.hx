@@ -108,6 +108,19 @@ final class CliFixture {
 	}
 
 	/**
+	 * Run `body`, then `cleanup` — whether `body` returns or throws. The try/finally Haxe does not
+	 * spell, and what every fixture that writes a tree owes its own run: a failing assert would
+	 * otherwise leave the tree, or a file it chmodded to mode 0, behind for the rest of the session.
+	 */
+	public static function always(cleanup: () -> Void, body: () -> Void): Void {
+		try body() catch (exception: Exception) {
+			cleanup();
+			throw exception;
+		}
+		cleanup();
+	}
+
+	/**
 	 * Remove a scratch root this class CLAIMED, and refuse anything else BY NAME.
 	 *
 	 * `removeDir` deletes whatever it is handed, recursively. Handed the wrong path it is an

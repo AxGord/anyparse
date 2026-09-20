@@ -61,10 +61,12 @@ using Lambda;
 @:nullSafety(Strict)
 final class RedundantImport implements Check implements RiskyFix {
 
+	private static final RULE_ID: String = 'redundant-import';
+
 	public function new() {}
 
 	public function id(): String {
-		return 'redundant-import';
+		return RULE_ID;
 	}
 
 	public function description(): String {
@@ -80,14 +82,25 @@ final class RedundantImport implements Check implements RiskyFix {
 		final violations: Array<Violation> = [];
 		for (info in index.allFiles()) for (imp in info.imports) {
 			final module: Null<String> = redundantModuleOf(info, imp, resolveIndex);
-			if (module != null) violations.push({
-				file: info.file,
-				span: imp.span,
-				rule: 'redundant-import',
-				severity: Severity.Warning,
-				message: 'redundant import \'${imp.raw}\': \'$module\' is imported here and already binds \''
-				+ '${SourceText.lastSegment(imp.raw)}\''
-			});
+			final ambient: Null<String> = module != null ? null : ambientProviderOf(info, imp, resolveIndex);
+			if (module != null)
+				violations.push({
+					file: info.file,
+					span: imp.span,
+					rule: RULE_ID,
+					severity: Severity.Warning,
+					message: 'redundant import \'${imp.raw}\': \'$module\' is imported here and already binds \''
+					+ '${SourceText.lastSegment(imp.raw)}\''
+				});
+			else if (ambient != null)
+				violations.push({
+					file: info.file,
+					span: imp.span,
+					rule: RULE_ID,
+					severity: Severity.Warning,
+					message: 'redundant ${imp.kind == ImportKind.Using ? 'using' : 'import'} \'${imp.raw}\': \'$ambient\' already puts the '
+					+ 'same statement in force in every module here'
+				});
 		}
 		return violations;
 	}
@@ -107,6 +120,15 @@ final class RedundantImport implements Check implements RiskyFix {
 		return edits;
 	}
 
+	/** Whether `o` binds `simple` as a NAME: an explicit `import` / `using` whose leaf is it, or an alias of it. */
+	private static inline function bindsSimpleName(o: ImportInfo, simple: String): Bool {
+		return switch o.kind {
+			case ImportKind.Import, ImportKind.Using: SourceText.lastSegment(o.raw) == simple;
+			case ImportKind.Alias: (o.alias ?? o.raw) == simple;
+			case ImportKind.Wild: false;
+		};
+	}
+
 	/**
 	 * Whether `o` brings every top-level type of `module` into scope: an unguarded, unaliased
 	 * `import <module>;` or `using <module>;` (a `using` is an import plus static extension). An
@@ -115,6 +137,69 @@ final class RedundantImport implements Check implements RiskyFix {
 	 */
 	private static inline function providesModule(o: ImportInfo, module: String): Bool {
 		return !o.guarded && (o.kind == ImportKind.Import || o.kind == ImportKind.Using) && o.raw == module;
+	}
+
+	/**
+	 * The NEAREST ambient group binding `simple` at all — the one that decides the name once the file's
+	 * own statement goes. Guardedness must not steer the SEARCH, only the verdict at the group it lands
+	 * on; filtered here it walks past a nearer group whose only binder is `#if`-guarded.
+	 */
+	private static function nearestBinder(info: FileInfo, simple: String): Null<AmbientImportGroup> {
+		return info.ambientImports.find(g -> g.imports.exists(o -> bindsSimpleName(o, simple)));
+	}
+
+	/**
+	 * The ambient source that already puts `imp` in force in `info`, or null when deleting `imp` could
+	 * change what a name means there.
+	 *
+	 * ONE shape qualifies, and it is stated positively: `imp` is an unguarded `import` or `using`, the
+	 * NEAREST ambient statement binding its simple name is an unguarded statement of the very same
+	 * kind and path, the chain was bounded, and nothing else in the file binds that name. An identical
+	 * statement binds an identical thing whatever it names — which is why this arm consults no
+	 * declaration at all, and why anything short of identical is refused instead of reasoned about. A
+	 * nearer ambient source binding the simple name to something ELSE is what makes the file's own
+	 * statement load-bearing, and it is the case this refuses on.
+	 */
+	private static function ambientProviderOf(info: FileInfo, imp: ImportInfo, index: SymbolIndex): Null<String> {
+		if (imp.guarded || !info.ambientImportsBounded) return null;
+		if (imp.kind != ImportKind.Import && imp.kind != ImportKind.Using) return null;
+		if (imp.kind == ImportKind.Using && usingCompetitorInScope(info, imp)) return null;
+		final simple: String = SourceText.lastSegment(imp.raw);
+		// The NEAREST group binding the name AT ALL — guardedness must not steer this choice. Filtered
+		// to unguarded binders the search walks PAST a nearer group whose only binder is `#if`-guarded
+		// and reports a farther identical one, so deleting the file's own statement retargets the name
+		// in the builds that guard is on. A guarded binder in the nearest group makes the question refuse.
+		final nearest: Null<AmbientImportGroup> = nearestBinder(info, simple);
+		if (nearest == null) return null;
+		// EVERY binder of the name in that group must be the identical statement: within one file the
+		// LAST binder of a simple name wins, so a guarded or differently-pathed sibling decides the name
+		// in some build. And no own statement is exempt — the binder that survives is an ambient one, so
+		// a second own binder would decide it instead and the deletion is a retarget.
+		final binders: Array<ImportInfo> = nearest.imports.filter(o -> bindsSimpleName(o, simple));
+		final identical: Bool = binders.foreach(o -> !o.guarded && o.kind == imp.kind && o.raw == imp.raw);
+		return identical && !bindsElsewhere(info, imp, '', simple, index) ? nearest.file : null;
+	}
+
+	/**
+	 * Whether a `using` other than `imp` and its ambient twins is in scope for `info` — the gate that
+	 * keeps the identity argument honest for the one kind it does not hold for.
+	 *
+	 * A `using` binds a NAME and a POSITION in the static-extension order, and the position is what an
+	 * identical statement elsewhere does NOT reproduce. Checked against the compiler rather than
+	 * assumed: extensions are tried in REVERSE declaration order, every own statement outranks every
+	 * ambient one, a NEARER
+	 * ambient group outranks a farther one, and within one file the last declaration wins. So deleting
+	 * the file's own statement hands each method to whichever competitor is next in that order, and
+	 * only an EMPTY field of competitors makes the two positions interchangeable. Naming the method
+	 * that would actually move needs a receiver-aware collision test, which this rule does not have.
+	 *
+	 * An ambient `using` of the SAME module is not a competitor: it names the module this statement
+	 * names, so whichever of them wins, the method resolves to the same static.
+	 */
+	private static function usingCompetitorInScope(info: FileInfo, imp: ImportInfo): Bool {
+		for (o in info.imports) if (o.kind == ImportKind.Using && (o.span.from != imp.span.from || o.span.to != imp.span.to)) return true;
+		for (group in info.ambientImports) for (o in group.imports) if (o.kind == ImportKind.Using && o.raw != imp.raw) return true;
+		return false;
 	}
 
 	/**

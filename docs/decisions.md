@@ -537,3 +537,41 @@ decided the question; it may not become a record of runs.
   → `import T;` on a package-less module is an explicit import like any other and the compiler
   ranks it as one, so skipping the path comparison for an empty package let an ambient namesake
   outrank it — `2c0f8087`
+- the CLI was blind where a direct `new UnusedPrivate().run(...)` reported, and the cause was to be
+  the `LintCommand` / `wrapResolution` resolution gate → it is `unused-private`'s own documented
+  reflection-surface gate: the CLI joins the Haxe std to the resolution scope unconditionally, the
+  std spells a bare `"Z"` string literal, and the constructor arm asks the whole scope's literals
+  about the CLASS name — so a fixture's type name must be one no report or std literal spells as a
+  word before the CLI is a valid instrument for anything name-keyed — `S227-merge`
+- the pending-import machinery was to add an import the ambient chain already provides → the
+  `importMap` path takes the file's path, so `shorten-type-ref` already shortens through an ambient
+  binding and adds nothing, and it already refuses to shorten a type whose simple name the chain
+  binds to a DIFFERENT declaration — `S227-merge`
+- the extension-rewrite fixes were to leave behind a `using` the ambient chain already puts in force
+  → the insert happens, and the same `--fix` run removes it again once `redundant-import` knows an
+  ambient source can provide a statement, so the net output is correct and a second run is a no-op;
+  what is left is a transient edit, not a surviving one — but ONLY under a `compilerOracle`, since
+  that removal is a `RiskyFix`, and only in a file carrying no other `using`, since a rival one makes
+  the removal refuse — `S227-merge`
+- an IDENTICAL ambient statement was to prove a module's own copy of it deletable, whatever the
+  statement names → true of an `import`, false of a `using`: a `using` binds a name AND a position in
+  the static-extension order, every own statement outranks every ambient one, a nearer ambient group
+  outranks a farther one, and the last declaration of a file wins — so deleting the own copy hands
+  every method a rival `using` also declares to that rival, and only an empty field of rivals makes
+  the two positions interchangeable — `S227-merge`
+- the group that decides a simple name was to be the nearest ambient group binding it UNGUARDED
+  → guardedness may decide the verdict but not the search: filtered, the search walks past a nearer
+  group whose only binder is `#if`-guarded and reports a farther identical group as the provider, so
+  deleting the module's own statement retargets the name in the builds that guard is on — the nearest
+  group binding the name at all is the one to land on, and a guarded binder there is a refusal —
+  `S227-merge`
+- a governed module's own text was to be read as generously as possible, on the ground that a
+  too-generous used-test only ever misses a dead statement → generous to the point of useless: the
+  governed subtree holds the DECLARING module of the imported type, whose own declaration of it reads
+  as a use, so a stale statement in an ambient source above its target was unreportable forever — a
+  module is never a reader of an import that names it — `S227-merge`
+- dropping the DECLARING module from an ambient source's reader set was to hold for every statement
+  kind, since a module is never a reader of an import that names it → true of an `import`, whose
+  target a module's own declaration outranks anyway, and false of a `using`: a module does not `using`
+  itself, so one that calls its own statics extension-style depends on exactly that statement, and
+  dropping its file made the ambient `using` it needs read as dead and deletable — `S227-merge`

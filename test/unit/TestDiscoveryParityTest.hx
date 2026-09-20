@@ -103,6 +103,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.SpanModeProbe',
 		'unit.TestDiscoveryParityTest',
 		'unit.check.AlwaysNullComparisonTest',
+		'unit.check.AmbientImportRulesTest',
 		'unit.check.AmbientImportSubtypeShieldTest',
 		'unit.check.AnonTypeDupCheckTest',
 		'unit.check.AssignmentInConditionCheckTest',
@@ -1029,6 +1030,22 @@ class TestDiscoveryParityTest extends Test {
 			'unit.ProseClaimCensusTest#testAnArmSentenceIsReadAsAnArmClaim :: control :: M-CLAIM-NOKINDS',
 			'unit.ProseClaimCensusTest#testTheCodeSenseOfControlIsNotAControlClaim :: control :: M-CLAIM-CODE-BLIND',
 			'unit.ProseClaimCensusTest#testTheTwoUnrecordableKindsStayOnTheList :: control :: M-CLAIM-NOKINDS',
+			'unit.check.AmbientImportRulesTest#testAGovernedSetThatCannotBeEstablishedWithholdsEveryVerdict :: control :: '
+				+ 'M-AMBIENT-GOVERNANCE-COMPLETE',
+			'unit.check.AmbientImportRulesTest#testAGuardedBinderInTheNearestGroupKeepsTheOwnStatement :: control :: '
+				+ 'M-AMBIENT-REDUNDANT-GUARDED-SKIP',
+			'unit.check.AmbientImportRulesTest#testAnAmbientImportAModuleUnderItUsesIsNotReported :: control :: '
+				+ 'M-AMBIENT-GOVERNANCE-BLIND',
+			'unit.check.AmbientImportRulesTest#testAnAmbientImportNoModuleUnderItUsesIsStillReported :: control :: '
+				+ 'M-AMBIENT-GOVERNANCE-SHORT',
+			'unit.check.AmbientImportRulesTest#testAnOwnUsingIsKeptWhereAnotherUsingCouldTakeItsPosition :: control :: '
+				+ 'M-AMBIENT-REDUNDANT-USING-POSITION',
+			'unit.check.AmbientImportRulesTest#testTheDeclaringModuleIsAReaderOfAnAmbientUsingOfItself :: control :: '
+				+ 'M-AMBIENT-DECLARER-READS-USING',
+			'unit.check.AmbientImportRulesTest#testTheGovernedSetIsReadEvenWhenTheRunWasGivenTheAmbientSourceAlone :: control :: '
+				+ 'M-AMBIENT-GOVERNANCE-BLIND',
+			'unit.check.AmbientImportRulesTest#testTheModuleAnAmbientStatementImportsIsNotOneOfItsReaders :: control :: '
+				+ 'M-AMBIENT-DECLARER-READS',
 			'unit.check.AmbientImportSubtypeShieldTest#testAWrittenAliasIsPinnedToNothingRatherThanToItsNamesake :: control :: '
 				+ 'M-AMBIENT-ALIAS-PINNED',
 			'unit.check.AmbientImportSubtypeShieldTest#testTheAmbientlyImportedTypeKeepsTheShieldAndTheNamesakeLosesIt :: control :: '
@@ -1577,6 +1594,10 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.AddressTest#testSelectUnknownKindIsNamedAsUnknown :: control :: M-SELECT-MISS-NO-KIND-CLAUSE',
 			'unit.query.AmbientImportResolutionTest#testAChainThatCannotBeBoundedIsReportedUnbounded :: control :: M-AMBIENT-CHAIN-ROOT',
 			'unit.query.AmbientImportResolutionTest#testAFilesOwnImportOutranksTheAmbientOne :: guard :: ',
+			'unit.query.AmbientImportResolutionTest#testAGuardedAmbientImportAnswersBothBuildsInsteadOfPinningOne :: control :: '
+				+ 'M-AMBIENT-GUARDED-UNION',
+			'unit.query.AmbientImportResolutionTest#testAGuardedOwnImportAnswersBothBuildsInsteadOfPinningOne :: control :: '
+				+ 'M-AMBIENT-GUARDED-UNION',
 			'unit.query.AmbientImportResolutionTest#testAModuleAbsentFromDiskHasNoChainAtAll :: control :: M-AMBIENT-DISK-BLIND',
 			'unit.query.AmbientImportResolutionTest#testAmbientSourceOutranksTheSamePackageNamesake :: control :: M-AMBIENT-IMPORT-BAND',
 			'unit.query.AmbientImportResolutionTest#testAmbientUsingAndWildcardBindTheirTypesBySimpleName :: control :: '
@@ -2181,6 +2202,14 @@ class TestDiscoveryParityTest extends Test {
 			'M-AMBIENT-CHAIN-EMPTY',
 			'M-AMBIENT-CHAIN-ROOT',
 			'M-AMBIENT-IMPORT-BAND',
+			'M-AMBIENT-GUARDED-UNION',
+			'M-AMBIENT-GOVERNANCE-BLIND',
+			'M-AMBIENT-GOVERNANCE-SHORT',
+			'M-AMBIENT-GOVERNANCE-COMPLETE',
+			'M-AMBIENT-DECLARER-READS',
+			'M-AMBIENT-DECLARER-READS-USING',
+			'M-AMBIENT-REDUNDANT-GUARDED-SKIP',
+			'M-AMBIENT-REDUNDANT-USING-POSITION',
 			'M-AMBIENT-IMPORT-MAP',
 			'M-AMBIENT-DISK-BLIND',
 			'M-AMBIENT-UNREADABLE-BOUNDED',
