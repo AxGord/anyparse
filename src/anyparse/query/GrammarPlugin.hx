@@ -342,6 +342,25 @@ interface GrammarPlugin {
 	 */
 	public function ambientImportSources(path: String, pkg: String): AmbientImports;
 
+	/**
+	 * When `path` is itself an AMBIENT import source, the modules it GOVERNS — every module that
+	 * receives its statements without spelling them — each with its text; null when `path` is an
+	 * ordinary module. The inverse of `ambientImportSources`, and what a rule judging such a file's
+	 * OWN statements needs: their reader is never this file, whose text is nothing but the statements
+	 * under judgement.
+	 *
+	 * `governs` carries the text for the reason `AmbientImportSource` does: the modules are read from
+	 * disk, so a run narrowed to the ambient source alone can still see who reads it.
+	 *
+	 * `bounded` is false when the governed set could not be established — a directory that could not
+	 * be listed, a module that could not be read. A short set is not a smaller one: a rule asking
+	 * whether ANYTHING under here uses a binding would call it dead on the modules it never saw, so
+	 * the only safe reading of a false is to withhold every verdict about this file.
+	 *
+	 * A grammar with no ambient-import concept answers null for every path.
+	 */
+	public function ambientImportGovernance(path: String): Null<AmbientImportGovernance>;
+
 }
 
 /**
@@ -3335,5 +3354,18 @@ typedef AmbientImportSource = {
  */
 typedef AmbientImports = {
 	var sources: Array<AmbientImportSource>;
+	var bounded: Bool;
+};
+
+/**
+ * The modules ONE ambient import source governs: each `governs` entry is a module that receives the
+ * source's statements without spelling them, with its text, and `bounded` says whether that set
+ * could be established at all.
+ *
+ * The two travel together for the same reason `AmbientImports`' pair does — see
+ * `GrammarPlugin.ambientImportGovernance`, which is where the false is read.
+ */
+typedef AmbientImportGovernance = {
+	var governs: Array<{ file: String, source: String }>;
 	var bounded: Bool;
 };

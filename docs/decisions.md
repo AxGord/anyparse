@@ -537,3 +537,17 @@ decided the question; it may not become a record of runs.
   → `import T;` on a package-less module is an explicit import like any other and the compiler
   ranks it as one, so skipping the path comparison for an empty package let an ambient namesake
   outrank it — `2c0f8087`
+- the CLI was blind where a direct `new UnusedPrivate().run(...)` reported, and the cause was to be
+  the `LintCommand` / `wrapResolution` resolution gate → it is `unused-private`'s own documented
+  reflection-surface gate: the CLI joins the Haxe std to the resolution scope unconditionally, the
+  std spells a bare `"Z"` string literal, and the constructor arm asks the whole scope's literals
+  about the CLASS name — so a fixture's type name must be one no report or std literal spells as a
+  word before the CLI is a valid instrument for anything name-keyed — `S227-merge`
+- the pending-import machinery was to add an import the ambient chain already provides → the
+  `importMap` path takes the file's path, so `shorten-type-ref` already shortens through an ambient
+  binding and adds nothing, and it already refuses to shorten a type whose simple name the chain
+  binds to a DIFFERENT declaration — `S227-merge`
+- the extension-rewrite fixes were to leave behind a `using` the ambient chain already puts in force
+  → the insert happens, and the same `--fix` run removes it again once `redundant-import` knows an
+  ambient source can provide a statement, so the net output is correct and a second run is a no-op;
+  what is left is a transient edit, not a surviving one — `S227-merge`

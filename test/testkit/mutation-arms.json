@@ -3055,6 +3055,34 @@
 			"note": "every candidate is reached at the WEAKEST tier, so the precedence collapses flat: an explicit import no longer outranks a wildcard one, the module's own statements no longer outrank the chain, a nearer ambient source no longer outranks a farther one, and an ambient binding no longer outranks a same-package namesake"
 		},
 		{
+			"name": "M-AMBIENT-GUARDED-UNION",
+			"type": "anyparse.query.TypeRefIndex",
+			"method": "hasGuardedImport",
+			"force": "false",
+			"note": "no import statement is ever seen as `#if`-guarded, so the two build configurations collapse into one and the engine pins the declaration ONE of them resolves where the builds disagree"
+		},
+		{
+			"name": "M-AMBIENT-GOVERNANCE-BLIND",
+			"type": "anyparse.grammar.haxe.HaxeAmbientImports",
+			"method": "governanceFor",
+			"force": "null",
+			"note": "no file is recognised as an ambient import source, so its statements are judged against its own text — which is nothing but those statements — and every one of them reads as dead"
+		},
+		{
+			"name": "M-AMBIENT-GOVERNANCE-SHORT",
+			"type": "anyparse.grammar.haxe.HaxeAmbientImports",
+			"method": "collectModules",
+			"force": "false",
+			"note": "the modules an ambient source governs are never reported as fully enumerated, so every verdict about such a file is withheld and a dead statement in one is never found"
+		},
+		{
+			"name": "M-AMBIENT-GOVERNANCE-COMPLETE",
+			"type": "anyparse.grammar.haxe.HaxeAmbientImports",
+			"method": "collectModules",
+			"force": "true",
+			"note": "a governed set that could not be listed is claimed complete, so an ambient source whose readers the engine never saw has every statement called dead and deleted"
+		},
+		{
 			"name": "M-AMBIENT-IMPORT-MAP",
 			"type": "anyparse.grammar.haxe.HaxeQueryPlugin",
 			"method": "importMap",

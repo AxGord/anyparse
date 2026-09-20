@@ -5,6 +5,7 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.AmbientImports;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import haxe.Exception;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -134,6 +135,63 @@ class AmbientImportResolutionTest extends Test {
 	}
 
 	@:pin('control')
+	@:killer('M-AMBIENT-GUARDED-UNION')
+	public function testAGuardedOwnImportAnswersBothBuildsInsteadOfPinningOne(): Void {
+		#if (sys || nodejs)
+		final root: String = CliFixture.writeTree('apq_ambient_guarded_own', [
+			{ name: 'src/a/T.hx', source: 'package a;\n\nclass T {}\n' },
+			{ name: 'src/b/T.hx', source: 'package b;\n\nclass T {}\n' },
+			{ name: 'src/lib/T.hx', source: 'package lib;\n\nclass T {}\n' },
+			{ name: 'src/lib/import.hx', source: 'import a.T;\n' },
+			{ name: 'src/lib/Main.hx', source: 'package lib;\n\n#if useB\nimport b.T;\n#end\n\nclass Main {}\n' }
+		]);
+		always(CliFixture.removeDir.bind(root), () -> {
+			final index: SymbolIndex = indexOfTree(root, ['src/a/T.hx', 'src/b/T.hx', 'src/lib/T.hx', 'src/lib/Main.hx']);
+			// Checked against the compiler: it answers `b.T` under the define and `a.T` without it, the
+			// same-package `lib.T` in neither. A tier resting on a guarded statement decides one build.
+			Assert.equals(
+				'$root/src/b/T.hx | $root/src/a/T.hx', candidates(index, 'T', '$root/src/lib/Main.hx'),
+				'a guarded own import and the ambient chain answer different builds, so both stay in scope'
+			);
+			Assert.equals(
+				'unresolved', declaringFile(index, 'T', '$root/src/lib/Main.hx'),
+				'a name two builds resolve differently is ambiguous here, never a pin'
+			);
+		});
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-AMBIENT-GUARDED-UNION')
+	public function testAGuardedAmbientImportAnswersBothBuildsInsteadOfPinningOne(): Void {
+		#if (sys || nodejs)
+		final root: String = CliFixture.writeTree('apq_ambient_guarded_chain', [
+			{ name: 'src/a/T.hx', source: 'package a;\n\nclass T {}\n' },
+			{ name: 'src/lib/T.hx', source: 'package lib;\n\nclass T {}\n' },
+			{ name: 'src/lib/import.hx', source: '#if useA\nimport a.T;\n#end\n' },
+			{ name: 'src/lib/Main.hx', source: 'package lib;\n\nclass Main {}\n' }
+		]);
+		always(CliFixture.removeDir.bind(root), () -> {
+			final index: SymbolIndex = indexOfTree(root, ['src/a/T.hx', 'src/lib/T.hx', 'src/lib/Main.hx']);
+			// The guard sits on the AMBIENT statement: the compiler answers `a.T` under the define and the
+			// same-package `lib.T` without it, so the chain cannot outrank the namesake on its own.
+			Assert.equals(
+				'$root/src/a/T.hx | $root/src/lib/T.hx', candidates(index, 'T', '$root/src/lib/Main.hx'),
+				'a guarded ambient import is present in one build only, so the same-package namesake stays in scope'
+			);
+			Assert.equals(
+				'unresolved', declaringFile(index, 'T', '$root/src/lib/Main.hx'),
+				'a name two builds resolve differently is ambiguous here, never a pin'
+			);
+		});
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
 	@:killer('M-AMBIENT-DISK-BLIND')
 	public function testAModuleAbsentFromDiskHasNoChainAtAll(): Void {
 		#if (sys || nodejs)
@@ -145,12 +203,13 @@ class AmbientImportResolutionTest extends Test {
 			{ file: '$host/lib/T.hx', source: 'package lib;\n\nclass T {}\n' },
 			{ file: '$host/a/T.hx', source: 'package a;\n\nclass T {}\n' }
 		];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
-		Assert.equals(
-			'$host/lib/T.hx', declaringFile(index, 'T', '$host/lib/Plain.hx'),
-			'an ambient source beside an invented path binds nothing, so the same-package type still answers'
-		);
-		CliFixture.removeDir(host);
+		always(CliFixture.removeDir.bind(host), () -> {
+			final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+			Assert.equals(
+				'$host/lib/T.hx', declaringFile(index, 'T', '$host/lib/Plain.hx'),
+				'an ambient source beside an invented path binds nothing, so the same-package type still answers'
+			);
+		});
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -164,12 +223,13 @@ class AmbientImportResolutionTest extends Test {
 			{ name: 'src/lib/import.hx', source: 'import a.T; ){{ not haxe\n' },
 			{ name: 'src/lib/Plain.hx', source: 'package lib;\n\nclass Plain {}\n' }
 		]);
-		final index: SymbolIndex = indexOfTree(root, ['src/lib/import.hx', 'src/lib/Plain.hx']);
-		Assert.isFalse(
-			boundedAt(index, '$root/src/lib/Plain.hx', 'Plain'),
-			'a chain member whose bindings could not be read binds an unknown set, so the reader is not pinnable'
-		);
-		CliFixture.removeDir(root);
+		always(CliFixture.removeDir.bind(root), () -> {
+			final index: SymbolIndex = indexOfTree(root, ['src/lib/import.hx', 'src/lib/Plain.hx']);
+			Assert.isFalse(
+				boundedAt(index, '$root/src/lib/Plain.hx', 'Plain'),
+				'a chain member whose bindings could not be read binds an unknown set, so the reader is not pinnable'
+			);
+		});
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -183,22 +243,25 @@ class AmbientImportResolutionTest extends Test {
 			{ name: 'src/lib/import.hx', source: 'import a.T;\n' },
 			{ name: 'src/lib/Plain.hx', source: 'package lib;\n\nclass Plain {}\n' }
 		]);
-		js.node.Fs.chmodSync('$root/src/lib/import.hx', 0);
-		final readable: Bool = try {
-			sys.io.File.getContent('$root/src/lib/import.hx');
-			true;
-		} catch (_: haxe.Exception) false;
-		if (readable)
-			Assert.pass('this runner reads a mode-0 file — nothing to withhold')
-		else {
-			final index: SymbolIndex = indexOfTree(root, ['src/lib/Plain.hx']);
-			Assert.isFalse(
-				boundedAt(index, '$root/src/lib/Plain.hx', 'Plain'),
-				'a source that EXISTS and could not be read leaves the chain short, so the reader is not pinnable'
-			);
-		}
-		js.node.Fs.chmodSync('$root/src/lib/import.hx', 384);
-		CliFixture.removeDir(root);
+		always(() -> {
+			js.node.Fs.chmodSync('$root/src/lib/import.hx', 384);
+			CliFixture.removeDir(root);
+		}, () -> {
+			js.node.Fs.chmodSync('$root/src/lib/import.hx', 0);
+			final readable: Bool = try {
+				sys.io.File.getContent('$root/src/lib/import.hx');
+				true;
+			} catch (_: haxe.Exception) false;
+			if (readable)
+				Assert.pass('this runner reads a mode-0 file — nothing to withhold')
+			else {
+				final index: SymbolIndex = indexOfTree(root, ['src/lib/Plain.hx']);
+				Assert.isFalse(
+					boundedAt(index, '$root/src/lib/Plain.hx', 'Plain'),
+					'a source that EXISTS and could not be read leaves the chain short, so the reader is not pinnable'
+				);
+			}
+		});
 		#else
 		Assert.pass('node-only: the mode change has no portable spelling');
 		#end
@@ -333,12 +396,20 @@ class AmbientImportResolutionTest extends Test {
 	private function withTree(body: (String) -> Void): Void {
 		#if (sys || nodejs)
 		final root: String = CliFixture.writeTree('apq_ambient_import', TREE);
-		try body(root) catch (exception: haxe.Exception) {
-			CliFixture.removeDir(root);
+		always(CliFixture.removeDir.bind(root), body.bind(root));
+		#end
+	}
+
+	/**
+	 * Run `body`, then `cleanup` — whether `body` returns or throws. Haxe spells no `finally`, and a
+	 * fixture tree, or a mode-0 file inside one, that a failing assert leaves behind outlives the run.
+	 */
+	private function always(cleanup: () -> Void, body: () -> Void): Void {
+		try body() catch (exception: Exception) {
+			cleanup();
 			throw exception;
 		}
-		CliFixture.removeDir(root);
-		#end
+		cleanup();
 	}
 
 	/** The index over every `.hx` of the fixture tree, paths as written. */
@@ -371,10 +442,15 @@ class AmbientImportResolutionTest extends Test {
 		return resolved == null ? 'unresolved' : resolved.file.file;
 	}
 
+	/** The declaring files of every declaration `name` is in scope of from `from`, in answer order. */
+	private function candidates(index: SymbolIndex, name: String, from: String): String {
+		return [for (r in index.resolveTypeRefsFrom(name, from)) r.file.file].join(' | ');
+	}
+
 	/** Whether the ambient chain of the module declaring `typeName` in `file` was bounded. */
 	private function boundedAt(index: SymbolIndex, file: String, typeName: String): Bool {
 		final host: Null<ResolvedType> = index.refs.findDeclaredType(file, typeName);
-		if (host == null) throw new haxe.Exception('the fixture file $file must declare $typeName');
+		if (host == null) throw new Exception('the fixture file $file must declare $typeName');
 		return host.file.ambientImportsBounded;
 	}
 

@@ -201,28 +201,12 @@ final class UnusedImport implements Check {
 		final reportMembersByModule: Map<String, Array<String>> = membersByModule(index);
 		final violations: Array<Violation> = [];
 		for (info in index.allFiles()) {
-			final source: String = sourceOf[info.file] ?? '';
-			// One mask, hoisted per file: the import statements (an occurrence inside one is not a
-			// use) AND the comment regions (a comment resolves no type, so a name spelled only
-			// there is not a use either). String literals are deliberately NOT in it — see the
-			// class doc.
-			final regions: Array<LexRegion> = plugin.lexicalRegions(source);
-			final comments: Array<Span> = SourceComments.collectCommentRegions(regions);
-			// A REGEX literal is the one additional inert kind safe to fold into the match mask here:
-			// unlike a string literal it is never a `Type.resolveClass('Foo')`-style reflection lookup,
-			// and this check's `fix` deletes every `Warning` with no secondary reflection gate to catch
-			// one — see the class doc. Strings stay OUT of the mask on purpose.
-			final matchMask: Array<Span> = [for (r in regions) if (r.kind == LexRegionKind.RegexLit) new Span(r.from, r.to)];
-			final scan: FileScan = {
-				source: source,
-				excluded: [for (imp in info.imports) imp.span].concat(comments),
-				commentRegions: comments,
-				matchMask: matchMask
-			};
+			final scans: Null<Array<FileScan>> = readerScans(info, sourceOf, plugin);
+			if (scans == null) continue;
 			final ignoreModules: Array<String> = plugin.checkOverrides(info.file)?.unusedImportIgnoreModules ?? [];
 			for (imp in info.imports) if (!moduleIgnored(imp, ignoreModules))
 				addViolation(
-					violations, info.file, imp, scan, plugin, moduleTypes, enumCtorsByPath, membersByPath, reportMembersByPath,
+					violations, info.file, imp, scans, plugin, moduleTypes, enumCtorsByPath, membersByPath, reportMembersByPath,
 					reportMembersByModule
 				);
 		}
@@ -265,10 +249,50 @@ final class UnusedImport implements Check {
 	 * `RefactorSupport.referencedUnqualifiedInRange` for why a dotted tail is not
 	 * a reference.
 	 */
-	private static inline function referenced(scan: FileScan, name: String): Bool {
-		return OccurrenceScan.referencedUnqualifiedInRange(
-			scan.source, name, 0, scan.source.length, scan.excluded, scan.commentRegions, scan.matchMask
+	private static inline function referenced(scans: Array<FileScan>, name: String): Bool {
+		return scans.exists(scan ->
+			OccurrenceScan.referencedUnqualifiedInRange(
+				scan.source, name, 0, scan.source.length, scan.excluded, scan.commentRegions, scan.matchMask
+			)
 		);
+	}
+
+	/**
+	 * The readers whose text decides `info`'s own import statements, or null when they could not be
+	 * established and no verdict about the file is safe.
+	 *
+	 * An ordinary module is its own reader. An AMBIENT source is not: its statements are read by the
+	 * modules under its directory and never by its own text, which is nothing but those statements —
+	 * judged against itself every one reads as dead and `fix` deletes a load-bearing import.
+	 */
+	private static function readerScans(info: FileInfo, sourceOf: Map<String, String>, plugin: GrammarPlugin): Null<Array<FileScan>> {
+		final governance: Null<AmbientImportGovernance> = plugin.ambientImportGovernance(info.file);
+		return if (governance == null)
+			[scanOf(sourceOf[info.file] ?? '', plugin, info.imports)] else if (governance.bounded)
+			[for (governed in governance.governs) scanOf(governed.source, plugin, [])] else
+			null;
+	}
+
+	/**
+	 * One reader's scan. `imports` is the statement list to EXCLUDE, since an occurrence inside a
+	 * file's own import statement is not a use of the name it binds; the comment regions join it
+	 * because a comment resolves no type. String literals are deliberately NOT masked — see the class
+	 * doc — while a REGEX literal is, the one additional inert kind that is never a
+	 * `Type.resolveClass('Foo')`-style reflection lookup and so cannot keep a deletable import alive.
+	 *
+	 * A module read from disk as the reader of an AMBIENT source arrives with no extracted import
+	 * list, and passing none only makes the used-test more GENEROUS — the direction a verdict whose
+	 * fix deletes the statement must err in.
+	 */
+	private static function scanOf(source: String, plugin: GrammarPlugin, imports: Array<ImportInfo>): FileScan {
+		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
+		final comments: Array<Span> = SourceComments.collectCommentRegions(regions);
+		return {
+			source: source,
+			excluded: [for (imp in imports) imp.span].concat(comments),
+			commentRegions: comments,
+			matchMask: [for (r in regions) if (r.kind == LexRegionKind.RegexLit) new Span(r.from, r.to)]
+		};
 	}
 
 	/**
@@ -289,18 +313,18 @@ final class UnusedImport implements Check {
 	 * the live.
 	 */
 	private static function addViolation(
-		out: Array<Violation>, file: String, imp: ImportInfo, scan: FileScan, plugin: GrammarPlugin,
+		out: Array<Violation>, file: String, imp: ImportInfo, scans: Array<FileScan>, plugin: GrammarPlugin,
 		moduleTypes: Map<String, Array<String>>, enumCtorsByPath: Map<String, Array<String>>, membersByPath: Map<String, Array<String>>,
 		reportMembersByPath: Map<String, Array<String>>, reportMembersByModule: Map<String, Array<String>>
 	): Void {
 		switch imp.kind {
 			case ImportKind.Wild:
-				addWildViolation(out, file, imp, scan, reportMembersByPath);
+				addWildViolation(out, file, imp, scans, reportMembersByPath);
 			case ImportKind.Using:
-				addUsingViolation(out, file, imp, scan, plugin, reportMembersByModule);
+				addUsingViolation(out, file, imp, scans, plugin, reportMembersByModule);
 			case _:
 				final bound: String = imp.alias ?? SourceText.lastSegment(imp.raw);
-				if (referenced(scan, bound)) return;
+				if (referenced(scans, bound)) return;
 				// A plain `import pkg.Mod;` binds every top-level type of the
 				// module, not only the main one — a reference to a SECONDARY
 				// typedef/enum keeps the import even though `Mod` itself is
@@ -309,11 +333,11 @@ final class UnusedImport implements Check {
 				// library root); a module resolvable in neither (stdlib, an
 				// unconfigured haxelib) falls back to the bound-name verdict. An
 				// alias import binds just the alias — never widened.
-				if (imp.kind == ImportKind.Import && secondaryTypeReferenced(imp.raw, bound, scan, moduleTypes)) return;
+				if (imp.kind == ImportKind.Import && secondaryTypeReferenced(imp.raw, bound, scans, moduleTypes)) return;
 				// A bare `import pkg.Enum;` whose constructor is used as a bare
 				// identifier (`Assert.equals(Private, m)`, expected-type resolved)
 				// is in use even though `Enum` itself is never named.
-				if (imp.kind == ImportKind.Import && enumCtorReferenced(imp.raw, scan, enumCtorsByPath)) return;
+				if (imp.kind == ImportKind.Import && enumCtorReferenced(imp.raw, scans, enumCtorsByPath)) return;
 				if (imp.kind == ImportKind.Import && !membersByPath.exists(imp.raw)) {
 					out.push(make(file, imp, Severity.Info, 'import \'${imp.raw}\': $MSG_NOT_IN_SCOPE', DECLINE_NOT_IN_SCOPE));
 					return;
@@ -331,10 +355,10 @@ final class UnusedImport implements Check {
 
 	/** True when any OTHER top-level type of in-set module `raw` is referenced in the file outside the imports. */
 	private static function secondaryTypeReferenced(
-		raw: String, bound: String, scan: FileScan, moduleTypes: Map<String, Array<String>>
+		raw: String, bound: String, scans: Array<FileScan>, moduleTypes: Map<String, Array<String>>
 	): Bool {
 		final types: Null<Array<String>> = moduleTypes[raw];
-		return types != null && types.exists(name -> name != bound && referenced(scan, name));
+		return types != null && types.exists(name -> name != bound && referenced(scans, name));
 	}
 
 	/**
@@ -384,24 +408,24 @@ final class UnusedImport implements Check {
 	 * `using pkg.MetaInspect` family of a macro-heavy tree — was unverifiable.
 	 */
 	private static function addUsingViolation(
-		out: Array<Violation>, file: String, imp: ImportInfo, scan: FileScan, plugin: GrammarPlugin,
+		out: Array<Violation>, file: String, imp: ImportInfo, scans: Array<FileScan>, plugin: GrammarPlugin,
 		reportMembersByModule: Map<String, Array<String>>
 	): Void {
 		final bound: String = SourceText.lastSegment(imp.raw);
-		if (referenced(scan, bound)) return;
+		if (referenced(scans, bound)) return;
 		final methods: Null<Array<String>> = plugin.knownExtensionMethods(imp.raw) ?? reportMembersByModule[imp.raw];
 		if (methods == null) {
 			out.push(make(file, imp, Severity.Info, 'using import \'${imp.raw}\': $MSG_USING_UNTRACKED', DECLINE_USING_UNTRACKED));
 			return;
 		}
-		if (methods.exists(m -> OccurrenceScan.methodCalledInSource(scan.source, m, bound))) return;
+		if (methods.exists(m -> scans.exists(scan -> OccurrenceScan.methodCalledInSource(scan.source, m, bound)))) return;
 		out.push(make(file, imp, Severity.Warning, 'unused using \'${imp.raw}\''));
 	}
 
 	/** True when any constructor of the enum-type imported by `raw` is referenced bare in the file (outside the imports). */
-	private static function enumCtorReferenced(raw: String, scan: FileScan, enumCtorsByPath: Map<String, Array<String>>): Bool {
+	private static function enumCtorReferenced(raw: String, scans: Array<FileScan>, enumCtorsByPath: Map<String, Array<String>>): Bool {
 		final ctors: Null<Array<String>> = enumCtorsByPath[raw];
-		return ctors != null && ctors.exists(name -> referenced(scan, name));
+		return ctors != null && ctors.exists(name -> referenced(scans, name));
 	}
 
 	/**
@@ -414,14 +438,14 @@ final class UnusedImport implements Check {
 	 * symbol set, so it stays an unverifiable `Info`.
 	 */
 	private static function addWildViolation(
-		out: Array<Violation>, file: String, imp: ImportInfo, scan: FileScan, membersByPath: Map<String, Array<String>>
+		out: Array<Violation>, file: String, imp: ImportInfo, scans: Array<FileScan>, membersByPath: Map<String, Array<String>>
 	): Void {
 		final members: Null<Array<String>> = membersByPath[stripWildStar(imp.raw)];
 		if (members == null) {
 			out.push(make(file, imp, Severity.Info, 'wildcard import \'${imp.raw}\': $MSG_WILD_UNTRACKED', DECLINE_WILD_UNTRACKED));
 			return;
 		}
-		if (members.exists(name -> referenced(scan, name))) return;
+		if (members.exists(name -> referenced(scans, name))) return;
 		out.push(make(file, imp, Severity.Warning, 'unused wildcard import \'${imp.raw}\': no member referenced'));
 	}
 

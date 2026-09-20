@@ -1474,6 +1474,10 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		return HaxeAmbientImports.chainFor(path, pkg);
 	}
 
+	public function ambientImportGovernance(path: String): Null<AmbientImportGovernance> {
+		return HaxeAmbientImports.governanceFor(path);
+	}
+
 	/**
 	 * `TypeInfoProvider`: maps each typed declaration's binding-span `from` to the
 	 * SIMPLE name of its nominal declared type, recovered from the grammar AST

@@ -4,6 +4,7 @@ import anyparse.check.ReflectionMemo;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.FunctionTypeProvider;
+import anyparse.query.GrammarPlugin.AmbientImportGovernance;
 import anyparse.query.GrammarPlugin.AmbientImports;
 import anyparse.query.GrammarPlugin.CheckOverrides;
 import anyparse.query.GrammarPlugin.LayoutMetrics;
@@ -481,6 +482,13 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		_ambientImportCache[key] = chain;
 		return chain;
 	}
+
+	/**
+	 * Deliberately NOT memoised: the answer is a directory LISTING plus the text under it, which a
+	 * pass that creates or edits a module changes, and one decorator instance serves every pass of a
+	 * `--fix` run.
+	 */
+	public function ambientImportGovernance(path: String): Null<AmbientImportGovernance> return _inner.ambientImportGovernance(path);
 
 	/**
 	 * `SpanTypeInfoProvider`: the five span-indexed maps, memoized by source. When the
