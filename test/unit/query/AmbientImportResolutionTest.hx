@@ -145,7 +145,7 @@ class AmbientImportResolutionTest extends Test {
 			{ name: 'src/lib/import.hx', source: 'import a.T;\n' },
 			{ name: 'src/lib/Main.hx', source: 'package lib;\n\n#if useB\nimport b.T;\n#end\n\nclass Main {}\n' }
 		]);
-		always(CliFixture.removeDir.bind(root), () -> {
+		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
 			final index: SymbolIndex = indexOfTree(root, ['src/a/T.hx', 'src/b/T.hx', 'src/lib/T.hx', 'src/lib/Main.hx']);
 			// Checked against the compiler: it answers `b.T` under the define and `a.T` without it, the
 			// same-package `lib.T` in neither. A tier resting on a guarded statement decides one build.
@@ -173,7 +173,7 @@ class AmbientImportResolutionTest extends Test {
 			{ name: 'src/lib/import.hx', source: '#if useA\nimport a.T;\n#end\n' },
 			{ name: 'src/lib/Main.hx', source: 'package lib;\n\nclass Main {}\n' }
 		]);
-		always(CliFixture.removeDir.bind(root), () -> {
+		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
 			final index: SymbolIndex = indexOfTree(root, ['src/a/T.hx', 'src/lib/T.hx', 'src/lib/Main.hx']);
 			// The guard sits on the AMBIENT statement: the compiler answers `a.T` under the define and the
 			// same-package `lib.T` without it, so the chain cannot outrank the namesake on its own.
@@ -203,7 +203,7 @@ class AmbientImportResolutionTest extends Test {
 			{ file: '$host/lib/T.hx', source: 'package lib;\n\nclass T {}\n' },
 			{ file: '$host/a/T.hx', source: 'package a;\n\nclass T {}\n' }
 		];
-		always(CliFixture.removeDir.bind(host), () -> {
+		CliFixture.always(CliFixture.removeDir.bind(host), () -> {
 			final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
 			Assert.equals(
 				'$host/lib/T.hx', declaringFile(index, 'T', '$host/lib/Plain.hx'),
@@ -223,7 +223,7 @@ class AmbientImportResolutionTest extends Test {
 			{ name: 'src/lib/import.hx', source: 'import a.T; ){{ not haxe\n' },
 			{ name: 'src/lib/Plain.hx', source: 'package lib;\n\nclass Plain {}\n' }
 		]);
-		always(CliFixture.removeDir.bind(root), () -> {
+		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
 			final index: SymbolIndex = indexOfTree(root, ['src/lib/import.hx', 'src/lib/Plain.hx']);
 			Assert.isFalse(
 				boundedAt(index, '$root/src/lib/Plain.hx', 'Plain'),
@@ -243,7 +243,7 @@ class AmbientImportResolutionTest extends Test {
 			{ name: 'src/lib/import.hx', source: 'import a.T;\n' },
 			{ name: 'src/lib/Plain.hx', source: 'package lib;\n\nclass Plain {}\n' }
 		]);
-		always(() -> {
+		CliFixture.always(() -> {
 			js.node.Fs.chmodSync('$root/src/lib/import.hx', 384);
 			CliFixture.removeDir(root);
 		}, () -> {
@@ -396,21 +396,10 @@ class AmbientImportResolutionTest extends Test {
 	private function withTree(body: (String) -> Void): Void {
 		#if (sys || nodejs)
 		final root: String = CliFixture.writeTree('apq_ambient_import', TREE);
-		always(CliFixture.removeDir.bind(root), body.bind(root));
+		CliFixture.always(CliFixture.removeDir.bind(root), body.bind(root));
 		#end
 	}
 
-	/**
-	 * Run `body`, then `cleanup` — whether `body` returns or throws. Haxe spells no `finally`, and a
-	 * fixture tree, or a mode-0 file inside one, that a failing assert leaves behind outlives the run.
-	 */
-	private function always(cleanup: () -> Void, body: () -> Void): Void {
-		try body() catch (exception: Exception) {
-			cleanup();
-			throw exception;
-		}
-		cleanup();
-	}
 
 	/** The index over every `.hx` of the fixture tree, paths as written. */
 	private function indexOf(root: String): SymbolIndex {

@@ -22,6 +22,7 @@ using Lambda;
  * even for an occurrence outside them. Both hoisted once per file.
  */
 private typedef FileScan = {
+	file: String,
 	source: String,
 	excluded: Array<Span>,
 	commentRegions: Array<Span>,
@@ -206,8 +207,8 @@ final class UnusedImport implements Check {
 			final ignoreModules: Array<String> = plugin.checkOverrides(info.file)?.unusedImportIgnoreModules ?? [];
 			for (imp in info.imports) if (!moduleIgnored(imp, ignoreModules))
 				addViolation(
-					violations, info.file, imp, scans, plugin, moduleTypes, enumCtorsByPath, membersByPath, reportMembersByPath,
-					reportMembersByModule
+					violations, info.file, imp, readersOf(scans, imp, info.file, resolveIndex), plugin, moduleTypes, enumCtorsByPath,
+					membersByPath, reportMembersByPath, reportMembersByModule
 				);
 		}
 		return violations;
@@ -268,8 +269,10 @@ final class UnusedImport implements Check {
 	private static function readerScans(info: FileInfo, sourceOf: Map<String, String>, plugin: GrammarPlugin): Null<Array<FileScan>> {
 		final governance: Null<AmbientImportGovernance> = plugin.ambientImportGovernance(info.file);
 		return if (governance == null)
-			[scanOf(sourceOf[info.file] ?? '', plugin, info.imports)] else if (governance.bounded)
-			[for (governed in governance.governs) scanOf(governed.source, plugin, [])] else
+			[scanOf(info.file, sourceOf[info.file] ?? '', plugin, info.imports)] else if (governance.bounded)
+			[
+				for (governed in governance.governs) scanOf(governed.file, governed.source, plugin, [])
+			] else
 			null;
 	}
 
@@ -284,15 +287,37 @@ final class UnusedImport implements Check {
 	 * list, and passing none only makes the used-test more GENEROUS — the direction a verdict whose
 	 * fix deletes the statement must err in.
 	 */
-	private static function scanOf(source: String, plugin: GrammarPlugin, imports: Array<ImportInfo>): FileScan {
+	private static function scanOf(file: String, source: String, plugin: GrammarPlugin, imports: Array<ImportInfo>): FileScan {
 		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
 		final comments: Array<Span> = SourceComments.collectCommentRegions(regions);
 		return {
+			file: file,
 			source: source,
 			excluded: [for (imp in imports) imp.span].concat(comments),
 			commentRegions: comments,
 			matchMask: [for (r in regions) if (r.kind == LexRegionKind.RegexLit) new Span(r.from, r.to)]
 		};
+	}
+
+	/**
+	 * `scans` without the reader that DECLARES what `imp` imports — a module's own declaration of a
+	 * type is not a use of an import of it, and no module ever needs an import of itself.
+	 *
+	 * Only an AMBIENT source can reach this: its governed set is every module under its directory, the
+	 * declaring module included, and the used-test is textual, so the declaring file's own `class T`
+	 * kept every `import a.T;` of an ambient source above `a/` alive forever. A declaring file the run
+	 * did not index is not dropped, which leaves the older, more generous answer.
+	 *
+	 * `own` is never dropped. A module that imports a SUB-MODULE type of itself needs no import for it,
+	 * but that is `redundant-import`'s question — this rule's own test would call the name unreferenced
+	 * and its fix would delete a statement on a verdict about visibility it never made.
+	 */
+	private static function readersOf(scans: Array<FileScan>, imp: ImportInfo, own: String, index: SymbolIndex): Array<FileScan> {
+		if (imp.kind != ImportKind.Import && imp.kind != ImportKind.Using) return scans;
+		final declaring: Array<String> = [
+			for (r in index.refs.resolveQualifiedRefAll(imp.raw)) if (r.file.file != own) r.file.file
+		];
+		return declaring.length == 0 ? scans : scans.filter(s -> !declaring.contains(s.file));
 	}
 
 	/**

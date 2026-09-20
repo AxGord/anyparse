@@ -3366,6 +3366,6 @@ typedef AmbientImports = {
  * `GrammarPlugin.ambientImportGovernance`, which is where the false is read.
  */
 typedef AmbientImportGovernance = {
-	var governs: Array<{ file: String, source: String }>;
+	var governs: Array<AmbientImportSource>;
 	var bounded: Bool;
 };

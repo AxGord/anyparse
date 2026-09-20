@@ -67,7 +67,7 @@ final class HaxeAmbientImports {
 	 */
 	public static function governanceFor(path: String): Null<AmbientImportGovernance> {
 		if (Path.withoutDirectory(path) != AMBIENT_FILE) return null;
-		final governed: Array<{ file: String, source: String }> = [];
+		final governed: Array<AmbientImportSource> = [];
 		final complete: Bool = collectModules(named(Path.directory(path)), governed);
 		return { governs: governed, bounded: complete };
 	}
@@ -83,14 +83,21 @@ final class HaxeAmbientImports {
 	}
 
 	/** Every module stored under `dir` with its text, ambient sources excluded; false when one could not be read. */
-	private static function collectModules(dir: String, out: Array<{ file: String, source: String }>): Bool {
+	private static function collectModules(dir: String, out: Array<AmbientImportSource>): Bool {
 		#if (sys || nodejs)
 		final entries: Null<Array<String>> = try sys.FileSystem.readDirectory(dir) catch (_: haxe.Exception) null;
 		if (entries == null) return false;
 		var complete: Bool = true;
 		for (name in entries) {
 			final child: String = '$dir/$name';
-			if (sys.FileSystem.isDirectory(child)) {
+			// EVERY io call here answers `null` rather than throwing: the governed subtree reaches past the
+			// scope a run was given, so a dangling symlink whose stat throws would take the whole lint down.
+			final isDir: Null<Bool> = try sys.FileSystem.isDirectory(child) catch (_: haxe.Exception) null;
+			if (isDir == null) {
+				complete = false;
+				continue;
+			}
+			if (isDir) {
 				if (!collectModules(child, out)) complete = false;
 				continue;
 			}
@@ -98,8 +105,11 @@ final class HaxeAmbientImports {
 			final text: Null<String> = try sys.io.File.getContent(child) catch (_: haxe.Exception) null;
 			if (text == null)
 				complete = false
-			else
-				out.push({ file: child, source: text });
+			else {
+				// Re-bound: strict null-safety does not carry a narrowed local into a structure literal.
+				final read: String = text;
+				out.push({ file: child, source: read });
+			}
 		}
 		return complete;
 		#else

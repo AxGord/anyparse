@@ -1032,12 +1032,18 @@ class TestDiscoveryParityTest extends Test {
 			'unit.ProseClaimCensusTest#testTheTwoUnrecordableKindsStayOnTheList :: control :: M-CLAIM-NOKINDS',
 			'unit.check.AmbientImportRulesTest#testAGovernedSetThatCannotBeEstablishedWithholdsEveryVerdict :: control :: '
 				+ 'M-AMBIENT-GOVERNANCE-COMPLETE',
+			'unit.check.AmbientImportRulesTest#testAGuardedBinderInTheNearestGroupKeepsTheOwnStatement :: control :: '
+				+ 'M-AMBIENT-REDUNDANT-GUARDED-SKIP',
 			'unit.check.AmbientImportRulesTest#testAnAmbientImportAModuleUnderItUsesIsNotReported :: control :: '
 				+ 'M-AMBIENT-GOVERNANCE-BLIND',
 			'unit.check.AmbientImportRulesTest#testAnAmbientImportNoModuleUnderItUsesIsStillReported :: control :: '
 				+ 'M-AMBIENT-GOVERNANCE-SHORT',
+			'unit.check.AmbientImportRulesTest#testAnOwnUsingIsKeptWhereAnotherUsingCouldTakeItsPosition :: control :: '
+				+ 'M-AMBIENT-REDUNDANT-USING-POSITION',
 			'unit.check.AmbientImportRulesTest#testTheGovernedSetIsReadEvenWhenTheRunWasGivenTheAmbientSourceAlone :: control :: '
 				+ 'M-AMBIENT-GOVERNANCE-BLIND',
+			'unit.check.AmbientImportRulesTest#testTheModuleAnAmbientStatementImportsIsNotOneOfItsReaders :: control :: '
+				+ 'M-AMBIENT-DECLARER-READS',
 			'unit.check.AmbientImportSubtypeShieldTest#testAWrittenAliasIsPinnedToNothingRatherThanToItsNamesake :: control :: '
 				+ 'M-AMBIENT-ALIAS-PINNED',
 			'unit.check.AmbientImportSubtypeShieldTest#testTheAmbientlyImportedTypeKeepsTheShieldAndTheNamesakeLosesIt :: control :: '
@@ -2198,6 +2204,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-AMBIENT-GOVERNANCE-BLIND',
 			'M-AMBIENT-GOVERNANCE-SHORT',
 			'M-AMBIENT-GOVERNANCE-COMPLETE',
+			'M-AMBIENT-DECLARER-READS',
+			'M-AMBIENT-REDUNDANT-GUARDED-SKIP',
+			'M-AMBIENT-REDUNDANT-USING-POSITION',
 			'M-AMBIENT-IMPORT-MAP',
 			'M-AMBIENT-DISK-BLIND',
 			'M-AMBIENT-UNREADABLE-BOUNDED',

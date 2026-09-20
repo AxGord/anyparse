@@ -3083,6 +3083,27 @@
 			"note": "a governed set that could not be listed is claimed complete, so an ambient source whose readers the engine never saw has every statement called dead and deleted"
 		},
 		{
+			"name": "M-AMBIENT-DECLARER-READS",
+			"type": "anyparse.check.UnusedImport",
+			"method": "readersOf",
+			"force": "scans",
+			"note": "the module an ambient statement IMPORTS counts as one of the statement's readers, so its own declaration of that type keeps the statement alive and a stale one in a root ambient source is never reportable"
+		},
+		{
+			"name": "M-AMBIENT-REDUNDANT-GUARDED-SKIP",
+			"type": "anyparse.check.RedundantImport",
+			"method": "nearestBinder",
+			"force": "info.ambientImports.find(g -> g.imports.exists(o -> !o.guarded && bindsSimpleName(o, simple)))",
+			"note": "the search for the group that decides a name skips one whose only binder is `#if`-guarded and lands on a farther identical group, so deleting the module's own statement retargets the name in the builds that guard is on"
+		},
+		{
+			"name": "M-AMBIENT-REDUNDANT-USING-POSITION",
+			"type": "anyparse.check.RedundantImport",
+			"method": "usingCompetitorInScope",
+			"force": "false",
+			"note": "a `using` is treated as binding only a name, so an own statement an ambient source repeats is deleted although another `using` in scope then takes the position it held and every method both modules declare resolves elsewhere"
+		},
+		{
 			"name": "M-AMBIENT-IMPORT-MAP",
 			"type": "anyparse.grammar.haxe.HaxeQueryPlugin",
 			"method": "importMap",

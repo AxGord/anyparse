@@ -140,6 +140,15 @@ final class RedundantImport implements Check implements RiskyFix {
 	}
 
 	/**
+	 * The NEAREST ambient group binding `simple` at all — the one that decides the name once the file's
+	 * own statement goes. Guardedness must not steer the SEARCH, only the verdict at the group it lands
+	 * on; filtered here it walks past a nearer group whose only binder is `#if`-guarded.
+	 */
+	private static function nearestBinder(info: FileInfo, simple: String): Null<AmbientImportGroup> {
+		return info.ambientImports.find(g -> g.imports.exists(o -> bindsSimpleName(o, simple)));
+	}
+
+	/**
 	 * The ambient source that already puts `imp` in force in `info`, or null when deleting `imp` could
 	 * change what a name means there.
 	 *
@@ -154,16 +163,43 @@ final class RedundantImport implements Check implements RiskyFix {
 	private static function ambientProviderOf(info: FileInfo, imp: ImportInfo, index: SymbolIndex): Null<String> {
 		if (imp.guarded || !info.ambientImportsBounded) return null;
 		if (imp.kind != ImportKind.Import && imp.kind != ImportKind.Using) return null;
+		if (imp.kind == ImportKind.Using && usingCompetitorInScope(info, imp)) return null;
 		final simple: String = SourceText.lastSegment(imp.raw);
-		final nearest: Null<AmbientImportGroup> = info.ambientImports.find(g ->
-			g.imports.exists(o -> !o.guarded && bindsSimpleName(o, simple))
-		);
+		// The NEAREST group binding the name AT ALL — guardedness must not steer this choice. Filtered
+		// to unguarded binders the search walks PAST a nearer group whose only binder is `#if`-guarded
+		// and reports a farther identical one, so deleting the file's own statement retargets the name
+		// in the builds that guard is on. A guarded binder in the nearest group makes the question refuse.
+		final nearest: Null<AmbientImportGroup> = nearestBinder(info, simple);
 		if (nearest == null) return null;
-		// Only an IDENTICAL statement proves the deletion a no-op. And no own statement is exempt: the
-		// binder that survives is an ambient one, so a second own binder of the name would decide it
-		// instead and the deletion is a retarget.
-		final identical: Bool = nearest.imports.exists(o -> !o.guarded && o.kind == imp.kind && o.raw == imp.raw);
+		// EVERY binder of the name in that group must be the identical statement: within one file the
+		// LAST binder of a simple name wins, so a guarded or differently-pathed sibling decides the name
+		// in some build. And no own statement is exempt — the binder that survives is an ambient one, so
+		// a second own binder would decide it instead and the deletion is a retarget.
+		final binders: Array<ImportInfo> = nearest.imports.filter(o -> bindsSimpleName(o, simple));
+		final identical: Bool = binders.foreach(o -> !o.guarded && o.kind == imp.kind && o.raw == imp.raw);
 		return identical && !bindsElsewhere(info, imp, '', simple, index) ? nearest.file : null;
+	}
+
+	/**
+	 * Whether a `using` other than `imp` and its ambient twins is in scope for `info` — the gate that
+	 * keeps the identity argument honest for the one kind it does not hold for.
+	 *
+	 * A `using` binds a NAME and a POSITION in the static-extension order, and the position is what an
+	 * identical statement elsewhere does NOT reproduce. Checked against the compiler rather than
+	 * assumed: extensions are tried in REVERSE declaration order, every own statement outranks every
+	 * ambient one, a NEARER
+	 * ambient group outranks a farther one, and within one file the last declaration wins. So deleting
+	 * the file's own statement hands each method to whichever competitor is next in that order, and
+	 * only an EMPTY field of competitors makes the two positions interchangeable. Naming the method
+	 * that would actually move needs a receiver-aware collision test, which this rule does not have.
+	 *
+	 * An ambient `using` of the SAME module is not a competitor: it names the module this statement
+	 * names, so whichever of them wins, the method resolves to the same static.
+	 */
+	private static function usingCompetitorInScope(info: FileInfo, imp: ImportInfo): Bool {
+		for (o in info.imports) if (o.kind == ImportKind.Using && (o.span.from != imp.span.from || o.span.to != imp.span.to)) return true;
+		for (group in info.ambientImports) for (o in group.imports) if (o.kind == ImportKind.Using && o.raw != imp.raw) return true;
+		return false;
 	}
 
 	/**
