@@ -29,6 +29,13 @@ private typedef Hoistable = {
 	final path: String;
 	final isUsing: Bool;
 	final simple: String;
+
+	/**
+	 * EVERY simple type name the statement brings into scope, not only its leaf: a statement naming a
+	 * module binds every type that module declares, and each of them is a name the addition could
+	 * silently retarget in a module that never spelled the statement.
+	 */
+	final names: Array<String>;
 }
 
 /**
@@ -65,6 +72,9 @@ private typedef HoistContext = {
 	final ladderOf: Map<String, Array<String>>;
 	final existingAt: Map<String, Array<ImportInfo>>;
 	final decided: Map<String, Array<Hoistable>>;
+
+	/** Every non-private top-level type name each module declares — what a statement naming one brings into scope. */
+	final publicTypes: Map<String, Array<String>>;
 }
 
 /**
@@ -256,7 +266,7 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 			if (info == null) continue;
 			final held: Array<String> = inForce(info);
 			for (imp in info.imports) {
-				final statement: Null<Hoistable> = hoistableOf(imp, allow);
+				final statement: Null<Hoistable> = hoistableOf(imp, allow, ctx.publicTypes);
 				if (statement == null) continue;
 				final key: String = keyOf(statement);
 				if (!census.byKey.exists(key)) {
@@ -414,7 +424,8 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 			infoOf: infoOf,
 			ladderOf: ladderOf,
 			existingAt: existingAt,
-			decided: []
+			decided: [],
+			publicTypes: SymbolIndex.publicTypesByModule(RefactorSupport.resolutionIndexOf(plugin) ?? report)
 		};
 	}
 
@@ -484,11 +495,11 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 			final info: Null<FileInfo> = ctx.infoOf[file];
 			if (info == null || !info.ambientImportsBounded) return false;
 			for (group in info.ambientImports) for (imp in group.imports) {
-				if (imp.guarded || SymbolIndex.bindsSimpleName(imp, statement.simple)) return false;
+				if (imp.guarded || SymbolIndex.bindsAnyOf(imp, statement.names, ctx.publicTypes)) return false;
 				if (statement.isUsing && imp.kind == ImportKind.Using) return false;
 			}
 			var binders: Int = 0;
-			for (imp in info.imports) if (SymbolIndex.bindsSimpleName(imp, statement.simple)) {
+			for (imp in info.imports) if (SymbolIndex.bindsAnyOf(imp, statement.names, ctx.publicTypes)) {
 				if (imp.guarded) return false;
 				binders++;
 			}
@@ -510,8 +521,18 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 	private static function retargetsSomeModule(statement: Hoistable, site: String, ctx: HoistContext, resolve: SymbolIndex): Bool {
 		final targets: Array<ResolvedType> = resolve.refs.resolveQualifiedRefAll(statement.path);
 		if (targets.length != 1) return true;
+		// EVERY name the statement brings, never only its leaf. A module import carries its siblings,
+		// and a sibling is the name nobody wrote and nobody would look at.
 		final owner: String = targets[0].file.file;
-		final rivals: Array<FileInfo> = resolve.refs.declaringFiles(statement.simple).filter(found -> found.file != owner);
+		return statement.names.exists(name -> retargetsByName(name, owner, site, ctx, resolve));
+	}
+
+	/** Whether a declaration of `name` other than the one at `owner` reaches a governed module through a band the statement outranks. */
+	private static function retargetsByName(name: String, owner: String, site: String, ctx: HoistContext, resolve: SymbolIndex): Bool {
+		// A module-PRIVATE rival is not a rival: it is visible by simple name only inside its own
+		// module, so no band this statement outranks can carry it to another file.
+		final rivals: Array<FileInfo> = resolve.refs.declaringFiles(name)
+			.filter(found -> found.file != owner && found.types.exists(t -> t.name == name && !t.isPrivate));
 		if (rivals.length == 0) return false;
 		for (file in ctx.governedAt[site] ?? []) {
 			final info: Null<FileInfo> = ctx.infoOf[file];
@@ -544,21 +565,23 @@ final class HoistCommonImport implements Check implements CrossFileFix implement
 	 * `imp` as a hoistable statement, or null when its shape is one this rule cannot reason about:
 	 * a guarded statement, an alias, a wildcard, a member import, or a `using` off the allow-list.
 	 */
-	private static function hoistableOf(imp: ImportInfo, allow: Array<String>): Null<Hoistable> {
+	private static function hoistableOf(imp: ImportInfo, allow: Array<String>, publicTypes: Map<String, Array<String>>): Null<Hoistable> {
 		if (imp.guarded) return null;
 		final simple: String = SourceText.lastSegment(imp.raw);
-		return switch imp.kind {
-			case ImportKind.Import: SourceText.isUpperInitial(simple) ? {
-				path: imp.raw,
-				isUsing: false,
-				simple: simple
-			} : null;
-			case ImportKind.Using: allow.contains(imp.raw) ? {
-				path: imp.raw,
-				isUsing: true,
-				simple: simple
-			} : null;
-			case ImportKind.Alias, ImportKind.Wild: null;
+		final shaped: Bool = switch imp.kind {
+			case ImportKind.Import: SourceText.isUpperInitial(simple);
+			case ImportKind.Using: allow.contains(imp.raw);
+			case ImportKind.Alias, ImportKind.Wild: false;
+		};
+		if (!shaped) return null;
+		// A statement whose bound-name set could not be established is not a candidate: the criterion
+		// is about what each of those names means in every governed module, and there is nothing to ask.
+		final names: Null<Array<String>> = SymbolIndex.namesBoundBy(imp, publicTypes);
+		return names == null || names.length == 0 ? null : {
+			path: imp.raw,
+			isUsing: imp.kind == ImportKind.Using,
+			simple: simple,
+			names: names
 		};
 	}
 

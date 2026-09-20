@@ -841,17 +841,57 @@ final class SymbolIndex {
 	}
 
 	/**
-	 * Whether `imp` binds `simple` as a NAME: an explicit `import` / `using` whose leaf is it, or an
-	 * alias of it. A WILDCARD binds no type name the caller can name, so it binds nothing here —
-	 * the tier it sits in is below every explicit statement's and a caller reasoning about which
-	 * declaration a name means asks that separately.
+	 * Every non-private top-level type name each MODULE declares, keyed by module path.
+	 *
+	 * The set a statement naming a module brings into scope, built once per run because the question
+	 * is asked per statement per file. A module-`private` type is left out: it is visible by simple
+	 * name only inside its own module, so counting it would invent a binding the compiler refuses.
 	 */
-	public static function bindsSimpleName(imp: ImportInfo, simple: String): Bool {
-		return switch imp.kind {
-			case ImportKind.Import, ImportKind.Using: SourceText.lastSegment(imp.raw) == simple;
-			case ImportKind.Alias: (imp.alias ?? imp.raw) == simple;
-			case ImportKind.Wild: false;
-		};
+	public static function publicTypesByModule(index: SymbolIndex): Map<String, Array<String>> {
+		final out: Map<String, Array<String>> = [];
+		for (info in index.allFiles()) out[info.module] = [for (t in info.types) if (!t.isPrivate) t.name];
+		return out;
+	}
+
+	/**
+	 * Every simple TYPE name `imp` brings into scope, or null when that set cannot be established.
+	 *
+	 * A statement naming a MODULE binds every type the module declares, not only the leaf — checked
+	 * against the compiler, which resolved a governed module's own same-package `Oth` to a SIBLING of
+	 * the imported `Mod` nobody had named. A path naming one type inside a module binds only that
+	 * type, an alias only the alias, and a wildcard no name a caller can enumerate — which is not the
+	 * same as an unknown set, since a wildcard is outranked by every explicit statement anyway.
+	 *
+	 * NULL is the answer for a statement whose module `publicTypes` does not carry: the names are
+	 * unknown, and a caller deciding what a name means must refuse rather than fall back to the leaf.
+	 */
+	public static function namesBoundBy(imp: ImportInfo, publicTypes: Map<String, Array<String>>): Null<Array<String>> {
+		final leaf: String = SourceText.lastSegment(imp.raw);
+		switch imp.kind {
+			case ImportKind.Wild:
+				return [];
+			case ImportKind.Alias:
+				return [imp.alias ?? imp.raw];
+			case _:
+		}
+		final asModule: Null<Array<String>> = publicTypes[imp.raw];
+		if (asModule != null) return asModule;
+		// A path one segment longer than a module it names binds the ONE type inside it.
+		final dot: Int = imp.raw.lastIndexOf('.');
+		final parent: Null<Array<String>> = dot <= 0 ? null : publicTypes[imp.raw.substring(0, dot)];
+		return parent != null && parent.contains(leaf) ? [leaf] : null;
+	}
+
+	/**
+	 * Whether `imp` binds ANY of `names` — the question a search for the statement that would decide
+	 * one of them asks.
+	 *
+	 * An unknown name set reads as a HIT: a caller running this search is looking for a reason to
+	 * refuse, and "the names this statement binds could not be established" is one.
+	 */
+	public static function bindsAnyOf(imp: ImportInfo, names: Array<String>, publicTypes: Map<String, Array<String>>): Bool {
+		final bound: Null<Array<String>> = namesBoundBy(imp, publicTypes);
+		return bound == null || bound.exists(name -> names.contains(name));
 	}
 
 }

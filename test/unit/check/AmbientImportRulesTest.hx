@@ -83,6 +83,9 @@ class AmbientImportRulesTest extends Test {
 	private static final GUARDED_NEARER_CONTROL: Array<{ name: String, source: String }> = [
 		{ name: 'src/a/T.hx', source: 'package a;\n\nclass T {}\n' },
 		{ name: 'src/b/T.hx', source: 'package b;\n\nclass T {}\n' },
+		// DECLARED, not merely named: an ambient statement whose module the run cannot read binds names
+		// this rule cannot enumerate, and the search for the group that decides a name has to refuse there.
+		{ name: 'src/b/Wqq.hx', source: 'package b;\n\nclass Wqq {}\n' },
 		{ name: 'src/outer/import.hx', source: 'import a.T;\n' },
 		{ name: 'src/outer/inner/import.hx', source: 'import b.Wqq;\n' },
 		{ name: 'src/outer/inner/Modq.hx', source: 'package outer.inner;\n\nimport a.T;\n\nclass Modq {}\n' }
@@ -102,6 +105,36 @@ class AmbientImportRulesTest extends Test {
 		{ name: 'src/b/Rqq.hx', source: 'package b;\n\nclass Rqq {}\n' },
 		{ name: 'src/lib/import.hx', source: 'using a.Sqq;\n' },
 		{ name: 'src/lib/Modq.hx', source: 'package lib;\n\nusing a.Sqq;\n\nclass Modq {}\n' }
+	];
+
+	/** A module whose sibling a NEARER ambient group binds to another declaration. */
+	private static final SIBLING_NEARER_TREE: Array<{ name: String, source: String }> = [
+		{
+			name: 'src/aaa/Modqqw.hx',
+			source: 'package aaa;\n\nclass Modqqw {}\n\nclass Othqqw {}\n'
+		},
+		{ name: 'src/ccc/Othqqw.hx', source: 'package ccc;\n\nclass Othqqw {}\n' },
+		{ name: 'src/import.hx', source: 'import aaa.Modqqw;\n' },
+		{ name: 'src/inner/import.hx', source: 'import ccc.Othqqw;\n' },
+		{
+			name: 'src/inner/Mqq.hx',
+			source: 'package inner;\n\nimport aaa.Modqqw;\n\nclass Mqq {\n\n\tvar a: Othqqw;\n\tvar b: Modqqw;\n\n}\n'
+		}
+	];
+
+	/** The same shape with the nearer group binding nothing of the statement's — where the deletion IS safe. */
+	private static final SIBLING_NEARER_CONTROL: Array<{ name: String, source: String }> = [
+		{
+			name: 'src/aaa/Modqqw.hx',
+			source: 'package aaa;\n\nclass Modqqw {}\n\nclass Othqqw {}\n'
+		},
+		{ name: 'src/ccc/Elsqqw.hx', source: 'package ccc;\n\nclass Elsqqw {}\n' },
+		{ name: 'src/import.hx', source: 'import aaa.Modqqw;\n' },
+		{ name: 'src/inner/import.hx', source: 'import ccc.Elsqqw;\n' },
+		{
+			name: 'src/inner/Mqq.hx',
+			source: 'package inner;\n\nimport aaa.Modqqw;\n\nclass Mqq {\n\n\tvar a: Othqqw;\n\tvar b: Modqqw;\n\n}\n'
+		}
 	];
 
 	@:pin('control')
@@ -174,6 +207,26 @@ class AmbientImportRulesTest extends Test {
 		Assert.equals(
 			'src/import.hx:a.Zqq', findings(DECLARER_TREE, ['src/import.hx', 'src/a/Zqq.hx', 'src/lib/Other.hx']),
 			'the declaring module is not a reader of the import that names it'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-IMPORT-LEAF-ONLY-NAMES')
+	public function testASiblingTheNearerGroupDecidesKeepsTheOwnStatement(): Void {
+		#if (sys || nodejs)
+		// Checked against the compiler: with the own module import the bare sibling name means
+		// `aaa.Othqqw`, and without it the NEARER ambient group's `ccc.Othqqw` — a module import binds
+		// every type its module declares, so the chain can decide a sibling somewhere else entirely.
+		Assert.equals(
+			'', redundantFindings(SIBLING_NEARER_TREE, 'src/inner/Mqq.hx'),
+			'a nearer ambient group deciding a SIBLING name makes the deletion a retarget'
+		);
+		Assert.equals(
+			'src/inner/Mqq.hx:aaa.Modqqw', redundantFindings(SIBLING_NEARER_CONTROL, 'src/inner/Mqq.hx'),
+			'with nothing nearer competing for any of the statement\'s names it IS redundant'
 		);
 		#else
 		Assert.pass('non-sys target');

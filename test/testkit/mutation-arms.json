@@ -3180,8 +3180,8 @@
 			"name": "M-HOIST-GUARDED-BLIND",
 			"type": "anyparse.check.HoistCommonImport",
 			"method": "hoistSound",
-			"find": "if (imp.guarded || SymbolIndex.bindsSimpleName(imp, statement.simple)) return false;",
-			"replace": "if (SymbolIndex.bindsSimpleName(imp, statement.simple)) return false;",
+			"find": "if (imp.guarded || SymbolIndex.bindsAnyOf(imp, statement.names, ctx.publicTypes)) return false;",
+			"replace": "if (SymbolIndex.bindsAnyOf(imp, statement.names, ctx.publicTypes)) return false;",
 			"note": "a chain carrying a `#if`-guarded statement is added to anyway, so a position this rule writes joins a chain whose every resolution answers the union of two build configurations"
 		},
 		{
@@ -3215,6 +3215,13 @@
 			"find": "_ambientImportCache.clear();\n\t\t_importMapCache.clear();",
 			"replace": "_ambientImportCache.keys();",
 			"note": "the memo of a directory chain and of the import maps keyed by path survives a pass that rewrote an ambient source, so every later pass of one --fix run resolves against the tree that was while the plugin behind the decorator reads disk fresh"
+		},
+		{
+			"name": "M-IMPORT-LEAF-ONLY-NAMES",
+			"type": "anyparse.query.SymbolIndex",
+			"method": "namesBoundBy",
+			"force": "[SourceText.lastSegment(imp.raw)]",
+			"note": "an import statement is read as binding its LEAF name alone, so a statement naming a module stops carrying the siblings that module declares and both import rules decide a name they never look at"
 		}
 	]
 }

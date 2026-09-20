@@ -598,3 +598,9 @@ decided the question; it may not become a record of runs.
   pass loop writes nothing to disk until it has converged, so every pass of the first round reads one
   disk state; the two answers appear where a fix writes DURING a pass, which is what creating a file
   is, and in the follow-up round after the wave lands — `S228-merge`
+- the LEAF name was what an import statement binds, so a hoist and a deletion could be judged on it
+  alone → a statement naming a MODULE binds every non-private type that module declares, and the
+  compiler proved both readings wrong on a SIBLING nobody had written: creating an ambient
+  `import a.Mod;` retargeted a governed module's own same-package `Oth` to `a.Oth`, and deleting an
+  own `import a.Mod;` identical to a farther ambient one handed `Oth` to a nearer group's `ccc.Oth`
+  — both still compiled, so no oracle would have caught either — `S228-merge`

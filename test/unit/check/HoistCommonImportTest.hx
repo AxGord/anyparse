@@ -46,6 +46,43 @@ class HoistCommonImportTest extends Test {
 		{ name: 'src/aqq/FourQq.hx', source: 'package aqq;\n\nclass FourQq {}\n' }
 	];
 
+	/**
+	 * Three modules of one package importing the MODULE `aqq.Modqqw`, whose sibling `Othqqw` a
+	 * same-package `bqq.Othqqw` is a namesake of — and a fourth module that reads bare `Othqqw`
+	 * without importing anything.
+	 */
+	private static final SIBLING_TREE: Array<TreeFile> = [
+		{
+			name: 'src/aqq/Modqqw.hx',
+			source: 'package aqq;\n\nclass Modqqw {\n\n\tpublic static function who(): String {\n\t\treturn \'aqq\';\n\t}\n\n}\n\n'
+				+ 'class Othqqw {\n\n\tpublic static function who(): String {\n\t\treturn \'aqq.Othqqw\';\n\t}\n\n}\n\n'
+				+ 'class Subqqw {\n\n\tpublic static function who(): String {\n\t\treturn \'aqq.Subqqw\';\n\t}\n\n}\n'
+		},
+		{
+			name: 'src/bqq/Othqqw.hx',
+			source: 'package bqq;\n\nclass Othqqw {\n\n\tpublic static function who(): String {\n\t\treturn \'bqq\';\n\t}\n\n}\n'
+		},
+		{
+			name: 'src/bqq/MqqOne.hx',
+			source: 'package bqq;\n\nimport aqq.Modqqw;\n\nclass MqqOne {\n\n\tpublic static function run(): String {\n\t\t'
+				+ 'return Modqqw.who();\n\t}\n\n}\n'
+		},
+		{
+			name: 'src/bqq/MqqTwo.hx',
+			source: 'package bqq;\n\nimport aqq.Modqqw;\n\nclass MqqTwo {\n\n\tpublic static function run(): String {\n\t\t'
+				+ 'return Modqqw.who();\n\t}\n\n}\n'
+		},
+		{
+			name: 'src/bqq/MqqThree.hx',
+			source: 'package bqq;\n\nimport aqq.Modqqw;\n\nclass MqqThree {\n\n\tpublic static function run(): String {\n\t\t'
+				+ 'return Modqqw.who();\n\t}\n\n}\n'
+		},
+		{
+			name: 'src/bqq/Userqqw.hx',
+			source: 'package bqq;\n\nclass Userqqw {\n\n\tpublic static function run(): String {\n\t\treturn Othqqw.who();\n\t}\n\n}\n'
+		}
+	];
+
 	/** A modules-and-nesting tree: one statement every module spells, one only the nested package does. */
 	private static final NESTED_TREE: Array<TreeFile> = [
 		{ name: 'src/qqz/Zqqwwee.hx', source: 'package qqz;\n\nclass Zqqwwee {}\n' },
@@ -186,6 +223,34 @@ class HoistCommonImportTest extends Test {
 			'src/aqq/OneQq.hx:qqz.Zqqwwee@src/aqq/import.hx,src/aqq/ThreeQq.hx:qqz.Zqqwwee@src/aqq/import.hx,'
 			+ 'src/aqq/TwoQq.hx:qqz.Zqqwwee@src/aqq/import.hx',
 			planned(COMMON_TREE.concat([{ name: 'src/fqq/Zqqwwee.hx', source: 'package fqq;\n\nclass Zqqwwee {}\n' }]))
+		);
+	}
+
+	/**
+	 * A statement naming a MODULE binds every type that module declares, so a SIBLING of the imported
+	 * type with a namesake a governed module can see is the same retarget as one on the leaf — and it
+	 * is the one nobody would look at, since no module in the directory ever named it.
+	 */
+	@:pin('control')
+	@:killer('M-IMPORT-LEAF-ONLY-NAMES')
+	public function testRefusesAModuleImportWhoseSiblingHasANamesake(): Void {
+		Assert.equals('', planned(SIBLING_TREE));
+	}
+
+	/** A path naming ONE type inside a module brings only that type, so a sibling's namesake is irrelevant to it. */
+	@:pin('control')
+	@:killer('M-HOIST-NEVER-SOUND')
+	public function testASubTypeImportIgnoresItsSiblings(): Void {
+		Assert.equals(
+			'src/bqq/MqqOne.hx:aqq.Modqqw.Subqqw@src/import.hx,src/bqq/MqqThree.hx:aqq.Modqqw.Subqqw@src/import.hx,'
+			+ 'src/bqq/MqqTwo.hx:aqq.Modqqw.Subqqw@src/import.hx',
+			planned(SIBLING_TREE.map(entry -> entry.name.startsWith('src/bqq/Mqq') ? {
+				name: entry.name,
+				source: entry.source.split('import aqq.Modqqw;')
+					.join('import aqq.Modqqw.Subqqw;')
+					.split('Modqqw.who()')
+					.join('Subqqw.who()')
+			} : entry))
 		);
 	}
 

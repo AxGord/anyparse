@@ -1036,6 +1036,9 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-AMBIENT-GOVERNANCE-COMPLETE',
 			'unit.check.AmbientImportRulesTest#testAGuardedBinderInTheNearestGroupKeepsTheOwnStatement :: control :: '
 				+ 'M-AMBIENT-REDUNDANT-GUARDED-SKIP',
+			'unit.check.AmbientImportRulesTest#testASiblingTheNearerGroupDecidesKeepsTheOwnStatement :: control :: '
+				+ 'M-IMPORT-LEAF-ONLY-NAMES',
+
 			'unit.check.AmbientImportRulesTest#testAnAmbientImportAModuleUnderItUsesIsNotReported :: control :: '
 				+ 'M-AMBIENT-GOVERNANCE-BLIND',
 			'unit.check.AmbientImportRulesTest#testAnAmbientImportNoModuleUnderItUsesIsStillReported :: control :: '
@@ -1127,6 +1130,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.HoistCommonImportTest#testANestedSiteTakesOnlyWhatItsParentDidNot :: control :: '
 				+ 'M-HOIST-SITE-ORDER,M-HOIST-CHAIN-INHERITED',
 			'unit.check.HoistCommonImportTest#testASecondRunHasNothingToDo :: guard :: ',
+			'unit.check.HoistCommonImportTest#testASubTypeImportIgnoresItsSiblings :: control :: M-HOIST-NEVER-SOUND',
 			'unit.check.HoistCommonImportTest#testCreatesTheAmbientSourceAsAWholeFile :: guard :: ',
 			'unit.check.HoistCommonImportTest#testDoesNotProposeWhatTheChainAlreadyProvides :: guard :: ',
 			'unit.check.HoistCommonImportTest#testExtendingAnExistingSourceIsAnEdit :: guard :: ',
@@ -1136,6 +1140,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.HoistCommonImportTest#testKeepsAnAllowListedUsingWhereARivalRemains :: control :: M-HOIST-USING-DEMOTION',
 			'unit.check.HoistCommonImportTest#testOneSlicePerSite :: guard :: ',
 			'unit.check.HoistCommonImportTest#testRefusesAGuardedStatement :: guard :: ',
+			'unit.check.HoistCommonImportTest#testRefusesAModuleImportWhoseSiblingHasANamesake :: control :: M-IMPORT-LEAF-ONLY-NAMES',
 			'unit.check.HoistCommonImportTest#testRefusesANamesakeReachedByAWildcard :: control :: M-HOIST-RETARGET-BAND',
 			'unit.check.HoistCommonImportTest#testRefusesAPackageWildcard :: guard :: ',
 			'unit.check.HoistCommonImportTest#testRefusesARootPackageNamesake :: control :: M-HOIST-RETARGET-BAND',
@@ -2253,7 +2258,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-HOIST-SHORT-CHAIN',
 			'M-HOIST-MIN-MODULES',
 			'M-HOIST-SITE-ORDER',
-			'M-AMBIENT-CHAIN-STALE'
+			'M-AMBIENT-CHAIN-STALE',
+			'M-IMPORT-LEAF-ONLY-NAMES'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
