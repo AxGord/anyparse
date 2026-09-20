@@ -570,3 +570,8 @@ decided the question; it may not become a record of runs.
   governed subtree holds the DECLARING module of the imported type, whose own declaration of it reads
   as a use, so a stale statement in an ambient source above its target was unreportable forever — a
   module is never a reader of an import that names it — `S227-merge`
+- dropping the DECLARING module from an ambient source's reader set was to hold for every statement
+  kind, since a module is never a reader of an import that names it → true of an `import`, whose
+  target a module's own declaration outranks anyway, and false of a `using`: a module does not `using`
+  itself, so one that calls its own statics extension-style depends on exactly that statement, and
+  dropping its file made the ambient `using` it needs read as dead and deletable — `S227-merge`

@@ -303,6 +303,12 @@ final class UnusedImport implements Check {
 	 * `scans` without the reader that DECLARES what `imp` imports — a module's own declaration of a
 	 * type is not a use of an import of it, and no module ever needs an import of itself.
 	 *
+	 * An `import` ONLY, and the asymmetry is the whole contract: a module's own declaration outranks an
+	 * import of itself, so it never needs one and its `class T` is not a use of one — but a module does
+	 * NOT `using` itself, so one that calls its own statics extension-style depends on a `using` of
+	 * itself, and when that `using` is the ambient one the declaring file is a genuine READER. Dropping
+	 * it there deletes a load-bearing statement.
+	 *
 	 * Only an AMBIENT source can reach this: its governed set is every module under its directory, the
 	 * declaring module included, and the used-test is textual, so the declaring file's own `class T`
 	 * kept every `import a.T;` of an ambient source above `a/` alive forever. A declaring file the run
@@ -313,7 +319,7 @@ final class UnusedImport implements Check {
 	 * and its fix would delete a statement on a verdict about visibility it never made.
 	 */
 	private static function readersOf(scans: Array<FileScan>, imp: ImportInfo, own: String, index: SymbolIndex): Array<FileScan> {
-		if (imp.kind != ImportKind.Import && imp.kind != ImportKind.Using) return scans;
+		if (imp.kind != ImportKind.Import) return scans;
 		final declaring: Array<String> = [
 			for (r in index.refs.resolveQualifiedRefAll(imp.raw)) if (r.file.file != own) r.file.file
 		];

@@ -36,6 +36,30 @@ class AmbientImportRulesTest extends Test {
 		{ name: 'src/lib/Other.hx', source: 'package lib;\n\nclass Other {}\n' }
 	];
 
+	/**
+	 * An ambient `using` of a module that calls its OWN statics extension-style — so the declaring
+	 * module depends on that statement and is one of its readers.
+	 */
+	private static final SELF_USING_TREE: Array<{ name: String, source: String }> = [
+		{ name: 'src/import.hx', source: 'using aaa.Extqqw;\n' },
+		{
+			name: 'src/aaa/Extqqw.hx',
+			source: 'package aaa;\n\nclass Extqqw {\n\n\tpublic static function tagqqw(s: String): String {\n\t\treturn \'S\' + s;\n'
+				+ '\t}\n\n\tpublic static function twiceqqw(s: String): String {\n\t\treturn s.tagqqw().tagqqw();\n\t}\n\n}\n'
+		}
+	];
+
+	/** An ambient `using` nothing under its own directory reaches for — the same arm's reporting half. */
+	private static final DEAD_USING_TREE: Array<{ name: String, source: String }> = [
+		{ name: 'src/lib/import.hx', source: 'using aaa.Extqqw;\n' },
+		{
+			name: 'src/aaa/Extqqw.hx',
+			source: 'package aaa;\n\nclass Extqqw {\n\n\tpublic static function tagqqw(s: String): String {\n\t\treturn \'S\' + s;\n'
+				+ '\t}\n\n}\n'
+		},
+		{ name: 'src/lib/Other.hx', source: 'package lib;\n\nclass Other {}\n' }
+	];
+
 	/** An ambient statement whose target module lies INSIDE the subtree the source governs. */
 	private static final DECLARER_TREE: Array<{ name: String, source: String }> = [
 		{ name: 'src/import.hx', source: 'import a.Zqq;\n' },
@@ -113,6 +137,27 @@ class AmbientImportRulesTest extends Test {
 		Assert.equals(
 			'src/lib/import.hx:a.T', findings(DEAD_TREE, ['src/a/T.hx', 'src/lib/import.hx', 'src/lib/Other.hx']),
 			'nothing under the directory binds the name, so the statement is dead and deletable'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-AMBIENT-DECLARER-READS-USING')
+	public function testTheDeclaringModuleIsAReaderOfAnAmbientUsingOfItself(): Void {
+		#if (sys || nodejs)
+		// A module's own declaration outranks an IMPORT of itself, so it never needs one — but it does
+		// not `using` itself, and one that calls its own statics extension-style depends on exactly that
+		// statement. Checked against the compiler: the module compiles with the ambient `using` and
+		// fails with `String has no field tagqqw` without it.
+		Assert.equals(
+			'', findings(SELF_USING_TREE, ['src/import.hx', 'src/aaa/Extqqw.hx']),
+			'the declaring module is a reader of an ambient `using` of itself'
+		);
+		Assert.equals(
+			'src/lib/import.hx:aaa.Extqqw', findings(DEAD_USING_TREE, ['src/lib/import.hx', 'src/aaa/Extqqw.hx', 'src/lib/Other.hx']),
+			'an ambient `using` nothing under its directory reaches for is still reported'
 		);
 		#else
 		Assert.pass('non-sys target');

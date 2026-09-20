@@ -1040,6 +1040,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-AMBIENT-GOVERNANCE-SHORT',
 			'unit.check.AmbientImportRulesTest#testAnOwnUsingIsKeptWhereAnotherUsingCouldTakeItsPosition :: control :: '
 				+ 'M-AMBIENT-REDUNDANT-USING-POSITION',
+			'unit.check.AmbientImportRulesTest#testTheDeclaringModuleIsAReaderOfAnAmbientUsingOfItself :: control :: '
+				+ 'M-AMBIENT-DECLARER-READS-USING',
 			'unit.check.AmbientImportRulesTest#testTheGovernedSetIsReadEvenWhenTheRunWasGivenTheAmbientSourceAlone :: control :: '
 				+ 'M-AMBIENT-GOVERNANCE-BLIND',
 			'unit.check.AmbientImportRulesTest#testTheModuleAnAmbientStatementImportsIsNotOneOfItsReaders :: control :: '
@@ -2205,6 +2207,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-AMBIENT-GOVERNANCE-SHORT',
 			'M-AMBIENT-GOVERNANCE-COMPLETE',
 			'M-AMBIENT-DECLARER-READS',
+			'M-AMBIENT-DECLARER-READS-USING',
 			'M-AMBIENT-REDUNDANT-GUARDED-SKIP',
 			'M-AMBIENT-REDUNDANT-USING-POSITION',
 			'M-AMBIENT-IMPORT-MAP',

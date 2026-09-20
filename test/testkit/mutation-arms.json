@@ -3090,6 +3090,13 @@
 			"note": "the module an ambient statement IMPORTS counts as one of the statement's readers, so its own declaration of that type keeps the statement alive and a stale one in a root ambient source is never reportable"
 		},
 		{
+			"name": "M-AMBIENT-DECLARER-READS-USING",
+			"type": "anyparse.check.UnusedImport",
+			"method": "readersOf",
+			"force": "scans.filter(s -> !([for (r in index.refs.resolveQualifiedRefAll(imp.raw)) if (r.file.file != own) r.file.file].contains(s.file)))",
+			"note": "the declaring module is dropped from the reader set for a `using` as well as for an import, so an ambient `using` that a module calling its own statics extension-style depends on reads as dead and is deleted"
+		},
+		{
 			"name": "M-AMBIENT-REDUNDANT-GUARDED-SKIP",
 			"type": "anyparse.check.RedundantImport",
 			"method": "nearestBinder",
