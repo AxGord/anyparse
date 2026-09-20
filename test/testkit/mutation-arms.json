@@ -3100,7 +3100,7 @@
 			"name": "M-AMBIENT-REDUNDANT-GUARDED-SKIP",
 			"type": "anyparse.check.RedundantImport",
 			"method": "nearestBinder",
-			"force": "info.ambientImports.find(g -> g.imports.exists(o -> !o.guarded && bindsSimpleName(o, simple)))",
+			"force": "info.ambientImports.find(g -> g.imports.exists(o -> !o.guarded && SymbolIndex.bindsAnyOf(o, [name], publicTypes)))",
 			"note": "the search for the group that decides a name skips one whose only binder is `#if`-guarded and lands on a farther identical group, so deleting the module's own statement retargets the name in the builds that guard is on"
 		},
 		{
