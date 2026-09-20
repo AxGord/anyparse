@@ -840,4 +840,18 @@ final class SymbolIndex {
 		return imp.kind == ImportKind.Alias ? imp.aliasTarget : imp.raw;
 	}
 
+	/**
+	 * Whether `imp` binds `simple` as a NAME: an explicit `import` / `using` whose leaf is it, or an
+	 * alias of it. A WILDCARD binds no type name the caller can name, so it binds nothing here —
+	 * the tier it sits in is below every explicit statement's and a caller reasoning about which
+	 * declaration a name means asks that separately.
+	 */
+	public static function bindsSimpleName(imp: ImportInfo, simple: String): Bool {
+		return switch imp.kind {
+			case ImportKind.Import, ImportKind.Using: SourceText.lastSegment(imp.raw) == simple;
+			case ImportKind.Alias: (imp.alias ?? imp.raw) == simple;
+			case ImportKind.Wild: false;
+		};
+	}
+
 }

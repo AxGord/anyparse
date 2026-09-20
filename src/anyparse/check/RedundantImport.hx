@@ -120,13 +120,9 @@ final class RedundantImport implements Check implements RiskyFix {
 		return edits;
 	}
 
-	/** Whether `o` binds `simple` as a NAME: an explicit `import` / `using` whose leaf is it, or an alias of it. */
+	/** Whether `o` binds `simple` as a NAME — the shared reading, so this rule and the hoisting one cannot disagree. */
 	private static inline function bindsSimpleName(o: ImportInfo, simple: String): Bool {
-		return switch o.kind {
-			case ImportKind.Import, ImportKind.Using: SourceText.lastSegment(o.raw) == simple;
-			case ImportKind.Alias: (o.alias ?? o.raw) == simple;
-			case ImportKind.Wild: false;
-		};
+		return SymbolIndex.bindsSimpleName(o, simple);
 	}
 
 	/**

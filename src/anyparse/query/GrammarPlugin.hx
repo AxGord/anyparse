@@ -361,6 +361,22 @@ interface GrammarPlugin {
 	 */
 	public function ambientImportGovernance(path: String): Null<AmbientImportGovernance>;
 
+	/**
+	 * Every position an ambient import source COULD occupy for the module at `path`, NEAREST FIRST
+	 * and whether or not a file is there — the chain `ambientImportSources` would read if all of
+	 * them existed.
+	 *
+	 * What a rule that PROPOSES an ambient source needs, and the reason it is a seam rather than
+	 * path arithmetic in the engine: where such a file lives and what it is called are the
+	 * grammar's to say, and so is where the ladder stops. Nesting is decided from the ladders
+	 * alone — one position is an ancestor of another exactly when some module lists both and the
+	 * ancestor sits later — so the engine never walks a directory itself.
+	 *
+	 * Empty for a grammar with no ambient-import concept, and empty when the stop point cannot be
+	 * established: there is no ladder to climb when its top is unknown.
+	 */
+	public function ambientImportSites(path: String, pkg: String): Array<String>;
+
 }
 
 /**

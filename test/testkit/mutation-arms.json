@@ -3147,6 +3147,74 @@
 			"find": "final direct: Null<ResolvedType> = pinnable && !aliased && written != ''",
 			"replace": "final direct: Null<ResolvedType> = pinnable && written != ''",
 			"note": "a written supertype the file binds as an ALIAS is pinned to whichever same-named declaration package proximity picks, and the declaration the alias really names loses its shield"
+		},
+		{
+			"name": "M-HOIST-NEVER-SOUND",
+			"type": "anyparse.check.HoistCommonImport",
+			"method": "hoistSound",
+			"force": "false",
+			"note": "no statement is ever judged safe to add to an ambient source, so the rule proposes nothing at all and the whole hoist is inert"
+		},
+		{
+			"name": "M-HOIST-RETARGET-BAND",
+			"type": "anyparse.check.HoistCommonImport",
+			"method": "retargetsSomeModule",
+			"force": "false",
+			"note": "a second declaration of the imported simple name is never a retarget, so the ambient statement silently replaces a same-package, root-package or wildcard-reached namesake in the modules that never spelled it"
+		},
+		{
+			"name": "M-HOIST-USING-DEMOTION",
+			"type": "anyparse.check.HoistCommonImport",
+			"method": "removable",
+			"force": "true",
+			"note": "a `using` is lifted out of a module that keeps another one, so the extension it held loses its position to the rival that stays and every method both modules declare resolves elsewhere"
+		},
+		{
+			"name": "M-HOIST-CHAIN-INHERITED",
+			"type": "anyparse.check.HoistCommonImport",
+			"method": "providedAtOrAbove",
+			"force": "[]",
+			"note": "a statement the chain above a directory already puts in force is proposed again, so a nested ambient source repeats its own parent"
+		},
+		{
+			"name": "M-HOIST-GUARDED-BLIND",
+			"type": "anyparse.check.HoistCommonImport",
+			"method": "hoistSound",
+			"find": "if (imp.guarded || SymbolIndex.bindsSimpleName(imp, statement.simple)) return false;",
+			"replace": "if (SymbolIndex.bindsSimpleName(imp, statement.simple)) return false;",
+			"note": "a chain carrying a `#if`-guarded statement is added to anyway, so a position this rule writes joins a chain whose every resolution answers the union of two build configurations"
+		},
+		{
+			"name": "M-HOIST-SHORT-CHAIN",
+			"type": "anyparse.check.HoistCommonImport",
+			"method": "hoistSound",
+			"find": "if (info == null || !info.ambientImportsBounded) return false;",
+			"replace": "if (info == null) return false;",
+			"note": "a governed module whose chain is knowingly SHORT is judged anyway, so the statement is added against bindings the engine never saw"
+		},
+		{
+			"name": "M-HOIST-MIN-MODULES",
+			"type": "anyparse.check.HoistCommonImport",
+			"method": "planSite",
+			"find": "if (governed.length < (cfg.intOption(RULE_ID, 'minModules') ?? DEFAULT_MIN_MODULES)) return;",
+			"replace": "if (governed.length < 0) return;",
+			"note": "a directory with too few modules for a share to mean anything is weighed anyway, so one module of two carries the whole verdict"
+		},
+		{
+			"name": "M-HOIST-SITE-ORDER",
+			"type": "anyparse.check.HoistCommonImport",
+			"method": "contextOf",
+			"find": "ArraySort.sort(sites, (a, b) -> (governedAt[b] ?? []).length - (governedAt[a] ?? []).length);",
+			"replace": "ArraySort.sort(sites, (a, b) -> (governedAt[a] ?? []).length - (governedAt[b] ?? []).length);",
+			"note": "the narrowest position is weighed first, so a statement lands in a nested source AND in its parent and the nested copy repeats what the parent already puts in force"
+		},
+		{
+			"name": "M-AMBIENT-CHAIN-STALE",
+			"type": "anyparse.query.CachingGrammarPlugin",
+			"method": "invalidateAmbientChain",
+			"find": "_ambientImportCache.clear();\n\t\t_importMapCache.clear();",
+			"replace": "_ambientImportCache.keys();",
+			"note": "the memo of a directory chain and of the import maps keyed by path survives a pass that rewrote an ambient source, so every later pass of one --fix run resolves against the tree that was while the plugin behind the decorator reads disk fresh"
 		}
 	]
 }

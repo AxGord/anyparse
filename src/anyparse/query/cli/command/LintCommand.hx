@@ -681,7 +681,11 @@ final class LintCommand implements CliCommand {
 			// reflection-name scan over every string literal in scope. On the active SUBSET a
 			// subtype or a `Reflect.field(o, "NAME")` in an unchanged file reads as absent, so a
 			// later pass would promote a field whose read then fails to compile.
-			'static-constant'
+			'static-constant',
+			// hoist-common-import weighs the SHARE of a directory's modules that spell a statement. On
+			// the active SUBSET the denominator is whatever the last pass rewrote, so the same directory
+			// answers a different share each pass and the decision flips under the fixed-point loop.
+			'hoist-common-import'
 		];
 		return {
 			risky: [for (c in checks) if (c is RiskyFix && !relaxableNoOracle(c)) c],

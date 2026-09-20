@@ -255,6 +255,20 @@ final class CliIo {
 	}
 
 	/**
+	 * Remove `path`, answering whether it is gone — the undo of a fix that CREATED a file, where
+	 * restoring the previous bytes is not what "revert" means.
+	 *
+	 * A path that was never there counts as gone: the caller's obligation is the END state, and a
+	 * revert failing because its work was already undone would abort a rollback half way.
+	 */
+	public static function deletePath(path: String): Bool {
+		return #if (sys || nodejs) try {
+			if (FileSystem.exists(path)) FileSystem.deleteFile(path);
+			!FileSystem.exists(path);
+		} catch (exception: Exception) false #else false #end;
+	}
+
+	/**
 	 * Write a whole change set, or none of it.
 	 *
 	 * Every file is staged first and only then renamed into place, so a set one member of

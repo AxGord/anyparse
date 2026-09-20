@@ -73,6 +73,27 @@ final class HaxeAmbientImports {
 	}
 
 	/**
+	 * Every position an `import.hx` could occupy for the module at `path`, NEAREST FIRST: its own
+	 * directory, then each directory up to and including the source root. Empty when the root
+	 * cannot be computed, since a ladder with no top would propose a file the compiler ignores.
+	 */
+	public static function sitesFor(path: String, pkg: String): Array<String> {
+		final root: Null<String> = sourceRootOf(path, pkg);
+		if (root == null) return [];
+		final stop: String = named(root);
+		final out: Array<String> = [];
+		var dir: String = named(Path.removeTrailingSlashes(Path.directory(path)));
+		while (true) {
+			out.push('$dir/$AMBIENT_FILE');
+			if (dir == stop) break;
+			final up: String = named(Path.removeTrailingSlashes(Path.directory(dir)));
+			if (up == dir) break;
+			dir = up;
+		}
+		return out;
+	}
+
+	/**
 	 * `dir` as a directory an absolute-path resolution can name. A relative module path whose
 	 * package consumes every segment leaves the EMPTY string, which names the process directory to a
 	 * reader and nothing at all to a path resolver — and a stop point that resolves to nothing bounds

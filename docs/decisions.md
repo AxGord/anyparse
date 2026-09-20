@@ -575,3 +575,26 @@ decided the question; it may not become a record of runs.
   target a module's own declaration outranks anyway, and false of a `using`: a module does not `using`
   itself, so one that calls its own statics extension-style depends on exactly that statement, and
   dropping its file made the ambient `using` it needs read as dead and deletable — `1f8d2ecb`
+- a hoisted statement was to land in the DEEPEST directory whose share reaches the threshold, with a
+  parent then re-weighed counting a module an already-hoisting child serves as one that has it → that
+  counting rule carries every statement to the source root anyway (the child's own modules all count)
+  and leaves the child's copy repeating its parent, so the placement is SHALLOWEST-first instead: the
+  widest position is weighed first and a nested one takes only what its parents did not — `S228-merge`
+- a statement was hoistable only where its simple name had exactly ONE declaration in the whole
+  resolution scope → the gate is per BAND and per MODULE, not per name: an ambient explicit import
+  outranks a governed module's own package, the root package and its own wildcard imports and nothing
+  else, so a namesake in a library package no governed module reaches is not a retarget, and the global
+  form refused the single most common import in the test tree on a namesake no test module can see —
+  `S228-merge`
+- a TYPE PARAMETER sharing the hoisted statement's simple name was a retarget to refuse → the compiler
+  ranks a type parameter ABOVE an ambient explicit import, so the parameter still wins and the addition
+  is a no-op there — `S228-merge`
+- an ambient STATIC wildcard (`import p.Mod.*;`) was assumed at least as dangerous as an explicit type
+  import → it is outranked by every binding a reader owns (its own members, its locals, its
+  module-level statics and its own static wildcard), so the only retarget source is a FARTHER ambient
+  wildcard; it stays refused for want of an ancestor-wildcard gate and an enumerable member set, not
+  because the precedence forbids it — `S228-merge`
+- the stale ambient memo was to make pass N+1 of one `--fix` run resolve against pass N's chain → the
+  pass loop writes nothing to disk until it has converged, so every pass of the first round reads one
+  disk state; the two answers appear where a fix writes DURING a pass, which is what creating a file
+  is, and in the follow-up round after the wave lands — `S228-merge`

@@ -288,6 +288,17 @@ interface OracleAssisted {
 typedef CrossFileEdits = {
 	final file: String;
 	final edits: Array<{ span: Span, text: String }>;
+
+	/**
+	 * The WHOLE text of a file this slice CREATES, or null — the default, and the state of every
+	 * slice that edits a file the run already holds.
+	 *
+	 * A create is its own member rather than an edit over an empty span because the two answers a
+	 * caller needs from a slice are different: an edit is refused when the file is missing, a
+	 * create is refused when it is present, and the commit owes a created file a DELETE on revert
+	 * that no edit list can express. `edits` must be empty beside it.
+	 */
+	@:optional final create: Null<String>;
 };
 
 /**

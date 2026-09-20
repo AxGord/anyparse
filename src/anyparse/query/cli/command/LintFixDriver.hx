@@ -92,6 +92,25 @@ final class LintFixDriver {
 		// File sets a cross-file fix committed as ONE unit — the safe-pass revert reverts them
 		// whole or not at all (`LintFixSafePass.implicated`).
 		final coupled: Array<Array<String>> = [];
+		// Files a cross-file fix CREATED. Reverting one means DELETING it, not restoring bytes it
+		// never had, and `originalOf` has no entry to restore from — so the set travels separately.
+		final created: Array<String> = [];
+		// The oracle's verdict on the tree before this run wrote ANYTHING. Taken lazily, the first
+		// time a create is about to reach disk: a creating fix writes during the pass, so a baseline
+		// measured after that would report the run's own file as a pre-existing condition — the
+		// mistake the post-safe-write baseline below already cost once.
+		final preWrite: { taken: Bool, outcome: Null<OracleOutcome> } = {
+			taken: false,
+			outcome: null
+		};
+		// Re-bound: a PARAMETER's narrowing does not survive into a closure, and this one reads it.
+		final oracleForBaseline: Null<String> = oracleHxml;
+		function baselineBeforeCreate(): Void {
+			if (preWrite.taken) return;
+			preWrite.taken = true;
+			final hxml: Null<String> = oracleForBaseline;
+			if (hxml != null) preWrite.outcome = CompilerOracle.typecheck(hxml, oracleDir);
+		}
 		var fixedCount: Int = 0;
 		var passes: Int = 0;
 		var hitCap: Bool = false;
@@ -120,7 +139,7 @@ final class LintFixDriver {
 				passes++;
 				final pass: LintPassResult = applyLintPass(
 					active, files, cached, split.activeScope, split.fullScope, split.safe, resolveConfig, applyEnablement, optsByFile,
-					passes, noted, notedRewrites, changedFiles, ledger, coupled, range
+					passes, noted, notedRewrites, changedFiles, ledger, coupled, range, created, baselineBeforeCreate
 				);
 				fixedCount += pass.fixedDelta;
 				active = pass.nextActive;
@@ -138,7 +157,9 @@ final class LintFixDriver {
 		// just done as a pre-existing condition, and left the tree un-typecheckable with no
 		// hint that `--fix` was the cause. The insurance was disabled at exactly the moment
 		// it was needed.
-		final safePass: SafePassOutcome = commitSafeWrites(files, changedFiles, originalOf, coupled, oracleHxml, oracleDir);
+		final safePass: SafePassOutcome = commitSafeWrites(
+			files, changedFiles, originalOf, coupled, oracleHxml, oracleDir, created, preWrite.outcome
+		);
 		if (safePass.reverted) {
 			CliIo.stderr(safePass.notice);
 			return EXIT_RUNTIME;
@@ -178,7 +199,7 @@ final class LintFixDriver {
 			active = list;
 			converge(maxPasses);
 			return fixedCount - before;
-		}, coupled, changedFiles, oracleHxml, oracleDir);
+		}, coupled, changedFiles, oracleHxml, oracleDir, created);
 		if (followUp.reverted) {
 			CliIo.stderr(followUp.notice);
 			return EXIT_RUNTIME;
@@ -232,8 +253,14 @@ final class LintFixDriver {
 		active: Array<{ file: String, source: String }>, files: Array<{ file: String, source: String }>, cached: CachingGrammarPlugin,
 		activeScopeChecks: Array<Check>, fullScopeChecks: Array<Check>, checks: Array<Check>, resolveConfig: (String) -> LintConfig,
 		applyEnablement: Bool, optsByFile: Map<String, Null<String>>, passes: Int, noted: Array<String>, notedRewrites: Array<String>,
-		changedFiles: Array<String>, ledger: Map<String, RuleFixOutcome>, coupled: Array<Array<String>>, range: Null<LintRange>
+		changedFiles: Array<String>, ledger: Map<String, RuleFixOutcome>, coupled: Array<Array<String>>, range: Null<LintRange>,
+		?created: Array<String>, ?baselineBeforeCreate: () -> Void
 	): LintPassResult {
+		// Every memo whose answer depends on an ambient source's TEXT is dropped at the head of each
+		// pass: a previous pass may have created or rewritten one, and a memo taken before that
+		// answers a tree that no longer exists — while the plugin behind the decorator reads the
+		// chain from disk fresh, so the stale memo is a SECOND answer for the same file.
+		cached.invalidateAmbientChain();
 		// The `index` PASSED to each check's `fix` is REPORT-scoped (the mutated report sources
 		// only): a fix's report-scope gates — naming's confinement / reflection-string / rtti proofs,
 		// prefer-final-field's confinement — reason about what a REPORT file can reach, and a
@@ -279,7 +306,10 @@ final class LintFixDriver {
 				for (slice in rename) ledgerFor(ledger, check.id()).edits += slice.edits.length;
 			}
 		}
-		fixedDelta += applyCrossFileRenames(crossRenames, files, optsByFile, cached, touchedThisPass, changedFiles, nextActive, coupled);
+		fixedDelta += applyCrossFileRenames(
+			crossRenames, files, optsByFile, cached, touchedThisPass, changedFiles, nextActive, coupled, created ?? [],
+			baselineBeforeCreate
+		);
 		for (entry in active) if (!touchedThisPass.contains(entry.file)) {
 			final fileViolations: Array<Violation> = violations.filter(v -> v.file == entry.file);
 			if (fileViolations.length == 0) continue;
@@ -337,26 +367,34 @@ final class LintFixDriver {
 	private static function applyCrossFileRenames(
 		renames: Array<Array<CrossFileEdits>>, files: Array<{ file: String, source: String }>, optsByFile: Map<String, Null<String>>,
 		cached: GrammarPlugin, touchedThisPass: Array<String>, changedFiles: Array<String>,
-		nextActive: Array<{ file: String, source: String }>, coupled: Array<Array<String>>
+		nextActive: Array<{ file: String, source: String }>, coupled: Array<Array<String>>, created: Array<String>,
+		beforeCreate: Null<() -> Void>
 	): Int {
 		var total: Int = 0;
 		for (component in crossFileComponents(renames)) {
-			final byFile: Map<String, Array<{ span: Span, text: String }>> = [];
 			final slices: Array<{ file: String, edits: Array<{ span: Span, text: String }> }> = [];
-			for (rename in component) for (slice in rename) {
-				var edits: Null<Array<{ span: Span, text: String }>> = byFile[slice.file];
-				if (edits == null) {
-					edits = [];
-					byFile[slice.file] = edits;
-					slices.push({ file: slice.file, edits: edits });
-				}
-				for (e in slice.edits) edits.push(e);
-			}
+			final creates: Array<{ file: String, text: String }> = [];
+			splitComponent(component, slices, creates);
+			// Validated BEFORE anything is edited, and refused when the path is already there: the
+			// removals a hoisting fix makes only compile beside the file it creates, so the create is
+			// the half that must be known good first.
+			final made: Null<Array<{ file: String, source: String }>> = CanonicalEdit.stageCrossFileCreates(
+				creates, file -> fileSourceOf(files, file) != null || ConfigFinder.fileExists(file),
+				(file, text) -> NewFile.createRaw(text, cached, CliArgs.discoverFormatConfig(file))
+			);
+			if (made == null) continue;
+			// Re-bound: strict null-safety does not carry a narrowed local into a comprehension.
+			final createdNow: Array<{ file: String, source: String }> = made;
 			final staged: Null<Array<{ file: String, source: String }>> = CanonicalEdit.stageCrossFileRename(
 				slices, file -> fileSourceOf(files, file),
 				(file, source, edits) -> CanonicalEdit.canonicalize(source, edits, false, cached, optsByFile[file])
 			);
 			if (staged == null) continue;
+			// On DISK inside the pass, not with the wave at the end, because an ambient source is read
+			// from disk by the very resolution the next pass runs — a file this pass created and only
+			// held in memory would leave every later pass answering from the chain that was.
+			if (createdNow.length > 0 && beforeCreate != null) beforeCreate();
+			commitCreates(createdNow, files, optsByFile, created, touchedThisPass, changedFiles, nextActive);
 			for (s in staged) for (entry in files) if (entry.file == s.file) {
 				entry.source = s.source;
 				if (!touchedThisPass.contains(s.file)) touchedThisPass.push(s.file);
@@ -365,11 +403,61 @@ final class LintFixDriver {
 				break;
 			}
 			// A component is committed whole, so the safe-pass revert must roll it back whole:
-			// reverting half a rename leaves the tree worse off than reverting all of it.
-			if (staged.length > 1) coupled.push([for (s in staged) s.file]);
+			// reverting half a rename leaves the tree worse off than reverting all of it, and
+			// reverting the removals without the created file leaves a tree that does not compile.
+			final unit: Array<String> = [for (m in createdNow) m.file].concat([for (s in staged) s.file]);
+			if (unit.length > 1) coupled.push(unit);
+			total += createdNow.length;
 			for (slice in slices) total += slice.edits.length;
 		}
 		return total;
+	}
+
+	/**
+	 * Split one component's slices into the per-file EDIT sets (unioned, since distinct slices of one
+	 * component touch distinct spans) and the whole-file CREATES. A create carries no edits, so the
+	 * two never meet in one slice; a path named by two creates is taken once.
+	 */
+	private static function splitComponent(
+		component: Array<Array<CrossFileEdits>>, slices: Array<{ file: String, edits: Array<{ span: Span, text: String }> }>,
+		creates: Array<{ file: String, text: String }>
+	): Void {
+		final byFile: Map<String, Array<{ span: Span, text: String }>> = [];
+		for (rename in component) for (slice in rename) {
+			final whole: Null<String> = slice.create;
+			if (whole != null) {
+				if (!creates.exists(c -> c.file == slice.file)) creates.push({ file: slice.file, text: whole });
+				continue;
+			}
+			var edits: Null<Array<{ span: Span, text: String }>> = byFile[slice.file];
+			if (edits == null) {
+				edits = [];
+				byFile[slice.file] = edits;
+				slices.push({ file: slice.file, edits: edits });
+			}
+			for (e in slice.edits) edits.push(e);
+		}
+	}
+
+	/**
+	 * Write each staged create to disk and enrol it in the run: an ordinary member of `files` from
+	 * here on, active next pass, and listed in `created` so the safe-pass revert DELETES it instead
+	 * of restoring bytes it never had.
+	 */
+	private static function commitCreates(
+		made: Array<{ file: String, source: String }>, files: Array<{ file: String, source: String }>,
+		optsByFile: Map<String, Null<String>>, created: Array<String>, touchedThisPass: Array<String>, changedFiles: Array<String>,
+		nextActive: Array<{ file: String, source: String }>
+	): Void {
+		for (m in made) {
+			CliIo.writeFile(m.file, m.source);
+			files.push(m);
+			optsByFile[m.file] = CliArgs.discoverFormatConfig(m.file);
+			created.push(m.file);
+			if (!touchedThisPass.contains(m.file)) touchedThisPass.push(m.file);
+			if (!changedFiles.contains(m.file)) changedFiles.push(m.file);
+			if (!containsFile(nextActive, m.file)) nextActive.push(m);
+		}
 	}
 
 	/**
@@ -746,7 +834,7 @@ final class LintFixDriver {
 	 */
 	private static function reconcileSafePass(
 		files: Array<{ file: String, source: String }>, changedFiles: Array<String>, originalOf: Map<String, String>,
-		coupled: Array<Array<String>>, pre: Null<OracleOutcome>, oracleHxml: Null<String>, oracleDir: Null<String>
+		coupled: Array<Array<String>>, pre: Null<OracleOutcome>, oracleHxml: Null<String>, oracleDir: Null<String>, created: Array<String>
 	): SafePassOutcome {
 		if (pre == null || oracleHxml == null) return { reverted: false, tail: '', notice: '' };
 		final resolved: OracleOutcome = pre;
@@ -767,7 +855,15 @@ final class LintFixDriver {
 		// undoing is what made the tree red.
 		function restore(list: Array<String>): Void {
 			final undo: Array<{ path: String, content: String }> = [];
+			// A file this run CREATED has no previous bytes to restore, so its revert is a DELETE.
+			// Taken after the writes, so a failed write set leaves the tree as it was rather than
+			// half restored and half removed.
+			final remove: Array<String> = [];
 			for (entry in files) if (list.contains(entry.file)) {
+				if (created.contains(entry.file)) {
+					remove.push(entry.file);
+					continue;
+				}
 				final original: String = originalOf[entry.file] ?? entry.source;
 				entry.source = original;
 				undo.push({
@@ -776,6 +872,7 @@ final class LintFixDriver {
 				});
 			}
 			CliIo.writeFiles(undo);
+			for (path in remove) CliIo.deletePath(path);
 		}
 		final narrowing: SafePassNarrowing = LintFixSafePass.narrow(
 			errors, changedFiles, coupled, restore, CompilerOracle.typecheck.bind(hxml, oracleDir), LintFixSafePass.NARROW_ROUNDS
@@ -813,15 +910,20 @@ final class LintFixDriver {
 	 */
 	private static function commitSafeWrites(
 		files: Array<{ file: String, source: String }>, changed: Array<String>, originalOf: Map<String, String>,
-		coupled: Array<Array<String>>, oracleHxml: Null<String>, oracleDir: Null<String>
+		coupled: Array<Array<String>>, oracleHxml: Null<String>, oracleDir: Null<String>, created: Array<String>, ?pre: OracleOutcome
 	): SafePassOutcome {
-		final baseline: Null<OracleOutcome> = oracleHxml != null && changed.length > 0
-			? CompilerOracle.typecheck(oracleHxml, oracleDir)
-			: null;
+		// `pre` is the verdict a CREATING fix already forced before it wrote — reused rather than
+		// re-measured, because the tree it describes is the one before this run touched anything and
+		// the tree here is not.
+		final baseline: Null<OracleOutcome> = pre ?? (
+			oracleHxml != null && changed.length > 0 ? CompilerOracle.typecheck(oracleHxml, oracleDir) : null
+		);
+		// A created file is written again rather than skipped: a later pass may have EXTENDED it in
+		// memory only, and the write is idempotent where it did not.
 		CliIo.writeFiles([
 			for (entry in files) if (changed.contains(entry.file)) { path: entry.file, content: entry.source }
 		]);
-		return reconcileSafePass(files, changed, originalOf, coupled, baseline, oracleHxml, oracleDir);
+		return reconcileSafePass(files, changed, originalOf, coupled, baseline, oracleHxml, oracleDir, created);
 	}
 
 	/**
@@ -843,7 +945,7 @@ final class LintFixDriver {
 	private static function followUpRound(
 		files: Array<{ file: String, source: String }>, settledOf: Map<String, String>,
 		converge: (Array<{ file: String, source: String }>) -> Int, coupled: Array<Array<String>>, changedFiles: Array<String>,
-		oracleHxml: Null<String>, oracleDir: Null<String>
+		oracleHxml: Null<String>, oracleDir: Null<String>, created: Array<String>
 	): SafePassOutcome {
 		final quiet: SafePassOutcome = { reverted: false, tail: '', notice: '' };
 		final verifiedChanged: Array<{ file: String, source: String }> = changedSince(files, settledOf);
@@ -855,7 +957,7 @@ final class LintFixDriver {
 		final rewritten: Array<String> = [for (entry in changedSince(files, verifiedOf)) entry.file];
 		if (rewritten.length == 0) return quiet;
 		for (f in rewritten) if (!changedFiles.contains(f)) changedFiles.push(f);
-		final pass: SafePassOutcome = commitSafeWrites(files, rewritten, verifiedOf, coupled, oracleHxml, oracleDir);
+		final pass: SafePassOutcome = commitSafeWrites(files, rewritten, verifiedOf, coupled, oracleHxml, oracleDir, created);
 		return {
 			reverted: pass.reverted,
 			tail: '${pass.tail}, follow-up: $fixed edit(s) in ${rewritten.length} file(s) exposed by the verified phases',
