@@ -94,6 +94,12 @@ class TestDiscovery {
 	/** The arm registry, beside this file — every `@:killer` name has to resolve into it. */
 	private static inline final ARMS_FILE: String = 'mutation-arms.json';
 
+	/**
+	 * A directory's AMBIENT IMPORT source. It declares no type, so it is neither a case nor an entry
+	 * point, and its name is not even a legal module path — the walk skips it wherever it sits.
+	 */
+	private static inline final AMBIENT_IMPORT_FILE: String = 'import.hx';
+
 	/** Method-name prefixes utest treats as fixtures — `TestBuilder.isTestName`. */
 	private static final FIXTURE_PREFIXES: Array<String> = ['test', 'spec'];
 
@@ -203,7 +209,7 @@ class TestDiscovery {
 			final full: String = Path.join([dir, entry]);
 			if (FileSystem.isDirectory(full)) {
 				collectModules(full, pack.concat([entry]), out);
-			} else if (entry.endsWith('.hx')) {
+			} else if (entry.endsWith('.hx') && entry != AMBIENT_IMPORT_FILE) {
 				final module: String = pack.concat([entry.substr(0, entry.length - '.hx'.length)]).join('.');
 				if (pack.length > 0)
 					out.push(module);

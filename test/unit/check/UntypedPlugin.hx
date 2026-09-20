@@ -118,4 +118,9 @@ final class UntypedPlugin implements GrammarPlugin {
 		return null;
 	}
 
+	/** The documented answer for a grammar with no ambient-import concept: no position could hold one. */
+	public function ambientImportSites(path: String, pkg: String): Array<String> {
+		return [];
+	}
+
 }

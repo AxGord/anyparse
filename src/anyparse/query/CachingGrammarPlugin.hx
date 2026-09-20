@@ -490,6 +490,23 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	 */
 	public function ambientImportGovernance(path: String): Null<AmbientImportGovernance> return _inner.ambientImportGovernance(path);
 
+	/** Forwarded: the ladder is a function of the path, the package and the grammar's own stop rule, so there is nothing to cache. */
+	public function ambientImportSites(path: String, pkg: String): Array<String> return _inner.ambientImportSites(path, pkg);
+
+	/**
+	 * Drop every memo whose answer depends on an ambient source's TEXT — the chain per directory
+	 * and the import maps keyed by path and source.
+	 *
+	 * One decorator instance serves every pass of a `--fix` run, and the run writes ambient
+	 * sources between passes, so a memo taken before a write answers the tree that was. The chain
+	 * is also read straight from disk by the plugin behind this decorator, and a memo the
+	 * decorator holds while the plugin reads fresh is two answers for one file.
+	 */
+	public function invalidateAmbientChain(): Void {
+		_ambientImportCache.clear();
+		_importMapCache.clear();
+	}
+
 	/**
 	 * `SpanTypeInfoProvider`: the five span-indexed maps, memoized by source. When the
 	 * wrapped plugin batches (`SpanTypeInfoProvider`) the bundle is one span-parse;

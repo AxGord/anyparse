@@ -281,6 +281,31 @@ final class CanonicalEdit {
 	}
 
 	/**
+	 * The canonical text of every file a cross-file fix CREATES, or null when any one of them is
+	 * refused: a path that already exists, or content the writer cannot settle.
+	 *
+	 * Its own seat beside `stageCrossFileRename` because the two refusals are opposite — an edit
+	 * needs its file to be there, a create needs it not to be — and because a create is validated
+	 * the way a new module is: parseable and at the writer's FIXED POINT, so the next writer-emit
+	 * op on the file does not refuse it as drifted.
+	 */
+	public static function stageCrossFileCreates(
+		creates: Array<{ file: String, text: String }>, exists: (String) -> Bool, canon: (String, String) -> EditResult
+	): Null<Array<{ file: String, source: String }>> {
+		final out: Array<{ file: String, source: String }> = [];
+		for (made in creates) {
+			if (exists(made.file)) return null;
+			switch canon(made.file, made.text) {
+				case Ok(text, _):
+					out.push({ file: made.file, source: text });
+				case Err(_):
+					return null;
+			}
+		}
+		return out;
+	}
+
+	/**
 	 * Stage a cross-file rename all-or-nothing: canonicalize each file's edit
 	 * `slice` through `canon` and return every file's rewritten source ONLY when
 	 * EVERY slice canonicalizes to a genuinely-changed result. Any `Err`, any
@@ -299,6 +324,7 @@ final class CanonicalEdit {
 		for (slice in slices) {
 			final src: Null<String> = sourceOf(slice.file);
 			if (src == null) return null;
+			if (slice.edits.length == 0) continue;
 			switch canon(slice.file, src, slice.edits) {
 				case Ok(text):
 					if (text == src) return null;

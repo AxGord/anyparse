@@ -79,10 +79,13 @@ final class RedundantImport implements Check implements RiskyFix {
 		// module declares. Widening it only ever adds evidence: it can turn an unprovable statement
 		// into a finding, and it can reveal a SECOND binder of the name, which vetoes one.
 		final resolveIndex: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? index;
+		// What a statement naming a MODULE brings into scope, built once: the ambient arm asks it per
+		// statement per file, and a module import's SIBLINGS are the names the leaf reading lost.
+		final publicTypes: Map<String, Array<String>> = SymbolIndex.publicTypesByModule(resolveIndex);
 		final violations: Array<Violation> = [];
 		for (info in index.allFiles()) for (imp in info.imports) {
 			final module: Null<String> = redundantModuleOf(info, imp, resolveIndex);
-			final ambient: Null<String> = module != null ? null : ambientProviderOf(info, imp, resolveIndex);
+			final ambient: Null<String> = module != null ? null : ambientProviderOf(info, imp, resolveIndex, publicTypes);
 			if (module != null)
 				violations.push({
 					file: info.file,
@@ -120,15 +123,6 @@ final class RedundantImport implements Check implements RiskyFix {
 		return edits;
 	}
 
-	/** Whether `o` binds `simple` as a NAME: an explicit `import` / `using` whose leaf is it, or an alias of it. */
-	private static inline function bindsSimpleName(o: ImportInfo, simple: String): Bool {
-		return switch o.kind {
-			case ImportKind.Import, ImportKind.Using: SourceText.lastSegment(o.raw) == simple;
-			case ImportKind.Alias: (o.alias ?? o.raw) == simple;
-			case ImportKind.Wild: false;
-		};
-	}
-
 	/**
 	 * Whether `o` brings every top-level type of `module` into scope: an unguarded, unaliased
 	 * `import <module>;` or `using <module>;` (a `using` is an import plus static extension). An
@@ -144,8 +138,8 @@ final class RedundantImport implements Check implements RiskyFix {
 	 * own statement goes. Guardedness must not steer the SEARCH, only the verdict at the group it lands
 	 * on; filtered here it walks past a nearer group whose only binder is `#if`-guarded.
 	 */
-	private static function nearestBinder(info: FileInfo, simple: String): Null<AmbientImportGroup> {
-		return info.ambientImports.find(g -> g.imports.exists(o -> bindsSimpleName(o, simple)));
+	private static function nearestBinder(info: FileInfo, name: String, publicTypes: Map<String, Array<String>>): Null<AmbientImportGroup> {
+		return info.ambientImports.find(g -> g.imports.exists(o -> SymbolIndex.bindsAnyOf(o, [name], publicTypes)));
 	}
 
 	/**
@@ -160,24 +154,37 @@ final class RedundantImport implements Check implements RiskyFix {
 	 * nearer ambient source binding the simple name to something ELSE is what makes the file's own
 	 * statement load-bearing, and it is the case this refuses on.
 	 */
-	private static function ambientProviderOf(info: FileInfo, imp: ImportInfo, index: SymbolIndex): Null<String> {
+	private static function ambientProviderOf(
+		info: FileInfo, imp: ImportInfo, index: SymbolIndex, publicTypes: Map<String, Array<String>>
+	): Null<String> {
 		if (imp.guarded || !info.ambientImportsBounded) return null;
 		if (imp.kind != ImportKind.Import && imp.kind != ImportKind.Using) return null;
 		if (imp.kind == ImportKind.Using && usingCompetitorInScope(info, imp)) return null;
-		final simple: String = SourceText.lastSegment(imp.raw);
-		// The NEAREST group binding the name AT ALL — guardedness must not steer this choice. Filtered
-		// to unguarded binders the search walks PAST a nearer group whose only binder is `#if`-guarded
-		// and reports a farther identical one, so deleting the file's own statement retargets the name
-		// in the builds that guard is on. A guarded binder in the nearest group makes the question refuse.
-		final nearest: Null<AmbientImportGroup> = nearestBinder(info, simple);
-		if (nearest == null) return null;
-		// EVERY binder of the name in that group must be the identical statement: within one file the
-		// LAST binder of a simple name wins, so a guarded or differently-pathed sibling decides the name
-		// in some build. And no own statement is exempt — the binder that survives is an ambient one, so
-		// a second own binder would decide it instead and the deletion is a retarget.
-		final binders: Array<ImportInfo> = nearest.imports.filter(o -> bindsSimpleName(o, simple));
-		final identical: Bool = binders.foreach(o -> !o.guarded && o.kind == imp.kind && o.raw == imp.raw);
-		return identical && !bindsElsewhere(info, imp, '', simple, index) ? nearest.file : null;
+		// EVERY name the statement brings, never only its leaf: a statement naming a MODULE binds every
+		// type that module declares, and the chain can decide a SIBLING name somewhere else entirely, so
+		// deleting the file's own statement hands that sibling to a nearer ambient group's declaration.
+		final names: Null<Array<String>> = SymbolIndex.namesBoundBy(imp, publicTypes);
+		if (names == null || names.length == 0) return null;
+		var provider: Null<String> = null;
+		for (name in names) {
+			// The NEAREST group binding the name AT ALL — guardedness must not steer this choice. Filtered
+			// to unguarded binders the search walks PAST a nearer group whose only binder is `#if`-guarded
+			// and reports a farther identical one, so deleting the file's own statement retargets the name
+			// in the builds that guard is on. A guarded binder in the nearest group makes the question refuse.
+			final nearest: Null<AmbientImportGroup> = nearestBinder(info, name, publicTypes);
+			// One group has to decide ALL of them. Where two groups decide two of the statement's names,
+			// the surviving chain reproduces neither position whole.
+			if (nearest == null || (provider != null && nearest.file != provider)) return null;
+			provider = nearest.file;
+			// EVERY binder of the name in that group must be the identical statement: within one file the
+			// LAST binder of a simple name wins, so a guarded or differently-pathed sibling decides the name
+			// in some build. And no own statement is exempt — the binder that survives is an ambient one, so
+			// a second own binder would decide it instead and the deletion is a retarget.
+			final binders: Array<ImportInfo> = nearest.imports.filter(o -> SymbolIndex.bindsAnyOf(o, [name], publicTypes));
+			if (!binders.foreach(o -> !o.guarded && o.kind == imp.kind && o.raw == imp.raw)) return null;
+			if (bindsElsewhere(info, imp, '', name, index)) return null;
+		}
+		return provider;
 	}
 
 	/**

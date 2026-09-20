@@ -187,6 +187,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.GuardReturnCheckTest',
 		'unit.check.HaxeSpawnTest',
 		'unit.check.HoistBranchStringAffixCheckTest',
+		'unit.check.HoistCommonImportTest',
 		'unit.check.HoistEmbeddedAssignmentCheckTest',
 		'unit.check.IdenticalOperandsCheckTest',
 		'unit.check.IfFalseDeadCodeCheckTest',
@@ -852,6 +853,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.CondRegionKindDerivationTest',
 		'unit.query.CondRegionLivenessTest',
 		'unit.query.CondResolveTest',
+		'unit.query.CreatingFixContractTest',
 		'unit.query.CrossRenameMemberSliceTest',
 		'unit.query.CrossRenameSliceTest',
 		'unit.query.DeleteBlankLineSliceTest',
@@ -1034,6 +1036,9 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-AMBIENT-GOVERNANCE-COMPLETE',
 			'unit.check.AmbientImportRulesTest#testAGuardedBinderInTheNearestGroupKeepsTheOwnStatement :: control :: '
 				+ 'M-AMBIENT-REDUNDANT-GUARDED-SKIP',
+			'unit.check.AmbientImportRulesTest#testASiblingTheNearerGroupDecidesKeepsTheOwnStatement :: control :: '
+				+ 'M-IMPORT-LEAF-ONLY-NAMES',
+
 			'unit.check.AmbientImportRulesTest#testAnAmbientImportAModuleUnderItUsesIsNotReported :: control :: '
 				+ 'M-AMBIENT-GOVERNANCE-BLIND',
 			'unit.check.AmbientImportRulesTest#testAnAmbientImportNoModuleUnderItUsesIsStillReported :: control :: '
@@ -1121,6 +1126,31 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.FieldWriteResolutionScopeTest#testThirdPartySubtypeWriteVetoesFinal :: control :: M-WRITEINDEX-PROJECT-FINAL',
 			'unit.check.FieldWriteResolutionScopeTest#testThirdPartySubtypeWriteVetoesReadOnly :: control :: M-WRITEINDEX-PROJECT-READONLY',
 			'unit.check.FieldWriteResolutionScopeTest#testThirdPartyUnresolvedWriteDoesNotVeto :: control :: M-ADMITS-TRUE',
+			'unit.check.HoistCommonImportTest#testANamesakePushesTheStatementToADeeperSite :: guard :: ',
+			'unit.check.HoistCommonImportTest#testANestedSiteTakesOnlyWhatItsParentDidNot :: control :: '
+				+ 'M-HOIST-SITE-ORDER,M-HOIST-CHAIN-INHERITED',
+			'unit.check.HoistCommonImportTest#testASecondRunHasNothingToDo :: guard :: ',
+			'unit.check.HoistCommonImportTest#testASubTypeImportIgnoresItsSiblings :: control :: M-HOIST-NEVER-SOUND',
+			'unit.check.HoistCommonImportTest#testCreatesTheAmbientSourceAsAWholeFile :: guard :: ',
+			'unit.check.HoistCommonImportTest#testDoesNotProposeWhatTheChainAlreadyProvides :: guard :: ',
+			'unit.check.HoistCommonImportTest#testExtendingAnExistingSourceIsAnEdit :: guard :: ',
+			'unit.check.HoistCommonImportTest#testExtendsAnExistingAmbientSource :: control :: M-HOIST-NEVER-SOUND',
+			'unit.check.HoistCommonImportTest#testHoistsAnAllowListedUsing :: control :: M-HOIST-NEVER-SOUND',
+			'unit.check.HoistCommonImportTest#testHoistsAnImportMostModulesSpell :: control :: M-HOIST-NEVER-SOUND',
+			'unit.check.HoistCommonImportTest#testKeepsAnAllowListedUsingWhereARivalRemains :: control :: M-HOIST-USING-DEMOTION',
+			'unit.check.HoistCommonImportTest#testOneSlicePerSite :: guard :: ',
+			'unit.check.HoistCommonImportTest#testRefusesAGuardedStatement :: guard :: ',
+			'unit.check.HoistCommonImportTest#testRefusesAModuleImportWhoseSiblingHasANamesake :: control :: M-IMPORT-LEAF-ONLY-NAMES',
+			'unit.check.HoistCommonImportTest#testRefusesANamesakeReachedByAWildcard :: control :: M-HOIST-RETARGET-BAND',
+			'unit.check.HoistCommonImportTest#testRefusesAPackageWildcard :: guard :: ',
+			'unit.check.HoistCommonImportTest#testRefusesARootPackageNamesake :: control :: M-HOIST-RETARGET-BAND',
+			'unit.check.HoistCommonImportTest#testRefusesASamePackageNamesake :: control :: M-HOIST-RETARGET-BAND',
+			'unit.check.HoistCommonImportTest#testRefusesAStaticWildcard :: guard :: ',
+			'unit.check.HoistCommonImportTest#testRefusesAUsingOffTheAllowList :: guard :: ',
+			'unit.check.HoistCommonImportTest#testRefusesAnAlias :: guard :: ',
+			'unit.check.HoistCommonImportTest#testWithholdsBelowTheMinimumModuleCount :: control :: M-HOIST-MIN-MODULES',
+			'unit.check.HoistCommonImportTest#testWithholdsOnAnUnboundedChain :: control :: M-HOIST-SHORT-CHAIN',
+			'unit.check.HoistCommonImportTest#testWithholdsWhereTheChainCarriesAGuardedStatement :: control :: M-HOIST-GUARDED-BLIND',
 			'unit.check.ImpossibleCastTest#testUnrelatedClassesFlagged :: control :: M-UNRELATED-FALSE',
 			'unit.check.ImpossibleIsCheckTest#testUnrelatedClassesFlagged :: control :: M-UNRELATED-FALSE',
 			'unit.check.JoinSingleUseLocalCheckTest#testAnnotationRestatesSourceFlagged :: control :: M-JSUL-ANNOTATION-NEVER-NEUTRAL',
@@ -1676,6 +1706,11 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CondRegionKindDerivationTest#testTheMetadataPrefixedSpliceIsSeenByTheGate :: control :: M-OPAQUE-REGION-HAND-LIST',
 			'unit.query.CondRegionKindDerivationTest#testTheReturnExpressionSpliceIsSeenByTheGate :: control :: M-OPAQUE-REGION-HAND-LIST',
 			'unit.query.CondRegionKindDerivationTest#testTheReturnStatementSpliceIsSeenByTheGate :: control :: M-OPAQUE-REGION-HAND-LIST',
+			'unit.query.CreatingFixContractTest#testACreateRefusesAPathThatIsAlreadyThere :: guard :: ',
+			'unit.query.CreatingFixContractTest#testACreateRefusesContentTheWriterCannotSettle :: guard :: ',
+			'unit.query.CreatingFixContractTest#testACreateSettlesItsTextAtTheWriterFixedPoint :: guard :: ',
+			'unit.query.CreatingFixContractTest#testAPassSeesTheChainAPreviousPassWrote :: control :: M-AMBIENT-CHAIN-STALE',
+			'unit.query.CreatingFixContractTest#testDeletingACreatedFileToleratesOneAlreadyGone :: guard :: ',
 			'unit.query.DocOwnerGuardSliceTest#testAppendBeforeAClosingBraceIsAccepted :: control :: M-DOCSPLIT-OWNER-ANY',
 			'unit.query.DocOwnerGuardSliceTest#testBannerCommentIsNotGuarded :: control :: M-DOCSPAN-BANNER-IS-DOC',
 			'unit.query.DocOwnerGuardSliceTest#testModifierInsertOnTheOwnersLineIsAccepted :: control :: M-DOCSPLIT-BREAKLESS-TOO',
@@ -2214,7 +2249,17 @@ class TestDiscoveryParityTest extends Test {
 			'M-AMBIENT-DISK-BLIND',
 			'M-AMBIENT-UNREADABLE-BOUNDED',
 			'M-AMBIENT-UNPARSED-EMPTY',
-			'M-AMBIENT-ALIAS-PINNED'
+			'M-AMBIENT-ALIAS-PINNED',
+			'M-HOIST-NEVER-SOUND',
+			'M-HOIST-RETARGET-BAND',
+			'M-HOIST-USING-DEMOTION',
+			'M-HOIST-CHAIN-INHERITED',
+			'M-HOIST-GUARDED-BLIND',
+			'M-HOIST-SHORT-CHAIN',
+			'M-HOIST-MIN-MODULES',
+			'M-HOIST-SITE-ORDER',
+			'M-AMBIENT-CHAIN-STALE',
+			'M-IMPORT-LEAF-ONLY-NAMES'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
