@@ -1,9 +1,11 @@
 package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.Violation;
+import anyparse.check.LoopScan.IndexedLoopHeader;
+import anyparse.check.LoopScan.IntervalLoopSeams;
 import anyparse.check.LoopScan.LoopSeams;
-import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
@@ -90,12 +92,6 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 	/** The one container nominal whose key-value iteration yields the `0...length` indices. */
 	private static inline final ARRAY_TYPE: String = 'Array';
 
-	/** A single-binder `for` node has exactly [iterable, body] children. */
-	private static inline final FOR_CHILD_COUNT: Int = 2;
-
-	/** An interval node has exactly [lower, upper] children. */
-	private static inline final INTERVAL_CHILD_COUNT: Int = 2;
-
 	/** Minimum body statements: the consumed declaration plus at least one real statement. */
 	private static inline final MIN_BODY_STATEMENTS: Int = 2;
 
@@ -117,7 +113,7 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final typed: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
-		return RunScan.collectWith(files, plugin, readSeams(plugin.refShape()), (entry, tree, s, violations) -> {
+		return RunScan.collectWith(files, plugin, LoopScan.intervalSeamsOf(plugin.refShape()), (entry, tree, s, violations) -> {
 			final types: Null<Map<Int, String>> = typed?.declaredTypeSources(entry.source);
 			walk(tree, tree, entry.file, entry.source, types, s, violations);
 		});
@@ -129,30 +125,17 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 	 * report-only, when the element type is not provable (see the type doc) or a comment sits in
 	 * the replaced region.
 	 */
-	public function fix(
-		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
-	): Array<{ span: Span, text: String }> {
-		return RunScan.editsWith(plugin, source, readSeams(plugin.refShape()), (tree, s) -> {
-			final typed: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
-			final types: Null<Map<Int, String>> = typed?.declaredTypeSources(source);
-			final wanted: Array<String> = RunScan.spanKeys(violations);
-			final edits: Array<{ span: Span, text: String }> = [];
-			fixWalk(tree, tree, source, types, s, wanted, edits);
-			return CanonicalEdit.dropContainedEdits(edits);
-		});
-	}
-
-	/** Bundle this check's kinds on top of the shared loop seams, or null when one is unset (the check is then a no-op). */
-	private static function readSeams(shape: RefShape): Null<Seams> {
-		final core: Null<LoopSeams> = LoopScan.seamsOf(shape);
-		if (core == null) return null;
-		final intervalKind: Null<String> = shape.intervalKind;
-		return intervalKind == null ? null : { core: core, intervalKind: intervalKind };
+	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
+		return RunScan.walkedEdits(
+			plugin, source, LoopScan.intervalSeamsOf(plugin.refShape()), violations,
+			(tree, types, s, wanted, out) -> fixWalk(tree, tree, source, types, s, wanted, out)
+		);
 	}
 
 	/** Descend `node`, testing it as a loop and recursing; a reification subtree is skipped wholesale. */
 	private static function walk(
-		node: QueryNode, root: QueryNode, file: String, source: String, types: Null<Map<Int, String>>, s: Seams, out: Array<Violation>
+		node: QueryNode, root: QueryNode, file: String, source: String, types: Null<Map<Int, String>>, s: IntervalLoopSeams,
+		out: Array<Violation>
 	): Void {
 		if (s.core.opaqueKinds.contains(node.kind)) return;
 		final m: Null<Match> = analyze(node, root, source, types, s);
@@ -168,13 +151,13 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 
 	/** Mirror of `walk` for the fix path: emit the header rewrite for each wanted, rewritable loop. */
 	private static function fixWalk(
-		node: QueryNode, root: QueryNode, source: String, types: Null<Map<Int, String>>, s: Seams, wanted: Array<String>,
-		out: Array<{ span: Span, text: String }>
+		node: QueryNode, root: QueryNode, source: String, types: Null<Map<Int, String>>, s: IntervalLoopSeams, wanted: Array<String>,
+		out: Array<FixEdit>
 	): Void {
 		if (s.core.opaqueKinds.contains(node.kind)) return;
 		final m: Null<Match> = analyze(node, root, source, types, s);
 		if (m != null && wanted.contains('${m.forSpan.from}:${m.forSpan.to}')) {
-			final e: Null<{ span: Span, text: String }> = buildEdit(m, source);
+			final e: Null<FixEdit> = buildEdit(m, source);
 			if (e != null) out.push(e);
 		}
 		for (c in node.children) fixWalk(c, root, source, types, s, wanted, out);
@@ -186,30 +169,29 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 	 * and `fixWalk` (rewrite) so both see one decision.
 	 */
 	private static function analyze(
-		forNode: QueryNode, root: QueryNode, source: String, types: Null<Map<Int, String>>, s: Seams
+		forNode: QueryNode, root: QueryNode, source: String, types: Null<Map<Int, String>>, s: IntervalLoopSeams
 	): Null<Match> {
 		final core: LoopSeams = s.core;
-		final header = matchHeader(forNode, source, s);
-		if (header == null) return null;
-		final h = header;
+		final h: Null<IndexedLoopHeader> = matchHeader(forNode, source, s);
+		if (h == null) return null;
 		final decl: QueryNode = h.body.children[0];
 		final valueVar: Null<String> = LoopScan.singleLocalDeclName(decl, core.localDeclKinds, core);
-		if (valueVar == null || valueVar == h.keyVar || valueVar == h.collection) return null;
+		if (valueVar == null || valueVar == h.index || valueVar == h.collection) return null;
 		final init: QueryNode = decl.children[0];
 		if (!LoopScan.isIndexAccessOf(init, h.collection, core)) return null;
-		if (LoopScan.bareIdentName(init.children[1], core) != h.keyVar) return null;
-		if (!bodyAdmitsRewrite(h.body, h.keyVar, valueVar, h.collection, core)) return null;
+		if (LoopScan.bareIdentName(init.children[1], core) != h.index) return null;
+		if (!bodyAdmitsRewrite(h.body, h.index, valueVar, h.collection, core)) return null;
 		final forSpan: Null<Span> = forNode.span;
 		final declSpan: Null<Span> = decl.span;
 		if (forSpan == null || declSpan == null) return null;
-		final collectionTypeSource: Null<String> = LoopScan.identTypeSource(h.lengthReceiver, root, types, core);
+		final collectionTypeSource: Null<String> = LoopScan.identTypeSource(h.sizeReceiver, root, types, core);
 		// A container that RESOLVES to something other than `Array` has no key-value iteration to
 		// offer, so the message would be advice that does not compile; only an UNRESOLVED one keeps
 		// the report-only tolerance, where the suggestion is a lead rather than a claim.
 		return collectionTypeSource != null && NominalTypes.outerNominalOf(collectionTypeSource) != ARRAY_TYPE ? null : {
 			forSpan: forSpan,
 			declSpan: declSpan,
-			keyVar: h.keyVar,
+			keyVar: h.index,
 			valueVar: valueVar,
 			collection: h.collection,
 			collectionTypeSource: collectionTypeSource,
@@ -218,35 +200,15 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 	}
 
 	/**
-	 * The loop's HEADER shape — a single-binder `for` over exactly `0...X.length` for a bare
-	 * identifier `X`, with a braced body of at least two statements — or null when it is anything
-	 * else. Split out of `analyze` so each half stays readable on its own.
+	 * `LoopScan.indexedHeaderOf` narrowed by THIS rule's own demand on the body: a braced block of at
+	 * least two statements, since the rewrite consumes the first one and must leave the loop
+	 * something to run.
 	 */
-	private static function matchHeader(forNode: QueryNode, source: String, s: Seams): Null<{
-		keyVar: String,
-		collection: String,
-		lengthReceiver: QueryNode,
-		body: QueryNode
-	}> {
-		final core: LoopSeams = s.core;
-		if (forNode.kind != core.forStmtKind || forNode.children.length != FOR_CHILD_COUNT) return null;
-		final keyVar: Null<String> = forNode.name;
-		if (keyVar == null) return null;
-		// A key-value loop carries its value binder as an EXTRA child ahead of the iterable, so the
-		// arity check above has already rejected the very form this rule produces.
-		final iterable: QueryNode = forNode.children[0];
-		if (iterable.kind != s.intervalKind || iterable.children.length != INTERVAL_CHILD_COUNT) return null;
-		if (!LoopScan.isZeroLiteral(iterable.children[0], source, core)) return null;
-		final upper: QueryNode = iterable.children[1];
-		final collection: Null<String> = LoopScan.memberReadReceiver(upper, LENGTH_MEMBER, core);
-		if (collection == null || collection == keyVar) return null;
-		final body: QueryNode = forNode.children[1];
-		return body.kind != core.blockStmtKind || body.children.length < MIN_BODY_STATEMENTS ? null : {
-			keyVar: keyVar,
-			collection: collection,
-			lengthReceiver: upper.children[0],
-			body: body
-		};
+	private static function matchHeader(forNode: QueryNode, source: String, s: IntervalLoopSeams): Null<IndexedLoopHeader> {
+		final h: Null<IndexedLoopHeader> = LoopScan.indexedHeaderOf(forNode, source, LENGTH_MEMBER, s);
+		if (h == null) return null;
+		final body: QueryNode = h.body;
+		return body.kind != s.core.blockStmtKind || body.children.length < MIN_BODY_STATEMENTS ? null : h;
 	}
 
 	/**
@@ -273,7 +235,7 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 	}
 
 	/** The single `{span, text}` replacing `[for, declaration end)` with the key-value header, or null when the rewrite is refused. */
-	private static function buildEdit(m: Match, source: String): Null<{ span: Span, text: String }> {
+	private static function buildEdit(m: Match, source: String): Null<FixEdit> {
 		// Reaching to the end of the declaration's LINE, not just its `;`: a trailing comment there
 		// documents the statement the rewrite deletes, and the splice would silently re-attach it to
 		// the loop header.
@@ -306,12 +268,6 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 		return args != null && args.length == ARRAY_TYPE_ARGUMENTS && StringTools.trim(args[0]) == StringTools.trim(declared);
 	}
 
-}
-
-/** The `RefShape` kinds `PreferKeyValueLoop` reads on top of the shared `LoopScan` core. */
-private typedef Seams = {
-	var core: LoopSeams;
-	var intervalKind: String;
 }
 
 /** One matched loop: the spans the rewrite splices, the three names it re-spells, and the annotations its type gate reads. */

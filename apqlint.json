@@ -95,6 +95,9 @@
 		"prefer-typed-throw": {
 			"enabled": true
 		},
+		"prefer-value-loop": {
+			"enabled": true
+		},
 		"redundant-ascription": {
 			"enabled": true
 		},

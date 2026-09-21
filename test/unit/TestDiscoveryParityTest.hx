@@ -219,6 +219,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.LintUsingSubmoduleExtensionTest',
 		'unit.check.ListenerSymmetryCheckTest',
 		'unit.check.LoopGuardCheckTest',
+		'unit.check.LoopScanTest',
 		'unit.check.MagicNumberCheckTest',
 		'unit.check.MapKeysLookupCheckTest',
 		'unit.check.MemberOrderCheckTest',
@@ -302,6 +303,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.PreferTryExpressionAssignmentCheckTest',
 		'unit.check.PreferTryExpressionReturnCheckTest',
 		'unit.check.PreferTypedThrowCheckTest',
+		'unit.check.PreferValueLoopCheckTest',
 		'unit.check.RedundantAscriptionTest',
 		'unit.check.RedundantBypassAccessorCheckTest',
 		'unit.check.RedundantCaseBodyCheckTest',
@@ -1234,6 +1236,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PreferTernaryReturnCheckTest#testOwnLineCommentInACascadeDefersTheTail :: control :: '
 				+ 'M-PTR-RIDES-NEVER,M-PTR-CASCADE-NEVER-STRANDS',
 			'unit.check.PreferTernaryReturnCheckTest#testTheRunOfOneHoistIsRefusedAtTheSeam :: control :: M-COMMENT-HOIST-BLIND',
+			'unit.check.PreferValueLoopCheckTest#testFixRewritesBlockBody :: control :: M-VALUE-LOOP-READS-UNSPLICED',
+			'unit.check.PreferValueLoopCheckTest#testMacroIndexReadNotFlagged :: control :: M-VALUE-LOOP-INDEX-TEXT-BLIND',
 			'unit.check.RedundantImportCheckTest#testSubTypeImportBesideItsModuleImportIsRedundant :: control :: M-DECLARINGFILES-EMPTY',
 			'unit.check.RedundantReplaceLoopCheckTest#testEmptyLiteralReplacementBoundsTheRedundancyToOneCharacter :: control :: '
 				+ 'M-EMPTY-B-ANY-NONEMPTY',
@@ -2166,6 +2170,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-FIND-CONFLICT-MIS-ATTRIBUTED',
 			'M-COUNT-CONFLICT-SILENT',
 			'M-COUNT-GUARDED-MIS-ATTRIBUTED',
+			'M-VALUE-LOOP-READS-UNSPLICED',
+			'M-VALUE-LOOP-INDEX-TEXT-BLIND',
 			'M-LINTDIFF-RULE-SUMMARY-BLANK',
 			'M-LINTDIFF-NET-UNSTATED',
 			'M-LINTDIFF-SURPLUS-BY-KEY',

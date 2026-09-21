@@ -2497,6 +2497,22 @@
 			"note": "the guard's sentence is written on every finding the rule reported again, including the ones the containment filter dropped and the ones no site matched"
 		},
 		{
+			"name": "M-VALUE-LOOP-READS-UNSPLICED",
+			"type": "anyparse.check.PreferValueLoop",
+			"method": "buildEdits",
+			"find": "\t\tfor (span in m.readSpans) edits.push({ span: span, text: binder });\n",
+			"replace": "",
+			"note": "the X[i] occurrences are left unspliced, so prefer-value-loop rewrites the header into a value loop and the body still reads an index binding that no longer exists"
+		},
+		{
+			"name": "M-VALUE-LOOP-INDEX-TEXT-BLIND",
+			"type": "anyparse.check.PreferValueLoop",
+			"method": "analyze",
+			"find": "\t\tif (OccurrenceScan.referencedInRange(f.source, h.index, bodySpan.from, bodySpan.to, indexSpans, f.inert)) return null;\n",
+			"replace": "",
+			"note": "the completeness gate is gone, so prefer-value-loop trusts node walks that prune a macro quotation and deletes an index the quotation still reads"
+		},
+		{
 			"name": "M-LINTDIFF-RULE-SUMMARY-BLANK",
 			"type": "anyparse.query.LintDiff",
 			"method": "ruleDeltas",

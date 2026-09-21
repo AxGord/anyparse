@@ -145,7 +145,7 @@ class DocMeasurementClaimCheckTest extends Test {
 		final check: Null<Check> = Linter.byId('doc-measurement-claim');
 		Assert.notNull(check);
 		Assert.isTrue(Std.isOfType(check, DefaultOff), 'doc-measurement-claim is opt-in');
-		Assert.equals(184, Linter.builtins().length);
+		Assert.equals(185, Linter.builtins().length);
 	}
 
 	/**

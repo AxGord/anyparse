@@ -278,6 +278,12 @@ final class Linter {
 			// (`i < B`) and `prefer-for-in` (`it.hasNext()`) both refuse by shape.
 			new WhileTrueCondition(),
 			new PreferKeyValueLoop(),
+			// Disjoint from `prefer-keyvalue-loop` by ENFORCEMENT, not by shape luck: this rule's
+			// `claimedByKeyValueLoop` declines every loop that rule claims — a braced body of at
+			// least two statements opening with `final v = X[i];` and holding exactly one `X[i]`.
+			// The predicate has to carry that claim entire; deferring on the OPENING alone left a
+			// loop the sibling declines for one of its own gates reported by neither.
+			new PreferValueLoop(),
 			new DeadBinderCounterLoop(),
 			new RedundantReplaceLoop(),
 			new TrivialGetter(),
