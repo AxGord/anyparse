@@ -3430,6 +3430,118 @@
 			"find": "matched: unreachable.length < roots.length",
 			"replace": "matched: roots.length > 0",
 			"note": "a declared `resolutionRoots` entry matching no `.hx` counts as a working root, so the crossing path admits an init over a scope that is the report alone"
+		},
+		{
+			"name": "M-ISVAR-SLOTS-ANY",
+			"type": "anyparse.check.RedundantIsVar",
+			"method": "candidateOf",
+			"find": "STORAGELESS_SLOTS.contains(access.read) && STORAGELESS_SLOTS.contains(access.write)",
+			"replace": "true",
+			"note": "every accessor slot counts as storageless, so an @:isVar over a `default` / `null` slot that has storage anyway is reported"
+		},
+		{
+			"name": "M-ISVAR-INIT-BLIND",
+			"type": "anyparse.check.RedundantIsVar",
+			"method": "candidateOf",
+			"find": "&& CtorFieldFold.declInitializer(member, shape) == null",
+			"replace": "&& true",
+			"note": "a declaration initializer is ignored, so the fix strips the metadata an `= v` needs to write the field"
+		},
+		{
+			"name": "M-ISVAR-ACCESSOR-BODY-BLIND",
+			"type": "anyparse.check.RedundantIsVar",
+			"method": "touchesStorage",
+			"find": "(accessor || bypass || nativeCodeCarrier(node, ctx))",
+			"replace": "(bypass || nativeCodeCarrier(node, ctx))",
+			"note": "accessor bodies are never read, so the fix strips the metadata from a property whose get_x / set_x, or a subclass override of one, reads or writes the field"
+		},
+		{
+			"name": "M-ISVAR-BYPASS-BLIND",
+			"type": "anyparse.check.RedundantIsVar",
+			"method": "touchesStorage",
+			"find": "(accessor || bypass || nativeCodeCarrier(node, ctx))",
+			"replace": "(accessor || nativeCodeCarrier(node, ctx))",
+			"note": "an @:bypassAccessor construct is never read, so the fix strips the metadata from a field a bypass access still reaches"
+		},
+		{
+			"name": "M-ISVAR-SCOPE-REPORT-ONLY",
+			"type": "anyparse.check.RedundantIsVar",
+			"method": "run",
+			"find": "scope: ReflectionScan.scopeFiles(files, plugin),",
+			"replace": "scope: files,",
+			"note": "the storage scan reads the report set alone, so a one-file lint misses an override in a resolution-scope subclass that writes the field"
+		},
+		{
+			"name": "M-ISVAR-REFLECTION-BLIND",
+			"type": "anyparse.check.RedundantIsVar",
+			"method": "considerClass",
+			"find": "!ReflectionScan.runtimeName(ctx.reflection, c.name) && ",
+			"replace": "",
+			"note": "a reflective string naming the property is ignored, so the fix removes a field `Reflect.field` reads by name"
+		},
+		{
+			"name": "M-ISVAR-RTTI-BLIND",
+			"type": "anyparse.check.RedundantIsVar",
+			"method": "considerClass",
+			"find": "scopeIndex.traits.transitivelyCarriesRtti(owner) || ",
+			"replace": "",
+			"note": "an @:rtti owner is judged like any other, so the fix changes the field set its runtime type information describes"
+		},
+		{
+			"name": "M-ISVAR-CHAIN-UNRESOLVED-ADMITTED",
+			"type": "anyparse.check.RedundantIsVar",
+			"method": "considerClass",
+			"find": " || !scopeIndex.subtypes.supertypeChainResolved(owner)",
+			"replace": "",
+			"note": "an owner whose supertype chain does not resolve is judged anyway, so an ancestor the index never read may carry what reaches the field"
+		},
+		{
+			"name": "M-ISVAR-OPAQUE-BLIND",
+			"type": "anyparse.check.RedundantIsVar",
+			"method": "storageReachable",
+			"find": "if (CondRegionScan.opaqueCondRegionMentioning(tree, entry.source, name, ctx.shape) != null) return true;",
+			"replace": "",
+			"note": "an unparsed `#if` region spelling the name is trusted as empty, although nothing inside it projects for the scan to see"
+		},
+		{
+			"name": "M-ISVAR-MACRO-FIXED",
+			"type": "anyparse.check.RedundantIsVar",
+			"method": "fix",
+			"find": "v.declineReason == null && ",
+			"replace": "",
+			"note": "a finding on a macro-built owner is fixed without a compiler oracle, so the metadata a builder's generated access may need is removed unverified"
+		},
+		{
+			"name": "M-ISVAR-MACRO-NEVER-ADMITTED",
+			"type": "anyparse.check.RedundantIsVar",
+			"method": "run",
+			"find": "oracleVerified: _oracleRelaxed",
+			"replace": "oracleVerified: false",
+			"note": "a macro-built owner's finding is declined even under a compiler oracle, so the verified path the oracle offers never removes its metadata"
+		},
+		{
+			"name": "M-ISVAR-NATIVE-BLIND",
+			"type": "anyparse.check.RedundantIsVar",
+			"method": "touchesStorage",
+			"find": "(accessor || bypass || nativeCodeCarrier(node, ctx))",
+			"replace": "(accessor || bypass)",
+			"note": "target code pasted as a string is not read, so the fix strips the metadata a `__cpp__` / `Syntax.code` / `@:functionCode` access needs, and only the native build fails"
+		},
+		{
+			"name": "M-ISVAR-MEMBER-KEEP-BLIND",
+			"type": "anyparse.check.RedundantIsVar",
+			"method": "candidateOf",
+			"find": "if (retained != null && run.exists(n -> MemberKinds.META_KINDS.contains(n.kind) && n.name == retained)) return null;",
+			"replace": "",
+			"note": "a member-level `@:keep` is ignored, so a member pinned against removal by machinery no scan models loses its storage"
+		},
+		{
+			"name": "M-ISVAR-EMPTY-CALL-UNFIXED",
+			"type": "anyparse.check.RedundantIsVar",
+			"method": "isVarSpelling",
+			"find": "text == IS_VAR_META || text.replace(' ', '').replace('\\t', '') == '$IS_VAR_META()'",
+			"replace": "text == IS_VAR_META",
+			"note": "an argument-less `@:isVar()` is reported but `fix` answers no edit and no reason for it"
 		}
 	]
 }

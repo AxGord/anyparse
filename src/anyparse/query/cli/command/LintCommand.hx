@@ -689,6 +689,12 @@ final class LintCommand implements CliCommand {
 			// `OracleRelaxable`), so the entry is INERT today — it is kept because it would carry
 			// the fixes again if the rule ever stopped being risky.
 			'unused-public-member',
+			// redundant-isvar's accessor-body, bypass and reflection scans read every file in scope.
+			// On the active SUBSET a subclass override in an unchanged file that writes the field
+			// reads as absent, and `--fix` would strip the metadata that override needs to compile.
+			// The entry acts only WITHOUT an oracle: the rule is `OracleRelaxable`, so that is when it
+			// joins the safe loop; with one it is verified as a `RiskyFix` over the whole set.
+			'redundant-isvar',
 			// inline-constant's reflection gate is the same whole-project string scan its three
 			// siblings on this list share (`orphan-accessor` and `unused-public-member` above,
 			// `static-constant` below), and it gates the FINDING rather than the fix. On the

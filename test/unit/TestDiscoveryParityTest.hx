@@ -315,6 +315,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.RedundantElseCheckTest',
 		'unit.check.RedundantImportCheckTest',
 		'unit.check.RedundantIsCheckTest',
+		'unit.check.RedundantIsVarCheckTest',
 		'unit.check.RedundantLambdaWrapperCheckTest',
 		'unit.check.RedundantMapExistsCheckTest',
 		'unit.check.RedundantMapIterKeyCheckTest',
@@ -1296,6 +1297,26 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PreferValueLoopCheckTest#testFixRewritesBlockBody :: control :: M-VALUE-LOOP-READS-UNSPLICED',
 			'unit.check.PreferValueLoopCheckTest#testMacroIndexReadNotFlagged :: control :: M-VALUE-LOOP-INDEX-TEXT-BLIND',
 			'unit.check.RedundantImportCheckTest#testSubTypeImportBesideItsModuleImportIsRedundant :: control :: M-DECLARINGFILES-EMPTY',
+			'unit.check.RedundantIsVarCheckTest#testBypassAccessorNotFlagged :: control :: M-ISVAR-BYPASS-BLIND',
+			'unit.check.RedundantIsVarCheckTest#testCppCodeOutsideAnAccessorNotFlagged :: control :: M-ISVAR-NATIVE-BLIND',
+			'unit.check.RedundantIsVarCheckTest#testDefaultSlotNotFlagged :: control :: M-ISVAR-SLOTS-ANY',
+			'unit.check.RedundantIsVarCheckTest#testEmptyArgumentListIsFixedAndArgumentsAreNotJudged :: control :: '
+				+ 'M-ISVAR-EMPTY-CALL-UNFIXED',
+			'unit.check.RedundantIsVarCheckTest#testFunctionCodeMetaNotFlagged :: control :: M-ISVAR-NATIVE-BLIND',
+			'unit.check.RedundantIsVarCheckTest#testGetterReadingStorageNotFlagged :: control :: M-ISVAR-ACCESSOR-BODY-BLIND',
+			'unit.check.RedundantIsVarCheckTest#testInitializerNotFlagged :: control :: M-ISVAR-INIT-BLIND',
+			'unit.check.RedundantIsVarCheckTest#testJsSyntaxCodeOutsideAnAccessorNotFlagged :: control :: M-ISVAR-NATIVE-BLIND',
+			'unit.check.RedundantIsVarCheckTest#testKeptMemberNotFlagged :: control :: M-ISVAR-MEMBER-KEEP-BLIND',
+			'unit.check.RedundantIsVarCheckTest#testMacroBuiltOwnerDeclinedWithoutTheOracle :: control :: M-ISVAR-MACRO-FIXED',
+			'unit.check.RedundantIsVarCheckTest#testMacroBuiltOwnerFixedUnderTheOracle :: control :: M-ISVAR-MACRO-NEVER-ADMITTED',
+			'unit.check.RedundantIsVarCheckTest#testOpaqueCondRegionMentioningTheNameNotFlagged :: control :: M-ISVAR-OPAQUE-BLIND',
+			'unit.check.RedundantIsVarCheckTest#testReflectionByNameNotFlagged :: control :: M-ISVAR-REFLECTION-BLIND',
+			'unit.check.RedundantIsVarCheckTest#testRttiOwnerNotFlagged :: control :: M-ISVAR-RTTI-BLIND',
+			'unit.check.RedundantIsVarCheckTest#testSetterWritingStorageNotFlagged :: control :: M-ISVAR-ACCESSOR-BODY-BLIND',
+			'unit.check.RedundantIsVarCheckTest#testSubclassOverrideOutsideTheReportScopeNotFlagged :: control :: '
+				+ 'M-ISVAR-SCOPE-REPORT-ONLY',
+			'unit.check.RedundantIsVarCheckTest#testSubclassOverrideWritingStorageNotFlagged :: control :: M-ISVAR-ACCESSOR-BODY-BLIND',
+			'unit.check.RedundantIsVarCheckTest#testUnresolvedSupertypeNotFlagged :: control :: M-ISVAR-CHAIN-UNRESOLVED-ADMITTED',
 			'unit.check.RedundantReplaceLoopCheckTest#testEmptyLiteralReplacementBoundsTheRedundancyToOneCharacter :: control :: '
 				+ 'M-EMPTY-B-ANY-NONEMPTY',
 			'unit.check.RedundantReplaceLoopCheckTest#testMultiCharSearchWithEmptyReplacementNotFlagged :: control :: M-SEAM-BLIND',
@@ -2348,7 +2369,21 @@ class TestDiscoveryParityTest extends Test {
 			'M-FIAD-PUBLIC-ADMITTED',
 			'M-FIAD-TRY-BOUNDARY-CLEARED',
 			'M-FIAD-SHADOW-IGNORED',
-			'M-FIAD-ROOTS-MATCH-IGNORED'
+			'M-FIAD-ROOTS-MATCH-IGNORED',
+			'M-ISVAR-SLOTS-ANY',
+			'M-ISVAR-INIT-BLIND',
+			'M-ISVAR-ACCESSOR-BODY-BLIND',
+			'M-ISVAR-BYPASS-BLIND',
+			'M-ISVAR-SCOPE-REPORT-ONLY',
+			'M-ISVAR-REFLECTION-BLIND',
+			'M-ISVAR-RTTI-BLIND',
+			'M-ISVAR-CHAIN-UNRESOLVED-ADMITTED',
+			'M-ISVAR-OPAQUE-BLIND',
+			'M-ISVAR-MACRO-FIXED',
+			'M-ISVAR-MACRO-NEVER-ADMITTED',
+			'M-ISVAR-NATIVE-BLIND',
+			'M-ISVAR-MEMBER-KEEP-BLIND',
+			'M-ISVAR-EMPTY-CALL-UNFIXED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

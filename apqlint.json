@@ -104,6 +104,9 @@
 		"redundant-cast-type": {
 			"enabled": true
 		},
+		"redundant-isvar": {
+			"enabled": true
+		},
 		"redundant-lambda-wrapper": {
 			"enabled": true
 		},

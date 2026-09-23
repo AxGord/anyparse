@@ -287,6 +287,10 @@ final class Linter {
 			new DeadBinderCounterLoop(),
 			new RedundantReplaceLoop(),
 			new TrivialGetter(),
+			// Also drops an `@:isVar`, and the two can never claim the same one: `trivial-getter`'s
+			// self-backed arm needs a getter that returns the property's own name, which this rule's
+			// accessor-body gate refuses. Registry order is therefore free.
+			new RedundantIsVar(),
 			new NullableSwitchMissingNull(),
 			new ShadowingCaseBinder(),
 			new ShadowingLocal(),
