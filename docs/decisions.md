@@ -634,3 +634,15 @@ decided the question; it may not become a record of runs.
   key-value iterator re-reads each value by key (a removed entry reads null), and a value loop over a local
   re-reads the local while the key-value iterator captured it once; the drop needs a std Array/List,
   unaliased, not shadowed, never reassigned (redundant-map-iter-key shared the unsound drop) — `d383325d`
+- prefer-final-field / prefer-final-public-field: every change a build macro can make to a `var` → `final` edit
+  was assumed to be a compile error the oracle sees → the conditional-default FOLD changes a property's kind
+  (FProp → FVar) and moves the initializer after builder-prepended code, and a builder that branches on finality
+  compiles either way; the fold is never admitted on a macro-built owner and a finality-reading builder declines
+  — `37ab06fb`
+- unused-private: a string naming a private static was assumed to matter only where source SPELLS a class value
+  of its owner → a build macro can register the class (`$p{path}` into a registry) and `Type.getClass(this)`
+  inside a macro reification binds `this` to the expansion site; a reifying project macro and a macro-file
+  `getClass(this)` now open the gate — `37ab06fb`
+- prefer-comprehension: an empty `[]` declaration filled by `a[j] = v` was assumed to be an Array → a `Map`
+  annotation makes the fold not compile and an abstract with an `@:arrayAccess` setter loses its side effect;
+  the fold takes only an unannotated or `Array`-headed declaration — `37ab06fb`
