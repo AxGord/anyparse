@@ -98,7 +98,7 @@ final class PreferCaseGuardOracleE2ETest extends Test {
 		final result: FixVerifyResult = FixVerifier.verify(
 			[{ file: path, source: APPLIES }],
 			[new PreferCaseGuard()],
-			new HaxeQueryPlugin(), 'check.hxml', dir, (p, c) -> File.saveContent(p, c)
+			new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], (p, c) -> File.saveContent(p, c)
 		);
 		Assert.equals(1, result.applied.length, 'a guard the build accepts is applied');
 		Assert.equals(0, result.reverted.length);
@@ -126,7 +126,7 @@ final class PreferCaseGuardOracleE2ETest extends Test {
 		final result: FixVerifyResult = FixVerifier.verify(
 			[{ file: path, source: REVERTS }],
 			[new PreferCaseGuard()],
-			new HaxeQueryPlugin(), 'check.hxml', dir, (p, c) -> File.saveContent(p, c)
+			new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], (p, c) -> File.saveContent(p, c)
 		);
 		Assert.equals(0, result.applied.length, 'a guard that breaks exhaustiveness is not applied');
 		Assert.equals(1, result.reverted.length, 'it is reverted to a report-only fallback');

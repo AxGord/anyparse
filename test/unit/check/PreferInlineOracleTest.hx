@@ -157,7 +157,7 @@ class PreferInlineOracleTest extends Test {
 			{ file: '$dir/Main.hx', source: PARTIAL_MAIN }
 		];
 		final result: FixVerifyResult = FixVerifier.verify(
-			files, [check], new HaxeQueryPlugin(), 'check.hxml', dir, (p, c) -> File.saveContent(p, c)
+			files, [check], new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], (p, c) -> File.saveContent(p, c)
 		);
 		Assert.equals(1, result.applied.length, 'Lib.hx changed on disk (partially applied)');
 		Assert.equals(0, result.reverted.length, 'no file is fully reverted');

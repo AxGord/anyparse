@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.Violation;
+import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
@@ -194,6 +195,24 @@ final class RunScan {
 	public static function oneFile(violations: Array<Violation>, ruleId: String): String {
 		assertOneFile(violations, ruleId);
 		return violations[0].file;
+	}
+
+	/**
+	 * The edit set of a check whose `fix` is a TYPED, span-keyed tree walk: parse, resolve the
+	 * declared types, key the caller's OWN violations by span, walk once, and drop any edit
+	 * another edit contains. Four lines that several checks wrote identically, so the keying and
+	 * the containment filter now have one definition rather than a copy per rule.
+	 */
+	public static function walkedEdits<S>(
+		plugin: GrammarPlugin, source: String, seams: Null<S>, violations: Array<Violation>,
+		walk: (tree:QueryNode, types:Null<Map<Int, String>>, seams:S, wanted:Array<String>, out:Array<FixEdit>) -> Void
+	): Array<FixEdit> {
+		return editsWith(plugin, source, seams, (tree, s) -> {
+			final types: Null<Map<Int, String>> = typeInfoOf(plugin)?.declaredTypeSources(source);
+			final out: Array<FixEdit> = [];
+			walk(tree, types, s, spanKeys(violations), out);
+			return CanonicalEdit.dropContainedEdits(out);
+		});
 	}
 
 }

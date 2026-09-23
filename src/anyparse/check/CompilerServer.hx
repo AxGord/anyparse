@@ -43,8 +43,8 @@ typedef ServerState = {
  *
  * The server is spawned DETACHED and deliberately outlives the process that started it —
  * that is the whole point, since a server warmed and killed inside one run would only
- * add cost. It is recorded in a state file under the OS temp dir keyed by the
- * (hxml, cwd) pair, and `stopShared` is its explicit teardown.
+ * add cost. It is recorded in a state file under the OS temp dir keyed by the (hxml, cwd, defines) triple — one server per
+ * CONFIGURATION, since a server holds the modules of the build it was warmed for — and `stopShared` is its explicit teardown.
  *
  * Opt-in per project through the `apqlint.json` `compilerOracleServer` key, and
  * declinable process-wide with `APQ_NO_ORACLE_SERVER` — a daemon that outlives the run
@@ -137,19 +137,24 @@ final class CompilerServer {
 	private static inline final MS_PER_SECOND: Float = 1000;
 
 	/**
-	 * Typecheck `hxml` (compiled from `cwd`) through the project's shared warm server, or
-	 * null when the warm path could not be used — the caller then falls back to
+	 * Typecheck `hxml` (compiled from `cwd`, under `defines`) through the project's shared warm
+	 * server, or null when the warm path could not be used — the caller then falls back to
 	 * `CompilerOracle.typecheck`, whose verdict a null here promises to be equivalent to.
 	 * `paths` are the files the caller is linting: every one of them modified since the
 	 * last compile through this server is invalidated first (see the class doc).
+	 *
+	 * The `defines` reach both the state file's key and every `--connect` this server is driven
+	 * with: a server warmed under one configuration holds that configuration's modules, so
+	 * letting a second configuration reuse it would answer its question with the first's build.
 	 */
-	public static function typecheck(hxml: String, cwd: Null<String>, paths: Array<String>): Null<OracleOutcome> {
+	public static function typecheck(hxml: String, cwd: Null<String>, paths: Array<String>, ?defines: Array<String>): Null<OracleOutcome> {
 		#if nodejs
-		final ready: Null<ServerState> = reuse(hxml, cwd, paths) ?? startServer(hxml, cwd);
+		final flags: Array<String> = defines ?? [];
+		final ready: Null<ServerState> = reuse(hxml, cwd, paths, flags) ?? startServer(hxml, cwd, flags);
 		if (ready == null) return null;
 		invocations++;
 		final startedAt: Int = nowSeconds();
-		final res: Null<ConnectResult> = connect(ready.port, hxml, cwd, ['--no-output']);
+		final res: Null<ConnectResult> = connect(ready.port, hxml, cwd, ['--no-output'], flags);
 		if (res == null || isConnectRefusal(res)) return null;
 		// The watermark only moves for a compile that RAN to a status: a client killed
 		// mid-compile leaves the server holding whatever it had read, which the next run
@@ -159,7 +164,7 @@ final class CompilerServer {
 			case 0: Confirmed;
 			case _: Rejected(res.output.trim());
 		};
-		writeState(hxml, cwd, { port: ready.port, pid: ready.pid, compiledAt: startedAt });
+		writeState(hxml, cwd, { port: ready.port, pid: ready.pid, compiledAt: startedAt }, flags);
 		return outcome;
 		#else
 		return null;
@@ -171,24 +176,24 @@ final class CompilerServer {
 	 * a caller that must not leave a daemon behind (a test fixture, a machine being
 	 * cleaned up). A no-op when nothing is recorded.
 	 */
-	public static function stopShared(hxml: String, cwd: Null<String>): Void {
+	public static function stopShared(hxml: String, cwd: Null<String>, ?defines: Array<String>): Void {
 		#if nodejs
-		final state: Null<ServerState> = readState(hxml, cwd);
+		final state: Null<ServerState> = readState(hxml, cwd, defines);
 		if (state != null && isOurServer(state.pid, state.port)) killPid(state.pid);
-		final path: String = stateFile(hxml, cwd);
+		final path: String = stateFile(hxml, cwd, defines);
 		if (sys.FileSystem.exists(path)) deleteState(path);
 		#end
 	}
 
 	/**
-	 * Where the shared server for `hxml` (compiled from `cwd`) is recorded — one file per
-	 * project under the OS temp dir, keyed by a digest of the pair so two checkouts, or
-	 * two build files in one checkout, never share a server. Public because it is also how
-	 * a human finds the pid of a daemon to stop.
+	 * Where the shared server for `hxml` (compiled from `cwd` under `defines`) is recorded — one
+	 * file per configuration under the OS temp dir, keyed by a digest of the triple so two
+	 * checkouts, two build files in one checkout, or two define sets over one build file never
+	 * share a server. Public because it is also how a human finds the pid of a daemon to stop.
 	 */
-	public static function stateFile(hxml: String, cwd: Null<String>): String {
+	public static function stateFile(hxml: String, cwd: Null<String>, ?defines: Array<String>): String {
 		#if nodejs
-		final key: String = '${absolute(hxml)}|${cwd ?? ''}';
+		final key: String = LintConfig.oracleKey({ hxml: absolute(hxml), dir: cwd, defines: defines ?? [] });
 		return Path.join([TempScratch.root(), 'apq-oracle-${Md5.encode(key)}.json']);
 		#else
 		return '';
@@ -208,14 +213,21 @@ final class CompilerServer {
 	}
 
 	/**
-	 * One `haxe --connect <port> <hxml> <extra…>` round trip run from `cwd`, narrowed to a
+	 * One `haxe <-D …> --connect <port> <hxml> <extra…>` round trip run from `cwd`, narrowed to a
 	 * `ConnectResult`, or null when the client could not be launched at all (no `haxe` on
 	 * PATH). The shared process primitive of every warm-server consumer.
+	 *
+	 * The defines lead, followed by `--each`, so they reach every `--next` arm of the hxml —
+	 * `CompilerOracle.oracleArgs` spells the same discipline for the cold spawn, and a trailing
+	 * `-D` would land in one arm only. `--connect` sits AFTER `--each` because it is a
+	 * client-side flag and must not be duplicated into the arms.
 	 */
-	public static function connect(port: Int, hxml: String, cwd: Null<String>, extra: Array<String>): Null<ConnectResult> {
+	public static function connect(
+		port: Int, hxml: String, cwd: Null<String>, extra: Array<String>, ?defines: Array<String>
+	): Null<ConnectResult> {
 		#if nodejs
 		try {
-			final args: Array<String> = ['--connect', '$port', hxml].concat(extra);
+			final args: Array<String> = connectArgs(port, hxml, extra, defines ?? []);
 			final opts: Dynamic = { encoding: 'utf8' };
 			if (cwd != null) Reflect.setField(opts, 'cwd', cwd);
 			final res: Dynamic = js.node.ChildProcess.spawnSync('haxe', args, opts);
@@ -231,17 +243,33 @@ final class CompilerServer {
 	}
 
 	/**
+	 * The client argument vector for one `--connect` round trip — pure, so the placement is
+	 * assertable without a compiler.
+	 *
+	 * A COMPILE carries its defines ahead of `--each`, for the reason `CompilerOracle.oracleArgs`
+	 * gives. A `--display` request must NOT: `--each` turns it into a per-arm batch that prints no
+	 * reply at all (a type query and a `server/invalidate` alike answer empty with status 0), so its defines lead the hxml bare.
+	 * On a multi-arm hxml every arm receives the request and the FIRST one answers it (a later arm replies `No completion point
+	 * was found`), and a leading define reaches exactly that first arm — so the reply is the first arm's, under these defines.
+	 */
+	public static function connectArgs(port: Int, hxml: String, extra: Array<String>, defines: Array<String>): Array<String> {
+		final lead: Array<String> = CompilerOracle.defineFlags(defines);
+		final spread: Bool = lead.length > 0 && !extra.contains('--display');
+		return (spread ? lead.concat(['--each']) : lead).concat(['--connect', '$port', hxml]).concat(extra);
+	}
+
+	/**
 	 * Poll `--connect` until the server answers (its first real connect drives the initial
 	 * full compile and blocks until it finishes) or the boot budget is spent. A client that
 	 * cannot be launched at all fails immediately rather than burning the whole budget on a
 	 * machine that simply has no compiler.
 	 */
-	public static function warm(port: Int, hxml: String, cwd: Null<String>): Bool {
+	public static function warm(port: Int, hxml: String, cwd: Null<String>, ?defines: Array<String>): Bool {
 		#if nodejs
 		var attempt: Int = 0;
 		while (attempt < MAX_WARM_ATTEMPTS) {
 			attempt++;
-			final res: Null<ConnectResult> = connect(port, hxml, cwd, ['--no-output']);
+			final res: Null<ConnectResult> = connect(port, hxml, cwd, ['--no-output'], defines);
 			if (res == null) return false;
 			if (!isConnectRefusal(res)) return true;
 			sleep();
@@ -285,8 +313,8 @@ final class CompilerServer {
 	 * something else, or so many files changed that a fresh server is cheaper — that last
 	 * case reaps the recorded one so the caller starts over.
 	 */
-	private static function reuse(hxml: String, cwd: Null<String>, paths: Array<String>): Null<ServerState> {
-		final state: Null<ServerState> = readState(hxml, cwd);
+	private static function reuse(hxml: String, cwd: Null<String>, paths: Array<String>, defines: Array<String>): Null<ServerState> {
+		final state: Null<ServerState> = readState(hxml, cwd, defines);
 		if (state == null || !isOurServer(state.pid, state.port)) return null;
 		final stale: Array<String> = staleFiles(paths, state.compiledAt);
 		if (stale.length > MAX_INVALIDATIONS) {
@@ -299,7 +327,7 @@ final class CompilerServer {
 		// A server that is alive but no longer answers as one is reaped rather than left
 		// behind: `startServer` would otherwise spawn its replacement and overwrite the only
 		// record of it, orphaning a process holding a whole compiled project.
-		for (p in probes) if (!invalidate(state.port, hxml, cwd, p)) {
+		for (p in probes) if (!invalidate(state.port, hxml, cwd, p, defines)) {
 			killPid(state.pid);
 			return null;
 		}
@@ -312,7 +340,7 @@ final class CompilerServer {
 	 * outlives this one, so it is unref'd rather than reaped; the record is written as soon
 	 * as the server exists, so a run that dies later still leaves it discoverable.
 	 */
-	private static function startServer(hxml: String, cwd: Null<String>): Null<ServerState> {
+	private static function startServer(hxml: String, cwd: Null<String>, defines: Array<String>): Null<ServerState> {
 		var attempt: Int = 0;
 		while (attempt < MAX_PORT_ATTEMPTS) {
 			attempt++;
@@ -321,13 +349,13 @@ final class CompilerServer {
 			final child: Dynamic = spawnServer(port, true);
 			if (child == null) continue;
 			final spawnedPid: Null<Int> = child.pid;
-			if (spawnedPid != null && warm(port, hxml, cwd) && invalidate(port, hxml, cwd, hxml)) {
+			if (spawnedPid != null && warm(port, hxml, cwd, defines) && invalidate(port, hxml, cwd, hxml, defines)) {
 				final pid: Int = spawnedPid;
 				final state: ServerState = { port: port, pid: pid, compiledAt: startedAt };
-				writeState(hxml, cwd, state);
+				writeState(hxml, cwd, state, defines);
 				// A record that did not land would orphan the daemon the moment this process
 				// exits — nothing else knows its pid — so an unwritable temp dir reaps it here.
-				if (sys.FileSystem.exists(stateFile(hxml, cwd))) {
+				if (sys.FileSystem.exists(stateFile(hxml, cwd, defines))) {
 					child.unref();
 					return state;
 				}
@@ -342,9 +370,9 @@ final class CompilerServer {
 	 * a compilation server at all. False when the port answered as something else — the
 	 * check that keeps a stray listener from passing for a warm server.
 	 */
-	private static function invalidate(port: Int, hxml: String, cwd: Null<String>, file: String): Bool {
+	private static function invalidate(port: Int, hxml: String, cwd: Null<String>, file: String, defines: Array<String>): Bool {
 		final request: String = '{"jsonrpc":"2.0","id":1,"method":"server/invalidate","params":{"file":"${jsonPath(file)}"}}';
-		final res: Null<ConnectResult> = connect(port, hxml, cwd, ['--display', request]);
+		final res: Null<ConnectResult> = connect(port, hxml, cwd, ['--display', request], defines);
 		return res != null && isServerReply(res.output);
 	}
 
@@ -386,16 +414,16 @@ final class CompilerServer {
 	 * it reads back as `undefined`, every `mtime >= undefined` comparison is false, and the
 	 * staleness guard would silently pass over every file instead of failing loudly.
 	 */
-	private static function readState(hxml: String, cwd: Null<String>): Null<ServerState> {
-		final path: String = stateFile(hxml, cwd);
+	private static function readState(hxml: String, cwd: Null<String>, ?defines: Array<String>): Null<ServerState> {
+		final path: String = stateFile(hxml, cwd, defines);
 		if (!sys.FileSystem.exists(path)) return null;
 		final state: Null<ServerState> = try haxe.Json.parse(sys.io.File.getContent(path)) catch (exception: haxe.Exception) null;
 		return state != null && state.port > 0 && state.pid > 0 && state.compiledAt > 0 ? state : null;
 	}
 
 	/** Record `state` as the shared server for `hxml`/`cwd`. */
-	private static function writeState(hxml: String, cwd: Null<String>, state: ServerState): Void {
-		try sys.io.File.saveContent(stateFile(hxml, cwd), haxe.Json.stringify(state)) catch (_exception: haxe.Exception) {
+	private static function writeState(hxml: String, cwd: Null<String>, state: ServerState, ?defines: Array<String>): Void {
+		try sys.io.File.saveContent(stateFile(hxml, cwd, defines), haxe.Json.stringify(state)) catch (_exception: haxe.Exception) {
 			// A temp dir we cannot write to only costs the next run a fresh server, never a verdict.
 		}
 	}

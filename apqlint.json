@@ -95,10 +95,16 @@
 		"prefer-typed-throw": {
 			"enabled": true
 		},
+		"prefer-value-loop": {
+			"enabled": true
+		},
 		"redundant-ascription": {
 			"enabled": true
 		},
 		"redundant-cast-type": {
+			"enabled": true
+		},
+		"redundant-isvar": {
 			"enabled": true
 		},
 		"redundant-lambda-wrapper": {
@@ -129,6 +135,9 @@
 			"enabled": true
 		},
 		"try-catch-null-guard": {
+			"enabled": true
+		},
+		"unused-loop-binder": {
 			"enabled": true
 		},
 		"unused-public-member": {

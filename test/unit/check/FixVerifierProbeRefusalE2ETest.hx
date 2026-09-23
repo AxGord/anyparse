@@ -191,7 +191,7 @@ final class FixVerifierProbeRefusalE2ETest extends Test {
 		final result: FixVerifyResult = FixVerifier.verify(
 			files,
 			[new TableFake(TABLE)],
-			new HaxeQueryPlugin(), 'check.hxml', dir, File.saveContent
+			new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], File.saveContent
 		);
 		Assert.isTrue(result.baseline.match(Confirmed), 'the oracle baseline must confirm — else these negatives are vacuous');
 		final after: String = File.getContent('$dir/Main.hx');
@@ -238,7 +238,7 @@ final class FixVerifierProbeRefusalE2ETest extends Test {
 		final result: FixVerifyResult = FixVerifier.verify(
 			files,
 			[new TableFake(TABLE)],
-			new HaxeQueryPlugin(), 'check.hxml', dir, File.saveContent
+			new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], File.saveContent
 		);
 		final spawns: Int = CompilerOracle.invocations - before;
 		Assert.isTrue(result.baseline.match(Confirmed), 'the oracle baseline must confirm — else these negatives are vacuous');
@@ -286,7 +286,7 @@ final class FixVerifierProbeRefusalE2ETest extends Test {
 		final result: FixVerifyResult = FixVerifier.verify(
 			files,
 			[new TableFake(ALL_DOOMED)],
-			new HaxeQueryPlugin(), 'check.hxml', dir, File.saveContent
+			new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], File.saveContent
 		);
 		Assert.isTrue(result.baseline.match(Confirmed), 'the oracle baseline must confirm — else these negatives are vacuous');
 		Assert.equals(0, result.appliedEdits, 'nothing survives when every unit is doomed');
@@ -345,7 +345,7 @@ final class FixVerifierProbeRefusalE2ETest extends Test {
 		final result: FixVerifyResult = FixVerifier.verify(
 			files,
 			[new TableFake(WIDE_TABLE)],
-			new HaxeQueryPlugin(), 'check.hxml', dir, File.saveContent
+			new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], File.saveContent
 		);
 		Assert.isTrue(result.baseline.match(Confirmed), 'the oracle baseline must confirm — else these negatives are vacuous');
 		Assert.equals(1, result.partials.length, 'the file was bisected');

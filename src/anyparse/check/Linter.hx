@@ -278,9 +278,24 @@ final class Linter {
 			// (`i < B`) and `prefer-for-in` (`it.hasNext()`) both refuse by shape.
 			new WhileTrueCondition(),
 			new PreferKeyValueLoop(),
+			// Disjoint from `prefer-keyvalue-loop` by ENFORCEMENT, not by shape luck: this rule's
+			// `claimedByKeyValueLoop` declines every loop that rule claims — a braced body of at
+			// least two statements opening with `final v = X[i];` and holding exactly one `X[i]`.
+			// The predicate has to carry that claim entire; deferring on the OPENING alone left a
+			// loop the sibling declines for one of its own gates reported by neither.
+			new PreferValueLoop(),
 			new DeadBinderCounterLoop(),
+			// Renames an unread loop binder to `_`, a span inside the header `dead-binder-counter-loop`
+			// rewrites whole — but never on the same loop: this rule asks `DeadBinderCounterLoop.claims`
+			// and leaves a claimed loop alone. It skips a loop whose key is already `_`, which is
+			// `redundant-map-iter-key`'s, so registry order is free.
+			new UnusedLoopBinder(),
 			new RedundantReplaceLoop(),
 			new TrivialGetter(),
+			// Also drops an `@:isVar`, and the two can never claim the same one: `trivial-getter`'s
+			// self-backed arm needs a getter that returns the property's own name, which this rule's
+			// accessor-body gate refuses. Registry order is therefore free.
+			new RedundantIsVar(),
 			new NullableSwitchMissingNull(),
 			new ShadowingCaseBinder(),
 			new ShadowingLocal(),

@@ -37,6 +37,14 @@ interface SymbolIndexHost {
 	function hasDeclaredResolutionScope(): Bool;
 
 	/**
+	 * Whether the project declared `resolutionRoots` AND they matched at least one `.hx` — the
+	 * signal that the report files plus `resolutionProjectFiles` span the declared roots, including
+	 * a whole-project lint where every root file sits in the report and `resolutionProjectFiles`
+	 * therefore cannot tell it from a project with no working roots. Reads the scope's sources.
+	 */
+	function projectRootsMatched(): Bool;
+
+	/**
 	 * The memoised resolution-scoped `SymbolIndex` (built once, over report
 	 * files UNION the library roots), or null when no scope is configured.
 	 */

@@ -222,19 +222,18 @@ final class LintCommand implements CliCommand {
 		);
 		// Compiler oracle (opt-in via apqlint.json `compilerOracle`): a project-level
 		// setting, so the config resolved for the first linted file carries it for the
-		// whole run — its hxml is typechecked as ground truth below. That stays; what it owes
+		// whole run — every configuration it declares is typechecked as ground truth below, and a
+		// project with conditional compilation needs more than one. That stays; what it owes
 		// the reader is a word when the scope spans roots that name DIFFERENT builds, since
 		// every risky and oracle-assisted verdict below is then taken against a build the
 		// second root never declared.
 		warnScopeNotices(activeChecks, resolveConfig, paths, o.noOracle);
 		final oracleConfig: Null<LintConfig> = paths.length > 0 ? resolveConfig(paths[0]) : null;
-		final oracleHxml: Null<String> = oracleConfig?.compilerOracle();
-		final oracleDir: Null<String> = oracleConfig?.compilerOracleDir();
+		final oracles: Array<OracleConfig> = oraclesOf(oracleConfig);
 
 		if (o.fix)
 			return LintFixDriver.runLintFix(
-				files, activeChecks, plugin, resolveConfig, applyEnablement, resolution, oracleHxml, oracleDir, o.noOracle, o.range,
-				o.verbose
+				files, activeChecks, plugin, resolveConfig, applyEnablement, resolution, oracles, o.noOracle, o.range, o.verbose
 			);
 
 		// Report mode only — the fix path returned above, so this pass never runs redundantly in a
@@ -261,8 +260,8 @@ final class LintCommand implements CliCommand {
 		// PROJECT-WIDE typecheck regardless of how narrow the lint scope is — nearly the
 		// whole of a single-file run, the inner loop's largest single tax.
 		final oracleExit: Null<Int> = o.noOracle
-			? LintFixVerify.oracleSkippedNote(oracleHxml)
-			: LintFixVerify.reportModeOracle(oracleHxml, oracleDir, paths, oracleConfig?.compilerOracleServer() ?? false);
+			? LintFixVerify.oracleSkippedNote(oracles)
+			: LintFixVerify.reportModeOracle(oracles, paths, oracleConfig?.compilerOracleServer() ?? false);
 		if (oracleExit != null) return oracleExit;
 
 		final failOn: Null<Severity> = o.failOn;
@@ -294,6 +293,18 @@ final class LintCommand implements CliCommand {
 			verbose: false,
 			errExit: code
 		};
+	}
+
+	/**
+	 * Every compiler-oracle configuration `config` declares, or none when this run resolved no
+	 * config at all (an empty scope).
+	 *
+	 * Named rather than written as a `?.` chain at the one call site: `runLint` is at its
+	 * complexity budget, and a null check spent on a scope that matched no file is not what that
+	 * budget is for.
+	 */
+	private static function oraclesOf(config: Null<LintConfig>): Array<OracleConfig> {
+		return config == null ? [] : config.compilerOracles();
 	}
 
 	/**
@@ -404,13 +415,16 @@ final class LintCommand implements CliCommand {
 		final reportPaths: Map<String, Bool> = [for (f in files) realPath(f.file) => true];
 		var projectRoots: Null<Array<{ file: String, source: String }>> = null;
 		var library: Null<Array<{ file: String, source: String }>> = null;
+		var rootsMatched: Bool = false;
 		return {
 			declared: declared,
 			sources: () -> {
 				final memoisedRoots: Null<Array<{ file: String, source: String }>> = projectRoots;
 				final memoised: Null<Array<{ file: String, source: String }>> = library;
 				if (memoisedRoots == null || memoised == null) {
-					final rootFiles: Array<{ file: String, source: String }> = readResolutionRoots(roots, reportPaths);
+					final read: { files: Array<{ file: String, source: String }>, matched: Bool } = readResolutionRoots(roots, reportPaths);
+					final rootFiles: Array<{ file: String, source: String }> = read.files;
+					rootsMatched = read.matched;
 					projectRoots = rootFiles;
 					// The library half stays the WHOLE read-only scope — project roots included — so the
 					// process-scoped parse tier keeps promoting exactly what it did, and it stays ONE
@@ -419,7 +433,12 @@ final class LintCommand implements CliCommand {
 				}
 				final rootFiles: Array<{ file: String, source: String }> = projectRoots ?? [];
 				final libFiles: Array<{ file: String, source: String }> = library ?? [];
-				return { report: files, projectRoots: rootFiles, library: new LibrarySources(libFiles) };
+				return {
+					report: files,
+					projectRoots: rootFiles,
+					library: new LibrarySources(libFiles),
+					rootsMatched: rootsMatched
+				};
 			}
 		};
 	}
@@ -463,7 +482,7 @@ final class LintCommand implements CliCommand {
 	 */
 	private static function readResolutionRoots(
 		roots: Array<String>, reportPaths: Map<String, Bool>
-	): Array<{ file: String, source: String }> {
+	): { files: Array<{ file: String, source: String }>, matched: Bool } {
 		// Expanded per ROOT rather than in one call, so a root that matches nothing can be NAMED.
 		// A declared root resolving to no `.hx` — a typo, a directory since moved, a path written
 		// against the wrong base — leaves `projectRoots` empty, which is byte-identical to never
@@ -489,7 +508,9 @@ final class LintCommand implements CliCommand {
 			}
 		}
 		ConfigDisagreement.warnUnreachableProjectRoots(unreachable);
-		return out;
+		// MATCHED counts the report files too: a whole-project lint excludes every root file from `out`,
+		// and its roots matched all the same.
+		return { files: out, matched: unreachable.length < roots.length };
 	}
 
 	/**
@@ -668,6 +689,12 @@ final class LintCommand implements CliCommand {
 			// `OracleRelaxable`), so the entry is INERT today — it is kept because it would carry
 			// the fixes again if the rule ever stopped being risky.
 			'unused-public-member',
+			// redundant-isvar's accessor-body, bypass and reflection scans read every file in scope.
+			// On the active SUBSET a subclass override in an unchanged file that writes the field
+			// reads as absent, and `--fix` would strip the metadata that override needs to compile.
+			// The entry acts only WITHOUT an oracle: the rule is `OracleRelaxable`, so that is when it
+			// joins the safe loop; with one it is verified as a `RiskyFix` over the whole set.
+			'redundant-isvar',
 			// inline-constant's reflection gate is the same whole-project string scan its three
 			// siblings on this list share (`orphan-accessor` and `unused-public-member` above,
 			// `static-constant` below), and it gates the FINDING rather than the fix. On the

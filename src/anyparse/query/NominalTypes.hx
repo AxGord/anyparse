@@ -2,6 +2,8 @@ package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.NodeShape;
+import anyparse.query.Refs.RefHit;
+import anyparse.query.Refs.RefKind;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -474,6 +476,32 @@ final class NominalTypes {
 	}
 
 	/**
+	 * Whether a key-value loop over `iterable` may drop its key and iterate the values alone: the
+	 * iterable's type resolves to a `RefShape.valueIterationTypes` container that the file does not
+	 * rebind (no import alias spelling the name, no import of another type under it, no indexed
+	 * project type of that name), and the iterable is not a local or parameter written anywhere in
+	 * its scope. That last gate is the language, not the container: a value loop over a bare local
+	 * re-reads the LOCAL each step, while the key-value iterator captured the value once, so a
+	 * reassignment in the body — or in a closure the body calls — changes what the value loop sees.
+	 * A field is read once into a hidden temporary by both forms. `importMap` is the file's
+	 * `TypeInfoProvider.importMap`.
+	 */
+	public static function valueIterationProvable(
+		iterable: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: Null<SymbolIndex>, file: String,
+		importMap: Map<String, String>
+	): Bool {
+		final types: Null<Map<String, String>> = shape.valueIterationTypes;
+		final nominal: Null<String> = expressionTypeNominal(iterable, root, shape, declaredTypes, index, file);
+		if (types == null || nominal == null || index == null) return false;
+		final stdPath: Null<String> = types[nominal];
+		if (stdPath == null || shadowedByNonStdType(index, nominal)) return false;
+		final imported: Null<String> = importMap[nominal];
+		if (imported != null && imported != stdPath) return false;
+		final aliasKinds: Array<String> = shape.importAliasKinds ?? [];
+		return !root.children.exists(c -> aliasKinds.contains(c.kind) && c.name == nominal) && !reassignedLocal(iterable, root, shape);
+	}
+
+	/**
 	 * A receiver path's ROOT reduced to whichever of the two things a root can BE: the enclosing
 	 * type declaration (the self reference) or a value BINDING. Null when the path's root is not
 	 * a bare identifier at all, or the one thing it is cannot be resolved.
@@ -831,6 +859,22 @@ final class NominalTypes {
 			if (hit != null) return hit;
 		}
 		return null;
+	}
+
+	/**
+	 * Whether `node` is a bare identifier whose binding some `Write` in the file reaches — the
+	 * reassignment `valueIterationProvable` refuses. An identifier the resolver cannot bind is a
+	 * field reached through `this`, which neither loop form re-reads.
+	 */
+	private static function reassignedLocal(node: QueryNode, root: QueryNode, shape: RefShape): Bool {
+		final name: Null<String> = node.name;
+		final span: Null<Span> = node.span;
+		if (node.kind != shape.identKind || name == null || span == null) return false;
+		final hits: Array<RefHit> = Refs.find(name, root, shape);
+		final own: Null<RefHit> = hits.find(h -> h.span.from == span.from && h.span.to == span.to);
+		final bound: Null<Span> = own?.bindingSpan;
+		return bound != null
+			&& hits.exists(h -> h.kind == RefKind.Write && h.bindingSpan?.from == bound.from && h.bindingSpan?.to == bound.to);
 	}
 
 }

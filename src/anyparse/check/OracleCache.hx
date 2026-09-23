@@ -62,7 +62,7 @@ private typedef HxmlChain = {
 /**
  * A CONTENT-ADDRESSED verdict cache for the report-mode compiler oracle: one
  * fingerprint over everything `haxe <hxml> --no-output` would read, and one persisted
- * verdict per (hxml, cwd) pair. On a hit no compiler is spawned at all.
+ * verdict per (hxml, cwd, defines) triple. On a hit no compiler is spawned at all.
  *
  * ## Why it exists
  *
@@ -75,6 +75,8 @@ private typedef HxmlChain = {
  * ## What the fingerprint covers
  *
  *  - a format tag, so a change to the scheme itself invalidates every stored record;
+ *  - the configuration's own extra defines, which decide which `#if` arms the compile even
+ *    reads;
  *  - the compiler's own `Defines:` line, which carries the Haxe version and the
  *    resolved version of every library on the command line;
  *  - every hxml in the include chain, by path AND content hash;
@@ -168,18 +170,23 @@ final class OracleCache {
 	}
 
 	/**
-	 * The content fingerprint of everything `haxe <hxml> --no-output` would read, or
+	 * The content fingerprint of everything `haxe <-D …> <hxml> --no-output` would read, or
 	 * null when it cannot be computed honestly — an unreadable first hxml, a compiler
 	 * probe that did not answer, or a target with no filesystem. Null means "no cache",
 	 * never "unchanged".
+	 *
+	 * The `defines` are part of the key because they are part of the COMPILE: two
+	 * configurations sharing one hxml and differing only in a define are two different
+	 * typechecks with two different verdicts, and a key blind to them would answer one
+	 * configuration's question with the other's stored answer.
 	 */
-	public static function fingerprint(hxml: String, cwd: Null<String>): Null<String> {
+	public static function fingerprint(hxml: String, cwd: Null<String>, ?defines: Array<String>): Null<String> {
 		#if (sys || nodejs)
 		final root: String = cwd ?? Sys.getCwd();
 		final chain: Null<HxmlChain> = scanHxmlChain(root, hxml);
 		if (chain == null) return null;
 		final probe: CompilerProbe = compilerProbe(root, chain.libs);
-		return probe.ok ? md5(buildManifest(root, chain, probe).join('\n')) : null;
+		return probe.ok ? md5(buildManifest(root, chain, probe, defines ?? []).join('\n')) : null;
 		#else
 		return null;
 		#end
@@ -191,9 +198,9 @@ final class OracleCache {
 	 * record missing a field, an unknown verdict word, or any fingerprint mismatch —
 	 * each of which means the caller must ask the compiler itself.
 	 */
-	public static function lookup(hxml: String, cwd: Null<String>, fingerprint: String): Null<OracleOutcome> {
+	public static function lookup(hxml: String, cwd: Null<String>, fingerprint: String, ?defines: Array<String>): Null<OracleOutcome> {
 		#if (sys || nodejs)
-		final record: Null<OracleVerdictRecord> = readRecord(cacheFile(hxml, cwd));
+		final record: Null<OracleVerdictRecord> = readRecord(cacheFile(hxml, cwd, defines));
 		return record != null && record.fingerprint == fingerprint ? storedOutcome(record) : null;
 		#else
 		return null;
@@ -207,7 +214,9 @@ final class OracleCache {
 	 * says nothing about the tree. A write failure is swallowed, because an unwritable
 	 * temp dir may cost the next run a typecheck but must never cost it a verdict.
 	 */
-	public static function store(hxml: String, cwd: Null<String>, fingerprint: String, outcome: OracleOutcome): Void {
+	public static function store(
+		hxml: String, cwd: Null<String>, fingerprint: String, outcome: OracleOutcome, ?defines: Array<String>
+	): Void {
 		#if (sys || nodejs)
 		final record: Null<OracleVerdictRecord> = switch (outcome) {
 			case Confirmed: { fingerprint: fingerprint, verdict: 'confirmed', errors: '' };
@@ -215,7 +224,7 @@ final class OracleCache {
 			case Unavailable(_): null;
 		};
 		if (record == null) return;
-		final path: String = cacheFile(hxml, cwd);
+		final path: String = cacheFile(hxml, cwd, defines);
 		if (path == '') return;
 		try sys.io.File.saveContent(path, haxe.Json.stringify(record)) catch (_exception: haxe.Exception) {
 			// Swallowed on purpose: see the doc comment above.
@@ -224,13 +233,15 @@ final class OracleCache {
 	}
 
 	/**
-	 * Where this (hxml, cwd) pair's record lives — one file under the OS temp dir, named
-	 * by a hash of the pair. Mirrors `CompilerServer.stateFile`; `''` on a target with
+	 * Where this (hxml, cwd, defines) triple's record lives — one file under the OS temp dir,
+	 * named by a hash of the triple. The defines are in the name and not only in the
+	 * fingerprint, so two configurations sharing an hxml hold two records instead of
+	 * overwriting one another's. Mirrors `CompilerServer.stateFile`; `''` on a target with
 	 * no filesystem, which every caller here reads as "no store".
 	 */
-	public static function cacheFile(hxml: String, cwd: Null<String>): String {
+	public static function cacheFile(hxml: String, cwd: Null<String>, ?defines: Array<String>): String {
 		#if (sys || nodejs)
-		final key: String = '${absolute(cwd ?? Sys.getCwd(), hxml)}|${cwd ?? ''}';
+		final key: String = '${absolute(cwd ?? Sys.getCwd(), hxml)}|${cwd ?? ''}|${(defines ?? []).join(' ')}';
 		return Path.join([TempScratch.root(), 'apq-oracle-verdict-${md5(key)}.json']);
 		#else
 		return '';
@@ -403,7 +414,7 @@ final class OracleCache {
 	 * The manifest the fingerprint hashes: the tag, the compiler's defines, the hxml
 	 * chain, then every reachable `.hx` file by path and content hash, sorted by path.
 	 */
-	private static function buildManifest(root: String, chain: HxmlChain, probe: CompilerProbe): Array<String> {
+	private static function buildManifest(root: String, chain: HxmlChain, probe: CompilerProbe, defines: Array<String>): Array<String> {
 		final files: Map<String, String> = [];
 		// The compile directory is on the compiler's classpath IMPLICITLY — it is the empty
 		// entry in the `Classpath:` line, which `probeDirs` drops. A module dropped next to the
@@ -414,7 +425,7 @@ final class OracleCache {
 		for (dir in probe.dirs) mergeDir(files, absolute(root, dir), true);
 		final fileLines: Array<String> = [for (path => hash in files) '$path $hash'];
 		fileLines.sort(compareStrings);
-		return [FORMAT_TAG, probe.defines].concat(chain.lines).concat(fileLines);
+		return [FORMAT_TAG, probe.defines, 'oracle-defines ${defines.join(' ')}'].concat(chain.lines).concat(fileLines);
 	}
 
 	/**

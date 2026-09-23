@@ -205,6 +205,26 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 		});
 	}
 
+	/**
+	 * The per-FILE question "does this rule CLAIM the loop `forNode`" — it reports the pair
+	 * `(decl, forNode)`, adjacent in the statement list `scope`, and its rewrite drops the loop's dead
+	 * binder together with the counter. `unused-loop-binder` asks so it can leave such a loop to this
+	 * rule: one owner per loop. The answer is the report pass's own `analyze`, so the two cannot
+	 * drift; the seams and the qualified-call probe are built once per file. `typeSources` is the
+	 * file's `declaredTypeSources` map. Null when the grammar lacks this rule's seams.
+	 */
+	public static function claimer(
+		root: QueryNode, source: String, plugin: GrammarPlugin, typeSources: Null<Map<Int, String>>, index: () -> Null<SymbolIndex>
+	): Null<(decl:QueryNode, forNode:QueryNode, scope:QueryNode) -> Bool> {
+		final s: Null<Seams> = readSeams(plugin);
+		if (s == null) return null;
+		final seams: Seams = s;
+		final qualified: () -> Bool = lazyQualified(root, source, plugin, index);
+		return (decl, forNode, scope) ->
+			seams.blockKinds.contains(scope.kind)
+				&& analyze(decl, forNode, scope, root, source, typeSources, seams, index, qualified) != null;
+	}
+
 	/** Whether any SURVIVING edit is the `count()` form — matched by span, since the containment filter rebuilds the list. */
 	private static function keptNeedsLambda(collected: Array<CountEdit>, kept: Array<{ span: Span, text: String }>): Bool {
 		for (c in collected) if (c.lambda) for (k in kept) if (k.span.from == c.edit.span.from && k.span.to == c.edit.span.to) return true;

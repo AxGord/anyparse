@@ -1096,7 +1096,7 @@ final class BinaryChainEmit {
 		// Add ` op ` width per gap so the cascade's `totalLength` /
 		// `exceedsMaxLineLength` predicates measure the realistic flat
 		// span (`items joined by ' op '`).
-		for (i in 0...ops.length) total += ops[i].length + 2;
+		for (op in ops) total += op.length + 2;
 		return {
 			total: total,
 			maxLen: maxLen,

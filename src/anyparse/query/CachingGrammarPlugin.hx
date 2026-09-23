@@ -186,6 +186,12 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		return scope != null && scope.declared;
 	}
 
+	/** `SymbolIndexHost`: whether the declared `resolutionRoots` matched at least one `.hx` (`ResolutionSources.rootsMatched`). */
+	public function projectRootsMatched(): Bool {
+		final sources: Null<ResolutionSources> = scopeSources();
+		return sources != null && sources.rootsMatched == true;
+	}
+
 	/**
 	 * The resolution file set — report files UNION library sources — with every library parse
 	 * PROMOTED into the process-scoped tier on the way out, so the next run over the same
@@ -627,6 +633,14 @@ typedef ResolutionSources = {
 	final report: Array<{ file: String, source: String }>;
 	final projectRoots: Array<{ file: String, source: String }>;
 	final library: LibrarySources;
+
+	/**
+	 * Whether the declared `resolutionRoots` MATCHED at least one `.hx`, report files included. Not
+	 * derivable from `projectRoots`: that half excludes the report, so a whole-project lint answers
+	 * it EMPTY for a project whose roots matched, exactly as for one declaring none or roots matching
+	 * nothing. Absent reads as false.
+	 */
+	@:optional final rootsMatched: Bool;
 };
 
 /**

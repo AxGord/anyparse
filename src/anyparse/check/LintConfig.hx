@@ -25,6 +25,24 @@ typedef RuleConfig = {
 }
 
 /**
+ * ONE compiler-oracle configuration: the hxml to typecheck, the directory that compile runs
+ * from, and the extra defines it carries.
+ *
+ * The key declares a LIST of these because one hxml is one configuration while a `#if` has two
+ * or more arms — an edit in code that only `#if android` compiles is typechecked by nothing a
+ * macOS build runs, so a single configuration cannot keep the promise that a risky fix which
+ * breaks the build is reverted.
+ *
+ * `defines` is EMPTY for the string form of the key, which is what makes that form the
+ * one-element case of this list rather than a second code path.
+ */
+typedef OracleConfig = {
+	var hxml: String;
+	var dir: Null<String>;
+	var defines: Array<String>;
+}
+
+/**
  * ONE `apqlint.json` document, as DECLARED — the intermediate a chain of them is
  * folded through before it becomes a `LintConfig`.
  *
@@ -37,8 +55,7 @@ typedef RuleConfig = {
  */
 typedef LintDocument = {
 	var rules: Map<String, RuleConfig>;
-	var ?compilerOracle: String;
-	var ?compilerOracleDir: String;
+	var ?compilerOracles: Array<OracleConfig>;
 	var ?compilerOracleServer: Bool;
 	var ?resolutionRoots: Array<String>;
 	var ?resolutionLibs: Array<String>;
@@ -82,13 +99,10 @@ final class LintConfig {
 	private final _rules: Map<String, RuleConfig>;
 
 	/**
-	 * The `compilerOracle` hxml path, resolved against the declaring config's
-	 * directory (verbatim when parsed without a base), or null when unset.
+	 * The `compilerOracle` configurations, each hxml resolved against the declaring config's
+	 * directory (verbatim when parsed without a base); an empty array when the key is absent.
 	 */
-	private final _compilerOracle: Null<String>;
-
-	/** The compile CWD probed for that hxml (`hxmlCompileDir`), or null when unset or parsed without a base. */
-	private final _compilerOracleDir: Null<String>;
+	private final _compilerOracles: Array<OracleConfig>;
 
 	/**
 	 * Whether the project opted the oracle into the shared warm compilation
@@ -121,13 +135,12 @@ final class LintConfig {
 	private final _drops: Array<String>;
 
 	public function new(
-		rules: Map<String, RuleConfig>, ?compilerOracle: String, ?compilerOracleDir: String, ?resolutionRoots: Array<String>,
+		rules: Map<String, RuleConfig>, ?compilerOracles: Array<OracleConfig>, ?resolutionRoots: Array<String>,
 		?resolutionLibs: Array<String>, ?resolutionStd: Bool, ?compilerOracleServer: Bool, ?languageVersion: String,
 		?frameworks: Array<FrameworkContract>, ?drops: Array<String>
 	) {
 		_rules = rules;
-		_compilerOracle = compilerOracle;
-		_compilerOracleDir = compilerOracleDir;
+		_compilerOracles = compilerOracles ?? [];
 		_compilerOracleServer = compilerOracleServer ?? false;
 		_resolutionRoots = resolutionRoots ?? [];
 		_resolutionLibs = resolutionLibs ?? [];
@@ -138,28 +151,20 @@ final class LintConfig {
 	}
 
 	/**
-	 * The project's compiler-oracle hxml (the root `compilerOracle` key), or null
-	 * when the config does not opt in. A relative path is resolved against the
-	 * declaring `apqlint.json`'s directory, so the key reads like a path typed next
-	 * to the config; the caller runs `haxe <path> --no-output` from
-	 * `compilerOracleDir()`.
+	 * Every compiler-oracle configuration the project declares (the root `compilerOracle`
+	 * key), in declared order; an empty array when it does not opt in.
+	 *
+	 * There is ONE accessor because every caller is obliged to ask ALL of them: an edit is
+	 * proved safe only by the configurations that actually typecheck it, and taking the first
+	 * would re-open the cross-configuration hole the list exists to close. Each element's
+	 * `dir` is the candidate under which that hxml's own relative `-cp` entries resolve
+	 * (`hxmlCompileDir`) — its own directory for classpaths written relative to itself (a
+	 * nested config naming `"../build.hxml"`), the CONFIG's directory for a lime/openfl-style
+	 * `dist/<target>/haxe/debug.hxml` — or null when the config was parsed without a base
+	 * directory, where there is nothing to resolve against.
 	 */
-	public function compilerOracle(): Null<String> {
-		return _compilerOracle;
-	}
-
-	/**
-	 * The working directory for the compiler-oracle run — the candidate under which the
-	 * HXML's own relative `-cp` entries actually resolve (`hxmlCompileDir`): its own
-	 * directory for an hxml whose classpaths are written relative to itself (a nested
-	 * config naming `"../build.hxml"`), the CONFIG's directory for a lime/openfl-style
-	 * `dist/<target>/haxe/debug.hxml` whose classpaths are written relative to the
-	 * project root the build is invoked from. Null when no oracle is configured, or
-	 * when the config was parsed without a base directory — there is then nothing to
-	 * resolve the declared path against.
-	 */
-	public function compilerOracleDir(): Null<String> {
-		return _compilerOracleDir;
+	public function compilerOracles(): Array<OracleConfig> {
+		return _compilerOracles;
 	}
 
 	/**
@@ -459,9 +464,52 @@ final class LintConfig {
 		return doc == null ? new LintConfig([]) : fromDocument(doc);
 	}
 
-	/** `dir`, or `/` for the empty string `Path.directory` yields at the filesystem root. */
-	private static inline function dirOrRoot(dir: String): String {
-		return dir == '' ? '/' : dir;
+	/**
+	 * Append every `JString` of `items` to `out`, dropping any other element
+	 * — the loop `stringListOption` runs one level up, shared with it.
+	 *
+	 * Public for `OracleDeclaration`, which reads a list of defines off the same per-entry-lenient
+	 * contract and must not answer a wrong-typed element differently from the rest of this reader.
+	 */
+	public static function collectStrings(items: Array<JValue>, out: Array<String>): Void {
+		for (item in items) switch item {
+			case JString(v):
+				out.push(v);
+			case _:
+		}
+	}
+
+	/**
+	 * Resolve a config-relative path (a `resolutionRoots` entry, the `compilerOracle` hxml) to
+	 * absolute against the config dir; an absolute path (or one parsed without a base) is kept as-is.
+	 *
+	 * Public for `OracleDeclaration`: every path a document declares is resolved against the
+	 * directory of THAT document, and one reader spelling it differently is how a nested config's
+	 * oracle would come to point somewhere else.
+	 */
+	public static function resolveAgainstConfigDir(baseDir: Null<String>, path: String): String {
+		return baseDir == null || Path.isAbsolute(path) ? path : Path.normalize(Path.join([baseDir, path]));
+	}
+
+	/**
+	 * One configuration named for a diagnostic: its hxml, plus the defines it adds when it
+	 * declares any.
+	 *
+	 * Every message that used to quote a bare hxml path now has several configurations to tell
+	 * apart, and two of them can share one hxml and differ only in a define.
+	 */
+	public static function describeOracle(oracle: OracleConfig): String {
+		return oracle.defines.length == 0 ? oracle.hxml : '${oracle.hxml} -D ${oracle.defines.join(' -D ')}';
+	}
+
+	/**
+	 * One string per distinct compile a configuration describes: hxml, directory, and defines in
+	 * declared order, each separated by a newline no path or define name carries. The ONE spelling
+	 * every "same configuration?" question shares — the coverage memo, the warm server's state file,
+	 * a report's dedupe — so two of them cannot disagree on what counts as the same build.
+	 */
+	public static function oracleKey(oracle: OracleConfig): String {
+		return [oracle.hxml, oracle.dir ?? ''].concat(oracle.defines).join('\n');
 	}
 
 	/** Guarded stderr write — mirrors `Cli.stderr` (`#if sys` alone is false on hxnodejs). */
@@ -483,10 +531,10 @@ final class LintConfig {
 
 	/**
 	 * `near` layered over `far` — the nearer document's declared keys win, and every
-	 * key it did not name falls through. `compilerOracle` and its probed compile
-	 * directory travel as a PAIR: a document that names its own oracle brings its own
-	 * compile dir with it, and one that names no oracle must not keep a dir belonging
-	 * to somebody else's hxml.
+	 * key it did not name falls through. A `compilerOracle` list replaces wholesale like
+	 * every other array: each element carries its own compile directory and defines, so a
+	 * document that names its own oracles can no longer inherit a directory belonging to
+	 * somebody else's hxml.
 	 */
 	private static function mergeDocuments(near: LintDocument, far: LintDocument): LintDocument {
 		final rules: Map<String, RuleConfig> = [];
@@ -494,8 +542,7 @@ final class LintConfig {
 		for (id => rc in near.rules) rules[id] = mergeRule(rc, far.rules[id]);
 		return {
 			rules: rules,
-			compilerOracle: near.compilerOracle ?? far.compilerOracle,
-			compilerOracleDir: near.compilerOracle != null ? near.compilerOracleDir : far.compilerOracleDir,
+			compilerOracles: near.compilerOracles ?? far.compilerOracles,
 			compilerOracleServer: near.compilerOracleServer ?? far.compilerOracleServer,
 			resolutionRoots: near.resolutionRoots ?? far.resolutionRoots,
 			resolutionLibs: near.resolutionLibs ?? far.resolutionLibs,
@@ -523,8 +570,8 @@ final class LintConfig {
 	/** The finished config for a folded document — the one place the "absent" nulls collapse into the defaults. */
 	private static function fromDocument(doc: LintDocument): LintConfig {
 		return new LintConfig(
-			doc.rules, doc.compilerOracle, doc.compilerOracleDir, doc.resolutionRoots, doc.resolutionLibs, doc.resolutionStd,
-			doc.compilerOracleServer, doc.languageVersion, doc.frameworks, doc.drops
+			doc.rules, doc.compilerOracles, doc.resolutionRoots, doc.resolutionLibs, doc.resolutionStd, doc.compilerOracleServer,
+			doc.languageVersion, doc.frameworks, doc.drops
 		);
 	}
 
@@ -547,29 +594,19 @@ final class LintConfig {
 			final rule: Null<RuleConfig> = parseRule(raw);
 			if (rule != null) rules[id] = rule;
 		}
-		// The oracle hxml resolves against the CONFIG dir, but the compile-dir question has
-		// no single answer: `haxe <path>` does not chdir to the hxml, and real projects write
-		// hxml-relative `-cp` entries against TWO conventions — a config in a subdirectory
-		// naming a parent hxml (`"../build.hxml"`) needs the HXML's own dir (the config dir
-		// resolves every classpath one level too deep), a lime-generated
-		// `dist/<target>/haxe/debug.hxml` needs the CONFIG/project dir (its classpaths are
-		// written relative to where the build is invoked from). `hxmlCompileDir` probes which.
-		// With no base dir there is nothing to resolve against and nothing to claim.
-		final declaredOracle: Null<String> = config.compilerOracle;
-		final oracle: Null<String> = declaredOracle == null ? null : resolveAgainstConfigDir(baseDir, declaredOracle);
-		final oracleDir: Null<String> = oracle == null || baseDir == null ? null : hxmlCompileDir(oracle, baseDir);
+		final drops: Array<String> = [];
+		final declaredOracle: Null<JValue> = config.compilerOracle;
+		final oracles: Null<Array<OracleConfig>> = declaredOracle == null ? null : OracleDeclaration.read(declaredOracle, baseDir, drops);
 		final declaredRoots: Null<Array<String>> = config.resolutionRoots;
 		// Absence has to survive the mapping: `null` is "this document said nothing about
 		// roots, ask the one above", where `[]` is "this document declares none". Collapsing
 		// the two here is what would make an inheriting document silently claim an empty scope.
 		final roots: Null<Array<String>> = declaredRoots?.map(resolveAgainstConfigDir.bind(baseDir));
-		final drops: Array<String> = [];
 		final declaredFrameworks: Null<Array<JValue>> = config.frameworks;
 		final frameworks: Null<Array<FrameworkContract>> = declaredFrameworks == null ? null : parseFrameworks(declaredFrameworks, drops);
 		return {
 			rules: rules,
-			compilerOracle: oracle,
-			compilerOracleDir: oracleDir,
+			compilerOracles: oracles,
 			compilerOracleServer: config.compilerOracleServer,
 			resolutionRoots: roots,
 			resolutionLibs: config.resolutionLibs,
@@ -680,90 +717,6 @@ final class LintConfig {
 				drops.push('frameworks[$i] is not an object — dropped');
 		}
 		return out;
-	}
-
-	/**
-	 * Append every `JString` of `items` to `out`, dropping any other element
-	 * — the loop `stringListOption` runs one level up, shared with it.
-	 */
-	private static function collectStrings(items: Array<JValue>, out: Array<String>): Void {
-		for (item in items) switch item {
-			case JString(v):
-				out.push(v);
-			case _:
-		}
-	}
-
-	/**
-	 * Resolve a config-relative path (a `resolutionRoots` entry, the `compilerOracle` hxml) to
-	 * absolute against the config dir; an absolute path (or one parsed without a base) is kept as-is.
-	 */
-	private static function resolveAgainstConfigDir(baseDir: Null<String>, path: String): String {
-		return baseDir == null || Path.isAbsolute(path) ? path : Path.normalize(Path.join([baseDir, path]));
-	}
-
-	/**
-	 * The directory a compile of `hxml` must run from. `haxe <path>` resolves the hxml's
-	 * relative `-cp` entries against the PROCESS cwd, and real projects write them against
-	 * two different conventions: relative to the hxml's own directory (a root-level
-	 * `build.hxml` named by a nested config as `"../build.hxml"`), or relative to the
-	 * project root the build is invoked from — the config's directory (a lime-generated
-	 * `dist/<target>/haxe/debug.hxml`, whose `-cp src` from the hxml's own dir resolves as
-	 * `dist/<target>/haxe/src` and rejects the whole build with `Type not found`). Neither
-	 * wins by fiat: the hxml's relative classpaths are PROBED under both candidates and the
-	 * one resolving strictly more of them wins; a tie — no relative entries, an unreadable
-	 * hxml, equal hit counts — keeps the hxml's own directory. `/` replaces an empty
-	 * directory for an hxml directly under the filesystem root, where an empty cwd would
-	 * fail the spawn instead of compiling at the root.
-	 */
-	private static function hxmlCompileDir(hxml: String, baseDir: String): String {
-		final own: String = dirOrRoot(Path.directory(hxml));
-		final config: String = dirOrRoot(baseDir);
-		if (config == own) return own;
-		var ownHits: Int = 0;
-		var configHits: Int = 0;
-		for (rel in relativeClasspaths(hxml)) {
-			if (pathExists(Path.normalize(Path.join([own, rel])))) ownHits++;
-			if (pathExists(Path.normalize(Path.join([config, rel])))) configHits++;
-		}
-		return configHits > ownHits ? config : own;
-	}
-
-	/**
-	 * The relative classpath entries (`-cp` / `-p` / `--class-path`) declared inside `hxml` —
-	 * the probe set `hxmlCompileDir` resolves under each candidate directory. Only INPUT
-	 * paths qualify: they must already exist, where an output path (`-cpp`, `-js`) may not
-	 * yet. Absolute entries prove nothing about the compile dir and are dropped; an
-	 * unreadable hxml (or a non-sys target) yields the empty set — the tie.
-	 */
-	private static function relativeClasspaths(hxml: String): Array<String> {
-		#if (sys || nodejs)
-		final content: Null<String> = try sys.io.File.getContent(hxml) catch (exception: Exception) null;
-		if (content == null) return [];
-		final out: Array<String> = [];
-		for (line in content.split('\n')) {
-			final trimmed: String = line.trim();
-			final path: Null<String> = if (trimmed.startsWith('-cp '))
-				trimmed.substr(4)
-			else if (trimmed.startsWith('-p '))
-				trimmed.substr(3)
-			else if (trimmed.startsWith('--class-path '))
-				trimmed.substr(13)
-			else
-				null;
-			if (path == null) continue;
-			final cleaned: String = path.trim();
-			if (cleaned != '' && !Path.isAbsolute(cleaned)) out.push(cleaned);
-		}
-		return out;
-		#else
-		return [];
-		#end
-	}
-
-	/** Whether `path` exists on disk — false wholesale on a non-sys target, keeping the probe a tie there. */
-	private static function pathExists(path: String): Bool {
-		return #if (sys || nodejs) sys.FileSystem.exists(path) #else false #end;
 	}
 
 	/**

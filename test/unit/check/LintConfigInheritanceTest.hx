@@ -212,8 +212,10 @@ class LintConfigInheritanceTest extends Test {
 		final repo: String = CliFixture.repoRoot();
 		final src: LintConfig = LintConfig.discover('$repo/src/anyparse/check/LintConfig.hx');
 		final test: LintConfig = LintConfig.discover('$repo/test/unit/LintConfigInheritanceTest.hx');
-		Assert.equals(src.compilerOracle(), test.compilerOracle(), 'the oracle hxml is inherited, not copied');
-		Assert.equals(src.compilerOracleDir(), test.compilerOracleDir(), 'so is the directory it compiles from');
+		Assert.same(src.compilerOracles(), test.compilerOracles(), 'the oracle configurations are inherited, not copied');
+		Assert.equals(
+			1, test.compilerOracles().length, 'and there is one of them to inherit — an empty list would compare equal to nothing'
+		);
 		// NOT `Assert.equals(src…, test…)`: the ctor defaults an undeclared
 		// `compilerOracleServer` to false, so comparing the two answers false == false and
 		// would pass with no inheritance at all. The VALUE is the assertion — the root turned

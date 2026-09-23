@@ -145,6 +145,42 @@ final class OracleCacheTest extends Test {
 	}
 
 	/**
+	 * Two configurations sharing ONE hxml and differing only in a define do not share a record.
+	 *
+	 * They are two different compiles with two different verdicts, so a key blind to the defines
+	 * answers one configuration's question with the other's stored answer — silent corruption
+	 * rather than a missed hit, and the one cache failure this class's content hashing cannot
+	 * recover from. Both halves of the key are asserted: the record's PATH and the fingerprint
+	 * stored in it.
+	 */
+	public function testTwoConfigurationsSharingOneHxmlDoNotShareARecord(): Void {
+		#if (sys || nodejs)
+		final dir: String = writeLintDir(VALID);
+		Assert.notEquals(
+			OracleCache.cacheFile('check.hxml', dir), OracleCache.cacheFile('check.hxml', dir, ['GRID_MODE']),
+			'the record path carries the defines, so neither configuration overwrites the other'
+		);
+		final plain: Null<String> = OracleCache.fingerprint('check.hxml', dir);
+		if (plain == null) {
+			skipNoFingerprint(dir);
+			return;
+		}
+		Assert.notEquals(plain, OracleCache.fingerprint('check.hxml', dir, ['GRID_MODE']), 'and so does the fingerprint recorded under it');
+		// The end-to-end direction: a verdict stored for the bare configuration must not be
+		// reused for the one that adds a define, whichever half of the key would have leaked.
+		OracleCache.store('check.hxml', dir, plain, Confirmed);
+		final withDefine: Null<String> = OracleCache.fingerprint('check.hxml', dir, ['GRID_MODE']);
+		Assert.isNull(
+			withDefine == null ? null : OracleCache.lookup('check.hxml', dir, withDefine, ['GRID_MODE']),
+			'the define-carrying configuration finds nothing recorded for itself'
+		);
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
 	 * The discriminating pair. Arm A poisons the cache with a `Rejected` on a project
 	 * that DOES typecheck and shows report mode reading it — without that arm the test
 	 * would be vacuous, since a cache nobody consults passes "fix ignores it" trivially.
@@ -175,7 +211,7 @@ final class OracleCacheTest extends Test {
 		final result: FixVerifyResult = FixVerifier.verify(
 			[{ file: path, source: VALID }],
 			[new TestRiskyLiteralRewrite('2')],
-			new HaxeQueryPlugin(), 'check.hxml', dir, (p, c) -> File.saveContent(p, c)
+			new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], (p, c) -> File.saveContent(p, c)
 		);
 		Assert.isTrue(result.baseline.match(Confirmed), 'the fix path asked the compiler itself, not the cache');
 		Assert.equals(1, result.applied.length, 'and applied the risky fix the poisoned record would have blocked');

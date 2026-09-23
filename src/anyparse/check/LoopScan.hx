@@ -1,6 +1,6 @@
 package anyparse.check;
 
-import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.GrammarPlugin;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceText;
@@ -10,8 +10,9 @@ import anyparse.runtime.Span;
 using Lambda;
 
 /**
- * The subtree scans the two COLLECTION-LOOP rewrite rules share — `prefer-keyvalue-loop` (an indexed `for` whose body opens by binding
- * `X[i]`) and `dead-binder-counter-loop` (a `var i = 0;` counter threaded through a `for`-in whose binder nothing reads). Both move a
+ * The subtree scans the COLLECTION-LOOP rewrite rules share — `prefer-keyvalue-loop` (an indexed `for` whose body opens
+ * by binding `X[i]`), `prefer-value-loop` (an indexed `for` whose index only ever indexes `X`) and
+ * `dead-binder-counter-loop` (a `var i = 0;` counter threaded through a `for`-in whose binder nothing reads). Both move a
  * name into, or drop one out of, a loop HEADER, so both must prove the same things about the body: the names involved are not written,
  * not re-declared, not captured by a closure, and — for the collection itself — used only in positions that cannot change its LENGTH.
  *
@@ -58,6 +59,12 @@ final class LoopScan {
 
 	/** The shortest loop body a leading guard can be lifted out of: the guard plus one statement. */
 	private static inline final GUARD_PLUS_ONE: Int = 2;
+
+	/** A single-binder `for` node has exactly [iterable, body] children. */
+	private static inline final FOR_CHILD_COUNT: Int = 2;
+
+	/** An interval node has exactly [lower, upper] children. */
+	private static inline final INTERVAL_CHILD_COUNT: Int = 2;
 
 	/** The name `node` carries when it is a bare identifier, else null. */
 	public static inline function bareIdentName(node: QueryNode, s: LoopSeams): Null<String> {
@@ -109,9 +116,16 @@ final class LoopScan {
 		// the plain-access kind a match requires.
 		final accessKinds: Array<String> = [fieldAccessKind];
 		for (k in [(shape.nullSafeAccessKind: Null<String>), shape.forceFieldAccessKind]) if (k != null) accessKinds.push(k);
+		// A literal's `name` slot carries TEXT, not a symbol, so a name-slot scan must subtract
+		// these before it may read a hit as a binding — `'i'` is a string, not a declaration of `i`.
+		final textLiteralKinds: Array<String> = (shape.stringLiteralKinds ?? []).copy();
+		final interpTextKind: Null<String> = shape.stringInterpTextKind;
+		if (interpTextKind != null && !textLiteralKinds.contains(interpTextKind)) textLiteralKinds.push(interpTextKind);
 		return {
 			shape: shape,
 			identKind: shape.identKind,
+			stringInterpIdentKind: shape.stringInterpIdentKind,
+			textLiteralKinds: textLiteralKinds,
 			blockStmtKind: blockStmtKind,
 			forStmtKind: forStmtKind,
 			fieldAccessKind: fieldAccessKind,
@@ -204,16 +218,103 @@ final class LoopScan {
 	}
 
 	/**
-	 * The number of `name[index]` accesses in `node`'s subtree whose index is exactly the bare
-	 * identifier `index` — the occurrences a key-value rewrite would have to rename to the value
-	 * binder, so a caller admits exactly the one it consumes.
+	 * The number of READS of `name` in `node`'s subtree — an identifier occurrence in code, or a
+	 * `$name` occurrence inside an interpolated string, which the grammar projects under a
+	 * DIFFERENT kind. Both are counted because a rewrite that DELETES the binding has to see both: keyed on the
+	 * code kind alone, `$i` reads as no use at all. Reification subtrees are NOT counted and this is NOT the
+	 * completeness gate — a rule that deletes a binding owes a TEXT scan over the body for what the tree hides
+	 * (`OccurrenceScan.referencedInRange`), the way `dead-binder-counter-loop` and `prefer-value-loop` both do.
 	 */
-	public static function countIndexReads(node: QueryNode, name: String, index: String, s: LoopSeams): Int {
+	public static function countReads(node: QueryNode, name: String, s: LoopSeams): Int {
 		if (s.opaqueKinds.contains(node.kind)) return 0;
 		var count: Int = 0;
-		if (isIndexAccessOf(node, name, s) && bareIdentName(node.children[1], s) == index) count++;
-		for (c in node.children) count += countIndexReads(c, name, index, s);
+		if (node.name == name && isReadKind(node.kind, s)) count++;
+		for (c in node.children) count += countReads(c, name, s);
 		return count;
+	}
+
+	/**
+	 * The `name[index]` accesses in `node`'s subtree whose index is exactly the bare identifier
+	 * `index`, in document order — the occurrences a value-loop rewrite re-spells as the value
+	 * binder, and the ones a key-value rewrite would have to rename.
+	 */
+	public static function collectIndexReads(node: QueryNode, name: String, index: String, s: LoopSeams): Array<QueryNode> {
+		final out: Array<QueryNode> = [];
+		collectIndexReadsInto(node, name, index, s, out);
+		return out;
+	}
+
+	/** How many `collectIndexReads` finds — the same walk where only the count is wanted. */
+	public static function countIndexReads(node: QueryNode, name: String, index: String, s: LoopSeams): Int {
+		return collectIndexReads(node, name, index, s).length;
+	}
+
+	/**
+	 * Whether any node in `node`'s subtree carries `name` in a `name` slot that could BIND it — a
+	 * nested loop's binder, a key-value loop's value binder, a lambda parameter, a `catch` variable, a
+	 * `case var` capture, a local declaration.
+	 *
+	 * Two slot families are subtracted, and for opposite reasons. A READ position (`identKind`, and
+	 * `$name` inside a string) is `countReads`' half of the question, so the two together partition
+	 * every occurrence. A `textLiteralKinds` slot carries literal TEXT rather than a symbol, so
+	 * `'i'` would otherwise answer as a declaration of `i` and silence a caller outright.
+	 *
+	 * What is left is still WIDER than a binder: a member name and a metadata name reach a `name` slot
+	 * too, and neither can shadow anything. That is deliberate — the answer is a blacklist of the slots
+	 * that provably cannot bind, not a whitelist of the ones that can, because a binder shape a
+	 * whitelist forgot lets an unsound rewrite through while an over-wide answer can only decline one.
+	 *
+	 * The one binder it does NOT see is a bare `case name:` capture, which the grammar spells as an
+	 * ordinary identifier; that is a READ position by kind, so a caller pairing this with `countReads`
+	 * still refuses there.
+	 */
+	public static function bindsName(node: QueryNode, name: String, s: LoopSeams): Bool {
+		return !s.opaqueKinds.contains(node.kind)
+			&& (node.name == name && !isReadKind(node.kind, s) && !s.textLiteralKinds.contains(node.kind)
+				|| node.children.exists(c -> bindsName(c, name, s)));
+	}
+
+	/**
+	 * `seamsOf` plus the interval kind, or null when either half is unset (the calling check is
+	 * then a no-op). `0...X.length` is the header every INDEXED-loop rewrite matches, so the
+	 * bundle belongs beside the scans rather than being re-declared privately by each rule.
+	 */
+	public static function intervalSeamsOf(shape: RefShape): Null<IntervalLoopSeams> {
+		final core: Null<LoopSeams> = seamsOf(shape);
+		if (core == null) return null;
+		final intervalKind: Null<String> = shape.intervalKind;
+		return intervalKind == null ? null : { core: core, intervalKind: intervalKind };
+	}
+
+	/**
+	 * The header every indexed-loop rewrite matches — a single-binder `for` over exactly
+	 * `0...X.<sizeMember>` for a bare identifier `X` — or null when the loop is anything else.
+	 * `sizeMember` is the CALLER's language token, which is what keeps this grammar-agnostic.
+	 *
+	 * The BODY comes back unexamined: what each rule demands of it is that rule's own claim, and
+	 * folding one rule's demand in here would make it everyone's. The arity check is load-bearing
+	 * for one non-obvious reason — a key-value loop carries its value binder as an EXTRA child
+	 * ahead of the iterable, so it rejects the very form `prefer-keyvalue-loop` produces.
+	 */
+	public static function indexedHeaderOf(
+		forNode: QueryNode, source: String, sizeMember: String, s: IntervalLoopSeams
+	): Null<IndexedLoopHeader> {
+		final core: LoopSeams = s.core;
+		if (forNode.kind != core.forStmtKind || forNode.children.length != FOR_CHILD_COUNT) return null;
+		final index: Null<String> = forNode.name;
+		if (index == null) return null;
+		final iterable: QueryNode = forNode.children[0];
+		if (iterable.kind != s.intervalKind || iterable.children.length != INTERVAL_CHILD_COUNT) return null;
+		if (!isZeroLiteral(iterable.children[0], source, core)) return null;
+		final upper: QueryNode = iterable.children[1];
+		final collection: Null<String> = memberReadReceiver(upper, sizeMember, core);
+		return collection == null || collection == index ? null : {
+			index: index,
+			collection: collection,
+			sizeReceiver: upper.children[0],
+			iterable: iterable,
+			body: forNode.children[1]
+		};
 	}
 
 	/** Whether `node` is an index access whose receiver is the bare identifier `name`. */
@@ -329,6 +430,44 @@ final class LoopScan {
 		return glued ? null : guard;
 	}
 
+	/** Bundle the per-FILE facts every gate reads, so the walks carry one argument instead of five. */
+	public static function fileScanOf(
+		tree: QueryNode, source: String, types: Null<Map<Int, String>>, plugin: GrammarPlugin, seams: IntervalLoopSeams
+	): LoopFileScan {
+		return {
+			root: tree,
+			source: source,
+			types: types,
+			inert: OccurrenceScan.inertMask(source, plugin),
+			seams: seams
+		};
+	}
+
+	/**
+	 * Whether `body` is a block that OPENS by binding `collection[index]` — a single-variable local
+	 * declaration initialised by exactly that access. The one shape `prefer-keyvalue-loop`'s opener
+	 * arm consumes, read by both rules so neither can drift from the other's idea of it.
+	 */
+	public static function opensWithIndexBinding(body: QueryNode, collection: String, index: String, s: LoopSeams): Bool {
+		if (body.kind != s.blockStmtKind || body.children.length == 0) return false;
+		final decl: QueryNode = body.children[0];
+		if (singleLocalDeclName(decl, s.localDeclKinds, s) == null) return false;
+		final init: QueryNode = decl.children[0];
+		return isIndexAccessOf(init, collection, s) && bareIdentName(init.children[1], s) == index;
+	}
+
+	/** Whether `kind` is one of the two positions that READ a name — plain identifier, or `$name` inside a string. */
+	private static inline function isReadKind(kind: String, s: LoopSeams): Bool {
+		return kind == s.identKind || s.stringInterpIdentKind != null && kind == s.stringInterpIdentKind;
+	}
+
+	/** Recursive body of `collectIndexReads`, appending in document order so the caller needs no sort. */
+	private static function collectIndexReadsInto(node: QueryNode, name: String, index: String, s: LoopSeams, out: Array<QueryNode>): Void {
+		if (s.opaqueKinds.contains(node.kind)) return;
+		if (isIndexAccessOf(node, name, s) && bareIdentName(node.children[1], s) == index) out.push(node);
+		for (c in node.children) collectIndexReadsInto(c, name, index, s, out);
+	}
+
 	/** Recursive body of `usedOnlyAsStableCollection`, carrying the two ancestors a position verdict needs. */
 	private static function stableUseScan(
 		node: QueryNode, parent: Null<QueryNode>, grandParent: Null<QueryNode>, name: String, sizeMember: String, s: LoopSeams
@@ -378,6 +517,21 @@ final class LoopScan {
 typedef LoopSeams = {
 	var shape: RefShape;
 	var identKind: String;
+
+	/**
+	 * The kind a `$name` read inside a single-quoted string projects as — a DIFFERENT kind from
+	 * `identKind`, so a read counter keyed on the latter alone reads `'$i'` as no use of `i` at
+	 * all. Nullable: a grammar without string interpolation leaves it unset and the scans that
+	 * consult it simply see one read position.
+	 */
+	var stringInterpIdentKind: Null<String>;
+
+	/**
+	 * The kinds whose `name` slot carries literal TEXT rather than a symbol. A scan that reads a
+	 * name slot as a BINDING must subtract them, or `'i'` in the body answers as a declaration
+	 * of `i`. Empty for a grammar that names no string literal, which only widens such a scan.
+	 */
+	var textLiteralKinds: Array<String>;
 	var blockStmtKind: String;
 	var forStmtKind: String;
 	var fieldAccessKind: String;
@@ -390,6 +544,30 @@ typedef LoopSeams = {
 	var writeParentKinds: Array<String>;
 	var closureKinds: Array<String>;
 	var opaqueKinds: Array<String>;
+}
+
+/**
+ * `LoopSeams` plus the interval kind, for the rules that match an INDEXED header
+ * (`0...X.length`). Bundled by `intervalSeamsOf`, and a separate typedef rather than a field on
+ * `LoopSeams` because the scans themselves never ask about an interval — a grammar that names
+ * no range loop still answers everything they need.
+ */
+typedef IntervalLoopSeams = {
+	var core: LoopSeams;
+	var intervalKind: String;
+}
+
+/**
+ * What `indexedHeaderOf` proved about a `for (i in 0...X.size)` header: the two names, the
+ * receiver whose declared type the rewrite gate reads, and the two nodes whose spans a header
+ * splice needs. `body` is the loop's body node, carried through unexamined.
+ */
+typedef IndexedLoopHeader = {
+	var index: String;
+	var collection: String;
+	var sizeReceiver: QueryNode;
+	var iterable: QueryNode;
+	var body: QueryNode;
 }
 
 /**
@@ -406,4 +584,17 @@ typedef LoopJumpSeams = {
 	var nestedScopeKinds: Array<String>;
 	var hardExitKinds: Array<String>;
 	var loopJumpKinds: Array<String>;
+}
+
+/**
+ * The per-FILE facts every gate reads: the tree root a type lookup resolves against, the source
+ * and its inert-region mask (comments, regexes and non-interpolating literals — the spans a text
+ * scan must not read as a use), the declared-type map, and the seams.
+ */
+typedef LoopFileScan = {
+	var root: QueryNode;
+	var source: String;
+	var types: Null<Map<Int, String>>;
+	var inert: Array<Span>;
+	var seams: IntervalLoopSeams;
 }

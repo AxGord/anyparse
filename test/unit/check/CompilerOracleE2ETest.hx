@@ -154,7 +154,7 @@ final class CompilerOracleE2ETest extends Test {
 		final result: FixVerifyResult = FixVerifier.verify(
 			files,
 			[new TestRiskyLiteralRewrite('2')],
-			new HaxeQueryPlugin(), 'check.hxml', dir, (p, c) -> File.saveContent(p, c)
+			new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], (p, c) -> File.saveContent(p, c)
 		);
 		Assert.equals(1, result.applied.length, 'a valid risky fix survives the typecheck and is applied');
 		Assert.equals(0, result.reverted.length);
@@ -179,7 +179,7 @@ final class CompilerOracleE2ETest extends Test {
 		final result: FixVerifyResult = FixVerifier.verify(
 			files,
 			[new TestRiskyLiteralRewrite('"broken"')],
-			new HaxeQueryPlugin(), 'check.hxml', dir, (p, c) -> File.saveContent(p, c)
+			new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], (p, c) -> File.saveContent(p, c)
 		);
 		Assert.equals(0, result.applied.length, 'a compile-breaking risky fix is not applied');
 		Assert.equals(1, result.reverted.length, 'it is reverted to a report-only fallback');
@@ -226,7 +226,7 @@ final class CompilerOracleE2ETest extends Test {
 		final dir: String = writeLimeShapedProject();
 		final cfg: LintConfig = LintConfig.discover('$dir/src/Good.hx');
 		Assert.equals(
-			Path.normalize(dir), Path.normalize(cfg.compilerOracleDir() ?? ''), 'a root-relative hxml compiles from the config dir'
+			Path.normalize(dir), Path.normalize(cfg.compilerOracles()[0].dir ?? ''), 'a root-relative hxml compiles from the config dir'
 		);
 		if (oracleWorks()) Assert.equals(0, Cli.run(['lint', '$dir/src/Good.hx']), 'a lime-shaped project typechecks through its oracle');
 		CliFixture.removeDir(dir);
@@ -250,8 +250,8 @@ final class CompilerOracleE2ETest extends Test {
 		final dir: String = writeNestedProject();
 		final path: String = '$dir/src/Good.hx';
 		final config: LintConfig = LintConfig.discover(path);
-		final hxml: Null<String> = config.compilerOracle();
-		if (hxml == null) {
+		final oracles: Array<OracleConfig> = config.compilerOracles();
+		if (oracles.length == 0) {
 			Assert.fail('the nested apqlint.json declares a compilerOracle');
 			CliFixture.removeDir(dir);
 			return;
@@ -259,7 +259,7 @@ final class CompilerOracleE2ETest extends Test {
 		final result: FixVerifyResult = FixVerifier.verify(
 			[{ file: path, source: NESTED_MAIN }],
 			[new TestRiskyLiteralRewrite('2')],
-			new HaxeQueryPlugin(), hxml, config.compilerOracleDir(), (p, c) -> File.saveContent(p, c)
+			new HaxeQueryPlugin(), oracles, (p, c) -> File.saveContent(p, c)
 		);
 		Assert.isTrue(result.baseline.match(Confirmed), 'the nested-config baseline typechecks');
 		Assert.equals(1, result.applied.length, 'the risky fix survives the typecheck and is applied');
@@ -346,13 +346,13 @@ final class CompilerOracleE2ETest extends Test {
 		final dir: String = writeLintDir(VALID, true, true);
 		final path: String = '$dir/Good.hx';
 		final config: LintConfig = LintConfig.discover(path);
-		final hxml: Null<String> = config.compilerOracle();
-		if (hxml == null) {
+		final oracles: Array<OracleConfig> = config.compilerOracles();
+		if (oracles.length == 0) {
 			Assert.fail('the fixture apqlint.json declares a compilerOracle');
 			CliFixture.removeDir(dir);
 			return;
 		}
-		final record: String = CompilerServer.stateFile(hxml, config.compilerOracleDir());
+		final record: String = CompilerServer.stateFile(oracles[0].hxml, oracles[0].dir, oracles[0].defines);
 		File.saveContent(record, DEAD_SERVER_RECORD);
 		Assert.equals(0, Cli.run(['lint', path]), 'a dead recorded server does not change the verdict');
 		Assert.isTrue(File.getContent(record).indexOf(DEAD_SERVER_PID) == -1, 'the dead record is replaced by a live one');
@@ -436,9 +436,7 @@ final class CompilerOracleE2ETest extends Test {
 
 	/** Reap the warm server a fixture started, keyed through the config exactly as the CLI keyed it. */
 	private function stopWarmServer(path: String): Void {
-		final config: LintConfig = LintConfig.discover(path);
-		final hxml: Null<String> = config.compilerOracle();
-		if (hxml != null) CompilerServer.stopShared(hxml, config.compilerOracleDir());
+		for (oracle in LintConfig.discover(path).compilerOracles()) CompilerServer.stopShared(oracle.hxml, oracle.dir, oracle.defines);
 	}
 
 	private function oracleWorks(): Bool {

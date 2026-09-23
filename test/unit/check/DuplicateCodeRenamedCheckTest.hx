@@ -413,7 +413,7 @@ class DuplicateCodeRenamedCheckTest extends Test {
 		final check: Null<Check> = Linter.byId('duplicate-code-renamed');
 		Assert.notNull(check);
 		Assert.isTrue(Std.isOfType(check, DefaultOff), 'the renamed reading is opt-in');
-		Assert.equals(184, Linter.builtins().length);
+		Assert.equals(187, Linter.builtins().length);
 	}
 
 	public function testFixReturnsNothingAndTheReasonSaysWhy(): Void {

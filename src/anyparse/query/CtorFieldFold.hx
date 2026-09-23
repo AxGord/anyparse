@@ -311,6 +311,19 @@ final class CtorFieldFold {
 	}
 
 	/**
+	 * The declaration's initializer expression node, or null when the field has none.
+	 * The LAST child is the initializer unless it is a type annotation
+	 * (`typeAnnotationKinds`) — an anonymous structure type projects as a child of the
+	 * declaration too.
+	 */
+	public static function declInitializer(field: QueryNode, shape: RefShape): Null<QueryNode> {
+		final typeKinds: Array<String> = shape.typeAnnotationKinds ?? [];
+		if (field.children.length == 0) return null;
+		final last: QueryNode = field.children[field.children.length - 1];
+		return typeKinds.contains(last.kind) ? null : last;
+	}
+
+	/**
 	 * The ONE top-level `if (<param> != null) <field> = <param>;` constructor statement
 	 * writing `field`, or null when the constructor holds none, more than one, or one
 	 * whose shape differs in any way. A statement that writes the field through some
@@ -358,19 +371,6 @@ final class CtorFieldFold {
 			dropped: new Span(nameEnd, close + 1),
 			end: close + 1
 		};
-	}
-
-	/**
-	 * The declaration's initializer expression node, or null when the field has none.
-	 * The LAST child is the initializer unless it is a type annotation
-	 * (`typeAnnotationKinds`) — an anonymous structure type projects as a child of the
-	 * declaration too.
-	 */
-	private static function declInitializer(field: QueryNode, shape: RefShape): Null<QueryNode> {
-		final typeKinds: Array<String> = shape.typeAnnotationKinds ?? [];
-		if (field.children.length == 0) return null;
-		final last: QueryNode = field.children[field.children.length - 1];
-		return typeKinds.contains(last.kind) ? null : last;
 	}
 
 	/**

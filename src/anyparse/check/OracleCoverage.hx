@@ -1,12 +1,15 @@
 package anyparse.check;
 
+import anyparse.check.CompilerOracle.OracleExclusion;
 import anyparse.check.HaxeSpawn.HaxeRun;
+import anyparse.check.LintConfig.OracleConfig;
 import anyparse.query.CondRegionLiveness;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
 import haxe.io.Path;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -166,10 +169,15 @@ final class OracleCoverage {
 	}
 
 	/**
-	 * The compiled set of `hxml` as run from `cwd`, established by one
-	 * `haxe -v --each <hxml> --no-output` spawn. Every condition the probe cannot answer
+	 * The compiled set of `hxml` as run from `cwd` under `defines`, established by one
+	 * `haxe -v <-D …> --each <hxml> --no-output` spawn. Every condition the probe cannot answer
 	 * under returns an UNKNOWN coverage carrying its own diagnostic, never an empty set
 	 * pretending to be an answer.
+	 *
+	 * The `defines` belong IN the probe: they are part of the configuration that will judge the
+	 * edit, so a probe without them describes a different compile — a different compiled set and,
+	 * one level down, a different set of live `#if` branches. They need no separate plumbing into
+	 * the arms, because the compiler's own `Defines:` line reports them.
 	 *
 	 * The flag ORDER is the whole fidelity of the claim. `--each` pushes what precedes it
 	 * into every `--next` arm, so `-v --no-output --each <hxml>` would suppress output in
@@ -177,12 +185,15 @@ final class OracleCoverage {
 	 * flag, which joins the LAST arm only. The probe has to run the compile it is
 	 * describing — an arm consuming an earlier arm's output would otherwise fail the probe
 	 * while passing the oracle, and the whole risky phase would decline on a difference the
-	 * probe invented.
+	 * probe invented. A `-D` sits ahead of `--each` for the same reason, and
+	 * `CompilerOracle.oracleArgs` is where the typecheck spells the identical discipline.
 	 */
-	public static function probe(hxml: String, cwd: Null<String>): OracleCoverage {
+	public static function probe(hxml: String, cwd: Null<String>, ?defines: Array<String>): OracleCoverage {
 		#if (sys || nodejs)
 		final root: String = cwd ?? Sys.getCwd();
-		final result: HaxeRun = probeOutput(root, ['-v', '--each', hxml, '--no-output']);
+		final result: HaxeRun = probeOutput(
+			root, ['-v'].concat(CompilerOracle.defineFlags(defines ?? [])).concat(['--each', hxml, '--no-output'])
+		);
 		if (result.failure != '') return unknown(result.failure);
 		final status: Null<Int> = result.status;
 		if (status == null) return unknown('the coverage probe produced no exit status');
@@ -200,6 +211,82 @@ final class OracleCoverage {
 		#else
 		return unknown(UNSUPPORTED_TARGET);
 		#end
+	}
+
+	/**
+	 * The probes for `oracles`, one per configuration in the same order, each taken ONCE: `memo`
+	 * holds every probe after the first call, and a caller handed a previous phase's probes seeds it
+	 * with those.
+	 *
+	 * Reused BY CONFIGURATION, never by position: a later phase judges its own subset of the
+	 * configurations (a build can turn red or unrunnable in between), and a probe handed to the wrong
+	 * configuration answers coverage for a compile that will not be the one judging — an edit only an
+	 * excluded build reads would pass the gate and be "verified" by builds that never read it. A
+	 * configuration with no probe in the memo is probed now.
+	 *
+	 * LAZY because a probe is a whole compile per configuration and a run whose checks propose
+	 * nothing must pay for none; shared because both verified `--fix` phases memoise.
+	 */
+	public static function probedOnce(memo: OracleCoverageMemo, oracles: Array<OracleConfig>): Array<OracleCoverage> {
+		return [for (oracle in oracles) probedFor(memo, oracle)];
+	}
+
+	/**
+	 * `usable` over the probes for `oracles`, settled ONCE per memo: the first call probes, splits,
+	 * and appends the split's exclusions to `excluded`; every later call answers the same split and
+	 * appends nothing, so a phase names each exclusion once however many candidates ask.
+	 */
+	public static function usableOnce(
+		memo: OracleCoverageMemo, oracles: Array<OracleConfig>, excluded: Array<OracleExclusion>
+	): UsableCoverage {
+		final held: Null<UsableCoverage> = memo.usable;
+		if (held != null) return held;
+		final fresh: UsableCoverage = usable(oracles, probedOnce(memo, oracles));
+		for (exclusion in fresh.excluded) excluded.push(exclusion);
+		memo.usable = fresh;
+		return fresh;
+	}
+
+	/**
+	 * Split `oracles` (paired by position with their `coverages`) into the configurations whose
+	 * compiled set is known and the ones that cannot say what they compile, each of the latter named
+	 * with a sentence saying why.
+	 *
+	 * An unknown-coverage configuration cannot make an edit VERIFIABLE — nothing it says proves it
+	 * reads the edited code — but its baseline is green, so a rejection from it is attributable: it
+	 * may compile that code, and it keeps its VETO (`unknown`, which every verification asks along
+	 * with the covering configurations). The phase stops only when no configuration's set is known
+	 * (`stop`), since then no edit can be shown verifiable at all.
+	 */
+	public static function usable(oracles: Array<OracleConfig>, coverages: Array<OracleCoverage>): UsableCoverage {
+		final configs: Array<OracleConfig> = [];
+		final known: Array<OracleCoverage> = [];
+		final unknown: Array<OracleConfig> = [];
+		final excluded: Array<OracleExclusion> = [];
+		var first: Null<String> = null;
+		for (i in 0...oracles.length) {
+			final coverage: OracleCoverage = coverages[i];
+			if (coverage.known) {
+				configs.push(oracles[i]);
+				known.push(coverage);
+				continue;
+			}
+			if (first == null) first = coverage.reason;
+			unknown.push(oracles[i]);
+			excluded.push({
+				config: oracles[i],
+				cause: Coverage,
+				sentence: '${LintConfig.describeOracle(oracles[i])} cannot vouch for any edit — its compiled set is unknown'
+				+ ' (${coverage.reason}); it still typechecks every candidate, so it can refuse one'
+			});
+		}
+		return {
+			configs: configs,
+			coverages: known,
+			unknown: unknown,
+			excluded: excluded,
+			stop: configs.length == 0 ? first : null
+		};
 	}
 
 	/** A coverage that declines to answer, carrying `reason` — the shape every failed probe returns. */
@@ -273,9 +360,36 @@ final class OracleCoverage {
 		#end
 	}
 
+	/**
+	 * The decline sentence for the per-configuration gaps of ONE edit set — what every caller
+	 * holding a LIST of configurations quotes once none of them typechecks the edit.
+	 *
+	 * A single gap IS the whole answer and is quoted verbatim, so a one-configuration project
+	 * reads exactly as it always did. Several are joined rather than summarised: each is a
+	 * different build's reason for being unable to judge this edit, and naming one would send the
+	 * reader to close a gap that on its own permits nothing. Pure.
+	 */
+	public static function gapSentence(gaps: Array<String>): String {
+		return gaps.length == 1 ? gaps[0] : 'no configured compiler oracle typechecks this edit — ${gaps.join('; ')}';
+	}
+
 	/** The decline sentence for a file the oracle's compile never reads. */
 	private static function fileGap(size: Int): String {
 		return 'the compiler oracle does not compile this file (its hxml reads $size source file(s), this one not among them)';
+	}
+
+	/** `memo`'s probe for `oracle`, taken and recorded now when the memo holds none for that configuration. */
+	private static function probedFor(memo: OracleCoverageMemo, oracle: OracleConfig): OracleCoverage {
+		final held: Null<ConfigCoverage> = memo.probes.find(p -> sameConfig(p.config, oracle));
+		if (held != null) return held.coverage;
+		final probed: OracleCoverage = probe(oracle.hxml, oracle.dir, oracle.defines);
+		memo.probes.push({ config: oracle, coverage: probed });
+		return probed;
+	}
+
+	/** Whether two configurations describe the same compile: one hxml, one directory, one define list in order. */
+	private static function sameConfig(a: OracleConfig, b: OracleConfig): Bool {
+		return LintConfig.oracleKey(a) == LintConfig.oracleKey(b);
 	}
 
 	/**
@@ -416,6 +530,40 @@ final class OracleCoverage {
 	}
 	#end
 
+}
+
+/**
+ * The cell a caller memoises its compiled-set probes in — empty until the first probe, or seeded
+ * with the probes a previous phase already paid for. Each probe carries the configuration it was
+ * taken for, which is the only key a reuse may be made by (`OracleCoverage.probedOnce`).
+ */
+typedef OracleCoverageMemo = {
+	var probes: Array<ConfigCoverage>;
+
+	/** The phase's `usableOnce` split, null until its first candidate asks. */
+	var usable: Null<UsableCoverage>;
+}
+
+/** One compiled-set probe and the configuration it describes — never read apart. */
+typedef ConfigCoverage = {
+	var config: OracleConfig;
+	var coverage: OracleCoverage;
+}
+
+/**
+ * The configurations a phase may judge with once coverage is known — see `OracleCoverage.usable`.
+ *
+ * `configs` and `coverages` are paired by position and hold only KNOWN coverage; `unknown` holds
+ * the configurations that cannot say what they compile, which vouch for no edit but still verify
+ * every candidate; `excluded` names each of them; `stop` is the reason the phase stops, non-null
+ * only when no configuration is left.
+ */
+typedef UsableCoverage = {
+	var configs: Array<OracleConfig>;
+	var coverages: Array<OracleCoverage>;
+	var unknown: Array<OracleConfig>;
+	var excluded: Array<OracleExclusion>;
+	var stop: Null<String>;
 }
 
 /**
