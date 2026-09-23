@@ -3877,6 +3877,366 @@
 			"find": "provable(node, s.valueBinderKinds) ? PROVEN_MESSAGE : UNPROVEN_MESSAGE",
 			"replace": "PROVEN_MESSAGE",
 			"note": "every finding recommends for (v in …), including over a Map where the fix declines because the drop is unsafe"
+		},
+		{
+			"name": "M-PFF-MACRO-SILENT",
+			"type": "anyparse.check.PreferFinalField",
+			"method": "considerField",
+			"find": "final decline: Null<String> = CtorFieldFold.macroFinalDecline(index, builders, owner, file, folded, oracleRelaxed);",
+			"replace": "if (index.traits.transitivelyCarriesBuildMacro(owner, file)) return; final decline: Null<String> = null;",
+			"note": "a macro-built owner's private field gets no finding at all, so the rule stays silent on every OpenFL Sprite subclass"
+		},
+		{
+			"name": "M-PFF-MACRO-FIXED",
+			"type": "anyparse.check.PreferFinalField",
+			"method": "fix",
+			"find": "[for (v in violations) if (v.declineReason == null) v.span]",
+			"replace": "[for (v in violations) v.span]",
+			"note": "a declined macro-built owner's field is finalized without a compiler oracle, which a builder assigning it outside the constructor breaks"
+		},
+		{
+			"name": "M-PFF-MACRO-NEVER-ADMITTED",
+			"type": "anyparse.check.PreferFinalField",
+			"method": "run",
+			"find": "_oracleRelaxed",
+			"replace": "false",
+			"note": "a macro-built owner's field is declined even under a compiler oracle, so the verified path never finalizes it"
+		},
+		{
+			"name": "M-PFPF-MACRO-SILENT",
+			"type": "anyparse.check.PreferFinalPublicField",
+			"method": "considerField",
+			"find": "final decline: Null<String> = CtorFieldFold.macroFinalDecline(index, index, owner, file, folded, oracleRelaxed);",
+			"replace": "if (index.traits.transitivelyCarriesBuildMacro(owner, file)) return; final decline: Null<String> = null;",
+			"note": "a macro-built owner's public field gets no finding at all, so the rule stays silent on every OpenFL Sprite subclass"
+		},
+		{
+			"name": "M-PFPF-MACRO-FIXED",
+			"type": "anyparse.check.PreferFinalPublicField",
+			"method": "fix",
+			"find": "[for (v in violations) if (v.declineReason == null) v.span]",
+			"replace": "[for (v in violations) v.span]",
+			"note": "a declined macro-built owner's public field is finalized without a compiler oracle"
+		},
+		{
+			"name": "M-PFPF-MACRO-NEVER-ADMITTED",
+			"type": "anyparse.check.PreferFinalPublicField",
+			"method": "run",
+			"find": "_oracleRelaxed",
+			"replace": "false",
+			"note": "a macro-built owner's public field is declined even under a compiler oracle"
+		},
+		{
+			"name": "M-STATICREACH-NEVER",
+			"type": "anyparse.check.UnusedPrivate",
+			"method": "memberDeclineReason",
+			"find": " || stringsUnreachable()",
+			"replace": "",
+			"note": "every string spelling a private static's name keeps it, whatever can reach the class — the old gate"
+		},
+		{
+			"name": "M-STATICREACH-INSTANCE",
+			"type": "anyparse.check.UnusedPrivate",
+			"method": "isStaticClassMember",
+			"find": "if (staticKind == null || !CheckScan.isClassBodyKind(parent.kind)) return false;",
+			"replace": "return true;",
+			"note": "an instance member takes the static-only relaxation, although instances flow into Dynamic everywhere"
+		},
+		{
+			"name": "M-STATICREACH-VALUE-BLIND",
+			"type": "anyparse.check.StaticReflectionReach",
+			"method": "staticReachable",
+			"find": "if (_values.exists(k)) return true;",
+			"replace": "",
+			"note": "the class name read as a value is ignored, so `Reflect.field(C, name)` through a local is not seen"
+		},
+		{
+			"name": "M-STATICREACH-CONSUMER-NONE",
+			"type": "anyparse.check.StaticReflectionReach",
+			"method": "consumed",
+			"find": "if (at < 0) return false;",
+			"replace": "return false;",
+			"note": "no consumer is whitelisted, so `Type.getClassName(Type.getClass(x))` reads as an escape and nothing is ever relaxed"
+		},
+		{
+			"name": "M-STATICREACH-SOURCE-BLIND",
+			"type": "anyparse.check.StaticReflectionReach",
+			"method": "noteClassSource",
+			"find": "if (consumed(parent, path, path.length - 2, scan)) return;",
+			"replace": "return;",
+			"note": "an unconsumed `Type.getClass` / `typeof` / `resolveClass` is ignored, so an instance's class value reaches reflection unseen"
+		},
+		{
+			"name": "M-STATICREACH-THIS-UNBOUNDED",
+			"type": "anyparse.check.StaticReflectionReach",
+			"method": "noteClassSource",
+			"find": "state.thisOwners.push(owner);",
+			"replace": "state.escapesAll = true;",
+			"note": "`getClass(this)` opens every class instead of the enclosing chain, so an unrelated class's self-lookup keeps every static"
+		},
+		{
+			"name": "M-STATICREACH-THIS-BLIND",
+			"type": "anyparse.check.StaticReflectionReach",
+			"method": "staticReachable",
+			"find": " || _thisOwners.exists(reified)",
+			"replace": "",
+			"note": "`getClass(this)` in a superclass of the owner is ignored, although `this` may be an owner instance"
+		},
+		{
+			"name": "M-STATICREACH-SUBTYPE-BLIND",
+			"type": "anyparse.check.StaticReflectionReach",
+			"method": "chainOf",
+			"find": "for (sub in index.subtypes.subtypeNames(owner, ownerFile)) if (!chain.contains(sub)) chain.push(sub);",
+			"replace": "",
+			"note": "a subclass's class value is ignored, although eval and ES6 js expose the inherited static through it"
+		},
+		{
+			"name": "M-STATICREACH-ALIAS-BLIND",
+			"type": "anyparse.check.StaticReflectionReach",
+			"method": "chainOf",
+			"find": "for (a in _aliases) if (a.target == target && !chain.contains(a.alias)) chain.push(a.alias);",
+			"replace": "",
+			"note": "a typedef or import alias of the owner read as a value is ignored"
+		},
+		{
+			"name": "M-STATICREACH-TYPEPATH-BLIND",
+			"type": "anyparse.check.StaticReflectionReach",
+			"method": "staticReachable",
+			"find": "ReflectionScan.runtimeTypePath(_surface.whole, k) || ",
+			"replace": "",
+			"note": "a literal naming the owner's path is ignored, so `Type.resolveClass('pkg.C')` or a library wrapper handed it is not seen"
+		},
+		{
+			"name": "M-STATICREACH-JS-HANDLE-BLIND",
+			"type": "anyparse.check.StaticReflectionReach",
+			"method": "noteName",
+			"find": "if (JS_CLASS_HANDLES.contains(name)) {",
+			"replace": "if (false) {",
+			"note": "`o.__class__` / `o.constructor` is ignored, although js reaches the instance's class through it"
+		},
+		{
+			"name": "M-STATICREACH-RECEIVER-BLIND",
+			"type": "anyparse.check.StaticReflectionReach",
+			"method": "staticReachable",
+			"find": "if ((_receivers[k] ?? []).exists(member -> !index.members.typeDeclaresMember(k, member))) return true;",
+			"replace": "",
+			"note": "`C.ext()` naming no member of C is read as a static access, although a `using` extension then receives the class"
+		},
+		{
+			"name": "M-STATICREACH-MACRO-BLIND",
+			"type": "anyparse.check.StaticReflectionReach",
+			"method": "noteString",
+			"find": "if (!inCarrier && !scan.macroFile)",
+			"replace": "if (!inCarrier)",
+			"note": "a string in a macro file is vouched for, although reification turns it into an identifier"
+		},
+		{
+			"name": "M-STATICREACH-CARRIER-BLIND",
+			"type": "anyparse.check.StaticReflectionReach",
+			"method": "noteString",
+			"find": "if (!inCarrier && !scan.macroFile)",
+			"replace": "if (!scan.macroFile)",
+			"note": "a string pasted into target code is vouched for, although it names the static directly"
+		},
+		{
+			"name": "M-STATICREACH-OPAQUE-SOURCE-BLIND",
+			"type": "anyparse.check.StaticReflectionReach",
+			"method": "build",
+			"find": "if (state.opaque.exists(text -> handles.exists(h -> RawSourceScan.mentionsWord(text, h)))) state.escapesAll = true;",
+			"replace": "",
+			"note": "a `Type.getClass` inside an unparsed `#if` region is ignored, although no node walk sees it"
+		},
+		{
+			"name": "M-STATICREACH-OPAQUE-CHAIN-BLIND",
+			"type": "anyparse.check.StaticReflectionReach",
+			"method": "staticReachable",
+			"find": " || chain.exists(k -> RawSourceScan.mentionsWord(text, k))",
+			"replace": "",
+			"note": "the owner's name inside an unparsed `#if` region is ignored, although it may be the class value handed to reflection"
+		},
+		{
+			"name": "M-COMPR-INDEXFILL-NEVER",
+			"type": "anyparse.check.ComprehensionFills",
+			"method": "loopText",
+			"find": "fill ?? ",
+			"replace": "",
+			"note": "a sequential index fill into the empty array is never folded, which is the rule before it learnt the shape"
+		},
+		{
+			"name": "M-COMPR-INDEXFILL-VALUE-UNCHECKED",
+			"type": "anyparse.check.ComprehensionFills",
+			"method": "indexFill",
+			"find": "acc.checks.push(value);",
+			"replace": "",
+			"note": "the written value skips the self-reference gate, so `out[j] = out.length` folds to a comprehension reading a different array"
+		},
+		{
+			"name": "M-COMPR-INDEXFILL-ANY-START",
+			"type": "anyparse.check.ComprehensionFills",
+			"method": "indexFill",
+			"find": " || !isZeroLiteral(range.children[0], ctx)",
+			"replace": "",
+			"note": "a fill from a non-zero start folds, although its first write leaves slot 0 empty rather than appending"
+		},
+		{
+			"name": "M-COMPR-INDEXFILL-ANY-INDEX",
+			"type": "anyparse.check.ComprehensionFills",
+			"method": "indexWriteValue",
+			"find": " && index.kind == s.identKind && index.name == binder",
+			"replace": "",
+			"note": "a write at an index other than the loop binder folds, although it does not append"
+		},
+		{
+			"name": "M-COMPR-NESTED-NEVER",
+			"type": "anyparse.check.PreferComprehension",
+			"method": "buildBlock",
+			"find": "if (nested != null) return nested;",
+			"replace": "",
+			"note": "a nested build is never folded, which is the rule before it learnt the shape"
+		},
+		{
+			"name": "M-COMPR-GAP-COMMENT-DROPPED",
+			"type": "anyparse.check.PreferComprehension",
+			"method": "tryMatch",
+			"find": "if (!gapped) hoistCommentsIn(new Span(declSpan.to, forSpan.from), ctx, acc);",
+			"replace": "",
+			"note": "an own-line comment between an adjacent declaration and its loop is swallowed by the merge"
+		},
+		{
+			"name": "M-COMPR-NESTED-ANY-LENGTH",
+			"type": "anyparse.check.ComprehensionFills",
+			"method": "nestedBuild",
+			"find": "kids.length != NESTED_BODY_LENGTH || ",
+			"replace": "",
+			"note": "an outer body holding a statement beyond the inner build folds, and the fix drops that statement"
+		},
+		{
+			"name": "M-COMPR-NESTED-PUSH-ANY",
+			"type": "anyparse.check.ComprehensionFills",
+			"method": "nestedBuild",
+			"find": " || pushed.kind != s.identKind || pushed.name != innerName",
+			"replace": "",
+			"note": "an outer push of something other than the inner array folds as if it pushed the inner array"
+		},
+		{
+			"name": "M-COMPR-NESTED-INNER-UNCHECKED",
+			"type": "anyparse.check.ComprehensionFills",
+			"method": "nestedBuild",
+			"find": " || innerAcc.checks.exists(cn -> PreferComprehension.referencesName(cn, innerName, s))",
+			"replace": "",
+			"note": "the inner fill may read the inner array it builds, which its comprehension no longer is"
+		},
+		{
+			"name": "M-COMPR-NESTED-CHECKS-UNMERGED",
+			"type": "anyparse.check.ComprehensionFills",
+			"method": "nestedBuild",
+			"find": "for (c in innerAcc.checks) acc.checks.push(c);",
+			"replace": "",
+			"note": "the inner fill's element and bounds skip the outer self-reference gate, so they may read the outer array being built"
+		},
+		{
+			"name": "M-COMPR-NESTED-ASCRIPTION-DROPPED",
+			"type": "anyparse.check.ComprehensionFills",
+			"method": "innerElement",
+			"find": "return restated ? '[$text]' : '([$text] : $annotation)';",
+			"replace": "return '[$text]';",
+			"note": "the inner declaration's annotation is dropped where the outer element type does not restate it, which can change the elements' type"
+		},
+		{
+			"name": "M-COMPR-GAP-NAME-BLIND",
+			"type": "anyparse.check.PreferComprehension",
+			"method": "gapAdmits",
+			"find": "!OccurrenceScan.referencedInRange(source, declName, declSpan.to, forSpan.from, [])",
+			"replace": "true",
+			"note": "a gap statement touching the array is crossed, so an index fill into an array the gap already pushed to no longer starts at slot 0"
+		},
+		{
+			"name": "M-COMPR-INDEXFILL-ANY-CONTAINER",
+			"type": "anyparse.check.ComprehensionFills",
+			"method": "loopText",
+			"find": "indexesLikeArray(annotation) ? indexFill(loop, name, ctx, acc) : null",
+			"replace": "indexFill(loop, name, ctx, acc)",
+			"note": "an index fill into a Map or an @:arrayAccess abstract folds, which does not compile or skips the setter"
+		},
+		{
+			"name": "M-COMPR-INDEXFILL-RANGE-UNCHECKED",
+			"type": "anyparse.check.ComprehensionFills",
+			"method": "indexFill",
+			"find": "acc.checks.push(range);",
+			"replace": "",
+			"note": "the fill's bound skips the self-reference gate, so `0...out.length` folds against a different array"
+		},
+		{
+			"name": "M-COMPR-WELD-BLIND",
+			"type": "anyparse.check.PreferComprehension",
+			"method": "hoistLeadOrRefuse",
+			"find": "if (ctx.source.substring(before.from + before.text.length, acc.hoisted[i].from).trim() != '') return null;",
+			"replace": "",
+			"note": "two hoisted comments code separated are welded, and the linter's guard then drops every edit of the rule in the file"
+		},
+		{
+			"name": "M-COMPR-NESTED-DECL-COMMENT",
+			"type": "anyparse.check.ComprehensionFills",
+			"method": "nestedBuild",
+			"find": "if (PreferComprehension.commentIntersects(declSpan, ctx)) return null;",
+			"replace": "",
+			"note": "a comment inside the inner declaration is stranded when the nest dissolves it"
+		},
+		{
+			"name": "M-STATICREACH-REIFY-BLIND",
+			"type": "anyparse.check.StaticReflectionReach",
+			"method": "build",
+			"find": "noteReified(scanned, state);",
+			"replace": "",
+			"note": "a project macro reifying the class it builds or is called from is ignored, so a registry it feeds reaches the static unseen"
+		},
+		{
+			"name": "M-STATICREACH-MACRO-THIS",
+			"type": "anyparse.check.StaticReflectionReach",
+			"method": "noteClassSource",
+			"find": " && !scan.macroFile",
+			"replace": "",
+			"note": "`getClass(this)` inside a macro module is bounded by the module's class, although `this` is reified into the caller"
+		},
+		{
+			"name": "M-STATICREACH-DEFINITION-BLIND",
+			"type": "anyparse.check.StaticReflectionReach",
+			"method": "noteName",
+			"find": "if (CLASS_SOURCES.contains(name) || NAME_SOURCES.contains(name)) {",
+			"replace": "if (CLASS_SOURCES.contains(name)) {",
+			"note": "a name-taking class source — `Type.resolveClass` or a library `getDefinitionByName` — is not recognised, so one handed a computed name escapes unseen"
+		},
+		{
+			"name": "M-STATICREACH-SOURCE-STRING-BLIND",
+			"type": "anyparse.check.StaticReflectionReach",
+			"method": "noteString",
+			"find": " || CLASS_SOURCES.contains(content) || NAME_SOURCES.contains(content)",
+			"replace": "",
+			"note": "a string naming a class source is ignored, so a reflective call of `Type.getClass` escapes unseen"
+		},
+		{
+			"name": "M-STATICREACH-USING-STD-ASSUMED",
+			"type": "anyparse.check.StaticReflectionReach",
+			"method": "consumed",
+			"find": "scan.usingStd && slot == 1",
+			"replace": "slot == 1",
+			"note": "any receiver-less `x.isOfType(v)` is taken for `Std.isOfType`, although without `using Std` it is some method handed the class"
+		},
+		{
+			"name": "M-FINAL-MACRO-FOLD-ADMITTED",
+			"type": "anyparse.query.CtorFieldFold",
+			"method": "macroFinalDecline",
+			"find": "else if (folded)",
+			"replace": "else if (false)",
+			"note": "the null-guarded default fold is admitted on a macro-built owner under the oracle, although it turns a property into a field and moves the default after builder code, both of which compile"
+		},
+		{
+			"name": "M-FINAL-MACRO-FINALITY-BLIND",
+			"type": "anyparse.query.CtorFieldFold",
+			"method": "macroFinalDecline",
+			"find": "else if (builders.traits.builderReadsFinality(owner, file))",
+			"replace": "else if (false)",
+			"note": "a builder that reads field finality is trusted to the oracle, although `final` then compiles and generates something else"
 		}
 	]
 }

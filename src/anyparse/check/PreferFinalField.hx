@@ -1,5 +1,7 @@
 package anyparse.check;
 
+import anyparse.check.Check.OracleRelaxable;
+import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.query.CtorFieldFold;
 import anyparse.query.CtorFieldWrite;
@@ -57,6 +59,21 @@ import anyparse.runtime.Span;
  * non-exported — hence the gate runs unconditionally, at the cost of over-declining an
  * ordinary private field whose owner happens to declare a conforming member set.
  *
+ * ## Macro-built owners — `RiskyFix` + `OracleRelaxable`
+ *
+ * A builder (`@:build`, `@:genericBuild`, or `@:autoBuild` reached through a supertype or an interface — every OpenFL
+ * `Sprite` subclass) rewrites members no text here holds. One that moves an INSTANCE initializer into the constructor
+ * leaves `final` legal; one that strips a STATIC initializer is "Static final variable must be initialized", and one that
+ * assigns the field in a generated method is "This expression cannot be accessed for writing". So such an owner's finding
+ * is kept, its edit admitted only under a compiler oracle, through typecheck-and-revert (`setOracleRelaxed`), and
+ * declined without one; every other owner keeps the ordinary fix. The compiler cannot see two things, so `CtorFieldFold.macroFinalDecline`
+ * declines them even under the oracle. The null-guarded default FOLD turns a `(default, null)` property
+ * into a plain field and moves the default after code the builder prepends to the constructor; and a
+ * builder that branches on the field's finality (`access.contains(AFinal)`): it compiles
+ * either way and silently generates something else. That one is declined when the
+ * builder module resolves and spells a finality read (`TypeTraits.builderReadsFinality`), a residual when
+ * it does not.
+ *
  * ## Whole-project scope required
  *
  * Confinement is only sound when the lint scope contains EVERY file that can
@@ -99,9 +116,20 @@ import anyparse.runtime.Span;
  * same confinement and abstract-mutability checks.
  */
 @:nullSafety(Strict)
-final class PreferFinalField implements Check {
+final class PreferFinalField implements Check implements RiskyFix implements OracleRelaxable {
+
+	/** Whether a compiler oracle verifies the fix, which is what admits a macro-built owner's edit. */
+	private var _oracleRelaxed: Bool = false;
 
 	public function new() {}
+
+	/**
+	 * Admit the edits of MACRO-BUILT owners. Set by `Cli.applyLintFixes` only when this check runs
+	 * as a verified `RiskyFix`, so those edits always pass the typecheck-and-revert pipeline.
+	 */
+	public function setOracleRelaxed(relaxed: Bool): Void {
+		_oracleRelaxed = relaxed;
+	}
 
 	public function id(): String {
 		return 'prefer-final-field';
@@ -122,7 +150,10 @@ final class PreferFinalField implements Check {
 		final violations: Array<Violation> = [];
 		CtorFieldWrite.eachFieldMember(files, plugin, (owner, field, source, file, exported) -> {
 			if (!exported)
-				considerField(violations, file, source, field, owner, index, lazyIndex, plugin, declaredTypesByFile[file], abstractKinds);
+				considerField(
+					violations, file, source, field, owner, index, lazyIndex, plugin, declaredTypesByFile[file], abstractKinds,
+					_oracleRelaxed
+				);
 		});
 		return violations;
 	}
@@ -139,18 +170,17 @@ final class PreferFinalField implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return CtorFieldFold.finalizeFieldEdits(source, [for (v in violations) v.span], plugin);
+		return CtorFieldFold.finalizeFieldEdits(source, [for (v in violations) if (v.declineReason == null) v.span], plugin);
 	}
 
-	/** Push a `prefer-final-field` violation for `name` at `span` with the reason phrase `reason`. */
-	private static inline function flag(out: Array<Violation>, file: String, span: Span, name: String, reason: String): Void {
-		out.push({
-			file: file,
-			span: span,
-			rule: 'prefer-final-field',
-			severity: Severity.Info,
-			message: 'field \'$name\' $reason; use final'
-		});
+	/**
+	 * Push a `prefer-final-field` violation for `name` at `span` with the reason phrase `reason`,
+	 * report-only when it carries a `decline` (`CtorFieldFold.macroFinalDecline`).
+	 */
+	private static inline function flag(
+		out: Array<Violation>, file: String, span: Span, name: String, reason: String, decline: Null<String>
+	): Void {
+		out.push(CtorFieldFold.finalFinding(file, span, 'prefer-final-field', 'field \'$name\' $reason; use final', decline));
 	}
 
 	/**
@@ -171,7 +201,8 @@ final class PreferFinalField implements Check {
 	 */
 	private static function considerField(
 		out: Array<Violation>, file: String, source: String, field: QueryNode, owner: String, index: SymbolIndex,
-		lazyIndex: () -> Null<SymbolIndex>, plugin: GrammarPlugin, declaredTypes: Null<Map<Int, String>>, abstractKinds: Array<String>
+		lazyIndex: () -> Null<SymbolIndex>, plugin: GrammarPlugin, declaredTypes: Null<Map<Int, String>>, abstractKinds: Array<String>,
+		oracleRelaxed: Bool
 	): Void {
 		final name: Null<String> = field.name;
 		final span: Null<Span> = field.span;
@@ -195,21 +226,21 @@ final class PreferFinalField implements Check {
 		// model that meta, so such a field arrives HERE as non-exported and `final` on it is a
 		// hard error the write gates cannot see. See the class doc for the measured matrix.
 		if (index.structural.structuralConformanceForbidsFinal(owner, name)) return;
-		// A macro-built type's fields are not what the declaration says: an `@:autoBuild`
-		// builder may strip the initializer and move the assignment into the constructor,
-		// after which `var` -> `final` is `Static final variable must be initialized`. The
-		// grant is inherited through `implements`, so the class itself carries no metadata.
-		if (index.traits.transitivelyCarriesBuildMacro(owner, file)) return;
 		// The conditional-default arm, checked FIRST: an initialized field whose only other
 		// write is one `if (p != null) x = p;` constructor statement folds to `final` plus
 		// `x = p ?? <default>`. It is disjoint from the initializer arm either way (that
 		// constructor write makes `writtenInFile` bail), but only this order lets it fire.
 		final folded: Bool = CtorFieldFold.ctorConditionalDefaultFinalEdits(source, span, plugin) != null;
+		// A macro-built type's fields are not what the declaration says (see the class doc): the
+		// finding is kept, and whether its edit is admitted is `macroFinalDecline`'s to say. The grant
+		// is inherited through `implements`, so the class itself may carry no metadata.
+		final builders: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? index;
+		final decline: Null<String> = CtorFieldFold.macroFinalDecline(index, builders, owner, file, folded, oracleRelaxed);
 		if (folded) {
 			if (!writesConfined(owner, name, source, index, plugin)) return;
 			final foldDeclType: Null<String> = declaredTypes == null ? null : declaredTypes[span.from];
 			if (CtorFieldWrite.abstractMethodMayMutate(source, name, foldDeclType, span, lazyIndex, abstractKinds)) return;
-			flag(out, file, span, name, 'has a null-guarded constructor default');
+			flag(out, file, span, name, 'has a null-guarded constructor default', decline);
 			return;
 		}
 		if (CtorFieldWrite.isInitializedNonPropertyField(source, field)) {
@@ -217,12 +248,12 @@ final class PreferFinalField implements Check {
 			if (writtenInFile(source, name, span)) return;
 			final declType: Null<String> = declaredTypes == null ? null : declaredTypes[span.from];
 			if (CtorFieldWrite.abstractMethodMayMutate(source, name, declType, span, lazyIndex, abstractKinds)) return;
-			flag(out, file, span, name, 'is assigned only at its declaration');
+			flag(out, file, span, name, 'is assigned only at its declaration', decline);
 			return;
 		}
 		if (!CtorFieldWrite.ctorSoleAssignmentFinalizable(source, field, plugin)) return;
 		if (!writesConfined(owner, name, source, index, plugin)) return;
-		flag(out, file, span, name, 'is assigned only in the constructor');
+		flag(out, file, span, name, 'is assigned only in the constructor', decline);
 	}
 
 	/**

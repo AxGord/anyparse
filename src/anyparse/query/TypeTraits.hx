@@ -3,6 +3,8 @@ package anyparse.query;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
 
+using Lambda;
+
 /**
  * Type-level TRAITS that only a declaration-chain walk can decide: whether `@:rtti` or a build /
  * autoBuild macro reaches a type from anywhere in its supertype closure, and whether an abstract
@@ -16,6 +18,9 @@ import anyparse.query.SymbolIndex.ResolvedType;
  */
 @:nullSafety(Strict)
 final class TypeTraits {
+
+	/** The macro-API spellings through which a builder tells a `final` field or a property from a plain `var`. */
+	private static final FINALITY_READS: EReg = ~/\b(AFinal|isFinal|AccFinal|FProp)\b/;
 
 	/** Every indexed file's `FileInfo`, handed over by the owning index. */
 	private final _files: Array<FileInfo>;
@@ -123,6 +128,31 @@ final class TypeTraits {
 	 * `transitivelyCarriesRtti`.
 	 */
 	public function transitivelyCarriesBuildMacro(typeName: String, ?fromFile: String): Bool {
+		return buildClosureAny(typeName, fromFile, source -> source == null || MemberWriteScan.carriesBuildMacro(source));
+	}
+
+	/**
+	 * Whether a build macro reaching `typeName` — along the same closure `transitivelyCarriesBuildMacro`
+	 * walks — has a RESOLVABLE builder module whose source reads a field's finality or property kind
+	 * (`FINALITY_READS`). Such a builder can generate something else for a `final` field than for a `var`,
+	 * which compiles either way, so no compiler oracle can vouch for the keyword swap.
+	 *
+	 * The builder is named by the metadata's call path (`@:autoBuild(pkg.Mod.fn())` → `Mod`) and looked up
+	 * by that simple name in this index; a builder the index does not hold answers false — that is the
+	 * residual, not a proof. A text scan, and a conservative one: a module that merely mentions a token
+	 * in an unrelated macro still counts.
+	 */
+	public function builderReadsFinality(typeName: String, ?fromFile: String): Bool {
+		return buildClosureAny(typeName, fromFile, source -> source != null && builderModules(source).exists(readsFinality));
+	}
+
+	/**
+	 * Whether `hit` answers true for the source of some declaration on `typeName`'s build-macro closure —
+	 * the declaration itself, then its supertypes and interfaces (`buildMacroSupertypes`) — handed null for
+	 * one the index retains no source of. The walk `transitivelyCarriesBuildMacro` and
+	 * `builderReadsFinality` share.
+	 */
+	private function buildClosureAny(typeName: String, fromFile: Null<String>, hit: (Null<String>) -> Bool): Bool {
 		final queue: Array<ResolvedType> = buildMacroRoots(typeName, fromFile);
 		final seen: Array<String> = [];
 		var i: Int = 0;
@@ -130,11 +160,18 @@ final class TypeTraits {
 			final cur: ResolvedType = queue[i];
 			i++;
 			if (!_refs.markSeen(cur, seen)) continue;
-			final source: Null<String> = _sources[cur.file.file];
-			if (source == null || MemberWriteScan.carriesBuildMacro(source)) return true;
+			if (hit(_sources[cur.file.file])) return true;
 			for (hop in buildMacroSupertypes(cur)) queue.push(hop);
 		}
 		return false;
+	}
+
+	/** Whether some indexed declaration named `module` lives in a source that spells a `FINALITY_READS` token. */
+	private function readsFinality(module: String): Bool {
+		return _refs.resolvedDeclsNamed(module).exists(decl -> {
+			final source: Null<String> = _sources[decl.file.file];
+			return source != null && FINALITY_READS.match(source);
+		});
 	}
 
 	/**
@@ -212,6 +249,19 @@ final class TypeTraits {
 				found = true;
 		}
 		return found && !unknown ? false : null;
+	}
+
+	/** The simple names of the builder modules the build metadata in `source` calls (`@:build(pkg.Mod.fn())` → `Mod`). */
+	private static function builderModules(source: String): Array<String> {
+		final out: Array<String> = [];
+		final re: EReg = ~/@:(build|autoBuild|genericBuild)\s*\(\s*([A-Za-z_][A-Za-z0-9_.]*)\s*\(/;
+		var rest: String = source;
+		while (re.match(rest)) {
+			final path: Array<String> = re.matched(2).split('.');
+			if (path.length >= 2 && !out.contains(path[path.length - 2])) out.push(path[path.length - 2]);
+			rest = re.matchedRight();
+		}
+		return out;
 	}
 
 }

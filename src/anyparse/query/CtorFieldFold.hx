@@ -1,5 +1,7 @@
 package anyparse.query;
 
+import anyparse.check.Check.Violation;
+import anyparse.check.Severity;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -32,6 +34,26 @@ using Lambda;
  */
 @:nullSafety(Strict)
 final class CtorFieldFold {
+
+	/**
+	 * Why a `var` -> `final` finding on a macro-built owner carries no edit without a compiler oracle —
+	 * the decline both `prefer-final-field` and `prefer-final-public-field` record.
+	 */
+	public static inline final MACRO_FINAL_DECLINE: String = 'a build macro reaches the owner and may assign the field after construction or strip a static '
+		+ 'initializer; `--fix` admits the edit only under the compiler oracle';
+
+	/**
+	 * Why the null-guarded default FOLD is never admitted on a macro-built owner, oracle or not: it turns a
+	 * `(default, null)` property into a plain field and moves the default after whatever the builder
+	 * prepends to the constructor — both compile, and both change what the builder sees.
+	 */
+	public static inline final MACRO_FOLD_DECLINE: String = 'a build macro reaches the owner, and the null-guarded default fold changes '
+		+ 'what it sees — a property becomes a plain field, the default moves after the code it prepends to the constructor — which '
+		+ 'no compiler oracle can check';
+
+	/** Why a `var` -> `final` swap is never admitted when the owner's resolvable builder reads field finality. */
+	public static inline final MACRO_FINALITY_DECLINE: String = 'the build macro reaching the owner reads field finality or '
+		+ 'property kind, so `final` changes what it generates, which no compiler oracle can check';
 
 	/**
 	 * The `var` → `final` keyword-swap edits for each non-null span in `spans` (a field
@@ -321,6 +343,43 @@ final class CtorFieldFold {
 		if (field.children.length == 0) return null;
 		final last: QueryNode = field.children[field.children.length - 1];
 		return typeKinds.contains(last.kind) ? null : last;
+	}
+
+	/**
+	 * The decline a `var` -> `final` finding on `owner` (declared in `file`) carries, or null when its edit is
+	 * admissible. Only an owner a build macro reaches (`carriers`) is ever declined: the conditional-default
+	 * `folded` arm always, the keyword swap always when a resolvable builder reads field finality (asked of
+	 * `builders`, the widest index at hand), and otherwise only without the compiler oracle (`oracleRelaxed`).
+	 */
+	public static function macroFinalDecline(
+		carriers: SymbolIndex, builders: SymbolIndex, owner: String, file: String, folded: Bool, oracleRelaxed: Bool
+	): Null<String> {
+		return if (!carriers.traits.transitivelyCarriesBuildMacro(owner, file))
+			null
+		else if (folded)
+			MACRO_FOLD_DECLINE
+		else if (builders.traits.builderReadsFinality(owner, file))
+			MACRO_FINALITY_DECLINE
+		else if (oracleRelaxed)
+			null
+		else
+			MACRO_FINAL_DECLINE;
+	}
+
+	/**
+	 * A `var` -> `final` finding of rule `rule`, the one shape both final-field rules report; a `decline`
+	 * makes it report-only, and each rule's `fix` then withholds its edit.
+	 */
+	public static function finalFinding(file: String, span: Span, rule: String, message: String, decline: Null<String>): Violation {
+		final finding: Violation = {
+			file: file,
+			span: span,
+			rule: rule,
+			severity: Severity.Info,
+			message: message
+		};
+		if (decline != null) finding.declineReason = decline;
+		return finding;
 	}
 
 	/**

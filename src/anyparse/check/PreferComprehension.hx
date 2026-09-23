@@ -106,6 +106,15 @@ using StringTools;
  * push ARGUMENT keeps today's behaviour — it rides along in the verbatim argument
  * text.
  *
+ * ## Index fill and nested build
+ *
+ * Two more loop shapes build the same array. A SEQUENTIAL INDEX FILL `for (j in 0...n) a[j] = v;` into the still-empty
+ * `a` appends at every step, since the write at step `k` lands at `a.length == k` — so it folds to `[for (j in 0...n)
+ * v]` (`ComprehensionFills.indexFill`), and only as the WHOLE loop of a match, from the literal `0`, at exactly `a[j]`. A NESTED BUILD
+ * body `final inner = []; <fill>; a.push(inner);` folds to `[for (…) [<fill>]]` (`ComprehensionFills.nestedBuild`), where the fill is any
+ * loop this rule itself folds, with `inner` as its array; both arrays go through the self-reference gate against every
+ * element, bound and guard, and an inner annotation the outer element type does not restate stays as an ascription.
+ *
  * ## Soundness gates
  *
  * - **Empty literal only.** The initializer's source, whitespace-stripped, must be
@@ -144,9 +153,9 @@ using StringTools;
  * - **Read after the loop.** `a` must be referenced somewhere after the `for`
  *   within its scope, else the comprehension feeds no one (`unused-local`'s
  *   territory).
- * - **No comment in the region the edit deletes.** For an adjacent pair that is the
- *   whole decl-to-loop gap, which the merge would swallow; for a gapped pair it is the
- *   declaration's own LINE, since the gap statements are not touched.
+ * - **No comment in the region the edit deletes.** That is the declaration's own LINE, for both pairs. For an adjacent
+ *   pair a comment on a line of its own between the two is HOISTED above the result,
+ *   like a body comment; a gapped pair leaves its gap statements untouched.
  *
  * ## The gap
  *
@@ -233,7 +242,8 @@ final class PreferComprehension implements Check {
 	}
 
 	public function description(): String {
-		return 'an empty-array local plus a push-only for/while loop replaceable with an array comprehension ([for] / [while])';
+		return
+			'an empty-array local plus a loop that only fills it (push, sequential index write, nested build) replaceable with an array comprehension';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -243,7 +253,7 @@ final class PreferComprehension implements Check {
 				span: m.span,
 				rule: 'prefer-comprehension',
 				severity: Severity.Info,
-				message: 'this empty-array declaration and push-only for loop can be an array comprehension ([for])'
+				message: 'this empty-array declaration and the loop filling it can be an array comprehension ([for] / [while])'
 			});
 		});
 	}
@@ -276,7 +286,7 @@ final class PreferComprehension implements Check {
 	}
 
 	/** Bundle the required + optional `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */
-	private static function readSeams(shape: RefShape): Null<Seams> {
+	private static function readSeams(shape: RefShape): Null<ComprehensionSeams> {
 		final forStmtKind: Null<String> = shape.forStmtKind;
 		if (forStmtKind == null) return null;
 		final localDeclKinds: Array<String> = shape.localDeclKinds ?? [];
@@ -298,6 +308,8 @@ final class PreferComprehension implements Check {
 			blockStmtKind: blockStmtKind,
 			identKind: shape.identKind,
 			ifKinds: shape.ifStatementKinds ?? [],
+			intervalKind: shape.intervalKind,
+			assignKind: shape.assignKind,
 			opaqueKinds: shape.opaqueKinds ?? [],
 			interpIdentKind: shape.stringInterpIdentKind,
 			valueBinderKinds: shape.iterationValueBinderKinds ?? [],
@@ -322,9 +334,9 @@ final class PreferComprehension implements Check {
 	 * `Ctx` — `collectCommentTokens` re-lexes the whole source on every call.
 	 */
 	private static function collectMatches(
-		tree: QueryNode, source: String, s: Seams, shape: RefShape, regions: Array<LexRegion>
+		tree: QueryNode, source: String, s: ComprehensionSeams, shape: RefShape, regions: Array<LexRegion>
 	): Array<Match> {
-		final ctx: Ctx = {
+		final ctx: ComprehensionCtx = {
 			source: source,
 			seams: s,
 			comments: SourceComments.collectCommentTokens(regions),
@@ -350,7 +362,7 @@ final class PreferComprehension implements Check {
 	 * first. The declaration side is tested ONCE per `i`, before the walk forward, so a block of
 	 * ordinary statements costs one span slice each rather than a quadratic sweep.
 	 */
-	private static function walk(node: QueryNode, ctx: Ctx, out: Array<Match>): Void {
+	private static function walk(node: QueryNode, ctx: ComprehensionCtx, out: Array<Match>): Void {
 		if (ctx.seams.opaqueKinds.contains(node.kind)) return;
 		final kids: Array<QueryNode> = node.children;
 		for (i in 0...kids.length - 1) if (isEmptyArrayLocal(kids[i], ctx)) {
@@ -365,7 +377,7 @@ final class PreferComprehension implements Check {
 	 * statements, or null when the walk hits an inadmissible statement (or the end of the list)
 	 * before a loop that qualifies.
 	 */
-	private static function scanForward(kids: Array<QueryNode>, from: Int, scope: QueryNode, ctx: Ctx): Null<Match> {
+	private static function scanForward(kids: Array<QueryNode>, from: Int, scope: QueryNode, ctx: ComprehensionCtx): Null<Match> {
 		var j: Int = from + 1;
 		while (j < kids.length) {
 			final m: Null<Match> = tryMatch(kids[from], kids[j], scope, ctx, j > from + 1);
@@ -382,7 +394,7 @@ final class PreferComprehension implements Check {
 	 * `tryMatch` so the gap walk tests it once per candidate instead of once per
 	 * (declaration, statement) pair.
 	 */
-	private static function isEmptyArrayLocal(decl: QueryNode, ctx: Ctx): Bool {
+	private static function isEmptyArrayLocal(decl: QueryNode, ctx: ComprehensionCtx): Bool {
 		if (!ctx.seams.localDeclKinds.contains(decl.kind) || decl.children.length != 1 || decl.name == null) return false;
 		final initSpan: Null<Span> = decl.children[0].span;
 		return initSpan != null && stripWhitespace(ctx.source.substring(initSpan.from, initSpan.to)) == '[]';
@@ -402,7 +414,7 @@ final class PreferComprehension implements Check {
 	 * is `[]`, which is pure, and the gap may not read it — but a `throw` reaches the block through
 	 * its own statement kind anyway, and admitting the expression forms buys nothing measurable.
 	 */
-	private static function admissibleGapStatement(node: QueryNode, ctx: Ctx): Bool {
+	private static function admissibleGapStatement(node: QueryNode, ctx: ComprehensionCtx): Bool {
 		return ctx.seams.localDeclKinds.contains(node.kind) || node.kind == ctx.seams.exprStmtKind;
 	}
 
@@ -412,8 +424,10 @@ final class PreferComprehension implements Check {
 	 * so, else null. `gapped` says whether statements stand between the two, which decides BOTH the
 	 * extra gates and the SHAPE of the fix (see `gappedEdits`).
 	 */
-	private static function tryMatch(decl: QueryNode, forNode: QueryNode, scope: QueryNode, ctx: Ctx, gapped: Bool): Null<Match> {
-		final s: Seams = ctx.seams;
+	private static function tryMatch(
+		decl: QueryNode, forNode: QueryNode, scope: QueryNode, ctx: ComprehensionCtx, gapped: Bool
+	): Null<Match> {
+		final s: ComprehensionSeams = ctx.seams;
 		final source: String = ctx.source;
 		if (!isEmptyArrayLocal(decl, ctx)) return null;
 		if (forNode.kind != s.forStmtKind && forNode.kind != s.whileStmtKind) return null;
@@ -426,8 +440,12 @@ final class PreferComprehension implements Check {
 		if (!gapAdmits(source, declName, declSpan, forSpan, gapped)) return null;
 		final annotation: Null<String> = CtorFieldFold.declaredTypeAnnotation(source, declSpan, initSpan, declName);
 		final element: Null<String> = annotation == null ? null : elementTypeOf(annotation, s.elementTypeParams);
-		final acc: Acc = { checks: [], hoisted: [], elementType: element };
-		final inner: Null<String> = buildInner(forNode, declName, ctx, acc);
+		final acc: ComprehensionAcc = { checks: [], hoisted: [], elementType: element };
+		// A comment on its own line between an ADJACENT pair documents the loop the fix dissolves, so it
+		// is hoisted above the result like a body comment; one trailing the declaration still refuses
+		// (`gapAdmits`), and a gapped pair leaves its gap untouched.
+		if (!gapped) hoistCommentsIn(new Span(declSpan.to, forSpan.from), ctx, acc);
+		final inner: Null<String> = ComprehensionFills.loopText(forNode, declName, annotation, ctx, acc);
 		if (inner == null) return null;
 		for (cn in acc.checks) if (referencesName(cn, declName, s)) return null;
 		if (!OccurrenceScan.referencedInRange(source, declName, forSpan.to, scopeSpan.to, [])) return null;
@@ -460,7 +478,8 @@ final class PreferComprehension implements Check {
 	 * the same block makes the loop's `a` a different binding, and the declaration must not cross it.
 	 */
 	private static function gapAdmits(source: String, declName: String, declSpan: Span, forSpan: Span, gapped: Bool): Bool {
-		final commentTo: Int = gapped ? endOfLine(source, declSpan.to) : forSpan.from;
+		final lineEnd: Int = endOfLine(source, declSpan.to);
+		final commentTo: Int = gapped || lineEnd < forSpan.from ? lineEnd : forSpan.from;
 		return !CheckScan.hasCommentMarker(source, declSpan.to, commentTo)
 			&& (!gapped || !OccurrenceScan.referencedInRange(source, declName, declSpan.to, forSpan.from, []));
 	}
@@ -516,8 +535,8 @@ final class PreferComprehension implements Check {
 	 * A comment on the LAST line of either transcribed HEADER refuses the match — see
 	 * `transcribeHeader` for why only that line is the hazard.
 	 */
-	private static function buildInner(node: QueryNode, name: String, ctx: Ctx, acc: Acc): Null<String> {
-		final s: Seams = ctx.seams;
+	private static function buildInner(node: QueryNode, name: String, ctx: ComprehensionCtx, acc: ComprehensionAcc): Null<String> {
+		final s: ComprehensionSeams = ctx.seams;
 		if (node.kind == s.forStmtKind) {
 			final operands: Array<QueryNode> = BinderScan.loopOperands(node, s.valueBinderKinds);
 			return operands.length != FOR_CHILD_COUNT ? null : buildHeaderLayer(node, operands[0], operands[1], name, ctx, acc);
@@ -545,7 +564,7 @@ final class PreferComprehension implements Check {
 	 * carries a comment on its LAST line (see `transcribeHeader`) or when the body is off-shape.
 	 */
 	private static function buildHeaderLayer(
-		node: QueryNode, check: QueryNode, body: QueryNode, name: String, ctx: Ctx, acc: Acc
+		node: QueryNode, check: QueryNode, body: QueryNode, name: String, ctx: ComprehensionCtx, acc: ComprehensionAcc
 	): Null<String> {
 		final nodeSpan: Null<Span> = node.span;
 		final bodySpan: Null<Span> = body.span;
@@ -568,7 +587,7 @@ final class PreferComprehension implements Check {
 	 * also refuses a `/* … *\/` on that line, which would in fact transcribe safely — both are the
 	 * conservative direction.
 	 */
-	private static function transcribeHeader(from: Int, to: Int, ctx: Ctx): Null<String> {
+	private static function transcribeHeader(from: Int, to: Int, ctx: ComprehensionCtx): Null<String> {
 		final header: String = ctx.source.substring(from, to).rtrim();
 		final lastLine: Int = header.lastIndexOf('\n');
 		return SourceComments.textHasCommentMarker(header.substring(lastLine + 1)) ? null : header;
@@ -585,7 +604,7 @@ final class PreferComprehension implements Check {
 	 * failure this arm set out to remove. A comment INSIDE the argument span still rides along in
 	 * that verbatim text.
 	 */
-	private static function pushArgument(node: QueryNode, name: String, ctx: Ctx, acc: Acc): Null<QueryNode> {
+	private static function pushArgument(node: QueryNode, name: String, ctx: ComprehensionCtx, acc: ComprehensionAcc): Null<QueryNode> {
 		final arg: Null<QueryNode> = pushCallArgument(node, name, ctx.seams);
 		if (arg == null) return null;
 		final argSpan: Null<Span> = arg.span;
@@ -603,7 +622,7 @@ final class PreferComprehension implements Check {
 	 * the array being built exactly as a bare `out` would. A reification subtree answers TRUE, since
 	 * nothing about its contents can be proven.
 	 */
-	private static function referencesName(node: QueryNode, name: String, s: Seams): Bool {
+	private static function referencesName(node: QueryNode, name: String, s: ComprehensionSeams): Bool {
 		return s.opaqueKinds.contains(node.kind) || node.name == name && (node.kind == s.identKind || node.kind == s.interpIdentKind)
 			|| node.children.exists(c -> referencesName(c, name, s));
 	}
@@ -625,7 +644,7 @@ final class PreferComprehension implements Check {
 	 * THIS one: `final out:Array<Dynamic> = []` fed by `final m:Map<String, Int> = new Map()` would
 	 * emit a bare `new Map()`, whose type parameters are then unknown and which does not compile.
 	 */
-	private static function restatesElementType(l: ChainLocal, annotation: String, acc: Acc): Bool {
+	private static function restatesElementType(l: ChainLocal, annotation: String, acc: ComprehensionAcc): Bool {
 		final element: Null<String> = acc.elementType;
 		return l.wholeArgument && element != null && stripWhitespace(element) == stripWhitespace(annotation);
 	}
@@ -679,12 +698,14 @@ final class PreferComprehension implements Check {
 	 * a CHAIN of single-use `final` locals feeding the final `<name>.push(e)`, each local's
 	 * initializer inlined into its one use. Every gate refuses by returning null.
 	 */
-	private static function buildBlock(node: QueryNode, name: String, ctx: Ctx, acc: Acc): Null<String> {
+	private static function buildBlock(node: QueryNode, name: String, ctx: ComprehensionCtx, acc: ComprehensionAcc): Null<String> {
 		final kids: Array<QueryNode> = node.children;
 		final blockSpan: Null<Span> = node.span;
 		if (kids.length == 0 || blockSpan == null) return null;
 		hoistGapComments(kids, blockSpan, ctx, acc);
 		if (kids.length == 1) return buildInner(kids[0], name, ctx, acc);
+		final nested: Null<String> = ComprehensionFills.nestedBuild(kids, name, ctx, acc);
+		if (nested != null) return nested;
 		final locals: Null<Array<ChainLocal>> = chainLocals(kids, name, ctx);
 		if (locals == null) return null;
 		final arg: Null<QueryNode> = pushArgument(kids[kids.length - 1], name, ctx, acc);
@@ -706,7 +727,7 @@ final class PreferComprehension implements Check {
 	 * for a single-statement body). Each token carries its offset: a nested block contributes its
 	 * own gaps after this one, so source order is restored by sorting, not by append order.
 	 */
-	private static function hoistGapComments(kids: Array<QueryNode>, blockSpan: Span, ctx: Ctx, acc: Acc): Void {
+	private static function hoistGapComments(kids: Array<QueryNode>, blockSpan: Span, ctx: ComprehensionCtx, acc: ComprehensionAcc): Void {
 		var at: Int = blockSpan.from;
 		for (kid in kids) {
 			final kidSpan: Null<Span> = kid.span;
@@ -718,7 +739,7 @@ final class PreferComprehension implements Check {
 	}
 
 	/** Append every comment token lying FULLY inside `span` to `acc.hoisted`, with its offset. */
-	private static function hoistCommentsIn(span: Span, ctx: Ctx, acc: Acc): Void {
+	private static function hoistCommentsIn(span: Span, ctx: ComprehensionCtx, acc: ComprehensionAcc): Void {
 		for (tok in ctx.comments) if (tok.from >= span.from && tok.to <= span.to)
 			acc.hoisted.push({ from: tok.from, text: ctx.source.substring(tok.from, tok.to) });
 	}
@@ -731,7 +752,7 @@ final class PreferComprehension implements Check {
 	 * refused here, while a link overtaking code that is not a link at all — `out.push(next() + a)`
 	 * after `final a = pop();` — is `chainLink`'s preceding-purity gate.
 	 */
-	private static function chainLocals(kids: Array<QueryNode>, name: String, ctx: Ctx): Null<Array<ChainLocal>> {
+	private static function chainLocals(kids: Array<QueryNode>, name: String, ctx: ComprehensionCtx): Null<Array<ChainLocal>> {
 		final locals: Array<ChainLocal> = [];
 		for (i in 0...kids.length - 1) {
 			final link: Null<ChainLocal> = chainLink(kids, i, name, ctx, locals);
@@ -757,8 +778,10 @@ final class PreferComprehension implements Check {
 	 * and nothing impure in the region may lie ENTIRELY BEFORE the use, because inlining moves the
 	 * initializer there and everything the region evaluated first would then run ahead of it.
 	 */
-	private static function chainLink(kids: Array<QueryNode>, i: Int, name: String, ctx: Ctx, taken: Array<ChainLocal>): Null<ChainLocal> {
-		final s: Seams = ctx.seams;
+	private static function chainLink(
+		kids: Array<QueryNode>, i: Int, name: String, ctx: ComprehensionCtx, taken: Array<ChainLocal>
+	): Null<ChainLocal> {
+		final s: ComprehensionSeams = ctx.seams;
 		final decl: QueryNode = kids[i];
 		if (!s.localDeclKinds.contains(decl.kind) || s.mutableDeclKinds.contains(decl.kind)) return null;
 		if (s.continuationKinds.contains(decl.kind) || decl.children.length != 1) return null;
@@ -809,7 +832,7 @@ final class PreferComprehension implements Check {
 	 * therefore refuses the chain — conservative, and the kind is rare).
 	 */
 	private static function collectUses(
-		node: QueryNode, parent: Null<QueryNode>, index: Int, name: String, eager: Bool, s: Seams, out: Array<Use>
+		node: QueryNode, parent: Null<QueryNode>, index: Int, name: String, eager: Bool, s: ComprehensionSeams, out: Array<Use>
 	): Void {
 		if (s.opaqueKinds.contains(node.kind) || (node.kind == s.interpIdentKind && node.name == name)) {
 			out.push({
@@ -848,7 +871,7 @@ final class PreferComprehension implements Check {
 	 * Both walks run over the host's VALUE REGION rather than the whole statement, so the push callee —
 	 * which is before the argument by construction and provably harmless — cannot refuse them.
 	 */
-	private static function useRunsInPlace(host: QueryNode, use: Use, useSpan: Span, name: String, s: Seams): Bool {
+	private static function useRunsInPlace(host: QueryNode, use: Use, useSpan: Span, name: String, s: ComprehensionSeams): Bool {
 		if (!use.eager) return false;
 		final region: Null<QueryNode> = valueRegion(host, name, s);
 		if (region == null) return false;
@@ -866,7 +889,7 @@ final class PreferComprehension implements Check {
 	 * pure — and it is no hazard: its receiver is the array LOCAL by construction, which
 	 * `pushArgument` proves before any of this runs.
 	 */
-	private static function valueRegion(host: QueryNode, name: String, s: Seams): Null<QueryNode> {
+	private static function valueRegion(host: QueryNode, name: String, s: ComprehensionSeams): Null<QueryNode> {
 		return s.localDeclKinds.contains(host.kind)
 			? (host.children.length == 1 ? host.children[0] : null)
 			: pushCallArgument(host, name, s);
@@ -880,7 +903,7 @@ final class PreferComprehension implements Check {
 	 * pure parent is itself entirely-before and is caught. Nodes that merely CONTAIN the use are
 	 * ancestors, which the eager-host spine gate covers instead.
 	 */
-	private static function precedingNodesPure(node: QueryNode, at: Int, s: Seams): Bool {
+	private static function precedingNodesPure(node: QueryNode, at: Int, s: ComprehensionSeams): Bool {
 		final span: Null<Span> = node.span;
 		if (span != null && span.to <= at && !s.pureKinds.contains(node.kind)) return false;
 		return node.children.foreach(c -> precedingNodesPure(c, at, s));
@@ -891,18 +914,18 @@ final class PreferComprehension implements Check {
 	 * would strand that comment inside an expression; a comment inside the terminal push statement
 	 * is a different matter — `pushArgument` hoists it, or the argument text carries it verbatim.
 	 */
-	private static function commentIntersects(span: Span, ctx: Ctx): Bool {
+	private static function commentIntersects(span: Span, ctx: ComprehensionCtx): Bool {
 		return ctx.comments.exists(tok -> tok.from < span.to && tok.to > span.from);
 	}
 
 	/** Whether `kind` appears anywhere in `node`'s subtree, reification aside. */
-	private static function containsKind(node: QueryNode, kind: String, s: Seams): Bool {
+	private static function containsKind(node: QueryNode, kind: String, s: ComprehensionSeams): Bool {
 		return !s.opaqueKinds.contains(node.kind) && (node.kind == kind || node.children.exists(c -> containsKind(c, kind, s)));
 	}
 
 
 	/** `source[span]` with every chain local's single use replaced by its (recursively rendered) initializer. */
-	private static function renderSpan(span: Span, locals: Array<ChainLocal>, ctx: Ctx, acc: Acc): String {
+	private static function renderSpan(span: Span, locals: Array<ChainLocal>, ctx: ComprehensionCtx, acc: ComprehensionAcc): String {
 		final inside: Array<ChainLocal> = [for (l in locals) if (l.useSpan.from >= span.from && l.useSpan.to <= span.to) l];
 		inside.sort((a, b) -> a.useSpan.from - b.useSpan.from);
 		final buf: StringBuf = new StringBuf();
@@ -925,7 +948,7 @@ final class PreferComprehension implements Check {
 	 * the context, `final d:Dynamic = x` widens, `final m:Map<String,Int> = new Map()` binds the type
 	 * parameters — so dropping it changes the expression's type or fails to compile outright.
 	 */
-	private static function renderLocal(l: ChainLocal, locals: Array<ChainLocal>, ctx: Ctx, acc: Acc): String {
+	private static function renderLocal(l: ChainLocal, locals: Array<ChainLocal>, ctx: ComprehensionCtx, acc: ComprehensionAcc): String {
 		final inner: String = renderSpan(l.initSpan, locals, ctx, acc);
 		final annotation: Null<String> = l.annotation;
 		if (annotation != null && !restatesElementType(l, annotation, acc)) return '($inner : $annotation)';
@@ -944,7 +967,7 @@ final class PreferComprehension implements Check {
 	 * final b = a; out.push(b * 2);` render as `x + 1 * 2` — a silently wrong value, since `b`'s
 	 * own kind is an atom and the outer test then declines to wrap too.
 	 */
-	private static function isDelimitedUse(l: ChainLocal, s: Seams): Bool {
+	private static function isDelimitedUse(l: ChainLocal, s: ComprehensionSeams): Bool {
 		final parent: Null<QueryNode> = l.useParent;
 		if (parent == null) return false;
 		final kind: String = parent.kind;
@@ -1068,15 +1091,21 @@ final class PreferComprehension implements Check {
 	 * The text prefixing the replacement: each hoisted body comment on its own line at the
 	 * indent of `anchor` — the statement the replacement is spliced at, which is the declaration
 	 * for an adjacent pair and the LOOP for a gapped one — in source order, or the empty string
-	 * when none was hoisted. Null REFUSES the match: that statement does not start its line, so a
-	 * comment placed above it would also comment out whatever shares that line.
+	 * when none was hoisted. Null REFUSES the match: that statement does not start its line, so a comment placed above it
+	 * would also comment out whatever shares that line; or two hoisted comments were separated by code.
 	 */
-	private static function hoistLeadOrRefuse(anchor: Span, ctx: Ctx, acc: Acc): Null<String> {
+	private static function hoistLeadOrRefuse(anchor: Span, ctx: ComprehensionCtx, acc: ComprehensionAcc): Null<String> {
 		if (acc.hoisted.length == 0) return '';
 		final lineStart: Int = SourceText.startOfLine(ctx.source, anchor.from);
 		final indent: String = ctx.source.substring(lineStart, anchor.from);
 		if (indent.trim() != '') return null;
 		acc.hoisted.sort((a, b) -> a.from - b.from);
+		// Two hoisted comments that CODE separated would land welded together, and the linter's weld guard
+		// then drops every edit this rule has for the file — so the one match refuses instead.
+		for (i in 1...acc.hoisted.length) {
+			final before: { from: Int, text: String } = acc.hoisted[i - 1];
+			if (ctx.source.substring(before.from + before.text.length, acc.hoisted[i].from).trim() != '') return null;
+		}
 		final buf: StringBuf = new StringBuf();
 		for (comment in acc.hoisted) {
 			buf.add(comment.text);
@@ -1092,7 +1121,7 @@ final class PreferComprehension implements Check {
 	 * not exactly that call — the shape test alone, with no side effects, so both the transcriber
 	 * and the evaluation-order gate can ask it.
 	 */
-	private static function pushCallArgument(node: QueryNode, name: String, s: Seams): Null<QueryNode> {
+	private static function pushCallArgument(node: QueryNode, name: String, s: ComprehensionSeams): Null<QueryNode> {
 		if (node.kind != s.exprStmtKind || node.children.length != 1) return null;
 		final call: QueryNode = node.children[0];
 		if (call.kind != s.callKind || call.children.length != PUSH_CALL_CHILD_COUNT) return null;
@@ -1105,7 +1134,7 @@ final class PreferComprehension implements Check {
 }
 
 /** The `RefShape` kinds `PreferComprehension` reads, bundled once so the walkers take one argument. */
-private typedef Seams = {
+typedef ComprehensionSeams = {
 	var forStmtKind: String;
 	var whileStmtKind: Null<String>;
 	var localDeclKinds: Array<String>;
@@ -1115,6 +1144,8 @@ private typedef Seams = {
 	var blockStmtKind: String;
 	var identKind: String;
 	var ifKinds: Array<String>;
+	var intervalKind: Null<String>;
+	var assignKind: Null<String>;
 	var opaqueKinds: Array<String>;
 	var interpIdentKind: Null<String>;
 	var valueBinderKinds: Array<String>;
@@ -1143,9 +1174,9 @@ private typedef Match = {
 }
 
 /** Per-file inputs the walkers share: the source, the resolved seams and the file's comment tokens (lexed once). */
-private typedef Ctx = {
+typedef ComprehensionCtx = {
 	var source: String;
-	var seams: Seams;
+	var seams: ComprehensionSeams;
 	var comments: Array<{ from: Int, to: Int, isLine: Bool }>;
 
 	/** The file's tree and ref shape — the write scan that decides `var` vs `final` needs both. */
@@ -1158,7 +1189,7 @@ private typedef Ctx = {
  * result, and the ARRAY declaration's ELEMENT type — the one thing that can restate a link sitting at
  * the whole-push-argument position, letting it drop its own annotation.
  */
-private typedef Acc = {
+typedef ComprehensionAcc = {
 	var checks: Array<QueryNode>;
 	var hoisted: Array<{ from: Int, text: String }>;
 	var elementType: Null<String>;
