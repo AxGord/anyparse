@@ -3302,6 +3302,134 @@
 			"find": "final key: String = CompilerOracle.exclusionKey(exclusion);",
 			"replace": "final key: String = exclusion.sentence;",
 			"note": "exclusions are deduped by sentence, so a red build whose error line moved after a safe fix is named twice with two reasons"
+		},
+		{
+			"name": "M-FIAD-CROSS-SUPER-UNPROVED",
+			"type": "anyparse.check.FieldInitAtDeclaration",
+			"method": "crossingAdmitted",
+			"force": "false",
+			"note": "the crossing narrowings never hold, so every init hoisted across an explicit `super(...)` is refused again - the blanket refusal that made the rule silent on openfl display classes"
+		},
+		{
+			"name": "M-FIAD-EARLY-READ-IGNORED",
+			"type": "anyparse.check.FieldInitAtDeclaration",
+			"method": "observableRead",
+			"force": "false",
+			"note": "no occurrence of the field ever counts as observable, so an early read that compares, defaults, stores or passes on the `null` no longer refuses the crossing move"
+		},
+		{
+			"name": "M-FIAD-EARLY-READ-CALL-ARG",
+			"type": "anyparse.check.FieldInitAtDeclaration",
+			"method": "faultsOnNull",
+			"find": "return parent != null && index == 0 && scan.faultingKinds.contains(parent.kind);",
+			"replace": "return parent != null && (index == 0 || parent.kind == scan.shape.callKind) && scan.faultingKinds.contains(parent.kind);",
+			"note": "a call ARGUMENT is admitted as a null-faulting position, so a crossing init whose field is passed on as a value moves and the callee now sees `[]` where it saw `null`"
+		},
+		{
+			"name": "M-FIAD-EARLY-READ-SAME-FILE",
+			"type": "anyparse.check.FieldInitAtDeclaration",
+			"method": "readObservableInScope",
+			"find": "for (entry in scope) if (",
+			"replace": "for (entry in scope) if (entry.file == file && ",
+			"note": "the early-read scan looks at the field's own file only, so a subclass in another file reading the early `null` in a value position no longer refuses the move"
+		},
+		{
+			"name": "M-FIAD-INERT-ADMITS-ALL",
+			"type": "anyparse.check.FieldInitAtDeclaration",
+			"method": "inertCollection",
+			"force": "true",
+			"note": "every right-hand side reads as an inert collection, so a `new`, a static call, a literal holding an identifier, a bare string or a bare scalar is hoisted ahead of the base constructor"
+		},
+		{
+			"name": "M-FIAD-CROSS-SUPER-NO-SOLE",
+			"type": "anyparse.check.FieldInitAtDeclaration",
+			"method": "candidateFor",
+			"find": "!(sole && earlyInitSafe(",
+			"replace": "!(earlyInitSafe(",
+			"note": "the crossing path no longer demands the sole write, so a field another member also writes moves across `super(...)` and a write the base constructor reaches outlives the deleted init"
+		},
+		{
+			"name": "M-FIAD-CROSS-SUPER-CHAIN",
+			"type": "anyparse.check.FieldInitAtDeclaration",
+			"method": "acceptableCoMover",
+			"find": "else if (hoistCrossesSuper(ctor, container, span.from, shape))",
+			"replace": "else if (false)",
+			"note": "the fix-side chain reading admits a crossing init as a co-mover, so a refused crossing init holds back the fix of an accepted one after it"
+		},
+		{
+			"name": "M-FIAD-DENOTES-ALL",
+			"type": "anyparse.check.FieldInitAtDeclaration",
+			"method": "mayDenoteField",
+			"force": "true",
+			"note": "every occurrence of the name is read as the field, so a same-named member of an unrelated type - a bare read or a `this.` one - blocks the move"
+		},
+		{
+			"name": "M-FIAD-INERT-ELEMENT-ADMITS-ALL",
+			"type": "anyparse.check.FieldInitAtDeclaration",
+			"method": "inertElement",
+			"force": "true",
+			"note": "every collection element reads as inert, so a literal holding a foreign static read or a call is evaluated ahead of the base constructor"
+		},
+		{
+			"name": "M-FIAD-CROSSING-ADMITS-SCALARS",
+			"type": "anyparse.check.FieldInitAtDeclaration",
+			"method": "inertCollection",
+			"find": "return collectionKinds.contains(node.kind) && node.children.foreach(c -> inertElement(c, plugin, shape));",
+			"replace": "return collectionKinds.contains(node.kind) ? node.children.foreach(c -> inertElement(c, plugin, shape)) : ConstantFieldScan.isConstantScalarInitializer(node, plugin) || (shape.stringLiteralKinds ?? []).contains(node.kind);",
+			"note": "a bare scalar or string crosses `super(...)` again, although a `null` String answers `length` on hxcpp instead of faulting"
+		},
+		{
+			"name": "M-FIAD-TRY-IGNORED",
+			"type": "anyparse.check.FieldInitAtDeclaration",
+			"method": "observableRead",
+			"find": "(inTry || !faultsOnNull(parent, index, scan))",
+			"replace": "!faultsOnNull(parent, index, scan)",
+			"note": "a faulting read inside a `try` body counts as unobservable, although the catch turns the early `null` into working code that changes once the field is initialised"
+		},
+		{
+			"name": "M-FIAD-NO-ROOTS-ADMITTED",
+			"type": "anyparse.check.FieldInitAtDeclaration",
+			"method": "crossingAdmitted",
+			"find": "host == null || !host.projectRootsMatched()",
+			"replace": "host == null",
+			"note": "a run whose project declared no `resolutionRoots` (a `resolutionLibs`-only scope) scans the report files alone, so a narrow `--fix` moves an init a reader in an unlinted file observes"
+		},
+		{
+			"name": "M-FIAD-ANY-DECLARED-TYPE",
+			"type": "anyparse.check.FieldInitAtDeclaration",
+			"method": "faultingFieldType",
+			"force": "true",
+			"note": "every declared type is admitted, so an abstract whose `@:from` runs code (or whose method accepts a `null` receiver) takes a hoisted literal"
+		},
+		{
+			"name": "M-FIAD-PUBLIC-ADMITTED",
+			"type": "anyparse.check.FieldInitAtDeclaration",
+			"method": "fieldExposed",
+			"force": "false",
+			"note": "a public field (or one of a `@:publicFields` type) crosses `super(...)`, although code outside the project scope may read it early"
+		},
+		{
+			"name": "M-FIAD-TRY-BOUNDARY-CLEARED",
+			"type": "anyparse.check.FieldInitAtDeclaration",
+			"method": "observableRead",
+			"find": "final childInTry: Bool = inTry || tryNode && child.kind != scan.catchKind;",
+			"replace": "final childInTry: Bool = !(scan.shape.functionKinds ?? []).concat(scan.shape.lambdaKinds ?? []).contains(node.kind) && (inTry || tryNode && child.kind != scan.catchKind);",
+			"note": "the try flag is cleared again at every function and lambda boundary, so a lambda or local function written inside a `try` and called there reads the early `null` under a catch that turns it into working code"
+		},
+		{
+			"name": "M-FIAD-SHADOW-IGNORED",
+			"type": "anyparse.check.FieldInitAtDeclaration",
+			"method": "coreNameShadowed",
+			"force": "false",
+			"note": "a core type name the file shadows - an imported, wildcard-reached or same-package user `Map` / `Array` - passes as the core type, so an abstract whose `@:from` runs code takes a hoisted literal"
+		},
+		{
+			"name": "M-FIAD-ROOTS-MATCH-IGNORED",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "readResolutionRoots",
+			"find": "matched: unreachable.length < roots.length",
+			"replace": "matched: roots.length > 0",
+			"note": "a declared `resolutionRoots` entry matching no `.hx` counts as a working root, so the crossing path admits an init over a scope that is the report alone"
 		}
 	]
 }

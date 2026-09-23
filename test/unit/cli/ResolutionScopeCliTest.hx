@@ -105,6 +105,46 @@ class ResolutionScopeCliTest extends Test {
 	}
 
 	/**
+	 * `field-init-at-declaration`'s crossing-`super(...)` path needs `resolutionRoots` that MATCH a
+	 * `.hx`: a declared root matching nothing leaves the scope the report alone — exactly as if the key
+	 * were never declared — so a reader in an unlinted file would go unseen. The unit fixtures cannot
+	 * express that shape; it lives in `LintCommand`'s root expansion.
+	 */
+	@:pin('control')
+	@:killer('M-FIAD-ROOTS-MATCH-IGNORED')
+	public function testCrossingSuperNeedsRootsThatMatch(): Void {
+		#if (sys || nodejs)
+		final crossing: String = 'class C extends B {\n\tprivate var _a:Array<Int>;\n\n\tpublic function new() {\n\t\tsuper();\n'
+			+ '\t\t_a = [];\n\t}\n\n\tfunction g():Int {\n\t\treturn _a.length;\n\t}\n}\n';
+		final base: String = 'class B {\n\tpublic function new() {}\n}\n';
+		final matching: String = CliFixture.writeDir('fiadroots', [{ name: 'B.hx', source: base }, { name: 'C.hx', source: crossing }]);
+		File.saveContent('$matching/apqlint.json', '{"resolutionRoots":["$matching"]}');
+		Assert.equals(1, Cli.run([
+			'lint',
+			'--rule',
+			'field-init-at-declaration',
+			'--fail-on',
+			'info',
+			'$matching/C.hx'
+		]), 'roots that match admit the crossing init');
+		CliFixture.removeDir(matching);
+		final nowhere: String = CliFixture.writeDir('fiadroots', [{ name: 'B.hx', source: base }, { name: 'C.hx', source: crossing }]);
+		File.saveContent('$nowhere/apqlint.json', '{"resolutionRoots":["$nowhere/nowhere"]}');
+		Assert.equals(0, Cli.run([
+			'lint',
+			'--rule',
+			'field-init-at-declaration',
+			'--fail-on',
+			'info',
+			'$nowhere/C.hx'
+		]), 'a root matching no .hx reads as undeclared');
+		CliFixture.removeDir(nowhere);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
 	 * The report scope given RELATIVE while a `resolutionRoots` entry resolves to the SAME
 	 * (absolute) directory: the shared base must land in the SymbolIndex ONCE, not once per
 	 * spelling. A raw-string dedup keeps the relative report copy AND the absolute library copy —

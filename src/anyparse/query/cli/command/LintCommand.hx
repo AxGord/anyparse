@@ -415,13 +415,16 @@ final class LintCommand implements CliCommand {
 		final reportPaths: Map<String, Bool> = [for (f in files) realPath(f.file) => true];
 		var projectRoots: Null<Array<{ file: String, source: String }>> = null;
 		var library: Null<Array<{ file: String, source: String }>> = null;
+		var rootsMatched: Bool = false;
 		return {
 			declared: declared,
 			sources: () -> {
 				final memoisedRoots: Null<Array<{ file: String, source: String }>> = projectRoots;
 				final memoised: Null<Array<{ file: String, source: String }>> = library;
 				if (memoisedRoots == null || memoised == null) {
-					final rootFiles: Array<{ file: String, source: String }> = readResolutionRoots(roots, reportPaths);
+					final read: { files: Array<{ file: String, source: String }>, matched: Bool } = readResolutionRoots(roots, reportPaths);
+					final rootFiles: Array<{ file: String, source: String }> = read.files;
+					rootsMatched = read.matched;
 					projectRoots = rootFiles;
 					// The library half stays the WHOLE read-only scope — project roots included — so the
 					// process-scoped parse tier keeps promoting exactly what it did, and it stays ONE
@@ -430,7 +433,12 @@ final class LintCommand implements CliCommand {
 				}
 				final rootFiles: Array<{ file: String, source: String }> = projectRoots ?? [];
 				final libFiles: Array<{ file: String, source: String }> = library ?? [];
-				return { report: files, projectRoots: rootFiles, library: new LibrarySources(libFiles) };
+				return {
+					report: files,
+					projectRoots: rootFiles,
+					library: new LibrarySources(libFiles),
+					rootsMatched: rootsMatched
+				};
 			}
 		};
 	}
@@ -474,7 +482,7 @@ final class LintCommand implements CliCommand {
 	 */
 	private static function readResolutionRoots(
 		roots: Array<String>, reportPaths: Map<String, Bool>
-	): Array<{ file: String, source: String }> {
+	): { files: Array<{ file: String, source: String }>, matched: Bool } {
 		// Expanded per ROOT rather than in one call, so a root that matches nothing can be NAMED.
 		// A declared root resolving to no `.hx` — a typo, a directory since moved, a path written
 		// against the wrong base — leaves `projectRoots` empty, which is byte-identical to never
@@ -500,7 +508,9 @@ final class LintCommand implements CliCommand {
 			}
 		}
 		ConfigDisagreement.warnUnreachableProjectRoots(unreachable);
-		return out;
+		// MATCHED counts the report files too: a whole-project lint excludes every root file from `out`,
+		// and its roots matched all the same.
+		return { files: out, matched: unreachable.length < roots.length };
 	}
 
 	/**

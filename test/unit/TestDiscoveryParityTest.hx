@@ -168,6 +168,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.ExplicitTypeReturnOracleTest',
 		'unit.check.ExtractRepeatedExpressionTest',
 		'unit.check.FieldInitAtDeclarationCheckTest',
+		'unit.check.FieldInitAtDeclarationCrossingSuperTest',
 		'unit.check.FieldInitInConstructorCheckTest',
 		'unit.check.FieldMutabilityMacroGateTest',
 		'unit.check.FieldWriteResolutionScopeTest',
@@ -1114,6 +1115,45 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-DUP-CODE-RENAMED-GATE-RAW',
 			'unit.check.ExtractRepeatedExpressionTest#testALiteralInteriorDifferenceSplitsTheGroup :: control :: '
 				+ 'M-EXTRACT-REPEAT-RENDER-SPLIT',
+			'unit.check.FieldInitAtDeclarationCrossingSuperTest#testCollectionOfForeignReadAfterSuperNotMoved :: control :: '
+				+ 'M-FIAD-INERT-ADMITS-ALL,M-FIAD-INERT-ELEMENT-ADMITS-ALL',
+			'unit.check.FieldInitAtDeclarationCrossingSuperTest#testCrossingWithoutResolutionRootsNotMoved :: control :: '
+				+ 'M-FIAD-NO-ROOTS-ADMITTED',
+			'unit.check.FieldInitAtDeclarationCrossingSuperTest#testEarlyReadComparedToNullRefused :: control :: M-FIAD-EARLY-READ-IGNORED',
+			'unit.check.FieldInitAtDeclarationCrossingSuperTest#testEarlyReadDefaultedRefused :: control :: M-FIAD-EARLY-READ-IGNORED',
+			'unit.check.FieldInitAtDeclarationCrossingSuperTest#testEarlyReadPassedAsArgumentRefused :: control :: '
+				+ 'M-FIAD-EARLY-READ-IGNORED,M-FIAD-EARLY-READ-CALL-ARG',
+			'unit.check.FieldInitAtDeclarationCrossingSuperTest#testEarlyReadReturnedFromSubclassInOtherFileRefused :: control :: '
+				+ 'M-FIAD-EARLY-READ-IGNORED,M-FIAD-EARLY-READ-SAME-FILE',
+			'unit.check.FieldInitAtDeclarationCrossingSuperTest#testEarlyReadSafeNavigatedRefused :: control :: M-FIAD-EARLY-READ-IGNORED',
+			'unit.check.FieldInitAtDeclarationCrossingSuperTest#testEarlyReadStoredRefused :: control :: M-FIAD-EARLY-READ-IGNORED',
+			'unit.check.FieldInitAtDeclarationCrossingSuperTest#testEarlyThisReadComparedToNullRefused :: control :: '
+				+ 'M-FIAD-EARLY-READ-IGNORED',
+			'unit.check.FieldInitAtDeclarationCrossingSuperTest#testFaultingReadInLambdaOrLocalFunctionInsideTryRefused :: control :: '
+				+ 'M-FIAD-TRY-BOUNDARY-CLEARED',
+			'unit.check.FieldInitAtDeclarationCrossingSuperTest#testFaultingReadInsideTryRefused :: control :: M-FIAD-TRY-IGNORED',
+			'unit.check.FieldInitAtDeclarationCrossingSuperTest#testImportedUserMapShadowingTheCoreNameNotMoved :: control :: '
+				+ 'M-FIAD-SHADOW-IGNORED',
+			'unit.check.FieldInitAtDeclarationCrossingSuperTest#testInertInitAfterSuperMovedWhenEveryReadFaults :: control :: '
+				+ 'M-FIAD-CROSS-SUPER-UNPROVED',
+			'unit.check.FieldInitAtDeclarationCrossingSuperTest#testNewInitAfterSuperNotMoved :: control :: M-FIAD-INERT-ADMITS-ALL',
+			'unit.check.FieldInitAtDeclarationCrossingSuperTest#testNonCoreDeclaredTypeNotMoved :: control :: M-FIAD-ANY-DECLARED-TYPE',
+			'unit.check.FieldInitAtDeclarationCrossingSuperTest#testPublicFieldNotMoved :: control :: M-FIAD-PUBLIC-ADMITTED',
+			'unit.check.FieldInitAtDeclarationCrossingSuperTest#testRefusedCrossingInitDoesNotHoldBackTheFix :: control :: '
+				+ 'M-FIAD-CROSS-SUPER-CHAIN',
+			'unit.check.FieldInitAtDeclarationCrossingSuperTest#testSameNamedFieldOfAnotherTypeDoesNotBlock :: control :: '
+				+ 'M-FIAD-DENOTES-ALL',
+			'unit.check.FieldInitAtDeclarationCrossingSuperTest#testSamePackageSiblingShadowingTheCoreNameNotMoved :: control :: '
+				+ 'M-FIAD-SHADOW-IGNORED',
+			'unit.check.FieldInitAtDeclarationCrossingSuperTest#testScalarInitAfterSuperNotMoved :: control :: '
+				+ 'M-FIAD-INERT-ADMITS-ALL,M-FIAD-CROSSING-ADMITS-SCALARS',
+			'unit.check.FieldInitAtDeclarationCrossingSuperTest#testSecondWriterAcrossSuperNotMoved :: control :: '
+				+ 'M-FIAD-CROSS-SUPER-NO-SOLE',
+			'unit.check.FieldInitAtDeclarationCrossingSuperTest#testStaticCallInitAfterSuperNotMoved :: control :: M-FIAD-INERT-ADMITS-ALL',
+			'unit.check.FieldInitAtDeclarationCrossingSuperTest#testStringInitAfterSuperNotMoved :: control :: '
+				+ 'M-FIAD-INERT-ADMITS-ALL,M-FIAD-CROSSING-ADMITS-SCALARS',
+			'unit.check.FieldInitAtDeclarationCrossingSuperTest#testThisReadOfAnotherTypeInSameFileDoesNotBlock :: control :: '
+				+ 'M-FIAD-DENOTES-ALL',
 			'unit.check.FieldInitInConstructorCheckTest#testConstantLandsInTheConstantsRank :: control :: M-LACKSMEMBER-FALSE',
 			'unit.check.FieldWriteResolutionScopeTest#testLibraryStructureVetoesOnceStructuralJoins :: control :: '
 				+ 'M-CHECKINDEX-PROJECT-FINAL',
@@ -1376,6 +1416,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.cli.LintConfigCliTest#testTheScopeGapNoticesReachTheRun :: control :: M-SCOPE-GAP-UNWIRED,M-SCOPE-GAP-ROOT-UNWIRED',
 			'unit.cli.LintFixQuietDefaultTest#testTheRuleAccountingWaitsForAnEditOrForVerbose :: control :: M-LINT-FIX-CENSUS-UNGATED',
 			'unit.cli.LintRangeCliTest#testWriteFixLeavesAStandingFindingOutsideTheWindow :: control :: M-LINT-RANGE-INERT',
+			'unit.cli.ResolutionScopeCliTest#testCrossingSuperNeedsRootsThatMatch :: control :: M-FIAD-ROOTS-MATCH-IGNORED',
 			'unit.format.BraceSymmetrySliceTest#testAWrappedValueThenBranchDropsItsSourceSemicolon :: control :: M-SSB-VALUE-WRAP-OFF',
 			'unit.format.BraceSymmetrySliceTest#testTheSameTryOutsideAMacroIsStillBraced :: control :: '
 				+ 'M-TRY-BODY-SYM-OFF,M-SSB-TRY-SUBST-OFF',
@@ -2290,7 +2331,24 @@ class TestDiscoveryParityTest extends Test {
 			'M-ORACLE-EXCLUSIONS-UNNAMED',
 			'M-DISPLAY-ORACLE-DROPS-DEFINES',
 			'M-ORACLE-UNKNOWN-COVERAGE-NO-VETO',
-			'M-ORACLE-EXCLUSIONS-KEYED-BY-SENTENCE'
+			'M-ORACLE-EXCLUSIONS-KEYED-BY-SENTENCE',
+			'M-FIAD-CROSS-SUPER-UNPROVED',
+			'M-FIAD-EARLY-READ-IGNORED',
+			'M-FIAD-EARLY-READ-CALL-ARG',
+			'M-FIAD-EARLY-READ-SAME-FILE',
+			'M-FIAD-INERT-ADMITS-ALL',
+			'M-FIAD-CROSS-SUPER-NO-SOLE',
+			'M-FIAD-CROSS-SUPER-CHAIN',
+			'M-FIAD-DENOTES-ALL',
+			'M-FIAD-INERT-ELEMENT-ADMITS-ALL',
+			'M-FIAD-CROSSING-ADMITS-SCALARS',
+			'M-FIAD-TRY-IGNORED',
+			'M-FIAD-NO-ROOTS-ADMITTED',
+			'M-FIAD-ANY-DECLARED-TYPE',
+			'M-FIAD-PUBLIC-ADMITTED',
+			'M-FIAD-TRY-BOUNDARY-CLEARED',
+			'M-FIAD-SHADOW-IGNORED',
+			'M-FIAD-ROOTS-MATCH-IGNORED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

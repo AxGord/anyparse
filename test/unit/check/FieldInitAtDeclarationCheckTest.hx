@@ -24,9 +24,11 @@ import utest.Test;
  * the live regression, where an init reading a `static final` array moved ahead of the
  * constructor statement that filled it. A chained candidate additionally needs it of every
  * field that already carries a declaration initializer. A `#if` member region refuses the
- * whole container (its interior is trivia here). An explicit `super(...)` ANYWHERE in
- * the constructor refuses the candidate on both paths: declaration initializers run in
- * the prologue, ahead of the base constructor. A static field, a property, a
+ * whole container (its interior is trivia here). An init after an explicit
+ * `super(...)` is refused on the chain path, and on the sole-write path
+ * unless every early-init narrowing holds (see
+ * `FieldInitAtDeclarationCrossingSuperTest`): declaration initializers run in the
+ * prologue, ahead of the base constructor. A static field, a property, a
  * right-hand side referencing a constructor parameter / `this` / another instance
  * member / a static of this class, a conditional / read-before-init write, a multi-write
  * field behind a broken chain or an in-class-reading declaration initializer, and a class
@@ -569,15 +571,15 @@ class FieldInitAtDeclarationCheckTest extends Test {
 	}
 
 	/**
-	 * The load-bearing premise of the "deliberately COARSER" argument, under test rather than
+	 * The load-bearing premise of `hoistCrossesSuper`'s coarse answer, under test rather than
 	 * only argued: a `super(…)` need not be a top-level statement, so "the init precedes THE
-	 * super call" often has no answer at all and the gate refuses the whole constructor
-	 * instead. A branch-conditional base-constructor call is legal Haxe — verified on the
-	 * compiler, where `if (c) super(1) else super(2);` and a one-sided `if (f) super(7);`
-	 * both compile and run. The gate turns the one violation here into none.
+	 * super call" often has no answer at all and the gate answers "crosses" instead. A
+	 * branch-conditional base-constructor call is legal Haxe — verified on the compiler, where
+	 * `if (c) super(1) else super(2);` and a one-sided `if (f) super(7);` both compile and run.
+	 * The right-hand side is a call, so the crossing narrowings cannot admit it either.
 	 */
 	public function testSuperInsideBranchNotMoved(): Void {
-		final src: String = 'class C extends B { var a:Int; public function new(f:Bool) { if (f) super(); a = 1; } }';
+		final src: String = 'class C extends B { var a:Int; public function new(f:Bool) { if (f) super(); a = Foo.make(); } }';
 		Assert.equals(0, violations(src).length);
 	}
 
