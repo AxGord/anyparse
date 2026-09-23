@@ -2498,11 +2498,11 @@
 		},
 		{
 			"name": "M-VALUE-LOOP-READS-UNSPLICED",
-			"type": "anyparse.check.PreferValueLoop",
-			"method": "buildEdits",
-			"find": "\t\tfor (span in m.readSpans) edits.push({ span: span, text: binder });\n",
+			"type": "anyparse.check.ElementLoopRewrite",
+			"method": "elementReadEdits",
+			"find": "\t\tfor (span in readSpans) edits.push({ span: span, text: binder });\n",
 			"replace": "",
-			"note": "the X[i] occurrences are left unspliced, so prefer-value-loop rewrites the header into a value loop and the body still reads an index binding that no longer exists"
+			"note": "the X[i] occurrences are left unspliced, so prefer-value-loop rewrites the header into a value loop and the body still reads an index binding that no longer exists, and prefer-keyvalue-loop leaves the element reads it promised to re-spell"
 		},
 		{
 			"name": "M-VALUE-LOOP-INDEX-TEXT-BLIND",
@@ -2511,6 +2511,148 @@
 			"find": "\t\tif (OccurrenceScan.referencedInRange(f.source, h.index, bodySpan.from, bodySpan.to, indexSpans, f.inert)) return null;\n",
 			"replace": "",
 			"note": "the completeness gate is gone, so prefer-value-loop trusts node walks that prune a macro quotation and deletes an index the quotation still reads"
+		},
+		{
+			"name": "M-ELEMENT-LOOP-UNSTABLE",
+			"type": "anyparse.check.ElementLoopRewrite",
+			"method": "bodyAdmitsElementLoop",
+			"find": "\t\tif (!LoopScan.usedOnlyAsStableCollection(h.body, h.collection, sizeMember, core)) return false;\n",
+			"replace": "",
+			"note": "a write to X[i] or a push onto X no longer declines, so an element-loop rewrite assigns to a copy or follows the growth a bounded range ignored"
+		},
+		{
+			"name": "M-ELEMENT-LOOP-REBIND",
+			"type": "anyparse.check.ElementLoopRewrite",
+			"method": "bodyAdmitsElementLoop",
+			"find": "\t\tif (LoopScan.bindsName(h.body, h.index, core) || LoopScan.bindsName(h.body, h.collection, core)) return false;\n",
+			"replace": "",
+			"note": "an X[i] under a nested binder of i is re-spelled as the outer element, and a body reaching the collection as this.X is rewritten"
+		},
+		{
+			"name": "M-ELEMENT-LOOP-CLOSURE",
+			"type": "anyparse.check.ElementLoopRewrite",
+			"method": "bodyAdmitsElementLoop",
+			"find": "return !LoopScan.capturedByClosure(h.body, source, h.collection, core);",
+			"replace": "return true;",
+			"note": "an X[i] read inside a closure becomes the binder, so a closure run after the loop sees the element of its iteration instead of the slot as it is then"
+		},
+		{
+			"name": "M-KV-NOOPENER-BODY-GATES",
+			"type": "anyparse.check.PreferKeyValueLoop",
+			"method": "analyzeReads",
+			"find": "\t\tif (!ElementLoopRewrite.bodyAdmitsElementLoop(h, f.source, LENGTH_MEMBER, core)) return null;\n",
+			"replace": "",
+			"note": "the no-opener arm stops asking the shared body gates, so a closure, a nested binder or a length change reaches its rewrite"
+		},
+		{
+			"name": "M-VALUE-LOOP-BODY-GATES",
+			"type": "anyparse.check.PreferValueLoop",
+			"method": "analyze",
+			"find": "\t\tif (!ElementLoopRewrite.bodyAdmitsElementLoop(h, f.source, LENGTH_MEMBER, core)) return null;\n",
+			"replace": "",
+			"note": "prefer-value-loop stops asking the shared body gates, so a closure, a nested binder or a length change reaches its rewrite"
+		},
+		{
+			"name": "M-ELEMENT-LOOP-NESTED-BINDER",
+			"type": "anyparse.check.ElementLoopRewrite",
+			"method": "binderFor",
+			"find": "\t\telse if (nestingLoopDerives(f.root, forNode, candidate, f))\n\t\t\t'an enclosing or nested indexed loop derives the same element name `$candidate`'\n",
+			"replace": "",
+			"note": "an outer and an inner indexed loop that derive one binder are both fixed in one pass, and the inner binder shadows the outer for the whole inner body"
+		},
+		{
+			"name": "M-ELEMENT-LOOP-TYPE-CALLEE",
+			"type": "anyparse.check.ElementLoopRewrite",
+			"method": "isSelfCallee",
+			"find": "\t\tif (SourceText.isUpperInitial(name) && (receiver.kind == core.identKind || core.accessKinds.contains(receiver.kind))) return true;\n",
+			"replace": "",
+			"note": "a static call on a type (Main.grow()) is admitted, so a static that grows or replaces the collection runs behind an element binder"
+		},
+		{
+			"name": "M-ELEMENT-LOOP-NEW-EXPR",
+			"type": "anyparse.check.ElementLoopRewrite",
+			"method": "callsThroughSelf",
+			"find": "\t\tif (node.kind == core.shape.newExprKind) return true;\n",
+			"replace": "",
+			"note": "a constructor call is admitted, so a constructor that grows or replaces the collection runs behind an element binder"
+		},
+		{
+			"name": "M-KV-OPENER-SELF-CALL",
+			"type": "anyparse.check.PreferKeyValueLoop",
+			"method": "openerDecline",
+			"find": "\t\telse if (m.selfCall)\n\t\t\tElementLoopRewrite.SELF_CALL_DECLINE\n",
+			"replace": "",
+			"note": "the opener arm fixes a body that calls through the instance, so a callee that grows the collection runs on under the key-value iterator"
+		},
+		{
+			"name": "M-VALUE-LOOP-SELF-CALL",
+			"type": "anyparse.check.PreferValueLoop",
+			"method": "analyze",
+			"find": "decline: ElementLoopRewrite.elementDecline(binder, h.collection, collectionTypeSource, h.body, core)",
+			"replace": "decline: binder.refusal ?? (collectionTypeSource == null ? ElementLoopRewrite.unresolvedDecline(h.collection) : null)",
+			"note": "a body calling through this is rewritten to a value loop, so a callee that replaces X[i] after the binder was read, or grows the collection, changes what the loop reads"
+		},
+		{
+			"name": "M-KV-NOOPENER-INDEX-ONLY",
+			"type": "anyparse.check.PreferKeyValueLoop",
+			"method": "analyzeReads",
+			"find": "\t\tif (LoopScan.countReads(h.body, h.index, core) == reads.length) return null;\n",
+			"replace": "",
+			"note": "a loop whose index only ever indexes X is claimed by both prefer-keyvalue-loop and prefer-value-loop, so two autofixes race for one header"
+		},
+		{
+			"name": "M-KV-NOOPENER-OPENER-CLAIM",
+			"type": "anyparse.check.PreferKeyValueLoop",
+			"method": "analyzeReads",
+			"find": "if (h == null || LoopScan.opensWithIndexBinding(h.body, h.collection, h.index, core)) return null;",
+			"replace": "if (h == null) return null;",
+			"note": "a body opening with final v = X[i] that the opener arm declined is picked up by the no-opener arm, which renames the opener initializer into final v = v-binder"
+		},
+		{
+			"name": "M-KV-NOOPENER-INDEX-WRITE",
+			"type": "anyparse.check.PreferKeyValueLoop",
+			"method": "analyzeReads",
+			"find": "\t\tif (LoopScan.countWrites(h.body, h.index, core) != 0) return null;\n",
+			"replace": "",
+			"note": "a body that writes the index is rewritten, and the binder no longer follows the index it was read with"
+		},
+		{
+			"name": "M-KV-NOOPENER-SELF-CALL",
+			"type": "anyparse.check.PreferKeyValueLoop",
+			"method": "analyzeReads",
+			"find": "decline: ElementLoopRewrite.elementDecline(binder, h.collection, collectionTypeSource, h.body, core)",
+			"replace": "decline: binder.refusal ?? (collectionTypeSource == null ? ElementLoopRewrite.unresolvedDecline(h.collection) : null)",
+			"note": "a body calling through this is fixed, so a callee that replaces X[i] after the binder was read, or grows the field, changes what the loop reads"
+		},
+		{
+			"name": "M-KV-NOOPENER-NON-ARRAY",
+			"type": "anyparse.check.PreferKeyValueLoop",
+			"method": "analyzeReads",
+			"find": "\t\tif (collectionTypeSource != null && NominalTypes.outerNominalOf(collectionTypeSource) != ARRAY_TYPE) return null;\n",
+			"replace": "",
+			"note": "a container resolved to something other than Array is reported with a key-value form it has no iterator for"
+		},
+		{
+			"name": "M-KV-NOOPENER-UNDERSCORE",
+			"type": "anyparse.check.ElementLoopRewrite",
+			"method": "withoutLeadingUnderscores",
+			"force": "name",
+			"note": "the private-member prefix stays on the collection name, the singularizer refuses it, and the rewrite of _points is withheld"
+		},
+		{
+			"name": "M-KV-NOOPENER-TAKEN-SCOPE",
+			"type": "anyparse.check.PreferKeyValueLoop",
+			"method": "analyzeReads",
+			"find": "outerFn?.span ?? new Span(0, f.source.length)",
+			"replace": "h.body.span ?? forSpan",
+			"note": "the binder name is checked against the body only, so it shadows a parameter or outer local of the same name for the whole loop"
+		},
+		{
+			"name": "M-KV-NOOPENER-TAKEN-MEMBER",
+			"type": "anyparse.check.PreferKeyValueLoop",
+			"method": "declaresValue",
+			"force": "false",
+			"note": "a binder named like a field of the type is written, shadowing the field for the whole loop"
 		},
 		{
 			"name": "M-LINTDIFF-RULE-SUMMARY-BLANK",

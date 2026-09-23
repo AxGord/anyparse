@@ -1,6 +1,6 @@
 package anyparse.check;
 
-import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.GrammarPlugin;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceText;
@@ -430,6 +430,32 @@ final class LoopScan {
 		return glued ? null : guard;
 	}
 
+	/** Bundle the per-FILE facts every gate reads, so the walks carry one argument instead of five. */
+	public static function fileScanOf(
+		tree: QueryNode, source: String, types: Null<Map<Int, String>>, plugin: GrammarPlugin, seams: IntervalLoopSeams
+	): LoopFileScan {
+		return {
+			root: tree,
+			source: source,
+			types: types,
+			inert: OccurrenceScan.inertMask(source, plugin),
+			seams: seams
+		};
+	}
+
+	/**
+	 * Whether `body` is a block that OPENS by binding `collection[index]` — a single-variable local
+	 * declaration initialised by exactly that access. The one shape `prefer-keyvalue-loop`'s opener
+	 * arm consumes, read by both rules so neither can drift from the other's idea of it.
+	 */
+	public static function opensWithIndexBinding(body: QueryNode, collection: String, index: String, s: LoopSeams): Bool {
+		if (body.kind != s.blockStmtKind || body.children.length == 0) return false;
+		final decl: QueryNode = body.children[0];
+		if (singleLocalDeclName(decl, s.localDeclKinds, s) == null) return false;
+		final init: QueryNode = decl.children[0];
+		return isIndexAccessOf(init, collection, s) && bareIdentName(init.children[1], s) == index;
+	}
+
 	/** Whether `kind` is one of the two positions that READ a name — plain identifier, or `$name` inside a string. */
 	private static inline function isReadKind(kind: String, s: LoopSeams): Bool {
 		return kind == s.identKind || s.stringInterpIdentKind != null && kind == s.stringInterpIdentKind;
@@ -558,4 +584,17 @@ typedef LoopJumpSeams = {
 	var nestedScopeKinds: Array<String>;
 	var hardExitKinds: Array<String>;
 	var loopJumpKinds: Array<String>;
+}
+
+/**
+ * The per-FILE facts every gate reads: the tree root a type lookup resolves against, the source
+ * and its inert-region mask (comments, regexes and non-interpolating literals — the spans a text
+ * scan must not read as a use), the declared-type map, and the seams.
+ */
+typedef LoopFileScan = {
+	var root: QueryNode;
+	var source: String;
+	var types: Null<Map<Int, String>>;
+	var inert: Array<Span>;
+	var seams: IntervalLoopSeams;
 }

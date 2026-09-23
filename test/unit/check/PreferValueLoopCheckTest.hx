@@ -1,6 +1,7 @@
 package unit.check;
 
 import anyparse.check.Check;
+import anyparse.check.ElementLoopRewrite;
 import anyparse.check.Linter;
 import anyparse.check.PreferValueLoop;
 import anyparse.check.Severity;
@@ -197,19 +198,19 @@ class PreferValueLoopCheckTest extends Test {
 	}
 
 	public function testTwoLoopsInOneFileBothFixed(): Void {
-		final body: String = 'for (i in 0...items.length) use(items[i]);\n\t\tfor (k in 0...items.length) log(items[k]);';
-		final src: String = wrapFn(body);
+		final body: String = 'for (i in 0...items.length) sink.use(items[i]);\n\t\tfor (k in 0...items.length) sink.log(items[k]);';
+		final src: String = wrap('items:Array<Item>, sink:Sink', body);
 		Assert.equals(2, violations(src).length);
-		assertAllFixed(src, ['for (item in items) use(item)', 'for (item in items) log(item)'], ['items[i]', 'items[k]']);
+		assertAllFixed(src, ['for (item in items) sink.use(item)', 'for (item in items) sink.log(item)'], ['items[i]', 'items[k]']);
 	}
 
 	public function testNestedLoopsBothFixedInOnePass(): Void {
 		// The outer splice ends at its own range, and the inner header never overlaps the outer
 		// index read, so one pass carries both rewrites.
-		final body: String = 'for (i in 0...rows.length) for (j in 0...cols.length) use(rows[i], cols[j]);';
-		final src: String = wrap('rows:Array<Item>, cols:Array<Item>', body);
+		final body: String = 'for (i in 0...rows.length) for (j in 0...cols.length) sink.use(rows[i], cols[j]);';
+		final src: String = wrap('rows:Array<Item>, cols:Array<Item>, sink:Sink', body);
 		Assert.equals(2, violations(src).length);
-		assertAllFixed(src, ['for (row in rows) for (col in cols) use(row, col)'], ['rows[i]', 'cols[j]']);
+		assertAllFixed(src, ['for (row in rows) for (col in cols) sink.use(row, col)'], ['rows[i]', 'cols[j]']);
 	}
 
 	public function testNestedIndexBinderNotFlagged(): Void {
@@ -239,19 +240,25 @@ class PreferValueLoopCheckTest extends Test {
 	@:pin('control') @:killer('M-VALUE-LOOP-READS-UNSPLICED')
 	public function testFixRewritesBlockBody(): Void {
 		assertFixCanonical(
-			wrapFn('for (i in 0...items.length) {\n\t\t\tuse(items[i]);\n\t\t\tlog(items[i]);\n\t\t}'), ['for (item in items)'],
-			['items[i]', '0...items.length']
+			wrap(
+				'items:Array<Item>, sink:Sink',
+				'for (i in 0...items.length) {\n\t\t\tsink.use(items[i]);\n\t\t\tsink.log(items[i]);\n\t\t}'
+			),
+			['for (item in items)'], ['items[i]', '0...items.length']
 		);
 	}
 
 	public function testFixRewritesSingleStatementBody(): Void {
-		assertFixCanonical(wrapFn('for (i in 0...items.length) use(items[i]);'), ['for (item in items)', 'use(item)'], ['items[i]']);
+		assertFixCanonical(
+			wrap('items:Array<Item>, sink:Sink', 'for (i in 0...items.length) sink.use(items[i]);'),
+			['for (item in items)', 'sink.use(item)'], ['items[i]']
+		);
 	}
 
 	public function testFixRewritesFieldCollection(): Void {
 		final src: String = 'class C {\n\tvar points:Array<Point> = [];\n\n\tfunction f():Void {\n'
-			+ '\t\tfor (i in 0...points.length) draw(points[i]);\n\t}\n}';
-		assertFixCanonical(src, ['for (point in points)', 'draw(point)'], ['points[i]']);
+			+ '\t\tfor (i in 0...points.length) canvas.draw(points[i]);\n\t}\n}';
+		assertFixCanonical(src, ['for (point in points)', 'canvas.draw(point)'], ['points[i]']);
 	}
 
 	public function testNoSingularReportedOnly(): Void {
@@ -286,6 +293,101 @@ class PreferValueLoopCheckTest extends Test {
 		final check: Null<Check> = Linter.byId('prefer-value-loop');
 		Assert.notNull(check);
 		Assert.isTrue(Std.isOfType(check, DefaultOff), 'prefer-value-loop is opt-in');
+	}
+
+	@:pin('control') @:killer('M-ELEMENT-LOOP-CLOSURE') @:killer('M-VALUE-LOOP-BODY-GATES')
+	public function testClosureReadNotFlagged(): Void {
+		// A closure pushed in the loop reads `items[i]` when it RUNS; after a slot is replaced post-loop
+		// it sees the new element, while a value binder would still hold the one of its iteration.
+		Assert.equals(
+			0, violations(wrap('items:Array<Item>, fns:Array<() -> Item>', 'for (i in 0...items.length) fns.push(() -> items[i]);')).length
+		);
+		final local: String = 'for (i in 0...items.length) {\n\t\t\tfunction get() return items[i];\n\t\t\tfns.push(get);\n\t\t}';
+		Assert.equals(0, violations(wrap('items:Array<Item>, fns:Array<() -> Item>', local)).length);
+	}
+
+	@:pin('control') @:killer('M-VALUE-LOOP-SELF-CALL')
+	public function testSelfCallIsReportOnly(): Void {
+		// A callee reached through the instance can replace `items[i]` after the binder was read, or grow
+		// the collection the value iterator follows. A parameter or local `items` can alias a field, so
+		// the gate does not depend on where the collection is declared.
+		for (call in ['refresh()', 'this.refresh()', 'super.refresh()']) {
+			final src: String = wrap(
+				'items:Array<Item>, sink:Sink', 'for (i in 0...items.length) {\n\t\t\t$call;\n\t\t\tsink.use(items[i]);\n\t\t}'
+			);
+			Assert.equals(ElementLoopRewrite.SELF_CALL_DECLINE, declineOf(src), call);
+		}
+		final local: String =
+			'final items:Array<Item> = [];\n\t\tfor (i in 0...items.length) {\n\t\t\trefresh();\n\t\t\tsink.use(items[i]);\n\t\t}';
+		Assert.equals(ElementLoopRewrite.SELF_CALL_DECLINE, declineOf(wrap('sink:Sink', local)));
+	}
+
+	public function testOtherReceiverCallStillFixed(): Void {
+		assertFixCanonical(
+			wrap('items:Array<Item>, sink:Sink', 'for (i in 0...items.length) sink.use(items[i]);'),
+			['for (item in items) sink.use(item);'], []
+		);
+	}
+
+	public function testReportOnlyFindingsNameTheirReason(): Void {
+		Assert.equals(
+			'no singular of `stuff` names the element',
+			declineOf(wrap('stuff:Array<Item>, sink:Sink', 'for (i in 0...stuff.length) sink.use(stuff[i]);'))
+		);
+		Assert.equals(
+			'the element name `class` is a reserved word',
+			declineOf(wrap('classes:Array<Item>, sink:Sink', 'for (i in 0...classes.length) sink.use(classes[i]);'))
+		);
+		Assert.equals(
+			'the element name `item` is already spelled in the loop body',
+			declineOf(wrap('items:Array<Item>, sink:Sink', 'for (i in 0...items.length) sink.use(items[i], item);'))
+		);
+		Assert.equals(
+			'the type of `items` is not resolved, so it is not provably an Array',
+			declineOf(wrap('sink:Sink', 'final items = sink.all();\n\t\tfor (i in 0...items.length) sink.use(items[i]);'))
+		);
+		Assert.equals(
+			ElementLoopRewrite.COMMENT_DECLINE,
+			declineOf(wrap('items:Array<Item>, sink:Sink', 'for (i in 0...items.length) sink.use(items[i /* x */]);'))
+		);
+	}
+
+	@:pin('control') @:killer('M-ELEMENT-LOOP-NESTED-BINDER')
+	public function testNestedLoopsDerivingOneBinderAreReportOnly(): Void {
+		// Both loops would be fixed in one pass: `for (val in vals) for (val in vals)` and the inner
+		// binder shadows the outer one.
+		final src: String = wrap(
+			'vals:Array<Int>, sink:Sink', 'for (i in 0...vals.length) for (j in 0...vals.length) sink.use(vals[i], vals[j]);'
+		);
+		final check: PreferValueLoop = new PreferValueLoop();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(2, vs.length);
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+		for (v in vs) Assert.equals('an enclosing or nested indexed loop derives the same element name `val`', v.declineReason);
+	}
+
+	@:pin('control') @:killer('M-ELEMENT-LOOP-TYPE-CALLEE') @:killer('M-ELEMENT-LOOP-NEW-EXPR')
+	public function testStaticAndConstructorCallsAreReportOnly(): Void {
+		for (call in ['Main.grow()', 'new Grower()']) {
+			final src: String = wrap(
+				'items:Array<Item>, sink:Sink', 'for (i in 0...items.length) {\n\t\t\tsink.use(items[i]);\n\t\t\t$call;\n\t\t}'
+			);
+			Assert.equals(ElementLoopRewrite.SELF_CALL_DECLINE, declineOf(src), call);
+		}
+	}
+
+	@:pin('control') @:killer('M-ELEMENT-LOOP-REBIND')
+	public function testThisQualifiedCollectionNotFlagged(): Void {
+		final push: String = 'for (i in 0...items.length) {\n\t\t\tsink.use(items[i]);\n\t\t\tthis.items.push(null);\n\t\t}';
+		Assert.equals(0, violations(wrap('items:Array<Item>, sink:Sink', push)).length);
+	}
+
+	public function testMethodOfAnotherObjectStillFixed(): Void {
+		// The documented residual: a method of another object that holds a reference to `items` is admitted.
+		assertFixCanonical(
+			wrap('items:Array<Item>, value:Array<Pos>, sink:Sink', 'for (i in 0...items.length) sink.use(items[i].clone());'),
+			['for (item in items) sink.use(item.clone());'], []
+		);
 	}
 
 	public function testSkipParseNoCrash(): Void {
@@ -339,6 +441,13 @@ class PreferValueLoopCheckTest extends Test {
 			case Err(message):
 				Assert.fail('fix canonicalize Err: $message');
 		}
+	}
+
+	/** The `declineReason` the fix writes on the single finding of `src`, asserting the fix withheld its edits. */
+	private function declineOf(src: String): Null<String> {
+		final r: CheckRun = runAndExpectOne(src);
+		Assert.equals(0, r.check.fix(src, r.vs, new HaxeQueryPlugin()).length);
+		return r.vs.length == 1 ? r.vs[0].declineReason : null;
 	}
 
 }

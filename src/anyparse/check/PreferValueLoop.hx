@@ -3,8 +3,9 @@ package anyparse.check;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.Violation;
+import anyparse.check.ElementLoopRewrite.BinderChoice;
 import anyparse.check.LoopScan.IndexedLoopHeader;
-import anyparse.check.LoopScan.IntervalLoopSeams;
+import anyparse.check.LoopScan.LoopFileScan;
 import anyparse.check.LoopScan.LoopSeams;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.NominalTypes;
@@ -24,7 +25,7 @@ using StringTools;
  * choice — opt in with `"prefer-value-loop": { "enabled": true }`.
  *
  * Disjoint from its sibling `prefer-keyvalue-loop` BY ENFORCEMENT, not by shape luck:
- * `claimedByKeyValueLoop` declines exactly the loops that rule claims. A statement-position
+ * `claimedByKeyValueLoop` declines its opener arm's loops; its other arm needs a bare `i`. A statement-position
  * `for` only — `ForExpr` (an array comprehension, a value-position `for`) is out of scope.
  *
  * ## Soundness gates (all required for a flag)
@@ -50,8 +51,8 @@ using StringTools;
  *
  * A container that RESOLVES to something other than `Array` is not reported at all: `String`
  * carries a `length` and no iterator, so the advice would not compile. An UNRESOLVED one is
- * reported without a fix. The binder comes from `singularOf`, an English plural convention
- * private to this check; no singular, a reserved word, or a name the body mentions in active
+ * reported without a fix. The binder comes from `ElementLoopRewrite.singularOf`, an English plural convention
+ * shared with the sibling; no singular, a reserved word, or a name the body mentions in active
  * text leaves the finding report-only, as does a comment inside a replaced region. One
  * pathological decline is accepted: `macro $i{nm}` spells the reification marker with the token
  * a loop named `i` uses, and a macro body is active code no mask may hide.
@@ -74,30 +75,6 @@ final class PreferValueLoop implements Check implements DefaultOff {
 	/** The one `X[i]` the sibling's rewrite consumes; a second one is outside its claim. */
 	private static inline final CONSUMED_INDEX_READS: Int = 1;
 
-	/** The English vowels, for deciding which `…ies` plural came from a `…y` singular. */
-	private static inline final VOWELS: String = 'aeiou';
-
-	/** The ending a `…y` singular takes in the plural. */
-	private static inline final PLURAL_IES: String = 'ies';
-
-	/** The ending the singular behind an `…ies` plural carries. */
-	private static inline final SINGULAR_Y: String = 'y';
-
-	/** The ending a sibilant singular takes in the plural. */
-	private static inline final PLURAL_ES: String = 'es';
-
-	/** The ending every other plural takes. */
-	private static inline final PLURAL_S: String = 's';
-
-	/** Endings that take `es` rather than a bare `s`, so the singular drops both characters. */
-	private static final SIBILANT_PLURALS: Array<String> = ['ses', 'xes', 'zes', 'ches', 'shes'];
-
-	/** Endings that make a word LOOK plural while it is not — `class`, `status`, `axis`. */
-	private static final SINGULAR_ENDINGS: Array<String> = ['ss', 'us', 'is'];
-
-	/** A collection name the singularizer will touch: lower camelCase, so a derived binder is one too. */
-	private static final COLLECTION_NAME_PATTERN: EReg = ~/^[a-z][A-Za-z0-9_]*$/;
-
 	public function new() {}
 
 	public function id(): String {
@@ -111,7 +88,7 @@ final class PreferValueLoop implements Check implements DefaultOff {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final typed: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		return RunScan.collectWith(files, plugin, LoopScan.intervalSeamsOf(plugin.refShape()), (entry, tree, s, violations) -> {
-			walk(tree, fileScanOf(tree, entry.source, typed?.declaredTypeSources(entry.source), plugin, s), entry.file, violations);
+			walk(tree, LoopScan.fileScanOf(tree, entry.source, typed?.declaredTypeSources(entry.source), plugin, s), entry.file, violations);
 		});
 	}
 
@@ -123,12 +100,12 @@ final class PreferValueLoop implements Check implements DefaultOff {
 	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
 		return RunScan.walkedEdits(
 			plugin, source, LoopScan.intervalSeamsOf(plugin.refShape()), violations,
-			(tree, types, s, wanted, out) -> fixWalk(tree, fileScanOf(tree, source, types, plugin, s), wanted, out)
+			(tree, types, s, wanted, out) -> fixWalk(tree, LoopScan.fileScanOf(tree, source, types, plugin, s), wanted, violations, out)
 		);
 	}
 
 	/** Descend `node`, testing it as a loop and recursing; a reification subtree is skipped wholesale. */
-	private static function walk(node: QueryNode, f: FileScan, file: String, out: Array<Violation>): Void {
+	private static function walk(node: QueryNode, f: LoopFileScan, file: String, out: Array<Violation>): Void {
 		if (f.seams.core.opaqueKinds.contains(node.kind)) return;
 		final m: Null<Match> = analyze(node, f);
 		if (m != null) out.push({
@@ -154,11 +131,18 @@ final class PreferValueLoop implements Check implements DefaultOff {
 	}
 
 	/** Mirror of `walk` for the fix path: emit the splices for each wanted, rewritable loop. */
-	private static function fixWalk(node: QueryNode, f: FileScan, wanted: Array<String>, out: Array<FixEdit>): Void {
+	private static function fixWalk(
+		node: QueryNode, f: LoopFileScan, wanted: Array<String>, violations: Array<Violation>, out: Array<FixEdit>
+	): Void {
 		if (f.seams.core.opaqueKinds.contains(node.kind)) return;
 		final m: Null<Match> = analyze(node, f);
-		if (m != null && wanted.contains('${m.forSpan.from}:${m.forSpan.to}')) for (e in buildEdits(m, f.source)) out.push(e);
-		for (c in node.children) fixWalk(c, f, wanted, out);
+		if (m != null && wanted.contains('${m.forSpan.from}:${m.forSpan.to}')) {
+			final edits: Array<FixEdit> = buildEdits(m, f.source);
+			if (edits.length == 0)
+				ElementLoopRewrite.declineAt(violations, RULE_ID, m.forSpan, m.decline ?? ElementLoopRewrite.COMMENT_DECLINE);
+			for (e in edits) out.push(e);
+		}
+		for (c in node.children) fixWalk(c, f, wanted, violations, out);
 	}
 
 	/**
@@ -169,15 +153,14 @@ final class PreferValueLoop implements Check implements DefaultOff {
 	 * The gates are layered on purpose: the node walks answer precisely about the shapes the tree
 	 * projects, and the text scan answers completely about the ones it hides.
 	 */
-	private static function analyze(forNode: QueryNode, f: FileScan): Null<Match> {
+	private static function analyze(forNode: QueryNode, f: LoopFileScan): Null<Match> {
 		final core: LoopSeams = f.seams.core;
 		final h: Null<IndexedLoopHeader> = LoopScan.indexedHeaderOf(forNode, f.source, LENGTH_MEMBER, f.seams);
 		if (h == null) return null;
 		final reads: Array<QueryNode> = LoopScan.collectIndexReads(h.body, h.collection, h.index, core);
 		if (reads.length == 0 || LoopScan.countReads(h.body, h.index, core) != reads.length) return null;
 		if (claimedByKeyValueLoop(h.body, h.collection, h.index, reads.length, core)) return null;
-		if (!LoopScan.usedOnlyAsStableCollection(h.body, h.collection, LENGTH_MEMBER, core)) return null;
-		if (LoopScan.bindsName(h.body, h.index, core) || LoopScan.bindsName(h.body, h.collection, core)) return null;
+		if (!ElementLoopRewrite.bodyAdmitsElementLoop(h, f.source, LENGTH_MEMBER, core)) return null;
 		final forSpan: Null<Span> = forNode.span;
 		final iterableSpan: Null<Span> = h.iterable.span;
 		final bodySpan: Null<Span> = h.body.span;
@@ -202,14 +185,16 @@ final class PreferValueLoop implements Check implements DefaultOff {
 		// A container that RESOLVES to something else has no value iteration to offer — `String`
 		// is the one that stings, since it carries a `length` — so the message would be advice
 		// that does not compile; only an UNRESOLVED one keeps the report-only tolerance.
-		return collectionTypeSource != null && NominalTypes.outerNominalOf(collectionTypeSource) != ARRAY_TYPE ? null : {
+		if (collectionTypeSource != null && NominalTypes.outerNominalOf(collectionTypeSource) != ARRAY_TYPE) return null;
+		final binder: BinderChoice = ElementLoopRewrite.binderFor(f, forNode, h.index, h.collection, bodySpan, 'the loop body');
+		return {
 			forSpan: forSpan,
 			iterableSpan: iterableSpan,
 			index: h.index,
 			collection: h.collection,
-			binder: binderFor(f, bodySpan, h.index, h.collection),
+			binder: binder.name,
 			readSpans: readSpans,
-			resolved: collectionTypeSource != null
+			decline: ElementLoopRewrite.elementDecline(binder, h.collection, collectionTypeSource, h.body, core)
 		};
 	}
 
@@ -228,62 +213,8 @@ final class PreferValueLoop implements Check implements DefaultOff {
 	private static function claimedByKeyValueLoop(
 		body: QueryNode, collection: String, index: String, indexReads: Int, core: LoopSeams
 	): Bool {
-		if (body.kind != core.blockStmtKind || body.children.length < MIN_KEY_VALUE_STATEMENTS) return false;
-		if (indexReads != CONSUMED_INDEX_READS) return false;
-		final decl: QueryNode = body.children[0];
-		if (LoopScan.singleLocalDeclName(decl, core.localDeclKinds, core) == null) return false;
-		final init: QueryNode = decl.children[0];
-		return LoopScan.isIndexAccessOf(init, collection, core) && LoopScan.bareIdentName(init.children[1], core) == index;
-	}
-
-	/**
-	 * The name the value binder would take, or null when this check will not write one. A candidate the
-	 * body spells ANYWHERE in ACTIVE text is refused — the same masked TEXT scan `analyze` uses, because
-	 * a name that occurs only in a `macro` quotation is just as capturable as one in plain code.
-	 * Shadowing an OUTER name the body never mentions is safe by contrast: the binder's scope ends with
-	 * the loop.
-	 *
-	 * The mask carries its weight on this half especially: a comment naming the singular is ordinary in a
-	 * loop body, and a comment cannot capture a binding.
-	 *
-	 * `candidate == collection` is not tested: every `singularOf` answer is strictly shorter than its
-	 * input.
-	 */
-	private static function binderFor(f: FileScan, bodySpan: Span, index: String, collection: String): Null<String> {
-		final candidate: Null<String> = singularOf(collection);
-		return if (candidate == null || candidate == index)
-			null
-		else if ((f.seams.core.shape.reservedWords ?? []).contains(candidate))
-			null
-		else if (OccurrenceScan.referencedInRange(f.source, candidate, bodySpan.from, bodySpan.to, [], f.inert))
-			null
-		else
-			candidate;
-	}
-
-	/**
-	 * The singular of a plural collection name, or null when no rule applies. An English
-	 * identifier convention, so it lives here rather than in the grammar seam: a plural is a
-	 * property of how people name collections, not of the language being parsed.
-	 */
-	private static function singularOf(name: String): Null<String> {
-		if (!COLLECTION_NAME_PATTERN.match(name)) return null;
-		if (name.endsWith(PLURAL_IES)) {
-			// A `…y` singular pluralises through a consonant (`property`, `body`); a stem already
-			// ending in a vowel had an `…ie` singular, which loses only the `s`.
-			final stem: String = name.substring(0, name.length - PLURAL_IES.length);
-			return if (stem.length == 0)
-				null
-			else if (VOWELS.indexOf(stem.charAt(stem.length - 1)) >= 0)
-				name.substring(0, name.length - PLURAL_S.length)
-			else
-				stem + SINGULAR_Y;
-		}
-		for (suffix in SIBILANT_PLURALS) if (name.endsWith(suffix)) return name.substring(0, name.length - PLURAL_ES.length);
-		for (suffix in SINGULAR_ENDINGS) if (name.endsWith(suffix)) return null;
-		if (!name.endsWith(PLURAL_S)) return null;
-		final stem: String = name.substring(0, name.length - PLURAL_S.length);
-		return stem.length == 0 ? null : stem;
+		return body.children.length >= MIN_KEY_VALUE_STATEMENTS && indexReads == CONSUMED_INDEX_READS
+			&& LoopScan.opensWithIndexBinding(body, collection, index, core);
 	}
 
 	/**
@@ -292,44 +223,14 @@ final class PreferValueLoop implements Check implements DefaultOff {
 	 * unresolved container, or a comment inside a region a splice would overwrite.
 	 */
 	private static function buildEdits(m: Match, source: String): Array<FixEdit> {
-		final maybeBinder: Null<String> = m.binder;
-		if (maybeBinder == null || !m.resolved) return [];
-		if (CheckScan.hasCommentMarker(source, m.forSpan.from, m.iterableSpan.to)) return [];
-		for (span in m.readSpans) if (CheckScan.hasCommentMarker(source, span.from, span.to)) return [];
-		final binder: String = maybeBinder;
-		final edits: Array<FixEdit> = [
-			{ span: new Span(m.forSpan.from, m.iterableSpan.to), text: 'for ($binder in ${m.collection}' }
-		];
-		for (span in m.readSpans) edits.push({ span: span, text: binder });
-		return edits;
+		final binder: Null<String> = m.binder;
+		return binder == null || m.decline != null
+			? []
+			: ElementLoopRewrite.elementReadEdits(
+				source, m.forSpan, m.iterableSpan, 'for ($binder in ${m.collection}', m.readSpans, binder
+			);
 	}
 
-	/** Bundle the per-FILE facts every gate reads, so the walks carry one argument instead of five. */
-	private static function fileScanOf(
-		tree: QueryNode, source: String, types: Null<Map<Int, String>>, plugin: GrammarPlugin, seams: IntervalLoopSeams
-	): FileScan {
-		return {
-			root: tree,
-			source: source,
-			types: types,
-			inert: OccurrenceScan.inertMask(source, plugin),
-			seams: seams
-		};
-	}
-
-}
-
-/**
- * The per-FILE facts every gate reads: the tree root a type lookup resolves against, the source
- * and its inert-region mask (comments, regexes and non-interpolating literals — the spans a text
- * scan must not read as a use), the declared-type map, and the seams.
- */
-private typedef FileScan = {
-	var root: QueryNode;
-	var source: String;
-	var types: Null<Map<Int, String>>;
-	var inert: Array<Span>;
-	var seams: IntervalLoopSeams;
 }
 
 /** One matched loop: the spans the rewrite splices, the names it reads, the binder it would write. */
@@ -340,5 +241,5 @@ private typedef Match = {
 	var collection: String;
 	var binder: Null<String>;
 	var readSpans: Array<Span>;
-	var resolved: Bool;
+	var decline: Null<String>;
 }
