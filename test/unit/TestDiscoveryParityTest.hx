@@ -262,6 +262,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.PreferCaseWildcardCheckTest',
 		'unit.check.PreferComprehensionCheckTest',
 		'unit.check.PreferComprehensionFinalTest',
+		'unit.check.PreferComprehensionIndexFillTest',
 		'unit.check.PreferDocCommentCheckTest',
 		'unit.check.PreferEnumAbstractCheckTest',
 		'unit.check.PreferExistsCheckTest',
@@ -269,6 +270,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.PreferFinalCheckTest',
 		'unit.check.PreferFinalClassCheckTest',
 		'unit.check.PreferFinalFieldCheckTest',
+		'unit.check.PreferFinalMacroOwnerTest',
 		'unit.check.PreferFinalPublicFieldCheckTest',
 		'unit.check.PreferFinalPublicFieldStructuralTest',
 		'unit.check.PreferFindCheckTest',
@@ -348,6 +350,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.SimplifyNegatedCompoundCheckTest',
 		'unit.check.SplitVarDeclarationCheckTest',
 		'unit.check.StaticConstantCheckTest',
+		'unit.check.StaticReflectionReachTest',
 		'unit.check.StringLiteralDupCheckTest',
 		'unit.check.StructuralConformanceProofTest',
 		'unit.check.SuppressionSliceTest',
@@ -1257,6 +1260,33 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PossibleNullDereferenceTest#testFieldPathMapReceiverFlagged :: control :: M-NULLABLE-NO-CHAIN',
 			'unit.check.PossibleNullDereferenceTest#testNullWrappedMapFlagged :: control :: M-NULLABLE-WRAPPER-OPAQUE',
 			'unit.check.PreferCaseGuardCheckTest#testInScopeEnumNotFlagged :: control :: M-DECLARINGFILES-EMPTY',
+			'unit.check.PreferComprehensionIndexFillTest#testACommentInsideTheInnerDeclarationRefusesTheNest :: control :: '
+				+ 'M-COMPR-NESTED-DECL-COMMENT',
+			'unit.check.PreferComprehensionIndexFillTest#testAHoistThatWouldWeldTwoCommentsIsRefused :: control :: M-COMPR-WELD-BLIND',
+			'unit.check.PreferComprehensionIndexFillTest#testANestedBuildFolds :: control :: M-COMPR-NESTED-NEVER',
+			'unit.check.PreferComprehensionIndexFillTest#testAnArrayTouchedBeforeTheLoopIsRefused :: control :: M-COMPR-GAP-NAME-BLIND',
+			'unit.check.PreferComprehensionIndexFillTest#testAnExtraStatementInTheOuterBodyIsRefused :: control :: '
+				+ 'M-COMPR-NESTED-ANY-LENGTH',
+			'unit.check.PreferComprehensionIndexFillTest#testAnIndexFillBoundedByTheArrayIsRefused :: control :: '
+				+ 'M-COMPR-INDEXFILL-RANGE-UNCHECKED',
+			'unit.check.PreferComprehensionIndexFillTest#testAnIndexFillFolds :: control :: M-COMPR-INDEXFILL-NEVER',
+			'unit.check.PreferComprehensionIndexFillTest#testAnIndexFillFromANonZeroStartIsRefused :: control :: '
+				+ 'M-COMPR-INDEXFILL-ANY-START',
+			'unit.check.PreferComprehensionIndexFillTest#testAnIndexFillIntoANonArrayIsRefused :: control :: '
+				+ 'M-COMPR-INDEXFILL-ANY-CONTAINER',
+			'unit.check.PreferComprehensionIndexFillTest#testAnIndexFillReadingTheArrayIsRefused :: control :: '
+				+ 'M-COMPR-INDEXFILL-VALUE-UNCHECKED',
+			'unit.check.PreferComprehensionIndexFillTest#testAnIndexOtherThanTheBinderIsRefused :: control :: M-COMPR-INDEXFILL-ANY-INDEX',
+			'unit.check.PreferComprehensionIndexFillTest#testAnInnerAnnotationTheOuterDoesNotRestateIsAscribed :: control :: '
+				+ 'M-COMPR-NESTED-ASCRIPTION-DROPPED',
+
+			'unit.check.PreferComprehensionIndexFillTest#testAnInnerFillReadingTheInnerArrayIsRefused :: control :: '
+				+ 'M-COMPR-NESTED-INNER-UNCHECKED',
+			'unit.check.PreferComprehensionIndexFillTest#testAnInnerFillReadingTheOuterArrayIsRefused :: control :: '
+				+ 'M-COMPR-NESTED-CHECKS-UNMERGED',
+			'unit.check.PreferComprehensionIndexFillTest#testAnOuterPushOfSomethingElseIsRefused :: control :: M-COMPR-NESTED-PUSH-ANY',
+			'unit.check.PreferComprehensionIndexFillTest#testAnOwnLineCommentBetweenTheDeclarationAndTheLoopIsHoisted :: control :: '
+				+ 'M-COMPR-GAP-COMMENT-DROPPED',
 			'unit.check.PreferEnumAbstractCheckTest#testFixRefusalFollowsTheDeclarationNotTheSimpleName :: control :: '
 				+ 'M-SUBTYPE-KEY-SIMPLE-NAME',
 			'unit.check.PreferEnumAbstractCheckTest#testFixRefusesAnRttiHomonym :: control :: M-RTTI-FALSE',
@@ -1277,6 +1307,21 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PreferFinalAbstractMethodCheckTest#testStdlibArrayFieldMethodCallStillFlagged :: control :: M-PFF-STDLIB-SAFE-NONE',
 			'unit.check.PreferFinalAbstractMethodCheckTest#testStdlibStringFieldMethodCallStillFlagged :: control :: '
 				+ 'M-PFF-STDLIB-SAFE-NONE',
+			'unit.check.PreferFinalMacroOwnerTest#testABuilderReadingFinalityDeclinesEvenUnderTheOracle :: control :: '
+				+ 'M-FINAL-MACRO-FINALITY-BLIND',
+			'unit.check.PreferFinalMacroOwnerTest#testAPrivateFieldOfAMacroBuiltOwnerIsFixedUnderTheOracle :: control :: '
+				+ 'M-PFF-MACRO-NEVER-ADMITTED',
+			'unit.check.PreferFinalMacroOwnerTest#testAPrivateFieldOfAMacroBuiltOwnerIsNotFixedWithoutTheOracle :: control :: '
+				+ 'M-PFF-MACRO-FIXED',
+			'unit.check.PreferFinalMacroOwnerTest#testAPrivateFieldOfAMacroBuiltOwnerIsReportedAndDeclined :: control :: '
+				+ 'M-PFF-MACRO-SILENT',
+			'unit.check.PreferFinalMacroOwnerTest#testAPublicFieldOfAMacroBuiltOwnerIsFixedUnderTheOracle :: control :: '
+				+ 'M-PFPF-MACRO-NEVER-ADMITTED',
+			'unit.check.PreferFinalMacroOwnerTest#testAPublicFieldOfAMacroBuiltOwnerIsNotFixedWithoutTheOracle :: control :: '
+				+ 'M-PFPF-MACRO-FIXED',
+			'unit.check.PreferFinalMacroOwnerTest#testAPublicFieldOfAMacroBuiltOwnerIsReportedAndDeclined :: control :: '
+				+ 'M-PFPF-MACRO-SILENT',
+			'unit.check.PreferFinalMacroOwnerTest#testTheFoldIsNeverAdmittedOnAMacroBuiltOwner :: control :: M-FINAL-MACRO-FOLD-ADMITTED',
 			'unit.check.PreferFindCheckTest#testFixRefusedWhenTheOnlyUsingIsGuarded :: control :: M-GUARDED-USING-ABSENT',
 			'unit.check.PreferIfExpressionAssignmentCheckTest#testFlatTwoBranchStillNotFlagged :: control :: M-TERMINAL-RUNGS-ANY',
 			'unit.check.PreferIfExpressionChainCheckTest#testBooleanReducibleUnfoldedRungStillConverts :: control :: '
@@ -1364,6 +1409,32 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ReflectionMemoTest#testTheSurfaceIsMemoisedWithinARun :: control :: M-REFLECTION-MEMO-DEAD',
 			'unit.check.ShortenTypeRefCheckTest#testASingleSurvivingOccurrenceEarnsNoImport :: control :: M-SHORTEN-IMPORT-THRESHOLD-ONE',
 			'unit.check.StaticConstantCheckTest#testScalarInstanceFinalFlagged :: control :: M-BUILDMACRO-TRUE',
+			'unit.check.StaticReflectionReachTest#testAClassReifyingBuildMacroKeepsTheGate :: control :: M-STATICREACH-REIFY-BLIND',
+			'unit.check.StaticReflectionReachTest#testAClassSourceInAnOpaqueRegionKeepsTheGate :: control :: '
+				+ 'M-STATICREACH-OPAQUE-SOURCE-BLIND',
+			'unit.check.StaticReflectionReachTest#testAConsumedGetClassDeletes :: control :: M-STATICREACH-CONSUMER-NONE',
+			'unit.check.StaticReflectionReachTest#testADefinitionLookupByAComputedNameKeepsTheGate :: control :: '
+				+ 'M-STATICREACH-DEFINITION-BLIND',
+			'unit.check.StaticReflectionReachTest#testAJsClassHandleKeepsTheGate :: control :: M-STATICREACH-JS-HANDLE-BLIND',
+			'unit.check.StaticReflectionReachTest#testALiteralNamingTheOwnerKeepsTheGate :: control :: M-STATICREACH-TYPEPATH-BLIND',
+			'unit.check.StaticReflectionReachTest#testAReceiverlessIsOfTypeNeedsUsingStd :: control :: M-STATICREACH-USING-STD-ASSUMED',
+			'unit.check.StaticReflectionReachTest#testAStaticNoClassValueReachesIsDeleted :: control :: M-STATICREACH-NEVER',
+			'unit.check.StaticReflectionReachTest#testAStringInAMacroFileKeepsTheGate :: control :: M-STATICREACH-MACRO-BLIND',
+			'unit.check.StaticReflectionReachTest#testAStringInANativeCarrierKeepsTheGate :: control :: M-STATICREACH-CARRIER-BLIND',
+			'unit.check.StaticReflectionReachTest#testAStringNamingAClassSourceKeepsTheGate :: control :: '
+				+ 'M-STATICREACH-SOURCE-STRING-BLIND',
+			'unit.check.StaticReflectionReachTest#testASubclassAsAValueKeepsTheGate :: control :: M-STATICREACH-SUBTYPE-BLIND',
+			'unit.check.StaticReflectionReachTest#testAWhitelistedConsumerOfTheClassNameDeletes :: control :: M-STATICREACH-CONSUMER-NONE',
+			'unit.check.StaticReflectionReachTest#testAnAliasAsAValueKeepsTheGate :: control :: M-STATICREACH-ALIAS-BLIND',
+			'unit.check.StaticReflectionReachTest#testAnExtensionOnTheClassKeepsTheGate :: control :: M-STATICREACH-RECEIVER-BLIND',
+			'unit.check.StaticReflectionReachTest#testAnInstanceFieldKeepsTheStringGate :: control :: M-STATICREACH-INSTANCE',
+			'unit.check.StaticReflectionReachTest#testAnUnconsumedGetClassKeepsTheGate :: control :: M-STATICREACH-SOURCE-BLIND',
+			'unit.check.StaticReflectionReachTest#testGetClassOfThisInAMacroModuleKeepsTheGate :: control :: M-STATICREACH-MACRO-THIS',
+			'unit.check.StaticReflectionReachTest#testGetClassOfThisInAnUnrelatedClassDeletes :: control :: M-STATICREACH-THIS-UNBOUNDED',
+			'unit.check.StaticReflectionReachTest#testGetClassOfThisOnTheOwnersChainKeepsTheGate :: control :: M-STATICREACH-THIS-BLIND',
+			'unit.check.StaticReflectionReachTest#testTheClassNameAsAValueKeepsTheGate :: control :: M-STATICREACH-VALUE-BLIND',
+			'unit.check.StaticReflectionReachTest#testTheCliDeletesADistinctiveStaticOnlyATableSpells :: control :: M-STATICREACH-NEVER',
+			'unit.check.StaticReflectionReachTest#testTheOwnerInAnOpaqueRegionKeepsTheGate :: control :: M-STATICREACH-OPAQUE-CHAIN-BLIND',
 			'unit.check.StringLiteralDupCheckTest#testMapOfOnlyStringLiteralsIsATable :: control :: M-STRING-LITERAL-DUP-MAP-ENTRY-BLIND',
 			'unit.check.StringLiteralDupCheckTest#testMapWithNonStringValuesIsATable :: control :: '
 				+ 'M-STRING-LITERAL-DUP-STRING-ONLY-ENTRIES',
@@ -2480,7 +2551,53 @@ class TestDiscoveryParityTest extends Test {
 			'M-ULB-UNBOUND-WILDCARD-ADMITTED',
 			'M-ULB-FIELD-NAME-AS-READ',
 			'M-ULB-WILDCARD-KEY-VALUE-BLIND',
-			'M-MAPITERKEY-MESSAGE-ALWAYS-PROVEN'
+			'M-MAPITERKEY-MESSAGE-ALWAYS-PROVEN',
+			'M-PFF-MACRO-SILENT',
+			'M-PFF-MACRO-FIXED',
+			'M-PFF-MACRO-NEVER-ADMITTED',
+			'M-PFPF-MACRO-SILENT',
+			'M-PFPF-MACRO-FIXED',
+			'M-PFPF-MACRO-NEVER-ADMITTED',
+			'M-STATICREACH-NEVER',
+			'M-STATICREACH-INSTANCE',
+			'M-STATICREACH-VALUE-BLIND',
+			'M-STATICREACH-CONSUMER-NONE',
+			'M-STATICREACH-SOURCE-BLIND',
+			'M-STATICREACH-THIS-UNBOUNDED',
+			'M-STATICREACH-THIS-BLIND',
+			'M-STATICREACH-SUBTYPE-BLIND',
+			'M-STATICREACH-ALIAS-BLIND',
+			'M-STATICREACH-TYPEPATH-BLIND',
+			'M-STATICREACH-JS-HANDLE-BLIND',
+			'M-STATICREACH-RECEIVER-BLIND',
+			'M-STATICREACH-MACRO-BLIND',
+			'M-STATICREACH-CARRIER-BLIND',
+			'M-STATICREACH-OPAQUE-SOURCE-BLIND',
+			'M-STATICREACH-OPAQUE-CHAIN-BLIND',
+			'M-COMPR-INDEXFILL-NEVER',
+			'M-COMPR-INDEXFILL-VALUE-UNCHECKED',
+			'M-COMPR-INDEXFILL-ANY-START',
+			'M-COMPR-INDEXFILL-ANY-INDEX',
+			'M-COMPR-NESTED-NEVER',
+			'M-COMPR-GAP-COMMENT-DROPPED',
+			'M-COMPR-NESTED-ANY-LENGTH',
+			'M-COMPR-NESTED-PUSH-ANY',
+			'M-COMPR-NESTED-INNER-UNCHECKED',
+			'M-COMPR-NESTED-CHECKS-UNMERGED',
+			'M-COMPR-NESTED-ASCRIPTION-DROPPED',
+			'M-COMPR-GAP-NAME-BLIND',
+			'M-COMPR-INDEXFILL-ANY-CONTAINER',
+			'M-COMPR-INDEXFILL-RANGE-UNCHECKED',
+			'M-COMPR-WELD-BLIND',
+
+			'M-COMPR-NESTED-DECL-COMMENT',
+			'M-STATICREACH-REIFY-BLIND',
+			'M-STATICREACH-MACRO-THIS',
+			'M-STATICREACH-DEFINITION-BLIND',
+			'M-STATICREACH-SOURCE-STRING-BLIND',
+			'M-STATICREACH-USING-STD-ASSUMED',
+			'M-FINAL-MACRO-FOLD-ADMITTED',
+			'M-FINAL-MACRO-FINALITY-BLIND'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

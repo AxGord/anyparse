@@ -431,6 +431,17 @@ final class SubtypeGraph {
 	}
 
 	/**
+	 * The simple names of every type in `owner`'s transitive SUBTYPE closure, `owner` excluded unless the
+	 * closure names it back. Over-approximated the way `subtypeFiles` is, so a caller may only read a
+	 * name here as "may be a subtype" — a veto, never a proof of relation.
+	 */
+	public function subtypeNames(owner: String, ?fromFile: String): Array<String> {
+		final out: Array<String> = [];
+		eachSubtype(owner, sub -> if (!out.contains(sub.type.name)) out.push(sub.type.name), fromFile);
+		return out;
+	}
+
+	/**
 	 * Call `visit` for every declaration in `owner`s transitive SUBTYPE closure, expanding
 	 * outward over the memoised adjacency (`subtypesOf`). The WALK is deduped by simple name —
 	 * two distinct types sharing one expand once, which is what terminates it — while `visit`

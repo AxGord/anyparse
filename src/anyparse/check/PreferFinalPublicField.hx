@@ -1,5 +1,7 @@
 package anyparse.check;
 
+import anyparse.check.Check.OracleRelaxable;
+import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.query.CtorFieldFold;
 import anyparse.query.CtorFieldWrite;
@@ -82,6 +84,13 @@ import anyparse.runtime.Span;
  * annotation, and a structural type declared in a configured library root — surface as loud
  * compile errors, never silent corruption.
  *
+ * ## Macro-built owners — `RiskyFix` + `OracleRelaxable`
+ *
+ * The same split as `prefer-final-field` (its class doc has the builder shapes): an owner a build macro reaches keeps its finding, whose
+ * edit is admitted only under a compiler oracle through typecheck-and-revert (`setOracleRelaxed`) and declined without one; every other
+ * owner keeps the ordinary fix. The null-guarded default fold is never admitted on such an owner, nor the swap
+ * under a builder that resolvably reads finality; one that cannot be resolved is the silent residual.
+ *
  * ## Whole-project scope required
  *
  * The write index and the subtype gate are only sound over a scope holding EVERY file that can
@@ -128,9 +137,20 @@ import anyparse.runtime.Span;
  * it answers the same in both scopes instead of by accident in one.
  */
 @:nullSafety(Strict)
-final class PreferFinalPublicField implements Check {
+final class PreferFinalPublicField implements Check implements RiskyFix implements OracleRelaxable {
+
+	/** Whether a compiler oracle verifies the fix, which is what admits a macro-built owner's edit. */
+	private var _oracleRelaxed: Bool = false;
 
 	public function new() {}
+
+	/**
+	 * Admit the edits of MACRO-BUILT owners. Set by `Cli.applyLintFixes` only when this check runs
+	 * as a verified `RiskyFix`, so those edits always pass the typecheck-and-revert pipeline.
+	 */
+	public function setOracleRelaxed(relaxed: Bool): Void {
+		_oracleRelaxed = relaxed;
+	}
 
 	public function id(): String {
 		return 'prefer-final-public-field';
@@ -153,7 +173,7 @@ final class PreferFinalPublicField implements Check {
 		final writeIndex: FieldWriteIndex = RefactorSupport.fieldWriteIndexOf(plugin) ?? FieldWriteIndex.build(scope, plugin, index);
 		final violations: Array<Violation> = [];
 		CtorFieldWrite.eachFieldMember(files, plugin, (owner, field, source, file, exported) -> {
-			if (exported) considerField(violations, file, source, field, owner, index, writeIndex, plugin);
+			if (exported) considerField(violations, file, source, field, owner, index, writeIndex, plugin, _oracleRelaxed);
 		});
 		return violations;
 	}
@@ -170,7 +190,17 @@ final class PreferFinalPublicField implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return CtorFieldFold.finalizeFieldEdits(source, [for (v in violations) v.span], plugin);
+		return CtorFieldFold.finalizeFieldEdits(source, [for (v in violations) if (v.declineReason == null) v.span], plugin);
+	}
+
+	/** The finding's message for the arm that proved the public field `name` single-assignment. */
+	private static inline function messageOf(name: String, folded: Bool, initialized: Bool): String {
+		return if (folded)
+			'public field \'$name\' has a null-guarded constructor default; use final and default with ??'
+		else if (initialized)
+			'public field \'$name\' is never reassigned; use final'
+		else
+			'public field \'$name\' is assigned only in the constructor; use final';
 	}
 
 	/**
@@ -185,7 +215,7 @@ final class PreferFinalPublicField implements Check {
 	 */
 	private static function considerField(
 		out: Array<Violation>, file: String, source: String, field: QueryNode, owner: String, index: SymbolIndex,
-		writeIndex: FieldWriteIndex, plugin: GrammarPlugin
+		writeIndex: FieldWriteIndex, plugin: GrammarPlugin, oracleRelaxed: Bool
 	): Void {
 		final name: Null<String> = field.name;
 		final span: Null<Span> = field.span;
@@ -196,9 +226,6 @@ final class PreferFinalPublicField implements Check {
 		// scope holding one unparseable file. The candidate's own file narrows the scan back off
 		// the library half: a skip-parsing haxelib source cannot name a project type.
 		if (index.text.skippedMayReference(name, file)) return;
-		// A macro-built type's fields are not what the declaration says — see
-		// `TypeTraits.transitivelyCarriesBuildMacro`.
-		if (index.traits.transitivelyCarriesBuildMacro(owner, file)) return;
 		final initialized: Bool = CtorFieldWrite.isInitializedNonPropertyField(source, field);
 		// The conditional-default arm: an initialized field (a `(default, null)` property
 		// included) whose only other write is one `if (p != null) x = p;` constructor
@@ -239,17 +266,10 @@ final class PreferFinalPublicField implements Check {
 			if (writeIndex.writtenOutsideDeclaration(owner, name, file)) return;
 		}
 		if (MemberWriteScan.subtypeWriteReaches(owner, name, index, writeIndex, plugin)) return;
-		out.push({
-			file: file,
-			span: span,
-			rule: 'prefer-final-public-field',
-			severity: Severity.Info,
-			message: folded
-				? 'public field \'$name\' has a null-guarded constructor default; use final and default with ??'
-				: initialized
-					? 'public field \'$name\' is never reassigned; use final'
-					: 'public field \'$name\' is assigned only in the constructor; use final'
-		});
+		// A macro-built type's fields are not what the declaration says (`prefer-final-field`'s class
+		// doc): the finding is kept, and whether its edit is admitted is `macroFinalDecline`'s to say.
+		final decline: Null<String> = CtorFieldFold.macroFinalDecline(index, index, owner, file, folded, oracleRelaxed);
+		out.push(CtorFieldFold.finalFinding(file, span, 'prefer-final-public-field', messageOf(name, folded, initialized), decline));
 	}
 
 }

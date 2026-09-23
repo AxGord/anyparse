@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.FrameworkAware;
 import anyparse.check.Check.Violation;
+import anyparse.check.ReflectionScan.ReflectionSurface;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberKinds;
@@ -131,6 +132,16 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	 */
 	private var _reflectedContents: Null<Array<String>> = null;
 
+	/**
+	 * The files and the reflection surface the last `run` saw, from which `fix` builds the static-reach
+	 * scan on its first need (`staticReachOf`). Null until `run` populates it, which leaves the string gate
+	 * closed for every static.
+	 */
+	private var _reachInput: Null<{ files: Array<{ file: String, source: String }>, surface: ReflectionSurface }> = null;
+
+	/** The static-reach scan built from `_reachInput`, once per `run`. */
+	private var _staticReach: Null<StaticReflectionReach> = null;
+
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
@@ -164,7 +175,8 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
 		final scopeIndex: SymbolIndex = RefactorSupport.widestScopeIndex(plugin, index) ?? index;
 		final contracts: Array<FrameworkContract> = LintConfig.frameworksFor(_resolveConfig, files);
-		final reflected: Array<String> = ReflectionScan.reflectionSurface(files, plugin).whole;
+		final surface: ReflectionSurface = ReflectionScan.reflectionSurface(files, plugin);
+		final reflected: Array<String> = surface.whole;
 		final violations: Array<Violation> = [];
 		final ctorCandidates: Array<{ file: String, className: String, span: Span }> = [];
 		for (entry in files) {
@@ -188,6 +200,8 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 			collectCtorCandidates(plugin, tree, entry.file, ctorCandidates);
 		}
 		_reflectedContents = reflected;
+		_reachInput = { files: files, surface: surface };
+		_staticReach = null;
 		// TWO of the three proofs below need a file the parser could read — `hasSubtype` is
 		// structural and `mentionedInStrings` reads literals off parsed trees, while
 		// `isInstantiatedAnywhere` already scans the raw `files` array and so sees a `new C()`
@@ -308,7 +322,10 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 					+ 'branch reads it is not decidable from here';
 				continue;
 			}
-			final decline: Null<String> = memberDeclineReason(node, owner, hit.inExtends, index, classMeta, reflected, plugin.refShape());
+			final decline: Null<String> = memberDeclineReason(
+				node, owner, hit.inExtends, index, classMeta, reflected, plugin.refShape(),
+				stringsUnreachable.bind(node, hit.parent, owner, v.file, plugin, scopeIndex ?? index)
+			);
 			if (decline == null)
 				attempt();
 			else
@@ -326,6 +343,30 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 				edits.push(CheckScan.deletionEdit(source, member, hit.parent, span, plugin.lexicalRegions(source)));
 		}
 		return edits;
+	}
+
+	/**
+	 * The static-reach scan over what the last `run` saw, built on the first call and kept for the rest
+	 * of the run; null before any `run`, or when the grammar cannot answer it.
+	 */
+	private function staticReachOf(plugin: GrammarPlugin): Null<StaticReflectionReach> {
+		final input: Null<{ files: Array<{ file: String, source: String }>, surface: ReflectionSurface }> = _reachInput;
+		if (_staticReach == null && input != null) _staticReach = StaticReflectionReach.build(input.files, plugin, input.surface);
+		return _staticReach;
+	}
+
+	/**
+	 * Whether no string can reach `member` of `owner` (declared in `file`, child of `parent`) by reflection
+	 * — true only for a static of a class no class value of which escapes (`StaticReflectionReach`).
+	 */
+	private function stringsUnreachable(
+		member: QueryNode, parent: QueryNode, owner: Null<String>, file: String, plugin: GrammarPlugin, index: Null<SymbolIndex>
+	): Bool {
+		final name: Null<String> = member.name;
+		if (owner == null || name == null || index == null) return false;
+		if (!isStaticClassMember(member, parent, plugin.refShape().staticModifierKind)) return false;
+		final reach: Null<StaticReflectionReach> = staticReachOf(plugin);
+		return reach != null && !reach.staticReachable(owner, file, name, index);
 	}
 
 	/**
@@ -682,6 +723,21 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 		return sawPrivate;
 	}
 
+	/**
+	 * Whether `member` is a `static` member of the CLASS body `parent` — its modifier run, read back
+	 * from the member, holds `static`. A modifier the run does not show (behind a `#if`) reads as absent,
+	 * which only keeps the string gate closed.
+	 */
+	private static function isStaticClassMember(member: QueryNode, parent: QueryNode, staticKind: Null<String>): Bool {
+		if (staticKind == null || !CheckScan.isClassBodyKind(parent.kind)) return false;
+		var i: Int = parent.children.indexOf(member) - 1;
+		while (i >= 0 && MemberKinds.MODIFIER_META_KINDS.contains(parent.children[i].kind)) {
+			if (parent.children[i].kind == staticKind) return true;
+			i--;
+		}
+		return false;
+	}
+
 	/** Whether the class carries at least one `static` member (the utility-class shape). */
 	private static function hasStaticMember(classNode: QueryNode): Bool {
 		return classNode.children.exists(child -> child.kind == 'Static');
@@ -738,7 +794,8 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	 */
 	private static function memberDeclineReason(
 		node: QueryNode, owner: Null<String>, inExtends: Bool, index: Null<SymbolIndex>,
-		classMeta: Map<String, { hasBuild: Bool, hasKeep: Bool }>, reflected: Array<String>, shape: RefShape
+		classMeta: Map<String, { hasBuild: Bool, hasKeep: Bool }>, reflected: Array<String>, shape: RefShape,
+		stringsUnreachable: () -> Bool
 	): Null<String> {
 		final shapeReason: Null<String> = shapeDecline(node, shape);
 		if (shapeReason != null) return shapeReason;
@@ -753,7 +810,7 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 			if (meta != null && meta.hasKeep) return 'the enclosing type is `@:keep`, so nothing may drop a member of it';
 		}
 		final name: Null<String> = node.name;
-		return name == null || !mentionedInStrings(name, reflected)
+		return name == null || !mentionedInStrings(name, reflected) || stringsUnreachable()
 			? null
 			: 'the name occurs in a STRING somewhere in the resolution scope, where it would be a `Reflect.field` target';
 	}
@@ -778,7 +835,6 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 			}
 		}
 	}
-
 
 	/**
 	 * `deleting` minus every member whose removal would leave a conditional region with no member

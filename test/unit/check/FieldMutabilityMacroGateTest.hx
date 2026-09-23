@@ -188,13 +188,15 @@ class FieldMutabilityMacroGateTest extends Test {
 	}
 
 	/**
-	 * `prefer-final-field` findings for `owner`, linted alongside the `@:autoBuild` interface.
+	 * `prefer-final-field` findings for `owner` that carry an edit without a compiler oracle, linted
+	 * alongside the `@:autoBuild` interface. A macro-built owner's finding is still REPORTED, declined
+	 * (`PreferFinalMacroOwnerTest`), so the gate these cells pin is the one on the edit.
 	 */
 	private function fieldViolations(owner: String): Array<Violation> {
 		return new PreferFinalField().run([
 			{ file: 'p/Declarator.hx', source: DECLARATOR },
 			{ file: 'p/W.hx', source: owner }
-		], new HaxeQueryPlugin()).filter(v -> v.file == 'p/W.hx');
+		], new HaxeQueryPlugin()).filter(v -> v.file == 'p/W.hx' && v.declineReason == null);
 	}
 
 	/** `prefer-final-field` findings for a `q.W`, linted alongside a same-simple-name `p.W`. */
@@ -204,7 +206,7 @@ class FieldMutabilityMacroGateTest extends Test {
 		return new PreferFinalField().run([
 			{ file: 'p/W.hx', source: homonym },
 			{ file: 'q/W.hx', source: owner }
-		], new HaxeQueryPlugin()).filter(v -> v.file == 'q/W.hx');
+		], new HaxeQueryPlugin()).filter(v -> v.file == 'q/W.hx' && v.declineReason == null);
 	}
 
 	/** `trivial-getter` findings for the same `q.W` / `p.W` pair. */
@@ -228,7 +230,7 @@ class FieldMutabilityMacroGateTest extends Test {
 			{ file: 'p/Marker.hx', source: BUILT_MARKER },
 			{ file: 'q/Marker.hx', source: PLAIN_MARKER },
 			{ file: '$pkg/W.hx', source: owner }
-		], new HaxeQueryPlugin()).filter(v -> v.file == '$pkg/W.hx');
+		], new HaxeQueryPlugin()).filter(v -> v.file == '$pkg/W.hx' && v.declineReason == null);
 	}
 
 	/** `inline-constant` findings for a class `head` carrying one private static scalar constant. */

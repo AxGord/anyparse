@@ -69,6 +69,8 @@ class BuiltinFixClassCensusTest extends Test {
 			'prefer-case-guard',
 			'prefer-enum-abstract',
 			'prefer-exists',
+			'prefer-final-field',
+			'prefer-final-public-field',
 			'prefer-inline',
 			'prefer-interpolation',
 			'prefer-map-type',
