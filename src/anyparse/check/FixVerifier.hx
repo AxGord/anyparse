@@ -3,18 +3,22 @@ package anyparse.check;
 import anyparse.check.Check.GroupedEdit;
 import anyparse.check.Check.GroupedFix;
 import anyparse.check.Check.Violation;
+import anyparse.check.CompilerOracle.OracleBaseline;
+import anyparse.check.CompilerOracle.OracleExclusion;
 import anyparse.check.CompilerOracle.OracleOutcome;
+import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.OracleCoverage;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
 /**
  * Outcome of a risky-fix verification pass. `baseline` is the typecheck of the
- * trusted (safe-only) state BEFORE any risky edit — verification proceeds only
- * when it is `Confirmed`, so a compile failure is always attributable to the
+ * trusted (safe-only) state BEFORE any risky edit — verification proceeds only when it is
+ * `Confirmed` over the judging subset, so a compile failure is always attributable to the
  * risky edit rather than to pre-existing breakage. `applied` lists the files
  * whose risky edit survived the compile (fully OR partially — a partially-applied
  * file changed on disk and belongs here); `reverted` names the (file, rule) pairs
@@ -39,21 +43,37 @@ typedef FixVerifyResult = {
 	var declined: Array<FixVerifyDecline>;
 
 	/**
-	 * Why the oracle's COMPILED SET could not be established, or null when it could. A
-	 * non-null value means no risky fix was verified this run and every list above is
-	 * empty — an oracle whose coverage is unknown proves nothing about any file.
+	 * Why NO judging configuration's compiled set could be established, or null while at least one
+	 * could. A non-null value means no risky fix was verified this run and every list above is
+	 * empty — an oracle whose coverage is unknown proves nothing about any file. A configuration
+	 * whose set is unknown while a sibling's is known is not this: it is named in `excluded`, and it
+	 * still verifies every candidate.
 	 */
 	var coverageUnknown: Null<String>;
 
 	/**
-	 * The compiled-set probe this run PAID FOR, or null when it never needed one (no risky
-	 * candidate ever existed, or the baseline was not `Confirmed`).
+	 * The configurations that could make no edit verifiable, each named with its cause: a red or
+	 * unrunnable baseline (`OracleBaseline`), which judges nothing, or a compiled set that could not
+	 * be established (`OracleCoverage.usable`), which still verifies every candidate.
+	 *
+	 * They judged nothing this run, and the caller names them: a configuration silently absent
+	 * from every verdict is indistinguishable from one that confirmed. Non-empty alongside a
+	 * `Confirmed` baseline is the normal partial case — some configurations judge, these do not.
+	 */
+	var excluded: Array<OracleExclusion>;
+
+	/**
+	 * The compiled-set probes this run PAID FOR, one per JUDGING configuration it probed, each
+	 * paired with that configuration — empty when it never needed them (no risky candidate ever
+	 * existed, or the baseline was not `Confirmed`).
 	 *
 	 * Handed back so the caller's oracle-assisted phase can ask the same question without
-	 * spawning a second `-v` compile — and, more to the point, so that it asks at all: it
-	 * writes annotations and verifies them with the same typecheck, and was ungated.
+	 * spawning a second `-v` compile per configuration — and, more to the point, so that it asks
+	 * at all: it writes annotations and verifies them with the same typechecks, and was ungated.
+	 * The pairing is what makes the reuse safe: that phase judges its OWN subset, and takes a probe
+	 * only for the configuration it was taken for (`OracleCoverage.probedOnce`).
 	 */
-	var coverage: Null<OracleCoverage>;
+	var coverage: Array<ConfigCoverage>;
 
 	/**
 	 * What each risky check ACHIEVED, one row per (rule, file) it had findings in — see
@@ -248,14 +268,16 @@ private enum EntryVerdict {
  * candidate, runs the compiler oracle, and KEEPS it on `Confirmed` or reconciles
  * otherwise — the report-only fallback.
  *
- * That promise carries a precondition the oracle cannot state for itself: the file
- * must be one the hxml actually COMPILES. An hxml routinely compiles a subset of the
- * tree a lint run walks, and for a file outside it the post-write typecheck cannot
- * fail whatever the edit did. So `verify` asks `OracleCoverage` before it writes
- * anything, and DECLINES an edit set whose file the oracle never reads
- * (`FixVerifyDecline`) instead of spending a compile to obtain a green verdict no edit
- * could have turned red. An oracle whose compiled set cannot be established at all
- * stops the phase outright (`coverageUnknown`).
+ * That promise carries a precondition the oracle cannot state for itself, and it is one question
+ * PER CONFIGURATION: the file must be one the hxml actually COMPILES, and `compilerOracle` declares
+ * a LIST because one hxml is one set of defines while a `#if` has two or more arms — an edit in code
+ * only the android arm compiles is typechecked by nothing a macOS build runs. So `verify` asks every
+ * configuration's `OracleCoverage` before it writes anything, DECLINES an edit set no configuration
+ * typechecks (`FixVerifyDecline`) rather than spend compiles on a green verdict no edit could have
+ * turned red, and then requires EVERY covering configuration to confirm — one confirmation out of
+ * two is how a fix that compiled on mac and broke android was applied. A configuration whose compiled set cannot
+ * be established vouches for no edit but still verifies every candidate, since its green baseline makes its
+ * rejection attributable; the phase stops outright only when no configuration's set is known (`coverageUnknown`).
  *
  * Rollback granularity is PER-EDIT by default, and per-GROUP for a check that opts
  * into `GroupedFix`: when the full set fails, the edits are bisected
@@ -269,9 +291,9 @@ private enum EntryVerdict {
  * Each probe re-canonicalises from the ORIGINAL source with a subset (spans are
  * original-source-relative, never stacked onto already-edited text); the isolated
  * safe complement is confirm-typechecked and written, only the failer(s) revert.
- * Oracle spawns per file are capped at `2*ceil(log2(N)) + 2` (the initial
- * typecheck + the bisect search + the confirm); beyond the cap the file falls back
- * to a whole-file revert. Cross-file risky checks are out of scope — the intended
+ * Search PROBES per file are capped at `2*ceil(log2(N))`, each of which may cost one compile per
+ * covering configuration; beyond the cap the file falls back to a
+ * whole-file revert. Cross-file risky checks are out of scope — the intended
  * consumers (avoid-dynamic / prefer-inline and other targeted rewrites) are
  * single-file.
  *
@@ -283,8 +305,8 @@ private enum EntryVerdict {
 final class FixVerifier {
 
 	public static function verify(
-		files: Array<{ file: String, source: String }>, riskyChecks: Array<Check>, plugin: GrammarPlugin, oracleHxml: String,
-		oracleDir: Null<String>, write: (String, String) -> Void, ?optsByFile: Map<String, Null<String>>, ?coverage: OracleCoverage
+		files: Array<{ file: String, source: String }>, riskyChecks: Array<Check>, plugin: GrammarPlugin, oracles: Array<OracleConfig>,
+		write: (String, String) -> Void, ?optsByFile: Map<String, Null<String>>, ?coverage: Array<ConfigCoverage>
 	): FixVerifyResult {
 		final applied: Array<String> = [];
 		final reverted: Array<FixVerifyRevert> = [];
@@ -295,7 +317,16 @@ final class FixVerifier {
 		// at all, which is a decline like any other and the one the caller could least see.
 		final tallies: Array<FixVerifyTally> = [];
 		var appliedEdits: Int = 0;
-		final baseline: OracleOutcome = CompilerOracle.typecheck(oracleHxml, oracleDir);
+		// EVERY configuration's own baseline, and a RED one is dropped rather than allowed to stop
+		// the phase: a configuration that does not typecheck before any edit was never a working
+		// gate, since a failure there afterwards is unattributable — where a green sibling still
+		// judges what it compiles perfectly well. Only when NOTHING judges does the phase decline,
+		// which is exactly what one red oracle always did.
+		final measured: OracleBaseline = CompilerOracle.judging(oracles);
+		final judging: Array<OracleConfig> = measured.judging;
+		// Grows when a judging configuration's compiled set turns out unknown — see below.
+		final excluded: Array<OracleExclusion> = measured.excluded;
+		final baseline: OracleOutcome = measured.verdict;
 		switch baseline {
 			case Confirmed:
 			case Rejected(_), Unavailable(_):
@@ -307,28 +338,22 @@ final class FixVerifier {
 					partials: partials,
 					declined: declined,
 					coverageUnknown: null,
-					coverage: null,
+					coverage: [],
+					excluded: excluded,
 					tallies: tallies
 				};
 		}
-		// LAZY on purpose: the probe is a compile, and a run whose risky checks find nothing
-		// must not pay for one. It is asked the moment the FIRST candidate edit set exists,
-		// which is also the first moment an answer could matter.
+		// LAZY on purpose: the probe is a compile per JUDGING configuration, and a run whose risky
+		// checks find nothing must not pay for any. They are asked the moment the FIRST candidate
+		// edit set exists, which is also the first moment an answer could matter.
 		//
-		// One probe per RUN, so MEMBERSHIP is a snapshot even though knownness is not: a fix
+		// One probe per configuration per RUN, so MEMBERSHIP is a snapshot even though knownness is not: a fix
 		// that removes the last reference to a module can drop it out of the compiled set
 		// afterwards, and a later candidate there would then be judged by a compile that no
 		// longer reads it. The common direction is the safe one — a fix that ADDS a reference
 		// only leaves the snapshot conservative — and re-probing per file would cost one
 		// compile each, which is the whole expense this gate exists to avoid.
-		var coverageMemo: Null<OracleCoverage> = coverage;
-		function compiledSet(): OracleCoverage {
-			final memo: Null<OracleCoverage> = coverageMemo;
-			if (memo != null) return memo;
-			final probed: OracleCoverage = OracleCoverage.probe(oracleHxml, oracleDir);
-			coverageMemo = probed;
-			return probed;
-		}
+		final coverageMemo: OracleCoverageMemo = { probes: (coverage ?? []).copy(), usable: null };
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
 		// One WHOLE-SET run per check, findings then grouped per file: a risky check's
 		// soundness gates can be whole-project (prefer-inline's subtype-override /
@@ -367,19 +392,26 @@ final class FixVerifier {
 					});
 					continue;
 				}
-				// The coverage question, asked BEFORE anything is written. `compiledSet` memoises,
-				// so its knownness cannot change mid-loop: an unknown answer is therefore always the
-				// first one, and returning here can never abandon an already-applied candidate.
-				final compiled: OracleCoverage = compiledSet();
-				if (!compiled.known) return {
+				// The coverage question, asked BEFORE anything is written, and settled at the first
+				// candidate, so the stop below can only ever be the first answer and can never abandon
+				// an already-applied candidate.
+				//
+				// A configuration that cannot say what it compiles vouches for no edit, but its
+				// baseline is green, so it still VERIFIES every candidate (`current.unknown`): it may
+				// compile the edited code, and a rejection from it is attributable. The phase stops
+				// only when no configuration's compiled set is known.
+				final current: UsableCoverage = OracleCoverage.usableOnce(coverageMemo, judging, excluded);
+				final unknown: Null<String> = current.stop;
+				if (unknown != null) return {
 					baseline: baseline,
 					applied: applied,
 					appliedEdits: appliedEdits,
 					reverted: reverted,
 					partials: partials,
 					declined: declined,
-					coverageUnknown: compiled.reason,
-					coverage: compiled,
+					coverageUnknown: unknown,
+					coverage: coverageMemo.probes,
+					excluded: excluded,
 					// Emptied to keep the contract `coverageUnknown` states: every list above is
 					// empty here, because an oracle whose compiled set cannot be established proves
 					// nothing about any file. The rows a check produced before the unknown answer
@@ -394,7 +426,7 @@ final class FixVerifier {
 				// is the one thing the caller's ledger row turns on: zero is a decline whatever
 				// the reason, and the reason is already in `declined` / `reverted` under the same
 				// (file, rule) pair.
-				final verdict: EntryVerdict = verifyEntry(entry, edits, plugin, opts, oracleHxml, oracleDir, write, compiled);
+				final verdict: EntryVerdict = verifyEntry(entry, edits, plugin, opts, current, excluded, write);
 				final landed: Int = switch verdict {
 					case NoChange, SourceNotCanonical: 0;
 					case Declined(reason):
@@ -461,7 +493,8 @@ final class FixVerifier {
 			partials: partials,
 			declined: declined,
 			coverageUnknown: null,
-			coverage: coverageMemo,
+			coverage: coverageMemo.probes,
+			excluded: excluded,
 			tallies: tallies
 		};
 	}
@@ -496,15 +529,15 @@ final class FixVerifier {
 	/**
 	 * Speculatively apply `edits` to one file and reconcile with the oracle.
 	 *
-	 * A candidate the oracle does not TYPECHECK — its file outside the compiled set, or its
-	 * edits inside a conditional branch no compiled arm makes live — is `Declined` the moment
-	 * it exists, carrying which of the two it was; asked after the canonicalise so the verdict
-	 * distinguishes "no candidate" from "a candidate nothing can judge".
+	 * A candidate NO configuration typechecks — its file outside every compiled set, or its edits
+	 * inside a conditional branch no compiled arm of any configuration makes live — is `Declined` the
+	 * moment it exists, carrying each configuration's own reason; asked after the canonicalise so the
+	 * verdict distinguishes "no candidate" from "a candidate nothing can judge". The configurations
+	 * that DO typecheck it are the ones that then judge it, and all of them must confirm.
 	 *
-	 * Otherwise the full set is written and typechecked first:
-	 * `Confirmed` keeps it (`Applied`);
-	 * `Unavailable` (the oracle cannot run) or a `Rejected` with fewer than two
-	 * UNITS reverts the whole file (`Reverted`). A multi-unit `Rejected` is
+	 * Otherwise the full set is written and typechecked by every covering configuration first:
+	 * `Confirmed` from all of them keeps it (`Applied`); `Unavailable` (an oracle cannot run) or a
+	 * `Rejected` with fewer than two UNITS reverts the whole file (`Reverted`). A multi-unit `Rejected` is
 	 * BISECTED — `isolateFailers` isolates the failing UNITS by binary search (each
 	 * probe re-canonicalises from the ORIGINAL `before` with that subset's edits),
 	 * the safe complement is confirm-typechecked and written, and only the failing
@@ -527,8 +560,8 @@ final class FixVerifier {
 	 * Mutates `entry.source` and the disk (`write`) to the final decided text.
 	 */
 	private static function verifyEntry(
-		entry: { file: String, source: String }, edits: Array<GroupedEdit>, plugin: GrammarPlugin, opts: Null<String>, oracleHxml: String,
-		oracleDir: Null<String>, write: (String, String) -> Void, coverage: OracleCoverage
+		entry: { file: String, source: String }, edits: Array<GroupedEdit>, plugin: GrammarPlugin, opts: Null<String>,
+		usable: UsableCoverage, excluded: Array<OracleExclusion>, write: (String, String) -> Void
 	): EntryVerdict {
 		final before: String = entry.source;
 		final full: Array<{ span: Span, text: String }> = [for (e in edits) { span: e.span, text: e.text }];
@@ -551,18 +584,50 @@ final class FixVerifier {
 				? Reverted(NotCanonical(message))
 				: SourceNotCanonical;
 		};
-		// The candidate exists; whether anything could ever JUDGE it is a separate question,
+		// The candidate exists; WHICH configurations could ever judge it is a separate question,
 		// and it is asked here rather than earlier so that the decline count means what it says:
 		// an edit set the writer would have refused is `NoChange` above, never a decline.
 		// EVERY edit's whole span, because the set is written and judged as ONE candidate: one edit
 		// landing where nothing is compiled makes the verdict on the rest unattributable, and a
 		// single edit STRADDLING such a region is the same thing with both its ends in live code.
-		final gap: Null<String> = coverage.uncovered(
-			entry.file, before, [for (edit in edits) edit.span], plugin.refShape(), plugin.lexicalRegions(before)
-		);
-		if (gap != null) return Declined(gap);
+		final spans: Array<Span> = [for (edit in edits) edit.span];
+		final regions: Array<LexRegion> = plugin.lexicalRegions(before);
+		final covering: Array<OracleConfig> = [];
+		final gaps: Array<String> = [];
+		for (i in 0...usable.configs.length) {
+			final gap: Null<String> = usable.coverages[i].uncovered(entry.file, before, spans, plugin.refShape(), regions);
+			if (gap == null)
+				covering.push(usable.configs[i])
+			else
+				gaps.push(gap);
+		}
+		// The EXCLUDED configurations join the gap list, because one of them may be the very build
+		// that would have typechecked this edit: a decline that named only the judging
+		// configurations' gaps would send the reader looking at an hxml's classpath for a file
+		// whose own build was dropped as red.
+		if (covering.length == 0) return Declined(OracleCoverage.gapSentence(gaps.concat(CompilerOracle.sentencesOf(excluded))));
+		// Coverage decided WHETHER the edit may be judged; the verdict is asked of every green
+		// configuration that may compile it — the covering ones, and every one whose compiled set is
+		// unknown. Dropping the latter is how an edit that compiles on mac and breaks an android build
+		// whose `-v` probe failed was applied.
+		final verifying: Array<OracleConfig> = covering.concat(usable.unknown);
+		// SPAWNS, counted per CONFIGURATION, because one candidate now costs a compile in each of
+		// them. `CompilerOracle.invocations` is the process-wide spawn counter this package
+		// already keeps, and reading it around the ask is what keeps the reported number exact
+		// without every layer between here and the spawn carrying a count.
+		final spawns: Array<Int> = [0];
+		function askCovering(): OracleOutcome {
+			final spentBefore: Int = CompilerOracle.invocations;
+			final outcome: OracleOutcome = CompilerOracle.typecheckAll(verifying);
+			spawns[0] += CompilerOracle.invocations - spentBefore;
+			return outcome;
+		}
 		write(entry.file, fullText);
-		switch CompilerOracle.typecheck(oracleHxml, oracleDir) {
+		// ALL of them, and the first REJECTION decides: an edit that compiles on one configuration
+		// and breaks another is exactly the incident this list exists to catch, so a single
+		// confirmation is not a verdict. `typecheckAll` stops at that first rejection, which is why
+		// the worst case of one compile per configuration is only ever paid for a GOOD edit.
+		switch askCovering() {
 			case Confirmed:
 				entry.source = fullText;
 				return Applied;
@@ -579,17 +644,14 @@ final class FixVerifier {
 			write(entry.file, before);
 			return Reverted(OracleRejected);
 		}
-		// Cap all oracle spawns for this file at 2*ceil(log2(n)) + 2: the initial full-set
-		// typecheck (already spent) + the bisect search + the confirm. The search gets the
-		// middle 2*ceil(log2(n)) probes; a single failing UNIT needs at most that, so it
-		// never spuriously falls back.
+		// Cap the bisect SEARCH at 2*ceil(log2(n)) probes: a single failing UNIT needs at most
+		// that, so the search never spuriously falls back. PROBES and not spawns, because one
+		// probe costs a compile in each covering configuration — `spent` is the budget counter
+		// and every attempt costs one, including a probe the writer refused before any compiler
+		// ran, while `spawns` counts only what a compiler was launched for and is what
+		// `oracleInvocations` reports.
 		final searchBudget: Int = 2 * ceilLog2(n);
 		final spent: Array<Int> = [0];
-		// SPAWNS, not probes. `spent` is the BUDGET counter and every attempt costs one,
-		// including a probe the writer refused before any compiler ran — so reporting it as
-		// `oracleInvocations` would overstate the compiler spawns this file cost, and the
-		// summary line that prints it says "oracle run(s)" in so many words.
-		final spawns: Array<Int> = [0];
 		// `isolateFailers` reads a BOOLEAN oracle, and a probe that could not build a
 		// candidate still has an honest answer for the question the bisect asks — "can this
 		// subset be applied and still build?" — which is no. So it counts as a failure and
@@ -606,11 +668,7 @@ final class FixVerifier {
 			return switch CanonicalEdit.canonicalize(before, subset, false, plugin, opts) {
 				case Ok(text):
 					write(entry.file, text);
-					spawns[0]++;
-					switch CompilerOracle.typecheck(oracleHxml, oracleDir) {
-						case Confirmed: true;
-						case _: false;
-					}
+					askCovering().match(Confirmed);
 				case Err(message):
 					if (uncanonical == null) uncanonical = message;
 					false;
@@ -618,10 +676,10 @@ final class FixVerifier {
 		}
 		final failers: Null<Array<Int>> = isolateFailers(n, searchBudget, probe, spent);
 		final refusal: Null<String> = uncanonical;
-		// The full-set typecheck plus every probe that produced a candidate — stated once
-		// because the whole point of the fix that introduced `spawns` is that this number is
-		// exact. The confirm adds its own `+ 1`, at the one seat where it ran.
-		final spawnsWithFullSet: Int = 1 + spawns[0];
+		// The full-set typecheck plus every probe that produced a candidate, across every covering
+		// configuration — read HERE because the confirm below spends more, and only the seats that
+		// reach it may report them.
+		final spawnsBeforeConfirm: Int = spawns[0];
 		if (failers == null || failers.length >= n) {
 			entry.source = before;
 			write(entry.file, before);
@@ -631,41 +689,40 @@ final class FixVerifier {
 			// knows more than this one and must answer from what IT saw — a hoisted cause put
 			// `NotCanonical` on a complement the compiler had read and rejected, which is the
 			// mirror of the defect the split of `FixRevertCause` exists to prevent.
-			return Partial(0, edits.length, spawnsWithFullSet, refusal == null ? OracleRejected : NotCanonical(refusal));
+			return Partial(0, edits.length, spawnsBeforeConfirm, refusal == null ? OracleRejected : NotCanonical(refusal));
 		}
 		final failerUnits: Array<Int> = failers;
 		final keptUnits: Array<Int> = [for (u in 0...n) if (!failerUnits.contains(u)) u];
 		final safe: Array<{ span: Span, text: String }> = editsOfUnits(edits, units, keptUnits);
-		final invocations: Int = spawnsWithFullSet + 1;
 		return switch CanonicalEdit.canonicalize(before, safe, false, plugin, opts) {
 			case Ok(safeText) if (safeText != before):
 				write(entry.file, safeText);
-				switch CompilerOracle.typecheck(oracleHxml, oracleDir) {
+				switch askCovering() {
 					case Confirmed:
 						entry.source = safeText;
 						// `OracleRejected` explicitly, not by defaulting: the cause is REQUIRED so
 						// that a future `Partial` cannot silently claim the compiler refused
 						// something it never saw. Here it is the truth — the full set was
 						// compiler-rejected, which is how the bisect was reached at all.
-						Partial(safe.length, edits.length - safe.length, invocations, OracleRejected);
+						Partial(safe.length, edits.length - safe.length, spawns[0], OracleRejected);
 					case _:
 						entry.source = before;
 						write(entry.file, before);
 						// The compiler READ this complement and refused it — `OracleRejected` whatever
 						// happened earlier in the search. A refusal upstream says nothing about a
 						// candidate the compiler judged for itself.
-						Partial(0, edits.length, invocations, OracleRejected);
+						Partial(0, edits.length, spawns[0], OracleRejected);
 				}
 			case Ok(_):
 				entry.source = before;
 				write(entry.file, before);
 				// The complement canonicalises back to the input, so nothing new was judged — but
 				// the FULL SET was, and its rejection is what put us here.
-				Partial(0, edits.length, spawnsWithFullSet, OracleRejected);
+				Partial(0, edits.length, spawnsBeforeConfirm, OracleRejected);
 			case Err(message):
 				entry.source = before;
 				write(entry.file, before);
-				Partial(0, edits.length, spawnsWithFullSet, NotCanonical(message));
+				Partial(0, edits.length, spawnsBeforeConfirm, NotCanonical(message));
 		};
 	}
 

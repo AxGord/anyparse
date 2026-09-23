@@ -168,7 +168,14 @@ final class FixVerifierCoverageE2ETest extends Test {
 		final result: FixVerifyResult = FixVerifier.verify(
 			files,
 			[new AvoidDynamic()],
-			new HaxeQueryPlugin(), 'check.hxml', dir, File.saveContent, OracleCoverage.unknown('probe stub')
+			new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }],
+			File.saveContent, null,
+			[
+				{
+					config: { hxml: 'check.hxml', dir: dir, defines: [] },
+					coverage: OracleCoverage.unknown('probe stub')
+				}
+			]
 		);
 		if (!result.baseline.match(Confirmed)) {
 			CliFixture.removeDir(dir);
@@ -256,7 +263,7 @@ final class FixVerifierCoverageE2ETest extends Test {
 		final result: FixVerifyResult = FixVerifier.verify(
 			files,
 			[new AvoidDynamic()],
-			new HaxeQueryPlugin(), 'check.hxml', dir, File.saveContent
+			new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], File.saveContent
 		);
 		Assert.same([
 			{
@@ -301,7 +308,7 @@ final class FixVerifierCoverageE2ETest extends Test {
 		final result: FixVerifyResult = FixVerifier.verify(
 			files,
 			[new AvoidDynamic()],
-			new HaxeQueryPlugin(), 'check.hxml', dir, File.saveContent
+			new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], File.saveContent
 		);
 		Assert.same(['$dir/Live.hx'], result.applied, 'the live branch is verified and applied');
 		Assert.equals(1, result.declined.length, 'the excluded branch yields exactly one decline');
@@ -349,7 +356,11 @@ final class FixVerifierCoverageE2ETest extends Test {
 			{ file: '$dir/Main.hx', source: main },
 			{ file: '$dir/Other.hx', source: OTHER }
 		];
-		return FixVerifier.verify(files, [new AvoidDynamic()], new HaxeQueryPlugin(), 'check.hxml', dir, File.saveContent);
+		return FixVerifier.verify(
+			files,
+			[new AvoidDynamic()],
+			new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], File.saveContent
+		);
 	}
 	#end
 

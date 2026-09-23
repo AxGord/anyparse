@@ -228,18 +228,99 @@ class LintConfigTest extends Test {
 	 * too deep and the build never typechecks.
 	 */
 	public function testCompilerOracleRunsFromTheHxmlDirectory(): Void {
-		final nested: LintConfig = LintConfig.parse('{"compilerOracle":"../build.hxml"}', '/proj/src');
-		Assert.equals('/proj/build.hxml', nested.compilerOracle(), 'the hxml resolves against the config dir');
-		Assert.equals('/proj', nested.compilerOracleDir(), 'and the compile runs from the hxml dir, not the config dir');
-		final sibling: LintConfig = LintConfig.parse('{"compilerOracle":"build.hxml"}', '/proj');
-		Assert.equals('/proj/build.hxml', sibling.compilerOracle(), 'a same-dir hxml resolves to the same absolute path');
-		Assert.equals('/proj', sibling.compilerOracleDir(), 'and its compile dir is the config dir — the root-config case, unchanged');
-		final absolute: LintConfig = LintConfig.parse('{"compilerOracle":"/elsewhere/build.hxml"}', '/proj/src');
-		Assert.equals('/elsewhere/build.hxml', absolute.compilerOracle(), 'an absolute hxml is kept verbatim');
-		Assert.equals('/elsewhere', absolute.compilerOracleDir(), 'and still compiles from its own directory');
-		final atRoot: LintConfig = LintConfig.parse('{"compilerOracle":"build.hxml"}', '/');
+		final nested: OracleConfig = only('{"compilerOracle":"../build.hxml"}', '/proj/src');
+		Assert.equals('/proj/build.hxml', nested.hxml, 'the hxml resolves against the config dir');
+		Assert.equals('/proj', nested.dir, 'and the compile runs from the hxml dir, not the config dir');
+		final sibling: OracleConfig = only('{"compilerOracle":"build.hxml"}', '/proj');
+		Assert.equals('/proj/build.hxml', sibling.hxml, 'a same-dir hxml resolves to the same absolute path');
+		Assert.equals('/proj', sibling.dir, 'and its compile dir is the config dir — the root-config case, unchanged');
+		final absolute: OracleConfig = only('{"compilerOracle":"/elsewhere/build.hxml"}', '/proj/src');
+		Assert.equals('/elsewhere/build.hxml', absolute.hxml, 'an absolute hxml is kept verbatim');
+		Assert.equals('/elsewhere', absolute.dir, 'and still compiles from its own directory');
 		Assert.equals(
-			'/', atRoot.compilerOracleDir(), 'an hxml directly under the filesystem root compiles from the root, never an empty cwd'
+			'/', only('{"compilerOracle":"build.hxml"}', '/').dir,
+			'an hxml directly under the filesystem root compiles from the root, never an empty cwd'
+		);
+	}
+
+	/**
+	 * The STRING form and the ARRAY form produce the same internal list — the whole reason the
+	 * string stays the one-element case rather than a second code path.
+	 *
+	 * And the array form carries what the string cannot: a per-configuration `defines` set, which
+	 * is what makes a second arm of a `#if` typecheckable at all.
+	 */
+	public function testTheStringAndArrayFormsAgree(): Void {
+		final asString: Array<OracleConfig> = LintConfig.parse('{"compilerOracle":"build.hxml"}', '/proj').compilerOracles();
+		final asArray: Array<OracleConfig> = LintConfig.parse('{"compilerOracle":[{"hxml":"build.hxml"}]}', '/proj').compilerOracles();
+		Assert.same(asString, asArray, 'one string and a one-element array are the same list');
+		Assert.same([
+			{
+				hxml: '/proj/build.hxml',
+				dir: '/proj',
+				defines: []
+			}
+		], asString, 'and the string form declares no defines');
+		final withDefines: Array<OracleConfig> = LintConfig.parse(
+			'{"compilerOracle":[{"hxml":"build.hxml"},{"hxml":"build.hxml","defines":["GRID_MODE","android"]}]}', '/proj'
+		)
+			.compilerOracles();
+		Assert.same([
+			{
+				hxml: '/proj/build.hxml',
+				dir: '/proj',
+				defines: []
+			},
+			{
+				hxml: '/proj/build.hxml',
+				dir: '/proj',
+				defines: ['GRID_MODE', 'android']
+			}
+		], withDefines, 'two configurations may share one hxml and differ only in a define');
+		Assert.equals(
+			'/proj/build.hxml -D GRID_MODE -D android', LintConfig.describeOracle(withDefines[1]), 'and a diagnostic can tell them apart'
+		);
+	}
+
+	/**
+	 * A configuration with an explicit `dir` is honoured instead of probed — the escape hatch for
+	 * an hxml whose classpaths resolve from neither candidate `hxmlCompileDir` weighs.
+	 */
+	public function testAnExplicitCompileDirWins(): Void {
+		Assert.equals(
+			'/proj/build', only('{"compilerOracle":[{"hxml":"sub/build.hxml","dir":"build"}]}', '/proj').dir,
+			'a declared dir resolves against the config dir and is not probed'
+		);
+	}
+
+	/**
+	 * A malformed array ELEMENT is DROPPED with a diagnostic and the configurations beside it
+	 * still apply — per-entry leniency, exactly as `rules` and `frameworks` have.
+	 *
+	 * A drop that said nothing would be indistinguishable from a configuration that works, and
+	 * here that silence costs a whole build's worth of verification.
+	 */
+	public function testAMalformedOracleElementIsDroppedAndReported(): Void {
+		final config: LintConfig = LintConfig.parse(
+			'{"compilerOracle":[{"hxml":"a.hxml"},"b.hxml",{"defines":["X"]},{"hxml":1},{"hxml":"c.hxml","defines":"X"},'
+			+ '{"hxml":"d.hxml","hxlm":"typo"}]}',
+			'/proj'
+		);
+		Assert.same(['/proj/a.hxml', '/proj/c.hxml', '/proj/d.hxml'], [
+			for (oracle in config.compilerOracles()) oracle.hxml
+		], 'the readable elements survive; the unreadable ones are gone');
+		Assert.same([
+			'compilerOracle[1] is not an object — dropped',
+			'compilerOracle[2] declares no "hxml" — dropped',
+			'compilerOracle[3] "hxml" is not a string — ignored',
+			'compilerOracle[3] declares no "hxml" — dropped',
+			'compilerOracle[4] "defines" is not an array of strings — ignored',
+			'compilerOracle[5] declares unknown key "hxlm" — ignored'
+		], config.drops(), 'and each drop says which element and why');
+		Assert.same([], LintConfig.parse('{"compilerOracle":7}', '/proj').compilerOracles(), 'a value that is neither form is no oracle');
+		Assert.same(
+			['compilerOracle is neither an hxml path nor a list of configurations — ignored'],
+			LintConfig.parse('{"compilerOracle":7}', '/proj').drops(), 'and it says so rather than degrading in silence'
 		);
 	}
 
@@ -250,9 +331,14 @@ class LintConfigTest extends Test {
 	 * `haxe.io.Path.directory('../build.hxml')` == `'..'`.
 	 */
 	public function testCompilerOracleWithoutBaseDirStaysVerbatim(): Void {
-		final cfg: LintConfig = LintConfig.parse('{"compilerOracle":"../build.hxml"}');
-		Assert.equals('../build.hxml', cfg.compilerOracle(), 'no base dir leaves the declared path untouched');
-		Assert.isNull(cfg.compilerOracleDir(), 'and claims no compile dir');
+		final oracle: OracleConfig = LintConfig.parse('{"compilerOracle":"../build.hxml"}').compilerOracles()[0];
+		Assert.equals('../build.hxml', oracle.hxml, 'no base dir leaves the declared path untouched');
+		Assert.isNull(oracle.dir, 'and claims no compile dir');
+	}
+
+	/** The one configuration `content` declares under `baseDir` — every oracle fixture here wants exactly this. */
+	private static function only(content: String, baseDir: String): OracleConfig {
+		return LintConfig.parse(content, baseDir).compilerOracles()[0];
 	}
 
 }

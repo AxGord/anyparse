@@ -127,10 +127,13 @@ class FixVerifierBisectTest extends Test {
 		// A coverage that covers NOTHING, which pins the ORDER the two gates run in: the
 		// canonical gate answers first, so a source the writer refuses stays `SourceNotCanonical`
 		// and never becomes a coverage decline. Reverse them and this reads `Declined`.
-		final verdict = FixVerifier.verifyEntry(
-			entry, edits, new HaxeQueryPlugin(), null, 'no-such-oracle.hxml', null, (_, _) -> written++,
-			OracleCoverage.unknown('covers nothing — the canonical gate must answer first')
-		);
+		final verdict = FixVerifier.verifyEntry(entry, edits, new HaxeQueryPlugin(), null, {
+			configs: [{ hxml: 'no-such-oracle.hxml', dir: null, defines: [] }],
+			coverages: [OracleCoverage.unknown('covers nothing — the canonical gate must answer first')],
+			unknown: [],
+			excluded: [],
+			stop: null
+		}, [], (_, _) -> written++);
 		Assert.equals(0, written, 'nothing may be written when no candidate was produced');
 		// Its OWN constructor, not `NoChange`. Both mean "no candidate", but only one of them is a
 		// statement about the CHECK, and `FixVerifier.verify` tallies for the caller's fix ledger off

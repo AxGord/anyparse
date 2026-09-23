@@ -2,6 +2,7 @@ package unit.query;
 
 import anyparse.check.CompilerOracle.OracleOutcome;
 import anyparse.check.DefiniteAssignmentGuard;
+import anyparse.check.LintConfig.OracleConfig;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
 import anyparse.query.LintFixSafePass;
@@ -326,22 +327,29 @@ class LintFixSafePassRevertTest extends Test {
 	 * project starts in, so it is the one that needed the sentence most.
 	 */
 	public function testBothNetlessArmsSaySoAndNameTheirOwnRemedy(): Void {
-		final unconfigured: String = LintFixSafePass.netNotice(null, false, false) ?? '';
+		final configured: Array<OracleConfig> = [
+			{
+				hxml: 'build.hxml',
+				dir: null,
+				defines: []
+			}
+		];
+		final unconfigured: String = LintFixSafePass.netNotice([], false, false) ?? '';
 		Assert.stringContains('no safe-pass revert net', unconfigured);
 		Assert.stringContains('compilerOracle', unconfigured);
 		Assert.stringContains('apqlint.json', unconfigured);
 		// `--no-oracle` on a project that configured nothing: the actionable remedy is still
 		// the config key, not the flag, so the two collapse to one sentence — and this arm is
 		// the one `verbose` does NOT gate, so a quiet run still gets it.
-		Assert.equals(unconfigured, LintFixSafePass.netNotice(null, true, false) ?? '');
+		Assert.equals(unconfigured, LintFixSafePass.netNotice([], true, false) ?? '');
 		// A configured oracle the run DECLINED keeps its own wording — the remedy there is to
 		// drop the flag, and naming the config key would be advice the user already took. It
 		// waits for `--verbose`; `LintFixQuietDefaultTest` owns why.
-		final declined: String = LintFixSafePass.netNotice('build.hxml', true, true) ?? '';
+		final declined: String = LintFixSafePass.netNotice(configured, true, true) ?? '';
 		Assert.stringContains('--no-oracle', declined);
 		Assert.equals(-1, declined.indexOf('apqlint.json'), 'a configured project is not told to configure: $declined');
 		// And a run that WILL ask the compiler says nothing, because it HAS a net.
-		Assert.isNull(LintFixSafePass.netNotice('build.hxml', false, true));
+		Assert.isNull(LintFixSafePass.netNotice(configured, false, true));
 	}
 
 	/**

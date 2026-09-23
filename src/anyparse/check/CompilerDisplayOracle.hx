@@ -21,10 +21,18 @@ using StringTools;
  * The Haxe compilation server invalidates a module by mtime at ONE-SECOND
  * granularity, so a write-then-reverify within the same second reads the STALE
  * module (a fresh write reverting a break is not re-picked-up within that
- * second). This oracle therefore does READ-ONLY type queries against files unchanged
- * since the warm; the caller applies edits and verifies with a FRESH
- * `CompilerOracle.typecheck` (a new process always reads current bytes). Never route
- * a post-edit typecheck through this server.
+ * second). This oracle therefore does READ-ONLY type queries against files unchanged since the warm; the
+ * caller applies edits and verifies with a FRESH `CompilerOracle.typecheck` (a new process always
+ * reads current bytes). Never route a post-edit typecheck through this server.
+ *
+ * ## Why it stays ONE configuration
+ *
+ * `compilerOracle` declares a LIST, and everything that VERIFIES an edit asks every configuration
+ * that typechecks it. This class is not one of those: post-write verification was deliberately taken
+ * away from it by the paragraph above, so what it needs is the one configuration in which the rule
+ * asks for a type — a second configuration would answer the same read-only query about a build the
+ * rule is not reasoning about. Widening it to the list would be a change with no question behind it. On a multi-arm hxml
+ * the answer is the FIRST arm's (see `CompilerServer.connectArgs`), whichever arm the queried file is really compiled by.
  *
  * ## Target
  *
@@ -51,6 +59,10 @@ final class CompilerDisplayOracle implements TypeOracle {
 
 	private final _hxml: String;
 	private final _cwd: Null<String>;
+
+	/** The configuration's `-D` defines — every connect to the server carries them, the warm included. */
+	private final _defines: Array<String>;
+
 	private final _port: Int;
 
 	#if nodejs
@@ -67,16 +79,18 @@ final class CompilerDisplayOracle implements TypeOracle {
 	private var _pathForm: Int = -1;
 
 	#if nodejs
-	private function new(hxml: String, cwd: Null<String>, port: Int, child: Dynamic) {
+	private function new(hxml: String, cwd: Null<String>, defines: Array<String>, port: Int, child: Dynamic) {
 		_hxml = hxml;
 		_cwd = cwd;
+		_defines = defines;
 		_port = port;
 		_child = child;
 	}
 	#else
-	private function new(hxml: String, cwd: Null<String>, port: Int) {
+	private function new(hxml: String, cwd: Null<String>, defines: Array<String>, port: Int) {
 		_hxml = hxml;
 		_cwd = cwd;
+		_defines = defines;
 		_port = port;
 	}
 	#end
@@ -114,12 +128,16 @@ final class CompilerDisplayOracle implements TypeOracle {
 	}
 
 	/**
-	 * Start a warm display server for `hxml` (run from `cwd`) and return a handle, or
-	 * null when one could not be brought up — no `haxe`, no free port after several
-	 * tries, or a non-nodejs target. A returned handle MUST be `stop`ped to reap the
-	 * server process.
+	 * Start a warm display server for `hxml` (run from `cwd`) under the configuration's `defines`
+	 * and return a handle, or null when one could not be brought up — no `haxe`, no free port
+	 * after several tries, or a non-nodejs target. A returned handle MUST be `stop`ped to reap
+	 * the server process.
+	 *
+	 * The defines are part of the configuration it answers for: two configurations may share one
+	 * hxml and differ only in a define, and a server warmed without it types a build nobody judges.
+	 * They are placed by `CompilerServer.connect`, the one spelling the typecheck shares.
 	 */
-	public static function start(hxml: String, ?cwd: String): Null<CompilerDisplayOracle> {
+	public static function start(hxml: String, ?cwd: String, ?defines: Array<String>): Null<CompilerDisplayOracle> {
 		#if nodejs
 		var attempt: Int = 0;
 		while (attempt < MAX_PORT_ATTEMPTS) {
@@ -127,7 +145,7 @@ final class CompilerDisplayOracle implements TypeOracle {
 			final port: Int = PORT_BASE + Std.random(PORT_SPAN);
 			final child: Dynamic = CompilerServer.spawnServer(port, false);
 			if (child == null) continue;
-			if (CompilerServer.warm(port, hxml, cwd)) return new CompilerDisplayOracle(hxml, cwd, port, child);
+			if (CompilerServer.warm(port, hxml, cwd, defines)) return new CompilerDisplayOracle(hxml, cwd, defines ?? [], port, child);
 			CompilerServer.killChild(child);
 		}
 		return null;
@@ -230,7 +248,7 @@ final class CompilerDisplayOracle implements TypeOracle {
 
 	#if nodejs
 	private inline function connectRun(extra: Array<String>): Null<String> {
-		return CompilerServer.connect(_port, _hxml, _cwd, extra)?.output;
+		return CompilerServer.connect(_port, _hxml, _cwd, extra, _defines)?.output;
 	}
 
 	/**

@@ -13,6 +13,7 @@ import anyparse.query.Cli.RuleFixOutcome;
 import anyparse.query.LintFixSafePass;
 import anyparse.query.cli.command.LintCommand.CheckPartition;
 import anyparse.query.cli.command.LintCommand.LintRange;
+import anyparse.query.cli.command.LintFixVerify.AssistedOutcome;
 import anyparse.query.cli.command.LintFixVerify.RiskyFixOutcome;
 import anyparse.runtime.Span;
 import anyparse.query.ExitCode.*;
@@ -61,9 +62,9 @@ final class LintFixDriver {
 
 	private static function applyLintFixes(
 		files: Array<{ file: String, source: String }>, checks: Array<Check>, plugin: GrammarPlugin, resolveConfig: (String) -> LintConfig,
-		applyEnablement: Bool, range: Null<LintRange>, verbose: Bool, ?resolution: ResolutionScope, ?oracleHxml: String, ?oracleDir: String
+		applyEnablement: Bool, range: Null<LintRange>, verbose: Bool, oracles: Array<OracleConfig>, ?resolution: ResolutionScope
 	): Int {
-		final oracleConfigured: Bool = oracleHxml != null;
+		final oracleConfigured: Bool = oracles.length > 0;
 		final split: CheckPartition = LintCommand.partitionChecks(checks, oracleConfigured);
 		for (c in split.risky) if (c is OracleRelaxable) (cast c: OracleRelaxable).setOracleRelaxed(true);
 		final maxPasses: Int = 10;
@@ -99,17 +100,14 @@ final class LintFixDriver {
 		// time a create is about to reach disk: a creating fix writes during the pass, so a baseline
 		// measured after that would report the run's own file as a pre-existing condition — the
 		// mistake the post-safe-write baseline below already cost once.
-		final preWrite: { taken: Bool, outcome: Null<OracleOutcome> } = {
+		final preWrite: { taken: Bool, baseline: Null<OracleBaseline> } = {
 			taken: false,
-			outcome: null
+			baseline: null
 		};
-		// Re-bound: a PARAMETER's narrowing does not survive into a closure, and this one reads it.
-		final oracleForBaseline: Null<String> = oracleHxml;
 		function baselineBeforeCreate(): Void {
 			if (preWrite.taken) return;
 			preWrite.taken = true;
-			final hxml: Null<String> = oracleForBaseline;
-			if (hxml != null) preWrite.outcome = CompilerOracle.typecheck(hxml, oracleDir);
+			if (oracleConfigured) preWrite.baseline = CompilerOracle.judging(oracles);
 		}
 		var fixedCount: Int = 0;
 		var passes: Int = 0;
@@ -157,9 +155,12 @@ final class LintFixDriver {
 		// just done as a pre-existing condition, and left the tree un-typecheckable with no
 		// hint that `--fix` was the cause. The insurance was disabled at exactly the moment
 		// it was needed.
-		final safePass: SafePassOutcome = commitSafeWrites(
-			files, changedFiles, originalOf, coupled, oracleHxml, oracleDir, created, preWrite.outcome
-		);
+		final safePass: SafePassOutcome = commitSafeWrites(files, changedFiles, originalOf, coupled, oracles, created, preWrite.baseline);
+		// WHICH configurations judged nothing, and why — named by every phase, and once per run:
+		// see `nameExclusions`. Printed as each phase learns them, so an aborting run names them
+		// too, and ahead of the summary line whose tails point back at them.
+		final named: Array<String> = [];
+		nameExclusions(named, safePass.excluded);
 		if (safePass.reverted) {
 			CliIo.stderr(safePass.notice);
 			return EXIT_RUNTIME;
@@ -176,9 +177,10 @@ final class LintFixDriver {
 		// otherwise left report-only. With no risky check present this block is a
 		// no-op, so a real run (no risky builtin) is byte-identical to before the key.
 		final risky: RiskyFixOutcome = LintFixVerify.verifyRiskyFixes(
-			files, split.risky, cached, oracleHxml, oracleDir, optsByFile, changedFiles, ledger
+			files, split.risky, cached, oracles, optsByFile, changedFiles, ledger
 		);
 		fixedCount += risky.appliedCount;
+		nameExclusions(named, risky.excluded);
 		final riskyTail: String = risky.tail;
 
 		// OracleAssisted checks (explicit-local-type's inference tail, explicit-type's return
@@ -186,10 +188,11 @@ final class LintFixDriver {
 		// display server, the edited files are re-typechecked, and any that break the build are
 		// reverted to report-only (verifyOracleBatch). No oracle / no such check → inert.
 		final oracleAssisted: Array<Check> = [for (c in checks) if (c is OracleAssisted) c];
-		final oa: { tail: String, appliedCount: Int } = LintFixVerify.applyOracleAssistedFixes(
-			files, oracleAssisted, cached, oracleHxml, oracleDir, optsByFile, changedFiles, resolveConfig, risky.coverage
+		final oa: AssistedOutcome = LintFixVerify.applyOracleAssistedFixes(
+			files, oracleAssisted, cached, oracles, optsByFile, changedFiles, resolveConfig, risky.coverage
 		);
 		fixedCount += oa.appliedCount;
+		nameExclusions(named, oa.excluded);
 		final oracleTail: String = oa.tail;
 
 		// The follow-up convergence round: `followUpRound` re-enters the loop over whatever the two
@@ -199,7 +202,8 @@ final class LintFixDriver {
 			active = list;
 			converge(maxPasses);
 			return fixedCount - before;
-		}, coupled, changedFiles, oracleHxml, oracleDir, created);
+		}, coupled, changedFiles, oracles, created);
+		nameExclusions(named, followUp.excluded);
 		if (followUp.reverted) {
 			CliIo.stderr(followUp.notice);
 			return EXIT_RUNTIME;
@@ -220,6 +224,7 @@ final class LintFixDriver {
 		// fixed hundreds said nothing whatever about the findings it declined, and a productive
 		// run is exactly where the misreading lands.
 		LintFixLedger.printUnfixedLedger(ledger, checks, split.risky, oracleAssisted, risky.ledgered, fixedCount, verbose);
+
 		// The summary says HOW MANY reverted; these say WHICH, and by which rule. One line per
 		// revert, nothing else: attributing them on a large tree otherwise costs
 		// an md5 snapshot before and after plus one run per candidate rule.
@@ -820,6 +825,25 @@ final class LintFixDriver {
 	}
 
 	/**
+	 * Print the sentence of each exclusion whose configuration and cause `named` does not already hold, and record that identity.
+	 *
+	 * Every phase that judges measures its own baseline, so one broken build is reported by each of
+	 * them — and a phase that shrinks to the green subset in silence reads as covering every build,
+	 * which is why none of them may stay quiet. Once per (configuration, cause), never per sentence: a red build's sentence
+	 * quotes an error line whose number moves when a safe fix edits the lines above it, and the reader needs to learn that their
+	 * android target was dropped, not to read it twice with two line numbers. The first sentence wins. Uncapped, because the
+	 * list is one line per configured build rather than per file.
+	 */
+	private static function nameExclusions(named: Array<String>, exclusions: Array<OracleExclusion>): Void {
+		for (exclusion in exclusions) {
+			final key: String = CompilerOracle.exclusionKey(exclusion);
+			if (named.contains(key)) continue;
+			named.push(key);
+			CliIo.stderr('apq lint --fix: compiler oracle ${exclusion.sentence}\n');
+		}
+	}
+
+	/**
 	 * Reconcile the safe pass against the compiler, given the verdict taken BEFORE its
 	 * writes landed. `LintFixSafePass` owns every judgement; this seat owns the IO — the
 	 * file sink that restores a file from `originalOf` (on disk and in `files`) and the
@@ -834,19 +858,38 @@ final class LintFixDriver {
 	 */
 	private static function reconcileSafePass(
 		files: Array<{ file: String, source: String }>, changedFiles: Array<String>, originalOf: Map<String, String>,
-		coupled: Array<Array<String>>, pre: Null<OracleOutcome>, oracleHxml: Null<String>, oracleDir: Null<String>, created: Array<String>
+		coupled: Array<Array<String>>, pre: Null<OracleBaseline>, oracles: Array<OracleConfig>, created: Array<String>
 	): SafePassOutcome {
-		if (pre == null || oracleHxml == null) return { reverted: false, tail: '', notice: '' };
-		final resolved: OracleOutcome = pre;
-		// Both re-bound as non-null locals: a PARAMETER's narrowing does not survive into the
-		// closures below, and both are read from inside one.
-		final hxml: String = oracleHxml;
+		if (pre == null || oracles.length == 0) return {
+			reverted: false,
+			tail: '',
+			notice: '',
+			excluded: []
+		};
+		final measured: OracleBaseline = pre;
+		final excluded: Array<OracleExclusion> = measured.excluded;
+		// The net runs over the JUDGING configurations alone: one that was red before this run
+		// wrote anything can detect no green-then-red transition, so including it would read the
+		// pre-existing failure as damage the safe pass did — the same exclusion rule the two
+		// verified phases take their baselines by.
+		final judging: Array<OracleConfig> = measured.judging;
+		final resolved: OracleOutcome = measured.verdict;
 		final decision: SafePassDecision = LintFixSafePass.classify(
-			resolved, LintFixSafePass.isConfirmed(resolved) ? CompilerOracle.typecheck(hxml, oracleDir) : null
+			resolved, LintFixSafePass.isConfirmed(resolved) ? CompilerOracle.typecheckAll(judging) : null
 		);
 		final errors: String = switch decision {
-			case Proceed: return { reverted: false, tail: '', notice: '' };
-			case NoNet(tail): return { reverted: false, tail: tail, notice: '' };
+			case Proceed: return {
+				reverted: false,
+				tail: '',
+				notice: '',
+				excluded: excluded
+			};
+			case NoNet(tail): return {
+				reverted: false,
+				tail: tail,
+				notice: '',
+				excluded: excluded
+			};
 			case Revert(text): text;
 		};
 		// ONE `writeFiles`, not a write per file. This is the ROLLBACK path, reached because the
@@ -875,7 +918,7 @@ final class LintFixDriver {
 			for (path in remove) CliIo.deletePath(path);
 		}
 		final narrowing: SafePassNarrowing = LintFixSafePass.narrow(
-			errors, changedFiles, coupled, restore, CompilerOracle.typecheck.bind(hxml, oracleDir), LintFixSafePass.NARROW_ROUNDS
+			errors, changedFiles, coupled, restore, CompilerOracle.typecheckAll.bind(judging), LintFixSafePass.NARROW_ROUNDS
 		);
 		// `narrow` reverted whatever it could attribute; an un-narrowable wave still owes the
 		// caller's own whole-wave rollback, which is the behaviour this net had before.
@@ -884,7 +927,12 @@ final class LintFixDriver {
 			case WholeWave(_):
 				restore(changedFiles);
 		}
-		return { reverted: true, tail: '', notice: LintFixSafePass.revertNotice(narrowing, changedFiles.length, errors) };
+		return {
+			reverted: true,
+			tail: '',
+			notice: LintFixSafePass.revertNotice(narrowing, changedFiles.length, errors),
+			excluded: excluded
+		};
 	}
 
 	/** Every file's current bytes, keyed by path - the baseline a later round measures its own writes against. */
@@ -910,20 +958,18 @@ final class LintFixDriver {
 	 */
 	private static function commitSafeWrites(
 		files: Array<{ file: String, source: String }>, changed: Array<String>, originalOf: Map<String, String>,
-		coupled: Array<Array<String>>, oracleHxml: Null<String>, oracleDir: Null<String>, created: Array<String>, ?pre: OracleOutcome
+		coupled: Array<Array<String>>, oracles: Array<OracleConfig>, created: Array<String>, ?pre: OracleBaseline
 	): SafePassOutcome {
 		// `pre` is the verdict a CREATING fix already forced before it wrote — reused rather than
 		// re-measured, because the tree it describes is the one before this run touched anything and
 		// the tree here is not.
-		final baseline: Null<OracleOutcome> = pre ?? (
-			oracleHxml != null && changed.length > 0 ? CompilerOracle.typecheck(oracleHxml, oracleDir) : null
-		);
+		final baseline: Null<OracleBaseline> = pre ?? (oracles.length > 0 && changed.length > 0 ? CompilerOracle.judging(oracles) : null);
 		// A created file is written again rather than skipped: a later pass may have EXTENDED it in
 		// memory only, and the write is idempotent where it did not.
 		CliIo.writeFiles([
 			for (entry in files) if (changed.contains(entry.file)) { path: entry.file, content: entry.source }
 		]);
-		return reconcileSafePass(files, changed, originalOf, coupled, baseline, oracleHxml, oracleDir, created);
+		return reconcileSafePass(files, changed, originalOf, coupled, baseline, oracles, created);
 	}
 
 	/**
@@ -945,9 +991,14 @@ final class LintFixDriver {
 	private static function followUpRound(
 		files: Array<{ file: String, source: String }>, settledOf: Map<String, String>,
 		converge: (Array<{ file: String, source: String }>) -> Int, coupled: Array<Array<String>>, changedFiles: Array<String>,
-		oracleHxml: Null<String>, oracleDir: Null<String>, created: Array<String>
+		oracles: Array<OracleConfig>, created: Array<String>
 	): SafePassOutcome {
-		final quiet: SafePassOutcome = { reverted: false, tail: '', notice: '' };
+		final quiet: SafePassOutcome = {
+			reverted: false,
+			tail: '',
+			notice: '',
+			excluded: []
+		};
 		final verifiedChanged: Array<{ file: String, source: String }> = changedSince(files, settledOf);
 		if (verifiedChanged.length == 0) return quiet;
 		final verifiedOf: Map<String, String> = sourceSnapshot(files);
@@ -957,11 +1008,12 @@ final class LintFixDriver {
 		final rewritten: Array<String> = [for (entry in changedSince(files, verifiedOf)) entry.file];
 		if (rewritten.length == 0) return quiet;
 		for (f in rewritten) if (!changedFiles.contains(f)) changedFiles.push(f);
-		final pass: SafePassOutcome = commitSafeWrites(files, rewritten, verifiedOf, coupled, oracleHxml, oracleDir, created);
+		final pass: SafePassOutcome = commitSafeWrites(files, rewritten, verifiedOf, coupled, oracles, created);
 		return {
 			reverted: pass.reverted,
 			tail: '${pass.tail}, follow-up: $fixed edit(s) in ${rewritten.length} file(s) exposed by the verified phases',
-			notice: pass.notice
+			notice: pass.notice,
+			excluded: pass.excluded
 		};
 	}
 
@@ -985,18 +1037,19 @@ final class LintFixDriver {
 	 */
 	public static function runLintFix(
 		files: Array<{ file: String, source: String }>, checks: Array<Check>, plugin: GrammarPlugin, resolveConfig: (String) -> LintConfig,
-		applyEnablement: Bool, resolution: Null<ResolutionScope>, oracleHxml: Null<String>, oracleDir: Null<String>, noOracle: Bool,
-		range: Null<LintRange>, verbose: Bool
+		applyEnablement: Bool, resolution: Null<ResolutionScope>, oracles: Array<OracleConfig>, noOracle: Bool, range: Null<LintRange>,
+		verbose: Bool
 	): Int {
 		FmtCommand.warnCommentGuardDeclined();
 		// Said BEFORE the first write, and said in both netless arms — the flag the user passed
 		// and the config key they never added. `LintFixSafePass.netNotice` owns which of them
 		// speaks by default and which waits for `--verbose`.
-		final notice: Null<String> = LintFixSafePass.netNotice(oracleHxml, noOracle, verbose);
+		final notice: Null<String> = LintFixSafePass.netNotice(oracles, noOracle, verbose);
 		if (notice != null) CliIo.stderr(notice);
-		return !noOracle
-			? applyLintFixes(files, checks, plugin, resolveConfig, applyEnablement, range, verbose, resolution, oracleHxml, oracleDir)
-			: applyLintFixes(files, checks, plugin, resolveConfig, applyEnablement, range, verbose, resolution);
+		// `--no-oracle` hands the fixer an EMPTY configuration list, which is the one spelling of
+		// "behave as if the project configured no compilerOracle" — the flag and the missing key
+		// then cannot drift apart by construction.
+		return applyLintFixes(files, checks, plugin, resolveConfig, applyEnablement, range, verbose, noOracle ? [] : oracles, resolution);
 	}
 
 }

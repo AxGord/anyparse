@@ -222,19 +222,18 @@ final class LintCommand implements CliCommand {
 		);
 		// Compiler oracle (opt-in via apqlint.json `compilerOracle`): a project-level
 		// setting, so the config resolved for the first linted file carries it for the
-		// whole run — its hxml is typechecked as ground truth below. That stays; what it owes
+		// whole run — every configuration it declares is typechecked as ground truth below, and a
+		// project with conditional compilation needs more than one. That stays; what it owes
 		// the reader is a word when the scope spans roots that name DIFFERENT builds, since
 		// every risky and oracle-assisted verdict below is then taken against a build the
 		// second root never declared.
 		warnScopeNotices(activeChecks, resolveConfig, paths, o.noOracle);
 		final oracleConfig: Null<LintConfig> = paths.length > 0 ? resolveConfig(paths[0]) : null;
-		final oracleHxml: Null<String> = oracleConfig?.compilerOracle();
-		final oracleDir: Null<String> = oracleConfig?.compilerOracleDir();
+		final oracles: Array<OracleConfig> = oraclesOf(oracleConfig);
 
 		if (o.fix)
 			return LintFixDriver.runLintFix(
-				files, activeChecks, plugin, resolveConfig, applyEnablement, resolution, oracleHxml, oracleDir, o.noOracle, o.range,
-				o.verbose
+				files, activeChecks, plugin, resolveConfig, applyEnablement, resolution, oracles, o.noOracle, o.range, o.verbose
 			);
 
 		// Report mode only — the fix path returned above, so this pass never runs redundantly in a
@@ -261,8 +260,8 @@ final class LintCommand implements CliCommand {
 		// PROJECT-WIDE typecheck regardless of how narrow the lint scope is — nearly the
 		// whole of a single-file run, the inner loop's largest single tax.
 		final oracleExit: Null<Int> = o.noOracle
-			? LintFixVerify.oracleSkippedNote(oracleHxml)
-			: LintFixVerify.reportModeOracle(oracleHxml, oracleDir, paths, oracleConfig?.compilerOracleServer() ?? false);
+			? LintFixVerify.oracleSkippedNote(oracles)
+			: LintFixVerify.reportModeOracle(oracles, paths, oracleConfig?.compilerOracleServer() ?? false);
 		if (oracleExit != null) return oracleExit;
 
 		final failOn: Null<Severity> = o.failOn;
@@ -294,6 +293,18 @@ final class LintCommand implements CliCommand {
 			verbose: false,
 			errExit: code
 		};
+	}
+
+	/**
+	 * Every compiler-oracle configuration `config` declares, or none when this run resolved no
+	 * config at all (an empty scope).
+	 *
+	 * Named rather than written as a `?.` chain at the one call site: `runLint` is at its
+	 * complexity budget, and a null check spent on a scope that matched no file is not what that
+	 * budget is for.
+	 */
+	private static function oraclesOf(config: Null<LintConfig>): Array<OracleConfig> {
+		return config == null ? [] : config.compilerOracles();
 	}
 
 	/**

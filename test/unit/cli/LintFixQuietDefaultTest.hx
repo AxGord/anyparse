@@ -1,6 +1,7 @@
 package unit.cli;
 
 import anyparse.check.Check;
+import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.Linter;
 import anyparse.query.Cli.RuleFixOutcome;
 import anyparse.query.LintFixSafePass;
@@ -67,11 +68,18 @@ class LintFixQuietDefaultTest extends Test {
 	 * arm speaks whatever the verbosity.
 	 */
 	public function testOnlyTheFlagArmOfTheNetNoticeIsQuiet(): Void {
-		Assert.isNull(LintFixSafePass.netNotice('build.hxml', true, false), 'the flag the reader just passed');
-		Assert.stringContains('--no-oracle', LintFixSafePass.netNotice('build.hxml', true, true) ?? '');
-		final unconfigured: Null<String> = LintFixSafePass.netNotice(null, false, false);
+		final configured: Array<OracleConfig> = [
+			{
+				hxml: 'build.hxml',
+				dir: null,
+				defines: []
+			}
+		];
+		Assert.isNull(LintFixSafePass.netNotice(configured, true, false), 'the flag the reader just passed');
+		Assert.stringContains('--no-oracle', LintFixSafePass.netNotice(configured, true, true) ?? '');
+		final unconfigured: Null<String> = LintFixSafePass.netNotice([], false, false);
 		Assert.stringContains('apqlint.json', unconfigured ?? '', 'the arm that names a remedy still speaks');
-		Assert.isNull(LintFixSafePass.netNotice('build.hxml', false, false), 'a run WITH a net says nothing either way');
+		Assert.isNull(LintFixSafePass.netNotice(configured, false, false), 'a run WITH a net says nothing either way');
 	}
 
 	private static function lines(ledger: Map<String, RuleFixOutcome>, check: Check, fixedCount: Int, verbose: Bool): Array<String> {

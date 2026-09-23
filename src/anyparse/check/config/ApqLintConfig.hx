@@ -24,6 +24,11 @@ import anyparse.grammar.json.JValue;
  * dropped — see `Check.VersionGated`. Absent means no constraint, which is the
  * behaviour every existing config already has.
  *
+ * `compilerOracle` is EITHER one hxml path or a LIST of `{hxml, defines?, dir?}` objects, so it
+ * is declared `JValue` and read by `LintConfig`: a project with conditional compilation has more
+ * than one configuration to typecheck against, and the string form is the one-element case of
+ * that list rather than a separate shape.
+ *
  * `rules` is the one section with ARBITRARY keys — one entry per rule id —
  * so it is declared `Map<String, JValue>`: the id set is open (any
  * grammar's `Check.id()`) and a rule's option bag is rule-specific, so the
@@ -44,7 +49,7 @@ typedef ApqLintConfig = {
 
 	@:optional var rules: Map<String, JValue>;
 
-	@:optional var compilerOracle: String;
+	@:optional var compilerOracle: JValue;
 
 	@:optional var compilerOracleServer: Bool;
 

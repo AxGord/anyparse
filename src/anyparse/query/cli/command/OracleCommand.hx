@@ -79,37 +79,52 @@ final class OracleCommand implements CliCommand {
 			return EXIT_RUNTIME;
 		}
 		final config: LintConfig = LintConfig.discover(paths[0]);
-		final hxml: Null<String> = config.compilerOracle();
-		if (hxml != null) return recordOracleVerdict(hxml, config.compilerOracleDir());
+		final oracles: Array<OracleConfig> = config.compilerOracles();
+		if (oracles.length > 0) return recordOracleVerdicts(oracles);
 		CliIo.stderr('apq oracle: no compilerOracle configured for ${specs.join(', ')} — nothing to typecheck\n');
 		return EXIT_OK;
 	}
 
 	/**
-	 * The compile-and-record half of `apq oracle`: the fingerprint is taken BEFORE the compile
-	 * (it describes the input the compiler is about to read), one COLD typecheck runs — never
-	 * the warm server, never the cache — and only an observed verdict is stored. A project that
-	 * yields no fingerprint says so, so a silently non-caching setup is visible rather than a
-	 * `lint` that mysteriously never speeds up.
+	 * Every configuration recorded, and a non-zero exit when ANY of them does not typecheck.
+	 *
+	 * All of them rather than up to the first rejection: the point of the command is to leave a
+	 * verdict for each configuration the following `lint` will ask about, and a run that stopped
+	 * early would leave the rest to recompile.
 	 */
-	private static function recordOracleVerdict(hxml: String, dir: Null<String>): Int {
-		final fingerprint: Null<String> = OracleCache.fingerprint(hxml, dir);
-		final outcome: OracleOutcome = CompilerOracle.typecheck(hxml, dir);
-		if (fingerprint != null) OracleCache.store(hxml, dir, fingerprint, outcome);
-		final exit: Int = reportOracleRun(outcome);
-		if (fingerprint == null) CliIo.stderr('apq oracle: no fingerprint for this project — the verdict was not recorded\n');
+	private static function recordOracleVerdicts(oracles: Array<OracleConfig>): Int {
+		var exit: Int = EXIT_OK;
+		for (oracle in oracles) if (recordOracleVerdict(oracle) != EXIT_OK) exit = EXIT_RUNTIME;
 		return exit;
 	}
 
-	/** One stderr line per `apq oracle` outcome, plus the exit status that goes with it. */
-	private static function reportOracleRun(outcome: OracleOutcome): Int {
+	/**
+	 * The compile-and-record half of `apq oracle`, for ONE configuration: the fingerprint is
+	 * taken BEFORE the compile (it describes the input the compiler is about to read), one COLD
+	 * typecheck runs — never the warm server, never the cache — and only an observed verdict is
+	 * stored. A configuration that yields no fingerprint says so, so a silently non-caching setup
+	 * is visible rather than a `lint` that mysteriously never speeds up.
+	 */
+	private static function recordOracleVerdict(oracle: OracleConfig): Int {
+		final fingerprint: Null<String> = OracleCache.fingerprint(oracle.hxml, oracle.dir, oracle.defines);
+		final outcome: OracleOutcome = CompilerOracle.typecheck(oracle.hxml, oracle.dir, oracle.defines);
+		if (fingerprint != null) OracleCache.store(oracle.hxml, oracle.dir, fingerprint, outcome, oracle.defines);
+		final exit: Int = reportOracleRun(oracle, outcome);
+		if (fingerprint == null)
+			CliIo.stderr('apq oracle: no fingerprint for ${LintConfig.describeOracle(oracle)} — the verdict was not recorded\n');
+		return exit;
+	}
+
+	/** One stderr line per configuration's `apq oracle` outcome, plus the exit status that goes with it. */
+	private static function reportOracleRun(oracle: OracleConfig, outcome: OracleOutcome): Int {
+		final named: String = LintConfig.describeOracle(oracle);
 		switch outcome {
 			case Confirmed:
-				CliIo.stderr('apq oracle: build typechecks — verdict recorded (lint will not recompile an unchanged tree)\n');
+				CliIo.stderr('apq oracle: $named typechecks — verdict recorded (lint will not recompile an unchanged tree)\n');
 			case Unavailable(reason):
-				CliIo.stderr('apq oracle: unavailable — $reason (nothing recorded)\n');
+				CliIo.stderr('apq oracle: $named unavailable — $reason (nothing recorded)\n');
 			case Rejected(errors):
-				CliIo.stderr('apq oracle: build does NOT typecheck:\n$errors\n');
+				CliIo.stderr('apq oracle: $named does NOT typecheck:\n$errors\n');
 				return EXIT_RUNTIME;
 		}
 		return EXIT_OK;

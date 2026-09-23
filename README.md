@@ -420,6 +420,17 @@ a config in a subdirectory naming a parent build file (`"../build.hxml"`, whose
 root the build is invoked from) both compile with the classpaths their authors
 meant.
 
+The key is also a LIST of configurations, because one hxml answers for one set of
+defines and a `#if` has two or more arms: `[{"hxml": …, "defines": [ … ], "dir": …}]`
+(`defines` and `dir` optional; the plain string is the one-element list). Each
+risky edit is typechecked by EVERY configuration that compiles it and is kept only
+when all of them confirm; an edit no configuration compiles is declined, not
+guessed at. A configuration whose own build is red before any edit, or whose
+compiled set cannot be probed, is EXCLUDED and named once per run, and the others
+still judge what they cover. `defines` go ahead of `--each`, so every `--next` arm
+of the hxml sees them. Full contract: `docs/testing.md` § "The oracle answers for
+what it COMPILED, not for what you linted".
+
 A top-level `"compilerOracleServer"` (boolean, default `false`) moves the
 REPORT-mode oracle onto a WARM Haxe compilation server shared by every `apq`
 process on the machine, instead of a fresh compile per run. The first lint
@@ -456,6 +467,13 @@ only a file OUTSIDE the linted set written within that same second.
 
 ```json
 { "compilerOracle": "build.hxml", "compilerOracleServer": true }
+```
+
+```json
+{ "compilerOracle": [
+	{ "hxml": "build.hxml" },
+	{ "hxml": "build.hxml", "defines": ["android"] }
+] }
 ```
 
 ```json

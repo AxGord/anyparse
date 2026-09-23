@@ -33,9 +33,13 @@
 #            --base companion, every track worktree) from a `git stash
 #            create` snapshot of the CURRENT working tree instead of HEAD,
 #            for an arm authored alongside the still-uncommitted source it
-#            targets. Refuses on any untracked file; prints every included
-#            change otherwise. Full rationale: `docs/testing.md` §
-#            "Declared arms" — one copy of this fact is enough.
+#            targets. Refuses on any untracked file, and on a dirty tree whose
+#            snapshot `git stash create` declines to make — an intent-to-add
+#            entry (`git add -N`) is enough, and the old silent fall back to
+#            HEAD measured the last commit while reporting this flag. Prints
+#            every included change otherwise. Full rationale:
+#            `docs/testing.md` § "Declared arms" — one copy of this fact is
+#            enough.
 #   --check-apply
 #            AUTHORING mode: apply the cut and BUILD, no suite. Each arm is
 #            reported APPLIES or BUILD-FAIL with the cause named
@@ -289,9 +293,32 @@ if [ "$working_tree" -eq 1 ]; then
         echo "mutation-arm.sh: --working-tree refuses — untracked file(s) would be silently dropped from the snapshot: $(printf '%s' "$untracked" | tr '\n' ' ')" >&2
         exit 2
     fi
-    stash_commit=$(git -C "$repo" stash create) || stash_commit=""
-    base_ref=${stash_commit:-HEAD}
+    stash_commit=$(git -C "$repo" stash create 2>/dev/null) || stash_commit=""
     dirty=$(git -C "$repo" status --porcelain --untracked-files=no)
+    # A snapshot that did not happen used to fall back to HEAD in silence, so the run
+    # measured the last commit while reporting `--working-tree` — a gate that cannot tell
+    # "your uncommitted work" from "HEAD" is worse than no gate, and it bites hardest while
+    # verifying a control pin, where a false green is most expensive. An INTENT-TO-ADD entry
+    # (`git add -N`, which a new test file often sits in) is enough to make `stash create`
+    # fail. So this refuses, and it names git's own reason: `stash create` writes a dangling
+    # commit and touches neither the index nor the worktree, so re-running it for the message
+    # is free and changes nothing. A CLEAN tree legitimately yields no commit, and there HEAD
+    # IS the working tree — hence the `dirty` half of the guard.
+    # A tree dirty only in a SUBMODULE refuses too: `stash create` snapshots no submodule change.
+    if [ -z "$stash_commit" ] && [ -n "$dirty" ]; then
+        echo "mutation-arm.sh: --working-tree refuses — the tree is dirty but \`git stash create\` produced no snapshot, so the run would silently measure HEAD instead:" >&2
+        # `|| true` because the whole point is that this git call FAILS, and `set -o pipefail`
+        # would otherwise abort the refusal half way — before the remedy below and before the
+        # exit status that says which kind of failure this was.
+        git -C "$repo" stash create 2>&1 >/dev/null | sed 's/^/mutation-arm.sh:   /' >&2 || true
+        intent=$(git -C "$repo" diff-files --name-only --diff-filter=A)
+        if [ -n "$intent" ]; then
+            echo "mutation-arm.sh: intent-to-add path(s) are the usual cause — stage them (\`git add <path>\`) or drop the intent (\`git reset <path>\`):" >&2
+            printf '%s\n' "$intent" | sed 's/^/mutation-arm.sh:   /' >&2
+        fi
+        exit 2
+    fi
+    base_ref=${stash_commit:-HEAD}
     if [ -n "$dirty" ]; then
         echo "mutation-arm.sh: --working-tree base = $base_ref, folding in $(printf '%s\n' "$dirty" | wc -l | tr -d ' ') uncommitted change(s) beyond HEAD:" >&2
         printf '%s\n' "$dirty" | sed 's/^/mutation-arm.sh:   /' >&2

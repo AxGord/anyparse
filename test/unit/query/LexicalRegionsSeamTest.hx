@@ -107,9 +107,10 @@ class LexicalRegionsSeamTest extends Test {
 	 * `anyparse.query`, `anyparse.check` and `anyparse.format` may name ANY `anyparse.grammar.*`
 	 * package in EXACTLY the modules on this list, and this asserts the list rather than a count.
 	 *
-	 *  - `check/LintConfig.hx` and `check/config/ApqLintConfig.hx` — `apqlint.json` IS a JSON
-	 *    document, so the config reader consumes `anyparse.grammar.json.JValue` as its value type.
-	 *    A shipped grammar used as the serialization of the tool's own data, not as a language.
+	 *  - `check/LintConfig.hx`, `check/OracleDeclaration.hx` and `check/config/ApqLintConfig.hx` —
+	 *    `apqlint.json` IS a JSON document, so the config reader and the `compilerOracle` key's own
+	 *    reader consume `anyparse.grammar.json.JValue` as their value type. A shipped grammar used as
+	 *    the serialization of the tool's own data, not as a language.
 	 *  - `query/Cli.hx` — `pickPlugin` maps `--lang haxe` to `HaxeQueryPlugin`. Something has to
 	 *    know one concrete grammar for the CLI to have a default, and this is the one place that
 	 *    does; every other module receives the plugin it was handed.
@@ -144,6 +145,7 @@ class LexicalRegionsSeamTest extends Test {
 	public function testNoGrammarAgnosticModuleNamesOneGrammar(): Void {
 		final allowed: Array<String> = [
 			'src/anyparse/check/LintConfig.hx',
+			'src/anyparse/check/OracleDeclaration.hx',
 			'src/anyparse/check/config/ApqLintConfig.hx',
 			'src/anyparse/query/FormatConfigDiscovery.hx',
 			'src/anyparse/query/cli/CliArgs.hx',

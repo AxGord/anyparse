@@ -860,6 +860,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 			applied: [],
 			appliedEdits: 0,
 			reverted: [],
+			excluded: [],
 			partials: [],
 			declined: [
 				{
@@ -914,6 +915,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 			baseline: Confirmed,
 			applied: ['Covered.hx'],
 			appliedEdits: 2,
+			excluded: [],
 			reverted: [
 				{
 					file: 'Rejected.hx',

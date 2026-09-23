@@ -1,6 +1,8 @@
 package anyparse.query;
 
+import anyparse.check.CompilerOracle.OracleExclusion;
 import anyparse.check.CompilerOracle.OracleOutcome;
+import anyparse.check.LintConfig.OracleConfig;
 
 using Lambda;
 using StringTools;
@@ -264,8 +266,8 @@ final class LintFixSafePass {
 	 * run's own summary line already carries both consequences it states (`N risky-fix rule(s) left
 	 * report-only (no compiler oracle for this run)`). Under `--verbose` it comes back.
 	 */
-	public static function netNotice(oracleHxml: Null<String>, noOracle: Bool, verbose: Bool): Null<String> {
-		return if (oracleHxml == null)
+	public static function netNotice(oracles: Array<OracleConfig>, noOracle: Bool, verbose: Bool): Null<String> {
+		return if (oracles.length == 0)
 			'apq lint --fix: no compilerOracle configured — no safe-pass revert net, risky fixes stay report-only,'
 				+ ' oracle-assisted fixes are inert; add a "compilerOracle" hxml to apqlint.json to arm it\n'
 		else if (noOracle && verbose)
@@ -361,4 +363,10 @@ typedef SafePassOutcome = {
 	final reverted: Bool;
 	final tail: String;
 	final notice: String;
+
+	/**
+	 * The configurations the net ran WITHOUT, each named with its cause (`OracleBaseline`) — for the
+	 * caller to name, since a net silently shrunk to the green subset reads as covering every build.
+	 */
+	final excluded: Array<OracleExclusion>;
 };

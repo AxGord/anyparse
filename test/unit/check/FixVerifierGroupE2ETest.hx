@@ -94,7 +94,7 @@ final class FixVerifierGroupE2ETest extends Test {
 		final result: FixVerifyResult = FixVerifier.verify(
 			files,
 			[new TableFake(POISON_TABLE)],
-			new HaxeQueryPlugin(), 'check.hxml', dir, File.saveContent
+			new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], File.saveContent
 		);
 		Assert.isTrue(result.baseline.match(Confirmed), 'the oracle baseline must confirm — else these negatives are vacuous');
 		final after: String = File.getContent('$dir/Main.hx');
@@ -124,7 +124,7 @@ final class FixVerifierGroupE2ETest extends Test {
 		final result: FixVerifyResult = FixVerifier.verify(
 			files,
 			[new TableFake(DEPENDENT_TABLE)],
-			new HaxeQueryPlugin(), 'check.hxml', dir, File.saveContent
+			new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], File.saveContent
 		);
 		Assert.isTrue(result.baseline.match(Confirmed), 'the oracle baseline must confirm — else these negatives are vacuous');
 		final after: String = File.getContent('$dir/Main.hx');
@@ -161,7 +161,7 @@ final class FixVerifierGroupE2ETest extends Test {
 		final result: FixVerifyResult = FixVerifier.verify(
 			files,
 			[new TableFake(SINGLE_GROUP_TABLE)],
-			new HaxeQueryPlugin(), 'check.hxml', dir, File.saveContent
+			new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], File.saveContent
 		);
 		Assert.isTrue(result.baseline.match(Confirmed), 'the oracle baseline must confirm — else these negatives are vacuous');
 		Assert.equals(0, result.partials.length, 'a single unit is not bisected, so no partial is reported');
@@ -198,7 +198,7 @@ final class FixVerifierGroupE2ETest extends Test {
 		final result: FixVerifyResult = FixVerifier.verify(files, [
 			new TableFake(SINGLE_GROUP_TABLE, 'fake-one'),
 			new TableFake(OTHER_SINGLE_GROUP_TABLE, 'fake-two')
-		], new HaxeQueryPlugin(), 'check.hxml', dir, File.saveContent);
+		], new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], File.saveContent);
 		Assert.isTrue(result.baseline.match(Confirmed), 'the oracle baseline must confirm — else these negatives are vacuous');
 		Assert.equals(2, result.reverted.length, 'one entry per RULE, not one per file');
 		Assert.equals('fake-one', result.reverted[0].rule);

@@ -65,7 +65,7 @@ class ReificationGateFixPathTest extends Test {
 		final result: FixVerifyResult = FixVerifier.verify(
 			files,
 			[new LiteralRewriteCheck()],
-			new HaxeQueryPlugin(), 'check.hxml', dir, (p, c) -> File.saveContent(p, c)
+			new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], (p, c) -> File.saveContent(p, c)
 		);
 		Assert.equals(1, result.applied.length, 'the unquoted rewrite is applied, so the verifier path really ran');
 		Assert.equals(0, result.reverted.length);

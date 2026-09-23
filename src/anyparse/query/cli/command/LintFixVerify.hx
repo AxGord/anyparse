@@ -13,6 +13,7 @@ import anyparse.check.OracleCoverage;
 import anyparse.core.EnvFlag;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.Cli.RuleFixOutcome;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
 import haxe.io.Path;
 import anyparse.query.ExitCode.*;
@@ -49,11 +50,19 @@ typedef RiskyFixOutcome = {
 	var appliedCount: Int;
 	var reverts: Array<FixVerifyRevert>;
 	var declines: Array<FixVerifyDecline>;
+
+	/**
+	 * The configurations that could make no edit verifiable, each named with its cause — a red baseline (`OracleBaseline`),
+	 * or an unknown compiled set (`OracleCoverage.usable`), which still verifies every
+	 * candidate. The driver prints them, once per (configuration, cause) across every phase.
+	 */
+	var excluded: Array<OracleExclusion>;
 	var ledgered: Bool;
 
 	/**
-	 * The compiled-set probe the risky phase paid for, or null when it never ran one. The
-	 * oracle-assisted phase reuses it rather than spawning a second `-v` compile.
+	 * The compiled-set probes the risky phase paid for, one per JUDGING configuration it probed and
+	 * paired with it, or empty when it never ran any. The oracle-assisted phase reuses a probe for
+	 * the SAME configuration rather than spawning a second `-v` compile for it.
 	 *
 	 * It is taken BEFORE the risky phase writes and read after, which extends the
 	 * within-run snapshot `FixVerifier` documents across a phase boundary. Defines cannot
@@ -62,8 +71,18 @@ typedef RiskyFixOutcome = {
 	 * would then permit an edit in a file the compile no longer reads. Re-probing costs a
 	 * whole compile, which is the expense this hand-off exists to avoid.
 	 */
-	var coverage: Null<OracleCoverage>;
+	var coverage: Array<ConfigCoverage>;
 };
+
+/**
+ * What the oracle-assisted phase did: the summary tail, its edit count, and the configurations it
+ * judged nothing with — the last for the driver to name, once per run with the other phases'.
+ */
+typedef AssistedOutcome = {
+	var tail: String;
+	var appliedCount: Int;
+	var excluded: Array<OracleExclusion>;
+}
 
 /**
  * The compiler oracle's half of `apq lint --fix`.
@@ -87,28 +106,13 @@ final class LintFixVerify {
 	 * is what lets the ledger block disclaim the risky set only when the disclaimer is true.
 	 */
 	public static function verifyRiskyFixes(
-		files: Array<{ file: String, source: String }>, riskyChecks: Array<Check>, cached: GrammarPlugin, oracleHxml: Null<String>,
-		oracleDir: Null<String>, optsByFile: Map<String, Null<String>>, changedFiles: Array<String>, ledger: Map<String, RuleFixOutcome>
+		files: Array<{ file: String, source: String }>, riskyChecks: Array<Check>, cached: GrammarPlugin, oracles: Array<OracleConfig>,
+		optsByFile: Map<String, Null<String>>, changedFiles: Array<String>, ledger: Map<String, RuleFixOutcome>
 	): RiskyFixOutcome {
-		if (riskyChecks.length == 0) return {
-			tail: '',
-			appliedCount: 0,
-			reverts: [],
-			declines: [],
-			ledgered: false,
-			coverage: null
-		};
-		if (oracleHxml == null) return {
-			tail: ', ${riskyChecks.length} risky-fix rule(s) left report-only (no compiler oracle for this run)',
-			appliedCount: 0,
-			reverts: [],
-			declines: [],
-			ledgered: false,
-			coverage: null
-		};
-		final verified: FixVerifyResult = FixVerifier.verify(
-			files, riskyChecks, cached, oracleHxml, oracleDir, CliIo.writeFile, optsByFile
-		);
+		if (riskyChecks.length == 0) return quietRisky('');
+		if (oracles.length == 0)
+			return quietRisky(', ${riskyChecks.length} risky-fix rule(s) left report-only (no compiler oracle for this run)');
+		final verified: FixVerifyResult = FixVerifier.verify(files, riskyChecks, cached, oracles, CliIo.writeFile, optsByFile);
 		switch verified.baseline {
 			case Confirmed:
 				final unknownCoverage: Null<String> = verified.coverageUnknown;
@@ -122,42 +126,37 @@ final class LintFixVerify {
 					appliedCount: 0,
 					reverts: [],
 					declines: [],
+					excluded: verified.excluded,
 					ledgered: false,
 					coverage: verified.coverage
 				};
 				for (f in verified.applied) if (!changedFiles.contains(f)) changedFiles.push(f);
 				ledgerRiskyTallies(ledger, verified);
+				// The three clauses in a local, so the sentence above keeps the shape it had: the
+				// declined / excluded / bisect tails are each empty on an ordinary run, and spelled
+				// inline they push the segment past the line width.
+				final declinedClause: String = declinedTail(verified.declined);
+				final clauses: String = '$declinedClause${excludedTail(verified.excluded)}${bisectTail(verified.partials)}';
 				return {
 					tail: ', risky-fix verified: ${verified.applied.length} file(s) applied, ${verified.reverted.length}'
-						+ ' reverted to report-only${declinedTail(verified.declined)}${bisectTail(verified.partials)}',
+						+ ' reverted to report-only$clauses',
 					appliedCount: verified.appliedEdits,
 					reverts: verified.reverted,
 					declines: verified.declined,
+					excluded: verified.excluded,
 					ledgered: true,
 					coverage: verified.coverage
 				};
 			case Unavailable(reason):
-				return {
-					tail: ', risky-fix skipped (oracle unavailable: $reason)',
-					appliedCount: 0,
-					reverts: [],
-					declines: [],
-					ledgered: false,
-					coverage: null
-				};
+				return quietRisky(', risky-fix skipped (oracle unavailable: $reason)', verified.excluded);
 			case Rejected(_):
 				// NOT "the baseline is red": `FixVerifier` measures its baseline AFTER the safe
 				// writes, so this arm is reached both by a tree that was already broken and by
 				// one the safe pass broke. `reconcileSafePass` has already told the two apart
-				// and reverted the second, so by here it can only be the first — say that.
-				return {
-					tail: ', risky-fix skipped (the tree does not typecheck — see the note above)',
-					appliedCount: 0,
-					reverts: [],
-					declines: [],
-					ledgered: false,
-					coverage: null
-				};
+				// and reverted the second, so by here it can only be the first — say that. And it
+				// takes EVERY configuration now: a single red one is excluded and the green ones
+				// carry on, so reaching here means not one of them typechecks the tree.
+				return quietRisky(', risky-fix skipped (no configured oracle typechecks the tree — see the note above)', verified.excluded);
 		}
 	}
 
@@ -276,12 +275,41 @@ final class LintFixVerify {
 	}
 
 	/**
+	 * A risky-fix outcome that verified NOTHING, carrying only `tail` and whatever configurations
+	 * were excluded before the phase gave up — the five empty fields the three declining exits
+	 * used to spell out one by one.
+	 */
+	private static function quietRisky(tail: String, ?excluded: Array<OracleExclusion>): RiskyFixOutcome {
+		return {
+			tail: tail,
+			appliedCount: 0,
+			reverts: [],
+			declines: [],
+			excluded: excluded ?? [],
+			ledgered: false,
+			coverage: []
+		};
+	}
+
+	/**
+	 * One-line summary of the configurations EXCLUDED before the phase judged anything, appended
+	 * to the risky-fix tail. Empty when every configuration judged.
+	 *
+	 * Kept apart from the declined and reverted counts: an exclusion is a fact about a BUILD, not
+	 * about a candidate, and folding it in would let a run whose android target is broken read
+	 * like a run that verified and refused something.
+	 */
+	private static function excludedTail(excluded: Array<OracleExclusion>): String {
+		return excluded.length == 0 ? '' : ', ${excluded.length} configuration(s) EXCLUDED (named above)';
+	}
+
+	/**
 	 * `--no-oracle`: say plainly that the compiler was not asked, and never fail on
 	 * it. Always null (no fail) — declining to run a gate can only ever weaken a
 	 * verdict, so it must never be able to produce one.
 	 */
-	public static function oracleSkippedNote(oracleHxml: Null<String>): Null<Int> {
-		if (oracleHxml != null) CliIo.stderr('apq lint: compiler oracle SKIPPED (--no-oracle) — nullSafety trust unproved for this run\n');
+	public static function oracleSkippedNote(oracles: Array<OracleConfig>): Null<Int> {
+		if (oracles.length > 0) CliIo.stderr('apq lint: compiler oracle SKIPPED (--no-oracle) — nullSafety trust unproved for this run\n');
 		return null;
 	}
 
@@ -293,31 +321,44 @@ final class LintFixVerify {
 	 * degrade to a skip note when the oracle can't run. Null = no fail. Split out of
 	 * `runLint` to keep it under the complexity budget.
 	 */
-	public static function reportModeOracle(
-		oracleHxml: Null<String>, oracleDir: Null<String>, paths: Array<String>, warmServer: Bool
-	): Null<Int> {
-		if (oracleHxml == null) return null;
-		switch reportOracleVerdict(oracleHxml, oracleDir, paths, warmServer) {
+	public static function reportModeOracle(oracles: Array<OracleConfig>, paths: Array<String>, warmServer: Bool): Null<Int> {
+		if (oracles.length == 0) return null;
+		final confirmed: Array<OracleConfig> = [];
+		for (oracle in oracles) switch reportOracleVerdict(oracle, paths, warmServer) {
 			case Confirmed:
-				// The qualifier is not hedging: what the compile confirms is the code it TYPECHECKED,
-				// and an hxml routinely reads a fraction of the lint scope, while a `#if` branch its
-				// defines exclude is skipped inside a file it does read (well under half of the
-				// conditional branches in scope are provably compiled). `OracleCoverage` answers
-				// that question per edit for `--fix`;
-				// report mode does not probe, so the honest thing here is to say what the claim covers
-				// rather than to imply the whole scope.
-				CliIo.stderr(
-					'apq lint: compiler oracle confirmed — build typechecks (nullSafety trust: compiler-confirmed for the code'
-					+ ' this hxml compiles — not for a file it never reads, nor for a #if branch its defines exclude)\n'
-				);
+				confirmed.push(oracle);
 			case Unavailable(reason):
-				CliIo.stderr('apq lint: compiler oracle unavailable — $reason (skipped)\n');
+				CliIo.stderr('apq lint: compiler oracle unavailable for ${LintConfig.describeOracle(oracle)} — $reason (skipped)\n');
 			case Rejected(errors):
-				CliIo.stderr('apq lint: compiler oracle REJECTED — build does not typecheck:\n');
+				CliIo.stderr('apq lint: compiler oracle REJECTED ${LintConfig.describeOracle(oracle)} — build does not typecheck:\n');
 				CliIo.stderr('$errors\n');
 				return EXIT_RUNTIME;
 		}
+		if (confirmed.length > 0) CliIo.stderr(trustNote(confirmed, oracles.length));
 		return null;
+	}
+
+	/**
+	 * The nullSafety trust line, NAMING the configurations that confirmed.
+	 *
+	 * The qualifier is not hedging: what a compile confirms is the code it TYPECHECKED, and an
+	 * hxml routinely reads a fraction of the lint scope while a `#if` branch its defines exclude
+	 * is skipped inside a file it does read. Naming the configurations is the other half of the
+	 * same honesty — a note that said "this hxml" while several were configured claimed a union
+	 * of builds no compile ever ran, and one that named all of them while only some answered
+	 * would repeat that in a smaller way.
+	 */
+	private static function trustNote(confirmed: Array<OracleConfig>, configured: Int): String {
+		final unanswered: Int = configured - confirmed.length;
+		final partial: String = unanswered == 0 ? '' : ' ($unanswered configuration(s) could not be asked)';
+		return 'apq lint: compiler oracle confirmed$partial — build typechecks (nullSafety trust: compiler-confirmed for the code'
+			+ ' these configuration(s) compile: ${describeOracles(confirmed)} — not for a file none of them reads, nor for a #if'
+			+ ' branch every one of their define sets excludes)\n';
+	}
+
+	/** Every configuration named for one diagnostic line, in declared order. */
+	private static function describeOracles(oracles: Array<OracleConfig>): String {
+		return [for (oracle in oracles) LintConfig.describeOracle(oracle)].join(', ');
 	}
 
 	/**
@@ -333,19 +374,23 @@ final class LintFixVerify {
 	 * The `--fix` risky-fix verification never reaches here — `FixVerifier` calls
 	 * `CompilerOracle` directly, so a post-write typecheck is always a real compiler run.
 	 */
-	private static function reportOracleVerdict(hxml: String, dir: Null<String>, paths: Array<String>, warmServer: Bool): OracleOutcome {
-		final fingerprint: Null<String> = EnvFlag.isSet('APQ_NO_ORACLE_CACHE') ? null : OracleCache.fingerprint(hxml, dir);
+	private static function reportOracleVerdict(oracle: OracleConfig, paths: Array<String>, warmServer: Bool): OracleOutcome {
+		final hxml: String = oracle.hxml;
+		final dir: Null<String> = oracle.dir;
+		final defines: Array<String> = oracle.defines;
+		final fingerprint: Null<String> = EnvFlag.isSet('APQ_NO_ORACLE_CACHE') ? null : OracleCache.fingerprint(hxml, dir, defines);
 		if (fingerprint != null) {
-			final cached: Null<OracleOutcome> = OracleCache.lookup(hxml, dir, fingerprint);
+			final cached: Null<OracleOutcome> = OracleCache.lookup(hxml, dir, fingerprint, defines);
 			if (cached != null) {
 				CliIo.stderr(
-					'apq lint: compiler oracle verdict reused — the compile input hashes identical to the last typecheck (no compile)\n'
+					'apq lint: compiler oracle verdict reused for ${LintConfig.describeOracle(oracle)} — the compile input hashes'
+					+ ' identical to the last typecheck (no compile)\n'
 				);
 				return cached;
 			}
 		}
-		final verdict: OracleOutcome = compiledOracleVerdict(hxml, dir, paths, warmServer);
-		if (fingerprint != null) OracleCache.store(hxml, dir, fingerprint, verdict);
+		final verdict: OracleOutcome = compiledOracleVerdict(oracle, paths, warmServer);
+		if (fingerprint != null) OracleCache.store(hxml, dir, fingerprint, verdict, defines);
 		return verdict;
 	}
 
@@ -358,7 +403,7 @@ final class LintFixVerify {
 	 * takes over then. The `--fix` risky-fix verification never comes here either: a post-write
 	 * typecheck is the one question a compilation server cannot answer honestly.
 	 */
-	private static function compiledOracleVerdict(hxml: String, dir: Null<String>, paths: Array<String>, warmServer: Bool): OracleOutcome {
+	private static function compiledOracleVerdict(oracle: OracleConfig, paths: Array<String>, warmServer: Bool): OracleOutcome {
 		final declined: Bool = !warmServer || EnvFlag.isSet('APQ_NO_ORACLE_SERVER');
 		// A warm CONFIRM stands as it is; a warm REJECTION is re-run COLD before it is reported.
 		// A compilation server can re-emit a stale null-safety diagnostic for a module it restored
@@ -366,10 +411,10 @@ final class LintFixVerify {
 		// project spuriously red while the cold compile was green. So a rejection always
 		// carries the cold compiler's own verdict and error text, and the server can only ever
 		// change what a verdict COSTS.
-		return switch (declined ? null : CompilerServer.typecheck(hxml, dir, paths)) {
+		return switch (declined ? null : CompilerServer.typecheck(oracle.hxml, oracle.dir, paths, oracle.defines)) {
 			case Confirmed: Confirmed;
-			case Rejected(_): coldAfterWarmRejection(hxml, dir);
-			case null, _: CompilerOracle.typecheck(hxml, dir);
+			case Rejected(_): coldAfterWarmRejection(oracle);
+			case null, _: CompilerOracle.typecheck(oracle.hxml, oracle.dir, oracle.defines);
 		};
 	}
 
@@ -379,8 +424,8 @@ final class LintFixVerify {
 	 * without the note the run silently costs a warm typecheck plus a cold one forever with
 	 * nothing to point at.
 	 */
-	private static function coldAfterWarmRejection(hxml: String, dir: Null<String>): OracleOutcome {
-		final cold: OracleOutcome = CompilerOracle.typecheck(hxml, dir);
+	private static function coldAfterWarmRejection(oracle: OracleConfig): OracleOutcome {
+		final cold: OracleOutcome = CompilerOracle.typecheck(oracle.hxml, oracle.dir, oracle.defines);
 		if (cold.match(Confirmed))
 			CliIo.stderr(
 				'apq lint: warm compiler server rejected a build the compiler accepts — stale cached diagnostic, cold verdict used\n'
@@ -410,40 +455,25 @@ final class LintFixVerify {
 	 * `CompilerDisplayOracle`). Split from `applyLintFixes` for the complexity budget.
 	 */
 	public static function applyOracleAssistedFixes(
-		files: Array<{ file: String, source: String }>, oracleChecks: Array<Check>, plugin: GrammarPlugin, oracleHxml: Null<String>,
-		oracleDir: Null<String>, optsByFile: Map<String, Null<String>>, changedFiles: Array<String>, resolveConfig: (String) -> LintConfig,
-		coverage: Null<OracleCoverage>
-	): { tail: String, appliedCount: Int } {
-		if (oracleChecks.length == 0) return { tail: '', appliedCount: 0 };
-		if (oracleHxml == null) return {
+		files: Array<{ file: String, source: String }>, oracleChecks: Array<Check>, plugin: GrammarPlugin, oracles: Array<OracleConfig>,
+		optsByFile: Map<String, Null<String>>, changedFiles: Array<String>, resolveConfig: (String) -> LintConfig,
+		coverage: Array<ConfigCoverage>
+	): AssistedOutcome {
+		if (oracleChecks.length == 0) return { tail: '', appliedCount: 0, excluded: [] };
+		if (oracles.length == 0) return {
 			tail: ', ${oracleChecks.length} oracle-assisted rule(s) left report-only (no compiler oracle for this run)',
-			appliedCount: 0
+			appliedCount: 0,
+			excluded: []
 		};
-		final blocked: Null<String> = assistedSkipTail(oracleHxml, oracleDir);
-		if (blocked != null) return { tail: blocked, appliedCount: 0 };
-		final display: Null<CompilerDisplayOracle> = CompilerDisplayOracle.start(oracleHxml, oracleDir);
-		if (display == null) return { tail: ', oracle-assisted skipped (display server unavailable)', appliedCount: 0 };
-		// This phase writes annotations and then asks the SAME `haxe <hxml> --no-output`
-		// whether the tree still builds — the very control `OracleCoverage` exists to keep
-		// honest — and it was ungated: a file the hxml never compiles, or a `#if` branch its
-		// defines exclude, got its annotation written and confirmed by a compile that could not
-		// have refused it. `verifyRiskyFixes` hands over the probe it already paid for; the
-		// closure exists so a run whose oracle-assisted checks propose nothing pays for none.
-		//
-		// `coverageHxml` is NOT a redundant alias: `oracleHxml` is a `Null<String>` parameter whose
-		// null check narrows it only in straight-line code, and the closure below would see the
-		// declared type again. Inlining it is a strict-null-safety error, not a simplification.
-		final coverageHxml: String = oracleHxml;
-		var coverageMemo: Null<OracleCoverage> = coverage;
-		inline function compiledSet(): OracleCoverage {
-			final memo: Null<OracleCoverage> = coverageMemo;
-			if (memo != null) return memo;
-			final probed: OracleCoverage = OracleCoverage.probe(coverageHxml, oracleDir);
-			coverageMemo = probed;
-			return probed;
-		}
+		// Per configuration, and a RED one is dropped rather than allowed to stop the phase — the
+		// same rule `FixVerifier` takes its baseline by, for the same reason: a configuration that
+		// does not typecheck before any annotation can judge none, while a green sibling still can.
+		final measured: OracleBaseline = CompilerOracle.judging(oracles);
+
+		// Grows when a judging configuration's compiled set turns out unknown — see below.
+		final excluded: Array<OracleExclusion> = measured.excluded;
+		if (!measured.verdict.match(Confirmed)) return { tail: assistedSkipTail(measured.verdict), appliedCount: 0, excluded: excluded };
 		final declines: Array<{ file: String, reason: String, edits: Int }> = [];
-		var unknownCoverage: Null<String> = null;
 		for (check in oracleChecks) if (check is ConfigAware) (cast check: ConfigAware).setConfigResolver(resolveConfig);
 		final candidates: Array<{ file: String, before: String, after: String }> = [];
 		// Per-file EDIT counts, so the run's "fixed N issue(s)" stays one unit: the safe loop
@@ -465,15 +495,30 @@ final class LintFixVerify {
 		final findingsByCheck: Array<{ check: Check, all: Array<Violation> }> = [
 			for (check in oracleChecks) { check: check, all: Linter.collect(files, plugin, [check]).filter(v -> v.rule == check.id()) }
 		];
+		// Nothing to annotate costs nothing: no probe, no display server.
+		if (!findingsByCheck.exists(byCheck -> byCheck.all.length > 0))
+			return { tail: ', oracle-assisted: 0 applied${excludedTail(excluded)}', appliedCount: 0, excluded: excluded };
+		// This phase writes annotations and then asks the SAME `haxe <hxml> --no-output`
+		// whether the tree still builds — the very control `OracleCoverage` exists to keep
+		// honest — and it was ungated: a file the hxml never compiles, or a `#if` branch its
+		// defines exclude, got its annotation written and confirmed by a compile that could not
+		// have refused it. `verifyRiskyFixes` hands over the probes it already paid for, each keyed
+		// by its configuration. Settled BEFORE the display server starts, because the server must
+		// be one of the configurations whose compiled set is known.
+		final coverageMemo: OracleCoverageMemo = { probes: coverage.copy(), usable: null };
+		final current: UsableCoverage = OracleCoverage.usableOnce(coverageMemo, measured.judging, excluded);
+		final stop: Null<String> = current.stop;
+		if (stop != null) return {
+			tail: ', oracle-assisted skipped (the oracle\'s compiled set is unknown: $stop)',
+			appliedCount: 0,
+			excluded: excluded
+		};
+		final display: Null<CompilerDisplayOracle> = startDisplay(current.configs);
+		if (display == null) return { tail: ', oracle-assisted skipped (display server unavailable)', appliedCount: 0, excluded: excluded };
 		for (entry in files) {
 			final allEdits: Array<{ span: Span, text: String }> = assistedEdits(entry, findingsByCheck, plugin, display);
 			if (allEdits.length == 0) continue;
-			final compiled: OracleCoverage = compiledSet();
-			if (!compiled.known) {
-				unknownCoverage = compiled.reason;
-				break;
-			}
-			final gap: Null<String> = assistedEditsAreVerifiable(compiled, entry, allEdits, plugin);
+			final gap: Null<String> = assistedEditsAreVerifiable(current.coverages, excluded, entry, allEdits, plugin);
 			if (gap != null) {
 				declines.push({
 					file: entry.file,
@@ -490,11 +535,6 @@ final class LintFixVerify {
 			}
 		}
 		display.stop();
-		final unknown: Null<String> = unknownCoverage;
-		if (unknown != null) return {
-			tail: ', oracle-assisted skipped (the oracle\'s compiled set is unknown: $unknown)',
-			appliedCount: 0
-		};
 		// WHICH files, not just how many — the same reason the risky phase prints a line per
 		// decline: a count leaves the reader to guess which of hundreds of files this hxml never
 		// typechecks, which is the search those lines exist to remove. Capped for the same reason
@@ -515,13 +555,33 @@ final class LintFixVerify {
 		final declinedTail: String = declines.length == 0
 			? ''
 			: ', ${declines.length} file(s) DECLINED unverifiable ($declinedEdits edit(s) the oracle does not typecheck)';
+		// Verified over EVERY judging configuration, the unknown-coverage ones included: coverage
+		// decided which candidates may be judged, and a green build that may compile an annotation
+		// keeps its veto whether or not it could say so.
 		final applied: { tail: String, appliedCount: Int } = candidates.length == 0
 			? { tail: ', oracle-assisted: 0 applied', appliedCount: 0 }
-			: commitAssisted(candidates, oracleHxml, oracleDir, files, changedFiles, editsPerFile);
+			: commitAssisted(candidates, measured.judging, files, changedFiles, editsPerFile);
 		return {
-			tail: applied.tail + declinedTail,
-			appliedCount: applied.appliedCount
+			tail: applied.tail + declinedTail + excludedTail(excluded),
+			appliedCount: applied.appliedCount,
+			excluded: excluded
 		};
+	}
+
+	/**
+	 * A display server for the first of `configs` that will start, or null when none will.
+	 *
+	 * `configs` are the judging configurations whose compiled set is KNOWN, in declared order — the
+	 * ones the phase can show an annotation verifiable under. ONE of them, deliberately (see
+	 * `CompilerDisplayOracle`), but not blindly the first: a server that will not come up for one
+	 * build is no reason to skip the phase while its sibling's would.
+	 */
+	private static function startDisplay(configs: Array<OracleConfig>): Null<CompilerDisplayOracle> {
+		for (config in configs) {
+			final display: Null<CompilerDisplayOracle> = CompilerDisplayOracle.start(config.hxml, config.dir, config.defines);
+			if (display != null) return display;
+		}
+		return null;
 	}
 
 	/**
@@ -532,10 +592,10 @@ final class LintFixVerify {
 	 * non-convergent batch are three different things to act on, and used to print identically.
 	 */
 	private static function commitAssisted(
-		candidates: Array<{ file: String, before: String, after: String }>, oracleHxml: String, oracleDir: Null<String>,
+		candidates: Array<{ file: String, before: String, after: String }>, oracles: Array<OracleConfig>,
 		files: Array<{ file: String, source: String }>, changedFiles: Array<String>, editsPerFile: Map<String, Int>
 	): { tail: String, appliedCount: Int } {
-		final result: OracleBatchResult = verifyOracleBatch(candidates, oracleHxml, oracleDir);
+		final result: OracleBatchResult = verifyOracleBatch(candidates, oracles);
 		syncAppliedSources(files, candidates, result.applied);
 		var edits: Int = 0;
 		for (f in result.applied) {
@@ -558,11 +618,11 @@ final class LintFixVerify {
 	 * safe writes, so "baseline" would name the wrong thing. `reconcileSafePass` has already
 	 * reverted a tree the safe pass broke, so a rejection here is a pre-existing one.
 	 */
-	private static function assistedSkipTail(oracleHxml: String, oracleDir: Null<String>): Null<String> {
-		return switch CompilerOracle.typecheck(oracleHxml, oracleDir) {
-			case Confirmed: null;
+	private static function assistedSkipTail(worst: OracleOutcome): String {
+		return switch worst {
+			case Confirmed: ', oracle-assisted skipped (no configuration to ask)';
 			case Unavailable(reason): ', oracle-assisted skipped (oracle unavailable: $reason)';
-			case Rejected(_): ', oracle-assisted skipped (the tree does not typecheck — see the note above)';
+			case Rejected(_): ', oracle-assisted skipped (no configured oracle typechecks the tree — see the note above)';
 		};
 	}
 
@@ -593,12 +653,24 @@ final class LintFixVerify {
 	 * code.
 	 */
 	private static function assistedEditsAreVerifiable(
-		compiled: OracleCoverage, entry: { file: String, source: String }, edits: Array<{ span: Span, text: String }>,
-		plugin: GrammarPlugin
+		compiled: Array<OracleCoverage>, excluded: Array<OracleExclusion>, entry: { file: String, source: String },
+		edits: Array<{ span: Span, text: String }>, plugin: GrammarPlugin
 	): Null<String> {
-		return compiled.uncovered(
-			entry.file, entry.source, [for (edit in edits) edit.span], plugin.refShape(), plugin.lexicalRegions(entry.source)
-		);
+		final spans: Array<Span> = [for (edit in edits) edit.span];
+		final regions: Array<LexRegion> = plugin.lexicalRegions(entry.source);
+		final gaps: Array<String> = [];
+		for (coverage in compiled) {
+			final gap: Null<String> = coverage.uncovered(entry.file, entry.source, spans, plugin.refShape(), regions);
+			// ONE configuration that typechecks the whole edit set is enough to make it verifiable:
+			// the batch below is judged by every configuration, so a candidate this one reads has a
+			// compile that could refuse it.
+			if (gap == null) return null;
+			gaps.push(gap);
+		}
+		// The EXCLUDED configurations join the gap list for the same reason they do in
+		// `FixVerifier`: one of them may be the very build that would have typechecked this
+		// annotation, and a decline naming only the judging configurations hides that.
+		return OracleCoverage.gapSentence(gaps.concat(CompilerOracle.sentencesOf(excluded)));
 	}
 
 	/**
@@ -612,14 +684,14 @@ final class LintFixVerify {
 	 * remaining, never keeping an unverified edit.
 	 */
 	public static function verifyOracleBatch(
-		candidates: Array<{ file: String, before: String, after: String }>, oracleHxml: String, oracleDir: Null<String>,
-		?typecheck: (String, Null<String>) -> OracleOutcome
+		candidates: Array<{ file: String, before: String, after: String }>, oracles: Array<OracleConfig>,
+		?typecheck: (Array<OracleConfig>) -> OracleOutcome
 	): OracleBatchResult {
 		// The oracle arrives as a parameter for the same reason `TypeOracle` is an interface: the
 		// three rollback CAUSES below are environment-shaped (a compiler that will not launch, an
 		// error text naming no candidate, a batch that never settles) and a fixture cannot stage
 		// them against a real haxe. A test supplies canned verdicts; production passes nothing.
-		final verdict: (String, Null<String>) -> OracleOutcome = typecheck ?? (h, d) -> CompilerOracle.typecheck(h, d);
+		final verdict: (Array<OracleConfig>) -> OracleOutcome = typecheck ?? CompilerOracle.typecheckAll;
 		CliIo.writeFiles([for (c in candidates) { path: c.file, content: c.after }]);
 		final reverted: Array<String> = [];
 		var confirmed: Bool = false;
@@ -628,7 +700,7 @@ final class LintFixVerify {
 		final maxPasses: Int = 6;
 		while (pass < maxPasses && !confirmed) {
 			pass++;
-			switch verdict(oracleHxml, oracleDir) {
+			switch verdict(oracles) {
 				case Confirmed:
 					confirmed = true;
 				case Unavailable(_):

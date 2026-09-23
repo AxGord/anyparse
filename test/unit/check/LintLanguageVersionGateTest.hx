@@ -52,18 +52,18 @@ class LintLanguageVersionGateTest extends Test {
 
 	public function testATwoComponentVersionComparesNumericallyNotLexically(): Void {
 		// `4.10` is newer than `4.9`, which a string comparison gets backwards.
-		Assert.isTrue(new LintConfig([], null, null, null, null, null, null, '4.10').allowsLanguageVersion('4.9'));
-		Assert.isFalse(new LintConfig([], null, null, null, null, null, null, '4.9').allowsLanguageVersion('4.10'));
+		Assert.isTrue(new LintConfig([], null, null, null, null, null, '4.10').allowsLanguageVersion('4.9'));
+		Assert.isFalse(new LintConfig([], null, null, null, null, null, '4.9').allowsLanguageVersion('4.10'));
 	}
 
 	public function testAnUnreadableVersionConstrainsNothing(): Void {
 		// A typo must not silently switch rules off — the failure mode this gate is meant to prevent.
-		Assert.isTrue(new LintConfig([], null, null, null, null, null, null, 'nightly').allowsLanguageVersion('4.3'));
+		Assert.isTrue(new LintConfig([], null, null, null, null, null, 'nightly').allowsLanguageVersion('4.3'));
 	}
 
 	/** The rule ids reported for `SOURCE` under a config declaring `version` (null = none declared). */
 	private function rulesFor(version: Null<String>): Array<String> {
-		final config: LintConfig = new LintConfig([], null, null, null, null, null, null, version);
+		final config: LintConfig = new LintConfig([], null, null, null, null, null, version);
 		final found: Array<Violation> = Linter.run([{ file: 'V.hx', source: SOURCE }], new HaxeQueryPlugin(), null, _ -> config, true);
 		return [for (v in found) v.rule];
 	}

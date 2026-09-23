@@ -3238,6 +3238,70 @@
 			"method": "namesBoundBy",
 			"force": "[SourceText.lastSegment(imp.raw)]",
 			"note": "an import statement is read as binding its LEAF name alone, so a statement naming a module stops carrying the siblings that module declares and both import rules decide a name they never look at"
+		},
+		{
+			"name": "M-ORACLE-FIRST-CONFIGURATION-IS-ENOUGH",
+			"type": "anyparse.check.CompilerOracle",
+			"method": "typecheckAll",
+			"find": "\t\tfor (oracle in oracles) {\n\t\t\tfinal outcome: OracleOutcome = typecheck(oracle.hxml, oracle.dir, oracle.defines);\n\t\t\tif (!outcome.match(Confirmed)) return outcome;\n\t\t}\n\t\treturn Confirmed;",
+			"replace": "\t\treturn typecheck(oracles[0].hxml, oracles[0].dir, oracles[0].defines);",
+			"note": "only the FIRST configuration is ever asked, so an edit that compiles under one set of defines and breaks another is applied - the cross-configuration hole the list exists to close"
+		},
+		{
+			"name": "M-ORACLE-RED-BASELINE-STOPS-THE-PHASE",
+			"type": "anyparse.check.CompilerOracle",
+			"method": "judging",
+			"find": "verdict: green.length == 0 ? failing : Confirmed",
+			"replace": "verdict: excluded.length == 0 ? Confirmed : failing",
+			"note": "any configuration red before the run stops the whole phase again, so one broken target leaves every risky fix report-only - including in files that target never reads and a green configuration verifies"
+		},
+		{
+			"name": "M-ORACLE-COVERAGE-PAIRED-BY-INDEX",
+			"type": "anyparse.check.OracleCoverage",
+			"method": "probedOnce",
+			"find": "return [for (oracle in oracles) probedFor(memo, oracle)];",
+			"replace": "return [for (i in 0...oracles.length) i < memo.probes.length ? memo.probes[i].coverage : probedFor(memo, oracles[i])];",
+			"note": "a seeded probe is handed to whichever configuration sits at its position, so a phase judging a different subset reads another build's compiled set and verifies an edit the judging build never compiles"
+		},
+		{
+			"name": "M-ORACLE-UNKNOWN-COVERAGE-STOPS-THE-PHASE",
+			"type": "anyparse.check.OracleCoverage",
+			"method": "usable",
+			"find": "stop: configs.length == 0 ? first : null",
+			"replace": "stop: first",
+			"note": "one configuration whose compiled set is unknown stops the whole phase again, so its known siblings judge nothing - the policy a red baseline no longer follows"
+		},
+		{
+			"name": "M-ORACLE-EXCLUSIONS-UNNAMED",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "nameExclusions",
+			"find": "CliIo.stderr('apq lint --fix: compiler oracle ${exclusion.sentence}\\n');",
+			"replace": "continue;",
+			"note": "the driver stops naming excluded configurations, so a net or phase shrunk to the green subset reads as covering every build"
+		},
+		{
+			"name": "M-DISPLAY-ORACLE-DROPS-DEFINES",
+			"type": "anyparse.query.cli.command.LintFixVerify",
+			"method": "startDisplay",
+			"find": "CompilerDisplayOracle.start(config.hxml, config.dir, config.defines)",
+			"replace": "CompilerDisplayOracle.start(config.hxml, config.dir)",
+			"note": "the display server is warmed and queried without its configuration's defines, so it names types for a build nobody judges"
+		},
+		{
+			"name": "M-ORACLE-UNKNOWN-COVERAGE-NO-VETO",
+			"type": "anyparse.check.FixVerifier",
+			"method": "verifyEntry",
+			"find": "final verifying: Array<OracleConfig> = covering.concat(usable.unknown);",
+			"replace": "final verifying: Array<OracleConfig> = covering;",
+			"note": "a configuration whose compiled set is unknown is dropped from the post-edit typecheck, so an edit that compiles on the covering build and breaks the unknown one is applied although its green baseline makes the rejection attributable"
+		},
+		{
+			"name": "M-ORACLE-EXCLUSIONS-KEYED-BY-SENTENCE",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "nameExclusions",
+			"find": "final key: String = CompilerOracle.exclusionKey(exclusion);",
+			"replace": "final key: String = exclusion.sentence;",
+			"note": "exclusions are deduped by sentence, so a red build whose error line moved after a safe fix is named twice with two reasons"
 		}
 	]
 }

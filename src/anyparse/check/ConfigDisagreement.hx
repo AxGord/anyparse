@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.LintConfig.OracleConfig;
 import anyparse.query.NamingPolicy.FrameworkContract;
 
 /**
@@ -108,14 +109,26 @@ final class ConfigDisagreement {
 	/**
 	 * The oracle sentence for `paths`, or null when their roots agree.
 	 *
-	 * `?? ''` because an OMITTED optional constructor argument is `undefined` on js, not null: a
-	 * directory with no config at all yields `LintConfig([])`, whose accessors then render as
-	 * `undefined` where a parsed document with the key absent renders as `null`. Every consumer asks
-	 * `!= null`, which is loose and cannot tell them apart — a raw interpolation can, and the first
-	 * mixed scope this ran over was reported as a disagreement about nothing.
+	 * The signature is built from a LIST, so an absent key and a declared-nothing key are the same empty string: the constructor defaults
+	 * the array, and a directory with no config at all no longer renders as `undefined` where a parsed document with the key absent
+	 * renders as `null`. That difference is what once reported the first mixed scope this ran over as a disagreement about nothing.
 	 */
 	private static function oracleMessage(resolve: Null<(String) -> LintConfig>, paths: Array<String>): Null<String> {
-		return message(resolve, paths, 'the compiler oracle', c -> (c.compilerOracle() ?? '') + '|' + (c.compilerOracleDir() ?? ''));
+		return message(resolve, paths, 'the compiler oracle', c -> oracleSignature(c.compilerOracles()));
+	}
+
+	/**
+	 * Every configuration of one config folded into ONE comparable string — hxml, compile dir and
+	 * defines per element, in declared order.
+	 *
+	 * Order counts as part of the signature: it is the order the verdicts are asked in, so two
+	 * roots listing the same builds the other way round genuinely disagree about which compile
+	 * answers first.
+	 */
+	private static function oracleSignature(oracles: Array<OracleConfig>): String {
+		return [
+			for (oracle in oracles) '${oracle.hxml}|${oracle.dir ?? ''}|${oracle.defines.join(' ')}'
+		].join('\n');
 	}
 
 	/**

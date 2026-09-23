@@ -247,6 +247,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.OptionalParamShorthandCheckTest',
 		'unit.check.OracleBatchRevertReasonTest',
 		'unit.check.OracleCacheTest',
+		'unit.check.OracleConfigListE2ETest',
 		'unit.check.OracleCoverageTest',
 		'unit.check.OracleFixImportLeakTest',
 		'unit.check.OrphanAccessorCheckTest',
@@ -1179,6 +1180,22 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryReturnBindingSeeded :: control :: M-NULLABLE-FLOW-REPORT-INDEX',
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryReturnDerefFlagged :: control :: M-NULLABLE-REPORT-INDEX',
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryStaticReturnDerefFlagged :: control :: M-NULLABLE-REPORT-INDEX',
+			'unit.check.OracleConfigListE2ETest#testAConfigurationWithAnUnknownCompiledSetStillVetoesAnEdit :: control :: '
+				+ 'M-ORACLE-UNKNOWN-COVERAGE-NO-VETO',
+			'unit.check.OracleConfigListE2ETest#testARedBaselineExcludesItsConfigurationRatherThanThePhase :: control :: '
+				+ 'M-ORACLE-RED-BASELINE-STOPS-THE-PHASE',
+			'unit.check.OracleConfigListE2ETest#testARedConfigurationWhoseErrorLineMovesIsNamedOnce :: control :: '
+				+ 'M-ORACLE-EXCLUSIONS-KEYED-BY-SENTENCE',
+			'unit.check.OracleConfigListE2ETest#testASafeOnlyRunNamesTheConfigurationItsNetRanWithout :: control :: '
+				+ 'M-ORACLE-EXCLUSIONS-UNNAMED',
+			'unit.check.OracleConfigListE2ETest#testASeededProbeAnswersOnlyForItsOwnConfiguration :: control :: '
+				+ 'M-ORACLE-COVERAGE-PAIRED-BY-INDEX',
+			'unit.check.OracleConfigListE2ETest#testAnEditTheSecondConfigurationRejectsIsReverted :: control :: '
+				+ 'M-ORACLE-FIRST-CONFIGURATION-IS-ENOUGH',
+			'unit.check.OracleConfigListE2ETest#testAnUnknownCompiledSetExcludesItsConfigurationRatherThanThePhase :: control :: '
+				+ 'M-ORACLE-UNKNOWN-COVERAGE-STOPS-THE-PHASE',
+			'unit.check.OracleConfigListE2ETest#testTheDisplayServerAnswersForTheConfigurationItServes :: control :: '
+				+ 'M-DISPLAY-ORACLE-DROPS-DEFINES',
 			'unit.check.OrphanAccessorCheckTest#testAnUnreadableCallerOutsideTheReportScopeStillDeclinesTheDeletion :: control :: '
 				+ 'M-ORPHAN-UNREADABLE-REPORT-SCOPE,M-ORPHAN-FIX-UNREADABLE-BLIND',
 			'unit.check.OrphanAccessorCheckTest#testAnUnreadableProjectFileSpellingNothingLeavesTheDeletionAvailable :: control :: '
@@ -2265,7 +2282,15 @@ class TestDiscoveryParityTest extends Test {
 			'M-HOIST-MIN-MODULES',
 			'M-HOIST-SITE-ORDER',
 			'M-AMBIENT-CHAIN-STALE',
-			'M-IMPORT-LEAF-ONLY-NAMES'
+			'M-IMPORT-LEAF-ONLY-NAMES',
+			'M-ORACLE-FIRST-CONFIGURATION-IS-ENOUGH',
+			'M-ORACLE-RED-BASELINE-STOPS-THE-PHASE',
+			'M-ORACLE-COVERAGE-PAIRED-BY-INDEX',
+			'M-ORACLE-UNKNOWN-COVERAGE-STOPS-THE-PHASE',
+			'M-ORACLE-EXCLUSIONS-UNNAMED',
+			'M-DISPLAY-ORACLE-DROPS-DEFINES',
+			'M-ORACLE-UNKNOWN-COVERAGE-NO-VETO',
+			'M-ORACLE-EXCLUSIONS-KEYED-BY-SENTENCE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
