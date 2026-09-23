@@ -2820,6 +2820,25 @@ typedef RefShape = {
 	@:optional var iterationElementTypeParams: Map<String, Int>;
 
 	/**
+	 * The containers whose single-binder iteration yields EXACTLY the values its key-value
+	 * iteration does — in order, and under mutation of the container — keyed by SIMPLE name, each
+	 * mapped to the fully-qualified path an `import` of the standard type would spell. A key-value
+	 * loop over one of them may drop its unread key (`unused-loop-binder`, `redundant-map-iter-key`,
+	 * through `NominalTypes.valueIterationProvable`); the path is how an import rebinding the name
+	 * to another type is told apart from one naming the standard type. A container whose
+	 * key-value iterator re-reads by key (a map) does not belong here. Optional; unset admits none.
+	 */
+	@:optional var valueIterationTypes: Map<String, String>;
+
+	/**
+	 * Module-level declarations that bind an imported type under a LOCAL name — Haxe's
+	 * `import a.B as C;` and `import a.B in C;` — whose node `name` is that local name. A question
+	 * about which type a SIMPLE name denotes in a file must consult them: the alias hides any
+	 * standard type of the same name. Optional; unset means the grammar has no import alias.
+	 */
+	@:optional var importAliasKinds: Array<String>;
+
+	/**
 	 * Expression kinds whose SUBTREE escapes the type system (Haxe `untyped` —
 	 * `UntypedExpr`). A write inside one has neither a trustworthy receiver type
 	 * nor a trustworthy RHS type, so `FieldWriteIndex` treats the subtree like an

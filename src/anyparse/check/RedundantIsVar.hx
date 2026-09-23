@@ -77,24 +77,6 @@ final class RedundantIsVar implements Check implements DefaultOff implements Ris
 	private static inline final MACRO_DECLINE: String =
 		'a build macro reaches the owner and may generate an access to the field, which only a compiler oracle can rule out';
 
-	/** The receiver the `NATIVE_SYNTAX_MEMBERS` hang off (`js.Syntax`, `python.Syntax`, `php.Syntax`, …). */
-	private static inline final SYNTAX_RECEIVER: String = 'Syntax';
-
-	/**
-	 * The metadata whose argument is TARGET code pasted into the generated output — text the Haxe
-	 * typer never reads, so a field it names is invisible to a `--no-output` oracle.
-	 */
-	private static final NATIVE_CODE_METAS: Array<String> = [
-		'@:functionCode',
-		'@:functionTailCode',
-		'@:cppFileCode',
-		'@:headerClassCode',
-		'@:headerCode',
-		'@:cppNamespaceCode'
-	];
-
-	/** The `Syntax` members that paste their string argument into the generated output as target code. */
-	private static final NATIVE_SYNTAX_MEMBERS: Array<String> = ['code', 'plainCode'];
 
 	/** The accessor slots that leave a property without storage of its own unless `@:isVar` grants it. */
 	private static final STORAGELESS_SLOTS: Array<String> = ['get', 'set', 'never'];
@@ -229,7 +211,7 @@ final class RedundantIsVar implements Check implements DefaultOff implements Ris
 
 	/**
 	 * Whether the subtree under `node` holds a method named one of `accessors`, a construct carrying
-	 * `@:bypassAccessor`, or a native-code carrier (`nativeCodeCarrier`), whose text mentions `name` as a
+	 * `@:bypassAccessor`, or a native-code carrier (`NativeCodeScan.isCarrier`), whose text mentions `name` as a
 	 * standalone identifier. Text rather than resolution: inside an accessor body a mention may reach the
 	 * field in any spelling — bare, `this.`-qualified, interpolated — and inside target code it is not
 	 * Haxe at all; a mention that reaches nothing only costs a finding.
@@ -239,27 +221,12 @@ final class RedundantIsVar implements Check implements DefaultOff implements Ris
 		final nodeName: Null<String> = node.name;
 		final accessor: Bool = nodeName != null && CheckScan.METHOD_KINDS.contains(node.kind) && accessors.contains(nodeName);
 		final bypass: Bool = node.children.exists(c -> MemberKinds.META_KINDS.contains(c.kind) && c.name == BYPASS_META);
-		if (span != null && (accessor || bypass || nativeCodeCarrier(node, ctx)) && SourceText.mentionsIdent(source, span, name))
+		if (
+			span != null && (accessor || bypass || NativeCodeScan.isCarrier(node, ctx.shape, ctx.fold))
+			&& SourceText.mentionsIdent(source, span, name)
+		)
 			return true;
 		return node.children.exists(c -> touchesStorage(c, source, name, accessors, ctx));
-	}
-
-	/**
-	 * Whether `node` hands its text to the TARGET rather than to the Haxe typer: a call to a target
-	 * intrinsic (`__cpp__`, `__js__`, … — `StringFoldSupport.readsArgumentsAsSyntax`), a
-	 * `Syntax.code` / `Syntax.plainCode` call, or one of the `NATIVE_CODE_METAS`. Such text can name
-	 * the field directly (`this->count`), and the C++ or JS build is the first thing to see it fail.
-	 */
-	private static function nativeCodeCarrier(node: QueryNode, ctx: Ctx): Bool {
-		final name: Null<String> = node.name;
-		if (MemberKinds.META_KINDS.contains(node.kind)) return name != null && NATIVE_CODE_METAS.contains(name);
-		if (node.kind != ctx.shape.callKind || node.children.length == 0) return false;
-		final callee: QueryNode = node.children[0];
-		final calleeName: Null<String> = callee.name;
-		if (calleeName == null) return false;
-		if (callee.kind == ctx.shape.identKind) return ctx.fold?.readsArgumentsAsSyntax(calleeName) == true;
-		final receiver: Null<QueryNode> = callee.children.length > 0 ? callee.children[0] : null;
-		return callee.kind == ctx.shape.fieldAccessKind && NATIVE_SYNTAX_MEMBERS.contains(calleeName) && receiver?.name == SYNTAX_RECEIVER;
 	}
 
 	/** Whether `text` is the whole `@:isVar` metadata as `fix` may delete it — bare, or with an empty argument list. */

@@ -137,6 +137,9 @@
 		"try-catch-null-guard": {
 			"enabled": true
 		},
+		"unused-loop-binder": {
+			"enabled": true
+		},
 		"unused-public-member": {
 			"enabled": true
 		},

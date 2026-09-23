@@ -3593,16 +3593,16 @@
 			"name": "M-ISVAR-ACCESSOR-BODY-BLIND",
 			"type": "anyparse.check.RedundantIsVar",
 			"method": "touchesStorage",
-			"find": "(accessor || bypass || nativeCodeCarrier(node, ctx))",
-			"replace": "(bypass || nativeCodeCarrier(node, ctx))",
+			"find": "(accessor || bypass || NativeCodeScan.isCarrier(node, ctx.shape, ctx.fold))",
+			"replace": "(bypass || NativeCodeScan.isCarrier(node, ctx.shape, ctx.fold))",
 			"note": "accessor bodies are never read, so the fix strips the metadata from a property whose get_x / set_x, or a subclass override of one, reads or writes the field"
 		},
 		{
 			"name": "M-ISVAR-BYPASS-BLIND",
 			"type": "anyparse.check.RedundantIsVar",
 			"method": "touchesStorage",
-			"find": "(accessor || bypass || nativeCodeCarrier(node, ctx))",
-			"replace": "(accessor || nativeCodeCarrier(node, ctx))",
+			"find": "(accessor || bypass || NativeCodeScan.isCarrier(node, ctx.shape, ctx.fold))",
+			"replace": "(accessor || NativeCodeScan.isCarrier(node, ctx.shape, ctx.fold))",
 			"note": "an @:bypassAccessor construct is never read, so the fix strips the metadata from a field a bypass access still reaches"
 		},
 		{
@@ -3665,7 +3665,7 @@
 			"name": "M-ISVAR-NATIVE-BLIND",
 			"type": "anyparse.check.RedundantIsVar",
 			"method": "touchesStorage",
-			"find": "(accessor || bypass || nativeCodeCarrier(node, ctx))",
+			"find": "(accessor || bypass || NativeCodeScan.isCarrier(node, ctx.shape, ctx.fold))",
 			"replace": "(accessor || bypass)",
 			"note": "target code pasted as a string is not read, so the fix strips the metadata a `__cpp__` / `Syntax.code` / `@:functionCode` access needs, and only the native build fails"
 		},
@@ -3684,6 +3684,199 @@
 			"find": "text == IS_VAR_META || text.replace(' ', '').replace('\\t', '') == '$IS_VAR_META()'",
 			"replace": "text == IS_VAR_META",
 			"note": "an argument-less `@:isVar()` is reported but `fix` answers no edit and no reason for it"
+		},
+		{
+			"name": "M-ULB-VALUE-ITERATION-NEVER",
+			"type": "anyparse.query.NominalTypes",
+			"method": "valueIterationProvable",
+			"force": "false",
+			"note": "no iterable is proved to iterate the same values, so an unread key over an Array or List is spelled `_` instead of dropped"
+		},
+		{
+			"name": "M-ULB-VALUE-ITERATION-ALWAYS",
+			"type": "anyparse.query.NominalTypes",
+			"method": "valueIterationProvable",
+			"force": "true",
+			"note": "every iterable counts as proved, so an unread key over a Map is dropped although its keyValueIterator reads a removed entry back as null"
+		},
+		{
+			"name": "M-ULB-VALUE-ITERATION-SHADOW-BLIND",
+			"type": "anyparse.query.NominalTypes",
+			"method": "valueIterationProvable",
+			"find": "if (stdPath == null || shadowedByNonStdType(index, nominal)) return false;",
+			"replace": "if (stdPath == null) return false;",
+			"note": "a project type named List is taken for the std one, so its key is dropped against an iterator() it may not have"
+		},
+		{
+			"name": "M-ULB-WILDCARD-KEY-ADMITTED",
+			"type": "anyparse.check.UnusedLoopBinder",
+			"method": "loopCandidates",
+			"find": "if (keyName == WILDCARD) {",
+			"replace": "if (false) {",
+			"note": "a key already spelled `_` is judged like any other, so `for (_ in xs)` is reported as unread and a discarded key is taken from redundant-map-iter-key"
+		},
+		{
+			"name": "M-ULB-OUTER-WILDCARD-BLIND",
+			"type": "anyparse.check.UnusedLoopBinder",
+			"method": "wildcardBoundOutside",
+			"force": "false",
+			"note": "a body read of an outer `_` is ignored, so the renamed binder captures it"
+		},
+		{
+			"name": "M-ULB-SHADOW-COUNTED-AS-READ",
+			"type": "anyparse.check.UnusedLoopBinder",
+			"method": "unread",
+			"find": "\t\t\tcovered.push(hit.span.from);\n",
+			"replace": "",
+			"note": "a read of an inner shadow is left unaccounted, so a binder the body only shadows is kept as though read"
+		},
+		{
+			"name": "M-ULB-OUTER-BINDING-AS-SHADOW",
+			"type": "anyparse.check.UnusedLoopBinder",
+			"method": "boundOutside",
+			"find": ": !within(bound, bodySpan);",
+			"replace": ": false;",
+			"note": "a read resolving to the loop binder itself counts as a shadow, so a binder read before its re-declaration is renamed"
+		},
+		{
+			"name": "M-ULB-INTERP-BLIND",
+			"type": "anyparse.check.UnusedLoopBinder",
+			"method": "unread",
+			"find": "return occurrences.foreach(at -> covered.contains(at) && !OccurrenceScan.offsetWithinAny(at, ctx.strings));",
+			"replace": "return true;",
+			"note": "occurrences are never accounted for, so a `$i` interpolation read and anything else the tree hides is renamed away"
+		},
+		{
+			"name": "M-ULB-INTERP-LITERAL-BLIND",
+			"type": "anyparse.check.UnusedLoopBinder",
+			"method": "unread",
+			"find": "return occurrences.foreach(at -> covered.contains(at) && !OccurrenceScan.offsetWithinAny(at, ctx.strings));",
+			"replace": "return occurrences.foreach(at -> covered.contains(at));",
+			"note": "an occurrence inside an interpolating literal is trusted once resolved, so a `${i}` read of a shadow no longer refuses"
+		},
+		{
+			"name": "M-ULB-COVERAGE-BLIND",
+			"type": "anyparse.check.UnusedLoopBinder",
+			"method": "unread",
+			"find": "return occurrences.foreach(at -> covered.contains(at) && !OccurrenceScan.offsetWithinAny(at, ctx.strings));",
+			"replace": "return occurrences.foreach(at -> !OccurrenceScan.offsetWithinAny(at, ctx.strings));",
+			"note": "an occurrence no hit accounts for is trusted, so a read inside a macro reification is renamed away"
+		},
+		{
+			"name": "M-ULB-OPAQUE-COND-BLIND",
+			"type": "anyparse.check.UnusedLoopBinder",
+			"method": "unread",
+			"find": [
+				"if (CondRegionScan.opaqueCondRegionMentioning(body, ctx.source, name, ctx.s.shape) != null) return false;",
+				"return occurrences.foreach(at -> covered.contains(at) && !OccurrenceScan.offsetWithinAny(at, ctx.strings));"
+			],
+			"replace": [
+				"",
+				"return true;"
+			],
+			"note": "an unparsed `#if` region spelling the name is trusted as empty, although nothing inside it projects for the scan to see"
+		},
+		{
+			"name": "M-ULB-NATIVE-BLIND",
+			"type": "anyparse.check.UnusedLoopBinder",
+			"method": "hazardMentions",
+			"find": " || NativeCodeScan.isCarrier(node, ctx.s.shape, ctx.fold)",
+			"replace": "",
+			"note": "target code pasted as a string is not read, so a binder a `Syntax.code` body names is renamed and only the target build fails"
+		},
+		{
+			"name": "M-ULB-UNTYPED-BLIND",
+			"type": "anyparse.check.UnusedLoopBinder",
+			"method": "seamsOf",
+			"find": "shape.untypedKinds, ",
+			"replace": "",
+			"note": "an untyped subtree is trusted to resolve like typed code, so a binder it mentions is judged by the resolver alone"
+		},
+		{
+			"name": "M-ULB-CLOSURE-BLIND",
+			"type": "anyparse.check.UnusedLoopBinder",
+			"method": "seamsOf",
+			"find": "shape.lambdaKinds, ",
+			"replace": "",
+			"note": "a closure mentioning the name is judged by the resolver alone, so a lambda whose own parameter shadows the binder lets the rename through"
+		},
+		{
+			"name": "M-ULB-COUNTER-CLAIM-BLIND",
+			"type": "anyparse.check.UnusedLoopBinder",
+			"method": "counterClaimed",
+			"force": "false",
+			"note": "a loop dead-binder-counter-loop claims is reported too, so one loop has two owners"
+		},
+		{
+			"name": "M-MAPITERKEY-UNPROVEN-DROPPED",
+			"type": "anyparse.check.RedundantMapIterKey",
+			"method": "fix",
+			"find": "if (v.message != PROVEN_MESSAGE || !provable(node, s.valueBinderKinds)) {",
+			"replace": "if (false) {",
+			"note": "the key prefix is dropped over any iterable, so a Map loop whose body removes an entry switches to the iterator that yields its stale value"
+		},
+		{
+			"name": "M-ULB-REASSIGNED-LOCAL-BLIND",
+			"type": "anyparse.query.NominalTypes",
+			"method": "reassignedLocal",
+			"force": "false",
+			"note": "a local or parameter written in its scope is trusted, so a key is dropped over it and the value loop re-reads the reassigned local"
+		},
+		{
+			"name": "M-ULB-IMPORT-ALIAS-BLIND",
+			"type": "anyparse.query.NominalTypes",
+			"method": "valueIterationProvable",
+			"find": "!root.children.exists(c -> aliasKinds.contains(c.kind) && c.name == nominal) && ",
+			"replace": "",
+			"note": "an import alias spelling List is taken for the std List, so a key is dropped over the aliased Map"
+		},
+		{
+			"name": "M-ULB-IMPORT-REBIND-BLIND",
+			"type": "anyparse.query.NominalTypes",
+			"method": "valueIterationProvable",
+			"find": "if (imported != null && imported != stdPath) return false;",
+			"replace": "",
+			"note": "an import binding List to another module is taken for the std List"
+		},
+		{
+			"name": "M-ULB-PATTERN-WILDCARD-UNEXEMPT",
+			"type": "anyparse.check.UnusedLoopBinder",
+			"method": "boundOutside",
+			"find": "!OccurrenceScan.offsetWithinAny(hit.span.from, ctx.patterns)",
+			"replace": "true",
+			"note": "a `case _:` wildcard pattern counts as a read of an outer `_`, so every loop whose body switches is refused"
+		},
+		{
+			"name": "M-ULB-UNBOUND-WILDCARD-ADMITTED",
+			"type": "anyparse.check.UnusedLoopBinder",
+			"method": "boundOutside",
+			"find": "!OccurrenceScan.offsetWithinAny(hit.span.from, ctx.patterns)",
+			"replace": "false",
+			"note": "a `_` the resolver cannot bind (an inherited field) counts as no read, so the renamed binder captures it"
+		},
+		{
+			"name": "M-ULB-FIELD-NAME-AS-READ",
+			"type": "anyparse.check.UnusedLoopBinder",
+			"method": "occurrencesIn",
+			"find": "ctx.fieldNames",
+			"replace": "[]",
+			"note": "an object-literal field name spelling the binder counts as a read, so the binder is kept"
+		},
+		{
+			"name": "M-ULB-WILDCARD-KEY-VALUE-BLIND",
+			"type": "anyparse.check.UnusedLoopBinder",
+			"method": "loopCandidates",
+			"find": "if (valueBinder != null && valueSpan != null) valueCandidate(ctx, body, bodySpan, valueBinder.name, valueSpan, out);",
+			"replace": "",
+			"note": "a loop whose key is `_` is skipped whole, so its unread value binder is fixed by nobody"
+		},
+		{
+			"name": "M-MAPITERKEY-MESSAGE-ALWAYS-PROVEN",
+			"type": "anyparse.check.RedundantMapIterKey",
+			"method": "walk",
+			"find": "provable(node, s.valueBinderKinds) ? PROVEN_MESSAGE : UNPROVEN_MESSAGE",
+			"replace": "PROVEN_MESSAGE",
+			"note": "every finding recommends for (v in …), including over a Map where the fix declines because the drop is unsafe"
 		}
 	]
 }

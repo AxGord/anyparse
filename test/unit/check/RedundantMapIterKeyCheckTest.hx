@@ -36,7 +36,7 @@ class RedundantMapIterKeyCheckTest extends Test {
 	}
 
 	public function testFixDropsKeyPrefix(): Void {
-		final src: String = 'class C {\n\tfunction f():Void {\n\t\tfor (_ => v in m) g(v);\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f(m:Array<Int>):Void {\n\t\tfor (_ => v in m) g(v);\n\t}\n}';
 		final check: RedundantMapIterKey = new RedundantMapIterKey();
 		final edits: Array<{ span: Span, text: String }> = check.fix(
 			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
@@ -47,6 +47,49 @@ class RedundantMapIterKeyCheckTest extends Test {
 		Assert.equals('_ => ', src.substring(cut.from, cut.to));
 		final applied: String = src.substring(0, cut.from) + edits[0].text + src.substring(cut.to);
 		Assert.isTrue(applied.indexOf('for (v in m)') >= 0);
+	}
+
+	/**
+	 * A `Map`'s `keyValueIterator` re-reads each value by key, so once the body removes an entry it
+	 * reads `null` where `iterator()` still yields the stale value: the drop is not behaviour-preserving
+	 * over a map, and neither over an iterable of unknown type. The finding stays, report-only, and says why.
+	 */
+	@:pin('control') @:killer('M-MAPITERKEY-UNPROVEN-DROPPED')
+	public function testFixDeclinedOverMapAndUnknownIterable(): Void {
+		for (param in ['m:Map<String, Int>', 'm']) {
+			final src: String = 'class C {\n\tfunction f($param):Void {\n\t\tfor (_ => v in m) { m.remove("a"); g(v); }\n\t}\n}';
+			final check: RedundantMapIterKey = new RedundantMapIterKey();
+			final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+			Assert.equals(1, vs.length);
+			Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+			Assert.notNull(vs[0].declineReason);
+		}
+	}
+
+	/** The shared proof refuses a reassigned local and an aliased `List` here exactly as in `unused-loop-binder`. */
+	@:pin('control') @:killer('M-ULB-REASSIGNED-LOCAL-BLIND')
+	public function testFixDeclinedOverReassignedLocal(): Void {
+		assertDeclined('class C {\n\tfunction f(m:Array<Int>):Void {\n\t\tfor (_ => v in m) { m = [7, 8]; g(v); }\n\t}\n}');
+	}
+
+	@:pin('control') @:killer('M-ULB-IMPORT-ALIAS-BLIND')
+	public function testFixDeclinedOverAliasedList(): Void {
+		assertDeclined(
+			'import haxe.ds.StringMap as List;\n\nclass C {\n\tfunction f(m:List<Int>):Void {\n\t\tfor (_ => v in m) g(v);\n\t}\n}'
+		);
+	}
+
+	/** Only a proved drop is recommended; elsewhere the finding describes the discarded key without prescribing the unsafe form. */
+	@:pin('control') @:killer('M-MAPITERKEY-MESSAGE-ALWAYS-PROVEN')
+	public function testMessageRecommendsTheDropOnlyWhenProved(): Void {
+		final proved: Array<Violation> = violations('class C {\n\tfunction f(m:Array<Int>):Void {\n\t\tfor (_ => v in m) g(v);\n\t}\n}');
+		final unproved: Array<Violation> =
+			violations('class C {\n\tfunction f(m:Map<String, Int>):Void {\n\t\tfor (_ => v in m) g(v);\n\t}\n}');
+		Assert.equals(1, proved.length);
+		Assert.equals(1, unproved.length);
+		if (proved.length != 1 || unproved.length != 1) return;
+		Assert.isTrue(proved[0].message.indexOf('for (v in') >= 0);
+		Assert.isTrue(unproved[0].message.indexOf('for (v in') < 0);
 	}
 
 	public function testRegisteredInBuiltins(): Void {
@@ -69,6 +112,13 @@ class RedundantMapIterKeyCheckTest extends Test {
 
 	private function violations(src: String): Array<Violation> {
 		return new RedundantMapIterKey().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	private function assertDeclined(src: String): Void {
+		final check: RedundantMapIterKey = new RedundantMapIterKey();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
 	}
 
 }

@@ -1042,6 +1042,10 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				'Iterator' => 0,
 				'Map' => 1
 			],
+			// `Array` and `haxe.ds.List` walk one index / node chain in both iterators; a map's
+			// key-value iterator re-reads by key, so it diverges once the body removes an entry.
+			valueIterationTypes: ['Array' => 'Array', 'List' => 'haxe.ds.List'],
+			importAliasKinds: ['ImportAliasDecl', 'ImportAliasInDecl'],
 			untypedKinds: ['UntypedExpr'],
 			casePatternBinderKinds: ['Capture'],
 			// The Haxe extractor: `case f(_) => p:` evaluates `f` on the subject before
