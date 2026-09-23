@@ -604,3 +604,33 @@ decided the question; it may not become a record of runs.
   `import a.Mod;` retargeted a governed module's own same-package `Oth` to `a.Oth`, and deleting an
   own `import a.Mod;` identical to a farther ambient one handed `Oth` to a nearer group's `ccc.Oth`
   — both still compiled, so no oracle would have caught either — `0a2d5ebe`
+- prefer-value-loop's `bindsName` as "any node carrying the name in its `name` slot" → an `IdentExpr` carries
+  its own name, so the gate held for the very `X[i]` read it was meant to admit and the rule never fired;
+  it asks for a DECLARING slot — `d383325d`
+- prefer-value-loop deferring to prefer-keyvalue-loop whenever the body OPENS with `final v = X[i];` → the
+  sibling claims less than that opening (braced, two statements, exactly one `X[i]`), so the shape it
+  refuses was left to neither rule; the deferral reads the sibling's full claim — `d383325d`
+- an index occurrence inside a literal counted as inert by QUOTE style (single quotes stay visible) →
+  `literalInterpolates` keys on `$` / the dollar escapes, not on the quote: a `$`-free literal of either
+  quote is inert — `d383325d`
+- `for (v in X)` as equivalent to `for (i in 0...X.length)` reading `X[i]` whenever the body leaves `X`
+  alone → the Array iterator re-reads `length` each step while the range evaluates it once, a closure
+  capturing `X[i]` sees a later slot, and a callee reached through the instance, a type or a constructor can
+  grow `X`; closures refuse, such calls leave the finding report-only, and nested loops deriving one binder
+  are not both fixed — `d383325d`
+- a compiler-oracle configuration whose compiled set cannot be probed excluded "like a red one" → its
+  baseline is green, so it cannot vouch for an edit but can still refuse one; dropping it from verification
+  applied a shared-code edit that compiled on mac and broke the other build — `d383325d`
+- field-init-at-declaration: an init hoisted across `super(...)` as unobservable because an early reader
+  "can only have crashed on the null" → a null String does not fault on hxcpp (`length` 0), a fault caught
+  up the stack is working code, a lambda written inside a `try` runs there, and a shadowed `Map` / `Array`
+  runs a `@:from`; the path narrows to faulting receivers of core collections outside any lexical `try`,
+  and the catch up the stack stays a stated residual — `d383325d`
+- redundant-isvar leaving a build-macro-reached owner report-only → without `@:isVar` every direct storage
+  access, generated ones included, fails to compile, so the compiler oracle judges the removal; what it
+  cannot see is native code pasted as a string, which the rule refuses, and reflection by a computed name,
+  a stated residual — `d383325d`
+- dropping an unread key (`for (k => v in E)` → `for (v in E)`) as behaviour-preserving → the Map
+  key-value iterator re-reads each value by key (a removed entry reads null), and a value loop over a local
+  re-reads the local while the key-value iterator captured it once; the drop needs a std Array/List,
+  unaliased, not shadowed, never reassigned (redundant-map-iter-key shared the unsound drop) — `d383325d`
