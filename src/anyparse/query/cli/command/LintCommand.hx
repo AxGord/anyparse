@@ -4,6 +4,8 @@ import anyparse.check.Check;
 import anyparse.check.ConfigDisagreement;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
+import anyparse.check.OracleGeneration;
+import anyparse.check.OracleGeneration.PreparedOracles;
 import anyparse.check.ReachDefinesProbe;
 import anyparse.check.Severity;
 import anyparse.query.Address.TreeAddresser;
@@ -231,7 +233,7 @@ final class LintCommand implements CliCommand {
 		// second root never declared.
 		warnScopeNotices(activeChecks, resolveConfig, paths, o.noOracle);
 		final oracleConfig: Null<LintConfig> = paths.length > 0 ? resolveConfig(paths[0]) : null;
-		final oracles: Array<OracleConfig> = oraclesOf(oracleConfig);
+		final oracles: Array<OracleConfig> = oraclesOf(oracleConfig, o.noOracle);
 		final resolution: Null<ResolutionScope> = withReachConfigurations(
 			unconfigured, oracles, o.noOracle, reachComplete(paths, resolveConfig)
 		);
@@ -301,15 +303,18 @@ final class LintCommand implements CliCommand {
 	}
 
 	/**
-	 * Every compiler-oracle configuration `config` declares, or none when this run resolved no
-	 * config at all (an empty scope).
+	 * Every compiler-oracle configuration `config` declares, made ready to use (`OracleGeneration.prepare`:
+	 * every stale `generate` entry regenerated, a failed one marked unavailable, each command that ran
+	 * named on stderr), or none when this run resolved no config at all (an empty scope).
 	 *
-	 * Named rather than written as a `?.` chain at the one call site: `runLint` is at its
-	 * complexity budget, and a null check spent on a scope that matched no file is not what that
-	 * budget is for.
+	 * Under `--no-oracle` nothing is generated: the run compiles nothing, so it owes no hxml.
 	 */
-	private static function oraclesOf(config: Null<LintConfig>): Array<OracleConfig> {
-		return config == null ? [] : config.compilerOracles();
+	private static function oraclesOf(config: Null<LintConfig>, noOracle: Bool): Array<OracleConfig> {
+		final declared: Array<OracleConfig> = config == null ? [] : config.compilerOracles();
+		if (noOracle) return declared;
+		final prepared: PreparedOracles = OracleGeneration.prepare(declared);
+		for (note in prepared.notes) CliIo.stderr('apq lint: compilerOracle $note\n');
+		return prepared.oracles;
 	}
 
 	/**

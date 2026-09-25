@@ -3,6 +3,8 @@ package anyparse.query.cli.command;
 import anyparse.check.CompilerOracle;
 import anyparse.check.LintConfig;
 import anyparse.check.OracleCache;
+import anyparse.check.OracleGeneration;
+import anyparse.check.OracleGeneration.PreparedOracles;
 import anyparse.query.cli.CliContext;
 import anyparse.query.ExitCode.*;
 
@@ -90,28 +92,28 @@ final class OracleCommand implements CliCommand {
 	 *
 	 * All of them rather than up to the first rejection: the point of the command is to leave a
 	 * verdict for each configuration the following `lint` will ask about, and a run that stopped
-	 * early would leave the rest to recompile.
+	 * early would leave the rest to recompile. The compiles overlap (`CompilerOracle.typecheckEach`);
+	 * each fingerprint is taken BEFORE them, since it describes the input the compiler is about to
+	 * read. A configuration whose `generate` command failed is reported unavailable and records nothing.
 	 */
 	private static function recordOracleVerdicts(oracles: Array<OracleConfig>): Int {
+		final prepared: PreparedOracles = OracleGeneration.prepare(oracles);
+		for (note in prepared.notes) CliIo.stderr('apq oracle: compilerOracle $note\n');
+		final ready: Array<OracleConfig> = prepared.oracles;
+		final fingerprints: Array<Null<String>> = [
+			for (oracle in ready) oracle.unavailable == null ? OracleCache.fingerprint(oracle.hxml, oracle.dir, oracle.defines) : null
+		];
+		final outcomes: Array<Null<OracleOutcome>> = CompilerOracle.typecheckEach(ready, false);
 		var exit: Int = EXIT_OK;
-		for (oracle in oracles) if (recordOracleVerdict(oracle) != EXIT_OK) exit = EXIT_RUNTIME;
-		return exit;
-	}
-
-	/**
-	 * The compile-and-record half of `apq oracle`, for ONE configuration: the fingerprint is
-	 * taken BEFORE the compile (it describes the input the compiler is about to read), one COLD
-	 * typecheck runs — never the warm server, never the cache — and only an observed verdict is
-	 * stored. A configuration that yields no fingerprint says so, so a silently non-caching setup
-	 * is visible rather than a `lint` that mysteriously never speeds up.
-	 */
-	private static function recordOracleVerdict(oracle: OracleConfig): Int {
-		final fingerprint: Null<String> = OracleCache.fingerprint(oracle.hxml, oracle.dir, oracle.defines);
-		final outcome: OracleOutcome = CompilerOracle.typecheck(oracle.hxml, oracle.dir, oracle.defines);
-		if (fingerprint != null) OracleCache.store(oracle.hxml, oracle.dir, fingerprint, outcome, oracle.defines);
-		final exit: Int = reportOracleRun(oracle, outcome);
-		if (fingerprint == null)
-			CliIo.stderr('apq oracle: no fingerprint for ${LintConfig.describeOracle(oracle)} — the verdict was not recorded\n');
+		for (i in 0...ready.length) {
+			final oracle: OracleConfig = ready[i];
+			final outcome: OracleOutcome = outcomes[i] ?? Unavailable('the typecheck was cancelled');
+			final fingerprint: Null<String> = fingerprints[i];
+			if (fingerprint != null) OracleCache.store(oracle.hxml, oracle.dir, fingerprint, outcome, oracle.defines);
+			if (reportOracleRun(oracle, outcome) != EXIT_OK) exit = EXIT_RUNTIME;
+			if (fingerprint == null && oracle.unavailable == null)
+				CliIo.stderr('apq oracle: no fingerprint for ${LintConfig.describeOracle(oracle)} — the verdict was not recorded\n');
+		}
 		return exit;
 	}
 
@@ -143,6 +145,9 @@ final class OracleCommand implements CliCommand {
 		CliIo.sysPrint('nobody observed. The scope only locates the project apqlint.json; without a\n');
 		CliIo.sysPrint('`compilerOracle` key the command is inert. Exit 0 when the build typechecks\n');
 		CliIo.sysPrint('or the oracle could not run, 1 when it does not typecheck, 2 on usage.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('A configuration with a `generate` command has it run first when its hxml is\n');
+		CliIo.sysPrint('stale; the configurations then compile concurrently (APQ_ORACLE_PARALLEL=<n>).\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Options:\n');
 		CliIo.sysPrint('  -h, --help      Show this help\n');

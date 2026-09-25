@@ -53,29 +53,51 @@ import js.node.ChildProcess.ChildProcessSpawnSyncResult;
 @:nullSafety(Strict)
 final class HaxeSpawn {
 
+	/** The failure sentence of a job `runAll` never started because an earlier one failed under `stopAfterFailure`. */
+	public static inline final NOT_STARTED: String = 'not started — an earlier job failed';
+
 	/** Bytes a job's JSON-escaped streams may add over its own output cap in the parallel driver's reply. */
 	private static inline final OVERHEAD: Int = 1024 * 1024;
 
+	/** The most compiles `parallelism` lets run at once, whatever the machine. */
+	private static inline final MAX_PARALLEL: Int = 4;
+
 	/**
-	 * The node program `runAll` drives its jobs with: reads the jobs as JSON on stdin, keeps at most `argv[1]` compiles
-	 * running, kills one that out-writes `argv[2]` bytes, and prints every run as JSON in job order once all closed.
+	 * The memory one compile of a large project is budgeted, in bytes: a measured peak of a little over a gigabyte,
+	 * plus headroom for everything else the machine runs.
+	 */
+	private static inline final COMPILE_MEMORY: Float = 2.0 * 1024 * 1024 * 1024;
+
+	/**
+	 * The node program `runAll` drives its jobs with: reads the jobs as JSON on stdin, keeps at most `argv[1]` of them
+	 * running, kills one that out-writes `argv[2]` bytes, and prints every run as JSON in job order once all closed. A
+	 * job runs `haxe <args>`, or its `shell` command line when it names one. With `argv[3]` = `1` a job that fails
+	 * (any status but 0) kills every LATER job still running and starts none after it, so the first failure in job
+	 * order is always one that ran to its end.
 	 */
 	private static inline final PARALLEL_DRIVER: String = "const cp = require('child_process');"
 		+ "const jobs = JSON.parse(require('fs').readFileSync(0, 'utf8'));"
-		+ "const limit = parseInt(process.argv[1]); const max = parseInt(process.argv[2]);"
-		+ "const out = new Array(jobs.length); let next = 0, running = 0, done = 0;"
-		+ "function finish(i, rec) { if (out[i]) return; out[i] = rec; running--; done++;"
+		+ "const limit = parseInt(process.argv[1]); const max = parseInt(process.argv[2]); const stop = process.argv[3] === '1';"
+		+ "const out = new Array(jobs.length); const kids = new Array(jobs.length); let next = 0, running = 0, done = 0;"
+		+ "function cancelAfter(i) { for (let k = i + 1; k < jobs.length; k++) { if (out[k]) continue;"
+		+ " if (kids[k]) { kids[k].cancelled = true; kids[k].kill(); }"
+		+ " else if (k >= next) { out[k] = { status: null, out: '', err: '', failure: '" + NOT_STARTED + "', overflowed: false,"
+		+ " cancelled: true, unstarted: true }; done++; } } next = jobs.length; }"
+		+ "function finish(i, rec) { if (out[i]) return; out[i] = rec; kids[i] = null; running--; done++;"
+		+ " if (stop && rec.status !== 0 && !rec.cancelled) cancelAfter(i);"
 		+ " if (done === jobs.length) process.stdout.write(JSON.stringify(out)); else start(); }"
-		+ "function start() { while (running < limit && next < jobs.length) { const i = next++; running++;"
-		+ " const j = jobs[i]; const o = [], e = []; let size = 0, over = false;"
-		+ " const c = cp.spawn('haxe', j.args, { cwd: j.cwd == null ? undefined : j.cwd });"
-		+ " c.stdout.on('data', d => { size += d.length; if (size > max) { over = true; c.kill(); } else o.push(d); });"
+		+ "function start() { while (running < limit && next < jobs.length) { const i = next++; if (out[i]) continue; running++;"
+		+ " const j = jobs[i]; const o = [], e = []; let size = 0, over = false; const what = j.shell == null ? 'haxe' : 'the command';"
+		+ " const opts = { cwd: j.cwd == null ? undefined : j.cwd, stdio: ['ignore', 'pipe', 'pipe'] };"
+		+ " const c = j.shell == null ? cp.spawn('haxe', j.args, opts) : cp.spawn(j.shell, Object.assign({ shell: true }, opts));"
+		+ " kids[i] = c;" + " c.stdout.on('data', d => { size += d.length; if (size > max) { over = true; c.kill(); } else o.push(d); });"
 		+ " c.stderr.on('data', d => e.push(d));"
-		+ " c.on('error', err => finish(i, { status: null, out: '', err: '', failure: 'could not launch haxe (' + err.message + ')',"
+		+ " c.on('error', err => finish(i, { status: null, out: '', err: '', failure: 'could not launch ' + what + ' (' + err.message + ')',"
 		+ " overflowed: false }));"
-		+ " c.on('close', code => finish(i, { status: over ? null : code, out: Buffer.concat(o).toString('utf8'),"
-		+ " err: Buffer.concat(e).toString('utf8'), failure: over ? 'haxe out-wrote its ' + max + ' byte output buffer' : '',"
-		+ " overflowed: over })); } }" + "if (jobs.length === 0) process.stdout.write('[]'); else start();";
+		+ " c.on('close', code => finish(i, { status: over || c.cancelled ? null : code, out: Buffer.concat(o).toString('utf8'),"
+		+ " err: Buffer.concat(e).toString('utf8'), failure: c.cancelled ? 'cancelled — an earlier job failed'"
+		+ " : over ? what + ' out-wrote its ' + max + ' byte output buffer' : '', overflowed: over, cancelled: c.cancelled === true })); } }"
+		+ "if (jobs.length === 0) process.stdout.write('[]'); else start();";
 
 	/**
 	 * Whether this target's spawn honours the `cwd` argument. False on the native `sys`
@@ -164,21 +186,30 @@ final class HaxeSpawn {
 	}
 
 	/**
-	 * Run every job of `jobs` — `haxe args` in `cwd` — at most `parallel` at a time, each as its own process under the
-	 * `maxBuffer` cap of `run`, and answer their runs in `jobs` order. The compiles share nothing but the machine, so a
-	 * caller whose jobs write no common path may overlap them; one that cannot say so passes 1. On a target without an
-	 * asynchronous process API the jobs run one after another.
+	 * Run every job of `jobs` — `haxe args` in `cwd`, or the `shell` command line in `cwd` when the job names one — at
+	 * most `parallel` at a time, each as its own process under the `maxBuffer` cap of `run`, and answer their runs in
+	 * `jobs` order. The processes share nothing but the machine, so a caller whose jobs write no common path may overlap
+	 * them; one that cannot say so passes 1. On a target without an asynchronous process API the jobs run one after
+	 * another.
+	 *
+	 * With `stopAfterFailure` a job that fails (any status but 0) ends every LATER job — a running one is killed, an
+	 * unstarted one never starts — and those answer `cancelled`. Jobs start in order, so every job before a failure has
+	 * started and runs to its end: the first failure in job order is the same run a sequential loop that stopped there
+	 * would have seen, which is what lets a caller keep first-failure semantics while overlapping the compiles.
 	 */
-	public static function runAll(jobs: Array<{ args: Array<String>, cwd: Null<String> }>, maxBuffer: Int, parallel: Int): Array<HaxeRun> {
+	public static function runAll(
+		jobs: Array<{ args: Array<String>, cwd: Null<String>, ?shell: String }>, maxBuffer: Int, parallel: Int, ?stopAfterFailure: Bool
+	): Array<HaxeRun> {
+		final stop: Bool = stopAfterFailure ?? false;
 		#if nodejs
-		if (jobs.length <= 1 || parallel <= 1) return [for (j in jobs) run(j.args, j.cwd, maxBuffer)];
+		if (jobs.length <= 1 || parallel <= 1) return runInOrder(jobs, maxBuffer, stop);
 		final options: Dynamic = {
 			encoding: 'utf8',
 			input: haxe.Json.stringify(jobs),
 			maxBuffer: (maxBuffer + OVERHEAD) * jobs.length
 		};
 		final res: ChildProcessSpawnSyncResult = js.node.ChildProcess.spawnSync(
-			js.Node.process.execPath, ['-e', PARALLEL_DRIVER, '--', '$parallel', '$maxBuffer'], options
+			js.Node.process.execPath, ['-e', PARALLEL_DRIVER, '--', '$parallel', '$maxBuffer', stop ? '1' : '0'], options
 		);
 		final launchError: Null<Dynamic> = (res.error: Dynamic);
 		final status: Null<Int> = (res.status: Null<Int>);
@@ -187,7 +218,7 @@ final class HaxeSpawn {
 			: try haxe.Json.parse(streamText(res.stdout)) catch (exception: haxe.Exception) null;
 		if (answer != null && answer.length == jobs.length) return answer;
 		// the driver itself failed: every job is answered as a run that produced no verdict
-		final why: String = 'the parallel haxe driver failed (${launchError == null ? 'status $status' : Reflect.field(launchError, 'message')})';
+		final why: String = 'the parallel process driver failed (${launchError == null ? 'status $status' : Reflect.field(launchError, 'message')})';
 		return [
 			for (_ in jobs)
 				{
@@ -199,8 +230,130 @@ final class HaxeSpawn {
 				}
 		];
 		#else
-		return [for (j in jobs) run(j.args, j.cwd, maxBuffer)];
+		return runInOrder(jobs, maxBuffer, stop);
 		#end
+	}
+
+	/**
+	 * Run `command` through the platform shell in `cwd` (the process cwd when null), capturing both streams under a
+	 * `maxBuffer` byte cap. Never throws; the same three answers as `run`. The native `sys` branch has no working
+	 * directory, so a `cwd` other than the process one is refused there rather than run in the wrong place.
+	 */
+	public static function runShell(command: String, cwd: Null<String>, maxBuffer: Int): HaxeRun {
+		#if nodejs
+		final options: Dynamic = {
+			encoding: 'utf8',
+			maxBuffer: maxBuffer,
+			shell: true,
+			stdio: ['ignore', 'pipe', 'pipe']
+		};
+		if (cwd != null) Reflect.setField(options, 'cwd', cwd);
+		final res: ChildProcessSpawnSyncResult = js.node.ChildProcess.spawnSync(command, options);
+		final launchError: Null<Dynamic> = (res.error: Dynamic);
+		if (launchError == null) return {
+			status: (res.status: Null<Int>),
+			out: streamText(res.stdout),
+			err: streamText(res.stderr),
+			failure: '',
+			overflowed: false
+		};
+		final code: Null<Dynamic> = Reflect.field(launchError, 'code');
+		final overflowed: Bool = code != null && '$code' == 'ENOBUFS';
+		return {
+			status: null,
+			out: streamText(res.stdout),
+			err: streamText(res.stderr),
+			failure: overflowed
+				? 'the command out-wrote its $maxBuffer byte output buffer'
+				: 'could not launch the command (${Reflect.field(launchError, 'message')})',
+			overflowed: overflowed
+		};
+		#elseif sys
+		if (cwd != null && haxe.io.Path.normalize(cwd) != haxe.io.Path.normalize(Sys.getCwd())) return {
+			status: null,
+			out: '',
+			err: '',
+			failure: 'a command cannot run in $cwd on this target',
+			overflowed: false
+		};
+		try {
+			final process: sys.io.Process = new sys.io.Process(command);
+			final out: String = process.stdout.readAll().toString();
+			final err: String = process.stderr.readAll().toString();
+			final code: Null<Int> = process.exitCode();
+			process.close();
+			return {
+				status: code,
+				out: out,
+				err: err,
+				failure: '',
+				overflowed: false
+			};
+		} catch (exception: haxe.Exception) {
+			return {
+				status: null,
+				out: '',
+				err: '',
+				failure: 'could not launch the command (${exception.message})',
+				overflowed: false
+			};
+		}
+		#else
+		return {
+			status: null,
+			out: '',
+			err: '',
+			failure: 'a child process requires a sys or nodejs target',
+			overflowed: false
+		};
+		#end
+	}
+
+	/**
+	 * How many compiles of one project may run at once: at most `MAX_PARALLEL`, at most half the cores, and at most as
+	 * many as the machine's memory holds at `COMPILE_MEMORY` each — never fewer than one. `APQ_ORACLE_PARALLEL` (a
+	 * positive integer) replaces the computed bound, for a machine the heuristic misjudges.
+	 */
+	public static function parallelism(): Int {
+		final declared: Null<Int> = Std.parseInt(Sys.getEnv('APQ_ORACLE_PARALLEL') ?? '');
+		if (declared != null && declared > 0) return declared;
+		#if nodejs
+		final byCpu: Int = Std.int(js.node.Os.cpus().length / 2);
+		final byMemory: Int = Std.int(js.node.Os.totalmem() / COMPILE_MEMORY);
+		return Std.int(Math.max(1, Math.min(MAX_PARALLEL, Math.min(byCpu, byMemory))));
+		#else
+		return 1;
+		#end
+	}
+
+	/**
+	 * `jobs` one after another through `run` / `runShell`, and — with `stop` — every job after the first failure
+	 * answered `NOT_STARTED`: the sequential form of `runAll`.
+	 */
+	private static function runInOrder(
+		jobs: Array<{ args: Array<String>, cwd: Null<String>, ?shell: String }>, maxBuffer: Int, stop: Bool
+	): Array<HaxeRun> {
+		final runs: Array<HaxeRun> = [];
+		var failed: Bool = false;
+		for (job in jobs) {
+			if (failed) {
+				runs.push({
+					status: null,
+					out: '',
+					err: '',
+					failure: NOT_STARTED,
+					overflowed: false,
+					cancelled: true,
+					unstarted: true
+				});
+				continue;
+			}
+			final shell: Null<String> = job.shell;
+			final result: HaxeRun = shell == null ? run(job.args, job.cwd, maxBuffer) : runShell(shell, job.cwd, maxBuffer);
+			if (stop && result.status != 0) failed = true;
+			runs.push(result);
+		}
+		return runs;
 	}
 
 	#if nodejs
@@ -230,4 +383,10 @@ typedef HaxeRun = {
 	var err: String;
 	var failure: String;
 	var overflowed: Bool;
+
+	/** `runAll` under `stopAfterFailure` ended this job because an earlier one failed: no verdict, by design. */
+	var ?cancelled: Bool;
+
+	/** A cancelled job that never started — no process was spawned for it. */
+	var ?unstarted: Bool;
 }

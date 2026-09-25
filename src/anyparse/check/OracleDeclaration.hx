@@ -21,8 +21,8 @@ using StringTools;
 final class OracleDeclaration {
 
 	/**
-	 * The `compilerOracle` value → its configurations. A JSON STRING is the one-element case (no
-	 * extra defines); an ARRAY holds one `{hxml, defines?, dir?}` object per configuration.
+	 * The `compilerOracle` value → its configurations. A JSON STRING is the one-element case (no extra defines);
+	 * an ARRAY holds one `{hxml, defines?, dir?, generate?, generateInputs?}` object per configuration.
 	 *
 	 * A value that is neither is not a configuration at all, so it is dropped with a line rather
 	 * than guessed at — a project whose oracle silently went missing would read every risky fix
@@ -31,13 +31,48 @@ final class OracleDeclaration {
 	public static function read(raw: JValue, baseDir: Null<String>, drops: Array<String>): Array<OracleConfig> {
 		return switch raw {
 			case JString(hxml):
-				[at(hxml, null, [], baseDir)];
+				[
+					at(hxml, {
+						hxml: hxml,
+						dir: null,
+						defines: [],
+						generate: null,
+						generateInputs: null
+					}, baseDir, drops, 0)
+				];
 			case JArray(items):
 				readList(items, baseDir, drops);
 			case _:
 				drops.push('compilerOracle is neither an hxml path nor a list of configurations — ignored');
 				[];
 		};
+	}
+
+	/**
+	 * The directory a compile of `hxml` must run from. `haxe <path>` resolves the hxml's
+	 * relative `-cp` entries against the PROCESS cwd, and real projects write them against
+	 * two different conventions: relative to the hxml's own directory (a root-level
+	 * `build.hxml` named by a nested config as `"../build.hxml"`), or relative to the
+	 * project root the build is invoked from — the config's directory (a lime-generated
+	 * `dist/<target>/haxe/debug.hxml`, whose `-cp src` from the hxml's own dir resolves as
+	 * `dist/<target>/haxe/src` and rejects the whole build with `Type not found`). Neither
+	 * wins by fiat: the hxml's relative classpaths are PROBED under both candidates and the
+	 * one resolving strictly more of them wins; a tie — no relative entries, an unreadable
+	 * hxml, equal hit counts — keeps the hxml's own directory. `/` replaces an empty
+	 * directory for an hxml directly under the filesystem root, where an empty cwd would
+	 * fail the spawn instead of compiling at the root.
+	 */
+	public static function compileDir(hxml: String, baseDir: String): String {
+		final own: String = dirOrRoot(Path.directory(hxml));
+		final config: String = dirOrRoot(baseDir);
+		if (config == own) return own;
+		var ownHits: Int = 0;
+		var configHits: Int = 0;
+		for (rel in relativeClasspaths(hxml)) {
+			if (pathExists(Path.normalize(Path.join([own, rel])))) ownHits++;
+			if (pathExists(Path.normalize(Path.join([config, rel])))) configHits++;
+		}
+		return configHits > ownHits ? config : own;
 	}
 
 	/** `dir`, or `/` for the empty string `Path.directory` yields at the filesystem root. */
@@ -65,39 +100,51 @@ final class OracleDeclaration {
 					drops.push('compilerOracle[$i] declares no "hxml" — dropped');
 					continue;
 				}
-				out.push(at(hxml, declared.dir, declared.defines, baseDir));
+				out.push(at(hxml, declared, baseDir, drops, i));
 			case _:
 				drops.push('compilerOracle[$i] is not an object — dropped');
 		}
 		return out;
 	}
 
-	/** One array element's three keys as DECLARED, every wrong-typed or unknown one dropped with a line. */
+	/** One array element's keys as DECLARED, every wrong-typed or unknown one dropped with a line. */
 	private static function readFields(index: Int, fields: Array<JEntry>, drops: Array<String>): OracleFields {
 		var hxml: Null<String> = null;
 		var dir: Null<String> = null;
+		var generate: Null<String> = null;
+		var inputs: Null<Array<String>> = null;
 		final defines: Array<String> = [];
 		for (field in fields) switch [field.key, field.value] {
 			case ['hxml', JString(v)]:
 				hxml = v;
 			case ['dir', JString(v)]:
 				dir = v;
+			case ['generate', JString(v)]:
+				generate = v;
+			case ['generateInputs', JArray(values)]:
+				final declared: Array<String> = [];
+				LintConfig.collectStrings(values, declared);
+				final skipped: Int = values.length - declared.length;
+				if (skipped > 0) drops.push('compilerOracle[$index] "generateInputs" ignored $skipped value(s) that are not strings');
+				inputs = declared;
 			case ['defines', JArray(values)]:
 				final before: Int = defines.length;
 				LintConfig.collectStrings(values, defines);
 				final skipped: Int = values.length - (defines.length - before);
 				if (skipped > 0) drops.push('compilerOracle[$index] "defines" ignored $skipped value(s) that are not strings');
-			case ['hxml', _], ['dir', _]:
+			case ['hxml', _], ['dir', _], ['generate', _]:
 				drops.push('compilerOracle[$index] "${field.key}" is not a string — ignored');
-			case ['defines', _]:
-				drops.push('compilerOracle[$index] "defines" is not an array of strings — ignored');
+			case ['defines', _], ['generateInputs', _]:
+				drops.push('compilerOracle[$index] "${field.key}" is not an array of strings — ignored');
 			case _:
 				drops.push('compilerOracle[$index] declares unknown key "${field.key}" — ignored');
 		}
 		return {
 			hxml: hxml,
 			dir: dir,
-			defines: defines
+			defines: defines,
+			generate: generate,
+			generateInputs: inputs
 		};
 	}
 
@@ -107,47 +154,38 @@ final class OracleDeclaration {
 	 *
 	 * With neither a declared dir nor a base there is nothing to resolve against and nothing to
 	 * claim, so the compile directory stays null and the caller runs in its own cwd.
+	 *
+	 * A `generate` command runs from the config dir (the process cwd without one) and its
+	 * `generateInputs` resolve there too: the compile directory may be one the command itself
+	 * creates. A probed compile directory is probed again once the command wrote the hxml
+	 * (`probeDir`), since before that there may be nothing to probe.
 	 */
-	private static function at(hxml: String, dir: Null<String>, defines: Array<String>, baseDir: Null<String>): OracleConfig {
+	private static function at(
+		hxml: String, declared: OracleFields, baseDir: Null<String>, drops: Array<String>, index: Int
+	): OracleConfig {
 		final resolved: String = LintConfig.resolveAgainstConfigDir(baseDir, hxml);
+		final dir: Null<String> = declared.dir;
 		final probed: Null<String> = if (dir != null)
 			LintConfig.resolveAgainstConfigDir(baseDir, dir)
 		else if (baseDir == null)
 			null
 		else
 			compileDir(resolved, baseDir);
-		return {
+		final command: Null<String> = declared.generate;
+		final inputs: Null<Array<String>> = declared.generateInputs;
+		if (command == null && inputs != null) drops.push('compilerOracle[$index] declares "generateInputs" without "generate" — ignored');
+		final config: OracleConfig = {
 			hxml: resolved,
 			dir: probed,
-			defines: defines
+			defines: declared.defines
 		};
-	}
-
-	/**
-	 * The directory a compile of `hxml` must run from. `haxe <path>` resolves the hxml's
-	 * relative `-cp` entries against the PROCESS cwd, and real projects write them against
-	 * two different conventions: relative to the hxml's own directory (a root-level
-	 * `build.hxml` named by a nested config as `"../build.hxml"`), or relative to the
-	 * project root the build is invoked from — the config's directory (a lime-generated
-	 * `dist/<target>/haxe/debug.hxml`, whose `-cp src` from the hxml's own dir resolves as
-	 * `dist/<target>/haxe/src` and rejects the whole build with `Type not found`). Neither
-	 * wins by fiat: the hxml's relative classpaths are PROBED under both candidates and the
-	 * one resolving strictly more of them wins; a tie — no relative entries, an unreadable
-	 * hxml, equal hit counts — keeps the hxml's own directory. `/` replaces an empty
-	 * directory for an hxml directly under the filesystem root, where an empty cwd would
-	 * fail the spawn instead of compiling at the root.
-	 */
-	private static function compileDir(hxml: String, baseDir: String): String {
-		final own: String = dirOrRoot(Path.directory(hxml));
-		final config: String = dirOrRoot(baseDir);
-		if (config == own) return own;
-		var ownHits: Int = 0;
-		var configHits: Int = 0;
-		for (rel in relativeClasspaths(hxml)) {
-			if (pathExists(Path.normalize(Path.join([own, rel])))) ownHits++;
-			if (pathExists(Path.normalize(Path.join([config, rel])))) configHits++;
-		}
-		return configHits > ownHits ? config : own;
+		if (command != null) config.generate = {
+			command: command,
+			root: baseDir ?? '.',
+			inputs: inputs == null ? null : [for (input in inputs) LintConfig.resolveAgainstConfigDir(baseDir, input)],
+			probeDir: dir == null && baseDir != null
+		};
+		return config;
 	}
 
 	/**
@@ -190,7 +228,7 @@ final class OracleDeclaration {
 }
 
 /**
- * One `compilerOracle` array element's three keys exactly as DECLARED — before any path is
+ * One `compilerOracle` array element's keys exactly as DECLARED — before any path is
  * resolved and before a missing `hxml` decides the element's fate.
  *
  * Module-private: it is the reading step's own shape, not a config surface.
@@ -199,4 +237,6 @@ private typedef OracleFields = {
 	var hxml: Null<String>;
 	var dir: Null<String>;
 	var defines: Array<String>;
+	var generate: Null<String>;
+	var generateInputs: Null<Array<String>>;
 }

@@ -250,7 +250,10 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.OracleCacheTest',
 		'unit.check.OracleConfigListE2ETest',
 		'unit.check.OracleCoverageTest',
+		'unit.check.OracleDirTest',
 		'unit.check.OracleFixImportLeakTest',
+		'unit.check.OracleGenerationTest',
+		'unit.check.OracleParallelVerdictTest',
 		'unit.check.OrphanAccessorCheckTest',
 		'unit.check.OversizedTypeCheckTest',
 		'unit.check.PossibleNullDereferenceTest',
@@ -1244,6 +1247,26 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-ORACLE-UNKNOWN-COVERAGE-STOPS-THE-PHASE',
 			'unit.check.OracleConfigListE2ETest#testTheDisplayServerAnswersForTheConfigurationItServes :: control :: '
 				+ 'M-DISPLAY-ORACLE-DROPS-DEFINES',
+			'unit.check.OracleDirTest#testASingleTypecheckRunsInTheDeclaredDir :: control :: '
+				+ 'M-SPAWN-RUN-IGNORES-CWD',
+			'unit.check.OracleDirTest#testOverlappedTypechecksRunInTheDeclaredDir :: control :: '
+				+ 'M-SPAWN-RUNALL-IGNORES-CWD',
+			'unit.check.OracleDirTest#testTheDisplayServerWarmsInTheDeclaredDir :: control :: '
+				+ 'M-DISPLAY-IGNORES-DIR',
+			'unit.check.OracleDirTest#testTheFingerprintReadsTheClasspathUnderTheDeclaredDir :: control :: '
+				+ 'M-ORACLE-CACHE-IGNORES-DIR',
+			'unit.check.OracleDirTest#testTheProbesRunInTheDeclaredDir :: control :: '
+				+ 'M-SPAWN-RUN-IGNORES-CWD',
+			'unit.check.OracleGenerationTest#testAChangedCommandRegenerates :: control :: '
+				+ 'M-GENERATE-NEVER-STALE-BY-COMMAND',
+			'unit.check.OracleGenerationTest#testAChangedInputRegeneratesAndAnUnchangedOneDoesNot :: control :: '
+				+ 'M-GENERATE-NEVER-STALE-BY-INPUT',
+			'unit.check.OracleGenerationTest#testAFailedGenerationIsUnavailableNeverTheStaleHxml :: control :: '
+				+ 'M-GENERATE-FAILURE-USES-THE-STALE-HXML',
+			'unit.check.OracleGenerationTest#testAMissingHxmlRegenerates :: control :: '
+				+ 'M-GENERATE-TRUSTS-A-MISSING-HXML',
+			'unit.check.OracleParallelVerdictTest#testTheOverlappedVerdictIsTheFirstFailureInDeclaredOrder :: control :: '
+				+ 'M-DRIVER-CANCELS-EARLIER-JOBS',
 			'unit.check.OrphanAccessorCheckTest#testAnUnreadableCallerOutsideTheReportScopeStillDeclinesTheDeletion :: control :: '
 				+ 'M-ORPHAN-UNREADABLE-REPORT-SCOPE,M-ORPHAN-FIX-UNREADABLE-BLIND',
 			'unit.check.OrphanAccessorCheckTest#testAnUnreadableProjectFileSpellingNothingLeavesTheDeletionAvailable :: control :: '
@@ -2683,6 +2706,15 @@ class TestDiscoveryParityTest extends Test {
 			'M-DISPLAY-ORACLE-DROPS-DEFINES',
 			'M-ORACLE-UNKNOWN-COVERAGE-NO-VETO',
 			'M-ORACLE-EXCLUSIONS-KEYED-BY-SENTENCE',
+			'M-GENERATE-NEVER-STALE-BY-INPUT',
+			'M-GENERATE-NEVER-STALE-BY-COMMAND',
+			'M-GENERATE-TRUSTS-A-MISSING-HXML',
+			'M-GENERATE-FAILURE-USES-THE-STALE-HXML',
+			'M-SPAWN-RUN-IGNORES-CWD',
+			'M-SPAWN-RUNALL-IGNORES-CWD',
+			'M-DRIVER-CANCELS-EARLIER-JOBS',
+			'M-ORACLE-CACHE-IGNORES-DIR',
+			'M-DISPLAY-IGNORES-DIR',
 			'M-FIAD-CROSS-SUPER-UNPROVED',
 			'M-FIAD-EARLY-READ-IGNORED',
 			'M-FIAD-EARLY-READ-CALL-ARG',
@@ -3092,7 +3124,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-PROJECTED-KINDS-ALT-ONLY :: anyparse.macro.QueryWalkerLowering#eachProjectedKind',
 			'M-DECL-HOST-KIND-STALE :: anyparse.grammar.haxe.HaxeQueryPlugin#FinalMember:DECL_HOST_KINDS',
 			'M-ELLIPSIS-STMT-TOKEN-STALE :: anyparse.grammar.haxe.HxStatement#SimpleCtor:EllipsisStmt',
-			'M-NON-NULL-RHS-DROP-HEX :: anyparse.check.NullFlow#FinalMember:NON_NULL_RHS_KINDS'
+			'M-NON-NULL-RHS-DROP-HEX :: anyparse.check.NullFlow#FinalMember:NON_NULL_RHS_KINDS',
+			'M-SPAWN-RUNALL-IGNORES-CWD :: anyparse.check.HaxeSpawn#FinalMember:PARALLEL_DRIVER',
+			'M-DRIVER-CANCELS-EARLIER-JOBS :: anyparse.check.HaxeSpawn#FinalMember:PARALLEL_DRIVER',
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 

@@ -3391,8 +3391,8 @@
 			"name": "M-ORACLE-FIRST-CONFIGURATION-IS-ENOUGH",
 			"type": "anyparse.check.CompilerOracle",
 			"method": "typecheckAll",
-			"find": "\t\tfor (oracle in oracles) {\n\t\t\tfinal outcome: OracleOutcome = typecheck(oracle.hxml, oracle.dir, oracle.defines);\n\t\t\tif (!outcome.match(Confirmed)) return outcome;\n\t\t}\n\t\treturn Confirmed;",
-			"replace": "\t\treturn typecheck(oracles[0].hxml, oracles[0].dir, oracles[0].defines);",
+			"find": "final asked: Array<OracleConfig> = cut < 0 ? oracles : oracles.slice(0, cut + 1);",
+			"replace": "final asked: Array<OracleConfig> = [oracles[0]];",
 			"note": "only the FIRST configuration is ever asked, so an edit that compiles under one set of defines and breaks another is applied - the cross-configuration hole the list exists to close"
 		},
 		{
@@ -3450,6 +3450,86 @@
 			"find": "final key: String = CompilerOracle.exclusionKey(exclusion);",
 			"replace": "final key: String = exclusion.sentence;",
 			"note": "exclusions are deduped by sentence, so a red build whose error line moved after a safe fix is named twice with two reasons"
+		},
+		{
+			"name": "M-GENERATE-NEVER-STALE-BY-INPUT",
+			"type": "anyparse.check.OracleGeneration",
+			"method": "staleness",
+			"find": "for (input in inputs) if (hashIn(recordedInputs, input) != hashOf(input)) return '$input changed';",
+			"replace": "",
+			"note": "a changed generateInputs file no longer makes the recorded generation stale, so an hxml generated from an older project.xml keeps answering for a build that no longer exists"
+		},
+		{
+			"name": "M-GENERATE-NEVER-STALE-BY-COMMAND",
+			"type": "anyparse.check.OracleGeneration",
+			"method": "staleness",
+			"find": "if (record.command != group.generate.command) return 'its generate command changed';",
+			"replace": "",
+			"note": "a changed generate command no longer regenerates, so an entry whose recipe was edited keeps the hxml the old recipe wrote"
+		},
+		{
+			"name": "M-GENERATE-TRUSTS-A-MISSING-HXML",
+			"type": "anyparse.check.OracleGeneration",
+			"method": "staleness",
+			"find": [
+				"for (hxml in group.hxmls) if (!sys.FileSystem.exists(hxml)) return '$hxml is missing';",
+				"for (hxml in group.hxmls) if (hashIn(recordedOutputs, hxml) != hashOf(hxml)) return '$hxml changed since it was generated';"
+			],
+			"replace": [
+				"",
+				""
+			],
+			"note": "an hxml deleted or edited after its generation was recorded is read as current, so the configuration compiles a missing or hand-edited file"
+		},
+		{
+			"name": "M-GENERATE-FAILURE-USES-THE-STALE-HXML",
+			"type": "anyparse.check.OracleGeneration",
+			"method": "ready",
+			"find": "if (failure != null) out.unavailable = 'its generate command failed — $failure';",
+			"replace": "",
+			"note": "a failed generate command no longer makes its configuration unavailable, so the hxml an earlier generation left behind silently answers for the build"
+		},
+		{
+			"name": "M-SPAWN-RUN-IGNORES-CWD",
+			"type": "anyparse.check.HaxeSpawn",
+			"method": "run",
+			"find": "if (cwd != null) Reflect.setField(options, 'cwd', cwd);",
+			"replace": "",
+			"note": "a single haxe spawn runs in the process cwd whatever the configuration's dir says, so a relative -cp resolves against the wrong tree and the typecheck and every probe answer about a different project"
+		},
+		{
+			"name": "M-SPAWN-RUNALL-IGNORES-CWD",
+			"type": "anyparse.check.HaxeSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": "const opts = { cwd: j.cwd == null ? undefined : j.cwd,",
+			"replace": "const opts = { cwd: undefined,",
+			"note": "the parallel driver spawns every job in its own cwd rather than the job's, so overlapped typechecks and coverage probes of a configuration with a dir answer about a different tree"
+		},
+		{
+			"name": "M-DRIVER-CANCELS-EARLIER-JOBS",
+			"type": "anyparse.check.HaxeSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": "for (let k = i + 1; k < jobs.length; k++)",
+			"replace": "for (let k = 0; k < jobs.length; k++)",
+			"note": "a failing job also kills the jobs declared BEFORE it, so the overlapped verdict is the first failure to finish rather than the first in declared order"
+		},
+		{
+			"name": "M-ORACLE-CACHE-IGNORES-DIR",
+			"type": "anyparse.check.OracleCache",
+			"method": "fingerprint",
+			"find": "final root: String = cwd ?? Sys.getCwd();",
+			"replace": "final root: String = Sys.getCwd();",
+			"note": "the verdict fingerprint resolves the hxml's classpath against the process cwd, so an edit under the configuration's dir leaves a stored verdict matching"
+		},
+		{
+			"name": "M-DISPLAY-IGNORES-DIR",
+			"type": "anyparse.check.CompilerServer",
+			"method": "connect",
+			"find": "if (cwd != null) Reflect.setField(opts, 'cwd', cwd);",
+			"replace": "",
+			"note": "the display server is warmed and queried from the process cwd, so a configuration with a dir never warms and the oracle-assisted phase is skipped"
 		},
 		{
 			"name": "M-FIAD-CROSS-SUPER-UNPROVED",
