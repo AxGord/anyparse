@@ -5792,7 +5792,7 @@
 		{
 			"name": "M-GRAPH-STATIC-NO-VIRTUAL",
 			"type": "anyparse.query.CallGraph",
-			"method": "implicitThisTargets",
+			"method": "collectEdges",
 			"find": "return types.isStatic(owner, member) ? [] : virtualTargets(typeName, member);",
 			"replace": "return virtualTargets(typeName, member);",
 			"note": "a bare call to a static gets virtual edges to same-named statics of subtypes"
@@ -6071,8 +6071,8 @@
 			"name": "M-REACH-CLOSURE-CHANNELS",
 			"type": "anyparse.query.ReachAdmission",
 			"method": "joinThroughChannels",
-			"find": "if (valueReached || admittedNames(u).exists(n -> names.exists(n))) add(u.from, 'unresolved');",
-			"replace": "if (admittedNames(u).exists(n -> names.exists(n))) add(u.from, 'unresolved');",
+			"find": "if (valueReached || admittedNames(u).exists(n -> names.exists(n)) || u.reason.match(Unseen(_)))",
+			"replace": "if (admittedNames(u).exists(n -> names.exists(n)) || u.reason.match(Unseen(_)))",
 			"note": "a function that reaches a lambda only through a call it cannot resolve is not admitted"
 		},
 		{
@@ -6984,6 +6984,182 @@
 			"method": "reflectionModule",
 			"force": "StringTools.endsWith(file, 'Type.hx') || StringTools.endsWith(file, 'Reflect.hx')",
 			"note": "any Type.hx or Reflect.hx counts as the std reflection"
+		},
+		{
+			"name": "M-FACTS-REACH-EDGES",
+			"type": "anyparse.query.FactsView",
+			"method": "bodyFacts",
+			"find": "return contextAlike(g, node, outer) ? outer : null;",
+			"replace": "return null;",
+			"note": "no function is read through its compiler facts, so a call the syntax cannot resolve is admitted by name again"
+		},
+		{
+			"name": "M-FACTS-REACH-OVERRIDES",
+			"type": "anyparse.query.CallGraphFacts",
+			"method": "virtualEdges",
+			"find": "for (v in view.overrides(g, dispatch, name)) if (!targets.contains(v)) targets.push(v);",
+			"replace": "",
+			"note": "an instance call dispatches only to the overrides the name-based hierarchy holds, so one it cannot see through an alias is never walked"
+		},
+		{
+			"name": "M-FACTS-REACH-VALUE",
+			"type": "anyparse.query.CallGraphFacts",
+			"method": "declaredCall",
+			"find": "if (field) unresolved(FunctionValue(name));",
+			"replace": "",
+			"note": "a call of a field holding a function value records nothing, so the value channel never admits what the field may hold"
+		},
+		{
+			"name": "M-FACTS-REACH-SPLICE",
+			"type": "anyparse.query.FactsView",
+			"method": "bodyFacts",
+			"find": "n.incomplete.exists(m -> UNPLACED.contains(m))",
+			"replace": "n.incomplete.contains(MACRO_EXPANSION)",
+			"note": "a body with an inlined call is read through its facts, whose spliced facts sit at the callee and are missed by a range question"
+		},
+		{
+			"name": "M-FACTS-REACH-LOCAL-INLINE",
+			"type": "anyparse.query.FactsView",
+			"method": "bodyFacts",
+			"find": " || inlinesLocally(g, node.file, n.at.span)",
+			"replace": "",
+			"note": "a body holding a local inline function is read through its facts, which place what that function runs at its declaration, outside the range asked about"
+		},
+		{
+			"name": "M-FACTS-REACH-ESCAPE-TYPED",
+			"type": "anyparse.query.ValueEscapes",
+			"method": "scanFile",
+			"find": "if (typed != null) return typed;",
+			"replace": "",
+			"note": "an escaping value is typed by the declarations alone, so one only the compiler types makes every instance escape"
+		},
+		{
+			"name": "M-FACTS-REACH-TOUCH-TYPED",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "scanFile",
+			"find": "final typed: Null<String> = at == null ? null : g.facts?.view.typeSourceAt(g, file, at);",
+			"replace": "final typed: Null<String> = null;",
+			"note": "a receiver the declarations do not type may be anything again, although the compiler typed it"
+		},
+		{
+			"name": "M-FACTS-REACH-MACRO",
+			"type": "anyparse.query.FactsView",
+			"method": "blindIn",
+			"find": "if (n.incomplete.contains(MACRO_EXPANSION)) return Reification(file, span);",
+			"replace": "",
+			"note": "a macro's expansion is no blind spot, so the code it adds is never accounted for"
+		},
+		{
+			"name": "M-FACTS-REACH-DROPPED",
+			"type": "anyparse.query.FactsView",
+			"method": "of",
+			"find": "table.dropped.length > 0 || ",
+			"replace": "",
+			"note": "a table missing a configuration is read as if it held every build"
+		},
+		{
+			"name": "M-FACTS-REACH-REFLECT-VALUE",
+			"type": "anyparse.query.FactsView",
+			"method": "blindIn",
+			"find": "for (r in n.reflection) if (r.isValue && meets(r.at.span, span)) return DynamicName(file, r.at.span);",
+			"replace": "",
+			"note": "a reflective member read as a value is no blind spot, so the member it later reaches by name is never accounted for"
+		},
+		{
+			"name": "M-FACTS-REACH-BUILDS",
+			"type": "anyparse.query.ReachGraph",
+			"method": "buildMacroOn",
+			"find": "if (_scope.facts?.built(t) == true) return Reification(site?.file ?? '', site?.span);",
+			"replace": "",
+			"note": "a build macro only the compiler saw applied never makes a type Unknown"
+		},
+		{
+			"name": "M-FACTS-REACH-GENERIC",
+			"type": "anyparse.query.FactsView",
+			"method": "graphType",
+			"find": "if (generic != null) base = CompilerFacts.baseId(generic);",
+			"replace": "",
+			"note": "a @:generic instance is named by its own generated type, which no declaration holds, instead of its generic class"
+		},
+		{
+			"name": "M-FACTS-REACH-NATIVE-IDENT",
+			"type": "anyparse.query.CallGraphFacts",
+			"method": "call",
+			"find": "unresolved(UnboundName(target == null ? '' : target.replace(NATIVE_PREFIX, '')));",
+			"replace": "",
+			"note": "a call of a native identifier records nothing, so what it may run is never admitted"
+		},
+		{
+			"name": "M-FACTS-REACH-CONSTRUCTION",
+			"type": "anyparse.query.CallGraphFacts",
+			"method": "construction",
+			"find": "g._wiring.record({\ntypeName: type,\nfrom: node.id,\nkind: run,\nfile: node.file,\nspan: x.at.span,\nchainGrew: false,\ntarget: ctor\n});",
+			"replace": "",
+			"note": "a construction the facts record never runs the initializers of a generated constructor"
+		},
+		{
+			"name": "M-GRAPH-LOCAL-INLINE",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectNodes",
+			"find": "final fnKinds: Array<String> = (shape.functionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);",
+			"replace": "final fnKinds: Array<String> = shape.functionKinds ?? [];",
+			"note": "a local inline function is no node of the graph, so a call of it resolves to nothing and what it runs is never walked"
+		},
+		{
+			"name": "M-FACTS-CALL-SITE-INLINE",
+			"type": "anyparse.check.TypedFactsMacro",
+			"method": "collectFields",
+			"find": "if (f.kind.match(FMethod(MethInline | MethNormal))) {",
+			"replace": "if (f.kind.match(FMethod(MethInline))) {",
+			"note": "only an `inline` method is matched to a splice, so a method its call site inlines reads as a macro expansion"
+		},
+		{
+			"name": "M-FACTS-SPLICE-OWN-ARGUMENTS",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "spliced",
+			"find": "if (at.file == _home && at.min >= _min && at.max <= _max) continue;",
+			"replace": "",
+			"note": "a spliced body's own call-site arguments are searched for the method it came from, so a macro expansion is read as an inlined call of the caller itself"
+		},
+		{
+			"name": "M-FACTS-REACH-BIND",
+			"type": "anyparse.query.CallGraphFacts",
+			"method": "nested",
+			"find": "record(g, node, [fact], view, true)",
+			"replace": "{}",
+			"note": "a closure the compiler made is dropped, so the method a bound call runs is never used as a value"
+		},
+		{
+			"name": "M-FACTS-REACH-ALIKE",
+			"type": "anyparse.query.FactsView",
+			"method": "memberAlike",
+			"find": "var answer: Bool = typeAlike(owner) && declaredAlike(owner, name, true);",
+			"replace": "var answer: Bool = true;",
+			"note": "a member whose declaration some build types differently is trusted as the listed builds typed it"
+		},
+		{
+			"name": "M-FACTS-REACH-GUARDED-NAME",
+			"type": "anyparse.query.FactsView",
+			"method": "resolvedAlikeIn",
+			"find": "for (name in statics) if (guarded.exists(name)) return false;",
+			"replace": "",
+			"note": "a call naming a member some build declares conditionally is trusted, though that build resolves it to the member"
+		},
+		{
+			"name": "M-FACTS-ABSTRACT-THIS",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "walk",
+			"find": " && !straddles",
+			"replace": "",
+			"note": "a range meeting the body without lying inside it — an abstract method's own `this`, placed at the whole abstract — reads as a splice, and the method is marked as a macro expansion"
+		},
+		{
+			"name": "M-FACTS-REACH-NESTED-OWNER",
+			"type": "anyparse.query.FactsView",
+			"method": "typedBodies",
+			"find": "if (owner != node.id && g.node(owner ?? '')?.span?.from == n.at.span.from) return null;",
+			"replace": "",
+			"note": "a function with no typed body of its own is read through the facts of a function nested in it, which leave out what it runs itself"
 		}
 	]
 }

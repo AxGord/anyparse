@@ -79,12 +79,14 @@ final class ReachAdmission {
 	/**
 	 * `add` every function that reaches the closure through a channel rather than an edge: one with an unresolved
 	 * call once the closure holds a value-callable function (`valueReached`) or a function of a name the call
-	 * admits (`names`), one with an untyped access naming such a function, — once `valueReached` — every
-	 * library target whose code the graph has not read, and every extern member target code may hand a program
-	 * object to, which reaches that object's members by name.
+	 * admits (`names`) — and always one calling code the graph holds no node for (`Unseen`), which may touch the
+	 * member itself — one with an untyped access naming such a function, — once `valueReached` — every library
+	 * target whose code the graph has not read, and every extern member target code may hand a program object to,
+	 * which reaches that object's members by name.
 	 */
 	private function joinThroughChannels(g: CallGraph, names: Map<String, Bool>, valueReached: Bool, add: (String, String) -> Void): Void {
-		for (u in g.unresolved) if (valueReached || admittedNames(u).exists(n -> names.exists(n))) add(u.from, 'unresolved');
+		for (u in g.unresolved) if (valueReached || admittedNames(u).exists(n -> names.exists(n)) || u.reason.match(Unseen(_)))
+			add(u.from, 'unresolved');
 		for (a in g.unresolvedAccess) if (accessNames(a.member).exists(n -> names.exists(n))) add(a.from, 'unresolved access');
 		if (valueReached) for (id => n in g.nodes) if (runsUnseenCode(g, n)) add(id, 'library');
 		// target code handed a program object reaches its members by name, so it reaches the closure whatever it holds
@@ -142,7 +144,7 @@ final class ReachAdmission {
 	public static function admittedNames(u: UnresolvedCall): Array<String> {
 		return switch u.reason {
 			case DynamicReceiver(m), UnresolvedReceiver(m), UnboundName(m): [m];
-			case FunctionValue(_), ComplexCallee(_): [];
+			case FunctionValue(_), ComplexCallee(_), Unseen(_): [];
 		};
 	}
 

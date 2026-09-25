@@ -14,6 +14,12 @@ final class ReachProject {
 	/** Project file -> its text. */
 	public final sources: Map<String, String> = [];
 
+	/**
+	 * The compiler facts of the run's builds, as the analysis reads them (`FactsView`): set once by the analysis that owns
+	 * this scope, null for syntax alone.
+	 */
+	public var facts: Null<FactsView> = null;
+
 	public final plugin: GrammarPlugin;
 	public final shape: RefShape;
 	public final index: SymbolIndex;

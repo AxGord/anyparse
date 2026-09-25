@@ -208,23 +208,26 @@ final class TypedFactsWalk {
 	/**
 	 * Walk `e`. The first expression outside the body's own range — another file, or elsewhere in this one — is the root of
 	 * a spliced body: an inlined function, or a macro's expansion. The compiler keeps no range for the call site it
-	 * replaced, so the node says where it cannot: `inline-site-unknown`, and `macro-expansion` when no inline function
-	 * holds the spliced code. A constant or a type expression is left out: the compiler places a default argument's
-	 * value, or an inlined constant, at its declaration.
+	 * replaced, so the node says where it cannot: `inline-site-unknown`, and `macro-expansion` when no method holds the
+	 * spliced code. A constant or a type expression is left out: the compiler places a default argument's value, or an
+	 * inlined constant, at its declaration. So is a range that meets the body without lying inside it: the compiler's
+	 * union of the body's own code with a range around it — an abstract method's `this` stands at the whole abstract, an
+	 * operand shares a range with an inlined sibling — whose parts are asked one by one.
 	 */
 	private function walk(e: TypedExpr): Void {
 		final info: { min: Int, max: Int, file: String } = Context.getPosInfos(e.pos);
 		final inside: Bool = info.file == _home && info.min >= _min && info.max <= _max;
+		final straddles: Bool = !inside && info.file == _home && info.min <= _max && info.max >= _min;
 		final saved: Bool = _inBody;
-		if (saved && !inside && !e.expr.match(TConst(_) | TTypeExpr(_))) spliced(e, info);
+		if (saved && !inside && !straddles && !e.expr.match(TConst(_) | TTypeExpr(_))) spliced(e, info);
 		// back inside, as the call site's own arguments are: a further splice there is a call of its own
-		_inBody = inside;
+		_inBody = inside || straddles;
 		visit(e);
 		_inBody = saved;
 	}
 
 	/**
-	 * Record the spliced body rooted at `e`: the call of the `inline` function it came from, found at the root or, when
+	 * Record the spliced body rooted at `e`: the call of the method it came from — `inline`, or inlined by its call site — found at the root or, when
 	 * the root carries a position of its own — an abstract's `this` stands at the whole abstract — at the first
 	 * expression under it that lies in one; `macro-expansion` when none does.
 	 */
@@ -237,6 +240,8 @@ final class TypedFactsWalk {
 			while (callee == null && pending.length > 0) {
 				final next: TypedExpr = pending.shift() ?? e;
 				final at: { min: Int, max: Int, file: String } = Context.getPosInfos(next.pos);
+				// the call site's own arguments sit in this body, which holds no method that could have been spliced here
+				if (at.file == _home && at.min >= _min && at.max <= _max) continue;
 				callee = _host.inlineCallee(at.file, at.min, at.max);
 				if (callee == null) TypedExprTools.iter(next, x -> pending.push(x));
 			}

@@ -3299,6 +3299,14 @@ typedef ExecutionShape = {
 	@:optional var stringConversionMethodNames: Array<String>;
 
 	/**
+	 * Qualified `Type.function` calls that convert their argument to a string the way the language's own conversion does
+	 * (Haxe `Std.string`), running what a string-conversion site runs on it. The compiler's typed tree spells a
+	 * concatenated object operand as such a call, so a reach walk over compiler facts reads one as a conversion site of its
+	 * argument rather than as a call into library code. Optional; unset means none does.
+	 */
+	@:optional var stringConversionCalls: Array<String>;
+
+	/**
 	 * The implicit-call annotation (`implicitCallMetaNames`) under which the language runs a member for an INDEX
 	 * access on its type (Haxe `@:arrayAccess`). Optional; unset means such a member runs from any site.
 	 */

@@ -119,7 +119,7 @@ final class ReachGraph {
 	public function graph(): CallGraph {
 		final built: Null<CallGraph> = _graph;
 		if (built != null) return built;
-		final g: CallGraph = CallGraph.build(_scope.files, _scope.plugin, _scope.index);
+		final g: CallGraph = CallGraph.build(_scope.files, _scope.plugin, _scope.index, _scope.facts);
 		_graph = g;
 		return g;
 	}
@@ -493,7 +493,11 @@ final class ReachGraph {
 		return null;
 	}
 
-	/** Whether any supertype on `typeName`'s chain, itself included, carries a build macro; the site of the first one found. */
+	/**
+	 * Whether any supertype on `typeName`'s chain, itself included, carries a build macro — written on it, or recorded by
+	 * the compiler facts, which also see one a supertype's `@:autoBuild` or a global macro applies; the site of the first
+	 * one found.
+	 */
 	public function buildMacroOn(typeName: String): Null<ReachUnknown> {
 		final seen: Array<String> = [];
 		final queue: Array<String> = [typeName];
@@ -504,6 +508,7 @@ final class ReachGraph {
 			final site: Null<{ file: String, span: Span }> = _scope.siteOf(t);
 			final decl: Null<TypeDeclInfo> = site == null ? null : _scope.index.fileInfo(site.file)?.types.find(d -> d.name == t);
 			if (site != null && decl != null && (decl.hasBuild || decl.hasAutoBuild)) return Reification(site.file, site.span);
+			if (_scope.facts?.built(t) == true) return Reification(site?.file ?? '', site?.span);
 			if (decl != null) for (s in decl.supertypes) queue.push(s);
 		}
 		return null;

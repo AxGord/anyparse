@@ -257,15 +257,22 @@ final class TypedFactsMacro {
 		line('{"k":"src","path":${Json.stringify(file)},"len":${bytes.length},"md5":"${haxe.crypto.Md5.make(bytes).toHex()}"}');
 	}
 
-	/** Note, for every class, which fields have overloads and where each `inline` method is declared. */
+	/**
+	 * Note, for every class, which fields have overloads and where each method the compiler may splice in is declared:
+	 * an `inline` one, and any other one a call site inlines (`inline f()`, `inline new`) — every method but a macro,
+	 * whose expansion is code of its own.
+	 */
 	private function collectFields(t: ModuleType): Void {
 		switch t {
 			case TClassDecl(r):
 				final c: ClassType = r.get();
 				final owner: String = typeId(c.pack, c.name);
-				for (f in c.fields.get().concat(c.statics.get())) {
+				final ctor: Null<ClassField> = c.constructor?.get();
+				final all: Array<ClassField> = c.fields.get().concat(c.statics.get());
+				if (ctor != null) all.push(ctor);
+				for (f in all) {
 					if (f.overloads.get().length > 0) _overloaded['$owner.${f.name}'] = true;
-					if (f.kind.match(FMethod(MethInline))) {
+					if (f.kind.match(FMethod(MethInline | MethNormal))) {
 						final info: { min: Int, max: Int, file: String } = Context.getPosInfos(f.pos);
 						final list: Array<{ min: Int, max: Int, id: String }> = _inlines[info.file] ?? [];
 						_inlines[info.file] = list;
@@ -276,7 +283,7 @@ final class TypedFactsMacro {
 		}
 	}
 
-	/** The `inline` function declared around `min`–`max` of `file` (the innermost), whose body was spliced from there; null for none. */
+	/** The method declared around `min`–`max` of `file` (the innermost), whose body was spliced from there; null for none. */
 	public function inlineCallee(file: String, min: Int, max: Int): Null<String> {
 		var best: Null<{ min: Int, max: Int, id: String }> = null;
 		for (f in _inlines[file] ?? []) if (f.min <= min && max <= f.max && (best == null || f.max - f.min < best.max - best.min)) best = f;

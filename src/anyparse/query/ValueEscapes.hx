@@ -262,6 +262,10 @@ final class ValueEscapes {
 		var ok: Bool = true;
 		function typeOf(raw: QueryNode): Null<String> {
 			final node: QueryNode = BoolExprShape.unwrapParens(raw, shape.parenKind);
+			// the compiler's type, where its facts replace the syntax of the code holding the value
+			final span: Null<Span> = node.span;
+			final typed: Null<String> = span == null ? null : _scope.facts?.typeSourceAt(g, file, span);
+			if (typed != null) return typed;
 			final constructed: Null<String> = node.name;
 			if (node.kind != shape.newExprKind || constructed == null) {
 				// what the declarations say, and for an unannotated local its initializer's type: the one Haxe infers for it

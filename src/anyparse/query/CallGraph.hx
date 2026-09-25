@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.CallGraphImports.ImportedName;
+import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.SymbolIndex.MemberInfo;
@@ -80,6 +81,9 @@ enum UnresolvedReason {
 
 	/** A callee of another shape (`kind` names the projected node kind). */
 	ComplexCallee(kind: String);
+
+	/** A call the compiler resolved to code the graph holds no node for (`what` names it): nothing here can follow it. */
+	Unseen(what: String);
 
 }
 
@@ -210,6 +214,12 @@ final class CallGraph {
 	/** The type facts edges resolve against, seeded from the index `build` was given. */
 	public final types: CallGraphTypes;
 
+	/**
+	 * How the graph reads compiler facts (`CallGraphFacts`): which functions they replace the syntax of, and the view
+	 * over the table (`FactsView`); null for syntax alone.
+	 */
+	public final facts: Null<CallGraphFacts>;
+
 	private final _out: Map<String, Array<CallEdge>> = [];
 	private final _in: Map<String, Array<CallEdge>> = [];
 	private final _byMember: Map<String, Array<String>> = [];
@@ -234,11 +244,14 @@ final class CallGraph {
 	private final _shape: RefShape;
 	private final _provider: Null<TypeInfoProvider>;
 
-	private function new(plugin: GrammarPlugin, shape: RefShape, provider: Null<TypeInfoProvider>, types: CallGraphTypes) {
+	private function new(
+		plugin: GrammarPlugin, shape: RefShape, provider: Null<TypeInfoProvider>, types: CallGraphTypes, facts: Null<CallGraphFacts>
+	) {
 		_plugin = plugin;
 		_shape = shape;
 		_provider = provider;
 		this.types = types;
+		this.facts = facts;
 		_wiring = new ConstructorWiring(this, shape.constructorName ?? 'new');
 	}
 
@@ -365,7 +378,13 @@ final class CallGraph {
 		if (unindexed.length > 0) types.merge(SymbolIndex.build(unindexed, _plugin));
 		_grownTypes.resize(0);
 		for (p in parsed) collectNodes(p);
-		for (p in parsed) collectEdges(p);
+		for (p in parsed) {
+			final reading: Null<CallGraphFacts> = facts;
+			// a function the facts replace records nothing from its syntax (`CallGraphFacts.mute`)
+			final faceted: Map<String, Array<FactNode>> = reading == null ? [] : reading.mute(this, p.file, p.fnBySpanFrom);
+			collectEdges(p);
+			if (reading != null) reading.recordMuted(this, faceted);
+		}
 		_wiring.markGrownChains(_grownTypes);
 		_wiring.wire((from, to, kind, file, span) -> addEdge(from, to, kind, null, file, span));
 	}
@@ -386,6 +405,7 @@ final class CallGraph {
 			nodes.remove(id);
 			_facts.forget(id);
 		}
+		facts?.forget(file, removed);
 		for (table in _members) for (member in [for (m => id in table) if (removed.exists(id)) m]) table.remove(member);
 		for (name => ids in _byMember) _byMember[name] = [for (id in ids) if (!removed.exists(id)) id];
 		purgeSites(key, removed);
@@ -463,7 +483,8 @@ final class CallGraph {
 		// noqa: complexity
 		final shape: RefShape = _shape;
 		final returnTypes: Map<Int, String> = _provider == null ? [] : _provider.returnTypes(entry.source);
-		final fnKinds: Array<String> = shape.functionKinds ?? [];
+		// a local `inline function` is a function of its own like any local one, though the grammar gives it a kind apart
+		final fnKinds: Array<String> = (shape.functionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);
 		final lambdaKinds: Array<String> = shape.lambdaKinds ?? [];
 		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
 		final macroKind: Null<String> = shape.macroModifierKind;
@@ -638,6 +659,7 @@ final class CallGraph {
 	private function addEdge(
 		from: String, to: String, kind: EdgeKind, via: Null<String>, file: String, span: Null<Span>, ?dispatchType: String
 	): Void {
+		if (kind != Contains && facts?.muted.exists(from) == true) return;
 		indexEdge({
 			from: from,
 			to: to,
@@ -660,20 +682,6 @@ final class CallGraph {
 		_in[edge.to] = into;
 	}
 
-	/**
-	 * Virtual dispatch targets for a BARE call inside `typeName` — the implicit-`this` case,
-	 * where `resolved` is the node the bare name already resolved to. Empty unless that node
-	 * is a NON-STATIC member on the type's own chain: a local function, a module-level
-	 * function and `super` each yield an id `memberOnChain` never returns, and Haxe neither
-	 * inherits nor overrides a static, so a same-named static on a subtype is a DIFFERENT
-	 * function that dispatch can never reach.
-	 */
-	private function implicitThisTargets(typeName: Null<String>, member: String, resolved: String): Array<String> {
-		if (typeName == null || memberOnChain(typeName, member) != resolved) return [];
-		final owner: String = nodes[resolved]?.typeName ?? typeName;
-		return types.isStatic(owner, member) ? [] : virtualTargets(typeName, member);
-	}
-
 	private function collectEdges(entry: ParsedEntry): Void {
 		// noqa: complexity
 		final shape: RefShape = _shape;
@@ -692,9 +700,10 @@ final class CallGraph {
 		final assignKind: Null<String> = shape.assignKind;
 		final writeParentKinds: Array<String> = shape.writeParentKinds;
 		final macroKind: Null<String> = shape.macroModifierKind;
-		final fnKinds: Array<String> = shape.functionKinds ?? [];
+		// a local `inline function` is a function of its own like any local one, though the grammar gives it a kind apart
+		final fnKinds: Array<String> = (shape.functionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);
 		final lambdaKinds: Array<String> = shape.lambdaKinds ?? [];
-		final localFnKinds: Array<String> = shape.localFunctionKinds ?? [];
+		final localFnKinds: Array<String> = (shape.localFunctionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);
 		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
 		final nullableWrappers: Array<String> = shape.nullableWrapperTypeNames ?? [];
 		final transparentWrappers: Array<String> = shape.memberTransparentWrapperTypeNames ?? [];
@@ -789,6 +798,7 @@ final class CallGraph {
 		}
 
 		function unresolvedAt(span: Null<Span>, reason: UnresolvedReason, currentType: Null<String>): Void {
+			if (facts?.muted.exists(frameId(currentType)) == true) return;
 			unresolved.push({
 				file: file,
 				span: span,
@@ -1146,7 +1156,7 @@ final class CallGraph {
 					return null;
 				}
 				final target: Null<String> = constructorTarget(superclass, ctorName);
-				_wiring.record({
+				if (facts?.muted.exists(frameId(currentType)) != true) _wiring.record({
 					typeName: superclass,
 					from: frameId(currentType),
 					kind: Call,
@@ -1232,7 +1242,7 @@ final class CallGraph {
 			if (!(_byMember.exists(name) || types.hasFunctionNamed(name))) return;
 			if (storedField(node.children[0], name, currentType)) return;
 			final recv: Null<Receiver> = receiverType(node.children[0], currentType);
-			if (recv == null || recv.isDynamic) unresolvedAccess.push({
+			if ((recv == null || recv.isDynamic) && facts?.muted.exists(frameId(currentType)) != true) unresolvedAccess.push({
 				file: file,
 				span: node.span,
 				from: frameId(currentType),
@@ -1282,6 +1292,20 @@ final class CallGraph {
 					untypedMethodRead(arg, currentType);
 			}
 			for (i in first ... args.length) refArg(args[i]);
+		}
+
+		/**
+		 * Virtual dispatch targets for a BARE call inside `typeName` — the implicit-`this` case,
+		 * where `resolved` is the node the bare name already resolved to. Empty unless that node
+		 * is a NON-STATIC member on the type's own chain: a local function, a module-level
+		 * function and `super` each yield an id `memberOnChain` never returns, and Haxe neither
+		 * inherits nor overrides a static, so a same-named static on a subtype is a DIFFERENT
+		 * function that dispatch can never reach.
+		 */
+		function implicitThisTargets(typeName: Null<String>, member: String, resolved: String): Array<String> {
+			if (typeName == null || memberOnChain(typeName, member) != resolved) return [];
+			final owner: String = nodes[resolved]?.typeName ?? typeName;
+			return types.isStatic(owner, member) ? [] : virtualTargets(typeName, member);
 		}
 
 		function handleCall(call: QueryNode, currentType: Null<String>): Void {
@@ -1371,7 +1395,7 @@ final class CallGraph {
 			final from: String = frameId(currentType);
 			final target: Null<String> = constructorTarget(typeName, ctorName);
 			if (target != null) addEdge(from, target, New, null, file, span);
-			_wiring.record({
+			if (facts?.muted.exists(from) != true) _wiring.record({
 				typeName: typeName,
 				from: from,
 				kind: New,
@@ -1527,6 +1551,7 @@ final class CallGraph {
 				ownStorage = unwrap(node.children[0]).kind == identKind && unwrap(node.children[0]).name == selfText;
 				final recv: Null<Receiver> = receiverType(node.children[0], currentType);
 				if (recv == null || recv.isDynamic) {
+					if (facts?.muted.exists(frameId(currentType)) == true) return;
 					unresolvedAccess.push({
 						file: file,
 						span: span,
@@ -1677,14 +1702,16 @@ final class CallGraph {
 	 * supertypes, member kinds and property accessors of types it holds no file for.
 	 * A grammar without call/ident/field-access shape seams yields an empty graph.
 	 */
-	public static function build(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?index: SymbolIndex): CallGraph {
+	public static function build(
+		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?index: SymbolIndex, ?facts: FactsView
+	): CallGraph {
 		final cached: GrammarPlugin = plugin is CachingGrammarPlugin ? plugin : new CachingGrammarPlugin(plugin);
 		final shape: RefShape = cached.refShape();
 		final provider: Null<TypeInfoProvider> = cached is TypeInfoProvider ? cast cached : null;
 		if (shape.callKind == null || shape.fieldAccessKind == null)
-			return new CallGraph(cached, shape, provider, new CallGraphTypes(null, shape));
+			return new CallGraph(cached, shape, provider, new CallGraphTypes(null, shape), null);
 		final types: CallGraphTypes = new CallGraphTypes(index ?? SymbolIndex.build(files, cached), shape);
-		final graph: CallGraph = new CallGraph(cached, shape, provider, types);
+		final graph: CallGraph = new CallGraph(cached, shape, provider, types, facts == null ? null : new CallGraphFacts(facts));
 		graph.addFiles(files);
 		return graph;
 	}

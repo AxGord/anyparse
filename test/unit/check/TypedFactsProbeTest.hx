@@ -82,6 +82,34 @@ class TypedFactsProbeTest extends Test {
 		scratch.remove();
 	}
 
+	@:pin('control') @:killer('M-FACTS-ABSTRACT-THIS')
+	public function testARangeMeetingTheBodyIsItsOwnCode(): Void {
+		// in the std `CallStack.subtract` an operand shares one range with the inlined `length` getter beside it, a range
+		// that starts outside the method's body and ends inside it: the body's own code, not a macro expansion
+		final scratch: Scratch = compile([
+			'Main.hx' => 'class Main {\n\tstatic function main() { var s:haxe.CallStack = haxe.CallStack.callStack(); s.subtract(s); }\n}\n'
+		], null, '-cp .\n-main Main\n--interp\n');
+		final subtract: Null<FactNode> = scratch.facts?.node('haxe._CallStack.CallStack_Impl_.subtract');
+		Assert.notNull(subtract, 'dropped: ${[for (d in scratch.facts?.dropped ?? []) d.reason]}');
+		Assert.isFalse(subtract?.incomplete.contains('macro-expansion') ?? true, 'marks: ${subtract?.incomplete}');
+		scratch.remove();
+	}
+
+	@:pin('control') @:killer('M-FACTS-CALL-SITE-INLINE')
+	public function testACallSiteInlineIsASpliceOfItsMethodNotAMacro(): Void {
+		// `inline f()` splices a method that is not `inline` itself: it is the method's body, named, not an expansion
+		final scratch: Scratch = compile([
+			'Main.hx' => 'class Main {\n\tstatic function grow(a:Array<Int>):Void a.push(1);\n'
+			+ '\tstatic function main() { var a = [1]; inline grow(a); }\n}\n'
+		]);
+		final main: Null<FactNode> = scratch.facts?.node('Main.main');
+		Assert.notNull(main);
+		Assert.isTrue(main?.incomplete.contains('inline-site-unknown') ?? false, 'no splice: ${main?.incomplete}');
+		Assert.isFalse(main?.incomplete.contains('macro-expansion') ?? true, 'a call-site inline read as a macro expansion');
+		Assert.isTrue(main?.calls.exists(c -> c.access == 'inlined' && c.target == 'Main.grow') ?? false, 'no inlined call of the method');
+		scratch.remove();
+	}
+
 	@:pin('control') @:killer('M-FACTS-SUPER') @:killer('M-FACTS-INITIALIZER')
 	public function testAnImplicitConstructorCallsSuperAndAnInitializerIsANode(): Void {
 		// a class that declares no constructor still gets one, calling its super's; a field initializer is typed as the
@@ -378,7 +406,7 @@ class TypedFactsProbeTest extends Test {
 	}
 
 	@:pin('control') @:killer('M-FACTS-INLINED-CALL') @:killer('M-FACTS-INLINED-CHILD') @:killer('M-FACTS-GENERATED')
-	@:killer('M-FACTS-SITE-UNKNOWN') @:killer('M-FACTS-MACRO-EXPANSION')
+	@:killer('M-FACTS-SITE-UNKNOWN') @:killer('M-FACTS-MACRO-EXPANSION') @:killer('M-FACTS-SPLICE-OWN-ARGUMENTS')
 	public function testSplicedCodeIsTheCallersAndItsSiteIsUnknown(): Void {
 		// an inlined body — from another file or this one — is a call of its inline function and the caller's facts, but the
 		// compiler keeps no range for the site it replaced: a range query short of the whole caller is Unknown. A function

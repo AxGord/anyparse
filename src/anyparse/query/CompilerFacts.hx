@@ -27,7 +27,8 @@ typedef FactPos = {
  * A call site. `target` is the called field's declaring type and name (`pack.Type.field`), a structure or dynamic
  * field's bare name, a local function's node id, or the identifier of a native call; absent for a call of a value.
  * `access` is `FInstance`, `FStatic`, `FAnon`, `FDynamic`, `FClosure`, `FEnum`, `fieldValue`, `super`, `local`, `ident`,
- * `value`, or `inlined` — a call of an `inline` function the compiler spliced in, positioned at the callee's body.
+ * `value`, or `inlined` — a call of a method the compiler spliced in (an `inline` one, or one its call site inlines),
+ * positioned at the callee's body.
  */
 typedef CallFact = {
 	final target: Null<String>;
@@ -230,6 +231,11 @@ final class CompilerFacts {
 		this._key = key;
 	}
 
+	/** The table key of `file`: what a fact's `FactPos.file` spells it as. */
+	public inline function keyOf(file: String): String {
+		return _key(file);
+	}
+
 	/** Whether any configuration typed code of `file`. */
 	public function compiled(file: String): Bool {
 		return _nodeFiles.exists(_key(file));
@@ -325,6 +331,11 @@ final class CompilerFacts {
 		return _types[id];
 	}
 
+	/** The id of every type some configuration typed. */
+	public inline function typeIds(): Iterator<String> {
+		return _types.keys();
+	}
+
 	/** Where the type `id` is declared; null when no configuration typed it or its file cannot be read. */
 	public function typePosition(id: String): Null<FactPos> {
 		final declared: Null<{ home: String, p: Array<Int> }> = _typeHomes[id];
@@ -341,7 +352,8 @@ final class CompilerFacts {
 		return closure(_subs, id);
 	}
 
-	private function add(dump: FactsDump): Void {
+	/** Add one configuration's facts; a dump that is not a complete facts file joins `dropped` instead. */
+	public function add(dump: FactsDump): Void {
 		final lines: Array<String> = dump.text.split('\n');
 		while (lines.length > 0 && lines[lines.length - 1] == '') lines.pop();
 		if (lines.length < 2 || !lines[0].startsWith('{"k":"facts","v":1,') || !lines[lines.length - 1].startsWith('{"k":"end"')) {
@@ -470,22 +482,20 @@ final class CompilerFacts {
 		return at != null && at.file == _key(file) && at.span.from == span.from && at.span.to == span.to;
 	}
 
-	private function inside(at: FactPos, file: String, span: Span): Bool {
-		return at.file == _key(file) && span.from <= at.span.from && at.span.to <= span.to;
-	}
-
 	/**
 	 * The facts `pick` takes from the nodes of `file` meeting `span` that lie inside it; a node wholly inside `span`
-	 * gives all of them, wherever the compiler placed them. Null when one of those nodes cannot say where some of its
-	 * facts run.
+	 * gives all of them, wherever the compiler placed them. Null — Unknown — when one of those nodes cannot say where
+	 * some of its facts run (`callsIn`).
 	 */
-	private function within<F>(file: String, span: Span, pick: (FactNode) -> Array<F>, at: (F) -> FactPos): Null<Array<F>> {
+	public function within<F>(file: String, span: Span, pick: (FactNode) -> Array<F>, at: (F) -> FactPos): Null<Array<F>> {
+		final key: String = _key(file);
+		function inside(where: FactPos): Bool return where.file == key && span.from <= where.span.from && where.span.to <= span.to;
 		final out: Array<F> = [];
 		for (n in nodesAround(file, span, true)) {
 			if (n.incomplete.contains('stale-foreign')) return null;
-			final whole: Bool = inside(n.at, file, span);
+			final whole: Bool = inside(n.at);
 			if (!whole && (n.incomplete.contains('inline-site-unknown') || n.incomplete.contains('macro-expansion'))) return null;
-			for (fact in pick(n)) if (whole || inside(at(fact), file, span)) out.push(fact);
+			for (fact in pick(n)) if (whole || inside(at(fact))) out.push(fact);
 		}
 		return out;
 	}
@@ -498,8 +508,8 @@ final class CompilerFacts {
 		return index;
 	}
 
-	/** The source of the file keyed `file`, read once. */
-	private function sourceOf(file: String): Null<String> {
+	/** The source of the file keyed `file` when it is the text the compile read, read once; null otherwise. */
+	public function sourceOf(file: String): Null<String> {
 		if (_sources.exists(file)) return _sources[file];
 		final read: Null<String> = _stale.exists(file) ? null : _read(file);
 		final expected: Null<String> = _expected[file];
@@ -661,14 +671,9 @@ final class CompilerFacts {
 		return facts;
 	}
 
-	/** An empty table, which `addDump` fills one dump at a time: each dump's text can then be freed before the next is read. */
+	/** An empty table, which `add` fills one dump at a time: each dump's text can then be freed before the next is read. */
 	public static function create(read: (String) -> Null<String>, key: (String) -> String): CompilerFacts {
 		return new CompilerFacts(read, key);
-	}
-
-	/** Add one configuration's facts; a dump that is not a complete facts file joins `dropped` instead. */
-	public inline function addDump(dump: FactsDump): Void {
-		add(dump);
 	}
 
 	/** The id of type string `type` without its type arguments. */
