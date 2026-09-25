@@ -726,3 +726,21 @@ decided the question; it may not become a record of runs.
   `@:build` reached no declaration; each metadata inside is lifted — `be636ec3`
 - mayReach step B measurement: 13 new sound loop fixes (anyparse 13, TM 0) against the < 10 stop rule → the line
   continues — `be636ec3`
+- mayReach step C: element-type (per-owner) discrimination of the arrays a callee changes → `ValueEscapes` escapes
+  every library receiver (`Array.push` included) and answers "any" on live native code, so no Array receiver is ever
+  CannotCarry on real code; callees are walked for ANY non-fresh array change instead — `987038ab`
+- mayReach step C: a `dynamic`-method guard in the callee walk → every call of a `dynamic` method already carries an
+  unresolved site (region or body); no test could make the guard fail, dropped — `987038ab`
+- mayReach step C: a String/Array exemption from library-override loading → every such call is either a benign call
+  (not followed) or refuses on its own; dropped — `987038ab`
+- the implicit walk pushed a library dispatch's declared target only → a library override the graph has not read was
+  never walked; `followEdge` loads the overrides or refuses — `987038ab`
+- a local was taken as holding what a plain `=` last gave it → `??=`, a compound write and an assignment used as a
+  value (`all = xs = [1]`) left an alias unseen; only a plain or `??=` write of a fresh value whose value is discarded
+  keeps it unshared — `987038ab`
+- an expression statement was taken as discarding its value → the last statement of a block, branch or arm in value
+  position is that construct's value (`all = { xs = [1]; }`); a value counts as discarded only when a statement follows
+  it or it ends a function's block body, a loop body, or a statement branch/block that is itself discarded — `987038ab`
+- mayReach step C measurement: +3 sound loop fixes (anyparse 22, TM 1); the remaining refusals are the
+  implicit-conversion admission (hxnodejs `untyped` in a `@:from`) and the element-type relation. The mayReach line
+  ends here, as planned — `987038ab`
