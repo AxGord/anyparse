@@ -3638,10 +3638,10 @@
 		{
 			"name": "M-GENERATE-READERS-EXCLUDE-EACH-OTHER",
 			"type": "anyparse.check.OracleGeneration",
-			"method": "prepare",
+			"method": "hold",
 			"note": "every run takes every generation exclusively, so one agent's long --fix run blocks every other lint over a tree nobody regenerates",
-			"find": "final blocked: Null<String> = OracleGenerationLock.holdShared(lock, run.me, run.deadline);",
-			"replace": "final blocked: Null<String> = OracleGenerationLock.holdExclusive(lock, run.me, run.deadline);"
+			"find": "return OracleGenerationLock.holdShared(lock, run.me, run.deadline);",
+			"replace": "return OracleGenerationLock.holdExclusive(lock, run.me, run.deadline);"
 		},
 		{
 			"name": "M-GENERATE-WRITER-IGNORES-READERS",
@@ -3698,11 +3698,11 @@
 			"method": "record",
 			"find": [
 				"hashIn(s.implicitBefore, path) ?? hashOf(path, after)",
-				"if (moved == null) writeRecord(s.group, s.inputs, implicit, after);"
+				"if (moved != null) return"
 			],
 			"replace": [
 				"hashOf(path, after)",
-				"writeRecord(s.group, s.inputs, implicit, after);"
+				"if (moved != null && false) return"
 			],
 			"note": "implicit inputs are hashed only after the command, so a library switched while it ran is recorded as the state the hxml was built against"
 		},
@@ -3791,15 +3791,15 @@
 			"name": "M-GENERATE-SHARE-WITHOUT-REJUDGE",
 			"type": "anyparse.check.OracleGeneration",
 			"method": "share",
-			"find": "else if (staleness(group, judged) != null)",
-			"replace": "else if (false)",
+			"find": "if (observe(group, judged) == seen) continue;",
+			"replace": "continue;",
 			"note": "a group judged current before another run wiped it is shared for the compile without being judged again, so a half-written tree is typechecked and vetoes an edit falsely"
 		},
 		{
 			"name": "M-GENERATE-REJUDGE-UNBOUNDED",
 			"type": "anyparse.check.OracleGeneration",
 			"method": "prepare",
-			"find": "refuse(run, group, staleAgain(attempts));",
+			"find": "refuse(run, group, 'it went stale again $attempts time(s) while this run waited — another run keeps moving it');",
 			"replace": "",
 			"note": "a group still stale after the bounded retries is handed to the compile anyway instead of being made unavailable"
 		},
@@ -3834,6 +3834,36 @@
 			"find": "if (pid == null || start == '' || !living(pid, start)) return;",
 			"replace": "if (pid == null || !living(pid, start)) return;",
 			"note": "a left job with no recorded start time is killed on its pid alone, which may name an unrelated process group by now"
+		},
+		{
+			"name": "M-GENERATE-SHARE-JUDGES-STALENESS",
+			"type": "anyparse.check.OracleGeneration",
+			"method": "share",
+			"find": "if (observe(group, judged) == seen) continue;",
+			"replace": "if (staleness(group, judged) == null) continue;",
+			"note": "the compile hold asks whether a group is current instead of whether it moved since this run looked, so an entry with no inputs, or one whose command writes its own input, is regenerated until it is given up on"
+		},
+		{
+			"name": "M-GENERATE-RIVAL-COMMAND-RETRIED",
+			"type": "anyparse.check.OracleGeneration",
+			"method": "rivalCommand",
+			"force": "null",
+			"note": "a tree another configuration regenerated with a different command is sent back through regeneration, so two configurations take it back and forth instead of one being told why it is unavailable"
+		},
+		{
+			"name": "M-GENERATE-RIVAL-COMMANDS-KEPT",
+			"type": "anyparse.check.OracleDeclaration",
+			"method": "withoutRivalCommands",
+			"force": "[for (entry in entries) entry.config]",
+			"note": "an hxml two different generate commands of one config claim is kept, so both commands run into one tree and one configuration is always unavailable"
+		},
+		{
+			"name": "M-GENERATE-READ-ONLY-ROOT-THROWS",
+			"type": "anyparse.check.OracleGeneration",
+			"method": "hold",
+			"find": "return 'cannot create its generation state under ${Path.directory(Path.directory(stateDir(group)))}: ${exception.message}';",
+			"replace": "throw exception;",
+			"note": "a generation root where the state cannot be created crashes the run instead of making its configurations unavailable"
 		},
 		{
 			"name": "M-FIAD-CROSS-SUPER-UNPROVED",

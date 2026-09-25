@@ -5,6 +5,7 @@ import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.LintConfig.OracleGenerate;
 import anyparse.check.OracleCache.HxmlRefs;
 import anyparse.check.OracleGenerationLock.Holder;
+import haxe.Exception;
 import haxe.io.Path;
 
 using Lambda;
@@ -33,12 +34,13 @@ using StringTools;
  *
  * ## Failure and concurrency
  *
- * A command that fails, times out, or leaves an hxml missing makes every configuration it serves UNAVAILABLE with its
- * output quoted; a stale hxml is never used in its place. Entries naming one command in one directory are ONE
- * generation over the union of their inputs; distinct commands run concurrently (`HaxeSpawn.runAll`), so two of them
- * must not write a common path. Each generation is guarded across processes by a reader/writer lock:
- * runs compiling a current tree share it and never wait for each other, and only a regeneration
- * takes it exclusively, after every other live reader is done (`holdShared`, `holdExclusive`).
+ * A command that fails, times out, or leaves an hxml missing makes every configuration it serves UNAVAILABLE with its output
+ * quoted; a stale hxml is never used in its place. So does a root where the generation state cannot be created (a read-only
+ * checkout): without a record and a lock nothing proves an hxml current. Entries naming one command in one directory are ONE
+ * generation over the union of their inputs; distinct commands run concurrently (`HaxeSpawn.runAll`), so two of them must not
+ * write a common path (an hxml two commands claim is dropped when the config is read, `OracleDeclaration`). Each generation
+ * is guarded across processes by a reader/writer lock: runs compiling a current tree share it and never wait for each other,
+ * and only a regeneration takes it exclusively, after every other live reader is done (`holdShared`, `holdExclusive`).
  */
 @:nullSafety(Strict)
 final class OracleGeneration {
@@ -64,11 +66,14 @@ final class OracleGeneration {
 	 * Each group is guarded by a reader/writer lock across `apq` processes (`OracleGenerationLock`), waiting at most
 	 * `lockWaitMs` for it, in three phases. Every group is JUDGED under a momentary shared hold, nothing held across
 	 * groups; the stale ones are REGENERATED under the exclusive hold (`regenerate`); then every usable group is SHARED
-	 * for the compiles that follow — and judged again under that hold, since another run may have wiped the tree after
-	 * this one judged it (a generation it then failed, or was killed during). A group found stale there goes back
-	 * through regeneration, all shares dropped first, at most `MAX_REJUDGE` times; one still stale after that is
-	 * unavailable. Every wait follows ONE global order (`lockOrder`), so two runs cannot deadlock. The shared holds last
-	 * until `release` or process exit. A hold that cannot be had makes that group's configurations unavailable.
+	 * for the compiles that follow — and looked at again under that hold, since another run may have wiped the tree after
+	 * this one judged it (a generation it then failed, or was killed during). The question there is whether anything
+	 * MOVED since this run observed the group (`observe`), not whether it is current: an entry with no inputs is never
+	 * current, yet the generation this run just made is exactly what it compiles. A moved group goes back through
+	 * regeneration, all shares dropped first, at most `MAX_REJUDGE` times, and is unavailable after that; one moved to
+	 * the record of ANOTHER command is unavailable at once (`share`). Every wait follows ONE global order (`lockOrder`),
+	 * so two runs cannot deadlock. The shared holds last until `release` or process exit. A hold that cannot be had —
+	 * including state that cannot be created under a read-only root — makes that group's configurations unavailable.
 	 */
 	public static function prepare(oracles: Array<OracleConfig>, ?lockWaitMs: Int): PreparedOracles {
 		final groups: Array<GenerationGroup> = groupsOf(oracles);
@@ -79,7 +84,8 @@ final class OracleGeneration {
 			me: OracleGenerationLock.holder(),
 			deadline: Date.now().getTime() + (lockWaitMs ?? declaredWait ?? LOCK_WAIT),
 			failures: [],
-			notes: notes
+			notes: notes,
+			observed: []
 		};
 		#if nodejs
 		js.Node.process.once('exit', () -> releaseGroups(groups, run.me));
@@ -89,11 +95,13 @@ final class OracleGeneration {
 		var candidates: Array<GenerationGroup> = [];
 		for (group in ordered) {
 			final lock: String = lockDir(group);
-			final blocked: Null<String> = OracleGenerationLock.holdShared(lock, run.me, run.deadline);
+			final blocked: Null<String> = hold(run, group, false);
 			if (blocked != null)
 				refuse(run, group, blocked)
 			else if (staleness(group, seen) != null)
-				candidates.push(group);
+				candidates.push(group)
+			else
+				run.observed[group.key] = observe(group, seen);
 			OracleGenerationLock.dropShared(lock, run.me);
 		}
 		var attempts: Int = 0;
@@ -105,7 +113,7 @@ final class OracleGeneration {
 			if (attempts >= MAX_REJUDGE) {
 				for (group in moved) {
 					OracleGenerationLock.dropShared(lockDir(group), run.me);
-					refuse(run, group, staleAgain(attempts));
+					refuse(run, group, 'it went stale again $attempts time(s) while this run waited — another run keeps moving it');
 				}
 				break;
 			}
@@ -503,7 +511,9 @@ final class OracleGeneration {
 	/**
 	 * Record the successful generation `s`: an implicit input seen before the command keeps its pre-run hash, a new one
 	 * gets its hash now, and a generation during which a previously-recorded implicit input MOVED is not recorded at all.
-	 * Answers the clause the generation's note ends with — empty when it was recorded.
+	 * Answers the clause the generation's note ends with — empty when it was recorded from inputs that held still. An
+	 * explicit input that moved while the command ran is recorded as it was before, so the next run regenerates; this
+	 * run uses the generation as its snapshot of the tree.
 	 */
 	private static function record(s: StaleGroup, libraries: LibraryIndex): String {
 		final after: Map<String, String> = [];
@@ -511,8 +521,10 @@ final class OracleGeneration {
 		final implicit: Array<FileHash> = [
 			for (path in implicitInputs(s.group, libraries)) { path: path, hash: hashIn(s.implicitBefore, path) ?? hashOf(path, after) }
 		];
-		if (moved == null) writeRecord(s.group, s.inputs, implicit, after);
-		return moved == null ? '' : ' — NOT recorded: ${moved.path} changed while it ran, so the next run regenerates';
+		if (moved != null) return ' — NOT recorded: ${moved.path} changed while it ran, so the next run regenerates';
+		writeRecord(s.group, s.inputs, implicit, after);
+		final raced: Null<FileHash> = s.inputs.find(held -> hashOf(held.path, after) != held.hash);
+		return raced == null ? '' : ' — ${raced.path} changed while it ran, so the next run regenerates';
 	}
 
 	/**
@@ -535,10 +547,11 @@ final class OracleGeneration {
 	 * implicit inputs its previous record named are hashed BEFORE the command, and that record is deleted so a
 	 * generation killed half way leaves nothing that reads as current.
 	 */
-	private static function claim(group: GenerationGroup, me: Holder, fresh: Map<String, String>): Null<StaleGroup> {
+	private static function claim(run: GenerationRun, group: GenerationGroup, fresh: Map<String, String>): Null<StaleGroup> {
 		final judged: Null<String> = staleness(group, fresh);
 		if (judged == null) {
-			OracleGenerationLock.dropExclusive(lockDir(group), me);
+			run.observed[group.key] = observe(group, fresh);
+			OracleGenerationLock.dropExclusive(lockDir(group), run.me);
 			return null;
 		}
 		final why: String = judged;
@@ -585,11 +598,11 @@ final class OracleGeneration {
 		final fresh: Map<String, String> = [];
 		final stale: Array<StaleGroup> = [];
 		for (group in candidates) {
-			final blocked: Null<String> = OracleGenerationLock.holdExclusive(lockDir(group), run.me, run.deadline);
+			final blocked: Null<String> = hold(run, group, true);
 			if (blocked != null)
 				refuse(run, group, blocked)
 			else {
-				final claimed: Null<StaleGroup> = claim(group, run.me, fresh);
+				final claimed: Null<StaleGroup> = claim(run, group, fresh);
 				if (claimed != null) stale.push(claimed);
 			}
 		}
@@ -605,11 +618,13 @@ final class OracleGeneration {
 				}
 		], BUFFER, HaxeSpawn.parallelism());
 		final libraries: LibraryIndex = libraryIndex(groups);
+		final settled: Map<String, String> = [];
 		for (i => s in stale) {
 			final failure: Null<String> = failureOf(s.group, runs[i]);
-			if (failure == null)
-				run.notes.push('regenerated ${s.group.hxmls.join(', ')} (${s.why})${record(s, libraries)}')
-			else {
+			if (failure == null) {
+				run.notes.push('regenerated ${s.group.hxmls.join(', ')} (${s.why})${record(s, libraries)}');
+				run.observed[s.group.key] = observe(s.group, settled);
+			} else {
 				run.failures[s.group.key] = 'its generate command failed — $failure';
 				run.notes.push('could NOT regenerate ${s.group.hxmls.join(', ')} (${s.why}): $failure');
 			}
@@ -618,35 +633,88 @@ final class OracleGeneration {
 	}
 
 	/**
-	 * Take the shared hold on every usable group of `ordered`, in order, and judge each again under it: answers the
-	 * groups found stale there — a tree another run wiped after this one judged it — which `prepare` regenerates again.
+	 * Take the shared hold on every usable group of `ordered`, in order, and look at each again under it: answers the
+	 * groups that MOVED since this run observed them (`observe`) — a tree another run wiped or regenerated meanwhile —
+	 * which `prepare` sends back through regeneration. Moved to a record of a DIFFERENT command, a group is refused at
+	 * once instead: another configuration regenerates the same tree, and every retry would only hand it back.
 	 */
 	private static function share(run: GenerationRun, ordered: Array<GenerationGroup>): Array<GenerationGroup> {
 		final judged: Map<String, String> = [];
 		final moved: Array<GenerationGroup> = [];
 		for (group in ordered) if (!run.failures.exists(group.key)) {
-			final blocked: Null<String> = OracleGenerationLock.holdShared(lockDir(group), run.me, run.deadline);
-			if (blocked != null)
-				refuse(run, group, blocked)
-			else if (staleness(group, judged) != null)
-				moved.push(group);
+			final blocked: Null<String> = hold(run, group, false);
+			if (blocked != null) {
+				refuse(run, group, blocked);
+				continue;
+			}
+			final seen: Null<String> = run.observed[group.key];
+			if (seen == null) throw new Exception('${group.hxmls.join(', ')} reached its compile hold unobserved');
+			if (observe(group, judged) == seen) continue;
+			final rival: Null<String> = rivalCommand(group);
+			if (rival == null)
+				moved.push(group)
+			else {
+				OracleGenerationLock.dropShared(lockDir(group), run.me);
+				refuse(run, group, 'another config regenerates this tree with a different command (`$rival`)');
+			}
 		}
 		return moved;
 	}
 
-	/** Why a group found stale under its compile hold `attempts` times in a row is given up on. */
-	private static inline function staleAgain(attempts: Int): String {
-		return 'it went stale again $attempts time(s) while this run waited — another run keeps regenerating or failing it';
+	/**
+	 * What this run sees of `group` right now, as one string: its record as written, and the hash of every hxml, every
+	 * explicit input and every implicit input that record names. Taken when the group is judged current or regenerated,
+	 * and compared under the compile hold (`share`), which therefore asks "did anything move since THIS run looked" — not
+	 * "is it current", which an entry with no inputs, or one whose command writes its own input, never is.
+	 */
+	private static function observe(group: GenerationGroup, memo: Map<String, String>): String {
+		#if (sys || nodejs)
+		final written: String = try sys.io.File.getContent(recordFile(group)) catch (exception: haxe.Exception) MISSING;
+		final record: Null<GenerationRecord> = try haxe.Json.parse(written) catch (exception: haxe.Exception) null;
+		final paths: Array<String> = group.hxmls.concat(group.inputs ?? []).concat([for (held in record?.implicit ?? []) held.path]);
+		return [written].concat([for (hash in hashAll(paths, memo)) '${hash.path} ${hash.hash}']).join('\n');
+		#else
+		return '';
+		#end
+	}
+
+	/**
+	 * Take `group`'s shared or exclusive hold for `run`: null when held, else why not. A generation root where the state
+	 * cannot be created (a read-only checkout) is a reason too, never a crash: with no record and no lock nothing shows
+	 * the hxml current, so its configurations are unavailable.
+	 */
+	private static function hold(run: GenerationRun, group: GenerationGroup, exclusive: Bool): Null<String> {
+		final lock: String = lockDir(group);
+		try {
+			if (exclusive) return OracleGenerationLock.holdExclusive(lock, run.me, run.deadline);
+			return OracleGenerationLock.holdShared(lock, run.me, run.deadline);
+		} catch (exception: Exception) {
+			return 'cannot create its generation state under ${Path.directory(Path.directory(stateDir(group)))}: ${exception.message}';
+		}
+	}
+
+	/** The command `group`'s current record names when it is a current-scheme record of a command other than its own, else null. */
+	private static function rivalCommand(group: GenerationGroup): Null<String> {
+		#if (sys || nodejs)
+		final record: Null<GenerationRecord> = readRecord(recordFile(group));
+		final command: Null<String> = record?.command;
+		return record?.format == FORMAT_TAG && command != null && command != group.generate.command ? command : null;
+		#else
+		return null;
+		#end
 	}
 
 }
 
-/** One `prepare` call's state: who holds the locks, until when it waits, and what it has refused and said. */
+/** One `prepare` call's state: who holds the locks, until when it waits, and what it has refused and said, and what it saw. */
 typedef GenerationRun = {
 	var me: Holder;
 	var deadline: Float;
 	var failures: Map<String, String>;
 	var notes: Array<String>;
+
+	/** What this run last saw of each usable group, by key (`OracleGeneration.observe`). */
+	var observed: Map<String, String>;
 }
 
 /** `OracleGeneration.prepare`'s answer: the configurations ready to use, and a line per command that ran. */

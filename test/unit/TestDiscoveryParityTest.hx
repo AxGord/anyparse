@@ -1275,6 +1275,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-GENERATE-NEVER-STALE-BY-COMMAND',
 			'unit.check.OracleGenerationTest#testAChangedInputRegeneratesAndAnUnchangedOneDoesNot :: control :: '
 				+ 'M-GENERATE-NEVER-STALE-BY-INPUT',
+			'unit.check.OracleGenerationTest#testACommandThatWritesItsOwnInputIsUsable :: control :: '
+				+ 'M-GENERATE-SHARE-JUDGES-STALENESS',
 			'unit.check.OracleGenerationTest#testADevLibraryIsTrackedThroughItsRepositoryDirectory :: control :: '
 				+ 'M-GENERATE-REPO-DIR-FROM-NAME',
 			'unit.check.OracleGenerationTest#testADirectoryInputIsHashedByItsContent :: control :: '
@@ -1301,6 +1303,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-GENERATE-LOCK-IGNORED',
 			'unit.check.OracleGenerationTest#testAMissingHxmlRegenerates :: control :: '
 				+ 'M-GENERATE-TRUSTS-A-MISSING-HXML',
+			'unit.check.OracleGenerationTest#testAReadOnlyRootIsUnavailableNotACrash :: control :: '
+				+ 'M-GENERATE-READ-ONLY-ROOT-THROWS',
 			'unit.check.OracleGenerationTest#testARecordOfAnOlderSchemeIsStale :: control :: '
 				+ 'M-GENERATE-FORMAT-UNCHECKED',
 			'unit.check.OracleGenerationTest#testAReusedPidDoesNotHoldTheLock :: control :: '
@@ -1309,14 +1313,20 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-GENERATE-RECORD-OUTLIVES-THE-RUN',
 			'unit.check.OracleGenerationTest#testATakeOverEndsTheJobTheDeadRunLeft :: control :: '
 				+ 'M-GENERATE-TAKEOVER-LEAVES-THE-JOB',
+			'unit.check.OracleGenerationTest#testATreeAnotherCommandRegeneratedIsUnavailableAtOnce :: control :: '
+				+ 'M-GENERATE-RIVAL-COMMAND-RETRIED',
 			'unit.check.OracleGenerationTest#testATreeWipedAfterItWasJudgedIsRegeneratedBeforeTheCompile :: control :: '
 				+ 'M-GENERATE-SHARE-WITHOUT-REJUDGE',
 			'unit.check.OracleGenerationTest#testAnAbandonedLockIsTakenOver :: control :: '
 				+ 'M-GENERATE-LOCK-NEVER-RECOVERED',
 			'unit.check.OracleGenerationTest#testAnEmptyOrMissingInputIsNeverSilentlyConstant :: control :: '
 				+ 'M-GENERATE-EMPTY-INPUTS-NEVER,M-GENERATE-MISSING-INPUT-SILENT',
+			'unit.check.OracleGenerationTest#testAnEntryWithNoInputsRegeneratesOncePerRunAndIsUsable :: control :: '
+				+ 'M-GENERATE-SHARE-JUDGES-STALENESS',
 			'unit.check.OracleGenerationTest#testAnHxmlTheGenerationWritesIsNotARacedInput :: control :: '
 				+ 'M-GENERATE-PRODUCED-INCLUDE-IS-INPUT',
+			'unit.check.OracleGenerationTest#testAnHxmlTwoCommandsGenerateIsDropped :: control :: '
+				+ 'M-GENERATE-RIVAL-COMMANDS-KEPT',
 			'unit.check.OracleGenerationTest#testAnIncludeOutsideTheHxmlTreeIsAnInput :: control :: '
 				+ 'M-GENERATE-PRODUCED-BY-ROOT',
 			'unit.check.OracleGenerationTest#testAnInputEditedDuringTheGenerationIsSeenNextRun :: control :: '
@@ -2822,6 +2832,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-GENERATE-STATE-DIR-HASHED',
 			'M-GENERATE-ORDER-BY-KEY',
 			'M-GENERATE-ENDJOB-PID-ONLY',
+			'M-GENERATE-SHARE-JUDGES-STALENESS',
+			'M-GENERATE-RIVAL-COMMAND-RETRIED',
+			'M-GENERATE-RIVAL-COMMANDS-KEPT',
+			'M-GENERATE-READ-ONLY-ROOT-THROWS',
 			'M-FIAD-CROSS-SUPER-UNPROVED',
 			'M-FIAD-EARLY-READ-IGNORED',
 			'M-FIAD-EARLY-READ-CALL-ARG',

@@ -160,7 +160,9 @@ final class OracleGenerationTest extends Test {
 		#if (sys || nodejs)
 		final dir: String = fixture();
 		final config: OracleConfig = entry(dir, '$WRITE && echo two > input.txt', ['$dir/input.txt']);
-		OracleGeneration.prepare([config]);
+		final first: PreparedOracles = OracleGeneration.prepare([config]);
+		Assert.isNull(first.oracles[0].unavailable, 'the run that made it uses it');
+		Assert.isTrue(first.notes.exists(note -> note.contains('changed while it ran')), 'and says the input moved: ${first.notes}');
 		OracleGeneration.prepare([config]);
 		Assert.equals(2, runs(dir), 'the hxml was built from `one`, so the `two` written during the run is stale');
 		OracleGeneration.prepare([config]);
@@ -491,7 +493,7 @@ final class OracleGenerationTest extends Test {
 
 	/**
 	 * A library the command's own run switched is not recorded as current: the version the hxml was built against is
-	 * not the one on disk afterwards, so the next run regenerates.
+	 * not the one on disk afterwards, so the next run regenerates. This run still compiles the generation it made.
 	 */
 	@:pin('control')
 	@:killer('M-GENERATE-IMPLICIT-HASHED-AFTER-THE-RUN')
@@ -506,13 +508,16 @@ final class OracleGenerationTest extends Test {
 		final write: String = "printf '%s\\n' '-cp .' '-main Main' '-cp " + repo + "/mylib/1,0,0/src' > gen.hxml && echo run >> runs.txt";
 		OracleGeneration.prepare([entry(dir, write, ['$dir/input.txt'])]);
 		final switching: OracleConfig = entry(dir, '$write && echo 1.0.1 > $repo/mylib/.current', ['$dir/input.txt']);
-		OracleGeneration.prepare([switching]);
-		Assert.equals(
-			3, runs(dir),
-			'the changed command ran, its generation (raced by the library switch it made) went unrecorded, and the compile hold regenerated it'
+		final raced: PreparedOracles = OracleGeneration.prepare([switching]);
+		Assert.equals(2, runs(dir), 'the changed command ran once');
+		Assert.isNull(raced.oracles[0].unavailable, 'and this run uses what it made');
+		Assert.isTrue(
+			raced.notes.exists(note -> note.contains('NOT recorded')), 'unrecorded, since the library moved under it: ${raced.notes}'
 		);
 		OracleGeneration.prepare([switching]);
-		Assert.equals(3, runs(dir), 'the unraced generation after it was recorded');
+		Assert.equals(3, runs(dir), 'so the next run regenerates');
+		OracleGeneration.prepare([switching]);
+		Assert.equals(3, runs(dir), 'and the unraced generation after it was recorded');
 		CliFixture.removeDir(repo);
 		CliFixture.removeDir(dir);
 		#else
@@ -778,7 +783,9 @@ final class OracleGenerationTest extends Test {
 		OracleGeneration.prepare([at(write)]);
 		final editing: OracleConfig = at(write + " && echo '-D b' > extra.hxml");
 		OracleGeneration.prepare([editing]);
-		Assert.equals(3, runs(dir), 'the include moved under the first generation, so it went unrecorded and was regenerated');
+		Assert.equals(2, runs(dir), 'the changed command ran once, and the include moved under it');
+		OracleGeneration.prepare([editing]);
+		Assert.equals(3, runs(dir), 'so it went unrecorded and the next run regenerates');
 		OracleGeneration.prepare([editing]);
 		Assert.equals(3, runs(dir), 'the unraced one after it was recorded');
 		CliFixture.removeDir(dir);
@@ -821,19 +828,24 @@ final class OracleGenerationTest extends Test {
 		#end
 	}
 
-	/** A generation that goes stale again every time it is regenerated is unavailable after a bounded number of tries. */
+	/**
+	 * A generation that moves again every time it is regenerated is unavailable after a bounded number of tries. A
+	 * background writer appending to the hxml stands in for another run that keeps rewriting the tree.
+	 */
 	@:pin('control')
 	@:killer('M-GENERATE-REJUDGE-UNBOUNDED')
 	public function testAGenerationThatKeepsGoingStaleIsUnavailable(): Void {
-		#if (sys || nodejs)
+		#if nodejs
 		final dir: String = fixture();
-		final restless: OracleConfig = entry(dir, '$WRITE && echo x >> input.txt', ['$dir/input.txt']);
-		final ready: Array<OracleConfig> = OracleGeneration.prepare([restless]).oracles;
-		Assert.isTrue((ready[0].unavailable ?? '').contains('went stale again'), 'it is given up on: ${ready[0].unavailable}');
+		final restless: OracleConfig = entry(dir, WRITE, ['$dir/input.txt']);
+		final writer: Dynamic = js.node.ChildProcess.spawn('sh', ['-c', 'while :; do echo "# moved" >> gen.hxml; done'], { cwd: dir });
+		var ready: Array<OracleConfig> = [];
+		CliFixture.always(() -> writer.kill(), () -> ready = OracleGeneration.prepare([restless]).oracles);
+		Assert.isTrue((ready[0]?.unavailable ?? '').contains('went stale again'), 'it is given up on: ${ready[0]?.unavailable}');
 		Assert.isTrue(runs(dir) <= 4, 'after a bounded number of generations: ${runs(dir)}');
 		CliFixture.removeDir(dir);
 		#else
-		Assert.pass('non-sys target');
+		Assert.pass('non-node target');
 		#end
 	}
 
@@ -954,5 +966,135 @@ final class OracleGenerationTest extends Test {
 		};
 	}
 	#end
+
+	/**
+	 * An entry with no `generateInputs` regenerates once per run and is USABLE after it: the compile hold asks whether the
+	 * tree moved since this run made it, not whether it is current, which such an entry never is.
+	 */
+	@:pin('control')
+	@:killer('M-GENERATE-SHARE-JUDGES-STALENESS')
+	public function testAnEntryWithNoInputsRegeneratesOncePerRunAndIsUsable(): Void {
+		#if (sys || nodejs)
+		final dir: String = fixture();
+		final config: OracleConfig = declared(dir, WRITE, 'gen.hxml');
+		for (run in 1...3) {
+			final ready: Array<OracleConfig> = OracleGeneration.prepare([config]).oracles;
+			OracleGeneration.release([config]);
+			Assert.isNull(ready[0].unavailable, 'run $run can use it');
+			Assert.equals(run, runs(dir), 'after exactly one generation in run $run');
+		}
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A command that writes one of its own `generateInputs` is usable in the run that made it, and regenerates in the next. */
+	@:pin('control')
+	@:killer('M-GENERATE-SHARE-JUDGES-STALENESS')
+	public function testACommandThatWritesItsOwnInputIsUsable(): Void {
+		#if (sys || nodejs)
+		final dir: String = fixture();
+		final config: OracleConfig = entry(dir, '$WRITE && echo x >> input.txt', ['$dir/input.txt']);
+		for (run in 1...3) {
+			final ready: Array<OracleConfig> = OracleGeneration.prepare([config]).oracles;
+			OracleGeneration.release([config]);
+			Assert.isNull(ready[0].unavailable, 'run $run can use it');
+			Assert.equals(run, runs(dir), 'after exactly one generation in run $run');
+		}
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A tree another configuration regenerated with a DIFFERENT command while this run held it current is unavailable at
+	 * once, with the rival named — retrying would only hand the tree back and forth. The second group's command stands in
+	 * for that other run: it rewrites the hxml and the record the way the rival generation would.
+	 */
+	@:pin('control')
+	@:killer('M-GENERATE-RIVAL-COMMAND-RETRIED')
+	public function testATreeAnotherCommandRegeneratedIsUnavailableAtOnce(): Void {
+		#if (sys || nodejs)
+		final dir: String = fixture();
+		final current: OracleConfig = entry(dir, WRITE, ['$dir/input.txt']);
+		OracleGeneration.prepare([current]);
+		OracleGeneration.release([current]);
+		final record: String = OracleGeneration.recordFile(OracleGeneration.groupsOf([current])[0]);
+		final rival: Dynamic = haxe.Json.parse(File.getContent(record));
+		rival.command = 'the rival command';
+		File.saveContent('$dir/rival.json', haxe.Json.stringify(rival));
+		final other: OracleConfig = declared(
+			dir, "printf '%s\\n' '-cp .' '-main Main' > o.hxml && echo '# rival' >> gen.hxml && cp rival.json '" + record + "'", 'o.hxml'
+		);
+		final ready: Array<OracleConfig> = OracleGeneration.prepare([current, other]).oracles;
+		OracleGeneration.release([current, other]);
+		Assert.isTrue(
+			(ready[0].unavailable ?? '').contains('another config regenerates this tree with a different command (`the rival command`)'),
+			'the rival is named: ${ready[0].unavailable}'
+		);
+		Assert.equals(1, runs(dir), 'and the tree was not taken back from it');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * One config naming an hxml under two different `generate` commands drops every entry that does, with a line naming
+	 * the rival command; one command named twice for one hxml is ONE generation and stays.
+	 */
+	@:pin('control')
+	@:killer('M-GENERATE-RIVAL-COMMANDS-KEPT')
+	public function testAnHxmlTwoCommandsGenerateIsDropped(): Void {
+		final config: LintConfig = LintConfig.parse(
+			'{"compilerOracle":[{"hxml":"g.hxml","generate":"one"},{"hxml":"g.hxml","generate":"two","defines":["B"]},'
+			+ '{"hxml":"h.hxml","generate":"one"},{"hxml":"h.hxml","generate":"one","defines":["B"]}]}',
+			'/tmp'
+		);
+		Assert.equals('/tmp/h.hxml,/tmp/h.hxml', config.compilerOracles().map(o -> o.hxml).join(','), 'only the unambiguous hxml stays');
+		Assert.isTrue(
+			config.drops().exists(d -> d.contains('compilerOracle[0]') && d.contains('`two`')),
+			'each drop names its rival: ${config.drops()}'
+		);
+		Assert.isTrue(config.drops().exists(d -> d.contains('compilerOracle[1]') && d.contains('`one`')), 'both ways: ${config.drops()}');
+	}
+
+	/**
+	 * A generation root where hxq cannot create its state (a read-only checkout) makes the configuration unavailable with
+	 * the reason, never a crash: with no record and no lock nothing can show the hxml current.
+	 */
+	@:pin('control')
+	@:killer('M-GENERATE-READ-ONLY-ROOT-THROWS')
+	public function testAReadOnlyRootIsUnavailableNotACrash(): Void {
+		#if nodejs
+		final dir: String = fixture();
+		js.node.Fs.chmodSync(dir, 365);
+		final writable: Bool = try {
+			File.saveContent('$dir/probe.txt', '');
+			true;
+		} catch (exception: haxe.Exception) false;
+		var ready: Array<OracleConfig> = [];
+		if (!writable)
+			CliFixture.always(
+				() -> js.node.Fs.chmodSync(dir, 493),
+				() -> ready = OracleGeneration.prepare([entry(dir, WRITE, ['$dir/input.txt'])]).oracles
+			);
+		js.node.Fs.chmodSync(dir, 493);
+		if (writable) {
+			CliFixture.removeDir(dir);
+			Assert.pass('a read-only directory is writable for this user — skipped');
+			return;
+		}
+		Assert.isTrue(
+			(ready[0]?.unavailable ?? '').contains('cannot create its generation state under $dir/.apq'),
+			'the reason is given: ${ready[0]?.unavailable}'
+		);
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-node target');
+		#end
+	}
 
 }

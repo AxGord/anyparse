@@ -74,7 +74,11 @@ final class OracleGenerationLock {
 			final created: Bool = try {
 				js.node.Fs.mkdirSync(writer);
 				true;
-			} catch (exception: haxe.Exception) false;
+			} catch (exception: haxe.Exception) {
+				// only another holder's writer is waited for: an unwritable lock would otherwise be waited on to the deadline
+				if ('${Reflect.field(exception.native, 'code')}' != 'EEXIST') throw exception;
+				false;
+			};
 			if (created) {
 				writeAtomically(Path.join([writer, 'owner']), '${me.pid}\n${me.start}\n${Date.now().getTime()}');
 				break;

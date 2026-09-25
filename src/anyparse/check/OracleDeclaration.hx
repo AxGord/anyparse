@@ -89,9 +89,12 @@ final class OracleDeclaration {
 	 * Every drop appends a diagnostic line, because a dropped element that said nothing is
 	 * indistinguishable from one that works — and here that silence costs a whole build's worth
 	 * of verification.
+	 *
+	 * An hxml two different `generate` commands claim is dropped from every entry that claims it
+	 * (`withoutRivalCommands`).
 	 */
 	private static function readList(items: Array<JValue>, baseDir: Null<String>, drops: Array<String>): Array<OracleConfig> {
-		final out: Array<OracleConfig> = [];
+		final out: Array<IndexedOracle> = [];
 		for (i in 0...items.length) switch items[i] {
 			case JObject(fields):
 				final declared: OracleFields = readFields(i, fields, drops);
@@ -100,11 +103,11 @@ final class OracleDeclaration {
 					drops.push('compilerOracle[$i] declares no "hxml" — dropped');
 					continue;
 				}
-				out.push(at(hxml, declared, baseDir, drops, i));
+				out.push({ index: i, config: at(hxml, declared, baseDir, drops, i) });
 			case _:
 				drops.push('compilerOracle[$i] is not an object — dropped');
 		}
-		return out;
+		return withoutRivalCommands(out, drops);
 	}
 
 	/** One array element's keys as DECLARED, every wrong-typed or unknown one dropped with a line. */
@@ -249,6 +252,36 @@ final class OracleDeclaration {
 		return out;
 	}
 
+	/**
+	 * `entries` without those whose hxml a DIFFERENT `generate` command of this document also writes. One generation's
+	 * state and lock are keyed by its tree, so two commands over one hxml would run concurrently into it and each find
+	 * the other's record: neither configuration could ever be current. Which one the project meant is not ours to guess,
+	 * so each such entry is dropped with a line naming the rival command.
+	 */
+	private static function withoutRivalCommands(entries: Array<IndexedOracle>, drops: Array<String>): Array<OracleConfig> {
+		final claims: Map<String, Array<String>> = [];
+		for (entry in entries) {
+			final command: Null<String> = entry.config.generate?.command;
+			if (command == null) continue;
+			final held: Array<String> = claims[entry.config.hxml] ?? [];
+			if (!held.contains(command)) held.push(command);
+			claims[entry.config.hxml] = held;
+		}
+		final out: Array<OracleConfig> = [];
+		for (entry in entries) {
+			final command: Null<String> = entry.config.generate?.command;
+			final rivals: Array<String> = command == null ? [] : (claims[entry.config.hxml] ?? []).filter(c -> c != command);
+			if (rivals.length == 0)
+				out.push(entry.config)
+			else
+				drops.push(
+					'compilerOracle[${entry.index}] generates ${entry.config.hxml}, which another entry generates with a different command '
+					+ '(`${rivals.join('`, `')}`) — which one writes it is ambiguous, so the entry is dropped'
+				);
+		}
+		return out;
+	}
+
 }
 
 /**
@@ -263,4 +296,10 @@ private typedef OracleFields = {
 	var defines: Array<String>;
 	var generate: Null<String>;
 	var generateInputs: Null<Array<String>>;
+}
+
+/** A configuration read from the array form, with the position its element had there, for the drop lines. */
+private typedef IndexedOracle = {
+	var index: Int;
+	var config: OracleConfig;
 }
