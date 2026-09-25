@@ -94,6 +94,14 @@ interface SymbolIndexHost {
 	function reachBuilds(): Null<ReachBuilds>;
 
 	/**
+	 * What the configured compiler oracles typed, unioned over their configurations (`CompilerFacts`), compiled on first
+	 * demand and once per run — or null when the run configured no oracle, declined it (`--no-oracle`), or no
+	 * configuration answered. Independent of `reachConfigurationsComplete`: code no configuration compiled has no facts,
+	 * and a consumer treats that absence as "no facts", never as "no code".
+	 */
+	function compilerFacts(): Null<CompilerFacts>;
+
+	/**
 	 * The memoised PROJECT-scoped `SymbolIndex` — built once over `resolutionProjectFiles`, or
 	 * null when the project declared no `resolutionRoots` and the caller's own report scope IS
 	 * the answer. The project-scope twin of `resolutionIndex`, and for the same reason: the two

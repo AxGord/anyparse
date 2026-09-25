@@ -7,9 +7,11 @@ import anyparse.check.Linter;
 import anyparse.check.OracleGeneration;
 import anyparse.check.ReachDefinesProbe;
 import anyparse.check.Severity;
+import anyparse.check.TypedFactsProbe;
 import anyparse.query.Address.TreeAddresser;
 import anyparse.query.CachingGrammarPlugin.LibrarySources;
 import anyparse.query.CachingGrammarPlugin.ResolutionScope;
+import anyparse.query.CompilerFacts;
 import anyparse.query.LintBaseline;
 import anyparse.query.LintDiff.LintDiffTally;
 import anyparse.query.LintDiff.LintMessageIdentities;
@@ -233,8 +235,8 @@ final class LintCommand implements CliCommand {
 		warnScopeNotices(activeChecks, resolveConfig, paths, o.noOracle);
 		final oracleConfig: Null<LintConfig> = paths.length > 0 ? resolveConfig(paths[0]) : null;
 		final oracles: Array<OracleConfig> = oraclesOf(oracleConfig, o.noOracle);
-		final resolution: Null<ResolutionScope> = withReachConfigurations(
-			unconfigured, oracles, o.noOracle, reachComplete(paths, resolveConfig)
+		final resolution: Null<ResolutionScope> = withCompilerFacts(
+			withReachConfigurations(unconfigured, oracles, o.noOracle, reachComplete(paths, resolveConfig)), oracles, o.noOracle
 		);
 
 		if (o.fix) {
@@ -343,6 +345,32 @@ final class LintCommand implements CliCommand {
 			return builds;
 		}
 		return { declared: resolution.declared, sources: resolution.sources, builds: probe };
+	}
+
+	/**
+	 * `resolution` carrying what the configured compiler oracles typed (`TypedFactsProbe`), compiled on first demand and
+	 * once per run. Unlike the builds it needs no complete oracle list: code no configuration compiled simply has no facts.
+	 * Unchanged with no oracle, or under `--no-oracle`.
+	 */
+	private static function withCompilerFacts(
+		resolution: Null<ResolutionScope>, oracles: Array<OracleConfig>, noOracle: Bool
+	): Null<ResolutionScope> {
+		if (resolution == null || oracles.length == 0 || noOracle) return resolution;
+		var probed: Bool = false;
+		var facts: Null<CompilerFacts> = null;
+		function probe(): Null<CompilerFacts> {
+			if (!probed) {
+				probed = true;
+				facts = TypedFactsProbe.probeAll(oracles);
+			}
+			return facts;
+		}
+		return {
+			declared: resolution.declared,
+			sources: resolution.sources,
+			builds: resolution.builds,
+			facts: probe
+		};
 	}
 
 	/**
