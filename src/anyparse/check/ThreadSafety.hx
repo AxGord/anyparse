@@ -179,14 +179,14 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		}
 	}
 
-	/** Reverse BFS from the sinks over Call/New/Virtual — `taintHop[n]` is n's next edge toward a sink. */
+	/** Reverse BFS from the sinks over the invocation edges (`EdgeKind.isInvocation`) — `taintHop[n]` is n's next edge toward a sink. */
 	private static function collectTaint(graph: CallGraph, sinkIds: Array<String>, taintHop: Map<String, CallEdge>): Void {
 		final queue: Array<String> = sinkIds.copy();
 		var qi: Int = 0;
 		while (qi < queue.length) {
 			final id: String = queue[qi++];
 			for (edge in graph.inEdges(id)) {
-				if (edge.kind != Call && edge.kind != New && edge.kind != Virtual) continue;
+				if (!edge.kind.isInvocation()) continue;
 				if (sinkIds.contains(edge.from) || taintHop.exists(edge.from)) continue;
 				taintHop[edge.from] = edge;
 				queue.push(edge.from);
@@ -200,7 +200,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		violations: Array<Violation>
 	): Void {
 		for (edge in graph.edges) {
-			if (edge.kind != Call && edge.kind != New && edge.kind != Virtual) continue;
+			if (!edge.kind.isInvocation()) continue;
 			if (!sinkIds.contains(edge.to)) continue;
 			// a `marshals` function IS the thread boundary — its body dispatches
 			// between contexts in ways the graph cannot see; sinks inside it are
@@ -255,7 +255,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 					final windowEnd: Null<Int> = closingUnlockFrom(graph, lockEdge, unlockId);
 					if (windowEnd == null) continue;
 					for (edge in graph.outEdges(lockEdge.from)) {
-						if (edge.kind != Call && edge.kind != New && edge.kind != Virtual) continue;
+						if (!edge.kind.isInvocation()) continue;
 						// same-simple-name types merge into one graph node — only
 						// edges from the SAME FILE belong to this lock's body window
 						if (edge.file != lockEdge.file) continue;

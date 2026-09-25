@@ -57,6 +57,7 @@ typedef LintDocument = {
 	var rules: Map<String, RuleConfig>;
 	var ?compilerOracles: Array<OracleConfig>;
 	var ?compilerOracleServer: Bool;
+	var ?reachConfigurationsComplete: Bool;
 	var ?resolutionRoots: Array<String>;
 	var ?resolutionLibs: Array<String>;
 	var ?resolutionStd: Bool;
@@ -110,6 +111,9 @@ final class LintConfig {
 	 */
 	private final _compilerOracleServer: Bool;
 
+	/** Whether the `compilerOracle` list covers every build the project ships (`reachConfigurationsComplete`); false unless declared. */
+	private final _reachConfigurationsComplete: Bool;
+
 	/**
 	 * The declared source roots (`resolutionRoots`) — the project's own, see the accessor — each resolved
 	 * to absolute against the config directory; an empty array when the key is absent.
@@ -137,8 +141,9 @@ final class LintConfig {
 	public function new(
 		rules: Map<String, RuleConfig>, ?compilerOracles: Array<OracleConfig>, ?resolutionRoots: Array<String>,
 		?resolutionLibs: Array<String>, ?resolutionStd: Bool, ?compilerOracleServer: Bool, ?languageVersion: String,
-		?frameworks: Array<FrameworkContract>, ?drops: Array<String>
+		?frameworks: Array<FrameworkContract>, ?drops: Array<String>, ?reachConfigurationsComplete: Bool
 	) {
+		_reachConfigurationsComplete = reachConfigurationsComplete ?? false;
 		_rules = rules;
 		_compilerOracles = compilerOracles ?? [];
 		_compilerOracleServer = compilerOracleServer ?? false;
@@ -178,6 +183,17 @@ final class LintConfig {
 	 */
 	public function compilerOracleServer(): Bool {
 		return _compilerOracleServer;
+	}
+
+	/**
+	 * Whether the project declares its `compilerOracle` list COMPLETE for the reach analysis
+	 * (`reachConfigurationsComplete`): every build it ships is one of those configurations. Only then may a
+	 * conditional branch that none of them compiles be read as code that never runs, and a library file none of them
+	 * parses as code that runs in no build — a platform build the list cannot typecheck (another OS, an app-store
+	 * variant) still ships its branches. False by default: without it every branch is walked.
+	 */
+	public function reachConfigurationsComplete(): Bool {
+		return _reachConfigurationsComplete;
 	}
 
 	/**
@@ -544,6 +560,7 @@ final class LintConfig {
 			rules: rules,
 			compilerOracles: near.compilerOracles ?? far.compilerOracles,
 			compilerOracleServer: near.compilerOracleServer ?? far.compilerOracleServer,
+			reachConfigurationsComplete: near.reachConfigurationsComplete ?? far.reachConfigurationsComplete,
 			resolutionRoots: near.resolutionRoots ?? far.resolutionRoots,
 			resolutionLibs: near.resolutionLibs ?? far.resolutionLibs,
 			resolutionStd: near.resolutionStd ?? far.resolutionStd,
@@ -571,7 +588,7 @@ final class LintConfig {
 	private static function fromDocument(doc: LintDocument): LintConfig {
 		return new LintConfig(
 			doc.rules, doc.compilerOracles, doc.resolutionRoots, doc.resolutionLibs, doc.resolutionStd, doc.compilerOracleServer,
-			doc.languageVersion, doc.frameworks, doc.drops
+			doc.languageVersion, doc.frameworks, doc.drops, doc.reachConfigurationsComplete
 		);
 	}
 
@@ -608,6 +625,7 @@ final class LintConfig {
 			rules: rules,
 			compilerOracles: oracles,
 			compilerOracleServer: config.compilerOracleServer,
+			reachConfigurationsComplete: config.reachConfigurationsComplete,
 			resolutionRoots: roots,
 			resolutionLibs: config.resolutionLibs,
 			resolutionStd: config.resolutionStd,

@@ -125,6 +125,14 @@ typedef MemberInfo = {
 	var firstParamTypeSource: Null<String>;
 
 	/**
+	 * The written types of ALL the member's parameters, in order — `null` for one written without a type;
+	 * empty for a member that is not a function. What a caller needs to tell, from the declaration alone,
+	 * whether a call can run user code through an argument (a function-typed parameter, or one of a type
+	 * whose implicitly-called methods a call may run).
+	 */
+	var paramTypeSources: Array<Null<String>>;
+
+	/**
 	 * The member's EXPLICIT visibility keyword as WRITTEN (`public` / `private`), or null
 	 * when its modifier run carries none. Drives cross-file override-visibility resolution.
 	 */
@@ -194,13 +202,32 @@ typedef MemberInfo = {
 
 	/**
 	 * True when the member carries the grammar's implicit-conversion annotation
-	 * (`RefShape.implicitConversionMetaName`) — a `@:from` on an abstract, whose body the
+	 * (`ExecutionShape.implicitConversionMetaName`) — a `@:from` on an abstract, whose body the
 	 * compiler RUNS wherever a value of the source type is written where this type is
 	 * expected. The fact `resolvesToConversionFreeType` turns on: a rewrite that narrows a
 	 * binding's declared type from a top type to such an abstract compiles and silently
 	 * gains that call. A header `from X` clause generates no code and is not recorded here.
 	 */
 	var isImplicitConversion: Bool;
+
+	/**
+	 * True when the member carries an annotation under which the language calls it IMPLICITLY
+	 * (`ExecutionShape.implicitCallMetaNames`: an operator, an index access, a conversion, a field-name
+	 * fallback) — code no call site names.
+	 */
+	var isImplicitCall: Bool;
+
+	/**
+	 * The implicit-call annotations (`ExecutionShape.implicitCallMetaNames`) the member carries, by name — which of the
+	 * language's implicit channels runs it: an operator, an index access, a conversion, a field-name fallback.
+	 */
+	var implicitCallMetas: Array<String>;
+
+	/**
+	 * True when the member's modifier run carries the grammar's `dynamic` modifier (`RefShape.dynamicModifierKind`):
+	 * the program may REASSIGN the method, so a call to it runs whatever function value it holds.
+	 */
+	var isDynamic: Bool;
 
 	/**
 	 * True when the member's DECLARATION sits under a `conditionalMemberKind` host — the
@@ -293,6 +320,12 @@ typedef TypeDeclInfo = {
 	var supertypesRaw: Array<String>;
 
 	/**
+	 * The `extends` / `implements` targets as the source writes them, type arguments included
+	 * (`Box<W>`) — what binds a supertype's type parameters for a member it declares with one.
+	 */
+	var supertypesWritten: Array<String>;
+
+	/**
 	 * Simple names (last `.` segment) of the type's `implements` targets ONLY — the
 	 * interfaces it declares itself to satisfy, a subset of `supertypes` excluding the
 	 * `extends` superclass / super-interfaces. Drives the interface-mutability gate: a
@@ -360,6 +393,13 @@ typedef TypeDeclInfo = {
 	 */
 	var hasKeep: Bool;
 
+	/**
+	 * True when the declaration carries a metadata under which the language constructs an instance from a
+	 * literal (`ExecutionShape.implicitConstructionTypeMetaNames`, Haxe `@:structInit`) — a constructor run no `new`
+	 * names, which a call graph must find without loading the declaring file.
+	 */
+	var constructsFromLiteral: Bool;
+
 	/** This type's directly-declared members (name + getter-property flag), for type-aware purity. */
 	var members: Array<MemberInfo>;
 
@@ -381,6 +421,12 @@ typedef TypeDeclInfo = {
 	 * non-abstract decl.
 	 */
 	var abstractForwardUnderlying: Null<String>;
+
+	/**
+	 * The members a `@:forward(a, b)` abstract forwards to its underlying type, or null when its `@:forward`
+	 * names none (it forwards every member) or it is not a forwarding abstract.
+	 */
+	var forwardedMembers: Null<Array<String>>;
 };
 
 /**

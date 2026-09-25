@@ -108,7 +108,9 @@ final class ClustersCommand implements CliCommand {
 		CliIo.sysPrint('into a utils bucket first (else one hub glues everything into a blob).\n\n');
 		CliIo.sysPrint('Options:\n');
 		CliIo.sysPrint('  --hubs <n>     Extract exactly the top-n fan-in hubs (0 = off; default auto)\n');
-		CliIo.sysPrint('  --kinds <k,..> Edge kinds for connectivity: call,ref,new,virtual,contains (default call,ref,new)\n');
+		CliIo.sysPrint(
+			'  --kinds <k,..> Edge kinds for connectivity: call,ref,new,virtual,contains,accessor (default call,ref,new,accessor)\n'
+		);
 		CliIo.sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
 	}
 

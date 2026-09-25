@@ -2562,35 +2562,41 @@
 		},
 		{
 			"name": "M-ELEMENT-LOOP-TYPE-CALLEE",
-			"type": "anyparse.check.ElementLoopRewrite",
-			"method": "isSelfCallee",
-			"find": "\t\tif (SourceText.isUpperInitial(name) && (receiver.kind == core.identKind || core.accessKinds.contains(receiver.kind))) return true;\n",
-			"replace": "",
-			"note": "a static call on a type (Main.grow()) is admitted, so a static that grows or replaces the collection runs behind an element binder"
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": [
+				"\t\t\t\t\tif ((bound == null || bound < 0) && CallGraphNames.isTypeLike(name)) return {\n",
+				"if (written == null) {\n\t\t\t\t\t\t\tunresolvedAt(span, UnresolvedReceiver(calleeName), currentType);\n"
+			],
+			"replace": [
+				"\t\t\t\t\tif (false) return {\n",
+				"if (written == null) {\n\t\t\t\t\t\t\t{}\n"
+			],
+			"note": "an unbound upper-case receiver is no longer a TYPE and its unresolved call is not recorded, so a static call (Main.grow()) that grows the collection reaches nothing"
 		},
 		{
 			"name": "M-ELEMENT-LOOP-NEW-EXPR",
-			"type": "anyparse.check.ElementLoopRewrite",
-			"method": "callsThroughSelf",
-			"find": "\t\tif (node.kind == core.shape.newExprKind) return true;\n",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "\t\t\tif (target != null) addEdge(from, target, New, null, file, span);\n",
 			"replace": "",
-			"note": "a constructor call is admitted, so a constructor that grows or replaces the collection runs behind an element binder"
+			"note": "a constructor call leaves no edge, so a constructor that grows or replaces the collection runs behind an element binder unseen"
 		},
 		{
 			"name": "M-KV-OPENER-SELF-CALL",
 			"type": "anyparse.check.PreferKeyValueLoop",
-			"method": "openerDecline",
-			"find": "\t\telse if (m.selfCall)\n\t\t\tElementLoopRewrite.SELF_CALL_DECLINE\n",
-			"replace": "",
-			"note": "the opener arm fixes a body that calls through the instance, so a callee that grows the collection runs on under the key-value iterator"
+			"method": "fixWalk",
+			"find": "openerDecline(m, f.source) ?? ElementLoopRewrite.reachDecline(gate.reachOf(), gate.file, m.header)",
+			"replace": "openerDecline(m, f.source)",
+			"note": "the opener arm never asks the body's reach, so a callee that grows the collection runs on under the key-value iterator"
 		},
 		{
 			"name": "M-VALUE-LOOP-SELF-CALL",
 			"type": "anyparse.check.PreferValueLoop",
-			"method": "analyze",
-			"find": "decline: ElementLoopRewrite.elementDecline(binder, h.collection, collectionTypeSource, h.body, core)",
-			"replace": "decline: binder.refusal ?? (collectionTypeSource == null ? ElementLoopRewrite.unresolvedDecline(h.collection) : null)",
-			"note": "a body calling through this is rewritten to a value loop, so a callee that replaces X[i] after the binder was read, or grows the collection, changes what the loop reads"
+			"method": "fixWalk",
+			"find": "ElementLoopRewrite.gatedEdits(buildEdits(m, f.source), gate, m.header, m.forSpan, m.decline, out);",
+			"replace": "for (e in buildEdits(m, f.source)) out.push(e);",
+			"note": "the value-loop fix never asks the body's reach, so a callee that replaces X[i] after the binder was read, or grows the collection, changes what the loop reads"
 		},
 		{
 			"name": "M-KV-NOOPENER-INDEX-ONLY",
@@ -2619,10 +2625,10 @@
 		{
 			"name": "M-KV-NOOPENER-SELF-CALL",
 			"type": "anyparse.check.PreferKeyValueLoop",
-			"method": "analyzeReads",
-			"find": "decline: ElementLoopRewrite.elementDecline(binder, h.collection, collectionTypeSource, h.body, core)",
-			"replace": "decline: binder.refusal ?? (collectionTypeSource == null ? ElementLoopRewrite.unresolvedDecline(h.collection) : null)",
-			"note": "a body calling through this is fixed, so a callee that replaces X[i] after the binder was read, or grows the field, changes what the loop reads"
+			"method": "fixWalk",
+			"find": "ElementLoopRewrite.gatedEdits(buildReadEdits(r, f.source), gate, r.header, r.forSpan, r.decline, out);",
+			"replace": "for (e in buildReadEdits(r, f.source)) out.push(e);",
+			"note": "the no-opener arm never asks the body's reach, so a callee that replaces X[i] after the binder was read, or grows the field, changes what the loop reads"
 		},
 		{
 			"name": "M-KV-NOOPENER-NON-ARRAY",
@@ -4237,6 +4243,1884 @@
 			"find": "else if (builders.traits.builderReadsFinality(owner, file))",
 			"replace": "else if (false)",
 			"note": "a builder that reads field finality is trusted to the oracle, although `final` then compiles and generates something else"
+		},
+		{
+			"name": "M-REACH-OUT-OF-SCOPE",
+			"type": "anyparse.query.MemberReach",
+			"method": "answerReach",
+			"find": "\t\tif (!_scopeKnown)\n\t\t\treturn Unknown(\n\t\t\t\tOutOfScope('the run declared no project roots that all matched, so a toucher",
+			"replace": "\t\tif (false)\n\t\t\treturn Unknown(\n\t\t\t\tOutOfScope('the run declared no project roots that all matched, so a toucher",
+			"note": "a run that did not read every project file answers as if it had, so a toucher in an unread file is missed"
+		},
+		{
+			"name": "M-REACH-WALK-UNKNOWN",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"force": "Unknown(Budget('mutation'))",
+			"note": "the walk proves nothing, so every entry that runs code is refused"
+		},
+		{
+			"name": "M-REACH-TOUCHER-FOUND",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "\t\t\t\tif (touchers.exists(id) && !freshlyConstructed(g, id, reach[id], scan, member))\n\t\t\t\t\treturn Reached(pathTo(reach, id, touchers[id]));\n",
+			"replace": "",
+			"note": "reaching a function that touches the member is not noticed, so a callee that grows the collection reads as harmless"
+		},
+		{
+			"name": "M-REACH-METHOD-TOUCH",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "classify",
+			"find": "return { touch: !reads, escape: !own };",
+			"replace": "return { touch: false, escape: !own };",
+			"note": "a mutating method call (items.pop()) on the member is not a touch"
+		},
+		{
+			"name": "M-REACH-SLOT-WRITE",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "classify",
+			"find": "if (pk == shape.indexAccessKind && index == 0) return { touch: writes(grand, parentIndex), escape: false };",
+			"replace": "if (pk == shape.indexAccessKind && index == 0) return { touch: false, escape: false };",
+			"note": "an element write (items[0] = v) is not a touch"
+		},
+		{
+			"name": "M-REACH-ESCAPE-ARGUMENT",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "classify",
+			"find": "\t\treturn { touch: false, escape: true };\n",
+			"replace": "\t\treturn { touch: false, escape: false };\n",
+			"note": "the member's value handed out as an argument is not an escape, so an alias changed by code that never names it is missed"
+		},
+		{
+			"name": "M-REACH-FRESH-ASSIGN",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "isFresh",
+			"force": "true",
+			"note": "every stored value counts as freshly built, so a shared array assigned into the member is not an escape"
+		},
+		{
+			"name": "M-REACH-SHARED-INITIALIZER",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "sharedInitializer",
+			"force": "null",
+			"note": "a member initialized from a shared value is not an escape"
+		},
+		{
+			"name": "M-GRAPH-SETTER-EDGE",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "\t\t\tif (writeSlot && prop.info.hasSetter && !(ownStorage && insideAccessor(accessorPrefixes[1] + name)))\n\t\t\t\taccessorEdge(accessorPrefixes[1]);\n",
+			"replace": "",
+			"note": "a property write leaves no edge to its setter, so the code set_x runs is invisible"
+		},
+		{
+			"name": "M-GRAPH-GETTER-EDGE",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "\t\t\tif (reads && prop.info.hasGetter && !(ownStorage && insideAccessor(accessorPrefixes[0] + name)))\n\t\t\t\taccessorEdge(accessorPrefixes[0]);\n",
+			"replace": "",
+			"note": "a property read leaves no edge to its getter, so the code get_x runs is invisible"
+		},
+		{
+			"name": "M-REACH-VALUE-CHANNEL",
+			"type": "anyparse.query.ReachAdmission",
+			"method": "valueAdmitted",
+			"find": "|| node.isDynamic || g.inEdges(node.id).exists(e -> e.kind == Ref)",
+			"replace": "|| node.isDynamic",
+			"note": "a method stored as a value is not admitted at a call through a function value, so cb() never reaches what cb holds"
+		},
+		{
+			"name": "M-REACH-NAME-CHANNEL",
+			"type": "anyparse.query.ReachAdmission",
+			"method": "admittedNames",
+			"find": "case DynamicReceiver(m), UnresolvedReceiver(m), UnboundName(m): [m];",
+			"replace": "case DynamicReceiver(m), UnresolvedReceiver(m), UnboundName(m): [];",
+			"note": "a call through a Dynamic or untyped receiver admits no same-named function"
+		},
+		{
+			"name": "M-REACH-REFLECT-LITERAL",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "scanFile",
+			"find": "final reflected: Null<String> = _hazards.reflectiveNameWith(node, source, stringFold);",
+			"replace": "final reflected: Null<String> = null;",
+			"note": "Reflect.setField(this, 'items', …) is not a touch of items"
+		},
+		{
+			"name": "M-REACH-REFLECT-COMPUTED",
+			"type": "anyparse.query.ReachHazards",
+			"method": "hazardsOfFile",
+			"find": "\t\t\t\telse if (nameArgumentOf(node) != null)\n",
+			"replace": "\t\t\t\telse if (false)\n",
+			"note": "a reflective access by a computed name is not a blind spot"
+		},
+		{
+			"name": "M-REACH-NATIVE",
+			"type": "anyparse.query.ReachHazards",
+			"method": "hazardsOfFile",
+			"find": "else if (NativeCodeScan.isCarrier(node, _shape, stringFold))",
+			"replace": "else if (false)",
+			"note": "target-language code in a reached function is not a blind spot"
+		},
+		{
+			"name": "M-REACH-UNTYPED",
+			"type": "anyparse.query.ReachHazards",
+			"method": "hazardsOfFile",
+			"find": "if (untypedKinds.contains(node.kind))",
+			"replace": "if (false)",
+			"note": "untyped code in a reached function is not a blind spot"
+		},
+		{
+			"name": "M-REACH-SKIP-PARSE",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "scan",
+			"find": "\t\t\tout.hidden = SkipParse(file);\n",
+			"replace": "",
+			"note": "a project file that did not parse and spells the member is not a blind spot"
+		},
+		{
+			"name": "M-REACH-SKIP-PARSE-ANY",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "scan",
+			"find": "for (file in g.skippedFiles) if (_scope.sources.exists(file)) {",
+			"replace": "for (file in g.skippedFiles) if (_scope.sources.exists(file) && RawSourceScan.mentionsWord(_scope.sources[file] ?? '', name)) {",
+			"note": "an unparsed project file counts only when it spells the member, so an override it declares is walked past"
+		},
+		{
+			"name": "M-REACH-SKIP-PARSE-LOCAL",
+			"type": "anyparse.query.MemberReach",
+			"method": "answerLocal",
+			"find": "for (skipped in g.skippedFiles) if (_projectSources.exists(skipped)) return Unknown(SkipParse(skipped));",
+			"replace": "for (skipped in g.skippedFiles) if (false) return Unknown(SkipParse(skipped));",
+			"note": "a shared collection's region is proved although an unparsed project file may hold an implicitly-called function"
+		},
+		{
+			"name": "M-REACH-LIB-SKIP-OVERRIDE",
+			"type": "anyparse.query.ReachGraph",
+			"method": "unparsedLibraryMentioning",
+			"note": "a library file that did not parse is invisible to a dispatch, so an override it declares is walked past",
+			"force": "null"
+		},
+		{
+			"name": "M-REACH-LIB-REFLECT-TOUCH",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "if (libraryTouchAt == null) libraryTouchAt = { from: from, file: file, span: span };",
+			"replace": "{}",
+			"note": "a library body reading the member by name through its owner's type only admits functions of that name"
+		},
+		{
+			"name": "M-REACH-LIB-REFLECT-UNSURE",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "blind = blind ?? DynamicName(file, span);",
+			"replace": "{}",
+			"note": "a library body reading the member's name through an untyped receiver is taken for another type's field"
+		},
+		{
+			"name": "M-REACH-LIB-REFLECT-UNRELATED",
+			"type": "anyparse.query.ValueCarriers",
+			"method": "relation",
+			"find": "? Carries : CannotCarry;",
+			"replace": "? Carries : MayCarry;",
+			"note": "(precision) a library read of an unrelated type's same-named field blocks every proof"
+		},
+		{
+			"name": "M-CARRY-SUBTYPE-MEET",
+			"type": "anyparse.query.ValueCarriers",
+			"method": "declaredValueTypes",
+			"find": "for (s in _scope.index.subtypes.subtypeNames(nominal)) {",
+			"replace": "for (s in []) {",
+			"note": "a value's types are its static type alone, so two types only a common subtype relates read as unrelated"
+		},
+		{
+			"name": "M-CARRY-CLASSPATH",
+			"type": "anyparse.query.ValueCarriers",
+			"method": "complete",
+			"find": "if (!classpathComplete()) return false;",
+			"replace": "",
+			"note": "a type's subtypes are the index's even when the builds compile code the index does not hold"
+		},
+		{
+			"name": "M-CARRY-ESCAPES",
+			"type": "anyparse.query.ValueCarriers",
+			"method": "valueTypes",
+			"find": "for (t in escaped) if (!out.contains(t)) out.push(t);",
+			"replace": "",
+			"note": "a value's types are its static type's alone, so an instance that left the type system through a Dynamic or a cast is never the object an unrelated receiver holds"
+		},
+		{
+			"name": "M-ESCAPE-STORE",
+			"type": "anyparse.query.ValueEscapes",
+			"method": "scanFile",
+			"find": "if (!assignedTypedly(node.children[0])) value(node.children[1]);",
+			"replace": "if (false) value(node.children[1]);",
+			"note": "a value assigned into a Dynamic field or variable stays typed"
+		},
+		{
+			"name": "M-ESCAPE-CAST",
+			"type": "anyparse.query.ValueEscapes",
+			"method": "scanFile",
+			"find": "kind == shape.uncheckedCastKind || ",
+			"replace": "",
+			"note": "an unchecked cast keeps its operand's type, so `me = cast this` into an unrelated type is not an exit"
+		},
+		{
+			"name": "M-ESCAPE-DECL",
+			"type": "anyparse.query.ValueEscapes",
+			"method": "scanFile",
+			"find": "if (init != null && annotated != null && !typedPosition(annotated)) value(init);",
+			"replace": "if (init != null && false) value(init);",
+			"note": "a declaration annotated Any or Dynamic keeps its initializer typed"
+		},
+		{
+			"name": "M-ESCAPE-PARAM",
+			"type": "anyparse.query.ValueEscapes",
+			"method": "paramsTyped",
+			"force": "true",
+			"note": "every parameter keeps what it is handed typed, a Dynamic or rest one included"
+		},
+		{
+			"name": "M-ESCAPE-RETURN",
+			"type": "anyparse.query.ValueEscapes",
+			"method": "scanFile",
+			"find": "if (!returnsTypedly(fn)) value(first);",
+			"replace": "if (false) value(first);",
+			"note": "a value returned from a function declared Dynamic stays typed"
+		},
+		{
+			"name": "M-ESCAPE-LAMBDA",
+			"type": "anyparse.query.ValueEscapes",
+			"method": "scanFile",
+			"find": "bodyValue(node.children[node.children.length - 1]);",
+			"replace": "{}",
+			"note": "an arrow lambda's result is not an exit, though the function type it is handed to says nothing of it"
+		},
+		{
+			"name": "M-ESCAPE-THROW",
+			"type": "anyparse.query.ValueEscapes",
+			"method": "scanFile",
+			"find": "else if (first != null && (shape.throwKinds ?? []).contains(kind))",
+			"replace": "else if (first != null && false)",
+			"note": "a thrown value stays typed, though a catch may bind it as Dynamic"
+		},
+		{
+			"name": "M-ESCAPE-METHOD-VALUE",
+			"type": "anyparse.query.ValueEscapes",
+			"method": "scanFile",
+			"find": "if (g.types.memberOnChain(enclosing, name)?.isStatic != true && !escape(enclosing)) ok = false;",
+			"replace": "",
+			"note": "a method read as a value carries no object, though a bound method holds its receiver"
+		},
+		{
+			"name": "M-ESCAPE-HELD",
+			"type": "anyparse.query.ValueEscapes",
+			"method": "escapeType",
+			"find": "[m.typeSource]",
+			"replace": "[]",
+			"note": "an escaped object's fields stay typed, though code holding it untyped reads them by name"
+		},
+		{
+			"name": "M-ESCAPE-LIBRARY-SUPER",
+			"type": "anyparse.query.ValueEscapes",
+			"method": "inheritsLibrary",
+			"force": "false",
+			"note": "a class inheriting library code keeps its instances typed, though that code runs with the instance as its own this"
+		},
+		{
+			"name": "M-ESCAPE-NATIVE",
+			"type": "anyparse.query.ValueEscapes",
+			"method": "compute",
+			"find": "case Native, Untyped, Unmodelled(_):",
+			"replace": "case Native, Untyped:\n\t\t\t\t\tcase Unmodelled(_):",
+			"note": "target-language and untyped code in the project reaches no object, though it sees every local and static by name"
+		},
+		{
+			"name": "M-ESCAPE-NAMED-CLASS",
+			"type": "anyparse.query.ValueEscapes",
+			"method": "namedClasses",
+			"force": "true",
+			"note": "a class named to the class-value producer, or any class under a computed name, is never built untyped"
+		},
+		{
+			"name": "M-ESCAPE-ANY",
+			"type": "anyparse.query.ValueEscapes",
+			"method": "compute",
+			"find": "return { types: out, raw: false };",
+			"replace": "return { types: null, raw: false };",
+			"note": "(precision) every instance may be anywhere, so no receiver ever rules out an owner"
+		},
+		{
+			"name": "M-ESCAPE-P-STORE",
+			"type": "anyparse.query.ValueEscapes",
+			"method": "scanFile",
+			"find": "if (!assignedTypedly(node.children[0])) value(node.children[1]);",
+			"replace": "value(node.children[1]);",
+			"note": "(precision) a value stored in a typed place is an exit"
+		},
+		{
+			"name": "M-ESCAPE-P-CAST",
+			"type": "anyparse.query.ValueEscapes",
+			"method": "scanFile",
+			"find": "if (first != null && (kind == shape.uncheckedCastKind || kind == shape.checkTypeKind))",
+			"replace": "if (first != null && (kind == shape.uncheckedCastKind || kind == shape.checkTypeKind || (shape.typedCastKinds ?? []).contains(kind)))",
+			"note": "(precision) a runtime-checked cast is an exit, though it throws on a wrong type"
+		},
+		{
+			"name": "M-ESCAPE-P-THROW",
+			"type": "anyparse.query.ValueEscapes",
+			"method": "scanFile",
+			"find": "// a catch may bind what is thrown as a catch-all\n\t\t\t\tvalue(first);",
+			"replace": "// a catch may bind what is thrown as a catch-all\n\t\t\t\tok = false;",
+			"note": "(precision) any thrown value leaves every instance anywhere, a string included"
+		},
+		{
+			"name": "M-ESCAPE-P-DECL",
+			"type": "anyparse.query.ValueEscapes",
+			"method": "scanFile",
+			"find": "if (init != null && annotated != null && !typedPosition(annotated)) value(init);",
+			"replace": "if (init != null && annotated != null) value(init);",
+			"note": "(precision) an initializer of a declaration annotated with a class is an exit"
+		},
+		{
+			"name": "M-ESCAPE-P-PARAM",
+			"type": "anyparse.query.ValueEscapes",
+			"method": "paramsTyped",
+			"force": "false",
+			"note": "(precision) a value passed to a class-typed parameter is an exit"
+		},
+		{
+			"name": "M-ESCAPE-P-RETURN",
+			"type": "anyparse.query.ValueEscapes",
+			"method": "scanFile",
+			"find": "if (!returnsTypedly(fn)) value(first);",
+			"replace": "value(first);",
+			"note": "(precision) a value returned from a function declared with a class is an exit"
+		},
+		{
+			"name": "M-ESCAPE-P-LAMBDA",
+			"type": "anyparse.query.ValueEscapes",
+			"method": "scanFile",
+			"find": "bodyValue(node.children[node.children.length - 1]);",
+			"replace": "ok = false;",
+			"note": "(precision) any arrow lambda leaves every instance anywhere"
+		},
+		{
+			"name": "M-ESCAPE-P-METHOD-VALUE",
+			"type": "anyparse.query.ValueEscapes",
+			"method": "scanFile",
+			"find": "if (g.types.memberOnChain(enclosing, name)?.isStatic != true && !escape(enclosing)) ok = false;",
+			"replace": "if (!escape(enclosing)) ok = false;",
+			"note": "(precision) a static method read as a value is taken to carry an instance"
+		},
+		{
+			"name": "M-ESCAPE-P-HELD",
+			"type": "anyparse.query.ValueEscapes",
+			"method": "escapeType",
+			"find": "if (heldType == null) return false;",
+			"replace": "if (heldType == null || m.name != '') return false;",
+			"note": "(precision) an escaped object with any field leaves every instance anywhere"
+		},
+		{
+			"name": "M-ESCAPE-P-LIBRARY-SUPER",
+			"type": "anyparse.query.ValueEscapes",
+			"method": "inheritsLibrary",
+			"force": "true",
+			"note": "(precision) every class is taken to inherit library code"
+		},
+		{
+			"name": "M-ESCAPE-P-NATIVE",
+			"type": "anyparse.query.ValueEscapes",
+			"method": "compute",
+			"find": "case ReflectiveName(_), ArrayChange:",
+			"replace": "case ReflectiveName(_), ArrayChange:\n\t\t\t\t\t\treturn { types: null, raw: false };",
+			"note": "(precision) an array change or a literal reflective name in the project leaves every instance anywhere"
+		},
+		{
+			"name": "M-ESCAPE-P-TYPED-ARGS",
+			"type": "anyparse.query.ValueCarriers",
+			"method": "typedNominal",
+			"find": "for (a in args) if (!primitive(a) && !typedNominal(a)) return false;",
+			"replace": "if (args.length > 0) return false;",
+			"note": "(precision) a container of a class is untyped, so an Array<C> holding this is an exit"
+		},
+		{
+			"name": "M-ESCAPE-LOCAL-INIT",
+			"type": "anyparse.query.ValueEscapes",
+			"method": "scanFile",
+			"find": "return initAt == null || initAt.to > at.from ? null : typeOf(init);",
+			"replace": "return null;",
+			"note": "(precision) an unannotated local has no type, though Haxe gives it its initializer's"
+		},
+		{
+			"name": "M-ESCAPE-PRIMITIVE-PARAM",
+			"type": "anyparse.query.ValueEscapes",
+			"method": "paramsPrimitive",
+			"force": "false",
+			"note": "(precision) a value passed to a library Int parameter is an exit, though no object is an Int"
+		},
+		{
+			"name": "M-ESCAPE-ASSIGN-VALUE",
+			"type": "anyparse.query.ValueEscapes",
+			"method": "scanFile",
+			"find": "value(node.children[1]);\n\t\t\t\treturn;",
+			"replace": "ok = false;\n\t\t\t\treturn;",
+			"note": "(precision) an assignment used as a value has no type, though it yields what it stores"
+		},
+		{
+			"name": "M-ESCAPE-IF-VALUE",
+			"type": "anyparse.query.ValueEscapes",
+			"method": "scanFile",
+			"find": "for (c in node.children.slice(1)) value(c);",
+			"replace": "ok = false;",
+			"note": "(precision) an if-expression has no type, though it yields one of its branches"
+		},
+		{
+			"name": "M-ESCAPE-BLOCK-VALUE",
+			"type": "anyparse.query.ValueEscapes",
+			"method": "scanFile",
+			"find": "if (!silentKinds.contains(last.kind)) value(last);",
+			"replace": "ok = false;",
+			"note": "(precision) a block expression has no type, though it yields its last statement"
+		},
+		{
+			"name": "M-ESCAPE-MACRO-MEMBER",
+			"type": "anyparse.query.ValueEscapes",
+			"method": "scanFile",
+			"find": "|| macroMember(file, tree, node)) return;",
+			"replace": ") return;",
+			"note": "(precision) a macro function body, which runs only while compiling, is scanned for exits"
+		},
+		{
+			"name": "M-ESCAPE-MACRO-HAZARD",
+			"type": "anyparse.query.ValueEscapes",
+			"method": "compute",
+			"find": "|| h.node.kind == _shape.macroModifierKind) continue;",
+			"replace": ") continue;",
+			"note": "(precision) a macro modifier, a compile-time construct, reads as unmodelled code that leaves every instance anywhere"
+		},
+		{
+			"name": "M-ESCAPE-REIFICATION",
+			"type": "anyparse.query.ValueEscapes",
+			"method": "scanFile",
+			"find": "if ((shape.opaqueKinds ?? []).contains(kind)) return;",
+			"replace": "if (false) return;",
+			"note": "(precision) a reification, a syntax tree built while compiling, is a value of unknown type"
+		},
+		{
+			"name": "M-CARRY-TYPED-ARGS",
+			"type": "anyparse.query.ValueCarriers",
+			"method": "typedNominal",
+			"find": "for (a in args) if (!primitive(a) && !typedNominal(a)) return false;",
+			"replace": "",
+			"note": "an Array<Dynamic> position keeps what it holds typed, so a C put in one reaches an unrelated position"
+		},
+		{
+			"name": "M-CARRY-TYPED-ARITY",
+			"type": "anyparse.query.ValueCarriers",
+			"method": "typedNominal",
+			"find": "if (args.length < decl.typeParamNames.length) return false;",
+			"replace": "",
+			"note": "a container written without its arguments - an alias of Array<Dynamic> - is typed"
+		},
+		{
+			"name": "M-ESCAPE-DECLARED-SOURCE",
+			"type": "anyparse.query.ValueEscapes",
+			"method": "scanFile",
+			"find": "final declared: Null<String> = declaredSourceOf(target);",
+			"replace": "final declared: Null<String> = typeOf(target);",
+			"note": "an assignment target is typed by its outer nominal, which drops the arguments its declaration writes"
+		},
+		{
+			"name": "M-ESCAPE-UNWRITTEN-ARGS",
+			"type": "anyparse.query.ValueEscapes",
+			"method": "escapeType",
+			"find": "if ((args ?? []).length < g.types.generics.typeParamsOf(nominal).length) return false;",
+			"replace": "",
+			"note": "a container escaped without its arguments escapes none of what it holds"
+		},
+		{
+			"name": "M-ESCAPE-NEW-TYPE",
+			"type": "anyparse.query.ValueEscapes",
+			"method": "scanFile",
+			"find": "if (node.kind != shape.newExprKind || constructed == null) {",
+			"replace": "if (true) {",
+			"note": "(precision) a construction has no type, so new C().loop() leaves every instance anywhere"
+		},
+		{
+			"name": "M-ESCAPE-RECEIVER-CALL",
+			"type": "anyparse.query.ValueEscapes",
+			"method": "scanFile",
+			"find": "targets.length == 0 && owner != null && calleeName",
+			"replace": "false && owner != null && calleeName",
+			"note": "(precision) a call the graph did not resolve hands its receiver to untyped code, though its static type declares the method"
+		},
+		{
+			"name": "M-REACH-CLASSPATH-DISPATCH",
+			"type": "anyparse.query.ReachGraph",
+			"method": "loadOverrides",
+			"find": "if (!carriers.classpathComplete())",
+			"replace": "if (false)",
+			"note": "a dispatch on a library type reads only the overrides the index holds, although the builds compile more"
+		},
+		{
+			"name": "M-REACH-LIB-ACCESS",
+			"type": "anyparse.query.MemberReach",
+			"method": "libraryAccesses",
+			"find": "walk(root);",
+			"replace": "{}",
+			"note": "library code reading the member by its name, typed or untyped, is no touch"
+		},
+		{
+			"name": "M-REACH-BUILD-MACRO",
+			"type": "anyparse.query.ReachGraph",
+			"method": "buildMacroOn",
+			"force": "null",
+			"note": "a build macro on the owner or a reached type is not a blind spot"
+		},
+		{
+			"name": "M-REACH-PROPERTY",
+			"type": "anyparse.query.MemberReach",
+			"method": "answerReach",
+			"find": "\t\tif (info != null && (info.hasGetter || info.hasSetter))\n",
+			"replace": "\t\tif (false)\n",
+			"note": "a member behind an accessor is answered as if it were the storage"
+		},
+		{
+			"name": "M-REACH-RECEIVER-OWNER",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "scanFile",
+			"find": "return _carriers.relation(known, declaring) != CannotCarry;",
+			"replace": "return true;",
+			"note": "other.items on an unrelated type counts as a touch of C.items"
+		},
+		{
+			"name": "M-REACH-LOCAL-SHADOW",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "scanFile",
+			"find": "if (!local && (owner == null || owner == declaring))",
+			"replace": "if (owner == null || owner == declaring)",
+			"note": "a same-named local counts as a touch of the member"
+		},
+		{
+			"name": "M-GRAPH-INIT-WIRING",
+			"type": "anyparse.query.ConstructorWiring",
+			"method": "wire",
+			"find": "for (init in generatedInitsOf(run.typeName)) wiredEdge(run.from, init, run.kind, run.file, run.span);",
+			"replace": "",
+			"note": "new T() on a type with no constructor of its own does not run T's field initializers"
+		},
+		{
+			"name": "M-GRAPH-CTOR-OWN-INIT",
+			"type": "anyparse.query.ConstructorWiring",
+			"method": "wire",
+			"find": "\t\t\tif (ctor != null && _graph.nodes.exists(init)) wiredEdge(ctor, init, EdgeKind.Call, _graph.nodes[ctor]?.file ?? '', null);\n",
+			"replace": "",
+			"note": "a declared constructor does not run its own type's field initializers"
+		},
+		{
+			"name": "M-GRAPH-STATIC-INIT",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "\t\t\t\tif (frames.length == 0 && MemberKinds.macroModifierPrecedes(kids, i, staticKind, modifierBoundary)) inStaticInit = true;\n",
+			"replace": "",
+			"note": "a static initializer lands on <init>, so every constructor appears to run it"
+		},
+		{
+			"name": "M-GRAPH-VALUE-USE",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "refEdges(frameId(currentType), ref, null, span);",
+			"replace": "{}",
+			"note": "a method stored, returned or put in a literal leaves no Ref edge, so a later call through that value reaches nothing"
+		},
+		{
+			"name": "M-GRAPH-VALUE-USE-LAMBDA",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "\t\t\t\tif (lambdaId != null) addEdge(frameId(currentType), lambdaId, Ref, null, file, span);\n",
+			"replace": "",
+			"note": "a lambda stored or returned leaves no Ref edge"
+		},
+		{
+			"name": "M-GRAPH-FIELD-PATH-RECEIVER",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "\t\t\tfinal written: Null<String> = typeSourceOf(recv, currentType);\n",
+			"replace": "\t\t\tfinal written: Null<String> = null;\n",
+			"note": "a receiver typed only through declared member types (w.worker, an inherited field) stays unresolved"
+		},
+		{
+			"name": "M-GRAPH-ELEMENT-RECEIVER",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "\t\t\tif (indexKind != null && expr.kind == indexKind && expr.children.length > 0) {\n",
+			"replace": "\t\t\tif (false) {\n",
+			"note": "an element receiver a[i] stays untyped, so a[i].x = v runs no setter"
+		},
+		{
+			"name": "M-GRAPH-UPGRADE-EXTERNAL",
+			"type": "anyparse.query.CallGraph",
+			"method": "registerNode",
+			"find": "if (!nodes.exists(id) || nodes[id]?.isExternal == true) {",
+			"replace": "if (!nodes.exists(id)) {",
+			"note": "a file added later leaves the external placeholder of its declaration in place, so the body it brings is never linked"
+		},
+		{
+			"name": "M-GRAPH-DYNAMIC-METHOD",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "\n\t\t\t\t\tif (nodes[calleeId]?.isDynamic == true) unresolvedAt(span, FunctionValue(calleeName), currentType);\n",
+			"replace": "\n",
+			"note": "a call to a dynamic method is only a call to its default body, though the program may have reassigned it"
+		},
+		{
+			"name": "M-GRAPH-DYNAMIC-RECEIVER",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "\t\t\t\t\t\t\tunresolvedAt(span, DynamicReceiver(calleeName), currentType);\n",
+			"replace": "\t\t\t\t\t\t\tunresolvedAt(span, UnresolvedReceiver(calleeName), currentType);\n",
+			"note": "a Dynamic receiver is recorded as merely unresolved"
+		},
+		{
+			"name": "M-GRAPH-FIELD-FUNCTION-VALUE",
+			"type": "anyparse.query.CallGraphTypes",
+			"method": "fieldOnChain",
+			"force": "false",
+			"note": "a call to a field of function type becomes a call to a phantom external method"
+		},
+		{
+			"name": "M-REACH-LIBRARY-GROWTH",
+			"type": "anyparse.query.ReachGraph",
+			"method": "loadFile",
+			"find": "\t\tg.addFiles([{ file: file, source: source }]);\n",
+			"replace": "",
+			"note": "a library target's file is never read, so its body is an extern leaf that admits every value-used mutator"
+		},
+		{
+			"name": "M-REACH-LOCAL-FRESH",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "localEscape",
+			"find": "if (init == null || !isFresh(init, { tree: tree, source: source })) return init?.span ?? declSpan;",
+			"replace": "return init?.span ?? declSpan;",
+			"note": "no local initializer counts as fresh, so every local collection whose loop calls anything is refused"
+		},
+		{
+			"name": "M-REACH-LOCAL-ESCAPE",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "localEscape",
+			"find": "if (closure || verdict.escape) found = span;",
+			"replace": "if (closure) found = span;",
+			"note": "a local handed out as an argument is not an escape"
+		},
+		{
+			"name": "M-REACH-LOCAL-CAPTURE",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "localEscape",
+			"find": "if (closure || verdict.escape) found = span;",
+			"replace": "if (verdict.escape) found = span;",
+			"note": "a local captured by a closure is not an escape"
+		},
+		{
+			"name": "M-REACH-PARAM",
+			"type": "anyparse.query.MemberReach",
+			"method": "mayMutateNamed",
+			"find": "&& !(_shape.fieldDeclKinds ?? []).contains(decl.kind)) {",
+			"replace": "&& false) {",
+			"note": "a parameter is asked about as a field, so an array the caller also holds counts as unshared"
+		},
+		{
+			"name": "M-REACH-EXPLAIN-PATH",
+			"type": "anyparse.query.MemberReach",
+			"method": "explain",
+			"find": "'a call can reach code that changes it: ${pathText(path)}'",
+			"replace": "'a call can reach code that changes it'",
+			"note": "the decline note stops naming the path it found"
+		},
+		{
+			"name": "M-TS-ACCESSOR-TAINT",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "reportLockHeld",
+			"find": "\t\t\t\t\t\tif (!edge.kind.isInvocation()) continue;\n",
+			"replace": "\t\t\t\t\t\tif (edge.kind != Call && edge.kind != New && edge.kind != Virtual) continue;\n",
+			"note": "a property read inside a lock window is not a call, so a getter that blocks while the lock is held goes unreported"
+		},
+		{
+			"name": "M-GRAPH-OWN-ACCESSOR-ANY-RECEIVER",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "!(ownStorage && insideAccessor(accessorPrefixes[1] + name))",
+			"replace": "!insideAccessor(accessorPrefixes[1] + name)",
+			"note": "inside set_x any `.x` write counts as the stored field, so another object's setter run from there leaves no edge"
+		},
+		{
+			"name": "M-REACH-CTOR-NOT-DISPATCHED",
+			"type": "anyparse.query.ReachAdmission",
+			"method": "valueAdmitted",
+			"find": "(node.name != ctorName && overridesLibrary(g, node))",
+			"replace": "overridesLibrary(g, node)",
+			"note": "a project constructor counts as overriding its library supertype's, so any unresolved call in library code admits it"
+		},
+		{
+			"name": "M-REACH-FRESH-OBJECT",
+			"type": "anyparse.query.MemberReach",
+			"method": "freshlyConstructed",
+			"force": "false",
+			"note": "a constructor entered to build a new object counts its own-`this` touches as touches of the running object"
+		},
+		{
+			"name": "M-GRAPH-SETTER-READ-DIRECT",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "!(ownStorage && insideAccessor(accessorPrefixes[0] + name))",
+			"replace": "!(ownStorage && (insideAccessor(accessorPrefixes[0] + name) || insideAccessor(accessorPrefixes[1] + name)))",
+			"note": "a read of x inside set_x counts as the stored field, though the language runs the getter there"
+		},
+		{
+			"name": "M-GRAPH-IMPLICIT-META",
+			"type": "anyparse.query.SymbolIndexBuilder",
+			"method": "isImplicitCallMeta",
+			"note": "an @:arrayAccess / @:from / @:to / @:resolve member is not recorded as called implicitly, so a conversion reaches nothing",
+			"force": "false"
+		},
+		{
+			"name": "M-GRAPH-OPERATOR-KIND",
+			"type": "anyparse.query.SymbolIndexBuilder",
+			"method": "operatorKindOf",
+			"note": "an @:op member records no operator it overloads, so `a + b` runs nothing",
+			"force": "null"
+		},
+		{
+			"name": "M-REACH-IMPLICIT-ADMIT",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "final implicit: Array<String> = site.always ? _g.alwaysIds(g).copy() : [];\n\t\t\tfor (at in site.implicit) for (id in _g.idsAt(g, at)) implicit.push(id);",
+			"replace": "final implicit: Array<String> = [];",
+			"note": "an implicitly-called function that grows the member is never admitted from the entry"
+		},
+		{
+			"name": "M-REACH-IMPLICIT-RUNS-CODE",
+			"type": "anyparse.query.ReachGraph",
+			"method": "indexImplicit",
+			"find": "if (names.contains(m.name) && !m.isStatic) add(",
+			"replace": "if (false) add(",
+			"note": "a function named like an implicitly-called method (toString, iterator) is not admitted, so a loop concatenating a string or iterating an object runs it unseen"
+		},
+		{
+			"name": "M-REACH-IMPLICIT-ARRAY-CHANGE",
+			"type": "anyparse.query.MemberReach",
+			"method": "answerLocal",
+			"find": "final implicit: Null<Occurrence> = implicitArrayChange(g, file, tree, region);",
+			"replace": "final implicit: Null<Occurrence> = null;",
+			"note": "a region with no visible call is proven for a shared array although an implicitly-called function in scope changes arrays"
+		},
+		{
+			"name": "M-REACH-ARRAY-CHANGE-SITE",
+			"type": "anyparse.query.ReachHazards",
+			"method": "changesAnArray",
+			"force": "false",
+			"note": "no site counts as changing an array, so an implicit function that pushes onto one reads as harmless"
+		},
+		{
+			"name": "M-REACH-IMPLICIT-CONSTRUCTION",
+			"type": "anyparse.query.ReachGraph",
+			"method": "indexImplicit",
+			"find": "if (t.constructsFromLiteral) out.push({",
+			"replace": "if (false) out.push({",
+			"note": "a class the language constructs from a literal (@:structInit) never has its constructor admitted, so a literal argument runs it unseen"
+		},
+		{
+			"name": "M-REACH-UNMODELLED",
+			"type": "anyparse.query.ReachHazards",
+			"method": "hazardsOfFile",
+			"find": "else if (!modelled.contains(node.kind))",
+			"replace": "else if (false)",
+			"note": "a node kind outside the whitelist is not a blind spot, so a construct nobody classified is walked as if it ran nothing"
+		},
+		{
+			"name": "M-REACH-ESCAPE-GATE",
+			"type": "anyparse.query.MemberReach",
+			"method": "answerReach",
+			"find": "if (access == Mutate && scan.escapes.length > 0) {",
+			"replace": "if (false) {",
+			"note": "a member whose value is shared is walked as if unshared, so a region writing through the alias is proven"
+		},
+		{
+			"name": "M-REACH-REGION-ARRAY-CHANGE",
+			"type": "anyparse.query.MemberReach",
+			"method": "regionCulprit",
+			"find": "if (!receiverIsFreshLocal(tree, source, fn, h.node, region)) return h.span;",
+			"replace": "",
+			"note": "an element write in the region is benign whatever array it writes, so a shared parameter written through an alias is proven"
+		},
+		{
+			"name": "M-REACH-ENTRY-HAZARDS",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "inspectAll('entry', entry);",
+			"replace": "",
+			"note": "the region's own reflective, native and untyped sites are never inspected"
+		},
+		{
+			"name": "M-REACH-REFLECT-ACCESSOR",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "final names: Array<String> = [for (p in _shape.accessorMethodPrefixes ?? []) p + named];",
+			"replace": "final names: Array<String> = [];",
+			"note": "Reflect.setProperty by a literal name admits only the member, not the setter it runs"
+		},
+		{
+			"name": "M-REACH-DYNAMIC-VALUE",
+			"type": "anyparse.query.ReachAdmission",
+			"method": "accessNames",
+			"find": "\t\tout.push(member);\n",
+			"replace": "",
+			"note": "a method read off an untyped receiver admits only its accessors, so the method run later as a value is unseen"
+		},
+		{
+			"name": "M-REACH-LIBRARY-BUDGET",
+			"type": "anyparse.query.ReachGraph",
+			"method": "loadFile",
+			"find": "if (++_questionFileCount > _maxLibraryFiles) return Budget(",
+			"replace": "if (false) return Budget(",
+			"note": "the library-file cap never refuses, so a walk that could not load every override answers as if it had"
+		},
+		{
+			"name": "M-REACH-VISITED-BUDGET",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "if (qi >= _maxVisited) return Unknown(",
+			"replace": "if (false) return Unknown(",
+			"note": "the visited-node cap never refuses"
+		},
+		{
+			"name": "M-REACH-LOCAL-HAZARDS",
+			"type": "anyparse.query.MemberReach",
+			"method": "answerLocal",
+			"find": "if (blind != null) return Unknown(blind);",
+			"replace": "",
+			"note": "target-language or untyped code in the function is ignored for a fresh local, though it can name the local"
+		},
+		{
+			"name": "M-REACH-AMBIGUOUS",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "if (type != null && g.types.declarationCount(type) > 1) blind = blind ?? Ambiguous(type);",
+			"replace": "",
+			"note": "a reached type sharing its simple name with another is taken for the one the graph merged, so the other's body is never seen"
+		},
+		{
+			"name": "M-REACH-LOCAL-SCOPE",
+			"type": "anyparse.query.MemberReach",
+			"method": "answerLocal",
+			"find": "\t\tif (!_scopeKnown)\n\t\t\treturn Unknown(OutOfScope(\n\t\t\t\t'the run declared no project roots that all matched, so a function called implicitly",
+			"replace": "\t\tif (false)\n\t\t\treturn Unknown(OutOfScope(\n\t\t\t\t'the run declared no project roots that all matched, so a function called implicitly",
+			"note": "a shared parameter is proven without the whole project, though an implicitly-called function may live in a file the run did not read"
+		},
+		{
+			"name": "M-REACH-NOT-A-MEMBER",
+			"type": "anyparse.query.MemberReach",
+			"method": "mayMutateNamed",
+			"find": "if (graph().types.declaringTypeOf(ownerName, name) == null)",
+			"replace": "if (false)",
+			"note": "a name the enclosing type does not declare (an imported static) is asked about as a member of that type"
+		},
+		{
+			"name": "M-REACH-FRESH-METHOD",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "freshResult",
+			"find": "if (receiverType == null || !((_scope.shape.execution?.freshReturningMethods ?? [])[receiverType] ?? []).contains(method))",
+			"replace": "if (receiverType == null || receiverType.length >= 0)",
+			"note": "a copy of an array is not fresh, so a loop over it is refused as if shared"
+		},
+		{
+			"name": "M-REACH-CALLS-ENTRY",
+			"type": "anyparse.query.MemberReach",
+			"method": "seedsOf",
+			"find": "seedsWhere(g, file, null, s -> s != null && starts.contains(s.from) && isLive(g, file, s));",
+			"replace": "seedsWhere(g, file, null, s -> s != null && isLive(g, file, s));",
+			"note": "a Calls entry starts at every call of the file, not the sites it names"
+		},
+		{
+			"name": "M-REACH-RERUN-END",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "rerunEnd",
+			"force": "region.to",
+			"note": "an escape later in an enclosing loop is not seen, though the loop runs the region again with the value shared"
+		},
+		{
+			"name": "M-REACH-BENIGN-CALL",
+			"type": "anyparse.query.MemberReach",
+			"method": "benignCall",
+			"force": "false",
+			"note": "no call in a parameter's region is benign, so a loop calling only array readers is refused"
+		},
+		{
+			"name": "M-HOST-ROOTS-ALL",
+			"type": "anyparse.query.CachingGrammarPlugin",
+			"method": "completeProjectFiles",
+			"find": " || sources.rootsAllMatched != true",
+			"replace": "",
+			"note": "a run where one declared root matched nothing still claims to hold the whole project"
+		},
+		{
+			"name": "M-GRAPH-ABSTRACT-THIS",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": [
+				"if (currentType == null || !_facts.abstracts.exists(currentType)) return currentType;",
+				"final underlying: Null<String> = _facts.abstracts[currentType];\n\t\t\treturn underlying == null ? null : types.resolveAlias(underlying);"
+			],
+			"replace": [
+				"return currentType;",
+				""
+			],
+			"note": "`this` inside an abstract is the abstract, so `this.foo()` calls the abstract's own foo instead of the underlying type's"
+		},
+		{
+			"name": "M-GRAPH-SUPER-CTOR-RUN",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "_wiring.record({\n\t\t\t\t\ttypeName: superclass,",
+			"replace": "_wiring.record({\n\t\t\t\t\ttypeName: '',",
+			"note": "a `super()` records no constructor run, so the generated constructor of a supertype that declares none never runs its initializers"
+		},
+		{
+			"name": "M-GRAPH-WIRED-ONCE",
+			"type": "anyparse.query.ConstructorWiring",
+			"method": "wire",
+			"find": "if (_wired.exists(key)) return;",
+			"replace": "",
+			"note": "growing the graph re-adds every constructor edge"
+		},
+		{
+			"name": "M-GRAPH-SAFE-METHOD-VALUE",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "if (!isAccessKind(arg.kind) || arg.children.length <= 0) return null;",
+			"replace": "if (arg.kind != fieldAccessKind || arg.children.length <= 0) return null;",
+			"note": "a method value read through `?.` or `!.` is no Ref"
+		},
+		{
+			"name": "M-GRAPH-NEW-ARGS",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "scanArgs(node.children, 0, target, currentType);",
+			"replace": "",
+			"note": "constructor arguments hand on no function value"
+		},
+		{
+			"name": "M-GRAPH-REF-OVERRIDES",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "if (dispatch != null && name != null) for (v in virtualTargets(dispatch, name))\n\t\t\t\taddEdge(from, v, Ref, via, file, span, dispatch);",
+			"replace": "",
+			"note": "a method value reaches only the static type's method, never an override"
+		},
+		{
+			"name": "M-GRAPH-UNLOADED-METHOD-VALUE",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "|| types.hasFunctionNamed(rawName)",
+			"replace": "",
+			"note": "a method value of a type whose file is not loaded yet leaves no Ref"
+		},
+		{
+			"name": "M-GRAPH-CONSTRUCTION-LITERAL",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "if (objectLiteralKind != null && node.kind == objectLiteralKind) handleConstructionLiteral(node, typeName);",
+			"replace": "",
+			"note": "a literal typed as a @:structInit class leaves no New edge"
+		},
+		{
+			"name": "M-GRAPH-TYPE-ARGUMENT",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "return if (args != null && args.length >= params.length)\n\t\t\t\tCallGraphNames.substituteTypeParams(written, params, args)",
+			"replace": "return if (args != null && false)\n\t\t\t\tCallGraphNames.substituteTypeParams(written, params, args)",
+			"note": "a member type spelling a type parameter never takes the receiver's argument for it"
+		},
+		{
+			"name": "M-GRAPH-TYPE-PARAM",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "if (declared != null && isTypeParam(declared, currentType)) return null;",
+			"replace": "",
+			"note": "a receiver typed as a type parameter is taken for a type of that name"
+		},
+		{
+			"name": "M-GRAPH-FN-TYPE-PARAM",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectNodes",
+			"find": "if (params.length > 0) _facts.typeParams[fnId] = params;",
+			"replace": "",
+			"note": "a function's own type parameters are not recorded, so a receiver typed by one becomes a phantom type"
+		},
+		{
+			"name": "M-GRAPH-TYPEDEF-ALIAS",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "typeName: types.resolveAlias(declared),",
+			"replace": "typeName: declared,",
+			"note": "a receiver typed by a typedef alias is not seen through"
+		},
+		{
+			"name": "M-GRAPH-USING-EXTENSION",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "final extensions: Array<String> = types.imports.staticExtensionsOf(file, calleeName);",
+			"replace": "final extensions: Array<String> = [];",
+			"note": "a static extension a `using` brings in is never resolved"
+		},
+		{
+			"name": "M-GRAPH-SUPERS-UNION",
+			"type": "anyparse.query.CallGraphTypes",
+			"method": "record",
+			"find": "unionInto(_supers, t.name, t.supertypes);",
+			"replace": "_supers[t.name] = t.supertypes.copy();",
+			"note": "a later declaration of a simple name replaces the earlier one's supertypes"
+		},
+		{
+			"name": "M-GRAPH-INTERFACE-PROPERTY",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "\t\t\t\t\texternalNode(prop.owner, accessor, true)\n",
+			"replace": "\t\t\t\t\texternalNode(prop.owner, accessor)\n",
+			"note": "an interface property with no accessor body names an external placeholder instead of a body-less declaration"
+		},
+		{
+			"name": "M-GRAPH-ACCESS-RECORDED",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "member: name,\n\t\t\t\t\t\twrite: writeSlot,",
+			"replace": "member: '',\n\t\t\t\t\t\twrite: writeSlot,",
+			"note": "an untyped property access is recorded against no member"
+		},
+		{
+			"name": "M-GRAPH-ACCESS-COUNTED",
+			"type": "anyparse.query.CallGraph",
+			"method": "unresolvedAccessesRunning",
+			"find": "for (prefix in _shape.accessorMethodPrefixes ?? []) if (name.startsWith(prefix)) names.push(name.substr(prefix.length));",
+			"replace": "",
+			"note": "an accessor's untyped accesses are not counted as blind sites of it"
+		},
+		{
+			"name": "M-GRAPH-DISPATCH-TYPE",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "addEdge(from, calleeId, Call, null, file, span, recv.isValue ? recv.typeName : null);",
+			"replace": "addEdge(from, calleeId, Call, null, file, span);",
+			"note": "an instance call records no dispatch type, so overrides loaded later are never reached"
+		},
+		{
+			"name": "M-GRAPH-STATIC-NO-VIRTUAL",
+			"type": "anyparse.query.CallGraph",
+			"method": "implicitThisTargets",
+			"find": "return types.isStatic(owner, member) ? [] : virtualTargets(typeName, member);",
+			"replace": "return virtualTargets(typeName, member);",
+			"note": "a bare call to a static gets virtual edges to same-named statics of subtypes"
+		},
+		{
+			"name": "M-GRAPH-SUPERCLASS",
+			"type": "anyparse.query.CallGraphTypes",
+			"method": "superclassOf",
+			"force": "supertypesOf(typeName)[0]",
+			"note": "the first supertype the header names is the superclass even when it is an interface"
+		},
+		{
+			"name": "M-GRAPH-UNBOUND-CAPITAL",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "if (imported.unknown || !types.imports.isEnumConstructor(name) || types.hasStaticFunctionNamed(name))",
+			"replace": "if (imported.unknown || !CallGraphNames.isTypeLike(name))",
+			"note": "an unbound capitalized call is taken for an enum constructor, so an imported static function called that way runs unseen"
+		},
+		{
+			"name": "M-REACH-UNTYPED-FRESH-LOCAL",
+			"type": "anyparse.query.MemberReach",
+			"method": "onFreshLocalArray",
+			"force": "false",
+			"note": "an array method on an unannotated fresh local counts as an unresolved call that may reach the shared array"
+		},
+		{
+			"name": "M-REACH-EXTERN-BODYLESS",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "else if (g.types.meta.isExtern(type) && !_g.externQuiet(g, type, name))\n",
+			"replace": "else if (false)\n",
+			"note": "a body-less extern member admits no function value, so a callback it is handed runs unseen"
+		},
+		{
+			"name": "M-REACH-INTERFACE-DISPATCH",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "else if (g.types.meta.isExtern(type) && !_g.externQuiet(g, type, name))\n",
+			"replace": "else if (true)\n",
+			"note": "a body-less interface or abstract declaration admits every function value, though only dispatch reaches past it"
+		},
+		{
+			"name": "M-REACH-BENIGN-CALLBACK",
+			"type": "anyparse.query.MemberReach",
+			"method": "benignCall",
+			"find": "|| _g.callsItsArgument(g, type, name)) return false;",
+			"replace": ") return false;",
+			"note": "an array method that calls its argument counts as benign in a parameter's region"
+		},
+		{
+			"name": "M-REACH-REGION-REF",
+			"type": "anyparse.query.MemberReach",
+			"method": "regionCulprit",
+			"find": "if (target == null || !target.isExternal || e.kind == Ref) return e.span ?? region;",
+			"replace": "if (e.kind == Ref) continue;\n\t\t\tif (target == null || !target.isExternal) return e.span ?? region;",
+			"note": "a function value the region hands on is not a culprit"
+		},
+		{
+			"name": "M-REACH-CALLBACK-PURE",
+			"type": "anyparse.query.ReachGraph",
+			"method": "runsNoUserCode",
+			"find": "|| callsItsArgument(g, type, name)) return false;",
+			"replace": ") return false;",
+			"note": "an array method that calls its argument runs no user code for the implicit walk"
+		},
+		{
+			"name": "M-REACH-IMPLICIT-BODYLESS",
+			"type": "anyparse.query.MemberReach",
+			"method": "implicitChangeIn",
+			"find": "if (g.types.meta.isExtern(type) && !_g.externQuiet(g, type, member))\n\t\t\t\treturn { file: node.file, span: node.span ?? new Span(0, 0) };",
+			"replace": "",
+			"note": "a body-less extern an implicitly-called function reaches is taken to change nothing"
+		},
+		{
+			"name": "M-REACH-QUESTION-BUDGET",
+			"type": "anyparse.query.ReachGraph",
+			"method": "startQuestion",
+			"find": "\t\t_questionFiles.clear();\n\t\t_questionFileCount = 0;\n",
+			"replace": "",
+			"note": "the library budget carries over between questions, so an answer depends on which were asked first"
+		},
+		{
+			"name": "M-REACH-MEMO-EVERY-SOURCE",
+			"type": "anyparse.query.MemberReach",
+			"method": "forRun",
+			"find": "if (memo != null && changed != null && (changed.length == 0 || memo.refresh(changed))) return memo;",
+			"replace": "if (memo != null && memo._projectSources[file] == source) return memo;",
+			"note": "the pass's analysis is reused after another project file changed"
+		},
+		{
+			"name": "M-REACH-SPLIT-FRESH",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "builtinTypeOf",
+			"find": "return outer != null && (arrays.contains(outer) || strings.contains(outer)) ? outer : null;",
+			"replace": "return outer != null && arrays.contains(outer) ? outer : null;",
+			"note": "`split` of a String-typed value is not a fresh array"
+		},
+		{
+			"name": "M-REACH-FRESH-CHAIN",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "builtinTypeOf",
+			"find": "\t\tif (freshResult(node, ctx)) return arrays[0];\n",
+			"replace": "",
+			"note": "a fresh result's own fresh-returning method result is not fresh"
+		},
+		{
+			"name": "M-REACH-STRINGBUF-PURE",
+			"type": "anyparse.grammar.haxe.HaxeQueryPlugin",
+			"method": "refShape",
+			"find": "\t\t\t\t'StringBuf.add',\n",
+			"replace": "",
+			"note": "a string buffer write counts as code that may change the caller's array"
+		},
+		{
+			"name": "M-GRAPH-STORED-FIELD",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "if (storedField(node.children[0], name, currentType)) return;",
+			"replace": "",
+			"note": "a stored anonymous-structure field read counts as a method read whenever some function shares its name"
+		},
+		{
+			"name": "M-GRAPH-LITERAL-ARGUMENT",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "} else if ((kind == callKind && index >= 1) || kind == newExprKind) {",
+			"replace": "} else if (false) {",
+			"note": "a literal passed as an argument is never typed by the parameter"
+		},
+		{
+			"name": "M-GRAPH-LITERAL-ELEMENT",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "else if (kind == arrayLiteralKind) {",
+			"replace": "else if (false) {",
+			"note": "a literal inside an array literal is never typed by the element type"
+		},
+		{
+			"name": "M-GRAPH-LITERAL-RETURN",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "else if (returnKinds.contains(kind))",
+			"replace": "else if (false)",
+			"note": "a returned literal is never typed by the return type"
+		},
+		{
+			"name": "M-GRAPH-CTOR-PLACEHOLDER",
+			"type": "anyparse.query.CallGraph",
+			"method": "constructorTarget",
+			"find": "final owner: Null<String> = types.declaringTypeOf(typeName, ctorName);",
+			"replace": "final owner: Null<String> = null;",
+			"note": "a constructor run on a chain not loaded yet names no constructor until the declaring file arrives"
+		},
+		{
+			"name": "M-GRAPH-SUPER-AMBIGUOUS",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "if (types.declarationCount(superclass) > 1) {",
+			"replace": "if (false) {",
+			"note": "`super()` on a name two types share resolves to whichever the tables hold"
+		},
+		{
+			"name": "M-GRAPH-UNSUBSTITUTED-PARAM",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "CallGraphNames.substituteTypeParams(written, params, [for (_ in params) UNKNOWN_TYPE]);",
+			"replace": "written;",
+			"note": "a member type spelling a parameter the receiver gives no argument for resolves to a class of that name"
+		},
+		{
+			"name": "M-GRAPH-RETURN-PARAM",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "nominalOf(throughParams(returned, owner, receiverSource, receiverType, currentType), currentType);",
+			"replace": "nominalOf(returned, currentType);",
+			"note": "a return type that is the owner's parameter never takes the receiver's argument"
+		},
+		{
+			"name": "M-GRAPH-FN-RETURN-PARAM",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "|| (_facts.typeParams[target] ?? []).contains(returned))",
+			"replace": ")",
+			"note": "a return type that is the function's own parameter resolves to a class of that name"
+		},
+		{
+			"name": "M-GRAPH-USING-ALL",
+			"type": "anyparse.query.CallGraphImports",
+			"method": "staticExtensionsOf",
+			"find": "if (_isStatic(u, member)) u\n\t\t];",
+			"replace": "if (_isStatic(u, member)) u\n\t\t].slice(0, 1);",
+			"note": "only the first `using` declaring the extension is a target, though the last one wins"
+		},
+		{
+			"name": "M-GRAPH-FORWARD",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "final recv: Receiver = forwarded == null ? written : { typeName: forwarded, isValue: true, isDynamic: false };",
+			"replace": "final recv: Receiver = written;",
+			"note": "a call through a `@:forward` abstract never reaches the underlying type's member"
+		},
+		{
+			"name": "M-GRAPH-PATH-SPELLING",
+			"type": "anyparse.query.CallGraphNames",
+			"method": "normalizePath",
+			"find": "\t\twhile (path.startsWith('./')) path = path.substr(2);\n",
+			"replace": "",
+			"note": "a file added under a second spelling is held twice"
+		},
+		{
+			"name": "M-GRAPH-INHERITED-PLACEHOLDER",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "if (declaring != null) return externalNode(declaring, name);",
+			"replace": "",
+			"note": "a bare call to a method of a supertype not loaded yet leaves no edge"
+		},
+		{
+			"name": "M-GRAPH-ENUM-VS-STATIC",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "if (imported.unknown || !types.imports.isEnumConstructor(name) || types.hasStaticFunctionNamed(name))",
+			"replace": "if (imported.unknown || !types.imports.isEnumConstructor(name))",
+			"note": "a visible enum constructor hides a static function of the same name"
+		},
+		{
+			"name": "M-GRAPH-IMPORTED-STATIC",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "if (targets.length > 0) {",
+			"replace": "if (false) {",
+			"note": "an imported static called by its simple name is never resolved"
+		},
+		{
+			"name": "M-GRAPH-BODYLESS-FLAG",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectNodes",
+			"find": "noBodyKind != null && node.children.exists(c -> c.kind == noBodyKind)",
+			"replace": "false",
+			"note": "a declaration with no body is taken for an empty body"
+		},
+		{
+			"name": "M-GRAPH-INHERITED-ARGS",
+			"type": "anyparse.query.TypeParamTable",
+			"method": "argumentsVia",
+			"find": "if (outer == owner) return args;",
+			"replace": "if (outer == owner) return null;",
+			"note": "a member a supertype declares with its parameter never takes the argument the `extends` clause passes"
+		},
+		{
+			"name": "M-REACH-FORWARDING-OP",
+			"type": "anyparse.query.MemberReach",
+			"method": "implicitChangeIn",
+			"find": "if (g.types.meta.isExtern(type) && !_g.externQuiet(g, type, member))",
+			"replace": "if (type.length >= 0)",
+			"note": "an abstract's body-less forwarding operator counts as target code that may change any array"
+		},
+		{
+			"name": "M-GRAPH-STATIC-FIELD-TYPE",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "if (staticOwner != null && types.isStatic(staticOwner, name)) return memberTypeSource(staticOwner, name);",
+			"replace": "",
+			"note": "a static field read off its type name (`Store.arr`) has no type, so a call on it is unresolved"
+		},
+		{
+			"name": "M-REACH-INDEX-IMPLICIT",
+			"type": "anyparse.query.ReachGraph",
+			"method": "counts",
+			"find": "return _scope.sources.exists(c.file) || inPlay(c);",
+			"replace": "return _scope.sources.exists(c.file);",
+			"note": "an implicitly-called member of a library file never read is not a candidate, so its toString runs unseen"
+		},
+		{
+			"name": "M-REACH-CLOSURE-CHANNELS",
+			"type": "anyparse.query.ReachAdmission",
+			"method": "joinThroughChannels",
+			"find": "if (valueReached || admittedNames(u).exists(n -> names.exists(n))) add(u.from, 'unresolved');",
+			"replace": "if (admittedNames(u).exists(n -> names.exists(n))) add(u.from, 'unresolved');",
+			"note": "a function that reaches a lambda only through a call it cannot resolve is not admitted"
+		},
+		{
+			"name": "M-REACH-CLOSURE-LIBRARY",
+			"type": "anyparse.query.ReachAdmission",
+			"method": "joinThroughChannels",
+			"find": "if (valueReached) for (id => n in g.nodes) if (runsUnseenCode(g, n)) add(id, 'library');",
+			"replace": "",
+			"note": "library code not read yet is never admitted, though it may call any function value"
+		},
+		{
+			"name": "M-REACH-PURE-PARAMS",
+			"type": "anyparse.query.ReachGraph",
+			"method": "isPureLibrary",
+			"find": "if (!(param != null && inertType(param)) && !(arg != null && literals.contains(arg.kind))) return false;",
+			"replace": "",
+			"note": "a listed library call counts as pure whatever it is handed, so an object's toString runs unseen"
+		},
+		{
+			"name": "M-REACH-FRESH-TYPED",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "freshResult",
+			"find": "if (receiverType == null || !((_scope.shape.execution?.freshReturningMethods ?? [])[receiverType] ?? []).contains(method))",
+			"replace": "if (receiverType == null || ![for (ms in (_scope.shape.execution?.freshReturningMethods ?? []).iterator()) for (m in ms) m].contains(method))",
+			"note": "a fresh-returning method of another type counts, so a `using` extension of that name is taken for it"
+		},
+		{
+			"name": "M-GRAPH-IMPORT-UNLISTED",
+			"type": "anyparse.query.CallGraphImports",
+			"method": "importedStatics",
+			"find": "case Import if (last == name && before != '' && CallGraphNames.isTypeLike(before)):\n\t\t\t\t\tbind(before, last);",
+			"replace": "case Import if (last == name && before != '' && CallGraphNames.isTypeLike(before)):\n\t\t\t\t\tif (_isStatic(before, last)) bind(before, last);",
+			"note": "an explicit static import the index does not list binds nothing, so the call is taken for an enum constructor"
+		},
+		{
+			"name": "M-GRAPH-UNLISTED-WILDCARD",
+			"type": "anyparse.query.CallGraphImports",
+			"method": "importedStatics",
+			"find": "\t\t\t\t\t\tbind(last, name)\n\t\t\t\t\telse if (_unlisted(last))\n\t\t\t\t\t\tout.unknown = true;\n",
+			"replace": "\t\t\t\t\t\tbind(last, name);\n",
+			"note": "a wildcard import of a type under a build macro supplies nothing unseen"
+		},
+		{
+			"name": "M-GRAPH-PLACEHOLDER-DISPATCH",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "(memberOnChain(currentType, calleeName) == calleeId || placeholder)",
+			"replace": "(memberOnChain(currentType, calleeName) == calleeId || placeholder && false)",
+			"note": "a bare call to a member of an unloaded supertype records no dispatch, so overrides loaded later are never reached"
+		},
+		{
+			"name": "M-GRAPH-PLACEHOLDER-DECLARING",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "types.declaringTypeOf(recv.typeName, calleeName) ?? recv.typeName, calleeName",
+			"replace": "recv.typeName, calleeName",
+			"note": "a call through `this` to an unloaded supertype's member names a placeholder no file ever upgrades"
+		},
+		{
+			"name": "M-GRAPH-LITERAL-ARMS",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "|| (switchKinds.contains(kind) && index >= 1) || ((kind == caseBranchKind || blockKinds.contains(kind)) && last)",
+			"replace": "",
+			"note": "a literal in a switch / if arm or ending a block is never typed by what encloses it"
+		},
+		{
+			"name": "M-GRAPH-LITERAL-REST",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "? Std.int(Math.min(index, params.length - 1))",
+			"replace": "? index",
+			"note": "only the first argument of a rest parameter is typed"
+		},
+		{
+			"name": "M-GRAPH-LITERAL-LAMBDA",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "else if (lambdaKinds.contains(kind) && last)",
+			"replace": "else if (false)",
+			"note": "a lambda's body is never typed by its function type's return"
+		},
+		{
+			"name": "M-GRAPH-LITERAL-MAP",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "} else if (kind == mapEntryKind && index == 1 && level > 0 && lineage[level - 1].kind == arrayLiteralKind) {",
+			"replace": "} else if (false) {",
+			"note": "a map literal's value is never typed by the map's value type"
+		},
+		{
+			"name": "M-GRAPH-LITERAL-FIELD",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "} else if (kind == objectFieldKind && level > 0 && lineage[level - 1].kind == objectLiteralKind) {",
+			"replace": "} else if (false) {",
+			"note": "an object literal's field is never typed by the field's declared type"
+		},
+		{
+			"name": "M-REACH-EXTERN-CLOSED",
+			"type": "anyparse.query.ReachGraph",
+			"method": "externClosed",
+			"find": "\t\t\t\tfor (w in written) if (w != null && !own(w)) closed = false;\n",
+			"replace": "",
+			"note": "an extern whose members carry arrays or functions counts as closed, so target code handed a callback runs unseen"
+		},
+		{
+			"name": "M-REACH-EXTERN-INERT",
+			"type": "anyparse.query.ReachGraph",
+			"method": "externClosed",
+			"find": "inertType(written) || nominal == current",
+			"replace": "nominal == current",
+			"note": "an extern handed only numbers and strings counts as holding program values, so every std extern refuses a shared collection"
+		},
+		{
+			"name": "M-REACH-IMPLICIT-INSTANCE",
+			"type": "anyparse.query.ReachGraph",
+			"method": "indexImplicit",
+			"find": "names.contains(m.name) && !m.isStatic",
+			"replace": "names.contains(m.name)",
+			"note": "a static function named toString counts as implicitly called, so any string conversion runs it"
+		},
+		{
+			"name": "M-REACH-EXTERN-IMPLICIT-QUIET",
+			"type": "anyparse.query.ReachGraph",
+			"method": "externQuiet",
+			"find": "return info != null && (info.isImplicitCall || byName) && !callsItsArgument(g, type, name);",
+			"replace": "return false;",
+			"note": "an extern's implicitly-called conversion counts as target code that may change any array"
+		},
+		{
+			"name": "M-REACH-IMPLICIT-WRITTEN",
+			"type": "anyparse.query.ReachGraph",
+			"method": "counts",
+			"find": "return _scope.sources.exists(c.file) || inPlay(c);",
+			"replace": "return true;",
+			"note": "(precision) every implicit member the index declares is a candidate, whether or not any code names its type"
+		},
+		{
+			"name": "M-REACH-SITE-SELF-ALIAS",
+			"type": "anyparse.query.ReachProject",
+			"method": "siteOf",
+			"find": "return found.length == 1 ? found[0] : null;",
+			"replace": "return null;",
+			"note": "(precision) a type re-exported by a same-named typedef has no declaration site, so its implicit members are opaque"
+		},
+		{
+			"name": "M-GRAPH-SELF-ALIAS-COUNT",
+			"type": "anyparse.query.CallGraphTypes",
+			"method": "record",
+			"find": "if (!CallGraphNames.selfAlias(t)) _declarations[t.name]",
+			"replace": "_declarations[t.name]",
+			"note": "a same-named typedef re-export counts as a second declaration, so every type it re-exports is ambiguous"
+		},
+		{
+			"name": "M-REACH-INCREMENTAL-PURGE",
+			"type": "anyparse.query.CallGraph",
+			"method": "purgeSites",
+			"find": "for (e in edges) if (CallGraphNames.normalizePath(e.file) != key && !removed.exists(e.from)) e",
+			"replace": "for (e in edges) e",
+			"note": "a file taken back out of the graph leaves its edges behind, so what its old text called still counts"
+		},
+		{
+			"name": "M-GRAPH-FORWARD-ONLY",
+			"type": "anyparse.query.TypeMetaFacts",
+			"method": "forwardedTo",
+			"find": "return only != null && !only.contains(member) ? null : _forwards[typeName];",
+			"replace": "return _forwards[typeName];",
+			"note": "`@:forward(bar)` forwards every member, so a call it rejects resolves to the underlying type"
+		},
+		{
+			"name": "M-GRAPH-CALL-ELEMENT",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "final returned: Null<String> = call == null ? null : _facts.returnSources[call.target];",
+			"replace": "final returned: Null<String> = null;",
+			"note": "an element of a call's result (`b.get()[0]`) has no type, so a call on it is unresolved"
+		},
+		{
+			"name": "M-REACH-CALLS-ARGUMENT",
+			"type": "anyparse.query.ReachGraph",
+			"method": "callsItsArgument",
+			"find": "if (nominal == null || catchAll.contains(nominal)) return true;",
+			"replace": "if (nominal == null) continue;",
+			"note": "a parameter of a function type does not count as a value the call may call, so `filter` runs its lambda unseen"
+		},
+		{
+			"name": "M-GRAPH-ABSTRACT-THIS-ALIAS",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "return underlying == null ? null : types.resolveAlias(underlying);",
+			"replace": "return underlying;",
+			"note": "`this` inside an abstract over a typedef alias stays the alias, so `this.copy()` on the std `Rest` is an unresolved call"
+		},
+		{
+			"name": "M-REACH-CONSTRUCTIBLE",
+			"type": "anyparse.query.ReachGraph",
+			"method": "inPlay",
+			"find": "return c.isExtern || constructible(c);",
+			"replace": "return c.isExtern;",
+			"note": "no library class's implicitly-called member counts, so an instance a library factory hands out as `Dynamic` runs its `toString` unseen"
+		},
+		{
+			"name": "M-REACH-QUESTION-ENTERED",
+			"type": "anyparse.query.ReachGraph",
+			"method": "startQuestion",
+			"find": "\t\t_entered.clear();\n\t\t_reach = null;\n",
+			"replace": "",
+			"note": "what an earlier question's walk entered stays visible to the next, so an answer depends on the questions asked before it"
+		},
+		{
+			"name": "M-REACH-EXTERN-OBJECT",
+			"type": "anyparse.query.MemberReach",
+			"method": "externSite",
+			"find": "if (takesObject) for (arg in args)",
+			"replace": "if (false) for (arg in args)",
+			"note": "an object handed to target code admits none of its members, so `JSON.stringify(this)` runs `toJSON` unseen"
+		},
+		{
+			"name": "M-REACH-JOIN-CONVERTS",
+			"type": "anyparse.query.ReachGraph",
+			"method": "runsNoUserCode",
+			"find": "\t\tif (g.types.memberOnChain(type, name)?.returnNominal == stringTypeName()) return false;\n",
+			"replace": "",
+			"note": "`join` runs no user code, so an element's `toString` runs unseen"
+		},
+		{
+			"name": "M-REACH-JOIN-CULPRIT",
+			"type": "anyparse.query.MemberReach",
+			"method": "benignCall",
+			"find": "\t\tif (g.types.memberOnChain(type, name)?.returnNominal == _g.stringTypeName()) return false;\n",
+			"replace": "",
+			"note": "`join` in a region over a shared array is benign, so an element's `toString` changes the array unseen"
+		},
+		{
+			"name": "M-REACH-MEMO-DYNAMIC",
+			"type": "anyparse.query.MemberReach",
+			"method": "signatureOf",
+			"find": " ${m.isDynamic}",
+			"replace": "",
+			"note": "a method turning `dynamic` is refreshed in place, so another file's call to it keeps resolving to the body"
+		},
+		{
+			"name": "M-REACH-FAMILY-MATCH",
+			"type": "anyparse.query.ReachGraph",
+			"method": "matches",
+			"find": "case _: false;",
+			"replace": "case _: true;",
+			"note": "(precision) every implicit-call site admits every family, so an index access runs an `iterator`"
+		},
+		{
+			"name": "M-REACH-TYPED-SITE",
+			"type": "anyparse.query.ReachGraph",
+			"method": "typesAt",
+			"find": "if (at.family == Literal) return null;",
+			"replace": "return null;",
+			"note": "(precision) an operand's type narrows nothing, so converting a `Quiet` runs every `toString` in play"
+		},
+		{
+			"name": "M-REACH-ABSTRACT-VISIBLE",
+			"type": "anyparse.query.ReachGraph",
+			"method": "counts",
+			"find": "if (c.isAbstract) return visibleAbstracts().exists(c.type);",
+			"replace": "if (c.isAbstract) return false;",
+			"note": "no library abstract's implicitly-called member counts, so a conversion of a value read off a library field runs unseen"
+		},
+		{
+			"name": "M-REACH-MEMBER-READ",
+			"type": "anyparse.query.ReachGraph",
+			"method": "memberUses",
+			"find": "\t\t\t\t\tpush(name, t == null ? null : readOwners(g, t, name));\n",
+			"replace": "",
+			"note": "a field read does not bring its declared type into reach, so a conversion of the value read runs unseen"
+		},
+		{
+			"name": "M-REACH-INFERRED-MEMBER",
+			"type": "anyparse.query.AbstractReach",
+			"method": "settle",
+			"find": "\t\t\t\tinferred(_sig.inferredMember[name]);\n",
+			"replace": "",
+			"note": "a member whose type is inferred brings nothing into reach, so a conversion of its value runs unseen"
+		},
+		{
+			"name": "M-REACH-COMPOUND-OPERATOR",
+			"type": "anyparse.query.ImplicitSites",
+			"method": "sitesOfFile",
+			"find": "\t\t\tif (applied != null && _overloaded.exists(applied)) add(Operator(applied), node, node.children);\n",
+			"replace": "",
+			"note": "`acc += 1` runs no `@:op(A + B)` overload"
+		},
+		{
+			"name": "M-REACH-EXTERN-HANDS",
+			"type": "anyparse.query.MemberReach",
+			"method": "externSite",
+			"find": [
+				"if (takesObject) for (arg in args)",
+				"if (returned != null && returned == stringType && at != null) {"
+			],
+			"replace": [
+				"if (false) for (arg in args)",
+				"if (at != null && false) {"
+			],
+			"note": "target code handed an object neither reaches its members by name nor converts it, so `Std.string(this)` runs `toString` unseen"
+		},
+		{
+			"name": "M-REACH-EXTERN-NESTED",
+			"type": "anyparse.query.ReachGraph",
+			"method": "handedMemberIds",
+			"find": "m.isStatic ? [] : [m.typeSource];",
+			"replace": "[];",
+			"note": "target code handed an object reaches only the object's own members, so a nested value's `toJSON` runs unseen"
+		},
+		{
+			"name": "M-REACH-EXTERN-ENUM-ARGS",
+			"type": "anyparse.query.ReachGraph",
+			"method": "handedMemberIds",
+			"find": "m.paramTypeSources;",
+			"replace": "[];",
+			"note": "an enum constructor's arguments are not walked, so the `toJSON` of an object a handed enum value holds runs unseen"
+		},
+		{
+			"name": "M-REACH-EXTERN-ENUM-CTOR",
+			"type": "anyparse.query.ReachGraph",
+			"method": "handedMemberIds",
+			"find": "else if (ctorKinds.contains(m.kind))",
+			"replace": "else if (false)",
+			"note": "(precision) an enum constructor is a kind nothing reads, so any handed enum value admits every function"
+		},
+		{
+			"name": "M-REACH-EXTERN-RECEIVER",
+			"type": "anyparse.query.MemberReach",
+			"method": "externSite",
+			"find": "if (onInstance)",
+			"replace": "if (false)",
+			"note": "an extern instance method's target code does not hold its receiver, so a native `toJSON` calling `this.toISOString()` runs unseen"
+		},
+		{
+			"name": "M-REACH-IMPLICIT-PLACEHOLDER",
+			"type": "anyparse.query.ReachGraph",
+			"method": "idsOf",
+			"find": "final id: String = declared ?? placeholder(g, c.type, c.member == CallGraph.INIT_NAME ? ctorName : c.member);",
+			"replace": "final id: String = declared ?? '';",
+			"note": "an implicitly-called member of a library file not read yet has no graph node, so its `toString` runs unseen"
+		},
+		{
+			"name": "M-LIVENESS-DEAD",
+			"type": "anyparse.query.CondRegionLiveness",
+			"method": "deadSpans",
+			"find": "if (to > from && frames.exists(f -> f.live == false)) dead.push(new Span(from, to));",
+			"replace": "",
+			"note": "no byte is ever dead, so a branch no build compiles is walked"
+		},
+		{
+			"name": "M-REACH-LIVE-HAZARDS",
+			"type": "anyparse.query.MemberReach",
+			"method": "liveHazards",
+			"find": "if (_live.live(file, source, h.span) && (h.kind != Opaque || _live.holdsLiveCode(file, source, h.span))) h",
+			"replace": "h",
+			"note": "(precision) a hazard inside a branch no configured build compiles still refuses the proof"
+		},
+		{
+			"name": "M-REACH-LIVE-EDGES",
+			"type": "anyparse.query.MemberReach",
+			"method": "liveEdges",
+			"find": "if (e.kind != Contains && isLive(g, e.file, e.span)) e",
+			"replace": "if (e.kind != Contains) e",
+			"note": "(precision) a call inside a branch no configured build compiles is still followed"
+		},
+		{
+			"name": "M-DEFINES-ONE-ARM",
+			"type": "anyparse.check.ReachDefinesProbe",
+			"method": "parse",
+			"find": "if (arms != 1 || early == null || all == null) return null;",
+			"replace": "if (early == null || all == null) return null;",
+			"note": "a transcript of several compile arms is read as the last arm's alone"
+		},
+		{
+			"name": "M-DEFINES-EARLY",
+			"type": "anyparse.check.ReachDefinesProbe",
+			"method": "parse",
+			"find": "defined: early,",
+			"replace": "defined: all,",
+			"note": "a define an initialization macro sets is read as defined for every file, so a module an earlier one typed is judged under it"
+		},
+		{
+			"name": "M-DEFINES-TYPES",
+			"type": "anyparse.check.ReachDefinesProbe",
+			"method": "macroSource",
+			"find": "if (named != null) Sys.println(",
+			"replace": "if (false) Sys.println(",
+			"note": "the probe names no type the build typed, so a type a macro defined reads as held by the index"
+		},
+		{
+			"name": "M-DEFINES-IMPL",
+			"type": "anyparse.check.ReachDefinesProbe",
+			"method": "macroSource",
+			"find": "case KAbstractImpl(_) | KGenericInstance(_, _): null;",
+			"replace": "case KGenericInstance(_, _): null;",
+			"note": "(precision) an abstract's implementation class is reported, which no source declares, so every build with an abstract reads as incomplete"
+		},
+		{
+			"name": "M-SPAWN-ORDER",
+			"type": "anyparse.check.HaxeSpawn",
+			"method": "runAll",
+			"find": "if (answer != null && answer.length == jobs.length) return answer;",
+			"replace": "if (answer != null && answer.length == jobs.length) return [for (k in 0...answer.length) answer[answer.length - 1 - k]];",
+			"note": "overlapping compiles answer in the order they finished, so one configuration's defines decide another's branches"
+		},
+		{
+			"name": "M-STD-SIBLING-HOMEBREW",
+			"type": "anyparse.query.StdResolver",
+			"method": "siblingStdOf",
+			"find": "return !exists(installer) && exists(homebrew) ? homebrew : installer;",
+			"replace": "return installer;",
+			"note": "the std beside a Homebrew compiler is missed, so another install's std is indexed while the compiler reads its own"
+		},
+		{
+			"name": "M-STD-ENV-ENTRIES",
+			"type": "anyparse.query.StdResolver",
+			"method": "stdEntryOf",
+			"find": "for (e in entries) if (holdsStd(e)) return e;",
+			"replace": "",
+			"note": "a HAXE_STD_PATH listing several directories answers no std, so another install's std is indexed while the compiler reads the listed one"
+		},
+		{
+			"name": "M-REACH-CONFIGS-COMPLETE",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "withReachConfigurations",
+			"find": "|| noOracle || !complete)",
+			"replace": "|| noOracle)",
+			"note": "the oracle list is read as every build the project ships, so a platform branch no configuration compiles is skipped"
+		},
+		{
+			"name": "M-REACH-CONFIGS-AGREE",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "reachComplete",
+			"find": "return all;",
+			"replace": "return resolveConfig(paths[0]).reachConfigurationsComplete();",
+			"note": "the first path's config decides the flag for the run, so a path whose own config ships other builds is judged under the first's"
+		},
+		{
+			"name": "M-REACH-COMPILED-ONLY",
+			"type": "anyparse.query.MemberReach",
+			"method": "configuredFor",
+			"find": "compiledIndex(project, compiled, plugin)",
+			"replace": "host.resolutionIndex() ?? SymbolIndex.build(project, plugin)",
+			"note": "(precision) a library file no configured build parses stays in play, so another target's copy of a std class blocks every proof"
+		},
+		{
+			"name": "M-REACH-ESCALATE-NEVER",
+			"type": "anyparse.query.MemberReach",
+			"method": "escalation",
+			"note": "a question that met a raw conditional region keeps the answer that walks every branch, so the builds never decide one",
+			"force": "null"
+		},
+		{
+			"name": "M-REACH-ESCALATE-ALWAYS",
+			"type": "anyparse.query.MemberReach",
+			"method": "escalation",
+			"find": "if (answer == Proven || !(_metRawRegion || _carriers.metIncomplete || answer.match(Unknown(OpaqueCond(_, _))))) return null;",
+			"replace": "if (answer == Proven) return null;",
+			"note": "every unproved question consults the builds, so a run pays a compile per configuration it did not need"
+		},
+		{
+			"name": "M-REACH-ESCALATE-INCOMPLETE",
+			"type": "anyparse.query.MemberReach",
+			"method": "escalation",
+			"find": "_carriers.metIncomplete || ",
+			"replace": "",
+			"note": "(precision) a question whose answer rests on which library code is compiled never consults the builds"
+		},
+		{
+			"name": "M-REACH-BASE-CLASSPATH",
+			"type": "anyparse.query.MemberReach",
+			"method": "forRun",
+			"find": "MAX_VISITED, null, () -> false",
+			"replace": "MAX_VISITED, null, () -> true",
+			"note": "the resolution scope vouches for the classpath, so a subtype a build compiles from outside it is ruled out"
+		},
+		{
+			"name": "M-REACH-TYPES-HELD",
+			"type": "anyparse.query.MemberReach",
+			"method": "declaresEveryType",
+			"force": "true",
+			"note": "a type the builds typed that no indexed file declares - one a macro made - is taken as nonexistent"
+		},
+		{
+			"name": "M-GRAPH-READ-DECLARED",
+			"type": "anyparse.query.ReachGraph",
+			"method": "readOwners",
+			"find": "if (declared == null || !declared.exists(t -> g.types.memberOnChain(t, name) != null)) return declared;",
+			"replace": "",
+			"note": "an escaped type declaring the name hides that the static type's own read is a static extension or a generated member"
+		},
+		{
+			"name": "M-REACH-INDEX-OPERATOR",
+			"type": "anyparse.query.ReachGraph",
+			"method": "indexImplicit",
+			"find": "if (indexOperator || (indexMeta != null && m.implicitCallMetas.contains(indexMeta))) add(IndexMember);",
+			"replace": "if (indexMeta != null && m.implicitCallMetas.contains(indexMeta)) add(IndexMember);",
+			"note": "an `@:op([])` overload never runs from an index access"
+		},
+		{
+			"name": "M-REACH-EXTENSION-READ",
+			"type": "anyparse.query.AbstractReach",
+			"method": "read",
+			"find": "\t\t\t{ name: read.name, owners: null };\n\t\t} else\n",
+			"replace": "\t\t\tread;\n\t\t} else\n",
+			"note": "a read none of whose receiver's chain declares the name reaches nothing, so a static extension's return type is out of reach"
+		},
+		{
+			"name": "M-REACH-GENERATED-READ",
+			"type": "anyparse.query.AbstractReach",
+			"method": "read",
+			"find": "if (receiver.exists(_built)) for (t in _everything()) add(t);",
+			"replace": "",
+			"note": "a member a build macro generated is taken for one no type declares, so what it returns is out of reach"
+		},
+		{
+			"name": "M-REACH-FILE-IMPORTS",
+			"type": "anyparse.query.ReachGraph",
+			"method": "enter",
+			"find": "eachWord(imp.raw, word);",
+			"replace": "{}",
+			"note": "what a file imports is not in scope in its members, so a `using` extension's return type is out of reach"
 		}
 	]
 }

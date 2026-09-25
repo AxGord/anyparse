@@ -1246,26 +1246,13 @@ typedef RefShape = {
 	@:optional var operatorOverloadMetaName: String;
 
 	/**
-	 * The ANNOTATION name a MEMBER carries to declare an IMPLICIT CONVERSION into its
-	 * enclosing type — Haxe `@:from`, whose body is ordinary code the compiler inserts at
-	 * every seam where a value of the source type is expected as this one.
-	 * `SymbolIndexBuilder` records its presence per member (`SymbolIndex.MemberInfo.
-	 * isImplicitConversion`), which is what `SymbolIndex.resolvesToConversionFreeType`
-	 * answers with: retyping a binding from a top type to such an abstract compiles and then
-	 * RUNS that member, where the wider type ran nothing. A header `from X` clause is NOT
-	 * this — it declares a structural relation and generates no code — so only members count.
-	 * Unset makes every abstract read as carrying no conversion.
-	 */
-	@:optional var implicitConversionMetaName: String;
-
-	/**
 	 * The ANNOTATION names that make a member COMPILER-DISPATCHED — one the compiler selects and
 	 * calls by the STATIC TYPE of its operands rather than by a written call: Haxe `@:from`, `@:op`,
 	 * `@:arrayAccess` and `@:resolve`. Every such member's parameter type IS the dispatch key, so a
 	 * rewrite that narrows one changes which expressions in the whole program select it, at sites
 	 * that name neither the member nor its type.
 	 *
-	 * A superset of `implicitConversionMetaName`, and deliberately a separate seam: that one answers
+	 * A superset of `execution.implicitConversionMetaName`, and deliberately a separate seam: that one answers
 	 * what a TYPE does to a value crossing into it, this one what a MEMBER's signature is load-bearing
 	 * for. Unset makes every member read as ordinarily called.
 	 */
@@ -1816,6 +1803,14 @@ typedef RefShape = {
 	 * whose source `T` differs from its effective type. Optional; unset disables the skip.
 	 */
 	@:optional var restParamKind: String;
+
+	/**
+	 * How the language runs code no call site names, and what a reachability analysis may assume about code it reads:
+	 * implicit calls and conversions, reflection, pure library calls, fresh values, modelled kinds (`ExecutionShape`).
+	 * Nested so this structure stays within the constructor arity a static target allows. Optional; unset reads as
+	 * every one of its fields unset.
+	 */
+	@:optional var execution: ExecutionShape;
 
 	/**
 	 * Node kinds whose direct children name a STRUCTURE FIELD rather than a lexical
@@ -3273,6 +3268,157 @@ typedef RefShape = {
 	 * precedence. Optional; unset suppresses nothing.
 	 */
 	@:optional var parenOpaqueSubtreeKinds: Array<String>;
+}
+
+/** The execution facts of `RefShape` (`RefShape.execution`): what runs code no call site names, and what reach may assume. */
+typedef ExecutionShape = {
+	/**
+	 * The ABSTRACT types a value can have although no code writes their name, by the node kind whose syntax builds one:
+	 * a rest parameter (Haxe `haxe.Rest`), a map literal's key-value pair (Haxe `Map`). `MemberReach` counts their
+	 * implicitly-called members as visible to code holding such a node. Optional; unset means the language has none.
+	 */
+	@:optional var literalAbstractTypes: Map<String, String>;
+
+	/**
+	 * The simple name of the language's CLASS-VALUE type (Haxe `Class`): a member returning or taking one may produce
+	 * an instance of a class no code names (`Type.resolveClass`, `Type.createInstance`). `MemberReach` reads the
+	 * producers off the declarations with it. Optional; unset means no class may be instantiated from a value.
+	 */
+	@:optional var classValueTypeName: String;
+
+	/**
+	 * The operator kinds that may CONVERT an operand to a string (Haxe `+` and `+=`, which concatenate when either side
+	 * is a string): a site where an operand's string-conversion method may run. Optional; unset means no operator does.
+	 */
+	@:optional var concatenationKinds: Array<String>;
+
+	/**
+	 * The implicitly-called method names (`implicitCallNames`) the language runs to convert a value to a string (Haxe
+	 * `toString`); the others it runs to iterate one. Optional; unset means every implicitly-called name iterates.
+	 */
+	@:optional var stringConversionMethodNames: Array<String>;
+
+	/**
+	 * The implicit-call annotation (`implicitCallMetaNames`) under which the language runs a member for an INDEX
+	 * access on its type (Haxe `@:arrayAccess`). Optional; unset means such a member runs from any site.
+	 */
+	@:optional var indexAccessMetaName: String;
+
+	/**
+	 * The node kind an operator-overload annotation's INDEX form projects as (Haxe `@:op([])`, an array-literal kind):
+	 * such a member runs at an index access, like one under `indexAccessMetaName`. Optional; unset means there is none.
+	 */
+	@:optional var indexOperatorOverloadKind: String;
+
+	/**
+	 * Compound-assignment kind -> the binary operator kind it applies (Haxe `AddAssign` -> `Add`): an overload of the
+	 * binary operator runs at the compound form too. Optional; unset means a compound form runs only its own overloads.
+	 */
+	@:optional var compoundAssignOperators: Map<String, String>;
+
+	/**
+	 * Maps a qualified `Type.method` REFLECTIVE member accessor to the index of the argument that
+	 * NAMES the member it reads, writes or tests (`Reflect.field` / `setField` / `getProperty` /
+	 * `setProperty` → 1). A reachability analysis reads it to see a member touched by a string: a
+	 * literal name is a touch it can attribute, a computed one is a blind spot it must admit.
+	 * Optional; unset leaves reflection invisible to `MemberReach`'s name channel.
+	 */
+	@:optional var reflectiveNameCalls: Map<String, Int>;
+
+	/**
+	 * Qualified `Type.method` calls that CONSTRUCT an instance of a class value chosen at run time
+	 * (Haxe `Type.createInstance`) — a constructor reached without any `new` naming it. Optional;
+	 * unset leaves such a call an ordinary external leaf.
+	 */
+	@:optional var reflectiveInstantiationCalls: Array<String>;
+
+	/**
+	 * The methods of the grammar's built-in array type (`arrayTypeNames`) that READ it and hand
+	 * nothing out that could change it (`indexOf`, `copy`, `map`, …), and the ones that CHANGE it
+	 * (`push`, `splice`, …). A name in neither list may be a static extension that receives the array
+	 * itself, so an analysis that follows aliases treats it as the array escaping. Optional; unset
+	 * makes every method call on an array a change and an escape.
+	 */
+	@:optional var nonMutatingArrayMethods: Array<String>;
+
+	/** See `nonMutatingArrayMethods`. */
+	@:optional var mutatingArrayMethods: Array<String>;
+
+	/**
+	 * The metadata that makes a function one the language calls IMPLICITLY — through an operator, an index
+	 * access, a conversion or a field-name fallback (Haxe `@:op`, `@:arrayAccess`, `@:from`, `@:to`,
+	 * `@:resolve`), at a site that names no call. A reachability analysis admits such a function from any
+	 * code, since the site cannot be told apart from plain arithmetic without a typer. Optional; unset
+	 * marks none.
+	 */
+	@:optional var implicitCallMetaNames: Array<String>;
+
+	/**
+	 * Method NAMES the language calls implicitly on a value whatever metadata they carry: string conversion
+	 * (Haxe `toString`, run by `+` on a string, interpolation and `Std.string`) and the iteration protocol
+	 * (`iterator`, `hasNext`, `next`, `keyValueIterator`, run by a `for` over anything but an interval). A
+	 * reachability analysis admits every such function from any code. Optional; unset admits none.
+	 */
+	@:optional var implicitCallNames: Array<String>;
+
+	/**
+	 * Type metadata under which the language CONSTRUCTS an instance without a `new` naming it (Haxe
+	 * `@:structInit`: an object literal typed as the class runs its constructor and field initializers).
+	 * Optional; unset leaves such construction unmodelled.
+	 */
+	@:optional var implicitConstructionTypeMetaNames: Array<String>;
+
+	/**
+	 * The member kinds an enum CONSTRUCTOR projects as (Haxe `SimpleCtor`, `ParamCtor`): a bare call to one
+	 * builds a value and runs no code, while a bare call to any other name the graph cannot bind may be a
+	 * function it did not see. Optional; unset makes every unbound bare call unresolved.
+	 */
+	@:optional var enumConstructorKinds: Array<String>;
+
+	/**
+	 * Every node kind whose run-time effect a reachability analysis MODELS: a kind it knows runs no code of
+	 * its own, or whose code the call graph records (a call, a constructor, an accessor, an operator of an
+	 * implicitly-called function). A WHITELIST — a reached body holding any kind NOT listed is a blind spot,
+	 * so a kind a later grammar revision adds fails closed until someone decides what it runs. Optional;
+	 * unset makes every reached body a blind spot.
+	 */
+	@:optional var modelledKinds: Array<String>;
+
+	/**
+	 * Qualified `Type.method` calls into LIBRARY code — an extern, a target intrinsic, or a
+	 * library body — known to run no user code of its own: no callback, no dynamic dispatch, and no implicit
+	 * call but those `implicitCallNames` lists (`StringBuf.add` converts its argument to a string, whose
+	 * `toString` a reachability analysis admits from any code anyway). A reachability walk stops there
+	 * instead of reading the body. Honoured only for a member the type's indexed
+	 * declaration actually declares, so a static extension spelled like one is never taken for it. Optional;
+	 * unset lists none, and every library call is then followed or refused.
+	 */
+	@:optional var pureLibraryCalls: Array<String>;
+
+	/** Library types EVERY member of which qualifies as a `pureLibraryCalls` entry (Haxe `Math`, `String`, `StringTools`). */
+	@:optional var pureLibraryTypes: Array<String>;
+
+	/**
+	 * Per built-in type (the array type, the string type), the methods that type declares as returning a NEW
+	 * object (Haxe `Array` => `copy`, `concat`, `map`, `filter`, `slice`; `String` => `split`): a local
+	 * initialised from such a call on a value KNOWN to be of that type holds a value no other code shares. The
+	 * type matters — a method of that name on another type is a `using` extension, which may return anything.
+	 * Optional; unset makes only literals fresh.
+	 */
+	@:optional var freshReturningMethods: Map<String, Array<String>>;
+
+	/**
+	 * The ANNOTATION name a MEMBER carries to declare an IMPLICIT CONVERSION into its
+	 * enclosing type — Haxe `@:from`, whose body is ordinary code the compiler inserts at
+	 * every seam where a value of the source type is expected as this one.
+	 * `SymbolIndexBuilder` records its presence per member (`SymbolIndex.MemberInfo.
+	 * isImplicitConversion`), which is what `SymbolIndex.resolvesToConversionFreeType`
+	 * answers with: retyping a binding from a top type to such an abstract compiles and then
+	 * RUNS that member, where the wider type ran nothing. A header `from X` clause is NOT
+	 * this — it declares a structural relation and generates no code — so only members count.
+	 * Unset makes every abstract read as carrying no conversion.
+	 */
+	@:optional var implicitConversionMetaName: String;
 }
 
 /**

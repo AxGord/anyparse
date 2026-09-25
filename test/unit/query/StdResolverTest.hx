@@ -31,6 +31,18 @@ class StdResolverTest extends Test {
 		Assert.equals('/w/std', StdResolver.discover('/bad/std', '/w/std', ['/k/std'], p -> p == '/w/std'));
 	}
 
+	/**
+	 * A `HAXE_STD_PATH` listing several directories answers the one holding the std, wherever it stands in the list — the
+	 * whole value is no directory at all.
+	 */
+	@:pin('control') @:killer('M-STD-ENV-ENTRIES')
+	public function testMultiEntryEnvAnswersTheStdEntry(): Void {
+		Assert.equals('/h/std', StdResolver.stdEntryOf('/x/lib:/h/std', ':', p -> p == '/h/std'));
+		Assert.equals('/h/std', StdResolver.stdEntryOf('/h/std;/x/lib', ';', p -> p == '/h/std'));
+		Assert.equals('/only', StdResolver.stdEntryOf('/only', ':', _ -> false));
+		Assert.isNull(StdResolver.stdEntryOf('/x/a:/x/b', ':', _ -> false));
+	}
+
 	/** The `which haxe` sibling wins over the known locations. */
 	public function testWhichWinsOverKnown(): Void {
 		Assert.equals('/w/std', StdResolver.discover(null, '/w/std', ['/k/std'], _ -> true));
@@ -273,5 +285,15 @@ class StdResolverTest extends Test {
 		return answer;
 	}
 	#end
+
+	@:pin('control') @:killer('M-STD-SIBLING-HOMEBREW')
+	public function testTheStdBesideTheCompilerIsFoundInEitherLayout(): Void {
+		// Homebrew ships std at `lib/haxe/std` beside `bin/haxe`; the known locations list another install first, whose
+		// std the compiler on PATH never reads.
+		final homebrew: String -> Bool = path -> path == '/brew/Cellar/haxe/4/lib/haxe/std';
+		Assert.equals('/brew/Cellar/haxe/4/lib/haxe/std', StdResolver.siblingStdOf('/brew/Cellar/haxe/4/bin/haxe', homebrew));
+		final installer: String -> Bool = path -> path == '/opt/haxe/std';
+		Assert.equals('/opt/haxe/std', StdResolver.siblingStdOf('/opt/haxe/bin/haxe', installer));
+	}
 
 }

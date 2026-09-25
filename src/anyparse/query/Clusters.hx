@@ -115,7 +115,7 @@ final class Clusters {
 		members.sort(byPosition);
 		final memberIds: Array<String> = [for (m in members) m.id];
 
-		final effectiveKinds: Array<EdgeKind> = kinds ?? [Call, Ref, New];
+		final effectiveKinds: Array<EdgeKind> = kinds ?? [Call, Ref, New, Accessor];
 		final intraEdges: Array<MemberEdge> = aggregateIntraEdges(graph, memberIds, effectiveKinds);
 		final adj: Map<String, Array<String>> = [];
 		final inNeighbors: Map<String, Array<String>> = [];
@@ -349,7 +349,7 @@ final class Clusters {
 	 * (`Virtual` would double-count the instance-call sites it accompanies).
 	 */
 	private static function countResolvedSites(graph: CallGraph, memberIds: Array<String>): Int {
-		final coverageKinds: Array<EdgeKind> = [Call, Ref, New];
+		final coverageKinds: Array<EdgeKind> = [Call, Ref, New, Accessor];
 		var count: Int = 0;
 		for (e in graph.edges) if (coverageKinds.contains(e.kind) && memberIds.contains(memberRoot(e.from))) count++;
 		return count;

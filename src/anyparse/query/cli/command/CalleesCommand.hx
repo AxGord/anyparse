@@ -122,7 +122,8 @@ final class CalleesCommand implements CliCommand {
 		}
 		// --limit 0 = uncapped; unset = DEFAULT_CHAIN_LINES; the budget is
 		final provenEmpty: Bool = renderChains(graph, matches, depth, outward, kinds, sources, limit);
-		if (graph.unresolved.length > 0) CliIo.stderr('${chainUnresolvedNote(cmd, targetStr, graph.unresolved.length, provenEmpty)}\n');
+		final blind: Int = graph.unresolved.length + graph.unresolvedAccessesRunning(matches).length;
+		if (blind > 0) CliIo.stderr('${chainUnresolvedNote(cmd, targetStr, blind, provenEmpty)}\n');
 		return ctx.emptyExit(provenEmpty);
 	}
 
@@ -165,7 +166,7 @@ final class CalleesCommand implements CliCommand {
 		CliIo.sysPrint('Transitive call tree: $what.\n\n');
 		CliIo.sysPrint('Options:\n');
 		CliIo.sysPrint('  --depth <n>    Levels to expand (default 1)\n');
-		CliIo.sysPrint('  --kinds <k,..> Edge kinds: call,ref,new,virtual,contains (default all)\n');
+		CliIo.sysPrint('  --kinds <k,..> Edge kinds: call,ref,new,virtual,contains,accessor (default all)\n');
 		CliIo.sysPrint('  --limit <n>    Max total tree lines across matches (default $DEFAULT_CHAIN_LINES; 0 = uncapped)\n');
 		CliIo.sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
 	}

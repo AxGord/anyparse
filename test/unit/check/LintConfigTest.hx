@@ -341,4 +341,43 @@ class LintConfigTest extends Test {
 		return LintConfig.parse(content, baseDir).compilerOracles()[0];
 	}
 
+	@:pin('control') @:killer('M-REACH-CONFIGS-COMPLETE')
+	@:access(anyparse.query.cli.command.LintCommand)
+	public function testReachSkipsBranchesOnlyUnderADeclaredCompleteOracleList(): Void {
+		// A build the `compilerOracle` list cannot typecheck — another OS, an app-store variant — still ships the branches its
+		// defines take, so the reach analysis sees the list's builds only when the project declares the list complete.
+		Assert.isFalse(LintConfig.parse('{"compilerOracle": "build.hxml"}').reachConfigurationsComplete());
+		Assert.isTrue(
+			LintConfig.parse('{"compilerOracle": "build.hxml", "reachConfigurationsComplete": true}').reachConfigurationsComplete()
+		);
+		final scope: anyparse.query.CachingGrammarPlugin.ResolutionScope = {
+			declared: true,
+			sources: () -> {
+				report: [],
+				projectRoots: [],
+				library: new anyparse.query.CachingGrammarPlugin.LibrarySources([]),
+				rootsMatched: true,
+				rootsAllMatched: true
+			}
+		};
+		final oracles: Array<OracleConfig> = [{ hxml: 'build.hxml', dir: null, defines: [] }];
+		Assert.isNull(anyparse.query.cli.command.LintCommand.withReachConfigurations(scope, oracles, false, false)?.builds);
+		Assert.notNull(anyparse.query.cli.command.LintCommand.withReachConfigurations(scope, oracles, false, true)?.builds);
+	}
+
+	@:pin('control') @:killer('M-REACH-CONFIGS-AGREE')
+	@:access(anyparse.query.cli.command.LintCommand)
+	public function testReachTakesTheBuildsAsCompleteOnlyWhenEveryPathAgrees(): Void {
+		// The run probes the first path's oracle list; a second path whose config names another list, or does not declare
+		// the flag, may ship a build that list does not name.
+		final complete: LintConfig = LintConfig.parse('{"compilerOracle": "a.hxml", "reachConfigurationsComplete": true}');
+		final otherList: LintConfig = LintConfig.parse('{"compilerOracle": "b.hxml", "reachConfigurationsComplete": true}');
+		final undeclared: LintConfig = LintConfig.parse('{"compilerOracle": "a.hxml"}');
+		final configs: Map<String, LintConfig> = ['a' => complete, 'b' => otherList, 'c' => undeclared];
+		final resolve: String -> LintConfig = path -> configs[path] ?? undeclared;
+		Assert.isTrue(anyparse.query.cli.command.LintCommand.reachComplete(['a', 'a'], resolve));
+		Assert.isFalse(anyparse.query.cli.command.LintCommand.reachComplete(['a', 'b'], resolve));
+		Assert.isFalse(anyparse.query.cli.command.LintCommand.reachComplete(['a', 'c'], resolve));
+	}
+
 }

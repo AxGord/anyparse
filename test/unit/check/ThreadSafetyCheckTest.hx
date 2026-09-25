@@ -123,6 +123,24 @@ class ThreadSafetyCheckTest extends Test {
 		#end
 	}
 
+	@:pin('control') @:killer('M-TS-ACCESSOR-TAINT')
+	public function testLockHeldAcrossABlockingGetterFlagged(): Void {
+		// Reading `_p.v` runs `get_v`, and that getter sleeps: the property read is a call like any other.
+		#if (sys || nodejs)
+		final vs: Array<Violation> =
+			violations('{"rules":{"thread-safety":{"sinks":["Sys.sleep","Mut.lock"],"lockPairs":["Mut.lock/unlock"]}}}', [
+				'class A { private final _m:Mut; private final _p:P; function w():Void { _m.lock(); trace(_p.v); _m.unlock(); } }',
+				'class P { public var v(get, never):Int; function get_v():Int { Sys.sleep(1); return 1; } }',
+				'class Mut { public function lock():Void {} public function unlock():Void {} }'
+			]);
+		Assert.equals(1, [
+			for (v in vs) if (v.message.indexOf('holds') != -1 && v.message.indexOf('P.get_v') != -1) v
+		].length);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	public function testTernarySpawnCallbackNotFlagged(): Void {
 		#if (sys || nodejs)
 		final vs: Array<Violation> = violations('{"rules":{"thread-safety":{"sinks":["Sys.sleep"],"spawns":["Runner.create"]}}}', [

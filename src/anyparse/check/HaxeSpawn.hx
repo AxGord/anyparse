@@ -53,6 +53,30 @@ import js.node.ChildProcess.ChildProcessSpawnSyncResult;
 @:nullSafety(Strict)
 final class HaxeSpawn {
 
+	/** Bytes a job's JSON-escaped streams may add over its own output cap in the parallel driver's reply. */
+	private static inline final OVERHEAD: Int = 1024 * 1024;
+
+	/**
+	 * The node program `runAll` drives its jobs with: reads the jobs as JSON on stdin, keeps at most `argv[1]` compiles
+	 * running, kills one that out-writes `argv[2]` bytes, and prints every run as JSON in job order once all closed.
+	 */
+	private static inline final PARALLEL_DRIVER: String = "const cp = require('child_process');"
+		+ "const jobs = JSON.parse(require('fs').readFileSync(0, 'utf8'));"
+		+ "const limit = parseInt(process.argv[1]); const max = parseInt(process.argv[2]);"
+		+ "const out = new Array(jobs.length); let next = 0, running = 0, done = 0;"
+		+ "function finish(i, rec) { if (out[i]) return; out[i] = rec; running--; done++;"
+		+ " if (done === jobs.length) process.stdout.write(JSON.stringify(out)); else start(); }"
+		+ "function start() { while (running < limit && next < jobs.length) { const i = next++; running++;"
+		+ " const j = jobs[i]; const o = [], e = []; let size = 0, over = false;"
+		+ " const c = cp.spawn('haxe', j.args, { cwd: j.cwd == null ? undefined : j.cwd });"
+		+ " c.stdout.on('data', d => { size += d.length; if (size > max) { over = true; c.kill(); } else o.push(d); });"
+		+ " c.stderr.on('data', d => e.push(d));"
+		+ " c.on('error', err => finish(i, { status: null, out: '', err: '', failure: 'could not launch haxe (' + err.message + ')',"
+		+ " overflowed: false }));"
+		+ " c.on('close', code => finish(i, { status: over ? null : code, out: Buffer.concat(o).toString('utf8'),"
+		+ " err: Buffer.concat(e).toString('utf8'), failure: over ? 'haxe out-wrote its ' + max + ' byte output buffer' : '',"
+		+ " overflowed: over })); } }" + "if (jobs.length === 0) process.stdout.write('[]'); else start();";
+
 	/**
 	 * Whether this target's spawn honours the `cwd` argument. False on the native `sys`
 	 * branch, where `sys.io.Process` has no working directory — a caller whose answer
@@ -136,6 +160,46 @@ final class HaxeSpawn {
 			failure: 'a haxe child process requires a sys or nodejs target',
 			overflowed: false
 		};
+		#end
+	}
+
+	/**
+	 * Run every job of `jobs` — `haxe args` in `cwd` — at most `parallel` at a time, each as its own process under the
+	 * `maxBuffer` cap of `run`, and answer their runs in `jobs` order. The compiles share nothing but the machine, so a
+	 * caller whose jobs write no common path may overlap them; one that cannot say so passes 1. On a target without an
+	 * asynchronous process API the jobs run one after another.
+	 */
+	public static function runAll(jobs: Array<{ args: Array<String>, cwd: Null<String> }>, maxBuffer: Int, parallel: Int): Array<HaxeRun> {
+		#if nodejs
+		if (jobs.length <= 1 || parallel <= 1) return [for (j in jobs) run(j.args, j.cwd, maxBuffer)];
+		final options: Dynamic = {
+			encoding: 'utf8',
+			input: haxe.Json.stringify(jobs),
+			maxBuffer: (maxBuffer + OVERHEAD) * jobs.length
+		};
+		final res: ChildProcessSpawnSyncResult = js.node.ChildProcess.spawnSync(
+			js.Node.process.execPath, ['-e', PARALLEL_DRIVER, '--', '$parallel', '$maxBuffer'], options
+		);
+		final launchError: Null<Dynamic> = (res.error: Dynamic);
+		final status: Null<Int> = (res.status: Null<Int>);
+		final answer: Null<Array<HaxeRun>> = launchError != null || status != 0
+			? null
+			: try haxe.Json.parse(streamText(res.stdout)) catch (exception: haxe.Exception) null;
+		if (answer != null && answer.length == jobs.length) return answer;
+		// the driver itself failed: every job is answered as a run that produced no verdict
+		final why: String = 'the parallel haxe driver failed (${launchError == null ? 'status $status' : Reflect.field(launchError, 'message')})';
+		return [
+			for (_ in jobs)
+				{
+					status: null,
+					out: '',
+					err: streamText(res.stderr),
+					failure: why,
+					overflowed: false
+				}
+		];
+		#else
+		return [for (j in jobs) run(j.args, j.cwd, maxBuffer)];
 		#end
 	}
 

@@ -133,7 +133,7 @@ final class CondRegionLiveness {
 			// to whatever branch was open, and the directive is what ends that branch.
 			final before: Null<String> = answerBelow(directive.span.from);
 			if (before != null) return before;
-			apply(frames, source, directive, shape, defines);
+			apply(frames, source, directive, shape, { defined: defines, undefined: [] });
 			// A point landing INSIDE a directive's own span is not code, so nothing about it is
 			// being verified; it is read as the state the directive leaves behind. `probePoints`
 			// never produces one — it takes `directive.span.to`, which is past the directive —
@@ -142,6 +142,37 @@ final class CondRegionLiveness {
 			if (inside != null) return inside;
 		}
 		return answerBelow(sorted[sorted.length - 1] + 1);
+	}
+
+	/**
+	 * The byte ranges of `source` that are PROVABLY not compiled under EVERY one of `configurations` — each a define
+	 * set stated in both directions (`DefineFacts`). A range between two directives is dead under one configuration
+	 * when some enclosing branch is provably not taken (`branchStep` answers false); an unknown answer keeps it live.
+	 * The answer is the intersection over the configurations, so a range any of them may compile stays live, and no
+	 * configuration at all proves nothing dead. The directives themselves are not code and are never reported.
+	 *
+	 * The mirror of `unproven`, for the opposite consumer: an analysis that may SKIP what no build compiles.
+	 */
+	public static function deadSpans(
+		source: String, shape: RefShape, configurations: Array<DefineFacts>, regions: Array<LexRegion>
+	): Array<Span> {
+		if (configurations.length == 0) return [];
+		final directives: Array<CondDirective> = CondDirectives.scan(source, shape, () -> regions);
+		if (directives.length == 0) return [];
+		var common: Null<Array<Span>> = null;
+		for (facts in configurations) {
+			final frames: Array<Frame> = [];
+			final dead: Array<Span> = [];
+			for (i => directive in directives) {
+				apply(frames, source, directive, shape, facts);
+				final from: Int = directive.span.to;
+				final to: Int = i + 1 < directives.length ? directives[i + 1].span.from : source.length;
+				if (to > from && frames.exists(f -> f.live == false)) dead.push(new Span(from, to));
+			}
+			final held: Null<Array<Span>> = common;
+			common = held == null ? dead : intersect(held, dead);
+		}
+		return common ?? [];
 	}
 
 	/**
@@ -226,6 +257,23 @@ final class CondRegionLiveness {
 		return points;
 	}
 
+	/** The ranges both sorted, disjoint `a` and `b` cover. */
+	private static function intersect(a: Array<Span>, b: Array<Span>): Array<Span> {
+		final out: Array<Span> = [];
+		var i: Int = 0;
+		var j: Int = 0;
+		while (i < a.length && j < b.length) {
+			final from: Int = a[i].from > b[j].from ? a[i].from : b[j].from;
+			final to: Int = a[i].to < b[j].to ? a[i].to : b[j].to;
+			if (from < to) out.push(new Span(from, to));
+			if (a[i].to < b[j].to)
+				i++
+			else
+				j++;
+		}
+		return out;
+	}
+
 	/** Three-valued negation: an unknown operand stays unknown. */
 	private static function notOf(value: Null<Bool>): Null<Bool> {
 		return value == null ? null : !value;
@@ -262,7 +310,7 @@ final class CondRegionLiveness {
 	 * make the rest of the file answer differently from the rest of the region.
 	 */
 	private static function apply(
-		frames: Array<Frame>, source: String, directive: CondDirective, shape: RefShape, defines: Array<String>
+		frames: Array<Frame>, source: String, directive: CondDirective, shape: RefShape, facts: DefineFacts
 	): Void {
 		final text: String = CondDirectives.text(source, directive);
 		if (directive.keyword == shape.conditionalEndKeyword) {
@@ -270,7 +318,7 @@ final class CondRegionLiveness {
 			return;
 		}
 		if (directive.keyword == shape.conditionalIfKeyword) {
-			final step: CondBranchStep = branchStep(true, conditionValue(source, directive, defines));
+			final step: CondBranchStep = branchStep(true, conditionValueFacts(source, directive, facts));
 			frames.push({
 				open: text,
 				branch: text,
@@ -299,7 +347,7 @@ final class CondRegionLiveness {
 		}
 		// Unknown when the condition could not be delimited, which `conditionValue` answers for a
 		// null span — the conservative half of the pair above.
-		final step: CondBranchStep = branchStep(frame.elseGuard, conditionValue(source, directive, defines));
+		final step: CondBranchStep = branchStep(frame.elseGuard, conditionValueFacts(source, directive, facts));
 		frame.live = step.live;
 		frame.elseGuard = step.guard;
 	}

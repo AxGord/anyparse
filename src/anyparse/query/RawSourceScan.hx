@@ -214,6 +214,11 @@ final class RawSourceScan {
 		return built;
 	}
 
+	/** Whether `c` can be part of an identifier — the word boundary `mentionsWord` tests against. */
+	public static inline function isWordChar(c: Int): Bool {
+		return c == '_'.code || c >= 'a'.code && c <= 'z'.code || c >= 'A'.code && c <= 'Z'.code || c >= '0'.code && c <= '9'.code;
+	}
+
 	/**
 	 * Whether `source` spells `name` as a whole WORD — the raw-text proof every scan over an unreadable
 	 * file reduces to.
@@ -233,11 +238,6 @@ final class RawSourceScan {
 			at = source.indexOf(name, at + 1);
 		}
 		return false;
-	}
-
-	/** Whether `c` can be part of an identifier — the word boundary `mentionsWord` tests against. */
-	private static inline function isWordChar(c: Int): Bool {
-		return c == '_'.code || c >= 'a'.code && c <= 'z'.code || c >= 'A'.code && c <= 'Z'.code || c >= '0'.code && c <= '9'.code;
 	}
 
 	/**

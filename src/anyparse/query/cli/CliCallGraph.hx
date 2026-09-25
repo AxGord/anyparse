@@ -55,7 +55,7 @@ final class CliCallGraph {
 		return { graph: graph, sources: sources };
 	}
 
-	/** Parse a `--kinds call,ref,new,virtual,contains` value. Null on an unknown kind (message printed). */
+	/** Parse a `--kinds call,ref,new,virtual,contains,accessor` value. Null on an unknown kind (message printed). */
 	public static function parseEdgeKinds(cmd: String, value: String): Null<Array<EdgeKind>> {
 		final result: Array<EdgeKind> = [];
 		for (part in value.split(',')) {
@@ -66,10 +66,11 @@ final class CliCallGraph {
 				case 'new': New;
 				case 'virtual': Virtual;
 				case 'contains': Contains;
+				case 'accessor': Accessor;
 				case _: null;
 			};
 			if (kind == null) {
-				CliIo.stderr('apq $cmd: unknown edge kind "$token" (call, ref, new, virtual, contains)\n');
+				CliIo.stderr('apq $cmd: unknown edge kind "$token" (call, ref, new, virtual, contains, accessor)\n');
 				return null;
 			}
 			result.push(kind);

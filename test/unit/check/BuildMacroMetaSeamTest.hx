@@ -322,6 +322,7 @@ class BuildMacroMetaSeamTest extends Test {
 			typeParamNames: [],
 			supertypes: [],
 			supertypesRaw: [],
+			supertypesWritten: [],
 			interfaces: [],
 			isAnonStruct: false,
 			aliasTargetNominal: null,
@@ -330,9 +331,11 @@ class BuildMacroMetaSeamTest extends Test {
 			hasBuild: false,
 			hasAutoBuild: false,
 			hasKeep: false,
+			constructsFromLiteral: false,
 			members: [],
 			abstractSelfRebind: false,
-			abstractForwardUnderlying: null
+			abstractForwardUnderlying: null,
+			forwardedMembers: null
 		};
 	}
 

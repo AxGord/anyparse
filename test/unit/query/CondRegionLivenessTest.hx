@@ -302,6 +302,23 @@ final class CondRegionLivenessTest extends Test {
 		Assert.isNull(CondRegionLiveness.unproven(BRANCHED, SHAPE, [], [], new HaxeQueryPlugin().lexicalRegions(BRANCHED)));
 	}
 
+	@:pin('control') @:killer('M-LIVENESS-DEAD')
+	public function testDeadSpansAreWhatNoConfigurationCompiles(): Void {
+		// Under a build that defines `nodejs`, the `#else` is dead and the `#if` branch live; a second build defining
+		// nothing it can decide keeps both live, since `nodejs` is unknown there. A build that provably leaves `nodejs`
+		// undefined kills the `#if` branch.
+		final regions: Array<anyparse.query.LexicalRegions.LexRegion> = new HaxeQueryPlugin().lexicalRegions(BRANCHED);
+		final nodejs: DefineFacts = { defined: ['nodejs'], undefined: [] };
+		final dead: Array<Span> = CondRegionLiveness.deadSpans(BRANCHED, SHAPE, [nodejs], regions);
+		final deadText: String = [for (d in dead) BRANCHED.substring(d.from, d.to)].join('|');
+		Assert.isTrue(deadText.indexOf('var dead') >= 0 && deadText.indexOf('var live') < 0, deadText);
+		Assert.equals(0, CondRegionLiveness.deadSpans(BRANCHED, SHAPE, [nodejs, { defined: [], undefined: [] }], regions).length);
+		final none: Array<Span> = CondRegionLiveness.deadSpans(BRANCHED, SHAPE, [{ defined: [], undefined: ['nodejs'] }], regions);
+		final noneText: String = [for (d in none) BRANCHED.substring(d.from, d.to)].join('|');
+		Assert.isTrue(noneText.indexOf('var live') >= 0 && noneText.indexOf('var dead') < 0, noneText);
+		Assert.equals(0, CondRegionLiveness.deadSpans(BRANCHED, SHAPE, [], regions).length);
+	}
+
 	/** A zero-length span at `needle`'s first occurrence — the shape an insertion has. */
 	private static function at(source: String, needle: String): Span {
 		final from: Int = source.indexOf(needle);

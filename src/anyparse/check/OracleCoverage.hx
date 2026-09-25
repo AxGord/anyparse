@@ -513,7 +513,7 @@ final class OracleCoverage {
 	 * temp dir is a symlink (`/tmp` on macOS) the two spellings of one file differ. An
 	 * unresolvable path keeps its normalised form rather than failing the lookup.
 	 */
-	private static function canonical(root: String, path: String): String {
+	public static function canonical(root: String, path: String): String {
 		// `root` is absolutised FIRST, so a relative one cannot produce a key the membership
 		// test can never match: `covers` resolves against the process cwd, and when the file
 		// does not exist `fullPath` throws and the normalised join is all that is left — a

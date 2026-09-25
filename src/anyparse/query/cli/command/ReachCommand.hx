@@ -103,7 +103,7 @@ final class ReachCommand implements CliCommand {
 			CliIo.stderr('apq reach: no function in scope matches --to ${toPatterns.join(', ')}\n');
 			return ctx.emptyExit(true);
 		}
-		final effectiveKinds: Array<EdgeKind> = kinds ?? [Call, Ref, New, Virtual];
+		final effectiveKinds: Array<EdgeKind> = kinds ?? [Call, Ref, New, Virtual, Accessor];
 		final found: Array<Array<CallEdge>> = Reach.paths(graph, fromIds, toIds, maxPaths, effectiveKinds);
 		for (path in found) CliIo.sysPrint('${Reach.render(graph, path, f -> sources[f])}\n');
 		if (found.length == 0) CliIo.stderr('apq reach: no path found (${fromIds.length} from-node(s), ${toIds.length} to-node(s))\n');
@@ -118,7 +118,7 @@ final class ReachCommand implements CliCommand {
 		CliIo.sysPrint('Options:\n');
 		CliIo.sysPrint('  --to <target>     Repeatable; accepts Type.method, bare method, Type.*\n');
 		CliIo.sysPrint('  --max-paths <n>   Cap on reported paths (default $DEFAULT_REACH_PATHS)\n');
-		CliIo.sysPrint('  --kinds <k,..>    Edge kinds to traverse (default call,ref,new,virtual)\n');
+		CliIo.sysPrint('  --kinds <k,..>    Edge kinds to traverse (default call,ref,new,virtual,accessor)\n');
 		CliIo.sysPrint('  --lang <name>     Grammar plugin (default haxe)\n');
 	}
 
