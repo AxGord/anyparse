@@ -626,9 +626,9 @@ The per-shard lines and the aggregate are MEASUREMENTS; the aggregate is their S
 
 `parity: counts not cross-checked (class parity OK: N placed)` is a statement about PLACEMENT — every registered class was dealt onto exactly one shard — and not about completeness; only `--verify` sees that. One trap worth knowing for any shell in this repo: **BSD `sed`'s BRE has no `\|`**. An alternation written that way matches nothing on macOS and prints nothing — silently, because a `sed -n` that matches nothing is a successful command.
 
-### A span is a CODEPOINT offset — a census that slices bytes measures a different file
+### A span is a character offset (UTF-16 units on node), not a byte offset — a census that slices bytes measures a different file
 
-`Span.from`/`Span.to`, and therefore every `@from-to` in `hxq ast --spans`, count **codepoints**, not bytes. On a file whose earlier lines are pure ASCII the two agree, which is what makes this expensive: a census works on hundreds of files and gets a plausible number. This codebase makes the trap likelier than most: the `ω-` markers used in comments are multi-byte and sit ABOVE the members a census wants to read.
+`Span.from`/`Span.to`, and therefore every `@from-to` in `hxq ast --spans`, count **characters of the JS string** (UTF-16 code units on node/jvm — equal to codepoints only inside the BMP; an emoji counts 2), not bytes. The Haxe compiler's `Position.min/max` count codepoints; `CodepointIndex` converts between the two. On a file whose earlier lines are pure ASCII the two agree, which is what makes this expensive: a census works on hundreds of files and gets a plausible number. This codebase makes the trap likelier than most: the `ω-` markers used in comments are multi-byte and sit ABOVE the members a census wants to read.
 
 ```
 class C {
