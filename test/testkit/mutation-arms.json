@@ -3542,7 +3542,7 @@
 		{
 			"name": "M-GENERATE-RECORD-OUTLIVES-THE-RUN",
 			"type": "anyparse.check.OracleGeneration",
-			"method": "prepare",
+			"method": "claim",
 			"find": "deleteRecord(group);",
 			"replace": "",
 			"note": "the previous generation's record survives while a stale command runs, so a generation killed half way leaves a partial tree that reads as current forever"
@@ -3733,10 +3733,59 @@
 		{
 			"name": "M-GENERATE-PRODUCED-INCLUDE-IS-INPUT",
 			"type": "anyparse.check.OracleGeneration",
-			"method": "prepare",
+			"method": "claim",
 			"find": "if (!isProduced(group, held.path)) held.path",
 			"replace": "if (true) held.path",
 			"note": "an hxml the generation writes and includes is compared across the run as if it were an input, so every generation that rewrites it goes unrecorded and regenerates forever (lime's iOS Build.hxml)"
+		},
+		{
+			"name": "M-GENERATE-SHARED-HELD-INTO-PHASE-TWO",
+			"type": "anyparse.check.OracleGeneration",
+			"method": "prepare",
+			"find": "OracleGenerationLock.dropShared(lock, me);",
+			"replace": "",
+			"note": "a run keeps its shared holds while it waits for exclusive ones, so two runs that each find two generations stale wait for each other until the deadline and each loses a configuration"
+		},
+		{
+			"name": "M-GENERATE-CLAIM-NEVER-CLEARED",
+			"type": "anyparse.check.OracleGenerationLock",
+			"method": "takeOver",
+			"find": "if (claimAbandoned(claim)) {",
+			"replace": "if (false) {",
+			"note": "a takeover claim left by a run that died mid-takeover is never cleared, so every later run waits on a writer nobody can take over"
+		},
+		{
+			"name": "M-GENERATE-TAKEOVER-LEAVES-THE-JOB",
+			"type": "anyparse.check.OracleGenerationLock",
+			"method": "takeOver",
+			"find": "endJob(Path.join([dir, 'writer', 'job']));",
+			"replace": "",
+			"note": "a takeover removes the dead run's writer while its generate job still runs, so that build tool writes on into a tree the next generation owns"
+		},
+		{
+			"name": "M-GENERATE-FORMAT-UNCHECKED",
+			"type": "anyparse.check.OracleGeneration",
+			"method": "staleness",
+			"find": "if (record.format != FORMAT_TAG) return 'its generation was recorded by an older engine';",
+			"replace": "",
+			"note": "a record written under an older scheme is trusted, so records whose implicit inputs an older engine derived differently keep answering as current"
+		},
+		{
+			"name": "M-GENERATE-PRODUCED-BY-ROOT",
+			"type": "anyparse.check.OracleGeneration",
+			"method": "isProduced",
+			"find": "final tree: String = Path.directory(hxml);",
+			"replace": "final tree: String = Path.directory(Path.directory(hxml));",
+			"note": "any include under a wider tree than the hxml's own output directory counts as produced, so an edited project hxml the generated one includes goes unnoticed during a generation"
+		},
+		{
+			"name": "M-DRIVER-OUTLIVES-ITS-PARENT",
+			"type": "anyparse.check.HaxeSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": "setInterval(() => { if (process.ppid !== parent) { killAll(); process.exit(1); } }, 500).unref();",
+			"replace": "",
+			"note": "a driver whose apq was SIGKILLed keeps its jobs running, so the next run regenerates concurrently with an orphaned build tool"
 		},
 		{
 			"name": "M-FIAD-CROSS-SUPER-UNPROVED",

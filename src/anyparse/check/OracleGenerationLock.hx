@@ -45,16 +45,14 @@ final class OracleGenerationLock {
 	public static function holdShared(dir: String, me: Holder, deadline: Float): Null<String> {
 		#if nodejs
 		final reader: String = Path.join([dir, 'readers', '${me.pid}']);
-		sys.FileSystem.createDirectory(Path.join([dir, 'readers']));
+		ensureDirectory(Path.join([dir, 'readers']));
 		while (true) {
 			writeAtomically(reader, me.start);
 			final writer: Null<LockOwner> = writerOf(dir);
 			if (writer == null || isMe(writer, me)) return null;
 			deleteQuietly(reader);
-			if (writer.abandoned) {
-				takeOver(dir, writer);
-				continue;
-			}
+			// a takeover that did not happen (another run's claim) is waited out like a live writer, never spun on
+			if (writer.abandoned && takeOver(dir, writer)) continue;
 			if (Date.now().getTime() > deadline) return 'another apq run (pid ${writer.pid}) is regenerating it';
 			pause();
 		}
@@ -71,7 +69,7 @@ final class OracleGenerationLock {
 	public static function holdExclusive(dir: String, me: Holder, deadline: Float): Null<String> {
 		#if nodejs
 		final writer: String = Path.join([dir, 'writer']);
-		sys.FileSystem.createDirectory(dir);
+		ensureDirectory(dir);
 		while (true) {
 			final created: Bool = try {
 				js.node.Fs.mkdirSync(writer);
@@ -83,10 +81,7 @@ final class OracleGenerationLock {
 			}
 			final held: Null<LockOwner> = writerOf(dir);
 			if (held != null && isMe(held, me)) break;
-			if (held != null && held.abandoned) {
-				takeOver(dir, held);
-				continue;
-			}
+			if (held != null && held.abandoned && takeOver(dir, held)) continue;
 			if (Date.now().getTime() > deadline) return 'another apq run (pid ${held?.pid}) is regenerating it';
 			pause();
 		}
@@ -188,6 +183,12 @@ final class OracleGenerationLock {
 	 * Break the abandoned exclusive hold `stale` on `dir`. Exactly one run wins a race over the same stale owner: the
 	 * claim is a `mkdir` named after that owner, and the winner removes the `writer` directory only after checking it
 	 * still belongs to that owner — a run that judged the owner stale too late finds a fresh writer and leaves it alone.
+	 * Before removing it, the winner ends the generation job the dead owner left running (`endJob`), so no build tool
+	 * keeps writing into a tree the next generation owns.
+	 *
+	 * A claim records its claimant (`owner`: pid, start time, when). One whose claimant is gone, or that is older than
+	 * `OWNERLESS_GRACE`, is itself abandoned — a run killed between its `mkdir` and its cleanup — and is moved aside
+	 * (a rename, so one run clears it) for the next attempt. Answers whether this call took the hold over.
 	 */
 	public static function takeOver(dir: String, stale: LockOwner): Bool {
 		final claim: String = Path.join([dir, 'takeover-${haxe.crypto.Md5.encode(stale.identity)}']);
@@ -195,12 +196,57 @@ final class OracleGenerationLock {
 			js.node.Fs.mkdirSync(claim);
 			true;
 		} catch (exception: haxe.Exception) false;
-		if (!won) return false;
+		if (!won) {
+			if (claimAbandoned(claim)) {
+				final aside: String = '$claim.dead-${js.Node.process.pid}-${Std.random(ASIDE_SUFFIX_BOUND)}';
+				final moved: Bool = try {
+					sys.FileSystem.rename(claim, aside);
+					true;
+				} catch (exception: haxe.Exception) false;
+				if (moved) removeTree(aside);
+			}
+			return false;
+		}
+		final me: Holder = holder();
+		writeAtomically(Path.join([claim, 'owner']), '${me.pid}\n${me.start}\n${Date.now().getTime()}');
 		final current: Null<LockOwner> = writerOf(dir);
 		final same: Bool = current != null && current.identity == stale.identity;
-		if (same) removeTree(Path.join([dir, 'writer']));
+		if (same) {
+			endJob(Path.join([dir, 'writer', 'job']));
+			removeTree(Path.join([dir, 'writer']));
+		}
 		removeTree(claim);
 		return same;
+	}
+
+	/** Whether the takeover claim `claim` was left by a run that is gone, or has outlived `OWNERLESS_GRACE`. */
+	private static function claimAbandoned(claim: String): Bool {
+		final text: Null<String> = try sys.io.File.getContent(Path.join([claim, 'owner'])) catch (exception: haxe.Exception) null;
+		final fields: Array<String> = (text ?? '').split('\n');
+		final pid: Null<Int> = Std.parseInt(fields[0]);
+		final now: Float = Date.now().getTime();
+		if (pid == null || fields.length < 3) return now - modified(claim) > OWNERLESS_GRACE;
+		final since: Float = Std.parseFloat(fields[2]);
+		return !living(pid, fields[1]) || Math.isNaN(since) || now - since > OWNERLESS_GRACE;
+	}
+
+	/**
+	 * End the generation job recorded at `job` (its process group leader: pid, start time) when it still runs: its whole
+	 * group is killed, and this waits — briefly — until it is gone. A job that already ended, or never recorded itself,
+	 * costs nothing.
+	 */
+	private static function endJob(job: String): Void {
+		final text: Null<String> = try sys.io.File.getContent(job) catch (exception: haxe.Exception) null;
+		if (text == null) return;
+		final fields: Array<String> = text.split('\n');
+		final pid: Null<Int> = Std.parseInt(fields[0]);
+		final start: String = (fields[1] ?? '').trim();
+		if (pid == null || !living(pid, start)) return;
+		try js.Syntax.code('process.kill(-{0}, "SIGKILL")', pid) catch (exception: haxe.Exception) {} // noqa: swallowed-exception
+		for (_ in 0...JOB_END_POLLS) {
+			if (!living(pid, start)) return;
+			pause();
+		}
 	}
 
 	private static inline function isMe(owner: LockOwner, me: Holder): Bool {
@@ -236,6 +282,28 @@ final class OracleGenerationLock {
 		return try sys.FileSystem.stat(path).mtime.getTime() catch (exception: haxe.Exception) Date.now().getTime();
 	}
 	#end
+
+	/** How many `LOCK_POLL` waits `endJob` gives a killed job to be gone. */
+	private static inline final JOB_END_POLLS: Int = 20;
+
+	/** Where a generation's job records its process group leader while this run holds the generation exclusively. */
+	public static function jobFile(dir: String): String {
+		return Path.join([dir, 'writer', 'job']);
+	}
+
+	#if nodejs
+	/**
+	 * Create `path` and its parents, an existing directory counting as created — through node's recursive `mkdir`,
+	 * which is idempotent under a race. `sys.FileSystem.createDirectory` is not: two runs creating one lock's parents at
+	 * once see its retry fail with `EEXIST`, and a run dies inside a lock it was only trying to take.
+	 */
+	private static function ensureDirectory(path: String): Void {
+		js.Syntax.code("require('fs').mkdirSync({0}, { recursive: true })", path);
+	}
+	#end
+
+	/** The bound of the random suffix that keeps two runs' moved-aside claims apart. */
+	private static inline final ASIDE_SUFFIX_BOUND: Int = 0x7fffffff;
 
 }
 

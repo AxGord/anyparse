@@ -1184,6 +1184,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-DRIVER-NEVER-STOPS',
 			'unit.check.HaxeSpawnTest#testAJobPastItsTimeoutIsKilled :: control :: '
 				+ 'M-DRIVER-NO-TIMEOUT',
+			'unit.check.HaxeSpawnTest#testAKilledParentTakesItsJobsWithIt :: control :: '
+				+ 'M-DRIVER-OUTLIVES-ITS-PARENT',
 			'unit.check.HaxeSpawnTest#testASignalledDriverTakesItsJobsWithIt :: control :: '
 				+ 'M-DRIVER-SIGNAL-ORPHANS',
 			'unit.check.HoistCommonImportTest#testANamesakePushesTheStatementToADeeperSite :: guard :: ',
@@ -1283,6 +1285,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-GENERATE-HASH-MEMO-UNUSED',
 			'unit.check.OracleGenerationTest#testAHalfWrittenOwnerIsNotTakenOver :: control :: '
 				+ 'M-GENERATE-OWNERLESS-ABANDONED-AT-ONCE',
+			'unit.check.OracleGenerationTest#testALeftoverTakeoverClaimIsCleared :: control :: '
+				+ 'M-GENERATE-CLAIM-NEVER-CLEARED',
 			'unit.check.OracleGenerationTest#testALibrarySwitchedDuringTheGenerationIsSeenNextRun :: control :: '
 				+ 'M-GENERATE-IMPLICIT-HASHED-AFTER-THE-RUN',
 			'unit.check.OracleGenerationTest#testALiveReaderDoesNotBlockACurrentGeneration :: control :: '
@@ -1293,16 +1297,22 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-GENERATE-LOCK-IGNORED',
 			'unit.check.OracleGenerationTest#testAMissingHxmlRegenerates :: control :: '
 				+ 'M-GENERATE-TRUSTS-A-MISSING-HXML',
+			'unit.check.OracleGenerationTest#testARecordOfAnOlderSchemeIsStale :: control :: '
+				+ 'M-GENERATE-FORMAT-UNCHECKED',
 			'unit.check.OracleGenerationTest#testAReusedPidDoesNotHoldTheLock :: control :: '
 				+ 'M-GENERATE-PID-ALONE',
 			'unit.check.OracleGenerationTest#testAStaleGenerationRunsWithoutItsOldRecord :: control :: '
 				+ 'M-GENERATE-RECORD-OUTLIVES-THE-RUN',
+			'unit.check.OracleGenerationTest#testATakeOverEndsTheJobTheDeadRunLeft :: control :: '
+				+ 'M-GENERATE-TAKEOVER-LEAVES-THE-JOB',
 			'unit.check.OracleGenerationTest#testAnAbandonedLockIsTakenOver :: control :: '
 				+ 'M-GENERATE-LOCK-NEVER-RECOVERED',
 			'unit.check.OracleGenerationTest#testAnEmptyOrMissingInputIsNeverSilentlyConstant :: control :: '
 				+ 'M-GENERATE-EMPTY-INPUTS-NEVER,M-GENERATE-MISSING-INPUT-SILENT',
 			'unit.check.OracleGenerationTest#testAnHxmlTheGenerationWritesIsNotARacedInput :: control :: '
 				+ 'M-GENERATE-PRODUCED-INCLUDE-IS-INPUT',
+			'unit.check.OracleGenerationTest#testAnIncludeOutsideTheHxmlTreeIsAnInput :: control :: '
+				+ 'M-GENERATE-PRODUCED-BY-ROOT',
 			'unit.check.OracleGenerationTest#testAnInputEditedDuringTheGenerationIsSeenNextRun :: control :: '
 				+ 'M-GENERATE-HASHES-INPUTS-AFTER-THE-RUN',
 			'unit.check.OracleGenerationTest#testEntriesSharingACommandMergeTheirInputs :: control :: '
@@ -1311,6 +1321,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-GENERATE-TAKEOVER-UNVERIFIED',
 			'unit.check.OracleGenerationTest#testTheLibraryStateTheHxmlNamesIsAnInput :: control :: '
 				+ 'M-GENERATE-IGNORES-LIBRARY-STATE,M-GENERATE-TEMPLATES-UNTRACKED',
+			'unit.check.OracleGenerationTest#testTwoRunsOverTwoStaleGenerationsDoNotDeadlock :: control :: '
+				+ 'M-GENERATE-SHARED-HELD-INTO-PHASE-TWO',
 			'unit.check.OracleParallelVerdictTest#testTheOverlappedVerdictIsTheFirstFailureInDeclaredOrder :: control :: '
 				+ 'M-DRIVER-CANCELS-EARLIER-JOBS',
 			'unit.check.OrphanAccessorCheckTest#testAnUnreadableCallerOutsideTheReportScopeStillDeclinesTheDeletion :: control :: '
@@ -2786,6 +2798,12 @@ class TestDiscoveryParityTest extends Test {
 			'M-GENERATE-TEMPLATES-UNTRACKED',
 			'M-ORACLE-CACHE-MEMO-UNREAD',
 			'M-GENERATE-PRODUCED-INCLUDE-IS-INPUT',
+			'M-GENERATE-SHARED-HELD-INTO-PHASE-TWO',
+			'M-GENERATE-CLAIM-NEVER-CLEARED',
+			'M-GENERATE-TAKEOVER-LEAVES-THE-JOB',
+			'M-GENERATE-FORMAT-UNCHECKED',
+			'M-GENERATE-PRODUCED-BY-ROOT',
+			'M-DRIVER-OUTLIVES-ITS-PARENT',
 			'M-FIAD-CROSS-SUPER-UNPROVED',
 			'M-FIAD-EARLY-READ-IGNORED',
 			'M-FIAD-EARLY-READ-CALL-ARG',
@@ -3202,6 +3220,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-DRIVER-KILLS-ONLY-THE-SHELL :: anyparse.check.HaxeSpawn#FinalMember:PARALLEL_DRIVER',
 			'M-DRIVER-NO-TIMEOUT :: anyparse.check.HaxeSpawn#FinalMember:PARALLEL_DRIVER',
 			'M-DRIVER-SIGNAL-ORPHANS :: anyparse.check.HaxeSpawn#FinalMember:PARALLEL_DRIVER',
+			'M-DRIVER-OUTLIVES-ITS-PARENT :: anyparse.check.HaxeSpawn#FinalMember:PARALLEL_DRIVER',
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 

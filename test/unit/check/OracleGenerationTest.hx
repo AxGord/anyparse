@@ -5,6 +5,7 @@ import sys.FileSystem;
 import sys.io.File;
 #end
 import anyparse.check.CompilerOracle;
+import anyparse.check.HaxeSpawn;
 import anyparse.check.LintConfig;
 import anyparse.check.OracleGeneration;
 import anyparse.check.OracleGenerationLock;
@@ -12,6 +13,7 @@ import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -603,6 +605,176 @@ final class OracleGenerationTest extends Test {
 		Assert.equals(2, runs(dir), 'the changed input regenerated, rewriting the included hxml');
 		OracleGeneration.prepare([config]);
 		Assert.equals(2, runs(dir), 'and that generation was recorded: nothing moved under it but its own output');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * Two runs that both find two generations stale finish in about one generation's time, both with every
+	 * configuration usable: waits happen in one global order and nothing is held across groups while judging, so neither
+	 * run can hold what the other waits for. Two child processes of this binary are the two runs (`testkit.TestChild`).
+	 */
+	@:pin('control')
+	@:killer('M-GENERATE-SHARED-HELD-INTO-PHASE-TWO')
+	public function testTwoRunsOverTwoStaleGenerationsDoNotDeadlock(): Void {
+		#if nodejs
+		final dir: String = fixture();
+		final configs: Array<OracleConfig> = [
+			for (name in ['g1', 'g2'])
+				{
+					hxml: '$dir/$name.hxml',
+					dir: dir,
+					defines: [],
+					generate: {
+						command: "sleep 1 && printf '%s\\n' '-cp .' '-main Main' > " + name + ".hxml && echo run >> runs.txt",
+						root: dir,
+						inputs: ['$dir/$name.input'],
+						probeDir: false
+					}
+				}
+		];
+		// Each generation already ran once and its (large) input then changed: judging it hashes that input under the
+		// shared hold, which keeps both runs judging long enough to overlap — the window the deadlock needs.
+		for (name in ['g1', 'g2']) js.node.ChildProcess.spawnSync('dd', ['if=/dev/zero', 'of=$dir/$name.input', 'bs=1048576', 'count=64']);
+		OracleGeneration.prepare(configs);
+		OracleGeneration.release(configs);
+		for (name in ['g1', 'g2']) js.Syntax.code("require('fs').appendFileSync({0}, 'x')", '$dir/$name.input');
+		File.saveContent('$dir/configs.json', haxe.Json.stringify(configs));
+		final child: String = 'APQ_TEST_CHILD=prepare APQ_TEST_CHILD_INPUT=$dir/configs.json APQ_ORACLE_LOCK_WAIT=10000 '
+			+ '"${js.Node.process.execPath}" "${js.Syntax.code('process.argv[1]')}"';
+		final started: Float = Date.now().getTime();
+		final children: Array<HaxeRun> = HaxeSpawn.runAll([
+			{ args: [], cwd: dir, shell: 'APQ_TEST_CHILD_OUTPUT=$dir/a.json $child' },
+			{ args: [], cwd: dir, shell: 'APQ_TEST_CHILD_OUTPUT=$dir/b.json $child' }
+		], 1024 * 1024, 2);
+		final spent: Float = Date.now().getTime() - started;
+		for (run in children) Assert.equals(0, run.status, 'each run completed: ${run.err}');
+		if (children.exists(run -> run.status != 0)) {
+			CliFixture.removeDir(dir);
+			return;
+		}
+		final answers: String = File.getContent('$dir/a.json') + File.getContent('$dir/b.json');
+		Assert.equals('[null,null][null,null]', answers, 'no configuration was lost to a lock');
+		Assert.isTrue(spent < 8000, 'and neither run waited for the other\'s deadline: $spent ms');
+		Assert.equals(4, runs(dir), 'each generation ran once more, for both runs');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-node target');
+		#end
+	}
+
+	/**
+	 * A takeover claim left by a run that died mid-takeover is cleared, not spun on: the next run takes the dead
+	 * writer over well inside the grace period.
+	 */
+	@:pin('control')
+	@:killer('M-GENERATE-CLAIM-NEVER-CLEARED')
+	public function testALeftoverTakeoverClaimIsCleared(): Void {
+		#if nodejs
+		final dir: String = fixture();
+		final config: OracleConfig = entry(dir, WRITE, ['$dir/input.txt']);
+		final lock: String = lockOf(config);
+		final dead: Null<Int> = exitedPid();
+		holdAsWriter(lock, dead, '');
+		final stale: Null<LockOwner> = OracleGenerationLock.writerOf(lock);
+		final claim: String = '$lock/takeover-${haxe.crypto.Md5.encode(stale?.identity ?? '')}';
+		FileSystem.createDirectory(claim);
+		File.saveContent('$claim/owner', '$dead\n\n${Date.now().getTime()}');
+		final started: Float = Date.now().getTime();
+		final ready: Array<OracleConfig> = OracleGeneration.prepare([config], 5000).oracles;
+		Assert.isNull(ready[0].unavailable, 'the dead claim was cleared and the writer taken over');
+		Assert.isTrue(Date.now().getTime() - started < 3000, 'at once, not at the deadline');
+		Assert.equals(1, runs(dir), 'and the generation ran');
+		CliFixture.removeDir(lock);
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-node target');
+		#end
+	}
+
+	/**
+	 * A takeover ends the generation job the dead run left: its process group is killed before the writer is removed,
+	 * so the dead run's build tool cannot write on into the tree the next generation owns. The job here is a group
+	 * leader outside this process's children, as a dead run's would be.
+	 */
+	@:pin('control')
+	@:killer('M-GENERATE-TAKEOVER-LEAVES-THE-JOB')
+	public function testATakeOverEndsTheJobTheDeadRunLeft(): Void {
+		#if nodejs
+		final dir: String = fixture();
+		final config: OracleConfig = entry(dir, WRITE, ['$dir/input.txt']);
+		final lock: String = lockOf(config);
+		holdAsWriter(lock, exitedPid(), '');
+		final started: Dynamic = js.node.ChildProcess.spawnSync(
+			'sh', ['-c', "perl -e 'setpgrp(0, 0); exec q(sleep), 30' >/dev/null 2>&1 & echo $!"], { encoding: 'utf8' }
+		);
+		final job: Null<Int> = Std.parseInt(StringTools.trim('${started.stdout}'));
+		Assert.notNull(job, 'the left-over job runs');
+		js.Syntax.code('Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 200)');
+		File.saveContent('$lock/writer/job', '$job\n${job == null ? '' : OracleGenerationLock.startTime(job)}');
+		OracleGeneration.prepare([config], 5000);
+		final alive: Bool = job != null && OracleGenerationLock.startTime(job) != '';
+		if (alive && job != null) js.Syntax.code('process.kill({0}, "SIGKILL")', job);
+		Assert.isFalse(alive, 'the dead run\'s job was ended by the takeover');
+		CliFixture.removeDir(lock);
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-node target');
+		#end
+	}
+
+	/** A record written under an older record scheme is never current. */
+	@:pin('control')
+	@:killer('M-GENERATE-FORMAT-UNCHECKED')
+	public function testARecordOfAnOlderSchemeIsStale(): Void {
+		#if (sys || nodejs)
+		final dir: String = fixture();
+		final config: OracleConfig = entry(dir, WRITE, ['$dir/input.txt']);
+		OracleGeneration.prepare([config]);
+		final record: String = OracleGeneration.recordFile(OracleGeneration.groupsOf([config])[0]);
+		final held: Dynamic = haxe.Json.parse(File.getContent(record));
+		held.format = 'apq-oracle-generate v1';
+		File.saveContent(record, haxe.Json.stringify(held));
+		OracleGeneration.prepare([config]);
+		Assert.equals(2, runs(dir), 'the v1 record was not trusted');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * An included hxml OUTSIDE the output tree of the hxml that includes it is an input like any other: one that moved
+	 * while the command ran leaves the generation unrecorded. Only the output tree itself is the command's to write.
+	 */
+	@:pin('control')
+	@:killer('M-GENERATE-PRODUCED-BY-ROOT')
+	public function testAnIncludeOutsideTheHxmlTreeIsAnInput(): Void {
+		#if (sys || nodejs)
+		final dir: String = fixture();
+		File.saveContent('$dir/extra.hxml', '-D a\n');
+		final write: String = "mkdir -p out && printf '%s\\n' '-cp .' '-main Main' 'extra.hxml' > out/gen.hxml && echo run >> runs.txt";
+		inline function at(command: String): OracleConfig {
+			return {
+				hxml: '$dir/out/gen.hxml',
+				dir: dir,
+				defines: [],
+				generate: {
+					command: command,
+					root: dir,
+					inputs: ['$dir/input.txt'],
+					probeDir: false
+				}
+			};
+		}
+		OracleGeneration.prepare([at(write)]);
+		final editing: OracleConfig = at(write + " && echo '-D b' > extra.hxml");
+		OracleGeneration.prepare([editing]);
+		Assert.equals(2, runs(dir), 'the changed command ran and edited the include');
+		OracleGeneration.prepare([editing]);
+		Assert.equals(3, runs(dir), 'so that generation was not recorded: the include moved under it');
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');

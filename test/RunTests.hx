@@ -20,6 +20,8 @@ import utest.Runner;
 class RunTests {
 
 	public static function main(): Void {
+		// before the private temp root: a child shares its parent test's scratch, where the fixtures live
+		if (testkit.TestChild.run()) return;
 		if (listing()) return;
 		// Every fixture path this suite writes is built from a process-local counter and a
 		// millisecond clock, so two suite processes started together — a parallel mutation-arm

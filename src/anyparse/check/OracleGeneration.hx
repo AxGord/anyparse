@@ -51,7 +51,7 @@ final class OracleGeneration {
 	private static inline final QUOTED_TAIL: Int = 4000;
 
 	/** The scheme tag in every record: bump it and every recorded generation is stale. */
-	private static inline final FORMAT_TAG: String = 'apq-oracle-generate v1';
+	private static inline final FORMAT_TAG: String = 'apq-oracle-generate v2';
 
 	/** What a missing file hashes as, so its appearance or disappearance is a change like any other. */
 	private static inline final MISSING: String = 'missing';
@@ -89,43 +89,31 @@ final class OracleGeneration {
 			failures[group.key] = why;
 			notes.push('could NOT use ${group.hxmls.join(', ')}: $why');
 		}
+		// every wait below happens in ONE global order (the group key), and phase 1 holds nothing across groups: a run
+		// waiting for a hold never holds one another run waits for, so two runs cannot deadlock
+		final ordered: Array<GenerationGroup> = groups.copy();
+		ordered.sort((a, b) -> Reflect.compare(a.key, b.key));
 		final seen: Map<String, String> = [];
 		final candidates: Array<GenerationGroup> = [];
-		for (group in groups) {
-			final blocked: Null<String> = OracleGenerationLock.holdShared(lockDir(group), me, deadline);
+		for (group in ordered) {
+			final lock: String = lockDir(group);
+			final blocked: Null<String> = OracleGenerationLock.holdShared(lock, me, deadline);
 			if (blocked != null)
 				refuse(group, blocked)
 			else if (staleness(group, seen) != null)
 				candidates.push(group);
+			OracleGenerationLock.dropShared(lock, me);
 		}
 		final fresh: Map<String, String> = [];
 		final stale: Array<StaleGroup> = [];
 		for (group in candidates) {
-			final lock: String = lockDir(group);
-			OracleGenerationLock.dropShared(lock, me);
-			final blocked: Null<String> = OracleGenerationLock.holdExclusive(lock, me, deadline);
-			if (blocked != null) {
-				refuse(group, blocked);
-				continue;
+			final blocked: Null<String> = OracleGenerationLock.holdExclusive(lockDir(group), me, deadline);
+			if (blocked != null)
+				refuse(group, blocked)
+			else {
+				final claimed: Null<StaleGroup> = claim(group, me, fresh);
+				if (claimed != null) stale.push(claimed);
 			}
-			final judged: Null<String> = staleness(group, fresh);
-			if (judged == null) {
-				// another run regenerated it while this one waited
-				OracleGenerationLock.holdShared(lock, me, deadline);
-				OracleGenerationLock.dropExclusive(lock, me);
-				continue;
-			}
-			final why: String = judged;
-			final previous: Null<GenerationRecord> = readRecord(recordFile(group));
-			stale.push({
-				group: group,
-				why: why,
-				inputs: hashAll(group.inputs ?? [], fresh),
-				implicitBefore: hashAll([
-					for (held in previous?.implicit ?? []) if (!isProduced(group, held.path)) held.path
-				], fresh)
-			});
-			deleteRecord(group);
 		}
 		final runs: Array<HaxeRun> = HaxeSpawn.runAll([
 			for (s in stale)
@@ -133,21 +121,27 @@ final class OracleGeneration {
 					args: [],
 					cwd: s.group.generate.root,
 					shell: s.group.generate.command,
-					timeout: GENERATE_TIMEOUT
+					timeout: GENERATE_TIMEOUT,
+					groupFile: OracleGenerationLock.jobFile(lockDir(s.group))
 				}
 		], BUFFER, HaxeSpawn.parallelism());
 		final libraries: LibraryIndex = libraryIndex(groups);
 		for (i => s in stale) {
 			final lock: String = lockDir(s.group);
 			final failure: Null<String> = failureOf(s.group, runs[i]);
-			if (failure == null) {
-				notes.push('regenerated ${s.group.hxmls.join(', ')} (${s.why})${record(s, libraries)}');
-				OracleGenerationLock.holdShared(lock, me, deadline);
-			} else {
+			if (failure == null)
+				notes.push('regenerated ${s.group.hxmls.join(', ')} (${s.why})${record(s, libraries)}')
+			else {
 				failures[s.group.key] = 'its generate command failed — $failure';
 				notes.push('could NOT regenerate ${s.group.hxmls.join(', ')} (${s.why}): $failure');
 			}
 			OracleGenerationLock.dropExclusive(lock, me);
+		}
+		// a shared hold on every usable generation, in the same order, for the compiles that follow; a generation another
+		// run started meanwhile is waited for, and is current once it lets go
+		for (group in ordered) if (!failures.exists(group.key)) {
+			final blocked: Null<String> = OracleGenerationLock.holdShared(lockDir(group), me, deadline);
+			if (blocked != null) refuse(group, blocked);
 		}
 		return { oracles: [for (oracle in oracles) ready(oracle, failures)], notes: notes };
 	}
@@ -160,6 +154,7 @@ final class OracleGeneration {
 		if (inputs == null) return 'it declares no generateInputs, so it regenerates every run';
 		final record: Null<GenerationRecord> = readRecord(recordFile(group));
 		if (record == null) return 'no generation of it is recorded';
+		if (record.format != FORMAT_TAG) return 'its generation was recorded by an older engine';
 		if (record.command != group.generate.command) return 'its generate command changed';
 		final recordedInputs: Array<FileHash> = record.inputs ?? [];
 		for (input in inputs) if (hashIn(recordedInputs, input) != hashOf(input, memo)) return '$input changed';
@@ -269,6 +264,7 @@ final class OracleGeneration {
 	): Void {
 		#if (sys || nodejs)
 		final record: GenerationRecord = {
+			format: FORMAT_TAG,
 			command: group.generate.command,
 			inputs: inputs,
 			outputs: hashAll(group.hxmls, memo),
@@ -535,17 +531,43 @@ final class OracleGeneration {
 	}
 
 	/**
-	 * Whether `path` lies inside `group`'s own directory, where its command may write: an hxml the generated one includes
-	 * there (lime's iOS `Build.hxml`) is PRODUCED by the generation, so it is hashed as the command left it and never
-	 * read as an input that moved while the command ran. Library state lies outside and is compared across the run.
+	 * Whether `path` lies in the output tree of one of `group`'s hxmls — the directory the command wrote that hxml into
+	 * — where an include (lime's iOS `Build.hxml`) is PRODUCED by the generation: hashed as the command left it, never
+	 * read as an input that moved while the command ran. Anything else, the rest of the project included, is compared
+	 * across the run.
 	 */
 	private static function isProduced(group: GenerationGroup, path: String): Bool {
-		#if (sys || nodejs)
-		final root: String = absolute(Sys.getCwd(), group.generate.root);
-		return path == root || path.startsWith('$root/');
-		#else
+		for (hxml in group.hxmls) {
+			final tree: String = Path.directory(hxml);
+			if (tree != '' && path.startsWith('$tree/')) return true;
+		}
 		return false;
-		#end
+	}
+
+	/**
+	 * `group`, held exclusively by `me`, readied to regenerate: staleness is decided again under the hold (another run
+	 * may have regenerated it while this one waited — then the hold is dropped and null answered), its inputs and the
+	 * implicit inputs its previous record named are hashed BEFORE the command, and that record is deleted so a
+	 * generation killed half way leaves nothing that reads as current.
+	 */
+	private static function claim(group: GenerationGroup, me: Holder, fresh: Map<String, String>): Null<StaleGroup> {
+		final judged: Null<String> = staleness(group, fresh);
+		if (judged == null) {
+			OracleGenerationLock.dropExclusive(lockDir(group), me);
+			return null;
+		}
+		final why: String = judged;
+		final previous: Null<GenerationRecord> = readRecord(recordFile(group));
+		final claimed: StaleGroup = {
+			group: group,
+			why: why,
+			inputs: hashAll(group.inputs ?? [], fresh),
+			implicitBefore: hashAll([
+				for (held in previous?.implicit ?? []) if (!isProduced(group, held.path)) held.path
+			], fresh)
+		};
+		deleteRecord(group);
+		return claimed;
 	}
 
 }
@@ -594,6 +616,8 @@ typedef FileHash = {
  * `haxe.Json.parse`, which will produce a structure missing any of them.
  */
 typedef GenerationRecord = {
+	/** The record scheme it was written under (`FORMAT_TAG`): a record of another scheme is never current. */
+	var ?format: String;
 	var ?command: String;
 	var ?inputs: Array<FileHash>;
 	var ?outputs: Array<FileHash>;

@@ -201,4 +201,44 @@ final class HaxeSpawnTest extends Test {
 	}
 	#end
 
+	/**
+	 * A driver whose `apq` parent is SIGKILLed — no handler runs in a killed process — notices its parent is gone and
+	 * takes its jobs' groups down within about a second. The parent is a child process of this binary
+	 * (`testkit.TestChild`), killed while its job's own child runs.
+	 */
+	@:pin('control')
+	@:killer('M-DRIVER-OUTLIVES-ITS-PARENT')
+	public function testAKilledParentTakesItsJobsWithIt(): Void {
+		#if nodejs
+		final dir: String = CliFixture.writeDir('spawnparent', []);
+		sys.io.File.saveContent(
+			'$dir/jobs.json', haxe.Json.stringify([{ args: [], cwd: dir, shell: 'sleep 30 & echo $! > child.txt; wait' }])
+		);
+		final env: Dynamic = js.Syntax.code('Object.assign({}, process.env)');
+		env.APQ_TEST_CHILD = 'spawn';
+		env.APQ_TEST_CHILD_INPUT = '$dir/jobs.json';
+		final parent: Dynamic = js.node.ChildProcess.spawn(
+			js.Node.process.execPath,
+			[js.Syntax.code('process.argv[1]')],
+			{ env: env, stdio: 'ignore' }
+		);
+		final child: Null<Int> = waitForPid('$dir/child.txt');
+		Assert.notNull(child, 'the job started its child');
+		parent.kill('SIGKILL');
+		var gone: Bool = false;
+		for (_ in 0...30) {
+			if (!signalable(child)) {
+				gone = true;
+				break;
+			}
+			js.Syntax.code('Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100)');
+		}
+		if (!gone && child != null) js.Syntax.code('process.kill({0}, "SIGKILL")', child);
+		Assert.isTrue(gone, 'the job\'s child died once its apq was gone');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('the process driver needs the node target');
+		#end
+	}
+
 }

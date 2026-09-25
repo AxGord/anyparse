@@ -76,7 +76,10 @@ final class HaxeSpawn {
 	 * after it, so the first failure in job order is always one that ran to its end. Off Windows every job leads a
 	 * process group of its own and a kill reaches the whole group — a shell's children (a build tool it started) die
 	 * with it instead of writing on after their job was answered. A SIGINT, SIGTERM or SIGHUP to the driver kills every
-	 * live job group before it exits: the groups are detached, so a Ctrl-C at the terminal no longer reaches them by itself.
+	 * live job group before it exits: the groups are detached, so a Ctrl-C at the terminal no longer reaches them
+	 * by itself. The driver also watches its parent: once `apq` is gone (its ppid changes — a SIGKILL leaves no
+	 * handler to run) it does the same. A job naming a `groupFile` gets its process group leader written there
+	 * (pid, then start time), so a run that takes over an abandoned generation can end the job the dead run left.
 	 */
 	private static inline final PARALLEL_DRIVER: String = "const cp = require('child_process');"
 		+ "const jobs = JSON.parse(require('fs').readFileSync(0, 'utf8'));"
@@ -87,6 +90,11 @@ final class HaxeSpawn {
 		+ " catch (err) { try { c.kill('SIGKILL'); } catch (ignored) {} } }"
 		+ "function killAll() { for (const c of kids) if (c) kill(c); }"
 		+ "for (const s of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(s, () => { killAll(); process.exit(1); });"
+		+ "const parent = process.ppid;"
+		+ "setInterval(() => { if (process.ppid !== parent) { killAll(); process.exit(1); } }, 500).unref();"
+		+ "function recordGroup(j, c) { if (j.groupFile == null || c.pid == null) return; let st = '';"
+		+ " try { if (group) st = cp.execFileSync('ps', ['-o', 'lstart=', '-p', String(c.pid)], { encoding: 'utf8' }).trim(); } catch (err) {}"
+		+ " try { require('fs').writeFileSync(j.groupFile, c.pid + '\\n' + st); } catch (err) {} }"
 		+ "function cancelAfter(i) { for (let k = i + 1; k < jobs.length; k++) { if (out[k]) continue;"
 		+ " if (kids[k]) { kids[k].cancelled = true; kill(kids[k]); }"
 		+ " else if (k >= next) { out[k] = { status: null, out: '', err: '', failure: '" + NOT_STARTED + "', overflowed: false,"
@@ -98,7 +106,8 @@ final class HaxeSpawn {
 		+ " const j = jobs[i]; const o = [], e = []; let size = 0, over = false; const what = j.shell == null ? 'haxe' : 'the command';"
 		+ " const opts = { cwd: j.cwd == null ? undefined : j.cwd, stdio: ['ignore', 'pipe', 'pipe'], detached: group };"
 		+ " const c = j.shell == null ? cp.spawn('haxe', j.args, opts) : cp.spawn(j.shell, Object.assign({ shell: true }, opts));"
-		+ " kids[i] = c;" + " if (j.timeout > 0) c.timer = setTimeout(() => { c.timedOut = true; kill(c); }, j.timeout);"
+		+ " kids[i] = c; recordGroup(j, c);"
+		+ " if (j.timeout > 0) c.timer = setTimeout(() => { c.timedOut = true; kill(c); }, j.timeout);"
 		+ " c.stdout.on('data', d => { size += d.length; if (size > max) { over = true; kill(c); } else o.push(d); });"
 		+ " c.stderr.on('data', d => e.push(d));"
 		+ " c.on('error', err => finish(i, { status: null, out: '', err: '', failure: 'could not launch ' + what + ' (' + err.message + ')',"
@@ -357,6 +366,9 @@ typedef SpawnJob = {
 	var cwd: Null<String>;
 	var ?shell: String;
 	var ?timeout: Int;
+
+	/** Where the driver writes the job's process group leader (pid, then its start time) once it started. */
+	var ?groupFile: String;
 }
 
 /**
