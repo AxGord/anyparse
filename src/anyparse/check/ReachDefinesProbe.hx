@@ -40,21 +40,19 @@ final class ReachDefinesProbe {
 	/** The bound of the random suffix that keeps two runs' probe directories apart. */
 	private static inline final DIRECTORY_SUFFIX_BOUND: Int = 0x7fffffff;
 
-	/** The most probe compiles `parallelism` runs at once. */
-	private static inline final MAX_PARALLEL: Int = 4;
 
 	/** Spawn buffer, in bytes: `-v` names every parsed module. */
 	private static inline final BUFFER: Int = 256 * 1024 * 1024;
 
 	/**
-	 * The builds of `oracles`, each probed once — the compiles overlap (`parallelism`) — with the source of every file
+	 * The builds of `oracles`, each probed once — the compiles overlap (`HaxeSpawn.parallelism`) — with the source of every file
 	 * any of them compiles (one that cannot be read is left out); null when any of them cannot be probed.
 	 */
 	public static function probeAll(oracles: Array<OracleConfig>): Null<ReachBuilds> {
 		final prepared: Array<Null<{ dir: String, args: Array<String> }>> = [for (i in 0...oracles.length) prepare(oracles[i], i)];
 		final ready: Array<{ dir: String, args: Array<String> }> = [for (p in prepared) if (p != null) p];
 		final runs: Array<HaxeRun> = ready.length == oracles.length
-			? HaxeSpawn.runAll([for (i in 0...ready.length) { args: ready[i].args, cwd: oracles[i].dir }], BUFFER, parallelism())
+			? HaxeSpawn.runAll([for (i in 0...ready.length) { args: ready[i].args, cwd: oracles[i].dir }], BUFFER, HaxeSpawn.parallelism())
 			: [];
 		for (p in ready) discard(p.dir);
 		if (runs.length != oracles.length || oracles.length == 0) return null;
@@ -161,6 +159,8 @@ final class ReachDefinesProbe {
 	 */
 	private static function prepare(oracle: OracleConfig, index: Int): Null<{ dir: String, args: Array<String> }> {
 		#if (sys || nodejs)
+		// a configuration that cannot be asked answers nothing, and one unanswered configuration answers for all
+		if (oracle.unavailable != null) return null;
 		final dir: String = Path.join([
 			TempScratch.root(),
 			'anyparse-reach-defines-${Std.random(DIRECTORY_SUFFIX_BOUND)}-$index'
@@ -218,17 +218,6 @@ final class ReachDefinesProbe {
 		#end
 	}
 
-	/**
-	 * How many probe compiles run at once: separate processes, each with its own probe directory and no output, so they
-	 * share nothing but the machine — bounded, since one compile of a large project holds a gigabyte or more.
-	 */
-	private static function parallelism(): Int {
-		#if nodejs
-		return Std.int(Math.max(1, Math.min(MAX_PARALLEL, Std.int(js.node.Os.cpus().length / 2))));
-		#else
-		return 1;
-		#end
-	}
 
 	private static function defines(list: String): Array<String> {
 		return [for (d in list.split(';')) if (d.trim() != '') d.trim()];

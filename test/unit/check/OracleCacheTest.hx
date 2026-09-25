@@ -311,4 +311,64 @@ final class OracleCacheTest extends Test {
 	}
 	#end
 
+	/**
+	 * A verdict is filed under the fingerprint taken BEFORE its compile only while the input still hashes to it: a tree
+	 * that moved during the compile (an editor saving, another run regenerating) produced a verdict about neither state.
+	 */
+	@:pin('control')
+	@:killer('M-ORACLE-CACHE-STORES-A-MOVED-FINGERPRINT')
+	public function testAVerdictIsNotFiledUnderAFingerprintTheTreeLeft(): Void {
+		#if (sys || nodejs)
+		if (!oracleWorks()) {
+			Assert.pass('haxe unavailable — skipped');
+			return;
+		}
+		final dir: String = writeLintDir(VALID);
+		final hxml: String = '$dir/check.hxml';
+		final before: Null<String> = OracleCache.fingerprint(hxml, dir);
+		if (before == null) {
+			skipNoFingerprint(dir);
+			return;
+		}
+		File.saveContent('$dir/Good.hx', BROKEN);
+		Assert.isFalse(OracleCache.storeIfUnchanged(hxml, dir, before, Confirmed), 'the tree moved: nothing is stored');
+		Assert.isNull(OracleCache.lookup(hxml, dir, before), 'so the old tree has no verdict to hand out');
+		Assert.isTrue(
+			OracleCache.storeIfUnchanged(hxml, dir, OracleCache.fingerprint(hxml, dir) ?? '', Rejected('x')), 'an unmoved one is'
+		);
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A fingerprint taken with a memo reads a source the memo already holds from the memo, not from disk — the one read
+	 * per source a run over many configurations pays. Proven by a memo that lies about the source: the key moves.
+	 */
+	@:pin('control')
+	@:killer('M-ORACLE-CACHE-MEMO-UNREAD')
+	public function testAFingerprintReadsItsSourcesThroughTheMemo(): Void {
+		#if (sys || nodejs)
+		if (!oracleWorks()) {
+			Assert.pass('haxe unavailable — skipped');
+			return;
+		}
+		final dir: String = writeLintDir(VALID);
+		final hxml: String = '$dir/check.hxml';
+		final plain: Null<String> = OracleCache.fingerprint(hxml, dir);
+		if (plain == null) {
+			skipNoFingerprint(dir);
+			return;
+		}
+		final memo: Map<String, String> = [];
+		Assert.equals(plain, OracleCache.fingerprint(hxml, dir, null, memo), 'an empty memo changes nothing');
+		for (path in memo.keys()) memo[path] = 'not-the-content';
+		Assert.notEquals(plain, OracleCache.fingerprint(hxml, dir, null, memo), 'a filled memo is what the key is built from');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 }

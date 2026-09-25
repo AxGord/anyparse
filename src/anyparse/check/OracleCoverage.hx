@@ -169,6 +169,48 @@ final class OracleCoverage {
 	}
 
 	/**
+	 * Why an edit set covering `spans` in `file` is NOT verifiable by the oracle's
+	 * compile — a sentence ready to quote in a decline — or null when it is.
+	 *
+	 * Two ways it can fail, and they are different facts. The FILE may sit outside the
+	 * compiled set, which is what `covers` answers. Or the file may be compiled while the
+	 * REGION the edit lands in is not: a `#if` branch the arm's defines exclude is skipped
+	 * at lex time, so the file still earns its `Parsed` line and a typecheck after the edit
+	 * cannot fail whatever the edit did (a planted `final _planted: Int = 'not an int';` in a
+	 * branch the oracle's defines exclude leaves it at exit 0; the same line in the compiled
+	 * branch fails with `String should be Int`).
+	 *
+	 * An arm must satisfy BOTH halves at once — read this file AND make every byte of every span live —
+	 * because a region is only ever typechecked by a compile that did both.
+	 */
+	public function uncovered(file: String, source: String, spans: Array<Span>, shape: RefShape, regions: Array<LexRegion>): Null<String> {
+		#if (sys || nodejs)
+		final paths: Null<Array<String>> = _compiled;
+		if (paths == null) return reason;
+		final key: String = canonical(Sys.getCwd(), file);
+		if (!paths.contains(key)) return fileGap(paths.length);
+		var regionGap: Null<String> = null;
+		var claimed: Bool = false;
+		for (arm in _arms) if (arm.files.contains(key)) {
+			claimed = true;
+			final gap: Null<String> = CondRegionLiveness.unproven(source, shape, spans, arm.defines, regions);
+			if (gap == null) return null;
+			if (regionGap == null) regionGap = gap;
+		}
+		final gap: Null<String> = regionGap;
+		// The union holds the file but no ARM claims it, so the transcript could not be read
+		// apart. Saying the oracle does not compile the file would be false; this state is its
+		// own, and it is unreachable while `probe` builds the union out of the arms.
+		if (!claimed) return 'the compiler oracle\'s compile arms could not be told apart for this file';
+		return gap == null
+			? fileGap(paths.length)
+			: 'the compiler oracle does not typecheck this region ($gap is live under no compiled arm)';
+		#else
+		return UNSUPPORTED_TARGET;
+		#end
+	}
+
+	/**
 	 * The compiled set of `hxml` as run from `cwd` under `defines`, established by one
 	 * `haxe -v <-D …> --each <hxml> --no-output` spawn. Every condition the probe cannot answer
 	 * under returns an UNKNOWN coverage carrying its own diagnostic, never an empty set
@@ -191,25 +233,39 @@ final class OracleCoverage {
 	public static function probe(hxml: String, cwd: Null<String>, ?defines: Array<String>): OracleCoverage {
 		#if (sys || nodejs)
 		final root: String = cwd ?? Sys.getCwd();
-		final result: HaxeRun = probeOutput(
-			root, ['-v'].concat(CompilerOracle.defineFlags(defines ?? [])).concat(['--each', hxml, '--no-output'])
-		);
-		if (result.failure != '') return unknown(result.failure);
-		final status: Null<Int> = result.status;
-		if (status == null) return unknown('the coverage probe produced no exit status');
-		if (status != 0) return unknown('`haxe -v --each $hxml --no-output` exited $status');
-		final tokens: Array<String> = parsedPaths(result.out);
-		if (tokens.length == 0) return unknown('`haxe -v` named no parsed source file');
-		final arms: Array<CompiledArm> = [
-			for (arm in parseArms(result.out))
-				{
-					files: [for (token in arm.files) canonical(root, token)],
-					defines: arm.defines
-				}
-		];
-		return new OracleCoverage([for (token in tokens) canonical(root, token)], arms, '');
+		return fromRun(root, hxml, probeOutput(root, probeArgs(hxml, defines ?? [])));
 		#else
 		return unknown(UNSUPPORTED_TARGET);
+		#end
+	}
+
+	/**
+	 * `probe` for every configuration of `oracles`, the compiles overlapping (`HaxeSpawn.runAll`, bounded by
+	 * `HaxeSpawn.parallelism`) — each `-v` compile writes nothing, so they share nothing but the machine. One coverage
+	 * per configuration in the same order; a configuration marked `unavailable` is an unknown coverage carrying that
+	 * reason, with no spawn. On a target whose spawn cannot honour a directory the probes run one by one through
+	 * `probe`, which refuses there on its own.
+	 */
+	public static function probeAll(oracles: Array<OracleConfig>): Array<OracleCoverage> {
+		#if (sys || nodejs)
+		if (!HaxeSpawn.honoursCwd()) return [
+			for (oracle in oracles) oracle.unavailable == null
+				? probe(oracle.hxml, oracle.dir, oracle.defines)
+				: unknown(oracle.unavailable ?? '')
+		];
+		final asked: Array<OracleConfig> = [for (oracle in oracles) if (oracle.unavailable == null) oracle];
+		final runs: Array<HaxeRun> = HaxeSpawn.runAll([
+			for (oracle in asked) { args: probeArgs(oracle.hxml, oracle.defines), cwd: oracle.dir ?? Sys.getCwd() }
+		], PROBE_BUFFER, HaxeSpawn.parallelism());
+		final out: Array<OracleCoverage> = [];
+		var next: Int = 0;
+		for (oracle in oracles) {
+			final unavailable: Null<String> = oracle.unavailable;
+			out.push(unavailable == null ? fromRun(oracle.dir ?? Sys.getCwd(), oracle.hxml, reworded(runs[next++])) : unknown(unavailable));
+		}
+		return out;
+		#else
+		return [for (_ in oracles) unknown(UNSUPPORTED_TARGET)];
 		#end
 	}
 
@@ -228,6 +284,12 @@ final class OracleCoverage {
 	 * nothing must pay for none; shared because both verified `--fix` phases memoise.
 	 */
 	public static function probedOnce(memo: OracleCoverageMemo, oracles: Array<OracleConfig>): Array<OracleCoverage> {
+		// every configuration the memo lacks is probed in ONE overlapping batch, each distinct one once
+		final missing: Array<OracleConfig> = [];
+		for (oracle in oracles) if (!memo.probes.exists(p -> sameConfig(p.config, oracle)) && !missing.exists(m -> sameConfig(m, oracle)))
+			missing.push(oracle);
+		final probed: Array<OracleCoverage> = probeAll(missing);
+		for (i in 0...missing.length) memo.probes.push({ config: missing[i], coverage: probed[i] });
 		return [for (oracle in oracles) probedFor(memo, oracle)];
 	}
 
@@ -294,7 +356,6 @@ final class OracleCoverage {
 		return new OracleCoverage(null, [], reason);
 	}
 
-
 	/**
 	 * A coverage over an explicit file list, each path resolved against `root`, read as ONE
 	 * arm running under `defines`. The seam a test drives the gate through without a
@@ -319,48 +380,6 @@ final class OracleCoverage {
 	}
 
 	/**
-	 * Why an edit set covering `spans` in `file` is NOT verifiable by the oracle's
-	 * compile — a sentence ready to quote in a decline — or null when it is.
-	 *
-	 * Two ways it can fail, and they are different facts. The FILE may sit outside the
-	 * compiled set, which is what `covers` answers. Or the file may be compiled while the
-	 * REGION the edit lands in is not: a `#if` branch the arm's defines exclude is skipped
-	 * at lex time, so the file still earns its `Parsed` line and a typecheck after the edit
-	 * cannot fail whatever the edit did (a planted `final _planted: Int = 'not an int';` in a
-	 * branch the oracle's defines exclude leaves it at exit 0; the same line in the compiled
-	 * branch fails with `String should be Int`).
-	 *
-	 * An arm must satisfy BOTH halves at once — read this file AND make every byte of every span live —
-	 * because a region is only ever typechecked by a compile that did both.
-	 */
-	public function uncovered(file: String, source: String, spans: Array<Span>, shape: RefShape, regions: Array<LexRegion>): Null<String> {
-		#if (sys || nodejs)
-		final paths: Null<Array<String>> = _compiled;
-		if (paths == null) return reason;
-		final key: String = canonical(Sys.getCwd(), file);
-		if (!paths.contains(key)) return fileGap(paths.length);
-		var regionGap: Null<String> = null;
-		var claimed: Bool = false;
-		for (arm in _arms) if (arm.files.contains(key)) {
-			claimed = true;
-			final gap: Null<String> = CondRegionLiveness.unproven(source, shape, spans, arm.defines, regions);
-			if (gap == null) return null;
-			if (regionGap == null) regionGap = gap;
-		}
-		final gap: Null<String> = regionGap;
-		// The union holds the file but no ARM claims it, so the transcript could not be read
-		// apart. Saying the oracle does not compile the file would be false; this state is its
-		// own, and it is unreachable while `probe` builds the union out of the arms.
-		if (!claimed) return 'the compiler oracle\'s compile arms could not be told apart for this file';
-		return gap == null
-			? fileGap(paths.length)
-			: 'the compiler oracle does not typecheck this region ($gap is live under no compiled arm)';
-		#else
-		return UNSUPPORTED_TARGET;
-		#end
-	}
-
-	/**
 	 * The decline sentence for the per-configuration gaps of ONE edit set — what every caller
 	 * holding a LIST of configurations quotes once none of them typechecks the edit.
 	 *
@@ -371,25 +390,6 @@ final class OracleCoverage {
 	 */
 	public static function gapSentence(gaps: Array<String>): String {
 		return gaps.length == 1 ? gaps[0] : 'no configured compiler oracle typechecks this edit — ${gaps.join('; ')}';
-	}
-
-	/** The decline sentence for a file the oracle's compile never reads. */
-	private static function fileGap(size: Int): String {
-		return 'the compiler oracle does not compile this file (its hxml reads $size source file(s), this one not among them)';
-	}
-
-	/** `memo`'s probe for `oracle`, taken and recorded now when the memo holds none for that configuration. */
-	private static function probedFor(memo: OracleCoverageMemo, oracle: OracleConfig): OracleCoverage {
-		final held: Null<ConfigCoverage> = memo.probes.find(p -> sameConfig(p.config, oracle));
-		if (held != null) return held.coverage;
-		final probed: OracleCoverage = probe(oracle.hxml, oracle.dir, oracle.defines);
-		memo.probes.push({ config: oracle, coverage: probed });
-		return probed;
-	}
-
-	/** Whether two configurations describe the same compile: one hxml, one directory, one define list in order. */
-	private static function sameConfig(a: OracleConfig, b: OracleConfig): Bool {
-		return LintConfig.oracleKey(a) == LintConfig.oracleKey(b);
 	}
 
 	/**
@@ -478,34 +478,54 @@ final class OracleCoverage {
 		return line.substring(quoteAt + 1, close);
 	}
 
-	#if (sys || nodejs)
-	/**
-	 * One `haxe` spawn for the probe through the shared `HaxeSpawn` seam, refusing up front
-	 * on a target that cannot honour the working directory: the compiler prints RELATIVE
-	 * `Parsed` paths, and resolving them against a root it never ran in would build a
-	 * plausible-looking set of wrong keys.
-	 */
-	private static function probeOutput(root: String, args: Array<String>): HaxeRun {
-		if (!HaxeSpawn.honoursCwd() && Path.normalize(root) != Path.normalize(Sys.getCwd())) return {
-			status: null,
-			out: '',
-			err: '',
-			failure: 'the coverage probe cannot run haxe in $root on this target',
-			overflowed: false
-		};
-		final run: HaxeRun = HaxeSpawn.run(args, root, PROBE_BUFFER);
-		// Re-worded rather than passed through: `HaxeSpawn` reports what the SPAWN could not
-		// do, and the caller turns every one of those into an UNKNOWN coverage, whose reader
-		// needs to know which of this project's compiles went missing.
-		return run.failure == '' ? run : {
-			status: null,
-			out: '',
-			err: '',
-			failure: 'the coverage probe ${run.failure}',
-			overflowed: run.overflowed
-		};
+	/** The `-v` probe's argument vector for `hxml` under `defines` — see `probe` for why the order is what it is. */
+	private static function probeArgs(hxml: String, defines: Array<String>): Array<String> {
+		return ['-v'].concat(CompilerOracle.defineFlags(defines)).concat(['--each', hxml, '--no-output']);
 	}
 
+	/** The coverage one probe spawn of `hxml`, run from `root`, reports. */
+	private static function fromRun(root: String, hxml: String, result: HaxeRun): OracleCoverage {
+		#if (sys || nodejs)
+		if (result.failure != '') return unknown(result.failure);
+		final status: Null<Int> = result.status;
+		if (status == null) return unknown('the coverage probe produced no exit status');
+		if (status != 0) return unknown('`haxe -v --each $hxml --no-output` exited $status');
+		final tokens: Array<String> = parsedPaths(result.out);
+		if (tokens.length == 0) return unknown('`haxe -v` named no parsed source file');
+		final arms: Array<CompiledArm> = [
+			for (arm in parseArms(result.out))
+				{
+					files: [for (token in arm.files) canonical(root, token)],
+					defines: arm.defines
+				}
+		];
+		return new OracleCoverage([for (token in tokens) canonical(root, token)], arms, '');
+		#else
+		return unknown(UNSUPPORTED_TARGET);
+		#end
+	}
+
+	/** The decline sentence for a file the oracle's compile never reads. */
+	private static function fileGap(size: Int): String {
+		return 'the compiler oracle does not compile this file (its hxml reads $size source file(s), this one not among them)';
+	}
+
+	/** `memo`'s probe for `oracle`, taken and recorded now when the memo holds none for that configuration. */
+	private static function probedFor(memo: OracleCoverageMemo, oracle: OracleConfig): OracleCoverage {
+		final held: Null<ConfigCoverage> = memo.probes.find(p -> sameConfig(p.config, oracle));
+		if (held != null) return held.coverage;
+		final unavailable: Null<String> = oracle.unavailable;
+		final probed: OracleCoverage = unavailable == null ? probe(oracle.hxml, oracle.dir, oracle.defines) : unknown(unavailable);
+		memo.probes.push({ config: oracle, coverage: probed });
+		return probed;
+	}
+
+	/** Whether two configurations describe the same compile: one hxml, one directory, one define list in order. */
+	private static function sameConfig(a: OracleConfig, b: OracleConfig): Bool {
+		return LintConfig.oracleKey(a) == LintConfig.oracleKey(b);
+	}
+
+	#if (sys || nodejs)
 	/**
 	 * `path` resolved against `root` when relative, then symlink-resolved. Both sides of
 	 * the membership test go through this: the compiler prints paths against ITS working
@@ -527,6 +547,38 @@ final class OracleCoverage {
 		// exact vacuity this class exists to refuse.
 		final resolved: Null<String> = try sys.FileSystem.fullPath(joined) catch (_exception: haxe.Exception) null;
 		return resolved == null || resolved == '' ? joined : resolved;
+	}
+
+	/**
+	 * One `haxe` spawn for the probe through the shared `HaxeSpawn` seam, refusing up front
+	 * on a target that cannot honour the working directory: the compiler prints RELATIVE
+	 * `Parsed` paths, and resolving them against a root it never ran in would build a
+	 * plausible-looking set of wrong keys.
+	 */
+	private static function probeOutput(root: String, args: Array<String>): HaxeRun {
+		if (!HaxeSpawn.honoursCwd() && Path.normalize(root) != Path.normalize(Sys.getCwd())) return {
+			status: null,
+			out: '',
+			err: '',
+			failure: 'the coverage probe cannot run haxe in $root on this target',
+			overflowed: false
+		};
+		return reworded(HaxeSpawn.run(args, root, PROBE_BUFFER));
+	}
+
+	/**
+	 * `run` with its failure re-worded rather than passed through: `HaxeSpawn` reports what the
+	 * SPAWN could not do, and the caller turns every one of those into an UNKNOWN coverage, whose
+	 * reader needs to know which of this project's compiles went missing.
+	 */
+	private static function reworded(run: HaxeRun): HaxeRun {
+		return run.failure == '' ? run : {
+			status: null,
+			out: '',
+			err: '',
+			failure: 'the coverage probe ${run.failure}',
+			overflowed: run.overflowed
+		};
 	}
 	#end
 

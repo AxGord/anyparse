@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.HaxeSpawn.HaxeRun;
 import anyparse.check.LintConfig.OracleConfig;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -104,17 +105,36 @@ final class CompilerOracle {
 	 */
 	public static function typecheck(hxml: String, ?cwd: String, ?defines: Array<String>): OracleOutcome {
 		invocations++;
-		final run: HaxeRun = HaxeSpawn.run(oracleArgs(hxml, defines ?? []), cwd, ORACLE_BUFFER);
-		// An overflow is the compiler having RUN and out-written the buffer; a build that
-		// verbose is failing, so it is a rejection carrying the partial errors rather than
-		// unavailability. Every other launch failure means haxe never ran.
-		if (run.overflowed) return Rejected((run.err + run.out).trim());
-		if (run.failure != '') return Unavailable(run.failure);
-		return switch (run.status) {
-			case null: Unavailable('haxe exited without a status code');
-			case 0: Confirmed;
-			case _: Rejected((run.err + run.out).trim());
-		};
+		return outcomeOf(HaxeSpawn.run(oracleArgs(hxml, defines ?? []), cwd, ORACLE_BUFFER));
+	}
+
+	/**
+	 * Every configuration of `oracles` typechecked, the compiles overlapping (`HaxeSpawn.runAll`,
+	 * bounded by `HaxeSpawn.parallelism`), one outcome per configuration in declared order. A
+	 * configuration marked `unavailable` is answered `Unavailable` without a spawn.
+	 *
+	 * With `stopAfterFailure` a configuration that does not confirm ends every later one still
+	 * compiling, and those answer null: the outcomes up to and including the first failure are
+	 * exactly the ones a sequential loop stopping there would have seen, the rest are no verdict.
+	 */
+	public static function typecheckEach(oracles: Array<OracleConfig>, stopAfterFailure: Bool): Array<Null<OracleOutcome>> {
+		final asked: Array<OracleConfig> = [for (oracle in oracles) if (oracle.unavailable == null) oracle];
+		final runs: Array<HaxeRun> = HaxeSpawn.runAll([
+			for (oracle in asked) { args: oracleArgs(oracle.hxml, oracle.defines), cwd: oracle.dir }
+		], ORACLE_BUFFER, HaxeSpawn.parallelism(), stopAfterFailure);
+		for (run in runs) if (run.unstarted != true) invocations++;
+		final out: Array<Null<OracleOutcome>> = [];
+		var next: Int = 0;
+		for (oracle in oracles) {
+			final unavailable: Null<String> = oracle.unavailable;
+			if (unavailable != null) {
+				out.push(Unavailable(unavailable));
+				continue;
+			}
+			final run: HaxeRun = runs[next++];
+			out.push(run.cancelled == true ? null : outcomeOf(run));
+		}
+		return out;
 	}
 
 	/**
@@ -146,21 +166,22 @@ final class CompilerOracle {
 	}
 
 	/**
-	 * Typecheck EVERY configuration in declared order, stopping at the first that does not
-	 * confirm and answering with its outcome; `Confirmed` only when all of them confirm.
+	 * Typecheck EVERY configuration and answer with the outcome of the first, in declared order,
+	 * that does not confirm; `Confirmed` only when all of them confirm.
 	 *
 	 * All of them, because an edit in shared code compiles under one set of defines and breaks
-	 * under another — the whole reason the key is a list. The declared order is the ask order, so
-	 * a project puts its cheapest configuration first and a rejection is usually paid for once.
-	 * An empty list is `Unavailable`: no configuration means nothing was proved, which is not the
-	 * same answer as a build that typechecks.
+	 * under another — the whole reason the key is a list. The compiles overlap, and the first
+	 * failure ends the ones declared after it (`typecheckEach`), so the verdict is the one a
+	 * sequential loop gives while a rejection still costs no compile that could not change it.
+	 * Configurations after the first `unavailable` one are never asked: its verdict is already
+	 * decided. An empty list is `Unavailable`: no configuration means nothing was proved, which is
+	 * not the same answer as a build that typechecks.
 	 */
 	public static function typecheckAll(oracles: Array<OracleConfig>): OracleOutcome {
 		if (oracles.length == 0) return Unavailable('no compiler oracle is configured');
-		for (oracle in oracles) {
-			final outcome: OracleOutcome = typecheck(oracle.hxml, oracle.dir, oracle.defines);
-			if (!outcome.match(Confirmed)) return outcome;
-		}
+		final cut: Int = oracles.findIndex(oracle -> oracle.unavailable != null);
+		final asked: Array<OracleConfig> = cut < 0 ? oracles : oracles.slice(0, cut + 1);
+		for (outcome in typecheckEach(asked, true)) if (outcome != null && !outcome.match(Confirmed)) return outcome;
 		return Confirmed;
 	}
 
@@ -176,8 +197,10 @@ final class CompilerOracle {
 		final green: Array<OracleConfig> = [];
 		final excluded: Array<OracleExclusion> = [];
 		var first: Null<OracleOutcome> = null;
-		for (oracle in oracles) {
-			final outcome: OracleOutcome = typecheck(oracle.hxml, oracle.dir, oracle.defines);
+		final outcomes: Array<Null<OracleOutcome>> = typecheckEach(oracles, false);
+		for (i in 0...oracles.length) {
+			final oracle: OracleConfig = oracles[i];
+			final outcome: OracleOutcome = outcomes[i] ?? Unavailable('the typecheck was cancelled');
 			if (outcome.match(Confirmed)) {
 				green.push(oracle);
 				continue;
@@ -207,6 +230,21 @@ final class CompilerOracle {
 	/** The sentences of `exclusions`, in order — what a decline's reason list quotes. */
 	public static function sentencesOf(exclusions: Array<OracleExclusion>): Array<String> {
 		return [for (exclusion in exclusions) exclusion.sentence];
+	}
+
+	/**
+	 * The verdict one typecheck spawn produced. An overflow is the compiler having RUN and
+	 * out-written the buffer; a build that verbose is failing, so it is a rejection carrying the
+	 * partial errors rather than unavailability. Every other launch failure means haxe never ran.
+	 */
+	private static function outcomeOf(run: HaxeRun): OracleOutcome {
+		if (run.overflowed) return Rejected((run.err + run.out).trim());
+		if (run.failure != '') return Unavailable(run.failure);
+		return switch (run.status) {
+			case null: Unavailable('haxe exited without a status code');
+			case 0: Confirmed;
+			case _: Rejected((run.err + run.out).trim());
+		};
 	}
 
 	/**

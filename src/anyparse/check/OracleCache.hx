@@ -180,13 +180,13 @@ final class OracleCache {
 	 * typechecks with two different verdicts, and a key blind to them would answer one
 	 * configuration's question with the other's stored answer.
 	 */
-	public static function fingerprint(hxml: String, cwd: Null<String>, ?defines: Array<String>): Null<String> {
+	public static function fingerprint(hxml: String, cwd: Null<String>, ?defines: Array<String>, ?memo: Map<String, String>): Null<String> {
 		#if (sys || nodejs)
 		final root: String = cwd ?? Sys.getCwd();
 		final chain: Null<HxmlChain> = scanHxmlChain(root, hxml);
 		if (chain == null) return null;
 		final probe: CompilerProbe = compilerProbe(root, chain.libs);
-		return probe.ok ? md5(buildManifest(root, chain, probe, defines ?? []).join('\n')) : null;
+		return probe.ok ? md5(buildManifest(root, chain, probe, defines ?? [], memo).join('\n')) : null;
 		#else
 		return null;
 		#end
@@ -414,15 +414,17 @@ final class OracleCache {
 	 * The manifest the fingerprint hashes: the tag, the compiler's defines, the hxml
 	 * chain, then every reachable `.hx` file by path and content hash, sorted by path.
 	 */
-	private static function buildManifest(root: String, chain: HxmlChain, probe: CompilerProbe, defines: Array<String>): Array<String> {
+	private static function buildManifest(
+		root: String, chain: HxmlChain, probe: CompilerProbe, defines: Array<String>, memo: Null<Map<String, String>>
+	): Array<String> {
 		final files: Map<String, String> = [];
 		// The compile directory is on the compiler's classpath IMPLICITLY — it is the empty
 		// entry in the `Classpath:` line, which `probeDirs` drops. A module dropped next to the
 		// hxml is compiled like any other, so it has to enter the key; walking the root first
 		// also means the declared `-cp` roots beneath it cost only their directory scan.
-		mergeDir(files, root, false);
-		for (dir in chain.classPaths) mergeDir(files, dir, false);
-		for (dir in probe.dirs) mergeDir(files, absolute(root, dir), true);
+		mergeDir(files, root, false, memo);
+		for (dir in chain.classPaths) mergeDir(files, dir, false, memo);
+		for (dir in probe.dirs) mergeDir(files, absolute(root, dir), true, memo);
 		final fileLines: Array<String> = [for (path => hash in files) '$path $hash'];
 		fileLines.sort(compareStrings);
 		return [FORMAT_TAG, probe.defines, 'oracle-defines ${defines.join(' ')}'].concat(chain.lines).concat(fileLines);
@@ -438,13 +440,13 @@ final class OracleCache {
 	 * every oracle test. The hxml's own `-cp` roots are never memoised: they ARE the
 	 * tree under lint, and re-reading them every time is the whole point of the key.
 	 */
-	private static function mergeDir(into: Map<String, String>, dir: String, memoise: Bool): Void {
+	private static function mergeDir(into: Map<String, String>, dir: String, memoise: Bool, memo: Null<Map<String, String>>): Void {
 		if (!memoise) {
 			// Straight into the shared set, so a file an enclosing root already hashed is
 			// skipped instead of read a second time — which is what makes NESTED roots (the
 			// compile directory and the `-cp` entries under it) cost a directory scan and
 			// nothing more.
-			walkDir(dir, into, 0);
+			walkDir(dir, into, 0, memo);
 			return;
 		}
 		for (path => hash in memoDir(dir)) into[path] = hash;
@@ -465,7 +467,7 @@ final class OracleCache {
 	 */
 	private static function collectDir(dir: String): Map<String, String> {
 		final collected: Map<String, String> = [];
-		walkDir(dir, collected, 0);
+		walkDir(dir, collected, 0, null);
 		return collected;
 	}
 
@@ -473,17 +475,22 @@ final class OracleCache {
 	 * The recursive half of `collectDir`: dot-prefixed entries are skipped (which keeps `.git`
 	 * out), depth is capped so a symlink loop terminates, unreadable entries are skipped.
 	 */
-	private static function walkDir(dir: String, into: Map<String, String>, depth: Int): Void {
+	private static function walkDir(dir: String, into: Map<String, String>, depth: Int, memo: Null<Map<String, String>>): Void {
 		if (depth > MAX_DIR_DEPTH) return;
 		final entries: Null<Array<String>> = try sys.FileSystem.readDirectory(dir) catch (_exception: haxe.Exception) null;
 		if (entries == null) return;
 		for (entry in entries) if (!entry.startsWith('.')) {
 			final full: String = Path.normalize(Path.join([dir, entry]));
 			if (isDirectory(full))
-				walkDir(full, into, depth + 1);
+				walkDir(full, into, depth + 1, memo);
 			else if (full.endsWith('.hx') && !into.exists(full)) {
-				final text: Null<String> = readText(full);
-				if (text != null) into[full] = md5(text);
+				final held: Null<String> = memo?.get(full);
+				final text: Null<String> = held == null ? readText(full) : null;
+				final hash: Null<String> = held ?? (text == null ? null : md5(text));
+				if (hash != null) {
+					into[full] = hash;
+					memo?.set(full, hash);
+				}
 			}
 		}
 	}
@@ -563,5 +570,19 @@ final class OracleCache {
 		return try sys.io.File.getContent(path) catch (_exception: haxe.Exception) null;
 	}
 	#end
+
+	/**
+	 * `store`, but only when the compile input still hashes to `fingerprint` — the fingerprint taken BEFORE the compile.
+	 * A tree that moved while the compiler ran (an editor saving, another run regenerating an hxml) produced a verdict
+	 * about neither state, and filing it under the old fingerprint would hand it to the next run of the old tree. Answers
+	 * whether it stored.
+	 */
+	public static function storeIfUnchanged(
+		hxml: String, cwd: Null<String>, fingerprint: String, outcome: OracleOutcome, ?defines: Array<String>, ?memo: Map<String, String>
+	): Bool {
+		if (OracleCache.fingerprint(hxml, cwd, defines, memo) != fingerprint) return false;
+		store(hxml, cwd, fingerprint, outcome, defines);
+		return true;
+	}
 
 }

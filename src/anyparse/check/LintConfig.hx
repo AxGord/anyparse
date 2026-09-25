@@ -40,6 +40,35 @@ typedef OracleConfig = {
 	var hxml: String;
 	var dir: Null<String>;
 	var defines: Array<String>;
+
+	/** How to (re)create `hxml` before the configuration is used; absent for an hxml the project maintains itself. */
+	var ?generate: OracleGenerate;
+
+	/**
+	 * Why this configuration cannot be asked at all — set by `OracleGeneration.prepare` when its `generate` command
+	 * failed. Every consumer answers it as an oracle that could not run, never by reading a stale hxml.
+	 */
+	var ?unavailable: String;
+
+	/**
+	 * Why this run's generation of the hxml is no faithful snapshot of the tree — an input moved while the command ran —
+	 * set by `OracleGeneration.prepare`. A report may still ask it; a `--fix` verification treats it as unavailable
+	 * (`LintFixVerify.verifiable`), since a veto from a build that does not match the tree is worse than none.
+	 */
+	var ?raced: String;
+}
+
+/**
+ * A configuration's `generate` declaration, resolved: the shell `command` that writes its hxml, the directory it runs
+ * in (`root` — the declaring config's directory), the absolute `inputs` whose content decides whether a recorded
+ * generation is still current (null when the entry names none: then it regenerates once per run), and whether the
+ * compile directory was left to be PROBED once the hxml exists (`probeDir`).
+ */
+typedef OracleGenerate = {
+	var command: String;
+	var root: String;
+	var inputs: Null<Array<String>>;
+	var probeDir: Bool;
 }
 
 /**

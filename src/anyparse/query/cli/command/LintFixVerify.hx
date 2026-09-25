@@ -324,13 +324,14 @@ final class LintFixVerify {
 	public static function reportModeOracle(oracles: Array<OracleConfig>, paths: Array<String>, warmServer: Bool): Null<Int> {
 		if (oracles.length == 0) return null;
 		final confirmed: Array<OracleConfig> = [];
-		for (oracle in oracles) switch reportOracleVerdict(oracle, paths, warmServer) {
+		final outcomes: Array<OracleOutcome> = reportOracleVerdicts(oracles, paths, warmServer);
+		for (i in 0...oracles.length) switch outcomes[i] {
 			case Confirmed:
-				confirmed.push(oracle);
+				confirmed.push(oracles[i]);
 			case Unavailable(reason):
-				CliIo.stderr('apq lint: compiler oracle unavailable for ${LintConfig.describeOracle(oracle)} — $reason (skipped)\n');
+				CliIo.stderr('apq lint: compiler oracle unavailable for ${LintConfig.describeOracle(oracles[i])} — $reason (skipped)\n');
 			case Rejected(errors):
-				CliIo.stderr('apq lint: compiler oracle REJECTED ${LintConfig.describeOracle(oracle)} — build does not typecheck:\n');
+				CliIo.stderr('apq lint: compiler oracle REJECTED ${LintConfig.describeOracle(oracles[i])} — build does not typecheck:\n');
 				CliIo.stderr('$errors\n');
 				return EXIT_RUNTIME;
 		}
@@ -362,56 +363,84 @@ final class LintFixVerify {
 	}
 
 	/**
-	 * The report-mode oracle verdict, through a CONTENT-ADDRESSED cache first. The key is a
-	 * fingerprint of everything the compiler would read (`OracleCache`), so a hit is only ever
-	 * taken on a byte-identical compile input — never on a modification time, never on "nothing
-	 * looks changed". Every doubt yields no fingerprint or no record, and then the compiler
-	 * itself decides, which is why the cache can only change what a verdict COSTS.
+	 * The report-mode oracle verdict of every configuration, in declared order, each through a
+	 * CONTENT-ADDRESSED cache first. The key is a fingerprint of everything the compiler would read
+	 * (`OracleCache`), so a hit is only ever taken on a byte-identical compile input — never on a
+	 * modification time, never on "nothing looks changed". Every doubt yields no fingerprint or no
+	 * record, and then the compiler itself decides, which is why the cache can only change what a
+	 * verdict COSTS.
 	 *
-	 * `APQ_NO_ORACLE_CACHE` declines it process-wide. That is a weakening-only switch: declining
-	 * a cache can cost time, never change a verdict.
+	 * The configurations the cache cannot answer are compiled together: overlapping cold compiles
+	 * (`CompilerOracle.typecheckEach`), or one by one through the warm server when the project opted
+	 * into it. Every one of them is asked even after a rejection — the report stops at the first, but
+	 * a verdict observed is a verdict the next run does not pay for.
+	 *
+	 * `APQ_NO_ORACLE_CACHE` declines the cache process-wide. That is a weakening-only switch:
+	 * declining a cache can cost time, never change a verdict.
 	 *
 	 * The `--fix` risky-fix verification never reaches here — `FixVerifier` calls
 	 * `CompilerOracle` directly, so a post-write typecheck is always a real compiler run.
 	 */
-	private static function reportOracleVerdict(oracle: OracleConfig, paths: Array<String>, warmServer: Bool): OracleOutcome {
-		final hxml: String = oracle.hxml;
-		final dir: Null<String> = oracle.dir;
-		final defines: Array<String> = oracle.defines;
-		final fingerprint: Null<String> = EnvFlag.isSet('APQ_NO_ORACLE_CACHE') ? null : OracleCache.fingerprint(hxml, dir, defines);
-		if (fingerprint != null) {
-			final cached: Null<OracleOutcome> = OracleCache.lookup(hxml, dir, fingerprint, defines);
-			if (cached != null) {
+	private static function reportOracleVerdicts(
+		oracles: Array<OracleConfig>, paths: Array<String>, warmServer: Bool
+	): Array<OracleOutcome> {
+		final outcomes: Array<Null<OracleOutcome>> = [];
+		final fingerprints: Array<Null<String>> = [];
+		final compile: Array<Int> = [];
+		// one read of each source across every configuration, before the compiles and again after them
+		final before: Map<String, String> = [];
+		final after: Map<String, String> = [];
+		for (i in 0...oracles.length) {
+			final oracle: OracleConfig = oracles[i];
+			final unavailable: Null<String> = oracle.unavailable;
+			final fingerprint: Null<String> = unavailable != null || EnvFlag.isSet('APQ_NO_ORACLE_CACHE')
+				? null
+				: OracleCache.fingerprint(oracle.hxml, oracle.dir, oracle.defines, before);
+			fingerprints.push(fingerprint);
+			final cached: Null<OracleOutcome> = fingerprint == null
+				? null
+				: OracleCache.lookup(oracle.hxml, oracle.dir, fingerprint, oracle.defines);
+			if (cached != null)
 				CliIo.stderr(
 					'apq lint: compiler oracle verdict reused for ${LintConfig.describeOracle(oracle)} — the compile input hashes'
 					+ ' identical to the last typecheck (no compile)\n'
 				);
-				return cached;
-			}
+			outcomes.push(unavailable == null ? cached : Unavailable(unavailable));
+			if (unavailable == null && cached == null) compile.push(i);
 		}
-		final verdict: OracleOutcome = compiledOracleVerdict(oracle, paths, warmServer);
-		if (fingerprint != null) OracleCache.store(hxml, dir, fingerprint, verdict, defines);
-		return verdict;
+		final pending: Array<OracleConfig> = [for (i in compile) oracles[i]];
+		final compiled: Array<OracleOutcome> = !warmServer || EnvFlag.isSet('APQ_NO_ORACLE_SERVER') ? [
+			for (outcome in CompilerOracle.typecheckEach(pending, false)) outcome ?? Unavailable('the typecheck was cancelled')
+		] : [for (oracle in pending) compiledOracleVerdict(oracle, paths)];
+		for (k in 0...compile.length) {
+			final i: Int = compile[k];
+			outcomes[i] = compiled[k];
+			final fingerprint: Null<String> = fingerprints[i];
+			// stored only while the input still hashes as it did before the compile: a tree that moved meanwhile
+			// produced a verdict about neither state
+			if (fingerprint != null)
+				OracleCache.storeIfUnchanged(oracles[i].hxml, oracles[i].dir, fingerprint, compiled[k], oracles[i].defines, after);
+		}
+		return [for (outcome in outcomes) outcome ?? Unavailable('no verdict was taken')];
 	}
 
 	/**
-	 * The verdict an actual COMPILER produced: through the project's shared WARM compilation
-	 * server when the config opted in (`compilerOracleServer`) and the process did not decline it
-	 * (`APQ_NO_ORACLE_SERVER`), else a fresh `haxe <hxml> --no-output`. Verdict-equivalent by
-	 * construction — the warm path answers null for every condition it cannot decide under
-	 * (no server, a dead one, a port that answers as something else), and the cold oracle
-	 * takes over then. The `--fix` risky-fix verification never comes here either: a post-write
-	 * typecheck is the one question a compilation server cannot answer honestly.
+	 * The verdict an actual COMPILER produced through the project's shared WARM compilation server —
+	 * the path `reportOracleVerdicts` takes only when the config opted in (`compilerOracleServer`) and
+	 * the process did not decline it (`APQ_NO_ORACLE_SERVER`). Verdict-equivalent by construction — the
+	 * warm path answers null for every condition it cannot decide under (no server, a dead one, a port
+	 * that answers as something else), and a fresh `haxe <hxml> --no-output` takes over then. The
+	 * `--fix` risky-fix verification never comes here either: a post-write typecheck is the one
+	 * question a compilation server cannot answer honestly.
 	 */
-	private static function compiledOracleVerdict(oracle: OracleConfig, paths: Array<String>, warmServer: Bool): OracleOutcome {
-		final declined: Bool = !warmServer || EnvFlag.isSet('APQ_NO_ORACLE_SERVER');
+	private static function compiledOracleVerdict(oracle: OracleConfig, paths: Array<String>): OracleOutcome {
 		// A warm CONFIRM stands as it is; a warm REJECTION is re-run COLD before it is reported.
 		// A compilation server can re-emit a stale null-safety diagnostic for a module it restored
 		// from cache rather than recompiled — one such site made every cached recompile of this
 		// project spuriously red while the cold compile was green. So a rejection always
 		// carries the cold compiler's own verdict and error text, and the server can only ever
 		// change what a verdict COSTS.
-		return switch (declined ? null : CompilerServer.typecheck(oracle.hxml, oracle.dir, paths, oracle.defines)) {
+		return switch (CompilerServer.typecheck(oracle.hxml, oracle.dir, paths, oracle.defines)) {
 			case Confirmed: Confirmed;
 			case Rejected(_): coldAfterWarmRejection(oracle);
 			case null, _: CompilerOracle.typecheck(oracle.hxml, oracle.dir, oracle.defines);
@@ -577,7 +606,7 @@ final class LintFixVerify {
 	 * build is no reason to skip the phase while its sibling's would.
 	 */
 	private static function startDisplay(configs: Array<OracleConfig>): Null<CompilerDisplayOracle> {
-		for (config in configs) {
+		for (config in configs) if (config.unavailable == null) {
 			final display: Null<CompilerDisplayOracle> = CompilerDisplayOracle.start(config.hxml, config.dir, config.defines);
 			if (display != null) return display;
 		}
@@ -792,6 +821,29 @@ final class LintFixVerify {
 	public static function unparseableFiles(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<String> {
 		return [
 			for (entry in files) if (CheckScan.parseOrNull(plugin, entry.source) == null) entry.file
+		];
+	}
+
+	/**
+	 * `oracles` as a `--fix` verification may ask them: one whose generation raced an input in this run (`raced`) is
+	 * unavailable — it answers for the build the command saw, not for the tree the fixes are written into, and a veto from
+	 * that build could revert a sound fix. Report mode keeps asking it, with the note that named the race.
+	 */
+	public static function verifiable(oracles: Array<OracleConfig>): Array<OracleConfig> {
+		return [
+			for (oracle in oracles) {
+				final raced: Null<String> = oracle.raced;
+				if (raced == null || oracle.unavailable != null)
+					oracle
+				else
+					{
+						hxml: oracle.hxml,
+						dir: oracle.dir,
+						defines: oracle.defines,
+						generate: oracle.generate,
+						unavailable: 'not asked to verify fixes — $raced'
+					};
+			}
 		];
 	}
 
