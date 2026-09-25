@@ -14,7 +14,8 @@ import anyparse.runtime.Span;
 using StringTools;
 
 /**
- * What a FACETED function node (`FactsView.bodyFacts`) contributes to a `CallGraph` in place of what its syntax would:
+ * What a FACETED function node (`FactsView.bodyFacts`) contributes to a `CallGraph`
+ * beside the edges its syntax records, and in place of its syntax's unresolved sites:
  * an edge per call, construction, method read as a value and nested function the compiler typed — each instance call
  * with its override edges, over the typed subtypes and the ones the graph holds alike — an unresolved site per call
  * through a value, a structure, a dynamic receiver or a native identifier, and an unresolved access per property or
@@ -37,7 +38,10 @@ final class CallGraphFacts {
 	 */
 	public final faceted: Map<String, Array<FactNode>> = [];
 
-	/** The faceted nodes of the file whose edges the graph is collecting: their syntax records nothing. */
+	/**
+	 * The faceted nodes of the file whose edges the graph is collecting: their syntax records its edges, which the facts
+	 * only add to, but none of its unresolved sites and accesses, which the facts type.
+	 */
 	public var muted(default, null): Map<String, Bool> = [];
 
 	public function new(view: FactsView) {
@@ -161,10 +165,13 @@ final class CallGraphFacts {
 		final type: String = view.graphType(owner);
 		final id: String = g.memberOnChain(type, name) ?? g.externalNode(g.types.declaringTypeOf(type, name) ?? type, name);
 		final field: Bool = c.access == 'fieldValue';
-		final replaceable: Bool = g.nodes[id]?.isDynamic == true;
+		// the index knows a library member before the graph reads its body
+		final known: Null<MemberInfo> = g.types.memberOnChain(type, name);
+		final replaceable: Bool = g.nodes[id]?.isDynamic == true || known?.isDynamic == true;
 		// a replaceable field runs whatever value it holds: a `dynamic` method's own body is one of them
 		if (field) unresolved(FunctionValue(name));
-		if (field && !replaceable) return;
+		// a field no declaration read so far says is a `dynamic` method may still be one, whose body the edge reads
+		if (field && !replaceable && known != null) return;
 		final instance: Bool = c.access == 'FInstance' || c.access == 'FClosure' || field;
 		final dispatch: Null<String> = instance ? dispatchType(c.receiver, owner, view) : null;
 		g.addEdge(node.id, id, deferred ? Ref : Call, null, node.file, span, dispatch == null ? null : view.graphType(dispatch));

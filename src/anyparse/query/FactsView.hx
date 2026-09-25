@@ -27,15 +27,19 @@ using StringTools;
  * make a question about them Unknown.
  *
  * A body is FACETED (`bodyFacts`) when its facts are whole and hold for every build, not only the listed ones: no
- * configuration was dropped, no marker says a fact of it has no place, it declares nothing the compiler splices in at
- * its own declaration (a local `inline function`), its text holds no conditional directive and lies in no conditional
- * region, its graph node stands for one declaration, and nothing the compiler resolved its sites through may differ in
- * a build the list does not name: every project type it names has a header with no directive (a typedef: no directive
- * anywhere), every project member it names is declared once, outside any conditional region, with no directive in
- * what types it, no member it names is declared conditionally anywhere in the project, and a function nested in it
- * was typed against a body that passes the same test. A library declaration is read as the index reads it, one copy
- * for every build, as the syntactic reading reads it. Anything else keeps the syntactic reading: absence of facts is
- * never "no code".
+ * configuration was dropped, no marker says a fact of it has no place, its text holds no conditional directive and lies
+ * in no conditional region, its graph node stands for one declaration, and nothing the compiler resolved its sites through
+ * may differ in a build the list does not name: every project type it names has a header with no directive (a typedef:
+ * no directive anywhere) in a file that imports nothing under a condition, every project member it names is declared
+ * once, outside any conditional region, with no directive in what types it, no member it names is declared conditionally
+ * anywhere in the project, and a function nested in it was typed against a body that passes the same test. A library
+ * declaration is read as the index reads it, one copy for every build, as the syntactic reading reads it. Anything else
+ * keeps the syntactic reading: absence of facts is never "no code".
+ *
+ * A faceted body keeps the edges its syntax records (`CallGraph.addEdge`): the facts add to them, never take one away,
+ * so a name a build the list does not name resolves the way the syntax reads it is still followed. A local `inline
+ * function` needs no test of its own for the same reason: its body is a graph node read by its syntax, and each use of
+ * it is such an edge.
  */
 @:nullSafety(Strict)
 final class FactsView {
@@ -115,7 +119,7 @@ final class FactsView {
 	public function bodyFacts(g: CallGraph, node: FnNode, declarations: Int): Null<Array<FactNode>> {
 		final outer: Null<Array<FactNode>> = declarations == 1 ? typedBodies(g, node) : null;
 		if (outer == null) return null;
-		for (n in outer) if (n.incomplete.exists(m -> UNPLACED.contains(m)) || inlinesLocally(g, node.file, n.at.span)) return null;
+		for (n in outer) if (n.incomplete.exists(m -> UNPLACED.contains(m))) return null;
 		return contextAlike(g, node, outer) ? outer : null;
 	}
 
@@ -159,27 +163,6 @@ final class FactsView {
 		final enclosing: Null<FnNode> = at != null && within(span, at) && wider(at, span) ? found : null;
 		final typed: Null<Array<FactNode>> = enclosing == null ? null : typedBodies(g, enclosing);
 		return enclosing != null && typed != null && contextAlike(g, enclosing, typed);
-	}
-
-	/**
-	 * Whether the code at `span` of `file` declares something the compiler splices in where it is used — a local
-	 * `inline function`, an `inline` local: its facts sit at the declaration, inside the same body, so no marker says so
-	 * and a range question would miss what it runs at each use.
-	 */
-	private function inlinesLocally(g: CallGraph, file: String, span: Span): Bool {
-		final tree: Null<QueryNode> = g.treeOf(file);
-		if (tree == null) return true;
-		final kinds: Array<String> = (_scope.shape.inlineFunctionKinds ?? []).copy();
-		final modifier: Null<String> = _scope.shape.inlineModifierKind;
-		if (modifier != null) kinds.push(modifier);
-		function holds(n: QueryNode): Bool {
-			final at: Null<Span> = n.span;
-			if (at == null) return n.children.exists(holds);
-			final own: Span = at;
-			if (!meets(own, span)) return false;
-			return (within(own, span) && kinds.contains(n.kind)) || n.children.exists(holds);
-		}
-		return holds(tree);
 	}
 
 	/**
@@ -434,7 +417,11 @@ final class FactsView {
 				text.span
 			else
 				new Span(info.span.from, info.members.fold((m, least) -> m.declFrom < least ? m.declFrom : least, info.span.to));
-			if (conditional(text.file, text.source, header)) answer = false;
+			// a file, or an ambient import source, importing under a condition may resolve every name in the type otherwise
+			final fi: Null<FileInfo> = indexedFile(text.file);
+			final guarded: Bool = fi != null
+				&& (fi.imports.exists(i -> i.guarded) || fi.ambientImports.exists(a -> a.imports.exists(i -> i.guarded)));
+			if (guarded || conditional(text.file, text.source, header)) answer = false;
 		}
 		_alike[type] = answer;
 		return answer;

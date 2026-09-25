@@ -626,9 +626,11 @@ final class ReachGraph {
 	 * a structure, a catch-all or a type parameter.
 	 */
 	private function runtimeTypes(g: CallGraph, type: String, family: SiteFamily, escaped: Bool = true): Null<Array<String>> {
-		// an abstract's own member of the family runs on it — static calls the compiler puts where the static type is it
+		// an abstract's own member of the family runs on it — static calls the compiler puts where the static type is it; its
+		// own conversion may convert the value it wraps in turn, as `Any`'s does, which may be anything
 		final own: String = g.types.resolveAlias(NominalTypes.outerNominalOf(StringTools.trim(type)) ?? type);
-		if (isAbstract(own) && indexImplicit().exists(c -> c.type == own && matches(c.family, family))) return [own];
+		if (isAbstract(own) && indexImplicit().exists(c -> c.type == own && matches(c.family, family)))
+			return family == Text ? null : [own];
 		// otherwise the value is one of its value types, which run what they and their supertypes declare
 		final values: Null<Array<String>> = escaped ? carriers.valueTypes(type) : carriers.declaredValueTypes(type);
 		if (values == null) return null;

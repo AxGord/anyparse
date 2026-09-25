@@ -834,9 +834,55 @@ final class MemberReach {
 				span: site.span
 			});
 		}
+		// a conversion or a field-name fallback can run from any code the walk enters that is read by its syntax — code read
+		// through its compiler facts spells each as a call — and every other implicitly-called function from a site of its
+		// own family: the entry's here, each body's as it is entered
+		var alwaysAdmitted: Bool = false;
+		var unreadAdmitted: Bool = false;
+		function admitAlways(): Void {
+			if (alwaysAdmitted || !_syntaxEntered) return;
+			alwaysAdmitted = true;
+			final always: AdmissionSite = {
+				from: 'entry',
+				file: seeds.file,
+				span: seeds.region,
+				kind: 'implicit',
+				names: [],
+				values: false,
+				constructors: false,
+				always: true,
+				implicit: []
+			};
+			sites.push(always);
+			apply(always);
+		}
 		function admit(site: AdmissionSite): Void {
 			sites.push(site);
 			apply(site);
+			// a channel may run code the walk never enters, since it reaches no toucher by an edge — code read by its syntax, a
+			// library's — which may convert or iterate any value it holds
+			if (!unreadAdmitted && runsUnreadCode(site)) {
+				unreadAdmitted = true;
+				_syntaxEntered = true;
+				final region: Span = site.span ?? seeds.region ?? new Span(0, 0);
+				final unread: AdmissionSite = {
+					from: site.from,
+					file: site.file,
+					span: site.span,
+					kind: 'implicit',
+					names: [],
+					values: false,
+					constructors: false,
+					always: false,
+					implicit: [
+						{ family: Text, span: region, types: [null] },
+						{ family: Iteration, span: region, types: [null] }
+					]
+				};
+				sites.push(unread);
+				apply(unread);
+			}
+			admitAlways();
 		}
 		function follow(e: CallEdge): Void {
 			enqueue(e.to, edgeStep(e));
@@ -900,25 +946,6 @@ final class MemberReach {
 			}
 		}
 
-		// a conversion or a field-name fallback can run from any code the walk enters that is read by its syntax — code read
-		// through its compiler facts spells each as a call — and every other implicitly-called function from a site of its
-		// own family: the entry's here, each body's as it is entered
-		var alwaysAdmitted: Bool = false;
-		function admitAlways(): Void {
-			if (alwaysAdmitted || !_syntaxEntered) return;
-			alwaysAdmitted = true;
-			admit({
-				from: 'entry',
-				file: seeds.file,
-				span: seeds.region,
-				kind: 'implicit',
-				names: [],
-				values: false,
-				constructors: false,
-				always: true,
-				implicit: []
-			});
-		}
 		admit({
 			from: 'entry',
 			file: seeds.file,
@@ -930,7 +957,6 @@ final class MemberReach {
 			always: false,
 			implicit: entryImplicit
 		});
-		admitAlways();
 		inspectAll('entry', entry);
 		for (e in seeds.edges) follow(e);
 		for (u in seeds.unresolved) admitUnresolved(u);
@@ -1327,6 +1353,15 @@ final class MemberReach {
 			if (scoped != null) host.setMemberReach(built);
 		}
 		return built;
+	}
+
+	/**
+	 * Whether what the admission `site` lets run may be a function the walk never enters, as it reaches no toucher by an
+	 * edge: a function value (a lambda read by its syntax, a library function such as `Std.string`), a reflectively
+	 * constructed object, any code at all. Such a function may convert or iterate any value it is handed.
+	 */
+	private static inline function runsUnreadCode(site: AdmissionSite): Bool {
+		return !site.always && (site.values || site.all == true || site.constructors);
 	}
 
 	/** The tree and text of `file` as the graph holds them, or null when it holds neither. */

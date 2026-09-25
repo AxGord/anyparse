@@ -380,7 +380,7 @@ final class CallGraph {
 		for (p in parsed) collectNodes(p);
 		for (p in parsed) {
 			final reading: Null<CallGraphFacts> = facts;
-			// a function the facts replace records nothing from its syntax (`CallGraphFacts.mute`)
+			// a function the facts describe records its syntax's edges alone, none of its unresolved sites (`CallGraphFacts.mute`)
 			final faceted: Map<String, Array<FactNode>> = reading == null ? [] : reading.mute(this, p.file, p.fnBySpanFrom);
 			collectEdges(p);
 			if (reading != null) reading.recordMuted(this, faceted);
@@ -659,7 +659,8 @@ final class CallGraph {
 	private function addEdge(
 		from: String, to: String, kind: EdgeKind, via: Null<String>, file: String, span: Null<Span>, ?dispatchType: String
 	): Void {
-		if (kind != Contains && facts?.muted.exists(from) == true) return;
+		// a faceted function's syntax still records every edge it names: the facts add to them and make them precise, never
+		// take one away, since a build the list does not name may resolve a name the way the syntax reads it
 		indexEdge({
 			from: from,
 			to: to,
@@ -1156,7 +1157,7 @@ final class CallGraph {
 					return null;
 				}
 				final target: Null<String> = constructorTarget(superclass, ctorName);
-				if (facts?.muted.exists(frameId(currentType)) != true) _wiring.record({
+				_wiring.record({
 					typeName: superclass,
 					from: frameId(currentType),
 					kind: Call,
@@ -1395,7 +1396,7 @@ final class CallGraph {
 			final from: String = frameId(currentType);
 			final target: Null<String> = constructorTarget(typeName, ctorName);
 			if (target != null) addEdge(from, target, New, null, file, span);
-			if (facts?.muted.exists(from) != true) _wiring.record({
+			_wiring.record({
 				typeName: typeName,
 				from: from,
 				kind: New,

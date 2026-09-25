@@ -7006,7 +7006,7 @@
 			"type": "anyparse.query.CallGraphFacts",
 			"method": "declaredCall",
 			"find": "if (field) unresolved(FunctionValue(name));",
-			"replace": "",
+			"replace": "if (field && name == '') unresolved(FunctionValue(name));",
 			"note": "a call of a field holding a function value records nothing, so the value channel never admits what the field may hold"
 		},
 		{
@@ -7016,14 +7016,6 @@
 			"find": "n.incomplete.exists(m -> UNPLACED.contains(m))",
 			"replace": "n.incomplete.contains(MACRO_EXPANSION)",
 			"note": "a body with an inlined call is read through its facts, whose spliced facts sit at the callee and are missed by a range question"
-		},
-		{
-			"name": "M-FACTS-REACH-LOCAL-INLINE",
-			"type": "anyparse.query.FactsView",
-			"method": "bodyFacts",
-			"find": " || inlinesLocally(g, node.file, n.at.span)",
-			"replace": "",
-			"note": "a body holding a local inline function is read through its facts, which place what that function runs at its declaration, outside the range asked about"
 		},
 		{
 			"name": "M-FACTS-REACH-ESCAPE-TYPED",
@@ -7160,6 +7152,46 @@
 			"find": "if (owner != node.id && g.node(owner ?? '')?.span?.from == n.at.span.from) return null;",
 			"replace": "",
 			"note": "a function with no typed body of its own is read through the facts of a function nested in it, which leave out what it runs itself"
+		},
+		{
+			"name": "M-FACTS-REACH-SYNTAX-UNION",
+			"type": "anyparse.query.CallGraph",
+			"method": "addEdge",
+			"find": "indexEdge({",
+			"replace": "if (kind != Contains && facts?.muted.exists(from) == true) return;\nindexEdge({",
+			"note": "a faceted function records the facts' edges alone, so a name another build resolves the way the syntax reads it is lost"
+		},
+		{
+			"name": "M-FACTS-REACH-GUARDED-IMPORT",
+			"type": "anyparse.query.FactsView",
+			"method": "typeAlike",
+			"find": "if (guarded || conditional(text.file, text.source, header)) answer = false;",
+			"replace": "if (conditional(text.file, text.source, header)) answer = false;",
+			"note": "a type in a file importing under a condition is trusted as the listed builds typed its members"
+		},
+		{
+			"name": "M-FACTS-REACH-LIBRARY-DYNAMIC",
+			"type": "anyparse.query.CallGraphFacts",
+			"method": "declaredCall",
+			"find": "if (field && !replaceable && known != null) return;",
+			"replace": "if (field && g.nodes[id]?.isDynamic != true) return;",
+			"note": "a call of a library dynamic method the graph has not read records no edge, so its body is never read"
+		},
+		{
+			"name": "M-FACTS-REACH-UNREAD-VALUE",
+			"type": "anyparse.query.MemberReach",
+			"method": "runsUnreadCode",
+			"find": "return !site.always && (site.values || site.all == true || site.constructors);",
+			"replace": "return !site.always && (site.all == true || site.constructors);",
+			"note": "the value channel is taken to run only code the walk enters, so a stored function's conversion is never admitted"
+		},
+		{
+			"name": "M-REACH-ABSTRACT-TEXT-ANY",
+			"type": "anyparse.query.ReachGraph",
+			"method": "runtimeTypes",
+			"find": "return family == Text ? null : [own];",
+			"replace": "return [own];",
+			"note": "an abstract's own toString is taken to run on the abstract alone, though it may convert the value it wraps"
 		}
 	]
 }

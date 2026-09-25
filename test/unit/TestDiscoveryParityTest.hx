@@ -2135,18 +2135,25 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testAConfigurationWithoutFactsLeavesTheSyntax :: control :: M-FACTS-REACH-DROPPED',
 			'unit.query.MemberReachFactsTest#testAConstructionRunsTheInitializersOfItsGeneratedConstructor :: control :: '
 				+ 'M-FACTS-REACH-CONSTRUCTION',
+			'unit.query.MemberReachFactsTest#testAConversionOfAnAbstractRunsWhatItsOwnConversionDoes :: control :: '
+				+ 'M-REACH-ABSTRACT-TEXT-ANY',
 			'unit.query.MemberReachFactsTest#testAFunctionWithoutFactsOfItsOwnIsNotReadThroughANestedOnes :: control :: '
 				+ 'M-FACTS-REACH-NESTED-OWNER',
 			'unit.query.MemberReachFactsTest#testAGenericInstanceIsItsGenericClass :: control :: M-FACTS-REACH-GENERIC',
-			'unit.query.MemberReachFactsTest#testALocalInlineFunctionKeepsItsBodysSyntax :: control :: '
-				+ 'M-FACTS-REACH-LOCAL-INLINE,M-GRAPH-LOCAL-INLINE',
+			'unit.query.MemberReachFactsTest#testALibraryDynamicMethodNotReadYetIsFollowed :: control :: M-FACTS-REACH-LIBRARY-DYNAMIC',
+			'unit.query.MemberReachFactsTest#testALocalInlineFunctionKeepsItsBodysSyntax :: control :: M-GRAPH-LOCAL-INLINE',
 			'unit.query.MemberReachFactsTest#testAMacroExpansionIsUnknown :: control :: M-FACTS-REACH-MACRO',
 			'unit.query.MemberReachFactsTest#testAMemberAnotherBuildDeclaresShadowsAnExtension :: control :: M-FACTS-REACH-GUARDED-NAME',
 			'unit.query.MemberReachFactsTest#testANativeIdentifierAdmitsWhatItMayCall :: control :: M-FACTS-REACH-NATIVE-IDENT',
 			'unit.query.MemberReachFactsTest#testAReflectiveMemberReadAsAValueIsUnknown :: control :: M-FACTS-REACH-REFLECT-VALUE',
+			'unit.query.MemberReachFactsTest#testAStoredFunctionValueMayConvertWhatItIsHanded :: control :: M-FACTS-REACH-UNREAD-VALUE',
 			'unit.query.MemberReachFactsTest#testATouchThroughAnInferredReceiverIsTypedByTheCompiler :: control :: '
 				+ 'M-FACTS-REACH-TOUCH-TYPED',
+			'unit.query.MemberReachFactsTest#testATypeInAFileImportingUnderAConditionKeepsTheSyntax :: control :: '
+				+ 'M-FACTS-REACH-GUARDED-IMPORT',
 			'unit.query.MemberReachFactsTest#testAnEscapeTheCompilerTypesCostsOnlyItsOwnFamily :: control :: M-FACTS-REACH-ESCAPE-TYPED',
+			'unit.query.MemberReachFactsTest#testAnExtensionAnotherBuildBringsInIsKeptFromTheSyntax :: control :: '
+				+ 'M-FACTS-REACH-SYNTAX-UNION',
 			'unit.query.MemberReachFactsTest#testAnInlinedCallKeepsItsBodysSyntax :: control :: M-FACTS-REACH-SPLICE',
 			'unit.query.MemberReachFactsTest#testTheCompilerResolvesACallTheSyntaxCannot :: control :: M-FACTS-REACH-EDGES',
 			'unit.query.MemberReachFactsTest#testTheCompilersHierarchyReachesAnOverride :: control :: M-FACTS-REACH-OVERRIDES',
@@ -3260,7 +3267,6 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-REACH-OVERRIDES',
 			'M-FACTS-REACH-VALUE',
 			'M-FACTS-REACH-SPLICE',
-			'M-FACTS-REACH-LOCAL-INLINE',
 			'M-FACTS-REACH-ESCAPE-TYPED',
 			'M-FACTS-REACH-TOUCH-TYPED',
 			'M-FACTS-REACH-MACRO',
@@ -3278,6 +3284,11 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-REACH-GUARDED-NAME',
 			'M-FACTS-ABSTRACT-THIS',
 			'M-FACTS-REACH-NESTED-OWNER',
+			'M-FACTS-REACH-SYNTAX-UNION',
+			'M-FACTS-REACH-GUARDED-IMPORT',
+			'M-FACTS-REACH-LIBRARY-DYNAMIC',
+			'M-FACTS-REACH-UNREAD-VALUE',
+			'M-REACH-ABSTRACT-TEXT-ANY',
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
