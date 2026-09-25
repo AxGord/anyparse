@@ -257,6 +257,7 @@ final class SymbolIndexBuilder {
 					hasAutoBuild: carriesAnyMeta(pendingMeta, shape.descendantBuildMacroMetaNames),
 					hasKeep: carriesMeta(pendingMeta, shape.retainedDeclMetaName),
 					constructsFromLiteral: carriesAnyMeta(pendingMeta, shape.execution?.implicitConstructionTypeMetaNames),
+					bringsExtensions: carriesAnyMeta(pendingMeta, shape.execution?.extensionTypeMetaNames),
 					members: collectMembers(node, source, accessors, writeAccessors, returnTypes, typeSources, memberSeams),
 					abstractSelfRebind: isAbstract && abstractRebindsThisScan(node, shape, pendingMeta),
 					abstractForwardUnderlying: isAbstract ? forwardUnderlyingOf(node, pendingMeta, shape) : null,
@@ -904,7 +905,10 @@ final class SymbolIndexBuilder {
 		// the abstract it guards. An `#if`-split abstract carries its `@:forward` INSIDE the region
 		// (openfl `Vector`), and document-order preserves the meta-before-decl attachment.
 		if (isMetaNodeKind(node.kind)) {
-			out.push({ node: node, guarded: true });
+			// a region holding only metadata projects it under a nameless wrapper: lift each one it holds
+			final held: Array<QueryNode> = node.name == null ? [for (c in node.children) if (isMetaNodeKind(c.kind)) c] : [];
+			if (held.length == 0) out.push({ node: node, guarded: true });
+			for (m in held) out.push({ node: m, guarded: true });
 			return;
 		}
 		// A guarded `extern` modifier: lift it too, whether it shares its region with the

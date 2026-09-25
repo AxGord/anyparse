@@ -400,6 +400,13 @@ typedef TypeDeclInfo = {
 	 */
 	var constructsFromLiteral: Bool;
 
+	/**
+	 * True when the declaration carries a metadata that brings static extensions in wherever a value of the type is
+	 * (`ExecutionShape.extensionTypeMetaNames`, Haxe `@:using`) — whether or not it sits in a conditional region, which
+	 * the index lifts — so a call no member of the type declares may run an extension no import names.
+	 */
+	var bringsExtensions: Bool;
+
 	/** This type's directly-declared members (name + getter-property flag), for type-aware purity. */
 	var members: Array<MemberInfo>;
 

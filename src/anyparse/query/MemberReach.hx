@@ -190,6 +190,12 @@ final class MemberReach {
 	/** Set when the current question met a raw conditional region: the configured builds may decide it (`escalation`). */
 	private var _metRawRegion: Bool = false;
 
+	/**
+	 * Set when the current question entered code read by its syntax rather than its compiler facts: a conversion or a
+	 * field-name fallback may run there without a call the graph holds, so every such function is admitted.
+	 */
+	private var _syntaxEntered: Bool = false;
+
 	/** What `_configure` was set to, for building the analysis under the builds again after a refresh it could not take. */
 	private var _reconfigure: Null<() -> Null<MemberReach>> = null;
 
@@ -198,12 +204,13 @@ final class MemberReach {
 	 * least that and, when wider, over the libraries the walk may grow into. `scopeKnown` false means the
 	 * project may hold files `project` does not, so only a fresh unshared local is ever `Proven`. `configurations`
 	 * are the builds an answer must hold under: a conditional branch none of them compiles is not walked, and with
-	 * none every branch is.
+	 * none every branch is. `facts` are the compiler's facts of the run's builds: a function they describe whole is read
+	 * through them (`FactsView`), every other one through its syntax.
 	 */
 	public function new(
 		plugin: GrammarPlugin, project: Array<{ file: String, source: String }>, index: SymbolIndex, scopeKnown: Bool,
 		maxLibraryFiles: Int = MAX_LIBRARY_FILES, maxVisited: Int = MAX_VISITED, ?configurations: Array<ReachConfiguration>,
-		?classpathComplete: () -> Bool
+		?classpathComplete: () -> Bool, ?facts: CompilerFacts
 	) {
 		_maxVisited = maxVisited;
 		final cached: GrammarPlugin = plugin is CachingGrammarPlugin ? plugin : new CachingGrammarPlugin(plugin);
@@ -230,6 +237,7 @@ final class MemberReach {
 			final source: Null<String> = scope.sources[file];
 			source == null || live.live(file, source, span);
 		});
+		scope.facts = FactsView.of(facts, scope);
 		_g = new ReachGraph(_scope, carriers, maxLibraryFiles);
 		_admission = new ReachAdmission(_scope, _g);
 		final built: ValueEscapes = new ValueEscapes(scope, _g, _hazards, live, carriers, scopeKnown);
@@ -250,6 +258,7 @@ final class MemberReach {
 	 */
 	public function mayReach(entry: ReachEntry, member: MemberRef, access: ReachAccess): ReachResult {
 		_metRawRegion = false;
+		_syntaxEntered = false;
 		_carriers.startQuestion();
 		final answer: ReachResult = answerReach(entry, member, access);
 		final configured: Null<MemberReach> = escalation(answer);
@@ -263,6 +272,7 @@ final class MemberReach {
 	 */
 	public function localMutation(file: String, fn: QueryNode, declaration: QueryNode, region: Span): ReachResult {
 		_metRawRegion = false;
+		_syntaxEntered = false;
 		_carriers.startQuestion();
 		final answer: ReachResult = answerLocal(file, fn, declaration, region);
 		final configured: Null<MemberReach> = escalation(answer);
@@ -348,7 +358,8 @@ final class MemberReach {
 			final at: Occurrence = scan.escapes[0];
 			return Unknown(Escape(at.file, at.span));
 		}
-		enterEntry(g, entry);
+		final marked: Null<ReachUnknown> = enterEntry(g, entry);
+		if (marked != null) return Unknown(marked);
 		return walk(g, seeds, entryHazards(g, entry), entrySites(g, entry), scan, member);
 	}
 
@@ -371,9 +382,8 @@ final class MemberReach {
 		final name: Null<String> = declaration.name;
 		if (tree == null || source == null) return Unknown(SkipParse(file));
 		if (declSpan == null || name == null) return Unknown(OutOfScope('the declaration of the collection carries no span'));
-		final blind: Null<ReachUnknown> = firstBlind(
-			file, liveHazards(file, tree, source, new Span(declSpan.from, _touches.rerunEnd(fn, region)))
-		);
+		final rerun: Span = new Span(declSpan.from, _touches.rerunEnd(fn, region));
+		final blind: Null<ReachUnknown> = firstBlind(file, liveHazards(file, tree, source, rerun)) ?? _scope.facts?.blindIn(file, rerun);
 		if (blind != null) return Unknown(blind);
 		final escape: Null<Span> = _touches.localEscape(tree, source, fn, declaration, name, region);
 		if (escape == null) return Proven;
@@ -475,8 +485,11 @@ final class MemberReach {
 		return widened;
 	}
 
-	/** Record the entry's own code as entered: the region, or each call site. */
-	private function enterEntry(g: CallGraph, entry: ReachEntry): Void {
+	/**
+	 * Record the entry's own code as entered: the region, or each call site; and answer the compiler-facts mark on it that
+	 * makes any answer about it Unknown (`FactsView.blindIn`), or null.
+	 */
+	private function enterEntry(g: CallGraph, entry: ReachEntry): Null<ReachUnknown> {
 		final file: String = switch entry {
 			case Region(f, _), Calls(f, _): f;
 		};
@@ -485,7 +498,12 @@ final class MemberReach {
 			case Calls(_, sites): [for (s in sites) if (s.span != null) s.span];
 		};
 		final tree: Null<QueryNode> = g.treeOf(file);
-		for (span in spans) _g.enter(g, file, span, tree == null ? null : MemberTouchScan.typeAt(tree, span.from));
+		var marked: Null<ReachUnknown> = null;
+		for (span in spans) {
+			_g.enter(g, file, span, tree == null ? null : MemberTouchScan.typeAt(tree, span.from));
+			marked = marked ?? _scope.facts?.blindIn(file, span);
+		}
+		return marked;
 	}
 
 	/**
@@ -529,14 +547,24 @@ final class MemberReach {
 		};
 	}
 
+	/**
+	 * The implicit-call sites of the code at `spans` of `file`: its compiler facts' where they replace its syntax
+	 * (`FactsView.sitesIn`), else its syntax's — which marks the question as having entered code read by its syntax.
+	 */
 	private function sitesOf(g: CallGraph, file: String, spans: Array<Span>): Array<ImplicitSite> {
 		final read: Null<{ tree: QueryNode, source: String }> = readOf(g, file);
 		if (read == null) return [];
-		return [
-			for (span in spans)
-				for (at in _g.sites.sitesIn(file, read.tree, read.source, span))
-					if (_live.live(file, read.source, at.span)) at
-		];
+		final out: Array<ImplicitSite> = [];
+		for (span in spans) {
+			final typed: Null<Array<ImplicitSite>> = _scope.facts?.sitesIn(g, file, span);
+			if (typed != null) {
+				for (at in typed) out.push(at);
+				continue;
+			}
+			_syntaxEntered = true;
+			for (at in _g.sites.sitesIn(file, read.tree, read.source, span)) if (_live.live(file, read.source, at.span)) out.push(at);
+		}
+		return out;
 	}
 
 	private function hazardsOf(g: CallGraph, file: String, spans: Array<Span>): Array<{ file: String, hazard: ReachHazard }> {
@@ -649,9 +677,10 @@ final class MemberReach {
 			seen[id] = true;
 			queue.push(id);
 		}
-		// entering more code may widen what a site admits (`ReachGraph.enter`), so every site is asked again then
+		// entering more code may widen what a site admits (`ReachGraph.enter`), so every site is asked again then; the
+		// functions no site narrows run only from code read by its syntax
 		function admitAll(): Void {
-			for (id in _g.alwaysIds(g)) push(id);
+			if (_syntaxEntered) for (id in _g.alwaysIds(g)) push(id);
 			for (at in sites) for (id in _g.idsAt(g, at)) push(id);
 		}
 		// whether it widened anything does not matter: every site is asked right after
@@ -678,9 +707,10 @@ final class MemberReach {
 						seen[body.id] = true;
 				}
 			}
+			final syntaxBefore: Bool = _syntaxEntered;
 			final change: Null<Occurrence> = implicitChangeIn(g, node, push, sites);
 			if (change != null) return change;
-			if (enterBody(g, node)) admitAll();
+			if (enterBody(g, node) || _syntaxEntered != syntaxBefore) admitAll();
 		}
 		return null;
 	}
@@ -736,6 +766,7 @@ final class MemberReach {
 		final source: Null<String> = g.sourceOf(node.file);
 		final spans: Null<Array<Span>> = bodySpans(g, node);
 		if (tree == null || source == null || spans == null) return node.span ?? new Span(0, 0);
+		for (span in spans) if (_scope.facts?.blindIn(node.file, span) != null) return span;
 		final fn: Null<QueryNode> = node.span == null ? null : enclosingFunctionNode(tree, node.span ?? new Span(0, 0));
 		for (span in spans) for (h in liveHazards(node.file, tree, source, span)) switch h.kind {
 			case ArrayChange:
@@ -803,9 +834,53 @@ final class MemberReach {
 				span: site.span
 			});
 		}
+		// a conversion or a field-name fallback can run from any code the walk enters that is read by its syntax — code read
+		// through its compiler facts spells each as a call — and every other implicitly-called function from a site of its
+		// own family: the entry's here, each body's as it is entered
+		var alwaysAdmitted: Bool = false;
+		var unreadAdmitted: Bool = false;
+		function admitAlways(): Void {
+			if (alwaysAdmitted || !_syntaxEntered) return;
+			alwaysAdmitted = true;
+			final always: AdmissionSite = {
+				from: 'entry',
+				file: seeds.file,
+				span: seeds.region,
+				kind: 'implicit',
+				names: [],
+				values: false,
+				constructors: false,
+				always: true,
+				implicit: []
+			};
+			sites.push(always);
+			apply(always);
+		}
 		function admit(site: AdmissionSite): Void {
 			sites.push(site);
 			apply(site);
+			// a channel may run code the walk never enters, since it reaches no toucher by an edge — code read by its syntax, a
+			// library's — which may run any implicitly-called member on any value it holds: a conversion, an iteration, an
+			// operator, an index access, a literal construction
+			if (!unreadAdmitted && runsUnreadCode(site)) {
+				unreadAdmitted = true;
+				_syntaxEntered = true;
+				final unread: AdmissionSite = {
+					from: site.from,
+					file: site.file,
+					span: site.span,
+					kind: 'implicit',
+					names: [],
+					values: false,
+					constructors: false,
+					always: true,
+					implicit: [],
+					ids: _g.implicitIds(g)
+				};
+				sites.push(unread);
+				apply(unread);
+			}
+			admitAlways();
 		}
 		function follow(e: CallEdge): Void {
 			enqueue(e.to, edgeStep(e));
@@ -825,7 +900,13 @@ final class MemberReach {
 			});
 		}
 		function admitUnresolved(u: UnresolvedCall): Void {
-			admit(site(u.from, u.file, u.span, 'unresolved', ReachAdmission.admittedNames(u), true));
+			switch u.reason {
+				case Unseen(what):
+					// code the compiler resolved and the graph holds no node for: nothing can say what it touches
+					blind = blind ?? UnresolvedDispatch(u.file, u.span, what);
+				case _:
+					admit(site(u.from, u.file, u.span, 'unresolved', ReachAdmission.admittedNames(u), true));
+			}
 		}
 		function admitAccess(a: UnresolvedAccess): Void {
 			// the member's accessors, and the member itself: a method read off an untyped receiver runs later as a value
@@ -863,8 +944,6 @@ final class MemberReach {
 			}
 		}
 
-		// a conversion or a field-name fallback can run from any code the walk enters, every other implicitly-called
-		// function from a site of its own family: the entry's here, each body's as it is entered
 		admit({
 			from: 'entry',
 			file: seeds.file,
@@ -873,7 +952,7 @@ final class MemberReach {
 			names: [],
 			values: false,
 			constructors: false,
-			always: true,
+			always: false,
 			implicit: entryImplicit
 		});
 		inspectAll('entry', entry);
@@ -923,11 +1002,13 @@ final class MemberReach {
 				else {
 					if (enterBody(g, node)) widened = true;
 					inspectAll(node.id, hazardsOf(g, node.file, spans));
+					for (span in spans) blind = blind ?? _scope.facts?.blindIn(node.file, span);
 					if (!_projectSources.exists(node.file)) for (access in libraryAccesses(g, node.file, spans, member))
 						libraryTouch(node.id, node.file, access.span, access.relation);
 					final touch: Null<{ from: String, file: String, span: Span }> = libraryTouchAt;
 					if (touch != null) return Reached(pathTo(reach, touch.from, { file: touch.file, span: touch.span }));
 					final implicit: Array<ImplicitSite> = sitesOf(g, node.file, spans);
+					admitAlways();
 					if (implicit.length > 0) admit({
 						from: node.id,
 						file: node.file,
@@ -1097,6 +1178,10 @@ final class MemberReach {
 		// and reaches its members by name as it does an argument's (a native `toJSON` runs `this.toISOString()`)
 		if (onInstance)
 			hand(receiver == null ? MemberTouchScan.typeAt(tree, call.span?.from ?? 0) : _g.sites.typeOf(file, tree, source, receiver));
+		// a type taking type parameters is a container whose elements a conversion reaches too: any
+		function containerFree(t: Null<String>): Null<String> {
+			return t == null || g.types.generics.typeParamsOf(t).length > 0 ? null : t;
+		}
 		final returned: Null<String> = g.types.memberOnChain(type, name)?.returnNominal;
 		final stringType: Null<String> = _g.stringTypeName();
 		final at: Null<Span> = call.span;
@@ -1110,12 +1195,6 @@ final class MemberReach {
 			});
 		}
 		return site;
-	}
-
-	/** `type`, or null when it takes type parameters — a container whose elements a conversion reaches too. */
-	private function containerFree(type: Null<String>): Null<String> {
-		if (type == null) return null;
-		return graph().types.generics.typeParamsOf(type).length > 0 ? null : type;
 	}
 
 	/** The call or constructor node of `tree` spanning exactly `span` — a chained call starting there is another node. */
@@ -1262,7 +1341,7 @@ final class MemberReach {
 		// the resolution scope is what the project declares, not what its builds compile: only the builds can say that no
 		// subtype or override lies outside the index (`configuredFor`)
 		final built: MemberReach = new MemberReach(
-			plugin, project, index, scoped != null, MAX_LIBRARY_FILES, MAX_VISITED, null, () -> false
+			plugin, project, index, scoped != null, MAX_LIBRARY_FILES, MAX_VISITED, null, () -> false, host?.compilerFacts()
 		);
 		// the builds are probed only once a question needs them (`escalation`), and read the project's text as it is then
 		if (host != null) {
@@ -1272,6 +1351,15 @@ final class MemberReach {
 			if (scoped != null) host.setMemberReach(built);
 		}
 		return built;
+	}
+
+	/**
+	 * Whether what the admission `site` lets run may be a function the walk never enters, as it reaches no toucher by an
+	 * edge: a function value (a lambda read by its syntax, a library function such as `Std.string`), a reflectively
+	 * constructed object, any code at all. Such a function may run any implicitly-called member on any value it is handed.
+	 */
+	private static inline function runsUnreadCode(site: AdmissionSite): Bool {
+		return !site.always && (site.values || site.all == true || site.constructors);
 	}
 
 	/** The tree and text of `file` as the graph holds them, or null when it holds neither. */
@@ -1406,7 +1494,8 @@ final class MemberReach {
 		final index: SymbolIndex = compiledIndex(project, compiled, plugin);
 		return new MemberReach(
 			plugin, [for (f in project) f],
-			index, scopeKnown, MAX_LIBRARY_FILES, MAX_VISITED, compiled.configurations, declaresEveryType.bind(compiled, index)
+			index, scopeKnown, MAX_LIBRARY_FILES, MAX_VISITED, compiled.configurations, declaresEveryType.bind(compiled, index),
+			host.compilerFacts()
 		);
 	}
 

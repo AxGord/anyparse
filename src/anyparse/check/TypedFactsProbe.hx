@@ -47,8 +47,8 @@ import haxe.io.Path;
  *     `FClosure`/`FEnum` with `t` = `<declaring type>.<field>` (a bare name for `FAnon`/`FDynamic`) and `r`/`rp` the
  *     receiver's type and position; `fieldValue` for a field that holds a replaceable value (a variable of a function
  *     type, a `dynamic` method); `super` (`t` = `<super>.new`); `local` (`t` = the local function's node id); `ident`
- *     (a native identifier); `value` (a call of any other value, `r` its type); `inlined` (`t` = the `inline` function
- *     whose body was spliced in, positioned at that body). `sig` is the signature chosen among a
+ *     (a native identifier); `value` (a call of any other value, `r` its type); `inlined` (`t` = the method — `inline`, or
+ *     inlined by its call site — whose body was spliced in, positioned at that body). `sig` is the signature chosen among a
  *     field's overloads. `rt` is the result type. A property access IS a call of `get_x`/`set_x`; an abstract operator,
  *     `@:from` or `@:to` is a call of the implementation class's static.
  *   - `news`: `{t, ty, p}` — the class and the instance type.
@@ -71,7 +71,7 @@ import haxe.io.Path;
  *
  * - `inline-site-unknown`: a body was spliced in; its facts are the node's but no range says where they run, so a range
  *   query not covering the whole node is Unknown.
- * - `macro-expansion`: a spliced body no `inline` function could be matched to — an expression macro's expansion, or
+ * - `macro-expansion`: a spliced body no method could be matched to — an expression macro's expansion, or
  *   an inlined piece that carries only its declaring type's range (an abstract's `this`); as above, and no callee is named.
  * - `reflection-inlined`: a `Reflect`/`Type` body was inlined; its call, name and arguments are gone.
  * - `stale-foreign` (added by the table): a fact positioned in a file whose text the table no longer has was dropped.
@@ -144,7 +144,7 @@ final class TypedFactsProbe {
 		for (i in 0...asked.length) {
 			final dump: Null<FactsDump> = answer(asked[i].oracle, runs[i], asked[i].out);
 			if (dump != null)
-				facts.addDump(dump)
+				facts.add(dump)
 			else
 				facts.dropped.push({ name: LintConfig.describeOracle(asked[i].oracle), reason: failureOf(runs[i]) });
 			discard(asked[i].dir);

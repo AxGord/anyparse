@@ -119,7 +119,7 @@ final class ReachGraph {
 	public function graph(): CallGraph {
 		final built: Null<CallGraph> = _graph;
 		if (built != null) return built;
-		final g: CallGraph = CallGraph.build(_scope.files, _scope.plugin, _scope.index);
+		final g: CallGraph = CallGraph.build(_scope.files, _scope.plugin, _scope.index, _scope.facts);
 		_graph = g;
 		return g;
 	}
@@ -367,6 +367,14 @@ final class ReachGraph {
 	}
 
 	/**
+	 * Every implicitly-called member that may run at all (`counts`), whatever its family: what code the walk does not
+	 * read may run through the language's implicit channels on a value of any type.
+	 */
+	public function implicitIds(g: CallGraph): Array<String> {
+		return idsOf(g, [for (c in indexImplicit()) if (counts(c)) c]);
+	}
+
+	/**
 	 * Record that the current question's walk entered the code at `span` of `file`, inside the type `typeName`; true
 	 * when that widened what it had entered, which may widen the abstracts visible to it (`visibleAbstracts`) and so
 	 * what an implicit-call site admits. What is recorded is the whole MEMBER enclosing `span` — the declarations of
@@ -493,7 +501,11 @@ final class ReachGraph {
 		return null;
 	}
 
-	/** Whether any supertype on `typeName`'s chain, itself included, carries a build macro; the site of the first one found. */
+	/**
+	 * Whether any supertype on `typeName`'s chain, itself included, carries a build macro — written on it, or recorded by
+	 * the compiler facts, which also see one a supertype's `@:autoBuild` or a global macro applies; the site of the first
+	 * one found.
+	 */
 	public function buildMacroOn(typeName: String): Null<ReachUnknown> {
 		final seen: Array<String> = [];
 		final queue: Array<String> = [typeName];
@@ -504,6 +516,7 @@ final class ReachGraph {
 			final site: Null<{ file: String, span: Span }> = _scope.siteOf(t);
 			final decl: Null<TypeDeclInfo> = site == null ? null : _scope.index.fileInfo(site.file)?.types.find(d -> d.name == t);
 			if (site != null && decl != null && (decl.hasBuild || decl.hasAutoBuild)) return Reification(site.file, site.span);
+			if (_scope.facts?.built(t) == true) return Reification(site?.file ?? '', site?.span);
 			if (decl != null) for (s in decl.supertypes) queue.push(s);
 		}
 		return null;
@@ -621,9 +634,11 @@ final class ReachGraph {
 	 * a structure, a catch-all or a type parameter.
 	 */
 	private function runtimeTypes(g: CallGraph, type: String, family: SiteFamily, escaped: Bool = true): Null<Array<String>> {
-		// an abstract's own member of the family runs on it — static calls the compiler puts where the static type is it
+		// an abstract's own member of the family runs on it — static calls the compiler puts where the static type is it; its
+		// own conversion may convert the value it wraps in turn, as `Any`'s does, which may be anything
 		final own: String = g.types.resolveAlias(NominalTypes.outerNominalOf(StringTools.trim(type)) ?? type);
-		if (isAbstract(own) && indexImplicit().exists(c -> c.type == own && matches(c.family, family))) return [own];
+		if (isAbstract(own) && indexImplicit().exists(c -> c.type == own && matches(c.family, family)))
+			return family == Text ? null : [own];
 		// otherwise the value is one of its value types, which run what they and their supertypes declare
 		final values: Null<Array<String>> = escaped ? carriers.valueTypes(type) : carriers.declaredValueTypes(type);
 		if (values == null) return null;

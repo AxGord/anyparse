@@ -905,6 +905,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.LocalTypeAnnotationProjectionTest',
 		'unit.query.MakeFinalSliceTest',
 		'unit.query.MemberKindsModifierRunTest',
+		'unit.query.MemberReachFactsTest',
 		'unit.query.MemberReachTest',
 		'unit.query.MetaElementSpanSliceTest',
 		'unit.query.ModifierKindSeamTest',
@@ -1558,8 +1559,10 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-TRIVGET-NO-NEGATION-DESCENT',
 			'unit.check.TrivialGetterShapeCollapseTest#testShapeACtorInitSingleQuotedStringMoveFix :: control :: '
 				+ 'M-TRIVGET-MOVABLE-LITERAL-FALSE',
+			'unit.check.TypedFactsProbeTest#testACallSiteInlineIsASpliceOfItsMethodNotAMacro :: control :: M-FACTS-CALL-SITE-INLINE',
 			'unit.check.TypedFactsProbeTest#testAConfigurationThatFailsContributesNothing :: control :: M-FACTS-DROPPED',
 			'unit.check.TypedFactsProbeTest#testALostSplicedFactMarksItsNodeAndOnlyTheStdIsReflection :: control :: M-FACTS-STALE-FOREIGN,M-FACTS-REFLECTION-PATH',
+			'unit.check.TypedFactsProbeTest#testARangeMeetingTheBodyIsItsOwnCode :: control :: M-FACTS-ABSTRACT-THIS',
 			'unit.check.TypedFactsProbeTest#testAbstractOperatorsConversionsAndAccessorsAreCallsOfTheirImplementations :: control :: M-FACTS-CALL-TARGET',
 			'unit.check.TypedFactsProbeTest#testAnImplicitConstructorCallsSuperAndAnInitializerIsANode :: control :: M-FACTS-SUPER,M-FACTS-INITIALIZER',
 			'unit.check.TypedFactsProbeTest#testAnInlineCallIsNoCallSiteAndItsBodyKeepsTheCalleesPositions :: control :: M-FACTS-INLINE-POSITIONS,M-FACTS-SAME-FILE-INLINE',
@@ -1574,7 +1577,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.TypedFactsProbeTest#testLoopsAndStringConversions :: control :: M-FACTS-ITER,M-FACTS-STRING-OPERAND,M-FACTS-TYPE-TEXT',
 			'unit.check.TypedFactsProbeTest#testPositionsAreSpanUnitsPastNonAsciiText :: control :: M-CODEPOINT-NATIVE,M-FACTS-READS',
 			'unit.check.TypedFactsProbeTest#testReflectionAndNativeSites :: control :: M-FACTS-REFLECT-NAME,M-FACTS-NATIVE',
-			'unit.check.TypedFactsProbeTest#testSplicedCodeIsTheCallersAndItsSiteIsUnknown :: control :: M-FACTS-INLINED-CALL,M-FACTS-INLINED-CHILD,M-FACTS-GENERATED,M-FACTS-SITE-UNKNOWN,M-FACTS-MACRO-EXPANSION',
+			'unit.check.TypedFactsProbeTest#testSplicedCodeIsTheCallersAndItsSiteIsUnknown :: control :: M-FACTS-INLINED-CALL,M-FACTS-INLINED-CHILD,M-FACTS-GENERATED,M-FACTS-SITE-UNKNOWN,M-FACTS-MACRO-EXPANSION,M-FACTS-SPLICE-OWN-ARGUMENTS',
 			'unit.check.TypedFactsProbeTest#testTheTableIsTheUnionOfTheConfigurations :: control :: M-FACTS-UNION',
 			'unit.check.UnguardedNullableDerefTest#testDeclaredNullableFromANullableFieldStillFlagged :: control :: '
 				+ 'M-DECL-INIT-RECEIVER-MODE-NOMINAL',
@@ -2125,6 +2128,38 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.LiteralVocabularyTest#testTheContentSetFollowsTheVocabularyItIsHanded :: control :: M-LIT-CONTENT-KINDS-FROZEN',
 			'unit.query.LiteralVocabularyTest#testTheInertSegmentKindsComeFromTheShapeToo :: control :: M-INERT-SEGMENT-KINDS-HARDCODED',
 			'unit.query.MakeFinalSliceTest#testHalfIteratorShapeStillFinal :: control :: M-STRUCT-BUILTIN-BY-NAME',
+			'unit.query.MemberReachFactsTest#testABoundMethodRunsWheneverItsClosureIsCalled :: control :: M-FACTS-REACH-BIND',
+			'unit.query.MemberReachFactsTest#testABuildMacroOnlyTheCompilerSawIsUnknown :: control :: M-FACTS-REACH-BUILDS',
+			'unit.query.MemberReachFactsTest#testACallOfAValueAdmitsTheValueChannel :: control :: M-FACTS-REACH-VALUE',
+			'unit.query.MemberReachFactsTest#testACalleeTypedDifferentlyInAnotherBuildKeepsTheSyntax :: control :: M-FACTS-REACH-ALIKE',
+			'unit.query.MemberReachFactsTest#testAConfigurationWithoutFactsLeavesTheSyntax :: control :: M-FACTS-REACH-DROPPED',
+			'unit.query.MemberReachFactsTest#testAConstructionRunsTheInitializersOfItsGeneratedConstructor :: control :: '
+				+ 'M-FACTS-REACH-CONSTRUCTION',
+			'unit.query.MemberReachFactsTest#testAConversionOfAnAbstractRunsWhatItsOwnConversionDoes :: control :: '
+				+ 'M-REACH-ABSTRACT-TEXT-ANY',
+			'unit.query.MemberReachFactsTest#testAFunctionWithoutFactsOfItsOwnIsNotReadThroughANestedOnes :: control :: '
+				+ 'M-FACTS-REACH-NESTED-OWNER',
+			'unit.query.MemberReachFactsTest#testAGenericInstanceIsItsGenericClass :: control :: M-FACTS-REACH-GENERIC',
+			'unit.query.MemberReachFactsTest#testALibraryDynamicMethodNotReadYetIsFollowed :: control :: M-FACTS-REACH-LIBRARY-DYNAMIC',
+			'unit.query.MemberReachFactsTest#testALocalInlineFunctionKeepsItsBodysSyntax :: control :: M-GRAPH-LOCAL-INLINE',
+			'unit.query.MemberReachFactsTest#testAMacroExpansionIsUnknown :: control :: M-FACTS-REACH-MACRO',
+			'unit.query.MemberReachFactsTest#testAMemberAnotherBuildDeclaresShadowsAnExtension :: control :: M-FACTS-REACH-GUARDED-NAME',
+			'unit.query.MemberReachFactsTest#testANativeIdentifierAdmitsWhatItMayCall :: control :: M-FACTS-REACH-NATIVE-IDENT',
+			'unit.query.MemberReachFactsTest#testAReflectiveMemberReadAsAValueIsUnknown :: control :: M-FACTS-REACH-REFLECT-VALUE',
+			'unit.query.MemberReachFactsTest#testAStoredFunctionValueMayConvertWhatItIsHanded :: control :: M-FACTS-REACH-UNREAD-VALUE',
+			'unit.query.MemberReachFactsTest#testAStoredFunctionValueMayRunAnOperatorOverload :: control :: M-FACTS-REACH-UNREAD-IMPLICIT',
+			'unit.query.MemberReachFactsTest#testATouchThroughAnInferredReceiverIsTypedByTheCompiler :: control :: '
+				+ 'M-FACTS-REACH-TOUCH-TYPED',
+			'unit.query.MemberReachFactsTest#testATypeBringingExtensionsInUnderAConditionIsUnknown :: control :: '
+				+ 'M-FACTS-REACH-USING-META,M-GRAPH-USING-META,M-INDEX-GUARDED-META-LIFT',
+			'unit.query.MemberReachFactsTest#testATypeInAFileImportingUnderAConditionKeepsTheSyntax :: control :: '
+				+ 'M-FACTS-REACH-GUARDED-IMPORT',
+			'unit.query.MemberReachFactsTest#testAnEscapeTheCompilerTypesCostsOnlyItsOwnFamily :: control :: M-FACTS-REACH-ESCAPE-TYPED',
+			'unit.query.MemberReachFactsTest#testAnExtensionAnotherBuildBringsInIsKeptFromTheSyntax :: control :: '
+				+ 'M-FACTS-REACH-SYNTAX-UNION',
+			'unit.query.MemberReachFactsTest#testAnInlinedCallKeepsItsBodysSyntax :: control :: M-FACTS-REACH-SPLICE',
+			'unit.query.MemberReachFactsTest#testTheCompilerResolvesACallTheSyntaxCannot :: control :: M-FACTS-REACH-EDGES',
+			'unit.query.MemberReachFactsTest#testTheCompilersHierarchyReachesAnOverride :: control :: M-FACTS-REACH-OVERRIDES',
 			'unit.query.MemberReachTest#testAClassNamedToTheClassValueProducerMayBeInstantiatedUntyped :: control :: M-ESCAPE-NAMED-CLASS',
 			'unit.query.MemberReachTest#testAClasspathTheIndexDoesNotHoldMayDeclareAnOverrideOrASubtype :: control :: '
 				+ 'M-REACH-CLASSPATH-DISPATCH,M-CARRY-CLASSPATH',
@@ -3231,6 +3266,36 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-BUILDS',
 			'M-FACTS-STALE-FOREIGN',
 			'M-FACTS-REFLECTION-PATH',
+			'M-FACTS-REACH-EDGES',
+			'M-FACTS-REACH-OVERRIDES',
+			'M-FACTS-REACH-VALUE',
+			'M-FACTS-REACH-SPLICE',
+			'M-FACTS-REACH-ESCAPE-TYPED',
+			'M-FACTS-REACH-TOUCH-TYPED',
+			'M-FACTS-REACH-MACRO',
+			'M-FACTS-REACH-DROPPED',
+			'M-FACTS-REACH-REFLECT-VALUE',
+			'M-FACTS-REACH-BUILDS',
+			'M-FACTS-REACH-GENERIC',
+			'M-FACTS-REACH-NATIVE-IDENT',
+			'M-FACTS-REACH-CONSTRUCTION',
+			'M-GRAPH-LOCAL-INLINE',
+			'M-FACTS-CALL-SITE-INLINE',
+			'M-FACTS-SPLICE-OWN-ARGUMENTS',
+			'M-FACTS-REACH-BIND',
+			'M-FACTS-REACH-ALIKE',
+			'M-FACTS-REACH-GUARDED-NAME',
+			'M-FACTS-ABSTRACT-THIS',
+			'M-FACTS-REACH-NESTED-OWNER',
+			'M-FACTS-REACH-SYNTAX-UNION',
+			'M-FACTS-REACH-GUARDED-IMPORT',
+			'M-FACTS-REACH-LIBRARY-DYNAMIC',
+			'M-FACTS-REACH-UNREAD-VALUE',
+			'M-REACH-ABSTRACT-TEXT-ANY',
+			'M-GRAPH-USING-META',
+			'M-FACTS-REACH-USING-META',
+			'M-INDEX-GUARDED-META-LIFT',
+			'M-FACTS-REACH-UNREAD-IMPLICIT',
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
@@ -3346,6 +3411,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-IDENT-READ :: anyparse.check.TypedFactsWalk#visit',
 			'M-FACTS-BUILDS :: anyparse.check.TypedFactsMacro#metaList',
 			'M-FACTS-REFLECTION-PATH :: anyparse.check.TypedFactsMacro#reflectionModule',
+			'M-FACTS-CALL-SITE-INLINE :: anyparse.check.TypedFactsMacro#collectFields',
+			'M-FACTS-SPLICE-OWN-ARGUMENTS :: anyparse.check.TypedFactsWalk#spliced',
+			'M-FACTS-ABSTRACT-THIS :: anyparse.check.TypedFactsWalk#walk',
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 

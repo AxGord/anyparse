@@ -707,6 +707,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				classValueTypeName: 'Class',
 				concatenationKinds: ['Add', 'AddAssign'],
 				stringConversionMethodNames: ['toString'],
+				stringConversionCalls: ['Std.string'],
 				indexAccessMetaName: '@:arrayAccess',
 				indexOperatorOverloadKind: 'ArrayExpr',
 				compoundAssignOperators: [
@@ -763,6 +764,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				implicitCallMetaNames: ['@:op', '@:arrayAccess', '@:from', '@:to', '@:resolve'],
 				implicitCallNames: ['toString', 'iterator', 'hasNext', 'next', 'keyValueIterator'],
 				implicitConstructionTypeMetaNames: ['@:structInit'],
+				extensionTypeMetaNames: ['@:using'],
 				enumConstructorKinds: ['SimpleCtor', 'ParamCtor'],
 				pureLibraryTypes: ['Math', 'String', 'StringTools'],
 				pureLibraryCalls: [

@@ -161,6 +161,13 @@ final class MemberTouchScan {
 				final typeName: String = path.substring(path.lastIndexOf('.') + 1);
 				if (g.types.declarationCount(typeName) > 0) return g.types.declaringTypeOf(typeName, name) == declaring;
 			}
+			// the compiler's type of the receiver, where its facts replace the syntax of the code holding it
+			final at: Null<Span> = receiver.span;
+			final typed: Null<String> = at == null ? null : g.facts?.view.typeSourceAt(g, file, at);
+			if (typed != null)
+				return _carriers.relation(
+					NominalTypes.unwrapNullable(typed, shape.memberTransparentWrapperTypeNames ?? []), declaring
+				) != CannotCarry;
 			final types: Map<Int, String> = declaredTypes ?? typesOf(provider, source);
 			declaredTypes = types;
 			final nominal: Null<String> = NominalTypes.expressionTypeNominal(receiver, tree, shape, types, _scope.index, file, null, true);

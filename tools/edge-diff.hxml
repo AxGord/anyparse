@@ -1,0 +1,13 @@
+# The edge-diff harness of the compiler-facts call graph (tools/EdgeDiff.hx): per function the facts replace,
+# the records the syntax gives it against the ones the facts give it. Build from the repo root; run from the
+# project root whose `apqlint.json` names the roots, libraries and compiler oracles. The artifact is gitignored.
+#
+#   haxe tools/edge-diff.hxml
+#   (cd <project> && node <anyparse>/bin/edge-diff.js <out.jsonl>)
+-cp src
+-cp tools
+-main EdgeDiff
+-lib hxnodejs
+-D js-es=6
+-D analyzer-optimize
+-js bin/edge-diff.js
