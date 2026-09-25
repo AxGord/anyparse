@@ -2137,7 +2137,6 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-REACH-CONSTRUCTION',
 			'unit.query.MemberReachFactsTest#testAConversionOfAnAbstractRunsWhatItsOwnConversionDoes :: control :: '
 				+ 'M-REACH-ABSTRACT-TEXT-ANY',
-
 			'unit.query.MemberReachFactsTest#testAFunctionWithoutFactsOfItsOwnIsNotReadThroughANestedOnes :: control :: '
 				+ 'M-FACTS-REACH-NESTED-OWNER',
 			'unit.query.MemberReachFactsTest#testAGenericInstanceIsItsGenericClass :: control :: M-FACTS-REACH-GENERIC',
@@ -2180,6 +2179,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachTest#testAnAnswerDoesNotDependOnTheQuestionsBeforeIt :: control :: M-REACH-QUESTION-ENTERED',
 			'unit.query.MemberReachTest#testAnInstanceThatLeftTheTypeSystemMayBeAnyType :: control :: '
 				+ 'M-CARRY-ESCAPES,M-ESCAPE-STORE,M-ESCAPE-CAST,M-ESCAPE-DECL,M-ESCAPE-PARAM,M-ESCAPE-RETURN,M-ESCAPE-LAMBDA,M-ESCAPE-THROW,M-ESCAPE-METHOD-VALUE,M-ESCAPE-HELD,M-ESCAPE-LIBRARY-SUPER,M-ESCAPE-NATIVE,M-ESCAPE-ANY',
+			'unit.query.MemberReachTest#testAssignmentUsedAsAValueSharesWhatItStores :: control :: M-REACH-ASSIGNMENT-VALUE-ALIAS',
 			'unit.query.MemberReachTest#testBodylessLibraryCallAdmitsImplicitlyCalledMethods :: control :: M-REACH-EXTERN-HANDS',
 			'unit.query.MemberReachTest#testBranchNoConfiguredBuildCompilesIsNotWalked :: control :: '
 				+ 'M-REACH-LIVE-HAZARDS,M-REACH-LIVE-EDGES',
@@ -2188,7 +2188,6 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-REACH-EXTERN-BODYLESS,M-REACH-CALLS-ARGUMENT',
 			'unit.query.MemberReachTest#testCalleeChangingOnlyAFreshLocalOfItsOwnIsProven :: control :: M-REACH-CALLEE-BENIGN-EDGE',
 			'unit.query.MemberReachTest#testCalleeDispatchOnALibraryTypeReachesItsLibraryOverrides :: control :: M-REACH-CALLEE-OVERRIDES',
-
 			'unit.query.MemberReachTest#testCalleeWhoseBodyIsNotItsSourceIsRefused :: control :: '
 				+ 'M-REACH-CALLEE-REWRITTEN,M-REACH-CALLEE-AMBIGUOUS',
 			'unit.query.MemberReachTest#testCallsEntryStartsAtTheSitesOnly :: control :: M-REACH-CALLS-ENTRY',
@@ -2244,6 +2243,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-REACH-CONSTRUCTIBLE,M-REACH-INDEX-IMPLICIT',
 			'unit.query.MemberReachTest#testLiteralTypedAsAConstructedClassRunsItsConstructor :: control :: M-REACH-IMPLICIT-CONSTRUCTION',
 			'unit.query.MemberReachTest#testLocalCapturedByAClosureIsAnEscape :: control :: M-REACH-LOCAL-CAPTURE',
+			'unit.query.MemberReachTest#testLocalGivenASharedValueByAnyWriteIsNotFresh :: control :: M-REACH-COMPOUND-WRITE-ALIAS',
 			'unit.query.MemberReachTest#testLocalHandedOutIsAnEscape :: control :: M-REACH-LOCAL-ESCAPE',
 			'unit.query.MemberReachTest#testMemoIsDroppedWhenAnyProjectFileChanged :: control :: '
 				+ 'M-REACH-MEMO-EVERY-SOURCE,M-REACH-INCREMENTAL-PURGE',
@@ -3308,10 +3308,11 @@ class TestDiscoveryParityTest extends Test {
 			'M-REACH-CALLEE-WALK',
 			'M-REACH-CALLEE-REFUSED',
 			'M-REACH-CALLEE-BENIGN-EDGE',
-
 			'M-REACH-CALLEE-REWRITTEN',
 			'M-REACH-CALLEE-AMBIGUOUS',
 			'M-REACH-CALLEE-OVERRIDES',
+			'M-REACH-COMPOUND-WRITE-ALIAS',
+			'M-REACH-ASSIGNMENT-VALUE-ALIAS',
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

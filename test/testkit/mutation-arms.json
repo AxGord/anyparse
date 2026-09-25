@@ -5488,7 +5488,7 @@
 			"method": "answerLocal",
 			"find": "final change: Null<Occurrence> = reachedArrayChange(g, file, tree, region, callees);",
 			"replace": "final change: Null<Occurrence> = null;",
-			"note": "a region with no visible call is proven for a shared array although an implicitly-called function in scope changes arrays"
+			"note": "a shared collection's region is proven although the functions it calls, or those the language calls implicitly, change arrays"
 		},
 		{
 			"name": "M-REACH-ARRAY-CHANGE-SITE",
@@ -7271,6 +7271,22 @@
 			"find": "for (v in g.virtualTargets(dispatch, target)) push(v);",
 			"replace": "",
 			"note": "a dispatch on a library type reaches only the declaration, not the overrides library code declares"
+		},
+		{
+			"name": "M-REACH-COMPOUND-WRITE-ALIAS",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "storesFreshValue",
+			"find": "final replacing: Bool = write.kind == shape.assignKind || write.kind == shape.nullCoalAssignKind;",
+			"replace": "final replacing: Bool = true;\n\t\tif (write.kind != shape.assignKind) return true;",
+			"note": "only a plain assignment of a shared value is an escape, so `x ??= shared` leaves `x` a fresh local whose push is taken as harmless"
+		},
+		{
+			"name": "M-REACH-ASSIGNMENT-VALUE-ALIAS",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "storesFreshValue",
+			"find": "if (holder.kind == shape.exprStatementKind) return true;",
+			"replace": "if (true) return true;",
+			"note": "an assignment used as a value keeps its target fresh, so `all = xs = [1]` leaves `xs` unshared though `all` holds it"
 		}
 	]
 }

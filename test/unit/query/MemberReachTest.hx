@@ -762,6 +762,33 @@ class MemberReachTest extends Test {
 		assertMatch(askLocal(shared, 'xs'), r -> r.match(Unknown(Aliased(_, _, _, _))));
 	}
 
+	@:pin('control') @:killer('M-REACH-COMPOUND-WRITE-ALIAS')
+	public function testLocalGivenASharedValueByAnyWriteIsNotFresh(): Void {
+		// `x ??= all` stores the shared array in a local that started fresh: its push changes `all`, which may be the
+		// caller's, whether the region or a callee does it
+		final region: String = 'class C { static var all:Array<Int> = []; function f(xs:Array<Int>):Void { /*<*/ '
+			+ 'var x:Null<Array<Int>> = null; x ??= all; x.push(9); var y:Int = xs[0]; /*>*/ } }';
+		assertMatch(askLocal(region, 'xs'), r -> r.match(Unknown(Aliased(_, _, _, _))));
+		final callee: String = 'class C { static var all:Array<Int> = []; function f(xs:Array<Int>):Void { /*<*/ var y:Int = xs[0]; '
+			+ 'step(); /*>*/ } static function step():Void { var x:Null<Array<Int>> = null; x ??= all; x.push(9); } }';
+		assertMatch(askLocal(callee, 'xs'), r -> r.match(Unknown(Aliased(_, _, _, _))));
+		// a fresh value stored the same way leaves the local unshared
+		final fresh: String = 'class C { function f(xs:Array<Int>):Void { /*<*/ var y:Int = xs[0]; step(); /*>*/ } '
+			+ 'static function step():Void { var x:Null<Array<Int>> = null; x ??= []; x.push(9); } }';
+		assertMatch(askLocal(fresh, 'xs'), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-REACH-ASSIGNMENT-VALUE-ALIAS')
+	public function testAssignmentUsedAsAValueSharesWhatItStores(): Void {
+		// `all = xs = [1]` stores the fresh array in `xs` AND hands it to `all`, which `grow` pushes onto
+		final src: String = 'class C { static var all:Array<Int> = []; static function grow():Void all.push(9); '
+			+ 'function f():Void { var xs:Array<Int> = []; all = xs = [1]; /*<*/ grow(); var y:Int = xs[0]; /*>*/ } }';
+		assertMatch(askLocal(src, 'xs'), r -> r.match(Unknown(Aliased(_, _, _, _))));
+		final statement: String = 'class C { static var all:Array<Int> = []; static function grow():Void all.push(9); '
+			+ 'function f():Void { var xs:Array<Int> = []; xs = [1]; /*<*/ grow(); var y:Int = xs[0]; /*>*/ } }';
+		assertMatch(askLocal(statement, 'xs'), r -> r.match(Proven));
+	}
+
 	@:pin('guard')
 	public function testDynamicFunctionACalleeRunsIsRefused(): Void {
 		// `hook` does nothing as declared, but any function value may be assigned over it: the syntax reads the call as one
