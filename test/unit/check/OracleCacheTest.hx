@@ -311,4 +311,35 @@ final class OracleCacheTest extends Test {
 	}
 	#end
 
+	/**
+	 * A verdict is filed under the fingerprint taken BEFORE its compile only while the input still hashes to it: a tree
+	 * that moved during the compile (an editor saving, another run regenerating) produced a verdict about neither state.
+	 */
+	@:pin('control')
+	@:killer('M-ORACLE-CACHE-STORES-A-MOVED-FINGERPRINT')
+	public function testAVerdictIsNotFiledUnderAFingerprintTheTreeLeft(): Void {
+		#if (sys || nodejs)
+		if (!oracleWorks()) {
+			Assert.pass('haxe unavailable — skipped');
+			return;
+		}
+		final dir: String = writeLintDir(VALID);
+		final hxml: String = '$dir/check.hxml';
+		final before: Null<String> = OracleCache.fingerprint(hxml, dir);
+		if (before == null) {
+			skipNoFingerprint(dir);
+			return;
+		}
+		File.saveContent('$dir/Good.hx', BROKEN);
+		Assert.isFalse(OracleCache.storeIfUnchanged(hxml, dir, before, Confirmed), 'the tree moved: nothing is stored');
+		Assert.isNull(OracleCache.lookup(hxml, dir, before), 'so the old tree has no verdict to hand out');
+		Assert.isTrue(
+			OracleCache.storeIfUnchanged(hxml, dir, OracleCache.fingerprint(hxml, dir) ?? '', Rejected('x')), 'an unmoved one is'
+		);
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 }

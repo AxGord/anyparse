@@ -1178,6 +1178,12 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.FieldWriteResolutionScopeTest#testThirdPartySubtypeWriteVetoesFinal :: control :: M-WRITEINDEX-PROJECT-FINAL',
 			'unit.check.FieldWriteResolutionScopeTest#testThirdPartySubtypeWriteVetoesReadOnly :: control :: M-WRITEINDEX-PROJECT-READONLY',
 			'unit.check.FieldWriteResolutionScopeTest#testThirdPartyUnresolvedWriteDoesNotVeto :: control :: M-ADMITS-TRUE',
+			'unit.check.HaxeSpawnTest#testACancelledShellJobTakesItsChildrenWithIt :: control :: '
+				+ 'M-DRIVER-KILLS-ONLY-THE-SHELL',
+			'unit.check.HaxeSpawnTest#testAFailureEndsTheJobsDeclaredAfterIt :: control :: '
+				+ 'M-DRIVER-NEVER-STOPS',
+			'unit.check.HaxeSpawnTest#testAJobPastItsTimeoutIsKilled :: control :: '
+				+ 'M-DRIVER-NO-TIMEOUT',
 			'unit.check.HoistCommonImportTest#testANamesakePushesTheStatementToADeeperSite :: guard :: ',
 			'unit.check.HoistCommonImportTest#testANestedSiteTakesOnlyWhatItsParentDidNot :: control :: '
 				+ 'M-HOIST-SITE-ORDER,M-HOIST-CHAIN-INHERITED',
@@ -1231,6 +1237,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryReturnBindingSeeded :: control :: M-NULLABLE-FLOW-REPORT-INDEX',
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryReturnDerefFlagged :: control :: M-NULLABLE-REPORT-INDEX',
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryStaticReturnDerefFlagged :: control :: M-NULLABLE-REPORT-INDEX',
+			'unit.check.OracleCacheTest#testAVerdictIsNotFiledUnderAFingerprintTheTreeLeft :: control :: '
+				+ 'M-ORACLE-CACHE-STORES-A-MOVED-FINGERPRINT',
 			'unit.check.OracleConfigListE2ETest#testAConfigurationWithAnUnknownCompiledSetStillVetoesAnEdit :: control :: '
 				+ 'M-ORACLE-UNKNOWN-COVERAGE-NO-VETO',
 			'unit.check.OracleConfigListE2ETest#testARedBaselineExcludesItsConfigurationRatherThanThePhase :: control :: '
@@ -1261,10 +1269,26 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-GENERATE-NEVER-STALE-BY-COMMAND',
 			'unit.check.OracleGenerationTest#testAChangedInputRegeneratesAndAnUnchangedOneDoesNot :: control :: '
 				+ 'M-GENERATE-NEVER-STALE-BY-INPUT',
+			'unit.check.OracleGenerationTest#testADirectoryInputIsHashedByItsContent :: control :: '
+				+ 'M-GENERATE-DIRECTORY-INPUT-CONSTANT',
 			'unit.check.OracleGenerationTest#testAFailedGenerationIsUnavailableNeverTheStaleHxml :: control :: '
 				+ 'M-GENERATE-FAILURE-USES-THE-STALE-HXML',
+			'unit.check.OracleGenerationTest#testALockHeldByALiveRunMakesTheConfigurationUnavailable :: control :: '
+				+ 'M-GENERATE-LOCK-IGNORED',
 			'unit.check.OracleGenerationTest#testAMissingHxmlRegenerates :: control :: '
 				+ 'M-GENERATE-TRUSTS-A-MISSING-HXML',
+			'unit.check.OracleGenerationTest#testAStaleGenerationRunsWithoutItsOldRecord :: control :: '
+				+ 'M-GENERATE-RECORD-OUTLIVES-THE-RUN',
+			'unit.check.OracleGenerationTest#testAnAbandonedLockIsTakenOver :: control :: '
+				+ 'M-GENERATE-LOCK-NEVER-RECOVERED',
+			'unit.check.OracleGenerationTest#testAnEmptyOrMissingInputIsNeverSilentlyConstant :: control :: '
+				+ 'M-GENERATE-EMPTY-INPUTS-NEVER,M-GENERATE-MISSING-INPUT-SILENT',
+			'unit.check.OracleGenerationTest#testAnInputEditedDuringTheGenerationIsSeenNextRun :: control :: '
+				+ 'M-GENERATE-HASHES-INPUTS-AFTER-THE-RUN',
+			'unit.check.OracleGenerationTest#testEntriesSharingACommandMergeTheirInputs :: control :: '
+				+ 'M-GENERATE-FIRST-ENTRY-INPUTS',
+			'unit.check.OracleGenerationTest#testTheLibraryStateTheHxmlNamesIsAnInput :: control :: '
+				+ 'M-GENERATE-IGNORES-LIBRARY-STATE',
 			'unit.check.OracleParallelVerdictTest#testTheOverlappedVerdictIsTheFirstFailureInDeclaredOrder :: control :: '
 				+ 'M-DRIVER-CANCELS-EARLIER-JOBS',
 			'unit.check.OrphanAccessorCheckTest#testAnUnreadableCallerOutsideTheReportScopeStillDeclinesTheDeletion :: control :: '
@@ -2715,6 +2739,19 @@ class TestDiscoveryParityTest extends Test {
 			'M-DRIVER-CANCELS-EARLIER-JOBS',
 			'M-ORACLE-CACHE-IGNORES-DIR',
 			'M-DISPLAY-IGNORES-DIR',
+			'M-GENERATE-HASHES-INPUTS-AFTER-THE-RUN',
+			'M-GENERATE-RECORD-OUTLIVES-THE-RUN',
+			'M-GENERATE-DIRECTORY-INPUT-CONSTANT',
+			'M-GENERATE-FIRST-ENTRY-INPUTS',
+			'M-GENERATE-LOCK-IGNORED',
+			'M-GENERATE-LOCK-NEVER-RECOVERED',
+			'M-GENERATE-EMPTY-INPUTS-NEVER',
+			'M-GENERATE-MISSING-INPUT-SILENT',
+			'M-DRIVER-NEVER-STOPS',
+			'M-DRIVER-KILLS-ONLY-THE-SHELL',
+			'M-DRIVER-NO-TIMEOUT',
+			'M-ORACLE-CACHE-STORES-A-MOVED-FINGERPRINT',
+			'M-GENERATE-IGNORES-LIBRARY-STATE',
 			'M-FIAD-CROSS-SUPER-UNPROVED',
 			'M-FIAD-EARLY-READ-IGNORED',
 			'M-FIAD-EARLY-READ-CALL-ARG',
@@ -3127,6 +3164,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-NON-NULL-RHS-DROP-HEX :: anyparse.check.NullFlow#FinalMember:NON_NULL_RHS_KINDS',
 			'M-SPAWN-RUNALL-IGNORES-CWD :: anyparse.check.HaxeSpawn#FinalMember:PARALLEL_DRIVER',
 			'M-DRIVER-CANCELS-EARLIER-JOBS :: anyparse.check.HaxeSpawn#FinalMember:PARALLEL_DRIVER',
+			'M-DRIVER-NEVER-STOPS :: anyparse.check.HaxeSpawn#FinalMember:PARALLEL_DRIVER',
+			'M-DRIVER-KILLS-ONLY-THE-SHELL :: anyparse.check.HaxeSpawn#FinalMember:PARALLEL_DRIVER',
+			'M-DRIVER-NO-TIMEOUT :: anyparse.check.HaxeSpawn#FinalMember:PARALLEL_DRIVER',
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 

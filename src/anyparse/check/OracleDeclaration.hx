@@ -182,7 +182,7 @@ final class OracleDeclaration {
 		if (command != null) config.generate = {
 			command: command,
 			root: baseDir ?? '.',
-			inputs: inputs == null ? null : [for (input in inputs) LintConfig.resolveAgainstConfigDir(baseDir, input)],
+			inputs: generateInputs(inputs, baseDir, drops, index),
 			probeDir: dir == null && baseDir != null
 		};
 		return config;
@@ -223,6 +223,30 @@ final class OracleDeclaration {
 	/** Whether `path` exists on disk — false wholesale on a non-sys target, keeping the probe a tie there. */
 	private static function pathExists(path: String): Bool {
 		return #if (sys || nodejs) sys.FileSystem.exists(path) #else false #end;
+	}
+
+	/**
+	 * A `generateInputs` list resolved: a leading `~/` against the home directory (a tool's own config file lives
+	 * there), anything else relative against the config dir. An EMPTY list is read as no list — it could only ever mean
+	 * "never regenerate", which no project wants silently — so both regenerate every run. A path that does not exist is
+	 * KEPT, since its appearance is a change the next run must see, but named with a line: a typo there would otherwise
+	 * make that input a constant.
+	 */
+	private static function generateInputs(
+		inputs: Null<Array<String>>, baseDir: Null<String>, drops: Array<String>, index: Int
+	): Null<Array<String>> {
+		if (inputs == null || inputs.length == 0) return null;
+		final home: String = Sys.getEnv('HOME') ?? '';
+		final out: Array<String> = [];
+		for (input in inputs) {
+			final path: String = input.startsWith('~/') && home != ''
+				? Path.join([home, input.substr(2)])
+				: LintConfig.resolveAgainstConfigDir(baseDir, input);
+			if (!pathExists(path))
+				drops.push('compilerOracle[$index] "generateInputs" names $input, which does not exist — kept, it counts once created');
+			out.push(path);
+		}
+		return out;
 	}
 
 }

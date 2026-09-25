@@ -5,7 +5,7 @@ import sys.FileSystem;
 import sys.io.File;
 #end
 import anyparse.check.CompilerOracle;
-import anyparse.check.LintConfig.OracleConfig;
+import anyparse.check.LintConfig;
 import anyparse.check.OracleGeneration;
 import unit.cli.CliFixture;
 import utest.Assert;
@@ -145,5 +145,188 @@ final class OracleGenerationTest extends Test {
 		return FileSystem.exists(path) ? [for (line in File.getContent(path).split('\n')) if (line != '') line].length : 0;
 	}
 	#end
+
+	/**
+	 * An input edited WHILE the command runs is a change the next run sees: the recorded hash is the one taken BEFORE
+	 * the command, which is what the hxml was built from. The command here edits its own input to stand in for an
+	 * editor saving mid-generation; the third call, with nothing edited since, stays current.
+	 */
+	@:pin('control')
+	@:killer('M-GENERATE-HASHES-INPUTS-AFTER-THE-RUN')
+	public function testAnInputEditedDuringTheGenerationIsSeenNextRun(): Void {
+		#if (sys || nodejs)
+		final dir: String = fixture();
+		final config: OracleConfig = entry(dir, '$WRITE && echo two > input.txt', ['$dir/input.txt']);
+		OracleGeneration.prepare([config]);
+		OracleGeneration.prepare([config]);
+		Assert.equals(2, runs(dir), 'the hxml was built from `one`, so the `two` written during the run is stale');
+		OracleGeneration.prepare([config]);
+		Assert.equals(2, runs(dir), 'and a generation that started from `two` is current');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * The record of the previous generation is gone BEFORE a stale command starts, so a command killed half way (here
+	 * observed from inside it) leaves nothing that reads as current.
+	 */
+	@:pin('control')
+	@:killer('M-GENERATE-RECORD-OUTLIVES-THE-RUN')
+	public function testAStaleGenerationRunsWithoutItsOldRecord(): Void {
+		#if (sys || nodejs)
+		final dir: String = fixture();
+		final first: OracleConfig = entry(dir, WRITE, ['$dir/input.txt']);
+		OracleGeneration.prepare([first]);
+		final record: String = OracleGeneration.recordFile(OracleGeneration.groupsOf([first])[0]);
+		Assert.isTrue(FileSystem.exists(record), 'the first generation is recorded');
+		final probe: String = '$WRITE && if [ -e "$record" ]; then echo present > seen.txt; fi';
+		OracleGeneration.prepare([entry(dir, probe, ['$dir/input.txt'])]);
+		Assert.isFalse(FileSystem.exists('$dir/seen.txt'), 'the command ran with no record left to trust if it died');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A directory input is hashed by its tree: a file added under it regenerates. */
+	@:pin('control')
+	@:killer('M-GENERATE-DIRECTORY-INPUT-CONSTANT')
+	public function testADirectoryInputIsHashedByItsContent(): Void {
+		#if (sys || nodejs)
+		final dir: String = fixture();
+		FileSystem.createDirectory('$dir/fonts');
+		File.saveContent('$dir/fonts/a.ttf', 'a');
+		final config: OracleConfig = entry(dir, WRITE, ['$dir/fonts']);
+		OracleGeneration.prepare([config]);
+		OracleGeneration.prepare([config]);
+		Assert.equals(1, runs(dir), 'an unchanged directory is current');
+		File.saveContent('$dir/fonts/b.ttf', 'b');
+		OracleGeneration.prepare([config]);
+		Assert.equals(2, runs(dir), 'a file added under it regenerates');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** Two entries sharing one command are one generation over the UNION of their inputs. */
+	@:pin('control')
+	@:killer('M-GENERATE-FIRST-ENTRY-INPUTS')
+	public function testEntriesSharingACommandMergeTheirInputs(): Void {
+		#if (sys || nodejs)
+		final dir: String = fixture();
+		File.saveContent('$dir/other.txt', 'x');
+		final pair: Array<OracleConfig> = [entry(dir, WRITE, ['$dir/input.txt']), entry(dir, WRITE, ['$dir/other.txt'])];
+		OracleGeneration.prepare(pair);
+		OracleGeneration.prepare(pair);
+		Assert.equals(1, runs(dir), 'one command, one generation');
+		File.saveContent('$dir/other.txt', 'y');
+		OracleGeneration.prepare(pair);
+		Assert.equals(2, runs(dir), 'the SECOND entry\'s input counts too');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * The library state the generated hxml resolves to is an input nobody declares: a library classpath outside the
+	 * project makes its `haxelib.json` and the repository's `.current` inputs, and an included hxml is one too. The
+	 * fixture is a scratch haxelib layout `<repo>/mylib/<version>/src`.
+	 */
+	@:pin('control')
+	@:killer('M-GENERATE-IGNORES-LIBRARY-STATE')
+	public function testTheLibraryStateTheHxmlNamesIsAnInput(): Void {
+		#if (sys || nodejs)
+		final dir: String = fixture();
+		final repo: String = CliFixture.writeTree('oraclegenrepo', [
+			{ name: 'mylib/.current', source: '1.0.0' },
+			{ name: 'mylib/1,0,0/haxelib.json', source: '{"name":"mylib","version":"1.0.0"}' },
+			{ name: 'mylib/1,0,0/src/Lib.hx', source: 'class Lib {}\n' }
+		]);
+		File.saveContent('$dir/extra.hxml', '-D extra\n');
+		final command: String = "printf '%s\\n' '-cp .' '-main Main' '-cp " + repo
+			+ "/mylib/1,0,0/src' 'extra.hxml' > gen.hxml && echo run >> runs.txt";
+		final config: OracleConfig = entry(dir, command, ['$dir/input.txt']);
+		OracleGeneration.prepare([config]);
+		OracleGeneration.prepare([config]);
+		Assert.equals(1, runs(dir), 'unchanged library state is current');
+		File.saveContent('$repo/mylib/.current', '1.0.1');
+		OracleGeneration.prepare([config]);
+		Assert.equals(2, runs(dir), 'switching the library version regenerates');
+		File.saveContent('$repo/mylib/1,0,0/haxelib.json', '{"name":"mylib","version":"1.0.2"}');
+		OracleGeneration.prepare([config]);
+		Assert.equals(3, runs(dir), 'so does its haxelib.json');
+		File.saveContent('$dir/extra.hxml', '-D extra2\n');
+		OracleGeneration.prepare([config]);
+		Assert.equals(4, runs(dir), 'and an hxml the generated one includes');
+		CliFixture.removeDir(repo);
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A lock held by a LIVE other run makes the configuration unavailable once the wait runs out. */
+	@:pin('control')
+	@:killer('M-GENERATE-LOCK-IGNORED')
+	public function testALockHeldByALiveRunMakesTheConfigurationUnavailable(): Void {
+		#if nodejs
+		final dir: String = fixture();
+		final config: OracleConfig = entry(dir, WRITE, ['$dir/input.txt']);
+		final lock: String = OracleGeneration.lockDir(OracleGeneration.groupsOf([config])[0]);
+		final other: Dynamic = js.node.ChildProcess.spawn('sleep', ['30']);
+		FileSystem.createDirectory(lock);
+		File.saveContent('$lock/owner', '${other.pid} ${Date.now().getTime()}');
+		final ready: Array<OracleConfig> = OracleGeneration.prepare([config], 300).oracles;
+		other.kill();
+		Assert.isTrue(
+			(ready[0].unavailable ?? '').contains('holds its generation lock'), 'the live owner is waited for: ${ready[0].unavailable}'
+		);
+		Assert.equals(0, runs(dir), 'and nothing was generated under it');
+		CliFixture.removeDir(lock);
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-node target');
+		#end
+	}
+
+	/** A lock whose owner is gone is taken over rather than waited for. */
+	@:pin('control')
+	@:killer('M-GENERATE-LOCK-NEVER-RECOVERED')
+	public function testAnAbandonedLockIsTakenOver(): Void {
+		#if nodejs
+		final dir: String = fixture();
+		final config: OracleConfig = entry(dir, WRITE, ['$dir/input.txt']);
+		final lock: String = OracleGeneration.lockDir(OracleGeneration.groupsOf([config])[0]);
+		final gone: Dynamic = js.node.ChildProcess.spawnSync('sh', ['-c', "echo $$"]);
+		final pid: Null<Int> = Std.parseInt(Std.string(gone.stdout).trim());
+		Assert.notNull(pid, 'a real pid, of a process that has exited');
+		FileSystem.createDirectory(lock);
+		File.saveContent('$lock/owner', '$pid ${Date.now().getTime()}');
+		final ready: Array<OracleConfig> = OracleGeneration.prepare([config], 300).oracles;
+		Assert.isNull(ready[0].unavailable, 'the dead owner\'s lock was taken over');
+		Assert.equals(1, runs(dir), 'and the generation ran');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-node target');
+		#end
+	}
+
+	/** `generateInputs: []` regenerates every run like an absent list, and a missing input is named, not silent. */
+	@:pin('control')
+	@:killer('M-GENERATE-EMPTY-INPUTS-NEVER')
+	@:killer('M-GENERATE-MISSING-INPUT-SILENT')
+	public function testAnEmptyOrMissingInputIsNeverSilentlyConstant(): Void {
+		final empty: LintConfig = LintConfig.parse('{"compilerOracle":[{"hxml":"g.hxml","generate":"true","generateInputs":[]}]}', '/tmp');
+		Assert.isNull(empty.compilerOracles()[0].generate?.inputs, 'an empty list is no list');
+		final missing: LintConfig = LintConfig.parse(
+			'{"compilerOracle":[{"hxml":"g.hxml","generate":"true","generateInputs":["no-such-input.txt"]}]}', '/tmp'
+		);
+		Assert.equals(1, missing.compilerOracles()[0].generate?.inputs?.length, 'the missing input is kept');
+		Assert.isTrue(Lambda.exists(missing.drops(), d -> d.contains('no-such-input.txt')), 'and named: ${missing.drops()}');
+	}
 
 }

@@ -109,10 +109,15 @@ final class OracleCommand implements CliCommand {
 			final oracle: OracleConfig = ready[i];
 			final outcome: OracleOutcome = outcomes[i] ?? Unavailable('the typecheck was cancelled');
 			final fingerprint: Null<String> = fingerprints[i];
-			if (fingerprint != null) OracleCache.store(oracle.hxml, oracle.dir, fingerprint, outcome, oracle.defines);
+			final stored: Bool = fingerprint != null
+				&& OracleCache.storeIfUnchanged(oracle.hxml, oracle.dir, fingerprint, outcome, oracle.defines);
 			if (reportOracleRun(oracle, outcome) != EXIT_OK) exit = EXIT_RUNTIME;
 			if (fingerprint == null && oracle.unavailable == null)
 				CliIo.stderr('apq oracle: no fingerprint for ${LintConfig.describeOracle(oracle)} — the verdict was not recorded\n');
+			else if (fingerprint != null && !stored)
+				CliIo.stderr(
+					'apq oracle: the compile input of ${LintConfig.describeOracle(oracle)} changed during the typecheck — the verdict was not recorded\n'
+				);
 		}
 		return exit;
 	}

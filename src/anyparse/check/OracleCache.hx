@@ -564,4 +564,18 @@ final class OracleCache {
 	}
 	#end
 
+	/**
+	 * `store`, but only when the compile input still hashes to `fingerprint` — the fingerprint taken BEFORE the compile.
+	 * A tree that moved while the compiler ran (an editor saving, another run regenerating an hxml) produced a verdict
+	 * about neither state, and filing it under the old fingerprint would hand it to the next run of the old tree. Answers
+	 * whether it stored.
+	 */
+	public static function storeIfUnchanged(
+		hxml: String, cwd: Null<String>, fingerprint: String, outcome: OracleOutcome, ?defines: Array<String>
+	): Bool {
+		if (OracleCache.fingerprint(hxml, cwd, defines) != fingerprint) return false;
+		store(hxml, cwd, fingerprint, outcome, defines);
+		return true;
+	}
+
 }

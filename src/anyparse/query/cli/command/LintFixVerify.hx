@@ -413,7 +413,10 @@ final class LintFixVerify {
 			final i: Int = compile[k];
 			outcomes[i] = compiled[k];
 			final fingerprint: Null<String> = fingerprints[i];
-			if (fingerprint != null) OracleCache.store(oracles[i].hxml, oracles[i].dir, fingerprint, compiled[k], oracles[i].defines);
+			// stored only while the input still hashes as it did before the compile: a tree that moved meanwhile
+			// produced a verdict about neither state
+			if (fingerprint != null)
+				OracleCache.storeIfUnchanged(oracles[i].hxml, oracles[i].dir, fingerprint, compiled[k], oracles[i].defines);
 		}
 		return [for (outcome in outcomes) outcome ?? Unavailable('no verdict was taken')];
 	}

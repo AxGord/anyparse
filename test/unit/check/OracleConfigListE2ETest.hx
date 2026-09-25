@@ -158,13 +158,15 @@ final class OracleConfigListE2ETest extends Test {
 		// one compile at a time, so "never asked" is a count: overlapped, the third may already be running when it is killed
 		final declared: Null<String> = Sys.getEnv('APQ_ORACLE_PARALLEL');
 		Sys.putEnv('APQ_ORACLE_PARALLEL', '1');
-		final result: FixVerifyResult = rewrite(dir, 'Good.hx', SHARED, 'ONLY_IN_FIRST', [
-			oracle(dir, 'check.hxml', []),
-			oracle(dir, 'check.hxml', ['second']),
-			oracle(dir, 'check.hxml', ['third'])
-		]);
-		Sys.putEnv('APQ_ORACLE_PARALLEL', declared ?? '');
-		Assert.equals(1, result.reverted.length, 'the second configuration still decides the outcome');
+		var result: Null<FixVerifyResult> = null;
+		CliFixture.always(
+			() -> Sys.putEnv('APQ_ORACLE_PARALLEL', declared ?? ''), () -> result = rewrite(dir, 'Good.hx', SHARED, 'ONLY_IN_FIRST', [
+				oracle(dir, 'check.hxml', []),
+				oracle(dir, 'check.hxml', ['second']),
+				oracle(dir, 'check.hxml', ['third'])
+			])
+		);
+		Assert.equals(1, result?.reverted.length, 'the second configuration still decides the outcome');
 		Assert.equals(
 			5, CompilerOracle.invocations - before,
 			'3 baseline typechecks + 2 for the candidate — the third is never asked once the second refuses'

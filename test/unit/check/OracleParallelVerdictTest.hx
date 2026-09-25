@@ -47,11 +47,14 @@ final class OracleParallelVerdictTest extends Test {
 			for (name in ['ok', 'slow', 'fast', 'ok']) { hxml: '$dir/$name.hxml', dir: dir, defines: [] }
 		];
 		final declared: Null<String> = Sys.getEnv('APQ_ORACLE_PARALLEL');
-		Sys.putEnv('APQ_ORACLE_PARALLEL', '4');
-		final overlapped: OracleOutcome = CompilerOracle.typecheckAll(configs);
-		Sys.putEnv('APQ_ORACLE_PARALLEL', '1');
-		final sequential: OracleOutcome = CompilerOracle.typecheckAll(configs);
-		Sys.putEnv('APQ_ORACLE_PARALLEL', declared ?? '');
+		var overlapped: OracleOutcome = Unavailable('not asked');
+		var sequential: OracleOutcome = Unavailable('not asked');
+		CliFixture.always(() -> Sys.putEnv('APQ_ORACLE_PARALLEL', declared ?? ''), () -> {
+			Sys.putEnv('APQ_ORACLE_PARALLEL', '4');
+			overlapped = CompilerOracle.typecheckAll(configs);
+			Sys.putEnv('APQ_ORACLE_PARALLEL', '1');
+			sequential = CompilerOracle.typecheckAll(configs);
+		});
 		Assert.isTrue(errorsOf(sequential).contains('SlowMissing'), 'the sequential loop stops at the second configuration: $sequential');
 		Assert.isTrue(
 			errorsOf(overlapped).contains('SlowMissing'), 'and so does the overlapped run, though the third failed first: $overlapped'

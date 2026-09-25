@@ -53,9 +53,13 @@ final class OracleDirTest extends Test {
 		final root: String = fixture();
 		final declared: Null<String> = Sys.getEnv('APQ_ORACLE_PARALLEL');
 		Sys.putEnv('APQ_ORACLE_PARALLEL', '2');
-		final verdict: OracleOutcome = CompilerOracle.typecheckAll([at(root, []), at(root, ['second'])]);
-		final coverage: Array<OracleCoverage> = OracleCoverage.probeAll([at(root, []), at(root, ['second'])]);
-		Sys.putEnv('APQ_ORACLE_PARALLEL', declared ?? '');
+		var verdict: OracleOutcome = Unavailable('not asked');
+		var coverage: Array<OracleCoverage> = [];
+		CliFixture.always(() -> Sys.putEnv('APQ_ORACLE_PARALLEL', declared ?? ''), () -> {
+			verdict = CompilerOracle.typecheckAll([at(root, []), at(root, ['second'])]);
+			coverage = OracleCoverage.probeAll([at(root, []), at(root, ['second'])]);
+		});
+		Assert.equals(2, coverage.length, 'both configurations were probed');
 		Assert.isTrue(verdict.match(Confirmed), 'both configurations typecheck from dir: $verdict');
 		Assert.isTrue(coverage[0].known && coverage[1].known, 'both coverage probes ran from dir');
 		Assert.isTrue(coverage[0].covers('$root/sub/src/Main.hx'), 'and read the module under dir');

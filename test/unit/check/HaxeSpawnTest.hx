@@ -1,6 +1,7 @@
 package unit.check;
 
 import anyparse.check.HaxeSpawn;
+import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -71,5 +72,75 @@ final class HaxeSpawnTest extends Test {
 		Assert.isTrue(run.failure.indexOf('output buffer') != -1, 'and the sentence names the buffer: ${run.failure}');
 	}
 	#end
+
+	/**
+	 * `stopAfterFailure` ends every LATER job: a fast failure cancels a slow job declared after it (killed while running
+	 * with two slots, never started with one), so a rejection does not wait for — or pay for — a compile that cannot
+	 * change the verdict.
+	 */
+	@:pin('control')
+	@:killer('M-DRIVER-NEVER-STOPS')
+	public function testAFailureEndsTheJobsDeclaredAfterIt(): Void {
+		#if nodejs
+		final jobs: Array<SpawnJob> = [
+			{ args: [], cwd: null, shell: 'exit 3' },
+			{ args: [], cwd: null, shell: 'sleep 5' }
+		];
+		final started: Float = Date.now().getTime();
+		final overlapped: Array<HaxeRun> = HaxeSpawn.runAll(jobs, ROOMY, 2, true);
+		Assert.equals(3, overlapped[0].status, 'the failure is answered as it ran');
+		Assert.isTrue(overlapped[1].cancelled == true && overlapped[1].unstarted != true, 'the running later job was killed');
+		final sequential: Array<HaxeRun> = HaxeSpawn.runAll(jobs, ROOMY, 1, true);
+		Assert.isTrue(sequential[1].unstarted == true, 'with one slot it never started');
+		Assert.isTrue(Date.now().getTime() - started < 4000, 'neither run waited for the slow job');
+		#else
+		Assert.pass('the process driver needs the node target');
+		#end
+	}
+
+	/**
+	 * A cancelled shell job's CHILDREN die with it: the kill reaches the job's whole process group, so a build tool the
+	 * shell started cannot keep writing after its job was answered. The child here writes a file two seconds in.
+	 */
+	@:pin('control')
+	@:killer('M-DRIVER-KILLS-ONLY-THE-SHELL')
+	public function testACancelledShellJobTakesItsChildrenWithIt(): Void {
+		#if nodejs
+		final dir: String = CliFixture.writeDir('spawngroup', []);
+		final jobs: Array<SpawnJob> = [
+			{ args: [], cwd: null, shell: 'sleep 0.5; exit 1' },
+			{ args: [], cwd: dir, shell: '(sleep 2; echo leaked > leak.txt) & wait' }
+		];
+		final runs: Array<HaxeRun> = HaxeSpawn.runAll(jobs, ROOMY, 2, true);
+		Assert.isTrue(runs[1].cancelled == true, 'the later job was cancelled');
+		js.Syntax.code('Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 3000)');
+		Assert.isFalse(sys.FileSystem.exists('$dir/leak.txt'), 'and the process it started died with it');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('the process driver needs the node target');
+		#end
+	}
+
+	/** A job that outlives its `timeout` is killed and answered as timed out, not waited for. */
+	@:pin('control')
+	@:killer('M-DRIVER-NO-TIMEOUT')
+	public function testAJobPastItsTimeoutIsKilled(): Void {
+		#if nodejs
+		final started: Float = Date.now().getTime();
+		final runs: Array<HaxeRun> = HaxeSpawn.runAll([
+			{
+				args: [],
+				cwd: null,
+				shell: 'sleep 5',
+				timeout: 300
+			}
+		], ROOMY, 1);
+		Assert.isNull(runs[0].status, 'no exit status: it was killed');
+		Assert.isTrue(runs[0].failure.indexOf('timed out') >= 0, 'and says so: ${runs[0].failure}');
+		Assert.isTrue(Date.now().getTime() - started < 4000, 'without waiting the five seconds out');
+		#else
+		Assert.pass('the process driver needs the node target');
+		#end
+	}
 
 }

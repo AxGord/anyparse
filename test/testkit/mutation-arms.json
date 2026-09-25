@@ -3485,7 +3485,7 @@
 			"name": "M-GENERATE-FAILURE-USES-THE-STALE-HXML",
 			"type": "anyparse.check.OracleGeneration",
 			"method": "ready",
-			"find": "if (failure != null) out.unavailable = 'its generate command failed — $failure';",
+			"find": "if (failure != null) out.unavailable = failure;",
 			"replace": "",
 			"note": "a failed generate command no longer makes its configuration unavailable, so the hxml an earlier generation left behind silently answers for the build"
 		},
@@ -3530,6 +3530,110 @@
 			"find": "if (cwd != null) Reflect.setField(opts, 'cwd', cwd);",
 			"replace": "",
 			"note": "the display server is warmed and queried from the process cwd, so a configuration with a dir never warms and the oracle-assisted phase is skipped"
+		},
+		{
+			"name": "M-GENERATE-HASHES-INPUTS-AFTER-THE-RUN",
+			"type": "anyparse.check.OracleGeneration",
+			"method": "writeRecord",
+			"find": "inputs: inputs,",
+			"replace": "inputs: hashAll(group.inputs ?? []),",
+			"note": "the explicit inputs are hashed after the command instead of before, so an edit landing during a generation is recorded beside an hxml built from the old content and never regenerates"
+		},
+		{
+			"name": "M-GENERATE-RECORD-OUTLIVES-THE-RUN",
+			"type": "anyparse.check.OracleGeneration",
+			"method": "prepare",
+			"find": "deleteRecord(group);",
+			"replace": "",
+			"note": "the previous generation's record survives while a stale command runs, so a generation killed half way leaves a partial tree that reads as current forever"
+		},
+		{
+			"name": "M-GENERATE-DIRECTORY-INPUT-CONSTANT",
+			"type": "anyparse.check.OracleGeneration",
+			"method": "hashOf",
+			"find": "listTree(path, '', lines, 0);",
+			"replace": "",
+			"note": "a directory input hashes to one constant, so a file added or edited under it never regenerates"
+		},
+		{
+			"name": "M-GENERATE-FIRST-ENTRY-INPUTS",
+			"type": "anyparse.check.OracleGeneration",
+			"method": "groupsOf",
+			"find": "held.inputs = mine == null || theirs == null ? null : theirs.concat([for (input in mine) if (!theirs.contains(input)) input]);",
+			"replace": "",
+			"note": "entries sharing one command keep only the first entry's inputs, so a change to an input only a later entry declares never regenerates"
+		},
+		{
+			"name": "M-GENERATE-LOCK-IGNORED",
+			"type": "anyparse.check.OracleGeneration",
+			"method": "acquire",
+			"force": "null",
+			"note": "no generation lock is taken, so another run's rm -rf can land in the middle of this run's typecheck"
+		},
+		{
+			"name": "M-GENERATE-LOCK-NEVER-RECOVERED",
+			"type": "anyparse.check.OracleGeneration",
+			"method": "alive",
+			"force": "true",
+			"note": "a lock left by a dead run is waited for as if its owner lived, so one crashed run makes every later one unavailable"
+		},
+		{
+			"name": "M-GENERATE-EMPTY-INPUTS-NEVER",
+			"type": "anyparse.check.OracleDeclaration",
+			"method": "generateInputs",
+			"find": "if (inputs == null || inputs.length == 0) return null;",
+			"replace": "if (inputs == null) return null;",
+			"note": "an empty generateInputs list is kept, so the entry never regenerates while an absent list regenerates every run"
+		},
+		{
+			"name": "M-GENERATE-MISSING-INPUT-SILENT",
+			"type": "anyparse.check.OracleDeclaration",
+			"method": "generateInputs",
+			"find": "drops.push('compilerOracle[$index] \"generateInputs\" names $input, which does not exist — kept, it counts once created');",
+			"replace": "{}",
+			"note": "a generateInputs path that does not exist is accepted silently, so a typo makes that input a constant nobody hears about"
+		},
+		{
+			"name": "M-DRIVER-NEVER-STOPS",
+			"type": "anyparse.check.HaxeSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": " if (stop && rec.status !== 0 && !rec.cancelled) cancelAfter(i);",
+			"replace": "",
+			"note": "a failing job no longer ends the later ones, so a rejection waits for and pays every compile declared after it"
+		},
+		{
+			"name": "M-DRIVER-KILLS-ONLY-THE-SHELL",
+			"type": "anyparse.check.HaxeSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": "if (group) process.kill(-c.pid, 'SIGKILL'); else c.kill();",
+			"replace": "c.kill('SIGKILL');",
+			"note": "a kill reaches only the shell, so a build tool it started keeps writing into the generated tree after its job was cancelled"
+		},
+		{
+			"name": "M-DRIVER-NO-TIMEOUT",
+			"type": "anyparse.check.HaxeSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": " if (j.timeout > 0) c.timer = setTimeout(() => { c.timedOut = true; kill(c); }, j.timeout);",
+			"replace": "",
+			"note": "a job's timeout is ignored, so a hung generate command blocks the run forever"
+		},
+		{
+			"name": "M-ORACLE-CACHE-STORES-A-MOVED-FINGERPRINT",
+			"type": "anyparse.check.OracleCache",
+			"method": "storeIfUnchanged",
+			"find": "if (OracleCache.fingerprint(hxml, cwd, defines) != fingerprint) return false;",
+			"replace": "",
+			"note": "a verdict is filed under the pre-compile fingerprint even when the tree moved during the compile, so a verdict about a half-regenerated tree is handed to the next run of the complete one"
+		},
+		{
+			"name": "M-GENERATE-IGNORES-LIBRARY-STATE",
+			"type": "anyparse.check.OracleGeneration",
+			"method": "implicitInputs",
+			"force": "[]",
+			"note": "the library state the generated hxml names is not an input, so a haxelib version or dev-path switch leaves an hxml naming the old library paths current"
 		},
 		{
 			"name": "M-FIAD-CROSS-SUPER-UNPROVED",
