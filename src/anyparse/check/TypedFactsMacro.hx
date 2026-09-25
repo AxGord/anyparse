@@ -24,9 +24,6 @@ final class TypedFactsMacro {
 	/** Deeper type nesting prints as unknown, so a recursive structure cannot grow a line without bound. */
 	private static inline final TYPE_DEPTH: Int = 8;
 
-	/** The zlib stream's trailer: the Adler-32 of its input, big-endian. */
-	private static inline final ADLER_BYTES: Int = 4;
-
 	/** This module: the probe itself is not the build's code. */
 	private static inline final OWN_MODULE: String = 'anyparse.check.TypedFactsMacro';
 
@@ -43,6 +40,8 @@ final class TypedFactsMacro {
 	private final _overloaded: Map<String, Bool> = [];
 	private final _replaceable: Map<String, Bool> = [];
 	private final _homes: Map<String, Bool> = [];
+	private final _inlines: Map<String, Array<{ min: Int, max: Int, id: String }>> = [];
+	private final _reflectionFiles: Map<String, Bool> = [];
 	private final _out: FileOutput;
 
 	private var _fileCount: Int = 0;
@@ -134,6 +133,7 @@ final class TypedFactsMacro {
 			case _ if (c.isInterface): 'interface';
 			case _: 'class';
 		};
+		final genericCopy: Bool = c.kind.match(KGenericInstance(_, _));
 		final home: String = fileOf(c.pos);
 		final members: Array<{ f: ClassField, s: Bool }> = [for (f in c.fields.get()) { f: f, s: false }];
 		for (f in c.statics.get()) members.push({ f: f, s: true });
@@ -147,13 +147,13 @@ final class TypedFactsMacro {
 				case FMethod(_): 'method';
 				case FVar(_, _): 'var';
 			};
-			walkBody(m.f.expr(), '$id.${m.f.name}', nodeKind, id, m.s, typeString(m.f.type, 0), home, 0);
+			walkBody(m.f.expr(), '$id.${m.f.name}', nodeKind, id, m.s, typeString(m.f.type, 0), home, 0, genericCopy);
 			var index: Int = 0;
 			for (o in m.f.overloads.get())
-				walkBody(o.expr(), '$id.${m.f.name}~${++index}', nodeKind, id, m.s, typeString(o.type, 0), home, index);
+				walkBody(o.expr(), '$id.${m.f.name}~${++index}', nodeKind, id, m.s, typeString(o.type, 0), home, index, genericCopy);
 		}
 		final init: Null<TypedExpr> = c.init;
-		walkBody(init, '$id.__init__', 'init', id, true, '()->Void', home, 0);
+		walkBody(init, '$id.__init__', 'init', id, true, '()->Void', home, 0, genericCopy);
 	}
 
 	/**
@@ -161,13 +161,16 @@ final class TypedFactsMacro {
 	 * the type it belongs to, and numbered when it is the `overloadIndex`-th overload of its field.
 	 */
 	private function walkBody(
-		body: Null<TypedExpr>, id: String, kind: String, owner: String, isStatic: Bool, signature: String, home: String, overloadIndex: Int
+		body: Null<TypedExpr>, id: String, kind: String, owner: String, isStatic: Bool, signature: String, home: String,
+		overloadIndex: Int, genericCopy: Bool
 	): Void {
 		if (body == null) return;
 		final walk: TypedFactsWalk = new TypedFactsWalk(
-			this, id, kind, owner, isStatic, signature, null, [], TypedFactsWalk.writtenLocals(body)
+			this, id, kind, owner, isStatic, signature, null, [], TypedFactsShapes.writtenLocals(body)
 		);
-		if (fileOf(body.pos) != home) walk.generated();
+		if (fileOf(body.pos) != home) walk.flag('gen');
+		// a `@:generic` instance's body sits at the generic class's ranges, which that class's own nodes answer for
+		if (genericCopy) walk.flag('gi');
 		if (overloadIndex > 0) walk.markOverload(overloadIndex);
 		walk.root(body);
 	}
@@ -211,17 +214,15 @@ final class TypedFactsMacro {
 
 	/**
 	 * Install the hook that writes the facts of the compile to `path` once typing ended; the last line is an `end` record.
-	 * The header's `inc` names what no node of this compile captures: a call of an `inline` function, when it inlines.
+	 * An inlined call is a fact of the node it was spliced into (`TypedFactsWalk`).
 	 */
 	public static function run(path: String): Void {
 		if (installed) return;
 		installed = true;
 		Context.onAfterTyping(moduleTypes -> {
 			final writer: TypedFactsMacro = new TypedFactsMacro(File.write(path, false));
-			final inlining: Bool = !Context.defined('no-inline');
-			final inc: String = inlining ? ',"inc":["inline-calls"]' : '';
-			writer.line('{"k":"facts","v":$VERSION,"inline":$inlining$inc}');
-			for (t in moduleTypes) writer.collectOverloads(t);
+			writer.line('{"k":"facts","v":$VERSION,"inline":${!Context.defined('no-inline')}}');
+			for (t in moduleTypes) writer.collectFields(t);
 			for (t in moduleTypes) writer.moduleType(t);
 			writer.line('{"k":"end","nodes":${writer.nodes},"types":${writer._types}}');
 			writer._out.close();
@@ -246,29 +247,61 @@ final class TypedFactsMacro {
 	}
 
 	/**
-	 * Announce `file` as the home of a record: once per file, a `src` record with its UTF-8 length and Adler-32, which
-	 * the zlib stream of a stored (level 0) compression carries in its last four bytes.
+	 * Announce `file` as the home of a record: once per file, a `src` record with its UTF-8 length and MD5.
 	 */
 	public function noteHome(file: String): Void {
 		if (_homes.exists(file)) return;
 		_homes[file] = true;
 		final bytes: Null<haxe.io.Bytes> = try File.getBytes(file) catch (exception: haxe.Exception) null;
 		if (bytes == null) return;
-		final z: haxe.io.Bytes = haxe.zip.Compress.run(bytes, 0);
-		final trailer: haxe.io.BytesInput = new haxe.io.BytesInput(z, z.length - ADLER_BYTES);
-		trailer.bigEndian = true;
-		final adler: Int = trailer.readInt32();
-		line('{"k":"src","path":${Json.stringify(file)},"len":${bytes.length},"adler":$adler}');
+		line('{"k":"src","path":${Json.stringify(file)},"len":${bytes.length},"md5":"${haxe.crypto.Md5.make(bytes).toHex()}"}');
 	}
 
-	private function collectOverloads(t: ModuleType): Void {
+	/** Note, for every class, which fields have overloads and where each `inline` method is declared. */
+	private function collectFields(t: ModuleType): Void {
 		switch t {
 			case TClassDecl(r):
 				final c: ClassType = r.get();
-				for (f in c.fields.get().concat(c.statics.get())) if (f.overloads.get().length > 0)
-					_overloaded[typeId(c.pack, c.name) + '.' + f.name] = true;
+				final owner: String = typeId(c.pack, c.name);
+				for (f in c.fields.get().concat(c.statics.get())) {
+					if (f.overloads.get().length > 0) _overloaded['$owner.${f.name}'] = true;
+					if (f.kind.match(FMethod(MethInline))) {
+						final info: { min: Int, max: Int, file: String } = Context.getPosInfos(f.pos);
+						final list: Array<{ min: Int, max: Int, id: String }> = _inlines[info.file] ?? [];
+						_inlines[info.file] = list;
+						list.push({ min: info.min, max: info.max, id: '$owner.${f.name}' });
+					}
+				}
 			case _:
 		}
+	}
+
+	/** The `inline` function declared around `min`–`max` of `file` (the innermost), whose body was spliced from there; null for none. */
+	public function inlineCallee(file: String, min: Int, max: Int): Null<String> {
+		var best: Null<{ min: Int, max: Int, id: String }> = null;
+		for (f in _inlines[file] ?? []) if (f.min <= min && max <= f.max && (best == null || f.max - f.min < best.max - best.min)) best = f;
+		return best?.id;
+	}
+
+	/**
+	 * Whether `file` is the standard `Reflect.hx` or `Type.hx` the compile resolved — a body of reflection inlined from
+	 * there. Compared by resolved path: a project's own `Type.hx` is not one.
+	 */
+	public function reflectionModule(file: String): Bool {
+		final known: Null<Bool> = _reflectionFiles[file];
+		if (known != null) return known;
+		final full: String = canonicalFile(file);
+		final answer: Bool = Lambda.exists(['Reflect.hx', 'Type.hx'], m -> {
+			final resolved: Null<String> = try Context.resolvePath(m) catch (exception: haxe.Exception) null;
+			resolved != null && canonicalFile(resolved) == full;
+		});
+		_reflectionFiles[file] = answer;
+		return answer;
+	}
+
+	private static function canonicalFile(path: String): String {
+		final full: Null<String> = try sys.FileSystem.fullPath(path) catch (exception: haxe.Exception) null;
+		return haxe.io.Path.normalize(full ?? path);
 	}
 
 	/** The file `p` lies in. */
@@ -342,8 +375,17 @@ final class TypedFactsMacro {
 		return arr([for (t in list) q(typeString(t, 0))]);
 	}
 
+	/**
+	 * The metadata names, and `builds`: the macro calls of `@:build`/`@:autoBuild`/`@:genericBuild`, printed — code that
+	 * runs at compile time over the type. A `macro` field (`k: "macro"`) is always reachable from outside the program.
+	 */
 	private static function metaList(meta: Array<MetadataEntry>): String {
-		return meta.length == 0 ? '' : ',"meta":' + arr([for (m in meta) q(m.name)]);
+		if (meta.length == 0) return '';
+		final builds: Array<String> = [
+			for (m in meta) if (m.name == ':build' || m.name == ':autoBuild' || m.name == ':genericBuild')
+				for (p in m.params ?? []) q(haxe.macro.ExprTools.toString(p))
+		];
+		return ',"meta":' + arr([for (m in meta) q(m.name)]) + (builds.length == 0 ? '' : ',"builds":' + arr(builds));
 	}
 
 	private static function access(a: VarAccess): String {

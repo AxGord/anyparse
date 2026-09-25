@@ -6675,7 +6675,7 @@
 			"name": "M-FACTS-FLOW-CAST",
 			"type": "anyparse.check.TypedFactsWalk",
 			"method": "visit",
-			"find": "flowText(str(inner.t), str(e.t), 'cast', e.pos);",
+			"find": "flowText(sourceType(inner), sink == '?' ? 'Dynamic' : sink, 'cast', e.pos);",
 			"replace": "",
 			"note": "an unchecked cast carries no flow"
 		},
@@ -6815,7 +6815,7 @@
 			"name": "M-FACTS-INIT",
 			"type": "anyparse.check.TypedFactsMacro",
 			"method": "classType",
-			"find": "walkBody(init, '$id.__init__', 'init', id, true, '()->Void', home, 0);",
+			"find": "walkBody(init, '$id.__init__', 'init', id, true, '()->Void', home, 0, genericCopy);",
 			"replace": "",
 			"note": "__init__ is not walked"
 		},
@@ -6839,17 +6839,9 @@
 			"name": "M-FACTS-REFLECTION-INLINED",
 			"type": "anyparse.check.TypedFactsWalk",
 			"method": "at",
-			"find": "if (Lambda.exists(REFLECTION_MODULES, m -> info.file.endsWith(m))) incomplete('reflection-inlined');",
+			"find": "if (_host.reflectionModule(info.file)) incomplete('reflection-inlined');",
 			"replace": "",
 			"note": "an inlined Reflect call leaves no mark"
-		},
-		{
-			"name": "M-FACTS-CONFIG-GAPS",
-			"type": "anyparse.check.TypedFactsMacro",
-			"method": "run",
-			"find": "final inc: String = inlining ? ',\"inc\":[\"inline-calls\"]' : '';",
-			"replace": "final inc: String = '';",
-			"note": "a compile that inlines says nothing about the calls it lost"
 		},
 		{
 			"name": "M-FACTS-OVERLOADS",
@@ -6860,25 +6852,18 @@
 			"note": "overload bodies past the first are not walked"
 		},
 		{
-			"name": "M-FACTS-SPLICED",
-			"type": "anyparse.query.CompilerFacts",
-			"method": "spliced",
-			"force": "false",
-			"note": "an inlined body is not found at its call site"
-		},
-		{
 			"name": "M-FACTS-INLINED-CHILD",
 			"type": "anyparse.check.TypedFactsWalk",
 			"method": "child",
-			"find": "if (info.file != _home) {",
-			"replace": "if (false) {",
-			"note": "a function in an inlined body is homed in the callee file"
+			"find": "if (!_inBody || !inside) nested._header += ',\"inl\":${q(id)}';",
+			"replace": "",
+			"note": "a function spliced in from another body claims a range of the file it was declared in"
 		},
 		{
 			"name": "M-FACTS-GENERATED",
 			"type": "anyparse.check.TypedFactsMacro",
 			"method": "walkBody",
-			"find": "if (fileOf(body.pos) != home) walk.generated();",
+			"find": "if (fileOf(body.pos) != home) walk.flag('gen');",
 			"replace": "",
 			"note": "a macro-built body claims a range of the macro file"
 		},
@@ -6910,9 +6895,95 @@
 			"name": "M-FACTS-DROPPED",
 			"type": "anyparse.check.TypedFactsProbe",
 			"method": "probeAll",
-			"find": "dropped.push({ name: LintConfig.describeOracle(asked[i].oracle), reason: failureOf(runs[i]) });",
+			"find": "facts.dropped.push({ name: LintConfig.describeOracle(asked[i].oracle), reason: failureOf(runs[i]) });",
 			"replace": "{}",
 			"note": "a configuration that failed is dropped in silence"
+		},
+		{
+			"name": "M-FACTS-INLINED-CALL",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "spliced",
+			"find": "add('calls', '{\"t\":${q(callee)},\"a\":\"inlined\",\"rt\":${q(str(e.t))},\"p\":${at(e.pos)}}');",
+			"replace": "",
+			"note": "an inlined call leaves no call fact"
+		},
+		{
+			"name": "M-FACTS-SAME-FILE-INLINE",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "walk",
+			"find": "final inside: Bool = info.file == _home && info.min >= _min && info.max <= _max;",
+			"replace": "final inside: Bool = info.file == _home;",
+			"note": "a body inlined from the same file reads as the caller's own code"
+		},
+		{
+			"name": "M-FACTS-SITE-UNKNOWN",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "within",
+			"find": "if (!whole && (n.incomplete.contains('inline-site-unknown') || n.incomplete.contains('macro-expansion'))) return null;",
+			"replace": "",
+			"note": "a range query short of a spliced node answers as if its facts were placed"
+		},
+		{
+			"name": "M-FACTS-MACRO-EXPANSION",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "spliced",
+			"find": "incomplete('macro-expansion');",
+			"replace": "",
+			"note": "a macro expansion leaves no mark"
+		},
+		{
+			"name": "M-FACTS-REFLECT-VALUE",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "reflectionValue",
+			"find": "add('refl', '{\"t\":${q(c.toString() + '.' + cf.toString())},\"v\":true,\"p\":${at(e.pos)}}');",
+			"replace": "{}",
+			"note": "a reflection member read as a value is no reflection site"
+		},
+		{
+			"name": "M-FACTS-UNTYPED-DECLARED",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "sourceType",
+			"force": "str(leaf.t)",
+			"note": "an untyped-retyped value flows at its retyped type"
+		},
+		{
+			"name": "M-FACTS-IDENT-READ",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "visit",
+			"find": "add('native', '{\"w\":\"ident\",\"n\":${q(identifier)},\"p\":${at(e.pos)}}');",
+			"replace": "",
+			"note": "a native identifier read is no native site"
+		},
+		{
+			"name": "M-FACTS-GENERIC-RANGES",
+			"type": "anyparse.query.FactText",
+			"method": "nodeHead",
+			"find": " || line.indexOf(',\"gi\":true') >= 0",
+			"replace": "",
+			"note": "a generic instance copy claims its generic class ranges"
+		},
+		{
+			"name": "M-FACTS-BUILDS",
+			"type": "anyparse.check.TypedFactsMacro",
+			"method": "metaList",
+			"find": "for (p in m.params ?? []) q(haxe.macro.ExprTools.toString(p))",
+			"replace": "for (p in new Array<haxe.macro.Expr>()) q(haxe.macro.ExprTools.toString(p))",
+			"note": "a build macro is not recorded"
+		},
+		{
+			"name": "M-FACTS-STALE-FOREIGN",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "materialize",
+			"find": "if (where == null && !node.incomplete.contains('stale-foreign')) node.incomplete.push('stale-foreign');",
+			"replace": "",
+			"note": "a spliced fact lost to a dropped file leaves no mark"
+		},
+		{
+			"name": "M-FACTS-REFLECTION-PATH",
+			"type": "anyparse.check.TypedFactsMacro",
+			"method": "reflectionModule",
+			"force": "StringTools.endsWith(file, 'Type.hx') || StringTools.endsWith(file, 'Reflect.hx')",
+			"note": "any Type.hx or Reflect.hx counts as the std reflection"
 		}
 	]
 }

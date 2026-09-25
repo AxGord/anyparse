@@ -42,14 +42,14 @@ final class FactText {
 			min: Std.parseInt(NODE_HEAD.matched(HEAD_MIN)) ?? 0,
 			max: Std.parseInt(NODE_HEAD.matched(HEAD_MAX)) ?? 0,
 			foreign: FOREIGN_POSITION.match(line),
-			generated: line.indexOf(',"gen":true') >= 0
+			generated: line.indexOf(',"gen":true') >= 0 || line.indexOf(',"gi":true') >= 0 || line.indexOf(',"inl":') >= 0
 		};
 	}
 
-	/** The `len:adler` of `source` as UTF-8, the hash the facts file records for each file it homes a record in. */
+	/** The `len:md5` of `source` as UTF-8, the hash the facts file records for each file it homes a record in. */
 	public static function contentHash(source: String): String {
 		final bytes: Bytes = Bytes.ofString(source);
-		return '${bytes.length}:${haxe.crypto.Adler32.make(bytes)}';
+		return '${bytes.length}:${haxe.crypto.Md5.make(bytes).toHex()}';
 	}
 
 	/** A line the table keeps, detached from the dump it was cut from so the dump's text can be freed. */
@@ -124,5 +124,10 @@ typedef NodeHead = {
 	final min: Int;
 	final max: Int;
 	final foreign: Bool;
+
+	/**
+	 * Whether no range of its file may claim the node: a body a macro placed (`gen`), a `@:generic` instance's copy of
+	 * its generic class's body (`gi`), or a function spliced in from another body (`inl`). Such a node is found by id.
+	 */
 	final generated: Bool;
 }

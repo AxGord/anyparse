@@ -3,12 +3,29 @@ package anyparse.check;
 #if macro
 import haxe.macro.Type;
 import haxe.macro.TypeTools;
+import haxe.macro.TypedExprTools;
 
 using StringTools;
 
 /** The shapes of the typed tree `TypedFactsWalk` asks about, answered without walking. */
 @:nullSafety(Strict)
 final class TypedFactsShapes {
+
+	/** The classes whose `code` calls are native code. */
+	public static final SYNTAX_CLASSES: Array<String> = [
+		'js.Syntax',
+		'cpp.Syntax',
+		'python.Syntax',
+		'php.Syntax',
+		'lua.Syntax',
+		'hl.Syntax',
+		'cs.Syntax',
+		'java.Syntax',
+		'eval.Syntax'
+	];
+
+	/** The classes whose members are reflection, called or read as a value. */
+	public static final REFLECTION_CLASSES: Array<String> = ['Reflect', 'Type'];
 
 	public static function collectLeaves(e: TypedExpr, out: Array<TypedExpr>): Void {
 		switch e.expr {
@@ -68,6 +85,21 @@ final class TypedFactsShapes {
 			case TInst(c, _): c.toString() == 'String';
 			case _: false;
 		};
+	}
+
+	/** The locals `body` ever assigns after their declaration: a function held by one of them is no fixed call target. */
+	public static function writtenLocals(body: TypedExpr): Map<Int, Bool> {
+		final out: Map<Int, Bool> = [];
+		function scan(e: TypedExpr): Void {
+			switch e.expr {
+				case TBinop(OpAssign | OpAssignOp(_), { expr: TLocal(v) }, _) | TUnop(OpIncrement | OpDecrement, _, { expr: TLocal(v) }):
+					out[v.id] = true;
+				case _:
+			}
+			TypedExprTools.iter(e, scan);
+		}
+		scan(body);
+		return out;
 	}
 
 }

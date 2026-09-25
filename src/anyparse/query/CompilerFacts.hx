@@ -26,7 +26,8 @@ typedef FactPos = {
 /**
  * A call site. `target` is the called field's declaring type and name (`pack.Type.field`), a structure or dynamic
  * field's bare name, a local function's node id, or the identifier of a native call; absent for a call of a value.
- * `access` is `FInstance`, `FStatic`, `FAnon`, `FDynamic`, `FClosure`, `FEnum`, `super`, `local`, `ident` or `value`.
+ * `access` is `FInstance`, `FStatic`, `FAnon`, `FDynamic`, `FClosure`, `FEnum`, `fieldValue`, `super`, `local`, `ident`,
+ * `value`, or `inlined` — a call of an `inline` function the compiler spliced in, positioned at the callee's body.
  */
 typedef CallFact = {
 	final target: Null<String>;
@@ -38,9 +39,6 @@ typedef CallFact = {
 
 	/** The signature the compiler chose, for a call of an overloaded field; null otherwise. */
 	final signature: Null<String>;
-
-	/** For a fact of an inlined body, the range in the node's own file it was spliced into; null otherwise. */
-	final inlinedAt: Null<FactPos>;
 }
 
 /** A `new`: the class and the instance type it makes. */
@@ -59,7 +57,6 @@ typedef FieldFact = {
 	final type: String;
 	final write: Bool;
 	final at: FactPos;
-	final inlinedAt: Null<FactPos>;
 }
 
 /** A value of type `from` reaching a place of type `to` through `via`: `var`, `assign`, `arg`, `ret`, `arr`, `obj` or `cast`. */
@@ -68,7 +65,6 @@ typedef FlowFact = {
 	final to: String;
 	final via: String;
 	final at: FactPos;
-	final inlinedAt: Null<FactPos>;
 }
 
 /** A non-String operand of a String concatenation: converted by its `toString`. */
@@ -89,6 +85,9 @@ typedef ReflectionFact = {
 	final target: String;
 	final name: Null<String>;
 	final typeArgument: Null<String>;
+
+	/** Whether the member (or the class itself) is read as a value, not called: whatever calls it later is reflection. */
+	final isValue: Bool;
 	final at: FactPos;
 }
 
@@ -126,20 +125,20 @@ typedef FactNode = {
 
 	/**
 	 * The node's range: the body the compiler typed (a method's function, a variable's initializer), not the whole
-	 * declaration; for a function spliced in by inlining, the call site it was spliced into.
+	 * declaration. For a function spliced in by inlining, the range it was declared at, in its callee.
 	 */
 	final at: FactPos;
 
 	/**
-	 * The channels this node's facts do not capture exactly — `reflection-inlined`: a `Reflect`/`Type` call the compiler
-	 * inlined, whose name and arguments are gone. A consumer answers Unknown for them.
+	 * The channels this node's facts do not capture exactly; a consumer answers Unknown for a question resting on one
+	 * (`TypedFactsProbe` lists them). The range queries `callsIn`/`flowsIn` already do.
 	 */
 	final incomplete: Array<String>;
 
 	/** Whether a macro placed the body outside its type's file: such a node is found by id, never by range. */
 	final generated: Bool;
 
-	/** The file of the inlined function this node was spliced from; null for code written where it stands. */
+	/** The node an inlined body spliced this function into: it runs there, not where it was declared. Null otherwise. */
 	final inlinedFrom: Null<String>;
 
 	/** For the `n`-th further overload of a field, `n`; 0 for the field's own body. */
@@ -187,6 +186,9 @@ typedef TypeFact = {
 
 	/** For a `@:generic` instance, the generic class at the arguments it was built for; null otherwise. */
 	final genericOf: Null<String>;
+
+	/** The printed macro calls of the type's `@:build`/`@:autoBuild`/`@:genericBuild`: compile-time code run over it. */
+	final builds: Array<String>;
 }
 
 /**
@@ -219,7 +221,6 @@ final class CompilerFacts {
 	private final _sources: Map<String, Null<String>> = [];
 	private final _expected: Map<String, String> = [];
 	private final _stale: Map<String, Bool> = [];
-	private final _gaps: Array<String> = [];
 	private final _dumps: Array<DumpFiles> = [];
 	private final _read: (String) -> Null<String>;
 	private final _key: (String) -> String;
@@ -244,14 +245,6 @@ final class CompilerFacts {
 		_sources.remove(key);
 		_indexes.remove(key);
 		_nodeCache.clear();
-	}
-
-	/**
-	 * The channels some configuration captured for no node — `inline-calls`: a call of an `inline` function, which the
-	 * compile inlined. A consumer answers Unknown for a question that rests on one.
-	 */
-	public function incompleteChannels(): Array<String> {
-		return _gaps.copy();
 	}
 
 	/** The node `id`, its facts unioned over every configuration that typed it; null when none did. */
@@ -287,18 +280,17 @@ final class CompilerFacts {
 		];
 	}
 
-	/** Every call site within `span` in `file`. */
-	public function callsIn(file: String, span: Span): Array<CallFact> {
-		return [
-			for (n in nodesAround(file, span, true)) for (c in n.calls) if (inside(c.at, file, span) || spliced(c.inlinedAt, file, span)) c
-		];
+	/**
+	 * Every call site within `span` in `file`; null — Unknown — when a node there holds facts no range places: a spliced
+	 * body (`inline-site-unknown`, `macro-expansion`) not wholly inside `span`, or facts lost to a stale file.
+	 */
+	public function callsIn(file: String, span: Span): Null<Array<CallFact>> {
+		return within(file, span, n -> n.calls, c -> c.at);
 	}
 
-	/** Every value flow within `span` in `file`. */
-	public function flowsIn(file: String, span: Span): Array<FlowFact> {
-		return [
-			for (n in nodesAround(file, span, true)) for (f in n.flows) if (inside(f.at, file, span) || spliced(f.inlinedAt, file, span)) f
-		];
+	/** Every value flow within `span` in `file`; null — Unknown — as `callsIn` says. */
+	public function flowsIn(file: String, span: Span): Null<Array<FlowFact>> {
+		return within(file, span, n -> n.flows, f -> f.at);
 	}
 
 	/**
@@ -360,8 +352,7 @@ final class CompilerFacts {
 		final files: DumpFiles = { paths: [], file: dump.file };
 		_dumps.push(files);
 		configurations.push(dump.name);
-		final header: HeaderRecord = Json.parse(lines[0]);
-		for (channel in header.inc ?? []) if (!_gaps.contains(channel)) _gaps.push(channel);
+
 		for (raw in lines) {
 			final line: String = FactText.detached(raw);
 			if (line.startsWith('{"k":"node"'))
@@ -397,7 +388,7 @@ final class CompilerFacts {
 	/** Record the text a configuration read of a file; two configurations that read different texts leave it stale. */
 	private function addSource(record: SourceRecord, dump: FactsDump): Void {
 		final file: String = dump.file(record.path);
-		final hash: String = '${record.len}:${record.adler}';
+		final hash: String = '${record.len}:${record.md5}';
 		final known: Null<String> = _expected[file];
 		if (known != null && known != hash)
 			_stale[file] = true
@@ -429,7 +420,8 @@ final class CompilerFacts {
 				superClass: record.sup,
 				interfaces: record.ifaces ?? [],
 				fields: fields,
-				genericOf: record.of
+				genericOf: record.of,
+				builds: record.builds ?? []
 			};
 			_types[record.id] = made;
 			_typeHomes[record.id] = { home: home, p: record.p };
@@ -482,9 +474,20 @@ final class CompilerFacts {
 		return at.file == _key(file) && span.from <= at.span.from && at.span.to <= span.to;
 	}
 
-	/** Whether an inlined body's fact was spliced in within `span`: its facts sit in the callee, its call site here. */
-	private function spliced(inlinedAt: Null<FactPos>, file: String, span: Span): Bool {
-		return inlinedAt != null && inside(inlinedAt, file, span);
+	/**
+	 * The facts `pick` takes from the nodes of `file` meeting `span` that lie inside it; a node wholly inside `span`
+	 * gives all of them, wherever the compiler placed them. Null when one of those nodes cannot say where some of its
+	 * facts run.
+	 */
+	private function within<F>(file: String, span: Span, pick: (FactNode) -> Array<F>, at: (F) -> FactPos): Null<Array<F>> {
+		final out: Array<F> = [];
+		for (n in nodesAround(file, span, true)) {
+			if (n.incomplete.contains('stale-foreign')) return null;
+			final whole: Bool = inside(n.at, file, span);
+			if (!whole && (n.incomplete.contains('inline-site-unknown') || n.incomplete.contains('macro-expansion'))) return null;
+			for (fact in pick(n)) if (whole || inside(at(fact), file, span)) out.push(fact);
+		}
+		return out;
 	}
 
 	private function indexOf(file: String): Null<CodepointIndex> {
@@ -558,11 +561,12 @@ final class CompilerFacts {
 			final node: FactNode = made ?? emptyNode(id, record, at);
 			made = node;
 			for (channel in record.inc ?? []) if (!node.incomplete.contains(channel)) node.incomplete.push(channel);
-			function anchor(p: Null<Array<Int>>): Null<FactPos> {
-				return p == null ? null : position(home, p, files.paths);
-			}
+
+			// a fact whose file the table cannot read any more — rewritten, or of another text — is lost to the node: say so
 			function place(p: Array<Int>): Null<FactPos> {
-				return position(home, p, files.paths);
+				final where: Null<FactPos> = position(home, p, files.paths);
+				if (where == null && !node.incomplete.contains('stale-foreign')) node.incomplete.push('stale-foreign');
+				return where;
 			}
 			// a fact is identified by its resolved text, so the same site from two configurations is one fact
 			function fresh(category: String, fact: Any, where: FactPos): Bool {
@@ -580,8 +584,7 @@ final class CompilerFacts {
 					receiverAt: c.rp == null ? null : place(c.rp),
 					result: c.rt,
 					at: where,
-					signature: c.sig,
-					inlinedAt: anchor(c.sp)
+					signature: c.sig
 				}: CallFact),
 				node.calls
 			);
@@ -597,8 +600,7 @@ final class CompilerFacts {
 					receiver: f.r,
 					type: f.t,
 					write: f.w ?? false,
-					at: where,
-					inlinedAt: anchor(f.sp)
+					at: where
 				}: FieldFact),
 				node.fields
 			);
@@ -607,8 +609,7 @@ final class CompilerFacts {
 					from: f.s,
 					to: f.d,
 					via: f.c,
-					at: where,
-					inlinedAt: anchor(f.sp)
+					at: where
 				}: FlowFact),
 				node.flows
 			);
@@ -622,6 +623,7 @@ final class CompilerFacts {
 					target: r.t,
 					name: r.n,
 					typeArgument: r.c,
+					isValue: r.v ?? false,
 					at: where
 				}: ReflectionFact),
 				node.reflection
@@ -653,10 +655,20 @@ final class CompilerFacts {
 	public static function build(
 		dumps: Array<FactsDump>, read: (String) -> Null<String>, key: (String) -> String, ?dropped: Array<{ name: String, reason: String }>
 	): CompilerFacts {
-		final facts: CompilerFacts = new CompilerFacts(read, key);
+		final facts: CompilerFacts = create(read, key);
 		for (d in dropped ?? []) facts.dropped.push(d);
 		for (dump in dumps) facts.add(dump);
 		return facts;
+	}
+
+	/** An empty table, which `addDump` fills one dump at a time: each dump's text can then be freed before the next is read. */
+	public static function create(read: (String) -> Null<String>, key: (String) -> String): CompilerFacts {
+		return new CompilerFacts(read, key);
+	}
+
+	/** Add one configuration's facts; a dump that is not a complete facts file joins `dropped` instead. */
+	public inline function addDump(dump: FactsDump): Void {
+		add(dump);
 	}
 
 	/** The id of type string `type` without its type arguments. */
@@ -713,11 +725,7 @@ private typedef DumpFiles = {
 private typedef SourceRecord = {
 	final path: String;
 	final len: Int;
-	final adler: Int;
-}
-
-private typedef HeaderRecord = {
-	final ?inc: Array<String>;
+	final md5: String;
 }
 
 private typedef FileRecord = {
@@ -744,6 +752,7 @@ private typedef TypeRecord = {
 	final ?ext: Bool;
 	final ?sup: String;
 	final ?of: String;
+	final ?builds: Array<String>;
 	final ?ifaces: Array<String>;
 	final ?fields: Array<FieldRecord>;
 }
@@ -755,7 +764,6 @@ private typedef CallRecord = {
 	final ?rp: Array<Int>;
 	final rt: String;
 	final ?sig: String;
-	final ?sp: Array<Int>;
 	final p: Array<Int>;
 }
 
@@ -782,15 +790,13 @@ private typedef NodeRecord = {
 		r: String,
 		t: String,
 		?w: Bool,
-		p: Array<Int>,
-		?sp: Array<Int>
+		p: Array<Int>
 	}>;
 	final ?flows: Array<{
 		s: String,
 		d: String,
 		c: String,
-		p: Array<Int>,
-		?sp: Array<Int>
+		p: Array<Int>
 	}>;
 	final ?strs: Array<{ o: String, p: Array<Int> }>;
 	final ?iters: Array<{ v: String, i: String, p: Array<Int> }>;
@@ -798,6 +804,7 @@ private typedef NodeRecord = {
 		t: String,
 		?n: String,
 		?c: String,
+		?v: Bool,
 		p: Array<Int>
 	}>;
 	final ?native: Array<{ w: String, n: String, p: Array<Int> }>;

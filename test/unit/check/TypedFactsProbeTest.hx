@@ -55,7 +55,7 @@ class TypedFactsProbeTest extends Test {
 		scratch.remove();
 	}
 
-	@:pin('control') @:killer('M-FACTS-INLINE-POSITIONS')
+	@:pin('control') @:killer('M-FACTS-INLINE-POSITIONS') @:killer('M-FACTS-SAME-FILE-INLINE')
 	public function testAnInlineCallIsNoCallSiteAndItsBodyKeepsTheCalleesPositions(): Void {
 		// the compiler inlines before the hook runs: the call is gone from the caller, whose facts now hold the body — at
 		// the callee's own ranges, so none of them reads as the type of the call site; the callee keeps a node of its own
@@ -65,7 +65,14 @@ class TypedFactsProbeTest extends Test {
 		final facts: Null<CompilerFacts> = scratch.facts;
 		final file: String = scratch.path('Main.hx');
 		Assert.notNull(facts?.node('Main.size'));
-		Assert.isFalse(facts?.node('Main.main')?.calls.exists(c -> c.target == 'Main.size') ?? true, 'the inline call survived');
+		// no call of the function is left, only the call fact of its spliced body
+		Assert.isFalse(
+			facts?.node('Main.main')?.calls.exists(c -> c.target == 'Main.size' && c.access != 'inlined') ?? true,
+			'the inline call survived'
+		);
+		Assert.isTrue(
+			facts?.node('Main.main')?.calls.exists(c -> c.target == 'Main.size' && c.access == 'inlined') ?? false, 'no inlined call'
+		);
 		final body: Int = source.indexOf('a.length');
 		final inlined: Null<FieldFact> = facts?.node('Main.main')?.fields.find(f -> f.field == 'length');
 		Assert.equals(body, inlined?.at.span.from);
@@ -195,7 +202,7 @@ class TypedFactsProbeTest extends Test {
 		}
 		final whole: Span = new Span(0, File.getContent(scratch.path('Main.hx')).length);
 		Assert.isTrue(
-			scratch.facts?.flowsIn(scratch.path('Main.hx'), whole).exists(f -> f.via == 'cast') ?? false, 'no cast flow in the file'
+			(scratch.facts?.flowsIn(scratch.path('Main.hx'), whole) ?? []).exists(f -> f.via == 'cast'), 'no cast flow in the file'
 		);
 		Assert.equals("$Box.T", scratch.facts?.type('Box')?.fields.find(f -> f.name == 'v')?.type);
 		scratch.remove();
@@ -317,16 +324,22 @@ class TypedFactsProbeTest extends Test {
 	}
 
 	@:pin('control') @:killer('M-FACTS-GENERIC') @:killer('M-FACTS-INIT') @:killer('M-FACTS-REASSIGNED-LOCAL')
-	@:killer('M-FACTS-FIELD-VALUE') @:killer('M-FACTS-REFLECTION-INLINED') @:killer('M-FACTS-CONFIG-GAPS')
+	@:killer('M-FACTS-FIELD-VALUE') @:killer('M-FACTS-REFLECTION-INLINED') @:killer('M-FACTS-REFLECT-VALUE')
+	@:killer('M-FACTS-UNTYPED-DECLARED') @:killer('M-FACTS-IDENT-READ') @:killer('M-FACTS-GENERIC-RANGES') @:killer('M-FACTS-BUILDS')
 	public function testGenericInstancesInitAndCallsThatNameNoFixedBody(): Void {
 		// a `@:generic` instance and `__init__` are code of their own; a local assigned again, a function-typed field and a
-		// dynamic method call whatever they hold; an inlined `Reflect` call leaves only a mark
+		// dynamic method call whatever they hold; an inlined `Reflect` call leaves only a mark, a reflection member or class
+		// read as a value is reflection, a value `untyped` retyped keeps its declared type, and a native identifier is a site
 		final source: String = '@:generic class Gen<T> { public function new() {} public function g(t:T):T { Main.hook(3); return t; } }\n'
 			+ 'class Main {\n\tstatic var stored:Void->Void;\n\tstatic function __init__() { hook(99); }\n'
 			+ '\tpublic static function hook(i:Int):Int return i;\n\tstatic function fclos():Void {}\n'
 			+ '\tstatic function main() {\n\t\tnew Gen<String>().g("x");\n' + '\t\tvar f = () -> 1; f = () -> 2; f();\n'
-			+ '\t\tvar g:Dynamic = () -> 3;\n' + '\t\tstored = fclos; stored();\n' + '\t\tReflect.callMethod(null, fclos, []);\n\t}\n}\n';
-		final scratch: Scratch = compile(['Main.hx' => source]);
+			+ '\t\tvar g:Dynamic = () -> 3;\n' + '\t\tstored = fclos; stored();\n' + '\t\tReflect.callMethod(null, fclos, []);\n'
+			+ '\t\tfinal rf = Reflect.field; var r = Reflect;\n' + '\t\tvar m:Main = null; var y = untyped m; y.zz();\n'
+			+ '\t\tvar w = untyped window;\n\t}\n}\n' + '@:build(Build.build()) class Built {}\n';
+		final build: String = 'class Build { public static macro function build():Array<haxe.macro.Expr.Field> '
+			+ 'return haxe.macro.Context.getBuildFields(); }\n';
+		final scratch: Scratch = compile(['Main.hx' => source, 'Build.hx' => build]);
 		final facts: Null<CompilerFacts> = scratch.facts;
 		Assert.equals('Gen<String>', facts?.type('Gen_String')?.genericOf);
 		Assert.isTrue(facts?.node('Gen_String.g')?.calls.exists(c -> c.target == 'Main.hook') ?? false, 'the generic instance body');
@@ -338,7 +351,14 @@ class TypedFactsProbeTest extends Test {
 		);
 		Assert.isTrue(main?.calls.exists(c -> c.access == 'fieldValue' && c.target == 'Main.stored') ?? false, 'a call of a field value');
 		Assert.isTrue(main?.incomplete.contains('reflection-inlined') ?? false, 'an inlined Reflect call left no mark');
-		Assert.isTrue(facts?.incompleteChannels().contains('inline-calls') ?? false, 'inlining left no configuration mark');
+		final values: Array<String> = [for (r in main?.reflection ?? []) if (r.isValue) r.target];
+		Assert.isTrue(values.contains('Reflect.field') && values.contains('Reflect'), 'values: $values');
+		Assert.isTrue(main?.flows.exists(f -> f.via == 'var' && f.from == 'Main') ?? false, 'an untyped value lost its declared type');
+		Assert.isTrue(main?.natives.exists(n -> n.kind == 'ident' && n.name == 'window') ?? false, 'a native identifier read');
+		Assert.isFalse(
+			facts?.nodesIn(scratch.path('Main.hx')).exists(n -> n.id == 'Gen_String.g') ?? true, 'a generic copy claims a range'
+		);
+		Assert.same(['Build.build()'], facts?.type('Built')?.builds);
 		scratch.remove();
 	}
 
@@ -357,30 +377,43 @@ class TypedFactsProbeTest extends Test {
 		scratch.remove();
 	}
 
-	@:pin('control') @:killer('M-FACTS-SPLICED') @:killer('M-FACTS-INLINED-CHILD') @:killer('M-FACTS-GENERATED')
-	public function testInlinedAndGeneratedCodeIsFoundWhereItRuns(): Void {
-		// an inlined body's facts sit in the callee but answer a range query at the call site; a function in it is homed at the
-		// call site, never in the callee's file; a macro-built field's body is found by id, never by a range of the macro's file
+	@:pin('control') @:killer('M-FACTS-INLINED-CALL') @:killer('M-FACTS-INLINED-CHILD') @:killer('M-FACTS-GENERATED')
+	@:killer('M-FACTS-SITE-UNKNOWN') @:killer('M-FACTS-MACRO-EXPANSION')
+	public function testSplicedCodeIsTheCallersAndItsSiteIsUnknown(): Void {
+		// an inlined body — from another file or this one — is a call of its inline function and the caller's facts, but the
+		// compiler keeps no range for the site it replaced: a range query short of the whole caller is Unknown. A function
+		// in it runs in the caller and is found by id; a macro-built field's body is found by id too, as is a macro
+		// expansion's, which leaves a mark of its own
 		final main: String = 'class Main {\n\tpublic static function hook(i:Int):Int return i;\n'
-			+ '\tstatic function main() {\n\t\tLib.wrap(1);\n\t\tvar d = Lib.deferred();\n\t\tTarget.generated();\n\t}\n}\n'
-			+ '@:build(Build.build()) class Target {}\n';
+			+ '\tstatic inline function same():Void { var g = function() { hook(10); }; g(); }\n'
+			+ '\tstatic function main() {\n\t\tLib.wrap(1);\n\t\tvar d = Lib.deferred();\n\t\tsame();\n\t\tTarget.generated();\n'
+			+ '\t\tBuild.mac(3);\n\t}\n}\n@:build(Build.build()) class Target {}\n';
 		final lib: String = 'class Lib {\n\tpublic static inline function wrap(i:Int):Int return Main.hook(i);\n'
 			+ '\tpublic static inline function deferred():Void->Int return () -> Main.hook(2);\n}\n';
-		final build: String = 'import haxe.macro.Context;\nclass Build {\n\tpublic static macro function build():Array<haxe.macro.Expr.Field> {\n'
+		final build: String = 'import haxe.macro.Context;\nimport haxe.macro.Expr;\nclass Build {\n'
+			+ '\tpublic static macro function build():Array<Field> {\n'
 			+ '\t\tfinal fields = Context.getBuildFields();\n\t\tfields.push({ name: "generated", access: [APublic, AStatic], '
 			+ 'pos: Context.currentPos(), kind: FFun({ args: [], ret: macro :Void, expr: macro { Main.hook(7); } }) });\n'
-			+ '\t\treturn fields;\n\t}\n}\n';
+			+ '\t\treturn fields;\n\t}\n\tpublic static macro function mac(e:Expr):Expr return macro Main.hook($$e);\n}\n';
 		final scratch: Scratch = compile(['Main.hx' => main, 'Lib.hx' => lib, 'Build.hx' => build]);
 		final facts: Null<CompilerFacts> = scratch.facts;
 		final file: String = scratch.path('Main.hx');
-		final body: Int = main.indexOf('Lib.wrap(1)');
-		final spliced: Array<CallFact> = facts?.callsIn(file, new Span(body, body + 'Lib.wrap(1)'.length)) ?? [];
-		Assert.isTrue(spliced.exists(c -> c.target == 'Main.hook'), 'the inlined call is not found at its call site');
-		final child: Null<FactNode> = [for (n in facts?.nodesIn(file) ?? []) if (n.inlinedFrom != null) n][0];
-		Assert.isTrue(StringTools.endsWith(child?.inlinedFrom ?? '', 'Lib.hx'), 'the inlined function is not homed at the call site');
-		Assert.isFalse(
-			facts?.nodesIn(scratch.path('Lib.hx')).exists(n -> n.inlinedFrom != null) ?? true, 'an inlined function sits in its callee'
-		);
+		final node: Null<FactNode> = facts?.node('Main.main');
+		final inlined: Array<Null<String>> = [for (c in node?.calls ?? []) if (c.access == 'inlined') c.target];
+		Assert.isTrue(inlined.contains('Lib.wrap') && inlined.contains('Main.same'), 'inlined: $inlined');
+		Assert.isTrue(node?.incomplete.contains('inline-site-unknown') ?? false, 'the splice left no mark');
+		Assert.isTrue(node?.incomplete.contains('macro-expansion') ?? false, 'the macro expansion left no mark');
+		final call: Int = main.indexOf('Lib.wrap(1)');
+		Assert.isNull(facts?.callsIn(file, new Span(call, call + 'Lib.wrap(1)'.length)), 'a range short of the caller answered');
+		final whole: Null<FactPos> = node?.at;
+		final all: Array<CallFact> = whole == null ? [] : facts?.callsIn(file, whole.span) ?? [];
+		Assert.isTrue(all.exists(c -> c.target == 'Main.hook'), 'the whole caller does not hold the spliced call');
+		final spliced: Array<String> = [for (id in node?.fns ?? []) if (facts?.node(id)?.inlinedFrom == 'Main.main') id];
+		Assert.equals(2, spliced.length);
+		for (name in ['Main.hx', 'Lib.hx'])
+			Assert.isFalse(
+				facts?.nodesIn(scratch.path(name)).exists(n -> n.inlinedFrom != null) ?? true, 'a spliced function claims $name'
+			);
 		Assert.isTrue(facts?.node('Target.generated')?.generated ?? false, 'the generated body is not marked');
 		Assert.isFalse(
 			facts?.nodesIn(scratch.path('Build.hx')).exists(n -> n.id == 'Target.generated') ?? true,
@@ -414,6 +447,27 @@ class TypedFactsProbeTest extends Test {
 		// the table reads Stale.hx only now, after the edit: its text is not the compiled one
 		File.saveContent(scratch.path('Stale.hx'), stale + '// edited\n');
 		Assert.isNull(facts?.node('Stale.f'), 'facts answered for a text the compile never read');
+		scratch.remove();
+	}
+
+	@:pin('control') @:killer('M-FACTS-STALE-FOREIGN') @:killer('M-FACTS-REFLECTION-PATH')
+	public function testALostSplicedFactMarksItsNodeAndOnlyTheStdIsReflection(): Void {
+		// the caller's file is unchanged, but facts spliced in from a file the table dropped are lost to it: the node says so,
+		// and its range queries are Unknown. A project's own `Type.hx` inlined into it is no reflection
+		final main: String = 'class Main {\n\tpublic static function hook(i:Int):Int return i;\n'
+			+ '\tstatic function main() { Lib.wrap(1); my.Type.twice(2); }\n}\n';
+		final scratch: Scratch = compile([
+			'Main.hx' => main,
+			'Lib.hx' => 'class Lib { public static inline function wrap(i:Int):Int return Main.hook(i); }\n',
+			'my/Type.hx' => 'package my;\nclass Type { public static inline function twice(i:Int):Int return Main.hook(i) * 2; }\n'
+		]);
+		final facts: Null<CompilerFacts> = scratch.facts;
+		Assert.isFalse(facts?.node('Main.main')?.incomplete.contains('reflection-inlined') ?? true, 'a project Type.hx read as reflection');
+		facts?.invalidate(scratch.path('Lib.hx'));
+		final node: Null<FactNode> = facts?.node('Main.main');
+		Assert.isTrue(node?.incomplete.contains('stale-foreign') ?? false, 'a lost spliced fact left no mark');
+		final whole: Null<FactPos> = node?.at;
+		Assert.isNull(whole == null ? [] : facts?.callsIn(scratch.path('Main.hx'), whole.span), 'a node with lost facts answered');
 		scratch.remove();
 	}
 
