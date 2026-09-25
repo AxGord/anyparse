@@ -697,3 +697,15 @@ decided the question; it may not become a record of runs.
 - oracle generation: a `project.xml`-tested define in an entry's `defines` → it reaches haxe but not lime's
   project evaluation (`ASSET_TOOLS` → `HEADLESS`); such a define goes on the generate command — `54150a0c`
 - "hxq ignores an oracle entry's `dir`" → on node every spawn kind honours it; pinned per spawn kind — `54150a0c`
+- compiler facts: `-D no-inline` for the facts compile → it changes typing (TM refuses inline calls in field
+  initializers); compile as the build does, with `keep-inline-positions` — `758ab0c2`
+- compiler facts: facts of an inlined body attributed by position → they carry the callee's file and range and
+  nothing records the call site; inlined bodies are whole-node facts marked `inline-site-unknown` — `758ab0c2`
+- compiler facts: a flow compared at the unified type of an if/switch/try → the branch value's own type is lost;
+  the sink is pushed down to every value-producing leaf — `758ab0c2`
+- compiler facts: a channel the typed tree cannot show (inlined js reflection, expression macros, a stale file)
+  left silent → the consumer would read absence as "no code"; each carries a node marker — `758ab0c2`
+- compiler facts: persistent/serialized with the interpreted `Json` / `Ref.get()` → eval decodes the whole class
+  per call (169 s vs 16 s); `Ref.toString()` and JSON written by hand — `758ab0c2`
+- spans: "a Span is a codepoint offset" → on js/jvm a Span counts UTF-16 units; the compiler's Position counts
+  codepoints, converted by `CodepointIndex` — `758ab0c2`
