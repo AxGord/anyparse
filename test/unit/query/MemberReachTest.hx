@@ -739,6 +739,123 @@ class MemberReachTest extends Test {
 		assertMatch(askLocal(fresh, 'xs'), r -> r.match(Proven));
 	}
 
+	@:pin('control') @:killer('M-REACH-CALLEE-WALK') @:killer('M-REACH-CALLEE-REFUSED')
+	public function testParameterRegionCallingProjectCodeDependsOnWhatItChanges(): Void {
+		// The caller may hold the same array, so a callee that changes ANY array other than a fresh local of its own may
+		// change it; a callee that changes none cannot.
+		final growing: String = 'class C { static var all:Array<Int> = []; function f(xs:Array<Int>):Void {'
+			+ ' /*<*/ var y:Int = xs[0]; bump(); /*>*/ } static function bump():Void { if (all.length < 5) all.push(1); } }';
+		assertMatch(askLocal(growing, 'xs'), r -> r.match(Unknown(Aliased(_, _, 'F0.hx', _))));
+		final pure: String = 'class C { function f(xs:Array<Int>):Void { /*<*/ var y:Int = sq(xs[0]); /*>*/ } '
+			+ 'static function sq(v:Int):Int return v * v; }';
+		assertMatch(askLocal(pure, 'xs'), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-REACH-CALLEE-BENIGN-EDGE')
+	public function testCalleeChangingOnlyAFreshLocalOfItsOwnIsProven(): Void {
+		final src: String = 'class C { function f(xs:Array<Int>):Void { /*<*/ var y:Int = dup(xs[0]); /*>*/ } '
+			+ 'static function dup(v:Int):Int { final out:Array<Int> = []; out.push(v); return out.length; } }';
+		assertMatch(askLocal(src, 'xs'), r -> r.match(Proven));
+		// the same push onto an array the callee did not build may be onto the caller's
+		final shared: String = 'class C { static var all:Array<Int> = []; function f(xs:Array<Int>):Void { /*<*/ var y:Int = dup(xs[0]); '
+			+ '/*>*/ } static function dup(v:Int):Int { final out:Array<Int> = all; out.push(v); return out.length; } }';
+		assertMatch(askLocal(shared, 'xs'), r -> r.match(Unknown(Aliased(_, _, _, _))));
+	}
+
+	@:pin('control') @:killer('M-REACH-COMPOUND-WRITE-ALIAS')
+	public function testLocalGivenASharedValueByAnyWriteIsNotFresh(): Void {
+		// `x ??= all` stores the shared array in a local that started fresh: its push changes `all`, which may be the
+		// caller's, whether the region or a callee does it
+		final region: String = 'class C { static var all:Array<Int> = []; function f(xs:Array<Int>):Void { /*<*/ '
+			+ 'var x:Null<Array<Int>> = null; x ??= all; x.push(9); var y:Int = xs[0]; /*>*/ } }';
+		assertMatch(askLocal(region, 'xs'), r -> r.match(Unknown(Aliased(_, _, _, _))));
+		final callee: String = 'class C { static var all:Array<Int> = []; function f(xs:Array<Int>):Void { /*<*/ var y:Int = xs[0]; '
+			+ 'step(); /*>*/ } static function step():Void { var x:Null<Array<Int>> = null; x ??= all; x.push(9); } }';
+		assertMatch(askLocal(callee, 'xs'), r -> r.match(Unknown(Aliased(_, _, _, _))));
+		// a fresh value stored the same way leaves the local unshared
+		final fresh: String = 'class C { function f(xs:Array<Int>):Void { /*<*/ var y:Int = xs[0]; step(); /*>*/ } '
+			+ 'static function step():Void { var x:Null<Array<Int>> = null; x ??= []; x.push(9); } }';
+		assertMatch(askLocal(fresh, 'xs'), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-REACH-ASSIGNMENT-VALUE-ALIAS')
+	public function testAssignmentUsedAsAValueSharesWhatItStores(): Void {
+		// `all = xs = [1]` stores the fresh array in `xs` AND hands it to `all`, which `grow` pushes onto
+		final src: String = 'class C { static var all:Array<Int> = []; static function grow():Void all.push(9); '
+			+ 'function f():Void { var xs:Array<Int> = []; all = xs = [1]; /*<*/ grow(); var y:Int = xs[0]; /*>*/ } }';
+		assertMatch(askLocal(src, 'xs'), r -> r.match(Unknown(Aliased(_, _, _, _))));
+		final statement: String = 'class C { static var all:Array<Int> = []; static function grow():Void all.push(9); '
+			+ 'function f():Void { var xs:Array<Int> = []; xs = [1]; /*<*/ grow(); var y:Int = xs[0]; /*>*/ } }';
+		assertMatch(askLocal(statement, 'xs'), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-REACH-LAST-STATEMENT-VALUE')
+	public function testFreshWriteEndingAValueBlockSharesWhatItStores(): Void {
+		// the last statement of a block, `if`, `switch` or `try` in value position is that construct's value: `all` gets `xs`
+		final forms: Array<String> = [
+			'all = { xs = [1]; }',
+			'all = if (all.length > 0) { xs = [1]; } else []',
+			'all = switch (all.length) { case 0: xs = [1]; case _: []; }',
+			'all = try { xs = [1]; } catch (e:Dynamic) []'
+		];
+		for (form in forms) {
+			final src: String = 'class C { static var all:Array<Int> = []; static function grow():Void all.push(9); '
+				+ 'function f():Void { var xs:Array<Int> = []; $form; /*<*/ grow(); var y:Int = xs[0]; /*>*/ } }';
+			assertMatch(askLocal(src, 'xs'), r -> r.match(Unknown(Aliased(_, _, _, _))));
+		}
+	}
+
+	@:pin('control') @:killer('M-REACH-DISCARDED-BODY') @:killer('M-REACH-DISCARDED-STATEMENT-BRANCH')
+	public function testFreshWriteEndingAStatementBodyKeepsTheLocalUnshared(): Void {
+		// the last statement of a function or loop body, or of a statement `if` / `switch` branch, yields nothing
+		final forms: Array<String> = [
+			'var xs:Array<Int> = []; for (k in 0...1) { xs = [1]; }',
+			'var xs:Array<Int> = []; if (all.length > 0) { xs = [1]; } else xs = [2];',
+			'var xs:Array<Int> = []; switch (all.length) { case 0: xs = [1]; case _: }',
+			'var xs:Array<Int> = []; do { xs = [1]; } while (all.length > 9);'
+		];
+		for (form in forms) {
+			final src: String = 'class C { static var all:Array<Int> = []; static function grow():Void all.push(9); '
+				+ 'function f():Void { $form /*<*/ grow(); var y:Int = xs[0]; /*>*/ } }';
+			assertMatch(askLocal(src, 'xs'), r -> r.match(Proven));
+		}
+		// a member written fresh as the last statement of a method's block body
+		final member: String = 'class C { var items:Array<Int> = []; public function reset():Void { items = []; } '
+			+ 'function f():Void { /*<*/ helper(); /*>*/ } function helper():Void {} }';
+		assertMatch(ask([member]), r -> r.match(Proven));
+	}
+
+	@:pin('guard')
+	public function testDynamicFunctionACalleeRunsIsRefused(): Void {
+		// `hook` does nothing as declared, but any function value may be assigned over it: the syntax reads the call as one
+		// through a value.
+		final src: String = 'class C { dynamic static function hook():Void {} function f(xs:Array<Int>):Void {'
+			+ ' /*<*/ var y:Int = xs[0]; step(); /*>*/ } static function step():Void hook(); }';
+		assertMatch(askLocal(src, 'xs'), r -> r.match(Unknown(Aliased(_, _, _, _))));
+	}
+
+	@:pin('control') @:killer('M-REACH-CALLEE-REWRITTEN') @:killer('M-REACH-CALLEE-AMBIGUOUS')
+	public function testCalleeWhoseBodyIsNotItsSourceIsRefused(): Void {
+		// A build macro may rewrite the callee's body; a second type of its name leaves which body runs unknown.
+		final region: String = 'class C { function f(xs:Array<Int>):Void { /*<*/ var y:Int = H.id(xs[0]); /*>*/ } }';
+		final built: String = '@:build(M.build()) class H { public static function id(v:Int):Int return v; }';
+		assertMatch(askLocalIn([region, built], 'xs'), r -> r.match(Unknown(Aliased(_, _, _, _))));
+		final plain: String = 'class H { public static function id(v:Int):Int return v; }';
+		assertMatch(askLocalIn([region, plain, plain], 'xs'), r -> r.match(Unknown(Aliased(_, _, _, _))));
+		assertMatch(askLocalIn([region, plain], 'xs'), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-REACH-CALLEE-OVERRIDES')
+	public function testCalleeDispatchOnALibraryTypeReachesItsLibraryOverrides(): Void {
+		// `b.go()` runs `LBase.go` as declared, and `LSub.go` — declared in library code the graph has not read — for an `LSub`.
+		final region: String = 'class C { function f(xs:Array<Int>, b:LBase):Void { /*<*/ var y:Int = xs[0]; b.go(); /*>*/ } }';
+		final base: String = 'class LBase { public function new() {} public function go():Void {} }';
+		final sub: String =
+			'class LSub extends LBase { public static var all:Array<Int> = []; override public function go():Void all.push(1); }';
+		final reach: MemberReach = reachOf([region], [base, sub], true);
+		assertMatch(mutatesNamed(reach, region, 'xs'), r -> r.match(Unknown(Aliased(_, _, _, _))));
+	}
+
 	@:pin('control') @:killer('M-REACH-ENTRY-HAZARDS')
 	public function testHazardInTheRegionItselfIsUnknown(): Void {
 		final computed: String =
@@ -1067,9 +1184,11 @@ class MemberReachTest extends Test {
 
 	@:pin('control') @:killer('M-REACH-PURE-PARAMS')
 	public function testLibraryCallHandedAnObjectIsNotPure(): Void {
-		// `add(x:T)` converts what it is handed: a literal runs nothing, an object may run its `toString`.
-		final std: String = 'class StringBuf { public function new() {} public function add<T>(x:T):Void {} }';
-		final obj: String = 'class Obj { public function new() {} }';
+		// `add(x:T)` converts what it is handed: a literal runs nothing, an object may run its `toString`, whose code the
+		// region then runs.
+		final std: String = 'class StringBuf { var s:String = ""; public function new() {} public function add<T>(x:T):Void s += x; }';
+		final obj: String = 'class Obj { public static var all:Array<Int> = []; public function new() {} '
+			+ 'public function toString():String { all.push(1); return ""; } }';
 		final src: String = 'class C { function f(xs:Array<Int>, o:Obj):Void { final b:StringBuf = new StringBuf(); '
 			+ '/*<*/ var y:Int = xs[0]; b.add(o); /*>*/ } }';
 		final at: Int = src.lastIndexOf('xs', src.indexOf(REGION_CLOSE));
@@ -1504,7 +1623,16 @@ class MemberReachTest extends Test {
 
 	/** Ask whether the region of `src` may mutate what the local or parameter `name` holds. */
 	private function askLocal(src: String, name: String): ReachResult {
-		final reach: MemberReach = reachOf([src], null, true);
+		return askLocalIn([src], name);
+	}
+
+	/** `askLocal` over the whole `project`, whose first file holds the region. */
+	private function askLocalIn(project: Array<String>, name: String): ReachResult {
+		return mutatesNamed(reachOf(project, null, true), project[0], name);
+	}
+
+	/** Ask `reach` whether the region of `src` (the file `F0.hx`) may mutate what `name`, read last in it, holds. */
+	private static function mutatesNamed(reach: MemberReach, src: String, name: String): ReachResult {
 		final at: Int = src.lastIndexOf(name, src.indexOf(REGION_CLOSE));
 		return reach.mayMutateNamed('F0.hx', name, new Span(at, at + name.length), regionOf(src));
 	}

@@ -2179,12 +2179,17 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachTest#testAnAnswerDoesNotDependOnTheQuestionsBeforeIt :: control :: M-REACH-QUESTION-ENTERED',
 			'unit.query.MemberReachTest#testAnInstanceThatLeftTheTypeSystemMayBeAnyType :: control :: '
 				+ 'M-CARRY-ESCAPES,M-ESCAPE-STORE,M-ESCAPE-CAST,M-ESCAPE-DECL,M-ESCAPE-PARAM,M-ESCAPE-RETURN,M-ESCAPE-LAMBDA,M-ESCAPE-THROW,M-ESCAPE-METHOD-VALUE,M-ESCAPE-HELD,M-ESCAPE-LIBRARY-SUPER,M-ESCAPE-NATIVE,M-ESCAPE-ANY',
+			'unit.query.MemberReachTest#testAssignmentUsedAsAValueSharesWhatItStores :: control :: M-REACH-ASSIGNMENT-VALUE-ALIAS',
 			'unit.query.MemberReachTest#testBodylessLibraryCallAdmitsImplicitlyCalledMethods :: control :: M-REACH-EXTERN-HANDS',
 			'unit.query.MemberReachTest#testBranchNoConfiguredBuildCompilesIsNotWalked :: control :: '
 				+ 'M-REACH-LIVE-HAZARDS,M-REACH-LIVE-EDGES',
 			'unit.query.MemberReachTest#testBuildMacroOnTheOwnerIsUnknown :: control :: M-REACH-BUILD-MACRO',
 			'unit.query.MemberReachTest#testCallbackArrayMethodRunsTheFunctionItIsHanded :: control :: '
 				+ 'M-REACH-EXTERN-BODYLESS,M-REACH-CALLS-ARGUMENT',
+			'unit.query.MemberReachTest#testCalleeChangingOnlyAFreshLocalOfItsOwnIsProven :: control :: M-REACH-CALLEE-BENIGN-EDGE',
+			'unit.query.MemberReachTest#testCalleeDispatchOnALibraryTypeReachesItsLibraryOverrides :: control :: M-REACH-CALLEE-OVERRIDES',
+			'unit.query.MemberReachTest#testCalleeWhoseBodyIsNotItsSourceIsRefused :: control :: '
+				+ 'M-REACH-CALLEE-REWRITTEN,M-REACH-CALLEE-AMBIGUOUS',
 			'unit.query.MemberReachTest#testCallsEntryStartsAtTheSitesOnly :: control :: M-REACH-CALLS-ENTRY',
 			'unit.query.MemberReachTest#testCompoundAssignmentRunsTheBinaryOperatorOverload :: control :: M-REACH-COMPOUND-OPERATOR',
 			'unit.query.MemberReachTest#testConstructNobodyClassifiedIsUnknown :: control :: M-REACH-UNMODELLED',
@@ -2192,6 +2197,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachTest#testConstructorOfALibrarySubclassIsNotADispatchTarget :: control :: M-REACH-CTOR-NOT-DISPATCHED',
 			'unit.query.MemberReachTest#testConstructorRunsTheFieldInitializers :: control :: M-GRAPH-INIT-WIRING',
 			'unit.query.MemberReachTest#testCopyOfAnArrayIsFresh :: control :: M-REACH-FRESH-METHOD',
+			'unit.query.MemberReachTest#testDynamicFunctionACalleeRunsIsRefused :: guard :: ',
 			'unit.query.MemberReachTest#testDynamicReceiverAdmitsBySameName :: control :: M-REACH-NAME-CHANNEL',
 			'unit.query.MemberReachTest#testEscapeLaterInAnEnclosingLoopPrecedesTheNextRun :: control :: M-REACH-RERUN-END',
 			'unit.query.MemberReachTest#testEveryEscapeRuleLetsItsSoundTwinThrough :: control :: '
@@ -2210,6 +2216,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachTest#testFieldWithoutTheWholeProjectIsUnknown :: control :: M-REACH-OUT-OF-SCOPE',
 			'unit.query.MemberReachTest#testFreshMethodMustBeTheReceiverTypesOwn :: control :: M-REACH-FRESH-TYPED',
 			'unit.query.MemberReachTest#testFreshUnsharedLocalIsProvenWhateverTheBodyCalls :: control :: M-REACH-LOCAL-FRESH',
+			'unit.query.MemberReachTest#testFreshWriteEndingAStatementBodyKeepsTheLocalUnshared :: control :: '
+				+ 'M-REACH-DISCARDED-BODY,M-REACH-DISCARDED-STATEMENT-BRANCH',
+			'unit.query.MemberReachTest#testFreshWriteEndingAValueBlockSharesWhatItStores :: control :: M-REACH-LAST-STATEMENT-VALUE',
 			'unit.query.MemberReachTest#testFunctionValueCallAdmitsAValueUsedMutator :: control :: M-REACH-VALUE-CHANNEL',
 			'unit.query.MemberReachTest#testFunctionValueCallWithNoValueUsedMutatorIsProven :: control :: M-REACH-WALK-UNKNOWN',
 			'unit.query.MemberReachTest#testGetterReadInTheRegionIsAnEntry :: control :: M-GRAPH-GETTER-EDGE',
@@ -2237,6 +2246,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-REACH-CONSTRUCTIBLE,M-REACH-INDEX-IMPLICIT',
 			'unit.query.MemberReachTest#testLiteralTypedAsAConstructedClassRunsItsConstructor :: control :: M-REACH-IMPLICIT-CONSTRUCTION',
 			'unit.query.MemberReachTest#testLocalCapturedByAClosureIsAnEscape :: control :: M-REACH-LOCAL-CAPTURE',
+			'unit.query.MemberReachTest#testLocalGivenASharedValueByAnyWriteIsNotFresh :: control :: M-REACH-COMPOUND-WRITE-ALIAS',
 			'unit.query.MemberReachTest#testLocalHandedOutIsAnEscape :: control :: M-REACH-LOCAL-ESCAPE',
 			'unit.query.MemberReachTest#testMemoIsDroppedWhenAnyProjectFileChanged :: control :: '
 				+ 'M-REACH-MEMO-EVERY-SOURCE,M-REACH-INCREMENTAL-PURGE',
@@ -2250,6 +2260,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachTest#testParameterRegionCallingACallbackMethodIsRefused :: control :: '
 				+ 'M-REACH-BENIGN-CALLBACK,M-REACH-CALLS-ARGUMENT',
 			'unit.query.MemberReachTest#testParameterRegionCallingOnlyArrayReadersIsProven :: control :: M-REACH-BENIGN-CALL',
+			'unit.query.MemberReachTest#testParameterRegionCallingProjectCodeDependsOnWhatItChanges :: control :: '
+				+ 'M-REACH-CALLEE-WALK,M-REACH-CALLEE-REFUSED',
 			'unit.query.MemberReachTest#testParameterRegionHandingOnAFunctionValueIsRefused :: control :: M-REACH-REGION-REF',
 			'unit.query.MemberReachTest#testParameterRegionOfArithmeticDependsOnWhatImplicitFunctionsChange :: control :: '
 				+ 'M-REACH-IMPLICIT-ARRAY-CHANGE,M-REACH-ARRAY-CHANGE-SITE',
@@ -3296,6 +3308,18 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-REACH-USING-META',
 			'M-INDEX-GUARDED-META-LIFT',
 			'M-FACTS-REACH-UNREAD-IMPLICIT',
+			'M-REACH-CALLEE-WALK',
+			'M-REACH-CALLEE-REFUSED',
+			'M-REACH-CALLEE-BENIGN-EDGE',
+			'M-REACH-CALLEE-REWRITTEN',
+			'M-REACH-CALLEE-AMBIGUOUS',
+			'M-REACH-CALLEE-OVERRIDES',
+			'M-REACH-COMPOUND-WRITE-ALIAS',
+			'M-REACH-ASSIGNMENT-VALUE-ALIAS',
+			'M-REACH-LAST-STATEMENT-VALUE',
+
+			'M-REACH-DISCARDED-BODY',
+			'M-REACH-DISCARDED-STATEMENT-BRANCH',
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

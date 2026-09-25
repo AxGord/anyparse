@@ -5486,9 +5486,9 @@
 			"name": "M-REACH-IMPLICIT-ARRAY-CHANGE",
 			"type": "anyparse.query.MemberReach",
 			"method": "answerLocal",
-			"find": "final implicit: Null<Occurrence> = implicitArrayChange(g, file, tree, region);",
-			"replace": "final implicit: Null<Occurrence> = null;",
-			"note": "a region with no visible call is proven for a shared array although an implicitly-called function in scope changes arrays"
+			"find": "final change: Null<Occurrence> = reachedArrayChange(g, file, tree, region, callees);",
+			"replace": "final change: Null<Occurrence> = null;",
+			"note": "a shared collection's region is proven although the functions it calls, or those the language calls implicitly, change arrays"
 		},
 		{
 			"name": "M-REACH-ARRAY-CHANGE-SITE",
@@ -5847,8 +5847,8 @@
 			"name": "M-REACH-REGION-REF",
 			"type": "anyparse.query.MemberReach",
 			"method": "regionCulprit",
-			"find": "if (target == null || !target.isExternal || e.kind == Ref) return e.span ?? region;",
-			"replace": "if (e.kind == Ref) continue;\n\t\t\tif (target == null || !target.isExternal) return e.span ?? region;",
+			"find": "if (target == null || e.kind == Ref) return e.span ?? region;",
+			"replace": "if (e.kind == Ref) continue;\n\t\t\tif (target == null) return e.span ?? region;",
 			"note": "a function value the region hands on is not a culprit"
 		},
 		{
@@ -5862,7 +5862,7 @@
 		{
 			"name": "M-REACH-IMPLICIT-BODYLESS",
 			"type": "anyparse.query.MemberReach",
-			"method": "implicitChangeIn",
+			"method": "reachedChangeIn",
 			"find": "if (g.types.meta.isExtern(type) && !_g.externQuiet(g, type, member))\n\t\t\t\treturn { file: node.file, span: node.span ?? new Span(0, 0) };",
 			"replace": "",
 			"note": "a body-less extern an implicitly-called function reaches is taken to change nothing"
@@ -6046,7 +6046,7 @@
 		{
 			"name": "M-REACH-FORWARDING-OP",
 			"type": "anyparse.query.MemberReach",
-			"method": "implicitChangeIn",
+			"method": "reachedChangeIn",
 			"find": "if (g.types.meta.isExtern(type) && !_g.externQuiet(g, type, member))",
 			"replace": "if (type.length >= 0)",
 			"note": "an abstract's body-less forwarding operator counts as target code that may change any array"
@@ -7224,6 +7224,93 @@
 			"find": "ids: _g.implicitIds(g)",
 			"replace": "ids: []",
 			"note": "code the walk never enters is taken to run no operator, index or literal member, only conversions"
+		},
+		{
+			"name": "M-REACH-CALLEE-WALK",
+			"type": "anyparse.query.MemberReach",
+			"method": "answerLocal",
+			"find": "reachedArrayChange(g, file, tree, region, callees);",
+			"replace": "reachedArrayChange(g, file, tree, region, []);",
+			"note": "what a shared collection's region calls is admitted unwalked, so a callee growing any array proves"
+		},
+		{
+			"name": "M-REACH-CALLEE-REFUSED",
+			"type": "anyparse.query.MemberReach",
+			"method": "regionCulprit",
+			"find": "if (!target.isExternal || !benignCall(g, tree, source, fn, target, call, region)) callees.push(e);",
+			"replace": "if (!target.isExternal || !benignCall(g, tree, source, fn, target, call, region)) return e.span ?? region;",
+			"note": "every call a shared collection's region makes is a culprit again, so a region calling a pure project function is refused"
+		},
+		{
+			"name": "M-REACH-CALLEE-BENIGN-EDGE",
+			"type": "anyparse.query.MemberReach",
+			"method": "benignEdge",
+			"force": "false",
+			"note": "a callee's push onto a fresh local of its own is followed into the built-in array type, whose body-less mutator refuses"
+		},
+		{
+			"name": "M-REACH-CALLEE-REWRITTEN",
+			"type": "anyparse.query.MemberReach",
+			"method": "bodyNotItsSource",
+			"find": " || _g.buildMacroOn(type) != null)",
+			"replace": ")",
+			"note": "a callee a build macro may rewrite is read as its source"
+		},
+		{
+			"name": "M-REACH-CALLEE-AMBIGUOUS",
+			"type": "anyparse.query.MemberReach",
+			"method": "bodyNotItsSource",
+			"find": "(g.types.declarationCount(type) > 1 || ",
+			"replace": "(",
+			"note": "a callee whose type name two declarations share is read as one of them"
+		},
+		{
+			"name": "M-REACH-CALLEE-OVERRIDES",
+			"type": "anyparse.query.MemberReach",
+			"method": "followEdge",
+			"find": "for (v in g.virtualTargets(dispatch, target)) push(v);",
+			"replace": "",
+			"note": "a dispatch on a library type reaches only the declaration, not the overrides library code declares"
+		},
+		{
+			"name": "M-REACH-COMPOUND-WRITE-ALIAS",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "storesFreshValue",
+			"find": "final replacing: Bool = write.kind == shape.assignKind || write.kind == shape.nullCoalAssignKind;",
+			"replace": "final replacing: Bool = true;\n\t\tif (write.kind != shape.assignKind) return true;",
+			"note": "only a plain assignment of a shared value is an escape, so `x ??= shared` leaves `x` a fresh local whose push is taken as harmless"
+		},
+		{
+			"name": "M-REACH-ASSIGNMENT-VALUE-ALIAS",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "storesFreshValue",
+			"find": "if (holder.kind == shape.exprStatementKind) return valueDiscarded(lineage, at - 1);",
+			"replace": "if (true) return holder.kind != shape.exprStatementKind || valueDiscarded(lineage, at - 1);",
+			"note": "an assignment used as a value keeps its target fresh, so `all = xs = [1]` leaves `xs` unshared though `all` holds it"
+		},
+		{
+			"name": "M-REACH-LAST-STATEMENT-VALUE",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "valueDiscarded",
+			"find": "final climbs: Bool = kind == shape.blockStmtKind",
+			"replace": "final climbs: Bool = true || kind == shape.blockStmtKind",
+			"note": "every construct a statement ends is climbed as if its value were discarded, so `all = { xs = [1]; }` keeps `xs` unshared"
+		},
+		{
+			"name": "M-REACH-DISCARDED-BODY",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "valueDiscarded",
+			"find": "if ((shape.loopStatementKinds ?? []).concat(shape.doWhileLoopKinds ?? []).contains(kind)) return true;",
+			"replace": "",
+			"note": "a loop's body is not taken as discarding its last statement's value, so a fresh write ending a loop body makes the local shared"
+		},
+		{
+			"name": "M-REACH-DISCARDED-STATEMENT-BRANCH",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "valueDiscarded",
+			"find": "return climbs && valueDiscarded(lineage, at - 1);",
+			"replace": "return false;",
+			"note": "no statement branch or nested block is climbed, so a fresh write ending an `if` / `switch` statement branch makes the local shared"
 		}
 	]
 }
