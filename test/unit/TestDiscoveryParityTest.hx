@@ -1283,8 +1283,12 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-GENERATE-FAILURE-USES-THE-STALE-HXML',
 			'unit.check.OracleGenerationTest#testAFileNamedByTwoGenerationsIsReadOnce :: control :: '
 				+ 'M-GENERATE-HASH-MEMO-UNUSED',
+			'unit.check.OracleGenerationTest#testAGenerationThatKeepsGoingStaleIsUnavailable :: control :: '
+				+ 'M-GENERATE-REJUDGE-UNBOUNDED',
 			'unit.check.OracleGenerationTest#testAHalfWrittenOwnerIsNotTakenOver :: control :: '
 				+ 'M-GENERATE-OWNERLESS-ABANDONED-AT-ONCE',
+			'unit.check.OracleGenerationTest#testAJobWithoutAStartTimeIsLeftAlone :: control :: '
+				+ 'M-GENERATE-ENDJOB-PID-ONLY',
 			'unit.check.OracleGenerationTest#testALeftoverTakeoverClaimIsCleared :: control :: '
 				+ 'M-GENERATE-CLAIM-NEVER-CLEARED',
 			'unit.check.OracleGenerationTest#testALibrarySwitchedDuringTheGenerationIsSeenNextRun :: control :: '
@@ -1305,6 +1309,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-GENERATE-RECORD-OUTLIVES-THE-RUN',
 			'unit.check.OracleGenerationTest#testATakeOverEndsTheJobTheDeadRunLeft :: control :: '
 				+ 'M-GENERATE-TAKEOVER-LEAVES-THE-JOB',
+			'unit.check.OracleGenerationTest#testATreeWipedAfterItWasJudgedIsRegeneratedBeforeTheCompile :: control :: '
+				+ 'M-GENERATE-SHARE-WITHOUT-REJUDGE',
 			'unit.check.OracleGenerationTest#testAnAbandonedLockIsTakenOver :: control :: '
 				+ 'M-GENERATE-LOCK-NEVER-RECOVERED',
 			'unit.check.OracleGenerationTest#testAnEmptyOrMissingInputIsNeverSilentlyConstant :: control :: '
@@ -1317,10 +1323,16 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-GENERATE-HASHES-INPUTS-AFTER-THE-RUN',
 			'unit.check.OracleGenerationTest#testEntriesSharingACommandMergeTheirInputs :: control :: '
 				+ 'M-GENERATE-FIRST-ENTRY-INPUTS',
+			'unit.check.OracleGenerationTest#testGenerationsAreWaitedOnInLockOrder :: control :: '
+				+ 'M-GENERATE-ORDER-BY-KEY',
 			'unit.check.OracleGenerationTest#testOnlyOneRunTakesOverADeadLock :: control :: '
 				+ 'M-GENERATE-TAKEOVER-UNVERIFIED',
+			'unit.check.OracleGenerationTest#testTheGenerationStateIsSharedAcrossTempDirectories :: control :: '
+				+ 'M-GENERATE-STATE-IN-TMPDIR',
 			'unit.check.OracleGenerationTest#testTheLibraryStateTheHxmlNamesIsAnInput :: control :: '
 				+ 'M-GENERATE-IGNORES-LIBRARY-STATE,M-GENERATE-TEMPLATES-UNTRACKED',
+			'unit.check.OracleGenerationTest#testTheStateDirectoryIsNoInput :: control :: '
+				+ 'M-GENERATE-STATE-DIR-HASHED',
 			'unit.check.OracleGenerationTest#testTwoRunsOverTwoStaleGenerationsDoNotDeadlock :: control :: '
 				+ 'M-GENERATE-SHARED-HELD-INTO-PHASE-TWO',
 			'unit.check.OracleParallelVerdictTest#testTheOverlappedVerdictIsTheFirstFailureInDeclaredOrder :: control :: '
@@ -2804,6 +2816,12 @@ class TestDiscoveryParityTest extends Test {
 			'M-GENERATE-FORMAT-UNCHECKED',
 			'M-GENERATE-PRODUCED-BY-ROOT',
 			'M-DRIVER-OUTLIVES-ITS-PARENT',
+			'M-GENERATE-SHARE-WITHOUT-REJUDGE',
+			'M-GENERATE-REJUDGE-UNBOUNDED',
+			'M-GENERATE-STATE-IN-TMPDIR',
+			'M-GENERATE-STATE-DIR-HASHED',
+			'M-GENERATE-ORDER-BY-KEY',
+			'M-GENERATE-ENDJOB-PID-ONLY',
 			'M-FIAD-CROSS-SUPER-UNPROVED',
 			'M-FIAD-EARLY-READ-IGNORED',
 			'M-FIAD-EARLY-READ-CALL-ARG',

@@ -3639,9 +3639,9 @@
 			"name": "M-GENERATE-READERS-EXCLUDE-EACH-OTHER",
 			"type": "anyparse.check.OracleGeneration",
 			"method": "prepare",
-			"find": "final blocked: Null<String> = OracleGenerationLock.holdShared(lockDir(group), me, deadline);",
-			"replace": "final blocked: Null<String> = OracleGenerationLock.holdExclusive(lockDir(group), me, deadline);",
-			"note": "every run takes every generation exclusively, so one agent's long --fix run blocks every other lint over a tree nobody regenerates"
+			"note": "every run takes every generation exclusively, so one agent's long --fix run blocks every other lint over a tree nobody regenerates",
+			"find": "final blocked: Null<String> = OracleGenerationLock.holdShared(lock, run.me, run.deadline);",
+			"replace": "final blocked: Null<String> = OracleGenerationLock.holdExclusive(lock, run.me, run.deadline);"
 		},
 		{
 			"name": "M-GENERATE-WRITER-IGNORES-READERS",
@@ -3742,9 +3742,9 @@
 			"name": "M-GENERATE-SHARED-HELD-INTO-PHASE-TWO",
 			"type": "anyparse.check.OracleGeneration",
 			"method": "prepare",
-			"find": "OracleGenerationLock.dropShared(lock, me);",
-			"replace": "",
-			"note": "a run keeps its shared holds while it waits for exclusive ones, so two runs that each find two generations stale wait for each other until the deadline and each loses a configuration"
+			"note": "a run keeps its shared holds while it waits for exclusive ones, so two runs that each find two generations stale wait for each other until the deadline and each loses a configuration",
+			"find": "OracleGenerationLock.dropShared(lock, run.me);",
+			"replace": ""
 		},
 		{
 			"name": "M-GENERATE-CLAIM-NEVER-CLEARED",
@@ -3786,6 +3786,54 @@
 			"find": "setInterval(() => { if (process.ppid !== parent) { killAll(); process.exit(1); } }, 500).unref();",
 			"replace": "",
 			"note": "a driver whose apq was SIGKILLed keeps its jobs running, so the next run regenerates concurrently with an orphaned build tool"
+		},
+		{
+			"name": "M-GENERATE-SHARE-WITHOUT-REJUDGE",
+			"type": "anyparse.check.OracleGeneration",
+			"method": "share",
+			"find": "else if (staleness(group, judged) != null)",
+			"replace": "else if (false)",
+			"note": "a group judged current before another run wiped it is shared for the compile without being judged again, so a half-written tree is typechecked and vetoes an edit falsely"
+		},
+		{
+			"name": "M-GENERATE-REJUDGE-UNBOUNDED",
+			"type": "anyparse.check.OracleGeneration",
+			"method": "prepare",
+			"find": "refuse(run, group, staleAgain(attempts));",
+			"replace": "",
+			"note": "a group still stale after the bounded retries is handed to the compile anyway instead of being made unavailable"
+		},
+		{
+			"name": "M-GENERATE-STATE-IN-TMPDIR",
+			"type": "anyparse.check.OracleGeneration",
+			"method": "stateDir",
+			"find": "return Path.join([root, STATE_DIR, 'oracle-generate', md5('$root\\n${hxmls.join('\\n')}')]);",
+			"replace": "return Path.join([Sys.getEnv('TMPDIR') ?? '/tmp', STATE_DIR, 'oracle-generate', md5('$root\\n${hxmls.join('\\n')}')]);",
+			"note": "the generation record and lock live under TMPDIR, so runs with different TMPDIRs share no lock and rm -rf the same tree concurrently"
+		},
+		{
+			"name": "M-GENERATE-STATE-DIR-HASHED",
+			"type": "anyparse.check.OracleGeneration",
+			"method": "listTree",
+			"find": "for (entry in entries) if (entry != STATE_DIR) {",
+			"replace": "for (entry in entries) if (true) {",
+			"note": "a directory input that holds the generation root hashes hxq's own state, which every generation rewrites, so it never reads as current"
+		},
+		{
+			"name": "M-GENERATE-ORDER-BY-KEY",
+			"type": "anyparse.check.OracleGeneration",
+			"method": "lockOrder",
+			"find": "ordered.sort((a, b) -> Reflect.compare(lockDir(a), lockDir(b)));",
+			"replace": "ordered.sort((a, b) -> Reflect.compare(a.key, b.key));",
+			"note": "waits follow the declaration key rather than the lock identity, so two runs declaring one tree under different commands can take its locks in opposite orders"
+		},
+		{
+			"name": "M-GENERATE-ENDJOB-PID-ONLY",
+			"type": "anyparse.check.OracleGenerationLock",
+			"method": "endJob",
+			"find": "if (pid == null || start == '' || !living(pid, start)) return;",
+			"replace": "if (pid == null || !living(pid, start)) return;",
+			"note": "a left job with no recorded start time is killed on its pid alone, which may name an unrelated process group by now"
 		},
 		{
 			"name": "M-FIAD-CROSS-SUPER-UNPROVED",

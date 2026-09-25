@@ -507,9 +507,12 @@ final class OracleGenerationTest extends Test {
 		OracleGeneration.prepare([entry(dir, write, ['$dir/input.txt'])]);
 		final switching: OracleConfig = entry(dir, '$write && echo 1.0.1 > $repo/mylib/.current', ['$dir/input.txt']);
 		OracleGeneration.prepare([switching]);
-		Assert.equals(2, runs(dir), 'the changed command ran');
+		Assert.equals(
+			3, runs(dir),
+			'the changed command ran, its generation (raced by the library switch it made) went unrecorded, and the compile hold regenerated it'
+		);
 		OracleGeneration.prepare([switching]);
-		Assert.equals(3, runs(dir), 'and its generation, raced by the library switch it made, was not taken as current');
+		Assert.equals(3, runs(dir), 'the unraced generation after it was recorded');
 		CliFixture.removeDir(repo);
 		CliFixture.removeDir(dir);
 		#else
@@ -542,7 +545,10 @@ final class OracleGenerationTest extends Test {
 		OracleGeneration.prepare(pair);
 		final before: Int = OracleGeneration.hashReads;
 		OracleGeneration.prepare(pair);
-		Assert.equals(5, OracleGeneration.hashReads - before, 'three fonts once, and each hxml: 3 + 2 reads, not 3 + 1 + 3 + 1');
+		Assert.equals(
+			10, OracleGeneration.hashReads - before,
+			'three fonts once and each hxml once per judging (before, and again under the compile hold): 2 × (3 + 2), not 2 × (3 + 1 + 3 + 1)'
+		);
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
@@ -772,13 +778,181 @@ final class OracleGenerationTest extends Test {
 		OracleGeneration.prepare([at(write)]);
 		final editing: OracleConfig = at(write + " && echo '-D b' > extra.hxml");
 		OracleGeneration.prepare([editing]);
-		Assert.equals(2, runs(dir), 'the changed command ran and edited the include');
+		Assert.equals(3, runs(dir), 'the include moved under the first generation, so it went unrecorded and was regenerated');
 		OracleGeneration.prepare([editing]);
-		Assert.equals(3, runs(dir), 'so that generation was not recorded: the include moved under it');
+		Assert.equals(3, runs(dir), 'the unraced one after it was recorded');
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
 	}
+
+	/**
+	 * A generation judged current, then wiped by another generation before this run compiles it, is judged again under
+	 * the compile hold and regenerated — never handed to a compile half-written. Here the stale group's own command
+	 * wipes the current group's hxml, standing in for another run that failed or died mid-generation.
+	 */
+	@:pin('control')
+	@:killer('M-GENERATE-SHARE-WITHOUT-REJUDGE')
+	public function testATreeWipedAfterItWasJudgedIsRegeneratedBeforeTheCompile(): Void {
+		#if (sys || nodejs)
+		final dir: String = fixture();
+		final current: OracleConfig = entry(dir, WRITE, ['$dir/input.txt']);
+		OracleGeneration.prepare([current]);
+		OracleGeneration.release([current]);
+		final wiping: OracleConfig = {
+			hxml: '$dir/w.hxml',
+			dir: dir,
+			defines: [],
+			generate: {
+				command: "rm -f gen.hxml && printf '%s\\n' '-cp .' '-main Main' > w.hxml",
+				root: dir,
+				inputs: ['$dir/input.txt'],
+				probeDir: false
+			}
+		};
+		final ready: Array<OracleConfig> = OracleGeneration.prepare([current, wiping]).oracles;
+		Assert.isNull(ready[0].unavailable, 'the wiped generation stays usable');
+		Assert.isTrue(FileSystem.exists('$dir/gen.hxml'), 'because it was regenerated before the compile');
+		Assert.equals(2, runs(dir), 'once more');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A generation that goes stale again every time it is regenerated is unavailable after a bounded number of tries. */
+	@:pin('control')
+	@:killer('M-GENERATE-REJUDGE-UNBOUNDED')
+	public function testAGenerationThatKeepsGoingStaleIsUnavailable(): Void {
+		#if (sys || nodejs)
+		final dir: String = fixture();
+		final restless: OracleConfig = entry(dir, '$WRITE && echo x >> input.txt', ['$dir/input.txt']);
+		final ready: Array<OracleConfig> = OracleGeneration.prepare([restless]).oracles;
+		Assert.isTrue((ready[0].unavailable ?? '').contains('went stale again'), 'it is given up on: ${ready[0].unavailable}');
+		Assert.isTrue(runs(dir) <= 4, 'after a bounded number of generations: ${runs(dir)}');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A generation's record and lock live in the project, keyed by the tree they guard: a run under another `TMPDIR`
+	 * meets the same record (and so the same lock) instead of regenerating a tree a first run may still be compiling.
+	 */
+	@:pin('control')
+	@:killer('M-GENERATE-STATE-IN-TMPDIR')
+	public function testTheGenerationStateIsSharedAcrossTempDirectories(): Void {
+		#if (sys || nodejs)
+		final dir: String = fixture();
+		final config: OracleConfig = entry(dir, WRITE, ['$dir/input.txt']);
+		OracleGeneration.prepare([config]);
+		OracleGeneration.release([config]);
+		final declared: Null<String> = Sys.getEnv('TMPDIR');
+		final other: String = CliFixture.writeDir('oraclegentmp', []);
+		Sys.putEnv('TMPDIR', other);
+		CliFixture.always(() -> Sys.putEnv('TMPDIR', declared ?? ''), () -> OracleGeneration.prepare([config]));
+		Assert.equals(1, runs(dir), 'the second run, under another TMPDIR, found the generation current');
+		Assert.isTrue(OracleGeneration.stateDir(OracleGeneration.groupsOf([config])[0]).startsWith('$dir/'), 'its state is in the project');
+		CliFixture.removeDir(other);
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A directory input holding the generation root never hashes hxq's own state directory, which every generation writes. */
+	@:pin('control')
+	@:killer('M-GENERATE-STATE-DIR-HASHED')
+	public function testTheStateDirectoryIsNoInput(): Void {
+		#if (sys || nodejs)
+		final dir: String = CliFixture.writeTree('oraclegenstate', [{ name: 'proj/Main.hx', source: MAIN }]);
+		final config: OracleConfig = {
+			hxml: '$dir/out/gen.hxml',
+			dir: '$dir/proj',
+			defines: [],
+			generate: {
+				command: "mkdir -p ../out && printf '%s\\n' '-cp .' '-main Main' > ../out/gen.hxml && echo run >> ../runs.txt",
+				root: '$dir/proj',
+				inputs: ['$dir/proj'],
+				probeDir: false
+			}
+		};
+		OracleGeneration.prepare([config]);
+		OracleGeneration.prepare([config]);
+		Assert.equals(1, runs(dir), 'the project directory is unchanged but for hxq\'s own state: current');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** Generations are waited on in lock-directory order — the identity runs contend on — not in declaration-key order. */
+	@:pin('control')
+	@:killer('M-GENERATE-ORDER-BY-KEY')
+	public function testGenerationsAreWaitedOnInLockOrder(): Void {
+		#if (sys || nodejs)
+		final dir: String = fixture();
+		final probe: Array<GenerationGroup> = OracleGeneration.groupsOf([entry(dir, 'a', []), declared(dir, 'b', 'other.hxml')]);
+		// commands chosen so the key order is the REVERSE of the lock order
+		final firstLow: Bool = Reflect.compare(OracleGeneration.lockDir(probe[0]), OracleGeneration.lockDir(probe[1])) < 0;
+		final groups: Array<GenerationGroup> = OracleGeneration.groupsOf([
+			entry(dir, firstLow ? 'z' : 'a', []),
+			declared(dir, firstLow ? 'a' : 'z', 'other.hxml')
+		]);
+		final ordered: Array<GenerationGroup> = OracleGeneration.lockOrder(groups);
+		Assert.isTrue(Reflect.compare(OracleGeneration.lockDir(ordered[0]), OracleGeneration.lockDir(ordered[1])) < 0, 'lock order');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A left job whose start time was never recorded is not killed: a bare pid may name some other process by now, and
+	 * killing its group could end a stranger. The takeover goes ahead without it.
+	 */
+	@:pin('control')
+	@:killer('M-GENERATE-ENDJOB-PID-ONLY')
+	public function testAJobWithoutAStartTimeIsLeftAlone(): Void {
+		#if nodejs
+		final dir: String = fixture();
+		final config: OracleConfig = entry(dir, WRITE, ['$dir/input.txt']);
+		final lock: String = lockOf(config);
+		holdAsWriter(lock, exitedPid(), '');
+		final started: Dynamic = js.node.ChildProcess.spawnSync(
+			'sh', ['-c', "perl -e 'setpgrp(0, 0); exec q(sleep), 30' >/dev/null 2>&1 & echo $!"], { encoding: 'utf8' }
+		);
+		final job: Null<Int> = Std.parseInt(StringTools.trim('${started.stdout}'));
+		js.Syntax.code('Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 200)');
+		File.saveContent('$lock/writer/job', '$job\n');
+		final ready: Array<OracleConfig> = OracleGeneration.prepare([config], 5000).oracles;
+		final alive: Bool = job != null && OracleGenerationLock.startTime(job) != '';
+		if (alive && job != null) js.Syntax.code('process.kill({0}, "SIGKILL")', job);
+		Assert.isTrue(alive, 'the unidentifiable job was not killed');
+		Assert.isNull(ready[0].unavailable, 'and the takeover went ahead');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-node target');
+		#end
+	}
+
+	#if (sys || nodejs)
+	/** A configuration whose `command` writes `hxml` (a file name) in `dir`, with no inputs. */
+	private static function declared(dir: String, command: String, hxml: String): OracleConfig {
+		return {
+			hxml: '$dir/$hxml',
+			dir: dir,
+			defines: [],
+			generate: {
+				command: command,
+				root: dir,
+				inputs: null,
+				probeDir: false
+			}
+		};
+	}
+	#end
 
 }

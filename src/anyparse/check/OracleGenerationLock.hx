@@ -241,7 +241,8 @@ final class OracleGenerationLock {
 		final fields: Array<String> = text.split('\n');
 		final pid: Null<Int> = Std.parseInt(fields[0]);
 		final start: String = (fields[1] ?? '').trim();
-		if (pid == null || !living(pid, start)) return;
+		// without a start time the pid proves nothing about WHICH process it is: killing its group could end a stranger
+		if (pid == null || start == '' || !living(pid, start)) return;
 		try js.Syntax.code('process.kill(-{0}, "SIGKILL")', pid) catch (exception: haxe.Exception) {} // noqa: swallowed-exception
 		for (_ in 0...JOB_END_POLLS) {
 			if (!living(pid, start)) return;
