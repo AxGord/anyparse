@@ -646,3 +646,37 @@ decided the question; it may not become a record of runs.
 - prefer-comprehension: an empty `[]` declaration filled by `a[j] = v` was assumed to be an Array → a `Map`
   annotation makes the fold not compile and an abstract with an `@:arrayAccess` setter loses its side effect;
   the fold takes only an unannotated or `Array`-headed declaration — `37ab06fb`
+- mayReach: "Proven unless a listed channel fires" → every unlisted way Haxe runs code (`toString`, an
+  iterator, `@:structInit`, reflection, a region's own writes) became a silent unsound fix; Proven is positive
+  (modelled node kinds only, every channel admitted, any blind spot Unknown) — `dea1314e`
+- element loops: a body calling only bare, `this`-, super- or type-qualified callees was the growth hazard →
+  setter writes (`a[i].x = v` runs `set_x`) and methods of other objects holding an alias were missed; the
+  syntactic stop is replaced by MemberReach — `dea1314e`
+- mayReach: a local escape searched up to the loop's end → an escape later in an enclosing loop precedes the
+  next run of the region; the scan runs to the end of the outermost enclosing loop — `dea1314e`
+- mayReach: callback-taking Array methods (`map`, `filter`, `sort`) run no user code → they call their argument;
+  purity and callback use are read from the declaration's parameter types, not hand lists — `dea1314e`
+- mayReach: library implicit members count only for types the run's code names → a factory returning `Dynamic`,
+  a supertype or `Iterable` hands out an unnamed subclass; any indexed construction counts, independent of
+  question order — `dea1314e`
+- mayReach: an extern handed an object reaches only that object's members → `JSON.stringify` walks field values
+  and native methods call their receiver by name; handed-object reach follows fields transitively and includes
+  the receiver — `dea1314e`
+- mayReach: three hand-rolled receiver relations (touch scan, library reflection, runtime types) agreed →
+  interface fields, common subtypes and structures each slipped through a different one; one predicate,
+  `ValueCarriers`, answers them all — `dea1314e`
+- mayReach: a value typed `T` is `T` or a subtype → `Dynamic`, an unchecked cast, `Array<Dynamic>` variance or a
+  hand-off to library code put any instance anywhere on js/interp; escaped types join the value side — `dea1314e`
+- #if liveness: "dead in every oracle configuration" = "runs in no build" → shipped builds the list does not hold
+  run it; skipping needs an explicit `reachConfigurationsComplete` — `dea1314e`
+- #if liveness: defines seen after the init macros hold for every file → an earlier init macro can type a module
+  before a later one defines a name; `defined` is what the first init macro sees — `dea1314e`
+- reach define probe: a cache keyed by compile-input content → macros read files never parsed, file existence and
+  the environment; the probe runs once per run, never stored — `dea1314e`
+- reach classpath: resolution-scope directories vouch for what builds compile → a `-lib` only an unlisted build
+  adds is invisible; only a declared-complete list, through an index declaring every typed type, does — `dea1314e`
+- mayReach: a skip-parse file matters only if it spells the member → an override it declares is dispatched to
+  without the name appearing; any unparsed project file is Unknown, a library one when it spells the dispatch —
+  `dea1314e`
+- StdResolver: the sibling std lookup covered the installed layouts → on Homebrew it indexed another install's std
+  than the compiler reads; both layouts and a multi-entry `HAXE_STD_PATH` are resolved — `dea1314e`
