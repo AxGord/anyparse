@@ -84,6 +84,11 @@ final class OracleGeneration {
 			stale.push({ group: group, why: why, inputs: hashAll(group.inputs ?? []) });
 			deleteRecord(group);
 		}
+		#if nodejs
+		// one listener per run releases every lock this process holds; `release` leaves another owner's alone
+		final me: Int = js.Node.process.pid;
+		js.Node.process.once('exit', () -> for (group in groups) release(lockDir(group), me));
+		#end
 		final runs: Array<HaxeRun> = HaxeSpawn.runAll([
 			for (s in stale)
 				{
@@ -427,7 +432,8 @@ final class OracleGeneration {
 	/**
 	 * Take `group`'s lock for this process, waiting at most `waitMs` for another `apq` run holding it; null when held,
 	 * else why not. A lock whose owner pid is gone, whose owner file never appeared, or that is older than
-	 * `MAX_LOCK_AGE` is taken over. The lock is released when this process exits. Re-entrant within one process.
+	 * `MAX_LOCK_AGE` is taken over. The caller releases it when this process exits
+	 * (`prepare` registers that once per run). Re-entrant within one process.
 	 */
 	public static function acquire(group: GenerationGroup, waitMs: Int): Null<String> {
 		#if nodejs
@@ -442,7 +448,6 @@ final class OracleGeneration {
 			} catch (exception: haxe.Exception) false;
 			if (created) {
 				sys.io.File.saveContent(owner, '$me ${Date.now().getTime()}');
-				js.Node.process.once('exit', () -> release(dir, me));
 				return null;
 			}
 			final held: Null<String> = try sys.io.File.getContent(owner) catch (exception: haxe.Exception) null;
