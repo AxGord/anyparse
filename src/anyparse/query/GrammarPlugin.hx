@@ -3307,6 +3307,12 @@ typedef ExecutionShape = {
 	@:optional var stringConversionCalls: Array<String>;
 
 	/**
+	 * Type annotations that bring static extensions in wherever a value of the type is (Haxe `@:using`): a call no member
+	 * of the type declares may run one no import names. Optional; unset means none does.
+	 */
+	@:optional var extensionTypeMetaNames: Array<String>;
+
+	/**
 	 * The implicit-call annotation (`implicitCallMetaNames`) under which the language runs a member for an INDEX
 	 * access on its type (Haxe `@:arrayAccess`). Optional; unset means such a member runs from any site.
 	 */

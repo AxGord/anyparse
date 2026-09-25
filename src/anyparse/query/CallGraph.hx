@@ -1359,7 +1359,15 @@ final class CallGraph {
 							) {
 								// no indexed type on the chain declares it: a static extension a `using` brings in, else unresolved
 								final extensions: Array<String> = types.imports.staticExtensionsOf(file, calleeName);
-								if (extensions.length == 0) unresolvedAt(span, UnresolvedReceiver(calleeName), currentType);
+								// a type on the chain that brings extensions in itself (`@:using`) may supply one no import names
+								final bringing: Null<String> = types.firstOnChain(recv.typeName, t -> types.meta.bringsExtensions(t));
+								if (bringing != null)
+									unresolvedAt(
+										span, Unseen('the static extension `$calleeName` the extensions of `$bringing` may supply'),
+										currentType
+									)
+								else if (extensions.length == 0)
+									unresolvedAt(span, UnresolvedReceiver(calleeName), currentType);
 								for (extension in extensions) {
 									calleeId = memberOnChain(extension, calleeName) ?? externalNode(extension, calleeName);
 									addEdge(from, calleeId, Call, null, file, span);

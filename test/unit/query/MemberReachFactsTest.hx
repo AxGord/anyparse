@@ -287,6 +287,28 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main]), r -> !r.match(Proven));
 	}
 
+	@:pin('control') @:killer('M-FACTS-REACH-USING-META') @:killer('M-GRAPH-USING-META') @:killer('M-INDEX-GUARDED-META-LIFT')
+	public function testATypeBringingExtensionsInUnderAConditionIsUnknown(): Void {
+		// a build defining `other` puts `@:using(Main.Loud)` on `W`, and `w.go()` runs `Loud.go`: neither the facts nor the
+		// `using` the file spells name it
+		final main: String = 'using Main.Quiet;\n' + LOOP_HEAD + '\tstatic function main() {\n\t\tvar w:W = new W();\n'
+			+ '\t\tfor (i in 0...items.length) { /*<*/ w.go(); /*>*/ }\n\t}\n}\n'
+			+ '#if other\n@:using(Main.Loud)\n#end\nclass W {\n\tpublic function new() {}\n}\n'
+			+ 'class Quiet {\n\tpublic static function go(w:W):Void {}\n}\n'
+			+ 'class Loud {\n\tpublic static function go(w:W):Void Main.items.push(1);\n}\n';
+		assertMatch(ask(['Main.hx' => main]), r -> !r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-FACTS-REACH-UNREAD-IMPLICIT')
+	public function testAStoredFunctionValueMayRunAnOperatorOverload(): Void {
+		// `f` holds a lambda the walk never enters — it reaches no toucher by an edge — whose `==` runs `AE.eq`
+		final main: String = LOOP_HEAD + '\tstatic var f:AE -> Bool = a -> a == a;\n'
+			+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ f(new AE(1)); /*>*/ }\n\t}\n}\n'
+			+ 'abstract AE(Int) {\n\tpublic inline function new(i:Int) this = i;\n\n'
+			+ '\t@:op(A == B) public function eq(b:AE):Bool return Main.items.push(1) == 0;\n}\n';
+		assertMatch(ask(['Main.hx' => main]), r -> !r.match(Proven));
+	}
+
 	/**
 	 * The answer for `member` (by default `Main.items`) over the region of `Main.hx` among `files`, compiled by `build` under
 	 * each define set of `configurations` and read through the facts unless `withFacts` is false; `classpathComplete` is

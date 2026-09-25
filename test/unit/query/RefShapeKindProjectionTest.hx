@@ -398,6 +398,14 @@ final class RefShapeKindProjectionTest extends Test {
 				after: ' class C {}'
 			},
 			{
+				field: 'extensionTypeMetaNames',
+				slot: '0',
+				kind: 'Meta',
+				names: NAME_IS,
+				before: '',
+				after: ' class C {}'
+			},
+			{
 				field: 'indexAccessMetaName',
 				slot: '',
 				kind: 'Meta',

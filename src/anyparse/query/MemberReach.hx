@@ -860,11 +860,11 @@ final class MemberReach {
 			sites.push(site);
 			apply(site);
 			// a channel may run code the walk never enters, since it reaches no toucher by an edge — code read by its syntax, a
-			// library's — which may convert or iterate any value it holds
+			// library's — which may run any implicitly-called member on any value it holds: a conversion, an iteration, an
+			// operator, an index access, a literal construction
 			if (!unreadAdmitted && runsUnreadCode(site)) {
 				unreadAdmitted = true;
 				_syntaxEntered = true;
-				final region: Span = site.span ?? seeds.region ?? new Span(0, 0);
 				final unread: AdmissionSite = {
 					from: site.from,
 					file: site.file,
@@ -873,11 +873,9 @@ final class MemberReach {
 					names: [],
 					values: false,
 					constructors: false,
-					always: false,
-					implicit: [
-						{ family: Text, span: region, types: [null] },
-						{ family: Iteration, span: region, types: [null] }
-					]
+					always: true,
+					implicit: [],
+					ids: _g.implicitIds(g)
 				};
 				sites.push(unread);
 				apply(unread);
@@ -1358,7 +1356,7 @@ final class MemberReach {
 	/**
 	 * Whether what the admission `site` lets run may be a function the walk never enters, as it reaches no toucher by an
 	 * edge: a function value (a lambda read by its syntax, a library function such as `Std.string`), a reflectively
-	 * constructed object, any code at all. Such a function may convert or iterate any value it is handed.
+	 * constructed object, any code at all. Such a function may run any implicitly-called member on any value it is handed.
 	 */
 	private static inline function runsUnreadCode(site: AdmissionSite): Bool {
 		return !site.always && (site.values || site.all == true || site.constructors);

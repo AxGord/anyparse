@@ -20,6 +20,9 @@ final class TypeMetaFacts {
 	/** The types the language constructs from a literal (`TypeDeclInfo.constructsFromLiteral`). */
 	private final _constructedFromLiteral: Map<String, Bool> = [];
 
+	/** The types that bring static extensions in (`TypeDeclInfo.bringsExtensions`). */
+	private final _extended: Map<String, Bool> = [];
+
 	/** `@:forward` abstract name -> the simple name of the underlying type its calls are routed to. */
 	private final _forwards: Map<String, String> = [];
 
@@ -43,6 +46,11 @@ final class TypeMetaFacts {
 		return _constructedFromLiteral.exists(typeName);
 	}
 
+	/** Whether a declaration of `typeName` brings static extensions in wherever a value of it is (Haxe `@:using`). */
+	public inline function bringsExtensions(typeName: String): Bool {
+		return _extended.exists(typeName);
+	}
+
 	/**
 	 * The underlying type a `@:forward` abstract `typeName` routes `member` to — a member it does not declare
 	 * itself, and one its `@:forward(...)` names when it names any — or null.
@@ -57,6 +65,7 @@ final class TypeMetaFacts {
 		if (t.isExtern) _externs[t.name] = true;
 		if (t.hasBuild || t.hasAutoBuild) _built[t.name] = true;
 		if (t.constructsFromLiteral) _constructedFromLiteral[t.name] = true;
+		if (t.bringsExtensions) _extended[t.name] = true;
 		final forward: Null<String> = t.abstractForwardUnderlying;
 		if (forward != null && forward != t.name) _forwards[t.name] = forward;
 		final only: Null<Array<String>> = t.forwardedMembers;

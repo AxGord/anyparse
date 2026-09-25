@@ -404,6 +404,12 @@ final class FactsView {
 		while (answer && paths.match(rest)) {
 			final id: String = paths.matched(0);
 			rest = paths.matchedRight();
+			// a type that brings extensions in (`@:using`) may resolve a call on it to one the facts do not name, in a build
+			// the list does not name when the annotation is conditional: the syntax refuses such a call
+			if (table.type(id) != null && extendedOnChain(id)) {
+				answer = false;
+				continue;
+			}
 			if (table.type(id) == null || !project(id)) continue;
 			final text: Null<TypeText> = typeText(id);
 			final info: Null<TypeDeclInfo> = text?.info;
@@ -425,6 +431,13 @@ final class FactsView {
 		}
 		_alike[type] = answer;
 		return answer;
+	}
+
+	/** Whether the typed type `id`, or a type it extends, is declared bringing static extensions in (`@:using`). */
+	private function extendedOnChain(id: String): Bool {
+		final names: Array<String> = [id].concat(table.supertypesOf(CompilerFacts.baseId(id))).map(graphType);
+		// read afresh: what `typeAlike` answers is kept per type
+		return _scope.index.allFiles().exists(fi -> fi.types.exists(t -> t.bringsExtensions && names.contains(t.name)));
 	}
 
 	/**

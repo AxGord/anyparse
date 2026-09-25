@@ -367,6 +367,14 @@ final class ReachGraph {
 	}
 
 	/**
+	 * Every implicitly-called member that may run at all (`counts`), whatever its family: what code the walk does not
+	 * read may run through the language's implicit channels on a value of any type.
+	 */
+	public function implicitIds(g: CallGraph): Array<String> {
+		return idsOf(g, [for (c in indexImplicit()) if (counts(c)) c]);
+	}
+
+	/**
 	 * Record that the current question's walk entered the code at `span` of `file`, inside the type `typeName`; true
 	 * when that widened what it had entered, which may widen the abstracts visible to it (`visibleAbstracts`) and so
 	 * what an implicit-call site admits. What is recorded is the whole MEMBER enclosing `span` — the declarations of

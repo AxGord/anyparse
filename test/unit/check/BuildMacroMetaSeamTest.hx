@@ -332,6 +332,7 @@ class BuildMacroMetaSeamTest extends Test {
 			hasAutoBuild: false,
 			hasKeep: false,
 			constructsFromLiteral: false,
+			bringsExtensions: false,
 			members: [],
 			abstractSelfRebind: false,
 			abstractForwardUnderlying: null,

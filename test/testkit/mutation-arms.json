@@ -7192,6 +7192,38 @@
 			"find": "return family == Text ? null : [own];",
 			"replace": "return [own];",
 			"note": "an abstract's own toString is taken to run on the abstract alone, though it may convert the value it wraps"
+		},
+		{
+			"name": "M-GRAPH-USING-META",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "final bringing: Null<String> = types.firstOnChain(recv.typeName, t -> types.meta.bringsExtensions(t));",
+			"replace": "final bringing: Null<String> = null;",
+			"note": "a call no member declares resolves to the extensions the file's `using`s name, though a `@:using` on the receiver's type may supply another"
+		},
+		{
+			"name": "M-FACTS-REACH-USING-META",
+			"type": "anyparse.query.FactsView",
+			"method": "extendedOnChain",
+			"find": "return _scope.index.allFiles().exists(fi -> fi.types.exists(t -> t.bringsExtensions && names.contains(t.name)));",
+			"replace": "return false;",
+			"note": "a function naming a type that brings extensions in is read through the facts, which name the extension the listed builds resolved"
+		},
+		{
+			"name": "M-INDEX-GUARDED-META-LIFT",
+			"type": "anyparse.query.SymbolIndexBuilder",
+			"method": "pushGuardedDecl",
+			"find": "final held: Array<QueryNode> = node.name == null ? [for (c in node.children) if (isMetaNodeKind(c.kind)) c] : [];",
+			"replace": "final held: Array<QueryNode> = [];",
+			"note": "metadata a conditional region holds alone is lifted nameless, so the declaration it annotates carries none of it"
+		},
+		{
+			"name": "M-FACTS-REACH-UNREAD-IMPLICIT",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "ids: _g.implicitIds(g)",
+			"replace": "ids: []",
+			"note": "code the walk never enters is taken to run no operator, index or literal member, only conversions"
 		}
 	]
 }

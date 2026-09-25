@@ -2147,8 +2147,11 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testANativeIdentifierAdmitsWhatItMayCall :: control :: M-FACTS-REACH-NATIVE-IDENT',
 			'unit.query.MemberReachFactsTest#testAReflectiveMemberReadAsAValueIsUnknown :: control :: M-FACTS-REACH-REFLECT-VALUE',
 			'unit.query.MemberReachFactsTest#testAStoredFunctionValueMayConvertWhatItIsHanded :: control :: M-FACTS-REACH-UNREAD-VALUE',
+			'unit.query.MemberReachFactsTest#testAStoredFunctionValueMayRunAnOperatorOverload :: control :: M-FACTS-REACH-UNREAD-IMPLICIT',
 			'unit.query.MemberReachFactsTest#testATouchThroughAnInferredReceiverIsTypedByTheCompiler :: control :: '
 				+ 'M-FACTS-REACH-TOUCH-TYPED',
+			'unit.query.MemberReachFactsTest#testATypeBringingExtensionsInUnderAConditionIsUnknown :: control :: '
+				+ 'M-FACTS-REACH-USING-META,M-GRAPH-USING-META,M-INDEX-GUARDED-META-LIFT',
 			'unit.query.MemberReachFactsTest#testATypeInAFileImportingUnderAConditionKeepsTheSyntax :: control :: '
 				+ 'M-FACTS-REACH-GUARDED-IMPORT',
 			'unit.query.MemberReachFactsTest#testAnEscapeTheCompilerTypesCostsOnlyItsOwnFamily :: control :: M-FACTS-REACH-ESCAPE-TYPED',
@@ -3289,6 +3292,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-REACH-LIBRARY-DYNAMIC',
 			'M-FACTS-REACH-UNREAD-VALUE',
 			'M-REACH-ABSTRACT-TEXT-ANY',
+			'M-GRAPH-USING-META',
+			'M-FACTS-REACH-USING-META',
+			'M-INDEX-GUARDED-META-LIFT',
+			'M-FACTS-REACH-UNREAD-IMPLICIT',
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
