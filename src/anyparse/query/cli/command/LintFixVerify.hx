@@ -824,4 +824,27 @@ final class LintFixVerify {
 		];
 	}
 
+	/**
+	 * `oracles` as a `--fix` verification may ask them: one whose generation raced an input in this run (`raced`) is
+	 * unavailable — it answers for the build the command saw, not for the tree the fixes are written into, and a veto from
+	 * that build could revert a sound fix. Report mode keeps asking it, with the note that named the race.
+	 */
+	public static function verifiable(oracles: Array<OracleConfig>): Array<OracleConfig> {
+		return [
+			for (oracle in oracles) {
+				final raced: Null<String> = oracle.raced;
+				if (raced == null || oracle.unavailable != null)
+					oracle
+				else
+					{
+						hxml: oracle.hxml,
+						dir: oracle.dir,
+						defines: oracle.defines,
+						generate: oracle.generate,
+						unavailable: 'not asked to verify fixes — $raced'
+					};
+			}
+		];
+	}
+
 }

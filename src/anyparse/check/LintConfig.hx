@@ -49,6 +49,13 @@ typedef OracleConfig = {
 	 * failed. Every consumer answers it as an oracle that could not run, never by reading a stale hxml.
 	 */
 	var ?unavailable: String;
+
+	/**
+	 * Why this run's generation of the hxml is no faithful snapshot of the tree — an input moved while the command ran —
+	 * set by `OracleGeneration.prepare`. A report may still ask it; a `--fix` verification treats it as unavailable
+	 * (`LintFixVerify.verifiable`), since a veto from a build that does not match the tree is worse than none.
+	 */
+	var ?raced: String;
 }
 
 /**

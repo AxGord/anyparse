@@ -3807,8 +3807,8 @@
 			"name": "M-GENERATE-STATE-IN-TMPDIR",
 			"type": "anyparse.check.OracleGeneration",
 			"method": "stateDir",
-			"find": "return Path.join([root, STATE_DIR, 'oracle-generate', md5('$root\\n${hxmls.join('\\n')}')]);",
-			"replace": "return Path.join([Sys.getEnv('TMPDIR') ?? '/tmp', STATE_DIR, 'oracle-generate', md5('$root\\n${hxmls.join('\\n')}')]);",
+			"find": "return Path.join([home, STATE_DIR, 'oracle-generate', md5(hxmls.join('\\n'))]);",
+			"replace": "return Path.join([Sys.getEnv('TMPDIR') ?? '/tmp', STATE_DIR, 'oracle-generate', md5(hxmls.join('\\n'))]);",
 			"note": "the generation record and lock live under TMPDIR, so runs with different TMPDIRs share no lock and rm -rf the same tree concurrently"
 		},
 		{
@@ -3846,8 +3846,9 @@
 		{
 			"name": "M-GENERATE-RIVAL-COMMAND-RETRIED",
 			"type": "anyparse.check.OracleGeneration",
-			"method": "rivalCommand",
-			"force": "null",
+			"method": "share",
+			"find": "if (rival == null)",
+			"replace": "if (true)",
 			"note": "a tree another configuration regenerated with a different command is sent back through regeneration, so two configurations take it back and forth instead of one being told why it is unavailable"
 		},
 		{
@@ -3864,6 +3865,60 @@
 			"find": "return 'cannot create its generation state under ${Path.directory(Path.directory(stateDir(group)))}: ${exception.message}';",
 			"replace": "throw exception;",
 			"note": "a generation root where the state cannot be created crashes the run instead of making its configurations unavailable"
+		},
+		{
+			"name": "M-GENERATE-STATE-BY-CONFIG-ROOT",
+			"type": "anyparse.check.OracleGeneration",
+			"method": "stateDir",
+			"find": "return Path.join([home, STATE_DIR, 'oracle-generate', md5(hxmls.join('\\n'))]);",
+			"replace": "return Path.join([absolute(Sys.getCwd(), group.generate.root), STATE_DIR, 'oracle-generate', md5(hxmls.join('\\n'))]);",
+			"note": "the generation state lives beside the declaring config, so two configs over one tree take two locks and delete the tree under each other"
+		},
+		{
+			"name": "M-GENERATE-STATE-BY-SPELLING",
+			"type": "anyparse.check.OracleGeneration",
+			"method": "stateDir",
+			"find": "group.hxmls.map(OracleDeclaration.realPath)",
+			"replace": "group.hxmls.copy()",
+			"note": "the generation state is keyed by the hxml as spelled, so a symlinked spelling of one tree takes a second lock"
+		},
+		{
+			"name": "M-GENERATE-STATE-IN-OUTPUT-DIR",
+			"type": "anyparse.check.OracleGeneration",
+			"method": "stateDir",
+			"find": "ConfigFinder.projectRoot(Path.directory(Path.directory(hxmls[0])))",
+			"replace": "ConfigFinder.projectRoot(Path.directory(hxmls[0]))",
+			"note": "a project marker in the hxml's own directory puts the generation state inside the tree the command may delete"
+		},
+		{
+			"name": "M-GENERATE-RIVAL-BY-SPELLING",
+			"type": "anyparse.check.OracleDeclaration",
+			"method": "withoutRivalCommands",
+			"find": "realPath(entry.config.hxml)",
+			"replace": "entry.config.hxml",
+			"note": "two spellings of one hxml under two commands are not seen as rivals, so both commands run into one tree"
+		},
+		{
+			"name": "M-GENERATE-EPOCH-UNOBSERVED",
+			"type": "anyparse.check.OracleGeneration",
+			"method": "observe",
+			"find": "return [epoch, written]",
+			"replace": "return [written]",
+			"note": "another run's generation that left the record and hxml as they were goes unseen, though it rewrote the rest of the tree"
+		},
+		{
+			"name": "M-GENERATE-RACED-VERIFIES-FIXES",
+			"type": "anyparse.query.cli.command.LintFixVerify",
+			"method": "verifiable",
+			"force": "oracles",
+			"note": "a generation that raced an input still verifies --fix, so a build that does not match the tree can veto a sound fix"
+		},
+		{
+			"name": "M-ORACLE-SUMMARY-SILENT",
+			"type": "anyparse.query.cli.command.OracleCommand",
+			"method": "verdictSummary",
+			"force": "''",
+			"note": "apq oracle ends without counting the unavailable configurations, so its exit 0 reads as every configuration confirmed"
 		},
 		{
 			"name": "M-FIAD-CROSS-SUPER-UNPROVED",

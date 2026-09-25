@@ -5,6 +5,7 @@ import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.LintConfig.OracleGenerate;
 import anyparse.check.OracleCache.HxmlRefs;
 import anyparse.check.OracleGenerationLock.Holder;
+import anyparse.query.ConfigFinder;
 import haxe.Exception;
 import haxe.io.Path;
 
@@ -29,7 +30,7 @@ using StringTools;
  *    did right after it.
  *
  * An entry with no inputs cannot be shown current by anything, so its command runs once per `prepare` call — once per
- * `apq` run. The record lives in the project, under the generation root (`stateDir`), is deleted before a stale command
+ * `apq` run. The record lives in the project, at the root of the tree it guards (`stateDir`), is deleted before a stale command
  * starts and written only after it succeeded, so a generation killed half way is never read as current.
  *
  * ## Failure and concurrency
@@ -85,7 +86,8 @@ final class OracleGeneration {
 			deadline: Date.now().getTime() + (lockWaitMs ?? declaredWait ?? LOCK_WAIT),
 			failures: [],
 			notes: notes,
-			observed: []
+			observed: [],
+			raced: []
 		};
 		#if nodejs
 		js.Node.process.once('exit', () -> releaseGroups(groups, run.me));
@@ -120,7 +122,7 @@ final class OracleGeneration {
 			for (group in ordered) OracleGenerationLock.dropShared(lockDir(group), run.me);
 			candidates = moved;
 		}
-		return { oracles: [for (oracle in oracles) ready(oracle, run.failures)], notes: notes };
+		return { oracles: [for (oracle in oracles) ready(oracle, run)], notes: notes };
 	}
 
 	/** Why `group`'s recorded generation is not current, or null when it is. */
@@ -184,11 +186,11 @@ final class OracleGeneration {
 		return Path.join([stateDir(group), 'record.json']);
 	}
 
-	/** `oracle` as it may be used after this run's generations: unavailable, re-probed, or untouched. */
-	private static function ready(oracle: OracleConfig, failures: Map<String, String>): OracleConfig {
+	/** `oracle` as it may be used after `run`'s generations: unavailable, re-probed, or untouched — and marked when it raced. */
+	private static function ready(oracle: OracleConfig, run: GenerationRun): OracleConfig {
 		final generate: Null<OracleGenerate> = oracle.generate;
 		if (generate == null) return oracle;
-		final failure: Null<String> = failures[keyOf(generate)];
+		final failure: Null<String> = run.failures[keyOf(generate)];
 		final dir: Null<String> = generate.probeDir && failure == null
 			? OracleDeclaration.compileDir(oracle.hxml, generate.root)
 			: oracle.dir;
@@ -199,6 +201,8 @@ final class OracleGeneration {
 			generate: generate
 		};
 		if (failure != null) out.unavailable = failure;
+		final raced: Null<String> = run.raced[keyOf(generate)];
+		if (raced != null && failure == null) out.raced = raced;
 		return out;
 	}
 
@@ -471,19 +475,23 @@ final class OracleGeneration {
 	}
 
 	/**
-	 * The directory holding `group`'s record and lock: `<generate root>/.apq/oracle-generate/<md5>/`, keyed by the tree
-	 * the generation guards — its directory and the hxmls it writes — and by nothing about the process asking. Every run
-	 * over that tree therefore meets the same lock and the same record, whatever its `TMPDIR` or engine version (a
-	 * record's own `format` answers the version). Nothing in it is `.hx`, so no scan of the project reads it, and a
-	 * directory input never hashes it (`listTree`); a project keeps it out of version control (`.apq/` in its ignore
-	 * file).
+	 * The directory holding `group`'s record, lock and epoch: `<project root>/.apq/oracle-generate/<md5>/`, keyed by the
+	 * TREE the generation writes — the real paths of its hxmls — and by nothing about the config or process asking. Every
+	 * config over that tree (a nested `apqlint.json` naming the same hxml included) therefore meets the same lock and the
+	 * same record, whatever its `TMPDIR` or engine version (a record's own `format` answers the version). The project
+	 * root is the nearest directory holding a project marker (`ConfigFinder.projectRoot`) ABOVE the hxml's own directory,
+	 * which the command may delete wholesale; with none, the generation's own root. Nothing in it is `.hx`, so no scan of
+	 * the project reads it, and a directory input never hashes it (`listTree`); a project keeps it out of version control
+	 * (`.apq/` in its ignore file).
 	 */
 	public static function stateDir(group: GenerationGroup): String {
 		#if (sys || nodejs)
-		final hxmls: Array<String> = group.hxmls.copy();
+		final hxmls: Array<String> = group.hxmls.map(OracleDeclaration.realPath);
 		hxmls.sort(Reflect.compare);
-		final root: String = absolute(Sys.getCwd(), group.generate.root);
-		return Path.join([root, STATE_DIR, 'oracle-generate', md5('$root\n${hxmls.join('\n')}')]);
+		final home: String = ConfigFinder.projectRoot(Path.directory(Path.directory(hxmls[0]))) ?? absolute(
+			Sys.getCwd(), group.generate.root
+		);
+		return Path.join([home, STATE_DIR, 'oracle-generate', md5(hxmls.join('\n'))]);
 		#else
 		return '';
 		#end
@@ -565,6 +573,7 @@ final class OracleGeneration {
 			], fresh)
 		};
 		deleteRecord(group);
+		sys.io.File.saveContent(epochFile(group), '${run.me.pid} ${Date.now().getTime()} ${Math.random()}');
 		return claimed;
 	}
 
@@ -622,7 +631,12 @@ final class OracleGeneration {
 		for (i => s in stale) {
 			final failure: Null<String> = failureOf(s.group, runs[i]);
 			if (failure == null) {
-				run.notes.push('regenerated ${s.group.hxmls.join(', ')} (${s.why})${record(s, libraries)}');
+				final clause: String = record(s, libraries);
+				run.notes.push('regenerated ${s.group.hxmls.join(', ')} (${s.why})$clause');
+				if (clause == '')
+					run.raced.remove(s.group.key)
+				else
+					run.raced[s.group.key] = 'this run regenerated it while an input moved$clause';
 				run.observed[s.group.key] = observe(s.group, settled);
 			} else {
 				run.failures[s.group.key] = 'its generate command failed — $failure';
@@ -650,7 +664,8 @@ final class OracleGeneration {
 			final seen: Null<String> = run.observed[group.key];
 			if (seen == null) throw new Exception('${group.hxmls.join(', ')} reached its compile hold unobserved');
 			if (observe(group, judged) == seen) continue;
-			final rival: Null<String> = rivalCommand(group);
+			final record: Null<GenerationRecord> = #if (sys || nodejs) readRecord(recordFile(group)) #else null #end;
+			final rival: Null<String> = record?.format == FORMAT_TAG && record?.command != group.generate.command ? record?.command : null;
 			if (rival == null)
 				moved.push(group)
 			else {
@@ -672,7 +687,8 @@ final class OracleGeneration {
 		final written: String = try sys.io.File.getContent(recordFile(group)) catch (exception: haxe.Exception) MISSING;
 		final record: Null<GenerationRecord> = try haxe.Json.parse(written) catch (exception: haxe.Exception) null;
 		final paths: Array<String> = group.hxmls.concat(group.inputs ?? []).concat([for (held in record?.implicit ?? []) held.path]);
-		return [written].concat([for (hash in hashAll(paths, memo)) '${hash.path} ${hash.hash}']).join('\n');
+		final epoch: String = try sys.io.File.getContent(epochFile(group)) catch (exception: haxe.Exception) MISSING;
+		return [epoch, written].concat([for (hash in hashAll(paths, memo)) '${hash.path} ${hash.hash}']).join('\n');
 		#else
 		return '';
 		#end
@@ -693,15 +709,13 @@ final class OracleGeneration {
 		}
 	}
 
-	/** The command `group`'s current record names when it is a current-scheme record of a command other than its own, else null. */
-	private static function rivalCommand(group: GenerationGroup): Null<String> {
-		#if (sys || nodejs)
-		final record: Null<GenerationRecord> = readRecord(recordFile(group));
-		final command: Null<String> = record?.command;
-		return record?.format == FORMAT_TAG && command != null && command != group.generate.command ? command : null;
-		#else
-		return null;
-		#end
+	/**
+	 * Where `group`'s epoch lives: a nonce every regeneration writes before its command starts, successful or not. Part of
+	 * what `observe` sees, so a generation by any run moves the snapshot even when the record and the hxml end up as they
+	 * were — a failed one leaves no record to compare, and the tree it half rewrote is more than the hxml.
+	 */
+	public static function epochFile(group: GenerationGroup): String {
+		return Path.join([stateDir(group), 'epoch']);
 	}
 
 }
@@ -715,6 +729,9 @@ typedef GenerationRun = {
 
 	/** What this run last saw of each usable group, by key (`OracleGeneration.observe`). */
 	var observed: Map<String, String>;
+
+	/** Why each group this run regenerated while an input moved is no snapshot of the tree, by key. */
+	var raced: Map<String, String>;
 }
 
 /** `OracleGeneration.prepare`'s answer: the configurations ready to use, and a line per command that ran. */

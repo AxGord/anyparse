@@ -253,24 +253,26 @@ final class OracleDeclaration {
 	}
 
 	/**
-	 * `entries` without those whose hxml a DIFFERENT `generate` command of this document also writes. One generation's
+	 * `entries` without those whose hxml a DIFFERENT `generate` command of this document
+	 * also writes, compared as real paths so two spellings of one file meet. One generation's
 	 * state and lock are keyed by its tree, so two commands over one hxml would run concurrently into it and each find
 	 * the other's record: neither configuration could ever be current. Which one the project meant is not ours to guess,
 	 * so each such entry is dropped with a line naming the rival command.
 	 */
 	private static function withoutRivalCommands(entries: Array<IndexedOracle>, drops: Array<String>): Array<OracleConfig> {
 		final claims: Map<String, Array<String>> = [];
-		for (entry in entries) {
+		final trees: Array<String> = [for (entry in entries) realPath(entry.config.hxml)];
+		for (i => entry in entries) {
 			final command: Null<String> = entry.config.generate?.command;
 			if (command == null) continue;
-			final held: Array<String> = claims[entry.config.hxml] ?? [];
+			final held: Array<String> = claims[trees[i]] ?? [];
 			if (!held.contains(command)) held.push(command);
-			claims[entry.config.hxml] = held;
+			claims[trees[i]] = held;
 		}
 		final out: Array<OracleConfig> = [];
-		for (entry in entries) {
+		for (i => entry in entries) {
 			final command: Null<String> = entry.config.generate?.command;
-			final rivals: Array<String> = command == null ? [] : (claims[entry.config.hxml] ?? []).filter(c -> c != command);
+			final rivals: Array<String> = command == null ? [] : (claims[trees[i]] ?? []).filter(c -> c != command);
 			if (rivals.length == 0)
 				out.push(entry.config)
 			else
@@ -280,6 +282,24 @@ final class OracleDeclaration {
 				);
 		}
 		return out;
+	}
+
+	/**
+	 * `path` absolute with every symlink resolved — the identity of a file however a config spells it. A path that does
+	 * not exist yet (an hxml before its first generation) resolves its nearest existing ancestor and keeps the rest.
+	 */
+	public static function realPath(path: String): String {
+		#if (sys || nodejs)
+		final absolute: String = Path.removeTrailingSlashes(Path.normalize(sys.FileSystem.absolutePath(path)));
+		if (sys.FileSystem.exists(absolute)) {
+			final resolved: Null<String> = try sys.FileSystem.fullPath(absolute) catch (exception: Exception) null;
+			return resolved == null ? absolute : Path.normalize(resolved);
+		}
+		final parent: String = Path.directory(absolute);
+		return parent == '' || parent == absolute ? absolute : Path.join([realPath(parent), Path.withoutDirectory(absolute)]);
+		#else
+		return path;
+		#end
 	}
 
 }

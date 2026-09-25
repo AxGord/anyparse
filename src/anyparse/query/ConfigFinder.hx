@@ -138,6 +138,23 @@ final class ConfigFinder {
 		return false;
 	}
 
+	/**
+	 * The nearest directory at or above `dir` holding one of `PROJECT_ROOT_MARKERS` — the project root the inheriting
+	 * walk stops at — or null when none does, or the target has no file IO.
+	 */
+	public static function projectRoot(dir: String): Null<String> {
+		#if (sys || nodejs)
+		var current: String = haxe.io.Path.removeTrailingSlashes(sys.FileSystem.absolutePath(dir));
+		while (current != '') {
+			if (marksProjectRoot(current, PROJECT_ROOT_MARKERS)) return current;
+			final parent: String = haxe.io.Path.directory(current);
+			if (parent == current) break;
+			current = parent;
+		}
+		#end
+		return null;
+	}
+
 }
 
 /**

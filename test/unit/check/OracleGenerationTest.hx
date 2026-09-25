@@ -7,8 +7,11 @@ import sys.io.File;
 import anyparse.check.CompilerOracle;
 import anyparse.check.HaxeSpawn;
 import anyparse.check.LintConfig;
+import anyparse.check.OracleDeclaration;
 import anyparse.check.OracleGeneration;
 import anyparse.check.OracleGenerationLock;
+import anyparse.query.Cli;
+import anyparse.query.cli.command.LintFixVerify;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -1094,6 +1097,176 @@ final class OracleGenerationTest extends Test {
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-node target');
+		#end
+	}
+
+	/**
+	 * Two configs over one hxml — a nested `apqlint.json` naming the parent's tree, through another spelling — meet the
+	 * SAME generation lock: its state is keyed by the tree's real paths and kept at the project root, never beside the
+	 * declaring config and never inside the hxml's own directory, which the command may delete.
+	 */
+	@:pin('control')
+	@:killer('M-GENERATE-STATE-BY-CONFIG-ROOT')
+	@:killer('M-GENERATE-STATE-BY-SPELLING')
+	@:killer('M-GENERATE-STATE-IN-OUTPUT-DIR')
+	public function testEveryConfigOverOneTreeMeetsOneLock(): Void {
+		#if nodejs
+		final dir: String = OracleDeclaration.realPath(CliFixture.writeTree('oraclegenxroot', [
+			{ name: 'proj/.git/HEAD', source: 'ref: refs/heads/main\n' },
+			{ name: 'proj/gen/haxelib.json', source: '{}' },
+			{ name: 'proj/sub/S.hx', source: 'class S {}\n' },
+			{ name: 'proj/Main.hx', source: MAIN }
+		]));
+		js.node.Fs.symlinkSync('$dir/proj/gen', '$dir/proj/link');
+		inline function declaredAt(root: String, hxml: String): OracleConfig {
+			return {
+				hxml: hxml,
+				dir: '$dir/proj',
+				defines: [],
+				generate: {
+					command: "mkdir -p gen && printf '%s\\n' '-cp .' '-main Main' > gen/a.hxml && echo run >> runs.txt",
+					root: root,
+					inputs: ['$dir/proj/Main.hx'],
+					probeDir: false
+				}
+			};
+		}
+		final parent: OracleConfig = declaredAt('$dir/proj', '$dir/proj/gen/a.hxml');
+		final nested: OracleConfig = declaredAt('$dir/proj/sub', '$dir/proj/link/a.hxml');
+		Assert.isTrue(
+			OracleGeneration.stateDir(OracleGeneration.groupsOf([parent])[0]).startsWith('$dir/proj/.apq/'), 'at the project root'
+		);
+		final other: Dynamic = js.node.ChildProcess.spawn('sleep', ['30']);
+		holdAsWriter(lockOf(parent), other.pid, OracleGenerationLock.startTime(other.pid));
+		final ready: Array<OracleConfig> = OracleGeneration.prepare([nested], 300).oracles;
+		other.kill();
+		Assert.isTrue(
+			(ready[0].unavailable ?? '').contains('is regenerating it'),
+			'the nested config waits on the parent\'s lock: ${ready[0].unavailable}'
+		);
+		Assert.isFalse(FileSystem.exists('$dir/proj/sub/runs.txt'), 'and generated nothing past it');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-node target');
+		#end
+	}
+
+	/** Two spellings of one hxml (a symlinked directory) under two different commands are one rival claim, dropped. */
+	@:pin('control')
+	@:killer('M-GENERATE-RIVAL-BY-SPELLING')
+	public function testTwoSpellingsOfOneHxmlAreOneClaim(): Void {
+		#if nodejs
+		final dir: String = CliFixture.writeTree('oraclegenspell', [{ name: 'gen/keep.txt', source: '' }]);
+		js.node.Fs.symlinkSync('$dir/gen', '$dir/link');
+		final config: LintConfig = LintConfig.parse(
+			'{"compilerOracle":[{"hxml":"gen/a.hxml","generate":"one"},{"hxml":"link/a.hxml","generate":"two"}]}', dir
+		);
+		Assert.equals(0, config.compilerOracles().length, 'both spellings name one file: ${config.drops()}');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-node target');
+		#end
+	}
+
+	/**
+	 * Another run's generation of a tree moves what this run observed of it even when it leaves no record and the hxml
+	 * as it was — a generation that failed after writing the hxml. The epoch it writes first is part of the snapshot.
+	 *
+	 * The tree here is one this run regenerated WITHOUT recording it (an include moved under the command), so nothing
+	 * but the epoch can tell. A third group, regenerated in a later round because a second one wiped it, stands in for
+	 * the other run: its command writes the first tree's epoch.
+	 */
+	@:pin('control')
+	@:killer('M-GENERATE-EPOCH-UNOBSERVED')
+	public function testAnotherRunsGenerationMovesTheSnapshot(): Void {
+		#if (sys || nodejs)
+		final dir: String = fixture();
+		File.saveContent('$dir/extra.hxml', '-D a\n');
+		inline function tree(hxml: String, command: String): OracleConfig {
+			return {
+				hxml: '$dir/$hxml',
+				dir: dir,
+				defines: [],
+				generate: {
+					command: command,
+					root: dir,
+					inputs: ['$dir/input.txt'],
+					probeDir: false
+				}
+			};
+		}
+		final write: String = "mkdir -p out && printf '%s\\n' '-cp .' '-main Main' 'extra.hxml' > out/gen.hxml && echo run >> runs.txt";
+		OracleGeneration.prepare([tree('out/gen.hxml', write)]);
+		final unrecorded: OracleConfig = tree('out/gen.hxml', write + " && echo '-D b' > extra.hxml");
+		final epoch: String = OracleGeneration.epochFile(OracleGeneration.groupsOf([unrecorded])[0]);
+		final other: OracleConfig = tree('c.hxml', "printf '%s\\n' '-cp .' '-main Main' > c.hxml && echo another-run > '" + epoch + "'");
+		OracleGeneration.prepare([other]);
+		final wiping: OracleConfig = tree('b.hxml', "rm -f c.hxml && printf '%s\\n' '-cp .' '-main Main' > b.hxml");
+		final ready: Array<OracleConfig> = OracleGeneration.prepare([unrecorded, wiping, other]).oracles;
+		OracleGeneration.release([unrecorded, wiping, other]);
+		Assert.isNull(ready[0].unavailable, 'the tree stays usable');
+		Assert.equals(3, runs(dir), 'the other run\'s generation was seen, so this run regenerated the tree again before using it');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A generation that raced an input in this run is marked, and a `--fix` verification does not ask it: it answers for
+	 * the build the command saw, not the tree the fixes land in. An unraced configuration passes through untouched.
+	 */
+	@:pin('control')
+	@:killer('M-GENERATE-RACED-VERIFIES-FIXES')
+	public function testARacedGenerationDoesNotVerifyFixes(): Void {
+		#if (sys || nodejs)
+		final dir: String = fixture();
+		final raced: OracleConfig = entry(dir, '$WRITE && echo x >> input.txt', ['$dir/input.txt']);
+		final ready: Array<OracleConfig> = OracleGeneration.prepare([raced]).oracles;
+		OracleGeneration.release([raced]);
+		Assert.isNull(ready[0].unavailable, 'a report still asks it');
+		Assert.notNull(ready[0].raced, 'but it is marked');
+		final plain: OracleConfig = { hxml: '$dir/other.hxml', dir: dir, defines: [] };
+		final verifying: Array<OracleConfig> = LintFixVerify.verifiable([ready[0], plain]);
+		Assert.isTrue(
+			(verifying[0].unavailable ?? '').contains('not asked to verify fixes'),
+			'a fix is not verified by it: ${verifying[0].unavailable}'
+		);
+		Assert.equals(plain, verifying[1], 'an unraced configuration is untouched');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * `apq oracle` exits 0 both when every configuration typechecks and when one could not be asked, so its last stderr
+	 * line tells them apart: here one configuration typechecks and one's generation failed.
+	 */
+	@:pin('control')
+	@:killer('M-ORACLE-SUMMARY-SILENT')
+	public function testTheOracleRunCountsTheUnavailable(): Void {
+		#if (sys || nodejs)
+		final dir: String = CliFixture.writeDir('oraclegensummary', [
+			{ name: 'Main.hx', source: MAIN },
+			{ name: 'good.hxml', source: '-cp .\n-main Main\n' },
+			{
+				name: 'apqlint.json',
+				source: '{"compilerOracle":[{"hxml":"good.hxml","dir":"."},{"hxml":"g.hxml","dir":".","generate":"exit 3"}]}'
+			}
+		]);
+		if (!CompilerOracle.typecheck('good.hxml', dir).match(Confirmed)) {
+			CliFixture.removeDir(dir);
+			Assert.pass('haxe unavailable — skipped');
+			return;
+		}
+		var exit: Int = -1;
+		final err: String = CliFixture.captureStderr(() -> exit = Cli.run(['oracle', '$dir/Main.hx']));
+		Assert.equals(0, exit, 'an unavailable configuration is not a failed build');
+		Assert.isTrue(err.contains('1 of 2 configuration(s) typecheck, 0 do NOT, 1 UNAVAILABLE'), 'the summary counts it: $err');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
 		#end
 	}
 

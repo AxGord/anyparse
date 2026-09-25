@@ -1303,6 +1303,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-GENERATE-LOCK-IGNORED',
 			'unit.check.OracleGenerationTest#testAMissingHxmlRegenerates :: control :: '
 				+ 'M-GENERATE-TRUSTS-A-MISSING-HXML',
+			'unit.check.OracleGenerationTest#testARacedGenerationDoesNotVerifyFixes :: control :: '
+				+ 'M-GENERATE-RACED-VERIFIES-FIXES',
 			'unit.check.OracleGenerationTest#testAReadOnlyRootIsUnavailableNotACrash :: control :: '
 				+ 'M-GENERATE-READ-ONLY-ROOT-THROWS',
 			'unit.check.OracleGenerationTest#testARecordOfAnOlderSchemeIsStale :: control :: '
@@ -1331,8 +1333,12 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-GENERATE-PRODUCED-BY-ROOT',
 			'unit.check.OracleGenerationTest#testAnInputEditedDuringTheGenerationIsSeenNextRun :: control :: '
 				+ 'M-GENERATE-HASHES-INPUTS-AFTER-THE-RUN',
+			'unit.check.OracleGenerationTest#testAnotherRunsGenerationMovesTheSnapshot :: control :: '
+				+ 'M-GENERATE-EPOCH-UNOBSERVED',
 			'unit.check.OracleGenerationTest#testEntriesSharingACommandMergeTheirInputs :: control :: '
 				+ 'M-GENERATE-FIRST-ENTRY-INPUTS',
+			'unit.check.OracleGenerationTest#testEveryConfigOverOneTreeMeetsOneLock :: control :: '
+				+ 'M-GENERATE-STATE-BY-CONFIG-ROOT,M-GENERATE-STATE-BY-SPELLING,M-GENERATE-STATE-IN-OUTPUT-DIR',
 			'unit.check.OracleGenerationTest#testGenerationsAreWaitedOnInLockOrder :: control :: '
 				+ 'M-GENERATE-ORDER-BY-KEY',
 			'unit.check.OracleGenerationTest#testOnlyOneRunTakesOverADeadLock :: control :: '
@@ -1341,10 +1347,14 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-GENERATE-STATE-IN-TMPDIR',
 			'unit.check.OracleGenerationTest#testTheLibraryStateTheHxmlNamesIsAnInput :: control :: '
 				+ 'M-GENERATE-IGNORES-LIBRARY-STATE,M-GENERATE-TEMPLATES-UNTRACKED',
+			'unit.check.OracleGenerationTest#testTheOracleRunCountsTheUnavailable :: control :: '
+				+ 'M-ORACLE-SUMMARY-SILENT',
 			'unit.check.OracleGenerationTest#testTheStateDirectoryIsNoInput :: control :: '
 				+ 'M-GENERATE-STATE-DIR-HASHED',
 			'unit.check.OracleGenerationTest#testTwoRunsOverTwoStaleGenerationsDoNotDeadlock :: control :: '
 				+ 'M-GENERATE-SHARED-HELD-INTO-PHASE-TWO',
+			'unit.check.OracleGenerationTest#testTwoSpellingsOfOneHxmlAreOneClaim :: control :: '
+				+ 'M-GENERATE-RIVAL-BY-SPELLING',
 			'unit.check.OracleParallelVerdictTest#testTheOverlappedVerdictIsTheFirstFailureInDeclaredOrder :: control :: '
 				+ 'M-DRIVER-CANCELS-EARLIER-JOBS',
 			'unit.check.OrphanAccessorCheckTest#testAnUnreadableCallerOutsideTheReportScopeStillDeclinesTheDeletion :: control :: '
@@ -2836,6 +2846,13 @@ class TestDiscoveryParityTest extends Test {
 			'M-GENERATE-RIVAL-COMMAND-RETRIED',
 			'M-GENERATE-RIVAL-COMMANDS-KEPT',
 			'M-GENERATE-READ-ONLY-ROOT-THROWS',
+			'M-GENERATE-STATE-BY-CONFIG-ROOT',
+			'M-GENERATE-STATE-BY-SPELLING',
+			'M-GENERATE-STATE-IN-OUTPUT-DIR',
+			'M-GENERATE-RIVAL-BY-SPELLING',
+			'M-GENERATE-EPOCH-UNOBSERVED',
+			'M-GENERATE-RACED-VERIFIES-FIXES',
+			'M-ORACLE-SUMMARY-SILENT',
 			'M-FIAD-CROSS-SUPER-UNPROVED',
 			'M-FIAD-EARLY-READ-IGNORED',
 			'M-FIAD-EARLY-READ-CALL-ARG',

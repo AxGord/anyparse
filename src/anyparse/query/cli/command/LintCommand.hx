@@ -239,7 +239,8 @@ final class LintCommand implements CliCommand {
 
 		if (o.fix) {
 			final fixed: Int = LintFixDriver.runLintFix(
-				files, activeChecks, plugin, resolveConfig, applyEnablement, resolution, oracles, o.noOracle, o.range, o.verbose
+				files, activeChecks, plugin, resolveConfig, applyEnablement, resolution, LintFixVerify.verifiable(oracles), o.noOracle,
+				o.range, o.verbose
 			);
 			// every compile of the run is done: another run may regenerate these builds now
 			OracleGeneration.release(oracles);

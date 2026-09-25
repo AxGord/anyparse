@@ -109,9 +109,11 @@ final class OracleCommand implements CliCommand {
 		];
 		final outcomes: Array<Null<OracleOutcome>> = CompilerOracle.typecheckEach(ready, false);
 		var exit: Int = EXIT_OK;
+		final answered: Array<OracleOutcome> = [];
 		for (i in 0...ready.length) {
 			final oracle: OracleConfig = ready[i];
 			final outcome: OracleOutcome = outcomes[i] ?? Unavailable('the typecheck was cancelled');
+			answered.push(outcome);
 			final fingerprint: Null<String> = fingerprints[i];
 			final stored: Bool = fingerprint != null
 				&& OracleCache.storeIfUnchanged(oracle.hxml, oracle.dir, fingerprint, outcome, oracle.defines, after);
@@ -123,6 +125,7 @@ final class OracleCommand implements CliCommand {
 					'apq oracle: the compile input of ${LintConfig.describeOracle(oracle)} changed during the typecheck — the verdict was not recorded\n'
 				);
 		}
+		CliIo.stderr(verdictSummary(answered));
 		// the compiles are done: another run may regenerate these builds now
 		OracleGeneration.release(ready);
 		return exit;
@@ -155,13 +158,28 @@ final class OracleCommand implements CliCommand {
 		CliIo.sysPrint('The compiler ALWAYS runs here — there is no flag that records a verdict\n');
 		CliIo.sysPrint('nobody observed. The scope only locates the project apqlint.json; without a\n');
 		CliIo.sysPrint('`compilerOracle` key the command is inert. Exit 0 when the build typechecks\n');
-		CliIo.sysPrint('or the oracle could not run, 1 when it does not typecheck, 2 on usage.\n');
+		CliIo.sysPrint('or the oracle could not run, 1 when it does not typecheck, 2 on usage. The\n');
+		CliIo.sysPrint('last stderr line counts both: `N of M configuration(s) typecheck, R do NOT,\n');
+		CliIo.sysPrint('U UNAVAILABLE` — read it, not the status, to know every one was confirmed.\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('A configuration with a `generate` command has it run first when its hxml is\n');
 		CliIo.sysPrint('stale; the configurations then compile concurrently (APQ_ORACLE_PARALLEL=<n>).\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Options:\n');
 		CliIo.sysPrint('  -h, --help      Show this help\n');
+	}
+
+	/**
+	 * The closing line of an `apq oracle` run: how many configurations typecheck, how many do not, and how many could not
+	 * be asked. Exit 0 covers both "typechecks" and "could not run", so this line is what tells them apart — a caller
+	 * that needs every configuration confirmed reads it (or the per-configuration lines), never the status alone.
+	 */
+	private static function verdictSummary(outcomes: Array<OracleOutcome>): String {
+		final confirmed: Int = outcomes.filter(o -> o.match(Confirmed)).length;
+		final rejected: Int = outcomes.filter(o -> o.match(Rejected(_))).length;
+		final unavailable: Int = outcomes.length - confirmed - rejected;
+		final tail: String = unavailable == 0 ? '' : ', $unavailable UNAVAILABLE (no verdict recorded for them)';
+		return 'apq oracle: $confirmed of ${outcomes.length} configuration(s) typecheck, $rejected do NOT$tail\n';
 	}
 
 }
