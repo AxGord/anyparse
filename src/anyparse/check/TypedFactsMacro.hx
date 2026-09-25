@@ -24,6 +24,9 @@ final class TypedFactsMacro {
 	/** Deeper type nesting prints as unknown, so a recursive structure cannot grow a line without bound. */
 	private static inline final TYPE_DEPTH: Int = 8;
 
+	/** The zlib stream's trailer: the Adler-32 of its input, big-endian. */
+	private static inline final ADLER_BYTES: Int = 4;
+
 	/** This module: the probe itself is not the build's code. */
 	private static inline final OWN_MODULE: String = 'anyparse.check.TypedFactsMacro';
 
@@ -37,6 +40,9 @@ final class TypedFactsMacro {
 
 	private final _files: Map<String, Int> = [];
 	private final _taken: Map<String, Bool> = [];
+	private final _overloaded: Map<String, Bool> = [];
+	private final _replaceable: Map<String, Bool> = [];
+	private final _homes: Map<String, Bool> = [];
 	private final _out: FileOutput;
 
 	private var _fileCount: Int = 0;
@@ -84,7 +90,7 @@ final class TypedFactsMacro {
 				final c: ClassType = r.get();
 				if (c.module == OWN_MODULE) return;
 				switch c.kind {
-					case KGenericInstance(_, _) | KTypeParameter(_) | KMacroType | KGenericBuild | KExpr(_):
+					case KTypeParameter(_) | KMacroType | KGenericBuild | KExpr(_):
 						return;
 					case _:
 				}
@@ -121,25 +127,49 @@ final class TypedFactsMacro {
 			case KAbstractImpl(a):
 				extra.push(',"abs":' + q(a.toString()));
 				'impl';
+			case KGenericInstance(base, params):
+				// a `@:generic` class compiles one class per argument list: its own code, typed at those arguments
+				extra.push(',"of":' + q(instString(base, params, 0)));
+				'class';
 			case _ if (c.isInterface): 'interface';
 			case _: 'class';
 		};
+		final home: String = fileOf(c.pos);
 		final members: Array<{ f: ClassField, s: Bool }> = [for (f in c.fields.get()) { f: f, s: false }];
 		for (f in c.statics.get()) members.push({ f: f, s: true });
 		final ctor: Null<Ref<ClassField>> = c.constructor;
 		if (ctor != null) members.push({ f: ctor.get(), s: false });
-		extra.push(',"fields":' + arr([for (m in members) fieldRecord(m.f, m.s, fileOf(c.pos))]));
+		extra.push(',"fields":' + arr([for (m in members) fieldRecord(m.f, m.s, home)]));
 		typeLine(c.pack, c.name, kind, c.pos, c.params, c.meta.get(), c.isExtern, extra);
 		for (m in members) {
-			final body: Null<TypedExpr> = m.f.expr();
-			if (body == null) continue;
 			final nodeKind: String = switch m.f.kind {
 				case FMethod(_) if (m.f.name == 'new' && !m.s): 'ctor';
 				case FMethod(_): 'method';
 				case FVar(_, _): 'var';
 			};
-			new TypedFactsWalk(this, '$id.${m.f.name}', nodeKind, id, m.s, typeString(m.f.type, 0), null, []).root(body);
+			walkBody(m.f.expr(), '$id.${m.f.name}', nodeKind, id, m.s, typeString(m.f.type, 0), home, 0);
+			var index: Int = 0;
+			for (o in m.f.overloads.get())
+				walkBody(o.expr(), '$id.${m.f.name}~${++index}', nodeKind, id, m.s, typeString(o.type, 0), home, index);
 		}
+		final init: Null<TypedExpr> = c.init;
+		walkBody(init, '$id.__init__', 'init', id, true, '()->Void', home, 0);
+	}
+
+	/**
+	 * A node for `body` when there is one: its facts, marked generated when a macro placed it outside `home`, the file of
+	 * the type it belongs to, and numbered when it is the `overloadIndex`-th overload of its field.
+	 */
+	private function walkBody(
+		body: Null<TypedExpr>, id: String, kind: String, owner: String, isStatic: Bool, signature: String, home: String, overloadIndex: Int
+	): Void {
+		if (body == null) return;
+		final walk: TypedFactsWalk = new TypedFactsWalk(
+			this, id, kind, owner, isStatic, signature, null, [], TypedFactsWalk.writtenLocals(body)
+		);
+		if (fileOf(body.pos) != home) walk.generated();
+		if (overloadIndex > 0) walk.markOverload(overloadIndex);
+		walk.root(body);
 	}
 
 	private function fieldRecord(f: ClassField, isStatic: Bool, home: String): String {
@@ -168,6 +198,7 @@ final class TypedFactsMacro {
 	): Void {
 		_types++;
 		final home: String = fileOf(p);
+		noteHome(home);
 		final out: StringBuf = new StringBuf();
 		out.add('{"k":"type","id":${q(typeId(pack, name))},"f":${q(home)},"p":${pos(p, home)},"kind":"$kind","pack":${q(pack.join('.'))}');
 		if (params.length > 0) out.add(',"params":' + arr([for (tp in params) q(tp.name)]));
@@ -178,17 +209,66 @@ final class TypedFactsMacro {
 		line(out.toString());
 	}
 
-	/** Install the hook that writes the facts of the compile to `path` once typing ended; the last line is an `end` record. */
+	/**
+	 * Install the hook that writes the facts of the compile to `path` once typing ended; the last line is an `end` record.
+	 * The header's `inc` names what no node of this compile captures: a call of an `inline` function, when it inlines.
+	 */
 	public static function run(path: String): Void {
 		if (installed) return;
 		installed = true;
 		Context.onAfterTyping(moduleTypes -> {
 			final writer: TypedFactsMacro = new TypedFactsMacro(File.write(path, false));
-			writer.line('{"k":"facts","v":$VERSION,"inline":${!Context.defined('no-inline')}}');
+			final inlining: Bool = !Context.defined('no-inline');
+			final inc: String = inlining ? ',"inc":["inline-calls"]' : '';
+			writer.line('{"k":"facts","v":$VERSION,"inline":$inlining$inc}');
+			for (t in moduleTypes) writer.collectOverloads(t);
 			for (t in moduleTypes) writer.moduleType(t);
 			writer.line('{"k":"end","nodes":${writer.nodes},"types":${writer._types}}');
 			writer._out.close();
 		});
+	}
+
+	/** Whether the field `target` (`<type>.<field>`) has overloads: a call of it then names the signature it chose. */
+	public function overloaded(target: String): Bool {
+		return _overloaded.exists(target);
+	}
+
+	/** Whether the field `cf` of `owner` holds a replaceable value: a variable, or a `dynamic` method. Decided once per field. */
+	public function replaceable(key: String, cf: Ref<ClassField>): Bool {
+		final known: Null<Bool> = _replaceable[key];
+		if (known != null) return known;
+		final answer: Bool = switch cf.get().kind {
+			case FVar(_, _) | FMethod(MethDynamic): true;
+			case FMethod(_): false;
+		};
+		_replaceable[key] = answer;
+		return answer;
+	}
+
+	/**
+	 * Announce `file` as the home of a record: once per file, a `src` record with its UTF-8 length and Adler-32, which
+	 * the zlib stream of a stored (level 0) compression carries in its last four bytes.
+	 */
+	public function noteHome(file: String): Void {
+		if (_homes.exists(file)) return;
+		_homes[file] = true;
+		final bytes: Null<haxe.io.Bytes> = try File.getBytes(file) catch (exception: haxe.Exception) null;
+		if (bytes == null) return;
+		final z: haxe.io.Bytes = haxe.zip.Compress.run(bytes, 0);
+		final trailer: haxe.io.BytesInput = new haxe.io.BytesInput(z, z.length - ADLER_BYTES);
+		trailer.bigEndian = true;
+		final adler: Int = trailer.readInt32();
+		line('{"k":"src","path":${Json.stringify(file)},"len":${bytes.length},"adler":$adler}');
+	}
+
+	private function collectOverloads(t: ModuleType): Void {
+		switch t {
+			case TClassDecl(r):
+				final c: ClassType = r.get();
+				for (f in c.fields.get().concat(c.statics.get())) if (f.overloads.get().length > 0)
+					_overloaded[typeId(c.pack, c.name) + '.' + f.name] = true;
+			case _:
+		}
 	}
 
 	/** The file `p` lies in. */

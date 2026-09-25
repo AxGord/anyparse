@@ -136,7 +136,8 @@ class TypedFactsProbeTest extends Test {
 			function call(access: String, target: Null<String>): Bool {
 				return walked.calls.exists(c -> c.access == access && c.target == target);
 			}
-			Assert.isTrue(call('FInstance', 'P.dyn'), 'a dynamic method call');
+			// a dynamic method calls whatever the field holds, not its declared body
+			Assert.isTrue(call('fieldValue', 'P.dyn'), 'a dynamic method call');
 			Assert.isTrue(call('FDynamic', 'foo'), 'a Dynamic call');
 			Assert.isTrue(call('FEnum', 'E.B'), 'an enum constructor call');
 			Assert.isTrue(
@@ -280,6 +281,143 @@ class TypedFactsProbeTest extends Test {
 		scratch.remove();
 	}
 
+	@:pin('control') @:killer('M-FACTS-BRANCH-LEAVES') @:killer('M-FACTS-MONO-SINK') @:killer('M-FACTS-CAST-ALWAYS')
+	@:killer('M-FACTS-THROW') @:killer('M-FACTS-UNTYPED-ARGS') @:killer('M-FACTS-REST')
+	public function testEveryValueChannelIntoAnotherTypeIsAFlow(): Void {
+		// a branch's value reaches the place at the branch's own type, not at what the branches unify to; a place of no type
+		// is Dynamic; an unchecked cast always names its source; a thrown value, a native call's argument and each rest
+		// argument reach a place of their own
+		final source: String = 'class Obj { public function new() {} }\nclass Sub extends Obj { public function new() super(); }\n'
+			+ 'class Main {\n\tstatic function rest(...xs:Obj):Void {}\n\tstatic function main() {\n'
+			+ '\t\tvar o = new Obj(); var r = Std.random(3);\n' + '\t\tvar t:Dynamic = r > 0 ? o : null;\n'
+			+ '\t\tvar w:Dynamic = switch r { case 0: o; case _: null; };\n' + '\t\tvar b:Dynamic = { r++; o; };\n'
+			+ '\t\tvar same:Obj = cast o; var u = cast o;\n' + '\t\ttrace(o);\n' + '\t\trest(new Sub(), new Sub());\n'
+			+ '\t\tif (r > 100) throw o;\n\t}\n}\n';
+		final scratch: Scratch = compile(['Main.hx' => source]);
+		final main: Null<FactNode> = scratch.facts?.node('Main.main');
+		Assert.notNull(main);
+		final flows: Array<FlowFact> = main?.flows ?? [];
+		function at(text: String, nth: Int = 0): Int {
+			var from: Int = -1;
+			for (_ in 0...nth + 1) from = source.indexOf(text, from + 1);
+			return from;
+		}
+		function flowAt(from: String, to: String, via: String, offset: Int): Bool {
+			return flows.exists(f -> f.from == from && f.to == to && f.via == via && f.at.span.from == offset);
+		}
+		Assert.isTrue(flowAt('Obj', 'Dynamic', 'var', at('o : null')), 'the ternary branch');
+		Assert.isTrue(flowAt('Obj', 'Dynamic', 'var', at('o; case')), 'the switch case');
+		Assert.isTrue(flowAt('Obj', 'Dynamic', 'var', at('o; };')), 'the block value');
+		Assert.isTrue(flows.exists(f -> f.via == 'cast' && f.from == 'Obj' && f.to == 'Obj'), 'an unchecked cast to its own type');
+		Assert.isTrue(flows.exists(f -> f.via == 'var' && f.to == 'Dynamic' && f.at.span.from == at('var u')), 'a place of no type');
+		Assert.isTrue(flowAt('Obj', 'Dynamic', 'arg', at('o);')), 'a native call argument');
+		Assert.equals(2, flows.filter(f -> f.from == 'Sub' && f.to == 'Obj' && f.via == 'arg').length);
+		Assert.isTrue(flows.exists(f -> f.from == 'Obj' && f.via == 'throw'), 'a thrown value');
+		scratch.remove();
+	}
+
+	@:pin('control') @:killer('M-FACTS-GENERIC') @:killer('M-FACTS-INIT') @:killer('M-FACTS-REASSIGNED-LOCAL')
+	@:killer('M-FACTS-FIELD-VALUE') @:killer('M-FACTS-REFLECTION-INLINED') @:killer('M-FACTS-CONFIG-GAPS')
+	public function testGenericInstancesInitAndCallsThatNameNoFixedBody(): Void {
+		// a `@:generic` instance and `__init__` are code of their own; a local assigned again, a function-typed field and a
+		// dynamic method call whatever they hold; an inlined `Reflect` call leaves only a mark
+		final source: String = '@:generic class Gen<T> { public function new() {} public function g(t:T):T { Main.hook(3); return t; } }\n'
+			+ 'class Main {\n\tstatic var stored:Void->Void;\n\tstatic function __init__() { hook(99); }\n'
+			+ '\tpublic static function hook(i:Int):Int return i;\n\tstatic function fclos():Void {}\n'
+			+ '\tstatic function main() {\n\t\tnew Gen<String>().g("x");\n' + '\t\tvar f = () -> 1; f = () -> 2; f();\n'
+			+ '\t\tvar g:Dynamic = () -> 3;\n' + '\t\tstored = fclos; stored();\n' + '\t\tReflect.callMethod(null, fclos, []);\n\t}\n}\n';
+		final scratch: Scratch = compile(['Main.hx' => source]);
+		final facts: Null<CompilerFacts> = scratch.facts;
+		Assert.equals('Gen<String>', facts?.type('Gen_String')?.genericOf);
+		Assert.isTrue(facts?.node('Gen_String.g')?.calls.exists(c -> c.target == 'Main.hook') ?? false, 'the generic instance body');
+		Assert.isTrue(facts?.node('Main.__init__')?.calls.exists(c -> c.target == 'Main.hook') ?? false, 'the __init__ body');
+		final main: Null<FactNode> = facts?.node('Main.main');
+		Assert.isFalse(main?.calls.exists(c -> c.access == 'local') ?? true, 'a reassigned local was read as one fixed function');
+		Assert.isTrue(
+			main?.flows.exists(f -> f.via == 'var' && f.to == 'Dynamic' && f.from == '()->Int') ?? false, 'a function into Dynamic'
+		);
+		Assert.isTrue(main?.calls.exists(c -> c.access == 'fieldValue' && c.target == 'Main.stored') ?? false, 'a call of a field value');
+		Assert.isTrue(main?.incomplete.contains('reflection-inlined') ?? false, 'an inlined Reflect call left no mark');
+		Assert.isTrue(facts?.incompleteChannels().contains('inline-calls') ?? false, 'inlining left no configuration mark');
+		scratch.remove();
+	}
+
+	@:pin('control') @:killer('M-FACTS-OVERLOADS')
+	public function testEveryOverloadIsANodeAndACallNamesTheOneItChose(): Void {
+		// an overload body compiles on a target that has them: each is a node, and a call names the signature it chose
+		final source: String = 'class Main {\n\toverload static function ov(i:Int):Void {}\n\toverload static function ov(s:String):Void {}\n'
+			+ '\tstatic function main() { ov(1); ov("x"); }\n}\n';
+		final scratch: Scratch = compile(['Main.hx' => source], null, '-cp .\n-main Main\n--jvm out.jar\n');
+		final facts: Null<CompilerFacts> = scratch.facts;
+		Assert.equals(1, facts?.node('Main.ov~1')?.overloadIndex, 'dropped: ${[for (d in facts?.dropped ?? []) d.reason]}');
+		final chosen: Array<Null<String>> = [
+			for (c in facts?.node('Main.main')?.calls ?? []) if (c.target == 'Main.ov') c.signature
+		];
+		Assert.isTrue(chosen.contains('(Int)->Void') && chosen.contains('(String)->Void'), 'chosen: $chosen');
+		scratch.remove();
+	}
+
+	@:pin('control') @:killer('M-FACTS-SPLICED') @:killer('M-FACTS-INLINED-CHILD') @:killer('M-FACTS-GENERATED')
+	public function testInlinedAndGeneratedCodeIsFoundWhereItRuns(): Void {
+		// an inlined body's facts sit in the callee but answer a range query at the call site; a function in it is homed at the
+		// call site, never in the callee's file; a macro-built field's body is found by id, never by a range of the macro's file
+		final main: String = 'class Main {\n\tpublic static function hook(i:Int):Int return i;\n'
+			+ '\tstatic function main() {\n\t\tLib.wrap(1);\n\t\tvar d = Lib.deferred();\n\t\tTarget.generated();\n\t}\n}\n'
+			+ '@:build(Build.build()) class Target {}\n';
+		final lib: String = 'class Lib {\n\tpublic static inline function wrap(i:Int):Int return Main.hook(i);\n'
+			+ '\tpublic static inline function deferred():Void->Int return () -> Main.hook(2);\n}\n';
+		final build: String = 'import haxe.macro.Context;\nclass Build {\n\tpublic static macro function build():Array<haxe.macro.Expr.Field> {\n'
+			+ '\t\tfinal fields = Context.getBuildFields();\n\t\tfields.push({ name: "generated", access: [APublic, AStatic], '
+			+ 'pos: Context.currentPos(), kind: FFun({ args: [], ret: macro :Void, expr: macro { Main.hook(7); } }) });\n'
+			+ '\t\treturn fields;\n\t}\n}\n';
+		final scratch: Scratch = compile(['Main.hx' => main, 'Lib.hx' => lib, 'Build.hx' => build]);
+		final facts: Null<CompilerFacts> = scratch.facts;
+		final file: String = scratch.path('Main.hx');
+		final body: Int = main.indexOf('Lib.wrap(1)');
+		final spliced: Array<CallFact> = facts?.callsIn(file, new Span(body, body + 'Lib.wrap(1)'.length)) ?? [];
+		Assert.isTrue(spliced.exists(c -> c.target == 'Main.hook'), 'the inlined call is not found at its call site');
+		final child: Null<FactNode> = [for (n in facts?.nodesIn(file) ?? []) if (n.inlinedFrom != null) n][0];
+		Assert.isTrue(StringTools.endsWith(child?.inlinedFrom ?? '', 'Lib.hx'), 'the inlined function is not homed at the call site');
+		Assert.isFalse(
+			facts?.nodesIn(scratch.path('Lib.hx')).exists(n -> n.inlinedFrom != null) ?? true, 'an inlined function sits in its callee'
+		);
+		Assert.isTrue(facts?.node('Target.generated')?.generated ?? false, 'the generated body is not marked');
+		Assert.isFalse(
+			facts?.nodesIn(scratch.path('Build.hx')).exists(n -> n.id == 'Target.generated') ?? true,
+			'a generated body claims the macro file'
+		);
+		scratch.remove();
+	}
+
+	@:pin('control') @:killer('M-FACTS-STALE-SOURCE') @:killer('M-FACTS-INVALIDATE') @:killer('M-FACTS-VARIANT-RANGES')
+	public function testFactsOfAnotherTextAreAbsent(): Void {
+		// facts describe the text the compile read: a file changed since, or one the run rewrote, has none; and two `#if`
+		// variants of one member are each found at their own range
+		final source: String = 'class Main {\n\tstatic function main() { hook(); Other.f(); Stale.f(); }\n'
+			+ '\tpublic static function hook():Void {}\n'
+			+ '#if APQ_A\n\tstatic function v():Void { hook(); }\n#else\n\tstatic function v():Void { hook(); hook(); }\n#end\n}\n';
+		final stale: String = 'class Stale { public static function f() Main.hook(); }\n';
+		final scratch: Scratch = compile([
+			'Main.hx' => source,
+			'Other.hx' => 'class Other { public static function f() Main.hook(); }\n',
+			'Stale.hx' => stale
+		], [[], ['APQ_A']]);
+		final facts: Null<CompilerFacts> = scratch.facts;
+		final file: String = scratch.path('Main.hx');
+		final first: Int = source.indexOf('hook(); }\n#else');
+		final second: Int = source.indexOf('hook(); hook();');
+		Assert.equals('Main.v', facts?.nodeAt(file, new Span(first, first + 6))?.id);
+		Assert.equals('Main.v', facts?.nodeAt(file, new Span(second, second + 6))?.id);
+		Assert.notNull(facts?.node('Other.f'));
+		facts?.invalidate(scratch.path('Other.hx'));
+		Assert.isNull(facts?.node('Other.f'), 'a rewritten file still has facts');
+		// the table reads Stale.hx only now, after the edit: its text is not the compiled one
+		File.saveContent(scratch.path('Stale.hx'), stale + '// edited\n');
+		Assert.isNull(facts?.node('Stale.f'), 'facts answered for a text the compile never read');
+		scratch.remove();
+	}
+
+	@:pin('control') @:killer('M-FACTS-DROPPED')
 	public function testAConfigurationThatFailsContributesNothing(): Void {
 		final dir: String = CliFixture.writeTree('typed_facts', [
 			{ name: 'Main.hx', source: 'class Main { static function main() { #if APQ_BROKEN nope(); #end } }\n' },
@@ -297,14 +435,19 @@ class TypedFactsProbeTest extends Test {
 		];
 		final facts: Null<CompilerFacts> = TypedFactsProbe.probeAll(oracles);
 		Assert.equals(1, facts?.configurations.length);
-		Assert.isNull(TypedFactsProbe.probeAll([oracles[1]]));
+		// each configuration that contributed nothing is named, with why: the run reports it rather than going quiet
+		final reasons: Array<String> = [for (d in facts?.dropped ?? []) d.reason];
+		Assert.equals(2, reasons.length);
+		Assert.isTrue(reasons.contains('generation failed'), 'reasons: $reasons');
+		Assert.isTrue(reasons.exists(r -> StringTools.startsWith(r, 'the compile failed')), 'reasons: $reasons');
+		Assert.equals(0, TypedFactsProbe.probeAll([oracles[1]])?.configurations.length);
 		CliFixture.removeDir(dir);
 	}
 
-	/** A compile of `files` (paths under one scratch directory) under each define set of `configurations`. */
-	private static function compile(files: Map<String, String>, ?configurations: Array<Array<String>>): Scratch {
+	/** A compile of `files` (paths under one scratch directory) under each define set of `configurations`, by `build`. */
+	private static function compile(files: Map<String, String>, ?configurations: Array<Array<String>>, ?build: String): Scratch {
 		final entries: Array<{ name: String, source: String }> = [for (name => text in files) { name: name, source: text }];
-		entries.push({ name: 'build.hxml', source: BUILD });
+		entries.push({ name: 'build.hxml', source: build ?? BUILD });
 		final dir: String = CliFixture.writeTree('typed_facts', entries);
 		final oracles: Array<OracleConfig> = [for (d in configurations ?? [[]]) { hxml: 'build.hxml', dir: dir, defines: d }];
 		return new Scratch(dir, TypedFactsProbe.probeAll(oracles));

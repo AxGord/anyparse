@@ -12,45 +12,55 @@ import haxe.io.Path;
  * `TypedFactsMacro` hook, which writes the typed tree's facts to a file once typing ended, read into one
  * `CompilerFacts` table. Asked per run and never kept across runs (`docs/decisions.md` records why a cache is unsound);
  * the compiles overlap (`HaxeSpawn.parallelism`). A configuration that cannot be asked, fails to compile, or leaves no
- * complete file contributes no facts — the table then holds less, which its absence semantics already answer.
+ * complete file contributes no facts and is named in the table's `dropped`.
  *
  * ## The facts file
  *
  * JSON Lines. Offsets are the compiler's `Position.min`/`max` (codepoints, `max` exclusive). A position is
  * `[min, max]` in the file of the record carrying it (`f`), or `[i, min, max]` in the file a `file` record announced
- * as index `i` — only code inlined or generated from elsewhere has one. Ids are the compiler's type paths: a type is
- * `pack.Name` (a private type's package ends in `_Module`), a field node `pack.Name.field` (the constructor is `new`),
- * a nested function `<enclosing node id>@<min>`, suffixed `#n` in the rare case two share an offset.
+ * as index `i` — code inlined or generated from elsewhere. A fact of an inlined body also carries `sp`: where it was
+ * spliced into the node's file — the range of the call site's own arguments inside it, or failing any, the innermost
+ * enclosing expression (the compiler keeps no call-site range). Ids are the compiler's type paths: a type is
+ * `pack.Name` (a private type's package ends in `_Module`), a field node `pack.Name.field` (the constructor is `new`,
+ * the static initializer `__init__`, a further overload `field~n`), a nested function `<enclosing node id>@<min>`,
+ * suffixed `#n` in the rare case two share an offset.
  *
- * - `{"k":"facts","v":1,"inline":B}` first; `{"k":"end","nodes":N,"types":N}` last — a file without it is incomplete.
- *   `inline` is whether the compile inlined: a call of an `inline` function is then no call site, and its
- *   body's facts are the caller's, positioned in the callee: the probe compiles with `keep-inline-positions`, so none
- *   lands on the call site's range.
- * - `{"k":"file","i":N,"path":S}`.
+ * - `{"k":"facts","v":1,"inline":B,"inc"?}` first; `{"k":"end","nodes":N,"types":N}` last — a file without it is
+ *   incomplete. `inc` names what no node of the compile captures: `inline-calls` — a call of an `inline` function is no
+ *   call site, its body's facts are the caller's, positioned in the callee (the compile keeps `keep-inline-positions`).
+ * - `{"k":"file","i":N,"path":S}`; `{"k":"src","path":S,"len":N,"adler":N}` — the UTF-8 length and Adler-32 of every
+ *   file a record is homed in, as the compile read it: a table reading another text has no facts for the file.
  * - `{"k":"type","id","f","p","kind","pack", params?, meta?, ext?, …}` — `kind` is `class`, `interface`, `impl` (an
  *   abstract's implementation class, `abs` naming the abstract), `abstract` (`under`, `from`, `to`, `impl`), `enum`
  *   (`ctors`: `{n, t}`) or `typedef` (`target`). A class or interface has `sup`, `ifaces` and `fields`:
  *   `{n, k, t, p, s?, fin?, ext?, over?, meta?}`, `k` being `method`, `inline`, `dynamic`, `macro` or
  *   `var(<read>,<write>)` with the accessors `default`, `null`, `never`, `call`, `inline`, `resolve`, `require`, `ctor`.
- * - `{"k":"node","id","f","p","kind","owner","t", s?, name?, …facts}` — `kind` is `method`, `ctor`, `var` (an
- *   initializer), `fn` (a function expression) or `local` (a function bound to a local). The facts, each list deduplicated:
+ *   A `@:generic` instance is a class of its own with `of`, the generic class at its arguments.
+ * - `{"k":"node","id","f","p","kind","owner","t", s?, name?, gen?, inl?, ov?, inc?, …facts}` — `kind` is `method`,
+ *   `ctor`, `var` (an initializer), `init` (`__init__`), `fn` (a function expression) or `local` (a function bound to a
+ *   local never assigned again). `p` is the body's range. `gen`: a macro placed the body outside its type's file. `inl`:
+ *   the file of the inlined function this one was spliced from, homed at `p` in the caller. `ov`: the overload index.
+ *   `inc`: the channels its facts do not capture exactly (`reflection-inlined`). The facts, each list deduplicated:
  *   - `params`: `{n, t}` — the function's parameters, in order; the compiler gives a parameter no position of its own.
- *   - `calls`: `{t?, a, r?, rp?, rt, p}` — `a` is the field access `FInstance`/`FStatic`/`FAnon`/`FDynamic`/`FClosure`/
- *     `FEnum` with `t` = `<declaring type>.<field>` (a bare name for `FAnon`/`FDynamic`) and `r`/`rp` the receiver's
- *     type and position; `super` (`t` = `<super>.new`); `local` (`t` = the local function's node id); `ident` (a native
- *     identifier); `value` (a call of any other value, `r` its type). `rt` is the result type. A property read or write
- *     through an accessor IS a call of `get_x`/`set_x`; an abstract operator, `@:from` or `@:to` is a call of the
- *     implementation class's static.
+ *   - `calls`: `{t?, a, sig?, r?, rp?, rt, p}` — `a` is the field access `FInstance`/`FStatic`/`FAnon`/`FDynamic`/
+ *     `FClosure`/`FEnum` with `t` = `<declaring type>.<field>` (a bare name for `FAnon`/`FDynamic`) and `r`/`rp` the
+ *     receiver's type and position; `fieldValue` for a field that holds a replaceable value (a variable of a function
+ *     type, a `dynamic` method); `super` (`t` = `<super>.new`); `local` (`t` = the local function's node id); `ident`
+ *     (a native identifier); `value` (a call of any other value, `r` its type). `sig` is the signature chosen among a
+ *     field's overloads. `rt` is the result type. A property access IS a call of `get_x`/`set_x`; an abstract operator,
+ *     `@:from` or `@:to` is a call of the implementation class's static.
  *   - `news`: `{t, ty, p}` — the class and the instance type.
  *   - `fields`: `{f, a, o?, r, t, p, w?}` — a field read (a write when `w`) that is not a callee; `o` is the declaring
  *     type, absent for a structure or a dynamic access.
  *   - `flows`: `{s, d, c, p}` — a value of type `s` reaching a place of type `d`, `c` being `var`, `assign`, `arg`,
- *     `ret`, `arr`, `obj` or `cast` (an unchecked cast only); kept only when the two differ beyond an outer `Null<>`.
+ *     `ret`, `arr`, `obj`, `throw` or `cast` (an unchecked cast, always kept). A branching value flows once per branch
+ *     at the branch's own type; a place of no type is `Dynamic`, and so is every argument of a callee of no function
+ *     type; each rest argument flows into the rest element type. Otherwise kept only when the types differ beyond `Null<>`.
  *   - `strs`: `{o, p}` — a non-String operand of a String `+` or `+=`.
  *   - `iters`: `{v, i, p}` — a `for` the compiler kept (it lowers an Array loop to a `while` and unrolls a constant one).
  *   - `refl`: `{t, n?, c?, p}` — a `Reflect.*`/`Type.*` call, its first literal string and its first type argument.
  *   - `native`: `{w, n, p}` — `syntax` for a `*.Syntax` call, `ident` for a `__js__`-style identifier.
- *   - `vars`: `{n, t, p}` — a parameter, local or loop binder (compiler temporaries are left out).
+ *   - `vars`: `{n, t, p}` — a local or loop binder (compiler temporaries are left out).
  *   - `reads`: `[min, max, type]` (foreign: `[i, min, max, type]`) — a read of a local, at the identifier.
  *   - `fns`: the node ids of the functions nested directly in this one.
  *
@@ -79,15 +89,20 @@ final class TypedFactsProbe {
 	/** The hook's modules, by class-path-relative path, written into each compile's probe directory. */
 	private static final MACRO_FILES: Array<{ path: String, text: String }> = [
 		{ path: 'anyparse/check/TypedFactsMacro.hx', text: EmbeddedSource.text('anyparse/check/TypedFactsMacro.hx') },
-		{ path: 'anyparse/check/TypedFactsWalk.hx', text: EmbeddedSource.text('anyparse/check/TypedFactsWalk.hx') }
+		{ path: 'anyparse/check/TypedFactsWalk.hx', text: EmbeddedSource.text('anyparse/check/TypedFactsWalk.hx') },
+		{ path: 'anyparse/check/TypedFactsShapes.hx', text: EmbeddedSource.text('anyparse/check/TypedFactsShapes.hx') }
 	];
 
 	/**
-	 * The table over every configuration of `oracles` that answered, each compiled once (the compiles overlap); null when
-	 * none answered.
+	 * The table over every configuration of `oracles` that answered, each compiled once (the compiles
+	 * overlap), with the rest in its `dropped` and why; null only on a target that cannot spawn a
+	 * compile. A compile that reported an error is dropped even when it wrote a complete file:
+	 * typing goes on past an error, and what it recovers with — an unbound monomorph, a branch left out — reads exactly
+	 * like a fact, so the table could not tell the two apart.
 	 */
 	public static function probeAll(oracles: Array<OracleConfig>): Null<CompilerFacts> {
 		#if (sys || nodejs)
+		final dropped: Array<{ name: String, reason: String }> = [];
 		final asked: Array<{
 			oracle: OracleConfig,
 			dir: String,
@@ -101,7 +116,13 @@ final class TypedFactsProbe {
 				out: String,
 				args: Array<String>
 			}> = prepare(oracles[i], i);
-			if (prepared != null) asked.push(prepared);
+			if (prepared != null)
+				asked.push(prepared)
+			else
+				dropped.push({
+					name: LintConfig.describeOracle(oracles[i]),
+					reason: oracles[i].unavailable ?? 'its probe directory could not be written'
+				});
 		}
 		final runs: Array<HaxeRun> = asked.length == 0
 			? []
@@ -109,16 +130,30 @@ final class TypedFactsProbe {
 		final dumps: Array<FactsDump> = [];
 		for (i in 0...asked.length) {
 			final dump: Null<FactsDump> = answer(asked[i].oracle, runs[i], asked[i].out);
-			if (dump != null) dumps.push(dump);
+			if (dump != null)
+				dumps.push(dump)
+			else
+				dropped.push({ name: LintConfig.describeOracle(asked[i].oracle), reason: failureOf(runs[i]) });
 		}
 		for (a in asked) discard(a.dir);
-		if (dumps.length == 0) return null;
 		return CompilerFacts.build(
-			dumps, file -> try sys.io.File.getContent(file) catch (exception: haxe.Exception) null, memoised(Sys.getCwd())
+			dumps, file -> try sys.io.File.getContent(file) catch (exception: haxe.Exception) null, memoised(Sys.getCwd()), dropped
 		);
 		#else
 		return null;
 		#end
+	}
+
+	/** Why the compile `run` left no facts, in one line. */
+	private static function failureOf(run: HaxeRun): String {
+		if (run.failure != '') return run.failure;
+		if (run.status != 0) {
+			final first: String = StringTools.trim(
+				Lambda.find(run.err.split('\n'), l -> StringTools.trim(l) != '' && l.indexOf('Warning') < 0) ?? ''
+			);
+			return 'the compile failed (status ${run.status})' + (first == '' ? '' : ': $first');
+		}
+		return 'it wrote no facts file';
 	}
 
 	/** The arguments of the facts compile of `hxml` under `defines`, writing to `out` with the hook found under `dir`. */

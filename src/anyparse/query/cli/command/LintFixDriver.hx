@@ -266,6 +266,8 @@ final class LintFixDriver {
 		// answers a tree that no longer exists — while the plugin behind the decorator reads the
 		// chain from disk fresh, so the stale memo is a SECOND answer for the same file.
 		cached.invalidateAmbientChain();
+		// a file an earlier pass rewrote no longer holds the text the compile's facts describe
+		cached.compilerFactsEdited(changedFiles);
 		// The `index` PASSED to each check's `fix` is REPORT-scoped (the mutated report sources
 		// only): a fix's report-scope gates — naming's confinement / reflection-string / rtti proofs,
 		// prefer-final-field's confinement — reason about what a REPORT file can reach, and a

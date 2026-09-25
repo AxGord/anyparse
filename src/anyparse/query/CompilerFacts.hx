@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.FactText.NodeHead;
 import anyparse.runtime.Span;
 import haxe.Json;
 
@@ -34,6 +35,12 @@ typedef CallFact = {
 	final receiverAt: Null<FactPos>;
 	final result: String;
 	final at: FactPos;
+
+	/** The signature the compiler chose, for a call of an overloaded field; null otherwise. */
+	final signature: Null<String>;
+
+	/** For a fact of an inlined body, the range in the node's own file it was spliced into; null otherwise. */
+	final inlinedAt: Null<FactPos>;
 }
 
 /** A `new`: the class and the instance type it makes. */
@@ -52,6 +59,7 @@ typedef FieldFact = {
 	final type: String;
 	final write: Bool;
 	final at: FactPos;
+	final inlinedAt: Null<FactPos>;
 }
 
 /** A value of type `from` reaching a place of type `to` through `via`: `var`, `assign`, `arg`, `ret`, `arr`, `obj` or `cast`. */
@@ -60,6 +68,7 @@ typedef FlowFact = {
 	final to: String;
 	final via: String;
 	final at: FactPos;
+	final inlinedAt: Null<FactPos>;
 }
 
 /** A non-String operand of a String concatenation: converted by its `toString`. */
@@ -114,7 +123,27 @@ typedef FactNode = {
 	final isStatic: Bool;
 	final signature: String;
 	final name: Null<String>;
+
+	/**
+	 * The node's range: the body the compiler typed (a method's function, a variable's initializer), not the whole
+	 * declaration; for a function spliced in by inlining, the call site it was spliced into.
+	 */
 	final at: FactPos;
+
+	/**
+	 * The channels this node's facts do not capture exactly — `reflection-inlined`: a `Reflect`/`Type` call the compiler
+	 * inlined, whose name and arguments are gone. A consumer answers Unknown for them.
+	 */
+	final incomplete: Array<String>;
+
+	/** Whether a macro placed the body outside its type's file: such a node is found by id, never by range. */
+	final generated: Bool;
+
+	/** The file of the inlined function this node was spliced from; null for code written where it stands. */
+	final inlinedFrom: Null<String>;
+
+	/** For the `n`-th further overload of a field, `n`; 0 for the field's own body. */
+	final overloadIndex: Int;
 
 	/** The parameters, in order: the compiler gives a parameter no position of its own. */
 	final params: Array<{ name: String, type: String }>;
@@ -155,6 +184,9 @@ typedef TypeFact = {
 	final superClass: Null<String>;
 	final interfaces: Array<String>;
 	final fields: Array<FieldDeclFact>;
+
+	/** For a `@:generic` instance, the generic class at the arguments it was built for; null otherwise. */
+	final genericOf: Null<String>;
 }
 
 /**
@@ -170,22 +202,8 @@ typedef TypeFact = {
 @:nullSafety(Strict)
 final class CompilerFacts {
 
-	/** The `NODE_HEAD` groups of a node's range. */
-	private static inline final HEAD_MIN: Int = 3;
-
-	private static inline final HEAD_MAX: Int = 4;
-
-	/** The length of an accessor's `get_`/`set_` prefix. */
-	private static inline final ACCESSOR_PREFIX: Int = 4;
-
-	/** The prefix every node line starts with, which the writer guarantees: id, home file, range. */
-	private static final NODE_HEAD: EReg = ~/^\{"k":"node","id":("(?:[^"\\]|\\.)*"),"f":("(?:[^"\\]|\\.)*"),"p":\[(\d+),(\d+)\]/;
-
-	/** A bare identifier. */
-	private static final IDENTIFIER: EReg = ~/^[A-Za-z_][A-Za-z0-9_]*$/;
-
-	/** A three-number position: one in a file other than its record's. */
-	private static final FOREIGN_POSITION: EReg = ~/\[\d+,\d+,\d+\]/;
+	/** The configurations that contributed nothing, and why — the table then holds less, and absence answers for it. */
+	public final dropped: Array<{ name: String, reason: String }> = [];
 
 	/** The configurations whose facts the table holds, by name. */
 	public final configurations: Array<String> = [];
@@ -199,6 +217,9 @@ final class CompilerFacts {
 	private final _subs: Map<String, Array<String>> = [];
 	private final _indexes: Map<String, Null<CodepointIndex>> = [];
 	private final _sources: Map<String, Null<String>> = [];
+	private final _expected: Map<String, String> = [];
+	private final _stale: Map<String, Bool> = [];
+	private final _gaps: Array<String> = [];
 	private final _dumps: Array<DumpFiles> = [];
 	private final _read: (String) -> Null<String>;
 	private final _key: (String) -> String;
@@ -211,6 +232,26 @@ final class CompilerFacts {
 	/** Whether any configuration typed code of `file`. */
 	public function compiled(file: String): Bool {
 		return _nodeFiles.exists(_key(file));
+	}
+
+	/**
+	 * Drop every fact of `file`: the run rewrote it (`--fix`), so no position the compile recorded names its text any more.
+	 * The file answers as never compiled from here on.
+	 */
+	public function invalidate(file: String): Void {
+		final key: String = _key(file);
+		_stale[key] = true;
+		_sources.remove(key);
+		_indexes.remove(key);
+		_nodeCache.clear();
+	}
+
+	/**
+	 * The channels some configuration captured for no node — `inline-calls`: a call of an `inline` function, which the
+	 * compile inlined. A consumer answers Unknown for a question that rests on one.
+	 */
+	public function incompleteChannels(): Array<String> {
+		return _gaps.copy();
 	}
 
 	/** The node `id`, its facts unioned over every configuration that typed it; null when none did. */
@@ -249,14 +290,14 @@ final class CompilerFacts {
 	/** Every call site within `span` in `file`. */
 	public function callsIn(file: String, span: Span): Array<CallFact> {
 		return [
-			for (n in nodesAround(file, span, true)) for (c in n.calls) if (inside(c.at, file, span)) c
+			for (n in nodesAround(file, span, true)) for (c in n.calls) if (inside(c.at, file, span) || spliced(c.inlinedAt, file, span)) c
 		];
 	}
 
 	/** Every value flow within `span` in `file`. */
 	public function flowsIn(file: String, span: Span): Array<FlowFact> {
 		return [
-			for (n in nodesAround(file, span, true)) for (f in n.flows) if (inside(f.at, file, span)) f
+			for (n in nodesAround(file, span, true)) for (f in n.flows) if (inside(f.at, file, span) || spliced(f.inlinedAt, file, span)) f
 		];
 	}
 
@@ -274,13 +315,13 @@ final class CompilerFacts {
 		if (source == null) return null;
 		final text: String = StringTools.trim(source.substring(span.from, span.to));
 		final seen: Array<String> = [];
-		final bare: Bool = IDENTIFIER.match(text);
-		for (n in nodesAround(file, span)) for (site in typedSites(n, bare)) {
+		final bare: Bool = FactText.bare(text);
+		for (n in nodesAround(file, span)) for (site in FactText.typedSites(n, bare)) {
 			final at: Null<FactPos> = site.at;
 			final member: Null<String> = site.member;
 			if (
 				at != null && same(at, file, span) && site.type != '?' && !seen.contains(site.type)
-				&& (member == null || mentions(text, member))
+				&& (member == null || FactText.mentions(text, member))
 			)
 				seen.push(site.type);
 		}
@@ -308,66 +349,60 @@ final class CompilerFacts {
 		return closure(_subs, id);
 	}
 
-	/**
-	 * Every positioned type `n` records for an expression, with the member name the expression's text must spell for it
-	 * to count (null when any text may carry it); a local's reads only when the asked text is a bare identifier (`bare`).
-	 */
-	private function typedSites(n: FactNode, bare: Bool): Array<{ at: Null<FactPos>, type: String, member: Null<String> }> {
-		final out: Array<{ at: Null<FactPos>, type: String, member: Null<String> }> = [];
-		for (c in n.calls) {
-			out.push({ at: c.at, type: c.result, member: calledMember(c) });
-			final receiver: Null<String> = c.receiver;
-			if (receiver != null) out.push({ at: c.receiverAt, type: receiver, member: null });
-		}
-		for (f in n.fields) out.push({ at: f.at, type: f.type, member: f.field });
-		for (v in n.vars) out.push({ at: v.at, type: v.type, member: v.name });
-		if (bare) for (r in n.reads) out.push({ at: r.at, type: r.type, member: null });
-		for (s in n.strings) out.push({ at: s.at, type: s.operand, member: null });
-		for (f in n.flows) if (f.via == 'arg' || f.via == 'arr' || f.via == 'obj') out.push({ at: f.at, type: f.from, member: null });
-		for (x in n.news) out.push({ at: x.at, type: x.instance, member: baseId(x.type).substr(baseId(x.type).lastIndexOf('.') + 1) });
-		return out;
-	}
-
-	/** The name a call site's text spells for what it calls — an accessor's property, a local function's binder — or null. */
-	private function calledMember(c: CallFact): Null<String> {
-		final target: Null<String> = c.target;
-		if (target == null || c.access == 'local' || c.access == 'value') return null;
-		if (c.access == 'super') return 'super';
-		final name: String = target.substr(target.lastIndexOf('.') + 1);
-		return StringTools.startsWith(name, 'get_') || StringTools.startsWith(name, 'set_') ? name.substr(ACCESSOR_PREFIX) : name;
-	}
-
 	private function add(dump: FactsDump): Void {
 		final lines: Array<String> = dump.text.split('\n');
 		while (lines.length > 0 && lines[lines.length - 1] == '') lines.pop();
-		if (lines.length < 2 || !lines[0].startsWith('{"k":"facts","v":1,') || !lines[lines.length - 1].startsWith('{"k":"end"')) return;
+		if (lines.length < 2 || !lines[0].startsWith('{"k":"facts","v":1,') || !lines[lines.length - 1].startsWith('{"k":"end"')) {
+			dropped.push({ name: dump.name, reason: 'its facts file is not complete' });
+			return;
+		}
 		final index: Int = _dumps.length;
 		final files: DumpFiles = { paths: [], file: dump.file };
 		_dumps.push(files);
 		configurations.push(dump.name);
-		for (line in lines) {
-			if (line.startsWith('{"k":"node"')) {
-				if (!NODE_HEAD.match(line)) continue;
-				final id: String = Json.parse(NODE_HEAD.matched(1));
-				final home: String = dump.file(Json.parse(NODE_HEAD.matched(2)));
-				final variants: Array<NodeLine> = _nodeLines[id] ?? [];
-				_nodeLines[id] = variants;
-				final foreign: Bool = FOREIGN_POSITION.match(line);
-				if (!variants.exists(v -> v.text == line && (!foreign || v.dump == index))) variants.push({ dump: index, text: line });
-				final ranges: Array<NodeRange> = _nodeFiles[home] ?? [];
-				_nodeFiles[home] = ranges;
-				if (!ranges.exists(r -> r.id == id)) ranges.push({
-					id: id,
-					min: Std.parseInt(NODE_HEAD.matched(HEAD_MIN)) ?? 0,
-					max: Std.parseInt(NODE_HEAD.matched(HEAD_MAX)) ?? 0
-				});
-			} else if (line.startsWith('{"k":"type"'))
-				addType(Json.parse(line), dump);
+		final header: HeaderRecord = Json.parse(lines[0]);
+		for (channel in header.inc ?? []) if (!_gaps.contains(channel)) _gaps.push(channel);
+		for (raw in lines) {
+			final line: String = FactText.detached(raw);
+			if (line.startsWith('{"k":"node"'))
+				addNode(line, index, dump)
+			else if (line.startsWith('{"k":"type"'))
+				addType(Json.parse(line), dump)
+			else if (line.startsWith('{"k":"src"'))
+				addSource(Json.parse(line), dump)
 			else if (line.startsWith('{"k":"file"')) {
 				final record: FileRecord = Json.parse(line);
 				files.paths[record.i] = dump.file(record.path);
 			}
 		}
+	}
+
+	private function addNode(line: String, index: Int, dump: FactsDump): Void {
+		final head: Null<NodeHead> = FactText.nodeHead(line);
+		if (head == null) return;
+		final id: String = head.id;
+		final variants: Array<NodeLine> = _nodeLines[id] ?? [];
+		_nodeLines[id] = variants;
+		if (!variants.exists(v -> v.text == line && (!head.foreign || v.dump == index))) variants.push({ dump: index, text: line });
+		// a macro-generated body lies outside its type's file, where no range of that file may claim it
+		if (head.generated) return;
+		final home: String = dump.file(head.file);
+		final ranges: Array<NodeRange> = _nodeFiles[home] ?? [];
+		_nodeFiles[home] = ranges;
+		// keyed by range too: two `#if` variants of one node sit at different ranges and both must be found
+		if (!ranges.exists(r -> r.id == id && r.min == head.min && r.max == head.max))
+			ranges.push({ id: id, min: head.min, max: head.max });
+	}
+
+	/** Record the text a configuration read of a file; two configurations that read different texts leave it stale. */
+	private function addSource(record: SourceRecord, dump: FactsDump): Void {
+		final file: String = dump.file(record.path);
+		final hash: String = '${record.len}:${record.adler}';
+		final known: Null<String> = _expected[file];
+		if (known != null && known != hash)
+			_stale[file] = true
+		else
+			_expected[file] = hash;
 	}
 
 	private function addType(record: TypeRecord, dump: FactsDump): Void {
@@ -393,7 +428,8 @@ final class CompilerFacts {
 				isExtern: record.ext ?? false,
 				superClass: record.sup,
 				interfaces: record.ifaces ?? [],
-				fields: fields
+				fields: fields,
+				genericOf: record.of
 			};
 			_types[record.id] = made;
 			_typeHomes[record.id] = { home: home, p: record.p };
@@ -446,6 +482,11 @@ final class CompilerFacts {
 		return at.file == _key(file) && span.from <= at.span.from && at.span.to <= span.to;
 	}
 
+	/** Whether an inlined body's fact was spliced in within `span`: its facts sit in the callee, its call site here. */
+	private function spliced(inlinedAt: Null<FactPos>, file: String, span: Span): Bool {
+		return inlinedAt != null && inside(inlinedAt, file, span);
+	}
+
 	private function indexOf(file: String): Null<CodepointIndex> {
 		if (_indexes.exists(file)) return _indexes[file];
 		final source: Null<String> = sourceOf(file);
@@ -457,7 +498,10 @@ final class CompilerFacts {
 	/** The source of the file keyed `file`, read once. */
 	private function sourceOf(file: String): Null<String> {
 		if (_sources.exists(file)) return _sources[file];
-		final source: Null<String> = _read(file);
+		final read: Null<String> = _stale.exists(file) ? null : _read(file);
+		final expected: Null<String> = _expected[file];
+		// facts of a text other than the one on disk describe no position in it: the file's facts are absent
+		final source: Null<String> = read == null || expected == null || FactText.contentHash(read) == expected ? read : null;
 		_sources[file] = source;
 		return source;
 	}
@@ -473,6 +517,35 @@ final class CompilerFacts {
 		return { file: file, span: new Span(index.toNative(min), index.toNative(max)) };
 	}
 
+	/** The node `id` as `record` heads it, at `at`, with no facts yet. */
+	private static function emptyNode(id: String, record: NodeRecord, at: FactPos): FactNode {
+		return {
+			id: id,
+			kind: record.kind,
+			owner: record.owner,
+			isStatic: record.s ?? false,
+			signature: record.t,
+			name: record.name,
+			at: at,
+			incomplete: (record.inc ?? []).copy(),
+			generated: record.gen ?? false,
+			inlinedFrom: record.inl,
+			overloadIndex: record.ov ?? 0,
+			params: [for (p in record.params ?? []) { name: p.n, type: p.t }],
+			calls: [],
+			news: [],
+			fields: [],
+			flows: [],
+			strings: [],
+			iterations: [],
+			reflection: [],
+			natives: [],
+			vars: [],
+			reads: [],
+			fns: []
+		};
+	}
+
 	private function materialize(id: String, lines: Array<NodeLine>): Null<FactNode> {
 		var made: Null<FactNode> = null;
 		final seen: Map<String, Bool> = [];
@@ -482,28 +555,12 @@ final class CompilerFacts {
 			final home: String = files.file(record.f);
 			final at: Null<FactPos> = position(home, record.p, files.paths);
 			if (at == null) continue;
-			final node: FactNode = made ?? {
-				id: id,
-				kind: record.kind,
-				owner: record.owner,
-				isStatic: record.s ?? false,
-				signature: record.t,
-				name: record.name,
-				at: at,
-				params: [for (p in record.params ?? []) { name: p.n, type: p.t }],
-				calls: [],
-				news: [],
-				fields: [],
-				flows: [],
-				strings: [],
-				iterations: [],
-				reflection: [],
-				natives: [],
-				vars: [],
-				reads: [],
-				fns: []
-			};
+			final node: FactNode = made ?? emptyNode(id, record, at);
 			made = node;
+			for (channel in record.inc ?? []) if (!node.incomplete.contains(channel)) node.incomplete.push(channel);
+			function anchor(p: Null<Array<Int>>): Null<FactPos> {
+				return p == null ? null : position(home, p, files.paths);
+			}
 			function place(p: Array<Int>): Null<FactPos> {
 				return position(home, p, files.paths);
 			}
@@ -522,7 +579,9 @@ final class CompilerFacts {
 					receiver: c.r,
 					receiverAt: c.rp == null ? null : place(c.rp),
 					result: c.rt,
-					at: where
+					at: where,
+					signature: c.sig,
+					inlinedAt: anchor(c.sp)
 				}: CallFact),
 				node.calls
 			);
@@ -538,7 +597,8 @@ final class CompilerFacts {
 					receiver: f.r,
 					type: f.t,
 					write: f.w ?? false,
-					at: where
+					at: where,
+					inlinedAt: anchor(f.sp)
 				}: FieldFact),
 				node.fields
 			);
@@ -547,7 +607,8 @@ final class CompilerFacts {
 					from: f.s,
 					to: f.d,
 					via: f.c,
-					at: where
+					at: where,
+					inlinedAt: anchor(f.sp)
 				}: FlowFact),
 				node.flows
 			);
@@ -589,8 +650,11 @@ final class CompilerFacts {
 	 * are then absent), and `key` maps a path a caller asks about to a table key. A dump that is not a complete facts
 	 * file of this version — no header, no closing record — contributes nothing.
 	 */
-	public static function build(dumps: Array<FactsDump>, read: (String) -> Null<String>, key: (String) -> String): CompilerFacts {
+	public static function build(
+		dumps: Array<FactsDump>, read: (String) -> Null<String>, key: (String) -> String, ?dropped: Array<{ name: String, reason: String }>
+	): CompilerFacts {
 		final facts: CompilerFacts = new CompilerFacts(read, key);
+		for (d in dropped ?? []) facts.dropped.push(d);
 		for (dump in dumps) facts.add(dump);
 		return facts;
 	}
@@ -599,23 +663,6 @@ final class CompilerFacts {
 	public static function baseId(type: String): String {
 		final open: Int = type.indexOf('<');
 		return open < 0 ? type : type.substr(0, open);
-	}
-
-	/** Whether `text` holds `name` as a whole word. */
-	private static function mentions(text: String, name: String): Bool {
-		var from: Int = text.indexOf(name);
-		while (from >= 0) {
-			final before: Int = from == 0 ? ' '.code : StringTools.fastCodeAt(text, from - 1);
-			final end: Int = from + name.length;
-			final after: Int = end >= text.length ? ' '.code : StringTools.fastCodeAt(text, end);
-			if (!isWordChar(before) && !isWordChar(after)) return true;
-			from = text.indexOf(name, from + 1);
-		}
-		return false;
-	}
-
-	private static function isWordChar(c: Int): Bool {
-		return c == '_'.code || (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code);
 	}
 
 	private static function closure(edges: Map<String, Array<String>>, from: String): Array<String> {
@@ -663,6 +710,16 @@ private typedef DumpFiles = {
 	final file: (String) -> String;
 }
 
+private typedef SourceRecord = {
+	final path: String;
+	final len: Int;
+	final adler: Int;
+}
+
+private typedef HeaderRecord = {
+	final ?inc: Array<String>;
+}
+
 private typedef FileRecord = {
 	final i: Int;
 	final path: String;
@@ -686,6 +743,7 @@ private typedef TypeRecord = {
 	final ?meta: Array<String>;
 	final ?ext: Bool;
 	final ?sup: String;
+	final ?of: String;
 	final ?ifaces: Array<String>;
 	final ?fields: Array<FieldRecord>;
 }
@@ -696,6 +754,8 @@ private typedef CallRecord = {
 	final ?r: String;
 	final ?rp: Array<Int>;
 	final rt: String;
+	final ?sig: String;
+	final ?sp: Array<Int>;
 	final p: Array<Int>;
 }
 
@@ -708,6 +768,10 @@ private typedef NodeRecord = {
 	final t: String;
 	final ?s: Bool;
 	final ?name: String;
+	final ?inc: Array<String>;
+	final ?gen: Bool;
+	final ?inl: String;
+	final ?ov: Int;
 	final ?params: Array<{ n: String, t: String }>;
 	final ?calls: Array<CallRecord>;
 	final ?news: Array<{ t: String, ty: String, p: Array<Int> }>;
@@ -718,13 +782,15 @@ private typedef NodeRecord = {
 		r: String,
 		t: String,
 		?w: Bool,
-		p: Array<Int>
+		p: Array<Int>,
+		?sp: Array<Int>
 	}>;
 	final ?flows: Array<{
 		s: String,
 		d: String,
 		c: String,
-		p: Array<Int>
+		p: Array<Int>,
+		?sp: Array<Int>
 	}>;
 	final ?strs: Array<{ o: String, p: Array<Int> }>;
 	final ?iters: Array<{ v: String, i: String, p: Array<Int> }>;

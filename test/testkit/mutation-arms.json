@@ -6603,8 +6603,8 @@
 			"name": "M-FACTS-CALL-TARGET",
 			"type": "anyparse.check.TypedFactsWalk",
 			"method": "call",
-			"find": "'{\"t\":${q(targetName)},\"a\":\"${access.kind}\",",
-			"replace": "'{\"a\":\"${access.kind}\",",
+			"find": "'{\"t\":${q(targetName)},\"a\":\"$kind\"$chosen,",
+			"replace": "'{\"a\":\"$kind\"$chosen,",
 			"note": "a field call is written without its target, so an abstract operator or an accessor is a call of nothing"
 		},
 		{
@@ -6626,7 +6626,7 @@
 		{
 			"name": "M-FACTS-ITER",
 			"type": "anyparse.check.TypedFactsWalk",
-			"method": "walk",
+			"method": "visit",
 			"find": "add('iters', '{\"v\":${q(str(v.t))},\"i\":${q(str(it.t))},\"p\":${at(e.pos)}}');",
 			"replace": "",
 			"note": "a kept for loop records no iteration"
@@ -6642,9 +6642,9 @@
 		{
 			"name": "M-FACTS-LOCAL-CALL",
 			"type": "anyparse.check.TypedFactsWalk",
-			"method": "walk",
-			"find": "_locals[v.id] = child(init, v.name);",
-			"replace": "child(init, v.name);",
+			"method": "visit",
+			"find": "if (!_written.exists(v.id)) _locals[v.id] = made;",
+			"replace": "{}",
 			"note": "a local function is not remembered, so its call is a call of a value"
 		},
 		{
@@ -6674,8 +6674,8 @@
 		{
 			"name": "M-FACTS-FLOW-CAST",
 			"type": "anyparse.check.TypedFactsWalk",
-			"method": "walk",
-			"find": "flow(inner.t, e.t, 'cast', e.pos);",
+			"method": "visit",
+			"find": "flowText(str(inner.t), str(e.t), 'cast', e.pos);",
 			"replace": "",
 			"note": "an unchecked cast carries no flow"
 		},
@@ -6742,7 +6742,7 @@
 		},
 		{
 			"name": "M-FACTS-TYPE-TEXT",
-			"type": "anyparse.query.CompilerFacts",
+			"type": "anyparse.query.FactText",
 			"method": "mentions",
 			"force": "true",
 			"note": "a fact the compiler placed at a source range answers for whatever expression the range holds"
@@ -6750,10 +6750,169 @@
 		{
 			"name": "M-FACTS-READS",
 			"type": "anyparse.check.TypedFactsWalk",
-			"method": "walk",
+			"method": "visit",
 			"find": "if (!v.name.startsWith('`')) add('reads', '[${range(e.pos)},${q(localType(v))}]');",
 			"replace": "{}",
 			"note": "a local read records no type"
+		},
+		{
+			"name": "M-FACTS-BRANCH-LEAVES",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "flowInto",
+			"find": "collectLeaves(value, leaves);",
+			"replace": "leaves.push(value);",
+			"note": "a branching value flows once, at the type its branches unify to"
+		},
+		{
+			"name": "M-FACTS-MONO-SINK",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "flowInto",
+			"find": "final sink: String = to == '?' ? 'Dynamic' : to;",
+			"replace": "final sink: String = to;",
+			"note": "a place of no type stays unknown instead of Dynamic"
+		},
+		{
+			"name": "M-FACTS-CAST-ALWAYS",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "flowText",
+			"find": "if (how != 'cast' && TypedFactsShapes.unwrapNull(s) == TypedFactsShapes.unwrapNull(d)) return;",
+			"replace": "if (TypedFactsShapes.unwrapNull(s) == TypedFactsShapes.unwrapNull(d)) return;",
+			"note": "an unchecked cast between equal types records no source"
+		},
+		{
+			"name": "M-FACTS-THROW",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "visit",
+			"find": "flowInto(value, 'Dynamic', 'throw', e.pos);",
+			"replace": "",
+			"note": "a thrown value reaches no place"
+		},
+		{
+			"name": "M-FACTS-UNTYPED-ARGS",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "argFlows",
+			"find": "for (a in args) flowInto(a, 'Dynamic', 'arg', a.pos);",
+			"replace": "",
+			"note": "an argument of a callee with no function type reaches no place"
+		},
+		{
+			"name": "M-FACTS-REST",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "argFlows",
+			"find": "if (element != null) rest = str(element);",
+			"replace": "",
+			"note": "rest arguments flow into the rest type itself or nowhere"
+		},
+		{
+			"name": "M-FACTS-GENERIC",
+			"type": "anyparse.check.TypedFactsMacro",
+			"method": "moduleType",
+			"find": "case KTypeParameter(_) | KMacroType | KGenericBuild | KExpr(_):",
+			"replace": "case KGenericInstance(_, _) | KTypeParameter(_) | KMacroType | KGenericBuild | KExpr(_):",
+			"note": "a @:generic instance is skipped"
+		},
+		{
+			"name": "M-FACTS-INIT",
+			"type": "anyparse.check.TypedFactsMacro",
+			"method": "classType",
+			"find": "walkBody(init, '$id.__init__', 'init', id, true, '()->Void', home, 0);",
+			"replace": "",
+			"note": "__init__ is not walked"
+		},
+		{
+			"name": "M-FACTS-REASSIGNED-LOCAL",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "visit",
+			"find": "if (!_written.exists(v.id)) _locals[v.id] = made;",
+			"replace": "_locals[v.id] = made;",
+			"note": "a reassigned local is read as one fixed function"
+		},
+		{
+			"name": "M-FACTS-FIELD-VALUE",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "calledKind",
+			"find": "return _host.replaceable(targetName, cf) ? 'fieldValue' : kind;",
+			"replace": "return kind;",
+			"note": "a call of a field value names the field as a fixed body"
+		},
+		{
+			"name": "M-FACTS-REFLECTION-INLINED",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "at",
+			"find": "if (Lambda.exists(REFLECTION_MODULES, m -> info.file.endsWith(m))) incomplete('reflection-inlined');",
+			"replace": "",
+			"note": "an inlined Reflect call leaves no mark"
+		},
+		{
+			"name": "M-FACTS-CONFIG-GAPS",
+			"type": "anyparse.check.TypedFactsMacro",
+			"method": "run",
+			"find": "final inc: String = inlining ? ',\"inc\":[\"inline-calls\"]' : '';",
+			"replace": "final inc: String = '';",
+			"note": "a compile that inlines says nothing about the calls it lost"
+		},
+		{
+			"name": "M-FACTS-OVERLOADS",
+			"type": "anyparse.check.TypedFactsMacro",
+			"method": "classType",
+			"find": "for (o in m.f.overloads.get())",
+			"replace": "for (o in new Array<ClassField>())",
+			"note": "overload bodies past the first are not walked"
+		},
+		{
+			"name": "M-FACTS-SPLICED",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "spliced",
+			"force": "false",
+			"note": "an inlined body is not found at its call site"
+		},
+		{
+			"name": "M-FACTS-INLINED-CHILD",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "child",
+			"find": "if (info.file != _home) {",
+			"replace": "if (false) {",
+			"note": "a function in an inlined body is homed in the callee file"
+		},
+		{
+			"name": "M-FACTS-GENERATED",
+			"type": "anyparse.check.TypedFactsMacro",
+			"method": "walkBody",
+			"find": "if (fileOf(body.pos) != home) walk.generated();",
+			"replace": "",
+			"note": "a macro-built body claims a range of the macro file"
+		},
+		{
+			"name": "M-FACTS-STALE-SOURCE",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "sourceOf",
+			"find": "FactText.contentHash(read) == expected",
+			"replace": "true",
+			"note": "facts answer for a text the compile never read"
+		},
+		{
+			"name": "M-FACTS-INVALIDATE",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "invalidate",
+			"find": "_stale[key] = true;",
+			"replace": "",
+			"note": "a rewritten file keeps its facts"
+		},
+		{
+			"name": "M-FACTS-VARIANT-RANGES",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "addNode",
+			"find": "!ranges.exists(r -> r.id == id && r.min == head.min && r.max == head.max)",
+			"replace": "!ranges.exists(r -> r.id == id)",
+			"note": "only the first #if variant of a node is found by range"
+		},
+		{
+			"name": "M-FACTS-DROPPED",
+			"type": "anyparse.check.TypedFactsProbe",
+			"method": "probeAll",
+			"find": "dropped.push({ name: LintConfig.describeOracle(asked[i].oracle), reason: failureOf(runs[i]) });",
+			"replace": "{}",
+			"note": "a configuration that failed is dropped in silence"
 		}
 	]
 }

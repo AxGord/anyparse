@@ -323,6 +323,12 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		return read == null ? null : read();
 	}
 
+	/** Tell the run's compiler facts that `files` were rewritten, without compiling them if no one asked yet. */
+	public function compilerFactsEdited(files: Array<String>): Void {
+		final edited: Null<(String) -> Void> = _resolutionScope?.factsEdited;
+		if (edited != null) for (f in files) edited(f);
+	}
+
 	/**
 	 * `SymbolIndexHost`: the run-scoped reflection memo, one per wrapper. Handed out rather than
 	 * filled here — the check layer owns what its slots mean and proves them against the sources it
@@ -736,4 +742,7 @@ typedef ResolutionScope = {
 	 * compiled simply has no facts.
 	 */
 	@:optional final facts: () -> Null<CompilerFacts>;
+
+	/** Record that the run rewrote a file: its facts are dropped now, or once `facts` builds them. */
+	@:optional final factsEdited: (String) -> Void;
 };
