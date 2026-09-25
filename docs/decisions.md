@@ -709,3 +709,20 @@ decided the question; it may not become a record of runs.
   per call (169 s vs 16 s); `Ref.toString()` and JSON written by hand — `758ab0c2`
 - spans: "a Span is a codepoint offset" → on js/jvm a Span counts UTF-16 units; the compiler's Position counts
   codepoints, converted by `CodepointIndex` — `758ab0c2`
+- compiler facts: a faceted function's facts replace its syntactic edges → a directive outside it (conditional
+  `using`, `import … as`, `import.hx`, conditional typedef) resolves a name otherwise in an unlisted build;
+  every syntactic edge stays and the facts only add — `be636ec3`
+- compiler facts: a type in a file importing under a condition is alike → its member may take another type and
+  that type's `@:from` in an unlisted build; not alike — `be636ec3`
+- compiler facts: a `fieldValue` call of a node the graph has not read records no edge → a library `dynamic`
+  method's body is never read; the index's `isDynamic` keeps the edge — `be636ec3`
+- reach: code reached only through a value / reflective / any-code channel admits conversion and iteration only →
+  it may run any implicit member (`@:op`, `@:arrayAccess`, `@:from`/`@:to`, `@:resolve`); all are admitted — `be636ec3`
+- reach: "an abstract's own `toString` runs on the abstract alone" → it may convert what it wraps (`Any`); a
+  string site on such an abstract admits any — `be636ec3`
+- reach: a call no member declares resolves to the file's `using`s → a `@:using` on the receiver's type chain,
+  conditional or not, may supply another extension; such a call is Unknown — `be636ec3`
+- index: metadata a conditional region holds alone was lifted as its nameless wrapper → a guarded `@:using` /
+  `@:build` reached no declaration; each metadata inside is lifted — `be636ec3`
+- mayReach step B measurement: 13 new sound loop fixes (anyparse 13, TM 0) against the < 10 stop rule → the line
+  continues — `be636ec3`
