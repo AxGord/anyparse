@@ -680,3 +680,20 @@ decided the question; it may not become a record of runs.
   `dea1314e`
 - StdResolver: the sibling std lookup covered the installed layouts → on Homebrew it indexed another install's std
   than the compiler reads; both layouts and a multi-entry `HAXE_STD_PATH` are resolved — `dea1314e`
+- compilerOracle: a project script generating the oracle hxml before lint → configuration belongs in
+  `apqlint.json`; each entry carries its own `generate` command, rerun when content (hxml, command, inputs,
+  library state read off the hxml) says it is stale — `54150a0c`
+- oracle generation: inputs hashed after the command / the old record kept while a stale command runs → an edit
+  during the run or a killed run is recorded as current; hash before the spawn, delete the record first — `54150a0c`
+- oracle generation: `libs.hxml` as the proxy for haxelib state, repo directories from `haxelib.json` names →
+  the hxml names paths neither tracks (`mac-utils` vs `mac_utils`); library state is read off the hxml's paths — `54150a0c`
+- oracle generation: one exclusive lock held for the whole run → every lint serialised behind one `--fix`; a
+  reader/writer lock, exclusive only to regenerate, taken in one global order with nothing held while waiting — `54150a0c`
+- oracle generation: re-sharing without re-judging, and re-judging by full staleness → a tree another run wiped
+  was compiled half-written, and a no-inputs entry was never current; compare the snapshot this run observed — `54150a0c`
+- oracle generation: state under `TMPDIR`, keyed by the declaring config, found from the hxml → runs with other
+  `TMPDIR`s or configs share no lock, and a marker in the output tree put the state in what the command deletes;
+  keyed by the tree's real paths at the declaring config's project root — `54150a0c`
+- oracle generation: a `project.xml`-tested define in an entry's `defines` → it reaches haxe but not lime's
+  project evaluation (`ASSET_TOOLS` → `HEADLESS`); such a define goes on the generate command — `54150a0c`
+- "hxq ignores an oracle entry's `dir`" → on node every spawn kind honours it; pinned per spawn kind — `54150a0c`
