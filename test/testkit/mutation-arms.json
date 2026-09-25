@@ -3731,6 +3731,14 @@
 			"note": "the fingerprint memo is never read, so every configuration re-reads and re-hashes the whole source tree before and after the compiles"
 		},
 		{
+			"name": "M-GENERATE-PRODUCED-INCLUDE-IS-INPUT",
+			"type": "anyparse.check.OracleGeneration",
+			"method": "prepare",
+			"find": "if (!isProduced(group, held.path)) held.path",
+			"replace": "if (true) held.path",
+			"note": "an hxml the generation writes and includes is compared across the run as if it were an input, so every generation that rewrites it goes unrecorded and regenerates forever (lime's iOS Build.hxml)"
+		},
+		{
 			"name": "M-FIAD-CROSS-SUPER-UNPROVED",
 			"type": "anyparse.check.FieldInitAtDeclaration",
 			"method": "crossingAdmitted",

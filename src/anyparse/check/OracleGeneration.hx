@@ -121,7 +121,9 @@ final class OracleGeneration {
 				group: group,
 				why: why,
 				inputs: hashAll(group.inputs ?? [], fresh),
-				implicitBefore: hashAll([for (held in previous?.implicit ?? []) held.path], fresh)
+				implicitBefore: hashAll([
+					for (held in previous?.implicit ?? []) if (!isProduced(group, held.path)) held.path
+				], fresh)
 			});
 			deleteRecord(group);
 		}
@@ -530,6 +532,20 @@ final class OracleGeneration {
 		];
 		if (moved == null) writeRecord(s.group, s.inputs, implicit, after);
 		return moved == null ? '' : ' — NOT recorded: ${moved.path} changed while it ran, so the next run regenerates';
+	}
+
+	/**
+	 * Whether `path` lies inside `group`'s own directory, where its command may write: an hxml the generated one includes
+	 * there (lime's iOS `Build.hxml`) is PRODUCED by the generation, so it is hashed as the command left it and never
+	 * read as an input that moved while the command ran. Library state lies outside and is compared across the run.
+	 */
+	private static function isProduced(group: GenerationGroup, path: String): Bool {
+		#if (sys || nodejs)
+		final root: String = absolute(Sys.getCwd(), group.generate.root);
+		return path == root || path.startsWith('$root/');
+		#else
+		return false;
+		#end
 	}
 
 }

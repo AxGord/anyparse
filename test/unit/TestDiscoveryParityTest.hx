@@ -1301,6 +1301,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-GENERATE-LOCK-NEVER-RECOVERED',
 			'unit.check.OracleGenerationTest#testAnEmptyOrMissingInputIsNeverSilentlyConstant :: control :: '
 				+ 'M-GENERATE-EMPTY-INPUTS-NEVER,M-GENERATE-MISSING-INPUT-SILENT',
+			'unit.check.OracleGenerationTest#testAnHxmlTheGenerationWritesIsNotARacedInput :: control :: '
+				+ 'M-GENERATE-PRODUCED-INCLUDE-IS-INPUT',
 			'unit.check.OracleGenerationTest#testAnInputEditedDuringTheGenerationIsSeenNextRun :: control :: '
 				+ 'M-GENERATE-HASHES-INPUTS-AFTER-THE-RUN',
 			'unit.check.OracleGenerationTest#testEntriesSharingACommandMergeTheirInputs :: control :: '
@@ -2783,6 +2785,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-GENERATE-HASH-MEMO-UNUSED',
 			'M-GENERATE-TEMPLATES-UNTRACKED',
 			'M-ORACLE-CACHE-MEMO-UNREAD',
+			'M-GENERATE-PRODUCED-INCLUDE-IS-INPUT',
 			'M-FIAD-CROSS-SUPER-UNPROVED',
 			'M-FIAD-EARLY-READ-IGNORED',
 			'M-FIAD-EARLY-READ-CALL-ARG',

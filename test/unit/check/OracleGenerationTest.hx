@@ -585,4 +585,28 @@ final class OracleGenerationTest extends Test {
 		Sys.putEnv('APQ_ORACLE_LOCK_WAIT', _declaredLockWait ?? '');
 	}
 
+	/**
+	 * An hxml the generation itself writes and includes (lime's iOS `Build.hxml`) is an OUTPUT, not an input that moved
+	 * while the command ran: the generation that rewrote it is recorded, and the next run finds it current.
+	 */
+	@:pin('control')
+	@:killer('M-GENERATE-PRODUCED-INCLUDE-IS-INPUT')
+	public function testAnHxmlTheGenerationWritesIsNotARacedInput(): Void {
+		#if (sys || nodejs)
+		final dir: String = fixture();
+		final command: String = "echo run >> runs.txt && printf '%s\\n' \"-D n$(wc -l < runs.txt | tr -d ' ')\" > inc.hxml"
+			+ " && printf '%s\\n' '-cp .' '-main Main' 'inc.hxml' > gen.hxml";
+		final config: OracleConfig = entry(dir, command, ['$dir/input.txt']);
+		OracleGeneration.prepare([config]);
+		File.saveContent('$dir/input.txt', 'two');
+		OracleGeneration.prepare([config]);
+		Assert.equals(2, runs(dir), 'the changed input regenerated, rewriting the included hxml');
+		OracleGeneration.prepare([config]);
+		Assert.equals(2, runs(dir), 'and that generation was recorded: nothing moved under it but its own output');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 }
