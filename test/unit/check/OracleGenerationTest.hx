@@ -478,7 +478,7 @@ final class OracleGenerationTest extends Test {
 		final config: OracleConfig = entry(dir, command, ['$dir/input.txt']);
 		final declared: Null<String> = Sys.getEnv('HAXELIB_PATH');
 		Sys.putEnv('HAXELIB_PATH', repo);
-		CliFixture.always(() -> Sys.putEnv('HAXELIB_PATH', declared ?? ''), () -> {
+		CliFixture.always(() -> Sys.putEnv('HAXELIB_PATH', declared), () -> {
 			OracleGeneration.prepare([config]);
 			OracleGeneration.prepare([config]);
 			Assert.equals(1, runs(dir), 'unchanged dev state is current');

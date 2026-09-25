@@ -7,9 +7,11 @@ import anyparse.check.Linter;
 import anyparse.check.OracleGeneration;
 import anyparse.check.ReachDefinesProbe;
 import anyparse.check.Severity;
+import anyparse.check.TypedFactsProbe;
 import anyparse.query.Address.TreeAddresser;
 import anyparse.query.CachingGrammarPlugin.LibrarySources;
 import anyparse.query.CachingGrammarPlugin.ResolutionScope;
+import anyparse.query.CompilerFacts;
 import anyparse.query.LintBaseline;
 import anyparse.query.LintDiff.LintDiffTally;
 import anyparse.query.LintDiff.LintMessageIdentities;
@@ -233,8 +235,8 @@ final class LintCommand implements CliCommand {
 		warnScopeNotices(activeChecks, resolveConfig, paths, o.noOracle);
 		final oracleConfig: Null<LintConfig> = paths.length > 0 ? resolveConfig(paths[0]) : null;
 		final oracles: Array<OracleConfig> = oraclesOf(oracleConfig, o.noOracle);
-		final resolution: Null<ResolutionScope> = withReachConfigurations(
-			unconfigured, oracles, o.noOracle, reachComplete(paths, resolveConfig)
+		final resolution: Null<ResolutionScope> = withCompilerFacts(
+			withReachConfigurations(unconfigured, oracles, o.noOracle, reachComplete(paths, resolveConfig)), oracles, o.noOracle
 		);
 
 		if (o.fix) {
@@ -343,6 +345,47 @@ final class LintCommand implements CliCommand {
 			return builds;
 		}
 		return { declared: resolution.declared, sources: resolution.sources, builds: probe };
+	}
+
+	/**
+	 * `resolution` carrying what the configured compiler oracles typed (`TypedFactsProbe`), compiled on first demand and
+	 * once per run, each configuration that contributed nothing named on stderr. Unlike the builds it needs no complete
+	 * oracle list: code no configuration compiled simply has no facts. A file the run rewrites is dropped from the table
+	 * (`factsEdited`). Unchanged with no oracle, or under `--no-oracle`.
+	 */
+	private static function withCompilerFacts(
+		resolution: Null<ResolutionScope>, oracles: Array<OracleConfig>, noOracle: Bool
+	): Null<ResolutionScope> {
+		if (resolution == null || oracles.length == 0 || noOracle) return resolution;
+		var probed: Bool = false;
+		var facts: Null<CompilerFacts> = null;
+		final edited: Array<String> = [];
+		function probe(): Null<CompilerFacts> {
+			if (!probed) {
+				probed = true;
+				final built: Null<CompilerFacts> = TypedFactsProbe.probeAll(oracles);
+				facts = built;
+				if (built != null) {
+					for (d in built.dropped) CliIo.stderr('apq lint: compilerOracle ${d.name}: no compiler facts — ${d.reason}\n');
+					for (f in edited) built.invalidate(f);
+				}
+			}
+			return facts;
+		}
+		function touched(file: String): Void {
+			final built: Null<CompilerFacts> = facts;
+			if (built != null)
+				built.invalidate(file)
+			else if (!edited.contains(file))
+				edited.push(file);
+		}
+		return {
+			declared: resolution.declared,
+			sources: resolution.sources,
+			builds: resolution.builds,
+			facts: probe,
+			factsEdited: touched
+		};
 	}
 
 	/**

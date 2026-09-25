@@ -6598,6 +6598,392 @@
 			"find": "eachWord(imp.raw, word);",
 			"replace": "{}",
 			"note": "what a file imports is not in scope in its members, so a `using` extension's return type is out of reach"
+		},
+		{
+			"name": "M-FACTS-CALL-TARGET",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "call",
+			"find": "'{\"t\":${q(targetName)},\"a\":\"$kind\"$chosen,",
+			"replace": "'{\"a\":\"$kind\"$chosen,",
+			"note": "a field call is written without its target, so an abstract operator or an accessor is a call of nothing"
+		},
+		{
+			"name": "M-FACTS-SUPER",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "call",
+			"find": "case TInst(c, _): ',\"t\":' + q(c.toString() + '.new');",
+			"replace": "case TInst(c, _): '';",
+			"note": "a super call names no constructor, so the implicit constructor reaches nothing"
+		},
+		{
+			"name": "M-FACTS-INITIALIZER",
+			"type": "anyparse.check.TypedFactsMacro",
+			"method": "classType",
+			"find": "case FVar(_, _): 'var';",
+			"replace": "case FVar(_, _): 'method';",
+			"note": "a field initializer is written as a method node"
+		},
+		{
+			"name": "M-FACTS-ITER",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "visit",
+			"find": "add('iters', '{\"v\":${q(str(v.t))},\"i\":${q(str(it.t))},\"p\":${at(e.pos)}}');",
+			"replace": "",
+			"note": "a kept for loop records no iteration"
+		},
+		{
+			"name": "M-FACTS-STRING-OPERAND",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "stringSite",
+			"find": "add('strs', '{\"o\":${q(str(operand.t))},\"p\":${at(operand.pos)}}');",
+			"replace": "",
+			"note": "a non-String operand of a concatenation is not recorded"
+		},
+		{
+			"name": "M-FACTS-LOCAL-CALL",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "visit",
+			"find": "if (!_written.exists(v.id)) _locals[v.id] = made;",
+			"replace": "{}",
+			"note": "a local function is not remembered, so its call is a call of a value"
+		},
+		{
+			"name": "M-FACTS-FIELD-WRITE",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "target",
+			"find": "fieldFact(lhs, receiver, fa, true);",
+			"replace": "fieldFact(lhs, receiver, fa, false);",
+			"note": "an assigned field is recorded as read, never written"
+		},
+		{
+			"name": "M-FACTS-REFLECT-NAME",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "reflection",
+			"find": "literal = ',\"n\":' + Json.stringify(s);",
+			"replace": "literal = '';",
+			"note": "a reflected literal name is dropped, so every reflection site reads as computed"
+		},
+		{
+			"name": "M-FACTS-NATIVE",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "call",
+			"find": "add('native', '{\"w\":\"syntax\",\"n\":${q(targetName)},\"p\":$where}');",
+			"replace": "{}",
+			"note": "a Syntax.code call is no native site"
+		},
+		{
+			"name": "M-FACTS-FLOW-CAST",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "visit",
+			"find": "flowText(sourceType(inner), sink == '?' ? 'Dynamic' : sink, 'cast', e.pos);",
+			"replace": "",
+			"note": "an unchecked cast carries no flow"
+		},
+		{
+			"name": "M-FACTS-TYPE-PARAMETER",
+			"type": "anyparse.check.TypedFactsMacro",
+			"method": "instString",
+			"find": "return isParam ? '$' + path : path + paramString(params, depth);",
+			"replace": "return path + paramString(params, depth);",
+			"note": "a type parameter prints as a class path"
+		},
+		{
+			"name": "M-CODEPOINT-NATIVE",
+			"type": "anyparse.query.CodepointIndex",
+			"method": "toNative",
+			"force": "codepoint",
+			"note": "a compiler offset is read as a Span offset, so every site past an emoji is off by the emoji count"
+		},
+		{
+			"name": "M-CODEPOINT-BACK",
+			"type": "anyparse.query.CodepointIndex",
+			"method": "toCodepoint",
+			"force": "native",
+			"note": "a Span offset is read as a compiler offset"
+		},
+		{
+			"name": "M-FACTS-UNION",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "add",
+			"find": "final index: Int = _dumps.length;",
+			"replace": "if (_dumps.length > 0) return;\n\t\tfinal index: Int = _dumps.length;",
+			"note": "only the first configuration is read: the table is one build, not the union"
+		},
+		{
+			"name": "M-FACTS-ABSENT",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "compiled",
+			"force": "true",
+			"note": "every file reads as compiled, so absence stops meaning no facts"
+		},
+		{
+			"name": "M-FACTS-HIERARCHY",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "link",
+			"find": "if (!down.contains(child)) down.push(child);",
+			"replace": "",
+			"note": "no subtype edge is recorded"
+		},
+		{
+			"name": "M-FACTS-INCOMPLETE",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "add",
+			"find": " || !lines[lines.length - 1].startsWith('{\"k\":\"end\"')",
+			"replace": "",
+			"note": "a facts file cut short before its closing record is read as complete"
+		},
+		{
+			"name": "M-FACTS-INLINE-POSITIONS",
+			"type": "anyparse.check.TypedFactsProbe",
+			"method": "compileArgs",
+			"find": "defines.concat(['keep-inline-positions'])",
+			"replace": "defines",
+			"note": "an inlined body takes the call site's range, so its facts read as the type of the call"
+		},
+		{
+			"name": "M-FACTS-TYPE-TEXT",
+			"type": "anyparse.query.FactText",
+			"method": "mentions",
+			"force": "true",
+			"note": "a fact the compiler placed at a source range answers for whatever expression the range holds"
+		},
+		{
+			"name": "M-FACTS-READS",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "visit",
+			"find": "if (!v.name.startsWith('`')) add('reads', '[${range(e.pos)},${q(localType(v))}]');",
+			"replace": "{}",
+			"note": "a local read records no type"
+		},
+		{
+			"name": "M-FACTS-BRANCH-LEAVES",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "flowInto",
+			"find": "collectLeaves(value, leaves);",
+			"replace": "leaves.push(value);",
+			"note": "a branching value flows once, at the type its branches unify to"
+		},
+		{
+			"name": "M-FACTS-MONO-SINK",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "flowInto",
+			"find": "final sink: String = to == '?' ? 'Dynamic' : to;",
+			"replace": "final sink: String = to;",
+			"note": "a place of no type stays unknown instead of Dynamic"
+		},
+		{
+			"name": "M-FACTS-CAST-ALWAYS",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "flowText",
+			"find": "if (how != 'cast' && TypedFactsShapes.unwrapNull(s) == TypedFactsShapes.unwrapNull(d)) return;",
+			"replace": "if (TypedFactsShapes.unwrapNull(s) == TypedFactsShapes.unwrapNull(d)) return;",
+			"note": "an unchecked cast between equal types records no source"
+		},
+		{
+			"name": "M-FACTS-THROW",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "visit",
+			"find": "flowInto(value, 'Dynamic', 'throw', e.pos);",
+			"replace": "",
+			"note": "a thrown value reaches no place"
+		},
+		{
+			"name": "M-FACTS-UNTYPED-ARGS",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "argFlows",
+			"find": "for (a in args) flowInto(a, 'Dynamic', 'arg', a.pos);",
+			"replace": "",
+			"note": "an argument of a callee with no function type reaches no place"
+		},
+		{
+			"name": "M-FACTS-REST",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "argFlows",
+			"find": "if (element != null) rest = str(element);",
+			"replace": "",
+			"note": "rest arguments flow into the rest type itself or nowhere"
+		},
+		{
+			"name": "M-FACTS-GENERIC",
+			"type": "anyparse.check.TypedFactsMacro",
+			"method": "moduleType",
+			"find": "case KTypeParameter(_) | KMacroType | KGenericBuild | KExpr(_):",
+			"replace": "case KGenericInstance(_, _) | KTypeParameter(_) | KMacroType | KGenericBuild | KExpr(_):",
+			"note": "a @:generic instance is skipped"
+		},
+		{
+			"name": "M-FACTS-INIT",
+			"type": "anyparse.check.TypedFactsMacro",
+			"method": "classType",
+			"find": "walkBody(init, '$id.__init__', 'init', id, true, '()->Void', home, 0, genericCopy);",
+			"replace": "",
+			"note": "__init__ is not walked"
+		},
+		{
+			"name": "M-FACTS-REASSIGNED-LOCAL",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "visit",
+			"find": "if (!_written.exists(v.id)) _locals[v.id] = made;",
+			"replace": "_locals[v.id] = made;",
+			"note": "a reassigned local is read as one fixed function"
+		},
+		{
+			"name": "M-FACTS-FIELD-VALUE",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "calledKind",
+			"find": "return _host.replaceable(targetName, cf) ? 'fieldValue' : kind;",
+			"replace": "return kind;",
+			"note": "a call of a field value names the field as a fixed body"
+		},
+		{
+			"name": "M-FACTS-REFLECTION-INLINED",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "at",
+			"find": "if (_host.reflectionModule(info.file)) incomplete('reflection-inlined');",
+			"replace": "",
+			"note": "an inlined Reflect call leaves no mark"
+		},
+		{
+			"name": "M-FACTS-OVERLOADS",
+			"type": "anyparse.check.TypedFactsMacro",
+			"method": "classType",
+			"find": "for (o in m.f.overloads.get())",
+			"replace": "for (o in new Array<ClassField>())",
+			"note": "overload bodies past the first are not walked"
+		},
+		{
+			"name": "M-FACTS-INLINED-CHILD",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "child",
+			"find": "if (!_inBody || !inside) nested._header += ',\"inl\":${q(id)}';",
+			"replace": "",
+			"note": "a function spliced in from another body claims a range of the file it was declared in"
+		},
+		{
+			"name": "M-FACTS-GENERATED",
+			"type": "anyparse.check.TypedFactsMacro",
+			"method": "walkBody",
+			"find": "if (fileOf(body.pos) != home) walk.flag('gen');",
+			"replace": "",
+			"note": "a macro-built body claims a range of the macro file"
+		},
+		{
+			"name": "M-FACTS-STALE-SOURCE",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "sourceOf",
+			"find": "FactText.contentHash(read) == expected",
+			"replace": "true",
+			"note": "facts answer for a text the compile never read"
+		},
+		{
+			"name": "M-FACTS-INVALIDATE",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "invalidate",
+			"find": "_stale[key] = true;",
+			"replace": "",
+			"note": "a rewritten file keeps its facts"
+		},
+		{
+			"name": "M-FACTS-VARIANT-RANGES",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "addNode",
+			"find": "!ranges.exists(r -> r.id == id && r.min == head.min && r.max == head.max)",
+			"replace": "!ranges.exists(r -> r.id == id)",
+			"note": "only the first #if variant of a node is found by range"
+		},
+		{
+			"name": "M-FACTS-DROPPED",
+			"type": "anyparse.check.TypedFactsProbe",
+			"method": "probeAll",
+			"find": "facts.dropped.push({ name: LintConfig.describeOracle(asked[i].oracle), reason: failureOf(runs[i]) });",
+			"replace": "{}",
+			"note": "a configuration that failed is dropped in silence"
+		},
+		{
+			"name": "M-FACTS-INLINED-CALL",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "spliced",
+			"find": "add('calls', '{\"t\":${q(callee)},\"a\":\"inlined\",\"rt\":${q(str(e.t))},\"p\":${at(e.pos)}}');",
+			"replace": "",
+			"note": "an inlined call leaves no call fact"
+		},
+		{
+			"name": "M-FACTS-SAME-FILE-INLINE",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "walk",
+			"find": "final inside: Bool = info.file == _home && info.min >= _min && info.max <= _max;",
+			"replace": "final inside: Bool = info.file == _home;",
+			"note": "a body inlined from the same file reads as the caller's own code"
+		},
+		{
+			"name": "M-FACTS-SITE-UNKNOWN",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "within",
+			"find": "if (!whole && (n.incomplete.contains('inline-site-unknown') || n.incomplete.contains('macro-expansion'))) return null;",
+			"replace": "",
+			"note": "a range query short of a spliced node answers as if its facts were placed"
+		},
+		{
+			"name": "M-FACTS-MACRO-EXPANSION",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "spliced",
+			"find": "incomplete('macro-expansion');",
+			"replace": "",
+			"note": "a macro expansion leaves no mark"
+		},
+		{
+			"name": "M-FACTS-REFLECT-VALUE",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "reflectionValue",
+			"find": "add('refl', '{\"t\":${q(c.toString() + '.' + cf.toString())},\"v\":true,\"p\":${at(e.pos)}}');",
+			"replace": "{}",
+			"note": "a reflection member read as a value is no reflection site"
+		},
+		{
+			"name": "M-FACTS-UNTYPED-DECLARED",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "sourceType",
+			"force": "str(leaf.t)",
+			"note": "an untyped-retyped value flows at its retyped type"
+		},
+		{
+			"name": "M-FACTS-IDENT-READ",
+			"type": "anyparse.check.TypedFactsWalk",
+			"method": "visit",
+			"find": "add('native', '{\"w\":\"ident\",\"n\":${q(identifier)},\"p\":${at(e.pos)}}');",
+			"replace": "",
+			"note": "a native identifier read is no native site"
+		},
+		{
+			"name": "M-FACTS-GENERIC-RANGES",
+			"type": "anyparse.query.FactText",
+			"method": "nodeHead",
+			"find": " || line.indexOf(',\"gi\":true') >= 0",
+			"replace": "",
+			"note": "a generic instance copy claims its generic class ranges"
+		},
+		{
+			"name": "M-FACTS-BUILDS",
+			"type": "anyparse.check.TypedFactsMacro",
+			"method": "metaList",
+			"find": "for (p in m.params ?? []) q(haxe.macro.ExprTools.toString(p))",
+			"replace": "for (p in new Array<haxe.macro.Expr>()) q(haxe.macro.ExprTools.toString(p))",
+			"note": "a build macro is not recorded"
+		},
+		{
+			"name": "M-FACTS-STALE-FOREIGN",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "materialize",
+			"find": "if (where == null && !node.incomplete.contains('stale-foreign')) node.incomplete.push('stale-foreign');",
+			"replace": "",
+			"note": "a spliced fact lost to a dropped file leaves no mark"
+		},
+		{
+			"name": "M-FACTS-REFLECTION-PATH",
+			"type": "anyparse.check.TypedFactsMacro",
+			"method": "reflectionModule",
+			"force": "StringTools.endsWith(file, 'Type.hx') || StringTools.endsWith(file, 'Reflect.hx')",
+			"note": "any Type.hx or Reflect.hx counts as the std reflection"
 		}
 	]
 }

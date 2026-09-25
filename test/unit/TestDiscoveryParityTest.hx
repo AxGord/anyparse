@@ -366,6 +366,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.TrivialGetterShapeCollapseTest',
 		'unit.check.TrivialGetterStaticShadowTest',
 		'unit.check.TryCatchNullGuardCheckTest',
+		'unit.check.TypedFactsProbeTest',
 		'unit.check.UncheckedNullableTest',
 		'unit.check.UnguardedNullableDerefTest',
 		'unit.check.UnnecessaryBlockCheckTest',
@@ -858,9 +859,11 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.ClassifyOccurrencesTest',
 		'unit.query.CliAtomicWriteSliceTest',
 		'unit.query.ClustersTest',
+		'unit.query.CodepointIndexTest',
 		'unit.query.CommentOwnerGuardSliceTest',
 		'unit.query.CommentRewriteSliceTest',
 		'unit.query.CommentWeldDeletionSliceTest',
+		'unit.query.CompilerFactsTest',
 		'unit.query.CondBranchSplitTest',
 		'unit.query.CondQueryTest',
 		'unit.query.CondRegionKindDerivationTest',
@@ -1178,16 +1181,11 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.FieldWriteResolutionScopeTest#testThirdPartySubtypeWriteVetoesFinal :: control :: M-WRITEINDEX-PROJECT-FINAL',
 			'unit.check.FieldWriteResolutionScopeTest#testThirdPartySubtypeWriteVetoesReadOnly :: control :: M-WRITEINDEX-PROJECT-READONLY',
 			'unit.check.FieldWriteResolutionScopeTest#testThirdPartyUnresolvedWriteDoesNotVeto :: control :: M-ADMITS-TRUE',
-			'unit.check.HaxeSpawnTest#testACancelledShellJobTakesItsChildrenWithIt :: control :: '
-				+ 'M-DRIVER-KILLS-ONLY-THE-SHELL',
-			'unit.check.HaxeSpawnTest#testAFailureEndsTheJobsDeclaredAfterIt :: control :: '
-				+ 'M-DRIVER-NEVER-STOPS',
-			'unit.check.HaxeSpawnTest#testAJobPastItsTimeoutIsKilled :: control :: '
-				+ 'M-DRIVER-NO-TIMEOUT',
-			'unit.check.HaxeSpawnTest#testAKilledParentTakesItsJobsWithIt :: control :: '
-				+ 'M-DRIVER-OUTLIVES-ITS-PARENT',
-			'unit.check.HaxeSpawnTest#testASignalledDriverTakesItsJobsWithIt :: control :: '
-				+ 'M-DRIVER-SIGNAL-ORPHANS',
+			'unit.check.HaxeSpawnTest#testACancelledShellJobTakesItsChildrenWithIt :: control :: ' + 'M-DRIVER-KILLS-ONLY-THE-SHELL',
+			'unit.check.HaxeSpawnTest#testAFailureEndsTheJobsDeclaredAfterIt :: control :: ' + 'M-DRIVER-NEVER-STOPS',
+			'unit.check.HaxeSpawnTest#testAJobPastItsTimeoutIsKilled :: control :: ' + 'M-DRIVER-NO-TIMEOUT',
+			'unit.check.HaxeSpawnTest#testAKilledParentTakesItsJobsWithIt :: control :: ' + 'M-DRIVER-OUTLIVES-ITS-PARENT',
+			'unit.check.HaxeSpawnTest#testASignalledDriverTakesItsJobsWithIt :: control :: ' + 'M-DRIVER-SIGNAL-ORPHANS',
 			'unit.check.HoistCommonImportTest#testANamesakePushesTheStatementToADeeperSite :: guard :: ',
 			'unit.check.HoistCommonImportTest#testANestedSiteTakesOnlyWhatItsParentDidNot :: control :: '
 				+ 'M-HOIST-SITE-ORDER,M-HOIST-CHAIN-INHERITED',
@@ -1241,8 +1239,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryReturnBindingSeeded :: control :: M-NULLABLE-FLOW-REPORT-INDEX',
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryReturnDerefFlagged :: control :: M-NULLABLE-REPORT-INDEX',
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryStaticReturnDerefFlagged :: control :: M-NULLABLE-REPORT-INDEX',
-			'unit.check.OracleCacheTest#testAFingerprintReadsItsSourcesThroughTheMemo :: control :: '
-				+ 'M-ORACLE-CACHE-MEMO-UNREAD',
+			'unit.check.OracleCacheTest#testAFingerprintReadsItsSourcesThroughTheMemo :: control :: ' + 'M-ORACLE-CACHE-MEMO-UNREAD',
 			'unit.check.OracleCacheTest#testAVerdictIsNotFiledUnderAFingerprintTheTreeLeft :: control :: '
 				+ 'M-ORACLE-CACHE-STORES-A-MOVED-FINGERPRINT',
 			'unit.check.OracleConfigListE2ETest#testAConfigurationWithAnUnknownCompiledSetStillVetoesAnEdit :: control :: '
@@ -1261,104 +1258,75 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-ORACLE-UNKNOWN-COVERAGE-STOPS-THE-PHASE',
 			'unit.check.OracleConfigListE2ETest#testTheDisplayServerAnswersForTheConfigurationItServes :: control :: '
 				+ 'M-DISPLAY-ORACLE-DROPS-DEFINES',
-			'unit.check.OracleDirTest#testASingleTypecheckRunsInTheDeclaredDir :: control :: '
-				+ 'M-SPAWN-RUN-IGNORES-CWD',
-			'unit.check.OracleDirTest#testOverlappedTypechecksRunInTheDeclaredDir :: control :: '
-				+ 'M-SPAWN-RUNALL-IGNORES-CWD',
-			'unit.check.OracleDirTest#testTheDisplayServerWarmsInTheDeclaredDir :: control :: '
-				+ 'M-DISPLAY-IGNORES-DIR',
-			'unit.check.OracleDirTest#testTheFingerprintReadsTheClasspathUnderTheDeclaredDir :: control :: '
-				+ 'M-ORACLE-CACHE-IGNORES-DIR',
-			'unit.check.OracleDirTest#testTheProbesRunInTheDeclaredDir :: control :: '
-				+ 'M-SPAWN-RUN-IGNORES-CWD',
-			'unit.check.OracleGenerationTest#testAChangedCommandRegenerates :: control :: '
-				+ 'M-GENERATE-NEVER-STALE-BY-COMMAND',
+			'unit.check.OracleDirTest#testASingleTypecheckRunsInTheDeclaredDir :: control :: ' + 'M-SPAWN-RUN-IGNORES-CWD',
+			'unit.check.OracleDirTest#testOverlappedTypechecksRunInTheDeclaredDir :: control :: ' + 'M-SPAWN-RUNALL-IGNORES-CWD',
+			'unit.check.OracleDirTest#testTheDisplayServerWarmsInTheDeclaredDir :: control :: ' + 'M-DISPLAY-IGNORES-DIR',
+			'unit.check.OracleDirTest#testTheFingerprintReadsTheClasspathUnderTheDeclaredDir :: control :: ' + 'M-ORACLE-CACHE-IGNORES-DIR',
+			'unit.check.OracleDirTest#testTheProbesRunInTheDeclaredDir :: control :: ' + 'M-SPAWN-RUN-IGNORES-CWD',
+			'unit.check.OracleGenerationTest#testAChangedCommandRegenerates :: control :: ' + 'M-GENERATE-NEVER-STALE-BY-COMMAND',
 			'unit.check.OracleGenerationTest#testAChangedInputRegeneratesAndAnUnchangedOneDoesNot :: control :: '
 				+ 'M-GENERATE-NEVER-STALE-BY-INPUT',
-			'unit.check.OracleGenerationTest#testACommandThatWritesItsOwnInputIsUsable :: control :: '
-				+ 'M-GENERATE-SHARE-JUDGES-STALENESS',
+			'unit.check.OracleGenerationTest#testACommandThatWritesItsOwnInputIsUsable :: control :: ' + 'M-GENERATE-SHARE-JUDGES-STALENESS',
 			'unit.check.OracleGenerationTest#testADevLibraryIsTrackedThroughItsRepositoryDirectory :: control :: '
 				+ 'M-GENERATE-REPO-DIR-FROM-NAME',
-			'unit.check.OracleGenerationTest#testADirectoryInputIsHashedByItsContent :: control :: '
-				+ 'M-GENERATE-DIRECTORY-INPUT-CONSTANT',
+			'unit.check.OracleGenerationTest#testADirectoryInputIsHashedByItsContent :: control :: ' + 'M-GENERATE-DIRECTORY-INPUT-CONSTANT',
 			'unit.check.OracleGenerationTest#testAFailedGenerationIsUnavailableNeverTheStaleHxml :: control :: '
 				+ 'M-GENERATE-FAILURE-USES-THE-STALE-HXML',
-			'unit.check.OracleGenerationTest#testAFileNamedByTwoGenerationsIsReadOnce :: control :: '
-				+ 'M-GENERATE-HASH-MEMO-UNUSED',
+			'unit.check.OracleGenerationTest#testAFileNamedByTwoGenerationsIsReadOnce :: control :: ' + 'M-GENERATE-HASH-MEMO-UNUSED',
 			'unit.check.OracleGenerationTest#testAGenerationThatKeepsGoingStaleIsUnavailable :: control :: '
 				+ 'M-GENERATE-REJUDGE-UNBOUNDED',
-			'unit.check.OracleGenerationTest#testAHalfWrittenOwnerIsNotTakenOver :: control :: '
-				+ 'M-GENERATE-OWNERLESS-ABANDONED-AT-ONCE',
-			'unit.check.OracleGenerationTest#testAJobWithoutAStartTimeIsLeftAlone :: control :: '
-				+ 'M-GENERATE-ENDJOB-PID-ONLY',
-			'unit.check.OracleGenerationTest#testALeftoverTakeoverClaimIsCleared :: control :: '
-				+ 'M-GENERATE-CLAIM-NEVER-CLEARED',
+			'unit.check.OracleGenerationTest#testAHalfWrittenOwnerIsNotTakenOver :: control :: ' + 'M-GENERATE-OWNERLESS-ABANDONED-AT-ONCE',
+			'unit.check.OracleGenerationTest#testAJobWithoutAStartTimeIsLeftAlone :: control :: ' + 'M-GENERATE-ENDJOB-PID-ONLY',
+			'unit.check.OracleGenerationTest#testALeftoverTakeoverClaimIsCleared :: control :: ' + 'M-GENERATE-CLAIM-NEVER-CLEARED',
 			'unit.check.OracleGenerationTest#testALibrarySwitchedDuringTheGenerationIsSeenNextRun :: control :: '
 				+ 'M-GENERATE-IMPLICIT-HASHED-AFTER-THE-RUN',
 			'unit.check.OracleGenerationTest#testALiveReaderDoesNotBlockACurrentGeneration :: control :: '
 				+ 'M-GENERATE-READERS-EXCLUDE-EACH-OTHER',
-			'unit.check.OracleGenerationTest#testALiveReaderHoldsOffARegeneration :: control :: '
-				+ 'M-GENERATE-WRITER-IGNORES-READERS',
+			'unit.check.OracleGenerationTest#testALiveReaderHoldsOffARegeneration :: control :: ' + 'M-GENERATE-WRITER-IGNORES-READERS',
 			'unit.check.OracleGenerationTest#testALockHeldByALiveRunMakesTheConfigurationUnavailable :: control :: '
 				+ 'M-GENERATE-LOCK-IGNORED',
 			'unit.check.OracleGenerationTest#testAMarkerInTheOutputTreeDoesNotHoldTheState :: control :: '
 				+ 'M-GENERATE-STATE-IN-OUTPUT-DIR,M-GENERATE-STATE-ROOT-FROM-HXML',
-			'unit.check.OracleGenerationTest#testAMissingHxmlRegenerates :: control :: '
-				+ 'M-GENERATE-TRUSTS-A-MISSING-HXML',
-			'unit.check.OracleGenerationTest#testARacedGenerationDoesNotVerifyFixes :: control :: '
-				+ 'M-GENERATE-RACED-VERIFIES-FIXES',
-			'unit.check.OracleGenerationTest#testAReadOnlyRootIsUnavailableNotACrash :: control :: '
-				+ 'M-GENERATE-READ-ONLY-ROOT-THROWS',
-			'unit.check.OracleGenerationTest#testARecordOfAnOlderSchemeIsStale :: control :: '
-				+ 'M-GENERATE-FORMAT-UNCHECKED',
-			'unit.check.OracleGenerationTest#testAReusedPidDoesNotHoldTheLock :: control :: '
-				+ 'M-GENERATE-PID-ALONE',
+			'unit.check.OracleGenerationTest#testAMissingHxmlRegenerates :: control :: ' + 'M-GENERATE-TRUSTS-A-MISSING-HXML',
+			'unit.check.OracleGenerationTest#testARacedGenerationDoesNotVerifyFixes :: control :: ' + 'M-GENERATE-RACED-VERIFIES-FIXES',
+			'unit.check.OracleGenerationTest#testAReadOnlyRootIsUnavailableNotACrash :: control :: ' + 'M-GENERATE-READ-ONLY-ROOT-THROWS',
+			'unit.check.OracleGenerationTest#testARecordOfAnOlderSchemeIsStale :: control :: ' + 'M-GENERATE-FORMAT-UNCHECKED',
+			'unit.check.OracleGenerationTest#testAReusedPidDoesNotHoldTheLock :: control :: ' + 'M-GENERATE-PID-ALONE',
 			'unit.check.OracleGenerationTest#testAStaleGenerationRunsWithoutItsOldRecord :: control :: '
 				+ 'M-GENERATE-RECORD-OUTLIVES-THE-RUN',
-			'unit.check.OracleGenerationTest#testATakeOverEndsTheJobTheDeadRunLeft :: control :: '
-				+ 'M-GENERATE-TAKEOVER-LEAVES-THE-JOB',
+			'unit.check.OracleGenerationTest#testATakeOverEndsTheJobTheDeadRunLeft :: control :: ' + 'M-GENERATE-TAKEOVER-LEAVES-THE-JOB',
 			'unit.check.OracleGenerationTest#testATopLevelHxmlKeepsItsStateInItsOwnProject :: control :: '
 				+ 'M-GENERATE-STATE-ROOT-FROM-HXML',
 			'unit.check.OracleGenerationTest#testATreeAnotherCommandRegeneratedIsUnavailableAtOnce :: control :: '
 				+ 'M-GENERATE-RIVAL-COMMAND-RETRIED',
 			'unit.check.OracleGenerationTest#testATreeWipedAfterItWasJudgedIsRegeneratedBeforeTheCompile :: control :: '
 				+ 'M-GENERATE-SHARE-WITHOUT-REJUDGE',
-			'unit.check.OracleGenerationTest#testAnAbandonedLockIsTakenOver :: control :: '
-				+ 'M-GENERATE-LOCK-NEVER-RECOVERED',
+			'unit.check.OracleGenerationTest#testAnAbandonedLockIsTakenOver :: control :: ' + 'M-GENERATE-LOCK-NEVER-RECOVERED',
 			'unit.check.OracleGenerationTest#testAnEmptyOrMissingInputIsNeverSilentlyConstant :: control :: '
 				+ 'M-GENERATE-EMPTY-INPUTS-NEVER,M-GENERATE-MISSING-INPUT-SILENT',
 			'unit.check.OracleGenerationTest#testAnEntryWithNoInputsRegeneratesOncePerRunAndIsUsable :: control :: '
 				+ 'M-GENERATE-SHARE-JUDGES-STALENESS',
 			'unit.check.OracleGenerationTest#testAnHxmlTheGenerationWritesIsNotARacedInput :: control :: '
 				+ 'M-GENERATE-PRODUCED-INCLUDE-IS-INPUT',
-			'unit.check.OracleGenerationTest#testAnHxmlTwoCommandsGenerateIsDropped :: control :: '
-				+ 'M-GENERATE-RIVAL-COMMANDS-KEPT',
-			'unit.check.OracleGenerationTest#testAnIncludeOutsideTheHxmlTreeIsAnInput :: control :: '
-				+ 'M-GENERATE-PRODUCED-BY-ROOT',
+			'unit.check.OracleGenerationTest#testAnHxmlTwoCommandsGenerateIsDropped :: control :: ' + 'M-GENERATE-RIVAL-COMMANDS-KEPT',
+			'unit.check.OracleGenerationTest#testAnIncludeOutsideTheHxmlTreeIsAnInput :: control :: ' + 'M-GENERATE-PRODUCED-BY-ROOT',
 			'unit.check.OracleGenerationTest#testAnInputEditedDuringTheGenerationIsSeenNextRun :: control :: '
 				+ 'M-GENERATE-HASHES-INPUTS-AFTER-THE-RUN',
-			'unit.check.OracleGenerationTest#testAnotherRunsGenerationMovesTheSnapshot :: control :: '
-				+ 'M-GENERATE-EPOCH-UNOBSERVED',
-			'unit.check.OracleGenerationTest#testEntriesSharingACommandMergeTheirInputs :: control :: '
-				+ 'M-GENERATE-FIRST-ENTRY-INPUTS',
+			'unit.check.OracleGenerationTest#testAnotherRunsGenerationMovesTheSnapshot :: control :: ' + 'M-GENERATE-EPOCH-UNOBSERVED',
+			'unit.check.OracleGenerationTest#testEntriesSharingACommandMergeTheirInputs :: control :: ' + 'M-GENERATE-FIRST-ENTRY-INPUTS',
 			'unit.check.OracleGenerationTest#testEveryConfigOverOneTreeMeetsOneLock :: control :: '
 				+ 'M-GENERATE-STATE-BY-CONFIG-ROOT,M-GENERATE-STATE-BY-SPELLING,M-GENERATE-STATE-IN-OUTPUT-DIR',
-			'unit.check.OracleGenerationTest#testGenerationsAreWaitedOnInLockOrder :: control :: '
-				+ 'M-GENERATE-ORDER-BY-KEY',
-			'unit.check.OracleGenerationTest#testOnlyOneRunTakesOverADeadLock :: control :: '
-				+ 'M-GENERATE-TAKEOVER-UNVERIFIED',
+			'unit.check.OracleGenerationTest#testGenerationsAreWaitedOnInLockOrder :: control :: ' + 'M-GENERATE-ORDER-BY-KEY',
+			'unit.check.OracleGenerationTest#testOnlyOneRunTakesOverADeadLock :: control :: ' + 'M-GENERATE-TAKEOVER-UNVERIFIED',
 			'unit.check.OracleGenerationTest#testTheGenerationStateIsSharedAcrossTempDirectories :: control :: '
 				+ 'M-GENERATE-STATE-IN-TMPDIR',
 			'unit.check.OracleGenerationTest#testTheLibraryStateTheHxmlNamesIsAnInput :: control :: '
 				+ 'M-GENERATE-IGNORES-LIBRARY-STATE,M-GENERATE-TEMPLATES-UNTRACKED',
-			'unit.check.OracleGenerationTest#testTheOracleRunCountsTheUnavailable :: control :: '
-				+ 'M-ORACLE-SUMMARY-SILENT',
-			'unit.check.OracleGenerationTest#testTheStateDirectoryIsNoInput :: control :: '
-				+ 'M-GENERATE-STATE-DIR-HASHED',
+			'unit.check.OracleGenerationTest#testTheOracleRunCountsTheUnavailable :: control :: ' + 'M-ORACLE-SUMMARY-SILENT',
+			'unit.check.OracleGenerationTest#testTheStateDirectoryIsNoInput :: control :: ' + 'M-GENERATE-STATE-DIR-HASHED',
 			'unit.check.OracleGenerationTest#testTwoRunsOverTwoStaleGenerationsDoNotDeadlock :: control :: '
 				+ 'M-GENERATE-SHARED-HELD-INTO-PHASE-TWO',
-			'unit.check.OracleGenerationTest#testTwoSpellingsOfOneHxmlAreOneClaim :: control :: '
-				+ 'M-GENERATE-RIVAL-BY-SPELLING',
+			'unit.check.OracleGenerationTest#testTwoSpellingsOfOneHxmlAreOneClaim :: control :: ' + 'M-GENERATE-RIVAL-BY-SPELLING',
 			'unit.check.OracleParallelVerdictTest#testTheOverlappedVerdictIsTheFirstFailureInDeclaredOrder :: control :: '
 				+ 'M-DRIVER-CANCELS-EARLIER-JOBS',
 			'unit.check.OrphanAccessorCheckTest#testAnUnreadableCallerOutsideTheReportScopeStillDeclinesTheDeletion :: control :: '
@@ -1590,6 +1558,24 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-TRIVGET-NO-NEGATION-DESCENT',
 			'unit.check.TrivialGetterShapeCollapseTest#testShapeACtorInitSingleQuotedStringMoveFix :: control :: '
 				+ 'M-TRIVGET-MOVABLE-LITERAL-FALSE',
+			'unit.check.TypedFactsProbeTest#testAConfigurationThatFailsContributesNothing :: control :: M-FACTS-DROPPED',
+			'unit.check.TypedFactsProbeTest#testALostSplicedFactMarksItsNodeAndOnlyTheStdIsReflection :: control :: M-FACTS-STALE-FOREIGN,M-FACTS-REFLECTION-PATH',
+			'unit.check.TypedFactsProbeTest#testAbstractOperatorsConversionsAndAccessorsAreCallsOfTheirImplementations :: control :: M-FACTS-CALL-TARGET',
+			'unit.check.TypedFactsProbeTest#testAnImplicitConstructorCallsSuperAndAnInitializerIsANode :: control :: M-FACTS-SUPER,M-FACTS-INITIALIZER',
+			'unit.check.TypedFactsProbeTest#testAnInlineCallIsNoCallSiteAndItsBodyKeepsTheCalleesPositions :: control :: M-FACTS-INLINE-POSITIONS,M-FACTS-SAME-FILE-INLINE',
+			'unit.check.TypedFactsProbeTest#testCodeNoConfigurationCompiledIsAbsent :: control :: M-FACTS-ABSENT',
+			'unit.check.TypedFactsProbeTest#testEveryCallAndFieldAccessKind :: control :: M-FACTS-LOCAL-CALL,M-FACTS-FIELD-WRITE',
+			'unit.check.TypedFactsProbeTest#testEveryOverloadIsANodeAndACallNamesTheOneItChose :: control :: M-FACTS-OVERLOADS',
+			'unit.check.TypedFactsProbeTest#testEveryValueChannelIntoAnotherTypeIsAFlow :: control :: M-FACTS-BRANCH-LEAVES,M-FACTS-MONO-SINK,M-FACTS-CAST-ALWAYS,M-FACTS-THROW,M-FACTS-UNTYPED-ARGS,M-FACTS-REST',
+			'unit.check.TypedFactsProbeTest#testFactsOfAnotherTextAreAbsent :: control :: M-FACTS-STALE-SOURCE,M-FACTS-INVALIDATE,M-FACTS-VARIANT-RANGES',
+			'unit.check.TypedFactsProbeTest#testFlowsIntoOtherTypes :: control :: M-FACTS-FLOW-CAST,M-FACTS-TYPE-PARAMETER',
+			'unit.check.TypedFactsProbeTest#testGenericInstancesInitAndCallsThatNameNoFixedBody :: control :: M-FACTS-GENERIC,M-FACTS-INIT,M-FACTS-REASSIGNED-LOCAL,M-FACTS-FIELD-VALUE,M-FACTS-REFLECTION-INLINED,M-FACTS-REFLECT-VALUE,M-FACTS-UNTYPED-DECLARED,M-FACTS-IDENT-READ,M-FACTS-GENERIC-RANGES,M-FACTS-BUILDS',
+			'unit.check.TypedFactsProbeTest#testHierarchyIsPackageQualifiedOverTheWholeTypedSet :: control :: M-FACTS-HIERARCHY',
+			'unit.check.TypedFactsProbeTest#testLoopsAndStringConversions :: control :: M-FACTS-ITER,M-FACTS-STRING-OPERAND,M-FACTS-TYPE-TEXT',
+			'unit.check.TypedFactsProbeTest#testPositionsAreSpanUnitsPastNonAsciiText :: control :: M-CODEPOINT-NATIVE,M-FACTS-READS',
+			'unit.check.TypedFactsProbeTest#testReflectionAndNativeSites :: control :: M-FACTS-REFLECT-NAME,M-FACTS-NATIVE',
+			'unit.check.TypedFactsProbeTest#testSplicedCodeIsTheCallersAndItsSiteIsUnknown :: control :: M-FACTS-INLINED-CALL,M-FACTS-INLINED-CHILD,M-FACTS-GENERATED,M-FACTS-SITE-UNKNOWN,M-FACTS-MACRO-EXPANSION',
+			'unit.check.TypedFactsProbeTest#testTheTableIsTheUnionOfTheConfigurations :: control :: M-FACTS-UNION',
 			'unit.check.UnguardedNullableDerefTest#testDeclaredNullableFromANullableFieldStillFlagged :: control :: '
 				+ 'M-DECL-INIT-RECEIVER-MODE-NOMINAL',
 			'unit.check.UnguardedNullableDerefTest#testDeclaredNullableLocalFlagged :: control :: M-DECL-NULLABLE-BLIND',
@@ -2044,6 +2030,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CallGraphTest#testUntypedPropertyAccessIsRecordedAgainstItsAccessor :: control :: '
 				+ 'M-GRAPH-ACCESS-RECORDED,M-GRAPH-ACCESS-COUNTED',
 			'unit.query.CallSitesTest#testASecondLocalFunctionOfTheSameNameRefusesTheProof :: control :: M-NAME-CLASH-KINDS-NO-BINDERS',
+			'unit.query.CodepointIndexTest#testAWideCodepointCountsTwoNativeUnits :: control :: M-CODEPOINT-NATIVE,M-CODEPOINT-BACK',
 			'unit.query.CommentOwnerGuardSliceTest#testACarryDeclarationThatDoesNotHoldIsNotARefusal :: control :: M-COMMENT-CARRY-REFUSES',
 			'unit.query.CommentOwnerGuardSliceTest#testACommentThatKeepsItsPlaceUnderACarryIsAccepted :: control :: '
 				+ 'M-CARRY-CROSSING-ANY-SIDE',
@@ -2078,6 +2065,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CommentWeldDeletionSliceTest#testHoistingInsideAReplacementIsStillRefused :: control :: M-COMMENT-WELD-BLIND',
 			'unit.query.CommentWeldDeletionSliceTest#testWeldingAcrossTheRepeatedSeparatorIsStillRefused :: control :: '
 				+ 'M-COMMENT-WELD-BLIND',
+			'unit.query.CompilerFactsTest#testADumpWithoutItsClosingRecordContributesNothing :: control :: M-FACTS-INCOMPLETE',
 			'unit.query.CondQueryTest#testABranchBodyNeverCarriesADirective :: control :: M-COND-BODY-SWALLOWS-DIRECTIVES',
 			'unit.query.CondQueryTest#testAMetadataNameIsASymbolRowAndKeepsItsSigil :: control :: M-COND-NAMES-DROP-META-NAME',
 			'unit.query.CondQueryTest#testANestedRegionRunsInsideItsParentBranch :: control :: M-COND-INNERMOST-FRAME',
@@ -3194,6 +3182,55 @@ class TestDiscoveryParityTest extends Test {
 			'M-REACH-EXTENSION-READ',
 			'M-REACH-GENERATED-READ',
 			'M-REACH-FILE-IMPORTS',
+			'M-FACTS-CALL-TARGET',
+			'M-FACTS-SUPER',
+			'M-FACTS-INITIALIZER',
+			'M-FACTS-ITER',
+			'M-FACTS-STRING-OPERAND',
+			'M-FACTS-LOCAL-CALL',
+			'M-FACTS-FIELD-WRITE',
+			'M-FACTS-REFLECT-NAME',
+			'M-FACTS-NATIVE',
+			'M-FACTS-FLOW-CAST',
+			'M-FACTS-TYPE-PARAMETER',
+			'M-CODEPOINT-NATIVE',
+			'M-CODEPOINT-BACK',
+			'M-FACTS-UNION',
+			'M-FACTS-ABSENT',
+			'M-FACTS-HIERARCHY',
+			'M-FACTS-INCOMPLETE',
+			'M-FACTS-INLINE-POSITIONS',
+			'M-FACTS-TYPE-TEXT',
+			'M-FACTS-READS',
+			'M-FACTS-BRANCH-LEAVES',
+			'M-FACTS-MONO-SINK',
+			'M-FACTS-CAST-ALWAYS',
+			'M-FACTS-THROW',
+			'M-FACTS-UNTYPED-ARGS',
+			'M-FACTS-REST',
+			'M-FACTS-GENERIC',
+			'M-FACTS-INIT',
+			'M-FACTS-REASSIGNED-LOCAL',
+			'M-FACTS-FIELD-VALUE',
+			'M-FACTS-REFLECTION-INLINED',
+			'M-FACTS-OVERLOADS',
+			'M-FACTS-INLINED-CHILD',
+			'M-FACTS-GENERATED',
+			'M-FACTS-STALE-SOURCE',
+			'M-FACTS-INVALIDATE',
+			'M-FACTS-VARIANT-RANGES',
+			'M-FACTS-DROPPED',
+			'M-FACTS-INLINED-CALL',
+			'M-FACTS-SAME-FILE-INLINE',
+			'M-FACTS-SITE-UNKNOWN',
+			'M-FACTS-MACRO-EXPANSION',
+			'M-FACTS-REFLECT-VALUE',
+			'M-FACTS-UNTYPED-DECLARED',
+			'M-FACTS-IDENT-READ',
+			'M-FACTS-GENERIC-RANGES',
+			'M-FACTS-BUILDS',
+			'M-FACTS-STALE-FOREIGN',
+			'M-FACTS-REFLECTION-PATH',
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
@@ -3275,6 +3312,40 @@ class TestDiscoveryParityTest extends Test {
 			'M-DRIVER-NO-TIMEOUT :: anyparse.check.HaxeSpawn#FinalMember:PARALLEL_DRIVER',
 			'M-DRIVER-SIGNAL-ORPHANS :: anyparse.check.HaxeSpawn#FinalMember:PARALLEL_DRIVER',
 			'M-DRIVER-OUTLIVES-ITS-PARENT :: anyparse.check.HaxeSpawn#FinalMember:PARALLEL_DRIVER',
+			'M-FACTS-CALL-TARGET :: anyparse.check.TypedFactsWalk#call',
+			'M-FACTS-SUPER :: anyparse.check.TypedFactsWalk#call',
+			'M-FACTS-INITIALIZER :: anyparse.check.TypedFactsMacro#classType',
+			'M-FACTS-ITER :: anyparse.check.TypedFactsWalk#visit',
+			'M-FACTS-STRING-OPERAND :: anyparse.check.TypedFactsWalk#stringSite',
+			'M-FACTS-LOCAL-CALL :: anyparse.check.TypedFactsWalk#visit',
+			'M-FACTS-FIELD-WRITE :: anyparse.check.TypedFactsWalk#target',
+			'M-FACTS-REFLECT-NAME :: anyparse.check.TypedFactsWalk#reflection',
+			'M-FACTS-NATIVE :: anyparse.check.TypedFactsWalk#call',
+			'M-FACTS-FLOW-CAST :: anyparse.check.TypedFactsWalk#visit',
+			'M-FACTS-TYPE-PARAMETER :: anyparse.check.TypedFactsMacro#instString',
+			'M-FACTS-READS :: anyparse.check.TypedFactsWalk#visit',
+			'M-FACTS-BRANCH-LEAVES :: anyparse.check.TypedFactsWalk#flowInto',
+			'M-FACTS-MONO-SINK :: anyparse.check.TypedFactsWalk#flowInto',
+			'M-FACTS-CAST-ALWAYS :: anyparse.check.TypedFactsWalk#flowText',
+			'M-FACTS-THROW :: anyparse.check.TypedFactsWalk#visit',
+			'M-FACTS-UNTYPED-ARGS :: anyparse.check.TypedFactsWalk#argFlows',
+			'M-FACTS-REST :: anyparse.check.TypedFactsWalk#argFlows',
+			'M-FACTS-GENERIC :: anyparse.check.TypedFactsMacro#moduleType',
+			'M-FACTS-INIT :: anyparse.check.TypedFactsMacro#classType',
+			'M-FACTS-REASSIGNED-LOCAL :: anyparse.check.TypedFactsWalk#visit',
+			'M-FACTS-FIELD-VALUE :: anyparse.check.TypedFactsWalk#calledKind',
+			'M-FACTS-REFLECTION-INLINED :: anyparse.check.TypedFactsWalk#at',
+			'M-FACTS-OVERLOADS :: anyparse.check.TypedFactsMacro#classType',
+			'M-FACTS-INLINED-CHILD :: anyparse.check.TypedFactsWalk#child',
+			'M-FACTS-GENERATED :: anyparse.check.TypedFactsMacro#walkBody',
+			'M-FACTS-INLINED-CALL :: anyparse.check.TypedFactsWalk#spliced',
+			'M-FACTS-SAME-FILE-INLINE :: anyparse.check.TypedFactsWalk#walk',
+			'M-FACTS-MACRO-EXPANSION :: anyparse.check.TypedFactsWalk#spliced',
+			'M-FACTS-REFLECT-VALUE :: anyparse.check.TypedFactsWalk#reflectionValue',
+			'M-FACTS-UNTYPED-DECLARED :: anyparse.check.TypedFactsWalk#sourceType',
+			'M-FACTS-IDENT-READ :: anyparse.check.TypedFactsWalk#visit',
+			'M-FACTS-BUILDS :: anyparse.check.TypedFactsMacro#metaList',
+			'M-FACTS-REFLECTION-PATH :: anyparse.check.TypedFactsMacro#reflectionModule',
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 
