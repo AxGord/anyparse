@@ -478,9 +478,10 @@ final class OracleGeneration {
 	 * The directory holding `group`'s record, lock and epoch: `<project root>/.apq/oracle-generate/<md5>/`, keyed by the
 	 * TREE the generation writes — the real paths of its hxmls — and by nothing about the config or process asking. Every
 	 * config over that tree (a nested `apqlint.json` naming the same hxml included) therefore meets the same lock and the
-	 * same record, whatever its `TMPDIR` or engine version (a record's own `format` answers the version). The project
-	 * root is the nearest directory holding a project marker (`ConfigFinder.projectRoot`) ABOVE the hxml's own directory,
-	 * which the command may delete wholesale; with none, the generation's own root. Nothing in it is `.hx`, so no scan of
+	 * same record, whatever its `TMPDIR` or engine version (a record's own `format` answers the version). The project root is
+	 * the nearest directory at or above the DECLARING config's directory holding a project marker (`ConfigFinder.projectRoot`),
+	 * else that directory itself: never a walk from the hxml, which could stop at a marker the generation writes into the tree
+	 * it deletes, or climb past a top-level hxml's own project into an enclosing one. Nothing in it is `.hx`, so no scan of
 	 * the project reads it, and a directory input never hashes it (`listTree`); a project keeps it out of version control
 	 * (`.apq/` in its ignore file).
 	 */
@@ -488,9 +489,8 @@ final class OracleGeneration {
 		#if (sys || nodejs)
 		final hxmls: Array<String> = group.hxmls.map(OracleDeclaration.realPath);
 		hxmls.sort(Reflect.compare);
-		final home: String = ConfigFinder.projectRoot(Path.directory(Path.directory(hxmls[0]))) ?? absolute(
-			Sys.getCwd(), group.generate.root
-		);
+		final declaring: String = OracleDeclaration.realPath(absolute(Sys.getCwd(), group.generate.root));
+		final home: String = ConfigFinder.projectRoot(declaring) ?? declaring;
 		return Path.join([home, STATE_DIR, 'oracle-generate', md5(hxmls.join('\n'))]);
 		#else
 		return '';

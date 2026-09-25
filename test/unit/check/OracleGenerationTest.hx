@@ -869,7 +869,10 @@ final class OracleGenerationTest extends Test {
 		Sys.putEnv('TMPDIR', other);
 		CliFixture.always(() -> Sys.putEnv('TMPDIR', declared ?? ''), () -> OracleGeneration.prepare([config]));
 		Assert.equals(1, runs(dir), 'the second run, under another TMPDIR, found the generation current');
-		Assert.isTrue(OracleGeneration.stateDir(OracleGeneration.groupsOf([config])[0]).startsWith('$dir/'), 'its state is in the project');
+		Assert.isTrue(
+			OracleGeneration.stateDir(OracleGeneration.groupsOf([config])[0]).startsWith('${OracleDeclaration.realPath(dir)}/'),
+			'its state is in the project'
+		);
 		CliFixture.removeDir(other);
 		CliFixture.removeDir(dir);
 		#else
@@ -1091,7 +1094,7 @@ final class OracleGenerationTest extends Test {
 			return;
 		}
 		Assert.isTrue(
-			(ready[0]?.unavailable ?? '').contains('cannot create its generation state under $dir/.apq'),
+			(ready[0]?.unavailable ?? '').contains('cannot create its generation state under ${OracleDeclaration.realPath(dir)}/.apq'),
 			'the reason is given: ${ready[0]?.unavailable}'
 		);
 		CliFixture.removeDir(dir);
@@ -1264,6 +1267,71 @@ final class OracleGenerationTest extends Test {
 		final err: String = CliFixture.captureStderr(() -> exit = Cli.run(['oracle', '$dir/Main.hx']));
 		Assert.equals(0, exit, 'an unavailable configuration is not a failed build');
 		Assert.isTrue(err.contains('1 of 2 configuration(s) typecheck, 0 do NOT, 1 UNAVAILABLE'), 'the summary counts it: $err');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A project marker the generation writes at the root of its own output tree (a generated `haxelib.json`) never
+	 * becomes the home of the generation state: the command deletes that tree, lock and record with it.
+	 */
+	@:pin('control')
+	@:killer('M-GENERATE-STATE-IN-OUTPUT-DIR')
+	@:killer('M-GENERATE-STATE-ROOT-FROM-HXML')
+	public function testAMarkerInTheOutputTreeDoesNotHoldTheState(): Void {
+		#if (sys || nodejs)
+		final dir: String = OracleDeclaration.realPath(CliFixture.writeTree('oraclegenmarker', [
+			{ name: 'proj/.git/HEAD', source: 'ref: refs/heads/main\n' },
+			{ name: 'proj/out/haxelib.json', source: '{"name":"genlib"}' },
+			{ name: 'proj/out/haxe/a.hxml', source: '-cp .\n' }
+		]));
+		final config: OracleConfig = {
+			hxml: '$dir/proj/out/haxe/a.hxml',
+			dir: '$dir/proj',
+			defines: [],
+			generate: {
+				command: 'true',
+				root: '$dir/proj',
+				inputs: null,
+				probeDir: false
+			}
+		};
+		final state: String = OracleGeneration.stateDir(OracleGeneration.groupsOf([config])[0]);
+		Assert.isTrue(state.startsWith('$dir/proj/.apq/'), 'at the declaring project\'s root, outside the output tree: $state');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A generated hxml at the top of its project, which sits inside an enclosing repository, keeps its state in its own
+	 * project — the walk starts at the declaring config, never above the hxml, so it cannot climb into the outer repo.
+	 */
+	@:pin('control')
+	@:killer('M-GENERATE-STATE-ROOT-FROM-HXML')
+	public function testATopLevelHxmlKeepsItsStateInItsOwnProject(): Void {
+		#if (sys || nodejs)
+		final dir: String = OracleDeclaration.realPath(CliFixture.writeTree('oraclegenouter', [
+			{ name: '.git/HEAD', source: 'ref: refs/heads/main\n' },
+			{ name: 'proj/.git/HEAD', source: 'ref: refs/heads/main\n' },
+			{ name: 'proj/i.txt', source: 'one' }
+		]));
+		final config: OracleConfig = {
+			hxml: '$dir/proj/a.hxml',
+			dir: '$dir/proj',
+			defines: [],
+			generate: {
+				command: 'true',
+				root: '$dir/proj',
+				inputs: null,
+				probeDir: false
+			}
+		};
+		final state: String = OracleGeneration.stateDir(OracleGeneration.groupsOf([config])[0]);
+		Assert.isTrue(state.startsWith('$dir/proj/.apq/'), 'in its own project, not the enclosing one: $state');
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');

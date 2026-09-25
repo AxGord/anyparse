@@ -3886,9 +3886,17 @@
 			"name": "M-GENERATE-STATE-IN-OUTPUT-DIR",
 			"type": "anyparse.check.OracleGeneration",
 			"method": "stateDir",
-			"find": "ConfigFinder.projectRoot(Path.directory(Path.directory(hxmls[0])))",
+			"find": "ConfigFinder.projectRoot(declaring)",
 			"replace": "ConfigFinder.projectRoot(Path.directory(hxmls[0]))",
 			"note": "a project marker in the hxml's own directory puts the generation state inside the tree the command may delete"
+		},
+		{
+			"name": "M-GENERATE-STATE-ROOT-FROM-HXML",
+			"type": "anyparse.check.OracleGeneration",
+			"method": "stateDir",
+			"find": "ConfigFinder.projectRoot(declaring)",
+			"replace": "ConfigFinder.projectRoot(Path.directory(Path.directory(hxmls[0])))",
+			"note": "the project root is searched from above the hxml, so a marker the generation writes at its output root holds the state it deletes, and a top-level hxml climbs into an enclosing repository"
 		},
 		{
 			"name": "M-GENERATE-RIVAL-BY-SPELLING",

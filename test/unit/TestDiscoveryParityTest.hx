@@ -1301,6 +1301,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-GENERATE-WRITER-IGNORES-READERS',
 			'unit.check.OracleGenerationTest#testALockHeldByALiveRunMakesTheConfigurationUnavailable :: control :: '
 				+ 'M-GENERATE-LOCK-IGNORED',
+			'unit.check.OracleGenerationTest#testAMarkerInTheOutputTreeDoesNotHoldTheState :: control :: '
+				+ 'M-GENERATE-STATE-IN-OUTPUT-DIR,M-GENERATE-STATE-ROOT-FROM-HXML',
 			'unit.check.OracleGenerationTest#testAMissingHxmlRegenerates :: control :: '
 				+ 'M-GENERATE-TRUSTS-A-MISSING-HXML',
 			'unit.check.OracleGenerationTest#testARacedGenerationDoesNotVerifyFixes :: control :: '
@@ -1315,6 +1317,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-GENERATE-RECORD-OUTLIVES-THE-RUN',
 			'unit.check.OracleGenerationTest#testATakeOverEndsTheJobTheDeadRunLeft :: control :: '
 				+ 'M-GENERATE-TAKEOVER-LEAVES-THE-JOB',
+			'unit.check.OracleGenerationTest#testATopLevelHxmlKeepsItsStateInItsOwnProject :: control :: '
+				+ 'M-GENERATE-STATE-ROOT-FROM-HXML',
 			'unit.check.OracleGenerationTest#testATreeAnotherCommandRegeneratedIsUnavailableAtOnce :: control :: '
 				+ 'M-GENERATE-RIVAL-COMMAND-RETRIED',
 			'unit.check.OracleGenerationTest#testATreeWipedAfterItWasJudgedIsRegeneratedBeforeTheCompile :: control :: '
@@ -2849,6 +2853,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-GENERATE-STATE-BY-CONFIG-ROOT',
 			'M-GENERATE-STATE-BY-SPELLING',
 			'M-GENERATE-STATE-IN-OUTPUT-DIR',
+			'M-GENERATE-STATE-ROOT-FROM-HXML',
 			'M-GENERATE-RIVAL-BY-SPELLING',
 			'M-GENERATE-EPOCH-UNOBSERVED',
 			'M-GENERATE-RACED-VERIFIES-FIXES',
