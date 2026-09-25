@@ -14,6 +14,7 @@ import anyparse.query.GrammarPlugin.TypeRefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.Pattern.KindEquivalence;
+import anyparse.query.ReachLiveness.ReachBuilds;
 import anyparse.query.SpanTypeInfoProvider;
 import anyparse.query.StringFold.StringFoldSupport;
 import haxe.io.Path;
@@ -148,6 +149,9 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	private var _fieldWriteIndex: Null<FieldWriteIndex> = null;
 	private var _fieldWriteIndexBuilt: Bool = false;
 
+	/** The pass's `MemberReach`, dropped with the other per-pass memos. */
+	private var _memberReach: Null<MemberReach> = null;
+
 	public function new(inner: GrammarPlugin) {
 		_inner = inner;
 		_rootProvider = inner is ParsedRootProvider ? cast inner : null;
@@ -235,6 +239,14 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		return roots.length == 0 ? null : sources.report.concat(roots);
 	}
 
+	/** `SymbolIndexHost`: the report UNION the project roots, when the roots matched. */
+	public function completeProjectFiles(): Null<Array<{ file: String, source: String }>> {
+		final sources: Null<ResolutionSources> = scopeSources();
+		return sources == null || sources.rootsMatched != true || sources.rootsAllMatched != true
+			? null
+			: sources.report.concat(sources.projectRoots);
+	}
+
 	/**
 	 * Adopt an externally-built resolution-scoped index as the memoised one. The `--fix`
 	 * loop builds a fresh index per pass over the CURRENT report sources UNION the library
@@ -252,6 +264,7 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		_projectIndexBuilt = false;
 		_fieldWriteIndex = null;
 		_fieldWriteIndexBuilt = false;
+		_memberReach = null;
 	}
 
 	/**
@@ -286,6 +299,22 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		_fieldWriteIndexBuilt = true;
 		_fieldWriteIndex = FieldWriteIndex.build(files, this, resolutionIndex(), thirdPartyFiles());
 		return _fieldWriteIndex;
+	}
+
+	/** `SymbolIndexHost`: the pass's memoised `MemberReach`, or null. */
+	public function memberReach(): Null<MemberReach> {
+		return _memberReach;
+	}
+
+	/** `SymbolIndexHost`: memoise `reach` for the rest of the pass. */
+	public function setMemberReach(reach: MemberReach): Void {
+		_memberReach = reach;
+	}
+
+	/** `SymbolIndexHost`: the builds the run's resolution scope names (`ResolutionScope.builds`), or null. */
+	public function reachBuilds(): Null<ReachBuilds> {
+		final read: Null<() -> Null<ReachBuilds>> = _resolutionScope?.builds;
+		return read == null ? null : read();
 	}
 
 	/**
@@ -641,6 +670,9 @@ typedef ResolutionSources = {
 	 * nothing. Absent reads as false.
 	 */
 	@:optional final rootsMatched: Bool;
+
+	/** Whether EVERY declared root matched at least one `.hx` — a root that matched nothing may be where project files live. Absent reads as false. */
+	@:optional final rootsAllMatched: Bool;
 };
 
 /**
@@ -685,4 +717,10 @@ abstract LibrarySources(Array<{ file: String, source: String }>) {
 typedef ResolutionScope = {
 	final declared: Bool;
 	final sources: () -> ResolutionSources;
+
+	/**
+	 * The builds the run's compiler oracles describe, read on first demand and once per run (`ReachBuilds`); absent
+	 * when the run configured no oracle, declined it, or did not declare its oracle list complete.
+	 */
+	@:optional final builds: () -> Null<ReachBuilds>;
 };

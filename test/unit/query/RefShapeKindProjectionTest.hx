@@ -95,6 +95,13 @@ final class RefShapeKindProjectionTest extends Test {
 	private static final EXTRA_KIND_FIELDS: Array<String> = ['leftAssociativeBinaryFamilies'];
 
 	/**
+	 * The `RefShape` fields that GROUP other fields into a nested structure (`RefShape.execution`), which exists only to
+	 * keep the shape within a static target's constructor arity. Every reading here sees a group's fields as the shape's
+	 * own, by their own names, so the nesting classifies and probes nothing differently.
+	 */
+	private static final GROUP_FIELDS: Array<String> = ['execution'];
+
+	/**
 	 * Fields carrying a TYPE or method name that merely COINCIDES with a projected kind.
 	 *
 	 * Every entry here is `Dynamic`: the Haxe grammar spells `dynamic` as a member modifier,
@@ -343,6 +350,62 @@ final class RefShapeKindProjectionTest extends Test {
 				after: ' c; } }'
 			},
 			{
+				field: 'implicitCallMetaNames',
+				slot: '0',
+				kind: 'Meta',
+				names: NAME_IS,
+				before: '',
+				after: ' class C {}'
+			},
+			{
+				field: 'implicitCallMetaNames',
+				slot: '1',
+				kind: 'Meta',
+				names: NAME_IS,
+				before: '',
+				after: ' class C {}'
+			},
+			{
+				field: 'implicitCallMetaNames',
+				slot: '2',
+				kind: 'Meta',
+				names: NAME_IS,
+				before: '',
+				after: ' class C {}'
+			},
+			{
+				field: 'implicitCallMetaNames',
+				slot: '3',
+				kind: 'Meta',
+				names: NAME_IS,
+				before: '',
+				after: ' class C {}'
+			},
+			{
+				field: 'implicitCallMetaNames',
+				slot: '4',
+				kind: 'Meta',
+				names: NAME_IS,
+				before: '',
+				after: ' class C {}'
+			},
+			{
+				field: 'implicitConstructionTypeMetaNames',
+				slot: '0',
+				kind: 'Meta',
+				names: NAME_IS,
+				before: '',
+				after: ' class C {}'
+			},
+			{
+				field: 'indexAccessMetaName',
+				slot: '',
+				kind: 'Meta',
+				names: NAME_IS,
+				before: '',
+				after: ' class C {}'
+			},
+			{
 				field: 'nullSafetyMetaName',
 				slot: '',
 				kind: 'Meta',
@@ -519,6 +582,7 @@ final class RefShapeKindProjectionTest extends Test {
 			'Extern',
 			'Inline',
 			'Macro',
+			'Meta',
 			'Optional',
 			'Overload',
 			'Override',
@@ -958,17 +1022,17 @@ final class RefShapeKindProjectionTest extends Test {
 			final shape: RefShape = CliArgs.pickPlugin(lang).refShape();
 			final projected: Array<String> = projectedKindsFor(lang);
 			final unclassified: Array<String> = [];
-			for (field in Reflect.fields(shape)) if (
-				field.indexOf('Kind') < 0 && !classified.contains(field) && !isKindKeyedMap(Reflect.field(shape, field), projected)
+			for (field in fieldsOf(shape)) if (
+				field.indexOf('Kind') < 0 && !classified.contains(field) && !isKindKeyedMap(fieldOf(shape, field), projected)
 			) {
 				final strings: Array<String> = [];
-				stringsOf(Reflect.field(shape, field), strings);
+				stringsOf(fieldOf(shape, field), strings);
 				if (strings.exists(name -> projected.contains(name))) unclassified.push(field);
 			}
 			unclassified.sort(Reflect.compare);
 			final loose: String = unclassified.join(', ');
 			Assert.equals('', loose, '$lang: RefShape field(s) carrying a projected kind name with no classification: [$loose]');
-			final live: Array<String> = classified.filter(field -> Reflect.hasField(shape, field));
+			final live: Array<String> = classified.filter(field -> hasFieldOf(shape, field));
 			live.sort(Reflect.compare);
 			Assert.equals(expected.join(', '), live.join(', '), '$lang: classified field(s) the shape no longer declares');
 		}
@@ -988,8 +1052,8 @@ final class RefShapeKindProjectionTest extends Test {
 			final projected: Array<String> = projectedKindsFor(lang);
 			final mixed: Array<String> = [];
 			var maps: Int = 0;
-			for (field in Reflect.fields(shape)) {
-				final value: Any = Reflect.field(shape, field);
+			for (field in fieldsOf(shape)) {
+				final value: Any = fieldOf(shape, field);
 				if (!Std.isOfType(value, StringMap)) continue;
 				maps++;
 				final keys: Array<String> = [for (key in (cast value: StringMap<Any>).keys()) key];
@@ -1025,7 +1089,7 @@ final class RefShapeKindProjectionTest extends Test {
 			wanted.sort(Reflect.compare);
 			Assert.isTrue(wanted.length >= MIN_TOKEN_SLOTS, '$lang: ${wanted.length} token-bearing slot(s)');
 			final keywords: Array<String> = KEYWORD_TOKEN_FIELDS.copy();
-			final liveKeywords: Array<String> = keywords.filter(field -> Reflect.hasField(shape, field));
+			final liveKeywords: Array<String> = keywords.filter(field -> hasFieldOf(shape, field));
 			keywords.sort(Reflect.compare);
 			liveKeywords.sort(Reflect.compare);
 			Assert.equals(keywords.join(', '), liveKeywords.join(', '), '$lang: keyword field(s) the shape no longer declares');
@@ -1191,19 +1255,44 @@ final class RefShapeKindProjectionTest extends Test {
 		return kinds;
 	}
 
+	/** The fields of `shape`, a group's (`GROUP_FIELDS`) in place of the group itself. */
+	private static function fieldsOf(shape: RefShape): Array<String> {
+		final out: Array<String> = [];
+		for (field in Reflect.fields(shape)) if (GROUP_FIELDS.contains(field)) {
+			for (inner in Reflect.fields(Reflect.field(shape, field))) out.push(inner);
+		} else
+			out.push(field);
+		return out;
+	}
+
+	/** The value of `field` of `shape`, looked up through the groups (`fieldsOf`). */
+	private static function fieldOf(shape: RefShape, field: String): Any {
+		if (Reflect.hasField(shape, field)) return Reflect.field(shape, field);
+		for (group in GROUP_FIELDS) {
+			final value: Any = Reflect.field(shape, group);
+			if (value != null && Reflect.hasField(value, field)) return Reflect.field(value, field);
+		}
+		return Reflect.field(shape, field);
+	}
+
+	/** Whether `shape` declares `field`, through the groups (`fieldsOf`). */
+	private static function hasFieldOf(shape: RefShape, field: String): Bool {
+		return fieldsOf(shape).contains(field);
+	}
+
 	/** The `RefShape` fields the declared side reads: named `*Kind*`, listed as kind-bearing, or a kind-keyed map. */
 	private static function kindFieldsOf(shape: RefShape, projected: Array<String>): Array<String> {
-		return Reflect.fields(shape).filter(
-			field ->
-				field.indexOf('Kind') >= 0 || EXTRA_KIND_FIELDS.contains(field) || isKindKeyedMap(Reflect.field(shape, field), projected)
-		);
+		return fieldsOf(shape)
+			.filter(
+				field -> field.indexOf('Kind') >= 0 || EXTRA_KIND_FIELDS.contains(field) || isKindKeyedMap(fieldOf(shape, field), projected)
+			);
 	}
 
 	/** Every distinct kind name `fields` declare — a kind-keyed map contributes its KEYS, everything else its strings. */
 	private static function declaredKindsOf(shape: RefShape, fields: Array<String>, projected: Array<String>): Array<String> {
 		final out: Array<String> = [];
 		for (field in fields) {
-			final value: Any = Reflect.field(shape, field);
+			final value: Any = fieldOf(shape, field);
 			final names: Array<String> = [];
 			if (isKindKeyedMap(value, projected))
 				for (key in (cast value: StringMap<Any>).keys()) names.push(key);
@@ -1296,7 +1385,7 @@ final class RefShapeKindProjectionTest extends Test {
 	/** The string `slot` addresses inside `field`'s value, or null when the shape no longer holds it. */
 	private static function slotText(shape: RefShape, field: String, slot: String): Null<String> {
 		final texts: Map<String, String> = [];
-		if (Reflect.hasField(shape, field)) slotTextsOf(Reflect.field(shape, field), '', texts);
+		if (hasFieldOf(shape, field)) slotTextsOf(fieldOf(shape, field), '', texts);
 		return texts[slot];
 	}
 
@@ -1330,9 +1419,9 @@ final class RefShapeKindProjectionTest extends Test {
 	/** Every `<field>#<slot>` of `shape` a capture probe has to cover, derived plus the declared keyword fields. */
 	private static function tokenSlotsOf(shape: RefShape): Array<String> {
 		final out: Array<String> = [];
-		for (field in Reflect.fields(shape)) {
+		for (field in fieldsOf(shape)) {
 			final texts: Map<String, String> = [];
-			slotTextsOf(Reflect.field(shape, field), '', texts);
+			slotTextsOf(fieldOf(shape, field), '', texts);
 			for (slot => text in texts) {
 				final address: String = '$field#$slot';
 				if (TEMPLATE_SLOTS.contains(address)) continue;

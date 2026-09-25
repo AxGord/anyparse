@@ -41,12 +41,16 @@ private typedef MemberSeams = {
 	final staticKind: Null<String>;
 	final inlineKind: Null<String>;
 	final macroKind: Null<String>;
+	final dynamicKind: Null<String>;
 
 	/** The operator-overload annotation NAME (`RefShape.operatorOverloadMetaName`), or null when the grammar has none. */
 	final operatorMetaName: Null<String>;
 
-	/** The implicit-conversion annotation NAME (`RefShape.implicitConversionMetaName`), or null when the grammar has none. */
+	/** The implicit-conversion annotation NAME (`ExecutionShape.implicitConversionMetaName`), or null when the grammar has none. */
 	final conversionMetaName: Null<String>;
+
+	/** The annotations under which the language calls a member implicitly (`ExecutionShape.implicitCallMetaNames`). */
+	final implicitCallMetaNames: Array<String>;
 	final conditionalKind: Null<String>;
 	final paramKinds: Array<String>;
 };
@@ -199,6 +203,8 @@ final class SymbolIndexBuilder {
 		final imports: Array<ImportInfo> = [];
 		final types: Array<TypeDeclInfo> = [];
 		var pendingMeta: Array<String> = [];
+		// the members a pending `@:forward(...)` names, null when it names none (it forwards them all)
+		var pendingForwarded: Null<Array<String>> = null;
 		// The EXTERN modifier projects as a NAMELESS sibling node preceding its declaration
 		// (`(Extern) (ClassDecl Date …)`), the same splice shape a visibility modifier takes, so it
 		// is carried forward like `pendingMeta` and consumed by the next type declaration.
@@ -239,6 +245,7 @@ final class SymbolIndexBuilder {
 					typeParamNames: declTypeParamNames(paramSegments),
 					supertypes: supersRaw.map(simpleName),
 					supertypesRaw: supersRaw,
+					supertypesWritten: collectSupertypesWritten(node, source),
 					interfaces: collectImplementsRaw(node).map(simpleName),
 					// A `typedef X = {…}` projects an `Anon` child; its fields can
 					// never be properties, so field access on it is side-effect-free.
@@ -249,11 +256,14 @@ final class SymbolIndexBuilder {
 					hasBuild: carriesOwnBuildMacro(pendingMeta, shape),
 					hasAutoBuild: carriesAnyMeta(pendingMeta, shape.descendantBuildMacroMetaNames),
 					hasKeep: carriesMeta(pendingMeta, shape.retainedDeclMetaName),
+					constructsFromLiteral: carriesAnyMeta(pendingMeta, shape.execution?.implicitConstructionTypeMetaNames),
 					members: collectMembers(node, source, accessors, writeAccessors, returnTypes, typeSources, memberSeams),
 					abstractSelfRebind: isAbstract && abstractRebindsThisScan(node, shape, pendingMeta),
-					abstractForwardUnderlying: isAbstract ? forwardUnderlyingOf(node, pendingMeta, shape) : null
+					abstractForwardUnderlying: isAbstract ? forwardUnderlyingOf(node, pendingMeta, shape) : null,
+					forwardedMembers: pendingForwarded
 				});
 				pendingMeta = [];
+				pendingForwarded = null;
 				pendingExtern = false;
 				pendingPrivate = false;
 				continue;
@@ -262,6 +272,8 @@ final class SymbolIndexBuilder {
 			if (isMetaNodeKind(node.kind)) {
 				final metaName: Null<String> = node.name;
 				if (metaName != null) pendingMeta.push(metaName);
+				// `@:forward(a, b)` forwards only the members it names
+				pendingForwarded = forwardedArgsOf(node, shape, pendingForwarded);
 				continue;
 			}
 			// A modifier (`private` / `extern`), comment or other module node between a meta (or a
@@ -283,6 +295,7 @@ final class SymbolIndexBuilder {
 				case 'PackageDecl':
 					pkg = name;
 					pendingMeta = [];
+					pendingForwarded = null;
 					pendingExtern = false;
 					pendingPrivate = false;
 				case 'ImportDecl':
@@ -295,6 +308,7 @@ final class SymbolIndexBuilder {
 						guarded: gn.guarded
 					});
 					pendingMeta = [];
+					pendingForwarded = null;
 					pendingExtern = false;
 					pendingPrivate = false;
 				case 'ImportAliasDecl', 'ImportAliasInDecl':
@@ -311,6 +325,7 @@ final class SymbolIndexBuilder {
 						guarded: gn.guarded
 					});
 					pendingMeta = [];
+					pendingForwarded = null;
 					pendingExtern = false;
 					pendingPrivate = false;
 				case 'ImportWildDecl':
@@ -323,6 +338,7 @@ final class SymbolIndexBuilder {
 						guarded: gn.guarded
 					});
 					pendingMeta = [];
+					pendingForwarded = null;
 					pendingExtern = false;
 					pendingPrivate = false;
 				case 'UsingDecl':
@@ -335,6 +351,7 @@ final class SymbolIndexBuilder {
 						guarded: gn.guarded
 					});
 					pendingMeta = [];
+					pendingForwarded = null;
 					pendingExtern = false;
 					pendingPrivate = false;
 				case _:
@@ -386,6 +403,19 @@ final class SymbolIndexBuilder {
 		for (c in node.children) if (c.kind == ANON_KIND) for (f in c.children) if (f.kind == EXTENDS_FIELD_KIND) {
 			final nm: Null<String> = f.name;
 			if (nm != null && !out.contains(nm)) out.push(nm);
+		}
+		return out;
+	}
+
+	/**
+	 * The `extends` / `implements` targets of the declaration `node` as the source writes them, type arguments
+	 * included (`Box<W>`), in clause order — what a consumer binding the supertype's parameters reads.
+	 */
+	private static function collectSupertypesWritten(node: QueryNode, source: String): Array<String> {
+		final out: Array<String> = [];
+		for (clause in node.children) if (clause.kind == 'ExtendsClause' || clause.kind == 'ImplementsClause') for (c in clause.children) {
+			final span: Null<Span> = c.span;
+			if (span != null) out.push(source.substring(span.from, span.to));
 		}
 		return out;
 	}
@@ -472,6 +502,7 @@ final class SymbolIndexBuilder {
 		node: QueryNode, source: String, accessors: Map<Int, Bool>, writeAccessors: Map<Int, Bool>, returnTypes: Map<Int, String>,
 		typeSources: Map<Int, String>, seams: MemberSeams
 	): Array<MemberInfo> {
+		// noqa: complexity
 		final out: Array<MemberInfo> = [];
 		MemberKinds.eachMemberHost(node, n -> {
 			// `guarded` is a property of the HOST, not of the member's own modifier run:
@@ -485,6 +516,9 @@ final class SymbolIndexBuilder {
 			var runMacro: Bool = false;
 			var runOperators: Array<String> = [];
 			var runImplicitConversion: Bool = false;
+			var runImplicitCall: Bool = false;
+			var runImplicitMetas: Array<String> = [];
+			var runDynamic: Bool = false;
 			for (child in n.children) {
 				final sp: Null<Span> = child.span;
 				// Enum constructors (`SimpleCtor` / `ParamCtor`) are captured as members too, so a bare
@@ -504,6 +538,7 @@ final class SymbolIndexBuilder {
 							returnNominal: returnTypes[typeKey],
 							typeSource: typeSources[typeKey],
 							firstParamTypeSource: firstParamTypeSourceOf(child, typeSources, seams.paramKinds),
+							paramTypeSources: paramTypeSourcesOf(child, typeSources, seams.paramKinds),
 							visibility: runVisibility,
 							isOverride: runOverride,
 							kind: child.kind,
@@ -513,6 +548,9 @@ final class SymbolIndexBuilder {
 							isMacro: runMacro,
 							operatorOverloads: runOperators,
 							isImplicitConversion: runImplicitConversion,
+							isImplicitCall: runImplicitCall,
+							implicitCallMetas: runImplicitMetas,
+							isDynamic: runDynamic,
 							guarded: guarded
 						});
 					}
@@ -523,6 +561,9 @@ final class SymbolIndexBuilder {
 					runMacro = false;
 					runOperators = [];
 					runImplicitConversion = false;
+					runImplicitCall = false;
+					runImplicitMetas = [];
+					runDynamic = false;
 				} else if (sp != null && seams.visibilityKinds.contains(child.kind))
 					runVisibility = source.substring(sp.from, sp.to);
 				else if (child.kind == seams.overrideKind)
@@ -533,10 +574,16 @@ final class SymbolIndexBuilder {
 					runInline = true;
 				else if (child.kind == seams.macroKind)
 					runMacro = true;
+				else if (child.kind == seams.dynamicKind)
+					runDynamic = true;
 				else {
 					final operatorKind: Null<String> = operatorKindOf(child, seams);
 					if (operatorKind != null) runOperators.push(operatorKind);
 					if (isConversionMeta(child, seams)) runImplicitConversion = true;
+					if (isImplicitCallMeta(child, seams)) {
+						runImplicitCall = true;
+						runImplicitMetas.push(child.name ?? '');
+					}
 				}
 			}
 		});
@@ -558,6 +605,20 @@ final class SymbolIndexBuilder {
 		if (decl == null || decl.name != member.name) return own.from;
 		final declSpan: Null<Span> = decl.span;
 		return declSpan == null ? own.from : declSpan.from;
+	}
+
+	/** The written types of every parameter of `member`, in order, `null` for one written without a type. */
+	private static function paramTypeSourcesOf(
+		member: QueryNode, typeSources: Map<Int, String>, paramKinds: Array<String>
+	): Array<Null<String>> {
+		return [
+			for (c in member.children) if (paramKinds.contains(c.kind)) c.span == null ? null : typeSources[c.span.from]
+		];
+	}
+
+	/** Whether `node` is an annotation under which the language calls the member implicitly (`MemberSeams.implicitCallMetaNames`). */
+	private static function isImplicitCallMeta(node: QueryNode, seams: MemberSeams): Bool {
+		return MemberKinds.META_KINDS.contains(node.kind) && seams.implicitCallMetaNames.contains(node.name ?? '');
 	}
 
 	/**
@@ -619,8 +680,10 @@ final class SymbolIndexBuilder {
 			staticKind: shape.staticModifierKind,
 			inlineKind: shape.inlineModifierKind,
 			macroKind: shape.macroModifierKind,
+			dynamicKind: shape.dynamicModifierKind,
 			operatorMetaName: shape.operatorOverloadMetaName,
-			conversionMetaName: shape.implicitConversionMetaName,
+			conversionMetaName: shape.execution?.implicitConversionMetaName,
+			implicitCallMetaNames: shape.execution?.implicitCallMetaNames ?? [],
 			conditionalKind: shape.conditionalMemberKind,
 			paramKinds: shape.paramKinds ?? []
 		};
@@ -652,6 +715,15 @@ final class SymbolIndexBuilder {
 			return false;
 		}
 		return node.children.exists(c -> memberRebindsThis(c, shape));
+	}
+
+	/**
+	 * The members the forwarding annotation `meta` names (`@:forward(a, b)`), or `pending` — what the run of
+	 * annotations before it already said — when `meta` is not one or names none.
+	 */
+	private static function forwardedArgsOf(meta: QueryNode, shape: RefShape, pending: Null<Array<String>>): Null<Array<String>> {
+		if (meta.name != shape.forwardingDeclMetaName || meta.children.length == 0) return pending;
+		return [for (c in meta.children) if (c.name != null) c.name ?? ''];
 	}
 
 	/**

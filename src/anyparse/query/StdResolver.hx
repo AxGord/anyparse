@@ -17,8 +17,8 @@ import sys.FileSystem;
  * resolution scope AND the std-derived tables share ONE auto-discovered channel
  * instead of hardcoded, machine-specific paths. Priority, first existing hit wins:
  *
- *  1. the `HAXE_STD_PATH` environment variable;
- *  2. the `../std` sibling of the real `haxe` binary (`which haxe`, symlinks resolved);
+ *  1. the `HAXE_STD_PATH` environment variable — the entry holding the std when it lists several (`stdEntryOf`);
+ *  2. the std beside the real `haxe` binary (`which haxe`, symlinks resolved): `../std`, or Homebrew's `../lib/haxe/std`;
  *  3. the known install locations (`/usr/local/lib/haxe/std`, `/opt/homebrew/lib/haxe/std`).
  *
  * `APQ_NO_STD` (any value but empty or `0`) DECLINES the whole channel before any of
@@ -78,7 +78,9 @@ final class StdResolver {
 		if (_computed) return _cached;
 		_computed = true;
 		discoveries++;
-		_cached = declined() ? null : discover(envStd(), whichHaxeSiblingStd(), KNOWN_LOCATIONS, dirExists);
+		final env: Null<String> = envStd();
+		final entry: Null<String> = env == null ? null : stdEntryOf(env, Sys.systemName() == 'Windows' ? ';' : ':', holdsStdMarker);
+		_cached = declined() ? null : discover(entry, whichHaxeSiblingStd(), KNOWN_LOCATIONS, dirExists);
 		return _cached;
 	}
 
@@ -111,6 +113,20 @@ final class StdResolver {
 			final path: String = Path.normalize(c);
 			if (exists(path)) return path;
 		}
+		return null;
+	}
+
+	/**
+	 * The entry of a `HAXE_STD_PATH` value `value` — a list of directories joined by `separator`, as the compiler reads it
+	 * — that holds the std (`holdsStd`), or null when none does. A single-entry value is its own answer, so a
+	 * set-but-nonexistent path is still skipped by `discover` rather than here. Pure.
+	 */
+	public static function stdEntryOf(value: String, separator: String, holdsStd: (String) -> Bool): Null<String> {
+		final entries: Array<String> = [
+			for (e in value.split(separator)) if (StringTools.trim(e) != '') StringTools.trim(e)
+		];
+		if (entries.length <= 1) return entries.length == 0 ? null : entries[0];
+		for (e in entries) if (holdsStd(e)) return e;
 		return null;
 	}
 
@@ -159,6 +175,18 @@ final class StdResolver {
 	}
 
 	/**
+	 * The std beside the real `haxe` binary `bin`: its directory's `../std` (the installer layout), or `../lib/haxe/std`
+	 * (Homebrew's) — the first that `exists`, else the first. The compiler on PATH reads its own std, so a known location
+	 * probed before this would index another install's copy.
+	 */
+	public static function siblingStdOf(bin: String, exists: (String) -> Bool): String {
+		final dir: String = Path.directory(bin);
+		final installer: String = Path.normalize(Path.join([dir, '..', 'std']));
+		final homebrew: String = Path.normalize(Path.join([dir, '..', 'lib', 'haxe', 'std']));
+		return !exists(installer) && exists(homebrew) ? homebrew : installer;
+	}
+
+	/**
 	 * Whether `APQ_NO_STD` DECLINES the auto-discovered std: set to anything other than the
 	 * empty string or `0`. The env twin of the `apqlint.json` `resolutionStd: false` key, and
 	 * the only way to refuse the std on a machine where `KNOWN_LOCATIONS` finds one whatever
@@ -201,17 +229,13 @@ final class StdResolver {
 	}
 
 	/**
-	 * The `../std` sibling of the real `haxe` binary: `which haxe`, then the binary's
-	 * symlink chain resolved, then its directory's `../std`, normalised. Null on any
-	 * failure (no `haxe` on PATH, a non-zero exit). Homebrew keeps std under
-	 * `lib/haxe/std` (not `../std`), so this misses there and the known-location
-	 * fallback answers — by design, not a bug.
+	 * The std that ships beside the real `haxe` binary: `which haxe`, then the binary's symlink chain resolved, then
+	 * `siblingStdOf` that path. Null on any failure (no `haxe` on PATH, a non-zero exit).
 	 */
 	private static function whichHaxeSiblingStd(): Null<String> {
 		final bin: Null<String> = whichHaxe();
 		if (bin == null) return null;
-		final real: String = resolveSymlink(bin);
-		return Path.normalize(Path.join([Path.directory(real), '..', 'std']));
+		return siblingStdOf(resolveSymlink(bin), dirExists);
 	}
 
 	/** Spawn `which haxe` and return its trimmed stdout on a zero exit, or null on any failure (mirrors `HaxelibResolver.runLibpath`). */
@@ -256,6 +280,11 @@ final class StdResolver {
 		#else
 		return path;
 		#end
+	}
+
+	/** Whether the directory `path` carries the toplevel file every std ships. */
+	private static function holdsStdMarker(path: String): Bool {
+		return #if (sys || nodejs) FileSystem.exists(Path.join([path, STD_MARKER])) #else false #end;
 	}
 
 	/** Whether `path` exists AND is a directory — the injected `exists` predicate for the real filesystem. */

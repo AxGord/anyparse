@@ -4,6 +4,7 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.Violation;
 import anyparse.check.ElementLoopRewrite.BinderChoice;
+import anyparse.check.ElementLoopRewrite.ReachGate;
 import anyparse.check.LoopScan.IndexedLoopHeader;
 import anyparse.check.LoopScan.IntervalLoopSeams;
 import anyparse.check.LoopScan.LoopFileScan;
@@ -45,11 +46,10 @@ using Lambda;
  * - **`X`'s length cannot move.** `0...X.length` evaluates the bound ONCE; `for (i => v in X)`
  *   re-asks the iterator every step, so a body that appends to `X` would turn a terminating loop
  *   into a runaway one. Every mention of `X` in the body must therefore be a `length` read or an
- *   index READ — see `LoopScan.usedOnlyAsStableCollection`, whose doc also states the limit both
- *   rules inherit: the scan is BODY-LOCAL, so an alias handed out before the loop
- *   (`register(X); for (…) { tick(); }`) or a call that mutates `X` through a field the callee
- *   owns is invisible to it. Closing that class needs whole-program alias analysis; this rule is
- *   `Info` and opt-in precisely because it stops short of one.
+ *   index READ — see `LoopScan.usedOnlyAsStableCollection`. That scan is BODY-LOCAL; what the body
+ *   RUNS — calls, constructors, the getters and setters of the properties it touches — is asked of
+ *   `MemberReach` by the fix (`ElementLoopRewrite.reachDecline`), which must prove that no such code
+ *   changes `X` through any alias, or leaves the finding report-only.
  * - **Exactly one `X[i]`.** Any OTHER `X[i]` in the body would have to become `v`, which is a
  *   rename this rule does not attempt — skipped rather than half-rewritten.
  * - **Nothing writes `i` or `v`.** A range binder and a key binder are both read-only in spirit;
@@ -85,9 +85,9 @@ using Lambda;
  * `prefer-value-loop`'s, and one that opens with the binding is the opener arm's whatever that arm decides. Beyond the gates
  * above it refuses an `X[i]` under a nested binder of `i` and any closure mentioning `X` - a closure reads the slot when it RUNS,
  * the binder holds it from the iteration that made it. Report-only when the binder name is taken anywhere in the enclosing
- * function or by a member, when the container is unresolved, and when the body holds a call that can reach `X`
- * behind the loop's back (`ElementLoopRewrite.callsThroughSelf`): such a callee can replace `X[i]` after the
- * binder was read, or grow `X`, which the key-value iterator follows. The opener arm takes the same report-only
+ * function or by a member, when the container is unresolved, and when the body runs code that may change `X`
+ * behind the loop's back (`ElementLoopRewrite.reachDecline`): such code can replace `X[i]` after the binder was
+ * read, or grow `X`, which the key-value iterator follows. The opener arm takes the same report-only
  * gate, and an enclosing or nested indexed loop deriving the same binder name leaves either arm report-only.
  *
  * ## Grammar-agnostic
@@ -152,10 +152,11 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 	 * the replaced region.
 	 */
 	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
+		final file: String = violations.length > 0 ? violations[0].file : '';
+		final gate: ReachGate = ElementLoopRewrite.gateFor(plugin, file, source, violations, RULE_ID);
 		return RunScan.walkedEdits(
 			plugin, source, LoopScan.intervalSeamsOf(plugin.refShape()), violations,
-			(tree, types, s, wanted, out) ->
-				fixWalk(tree, LoopScan.fileScanOf(tree, source, types, plugin, s), null, wanted, violations, out)
+			(tree, types, s, wanted, out) -> fixWalk(tree, LoopScan.fileScanOf(tree, source, types, plugin, s), null, wanted, out, gate)
 		);
 	}
 
@@ -174,29 +175,28 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 		for (c in node.children) walk(c, f, fn, file, out);
 	}
 
-	/** Mirror of `walk` for the fix path: emit the header rewrite for each wanted, rewritable loop. */
+	/**
+	 * Mirror of `walk` for the fix path: emit the header rewrite for each wanted, rewritable loop. The
+	 * body's reach (`ElementLoopRewrite.reachDecline`) is asked here only, after every cheaper gate passed.
+	 */
 	private static function fixWalk(
-		node: QueryNode, f: LoopFileScan, outerFn: Null<QueryNode>, wanted: Array<String>, violations: Array<Violation>,
-		out: Array<FixEdit>
+		node: QueryNode, f: LoopFileScan, outerFn: Null<QueryNode>, wanted: Array<String>, out: Array<FixEdit>, gate: ReachGate
 	): Void {
 		if (f.seams.core.opaqueKinds.contains(node.kind)) return;
 		final m: Null<Match> = analyze(node, f.root, f.source, f.types, f.seams);
 		if (m != null && wanted.contains('${m.forSpan.from}:${m.forSpan.to}')) {
-			final decline: Null<String> = openerDecline(m, f.source);
+			final decline: Null<String> =
+				openerDecline(m, f.source) ?? ElementLoopRewrite.reachDecline(gate.reachOf(), gate.file, m.header);
 			if (decline == null)
 				out.push(buildEdit(m));
 			else
-				ElementLoopRewrite.declineAt(violations, RULE_ID, m.forSpan, decline);
+				ElementLoopRewrite.declineAt(gate.violations, RULE_ID, m.forSpan, decline);
 		}
 		final r: Null<ReadsMatch> = m == null ? analyzeReads(node, f, outerFn) : null;
-		if (r != null && wanted.contains('${r.forSpan.from}:${r.forSpan.to}')) {
-			final edits: Array<FixEdit> = buildReadEdits(r, f.source);
-			if (edits.length == 0)
-				ElementLoopRewrite.declineAt(violations, RULE_ID, r.forSpan, r.decline ?? ElementLoopRewrite.COMMENT_DECLINE);
-			for (e in edits) out.push(e);
-		}
+		if (r != null && wanted.contains('${r.forSpan.from}:${r.forSpan.to}'))
+			ElementLoopRewrite.gatedEdits(buildReadEdits(r, f.source), gate, r.header, r.forSpan, r.decline, out);
 		final fn: Null<QueryNode> = outerFn ?? enclosingFunctionAt(node, f);
-		for (c in node.children) fixWalk(c, f, fn, wanted, violations, out);
+		for (c in node.children) fixWalk(c, f, fn, wanted, out, gate);
 	}
 
 	/**
@@ -232,7 +232,7 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 			collection: h.collection,
 			collectionTypeSource: collectionTypeSource,
 			declTypeSource: types == null ? null : types[declSpan.from],
-			selfCall: ElementLoopRewrite.callsThroughSelf(h.body, core)
+			header: h
 		};
 	}
 
@@ -331,7 +331,8 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 			collection: h.collection,
 			binder: binder.name,
 			readSpans: readSpans,
-			decline: ElementLoopRewrite.elementDecline(binder, h.collection, collectionTypeSource, h.body, core)
+			decline: ElementLoopRewrite.elementDecline(binder, h.collection, collectionTypeSource),
+			header: h
 		};
 	}
 
@@ -406,11 +407,12 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 	}
 
 	/**
-	 * Why the opener arm withholds its fix, or null: an element type the dropped declaration could change,
-	 * a comment inside the replaced region, a trailing comment on the declaration's line (it documents the
-	 * statement the rewrite deletes, and the splice would re-attach it to the loop header), or a call that
-	 * can reach the collection behind the loop's back — the binder is read at the iteration start, as the
-	 * declaration was, but a callee can still grow `X`, which the key-value iterator follows.
+	 * Why the opener arm withholds its fix before the body's reach is asked, or null: an element type the
+	 * dropped declaration could change, a comment inside the replaced region, or a trailing comment on the
+	 * declaration's line (it documents the statement the rewrite deletes, and the splice would re-attach it
+	 * to the loop header). `ElementLoopRewrite.reachDecline` follows: the binder is read at the iteration
+	 * start, as the declaration was, but code the body runs can still grow `X`, which the key-value
+	 * iterator follows.
 	 */
 	private static function openerDecline(m: Match, source: String): Null<String> {
 		final declEnd: Int = m.declSpan.to;
@@ -420,8 +422,6 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 			ElementLoopRewrite.COMMENT_DECLINE
 		else if (CheckScan.hasCommentMarker(source, declEnd, lineEndAfter(source, declEnd)))
 			TRAILING_COMMENT_DECLINE
-		else if (m.selfCall)
-			ElementLoopRewrite.SELF_CALL_DECLINE
 		else
 			null;
 	}
@@ -437,7 +437,7 @@ private typedef Match = {
 	var collection: String;
 	var collectionTypeSource: Null<String>;
 	var declTypeSource: Null<String>;
-	var selfCall: Bool;
+	var header: IndexedLoopHeader;
 }
 
 /**
@@ -452,4 +452,5 @@ private typedef ReadsMatch = {
 	var binder: Null<String>;
 	var readSpans: Array<Span>;
 	var decline: Null<String>;
+	var header: IndexedLoopHeader;
 }

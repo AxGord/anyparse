@@ -4,6 +4,7 @@ import anyparse.check.Check;
 import anyparse.check.ConfigDisagreement;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
+import anyparse.check.ReachDefinesProbe;
 import anyparse.check.Severity;
 import anyparse.query.Address.TreeAddresser;
 import anyparse.query.CachingGrammarPlugin.LibrarySources;
@@ -11,6 +12,7 @@ import anyparse.query.CachingGrammarPlugin.ResolutionScope;
 import anyparse.query.LintBaseline;
 import anyparse.query.LintDiff.LintDiffTally;
 import anyparse.query.LintDiff.LintMessageIdentities;
+import anyparse.query.ReachLiveness.ReachBuilds;
 import anyparse.query.SourceText;
 import anyparse.query.cli.CliContext;
 import anyparse.query.format.LintFormat;
@@ -217,7 +219,7 @@ final class LintCommand implements CliCommand {
 		// came to exist, for the consumers that must tell them apart.
 		final resolutionRoots: Array<String> = unionConfigStrings(paths, resolveConfig, c -> c.resolutionRoots());
 		final resolutionLibs: Array<String> = unionConfigStrings(paths, resolveConfig, c -> c.resolutionLibs());
-		final resolution: Null<ResolutionScope> = resolutionThunk(
+		final unconfigured: Null<ResolutionScope> = resolutionThunk(
 			files, resolutionRoots, resolutionLibs, paths.foreach(p -> resolveConfig(p).resolutionStd())
 		);
 		// Compiler oracle (opt-in via apqlint.json `compilerOracle`): a project-level
@@ -230,6 +232,9 @@ final class LintCommand implements CliCommand {
 		warnScopeNotices(activeChecks, resolveConfig, paths, o.noOracle);
 		final oracleConfig: Null<LintConfig> = paths.length > 0 ? resolveConfig(paths[0]) : null;
 		final oracles: Array<OracleConfig> = oraclesOf(oracleConfig);
+		final resolution: Null<ResolutionScope> = withReachConfigurations(
+			unconfigured, oracles, o.noOracle, reachComplete(paths, resolveConfig)
+		);
 
 		if (o.fix)
 			return LintFixDriver.runLintFix(
@@ -305,6 +310,29 @@ final class LintCommand implements CliCommand {
 	 */
 	private static function oraclesOf(config: Null<LintConfig>): Array<OracleConfig> {
 		return config == null ? [] : config.compilerOracles();
+	}
+
+	/**
+	 * `resolution` carrying the builds the configured compiler oracles describe (`ReachDefinesProbe`), probed on first
+	 * demand and once per run — only when the project declares the oracle list complete (`reachConfigurationsComplete`):
+	 * a `MemberReach` answer may then hold under their conditional compilation and read exactly the code they compile.
+	 * An oracle list not declared complete vouches for nothing, since a build it leaves out may compile code no listed
+	 * one does. Unchanged with no oracle, or under `--no-oracle`, which runs no compile at all.
+	 */
+	private static function withReachConfigurations(
+		resolution: Null<ResolutionScope>, oracles: Array<OracleConfig>, noOracle: Bool, complete: Bool
+	): Null<ResolutionScope> {
+		if (resolution == null || oracles.length == 0 || noOracle || !complete) return resolution;
+		var probed: Bool = false;
+		var builds: Null<ReachBuilds> = null;
+		function probe(): Null<ReachBuilds> {
+			if (!probed) {
+				probed = true;
+				builds = ReachDefinesProbe.probeAll(oracles);
+			}
+			return builds;
+		}
+		return { declared: resolution.declared, sources: resolution.sources, builds: probe };
 	}
 
 	/**
@@ -416,15 +444,21 @@ final class LintCommand implements CliCommand {
 		var projectRoots: Null<Array<{ file: String, source: String }>> = null;
 		var library: Null<Array<{ file: String, source: String }>> = null;
 		var rootsMatched: Bool = false;
+		var rootsAllMatched: Bool = false;
 		return {
 			declared: declared,
 			sources: () -> {
 				final memoisedRoots: Null<Array<{ file: String, source: String }>> = projectRoots;
 				final memoised: Null<Array<{ file: String, source: String }>> = library;
 				if (memoisedRoots == null || memoised == null) {
-					final read: { files: Array<{ file: String, source: String }>, matched: Bool } = readResolutionRoots(roots, reportPaths);
+					final read: {
+						files: Array<{ file: String, source: String }>,
+						matched: Bool,
+						allMatched: Bool
+					} = readResolutionRoots(roots, reportPaths);
 					final rootFiles: Array<{ file: String, source: String }> = read.files;
 					rootsMatched = read.matched;
+					rootsAllMatched = read.allMatched;
 					projectRoots = rootFiles;
 					// The library half stays the WHOLE read-only scope — project roots included — so the
 					// process-scoped parse tier keeps promoting exactly what it did, and it stays ONE
@@ -437,7 +471,8 @@ final class LintCommand implements CliCommand {
 					report: files,
 					projectRoots: rootFiles,
 					library: new LibrarySources(libFiles),
-					rootsMatched: rootsMatched
+					rootsMatched: rootsMatched,
+					rootsAllMatched: rootsAllMatched
 				};
 			}
 		};
@@ -482,7 +517,7 @@ final class LintCommand implements CliCommand {
 	 */
 	private static function readResolutionRoots(
 		roots: Array<String>, reportPaths: Map<String, Bool>
-	): { files: Array<{ file: String, source: String }>, matched: Bool } {
+	): { files: Array<{ file: String, source: String }>, matched: Bool, allMatched: Bool } {
 		// Expanded per ROOT rather than in one call, so a root that matches nothing can be NAMED.
 		// A declared root resolving to no `.hx` — a typo, a directory since moved, a path written
 		// against the wrong base — leaves `projectRoots` empty, which is byte-identical to never
@@ -510,7 +545,7 @@ final class LintCommand implements CliCommand {
 		ConfigDisagreement.warnUnreachableProjectRoots(unreachable);
 		// MATCHED counts the report files too: a whole-project lint excludes every root file from `out`,
 		// and its roots matched all the same.
-		return { files: out, matched: unreachable.length < roots.length };
+		return { files: out, matched: unreachable.length < roots.length, allMatched: unreachable.length == 0 };
 	}
 
 	/**
@@ -1154,6 +1189,31 @@ final class LintCommand implements CliCommand {
 		#else
 		return found;
 		#end
+	}
+
+	/**
+	 * Whether the reach analysis may read the run's oracle builds as every build the project ships: EVERY linted path's
+	 * config declares `reachConfigurationsComplete` over the same `compilerOracle` list as the first path's — the list the
+	 * run probes. A path whose config says otherwise may ship a build that list does not name, so a run whose paths
+	 * disagree walks every branch, and says so once when any of them declared the flag.
+	 */
+	private static function reachComplete(paths: Array<String>, resolveConfig: String -> LintConfig): Bool {
+		if (paths.length == 0) return false;
+		final list: LintConfig -> String = c -> [for (o in c.compilerOracles()) LintConfig.oracleKey(o)].join('|');
+		final first: String = list(resolveConfig(paths[0]));
+		var declared: Bool = false;
+		var all: Bool = true;
+		for (path in paths) {
+			final config: LintConfig = resolveConfig(path);
+			if (config.reachConfigurationsComplete()) declared = true;
+			if (!config.reachConfigurationsComplete() || list(config) != first) all = false;
+		}
+		if (declared && !all)
+			CliIo.stderr(
+				'apq lint: reachConfigurationsComplete ignored — the linted paths resolve to different compilerOracle lists or'
+				+ ' flags, so the reach analysis walks every conditional branch\n'
+			);
+		return all;
 	}
 
 }

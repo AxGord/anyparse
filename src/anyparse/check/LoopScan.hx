@@ -23,9 +23,9 @@ using Lambda;
  * never a bare mention that hands the reference to something else, never a write to or through it. That is a WHITELIST of
  * two positions, not a list of banned ones: the next hazardous shape nobody has thought of fails by construction.
  *
- * Its limit is that the scan is BODY-LOCAL. An alias handed out before the loop, or a call that
- * mutates the same collection through a field the callee owns, is outside what a per-file check can
- * see; both rules state that caveat in their own type docs rather than pretending the gate is a proof.
+ * Its limit is that the scan is BODY-LOCAL: code the body RUNS can change the collection through an
+ * alias or a field it owns. The element-loop rewrites close that half with `MemberReach`
+ * (`ElementLoopRewrite.reachDecline`); a rule that does not must state the caveat in its own type doc.
  *
  * Grammar-agnostic: every node kind arrives through `LoopSeams`, built once per run by
  * `seamsOf`, and a grammar leaving any required kind unset makes both rules a no-op.
@@ -79,7 +79,7 @@ final class LoopScan {
 	 *
 	 * The scan is BODY-LOCAL, which is its documented limit: an alias handed out before the loop, or
 	 * a call that reaches the same collection through a field the callee owns, is invisible to it.
-	 * Closing that would need whole-program alias analysis; each rule's type doc repeats the caveat.
+	 * `MemberReach` answers that question for the element-loop rewrites; any other rule states the caveat.
 	 */
 	public static inline function usedOnlyAsStableCollection(node: QueryNode, name: String, sizeMember: String, s: LoopSeams): Bool {
 		return stableUseScan(node, null, null, name, sizeMember, s);

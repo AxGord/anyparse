@@ -4,6 +4,7 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.Violation;
 import anyparse.check.ElementLoopRewrite.BinderChoice;
+import anyparse.check.ElementLoopRewrite.ReachGate;
 import anyparse.check.LoopScan.IndexedLoopHeader;
 import anyparse.check.LoopScan.LoopFileScan;
 import anyparse.check.LoopScan.LoopSeams;
@@ -53,7 +54,8 @@ using StringTools;
  * carries a `length` and no iterator, so the advice would not compile. An UNRESOLVED one is
  * reported without a fix. The binder comes from `ElementLoopRewrite.singularOf`, an English plural convention
  * shared with the sibling; no singular, a reserved word, or a name the body mentions in active
- * text leaves the finding report-only, as does a comment inside a replaced region. One
+ * text leaves the finding report-only, as does a comment inside a replaced region and a body that runs
+ * code `MemberReach` cannot prove leaves `X` unchanged (`ElementLoopRewrite.reachDecline`). One
  * pathological decline is accepted: `macro $i{nm}` spells the reification marker with the token
  * a loop named `i` uses, and a macro body is active code no mask may hide.
  */
@@ -98,9 +100,11 @@ final class PreferValueLoop implements Check implements DefaultOff {
 	 * every span, so a braced and an unbraced body take the same edits.
 	 */
 	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
+		final file: String = violations.length > 0 ? violations[0].file : '';
+		final gate: ReachGate = ElementLoopRewrite.gateFor(plugin, file, source, violations, RULE_ID);
 		return RunScan.walkedEdits(
 			plugin, source, LoopScan.intervalSeamsOf(plugin.refShape()), violations,
-			(tree, types, s, wanted, out) -> fixWalk(tree, LoopScan.fileScanOf(tree, source, types, plugin, s), wanted, violations, out)
+			(tree, types, s, wanted, out) -> fixWalk(tree, LoopScan.fileScanOf(tree, source, types, plugin, s), wanted, out, gate)
 		);
 	}
 
@@ -130,19 +134,16 @@ final class PreferValueLoop implements Check implements DefaultOff {
 			: 'this indexed loop can be for ($binder in ${m.collection})';
 	}
 
-	/** Mirror of `walk` for the fix path: emit the splices for each wanted, rewritable loop. */
-	private static function fixWalk(
-		node: QueryNode, f: LoopFileScan, wanted: Array<String>, violations: Array<Violation>, out: Array<FixEdit>
-	): Void {
+	/**
+	 * Mirror of `walk` for the fix path: emit the splices for each wanted, rewritable loop. The body's
+	 * reach (`ElementLoopRewrite.reachDecline`) is asked here only, after every cheaper gate passed.
+	 */
+	private static function fixWalk(node: QueryNode, f: LoopFileScan, wanted: Array<String>, out: Array<FixEdit>, gate: ReachGate): Void {
 		if (f.seams.core.opaqueKinds.contains(node.kind)) return;
 		final m: Null<Match> = analyze(node, f);
-		if (m != null && wanted.contains('${m.forSpan.from}:${m.forSpan.to}')) {
-			final edits: Array<FixEdit> = buildEdits(m, f.source);
-			if (edits.length == 0)
-				ElementLoopRewrite.declineAt(violations, RULE_ID, m.forSpan, m.decline ?? ElementLoopRewrite.COMMENT_DECLINE);
-			for (e in edits) out.push(e);
-		}
-		for (c in node.children) fixWalk(c, f, wanted, violations, out);
+		if (m != null && wanted.contains('${m.forSpan.from}:${m.forSpan.to}'))
+			ElementLoopRewrite.gatedEdits(buildEdits(m, f.source), gate, m.header, m.forSpan, m.decline, out);
+		for (c in node.children) fixWalk(c, f, wanted, out, gate);
 	}
 
 	/**
@@ -194,7 +195,8 @@ final class PreferValueLoop implements Check implements DefaultOff {
 			collection: h.collection,
 			binder: binder.name,
 			readSpans: readSpans,
-			decline: ElementLoopRewrite.elementDecline(binder, h.collection, collectionTypeSource, h.body, core)
+			decline: ElementLoopRewrite.elementDecline(binder, h.collection, collectionTypeSource),
+			header: h
 		};
 	}
 
@@ -242,4 +244,5 @@ private typedef Match = {
 	var binder: Null<String>;
 	var readSpans: Array<Span>;
 	var decline: Null<String>;
+	var header: IndexedLoopHeader;
 }

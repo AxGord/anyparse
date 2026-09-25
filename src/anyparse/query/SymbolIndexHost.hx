@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.check.ReflectionMemo;
+import anyparse.query.ReachLiveness.ReachBuilds;
 
 /**
  * A run-scoped host that can supply a resolution-scoped `SymbolIndex` — the
@@ -68,6 +69,29 @@ interface SymbolIndexHost {
 	 * stops reporting.
 	 */
 	function resolutionProjectFiles(): Null<Array<{ file: String, source: String }>>;
+
+	/**
+	 * EVERY project source — the report files UNION the declared `resolutionRoots` — when EVERY declared
+	 * root matched, including a whole-project lint whose roots all sit in the report (where
+	 * `resolutionProjectFiles` answers null); null when any root matched nothing, so the project may hold
+	 * files this run never read. The seam for a proof that must see every place a project member is named.
+	 * A file of the project that lies under no declared root is outside it by construction.
+	 */
+	function completeProjectFiles(): Null<Array<{ file: String, source: String }>>;
+
+	/** The `MemberReach` memoised for the current pass, or null — dropped whenever the pass's index is. */
+	function memberReach(): Null<MemberReach>;
+
+	/** Memoise `reach` for the current pass. */
+	function setMemberReach(reach: MemberReach): Void;
+
+	/**
+	 * The builds a `MemberReach` answer must hold under — each configured compiler oracle's define sets and the files it
+	 * compiles — or null when the run declared none, did not declare its oracle list complete, declined them, or one
+	 * could not be read: every conditional branch and every library file is then in play, and no subtype the index
+	 * does not list is ruled out.
+	 */
+	function reachBuilds(): Null<ReachBuilds>;
 
 	/**
 	 * The memoised PROJECT-scoped `SymbolIndex` — built once over `resolutionProjectFiles`, or

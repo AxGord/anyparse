@@ -5,9 +5,10 @@ import anyparse.check.Check.Violation;
 import anyparse.check.LoopScan.IndexedLoopHeader;
 import anyparse.check.LoopScan.LoopFileScan;
 import anyparse.check.LoopScan.LoopSeams;
+import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberReach;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
-import anyparse.query.SourceText;
 import anyparse.runtime.Span;
 
 using StringTools;
@@ -22,9 +23,12 @@ using Lambda;
 @:nullSafety(Strict)
 final class ElementLoopRewrite {
 
-	/** The decline note of an element-loop fix refused over a call that can reach the collection (see `callsThroughSelf`). */
-	public static inline final SELF_CALL_DECLINE: String = 'the body calls a bare, this-, super- or type-qualified callee or a constructor, '
-		+ 'which can replace an element or grow the collection while the loop runs';
+	/**
+	 * The head of the decline note of an element-loop fix refused because the body may run code that
+	 * changes the collection (see `reachDecline`); the note continues with what `MemberReach` found.
+	 */
+	public static inline final SELF_CALL_DECLINE: String =
+		'the body runs code that may replace an element or grow the collection while the loop runs';
 
 	/** The decline note of an element-loop fix refused over a comment inside a region a splice would overwrite. */
 	public static inline final COMMENT_DECLINE: String = 'a comment sits inside a region the rewrite would overwrite';
@@ -137,21 +141,57 @@ final class ElementLoopRewrite {
 	}
 
 	/**
-	 * Whether `node` holds a call that can reach a collection behind the loop's back: a callee `isSelfCallee`
-	 * admits, or any `new` expression (a constructor runs arbitrary code, a static collection included). Such a
-	 * callee can replace `X[i]` after an element binder was read, or grow `X`, which an element iterator follows and a
-	 * once-evaluated `0...X.length` bound does not. Every element-loop rewrite leaves the fix report-only on it, for a
-	 * local `X` as well as a field: a parameter or a local may alias a field, be stored in one, or be captured by a
-	 * local function, and telling a fresh never-escaped local apart needs an escape analysis over the whole function.
-	 *
-	 * The residual, stated rather than hidden: a method of ANOTHER object that holds a reference to `X`
-	 * (`value[i].clone()`, `sink.use(x)`) is admitted - the body-local limit both rules document.
+	 * The reach gate of one `fix` call over `file`: a thunk building the file's `MemberReach` on first demand
+	 * (memoised on the run's host for the pass), so a fix that never gets past its cheaper gates never builds
+	 * a call graph, and where a decline of `rule` is written.
 	 */
-	public static function callsThroughSelf(node: QueryNode, core: LoopSeams): Bool {
-		if (core.opaqueKinds.contains(node.kind)) return false;
-		if (node.kind == core.shape.newExprKind) return true;
-		if (node.kind == core.callKind && node.children.length > 0 && isSelfCallee(node.children[0], core)) return true;
-		return node.children.exists(c -> callsThroughSelf(c, core));
+	public static function gateFor(
+		plugin: GrammarPlugin, file: String, source: String, violations: Array<Violation>, rule: String
+	): ReachGate {
+		var reach: Null<MemberReach> = null;
+		return {
+			reachOf: () -> {
+				final built: MemberReach = reach ?? MemberReach.forRun(plugin, file, source);
+				reach = built;
+				built;
+			},
+			file: file,
+			violations: violations,
+			rule: rule
+		};
+	}
+
+	/**
+	 * Hand `built` on to `out` when the body's reach allows it, else record why not: `prior` (a cheaper gate's
+	 * refusal) first, then the reach decline, then the comment decline an empty `built` stands for. The reach
+	 * is asked only when every cheaper gate passed.
+	 */
+	public static function gatedEdits(
+		built: Array<FixEdit>, gate: ReachGate, header: IndexedLoopHeader, forSpan: Span, prior: Null<String>, out: Array<FixEdit>
+	): Void {
+		final reach: Null<String> = built.length == 0 ? null : reachDecline(gate.reachOf(), gate.file, header);
+		final edits: Array<FixEdit> = reach == null ? built : [];
+		if (edits.length == 0) declineAt(gate.violations, gate.rule, forSpan, prior ?? reach ?? COMMENT_DECLINE);
+		for (e in edits) out.push(e);
+	}
+
+	/**
+	 * Why an element-loop fix is withheld because the loop BODY may change the collection behind the
+	 * binder's back, or null when `MemberReach` proves it cannot. Such code can replace `X[i]` after the
+	 * binder read it, or grow `X`, which an element iterator follows and a once-evaluated `0...X.length`
+	 * does not. The body is the entry REGION, so everything it runs counts — calls, constructors, the
+	 * accessors of the properties it touches, and whatever the language runs implicitly — as far as the
+	 * call graph and `MemberReach`'s whitelist of modelled constructs can show; what they cannot show refuses.
+	 */
+	public static function reachDecline(reach: MemberReach, file: String, h: IndexedLoopHeader): Null<String> {
+		final at: Null<Span> = h.sizeReceiver.span;
+		final region: Null<Span> = h.body.span;
+		if (at == null || region == null) return SELF_CALL_DECLINE;
+		final result: ReachResult = reach.mayMutateNamed(file, h.collection, at, region);
+		return switch result {
+			case Proven: null;
+			case _: '$SELF_CALL_DECLINE: ${reach.explain(result)}';
+		};
 	}
 
 	/**
@@ -167,19 +207,15 @@ final class ElementLoopRewrite {
 	}
 
 	/**
-	 * Why an element-loop fix is withheld, or null when nothing withholds it: no usable binder name,
-	 * a container whose declared type is unknown (`typeSource` null), or a body that calls through the
-	 * instance. The order is the order a reader fixes them in; the first applies.
+	 * Why an element-loop fix is withheld before the body's reach is asked, or null when nothing withholds
+	 * it: no usable binder name, or a container whose declared type is unknown (`typeSource` null). The
+	 * order is the order a reader fixes them in; the first applies. `reachDecline` is asked after it.
 	 */
-	public static function elementDecline(
-		binder: BinderChoice, collection: String, typeSource: Null<String>, body: QueryNode, s: LoopSeams
-	): Null<String> {
+	public static function elementDecline(binder: BinderChoice, collection: String, typeSource: Null<String>): Null<String> {
 		return if (binder.refusal != null)
 			binder.refusal
 		else if (typeSource == null)
 			unresolvedDecline(collection)
-		else if (callsThroughSelf(body, s))
-			SELF_CALL_DECLINE
 		else
 			null;
 	}
@@ -205,21 +241,6 @@ final class ElementLoopRewrite {
 	}
 
 	/**
-	 * Whether `callee` can reach state the loop body cannot see: a bare name, a member of the grammar's self /
-	 * super reference, or a member of an UPPER-initial receiver - a type (a static reaches a static collection, or a
-	 * field through a singleton) or a static constant, answered alike because telling them apart buys nothing.
-	 */
-	private static function isSelfCallee(callee: QueryNode, core: LoopSeams): Bool {
-		if (callee.kind == core.identKind) return true;
-		if (!core.accessKinds.contains(callee.kind) || callee.children.length != 1) return false;
-		final receiver: QueryNode = callee.children[0];
-		final name: Null<String> = receiver.name;
-		if (name == null) return false;
-		if (SourceText.isUpperInitial(name) && (receiver.kind == core.identKind || core.accessKinds.contains(receiver.kind))) return true;
-		return receiver.kind == core.identKind && (name == core.shape.selfReferenceText || name == core.shape.superReferenceText);
-	}
-
-	/**
 	 * Whether an indexed `for` that encloses `loop` or sits inside it derives `candidate` as its own
 	 * element name — with its collection's leading underscores dropped, the wider of the two rules'
 	 * spellings, so the answer covers a loop either rule may rewrite. Sibling loops never collide: each
@@ -241,6 +262,14 @@ final class ElementLoopRewrite {
 		return sa != null && sb != null && (sa.from <= sb.from && sb.to <= sa.to || sb.from <= sa.from && sa.to <= sb.to);
 	}
 
+}
+
+/** What `ElementLoopRewrite.gatedEdits` needs besides the loop: the reach thunk, the file, and where a decline is written. */
+typedef ReachGate = {
+	var reachOf: () -> MemberReach;
+	var file: String;
+	var violations: Array<Violation>;
+	var rule: String;
 }
 
 /**

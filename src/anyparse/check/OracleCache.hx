@@ -295,6 +295,15 @@ final class OracleCache {
 		return [for (entry in payload.split(';')) if (entry.trim() != '') entry.trim()];
 	}
 
+	/**
+	 * md5 of `data`. Node's native digest is orders of magnitude faster than the pure-Haxe
+	 * implementation, and that difference is what keeps hashing every source from dominating
+	 * the very typecheck this cache exists to avoid.
+	 */
+	private static function md5(data: String): String {
+		return #if nodejs js.node.Crypto.createHash('md5').update(data, 'utf8').digest('hex') #else haxe.crypto.Md5.encode(data) #end;
+	}
+
 	/** The library name of a `-lib` token, with any `:version` suffix stripped. */
 	private static function libName(token: String): String {
 		final colon: Int = token.indexOf(':');
@@ -318,15 +327,6 @@ final class OracleCache {
 			1
 		else
 			0;
-	}
-
-	/**
-	 * md5 of `data`. Node's native digest is orders of magnitude faster than the pure-Haxe
-	 * implementation, and that difference is what keeps hashing every source from dominating
-	 * the very typecheck this cache exists to avoid.
-	 */
-	private static function md5(data: String): String {
-		return #if nodejs js.node.Crypto.createHash('md5').update(data, 'utf8').digest('hex') #else haxe.crypto.Md5.encode(data) #end;
 	}
 
 	#if (sys || nodejs)
