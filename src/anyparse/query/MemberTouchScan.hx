@@ -96,9 +96,9 @@ final class MemberTouchScan {
 		final end: Int = rerunEnd(fn, region);
 		var found: Null<Span> = null;
 		final declFrom: Int = declSpan.from;
+		final lineage: Array<QueryNode> = [];
 		function walk(
-			node: QueryNode, parent: Null<QueryNode>, grand: Null<QueryNode>, great: Null<QueryNode>, index: Int, parentIndex: Int,
-			inClosure: Bool
+			node: QueryNode, parent: Null<QueryNode>, grand: Null<QueryNode>, index: Int, parentIndex: Int, inClosure: Bool
 		): Void {
 			final at: Null<Span> = node.span;
 			if (found != null || at == null) return;
@@ -106,12 +106,14 @@ final class MemberTouchScan {
 			if (span.from >= end) return;
 			final closure: Bool = inClosure || closures.contains(node.kind);
 			if (node.kind == shape.identKind && node.name == name && span.from > declFrom) {
-				final verdict: Verdict = classify(node, parent, grand, great, index, parentIndex, Mutate, true);
+				final verdict: Verdict = classify(node, parent, grand, lineage, index, parentIndex, Mutate, true);
 				if (closure || verdict.escape) found = span;
 			}
-			for (i in 0...node.children.length) walk(node.children[i], node, parent, grand, i, index, closure);
+			lineage.push(node);
+			for (i in 0...node.children.length) walk(node.children[i], node, parent, i, index, closure);
+			lineage.pop();
 		}
-		walk(fn, null, null, null, 0, 0, false);
+		walk(fn, null, null, 0, 0, false);
 		return found;
 	}
 
@@ -177,14 +179,13 @@ final class MemberTouchScan {
 			return _carriers.relation(known, declaring) != CannotCarry;
 		}
 
-		function record(
-			node: QueryNode, parent: Null<QueryNode>, grand: Null<QueryNode>, great: Null<QueryNode>, index: Int, parentIndex: Int
-		): Void {
+		final lineage: Array<QueryNode> = [];
+		function record(node: QueryNode, parent: Null<QueryNode>, grand: Null<QueryNode>, index: Int, parentIndex: Int): Void {
 			final at: Null<Span> = node.span;
 			if (at == null) return;
 			final span: Span = at;
 			if (!_live(file, span)) return;
-			final verdict: Verdict = classify(node, parent, grand, great, index, parentIndex, access, arrayTyped);
+			final verdict: Verdict = classify(node, parent, grand, lineage, index, parentIndex, access, arrayTyped);
 			if (verdict.escape) out.escapes.push({ file: file, span: span });
 			if (!verdict.touch) return;
 			if (within(span, region) && out.inRegion == null) out.inRegion = {
@@ -204,8 +205,7 @@ final class MemberTouchScan {
 		}
 
 		function walk(
-			node: QueryNode, parent: Null<QueryNode>, grand: Null<QueryNode>, great: Null<QueryNode>, index: Int, parentIndex: Int,
-			type: Null<String>
+			node: QueryNode, parent: Null<QueryNode>, grand: Null<QueryNode>, index: Int, parentIndex: Int, type: Null<String>
 		): Void {
 			if (opaqueKinds.contains(node.kind)) return;
 			final current: Null<String> = CallGraphNames.typeNameOf(node) ?? type;
@@ -215,9 +215,9 @@ final class MemberTouchScan {
 					final bound: Null<Int> = bindings[span.from];
 					final local: Bool = bound != null && bound >= 0 && g.functionAt(file, bound) != null;
 					final owner: Null<String> = current == null ? null : g.types.declaringTypeOf(current, name);
-					if (!local && (owner == null || owner == declaring)) record(node, parent, grand, great, index, parentIndex);
+					if (!local && (owner == null || owner == declaring)) record(node, parent, grand, index, parentIndex);
 				} else if (_hazards.isAccess(node.kind) && node.children.length > 0 && receiverOwns(node.children[0])) {
-					record(node, parent, grand, great, index, parentIndex);
+					record(node, parent, grand, index, parentIndex);
 				}
 			}
 			final reflected: Null<String> = _hazards.reflectiveNameWith(node, source, stringFold);
@@ -235,9 +235,11 @@ final class MemberTouchScan {
 					span: site
 				};
 			}
-			for (i in 0...node.children.length) walk(node.children[i], node, parent, grand, i, index, current);
+			lineage.push(node);
+			for (i in 0...node.children.length) walk(node.children[i], node, parent, i, index, current);
+			lineage.pop();
 		}
-		walk(tree, null, null, null, 0, 0, null);
+		walk(tree, null, null, 0, 0, null);
 	}
 
 	/**
@@ -260,7 +262,7 @@ final class MemberTouchScan {
 	 * readers; a method the array type does not declare may be a static extension handed the array itself.
 	 */
 	private function classify(
-		node: QueryNode, parent: Null<QueryNode>, grand: Null<QueryNode>, great: Null<QueryNode>, index: Int, parentIndex: Int,
+		node: QueryNode, parent: Null<QueryNode>, grand: Null<QueryNode>, lineage: Array<QueryNode>, index: Int, parentIndex: Int,
 		access: ReachAccess, arrayTyped: Bool
 	): Verdict {
 		// noqa: complexity
@@ -272,7 +274,7 @@ final class MemberTouchScan {
 			return switch access {
 				case Read: { touch: !plain, escape: false };
 				case Write: { touch: true, escape: false };
-				case Mutate: { touch: true, escape: !storesFreshValue(parent, grand, great) };
+				case Mutate: { touch: true, escape: !storesFreshValue(lineage) };
 			};
 		}
 		if (access == Write) return { touch: false, escape: false };
@@ -290,28 +292,73 @@ final class MemberTouchScan {
 		}
 		if (pk == shape.forStmtKind && isIterableOf(parent, node)) return { touch: false, escape: false };
 		if ((shape.equalityKinds ?? []).contains(pk)) return { touch: false, escape: false };
-		if (pk == shape.parenKind) return classify(parent, grand, great, null, parentIndex, 0, access, arrayTyped);
+		if (pk == shape.parenKind)
+			return classify(parent, grand, null, lineage.slice(0, lineage.length - 1), parentIndex, 0, access, arrayTyped);
 		return { touch: false, escape: true };
 	}
 
 	/**
-	 * Whether the write `write` (whose parent is `holder`, whose parent is `owner`) leaves its target holding a value
+	 * Whether the write that ends `lineage` (the chain of nodes from the root down to it) leaves its target holding a value
 	 * nothing else holds: a plain or null-coalescing assignment of a freshly built value whose own value goes nowhere —
-	 * a statement, or the expression body of a function declared to return nothing. Any other write — a compound
+	 * a statement whose value is discarded (`valueDiscarded`), or the expression
+	 * body of a function declared to return nothing. Any other write — a compound
 	 * operator, an increment, a stored value that is not fresh — may leave an alias there, and an assignment used as a
 	 * value hands what it stored on too.
 	 */
-	private function storesFreshValue(write: QueryNode, holder: Null<QueryNode>, owner: Null<QueryNode>): Bool {
+	private function storesFreshValue(lineage: Array<QueryNode>): Bool {
 		final shape: RefShape = _scope.shape;
+		final at: Int = lineage.length - 1;
+		final write: Null<QueryNode> = at >= 0 ? lineage[at] : null;
+		if (write == null || write.children.length < 2 || at < 1) return false;
 		final replacing: Bool = write.kind == shape.assignKind || write.kind == shape.nullCoalAssignKind;
-		if (!replacing || write.children.length < 2 || !isFresh(write.children[1], null) || holder == null) return false;
-		if (holder.kind == shape.exprStatementKind) return true;
+		if (!replacing || !isFresh(write.children[1], null)) return false;
+		final holder: QueryNode = lineage[at - 1];
+		if (holder.kind == shape.exprStatementKind) return valueDiscarded(lineage, at - 1);
+		final owner: Null<QueryNode> = at >= 2 ? lineage[at - 2] : null;
 		if (owner == null || !(shape.expressionBodyKinds ?? []).contains(holder.kind)) return false;
 		final memberFunctions: Array<String> = [
 			for (k in shape.functionKinds ?? []) if (!(shape.lambdaKinds ?? []).contains(k)) k
 		];
 		return memberFunctions.contains(owner.kind)
 			&& owner.children.exists(c -> (shape.typeAnnotationKinds ?? []).contains(c.kind) && c.name == shape.voidTypeName);
+	}
+
+	/**
+	 * Whether the value of the statement `lineage[at]` is discarded: it is followed by another statement of its block or
+	 * arm, or it ends one whose own value is discarded — a function's block body (never its value), a loop's body, or a
+	 * statement `if` / `switch` / `try` branch or nested block that is itself discarded. The last statement of a block, arm
+	 * or branch in value position is that construct's value, and any shape not listed counts as not discarded.
+	 */
+	private function valueDiscarded(lineage: Array<QueryNode>, at: Int): Bool {
+		final shape: RefShape = _scope.shape;
+		if (at < 1) return false;
+		final node: QueryNode = lineage[at];
+		final parent: QueryNode = lineage[at - 1];
+		final kind: String = parent.kind;
+		final sequence: Bool = kind == shape.blockStmtKind || kind == shape.blockBodyKind || (shape.branchScopeKinds ?? []).contains(kind);
+		if (sequence && parent.children[parent.children.length - 1] != node) return true;
+		if ((shape.loopStatementKinds ?? []).concat(shape.doWhileLoopKinds ?? []).contains(kind)) return true;
+		if (kind == shape.blockBodyKind) return at >= 2 && bodyDiscardsItsValue(lineage[at - 2]);
+		final statementForms: Array<String> = (
+			shape.ifStatementKinds ?? []
+		).concat(shape.switchStatementKinds ?? []).concat(shape.tryStatementKinds ?? []);
+		// an arm or a catch is climbed to its `switch` / `try`, which decides for itself
+		final climbs: Bool = kind == shape.blockStmtKind || statementForms.contains(kind) || (shape.branchScopeKinds ?? []).contains(kind)
+			|| kind == shape.catchClauseKind;
+		return climbs && valueDiscarded(lineage, at - 1);
+	}
+
+	/**
+	 * Whether `owner`, holding a block body, discards the body's last statement: a `function` does, an arrow lambda
+	 * yields it, and a `do` loop runs it as a statement.
+	 */
+	private function bodyDiscardsItsValue(owner: QueryNode): Bool {
+		final shape: RefShape = _scope.shape;
+		final arrows: Array<String> = [
+			for (k in shape.lambdaKinds ?? []) if (k != shape.fnExprKind && k != shape.namedFnExprKind) k
+		];
+		final discarding: Array<String> = (shape.functionKinds ?? []).concat(shape.lambdaKinds ?? []).concat(shape.doWhileLoopKinds ?? []);
+		return !arrows.contains(owner.kind) && discarding.contains(owner.kind);
 	}
 
 	/** Whether `node` is the ITERABLE of the `for` statement `loop`, not its body. */

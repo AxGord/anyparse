@@ -2216,6 +2216,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachTest#testFieldWithoutTheWholeProjectIsUnknown :: control :: M-REACH-OUT-OF-SCOPE',
 			'unit.query.MemberReachTest#testFreshMethodMustBeTheReceiverTypesOwn :: control :: M-REACH-FRESH-TYPED',
 			'unit.query.MemberReachTest#testFreshUnsharedLocalIsProvenWhateverTheBodyCalls :: control :: M-REACH-LOCAL-FRESH',
+			'unit.query.MemberReachTest#testFreshWriteEndingAStatementBodyKeepsTheLocalUnshared :: control :: '
+				+ 'M-REACH-DISCARDED-BODY,M-REACH-DISCARDED-STATEMENT-BRANCH',
+			'unit.query.MemberReachTest#testFreshWriteEndingAValueBlockSharesWhatItStores :: control :: M-REACH-LAST-STATEMENT-VALUE',
 			'unit.query.MemberReachTest#testFunctionValueCallAdmitsAValueUsedMutator :: control :: M-REACH-VALUE-CHANNEL',
 			'unit.query.MemberReachTest#testFunctionValueCallWithNoValueUsedMutatorIsProven :: control :: M-REACH-WALK-UNKNOWN',
 			'unit.query.MemberReachTest#testGetterReadInTheRegionIsAnEntry :: control :: M-GRAPH-GETTER-EDGE',
@@ -3313,6 +3316,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-REACH-CALLEE-OVERRIDES',
 			'M-REACH-COMPOUND-WRITE-ALIAS',
 			'M-REACH-ASSIGNMENT-VALUE-ALIAS',
+			'M-REACH-LAST-STATEMENT-VALUE',
+
+			'M-REACH-DISCARDED-BODY',
+			'M-REACH-DISCARDED-STATEMENT-BRANCH',
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

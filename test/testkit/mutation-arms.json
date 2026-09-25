@@ -7284,9 +7284,33 @@
 			"name": "M-REACH-ASSIGNMENT-VALUE-ALIAS",
 			"type": "anyparse.query.MemberTouchScan",
 			"method": "storesFreshValue",
-			"find": "if (holder.kind == shape.exprStatementKind) return true;",
-			"replace": "if (true) return true;",
+			"find": "if (holder.kind == shape.exprStatementKind) return valueDiscarded(lineage, at - 1);",
+			"replace": "if (true) return holder.kind != shape.exprStatementKind || valueDiscarded(lineage, at - 1);",
 			"note": "an assignment used as a value keeps its target fresh, so `all = xs = [1]` leaves `xs` unshared though `all` holds it"
+		},
+		{
+			"name": "M-REACH-LAST-STATEMENT-VALUE",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "valueDiscarded",
+			"find": "final climbs: Bool = kind == shape.blockStmtKind",
+			"replace": "final climbs: Bool = true || kind == shape.blockStmtKind",
+			"note": "every construct a statement ends is climbed as if its value were discarded, so `all = { xs = [1]; }` keeps `xs` unshared"
+		},
+		{
+			"name": "M-REACH-DISCARDED-BODY",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "valueDiscarded",
+			"find": "if ((shape.loopStatementKinds ?? []).concat(shape.doWhileLoopKinds ?? []).contains(kind)) return true;",
+			"replace": "",
+			"note": "a loop's body is not taken as discarding its last statement's value, so a fresh write ending a loop body makes the local shared"
+		},
+		{
+			"name": "M-REACH-DISCARDED-STATEMENT-BRANCH",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "valueDiscarded",
+			"find": "return climbs && valueDiscarded(lineage, at - 1);",
+			"replace": "return false;",
+			"note": "no statement branch or nested block is climbed, so a fresh write ending an `if` / `switch` statement branch makes the local shared"
 		}
 	]
 }

@@ -789,6 +789,42 @@ class MemberReachTest extends Test {
 		assertMatch(askLocal(statement, 'xs'), r -> r.match(Proven));
 	}
 
+	@:pin('control') @:killer('M-REACH-LAST-STATEMENT-VALUE')
+	public function testFreshWriteEndingAValueBlockSharesWhatItStores(): Void {
+		// the last statement of a block, `if`, `switch` or `try` in value position is that construct's value: `all` gets `xs`
+		final forms: Array<String> = [
+			'all = { xs = [1]; }',
+			'all = if (all.length > 0) { xs = [1]; } else []',
+			'all = switch (all.length) { case 0: xs = [1]; case _: []; }',
+			'all = try { xs = [1]; } catch (e:Dynamic) []'
+		];
+		for (form in forms) {
+			final src: String = 'class C { static var all:Array<Int> = []; static function grow():Void all.push(9); '
+				+ 'function f():Void { var xs:Array<Int> = []; $form; /*<*/ grow(); var y:Int = xs[0]; /*>*/ } }';
+			assertMatch(askLocal(src, 'xs'), r -> r.match(Unknown(Aliased(_, _, _, _))));
+		}
+	}
+
+	@:pin('control') @:killer('M-REACH-DISCARDED-BODY') @:killer('M-REACH-DISCARDED-STATEMENT-BRANCH')
+	public function testFreshWriteEndingAStatementBodyKeepsTheLocalUnshared(): Void {
+		// the last statement of a function or loop body, or of a statement `if` / `switch` branch, yields nothing
+		final forms: Array<String> = [
+			'var xs:Array<Int> = []; for (k in 0...1) { xs = [1]; }',
+			'var xs:Array<Int> = []; if (all.length > 0) { xs = [1]; } else xs = [2];',
+			'var xs:Array<Int> = []; switch (all.length) { case 0: xs = [1]; case _: }',
+			'var xs:Array<Int> = []; do { xs = [1]; } while (all.length > 9);'
+		];
+		for (form in forms) {
+			final src: String = 'class C { static var all:Array<Int> = []; static function grow():Void all.push(9); '
+				+ 'function f():Void { $form /*<*/ grow(); var y:Int = xs[0]; /*>*/ } }';
+			assertMatch(askLocal(src, 'xs'), r -> r.match(Proven));
+		}
+		// a member written fresh as the last statement of a method's block body
+		final member: String = 'class C { var items:Array<Int> = []; public function reset():Void { items = []; } '
+			+ 'function f():Void { /*<*/ helper(); /*>*/ } function helper():Void {} }';
+		assertMatch(ask([member]), r -> r.match(Proven));
+	}
+
 	@:pin('guard')
 	public function testDynamicFunctionACalleeRunsIsRefused(): Void {
 		// `hook` does nothing as declared, but any function value may be assigned over it: the syntax reads the call as one
