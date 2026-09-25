@@ -2137,6 +2137,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-REACH-CONSTRUCTION',
 			'unit.query.MemberReachFactsTest#testAConversionOfAnAbstractRunsWhatItsOwnConversionDoes :: control :: '
 				+ 'M-REACH-ABSTRACT-TEXT-ANY',
+
 			'unit.query.MemberReachFactsTest#testAFunctionWithoutFactsOfItsOwnIsNotReadThroughANestedOnes :: control :: '
 				+ 'M-FACTS-REACH-NESTED-OWNER',
 			'unit.query.MemberReachFactsTest#testAGenericInstanceIsItsGenericClass :: control :: M-FACTS-REACH-GENERIC',
@@ -2185,6 +2186,11 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachTest#testBuildMacroOnTheOwnerIsUnknown :: control :: M-REACH-BUILD-MACRO',
 			'unit.query.MemberReachTest#testCallbackArrayMethodRunsTheFunctionItIsHanded :: control :: '
 				+ 'M-REACH-EXTERN-BODYLESS,M-REACH-CALLS-ARGUMENT',
+			'unit.query.MemberReachTest#testCalleeChangingOnlyAFreshLocalOfItsOwnIsProven :: control :: M-REACH-CALLEE-BENIGN-EDGE',
+			'unit.query.MemberReachTest#testCalleeDispatchOnALibraryTypeReachesItsLibraryOverrides :: control :: M-REACH-CALLEE-OVERRIDES',
+
+			'unit.query.MemberReachTest#testCalleeWhoseBodyIsNotItsSourceIsRefused :: control :: '
+				+ 'M-REACH-CALLEE-REWRITTEN,M-REACH-CALLEE-AMBIGUOUS',
 			'unit.query.MemberReachTest#testCallsEntryStartsAtTheSitesOnly :: control :: M-REACH-CALLS-ENTRY',
 			'unit.query.MemberReachTest#testCompoundAssignmentRunsTheBinaryOperatorOverload :: control :: M-REACH-COMPOUND-OPERATOR',
 			'unit.query.MemberReachTest#testConstructNobodyClassifiedIsUnknown :: control :: M-REACH-UNMODELLED',
@@ -2192,6 +2198,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachTest#testConstructorOfALibrarySubclassIsNotADispatchTarget :: control :: M-REACH-CTOR-NOT-DISPATCHED',
 			'unit.query.MemberReachTest#testConstructorRunsTheFieldInitializers :: control :: M-GRAPH-INIT-WIRING',
 			'unit.query.MemberReachTest#testCopyOfAnArrayIsFresh :: control :: M-REACH-FRESH-METHOD',
+			'unit.query.MemberReachTest#testDynamicFunctionACalleeRunsIsRefused :: guard :: ',
 			'unit.query.MemberReachTest#testDynamicReceiverAdmitsBySameName :: control :: M-REACH-NAME-CHANNEL',
 			'unit.query.MemberReachTest#testEscapeLaterInAnEnclosingLoopPrecedesTheNextRun :: control :: M-REACH-RERUN-END',
 			'unit.query.MemberReachTest#testEveryEscapeRuleLetsItsSoundTwinThrough :: control :: '
@@ -2250,6 +2257,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachTest#testParameterRegionCallingACallbackMethodIsRefused :: control :: '
 				+ 'M-REACH-BENIGN-CALLBACK,M-REACH-CALLS-ARGUMENT',
 			'unit.query.MemberReachTest#testParameterRegionCallingOnlyArrayReadersIsProven :: control :: M-REACH-BENIGN-CALL',
+			'unit.query.MemberReachTest#testParameterRegionCallingProjectCodeDependsOnWhatItChanges :: control :: '
+				+ 'M-REACH-CALLEE-WALK,M-REACH-CALLEE-REFUSED',
 			'unit.query.MemberReachTest#testParameterRegionHandingOnAFunctionValueIsRefused :: control :: M-REACH-REGION-REF',
 			'unit.query.MemberReachTest#testParameterRegionOfArithmeticDependsOnWhatImplicitFunctionsChange :: control :: '
 				+ 'M-REACH-IMPLICIT-ARRAY-CHANGE,M-REACH-ARRAY-CHANGE-SITE',
@@ -3296,6 +3305,13 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-REACH-USING-META',
 			'M-INDEX-GUARDED-META-LIFT',
 			'M-FACTS-REACH-UNREAD-IMPLICIT',
+			'M-REACH-CALLEE-WALK',
+			'M-REACH-CALLEE-REFUSED',
+			'M-REACH-CALLEE-BENIGN-EDGE',
+
+			'M-REACH-CALLEE-REWRITTEN',
+			'M-REACH-CALLEE-AMBIGUOUS',
+			'M-REACH-CALLEE-OVERRIDES',
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

@@ -371,8 +371,11 @@ final class MemberReach {
 	 * the region can run lets the value escape (no argument, store, `return`, reassignment or closure capture):
 	 * no other code holds a reference. A shared value — a parameter, an escaped local — is `Proven` only when
 	 * the run declares its whole project and the region runs nothing that could change it: every array change
-	 * and every call there must be confined to a fresh local of `fn` or known not to change arrays, and no
-	 * function the language calls implicitly may change one.
+	 * there must be confined to a fresh local of `fn`, and nothing the region runs — a function it calls, constructs
+	 * or reads a property through, or one the language calls implicitly — may change any array other than a fresh
+	 * local of its own (`reachedArrayChange`). Which array such code changes is not asked: an array handed to library
+	 * code, the receiver of a built-in array method included, leaves the type system (`ValueEscapes`), and then an array
+	 * of any element type may be this one.
 	 */
 	private function answerLocal(file: String, fn: QueryNode, declaration: QueryNode, region: Span): ReachResult {
 		_g.startQuestion();
@@ -395,10 +398,11 @@ final class MemberReach {
 		// a project file that did not parse may hold a function the language calls implicitly
 		final g: CallGraph = graph();
 		for (skipped in g.skippedFiles) if (_projectSources.exists(skipped)) return Unknown(SkipParse(skipped));
-		final culprit: Null<Span> = regionCulprit(file, tree, source, fn, region);
+		final callees: Array<CallEdge> = [];
+		final culprit: Null<Span> = regionCulprit(file, tree, source, fn, region, callees);
 		if (culprit != null) return Unknown(Aliased(file, shared, file, culprit));
-		final implicit: Null<Occurrence> = implicitArrayChange(g, file, tree, region);
-		return implicit == null ? Proven : Unknown(Aliased(file, shared, implicit.file, implicit.span));
+		final change: Null<Occurrence> = reachedArrayChange(g, file, tree, region, callees);
+		return change == null ? Proven : Unknown(Aliased(file, shared, change.file, change.span));
 	}
 
 	/** The innermost function or lambda node of `tree` whose span contains `span`. */
@@ -576,13 +580,17 @@ final class MemberReach {
 	}
 
 	/**
-	 * The first site in `region` that may change a SHARED collection: a reflective access, an array change on a
-	 * receiver that is not a fresh unshared local of `fn`, a function value handed on, or any call / constructor /
-	 * accessor / unresolved site except a method of the built-in array type that calls no function argument
-	 * (`ExecutionShape.nonMutatingArrayMethods`, or a mutating one on such a fresh local) and a
-	 * `ExecutionShape.pureLibraryCalls` target. Null when the region runs nothing of the sort.
+	 * The first site in `region` that may change a SHARED collection by itself: a reflective access, an array change on a
+	 * receiver that is not a fresh unshared local of `fn`, a function value handed on, or an unresolved call or access
+	 * other than a built-in array method on such a fresh local. Every other resolved invocation — of project code, or of
+	 * library code that is not a method of the built-in array type calling no function argument
+	 * (`ExecutionShape.nonMutatingArrayMethods`, or a mutating one on such a fresh local) or a
+	 * `ExecutionShape.pureLibraryCalls` target — goes to `callees`, whose code `reachedArrayChange` walks. Null when the
+	 * region itself holds no such site.
 	 */
-	private function regionCulprit(file: String, tree: QueryNode, source: String, fn: QueryNode, region: Span): Null<Span> {
+	private function regionCulprit(
+		file: String, tree: QueryNode, source: String, fn: QueryNode, region: Span, callees: Array<CallEdge>
+	): Null<Span> {
 		for (h in liveHazards(file, tree, source, region)) switch h.kind {
 			case ArrayChange:
 				if (!receiverIsFreshLocal(tree, source, fn, h.node, region)) return h.span;
@@ -595,11 +603,11 @@ final class MemberReach {
 		for (u in seeds.unresolved) if (!onFreshLocalArray(tree, source, fn, u, calls, region)) return u.span ?? region;
 		if (seeds.access.length > 0) return seeds.access[0].span ?? region;
 		for (e in seeds.edges) {
-			// a function value the region hands on may be run by whatever receives it, and a body it calls may change anything
+			// a function value the region hands on may be run by whatever receives it, whenever it does
 			final target: Null<FnNode> = g.node(e.to);
-			if (target == null || !target.isExternal || e.kind == Ref) return e.span ?? region;
+			if (target == null || e.kind == Ref) return e.span ?? region;
 			final call: Null<QueryNode> = calls.find(c -> c.span?.from == e.span?.from);
-			if (!benignCall(g, tree, source, fn, target, call, region)) return e.span ?? region;
+			if (!target.isExternal || !benignCall(g, tree, source, fn, target, call, region)) callees.push(e);
 		}
 		return null;
 	}
@@ -661,14 +669,17 @@ final class MemberReach {
 	}
 
 	/**
-	 * Where a function the language may call IMPLICITLY — from an operator, conversion, index, string
-	 * conversion, iteration or literal construction the region may spell — can change ANY array, or null when
-	 * none can: the one way a region with no visible call could change a shared collection. Walks what those
-	 * functions reach, into library bodies as the main walk does; an array change on anything but a fresh
-	 * unshared local of the function doing it, a blind spot, an unresolved site and a body-less target that
-	 * is not `ExecutionShape.pureLibraryCalls` all count as a change.
+	 * Where code the region runs can change ANY array, or null when none can: the invocations `callees` resolved for it
+	 * (`regionCulprit`) and every function the language may call IMPLICITLY from an operator, conversion, index, string
+	 * conversion, iteration or literal construction it may spell. Walks what those functions reach — calls, overrides,
+	 * accessors, function values, implicit calls — into library bodies as the main walk does; an array change on anything
+	 * but a fresh unshared local of the function doing it, a blind spot, an unresolved site (a call of a `dynamic`
+	 * function is one), a body a build macro may rewrite or an ambiguous type holds, and a body-less target
+	 * that is not `ExecutionShape.pureLibraryCalls` all count as a change.
 	 */
-	private function implicitArrayChange(g: CallGraph, file: String, tree: QueryNode, region: Span): Null<Occurrence> {
+	private function reachedArrayChange(
+		g: CallGraph, file: String, tree: QueryNode, region: Span, callees: Array<CallEdge>
+	): Null<Occurrence> {
 		final queue: Array<String> = [];
 		final seen: Map<String, Bool> = [];
 		final sites: Array<ImplicitSite> = sitesOf(g, file, [region]);
@@ -686,6 +697,10 @@ final class MemberReach {
 		// whether it widened anything does not matter: every site is asked right after
 		_g.enter(g, file, region, MemberTouchScan.typeAt(tree, region.from)); // noqa: unused-return-value
 		admitAll();
+		for (e in callees) {
+			final unknown: Null<Occurrence> = followEdge(g, e, push);
+			if (unknown != null) return unknown;
+		}
 		var qi: Int = 0;
 		while (qi < queue.length) {
 			if (qi >= _maxVisited) return { file: '', span: new Span(0, 0) };
@@ -707,8 +722,9 @@ final class MemberReach {
 						seen[body.id] = true;
 				}
 			}
+			if (bodyNotItsSource(g, node)) return { file: node.file, span: node.span ?? new Span(0, 0) };
 			final syntaxBefore: Bool = _syntaxEntered;
-			final change: Null<Occurrence> = implicitChangeIn(g, node, push, sites);
+			final change: Null<Occurrence> = reachedChangeIn(g, node, push, sites);
 			if (change != null) return change;
 			if (enterBody(g, node) || _syntaxEntered != syntaxBefore) admitAll();
 		}
@@ -716,12 +732,13 @@ final class MemberReach {
 	}
 
 	/**
-	 * Where the implicit walk's `node` may change an array other code holds, or null after queueing (`push`) what it
+	 * Where `reachedArrayChange`'s `node` may change an array other code holds, or null after queueing (`push`) what it
 	 * runs and recording its implicit-call sites in `sites`: a body-less declaration dispatches to its implementations (an abstract's
 	 * operator forwards to its underlying value) unless it is extern, whose code the walk cannot see, and a body
-	 * counts its own array changes, blind spots and unresolved sites.
+	 * counts its own array changes, blind spots and unresolved sites. A call of library code the region itself could
+	 * make freely (`benignCall`: a pure call, a built-in array method on a fresh local of the body) is not followed.
 	 */
-	private function implicitChangeIn(g: CallGraph, node: FnNode, push: String -> Void, sites: Array<ImplicitSite>): Null<Occurrence> {
+	private function reachedChangeIn(g: CallGraph, node: FnNode, push: String -> Void, sites: Array<ImplicitSite>): Null<Occurrence> {
 		final type: Null<String> = node.typeName;
 		final name: Null<String> = node.name;
 		final next: Array<String> = if (node.isBodyless) {
@@ -742,10 +759,49 @@ final class MemberReach {
 				sites.push(at);
 				for (id in _g.idsAt(g, at)) push(id);
 			}
-			[for (e in liveEdges(g, node.id)) e.to];
+			for (e in liveEdges(g, node.id)) if (!benignEdge(g, node, e)) {
+				final unknown: Null<Occurrence> = followEdge(g, e, push);
+				if (unknown != null) return unknown;
+			}
+			[];
 		};
 		for (id in next) push(id);
 		return null;
+	}
+
+	/**
+	 * Queue (`push`) the target of `e` and, for an instance dispatch, every override of it the graph holds once the
+	 * library subtypes are read (`ReachGraph.loadOverrides`) — or answer the site when they cannot all be known.
+	 */
+	private function followEdge(g: CallGraph, e: CallEdge, push: String -> Void): Null<Occurrence> {
+		push(e.to);
+		final dispatch: Null<String> = e.dispatchType;
+		final target: Null<String> = g.node(e.to)?.name;
+		if (dispatch == null || target == null) return null;
+		if (!_projectSources.exists(_scope.siteOf(dispatch)?.file ?? '') && _g.loadOverrides(g, dispatch, target) != null)
+			return { file: e.file, span: e.span ?? new Span(0, 0) };
+		for (v in g.virtualTargets(dispatch, target)) push(v);
+		return null;
+	}
+
+	/** Whether the edge `e` out of the body `node` invokes library code that cannot change an array other code holds (`benignCall`). */
+	private function benignEdge(g: CallGraph, node: FnNode, e: CallEdge): Bool {
+		final target: Null<FnNode> = g.node(e.to);
+		final tree: Null<QueryNode> = g.treeOf(node.file);
+		final source: Null<String> = g.sourceOf(node.file);
+		final body: Null<Span> = node.span;
+		final at: Null<Span> = e.span;
+		if (target == null || !target.isExternal || e.kind == Ref || tree == null || source == null || body == null || at == null)
+			return false;
+		final fn: Null<QueryNode> = enclosingFunctionNode(tree, body);
+		final call: Null<QueryNode> = _hazards.callsIn(tree, at).find(c -> c.span?.from == at.from);
+		return fn != null && benignCall(g, tree, source, fn, target, call, body);
+	}
+
+	/** Whether the code that runs for `node` may not be its source: a build macro may rewrite its type, or two types share the name. */
+	private function bodyNotItsSource(g: CallGraph, node: FnNode): Bool {
+		final type: Null<String> = node.typeName;
+		return type != null && (g.types.declarationCount(type) > 1 || _g.buildMacroOn(type) != null);
 	}
 
 	/** What the external `node` stands for once its library file is read: harmless, a body to walk, or nothing the walk can see. */
