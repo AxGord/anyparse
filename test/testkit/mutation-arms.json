@@ -3455,7 +3455,7 @@
 			"name": "M-GENERATE-NEVER-STALE-BY-INPUT",
 			"type": "anyparse.check.OracleGeneration",
 			"method": "staleness",
-			"find": "for (input in inputs) if (hashIn(recordedInputs, input) != hashOf(input)) return '$input changed';",
+			"find": "for (input in inputs) if (hashIn(recordedInputs, input) != hashOf(input, memo)) return '$input changed';",
 			"replace": "",
 			"note": "a changed generateInputs file no longer makes the recorded generation stale, so an hxml generated from an older project.xml keeps answering for a build that no longer exists"
 		},
@@ -3473,7 +3473,7 @@
 			"method": "staleness",
 			"find": [
 				"for (hxml in group.hxmls) if (!sys.FileSystem.exists(hxml)) return '$hxml is missing';",
-				"for (hxml in group.hxmls) if (hashIn(recordedOutputs, hxml) != hashOf(hxml)) return '$hxml changed since it was generated';"
+				"for (hxml in group.hxmls) if (hashIn(recordedOutputs, hxml) != hashOf(hxml, memo)) return '$hxml changed since it was generated';"
 			],
 			"replace": [
 				"",
@@ -3536,7 +3536,7 @@
 			"type": "anyparse.check.OracleGeneration",
 			"method": "writeRecord",
 			"find": "inputs: inputs,",
-			"replace": "inputs: hashAll(group.inputs ?? []),",
+			"replace": "inputs: hashAll(group.inputs ?? [], []),",
 			"note": "the explicit inputs are hashed after the command instead of before, so an edit landing during a generation is recorded beside an hxml built from the old content and never regenerates"
 		},
 		{
@@ -3551,7 +3551,7 @@
 			"name": "M-GENERATE-DIRECTORY-INPUT-CONSTANT",
 			"type": "anyparse.check.OracleGeneration",
 			"method": "hashOf",
-			"find": "listTree(path, '', lines, 0);",
+			"find": "listTree(path, '', lines, 0, memo);",
 			"replace": "",
 			"note": "a directory input hashes to one constant, so a file added or edited under it never regenerates"
 		},
@@ -3565,17 +3565,17 @@
 		},
 		{
 			"name": "M-GENERATE-LOCK-IGNORED",
-			"type": "anyparse.check.OracleGeneration",
-			"method": "acquire",
-			"force": "null",
-			"note": "no generation lock is taken, so another run's rm -rf can land in the middle of this run's typecheck"
+			"type": "anyparse.check.OracleGenerationLock",
+			"method": "living",
+			"note": "every lock holder reads as dead, so a live run's exclusive hold is taken over and its tree regenerated under it",
+			"force": "false"
 		},
 		{
 			"name": "M-GENERATE-LOCK-NEVER-RECOVERED",
-			"type": "anyparse.check.OracleGeneration",
-			"method": "alive",
-			"force": "true",
-			"note": "a lock left by a dead run is waited for as if its owner lived, so one crashed run makes every later one unavailable"
+			"type": "anyparse.check.OracleGenerationLock",
+			"method": "living",
+			"note": "a lock left by a dead run is waited for as if its owner lived, so one crashed run makes every later one unavailable",
+			"force": "true"
 		},
 		{
 			"name": "M-GENERATE-EMPTY-INPUTS-NEVER",
@@ -3624,7 +3624,7 @@
 			"name": "M-ORACLE-CACHE-STORES-A-MOVED-FINGERPRINT",
 			"type": "anyparse.check.OracleCache",
 			"method": "storeIfUnchanged",
-			"find": "if (OracleCache.fingerprint(hxml, cwd, defines) != fingerprint) return false;",
+			"find": "if (OracleCache.fingerprint(hxml, cwd, defines, memo) != fingerprint) return false;",
 			"replace": "",
 			"note": "a verdict is filed under the pre-compile fingerprint even when the tree moved during the compile, so a verdict about a half-regenerated tree is handed to the next run of the complete one"
 		},
@@ -3634,6 +3634,101 @@
 			"method": "implicitInputs",
 			"force": "[]",
 			"note": "the library state the generated hxml names is not an input, so a haxelib version or dev-path switch leaves an hxml naming the old library paths current"
+		},
+		{
+			"name": "M-GENERATE-READERS-EXCLUDE-EACH-OTHER",
+			"type": "anyparse.check.OracleGeneration",
+			"method": "prepare",
+			"find": "final blocked: Null<String> = OracleGenerationLock.holdShared(lockDir(group), me, deadline);",
+			"replace": "final blocked: Null<String> = OracleGenerationLock.holdExclusive(lockDir(group), me, deadline);",
+			"note": "every run takes every generation exclusively, so one agent's long --fix run blocks every other lint over a tree nobody regenerates"
+		},
+		{
+			"name": "M-GENERATE-WRITER-IGNORES-READERS",
+			"type": "anyparse.check.OracleGenerationLock",
+			"method": "holdExclusive",
+			"find": "if (others.length == 0) return null;",
+			"replace": "return null;",
+			"note": "a regeneration no longer waits for the runs still compiling the old tree, so its rm -rf lands under their typecheck"
+		},
+		{
+			"name": "M-GENERATE-OWNERLESS-ABANDONED-AT-ONCE",
+			"type": "anyparse.check.OracleGenerationLock",
+			"method": "writerOf",
+			"find": "abandoned: now - modified(writer) > OWNERLESS_GRACE",
+			"replace": "abandoned: true",
+			"note": "a writer caught between its mkdir and its owner write is taken over at once, so two runs both hold the lock"
+		},
+		{
+			"name": "M-GENERATE-TAKEOVER-UNVERIFIED",
+			"type": "anyparse.check.OracleGenerationLock",
+			"method": "takeOver",
+			"find": "final same: Bool = current != null && current.identity == stale.identity;",
+			"replace": "final same: Bool = current != null;",
+			"note": "a run that judged an owner dead too late removes the fresh writer that replaced it, so two runs both win the takeover"
+		},
+		{
+			"name": "M-GENERATE-PID-ALONE",
+			"type": "anyparse.check.OracleGenerationLock",
+			"method": "living",
+			"find": "return signalable && (start == '' || startTime(pid) == start);",
+			"replace": "return signalable;",
+			"note": "a lock owner is judged by its pid alone, so a pid the system reused keeps a dead run's lock for hours"
+		},
+		{
+			"name": "M-DRIVER-SIGNAL-ORPHANS",
+			"type": "anyparse.check.HaxeSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": "for (const s of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(s, () => { killAll(); process.exit(1); });",
+			"replace": "",
+			"note": "a signalled driver exits without its detached job groups, so Ctrl-C leaves a build tool writing into dist/oracle"
+		},
+		{
+			"name": "M-GENERATE-REPO-DIR-FROM-NAME",
+			"type": "anyparse.check.OracleGeneration",
+			"method": "repositoryDir",
+			"find": "final dev: Null<String> = libraries.devs[library];",
+			"replace": "final dev: Null<String> = null;",
+			"note": "a dev install is not traced to the repository directory whose .dev points at it, so haxelib dev on a library whose json name differs from its directory never regenerates"
+		},
+		{
+			"name": "M-GENERATE-IMPLICIT-HASHED-AFTER-THE-RUN",
+			"type": "anyparse.check.OracleGeneration",
+			"method": "record",
+			"find": [
+				"hashIn(s.implicitBefore, path) ?? hashOf(path, after)",
+				"if (moved == null) writeRecord(s.group, s.inputs, implicit, after);"
+			],
+			"replace": [
+				"hashOf(path, after)",
+				"writeRecord(s.group, s.inputs, implicit, after);"
+			],
+			"note": "implicit inputs are hashed only after the command, so a library switched while it ran is recorded as the state the hxml was built against"
+		},
+		{
+			"name": "M-GENERATE-HASH-MEMO-UNUSED",
+			"type": "anyparse.check.OracleGeneration",
+			"method": "hashOf",
+			"find": "if (held != null) return held;",
+			"replace": "",
+			"note": "every generation naming a path reads and hashes it again, so a large shared input such as fonts/ is read once per build per run"
+		},
+		{
+			"name": "M-GENERATE-TEMPLATES-UNTRACKED",
+			"type": "anyparse.check.OracleGeneration",
+			"method": "collectHxml",
+			"find": "['haxelib.json', 'include.xml', 'templates/haxe']",
+			"replace": "['haxelib.json', 'include.xml']",
+			"note": "a library's code templates are not inputs, so a changed lime ApplicationMain template leaves the generated sources stale"
+		},
+		{
+			"name": "M-ORACLE-CACHE-MEMO-UNREAD",
+			"type": "anyparse.check.OracleCache",
+			"method": "walkDir",
+			"find": "final held: Null<String> = memo?.get(full);",
+			"replace": "final held: Null<String> = null;",
+			"note": "the fingerprint memo is never read, so every configuration re-reads and re-hashes the whole source tree before and after the compiles"
 		},
 		{
 			"name": "M-FIAD-CROSS-SUPER-UNPROVED",

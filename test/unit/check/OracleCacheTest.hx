@@ -342,4 +342,33 @@ final class OracleCacheTest extends Test {
 		#end
 	}
 
+	/**
+	 * A fingerprint taken with a memo reads a source the memo already holds from the memo, not from disk — the one read
+	 * per source a run over many configurations pays. Proven by a memo that lies about the source: the key moves.
+	 */
+	@:pin('control')
+	@:killer('M-ORACLE-CACHE-MEMO-UNREAD')
+	public function testAFingerprintReadsItsSourcesThroughTheMemo(): Void {
+		#if (sys || nodejs)
+		if (!oracleWorks()) {
+			Assert.pass('haxe unavailable — skipped');
+			return;
+		}
+		final dir: String = writeLintDir(VALID);
+		final hxml: String = '$dir/check.hxml';
+		final plain: Null<String> = OracleCache.fingerprint(hxml, dir);
+		if (plain == null) {
+			skipNoFingerprint(dir);
+			return;
+		}
+		final memo: Map<String, String> = [];
+		Assert.equals(plain, OracleCache.fingerprint(hxml, dir, null, memo), 'an empty memo changes nothing');
+		for (path in memo.keys()) memo[path] = 'not-the-content';
+		Assert.notEquals(plain, OracleCache.fingerprint(hxml, dir, null, memo), 'a filled memo is what the key is built from');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 }

@@ -7,6 +7,7 @@ import sys.io.File;
 import anyparse.check.CompilerOracle;
 import anyparse.check.LintConfig;
 import anyparse.check.OracleGeneration;
+import anyparse.check.OracleGenerationLock;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -238,13 +239,15 @@ final class OracleGenerationTest extends Test {
 	 */
 	@:pin('control')
 	@:killer('M-GENERATE-IGNORES-LIBRARY-STATE')
+	@:killer('M-GENERATE-TEMPLATES-UNTRACKED')
 	public function testTheLibraryStateTheHxmlNamesIsAnInput(): Void {
 		#if (sys || nodejs)
 		final dir: String = fixture();
 		final repo: String = CliFixture.writeTree('oraclegenrepo', [
 			{ name: 'mylib/.current', source: '1.0.0' },
 			{ name: 'mylib/1,0,0/haxelib.json', source: '{"name":"mylib","version":"1.0.0"}' },
-			{ name: 'mylib/1,0,0/src/Lib.hx', source: 'class Lib {}\n' }
+			{ name: 'mylib/1,0,0/src/Lib.hx', source: 'class Lib {}\n' },
+			{ name: 'mylib/1,0,0/templates/haxe/ApplicationMain.hx', source: '// template\n' }
 		]);
 		File.saveContent('$dir/extra.hxml', '-D extra\n');
 		final command: String = "printf '%s\\n' '-cp .' '-main Main' '-cp " + repo
@@ -262,6 +265,9 @@ final class OracleGenerationTest extends Test {
 		File.saveContent('$dir/extra.hxml', '-D extra2\n');
 		OracleGeneration.prepare([config]);
 		Assert.equals(4, runs(dir), 'and an hxml the generated one includes');
+		File.saveContent('$repo/mylib/1,0,0/templates/haxe/ApplicationMain.hx', '// template 2\n');
+		OracleGeneration.prepare([config]);
+		Assert.equals(5, runs(dir), 'and the code templates of the library that generated it');
 		CliFixture.removeDir(repo);
 		CliFixture.removeDir(dir);
 		#else
@@ -269,21 +275,20 @@ final class OracleGenerationTest extends Test {
 		#end
 	}
 
-	/** A lock held by a LIVE other run makes the configuration unavailable once the wait runs out. */
+	/** A generation held EXCLUSIVELY by a live other run makes the configuration unavailable once the wait runs out. */
 	@:pin('control')
 	@:killer('M-GENERATE-LOCK-IGNORED')
 	public function testALockHeldByALiveRunMakesTheConfigurationUnavailable(): Void {
 		#if nodejs
 		final dir: String = fixture();
 		final config: OracleConfig = entry(dir, WRITE, ['$dir/input.txt']);
-		final lock: String = OracleGeneration.lockDir(OracleGeneration.groupsOf([config])[0]);
+		final lock: String = lockOf(config);
 		final other: Dynamic = js.node.ChildProcess.spawn('sleep', ['30']);
-		FileSystem.createDirectory(lock);
-		File.saveContent('$lock/owner', '${other.pid} ${Date.now().getTime()}');
+		holdAsWriter(lock, other.pid, OracleGenerationLock.startTime(other.pid));
 		final ready: Array<OracleConfig> = OracleGeneration.prepare([config], 300).oracles;
 		other.kill();
 		Assert.isTrue(
-			(ready[0].unavailable ?? '').contains('holds its generation lock'), 'the live owner is waited for: ${ready[0].unavailable}'
+			(ready[0].unavailable ?? '').contains('is regenerating it'), 'the live writer is waited for: ${ready[0].unavailable}'
 		);
 		Assert.equals(0, runs(dir), 'and nothing was generated under it');
 		CliFixture.removeDir(lock);
@@ -293,22 +298,19 @@ final class OracleGenerationTest extends Test {
 		#end
 	}
 
-	/** A lock whose owner is gone is taken over rather than waited for. */
+	/** A generation lock whose owner is gone is taken over rather than waited for. */
 	@:pin('control')
 	@:killer('M-GENERATE-LOCK-NEVER-RECOVERED')
 	public function testAnAbandonedLockIsTakenOver(): Void {
 		#if nodejs
 		final dir: String = fixture();
 		final config: OracleConfig = entry(dir, WRITE, ['$dir/input.txt']);
-		final lock: String = OracleGeneration.lockDir(OracleGeneration.groupsOf([config])[0]);
-		final gone: Dynamic = js.node.ChildProcess.spawnSync('sh', ['-c', "echo $$"]);
-		final pid: Null<Int> = Std.parseInt(Std.string(gone.stdout).trim());
-		Assert.notNull(pid, 'a real pid, of a process that has exited');
-		FileSystem.createDirectory(lock);
-		File.saveContent('$lock/owner', '$pid ${Date.now().getTime()}');
+		final lock: String = lockOf(config);
+		holdAsWriter(lock, exitedPid(), '');
 		final ready: Array<OracleConfig> = OracleGeneration.prepare([config], 300).oracles;
 		Assert.isNull(ready[0].unavailable, 'the dead owner\'s lock was taken over');
 		Assert.equals(1, runs(dir), 'and the generation ran');
+		CliFixture.removeDir(lock);
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-node target');
@@ -327,6 +329,260 @@ final class OracleGenerationTest extends Test {
 		);
 		Assert.equals(1, missing.compilerOracles()[0].generate?.inputs?.length, 'the missing input is kept');
 		Assert.isTrue(Lambda.exists(missing.drops(), d -> d.contains('no-such-input.txt')), 'and named: ${missing.drops()}');
+	}
+
+	/**
+	 * Readers never wait for each other: a CURRENT generation another live run is compiling (a shared hold) is used at
+	 * once, with nothing regenerated — two concurrent lint runs over a current tree each take their own time, not twice it.
+	 */
+	@:pin('control')
+	@:killer('M-GENERATE-READERS-EXCLUDE-EACH-OTHER')
+	public function testALiveReaderDoesNotBlockACurrentGeneration(): Void {
+		#if nodejs
+		final dir: String = fixture();
+		final config: OracleConfig = entry(dir, WRITE, ['$dir/input.txt']);
+		OracleGeneration.prepare([config]);
+		OracleGeneration.release([config]);
+		final lock: String = lockOf(config);
+		final other: Dynamic = js.node.ChildProcess.spawn('sleep', ['30']);
+		holdAsReader(lock, other.pid, OracleGenerationLock.startTime(other.pid));
+		final started: Float = Date.now().getTime();
+		final ready: Array<OracleConfig> = OracleGeneration.prepare([config], 3000).oracles;
+		final spent: Float = Date.now().getTime() - started;
+		other.kill();
+		Assert.isNull(ready[0].unavailable, 'the current generation is usable beside another reader');
+		Assert.isTrue(spent < 2000, 'without waiting for it: ${spent} ms');
+		Assert.equals(1, runs(dir), 'and nothing regenerated');
+		CliFixture.removeDir(lock);
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-node target');
+		#end
+	}
+
+	/** A regeneration waits for every OTHER live run still compiling the group, and gives up at the deadline. */
+	@:pin('control')
+	@:killer('M-GENERATE-WRITER-IGNORES-READERS')
+	public function testALiveReaderHoldsOffARegeneration(): Void {
+		#if nodejs
+		final dir: String = fixture();
+		final config: OracleConfig = entry(dir, WRITE, ['$dir/input.txt']);
+		final lock: String = lockOf(config);
+		final other: Dynamic = js.node.ChildProcess.spawn('sleep', ['30']);
+		holdAsReader(lock, other.pid, OracleGenerationLock.startTime(other.pid));
+		final ready: Array<OracleConfig> = OracleGeneration.prepare([config], 300).oracles;
+		other.kill();
+		Assert.isTrue((ready[0].unavailable ?? '').contains('still compiling'), 'the reader is waited for: ${ready[0].unavailable}');
+		Assert.equals(0, runs(dir), 'and its tree was not regenerated under it');
+		CliFixture.removeDir(lock);
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-node target');
+		#end
+	}
+
+	/** A writer whose owner file is still empty (between its `mkdir` and its write) is not abandoned inside the grace. */
+	@:pin('control')
+	@:killer('M-GENERATE-OWNERLESS-ABANDONED-AT-ONCE')
+	public function testAHalfWrittenOwnerIsNotTakenOver(): Void {
+		#if nodejs
+		final dir: String = fixture();
+		final config: OracleConfig = entry(dir, WRITE, ['$dir/input.txt']);
+		final lock: String = lockOf(config);
+		FileSystem.createDirectory('$lock/writer');
+		File.saveContent('$lock/writer/owner', '');
+		final ready: Array<OracleConfig> = OracleGeneration.prepare([config], 300).oracles;
+		Assert.notNull(ready[0].unavailable, 'the fresh writer is waited for');
+		Assert.equals(0, runs(dir), 'and nothing was generated past it');
+		CliFixture.removeDir(lock);
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-node target');
+		#end
+	}
+
+	/**
+	 * Two runs that judged the same owner dead cannot both take over: the one that comes second, after the first already
+	 * took the lock and a new writer holds it, leaves that writer alone.
+	 */
+	@:pin('control')
+	@:killer('M-GENERATE-TAKEOVER-UNVERIFIED')
+	public function testOnlyOneRunTakesOverADeadLock(): Void {
+		#if nodejs
+		final dir: String = fixture();
+		final lock: String = lockOf(entry(dir, WRITE, ['$dir/input.txt']));
+		holdAsWriter(lock, exitedPid(), '');
+		final seen: Null<LockOwner> = OracleGenerationLock.writerOf(lock);
+		Assert.isTrue(seen?.abandoned == true, 'the owner is dead');
+		Assert.isTrue(seen != null && OracleGenerationLock.takeOver(lock, seen), 'the first run takes over');
+		final other: Dynamic = js.node.ChildProcess.spawn('sleep', ['30']);
+		holdAsWriter(lock, other.pid, OracleGenerationLock.startTime(other.pid));
+		Assert.isFalse(seen != null && OracleGenerationLock.takeOver(lock, seen), 'the second, acting on the same dead owner, loses');
+		Assert.equals(other.pid, OracleGenerationLock.writerOf(lock)?.pid, 'and the new writer still holds the lock');
+		other.kill();
+		CliFixture.removeDir(lock);
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-node target');
+		#end
+	}
+
+	/** A live pid that started at another time than its owner file says is a reused pid: that owner is gone. */
+	@:pin('control')
+	@:killer('M-GENERATE-PID-ALONE')
+	public function testAReusedPidDoesNotHoldTheLock(): Void {
+		#if nodejs
+		final dir: String = fixture();
+		final config: OracleConfig = entry(dir, WRITE, ['$dir/input.txt']);
+		final lock: String = lockOf(config);
+		final other: Dynamic = js.node.ChildProcess.spawn('sleep', ['30']);
+		holdAsWriter(lock, other.pid, 'Thu Jan  1 00:00:00 1970');
+		final ready: Array<OracleConfig> = OracleGeneration.prepare([config], 300).oracles;
+		other.kill();
+		Assert.isNull(ready[0].unavailable, 'the start time does not match: the lock is taken over');
+		Assert.equals(1, runs(dir), 'and the generation ran');
+		CliFixture.removeDir(lock);
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-node target');
+		#end
+	}
+
+	/**
+	 * A DEV install is tracked through the repository directory whose `.dev` points at it, not through the name its
+	 * `haxelib.json` declares — here `my-lib` in the repository, `my_lib` in the json, as `mac-utils` / `mac_utils` in the
+	 * wild. `HAXELIB_PATH` points the run at a scratch repository.
+	 */
+	@:pin('control')
+	@:killer('M-GENERATE-REPO-DIR-FROM-NAME')
+	public function testADevLibraryIsTrackedThroughItsRepositoryDirectory(): Void {
+		#if nodejs
+		final dir: String = fixture();
+		final repo: String = CliFixture.writeTree('oraclegendevrepo', [
+			{ name: '.repo-version', source: '1' },
+			{ name: 'my-lib/.current', source: 'dev' }
+		]);
+		final lib: String = CliFixture.writeTree('oraclegendevlib', [
+			{ name: 'haxelib.json', source: '{"name":"my_lib","version":"1.0.0"}' },
+			{ name: 'src/Lib.hx', source: 'class Lib {}\n' }
+		]);
+		File.saveContent('$repo/my-lib/.dev', lib);
+		final command: String = "printf '%s\\n' '-cp .' '-main Main' '-cp " + lib + "/src' > gen.hxml && echo run >> runs.txt";
+		final config: OracleConfig = entry(dir, command, ['$dir/input.txt']);
+		final declared: Null<String> = Sys.getEnv('HAXELIB_PATH');
+		Sys.putEnv('HAXELIB_PATH', repo);
+		CliFixture.always(() -> Sys.putEnv('HAXELIB_PATH', declared ?? ''), () -> {
+			OracleGeneration.prepare([config]);
+			OracleGeneration.prepare([config]);
+			Assert.equals(1, runs(dir), 'unchanged dev state is current');
+			File.saveContent('$repo/my-lib/.dev', '$lib/');
+			OracleGeneration.prepare([config]);
+			Assert.equals(2, runs(dir), 'repointing the dev install regenerates');
+		});
+		CliFixture.removeDir(lib);
+		CliFixture.removeDir(repo);
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-node target');
+		#end
+	}
+
+	/**
+	 * A library the command's own run switched is not recorded as current: the version the hxml was built against is
+	 * not the one on disk afterwards, so the next run regenerates.
+	 */
+	@:pin('control')
+	@:killer('M-GENERATE-IMPLICIT-HASHED-AFTER-THE-RUN')
+	public function testALibrarySwitchedDuringTheGenerationIsSeenNextRun(): Void {
+		#if (sys || nodejs)
+		final dir: String = fixture();
+		final repo: String = CliFixture.writeTree('oraclegenracerepo', [
+			{ name: 'mylib/.current', source: '1.0.0' },
+			{ name: 'mylib/1,0,0/haxelib.json', source: '{"name":"mylib","version":"1.0.0"}' },
+			{ name: 'mylib/1,0,0/src/Lib.hx', source: 'class Lib {}\n' }
+		]);
+		final write: String = "printf '%s\\n' '-cp .' '-main Main' '-cp " + repo + "/mylib/1,0,0/src' > gen.hxml && echo run >> runs.txt";
+		OracleGeneration.prepare([entry(dir, write, ['$dir/input.txt'])]);
+		final switching: OracleConfig = entry(dir, '$write && echo 1.0.1 > $repo/mylib/.current', ['$dir/input.txt']);
+		OracleGeneration.prepare([switching]);
+		Assert.equals(2, runs(dir), 'the changed command ran');
+		OracleGeneration.prepare([switching]);
+		Assert.equals(3, runs(dir), 'and its generation, raced by the library switch it made, was not taken as current');
+		CliFixture.removeDir(repo);
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** One `prepare` reads a file once, however many generations name it. */
+	@:pin('control')
+	@:killer('M-GENERATE-HASH-MEMO-UNUSED')
+	public function testAFileNamedByTwoGenerationsIsReadOnce(): Void {
+		#if (sys || nodejs)
+		final dir: String = fixture();
+		FileSystem.createDirectory('$dir/fonts');
+		for (name in ['a', 'b', 'c']) File.saveContent('$dir/fonts/$name.ttf', name);
+		final pair: Array<OracleConfig> = [
+			entry(dir, WRITE, ['$dir/fonts']),
+			{
+				hxml: '$dir/gen2.hxml',
+				dir: dir,
+				defines: [],
+				generate: {
+					command: "printf '%s\\n' '-cp .' '-main Main' > gen2.hxml",
+					root: dir,
+					inputs: ['$dir/fonts'],
+					probeDir: false
+				}
+			}
+		];
+		OracleGeneration.prepare(pair);
+		final before: Int = OracleGeneration.hashReads;
+		OracleGeneration.prepare(pair);
+		Assert.equals(5, OracleGeneration.hashReads - before, 'three fonts once, and each hxml: 3 + 2 reads, not 3 + 1 + 3 + 1');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	#if nodejs
+	/** The generation lock of `config`'s group. */
+	private static function lockOf(config: OracleConfig): String {
+		return OracleGeneration.lockDir(OracleGeneration.groupsOf([config])[0]);
+	}
+
+	/** Stand `pid` / `start` in as the exclusive holder of `lock`, as another run would. */
+	private static function holdAsWriter(lock: String, pid: Null<Int>, start: String): Void {
+		FileSystem.createDirectory('$lock/writer');
+		File.saveContent('$lock/writer/owner', '$pid\n$start\n${Date.now().getTime()}');
+	}
+
+	/** Stand `pid` / `start` in as a shared holder of `lock`. */
+	private static function holdAsReader(lock: String, pid: Null<Int>, start: String): Void {
+		FileSystem.createDirectory('$lock/readers');
+		File.saveContent('$lock/readers/$pid', start);
+	}
+
+	/** The pid of a process that has already exited. */
+	private static function exitedPid(): Null<Int> {
+		final gone: Dynamic = js.node.ChildProcess.spawnSync('sh', ['-c', "echo $$"]);
+		return Std.parseInt(Std.string(gone.stdout).trim());
+	}
+	#end
+
+	/** The `APQ_ORACLE_LOCK_WAIT` this suite found, restored after every test. */
+	private var _declaredLockWait: Null<String> = null;
+
+	/** A lock nobody releases fails a test in seconds, not after the ten-minute production wait. */
+	public function setup(): Void {
+		_declaredLockWait = Sys.getEnv('APQ_ORACLE_LOCK_WAIT');
+		Sys.putEnv('APQ_ORACLE_LOCK_WAIT', '5000');
+	}
+
+	public function teardown(): Void {
+		Sys.putEnv('APQ_ORACLE_LOCK_WAIT', _declaredLockWait ?? '');
 	}
 
 }

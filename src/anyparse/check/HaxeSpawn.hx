@@ -75,7 +75,8 @@ final class HaxeSpawn {
 	 * one. With `argv[3]` = `1` a job that fails (any status but 0) kills every LATER job still running and starts none
 	 * after it, so the first failure in job order is always one that ran to its end. Off Windows every job leads a
 	 * process group of its own and a kill reaches the whole group — a shell's children (a build tool it started) die
-	 * with it instead of writing on after their job was answered.
+	 * with it instead of writing on after their job was answered. A SIGINT, SIGTERM or SIGHUP to the driver kills every
+	 * live job group before it exits: the groups are detached, so a Ctrl-C at the terminal no longer reaches them by itself.
 	 */
 	private static inline final PARALLEL_DRIVER: String = "const cp = require('child_process');"
 		+ "const jobs = JSON.parse(require('fs').readFileSync(0, 'utf8'));"
@@ -84,6 +85,8 @@ final class HaxeSpawn {
 		+ "const out = new Array(jobs.length); const kids = new Array(jobs.length); let next = 0, running = 0, done = 0;"
 		+ "function kill(c) { try { if (group) process.kill(-c.pid, 'SIGKILL'); else c.kill(); }"
 		+ " catch (err) { try { c.kill('SIGKILL'); } catch (ignored) {} } }"
+		+ "function killAll() { for (const c of kids) if (c) kill(c); }"
+		+ "for (const s of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(s, () => { killAll(); process.exit(1); });"
 		+ "function cancelAfter(i) { for (let k = i + 1; k < jobs.length; k++) { if (out[k]) continue;"
 		+ " if (kids[k]) { kids[k].cancelled = true; kill(kids[k]); }"
 		+ " else if (k >= next) { out[k] = { status: null, out: '', err: '', failure: '" + NOT_STARTED + "', overflowed: false,"
@@ -188,14 +191,9 @@ final class HaxeSpawn {
 			input: haxe.Json.stringify(jobs),
 			maxBuffer: (maxBuffer + OVERHEAD) * jobs.length
 		};
-		final res: ChildProcessSpawnSyncResult = js.node.ChildProcess.spawnSync(js.Node.process.execPath, [
-			'-e',
-			PARALLEL_DRIVER,
-			'--',
-			'${Std.int(Math.max(1, parallel))}',
-			'$maxBuffer',
-			stop ? '1' : '0'
-		], options);
+		final res: ChildProcessSpawnSyncResult = js.node.ChildProcess.spawnSync(
+			js.Node.process.execPath, driverArgs(parallel, maxBuffer, stop), options
+		);
 		final launchError: Null<Dynamic> = (res.error: Dynamic);
 		final status: Null<Int> = (res.status: Null<Int>);
 		final answer: Null<Array<HaxeRun>> = launchError != null || status != 0
@@ -332,6 +330,21 @@ final class HaxeSpawn {
 		return value == null ? '' : '$value';
 	}
 	#end
+
+	/**
+	 * The node argument vector that runs the process driver over at most `parallel` jobs at once under `maxBuffer`, with
+	 * `stop` as `stopAfterFailure`. The jobs go to its stdin as JSON and its runs come back on stdout, in job order.
+	 */
+	public static function driverArgs(parallel: Int, maxBuffer: Int, stop: Bool): Array<String> {
+		return [
+			'-e',
+			PARALLEL_DRIVER,
+			'--',
+			'${Std.int(Math.max(1, parallel))}',
+			'$maxBuffer',
+			stop ? '1' : '0'
+		];
+	}
 
 }
 

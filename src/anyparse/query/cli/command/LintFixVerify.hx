@@ -387,12 +387,15 @@ final class LintFixVerify {
 		final outcomes: Array<Null<OracleOutcome>> = [];
 		final fingerprints: Array<Null<String>> = [];
 		final compile: Array<Int> = [];
+		// one read of each source across every configuration, before the compiles and again after them
+		final before: Map<String, String> = [];
+		final after: Map<String, String> = [];
 		for (i in 0...oracles.length) {
 			final oracle: OracleConfig = oracles[i];
 			final unavailable: Null<String> = oracle.unavailable;
 			final fingerprint: Null<String> = unavailable != null || EnvFlag.isSet('APQ_NO_ORACLE_CACHE')
 				? null
-				: OracleCache.fingerprint(oracle.hxml, oracle.dir, oracle.defines);
+				: OracleCache.fingerprint(oracle.hxml, oracle.dir, oracle.defines, before);
 			fingerprints.push(fingerprint);
 			final cached: Null<OracleOutcome> = fingerprint == null
 				? null
@@ -416,7 +419,7 @@ final class LintFixVerify {
 			// stored only while the input still hashes as it did before the compile: a tree that moved meanwhile
 			// produced a verdict about neither state
 			if (fingerprint != null)
-				OracleCache.storeIfUnchanged(oracles[i].hxml, oracles[i].dir, fingerprint, compiled[k], oracles[i].defines);
+				OracleCache.storeIfUnchanged(oracles[i].hxml, oracles[i].dir, fingerprint, compiled[k], oracles[i].defines, after);
 		}
 		return [for (outcome in outcomes) outcome ?? Unavailable('no verdict was taken')];
 	}

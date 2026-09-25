@@ -4,7 +4,6 @@ import anyparse.check.CompilerOracle;
 import anyparse.check.LintConfig;
 import anyparse.check.OracleCache;
 import anyparse.check.OracleGeneration;
-import anyparse.check.OracleGeneration.PreparedOracles;
 import anyparse.query.cli.CliContext;
 import anyparse.query.ExitCode.*;
 
@@ -100,8 +99,13 @@ final class OracleCommand implements CliCommand {
 		final prepared: PreparedOracles = OracleGeneration.prepare(oracles);
 		for (note in prepared.notes) CliIo.stderr('apq oracle: compilerOracle $note\n');
 		final ready: Array<OracleConfig> = prepared.oracles;
+		// one read of each source across every configuration, before the compiles and again after them
+		final before: Map<String, String> = [];
+		final after: Map<String, String> = [];
 		final fingerprints: Array<Null<String>> = [
-			for (oracle in ready) oracle.unavailable == null ? OracleCache.fingerprint(oracle.hxml, oracle.dir, oracle.defines) : null
+			for (oracle in ready) oracle.unavailable == null
+				? OracleCache.fingerprint(oracle.hxml, oracle.dir, oracle.defines, before)
+				: null
 		];
 		final outcomes: Array<Null<OracleOutcome>> = CompilerOracle.typecheckEach(ready, false);
 		var exit: Int = EXIT_OK;
@@ -110,7 +114,7 @@ final class OracleCommand implements CliCommand {
 			final outcome: OracleOutcome = outcomes[i] ?? Unavailable('the typecheck was cancelled');
 			final fingerprint: Null<String> = fingerprints[i];
 			final stored: Bool = fingerprint != null
-				&& OracleCache.storeIfUnchanged(oracle.hxml, oracle.dir, fingerprint, outcome, oracle.defines);
+				&& OracleCache.storeIfUnchanged(oracle.hxml, oracle.dir, fingerprint, outcome, oracle.defines, after);
 			if (reportOracleRun(oracle, outcome) != EXIT_OK) exit = EXIT_RUNTIME;
 			if (fingerprint == null && oracle.unavailable == null)
 				CliIo.stderr('apq oracle: no fingerprint for ${LintConfig.describeOracle(oracle)} — the verdict was not recorded\n');
@@ -119,6 +123,8 @@ final class OracleCommand implements CliCommand {
 					'apq oracle: the compile input of ${LintConfig.describeOracle(oracle)} changed during the typecheck — the verdict was not recorded\n'
 				);
 		}
+		// the compiles are done: another run may regenerate these builds now
+		OracleGeneration.release(ready);
 		return exit;
 	}
 

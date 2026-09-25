@@ -5,7 +5,6 @@ import anyparse.check.ConfigDisagreement;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.check.OracleGeneration;
-import anyparse.check.OracleGeneration.PreparedOracles;
 import anyparse.check.ReachDefinesProbe;
 import anyparse.check.Severity;
 import anyparse.query.Address.TreeAddresser;
@@ -238,10 +237,14 @@ final class LintCommand implements CliCommand {
 			unconfigured, oracles, o.noOracle, reachComplete(paths, resolveConfig)
 		);
 
-		if (o.fix)
-			return LintFixDriver.runLintFix(
+		if (o.fix) {
+			final fixed: Int = LintFixDriver.runLintFix(
 				files, activeChecks, plugin, resolveConfig, applyEnablement, resolution, oracles, o.noOracle, o.range, o.verbose
 			);
+			// every compile of the run is done: another run may regenerate these builds now
+			OracleGeneration.release(oracles);
+			return fixed;
+		}
 
 		// Report mode only — the fix path returned above, so this pass never runs redundantly in a
 		// --fix run. The resolution scope joins the checks' SymbolIndex; findings stay in the report
@@ -269,6 +272,7 @@ final class LintCommand implements CliCommand {
 		final oracleExit: Null<Int> = o.noOracle
 			? LintFixVerify.oracleSkippedNote(oracles)
 			: LintFixVerify.reportModeOracle(oracles, paths, oracleConfig?.compilerOracleServer() ?? false);
+		OracleGeneration.release(oracles);
 		if (oracleExit != null) return oracleExit;
 
 		final failOn: Null<Severity> = o.failOn;

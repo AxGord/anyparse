@@ -143,4 +143,62 @@ final class HaxeSpawnTest extends Test {
 		#end
 	}
 
+	/**
+	 * A signal to the process driver takes every running job's process group down with it: the groups are detached, so a
+	 * Ctrl-C at the terminal would otherwise leave a build tool writing on. The job records its child's pid, the driver
+	 * gets SIGTERM, and the child must be gone.
+	 */
+	@:pin('control')
+	@:killer('M-DRIVER-SIGNAL-ORPHANS')
+	public function testASignalledDriverTakesItsJobsWithIt(): Void {
+		#if nodejs
+		final dir: String = CliFixture.writeDir('spawnsignal', []);
+		// the jobs go in through a FILE: this test blocks its own event loop while it polls, so a piped write would never flush
+		sys.io.File.saveContent(
+			'$dir/jobs.json', haxe.Json.stringify([{ args: [], cwd: dir, shell: 'sleep 30 & echo $! > child.txt; wait' }])
+		);
+		final input: Int = js.Syntax.code("require('fs').openSync({0}, 'r')", '$dir/jobs.json');
+		final driver: Dynamic = js.node.ChildProcess.spawn(
+			js.Node.process.execPath, HaxeSpawn.driverArgs(1, ROOMY, false), { stdio: [input, 'ignore', 'ignore'] }
+		);
+		final child: Null<Int> = waitForPid('$dir/child.txt');
+		Assert.notNull(child, 'the job started its child');
+		driver.kill('SIGTERM');
+		var gone: Bool = false;
+		for (_ in 0...50) {
+			if (!signalable(child)) {
+				gone = true;
+				break;
+			}
+			js.Syntax.code('Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100)');
+		}
+		if (!gone && child != null) js.Syntax.code('process.kill({0}, "SIGKILL")', child);
+		Assert.isTrue(gone, 'the job\'s child died with the driver');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('the process driver needs the node target');
+		#end
+	}
+
+	#if nodejs
+	/** The pid written to `path` once it appears, polling up to five seconds. */
+	private static function waitForPid(path: String): Null<Int> {
+		for (_ in 0...50) {
+			final text: Null<String> = try sys.io.File.getContent(path) catch (exception: haxe.Exception) null;
+			final pid: Null<Int> = Std.parseInt(StringTools.trim(text ?? ''));
+			if (pid != null) return pid;
+			js.Syntax.code('Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100)');
+		}
+		return null;
+	}
+
+	/** Whether `pid` answers a signal-0 probe. */
+	private static function signalable(pid: Null<Int>): Bool {
+		return pid != null && try {
+			js.Syntax.code('process.kill({0}, 0)', pid);
+			true;
+		} catch (exception: haxe.Exception) false;
+	}
+	#end
+
 }

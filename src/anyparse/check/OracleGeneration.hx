@@ -4,6 +4,7 @@ import anyparse.check.HaxeSpawn.HaxeRun;
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.LintConfig.OracleGenerate;
 import anyparse.check.OracleCache.HxmlRefs;
+import anyparse.check.OracleGenerationLock.Holder;
 import anyparse.core.TempScratch;
 import haxe.io.Path;
 
@@ -36,8 +37,9 @@ using StringTools;
  * A command that fails, times out, or leaves an hxml missing makes every configuration it serves UNAVAILABLE with its
  * output quoted; a stale hxml is never used in its place. Entries naming one command in one directory are ONE
  * generation over the union of their inputs; distinct commands run concurrently (`HaxeSpawn.runAll`), so two of them
- * must not write a common path. Each generation is serialised across processes by a lock (`acquire`) held until this
- * process exits, so another run cannot regenerate a tree this one is still compiling.
+ * must not write a common path. Each generation is guarded across processes by a reader/writer lock:
+ * runs compiling a current tree share it and never wait for each other, and only a regeneration
+ * takes it exclusively, after every other live reader is done (`holdShared`, `holdExclusive`).
  */
 @:nullSafety(Strict)
 final class OracleGeneration {
@@ -60,35 +62,69 @@ final class OracleGeneration {
 	 * generation marks its configurations `unavailable`. Entries without `generate` pass through untouched, in place.
 	 * `notes` names each command that ran and why, for the caller to print.
 	 *
-	 * Every group's lock is taken first (`acquire`, waiting at most `lockWaitMs`) and held until this process exits, so
-	 * no other `apq` run regenerates a tree this run is still compiling; a lock that cannot be had makes that group's
-	 * configurations unavailable. A stale group's record is deleted BEFORE its command runs — a generation killed half
-	 * way leaves no record, so the next run regenerates instead of trusting a partial tree — and its explicit inputs are
-	 * hashed BEFORE it runs too, so an edit landing during the generation reads as a change next time.
+	 * Each group is guarded by a reader/writer lock across `apq` processes, waiting at most `lockWaitMs` for it. This run
+	 * takes a SHARED hold on every group it will compile — readers never wait for each other, so a current group never
+	 * blocks — and swaps it for the EXCLUSIVE hold only to regenerate, which waits until no other live run holds the group
+	 * shared (and makes new readers wait). Staleness is decided again under the exclusive hold, since another run may
+	 * have regenerated meanwhile. The shared holds last until `release` or process exit. A hold that cannot be had makes
+	 * that group's configurations unavailable.
+	 *
+	 * A stale group's record is deleted BEFORE its command runs, so a generation killed half way leaves nothing that
+	 * reads as current. Its explicit inputs, and the implicit ones its previous record named, are hashed before the command
+	 * too; an implicit input seen before AND after keeps its pre-run hash, and one that moved while the command ran leaves
+	 * the generation unrecorded, so the next run regenerates.
 	 */
 	public static function prepare(oracles: Array<OracleConfig>, ?lockWaitMs: Int): PreparedOracles {
 		final groups: Array<GenerationGroup> = groupsOf(oracles);
 		final notes: Array<String> = [];
 		if (groups.length == 0) return { oracles: oracles, notes: notes };
 		final failures: Map<String, String> = [];
-		final stale: Array<{ group: GenerationGroup, why: String, inputs: Array<FileHash> }> = [];
+		final me: Holder = OracleGenerationLock.holder();
+		final declaredWait: Null<Int> = Std.parseInt(Sys.getEnv('APQ_ORACLE_LOCK_WAIT') ?? '');
+		final deadline: Float = Date.now().getTime() + (lockWaitMs ?? declaredWait ?? LOCK_WAIT);
+		#if nodejs
+		js.Node.process.once('exit', () -> releaseGroups(groups, me));
+		#end
+		inline function refuse(group: GenerationGroup, why: String): Void {
+			failures[group.key] = why;
+			notes.push('could NOT use ${group.hxmls.join(', ')}: $why');
+		}
+		final seen: Map<String, String> = [];
+		final candidates: Array<GenerationGroup> = [];
 		for (group in groups) {
-			final blocked: Null<String> = acquire(group, lockWaitMs ?? LOCK_WAIT);
+			final blocked: Null<String> = OracleGenerationLock.holdShared(lockDir(group), me, deadline);
+			if (blocked != null)
+				refuse(group, blocked)
+			else if (staleness(group, seen) != null)
+				candidates.push(group);
+		}
+		final fresh: Map<String, String> = [];
+		final stale: Array<StaleGroup> = [];
+		for (group in candidates) {
+			final lock: String = lockDir(group);
+			OracleGenerationLock.dropShared(lock, me);
+			final blocked: Null<String> = OracleGenerationLock.holdExclusive(lock, me, deadline);
 			if (blocked != null) {
-				failures[group.key] = blocked;
-				notes.push('could NOT use ${group.hxmls.join(', ')}: $blocked');
+				refuse(group, blocked);
 				continue;
 			}
-			final why: Null<String> = staleness(group);
-			if (why == null) continue;
-			stale.push({ group: group, why: why, inputs: hashAll(group.inputs ?? []) });
+			final judged: Null<String> = staleness(group, fresh);
+			if (judged == null) {
+				// another run regenerated it while this one waited
+				OracleGenerationLock.holdShared(lock, me, deadline);
+				OracleGenerationLock.dropExclusive(lock, me);
+				continue;
+			}
+			final why: String = judged;
+			final previous: Null<GenerationRecord> = readRecord(recordFile(group));
+			stale.push({
+				group: group,
+				why: why,
+				inputs: hashAll(group.inputs ?? [], fresh),
+				implicitBefore: hashAll([for (held in previous?.implicit ?? []) held.path], fresh)
+			});
 			deleteRecord(group);
 		}
-		#if nodejs
-		// one listener per run releases every lock this process holds; `release` leaves another owner's alone
-		final me: Int = js.Node.process.pid;
-		js.Node.process.once('exit', () -> for (group in groups) release(lockDir(group), me));
-		#end
 		final runs: Array<HaxeRun> = HaxeSpawn.runAll([
 			for (s in stale)
 				{
@@ -98,21 +134,24 @@ final class OracleGeneration {
 					timeout: GENERATE_TIMEOUT
 				}
 		], BUFFER, HaxeSpawn.parallelism());
+		final libraries: LibraryIndex = libraryIndex(groups);
 		for (i => s in stale) {
+			final lock: String = lockDir(s.group);
 			final failure: Null<String> = failureOf(s.group, runs[i]);
 			if (failure == null) {
-				writeRecord(s.group, s.inputs, hashAll(implicitInputs(s.group)));
-				notes.push('regenerated ${s.group.hxmls.join(', ')} (${s.why})');
+				notes.push('regenerated ${s.group.hxmls.join(', ')} (${s.why})${record(s, libraries)}');
+				OracleGenerationLock.holdShared(lock, me, deadline);
 			} else {
 				failures[s.group.key] = 'its generate command failed — $failure';
 				notes.push('could NOT regenerate ${s.group.hxmls.join(', ')} (${s.why}): $failure');
 			}
+			OracleGenerationLock.dropExclusive(lock, me);
 		}
 		return { oracles: [for (oracle in oracles) ready(oracle, failures)], notes: notes };
 	}
 
 	/** Why `group`'s recorded generation is not current, or null when it is. */
-	public static function staleness(group: GenerationGroup): Null<String> {
+	public static function staleness(group: GenerationGroup, memo: Map<String, String>): Null<String> {
 		#if (sys || nodejs)
 		for (hxml in group.hxmls) if (!sys.FileSystem.exists(hxml)) return '$hxml is missing';
 		final inputs: Null<Array<String>> = group.inputs;
@@ -121,10 +160,10 @@ final class OracleGeneration {
 		if (record == null) return 'no generation of it is recorded';
 		if (record.command != group.generate.command) return 'its generate command changed';
 		final recordedInputs: Array<FileHash> = record.inputs ?? [];
-		for (input in inputs) if (hashIn(recordedInputs, input) != hashOf(input)) return '$input changed';
+		for (input in inputs) if (hashIn(recordedInputs, input) != hashOf(input, memo)) return '$input changed';
 		final recordedOutputs: Array<FileHash> = record.outputs ?? [];
-		for (hxml in group.hxmls) if (hashIn(recordedOutputs, hxml) != hashOf(hxml)) return '$hxml changed since it was generated';
-		for (held in record.implicit ?? []) if (hashOf(held.path) != held.hash) return '${held.path} changed';
+		for (hxml in group.hxmls) if (hashIn(recordedOutputs, hxml) != hashOf(hxml, memo)) return '$hxml changed since it was generated';
+		for (held in record.implicit ?? []) if (hashOf(held.path, memo) != held.hash) return '${held.path} changed';
 		return null;
 		#else
 		return 'no filesystem on this target';
@@ -223,12 +262,14 @@ final class OracleGeneration {
 	 * Record `group`'s generation as current: its command, its explicit inputs as hashed BEFORE the command ran, every
 	 * hxml as the command left it, and the `implicit` inputs read off those hxmls.
 	 */
-	private static function writeRecord(group: GenerationGroup, inputs: Array<FileHash>, implicit: Array<FileHash>): Void {
+	private static function writeRecord(
+		group: GenerationGroup, inputs: Array<FileHash>, implicit: Array<FileHash>, memo: Map<String, String>
+	): Void {
 		#if (sys || nodejs)
 		final record: GenerationRecord = {
 			command: group.generate.command,
 			inputs: inputs,
-			outputs: hashAll(group.hxmls),
+			outputs: hashAll(group.hxmls, memo),
 			implicit: implicit
 		};
 		try sys.io.File.saveContent(recordFile(group), haxe.Json.stringify(record)) catch (exception: haxe.Exception) {
@@ -262,27 +303,41 @@ final class OracleGeneration {
 	/**
 	 * The content hash of `path`: a file's bytes; a directory's recursive listing with every file's own hash, so an
 	 * added, removed, renamed or edited file under it is a change; `MISSING` when it does not exist or cannot be read.
+	 * Answered from `memo` when it already holds `path`, and recorded there — one `prepare` step reads each file once,
+	 * however many groups name it. Content only: a memo lives for one step and never stands in for a later read.
 	 */
-	private static function hashOf(path: String): String {
-		if (!sys.FileSystem.exists(path)) return MISSING;
-		if (!sys.FileSystem.isDirectory(path)) return try md5Bytes(sys.io.File.getBytes(path)) catch (exception: haxe.Exception) MISSING;
-		final lines: Array<String> = [];
-		listTree(path, '', lines, 0);
-		lines.sort(Reflect.compare);
-		return md5('dir\n${lines.join('\n')}');
+	private static function hashOf(path: String, memo: Map<String, String>): String {
+		final held: Null<String> = memo[path];
+		if (held != null) return held;
+		final hash: String = if (!sys.FileSystem.exists(path))
+			MISSING
+		else if (sys.FileSystem.isDirectory(path)) {
+			final lines: Array<String> = [];
+			listTree(path, '', lines, 0, memo);
+			lines.sort(Reflect.compare);
+			md5('dir\n${lines.join('\n')}');
+		} else {
+			hashReads++;
+			try
+				md5Bytes(sys.io.File.getBytes(path))
+			catch (exception: haxe.Exception)
+				MISSING;
+		};
+		memo[path] = hash;
+		return hash;
 	}
 
 	/** One `relative-path hash` line per file under `dir`, recursing at most `MAX_TREE_DEPTH` levels so a symlink loop ends. */
-	private static function listTree(dir: String, relative: String, into: Array<String>, depth: Int): Void {
+	private static function listTree(dir: String, relative: String, into: Array<String>, depth: Int, memo: Map<String, String>): Void {
 		if (depth > MAX_TREE_DEPTH) return;
 		final entries: Array<String> = try sys.FileSystem.readDirectory(dir) catch (exception: haxe.Exception) [];
 		for (entry in entries) {
 			final full: String = Path.join([dir, entry]);
 			final rel: String = relative == '' ? entry : '$relative/$entry';
 			if (sys.FileSystem.isDirectory(full))
-				listTree(full, rel, into, depth + 1);
+				listTree(full, rel, into, depth + 1, memo);
 			else
-				into.push('$rel ${hashOf(full)}');
+				into.push('$rel ${hashOf(full, memo)}');
 		}
 	}
 
@@ -300,15 +355,6 @@ final class OracleGeneration {
 	/** How long one generate command may run before its whole process group is killed, in ms. */
 	private static inline final GENERATE_TIMEOUT: Int = 30 * 60 * 1000;
 
-	/** A lock older than this is taken over even when its pid is alive — a pid the system reused for something else. */
-	private static inline final MAX_LOCK_AGE: Float = 6 * 60 * 60 * 1000;
-
-	/** How long a lock directory may exist without its owner file before it counts as abandoned, in ms. */
-	private static inline final OWNERLESS_GRACE: Float = 10 * 1000;
-
-	/** How often a waiting `acquire` looks again, in ms. */
-	private static inline final LOCK_POLL: Int = 250;
-
 	/** Recursion cap for a directory input and for the walk up to a library root. */
 	private static inline final MAX_TREE_DEPTH: Int = 32;
 
@@ -320,10 +366,10 @@ final class OracleGeneration {
 		return '${generate.root}\n${generate.command}';
 	}
 
-	/** Every path of `paths` with its content hash now. */
-	private static function hashAll(paths: Array<String>): Array<FileHash> {
+	/** Every path of `paths` with its content hash, through `memo`. */
+	private static function hashAll(paths: Array<String>, memo: Map<String, String>): Array<FileHash> {
 		#if (sys || nodejs)
-		return [for (path in paths) { path: path, hash: hashOf(path) }];
+		return [for (path in paths) { path: path, hash: hashOf(path, memo) }];
 		#else
 		return [];
 		#end
@@ -331,22 +377,26 @@ final class OracleGeneration {
 
 	/**
 	 * The files the hxmls `group` just generated depend on without the entry declaring them: every hxml they include,
-	 * and for every classpath OUTSIDE the generation's directory the library that holds it — its `haxelib.json` and
-	 * `include.xml` at the nearest ancestor carrying a `haxelib.json`, and the haxelib repository's `.current` / `.dev`
-	 * for it (the version or dev path that library resolves to), as for every `-lib` the hxml names. A library switched to
-	 * another version or dev path therefore makes the generation stale, without the project listing machine paths.
-	 * Generic over build tools: it reads only the hxml.
+	 * and for every classpath OUTSIDE the generation's directory the library that holds it — its `haxelib.json`,
+	 * `include.xml` and `templates/haxe` (the code templates a build-tool library renders the generated sources from) at
+	 * the nearest ancestor carrying a `haxelib.json`, and the haxelib repository's `.current` / `.dev` for it, as for
+	 * every `-lib` the hxml names. A library switched to another version or dev path therefore makes the generation
+	 * stale, without the project listing machine paths. The repository directory is found from the PATH (`libraries`),
+	 * never from the name a `haxelib.json` declares, which need not match it. Generic over build tools: it reads only
+	 * the hxml and the haxelib repository layout.
 	 */
-	public static function implicitInputs(group: GenerationGroup): Array<String> {
+	public static function implicitInputs(group: GenerationGroup, libraries: LibraryIndex): Array<String> {
 		final paths: Array<String> = [];
 		#if (sys || nodejs)
 		final root: String = absolute(Sys.getCwd(), group.generate.root);
 		final names: Array<String> = [];
-		final repo: Null<String> = haxelibRepository(root);
-		for (i => hxml in group.hxmls) collectHxml(hxml, absolute(root, group.dirs[i]), root, paths, names, 0);
-		for (name in names)
-			if (repo != null)
-				for (marker in ['.current', '.dev']) addOnce(paths, Path.join([repo, name.replace('.', ','), marker]));
+		for (i => hxml in group.hxmls) collectHxml(hxml, absolute(root, group.dirs[i]), root, paths, names, libraries, 0);
+		final repo: Null<String> = libraries.repo;
+		if (repo != null) for (name in names) {
+			final lower: String = Path.join([repo, name.toLowerCase().replace('.', ',')]);
+			final dir: String = sys.FileSystem.exists(lower) ? lower : Path.join([repo, name.replace('.', ',')]);
+			for (marker in ['.current', '.dev']) addOnce(paths, Path.join([dir, marker]));
+		}
 		#end
 		return paths;
 	}
@@ -354,7 +404,7 @@ final class OracleGeneration {
 	#if (sys || nodejs)
 	/** Fold one hxml's includes, library classpaths and `-lib` names into the accumulators — see `implicitInputs`. */
 	private static function collectHxml(
-		hxml: String, cwd: String, root: String, paths: Array<String>, names: Array<String>, depth: Int
+		hxml: String, cwd: String, root: String, paths: Array<String>, names: Array<String>, libraries: LibraryIndex, depth: Int
 	): Void {
 		if (depth > MAX_INCLUDE_DEPTH) return;
 		final text: Null<String> = try sys.io.File.getContent(hxml) catch (exception: haxe.Exception) null;
@@ -364,7 +414,7 @@ final class OracleGeneration {
 			final path: String = absolute(cwd, include);
 			if (!paths.contains(path)) {
 				paths.push(path);
-				collectHxml(path, cwd, root, paths, names, depth + 1);
+				collectHxml(path, cwd, root, paths, names, libraries, depth + 1);
 			}
 		}
 		for (lib in refs.libs) if (!names.contains(lib)) names.push(lib);
@@ -373,17 +423,44 @@ final class OracleGeneration {
 			if (dir == root || dir.startsWith('$root/')) continue;
 			final library: Null<String> = libraryRoot(dir);
 			if (library == null) continue;
-			addOnce(paths, Path.join([library, 'haxelib.json']));
-			addOnce(paths, Path.join([library, 'include.xml']));
-			final name: Null<String> = libraryName(Path.join([library, 'haxelib.json']));
-			if (name != null && !names.contains(name)) names.push(name);
-			// a versioned install sits in `<repo>/<lib>/<version>`, whose parent carries the selection itself
-			final parent: String = Path.directory(library);
-			if (sys.FileSystem.exists(Path.join([parent, '.current']))) {
-				addOnce(paths, Path.join([parent, '.current']));
-				addOnce(paths, Path.join([parent, '.dev']));
+			for (file in ['haxelib.json', 'include.xml', 'templates/haxe']) addOnce(paths, Path.join([library, file]));
+			final installed: Null<String> = repositoryDir(libraries, library);
+			if (installed != null) for (marker in ['.current', '.dev']) addOnce(paths, Path.join([installed, marker]));
+		}
+	}
+
+	/**
+	 * The haxelib repository directory `library` (a library root) is selected through: the directory directly under the
+	 * repository for a versioned install, the one whose `.dev` points at it for a dev install, or — with no repository
+	 * known — a parent carrying `.current`. Null when none applies.
+	 */
+	private static function repositoryDir(libraries: LibraryIndex, library: String): Null<String> {
+		final repo: Null<String> = libraries.repo;
+		if (repo != null && library.startsWith('$repo/')) return Path.join([repo, library.substr(repo.length + 1).split('/')[0]]);
+		final dev: Null<String> = libraries.devs[library];
+		if (repo != null && dev != null) return Path.join([repo, dev]);
+		final parent: String = Path.directory(library);
+		return sys.FileSystem.exists(Path.join([parent, '.current'])) ? parent : null;
+	}
+
+	/**
+	 * The haxelib repository the generations in `groups` resolve libraries from (`haxelib config` in the first one's
+	 * directory, which honours a local `.haxelib`) and every dev install in it, dev path to repository directory. Taken
+	 * once per `prepare`.
+	 */
+	private static function libraryIndex(groups: Array<GenerationGroup>): LibraryIndex {
+		final devs: Map<String, String> = [];
+		final repo: Null<String> = groups.length == 0 ? null : haxelibRepository(absolute(Sys.getCwd(), groups[0].generate.root));
+		if (repo != null) {
+			final entries: Array<String> = try sys.FileSystem.readDirectory(repo) catch (exception: haxe.Exception) [];
+			for (entry in entries) {
+				final marker: String = Path.join([repo, entry, '.dev']);
+				if (!sys.FileSystem.exists(marker)) continue;
+				final target: Null<String> = try sys.io.File.getContent(marker).trim() catch (exception: haxe.Exception) null;
+				if (target != null && target != '') devs[absolute(repo, target)] = entry;
 			}
 		}
+		return { repo: repo, devs: devs };
 	}
 
 	/** The nearest ancestor of `dir` (itself included) holding a `haxelib.json`, or null within `MAX_TREE_DEPTH` levels. */
@@ -396,14 +473,6 @@ final class OracleGeneration {
 			current = parent;
 		}
 		return null;
-	}
-
-	/** The `name` a `haxelib.json` declares, or null when it cannot be read. */
-	private static function libraryName(path: String): Null<String> {
-		final text: Null<String> = try sys.io.File.getContent(path) catch (exception: haxe.Exception) null;
-		if (text == null) return null;
-		final parsed: Null<{ ?name: String }> = try haxe.Json.parse(text) catch (exception: haxe.Exception) null;
-		return parsed?.name;
 	}
 
 	/** The haxelib repository `root` resolves libraries from (`haxelib config`, which honours a local `.haxelib`), or null. */
@@ -429,73 +498,39 @@ final class OracleGeneration {
 		return '${recordFile(group)}.lock';
 	}
 
+	/** Files read (not answered from a memo) by `hashOf` in this process — tests read it to prove a file is read once per step. */
+	public static var hashReads(default, null): Int = 0;
+
 	/**
-	 * Take `group`'s lock for this process, waiting at most `waitMs` for another `apq` run holding it; null when held,
-	 * else why not. A lock whose owner pid is gone, whose owner file never appeared, or that is older than
-	 * `MAX_LOCK_AGE` is taken over. The caller releases it when this process exits
-	 * (`prepare` registers that once per run). Re-entrant within one process.
+	 * Drop this process's holds on the generations `oracles` declare, once its compiles of them are done. Idempotent;
+	 * process exit does the same for a caller that never gets here.
 	 */
-	public static function acquire(group: GenerationGroup, waitMs: Int): Null<String> {
-		#if nodejs
-		final dir: String = lockDir(group);
-		final owner: String = Path.join([dir, 'owner']);
-		final me: Int = js.Node.process.pid;
-		final deadline: Float = Date.now().getTime() + waitMs;
-		while (true) {
-			final created: Bool = try {
-				js.node.Fs.mkdirSync(dir);
-				true;
-			} catch (exception: haxe.Exception) false;
-			if (created) {
-				sys.io.File.saveContent(owner, '$me ${Date.now().getTime()}');
-				return null;
-			}
-			final held: Null<String> = try sys.io.File.getContent(owner) catch (exception: haxe.Exception) null;
-			final fields: Array<String> = (held ?? '').trim().split(' ');
-			final pid: Null<Int> = Std.parseInt(fields[0]);
-			final since: Float = held == null ? modified(dir) : Std.parseFloat(fields[1] ?? '0');
-			final now: Float = Date.now().getTime();
-			if (pid == me) return null;
-			final abandoned: Bool = held == null ? now - since > OWNERLESS_GRACE : pid == null || !alive(pid) || now - since > MAX_LOCK_AGE;
-			if (abandoned) {
-				release(dir, pid);
-				continue;
-			}
-			if (now > deadline) return 'another apq run (pid $pid) holds its generation lock $dir';
-			js.Syntax.code('Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, {0})', LOCK_POLL);
-		}
-		#else
-		return null;
-		#end
+	public static function release(oracles: Array<OracleConfig>): Void {
+		releaseGroups(groupsOf(oracles), OracleGenerationLock.holder());
 	}
 
-	#if nodejs
-	/** Remove the lock `dir` when `pid` (null: any) still owns it. */
-	private static function release(dir: String, pid: Null<Int>): Void {
-		final owner: String = Path.join([dir, 'owner']);
-		try {
-			final held: Null<Int> = sys.FileSystem.exists(owner) ? Std.parseInt(sys.io.File.getContent(owner).trim().split(' ')[0]) : null;
-			if (pid != null && held != null && held != pid) return;
-			if (sys.FileSystem.exists(owner)) sys.FileSystem.deleteFile(owner);
-			sys.FileSystem.deleteDirectory(dir);
-		} catch (exception: haxe.Exception) { // noqa: swallowed-exception
-			// a lock that cannot be removed is taken over once its owner is gone
+	/** Drop `me`'s shared and exclusive holds on every group of `groups`. */
+	private static function releaseGroups(groups: Array<GenerationGroup>, me: Holder): Void {
+		for (group in groups) {
+			OracleGenerationLock.dropShared(lockDir(group), me);
+			OracleGenerationLock.dropExclusive(lockDir(group), me);
 		}
 	}
 
-	/** Whether process `pid` exists (a signal-0 probe; EPERM means it exists under another user). */
-	private static function alive(pid: Int): Bool {
-		return try {
-			js.Syntax.code('process.kill({0}, 0)', pid);
-			true;
-		} catch (exception: haxe.Exception) '${Reflect.field(exception.native, 'code')}' == 'EPERM';
+	/**
+	 * Record the successful generation `s`: an implicit input seen before the command keeps its pre-run hash, a new one
+	 * gets its hash now, and a generation during which a previously-recorded implicit input MOVED is not recorded at all.
+	 * Answers the clause the generation's note ends with — empty when it was recorded.
+	 */
+	private static function record(s: StaleGroup, libraries: LibraryIndex): String {
+		final after: Map<String, String> = [];
+		final moved: Null<FileHash> = s.implicitBefore.find(held -> hashOf(held.path, after) != held.hash);
+		final implicit: Array<FileHash> = [
+			for (path in implicitInputs(s.group, libraries)) { path: path, hash: hashIn(s.implicitBefore, path) ?? hashOf(path, after) }
+		];
+		if (moved == null) writeRecord(s.group, s.inputs, implicit, after);
+		return moved == null ? '' : ' — NOT recorded: ${moved.path} changed while it ran, so the next run regenerates';
 	}
-
-	/** `path`'s modification time in ms, or now when it cannot be read. */
-	private static function modified(path: String): Float {
-		return try sys.FileSystem.stat(path).mtime.getTime() catch (exception: haxe.Exception) Date.now().getTime();
-	}
-	#end
 
 }
 
@@ -503,6 +538,20 @@ final class OracleGeneration {
 typedef PreparedOracles = {
 	var oracles: Array<OracleConfig>;
 	var notes: Array<String>;
+}
+
+/** A stale generation about to run: its group, why, and its explicit and previously-recorded implicit inputs as hashed before the command. */
+typedef StaleGroup = {
+	var group: GenerationGroup;
+	var why: String;
+	var inputs: Array<FileHash>;
+	var implicitBefore: Array<FileHash>;
+}
+
+/** The haxelib repository generations resolve libraries from, and each dev install in it as dev path to repository directory. */
+typedef LibraryIndex = {
+	var repo: Null<String>;
+	var devs: Map<String, String>;
 }
 
 /**
