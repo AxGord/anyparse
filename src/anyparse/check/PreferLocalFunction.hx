@@ -51,6 +51,10 @@ using StringTools;
  * - `name` occurs NOWHERE before the point the declaration moves to. This is what refuses the
  *   mutually-recursive-closure idiom (`var a = cast null; a = function() { … b … };`), whose
  *   whole reason for the `var` is the forward reference a declaration cannot express.
+ * - `name` occurs nowhere INSIDE the literal either. In `final g = (x:Int) -> g(x) + 1` the
+ *   inner `g` is an outer function, the local not being in scope in its own initializer; in the
+ *   hoisted `function g(x:Int)` it is the function itself, so the call became unbounded
+ *   recursion.
  * - `name` is WRITTEN only by the flagged assignment, and DECLARED exactly once — a rebound
  *   binding has to stay a variable.
  * - the declaration is BARE, or initialized by the definite-assignment placeholder (`null`,
@@ -247,7 +251,7 @@ final class PreferLocalFunction implements Check {
 			null
 		else if (!resultSurvives(parts, declared.returnsVoid) || !signatureCarries(parts, declared.signature, source))
 			null
-		else if (!bindingIsSole(list, name, stSpan.from, null, s))
+		else if (!nameIsFree(list, fn, name, stSpan.from, null, s))
 			null
 		else if (commentOverlaps(comments, stSpan.from, fnSpan.from) || commentOverlaps(comments, fnSpan.to, stSpan.to))
 			null
@@ -279,7 +283,7 @@ final class PreferLocalFunction implements Check {
 		final declared: DeclaredType = declaredType(source, declSpan, name, s.voidTypeName);
 		if (!declared.survives) return null;
 		if (!resultSurvives(parts, declared.returnsVoid) || !signatureCarries(parts, declared.signature, source)) return null;
-		if (!bindingIsSole(list, name, stSpan.from, lhsSpan, s)) return null;
+		if (!nameIsFree(list, fn, name, stSpan.from, lhsSpan, s)) return null;
 		if (commentOverlaps(comments, assignSpan.from, fnSpan.from)) return null;
 		final cut: Span = ElementSpan.lineExtendedSpan(source, declSpan);
 		if (commentOverlaps(comments, cut.from, cut.to)) return null;
@@ -523,6 +527,28 @@ final class PreferLocalFunction implements Check {
 		if (node.kind == s.nullLiteralKind) return true;
 		final isCast: Bool = node.kind == s.uncheckedCastKind || s.castKinds.contains(node.kind);
 		return isCast && node.children.length > 0 && isNullPlaceholder(node.children[0], s);
+	}
+
+	/**
+	 * Whether `name` may become the literal `fn`'s local function name: the binding is the sole one
+	 * (`bindingIsSole`) and the literal does not mention the name itself (`readsName`).
+	 */
+	private static function nameIsFree(
+		list: QueryNode, fn: QueryNode, name: String, hoistFrom: Int, allowedWrite: Null<Span>, s: Seams
+	): Bool {
+		return bindingIsSole(list, name, hoistFrom, allowedWrite, s) && !readsName(fn, name, s);
+	}
+
+	/**
+	 * Whether the literal `fn` mentions `name` anywhere in its own text, whatever that occurrence binds
+	 * to. Inside a local declaration's initializer the name is NOT yet the local — `final g = x -> g(x)`
+	 * calls an OUTER `g` — while in the hoisted `function g(x) … g(x)` it is the function itself, so the
+	 * hoist would turn a call to another function into unbounded recursion.
+	 */
+	private static function readsName(fn: QueryNode, name: String, s: Seams): Bool {
+		return (
+			fn.kind == s.identKind || fn.kind == s.stringInterpKind
+		) && fn.name == name || fn.children.exists(c -> readsName(c, name, s));
 	}
 
 	/**

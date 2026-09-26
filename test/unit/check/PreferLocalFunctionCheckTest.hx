@@ -157,6 +157,18 @@ class PreferLocalFunctionCheckTest extends Test {
 		Assert.equals('class C {\n\tfunction f():Void {\n\t\tfunction h(x:Int):Void {\nx + 1;\n}\n\t\tg(h);\n\t}\n}', fixed(src));
 	}
 
+	/**
+	 * The literal reads an OUTER `g`: the local is not in scope in its own initializer. Hoisted to
+	 * `function g`, the same `g` is the function itself and the call recurses without end.
+	 */
+	@:pin('control')
+	@:killer('M-LOCALFN-OUTER-NAME-READ')
+	public function testLiteralReadingItsOwnNameRefused(): Void {
+		final src: String = 'class C {\n\tstatic function g(x:Int):Int return x * 10;\n\tfunction f():Void {\n'
+			+ '\t\tfinal g:(x:Int) -> Int = (x:Int) -> g(x) + 1;\n\t\ttrace(g(2));\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
 	/** The same initializer with its type REMOVED: nothing proves the block's value was `Void`. */
 	public function testUnannotatedArrowBlockBodyRefused(): Void {
 		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tvar h = (e:Int) -> { p(e); };\n\t\tg(h);\n\t}\n}').length);

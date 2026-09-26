@@ -1580,6 +1580,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PreferKeyValueLoopCheckTest#testStaticCallOnATypeIsReportOnly :: control :: M-ELEMENT-LOOP-TYPE-CALLEE',
 			'unit.check.PreferKeyValueLoopCheckTest#testThisQualifiedCollectionNotFlagged :: control :: M-ELEMENT-LOOP-REBIND',
 			'unit.check.PreferLocalFunctionCheckTest#testDeclaredResultIsCarried :: control :: M-LOCALFN-RESULT-DROPPED',
+			'unit.check.PreferLocalFunctionCheckTest#testLiteralReadingItsOwnNameRefused :: control :: M-LOCALFN-OUTER-NAME-READ',
 			'unit.check.PreferLocalFunctionCheckTest#testSignatureMismatchRefused :: control :: M-LOCALFN-SIGNATURE-ANY',
 			'unit.check.PreferLocalFunctionCheckTest#testVoidExpressionBodyIsWrapped :: control :: M-LOCALFN-VOID-RETURNED',
 			'unit.check.PreferStaticExtensionCheckTest#testGuardedImportRunGetsNoSecondUsing :: control :: M-GUARDED-USING-ABSENT',
@@ -3741,7 +3742,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-BIND-FIELD-RECEIVER',
 			'M-LOCALFN-RESULT-DROPPED',
 			'M-LOCALFN-SIGNATURE-ANY',
-			'M-LOCALFN-VOID-RETURNED'
+			'M-LOCALFN-VOID-RETURNED',
+			'M-LOCALFN-OUTER-NAME-READ'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

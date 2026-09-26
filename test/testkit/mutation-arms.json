@@ -8834,6 +8834,14 @@
 			"find": "if (parts.bare && !parts.block && declared.returnsVoid)",
 			"replace": "if (false)",
 			"note": "an expression body under a `Void` result is returned rather than wrapped"
+		},
+		{
+			"name": "M-LOCALFN-OUTER-NAME-READ",
+			"type": "anyparse.check.PreferLocalFunction",
+			"method": "nameIsFree",
+			"find": " && !readsName(fn, name, s)",
+			"replace": "",
+			"note": "an initializer literal reading an outer function of the binding's name is hoisted into self-recursion"
 		}
 	]
 }
