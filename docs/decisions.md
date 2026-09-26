@@ -781,3 +781,16 @@ decided the question; it may not become a record of runs.
   `Some(var x)` capture are fresh bindings the flow never cleared, so an outer `x` proven non-null reached `x?.f` on the
   binder and `dead-safe-nav` / `dead-null-coalescing` rewrote it into a null dereference; every scope now shadows the
   names `BinderScan.binderKinds` says it binds and restores the outer fact on exit unless the construct writes it — `ac54a198`
+- a declared nominal proves non-null under null safety by its NAME → `typedef MaybeR = Null<R>` reads as a plain nominal, so
+  `?.` / `??` / `!= null` on it were dropped (a build break, and a runtime change for the `!= null` one); a written type now
+  proves only once it resolves to a class / interface / enum / structure through every alias and abstract (`DeclaredNullity`)
+- compiler facts as the source of that proof → `TypedFactsMacro.typeString` prints a typedef by its own name, unfollowed, so
+  a fact about `x:MaybeR` carries the same unresolved alias; the syntactic resolution is the one path
+- the value-type fast path for every `Int` / `Float` / `Bool` binding → a field with no initialiser reads null on `--interp`
+  and `undefined` on js (`0` on hxcpp), so `n ?? 5` answered 5 there and `n` after the rewrite; such a field keeps only the
+  null-safety arm
+- keeping `static function main()` only when an oracle hxml names its class in `-main` → the oracle configurations are not
+  the set of all builds (a generated launcher, `--run`, an uncovered platform), so no list the linter reads proves an entry
+  point unreached; it is kept by shape (`ImplicitReach.EntryPoint`)
+- a private constructor is unreached when no `new C` is written → `Type.createInstance(C, [])` runs it with none, and
+  deleting it broke that call on `--interp`; a class used as a value, or aliased by a typedef, keeps its constructor

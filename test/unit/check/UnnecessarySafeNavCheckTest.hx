@@ -6,6 +6,7 @@ import anyparse.check.Severity;
 import anyparse.check.UnnecessarySafeNav;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -103,7 +104,20 @@ class UnnecessarySafeNavCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new UnnecessarySafeNav().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return new UnnecessarySafeNav().run(CheckFixture.withStd(src), new HaxeQueryPlugin());
+	}
+
+	@:pin('control')
+	@:killer('M-PROVER-NULLITY-SKIPPED')
+	public function testTypedefOfNullReceiverNotFlagged(): Void {
+		// `MaybeR` names `Null<R>`: dropping the `?` breaks the build under Strict.
+		Assert.equals(
+			0,
+			violations(
+				'typedef MaybeR = Null<R>; class R { public var name:String = ""; } '
+				+ '@:nullSafety(Strict) class C { function f(x:MaybeR) { var n = x?.name; } }'
+			).length
+		);
 	}
 
 }

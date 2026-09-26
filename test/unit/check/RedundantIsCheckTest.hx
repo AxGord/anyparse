@@ -6,6 +6,7 @@ import anyparse.check.RedundantIsCheck;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -157,7 +158,7 @@ class RedundantIsCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new RedundantIsCheck().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return new RedundantIsCheck().run(CheckFixture.withStd(src), new HaxeQueryPlugin());
 	}
 
 }

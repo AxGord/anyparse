@@ -54,6 +54,24 @@ final class CheckFixture {
 		);
 	}
 
+	/**
+	 * `source` as `C.hx` beside a stand-in for the Haxe std the CLI's implicit resolution scope
+	 * carries — the declarations a null proof has to RESOLVE a written `String` or `haxe.io.Eof`
+	 * to, since a type proves non-null only through the declaration its name reaches. Neither stub
+	 * file holds a construct any null-aware check reports.
+	 */
+	public static function withStd(source: String): Array<{ file: String, source: String }> {
+		return [
+			{ file: 'C.hx', source: source },
+			{
+				file: 'String.hx',
+				source: 'extern class String { var length(default, null):Int; function charAt(index:Int):String; '
+					+ 'function toString():String; }'
+			},
+			{ file: 'haxe/io/Eof.hx', source: 'package haxe.io; class Eof { public function new() {} }' }
+		];
+	}
+
 	public static function fixedSource(check: Check, source: String): String {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final violations: Array<Violation> = check.run([{ file: 'C.hx', source: source }], plugin);

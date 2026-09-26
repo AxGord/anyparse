@@ -1037,4 +1037,61 @@ class UnusedPrivateCheckTest extends Test {
 		return 'package $pkg;\n\nclass $name {\n\n\tpublic static final K: Int = 1;\n\n\tprivate function new() {}\n\n}\n';
 	}
 
+	@:pin('control')
+	@:killer('M-ENTRY-POINT-UNREACHED')
+	public function testEntryPointMainIsNeverUnused(): Void {
+		// The build names `main` (`-main`, a generated launcher, `--run`); no source does.
+		Assert.equals(0, one('class C {\n\tstatic function main() {}\n}').length);
+	}
+
+	@:pin('control')
+	@:killer('M-ENTRY-POINT-ANY-ARITY')
+	public function testMainTakingAParameterIsNoEntryPoint(): Void {
+		Assert.equals(1, one('class C {\n\tstatic function main(args:Array<String>) {}\n}').length);
+	}
+
+	@:pin('control')
+	@:killer('M-CTOR-CLASS-VALUE-BLIND')
+	public function testClassPassedAsAValueKeepsItsPrivateConstructor(): Void {
+		// `Type.createInstance(U, [])` runs the constructor with no `new` written anywhere.
+		final user: String =
+			'package pkg;\n\nclass V {\n\n\tpublic static function make():Dynamic {\n\t\treturn Type.createInstance(U, []);\n\t}\n\n}\n';
+		Assert.equals(
+			0, ctorFindings([
+				{ file: 'pkg/U.hx', source: utilityClass('pkg', 'U') },
+				{ file: 'pkg/V.hx', source: user }
+			]).length
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-CTOR-RECEIVER-AS-VALUE')
+	public function testStaticReceiverIsNoClassValue(): Void {
+		final user: String = 'package pkg;\n\nclass V {\n\n\tpublic static function read():Int {\n\t\treturn U.K;\n\t}\n\n}\n';
+		Assert.equals(
+			1, ctorFindings([
+				{ file: 'pkg/U.hx', source: utilityClass('pkg', 'U') },
+				{ file: 'pkg/V.hx', source: user }
+			]).length
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-CTOR-ALIAS-BLIND')
+	public function testAliasedClassKeepsItsPrivateConstructor(): Void {
+		// The alias's own name is a class value of `U` the value scan was not asked about.
+		final alias: String = 'package pkg;\n\ntypedef UAlias = U;\n';
+		Assert.equals(
+			0, ctorFindings([
+				{ file: 'pkg/U.hx', source: utilityClass('pkg', 'U') },
+				{ file: 'pkg/UAlias.hx', source: alias }
+			]).length
+		);
+	}
+
+	/** The private-constructor findings of a run over `files`. */
+	private function ctorFindings(files: Array<{ file: String, source: String }>): Array<Violation> {
+		return [for (v in violations(files)) if (v.message.contains('constructor')) v];
+	}
+
 }

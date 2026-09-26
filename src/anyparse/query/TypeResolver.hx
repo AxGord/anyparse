@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.DeclaredNullity.Nullity;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.Refs.RefHit;
@@ -589,8 +590,10 @@ final class TypeResolver {
 
 	/**
 	 * Whether `operand` is a plain identifier resolvable to a provably non-null
-	 * type — a `RefShape.nonNullableTypeNames` value type (null-safety-independent),
-	 * or any recovered nominal type while null-safety is active. An operand bound to
+	 * type — a `RefShape.nonNullableTypeNames` value type written by its own name
+	 * (null-safety-independent), or, while null-safety is active, a declared type
+	 * that RESOLVES to a declaration excluding null (`DeclaredNullity` — a typedef of
+	 * `Null<…>`, a type parameter, an unresolvable name all fail). An operand bound to
 	 * an optional parameter, to a declaration INITIALISED BY THE LITERAL `null`
 	 * (`p: T = null`, `var f: T = null`, `var l: T = null` alike — the declaration's
 	 * own syntax outranks its written type, so `bindingIsNullInitialised` is checked
@@ -615,8 +618,8 @@ final class TypeResolver {
 	 * evidence (`redundant-null-coalescing`, `unnecessary-safe-nav`,
 	 * `comparison-to-boolean`, …).
 	 */
-	public static function isProvablyNonNull(operand: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>): Bool {
-		return provablyNonNull(operand, root, shape, declaredTypes, true);
+	public static function isProvablyNonNull(operand: QueryNode, root: QueryNode, shape: RefShape, types: DeclaredNullity): Bool {
+		return provablyNonNull(operand, root, shape, types, true);
 	}
 
 	/**
@@ -643,9 +646,9 @@ final class TypeResolver {
 	 * target and their checks keep `isProvablyNonNull`.
 	 */
 	public static function isProvablyNonNullAtNullComparison(
-		operand: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>
+		operand: QueryNode, root: QueryNode, shape: RefShape, types: DeclaredNullity
 	): Bool {
-		return provablyNonNull(operand, root, shape, declaredTypes, false);
+		return provablyNonNull(operand, root, shape, types, false);
 	}
 
 	/**
@@ -868,6 +871,32 @@ final class TypeResolver {
 			.concat(shape.staticLocalDeclKinds ?? [])
 			.concat(shape.localFunctionKinds ?? [])
 			.concat(shape.inlineFunctionKinds ?? []);
+	}
+
+	/**
+	 * The INNERMOST `declKinds` node whose span covers `bindingFrom` — the declaration that
+	 * actually binds that offset when several nest. A multi-declarator list nests its
+	 * continuations (`var a: T = null, b: T = 0` projects `b`'s node as a CHILD of `a`'s), so
+	 * an outermost-first walk answers for the FIRST declarator no matter which name was asked
+	 * about; the innermost answers for the one that owns `bindingFrom`. A single-kind caller
+	 * (a parameter located by its binding offset) passes a one-element list.
+	 */
+	public static function innermostDeclCovering(tree: QueryNode, declKinds: Array<String>, bindingFrom: Int): Null<QueryNode> {
+		var best: Null<QueryNode> = null;
+		var bestWidth: Int = -1;
+		function walk(node: QueryNode): Void {
+			final s: Null<Span> = node.span;
+			if (s != null && s.from <= bindingFrom && bindingFrom < s.to && declKinds.contains(node.kind)) {
+				final width: Int = s.to - s.from;
+				if (bestWidth == -1 || width < bestWidth) {
+					best = node;
+					bestWidth = width;
+				}
+			}
+			for (child in node.children) walk(child);
+		}
+		walk(tree);
+		return best;
 	}
 
 	/** Whether `outer` covers `inner` — the containment a tree's spans state between ancestor and descendant. */
@@ -1121,7 +1150,7 @@ final class TypeResolver {
 	 * dynamic passes `false` and falls through to the null-safety arm.
 	 */
 	private static function provablyNonNull(
-		operand: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, trustValueTypes: Bool
+		operand: QueryNode, root: QueryNode, shape: RefShape, types: DeclaredNullity, trustValueTypes: Bool
 	): Bool {
 		final bindingFrom: Null<Int> = operandBindingFrom(operand, root, shape);
 		if (bindingFrom == null) return false;
@@ -1145,44 +1174,17 @@ final class TypeResolver {
 		final nullLiteralKind: Null<String> = shape.nullLiteralKind;
 		if (nullLiteralKind != null && bindingIsNullInitialised(root, bindingFrom, valueBinderDeclKinds(shape), nullLiteralKind))
 			return false;
-		final typeName: Null<String> = declaredTypes[bindingFrom];
+		final typeName: Null<String> = types.nominalAt(bindingFrom);
 		if (typeName == null) return false;
-		final nonNullableTypeNames: Array<String> = shape.nonNullableTypeNames ?? [];
-		if (trustValueTypes && nonNullableTypeNames.contains(typeName)) return true;
-		final nullableWrapperTypeNames: Array<String> = shape.nullableWrapperTypeNames ?? [];
-		if (nullableWrapperTypeNames.contains(typeName)) return false;
+		if (trustValueTypes && types.isValueType(bindingFrom)) return true;
 		final nullSafetyMetaName: Null<String> = shape.nullSafetyMetaName;
 		final opSpan: Null<Span> = operand.span;
 		if (nullSafetyMetaName == null || opSpan == null) return false;
 		final disableArg: Null<String> = shape.nullSafetyDisableArg;
+		// The written type is resolved LAST: null safety is the cheap half, and resolution may
+		// build the whole resolution index.
 		return enclosingIsNullSafe(root, new Span(bindingFrom, bindingFrom), nullSafetyMetaName, disableArg)
-			&& enclosingIsNullSafe(root, opSpan, nullSafetyMetaName, disableArg);
-	}
-
-	/**
-	 * The INNERMOST `declKinds` node whose span covers `bindingFrom` — the declaration that
-	 * actually binds that offset when several nest. A multi-declarator list nests its
-	 * continuations (`var a: T = null, b: T = 0` projects `b`'s node as a CHILD of `a`'s), so
-	 * an outermost-first walk answers for the FIRST declarator no matter which name was asked
-	 * about; the innermost answers for the one that owns `bindingFrom`. A single-kind caller
-	 * (a parameter located by its binding offset) passes a one-element list.
-	 */
-	private static function innermostDeclCovering(tree: QueryNode, declKinds: Array<String>, bindingFrom: Int): Null<QueryNode> {
-		var best: Null<QueryNode> = null;
-		var bestWidth: Int = -1;
-		function walk(node: QueryNode): Void {
-			final s: Null<Span> = node.span;
-			if (s != null && s.from <= bindingFrom && bindingFrom < s.to && declKinds.contains(node.kind)) {
-				final width: Int = s.to - s.from;
-				if (bestWidth == -1 || width < bestWidth) {
-					best = node;
-					bestWidth = width;
-				}
-			}
-			for (child in node.children) walk(child);
-		}
-		walk(tree);
-		return best;
+			&& enclosingIsNullSafe(root, opSpan, nullSafetyMetaName, disableArg) && types.ofBinding(bindingFrom) != Unproven;
 	}
 
 }

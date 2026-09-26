@@ -3,8 +3,10 @@ package anyparse.check;
 import anyparse.check.Check.OracleRelaxable;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
+import anyparse.query.DeclaredNullity;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
 import anyparse.query.SourceText;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
@@ -123,8 +125,9 @@ final class PreferInterpolation implements Check implements RiskyFix implements 
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final violations: Array<Violation> = [];
+		final index: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
 		for (entry in files) {
-			final matches: Null<Array<ScanMatch>> = scanSource(entry.source, plugin, _oracleRelaxed, false);
+			final matches: Null<Array<ScanMatch>> = scanSource(entry.file, entry.source, plugin, _oracleRelaxed, false, index);
 			if (matches == null) continue;
 			for (m in matches) violations.push({
 				file: entry.file,
@@ -147,7 +150,7 @@ final class PreferInterpolation implements Check implements RiskyFix implements 
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final matches: Null<Array<ScanMatch>> = scanSource(source, plugin, true, true);
+		final matches: Null<Array<ScanMatch>> = scanSource('', source, plugin, true, true, () -> null);
 		if (matches == null) return [];
 		final byKey: Map<String, ScanMatch> = [for (m in matches) '${m.span.from}:${m.span.to}' => m];
 		return CheckScan.collectSpanEdits(violations, byKey, (m, _) -> ({ span: m.span, text: m.replacement }));
@@ -155,9 +158,9 @@ final class PreferInterpolation implements Check implements RiskyFix implements 
 
 	/**
 	 * The scan matches for `source` — the shared `run` / `fix` preamble — or null when a
-	 * required seam kind is unset or the source does not parse. `declaredTypes` is pulled
-	 * only when the gate that reads it is active: a relaxed scan bypasses `isSafeArg`
-	 * entirely, so it never pays for the map. The FIX-side re-scan passes
+	 * required seam kind is unset or the source does not parse. The declared types are pulled
+	 * only when the gate that reads them is active: a relaxed scan bypasses `isSafeArg`
+	 * entirely, so it never pays for them, nor for the `index` they resolve through. The FIX-side re-scan passes
 	 * `collectNested`: relaxing the gate moves the outermost-only stop (a gate-refused
 	 * outer call does not stop `run`'s walk, so `run` may have flagged an inner call the
 	 * relaxed re-scan would otherwise hide behind its outer match) — over-collection is
@@ -165,7 +168,9 @@ final class PreferInterpolation implements Check implements RiskyFix implements 
 	 * scan never collects nested matches, oracle-relaxed or not: its matches ARE the
 	 * findings, and nested ones would overlap.
 	 */
-	private static function scanSource(source: String, plugin: GrammarPlugin, relaxed: Bool, collectNested: Bool): Null<Array<ScanMatch>> {
+	private static function scanSource(
+		file: String, source: String, plugin: GrammarPlugin, relaxed: Bool, collectNested: Bool, index: () -> Null<SymbolIndex>
+	): Null<Array<ScanMatch>> {
 		final resolved: Null<Seams> = resolveSeams(plugin);
 		if (resolved == null) return null;
 		final seams: Seams = resolved;
@@ -179,7 +184,7 @@ final class PreferInterpolation implements Check implements RiskyFix implements 
 			root: tree,
 			seams: seams,
 			shape: plugin.refShape(),
-			declaredTypes: relaxed || provider == null ? [] : provider.declaredTypes(source),
+			nullity: DeclaredNullity.of(file, tree, source, plugin.refShape(), relaxed ? null : provider, index),
 			relaxed: relaxed,
 			collectNested: collectNested
 		}, tree, null, false, false, false);
@@ -220,7 +225,7 @@ final class PreferInterpolation implements Check implements RiskyFix implements 
 		final arg: Null<QueryNode> = matchArg(node, seams.callKind, seams.fieldAccessKind, seams.identKind);
 		if (
 			arg != null && !deferredToFold(chain, inMeta || inString, ctx.source, seams, ctx.shape)
-			&& (ctx.relaxed || isSafeArg(arg, ctx.root, seams.fieldAccessKind, seams.identKind, ctx.shape, ctx.declaredTypes))
+			&& (ctx.relaxed || isSafeArg(arg, ctx.root, seams.fieldAccessKind, seams.identKind, ctx.shape, ctx.nullity))
 			&& flagMatch(out, ctx, node, arg, sole) && !ctx.collectNested
 		)
 			return;
@@ -288,17 +293,17 @@ final class PreferInterpolation implements Check implements RiskyFix implements 
 	 *
 	 * A bare field access (`fieldAccessKind`) never narrows and is always refused,
 	 * guard or not. A simple identifier (`identKind`) is safe only when it resolves
-	 * (via the scope resolver) to a local / parameter declaration with a KNOWN
-	 * nominal type — an unresolved binding or an unannotated/inferred declaration
-	 * (absent from `declaredTypes`) keeps the conservative default — that is not an
-	 * optional parameter (`?p`), not a default-null parameter (`p: T = null`), and
-	 * not one of `RefShape.nullableWrapperTypeNames` (`Null<…>` / `Dynamic` / `Any`).
+	 * (via the scope resolver) to a local / parameter declaration whose written type
+	 * RESOLVES to one excluding null (`DeclaredNullity` — so a typedef of `Null<…>`,
+	 * a type parameter, `Dynamic`, an unresolvable name all keep the conservative
+	 * default, as do an unresolved binding and an unannotated declaration) and that is
+	 * not an optional parameter (`?p`) or a default-null parameter (`p: T = null`).
 	 * Any other argument shape (a call, a binary expression, …) is left to the
 	 * pre-existing `interpolationSafe`-gated braced rewrite, unaffected by this gate.
 	 * The whole gate is bypassed in oracle-relaxed mode (`setOracleRelaxed`).
 	 */
 	private static function isSafeArg(
-		arg: QueryNode, root: QueryNode, fieldAccessKind: String, identKind: String, shape: RefShape, declaredTypes: Map<Int, String>
+		arg: QueryNode, root: QueryNode, fieldAccessKind: String, identKind: String, shape: RefShape, nullity: DeclaredNullity
 	): Bool {
 		if (arg.kind == fieldAccessKind) return false;
 		if (arg.kind != identKind) return true;
@@ -313,10 +318,7 @@ final class PreferInterpolation implements Check implements RiskyFix implements 
 			&& TypeResolver.bindingIsNullInitialised(root, bindingFrom, paramKinds, nullLiteralKind)
 		)
 			return false;
-		final typeName: Null<String> = declaredTypes[bindingFrom];
-		if (typeName == null) return false;
-		final nullableWrapperTypeNames: Array<String> = shape.nullableWrapperTypeNames ?? [];
-		return !nullableWrapperTypeNames.contains(typeName);
+		return nullity.ofBinding(bindingFrom) != Unproven;
 	}
 
 	/**
@@ -446,7 +448,7 @@ private typedef ScanCtx = {
 	final root: QueryNode;
 	final seams: Seams;
 	final shape: RefShape;
-	final declaredTypes: Map<Int, String>;
+	final nullity: DeclaredNullity;
 
 	/**
 	 * True to bypass the `isSafeArg` null-safety gate: the `run` of an oracle-relaxed

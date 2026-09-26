@@ -61,6 +61,12 @@ enum abstract ImplicitReach(String) {
 	/** A `static final` bound to a type reference — a `Class<T>` registry entry resolved by name. */
 	final TypeRegistry = 'typeRegistry';
 
+	/**
+	 * The program's entry point — a Haxe `static function main()` — named by the build (`-main`, a
+	 * framework's generated launcher, `--run`), never by the sources the linter reads.
+	 */
+	final EntryPoint = 'entryPoint';
+
 }
 
 /**

@@ -430,6 +430,23 @@ typedef TypeDeclInfo = {
 	var abstractForwardUnderlying: Null<String>;
 
 	/**
+	 * The WRITTEN head path of an abstract's underlying type — the `(…)` after its header, type
+	 * arguments stripped (`abstract A<T>(Null<T>)` -> `Null`, `enum abstract E(Int)` -> `Int`) — or
+	 * null for every other decl AND for an abstract whose underlying is not a plain nominal path (a
+	 * `@:coreType` one with none, a function or anonymous type), and for a `#if`-guarded one, for
+	 * `aliasTargetRaw`'s reason. Read from source: the projection cannot tell the underlying's
+	 * `Named` child from a type-parameter constraint's. Null reads as "not resolvable".
+	 */
+	var underlyingRaw: Null<String>;
+
+	/**
+	 * True when the declaration sits inside a `#if` region. The index keeps ONE declaration per name
+	 * and the other branches may declare that name differently, so a proof about what the name
+	 * denotes must refuse a guarded one.
+	 */
+	var guarded: Bool;
+
+	/**
 	 * The members a `@:forward(a, b)` abstract forwards to its underlying type, or null when its `@:forward`
 	 * names none (it forwards every member) or it is not a forwarding abstract.
 	 */

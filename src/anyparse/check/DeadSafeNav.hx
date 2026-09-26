@@ -3,7 +3,9 @@ package anyparse.check;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.Violation;
 import anyparse.check.NullFlowScan.IdentOperand;
+import anyparse.query.DeclaredNullity;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
@@ -121,8 +123,9 @@ final class DeadSafeNav implements Check implements ConfigAware {
 		final ident: String = identKind;
 		final hxmlText: Map<String, Null<String>> = [];
 		final buildMay: Map<String, Bool> = [];
+		final index: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
 		return RunScan.collectWith(files, plugin, RunScan.typeInfoOf(plugin), (entry, root, typed, violations) -> {
-			final declaredTypes: Map<Int, String> = typed.declaredTypes(entry.source);
+			final types: DeclaredNullity = DeclaredNullity.of(entry.file, root, entry.source, shape, typed, index);
 			final configDir: String = Path.directory(entry.file);
 			if (!buildMay.exists(configDir)) buildMay[configDir] = buildMayEnableNullSafety(entry.file, hxmlText);
 			final buildNullSafe: Bool = buildMay[configDir] == true;
@@ -131,7 +134,7 @@ final class DeadSafeNav implements Check implements ConfigAware {
 				final receiver: Null<IdentOperand> = NullFlowScan.identOperand(node, node.children[0], ident);
 				if (receiver == null) return;
 				// Owned by `unnecessary-safe-nav` when the declared type proves it.
-				if (TypeResolver.isProvablyNonNull(receiver.operand, root, shape, declaredTypes)) return;
+				if (TypeResolver.isProvablyNonNull(receiver.operand, root, shape, types)) return;
 				if (!facts.nonNull(receiver.name)) return;
 				final violation: Violation = {
 					file: entry.file,

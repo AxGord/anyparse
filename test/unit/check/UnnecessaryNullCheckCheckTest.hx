@@ -6,6 +6,7 @@ import anyparse.check.Severity;
 import anyparse.check.UnnecessaryNullCheck;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -287,7 +288,20 @@ class UnnecessaryNullCheckCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new UnnecessaryNullCheck().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return new UnnecessaryNullCheck().run(CheckFixture.withStd(src), new HaxeQueryPlugin());
+	}
+
+	@:pin('control')
+	@:killer('M-PROVER-NULLITY-SKIPPED')
+	public function testTypedefOfNullOperandNotFlagged(): Void {
+		// Dropping this check changes what `f(null)` returns, with or without null safety.
+		Assert.equals(
+			0,
+			violations(
+				'typedef MaybeR = Null<R>; class R {} '
+				+ '@:nullSafety(Strict) class C { function f(x:MaybeR):String { if (x != null) return "a"; return "b"; } }'
+			).length
+		);
 	}
 
 }

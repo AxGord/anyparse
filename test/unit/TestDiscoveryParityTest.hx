@@ -876,6 +876,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.CreatingFixContractTest',
 		'unit.query.CrossRenameMemberSliceTest',
 		'unit.query.CrossRenameSliceTest',
+		'unit.query.DeclaredNullityTest',
 		'unit.query.DeleteBlankLineSliceTest',
 		'unit.query.DocOwnerGuardSliceTest',
 		'unit.query.ElementSpanOwnedLinesTest',
@@ -1470,6 +1471,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PreferInlineCheckTest#testOwnFileBuildMacroTokenCostsNoResolutionIndex :: control :: M-INLINE-LOCAL-BUILD-MACRO',
 			'unit.check.PreferInlineCheckTest#testQualifiedSupertypeKeySplitsTheTwinFromTheRealSubtypesOwner :: control :: '
 				+ 'M-INLINE-SUBTYPE-REPORT-INDEX',
+			'unit.check.PreferInterpolationCheckTest#testTypedefOfNullArgumentNotFlagged :: control :: M-INTERP-NULLITY-SKIPPED',
 			'unit.check.PreferKeyValueLoopCheckTest#testConstructorCallIsReportOnly :: control :: M-ELEMENT-LOOP-NEW-EXPR',
 			'unit.check.PreferKeyValueLoopCheckTest#testIndexOnlyLoopLeftToValueLoop :: control :: M-KV-NOOPENER-INDEX-ONLY',
 			'unit.check.PreferKeyValueLoopCheckTest#testNestedBinderClashAcrossTheTwoRules :: control :: M-ELEMENT-LOOP-NESTED-BINDER',
@@ -1541,6 +1543,13 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.RedundantMapIterKeyCheckTest#testFixDeclinedOverReassignedLocal :: control :: M-ULB-REASSIGNED-LOCAL-BLIND',
 			'unit.check.RedundantMapIterKeyCheckTest#testMessageRecommendsTheDropOnlyWhenProved :: control :: '
 				+ 'M-MAPITERKEY-MESSAGE-ALWAYS-PROVEN',
+			'unit.check.RedundantNullCoalescingCheckTest#testTypedefOfNullLeftNotFlagged :: control :: M-PROVER-NULLITY-SKIPPED',
+			'unit.check.RedundantNullCoalescingCheckTest#testValueTypeFieldWithInitialiserFlagged :: control :: '
+				+ 'M-VALUE-TYPE-FIELDS-REFUSED',
+			'unit.check.RedundantNullCoalescingCheckTest#testValueTypeFieldWithoutInitialiserNotFlagged :: control :: '
+				+ 'M-VALUE-TYPE-UNINIT-FIELD',
+			'unit.check.RedundantNullCoalescingCheckTest#testValueTypePropertyReadThroughGetterFlagged :: control :: '
+				+ 'M-VALUE-TYPE-FIELDS-REFUSED',
 			'unit.check.RedundantReplaceLoopCheckTest#testEmptyLiteralReplacementBoundsTheRedundancyToOneCharacter :: control :: '
 				+ 'M-EMPTY-B-ANY-NONEMPTY',
 			'unit.check.RedundantReplaceLoopCheckTest#testMultiCharSearchWithEmptyReplacementNotFlagged :: control :: M-SEAM-BLIND',
@@ -1549,6 +1558,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.RedundantReplaceLoopCheckTest#testSeamReformingLiteralPairSurvivesTheFix :: control :: M-SEAM-BLIND',
 			'unit.check.RedundantReplaceLoopCheckTest#testSearchEndingWithTheReplacementHeadNotFlagged :: control :: M-SEAM-BLIND',
 			'unit.check.RedundantThisCheckTest#testInheritedFromOtherFileBaseFlagged :: control :: M-INHERITS-FALSE',
+			'unit.check.RedundantToStringCheckTest#testMethodReturningTypedefOfNullNotFixed :: control :: M-TOSTRING-RETURN-TRUSTED',
 			'unit.check.RedundantUpcastTest#testUpcastFlagged :: control :: M-ISSUBTYPE-FALSE',
 			'unit.check.ReflectionMemoTest#testARewrittenScopeFileIsReRead :: control :: M-REFLECTION-MEMO-STALE',
 			'unit.check.ReflectionMemoTest#testASecondScopeIsNotAnsweredFromTheFirst :: control :: M-REFLECTION-MEMO-STALE',
@@ -1643,6 +1653,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.UnguardedNullableDerefTest#testFieldPathMapSeedFlagged :: control :: M-NULLABLE-NO-CHAIN',
 			'unit.check.UnguardedNullableDerefTest#testReflectCopyBindingNotFlagged :: control :: M-NULLABLE-FLOW-EXCLUDE-NONE',
 			'unit.check.UnguardedNullableDerefTest#testSafeNavGuardNarrowsRoot :: control :: M-SAFENAV-NO-NARROW',
+			'unit.check.UnnecessaryNullCheckCheckTest#testTypedefOfNullOperandNotFlagged :: control :: M-PROVER-NULLITY-SKIPPED',
+			'unit.check.UnnecessarySafeNavCheckTest#testTypedefOfNullReceiverNotFlagged :: control :: M-PROVER-NULLITY-SKIPPED',
 			'unit.check.UnreachableCatchTest#testSubtypeAfterSupertypeFlagged :: control :: M-ISSUBTYPE-FALSE',
 			'unit.check.UnusedLoopBinderCheckTest#testBracedInterpolationRefuses :: control :: M-ULB-INTERP-LITERAL-BLIND',
 			'unit.check.UnusedLoopBinderCheckTest#testCaseWildcardInBodyStillRenamed :: control :: M-ULB-PATTERN-WILDCARD-UNEXEMPT',
@@ -1668,10 +1680,15 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.UnusedLoopBinderCheckTest#testWildcardKeyUnreadValueRenamed :: control :: M-ULB-WILDCARD-KEY-VALUE-BLIND',
 			'unit.check.UnusedParameterCheckTest#testAccessGrantOutsideReportScopeKeepsParameter :: control :: '
 				+ 'M-CONFINEMENT-REPORT-INDEX-PARAM',
+			'unit.check.UnusedPrivateCheckTest#testAliasedClassKeepsItsPrivateConstructor :: control :: M-CTOR-ALIAS-BLIND',
+			'unit.check.UnusedPrivateCheckTest#testClassPassedAsAValueKeepsItsPrivateConstructor :: control :: M-CTOR-CLASS-VALUE-BLIND',
+			'unit.check.UnusedPrivateCheckTest#testEntryPointMainIsNeverUnused :: control :: M-ENTRY-POINT-UNREACHED',
+			'unit.check.UnusedPrivateCheckTest#testMainTakingAParameterIsNoEntryPoint :: control :: M-ENTRY-POINT-ANY-ARITY',
 			'unit.check.UnusedPrivateCheckTest#testNamesakeSubtypeNoLongerShieldsAPrivateConstructor :: control :: '
 				+ 'M-SUBTYPE-KEY-SIMPLE-NAME',
 			'unit.check.UnusedPrivateCheckTest#testReflectionCallOutsideReportScopeKeepsMember :: control :: '
 				+ 'M-REFLECTION-REPORT-INDEX-DELETE',
+			'unit.check.UnusedPrivateCheckTest#testStaticReceiverIsNoClassValue :: control :: M-CTOR-RECEIVER-AS-VALUE',
 			'unit.check.UnusedPrivateDeclineReasonTest#testEachGateNamesItself :: control :: '
 				+ 'M-UNUSED-PRIVATE-DECLINE-SILENT,M-UNUSED-PRIVATE-REGION-DECLINE-SILENT',
 			'unit.check.UnusedPublicMemberCheckTest#testInterpolationEscapeKeepsTheMember :: control :: M-NAMEOUTSIDE-TRUE',
@@ -2141,6 +2158,20 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CreatingFixContractTest#testACreateSettlesItsTextAtTheWriterFixedPoint :: guard :: ',
 			'unit.query.CreatingFixContractTest#testAPassSeesTheChainAPreviousPassWrote :: control :: M-AMBIENT-CHAIN-STALE',
 			'unit.query.CreatingFixContractTest#testDeletingACreatedFileToleratesOneAlreadyGone :: guard :: ',
+			'unit.query.DeclaredNullityTest#testAbstractOverClassIsProven :: control :: M-NULLITY-HOPS-CUT',
+			'unit.query.DeclaredNullityTest#testAbstractOverNullIsUnproven :: control :: M-NULLITY-UNDERLYING-TRUSTED',
+			'unit.query.DeclaredNullityTest#testAliasOfClassIsProven :: control :: M-NULLITY-HOPS-CUT',
+			'unit.query.DeclaredNullityTest#testAnonymousStructureTypedefIsProven :: control :: M-NULLITY-ANON-REFUSED',
+			'unit.query.DeclaredNullityTest#testClassTypeParameterIsUnproven :: control :: M-NULLITY-TYPE-PARAMS-IGNORED',
+			'unit.query.DeclaredNullityTest#testEnumAbstractOverIntIsProven :: control :: M-NULLITY-HOPS-CUT',
+			'unit.query.DeclaredNullityTest#testFunctionTypeParameterIsUnproven :: control :: M-NULLITY-TYPE-PARAMS-IGNORED',
+			'unit.query.DeclaredNullityTest#testGuardedDeclarationIsUnproven :: control :: M-NULLITY-GUARD-IGNORED',
+			'unit.query.DeclaredNullityTest#testImportedClassIsProven :: control :: M-NULLITY-SCOPE-LOST',
+			'unit.query.DeclaredNullityTest#testImportedTypedefOfNullIsUnproven :: control :: M-NULLITY-ALIAS-TRUSTED',
+			'unit.query.DeclaredNullityTest#testParameterisedTypedefOfNullIsUnproven :: control :: M-NULLITY-ALIAS-TRUSTED',
+			'unit.query.DeclaredNullityTest#testTypedefChainToNullIsUnproven :: control :: M-NULLITY-ALIAS-TRUSTED',
+			'unit.query.DeclaredNullityTest#testTypedefOfNullIsUnproven :: control :: M-NULLITY-ALIAS-TRUSTED',
+			'unit.query.DeclaredNullityTest#testUnresolvableNameIsUnproven :: control :: M-NULLITY-UNRESOLVED-PROVEN',
 			'unit.query.DocOwnerGuardSliceTest#testAppendBeforeAClosingBraceIsAccepted :: control :: M-DOCSPLIT-OWNER-ANY',
 			'unit.query.DocOwnerGuardSliceTest#testBannerCommentIsNotGuarded :: control :: M-DOCSPAN-BANNER-IS-DOC',
 			'unit.query.DocOwnerGuardSliceTest#testModifierInsertOnTheOwnersLineIsAccepted :: control :: M-DOCSPLIT-BREAKLESS-TOO',
@@ -3410,6 +3441,24 @@ class TestDiscoveryParityTest extends Test {
 			'M-NULLFLOW-CATCH-BINDER-BLIND',
 			'M-NULLFLOW-SHADOW-NO-RESTORE',
 			'M-NULLFLOW-SHADOW-RESTORES-WRITTEN',
+			'M-NULLITY-ALIAS-TRUSTED',
+			'M-NULLITY-UNDERLYING-TRUSTED',
+			'M-NULLITY-TYPE-PARAMS-IGNORED',
+			'M-NULLITY-UNRESOLVED-PROVEN',
+			'M-NULLITY-GUARD-IGNORED',
+			'M-NULLITY-HOPS-CUT',
+			'M-NULLITY-ANON-REFUSED',
+			'M-NULLITY-SCOPE-LOST',
+			'M-PROVER-NULLITY-SKIPPED',
+			'M-VALUE-TYPE-UNINIT-FIELD',
+			'M-VALUE-TYPE-FIELDS-REFUSED',
+			'M-INTERP-NULLITY-SKIPPED',
+			'M-TOSTRING-RETURN-TRUSTED',
+			'M-ENTRY-POINT-UNREACHED',
+			'M-ENTRY-POINT-ANY-ARITY',
+			'M-CTOR-CLASS-VALUE-BLIND',
+			'M-CTOR-RECEIVER-AS-VALUE',
+			'M-CTOR-ALIAS-BLIND',
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

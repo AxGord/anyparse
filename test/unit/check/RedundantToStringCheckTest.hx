@@ -7,6 +7,7 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -145,9 +146,13 @@ class RedundantToStringCheckTest extends Test {
 	public function testGuardedExternReceiverTypeReportedNotFixed(): Void {
 		final src: String = '#if js\nextern class Ext { function toString():String; }\n#end\n'
 			+ "@:nullSafety(Strict) class C { function f(x:Ext) { final s:String = '${x.toString()}'; } }";
+		// A `#if`-guarded declaration proves nothing about what its name denotes in the other
+		// branch, so the receiver is not even provably non-null — the gate before the extern one.
 		final found: Array<Violation> = violations(src);
 		Assert.equals(1, found.length);
-		Assert.isTrue(found[0].message.indexOf('extern') != -1, 'message should name the missing proof: ${found[0].message}');
+		Assert.isTrue(
+			found[0].message.indexOf('not provably non-null') != -1, 'message should name the missing proof: ${found[0].message}'
+		);
 		Assert.equals(0, edits(src).length);
 	}
 
@@ -232,8 +237,8 @@ class RedundantToStringCheckTest extends Test {
 	}
 
 	public function testStringReceiverIsIdentity(): Void {
-		// The identity arm needs no type proof: `String` is nowhere declared here, and the call
-		// performs no coercion at all.
+		// The identity arm needs no coercion proof — the call performs no coercion at all — only the
+		// receiver's non-null proof, which resolves `String` through the std stand-in.
 		final out: String = applyFix('@:nullSafety(Strict) class C { function f(s:String) { final r:String = s.toString(); } }');
 		Assert.isTrue(out.indexOf('= s;') != -1, 'expected the identity call dropped, got: $out');
 	}
@@ -326,13 +331,13 @@ class RedundantToStringCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new RedundantToString().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return new RedundantToString().run(CheckFixture.withStd(src), new HaxeQueryPlugin());
 	}
 
 	/** The check's edits for `src`, driven with the whole-scope index `Cli` always supplies. */
 	private function edits(src: String): Array<{ span: Span, text: String }> {
 		final check: RedundantToString = new RedundantToString();
-		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }];
+		final files: Array<{ file: String, source: String }> = CheckFixture.withStd(src);
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final found: Array<Violation> = check.run(files, plugin);
 		return check.fix(src, found, plugin, SymbolIndex.build(files, plugin));
@@ -344,6 +349,17 @@ class RedundantToStringCheckTest extends Test {
 		var result: String = src;
 		for (edit in applied) result = result.substring(0, edit.span.from) + edit.text + result.substring(edit.span.to);
 		return result;
+	}
+
+	@:pin('control')
+	@:killer('M-TOSTRING-RETURN-TRUSTED')
+	public function testMethodReturningTypedefOfNullNotFixed(): Void {
+		// `get()` returns `MaybeObj`, i.e. `Null<Obj>`: the call throws on null where the concatenation prints "null".
+		final src: String = 'typedef MaybeObj = Null<Obj>; class Obj { public function new() {} public function toString():String return "o"; } '
+			+ 'class Src { public function new() {} public function get():MaybeObj return null; } '
+			+ '@:nullSafety(Strict) class C { function f(s:Src) { final r:String = "a" + s.get().toString(); } }';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(0, edits(src).length);
 	}
 
 }

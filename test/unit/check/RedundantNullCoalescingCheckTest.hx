@@ -22,7 +22,7 @@ class RedundantNullCoalescingCheckTest extends Test {
 	}
 
 	public function testNominalUnderNullSafetyFlagged(): Void {
-		Assert.equals(1, violations('@:nullSafety class C { function f(x:Foo) { var a = x ?? other; } }').length);
+		Assert.equals(1, violations('@:nullSafety class C { function f(x:Foo) { var a = x ?? other; } } class Foo {}').length);
 	}
 
 	public function testNullableNotFlagged(): Void {
@@ -105,12 +105,12 @@ class RedundantNullCoalescingCheckTest extends Test {
 		// Self-shadow whose ENCLOSING binding is a non-null param — the RHS resolves to it,
 		// so the coalesce is genuinely redundant and stays flagged (proves resolve-to-outer,
 		// not a blanket self-shadow bail).
-		Assert.equals(1, violations('@:nullSafety class C { function f(p:Foo) { final p:Foo = p ?? other; } }').length);
+		Assert.equals(1, violations('@:nullSafety class C { function f(p:Foo) { final p:Foo = p ?? other; } } class Foo {}').length);
 	}
 
 	public function testGenuinelyRedundantNonShadowStillFlagged(): Void {
 		// Non-shadow control: a differently-named local off a non-null param still strips.
-		Assert.equals(1, violations('@:nullSafety class C { function f(q:Foo) { final x:Foo = q ?? other; } }').length);
+		Assert.equals(1, violations('@:nullSafety class C { function f(q:Foo) { final x:Foo = q ?? other; } } class Foo {}').length);
 	}
 
 	public function testFixLeavesSelfShadowNullableUntouched(): Void {
@@ -130,6 +130,38 @@ class RedundantNullCoalescingCheckTest extends Test {
 		var result: String = src;
 		for (e in edits) result = result.substring(0, e.span.from) + e.text + result.substring(e.span.to);
 		return result;
+	}
+
+	@:pin('control')
+	@:killer('M-PROVER-NULLITY-SKIPPED')
+	public function testTypedefOfNullLeftNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'typedef MaybeR = Null<R>; class R {} @:nullSafety(Strict) class C { function f(x:MaybeR) { var a = x ?? new R(); } }'
+			).length
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-VALUE-TYPE-UNINIT-FIELD')
+	public function testValueTypeFieldWithoutInitialiserNotFlagged(): Void {
+		// `var n:Int;` reads null on `--interp` and js until assigned, so `n ?? 5` answers 5 there.
+		Assert.equals(0, violations('class C { var n:Int; function f() { var a = n ?? 5; } }').length);
+	}
+
+	@:pin('control')
+	@:killer('M-VALUE-TYPE-FIELDS-REFUSED')
+	public function testValueTypeFieldWithInitialiserFlagged(): Void {
+		Assert.equals(1, violations('class C { var n:Int = 0; function f() { var a = n ?? 5; } }').length);
+	}
+
+	@:pin('control')
+	@:killer('M-VALUE-TYPE-FIELDS-REFUSED')
+	public function testValueTypePropertyReadThroughGetterFlagged(): Void {
+		Assert.equals(
+			1, violations('class C { var n(get, never):Int; function get_n():Int return 1; function f() { var a = n ?? 5; } }').length
+		);
 	}
 
 }

@@ -1,8 +1,10 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.DeclaredNullity;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
@@ -42,14 +44,15 @@ final class RedundantNullCoalescing implements Check {
 		final coalKind: String = seams.coalKind;
 		final opaqueKinds: Array<String> = seams.opaqueKinds;
 		final shape: RefShape = seams.shape;
+		final index: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
 		return RunScan.collectWith(files, plugin, RunScan.typeInfoOf(plugin), (entry, tree, typed, violations) -> {
 			final root: QueryNode = tree;
-			final declaredTypes: Map<Int, String> = typed.declaredTypes(entry.source);
+			final types: DeclaredNullity = DeclaredNullity.of(entry.file, root, entry.source, shape, typed, index);
 			function walk(node: QueryNode): Void {
 				if (opaqueKinds.contains(node.kind)) return;
 				if (node.kind == coalKind && node.children.length == 2) {
 					final span: Null<Span> = node.span;
-					if (span != null && TypeResolver.isProvablyNonNull(node.children[0], root, shape, declaredTypes)) violations.push({
+					if (span != null && TypeResolver.isProvablyNonNull(node.children[0], root, shape, types)) violations.push({
 						file: entry.file,
 						span: span,
 						rule: 'redundant-null-coalescing',

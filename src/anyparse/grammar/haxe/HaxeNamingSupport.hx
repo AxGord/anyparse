@@ -484,11 +484,11 @@ final class HaxeNamingSupport implements NamingSupport {
 
 	/**
 	 * WHICH mechanism reaches a member of `category` named `name` without an in-source identifier
-	 * reference, or null when none does. Five, in the order they are asked: a constructor (`new`), a
+	 * reference, or null when none does. Six, in the order they are asked: a constructor (`new`), a
 	 * magic dunder name the runtime calls (`__init__` - the static module initialiser), a `get_` /
 	 * `set_` property accessor invoked through `(get, set)`, an annotated member a framework / macro /
-	 * `@:keep` may reach, and a static final initialised with a type reference (a `Class<T>` registry
-	 * entry).
+	 * `@:keep` may reach, the program's entry point (`isEntryPoint`), and a static final initialised
+	 * with a type reference (a `Class<T>` registry entry).
 	 *
 	 * It answered a `Bool`, and the naming autofix turned that ONE `true` into one decline SENTENCE
 	 * about metadata, false for four of the five. The order here is the disjunction's own, so a name
@@ -503,8 +503,20 @@ final class HaxeNamingSupport implements NamingSupport {
 		if (DUNDER_NAME_PATTERN.match(name)) return ImplicitReach.MagicName;
 		if (isAccessorName(name)) return ImplicitReach.Accessor;
 		if (metaInRun(node, ancestors, category)) return ImplicitReach.Annotation;
+		if (isEntryPoint(category, name, node, mods)) return ImplicitReach.EntryPoint;
 		final registry: Bool = node.kind == 'FinalMember' && mods.contains('static') && isTypeReferenceInit(node);
 		return registry ? ImplicitReach.TypeRegistry : null;
+	}
+
+	/**
+	 * Whether the member is a Haxe ENTRY POINT: a parameterless `static function main()`. The build
+	 * names it (`-main`, lime's generated `ApplicationMain`, `--run`), so no source the linter reads
+	 * references it, and no build list the linter can see is the set of ALL builds - so the shape
+	 * alone decides, and it is never proven unreached.
+	 */
+	private static function isEntryPoint(category: NamingCategory, name: String, node: QueryNode, mods: Array<String>): Bool {
+		return category == NamingCategory.Method && name == 'main' && mods.contains('static')
+			&& !node.children.exists(c -> categoryOf(c, []) == NamingCategory.Param);
 	}
 
 	/**
