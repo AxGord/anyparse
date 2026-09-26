@@ -35,8 +35,12 @@ package anyparse.grammar.haxe;
  * reached only via a `macro $x in $y` reification). Declaration order within a tier is readability only:
  * `lowerPrattLoop` sorts operators by literal length descending. `SwitchExpr` / `SwitchExprBare` carry
  * `@:fmt(propagateExprPosition)` so cases route through `expressionCase`.
+ *
+ * `@:memo`: the four `(`-led atoms re-enter the same operand at the same position — a failed `(e : T)` leaves
+ * `(e)` to parse `e` again — so without the per-position memo on the atom a paren nest costs `2^depth`.
  */
 @:peg
+@:memo
 enum HxExpr {
 
 	HexLit(v: HxHexLit);

@@ -1,5 +1,7 @@
 package anyparse.runtime;
 
+import anyparse.runtime.MemoEntry.MemoExit;
+
 /**
  * Runtime parser context threaded through generated parsers as the
  * first argument to every helper. Owns everything that
@@ -33,6 +35,9 @@ final class Parser {
 	public var maxFailPos(default, null): Int = -1;
 
 	public var maxFailExpected(default, null): Null<String> = null;
+
+	/** How many times a `@:memo` rule actually ran — a replay does not count. */
+	public var memoRuns(default, null): Int = 0;
 
 	public final errors: Array<ParseError> = [];
 	public final indentStack: Array<Int> = [];
@@ -71,15 +76,99 @@ final class Parser {
 	 * point and its sub-rule call here; the next `collectTrivia` drains
 	 * it as a prefix. Null outside Trivia-mode builds and between drains.
 	 */
-	public var pendingTrivia: Null<{
-		blankBefore: Bool,
-		blankAfterLeadingComments: Bool,
-		newlineBefore: Bool,
-		leadingComments: Array<String>
-	}> = null;
+	public var pendingTrivia: Null<PendingTrivia> = null;
+
+	/**
+	 * Packrat memo of the `@:memo` grammar rules: generated rule key plus the
+	 * pending-trivia content (`memoKey`), then start position. Scoped to this
+	 * parse like every other field here: an entry is valid only for this
+	 * `input`.
+	 */
+	private final _memo: Map<String, Map<Int, MemoEntry>> = [];
 
 	public function new(input: Input) {
 		this.input = input;
+	}
+
+	/**
+	 * The memo key of rule `rule` under the current `pendingTrivia`. A rule's
+	 * run reads the stash (it drains it, and operator commits read its flags),
+	 * so the stash's content is part of the input the key must name.
+	 */
+	public function memoKey(rule: String): String {
+		final pending: Null<PendingTrivia> = pendingTrivia;
+		if (pending == null) return rule;
+		final buf: StringBuf = new StringBuf();
+		buf.add(rule);
+		buf.add(pending.blankBefore ? '|b' : '|-');
+		buf.add(pending.blankAfterLeadingComments ? 'a' : '-');
+		buf.add(pending.newlineBefore ? 'n' : '-');
+		for (comment in pending.leadingComments) {
+			buf.add('|');
+			buf.add(comment.length);
+			buf.add(':');
+			buf.add(comment);
+		}
+		return buf.toString();
+	}
+
+	/**
+	 * Replay the recorded run of `key` from `start`, or return null when there
+	 * is none. A replay leaves `pos` and `pendingTrivia` exactly as the run did,
+	 * and hands back the entry so the caller returns its value or rethrows its
+	 * error.
+	 */
+	public function memoReplay(key: String, start: Int): Null<MemoEntry> {
+		final byPos: Null<Map<Int, MemoEntry>> = _memo[key];
+		final entry: Null<MemoEntry> = byPos == null ? null : byPos[start];
+		if (entry == null) return null;
+		pos = entry.end;
+		final handed: Null<PendingTrivia> = pendingTrivia;
+		final after: Null<PendingTrivia> = entry.handedAfter;
+		if (handed != null && after != null) {
+			handed.blankBefore = after.blankBefore;
+			handed.blankAfterLeadingComments = after.blankAfterLeadingComments;
+			handed.newlineBefore = after.newlineBefore;
+			for (comment in after.leadingComments) handed.leadingComments.push(comment);
+		}
+		final own: Null<PendingTrivia> = entry.own;
+		pendingTrivia = if (entry.exit == Handed)
+			handed
+		else if (own != null)
+			copyTrivia(own, 0)
+		else
+			null;
+		return entry;
+	}
+
+	/**
+	 * Record the run of `key` from `start` that was handed the stash `handed`
+	 * (holding `handedComments` comments then) and just returned `value` or
+	 * threw `error`. A run whose trivia effect a replay could not reproduce —
+	 * the handed stash lost comments — is not recorded.
+	 */
+	public function memoRecord(
+		key: String, start: Int, handed: Null<PendingTrivia>, handedComments: Int, value: Null<Dynamic>, error: Null<ParseError>
+	): Void {
+		memoRuns++;
+		if (handed != null && handed.leadingComments.length < handedComments) return;
+		final left: Null<PendingTrivia> = pendingTrivia;
+		final exit: MemoExit = if (left == null)
+			Nothing
+		else if (left == handed)
+			Handed
+		else
+			Own;
+		final entry: MemoEntry = new MemoEntry(
+			pos, value, error, handed == null ? null : copyTrivia(handed, handedComments), exit,
+			left == null || exit == Handed ? null : copyTrivia(left, 0)
+		);
+		var byPos: Null<Map<Int, MemoEntry>> = _memo[key];
+		if (byPos == null) {
+			byPos = [];
+			_memo[key] = byPos;
+		}
+		byPos[start] = entry;
 	}
 
 	/**
@@ -106,6 +195,16 @@ final class Parser {
 
 	private static function alwaysFalse(): Bool {
 		return false;
+	}
+
+	/** A detached copy of `t`, keeping its comments from index `from` on. */
+	private static function copyTrivia(t: PendingTrivia, from: Int): PendingTrivia {
+		return {
+			blankBefore: t.blankBefore,
+			blankAfterLeadingComments: t.blankAfterLeadingComments,
+			newlineBefore: t.newlineBefore,
+			leadingComments: t.leadingComments.slice(from)
+		};
 	}
 
 }

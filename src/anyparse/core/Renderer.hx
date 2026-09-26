@@ -734,11 +734,18 @@ class Renderer {
 	 * report its inner Doc plus whether that inner is a `HardFlatten`
 	 * (opAddSub) vs a plain chain (opBool / ternary). Returns null when no
 	 * `CollapseProbe` is present (non-candidate node).
+	 *
+	 * A node already popped is skipped: its subtree was searched in full before
+	 * anything pushed ahead of it, so a second visit could only repeat a miss —
+	 * and on a nest of shared branches it would repeat it `2^depth` times.
 	 */
 	private static function findCollapseProbe(d: Doc): Null<{ inner: Doc, hard: Bool }> {
 		final stack: Array<Doc> = [d];
+		final seen: DocIdentityMap<Bool> = new DocIdentityMap();
 		while (stack.length > 0) {
 			final node: Doc = (cast stack.pop(): Doc);
+			if (seen.exists(node)) continue;
+			seen.set(node, true);
 			switch node {
 				case CollapseProbe(inner):
 					final hard: Bool = switch inner {

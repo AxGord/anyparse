@@ -39,8 +39,12 @@ package anyparse.grammar.haxe;
  *
  * `Parens(inner:HxType)` — parenthesised type atom `(T)`, a Case 3 single-Ref `@:wrap('(',
  * ')')` like `HxExpr.ParenExpr`; reached only when `ArrowFn` rolls back.
+ *
+ * `@:memo`: that rollback re-parses the parenthesised type, so without the per-position memo on
+ * the atom a nest of `(` costs `2^depth` (see `HxExpr`).
  */
 @:peg
+@:memo
 @:fmt(preWrite(HaxeTypeRewrites.arrowFnOldStyleRewrite))
 enum HxType {
 

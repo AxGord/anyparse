@@ -1,6 +1,8 @@
 package anyparse.format.wrap;
 
+import anyparse.core.CollapsePass;
 import anyparse.core.Doc;
+import anyparse.core.DocIdentityMap;
 import anyparse.core.DocMeasure;
 import anyparse.format.BodyFit;
 import anyparse.format.IndentChar;
@@ -4554,52 +4556,69 @@ class WrapList {
 	 * line — matching the fork, which measures the full arrow line.
 	 */
 	private static function groupifyInlineBodies(d: Doc): Doc {
-		return switch d {
+		return groupifyShared(d, { done: new DocIdentityMap(), decides: new DocIdentityMap() });
+	}
+
+	/**
+	 * `groupifyInlineBodies` once per node where that is invisible: a shared
+	 * node maps to one shared result, so the rebuilt Doc keeps the input's
+	 * sharing instead of copying a nest of two-branch ctors out to `2^depth`
+	 * nodes. A subtree holding a node the measure render records a decision
+	 * for (`CollapsePass.holdsDecision`) is rebuilt per path as before:
+	 * `CollapsePass` reads a decision by node IDENTITY, and a copy the measure
+	 * render never reached answers "no decision" where a shared node would
+	 * answer with the other path's.
+	 */
+	private static function groupifyShared(d: Doc, memo: { done: DocIdentityMap<Doc>, decides: DocIdentityMap<Bool> }): Doc {
+		final shared: Bool = !CollapsePass.holdsDecision(d, memo.decides);
+		final hit: Null<Doc> = shared ? memo.done.get(d) : null;
+		if (hit != null) return hit;
+		final out: Doc = switch d {
 			case Empty, Text(_), Line(_), OptSpace(_), OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline,
 				OptSpaceSkipAfterHardline:
 				d;
 			case BodyGroup(inner):
-				flatLength(inner) >= 0 ? Group(groupifyInlineBodies(inner)) : BodyGroup(groupifyInlineBodies(inner));
+				flatLength(inner) >= 0 ? Group(groupifyShared(inner, memo)) : BodyGroup(groupifyShared(inner, memo));
 			case Group(inner):
-				Group(groupifyInlineBodies(inner));
+				Group(groupifyShared(inner, memo));
 			case GroupWithRestProbe(inner):
-				GroupWithRestProbe(groupifyInlineBodies(inner));
+				GroupWithRestProbe(groupifyShared(inner, memo));
 			case Nest(n, inner):
-				Nest(n, groupifyInlineBodies(inner));
+				Nest(n, groupifyShared(inner, memo));
 			case Flatten(inner):
-				Flatten(groupifyInlineBodies(inner));
+				Flatten(groupifyShared(inner, memo));
 			case WrapBoundary(inner):
-				WrapBoundary(groupifyInlineBodies(inner));
+				WrapBoundary(groupifyShared(inner, memo));
 			case HardFlatten(inner):
-				HardFlatten(groupifyInlineBodies(inner));
+				HardFlatten(groupifyShared(inner, memo));
 			case CollapseProbe(inner):
-				CollapseProbe(groupifyInlineBodies(inner));
+				CollapseProbe(groupifyShared(inner, memo));
 			case CollapseAddProbe(inner):
-				CollapseAddProbe(groupifyInlineBodies(inner));
+				CollapseAddProbe(groupifyShared(inner, memo));
 			case CollapseBoolProbe(inner):
-				CollapseBoolProbe(groupifyInlineBodies(inner));
+				CollapseBoolProbe(groupifyShared(inner, memo));
 			case CollapseChainProbe(inner):
-				CollapseChainProbe(groupifyInlineBodies(inner));
+				CollapseChainProbe(groupifyShared(inner, memo));
 			case ConditionalMarkerZero(inner):
-				ConditionalMarkerZero(groupifyInlineBodies(inner));
+				ConditionalMarkerZero(groupifyShared(inner, memo));
 			case ConditionalMarkerDecrease(inner):
-				ConditionalMarkerDecrease(groupifyInlineBodies(inner));
+				ConditionalMarkerDecrease(groupifyShared(inner, memo));
 			case Concat(items):
-				Concat([for (it in items) groupifyInlineBodies(it)]);
+				Concat([for (it in items) groupifyShared(it, memo)]);
 			case IfBreak(b, f):
-				IfBreak(groupifyInlineBodies(b), groupifyInlineBodies(f));
+				IfBreak(groupifyShared(b, memo), groupifyShared(f, memo));
 			case IfWidthExceeds(n, b, f):
-				IfWidthExceeds(n, groupifyInlineBodies(b), groupifyInlineBodies(f));
+				IfWidthExceeds(n, groupifyShared(b, memo), groupifyShared(f, memo));
 			case IfFirstLineExceeds(n, b, f):
-				IfFirstLineExceeds(n, groupifyInlineBodies(b), groupifyInlineBodies(f));
+				IfFirstLineExceeds(n, groupifyShared(b, memo), groupifyShared(f, memo));
 			case IfLineExceeds(n, b, f):
-				IfLineExceeds(n, groupifyInlineBodies(b), groupifyInlineBodies(f));
+				IfLineExceeds(n, groupifyShared(b, memo), groupifyShared(f, memo));
 			case IfResidualLineExceeds(n, b, f):
-				IfResidualLineExceeds(n, groupifyInlineBodies(b), groupifyInlineBodies(f));
+				IfResidualLineExceeds(n, groupifyShared(b, memo), groupifyShared(f, memo));
 			case IfFullLineExceeds(n, b, f):
-				IfFullLineExceeds(n, groupifyInlineBodies(b), groupifyInlineBodies(f));
+				IfFullLineExceeds(n, groupifyShared(b, memo), groupifyShared(f, memo));
 			case IfNaturalFirstLineExceeds(n, b, f):
-				IfNaturalFirstLineExceeds(n, groupifyInlineBodies(b), groupifyInlineBodies(f));
+				IfNaturalFirstLineExceeds(n, groupifyShared(b, memo), groupifyShared(f, memo));
 			// A shared arm here rebuilt BOTH probes as the plain ctor and dropped the
 			// rest-awareness of the `…WithRest` one — the failure `D.mapChildren` warns
 			// about, and the sibling arrow pair three arms below keeps them separate for
@@ -4607,24 +4626,26 @@ class WrapList {
 			// deliberate exception is `BodyGroup -> Group`, which is the whole point of
 			// the function. Exhaustiveness catches a MISSING ctor, never a wrong one.
 			case IfNaturalFirstLineExceedsWithRest(n, b, f):
-				IfNaturalFirstLineExceedsWithRest(n, groupifyInlineBodies(b), groupifyInlineBodies(f));
+				IfNaturalFirstLineExceedsWithRest(n, groupifyShared(b, memo), groupifyShared(f, memo));
 			case IfNaturalFirstLineFitsOpenDelim(n, b, f):
-				IfNaturalFirstLineFitsOpenDelim(n, groupifyInlineBodies(b), groupifyInlineBodies(f));
+				IfNaturalFirstLineFitsOpenDelim(n, groupifyShared(b, memo), groupifyShared(f, memo));
 			case IfArrowContinuationFits(ei, fw, n, b, f):
-				IfArrowContinuationFits(ei, fw, n, groupifyInlineBodies(b), groupifyInlineBodies(f));
+				IfArrowContinuationFits(ei, fw, n, groupifyShared(b, memo), groupifyShared(f, memo));
 			case IfArrowContinuationFitsWithRest(ei, fw, n, b, f):
-				IfArrowContinuationFitsWithRest(ei, fw, n, groupifyInlineBodies(b), groupifyInlineBodies(f));
+				IfArrowContinuationFitsWithRest(ei, fw, n, groupifyShared(b, memo), groupifyShared(f, memo));
 			case IfIndentWidthExceeds(fw, n, b, f):
-				IfIndentWidthExceeds(fw, n, groupifyInlineBodies(b), groupifyInlineBodies(f));
+				IfIndentWidthExceeds(fw, n, groupifyShared(b, memo), groupifyShared(f, memo));
 			case IfGluedFirstLineExceeds(n, bi, b, f):
-				IfGluedFirstLineExceeds(n, bi, groupifyInlineBodies(b), groupifyInlineBodies(f));
+				IfGluedFirstLineExceeds(n, bi, groupifyShared(b, memo), groupifyShared(f, memo));
 			case Fill(items, sep, tr):
-				Fill([for (it in items) groupifyInlineBodies(it)], groupifyInlineBodies(sep), tr);
+				Fill([for (it in items) groupifyShared(it, memo)], groupifyShared(sep, memo), tr);
 			case FillWithRestProbe(items, sep, tr):
-				FillWithRestProbe([for (it in items) groupifyInlineBodies(it)], groupifyInlineBodies(sep), tr);
+				FillWithRestProbe([for (it in items) groupifyShared(it, memo)], groupifyShared(sep, memo), tr);
 			case FillBreakAfterWrap(items, sep, tr):
-				FillBreakAfterWrap([for (it in items) groupifyInlineBodies(it)], groupifyInlineBodies(sep), tr);
+				FillBreakAfterWrap([for (it in items) groupifyShared(it, memo)], groupifyShared(sep, memo), tr);
 		};
+		if (shared) memo.done.set(d, out);
+		return out;
 	}
 
 	/**
