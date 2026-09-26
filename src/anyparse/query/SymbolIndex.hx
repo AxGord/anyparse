@@ -243,6 +243,18 @@ typedef MemberInfo = {
 	 */
 	var isDynamic: Bool;
 
+	/** True when the member's modifier run carries the grammar's extern modifier (`RefShape.externModifierKind`). */
+	var isExtern: Bool;
+
+	/**
+	 * True when the member's modifier run carries the grammar's overload modifier (`RefShape.overloadModifierKind`):
+	 * it is one of several same-named signatures, so its name alone does not pick a function.
+	 */
+	var isOverload: Bool;
+
+	/** The names of the annotations on the member, in source order (`@:generic`, `@:keep`, …). */
+	var metaNames: Array<String>;
+
 	/**
 	 * True when the member carries an annotation that keeps it out of the extension channel
 	 * (`ExecutionShape.extensionExcludingMetaNames`, Haxe `@:noUsing`): `using` never binds it.

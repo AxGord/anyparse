@@ -3,8 +3,10 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
 import anyparse.query.Refs;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
@@ -39,13 +41,15 @@ using Lambda;
  *   between the two moments, and a call would move its side effect. The nullability
  *   half is the null-safety one: a `Null<String>` capture the compiler accepts inside
  *   the lambda is rejected as a `bind` argument (`Cannot assign nullable value here`);
- * - the callee is a bare name (a method, a static import, a local function, or a local
- *   passing the argument test), `local.m` over such a local, `this.m` or `pkg.Type.m` —
- *   a field receiver or a longer chain is refused, since `bind` reads it (and throws on
- *   a null one) at creation time.
- *
- * A bare callee name that resolves to nothing may still be a function-typed FIELD reassigned later, and one that resolves
- * to a `dynamic` method may be rebound; telling either from a plain method needs more than this per-file scan reads.
+ * - the callee is PROVEN to be a plain method through the `SymbolIndex`: a bare name or
+ *   `this.m` declared by the enclosing type, `local.m` over a local passing the argument
+ *   test, or `Type.m` on a type name — each naming exactly one declaration, a method
+ *   rather than a function-typed `var` / `final`, and not `dynamic` (rebindable), not a
+ *   macro (`Macro functions must be called immediately`), not generic, not `inline`
+ *   together with `extern`, and not one of several overloads (`Cannot create closure`).
+ *   A local function is accepted as it stands. Anything the index cannot answer — an
+ *   inherited member, a static import, a type outside the index, an ambiguous name, a
+ *   field receiver, a longer chain — is refused.
  *
  * ## Grammar-agnostic
  *
@@ -70,8 +74,9 @@ final class PreferBind implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
+		final index: String -> Null<SymbolIndex> = coveringIndex(files, plugin);
 		return RunScan.collectWith(files, plugin, resolveSeams(plugin), (entry, tree, seams, violations) -> {
-			for (m in matches(tree, entry.source, seams, plugin)) violations.push({
+			for (m in matches(tree, entry.file, entry.source, seams, plugin, index)) violations.push({
 				file: entry.file,
 				span: m.span,
 				rule: RULE_ID,
@@ -86,16 +91,27 @@ final class PreferBind implements Check {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		final seams: Null<Seams> = resolveSeams(plugin);
-		return seams == null
-			? []
-			: CheckScan.applyTextMatches(plugin, source, violations, (tree, text) -> matches(tree, text, seams, plugin));
+		if (seams == null) return [];
+		final file: String = violations.length == 0 ? '' : violations[0].file;
+		final scope: String -> Null<SymbolIndex> = coveringIndex([{ file: file, source: source }], plugin, index);
+		return CheckScan.applyTextMatches(plugin, source, violations, (tree, text) -> matches(tree, file, text, seams, plugin, scope));
 	}
 
 	/** Every bindable lambda under `tree` with its rewrite — the outermost one of a nest only. */
 	private static function matches(
-		tree: QueryNode, source: String, seams: Seams, plugin: GrammarPlugin
+		tree: QueryNode, file: String, source: String, seams: Seams, plugin: GrammarPlugin, index: String -> Null<SymbolIndex>
 	): Array<{ span: Span, text: String }> {
-		final ctx: Ctx = { seams: seams, root: tree, declaredTypes: RunScan.typeInfoOf(plugin)?.declaredTypes(source) ?? [] };
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+		final ctx: Ctx = {
+			seams: seams,
+			root: tree,
+			file: file,
+			source: source,
+			provider: provider,
+			index: index.bind(file),
+			declaredTypes: provider?.declaredTypes(source) ?? [],
+			binder: null
+		};
 		final out: Array<{ span: Span, text: String }> = [];
 		walk(tree, source, ctx, out);
 		return out;
@@ -118,9 +134,10 @@ final class PreferBind implements Check {
 		final call: QueryNode = node.children[0];
 		// callee + at least one argument; a parameter-bearing lambda has Required/Optional
 		// children, so children.length != 1 excludes it.
-		if (call.kind != seams.callKind || call.children.length < 2 || !stableCallee(call.children[0], ctx)) return null;
+		if (call.kind != seams.callKind || call.children.length < 2) return null;
 		for (i in 1...call.children.length) if (!stableArg(call.children[i], ctx)) return null;
-		return call;
+		// The callee last: its proof may build the index, which a lambda with a computed argument never needs.
+		return stableCallee(call.children[0], ctx) ? call : null;
 	}
 
 	/**
@@ -141,51 +158,85 @@ final class PreferBind implements Check {
 	}
 
 	/**
-	 * Whether the callee reads the same function at both moments: a bare name bound to nothing
-	 * in the file (an inherited method or a static import), to a method or local function, or to
-	 * a local passing `unchangingBinding`; `local.m` over such a local; the self reference's
-	 * `this.m`; or a static `pkg.Type.m`, whose receiver chain is package segments ending in one
-	 * type-cased segment and binds to no value.
+	 * Whether the callee is a function that cannot change between creation and call and can be closed
+	 * over: a bare name or `this.m` the enclosing type declares, `local.m` over an unchanging local, or
+	 * `Type.m` on a type name — each proven by `plainMethod`; or a bare name bound to a local function.
 	 */
 	private static function stableCallee(callee: QueryNode, ctx: Ctx): Bool {
 		final shape: RefShape = ctx.seams.shape;
-		if (callee.kind == shape.identKind) return stableBareCallee(callee, ctx);
-		if (callee.kind != shape.fieldAccessKind || callee.children.length != 1) return false;
-		final segments: Array<QueryNode> = [];
-		var cur: QueryNode = callee.children[0];
-		while (cur.kind == shape.fieldAccessKind && cur.children.length == 1) {
-			segments.unshift(cur);
-			cur = cur.children[0];
-		}
-		if (cur.kind != shape.identKind) return false;
-		if (!TypeResolver.receiverRootIsUnboundType(cur, ctx.root, shape)) return segments.length == 0 && unchangingBinding(cur, ctx);
-		segments.unshift(cur);
-		return staticReceiver([for (s in segments) s.name], shape.selfReferenceText);
+		if (callee.kind == shape.identKind) return bareCalleeIsMethod(callee, ctx);
+		final method: Null<String> = callee.name;
+		if (callee.kind != shape.fieldAccessKind || callee.children.length != 1 || method == null) return false;
+		final receiver: QueryNode = callee.children[0];
+		final receiverName: Null<String> = receiver.name;
+		if (receiver.kind != shape.identKind || receiverName == null) return false;
+		if (receiverName == shape.selfReferenceText) return enclosingDeclares(callee, method, ctx);
+		final local: Bool = TypeResolver.identBindingFrom(receiver, ctx.root, shape) != null;
+		// A bound receiver must be a local `bind` reads unchanged; an unbound one must name a type.
+		if (local ? !unchangingBinding(receiver, ctx) : !CasePatternScan.startsUpper(receiverName)) return false;
+		final owners: Null<Array<ResolvedType>> = binderOf(ctx)?.receiverDecls(receiver);
+		return owners != null && owners.length == 1 && plainMethod(owners[0], method, !local, ctx);
 	}
 
-	/** A bare callee name: bound to nothing in the file, to a method or local function, or to a local `unchangingBinding` accepts. */
-	private static function stableBareCallee(callee: QueryNode, ctx: Ctx): Bool {
+	/**
+	 * A bare callee name: bound to a local function, or — bound to nothing local — a method the enclosing
+	 * type itself declares. A local holding a function value is refused (its type is not a nominal one the
+	 * argument test can prove), and so is a name the enclosing type does not declare: an inherited member,
+	 * a static import, a module-level function.
+	 */
+	private static function bareCalleeIsMethod(callee: QueryNode, ctx: Ctx): Bool {
 		final shape: RefShape = ctx.seams.shape;
 		final name: Null<String> = callee.name;
 		final span: Null<Span> = callee.span;
 		if (name == null || span == null) return false;
 		final binding: Null<QueryNode> = TypeResolver.bindingNodeFrom(name, span, ctx.root, shape);
-		return binding == null || (shape.functionKinds ?? []).contains(binding.kind) || unchangingBinding(callee, ctx);
+		if (binding != null && (shape.localFunctionKinds ?? []).contains(binding.kind)) return true;
+		return (binding == null || !isLocalOrParam(binding.kind, shape)) && enclosingDeclares(callee, name, ctx);
+	}
+
+	/** Whether the type enclosing `node` declares `name` as a `plainMethod`, static or not. */
+	private static function enclosingDeclares(node: QueryNode, name: String, ctx: Ctx): Bool {
+		final span: Null<Span> = node.span;
+		final index: Null<SymbolIndex> = ctx.index();
+		final fi: Null<FileInfo> = index?.fileInfo(ctx.file);
+		if (span == null || fi == null) return false;
+		final file: FileInfo = fi;
+		final found: Null<TypeDeclInfo> = fi.types.find(t -> t.span.from <= span.from && span.to <= t.span.to);
+		if (found == null) return false;
+		final owner: TypeDeclInfo = found;
+		return plainMethod({ type: owner, file: file }, name, null, ctx);
 	}
 
 	/**
-	 * Whether an unbound receiver chain, spelled `names`, is the self reference alone or a static type path —
-	 * package segments ending in one type-cased segment.
+	 * Whether `owner` declares `name` exactly once, as a method `bind` can close over and nothing can rebind:
+	 * a function member (not a function-typed `var` / `final` field), outside any `#if`, and not `dynamic`,
+	 * a macro, generic, one of several overloads (by modifier or `@:overload`), or `inline` together with
+	 * `extern` (on the member or its type). `isStatic`, when given, is what the access demands.
 	 */
-	private static function staticReceiver(names: Array<Null<String>>, self: Null<String>): Bool {
-		if (names.length == 1 && names[0] == self) return true;
-		final last: Null<String> = names[names.length - 1];
-		if (last == null || !CasePatternScan.startsUpper(last)) return false;
-		for (i in 0...names.length - 1) {
-			final segment: Null<String> = names[i];
-			if (segment == null || CasePatternScan.startsUpper(segment) || segment == self) return false;
-		}
-		return true;
+	private static function plainMethod(owner: ResolvedType, name: String, isStatic: Null<Bool>, ctx: Ctx): Bool {
+		final shape: RefShape = ctx.seams.shape;
+		final members: Array<MemberInfo> = owner.type.members.filter(m -> m.name == name);
+		if (members.length != 1) return false;
+		final m: MemberInfo = members[0];
+		final generic: Null<String> = shape.genericFunctionMetaName;
+		return (shape.functionKinds ?? []).contains(m.kind) && !m.guarded && !m.isDynamic && !m.isMacro && !m.isOverload
+			&& !m.hasOverloadMeta && !(m.isInline && (m.isExtern || owner.type.isExtern))
+			&& (generic == null || !m.metaNames.contains(generic)) && (isStatic == null || isStatic == m.isStatic);
+	}
+
+	/** The file's `OperandBinder`, built on first use; null when the grammar supplies no type information or the index is missing. */
+	private static function binderOf(ctx: Ctx): Null<OperandBinder> {
+		final built: Null<OperandBinder> = ctx.binder;
+		if (built != null) return built;
+		final index: Null<SymbolIndex> = ctx.index();
+		final provider: Null<TypeInfoProvider> = ctx.provider;
+		if (index == null || provider == null) return null;
+		final shape: RefShape = ctx.seams.shape;
+		final binder: OperandBinder = new OperandBinder(
+			ctx.file, ctx.source, ctx.root, shape, index, provider, OperandBinder.builtinNamesOf(shape)
+		);
+		ctx.binder = binder;
+		return binder;
 	}
 
 	/**
@@ -241,6 +292,32 @@ final class PreferBind implements Check {
 		return '$callee.bind(${args.join(', ')})';
 	}
 
+	/**
+	 * A memoised index lookup that COVERS the file asked about: the plugin's resolution scope when it
+	 * holds that file — the one `run` proves against, and wider than the per-pass index `--fix` hands in
+	 * — else the caller's `given` index, else one built over `files`. A file outside the resolution
+	 * roots would otherwise find no declarations at all and every callee would be refused.
+	 */
+	private static function coveringIndex(
+		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?given: SymbolIndex
+	): String -> Null<SymbolIndex> {
+		var wide: Null<SymbolIndex> = null;
+		var widened: Bool = false;
+		var own: Null<SymbolIndex> = given;
+		function covering(file: String): Null<SymbolIndex> {
+			if (!widened) {
+				wide = RefactorSupport.resolutionIndexOf(plugin);
+				widened = true;
+			}
+			final scope: Null<SymbolIndex> = wide;
+			if (scope != null && scope.fileInfo(file) != null) return scope;
+			final built: SymbolIndex = own ?? SymbolIndex.build(files, plugin);
+			own = built;
+			return built;
+		}
+		return covering;
+	}
+
 	/** Resolve the lambda / call seam kinds, or null when either is unset. */
 	private static function resolveSeams(plugin: GrammarPlugin): Null<Seams> {
 		final shape: RefShape = plugin.refShape();
@@ -260,11 +337,17 @@ private typedef Seams = {
 };
 
 /**
- * One file's scan: the seams, the parsed root the scope resolver binds identifiers against, and
- * the declared-type map keyed by binding offset.
+ * One file's scan: the seams, the parsed root the scope resolver binds identifiers against, the file's
+ * name and source, the declared-type map keyed by binding offset, and the index a callee is proven
+ * against with the `OperandBinder` over it, both built on first use.
  */
 private typedef Ctx = {
 	final seams: Seams;
 	final root: QueryNode;
+	final file: String;
+	final source: String;
+	final provider: Null<TypeInfoProvider>;
+	final index: () -> Null<SymbolIndex>;
 	final declaredTypes: Map<Int, String>;
+	var binder: Null<OperandBinder>;
 };

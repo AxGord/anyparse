@@ -42,6 +42,8 @@ private typedef MemberSeams = {
 	final inlineKind: Null<String>;
 	final macroKind: Null<String>;
 	final dynamicKind: Null<String>;
+	final externKind: Null<String>;
+	final overloadKind: Null<String>;
 
 	/** The operator-overload annotation NAME (`RefShape.operatorOverloadMetaName`), or null when the grammar has none. */
 	final operatorMetaName: Null<String>;
@@ -532,6 +534,9 @@ final class SymbolIndexBuilder {
 			var runDynamic: Bool = false;
 			var runNoExtension: Bool = false;
 			var runOverloadMeta: Bool = false;
+			var runExtern: Bool = false;
+			var runOverload: Bool = false;
+			var runMetaNames: Array<String> = [];
 			for (child in n.children) {
 				final sp: Null<Span> = child.span;
 				// Enum constructors (`SimpleCtor` / `ParamCtor`) are captured as members too, so a bare
@@ -567,6 +572,9 @@ final class SymbolIndexBuilder {
 							isImplicitCall: runImplicitCall,
 							implicitCallMetas: runImplicitMetas,
 							isDynamic: runDynamic,
+							isExtern: runExtern,
+							isOverload: runOverload,
+							metaNames: runMetaNames,
 							excludedFromExtensions: runNoExtension,
 							hasOverloadMeta: runOverloadMeta,
 							guarded: guarded
@@ -584,6 +592,9 @@ final class SymbolIndexBuilder {
 					runDynamic = false;
 					runNoExtension = false;
 					runOverloadMeta = false;
+					runExtern = false;
+					runOverload = false;
+					runMetaNames = [];
 				} else if (sp != null && seams.visibilityKinds.contains(child.kind))
 					runVisibility = source.substring(sp.from, sp.to);
 				else if (child.kind == seams.overrideKind)
@@ -596,7 +607,12 @@ final class SymbolIndexBuilder {
 					runMacro = true;
 				else if (child.kind == seams.dynamicKind)
 					runDynamic = true;
+				else if (child.kind == seams.externKind)
+					runExtern = true;
+				else if (child.kind == seams.overloadKind)
+					runOverload = true;
 				else {
+					if (MemberKinds.META_KINDS.contains(child.kind) && child.name != null) runMetaNames.push(child.name ?? '');
 					final operatorKind: Null<String> = operatorKindOf(child, seams);
 					if (operatorKind != null) runOperators.push(operatorKind);
 					if (isConversionMeta(child, seams)) runImplicitConversion = true;
@@ -705,6 +721,8 @@ final class SymbolIndexBuilder {
 			inlineKind: shape.inlineModifierKind,
 			macroKind: shape.macroModifierKind,
 			dynamicKind: shape.dynamicModifierKind,
+			externKind: shape.externModifierKind,
+			overloadKind: shape.overloadModifierKind,
 			operatorMetaName: shape.operatorOverloadMetaName,
 			overloadMetaName: shape.signatureOverloadMetaName,
 			conversionMetaName: shape.execution?.implicitConversionMetaName,

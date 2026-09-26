@@ -21,7 +21,9 @@ using StringTools;
 class PreferBindCheckTest extends Test {
 
 	public function testWrapperLambdaFlagged(): Void {
-		final vs: Array<Violation> = violations('class C {\n\tfunction f(a:Int, b:String):Void {\n\t\tvar g = () -> h(a, b);\n\t}\n}');
+		final vs: Array<Violation> = violations(
+			'class C {\n\tfunction h(a:Int, b:String):Void {}\n\tfunction f(a:Int, b:String):Void {\n\t\tvar g = () -> h(a, b);\n\t}\n}'
+		);
 		Assert.equals(1, vs.length);
 		Assert.equals('prefer-bind', vs[0].rule);
 		Assert.equals(Severity.Info, vs[0].severity);
@@ -65,8 +67,8 @@ class PreferBindCheckTest extends Test {
 
 	/** Stable values — a parameter, a final local, a plain string, a negated literal — still convert. */
 	public function testStableArgsFixed(): Void {
-		final src: String =
-			"class C {\n\tfunction f(i:Int):Void {\n\t\tfinal k:String = 'k';\n\t\tvar g = () -> h(i, k, -1, 'plain');\n\t}\n}";
+		final src: String = "class C {\n\tfunction h(i:Int, k:String, n:Int, s:String):Void {}\n\tfunction f(i:Int):Void {\n"
+			+ "\t\tfinal k:String = 'k';\n\t\tvar g = () -> h(i, k, -1, 'plain');\n\t}\n}";
 		final check: PreferBind = new PreferBind();
 		final edits: Array<{ span: Span, text: String }> = check.fix(
 			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
@@ -76,7 +78,8 @@ class PreferBindCheckTest extends Test {
 	}
 
 	public function testFixToBind(): Void {
-		final src: String = 'class C {\n\tfunction f(a:Int, b:String):Void {\n\t\tvar g = () -> h(a, b);\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction h(a:Int, b:String):Void {}\n\tfunction f(a:Int, b:String):Void {\n\t\tvar g = () -> h(a, b);\n\t}\n}';
 		final check: PreferBind = new PreferBind();
 		final edits: Array<{ span: Span, text: String }> = check.fix(
 			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
@@ -86,7 +89,8 @@ class PreferBindCheckTest extends Test {
 	}
 
 	public function testFixFieldAccessCallee(): Void {
-		final src: String = 'class C {\n\tfunction f(obj:Obj, x:Int):Void {\n\t\tvar g = () -> obj.m(x);\n\t}\n}';
+		final src: String = 'class Obj {\n\tpublic function m(x:Int):Void {}\n}\nclass C {\n\tfunction f(obj:Obj, x:Int):Void {\n'
+			+ '\t\tvar g = () -> obj.m(x);\n\t}\n}';
 		final check: PreferBind = new PreferBind();
 		final edits: Array<{ span: Span, text: String }> = check.fix(
 			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
@@ -102,20 +106,22 @@ class PreferBindCheckTest extends Test {
 	@:pin('control')
 	@:killer('M-BIND-WRITES-IGNORED')
 	public function testReassignedLocalNotFlagged(): Void {
-		Assert.equals(
-			0, violations('class C {\n\tfunction f():Void {\n\t\tvar v:Int = 1;\n\t\tfinal g = () -> h(v);\n\t\tv = 2;\n\t}\n}').length
-		);
-		Assert.equals(0, violations('class C {\n\tfunction f(p:Int):Void {\n\t\tfinal g = () -> h(p);\n\t\tp++;\n\t}\n}').length);
+		final cls: String = 'class C {\n\tfunction h(n:Int):Void {}\n\tfunction f(p:Int):Void {\n\t\tBODY\n\t}\n}';
+		Assert.equals(0, violations(cls.replace('BODY', 'var v:Int = 1;\n\t\tfinal g = () -> h(v);\n\t\tv = 2;')).length);
+		Assert.equals(0, violations(cls.replace('BODY', 'final g = () -> h(p);\n\t\tp++;')).length);
+		Assert.equals(1, violations(cls.replace('BODY', 'final g = () -> h(p);')).length, 'the unwritten twin');
 	}
 
 	/** A field — bare, through `this`, or a static — may change between creation and call. */
 	@:pin('control')
 	@:killer('M-BIND-FIELD-ARG')
 	public function testFieldArgumentNotFlagged(): Void {
-		final cls: String = 'class C {\n\tvar count:Int = 0;\n\tfunction f():Void {\n\t\tfinal g = () -> h(ARG);\n\t}\n}';
+		final cls: String =
+			'class C {\n\tvar count:Int = 0;\n\tfunction h(n:Int):Void {}\n\tfunction f(p:Int):Void {\n\t\tfinal g = () -> h(ARG);\n\t}\n}';
 		Assert.equals(0, violations(cls.replace('ARG', 'count')).length);
 		Assert.equals(0, violations(cls.replace('ARG', 'this.count')).length);
 		Assert.equals(0, violations(cls.replace('ARG', 'MouseEvent.CLICK')).length);
+		Assert.equals(1, violations(cls.replace('ARG', 'p')).length, 'the parameter twin');
 	}
 
 	/**
@@ -126,25 +132,65 @@ class PreferBindCheckTest extends Test {
 	@:pin('control')
 	@:killer('M-BIND-NULLABLE-ARG')
 	public function testNullableArgumentNotFlagged(): Void {
-		Assert.equals(
-			0,
-			violations(
-				"class C {\n\tfunction f():Void {\n\t\tfinal d:Null<String> = Sys.getEnv('X');\n\t\tfinal g = () -> Sys.putEnv('K', d);\n"
-				+ '\t}\n}'
-			).length
-		);
-		Assert.equals(0, violations("class C {\n\tfunction f(?o:String):Void {\n\t\tfinal g = () -> Sys.putEnv('K', o);\n\t}\n}").length);
+		final cls: String = 'class C {\n\tfunction put(k:String, v:Null<String>):Void {}\n\tfunction f(?o:String, s:String):Void {\n'
+			+ "\t\tfinal d:Null<String> = Sys.getEnv('X');\n\t\tfinal g = () -> put('K', ARG);\n\t}\n}";
+		Assert.equals(0, violations(cls.replace('ARG', 'd')).length);
+		Assert.equals(0, violations(cls.replace('ARG', 'o')).length);
+		Assert.equals(1, violations(cls.replace('ARG', 's')).length, 'the non-nullable twin');
 	}
 
 	/** `bind` reads a field receiver at creation time, and throws there on a null one. */
 	@:pin('control')
 	@:killer('M-BIND-FIELD-RECEIVER')
 	public function testFieldReceiverNotFlagged(): Void {
-		final cls: String = 'class C {\n\tvar view:View;\n\tfunction f():Void {\n\t\tfinal g = () -> CALLEE(1);\n\t}\n}';
+		final cls: String = 'class Tool {\n\tpublic static function m(n:Int):Void {}\n}\nclass View {\n\tpublic function m(n:Int):Void {}\n'
+			+ '}\nclass C {\n\tvar view:View;\n\tfunction m(n:Int):Void {}\n\tfunction f():Void {\n'
+			+ '\t\tfinal g = () -> CALLEE(1);\n\t}\n}';
 		Assert.equals(0, violations(cls.replace('CALLEE', 'view.m')).length);
 		Assert.equals(0, violations(cls.replace('CALLEE', 'this.view.m')).length);
+		Assert.equals(0, violations(cls.replace('CALLEE', 'pkg.Tool.m')).length);
 		Assert.equals(1, violations(cls.replace('CALLEE', 'this.m')).length);
-		Assert.equals(1, violations(cls.replace('CALLEE', 'pkg.Type.m')).length);
+		Assert.equals(1, violations(cls.replace('CALLEE', 'Tool.m')).length);
+	}
+
+	/**
+	 * A `dynamic` method, or a `var` holding a function, may be REBOUND after the callback is created:
+	 * the lambda calls the new function, `bind` keeps calling the old one.
+	 */
+	@:pin('control')
+	@:killer('M-BIND-METHOD-UNPROVEN')
+	@:killer('M-BIND-DYNAMIC-CALLEE')
+	public function testRebindableCalleeNotFlagged(): Void {
+		final cls: String = 'class Foo {\n\tpublic var cb:Int->Void;\n\tpublic dynamic function dm(x:Int):Void {}\n}\n'
+			+ 'class C {\n\tdynamic function dyn(x:Int):Void {}\n\tfunction f(foo:Foo):Void {\n\t\tfinal g = () -> CALLEE(1);\n\t}\n}';
+		Assert.equals(0, violations(cls.replace('CALLEE', 'this.dyn')).length);
+		Assert.equals(0, violations(cls.replace('CALLEE', 'dyn')).length);
+		Assert.equals(0, violations(cls.replace('CALLEE', 'foo.dm')).length);
+		Assert.equals(0, violations(cls.replace('CALLEE', 'foo.cb')).length);
+	}
+
+	/**
+	 * A function that has no single closure — a macro (`Macro functions must be called immediately`), a
+	 * `@:generic` one, an `extern inline` one, one of several overloads — cannot be `bind`-ed at all.
+	 */
+	@:pin('control')
+	@:killer('M-BIND-METHOD-UNPROVEN')
+	@:killer('M-BIND-CLOSURELESS-CALLEE')
+	public function testClosurelessCalleeNotFlagged(): Void {
+		final cls: String = 'class U {\n\tpublic static macro function mac(e:Expr):Expr return e;\n'
+			+ '\t@:generic public static function gen<T>(x:T):Void {}\n\tpublic static extern inline function ei(x:Int):Void {}\n'
+			+ '\tpublic static overload extern inline function ov(x:Int):Void {}\n'
+			+ '\t@:overload(function(x:String):Void {}) public static function om(x:Int):Void {}\n}\n'
+			+ 'class C {\n\textern inline function mei(x:Int):Void {}\n\tfunction f():Void {\n\t\tfinal g = () -> CALLEE(1);\n\t}\n}';
+		for (callee in ['U.mac', 'U.gen', 'U.ei', 'U.ov', 'U.om', 'mei', 'this.mei'])
+			Assert.equals(0, violations(cls.replace('CALLEE', callee)).length, callee);
+	}
+
+	/** A bare name the enclosing type does not declare — inherited, a static import — is not proven a plain method. */
+	@:pin('control')
+	@:killer('M-BIND-UNDECLARED-BARE')
+	public function testUndeclaredBareCalleeNotFlagged(): Void {
+		Assert.equals(0, violations('class C extends B {\n\tfunction f():Void {\n\t\tfinal g = () -> inherited(1);\n\t}\n}').length);
 	}
 
 	public function testRegisteredInBuiltins(): Void {
@@ -158,7 +204,9 @@ class PreferBindCheckTest extends Test {
 	}
 
 	public function testNestedLambdaFlaggedOnce(): Void {
-		Assert.equals(1, violations('class C {\n\tfunction f():Void {\n\t\tvar g = () -> h(() -> k(1));\n\t}\n}').length);
+		Assert.equals(
+			1, violations('class C {\n\tfunction k(n:Int):Void {}\n\tfunction f():Void {\n\t\tvar g = () -> h(() -> k(1));\n\t}\n}').length
+		);
 	}
 
 	public function testGenericCallNotFlagged(): Void {

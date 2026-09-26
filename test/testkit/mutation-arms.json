@@ -8808,9 +8808,9 @@
 			"name": "M-BIND-FIELD-RECEIVER",
 			"type": "anyparse.check.PreferBind",
 			"method": "stableCallee",
-			"find": "if (cur.kind != shape.identKind) return false;",
-			"replace": "if (cur.kind != shape.identKind) return false;\n\t\treturn true;",
-			"note": "any receiver chain is read as stable"
+			"find": "if (receiver.kind != shape.identKind || receiverName == null) return false;",
+			"replace": "if (receiver.kind != shape.identKind || receiverName == null) return false;\n\t\treturn true;",
+			"note": "any single-level receiver is read as stable"
 		},
 		{
 			"name": "M-LOCALFN-RESULT-DROPPED",
@@ -8834,6 +8834,37 @@
 			"find": "if (parts.bare && !parts.block && declared.returnsVoid)",
 			"replace": "if (false)",
 			"note": "an expression body under a `Void` result is returned rather than wrapped"
+		},
+		{
+			"name": "M-BIND-METHOD-UNPROVEN",
+			"type": "anyparse.check.PreferBind",
+			"method": "plainMethod",
+			"force": "owner.type.members.exists(m -> m.name == name)",
+			"note": "any member the owner declares under the name is taken as a closable, unchanging method"
+		},
+		{
+			"name": "M-BIND-DYNAMIC-CALLEE",
+			"type": "anyparse.check.PreferBind",
+			"method": "plainMethod",
+			"find": "!m.isDynamic && ",
+			"replace": "",
+			"note": "a `dynamic` method, rebindable after the callback is created, is bound"
+		},
+		{
+			"name": "M-BIND-CLOSURELESS-CALLEE",
+			"type": "anyparse.check.PreferBind",
+			"method": "plainMethod",
+			"find": "!m.isMacro && !m.isOverload",
+			"replace": "true",
+			"note": "a macro or an overloaded method, which has no closure to bind, is bound"
+		},
+		{
+			"name": "M-BIND-UNDECLARED-BARE",
+			"type": "anyparse.check.PreferBind",
+			"method": "bareCalleeIsMethod",
+			"find": "&& enclosingDeclares(callee, name, ctx)",
+			"replace": "",
+			"note": "a bare callee name the enclosing type does not declare is taken as a method"
 		},
 		{
 			"name": "M-LOCALFN-OUTER-NAME-READ",

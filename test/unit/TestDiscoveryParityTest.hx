@@ -1481,10 +1481,13 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PossibleNullDereferenceTest#testFieldPathMapExistsGuardedNotFlagged :: control :: M-EXISTS-GUARD-BLIND',
 			'unit.check.PossibleNullDereferenceTest#testFieldPathMapReceiverFlagged :: control :: M-NULLABLE-NO-CHAIN',
 			'unit.check.PossibleNullDereferenceTest#testNullWrappedMapFlagged :: control :: M-NULLABLE-WRAPPER-OPAQUE',
+			'unit.check.PreferBindCheckTest#testClosurelessCalleeNotFlagged :: control :: M-BIND-METHOD-UNPROVEN,M-BIND-CLOSURELESS-CALLEE',
 			'unit.check.PreferBindCheckTest#testFieldArgumentNotFlagged :: control :: M-BIND-FIELD-ARG',
 			'unit.check.PreferBindCheckTest#testFieldReceiverNotFlagged :: control :: M-BIND-FIELD-RECEIVER',
 			'unit.check.PreferBindCheckTest#testNullableArgumentNotFlagged :: control :: M-BIND-NULLABLE-ARG',
 			'unit.check.PreferBindCheckTest#testReassignedLocalNotFlagged :: control :: M-BIND-WRITES-IGNORED',
+			'unit.check.PreferBindCheckTest#testRebindableCalleeNotFlagged :: control :: M-BIND-METHOD-UNPROVEN,M-BIND-DYNAMIC-CALLEE',
+			'unit.check.PreferBindCheckTest#testUndeclaredBareCalleeNotFlagged :: control :: M-BIND-UNDECLARED-BARE',
 			'unit.check.PreferCaseGuardCheckTest#testInScopeEnumNotFlagged :: control :: M-DECLARINGFILES-EMPTY',
 			'unit.check.PreferComprehensionIndexFillTest#testACommentInsideTheInnerDeclarationRefusesTheNest :: control :: '
 				+ 'M-COMPR-NESTED-DECL-COMMENT',
@@ -3743,6 +3746,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-LOCALFN-RESULT-DROPPED',
 			'M-LOCALFN-SIGNATURE-ANY',
 			'M-LOCALFN-VOID-RETURNED',
+			'M-BIND-METHOD-UNPROVEN',
+			'M-BIND-DYNAMIC-CALLEE',
+			'M-BIND-CLOSURELESS-CALLEE',
+			'M-BIND-UNDECLARED-BARE',
 			'M-LOCALFN-OUTER-NAME-READ'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
