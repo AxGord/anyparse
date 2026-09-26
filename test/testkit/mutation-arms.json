@@ -7825,7 +7825,7 @@
 			"type": "anyparse.check.UnusedPrivate",
 			"method": "usedAsValue",
 			"find": "names.push(alias);",
-			"replace": "",
+			"replace": "names.push(className);",
 			"note": "an import alias of the class is not a spelling of it, so `Type.createInstance(K, [])` reaches a deleted constructor"
 		},
 		{
