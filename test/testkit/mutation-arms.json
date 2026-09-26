@@ -8497,6 +8497,14 @@
 			"find": "if (seen.exists(node)) continue;",
 			"replace": "",
 			"note": "the collapse-probe search re-walks a shared Doc node once per path to it, 2^depth on a nest of two-branch ctors"
+		},
+		{
+			"name": "M-CHAIN-WALK-EAGER",
+			"type": "anyparse.macro.WriterChainLowering",
+			"method": "wrapChainTriviaBody",
+			"find": "if (_isChain) {",
+			"replace": "if (true) {",
+			"note": "the method-chain walk writes every call's arguments before it knows the value is a chain, and the plain call writes them again, so `a.m(a.m(\u2026))` doubles per level"
 		}
 	]
 }

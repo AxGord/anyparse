@@ -108,8 +108,15 @@ class HxNestingCostTest extends Test {
 		]
 	};
 
-	/** A constant number of reads of a `for` body per level. */
-	private static final BODY_WRITES: Meter = { cost: bodyReads, budget: n -> 3 * n + 8, shapes: [COMPREHENSION] };
+	/** A constant number of reads of a `for` body or a call's arguments per level. */
+	private static final BODY_WRITES: Meter = {
+		cost: bodyReads,
+		budget: n -> 3 * n + 8,
+		shapes: [
+			COMPREHENSION,
+			{ name: 'method-call-nest', gen: n -> nest(n, 'a.m(', ')', '1'), cfg: null }
+		]
+	};
 
 	@:pin('control')
 	@:killer('M-PARSE-MEMO-REPLAY-OFF')
@@ -134,7 +141,8 @@ class HxNestingCostTest extends Test {
 
 	@:pin('control')
 	@:killer('M-FOR-BODY-PROBE-EAGER')
-	public function testComprehensionBodyIsWrittenOnce(): Void {
+	@:killer('M-CHAIN-WALK-EAGER')
+	public function testEachBodyIsWrittenOnce(): Void {
 		check(BODY_WRITES);
 	}
 
@@ -218,31 +226,35 @@ class HxNestingCostTest extends Test {
 	}
 
 	/**
-	 * Replace the `body` field of every `for` payload in `node` with a getter that counts its
-	 * reads — the writer reads a body a fixed number of times per write of it.
+	 * Count the reads of every `for` payload's `body` and every call's `args` in `node` — the
+	 * writer reads each a fixed number of times per write of it.
 	 */
 	private static function countBodyReads(node: Null<Dynamic>, reads: { count: Int }): Void {
 		if (node == null) return;
 		switch Type.typeof(node) {
 			case TEnum(_):
 				for (param in Type.enumParameters(node)) countBodyReads(param, reads);
+				if (Type.enumConstructor(node) == 'Call') countFieldReads(node, 'args', reads);
 			case TClass(Array):
 				final items: Array<Dynamic> = node;
 				for (item in items) countBodyReads(item, reads);
 			case TObject, TClass(_) if (!(node is String)):
 				for (field in Reflect.fields(node)) countBodyReads(Reflect.field(node, field), reads);
-				if (Reflect.hasField(node, 'iterable') && Reflect.hasField(node, 'varName') && Reflect.hasField(node, 'body')) {
-					final body: Dynamic = Reflect.field(node, 'body');
-					js.lib.Object.defineProperty(node, 'body', {
-						get: () -> {
-							reads.count++;
-							return body;
-						},
-						enumerable: true
-					});
-				}
+				if (Reflect.hasField(node, 'iterable') && Reflect.hasField(node, 'varName')) countFieldReads(node, 'body', reads);
 			case _:
 		}
+	}
+
+	/** Replace `node.field` with a getter that counts its reads. */
+	private static function countFieldReads(node: Dynamic, field: String, reads: { count: Int }): Void {
+		final value: Dynamic = Reflect.field(node, field);
+		js.lib.Object.defineProperty(node, field, {
+			get: () -> {
+				reads.count++;
+				return value;
+			},
+			enumerable: true
+		});
 	}
 
 	private static function nest(n: Int, open: String, close: String, core: String): String {

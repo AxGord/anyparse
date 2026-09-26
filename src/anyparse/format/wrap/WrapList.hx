@@ -4564,7 +4564,7 @@ class WrapList {
 	 * node maps to one shared result, so the rebuilt Doc keeps the input's
 	 * sharing instead of copying a nest of two-branch ctors out to `2^depth`
 	 * nodes. A subtree holding a node the measure render records a decision
-	 * for (`CollapsePass.recordsDecision`) is rebuilt per path as before:
+	 * for (`CollapsePass.holdsDecision`) is rebuilt per path as before:
 	 * `CollapsePass` reads a decision by node IDENTITY, and a copy the measure
 	 * render never reached answers "no decision" where a shared node would
 	 * answer with the other path's.

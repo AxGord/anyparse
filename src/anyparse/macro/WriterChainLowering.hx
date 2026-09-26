@@ -91,125 +91,150 @@ final class WriterChainLowering {
 		// `a[i].foo()` still fall through to default emission, matching
 		// fork's `isDotAfterPClose` PClose-only test (`MarkWrapping.hx:2299`).
 		return macro {
-			final _segs: Array<anyparse.core.Doc> = [];
-			// ω-keep-chain (increment 9): `_breaks` is parallel to `_segs`
-			// — entry `i` is whether the source had a newline in the gap
-			// before segment `i`'s `.field` lead (the FieldAccess ctor's
-			// captured `chainNewline` synth slot). Built in lockstep with
-			// `_segs.unshift` so a `WrapMode.Keep` method-chain round-trips
-			// the source per-segment dot-boundary line breaks via
-			// `MethodChainEmit.shapeKeep`. Trivia-mode only; Plain keeps the
-			// 2-arg ctor patterns below and threads no `_breaks` (null →
-			// shapeNoWrap, byte-inert).
-			final _breaks: Array<Bool> = [];
-			var _cursor = value;
-			var _receiver = value;
-			var _hasCallPrev: Bool = false;
-			// ω-methodchain-all-or-nothing / isDotAfterPClose: did the dot that
-			// leads the INNERMOST collected segment follow a `)`? The walk runs
-			// right-to-left, so the last write is that segment's answer. `false`
-			// means the segment is not a chain item at all (fork
-			// `MarkWrapping.isDotAfterPClose`) and belongs to the head, which
-			// `MethodChainEmit.emit` renders by keeping it glued.
-			var _seg0AfterCall: Bool = false;
-			// ω-keep-chain-receiver-comment: the inner-most FieldAccess carries
-			// its operand's dot-gap trailing comment in the synth
-			// `chainLeadComment` slot. When that operand IS the chain receiver
-			// (a bare value, the `case _:` of the `switch _prev` below), stash
-			// the comment so it can be reattached to the receiver Doc after the
-			// walk — a `Keep` chain would otherwise drop it when the per-segment
-			// break replaces the source `owner // test` layout.
-			var _recTrail: Null<String> = null;
-			while (true) {
-				switch _cursor {
-					// ω-keep-callclose-newline: trivia Call ctor grew a 5th
-					// positional `argsCloseNewline`; the chain walk ignores it
-					// here (close placement is decided by the outer call's
-					// `lowerPostfixStar`, not the per-segment chain emit).
-					case Call(_op, _args, _trailClose, _, _, _):
+			// The chain walk writes every segment's arguments; a value it then
+			// hands to `$body` (no dot follows a `)`) writes them again, and a
+			// nest of such calls (`a.m(a.m(…))`) doubles per level. So the
+			// walk's gate is decided on the AST first, before anything is written.
+			var _probe = value;
+			var _isChain: Bool = false;
+			while (!_isChain) {
+				switch _probe {
+					case Call(_op, _, _, _, _, _):
 						switch _op {
-							case FieldAccess(_prev, _fld, _nl, _opTrail):
-								final _argDocs: Array<anyparse.core.Doc> = $argDocsExpr;
-								final _argsDoc: anyparse.core.Doc = $argsListExpr;
-								final _segDoc: anyparse.core.Doc = _trailClose != null
-									? _dc([_dt('.' + _fld), _argsDoc, trailingCommentDocVerbatim(_trailClose, opt)])
-									: _dc([_dt('.' + _fld), _argsDoc]);
-								_segs.unshift(_segDoc);
-								_breaks.unshift(_nl);
-								switch _prev {
-									case Call(_, _, _, _, _, _):
-										_hasCallPrev = true;
-										_seg0AfterCall = true;
-									case _:
-										_seg0AfterCall = false;
-										if (_opTrail != null) _recTrail = _opTrail;
-								}
-								_cursor = _prev;
+							case FieldAccess(_prev, _, _, _):
+								_isChain = _prev.match(Call(_, _, _, _, _, _));
+								_probe = _prev;
 							case _:
-								_receiver = _cursor;
 								break;
 						}
-					case FieldAccess(_prev, _fld, _nl, _opTrail):
-						// ω-methodchain-glue-bare-field: a bare `.field`
-						// access that precedes an already-collected segment
-						// (a Call to its right) is NOT its own chain
-						// break-item — it glues onto that segment's lead,
-						// mirroring fork `MarkWrapping.isDotAfterPClose` (a
-						// `.` counts as a chain item only when its previous
-						// token is `)`). So `holder.firstField.inner
-						// .filter(args)` stays ONE item, not three. When
-						// `_segs` is empty the bare field is a trailing
-						// access (its own item per fork's PClose-after rule
-						// for `a().b`); keep current shape. Without this glue
-						// every leading bare FieldAccess over-segments the
-						// chain and inflates the cascade item count.
-						//
-						// ω-keep-chain: when the bare field glues onto
-						// `_segs[0]` it becomes that segment's NEW leading
-						// dot, so its source-newline (`_nl`) REPLACES the
-						// existing `_breaks[0]` (the break-before now refers
-						// to the glued lead). When `_segs` is empty the bare
-						// field is its own segment → push its `_nl` parallel.
-						if (_segs.length > 0) {
-							_segs[0] = _dc([_dt('.' + _fld), _segs[0]]);
-							_breaks[0] = _nl;
-						} else {
-							_segs.unshift(_dt('.' + _fld));
-							_breaks.unshift(_nl);
-						}
-						switch _prev {
-							case Call(_, _, _, _, _, _):
-								_hasCallPrev = true;
-								_seg0AfterCall = true;
-							case _:
-								_seg0AfterCall = false;
-								if (_opTrail != null) _recTrail = _opTrail;
-						}
-						_cursor = _prev;
+					case FieldAccess(_prev, _, _, _):
+						_isChain = _prev.match(Call(_, _, _, _, _, _));
+						_probe = _prev;
 					case _:
-						_receiver = _cursor;
 						break;
 				}
 			}
-			if (_segs.length >= 1 && _hasCallPrev) {
-				final _recBaseDoc: anyparse.core.Doc = $writeIdent(_receiver, opt, $precExpr);
-				// ω-keep-chain-receiver-comment: glue the receiver's captured
-				// trailing comment (`owner // test`) to its Doc before the first
-				// forced segment break. `trailingCommentDocVerbatim` prepends the
-				// leading space, so `_dc([recv, ' // test'])` reproduces the source.
-				final _recDoc: anyparse.core.Doc = _recTrail != null
-					? _dc([_recBaseDoc, trailingCommentDocVerbatim(_recTrail, opt)])
-					: _recBaseDoc;
-				// ω-methodchain-reeval-after-callparam nest-suppress prereq:
-				// a chain that is itself a CALL ARGUMENT (`_callArgChainNest`)
-				// keeps its own dot-break — fork
-				// `reEvaluateMethodChainAfterCallParam` never strips chain
-				// breaks for a chain inside a breaking outer call
-				// (`method_chain_single_arg_break_parens`). Mirror the
-				// `BinaryChainEmit` `_chainNestSuppress` gate.
-				return anyparse.format.wrap.MethodChainEmit.emit(
-					_recDoc, _segs, opt, $chainRulesExpr, _breaks, opt._callArgChainNest, $segCallLeadingBreakExpr, _seg0AfterCall
-				);
+			if (_isChain) {
+				final _segs: Array<anyparse.core.Doc> = [];
+				// ω-keep-chain (increment 9): `_breaks` is parallel to `_segs`
+				// — entry `i` is whether the source had a newline in the gap
+				// before segment `i`'s `.field` lead (the FieldAccess ctor's
+				// captured `chainNewline` synth slot). Built in lockstep with
+				// `_segs.unshift` so a `WrapMode.Keep` method-chain round-trips
+				// the source per-segment dot-boundary line breaks via
+				// `MethodChainEmit.shapeKeep`. Trivia-mode only; Plain keeps the
+				// 2-arg ctor patterns below and threads no `_breaks` (null →
+				// shapeNoWrap, byte-inert).
+				final _breaks: Array<Bool> = [];
+				var _cursor = value;
+				var _receiver = value;
+				var _hasCallPrev: Bool = false;
+				// ω-methodchain-all-or-nothing / isDotAfterPClose: did the dot that
+				// leads the INNERMOST collected segment follow a `)`? The walk runs
+				// right-to-left, so the last write is that segment's answer. `false`
+				// means the segment is not a chain item at all (fork
+				// `MarkWrapping.isDotAfterPClose`) and belongs to the head, which
+				// `MethodChainEmit.emit` renders by keeping it glued.
+				var _seg0AfterCall: Bool = false;
+				// ω-keep-chain-receiver-comment: the inner-most FieldAccess carries
+				// its operand's dot-gap trailing comment in the synth
+				// `chainLeadComment` slot. When that operand IS the chain receiver
+				// (a bare value, the `case _:` of the `switch _prev` below), stash
+				// the comment so it can be reattached to the receiver Doc after the
+				// walk — a `Keep` chain would otherwise drop it when the per-segment
+				// break replaces the source `owner // test` layout.
+				var _recTrail: Null<String> = null;
+				while (true) {
+					switch _cursor {
+						// ω-keep-callclose-newline: trivia Call ctor grew a 5th
+						// positional `argsCloseNewline`; the chain walk ignores it
+						// here (close placement is decided by the outer call's
+						// `lowerPostfixStar`, not the per-segment chain emit).
+						case Call(_op, _args, _trailClose, _, _, _):
+							switch _op {
+								case FieldAccess(_prev, _fld, _nl, _opTrail):
+									final _argDocs: Array<anyparse.core.Doc> = $argDocsExpr;
+									final _argsDoc: anyparse.core.Doc = $argsListExpr;
+									final _segDoc: anyparse.core.Doc = _trailClose != null
+										? _dc([_dt('.' + _fld), _argsDoc, trailingCommentDocVerbatim(_trailClose, opt)])
+										: _dc([_dt('.' + _fld), _argsDoc]);
+									_segs.unshift(_segDoc);
+									_breaks.unshift(_nl);
+									switch _prev {
+										case Call(_, _, _, _, _, _):
+											_hasCallPrev = true;
+											_seg0AfterCall = true;
+										case _:
+											_seg0AfterCall = false;
+											if (_opTrail != null) _recTrail = _opTrail;
+									}
+									_cursor = _prev;
+								case _:
+									_receiver = _cursor;
+									break;
+							}
+						case FieldAccess(_prev, _fld, _nl, _opTrail):
+							// ω-methodchain-glue-bare-field: a bare `.field`
+							// access that precedes an already-collected segment
+							// (a Call to its right) is NOT its own chain
+							// break-item — it glues onto that segment's lead,
+							// mirroring fork `MarkWrapping.isDotAfterPClose` (a
+							// `.` counts as a chain item only when its previous
+							// token is `)`). So `holder.firstField.inner
+							// .filter(args)` stays ONE item, not three. When
+							// `_segs` is empty the bare field is a trailing
+							// access (its own item per fork's PClose-after rule
+							// for `a().b`); keep current shape. Without this glue
+							// every leading bare FieldAccess over-segments the
+							// chain and inflates the cascade item count.
+							//
+							// ω-keep-chain: when the bare field glues onto
+							// `_segs[0]` it becomes that segment's NEW leading
+							// dot, so its source-newline (`_nl`) REPLACES the
+							// existing `_breaks[0]` (the break-before now refers
+							// to the glued lead). When `_segs` is empty the bare
+							// field is its own segment → push its `_nl` parallel.
+							if (_segs.length > 0) {
+								_segs[0] = _dc([_dt('.' + _fld), _segs[0]]);
+								_breaks[0] = _nl;
+							} else {
+								_segs.unshift(_dt('.' + _fld));
+								_breaks.unshift(_nl);
+							}
+							switch _prev {
+								case Call(_, _, _, _, _, _):
+									_hasCallPrev = true;
+									_seg0AfterCall = true;
+								case _:
+									_seg0AfterCall = false;
+									if (_opTrail != null) _recTrail = _opTrail;
+							}
+							_cursor = _prev;
+						case _:
+							_receiver = _cursor;
+							break;
+					}
+				}
+				if (_segs.length >= 1 && _hasCallPrev) {
+					final _recBaseDoc: anyparse.core.Doc = $writeIdent(_receiver, opt, $precExpr);
+					// ω-keep-chain-receiver-comment: glue the receiver's captured
+					// trailing comment (`owner // test`) to its Doc before the first
+					// forced segment break. `trailingCommentDocVerbatim` prepends the
+					// leading space, so `_dc([recv, ' // test'])` reproduces the source.
+					final _recDoc: anyparse.core.Doc = _recTrail != null
+						? _dc([_recBaseDoc, trailingCommentDocVerbatim(_recTrail, opt)])
+						: _recBaseDoc;
+					// ω-methodchain-reeval-after-callparam nest-suppress prereq:
+					// a chain that is itself a CALL ARGUMENT (`_callArgChainNest`)
+					// keeps its own dot-break — fork
+					// `reEvaluateMethodChainAfterCallParam` never strips chain
+					// breaks for a chain inside a breaking outer call
+					// (`method_chain_single_arg_break_parens`). Mirror the
+					// `BinaryChainEmit` `_chainNestSuppress` gate.
+					return anyparse.format.wrap.MethodChainEmit.emit(
+						_recDoc, _segs, opt, $chainRulesExpr, _breaks, opt._callArgChainNest, $segCallLeadingBreakExpr, _seg0AfterCall
+					);
+				}
 			}
 			$body;
 		};
@@ -229,64 +254,89 @@ final class WriterChainLowering {
 		final segCallLeadingBreakExpr: Expr = c.segCallLeadingBreakExpr;
 		final body: Expr = c.body;
 		return macro {
-			final _segs: Array<anyparse.core.Doc> = [];
-			var _cursor = value;
-			var _receiver = value;
-			var _hasCallPrev: Bool = false;
-			// ω-methodchain-all-or-nothing / isDotAfterPClose (plain-mode twin of
-			// the trivia walk's tracker): did the innermost collected segment's
-			// dot follow a `)`?
-			var _seg0AfterCall: Bool = false;
-			while (true) {
-				switch _cursor {
-					case Call(_op, _args):
+			// The chain walk writes every segment's arguments; a value it then
+			// hands to `$body` (no dot follows a `)`) writes them again, and a
+			// nest of such calls (`a.m(a.m(…))`) doubles per level. So the
+			// walk's gate is decided on the AST first, before anything is written.
+			var _probe = value;
+			var _isChain: Bool = false;
+			while (!_isChain) {
+				switch _probe {
+					case Call(_op, _):
 						switch _op {
-							case FieldAccess(_prev, _fld):
-								final _argDocs: Array<anyparse.core.Doc> = $argDocsExpr;
-								final _argsDoc: anyparse.core.Doc = $argsListExpr;
-								_segs.unshift(_dc([_dt('.' + _fld), _argsDoc]));
-								switch _prev {
-									case Call(_, _):
-										_hasCallPrev = true;
-										_seg0AfterCall = true;
-									case _:
-										_seg0AfterCall = false;
-								}
-								_cursor = _prev;
+							case FieldAccess(_prev, _):
+								_isChain = _prev.match(Call(_, _));
+								_probe = _prev;
 							case _:
-								_receiver = _cursor;
 								break;
 						}
-					case FieldAccess(_prev, _fld):
-						// ω-methodchain-glue-bare-field (plain-mode twin of
-						// the trivia branch above): glue a bare leading
-						// `.field` onto the already-collected segment to its
-						// right rather than over-segmenting the chain.
-						if (_segs.length > 0)
-							_segs[0] = _dc([_dt('.' + _fld), _segs[0]]);
-						else
-							_segs.unshift(_dt('.' + _fld));
-						switch _prev {
-							case Call(_, _):
-								_hasCallPrev = true;
-								_seg0AfterCall = true;
-							case _:
-								_seg0AfterCall = false;
-						}
-						_cursor = _prev;
+					case FieldAccess(_prev, _):
+						_isChain = _prev.match(Call(_, _));
+						_probe = _prev;
 					case _:
-						_receiver = _cursor;
 						break;
 				}
 			}
-			if (_segs.length >= 1 && _hasCallPrev) {
-				final _recDoc: anyparse.core.Doc = $writeIdent(_receiver, opt, $precExpr);
-				// ω-methodchain-reeval-after-callparam nest-suppress prereq
-				// (plain-mode twin): pass `sourceBreakBefore = null` then the
-				// `_callArgChainNest` gate.
-				return anyparse.format.wrap.MethodChainEmit.emit(
-					_recDoc, _segs, opt, $chainRulesExpr, null, opt._callArgChainNest, $segCallLeadingBreakExpr, _seg0AfterCall
-				);
+			if (_isChain) {
+				final _segs: Array<anyparse.core.Doc> = [];
+				var _cursor = value;
+				var _receiver = value;
+				var _hasCallPrev: Bool = false;
+				// ω-methodchain-all-or-nothing / isDotAfterPClose (plain-mode twin of
+				// the trivia walk's tracker): did the innermost collected segment's
+				// dot follow a `)`?
+				var _seg0AfterCall: Bool = false;
+				while (true) {
+					switch _cursor {
+						case Call(_op, _args):
+							switch _op {
+								case FieldAccess(_prev, _fld):
+									final _argDocs: Array<anyparse.core.Doc> = $argDocsExpr;
+									final _argsDoc: anyparse.core.Doc = $argsListExpr;
+									_segs.unshift(_dc([_dt('.' + _fld), _argsDoc]));
+									switch _prev {
+										case Call(_, _):
+											_hasCallPrev = true;
+											_seg0AfterCall = true;
+										case _:
+											_seg0AfterCall = false;
+									}
+									_cursor = _prev;
+								case _:
+									_receiver = _cursor;
+									break;
+							}
+						case FieldAccess(_prev, _fld):
+							// ω-methodchain-glue-bare-field (plain-mode twin of
+							// the trivia branch above): glue a bare leading
+							// `.field` onto the already-collected segment to its
+							// right rather than over-segmenting the chain.
+							if (_segs.length > 0)
+								_segs[0] = _dc([_dt('.' + _fld), _segs[0]]);
+							else
+								_segs.unshift(_dt('.' + _fld));
+							switch _prev {
+								case Call(_, _):
+									_hasCallPrev = true;
+									_seg0AfterCall = true;
+								case _:
+									_seg0AfterCall = false;
+							}
+							_cursor = _prev;
+						case _:
+							_receiver = _cursor;
+							break;
+					}
+				}
+				if (_segs.length >= 1 && _hasCallPrev) {
+					final _recDoc: anyparse.core.Doc = $writeIdent(_receiver, opt, $precExpr);
+					// ω-methodchain-reeval-after-callparam nest-suppress prereq
+					// (plain-mode twin): pass `sourceBreakBefore = null` then the
+					// `_callArgChainNest` gate.
+					return anyparse.format.wrap.MethodChainEmit.emit(
+						_recDoc, _segs, opt, $chainRulesExpr, null, opt._callArgChainNest, $segCallLeadingBreakExpr, _seg0AfterCall
+					);
+				}
 			}
 			$body;
 		};

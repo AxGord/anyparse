@@ -1977,7 +1977,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testWhileIfElseBreaksUnderHeader :: control :: M-LOOPIF-NEVER',
 			'unit.grammar.haxe.HxNestingCostTest#testCollapsePassComputesEachSharedNodeOnce :: control :: '
 				+ 'M-COLLAPSE-REWRITE-MEMO-OFF,M-COLLAPSE-SUBTREE-MEMO-OFF,M-COLLAPSE-COMMIT-MEMO-OFF',
-			'unit.grammar.haxe.HxNestingCostTest#testComprehensionBodyIsWrittenOnce :: control :: M-FOR-BODY-PROBE-EAGER',
+			'unit.grammar.haxe.HxNestingCostTest#testEachBodyIsWrittenOnce :: control :: M-FOR-BODY-PROBE-EAGER,M-CHAIN-WALK-EAGER',
 			'unit.grammar.haxe.HxNestingCostTest#testParserRunsEachNestedAtomOnce :: control :: M-PARSE-MEMO-REPLAY-OFF,M-PARSE-MEMO-STASHED-SKIP',
 			'unit.grammar.haxe.HxNestingCostTest#testWriterDocKeepsItsSharing :: control :: M-GROUPIFY-SHARED-OFF',
 			'unit.grammar.haxe.HxSameLineOptionsTest#testStatementBareTryBreaksByDefault :: control :: M-BLOCK-SHAPE-EQUIV-NONE',
@@ -3646,7 +3646,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-COLLAPSE-COMMIT-MEMO-OFF',
 			'M-FOR-BODY-PROBE-EAGER',
 			'M-GROUPIFY-SHARED-OFF',
-			'M-PROBE-SEARCH-REVISITS'
+			'M-PROBE-SEARCH-REVISITS',
+			'M-CHAIN-WALK-EAGER'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
@@ -3768,6 +3769,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-PENDING-JOBS-FILE-KEPT :: anyparse.check.HaxeSpawn#FinalMember:PARALLEL_DRIVER',
 			'M-FACTS-WRITTEN-DURING :: anyparse.check.TypedFactsMacro#writtenSince',
 			'M-FOR-BODY-PROBE-EAGER :: anyparse.macro.WriterBodyPolicyLowering#wrapBodyAllman',
+			'M-CHAIN-WALK-EAGER :: anyparse.macro.WriterChainLowering#wrapChainTriviaBody',
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 
