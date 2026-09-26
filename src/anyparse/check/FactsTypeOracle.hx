@@ -68,6 +68,9 @@ final class FactsTypeOracle implements TypeOracle {
 	/** The node kinds that are a member function's own body (`TypedFactsProbe`). */
 	private static final MEMBER_FUNCTION_KINDS: Array<String> = ['method', 'ctor'];
 
+	/** The kinds the facts give a type no operator overload can be declared on (`CompilerFacts.TypeFact`). */
+	private static final PLAIN_KINDS: Array<String> = ['class', 'interface', 'enum'];
+
 	public static inline final DECLINE_DYNAMIC_SOURCE: String =
 		'a `Dynamic` value flows into it, so the type the compiler gave it was inferred from its uses, not from the value';
 
@@ -131,7 +134,7 @@ final class FactsTypeOracle implements TypeOracle {
 	}
 
 	/**
-	 * The id of the type every configuration gave the expression at `expr` (`expressionType`) — a `Null<…>` unwrapped when
+	 * The id of the type every configuration gave the expression at `expr` (`valueType`) — a `Null<…>` unwrapped when
 	 * `unwrapNull`, type arguments dropped — when it names a type the facts hold; null otherwise: a declined answer, a type
 	 * parameter, a function or structure type, or a `Null<…>` kept.
 	 */
@@ -210,6 +213,35 @@ final class FactsTypeOracle implements TypeOracle {
 
 	public function expressionType(file: String, expr: Span): OracleType {
 		return resolve(file, expr, expr, o -> o.expressionType(file, expr), typedAt.bind(true));
+	}
+
+	/**
+	 * The simple name of the type every configuration gave the expression at `expr` of `source` — or at the parentheses
+	 * directly around it, where the compiler records an operand it typed — when that type is a built-in scalar of the
+	 * grammar or one no operator overload can be declared on (`PLAIN_KINDS`); null otherwise. A caller judging operators by
+	 * SIMPLE name may meet another declaration of it, so an abstract is never named, whatever the name resolves to there.
+	 */
+	public function nonOverloadingName(file: String, source: String, expr: Null<Span>): Null<String> {
+		if (expr == null) return null;
+		final paren: Null<Span> = parenthesized(source, expr);
+		final id: Null<String> = typeIdAt(file, expr, true) ?? (paren == null ? null : typeIdAt(file, paren, true));
+		final declared: Null<TypeFact> = id == null ? null : facts.type(id);
+		final shape: RefShape = _plugin.refShape();
+		final builtins: Array<String> = [for (name in shape.literalTypeNames ?? []) name].concat(shape.nonNullableTypeNames ?? []);
+		return id != null && (builtins.contains(id) || (declared != null && declared.alike && PLAIN_KINDS.contains(declared.kind)))
+			? id.substr(id.lastIndexOf('.') + 1)
+			: null;
+	}
+
+	/** The span of the parentheses directly around `at` in `source`, or null. */
+	private static function parenthesized(source: String, at: Span): Null<Span> {
+		var from: Int = at.from - 1;
+		while (from >= 0 && source.isSpace(from)) from--;
+		var to: Int = at.to;
+		while (to < source.length && source.isSpace(to)) to++;
+		return from >= 0 && to < source.length && source.fastCodeAt(from) == '('.code && source.fastCodeAt(to) == ')'.code
+			? new Span(from, to + 1)
+			: null;
 	}
 
 	/**

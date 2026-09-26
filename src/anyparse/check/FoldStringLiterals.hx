@@ -299,7 +299,16 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 			if (at != null && v.message.indexOf(OperatorGate.REFUSAL) != -1) unproven['${at.from}:${at.to}'] = v;
 		}
 		final tree: Null<QueryNode> = unproven.keys().hasNext() ? CheckScan.parseOrNull(plugin, source) : null;
-		final operators: Null<OperatorGate> = tree == null ? null : OperatorGate.withFacts(plugin, seams, file, source, tree);
+		final oracle: Null<FactsTypeOracle> = tree == null ? null : FactsTypeOracle.forFix(plugin, file, source);
+		final typed: Null<(QueryNode) -> Null<String>> = if (oracle == null)
+			null
+		else {
+			final facts: FactsTypeOracle = oracle;
+			operand -> facts.nonOverloadingName(file, source, operand.span);
+		};
+		final operators: Null<OperatorGate> = tree == null
+			? null
+			: new OperatorGate(OperatorSelection.of(plugin, [{ file: file, source: source }]), seams, file, source, tree, typed);
 		return CheckScan.applyBySpan(plugin, source, fixable, seams.candidateKinds, (node, span) -> {
 			final doubted: Null<Violation> = unproven['${span.from}:${span.to}'];
 			if (
@@ -2295,40 +2304,6 @@ private class OperatorGate {
 		else if (identKind != null && child.kind == identKind)
 			out.push(child);
 		return out;
-	}
-
-	/**
-	 * The gate `fix` asks for a construct `run` left `Unproven`: the same verdict, with an operand no structural rule types
-	 * named by the compiler's facts (`FactsTypeOracle.typeIdAt`) — the type every configuration gave it, by its simple name,
-	 * which the overload table then judges exactly as a written one. Without complete facts it answers as `run` did.
-	 */
-	public static function withFacts(plugin: GrammarPlugin, seams: Seams, file: String, source: String, tree: QueryNode): OperatorGate {
-		final oracle: Null<FactsTypeOracle> = FactsTypeOracle.forFix(plugin, file, source);
-		final selection: Null<OperatorSelection> = OperatorSelection.of(plugin, [{ file: file, source: source }]);
-		if (oracle == null) return new OperatorGate(selection, seams, file, source, tree);
-		final facts: FactsTypeOracle = oracle;
-		return new OperatorGate(selection, seams, file, source, tree, operand -> {
-			final at: Null<Span> = operand.span;
-			if (at == null) return null;
-			final paren: Null<Span> = parenthesized(source, at);
-			final id: Null<String> = facts.typeIdAt(file, at, true) ?? (paren == null ? null : facts.typeIdAt(file, paren, true));
-			return id == null ? null : id.substr(id.lastIndexOf('.') + 1);
-		});
-	}
-
-	/**
-	 * The span of the parentheses directly around `at` in `source`, or null: an operand reaches the resolver with its
-	 * parentheses unwrapped, while the facts record a concatenated operand at the range the compiler typed, parentheses
-	 * included.
-	 */
-	private static function parenthesized(source: String, at: Span): Null<Span> {
-		var from: Int = at.from - 1;
-		while (from >= 0 && source.isSpace(from)) from--;
-		var to: Int = at.to;
-		while (to < source.length && source.isSpace(to)) to++;
-		return from >= 0 && to < source.length && source.fastCodeAt(from) == '('.code && source.fastCodeAt(to) == ')'.code
-			? new Span(from, to + 1)
-			: null;
 	}
 
 }

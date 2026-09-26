@@ -8179,8 +8179,8 @@
 			"name": "M-FOLD-FACTS-OPERAND",
 			"type": "anyparse.check.FoldStringLiterals",
 			"method": "fix",
-			"find": "final operators: Null<OperatorGate> = tree == null ? null : OperatorGate.withFacts(plugin, seams, file, source, tree);",
-			"replace": "final operators: Null<OperatorGate> = null;",
+			"find": "final oracle: Null<FactsTypeOracle> = tree == null ? null : FactsTypeOracle.forFix(plugin, file, source);",
+			"replace": "final oracle: Null<FactsTypeOracle> = null;",
 			"note": "a construct the run left Unproven is never asked of the compiler's facts, so an operand only they type keeps the fix off"
 		},
 		{
@@ -8235,6 +8235,14 @@
 			"method": "escapedBefore",
 			"force": "false",
 			"note": "an expression in a string after an escape is typed by the fact the compiler shifted onto its range"
+		},
+		{
+			"name": "M-FOLD-FACTS-PLAIN-KINDS",
+			"type": "anyparse.check.FactsTypeOracle",
+			"method": "nonOverloadingName",
+			"find": "return id != null && (builtins.contains(id) || (declared != null && declared.alike && PLAIN_KINDS.contains(declared.kind)))",
+			"replace": "return id != null",
+			"note": "any type the facts name is named, an abstract included, and the overload table judges another declaration of that simple name"
 		}
 	]
 }

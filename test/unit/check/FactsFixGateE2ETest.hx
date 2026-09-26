@@ -43,6 +43,17 @@ class FactsFixGateE2ETest extends Test {
 		+ '\t\tfinal d:Date = Date.now();\n' + '\t\tfinal n:Named = new Named();\n'
 		+ '\t\tSys.println(\'\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t$${d.toString()}$${n.label}\'.length);\n' + '\t}\n' + '}\n'
 		+ '\n' + 'class Named {\n' + '\tpublic final label:String = \'l\';\n' + '\n' + '\tpublic function new() {}\n' + '}\n';
+	private static final FAR_MAIN: String = 'import far.Path2;\n' + '\n' + 'abstract Dir(String) from String to String {\n'
+		+ '\t@:op(A + B) static function add(a:Dir, b:String):Dir\n' + '\t\treturn (a : String) + \'/\' + b;\n' + '}\n' + '\n'
+		+ 'class Holder {\n' + '\tpublic final fp:Path2 = \'r\';\n' + '\n' + '\tpublic function new() {}\n' + '}\n' + '\n'
+		+ 'class Main {\n' + '\tstatic function pick<T>(v:T):T {\n' + '\t\treturn v;\n' + '\t}\n' + '\n' + '\tstatic function main() {\n'
+		+ '\t\tfinal out:Array<String> = [];\n' + '\t\tfinal c:Bool = out.length == 0;\n' + '\t\tfinal fp:Path2 = \'r\';\n'
+		+ '\t\tfinal h:Holder = new Holder();\n' + '\t\tfinal hs:Array<Holder> = [h];\n' + '\t\tout.push((c ? fp : fp) + \'x\' + \'y\');\n'
+		+ '\t\tout.push(hs[0].fp + \'x\' + \'y\');\n' + '\t\tout.push(pick(h).fp + \'x\' + \'y\');\n'
+		+ '\t\tout.push(hs.copy()[0].fp + \'x\' + \'y\');\n' + '\t\tSys.println(out.join(\',\'));\n' + '\t}\n' + '}\n';
+	private static final FAR_PATH: String = 'package far;\n' + '\n' + 'abstract Path2(String) from String to String {\n'
+		+ '\t@:op(A + B) static function add(a:Path2, b:String):Path2\n' + '\t\treturn (a : String) + \'/\' + b;\n' + '}\n';
+	private static final NEAR_PATH: String = 'package other;\n' + '\n' + 'class Path2 {\n' + '\tpublic function new() {}\n' + '}\n';
 	private static final HXML: String = '-cp .\n-main Main\n--interp\n';
 	private static inline final APQLINT: String = '{"compilerOracle":[{"hxml":"check.hxml"}],"resolutionRoots":["."]}';
 	private static inline final BUFFER: Int = 1 << 20;
@@ -64,6 +75,30 @@ class FactsFixGateE2ETest extends Test {
 		Assert.isTrue(after.indexOf('out.push(\'h$${(i - 1)}_p1\');') >= 0, after);
 		Assert.isTrue(after.indexOf('out.push(\'$${i + 1} $${(i * 2)}\');') >= 0, after);
 		Assert.isTrue(after.indexOf('out.push((name() : Dir) + \'x\' + \'y\');') >= 0, after);
+		Assert.equals(before, run(dir), 'the program prints what it printed');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * An operand the facts type as `far.Path2` — an abstract overloading `+` that the resolution scope does not declare —
+	 * stays, though the scope's own `Path2` is a plain class: the overload table judges a simple name, so the facts name
+	 * only a type no operator can be declared on.
+	 */
+	@:pin('control') @:killer('M-FOLD-FACTS-PLAIN-KINDS')
+	public function testAnAbstractTheFactsTypeIsNeverJudgedByAnotherDeclarationOfItsName(): Void {
+		#if (sys || nodejs)
+		final dir: Null<String> = tree('foldfar', [
+			{ name: 'src/Main.hx', source: FAR_MAIN },
+			{ name: 'src/other/Path2.hx', source: NEAR_PATH },
+			{ name: 'lib/far/Path2.hx', source: FAR_PATH }
+		], '-cp src\n-cp lib\n-main Main\n--interp\n', '{"compilerOracle":[{"hxml":"check.hxml"}],"resolutionRoots":["src"]}');
+		if (dir == null) return;
+		final before: String = run(dir);
+		CliFixture.captureStderr(() -> Cli.run(['lint', '--fix', '--rule', 'fold-adjacent-string-literals', '$dir/src']));
+		Assert.equals(FAR_MAIN, File.getContent('$dir/src/Main.hx'));
 		Assert.equals(before, run(dir), 'the program prints what it printed');
 		CliFixture.removeDir(dir);
 		#else
