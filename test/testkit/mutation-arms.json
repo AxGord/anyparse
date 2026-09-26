@@ -7900,22 +7900,6 @@
 			"note": "only the first configuration's signature is kept, so a return or parameter the builds type apart reads as agreed"
 		},
 		{
-			"name": "M-TEXTMAP-MYERS",
-			"type": "anyparse.query.TextMap",
-			"method": "myers",
-			"find": "_match[b0 + y] = a0 + x;",
-			"replace": "",
-			"note": "the line diff matches nothing between the first and the last change, so an untouched line there has no counterpart"
-		},
-		{
-			"name": "M-TEXTMAP-PREFIX",
-			"type": "anyparse.query.TextMap",
-			"method": "toBefore",
-			"find": "if (col <= prefix) return _beforeStarts[counterpart] + col;",
-			"replace": "",
-			"note": "an edited line keeps no text before its edit, so a declaration whose line gained an annotation cannot be placed"
-		},
-		{
 			"name": "M-EXPLICIT-TYPE-ORACLE-PARAMS",
 			"type": "anyparse.check.ExplicitType",
 			"method": "functionOracleEdits",
@@ -7973,6 +7957,75 @@
 			"method": "nominalOrNull",
 			"force": "name",
 			"note": "a Null<T> value is typed by its bare wrapper, so the bag becomes DynamicAccess<Null>, which names no type"
+		},
+		{
+			"name": "M-JOURNAL-INTERIOR",
+			"type": "anyparse.query.EditStep",
+			"method": "back",
+			"find": "if (start < to && from < end) return null;",
+			"replace": "{}",
+			"note": "a span inside text an edit inserted or replaced is carried back by offset arithmetic anyway, so a moved member lands on whatever text now sits there"
+		},
+		{
+			"name": "M-JOURNAL-SHIFT",
+			"type": "anyparse.query.EditStep",
+			"method": "back",
+			"find": "if (end <= from) at = shift + e.text.length - (e.span.to - e.span.from);",
+			"replace": "if (end <= from) at = shift;",
+			"note": "the last edit before a span does not shift it, so untouched text maps one edit off"
+		},
+		{
+			"name": "M-JOURNAL-OPAQUE",
+			"type": "anyparse.query.EditStep",
+			"method": "alignment",
+			"find": "same = StringTools.fastCodeAt(spliced, solid[i]) == StringTools.fastCodeAt(after, settled[i]);",
+			"replace": "same = true;",
+			"note": "a settled text that differs from its splice in more than whitespace is aligned as if it did not"
+		},
+		{
+			"name": "M-JOURNAL-AGREE",
+			"type": "anyparse.query.EditJournal",
+			"method": "back",
+			"find": "if (seen != null && (seen.from != at.from || seen.to != at.to)) return Unmapped(UNMAPPED_AMBIGUOUS);",
+			"replace": "{}",
+			"note": "two recorded histories that place a span apart answer the last one"
+		},
+		{
+			"name": "M-JOURNAL-RECORD-PATH",
+			"type": "anyparse.query.EditJournal",
+			"method": "collect",
+			"find": "if (step.after == goal) {",
+			"replace": "if (true) {",
+			"note": "any recorded step from the text is taken for a history reaching the file as it is now"
+		},
+		{
+			"name": "M-JOURNAL-RECORD",
+			"type": "anyparse.query.CanonicalEdit",
+			"method": "canonicalize",
+			"find": "(cast plugin: CachingGrammarPlugin).editJournal?.record(source, edits, settled);",
+			"replace": "{}",
+			"note": "the fix driver's rewrites are not recorded, so no file it touched can be placed"
+		},
+		{
+			"name": "M-ORACLE-WHOLE-MEMBER",
+			"type": "anyparse.check.FactsTypeOracle",
+			"method": "resolve",
+			"find": [
+				"return switch journal.back(site.text, site.current, member) {",
+				"case Mapped(at) if (site.text.substring(at.from, at.to) == site.current.substring(member.from, member.to)):\n\t\t\t\tquery(site, new Span(key.from + at.from - member.from, key.to + at.from - member.from), here);"
+			],
+			"replace": [
+				"return switch journal.back(site.text, site.current, key) {",
+				"case Mapped(at):\n\t\t\t\tquery(site, at, here);"
+			],
+			"note": "only the declaration's name is placed, so an edit elsewhere in its member — a changed signature the inferred type rests on — goes unseen"
+		},
+		{
+			"name": "M-ORACLE-HOME-GUARD",
+			"type": "anyparse.check.FactsTypeOracle",
+			"method": "sameHome",
+			"force": "true",
+			"note": "facts of any member answer for code the file now holds in another"
 		}
 	]
 }

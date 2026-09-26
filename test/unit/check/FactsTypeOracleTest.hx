@@ -7,6 +7,7 @@ import anyparse.check.FactsTypeOracle;
 import anyparse.check.FactsTypeSpelling;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CompilerFacts;
+import anyparse.query.EditJournal;
 import anyparse.query.FactText;
 import anyparse.runtime.Span;
 import utest.Assert;
@@ -21,6 +22,8 @@ using StringTools;
  */
 @:nullSafety(Strict)
 class FactsTypeOracleTest extends Test {
+
+	private static final PLUGIN: HaxeQueryPlugin = new HaxeQueryPlugin();
 
 	private static final SRC: String = 'class A<T> {\n\tvar fld = g();\n\n\tfunction f(p) {\n\t\tvar v = g();\n\t}\n}\n';
 
@@ -57,19 +60,55 @@ class FactsTypeOracleTest extends Test {
 	@:pin('control') @:killer('M-FACTS-ABSENT')
 	public function testCodeNoConfigurationCompiledDeclines(): Void {
 		final facts: CompilerFacts = table([dump('Int')]);
-		final oracle: FactsTypeOracle = new FactsTypeOracle(facts, file -> SRC);
+		final oracle: FactsTypeOracle = new FactsTypeOracle(facts, file -> SRC, null, PLUGIN);
 		Assert.same(Declined(FactsTypeOracle.DECLINE_FILE_NOT_COMPILED), oracle.localType('B.hx', declOf(SRC), 'v', 0));
 		// a local of the same name the facts do not list: a branch no build compiled
-		Assert.same(Declined(FactsTypeOracle.DECLINE_CODE_NOT_COMPILED), oracle.localType('A.hx', declOf(SRC), 'w', 0));
+		Assert.same(
+			Declined(FactsTypeOracle.DECLINE_CODE_NOT_COMPILED), oracle.localType('A.hx', declOf(SRC), 'w', SRC.indexOf('var v') + 5)
+		);
 	}
 
-	@:pin('control') @:killer('M-FACTS-ORACLE-ORIGINAL')
+	@:pin('control') @:killer('M-FACTS-ORACLE-ORIGINAL') @:killer('M-JOURNAL-SHIFT')
 	public function testARewrittenFileIsReadAtTheTextTheCompileRead(): Void {
+		// an edit in ANOTHER member: the local below it is placed by the offset the edit shifted it by
 		final facts: CompilerFacts = table([dump('Int')]);
-		final now: String = SRC.replace('\tvar fld = g();\n', '\tvar fld:Int = g();\n\n\t// added\n');
+		final at: Int = SRC.indexOf(' = g();');
+		final now: String = SRC.substr(0, at) + ':Int\n\n\t// added\n' + SRC.substr(at);
 		facts.invalidate('A.hx', SRC);
-		final oracle: FactsTypeOracle = new FactsTypeOracle(facts, file -> now);
-		Assert.same(Typed('Int'), oracle.localType('A.hx', declOf(now), 'v', 0));
+		final journal: EditJournal = new EditJournal();
+		journal.record(SRC, [{ span: new Span(at, at), text: ':Int\n\n\t// added\n' }], now);
+		final oracle: FactsTypeOracle = new FactsTypeOracle(facts, file -> now, journal, PLUGIN);
+		Assert.same(Typed('Int'), oracle.localType('A.hx', declOf(now), 'v', now.indexOf('var v') + 5));
+		Assert.same(
+			Declined(EditJournal.UNMAPPED_NO_HISTORY),
+			new FactsTypeOracle(facts, file -> now, null, PLUGIN).localType('A.hx', declOf(now), 'v', now.indexOf('var v') + 5)
+		);
+	}
+
+	@:pin('control') @:killer('M-ORACLE-WHOLE-MEMBER')
+	public function testAnEditAnywhereInTheMemberDeclines(): Void {
+		// the local's own text is untouched, but its member's signature changed: what the compiler inferred rests on it
+		final facts: CompilerFacts = table([dump('Int')]);
+		final at: Int = SRC.indexOf('(p)') + 2;
+		final now: String = SRC.substr(0, at) + ':Int' + SRC.substr(at);
+		facts.invalidate('A.hx', SRC);
+		final journal: EditJournal = new EditJournal();
+		journal.record(SRC, [{ span: new Span(at, at), text: ':Int' }], now);
+		final oracle: FactsTypeOracle = new FactsTypeOracle(facts, file -> now, journal, PLUGIN);
+		Assert.same(Declined(EditJournal.UNMAPPED_REWRITTEN), oracle.localType('A.hx', declOf(now), 'v', now.indexOf('var v') + 5));
+	}
+
+	@:pin('control') @:killer('M-ORACLE-HOME-GUARD')
+	public function testFactsOfAnotherMemberDecline(): Void {
+		// same length, same place, another member: the facts name `f`, the file holds `h`
+		final renamed: String = SRC.replace('function f', 'function h');
+		final facts: CompilerFacts = CompilerFacts.build(
+			[{ name: 'one', text: dump('Int'), file: path -> path }], file -> file == 'A.hx' ? renamed : null, file -> file
+		);
+		final oracle: FactsTypeOracle = new FactsTypeOracle(facts, file -> renamed, null, PLUGIN);
+		Assert.same(
+			Declined(FactsTypeOracle.DECLINE_ELSEWHERE), oracle.localType('A.hx', declOf(renamed), 'v', renamed.indexOf('var v') + 5)
+		);
 	}
 
 	@:pin('control') @:killer('M-FACTS-INVALIDATE-FOREIGN')
@@ -80,7 +119,10 @@ class FactsTypeOracleTest extends Test {
 			.replace('\n{"k":"end"', '\n{"k":"src","path":"A.hx","len":${hash[0]},"md5":"${hash[1]}"}\n{"k":"end"');
 		final facts: CompilerFacts = table([read]);
 		facts.invalidate('A.hx', SRC.replace('class A', 'class  A'));
-		Assert.same(Typed('Int'), new FactsTypeOracle(facts, file -> SRC).localType('A.hx', declOf(SRC), 'v', 0));
+		Assert.same(
+			Typed('Int'),
+			new FactsTypeOracle(facts, file -> SRC, null, PLUGIN).localType('A.hx', declOf(SRC), 'v', SRC.indexOf('var v') + 5)
+		);
 	}
 
 	@:pin('control') @:killer('M-CODEPOINT-NATIVE')
@@ -91,28 +133,39 @@ class FactsTypeOracleTest extends Test {
 		final facts: CompilerFacts = CompilerFacts.build(
 			[{ name: 'one', text: dump('Int', shift), file: path -> path }], file -> file == 'A.hx' ? source : null, file -> file
 		);
-		Assert.same(Typed('Int'), new FactsTypeOracle(facts, file -> source).localType('A.hx', declOf(source), 'v', 0));
+		Assert.same(
+			Typed('Int'),
+			new FactsTypeOracle(facts, file -> source, null, PLUGIN).localType('A.hx', declOf(source), 'v', source.indexOf('var v') + 5)
+		);
 	}
 
 	@:pin('control') @:killer('M-FACTS-FIELD-TYPES')
 	public function testAFieldTheConfigurationsTypeApartDeclines(): Void {
 		final field: Span = new Span(SRC.indexOf('var fld'), SRC.indexOf('g();') + 4);
-		final same: FactsTypeOracle = new FactsTypeOracle(table([dump('Int'), dump('Int')]), file -> SRC);
-		Assert.same(Typed('Int'), same.fieldType('A.hx', field, 'fld', 0));
-		final apart: FactsTypeOracle = new FactsTypeOracle(table([dump('Int'), dump('Int', 0, 'Float')]), file -> SRC);
-		Assert.isTrue(declinedWith(apart.fieldType('A.hx', field, 'fld', 0), 'the oracle configurations type it differently'));
+		final same: FactsTypeOracle = new FactsTypeOracle(table([dump('Int'), dump('Int')]), file -> SRC, null, PLUGIN);
+		Assert.same(Typed('Int'), same.fieldType('A.hx', field, 'fld', SRC.indexOf('var fld') + 7));
+		final apart: FactsTypeOracle = new FactsTypeOracle(table([dump('Int'), dump('Int', 0, 'Float')]), file -> SRC, null, PLUGIN);
+		Assert.isTrue(
+			declinedWith(apart.fieldType('A.hx', field, 'fld', SRC.indexOf('var fld') + 7), 'the oracle configurations type it differently')
+		);
 	}
 
 	@:pin('control') @:killer('M-FACTS-SIGNATURE-VARIANTS')
 	public function testASignatureTheConfigurationsTypeApartDeclines(): Void {
 		final fn: Span = new Span(SRC.indexOf('function f'), SRC.indexOf('\t}\n}') + 2);
-		final same: FactsTypeOracle = new FactsTypeOracle(table([dump('Int'), dump('Int')]), file -> SRC);
-		Assert.same(Typed('Int'), same.returnType('A.hx', fn, 'f', 0));
-		Assert.same(Typed('Null<Int>'), same.paramType('A.hx', fn, 'f', 0, 'p', 0));
-		final apart: FactsTypeOracle = new FactsTypeOracle(table([dump('Int'), dump('Int', 0, 'Int', 'Float', 'Float')]), file -> SRC);
-		Assert.isTrue(declinedWith(apart.returnType('A.hx', fn, 'f', 0), 'the oracle configurations type it differently'));
-		Assert.isTrue(declinedWith(apart.paramType('A.hx', fn, 'f', 0, 'p', 0), 'the oracle configurations type it differently'));
-		Assert.same(Declined(FactsTypeOracle.DECLINE_PARAM_MISMATCH), same.paramType('A.hx', fn, 'f', 0, 'q', 0));
+		final same: FactsTypeOracle = new FactsTypeOracle(table([dump('Int'), dump('Int')]), file -> SRC, null, PLUGIN);
+		Assert.same(Typed('Int'), same.returnType('A.hx', fn, 'f', SRC.indexOf('function f') + 10));
+		Assert.same(Typed('Null<Int>'), same.paramType('A.hx', fn, 'f', 0, 'p', SRC.indexOf('(p)') + 2));
+		final apart: FactsTypeOracle = new FactsTypeOracle(
+			table([dump('Int'), dump('Int', 0, 'Int', 'Float', 'Float')]), file -> SRC, null, PLUGIN
+		);
+		Assert.isTrue(
+			declinedWith(apart.returnType('A.hx', fn, 'f', SRC.indexOf('function f') + 10), 'the oracle configurations type it differently')
+		);
+		Assert.isTrue(
+			declinedWith(apart.paramType('A.hx', fn, 'f', 0, 'p', SRC.indexOf('(p)') + 2), 'the oracle configurations type it differently')
+		);
+		Assert.same(Declined(FactsTypeOracle.DECLINE_PARAM_MISMATCH), same.paramType('A.hx', fn, 'f', 0, 'q', SRC.indexOf('(p)') + 2));
 	}
 
 	@:pin('control') @:killer('M-EXPLICIT-TYPE-STRUCTURAL-DECLINE')
@@ -129,7 +182,7 @@ class FactsTypeOracleTest extends Test {
 
 	/** The type the oracle over `facts` gives the local `v` of `SRC`. */
 	private static function local(facts: CompilerFacts): OracleType {
-		return new FactsTypeOracle(facts, file -> SRC).localType('A.hx', declOf(SRC), 'v', 0);
+		return new FactsTypeOracle(facts, file -> SRC, null, PLUGIN).localType('A.hx', declOf(SRC), 'v', SRC.indexOf('var v') + 5);
 	}
 
 	/** The span of the `var v` declaration in `source`. */

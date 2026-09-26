@@ -10,6 +10,7 @@ import anyparse.query.CachingGrammarPlugin.ResolutionScope;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.Cli.RuleEdits;
 import anyparse.query.Cli.RuleFixOutcome;
+import anyparse.query.EditJournal;
 import anyparse.query.LintFixSafePass;
 import anyparse.query.cli.command.LintCommand.CheckPartition;
 import anyparse.query.cli.command.LintCommand.LintRange;
@@ -72,6 +73,8 @@ final class LintFixDriver {
 		// check, and every fix — keyed by source content, so an unchanged file is
 		// reused across passes and only a rewritten one re-parses on its new content.
 		final cached: CachingGrammarPlugin = LintCommand.wrapResolution(plugin, resolution);
+		// the oracle-assisted phase places the compiler's facts of a file's run-start text through the edits the run applied
+		if (oracleConfigured) cached.editJournal = new EditJournal();
 		// hxformat.json is on disk and source-independent — discover once per file.
 		final optsByFile: Map<String, Null<String>> = [];
 		for (entry in files) optsByFile[entry.file] = CliArgs.discoverFormatConfig(entry.file);

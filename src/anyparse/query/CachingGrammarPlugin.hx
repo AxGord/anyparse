@@ -317,6 +317,12 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		return read == null ? null : read();
 	}
 
+	/**
+	 * The run's record of every rewrite `CanonicalEdit.canonicalize` settled through this plugin, or null — the default, for a
+	 * run that asks no question of an earlier text of a file. A `--fix` run that reads compiler facts sets one.
+	 */
+	public var editJournal: Null<EditJournal> = null;
+
 	/** `SymbolIndexHost`: the compiler facts the run's resolution scope names (`ResolutionScope.facts`), or null. */
 	public function compilerFacts(): Null<CompilerFacts> {
 		final read: Null<() -> Null<CompilerFacts>> = _resolutionScope?.facts;

@@ -881,6 +881,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.DeclaredNullityTest',
 		'unit.query.DeleteBlankLineSliceTest',
 		'unit.query.DocOwnerGuardSliceTest',
+		'unit.query.EditJournalTest',
 		'unit.query.ElementSpanOwnedLinesTest',
 		'unit.query.EncapsulateFieldSliceTest',
 		'unit.query.ExtractConstantSliceTest',
@@ -962,7 +963,6 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.SymbolIndexRunMemoSliceTest',
 		'unit.query.SymbolIndexSliceTest',
 		'unit.query.SymbolQuerySliceTest',
-		'unit.query.TextMapTest',
 		'unit.query.ThinArrowParamBindingSliceTest',
 		'unit.query.TypeInfoMemoTest',
 		'unit.query.TypeRefPrinterTest',
@@ -1168,16 +1168,19 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-DUP-CODE-RENAMED-GATE-RAW',
 			'unit.check.ExtractRepeatedExpressionTest#testALiteralInteriorDifferenceSplitsTheGroup :: control :: '
 				+ 'M-EXTRACT-REPEAT-RENDER-SPLIT',
+			'unit.check.FactsTypeOracleE2ETest#testAReorderedFileIsPlacedOnlyThroughTheEditsItsRunApplied :: guard :: ',
 			'unit.check.FactsTypeOracleE2ETest#testTheFactsTypeEveryDeclarationKindAndKeepTheProgram :: control :: M-ASSISTED-FACTS-FIRST,M-ASSISTED-DECLINE-CENSUS,M-EXPLICIT-TYPE-ORACLE-PARAMS,M-EXPLICIT-TYPE-ORACLE-FIELDS,M-FACTS-DYNAMIC-SOURCE',
 			'unit.check.FactsTypeOracleTest#testAFieldTheConfigurationsTypeApartDeclines :: control :: M-FACTS-FIELD-TYPES',
-			'unit.check.FactsTypeOracleTest#testARewrittenFileIsReadAtTheTextTheCompileRead :: control :: M-FACTS-ORACLE-ORIGINAL',
+			'unit.check.FactsTypeOracleTest#testARewrittenFileIsReadAtTheTextTheCompileRead :: control :: M-FACTS-ORACLE-ORIGINAL,M-JOURNAL-SHIFT',
 			'unit.check.FactsTypeOracleTest#testASignatureTheConfigurationsTypeApartDeclines :: control :: M-FACTS-SIGNATURE-VARIANTS',
 			'unit.check.FactsTypeOracleTest#testASiteAfterNonAsciiTextIsFound :: control :: M-CODEPOINT-NATIVE',
 			'unit.check.FactsTypeOracleTest#testATypeParameterOutOfScopeDeclines :: control :: M-FACTS-SPELL-SCOPE',
+			'unit.check.FactsTypeOracleTest#testAnEditAnywhereInTheMemberDeclines :: control :: M-ORACLE-WHOLE-MEMBER',
 			'unit.check.FactsTypeOracleTest#testAnUnknownDeclines :: control :: M-FACTS-SPELL-UNKNOWN',
 			'unit.check.FactsTypeOracleTest#testCodeNoConfigurationCompiledDeclines :: control :: M-FACTS-ABSENT',
 			'unit.check.FactsTypeOracleTest#testConfigurationsThatDisagreeDecline :: control :: M-FACTS-ORACLE-AGREE,M-FACTS-UNION',
 			'unit.check.FactsTypeOracleTest#testExplicitTypeSaysWhyItsStructuralFixDeclined :: control :: M-EXPLICIT-TYPE-STRUCTURAL-DECLINE',
+			'unit.check.FactsTypeOracleTest#testFactsOfAnotherMemberDecline :: control :: M-ORACLE-HOME-GUARD',
 			'unit.check.FactsTypeOracleTest#testFactsOfTheRewrittenTextStayCurrent :: control :: M-FACTS-INVALIDATE-FOREIGN',
 			'unit.check.FactsTypeOracleTest#testTypesNoSourceCanSpellDecline :: control :: M-FACTS-SPELL-IMPL',
 			'unit.check.FieldInitAtDeclarationCrossingSuperTest#testCollectionOfForeignReadAfterSuperNotMoved :: control :: '
@@ -2205,6 +2208,14 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.DocOwnerGuardSliceTest#testBannerCommentIsNotGuarded :: control :: M-DOCSPAN-BANNER-IS-DOC',
 			'unit.query.DocOwnerGuardSliceTest#testModifierInsertOnTheOwnersLineIsAccepted :: control :: M-DOCSPLIT-BREAKLESS-TOO',
 			'unit.query.DocOwnerGuardSliceTest#testReplacementStartingAtTheOwnerIsAccepted :: control :: M-DOCSPLIT-COVERING-TOO',
+			'unit.query.EditJournalTest#testAMovedMemberHasNoCounterpart :: control :: M-JOURNAL-INTERIOR',
+			'unit.query.EditJournalTest#testASettleBeyondWhitespaceMapsNothing :: control :: M-JOURNAL-OPAQUE',
+			'unit.query.EditJournalTest#testHistoriesThatPlaceASpanApartDecline :: control :: M-JOURNAL-AGREE',
+			'unit.query.EditJournalTest#testManyEditsStillMapExactly :: control :: M-JOURNAL-SHIFT',
+			'unit.query.EditJournalTest#testNoRecordedHistoryMapsNothing :: control :: M-JOURNAL-RECORD-PATH',
+			'unit.query.EditJournalTest#testSwappedIdenticalBodiesKeepTheirOwnIdentity :: control :: M-JOURNAL-INTERIOR',
+			'unit.query.EditJournalTest#testTheCanonicalizerRecordsWhatItSettled :: control :: M-JOURNAL-RECORD',
+			'unit.query.EditJournalTest#testUntouchedTextMapsByTheShiftOfTheEditsBefore :: control :: M-JOURNAL-SHIFT',
 			'unit.query.ExtractInterfaceSliceTest#testAlreadyImplementsRefused :: control :: M-EI-DUP-IMPL-ALLOWED',
 			'unit.query.ExtractInterfaceSliceTest#testGuardedImplementsRefused :: control :: M-EI-DUP-IMPL-ALLOWED,M-EI-GUARD-FLAT-SCAN',
 			'unit.query.ExtractInterfaceSliceTest#testQualifiedSameNameDoesNotBlock :: control :: M-EI-IMPL-ANY-REFUSED',
@@ -2485,8 +2496,6 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.StdResolverTest#testTheStdBesideTheCompilerIsFoundInEitherLayout :: control :: M-STD-SIBLING-HOMEBREW',
 			'unit.query.SymbolIndexRunMemoSliceTest#testConfinementGateReadsTheIndexGrantSlot :: control :: M-GRANT-SLOT-UNREAD',
 			'unit.query.SymbolIndexRunMemoSliceTest#testSupertypeNameUnionIsBuiltOncePerIndex :: control :: M-SUPERTYPE-UNION-NOMEMO',
-			'unit.query.TextMapTest#testALineTheRewriteLeftAloneMapsExactly :: control :: M-TEXTMAP-MYERS',
-			'unit.query.TextMapTest#testAnEditedLineKeepsWhatItsEditLeftAround :: control :: M-TEXTMAP-PREFIX'
 		];
 		final actualPins: Array<String> = TestRegistry.pins();
 		Assert.same(
@@ -3507,8 +3516,6 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-INVALIDATE-FOREIGN',
 			'M-FACTS-FIELD-TYPES',
 			'M-FACTS-SIGNATURE-VARIANTS',
-			'M-TEXTMAP-MYERS',
-			'M-TEXTMAP-PREFIX',
 			'M-EXPLICIT-TYPE-ORACLE-PARAMS',
 			'M-EXPLICIT-TYPE-ORACLE-FIELDS',
 			'M-EXPLICIT-TYPE-STRUCTURAL-DECLINE',
@@ -3516,7 +3523,15 @@ class TestDiscoveryParityTest extends Test {
 			'M-ASSISTED-DECLINE-CENSUS',
 			'M-FACTS-DYNAMIC-SOURCE',
 			'M-BAG-INITIALIZER',
-			'M-BAG-NULL-OUTER'
+			'M-BAG-NULL-OUTER',
+			'M-JOURNAL-INTERIOR',
+			'M-JOURNAL-SHIFT',
+			'M-JOURNAL-OPAQUE',
+			'M-JOURNAL-AGREE',
+			'M-JOURNAL-RECORD-PATH',
+			'M-JOURNAL-RECORD',
+			'M-ORACLE-WHOLE-MEMBER',
+			'M-ORACLE-HOME-GUARD'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
