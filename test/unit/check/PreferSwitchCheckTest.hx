@@ -141,6 +141,47 @@ class PreferSwitchCheckTest extends Test {
 	}
 
 	/**
+	 * The `;` before an `else` is elided, so a then-branch arrives BARE (`return 1`, `throw 'b'`)
+	 * and the `;` after the last branch belonged to the whole chain. Every `case` body must end
+	 * terminated, or the switch does not compile (`Missing ;`).
+	 */
+	@:pin('control')
+	@:killer('M-SWITCH-BARE-BODY-VERBATIM')
+	public function testBareBranchBodiesGainATerminator(): Void {
+		final fixed: String = fixedSource(wrap("if (x == 1) return 1 else if (x == 2) throw 'b' else trace(3);"));
+		Assert.isTrue(fixed.indexOf('return 1;') >= 0, fixed);
+		Assert.isTrue(fixed.indexOf("throw 'b';") >= 0, fixed);
+		Assert.isTrue(fixed.indexOf('trace(3);') >= 0, fixed);
+		Assert.equals(-1, fixed.indexOf(';;'), fixed);
+	}
+
+	/**
+	 * The chain from a value-returning lambda block, `x -> { if (…) a else if (…) b else c; }`:
+	 * every branch is a bare VALUE, and the switch stays the block's last expression, so each
+	 * `case` yields its value with a `;` of its own.
+	 */
+	@:pin('control')
+	@:killer('M-SWITCH-BARE-BODY-VERBATIM')
+	public function testValueChainInALambdaBlockGainsTerminators(): Void {
+		final fixed: String = fixedSource(
+			wrap("final g = file -> {\n\t\t\tif (file == 'A') one else if (file == 'B') two else null;\n\t\t};")
+		);
+		Assert.isTrue(fixed.indexOf("case 'A': one;") >= 0, fixed);
+		Assert.isTrue(fixed.indexOf("case 'B': two;") >= 0, fixed);
+		Assert.isTrue(fixed.indexOf('case _: null;') >= 0, fixed);
+	}
+
+	/** A body that already ends in its own `;` or in a closing `}` is taken verbatim — never `;;`, never `};`. */
+	@:pin('control')
+	@:killer('M-SWITCH-TERMINATED-BODY-DOUBLED')
+	public function testTerminatedBranchBodiesAreNotDoubled(): Void {
+		final fixed: String = fixedSource(wrap('if (x == 1) { a(); } else if (x == 2) b(); else c();'));
+		Assert.isTrue(fixed.indexOf('switch (x)') >= 0, fixed);
+		Assert.equals(-1, fixed.indexOf(';;'), fixed);
+		Assert.equals(-1, fixed.indexOf('};'), fixed);
+	}
+
+	/**
 	 * Gate 7 is UNCONDITIONAL: a chain with no trailing `else` is never flagged, whatever its
 	 * subject, so every converted chain carries `case _`. The fixtures cover both sides of the
 	 * waiver this replaced — an `Int` local and an `Int` PARAMETER over cross-file constants,

@@ -8764,6 +8764,21 @@
 			"find": "if (_isChain) {",
 			"replace": "if (true) {",
 			"note": "the method-chain walk writes every call's arguments before it knows the value is a chain, and the plain call writes them again, so `a.m(a.m(\u2026))` doubles per level"
+		},
+		{
+			"name": "M-SWITCH-BARE-BODY-VERBATIM",
+			"type": "anyparse.check.SwitchChain",
+			"method": "terminatedBody",
+			"force": "spanText(source, span)",
+			"note": "a case body is taken verbatim, so a branch whose `;` was elided before `else` arrives bare"
+		},
+		{
+			"name": "M-SWITCH-TERMINATED-BODY-DOUBLED",
+			"type": "anyparse.check.SwitchChain",
+			"method": "terminatedBody",
+			"find": "seams.selfTerminatingEndings.exists(ending -> text.endsWith(ending))",
+			"replace": "false",
+			"note": "the terminator is appended even after a body that already ends in `;` or `}`"
 		}
 	]
 }

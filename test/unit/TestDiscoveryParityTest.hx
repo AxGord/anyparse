@@ -1604,6 +1604,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PreferStaticExtensionFactsTest#testTheFactsWeighTheConfiguredModulesNeighbours :: control :: M-PSE-FACTS-USING-SELF-MODULE',
 			'unit.check.PreferStaticExtensionFactsTest#testTheFirstParameterOfAFactsSignature :: control :: M-PSE-FIRST-PARAM',
 			'unit.check.PreferStaticExtensionFactsTest#testTheRewrittenProgramPrintsWhatItPrinted :: guard :: ',
+			'unit.check.PreferSwitchCheckTest#testBareBranchBodiesGainATerminator :: control :: M-SWITCH-BARE-BODY-VERBATIM',
+			'unit.check.PreferSwitchCheckTest#testTerminatedBranchBodiesAreNotDoubled :: control :: M-SWITCH-TERMINATED-BODY-DOUBLED',
+			'unit.check.PreferSwitchCheckTest#testValueChainInALambdaBlockGainsTerminators :: control :: M-SWITCH-BARE-BODY-VERBATIM',
 			'unit.check.PreferTernaryReturnCheckTest#testOwnLineCommentInACascadeDefersTheTail :: control :: '
 				+ 'M-PTR-RIDES-NEVER,M-PTR-CASCADE-NEVER-STRANDS',
 			'unit.check.PreferTernaryReturnCheckTest#testTheRunOfOneHoistIsRefusedAtTheSeam :: control :: M-COMMENT-HOIST-BLIND',
@@ -3722,7 +3725,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-FOR-BODY-PROBE-EAGER',
 			'M-GROUPIFY-SHARED-OFF',
 			'M-PROBE-SEARCH-REVISITS',
-			'M-CHAIN-WALK-EAGER'
+			'M-CHAIN-WALK-EAGER',
+			'M-SWITCH-BARE-BODY-VERBATIM',
+			'M-SWITCH-TERMINATED-BODY-DOUBLED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
