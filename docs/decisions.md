@@ -794,3 +794,10 @@ decided the question; it may not become a record of runs.
   point unreached; it is kept by shape (`ImplicitReach.EntryPoint`)
 - a private constructor is unreached when no `new C` is written → `Type.createInstance(C, [])` runs it with none, and
   deleting it broke that call on `--interp`; a class used as a value, or aliased by a typedef, keeps its constructor
+- resolving a proof's type name through `TypeRefIndex.inScopeAll` → it unions the tiers and skips an import the index does
+  not hold, so an alias (`import other.Opt as MaybeR`) or an unindexed import lost to a same-package class; the proof now
+  walks the compiler's own order and stops at the first tier it cannot read (`TypeNameBinding`)
+- closing a `cast` into a non-null class or abstract (`@:from … return cast v`) → no nominal proof sees an unchecked cast; a
+  residual of the unsafe-cast class, not of the name resolution
+- closing a value type that receives null from non-null-safe code on a dynamic target (`n ?? 7` -> `n` on an `Int` parameter)
+  → the same dynamic-hole class; the value-type fast path keeps trusting a parameter or a local

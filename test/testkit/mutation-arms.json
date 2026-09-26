@@ -7653,8 +7653,8 @@
 			"name": "M-NULLITY-UNRESOLVED-PROVEN",
 			"type": "anyparse.query.DeclaredNullity",
 			"method": "resolve",
-			"find": "return candidates.length > 0 && candidates.foreach(",
-			"replace": "return candidates.foreach(",
+			"find": "candidates != null && candidates.length > 0 && candidates.foreach(",
+			"replace": "(candidates ?? []).foreach(",
 			"note": "a name that resolves to nothing is proven by the empty agreement"
 		},
 		{
@@ -7684,9 +7684,9 @@
 		{
 			"name": "M-NULLITY-SCOPE-LOST",
 			"type": "anyparse.query.DeclaredNullity",
-			"method": "resolve",
-			"find": "index.resolveTypeRefsFrom(head, fromFile)",
-			"replace": "index.resolveTypeRefsFrom(head, '')",
+			"method": "bindingOf",
+			"find": "index.fileInfo(fromFile)",
+			"replace": "index.fileInfo('')",
 			"note": "names resolve from no file, so an imported class stops proving anything"
 		},
 		{
@@ -7765,6 +7765,76 @@
 			"method": "isAliased",
 			"force": "false",
 			"note": "a typedef aliasing the class is ignored, so a class value spelled by the alias reaches a deleted constructor"
+		},
+		{
+			"name": "M-BINDING-ALIAS-BLIND",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "importTier",
+			"find": "if (imp.alias != name)",
+			"replace": "if (true)",
+			"note": "an import alias never binds its alias name, so a same-package class answers for `import other.Opt as MaybeR`"
+		},
+		{
+			"name": "M-BINDING-UNINDEXED-IMPORT-FREE",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "boundOrUnknown",
+			"find": "return decls.length == 0 ? Unknown : Bound(decls);",
+			"replace": "return decls.length == 0 ? Free : Bound(decls);",
+			"note": "an import or alias naming a type outside the index falls through to the package tier"
+		},
+		{
+			"name": "M-BINDING-UNINDEXED-MODULE-FREE",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "importTier",
+			"find": "? Free : Unknown;",
+			"replace": "? Free : Free;",
+			"note": "an unindexed module import is taken to declare no sub-type of the name"
+		},
+		{
+			"name": "M-BINDING-UNINDEXED-WILDCARD-FREE",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "wildcardTier",
+			"find": "if (files.length == 0 && !index.allFiles().exists(f -> f.module == pkg)) return Unknown;",
+			"replace": "",
+			"note": "a wildcard over an unindexed package is taken to bind nothing"
+		},
+		{
+			"name": "M-BINDING-OWN-TIER-CUT",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "bind",
+			"find": "if (own.length > 0) return [for (t in own) { file: fi, type: t }];",
+			"replace": "",
+			"note": "the module's own types are not asked first, so an import answers for a name the module itself declares"
+		},
+		{
+			"name": "M-BINDING-WILDCARD-CUT",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "wildcardTier",
+			"force": "Free",
+			"note": "no wildcard import binds anything"
+		},
+		{
+			"name": "M-BINDING-PACKAGE-TIER-CUT",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "packageTier",
+			"force": "Free",
+			"note": "no package or toplevel type binds anything"
+		},
+		{
+			"name": "M-CTOR-IMPORT-ALIAS-BLIND",
+			"type": "anyparse.check.UnusedPrivate",
+			"method": "usedAsValue",
+			"find": "names.push(alias);",
+			"replace": "",
+			"note": "an import alias of the class is not a spelling of it, so `Type.createInstance(K, [])` reaches a deleted constructor"
+		},
+		{
+			"name": "M-CTOR-QUALIFIED-BLIND",
+			"type": "anyparse.check.UnusedPrivate",
+			"method": "usedAsValue",
+			"find": "&& node.name == className;",
+			"replace": "&& false;",
+			"note": "a qualified path to the class is not a class value, so `Type.createInstance(pkg.U, [])` reaches a deleted constructor"
 		}
 	]
 }

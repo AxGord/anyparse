@@ -920,6 +920,84 @@ class UnusedPrivateCheckTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-ENTRY-POINT-UNREACHED')
+	public function testEntryPointMainIsNeverUnused(): Void {
+		// The build names `main` (`-main`, a generated launcher, `--run`); no source does.
+		Assert.equals(0, one('class C {\n\tstatic function main() {}\n}').length);
+	}
+
+	@:pin('control')
+	@:killer('M-ENTRY-POINT-ANY-ARITY')
+	public function testMainTakingAParameterIsNoEntryPoint(): Void {
+		Assert.equals(1, one('class C {\n\tstatic function main(args:Array<String>) {}\n}').length);
+	}
+
+	@:pin('control')
+	@:killer('M-CTOR-CLASS-VALUE-BLIND')
+	public function testClassPassedAsAValueKeepsItsPrivateConstructor(): Void {
+		// `Type.createInstance(U, [])` runs the constructor with no `new` written anywhere.
+		final user: String =
+			'package pkg;\n\nclass V {\n\n\tpublic static function make():Dynamic {\n\t\treturn Type.createInstance(U, []);\n\t}\n\n}\n';
+		Assert.equals(
+			0, ctorFindings([
+				{ file: 'pkg/U.hx', source: utilityClass('pkg', 'U') },
+				{ file: 'pkg/V.hx', source: user }
+			]).length
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-CTOR-RECEIVER-AS-VALUE')
+	public function testStaticReceiverIsNoClassValue(): Void {
+		final user: String = 'package pkg;\n\nclass V {\n\n\tpublic static function read():Int {\n\t\treturn U.K;\n\t}\n\n}\n';
+		Assert.equals(
+			1, ctorFindings([
+				{ file: 'pkg/U.hx', source: utilityClass('pkg', 'U') },
+				{ file: 'pkg/V.hx', source: user }
+			]).length
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-CTOR-ALIAS-BLIND')
+	public function testAliasedClassKeepsItsPrivateConstructor(): Void {
+		// The alias's own name is a class value of `U` the value scan was not asked about.
+		final alias: String = 'package pkg;\n\ntypedef UAlias = U;\n';
+		Assert.equals(
+			0, ctorFindings([
+				{ file: 'pkg/U.hx', source: utilityClass('pkg', 'U') },
+				{ file: 'pkg/UAlias.hx', source: alias }
+			]).length
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-CTOR-IMPORT-ALIAS-BLIND')
+	public function testClassReachedThroughAnImportAliasKeepsItsPrivateConstructor(): Void {
+		final user: String = 'package pkg;\n\nimport pkg.U as K;\n\nclass V {\n\n\tpublic static function make():Dynamic {\n'
+			+ '\t\treturn Type.createInstance(K, []);\n\t}\n\n}\n';
+		Assert.equals(
+			0, ctorFindings([
+				{ file: 'pkg/U.hx', source: utilityClass('pkg', 'U') },
+				{ file: 'pkg/V.hx', source: user }
+			]).length
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-CTOR-QUALIFIED-BLIND')
+	public function testClassReachedThroughAQualifiedPathKeepsItsPrivateConstructor(): Void {
+		final user: String = 'package pkg;\n\nclass V {\n\n\tpublic static function make():Dynamic {\n'
+			+ '\t\treturn Type.createInstance(pkg.U, []);\n\t}\n\n}\n';
+		Assert.equals(
+			0, ctorFindings([
+				{ file: 'pkg/U.hx', source: utilityClass('pkg', 'U') },
+				{ file: 'pkg/V.hx', source: user }
+			]).length
+		);
+	}
+
 	/** `run` reports the dead member and `fix` declines it — the shape every class-annotation gate has. */
 	private function assertReportedButNotDeleted(src: String): Void {
 		final check: UnusedPrivate = new UnusedPrivate();
@@ -1035,58 +1113,6 @@ class UnusedPrivateCheckTest extends Test {
 	/** A never-instantiated all-static utility class in `pkg` named `name`, with the private empty constructor the arm reports. */
 	private function utilityClass(pkg: String, name: String): String {
 		return 'package $pkg;\n\nclass $name {\n\n\tpublic static final K: Int = 1;\n\n\tprivate function new() {}\n\n}\n';
-	}
-
-	@:pin('control')
-	@:killer('M-ENTRY-POINT-UNREACHED')
-	public function testEntryPointMainIsNeverUnused(): Void {
-		// The build names `main` (`-main`, a generated launcher, `--run`); no source does.
-		Assert.equals(0, one('class C {\n\tstatic function main() {}\n}').length);
-	}
-
-	@:pin('control')
-	@:killer('M-ENTRY-POINT-ANY-ARITY')
-	public function testMainTakingAParameterIsNoEntryPoint(): Void {
-		Assert.equals(1, one('class C {\n\tstatic function main(args:Array<String>) {}\n}').length);
-	}
-
-	@:pin('control')
-	@:killer('M-CTOR-CLASS-VALUE-BLIND')
-	public function testClassPassedAsAValueKeepsItsPrivateConstructor(): Void {
-		// `Type.createInstance(U, [])` runs the constructor with no `new` written anywhere.
-		final user: String =
-			'package pkg;\n\nclass V {\n\n\tpublic static function make():Dynamic {\n\t\treturn Type.createInstance(U, []);\n\t}\n\n}\n';
-		Assert.equals(
-			0, ctorFindings([
-				{ file: 'pkg/U.hx', source: utilityClass('pkg', 'U') },
-				{ file: 'pkg/V.hx', source: user }
-			]).length
-		);
-	}
-
-	@:pin('control')
-	@:killer('M-CTOR-RECEIVER-AS-VALUE')
-	public function testStaticReceiverIsNoClassValue(): Void {
-		final user: String = 'package pkg;\n\nclass V {\n\n\tpublic static function read():Int {\n\t\treturn U.K;\n\t}\n\n}\n';
-		Assert.equals(
-			1, ctorFindings([
-				{ file: 'pkg/U.hx', source: utilityClass('pkg', 'U') },
-				{ file: 'pkg/V.hx', source: user }
-			]).length
-		);
-	}
-
-	@:pin('control')
-	@:killer('M-CTOR-ALIAS-BLIND')
-	public function testAliasedClassKeepsItsPrivateConstructor(): Void {
-		// The alias's own name is a class value of `U` the value scan was not asked about.
-		final alias: String = 'package pkg;\n\ntypedef UAlias = U;\n';
-		Assert.equals(
-			0, ctorFindings([
-				{ file: 'pkg/U.hx', source: utilityClass('pkg', 'U') },
-				{ file: 'pkg/UAlias.hx', source: alias }
-			]).length
-		);
 	}
 
 	/** The private-constructor findings of a run over `files`. */

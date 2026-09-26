@@ -113,6 +113,81 @@ class DeclaredNullityTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-BINDING-ALIAS-BLIND')
+	public function testImportAliasOutranksSamePackageClass(): Void {
+		Assert.isFalse(proven([
+			'package app; import other.Opt as MaybeR; ' + subject('MaybeR'),
+			'package app; class MaybeR {}',
+			'package other; typedef Opt = Null<app.R>;',
+			'package app; class R {}'
+		], ['app/C.hx', 'app/MaybeR.hx', 'other/Opt.hx', 'app/R.hx']), 'the compiler binds the alias, not the class of the same name in '
+		+ 'the package');
+	}
+
+	@:pin('control')
+	@:killer('M-BINDING-UNINDEXED-IMPORT-FREE')
+	public function testImportOfUnindexedTypeIsUnproven(): Void {
+		Assert.isFalse(proven([
+			'package app; import other.MaybeR; ' + subject('MaybeR'),
+			'package app; class MaybeR {}'
+		], ['app/C.hx', 'app/MaybeR.hx']), 'the import binds a type the index does not hold, so the package class says nothing');
+	}
+
+	@:pin('control')
+	@:killer('M-BINDING-UNINDEXED-IMPORT-FREE')
+	public function testAliasOfUnindexedTypeIsUnproven(): Void {
+		Assert.isFalse(proven([
+			'package app; import other.Opt as MaybeR; ' + subject('MaybeR'),
+			'package app; class MaybeR {}'
+		], ['app/C.hx', 'app/MaybeR.hx']), 'the alias names a type the index does not hold');
+	}
+
+	@:pin('control')
+	@:killer('M-BINDING-UNINDEXED-MODULE-FREE')
+	public function testImportOfUnindexedModuleIsUnproven(): Void {
+		Assert.isFalse(proven([
+			'package app; import other.Mod; ' + subject('MaybeR'),
+			'package app; class MaybeR {}'
+		], ['app/C.hx', 'app/MaybeR.hx']), 'an unindexed module may declare the name as a sub-type, and its import outranks the package');
+	}
+
+	@:pin('control')
+	@:killer('M-BINDING-UNINDEXED-WILDCARD-FREE')
+	public function testWildcardOverUnindexedPackageIsUnproven(): Void {
+		Assert.isFalse(proven([
+			'package app; import other.*; ' + subject('MaybeR'),
+			'package app; class MaybeR {}'
+		], ['app/C.hx', 'app/MaybeR.hx']), 'a wildcard import outranks the package, and its package is not in the index');
+	}
+
+	@:pin('control')
+	@:killer('M-BINDING-OWN-TIER-CUT')
+	public function testModuleOwnTypeOutranksImport(): Void {
+		Assert.isTrue(proven([
+			'package app; import other.MaybeR; ' + subject('MaybeR') + ' private class MaybeR {}',
+			'package other; typedef MaybeR = Null<Int>;'
+		], ['app/C.hx', 'other/MaybeR.hx']), 'the module\'s own type is asked first, ahead of every import');
+	}
+
+	@:pin('control')
+	@:killer('M-BINDING-WILDCARD-CUT')
+	public function testWildcardOverIndexedPackageIsProven(): Void {
+		Assert.isTrue(
+			proven(['package app; import other.*; ' + subject('R'), 'package other; class R {}'], ['app/C.hx', 'other/R.hx']),
+			'the wildcard brings in the main type of `other.R`'
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-BINDING-PACKAGE-TIER-CUT')
+	public function testParentPackageClassIsProven(): Void {
+		Assert.isTrue(
+			proven(['package app.sub; ' + subject('R'), 'package app; class R {}'], ['app/sub/C.hx', 'app/R.hx']),
+			'a type of a parent package is in scope after the file\'s own package'
+		);
+	}
+
 	/** The subject class: `x` is declared as `$type`, compared against null under Strict null safety. */
 	private static function subject(type: String): String {
 		return '@:nullSafety(Strict) class C { static function m(x:$type):Void { if (x != null) {} } }';

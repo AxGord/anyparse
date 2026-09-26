@@ -156,8 +156,10 @@ final class DeclaredNullity {
 		if ((_shape.nonNullableTypeNames ?? []).contains(head)) return hops == 0 ? ValueType : NonNull;
 		final index: Null<SymbolIndex> = _index();
 		if (index == null) return Unproven;
-		final candidates: Array<ResolvedType> = index.resolveTypeRefsFrom(head, fromFile);
-		return candidates.length > 0 && candidates.foreach(c -> ofDecl(c, hops, seen) == NonNull) ? NonNull : Unproven;
+		final candidates: Null<Array<ResolvedType>> = bindingOf(head, fromFile, index);
+		return candidates != null && candidates.length > 0 && candidates.foreach(c -> ofDecl(c, hops, seen) == NonNull)
+			? NonNull
+			: Unproven;
 	}
 
 	/** The verdict on one resolved declaration: its kind decides, or the alias / underlying it hops to. */
@@ -224,6 +226,16 @@ final class DeclaredNullity {
 	/** Whether `r`'s parameter names are known: a generic header whose names could not be read hides one. */
 	private static inline function paramsReadable(r: ResolvedType): Bool {
 		return r.type.typeParamArity == r.type.typeParamNames.length;
+	}
+
+	/**
+	 * What `head`, written in `fromFile`, names: a dotted path resolves as a path, a simple name tier by
+	 * tier in the compiler's own order (`TypeNameBinding`). Null when no tier provably answers.
+	 */
+	private static function bindingOf(head: String, fromFile: String, index: SymbolIndex): Null<Array<ResolvedType>> {
+		if (head.indexOf('.') >= 0) return index.resolveTypeRefsFrom(head, fromFile);
+		final fi: Null<SymbolIndex.FileInfo> = index.fileInfo(fromFile);
+		return fi == null ? null : TypeNameBinding.bind(head, fi, index);
 	}
 
 	/**

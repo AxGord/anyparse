@@ -221,7 +221,7 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 		for (c in ctorCandidates) if (
 			!index.text.skippedMayReference(c.className) && !index.subtypes.hasSubtype(c.className, c.file)
 			&& !isInstantiatedAnywhere(c.className, files) && !mentionedInStrings(c.className, reflected)
-			&& !usedAsValue(c.className, files, plugin) && !isAliased(c.className, scopeIndex)
+			&& !usedAsValue(c.className, files, plugin, index) && !isAliased(c.className, scopeIndex)
 		) violations.push({
 			file: c.file,
 			span: c.span,
@@ -752,21 +752,34 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	}
 
 	/**
-	 * Whether any parsed file uses `className` as a VALUE — an identifier anywhere but the receiver of a
-	 * member access. A class value reaches its constructor with no `new` written
-	 * (`Type.createInstance(C, [])`), so it is never proven never-instantiated. The positive shape is the
-	 * receiver slot alone, since that is the only one a static-utility class needs; every other position,
-	 * a type-shaped argument included, counts.
+	 * Whether any parsed file uses `className` as a VALUE — a reference to the class anywhere but the
+	 * receiver of a member access. A class value reaches its constructor with no `new` written
+	 * (`Type.createInstance(C, [])`), so it is never proven never-instantiated. Every spelling that can
+	 * denote the class counts: its simple name, a qualified path ending in it (`mk(app.C)`), and an
+	 * import alias of it (`import app.C as K`); the positive shape is the receiver slot alone, since that
+	 * is the only one a static-utility class needs.
 	 */
-	private static function usedAsValue(className: String, files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Bool {
+	private static function usedAsValue(
+		className: String, files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, index: SymbolIndex
+	): Bool {
 		final shape: RefShape = plugin.refShape();
-		function valueUse(node: QueryNode, parent: Null<QueryNode>): Bool {
+		function valueUse(node: QueryNode, parent: Null<QueryNode>, names: Array<String>): Bool {
 			final isReceiver: Bool = parent != null && parent.kind == shape.fieldAccessKind && parent.children[0] == node;
-			return node.kind == shape.identKind && node.name == className && !isReceiver || node.children.exists(c -> valueUse(c, node));
+			final named: Bool = node.kind == shape.identKind && names.contains(node.name ?? '') || node.kind == shape.fieldAccessKind
+				&& node.name == className;
+			return named && !isReceiver || node.children.exists(c -> valueUse(c, node, names));
 		}
 		return files.exists(entry -> {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			tree != null && valueUse(tree, null);
+			final names: Array<String> = [className];
+			final fi: Null<FileInfo> = index.fileInfo(entry.file);
+			final imports: Array<ImportInfo> = fi == null ? [] : fi.imports.concat([for (g in fi.ambientImports) for (i in g.imports) i]);
+			for (imp in imports) {
+				final target: String = imp.aliasTarget ?? '';
+				final alias: Null<String> = imp.alias;
+				if (alias != null && (target == className || target.endsWith('.$className'))) names.push(alias);
+			}
+			tree != null && valueUse(tree, null, names);
 		});
 	}
 
