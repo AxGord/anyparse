@@ -2,6 +2,7 @@ package anyparse.query.cli.command;
 
 import anyparse.check.Check;
 import anyparse.check.ConfigDisagreement;
+import anyparse.check.EffectiveRules;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.check.OracleGeneration;
@@ -157,6 +158,7 @@ final class LintCommand implements CliCommand {
 	public static function runLint(args: Array<String>): Int {
 		final o: LintOpts = parseLintArgs(args);
 		if (o.errExit != null) return o.errExit;
+
 		if (o.inputSpecs.length == 0) {
 			CliIo.stderr('apq lint: expected <scope> (one or more file/dir/glob specs)\n');
 			printLintUsage();
@@ -319,6 +321,7 @@ final class LintCommand implements CliCommand {
 			range: null,
 			baseline: null,
 			verbose: false,
+
 			errExit: code
 		};
 	}
@@ -889,7 +892,10 @@ final class LintCommand implements CliCommand {
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Options:\n');
 		CliIo.sysPrint('  --rule <id>       Run only this check (repeatable; default: all)\n');
-		CliIo.sysPrint('  --list-rules      List every registered check and exit\n');
+		CliIo.sysPrint('  --list-rules      List every registered check and exit. Given a scope, list\n');
+		CliIo.sysPrint('                    each rule as on/off for those files instead, one block per\n');
+		CliIo.sysPrint('                    distinct apqlint.json chain (config, default-off and\n');
+		CliIo.sysPrint('                    languageVersion resolved); nothing is linted\n');
 		CliIo.sysPrint('  --fix            Apply autofixes in place (e.g. delete unused imports)\n');
 		CliIo.sysPrint('  --fail-on <sev>   Exit non-zero if a finding at-or-above <sev> exists\n');
 		CliIo.sysPrint('                    (error|warning|info)\n');
@@ -938,6 +944,7 @@ final class LintCommand implements CliCommand {
 		var range: Null<LintRange> = null;
 		var baseline: Null<String> = null;
 		var verbose: Bool = false;
+		var listRules: Bool = false;
 
 		var i: Int = 0;
 		while (i < args.length) {
@@ -985,8 +992,7 @@ final class LintCommand implements CliCommand {
 					printLintUsage();
 					return lintParseExit(EXIT_OK);
 				case '--list-rules':
-					printLintRules();
-					return lintParseExit(EXIT_OK);
+					listRules = true;
 				case _:
 					if (a.startsWith('--')) {
 						CliIo.stderr('apq lint: unknown option "$a"\n');
@@ -996,6 +1002,9 @@ final class LintCommand implements CliCommand {
 			}
 			i++;
 		}
+		// Listing rules is terminal like `--help`, but only once the whole argv is read: the scope
+		// that narrows it to effective state may follow the flag.
+		if (listRules) return lintParseExit(runListRules(lang, inputSpecs));
 		return {
 			lang: lang,
 			flat: flat,
@@ -1224,15 +1233,13 @@ final class LintCommand implements CliCommand {
 	}
 
 	/**
-	 * Print every registered check as `id  description`, one per line, in
-	 * registration order — the machine-consumable counterpart of the usage
-	 * text (review tooling subtracts linter-owned rules from manual checklists
-	 * by this list).
+	 * `--list-rules`: with no scope, the bare registry, one `<id>  <description>` line per rule, exactly
+	 * as before a scope was accepted; with one, `printEffectiveRules`.
 	 */
-	private static function printLintRules(): Void {
+	private static function runListRules(lang: String, inputSpecs: Array<String>): Int {
+		if (inputSpecs.length > 0) return printEffectiveRules(lang, inputSpecs);
 		final checks: Array<Check> = Linter.builtins();
-		var width: Int = 0;
-		for (c in checks) if (c.id().length > width) width = c.id().length;
+		final width: Int = idWidth(checks);
 		// The minimum language version a rule's FIX needs is printed with the rule, not
 		// discovered after a run that silently dropped it: a project whose `languageVersion`
 		// is below it never sees the finding, and this is where that becomes visible.
@@ -1240,6 +1247,44 @@ final class LintCommand implements CliCommand {
 			final requires: String = c is VersionGated ? ' [needs ${(cast c: VersionGated).minLanguageVersion()}]' : '';
 			CliIo.sysPrint('${c.id().rpad(' ', width)}  ${c.description()}$requires\n');
 		}
+		return EXIT_OK;
+	}
+
+	/**
+	 * `--list-rules <scope>`: every registered rule with the state a lint of the scope's files would run
+	 * it in — one block per distinct `apqlint.json` chain, headed by that chain (nearest first) and the
+	 * files it governs, then `<id>  on|off  <reason>  <description>` per rule (reasons: `EffectiveRules`).
+	 *
+	 * The registry alone is an upper bound: a config disables rules, and a default-off rule runs only
+	 * where a config enables it. Configs are resolved exactly as a lint run resolves them; nothing is
+	 * parsed or linted.
+	 */
+	private static function printEffectiveRules(lang: String, inputSpecs: Array<String>): Int {
+		final paths: Array<String> = CliArgs.resolveInputPaths(lang, inputSpecs).paths;
+		if (paths.length == 0) {
+			CliIo.stderr('apq lint: ${CliArgs.quotedSpecs(inputSpecs)} matched no .hx files\n');
+			return EXIT_RUNTIME;
+		}
+		final checks: Array<Check> = Linter.builtins();
+		final width: Int = idWidth(checks);
+		for (group in EffectiveRules.resolve(paths, checks)) {
+			final chain: String = group.chain.length == 0 ? '(none — builtin defaults)' : group.chain.join(' <- ');
+			CliIo.sysPrint('=== effective lint rules — config chain: $chain ===\n');
+			for (file in group.files) CliIo.sysPrint('file: $file\n');
+			final reasonWidth: Int = group.rules.fold((r, w) -> r.reason.length > w ? r.reason.length : w, 0);
+			for (r in group.rules) {
+				final state: String = r.on ? 'on ' : 'off';
+				CliIo.sysPrint('${r.id.rpad(' ', width)}  $state  ${r.reason.rpad(' ', reasonWidth)}  ${r.description}\n');
+			}
+		}
+		return EXIT_OK;
+	}
+
+	/** The widest rule id among `checks` — the column the listings pad ids to. */
+	private static function idWidth(checks: Array<Check>): Int {
+		var width: Int = 0;
+		for (c in checks) if (c.id().length > width) width = c.id().length;
+		return width;
 	}
 
 	/**

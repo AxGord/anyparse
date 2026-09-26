@@ -7835,6 +7835,62 @@
 			"find": "&& node.name == className;",
 			"replace": "&& false;",
 			"note": "a qualified path to the class is not a class value, so `Type.createInstance(pkg.U, [])` reaches a deleted constructor"
+		},
+		{
+			"name": "M-EFFECTIVE-IGNORES-CONFIG",
+			"type": "anyparse.check.EffectiveRules",
+			"method": "stateOf",
+			"find": "final stated: Null<Bool> = config.enabledSetting(id);",
+			"replace": "final stated: Null<Bool> = null;",
+			"note": "the listing reads the registry defaults and never the config, so a disabled rule is reported as run"
+		},
+		{
+			"name": "M-EFFECTIVE-IGNORES-DEFAULT-OFF",
+			"type": "anyparse.check.EffectiveRules",
+			"method": "stateOf",
+			"find": "stated ?? !(check is DefaultOff)",
+			"replace": "stated ?? true",
+			"note": "an opt-in rule no config enables is listed as on"
+		},
+		{
+			"name": "M-EFFECTIVE-IGNORES-VERSION",
+			"type": "anyparse.check.EffectiveRules",
+			"method": "stateOf",
+			"find": "final gated: Bool = enabled && minimum != null && !config.allowsLanguageVersion(minimum);",
+			"replace": "final gated: Bool = false;",
+			"note": "a rule whose findings the languageVersion gate drops is listed as on"
+		},
+		{
+			"name": "M-EFFECTIVE-GROUPS-PER-DIR",
+			"type": "anyparse.check.EffectiveRules",
+			"method": "groupFor",
+			"find": "if (existing != null) return existing;",
+			"replace": "",
+			"note": "two directories under one chain are listed as two groups"
+		},
+		{
+			"name": "M-CHAIN-NEAREST-ONLY",
+			"type": "anyparse.check.LintConfig",
+			"method": "discoverChain",
+			"find": "if (doc.inherit == false) break;",
+			"replace": "break;",
+			"note": "the nearest apqlint.json replaces its ancestors instead of extending them"
+		},
+		{
+			"name": "M-CHAIN-IGNORES-INHERIT",
+			"type": "anyparse.check.LintConfig",
+			"method": "discoverChain",
+			"find": "if (doc.inherit == false) break;",
+			"replace": "",
+			"note": "a document declaring inherit:false still folds its ancestors"
+		},
+		{
+			"name": "M-CHAIN-UNBOUNDED",
+			"type": "anyparse.check.LintConfig",
+			"method": "discoverChain",
+			"find": "ConfigFinder.findUpAll(path, 'apqlint.json', ConfigFinder.PROJECT_ROOT_MARKERS)",
+			"replace": "ConfigFinder.findUpAll(path, 'apqlint.json')",
+			"note": "the chain climbs past the project root and folds a stray ancestor document"
 		}
 	]
 }

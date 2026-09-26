@@ -150,6 +150,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.DuplicateCodeCrossFileCheckTest',
 		'unit.check.DuplicateCodeRenamedCheckTest',
 		'unit.check.DuplicateTernaryBranchesCheckTest',
+		'unit.check.EffectiveRulesTest',
 		'unit.check.EmptyBlockCheckTest',
 		'unit.check.EmptyCaseArmCheckTest',
 		'unit.check.EmptyCommentCheckTest',
@@ -1161,6 +1162,12 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.DuplicateCodeRenamedCheckTest#testALocalsOnlyRenamingIsAClone :: control :: M-DUP-CODE-RENAMED-BINDERS',
 			'unit.check.DuplicateCodeRenamedCheckTest#testDeclarationsWhoseBytesAreMostlyTheirNamesAreNotAClone :: control :: '
 				+ 'M-DUP-CODE-RENAMED-GATE-RAW',
+			'unit.check.EffectiveRulesTest#testADefaultOffRuleRunsOnlyWhereAConfigEnablesIt :: control :: M-EFFECTIVE-IGNORES-DEFAULT-OFF',
+			'unit.check.EffectiveRulesTest#testALanguageVersionBelowTheFixDropsTheRule :: control :: M-EFFECTIVE-IGNORES-VERSION',
+			'unit.check.EffectiveRulesTest#testANestedConfigFoldsItsAncestors :: control :: M-EFFECTIVE-IGNORES-CONFIG,M-CHAIN-NEAREST-ONLY',
+			'unit.check.EffectiveRulesTest#testFilesGroupByChainNotByDirectory :: control :: M-EFFECTIVE-GROUPS-PER-DIR',
+			'unit.check.EffectiveRulesTest#testInheritFalseEndsTheChain :: control :: M-CHAIN-IGNORES-INHERIT',
+			'unit.check.EffectiveRulesTest#testTheChainStopsAtTheProjectRoot :: control :: M-CHAIN-UNBOUNDED',
 			'unit.check.ExtractRepeatedExpressionTest#testALiteralInteriorDifferenceSplitsTheGroup :: control :: '
 				+ 'M-EXTRACT-REPEAT-RENDER-SPLIT',
 			'unit.check.FieldInitAtDeclarationCrossingSuperTest#testCollectionOfForeignReadAfterSuperNotMoved :: control :: '
@@ -3480,6 +3487,13 @@ class TestDiscoveryParityTest extends Test {
 			'M-BINDING-PACKAGE-TIER-CUT',
 			'M-CTOR-IMPORT-ALIAS-BLIND',
 			'M-CTOR-QUALIFIED-BLIND',
+			'M-EFFECTIVE-IGNORES-CONFIG',
+			'M-EFFECTIVE-IGNORES-DEFAULT-OFF',
+			'M-EFFECTIVE-IGNORES-VERSION',
+			'M-EFFECTIVE-GROUPS-PER-DIR',
+			'M-CHAIN-NEAREST-ONLY',
+			'M-CHAIN-IGNORES-INHERIT',
+			'M-CHAIN-UNBOUNDED',
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

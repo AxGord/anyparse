@@ -105,6 +105,15 @@ typedef LintDocument = {
 }
 
 /**
+ * A discovered config together with the `apqlint.json` documents it was folded from, nearest
+ * first; `chain` is empty when no document applies and the config is the builtin defaults.
+ */
+typedef DiscoveredConfig = {
+	var config: LintConfig;
+	var chain: Array<String>;
+}
+
+/**
  * Project-level lint configuration, read from an `apqlint.json` discovered by
  * walking up from a linted file's directory (the apq-native counterpart of the
  * `checkstyle.json` compat config). Grammar-agnostic — it keys rules by their
@@ -282,8 +291,12 @@ final class LintConfig {
 	 * the caller opts into. A present `enabled` value always wins.
 	 */
 	public function enabledFor(id: String, defaultOn: Bool = true): Bool {
-		final rc: Null<RuleConfig> = _rules[id];
-		return rc == null ? defaultOn : (rc.enabled ?? defaultOn);
+		return enabledSetting(id) ?? defaultOn;
+	}
+
+	/** The `enabled` value the config states for rule `id`, or null when it states none and the rule's own default applies. */
+	public function enabledSetting(id: String): Null<Bool> {
+		return _rules[id]?.enabled;
 	}
 
 	/** The configured severity override for `id`, or null when unset. */
@@ -435,8 +448,21 @@ final class LintConfig {
 	 * chain still applies: the nearest config being broken must not also throw away
 	 * the project's.
 	 */
-	public static function discover(path: String): LintConfig {
+	public static inline function discover(path: String): LintConfig {
+		return discoverChain(path).config;
+	}
+
+	/**
+	 * `discover`, plus the documents it FOLDED, nearest first — the chain as it was applied, so a
+	 * document the schema rejected or an `"inherit": false` cut off is absent from it.
+	 *
+	 * Two directories whose chains are equal resolve to the same config, since every value a document
+	 * declares is resolved against that document's own directory; that is what lets a report group
+	 * files by chain rather than by directory.
+	 */
+	public static function discoverChain(path: String): DiscoveredConfig {
 		final chain: ConfigChain = ConfigFinder.findUpAll(path, 'apqlint.json', ConfigFinder.PROJECT_ROOT_MARKERS);
+		final folded: Array<String> = [];
 		var merged: Null<LintDocument> = null;
 		// A document that EXISTS and cannot be read is the one outcome with no other
 		// symptom: the ancestor's answer applies to a question this document already
@@ -462,10 +488,11 @@ final class LintConfig {
 				warnOnce(entry.path, lines.join(''));
 			}
 			merged = merged == null ? doc : mergeDocuments(merged, doc);
+			folded.push(entry.path);
 			if (doc.inherit == false) break;
 		}
-		final folded: Null<LintDocument> = merged;
-		return folded == null ? new LintConfig([]) : fromDocument(folded);
+		final result: Null<LintDocument> = merged;
+		return { config: result == null ? new LintConfig([]) : fromDocument(result), chain: folded };
 	}
 
 	/**
