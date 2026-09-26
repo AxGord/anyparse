@@ -937,9 +937,10 @@ final class TypeResolver {
 	 * The hit the reference walk emitted for the occurrence of `name` at `refSpan`, or null when
 	 * it emitted none there — a member-access slot, a reification interior, an unspanned node.
 	 * Both public resolvers read one field of it apiece: the binding's OFFSET keys a decl-type
-	 * map, the binding's NODE says what the reference actually binds to.
+	 * map, the binding's NODE says what the reference actually binds to. A caller needing both
+	 * reads this once rather than walking the references twice.
 	 */
-	private static function resolveBindingHit(name: String, refSpan: Span, tree: QueryNode, shape: RefShape): Null<RefHit> {
+	public static function resolveBindingHit(name: String, refSpan: Span, tree: QueryNode, shape: RefShape): Null<RefHit> {
 		for (hit in Refs.find(name, tree, shape)) if (hit.span.from == refSpan.from && hit.span.to == refSpan.to) return hit;
 		return null;
 	}

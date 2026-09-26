@@ -497,16 +497,6 @@ final class CallGraph {
 		final underlyingKinds: Array<String> = shape.underlyingThisTypeKinds ?? [];
 		final annotationKinds: Array<String> = shape.typeAnnotationKinds ?? [];
 
-		/** The written return type of the function `fn`: its last type annotation that is its own child, not a parameter's. */
-		function returnSourceOf(fn: QueryNode, source: String): Null<String> {
-			var found: Null<String> = null;
-			for (c in fn.children) {
-				final at: Null<Span> = c.span;
-				if (at != null && annotationKinds.contains(c.kind)) found = source.substring(at.from, at.to);
-			}
-			return found;
-		}
-
 		function walk(node: QueryNode, currentType: Null<String>, parentFn: Null<String>, isDynamic: Bool): Void {
 			// a macro-reification subtree is generated-code emission, not runtime
 			// calls — walking it would fabricate nodes and edges (mirrors Refs)
@@ -533,7 +523,7 @@ final class CallGraph {
 				if (params.length > 0) _facts.typeParams[fnId] = params;
 				final returned: Null<String> = returnTypes[span.from];
 				if (returned != null && !_facts.returns.exists(fnId)) _facts.returns[fnId] = returned;
-				final written: Null<String> = returnSourceOf(node, entry.source);
+				final written: Null<String> = CallGraphNames.returnSourceOf(node, entry.source, annotationKinds);
 				if (written != null && !_facts.returnSources.exists(fnId)) _facts.returnSources[fnId] = written;
 			} else if (span != null && lambdaKinds.contains(node.kind)) {
 				lambdaCounter++;

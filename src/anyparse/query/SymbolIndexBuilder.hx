@@ -56,6 +56,8 @@ private typedef MemberSeams = {
 	final extensionExcludingMetaNames: Array<String>;
 	final conditionalKind: Null<String>;
 	final paramKinds: Array<String>;
+	final functionKinds: Array<String>;
+	final annotationKinds: Array<String>;
 };
 
 /**
@@ -543,6 +545,9 @@ final class SymbolIndexBuilder {
 							hasGetter: accessors[typeKey] ?? false,
 							hasSetter: writeAccessors[typeKey] ?? false,
 							returnNominal: returnTypes[typeKey],
+							returnSource: seams.functionKinds.contains(child.kind)
+								? CallGraphNames.returnSourceOf(child, source, seams.annotationKinds)
+								: null,
 							typeSource: typeSources[typeKey],
 							firstParamTypeSource: firstParamTypeSourceOf(child, typeSources, seams.paramKinds),
 							paramTypeSources: paramTypeSourcesOf(child, typeSources, seams.paramKinds),
@@ -697,7 +702,9 @@ final class SymbolIndexBuilder {
 			implicitCallMetaNames: shape.execution?.implicitCallMetaNames ?? [],
 			extensionExcludingMetaNames: shape.execution?.extensionExcludingMetaNames ?? [],
 			conditionalKind: shape.conditionalMemberKind,
-			paramKinds: shape.paramKinds ?? []
+			paramKinds: shape.paramKinds ?? [],
+			functionKinds: shape.functionKinds ?? [],
+			annotationKinds: shape.typeAnnotationKinds ?? []
 		};
 	}
 

@@ -248,6 +248,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.NullFlowScanTest',
 		'unit.check.NullableSourceResolutionScopeTest',
 		'unit.check.NullableSwitchMissingNullCheckTest',
+		'unit.check.OperandBindingTest',
 		'unit.check.OperatorOverloadGateTest',
 		'unit.check.OptionalParamShorthandCheckTest',
 		'unit.check.OracleBatchRevertReasonTest',
@@ -1317,6 +1318,21 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryReturnBindingSeeded :: control :: M-NULLABLE-FLOW-REPORT-INDEX',
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryReturnDerefFlagged :: control :: M-NULLABLE-REPORT-INDEX',
 			'unit.check.NullableSourceResolutionScopeTest#testLibraryStaticReturnDerefFlagged :: control :: M-NULLABLE-REPORT-INDEX',
+			'unit.check.OperandBindingTest#testAliasOfUnindexedTypeOutranksSamePackageClass :: control :: M-BINDING-ALIAS-BLIND',
+			'unit.check.OperandBindingTest#testAmbientImportOfUnindexedTypeOutranksSamePackageClass :: control :: M-BINDING-UNINDEXED-IMPORT-FREE',
+			'unit.check.OperandBindingTest#testCallToFunctionOfThisFileIsProven :: control :: M-OPERAND-LOCAL-CALL-CUT',
+			'unit.check.OperandBindingTest#testImportOfUnindexedTypeIsNotItsIndexedNamesake :: control :: M-OPERAND-SIMPLE-NAME',
+			'unit.check.OperandBindingTest#testImportOfUnindexedTypeOutranksSamePackageClass :: control :: M-BINDING-UNINDEXED-IMPORT-FREE',
+			'unit.check.OperandBindingTest#testJoinAppendBindsTheTarget :: control :: M-BINDING-UNINDEXED-IMPORT-FREE',
+			'unit.check.OperandBindingTest#testMemberOfBuiltinTypeIsProven :: control :: M-OPERAND-MEMBER-CUT',
+			'unit.check.OperandBindingTest#testMemberTypeBindsInItsDeclaringFile :: control :: M-OPERAND-MEMBER-SCOPE-LOST',
+			'unit.check.OperandBindingTest#testMethodTypeParameterIsNotTheSamePackageClass :: control :: M-OPERAND-METHOD-PARAMS-IGNORED',
+			'unit.check.OperandBindingTest#testNegationRulesBindTheOperands :: control :: M-BINDING-UNINDEXED-IMPORT-FREE',
+			'unit.check.OperandBindingTest#testNullableOverloaderIsOverloaded :: control :: M-OPERAND-WRAPPER-KEPT',
+			'unit.check.OperandBindingTest#testSamePackageClassIsProven :: control :: M-BINDING-PACKAGE-TIER-CUT',
+			'unit.check.OperandBindingTest#testStaticCallThroughTypeNameIsProven :: control :: M-OPERAND-STATIC-RECEIVER-CUT',
+			'unit.check.OperandBindingTest#testSubTypeOfUnindexedModuleOutranksSamePackageClass :: control :: M-BINDING-UNINDEXED-MODULE-FREE',
+			'unit.check.OperandBindingTest#testWildcardOverUnindexedPackageOutranksSamePackageClass :: control :: M-BINDING-UNINDEXED-WILDCARD-FREE',
 			'unit.check.OracleCacheTest#testAFingerprintReadsItsSourcesThroughTheMemo :: control :: ' + 'M-ORACLE-CACHE-MEMO-UNREAD',
 			'unit.check.OracleCacheTest#testAVerdictIsNotFiledUnderAFingerprintTheTreeLeft :: control :: '
 				+ 'M-ORACLE-CACHE-STORES-A-MOVED-FINGERPRINT',
@@ -3630,7 +3646,14 @@ class TestDiscoveryParityTest extends Test {
 			'M-PSE-FACTS-USING-MODULE-WIDE',
 			'M-PSE-USING-ALIAS-HOST',
 			'M-PSE-USING-SELF-MODULE',
-			'M-PSE-FACTS-USING-SELF-MODULE'
+			'M-PSE-FACTS-USING-SELF-MODULE',
+			'M-OPERAND-SIMPLE-NAME',
+			'M-OPERAND-WRAPPER-KEPT',
+			'M-OPERAND-MEMBER-SCOPE-LOST',
+			'M-OPERAND-MEMBER-CUT',
+			'M-OPERAND-METHOD-PARAMS-IGNORED',
+			'M-OPERAND-STATIC-RECEIVER-CUT',
+			'M-OPERAND-LOCAL-CALL-CUT'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

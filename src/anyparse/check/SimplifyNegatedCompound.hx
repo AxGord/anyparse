@@ -7,6 +7,7 @@ import anyparse.query.CondRegionScan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeNameBinding.Tier;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -111,9 +112,9 @@ final class SimplifyNegatedCompound implements Check {
 			// The type resolver walks the whole resolution scope, so it is built only for a file
 			// that actually holds the shape — most files skip it entirely.
 			if (tree == null || !hasShape(tree, seams)) continue;
-			for (
-				c in candidates(tree, null, entry.source, seams, CheckScan.typeNominalResolver(entry.source, plugin, tree, entry.file), [])
-			) violations.push({
+			final types: Null<(QueryNode) -> Null<String>> = CheckScan.typeNominalResolver(entry.source, plugin, tree, entry.file);
+			final written: Null<(QueryNode) -> Tier> = seams.selection?.typingFor(entry.file, entry.source, tree);
+			for (c in candidates(tree, null, entry.source, seams, types, written, [])) violations.push({
 				file: entry.file,
 				span: c.span,
 				rule: 'simplify-negated-compound',
@@ -141,7 +142,8 @@ final class SimplifyNegatedCompound implements Check {
 					source, plugin, tree, violations[0].file, index
 				);
 				final bySpan: Map<String, Candidate> = [];
-				for (c in candidates(tree, null, source, s, types, [])) bySpan['${c.span.from}:${c.span.to}'] = c;
+				final written: Null<(QueryNode) -> Tier> = s.selection?.typingFor(violations[0].file, source, tree);
+				for (c in candidates(tree, null, source, s, types, written, [])) bySpan['${c.span.from}:${c.span.to}'] = c;
 				return CheckScan.collectSpanEdits(violations, bySpan, (c, _) -> ({ span: c.span, text: c.text }));
 			});
 	}
@@ -164,21 +166,23 @@ final class SimplifyNegatedCompound implements Check {
 	 * can overlap; a REJECTED node is descended into normally, since nothing will consume it.
 	 */
 	private static function candidates(
-		node: QueryNode, parent: Null<QueryNode>, source: String, s: Seams, types: Null<(QueryNode) -> Null<String>>, out: Array<Candidate>
+		node: QueryNode, parent: Null<QueryNode>, source: String, s: Seams, types: Null<(QueryNode) -> Null<String>>,
+		written: Null<(QueryNode) -> Tier>, out: Array<Candidate>
 	): Array<Candidate> {
 		if (s.opaqueKinds.contains(node.kind)) return out;
-		final accepted: Null<Candidate> = candidateAt(node, parent, source, s, types);
+		final accepted: Null<Candidate> = candidateAt(node, parent, source, s, types, written);
 		if (accepted != null) {
 			out.push(accepted);
 			return out;
 		}
-		for (c in node.children) candidates(c, node, source, s, types, out);
+		for (c in node.children) candidates(c, node, source, s, types, written, out);
 		return out;
 	}
 
 	/** The accepted rewrite AT `node`, or null when it is not the shape or any gate refuses it. */
 	private static function candidateAt(
-		node: QueryNode, parent: Null<QueryNode>, source: String, s: Seams, types: Null<(QueryNode) -> Null<String>>
+		node: QueryNode, parent: Null<QueryNode>, source: String, s: Seams, types: Null<(QueryNode) -> Null<String>>,
+		written: Null<(QueryNode) -> Tier>
 	): Null<Candidate> {
 		final operand: Null<QueryNode> = s.support.negatedOperandOf(node);
 		final span: Null<Span> = node.span;
@@ -187,7 +191,7 @@ final class SimplifyNegatedCompound implements Check {
 		// be the language own. `Overloaded` and `Unproven` are one answer here, unlike in a layout
 		// rule: this finding IS the rewrite, so a site it cannot licence has nothing left to say.
 		final selection: Null<OperatorSelection> = s.selection;
-		if (selection != null && !selection.verdictFor(node, s.operatorKinds, types).match(Builtin)) return null;
+		if (selection != null && (written == null || !selection.verdictFor(node, s.operatorKinds, written).match(Builtin))) return null;
 		// The engine rebuilds the operator glue between operands, so a comment inside the span
 		// would be dropped; a `#if` region projects as flat siblings, so a rebuilt chain would
 		// splice both arms together. Both refuse rather than emit a lossy rewrite.

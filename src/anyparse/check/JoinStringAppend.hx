@@ -236,8 +236,7 @@ final class JoinStringAppend implements Check implements DefaultOff {
 		final selection: Null<OperatorSelection> = s.selection;
 		final kinds: Array<String> = [s.addAssignKind];
 		if (selection == null || !selection.declared(kinds)) return true;
-		final types: Null<(QueryNode) -> Null<String>> = selection.typesFor(file, source, tree);
-		return selection.verdictOfOperands([m.targetNode], kinds, types).match(Builtin);
+		return selection.verdictOfOperands([m.targetNode], kinds, selection.typingFor(file, source, tree)).match(Builtin);
 	}
 
 	/** Collect every joinable run reachable under `node`. */

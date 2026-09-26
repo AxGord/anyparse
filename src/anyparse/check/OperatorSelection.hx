@@ -5,6 +5,8 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeInfoProvider;
+import anyparse.query.TypeNameBinding.Tier;
 
 using Lambda;
 
@@ -60,11 +62,12 @@ enum OperatorVerdict {
  *    is a map lookup. In a tree where the answer is no — which is most trees, and every tree
  *    before someone writes the first `@:op` — every occurrence is `Builtin` and no operand type
  *    is ever resolved. That is what keeps the gate free.
- * 2. **Could an operand of THIS occurrence be one of those types?** Each operand's nominal type
- *    comes from the caller's resolver (`CheckScan.typeNominalResolver`), and the answer is
- *    `Overloaded` for a type that declares the pattern, `Builtin` for one that provably cannot,
- *    and `Unproven` for everything else — an unresolved operand included, since the whole point
- *    is that an overloading type does not look different from any other.
+ * 2. **Could an operand of THIS occurrence be one of those types?** Each operand's declared type
+ *    is BOUND in the file that writes it, tier by tier in the compiler's order (`typingFor`), and
+ *    the answer is `Overloaded` for a declaration that declares the pattern, `Builtin` for one
+ *    that provably cannot, and `Unproven` for everything else — an operand no binding types
+ *    included, since the whole point is that an overloading type does not look different from
+ *    any other.
  *
  * ## Two subtleties, both load-bearing
  *
@@ -115,9 +118,11 @@ enum OperatorVerdict {
  *    wins over an `@:to String` — compile-and-run on Haxe 4.3.7 `--interp` with an
  *    `abstract Tag(String)` declaring both: interpolation, concatenation, `Std.string` and the
  *    direct call all print the METHOD answer.
- *  - a verdict is per simple NAME, so a name that is AMBIGUOUS in the resolution scope answers
- *    `Unproven` — an abstract called `Path` beside `haxe.io.Path` is refused for the collision
- *    alone. Conservative and intended; worth knowing before writing a fixture.
+ *  - a verdict is per BINDING, never per simple name: `import far.Tag` beside an indexed class
+ *    `other.Tag` names the import, so a tier that could bind the name to something the index
+ *    does not hold answers `Unproven` rather than falling through to the class. Worth knowing
+ *    before writing a fixture: a member reached only through a supertype, or through a receiver
+ *    no binding types, has no written type here, and only the compiler's facts can vouch for it.
  *
  * ## Grammar-agnostic
  *
@@ -132,14 +137,16 @@ enum OperatorVerdict {
 @:nullSafety(Strict)
 final class OperatorSelection {
 
-	/** Per-file nominal-type resolvers, built on first demand — see `typesFor`. */
-	private final _typesByFile: Map<String, Null<(QueryNode) -> Null<String>>> = [];
+	/** Per-file operand binders, built on first demand — see `typingFor`. */
+	private final _typingByFile: Map<String, (QueryNode) -> Tier> = [];
 
 	/** The plugin whose resolution scope the overload table is read from. */
 	private final _plugin: GrammarPlugin;
 
 	/** The files to index when the plugin carries no resolution scope of its own. */
 	private final _files: Array<{ file: String, source: String }>;
+
+	private final _shape: RefShape;
 
 	/** Literal kinds whose value's type is built in, so such an operand can never carry an overload. */
 	private final _literalKinds: Array<String>;
@@ -149,6 +156,9 @@ final class OperatorSelection {
 
 	/** The declaration kinds that may carry an operator overload at all (`RefShape.underlyingThisTypeKinds`). */
 	private final _abstractKinds: Array<String>;
+
+	/** The declaration kinds none of which may carry an operator overload: classes, interfaces, enums. */
+	private final _plainKinds: Array<String>;
 
 	/** The parenthesis kind, unwrapped before an operand is classified. */
 	private final _parenKind: Null<String>;
@@ -162,12 +172,14 @@ final class OperatorSelection {
 	private function new(plugin: GrammarPlugin, files: Array<{ file: String, source: String }>, shape: RefShape) {
 		_plugin = plugin;
 		_files = files;
+		_shape = shape;
 		final literalTypeNames: Map<String, String> = shape.literalTypeNames ?? [];
 		_literalKinds = [for (kind in literalTypeNames.keys()) kind];
 		final builtins: Array<String> = [for (name in literalTypeNames) name];
 		for (name in shape.nonNullableTypeNames ?? []) if (!builtins.contains(name)) builtins.push(name);
 		_builtinTypeNames = builtins;
 		_abstractKinds = shape.underlyingThisTypeKinds ?? [];
+		_plainKinds = (shape.classDeclKinds ?? []).concat(shape.interfaceDeclKinds ?? []).concat(shape.runtimeTaggedTypeKinds ?? []);
 		_parenKind = shape.parenKind;
 	}
 
@@ -190,12 +202,14 @@ final class OperatorSelection {
 	 *
 	 * Every same-kind child is flattened first, so a `+` CHAIN is judged as a whole and one
 	 * operand carrying an overload condemns all of it — see the type doc on why the pair alone
-	 * is the wrong unit. `types` resolves an operand to its simple nominal type name (normally
-	 * `CheckScan.typeNominalResolver`); passing null answers `Unproven` for every non-literal
-	 * operand, which is what a grammar with no type information deserves.
+	 * is the wrong unit. `written` binds an operand's declared type in its file (`typingFor`);
+	 * `proven`, when given, is a second source that may vouch for an operand `written` leaves
+	 * unproven — the compiler's facts.
 	 */
-	public function verdictFor(node: QueryNode, kinds: Array<String>, types: Null<(QueryNode) -> Null<String>>): OperatorVerdict {
-		return verdictOfOperands(operandsOf(node), kinds, types);
+	public function verdictFor(
+		node: QueryNode, kinds: Array<String>, written: (QueryNode) -> Tier, ?proven: (QueryNode) -> Bool
+	): OperatorVerdict {
+		return verdictOfOperands(operandsOf(node), kinds, written, proven);
 	}
 
 	/**
@@ -208,31 +222,39 @@ final class OperatorSelection {
 	 * is a child of a node whose kind names the operator.
 	 */
 	public function verdictOfOperands(
-		operands: Array<QueryNode>, kinds: Array<String>, types: Null<(QueryNode) -> Null<String>>
+		operands: Array<QueryNode>, kinds: Array<String>, written: (QueryNode) -> Tier, ?proven: (QueryNode) -> Bool
 	): OperatorVerdict {
 		if (!declared(kinds)) return Builtin;
 		var verdict: OperatorVerdict = Builtin;
 		for (operand in operands) {
-			verdict = worse(verdict, operandVerdict(BoolExprShape.unwrapParens(operand, _parenKind), kinds, types));
+			verdict = worse(verdict, operandVerdict(BoolExprShape.unwrapParens(operand, _parenKind), kinds, written, proven));
 			if (verdict.match(Overloaded(_))) return verdict;
 		}
 		return verdict;
 	}
 
 	/**
-	 * The nominal-type resolver for ONE file, built on first demand and memoised for the run.
+	 * The operand binder for ONE file, built on first demand and memoised for the run: what the
+	 * type an operand is DECLARED with binds to, resolved in that file's scope in the compiler's
+	 * own order (`DeclaredNullity.writtenHeadTier` over `TypeNameBinding`).
 	 *
-	 * It lives here rather than in each caller because it must not be built EAGERLY: a resolver
-	 * costs a declared-type map per source, and on a tree where nothing overloads the operator in
-	 * question no caller ever asks for one. Demanding it only after `declared` has said yes is
-	 * what keeps the whole gate free for the projects that have no overloads at all. Null when the
-	 * grammar carries no type information, which answers `Unproven` for every non-literal operand.
+	 * A simple type name proves nothing by itself: `final t: Tag` under `import far.Tag` names the
+	 * imported abstract even when the index holds only some other `Tag`, so judging the name would
+	 * vouch for the wrong declaration. So every type is bound where it is WRITTEN (`OperandBinder`):
+	 * a binding this file declares in this file, a member's declared type in the file that declares
+	 * the member. It is built lazily for the same reason the overload table is: a tree where
+	 * nothing overloads the operator never asks.
 	 */
-	public function typesFor(file: String, source: String, tree: QueryNode): Null<(QueryNode) -> Null<String>> {
-		if (_typesByFile.exists(file)) return _typesByFile[file];
-		final resolver: Null<(QueryNode) -> Null<String>> = CheckScan.typeNominalResolver(source, _plugin, tree, file);
-		_typesByFile[file] = resolver;
-		return resolver;
+	public function typingFor(file: String, source: String, tree: QueryNode): (QueryNode) -> Tier {
+		final cached: Null<(QueryNode) -> Tier> = _typingByFile[file];
+		if (cached != null) return cached;
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(_plugin);
+		final index: Null<SymbolIndex> = indexHolding(file);
+		final typing: (QueryNode) -> Tier = provider == null || index == null
+			? _ -> Unknown
+			: new OperandBinder(file, source, tree, _shape, index, provider, _builtinTypeNames).tierOf;
+		_typingByFile[file] = typing;
+		return typing;
 	}
 
 	/**
@@ -256,57 +278,54 @@ final class OperatorSelection {
 	}
 
 	/**
-	 * The verdict `operand` contributes: its own type asked of the table, or `Unproven` when it
-	 * has none.
+	 * The verdict `operand` contributes: what its declared type binds to, asked of the table, or
+	 * `Unproven` when no binding is proven and `proven` does not vouch for it either.
 	 *
 	 * An operand that is ITSELF one of the operators in question is judged RECURSIVELY instead of
 	 * typed. That is what walks the SPINE of a rebuilt boolean expression — `!(a == b && c)` is
 	 * built-in exactly when the `!`, the `&&` and the `==` all are — and it is the only reading
-	 * that can answer at all, since no type resolver names the type of an operator node. The
-	 * recursion deliberately stops at everything else: an operator buried inside a CALL argument
-	 * is copied verbatim by every rewrite that reaches this class, never re-selected.
+	 * that can answer at all, since no binding names the type of an operator node. The recursion
+	 * deliberately stops at everything else: an operator buried inside a CALL argument is copied
+	 * verbatim by every rewrite that reaches this class, never re-selected.
 	 */
-	private function operandVerdict(operand: QueryNode, kinds: Array<String>, types: Null<(QueryNode) -> Null<String>>): OperatorVerdict {
-		if (kinds.contains(operand.kind)) return verdictFor(operand, kinds, types);
+	private function operandVerdict(
+		operand: QueryNode, kinds: Array<String>, written: (QueryNode) -> Tier, proven: Null<(QueryNode) -> Bool>
+	): OperatorVerdict {
+		if (kinds.contains(operand.kind)) return verdictFor(operand, kinds, written, proven);
 		if (_literalKinds.contains(operand.kind)) return Builtin;
-		if (types == null) return Unproven;
-		final typeName: Null<String> = types(operand);
-		return typeName == null ? Unproven : typeVerdict(typeName, kinds);
+		final verdict: OperatorVerdict = switch written(operand) {
+			case Free: Builtin;
+			case Bound(decls): declsVerdict(decls, kinds);
+			case Unknown: Unproven;
+		};
+		return verdict.match(Unproven) && proven != null && proven(operand) ? Builtin : verdict;
 	}
 
 	/**
-	 * The verdict for a value of type `typeName`. Three proofs, tried in the order that reads:
-	 * the name is one the grammar declares built in; some declaration of it overloads one of
-	 * `kinds`; or the name resolves to a single PLAIN nominal — a class, interface or enum, none
-	 * of which may carry an operator overload (`SymbolIndex.resolvesToPlainNominal`, whose own doc
-	 * excludes abstracts for exactly this reason).
-	 *
-	 * An ABSTRACT the index carries is judged by its own record: overloading none of `kinds` means
-	 * the compiler picks the built-in operator after whatever implicit conversion applies, which
-	 * is the same operator the rewrite assumes. That reading needs the member set to be complete,
-	 * so a `@:build` / `@:autoBuild` declaration — whose generated members no index sees — stays
-	 * `Unproven`.
-	 *
-	 * Everything else is `Unproven`: an out-of-scope name, an alias, an ambiguous simple name.
+	 * The verdict for a value whose type is one of `decls` — every candidate the binding left, so
+	 * the answer holds whichever the compiler picks. `Overloaded` when any declares an overload of
+	 * `kinds`; `Builtin` when every one is a PLAIN nominal (a class, interface or enum, none of
+	 * which may carry an operator overload) or an abstract overloading none of `kinds` — the
+	 * compiler then picks the built-in operator after whatever implicit conversion applies. That
+	 * reading of an abstract needs its member set to be complete, so a `@:build` / `@:autoBuild`
+	 * declaration, whose generated members no index sees, stays `Unproven`, as does a typedef.
 	 */
-	private function typeVerdict(typeName: String, kinds: Array<String>): OperatorVerdict {
-		if (_builtinTypeNames.contains(typeName)) return Builtin;
-		final decls: Array<TypeDeclInfo> = declsOf(typeName);
-		if (decls.length == 0) return Unproven;
-		for (decl in decls)
-			for (member in decl.members)
+	private function declsVerdict(decls: Array<ResolvedType>, kinds: Array<String>): OperatorVerdict {
+		for (r in decls)
+			for (member in r.type.members)
 				for (overloaded in member.operatorOverloads)
-					if (kinds.contains(overloaded)) return Overloaded(typeName);
-		if (indexes().exists(index -> index.resolvesToPlainNominal(typeName))) return Builtin;
-		return decls.foreach(decl -> _abstractKinds.contains(decl.kind) && !decl.hasBuild && !decl.hasAutoBuild) ? Builtin : Unproven;
+					if (kinds.contains(overloaded)) return Overloaded(r.type.name);
+		return decls.length > 0
+			&& decls.foreach(
+				r -> _plainKinds.contains(r.type.kind) || (_abstractKinds.contains(r.type.kind) && !r.type.hasBuild && !r.type.hasAutoBuild)
+			)
+			? Builtin
+			: Unproven;
 	}
 
-	/** Every top-level declaration named `typeName` the resolution scope carries. */
-	private function declsOf(typeName: String): Array<TypeDeclInfo> {
-		return [
-			for (index in indexes()) for (info in index.refs.declaringFiles(typeName)) for (decl in info.types) if (decl.name == typeName)
-				decl
-		];
+	/** The first scope that indexes `file` — the one its binding is resolved in — or null when none does. */
+	private function indexHolding(file: String): Null<SymbolIndex> {
+		return indexes().find(index -> index.fileInfo(file) != null);
 	}
 
 	/** Operator node kind -> the names of the types that overload it, built once on first demand. */

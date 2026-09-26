@@ -126,7 +126,7 @@ final class DoubleNegation implements Check {
 		final selection: Null<OperatorSelection> = seams.selection;
 		final kinds: Array<String> = [seams.notKind];
 		if (selection == null || !selection.declared(kinds)) return true;
-		return selection.verdictFor(not, kinds, selection.typesFor(file, source, root)).match(Builtin);
+		return selection.verdictFor(not, kinds, selection.typingFor(file, source, root)).match(Builtin);
 	}
 
 	/** Whether `operand`'s subtree reaches any kind whose nullness the check cannot rule out. */

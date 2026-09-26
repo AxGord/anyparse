@@ -11,6 +11,7 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.StringFold.ConcatSegment;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeNameBinding.Tier;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
@@ -300,15 +301,15 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 		}
 		final tree: Null<QueryNode> = unproven.keys().hasNext() ? CheckScan.parseOrNull(plugin, source) : null;
 		final oracle: Null<FactsTypeOracle> = tree == null ? null : FactsTypeOracle.forFix(plugin, file, source);
-		final typed: Null<(QueryNode) -> Null<String>> = if (oracle == null)
+		final proven: Null<(QueryNode) -> Bool> = if (oracle == null)
 			null
 		else {
 			final facts: FactsTypeOracle = oracle;
-			operand -> facts.nonOverloadingName(file, source, operand.span);
+			operand -> facts.nonOverloadingName(file, source, operand.span) != null;
 		};
 		final operators: Null<OperatorGate> = tree == null
 			? null
-			: new OperatorGate(OperatorSelection.of(plugin, [{ file: file, source: source }]), seams, file, source, tree, typed);
+			: new OperatorGate(OperatorSelection.of(plugin, [{ file: file, source: source }]), seams, file, source, tree, proven);
 		return CheckScan.applyBySpan(plugin, source, fixable, seams.candidateKinds, (node, span) -> {
 			final doubted: Null<Violation> = unproven['${span.from}:${span.to}'];
 			if (
@@ -2243,12 +2244,11 @@ private class OperatorGate {
 	private final _source: String;
 	private final _tree: QueryNode;
 
-	/** The type an operand the structural resolver cannot name has in the compiler's facts, or null for none. */
-	private final _facts: Null<(QueryNode) -> Null<String>>;
+	/** Whether the compiler's facts type an operand the binding leaves unproven with a type that cannot overload. */
+	private final _facts: Null<(QueryNode) -> Bool>;
 
 	public function new(
-		selection: Null<OperatorSelection>, seams: Seams, file: String, source: String, tree: QueryNode,
-		?facts: (QueryNode) -> Null<String>
+		selection: Null<OperatorSelection>, seams: Seams, file: String, source: String, tree: QueryNode, ?facts: (QueryNode) -> Bool
 	) {
 		_selection = selection;
 		_seams = seams;
@@ -2272,28 +2272,20 @@ private class OperatorGate {
 		if (selection == null) return Builtin;
 		final kinds: Array<String> = [_seams.concatKind];
 		if (!selection.declared(kinds)) return Builtin;
-		final structural: Null<(QueryNode) -> Null<String>> = selection.typesFor(_file, _source, _tree);
-		final facts: Null<(QueryNode) -> Null<String>> = _facts;
-		final types: Null<(QueryNode) -> Null<String>> = if (facts == null)
-			structural
-		else if (structural == null)
-			facts
-		else {
-			final written: (QueryNode) -> Null<String> = structural;
-			final typed: (QueryNode) -> Null<String> = facts;
-			operand -> written(operand) ?? typed(operand);
-		};
-		return literal ? selection.verdictOfOperands(interpolated(node), kinds, types) : selection.verdictFor(node, kinds, types);
+		final written: (QueryNode) -> Tier = selection.typingFor(_file, _source, _tree);
+		return literal
+			? selection.verdictOfOperands(interpolated(node), kinds, written, _facts)
+			: selection.verdictFor(node, kinds, written, _facts);
 	}
 
 	/**
 	 * The interpolation fragments of a string LITERAL — the operands a split would lift out as
 	 * bare `+` operands. A `${ … }` block contributes the one expression it owns, or itself when
 	 * it owns none (a rescanned escape-spelled block is childless — see
-	 * `RefShape.stringInterpBlockKind`); a `$name` fragment contributes itself. Neither an
-	 * empty-handed block nor a `$name` fragment resolves to a type through the shared resolver,
-	 * so both answer `Unproven` and leave such a split reported without a fix — the conservative
-	 * direction, and the one place this gate is knowingly coarser than it could be.
+	 * `RefShape.stringInterpBlockKind`); a `$name` fragment contributes itself and binds like a
+	 * bare read. An empty-handed block binds nothing, so it answers `Unproven` and leaves such a
+	 * split reported without a fix — the conservative direction, and the one place this gate is
+	 * knowingly coarser than it could be.
 	 */
 	private function interpolated(literal: QueryNode): Array<QueryNode> {
 		final blockKind: Null<String> = _seams.stringInterpBlockKind;

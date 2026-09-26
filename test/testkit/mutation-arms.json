@@ -7801,8 +7801,8 @@
 		{
 			"name": "M-BINDING-OWN-TIER-CUT",
 			"type": "anyparse.query.TypeNameBinding",
-			"method": "bind",
-			"find": "if (own.length > 0) return [for (t in own) { file: fi, type: t }];",
+			"method": "tierOf",
+			"find": "if (own.length > 0) return Bound([for (t in own) { file: fi, type: t }]);",
 			"replace": "",
 			"note": "the module's own types are not asked first, so an import answers for a name the module itself declares"
 		},
@@ -8434,6 +8434,60 @@
 			"find": "usings.contains(module) ? usings : usings.concat([module])",
 			"replace": "usings",
 			"note": "the facts do not weigh the other types of the configured module"
+		},
+		{
+			"name": "M-OPERAND-SIMPLE-NAME",
+			"type": "anyparse.query.DeclaredNullity",
+			"method": "headTierIn",
+			"find": "return switch TypeNameBinding.tierOf(head, fi, index) {",
+			"replace": "return switch (index.refs.resolvedDeclsNamed(head).length > 0 ? Bound(index.refs.resolvedDeclsNamed(head)) : TypeNameBinding.tierOf(head, fi, index)) {",
+			"note": "a written type name is judged by any indexed declaration of that simple name, so an import of an unindexed type answers as its namesake"
+		},
+		{
+			"name": "M-OPERAND-WRAPPER-KEPT",
+			"type": "anyparse.query.DeclaredNullity",
+			"method": "headTierIn",
+			"find": "headPathOf(NominalTypes.unwrapNullable(written.trim(), wrappers))",
+			"replace": "headPathOf(written.trim())",
+			"note": "a `Null<T>` operand is not seen through, so the overload `T` declares goes unseen"
+		},
+		{
+			"name": "M-OPERAND-MEMBER-SCOPE-LOST",
+			"type": "anyparse.check.OperandBinder",
+			"method": "memberTier",
+			"find": "DeclaredNullity.headTierIn(written, owner.file, _index,",
+			"replace": "DeclaredNullity.headTierIn(written, _index.fileInfo(_file) ?? owner.file, _index,",
+			"note": "a member's written type is bound in the READING file instead of the declaring one"
+		},
+		{
+			"name": "M-OPERAND-MEMBER-CUT",
+			"type": "anyparse.check.OperandBinder",
+			"method": "memberTier",
+			"force": "Unknown",
+			"note": "no member read or call types an operand"
+		},
+		{
+			"name": "M-OPERAND-METHOD-PARAMS-IGNORED",
+			"type": "anyparse.check.OperandBinder",
+			"method": "memberTier",
+			"find": "ownParams.concat(CallGraphNames.declaredTypeParams(source, new Span(m.declFrom, m.declFrom), name))",
+			"replace": "ownParams",
+			"note": "a method's own type parameters do not shadow a type of the same name in its return type"
+		},
+		{
+			"name": "M-OPERAND-STATIC-RECEIVER-CUT",
+			"type": "anyparse.check.OperandBinder",
+			"method": "receiverDecls",
+			"find": "return switch TypeNameBinding.tierOf(name, fi, _index) {",
+			"replace": "return switch Unknown {",
+			"note": "a type name never serves as a receiver, so no static access types an operand"
+		},
+		{
+			"name": "M-OPERAND-LOCAL-CALL-CUT",
+			"type": "anyparse.check.OperandBinder",
+			"method": "localCallTier",
+			"force": "Unknown",
+			"note": "a call to a function this file declares is never typed by its return type"
 		}
 	]
 }
