@@ -405,7 +405,8 @@ final class UsingScan {
 	 *
 	 * A `using` of a MODULE brings the statics of every type the module declares, not only of the one named after it — the
 	 * last-declared type's winning among them (probed on 4.3.7) — so every type is weighed; a `using` of a sub-type path
-	 * (`pkg.Mod.Sub`) brings `Sub` alone. A type named after `module` itself is skipped: it is the configured one. A known
+	 * (`pkg.Mod.Sub`) brings `Sub` alone. `module` itself is skipped, but not the rest of its
+	 * module: its own `using` — present, or inserted by the rewrite — brings those too. A known
 	 * extension table (a std module) answers for its whole module. `file` lets a simple path resolve the way the file
 	 * spells it (`TypeNameBinding`); without it only an exact module path does.
 	 */
@@ -413,32 +414,48 @@ final class UsingScan {
 		usings: Array<String>, module: String, method: String, plugin: GrammarPlugin, symbols: () -> Null<SymbolIndex>, ?file: String
 	): UsingConflict {
 		final simple: String = CheckScan.simpleModuleName(module);
-		var unresolved: Bool = false;
+		var verdict: UsingConflict = UsingConflict.Clear;
 		for (path in usings) if (path != module && CheckScan.simpleModuleName(path) != simple) {
 			final known: Null<Array<String>> = plugin.knownExtensionMethods(path);
 			if (known != null) {
 				if (known.contains(method)) return UsingConflict.Conflict;
 				continue;
 			}
-			final index: Null<SymbolIndex> = symbols();
-			final types: Null<Array<UsedType>> = index == null ? null : typesUsedBy(path, index, file);
-			if (types == null) {
-				unresolved = true;
+			verdict = worse(verdict, supplied(path, module, method, symbols, file));
+			if (verdict == UsingConflict.Conflict) return verdict;
+		}
+		// `module`'s own `using` — the one the file has or the one the rewrite inserts — brings every OTHER type of its
+		// module too; a std module's extension table stands for its whole module, which is `module`'s own
+		return plugin.knownExtensionMethods(module) != null ? verdict : worse(verdict, supplied(module, module, method, symbols, file));
+	}
+
+	/** What `using <path>` supplies of `method` besides `module` itself, through the index. */
+	private static function supplied(
+		path: String, module: String, method: String, symbols: () -> Null<SymbolIndex>, ?file: String
+	): UsingConflict {
+		final index: Null<SymbolIndex> = symbols();
+		final types: Null<Array<UsedType>> = index == null ? null : typesUsedBy(path, index, file);
+		if (index == null || types == null) return UsingConflict.Unresolved;
+		var verdict: UsingConflict = UsingConflict.Clear;
+		for (t in types) if (t.path != module) {
+			// a `typedef` of a class brings that class's statics, as `using tink.CoreApi` does
+			final host: Null<TypeDeclInfo> = aliasedHost(t.type, t.file, index);
+			if (host == null) {
+				verdict = UsingConflict.Unresolved;
 				continue;
 			}
-			for (t in types) if (t.path != module) {
-				// a `typedef` of a class brings that class's statics, as `using tink.CoreApi` does
-				final host: Null<TypeDeclInfo> = index == null ? null : aliasedHost(t.type, t.file, index);
-				if (host == null) {
-					unresolved = true;
-					continue;
-				}
-				if (host.members.exists(m -> m.name == method && m.isStatic && !m.excludedFromExtensions)) return UsingConflict.Conflict;
-				// a build macro may add the static the declaration does not show
-				if (host.hasBuild || host.hasAutoBuild) unresolved = true;
-			}
+			if (host.members.exists(m -> m.name == method && m.isStatic && !m.excludedFromExtensions)) return UsingConflict.Conflict;
+			// a build macro may add the static the declaration does not show
+			if (host.hasBuild || host.hasAutoBuild) verdict = UsingConflict.Unresolved;
 		}
-		return unresolved ? UsingConflict.Unresolved : UsingConflict.Clear;
+		return verdict;
+	}
+
+	/** The graver of two verdicts. */
+	private static inline function worse(a: UsingConflict, b: UsingConflict): UsingConflict {
+		return a == UsingConflict.Conflict || b == UsingConflict.Conflict
+			? UsingConflict.Conflict
+			: a == UsingConflict.Unresolved || b == UsingConflict.Unresolved ? UsingConflict.Unresolved : UsingConflict.Clear;
 	}
 
 	/**

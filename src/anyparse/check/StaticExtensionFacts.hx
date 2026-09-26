@@ -77,7 +77,8 @@ final class StaticExtensionFacts {
 		}
 		final owner: Null<String> = staticOwner(facts, file, call, module, method);
 		if (owner == null) return Unproven;
-		switch usingsSupply(facts, usings, owner, method) {
+		// `module`'s own `using`, present or inserted by the rewrite, brings the other types of its module as well
+		switch usingsSupply(facts, usings.contains(module) ? usings : usings.concat([module]), owner, method) {
 			case Supplied:
 				return Shadowed;
 			case Unread:
@@ -151,7 +152,7 @@ final class StaticExtensionFacts {
 		for (path in usings) {
 			final id: Null<String> = typeIdOf(facts, path);
 			if (id == null) return Unread;
-			if (id == owner) continue;
+
 			final home: Null<String> = facts.typePosition(id)?.file;
 			final main: Bool = facts.type(path) != null;
 			final ids: Array<String> = [id];

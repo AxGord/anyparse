@@ -347,6 +347,48 @@ class PreferStaticExtensionFactsTest extends Test {
 	}
 
 	/**
+	 * The `using Util` the rewrite inserts brings every type of `Util.hx`: `Extra.f` there binds `b.f()` instead of
+	 * `Util.f`, so the configured module's own neighbours drop the site.
+	 */
+	@:pin('control') @:killer('M-PSE-USING-SELF-MODULE')
+	public function testTheConfiguredModulesOwnNeighboursDropTheSite(): Void {
+		final seen: Null<Map<String, String>> = verdicts([[]], SUBTYPE_MAIN, SUBTYPE_MAIN, BUILD, UTIL_CONFIG, selfModules());
+		if (seen == null) return;
+		for (site in ['facts', 'structural']) Assert.equals('drop', seen[site], '$site: $seen');
+	}
+
+	/** The facts half: with no `using` in the file, the inserted one's neighbours alone drop the site. */
+	@:pin('control') @:killer('M-PSE-FACTS-USING-SELF-MODULE')
+	public function testTheFactsWeighTheConfiguredModulesNeighbours(): Void {
+		#if (sys || nodejs)
+		final entries: Array<{ name: String, source: String }> = [
+			{ name: 'Main.hx', source: SUBTYPE_MAIN },
+			{ name: 'build.hxml', source: BUILD }
+		];
+		for (name => text in selfModules()) entries.push({ name: name, source: text });
+		final dir: String = CliFixture.writeTree('pse_facts_self', entries);
+		final facts: Null<CompilerFacts> = CompilerOracle.typecheck('build.hxml', dir).match(Confirmed)
+			? TypedFactsProbe.probeAll([{ hxml: 'build.hxml', dir: dir, defines: [] }])
+			: null;
+		if (facts == null) {
+			CliFixture.removeDir(dir);
+			Assert.pass('haxe unavailable — skipped');
+			return;
+		}
+		final call: Int = SUBTYPE_MAIN.indexOf('Util.f(b)');
+		final recv: Int = call + 'Util.f('.length;
+		final judged: ExtensionFactsVerdict = StaticExtensionFacts.judge(
+			facts, Path.join([dir, 'Main.hx']), SUBTYPE_MAIN, new Span(call, call + 'Util.f(b)'.length), new Span(recv, recv + 1), 'Util',
+			'f', []
+		);
+		CliFixture.removeDir(dir);
+		Assert.equals(Shadowed, judged);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
 	 * A receiver type's `@:using` binds before the file's `using` — on the type itself, on a superclass and on an
 	 * interface alike; the structural path and the facts path each keep such a site report-only.
 	 */
@@ -424,6 +466,15 @@ class PreferStaticExtensionFactsTest extends Test {
 			'Zeta.hx' => 'class Zeta {\n\tpublic static function g():Int\n\t\treturn 0;\n}\n\n'
 				+ 'class Extra {\n\tpublic static function f(x:Base):String\n\t\treturn "Extra.f";\n}\n'
 		];
+	}
+
+	/** `subtypeModules`, with `Extra` declared in the configured `Util.hx` itself. */
+	private static function selfModules(): Map<String, String> {
+		final out: Map<String, String> = subtypeModules();
+		out['Util.hx'] = 'class Util {\n\tpublic static function f(x:Base):String\n\t\treturn "Util.f";\n}\n\n'
+			+ 'class Extra {\n\tpublic static function f(x:Base):String\n\t\treturn "Extra.f";\n}\n';
+		out['Zeta.hx'] = 'class Zeta {\n\tpublic static function g():Int\n\t\treturn 0;\n}\n';
+		return out;
 	}
 
 	/**

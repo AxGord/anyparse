@@ -1554,7 +1554,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PreferStaticExtensionFactsTest#testAnImportAliasOfTheModuleNameDropsTheSite :: control :: M-PSE-CHANNEL-ALIAS',
 			'unit.check.PreferStaticExtensionFactsTest#testAnOverloadIsNotRewritten :: control :: M-PSE-FACTS-OVERLOAD',
 			'unit.check.PreferStaticExtensionFactsTest#testFactsOfAnotherTextProveNothing :: control :: M-PSE-FACTS-TEXT',
+			'unit.check.PreferStaticExtensionFactsTest#testTheConfiguredModulesOwnNeighboursDropTheSite :: control :: M-PSE-USING-SELF-MODULE',
 			'unit.check.PreferStaticExtensionFactsTest#testTheFactsWeighEveryTypeAUsedModuleDeclares :: control :: M-PSE-FACTS-USING-MODULE-WIDE',
+			'unit.check.PreferStaticExtensionFactsTest#testTheFactsWeighTheConfiguredModulesNeighbours :: control :: M-PSE-FACTS-USING-SELF-MODULE',
 			'unit.check.PreferStaticExtensionFactsTest#testTheFirstParameterOfAFactsSignature :: control :: M-PSE-FIRST-PARAM',
 			'unit.check.PreferStaticExtensionFactsTest#testTheRewrittenProgramPrintsWhatItPrinted :: guard :: ',
 			'unit.check.PreferTernaryReturnCheckTest#testOwnLineCommentInACascadeDefersTheTail :: control :: '
@@ -3608,7 +3610,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-PSE-CLOSURE-USING-SUPER',
 			'M-PSE-USING-MODULE-WIDE',
 			'M-PSE-FACTS-USING-MODULE-WIDE',
-			'M-PSE-USING-ALIAS-HOST'
+			'M-PSE-USING-ALIAS-HOST',
+			'M-PSE-USING-SELF-MODULE',
+			'M-PSE-FACTS-USING-SELF-MODULE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

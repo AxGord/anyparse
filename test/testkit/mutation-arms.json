@@ -8321,10 +8321,26 @@
 		{
 			"name": "M-PSE-USING-ALIAS-HOST",
 			"type": "anyparse.check.UsingScan",
-			"method": "usingConflict",
-			"find": "index == null ? null : aliasedHost(t.type, t.file, index)",
+			"method": "supplied",
+			"find": "aliasedHost(t.type, t.file, index)",
 			"replace": "t.type",
 			"note": "a typedef in a used module is read as a type with no statics instead of the class it aliases"
+		},
+		{
+			"name": "M-PSE-USING-SELF-MODULE",
+			"type": "anyparse.check.UsingScan",
+			"method": "usingConflict",
+			"find": "worse(verdict, supplied(module, module, method, symbols, file))",
+			"replace": "verdict",
+			"note": "the configured module's own using is not weighed, so its other types go unchecked"
+		},
+		{
+			"name": "M-PSE-FACTS-USING-SELF-MODULE",
+			"type": "anyparse.check.StaticExtensionFacts",
+			"method": "judge",
+			"find": "usings.contains(module) ? usings : usings.concat([module])",
+			"replace": "usings",
+			"note": "the facts do not weigh the other types of the configured module"
 		}
 	]
 }
