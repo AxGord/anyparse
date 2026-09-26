@@ -1171,6 +1171,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.FactsTypeOracleE2ETest#testAReorderedFileIsPlacedOnlyThroughTheEditsItsRunApplied :: guard :: ',
 			'unit.check.FactsTypeOracleE2ETest#testTheFactsTypeEveryDeclarationKindAndKeepTheProgram :: control :: M-ASSISTED-FACTS-FIRST,M-ASSISTED-DECLINE-CENSUS,M-EXPLICIT-TYPE-ORACLE-PARAMS,M-EXPLICIT-TYPE-ORACLE-FIELDS,M-FACTS-DYNAMIC-SOURCE',
 			'unit.check.FactsTypeOracleTest#testAFieldTheConfigurationsTypeApartDeclines :: control :: M-FACTS-FIELD-TYPES',
+			'unit.check.FactsTypeOracleTest#testAFinalClassIsItsOwnHome :: control :: M-ORACLE-HOME-MODIFIED-TYPE',
 			'unit.check.FactsTypeOracleTest#testARewrittenFileIsReadAtTheTextTheCompileRead :: control :: M-FACTS-ORACLE-ORIGINAL,M-JOURNAL-SHIFT',
 			'unit.check.FactsTypeOracleTest#testASignatureTheConfigurationsTypeApartDeclines :: control :: M-FACTS-SIGNATURE-VARIANTS',
 			'unit.check.FactsTypeOracleTest#testASiteAfterNonAsciiTextIsFound :: control :: M-CODEPOINT-NATIVE',
@@ -3531,7 +3532,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-JOURNAL-RECORD-PATH',
 			'M-JOURNAL-RECORD',
 			'M-ORACLE-WHOLE-MEMBER',
-			'M-ORACLE-HOME-GUARD'
+			'M-ORACLE-HOME-GUARD',
+			'M-ORACLE-HOME-MODIFIED-TYPE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

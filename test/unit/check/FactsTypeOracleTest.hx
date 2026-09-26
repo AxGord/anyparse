@@ -111,6 +111,17 @@ class FactsTypeOracleTest extends Test {
 		);
 	}
 
+	@:pin('control') @:killer('M-ORACLE-HOME-MODIFIED-TYPE')
+	public function testAFinalClassIsItsOwnHome(): Void {
+		// `final class` projects as a wrapper around the named class form; the wrapper names nothing itself
+		final modified: String = '@:x final ' + SRC;
+		final facts: CompilerFacts = CompilerFacts.build([
+			{ name: 'one', text: dump('Int', 0, 'Int', 'Int', 'Int', modified), file: path -> path }
+		], file -> file == 'A.hx' ? modified : null, file -> file);
+		final oracle: FactsTypeOracle = new FactsTypeOracle(facts, file -> modified, null, PLUGIN);
+		Assert.same(Typed('Int'), oracle.localType('A.hx', declOf(modified), 'v', modified.indexOf('var v') + 5));
+	}
+
 	@:pin('control') @:killer('M-FACTS-INVALIDATE-FOREIGN')
 	public function testFactsOfTheRewrittenTextStayCurrent(): Void {
 		// the facts compile ran after the run wrote the file: the rewrite did not outdate them
@@ -203,17 +214,18 @@ class FactsTypeOracleTest extends Test {
 	 * `p` typed `Null<param>`.
 	 */
 	private static function dump(
-		varType: String, shift: Int = 0, fieldType: String = 'Int', result: String = 'Int', param: String = 'Int'
+		varType: String, shift: Int = 0, fieldType: String = 'Int', result: String = 'Int', param: String = 'Int', ?source: String
 	): String {
+		final text: String = source ?? SRC;
 		function at(offset: Int): Int return offset + shift;
-		final fnFrom: Int = at(SRC.indexOf('(p)'));
-		final fnTo: Int = at(SRC.indexOf('\t}\n}') + 2);
-		final varFrom: Int = at(SRC.indexOf('var v'));
-		final varTo: Int = at(SRC.indexOf('g();\n\t}') + 3);
-		final fldFrom: Int = at(SRC.indexOf('var fld'));
-		final fldTo: Int = at(SRC.indexOf('g();') + 3);
+		final fnFrom: Int = at(text.indexOf('(p)'));
+		final fnTo: Int = at(text.indexOf('\t}\n}') + 2);
+		final varFrom: Int = at(text.indexOf('var v'));
+		final varTo: Int = at(text.indexOf('g();\n\t}') + 3);
+		final fldFrom: Int = at(text.indexOf('var fld'));
+		final fldTo: Int = at(text.indexOf('g();') + 3);
 		return '{"k":"facts","v":1,"inline":true}\n'
-			+ '{"k":"type","id":"A","f":"A.hx","p":[${at(0)},${at(SRC.length)}],"kind":"class","pack":"","params":["T"],'
+			+ '{"k":"type","id":"A","f":"A.hx","p":[${at(0)},${at(text.length)}],"kind":"class","pack":"","params":["T"],'
 			+ '"fields":[{"n":"fld","k":"var(default,default)","t":"$fieldType","p":[$fldFrom,$fldTo]}]}\n'
 			+ '{"k":"node","id":"A.f","f":"A.hx","p":[$fnFrom,$fnTo],"kind":"method","owner":"A","t":"(?Null<$param>)->$result",'
 			+ '"params":[{"n":"p","t":"Null<$param>"}],"vars":[{"n":"v","t":"$varType","p":[$varFrom,$varTo]}]}\n'

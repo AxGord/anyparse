@@ -8026,6 +8026,14 @@
 			"method": "sameHome",
 			"force": "true",
 			"note": "facts of any member answer for code the file now holds in another"
+		},
+		{
+			"name": "M-ORACLE-HOME-MODIFIED-TYPE",
+			"type": "anyparse.check.FactsTypeOracle",
+			"method": "homeOf",
+			"find": "type = node.name ?? node.children.find(c -> c.name != null)?.name;",
+			"replace": "type = node.name;",
+			"note": "a `final class` names no type, so every declaration in one reads as homeless and declines"
 		}
 	]
 }

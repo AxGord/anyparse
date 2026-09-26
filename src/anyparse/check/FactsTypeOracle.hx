@@ -240,7 +240,8 @@ final class FactsTypeOracle implements TypeOracle {
 				memberSpan = at;
 			}
 			if (at != null && types.contains(node.kind)) {
-				type = node.name;
+				// a modified declaration (`final class`) wraps the named form it modifies
+				type = node.name ?? node.children.find(c -> c.name != null)?.name;
 				member = null;
 				memberSpan = null;
 			}
