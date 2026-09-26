@@ -7959,6 +7959,20 @@
 			"find": "return Declined(DECLINE_DYNAMIC_SOURCE);",
 			"replace": "{}",
 			"note": "a local a Dynamic value initializes is annotated with the structure its uses bound, which the value need not have"
+		},
+		{
+			"name": "M-BAG-INITIALIZER",
+			"type": "anyparse.check.DynamicBag",
+			"method": "initializerFits",
+			"force": "true",
+			"note": "a bag declaration whose initializer is a typed structure becomes a DynamicAccess its fields may not fit"
+		},
+		{
+			"name": "M-BAG-NULL-OUTER",
+			"type": "anyparse.check.DynamicBag",
+			"method": "nominalOrNull",
+			"force": "name",
+			"note": "a Null<T> value is typed by its bare wrapper, so the bag becomes DynamicAccess<Null>, which names no type"
 		}
 	]
 }

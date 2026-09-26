@@ -808,3 +808,4 @@ decided the question; it may not become a record of runs.
 - asking the display server for code no configuration compiles → its hxml is one of those configurations, so the answer is empty by construction; the facts oracle declines instead
 - dropping the facts of every file the `--fix` run rewrote → the facts compile may have read the REWRITTEN text (it starts on first demand), so they were current; keep the run-start text and invalidate only facts of that text
 - writing the type the compiler gave a local a `Dynamic` value initializes → assignment from `Dynamic` binds no monomorph, so the type is whatever its uses bound (`{k:String}` for a `Json.parse` result read as a string), not the value's
+- rewriting a `Dynamic` bag to `DynamicAccess<T>` whatever its initializer → a value of a typed structure must unify with the map field by field, which the writes do not show; only none, `{}` or a `Dynamic` value may become one

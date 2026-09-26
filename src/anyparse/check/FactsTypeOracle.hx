@@ -18,12 +18,13 @@ using StringTools;
  * It answers only a type every configuration that compiled the declaration AGREES on: two configurations naming two
  * types (`Null<X>` in one, `X` in another) decline, because one annotation would be wrong in the other build. It also
  * declines a type no source can write: an unknown (an unbound monomorph, or nesting past the facts' depth bound), a type
- * parameter of a declaration the site is not inside, and an abstract's statics or implementation class. The type is
- * then spelled as Haxe source (`spell`), still fully qualified, for the check's own normaliser.
+ * parameter of a declaration the site is not inside, and an abstract's statics or implementation class — and a local or
+ * a return a `Dynamic` value flows into, whose type the compiler inferred from its uses. The type is then spelled as Haxe
+ * source (`FactsTypeSpelling`), still fully qualified, for the check's own normaliser.
  *
- * Code no configuration compiled has no facts and declines. A file the run REWROTE after the compile has facts that no
- * longer name its text; that one question goes to `fallback`, an oracle that reads the tree as it is now, when there is
- * one.
+ * Code no configuration compiled has no facts and declines. A file the run REWROTE after the compile is read at the text
+ * the compile read and mapped onto the file as it is now (`TextMap`); a declaration whose own text changed declines, and
+ * only a file whose compiled text is gone altogether goes to `fallback`, an oracle that reads the tree as it is now.
  */
 @:nullSafety(Strict)
 final class FactsTypeOracle implements TypeOracle {

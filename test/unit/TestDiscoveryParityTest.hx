@@ -1084,6 +1084,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-AMBIENT-IMPORT-BAND',
 			'unit.check.AmbientImportSubtypeShieldTest#testTheWildcardTierShieldsTheTypeTheSupertypeReallyNames :: control :: '
 				+ 'M-AMBIENT-IMPORT-BAND',
+			'unit.check.AvoidDynamicBagFixTest#testANullableValueIsNeverTypedByItsBareWrapper :: control :: M-BAG-NULL-OUTER',
+			'unit.check.AvoidDynamicBagFixTest#testAnInitializerOfAnotherTypeKeepsTheDeclaration :: control :: M-BAG-INITIALIZER',
 			'unit.check.BuiltinFixClassCensusTest#testEveryDeclaredNoAutofixRuleAnswersNoEdit :: control :: M-NO-AUTOFIX-STILL-EDITS',
 			'unit.check.BuiltinFixClassCensusTest#testNoAutofixReasonIsNotTheRuleNameReadBack :: control :: '
 				+ 'M-NO-AUTOFIX-REASON-IS-THE-RULE-NAME',
@@ -3512,7 +3514,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-EXPLICIT-TYPE-STRUCTURAL-DECLINE',
 			'M-ASSISTED-FACTS-FIRST',
 			'M-ASSISTED-DECLINE-CENSUS',
-			'M-FACTS-DYNAMIC-SOURCE'
+			'M-FACTS-DYNAMIC-SOURCE',
+			'M-BAG-INITIALIZER',
+			'M-BAG-NULL-OUTER'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
