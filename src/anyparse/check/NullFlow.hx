@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.query.BinderScan;
 import anyparse.query.BoolExprShape;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.MemberKinds;
@@ -145,6 +146,12 @@ private typedef FlowCtx = {
 	var assertFalseCalls: Array<String>;
 	var mapExistsMethods: Array<String>;
 	var captured: Array<String>;
+
+	/** `RefShape.selfScopeDeclKinds`: constructs whose own name binds into the scope they open (`for`, `catch`). */
+	var selfScopeDeclKinds: Array<String>;
+
+	/** `BinderScan.binderKinds`: every node kind the grammar projects as a named binder. */
+	var binderKinds: Array<String>;
 	var ownNames: Array<String>;
 	var source: String;
 	var nullableSourceRhs: Null<QueryNode -> Bool>;
@@ -632,6 +639,8 @@ final class NullFlow {
 			assertFalseCalls: shape.assertFalseCalls ?? [],
 			mapExistsMethods: shape.mapExistsMethods ?? [],
 			captured: collectCaptured(body, identKind, shape.writeParentKinds ?? [], nestedFnKinds),
+			selfScopeDeclKinds: shape.selfScopeDeclKinds,
+			binderKinds: BinderScan.binderKinds(shape),
 			ownNames: paramNames.concat(collectDeclared(body, localDeclKinds, nestedFnKinds)),
 			source: source,
 			nullableSourceRhs: seed,
@@ -656,7 +665,10 @@ final class NullFlow {
 		}
 		visitNode(node, state, ctx);
 		final before: Null<Array<String>> = node.children.length == 0 || ownsVisibility(kind, ctx) ? null : visibleIn(state);
+		final bound: Array<String> = ctx.selfScopeDeclKinds.contains(kind) ? boundNames(node, ctx) : [];
+		final outer: Null<FlowState> = shadow(state, bound);
 		transfer(node, state, ctx);
+		unshadow(state, node, bound, outer, ctx);
 		if (before != null) keepVisible(state, before);
 	}
 
@@ -990,7 +1002,8 @@ final class NullFlow {
 		b: QueryNode, state: FlowState, ctx: FlowCtx, subjectName: Null<String>, nullConsumed: Bool
 	): Null<FlowState> {
 		final branchState: FlowState = copyState(state);
-		clearBranchPatterns(b, branchState, ctx);
+		final bound: Array<String> = boundNames(b, ctx);
+		final outer: Null<FlowState> = shadow(branchState, bound);
 		if (nullConsumed && subjectName != null) branchState.maybe.remove(subjectName);
 		final guard: Null<QueryNode> = caseGuard(b, ctx);
 		if (guard != null) clearMaybeByGuard(guard, branchState, ctx);
@@ -999,23 +1012,9 @@ final class NullFlow {
 		// Exit clearing: the branch body is not block-wrapped, so a shadow's facts must be
 		// dropped here (an inner local declaration or a written pattern capture).
 		clearDeclaredIn(b, branchState, ctx);
-		clearBranchPatterns(b, branchState, ctx);
+		unshadow(branchState, b, bound, outer, ctx);
 		final last: Null<QueryNode> = b.children.length > 0 ? b.children[b.children.length - 1] : null;
 		return last == null || !armExits(last, ctx) ? branchState : null;
-	}
-
-	/**
-	 * Clears every name a case branch's patterns mention — the first pattern child
-	 * plus every comma alternative (`case a(v), b(v):` projects one leading
-	 * `plainCasePatternKind` child per alternative). Pattern idents are fresh
-	 * bindings (captures) or enum-constructor names, never runtime reads of an
-	 * outer local, so an outer fact must not survive into them.
-	 */
-	private static function clearBranchPatterns(b: QueryNode, branchState: FlowState, ctx: FlowCtx): Void {
-		if (b.kind != ctx.caseBranchKind || b.children.length == 0) return;
-		clearPatternNames(b.children[0], branchState, ctx);
-		for (c in b.children) if (ctx.plainCasePatternKind != null && c.kind == ctx.plainCasePatternKind)
-			clearPatternNames(c, branchState, ctx);
 	}
 
 	/**
@@ -1042,15 +1041,13 @@ final class NullFlow {
 		for (i in 1...node.children.length) {
 			final clause: QueryNode = node.children[i];
 			final clauseState: FlowState = copyState(catchEntry);
-			final varName: Null<String> = clause.name;
-			final isCatch: Bool = clause.kind == ctx.catchClauseKind;
-			if (isCatch && varName != null) clearName(clauseState, varName);
+			final bound: Array<String> = ctx.selfScopeDeclKinds.contains(clause.kind) ? boundNames(clause, ctx) : [];
+			final outer: Null<FlowState> = shadow(clauseState, bound);
 			visitNode(clause, clauseState, ctx);
 			for (c in clause.children) walk(c, clauseState, ctx);
-			// Exit clearing: a write to the catch variable or to a bare-body shadow
-			// declaration must not leak out under the outer binding's name.
+			// Exit clearing: a bare-body shadow declaration must not leak out under the outer binding's name.
 			clearDeclaredIn(clause, clauseState, ctx);
-			if (isCatch && varName != null) clearName(clauseState, varName);
+			unshadow(clauseState, clause, bound, outer, ctx);
 			final last: Null<QueryNode> = clause.children.length > 0 ? clause.children[clause.children.length - 1] : null;
 			if (last == null || !armExits(last, ctx)) exitStates.push(clauseState);
 		}
@@ -1115,16 +1112,6 @@ final class NullFlow {
 				for (p in c.children)
 					if (p.kind == nl) return true;
 		return false;
-	}
-
-	/**
-	 * Clear every identifier name in a case-pattern subtree from `state` — a pattern capture is a
-	 * fresh binding shadowing any same-named outer local, so no outer fact may survive into the branch.
-	 */
-	private static function clearPatternNames(pattern: QueryNode, state: FlowState, ctx: FlowCtx): Void {
-		final name: Null<String> = pattern.name;
-		if (pattern.kind == ctx.identKind && name != null) clearName(state, name);
-		for (c in pattern.children) clearPatternNames(c, state, ctx);
 	}
 
 	/**
@@ -1350,6 +1337,66 @@ final class NullFlow {
 				for (e in a.present) if (b.present.exists(q -> q.map == e.map && q.key == e.key)) e
 			]
 		};
+	}
+
+	/**
+	 * The names `node` binds for its own subtree, read off the grammar's binder vocabulary
+	 * (`BinderScan.binderKinds`) so a new binder spelling is covered the day it is declared: a
+	 * `selfScopeDeclKinds` construct's own name (`for (x in …)`, `catch (x)`) and every binder child
+	 * it carries (`k => x`), and every name a `case` branch's patterns bind (`BinderScan.casePatternNames`
+	 * over the first pattern and each comma alternative — `case x:`, `case var x:`, `case Some(var x):`).
+	 * Lambda and local-function parameters bind in a unit of their own (`forEachFunctionUnit`), and a
+	 * block's `var` is position-scoped (`handleBlock` clears it on exit), so neither is answered here.
+	 */
+	private static function boundNames(node: QueryNode, ctx: FlowCtx): Array<String> {
+		final out: Array<String> = [];
+		function add(name: Null<String>): Void {
+			if (name != null && !out.contains(name)) out.push(name);
+		}
+		if (ctx.selfScopeDeclKinds.contains(node.kind)) {
+			add(node.name);
+			for (c in node.children) if (ctx.binderKinds.contains(c.kind)) add(c.name);
+		}
+		if (node.kind == ctx.caseBranchKind && node.children.length > 0) for (i in 0...node.children.length) {
+			final c: QueryNode = node.children[i];
+			if (i == 0 || c.kind == ctx.plainCasePatternKind)
+				for (n in BinderScan.casePatternNames(c, ctx.plainCasePatternKind, ctx.binderKinds)) add(n);
+		}
+		return out;
+	}
+
+	/**
+	 * Enter the scope of `bound`: every fact about those names is dropped, since inside it they
+	 * denote fresh bindings. Returns the state as it was, for `unshadow` — null when nothing is bound.
+	 */
+	private static function shadow(state: FlowState, bound: Array<String>): Null<FlowState> {
+		if (bound.length == 0) return null;
+		final outer: FlowState = copyState(state);
+		for (n in bound) clearName(state, n);
+		return outer;
+	}
+
+	/**
+	 * Leave the scope of `bound` opened on `node`: the inner bindings' facts are dropped, and each
+	 * outer name `node` writes nowhere gets back the `NonNull` / `Null` / `MaybeNull` fact `outer`
+	 * held for it — the compiler keeps an outer local's narrowing across a scope that shadowed it.
+	 * A name written inside stays `Unknown`: the write may be the outer one's.
+	 */
+	private static function unshadow(state: FlowState, node: QueryNode, bound: Array<String>, outer: Null<FlowState>, ctx: FlowCtx): Void {
+		if (outer == null) return;
+		final written: Array<String> = [];
+		collectWrites(node, written, ctx);
+		for (n in bound) {
+			clearName(state, n);
+			if (written.contains(n)) continue;
+			if (outer.nonNull.contains(n)) {
+				markNonNull(state, n);
+				if (outer.unseen.contains(n)) state.unseen.push(n);
+			} else if (outer.known.contains(n))
+				markKnown(state, n);
+			else if (outer.maybe.contains(n))
+				markMaybe(state, n);
+		}
 	}
 
 	/**

@@ -31,6 +31,17 @@ class DeadNullCoalescingTest extends Test {
 		Assert.equals(1, violations('class C { function f(?x:Foo) { x = new Foo(); var n = x ?? mk(); } }').length);
 	}
 
+	/** A loop binder shadows the outer proof: `(x ?? d).bar` on the binder is a live fallback, not a dead one. */
+	@:pin('control') @:killer('M-NULLFLOW-BINDER-BLIND')
+	public function testLoopBinderShadowsTheOuterProof(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C { function f(x:Null<Foo>, xs:Array<Null<Foo>>, d:Foo) { if (x == null) return; for (x in xs) g((x ?? d).bar); } }'
+			).length
+		);
+	}
+
 	public function testNoGuardNotFlagged(): Void {
 		Assert.equals(0, violations('class C { function f(?x:String) { var n = x ?? "d"; } }').length);
 	}

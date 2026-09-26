@@ -10,6 +10,8 @@ import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
 
+using StringTools;
+
 /**
  * The `dead-safe-nav` check: a null-safe access `a?.b` whose receiver is already
  * non-null **by flow** (a prior `!= null` guard, an `== null` guard's else-arm, or
@@ -262,6 +264,51 @@ class DeadSafeNavTest extends Test {
 		assertFixed(nullSafe('g(x = new Foo()); var n = x?.bar;'));
 	}
 
+	/**
+	 * A loop binder is a fresh variable: the outer `x` proven non-null says nothing about it, in any
+	 * loop spelling — plain, comprehension, nested, and with or without a key.
+	 */
+	@:pin('control') @:killer('M-NULLFLOW-BINDER-BLIND')
+	public function testLoopBinderShadowsTheOuterProof(): Void {
+		final guard: String = 'if (x == null) return;';
+		Assert.equals(0, violations(outer('$guard for (x in xs) g(x?.bar);')).length, 'for (x in xs)');
+		Assert.equals(0, violations(outer('$guard var a = [for (x in xs) x?.bar];')).length, 'comprehension');
+		Assert.equals(0, violations(outer('$guard for (ys in xss) for (x in ys) g(x?.bar);')).length, 'nested for');
+		Assert.equals(0, violations(outer('$guard for (i => x in xs) g(x?.bar);')).length, 'for (i => x in xs)');
+	}
+
+	/** The key-value loop's VALUE binder sits on a child node, not on the loop. */
+	@:pin('control') @:killer('M-NULLFLOW-CHILD-BINDER-BLIND')
+	public function testKeyValueBinderShadowsTheOuterProof(): Void {
+		Assert.equals(0, violations(outer('if (x == null) return; for (k => x in m) g(x?.bar);')).length);
+	}
+
+	/** Case captures in every spelling, and a catch variable, shadow the outer name too. */
+	@:pin('control') @:killer('M-NULLFLOW-CASE-BINDER-BLIND')
+	public function testCaseCapturesShadowTheOuterProof(): Void {
+		final guard: String = 'if (x == null) return;';
+		Assert.equals(0, violations(outer('$guard switch y { case x: g(x?.bar); }')).length, 'case x');
+		Assert.equals(0, violations(outer('$guard switch y { case var x: g(x?.bar); }')).length, 'case var x');
+		Assert.equals(0, violations(outer('$guard switch e { case Some(var x): g(x?.bar); case _: }')).length, 'Some(var x)');
+	}
+
+	@:pin('control') @:killer('M-NULLFLOW-CATCH-BINDER-BLIND')
+	public function testCatchVariableShadowsTheOuterProof(): Void {
+		Assert.equals(0, violations(outer('if (x == null) return; try g(1) catch (x:Dynamic) g(x?.bar);')).length);
+	}
+
+	/** Past the loop the outer `x` is itself again, still proven non-null — the compiler keeps that narrowing too. */
+	@:pin('control') @:killer('M-NULLFLOW-SHADOW-NO-RESTORE')
+	public function testOuterProofSurvivesTheShadowingLoop(): Void {
+		assertFixed(outer('if (x == null) return; for (x in xs) g(x); var n = x?.bar;'));
+	}
+
+	/** An outer proof is not restored past a construct that writes the name: the iterable runs in the OUTER scope. */
+	@:pin('control') @:killer('M-NULLFLOW-SHADOW-RESTORES-WRITTEN')
+	public function testWrittenNameIsNotRestored(): Void {
+		Assert.equals(0, violations(outer('if (x == null) return; for (x in { x = null; xs; }) g(x); var n = x?.bar;')).length);
+	}
+
 	private function assertDeclined(src: String): Void {
 		final check: DeadSafeNav = new DeadSafeNav();
 		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
@@ -295,6 +342,16 @@ class DeadSafeNavTest extends Test {
 
 	private function violations(src: String): Array<Violation> {
 		return new DeadSafeNav().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	/** `body` as the body of a null-safe method over a nullable `x` and a few containers. */
+	private static function outer(body: String): String {
+		return nullSafe(body)
+			.replace(
+				'k:Int)',
+				'k:Int, y:Null<Foo>, xs:Array<Null<Foo>>, xss:Array<Array<Null<Foo>>>, m:Map<String, Null<Foo>>, '
+				+ 'e:haxe.ds.Option<Null<Foo>>)'
+			);
 	}
 
 	/** `body` as the body of a strictly null-safe method over a nullable `x`, a Bool `b` and an Int `k`. */

@@ -777,3 +777,7 @@ decided the question; it may not become a record of runs.
 - matching `--macro nullSafety(path, …)` against the module to decide whether an oracle build enables null-safety →
   `addGlobalMetadata`, a `-lib`'s extraParams and any project macro reach the same metadata, so a build is plain
   only when every hxml line is a known inert flag
+- clearing only the names a loop WRITES before its body → a `for` binder, a key-value value binder and a `case var` /
+  `Some(var x)` capture are fresh bindings the flow never cleared, so an outer `x` proven non-null reached `x?.f` on the
+  binder and `dead-safe-nav` / `dead-null-coalescing` rewrote it into a null dereference; every scope now shadows the
+  names `BinderScan.binderKinds` says it binds and restores the outer fact on exit unless the construct writes it

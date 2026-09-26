@@ -7576,6 +7576,54 @@
 			"method": "ownsVisibility",
 			"force": "false",
 			"note": "no construct keeps what its children proved, so an assignment inside a call argument loses a fix the compiler accepts"
+		},
+		{
+			"name": "M-NULLFLOW-BINDER-BLIND",
+			"type": "anyparse.check.NullFlow",
+			"method": "walk",
+			"find": "final bound: Array<String> = ctx.selfScopeDeclKinds.contains(kind) ? boundNames(node, ctx) : [];",
+			"replace": "final bound: Array<String> = [];",
+			"note": "a loop binder no longer shadows the outer name, so the outer non-null proof reaches `x?.f` on the binder and the fix / dead-fallback deletion crashes at runtime on a null element"
+		},
+		{
+			"name": "M-NULLFLOW-CHILD-BINDER-BLIND",
+			"type": "anyparse.check.NullFlow",
+			"method": "boundNames",
+			"find": "for (c in node.children) if (ctx.binderKinds.contains(c.kind)) add(c.name);",
+			"replace": "",
+			"note": "a key-value loop's VALUE binder no longer shadows, so `for (k => x in m)` inherits the outer `x` proof"
+		},
+		{
+			"name": "M-NULLFLOW-CASE-BINDER-BLIND",
+			"type": "anyparse.check.NullFlow",
+			"method": "walkBranch",
+			"find": "final bound: Array<String> = boundNames(b, ctx);",
+			"replace": "final bound: Array<String> = [];",
+			"note": "a case capture no longer shadows, so `case x:` / `case var x:` inherit the outer proof"
+		},
+		{
+			"name": "M-NULLFLOW-CATCH-BINDER-BLIND",
+			"type": "anyparse.check.NullFlow",
+			"method": "handleTry",
+			"find": "final bound: Array<String> = ctx.selfScopeDeclKinds.contains(clause.kind) ? boundNames(clause, ctx) : [];",
+			"replace": "final bound: Array<String> = [];",
+			"note": "a catch variable no longer shadows, so `catch (x:Dynamic)` inherits the outer proof"
+		},
+		{
+			"name": "M-NULLFLOW-SHADOW-NO-RESTORE",
+			"type": "anyparse.check.NullFlow",
+			"method": "unshadow",
+			"find": "if (written.contains(n)) continue;",
+			"replace": "continue;",
+			"note": "the outer fact is never restored past a shadowing scope, so the fix after the loop is lost"
+		},
+		{
+			"name": "M-NULLFLOW-SHADOW-RESTORES-WRITTEN",
+			"type": "anyparse.check.NullFlow",
+			"method": "unshadow",
+			"find": "if (written.contains(n)) continue;",
+			"replace": "",
+			"note": "the outer fact is restored even when the construct writes the name, so a null written by the iterable is read as non-null"
 		}
 	]
 }
