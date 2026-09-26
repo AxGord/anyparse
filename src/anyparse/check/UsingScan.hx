@@ -8,6 +8,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.SymbolIndex.FileInfo;
+import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.TypeNameBinding;
 import anyparse.runtime.Span;
@@ -420,15 +421,21 @@ final class UsingScan {
 				continue;
 			}
 			final index: Null<SymbolIndex> = symbols();
-			final types: Null<Array<{ path: String, type: TypeDeclInfo }>> = index == null ? null : typesUsedBy(path, index, file);
+			final types: Null<Array<UsedType>> = index == null ? null : typesUsedBy(path, index, file);
 			if (types == null) {
 				unresolved = true;
 				continue;
 			}
 			for (t in types) if (t.path != module) {
-				if (t.type.members.exists(m -> m.name == method && m.isStatic && !m.excludedFromExtensions)) return UsingConflict.Conflict;
+				// a `typedef` of a class brings that class's statics, as `using tink.CoreApi` does
+				final host: Null<TypeDeclInfo> = index == null ? null : aliasedHost(t.type, t.file, index);
+				if (host == null) {
+					unresolved = true;
+					continue;
+				}
+				if (host.members.exists(m -> m.name == method && m.isStatic && !m.excludedFromExtensions)) return UsingConflict.Conflict;
 				// a build macro may add the static the declaration does not show
-				if (t.type.hasBuild || t.type.hasAutoBuild) unresolved = true;
+				if (host.hasBuild || host.hasAutoBuild) unresolved = true;
 			}
 		}
 		return unresolved ? UsingConflict.Unresolved : UsingConflict.Clear;
@@ -439,26 +446,42 @@ final class UsingScan {
 	 * the one sub-type a `pkg.Mod.Sub` path names; a simple path also as `file` resolves it, a main type then standing for
 	 * its whole module. Null when nothing resolves.
 	 */
-	private static function typesUsedBy(
-		path: String, index: SymbolIndex, ?file: String
-	): Null<Array<{ path: String, type: TypeDeclInfo }>> {
-		final out: Array<{ path: String, type: TypeDeclInfo }> = [];
+	private static function typesUsedBy(path: String, index: SymbolIndex, ?file: String): Null<Array<UsedType>> {
+		final out: Array<UsedType> = [];
 		function wholeModule(fi: FileInfo): Void {
-			for (t in fi.types) out.push({ path: t.isMain ? fi.module : '${fi.module}.${t.name}', type: t });
+			for (t in fi.types) out.push({ path: t.isMain ? fi.module : '${fi.module}.${t.name}', type: t, file: fi });
 		}
 		final dot: Int = path.lastIndexOf('.');
 		for (fi in index.allFiles()) {
 			if (fi.module == path) wholeModule(fi);
 			if (dot > 0 && fi.module == path.substring(0, dot))
 				for (t in fi.types)
-					if (t.name == path.substr(dot + 1) && !t.isMain) out.push({ path: path, type: t });
+					if (t.name == path.substr(dot + 1) && !t.isMain) out.push({ path: path, type: t, file: fi });
 		}
 		final info: Null<FileInfo> = file == null ? null : index.fileInfo(file);
 		if (dot < 0 && info != null) for (d in TypeNameBinding.bind(path, info, index) ?? []) if (d.type.isMain)
 			wholeModule(d.file)
 		else
-			out.push({ path: '${d.file.module}.${d.type.name}', type: d.type });
+			out.push({ path: '${d.file.module}.${d.type.name}', type: d.type, file: d.file });
 		return out.length == 0 ? null : out;
+	}
+
+	/**
+	 * The declaration whose statics `type` brings to a `using`: itself, or — for a `typedef` of another type — the type it
+	 * aliases, followed down the chain. Null when an alias does not resolve to one declaration.
+	 */
+	@:access(anyparse.query.SymbolIndex)
+	private static function aliasedHost(type: TypeDeclInfo, file: FileInfo, index: SymbolIndex): Null<TypeDeclInfo> {
+		var cur: ResolvedType = { file: file, type: type };
+		final seen: Array<TypeDeclInfo> = [];
+		while (cur.type.kind == SymbolIndex.TYPEDEF_DECL_KIND && !cur.type.isAnonStruct) {
+			final target: Null<String> = cur.type.aliasTargetRaw;
+			final next: Null<ResolvedType> = target == null ? null : index.refs.resolveTypeRef(target, cur.file);
+			if (next == null || seen.contains(next.type)) return null;
+			seen.push(cur.type);
+			cur = next;
+		}
+		return cur.type;
 	}
 
 	/**
@@ -558,6 +581,13 @@ enum abstract UsingScope(Int) {
 	final Absent = 2;
 
 }
+
+/** A type a `using` brings, with the path it is imported by and the file declaring it. */
+private typedef UsedType = {
+	final path: String;
+	final type: TypeDeclInfo;
+	final file: FileInfo;
+};
 
 /** What the other `using`s of a file say about one extension method (`UsingScan.usingConflict`). */
 enum abstract UsingConflict(Int) {

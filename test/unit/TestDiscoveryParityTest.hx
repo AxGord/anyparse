@@ -1546,6 +1546,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PreferStaticExtensionFactsTest#testAReceiverWhoseTypeTheCallMayHaveInferredIsNotRewritten :: control :: '
 				+ 'M-PSE-FACTS-INFERRED',
 			'unit.check.PreferStaticExtensionFactsTest#testATypeWithItsOwnUsingIsNotRewritten :: control :: M-PSE-FACTS-USING',
+			'unit.check.PreferStaticExtensionFactsTest#testAUsingOfAModuleFollowsItsTypedefs :: control :: M-PSE-USING-ALIAS-HOST',
 			'unit.check.PreferStaticExtensionFactsTest#testAUsingOfAModuleWeighsEveryTypeItDeclares :: control :: M-PSE-USING-MODULE-WIDE',
 			'unit.check.PreferStaticExtensionFactsTest#testAUsingOnASupertypeKeepsTheSiteReportOnly :: control :: M-PSE-CLOSURE-USING-SUPER',
 			'unit.check.PreferStaticExtensionFactsTest#testAUsingOnTheReceiverTypeKeepsTheSiteReportOnly :: control :: M-PSE-CLOSURE-USING',
@@ -3606,7 +3607,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-PSE-CLOSURE-USING',
 			'M-PSE-CLOSURE-USING-SUPER',
 			'M-PSE-USING-MODULE-WIDE',
-			'M-PSE-FACTS-USING-MODULE-WIDE'
+			'M-PSE-FACTS-USING-MODULE-WIDE',
+			'M-PSE-USING-ALIAS-HOST'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

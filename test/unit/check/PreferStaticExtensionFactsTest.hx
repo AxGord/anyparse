@@ -305,6 +305,18 @@ class PreferStaticExtensionFactsTest extends Test {
 		}
 	}
 
+	/** A `typedef` of a class in the used module brings that class's statics too (`using tink.CoreApi` works that way). */
+	@:pin('control') @:killer('M-PSE-USING-ALIAS-HOST')
+	public function testAUsingOfAModuleFollowsItsTypedefs(): Void {
+		final main: String = 'using Zeta;\n\n' + SUBTYPE_MAIN;
+		final extra: Map<String, String> = subtypeModules();
+		extra['Zeta.hx'] = 'class Zeta {\n\tpublic static function g():Int\n\t\treturn 0;\n}\n\ntypedef Extra = Hidden;\n';
+		extra['Hidden.hx'] = 'class Hidden {\n\tpublic static function f(x:Base):String\n\t\treturn "Hidden.f";\n}\n';
+		final seen: Null<Map<String, String>> = verdicts([[]], main, main, BUILD, UTIL_CONFIG, extra);
+		if (seen == null) return;
+		Assert.equals('drop', seen['structural'], '$seen');
+	}
+
 	/** The facts half of the same gate: `Extra.f` in the facts of `Zeta.hx`'s module drops the site on its own. */
 	@:pin('control') @:killer('M-PSE-FACTS-USING-MODULE-WIDE')
 	public function testTheFactsWeighEveryTypeAUsedModuleDeclares(): Void {

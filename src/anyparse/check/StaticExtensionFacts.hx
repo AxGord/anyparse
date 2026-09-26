@@ -32,6 +32,12 @@ final class StaticExtensionFacts {
 	/** The access the facts record for a call the compiler spliced in (`inline`). */
 	private static inline final INLINED_ACCESS: String = 'inlined';
 
+	/** A typedef's kind in the facts. */
+	private static inline final TYPEDEF_KIND: String = 'typedef';
+
+	/** A bound on a typedef chain, which a structure-typed alias never ends. */
+	private static inline final MAX_ALIAS_HOPS: Int = 16;
+
 	/** The annotation that keeps a static out of `using` (`TypedFactsProbe` writes metadata without its `@`). */
 	private static inline final NO_USING_META: String = ':noUsing';
 
@@ -152,12 +158,27 @@ final class StaticExtensionFacts {
 			if (main && home != null)
 				for (other in facts.typeIds())
 					if (other != id && facts.typePosition(other)?.file == home) ids.push(other);
-			for (t in ids) if (t != owner && facts.type(t)?.fields.exists(f ->
-				f.name == method && f.isStatic && !f.meta.contains(NO_USING_META)
-			) == true)
-				return Supplied;
+			for (t in ids) if (t != owner) {
+				final host: Null<TypeFact> = aliasedFact(facts, t);
+				if (host == null) return Unread;
+				if (host.id != owner && host.fields.exists(f -> f.name == method && f.isStatic && !f.meta.contains(NO_USING_META)))
+					return Supplied;
+			}
 		}
 		return None;
+	}
+
+	/** The typed type `id` stands for: itself, or what a `typedef` aliases in every configuration. Null when that is not one type. */
+	private static function aliasedFact(facts: CompilerFacts, id: String): Null<TypeFact> {
+		var cur: Null<TypeFact> = facts.type(id);
+		var hops: Int = 0;
+		while (cur != null && cur.kind == TYPEDEF_KIND) {
+			// a structure or a function type has no statics: the alias brings nothing
+			if (cur.targets.length > 0 && cur.targets.foreach(t -> t.startsWith('{') || t.startsWith('('))) return cur;
+			if (cur.targets.length != 1 || ++hops > MAX_ALIAS_HOPS) return null;
+			cur = facts.type(CompilerFacts.baseId(cur.targets[0]));
+		}
+		return cur;
 	}
 
 	/**
