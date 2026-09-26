@@ -14,13 +14,14 @@ final class FactMerge {
 
 	/**
 	 * `into` joined by `from`, another configuration's record of the same type: a configuration that typed more of it (a
-	 * conditional member, a conditional `implements`) adds what the others lacked, and one recording another kind or extern
-	 * flag makes it not `alike`.
+	 * conditional member, a conditional `implements`, another typedef target) adds what the others lacked, and one
+	 * recording another kind or extern flag makes it not `alike`.
 	 */
 	public static function type(into: TypeFact, from: TypeFact): Void {
 		fields(into.fields, from.fields);
 		for (m in from.meta) if (!into.meta.contains(m)) into.meta.push(m);
-		for (i in from.interfaces) if (!into.interfaces.contains(i)) into.interfaces.push(i);
+		absent(into.interfaces, from.interfaces);
+		absent(into.targets, from.targets);
 		if (into.kind != from.kind || into.isExtern != from.isExtern) into.alike = false;
 	}
 
@@ -30,8 +31,10 @@ final class FactMerge {
 			final known: Null<FieldDeclFact> = into.find(k -> k.name == f.name && k.isStatic == f.isStatic);
 			if (known == null)
 				into.push(f)
-			else if (!known.types.contains(f.type))
-				known.types.push(f.type);
+			else {
+				if (!known.types.contains(f.type)) known.types.push(f.type);
+				for (n in f.overloads) if (!known.overloads.contains(n)) known.overloads.push(n);
+			}
 		}
 	}
 
@@ -65,6 +68,11 @@ final class FactMerge {
 			final where: Null<FactPos> = position(record);
 			if (where != null && fresh(record, where)) into.push(make(record, where));
 		}
+	}
+
+	/** Add to `into` each of `from` it does not hold yet. */
+	public static function absent<T>(into: Array<T>, from: Array<T>): Void {
+		for (x in from) if (!into.contains(x)) into.push(x);
 	}
 
 }

@@ -3313,6 +3313,12 @@ typedef ExecutionShape = {
 	@:optional var extensionTypeMetaNames: Array<String>;
 
 	/**
+	 * Member annotations that keep a static function out of the extension channel (Haxe `@:noUsing`): calling it on a
+	 * receiver does not compile, whatever `using` is in scope. Optional; unset means none does.
+	 */
+	@:optional var extensionExcludingMetaNames: Array<String>;
+
+	/**
 	 * The implicit-call annotation (`implicitCallMetaNames`) under which the language runs a member for an INDEX
 	 * access on its type (Haxe `@:arrayAccess`). Optional; unset means such a member runs from any site.
 	 */

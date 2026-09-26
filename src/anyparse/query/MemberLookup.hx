@@ -359,6 +359,17 @@ final class MemberLookup {
 	}
 
 	/**
+	 * Whether no type a value of `typeName` is — the type, what it aliases, every supertype and interface — brings static
+	 * extensions of its own (`TypeDeclInfo.bringsExtensions`, Haxe `@:using`), which the compiler binds a call no member
+	 * declares to before any `using` of the file. False — not proven — when any link of that closure does not resolve to
+	 * one declaration, a `@:forward` abstract exposes an underlying type, or a supertype is `Dynamic`.
+	 */
+	public function closureFreeOfExtensionTypes(typeName: String, ?fromFile: String): Bool {
+		final start: Null<ResolvedType> = _refs.resolveStartType(typeName, fromFile);
+		return start != null && freeOfExtensionTypes(start, []);
+	}
+
+	/**
 	 * EVERY declaration of `member` on `typeName`. A type declares one member more than once only
 	 * when the declarations sit in different branches of a `#if` region, so they are ONE logical
 	 * member: rewriting a single branch leaves every other build target with accesses that no
@@ -431,6 +442,23 @@ final class MemberLookup {
 		for (raw in t.supertypesRaw) if (!dynamicSupertypeRef(raw)) {
 			final anc: Null<ResolvedType> = _refs.resolveTypeRef(raw, cur.file);
 			if (anc == null || !lacksMemberClosure(anc, member, seen)) return false;
+		}
+		return true;
+	}
+
+	/** `closureFreeOfExtensionTypes` from the resolved `cur`: the same walk as `lacksMemberClosure`, asking a type's annotation. */
+	private function freeOfExtensionTypes(cur: ResolvedType, seen: Array<String>): Bool {
+		if (!_refs.markSeen(cur, seen)) return true;
+		final t: TypeDeclInfo = cur.type;
+		if (t.bringsExtensions || t.abstractForwardUnderlying != null) return false;
+		if (t.kind == SymbolIndex.TYPEDEF_DECL_KIND && !t.isAnonStruct) {
+			final target: Null<String> = t.aliasTargetRaw;
+			final next: Null<ResolvedType> = target == null ? null : _refs.resolveTypeRef(target, cur.file);
+			return next != null && !seen.contains(_refs.seenKey(next)) && freeOfExtensionTypes(next, seen);
+		}
+		for (raw in t.supertypesRaw) {
+			final anc: Null<ResolvedType> = dynamicSupertypeRef(raw) ? null : _refs.resolveTypeRef(raw, cur.file);
+			if (anc == null || !freeOfExtensionTypes(anc, seen)) return false;
 		}
 		return true;
 	}

@@ -408,6 +408,9 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 */
 	private static final FIELD_BOUNDARY_KINDS: Array<String> = ['VarMember', 'FinalMember', 'FinalModifiedMember'];
 
+	/** The annotation that keeps a static out of `using`: calling it as an extension does not compile. */
+	private static inline final NO_USING_META: String = '@:noUsing';
+
 	public function new() {}
 
 	public function langName(): String return 'haxe';
@@ -765,6 +768,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				implicitCallNames: ['toString', 'iterator', 'hasNext', 'next', 'keyValueIterator'],
 				implicitConstructionTypeMetaNames: ['@:structInit'],
 				extensionTypeMetaNames: ['@:using'],
+				extensionExcludingMetaNames: [NO_USING_META],
 				enumConstructorKinds: ['SimpleCtor', 'ParamCtor'],
 				pureLibraryTypes: ['Math', 'String', 'StringTools'],
 				pureLibraryCalls: [

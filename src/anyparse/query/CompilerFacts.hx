@@ -183,6 +183,9 @@ typedef FieldDeclFact = {
 
 	/** Every type a configuration gave the field, `type` first: more than one when the builds disagree. */
 	final types: Array<String>;
+
+	/** Every count of further overloads a configuration gave the field (`overload`): `type` is the first signature only. */
+	final overloads: Array<Int>;
 }
 
 /**
@@ -212,6 +215,9 @@ typedef TypeFact = {
 	 * `isExtern` are the first configuration's, so a question about either needs this too.
 	 */
 	var alike: Bool;
+
+	/** For a `typedef`, every type a configuration aliased it to; empty for any other kind. */
+	final targets: Array<String>;
 }
 
 /**
@@ -489,12 +495,14 @@ final class CompilerFacts {
 						type: f.t,
 						isStatic: f.s ?? false,
 						meta: f.meta ?? [],
-						types: [f.t]
+						types: [f.t],
+						overloads: [f.over ?? 0]
 					}
 			],
 			genericOf: record.of,
 			builds: record.builds ?? [],
-			alike: true
+			alike: true,
+			targets: record.target == null ? [] : [record.target]
 		};
 		final known: Null<TypeFact> = _types[record.id];
 		if (known == null) {
@@ -785,6 +793,7 @@ private typedef FieldRecord = {
 	final t: String;
 	final ?s: Bool;
 	final ?meta: Array<String>;
+	final ?over: Int;
 }
 
 private typedef TypeRecord = {
@@ -801,6 +810,7 @@ private typedef TypeRecord = {
 	final ?builds: Array<String>;
 	final ?ifaces: Array<String>;
 	final ?fields: Array<FieldRecord>;
+	final ?target: String;
 }
 
 private typedef CallRecord = {

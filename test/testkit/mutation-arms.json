@@ -8267,6 +8267,173 @@
 			"find": "for (m in from.meta) if (!into.meta.contains(m)) into.meta.push(m);",
 			"replace": "",
 			"note": "a type's metadata is the first configuration's only, so an `@:autoBuild` another configuration sees is lost"
+		},
+		{
+			"name": "M-PSE-FACTS-INFERRED",
+			"type": "anyparse.check.PreferStaticExtension",
+			"method": "factsVerdict",
+			"find": "if (binding == null || chain.declaredTypeSources[binding] == null) return Verdict.UnresolvedReceiver;",
+			"replace": "",
+			"note": "an unannotated local, whose type the rewritten call itself may have bound, is typed by the facts"
+		},
+		{
+			"name": "M-PSE-FACTS-OFF",
+			"type": "anyparse.check.PreferStaticExtension",
+			"method": "factsVerdict",
+			"force": "Verdict.UnresolvedReceiver",
+			"note": "a receiver only the compiler's facts type stays report-only"
+		},
+		{
+			"name": "M-PSE-FACTS-SHADOW",
+			"type": "anyparse.check.StaticExtensionFacts",
+			"method": "judge",
+			"find": "for (id in chain) if (facts.type(id)?.fields.exists(f -> f.name == method) == true) return Shadowed;",
+			"replace": "",
+			"note": "a same-name member of a supertype or an interface no longer drops the site"
+		},
+		{
+			"name": "M-PSE-FACTS-HOSTS",
+			"type": "anyparse.check.StaticExtensionFacts",
+			"method": "judge",
+			"find": "if (t == null || !MEMBER_HOSTS.contains(t.kind) || t.meta.contains(USING_META)) return Unproven;",
+			"replace": "if (t == null || t.meta.contains(USING_META)) return Unproven;",
+			"note": "a forwarding abstract counts as a member host whose own fields are its members"
+		},
+		{
+			"name": "M-PSE-FACTS-USING",
+			"type": "anyparse.check.StaticExtensionFacts",
+			"method": "judge",
+			"find": "if (t == null || !MEMBER_HOSTS.contains(t.kind) || t.meta.contains(USING_META)) return Unproven;",
+			"replace": "if (t == null || !MEMBER_HOSTS.contains(t.kind)) return Unproven;",
+			"note": "a receiver type's own @:using, which wins over the file's, is ignored"
+		},
+		{
+			"name": "M-PSE-FACTS-PARAM",
+			"type": "anyparse.check.StaticExtensionFacts",
+			"method": "accepts",
+			"find": "case _: false;",
+			"replace": "case _: true;",
+			"note": "an abstract first parameter, reached through @:from, is taken as accepting the receiver"
+		},
+		{
+			"name": "M-PSE-FACTS-OVERLOAD",
+			"type": "anyparse.check.StaticExtensionFacts",
+			"method": "firstParam",
+			"find": " || field.overloads.exists(n -> n > 0)",
+			"replace": "",
+			"note": "an overloaded static is judged by its first signature, the only one the facts field records"
+		},
+		{
+			"name": "M-PSE-FACTS-DYNAMIC",
+			"type": "anyparse.check.StaticExtensionFacts",
+			"method": "judge",
+			"find": "if (receiver == DYNAMIC) return DynamicReceiver;",
+			"replace": "if (receiver == DYNAMIC) return Unproven;",
+			"note": "a Dynamic receiver is reported instead of dropped"
+		},
+		{
+			"name": "M-PSE-FACTS-NULL",
+			"type": "anyparse.check.StaticExtensionFacts",
+			"method": "judge",
+			"find": "final receiver: String = unwrapNull(typed);",
+			"replace": "final receiver: String = typed;",
+			"note": "a nullable receiver is read as the Null abstract, which hosts no member"
+		},
+		{
+			"name": "M-PSE-FACTS-TEXT",
+			"type": "anyparse.check.StaticExtensionFacts",
+			"method": "judge",
+			"find": " || facts.sourceOf(facts.keyOf(file)) != source)",
+			"replace": ")",
+			"note": "facts of the text the compile read answer for a file edited since"
+		},
+		{
+			"name": "M-PSE-FIRST-PARAM",
+			"type": "anyparse.check.StaticExtensionFacts",
+			"method": "firstParamOf",
+			"find": "c == '>'.code && signature.fastCodeAt(i - 1) != '-'.code",
+			"replace": "c == '>'.code",
+			"note": "the arrow of a function-typed parameter closes a bracket"
+		},
+		{
+			"name": "M-PSE-CHANNEL-ALIAS",
+			"type": "anyparse.check.PreferStaticExtension",
+			"method": "channelsOf",
+			"find": "elsewhere: paths.length > 0 && !paths.contains(module) || excluded,",
+			"replace": "elsewhere: excluded,",
+			"note": "a module name an import alias rebinds to another type keeps the site as a candidate"
+		},
+		{
+			"name": "M-PSE-CHANNEL-REGION-USING",
+			"type": "anyparse.check.PreferStaticExtension",
+			"method": "collectUsings",
+			"find": "for (child in node.children) collectUsings(child, out);",
+			"replace": "for (child in node.children) if (child.kind != 'Conditional') collectUsings(child, out);",
+			"note": "a using inside a conditional region is invisible to the conflict gate"
+		},
+		{
+			"name": "M-PSE-CHANNEL-NO-USING",
+			"type": "anyparse.query.SymbolIndexBuilder",
+			"method": "collectMembers",
+			"find": "runNoExtension = true;",
+			"replace": "runNoExtension = false;",
+			"note": "a @:noUsing static reads as an extension"
+		},
+		{
+			"name": "M-PSE-CLOSURE-USING",
+			"type": "anyparse.check.PreferStaticExtension",
+			"method": "verdictFor",
+			"find": "\n\t\t\t&& index.members.closureFreeOfExtensionTypes(receiverType, file)",
+			"replace": "",
+			"note": "the structural path ignores @:using on the receiver's type closure"
+		},
+		{
+			"name": "M-PSE-CLOSURE-USING-SUPER",
+			"type": "anyparse.query.MemberLookup",
+			"method": "freeOfExtensionTypes",
+			"find": "if (anc == null || !freeOfExtensionTypes(anc, seen)) return false;",
+			"replace": "if (anc == null) return false;",
+			"note": "a @:using on a superclass or an interface is not walked"
+		},
+		{
+			"name": "M-PSE-USING-MODULE-WIDE",
+			"type": "anyparse.check.UsingScan",
+			"method": "typesUsedBy",
+			"find": "for (t in fi.types) out.push(",
+			"replace": "for (t in fi.types) if (t.isMain) out.push(",
+			"note": "a using of a module weighs only the type named after it, not its sub-types"
+		},
+		{
+			"name": "M-PSE-FACTS-USING-MODULE-WIDE",
+			"type": "anyparse.check.StaticExtensionFacts",
+			"method": "usingsSupply",
+			"find": "if (main && home != null)",
+			"replace": "if (false)",
+			"note": "the facts weigh only the type a using names, not the rest of its module"
+		},
+		{
+			"name": "M-PSE-USING-ALIAS-HOST",
+			"type": "anyparse.check.UsingScan",
+			"method": "supplied",
+			"find": "aliasedHost(t.type, t.file, index)",
+			"replace": "t.type",
+			"note": "a typedef in a used module is read as a type with no statics instead of the class it aliases"
+		},
+		{
+			"name": "M-PSE-USING-SELF-MODULE",
+			"type": "anyparse.check.UsingScan",
+			"method": "usingConflict",
+			"find": "worse(verdict, supplied(module, module, method, symbols, file))",
+			"replace": "verdict",
+			"note": "the configured module's own using is not weighed, so its other types go unchecked"
+		},
+		{
+			"name": "M-PSE-FACTS-USING-SELF-MODULE",
+			"type": "anyparse.check.StaticExtensionFacts",
+			"method": "judge",
+			"find": "usings.contains(module) ? usings : usings.concat([module])",
+			"replace": "usings",
+			"note": "the facts do not weigh the other types of the configured module"
 		}
 	]
 }

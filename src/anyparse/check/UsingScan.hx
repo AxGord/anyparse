@@ -7,6 +7,10 @@ import anyparse.query.ModuleScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
+import anyparse.query.SymbolIndex.FileInfo;
+import anyparse.query.SymbolIndex.ResolvedType;
+import anyparse.query.SymbolIndex.TypeDeclInfo;
+import anyparse.query.TypeNameBinding;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -392,23 +396,109 @@ final class UsingScan {
 	private static function conflictScan(
 		usings: Array<String>, module: String, method: String, plugin: GrammarPlugin, symbols: () -> Null<SymbolIndex>
 	): Bool {
+		return usingConflict(usings, module, method, plugin, symbols) != UsingConflict.Clear;
+	}
+
+	/**
+	 * What the `using`s other than `module` say about `method`: `Clear` when each is proven to supply no such extension,
+	 * `Conflict` when one may, `Unresolved` when one names a module this cannot read.
+	 *
+	 * A `using` of a MODULE brings the statics of every type the module declares, not only of the one named after it — the
+	 * last-declared type's winning among them (probed on 4.3.7) — so every type is weighed; a `using` of a sub-type path
+	 * (`pkg.Mod.Sub`) brings `Sub` alone. `module` itself is skipped, but not the rest of its
+	 * module: its own `using` — present, or inserted by the rewrite — brings those too. A known
+	 * extension table (a std module) answers for its whole module. `file` lets a simple path resolve the way the file
+	 * spells it (`TypeNameBinding`); without it only an exact module path does.
+	 */
+	public static function usingConflict(
+		usings: Array<String>, module: String, method: String, plugin: GrammarPlugin, symbols: () -> Null<SymbolIndex>, ?file: String
+	): UsingConflict {
 		final simple: String = CheckScan.simpleModuleName(module);
+		var verdict: UsingConflict = UsingConflict.Clear;
 		for (path in usings) if (path != module && CheckScan.simpleModuleName(path) != simple) {
 			final known: Null<Array<String>> = plugin.knownExtensionMethods(path);
 			if (known != null) {
-				if (known.contains(method)) return true;
+				if (known.contains(method)) return UsingConflict.Conflict;
 				continue;
 			}
-			final index: Null<SymbolIndex> = symbols();
-			// The FULL module path, not its last segment: `typeProvablyLacksMember` resolves a
-			// dotted name by import path, so a module whose simple name another package reuses
-			// no longer reads as ambiguous-and-therefore-conflicting.
-			// The FULL module path, not its last segment: `typeProvablyLacksMember` resolves a
-			// dotted name by import path, so a module whose simple name another package reuses
-			// no longer reads as ambiguous-and-therefore-conflicting.
-			if (index == null || !index.members.typeProvablyLacksMember(path, method)) return true;
+			verdict = worse(verdict, supplied(path, module, method, symbols, file));
+			if (verdict == UsingConflict.Conflict) return verdict;
 		}
-		return false;
+		// `module`'s own `using` — the one the file has or the one the rewrite inserts — brings every OTHER type of its
+		// module too; a std module's extension table stands for its whole module, which is `module`'s own
+		return plugin.knownExtensionMethods(module) != null ? verdict : worse(verdict, supplied(module, module, method, symbols, file));
+	}
+
+	/** What `using <path>` supplies of `method` besides `module` itself, through the index. */
+	private static function supplied(
+		path: String, module: String, method: String, symbols: () -> Null<SymbolIndex>, ?file: String
+	): UsingConflict {
+		final index: Null<SymbolIndex> = symbols();
+		final types: Null<Array<UsedType>> = index == null ? null : typesUsedBy(path, index, file);
+		if (index == null || types == null) return UsingConflict.Unresolved;
+		var verdict: UsingConflict = UsingConflict.Clear;
+		for (t in types) if (t.path != module) {
+			// a `typedef` of a class brings that class's statics, as `using tink.CoreApi` does
+			final host: Null<TypeDeclInfo> = aliasedHost(t.type, t.file, index);
+			if (host == null) {
+				verdict = UsingConflict.Unresolved;
+				continue;
+			}
+			if (host.members.exists(m -> m.name == method && m.isStatic && !m.excludedFromExtensions)) return UsingConflict.Conflict;
+			// a build macro may add the static the declaration does not show
+			if (host.hasBuild || host.hasAutoBuild) verdict = UsingConflict.Unresolved;
+		}
+		return verdict;
+	}
+
+	/** The graver of two verdicts. */
+	private static inline function worse(a: UsingConflict, b: UsingConflict): UsingConflict {
+		return a == UsingConflict.Conflict || b == UsingConflict.Conflict
+			? UsingConflict.Conflict
+			: a == UsingConflict.Unresolved || b == UsingConflict.Unresolved ? UsingConflict.Unresolved : UsingConflict.Clear;
+	}
+
+	/**
+	 * The types `using <path>` brings, each with the path it is imported by: every type of the module `path` names, or
+	 * the one sub-type a `pkg.Mod.Sub` path names; a simple path also as `file` resolves it, a main type then standing for
+	 * its whole module. Null when nothing resolves.
+	 */
+	private static function typesUsedBy(path: String, index: SymbolIndex, ?file: String): Null<Array<UsedType>> {
+		final out: Array<UsedType> = [];
+		function wholeModule(fi: FileInfo): Void {
+			for (t in fi.types) out.push({ path: t.isMain ? fi.module : '${fi.module}.${t.name}', type: t, file: fi });
+		}
+		final dot: Int = path.lastIndexOf('.');
+		for (fi in index.allFiles()) {
+			if (fi.module == path) wholeModule(fi);
+			if (dot > 0 && fi.module == path.substring(0, dot))
+				for (t in fi.types)
+					if (t.name == path.substr(dot + 1) && !t.isMain) out.push({ path: path, type: t, file: fi });
+		}
+		final info: Null<FileInfo> = file == null ? null : index.fileInfo(file);
+		if (dot < 0 && info != null) for (d in TypeNameBinding.bind(path, info, index) ?? []) if (d.type.isMain)
+			wholeModule(d.file)
+		else
+			out.push({ path: '${d.file.module}.${d.type.name}', type: d.type, file: d.file });
+		return out.length == 0 ? null : out;
+	}
+
+	/**
+	 * The declaration whose statics `type` brings to a `using`: itself, or — for a `typedef` of another type — the type it
+	 * aliases, followed down the chain. Null when an alias does not resolve to one declaration.
+	 */
+	@:access(anyparse.query.SymbolIndex)
+	private static function aliasedHost(type: TypeDeclInfo, file: FileInfo, index: SymbolIndex): Null<TypeDeclInfo> {
+		var cur: ResolvedType = { file: file, type: type };
+		final seen: Array<TypeDeclInfo> = [];
+		while (cur.type.kind == SymbolIndex.TYPEDEF_DECL_KIND && !cur.type.isAnonStruct) {
+			final target: Null<String> = cur.type.aliasTargetRaw;
+			final next: Null<ResolvedType> = target == null ? null : index.refs.resolveTypeRef(target, cur.file);
+			if (next == null || seen.contains(next.type)) return null;
+			seen.push(cur.type);
+			cur = next;
+		}
+		return cur.type;
 	}
 
 	/**
@@ -506,5 +596,26 @@ enum abstract UsingScope(Int) {
 
 	/** Not declared at all, so an insert is the whole job. */
 	final Absent = 2;
+
+}
+
+/** A type a `using` brings, with the path it is imported by and the file declaring it. */
+private typedef UsedType = {
+	final path: String;
+	final type: TypeDeclInfo;
+	final file: FileInfo;
+};
+
+/** What the other `using`s of a file say about one extension method (`UsingScan.usingConflict`). */
+enum abstract UsingConflict(Int) {
+
+	/** Every other `using` is proven to supply no such extension. */
+	final Clear = 0;
+
+	/** Another `using` may supply it: the rewritten call could bind there. */
+	final Conflict = 1;
+
+	/** Another `using` names a module this cannot read. */
+	final Unresolved = 2;
 
 }
