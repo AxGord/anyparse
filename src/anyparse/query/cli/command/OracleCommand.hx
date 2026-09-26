@@ -1,11 +1,13 @@
 package anyparse.query.cli.command;
 
 import anyparse.check.CompilerOracle;
+import anyparse.check.ConfigDisagreement;
 import anyparse.check.LintConfig;
 import anyparse.check.OracleCache;
 import anyparse.check.OracleGeneration;
 import anyparse.query.cli.CliContext;
 import anyparse.query.ExitCode.*;
+import haxe.io.Path;
 
 using StringTools;
 
@@ -79,8 +81,19 @@ final class OracleCommand implements CliCommand {
 			CliIo.stderr('apq oracle: ${CliArgs.quotedSpecs(specs)} matched no .hx files\n');
 			return EXIT_RUNTIME;
 		}
-		final config: LintConfig = LintConfig.discover(paths[0]);
-		final oracles: Array<OracleConfig> = config.compilerOracles();
+		// `lint` over the same scope asks the FIRST path's builds, so those are the verdicts worth recording; a scope
+		// whose roots name other builds is told so, in `lint`'s own words, rather than silently judged by the first.
+		final configByDir: Map<String, LintConfig> = [];
+		function resolveConfig(file: String): LintConfig {
+			final dir: String = Path.directory(file);
+			final cached: Null<LintConfig> = configByDir[dir];
+			if (cached != null) return cached;
+			final discovered: LintConfig = LintConfig.discover(file);
+			configByDir[dir] = discovered;
+			return discovered;
+		}
+		ConfigDisagreement.warnOracle(resolveConfig, paths);
+		final oracles: Array<OracleConfig> = resolveConfig(paths[0]).compilerOracles();
 		if (oracles.length > 0) return recordOracleVerdicts(oracles);
 		CliIo.stderr('apq oracle: no compilerOracle configured for ${specs.join(', ')} — nothing to typecheck\n');
 		return EXIT_OK;

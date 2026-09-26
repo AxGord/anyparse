@@ -1,7 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
-import anyparse.check.Check.FileGated;
+import anyparse.check.Check.GraphScoped;
 import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.query.CallGraph;
@@ -64,7 +64,7 @@ private typedef ChainLists = {
  * entry is `<lock pattern>/<unlock member name>` on the same type.
  */
 @:nullSafety(Strict)
-final class ThreadSafety implements Check implements ConfigAware implements NoAutofix implements FileGated {
+final class ThreadSafety implements Check implements ConfigAware implements NoAutofix implements GraphScoped {
 
 	private static inline final CTX_MAIN: Int = 1;
 	private static inline final CTX_BG: Int = 2;
@@ -88,15 +88,17 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	}
 
 	/**
-	 * ONE graph over every file of the run, whatever config chains they span, and each SITE judged by the chain of
-	 * its own file: a call is a sink call when its call site's chain lists that sink, a callback is spawned or
-	 * marshalled when the registering site's chain lists that target, a lock window opens under its file's `lockPairs`.
-	 * Reachability stays whole-graph, so a single-chain run is unchanged and a main-thread caller in one chain still
-	 * reaches a sink call in another.
+	 * ONE graph over every file of the run but an `exclude`d one, whatever config chains they span — a file whose chain
+	 * names no `sinks` included, since its calls and registrations shape the other files' contexts — and each SITE
+	 * judged by the chain of its own file: a call is a sink call when its call site's chain lists that sink, a callback
+	 * is spawned or marshalled when the registering site's chain lists that target, a lock window opens under its file's
+	 * `lockPairs`. Reachability stays whole-graph, so a single-chain run is unchanged and a main-thread caller in one
+	 * chain still reaches a sink call in another.
 	 */
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		if (files.length == 0) return [];
-		// `Linter.collect` has already dropped every file `skipReason` refuses: no `sinks`, or an `exclude` path.
+		// `Linter.collect` hands over every file but an `exclude`d one (`scanSkipReason`), and drops the findings in a
+		// file with no `sinks` of its own afterwards (`skipReason`).
 		final graph: CallGraph = CallGraph.build(files, plugin);
 		final sets: Array<ChainLists> = [];
 		final byFile: Map<String, ChainLists> = listsByFile(files, graph, sets);
@@ -131,12 +133,16 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 
 	/** `needs-config` without a `sinks` list — there is nothing to find — and `config-excluded` for a path under `exclude`. */
 	public function skipReason(file: String, config: LintConfig): Null<String> {
-		return if ((config.stringListOption('thread-safety', 'sinks') ?? []).length == 0)
-			'needs-config'
-		else if (pathExcluded(file, config.stringListOption('thread-safety', 'exclude') ?? []))
-			'config-excluded'
-		else
-			null;
+		return (config.stringListOption('thread-safety', 'sinks') ?? []).length == 0 ? 'needs-config' : scanSkipReason(file, config);
+	}
+
+	/**
+	 * `config-excluded` for a path under `exclude`, the one file the graph leaves out: `exclude` says the code is no
+	 * part of the analysis. A file with no `sinks` stays in the graph — its calls and `spawns` registrations decide the
+	 * contexts of the files that do report.
+	 */
+	public function scanSkipReason(file: String, config: LintConfig): Null<String> {
+		return pathExcluded(file, config.stringListOption('thread-safety', 'exclude') ?? []) ? 'config-excluded' : null;
 	}
 
 	/**
@@ -150,16 +156,17 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		final byFile: Map<String, ChainLists> = [];
 		for (entry in files) {
 			final config: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
-			final patterns: Array<Array<String>> = [
-				for (key in ['sinks', 'spawns', 'marshals', 'lockPairs']) config.stringListOption('thread-safety', key) ?? []
-			];
-			final signature: String = [for (list in patterns) list.join('\n')].join('\t');
+			final sinks: Array<String> = config.stringListOption('thread-safety', 'sinks') ?? [];
+			final spawns: Array<String> = config.stringListOption('thread-safety', 'spawns') ?? [];
+			final marshals: Array<String> = config.stringListOption('thread-safety', 'marshals') ?? [];
+			final lockPairs: Array<String> = config.stringListOption('thread-safety', 'lockPairs') ?? [];
+			final signature: String = [for (list in [sinks, spawns, marshals, lockPairs]) list.join('\n')].join('\t');
 			final known: Null<ChainLists> = bySignature[signature];
 			final lists: ChainLists = known ?? {
-				sinkIds: matchAll(graph, patterns[0]),
-				spawnIds: matchAll(graph, patterns[1]),
-				marshalIds: matchAll(graph, patterns[2]),
-				lockPairs: patterns[3]
+				sinkIds: matchAll(graph, sinks),
+				spawnIds: matchAll(graph, spawns),
+				marshalIds: matchAll(graph, marshals),
+				lockPairs: lockPairs
 			};
 			if (known == null) {
 				bySignature[signature] = lists;
@@ -241,7 +248,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 
 	/**
 	 * Reverse BFS from the sinks over the invocation edges (`EdgeKind.isInvocation`) — `taintHop[n]` is n's next edge toward a sink.
-	 * `sinkIds` is the union over every chain; a call INTO a sink taints its caller only when the call site's own chain names it.
+	 * `sinkIds` is the union over every chain: a call taints its caller when the call site's own chain names the callee a
+	 * sink, or when the callee is itself tainted.
 	 */
 	private static function collectTaint(
 		graph: CallGraph, sinkIds: Array<String>, listsOf: (String) -> ChainLists, taintHop: Map<String, CallEdge>
@@ -250,10 +258,11 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		var qi: Int = 0;
 		while (qi < queue.length) {
 			final id: String = queue[qi++];
-			for (edge in graph.inEdges(id)) {
-				if (!edge.kind.isInvocation()) continue;
-				if (sinkIds.contains(edge.from) || taintHop.exists(edge.from)) continue;
-				if (sinkIds.contains(id) && !listsOf(edge.file).sinkIds.contains(id)) continue;
+			for (edge in graph.inEdges(id)) if (edge.kind.isInvocation()) {
+				// the edge leaves `from`'s body, so its file's chain is the one that says whether `from` is a sink
+				final lists: ChainLists = listsOf(edge.file);
+				if (lists.sinkIds.contains(edge.from) || taintHop.exists(edge.from)) continue;
+				if (!(lists.sinkIds.contains(id) || taintHop.exists(id))) continue;
 				taintHop[edge.from] = edge;
 				queue.push(edge.from);
 			}

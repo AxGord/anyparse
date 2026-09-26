@@ -238,14 +238,30 @@ interface VersionGated {
  * scope, or a rule whose options switch every one of its findings off.
  *
  * `skipReason` is the one answer to "does this rule run for this file under this config".
- * `Linter.collect` hands the rule only the files it answers null for, and `EffectiveRules`
- * reports the same answer, so a rule listing and a lint run cannot disagree about what was
- * verified. The rule's `run` does not re-filter.
+ * `Linter.collect` hands the rule only the files it answers null for (a `GraphScoped` rule reads
+ * more and reports only there), and `EffectiveRules` reports the same answer, so a rule listing
+ * and a lint run cannot disagree about what was verified. The rule's `run` does not re-filter.
  */
 interface FileGated {
 
 	/** Null when the rule scans `file` under `config`; otherwise why not — `needs-config`, `config-excluded` or `config-noop`. */
 	function skipReason(file: String, config: LintConfig): Null<String>;
+
+}
+
+/**
+ * A `FileGated` rule whose analysis is a graph over the whole run: it SCANS for the graph and REPORTS per gate.
+ *
+ * `skipReason` keeps its meaning for the report — `EffectiveRules` lists the rule off in a file it refuses, and
+ * `Linter.collect` drops every finding sitting in one. What the rule READS is `scanSkipReason`'s narrower answer: a
+ * file the report gate refuses still carries edges and registrations other files' findings depend on, and cutting
+ * it out of the graph changes what the rest of the run reports. A run whose files the report gate refuses in full
+ * reads nothing.
+ */
+interface GraphScoped extends FileGated {
+
+	/** Null when `file` belongs in the graph under `config`; otherwise why not. */
+	function scanSkipReason(file: String, config: LintConfig): Null<String>;
 
 }
 

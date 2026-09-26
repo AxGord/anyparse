@@ -308,7 +308,7 @@ final class FixVerifier {
 	public static function verify(
 		files: Array<{ file: String, source: String }>, riskyChecks: Array<Check>, plugin: GrammarPlugin, oracles: Array<OracleConfig>,
 		write: (String, String) -> Void, ?optsByFile: Map<String, Null<String>>, ?coverage: Array<ConfigCoverage>,
-		?resolveConfig: (String) -> LintConfig
+		?resolveConfig: (String) -> LintConfig, applyEnablement: Bool = true
 	): FixVerifyResult {
 		final applied: Array<String> = [];
 		final reverted: Array<FixVerifyRevert> = [];
@@ -375,7 +375,8 @@ final class FixVerifier {
 			// reification and inline-suppression gates here. The oracle below cannot stand in for
 			// either — a risky rewrite inside a `macro …` quotation still typechecks, and so does one
 			// on a line whose `// noqa` says the rule is wrong there.
-			final all: Array<Violation> = Linter.collect(files, plugin, [check], resolveConfig).filter(v -> v.rule == check.id());
+			final all: Array<Violation> = Linter.collect(files, plugin, [check], resolveConfig, applyEnablement)
+				.filter(v -> v.rule == check.id());
 			for (entry in files) {
 				final own: Array<Violation> = all.filter(v -> v.file == entry.file);
 				if (own.length == 0) continue;

@@ -186,6 +186,28 @@ class AnonTypeDupCheckTest extends Test {
 		Assert.equals(identity, check.messageIdentity(identity));
 	}
 
+	/**
+	 * Two config chains: each file's shapes are held to its own `minOccurrences`, whichever file the run lists first.
+	 */
+	@:pin('control') @:killer('M-ANON-FIRST-FILE-CONFIG')
+	public function testEachFileHeldToItsOwnChainThreshold(): Void {
+		final low: LintConfig = LintConfig.parse('{"rules":{"anon-type-dup":{"enabled":true,"minOccurrences":2,"minFields":2}}}');
+		final high: LintConfig = LintConfig.parse('{"rules":{"anon-type-dup":{"enabled":true,"minOccurrences":50,"minFields":2}}}');
+		final x: { file: String, source: String } = {
+			file: 'x/X.hx',
+			source: 'class X { static var a:{p:Int, q:Int}; static var b:{p:Int, q:Int}; }'
+		};
+		final y: { file: String, source: String } = {
+			file: 'y/Y.hx',
+			source: 'class Y { static var a:{r:Int, s:Int}; static var b:{r:Int, s:Int}; }'
+		};
+		for (files in [[x, y], [y, x]]) {
+			final check: AnonTypeDup = new AnonTypeDup();
+			check.setConfigResolver(f -> f.startsWith('x/') ? low : high);
+			Assert.same(['x/X.hx'], [for (v in check.run(files, new HaxeQueryPlugin())) v.file]);
+		}
+	}
+
 	private function violations(sources: Array<String>): Array<Violation> {
 		return new AnonTypeDup().run([for (i in 0...sources.length) { file: 'a$i.hx', source: sources[i] }], new HaxeQueryPlugin());
 	}

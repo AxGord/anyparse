@@ -9,6 +9,8 @@ import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
 
+using Lambda;
+
 /**
  * The `thread-safety` check: MAIN/BG context propagation over the call graph
  * (spawn callbacks go BG, marshal callbacks come back MAIN), finding (a) —
@@ -17,6 +19,11 @@ import utest.Test;
  * config-driven and inert without a `thread-safety` entry in `apqlint.json`.
  */
 class ThreadSafetyCheckTest extends Test {
+
+	#if (sys || nodejs)
+	private static final MUTEX: String =
+		'class Mutex { public function new() {} public function acquire():Void {} public function release():Void {} }\n';
+	#end
 
 	public function testMainDirectSinkFlagged(): Void {
 		#if (sys || nodejs)
@@ -207,42 +214,110 @@ class ThreadSafetyCheckTest extends Test {
 	@:pin('control') @:killer('M-TS-FIRST-FILE-LISTS')
 	public function testEachCallSiteJudgedByItsOwnChain(): Void {
 		#if (sys || nodejs)
-		final a: { file: String, source: String } = {
-			file: 'a/A.hx',
-			source: 'class A { static function main():Void { Sys.sleep(1); Gate.block(); B.f(); } }'
-		};
-		final gate: { file: String, source: String } = {
-			file: 'a/Gate.hx',
-			source: 'class Gate { public static function block():Void {} }'
-		};
-		final b: { file: String, source: String } = {
-			file: 'b/B.hx',
-			source: 'class B { public static function f():Void { Sys.sleep(2); Gate.block(); } }'
-		};
-		final root: String = CliFixture.writeTree('threadsafetychains', [
+		final tree: Array<{ name: String, source: String }> = [
 			{ name: 'apqlint.json', source: '{"rules":{"thread-safety":{"sinks":["Sys.sleep"]}}}' },
 			{ name: 'a/apqlint.json', source: '{"inherit":false,"rules":{"thread-safety":{"sinks":["Gate.block"]}}}' },
-			{ name: a.file, source: a.source },
-			{ name: gate.file, source: gate.source },
-			{ name: b.file, source: b.source }
-		]);
-		for (order in [[a, gate, b], [b, gate, a]]) {
-			final files: Array<{ file: String, source: String }> = [for (f in order) { file: '$root/${f.file}', source: f.source }];
-			final vs: Array<Violation> = Linter.run(files, new HaxeQueryPlugin(), [new ThreadSafety()]);
-			final found: Array<String> = [for (v in vs) '${v.file.substring(root.length + 1)}: ${v.message}'];
-			found.sort(Reflect.compare);
-			Assert.same([
-				'a/A.hx: main thread reaches blocking "Gate.block": A.main -> Gate.block',
-				'b/B.hx: main thread reaches blocking "Sys.sleep": A.main -> B.f -> Sys.sleep'
-			], found);
-		}
-		CliFixture.removeDir(root);
+			{ name: 'a/A.hx', source: 'class A { static function main():Void { Sys.sleep(1); Gate.block(); B.f(); } }' },
+			{ name: 'a/Gate.hx', source: 'class Gate { public static function block():Void {} }' },
+			{ name: 'b/B.hx', source: 'class B { public static function f():Void { Sys.sleep(2); Gate.block(); } }' }
+		];
+		for (order in [['a/A.hx', 'a/Gate.hx', 'b/B.hx'], ['b/B.hx', 'a/Gate.hx', 'a/A.hx']]) Assert.same([
+			'a/A.hx: main thread reaches blocking "Gate.block": A.main -> Gate.block',
+			'b/B.hx: main thread reaches blocking "Sys.sleep": A.main -> B.f -> Sys.sleep'
+		], chainFindings(tree, order));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A node one chain names a sink is a plain function in a chain that does not: there it is tainted by the sink it
+	 * calls, so a lock held across a call to it is reported, whichever file the run lists first.
+	 */
+	@:pin('control') @:killer('M-TS-TAINT-UNION-SINK')
+	public function testASinkOfOneChainIsAPlainCallInAnother(): Void {
+		#if (sys || nodejs)
+		final tree: Array<{ name: String, source: String }> = [
+			{ name: 'x/apqlint.json', source: '{"inherit":false,"rules":{"thread-safety":{"sinks":["A.n"]}}}' },
+			{
+				name: 'y/apqlint.json',
+				source: '{"inherit":false,"rules":{"thread-safety":{"sinks":["Sys.sleep"],"lockPairs":["Mutex.acquire/release"]}}}'
+			},
+			{ name: 'x/X.hx', source: 'class X { static function main():Void { A.n(); } }' },
+			{ name: 'y/A.hx', source: 'class A { public static function n():Void { Sys.sleep(1); } }' },
+			{
+				name: 'y/B.hx',
+				source: MUTEX
+					+ 'class B { static var m:Mutex = new Mutex(); public static function f():Void { m.acquire(); A.n(); m.release(); } }'
+			}
+		];
+		for (order in [['x/X.hx', 'y/A.hx', 'y/B.hx'], ['y/A.hx', 'y/B.hx', 'x/X.hx']])
+			Assert.contains(
+				'y/B.hx: "B.f" holds "Mutex.acquire" across a call that can block: A.n -> Sys.sleep', chainFindings(tree, order)
+			);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A file whose chain names no sinks reports nothing but stays in the graph: its `spawns` registration still sends
+	 * the callback to a background thread, so the sink call inside it is not a main-thread finding.
+	 */
+	@:pin('control') @:killer('M-TS-GRAPH-CUT')
+	public function testAFileWithoutSinksStillShapesTheGraph(): Void {
+		#if (sys || nodejs)
+		final tree: Array<{ name: String, source: String }> = [
+			{ name: 'x/apqlint.json', source: '{"inherit":false,"rules":{"thread-safety":{"sinks":["Sys.sleep"],"spawns":["W.run"]}}}' },
+			{ name: 'y/apqlint.json', source: '{"inherit":false,"rules":{"thread-safety":{"spawns":["W.run"]}}}' },
+			{
+				name: 'x/X.hx',
+				source: 'class W { public static function run(f:()->Void):Void {} } class X { public static function work():Void {'
+					+ ' Sys.sleep(1); } }'
+			},
+			{ name: 'y/Reg.hx', source: 'class Reg { static function main():Void { W.run(X.work); } }' }
+		];
+		for (order in [['x/X.hx', 'y/Reg.hx'], ['y/Reg.hx', 'x/X.hx']]) Assert.same([], chainFindings(tree, order));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A file whose chain names no sinks is scanned for the graph and never reported in — `skipReason` is the report gate. */
+	@:pin('control') @:killer('M-TS-REPORT-UNGATED')
+	public function testNoFindingInAFileWhoseChainNamesNoSinks(): Void {
+		#if (sys || nodejs)
+		final tree: Array<{ name: String, source: String }> = [
+			{ name: 'x/apqlint.json', source: '{"inherit":false,"rules":{"thread-safety":{"sinks":["Sys.sleep"]}}}' },
+			{ name: 'y/apqlint.json', source: '{"inherit":false,"rules":{"thread-safety":{"lockPairs":["Mutex.acquire/release"]}}}' },
+			{ name: 'x/X.hx', source: 'class X { public static function work():Void { Sys.sleep(1); } }' },
+			{
+				name: 'y/Y.hx',
+				source: '${MUTEX}class Y { static var m:Mutex = new Mutex(); public static function f():Void {'
+					+ ' m.acquire(); X.work(); m.release(); } }'
+			}
+		];
+		for (order in [['x/X.hx', 'y/Y.hx'], ['y/Y.hx', 'x/X.hx']])
+			Assert.same(['x/X.hx: main thread reaches blocking "Sys.sleep": Y.f -> X.work -> Sys.sleep'], chainFindings(tree, order));
 		#else
 		Assert.pass('non-sys target');
 		#end
 	}
 
 	#if (sys || nodejs)
+	/** Every finding over `tree` with the run's files listed in `order`, as sorted `<relative path>: <message>` lines. */
+	private function chainFindings(tree: Array<{ name: String, source: String }>, order: Array<String>): Array<String> {
+		final root: String = CliFixture.writeTree('threadsafetychains', tree);
+		final files: Array<{ file: String, source: String }> = [
+			for (name in order) { file: '$root/$name', source: tree.find(t -> t.name == name)?.source ?? '' }
+		];
+		final vs: Array<Violation> = Linter.run(files, new HaxeQueryPlugin(), [new ThreadSafety()]);
+		final found: Array<String> = [for (v in vs) '${v.file.substring(root.length + 1)}: ${v.message}'];
+		found.sort(Reflect.compare);
+		CliFixture.removeDir(root);
+		return found;
+	}
+
 	private function violations(config: String, sources: Array<String>): Array<Violation> {
 		final dir: String = CliFixture.writeDir('threadsafety', [{ name: 'apqlint.json', source: config }]);
 		final files: Array<{ file: String, source: String }> = [

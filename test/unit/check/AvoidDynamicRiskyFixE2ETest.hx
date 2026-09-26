@@ -68,6 +68,11 @@ final class AvoidDynamicRiskyFixE2ETest extends Test {
 
 	private static final PARAM_HXML: String = '-cp .\n-main Param\n';
 	private static final PARAM_APQLINT: String = '{"compilerOracle":"check.hxml","rules":{"avoid-dynamic":{"enabled":true}}}';
+	/** An unused import (a safe fix) and a narrowable `Dynamic` local (a risky one) in one class; `C` is the class name. */
+	private static final DISABLED_SUBDIR: String = 'import haxe.io.Bytes;\n\nclass C {\n\tpublic function new() {}\n\n'
+		+ '\tpublic static function run():Void {\n\t\tfinal a:C = new C();\n'
+		+ '\t\tvar x:Dynamic = a;\n\t\tvar y:C = x;\n\t\ttrace(y);\n\t}\n}\n';
+
 	private static final HXML: String = '-cp .\n-main Good\n';
 	#end
 
@@ -174,6 +179,41 @@ final class AvoidDynamicRiskyFixE2ETest extends Test {
 			Assert.equals(arm.applied, result.applied.length, 'applied under ${arm.config}');
 			CliFixture.removeDir(dir);
 		}
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * `--fix` writes nothing a file's own config switched off: `b/` disables a risky rule (`avoid-dynamic`) and a safe
+	 * one (`unused-import`), and keeps both findings while `a/` gets both fixes.
+	 */
+	@:pin('control') @:killer('M-COLLECT-NO-ENABLEMENT', 'M-FIXVERIFY-ENABLEMENT-DROPPED')
+	public function testAFixNeverLandsWhereItsRuleIsDisabled(): Void {
+		#if (sys || nodejs)
+		if (!oracleWorks()) {
+			Assert.pass('haxe unavailable — skipped');
+			return;
+		}
+		final root: String = CliFixture.writeTree('addynoff', [
+			{ name: 'a/Good.hx', source: DISABLED_SUBDIR.replace('C', 'Good') },
+			{ name: 'b/Bad.hx', source: DISABLED_SUBDIR.replace('C', 'Bad') },
+			{ name: 'a/Main.hx', source: 'class Main {\n\tstatic function main():Void {\n\t\tGood.run();\n\t\tBad.run();\n\t}\n}\n' },
+			{ name: 'check.hxml', source: '-cp a\n-cp b\n-main Main\n' },
+			{
+				name: 'apqlint.json',
+				source: '{"compilerOracle":"check.hxml","rules":{"avoid-dynamic":{"enabled":true},"prefer-final":{"enabled":false},'
+				+ '"join-single-use-local":{"enabled":false}}}'
+			},
+			{ name: 'b/apqlint.json', source: '{"rules":{"avoid-dynamic":{"enabled":false},"unused-import":{"enabled":false}}}' }
+		]);
+		Cli.run(['lint', '--fix', '$root/a', '$root/b']);
+		final good: String = File.getContent('$root/a/Good.hx');
+		final bad: String = File.getContent('$root/b/Bad.hx');
+		Assert.isTrue(good.indexOf('var x:Good = a;') != -1 && good.indexOf('import') == -1, 'a/ takes both fixes: $good');
+		Assert.isTrue(bad.indexOf('import haxe.io.Bytes;') != -1, 'b/ disables the safe unused-import: $bad');
+		Assert.isTrue(bad.indexOf('var x:Dynamic = a;') != -1, 'b/ disables the risky avoid-dynamic: $bad');
+		CliFixture.removeDir(root);
 		#else
 		Assert.pass('non-sys target');
 		#end

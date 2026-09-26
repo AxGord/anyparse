@@ -36,10 +36,9 @@ final class LintFixLedger {
 	 * FIRST-pass count for the safe rules and a single-run count for the risky ones, and an
 	 * `OracleAssisted` rule's second pass adds edits under a row whose findings were counted before
 	 * it ran. The second is the GATES: `FixVerifier` collects through `Linter.collect`, which
-	 * applies the reification and inline-suppression gates and nothing else — no `resolveConfig`,
-	 * no enablement inversion, no version gate, no per-file severity — and `applyLintFixes` relaxes
-	 * the `OracleRelaxable` risky checks before it, so a risky rule's row here can count findings a
-	 * plain `lint` would not report. The finding total belongs to that plain `lint`, which runs
+	 * applies the reification, inline-suppression and per-file enablement gates but no per-file
+	 * severity, and `applyLintFixes` relaxes the `OracleRelaxable` risky checks before it, so a
+	 * risky rule's row here can count findings a plain `lint` would not report. The finding total belongs to that plain `lint`, which runs
 	 * every rule once under its own config; what each rule DECLINED is `unfixedFixLedger`'s block
 	 * below.
 	 */

@@ -10,6 +10,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -122,18 +123,20 @@ final class AnonTypeDup implements Check implements NoAutofix implements ConfigA
 		final shape: RefShape = plugin.refShape();
 		final ctx: Null<AnonCtx> = buildCtx(shape);
 		if (ctx == null || files.length == 0) return [];
-		final config: LintConfig = LintConfig.resolveWith(_resolveConfig, files[0].file);
-		final minOcc: Int = positiveOr(config.intOption(RULE_ID, 'minOccurrences'), DEFAULT_MIN_OCCURRENCES);
-		final minFields: Int = positiveOr(config.intOption(RULE_ID, 'minFields'), DEFAULT_MIN_FIELDS);
-
+		// Both options are read per FILE: `minFields` where a shape is written, `minOccurrences` where a group's
+		// occurrence sits, so a scope spanning two config chains holds each file to its own.
+		final minOccOf: Map<String, Int> = [];
 		final groups: Map<String, Array<Occurrence>> = [];
 		final order: Array<String> = [];
 		for (entry in files) {
+			final config: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
+			minOccOf[entry.file] = positiveOr(config.intOption(RULE_ID, 'minOccurrences'), DEFAULT_MIN_OCCURRENCES);
+			final minFields: Int = positiveOr(config.intOption(RULE_ID, 'minFields'), DEFAULT_MIN_FIELDS);
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			collect(tree, null, entry.file, entry.source, ctx, minFields, groups, order);
 		}
-		return report(groups, order, minOcc);
+		return report(groups, order, minOccOf);
 	}
 
 	/** No mechanical autofix — the typedef's name is intent a human supplies (like `string-literal-dup`). */
@@ -245,10 +248,10 @@ final class AnonTypeDup implements Check implements NoAutofix implements ConfigA
 				final at: Span = span;
 				final bucket: Null<Array<Occurrence>> = groups[key];
 				if (bucket == null) {
-					groups[key] = [{ file: file, at: at, text: collapse(source.substring(at.from, at.to)) }];
+					groups[key] = [{ file: file, at: at, source: source }];
 					order.push(key);
 				} else {
-					bucket.push({ file: file, at: at, text: '' });
+					bucket.push({ file: file, at: at, source: source });
 				}
 			}
 		}
@@ -256,25 +259,29 @@ final class AnonTypeDup implements Check implements NoAutofix implements ConfigA
 	}
 
 	/**
-	 * One `Info` per group that reaches `minOcc`, anchored at its scope-earliest
-	 * occurrence. `order` is first-seen order over the scope's files, so the
-	 * report does not depend on map iteration order.
+	 * One `Info` per group that reaches the `minOccurrences` of one of its occurrences' files, anchored at the
+	 * scope-earliest such occurrence. `order` is first-seen order over the scope's files, so the report does not
+	 * depend on map iteration order.
 	 */
-	private static function report(groups: Map<String, Array<Occurrence>>, order: Array<String>, minOcc: Int): Array<Violation> {
+	private static function report(
+		groups: Map<String, Array<Occurrence>>, order: Array<String>, minOccOf: Map<String, Int>
+	): Array<Violation> {
 		final out: Array<Violation> = [];
 		for (key in order) {
 			final hits: Null<Array<Occurrence>> = groups[key];
-			if (hits == null || hits.length < minOcc) continue;
+			if (hits == null) continue;
+			final anchor: Null<Occurrence> = hits.find(hit -> hits.length >= (minOccOf[hit.file] ?? DEFAULT_MIN_OCCURRENCES));
+			if (anchor == null) continue;
 			final files: Array<String> = [];
 			for (hit in hits) if (!files.contains(hit.file)) files.push(hit.file);
-			final anchor: Occurrence = hits[0];
+			final quoted: String = collapse(anchor.source.substring(anchor.at.from, anchor.at.to));
 			final where: String = files.length == 1 ? 'in this file' : '$ACROSS_LEAD${files.length} files';
 			out.push({
 				file: anchor.file,
 				span: anchor.at,
 				rule: RULE_ID,
 				severity: Severity.Info,
-				message: 'anonymous structure ${preview(anchor.text)}$WRITTEN_LEAD${hits.length} times $where — extract a typedef'
+				message: 'anonymous structure ${preview(quoted)}$WRITTEN_LEAD${hits.length} times $where — extract a typedef'
 			});
 		}
 		return out;
@@ -318,12 +325,9 @@ typedef AnonCtx = {
 	final typeDeclKinds: Array<String>;
 };
 
-/**
- * One written-out occurrence of a shape: the file it sits in, its span, and — for
- * the group's FIRST occurrence only — its source text as the report quotes it.
- */
+/** One written-out occurrence of a shape: the file it sits in, its span, and that file's source the report quotes. */
 private typedef Occurrence = {
 	final file: String;
 	final at: Span;
-	final text: String;
+	final source: String;
 };

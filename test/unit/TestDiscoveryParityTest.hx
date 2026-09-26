@@ -1089,8 +1089,11 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-AMBIENT-IMPORT-BAND',
 			'unit.check.AmbientImportSubtypeShieldTest#testTheWildcardTierShieldsTheTypeTheSupertypeReallyNames :: control :: '
 				+ 'M-AMBIENT-IMPORT-BAND',
+			'unit.check.AnonTypeDupCheckTest#testEachFileHeldToItsOwnChainThreshold :: control :: M-ANON-FIRST-FILE-CONFIG',
 			'unit.check.AvoidDynamicBagFixTest#testANullableValueIsNeverTypedByItsBareWrapper :: control :: M-BAG-NULL-OUTER',
 			'unit.check.AvoidDynamicBagFixTest#testAnInitializerOfAnotherTypeKeepsTheDeclaration :: control :: M-BAG-INITIALIZER',
+			'unit.check.AvoidDynamicRiskyFixE2ETest#testAFixNeverLandsWhereItsRuleIsDisabled :: control :: '
+				+ 'M-COLLECT-NO-ENABLEMENT,M-FIXVERIFY-ENABLEMENT-DROPPED',
 			'unit.check.AvoidDynamicRiskyFixE2ETest#testTheRunResolverGatesTheScannedFiles :: control :: M-FIXVERIFY-DISCOVERS-CONFIG',
 			'unit.check.AvoidDynamicRiskyFixE2ETest#testTheRunResolverReachesTheCheckOptions :: control :: M-FIXVERIFY-CHECK-DISCOVERS-CONFIG',
 			'unit.check.BuiltinFixClassCensusTest#testEveryDeclaredNoAutofixRuleAnswersNoEdit :: control :: M-NO-AUTOFIX-STILL-EDITS',
@@ -1706,8 +1709,11 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.StructuralConformanceProofTest#testUnresolvableSupertypeSuppliesNoMember :: control :: M-STRUCT-DECLARES-LOOSE',
 			'unit.check.TailMergeCheckTest#testStructuralIdentityHalfNeeded :: control :: M-TAILMERGE-NORM-ONLY',
 			'unit.check.TailMergeCheckTest#testSwitchCaseOutOfScope :: control :: M-TAILMERGE-FALL-KEPT',
+			'unit.check.ThreadSafetyCheckTest#testAFileWithoutSinksStillShapesTheGraph :: control :: M-TS-GRAPH-CUT',
+			'unit.check.ThreadSafetyCheckTest#testASinkOfOneChainIsAPlainCallInAnother :: control :: M-TS-TAINT-UNION-SINK',
 			'unit.check.ThreadSafetyCheckTest#testEachCallSiteJudgedByItsOwnChain :: control :: M-TS-FIRST-FILE-LISTS',
 			'unit.check.ThreadSafetyCheckTest#testLockHeldAcrossABlockingGetterFlagged :: control :: M-TS-ACCESSOR-TAINT',
+			'unit.check.ThreadSafetyCheckTest#testNoFindingInAFileWhoseChainNamesNoSinks :: control :: M-TS-REPORT-UNGATED',
 			'unit.check.TrivialGetterCheckTest#testBasicBlockBodyFlagged :: control :: M-SUBOVERRIDE-TRUE',
 			'unit.check.TrivialGetterShapeCollapseTest#testForeignHierarchyBackingNameStaysAccountedFor :: control :: '
 				+ 'M-SUPERDECLARES-FALSE',
@@ -3685,7 +3691,13 @@ class TestDiscoveryParityTest extends Test {
 			'M-TOSTRING-STRING-BINDING',
 			'M-TS-FIRST-FILE-LISTS',
 			'M-FIXVERIFY-DISCOVERS-CONFIG',
-			'M-FIXVERIFY-CHECK-DISCOVERS-CONFIG'
+			'M-FIXVERIFY-CHECK-DISCOVERS-CONFIG',
+			'M-TS-TAINT-UNION-SINK',
+			'M-TS-GRAPH-CUT',
+			'M-TS-REPORT-UNGATED',
+			'M-ANON-FIRST-FILE-CONFIG',
+			'M-COLLECT-NO-ENABLEMENT',
+			'M-FIXVERIFY-ENABLEMENT-DROPPED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

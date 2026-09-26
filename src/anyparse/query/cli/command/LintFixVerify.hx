@@ -112,13 +112,13 @@ final class LintFixVerify {
 	public static function verifyRiskyFixes(
 		files: Array<{ file: String, source: String }>, riskyChecks: Array<Check>, cached: GrammarPlugin, oracles: Array<OracleConfig>,
 		optsByFile: Map<String, Null<String>>, changedFiles: Array<String>, ledger: Map<String, RuleFixOutcome>,
-		resolveConfig: (String) -> LintConfig
+		resolveConfig: (String) -> LintConfig, applyEnablement: Bool
 	): RiskyFixOutcome {
 		if (riskyChecks.length == 0) return quietRisky('');
 		if (oracles.length == 0)
 			return quietRisky(', ${riskyChecks.length} risky-fix rule(s) left report-only (no compiler oracle for this run)');
 		final verified: FixVerifyResult = FixVerifier.verify(
-			files, riskyChecks, cached, oracles, CliIo.writeFile, optsByFile, null, resolveConfig
+			files, riskyChecks, cached, oracles, CliIo.writeFile, optsByFile, null, resolveConfig, applyEnablement
 		);
 		switch verified.baseline {
 			case Confirmed:
@@ -492,7 +492,7 @@ final class LintFixVerify {
 	 */
 	public static function applyOracleAssistedFixes(
 		files: Array<{ file: String, source: String }>, oracleChecks: Array<Check>, plugin: GrammarPlugin, oracles: Array<OracleConfig>,
-		optsByFile: Map<String, Null<String>>, changedFiles: Array<String>, resolveConfig: (String) -> LintConfig,
+		optsByFile: Map<String, Null<String>>, changedFiles: Array<String>, resolveConfig: (String) -> LintConfig, applyEnablement: Bool,
 		coverage: Array<ConfigCoverage>
 	): AssistedOutcome {
 		if (oracleChecks.length == 0) return { tail: '', appliedCount: 0, excluded: [] };
@@ -532,7 +532,7 @@ final class LintFixVerify {
 			for (check in oracleChecks)
 				{
 					check: check,
-					all: Linter.collect(files, plugin, [check], resolveConfig).filter(v -> v.rule == check.id())
+					all: Linter.collect(files, plugin, [check], resolveConfig, applyEnablement).filter(v -> v.rule == check.id())
 				}
 		];
 		// Nothing to annotate costs nothing: no probe, no display server.
