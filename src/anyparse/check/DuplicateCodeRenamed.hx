@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.Check.CrossFileAnchored;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
@@ -35,7 +36,8 @@ import anyparse.runtime.Span;
  */
 @:nullSafety(Strict)
 @:access(anyparse.check.DuplicateCode)
-final class DuplicateCodeRenamed implements Check implements NoAutofix implements VolatileMessage implements DefaultOff {
+final class DuplicateCodeRenamed implements Check implements NoAutofix implements VolatileMessage implements DefaultOff
+		implements CrossFileAnchored {
 
 	private static inline final RULE_ID: String = 'duplicate-code-renamed';
 
@@ -53,7 +55,14 @@ final class DuplicateCodeRenamed implements Check implements NoAutofix implement
 		crossFileTail: CROSS_FILE_TAIL
 	};
 
+	/** The linter's per-file "does a finding here survive" answer; null when every file's does. */
+	private var _reportable: Null<(String) -> Bool> = null;
+
 	public function new() {}
+
+	public function setReportable(reportable: Null<(String) -> Bool>): Void {
+		_reportable = reportable;
+	}
 
 	public function id(): String {
 		return RULE_ID;
@@ -65,7 +74,7 @@ final class DuplicateCodeRenamed implements Check implements NoAutofix implement
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		return DuplicateCode.scan(files, plugin, RENAMED);
+		return DuplicateCode.scan(files, plugin, RENAMED, _reportable);
 	}
 
 	/** Extraction is a refactoring (`hxq extract-method`), not a mechanical span edit — report-only. */

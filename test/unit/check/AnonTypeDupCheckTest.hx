@@ -208,6 +208,32 @@ class AnonTypeDupCheckTest extends Test {
 		}
 	}
 
+	/**
+	 * A group whose earliest occurrence sits in a file that disables the rule is anchored at the first file that keeps
+	 * it, so the finding survives in either file order.
+	 */
+	@:pin('control') @:killer('M-ANON-ANCHOR-UNGATED')
+	public function testAGroupIsAnchoredWhereTheRuleIsEnabled(): Void {
+		final on: LintConfig = LintConfig.parse('{"rules":{"anon-type-dup":{"enabled":true,"minOccurrences":3}}}');
+		final off: LintConfig = LintConfig.parse('{"rules":{"anon-type-dup":{"enabled":false,"minOccurrences":3}}}');
+		final x: { file: String, source: String } = {
+			file: 'x/X.hx',
+			source: 'class X { static var a:{p:Int, q:Int}; static var b:{p:Int, q:Int}; }'
+		};
+		final y: { file: String, source: String } = {
+			file: 'y/Y.hx',
+			source: 'class Y { static var a:{p:Int, q:Int}; static var b:{p:Int, q:Int}; }'
+		};
+		for (files in [[x, y], [y, x]]) {
+			final found: Array<Violation> = Linter.run(
+				files, new HaxeQueryPlugin(),
+				[new AnonTypeDup()],
+				f -> f.startsWith('x/') ? on : off, true
+			);
+			Assert.same(['x/X.hx'], [for (v in found) v.file]);
+		}
+	}
+
 	private function violations(sources: Array<String>): Array<Violation> {
 		return new AnonTypeDup().run([for (i in 0...sources.length) { file: 'a$i.hx', source: sources[i] }], new HaxeQueryPlugin());
 	}

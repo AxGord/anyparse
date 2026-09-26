@@ -222,8 +222,9 @@ interface DefaultOff {}
  * a higher minimum is dropped for that file. No declared version means no constraint —
  * the behaviour every existing config already has.
  *
- * `--rule <id>` still force-enables, exactly as it does for a config-disabled rule: an
- * explicit selection is the user overruling the project's own default.
+ * `--rule <id>` does NOT lift it, though it force-enables a config-disabled rule: enablement is
+ * the project's preference, which an explicit selection may overrule, while the version is a
+ * correctness limit — a fix past it writes syntax the project's compiler rejects.
  */
 interface VersionGated {
 
@@ -629,5 +630,20 @@ interface VolatileMessage {
 	 * anchor is a silent no-op that restores the false movement.
 	 */
 	public function messageIdentity(message: String): String;
+
+}
+
+/**
+ * A check that reports ONE finding for occurrences spread over several files, anchored at one of them.
+ *
+ * `Linter.collect` drops a finding whose own file's config gates its rule off, so an anchor picked without
+ * looking at those gates loses the finding for every other file too — and which file comes first decided whether a
+ * clone was reported at all. `setReportable` hands the check the linter's per-file answer before each run (null:
+ * every file reports), and the check anchors at an occurrence it holds true for.
+ */
+interface CrossFileAnchored {
+
+	/** Whether a finding in a file survives the run's per-file gates, or null when every file's does. */
+	function setReportable(reportable: Null<(String) -> Bool>): Void;
 
 }

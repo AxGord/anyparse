@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.Check.CrossFileAnchored;
 import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.check.Check.VolatileMessage;
@@ -89,7 +90,7 @@ using Lambda;
  * findings.
  */
 @:nullSafety(Strict)
-final class DuplicateCode implements Check implements NoAutofix implements VolatileMessage {
+final class DuplicateCode implements Check implements NoAutofix implements VolatileMessage implements CrossFileAnchored {
 
 	/** The shortest run of consecutive statements considered a clone. */
 	private static inline final MIN_STATEMENTS: Int = 3;
@@ -150,7 +151,14 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 		crossFileTail: CROSS_FILE_TAIL
 	};
 
+	/** The linter's per-file "does a finding here survive" answer; null when every file's does. */
+	private var _reportable: Null<(String) -> Bool> = null;
+
 	public function new() {}
+
+	public function setReportable(reportable: Null<(String) -> Bool>): Void {
+		_reportable = reportable;
+	}
 
 	public function id(): String {
 		return RULE_ID;
@@ -161,7 +169,7 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		return scan(files, plugin, EXACT);
+		return scan(files, plugin, EXACT, _reportable);
 	}
 
 	/** Extraction is a refactoring (`hxq extract-method`), not a mechanical span edit — report-only. */
@@ -212,7 +220,9 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 	 * before two statements are compared — with normalization off the key is the raw render, so the
 	 * type-2 reading degenerates to the type-1 one.
 	 */
-	private static function scan(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, mode: DupMode): Array<Violation> {
+	private static function scan(
+		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, mode: DupMode, reportable: Null<(String) -> Bool>
+	): Array<Violation> {
 		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
 		if (support == null) return [];
 		final shape: RefShape = plugin.refShape();
@@ -242,7 +252,7 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 			perFile.push({ file: entry.file, source: entry.source, blocks: blocks });
 		}
 		for (pf in perFile) scanBlocks(violations, pf.file, pf.source, pf.blocks, mode);
-		scanCrossFile(violations, perFile, mode);
+		scanCrossFile(violations, perFile, mode, reportable);
 		return violations;
 	}
 
@@ -508,7 +518,9 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 	 * helper there is a design decision the tool must not force, so this pass is REPORT-ONLY
 	 * (`fix` emits nothing) — the finding names both sites and leaves the call.
 	 */
-	private static function scanCrossFile(out: Array<Violation>, perFile: Array<DupFile>, mode: DupMode): Void {
+	private static function scanCrossFile(
+		out: Array<Violation>, perFile: Array<DupFile>, mode: DupMode, reportable: Null<(String) -> Bool>
+	): Void {
 		final blocks: Array<Array<DupStmt>> = [];
 		final blockFile: Array<Int> = [];
 		for (fi in 0...perFile.length) for (blk in perFile[fi].blocks) {
@@ -518,7 +530,8 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 
 		final grams: Map<String, Array<DupPos>> = buildGrams(blocks);
 		final findings: Array<DupFinding> = [];
-		for (bucket in grams) if (bucket.length >= 2) collectCrossFindings(blocks, blockFile, perFile, bucket, findings);
+		final silent: Array<Bool> = [for (pf in perFile) reportable != null && !reportable(pf.file)];
+		for (bucket in grams) if (bucket.length >= 2) collectCrossFindings(blocks, blockFile, perFile, silent, bucket, findings);
 
 		final kept: Array<DupFinding> = dropOverlapping(findings);
 		kept.sort((a, b) -> a.laterFile != b.laterFile ? a.laterFile - b.laterFile : a.span.from - b.span.from);
@@ -539,7 +552,8 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 	 * skipped — the same-file pass reports those — so a pure within-file repeat yields nothing here.
 	 */
 	private static function collectCrossFindings(
-		blocks: Array<Array<DupStmt>>, blockFile: Array<Int>, perFile: Array<DupFile>, bucket: Array<DupPos>, findings: Array<DupFinding>
+		blocks: Array<Array<DupStmt>>, blockFile: Array<Int>, perFile: Array<DupFile>, silent: Array<Bool>, bucket: Array<DupPos>,
+		findings: Array<DupFinding>
 	): Void {
 		// Ordered by file PATH, never by the index the file happened to get from the scan: the
 		// index is the order the CLI handed the scope over, so `lint src test` and `lint test src`
@@ -547,9 +561,12 @@ final class DuplicateCode implements Check implements NoAutofix implements Volat
 		// flip is an added + a removed line in the blast-radius gate. The path is a property of
 		// the file SET, so the pair agrees. `fa - fb` breaks a tie only when one path is listed
 		// twice, which keeps the comparator total.
+		// A file whose finding the run would drop comes FIRST, so it takes the anchor — which carries no finding —
+		// and the clone is still reported in every file that can report it (see `Check.CrossFileAnchored`).
 		bucket.sort((a, b) -> {
 			final fa: Int = blockFile[a.b];
 			final fb: Int = blockFile[b.b];
+			if (silent[fa] != silent[fb]) return silent[fa] ? -1 : 1;
 			if (fa == fb) return blocks[a.b][a.i].span.from - blocks[b.b][b.i].span.from;
 			final pa: String = perFile[fa].file;
 			final pb: String = perFile[fb].file;

@@ -18,6 +18,10 @@ using StringTools;
  * lock pairs as written (`reportLockHeld` parses them).
  */
 private typedef ChainLists = {
+
+	/** Whether the chain names any `sinks` — a chain that names none is read for the graph and reports nothing. */
+	final reports: Bool;
+
 	final sinkIds: Array<String>;
 	final spawnIds: Array<String>;
 	final marshalIds: Array<String>;
@@ -163,6 +167,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			final signature: String = [for (list in [sinks, spawns, marshals, lockPairs]) list.join('\n')].join('\t');
 			final known: Null<ChainLists> = bySignature[signature];
 			final lists: ChainLists = known ?? {
+				reports: sinks.length > 0,
 				sinkIds: matchAll(graph, sinks),
 				spawnIds: matchAll(graph, spawns),
 				marshalIds: matchAll(graph, marshals),
@@ -311,7 +316,9 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		for (setIndex => lists in sets) for (pair in lists.lockPairs) {
 			final slash: Int = pair.lastIndexOf('/');
 			if (slash <= 0) {
-				if (sets.slice(0, setIndex).exists(earlier -> earlier.lockPairs.contains(pair))) continue;
+				// a chain that reports nothing (`needs-config`) says nothing about its options either
+				if (!lists.reports || sets.slice(0, setIndex).exists(earlier -> earlier.reports && earlier.lockPairs.contains(pair)))
+					continue;
 				violations.push({
 					file: '',
 					span: null,

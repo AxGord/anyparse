@@ -37,7 +37,9 @@ typedef RuleStateGroup = {
  * The registry alone overstates it — a config disables rules and a default-off rule runs only where
  * a config enables it — so a reviewer who subtracts the registry from a manual checklist drops
  * checks nobody ran. The answer is the same `enabledFor` / `allowsLanguageVersion` pair
- * `Linter.run` applies to findings, asked of the same per-directory `LintConfig.discover`.
+ * `Linter.collect` applies to findings, asked of the same per-directory `LintConfig.discover`. A
+ * `--rule` run lifts only the first: a rule this listing marks `needs-language-…` reports nothing
+ * there under any selection.
  */
 @:nullSafety(Strict)
 final class EffectiveRules {

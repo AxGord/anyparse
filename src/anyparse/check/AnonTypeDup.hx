@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.CrossFileAnchored;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
@@ -75,7 +76,8 @@ using StringTools;
  * verdict depend on which occurrence happened to come first.
  */
 @:nullSafety(Strict)
-final class AnonTypeDup implements Check implements NoAutofix implements ConfigAware implements DefaultOff implements VolatileMessage {
+final class AnonTypeDup implements Check implements NoAutofix implements ConfigAware implements DefaultOff implements VolatileMessage
+		implements CrossFileAnchored {
 
 	/** Least occurrences of one shape before the group is flagged. */
 	private static inline final DEFAULT_MIN_OCCURRENCES: Int = 3;
@@ -101,10 +103,17 @@ final class AnonTypeDup implements Check implements NoAutofix implements ConfigA
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
+	/** The linter's per-file "does a finding here survive" answer; null when every file's does. */
+	private var _reportable: Null<(String) -> Bool> = null;
+
 	public function new() {}
 
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
 		_resolveConfig = resolve;
+	}
+
+	public function setReportable(reportable: Null<(String) -> Bool>): Void {
+		_reportable = reportable;
 	}
 
 	public function id(): String {
@@ -136,7 +145,7 @@ final class AnonTypeDup implements Check implements NoAutofix implements ConfigA
 			if (tree == null) continue;
 			collect(tree, null, entry.file, entry.source, ctx, minFields, groups, order);
 		}
-		return report(groups, order, minOccOf);
+		return report(groups, order, minOccOf, _reportable);
 	}
 
 	/** No mechanical autofix — the typedef's name is intent a human supplies (like `string-literal-dup`). */
@@ -260,17 +269,19 @@ final class AnonTypeDup implements Check implements NoAutofix implements ConfigA
 
 	/**
 	 * One `Info` per group that reaches the `minOccurrences` of one of its occurrences' files, anchored at the
-	 * scope-earliest such occurrence. `order` is first-seen order over the scope's files, so the report does not
-	 * depend on map iteration order.
+	 * scope-earliest such occurrence whose file `reportable` accepts (see `Check.CrossFileAnchored`). `order` is
+	 * first-seen order over the scope's files, so the report does not depend on map iteration order.
 	 */
 	private static function report(
-		groups: Map<String, Array<Occurrence>>, order: Array<String>, minOccOf: Map<String, Int>
+		groups: Map<String, Array<Occurrence>>, order: Array<String>, minOccOf: Map<String, Int>, reportable: Null<(String) -> Bool>
 	): Array<Violation> {
 		final out: Array<Violation> = [];
 		for (key in order) {
 			final hits: Null<Array<Occurrence>> = groups[key];
 			if (hits == null) continue;
-			final anchor: Null<Occurrence> = hits.find(hit -> hits.length >= (minOccOf[hit.file] ?? DEFAULT_MIN_OCCURRENCES));
+			final anchor: Null<Occurrence> = hits.find(
+				hit -> hits.length >= (minOccOf[hit.file] ?? DEFAULT_MIN_OCCURRENCES) && (reportable == null || reportable(hit.file))
+			);
 			if (anchor == null) continue;
 			final files: Array<String> = [];
 			for (hit in hits) if (!files.contains(hit.file)) files.push(hit.file);

@@ -304,6 +304,26 @@ class ThreadSafetyCheckTest extends Test {
 		#end
 	}
 
+	/** A malformed `lockPairs` entry of a chain that names no sinks is not reported: that chain reports nothing at all. */
+	@:pin('control') @:killer('M-TS-MALFORMED-UNGATED')
+	public function testAMalformedOptionOfANonReportingChainIsSilent(): Void {
+		#if (sys || nodejs)
+		final tree: Array<{ name: String, source: String }> = [
+			{ name: 'x/apqlint.json', source: '{"inherit":false,"rules":{"thread-safety":{"sinks":["Sys.sleep"],"lockPairs":["bad2"]}}}' },
+			{ name: 'y/apqlint.json', source: '{"inherit":false,"rules":{"thread-safety":{"lockPairs":["bad"]}}}' },
+			{ name: 'x/X.hx', source: 'class X { public static function work():Void { Sys.sleep(1); } }' },
+			{ name: 'y/Y.hx', source: 'class Y { static function main():Void { X.work(); } }' }
+		];
+		for (order in [['x/X.hx', 'y/Y.hx'], ['y/Y.hx', 'x/X.hx']])
+			Assert.same(
+				[': malformed lockPairs entry "bad2" — expected "<lock pattern>/<unlock member>"'],
+				chainFindings(tree, order).filter(f -> f.indexOf('malformed') != -1)
+			);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
 	/** Every finding over `tree` with the run's files listed in `order`, as sorted `<relative path>: <message>` lines. */
 	private function chainFindings(tree: Array<{ name: String, source: String }>, order: Array<String>): Array<String> {
