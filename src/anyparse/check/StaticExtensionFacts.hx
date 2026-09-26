@@ -29,6 +29,12 @@ final class StaticExtensionFacts {
 	/** The static access the facts record for `Module.method(…)`. */
 	private static inline final STATIC_ACCESS: String = 'FStatic';
 
+	/** The access the facts record for a call the compiler spliced in (`inline`). */
+	private static inline final INLINED_ACCESS: String = 'inlined';
+
+	/** The annotation that keeps a static out of `using` (`TypedFactsProbe` writes metadata without its `@`). */
+	private static inline final NO_USING_META: String = ':noUsing';
+
 	/** The wrapper a nullable type is spelled with; member lookup and `using` both look through it. */
 	private static inline final NULL_OPEN: String = 'Null<';
 
@@ -103,18 +109,23 @@ final class StaticExtensionFacts {
 	}
 
 	/**
-	 * The typed id of the configured `module`, when every call fact at `call` names its static `method` — an inlined call
-	 * leaves none there. Null when a fact names anything else, or the table holds no such type.
+	 * The typed id of the configured `module` when the facts name its static `method` as what the call at `call` runs:
+	 * every call fact at that range names it, or — an inlined call leaves none there — a function holding the call records
+	 * a splice of it. Null when a fact names anything else, none names it, or the table holds no such type. Which function the
+	 * written name denotes is proven by the caller (`PreferStaticExtension.channelsOf`); this only refuses a site whose
+	 * facts contradict it or say nothing.
 	 */
 	private static function staticOwner(facts: CompilerFacts, file: String, call: Span, module: String, method: String): Null<String> {
 		final configured: Null<String> = typeIdOf(facts, module);
 		if (configured == null) return null;
-		final suffix: String = '.$method';
-		for (c in facts.callsAt(file, call)) {
-			final target: Null<String> = c.target;
-			if (target == null || c.access != STATIC_ACCESS || target != configured + suffix) return null;
-		}
-		return configured;
+		final target: String = '$configured.$method';
+		final sites: Array<CallFact> = facts.callsAt(file, call);
+		for (c in sites) if (c.target != target || c.access != STATIC_ACCESS) return null;
+		if (sites.length > 0) return configured;
+		// an inlined call leaves no fact at its own range: the facts of the code holding it must name the splice of `target`
+		for (n in facts.nodesAround(file, call)) if (n.calls.exists(c -> c.access == INLINED_ACCESS && c.target == target))
+			return configured;
+		return null;
 	}
 
 	/**
@@ -139,7 +150,11 @@ final class StaticExtensionFacts {
 		final declared: Array<FieldDeclFact> = (facts.type(owner)?.fields ?? []).filter(f -> f.name == method);
 		if (declared.length != 1) return null;
 		final field: FieldDeclFact = declared[0];
-		if (!field.isStatic || field.kind == MACRO_KIND || field.overloads.exists(n -> n > 0) || field.types.length != 1) return null;
+		if (
+			!field.isStatic || field.kind == MACRO_KIND || field.meta.contains(NO_USING_META) || field.overloads.exists(n -> n > 0)
+			|| field.types.length != 1
+		)
+			return null;
 		final param: Null<String> = firstParamOf(field.type);
 		return param == null || param.startsWith('?') ? null : param;
 	}

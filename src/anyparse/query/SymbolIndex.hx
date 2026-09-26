@@ -230,6 +230,12 @@ typedef MemberInfo = {
 	var isDynamic: Bool;
 
 	/**
+	 * True when the member carries an annotation that keeps it out of the extension channel
+	 * (`ExecutionShape.extensionExcludingMetaNames`, Haxe `@:noUsing`): `using` never binds it.
+	 */
+	var excludedFromExtensions: Bool;
+
+	/**
 	 * True when the member's DECLARATION sits under a `conditionalMemberKind` host — the
 	 * member is written inside a `#if` region rather than at plain type-body level.
 	 * Mirrors `ImportInfo.guarded`: the declaration genuinely exists, but its presence is

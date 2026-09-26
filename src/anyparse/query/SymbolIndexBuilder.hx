@@ -51,6 +51,9 @@ private typedef MemberSeams = {
 
 	/** The annotations under which the language calls a member implicitly (`ExecutionShape.implicitCallMetaNames`). */
 	final implicitCallMetaNames: Array<String>;
+
+	/** The annotations that keep a static out of the extension channel (`ExecutionShape.extensionExcludingMetaNames`). */
+	final extensionExcludingMetaNames: Array<String>;
 	final conditionalKind: Null<String>;
 	final paramKinds: Array<String>;
 };
@@ -522,6 +525,7 @@ final class SymbolIndexBuilder {
 			var runImplicitCall: Bool = false;
 			var runImplicitMetas: Array<String> = [];
 			var runDynamic: Bool = false;
+			var runNoExtension: Bool = false;
 			for (child in n.children) {
 				final sp: Null<Span> = child.span;
 				// Enum constructors (`SimpleCtor` / `ParamCtor`) are captured as members too, so a bare
@@ -554,6 +558,7 @@ final class SymbolIndexBuilder {
 							isImplicitCall: runImplicitCall,
 							implicitCallMetas: runImplicitMetas,
 							isDynamic: runDynamic,
+							excludedFromExtensions: runNoExtension,
 							guarded: guarded
 						});
 					}
@@ -567,6 +572,7 @@ final class SymbolIndexBuilder {
 					runImplicitCall = false;
 					runImplicitMetas = [];
 					runDynamic = false;
+					runNoExtension = false;
 				} else if (sp != null && seams.visibilityKinds.contains(child.kind))
 					runVisibility = source.substring(sp.from, sp.to);
 				else if (child.kind == seams.overrideKind)
@@ -583,6 +589,8 @@ final class SymbolIndexBuilder {
 					final operatorKind: Null<String> = operatorKindOf(child, seams);
 					if (operatorKind != null) runOperators.push(operatorKind);
 					if (isConversionMeta(child, seams)) runImplicitConversion = true;
+					if (MemberKinds.META_KINDS.contains(child.kind) && seams.extensionExcludingMetaNames.contains(child.name ?? ''))
+						runNoExtension = true;
 					if (isImplicitCallMeta(child, seams)) {
 						runImplicitCall = true;
 						runImplicitMetas.push(child.name ?? '');
@@ -687,6 +695,7 @@ final class SymbolIndexBuilder {
 			operatorMetaName: shape.operatorOverloadMetaName,
 			conversionMetaName: shape.execution?.implicitConversionMetaName,
 			implicitCallMetaNames: shape.execution?.implicitCallMetaNames ?? [],
+			extensionExcludingMetaNames: shape.execution?.extensionExcludingMetaNames ?? [],
 			conditionalKind: shape.conditionalMemberKind,
 			paramKinds: shape.paramKinds ?? []
 		};

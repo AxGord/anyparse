@@ -13,10 +13,17 @@ import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
+import anyparse.query.SymbolIndex.FileInfo;
+import anyparse.query.SymbolIndex.ImportInfo;
+import anyparse.query.SymbolIndex.ImportKind;
+import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.SymbolIndexHost;
 import anyparse.query.TypeInfoProvider;
+import anyparse.query.TypeNameBinding;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
+
+using Lambda;
 
 /**
  * Rewrites a STATIC UTILITY call on a configured module to extension-method form —
@@ -84,7 +91,8 @@ import anyparse.runtime.Span;
  *  - `R` or a supertype declares `m` → DROP (the shadow gate above).
  *  - `R`'s member closure provably lacks `m` → a FIXABLE finding.
  *  - the closure is unresolvable (a supertype outside the index, an unreadable `typedef` alias,
- *    a `@:forward` abstract) → a REPORT-ONLY finding whose message asks the reader to verify
+ *    a `@:forward` abstract), or a type of it carries `@:using` — whose extensions the compiler
+ *    binds before the file's — → a REPORT-ONLY finding whose message asks the reader to verify
  *    that no same-name member exists.
  *  - `R` unresolved, or no index at all → a REPORT-ONLY finding with its own message — unless the
  *    receiver is an identifier whose declaration WRITES its type (`Null<String>`, which the walk does
@@ -120,6 +128,15 @@ import anyparse.runtime.Span;
  * degrade every std-typed site to report-only, and could just as easily "prove" — from a name
  * the report scope happens to see only once — something the wider scope refused.
  *
+ * ## The channel gate
+ *
+ * A FIXABLE verdict also needs every OTHER channel the compiler binds `x.m` through proven
+ * (`channelsOf`): the written module name must denote the configured module (an import alias, a
+ * same-package type or an ambient import may rebind it — then the site is DROPPED), the function
+ * must not be `@:noUsing` (DROPPED), and every `using` that may reach the site — the file's in
+ * any `#if` region and the ambient chain's — goes through the conflict gate. A channel the index
+ * cannot read keeps the site REPORT-ONLY.
+ *
  * ## Known limitations
  *
  * - A FULLY QUALIFIED call site (`haxe.io.Path.withoutExtension(p)`) is invisible: the callee's
@@ -132,9 +149,8 @@ import anyparse.runtime.Span;
  *   the wrong one. An EXTENSION call is the same miss from the other end: the method is not a member
  *   of the receiver's type, so it names no return type to read — a chain of them never resolves
  *   however many `--fix` passes run.
- * - An ambient `using` reaches TYPE RESOLUTION but not this walk, which
- *   reads the file own `using` run (`UsingScan`): worst case an inserted `using` that was
- *   already implied, or a conservative miss of a conflicting module. Neither breaks a build.
+ * - An ambient `using` is read off the index (`FileInfo.ambientImports`); a chain the index could
+ *   not bound keeps the site report-only.
  * - A call inside a `#if … #end` region IS found: the grammar projects a balanced region as a
  *   `Conditional` whose branches are flat children, and this walk descends into it like any other
  *   node (a `StringTools` call in a `#if (sys || nodejs)` statement region is reported).
@@ -369,7 +385,7 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		final out: Array<Candidate> = [];
 		for (call in calls) {
 			final candidate: Null<Candidate> = classify(
-				call, tree, source, file, s, options, plugin, symbols, declaredTypes, chain, usings, conflicts
+				call, tree, source, file, s, options, plugin, symbols, declaredTypes, chain, conflicts
 			);
 			if (candidate != null) out.push(candidate);
 		}
@@ -391,8 +407,7 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 	 */
 	private static function classify(
 		call: QueryNode, root: QueryNode, source: String, file: String, s: Seams, options: Options, plugin: GrammarPlugin,
-		symbols: () -> Null<SymbolIndex>, declaredTypes: Map<Int, String>, chain: ChainTypeContext, usings: Array<String>,
-		conflicts: Map<String, Bool>
+		symbols: () -> Null<SymbolIndex>, declaredTypes: Map<Int, String>, chain: ChainTypeContext, conflicts: Map<String, Bool>
 	): Null<Candidate> {
 		if (call.children.length < MIN_CALL_CHILDREN) return null;
 		final callee: QueryNode = call.children[0];
@@ -414,15 +429,20 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		// deleted regions, where the comment gate already guards them.
 		final recv: QueryNode = BoolExprShape.unwrapParens(call.children[1], s.parenKind);
 		if (callSpan == null || recv.span == null) return null;
-		if (UsingScan.conflictingUsing(usings, module, method, plugin, symbols, conflicts)) return null;
+		// Every channel through which the compiler could bind `recv.method` to another function: what the written name denotes,
+		// whether the function takes part in `using` at all, and every `using` that could reach the site.
+		final channels: Channels = channelsOf(typeName, module, method, file, root, symbols);
+		if (channels.elsewhere || UsingScan.conflictingUsing(channels.usings, module, method, plugin, symbols, conflicts)) return null;
 		final nominal: Null<String> = receiverNominal(recv, root, s, declaredTypes, chain, symbols, file);
 		// A `Dynamic` receiver dispatches no extension at RUNTIME while the rewrite still compiles.
 		if (nominal != null && nominal == s.dynamicTypeName) return null;
 		final structural: Null<Verdict> = verdictFor(nominal, method, symbols, file);
-		final verdict: Null<Verdict> = structural == Verdict.UnresolvedReceiver && nominal == null
+		final judged: Null<Verdict> = structural == Verdict.UnresolvedReceiver && nominal == null
 			? factsVerdict(call, recv, root, s, chain, source, file, module, method, plugin)
 			: structural;
-		if (verdict == null) return null;
+		if (judged == null) return null;
+		final settled: Verdict = judged;
+		final verdict: Verdict = settled == Verdict.Fixable && !channels.proven ? Verdict.UnprovenChannels : settled;
 		final suggestion: Null<String> = suggestionOf(call, recv, method, source);
 		return suggestion == null ? null : {
 			call: call,
@@ -433,6 +453,78 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 			verdict: verdict,
 			message: messageFor(verdict, suggestion)
 		};
+	}
+
+	/**
+	 * What the compiler could bind `recv.method` to besides `module.method`, read off every channel it resolves one through.
+	 *
+	 * - The written `name` must denote `module` (`TypeNameBinding`): an import alias, a same-package type, an ambient import
+	 *   may bind it to another type, whose function the call reaches while the `using` the rewrite adds binds `module`'s.
+	 *   Another declaration makes the site no candidate at all.
+	 * - A function the module marks out of the extension channel (`MemberInfo.excludedFromExtensions`) is no candidate.
+	 * - The `using`s that may reach the site: EVERY one the file writes — a conditional region's included, since the build
+	 *   that compiles it binds through it — and the ambient chain's; the conflict gate weighs each.
+	 *
+	 * `proven` only when the name resolves, through the index, to exactly the module, and the ambient chain is bounded: a
+	 * channel this cannot read keeps the site report-only.
+	 */
+	private static function channelsOf(
+		name: String, module: String, method: String, file: String, root: QueryNode, symbols: () -> Null<SymbolIndex>
+	): Channels {
+		final usings: Array<String> = [];
+		collectUsings(root, usings);
+		final index: Null<SymbolIndex> = symbols();
+		final info: Null<FileInfo> = index?.fileInfo(file);
+		if (index == null || info == null) return { elsewhere: false, proven: false, usings: usings };
+		for (group in info.ambientImports) for (i in group.imports) if (i.kind == ImportKind.Using) usings.push(i.raw);
+		final decls: Array<ResolvedType> = TypeNameBinding.bind(name, info, index) ?? moduleIfGuardedSelf(name, module, info, index);
+		final paths: Array<String> = [];
+		for (d in decls) {
+			final path: String = qualifiedPath(d);
+			if (!paths.contains(path)) paths.push(path);
+		}
+		final bound: Bool = paths.length == 1 && paths[0] == module;
+		final excluded: Bool = bound
+			&& decls.exists(d -> d.type.members.exists(m -> m.name == method && m.isStatic && m.excludedFromExtensions));
+		return {
+			elsewhere: paths.length > 0 && !paths.contains(module) || excluded,
+			proven: bound && info.ambientImportsBounded,
+			usings: usings
+		};
+	}
+
+	/**
+	 * The name's binding when the only thing `TypeNameBinding` could not answer is a `#if`-guarded `import` / `using` of
+	 * `module` itself: the builds that compile it bind `module`, so the name is `module` everywhere when the file's other
+	 * statements alone bind it to `module` too. Empty otherwise.
+	 */
+	private static function moduleIfGuardedSelf(name: String, module: String, info: FileInfo, index: SymbolIndex): Array<ResolvedType> {
+		final self: (ImportInfo) -> Bool = i -> i.guarded && i.raw == module && (i.kind == ImportKind.Import || i.kind == ImportKind.Using);
+		if (!info.imports.exists(self)) return [];
+		final rest: FileInfo = {
+			file: info.file,
+			pkg: info.pkg,
+			module: info.module,
+			imports: info.imports.filter(i -> !self(i)),
+			types: info.types,
+			ambientImports: info.ambientImports,
+			ambientImportsBounded: info.ambientImportsBounded,
+			accessGrants: info.accessGrants
+		};
+		final decls: Array<ResolvedType> = TypeNameBinding.bind(name, rest, index) ?? [];
+		return decls.exists(d -> qualifiedPath(d) != module) ? [] : decls;
+	}
+
+	/** The path a module-level type is imported by: its module's for the main type, the module's plus its name otherwise. */
+	private static inline function qualifiedPath(d: ResolvedType): String {
+		return d.type.isMain ? d.file.module : '${d.file.module}.${d.type.name}';
+	}
+
+	/** The path of every `using` declaration under `node`, whatever region holds it. */
+	private static function collectUsings(node: QueryNode, out: Array<String>): Void {
+		final path: Null<String> = node.kind == UsingScan.USING_DECL_KIND ? node.name : null;
+		if (path != null && !out.contains(path)) out.push(path);
+		for (child in node.children) collectUsings(child, out);
 	}
 
 	/**
@@ -452,7 +544,10 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		final index: SymbolIndex = resolved;
 		return if (index.members.memberShadowsExtension(receiverType, method))
 			null
-		else if (index.members.typeProvablyLacksMember(receiverType, method, file))
+		else if (
+			index.members.typeProvablyLacksMember(receiverType, method, file)
+			&& index.members.closureFreeOfExtensionTypes(receiverType, file)
+		)
 			Verdict.Fixable
 		else
 			Verdict.UnresolvedClosure;
@@ -610,6 +705,9 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 			case Verdict.UnresolvedReceiver:
 				'the receiver\'s nominal type did not resolve in scope, so whether it declares a same-name member — which Haxe would '
 					+ 'pick over the extension — cannot be answered';
+			case Verdict.UnprovenChannels:
+				'whether the written module name denotes the configured module, or which `using` an ambient import adds, did '
+					+ 'not resolve, so the extension form may bind another function';
 			case _:
 				'the receiver resolved but its member closure did not, so a same-name member the rewrite would silently retarget '
 					+ 'cannot be ruled out';
@@ -624,6 +722,9 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 			case Verdict.UnresolvedReceiver:
 				'this static utility call may be the extension call $suggestion'
 					+ ' (receiver type unresolved: verify the receiver type declares no same-name member)';
+			case Verdict.UnprovenChannels:
+				'this static utility call may be the extension call $suggestion'
+					+ ' (verify the module name is the configured module and no other `using` provides the method)';
 			case _:
 				'this static utility call may be the extension call $suggestion (verify the receiver type declares no same-name member)';
 		}
@@ -712,6 +813,9 @@ private enum abstract Verdict(Int) {
 	/** The receiver resolved but its member closure did not — reported, never rewritten. */
 	final UnresolvedClosure = 2;
 
+	/** The receiver is proven, but a channel the compiler could bind the call through is not — reported, never rewritten. */
+	final UnprovenChannels = 3;
+
 }
 
 /** The `RefShape` kinds + type provider this check reads, bundled once so the walkers take one argument. */
@@ -745,4 +849,17 @@ private typedef Candidate = {
 	var module: String;
 	var verdict: Verdict;
 	var message: String;
+};
+
+/** What `channelsOf` read off the channels a call's extension form could bind through. */
+private typedef Channels = {
+
+	/** The written name denotes another type, or the function takes no part in `using`: the site is no candidate. */
+	final elsewhere: Bool;
+
+	/** The name denotes the configured module through the index, over a bounded ambient chain. */
+	final proven: Bool;
+
+	/** Every `using` that may reach the site: the file's, in any region, and the ambient chain's. */
+	final usings: Array<String>;
 };

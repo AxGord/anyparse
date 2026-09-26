@@ -8226,7 +8226,7 @@
 			"name": "M-PSE-FACTS-OVERLOAD",
 			"type": "anyparse.check.StaticExtensionFacts",
 			"method": "firstParam",
-			"find": "field.overloads.exists(n -> n > 0) || ",
+			"find": " || field.overloads.exists(n -> n > 0)",
 			"replace": "",
 			"note": "an overloaded static is judged by its first signature, the only one the facts field records"
 		},
@@ -8261,6 +8261,46 @@
 			"find": "c == '>'.code && signature.fastCodeAt(i - 1) != '-'.code",
 			"replace": "c == '>'.code",
 			"note": "the arrow of a function-typed parameter closes a bracket"
+		},
+		{
+			"name": "M-PSE-CHANNEL-ALIAS",
+			"type": "anyparse.check.PreferStaticExtension",
+			"method": "channelsOf",
+			"find": "elsewhere: paths.length > 0 && !paths.contains(module) || excluded,",
+			"replace": "elsewhere: excluded,",
+			"note": "a module name an import alias rebinds to another type keeps the site as a candidate"
+		},
+		{
+			"name": "M-PSE-CHANNEL-REGION-USING",
+			"type": "anyparse.check.PreferStaticExtension",
+			"method": "collectUsings",
+			"find": "for (child in node.children) collectUsings(child, out);",
+			"replace": "for (child in node.children) if (child.kind != 'Conditional') collectUsings(child, out);",
+			"note": "a using inside a conditional region is invisible to the conflict gate"
+		},
+		{
+			"name": "M-PSE-CHANNEL-NO-USING",
+			"type": "anyparse.query.SymbolIndexBuilder",
+			"method": "collectMembers",
+			"find": "runNoExtension = true;",
+			"replace": "runNoExtension = false;",
+			"note": "a @:noUsing static reads as an extension"
+		},
+		{
+			"name": "M-PSE-CLOSURE-USING",
+			"type": "anyparse.check.PreferStaticExtension",
+			"method": "verdictFor",
+			"find": "\n\t\t\t&& index.members.closureFreeOfExtensionTypes(receiverType, file)",
+			"replace": "",
+			"note": "the structural path ignores @:using on the receiver's type closure"
+		},
+		{
+			"name": "M-PSE-CLOSURE-USING-SUPER",
+			"type": "anyparse.query.MemberLookup",
+			"method": "freeOfExtensionTypes",
+			"find": "if (anc == null || !freeOfExtensionTypes(anc, seen)) return false;",
+			"replace": "if (anc == null) return false;",
+			"note": "a @:using on a superclass or an interface is not walked"
 		}
 	]
 }

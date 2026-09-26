@@ -14,6 +14,7 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.Cli;
 import anyparse.query.CompilerFacts;
+import anyparse.query.StdResolver;
 import haxe.io.Path;
 import unit.cli.CliFixture;
 import utest.Assert;
@@ -121,6 +122,33 @@ class PreferStaticExtensionFactsTest extends Test {
 		''
 	].join('\n');
 
+	/** `Util` is an alias of `Other`; the configured `Util` is another module (`testAnImportAliasOfTheModuleNameDropsTheSite`). */
+	private static final ALIAS_MAIN: String = 'import Other as Util;\n\nclass Main {\n\tstatic function mk()\n\t\treturn new Base();\n\n'
+		+ '\tstatic function main() {\n\t\tfinal b:Null<Base> = mk();\n\t\tfinal c:Base = new Base();\n'
+		+ '\t\tSys.println(Util.f(b)); // facts\n\t\tSys.println(Util.f(c)); // structural\n\t}\n}\n';
+
+	/** `Util.f` and `Other.f`, both taking a `Base`. */
+	private static final TWIN_MODULES: String = 'class Util {\n\tpublic static function f(x:Base):String\n\t\treturn "Util.f";\n}\n\n'
+		+ 'class Other {\n\tpublic static function f(x:Base):String\n\t\treturn "Other.f";\n}\n\n';
+
+	/** `Base`, and a `Main` calling `Util.f` on a receiver each path types: a facts site and a structural one. */
+	private static final BASE_MAKER: String = 'class Base {\n\tpublic function new() {}\n}\n\nclass Main {\n\tstatic function mk()\n\t\treturn new Base();\n\n'
+		+ '\tstatic function main() {\n\t\tfinal b:Null<Base> = mk();\n\t\tfinal c:Base = new Base();\n'
+		+ '\t\tSys.println(Util.f(b)); // facts\n\t\tSys.println(Util.f(c)); // structural\n\t}\n}\n';
+
+	/** Receivers whose type, superclass or interface carries `@:using(Main.Other)`. */
+	private static final USING_MAIN: String = 'class Util {\n\tpublic static function t(x:Tp):String\n\t\treturn "Util.t";\n\n'
+		+ '\tpublic static function u(x:Sub):String\n\t\treturn "Util.u";\n\n\tpublic static function v(x:Impl):String\n\t\treturn "Util.v";\n}\n\n'
+		+ 'class Other {\n\tpublic static function t(x:Tp):String\n\t\treturn "Other.t";\n\n\tpublic static function u(x:Tp):String\n\t\treturn "Other.u";\n\n'
+		+ '\tpublic static function v(x:I):String\n\t\treturn "Other.v";\n}\n\n'
+		+ '@:using(Main.Other) class Tp {\n\tpublic function new() {}\n}\n\nclass Sub extends Tp {}\n\n@:using(Main.Other) interface I {}\n\n'
+		+ 'class Impl implements I {\n\tpublic function new() {}\n}\n\n'
+		+ 'class Main {\n\tstatic function mkSub()\n\t\treturn new Sub();\n\n\tstatic function mkImpl()\n\t\treturn new Impl();\n\n'
+		+ '\tstatic function main() {\n\t\tfinal tp:Tp = new Tp();\n\t\tfinal s:Sub = new Sub();\n\t\tfinal i:Impl = new Impl();\n'
+		+ '\t\tfinal sn:Null<Sub> = mkSub();\n\t\tfinal im:Null<Impl> = mkImpl();\n'
+		+ '\t\tSys.println(Util.t(tp)); // own\n\t\tSys.println(Util.u(s)); // super\n\t\tSys.println(Util.v(i)); // iface\n'
+		+ '\t\tSys.println(Util.u(sn)); // super facts\n\t\tSys.println(Util.v(im)); // iface facts\n\t}\n}\n';
+
 	@:pin('control') @:killer('M-PSE-FACTS-OFF') @:killer('M-PSE-FACTS-NULL')
 	public function testAReceiverOnlyTheFactsTypeIsRewritten(): Void {
 		final seen: Null<Map<String, String>> = verdicts([[]]);
@@ -217,6 +245,59 @@ class PreferStaticExtensionFactsTest extends Test {
 		Assert.isNull(StaticExtensionFacts.firstParamOf('String'));
 	}
 
+	/**
+	 * `import Other as Util` rebinds the configured module's name: `Util.f(b)` calls `Other.f`, while the rewrite's
+	 * `using Util` binds the configured module's `f` — both inline, so no call fact at the site names either.
+	 */
+	@:pin('control') @:killer('M-PSE-CHANNEL-ALIAS')
+	public function testAnImportAliasOfTheModuleNameDropsTheSite(): Void {
+		final seen: Null<Map<String, String>> =
+			verdicts([[]], ALIAS_MAIN, ALIAS_MAIN, BUILD, '{"rules": {"prefer-static-extension": {"types": ["Util"]}}}', [
+				'Base.hx' => 'class Base {\n\tpublic var n:Int = 1;\n\n\tpublic function new() {}\n\n\tpublic static function touch():String\n\t\treturn Util.f(new Base());\n}\n',
+				'Other.hx' => 'class Other {\n\tpublic static inline function f(x:Base):String\n\t\treturn "Other.f " + x.n;\n}\n',
+				'Util.hx' => 'class Util {\n\tpublic static inline function f(x:Base):String\n\t\treturn "Util.f " + x.n;\n}\n'
+			]);
+		if (seen == null) return;
+		for (site in ['facts', 'structural']) Assert.equals('drop', seen[site], '$site: $seen');
+	}
+
+	/** A `using` in a conditional region binds in the builds that compile it: `Other.f` there, not the configured `Util.f`. */
+	@:pin('control') @:killer('M-PSE-CHANNEL-REGION-USING')
+	public function testAConditionalUsingProvidingTheMethodDropsTheSite(): Void {
+		final source: String = '#if !nope\nusing Main.Other;\n#end\n\n' + TWIN_MODULES + BASE_MAKER;
+		final seen: Null<Map<String, String>> = verdicts([[]], source, source);
+		if (seen == null) return;
+		for (site in ['facts', 'structural']) Assert.equals('drop', seen[site], '$site: $seen');
+	}
+
+	/** `@:noUsing` keeps `Util.f` out of `using`: the rewrite would not compile. */
+	@:pin('control') @:killer('M-PSE-CHANNEL-NO-USING')
+	public function testANoUsingFunctionDropsTheSite(): Void {
+		final source: String = 'class Util {\n\t@:noUsing public static function f(x:Base):String\n\t\treturn "Util.f";\n}\n\n' + BASE_MAKER;
+		final seen: Null<Map<String, String>> = verdicts([[]], source, source);
+		if (seen == null) return;
+		for (site in ['facts', 'structural']) Assert.equals('drop', seen[site], '$site: $seen');
+	}
+
+	/**
+	 * A receiver type's `@:using` binds before the file's `using` — on the type itself, on a superclass and on an
+	 * interface alike; the structural path and the facts path each keep such a site report-only.
+	 */
+	@:pin('control') @:killer('M-PSE-CLOSURE-USING')
+	public function testAUsingOnTheReceiverTypeKeepsTheSiteReportOnly(): Void {
+		final seen: Null<Map<String, String>> = verdicts([[]], USING_MAIN, USING_MAIN);
+		if (seen == null) return;
+		for (site in ['own', 'super', 'iface']) Assert.equals('report', seen[site], '$site: $seen');
+		for (site in ['super facts', 'iface facts']) Assert.equals('report', seen[site], '$site: $seen');
+	}
+
+	@:pin('control') @:killer('M-PSE-CLOSURE-USING-SUPER')
+	public function testAUsingOnASupertypeKeepsTheSiteReportOnly(): Void {
+		final seen: Null<Map<String, String>> = verdicts([[]], USING_MAIN, USING_MAIN);
+		if (seen == null) return;
+		for (site in ['super', 'iface']) Assert.equals('report', seen[site], '$site: $seen');
+	}
+
 	/** `--fix` end to end: the proven sites are rewritten with the `using` they need, and the program prints what it printed. */
 	@:pin('guard')
 	public function testTheRewrittenProgramPrintsWhatItPrinted(): Void {
@@ -256,19 +337,34 @@ class PreferStaticExtensionFactsTest extends Test {
 		#end
 	}
 
+	/** The std `StringTools` module, which the index resolves a written `StringTools` against; none without a std. */
+	private static function stdStringTools(): Array<{ file: String, source: String }> {
+		#if (sys || nodejs)
+		final std: Null<String> = StdResolver.stdDir();
+		return std == null ? [] : [
+			{ file: Path.join([std, 'StringTools.hx']), source: File.getContent(Path.join([std, 'StringTools.hx'])) }
+		];
+		#else
+		return [];
+		#end
+	}
+
 	/**
 	 * The verdict per marked site of `source` (default `MAIN`), compiled from `compiled` (default `MAIN`) by `build` under
 	 * each define set of `configurations`, with `config` as the project's options: `fix`, `report`, or `drop` for a site
 	 * with no finding. Null when haxe is unavailable.
 	 */
 	private static function verdicts(
-		configurations: Array<Array<String>>, ?source: String, ?compiled: String, build: String = BUILD, config: String = CONFIG
+		configurations: Array<Array<String>>, ?source: String, ?compiled: String, build: String = BUILD, config: String = CONFIG,
+		?extra: Map<String, String>
 	): Null<Map<String, String>> {
 		#if (sys || nodejs)
-		final dir: String = CliFixture.writeTree('pse_facts', [
+		final written: Array<{ name: String, source: String }> = [
 			{ name: 'Main.hx', source: compiled ?? MAIN },
 			{ name: 'build.hxml', source: build }
-		]);
+		];
+		for (name => text in extra ?? []) written.push({ name: name, source: text });
+		final dir: String = CliFixture.writeTree('pse_facts', written);
 		final oracles: Array<OracleConfig> = [for (d in configurations) { hxml: 'build.hxml', dir: dir, defines: d }];
 		if (!CompilerOracle.typecheck('build.hxml', dir).match(Confirmed)) {
 			CliFixture.removeDir(dir);
@@ -282,14 +378,16 @@ class PreferStaticExtensionFactsTest extends Test {
 			return null;
 		}
 		final text: String = source ?? MAIN;
-		final files: Array<{ file: String, source: String }> = [{ file: Path.join([dir, 'Main.hx']), source: text }];
+		final main: String = Path.join([dir, 'Main.hx']);
+		final files: Array<{ file: String, source: String }> = [{ file: main, source: text }];
+		for (name => code in extra ?? []) files.push({ file: Path.join([dir, name]), source: code });
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		plugin.setResolutionScope({
 			declared: true,
 			sources: () -> {
 				report: files,
 				projectRoots: [],
-				library: new LibrarySources([]),
+				library: new LibrarySources(stdStringTools()),
 				rootsMatched: true,
 				rootsAllMatched: true
 			},
@@ -306,7 +404,7 @@ class PreferStaticExtensionFactsTest extends Test {
 			final mark: Int = line.indexOf('// ');
 			if (mark >= 0 && (line.indexOf('Sys.println') >= 0 || line.indexOf('trace(') >= 0)) out[line.substr(mark + 3)] = 'drop';
 		}
-		for (v in found) {
+		for (v in found) if (v.file == main) {
 			final from: Int = v.span?.from ?? -1;
 			final line: String = lines[text.substring(0, from).split('\n').length - 1];
 			final mark: Int = line.indexOf('// ');
