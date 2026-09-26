@@ -3,10 +3,12 @@ package anyparse.check;
 import anyparse.check.Check.OracleType;
 import anyparse.check.Check.TypeOracle;
 import anyparse.check.FactsTypeSpelling.TypeScope;
+import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CompilerFacts;
 import anyparse.query.EditJournal;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
+import anyparse.query.SymbolIndexHost;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -53,6 +55,12 @@ final class FactsTypeOracle implements TypeOracle {
 
 	public static inline final DECLINE_PARAM_MISMATCH: String = "the compiler's parameter list does not match the declaration's";
 
+	/** The opening of a nullable type, as `FactsTypeSpelling` writes it. */
+	private static inline final NULL_OPEN: String = 'Null<';
+
+	/** The nullable wrapper's own name: never the type of a value `typeIdAt` names. */
+	private static inline final NULL_TYPE: String = 'Null';
+
 	/** The suffix of an abstract's implementation class: its members are the abstract's. */
 	private static inline final IMPL_SUFFIX: String = '_Impl_';
 
@@ -62,10 +70,13 @@ final class FactsTypeOracle implements TypeOracle {
 	public static inline final DECLINE_DYNAMIC_SOURCE: String =
 		'a `Dynamic` value flows into it, so the type the compiler gave it was inferred from its uses, not from the value';
 
+
 	public static inline final DECLINE_ELSEWHERE: String =
 		'the facts place this code in another member or type than the file as it is now does';
 
-	private final _facts: CompilerFacts;
+	/** The table this oracle reads. */
+	public final facts: CompilerFacts;
+
 	private final _current: (String) -> Null<String>;
 	private final _journal: Null<EditJournal>;
 	private final _plugin: GrammarPlugin;
@@ -74,7 +85,7 @@ final class FactsTypeOracle implements TypeOracle {
 	/** Table key -> where the facts of that file are read, settled on first need. */
 	private final _sites: Map<String, Null<FactsSite>> = [];
 
-	/** `_facts` read as the compile read each file (`CompilerFacts.asCompiled`), built on first need. */
+	/** `facts` read as the compile read each file (`CompilerFacts.asCompiled`), built on first need. */
 	private var _asCompiled: Null<CompilerFacts> = null;
 
 	/**
@@ -86,11 +97,49 @@ final class FactsTypeOracle implements TypeOracle {
 		facts: CompilerFacts, current: (String) -> Null<String>, journal: Null<EditJournal>, plugin: GrammarPlugin,
 		?fallback: () -> Null<TypeOracle>
 	) {
-		_facts = facts;
+		this.facts = facts;
 		_current = current;
 		_journal = journal;
 		_plugin = plugin;
 		_fallback = fallback;
+	}
+
+	/**
+	 * The compiler facts of the run `plugin` serves (`SymbolIndexHost.compilerFacts`), when every configuration contributed
+	 * to them: a configuration missing from the table could type a declaration differently, and agreement is what a facts
+	 * answer rests on. Null otherwise, or when the run reads none.
+	 */
+	public static function runFacts(plugin: GrammarPlugin): Null<CompilerFacts> {
+		final facts: Null<CompilerFacts> = plugin is SymbolIndexHost ? (cast plugin: SymbolIndexHost).compilerFacts() : null;
+		return facts == null || facts.dropped.length > 0 || facts.configurations.length == 0 ? null : facts;
+	}
+
+	/**
+	 * The oracle a `Check.fix` of `file`, whose text is `source` now, asks over the run's facts (`runFacts`), placing a
+	 * rewritten file through the run's edit journal; null when the run has no such facts. It has no fallback: a file whose
+	 * compiled text is gone declines.
+	 */
+	public static function forFix(plugin: GrammarPlugin, file: String, source: String): Null<FactsTypeOracle> {
+		final facts: Null<CompilerFacts> = runFacts(plugin);
+		if (facts == null) return null;
+		final journal: Null<EditJournal> = plugin is CachingGrammarPlugin ? (cast plugin: CachingGrammarPlugin).editJournal : null;
+		return new FactsTypeOracle(facts, f -> f == file ? source : null, journal, plugin);
+	}
+
+	/**
+	 * The id of the type every configuration gave the expression at `expr` (`expressionType`) — a `Null<…>` unwrapped when
+	 * `unwrapNull`, type arguments dropped — when it names a type the facts hold; null otherwise: a declined answer, a type
+	 * parameter, a function or structure type, or a `Null<…>` kept.
+	 */
+	public function typeIdAt(file: String, expr: Span, unwrapNull: Bool): Null<String> {
+		var spelled: String = switch valueType(file, expr) {
+			case Typed(type): type;
+			case Declined(_): return null;
+		};
+		if (unwrapNull && spelled.startsWith(NULL_OPEN) && spelled.endsWith('>'))
+			spelled = spelled.substring(NULL_OPEN.length, spelled.length - 1);
+		final id: String = CompilerFacts.baseId(spelled);
+		return id == NULL_TYPE || facts.type(id) == null ? null : id;
 	}
 
 	public function localType(file: String, decl: Span, name: String, nameEnd: Int): OracleType {
@@ -156,19 +205,34 @@ final class FactsTypeOracle implements TypeOracle {
 	}
 
 	public function expressionType(file: String, expr: Span): OracleType {
-		return resolve(file, expr, expr, o -> o.expressionType(file, expr), (site, at, here) -> {
-			final nodes: Array<FactNode> = site.facts.nodesAround(site.file, at);
-			if (nodes.length == 0) return Declined(DECLINE_CODE_NOT_COMPILED);
-			if (!sameHome(site, nodes[nodes.length - 1], here)) return Declined(DECLINE_ELSEWHERE);
-			final typed: Null<String> = site.facts.typeOfExpressionAt(site.file, at);
-			final types: Array<String> = typed == null ? [] : [typed];
-			// a value handed to a place of another type flows there at its own type: the facts' only record of many a value
-			for (f in site.facts.flowsIn(site.file, at) ?? []) if (
-				f.at.file == site.key && f.at.span.from == at.from && f.at.span.to == at.to && !types.contains(f.from)
-			)
-				types.push(f.from);
-			return agreed(types, scopeOf(nodes[nodes.length - 1]), DECLINE_NO_FACT);
-		});
+		return resolve(file, expr, expr, o -> o.expressionType(file, expr), typedAt.bind(true));
+	}
+
+	/**
+	 * The type the compiler gave the expression at `expr` ITSELF: what `expressionType` answers without the flows. A flow's
+	 * source type is the value's before a conversion at that range, which a check-type `(e : T)` records at its own range:
+	 * the type of the inner value, not of the expression.
+	 */
+	public function valueType(file: String, expr: Span): OracleType {
+		return resolve(file, expr, expr, o -> o.expressionType(file, expr), typedAt.bind(false));
+	}
+
+	/**
+	 * The type the facts of `site` give the expression at `at`, held in the member and type `here` — with `flows`, also
+	 * the type a value flowing from that very range had (`expressionType`), else only the expression's own (`valueType`).
+	 */
+	private function typedAt(flows: Bool, site: FactsSite, at: Span, here: Home): OracleType {
+		final nodes: Array<FactNode> = site.facts.nodesAround(site.file, at);
+		if (nodes.length == 0) return Declined(DECLINE_CODE_NOT_COMPILED);
+		if (!sameHome(site, nodes[nodes.length - 1], here)) return Declined(DECLINE_ELSEWHERE);
+		final typed: Null<String> = site.facts.typeOfExpressionAt(site.file, at);
+		final types: Array<String> = typed == null ? [] : [typed];
+		// a value handed to a place of another type flows there at its own type: the facts' only record of many a value
+		if (flows)
+			for (f in site.facts.flowsIn(site.file, at) ?? [])
+				if (f.at.file == site.key && f.at.span.from == at.from && f.at.span.to == at.to && !types.contains(f.from))
+					types.push(f.from);
+		return agreed(types, scopeOf(nodes[nodes.length - 1]), DECLINE_NO_FACT);
 	}
 
 	/**
@@ -197,7 +261,7 @@ final class FactsTypeOracle implements TypeOracle {
 	private function resolve(
 		file: String, span: Span, key: Span, ask: (TypeOracle) -> OracleType, query: (FactsSite, Span, Home) -> OracleType
 	): OracleType {
-		if (!_facts.compiled(file)) return Declined(DECLINE_FILE_NOT_COMPILED);
+		if (!facts.compiled(file)) return Declined(DECLINE_FILE_NOT_COMPILED);
 		final site: Null<FactsSite> = siteOf(file);
 		if (site == null) {
 			final fallback: Null<() -> Null<TypeOracle>> = _fallback;
@@ -276,13 +340,13 @@ final class FactsTypeOracle implements TypeOracle {
 	 * the run rewrote answers at its original text; null when neither holds the text the compile read.
 	 */
 	private function siteOf(file: String): Null<FactsSite> {
-		final key: String = _facts.keyOf(file);
+		final key: String = facts.keyOf(file);
 		if (_sites.exists(key)) return _sites[key];
 		final current: Null<String> = _current(file);
-		var table: CompilerFacts = _facts;
-		var text: Null<String> = _facts.sourceOf(key);
+		var table: CompilerFacts = facts;
+		var text: Null<String> = facts.sourceOf(key);
 		if (text == null) {
-			final compiled: CompilerFacts = _asCompiled ?? _facts.asCompiled();
+			final compiled: CompilerFacts = _asCompiled ?? facts.asCompiled();
 			_asCompiled = compiled;
 			table = compiled;
 			text = compiled.sourceOf(key);

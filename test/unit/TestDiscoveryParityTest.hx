@@ -168,6 +168,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.ExplicitTypeCheckTest',
 		'unit.check.ExplicitTypeReturnOracleTest',
 		'unit.check.ExtractRepeatedExpressionTest',
+		'unit.check.FactsFixGateE2ETest',
 		'unit.check.FactsTypeOracleE2ETest',
 		'unit.check.FactsTypeOracleTest',
 		'unit.check.FieldInitAtDeclarationCheckTest',
@@ -1181,6 +1182,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.EffectiveRulesTest#testTheRunSkipsWhatTheListingReportsOff :: control :: M-GATE-COLLECT-BYPASS',
 			'unit.check.ExtractRepeatedExpressionTest#testALiteralInteriorDifferenceSplitsTheGroup :: control :: '
 				+ 'M-EXTRACT-REPEAT-RENDER-SPLIT',
+			'unit.check.FactsFixGateE2ETest#testAPrivateMemberNoSupertypeDeclaresIsDeleted :: control :: M-UNUSED-PRIVATE-CHAIN-FACTS,M-UNUSED-PRIVATE-CHAIN-DECLARED,M-UNUSED-PRIVATE-CHAIN-AUTOBUILD',
+			'unit.check.FactsFixGateE2ETest#testAReceiverTheFactsTypeAsANonExternClassLosesItsToString :: control :: M-TOSTRING-FACTS-CLASS,M-TOSTRING-FACTS-EXTERN',
+			'unit.check.FactsFixGateE2ETest#testAnOperandTheFactsTypeLetsTheMergeThrough :: control :: M-FOLD-FACTS-OPERAND,M-FACTS-VALUE-TYPE-FLOWS',
 			'unit.check.FactsTypeOracleE2ETest#testAReorderedFileIsPlacedOnlyThroughTheEditsItsRunApplied :: guard :: ',
 			'unit.check.FactsTypeOracleE2ETest#testTheFactsTypeEveryDeclarationKindAndKeepTheProgram :: control :: M-ASSISTED-FACTS-FIRST,M-ASSISTED-DECLINE-CENSUS,M-EXPLICIT-TYPE-ORACLE-PARAMS,M-EXPLICIT-TYPE-ORACLE-FIELDS,M-FACTS-DYNAMIC-SOURCE',
 			'unit.check.FactsTypeOracleE2ETest#testTheFirstWriteWaitsForTheFactsCompile :: guard :: ',
@@ -3567,7 +3571,14 @@ class TestDiscoveryParityTest extends Test {
 			'M-ORACLE-HOME-MODIFIED-TYPE',
 			'M-FACTS-WRITTEN-DURING',
 			'M-FACTS-CHANGED-STALE',
-			'M-FIX-FACTS-SETTLED'
+			'M-FIX-FACTS-SETTLED',
+			'M-FOLD-FACTS-OPERAND',
+			'M-FACTS-VALUE-TYPE-FLOWS',
+			'M-UNUSED-PRIVATE-CHAIN-FACTS',
+			'M-UNUSED-PRIVATE-CHAIN-DECLARED',
+			'M-UNUSED-PRIVATE-CHAIN-AUTOBUILD',
+			'M-TOSTRING-FACTS-CLASS',
+			'M-TOSTRING-FACTS-EXTERN'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

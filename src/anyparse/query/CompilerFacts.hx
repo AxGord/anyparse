@@ -187,7 +187,8 @@ typedef FieldDeclFact = {
 
 /**
  * A type the compiler typed: `kind` is `class`, `interface`, `impl` (an abstract's implementation class), `abstract`,
- * `enum` or `typedef`. `superClass` and `interfaces` carry their type arguments as written.
+ * `enum` or `typedef`. `superClass` and `interfaces` carry their type arguments
+ * as written; `meta` and `interfaces` hold what any configuration recorded.
  */
 typedef TypeFact = {
 	final id: String;
@@ -205,6 +206,12 @@ typedef TypeFact = {
 
 	/** The printed macro calls of the type's `@:build`/`@:autoBuild`/`@:genericBuild`: compile-time code run over it. */
 	final builds: Array<String>;
+
+	/**
+	 * Whether every configuration that typed it recorded one declaration: one kind, extern in all or in none. `kind` and
+	 * `isExtern` are the first configuration's, so a question about either needs this too.
+	 */
+	var alike: Bool;
 }
 
 /**
@@ -237,6 +244,7 @@ final class CompilerFacts {
 	private final _sources: Map<String, Null<String>> = [];
 	private final _expected: Map<String, String> = [];
 	private final _stale: Map<String, Bool> = [];
+
 
 	/** Table key -> the text a rewritten file had when the run started, when it is the text the compile read. */
 	private final _originals: Map<String, String> = [];
@@ -301,6 +309,7 @@ final class CompilerFacts {
 		for (k => v in _nodeFiles) twin._nodeFiles[k] = v;
 		for (k => v in _types) twin._types[k] = v;
 		for (k => v in _typeHomes) twin._typeHomes[k] = v;
+
 		for (k => v in _supers) twin._supers[k] = v;
 		for (k => v in _subs) twin._subs[k] = v;
 		for (k => v in _expected) twin._expected[k] = v;
@@ -391,6 +400,7 @@ final class CompilerFacts {
 		return _types.keys();
 	}
 
+
 	/** Where the type `id` is declared; null when no configuration typed it or its file cannot be read. */
 	public function typePosition(id: String): Null<FactPos> {
 		final declared: Null<{ home: String, p: Array<Int> }> = _typeHomes[id];
@@ -465,40 +475,36 @@ final class CompilerFacts {
 	}
 
 	private function addType(record: TypeRecord, dump: FactsDump): Void {
-		final home: String = dump.file(record.f);
-		final fields: Array<FieldDeclFact> = [
-			for (f in record.fields ?? [])
-				{
-					name: f.n,
-					kind: f.k,
-					type: f.t,
-					isStatic: f.s ?? false,
-					meta: f.meta ?? [],
-					types: [f.t]
-				}
-		];
+		final made: TypeFact = {
+			id: record.id,
+			kind: record.kind,
+			pack: record.pack,
+			params: record.params ?? [],
+			meta: record.meta ?? [],
+			isExtern: record.ext ?? false,
+			superClass: record.sup,
+			interfaces: record.ifaces ?? [],
+			fields: [
+				for (f in record.fields ?? [])
+					{
+						name: f.n,
+						kind: f.k,
+						type: f.t,
+						isStatic: f.s ?? false,
+						meta: f.meta ?? [],
+						types: [f.t]
+					}
+			],
+			genericOf: record.of,
+			builds: record.builds ?? [],
+			alike: true
+		};
 		final known: Null<TypeFact> = _types[record.id];
 		if (known == null) {
-			final made: TypeFact = {
-				id: record.id,
-				kind: record.kind,
-				pack: record.pack,
-				params: record.params ?? [],
-				meta: record.meta ?? [],
-				isExtern: record.ext ?? false,
-				superClass: record.sup,
-				interfaces: record.ifaces ?? [],
-				fields: fields,
-				genericOf: record.of,
-				builds: record.builds ?? []
-			};
 			_types[record.id] = made;
-			_typeHomes[record.id] = { home: home, p: record.p };
-		} else {
-			// a configuration that typed more of the type (a conditional member) adds what the others lacked
-			FactMerge.fields(known.fields, fields);
-			for (i in record.ifaces ?? []) if (!known.interfaces.contains(i)) known.interfaces.push(i);
-		}
+			_typeHomes[record.id] = { home: dump.file(record.f), p: record.p };
+		} else
+			FactMerge.type(known, made);
 		final parents: Array<String> = (record.ifaces ?? []).copy();
 		final sup: Null<String> = record.sup;
 		if (sup != null) parents.push(sup);

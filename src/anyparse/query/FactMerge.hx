@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.query.CompilerFacts.FactPos;
 import anyparse.query.CompilerFacts.FactSignature;
 import anyparse.query.CompilerFacts.FieldDeclFact;
+import anyparse.query.CompilerFacts.TypeFact;
 import haxe.Json;
 
 using Lambda;
@@ -10,6 +11,18 @@ using Lambda;
 /** How `CompilerFacts` assembles its table: records made into facts, and a second configuration's facts joined to the first's. */
 @:nullSafety(Strict)
 final class FactMerge {
+
+	/**
+	 * `into` joined by `from`, another configuration's record of the same type: a configuration that typed more of it (a
+	 * conditional member, a conditional `implements`) adds what the others lacked, and one recording another kind or extern
+	 * flag makes it not `alike`.
+	 */
+	public static function type(into: TypeFact, from: TypeFact): Void {
+		fields(into.fields, from.fields);
+		for (m in from.meta) if (!into.meta.contains(m)) into.meta.push(m);
+		for (i in from.interfaces) if (!into.interfaces.contains(i)) into.interfaces.push(i);
+		if (into.kind != from.kind || into.isExtern != from.isExtern) into.alike = false;
+	}
 
 	/** `into` with every field of `from` it lacks, and every type `from` gives a field it has that it does not hold yet. */
 	public static function fields(into: Array<FieldDeclFact>, from: Array<FieldDeclFact>): Void {

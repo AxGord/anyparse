@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
+import anyparse.query.CompilerFacts.TypeFact;
 import anyparse.query.DeclaredNullity;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
@@ -59,7 +60,8 @@ using Lambda;
  * **2. The coercion calls the DECLARED `toString`** (the three context arms; the identity arm
  * performs no coercion). The receiver's type must be declared in the analysed scope with NO EXTERN
  * declaration — see `coercionCallsDeclaredToString` for the measured `extern class Date` /
- * `extern class Array` divergence on js that makes this gate load-bearing rather than defensive.
+ * `extern class Array` divergence on js that makes this gate load-bearing rather than defensive. `fix` also
+ * accepts a receiver every configuration of the compiler facts types as a non-extern class (`compiledClass`).
  *
  * **3. `+` on the receiver really is concatenation** (the `+` arm only): its type must be a CLASS,
  * since an `abstract` may overload `@:op(A + B)` and the overload wins over the concatenation rule
@@ -97,6 +99,9 @@ final class RedundantToString implements Check implements DefaultOff {
 	/** The member name the `Std.string(...)` arm matches on. */
 	private static inline final STD_METHOD: String = 'string';
 
+	/** The kind the compiler's facts give a class (`CompilerFacts.TypeFact`). */
+	private static inline final CLASS_KIND: String = 'class';
+
 	public function new() {}
 
 	public function id(): String {
@@ -113,7 +118,7 @@ final class RedundantToString implements Check implements DefaultOff {
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final context: Null<Ctx> = contextFor(plugin, entry.file, entry.source, seams, index);
+			final context: Null<Ctx> = contextFor(plugin, entry.file, entry.source, seams, index, null);
 			if (context == null) continue;
 			for (found in collect(context)) {
 				final blocker: Null<String> = found.blocker;
@@ -146,7 +151,8 @@ final class RedundantToString implements Check implements DefaultOff {
 		final seams: Null<Seams> = resolveSeams(plugin);
 		if (seams == null) return [];
 		final scope: SymbolIndex = index ?? SymbolIndex.build([{ file: '', source: source }], plugin);
-		final context: Null<Ctx> = contextFor(plugin, violations.length == 0 ? '' : violations[0].file, source, seams, scope);
+		final file: String = violations.length == 0 ? '' : violations[0].file;
+		final context: Null<Ctx> = contextFor(plugin, file, source, seams, scope, FactsTypeOracle.forFix(plugin, file, source));
 		if (context == null) return [];
 		final wanted: Array<String> = RunScan.spanKeys(violations);
 		final edits: Array<{ span: Span, text: String }> = [];
@@ -177,7 +183,9 @@ final class RedundantToString implements Check implements DefaultOff {
 	 * `run`, and whole-scope in `fix` too whenever the caller passes one (`Cli` always does). The
 	 * null proof resolves written types against the run's resolution scope when there is one.
 	 */
-	private static function contextFor(plugin: GrammarPlugin, file: String, source: String, seams: Seams, index: SymbolIndex): Null<Ctx> {
+	private static function contextFor(
+		plugin: GrammarPlugin, file: String, source: String, seams: Seams, index: SymbolIndex, facts: Null<FactsTypeOracle>
+	): Null<Ctx> {
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return null;
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
@@ -187,7 +195,9 @@ final class RedundantToString implements Check implements DefaultOff {
 			seams: seams,
 			declaredTypes: provider == null ? [] : provider.declaredTypes(source),
 			nullity: DeclaredNullity.of(file, tree, source, seams.shape, provider, RefactorSupport.lazySymbolIndex([], plugin, index)),
-			index: index
+			index: index,
+			file: file,
+			facts: facts
 		};
 	}
 
@@ -251,10 +261,13 @@ final class RedundantToString implements Check implements DefaultOff {
 		if (!info.nonNull) return 'the receiver is not provably non-null, so dropping the call would print "null" where it throws';
 		final typeName: Null<String> = info.typeName;
 		if (arm != StringReceiver) {
-			if (typeName == null || !coercionCallsDeclaredToString(typeName, ctx))
+			final declared: Bool = typeName != null && coercionCallsDeclaredToString(typeName, ctx);
+			final classDeclared: Bool = typeName != null && declared && isClassType(typeName, ctx);
+			final compiled: Bool = (!declared || (arm == Concat && !classDeclared)) && compiledClass(recvSpan, ctx);
+			if (!declared && !compiled)
 				return 'the receiver type is not a non-extern type '
 					+ 'declared in scope, so its toString is not provably the method the string coercion calls';
-			if (arm == Concat && !isClassType(typeName, ctx))
+			if (arm == Concat && !classDeclared && !compiled)
 				return 'the receiver type is not a class, so a `+` operator overload could make this something other than concatenation';
 		}
 		final removed: String = ctx.source.substring(recvSpan.to, callSpan.to);
@@ -312,6 +325,20 @@ final class RedundantToString implements Check implements DefaultOff {
 	private static function isClassType(typeName: String, ctx: Ctx): Bool {
 		final decls: Array<TypeDeclInfo> = declsOf(typeName, ctx);
 		return decls.length != 0 && decls.foreach(decl -> ctx.seams.classDeclKinds.contains(decl.kind));
+	}
+
+	/**
+	 * Whether the compiler's facts (`fix` only) prove the receiver at `recvSpan` a value of a non-extern CLASS: every
+	 * configuration gave the expression that one type and declared it a class, extern in none. A class is what both context
+	 * proofs ask of a written type (`coercionCallsDeclaredToString`, `isClassType`), read here off the builds themselves. A
+	 * nullable type proves nothing: the non-null proof is the resolver's, never the facts'.
+	 */
+	private static function compiledClass(recvSpan: Span, ctx: Ctx): Bool {
+		final facts: Null<FactsTypeOracle> = ctx.facts;
+		final id: Null<String> = facts?.typeIdAt(ctx.file, recvSpan, false);
+		if (facts == null || id == null) return false;
+		final declared: Null<TypeFact> = facts.facts.type(id);
+		return declared != null && declared.alike && declared.kind == CLASS_KIND && !declared.isExtern;
 	}
 
 	/** Every in-scope top-level declaration named `typeName`. */
@@ -592,6 +619,12 @@ private typedef Ctx = {
 
 	/** The resolution scope: whole-analysed-set in `run`, and in `fix` whenever the caller passes one. */
 	final index: SymbolIndex;
+
+	/** The file analysed. */
+	final file: String;
+
+	/** The compiler's facts, asked by `fix` for a receiver type the resolution scope cannot place; null in `run`. */
+	final facts: Null<FactsTypeOracle>;
 };
 
 /** What a receiver resolves to — the two facts every gate downstream needs. */

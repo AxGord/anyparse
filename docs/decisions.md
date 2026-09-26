@@ -816,3 +816,6 @@ decided the question; it may not become a record of runs.
 - the facts compile's mtime check (`writtenSince`) as a guarantee on its own → a coarse-mtime filesystem (ext4 kernel
   tick, HFS+/SMB seconds) can date a write made during the compile before its start; the `--fix` barrier closes the
   run's own writes, only an outside writer during the compile (a parallel hxq) remains — `2d7f06cf`
+- `prefer-arrow-callback` reading the callee signature off the facts' call target → TM's one site hands the literal to tink `Future.handle`, whose parameter is the abstract `Callback<T>` (its `@:from` casts choose the conversion; there is no function type whose `Void` return could be read), and anyparse's is macro-context code no facts compile types; no gain, not built
+- clearing `unused-private`'s `extends` veto because no supertype in the facts declares the name → a supertype's `@:autoBuild` builds the subclass as its own `@:build`, which the rule declines; 5 of TM's 6 sit under `openfl.display.Sprite`'s, so the facts clear only a chain that carries none
+- typing a concatenation operand with `FactsTypeOracle.expressionType` → it adds the source type of a flow at that range, so a check-type `(name() : Dir)` answered `String` and a merge crossed `Dir`'s overloaded `+`; an operand is read with `valueType`, the expression's own type

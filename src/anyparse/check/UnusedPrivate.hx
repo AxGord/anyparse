@@ -4,6 +4,7 @@ import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.FrameworkAware;
 import anyparse.check.Check.Violation;
 import anyparse.check.ReflectionScan.ReflectionSurface;
+import anyparse.query.CompilerFacts;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberKinds;
@@ -92,7 +93,8 @@ using StringTools;
  * qualifies, a body-less declaration never — `RefactorSupport.isSideEffectFree`),
  * it is not an abstract-method impl of an `extends` class
  * (`mayImplementAbstractMethod`: Haxe impls carry no `override` and the base's
- * call is invisible to a single-file scan), its enclosing type carries no `@:rtti`
+ * call is invisible to a single-file scan — unless the compiler's facts show no supertype
+ * declares the name, `supertypeDecline`), its enclosing type carries no `@:rtti`
  * (drill-Node serialization by field name), `@:keep`, or `@:build`, and its name
  * appears in no string literal anywhere in the RESOLUTION scope — report files
  * UNION the library, `ReflectionScan`'s scope, the only one a name-keyed
@@ -124,6 +126,13 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	 */
 	private static inline final DECLINE_BUILD_MACRO: String = 'the enclosing type is under a `@:build` macro, which reads the '
 		+ 'field list this deletion would change';
+
+	/** The decline of a member of an `extends` class the compiler's facts cannot clear (`supertypeDecline`). */
+	private static inline final DECLINE_ABSTRACT_IMPL: String = 'the member may implement an ABSTRACT method of the `extends` '
+		+ 'class — a Haxe impl carries no `override`, so the call in the base is invisible from here';
+
+	/** The metadata a supertype hands its build macro down to every subclass with, as the facts record it. */
+	private static inline final AUTO_BUILD_META: String = ':autoBuild';
 
 	/**
 	 * RESOLUTION-scope string-literal contents gathered by the last `run` — `ReflectionScan.reflectionSurface`,
@@ -236,8 +245,8 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	 * Delete the auto-fixable subset of `violations` under conservative gates: a
 	 * doubtful case stays report-only, so `--fix` never breaks another platform's
 	 * build. A flagged MEMBER is removed only when its initializer is side-effect-free (a body-bearing method always
-	 * qualifies, a body-less declaration never), it is not an abstract-method impl of an `extends`
-	 * class (`mayImplementAbstractMethod`), its enclosing type carries no
+	 * qualifies, a body-less declaration never), it is not an abstract-method impl of an `extends` class (`mayImplementAbstractMethod`,
+	 * lifted when the compiler's facts clear the chain — `supertypeDecline`), its enclosing type carries no
 	 * `@:rtti` (drill-Node field-name serialization, via the index), `@:keep`, or
 	 * `@:build`, and its name appears in no string literal anywhere in the RESOLUTION scope — report
 	 * files UNION the library, which is `ReflectionScan`'s scope and the only one a name-keyed
@@ -326,8 +335,8 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 				continue;
 			}
 			final decline: Null<String> = memberDeclineReason(
-				node, owner, hit.inExtends, index, classMeta, reflected, plugin.refShape(),
-				stringsUnreachable.bind(node, hit.parent, owner, v.file, plugin, scopeIndex ?? index)
+				node, owner, hit.inExtends, supertypeDecline.bind(plugin, v.file, owner, node.name), index, classMeta, reflected,
+				plugin.refShape(), stringsUnreachable.bind(node, hit.parent, owner, v.file, plugin, scopeIndex ?? index)
 			);
 			if (decline == null)
 				attempt();
@@ -409,6 +418,31 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	 */
 	private static inline function mayImplementAbstractMethod(member: QueryNode, inExtendsClass: Bool): Bool {
 		return (member.kind == 'FnMember' || member.kind == 'FinalModifiedMember') && inExtendsClass;
+	}
+
+	/**
+	 * Why the `extends` chain of `owner` (declared in `file`) may still reach its member `name`, or null when the
+	 * compiler's facts rule that out: no supertype any configuration typed declares the name, so the member implements
+	 * nothing (a private member redeclaring an inherited one needs `override` unless the inherited one is abstract), and
+	 * none carries `@:autoBuild`, whose macro runs over this type as its own `@:build`. A chain a type of which no
+	 * configuration typed, an owner the facts do not place in `file`, and a run with no complete facts keep the
+	 * abstract-method decline: the base's call is invisible from here.
+	 */
+	private static function supertypeDecline(plugin: GrammarPlugin, file: String, owner: Null<String>, name: Null<String>): Null<String> {
+		final facts: Null<CompilerFacts> = FactsTypeOracle.runFacts(plugin);
+		final key: Null<String> = facts?.keyOf(file);
+		final ids: Array<String> = facts == null || owner == null ? [] : [
+			for (id in facts.typeIds()) if (id.substr(id.lastIndexOf('.') + 1) == owner && facts.typePosition(id)?.file == key) id
+		];
+		if (facts == null || name == null || ids.length == 0) return DECLINE_ABSTRACT_IMPL;
+		for (id in ids) for (sup in facts.supertypesOf(id)) {
+			final declared: Null<TypeFact> = facts.type(sup);
+			if (declared == null || declared.fields.exists(f -> f.name == name)) return DECLINE_ABSTRACT_IMPL;
+			if (declared.meta.contains(AUTO_BUILD_META))
+				return 'the supertype `$sup` is `@:autoBuild`, whose macro builds this type as its own `@:build` and reads the '
+					+ 'field list this deletion would change';
+		}
+		return null;
 	}
 
 	/**
@@ -836,15 +870,16 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	 * elsewhere, which is what keeps the two from drifting apart (`Violation.declineReason`).
 	 */
 	private static function memberDeclineReason(
-		node: QueryNode, owner: Null<String>, inExtends: Bool, index: Null<SymbolIndex>,
+		node: QueryNode, owner: Null<String>, inExtends: Bool, supertypes: () -> Null<String>, index: Null<SymbolIndex>,
 		classMeta: Map<String, { hasBuild: Bool, hasKeep: Bool }>, reflected: Array<String>, shape: RefShape,
 		stringsUnreachable: () -> Bool
 	): Null<String> {
 		final shapeReason: Null<String> = shapeDecline(node, shape);
 		if (shapeReason != null) return shapeReason;
-		if (mayImplementAbstractMethod(node, inExtends))
-			return 'the member may implement an ABSTRACT method of the `extends` class — a Haxe impl carries no `override`, so the '
-				+ 'call in the base is invisible from here';
+		if (mayImplementAbstractMethod(node, inExtends)) {
+			final reason: Null<String> = supertypes();
+			if (reason != null) return reason;
+		}
 		if (owner != null) {
 			if (index != null && index.traits.transitivelyCarriesRtti(owner))
 				return 'the enclosing type transitively carries `@:rtti`, so its members are reachable by NAME at runtime';

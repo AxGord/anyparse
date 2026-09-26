@@ -8174,6 +8174,60 @@
 			"find": "// no disk write before this one but a create, which settled the facts compiles already\n\t\tcached.compilerFactsSettled();",
 			"replace": "",
 			"note": "the safe pass writes while the early facts compiles may still be reading the files"
+		},
+		{
+			"name": "M-FOLD-FACTS-OPERAND",
+			"type": "anyparse.check.FoldStringLiterals",
+			"method": "fix",
+			"find": "final operators: Null<OperatorGate> = tree == null ? null : OperatorGate.withFacts(plugin, seams, file, source, tree);",
+			"replace": "final operators: Null<OperatorGate> = null;",
+			"note": "a construct the run left Unproven is never asked of the compiler's facts, so an operand only they type keeps the fix off"
+		},
+		{
+			"name": "M-FACTS-VALUE-TYPE-FLOWS",
+			"type": "anyparse.check.FactsTypeOracle",
+			"method": "typeIdAt",
+			"find": "var spelled: String = switch valueType(file, expr) {",
+			"replace": "var spelled: String = switch expressionType(file, expr) {",
+			"note": "a value's type is read with the flows at its range, so a check-type `(e : T)` answers the type of `e`, not `T`"
+		},
+		{
+			"name": "M-UNUSED-PRIVATE-CHAIN-FACTS",
+			"type": "anyparse.check.UnusedPrivate",
+			"method": "supertypeDecline",
+			"force": "DECLINE_ABSTRACT_IMPL",
+			"note": "every private method of an `extends` class stays, whatever the compiler's facts say of its supertypes"
+		},
+		{
+			"name": "M-UNUSED-PRIVATE-CHAIN-DECLARED",
+			"type": "anyparse.check.UnusedPrivate",
+			"method": "supertypeDecline",
+			"find": "if (declared == null || declared.fields.exists(f -> f.name == name)) return DECLINE_ABSTRACT_IMPL;",
+			"replace": "if (declared == null) return DECLINE_ABSTRACT_IMPL;",
+			"note": "a member a supertype declares, an abstract one's implementation among them, is deleted"
+		},
+		{
+			"name": "M-UNUSED-PRIVATE-CHAIN-AUTOBUILD",
+			"type": "anyparse.check.UnusedPrivate",
+			"method": "supertypeDecline",
+			"find": "if (declared.meta.contains(AUTO_BUILD_META))",
+			"replace": "if (false)",
+			"note": "a member of a class a supertype's `@:autoBuild` builds is deleted"
+		},
+		{
+			"name": "M-TOSTRING-FACTS-CLASS",
+			"type": "anyparse.check.RedundantToString",
+			"method": "compiledClass",
+			"force": "false",
+			"note": "a receiver the resolution scope does not declare keeps its `.toString()` whatever the compiler's facts say"
+		},
+		{
+			"name": "M-TOSTRING-FACTS-EXTERN",
+			"type": "anyparse.check.RedundantToString",
+			"method": "compiledClass",
+			"find": "&& declared.kind == CLASS_KIND && !declared.isExtern;",
+			"replace": "&& declared.kind == CLASS_KIND;",
+			"note": "an extern class's `.toString()` is dropped, though the string coercion may call the native one"
 		}
 	]
 }

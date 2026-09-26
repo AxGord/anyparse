@@ -288,12 +288,27 @@ final class FoldStringLiterals implements Check implements ConfigAware {
 		// cross-file symbol index, neither of which `fix` is handed — `applyBySpan` finds
 		// a node by its span alone, and `source` is one file. `run` already decided it, so
 		// the FINDING carries the decision here rather than the resolution being redone.
-		final fixable: Array<Violation> = violations.filter(
-			v ->
-				v.message.indexOf(MACRO_REFUSAL) == -1 && v.message.indexOf(MacroGate.INTRINSIC_REFUSAL) == -1
-				&& v.message.indexOf(OperatorGate.REFUSAL) == -1
+		final fixable: Array<Violation> = violations.filter(v ->
+			v.message.indexOf(MACRO_REFUSAL) == -1 && v.message.indexOf(MacroGate.INTRINSIC_REFUSAL) == -1
 		);
+		// An operand `run` could not type is asked of the compiler's facts: such a construct is fixed only once every operand
+		// is proven to select the built-in operator.
+		final unproven: Map<String, Violation> = [];
+		for (v in fixable) {
+			final at: Null<Span> = v.span;
+			if (at != null && v.message.indexOf(OperatorGate.REFUSAL) != -1) unproven['${at.from}:${at.to}'] = v;
+		}
+		final tree: Null<QueryNode> = unproven.keys().hasNext() ? CheckScan.parseOrNull(plugin, source) : null;
+		final operators: Null<OperatorGate> = tree == null ? null : OperatorGate.withFacts(plugin, seams, file, source, tree);
 		return CheckScan.applyBySpan(plugin, source, fixable, seams.candidateKinds, (node, span) -> {
+			final doubted: Null<Violation> = unproven['${span.from}:${span.to}'];
+			if (
+				doubted != null
+				&& (operators == null || !operators.verdictFor(node, seams.stringLiteralKinds.contains(node.kind)).match(Builtin))
+			) {
+				doubted.declineReason = OperatorGate.DECLINE;
+				return null;
+			}
 			final planned: Null<PlannedFold> = plan(ctx, node);
 			// The violation's span is the NODE's — `applyBySpan` keys on it — but the edit is the
 			// narrower OPERAND extent, so trivia the node's span absorbs past its last operand
@@ -2209,18 +2224,29 @@ private class OperatorGate {
 	public static inline final REFUSAL: String = ', but a type in scope overloads the concatenation operator and an '
 		+ 'operand of this construct cannot be typed, so nothing rules out the merge changing what the operator does';
 
+	/** Why `fix` left a construct the run reported `Unproven` alone: the compiler's facts could not type it either. */
+	public static inline final DECLINE: String = 'a type in scope overloads the concatenation operator, and neither the run nor '
+		+ "the compiler's facts type every operand of this construct";
+
 	private final _selection: Null<OperatorSelection>;
 	private final _seams: Seams;
 	private final _file: String;
 	private final _source: String;
 	private final _tree: QueryNode;
 
-	public function new(selection: Null<OperatorSelection>, seams: Seams, file: String, source: String, tree: QueryNode) {
+	/** The type an operand the structural resolver cannot name has in the compiler's facts, or null for none. */
+	private final _facts: Null<(QueryNode) -> Null<String>>;
+
+	public function new(
+		selection: Null<OperatorSelection>, seams: Seams, file: String, source: String, tree: QueryNode,
+		?facts: (QueryNode) -> Null<String>
+	) {
 		_selection = selection;
 		_seams = seams;
 		_file = file;
 		_source = source;
 		_tree = tree;
+		_facts = facts;
 	}
 
 	/**
@@ -2237,7 +2263,17 @@ private class OperatorGate {
 		if (selection == null) return Builtin;
 		final kinds: Array<String> = [_seams.concatKind];
 		if (!selection.declared(kinds)) return Builtin;
-		final types: Null<(QueryNode) -> Null<String>> = selection.typesFor(_file, _source, _tree);
+		final structural: Null<(QueryNode) -> Null<String>> = selection.typesFor(_file, _source, _tree);
+		final facts: Null<(QueryNode) -> Null<String>> = _facts;
+		final types: Null<(QueryNode) -> Null<String>> = if (facts == null)
+			structural
+		else if (structural == null)
+			facts
+		else {
+			final written: (QueryNode) -> Null<String> = structural;
+			final typed: (QueryNode) -> Null<String> = facts;
+			operand -> written(operand) ?? typed(operand);
+		};
 		return literal ? selection.verdictOfOperands(interpolated(node), kinds, types) : selection.verdictFor(node, kinds, types);
 	}
 
@@ -2259,6 +2295,40 @@ private class OperatorGate {
 		else if (identKind != null && child.kind == identKind)
 			out.push(child);
 		return out;
+	}
+
+	/**
+	 * The gate `fix` asks for a construct `run` left `Unproven`: the same verdict, with an operand no structural rule types
+	 * named by the compiler's facts (`FactsTypeOracle.typeIdAt`) — the type every configuration gave it, by its simple name,
+	 * which the overload table then judges exactly as a written one. Without complete facts it answers as `run` did.
+	 */
+	public static function withFacts(plugin: GrammarPlugin, seams: Seams, file: String, source: String, tree: QueryNode): OperatorGate {
+		final oracle: Null<FactsTypeOracle> = FactsTypeOracle.forFix(plugin, file, source);
+		final selection: Null<OperatorSelection> = OperatorSelection.of(plugin, [{ file: file, source: source }]);
+		if (oracle == null) return new OperatorGate(selection, seams, file, source, tree);
+		final facts: FactsTypeOracle = oracle;
+		return new OperatorGate(selection, seams, file, source, tree, operand -> {
+			final at: Null<Span> = operand.span;
+			if (at == null) return null;
+			final paren: Null<Span> = parenthesized(source, at);
+			final id: Null<String> = facts.typeIdAt(file, at, true) ?? (paren == null ? null : facts.typeIdAt(file, paren, true));
+			return id == null ? null : id.substr(id.lastIndexOf('.') + 1);
+		});
+	}
+
+	/**
+	 * The span of the parentheses directly around `at` in `source`, or null: an operand reaches the resolver with its
+	 * parentheses unwrapped, while the facts record a concatenated operand at the range the compiler typed, parentheses
+	 * included.
+	 */
+	private static function parenthesized(source: String, at: Span): Null<Span> {
+		var from: Int = at.from - 1;
+		while (from >= 0 && source.isSpace(from)) from--;
+		var to: Int = at.to;
+		while (to < source.length && source.isSpace(to)) to++;
+		return from >= 0 && to < source.length && source.fastCodeAt(from) == '('.code && source.fastCodeAt(to) == ')'.code
+			? new Span(from, to + 1)
+			: null;
 	}
 
 }
