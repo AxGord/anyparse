@@ -2,15 +2,18 @@ package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.Violation;
+import anyparse.check.StaticExtensionFacts.ExtensionFactsVerdict;
 import anyparse.check.UsingScan.UsingHeader;
 import anyparse.check.UsingScan.UsingScope;
 import anyparse.query.BoolExprShape;
 import anyparse.query.CanonicalEdit;
+import anyparse.query.CompilerFacts;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
+import anyparse.query.SymbolIndexHost;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
@@ -83,7 +86,10 @@ import anyparse.runtime.Span;
  *  - the closure is unresolvable (a supertype outside the index, an unreadable `typedef` alias,
  *    a `@:forward` abstract) → a REPORT-ONLY finding whose message asks the reader to verify
  *    that no same-name member exists.
- *  - `R` unresolved, or no index at all → a REPORT-ONLY finding with its own message.
+ *  - `R` unresolved, or no index at all → a REPORT-ONLY finding with its own message — unless the
+ *    receiver is an identifier whose declaration WRITES its type (`Null<String>`, which the walk does
+ *    not unwrap) and the compiler facts prove the rewrite (`factsVerdict`): then FIXABLE, or DROPPED
+ *    when they prove a same-name member or a `Dynamic` receiver.
  *
  * ## The conflicting-`using` gate
  *
@@ -412,7 +418,10 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		final nominal: Null<String> = receiverNominal(recv, root, s, declaredTypes, chain, symbols, file);
 		// A `Dynamic` receiver dispatches no extension at RUNTIME while the rewrite still compiles.
 		if (nominal != null && nominal == s.dynamicTypeName) return null;
-		final verdict: Null<Verdict> = verdictFor(nominal, method, symbols, file);
+		final structural: Null<Verdict> = verdictFor(nominal, method, symbols, file);
+		final verdict: Null<Verdict> = structural == Verdict.UnresolvedReceiver && nominal == null
+			? factsVerdict(call, recv, root, s, chain, source, file, module, method, plugin)
+			: structural;
 		if (verdict == null) return null;
 		final suggestion: Null<String> = suggestionOf(call, recv, method, source);
 		return suggestion == null ? null : {
@@ -447,6 +456,34 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 			Verdict.Fixable
 		else
 			Verdict.UnresolvedClosure;
+	}
+
+	/**
+	 * The verdict of the compiler's facts on a receiver the structural walk left unresolved (`StaticExtensionFacts`), or
+	 * null to DROP the site when they prove a same-name member or a `Dynamic` receiver. Only an identifier bound to a
+	 * declaration with a WRITTEN type is asked: that type is fixed before the call is typed, where an inferred one may be the
+	 * very type the call's parameter bound, and at the extension form it would not be bound yet. A bare self-reference is not
+	 * asked either — its meaning differs inside an abstract. No facts (no oracle configured, or declined) keeps report-only.
+	 */
+	private static function factsVerdict(
+		call: QueryNode, recv: QueryNode, root: QueryNode, s: Seams, chain: ChainTypeContext, source: String, file: String, module: String,
+		method: String, plugin: GrammarPlugin
+	): Null<Verdict> {
+		final callSpan: Null<Span> = call.span;
+		final recvSpan: Null<Span> = recv.span;
+		if (callSpan == null || recvSpan == null || recv.kind != s.identKind || recv.name == s.shape.selfReferenceText)
+			return Verdict.UnresolvedReceiver;
+		// the type the compiler gave a binding it inferred may have been bound by this very argument, and an extension call
+		// on a type not bound yet dispatches on whatever the receiver turns out to be at run time
+		final binding: Null<Int> = TypeResolver.identBindingFrom(recv, root, s.shape);
+		if (binding == null || chain.declaredTypeSources[binding] == null) return Verdict.UnresolvedReceiver;
+		final facts: Null<CompilerFacts> = plugin is SymbolIndexHost ? (cast plugin: SymbolIndexHost).compilerFacts() : null;
+		if (facts == null) return Verdict.UnresolvedReceiver;
+		return switch StaticExtensionFacts.judge(facts, file, source, callSpan, recvSpan, module, method) {
+			case Proven: Verdict.Fixable;
+			case Shadowed, DynamicReceiver: null;
+			case Unproven: Verdict.UnresolvedReceiver;
+		};
 	}
 
 	/**

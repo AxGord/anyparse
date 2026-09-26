@@ -816,3 +816,7 @@ decided the question; it may not become a record of runs.
 - the facts compile's mtime check (`writtenSince`) as a guarantee on its own → a coarse-mtime filesystem (ext4 kernel
   tick, HFS+/SMB seconds) can date a write made during the compile before its start; the `--fix` barrier closes the
   run's own writes, only an outside writer during the compile (a parallel hxq) remains — `2d7f06cf`
+- `prefer-static-extension` taking an unannotated local's type from the compiler facts → the facts hold the type after typing ended, which may be the one the rewritten call's own parameter bound; at `x.m()` the monomorph is not bound yet, the call becomes a dynamic field call that compiles and fails at run time — only a binding with a written type is asked
+- a file's `using` outranking the receiver type's own `@:using` → the type's `@:using` wins (`t.tp()` calls `Other.tp` under `using Util`), so a receiver whose hierarchy carries one is never rewritten by the facts path
+- an abstract first parameter that took the argument through `@:from` taking the receiver in extension form too → `using` binds by unification alone (`String has no field k`), so the facts path accepts only a class, an interface, a structure typedef, a structure, a function type or the function's own type parameter
+- reading an overloaded static's parameters off the facts field → the field record holds only the first signature (`over` counted the rest and nothing read it), so an overload is refused by its count, never judged by a signature the call may not have chosen

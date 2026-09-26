@@ -308,6 +308,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.PreferSafeNavComparisonCheckTest',
 		'unit.check.PreferSingleQuotesCheckTest',
 		'unit.check.PreferStaticExtensionCheckTest',
+		'unit.check.PreferStaticExtensionFactsTest',
 		'unit.check.PreferSwitchCheckTest',
 		'unit.check.PreferSwitchExpressionAssignmentCheckTest',
 		'unit.check.PreferSwitchExpressionCheckTest',
@@ -1535,6 +1536,19 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PreferStaticExtensionCheckTest#testMessageQuotesLiteralWhitespaceExactlyAsTheFixWritesIt :: control :: '
 				+ 'M-RENDER-SPAN-TOKENS',
 			'unit.check.PreferStaticExtensionCheckTest#testUsingInAnotherBranchDoesNotCoverTheCall :: control :: M-COND-BRANCH-SPAN-SHARED',
+			'unit.check.PreferStaticExtensionFactsTest#testADynamicReceiverIsDropped :: control :: M-PSE-FACTS-DYNAMIC',
+			'unit.check.PreferStaticExtensionFactsTest#testAForwardingAbstractIsNoMemberHost :: control :: M-PSE-FACTS-HOSTS',
+			'unit.check.PreferStaticExtensionFactsTest#testAMemberOfASupertypeOrAnInterfaceDropsTheSite :: control :: M-PSE-FACTS-SHADOW',
+			'unit.check.PreferStaticExtensionFactsTest#testAReceiverOnlyTheFactsTypeIsRewritten :: control :: M-PSE-FACTS-OFF,M-PSE-FACTS-NULL',
+			'unit.check.PreferStaticExtensionFactsTest#testAReceiverTwoConfigurationsTypeDifferentlyIsNotRewritten :: guard :: ',
+			'unit.check.PreferStaticExtensionFactsTest#testAReceiverWhoseTypeTheCallMayHaveInferredIsNotRewritten :: control :: '
+				+ 'M-PSE-FACTS-INFERRED',
+			'unit.check.PreferStaticExtensionFactsTest#testATypeWithItsOwnUsingIsNotRewritten :: control :: M-PSE-FACTS-USING',
+			'unit.check.PreferStaticExtensionFactsTest#testAnAbstractParameterIsNotRewritten :: control :: M-PSE-FACTS-PARAM',
+			'unit.check.PreferStaticExtensionFactsTest#testAnOverloadIsNotRewritten :: control :: M-PSE-FACTS-OVERLOAD',
+			'unit.check.PreferStaticExtensionFactsTest#testFactsOfAnotherTextProveNothing :: control :: M-PSE-FACTS-TEXT',
+			'unit.check.PreferStaticExtensionFactsTest#testTheFirstParameterOfAFactsSignature :: control :: M-PSE-FIRST-PARAM',
+			'unit.check.PreferStaticExtensionFactsTest#testTheRewrittenProgramPrintsWhatItPrinted :: guard :: ',
 			'unit.check.PreferTernaryReturnCheckTest#testOwnLineCommentInACascadeDefersTheTail :: control :: '
 				+ 'M-PTR-RIDES-NEVER,M-PTR-CASCADE-NEVER-STRANDS',
 			'unit.check.PreferTernaryReturnCheckTest#testTheRunOfOneHoistIsRefusedAtTheSeam :: control :: M-COMMENT-HOIST-BLIND',
@@ -3567,7 +3581,18 @@ class TestDiscoveryParityTest extends Test {
 			'M-ORACLE-HOME-MODIFIED-TYPE',
 			'M-FACTS-WRITTEN-DURING',
 			'M-FACTS-CHANGED-STALE',
-			'M-FIX-FACTS-SETTLED'
+			'M-FIX-FACTS-SETTLED',
+			'M-PSE-FACTS-INFERRED',
+			'M-PSE-FACTS-OFF',
+			'M-PSE-FACTS-SHADOW',
+			'M-PSE-FACTS-HOSTS',
+			'M-PSE-FACTS-USING',
+			'M-PSE-FACTS-PARAM',
+			'M-PSE-FACTS-OVERLOAD',
+			'M-PSE-FACTS-DYNAMIC',
+			'M-PSE-FACTS-NULL',
+			'M-PSE-FACTS-TEXT',
+			'M-PSE-FIRST-PARAM'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
