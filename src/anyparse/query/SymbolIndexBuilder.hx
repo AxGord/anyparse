@@ -46,6 +46,9 @@ private typedef MemberSeams = {
 	/** The operator-overload annotation NAME (`RefShape.operatorOverloadMetaName`), or null when the grammar has none. */
 	final operatorMetaName: Null<String>;
 
+	/** The signature-overload annotation NAME (`RefShape.signatureOverloadMetaName`), or null when the grammar has none. */
+	final overloadMetaName: Null<String>;
+
 	/** The implicit-conversion annotation NAME (`ExecutionShape.implicitConversionMetaName`), or null when the grammar has none. */
 	final conversionMetaName: Null<String>;
 
@@ -528,6 +531,7 @@ final class SymbolIndexBuilder {
 			var runImplicitMetas: Array<String> = [];
 			var runDynamic: Bool = false;
 			var runNoExtension: Bool = false;
+			var runOverloadMeta: Bool = false;
 			for (child in n.children) {
 				final sp: Null<Span> = child.span;
 				// Enum constructors (`SimpleCtor` / `ParamCtor`) are captured as members too, so a bare
@@ -564,6 +568,7 @@ final class SymbolIndexBuilder {
 							implicitCallMetas: runImplicitMetas,
 							isDynamic: runDynamic,
 							excludedFromExtensions: runNoExtension,
+							hasOverloadMeta: runOverloadMeta,
 							guarded: guarded
 						});
 					}
@@ -578,6 +583,7 @@ final class SymbolIndexBuilder {
 					runImplicitMetas = [];
 					runDynamic = false;
 					runNoExtension = false;
+					runOverloadMeta = false;
 				} else if (sp != null && seams.visibilityKinds.contains(child.kind))
 					runVisibility = source.substring(sp.from, sp.to);
 				else if (child.kind == seams.overrideKind)
@@ -596,6 +602,8 @@ final class SymbolIndexBuilder {
 					if (isConversionMeta(child, seams)) runImplicitConversion = true;
 					if (MemberKinds.META_KINDS.contains(child.kind) && seams.extensionExcludingMetaNames.contains(child.name ?? ''))
 						runNoExtension = true;
+					if (MemberKinds.META_KINDS.contains(child.kind) && child.name != null && child.name == seams.overloadMetaName)
+						runOverloadMeta = true;
 					if (isImplicitCallMeta(child, seams)) {
 						runImplicitCall = true;
 						runImplicitMetas.push(child.name ?? '');
@@ -698,6 +706,7 @@ final class SymbolIndexBuilder {
 			macroKind: shape.macroModifierKind,
 			dynamicKind: shape.dynamicModifierKind,
 			operatorMetaName: shape.operatorOverloadMetaName,
+			overloadMetaName: shape.signatureOverloadMetaName,
 			conversionMetaName: shape.execution?.implicitConversionMetaName,
 			implicitCallMetaNames: shape.execution?.implicitCallMetaNames ?? [],
 			extensionExcludingMetaNames: shape.execution?.extensionExcludingMetaNames ?? [],

@@ -5,6 +5,7 @@ import anyparse.check.DoubleNegation;
 import anyparse.check.FoldStringLiterals;
 import anyparse.check.InvertNegatedIfElse;
 import anyparse.check.JoinStringAppend;
+import anyparse.check.RedundantToString;
 import anyparse.check.SimplifyNegatedCompound;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
@@ -163,6 +164,111 @@ class OperandBindingTest extends Test {
 		Assert.isFalse(reports(new InvertNegatedIfElse(), files, 'if (!f)'), 'invert-negated-if-else');
 	}
 
+	/**
+	 * `case t:` CAPTURES the switched `Dir` — a bare lowercase identifier in a pattern binds, it never
+	 * compares — so the `t` after it is the `Dir`, not the outer `String` the reference walk resolves
+	 * it to. `r/a/b` became `rab` when folded (4.3.7 `--interp`).
+	 */
+	@:pin('control')
+	@:killer('M-OPERAND-CASE-CAPTURE')
+	public function testCaseCaptureShadowsTheOuterBinding(): Void {
+		Assert.equals(REPORT_ONLY, foldOf(['u/Use.hx' => caseUse('case t:', '')], 't + \''));
+	}
+
+	/** A declaration INSIDE the branch shadows the capture in turn, so the walk's answer stands. */
+	@:pin('control')
+	@:killer('M-OPERAND-CASE-CAPTURE-INSIDE')
+	public function testDeclarationInsideTheBranchOutranksItsCapture(): Void {
+		Assert.equals(FIXABLE, foldOf(['u/Use.hx' => caseUse('case t:', 'final t: String = \'q\'; ')], 't + \''));
+	}
+
+	/** An extern `@:overload` may select a signature returning the overloader: the written `String` proves nothing. */
+	@:pin('control')
+	@:killer('M-OPERAND-OVERLOAD-SIGNATURE')
+	public function testOverloadedSignatureIsNotItsWrittenReturn(): Void {
+		Assert.equals(REPORT_ONLY, fold(['u/Ext.hx' => EXT], '', 'h: Int', 'Ext.m(1) + \''));
+	}
+
+	@:pin('control')
+	@:killer('M-INDEX-OVERLOAD-META')
+	public function testOverloadMetaIsIndexed(): Void {
+		Assert.equals(REPORT_ONLY, fold(['u/Ext.hx' => EXT], '', 'h: Int', 'Ext.m(1) + \''));
+	}
+
+	/** A macro's written return is what it BUILDS, not the type the call site receives. */
+	@:pin('control')
+	@:killer('M-OPERAND-MACRO-RETURN')
+	public function testMacroMemberIsNotTypedByItsReturn(): Void {
+		final gen: String = 'package u;\n\nclass Gen {\n\n\tpublic static macro function m(): String {\n\t\treturn null;\n\t}\n\n}\n';
+		Assert.equals(REPORT_ONLY, fold(['u/Gen.hx' => gen], '', 'h: Int', 'Gen.m() + \''));
+	}
+
+	/** The same for an unqualified call to a macro the file itself declares. */
+	@:pin('control')
+	@:killer('M-OPERAND-LOCAL-MACRO')
+	public function testLocalMacroIsNotTypedByItsReturn(): Void {
+		final use: String = 'package u;\n\nclass Use {\n\n\tpublic static function f(): String {\n\t\treturn gen() + \'a\' + \'b\';\n\t}\n\n'
+			+ '\tprivate static macro function gen(): String {\n\t\treturn null;\n\t}\n\n}\n';
+		Assert.equals(REPORT_ONLY, foldOf(['u/Use.hx' => use], 'gen() + \''));
+	}
+
+	/**
+	 * A member's nullable return, written as a PATH into an unindexed module (`far.MaybeR`, an alias of
+	 * `Null<R>`), is not the same-package class of that last segment: `redundant-tostring` keeps the
+	 * call that throws on null.
+	 */
+	@:pin('control')
+	@:killer('M-NULLITY-RETURN-LAST-SEGMENT')
+	public function testMemberReturnPathIsNotItsLastSegment(): Void {
+		final holder: String = 'package u;\n\nclass Holder {\n\n\tpublic function new() {}\n\n'
+			+ '\tpublic function get(): far.MaybeR {\n\t\treturn null;\n\t}\n\n}\n';
+		Assert.isFalse(dropsToString(['u/MaybeR.hx' => MAYBE, 'u/Holder.hx' => holder]));
+	}
+
+	/** And `@:overload` there: the other signature's `Null<MaybeR>` is a return the call may select. */
+	@:pin('control')
+	@:killer('M-NULLITY-RETURN-OVERLOAD')
+	public function testMemberReturnWithOverloadIsUnproven(): Void {
+		final holder: String = 'package u;\n\nextern class Holder {\n\n\tpublic function new();\n\n'
+			+ '\t@:overload(function(x: Int): Null<MaybeR> {})\n\tpublic function get(): MaybeR;\n\n}\n';
+		Assert.isFalse(dropsToString(['u/MaybeR.hx' => MAYBE, 'u/Holder.hx' => holder]));
+	}
+
+	/** Without the path or the overload the same member IS proven, so the pair above is discriminating. */
+	@:pin('control')
+	@:killer('M-NULLITY-RETURN-CUT')
+	public function testMemberReturnOfIndexedClassIsProven(): Void {
+		final holder: String = 'package u;\n\nclass Holder {\n\n\tpublic function new() {}\n\n'
+			+ '\tpublic function get(): MaybeR {\n\t\treturn new MaybeR();\n\t}\n\n}\n';
+		Assert.isTrue(dropsToString(['u/MaybeR.hx' => MAYBE, 'u/Holder.hx' => holder]));
+	}
+
+	/** An extern whose `@:overload` returns the `+` overloader while the written signature returns `String`. */
+	private static final EXT: String = 'package u;\n\nextern class Ext {\n\n'
+		+ '\t@:overload(function(x: Int): lib.Dir {})\n\tpublic static function m(x: String): String;\n\n}\n';
+
+	/** A class with a `toString`, named like the unindexed nullable alias `far.MaybeR`. */
+	private static final MAYBE: String = 'package u;\n\nclass MaybeR {\n\n\tpublic function new() {}\n\n'
+		+ '\tpublic function toString(): String {\n\t\treturn \'M\';\n\t}\n\n}\n';
+
+	/** A `Use` whose outer `t: String` meets a switch over a `lib.Dir` with `pattern`, the branch body led by `lead`. */
+	private static function caseUse(pattern: String, lead: String): String {
+		return 'package u;\n\nimport lib.Dir;\n\nclass Use {\n\n\tpublic static function f(d: Dir): String {\n'
+			+ '\t\tfinal t: String = \'q\';\n\t\tswitch d {\n\t\t\t$pattern\n\t\t\t\t${lead}return t + \'a\' + \'b\';\n\t\t}\n'
+			+ '\t\treturn t;\n\t}\n\n}\n';
+	}
+
+	/** Whether `redundant-tostring` offers to drop `.toString()` off `h.get()` in a null-safe `Use`. */
+	private static function dropsToString(files: Map<String, String>): Bool {
+		final use: String = 'package u;\n\n@:nullSafety(Strict)\nclass Use {\n\n\tpublic static function f(h: Holder): String {\n'
+			+ '\t\treturn \'$${h.get().toString()}x\';\n\t}\n\n}\n';
+		final all: Map<String, String> = files.copy();
+		all['u/Use.hx'] = use;
+		return violationsAt(
+			new RedundantToString(), all, 'h.get().toString()'
+		).exists(v -> v.message.indexOf('not provably non-null') == -1);
+	}
+
 	private static inline final FIXABLE: String = 'fixable';
 	private static inline final REPORT_ONLY: String = 'report-only';
 	private static inline final ABSENT: String = 'absent';
@@ -178,6 +284,11 @@ class OperandBindingTest extends Test {
 			+ '\t\treturn $expr;\n\t}\n\n\tprivate static function name(): String {\n\t\treturn \'n\';\n\t}\n\n}\n';
 		final files: Map<String, String> = extra.copy();
 		files['u/Use.hx'] = use;
+		return foldOf(files, needle, root);
+	}
+
+	/** What `fold-adjacent-string-literals` makes of the construct at `needle` in `files`' `u/Use.hx`. */
+	private static function foldOf(files: Map<String, String>, needle: String, root: String = ''): String {
 		final found: Array<Violation> = violationsAt(new FoldStringLiterals(), files, needle, root);
 		return if (found.length == 0)
 			ABSENT

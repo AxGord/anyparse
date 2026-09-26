@@ -1246,6 +1246,14 @@ typedef RefShape = {
 	@:optional var operatorOverloadMetaName: String;
 
 	/**
+	 * The annotation NAME that adds a further SIGNATURE to a function (Haxe `@:overload`): a call
+	 * may select that signature, and its return type, instead of the written one. Recorded as
+	 * `SymbolIndex.MemberInfo.hasOverloadMeta`, so a reader of a member's written return type can
+	 * tell when it is not the only candidate. Unset means the grammar has no such annotation.
+	 */
+	@:optional var signatureOverloadMetaName: String;
+
+	/**
 	 * The ANNOTATION names that make a member COMPILER-DISPATCHED — one the compiler selects and
 	 * calls by the STATIC TYPE of its operands rather than by a written call: Haxe `@:from`, `@:op`,
 	 * `@:arrayAccess` and `@:resolve`. Every such member's parameter type IS the dispatch key, so a

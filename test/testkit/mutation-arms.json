@@ -8488,6 +8488,76 @@
 			"method": "localCallTier",
 			"force": "Unknown",
 			"note": "a call to a function this file declares is never typed by its return type"
+		},
+		{
+			"name": "M-OPERAND-CASE-CAPTURE",
+			"type": "anyparse.check.OperandBinder",
+			"method": "capturedBetween",
+			"force": "false",
+			"note": "a `case` capture between a read and the binding the walk found is not seen, so the read binds to the outer declaration"
+		},
+		{
+			"name": "M-OPERAND-CASE-CAPTURE-INSIDE",
+			"type": "anyparse.check.OperandBinder",
+			"method": "capturedBetween",
+			"find": "if (node.kind == branchKind && !inside)",
+			"replace": "if (node.kind == branchKind)",
+			"note": "a binding declared inside the capturing branch is refused too, though it shadows the capture"
+		},
+		{
+			"name": "M-OPERAND-OVERLOAD-SIGNATURE",
+			"type": "anyparse.check.OperandBinder",
+			"method": "typedByItsReturn",
+			"find": "return !m.hasOverloadMeta && !m.isMacro;",
+			"replace": "return !m.isMacro;",
+			"note": "a call to an `@:overload`ed member is typed by the written signature alone"
+		},
+		{
+			"name": "M-OPERAND-MACRO-RETURN",
+			"type": "anyparse.check.OperandBinder",
+			"method": "typedByItsReturn",
+			"find": "return !m.hasOverloadMeta && !m.isMacro;",
+			"replace": "return !m.hasOverloadMeta;",
+			"note": "a call to a macro is typed by the macro's written return"
+		},
+		{
+			"name": "M-OPERAND-LOCAL-MACRO",
+			"type": "anyparse.check.OperandBinder",
+			"method": "localCallTier",
+			"find": "if (member != null && !typedByItsReturn(member)) return Unknown;",
+			"replace": "",
+			"note": "an unqualified call to the file's own macro or overloaded member is typed by its written return"
+		},
+		{
+			"name": "M-INDEX-OVERLOAD-META",
+			"type": "anyparse.query.SymbolIndexBuilder",
+			"method": "collectMembers",
+			"find": "runOverloadMeta = true;",
+			"replace": "runOverloadMeta = false;",
+			"note": "the index never records `@:overload` on a member"
+		},
+		{
+			"name": "M-NULLITY-RETURN-LAST-SEGMENT",
+			"type": "anyparse.query.DeclaredNullity",
+			"method": "ofMemberReturn",
+			"find": "final returned: Null<String> = m.returnSource;",
+			"replace": "final returned: Null<String> = m.returnNominal;",
+			"note": "a member's return is resolved by the last segment of its written path, so `far.MaybeR` binds to a same-package `MaybeR`"
+		},
+		{
+			"name": "M-NULLITY-RETURN-OVERLOAD",
+			"type": "anyparse.query.DeclaredNullity",
+			"method": "ofMemberReturn",
+			"find": " || m.hasOverloadMeta || m.isMacro) return Unproven;",
+			"replace": ") return Unproven;",
+			"note": "an `@:overload`ed or macro member is proven by its written return alone"
+		},
+		{
+			"name": "M-NULLITY-RETURN-CUT",
+			"type": "anyparse.query.DeclaredNullity",
+			"method": "ofMemberReturn",
+			"force": "Unproven",
+			"note": "no member return is ever proven non-null"
 		}
 	]
 }

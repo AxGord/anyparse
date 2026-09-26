@@ -12,6 +12,8 @@ import anyparse.query.TypeNameBinding;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
+using Lambda;
+
 /**
  * What the declared type of an operand binds to, for ONE file — every type bound in the scope of the
  * file that WRITES it, never by its simple name:
@@ -78,13 +80,48 @@ final class OperandBinder {
 		return from == null ? Unknown : _declared.writtenHeadTier(from, _wrappers, _builtins);
 	}
 
-	/** The reference hit of an identifier read, or null for anything else. */
+	/**
+	 * The reference hit of an identifier read, or null for anything else — and null for a read a
+	 * `case` capture may bind instead of the declaration the hit names (`capturedBetween`).
+	 */
 	private function hitOf(ident: QueryNode): Null<RefHit> {
 		final name: Null<String> = ident.name;
 		final span: Null<Span> = ident.span;
-		return name == null || span == null || !_identKinds.contains(ident.kind)
-			? null
-			: TypeResolver.resolveBindingHit(name, span, _tree, _shape);
+		if (name == null || span == null || !_identKinds.contains(ident.kind)) return null;
+		final hit: Null<RefHit> = TypeResolver.resolveBindingHit(name, span, _tree, _shape);
+		return hit == null || capturedBetween(name, span, hit.bindingSpan?.from) ? null : hit;
+	}
+
+	/**
+	 * Whether a `case` branch holding the read at `at` may capture `name` in its pattern while the
+	 * binding the reference walk found (`bindingFrom`) lies OUTSIDE that branch. The walk does not see
+	 * a bare lowercase identifier in a pattern as a binder (`case t:` captures, it never compares), so
+	 * its answer is the outer declaration the capture shadows. Every non-upper-initial identifier in a
+	 * pattern counts, an extractor's function name included: over-counting only declines.
+	 */
+	private function capturedBetween(name: String, at: Span, bindingFrom: Null<Int>): Bool {
+		final branchKind: Null<String> = _shape.caseBranchKind;
+		final plainKind: Null<String> = _shape.plainCasePatternKind;
+		final binderKinds: Array<String> = _shape.casePatternBinderKinds ?? [];
+		final skipUpper: Bool = _shape.upperInitialNeverCaptures == true;
+		if (branchKind == null) return false;
+		final from: Int = bindingFrom ?? -1;
+		function captures(pattern: QueryNode): Bool {
+			final n: Null<String> = pattern.name;
+			return (n == name && (
+				binderKinds.contains(pattern.kind) || (pattern.kind == _shape.identKind && !(skipUpper && SourceText.isUpperInitial(n)))
+			)) || pattern.children.exists(captures);
+		}
+		function walk(node: QueryNode): Bool {
+			final span: Null<Span> = node.span;
+			if (span == null || at.from < span.from || at.to > span.to) return span == null && node.children.exists(walk);
+			final inside: Bool = from >= span.from && from < span.to;
+			if (node.kind == branchKind && !inside)
+				for (c in node.children)
+					if ((c.kind == plainKind || binderKinds.contains(c.kind)) && captures(c)) return true;
+			return node.children.exists(walk);
+		}
+		return walk(_tree);
 	}
 
 	/** A call whose callee names a function this file declares: that function's written return type. */
@@ -94,6 +131,9 @@ final class OperandBinder {
 		final fn: Null<QueryNode> = hit?.bindingNode;
 		if (from == null || fn == null) return Unknown;
 		final declaration: QueryNode = fn;
+		final member: Null<MemberInfo> = _index.fileInfo(_file)?.types.flatMap(t -> t.members)
+			.find(m -> m.declFrom == declaration.span?.from);
+		if (member != null && !typedByItsReturn(member)) return Unknown;
 		return _fnKinds.contains(declaration.kind)
 			? _declared.headTier(
 				CallGraphNames.returnSourceOf(declaration, _source, _shape.typeAnnotationKinds ?? []), from, _wrappers, _builtins
@@ -116,7 +156,7 @@ final class OperandBinder {
 			if (members.length == 0 || source == null || owner.type.typeParamArity != ownParams.length) return Unknown;
 			for (m in members) {
 				final written: Null<String> = call ? m.returnSource : m.typeSource;
-				if (written == null) return Unknown;
+				if (written == null || (call && !typedByItsReturn(m))) return Unknown;
 				final params: Array<String> = call
 					? ownParams.concat(CallGraphNames.declaredTypeParams(source, new Span(m.declFrom, m.declFrom), name))
 					: ownParams;
@@ -130,6 +170,15 @@ final class OperandBinder {
 			}
 		}
 		return found.length == 0 ? Free : Bound(found);
+	}
+
+	/**
+	 * Whether a call to `m` has the type its written return type names: not when `@:overload` offers
+	 * other signatures to select, nor for a macro, whose written return is the `Expr` it builds rather
+	 * than the type of the expression the call site receives.
+	 */
+	private static inline function typedByItsReturn(m: MemberInfo): Bool {
+		return !m.hasOverloadMeta && !m.isMacro;
 	}
 
 	/**
