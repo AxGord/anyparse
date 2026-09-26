@@ -354,10 +354,10 @@ class RedundantToStringCheckTest extends Test {
 	@:pin('control')
 	@:killer('M-TOSTRING-RETURN-TRUSTED')
 	public function testMethodReturningTypedefOfNullNotFixed(): Void {
-		// `get()` returns `MaybeObj`, i.e. `Null<Obj>`: the call throws on null where the concatenation prints "null".
+		// `get()` returns `MaybeObj`, i.e. `Null<Obj>`: the call throws on null where the interpolation prints "null".
 		final src: String = 'typedef MaybeObj = Null<Obj>; class Obj { public function new() {} public function toString():String return "o"; } '
 			+ 'class Src { public function new() {} public function get():MaybeObj return null; } '
-			+ '@:nullSafety(Strict) class C { function f(s:Src) { final r:String = "a" + s.get().toString(); } }';
+			+ "@:nullSafety(Strict) class C { function f(s:Src) { final r:String = '${s.get().toString()}'; } }";
 		Assert.equals(1, violations(src).length);
 		Assert.equals(0, edits(src).length);
 	}
