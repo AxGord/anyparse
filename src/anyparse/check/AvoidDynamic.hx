@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.FileGated;
 import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.GroupedEdit;
 import anyparse.check.Check.GroupedFix;
@@ -132,7 +133,8 @@ using Lambda;
  * `excludeMeta` / `boundaryCalls` are read from `apqlint.json`.
  */
 @:nullSafety(Strict)
-final class AvoidDynamic implements Check implements ConfigAware implements RiskyFix implements OracleAssisted implements GroupedFix {
+final class AvoidDynamic implements Check implements ConfigAware implements RiskyFix implements OracleAssisted implements GroupedFix
+		implements FileGated {
 
 	private static inline final RULE_ID: String = 'avoid-dynamic';
 
@@ -178,8 +180,6 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final cfg: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
-			final excludePaths: Array<String> = cfg.stringListOption(RULE_ID, 'excludePaths') ?? [];
-			if (pathExcluded(entry.file, excludePaths)) continue;
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			final excludeMeta: Array<String> = cfg.stringListOption(RULE_ID, 'excludeMeta') ?? [];
@@ -290,6 +290,11 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 	 */
 	public function fixWithOracle(source: String, violations: Array<Violation>, plugin: GrammarPlugin, oracle: TypeOracle): Array<FixEdit> {
 		return DynamicBag.bagEdits(source, violations.filter(v -> v.rule == RULE_ID), plugin, oracle);
+	}
+
+	/** `config-excluded` for a file whose path contains an `excludePaths` entry. */
+	public function skipReason(file: String, config: LintConfig): Null<String> {
+		return pathExcluded(file, config.stringListOption(RULE_ID, 'excludePaths') ?? []) ? 'config-excluded' : null;
 	}
 
 	/**

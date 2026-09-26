@@ -233,6 +233,23 @@ interface VersionGated {
 }
 
 /**
+ * A check whose OWN options decide, per file, whether it scans that file at all: a rule with
+ * nothing to look for until the project configures it, a rule that carves paths out of its
+ * scope, or a rule whose options switch every one of its findings off.
+ *
+ * `skipReason` is the one answer to "does this rule run for this file under this config".
+ * `Linter.collect` hands the rule only the files it answers null for, and `EffectiveRules`
+ * reports the same answer, so a rule listing and a lint run cannot disagree about what was
+ * verified. The rule's `run` does not re-filter.
+ */
+interface FileGated {
+
+	/** Null when the rule scans `file` under `config`; otherwise why not — `needs-config`, `config-excluded` or `config-noop`. */
+	function skipReason(file: String, config: LintConfig): Null<String>;
+
+}
+
+/**
  * The type-query seam a `CompilerOracle`-backed display server exposes to an
  * `OracleAssisted` check: `typeAt` returns the compiler's OWN inferred type at a
  * byte position (the local's name token), or null when the position carries no

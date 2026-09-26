@@ -2,6 +2,7 @@ package anyparse.query.cli.command;
 
 import anyparse.check.Check;
 import anyparse.check.ConfigDisagreement;
+import anyparse.check.EffectiveRules;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.check.OracleGeneration;
@@ -157,6 +158,7 @@ final class LintCommand implements CliCommand {
 	public static function runLint(args: Array<String>): Int {
 		final o: LintOpts = parseLintArgs(args);
 		if (o.errExit != null) return o.errExit;
+
 		if (o.inputSpecs.length == 0) {
 			CliIo.stderr('apq lint: expected <scope> (one or more file/dir/glob specs)\n');
 			printLintUsage();
@@ -319,6 +321,7 @@ final class LintCommand implements CliCommand {
 			range: null,
 			baseline: null,
 			verbose: false,
+
 			errExit: code
 		};
 	}
@@ -889,7 +892,10 @@ final class LintCommand implements CliCommand {
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Options:\n');
 		CliIo.sysPrint('  --rule <id>       Run only this check (repeatable; default: all)\n');
-		CliIo.sysPrint('  --list-rules      List every registered check and exit\n');
+		CliIo.sysPrint('  --list-rules      List every registered check and exit. Given a scope, list\n');
+		CliIo.sysPrint('                    each rule as on/off for those files instead, one block per\n');
+		CliIo.sysPrint('                    distinct apqlint.json chain (config, default-off and\n');
+		CliIo.sysPrint('                    languageVersion resolved); nothing is linted\n');
 		CliIo.sysPrint('  --fix            Apply autofixes in place (e.g. delete unused imports)\n');
 		CliIo.sysPrint('  --fail-on <sev>   Exit non-zero if a finding at-or-above <sev> exists\n');
 		CliIo.sysPrint('                    (error|warning|info)\n');
@@ -938,6 +944,7 @@ final class LintCommand implements CliCommand {
 		var range: Null<LintRange> = null;
 		var baseline: Null<String> = null;
 		var verbose: Bool = false;
+		var listRules: Bool = false;
 
 		var i: Int = 0;
 		while (i < args.length) {
@@ -985,8 +992,7 @@ final class LintCommand implements CliCommand {
 					printLintUsage();
 					return lintParseExit(EXIT_OK);
 				case '--list-rules':
-					printLintRules();
-					return lintParseExit(EXIT_OK);
+					listRules = true;
 				case _:
 					if (a.startsWith('--')) {
 						CliIo.stderr('apq lint: unknown option "$a"\n');
@@ -996,7 +1002,9 @@ final class LintCommand implements CliCommand {
 			}
 			i++;
 		}
-		return {
+		// Listing rules is terminal like `--help`, but only once the whole argv is read: the scope
+		// that narrows it to effective state may follow the flag.
+		final opts: LintOpts = {
 			lang: lang,
 			flat: flat,
 			includeInfo: includeInfo,
@@ -1011,6 +1019,7 @@ final class LintCommand implements CliCommand {
 			verbose: verbose,
 			errExit: null
 		};
+		return listRules ? lintParseExit(runListRules(opts)) : opts;
 	}
 
 	/**
@@ -1224,12 +1233,17 @@ final class LintCommand implements CliCommand {
 	}
 
 	/**
-	 * Print every registered check as `id  description`, one per line, in
-	 * registration order — the machine-consumable counterpart of the usage
-	 * text (review tooling subtracts linter-owned rules from manual checklists
-	 * by this list).
+	 * `--list-rules`: with no scope, the bare registry, one `<id>  <description>` line per rule, exactly
+	 * as before a scope was accepted; with one, `printEffectiveRules`. A flag that only means something
+	 * to a lint run is a usage error rather than silently ignored — a listing is not narrowed by `--rule`.
 	 */
-	private static function printLintRules(): Void {
+	private static function runListRules(o: LintOpts): Int {
+		final ignored: Null<String> = lintOnlyFlag(o);
+		if (ignored != null) {
+			CliIo.stderr('apq lint: --list-rules takes only a scope and --lang — $ignored applies to a lint run\n');
+			return EXIT_USAGE;
+		}
+		if (o.inputSpecs.length > 0) return printEffectiveRules(o.lang, o.inputSpecs);
 		final checks: Array<Check> = Linter.builtins();
 		var width: Int = 0;
 		for (c in checks) if (c.id().length > width) width = c.id().length;
@@ -1240,6 +1254,39 @@ final class LintCommand implements CliCommand {
 			final requires: String = c is VersionGated ? ' [needs ${(cast c: VersionGated).minLanguageVersion()}]' : '';
 			CliIo.sysPrint('${c.id().rpad(' ', width)}  ${c.description()}$requires\n');
 		}
+		return EXIT_OK;
+	}
+
+	/**
+	 * `--list-rules <scope>`: every registered rule with the state a lint of the scope's files would run
+	 * it in, as `EffectiveRules.render` lays it out. The registry alone is an upper bound; configs are
+	 * resolved exactly as a lint run resolves them, and nothing is parsed or linted.
+	 */
+	private static function printEffectiveRules(lang: String, inputSpecs: Array<String>): Int {
+		final paths: Array<String> = CliArgs.resolveInputPaths(lang, inputSpecs).paths;
+		if (paths.length == 0) {
+			CliIo.stderr('apq lint: ${CliArgs.quotedSpecs(inputSpecs)} matched no .hx files\n');
+			return EXIT_RUNTIME;
+		}
+		CliIo.sysPrint(EffectiveRules.render(EffectiveRules.resolve(paths, Linter.builtins())));
+		return EXIT_OK;
+	}
+
+	/** The first lint-run flag `o` carries, as the user spelled it, or null when there is none. */
+	private static function lintOnlyFlag(o: LintOpts): Null<String> {
+		final given: Array<{ flag: String, set: Bool }> = [
+			{ flag: '--rule', set: o.ruleFilters.length > 0 },
+			{ flag: '--fix', set: o.fix },
+			{ flag: '--all', set: o.includeInfo },
+			{ flag: '--flat', set: o.flat },
+			{ flag: '--no-oracle', set: o.noOracle },
+			{ flag: '--fail-on', set: o.failOn != null },
+			{ flag: '--format', set: o.format != FORMAT_TEXT },
+			{ flag: '--range', set: o.range != null },
+			{ flag: '--baseline', set: o.baseline != null },
+			{ flag: '--verbose', set: o.verbose }
+		];
+		return given.find(g -> g.set)?.flag;
 	}
 
 	/**

@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.Check.FileGated;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.NamingPolicy.NamedDecl;
@@ -128,7 +129,7 @@ using StringTools;
  */
 @:nullSafety(Strict)
 @:access(anyparse.check.Naming)
-final class NoUnderscorePrefix implements Check implements DefaultOff implements ConfigAware {
+final class NoUnderscorePrefix implements Check implements DefaultOff implements ConfigAware implements FileGated {
 
 	private static inline final RULE_ID: String = 'no-underscore-prefix';
 
@@ -254,6 +255,13 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 				}
 				return edits;
 			});
+	}
+
+	/** `config-noop` when the options exempt both parameters and locals: nothing is left in scope. */
+	public function skipReason(file: String, config: LintConfig): Null<String> {
+		final params: Bool = config.boolOption(RULE_ID, 'params') ?? DEFAULT_PARAMS;
+		final locals: Bool = config.boolOption(RULE_ID, 'locals') ?? DEFAULT_LOCALS;
+		return params || locals ? null : 'config-noop';
 	}
 
 	/**
@@ -382,7 +390,6 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 		final owner: Null<String> = decl.enclosingType;
 		return owner != null && idx.members.supertypeDeclaresMember(owner, target);
 	}
-
 
 	/**
 	 * Whether `name`, declared at `declSpan`, is referenced nowhere else in its innermost

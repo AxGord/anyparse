@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.Check.FileGated;
 import anyparse.check.Check.VersionGated;
 import anyparse.check.Check.Violation;
 import anyparse.check.Check.VolatileMessage;
@@ -418,9 +419,11 @@ final class Linter {
 	 * overrides) on top; a directive written in the source is not configuration.
 	 */
 	public static function collect(
-		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, checks: Array<Check>
+		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, checks: Array<Check>, ?resolveConfig: (String) -> LintConfig
 	): Array<Violation> {
-		final raw: Array<Violation> = [for (check in checks) for (violation in check.run(files, plugin)) violation];
+		final raw: Array<Violation> = [
+			for (check in checks) for (violation in check.run(scannedBy(check, files, resolveConfig), plugin)) violation
+		];
 		final unquoted: Array<Violation> = ReificationScan.withoutQuoted(raw, files, plugin, ReificationScan.exemptIdsOf(checks));
 		return Suppression.apply(unquoted, files, plugin.lexicalRegions);
 	}
@@ -468,7 +471,7 @@ final class Linter {
 		// resolver resets them to their own `LintConfig.discover` fallback.
 		for (check in active) if (check is ConfigAware) (cast check: ConfigAware).setConfigResolver(resolveConfig);
 		// `collect` has already applied the reification and inline-suppression gates.
-		final out: Array<Violation> = collect(files, cached, active);
+		final out: Array<Violation> = collect(files, cached, active, resolveConfig);
 		if (resolveConfig == null) return out;
 		// Per-file config: resolve the apqlint.json for each finding's OWN file, drop
 		// it when its rule is disabled there (unless an explicit --rule selection
@@ -484,6 +487,19 @@ final class Linter {
 			kept.push(violation);
 		}
 		return kept;
+	}
+
+	/**
+	 * The files `check` scans: all of them, except that a `FileGated` check gets only those its
+	 * `skipReason` accepts under each file's own config — the gate `EffectiveRules` reports, applied
+	 * where every `Check.run` result enters the tool.
+	 */
+	private static function scannedBy(
+		check: Check, files: Array<{ file: String, source: String }>, resolveConfig: Null<(String) -> LintConfig>
+	): Array<{ file: String, source: String }> {
+		if (!(check is FileGated)) return files;
+		final gated: FileGated = cast check;
+		return files.filter(f -> gated.skipReason(f.file, LintConfig.resolveWith(resolveConfig, f.file)) == null);
 	}
 
 }

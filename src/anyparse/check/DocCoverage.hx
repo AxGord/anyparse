@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.FileGated;
 import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
@@ -56,7 +57,7 @@ using Lambda;
  * conservatively.
  */
 @:nullSafety(Strict)
-final class DocCoverage implements Check implements ConfigAware implements NoAutofix {
+final class DocCoverage implements Check implements ConfigAware implements NoAutofix implements FileGated {
 
 	/** Whether an undocumented public top-level type is flagged, unless an `apqlint.json` sets `requireTypeDoc`. */
 	private static inline final RULE_ID: String = 'doc-coverage';
@@ -119,6 +120,13 @@ final class DocCoverage implements Check implements ConfigAware implements NoAut
 	 */
 	public function noAutofixReason(): String {
 		return 'a generated doc restates the member name; the sentence a reader needs is the one only its author can write';
+	}
+
+	/** `config-noop` when the options ask for neither type nor member docs: every finding is switched off. */
+	public function skipReason(file: String, config: LintConfig): Null<String> {
+		final types: Bool = config.boolOption(RULE_ID, 'requireTypeDoc') ?? DEFAULT_REQUIRE_TYPE_DOC;
+		final members: Bool = config.boolOption(RULE_ID, 'requireMemberDoc') ?? DEFAULT_REQUIRE_MEMBER_DOC;
+		return types || members ? null : 'config-noop';
 	}
 
 	/**
