@@ -206,7 +206,8 @@ class ThreadSafetyCheckTest extends Test {
 		final files: Array<{ file: String, source: String }> = [
 			for (i in 0...sources.length) { file: '$dir/F$i.hx', source: sources[i] }
 		];
-		final result: Array<Violation> = new ThreadSafety().run(files, new HaxeQueryPlugin());
+		// Through `Linter.run`, not `run`: the `sinks` / `exclude` gate is `FileGated`, applied where findings enter the tool.
+		final result: Array<Violation> = Linter.run(files, new HaxeQueryPlugin(), [new ThreadSafety()]);
 		CliFixture.removeDir(dir);
 		return result;
 	}

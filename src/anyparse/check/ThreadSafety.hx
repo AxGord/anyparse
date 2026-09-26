@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.FileGated;
 import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.query.CallGraph;
@@ -50,7 +51,7 @@ using StringTools;
  * entry is `<lock pattern>/<unlock member name>` on the same type.
  */
 @:nullSafety(Strict)
-final class ThreadSafety implements Check implements ConfigAware implements NoAutofix {
+final class ThreadSafety implements Check implements ConfigAware implements NoAutofix implements FileGated {
 
 	private static inline final CTX_MAIN: Int = 1;
 	private static inline final CTX_BG: Int = 2;
@@ -77,17 +78,12 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		if (files.length == 0) return [];
 		final config: LintConfig = LintConfig.resolveWith(_resolveConfig, files[0].file);
 		final sinks: Array<String> = config.stringListOption('thread-safety', 'sinks') ?? [];
-		if (sinks.length == 0) return [];
 		final spawns: Array<String> = config.stringListOption('thread-safety', 'spawns') ?? [];
 		final marshals: Array<String> = config.stringListOption('thread-safety', 'marshals') ?? [];
 		final lockPairs: Array<String> = config.stringListOption('thread-safety', 'lockPairs') ?? [];
 
-		final excludes: Array<String> = config.stringListOption('thread-safety', 'exclude') ?? [];
-		final scanned: Array<{ file: String, source: String }> = excludes.length == 0
-			? files
-			: files.filter(f -> !pathExcluded(f.file, excludes));
-		if (scanned.length == 0) return [];
-		final graph: CallGraph = CallGraph.build(scanned, plugin);
+		// `Linter.collect` has already dropped every file `skipReason` refuses: no `sinks`, or an `exclude` path.
+		final graph: CallGraph = CallGraph.build(files, plugin);
 		final sinkIds: Array<String> = matchAll(graph, sinks);
 		if (sinkIds.length == 0) return [];
 		final spawnIds: Array<String> = matchAll(graph, spawns);
@@ -115,6 +111,16 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	public function noAutofixReason(): String {
 		return 'moving the work off the main thread, or narrowing what the lock covers, is a concurrency design change no span'
 			+ ' rewrite expresses';
+	}
+
+	/** `needs-config` without a `sinks` list — there is nothing to find — and `config-excluded` for a path under `exclude`. */
+	public function skipReason(file: String, config: LintConfig): Null<String> {
+		return if ((config.stringListOption('thread-safety', 'sinks') ?? []).length == 0)
+			'needs-config'
+		else if (pathExcluded(file, config.stringListOption('thread-safety', 'exclude') ?? []))
+			'config-excluded'
+		else
+			null;
 	}
 
 	/** Union of `graph.matchIds` over `patterns`, deduplicated. */

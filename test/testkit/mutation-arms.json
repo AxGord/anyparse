@@ -7891,6 +7891,67 @@
 			"find": "ConfigFinder.findUpAll(path, 'apqlint.json', ConfigFinder.PROJECT_ROOT_MARKERS)",
 			"replace": "ConfigFinder.findUpAll(path, 'apqlint.json')",
 			"note": "the chain climbs past the project root and folds a stray ancestor document"
+		},
+		{
+			"name": "M-GATE-COLLECT-BYPASS",
+			"type": "anyparse.check.Linter",
+			"method": "scannedBy",
+			"find": "if (!(check is FileGated)) return files;",
+			"replace": "return files;",
+			"note": "the run ignores the FileGated answer the listing reports, so an excluded file is scanned"
+		},
+		{
+			"name": "M-GATE-TS-SINKS-BLIND",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "skipReason",
+			"find": "'needs-config'",
+			"replace": "null",
+			"note": "thread-safety without sinks is reported as running"
+		},
+		{
+			"name": "M-GATE-TS-EXCLUDE-BLIND",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "skipReason",
+			"find": "'config-excluded'",
+			"replace": "null",
+			"note": "a thread-safety exclude path is reported as scanned"
+		},
+		{
+			"name": "M-GATE-AD-EXCLUDE-BLIND",
+			"type": "anyparse.check.AvoidDynamic",
+			"method": "skipReason",
+			"force": "null",
+			"note": "an avoid-dynamic excludePaths file is reported as scanned"
+		},
+		{
+			"name": "M-GATE-NOOP-DOC",
+			"type": "anyparse.check.DocCoverage",
+			"method": "skipReason",
+			"force": "null",
+			"note": "doc-coverage asking for no docs is reported as running"
+		},
+		{
+			"name": "M-GATE-NOOP-UNDERSCORE",
+			"type": "anyparse.check.NoUnderscorePrefix",
+			"method": "skipReason",
+			"force": "null",
+			"note": "no-underscore-prefix exempting params and locals is reported as running"
+		},
+		{
+			"name": "M-EFFECTIVE-IGNORES-FILEGATE",
+			"type": "anyparse.check.EffectiveRules",
+			"method": "stateOf",
+			"find": "final skipped: Null<String> = enabled && !gated && check is FileGated ? (cast check: FileGated).skipReason(file, config) : null;",
+			"replace": "final skipped: Null<String> = null;",
+			"note": "the listing ignores a rule's own per-file gate"
+		},
+		{
+			"name": "M-EFFECTIVE-RENDER-HEADER",
+			"type": "anyparse.check.EffectiveRules",
+			"method": "render",
+			"find": "'=== effective lint rules — config chain: $chain ===\\n'",
+			"replace": "'=== lint rules: $chain ===\\n'",
+			"note": "the header review tooling detects the scoped form by changes"
 		}
 	]
 }

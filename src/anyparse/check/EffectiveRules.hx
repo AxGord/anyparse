@@ -1,10 +1,12 @@
 package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.Check.FileGated;
 import anyparse.check.Check.VersionGated;
 import anyparse.check.LintConfig.DiscoveredConfig;
 import haxe.io.Path;
 
+using StringTools;
 using Lambda;
 
 /** Whether one rule runs for a group of files, and what decided it. */
@@ -41,30 +43,35 @@ typedef RuleStateGroup = {
 final class EffectiveRules {
 
 	/**
-	 * One group per distinct config chain among `files`, in the order the chains are first met; the
-	 * files keep their given order within a group. A directory is resolved once.
+	 * One group per distinct (config chain, rule states) pair among `files`, in the order first met;
+	 * the files keep their given order within a group. A directory's chain is resolved once, and the
+	 * states are asked per file because a `FileGated` rule can answer differently for two files under
+	 * one chain.
 	 */
 	public static function resolve(files: Array<String>, checks: Array<Check>): Array<RuleStateGroup> {
 		final groups: Array<RuleStateGroup> = [];
-		final byDir: Map<String, RuleStateGroup> = [];
+		final byDir: Map<String, DiscoveredConfig> = [];
 		for (file in files) {
 			final dir: String = Path.directory(file);
-			final group: RuleStateGroup = byDir[dir] ?? groupFor(LintConfig.discoverChain(file), checks, groups);
-			byDir[dir] = group;
-			group.files.push(file);
+			final found: DiscoveredConfig = byDir[dir] ?? LintConfig.discoverChain(file);
+			byDir[dir] = found;
+			groupFor(found.chain, [for (c in checks) stateOf(c, file, found.config)], groups).files.push(file);
 		}
 		return groups;
 	}
 
-	/** The state of `check` under `config`. */
-	public static function stateOf(check: Check, config: LintConfig): RuleState {
+	/** The state of `check` for `file` under `config`. */
+	public static function stateOf(check: Check, file: String, config: LintConfig): RuleState {
 		final id: String = check.id();
 		final stated: Null<Bool> = config.enabledSetting(id);
 		final enabled: Bool = stated ?? !(check is DefaultOff);
 		final minimum: Null<String> = check is VersionGated ? (cast check: VersionGated).minLanguageVersion() : null;
 		final gated: Bool = enabled && minimum != null && !config.allowsLanguageVersion(minimum);
+		final skipped: Null<String> = enabled && !gated && check is FileGated ? (cast check: FileGated).skipReason(file, config) : null;
 		final reason: String = if (gated)
 			'needs-language-$minimum'
+		else if (skipped != null)
+			skipped
 		else if (stated != null)
 			'config'
 		else if (enabled)
@@ -73,24 +80,46 @@ final class EffectiveRules {
 			'default-off';
 		return {
 			id: id,
-			on: enabled && !gated,
+			on: enabled && !gated && skipped == null,
 			reason: reason,
 			description: check.description()
 		};
 	}
 
-	/** The existing group whose chain equals `found`'s, else a new one appended to `groups`. */
-	private static function groupFor(found: DiscoveredConfig, checks: Array<Check>, groups: Array<RuleStateGroup>): RuleStateGroup {
-		final key: String = found.chain.join('\n');
-		final existing: Null<RuleStateGroup> = groups.find(g -> g.chain.join('\n') == key);
+	/**
+	 * The listing `apq lint --list-rules <scope>` prints: per group, a header naming the chain nearest
+	 * first, its `file:` lines, then `<id>  on|off  <reason>  <description>` per rule. Review tooling
+	 * detects an hxq that supports the scoped form by the header, so its opening is a contract.
+	 */
+	public static function render(groups: Array<RuleStateGroup>): String {
+		final out: StringBuf = new StringBuf();
+		for (group in groups) {
+			final chain: String = group.chain.length == 0 ? '(none — builtin defaults)' : group.chain.join(' <- ');
+			out.add('=== effective lint rules — config chain: $chain ===\n');
+			for (file in group.files) out.add('file: $file\n');
+			final idWidth: Int = group.rules.fold((r, w) -> r.id.length > w ? r.id.length : w, 0);
+			final reasonWidth: Int = group.rules.fold((r, w) -> r.reason.length > w ? r.reason.length : w, 0);
+			for (r in group.rules) {
+				final state: String = r.on ? 'on ' : 'off';
+				out.add('${r.id.rpad(' ', idWidth)}  $state  ${r.reason.rpad(' ', reasonWidth)}  ${r.description}\n');
+			}
+		}
+		return out.toString();
+	}
+
+	/** The existing group with this chain and these states, else a new one appended to `groups`. */
+	private static function groupFor(chain: Array<String>, rules: Array<RuleState>, groups: Array<RuleStateGroup>): RuleStateGroup {
+		final key: String = signature(chain, rules);
+		final existing: Null<RuleStateGroup> = groups.find(g -> signature(g.chain, g.rules) == key);
 		if (existing != null) return existing;
-		final created: RuleStateGroup = {
-			chain: found.chain,
-			files: [],
-			rules: [for (c in checks) stateOf(c, found.config)]
-		};
+		final created: RuleStateGroup = { chain: chain, files: [], rules: rules };
 		groups.push(created);
 		return created;
+	}
+
+	/** One string per (chain, states) pair — what two files must share to be listed in one group. */
+	private static function signature(chain: Array<String>, rules: Array<RuleState>): String {
+		return chain.join('\n') + '\n\n' + [for (r in rules) '${r.id} ${r.on} ${r.reason}'].join('\n');
 	}
 
 }

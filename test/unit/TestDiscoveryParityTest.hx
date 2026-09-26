@@ -1165,9 +1165,14 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.EffectiveRulesTest#testADefaultOffRuleRunsOnlyWhereAConfigEnablesIt :: control :: M-EFFECTIVE-IGNORES-DEFAULT-OFF',
 			'unit.check.EffectiveRulesTest#testALanguageVersionBelowTheFixDropsTheRule :: control :: M-EFFECTIVE-IGNORES-VERSION',
 			'unit.check.EffectiveRulesTest#testANestedConfigFoldsItsAncestors :: control :: M-EFFECTIVE-IGNORES-CONFIG,M-CHAIN-NEAREST-ONLY',
+			'unit.check.EffectiveRulesTest#testAPathARuleExcludesIsOffForThatFileOnly :: control :: M-GATE-TS-EXCLUDE-BLIND,M-GATE-AD-EXCLUDE-BLIND',
+			'unit.check.EffectiveRulesTest#testARuleWithNothingToLookForIsOff :: control :: M-GATE-TS-SINKS-BLIND,M-EFFECTIVE-IGNORES-FILEGATE',
 			'unit.check.EffectiveRulesTest#testFilesGroupByChainNotByDirectory :: control :: M-EFFECTIVE-GROUPS-PER-DIR',
 			'unit.check.EffectiveRulesTest#testInheritFalseEndsTheChain :: control :: M-CHAIN-IGNORES-INHERIT',
+			'unit.check.EffectiveRulesTest#testOptionsThatSwitchEveryFindingOffAreANoop :: control :: M-GATE-NOOP-DOC,M-GATE-NOOP-UNDERSCORE',
 			'unit.check.EffectiveRulesTest#testTheChainStopsAtTheProjectRoot :: control :: M-CHAIN-UNBOUNDED',
+			'unit.check.EffectiveRulesTest#testTheListingOpensWithTheHeaderToolingDetects :: control :: M-EFFECTIVE-RENDER-HEADER',
+			'unit.check.EffectiveRulesTest#testTheRunSkipsWhatTheListingReportsOff :: control :: M-GATE-COLLECT-BYPASS',
 			'unit.check.ExtractRepeatedExpressionTest#testALiteralInteriorDifferenceSplitsTheGroup :: control :: '
 				+ 'M-EXTRACT-REPEAT-RENDER-SPLIT',
 			'unit.check.FieldInitAtDeclarationCrossingSuperTest#testCollectionOfForeignReadAfterSuperNotMoved :: control :: '
@@ -3494,6 +3499,14 @@ class TestDiscoveryParityTest extends Test {
 			'M-CHAIN-NEAREST-ONLY',
 			'M-CHAIN-IGNORES-INHERIT',
 			'M-CHAIN-UNBOUNDED',
+			'M-GATE-COLLECT-BYPASS',
+			'M-GATE-TS-SINKS-BLIND',
+			'M-GATE-TS-EXCLUDE-BLIND',
+			'M-GATE-AD-EXCLUDE-BLIND',
+			'M-GATE-NOOP-DOC',
+			'M-GATE-NOOP-UNDERSCORE',
+			'M-EFFECTIVE-IGNORES-FILEGATE',
+			'M-EFFECTIVE-RENDER-HEADER',
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

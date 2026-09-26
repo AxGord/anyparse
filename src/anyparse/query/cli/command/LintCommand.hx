@@ -1004,8 +1004,7 @@ final class LintCommand implements CliCommand {
 		}
 		// Listing rules is terminal like `--help`, but only once the whole argv is read: the scope
 		// that narrows it to effective state may follow the flag.
-		if (listRules) return lintParseExit(runListRules(lang, inputSpecs));
-		return {
+		final opts: LintOpts = {
 			lang: lang,
 			flat: flat,
 			includeInfo: includeInfo,
@@ -1020,6 +1019,7 @@ final class LintCommand implements CliCommand {
 			verbose: verbose,
 			errExit: null
 		};
+		return listRules ? lintParseExit(runListRules(opts)) : opts;
 	}
 
 	/**
@@ -1234,12 +1234,19 @@ final class LintCommand implements CliCommand {
 
 	/**
 	 * `--list-rules`: with no scope, the bare registry, one `<id>  <description>` line per rule, exactly
-	 * as before a scope was accepted; with one, `printEffectiveRules`.
+	 * as before a scope was accepted; with one, `printEffectiveRules`. A flag that only means something
+	 * to a lint run is a usage error rather than silently ignored — a listing is not narrowed by `--rule`.
 	 */
-	private static function runListRules(lang: String, inputSpecs: Array<String>): Int {
-		if (inputSpecs.length > 0) return printEffectiveRules(lang, inputSpecs);
+	private static function runListRules(o: LintOpts): Int {
+		final ignored: Null<String> = lintOnlyFlag(o);
+		if (ignored != null) {
+			CliIo.stderr('apq lint: --list-rules takes only a scope and --lang — $ignored applies to a lint run\n');
+			return EXIT_USAGE;
+		}
+		if (o.inputSpecs.length > 0) return printEffectiveRules(o.lang, o.inputSpecs);
 		final checks: Array<Check> = Linter.builtins();
-		final width: Int = idWidth(checks);
+		var width: Int = 0;
+		for (c in checks) if (c.id().length > width) width = c.id().length;
 		// The minimum language version a rule's FIX needs is printed with the rule, not
 		// discovered after a run that silently dropped it: a project whose `languageVersion`
 		// is below it never sees the finding, and this is where that becomes visible.
@@ -1252,12 +1259,8 @@ final class LintCommand implements CliCommand {
 
 	/**
 	 * `--list-rules <scope>`: every registered rule with the state a lint of the scope's files would run
-	 * it in — one block per distinct `apqlint.json` chain, headed by that chain (nearest first) and the
-	 * files it governs, then `<id>  on|off  <reason>  <description>` per rule (reasons: `EffectiveRules`).
-	 *
-	 * The registry alone is an upper bound: a config disables rules, and a default-off rule runs only
-	 * where a config enables it. Configs are resolved exactly as a lint run resolves them; nothing is
-	 * parsed or linted.
+	 * it in, as `EffectiveRules.render` lays it out. The registry alone is an upper bound; configs are
+	 * resolved exactly as a lint run resolves them, and nothing is parsed or linted.
 	 */
 	private static function printEffectiveRules(lang: String, inputSpecs: Array<String>): Int {
 		final paths: Array<String> = CliArgs.resolveInputPaths(lang, inputSpecs).paths;
@@ -1265,26 +1268,25 @@ final class LintCommand implements CliCommand {
 			CliIo.stderr('apq lint: ${CliArgs.quotedSpecs(inputSpecs)} matched no .hx files\n');
 			return EXIT_RUNTIME;
 		}
-		final checks: Array<Check> = Linter.builtins();
-		final width: Int = idWidth(checks);
-		for (group in EffectiveRules.resolve(paths, checks)) {
-			final chain: String = group.chain.length == 0 ? '(none — builtin defaults)' : group.chain.join(' <- ');
-			CliIo.sysPrint('=== effective lint rules — config chain: $chain ===\n');
-			for (file in group.files) CliIo.sysPrint('file: $file\n');
-			final reasonWidth: Int = group.rules.fold((r, w) -> r.reason.length > w ? r.reason.length : w, 0);
-			for (r in group.rules) {
-				final state: String = r.on ? 'on ' : 'off';
-				CliIo.sysPrint('${r.id.rpad(' ', width)}  $state  ${r.reason.rpad(' ', reasonWidth)}  ${r.description}\n');
-			}
-		}
+		CliIo.sysPrint(EffectiveRules.render(EffectiveRules.resolve(paths, Linter.builtins())));
 		return EXIT_OK;
 	}
 
-	/** The widest rule id among `checks` — the column the listings pad ids to. */
-	private static function idWidth(checks: Array<Check>): Int {
-		var width: Int = 0;
-		for (c in checks) if (c.id().length > width) width = c.id().length;
-		return width;
+	/** The first lint-run flag `o` carries, as the user spelled it, or null when there is none. */
+	private static function lintOnlyFlag(o: LintOpts): Null<String> {
+		final given: Array<{ flag: String, set: Bool }> = [
+			{ flag: '--rule', set: o.ruleFilters.length > 0 },
+			{ flag: '--fix', set: o.fix },
+			{ flag: '--all', set: o.includeInfo },
+			{ flag: '--flat', set: o.flat },
+			{ flag: '--no-oracle', set: o.noOracle },
+			{ flag: '--fail-on', set: o.failOn != null },
+			{ flag: '--format', set: o.format != FORMAT_TEXT },
+			{ flag: '--range', set: o.range != null },
+			{ flag: '--baseline', set: o.baseline != null },
+			{ flag: '--verbose', set: o.verbose }
+		];
+		return given.find(g -> g.set)?.flag;
 	}
 
 	/**

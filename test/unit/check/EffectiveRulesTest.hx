@@ -4,9 +4,12 @@ package unit.check;
 import sys.FileSystem;
 import sys.io.File;
 #end
+import anyparse.check.AvoidDynamic;
 import anyparse.check.Check;
 import anyparse.check.EffectiveRules;
+import anyparse.check.LintConfig;
 import anyparse.check.Linter;
+import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
 import unit.cli.CliFixture;
 import utest.Assert;
@@ -138,6 +141,113 @@ class EffectiveRulesTest extends Test {
 		final root: String = project('{"rules": {}}', null);
 		Assert.equals(0, Cli.run(['lint', '--list-rules', '$root/nested/Probe.hx']), 'a scope lists effective state and exits 0');
 		Assert.equals(1, Cli.run(['lint', '--list-rules', '$root/nested/Missing.hx']), 'a scope with no .hx is a runtime error');
+		CliFixture.removeDir(root);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-GATE-TS-SINKS-BLIND')
+	@:killer('M-EFFECTIVE-IGNORES-FILEGATE')
+	public function testARuleWithNothingToLookForIsOff(): Void {
+		#if (sys || nodejs)
+		final root: String = project('{"rules": {}}', null);
+		assertState(only('$root/nested/Probe.hx'), 'thread-safety', false, 'needs-config');
+		CliFixture.removeDir(root);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-GATE-TS-EXCLUDE-BLIND')
+	@:killer('M-GATE-AD-EXCLUDE-BLIND')
+	public function testAPathARuleExcludesIsOffForThatFileOnly(): Void {
+		#if (sys || nodejs)
+		final root: String = project(
+			'{"rules": {"thread-safety": {"sinks": ["Sys.sleep"], "exclude": ["nested"]}, "avoid-dynamic": {"excludePaths": ["nested/"]}}}',
+			null
+		);
+		File.saveContent('$root/Top.hx', 'class Top {}\n');
+		final groups: Array<RuleStateGroup> = EffectiveRules.resolve(['$root/Top.hx', '$root/nested/Probe.hx'], Linter.builtins());
+		Assert.equals(2, groups.length, 'one chain, two rule states: two groups');
+		assertState(groups[0], 'thread-safety', true, 'default');
+		assertState(groups[0], 'avoid-dynamic', true, 'default');
+		assertState(groups[1], 'thread-safety', false, 'config-excluded');
+		assertState(groups[1], 'avoid-dynamic', false, 'config-excluded');
+		CliFixture.removeDir(root);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-GATE-NOOP-DOC')
+	@:killer('M-GATE-NOOP-UNDERSCORE')
+	public function testOptionsThatSwitchEveryFindingOffAreANoop(): Void {
+		#if (sys || nodejs)
+		final root: String = project(
+			'{"rules": {"doc-coverage": {"requireTypeDoc": false, "requireMemberDoc": false},'
+			+ ' "no-underscore-prefix": {"enabled": true, "params": false, "locals": false}}}',
+			null
+		);
+		final group: RuleStateGroup = only('$root/nested/Probe.hx');
+		assertState(group, 'doc-coverage', false, 'config-noop');
+		assertState(group, 'no-underscore-prefix', false, 'config-noop');
+		CliFixture.removeDir(root);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** The listing and the run answer from one predicate: a file the listing reports off yields no finding. */
+	@:pin('control')
+	@:killer('M-GATE-COLLECT-BYPASS')
+	public function testTheRunSkipsWhatTheListingReportsOff(): Void {
+		final config: LintConfig = LintConfig.parse('{"rules": {"avoid-dynamic": {"excludePaths": ["gen/"]}}}');
+		final source: String = 'class C {\n\tvar x:Dynamic;\n}\n';
+		final files: Array<{ file: String, source: String }> = [{ file: 'gen/C.hx', source: source }, { file: 'app/C.hx', source: source }];
+		final found: Array<Violation> = Linter.run(files, new HaxeQueryPlugin(), [new AvoidDynamic()], _ -> config, true);
+		Assert.same(['app/C.hx'], [for (v in found) v.file], 'only the file the listing reports on is scanned');
+		Assert.isFalse(EffectiveRules.stateOf(new AvoidDynamic(), 'gen/C.hx', config).on, 'and the listing reports the other off');
+	}
+
+	@:pin('control')
+	@:killer('M-EFFECTIVE-RENDER-HEADER')
+	public function testTheListingOpensWithTheHeaderToolingDetects(): Void {
+		final group: RuleStateGroup = {
+			chain: ['/p/apqlint.json'],
+			files: ['/p/A.hx'],
+			rules: [
+				{
+					id: 'dead-code',
+					on: true,
+					reason: 'default',
+					description: 'd'
+				},
+				{
+					id: 'explicit-local-type',
+					on: false,
+					reason: 'default-off',
+					description: 'e'
+				}
+			]
+		};
+		Assert.equals(
+			'=== effective lint rules — config chain: /p/apqlint.json ===\nfile: /p/A.hx\ndead-code            on   default      d\n'
+			+ 'explicit-local-type  off  default-off  e\n',
+			EffectiveRules.render([group])
+		);
+	}
+
+	public function testLintRunFlagsAreRefusedWithTheListing(): Void {
+		#if (sys || nodejs)
+		final root: String = project('{"rules": {}}', null);
+		for (flag in [['--rule', 'dead-code'], ['--fix'], ['--all']])
+			Assert.equals(
+				2, Cli.run(['lint', '--list-rules'].concat(flag).concat(['$root/nested/Probe.hx'])), '${flag[0]} is a usage error'
+			);
 		CliFixture.removeDir(root);
 		#else
 		Assert.pass('non-sys target');
