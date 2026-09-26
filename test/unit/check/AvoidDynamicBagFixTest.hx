@@ -3,6 +3,7 @@ package unit.check;
 import anyparse.check.AvoidDynamic;
 import anyparse.check.Check.TypeOracle;
 import anyparse.check.Check.Violation;
+import anyparse.check.PositionTypeOracle;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
 import utest.Assert;
@@ -49,6 +50,23 @@ class AvoidDynamicBagFixTest extends Test {
 
 	public function testHeterogeneousNoEdits(): Void {
 		Assert.equals(0, edits(usingLocal('bag.setField("i", 1);\n\t\tbag.setField("s", "x");'), new FakeTypeOracle(null)).length);
+	}
+
+	@:pin('control') @:killer('M-BAG-INITIALIZER')
+	public function testAnInitializerOfAnotherTypeKeepsTheDeclaration(): Void {
+		// a value of a typed structure would have to unify with the map field by field; only a Dynamic one may become it
+		final src: String = 'using Reflect;\nclass C {\n\tfunction f():Dynamic {\n\t\tfinal bag:Dynamic = make();\n\t\t'
+			+ 'bag.setField("a", "x");\n\t\treturn bag;\n\t}\n}';
+		Assert.equals(0, edits(src, new FakeTypeOracle('String')).length);
+		Assert.isTrue(apply(src, edits(src, new FakeTypeOracle('Dynamic'))).indexOf('final bag:DynamicAccess<') != -1);
+	}
+
+	@:pin('control') @:killer('M-BAG-NULL-OUTER')
+	public function testANullableValueIsNeverTypedByItsBareWrapper(): Void {
+		final src: String = 'using Reflect;\nclass C {\n\tfunction f(s:Null<String>):Dynamic {\n\t\tfinal bag:Dynamic = {};\n\t\t'
+			+ 'bag.setField("a", s);\n\t\treturn bag;\n\t}\n}';
+		Assert.equals(0, edits(src, new FakeTypeOracle(null)).length);
+		Assert.isTrue(apply(src, edits(src, new FakeTypeOracle('Null<String>'))).indexOf('DynamicAccess<Null<String>>') != -1);
 	}
 
 	// ---- blast-radius ----
@@ -140,7 +158,7 @@ class AvoidDynamicBagFixTest extends Test {
 }
 
 /** A canned `TypeOracle` for the bag-fix inference tail — returns one fixed type (or null) for every query, no process. */
-private class FakeTypeOracle implements TypeOracle {
+private class FakeTypeOracle extends PositionTypeOracle {
 
 	private final _answer: Null<String>;
 

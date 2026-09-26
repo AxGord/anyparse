@@ -32,6 +32,12 @@ final class TypedFactsMacro {
 
 	private static var installed: Bool = false;
 
+	/** Milliseconds in a second: `Date.getTime` counts the one, `Sys.time` the other. */
+	private static inline final MS_PER_SECOND: Float = 1000;
+
+	/** When the compile started, in `Sys.time` seconds (`run`). */
+	private static var started: Float = 0;
+
 	/** Nodes written, for the closing record. */
 	public var nodes: Int = 0;
 
@@ -219,6 +225,8 @@ final class TypedFactsMacro {
 	public static function run(path: String): Void {
 		if (installed) return;
 		installed = true;
+		// an init macro runs before any module is parsed: a file written after this was not the text the compile read
+		started = Sys.time();
 		Context.onAfterTyping(moduleTypes -> {
 			final writer: TypedFactsMacro = new TypedFactsMacro(File.write(path, false));
 			writer.line('{"k":"facts","v":$VERSION,"inline":${!Context.defined('no-inline')}}');
@@ -247,14 +255,26 @@ final class TypedFactsMacro {
 	}
 
 	/**
-	 * Announce `file` as the home of a record: once per file, a `src` record with its UTF-8 length and MD5.
+	 * Announce `file` as the home of a record: once per file, a `src` record with its UTF-8 length and MD5, read from disk
+	 * now that typing ended — and `changed` when the file was written after the compile started, so the text hashed is
+	 * not provably the one the compile parsed.
 	 */
 	public function noteHome(file: String): Void {
 		if (_homes.exists(file)) return;
 		_homes[file] = true;
 		final bytes: Null<haxe.io.Bytes> = try File.getBytes(file) catch (exception: haxe.Exception) null;
 		if (bytes == null) return;
-		line('{"k":"src","path":${Json.stringify(file)},"len":${bytes.length},"md5":"${haxe.crypto.Md5.make(bytes).toHex()}"}');
+		final changed: Bool = writtenSince(file, started);
+		line(
+			'{"k":"src","path":${Json.stringify(file)},"len":${bytes.length},"md5":"${haxe.crypto.Md5.make(bytes).toHex()}"'
+			+ (changed ? ',"changed":true}' : '}')
+		);
+	}
+
+	/** Whether `file` was modified at or after `time` (`Sys.time` seconds); true when it cannot be told. */
+	public static function writtenSince(file: String, time: Float): Bool {
+		final mtime: Null<Float> = try sys.FileSystem.stat(file).mtime.getTime() / MS_PER_SECOND catch (exception: haxe.Exception) null;
+		return mtime == null || mtime >= time;
 	}
 
 	/**

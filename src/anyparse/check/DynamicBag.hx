@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.Check.OracleType;
 import anyparse.check.Check.TypeOracle;
 import anyparse.check.Check.Violation;
 import anyparse.check.DynamicShape.DynCtx;
@@ -80,7 +81,7 @@ final class DynamicBag {
 			final decl: Null<QueryNode> = fixableBagDecl(tree, source, span, ctx, dynName);
 			if (decl == null) continue;
 			final bag: Null<BagUses> = bagUsesOf(decl, tree, source, shape, ctx, usingReflect, dynName);
-			if (bag == null) continue;
+			if (bag == null || !initializerFits(decl, shape, oracle, v.file)) continue;
 			switch unifyBagValues(bag.writes, tree, shape, dynName, declaredTypes, imports, oracle, v.file) {
 				case Real(t):
 					edits.push({ span: span, text: 'DynamicAccess<$t>' });
@@ -344,7 +345,12 @@ final class DynamicBag {
 			var t: Null<String> = bagValueType(w, tree, shape, declaredTypes);
 			if (t == null && oracle != null) {
 				final ws: Null<Span> = w.span;
-				final raw: Null<String> = ws == null ? null : oracle.typeAt(file, ws.to - 1);
+				final raw: Null<String> = ws == null
+					? null
+					: switch oracle.expressionType(file, ws) {
+						case Typed(type): type;
+						case Declined(_): null;
+					};
 				t = raw == null ? null : LiteralInfer.normalizeInferredType(raw, imports, BAG_MAX_ANON);
 			}
 			if (t == null) {
@@ -370,17 +376,36 @@ final class DynamicBag {
 			Undetermined;
 	}
 
+	/**
+	 * Whether the initializer of `decl` may become a `DynamicAccess<T>`: none, an empty object literal, or a value the oracle
+	 * types `Dynamic`. Any other value — a structure with typed fields, a class instance — would have to unify with the map
+	 * field by field, and the writes say nothing about its fields.
+	 */
+	private static function initializerFits(decl: QueryNode, shape: RefShape, oracle: Null<TypeOracle>, file: String): Bool {
+		final annotations: Array<String> = shape.typeAnnotationKinds ?? [];
+		final init: Null<QueryNode> = decl.children.find(c -> !annotations.contains(c.kind));
+		if (init == null || (init.kind == shape.objectLiteralKind && init.children.length == 0)) return true;
+		final span: Null<Span> = init.span;
+		return oracle != null && span != null && oracle.expressionType(file, span).match(Typed('Dynamic'));
+	}
+
 	/** The structural named type of a written bag value: a literal, a typed identifier, or a `new T(…)`; null when unresolved. */
 	private static function bagValueType(w: QueryNode, tree: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>): Null<String> {
 		final literalTypes: Map<String, String> = shape.literalTypeNames ?? [];
 		return if (literalTypes.exists(w.kind))
 			literalTypes[w.kind]
 		else if (w.kind == shape.identKind)
-			TypeResolver.identTypeName(w, tree, shape, declaredTypes)
+			// a declared type is read by its OUTER name, and `Null`'s names no type without its argument
+			nominalOrNull(TypeResolver.identTypeName(w, tree, shape, declaredTypes), shape)
 		else if (shape.newExprKind != null && w.kind == shape.newExprKind)
 			TypeResolver.simpleNominalName(w.name)
 		else
 			null;
+	}
+
+	/** `name` unless it is a transparent wrapper (`RefShape.memberTransparentWrapperTypeNames`), which names no type without its argument. */
+	private static function nominalOrNull(name: Null<String>, shape: RefShape): Null<String> {
+		return name == null || (shape.memberTransparentWrapperTypeNames ?? []).contains(name) ? null : name;
 	}
 
 	/** The `import haxe.DynamicAccess;` insertion edit, or null when already imported. Mirrors `AddImport`'s site selection. */

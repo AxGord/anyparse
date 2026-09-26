@@ -5,15 +5,20 @@ import anyparse.check.CheckScan;
 import anyparse.check.CompilerDisplayOracle;
 import anyparse.check.CompilerOracle;
 import anyparse.check.CompilerServer;
+import anyparse.check.FactsTypeOracle;
 import anyparse.check.FixVerifier;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.check.OracleCache;
 import anyparse.check.OracleCoverage;
 import anyparse.core.EnvFlag;
+import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.Cli.RuleFixOutcome;
+import anyparse.query.CompilerFacts;
+import anyparse.query.EditJournal;
 import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.SymbolIndexHost;
 import anyparse.runtime.Span;
 import haxe.io.Path;
 import anyparse.query.ExitCode.*;
@@ -542,10 +547,11 @@ final class LintFixVerify {
 			appliedCount: 0,
 			excluded: excluded
 		};
-		final display: Null<CompilerDisplayOracle> = startDisplay(current.configs);
-		if (display == null) return { tail: ', oracle-assisted skipped (display server unavailable)', appliedCount: 0, excluded: excluded };
+		final display: DisplayHandle = { configs: current.configs, server: null, tried: false };
+		final oracle: Null<TypeOracle> = assistedOracle(plugin, display, files);
+		if (oracle == null) return { tail: ', oracle-assisted skipped (display server unavailable)', appliedCount: 0, excluded: excluded };
 		for (entry in files) {
-			final allEdits: Array<{ span: Span, text: String }> = assistedEdits(entry, findingsByCheck, plugin, display);
+			final allEdits: Array<{ span: Span, text: String }> = assistedEdits(entry, findingsByCheck, plugin, oracle);
 			if (allEdits.length == 0) continue;
 			final gap: Null<String> = assistedEditsAreVerifiable(current.coverages, excluded, entry, allEdits, plugin);
 			if (gap != null) {
@@ -563,7 +569,8 @@ final class LintFixVerify {
 				case _:
 			}
 		}
-		display.stop();
+		display.server?.stop();
+		for (line in assistedDeclineLines(findingsByCheck)) CliIo.stderr(line);
 		// WHICH files, not just how many — the same reason the risky phase prints a line per
 		// decline: a count leaves the reader to guess which of hundreds of files this hxml never
 		// typechecks, which is the search those lines exist to remove. Capped for the same reason
@@ -595,6 +602,60 @@ final class LintFixVerify {
 			appliedCount: applied.appliedCount,
 			excluded: excluded
 		};
+	}
+
+	/**
+	 * The oracle the phase asks: the compiler's typed facts whenever every configuration contributed to them
+	 * (`CompilerFacts.dropped` empty — a configuration missing from the table could type a declaration differently, and
+	 * agreement is what the facts oracle answers on), reading each of `files` as it is now; the display server of `display`
+	 * is started only for a file whose facts cannot be placed in it, or alone when the run has no such facts. Null when
+	 * neither is there.
+	 */
+	private static function assistedOracle(
+		plugin: GrammarPlugin, display: DisplayHandle, files: Array<{ file: String, source: String }>
+	): Null<TypeOracle> {
+		final facts: Null<CompilerFacts> = plugin is SymbolIndexHost ? (cast plugin: SymbolIndexHost).compilerFacts() : null;
+		if (facts == null || facts.dropped.length > 0 || facts.configurations.length == 0) return displayOf(display);
+		final current: Map<String, String> = [for (entry in files) entry.file => entry.source];
+		final journal: Null<EditJournal> = plugin is CachingGrammarPlugin ? (cast plugin: CachingGrammarPlugin).editJournal : null;
+		return new FactsTypeOracle(facts, file -> current[file], journal, plugin, displayOf.bind(display));
+	}
+
+	/** The display server of `handle`, started on the first call (`startDisplay`); null when none would start. */
+	private static function displayOf(handle: DisplayHandle): Null<TypeOracle> {
+		if (!handle.tried) {
+			handle.tried = true;
+			handle.server = startDisplay(handle.configs);
+		}
+		return handle.server;
+	}
+
+	/**
+	 * The oracle-assisted decline census: per rule, how many of its findings the phase declined and why — the reasons the
+	 * checks recorded (`Violation.declineReason`), most frequent first, the rest summarised past the usual cap.
+	 */
+	private static function assistedDeclineLines(findingsByCheck: Array<{ check: Check, all: Array<Violation> }>): Array<String> {
+		final lines: Array<String> = [];
+		for (byCheck in findingsByCheck) {
+			final counts: Map<String, Int> = [];
+			var total: Int = 0;
+			for (v in byCheck.all) {
+				final reason: Null<String> = v.declineReason;
+				if (reason == null) continue;
+				counts[reason] = (counts[reason] ?? 0) + 1;
+				total++;
+			}
+			if (total == 0) continue;
+			final reasons: Array<String> = [for (r in counts.keys()) r];
+			reasons.sort((a, b) -> (counts[b] ?? 0) != (counts[a] ?? 0) ? (counts[b] ?? 0) - (counts[a] ?? 0) : Reflect.compare(a, b));
+			lines.push(
+				'apq lint --fix: oracle-assisted ${byCheck.check.id()} DECLINED $total finding(s), ${reasons.length} distinct reason(s)\n'
+			);
+			for (r in reasons.slice(0, LintFixDriver.DECLINED_REASONS_SHOWN)) lines.push('      ${counts[r]}× $r\n');
+			if (reasons.length > LintFixDriver.DECLINED_REASONS_SHOWN)
+				lines.push('      … +${reasons.length - LintFixDriver.DECLINED_REASONS_SHOWN} more reason(s)\n');
+		}
+		return lines;
 	}
 
 	/**
@@ -661,13 +722,13 @@ final class LintFixVerify {
 	 */
 	private static function assistedEdits(
 		entry: { file: String, source: String }, findingsByCheck: Array<{ check: Check, all: Array<Violation> }>, plugin: GrammarPlugin,
-		display: CompilerDisplayOracle
+		oracle: TypeOracle
 	): Array<{ span: Span, text: String }> {
 		final out: Array<{ span: Span, text: String }> = [];
 		for (byCheck in findingsByCheck) {
 			final own: Array<Violation> = byCheck.all.filter(v -> v.file == entry.file);
 			if (own.length == 0) continue;
-			for (edit in (cast byCheck.check: OracleAssisted).fixWithOracle(entry.source, own, plugin, display)) out.push(edit);
+			for (edit in (cast byCheck.check: OracleAssisted).fixWithOracle(entry.source, own, plugin, oracle)) out.push(edit);
 		}
 		return out;
 	}
@@ -847,4 +908,11 @@ final class LintFixVerify {
 		];
 	}
 
+}
+
+/** The display server `LintFixVerify.displayOf` starts for `configs` on first need, and whether it was tried. */
+private typedef DisplayHandle = {
+	final configs: Array<OracleConfig>;
+	var server: Null<CompilerDisplayOracle>;
+	var tried: Bool;
 }

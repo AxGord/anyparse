@@ -1,6 +1,5 @@
 package anyparse.check;
 
-import anyparse.check.Check.TypeOracle;
 import haxe.io.Path;
 
 using StringTools;
@@ -44,7 +43,7 @@ using StringTools;
  * `start` / a null `typeAt` — the oracle degrades, never throws.
  */
 @:nullSafety(Strict)
-final class CompilerDisplayOracle implements TypeOracle {
+final class CompilerDisplayOracle extends PositionTypeOracle {
 
 	/** Total `typeAt` queries this process — a spawn counter tests read to prove the no-config gate. */
 	public static var invocations(default, null): Int = 0;

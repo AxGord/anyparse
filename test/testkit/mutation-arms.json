@@ -7952,6 +7952,228 @@
 			"find": "'=== effective lint rules — config chain: $chain ===\\n'",
 			"replace": "'=== lint rules: $chain ===\\n'",
 			"note": "the header review tooling detects the scoped form by changes"
+		},
+		{
+			"name": "M-FACTS-ORACLE-AGREE",
+			"type": "anyparse.check.FactsTypeOracle",
+			"method": "agreed",
+			"find": "if (types.length > 1) return Declined('the oracle configurations type it differently: ${types.join(' / ')}');",
+			"replace": "",
+			"note": "the first of two types the configurations disagree on is answered, so an annotation is right in one build and wrong in the other"
+		},
+		{
+			"name": "M-FACTS-SPELL-UNKNOWN",
+			"type": "anyparse.check.FactsTypeSpelling",
+			"method": "type",
+			"find": "case '?'.code: fail(FactsTypeOracle.DECLINE_UNKNOWN);",
+			"replace": "case '?'.code:\n\t\t\t\t_pos++;\n\t\t\t\t'Dynamic';",
+			"note": "an unbound monomorph is spelled Dynamic, so a type the compiler never pinned is written as one"
+		},
+		{
+			"name": "M-FACTS-SPELL-SCOPE",
+			"type": "anyparse.check.FactsTypeSpelling",
+			"method": "inScope",
+			"force": "true",
+			"note": "every type parameter is in scope, so a parameter of another declaration is written where it names nothing"
+		},
+		{
+			"name": "M-FACTS-SPELL-IMPL",
+			"type": "anyparse.check.FactsTypeSpelling",
+			"method": "nominal",
+			"find": "if (name == 'Abstract' || name.indexOf('_Impl_') >= 0) return fail(FactsTypeOracle.DECLINE_UNSPELLABLE);",
+			"replace": "",
+			"note": "an abstract's statics and implementation class are spelled like any path, which no source can write"
+		},
+		{
+			"name": "M-FACTS-ORACLE-ORIGINAL",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "invalidate",
+			"find": "if (original != null && matches && !_stale.exists(key) && !_originals.exists(key)) _originals[key] = original;",
+			"replace": "",
+			"note": "a rewritten file keeps no original text, so its facts cannot be placed and every declaration in it declines"
+		},
+		{
+			"name": "M-FACTS-INVALIDATE-FOREIGN",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "invalidate",
+			"find": "if (now != null && FactText.contentHash(now) == expected) return;",
+			"note": "facts a compile certified for the text now on disk are dropped with the rewrite, so a compile that ran after the write answers nothing",
+			"replace": "{}"
+		},
+		{
+			"name": "M-FACTS-FIELD-TYPES",
+			"type": "anyparse.query.FactMerge",
+			"method": "fields",
+			"find": "known.types.push(f.type);",
+			"replace": "{}",
+			"note": "a second configuration's type for a field is dropped, so a field the builds type apart reads as agreed"
+		},
+		{
+			"name": "M-FACTS-SIGNATURE-VARIANTS",
+			"type": "anyparse.query.FactMerge",
+			"method": "variant",
+			"find": "if (!into.exists(v -> v.signature == signature && Json.stringify(v.params) == key))",
+			"replace": "if (into.length == 0)",
+			"note": "only the first configuration's signature is kept, so a return or parameter the builds type apart reads as agreed"
+		},
+		{
+			"name": "M-EXPLICIT-TYPE-ORACLE-PARAMS",
+			"type": "anyparse.check.ExplicitType",
+			"method": "functionOracleEdits",
+			"find": "for (index in 0...own.length) pushEdit(out, paramOracleEdit(s, fn, own[index], index));",
+			"replace": "",
+			"note": "the oracle-assisted pass types no parameter"
+		},
+		{
+			"name": "M-EXPLICIT-TYPE-ORACLE-FIELDS",
+			"type": "anyparse.check.ExplicitType",
+			"method": "fieldOracleEdit",
+			"force": "null",
+			"note": "the oracle-assisted pass types no field"
+		},
+		{
+			"name": "M-EXPLICIT-TYPE-STRUCTURAL-DECLINE",
+			"type": "anyparse.check.ExplicitType",
+			"method": "recordStructuralDeclines",
+			"find": "v.declineReason = v.message == RETURN_MESSAGE ? DECLINE_NO_STRUCTURAL_RETURN : DECLINE_NO_STRUCTURAL_TYPE;",
+			"replace": "{}",
+			"note": "a finding the structural fix leaves unfixed says nothing about why"
+		},
+		{
+			"name": "M-ASSISTED-FACTS-FIRST",
+			"type": "anyparse.query.cli.command.LintFixVerify",
+			"method": "assistedOracle",
+			"force": "displayOf(display)",
+			"note": "the oracle-assisted phase asks the display server although the run holds every configuration's facts"
+		},
+		{
+			"name": "M-ASSISTED-DECLINE-CENSUS",
+			"type": "anyparse.query.cli.command.LintFixVerify",
+			"method": "assistedDeclineLines",
+			"force": "[]",
+			"note": "the oracle-assisted phase prints no decline reason"
+		},
+		{
+			"name": "M-FACTS-DYNAMIC-SOURCE",
+			"type": "anyparse.check.FactsTypeOracle",
+			"method": "localType",
+			"find": "return Declined(DECLINE_DYNAMIC_SOURCE);",
+			"replace": "{}",
+			"note": "a local a Dynamic value initializes is annotated with the structure its uses bound, which the value need not have"
+		},
+		{
+			"name": "M-BAG-INITIALIZER",
+			"type": "anyparse.check.DynamicBag",
+			"method": "initializerFits",
+			"force": "true",
+			"note": "a bag declaration whose initializer is a typed structure becomes a DynamicAccess its fields may not fit"
+		},
+		{
+			"name": "M-BAG-NULL-OUTER",
+			"type": "anyparse.check.DynamicBag",
+			"method": "nominalOrNull",
+			"force": "name",
+			"note": "a Null<T> value is typed by its bare wrapper, so the bag becomes DynamicAccess<Null>, which names no type"
+		},
+		{
+			"name": "M-JOURNAL-INTERIOR",
+			"type": "anyparse.query.EditStep",
+			"method": "back",
+			"find": "if (start < to && from < end) return null;",
+			"replace": "{}",
+			"note": "a span inside text an edit inserted or replaced is carried back by offset arithmetic anyway, so a moved member lands on whatever text now sits there"
+		},
+		{
+			"name": "M-JOURNAL-SHIFT",
+			"type": "anyparse.query.EditStep",
+			"method": "back",
+			"find": "if (end <= from) at = shift + e.text.length - (e.span.to - e.span.from);",
+			"replace": "if (end <= from) at = shift;",
+			"note": "the last edit before a span does not shift it, so untouched text maps one edit off"
+		},
+		{
+			"name": "M-JOURNAL-OPAQUE",
+			"type": "anyparse.query.EditStep",
+			"method": "alignment",
+			"find": "same = StringTools.fastCodeAt(spliced, solid[i]) == StringTools.fastCodeAt(after, settled[i]);",
+			"replace": "same = true;",
+			"note": "a settled text that differs from its splice in more than whitespace is aligned as if it did not"
+		},
+		{
+			"name": "M-JOURNAL-AGREE",
+			"type": "anyparse.query.EditJournal",
+			"method": "back",
+			"find": "if (seen != null && (seen.from != at.from || seen.to != at.to)) return Unmapped(UNMAPPED_AMBIGUOUS);",
+			"replace": "{}",
+			"note": "two recorded histories that place a span apart answer the last one"
+		},
+		{
+			"name": "M-JOURNAL-RECORD-PATH",
+			"type": "anyparse.query.EditJournal",
+			"method": "collect",
+			"find": "if (step.after == goal) {",
+			"replace": "if (true) {",
+			"note": "any recorded step from the text is taken for a history reaching the file as it is now"
+		},
+		{
+			"name": "M-JOURNAL-RECORD",
+			"type": "anyparse.query.CanonicalEdit",
+			"method": "canonicalize",
+			"find": "(cast plugin: CachingGrammarPlugin).editJournal?.record(source, edits, settled);",
+			"replace": "{}",
+			"note": "the fix driver's rewrites are not recorded, so no file it touched can be placed"
+		},
+		{
+			"name": "M-ORACLE-WHOLE-MEMBER",
+			"type": "anyparse.check.FactsTypeOracle",
+			"method": "resolve",
+			"find": [
+				"return switch journal.back(site.text, site.current, member) {",
+				"case Mapped(at) if (site.text.substring(at.from, at.to) == site.current.substring(member.from, member.to)):\n\t\t\t\tquery(site, new Span(key.from + at.from - member.from, key.to + at.from - member.from), here);"
+			],
+			"replace": [
+				"return switch journal.back(site.text, site.current, key) {",
+				"case Mapped(at):\n\t\t\t\tquery(site, at, here);"
+			],
+			"note": "only the declaration's name is placed, so an edit elsewhere in its member — a changed signature the inferred type rests on — goes unseen"
+		},
+		{
+			"name": "M-ORACLE-HOME-GUARD",
+			"type": "anyparse.check.FactsTypeOracle",
+			"method": "sameHome",
+			"force": "true",
+			"note": "facts of any member answer for code the file now holds in another"
+		},
+		{
+			"name": "M-ORACLE-HOME-MODIFIED-TYPE",
+			"type": "anyparse.check.FactsTypeOracle",
+			"method": "homeOf",
+			"find": "type = node.name ?? node.children.find(c -> c.name != null)?.name;",
+			"replace": "type = node.name;",
+			"note": "a `final class` names no type, so every declaration in one reads as homeless and declines"
+		},
+		{
+			"name": "M-FACTS-WRITTEN-DURING",
+			"type": "anyparse.check.TypedFactsMacro",
+			"method": "writtenSince",
+			"force": "false",
+			"note": "a file written while the facts compile ran is certified by a hash of the text it has now"
+		},
+		{
+			"name": "M-FACTS-CHANGED-STALE",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "addSource",
+			"find": "if (record.changed == true || (known != null && known != hash))",
+			"replace": "if (known != null && known != hash)",
+			"note": "a file the compile marked written during it keeps its facts"
+		},
+		{
+			"name": "M-FIX-FACTS-SETTLED",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "applyLintFixes",
+			"find": "// no disk write before this one but a create, which settled the facts compiles already\n\t\tcached.compilerFactsSettled();",
+			"replace": "",
+			"note": "the safe pass writes while the early facts compiles may still be reading the files"
 		}
 	]
 }

@@ -317,16 +317,31 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		return read == null ? null : read();
 	}
 
+	/**
+	 * The run's record of every rewrite `CanonicalEdit.canonicalize` settled through this plugin, or null — the default, for a
+	 * run that asks no question of an earlier text of a file. A `--fix` run that reads compiler facts sets one.
+	 */
+	public var editJournal: Null<EditJournal> = null;
+
 	/** `SymbolIndexHost`: the compiler facts the run's resolution scope names (`ResolutionScope.facts`), or null. */
 	public function compilerFacts(): Null<CompilerFacts> {
 		final read: Null<() -> Null<CompilerFacts>> = _resolutionScope?.facts;
 		return read == null ? null : read();
 	}
 
-	/** Tell the run's compiler facts that `files` were rewritten, without compiling them if no one asked yet. */
-	public function compilerFactsEdited(files: Array<String>): Void {
-		final edited: Null<(String) -> Void> = _resolutionScope?.factsEdited;
-		if (edited != null) for (f in files) edited(f);
+	/** Let the facts compiles the run started ahead finish before it writes (`ResolutionScope.factsSettled`). */
+	public function compilerFactsSettled(): Void {
+		final settle: Null<() -> Void> = _resolutionScope?.factsSettled;
+		if (settle != null) settle();
+	}
+
+	/**
+	 * Tell the run's compiler facts that `files` were rewritten, without compiling them if no one asked yet. `originals`
+	 * holds the text each had when the run started, which the facts keep to read the file as the compile read it.
+	 */
+	public function compilerFactsEdited(files: Array<String>, ?originals: Map<String, String>): Void {
+		final edited: Null<(String, Null<String>) -> Void> = _resolutionScope?.factsEdited;
+		if (edited != null) for (f in files) edited(f, originals?.get(f));
 	}
 
 	/**
@@ -743,6 +758,15 @@ typedef ResolutionScope = {
 	 */
 	@:optional final facts: () -> Null<CompilerFacts>;
 
-	/** Record that the run rewrote a file: its facts are dropped now, or once `facts` builds them. */
-	@:optional final factsEdited: (String) -> Void;
+	/**
+	 * Record that the run rewrote a file, with the text it had when the run started when known: its facts are dropped now,
+	 * or once `facts` builds them (`CompilerFacts.invalidate`).
+	 */
+	@:optional final factsEdited: (String, Null<String>) -> Void;
+
+	/**
+	 * Wait for the facts compiles the run started ahead, when it did: called before the run's first write, so no compile
+	 * reads a file half way through a rewrite. A run that started none compiles on demand, after its writes.
+	 */
+	@:optional final factsSettled: () -> Void;
 };

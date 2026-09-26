@@ -1,8 +1,8 @@
 package unit.check;
 
-import anyparse.check.Check.TypeOracle;
 import anyparse.check.Check.Violation;
 import anyparse.check.ExplicitLocalType;
+import anyparse.check.PositionTypeOracle;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import utest.Assert;
 import utest.Test;
@@ -90,7 +90,7 @@ class ExplicitLocalTypePrinterTest extends Test {
 }
 
 /** A `TypeOracle` that answers every position with one canned type — the compiler-free stand-in for the display server. */
-private class CannedTypeOracle implements TypeOracle {
+private class CannedTypeOracle extends PositionTypeOracle {
 
 	private final _type: String;
 

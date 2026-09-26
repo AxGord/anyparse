@@ -1,8 +1,10 @@
 package anyparse.check;
 
 import anyparse.check.Check.OracleAssisted;
+import anyparse.check.Check.OracleType;
 import anyparse.check.Check.TypeOracle;
 import anyparse.check.Check.Violation;
+import anyparse.check.LiteralInfer.AnnotationSite;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.MemberKinds;
@@ -50,6 +52,22 @@ final class ExplicitType implements Check implements OracleAssisted {
 	 */
 	private static inline final MAX_ANON_LEN: Int = 80;
 
+	/** The message of a missing return type's finding: the one finding keyed by its function rather than a node of its own. */
+	private static inline final RETURN_MESSAGE: String = 'function declared without an explicit return type';
+
+	private static inline final DECLINE_NO_RETURN_SLOT: String = "no `)` sits right before the function's body, where the return type goes";
+
+	private static inline final DECLINE_NO_NAME: String = 'the declaration does not spell its name in active code';
+
+	private static inline final DECLINE_NO_SLOT: String = 'no slot after the name takes the annotation';
+
+	private static inline final DECLINE_NO_STRUCTURAL_RETURN: String = 'a non-Void return type has no structural evidence — the '
+		+ 'oracle-assisted pass types it when the project configures a compilerOracle';
+
+	private static inline final DECLINE_NO_STRUCTURAL_TYPE: String = 'no structural rule names its type — a literal, a typed `new` '
+		+ 'or cast initializer, or a supertype declaring the parameter — and the oracle-assisted pass types it when the project '
+		+ 'configures a compilerOracle';
+
 	/**
 	 * Simple names visible WITHOUT an import from every Haxe module — the standard library's root
 	 * package. `collectInheritedParamEdits` may copy one of these across files unconditionally;
@@ -82,18 +100,18 @@ final class ExplicitType implements Check implements OracleAssisted {
 	public function new() {}
 
 	/**
-	 * The oracle-assisted RETURN-TYPE pass: annotate every flagged function whose type the
-	 * display server names. `fix()` leaves a non-`Void` return type report-only because no
-	 * structural evidence pins it; the compiler's own answer is that evidence, so the same
-	 * findings become fixable the moment a project configures a `compilerOracle`. Everything
-	 * else the check reports — fields, parameters — is already handled structurally and is
-	 * skipped here: a violation whose span keys a FUNCTION node is the return-type finding,
-	 * since a field / parameter violation keys its own node instead.
+	 * The oracle-assisted pass: annotate every flagged return type, parameter and field the
+	 * `TypeOracle` types. `fix()` leaves each of them report-only when no structural evidence pins
+	 * it — a non-`Void` return type never has any; the compiler's own answer is that evidence, so
+	 * the same findings become fixable the moment a project configures a `compilerOracle`. A
+	 * violation keys the node it is about: a FUNCTION node for its return type, a parameter or
+	 * field node for its own.
 	 *
-	 * Per finding, every failed gate is a silent skip that leaves it report-only: a `macro`
-	 * function (its `Expr` return is implicit), a body the annotation cannot be placed before
-	 * (`voidInsertPoint`), a name token the source does not spell in active code, a reply that
-	 * is not a printed function type (`returnTypeOf`), and a type `normalizeWith` refuses.
+	 * Per finding, every failed gate leaves it report-only and records why (`declineReason`): a
+	 * `macro` function (its `Expr` return and parameters are implicit), a slot the annotation cannot
+	 * be placed in, a name token the source does not spell in active code, an oracle decline, and a
+	 * type the normalizer refuses. A parameter or field the compiler types `Dynamic`/`Any` is refused
+	 * as a local is (`LiteralInfer.admissibleLocal`).
 	 */
 	public function fixWithOracle(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, oracle: TypeOracle
@@ -106,17 +124,13 @@ final class ExplicitType implements Check implements OracleAssisted {
 		if (functions.length == 0 || bodies.length == 0 || violations.length == 0) return [];
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
-		final flagged: Map<String, Bool> = [];
-		for (v in violations) {
-			final vspan: Null<Span> = v.span;
-			if (vspan != null) flagged['${vspan.from}:${vspan.to}'] = true;
-		}
 		final printer: TypeRefPrinter = LiteralInfer.printerFor(source, tree, plugin, violations[0].file);
 		final seams: ReturnSeams = {
 			source: source,
 			file: violations[0].file,
 			bodies: bodies,
-			flagged: flagged,
+			params: shape.paramKinds ?? [],
+			flagged: [for (v in violations) if (v.span != null) '${v.span.from}:${v.span.to}' => v],
 			printer: printer,
 			oracle: oracle,
 			regions: plugin.lexicalRegions(source)
@@ -130,9 +144,9 @@ final class ExplicitType implements Check implements OracleAssisted {
 			for (i in 0...kids.length) {
 				final child: QueryNode = kids[i];
 				if (functions.contains(child.kind) && !MemberKinds.macroModifierPrecedes(kids, i, macroKind, boundary)) {
-					final edit: Null<{ span: Span, text: String }> = returnEdit(seams, child);
-					if (edit != null) edits.push(edit);
-				}
+					for (edit in functionOracleEdits(seams, child)) edits.push(edit);
+				} else if (fields.contains(child.kind))
+					pushEdit(edits, fieldOracleEdit(seams, child));
 				walk(child);
 			}
 		}
@@ -198,8 +212,32 @@ final class ExplicitType implements Check implements OracleAssisted {
 				final functions: Array<String> = [for (k in memberKinds) if (!fields.contains(k)) k];
 				collectVoidReturnEdits(tree, source, shape, violations, functions, memberKinds, edits);
 				collectInheritedParamEdits(tree, source, violations, plugin, index, functions, params, edits);
+				recordStructuralDeclines(violations, edits);
 				return edits;
 			});
+	}
+
+	/**
+	 * Give every finding `edits` left unfixed its decline reason. An edit belongs to the NARROWEST finding around it: a
+	 * function's return-type finding spans its parameters' findings too.
+	 */
+	private static function recordStructuralDeclines(violations: Array<Violation>, edits: Array<{ span: Span, text: String }>): Void {
+		final fixed: Array<Violation> = [];
+		for (e in edits) {
+			var owner: Null<Violation> = null;
+			for (v in violations) {
+				final span: Null<Span> = v.span;
+				final best: Null<Span> = owner?.span;
+				if (
+					span != null && span.from <= e.span.from && e.span.from <= span.to
+					&& (best == null || best.from <= span.from && span.to <= best.to)
+				)
+					owner = v;
+			}
+			if (owner != null) fixed.push(owner);
+		}
+		for (v in violations) if (!fixed.contains(v))
+			v.declineReason = v.message == RETURN_MESSAGE ? DECLINE_NO_STRUCTURAL_RETURN : DECLINE_NO_STRUCTURAL_TYPE;
 	}
 
 	/**
@@ -249,27 +287,121 @@ final class ExplicitType implements Check implements OracleAssisted {
 	private static function returnEdit(s: ReturnSeams, fn: QueryNode): Null<{ span: Span, text: String }> {
 		final span: Null<Span> = fn.span;
 		final name: Null<String> = fn.name;
-		if (span == null || name == null || !s.flagged.exists('${span.from}:${span.to}')) return null;
+		final v: Null<Violation> = span == null ? null : s.flagged['${span.from}:${span.to}'];
+		if (span == null || name == null || v == null) return null;
 		final body: Null<QueryNode> = fn.children.find(c -> s.bodies.contains(c.kind));
-		if (body == null) return null;
-		final at: Int = voidInsertPoint(span.from, body, s.source);
-		if (at < 0) return null;
-		// The display server answers at a position INSIDE the name token, not at the
+		final at: Int = body == null ? -1 : voidInsertPoint(span.from, body, s.source);
+		if (at < 0) return decline(v, DECLINE_NO_RETURN_SLOT);
+		// A position-based oracle answers at a position INSIDE the name token, not at the
 		// `function` keyword the node's span starts on.
 		final nameAt: Int = OccurrenceScan.activeCodeIdentTokenOffset(s.source, span, name, s.regions);
-		if (nameAt < 0) return null;
-		final raw: Null<String> = s.oracle.typeAt(s.file, nameAt + name.length - 1);
-		final ret: Null<String> = raw == null ? null : returnTypeOf(raw);
-		if (ret == null) return null;
-		// The `<method>.<param>` form can only be printed for a method that DECLARES type
-		// parameters — `<` right after the name token. Without that proof the same shape is an
-		// ordinary package-qualified type whose package tail happens to match the method name.
-		final generic: Bool = s.source.fastCodeAt(nameAt + name.length) == '<'.code;
-		final norm: Null<String> = LiteralInfer.normalizeWith(ret, s.printer, MAX_ANON_LEN, {
-			file: s.file,
-			methodName: generic ? name : null
-		}, at);
-		return norm == null ? null : { span: new Span(at, at), text: ':$norm' };
+		if (nameAt < 0) return decline(v, DECLINE_NO_NAME);
+		return annotation(s, v, s.oracle.returnType(s.file, span, name, nameAt + name.length), at, methodProof(s, name, nameAt), false);
+	}
+
+	/** The oracle-assisted edits for the flagged return type and parameters of the function `fn`. */
+	private static function functionOracleEdits(s: ReturnSeams, fn: QueryNode): Array<{ span: Span, text: String }> {
+		final out: Array<{ span: Span, text: String }> = [];
+		pushEdit(out, returnEdit(s, fn));
+		final own: Array<QueryNode> = [for (c in fn.children) if (s.params.contains(c.kind)) c];
+		for (index in 0...own.length) pushEdit(out, paramOracleEdit(s, fn, own[index], index));
+		return out;
+	}
+
+	/** `edit` appended to `edits` unless it is null. */
+	private static inline function pushEdit(edits: Array<{ span: Span, text: String }>, edit: Null<{ span: Span, text: String }>): Void {
+		if (edit != null) edits.push(edit);
+	}
+
+	/**
+	 * The annotation edit for the flagged parameter `param`, the `index`-th of `fn`, or null when any gate fails (the
+	 * finding's `declineReason` says which).
+	 */
+	private static function paramOracleEdit(
+		s: ReturnSeams, fn: QueryNode, param: QueryNode, index: Int
+	): Null<{ span: Span, text: String }> {
+		final span: Null<Span> = param.span;
+		final fnSpan: Null<Span> = fn.span;
+		final v: Null<Violation> = span == null ? null : s.flagged['${span.from}:${span.to}'];
+		final name: Null<String> = param.name;
+		final fnName: Null<String> = fn.name;
+		if (span == null || fnSpan == null || v == null || name == null || fnName == null) return null;
+		final nameAt: Int = OccurrenceScan.activeCodeIdentTokenOffset(s.source, span, name, s.regions);
+		if (nameAt < 0) return decline(v, DECLINE_NO_NAME);
+		final at: Int = param.children.length > 0 ? LiteralInfer.insertPoint(param, param.children[0], s.source) : nameAt + name.length;
+		if (at < 0) return decline(v, DECLINE_NO_SLOT);
+		final fnAt: Int = OccurrenceScan.activeCodeIdentTokenOffset(s.source, fnSpan, fnName, s.regions);
+		final proof: Null<String> = fnAt < 0 ? null : methodProof(s, fnName, fnAt);
+		return annotation(s, v, s.oracle.paramType(s.file, fnSpan, fnName, index, name, nameAt + name.length), at, proof, true);
+	}
+
+	/** The annotation edit for the flagged field `field`, or null when any gate fails (the finding's `declineReason` says which). */
+	private static function fieldOracleEdit(s: ReturnSeams, field: QueryNode): Null<{ span: Span, text: String }> {
+		final span: Null<Span> = field.span;
+		final v: Null<Violation> = span == null ? null : s.flagged['${span.from}:${span.to}'];
+		final name: Null<String> = field.name;
+		if (span == null || v == null || name == null) return null;
+		final nameAt: Int = OccurrenceScan.activeCodeIdentTokenOffset(s.source, span, name, s.regions);
+		if (nameAt < 0) return decline(v, DECLINE_NO_NAME);
+		final at: Int = field.children.length > 0
+			? LiteralInfer.insertPoint(field, field.children[0], s.source)
+			: bareFieldInsertPoint(s.source, nameAt + name.length, span.to);
+		if (at < 0) return decline(v, DECLINE_NO_SLOT);
+		return annotation(s, v, s.oracle.fieldType(s.file, span, name, nameAt + name.length), at, null, true);
+	}
+
+	/**
+	 * The `:Type` edit at `at` for the oracle's `answer`, normalised for this file, or null with the finding's
+	 * `declineReason` set. `admissible` applies the refusals a local's annotation takes (`LiteralInfer.admissibleLocal`):
+	 * a parameter or field is a binding exactly as a local is, while a return type may legitimately say `Void`.
+	 */
+	private static function annotation(
+		s: ReturnSeams, v: Violation, answer: OracleType, at: Int, methodName: Null<String>, admissible: Bool
+	): Null<{ span: Span, text: String }> {
+		final raw: String = switch answer {
+			case Typed(type): type;
+			case Declined(reason): return decline(v, reason);
+		};
+		final site: AnnotationSite = { file: s.file, methodName: methodName };
+		final mark: Int = s.printer.pendingImportMark();
+		final normalized: Null<String> = LiteralInfer.normalizeWith(raw, s.printer, MAX_ANON_LEN, site, at);
+		final norm: Null<String> = admissible ? LiteralInfer.admissibleLocal(normalized, s.printer) : normalized;
+		if (norm == null) {
+			s.printer.rollbackPendingImports(mark);
+			return decline(v, LiteralInfer.unwritableReason(raw, MAX_ANON_LEN, site, admissible));
+		}
+		return { span: new Span(at, at), text: ':$norm' };
+	}
+
+	/**
+	 * `name` when the function whose name token starts at `nameAt` DECLARES type parameters — `<` right after the name
+	 * token — else null. The `<method>.<param>` form a compiler prints can only belong to such a method; without that
+	 * proof the same shape is an ordinary package-qualified type whose package tail happens to match the method name.
+	 */
+	private static function methodProof(s: ReturnSeams, name: String, nameAt: Int): Null<String> {
+		return s.source.fastCodeAt(nameAt + name.length) == '<'.code ? name : null;
+	}
+
+	/**
+	 * Where a field with no initializer takes its annotation: right after its name, or after its accessor list
+	 * `(get, set)` — the slot a `;` follows. -1 when `;` does not follow within `end`.
+	 */
+	private static function bareFieldInsertPoint(source: String, nameEnd: Int, end: Int): Int {
+		var at: Int = nameEnd;
+		if (at < end && source.fastCodeAt(at) == '('.code) {
+			final close: Int = source.indexOf(')', at);
+			if (close < 0 || close >= end) return -1;
+			at = close + 1;
+		}
+		var next: Int = at;
+		while (next < end && isInlineSpace(source.fastCodeAt(next))) next++;
+		return next < source.length && source.fastCodeAt(next) == ';'.code ? at : -1;
+	}
+
+	/** Record `reason` on `v` and answer no edit. */
+	private static function decline(v: Violation, reason: String): Null<{ span: Span, text: String }> {
+		v.declineReason = reason;
+		return null;
 	}
 
 	/**
@@ -305,8 +437,7 @@ final class ExplicitType implements Check implements OracleAssisted {
 	): Void {
 		for (child in fn.children) if (params.contains(child.kind) && !LiteralInfer.hasTypeBeforeInit(child, source))
 			push(out, file, child.span, 'parameter declared without an explicit type');
-		if (fn.name != 'new' && !hasReturnType(fn, params, bodies))
-			push(out, file, fn.span, 'function declared without an explicit return type');
+		if (fn.name != 'new' && !hasReturnType(fn, params, bodies)) push(out, file, fn.span, RETURN_MESSAGE);
 	}
 
 	/**
@@ -730,7 +861,11 @@ private typedef ReturnSeams = {
 	final source: String;
 	final file: String;
 	final bodies: Array<String>;
-	final flagged: Map<String, Bool>;
+
+	/** The parameter kinds (`RefShape.paramKinds`). */
+	final params: Array<String>;
+
+	final flagged: Map<String, Violation>;
 	final printer: TypeRefPrinter;
 	final oracle: TypeOracle;
 

@@ -251,6 +251,26 @@ final class LiteralInfer {
 	}
 
 	/**
+	 * Why `normalizeWith` (and, for a `local`, `admissibleLocal`) refused the compiler-named `raw` — the decline reason a
+	 * check records. Reads the refusals in the order they are taken; the last one standing is the printer's.
+	 */
+	public static function unwritableReason(raw: String, maxAnonLen: Int, site: AnnotationSite, local: Bool): String {
+		final t: String = stripTypeParamQualifiers(raw.trim(), site);
+		return if (t.indexOf('Unknown<') != -1)
+			'the compiler left part of its type unknown (a monomorph)'
+		else if (hasForeignPrivateType(t))
+			'its type is a private type of another module, which no import reaches'
+		else if (t.indexOf('{') != -1 && t.length > maxAnonLen)
+			'its type is an anonymous structure longer than the configured cap ($maxAnonLen)'
+		else if (hasBareUnderscore(t))
+			'its type holds a `_` placeholder, which names no type'
+		else if (local && inadmissibleType(t))
+			'its type is `Dynamic`/`Any` or a bare `Void`, which a local annotation must not state'
+		else
+			'its type names a path this file cannot spell (a name bound to another type here, or no import can be anchored)';
+	}
+
+	/**
 	 * Whether `t` is a type no local declaration should be given.
 	 *
 	 * `Dynamic` / `Any` ANYWHERE in it: the display server answers `Dynamic` for an expression it

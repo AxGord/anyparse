@@ -208,6 +208,9 @@ final class CanonicalEdit {
 		)
 		catch (exception: Exception) return Err('result does not parse: ${exception.message}');
 		final settled: Null<String> = fixedPoint.text;
+		// the run's journal of rewrites, when it keeps one: the one record of where a declaration of `source` now stands
+		if (settled != null && fixedPoint.converged && plugin is CachingGrammarPlugin)
+			(cast plugin: CachingGrammarPlugin).editJournal?.record(source, edits, settled);
 		return if (settled == null)
 			Err('the "${plugin.langName()}" grammar has no writer — cannot writer-format the result')
 		else if (fixedPoint.converged)

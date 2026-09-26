@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.OracleAssisted;
+import anyparse.check.Check.OracleType;
 import anyparse.check.Check.TypeOracle;
 import anyparse.check.Check.Violation;
 import anyparse.check.LintConfig;
@@ -381,8 +382,14 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 			if (node == null || node.children.length == 0) continue;
 			final at: Int = LiteralInfer.insertPoint(node, node.children[0], source);
 			if (at <= 0) continue;
-			final raw: Null<String> = oracle.typeAt(v.file, at - 1);
-			if (raw == null) continue;
+			final name: Null<String> = node.name;
+			if (name == null) continue;
+			final raw: String = switch oracle.localType(v.file, span, name, at) {
+				case Typed(type): type;
+				case Declined(reason):
+					v.declineReason = reason;
+					continue;
+			};
 			final owner: Null<String> = enclosingGenericFunction(tree, source, span.from, functions, regions);
 			// `normalizeWith` ENDS in a print, and printing is what promises the printer an import —
 			// `admissibleLocal` only gets to reject the candidate afterwards. Abstaining has to take
@@ -392,9 +399,10 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 			final norm: Null<String> = LiteralInfer.admissibleLocal(
 				LiteralInfer.normalizeWith(raw, printer, maxAnon, { file: v.file, methodName: owner }, at), printer
 			);
-			if (norm == null)
+			if (norm == null) {
 				printer.rollbackPendingImports(mark);
-			else
+				v.declineReason = LiteralInfer.unwritableReason(raw, maxAnon, { file: v.file, methodName: owner }, true);
+			} else
 				edits.push({ span: new Span(at, at), text: ':$norm' });
 		}
 		if (edits.length > 0) for (importEdit in printer.pendingImportEdits()) edits.push(importEdit);
