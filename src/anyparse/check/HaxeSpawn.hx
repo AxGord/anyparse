@@ -60,7 +60,7 @@ final class HaxeSpawn {
 	private static inline final OVERHEAD: Int = 1024 * 1024;
 
 	/** The most compiles `parallelism` lets run at once, whatever the machine. */
-	private static inline final MAX_PARALLEL: Int = 4;
+	private static inline final MAX_PARALLEL: Int = 16;
 
 	/**
 	 * The memory one compile of a large project is budgeted, in bytes: a measured peak of a little over a gigabyte,
@@ -80,18 +80,27 @@ final class HaxeSpawn {
 	 * by itself. The driver also watches its parent: once `apq` is gone (its ppid changes — a SIGKILL leaves no
 	 * handler to run) it does the same. A job naming a `groupFile` gets its process group leader written there
 	 * (pid, then start time), so a run that takes over an abandoned generation can end the job the dead run left.
+	 * With `argv[4]` naming a file the runs go there instead of stdout — written whole under a temporary name, then
+	 * renamed, so the file exists only once it is complete — and with `argv[5]` naming one the jobs are read from it
+	 * instead of stdin and deleted once read: the two ends a driver running in the BACKGROUND (`PendingRuns`) is talked
+	 * to through. Such a driver ended by a signal, or outliving `apq`, removes the directory holding its answer file.
 	 */
 	private static inline final PARALLEL_DRIVER: String = "const cp = require('child_process');"
-		+ "const jobs = JSON.parse(require('fs').readFileSync(0, 'utf8'));"
+		+ "const jobs = JSON.parse(require('fs').readFileSync(process.argv[5] ? process.argv[5] : 0, 'utf8'));"
+		+ "if (process.argv[5]) try { require('fs').unlinkSync(process.argv[5]); } catch (err) {}"
+		+ "function drop() { if (process.argv[4]) try { require('fs').rmSync(require('path').dirname(process.argv[4]),"
+		+ " { recursive: true, force: true }); } catch (err) {} }"
+		+ "function emit(s) { const f = process.argv[4]; if (!f) { process.stdout.write(s); return; }"
+		+ " require('fs').writeFileSync(f + '.part', s); require('fs').renameSync(f + '.part', f); }"
 		+ "const limit = parseInt(process.argv[1]); const max = parseInt(process.argv[2]); const stop = process.argv[3] === '1';"
 		+ "const group = process.platform !== 'win32';"
 		+ "const out = new Array(jobs.length); const kids = new Array(jobs.length); let next = 0, running = 0, done = 0;"
 		+ "function kill(c) { try { if (group) process.kill(-c.pid, 'SIGKILL'); else c.kill(); }"
 		+ " catch (err) { try { c.kill('SIGKILL'); } catch (ignored) {} } }"
 		+ "function killAll() { for (const c of kids) if (c) kill(c); }"
-		+ "for (const s of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(s, () => { killAll(); process.exit(1); });"
+		+ "for (const s of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(s, () => { killAll(); drop(); process.exit(1); });"
 		+ "const parent = process.ppid;"
-		+ "setInterval(() => { if (process.ppid !== parent) { killAll(); process.exit(1); } }, 500).unref();"
+		+ "setInterval(() => { if (process.ppid !== parent) { killAll(); drop(); process.exit(1); } }, 500).unref();"
 		+ "function recordGroup(j, c) { if (j.groupFile == null || c.pid == null) return; let st = '';"
 		+ " try { if (group) st = cp.execFileSync('ps', ['-o', 'lstart=', '-p', String(c.pid)], { encoding: 'utf8' }).trim(); } catch (err) {}"
 		+ " try { require('fs').writeFileSync(j.groupFile, c.pid + '\\n' + st); } catch (err) {} }"
@@ -101,7 +110,7 @@ final class HaxeSpawn {
 		+ " cancelled: true, unstarted: true }; done++; } } next = jobs.length; }"
 		+ "function finish(i, rec) { if (out[i]) return; out[i] = rec; if (kids[i] && kids[i].timer) clearTimeout(kids[i].timer);"
 		+ " kids[i] = null; running--; done++;" + " if (stop && rec.status !== 0 && !rec.cancelled) cancelAfter(i);"
-		+ " if (done === jobs.length) process.stdout.write(JSON.stringify(out)); else start(); }"
+		+ " if (done === jobs.length) emit(JSON.stringify(out)); else start(); }"
 		+ "function start() { while (running < limit && next < jobs.length) { const i = next++; if (out[i]) continue; running++;"
 		+ " const j = jobs[i]; const o = [], e = []; let size = 0, over = false; const what = j.shell == null ? 'haxe' : 'the command';"
 		+ " const opts = { cwd: j.cwd == null ? undefined : j.cwd, stdio: ['ignore', 'pipe', 'pipe'], detached: group };"
@@ -115,7 +124,7 @@ final class HaxeSpawn {
 		+ " out: Buffer.concat(o).toString('utf8'), err: Buffer.concat(e).toString('utf8'),"
 		+ " failure: c.cancelled ? 'cancelled — an earlier job failed' : c.timedOut ? what + ' timed out after ' + j.timeout + ' ms'"
 		+ " : over ? what + ' out-wrote its ' + max + ' byte output buffer' : '', overflowed: over, cancelled: c.cancelled === true })); } }"
-		+ "if (jobs.length === 0) process.stdout.write('[]'); else start();";
+		+ "if (jobs.length === 0) emit('[]'); else start();";
 
 	/**
 	 * Whether this target's spawn honours the `cwd` argument. False on the native `sys`
@@ -227,6 +236,14 @@ final class HaxeSpawn {
 	}
 
 	/**
+	 * `runAll` over `jobs` started in the BACKGROUND: they run while the caller goes on, and `PendingRuns.await` answers
+	 * what `runAll` would have. On a target without an asynchronous process API nothing starts before `await`.
+	 */
+	public static function startAll(jobs: Array<SpawnJob>, maxBuffer: Int, parallel: Int): PendingRuns {
+		return new PendingRuns(jobs, maxBuffer, parallel);
+	}
+
+	/**
 	 * Run `command` through the platform shell in `cwd` (the process cwd when null), capturing both streams under a
 	 * `maxBuffer` byte cap. Never throws; the same three answers as `run`. The native `sys` branch has no working
 	 * directory, so a `cwd` other than the process one is refused there rather than run in the wrong place.
@@ -281,20 +298,27 @@ final class HaxeSpawn {
 	#end
 
 	/**
-	 * How many compiles of one project may run at once: at most `MAX_PARALLEL`, at most half the cores, and at most as
-	 * many as the machine's memory holds at `COMPILE_MEMORY` each — never fewer than one. `APQ_ORACLE_PARALLEL` (a
+	 * How many compiles of one project may run at once on this machine (`parallelismFor`). `APQ_ORACLE_PARALLEL` (a
 	 * positive integer) replaces the computed bound, for a machine the heuristic misjudges.
 	 */
 	public static function parallelism(): Int {
 		final declared: Null<Int> = Std.parseInt(Sys.getEnv('APQ_ORACLE_PARALLEL') ?? '');
 		if (declared != null && declared > 0) return declared;
 		#if nodejs
-		final byCpu: Int = Std.int(js.node.Os.cpus().length / 2);
-		final byMemory: Int = Std.int(js.node.Os.totalmem() / COMPILE_MEMORY);
-		return Std.int(Math.max(1, Math.min(MAX_PARALLEL, Math.min(byCpu, byMemory))));
+		return parallelismFor(js.node.Os.cpus().length, js.node.Os.totalmem());
 		#else
 		return 1;
 		#end
+	}
+
+	/**
+	 * The bound for a machine of `cores` cores and `memory` bytes: every core but one, at most as many compiles as the
+	 * memory holds at `COMPILE_MEMORY` each, at most `MAX_PARALLEL`, never fewer than one. A compile is one
+	 * single-threaded process the caller only waits on, so the cores are the budget; the knee of anyparse's own process
+	 * fan-out (`docs/design-principles.md` § 2) is about parse processes sharing a tree, not about compiles.
+	 */
+	public static function parallelismFor(cores: Int, memory: Float): Int {
+		return Std.int(Math.max(1, Math.min(MAX_PARALLEL, Math.min(cores - 1, memory / COMPILE_MEMORY))));
 	}
 
 	/**
@@ -344,8 +368,8 @@ final class HaxeSpawn {
 	 * The node argument vector that runs the process driver over at most `parallel` jobs at once under `maxBuffer`, with
 	 * `stop` as `stopAfterFailure`. The jobs go to its stdin as JSON and its runs come back on stdout, in job order.
 	 */
-	public static function driverArgs(parallel: Int, maxBuffer: Int, stop: Bool): Array<String> {
-		return [
+	public static function driverArgs(parallel: Int, maxBuffer: Int, stop: Bool, ?files: { result: String, jobs: String }): Array<String> {
+		final args: Array<String> = [
 			'-e',
 			PARALLEL_DRIVER,
 			'--',
@@ -353,6 +377,7 @@ final class HaxeSpawn {
 			'$maxBuffer',
 			stop ? '1' : '0'
 		];
+		return files == null ? args : args.concat([files.result, files.jobs]);
 	}
 
 }

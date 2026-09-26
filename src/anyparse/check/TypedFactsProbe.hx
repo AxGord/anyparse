@@ -106,41 +106,82 @@ final class TypedFactsProbe {
 	];
 
 	/**
-	 * The table over every configuration of `oracles` that answered, each compiled once (the compiles overlap), with the
-	 * rest in its `dropped` and why; null only on a target that cannot spawn a compile. A compile that reported an error
-	 * is dropped even when it wrote a complete file: typing goes on past an error, and what it recovers with — an unbound
-	 * monomorph, a branch left out — reads exactly like a fact, so the table could not tell the two apart. The files are
-	 * read and added one at a time, so no two dumps are held at once.
+	 * The table over every configuration of `oracles` that answered, each compiled once (the compiles overlap):
+	 * `start` and `finish` in one step.
 	 */
 	public static function probeAll(oracles: Array<OracleConfig>): Null<CompilerFacts> {
+		return finish(start(oracles));
+	}
+
+	/**
+	 * `probeAll` started in the BACKGROUND: the compiles — and in a run that remembers, the baseline of the same tree
+	 * beside each (`wanted`) — run while the caller goes on; `finish` answers the table, `abandon` ends them unread. A lint
+	 * run that expects to be asked starts them before its first pass, so they overlap the checks instead of following the
+	 * first check that asks.
+	 */
+	public static function start(oracles: Array<OracleConfig>): FactsProbe {
+		final dropped: Array<{ name: String, reason: String }> = [];
+		final asked: Array<FactsCompile> = [];
 		#if (sys || nodejs)
-		final facts: CompilerFacts = CompilerFacts.create(
-			file -> try sys.io.File.getContent(file) catch (exception: haxe.Exception) null, memoised(Sys.getCwd())
-		);
-		final asked: Array<{
-			oracle: OracleConfig,
-			dir: String,
-			out: String,
-			args: Array<String>
-		}> = [];
 		for (i in 0...oracles.length) {
-			final prepared: Null<{
-				oracle: OracleConfig,
-				dir: String,
-				out: String,
-				args: Array<String>
-			}> = prepare(oracles[i], i);
+			final prepared: Null<FactsCompile> = prepare(oracles[i], i);
 			if (prepared != null)
 				asked.push(prepared)
 			else
-				facts.dropped.push({
+				dropped.push({
 					name: LintConfig.describeOracle(oracles[i]),
 					reason: oracles[i].unavailable ?? 'its probe directory could not be written'
 				});
 		}
-		final runs: Array<HaxeRun> = asked.length == 0
-			? []
-			: HaxeSpawn.runAll([for (a in asked) { args: a.args, cwd: a.oracle.dir }], BUFFER, HaxeSpawn.parallelism());
+		final memo: Null<OracleRunMemo> = OracleRunMemo.of(oracles);
+		final baselines: Array<OracleConfig> = memo == null ? [] : [for (a in asked) a.oracle];
+		final before: Array<Null<String>> = memo == null ? [] : memo.fingerprints(baselines);
+		final ahead: Array<Int> = memo == null ? [] : [for (k in 0...baselines.length) if (wanted(memo, baselines[k], before[k])) k];
+		final runs: PendingRuns = HaxeSpawn.startAll([for (a in asked) { args: a.args, cwd: a.oracle.dir }].concat([
+			for (k in ahead) { args: OracleCoverage.probeArgs(baselines[k].hxml, baselines[k].defines), cwd: baselines[k].dir }
+		]), BUFFER, HaxeSpawn.parallelism());
+		return {
+			dropped: dropped,
+			asked: asked,
+			memo: memo,
+			baselines: [for (k in ahead) baselines[k]],
+			before: [for (k in ahead) before[k]],
+			runs: runs
+		};
+		#else
+		return {
+			dropped: dropped,
+			asked: asked,
+			memo: null,
+			baselines: [],
+			before: [],
+			runs: null
+		};
+		#end
+	}
+
+	/**
+	 * The table `probe` compiled, blocking until its compiles ended: every configuration that answered, with the rest in
+	 * its `dropped` and why; null only on a target that cannot spawn a compile. A compile that reported an error is dropped
+	 * even when it wrote a complete file: typing goes on past an error, and what it recovers with — an unbound monomorph, a
+	 * branch left out — reads exactly like a fact, so the table could not tell the two apart. The files are read and added
+	 * one at a time, so no two dumps are held at once. The baselines compiled beside are filed in the run's memo.
+	 */
+	public static function finish(probe: FactsProbe): Null<CompilerFacts> {
+		#if (sys || nodejs)
+		final pending: Null<PendingRuns> = probe.runs;
+		if (pending == null) return null;
+		final runs: Array<HaxeRun> = pending.await();
+		final asked: Array<FactsCompile> = probe.asked;
+		final memo: Null<OracleRunMemo> = probe.memo;
+		if (memo != null && probe.baselines.length > 0) {
+			final after: Array<Null<String>> = memo.fingerprints(probe.baselines);
+			for (j in 0...probe.baselines.length) memo.file(probe.baselines[j], true, probe.before[j], after[j], runs[asked.length + j]);
+		}
+		final facts: CompilerFacts = CompilerFacts.create(
+			file -> try sys.io.File.getContent(file) catch (exception: haxe.Exception) null, memoised(Sys.getCwd())
+		);
+		for (d in probe.dropped) facts.dropped.push(d);
 		for (i in 0...asked.length) {
 			final dump: Null<FactsDump> = answer(asked[i].oracle, runs[i], asked[i].out);
 			if (dump != null)
@@ -153,6 +194,27 @@ final class TypedFactsProbe {
 		#else
 		return null;
 		#end
+	}
+
+	/** End `probe`'s compiles unread and delete what they were given — a run that was never asked for the facts. */
+	public static function abandon(probe: FactsProbe): Void {
+		probe.runs?.cancel();
+		#if (sys || nodejs)
+		for (a in probe.asked) discard(a.dir);
+		#end
+	}
+
+	/**
+	 * Whether the facts compile of `oracle` should bring its baseline typecheck along: the run will ask for one of the tree
+	 * as it is now, the memo holds none, and it is not a run that answers baselines from the persisted cache, which
+	 * already holds one for this input. The baseline is the `-v` compile, so the coverage probe of the same tree reuses it.
+	 */
+	private static function wanted(memo: OracleRunMemo, oracle: OracleConfig, fingerprint: Null<String>): Bool {
+		if (fingerprint == null || memo.holds(oracle, fingerprint)) return false;
+		if (!memo.persisted) return true;
+		// the persisted cache files a verdict under its own fingerprint, not the run's
+		final persisted: Null<String> = OracleCache.fingerprint(oracle.hxml, oracle.dir, oracle.defines);
+		return persisted == null || OracleCache.lookup(oracle.hxml, oracle.dir, persisted, oracle.defines) == null;
 	}
 
 	/** Why the compile `run` left no facts, in one line. */
@@ -183,12 +245,7 @@ final class TypedFactsProbe {
 	}
 
 	#if (sys || nodejs)
-	private static function prepare(oracle: OracleConfig, index: Int): Null<{
-		oracle: OracleConfig,
-		dir: String,
-		out: String,
-		args: Array<String>
-	}> {
+	private static function prepare(oracle: OracleConfig, index: Int): Null<FactsCompile> {
 		if (oracle.unavailable != null) return null;
 		final dir: String = Path.join([
 			TempScratch.root(),
@@ -246,4 +303,27 @@ final class TypedFactsProbe {
 	}
 	#end
 
+}
+
+/** One configuration's facts compile: its probe directory, the file the hook writes, and the compile's arguments. */
+typedef FactsCompile = {
+	var oracle: OracleConfig;
+	var dir: String;
+	var out: String;
+	var args: Array<String>;
+}
+
+/**
+ * The facts compiles `TypedFactsProbe.start` left running, and what `finish` needs to read them: the configurations
+ * dropped before any compile, the compiles in job order, and — in a run that remembers — the baselines compiled after
+ * them in the same batch with the fingerprint each input had when it started. `runs` is null on a target that cannot
+ * spawn a compile.
+ */
+typedef FactsProbe = {
+	var dropped: Array<{ name: String, reason: String }>;
+	var asked: Array<FactsCompile>;
+	var memo: Null<OracleRunMemo>;
+	var baselines: Array<OracleConfig>;
+	var before: Array<Null<String>>;
+	var runs: Null<PendingRuns>;
 }

@@ -254,9 +254,7 @@ final class OracleCoverage {
 				: unknown(oracle.unavailable ?? '')
 		];
 		final asked: Array<OracleConfig> = [for (oracle in oracles) if (oracle.unavailable == null) oracle];
-		final runs: Array<HaxeRun> = HaxeSpawn.runAll([
-			for (oracle in asked) { args: probeArgs(oracle.hxml, oracle.defines), cwd: oracle.dir ?? Sys.getCwd() }
-		], PROBE_BUFFER, HaxeSpawn.parallelism());
+		final runs: Array<HaxeRun> = remembered(asked);
 		final out: Array<OracleCoverage> = [];
 		var next: Int = 0;
 		for (oracle in oracles) {
@@ -479,7 +477,7 @@ final class OracleCoverage {
 	}
 
 	/** The `-v` probe's argument vector for `hxml` under `defines` — see `probe` for why the order is what it is. */
-	private static function probeArgs(hxml: String, defines: Array<String>): Array<String> {
+	public static function probeArgs(hxml: String, defines: Array<String>): Array<String> {
 		return ['-v'].concat(CompilerOracle.defineFlags(defines)).concat(['--each', hxml, '--no-output']);
 	}
 
@@ -503,6 +501,34 @@ final class OracleCoverage {
 		#else
 		return unknown(UNSUPPORTED_TARGET);
 		#end
+	}
+
+	/**
+	 * The `-v` probe runs of `asked`, one per configuration in order. In a run that remembers what the compiler answered
+	 * (`OracleRunMemo`) a configuration whose current input already had its `-v` compile — the baseline `CompilerOracle.judging`
+	 * takes — is answered from it, since the probe IS that compile; every probe spawned is filed for a later baseline.
+	 */
+	private static function remembered(asked: Array<OracleConfig>): Array<HaxeRun> {
+		final memo: Null<OracleRunMemo> = OracleRunMemo.of(asked);
+		final before: Array<Null<String>> = memo == null ? [for (_ in asked) null] : memo.fingerprints(asked);
+		final held: Array<Null<HaxeRun>> = [for (i in 0...asked.length) memo?.run(asked[i], true, before[i])];
+		final spawned: Array<Int> = [for (i in 0...asked.length) if (held[i] == null) i];
+		final runs: Array<HaxeRun> = HaxeSpawn.runAll([
+			for (i in spawned) { args: probeArgs(asked[i].hxml, asked[i].defines), cwd: asked[i].dir ?? Sys.getCwd() }
+		], PROBE_BUFFER, HaxeSpawn.parallelism());
+		final after: Array<Null<String>> = memo == null ? [] : memo.fingerprints([for (i in spawned) asked[i]]);
+		return [
+			for (i in 0...asked.length) {
+				final reused: Null<HaxeRun> = held[i];
+				if (reused != null)
+					reused
+				else {
+					final k: Int = spawned.indexOf(i);
+					memo?.file(asked[i], true, before[i], after[k], runs[k]);
+					runs[k];
+				}
+			}
+		];
 	}
 
 	/** The decline sentence for a file the oracle's compile never reads. */

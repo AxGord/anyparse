@@ -5,6 +5,7 @@ import anyparse.check.ConfigDisagreement;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.check.OracleGeneration;
+import anyparse.check.OracleRunMemo;
 import anyparse.check.ReachDefinesProbe;
 import anyparse.check.Severity;
 import anyparse.check.TypedFactsProbe;
@@ -234,19 +235,21 @@ final class LintCommand implements CliCommand {
 		// second root never declared.
 		warnScopeNotices(activeChecks, resolveConfig, paths, o.noOracle);
 		final oracleConfig: Null<LintConfig> = paths.length > 0 ? resolveConfig(paths[0]) : null;
-		final oracles: Array<OracleConfig> = oraclesOf(oracleConfig, o.noOracle);
+		final oracles: Array<OracleConfig> = oraclesOf(oracleConfig, o.noOracle, !o.fix, files);
+		final early: Null<FactsProbe> = earlyFacts(unconfigured != null, oracles, o);
 		final resolution: Null<ResolutionScope> = withCompilerFacts(
-			withReachConfigurations(unconfigured, oracles, o.noOracle, reachComplete(paths, resolveConfig)), oracles, o.noOracle
+			withReachConfigurations(unconfigured, oracles, o.noOracle, reachComplete(paths, resolveConfig)), oracles, o.noOracle, early
 		);
 
 		if (o.fix) {
-			final fixed: Int = LintFixDriver.runLintFix(
-				files, activeChecks, plugin, resolveConfig, applyEnablement, resolution, LintFixVerify.verifiable(oracles), o.noOracle,
-				o.range, o.verbose
+			return endingCompiles(
+				early, oracles,
+				() ->
+					LintFixDriver.runLintFix(
+						files, activeChecks, plugin, resolveConfig, applyEnablement, resolution, LintFixVerify.verifiable(oracles),
+						o.noOracle, o.range, o.verbose
+					)
 			);
-			// every compile of the run is done: another run may regenerate these builds now
-			OracleGeneration.release(oracles);
-			return fixed;
 		}
 
 		// Report mode only — the fix path returned above, so this pass never runs redundantly in a
@@ -275,7 +278,7 @@ final class LintCommand implements CliCommand {
 		final oracleExit: Null<Int> = o.noOracle
 			? LintFixVerify.oracleSkippedNote(oracles)
 			: LintFixVerify.reportModeOracle(oracles, paths, oracleConfig?.compilerOracleServer() ?? false);
-		OracleGeneration.release(oracles);
+		endCompiles(early, oracles);
 		if (oracleExit != null) return oracleExit;
 
 		final failOn: Null<Severity> = o.failOn;
@@ -284,6 +287,17 @@ final class LintCommand implements CliCommand {
 			for (v in all) if ((cast v.severity: Int) <= threshold) return EXIT_RUNTIME;
 		}
 		return EXIT_OK;
+	}
+
+	/**
+	 * Whether a run starts its compiler-facts compiles before its first pass rather than when a check first asks: only a
+	 * `--fix` run (`fix`) that could be asked at all (a resolution scope, `oracles` configurations, no `--no-oracle`) and
+	 * is given every rule (`narrowed` is a `--rule` filter). The facts are asked for by the gates of the fixes, so such a
+	 * run nearly always asks and then the compiles overlap the checks; a report or a narrowed run keeps asking on demand,
+	 * where an early start would compile every configuration for nothing.
+	 */
+	public static function startsFactsEarly(scoped: Bool, oracles: Int, noOracle: Bool, narrowed: Bool, fix: Bool): Bool {
+		return fix && scoped && oracles > 0 && !noOracle && !narrowed;
 	}
 
 	/** Source-offset sort key for a violation span; null spans sort last. */
@@ -315,13 +329,19 @@ final class LintCommand implements CliCommand {
 	 * named on stderr), or none when this run resolved no config at all (an empty scope).
 	 *
 	 * Under `--no-oracle` nothing is generated: the run compiles nothing, so it owes no hxml.
+	 *
+	 * The configurations carry this run's `OracleRunMemo`, so a compile of a tree the run already compiled is answered
+	 * from it; `persisted` says the run is a report, which answers its verdict from `OracleCache` when it can.
 	 */
-	private static function oraclesOf(config: Null<LintConfig>, noOracle: Bool): Array<OracleConfig> {
+	private static function oraclesOf(
+		config: Null<LintConfig>, noOracle: Bool, persisted: Bool, files: Array<{ file: String, source: String }>
+	): Array<OracleConfig> {
 		final declared: Array<OracleConfig> = config == null ? [] : config.compilerOracles();
 		if (noOracle) return declared;
 		final prepared: PreparedOracles = OracleGeneration.prepare(declared);
 		for (note in prepared.notes) CliIo.stderr('apq lint: compilerOracle $note\n');
-		return prepared.oracles;
+		// `files` is the run's own list, which a created file joins: the memo hashes whatever it holds at each question
+		return OracleRunMemo.attach(prepared.oracles, new OracleRunMemo(persisted, () -> [for (f in files) f.file]));
 	}
 
 	/**
@@ -347,14 +367,44 @@ final class LintCommand implements CliCommand {
 		return { declared: resolution.declared, sources: resolution.sources, builds: probe };
 	}
 
+	/** The facts compiles a run starts before its first pass (`startsFactsEarly`), or null for a run that asks on demand. */
+	private static function earlyFacts(scoped: Bool, oracles: Array<OracleConfig>, o: LintOpts): Null<FactsProbe> {
+		return startsFactsEarly(scoped, oracles.length, o.noOracle, o.ruleFilters.length > 0, o.fix)
+			? TypedFactsProbe.start(oracles)
+			: null;
+	}
+
 	/**
-	 * `resolution` carrying what the configured compiler oracles typed (`TypedFactsProbe`), compiled on first demand and
-	 * once per run, each configuration that contributed nothing named on stderr. Unlike the builds it needs no complete
+	 * `body`'s answer, with the run's compiles ended (`endCompiles`) on every way out, a throw included: an early facts
+	 * batch must not run on after a failed run.
+	 */
+	private static function endingCompiles(early: Null<FactsProbe>, oracles: Array<OracleConfig>, body: () -> Int): Int {
+		final answer: Int = try body() catch (exception: Exception) {
+			endCompiles(early, oracles);
+			throw exception;
+		};
+		endCompiles(early, oracles);
+		return answer;
+	}
+
+	/**
+	 * Every compile of the run is done: end the facts compiles no check asked for (`early`), then release the builds, so
+	 * another run may regenerate them.
+	 */
+	private static function endCompiles(early: Null<FactsProbe>, oracles: Array<OracleConfig>): Void {
+		if (early != null) TypedFactsProbe.abandon(early);
+		OracleGeneration.release(oracles);
+	}
+
+	/**
+	 * `resolution` carrying what the configured compiler oracles typed (`TypedFactsProbe`), compiled once per
+	 * run — from `early` when the caller started the compiles ahead, else on first demand — and read on first
+	 * demand, each configuration that contributed nothing named on stderr. Unlike the builds it needs no complete
 	 * oracle list: code no configuration compiled simply has no facts. A file the run rewrites is dropped from the table
 	 * (`factsEdited`). Unchanged with no oracle, or under `--no-oracle`.
 	 */
 	private static function withCompilerFacts(
-		resolution: Null<ResolutionScope>, oracles: Array<OracleConfig>, noOracle: Bool
+		resolution: Null<ResolutionScope>, oracles: Array<OracleConfig>, noOracle: Bool, early: Null<FactsProbe>
 	): Null<ResolutionScope> {
 		if (resolution == null || oracles.length == 0 || noOracle) return resolution;
 		var probed: Bool = false;
@@ -363,7 +413,7 @@ final class LintCommand implements CliCommand {
 		function probe(): Null<CompilerFacts> {
 			if (!probed) {
 				probed = true;
-				final built: Null<CompilerFacts> = TypedFactsProbe.probeAll(oracles);
+				final built: Null<CompilerFacts> = TypedFactsProbe.finish(early ?? TypedFactsProbe.start(oracles));
 				facts = built;
 				if (built != null) {
 					for (d in built.dropped) CliIo.stderr('apq lint: compilerOracle ${d.name}: no compiler facts — ${d.reason}\n');

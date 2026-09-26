@@ -38,8 +38,8 @@ enum OracleOutcome {
  * target would disable every risky fix, including in files that target never reads.
  *
  * Every phase that judges (the safe-pass net, the risky phase, the oracle-assisted phase) measures
- * this afresh over every configured build, so a run pays one baseline compile per configuration
- * per phase.
+ * this afresh over every configured build; in a lint run the configurations remember what the compiler
+ * answered (`OracleRunMemo`), so a phase whose tree an earlier compile already judged pays no compile for it.
  */
 typedef OracleBaseline = {
 	var judging: Array<OracleConfig>;
@@ -116,8 +116,15 @@ final class CompilerOracle {
 	 * With `stopAfterFailure` a configuration that does not confirm ends every later one still
 	 * compiling, and those answer null: the outcomes up to and including the first failure are
 	 * exactly the ones a sequential loop stopping there would have seen, the rest are no verdict.
+	 *
+	 * Configurations a lint run prepared carry its `OracleRunMemo`, and then `remembered` answers:
+	 * `verbose` asks it to compile with `-v`, so a coverage probe of the same tree reuses the run.
 	 */
-	public static function typecheckEach(oracles: Array<OracleConfig>, stopAfterFailure: Bool): Array<Null<OracleOutcome>> {
+	public static function typecheckEach(
+		oracles: Array<OracleConfig>, stopAfterFailure: Bool, verbose: Bool = false
+	): Array<Null<OracleOutcome>> {
+		final memo: Null<OracleRunMemo> = OracleRunMemo.of(oracles);
+		if (memo != null) return remembered(memo, oracles, stopAfterFailure, verbose);
 		final asked: Array<OracleConfig> = [for (oracle in oracles) if (oracle.unavailable == null) oracle];
 		final runs: Array<HaxeRun> = HaxeSpawn.runAll([
 			for (oracle in asked) { args: oracleArgs(oracle.hxml, oracle.defines), cwd: oracle.dir }
@@ -197,7 +204,8 @@ final class CompilerOracle {
 		final green: Array<OracleConfig> = [];
 		final excluded: Array<OracleExclusion> = [];
 		var first: Null<OracleOutcome> = null;
-		final outcomes: Array<Null<OracleOutcome>> = typecheckEach(oracles, false);
+		// a baseline compiles with `-v` in a run that remembers, so the coverage probe of the same tree costs no compile
+		final outcomes: Array<Null<OracleOutcome>> = typecheckEach(oracles, false, true);
 		for (i in 0...oracles.length) {
 			final oracle: OracleConfig = oracles[i];
 			final outcome: OracleOutcome = outcomes[i] ?? Unavailable('the typecheck was cancelled');
@@ -230,6 +238,92 @@ final class CompilerOracle {
 	/** The sentences of `exclusions`, in order — what a decline's reason list quotes. */
 	public static function sentencesOf(exclusions: Array<OracleExclusion>): Array<String> {
 		return [for (exclusion in exclusions) exclusion.sentence];
+	}
+
+	/** Whether `run` is a compile that ran to its own status — not cancelled, not a spawn that produced none. */
+	private static inline function answered(run: HaxeRun): Bool {
+		return run.cancelled != true && run.failure == '' && run.status != null;
+	}
+
+	/**
+	 * `typecheckEach` in a run that remembers what the compiler answered (`OracleRunMemo`): a configuration whose current
+	 * input the memo already holds a verdict for is answered without a spawn, and every other one is compiled — with `-v`
+	 * when `verbose`, so a coverage probe of the same tree reuses it — and filed.
+	 *
+	 * A `-v` compile that fails is compiled again without the flag, because a rejection QUOTES the compiler's streams (the
+	 * error-guided revert reads file names out of them) and `-v` writes a line per parsed file into stdout. Should the two
+	 * disagree, the configuration answers `Unavailable` rather than `Confirmed`: under `stopAfterFailure` the jobs after it
+	 * were already cancelled, and a confirm there would let the phase proceed on configurations never asked. With
+	 * `stopAfterFailure` a configuration after one the memo answered as failing is not compiled at all.
+	 */
+	private static function remembered(
+		memo: OracleRunMemo, oracles: Array<OracleConfig>, stopAfterFailure: Bool, verbose: Bool
+	): Array<Null<OracleOutcome>> {
+		final before: Array<Null<String>> = memo.fingerprints(oracles);
+		final out: Array<Null<OracleOutcome>> = [
+			for (i in 0...oracles.length) {
+				final unavailable: Null<String> = oracles[i].unavailable;
+				unavailable != null ? Unavailable(unavailable) : heldVerdict(memo, oracles[i], before[i]);
+			}
+		];
+		final decided: Int = stopAfterFailure ? firstHeldFailure(oracles, out) : oracles.length;
+		final compiled: Array<Int> = [for (i in 0...oracles.length) if (out[i] == null && i < decided) i];
+		final runs: Array<HaxeRun> = HaxeSpawn.runAll([
+			for (i in compiled) { args: argsOf(oracles[i], verbose), cwd: oracles[i].dir }
+		], ORACLE_BUFFER, HaxeSpawn.parallelism(), stopAfterFailure);
+		for (run in runs) if (run.unstarted != true) invocations++;
+		// a failing `-v` compile is asked again plainly: its streams are what a rejection quotes
+		final retried: Array<Int> = verbose ? [for (k in 0...compiled.length) if (answered(runs[k]) && runs[k].status != 0) k] : [];
+		final plain: Array<HaxeRun> = HaxeSpawn.runAll([
+			for (k in retried) { args: argsOf(oracles[compiled[k]], false), cwd: oracles[compiled[k]].dir }
+		], ORACLE_BUFFER, HaxeSpawn.parallelism(), false);
+		invocations += plain.length;
+		final after: Array<Null<String>> = memo.fingerprints([for (i in compiled) oracles[i]]);
+		for (k in 0...compiled.length) {
+			final i: Int = compiled[k];
+			memo.file(oracles[i], verbose, before[i], after[k], runs[k]);
+			final again: Int = retried.indexOf(k);
+			if (again >= 0) memo.file(oracles[i], false, before[i], after[k], plain[again]);
+			out[i] = again >= 0 ? retriedOutcome(plain[again]) : runs[k].cancelled == true ? null : outcomeOf(runs[k]);
+		}
+		return out;
+	}
+
+	/**
+	 * What `memo` already answers for `oracle` at `fingerprint`: the plain compile's outcome, or `Confirmed` for a `-v`
+	 * compile that exited 0 — a failing `-v` compile answers nothing, since a rejection may not quote its streams.
+	 */
+	private static function heldVerdict(memo: OracleRunMemo, oracle: OracleConfig, fingerprint: Null<String>): Null<OracleOutcome> {
+		final plain: Null<HaxeRun> = memo.run(oracle, false, fingerprint);
+		if (plain != null) return outcomeOf(plain);
+		final verbose: Null<HaxeRun> = memo.run(oracle, true, fingerprint);
+		return verbose != null && verbose.status == 0 ? Confirmed : null;
+	}
+
+	/** The argument vector of `oracle`'s typecheck, `-v` (`OracleCoverage.probeArgs`) when `verbose`. */
+	private static function argsOf(oracle: OracleConfig, verbose: Bool): Array<String> {
+		return verbose ? OracleCoverage.probeArgs(oracle.hxml, oracle.defines) : oracleArgs(oracle.hxml, oracle.defines);
+	}
+
+	/**
+	 * The index of the first configuration of `oracles` the memo answered as failing in `held` — a configuration that
+	 * could not be asked is no failure here — or the length when there is none.
+	 */
+	private static function firstHeldFailure(oracles: Array<OracleConfig>, held: Array<Null<OracleOutcome>>): Int {
+		for (i in 0...oracles.length) {
+			final outcome: Null<OracleOutcome> = held[i];
+			if (oracles[i].unavailable == null && outcome != null && !outcome.match(Confirmed)) return i;
+		}
+		return oracles.length;
+	}
+
+	/**
+	 * The outcome of the plain compile that followed a failing `-v` one: its own, unless it CONFIRMED, since the two then
+	 * disagree and a confirm would let a phase proceed on configurations its cancellation left unasked.
+	 */
+	private static function retriedOutcome(plain: HaxeRun): OracleOutcome {
+		final outcome: OracleOutcome = outcomeOf(plain);
+		return outcome.match(Confirmed) ? Unavailable('the typecheck failed with -v and passed without it') : outcome;
 	}
 
 	/**

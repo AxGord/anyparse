@@ -181,12 +181,27 @@ final class OracleCache {
 	 * configuration's question with the other's stored answer.
 	 */
 	public static function fingerprint(hxml: String, cwd: Null<String>, ?defines: Array<String>, ?memo: Map<String, String>): Null<String> {
+		return scanned(hxml, cwd, defines, memo)?.fingerprint;
+	}
+
+	/**
+	 * `fingerprint`, and the directories its manifest walked — the compile root, the chain's `-cp` roots and the
+	 * compiler's `Classpath:` entries, absolute. A file the compile reads outside them (a `--macro addClassPath` directory)
+	 * is one the fingerprint cannot see; `OracleRunMemo` asks this to know when it may not answer.
+	 */
+	public static function scanned(
+		hxml: String, cwd: Null<String>, ?defines: Array<String>, ?memo: Map<String, String>
+	): Null<{ fingerprint: String, roots: Array<String> }> {
 		#if (sys || nodejs)
 		final root: String = cwd ?? Sys.getCwd();
 		final chain: Null<HxmlChain> = scanHxmlChain(root, hxml);
 		if (chain == null) return null;
 		final probe: CompilerProbe = compilerProbe(root, chain.libs);
-		return probe.ok ? md5(buildManifest(root, chain, probe, defines ?? [], memo).join('\n')) : null;
+		if (!probe.ok) return null;
+		return {
+			fingerprint: md5(buildManifest(root, chain, probe, defines ?? [], memo).join('\n')),
+			roots: [root].concat(chain.classPaths).concat([for (dir in probe.dirs) absolute(root, dir)])
+		};
 		#else
 		return null;
 		#end
@@ -300,7 +315,7 @@ final class OracleCache {
 	 * implementation, and that difference is what keeps hashing every source from dominating
 	 * the very typecheck this cache exists to avoid.
 	 */
-	private static function md5(data: String): String {
+	public static function md5(data: String): String {
 		return #if nodejs js.node.Crypto.createHash('md5').update(data, 'utf8').digest('hex') #else haxe.crypto.Md5.encode(data) #end;
 	}
 

@@ -56,6 +56,12 @@ typedef OracleConfig = {
 	 * (`LintFixVerify.verifiable`), since a veto from a build that does not match the tree is worse than none.
 	 */
 	var ?raced: String;
+
+	/**
+	 * What the compiler already answered in the run this configuration belongs to — set by the lint command on the
+	 * configurations it prepares for ONE run, absent everywhere else, and then every compile goes to the compiler.
+	 */
+	var ?runs: OracleRunMemo;
 }
 
 /**

@@ -3518,7 +3518,7 @@
 		{
 			"name": "M-ORACLE-CACHE-IGNORES-DIR",
 			"type": "anyparse.check.OracleCache",
-			"method": "fingerprint",
+			"method": "scanned",
 			"find": "final root: String = cwd ?? Sys.getCwd();",
 			"replace": "final root: String = Sys.getCwd();",
 			"note": "the verdict fingerprint resolves the hxml's classpath against the process cwd, so an edit under the configuration's dir leaves a stored verdict matching"
@@ -3680,7 +3680,7 @@
 			"type": "anyparse.check.HaxeSpawn",
 			"method": "PARALLEL_DRIVER",
 			"kind": "FinalMember",
-			"find": "for (const s of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(s, () => { killAll(); process.exit(1); });",
+			"find": "for (const s of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(s, () => { killAll(); drop(); process.exit(1); });",
 			"replace": "",
 			"note": "a signalled driver exits without its detached job groups, so Ctrl-C leaves a build tool writing into dist/oracle"
 		},
@@ -3783,7 +3783,7 @@
 			"type": "anyparse.check.HaxeSpawn",
 			"method": "PARALLEL_DRIVER",
 			"kind": "FinalMember",
-			"find": "setInterval(() => { if (process.ppid !== parent) { killAll(); process.exit(1); } }, 500).unref();",
+			"find": "setInterval(() => { if (process.ppid !== parent) { killAll(); drop(); process.exit(1); } }, 500).unref();",
 			"replace": "",
 			"note": "a driver whose apq was SIGKILLed keeps its jobs running, so the next run regenerates concurrently with an orphaned build tool"
 		},
@@ -6894,7 +6894,7 @@
 		{
 			"name": "M-FACTS-DROPPED",
 			"type": "anyparse.check.TypedFactsProbe",
-			"method": "probeAll",
+			"method": "finish",
 			"find": "facts.dropped.push({ name: LintConfig.describeOracle(asked[i].oracle), reason: failureOf(runs[i]) });",
 			"replace": "{}",
 			"note": "a configuration that failed is dropped in silence"
@@ -7311,6 +7311,117 @@
 			"find": "return climbs && valueDiscarded(lineage, at - 1);",
 			"replace": "return false;",
 			"note": "no statement branch or nested block is climbed, so a fresh write ending an `if` / `switch` statement branch makes the local shared"
+		},
+		{
+			"name": "M-ORACLE-PARALLEL-HALF-THE-CORES",
+			"type": "anyparse.check.HaxeSpawn",
+			"method": "parallelismFor",
+			"find": "Math.min(cores - 1,",
+			"replace": "Math.min(cores / 2,",
+			"note": "the compile budget is half the cores again, so a thirteen-configuration project compiles in four waves on a sixteen-core machine"
+		},
+		{
+			"name": "M-RUNMEMO-PROBE-RECOMPILES",
+			"type": "anyparse.check.OracleCoverage",
+			"method": "remembered",
+			"find": "final held: Array<Null<HaxeRun>> = [for (i in 0...asked.length) memo?.run(asked[i], true, before[i])];",
+			"replace": "final held: Array<Null<HaxeRun>> = [for (i in 0...asked.length) null];",
+			"note": "the coverage probe compiles the tree its baseline just compiled with -v, paying a second compile per configuration"
+		},
+		{
+			"name": "M-RUNMEMO-KEY-IGNORES-CONTENT",
+			"type": "anyparse.check.OracleRunMemo",
+			"method": "key",
+			"find": "\\n$fingerprint'",
+			"replace": "'",
+			"note": "a remembered verdict answers for any content of the tree, so an edit that breaks the build is judged by the verdict of the tree before it"
+		},
+		{
+			"name": "M-RUNMEMO-QUOTES-THE-VERBOSE-STREAMS",
+			"type": "anyparse.check.CompilerOracle",
+			"method": "remembered",
+			"find": "final retried: Array<Int> = verbose ? [for (k in 0...compiled.length) if (answered(runs[k]) && runs[k].status != 0) k] : [];",
+			"replace": "final retried: Array<Int> = [];",
+			"note": "a failing -v baseline is quoted with its -v lines, so a rejection's text names every parsed file"
+		},
+		{
+			"name": "M-RUNMEMO-FILES-A-MOVED-INPUT",
+			"type": "anyparse.check.OracleRunMemo",
+			"method": "file",
+			"find": "before != after || ",
+			"replace": "",
+			"note": "a compile whose input changed while it ran is filed under the content it started from, so that content is later answered with a verdict about another"
+		},
+		{
+			"name": "M-RUNMEMO-NO-BASELINE-AHEAD",
+			"type": "anyparse.check.TypedFactsProbe",
+			"method": "wanted",
+			"force": "false",
+			"note": "the facts compile no longer brings the baseline along, so the baseline asked next is a compile of its own"
+		},
+		{
+			"name": "M-PENDING-RUNS-IN-FOREGROUND",
+			"type": "anyparse.check.PendingRuns",
+			"method": "await",
+			"find": "final answer: Array<HaxeRun> = pid == null ? HaxeSpawn.runAll(_jobs, _maxBuffer, _parallel) : collect(pid);",
+			"replace": "final answer: Array<HaxeRun> = HaxeSpawn.runAll(_jobs, _maxBuffer, _parallel);",
+			"note": "a background batch is run again in the foreground when it is awaited, so nothing it did while the caller worked is saved"
+		},
+		{
+			"name": "M-PENDING-CANCEL-LEAVES-JOBS",
+			"type": "anyparse.check.PendingRuns",
+			"method": "cancel",
+			"find": "if (pid != null) try",
+			"replace": "if (pid == -1) try",
+			"note": "a cancelled batch leaves its driver running, so the jobs it started run to their end after the run abandoned them"
+		},
+		{
+			"name": "M-RUNMEMO-NOT-ATTACHED",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "oraclesOf",
+			"find": "return OracleRunMemo.attach(prepared.oracles, new OracleRunMemo(persisted, () -> [for (f in files) f.file]));",
+			"replace": "return prepared.oracles;",
+			"note": "a lint run's configurations carry no memo, so every phase compiles the tree it asks about again"
+		},
+		{
+			"name": "M-FACTS-NEVER-EARLY",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "startsFactsEarly",
+			"force": "false",
+			"note": "no run starts its facts compiles ahead, so they follow the first check that asks instead of overlapping the checks"
+		},
+		{
+			"name": "M-FACTS-EARLY-DIRS-LEFT",
+			"type": "anyparse.check.TypedFactsProbe",
+			"method": "abandon",
+			"find": "for (a in probe.asked) discard(a.dir);",
+			"replace": "",
+			"note": "facts compiles no check asked for leave their probe directories behind"
+		},
+		{
+			"name": "M-RUNMEMO-WRITTEN-UNHASHED",
+			"type": "anyparse.check.OracleRunMemo",
+			"method": "fingerprints",
+			"find": "written = written ?? writtenDigest(_written());",
+			"replace": "written = '';",
+			"note": "the run's fingerprint rests on the library directories hashed earlier in the process, so an edit to a project whose sources arrive through -lib leaves it unchanged and the verification is answered from the baseline"
+		},
+		{
+			"name": "M-RUNMEMO-TRUSTS-UNSEEN-SOURCES",
+			"type": "anyparse.check.OracleRunMemo",
+			"method": "judgeReads",
+			"find": "final inside: Bool = read.length > 0 && ",
+			"replace": "final inside: Bool = true || read.length > 0 && ",
+			"note": "a configuration that reads files outside every directory its fingerprint walks is answered from the memo, so an edit there reuses a verdict about the old content"
+		},
+		{
+			"name": "M-PENDING-JOBS-FILE-KEPT",
+			"type": "anyparse.check.HaxeSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": "+ \"if (process.argv[5]) try { require('fs').unlinkSync(process.argv[5]); } catch (err) {}\"",
+			"replace": "+ \"\"",
+			"note": "the driver leaves the job list in its directory, so a run killed mid-batch leaves the job list behind"
 		}
 	]
 }

@@ -254,8 +254,12 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.OracleFixImportLeakTest',
 		'unit.check.OracleGenerationTest',
 		'unit.check.OracleParallelVerdictTest',
+		'unit.check.OracleParallelismTest',
+		'unit.check.OracleRunMemoTest',
+		'unit.check.OracleRunWiringTest',
 		'unit.check.OrphanAccessorCheckTest',
 		'unit.check.OversizedTypeCheckTest',
+		'unit.check.PendingRunsTest',
 		'unit.check.PossibleNullDereferenceTest',
 		'unit.check.PreferArrayLiteralCheckTest',
 		'unit.check.PreferArrowCallbackCheckTest',
@@ -1330,6 +1334,20 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.OracleGenerationTest#testTwoSpellingsOfOneHxmlAreOneClaim :: control :: ' + 'M-GENERATE-RIVAL-BY-SPELLING',
 			'unit.check.OracleParallelVerdictTest#testTheOverlappedVerdictIsTheFirstFailureInDeclaredOrder :: control :: '
 				+ 'M-DRIVER-CANCELS-EARLIER-JOBS',
+			'unit.check.OracleParallelismTest#testMemoryTheCapAndOneBoundTheBudget :: guard :: ',
+			'unit.check.OracleParallelismTest#testTheBudgetIsEveryCoreButOne :: control :: M-ORACLE-PARALLEL-HALF-THE-CORES',
+			'unit.check.OracleRunMemoTest#testACompileWhoseInputMovedIsNotFiled :: control :: M-RUNMEMO-FILES-A-MOVED-INPUT',
+			'unit.check.OracleRunMemoTest#testAConfigurationOutsideARunIsAlwaysCompiled :: guard :: ',
+			'unit.check.OracleRunMemoTest#testARejectedBaselineQuotesThePlainCompile :: control :: M-RUNMEMO-QUOTES-THE-VERBOSE-STREAMS',
+			'unit.check.OracleRunMemoTest#testASourceTheFingerprintCannotSeeIsAlwaysCompiled :: control :: M-RUNMEMO-TRUSTS-UNSEEN-SOURCES',
+			'unit.check.OracleRunMemoTest#testAVerdictIsReusedForTheSameContentOnly :: control :: M-RUNMEMO-KEY-IGNORES-CONTENT',
+			'unit.check.OracleRunMemoTest#testTheCoverageProbeReusesTheBaselineCompile :: control :: M-RUNMEMO-PROBE-RECOMPILES',
+			'unit.check.OracleRunMemoTest#testTheFactsCompileBringsTheBaselineAlong :: control :: M-RUNMEMO-NO-BASELINE-AHEAD',
+			'unit.check.OracleRunWiringTest#testAFixRunGivenEveryRuleStartsTheFactsEarly :: control :: M-FACTS-NEVER-EARLY',
+			'unit.check.OracleRunWiringTest#testALintRunCompilesEachTreeOnce :: control :: M-RUNMEMO-NOT-ATTACHED',
+			'unit.check.OracleRunWiringTest#testAReportANarrowedOrAnOracleLessRunAsksOnDemand :: guard :: ',
+			'unit.check.OracleRunWiringTest#testAnEditReachedThroughALibraryIsCompiled :: control :: M-RUNMEMO-WRITTEN-UNHASHED',
+			'unit.check.OracleRunWiringTest#testUnaskedEarlyFactsLeaveNothingBehind :: control :: M-FACTS-EARLY-DIRS-LEFT',
 			'unit.check.OrphanAccessorCheckTest#testAnUnreadableCallerOutsideTheReportScopeStillDeclinesTheDeletion :: control :: '
 				+ 'M-ORPHAN-UNREADABLE-REPORT-SCOPE,M-ORPHAN-FIX-UNREADABLE-BLIND',
 			'unit.check.OrphanAccessorCheckTest#testAnUnreadableProjectFileSpellingNothingLeavesTheDeletionAvailable :: control :: '
@@ -1342,6 +1360,9 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-ORPHAN-UNREADABLE-SUBTYPE-OWNER-WIDE,M-ORPHAN-REPORT-OWNER-WIDE',
 			'unit.check.OrphanAccessorCheckTest#testTheUnresolvedSupertypeArmAlsoSaysWhyNoEditFollows :: control :: '
 				+ 'M-ORPHAN-ARMS-SHARE-REASON',
+			'unit.check.PendingRunsTest#testABatchRunsWhileTheCallerWorks :: control :: M-PENDING-RUNS-IN-FOREGROUND',
+			'unit.check.PendingRunsTest#testACancelledBatchEndsItsJobs :: control :: M-PENDING-CANCEL-LEAVES-JOBS',
+			'unit.check.PendingRunsTest#testTheBatchFilesArePrivateAndShortLived :: control :: M-PENDING-JOBS-FILE-KEPT',
 			'unit.check.PossibleNullDereferenceTest#testCallReturnPopFlagged :: control :: M-NULLABLE-NO-CHAIN',
 			'unit.check.PossibleNullDereferenceTest#testExistsGuardedEarlyReturnNotFlagged :: control :: M-EXISTS-GUARD-BLIND',
 			'unit.check.PossibleNullDereferenceTest#testExistsGuardedThenArmNotFlagged :: control :: M-EXISTS-GUARD-BLIND',
@@ -3320,6 +3341,20 @@ class TestDiscoveryParityTest extends Test {
 
 			'M-REACH-DISCARDED-BODY',
 			'M-REACH-DISCARDED-STATEMENT-BRANCH',
+			'M-ORACLE-PARALLEL-HALF-THE-CORES',
+			'M-RUNMEMO-PROBE-RECOMPILES',
+			'M-RUNMEMO-KEY-IGNORES-CONTENT',
+			'M-RUNMEMO-QUOTES-THE-VERBOSE-STREAMS',
+			'M-RUNMEMO-FILES-A-MOVED-INPUT',
+			'M-RUNMEMO-NO-BASELINE-AHEAD',
+			'M-PENDING-RUNS-IN-FOREGROUND',
+			'M-PENDING-CANCEL-LEAVES-JOBS',
+			'M-RUNMEMO-NOT-ATTACHED',
+			'M-FACTS-NEVER-EARLY',
+			'M-FACTS-EARLY-DIRS-LEFT',
+			'M-RUNMEMO-WRITTEN-UNHASHED',
+			'M-RUNMEMO-TRUSTS-UNSEEN-SOURCES',
+			'M-PENDING-JOBS-FILE-KEPT',
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
@@ -3438,6 +3473,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-CALL-SITE-INLINE :: anyparse.check.TypedFactsMacro#collectFields',
 			'M-FACTS-SPLICE-OWN-ARGUMENTS :: anyparse.check.TypedFactsWalk#spliced',
 			'M-FACTS-ABSTRACT-THIS :: anyparse.check.TypedFactsWalk#walk',
+			'M-PENDING-JOBS-FILE-KEPT :: anyparse.check.HaxeSpawn#FinalMember:PARALLEL_DRIVER',
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 

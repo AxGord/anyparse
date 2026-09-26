@@ -744,3 +744,22 @@ decided the question; it may not become a record of runs.
 - mayReach step C measurement: +3 sound loop fixes (anyparse 22, TM 1); the remaining refusals are the
   implicit-conversion admission (hxnodejs `untyped` in a `@:from`) and the element-type relation. The mayReach line
   ends here, as planned — `987038ab`
+- `compilerOracleServer` re-probed for the whole oracle (baselines, verifications, the facts compile) → a warm compile of
+  an UNCHANGED tree still reports null-safety errors the cold compile does not (TM `DrillValidator.hx`, anyparse
+  `CliIo`/`LintCommand`/`OracleDeclaration`), so every warm rejection is re-run cold and an incremental re-typecheck
+  after a `--fix` edit buys nothing; the facts compile's cost is its typed-tree walk, which a server does not keep. The
+  compiles stay cold and are shared inside the run instead (`OracleRunMemo`)
+- one compile per configuration serving the facts, the baseline and the coverage → the facts compile is not the
+  baseline's: its `-D keep-inline-positions` reaches every `#if` and `Context.defined`, and its `-cp` probe directory
+  shadows a project's own `anyparse.check.TypedFacts*` (this tree), so its status proves nothing about the plain
+  typecheck; the baseline and the coverage probe are ONE `-v` compile, run in the facts compile's batch
+- folding `ReachDefinesProbe` into the facts compile → both define sets it prints would carry the facts compile's
+  `keep-inline-positions`, and it needs the `-v` and `--each` the facts compile does not pass, so its output would not
+  be the separate probe's; it stays a compile of its own (and runs only under `reachConfigurationsComplete`)
+- the oracle's compile budget `min(4, cores/2, memory/2 GiB)`, taken from the parse fan-out knee → a compile is one
+  single-threaded process the caller only waits on: thirteen TM typechecks take 19.3 s four at a time, 12.2 s at eight
+  and 8.0 s at thirteen on sixteen cores; the budget is `min(16, cores − 1, memory/2 GiB)`
+- the run memo keyed by `OracleCache.fingerprint` alone → its compiler classpath directories are hashed once per
+  process, so a project whose own sources arrive through `-lib` (a local `.haxelib` dev path) fingerprinted an edit at
+  its old content and a build-breaking `--fix` was verified from the baseline; the run key adds a fresh hash of every
+  path the run may write, and a configuration reading outside the walked directories is never answered
