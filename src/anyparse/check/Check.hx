@@ -222,8 +222,9 @@ interface DefaultOff {}
  * a higher minimum is dropped for that file. No declared version means no constraint —
  * the behaviour every existing config already has.
  *
- * `--rule <id>` still force-enables, exactly as it does for a config-disabled rule: an
- * explicit selection is the user overruling the project's own default.
+ * `--rule <id>` does NOT lift it, though it force-enables a config-disabled rule: enablement is
+ * the project's preference, which an explicit selection may overrule, while the version is a
+ * correctness limit — a fix past it writes syntax the project's compiler rejects.
  */
 interface VersionGated {
 
@@ -238,14 +239,30 @@ interface VersionGated {
  * scope, or a rule whose options switch every one of its findings off.
  *
  * `skipReason` is the one answer to "does this rule run for this file under this config".
- * `Linter.collect` hands the rule only the files it answers null for, and `EffectiveRules`
- * reports the same answer, so a rule listing and a lint run cannot disagree about what was
- * verified. The rule's `run` does not re-filter.
+ * `Linter.collect` hands the rule only the files it answers null for (a `GraphScoped` rule reads
+ * more and reports only there), and `EffectiveRules` reports the same answer, so a rule listing
+ * and a lint run cannot disagree about what was verified. The rule's `run` does not re-filter.
  */
 interface FileGated {
 
 	/** Null when the rule scans `file` under `config`; otherwise why not — `needs-config`, `config-excluded` or `config-noop`. */
 	function skipReason(file: String, config: LintConfig): Null<String>;
+
+}
+
+/**
+ * A `FileGated` rule whose analysis is a graph over the whole run: it SCANS for the graph and REPORTS per gate.
+ *
+ * `skipReason` keeps its meaning for the report — `EffectiveRules` lists the rule off in a file it refuses, and
+ * `Linter.collect` drops every finding sitting in one. What the rule READS is `scanSkipReason`'s narrower answer: a
+ * file the report gate refuses still carries edges and registrations other files' findings depend on, and cutting
+ * it out of the graph changes what the rest of the run reports. A run whose files the report gate refuses in full
+ * reads nothing.
+ */
+interface GraphScoped extends FileGated {
+
+	/** Null when `file` belongs in the graph under `config`; otherwise why not. */
+	function scanSkipReason(file: String, config: LintConfig): Null<String>;
 
 }
 
@@ -613,5 +630,20 @@ interface VolatileMessage {
 	 * anchor is a silent no-op that restores the false movement.
 	 */
 	public function messageIdentity(message: String): String;
+
+}
+
+/**
+ * A check that reports ONE finding for occurrences spread over several files, anchored at one of them.
+ *
+ * `Linter.collect` drops a finding whose own file's config gates its rule off, so an anchor picked without
+ * looking at those gates loses the finding for every other file too — and which file comes first decided whether a
+ * clone was reported at all. `setReportable` hands the check the linter's per-file answer before each run (null:
+ * every file reports), and the check anchors at an occurrence it holds true for.
+ */
+interface CrossFileAnchored {
+
+	/** Whether a finding in a file survives the run's per-file gates, or null when every file's does. */
+	function setReportable(reportable: Null<(String) -> Bool>): Void;
 
 }

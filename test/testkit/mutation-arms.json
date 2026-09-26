@@ -7911,7 +7911,7 @@
 		{
 			"name": "M-GATE-TS-EXCLUDE-BLIND",
 			"type": "anyparse.check.ThreadSafety",
-			"method": "skipReason",
+			"method": "scanSkipReason",
 			"find": "'config-excluded'",
 			"replace": "null",
 			"note": "a thread-safety exclude path is reported as scanned"
@@ -8589,6 +8589,110 @@
 			"find": "&& isBuiltinBinding(ctx.binder?.tierOf(node), stringTypeName);",
 			"replace": ";",
 			"note": "an identifier typed `String` counts as the built-in even where an import binds `String` to another type"
+		},
+		{
+			"name": "M-TS-FIRST-FILE-LISTS",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "run",
+			"find": "listsOfFile.bind(byFile)",
+			"replace": "_ -> sets[0]",
+			"note": "every file is judged by the thread-safety lists of the chain the first file sits under"
+		},
+		{
+			"name": "M-FIXVERIFY-DISCOVERS-CONFIG",
+			"type": "anyparse.check.FixVerifier",
+			"method": "verify",
+			"find": "Linter.collect(files, plugin, [check], resolveConfig, applyEnablement)",
+			"replace": "Linter.collect(files, plugin, [check], null, applyEnablement)",
+			"note": "the risky checks' file gate resolves each file's config by an unmemoised discover instead of the run's resolver"
+		},
+		{
+			"name": "M-FIXVERIFY-CHECK-DISCOVERS-CONFIG",
+			"type": "anyparse.check.FixVerifier",
+			"method": "verify",
+			"find": "(cast check: ConfigAware).setConfigResolver(resolveConfig);",
+			"replace": "{};",
+			"note": "a ConfigAware risky check reads its own options by an unmemoised discover instead of the run's resolver"
+		},
+		{
+			"name": "M-TS-TAINT-UNION-SINK",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "collectTaint",
+			"find": "if (lists.sinkIds.contains(edge.from) || taintHop.exists(edge.from)) continue;",
+			"replace": "if (sinkIds.contains(edge.from) || taintHop.exists(edge.from)) continue;",
+			"note": "a node one chain names a sink never carries taint to its callers in a chain where it is a plain function"
+		},
+		{
+			"name": "M-TS-GRAPH-CUT",
+			"type": "anyparse.check.Linter",
+			"method": "scannedBy",
+			"find": "if (!(check is GraphScoped) || reported.length == 0) return reported;",
+			"replace": "return reported;",
+			"note": "a graph-scoped rule reads only the files it reports in, so a file without sinks loses its spawns registrations"
+		},
+		{
+			"name": "M-TS-REPORT-UNGATED",
+			"type": "anyparse.check.Linter",
+			"method": "runGated",
+			"find": "if (!(check is GraphScoped)) return found;",
+			"replace": "return found;",
+			"note": "a graph-scoped rule reports in a file whose own config refuses it"
+		},
+		{
+			"name": "M-ANON-FIRST-FILE-CONFIG",
+			"type": "anyparse.check.AnonTypeDup",
+			"method": "run",
+			"find": "LintConfig.resolveWith(_resolveConfig, entry.file)",
+			"replace": "LintConfig.resolveWith(_resolveConfig, files[0].file)",
+			"note": "every file is held to the thresholds of the chain the first file sits under"
+		},
+		{
+			"name": "M-COLLECT-NO-ENABLEMENT",
+			"type": "anyparse.check.Linter",
+			"method": "collect",
+			"find": "return resolveConfig == null ? kept : gatedPerFile(kept, checks, resolveConfig, applyEnablement);",
+			"replace": "return kept;",
+			"note": "no path that writes a fix honours a file's own enabled:false"
+		},
+		{
+			"name": "M-FIXVERIFY-ENABLEMENT-DROPPED",
+			"type": "anyparse.check.FixVerifier",
+			"method": "verify",
+			"find": "Linter.collect(files, plugin, [check], resolveConfig, applyEnablement)",
+			"replace": "Linter.collect(files, plugin, [check], resolveConfig, false)",
+			"note": "the risky verifier rewrites a file whose config disables the rule"
+		},
+		{
+			"name": "M-VERSION-LIFTED-BY-RULE",
+			"type": "anyparse.check.Linter",
+			"method": "passesGates",
+			"find": "(minVersion == null || config.allowsLanguageVersion(minVersion))",
+			"replace": "(minVersion == null || !applyEnablement || config.allowsLanguageVersion(minVersion))",
+			"note": "an explicit --rule selection lifts the languageVersion floor, so a fix writes syntax the project cannot compile"
+		},
+		{
+			"name": "M-ANON-ANCHOR-UNGATED",
+			"type": "anyparse.check.AnonTypeDup",
+			"method": "report",
+			"find": " && (reportable == null || reportable(hit.file))",
+			"replace": "",
+			"note": "a group anchored in a file that disables the rule is dropped for every file"
+		},
+		{
+			"name": "M-DUP-ANCHOR-UNGATED",
+			"type": "anyparse.check.DuplicateCode",
+			"method": "collectCrossFindings",
+			"find": "if (silent[fa] != silent[fb]) return silent[fa] ? -1 : 1;",
+			"replace": "",
+			"note": "a clone whose later copy sits in a disabled file is reported nowhere"
+		},
+		{
+			"name": "M-TS-MALFORMED-UNGATED",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "reportLockHeld",
+			"find": "!lists.reports || ",
+			"replace": "",
+			"note": "a malformed option of a chain that reports nothing is reported"
 		}
 	]
 }

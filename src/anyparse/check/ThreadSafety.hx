@@ -1,15 +1,32 @@
 package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
-import anyparse.check.Check.FileGated;
+import anyparse.check.Check.GraphScoped;
 import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.query.CallGraph;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import haxe.Exception;
 
+using Lambda;
 using StringTools;
+
+/**
+ * One `apqlint.json` chain's `thread-safety` lists: the three name lists resolved to graph ids, the
+ * lock pairs as written (`reportLockHeld` parses them).
+ */
+private typedef ChainLists = {
+
+	/** Whether the chain names any `sinks` — a chain that names none is read for the graph and reports nothing. */
+	final reports: Bool;
+
+	final sinkIds: Array<String>;
+	final spawnIds: Array<String>;
+	final marshalIds: Array<String>;
+	final lockPairs: Array<String>;
+}
 
 /**
  * Config-driven thread-context analysis over the approximate `CallGraph` —
@@ -51,7 +68,7 @@ using StringTools;
  * entry is `<lock pattern>/<unlock member name>` on the same type.
  */
 @:nullSafety(Strict)
-final class ThreadSafety implements Check implements ConfigAware implements NoAutofix implements FileGated {
+final class ThreadSafety implements Check implements ConfigAware implements NoAutofix implements GraphScoped {
 
 	private static inline final CTX_MAIN: Int = 1;
 	private static inline final CTX_BG: Int = 2;
@@ -74,31 +91,36 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		return 'main-thread-reachable blocking calls and locks held across blocking calls (config-driven)';
 	}
 
+	/**
+	 * ONE graph over every file of the run but an `exclude`d one, whatever config chains they span — a file whose chain
+	 * names no `sinks` included, since its calls and registrations shape the other files' contexts — and each SITE
+	 * judged by the chain of its own file: a call is a sink call when its call site's chain lists that sink, a callback
+	 * is spawned or marshalled when the registering site's chain lists that target, a lock window opens under its file's
+	 * `lockPairs`. Reachability stays whole-graph, so a single-chain run is unchanged and a main-thread caller in one
+	 * chain still reaches a sink call in another.
+	 */
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		if (files.length == 0) return [];
-		final config: LintConfig = LintConfig.resolveWith(_resolveConfig, files[0].file);
-		final sinks: Array<String> = config.stringListOption('thread-safety', 'sinks') ?? [];
-		final spawns: Array<String> = config.stringListOption('thread-safety', 'spawns') ?? [];
-		final marshals: Array<String> = config.stringListOption('thread-safety', 'marshals') ?? [];
-		final lockPairs: Array<String> = config.stringListOption('thread-safety', 'lockPairs') ?? [];
-
-		// `Linter.collect` has already dropped every file `skipReason` refuses: no `sinks`, or an `exclude` path.
+		// `Linter.collect` hands over every file but an `exclude`d one (`scanSkipReason`), and drops the findings in a
+		// file with no `sinks` of its own afterwards (`skipReason`).
 		final graph: CallGraph = CallGraph.build(files, plugin);
-		final sinkIds: Array<String> = matchAll(graph, sinks);
+		final sets: Array<ChainLists> = [];
+		final byFile: Map<String, ChainLists> = listsByFile(files, graph, sets);
+		final sinkIds: Array<String> = [];
+		for (lists in sets) for (id in lists.sinkIds) if (!sinkIds.contains(id)) sinkIds.push(id);
 		if (sinkIds.length == 0) return [];
-		final spawnIds: Array<String> = matchAll(graph, spawns);
-		final marshalIds: Array<String> = matchAll(graph, marshals);
+		final listsOf: (String) -> ChainLists = listsOfFile.bind(byFile);
 
 		final contexts: Map<String, Int> = [];
 		final mainParent: Map<String, CallEdge> = [];
-		propagateContexts(graph, spawnIds, marshalIds, contexts, mainParent);
+		propagateContexts(graph, listsOf, contexts, mainParent);
 
 		final taintHop: Map<String, CallEdge> = [];
-		collectTaint(graph, sinkIds, taintHop);
+		collectTaint(graph, sinkIds, listsOf, taintHop);
 
 		final violations: Array<Violation> = [];
-		reportMainSinkCalls(graph, sinkIds, marshalIds, contexts, mainParent, violations);
-		reportLockHeld(graph, lockPairs, sinkIds, taintHop, violations);
+		reportMainSinkCalls(graph, listsOf, contexts, mainParent, violations);
+		reportLockHeld(graph, sets, listsOf, taintHop, violations);
 		return violations;
 	}
 
@@ -115,12 +137,56 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 
 	/** `needs-config` without a `sinks` list — there is nothing to find — and `config-excluded` for a path under `exclude`. */
 	public function skipReason(file: String, config: LintConfig): Null<String> {
-		return if ((config.stringListOption('thread-safety', 'sinks') ?? []).length == 0)
-			'needs-config'
-		else if (pathExcluded(file, config.stringListOption('thread-safety', 'exclude') ?? []))
-			'config-excluded'
-		else
-			null;
+		return (config.stringListOption('thread-safety', 'sinks') ?? []).length == 0 ? 'needs-config' : scanSkipReason(file, config);
+	}
+
+	/**
+	 * `config-excluded` for a path under `exclude`, the one file the graph leaves out: `exclude` says the code is no
+	 * part of the analysis. A file with no `sinks` stays in the graph — its calls and `spawns` registrations decide the
+	 * contexts of the files that do report.
+	 */
+	public function scanSkipReason(file: String, config: LintConfig): Null<String> {
+		return pathExcluded(file, config.stringListOption('thread-safety', 'exclude') ?? []) ? 'config-excluded' : null;
+	}
+
+	/**
+	 * Each file's `ChainLists`, one record per DISTINCT option set: `sets` receives them in the order
+	 * their first file appears, so a single-chain run holds exactly one.
+	 */
+	private function listsByFile(
+		files: Array<{ file: String, source: String }>, graph: CallGraph, sets: Array<ChainLists>
+	): Map<String, ChainLists> {
+		final bySignature: Map<String, ChainLists> = [];
+		final byFile: Map<String, ChainLists> = [];
+		for (entry in files) {
+			final config: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
+			final sinks: Array<String> = config.stringListOption('thread-safety', 'sinks') ?? [];
+			final spawns: Array<String> = config.stringListOption('thread-safety', 'spawns') ?? [];
+			final marshals: Array<String> = config.stringListOption('thread-safety', 'marshals') ?? [];
+			final lockPairs: Array<String> = config.stringListOption('thread-safety', 'lockPairs') ?? [];
+			final signature: String = [for (list in [sinks, spawns, marshals, lockPairs]) list.join('\n')].join('\t');
+			final known: Null<ChainLists> = bySignature[signature];
+			final lists: ChainLists = known ?? {
+				reports: sinks.length > 0,
+				sinkIds: matchAll(graph, sinks),
+				spawnIds: matchAll(graph, spawns),
+				marshalIds: matchAll(graph, marshals),
+				lockPairs: lockPairs
+			};
+			if (known == null) {
+				bySignature[signature] = lists;
+				sets.push(lists);
+			}
+			byFile[entry.file] = lists;
+		}
+		return byFile;
+	}
+
+	/** The lists of the chain `file` sits under — every edge's file is one the graph was built from. */
+	private static function listsOfFile(byFile: Map<String, ChainLists>, file: String): ChainLists {
+		final lists: Null<ChainLists> = byFile[file];
+		if (lists == null) throw new Exception('thread-safety: an edge sits in "$file", which no run file resolved a config for');
+		return lists;
 	}
 
 	/** Union of `graph.matchIds` over `patterns`, deduplicated. */
@@ -137,7 +203,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	 * edge that first carried MAIN into a node — the chain evidence.
 	 */
 	private static function propagateContexts(
-		graph: CallGraph, spawnIds: Array<String>, marshalIds: Array<String>, contexts: Map<String, Int>, mainParent: Map<String, CallEdge>
+		graph: CallGraph, listsOf: (String) -> ChainLists, contexts: Map<String, Int>, mainParent: Map<String, CallEdge>
 	): Void {
 		// noqa: complexity
 		final queue: Array<String> = [];
@@ -155,9 +221,9 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 						case Contains: 0;
 						case Ref:
 							final via: Null<String> = edge.via;
-							if (via != null && spawnIds.contains(via))
+							if (via != null && listsOf(edge.file).spawnIds.contains(via))
 								CTX_BG;
-							else if (via != null && marshalIds.contains(via))
+							else if (via != null && listsOf(edge.file).marshalIds.contains(via))
 								CTX_MAIN;
 							else
 								ctx;
@@ -185,15 +251,23 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		}
 	}
 
-	/** Reverse BFS from the sinks over the invocation edges (`EdgeKind.isInvocation`) — `taintHop[n]` is n's next edge toward a sink. */
-	private static function collectTaint(graph: CallGraph, sinkIds: Array<String>, taintHop: Map<String, CallEdge>): Void {
+	/**
+	 * Reverse BFS from the sinks over the invocation edges (`EdgeKind.isInvocation`) — `taintHop[n]` is n's next edge toward a sink.
+	 * `sinkIds` is the union over every chain: a call taints its caller when the call site's own chain names the callee a
+	 * sink, or when the callee is itself tainted.
+	 */
+	private static function collectTaint(
+		graph: CallGraph, sinkIds: Array<String>, listsOf: (String) -> ChainLists, taintHop: Map<String, CallEdge>
+	): Void {
 		final queue: Array<String> = sinkIds.copy();
 		var qi: Int = 0;
 		while (qi < queue.length) {
 			final id: String = queue[qi++];
-			for (edge in graph.inEdges(id)) {
-				if (!edge.kind.isInvocation()) continue;
-				if (sinkIds.contains(edge.from) || taintHop.exists(edge.from)) continue;
+			for (edge in graph.inEdges(id)) if (edge.kind.isInvocation()) {
+				// the edge leaves `from`'s body, so its file's chain is the one that says whether `from` is a sink
+				final lists: ChainLists = listsOf(edge.file);
+				if (lists.sinkIds.contains(edge.from) || taintHop.exists(edge.from)) continue;
+				if (!(lists.sinkIds.contains(id) || taintHop.exists(id))) continue;
 				taintHop[edge.from] = edge;
 				queue.push(edge.from);
 			}
@@ -202,16 +276,16 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 
 	/** Finding (a): a MAIN-context function directly calls a sink. */
 	private static function reportMainSinkCalls(
-		graph: CallGraph, sinkIds: Array<String>, marshalIds: Array<String>, contexts: Map<String, Int>, mainParent: Map<String, CallEdge>,
+		graph: CallGraph, listsOf: (String) -> ChainLists, contexts: Map<String, Int>, mainParent: Map<String, CallEdge>,
 		violations: Array<Violation>
 	): Void {
-		for (edge in graph.edges) {
-			if (!edge.kind.isInvocation()) continue;
-			if (!sinkIds.contains(edge.to)) continue;
+		for (edge in graph.edges) if (edge.kind.isInvocation()) {
+			final lists: ChainLists = listsOf(edge.file);
+			if (!lists.sinkIds.contains(edge.to)) continue;
 			// a `marshals` function IS the thread boundary — its body dispatches
 			// between contexts in ways the graph cannot see; sinks inside it are
 			// the primitive's own machinery, not application-level main calls
-			if (marshalIds.contains(edge.from)) continue;
+			if (lists.marshalIds.contains(edge.from)) continue;
 			final ctx: Int = contexts[edge.from] ?? 0;
 			if (ctx & CTX_MAIN == 0) continue;
 			final chain: String = mainChain(edge.from, mainParent);
@@ -230,16 +304,21 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	 * Finding (b): between a lock call and the SAME TYPE's unlock call inside
 	 * one function body (source order), a call transitively reaches a sink.
 	 * Receiver identity is not tracked — same-type pairing is the
-	 * over-approximation.
+	 * over-approximation. Each chain's `lockPairs` open windows only in its own files; a malformed
+	 * entry several chains share is reported once.
 	 */
 	private static function reportLockHeld(
-		graph: CallGraph, lockPairs: Array<String>, sinkIds: Array<String>, taintHop: Map<String, CallEdge>, violations: Array<Violation>
+		graph: CallGraph, sets: Array<ChainLists>, listsOf: (String) -> ChainLists, taintHop: Map<String, CallEdge>,
+		violations: Array<Violation>
 	): Void {
 		// noqa: complexity
 		final seen: Array<String> = [];
-		for (pair in lockPairs) {
+		for (setIndex => lists in sets) for (pair in lists.lockPairs) {
 			final slash: Int = pair.lastIndexOf('/');
 			if (slash <= 0) {
+				// a chain that reports nothing (`needs-config`) says nothing about its options either
+				if (!lists.reports || sets.slice(0, setIndex).exists(earlier -> earlier.reports && earlier.lockPairs.contains(pair)))
+					continue;
 				violations.push({
 					file: '',
 					span: null,
@@ -255,7 +334,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 				final dot: Int = lockId.lastIndexOf('.');
 				if (dot <= 0) continue;
 				final unlockId: String = lockId.substring(0, dot + 1) + unlockMember;
-				for (lockEdge in graph.inEdges(lockId)) if (lockEdge.kind == Call) {
+				for (lockEdge in graph.inEdges(lockId)) if (lockEdge.kind == Call && listsOf(lockEdge.file) == lists) {
 					final lockSpan: Null<Span> = lockEdge.span;
 					if (lockSpan == null) continue;
 					final windowEnd: Null<Int> = closingUnlockFrom(graph, lockEdge, unlockId);
@@ -270,7 +349,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 						// the closing unlock is excluded; a SECOND lock call inside
 						// the window is a nested re-acquire and stays reportable
 						if (edge.to == unlockId) continue;
-						final direct: Bool = sinkIds.contains(edge.to);
+						final direct: Bool = lists.sinkIds.contains(edge.to);
 						if (!direct && !taintHop.exists(edge.to)) continue;
 						final evidence: String = direct ? edge.to : taintChain(edge.to, taintHop);
 						final message: String = '"${lockEdge.from}" holds "$lockId" across a call that can block: $evidence';

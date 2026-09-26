@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.GroupedEdit;
 import anyparse.check.Check.GroupedFix;
 import anyparse.check.Check.Violation;
@@ -306,7 +307,8 @@ final class FixVerifier {
 
 	public static function verify(
 		files: Array<{ file: String, source: String }>, riskyChecks: Array<Check>, plugin: GrammarPlugin, oracles: Array<OracleConfig>,
-		write: (String, String) -> Void, ?optsByFile: Map<String, Null<String>>, ?coverage: Array<ConfigCoverage>
+		write: (String, String) -> Void, ?optsByFile: Map<String, Null<String>>, ?coverage: Array<ConfigCoverage>,
+		?resolveConfig: (String) -> LintConfig, applyEnablement: Bool = true
 	): FixVerifyResult {
 		final applied: Array<String> = [];
 		final reverted: Array<FixVerifyRevert> = [];
@@ -363,12 +365,18 @@ final class FixVerifier {
 		// incident) is outside the hxml's compiled set. A finding for entry k is computed
 		// before entries < k had their fixes applied — harmless while risky fixes are
 		// same-file insertions.
+		// The run's memoised resolver, installed the way `LintFixVerify.applyOracleAssistedFixes` installs it for its own
+		// checks: a `ConfigAware` risky check left without one re-discovers its file's config chain for every file it reads.
+		if (resolveConfig != null)
+			for (check in riskyChecks)
+				if (check is ConfigAware) (cast check: ConfigAware).setConfigResolver(resolveConfig);
 		for (check in riskyChecks) {
 			// Through `Linter.collect`, never `check.run` directly: that is what applies the central
 			// reification and inline-suppression gates here. The oracle below cannot stand in for
 			// either — a risky rewrite inside a `macro …` quotation still typechecks, and so does one
 			// on a line whose `// noqa` says the rule is wrong there.
-			final all: Array<Violation> = Linter.collect(files, plugin, [check]).filter(v -> v.rule == check.id());
+			final all: Array<Violation> = Linter.collect(files, plugin, [check], resolveConfig, applyEnablement)
+				.filter(v -> v.rule == check.id());
 			for (entry in files) {
 				final own: Array<Violation> = all.filter(v -> v.file == entry.file);
 				if (own.length == 0) continue;

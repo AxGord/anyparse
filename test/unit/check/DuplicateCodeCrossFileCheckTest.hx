@@ -2,11 +2,14 @@ package unit.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.check.DuplicateCode;
+import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import utest.Assert;
 import utest.Test;
+
+using StringTools;
 
 /**
  * The cross-file axis of the `duplicate-code` check: three or more consecutive statements
@@ -365,6 +368,28 @@ class DuplicateCodeCrossFileCheckTest extends Test {
 		Assert.isTrue(identity.indexOf('3 statements duplicated from A.hx:#') == 0, identity);
 		Assert.notEquals(identity, check.messageIdentity(four));
 		Assert.equals(identity, check.messageIdentity(identity));
+	}
+
+	/**
+	 * A clone whose copy sits in a file that disables the rule is still reported in the file that keeps it, whichever
+	 * file sorts first: the disabled copy takes the anchor, the finding lands on the other.
+	 */
+	@:pin('control') @:killer('M-DUP-ANCHOR-UNGATED')
+	public function testADisabledCopyTakesTheAnchor(): Void {
+		final on: LintConfig = LintConfig.parse('{}');
+		final off: LintConfig = LintConfig.parse('{"rules":{"duplicate-code":{"enabled":false}}}');
+		final body: String = '{ var a = 1; var b = a + 2; var c = b * 3; var d = c - 4; trace(a + b + c + d); }';
+		for (names in [['x/X.hx', 'y/Y.hx'], ['y/Y.hx', 'x/X.hx']]) {
+			final files: Array<{ file: String, source: String }> = [
+				for (name in names) { file: name, source: 'class ${name.charAt(2)} { static function f():Void $body }' }
+			];
+			final found: Array<Violation> = Linter.run(
+				files, new HaxeQueryPlugin(),
+				[new DuplicateCode()],
+				f -> f.startsWith('y/') ? off : on, true
+			);
+			Assert.same(['x/X.hx'], [for (v in found) v.file]);
+		}
 	}
 
 	private function violations(files: Array<{ file: String, source: String }>): Array<Violation> {

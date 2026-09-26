@@ -1,9 +1,14 @@
 package unit.check;
 
+#if (sys || nodejs)
+import sys.io.File;
+#end
 import anyparse.check.Check.Violation;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.Cli;
+import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -20,6 +25,10 @@ import utest.Test;
  * constraint — what every existing config already means.
  */
 class LintLanguageVersionGateTest extends Test {
+
+	/** A null-guarded call `prefer-safe-nav` (4.3) rewrites to `a?.push(1)`. */
+	private static final SAFE_NAV: String =
+		'class V {\n\tpublic static function f(a:Null<Array<Int>>):Void {\n\t\tif (a != null) a.push(1);\n\t}\n}\n';
 
 	/** A ternary the 4.3 rule rewrites, and a `catch (e: Dynamic)` the 4.1 rule rewrites. */
 	private static final SOURCE: String = 'class V {\n\n\tpublic static function pick(a: Null<Int>, b: Int): Int {\n'
@@ -59,6 +68,30 @@ class LintLanguageVersionGateTest extends Test {
 	public function testAnUnreadableVersionConstrainsNothing(): Void {
 		// A typo must not silently switch rules off — the failure mode this gate is meant to prevent.
 		Assert.isTrue(new LintConfig([], null, null, null, null, null, 'nightly').allowsLanguageVersion('4.3'));
+	}
+
+	/**
+	 * An explicit rule selection lifts `enabled:false` but never the version floor: the finding stays out of the
+	 * report, and `--fix --rule` writes no `?.` into a 4.0 project while a 4.3 one still gets it.
+	 */
+	@:pin('control') @:killer('M-VERSION-LIFTED-BY-RULE')
+	public function testAnExplicitRuleSelectionKeepsTheVersionFloor(): Void {
+		final config: LintConfig = new LintConfig([], null, null, null, null, null, '4.0');
+		final found: Array<Violation> = Linter.run([{ file: 'V.hx', source: SOURCE }], new HaxeQueryPlugin(), null, _ -> config, false);
+		Assert.same([], [
+			for (v in found) if (v.rule == 'prefer-null-coalescing' || v.rule == 'catch-dynamic') v.rule
+		]);
+		#if (sys || nodejs)
+		for (version => rewrites in ['4.0' => false, '4.3' => true]) {
+			final dir: String = CliFixture.writeDir('versionrule', [
+				{ name: 'V.hx', source: SAFE_NAV },
+				{ name: 'apqlint.json', source: '{"languageVersion":"$version"}' }
+			]);
+			Cli.run(['lint', '--fix', '--no-oracle', '--rule', 'prefer-safe-nav', '$dir/V.hx']);
+			Assert.equals(rewrites, File.getContent('$dir/V.hx').indexOf('a?.push(1)') != -1, 'languageVersion $version');
+			CliFixture.removeDir(dir);
+		}
+		#end
 	}
 
 	/** The rule ids reported for `SOURCE` under a config declaring `version` (null = none declared). */

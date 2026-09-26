@@ -35,9 +35,9 @@ final class ConfigDisagreement {
 	 *
 	 * Called from `Cli.runLint` beside its oracle twin, NOT from `LintConfig.frameworksFor`: that runs
 	 * once per framework-aware rule and re-runs this whole per-file scan each time (the argument is
-	 * evaluated whatever the once-per-process ledger later decides), and for the `RiskyFix` half of
-	 * those rules `FixVerifier` installs no resolver at all — so each scan was an uncached
-	 * `LintConfig.discover` walk per file. The CLI is where the memoised resolver lives, and where the
+	 * evaluated whatever the once-per-process ledger later decides), and a rule run without the
+	 * run's resolver pays an uncached `LintConfig.discover` walk per file for it. The CLI is where the
+	 * memoised resolver lives, and where the
 	 * run knows whether any `FrameworkAware` rule is active to read the roster at all.
 	 */
 	public static function warnRoster(resolve: Null<(String) -> LintConfig>, paths: Array<String>): Void {

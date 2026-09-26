@@ -1,8 +1,10 @@
 package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.CrossFileAnchored;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FileGated;
+import anyparse.check.Check.GraphScoped;
 import anyparse.check.Check.VersionGated;
 import anyparse.check.Check.Violation;
 import anyparse.check.Check.VolatileMessage;
@@ -415,17 +417,29 @@ final class Linter {
 	 * here for the same reason. It used to sit in `run` alone, so the report honoured it and every
 	 * `--fix` path ignored it: a `noqa`-carrying line was reported clean and rewritten anyway, which
 	 * is the exact failure the suppression mechanism exists to prevent — the user writes it BECAUSE
-	 * the rule is wrong there. `run` still adds what is genuinely configuration (enablement, severity
-	 * overrides) on top; a directive written in the source is not configuration.
+	 * the rule is wrong there. `run` still adds the severity overrides on top.
+	 *
+	 * The per-file config gates are the third (`gatedPerFile`), applied whenever a resolver is given, and they live
+	 * here for the same reason: every path that WRITES a fix reads its findings through this function. The
+	 * `languageVersion` gate always holds — it is a correctness limit, and a fix past it does not compile. ENABLEMENT
+	 * defaults the inverse of `run`'s on purpose, so a caller that forgets the flag writes nothing a config switched
+	 * off; `run` and the fix verifiers pass the run's own `applyEnablement`, which an explicit `--rule` selection
+	 * turns off for the report and every fix alike. A `CrossFileAnchored` check is handed the same per-file answer
+	 * before it runs, so it anchors each finding where the finding survives.
 	 */
 	public static function collect(
-		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, checks: Array<Check>, ?resolveConfig: (String) -> LintConfig
+		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, checks: Array<Check>,
+		?resolveConfig: (String) -> LintConfig, applyEnablement: Bool = true
 	): Array<Violation> {
+		final resolve: Null<(String) -> LintConfig> = resolveConfig;
+		for (check in checks) if (check is CrossFileAnchored)
+			(cast check: CrossFileAnchored).setReportable(resolve == null ? null : reportableFor.bind(check, resolve, applyEnablement));
 		final raw: Array<Violation> = [
-			for (check in checks) for (violation in check.run(scannedBy(check, files, resolveConfig), plugin)) violation
+			for (check in checks) for (violation in runGated(check, files, plugin, resolveConfig)) violation
 		];
 		final unquoted: Array<Violation> = ReificationScan.withoutQuoted(raw, files, plugin, ReificationScan.exemptIdsOf(checks));
-		return Suppression.apply(unquoted, files, plugin.lexicalRegions);
+		final kept: Array<Violation> = Suppression.apply(unquoted, files, plugin.lexicalRegions);
+		return resolveConfig == null ? kept : gatedPerFile(kept, checks, resolveConfig, applyEnablement);
 	}
 
 	/**
@@ -453,16 +467,6 @@ final class Linter {
 		?resolveConfig: (String) -> LintConfig, applyEnablement: Bool = false
 	): Array<Violation> {
 		final active: Array<Check> = checks ?? builtins();
-		// A DefaultOff rule is excluded from the default set: its finding survives only
-		// when the file explicitly opts in (`enabled:true`) — the inverse default the
-		// per-file enablement gate below applies via `enabledFor`'s `defaultOn`.
-		final defaultOffIds: Array<String> = [for (c in active) if (c is DefaultOff) c.id()];
-		// A rule whose FIX emits syntax newer than the project's declared `languageVersion`
-		// is dropped for that file — see `Check.VersionGated`. Collected once; the per-file
-		// question is answered against each finding's own config below.
-		final minVersionById: Map<String, String> = [
-			for (c in active) if (c is VersionGated) c.id() => (cast c: VersionGated).minLanguageVersion()
-		];
 		// Parse each file once and share the trees across all checks — each check
 		// parses independently otherwise, so N checks over M files is N*M parses.
 		final cached: GrammarPlugin = plugin is CachingGrammarPlugin ? plugin : new CachingGrammarPlugin(plugin);
@@ -470,23 +474,49 @@ final class Linter {
 		// checks so they don't re-walk ancestor dirs + re-parse the JSON per file; a null
 		// resolver resets them to their own `LintConfig.discover` fallback.
 		for (check in active) if (check is ConfigAware) (cast check: ConfigAware).setConfigResolver(resolveConfig);
-		// `collect` has already applied the reification and inline-suppression gates.
-		final out: Array<Violation> = collect(files, cached, active, resolveConfig);
+		// `collect` has already applied the reification, inline-suppression and (unless an explicit
+		// --rule selection bypasses it) per-file enablement gates.
+		final out: Array<Violation> = collect(files, cached, active, resolveConfig, applyEnablement);
 		if (resolveConfig == null) return out;
-		// Per-file config: resolve the apqlint.json for each finding's OWN file, drop
-		// it when its rule is disabled there (unless an explicit --rule selection
-		// bypasses enablement), then apply that file's severity override.
-		final kept: Array<Violation> = [];
 		for (violation in out) {
-			final config: LintConfig = resolveConfig(violation.file);
-			if (applyEnablement && !config.enabledFor(violation.rule, !defaultOffIds.contains(violation.rule))) continue;
-			final minVersion: Null<String> = minVersionById[violation.rule];
-			if (applyEnablement && minVersion != null && !config.allowsLanguageVersion(minVersion)) continue;
-			final sev: Null<Severity> = config.severityFor(violation.rule);
+			final sev: Null<Severity> = resolveConfig(violation.file).severityFor(violation.rule);
 			if (sev != null) violation.severity = sev;
-			kept.push(violation);
 		}
-		return kept;
+		return out;
+	}
+
+	/**
+	 * `found` without the findings whose OWN file's config gates their rule off (`passesGates`).
+	 *
+	 * Inside `collect` rather than beside the report, because a finding that survives here is one some path WRITES: the
+	 * fix loop, the risky verifier and the oracle-assisted phase all take their findings from `collect`, and a gate kept
+	 * in `run` alone let a risky fix rewrite a file whose config disabled the rule.
+	 */
+	private static function gatedPerFile(
+		found: Array<Violation>, checks: Array<Check>, resolveConfig: (String) -> LintConfig, applyEnablement: Bool
+	): Array<Violation> {
+		final byId: Map<String, Check> = [for (c in checks) c.id() => c];
+		return found.filter(violation -> {
+			final config: LintConfig = resolveConfig(violation.file);
+			final check: Null<Check> = byId[violation.rule];
+			check != null ? passesGates(check, config, applyEnablement) : !applyEnablement || config.enabledFor(violation.rule, true);
+		});
+	}
+
+	/** `passesGates` for `check` in `file`, asked of `file`'s own config — the answer a `CrossFileAnchored` check anchors by. */
+	private static function reportableFor(check: Check, resolve: (String) -> LintConfig, applyEnablement: Bool, file: String): Bool {
+		return passesGates(check, resolve(file), applyEnablement);
+	}
+
+	/**
+	 * Whether a finding of `check` survives `config`: never past the file's declared `languageVersion` (see
+	 * `Check.VersionGated`), and — when `applyEnablement` — only where the rule is enabled, a `DefaultOff` rule only
+	 * where the file opts in.
+	 */
+	private static function passesGates(check: Check, config: LintConfig, applyEnablement: Bool): Bool {
+		final minVersion: Null<String> = check is VersionGated ? (cast check: VersionGated).minLanguageVersion() : null;
+		return (minVersion == null || config.allowsLanguageVersion(minVersion))
+			&& (!applyEnablement || config.enabledFor(check.id(), !(check is DefaultOff)));
 	}
 
 	/**
@@ -499,7 +529,26 @@ final class Linter {
 	): Array<{ file: String, source: String }> {
 		if (!(check is FileGated)) return files;
 		final gated: FileGated = cast check;
-		return files.filter(f -> gated.skipReason(f.file, LintConfig.resolveWith(resolveConfig, f.file)) == null);
+		final reported: Array<{ file: String, source: String }> = files.filter(f ->
+			gated.skipReason(f.file, LintConfig.resolveWith(resolveConfig, f.file)) == null
+		);
+		if (!(check is GraphScoped) || reported.length == 0) return reported;
+		final scoped: GraphScoped = cast check;
+		return files.filter(f -> scoped.scanSkipReason(f.file, LintConfig.resolveWith(resolveConfig, f.file)) == null);
+	}
+
+	/**
+	 * `check` run over the files `scannedBy` hands it, without a `GraphScoped` check's findings in the files its report
+	 * gate refuses — the half of the gate `scannedBy` does not apply to such a check. A finding naming no file (a
+	 * malformed option) stays.
+	 */
+	private static function runGated(
+		check: Check, files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, resolveConfig: Null<(String) -> LintConfig>
+	): Array<Violation> {
+		final found: Array<Violation> = check.run(scannedBy(check, files, resolveConfig), plugin);
+		if (!(check is GraphScoped)) return found;
+		final gated: GraphScoped = cast check;
+		return found.filter(v -> v.file == '' || gated.skipReason(v.file, LintConfig.resolveWith(resolveConfig, v.file)) == null);
 	}
 
 }

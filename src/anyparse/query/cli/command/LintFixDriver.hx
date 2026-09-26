@@ -184,7 +184,7 @@ final class LintFixDriver {
 		// otherwise left report-only. With no risky check present this block is a
 		// no-op, so a real run (no risky builtin) is byte-identical to before the key.
 		final risky: RiskyFixOutcome = LintFixVerify.verifyRiskyFixes(
-			files, split.risky, cached, oracles, optsByFile, changedFiles, ledger
+			files, split.risky, cached, oracles, optsByFile, changedFiles, ledger, resolveConfig, applyEnablement
 		);
 		fixedCount += risky.appliedCount;
 		nameExclusions(named, risky.excluded);
@@ -197,7 +197,7 @@ final class LintFixDriver {
 		// (verifyOracleBatch). No oracle / no such check → inert.
 		final oracleAssisted: Array<Check> = [for (c in checks) if (c is OracleAssisted) c];
 		final oa: AssistedOutcome = LintFixVerify.applyOracleAssistedFixes(
-			files, oracleAssisted, cached, oracles, optsByFile, changedFiles, resolveConfig, risky.coverage
+			files, oracleAssisted, cached, oracles, optsByFile, changedFiles, resolveConfig, applyEnablement, risky.coverage
 		);
 		fixedCount += oa.appliedCount;
 		nameExclusions(named, oa.excluded);

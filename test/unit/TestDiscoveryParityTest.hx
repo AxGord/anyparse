@@ -1089,8 +1089,14 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-AMBIENT-IMPORT-BAND',
 			'unit.check.AmbientImportSubtypeShieldTest#testTheWildcardTierShieldsTheTypeTheSupertypeReallyNames :: control :: '
 				+ 'M-AMBIENT-IMPORT-BAND',
+			'unit.check.AnonTypeDupCheckTest#testAGroupIsAnchoredWhereTheRuleIsEnabled :: control :: M-ANON-ANCHOR-UNGATED',
+			'unit.check.AnonTypeDupCheckTest#testEachFileHeldToItsOwnChainThreshold :: control :: M-ANON-FIRST-FILE-CONFIG',
 			'unit.check.AvoidDynamicBagFixTest#testANullableValueIsNeverTypedByItsBareWrapper :: control :: M-BAG-NULL-OUTER',
 			'unit.check.AvoidDynamicBagFixTest#testAnInitializerOfAnotherTypeKeepsTheDeclaration :: control :: M-BAG-INITIALIZER',
+			'unit.check.AvoidDynamicRiskyFixE2ETest#testAFixNeverLandsWhereItsRuleIsDisabled :: control :: '
+				+ 'M-COLLECT-NO-ENABLEMENT,M-FIXVERIFY-ENABLEMENT-DROPPED',
+			'unit.check.AvoidDynamicRiskyFixE2ETest#testTheRunResolverGatesTheScannedFiles :: control :: M-FIXVERIFY-DISCOVERS-CONFIG',
+			'unit.check.AvoidDynamicRiskyFixE2ETest#testTheRunResolverReachesTheCheckOptions :: control :: M-FIXVERIFY-CHECK-DISCOVERS-CONFIG',
 			'unit.check.BuiltinFixClassCensusTest#testEveryDeclaredNoAutofixRuleAnswersNoEdit :: control :: M-NO-AUTOFIX-STILL-EDITS',
 			'unit.check.BuiltinFixClassCensusTest#testNoAutofixReasonIsNotTheRuleNameReadBack :: control :: '
 				+ 'M-NO-AUTOFIX-REASON-IS-THE-RULE-NAME',
@@ -1166,6 +1172,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.DuplicateCodeCheckTest#testABareRunWithOneCallIsAClone :: guard :: ',
 			'unit.check.DuplicateCodeCheckTest#testALiteralInteriorDifferenceIsNotACloneWhileItsLayoutTwinIs :: control :: '
 				+ 'M-DUP-CODE-NORM-KEY',
+			'unit.check.DuplicateCodeCrossFileCheckTest#testADisabledCopyTakesTheAnchor :: control :: M-DUP-ANCHOR-UNGATED',
 			'unit.check.DuplicateCodeRenamedCheckTest#testABareDeclarationRunIsNotAClone :: control :: M-DUP-CODE-BARE-RUN-OFF',
 			'unit.check.DuplicateCodeRenamedCheckTest#testABareRunWithOneCallIsAClone :: guard :: ',
 			'unit.check.DuplicateCodeRenamedCheckTest#testALocalsOnlyRenamingIsAClone :: control :: M-DUP-CODE-RENAMED-BINDERS',
@@ -1307,6 +1314,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.LintFixDeclineWiringSliceTest#testACrossFileRuleIsNotReportedAsSayingNothing :: control :: '
 				+ 'M-LEDGER-CROSS-FILE-MUTE',
 			'unit.check.LintFixDeclineWiringSliceTest#testAnAcceptedFileIsWrittenAndBlamesNobody :: control :: M-LINTFIX-ACCEPTED-BLAMED',
+			'unit.check.LintLanguageVersionGateTest#testAnExplicitRuleSelectionKeepsTheVersionFloor :: control :: M-VERSION-LIFTED-BY-RULE',
 			'unit.check.LintScopeGateTest#testALibsOnlyScopeIsNamedAsAGap :: control :: M-SCOPE-GAP-SILENT',
 			'unit.check.NamingCheckCrossFileFixTest#testCrossFileRenameAsksTheResolutionScopeForUnreadableFiles :: control :: '
 				+ 'M-NAMING-SKIPSCAN-REPORT-INDEX,M-SKIPSCAN-SCOPEWIDE',
@@ -1704,7 +1712,12 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.StructuralConformanceProofTest#testUnresolvableSupertypeSuppliesNoMember :: control :: M-STRUCT-DECLARES-LOOSE',
 			'unit.check.TailMergeCheckTest#testStructuralIdentityHalfNeeded :: control :: M-TAILMERGE-NORM-ONLY',
 			'unit.check.TailMergeCheckTest#testSwitchCaseOutOfScope :: control :: M-TAILMERGE-FALL-KEPT',
+			'unit.check.ThreadSafetyCheckTest#testAFileWithoutSinksStillShapesTheGraph :: control :: M-TS-GRAPH-CUT',
+			'unit.check.ThreadSafetyCheckTest#testAMalformedOptionOfANonReportingChainIsSilent :: control :: M-TS-MALFORMED-UNGATED',
+			'unit.check.ThreadSafetyCheckTest#testASinkOfOneChainIsAPlainCallInAnother :: control :: M-TS-TAINT-UNION-SINK',
+			'unit.check.ThreadSafetyCheckTest#testEachCallSiteJudgedByItsOwnChain :: control :: M-TS-FIRST-FILE-LISTS',
 			'unit.check.ThreadSafetyCheckTest#testLockHeldAcrossABlockingGetterFlagged :: control :: M-TS-ACCESSOR-TAINT',
+			'unit.check.ThreadSafetyCheckTest#testNoFindingInAFileWhoseChainNamesNoSinks :: control :: M-TS-REPORT-UNGATED',
 			'unit.check.TrivialGetterCheckTest#testBasicBlockBodyFlagged :: control :: M-SUBOVERRIDE-TRUE',
 			'unit.check.TrivialGetterShapeCollapseTest#testForeignHierarchyBackingNameStaysAccountedFor :: control :: '
 				+ 'M-SUPERDECLARES-FALSE',
@@ -3679,7 +3692,20 @@ class TestDiscoveryParityTest extends Test {
 			'M-TOSTRING-CALL-BY-NAME',
 			'M-TOSTRING-CALL-CUT',
 			'M-TOSTRING-IDENT-CUT',
-			'M-TOSTRING-STRING-BINDING'
+			'M-TOSTRING-STRING-BINDING',
+			'M-TS-FIRST-FILE-LISTS',
+			'M-FIXVERIFY-DISCOVERS-CONFIG',
+			'M-FIXVERIFY-CHECK-DISCOVERS-CONFIG',
+			'M-TS-TAINT-UNION-SINK',
+			'M-TS-GRAPH-CUT',
+			'M-TS-REPORT-UNGATED',
+			'M-ANON-FIRST-FILE-CONFIG',
+			'M-COLLECT-NO-ENABLEMENT',
+			'M-FIXVERIFY-ENABLEMENT-DROPPED',
+			'M-VERSION-LIFTED-BY-RULE',
+			'M-ANON-ANCHOR-UNGATED',
+			'M-DUP-ANCHOR-UNGATED',
+			'M-TS-MALFORMED-UNGATED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
