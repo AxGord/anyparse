@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.Violation;
 import anyparse.check.StaticExtensionFacts.ExtensionFactsVerdict;
+import anyparse.check.UsingScan.UsingConflict;
 import anyparse.check.UsingScan.UsingHeader;
 import anyparse.check.UsingScan.UsingScope;
 import anyparse.query.BoolExprShape;
@@ -381,7 +382,7 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		final chain: ChainTypeContext = { declaredTypeSources: s.typed.declaredTypeSources(source), source: source, usings: usings };
 		// The conflict verdict depends only on (module, method), while a file repeats the same
 		// pair across every call site — and each miss costs a whole-index member-closure query.
-		final conflicts: Map<String, Bool> = [];
+		final conflicts: Map<String, UsingConflict> = [];
 		final out: Array<Candidate> = [];
 		for (call in calls) {
 			final candidate: Null<Candidate> = classify(
@@ -407,7 +408,7 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 	 */
 	private static function classify(
 		call: QueryNode, root: QueryNode, source: String, file: String, s: Seams, options: Options, plugin: GrammarPlugin,
-		symbols: () -> Null<SymbolIndex>, declaredTypes: Map<Int, String>, chain: ChainTypeContext, conflicts: Map<String, Bool>
+		symbols: () -> Null<SymbolIndex>, declaredTypes: Map<Int, String>, chain: ChainTypeContext, conflicts: Map<String, UsingConflict>
 	): Null<Candidate> {
 		if (call.children.length < MIN_CALL_CHILDREN) return null;
 		final callee: QueryNode = call.children[0];
@@ -432,17 +433,21 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		// Every channel through which the compiler could bind `recv.method` to another function: what the written name denotes,
 		// whether the function takes part in `using` at all, and every `using` that could reach the site.
 		final channels: Channels = channelsOf(typeName, module, method, file, root, symbols);
-		if (channels.elsewhere || UsingScan.conflictingUsing(channels.usings, module, method, plugin, symbols, conflicts)) return null;
+		final key: String = '$module:$method';
+		final conflict: UsingConflict = conflicts[key] ?? UsingScan.usingConflict(channels.usings, module, method, plugin, symbols, file);
+		conflicts[key] = conflict;
+		if (channels.elsewhere || conflict == UsingConflict.Conflict) return null;
 		final nominal: Null<String> = receiverNominal(recv, root, s, declaredTypes, chain, symbols, file);
 		// A `Dynamic` receiver dispatches no extension at RUNTIME while the rewrite still compiles.
 		if (nominal != null && nominal == s.dynamicTypeName) return null;
 		final structural: Null<Verdict> = verdictFor(nominal, method, symbols, file);
 		final judged: Null<Verdict> = structural == Verdict.UnresolvedReceiver && nominal == null
-			? factsVerdict(call, recv, root, s, chain, source, file, module, method, plugin)
+			? factsVerdict(call, recv, root, s, chain, source, file, module, method, plugin, channels.usings)
 			: structural;
 		if (judged == null) return null;
 		final settled: Verdict = judged;
-		final verdict: Verdict = settled == Verdict.Fixable && !channels.proven ? Verdict.UnprovenChannels : settled;
+		final proven: Bool = channels.proven && conflict == UsingConflict.Clear;
+		final verdict: Verdict = settled == Verdict.Fixable && !proven ? Verdict.UnprovenChannels : settled;
 		final suggestion: Null<String> = suggestionOf(call, recv, method, source);
 		return suggestion == null ? null : {
 			call: call,
@@ -562,7 +567,7 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 	 */
 	private static function factsVerdict(
 		call: QueryNode, recv: QueryNode, root: QueryNode, s: Seams, chain: ChainTypeContext, source: String, file: String, module: String,
-		method: String, plugin: GrammarPlugin
+		method: String, plugin: GrammarPlugin, usings: Array<String>
 	): Null<Verdict> {
 		final callSpan: Null<Span> = call.span;
 		final recvSpan: Null<Span> = recv.span;
@@ -574,7 +579,7 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		if (binding == null || chain.declaredTypeSources[binding] == null) return Verdict.UnresolvedReceiver;
 		final facts: Null<CompilerFacts> = plugin is SymbolIndexHost ? (cast plugin: SymbolIndexHost).compilerFacts() : null;
 		if (facts == null) return Verdict.UnresolvedReceiver;
-		return switch StaticExtensionFacts.judge(facts, file, source, callSpan, recvSpan, module, method) {
+		return switch StaticExtensionFacts.judge(facts, file, source, callSpan, recvSpan, module, method, usings) {
 			case Proven: Verdict.Fixable;
 			case Shadowed, DynamicReceiver: null;
 			case Unproven: Verdict.UnresolvedReceiver;

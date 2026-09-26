@@ -52,7 +52,7 @@ final class StaticExtensionFacts {
 	 * calling `method` of the configured `module`.
 	 */
 	public static function judge(
-		facts: CompilerFacts, file: String, source: String, call: Span, recv: Span, module: String, method: String
+		facts: CompilerFacts, file: String, source: String, call: Span, recv: Span, module: String, method: String, usings: Array<String>
 	): ExtensionFactsVerdict {
 		// a configuration missing from the table could type the receiver differently, and facts of another text place nothing
 		if (facts.dropped.length > 0 || facts.configurations.length == 0 || facts.sourceOf(facts.keyOf(file)) != source) return Unproven;
@@ -70,6 +70,14 @@ final class StaticExtensionFacts {
 			if (t == null || !MEMBER_HOSTS.contains(t.kind) || t.meta.contains(USING_META)) return Unproven;
 		}
 		final owner: Null<String> = staticOwner(facts, file, call, module, method);
+		if (owner == null) return Unproven;
+		switch usingsSupply(facts, usings, owner, method) {
+			case Supplied:
+				return Shadowed;
+			case Unread:
+				return Unproven;
+			case None:
+		}
 		final param: Null<String> = owner == null ? null : firstParam(facts, owner, method);
 		return param != null && accepts(facts, param, base, chain) ? Proven : Unproven;
 	}
@@ -126,6 +134,30 @@ final class StaticExtensionFacts {
 		for (n in facts.nodesAround(file, call)) if (n.calls.exists(c -> c.access == INLINED_ACCESS && c.target == target))
 			return configured;
 		return null;
+	}
+
+	/**
+	 * Whether a `using` of `usings` other than the one of `owner` may supply a static `method` in the facts: a module path
+	 * brings every type its main type's file declares, a sub-type path (`pkg.Mod.Sub`) that type alone. `Unread` when a
+	 * path names no typed type.
+	 */
+	private static function usingsSupply(facts: CompilerFacts, usings: Array<String>, owner: String, method: String): UsingSupply {
+		for (path in usings) {
+			final id: Null<String> = typeIdOf(facts, path);
+			if (id == null) return Unread;
+			if (id == owner) continue;
+			final home: Null<String> = facts.typePosition(id)?.file;
+			final main: Bool = facts.type(path) != null;
+			final ids: Array<String> = [id];
+			if (main && home != null)
+				for (other in facts.typeIds())
+					if (other != id && facts.typePosition(other)?.file == home) ids.push(other);
+			for (t in ids) if (t != owner && facts.type(t)?.fields.exists(f ->
+				f.name == method && f.isStatic && !f.meta.contains(NO_USING_META)
+			) == true)
+				return Supplied;
+		}
+		return None;
 	}
 
 	/**
@@ -204,5 +236,19 @@ enum ExtensionFactsVerdict {
 
 	/** The facts prove neither. */
 	Unproven;
+
+}
+
+/** What the facts say about the `using`s a site is reached by (`StaticExtensionFacts.usingsSupply`). */
+private enum UsingSupply {
+
+	/** No other `using` supplies the method. */
+	None;
+
+	/** Another `using` supplies it. */
+	Supplied;
+
+	/** A `using` names a type the facts do not hold. */
+	Unread;
 
 }

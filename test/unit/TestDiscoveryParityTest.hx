@@ -1546,12 +1546,14 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PreferStaticExtensionFactsTest#testAReceiverWhoseTypeTheCallMayHaveInferredIsNotRewritten :: control :: '
 				+ 'M-PSE-FACTS-INFERRED',
 			'unit.check.PreferStaticExtensionFactsTest#testATypeWithItsOwnUsingIsNotRewritten :: control :: M-PSE-FACTS-USING',
+			'unit.check.PreferStaticExtensionFactsTest#testAUsingOfAModuleWeighsEveryTypeItDeclares :: control :: M-PSE-USING-MODULE-WIDE',
 			'unit.check.PreferStaticExtensionFactsTest#testAUsingOnASupertypeKeepsTheSiteReportOnly :: control :: M-PSE-CLOSURE-USING-SUPER',
 			'unit.check.PreferStaticExtensionFactsTest#testAUsingOnTheReceiverTypeKeepsTheSiteReportOnly :: control :: M-PSE-CLOSURE-USING',
 			'unit.check.PreferStaticExtensionFactsTest#testAnAbstractParameterIsNotRewritten :: control :: M-PSE-FACTS-PARAM',
 			'unit.check.PreferStaticExtensionFactsTest#testAnImportAliasOfTheModuleNameDropsTheSite :: control :: M-PSE-CHANNEL-ALIAS',
 			'unit.check.PreferStaticExtensionFactsTest#testAnOverloadIsNotRewritten :: control :: M-PSE-FACTS-OVERLOAD',
 			'unit.check.PreferStaticExtensionFactsTest#testFactsOfAnotherTextProveNothing :: control :: M-PSE-FACTS-TEXT',
+			'unit.check.PreferStaticExtensionFactsTest#testTheFactsWeighEveryTypeAUsedModuleDeclares :: control :: M-PSE-FACTS-USING-MODULE-WIDE',
 			'unit.check.PreferStaticExtensionFactsTest#testTheFirstParameterOfAFactsSignature :: control :: M-PSE-FIRST-PARAM',
 			'unit.check.PreferStaticExtensionFactsTest#testTheRewrittenProgramPrintsWhatItPrinted :: guard :: ',
 			'unit.check.PreferTernaryReturnCheckTest#testOwnLineCommentInACascadeDefersTheTail :: control :: '
@@ -3602,7 +3604,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-PSE-CHANNEL-REGION-USING',
 			'M-PSE-CHANNEL-NO-USING',
 			'M-PSE-CLOSURE-USING',
-			'M-PSE-CLOSURE-USING-SUPER'
+			'M-PSE-CLOSURE-USING-SUPER',
+			'M-PSE-USING-MODULE-WIDE',
+			'M-PSE-FACTS-USING-MODULE-WIDE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

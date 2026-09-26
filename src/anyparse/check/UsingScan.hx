@@ -7,6 +7,9 @@ import anyparse.query.ModuleScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
+import anyparse.query.SymbolIndex.FileInfo;
+import anyparse.query.SymbolIndex.TypeDeclInfo;
+import anyparse.query.TypeNameBinding;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -392,23 +395,70 @@ final class UsingScan {
 	private static function conflictScan(
 		usings: Array<String>, module: String, method: String, plugin: GrammarPlugin, symbols: () -> Null<SymbolIndex>
 	): Bool {
+		return usingConflict(usings, module, method, plugin, symbols) != UsingConflict.Clear;
+	}
+
+	/**
+	 * What the `using`s other than `module` say about `method`: `Clear` when each is proven to supply no such extension,
+	 * `Conflict` when one may, `Unresolved` when one names a module this cannot read.
+	 *
+	 * A `using` of a MODULE brings the statics of every type the module declares, not only of the one named after it — the
+	 * last-declared type's winning among them (probed on 4.3.7) — so every type is weighed; a `using` of a sub-type path
+	 * (`pkg.Mod.Sub`) brings `Sub` alone. A type named after `module` itself is skipped: it is the configured one. A known
+	 * extension table (a std module) answers for its whole module. `file` lets a simple path resolve the way the file
+	 * spells it (`TypeNameBinding`); without it only an exact module path does.
+	 */
+	public static function usingConflict(
+		usings: Array<String>, module: String, method: String, plugin: GrammarPlugin, symbols: () -> Null<SymbolIndex>, ?file: String
+	): UsingConflict {
 		final simple: String = CheckScan.simpleModuleName(module);
+		var unresolved: Bool = false;
 		for (path in usings) if (path != module && CheckScan.simpleModuleName(path) != simple) {
 			final known: Null<Array<String>> = plugin.knownExtensionMethods(path);
 			if (known != null) {
-				if (known.contains(method)) return true;
+				if (known.contains(method)) return UsingConflict.Conflict;
 				continue;
 			}
 			final index: Null<SymbolIndex> = symbols();
-			// The FULL module path, not its last segment: `typeProvablyLacksMember` resolves a
-			// dotted name by import path, so a module whose simple name another package reuses
-			// no longer reads as ambiguous-and-therefore-conflicting.
-			// The FULL module path, not its last segment: `typeProvablyLacksMember` resolves a
-			// dotted name by import path, so a module whose simple name another package reuses
-			// no longer reads as ambiguous-and-therefore-conflicting.
-			if (index == null || !index.members.typeProvablyLacksMember(path, method)) return true;
+			final types: Null<Array<{ path: String, type: TypeDeclInfo }>> = index == null ? null : typesUsedBy(path, index, file);
+			if (types == null) {
+				unresolved = true;
+				continue;
+			}
+			for (t in types) if (t.path != module) {
+				if (t.type.members.exists(m -> m.name == method && m.isStatic && !m.excludedFromExtensions)) return UsingConflict.Conflict;
+				// a build macro may add the static the declaration does not show
+				if (t.type.hasBuild || t.type.hasAutoBuild) unresolved = true;
+			}
 		}
-		return false;
+		return unresolved ? UsingConflict.Unresolved : UsingConflict.Clear;
+	}
+
+	/**
+	 * The types `using <path>` brings, each with the path it is imported by: every type of the module `path` names, or
+	 * the one sub-type a `pkg.Mod.Sub` path names; a simple path also as `file` resolves it, a main type then standing for
+	 * its whole module. Null when nothing resolves.
+	 */
+	private static function typesUsedBy(
+		path: String, index: SymbolIndex, ?file: String
+	): Null<Array<{ path: String, type: TypeDeclInfo }>> {
+		final out: Array<{ path: String, type: TypeDeclInfo }> = [];
+		function wholeModule(fi: FileInfo): Void {
+			for (t in fi.types) out.push({ path: t.isMain ? fi.module : '${fi.module}.${t.name}', type: t });
+		}
+		final dot: Int = path.lastIndexOf('.');
+		for (fi in index.allFiles()) {
+			if (fi.module == path) wholeModule(fi);
+			if (dot > 0 && fi.module == path.substring(0, dot))
+				for (t in fi.types)
+					if (t.name == path.substr(dot + 1) && !t.isMain) out.push({ path: path, type: t });
+		}
+		final info: Null<FileInfo> = file == null ? null : index.fileInfo(file);
+		if (dot < 0 && info != null) for (d in TypeNameBinding.bind(path, info, index) ?? []) if (d.type.isMain)
+			wholeModule(d.file)
+		else
+			out.push({ path: '${d.file.module}.${d.type.name}', type: d.type });
+		return out.length == 0 ? null : out;
 	}
 
 	/**
@@ -506,5 +556,19 @@ enum abstract UsingScope(Int) {
 
 	/** Not declared at all, so an insert is the whole job. */
 	final Absent = 2;
+
+}
+
+/** What the other `using`s of a file say about one extension method (`UsingScan.usingConflict`). */
+enum abstract UsingConflict(Int) {
+
+	/** Every other `using` is proven to supply no such extension. */
+	final Clear = 0;
+
+	/** Another `using` may supply it: the rewritten call could bind there. */
+	final Conflict = 1;
+
+	/** Another `using` names a module this cannot read. */
+	final Unresolved = 2;
 
 }

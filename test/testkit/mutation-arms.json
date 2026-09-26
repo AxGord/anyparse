@@ -8301,6 +8301,22 @@
 			"find": "if (anc == null || !freeOfExtensionTypes(anc, seen)) return false;",
 			"replace": "if (anc == null) return false;",
 			"note": "a @:using on a superclass or an interface is not walked"
+		},
+		{
+			"name": "M-PSE-USING-MODULE-WIDE",
+			"type": "anyparse.check.UsingScan",
+			"method": "typesUsedBy",
+			"find": "for (t in fi.types) out.push(",
+			"replace": "for (t in fi.types) if (t.isMain) out.push(",
+			"note": "a using of a module weighs only the type named after it, not its sub-types"
+		},
+		{
+			"name": "M-PSE-FACTS-USING-MODULE-WIDE",
+			"type": "anyparse.check.StaticExtensionFacts",
+			"method": "usingsSupply",
+			"find": "if (main && home != null)",
+			"replace": "if (false)",
+			"note": "the facts weigh only the type a using names, not the rest of its module"
 		}
 	]
 }

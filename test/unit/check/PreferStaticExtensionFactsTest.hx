@@ -9,12 +9,14 @@ import anyparse.check.HaxeSpawn;
 import anyparse.check.LintConfig;
 import anyparse.check.PreferStaticExtension;
 import anyparse.check.StaticExtensionFacts;
+import anyparse.check.StaticExtensionFacts.ExtensionFactsVerdict;
 import anyparse.check.TypedFactsProbe;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.Cli;
 import anyparse.query.CompilerFacts;
 import anyparse.query.StdResolver;
+import anyparse.runtime.Span;
 import haxe.io.Path;
 import unit.cli.CliFixture;
 import utest.Assert;
@@ -149,6 +151,14 @@ class PreferStaticExtensionFactsTest extends Test {
 		+ '\t\tSys.println(Util.t(tp)); // own\n\t\tSys.println(Util.u(s)); // super\n\t\tSys.println(Util.v(i)); // iface\n'
 		+ '\t\tSys.println(Util.u(sn)); // super facts\n\t\tSys.println(Util.v(im)); // iface facts\n\t}\n}\n';
 
+	/** Only `Util` is configured. */
+	private static inline final UTIL_CONFIG: String = '{"rules": {"prefer-static-extension": {"types": ["Util"]}}}';
+
+	/** `Util.f(b)` on a facts receiver and on a structural one, in a file that `using Zeta` may reach. */
+	private static final SUBTYPE_MAIN: String = 'class Main {\n\tstatic function mk()\n\t\treturn new Base();\n\n'
+		+ '\tstatic function main() {\n\t\tfinal b:Null<Base> = mk();\n\t\tfinal c:Base = new Base();\n'
+		+ '\t\tSys.println(Util.f(b)); // facts\n\t\tSys.println(Util.f(c)); // structural\n\t\tSys.println(Zeta.g());\n\t}\n}\n';
+
 	@:pin('control') @:killer('M-PSE-FACTS-OFF') @:killer('M-PSE-FACTS-NULL')
 	public function testAReceiverOnlyTheFactsTypeIsRewritten(): Void {
 		final seen: Null<Map<String, String>> = verdicts([[]]);
@@ -280,6 +290,51 @@ class PreferStaticExtensionFactsTest extends Test {
 	}
 
 	/**
+	 * `using Zeta` brings the statics of every type `Zeta.hx` declares: `Extra.f` there binds `b.f()` (`Util.f` before), so
+	 * the site is dropped — whether the `using` is the file's or an ambient `import.hx`'s.
+	 */
+	@:pin('control') @:killer('M-PSE-USING-MODULE-WIDE')
+	public function testAUsingOfAModuleWeighsEveryTypeItDeclares(): Void {
+		for (ambient in [false, true]) {
+			final main: String = (ambient ? '' : 'using Zeta;\n\n') + SUBTYPE_MAIN;
+			final extra: Map<String, String> = subtypeModules();
+			if (ambient) extra['import.hx'] = 'using Zeta;\n';
+			final seen: Null<Map<String, String>> = verdicts([[]], main, main, BUILD, UTIL_CONFIG, extra);
+			if (seen == null) return;
+			for (site in ['facts', 'structural']) Assert.equals('drop', seen[site], 'ambient=$ambient $site: $seen');
+		}
+	}
+
+	/** The facts half of the same gate: `Extra.f` in the facts of `Zeta.hx`'s module drops the site on its own. */
+	@:pin('control') @:killer('M-PSE-FACTS-USING-MODULE-WIDE')
+	public function testTheFactsWeighEveryTypeAUsedModuleDeclares(): Void {
+		#if (sys || nodejs)
+		final main: String = 'using Zeta;\n\n' + SUBTYPE_MAIN;
+		final entries: Array<{ name: String, source: String }> = [{ name: 'Main.hx', source: main }, { name: 'build.hxml', source: BUILD }];
+		for (name => text in subtypeModules()) entries.push({ name: name, source: text });
+		final dir: String = CliFixture.writeTree('pse_facts_using', entries);
+		final facts: Null<CompilerFacts> = CompilerOracle.typecheck('build.hxml', dir).match(Confirmed)
+			? TypedFactsProbe.probeAll([{ hxml: 'build.hxml', dir: dir, defines: [] }])
+			: null;
+		if (facts == null) {
+			CliFixture.removeDir(dir);
+			Assert.pass('haxe unavailable — skipped');
+			return;
+		}
+		final call: Int = main.indexOf('Util.f(b)');
+		final recv: Int = call + 'Util.f('.length;
+		final judged: ExtensionFactsVerdict = StaticExtensionFacts.judge(
+			facts, Path.join([dir, 'Main.hx']), main, new Span(call, call + 'Util.f(b)'.length), new Span(recv, recv + 1), 'Util', 'f',
+			['Zeta']
+		);
+		CliFixture.removeDir(dir);
+		Assert.equals(Shadowed, judged);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
 	 * A receiver type's `@:using` binds before the file's `using` — on the type itself, on a superclass and on an
 	 * interface alike; the structural path and the facts path each keep such a site report-only.
 	 */
@@ -347,6 +402,16 @@ class PreferStaticExtensionFactsTest extends Test {
 		#else
 		return [];
 		#end
+	}
+
+	/** `Util.f`, `Base`, and a module `Zeta` whose SUB-type `Extra` declares a static `f` taking a `Base`. */
+	private static function subtypeModules(): Map<String, String> {
+		return [
+			'Base.hx' => 'class Base {\n\tpublic function new() {}\n}\n',
+			'Util.hx' => 'class Util {\n\tpublic static function f(x:Base):String\n\t\treturn "Util.f";\n}\n',
+			'Zeta.hx' => 'class Zeta {\n\tpublic static function g():Int\n\t\treturn 0;\n}\n\n'
+				+ 'class Extra {\n\tpublic static function f(x:Base):String\n\t\treturn "Extra.f";\n}\n'
+		];
 	}
 
 	/**
