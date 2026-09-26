@@ -19,6 +19,19 @@ final class CallGraphNames {
 	private static final EXTRA_TYPE_DECL_KINDS: Array<String> = ['AbstractClassDecl', 'EnumAbstractDecl'];
 
 	/**
+	 * The written return type of the function `fn`: its last type annotation (one of `annotationKinds`)
+	 * that is its own child rather than a parameter's, or null when it declares none.
+	 */
+	public static function returnSourceOf(fn: QueryNode, source: String, annotationKinds: Array<String>): Null<String> {
+		var found: Null<String> = null;
+		for (c in fn.children) {
+			final at: Null<Span> = c.span;
+			if (at != null && annotationKinds.contains(c.kind)) found = source.substring(at.from, at.to);
+		}
+		return found;
+	}
+
+	/**
 	 * The type parameters a function declaration spells between its name and its parameter list (`f<T, U:B>`),
 	 * read from the source because the projection keeps only their constraints.
 	 */

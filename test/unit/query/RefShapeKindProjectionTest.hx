@@ -438,6 +438,14 @@ final class RefShapeKindProjectionTest extends Test {
 				after: ' class C {}'
 			},
 			{
+				field: 'signatureOverloadMetaName',
+				slot: '',
+				kind: 'Meta',
+				names: NAME_IS,
+				before: '',
+				after: ' class C {}'
+			},
+			{
 				field: 'parenDelimiters',
 				slot: 'open',
 				kind: 'ParenExpr',

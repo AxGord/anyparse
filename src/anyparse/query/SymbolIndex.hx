@@ -106,6 +106,20 @@ typedef MemberInfo = {
 	var returnNominal: Null<String>;
 
 	/**
+	 * The member's VERBATIM declared RETURN type source (`Null<T>` and a dotted path preserved), or null
+	 * for a field / an unannotated return. The written form `returnNominal` reduces to a last segment,
+	 * which is what a reader binding the name in the declaring file's scope needs instead.
+	 */
+	var returnSource: Null<String>;
+
+	/**
+	 * True when the member carries the grammar's signature-overload annotation
+	 * (`RefShape.signatureOverloadMetaName`, Haxe `@:overload`): a call may select another signature,
+	 * so `returnSource` is not the only return type a call to it can have.
+	 */
+	var hasOverloadMeta: Bool;
+
+	/**
 	 * The member's VERBATIM declared type SOURCE — the written `:Type` text (`Null<T>`
 	 * preserved), or null for an unannotated / inference-typed / function member (whose annotation
 	 * is a `returnType`, not a `type`). Drives cross-file `Type.staticField` read-type resolution.

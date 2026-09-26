@@ -143,7 +143,7 @@ final class InvertNegatedIfElse implements Check {
 		final selection: Null<OperatorSelection> = seams.selection;
 		if (selection == null) return true;
 		final kinds: Array<String> = [seams.notKind];
-		return !selection.declared(kinds) || selection.verdictFor(not, kinds, selection.typesFor(file, source, root)).match(Builtin);
+		return !selection.declared(kinds) || selection.verdictFor(not, kinds, selection.typingFor(file, source, root)).match(Builtin);
 	}
 
 	/**

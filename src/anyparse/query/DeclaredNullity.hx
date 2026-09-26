@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.SymbolIndex.ResolvedType;
+import anyparse.query.TypeNameBinding.Tier;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -121,19 +122,66 @@ final class DeclaredNullity {
 	}
 
 	/**
-	 * The verdict on the RETURN type of `owner`'s method `method`, over every indexed declaration of
-	 * the method directly on a type named `owner`; none, or any that does not resolve non-null, is
-	 * `Unproven`. Each is resolved in its declaring file, with the owner's and the method's own type
-	 * parameters shadowing. An inherited method is not followed.
+	 * What the head of the type the binding at `bindingFrom` is WRITTEN with binds to — `headTier` over
+	 * its annotation; `Unknown` for a binding that carries none.
 	 */
-	public function ofMemberReturn(owner: String, method: String): Nullity {
+	public inline function writtenHeadTier(bindingFrom: Int, wrappers: Array<String>, builtins: Array<String>): Tier {
+		return headTier(_typeSources[bindingFrom], bindingFrom, wrappers, builtins);
+	}
+
+	/**
+	 * What the head of the type `written` at offset `at` of this file binds to, in this file's scope and
+	 * in the compiler's resolution order, once any of `wrappers` is peeled off it (`Null<Tag>` -> `Tag`).
+	 * `Unknown` for no type, a head that is not a plain nominal or is still a wrapper, a type parameter
+	 * in scope at `at`, and a qualified path the index does not hold. `Free` only for one of `builtins`
+	 * that no tier binds, so the compiler's own type is the one it names; any other name no tier binds
+	 * is `Unknown`.
+	 */
+	public function headTier(written: Null<String>, at: Int, wrappers: Array<String>, builtins: Array<String>): Tier {
+		final params: Null<Array<String>> = typeParamsAt(at);
 		final index: Null<SymbolIndex> = _index();
-		if (index == null) return Unproven;
+		final fi: Null<SymbolIndex.FileInfo> = index?.fileInfo(_file);
+		return written == null || params == null || index == null || fi == null
+			? Unknown
+			: headTierIn(written, fi, index, params, wrappers, builtins);
+	}
+
+	/**
+	 * `headTier` for a type written in ANY indexed file `fi` — a member's declared type read where it is
+	 * declared — with `params` the type parameters in scope there.
+	 */
+	public static function headTierIn(
+		written: String, fi: SymbolIndex.FileInfo, index: SymbolIndex, params: Array<String>, wrappers: Array<String>,
+		builtins: Array<String>
+	): Tier {
+		final head: Null<String> = headPathOf(NominalTypes.unwrapNullable(written.trim(), wrappers));
+		if (head == null || wrappers.contains(head) || params.contains(head)) return Unknown;
+		if (head.indexOf('.') >= 0) {
+			final decls: Array<ResolvedType> = index.resolveTypeRefsFrom(head, fi.file);
+			return decls.length == 0 ? Unknown : Bound(decls);
+		}
+		return switch TypeNameBinding.tierOf(head, fi, index) {
+			case Free if (!builtins.contains(head)): Unknown;
+			case tier: tier;
+		};
+	}
+
+	/**
+	 * The verdict on the RETURN type of method `method` as each of `owners` declares it DIRECTLY — the
+	 * declarations the receiver's type BINDS to, never a simple name; none, or any that does not
+	 * resolve non-null, is `Unproven`. Each is resolved from its WRITTEN return type in its declaring
+	 * file, with the owner's and the method's own type parameters shadowing. An inherited method is not
+	 * followed, and neither is one carrying `@:overload` (a call may select another signature) or a
+	 * macro (its written return is not the call site's type).
+	 */
+	public function ofMemberReturn(owners: Array<ResolvedType>, method: String): Nullity {
+		final index: Null<SymbolIndex> = _index();
+		if (index == null || owners.exists(r -> !r.type.members.exists(m -> m.name == method))) return Unproven;
 		var verdict: Nullity = Unproven;
-		for (r in index.refs.resolvedDeclsNamed(owner)) for (m in r.type.members) if (m.name == method) {
-			final returned: Null<String> = m.returnNominal;
+		for (r in owners) for (m in r.type.members) if (m.name == method) {
+			final returned: Null<String> = m.returnSource;
 			final source: Null<String> = index.sourceOf(r.file.file);
-			if (returned == null || source == null || !paramsReadable(r)) return Unproven;
+			if (returned == null || source == null || !paramsReadable(r) || m.hasOverloadMeta || m.isMacro) return Unproven;
 			final params: Array<String> = r.type.typeParamNames.concat(
 				CallGraphNames.declaredTypeParams(source, new Span(m.declFrom, m.declFrom), method)
 			);

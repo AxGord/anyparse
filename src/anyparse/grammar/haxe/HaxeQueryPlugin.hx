@@ -1122,6 +1122,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			enumAbstractDeclKind: 'EnumAbstractDecl',
 			enumAbstractMetaName: '@:enum',
 			operatorOverloadMetaName: '@:op',
+			signatureOverloadMetaName: '@:overload',
 			dispatchedMemberMetaNames: ['@:from', '@:op', '@:arrayAccess', '@:resolve'],
 			// The same three tokens `MemberWriteScan.carriesBuildMacro` matches, published so the
 			// STRUCTURAL leading-run walk `unused-private` uses asks the grammar rather than spelling

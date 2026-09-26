@@ -9,8 +9,8 @@ import anyparse.query.SymbolIndex.TypeDeclInfo;
 using Lambda;
 using StringTools;
 
-/** What one resolution tier says about a name. */
-private enum Tier {
+/** What one resolution tier says about a name — and, from `TypeNameBinding.tierOf`, what the whole order says. */
+enum Tier {
 
 	/** The tier binds the name, to these declarations. */
 	Bound(decls: Array<ResolvedType>);
@@ -18,7 +18,7 @@ private enum Tier {
 	/** The tier COULD bind the name but what it binds to is not in the index, so no lower tier may answer. */
 	Unknown;
 
-	/** The tier provably does not bind the name; the next one is asked. */
+	/** The tier provably does not bind the name; the next one is asked. From `tierOf`: no tier does, so only a built-in can. */
 	Free;
 
 }
@@ -42,21 +42,31 @@ final class TypeNameBinding {
 
 	/** Null when no tier provably answers; otherwise the declarations of the first tier that binds `name`. */
 	public static function bind(name: String, fi: FileInfo, index: SymbolIndex): Null<Array<ResolvedType>> {
+		return switch tierOf(name, fi, index) {
+			case Bound(decls): decls;
+			case Unknown, Free: null;
+		};
+	}
+
+	/**
+	 * The whole resolution order's answer: `Bound` by the first tier that binds `name`, `Unknown` when a
+	 * tier could bind it to something the index does not hold, `Free` when every tier provably passes —
+	 * the one answer that leaves the name to the compiler's own built-ins.
+	 */
+	public static function tierOf(name: String, fi: FileInfo, index: SymbolIndex): Tier {
 		final own: Array<TypeDeclInfo> = fi.types.filter(t -> t.name == name);
-		if (own.length > 0) return [for (t in own) { file: fi, type: t }];
+		if (own.length > 0) return Bound([for (t in own) { file: fi, type: t }]);
 		final tiers: Array<() -> Tier> = [explicitTier.bind(name, fi.imports, index)];
 		for (group in fi.ambientImports) tiers.push(explicitTier.bind(name, group.imports, index));
 		tiers.push(() -> fi.ambientImportsBounded ? Free : Unknown);
 		tiers.push(wildcardTier.bind(name, fi, index));
 		tiers.push(packageTier.bind(name, fi.pkg, index));
 		for (tier in tiers) switch tier() {
-			case Bound(decls):
-				return decls;
-			case Unknown:
-				return null;
 			case Free:
+			case answer:
+				return answer;
 		}
-		return null;
+		return Free;
 	}
 
 	private static inline function boundOrUnknown(decls: Array<ResolvedType>): Tier {

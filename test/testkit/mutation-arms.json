@@ -7725,7 +7725,7 @@
 			"name": "M-TOSTRING-RETURN-TRUSTED",
 			"type": "anyparse.check.RedundantToString",
 			"method": "callReceiver",
-			"find": "&& ctx.nullity.ofMemberReturn(ownerType, method) != Unproven",
+			"find": "&& ctx.nullity.ofMemberReturn(owners, method) != Unproven",
 			"replace": "",
 			"note": "an instance call's declared return is trusted by name under null safety, so a method returning a typedef of `Null<…>` loses its `.toString()`"
 		},
@@ -7801,8 +7801,8 @@
 		{
 			"name": "M-BINDING-OWN-TIER-CUT",
 			"type": "anyparse.query.TypeNameBinding",
-			"method": "bind",
-			"find": "if (own.length > 0) return [for (t in own) { file: fi, type: t }];",
+			"method": "tierOf",
+			"find": "if (own.length > 0) return Bound([for (t in own) { file: fi, type: t }]);",
 			"replace": "",
 			"note": "the module's own types are not asked first, so an import answers for a name the module itself declares"
 		},
@@ -8434,6 +8434,161 @@
 			"find": "usings.contains(module) ? usings : usings.concat([module])",
 			"replace": "usings",
 			"note": "the facts do not weigh the other types of the configured module"
+		},
+		{
+			"name": "M-OPERAND-SIMPLE-NAME",
+			"type": "anyparse.query.DeclaredNullity",
+			"method": "headTierIn",
+			"find": "return switch TypeNameBinding.tierOf(head, fi, index) {",
+			"replace": "return switch (index.refs.resolvedDeclsNamed(head).length > 0 ? Bound(index.refs.resolvedDeclsNamed(head)) : TypeNameBinding.tierOf(head, fi, index)) {",
+			"note": "a written type name is judged by any indexed declaration of that simple name, so an import of an unindexed type answers as its namesake"
+		},
+		{
+			"name": "M-OPERAND-WRAPPER-KEPT",
+			"type": "anyparse.query.DeclaredNullity",
+			"method": "headTierIn",
+			"find": "headPathOf(NominalTypes.unwrapNullable(written.trim(), wrappers))",
+			"replace": "headPathOf(written.trim())",
+			"note": "a `Null<T>` operand is not seen through, so the overload `T` declares goes unseen"
+		},
+		{
+			"name": "M-OPERAND-MEMBER-SCOPE-LOST",
+			"type": "anyparse.check.OperandBinder",
+			"method": "memberTier",
+			"find": "DeclaredNullity.headTierIn(written, owner.file, _index,",
+			"replace": "DeclaredNullity.headTierIn(written, _index.fileInfo(_file) ?? owner.file, _index,",
+			"note": "a member's written type is bound in the READING file instead of the declaring one"
+		},
+		{
+			"name": "M-OPERAND-MEMBER-CUT",
+			"type": "anyparse.check.OperandBinder",
+			"method": "memberTier",
+			"force": "Unknown",
+			"note": "no member read or call types an operand"
+		},
+		{
+			"name": "M-OPERAND-METHOD-PARAMS-IGNORED",
+			"type": "anyparse.check.OperandBinder",
+			"method": "memberTier",
+			"find": "ownParams.concat(CallGraphNames.declaredTypeParams(source, new Span(m.declFrom, m.declFrom), name))",
+			"replace": "ownParams",
+			"note": "a method's own type parameters do not shadow a type of the same name in its return type"
+		},
+		{
+			"name": "M-OPERAND-STATIC-RECEIVER-CUT",
+			"type": "anyparse.check.OperandBinder",
+			"method": "receiverDecls",
+			"find": "return switch TypeNameBinding.tierOf(name, fi, _index) {",
+			"replace": "return switch Unknown {",
+			"note": "a type name never serves as a receiver, so no static access types an operand"
+		},
+		{
+			"name": "M-OPERAND-LOCAL-CALL-CUT",
+			"type": "anyparse.check.OperandBinder",
+			"method": "localCallTier",
+			"force": "Unknown",
+			"note": "a call to a function this file declares is never typed by its return type"
+		},
+		{
+			"name": "M-OPERAND-CASE-CAPTURE",
+			"type": "anyparse.check.OperandBinder",
+			"method": "capturedBetween",
+			"force": "false",
+			"note": "a `case` capture between a read and the binding the walk found is not seen, so the read binds to the outer declaration"
+		},
+		{
+			"name": "M-OPERAND-CASE-CAPTURE-INSIDE",
+			"type": "anyparse.check.OperandBinder",
+			"method": "capturedBetween",
+			"find": "if (node.kind == branchKind && !inside)",
+			"replace": "if (node.kind == branchKind)",
+			"note": "a binding declared inside the capturing branch is refused too, though it shadows the capture"
+		},
+		{
+			"name": "M-OPERAND-OVERLOAD-SIGNATURE",
+			"type": "anyparse.check.OperandBinder",
+			"method": "typedByItsReturn",
+			"find": "return !m.hasOverloadMeta && !m.isMacro;",
+			"replace": "return !m.isMacro;",
+			"note": "a call to an `@:overload`ed member is typed by the written signature alone"
+		},
+		{
+			"name": "M-OPERAND-MACRO-RETURN",
+			"type": "anyparse.check.OperandBinder",
+			"method": "typedByItsReturn",
+			"find": "return !m.hasOverloadMeta && !m.isMacro;",
+			"replace": "return !m.hasOverloadMeta;",
+			"note": "a call to a macro is typed by the macro's written return"
+		},
+		{
+			"name": "M-OPERAND-LOCAL-MACRO",
+			"type": "anyparse.check.OperandBinder",
+			"method": "localCallTier",
+			"find": "if (member != null && !typedByItsReturn(member)) return Unknown;",
+			"replace": "",
+			"note": "an unqualified call to the file's own macro or overloaded member is typed by its written return"
+		},
+		{
+			"name": "M-INDEX-OVERLOAD-META",
+			"type": "anyparse.query.SymbolIndexBuilder",
+			"method": "collectMembers",
+			"find": "runOverloadMeta = true;",
+			"replace": "runOverloadMeta = false;",
+			"note": "the index never records `@:overload` on a member"
+		},
+		{
+			"name": "M-NULLITY-RETURN-LAST-SEGMENT",
+			"type": "anyparse.query.DeclaredNullity",
+			"method": "ofMemberReturn",
+			"find": "final returned: Null<String> = m.returnSource;",
+			"replace": "final returned: Null<String> = m.returnNominal;",
+			"note": "a member's return is resolved by the last segment of its written path, so `far.MaybeR` binds to a same-package `MaybeR`"
+		},
+		{
+			"name": "M-NULLITY-RETURN-OVERLOAD",
+			"type": "anyparse.query.DeclaredNullity",
+			"method": "ofMemberReturn",
+			"find": " || m.hasOverloadMeta || m.isMacro) return Unproven;",
+			"replace": ") return Unproven;",
+			"note": "an `@:overload`ed or macro member is proven by its written return alone"
+		},
+		{
+			"name": "M-NULLITY-RETURN-CUT",
+			"type": "anyparse.query.DeclaredNullity",
+			"method": "ofMemberReturn",
+			"force": "Unproven",
+			"note": "no member return is ever proven non-null"
+		},
+		{
+			"name": "M-TOSTRING-CALL-BY-NAME",
+			"type": "anyparse.check.RedundantToString",
+			"method": "callReceiver",
+			"find": ["final owners: Null<Array<ResolvedType>> = binder.receiverDecls(owner);", "decls: boundDecls(binder.tierOf(call)),"],
+			"replace": ["final owners: Null<Array<ResolvedType>> = ctx.index.refs.resolvedDeclsNamed(TypeResolver.identTypeName(owner, ctx.root, seams.shape, ctx.declaredTypes) ?? '');", "decls: ctx.index.refs.resolvedDeclsNamed(ctx.index.members.returnNominalOf(TypeResolver.identTypeName(owner, ctx.root, seams.shape, ctx.declaredTypes) ?? '', method) ?? ''),"],
+			"note": "a call receiver is typed by its owner's SIMPLE name, so `far.Holder.get()` reads as the same-package `Holder.get()`"
+		},
+		{
+			"name": "M-TOSTRING-CALL-CUT",
+			"type": "anyparse.check.RedundantToString",
+			"method": "callReceiver",
+			"force": "{ decls: null, nonNull: false }",
+			"note": "no call receiver is ever typed"
+		},
+		{
+			"name": "M-TOSTRING-IDENT-CUT",
+			"type": "anyparse.check.RedundantToString",
+			"method": "resolveReceiver",
+			"find": "decls: boundDecls(ctx.binder?.tierOf(receiver)),",
+			"replace": "decls: null,",
+			"note": "an identifier receiver's type is never bound"
+		},
+		{
+			"name": "M-TOSTRING-STRING-BINDING",
+			"type": "anyparse.check.RedundantToString",
+			"method": "isStringTyped",
+			"find": "&& isBuiltinBinding(ctx.binder?.tierOf(node), stringTypeName);",
+			"replace": ";",
+			"note": "an identifier typed `String` counts as the built-in even where an import binds `String` to another type"
 		}
 	]
 }
