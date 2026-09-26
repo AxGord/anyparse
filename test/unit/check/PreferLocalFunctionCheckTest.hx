@@ -10,6 +10,8 @@ import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
 
+using StringTools;
+
 /**
  * The `prefer-local-function` check: a function literal bound to a local is flagged `Info` and
  * the binding is rewritten into a local function declaration sitting where the literal was.
@@ -83,14 +85,17 @@ class PreferLocalFunctionCheckTest extends Test {
 	public function testArrowBlockBodyWithVoidResultHoisted(): Void {
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\tvar h:Int->Void = null;\n\t\tg(1, h = (e:Int) -> { p(e); }, 2);\n\t}\n}';
 		Assert.equals(1, violations(src).length);
-		Assert.equals('class C {\n\tfunction f():Void {\n\t\tfunction h(e:Int) { p(e); }\ng(1, h, 2);\n\t}\n}', fixed(src));
+		Assert.equals('class C {\n\tfunction f():Void {\n\t\tfunction h(e:Int):Void { p(e); }\ng(1, h, 2);\n\t}\n}', fixed(src));
 	}
 
-	/** A lambda's expression body IS its value — the declaration regains the `return` the arrow implied. */
+	/**
+	 * A lambda's expression body IS its value — the declaration regains the `return` the arrow implied, and
+	 * the declared result as its hint.
+	 */
 	public function testArrowExpressionBodyGainsReturn(): Void {
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\tvar h:Int->Int = null;\n\t\tg(h = (x:Int) -> x * 2);\n\t}\n}';
 		Assert.equals(1, violations(src).length);
-		Assert.equals('class C {\n\tfunction f():Void {\n\t\tfunction h(x:Int) return x * 2;\ng(h);\n\t}\n}', fixed(src));
+		Assert.equals('class C {\n\tfunction f():Void {\n\t\tfunction h(x:Int):Int return x * 2;\ng(h);\n\t}\n}', fixed(src));
 	}
 
 	/**
@@ -110,7 +115,46 @@ class PreferLocalFunctionCheckTest extends Test {
 	public function testArrowInitializerWithVoidResultHoisted(): Void {
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\tvar h:Int->Void = (e:Int) -> { p(e); };\n\t\tg(h);\n\t}\n}';
 		Assert.equals(1, violations(src).length);
-		Assert.equals('class C {\n\tfunction f():Void {\n\t\tfunction h(e:Int) { p(e); }\n\t\tg(h);\n\t}\n}', fixed(src));
+		Assert.equals('class C {\n\tfunction f():Void {\n\t\tfunction h(e:Int):Void { p(e); }\n\t\tg(h);\n\t}\n}', fixed(src));
+	}
+
+	/**
+	 * The declared result is carried as the return hint: without it the declaration infers its type
+	 * from the body, and an inferred `{ a: 1 }` does not unify with a declared structure of `final`
+	 * fields (`Cannot unify final and non-final fields`).
+	 */
+	@:pin('control')
+	@:killer('M-LOCALFN-RESULT-DROPPED')
+	public function testDeclaredResultIsCarried(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tfinal s:() -> R = () -> { a: 1 };\n\t\tg(s);\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals('class C {\n\tfunction f():Void {\n\t\tfunction s():R return { a: 1 };\n\t\tg(s);\n\t}\n}', fixed(src));
+	}
+
+	/**
+	 * A literal whose parameters do not spell the declared ones — another type, another optionality,
+	 * another count — would be hoisted with a type the binding never had.
+	 */
+	@:pin('control')
+	@:killer('M-LOCALFN-SIGNATURE-ANY')
+	public function testSignatureMismatchRefused(): Void {
+		final cls: String = 'class C {\n\tfunction f():Void {\n\t\tfinal h:TYPE = LIT;\n\t\tg(h);\n\t}\n}';
+		Assert.equals(0, violations(cls.replace('TYPE', '(x:Int) -> Int').replace('LIT', '(x:Float) -> 1')).length);
+		Assert.equals(0, violations(cls.replace('TYPE', '(?x:Int) -> Int').replace('LIT', '(x:Int) -> 1')).length);
+		Assert.equals(0, violations(cls.replace('TYPE', '(Int, Int) -> Int').replace('LIT', '(x:Int) -> 1')).length);
+		Assert.equals(1, violations(cls.replace('TYPE', '(?x:Int, s:String) -> Int').replace('LIT', '(?x:Int, s:String) -> 1')).length);
+		Assert.equals(1, violations(cls.replace('TYPE', 'Int -> String -> Int').replace('LIT', '(x:Int, s:String) -> 1')).length);
+	}
+
+	/**
+	 * An expression body under a `Void` result is wrapped in a block, not returned: `return x + 1` in a
+	 * `:Void` function is `Int should be Void`, while the lambda's value was simply discarded.
+	 */
+	@:pin('control')
+	@:killer('M-LOCALFN-VOID-RETURNED')
+	public function testVoidExpressionBodyIsWrapped(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tfinal h:Int -> Void = (x:Int) -> x + 1;\n\t\tg(h);\n\t}\n}';
+		Assert.equals('class C {\n\tfunction f():Void {\n\t\tfunction h(x:Int):Void {\nx + 1;\n}\n\t\tg(h);\n\t}\n}', fixed(src));
 	}
 
 	/** The same initializer with its type REMOVED: nothing proves the block's value was `Void`. */

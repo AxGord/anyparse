@@ -1575,6 +1575,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PreferKeyValueLoopCheckTest#testSetterRunByTheBodyIsFollowed :: control :: M-GRAPH-SETTER-EDGE',
 			'unit.check.PreferKeyValueLoopCheckTest#testStaticCallOnATypeIsReportOnly :: control :: M-ELEMENT-LOOP-TYPE-CALLEE',
 			'unit.check.PreferKeyValueLoopCheckTest#testThisQualifiedCollectionNotFlagged :: control :: M-ELEMENT-LOOP-REBIND',
+			'unit.check.PreferLocalFunctionCheckTest#testDeclaredResultIsCarried :: control :: M-LOCALFN-RESULT-DROPPED',
+			'unit.check.PreferLocalFunctionCheckTest#testSignatureMismatchRefused :: control :: M-LOCALFN-SIGNATURE-ANY',
+			'unit.check.PreferLocalFunctionCheckTest#testVoidExpressionBodyIsWrapped :: control :: M-LOCALFN-VOID-RETURNED',
 			'unit.check.PreferStaticExtensionCheckTest#testGuardedImportRunGetsNoSecondUsing :: control :: M-GUARDED-USING-ABSENT',
 			'unit.check.PreferStaticExtensionCheckTest#testGuardedImportRunRefusalNamesTheRegion :: control :: M-GUARDED-USING-ABSENT',
 			'unit.check.PreferStaticExtensionCheckTest#testMessageKeepsATwoSpaceLiteral :: control :: M-RENDER-SPAN-TOKENS',
@@ -3727,7 +3730,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-PROBE-SEARCH-REVISITS',
 			'M-CHAIN-WALK-EAGER',
 			'M-SWITCH-BARE-BODY-VERBATIM',
-			'M-SWITCH-TERMINATED-BODY-DOUBLED'
+			'M-SWITCH-TERMINATED-BODY-DOUBLED',
+			'M-LOCALFN-RESULT-DROPPED',
+			'M-LOCALFN-SIGNATURE-ANY',
+			'M-LOCALFN-VOID-RETURNED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

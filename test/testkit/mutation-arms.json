@@ -8779,6 +8779,29 @@
 			"find": "seams.selfTerminatingEndings.exists(ending -> text.endsWith(ending))",
 			"replace": "false",
 			"note": "the terminator is appended even after a body that already ends in `;` or `}`"
+		},
+		{
+			"name": "M-LOCALFN-RESULT-DROPPED",
+			"type": "anyparse.check.PreferLocalFunction",
+			"method": "declarationText",
+			"find": "':${signature.ret}'",
+			"replace": "''",
+			"note": "the declared result is not carried, so the hoisted declaration infers its type from the body"
+		},
+		{
+			"name": "M-LOCALFN-SIGNATURE-ANY",
+			"type": "anyparse.check.PreferLocalFunction",
+			"method": "signatureCarries",
+			"force": "true",
+			"note": "any literal signature is taken to reproduce the declared function type"
+		},
+		{
+			"name": "M-LOCALFN-VOID-RETURNED",
+			"type": "anyparse.check.PreferLocalFunction",
+			"method": "declarationText",
+			"find": "if (parts.bare && !parts.block && declared.returnsVoid)",
+			"replace": "if (false)",
+			"note": "an expression body under a `Void` result is returned rather than wrapped"
 		}
 	]
 }
