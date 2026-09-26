@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.query.BinderScan;
 import anyparse.query.BoolExprShape;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.MemberKinds;
@@ -26,6 +27,15 @@ using StringTools;
  */
 typedef NullFacts = {
 	var nonNull: String -> Bool;
+
+	/**
+	 * Whether `name` is `NonNull` by flow through forms the compiler's null-safety is probed to follow, and only those:
+	 * a direct `!= null` / `== null` of the name narrowing its own `if` / `while` / `&&` / `||`, an early exit or a
+	 * non-null assignment in the same statement sequence, and a join of live arms that are each visible. Everything else
+	 * is unseen — a Bool local, an alias, a `?.` comparison, what the body of a lone surviving `if` arm or `switch` branch
+	 * proved, what a `try` proved, and any construct `ownsVisibility` does not name.
+	 */
+	var nonNullVisible: String -> Bool;
 	var isNull: String -> Bool;
 	var isMaybeNull: String -> Bool;
 	var indexPresent: QueryNode -> Bool;
@@ -39,6 +49,9 @@ typedef NullFacts = {
  */
 private typedef FlowState = {
 	var nonNull: Array<String>;
+
+	/** The `nonNull` names some path proves only through a narrowing the compiler cannot see (see `NullFacts.nonNullVisible`). */
+	var unseen: Array<String>;
 	var known: Array<String>;
 	var maybe: Array<String>;
 	var predicates: Array<PredicateFact>;
@@ -133,6 +146,12 @@ private typedef FlowCtx = {
 	var assertFalseCalls: Array<String>;
 	var mapExistsMethods: Array<String>;
 	var captured: Array<String>;
+
+	/** `RefShape.selfScopeDeclKinds`: constructs whose own name binds into the scope they open (`for`, `catch`). */
+	var selfScopeDeclKinds: Array<String>;
+
+	/** `BinderScan.binderKinds`: every node kind the grammar projects as a named binder. */
+	var binderKinds: Array<String>;
 	var ownNames: Array<String>;
 	var source: String;
 	var nullableSourceRhs: Null<QueryNode -> Bool>;
@@ -293,6 +312,9 @@ final class NullFlow {
 		'HexLit',
 		'BoolLit'
 	];
+
+	/** The array-literal node kind — its elements evaluate in order, so it keeps what they prove. */
+	private static final ARRAY_KIND: String = 'ArrayExpr';
 
 	/** Sequential statement-list containers — children share one running state. */
 	private static final BLOCK_KINDS: Array<String> = ['BlockBody', 'BlockStmt', 'BlockExpr'];
@@ -476,6 +498,7 @@ final class NullFlow {
 	/** Record `name` as `NonNull` in `state`, clearing any `Null` / `MaybeNull` fact (the three sets stay disjoint), deduplicated. */
 	private static inline function markNonNull(state: FlowState, name: String): Void {
 		if (!state.nonNull.contains(name)) state.nonNull.push(name);
+		state.unseen.remove(name);
 		state.known.remove(name);
 		state.maybe.remove(name);
 	}
@@ -483,7 +506,7 @@ final class NullFlow {
 	/** Record `name` as `Null` in `state`, clearing any `NonNull` / `MaybeNull` fact (the three sets stay disjoint), deduplicated. */
 	private static inline function markKnown(state: FlowState, name: String): Void {
 		if (!state.known.contains(name)) state.known.push(name);
-		state.nonNull.remove(name);
+		dropNonNull(state, name);
 		state.maybe.remove(name);
 	}
 
@@ -493,13 +516,19 @@ final class NullFlow {
 	 */
 	private static inline function markMaybe(state: FlowState, name: String): Void {
 		if (!state.maybe.contains(name)) state.maybe.push(name);
-		state.nonNull.remove(name);
+		dropNonNull(state, name);
 		state.known.remove(name);
+	}
+
+	/** Drop a `NonNull` fact about `name` together with its visibility mark, which never outlives it. */
+	private static inline function dropNonNull(state: FlowState, name: String): Void {
+		state.nonNull.remove(name);
+		state.unseen.remove(name);
 	}
 
 	/** Drop every fact about `name` — it becomes `Unknown`. */
 	private static inline function clearName(state: FlowState, name: String): Void {
-		state.nonNull.remove(name);
+		dropNonNull(state, name);
 		state.known.remove(name);
 		state.maybe.remove(name);
 		killAuxFacts(state, name);
@@ -509,6 +538,7 @@ final class NullFlow {
 	private static inline function copyState(state: FlowState): FlowState {
 		return {
 			nonNull: state.nonNull.copy(),
+			unseen: state.unseen.copy(),
 			known: state.known.copy(),
 			maybe: state.maybe.copy(),
 			predicates: state.predicates.copy(),
@@ -519,18 +549,19 @@ final class NullFlow {
 
 	/** Replace the contents of `state` in place with `next` (the running state is mutated for the caller). */
 	private static inline function setState(state: FlowState, next: FlowState): Void {
-		state.nonNull.resize(0);
-		for (n in next.nonNull) state.nonNull.push(n);
-		state.known.resize(0);
-		for (n in next.known) state.known.push(n);
-		state.maybe.resize(0);
-		for (n in next.maybe) state.maybe.push(n);
-		state.predicates.resize(0);
-		for (p in next.predicates) state.predicates.push(p);
-		state.aliases.resize(0);
-		for (a in next.aliases) state.aliases.push(a);
-		state.present.resize(0);
-		for (e in next.present) state.present.push(e);
+		refill(state.nonNull, next.nonNull);
+		refill(state.unseen, next.unseen);
+		refill(state.known, next.known);
+		refill(state.maybe, next.maybe);
+		refill(state.predicates, next.predicates);
+		refill(state.aliases, next.aliases);
+		refill(state.present, next.present);
+	}
+
+	/** Replace the contents of `into` with `from`'s, keeping `into` the same array. */
+	private static inline function refill<T>(into: Array<T>, from: Array<T>): Void {
+		into.resize(0);
+		for (item in from) into.push(item);
 	}
 
 	/**
@@ -546,6 +577,7 @@ final class NullFlow {
 	private static inline function emptyState(): FlowState {
 		return {
 			nonNull: [],
+			unseen: [],
 			known: [],
 			maybe: [],
 			predicates: [],
@@ -607,6 +639,8 @@ final class NullFlow {
 			assertFalseCalls: shape.assertFalseCalls ?? [],
 			mapExistsMethods: shape.mapExistsMethods ?? [],
 			captured: collectCaptured(body, identKind, shape.writeParentKinds ?? [], nestedFnKinds),
+			selfScopeDeclKinds: shape.selfScopeDeclKinds,
+			binderKinds: BinderScan.binderKinds(shape),
 			ownNames: paramNames.concat(collectDeclared(body, localDeclKinds, nestedFnKinds)),
 			source: source,
 			nullableSourceRhs: seed,
@@ -630,6 +664,17 @@ final class NullFlow {
 			return;
 		}
 		visitNode(node, state, ctx);
+		final before: Null<Array<String>> = node.children.length == 0 || ownsVisibility(kind, ctx) ? null : visibleIn(state);
+		final bound: Array<String> = ctx.selfScopeDeclKinds.contains(kind) ? boundNames(node, ctx) : [];
+		final outer: Null<FlowState> = shadow(state, bound);
+		transfer(node, state, ctx);
+		unshadow(state, node, bound, outer, ctx);
+		if (before != null) keepVisible(state, before);
+	}
+
+	/** Apply `node`'s flow transfer to `state` — the per-construct dispatch of `walk`. */
+	private static function transfer(node: QueryNode, state: FlowState, ctx: FlowCtx): Void {
+		final kind: String = node.kind;
 		if (ctx.writeKinds.contains(kind))
 			handleWrite(node, state, ctx);
 		else if (ctx.localDeclKinds.contains(kind))
@@ -824,6 +869,7 @@ final class NullFlow {
 		// a positive `m.exists(k)` conjunct, the else-arm — and hence the fall-through of an
 		// early-returning `if (!m.exists(k)) return;` — from a negated disjunct.
 		final thenState: FlowState = narrowedCopy(cond, state, ctx, ctx.notEqKind, ctx.eqKind, BOOL_AND_KIND);
+		final thenKept: Array<String> = visibleUnwritten(thenState, thenArm, ctx);
 		walk(thenArm, thenState, ctx);
 		// An unbraced arm declaration (`if (c) var v = null;`) never passes through
 		// `handleBlock`'s exit clearing — drop its facts before the join.
@@ -831,6 +877,7 @@ final class NullFlow {
 		// Else path: the negated condition (`!(a || b)` = `!a && !b`), so an `== null`
 		// disjunct proves non-null and a `!= null` disjunct proves null.
 		final elseState: FlowState = narrowedCopy(cond, state, ctx, ctx.eqKind, ctx.notEqKind, BOOL_OR_KIND);
+		final elseKept: Array<String> = elseArm == null ? visibleIn(elseState) : visibleUnwritten(elseState, elseArm, ctx);
 		if (elseArm != null) {
 			walk(elseArm, elseState, ctx);
 			clearDeclaredIn(elseArm, elseState, ctx);
@@ -838,15 +885,17 @@ final class NullFlow {
 		// Join: a fact holds after the `if` only if it holds on every path that falls
 		// through to here. An arm that returns / throws contributes no path, so the
 		// surviving arm's state passes through unintersected — this gives early-return
-		// narrowing (`if (x == null) return;` leaves x non-null after).
+		// narrowing (`if (x == null) return;` leaves x non-null after). The compiler joins only
+		// two live arms: past a lone survivor it keeps the condition's narrowing and nothing the
+		// arm's body proved, so only what was visible on entering that arm stays visible.
 		final thenExits: Bool = armExits(thenArm, ctx);
 		final elseExits: Bool = elseArm != null && armExits(elseArm, ctx);
 		final post: FlowState = if (thenExits && elseExits)
 			emptyState();
 		else if (thenExits)
-			elseState;
+			survivor(elseState, elseKept);
 		else if (elseExits)
-			thenState;
+			survivor(thenState, thenKept);
 		else
 			intersect(thenState, elseState);
 		setState(state, post);
@@ -874,6 +923,8 @@ final class NullFlow {
 	private static function visitNode(node: QueryNode, state: FlowState, ctx: FlowCtx): Void {
 		final facts: NullFacts = {
 			nonNull: n -> ctx.ownNames.contains(n) && !ctx.captured.contains(n) && state.nonNull.contains(n),
+			nonNullVisible: n ->
+				ctx.ownNames.contains(n) && !ctx.captured.contains(n) && state.nonNull.contains(n) && !state.unseen.contains(n),
 			isNull: n -> ctx.ownNames.contains(n) && !ctx.captured.contains(n) && state.known.contains(n),
 			isMaybeNull: n -> ctx.ownNames.contains(n) && !ctx.captured.contains(n) && state.maybe.contains(n),
 			indexPresent: n -> indexPresentIn(n, state, ctx)
@@ -921,10 +972,19 @@ final class NullFlow {
 		// `maybe`-only, so the seed-less consumers (the six flow checks) stay byte-identical.
 		final exitStates: Array<FlowState> = [];
 		var nullConsumed: Bool = false;
+		var live: Null<QueryNode> = null;
 		for (b in branches) {
 			final exit: Null<FlowState> = walkBranch(b, state, ctx, subjectName, nullConsumed);
-			if (exit != null) exitStates.push(exit);
+			if (exit != null) {
+				exitStates.push(exit);
+				live = b;
+			}
 			if (isNullConsumingCase(b, ctx)) nullConsumed = true;
+		}
+		// A lone surviving branch is the `if` arm's case: the compiler keeps nothing its body proved.
+		if (hasDefault && exitStates.length == 1 && live != null) {
+			setState(state, survivor(exitStates[0], visibleUnwritten(state, live, ctx)));
+			return;
 		}
 		var post: Null<FlowState> = hasDefault ? null : copyState(state);
 		for (e in exitStates) post = post == null ? e : intersect(post, e);
@@ -942,7 +1002,8 @@ final class NullFlow {
 		b: QueryNode, state: FlowState, ctx: FlowCtx, subjectName: Null<String>, nullConsumed: Bool
 	): Null<FlowState> {
 		final branchState: FlowState = copyState(state);
-		clearBranchPatterns(b, branchState, ctx);
+		final bound: Array<String> = boundNames(b, ctx);
+		final outer: Null<FlowState> = shadow(branchState, bound);
 		if (nullConsumed && subjectName != null) branchState.maybe.remove(subjectName);
 		final guard: Null<QueryNode> = caseGuard(b, ctx);
 		if (guard != null) clearMaybeByGuard(guard, branchState, ctx);
@@ -951,23 +1012,9 @@ final class NullFlow {
 		// Exit clearing: the branch body is not block-wrapped, so a shadow's facts must be
 		// dropped here (an inner local declaration or a written pattern capture).
 		clearDeclaredIn(b, branchState, ctx);
-		clearBranchPatterns(b, branchState, ctx);
+		unshadow(branchState, b, bound, outer, ctx);
 		final last: Null<QueryNode> = b.children.length > 0 ? b.children[b.children.length - 1] : null;
 		return last == null || !armExits(last, ctx) ? branchState : null;
-	}
-
-	/**
-	 * Clears every name a case branch's patterns mention — the first pattern child
-	 * plus every comma alternative (`case a(v), b(v):` projects one leading
-	 * `plainCasePatternKind` child per alternative). Pattern idents are fresh
-	 * bindings (captures) or enum-constructor names, never runtime reads of an
-	 * outer local, so an outer fact must not survive into them.
-	 */
-	private static function clearBranchPatterns(b: QueryNode, branchState: FlowState, ctx: FlowCtx): Void {
-		if (b.kind != ctx.caseBranchKind || b.children.length == 0) return;
-		clearPatternNames(b.children[0], branchState, ctx);
-		for (c in b.children) if (ctx.plainCasePatternKind != null && c.kind == ctx.plainCasePatternKind)
-			clearPatternNames(c, branchState, ctx);
 	}
 
 	/**
@@ -982,6 +1029,9 @@ final class NullFlow {
 	private static function handleTry(node: QueryNode, state: FlowState, ctx: FlowCtx): Void {
 		if (node.children.length == 0) return;
 		final body: QueryNode = node.children[0];
+		// The compiler carries nothing a `try` or its catches prove past the construct — only what
+		// was visible on entering it and is written nowhere inside.
+		final kept: Array<String> = visibleUnwritten(state, node, ctx);
 		final tryState: FlowState = copyState(state);
 		walk(body, tryState, ctx);
 		final catchEntry: FlowState = copyState(state);
@@ -991,21 +1041,19 @@ final class NullFlow {
 		for (i in 1...node.children.length) {
 			final clause: QueryNode = node.children[i];
 			final clauseState: FlowState = copyState(catchEntry);
-			final varName: Null<String> = clause.name;
-			final isCatch: Bool = clause.kind == ctx.catchClauseKind;
-			if (isCatch && varName != null) clearName(clauseState, varName);
+			final bound: Array<String> = ctx.selfScopeDeclKinds.contains(clause.kind) ? boundNames(clause, ctx) : [];
+			final outer: Null<FlowState> = shadow(clauseState, bound);
 			visitNode(clause, clauseState, ctx);
 			for (c in clause.children) walk(c, clauseState, ctx);
-			// Exit clearing: a write to the catch variable or to a bare-body shadow
-			// declaration must not leak out under the outer binding's name.
+			// Exit clearing: a bare-body shadow declaration must not leak out under the outer binding's name.
 			clearDeclaredIn(clause, clauseState, ctx);
-			if (isCatch && varName != null) clearName(clauseState, varName);
+			unshadow(clauseState, clause, bound, outer, ctx);
 			final last: Null<QueryNode> = clause.children.length > 0 ? clause.children[clause.children.length - 1] : null;
 			if (last == null || !armExits(last, ctx)) exitStates.push(clauseState);
 		}
 		var post: Null<FlowState> = null;
 		for (e in exitStates) post = post == null ? e : intersect(post, e);
-		setState(state, post ?? emptyState());
+		setState(state, survivor(post ?? emptyState(), kept));
 	}
 
 	/**
@@ -1064,16 +1112,6 @@ final class NullFlow {
 				for (p in c.children)
 					if (p.kind == nl) return true;
 		return false;
-	}
-
-	/**
-	 * Clear every identifier name in a case-pattern subtree from `state` — a pattern capture is a
-	 * fresh binding shadowing any same-named outer local, so no outer fact may survive into the branch.
-	 */
-	private static function clearPatternNames(pattern: QueryNode, state: FlowState, ctx: FlowCtx): Void {
-		final name: Null<String> = pattern.name;
-		if (pattern.kind == ctx.identKind && name != null) clearName(state, name);
-		for (c in pattern.children) clearPatternNames(c, state, ctx);
 	}
 
 	/**
@@ -1158,7 +1196,12 @@ final class NullFlow {
 		final written: Array<String> = [];
 		collectWrites(cond, written, ctx);
 		final nonNull: Array<String> = [];
-		collectNarrow(cond, nonNull, ctx, cmpNonNull, combineKind, true);
+		final viaSafeNav: Array<String> = [];
+		collectNarrow(cond, nonNull, ctx, cmpNonNull, combineKind, true, viaSafeNav);
+		// What the compiler narrows too: the direct comparisons alone, before the three kinds of
+		// proof it cannot follow — safe navigation, a laundered Bool, an alias — join them.
+		final visible: Array<String> = nonNull.copy();
+		for (n in viaSafeNav) nonNull.push(n);
 		final known: Array<String> = [];
 		collectNarrow(cond, known, ctx, cmpKnown, combineKind, false);
 		// Feature 1: a bare Bool conjunct/disjunct carrying a laundered-guard fact narrows its target.
@@ -1174,7 +1217,11 @@ final class NullFlow {
 		final present: Array<ExistsFact> = [];
 		collectExists(cond, present, ctx, combineKind, combineKind == BOOL_OR_KIND);
 		for (e in present) if (!e.names.exists(n -> written.contains(n))) out.present.push(e);
-		for (n in nonNull) if (!written.contains(n)) markNonNull(out, n);
+		for (n in nonNull) if (!written.contains(n)) {
+			final seen: Bool = visible.contains(n) || out.nonNull.contains(n) && !out.unseen.contains(n);
+			markNonNull(out, n);
+			if (!seen && !out.unseen.contains(n)) out.unseen.push(n);
+		}
 		for (n in known) if (!written.contains(n)) markKnown(out, n);
 		return out;
 	}
@@ -1212,7 +1259,8 @@ final class NullFlow {
 	 * (`!(a || b)` = `!a && !b`), so an `== null` disjunct proves non-null when false.
 	 */
 	private static function collectNarrow(
-		cond: QueryNode, out: Array<String>, ctx: FlowCtx, cmpKind: Null<String>, combineKind: String, provesNonNull: Bool
+		cond: QueryNode, out: Array<String>, ctx: FlowCtx, cmpKind: Null<String>, combineKind: String, provesNonNull: Bool,
+		?viaSafeNav: Array<String>
 	): Void {
 		final kind: String = cond.kind;
 		if (cmpKind != null && kind == cmpKind) {
@@ -1220,17 +1268,16 @@ final class NullFlow {
 			// `cmpKind` — is what says which side this call is filling: the operator alone cannot,
 			// since the else-arm collects non-null names through `== null` by duality. `x?.a` null
 			// leaves `x` itself entirely unconstrained, so the known-null slot must never take one.
-			final operand: Null<QueryNode> = nullComparisonOperand(cond, ctx.identKind, ctx.nullLitKind) ?? (
-				provesNonNull ? safeNavChainRoot(cond, ctx) : null
-			);
-			if (operand != null) {
-				final nm: Null<String> = operand.name;
-				if (nm != null) out.push(nm);
-			}
+			final direct: Null<QueryNode> = nullComparisonOperand(cond, ctx.identKind, ctx.nullLitKind);
+			final operand: Null<QueryNode> = direct ?? (provesNonNull ? safeNavChainRoot(cond, ctx) : null);
+			final nm: Null<String> = operand?.name;
+			// A caller that tracks compiler visibility takes the safe-navigation names apart: the
+			// compiler narrows `x` on `x != null`, never on `x?.f != null`.
+			if (nm != null) (direct == null ? viaSafeNav ?? out : out).push(nm);
 		} else if (kind == combineKind) {
-			for (c in cond.children) collectNarrow(c, out, ctx, cmpKind, combineKind, provesNonNull);
+			for (c in cond.children) collectNarrow(c, out, ctx, cmpKind, combineKind, provesNonNull, viaSafeNav);
 		} else if (ctx.parenKind != null && kind == ctx.parenKind && cond.children.length == 1) {
-			collectNarrow(cond.children[0], out, ctx, cmpKind, combineKind, provesNonNull);
+			collectNarrow(cond.children[0], out, ctx, cmpKind, combineKind, provesNonNull, viaSafeNav);
 		} else if (ctx.notKind != null && kind == ctx.notKind && cond.children.length == 1) {
 			// Feature 3: `!(…)` flips the comparison polarity AND the combine operator (De Morgan) — a
 			// negand proving x null then proves x non-null, and its `&&`/`||` swap; nested `!` unwinds
@@ -1242,7 +1289,7 @@ final class NullFlow {
 			else
 				cmpKind;
 			final flipCombine: String = combineKind == BOOL_AND_KIND ? BOOL_OR_KIND : BOOL_AND_KIND;
-			collectNarrow(cond.children[0], out, ctx, flipCmp, flipCombine, provesNonNull);
+			collectNarrow(cond.children[0], out, ctx, flipCmp, flipCombine, provesNonNull, viaSafeNav);
 		}
 	}
 
@@ -1271,8 +1318,10 @@ final class NullFlow {
 
 	/** The facts holding on both `a` and `b` — a name keeps a polarity after a join only if it held it on both arms. */
 	private static function intersect(a: FlowState, b: FlowState): FlowState {
+		final nonNull: Array<String> = [for (n in a.nonNull) if (b.nonNull.contains(n)) n];
 		return {
-			nonNull: [for (n in a.nonNull) if (b.nonNull.contains(n)) n],
+			nonNull: nonNull,
+			unseen: unseenAfterJoin(nonNull, a, b),
 			known: [for (n in a.known) if (b.known.contains(n)) n],
 			maybe: [for (n in a.maybe) if (b.maybe.contains(n)) n],
 			predicates: [
@@ -1288,6 +1337,106 @@ final class NullFlow {
 				for (e in a.present) if (b.present.exists(q -> q.map == e.map && q.key == e.key)) e
 			]
 		};
+	}
+
+	/**
+	 * The names `node` binds for its own subtree, read off the grammar's binder vocabulary
+	 * (`BinderScan.binderKinds`) so a new binder spelling is covered the day it is declared: a
+	 * `selfScopeDeclKinds` construct's own name (`for (x in …)`, `catch (x)`) and every binder child
+	 * it carries (`k => x`), and every name a `case` branch's patterns bind (`BinderScan.casePatternNames`
+	 * over the first pattern and each comma alternative — `case x:`, `case var x:`, `case Some(var x):`).
+	 * Lambda and local-function parameters bind in a unit of their own (`forEachFunctionUnit`), and a
+	 * block's `var` is position-scoped (`handleBlock` clears it on exit), so neither is answered here.
+	 */
+	private static function boundNames(node: QueryNode, ctx: FlowCtx): Array<String> {
+		final out: Array<String> = [];
+		function add(name: Null<String>): Void {
+			if (name != null && !out.contains(name)) out.push(name);
+		}
+		if (ctx.selfScopeDeclKinds.contains(node.kind)) {
+			add(node.name);
+			for (c in node.children) if (ctx.binderKinds.contains(c.kind)) add(c.name);
+		}
+		if (node.kind == ctx.caseBranchKind && node.children.length > 0) for (i in 0...node.children.length) {
+			final c: QueryNode = node.children[i];
+			if (i == 0 || c.kind == ctx.plainCasePatternKind)
+				for (n in BinderScan.casePatternNames(c, ctx.plainCasePatternKind, ctx.binderKinds)) add(n);
+		}
+		return out;
+	}
+
+	/**
+	 * Enter the scope of `bound`: every fact about those names is dropped, since inside it they
+	 * denote fresh bindings. Returns the state as it was, for `unshadow` — null when nothing is bound.
+	 */
+	private static function shadow(state: FlowState, bound: Array<String>): Null<FlowState> {
+		if (bound.length == 0) return null;
+		final outer: FlowState = copyState(state);
+		for (n in bound) clearName(state, n);
+		return outer;
+	}
+
+	/**
+	 * Leave the scope of `bound` opened on `node`: the inner bindings' facts are dropped, and each
+	 * outer name `node` writes nowhere gets back the `NonNull` / `Null` / `MaybeNull` fact `outer`
+	 * held for it — the compiler keeps an outer local's narrowing across a scope that shadowed it.
+	 * A name written inside stays `Unknown`: the write may be the outer one's.
+	 */
+	private static function unshadow(state: FlowState, node: QueryNode, bound: Array<String>, outer: Null<FlowState>, ctx: FlowCtx): Void {
+		if (outer == null) return;
+		final written: Array<String> = [];
+		collectWrites(node, written, ctx);
+		for (n in bound) {
+			clearName(state, n);
+			if (written.contains(n)) continue;
+			if (outer.nonNull.contains(n)) {
+				markNonNull(state, n);
+				if (outer.unseen.contains(n)) state.unseen.push(n);
+			} else if (outer.known.contains(n))
+				markKnown(state, n);
+			else if (outer.maybe.contains(n))
+				markMaybe(state, n);
+		}
+	}
+
+	/**
+	 * Whether `kind` states its own visibility rule, so `walk` leaves its post-state alone: the constructs the compiler is
+	 * probed to follow in order (a block, a statement, a write, a declaration, a call, a parenthesis, an array literal) and
+	 * the constructs whose handlers apply the rule themselves (`if`, `switch`, `try`). Every other kind keeps visible only
+	 * what was visible before it.
+	 */
+	private static function ownsVisibility(kind: String, ctx: FlowCtx): Bool {
+		return ctx.blockKinds.contains(kind) || kind == ctx.exprStmtKind || ctx.writeKinds.contains(kind)
+			|| ctx.localDeclKinds.contains(kind) || kind == ctx.callKind || kind == ctx.parenKind || kind == ARRAY_KIND
+			|| ctx.ifKinds.contains(kind) || ctx.switchKinds.contains(kind) || ctx.tryKinds.contains(kind);
+	}
+
+	/** The `nonNull` names `state` proves visibly. */
+	private static function visibleIn(state: FlowState): Array<String> {
+		return [for (n in state.nonNull) if (!state.unseen.contains(n)) n];
+	}
+
+	/** The names visible in `state` that `node` writes nowhere — what survives a construct the compiler does not follow into. */
+	private static function visibleUnwritten(state: FlowState, node: QueryNode, ctx: FlowCtx): Array<String> {
+		final written: Array<String> = [];
+		collectWrites(node, written, ctx);
+		return [for (n in visibleIn(state)) if (!written.contains(n)) n];
+	}
+
+	/** Mark unseen every `nonNull` name of `state` outside `kept`: a construct keeps a name visible only when its rule names it. */
+	private static function keepVisible(state: FlowState, kept: Array<String>): Void {
+		for (n in state.nonNull) if (!kept.contains(n) && !state.unseen.contains(n)) state.unseen.push(n);
+	}
+
+	/** `state` with `keepVisible(state, kept)` applied — the post-state of a lone surviving path. */
+	private static function survivor(state: FlowState, kept: Array<String>): FlowState {
+		keepVisible(state, kept);
+		return state;
+	}
+
+	/** The joined `nonNull` names either arm proved only invisibly — a join is visible only where both arms were. */
+	private static function unseenAfterJoin(nonNull: Array<String>, a: FlowState, b: FlowState): Array<String> {
+		return [for (n in nonNull) if (a.unseen.contains(n) || b.unseen.contains(n)) n];
 	}
 
 	/**

@@ -6,8 +6,11 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
+
+using StringTools;
 
 /**
  * The `dead-safe-nav` check: a null-safe access `a?.b` whose receiver is already
@@ -97,8 +100,263 @@ class DeadSafeNavTest extends Test {
 		);
 	}
 
+	/**
+	 * `CallGraph`'s `under?.name == null ? null : f(under?.name)`: the else-arm proves `under` non-null only through
+	 * the safe-navigation comparison, which strict null-safety does not narrow on — reported, but no `.` rewrite.
+	 */
+	@:pin('control') @:killer('M-DSN-UNSEEN-DROPPED')
+	public function testSafeNavComparisonProofKeepsNoFixUnderNullSafety(): Void {
+		assertDeclined('@:nullSafety(Strict) class C { function f(u:Null<Foo>) { var a = u?.name == null ? null : g(u?.name); } }');
+	}
+
+	/** `CallGraph`'s `final writeSlot = parent != null && …; … writeSlot && parent?.kind`: a proof through a Bool local. */
+	@:pin('control') @:killer('M-DSN-UNSEEN-DROPPED')
+	public function testBoolLocalProofKeepsNoFixUnderNullSafety(): Void {
+		assertDeclined(
+			'@:nullSafety(Strict) class C { function f(parent:Null<Foo>, b:Bool) {'
+			+ ' final w = parent != null && b; final r = !(w && parent?.kind == k); } }'
+		);
+	}
+
+	/** An alias copy narrowed through its original: the compiler narrows `u`, never `v`. */
+	@:pin('control') @:killer('M-DSN-UNSEEN-DROPPED')
+	public function testAliasProofKeepsNoFixUnderNullSafety(): Void {
+		assertDeclined('@:nullSafety(Strict) class C { function f(u:Null<Foo>) { var v = u; if (u != null) { var n = v?.bar; } } }');
+	}
+
+	/** The control: an early-return guard is a narrowing the compiler performs too, so the fix stays. */
+	@:pin('control') @:killer('M-DSN-UNSEEN-ALL')
+	public function testDirectGuardKeepsTheFixUnderNullSafety(): Void {
+		assertFixed('@:nullSafety(Strict) class C { function f(x:Null<Foo>) { if (x == null) return; var n = x?.bar; } }');
+	}
+
+	/**
+	 * Without null-safety nothing typechecks the narrowing, so a Bool-local proof still gets its runtime-sound fix — in a
+	 * project with no oracle build to read, since a build this check cannot rule out counts as enabling it.
+	 */
+	@:pin('control') @:killer('M-DSN-NULLSAFE-ALWAYS')
+	public function testBoolLocalProofKeepsTheFixWithoutNullSafety(): Void {
+		assertBuild([], false, '{}');
+	}
+
+	/** A join keeps a proof visible only when BOTH arms made it visibly: here one arm narrowed through a Bool local. */
+	@:pin('control') @:killer('M-DSN-JOIN-EITHER')
+	public function testJoinWithOneUnseenArmKeepsNoFix(): Void {
+		assertDeclined(
+			'@:nullSafety(Strict) class C { function f(x:Null<Foo>, b:Bool) { if (b) { if (x == null) return; } else {'
+			+ ' final ok = x != null; if (ok) {} else return; } var n = x?.bar; } }'
+		);
+	}
+
+	/** A receiver the compiler already narrowed stays narrowed when a Bool local proves it again. */
+	@:pin('control') @:killer('M-DSN-RENARROW-HIDES')
+	public function testVisibleProofSurvivesAnUnseenRenarrowing(): Void {
+		assertFixed(
+			'@:nullSafety(Strict) class C { function f(x:Null<Foo>) { if (x == null) return; final ok = x != null; if (ok) {'
+			+ ' var n = x?.bar; } } }'
+		);
+	}
+
+	/** A non-null assignment is a narrowing the compiler sees, whatever proved the name before it. */
+	@:pin('control') @:killer('M-DSN-ASSIGN-KEEPS-UNSEEN')
+	public function testNonNullAssignmentMakesTheProofVisible(): Void {
+		assertFixed(
+			'@:nullSafety(Strict) class C { function f(x:Null<Foo>) { final ok = x != null; if (ok) { x = new Foo(); var n = x?.bar; } } }'
+		);
+	}
+
+	/** A `--macro nullSafety('')` in the oracle hxml turns null-safety on for a file that carries no `@:nullSafety`. */
+	@:pin('control') @:killer('M-DSN-MACRO-BLIND')
+	public function testOracleMacroNullSafetyKeepsNoFix(): Void {
+		assertBuild([{ name: 'build.hxml', source: '-cp .\n--macro nullSafety(\'\', Strict)\n' }], true);
+	}
+
+	/** A build of nothing but class paths, defines, a main class and a target cannot enable null-safety: the fix stays. */
+	@:pin('control') @:killer('M-DSN-HXML-ALWAYS-ON')
+	public function testPlainOracleBuildKeepsTheFix(): Void {
+		assertBuild([
+			{ name: 'build.hxml', source: '-cp .\n-D flag\n-main app.C\napp.C\n--js out.js\n' }
+		], false);
+	}
+
+	/** A commented-out macro is not part of the build. */
+	@:pin('control') @:killer('M-DSN-HXML-ALWAYS-ON', 'M-DSN-HXML-COMMENT-READ')
+	public function testCommentedMacroKeepsTheFix(): Void {
+		assertBuild([{ name: 'build.hxml', source: '-cp .\n#--macro nullSafety(\'\')\n' }], false);
+	}
+
+	/** `addGlobalMetadata` with `@:nullSafety` enables it as surely as the `nullSafety` macro does. */
+	@:pin('control') @:killer('M-DSN-MACRO-BLIND')
+	public function testGlobalMetadataMacroKeepsNoFix(): Void {
+		assertBuild([
+			{ name: 'build.hxml', source: '-cp .\n--macro addGlobalMetadata(\'app\', \'@:nullSafety(Strict)\')\n' }
+		], true);
+	}
+
+	/** A `-lib`'s extraParams are not read, so it may enable null-safety. */
+	@:pin('control') @:killer('M-DSN-MACRO-BLIND', 'M-DSN-HXML-LIB-PLAIN')
+	public function testUnreadLibraryKeepsNoFix(): Void {
+		assertBuild([{ name: 'build.hxml', source: '-cp .\n-lib somelib\n' }], true);
+	}
+
+	/** An hxml the oracle's hxml includes is read too. */
+	@:pin('control') @:killer('M-DSN-HXML-INCLUDE-SKIPPED')
+	public function testIncludedHxmlIsRead(): Void {
+		assertBuild([
+			{ name: 'build.hxml', source: '-cp .\ncommon.hxml\n' },
+			{ name: 'common.hxml', source: '--macro nullSafety(\'\')\n' }
+		], true);
+	}
+
+	/** An oracle hxml that cannot be read — not generated yet — cannot rule null-safety out. */
+	@:pin('control') @:killer('M-DSN-HXML-UNREADABLE-PLAIN')
+	public function testUnreadableOracleHxmlKeepsNoFix(): Void {
+		assertBuild([], true);
+	}
+
+	/** A proof made inside a `try` does not survive it for the compiler, even with the catch exiting. */
+	@:pin('control') @:killer('M-DSN-TRY-KEEPS-ALL')
+	public function testTryProofKeepsNoFix(): Void {
+		assertDeclined(nullSafe('try { x = new Foo(); } catch (e:Dynamic) { return; } var n = x?.bar;'));
+		assertDeclined(nullSafe('try { if (x == null) return; } catch (e:Dynamic) { return; } var n = x?.bar;'));
+	}
+
+	/** A proof made before a `try` that writes nothing survives it. */
+	@:pin('control') @:killer('M-DSN-TRY-HIDES-ALL')
+	public function testProofBeforeTryKeepsTheFix(): Void {
+		assertFixed(nullSafe('if (x == null) return; try { g(); } catch (e:Dynamic) { return; } var n = x?.bar;'));
+	}
+
+	/** Past a lone surviving `if` arm the compiler keeps nothing the arm's BODY proved. */
+	@:pin('control') @:killer('M-DSN-LONE-ARM-KEEPS-BODY')
+	public function testLoneArmBodyProofKeepsNoFix(): Void {
+		assertDeclined(nullSafe('if (b) { x = new Foo(); } else return; var n = x?.bar;'));
+		assertDeclined(nullSafe('if (!b) return; else { if (x == null) return; } var n = x?.bar;'));
+	}
+
+	/** Past a lone surviving `if` arm the condition's own narrowing still holds. */
+	@:pin('control') @:killer('M-DSN-LONE-ARM-HIDES-ALL')
+	public function testLoneArmConditionProofKeepsTheFix(): Void {
+		assertFixed(nullSafe('if (x == null || b) { return; } else { g(); } var n = x?.bar;'));
+	}
+
+	/** Two live `if` arms that each prove the name visibly join into a visible proof. */
+	@:pin('control') @:killer('M-DSN-JOIN-HIDES-ALL')
+	public function testTwoLiveArmsKeepTheFix(): Void {
+		assertFixed(nullSafe('if (b) { if (x == null) return; } else { if (x == null) return; } var n = x?.bar;'));
+	}
+
+	/** A lone live `switch` branch is the lone `if` arm again. */
+	@:pin('control') @:killer('M-DSN-LONE-BRANCH-KEEPS-BODY')
+	public function testLoneSwitchBranchProofKeepsNoFix(): Void {
+		assertDeclined(nullSafe('switch k { case 0: if (x == null) return; case _: return; } var n = x?.bar;'));
+	}
+
+	/** Two live `switch` branches that each prove the name visibly join into a visible proof. */
+	@:pin('control') @:killer('M-DSN-JOIN-HIDES-ALL')
+	public function testTwoLiveSwitchBranchesKeepTheFix(): Void {
+		assertFixed(nullSafe('switch k { case 0: x = new Foo(); case _: x = new Foo(); } var n = x?.bar;'));
+	}
+
+	/** An assignment nested in a call argument is evaluated in order, and the compiler follows it. */
+	@:pin('control') @:killer('M-DSN-OWNS-NONE')
+	public function testAssignmentInsideACallKeepsTheFix(): Void {
+		assertFixed(nullSafe('g(x = new Foo()); var n = x?.bar;'));
+	}
+
+	/**
+	 * A loop binder is a fresh variable: the outer `x` proven non-null says nothing about it, in any
+	 * loop spelling — plain, comprehension, nested, and with or without a key.
+	 */
+	@:pin('control') @:killer('M-NULLFLOW-BINDER-BLIND')
+	public function testLoopBinderShadowsTheOuterProof(): Void {
+		final guard: String = 'if (x == null) return;';
+		Assert.equals(0, violations(outer('$guard for (x in xs) g(x?.bar);')).length, 'for (x in xs)');
+		Assert.equals(0, violations(outer('$guard var a = [for (x in xs) x?.bar];')).length, 'comprehension');
+		Assert.equals(0, violations(outer('$guard for (ys in xss) for (x in ys) g(x?.bar);')).length, 'nested for');
+		Assert.equals(0, violations(outer('$guard for (i => x in xs) g(x?.bar);')).length, 'for (i => x in xs)');
+	}
+
+	/** The key-value loop's VALUE binder sits on a child node, not on the loop. */
+	@:pin('control') @:killer('M-NULLFLOW-CHILD-BINDER-BLIND')
+	public function testKeyValueBinderShadowsTheOuterProof(): Void {
+		Assert.equals(0, violations(outer('if (x == null) return; for (k => x in m) g(x?.bar);')).length);
+	}
+
+	/** Case captures in every spelling, and a catch variable, shadow the outer name too. */
+	@:pin('control') @:killer('M-NULLFLOW-CASE-BINDER-BLIND')
+	public function testCaseCapturesShadowTheOuterProof(): Void {
+		final guard: String = 'if (x == null) return;';
+		Assert.equals(0, violations(outer('$guard switch y { case x: g(x?.bar); }')).length, 'case x');
+		Assert.equals(0, violations(outer('$guard switch y { case var x: g(x?.bar); }')).length, 'case var x');
+		Assert.equals(0, violations(outer('$guard switch e { case Some(var x): g(x?.bar); case _: }')).length, 'Some(var x)');
+	}
+
+	@:pin('control') @:killer('M-NULLFLOW-CATCH-BINDER-BLIND')
+	public function testCatchVariableShadowsTheOuterProof(): Void {
+		Assert.equals(0, violations(outer('if (x == null) return; try g(1) catch (x:Dynamic) g(x?.bar);')).length);
+	}
+
+	/** Past the loop the outer `x` is itself again, still proven non-null — the compiler keeps that narrowing too. */
+	@:pin('control') @:killer('M-NULLFLOW-SHADOW-NO-RESTORE')
+	public function testOuterProofSurvivesTheShadowingLoop(): Void {
+		assertFixed(outer('if (x == null) return; for (x in xs) g(x); var n = x?.bar;'));
+	}
+
+	/** An outer proof is not restored past a construct that writes the name: the iterable runs in the OUTER scope. */
+	@:pin('control') @:killer('M-NULLFLOW-SHADOW-RESTORES-WRITTEN')
+	public function testWrittenNameIsNotRestored(): Void {
+		Assert.equals(0, violations(outer('if (x == null) return; for (x in { x = null; xs; }) g(x); var n = x?.bar;')).length);
+	}
+
+	private function assertDeclined(src: String): Void {
+		final check: DeadSafeNav = new DeadSafeNav();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length, 'the redundant `?.` is still reported');
+		Assert.notNull(vs[0].declineReason, 'and says why it gets no fix');
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length, 'no `.` rewrite the compiler would reject');
+	}
+
+	private function assertFixed(src: String): Void {
+		final check: DeadSafeNav = new DeadSafeNav();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.equals(1, check.fix(src, vs, new HaxeQueryPlugin()).length, 'the `?.` is rewritten to `.`');
+	}
+
+	/** The plain Bool-local shape, run from a scratch project configured by `config` (an oracle `build.hxml` among `files`). */
+	private function assertBuild(
+		files: Array<{ name: String, source: String }>, declined: Bool, config: String = '{ "compilerOracle": "build.hxml" }'
+	): Void {
+		#if (sys || nodejs)
+		final src: String = 'package app; class C { function f(x:Null<Foo>) { final ok = x != null; if (ok) { var n = x?.bar; } } }';
+		final dir: String = CliFixture.writeDir('dsnbuild', [{ name: 'apqlint.json', source: config }].concat(files));
+		final vs: Array<Violation> = new DeadSafeNav().run([{ file: '$dir/C.hx', source: src }], new HaxeQueryPlugin());
+		CliFixture.removeDir(dir);
+		Assert.equals(1, vs.length);
+		Assert.equals(declined, vs[0].declineReason != null, declined ? 'the build may enable null-safety' : 'the build is plain');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new DeadSafeNav().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	/** `body` as the body of a null-safe method over a nullable `x` and a few containers. */
+	private static function outer(body: String): String {
+		return nullSafe(body)
+			.replace(
+				'k:Int)',
+				'k:Int, y:Null<Foo>, xs:Array<Null<Foo>>, xss:Array<Array<Null<Foo>>>, m:Map<String, Null<Foo>>, '
+				+ 'e:haxe.ds.Option<Null<Foo>>)'
+			);
+	}
+
+	/** `body` as the body of a strictly null-safe method over a nullable `x`, a Bool `b` and an Int `k`. */
+	private static function nullSafe(body: String): String {
+		return '@:nullSafety(Strict) class C { function f(x:Null<Foo>, b:Bool, k:Int) { $body } }';
 	}
 
 }

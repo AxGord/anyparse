@@ -763,3 +763,21 @@ decided the question; it may not become a record of runs.
   process, so a project whose own sources arrive through `-lib` (a local `.haxelib` dev path) fingerprinted an edit at
   its old content and a build-breaking `--fix` was verified from the baseline; the run key adds a fresh hash of every
   path the run may write, and a configuration reading outside the walked directories is never answered — `cb5c668e`
+- `dead-safe-nav`'s `?.` → `.` as a SAFE fix wherever the flow facts hold → Haxe null-safety narrows only a direct
+  `== null` / `!= null` of the name and a non-null assignment, never a Bool local (`ok = x != null`), an alias copy
+  or a safe-navigation comparison (`x?.f == null`), so under null-safety those proofs broke a green build and aborted
+  `--fix`; they now report with a `declineReason` instead
+- making `dead-safe-nav` a `RiskyFix` instead of declining the invisible proofs → `RiskyFix` is per rule, so every
+  plain-code fix and every compiler-visible one would go report-only on a run with no oracle, to recover only an
+  invisible proof that typechecks anyway — neither of anyparse's two did
+- deriving compiler visibility NEGATIVELY (every NullFlow fact visible except a Bool local, an alias or a `?.`
+  comparison) → the compiler also drops what the body of a lone surviving `if` arm or `switch` branch proved and
+  everything a `try` proved, so each missed construct was another build-breaking fix; visibility is now granted only
+  by the probed forms, and every construct it does not name keeps what was visible before it
+- matching `--macro nullSafety(path, …)` against the module to decide whether an oracle build enables null-safety →
+  `addGlobalMetadata`, a `-lib`'s extraParams and any project macro reach the same metadata, so a build is plain
+  only when every hxml line is a known inert flag
+- clearing only the names a loop WRITES before its body → a `for` binder, a key-value value binder and a `case var` /
+  `Some(var x)` capture are fresh bindings the flow never cleared, so an outer `x` proven non-null reached `x?.f` on the
+  binder and `dead-safe-nav` / `dead-null-coalescing` rewrote it into a null dereference; every scope now shadows the
+  names `BinderScan.binderKinds` says it binds and restores the outer fact on exit unless the construct writes it

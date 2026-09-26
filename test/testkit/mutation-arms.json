@@ -7422,6 +7422,208 @@
 			"find": "+ \"if (process.argv[5]) try { require('fs').unlinkSync(process.argv[5]); } catch (err) {}\"",
 			"replace": "+ \"\"",
 			"note": "the driver leaves the job list in its directory, so a run killed mid-batch leaves the job list behind"
+		},
+		{
+			"name": "M-DSN-UNSEEN-DROPPED",
+			"type": "anyparse.check.NullFlow",
+			"method": "narrowedCopy",
+			"find": "if (!seen && !out.unseen.contains(n)) out.unseen.push(n);",
+			"replace": "if (!seen && false) out.unseen.push(n);",
+			"note": "no narrowing is ever marked invisible to the compiler, so dead-safe-nav rewrites a Bool-local / alias / `?.`-comparison proof to `.` under null-safety and the build breaks"
+		},
+		{
+			"name": "M-DSN-UNSEEN-ALL",
+			"type": "anyparse.check.NullFlow",
+			"method": "narrowedCopy",
+			"find": "final visible: Array<String> = nonNull.copy();",
+			"replace": "final visible: Array<String> = [];",
+			"note": "a direct `== null` / `!= null` guard counts as invisible too, so dead-safe-nav declines the fix the compiler would accept"
+		},
+		{
+			"name": "M-DSN-NULLSAFE-ALWAYS",
+			"type": "anyparse.check.DeadSafeNav",
+			"method": "run",
+			"find": "final nullSafe: Bool = buildNullSafe",
+			"replace": "final nullSafe: Bool = true || buildNullSafe",
+			"note": "plain code is treated as null-checked, so a runtime-sound Bool-local proof loses its fix where nothing typechecks it"
+		},
+		{
+			"name": "M-DSN-JOIN-EITHER",
+			"type": "anyparse.check.NullFlow",
+			"method": "unseenAfterJoin",
+			"find": "a.unseen.contains(n) || b.unseen.contains(n)",
+			"replace": "a.unseen.contains(n) && b.unseen.contains(n)",
+			"note": "a join forgets that one arm proved the name only invisibly, so the fix lands on a path the compiler never narrowed"
+		},
+		{
+			"name": "M-DSN-RENARROW-HIDES",
+			"type": "anyparse.check.NullFlow",
+			"method": "narrowedCopy",
+			"find": "final seen: Bool = visible.contains(n) || out.nonNull.contains(n) && !out.unseen.contains(n);",
+			"replace": "final seen: Bool = visible.contains(n);",
+			"note": "an invisible re-narrowing hides a proof the compiler already has, so an accepted fix is declined"
+		},
+		{
+			"name": "M-DSN-ASSIGN-KEEPS-UNSEEN",
+			"type": "anyparse.check.NullFlow",
+			"method": "markNonNull",
+			"find": "state.unseen.remove(name);",
+			"replace": "if (false) state.unseen.remove(name);",
+			"note": "a non-null assignment no longer makes the proof visible, so the fix after `x = new T()` is declined"
+		},
+		{
+			"name": "M-DSN-MACRO-BLIND",
+			"type": "anyparse.check.DeadSafeNav",
+			"method": "buildMayEnableNullSafety",
+			"force": "false",
+			"note": "a project-wide `--macro nullSafety` in the oracle hxml is ignored, so a meta-free module gets the `.` rewrite its build rejects"
+		},
+		{
+			"name": "M-DSN-HXML-ALWAYS-ON",
+			"type": "anyparse.check.DeadSafeNav",
+			"method": "buildMayEnableNullSafety",
+			"force": "true",
+			"note": "every oracle build reads as enabling null-safety, so a plain project loses the runtime-sound fix"
+		},
+		{
+			"name": "M-DSN-HXML-COMMENT-READ",
+			"type": "anyparse.check.DeadSafeNav",
+			"method": "buildMayEnableNullSafety",
+			"find": "if (line == '' || line.startsWith('#')) continue;",
+			"replace": "if (line == '') continue;",
+			"note": "a commented-out `#--macro nullSafety` is read as live, so the fix is declined in a plain build"
+		},
+		{
+			"name": "M-DSN-HXML-LIB-PLAIN",
+			"type": "anyparse.check.DeadSafeNav",
+			"method": "buildMayEnableNullSafety",
+			"find": "} else if (line.startsWith('-') && !PLAIN_HXML_FLAGS.contains(line.split(' ')[0]))",
+			"replace": "} else if (line.startsWith('-') && !line.startsWith('-lib') && !PLAIN_HXML_FLAGS.contains(line.split(' ')[0]))",
+			"note": "a `-lib` is taken as plain although its extraParams may add `@:nullSafety`, so the build-breaking fix lands"
+		},
+		{
+			"name": "M-DSN-HXML-INCLUDE-SKIPPED",
+			"type": "anyparse.check.DeadSafeNav",
+			"method": "buildMayEnableNullSafety",
+			"find": "mayEnable(LintConfig.resolveAgainstConfigDir(base, line), base, depth + 1)",
+			"replace": "false",
+			"note": "an included hxml is never read, so a `nullSafety` macro in it goes unseen and the build-breaking fix lands"
+		},
+		{
+			"name": "M-DSN-HXML-UNREADABLE-PLAIN",
+			"type": "anyparse.check.DeadSafeNav",
+			"method": "buildMayEnableNullSafety",
+			"find": "if (text == null) return true;",
+			"replace": "if (text == null) return false;",
+			"note": "an oracle hxml not generated yet reads as plain, so the fix lands before the build that may reject it exists"
+		},
+		{
+			"name": "M-DSN-TRY-KEEPS-ALL",
+			"type": "anyparse.check.NullFlow",
+			"method": "handleTry",
+			"find": "setState(state, survivor(post ?? emptyState(), kept));",
+			"replace": "setState(state, post ?? emptyState());",
+			"note": "a proof made inside a `try` stays visible past it, so the `.` rewrite after the try does not compile"
+		},
+		{
+			"name": "M-DSN-TRY-HIDES-ALL",
+			"type": "anyparse.check.NullFlow",
+			"method": "handleTry",
+			"find": "final kept: Array<String> = visibleUnwritten(state, node, ctx);",
+			"replace": "final kept: Array<String> = [];",
+			"note": "a proof made before a `try` is hidden past it, so an accepted fix is declined"
+		},
+		{
+			"name": "M-DSN-LONE-ARM-KEEPS-BODY",
+			"type": "anyparse.check.NullFlow",
+			"method": "handleIf",
+			"find": [
+				"survivor(elseState, elseKept);",
+				"survivor(thenState, thenKept);"
+			],
+			"replace": [
+				"elseState;",
+				"thenState;"
+			],
+			"note": "what the body of a lone surviving `if` arm proved stays visible past the `if`, so the `.` rewrite does not compile"
+		},
+		{
+			"name": "M-DSN-LONE-ARM-HIDES-ALL",
+			"type": "anyparse.check.NullFlow",
+			"method": "handleIf",
+			"find": "final elseKept: Array<String> = elseArm == null ? visibleIn(elseState) : visibleUnwritten(elseState, elseArm, ctx);",
+			"replace": "final elseKept: Array<String> = [];",
+			"note": "the condition's own narrowing is hidden past a lone surviving arm, so the fix after `if (x == null || b) return;`-style guards is declined"
+		},
+		{
+			"name": "M-DSN-JOIN-HIDES-ALL",
+			"type": "anyparse.check.NullFlow",
+			"method": "unseenAfterJoin",
+			"force": "nonNull",
+			"note": "every join hides its proof, so two live arms that each narrow visibly lose their fix"
+		},
+		{
+			"name": "M-DSN-LONE-BRANCH-KEEPS-BODY",
+			"type": "anyparse.check.NullFlow",
+			"method": "handleSwitch",
+			"find": "setState(state, survivor(exitStates[0], visibleUnwritten(state, live, ctx)));",
+			"replace": "setState(state, exitStates[0]);",
+			"note": "what a lone live `switch` branch proved stays visible past the switch, so the `.` rewrite does not compile"
+		},
+		{
+			"name": "M-DSN-OWNS-NONE",
+			"type": "anyparse.check.NullFlow",
+			"method": "ownsVisibility",
+			"force": "false",
+			"note": "no construct keeps what its children proved, so an assignment inside a call argument loses a fix the compiler accepts"
+		},
+		{
+			"name": "M-NULLFLOW-BINDER-BLIND",
+			"type": "anyparse.check.NullFlow",
+			"method": "walk",
+			"find": "final bound: Array<String> = ctx.selfScopeDeclKinds.contains(kind) ? boundNames(node, ctx) : [];",
+			"replace": "final bound: Array<String> = [];",
+			"note": "a loop binder no longer shadows the outer name, so the outer non-null proof reaches `x?.f` on the binder and the fix / dead-fallback deletion crashes at runtime on a null element"
+		},
+		{
+			"name": "M-NULLFLOW-CHILD-BINDER-BLIND",
+			"type": "anyparse.check.NullFlow",
+			"method": "boundNames",
+			"find": "for (c in node.children) if (ctx.binderKinds.contains(c.kind)) add(c.name);",
+			"replace": "",
+			"note": "a key-value loop's VALUE binder no longer shadows, so `for (k => x in m)` inherits the outer `x` proof"
+		},
+		{
+			"name": "M-NULLFLOW-CASE-BINDER-BLIND",
+			"type": "anyparse.check.NullFlow",
+			"method": "walkBranch",
+			"find": "final bound: Array<String> = boundNames(b, ctx);",
+			"replace": "final bound: Array<String> = [];",
+			"note": "a case capture no longer shadows, so `case x:` / `case var x:` inherit the outer proof"
+		},
+		{
+			"name": "M-NULLFLOW-CATCH-BINDER-BLIND",
+			"type": "anyparse.check.NullFlow",
+			"method": "handleTry",
+			"find": "final bound: Array<String> = ctx.selfScopeDeclKinds.contains(clause.kind) ? boundNames(clause, ctx) : [];",
+			"replace": "final bound: Array<String> = [];",
+			"note": "a catch variable no longer shadows, so `catch (x:Dynamic)` inherits the outer proof"
+		},
+		{
+			"name": "M-NULLFLOW-SHADOW-NO-RESTORE",
+			"type": "anyparse.check.NullFlow",
+			"method": "unshadow",
+			"find": "if (written.contains(n)) continue;",
+			"replace": "continue;",
+			"note": "the outer fact is never restored past a shadowing scope, so the fix after the loop is lost"
+		},
+		{
+			"name": "M-NULLFLOW-SHADOW-RESTORES-WRITTEN",
+			"type": "anyparse.check.NullFlow",
+			"method": "unshadow",
+			"find": "if (written.contains(n)) continue;",
+			"replace": "",
+			"note": "the outer fact is restored even when the construct writes the name, so a null written by the iterable is read as non-null"
 		}
 	]
 }
