@@ -759,3 +759,7 @@ decided the question; it may not become a record of runs.
 - the oracle's compile budget `min(4, cores/2, memory/2 GiB)`, taken from the parse fan-out knee → a compile is one
   single-threaded process the caller only waits on: thirteen TM typechecks take 19.3 s four at a time, 12.2 s at eight
   and 8.0 s at thirteen on sixteen cores; the budget is `min(16, cores − 1, memory/2 GiB)`
+- the run memo keyed by `OracleCache.fingerprint` alone → its compiler classpath directories are hashed once per
+  process, so a project whose own sources arrive through `-lib` (a local `.haxelib` dev path) fingerprinted an edit at
+  its old content and a build-breaking `--fix` was verified from the baseline; the run key adds a fresh hash of every
+  path the run may write, and a configuration reading outside the walked directories is never answered

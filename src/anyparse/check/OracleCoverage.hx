@@ -510,13 +510,13 @@ final class OracleCoverage {
 	 */
 	private static function remembered(asked: Array<OracleConfig>): Array<HaxeRun> {
 		final memo: Null<OracleRunMemo> = OracleRunMemo.of(asked);
-		final before: Array<Null<String>> = memo == null ? [for (_ in asked) null] : OracleRunMemo.fingerprints(asked);
+		final before: Array<Null<String>> = memo == null ? [for (_ in asked) null] : memo.fingerprints(asked);
 		final held: Array<Null<HaxeRun>> = [for (i in 0...asked.length) memo?.run(asked[i], true, before[i])];
 		final spawned: Array<Int> = [for (i in 0...asked.length) if (held[i] == null) i];
 		final runs: Array<HaxeRun> = HaxeSpawn.runAll([
 			for (i in spawned) { args: probeArgs(asked[i].hxml, asked[i].defines), cwd: asked[i].dir ?? Sys.getCwd() }
 		], PROBE_BUFFER, HaxeSpawn.parallelism());
-		final after: Array<Null<String>> = memo == null ? [] : OracleRunMemo.fingerprints([for (i in spawned) asked[i]]);
+		final after: Array<Null<String>> = memo == null ? [] : memo.fingerprints([for (i in spawned) asked[i]]);
 		return [
 			for (i in 0...asked.length) {
 				final reused: Null<HaxeRun> = held[i];

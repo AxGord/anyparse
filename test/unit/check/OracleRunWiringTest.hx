@@ -23,6 +23,7 @@ final class OracleRunWiringTest extends Test {
 		+ 'Good();\n\t\tvar x:Dynamic = a;\n\t\tvar y:Good = x;\n\t\ttrace(y);\n\t}\n}\n';
 	private static final HXML: String = '-cp .\n-main Good\n' + CompileCounter.MACRO;
 	private static final APQLINT: String = '{"compilerOracle":"check.hxml","rules":{"avoid-dynamic":{"enabled":true}}}';
+	private static final LIB_A: String = 'package lib;\n\nclass A {\n\tpublic var x:Int = 1;\n\n\tpublic function new() {}\n}\n';
 	#end
 
 	/**
@@ -38,6 +39,41 @@ final class OracleRunWiringTest extends Test {
 		Cli.run(['lint', '$dir/Good.hx', '--fix', '--rule', 'avoid-dynamic']);
 		Assert.isTrue(sys.io.File.getContent('$dir/Good.hx').indexOf('var x:Good') >= 0, 'the risky edit was verified and applied');
 		Assert.equals(2, CompileCounter.count(dir), 'the baseline of the first tree and the verification of the second, nothing else');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A project whose own sources reach the compile through `-lib` (a local `.haxelib` whose dev path is the project's
+	 * `src`): the compiler's classpath directories are hashed once per process, so without the run's own hash of what it
+	 * writes, the edited file fingerprinted at its old content and the verification was answered from the baseline.
+	 */
+	@:pin('control')
+	@:killer('M-RUNMEMO-WRITTEN-UNHASHED')
+	public function testAnEditReachedThroughALibraryIsCompiled(): Void {
+		#if (sys || nodejs)
+		final dir: String = CliFixture.writeTree('runwiringlib', [
+			{ name: 'src/Main.hx', source: 'class Main {\n\tstatic function main() {\n\t\tlib.B.poke(new lib.A());\n\t}\n}\n' },
+			{ name: 'src/lib/A.hx', source: LIB_A },
+			{
+				name: 'src/lib/B.hx',
+				source: 'package lib;\n\nclass B {\n\tpublic static function poke(a:A):Void {\n\t\ta.x = 2;\n\t}\n}\n'
+			},
+			{ name: 'build.hxml', source: '-lib mylib\n-main Main\n-js out.js\n' },
+			{ name: 'apqlint.json', source: '{"compilerOracle":"build.hxml"}' },
+			{ name: '.haxelib/.repo-version', source: '1\n' },
+			{ name: '.haxelib/mylib/.dev', source: '' }
+		]);
+		sys.io.File.saveContent('$dir/.haxelib/mylib/.dev', '$dir/src/');
+		if (Cli.run(['oracle', '$dir/src/lib/A.hx']) != 0) {
+			CliFixture.removeDir(dir);
+			Assert.pass('haxe unavailable — skipped');
+			return;
+		}
+		Cli.run(['lint', '$dir/src/lib/A.hx', '--fix', '--rule', 'prefer-final-public-field']);
+		Assert.equals(LIB_A, sys.io.File.getContent('$dir/src/lib/A.hx'), 'B writes the field, so the compiler refuses the final');
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');

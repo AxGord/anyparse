@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.HaxeSpawn.HaxeRun;
 import anyparse.check.HaxeSpawn.SpawnJob;
+import haxe.Exception;
 
 using StringTools;
 
@@ -32,9 +33,6 @@ final class PendingRuns {
 	/** Looks between two probes of whether the driver still lives. */
 	private static inline final POLLS_PER_PROBE: Int = 25;
 
-	/** The bound of the random suffix that keeps two batches' files apart. */
-	private static inline final SUFFIX_BOUND: Int = 0x7fffffff;
-
 	private final _jobs: Array<SpawnJob>;
 	private final _maxBuffer: Int;
 	private final _parallel: Int;
@@ -43,6 +41,9 @@ final class PendingRuns {
 
 	#if nodejs
 	private var _pid: Null<Int> = null;
+
+	/** The batch's own directory, made with `mkdtemp`: private to this user, and no other process can have named it first. */
+	private var _dir: String = '';
 	private var _result: String = '';
 	private var _input: String = '';
 	#end
@@ -56,10 +57,10 @@ final class PendingRuns {
 			_answer = [];
 			return;
 		}
-		final base: String = Path.join([TempScratch.root(), 'apq-pending-${Std.random(SUFFIX_BOUND)}']);
-		_input = '$base.jobs.json';
-		_result = '$base.runs.json';
 		try {
+			_dir = js.node.Fs.mkdtempSync(Path.join([TempScratch.root(), 'apq-pending-']));
+			_input = Path.join([_dir, 'jobs.json']);
+			_result = Path.join([_dir, 'runs.json']);
 			sys.io.File.saveContent(_input, haxe.Json.stringify(jobs));
 			final child: Dynamic = js.node.ChildProcess.spawn(
 				js.Node.process.execPath, HaxeSpawn.driverArgs(parallel, maxBuffer, false, { result: _result, jobs: _input }),
@@ -68,7 +69,7 @@ final class PendingRuns {
 			// a batch nobody awaits must not keep this process alive: the driver ends its jobs once this process is gone
 			child.unref();
 			_pid = child.pid;
-		} catch (exception: haxe.Exception) { // noqa: swallowed-exception
+		} catch (exception: Exception) { // noqa: swallowed-exception
 			// a driver that could not be started leaves `_pid` null, and `await` runs the batch in the foreground
 		}
 		#end
@@ -99,19 +100,24 @@ final class PendingRuns {
 		if (_answer != null) return;
 		#if nodejs
 		final pid: Null<Int> = _pid;
-		if (pid != null) try js.Node.process.kill(pid, 'SIGTERM') catch (exception: haxe.Exception) { // noqa: swallowed-exception
+		if (pid != null) try js.Node.process.kill(pid, 'SIGTERM') catch (exception: Exception) { // noqa: swallowed-exception
 			// a driver already gone has nothing left to end
 		} forget();
 		#end
-		_answer = [
+		_answer = unanswered('cancelled — the batch was abandoned', true);
+	}
+
+	/** Every job of the batch answered as a run that produced no verdict, for `failure`, and `cancelled` when it was ended. */
+	private function unanswered(failure: String, cancelled: Bool): Array<HaxeRun> {
+		return [
 			for (_ in _jobs)
 				{
 					status: null,
 					out: '',
 					err: '',
-					failure: 'cancelled — the batch was abandoned',
+					failure: failure,
 					overflowed: false,
-					cancelled: true
+					cancelled: cancelled
 				}
 		];
 	}
@@ -124,25 +130,23 @@ final class PendingRuns {
 			if (++polls % POLLS_PER_PROBE == 0 && !living(pid)) break;
 			pause(POLL_MS);
 		}
-		final text: Null<String> = try sys.io.File.getContent(_result) catch (exception: haxe.Exception) null;
+		final text: Null<String> = try sys.io.File.getContent(_result) catch (exception: Exception) null;
 		forget();
-		final answer: Null<Array<HaxeRun>> = text == null ? null : try haxe.Json.parse(text) catch (exception: haxe.Exception) null;
-		return answer != null && answer.length == _jobs.length ? answer : [
-			for (_ in _jobs)
-				{
-					status: null,
-					out: '',
-					err: '',
-					failure: 'the background process driver ended without an answer',
-					overflowed: false
-				}
-		];
+		final answer: Null<Array<HaxeRun>> = text == null ? null : try haxe.Json.parse(text) catch (exception: Exception) null;
+		return answer != null && answer.length == _jobs.length
+			? answer
+			: unanswered('the background process driver ended without an answer', false);
 	}
 
-	/** Delete the batch's two files. */
+	/** Delete the batch's directory and what is left in it. */
 	private function forget(): Void {
-		for (path in [_input, _result]) try sys.FileSystem.deleteFile(path) catch (exception: haxe.Exception) { // noqa: swallowed-exception
-			// a leftover file costs nothing but disk: the answer never depends on it
+		if (_dir == '') return;
+		for (path in [_input, _result])
+			if (sys.FileSystem.exists(path)) try sys.FileSystem.deleteFile(path) catch (exception: Exception) { // noqa: swallowed-exception
+				// a leftover file costs nothing but disk: the answer never depends on it
+			}
+		try sys.FileSystem.deleteDirectory(_dir) catch (exception: Exception) { // noqa: swallowed-exception
+			// the driver may still be removing it
 		}
 	}
 
@@ -154,7 +158,7 @@ final class PendingRuns {
 		// signal 0 delivers nothing: it only asks whether the pid exists
 		try
 			js.Syntax.code('process.kill({0}, 0)', pid)
-		catch (exception: haxe.Exception)
+		catch (exception: Exception)
 			return false;
 		if (js.Node.process.platform == 'win32') return true;
 		final res: Dynamic = js.node.ChildProcess.spawnSync('ps', ['-o', 'stat=', '-p', '$pid'], { encoding: 'utf8' });

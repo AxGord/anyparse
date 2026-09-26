@@ -82,10 +82,14 @@ final class HaxeSpawn {
 	 * (pid, then start time), so a run that takes over an abandoned generation can end the job the dead run left.
 	 * With `argv[4]` naming a file the runs go there instead of stdout — written whole under a temporary name, then
 	 * renamed, so the file exists only once it is complete — and with `argv[5]` naming one the jobs are read from it
-	 * instead of stdin: the two ends a driver running in the BACKGROUND (`PendingRuns`) is talked to through.
+	 * instead of stdin and deleted once read: the two ends a driver running in the BACKGROUND (`PendingRuns`) is talked
+	 * to through. Such a driver ended by a signal, or outliving `apq`, removes the directory holding its answer file.
 	 */
 	private static inline final PARALLEL_DRIVER: String = "const cp = require('child_process');"
 		+ "const jobs = JSON.parse(require('fs').readFileSync(process.argv[5] ? process.argv[5] : 0, 'utf8'));"
+		+ "if (process.argv[5]) try { require('fs').unlinkSync(process.argv[5]); } catch (err) {}"
+		+ "function drop() { if (process.argv[4]) try { require('fs').rmSync(require('path').dirname(process.argv[4]),"
+		+ " { recursive: true, force: true }); } catch (err) {} }"
 		+ "function emit(s) { const f = process.argv[4]; if (!f) { process.stdout.write(s); return; }"
 		+ " require('fs').writeFileSync(f + '.part', s); require('fs').renameSync(f + '.part', f); }"
 		+ "const limit = parseInt(process.argv[1]); const max = parseInt(process.argv[2]); const stop = process.argv[3] === '1';"
@@ -94,9 +98,9 @@ final class HaxeSpawn {
 		+ "function kill(c) { try { if (group) process.kill(-c.pid, 'SIGKILL'); else c.kill(); }"
 		+ " catch (err) { try { c.kill('SIGKILL'); } catch (ignored) {} } }"
 		+ "function killAll() { for (const c of kids) if (c) kill(c); }"
-		+ "for (const s of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(s, () => { killAll(); process.exit(1); });"
+		+ "for (const s of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(s, () => { killAll(); drop(); process.exit(1); });"
 		+ "const parent = process.ppid;"
-		+ "setInterval(() => { if (process.ppid !== parent) { killAll(); process.exit(1); } }, 500).unref();"
+		+ "setInterval(() => { if (process.ppid !== parent) { killAll(); drop(); process.exit(1); } }, 500).unref();"
 		+ "function recordGroup(j, c) { if (j.groupFile == null || c.pid == null) return; let st = '';"
 		+ " try { if (group) st = cp.execFileSync('ps', ['-o', 'lstart=', '-p', String(c.pid)], { encoding: 'utf8' }).trim(); } catch (err) {}"
 		+ " try { require('fs').writeFileSync(j.groupFile, c.pid + '\\n' + st); } catch (err) {} }"

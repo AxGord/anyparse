@@ -235,19 +235,21 @@ final class LintCommand implements CliCommand {
 		// second root never declared.
 		warnScopeNotices(activeChecks, resolveConfig, paths, o.noOracle);
 		final oracleConfig: Null<LintConfig> = paths.length > 0 ? resolveConfig(paths[0]) : null;
-		final oracles: Array<OracleConfig> = oraclesOf(oracleConfig, o.noOracle, !o.fix);
+		final oracles: Array<OracleConfig> = oraclesOf(oracleConfig, o.noOracle, !o.fix, files);
 		final early: Null<FactsProbe> = earlyFacts(unconfigured != null, oracles, o);
 		final resolution: Null<ResolutionScope> = withCompilerFacts(
 			withReachConfigurations(unconfigured, oracles, o.noOracle, reachComplete(paths, resolveConfig)), oracles, o.noOracle, early
 		);
 
 		if (o.fix) {
-			final fixed: Int = LintFixDriver.runLintFix(
-				files, activeChecks, plugin, resolveConfig, applyEnablement, resolution, LintFixVerify.verifiable(oracles), o.noOracle,
-				o.range, o.verbose
+			return endingCompiles(
+				early, oracles,
+				() ->
+					LintFixDriver.runLintFix(
+						files, activeChecks, plugin, resolveConfig, applyEnablement, resolution, LintFixVerify.verifiable(oracles),
+						o.noOracle, o.range, o.verbose
+					)
 			);
-			endCompiles(early, oracles);
-			return fixed;
 		}
 
 		// Report mode only — the fix path returned above, so this pass never runs redundantly in a
@@ -331,12 +333,15 @@ final class LintCommand implements CliCommand {
 	 * The configurations carry this run's `OracleRunMemo`, so a compile of a tree the run already compiled is answered
 	 * from it; `persisted` says the run is a report, which answers its verdict from `OracleCache` when it can.
 	 */
-	private static function oraclesOf(config: Null<LintConfig>, noOracle: Bool, persisted: Bool): Array<OracleConfig> {
+	private static function oraclesOf(
+		config: Null<LintConfig>, noOracle: Bool, persisted: Bool, files: Array<{ file: String, source: String }>
+	): Array<OracleConfig> {
 		final declared: Array<OracleConfig> = config == null ? [] : config.compilerOracles();
 		if (noOracle) return declared;
 		final prepared: PreparedOracles = OracleGeneration.prepare(declared);
 		for (note in prepared.notes) CliIo.stderr('apq lint: compilerOracle $note\n');
-		return OracleRunMemo.attach(prepared.oracles, new OracleRunMemo(persisted));
+		// `files` is the run's own list, which a created file joins: the memo hashes whatever it holds at each question
+		return OracleRunMemo.attach(prepared.oracles, new OracleRunMemo(persisted, () -> [for (f in files) f.file]));
 	}
 
 	/**
@@ -367,6 +372,19 @@ final class LintCommand implements CliCommand {
 		return startsFactsEarly(scoped, oracles.length, o.noOracle, o.ruleFilters.length > 0, o.fix)
 			? TypedFactsProbe.start(oracles)
 			: null;
+	}
+
+	/**
+	 * `body`'s answer, with the run's compiles ended (`endCompiles`) on every way out, a throw included: an early facts
+	 * batch must not run on after a failed run.
+	 */
+	private static function endingCompiles(early: Null<FactsProbe>, oracles: Array<OracleConfig>, body: () -> Int): Int {
+		final answer: Int = try body() catch (exception: Exception) {
+			endCompiles(early, oracles);
+			throw exception;
+		};
+		endCompiles(early, oracles);
+		return answer;
 	}
 
 	/**

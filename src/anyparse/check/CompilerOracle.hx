@@ -259,7 +259,7 @@ final class CompilerOracle {
 	private static function remembered(
 		memo: OracleRunMemo, oracles: Array<OracleConfig>, stopAfterFailure: Bool, verbose: Bool
 	): Array<Null<OracleOutcome>> {
-		final before: Array<Null<String>> = OracleRunMemo.fingerprints(oracles);
+		final before: Array<Null<String>> = memo.fingerprints(oracles);
 		final out: Array<Null<OracleOutcome>> = [
 			for (i in 0...oracles.length) {
 				final unavailable: Null<String> = oracles[i].unavailable;
@@ -278,7 +278,7 @@ final class CompilerOracle {
 			for (k in retried) { args: argsOf(oracles[compiled[k]], false), cwd: oracles[compiled[k]].dir }
 		], ORACLE_BUFFER, HaxeSpawn.parallelism(), false);
 		invocations += plain.length;
-		final after: Array<Null<String>> = OracleRunMemo.fingerprints([for (i in compiled) oracles[i]]);
+		final after: Array<Null<String>> = memo.fingerprints([for (i in compiled) oracles[i]]);
 		for (k in 0...compiled.length) {
 			final i: Int = compiled[k];
 			memo.file(oracles[i], verbose, before[i], after[k], runs[k]);

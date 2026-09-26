@@ -22,6 +22,7 @@ final class OracleRunMemoTest extends Test {
 
 	#if (sys || nodejs)
 	private static final GOOD: String = 'class Main {\n\tstatic function main() {\n\t\ttrace(1);\n\t}\n}\n';
+	private static final OTHER: String = 'class Main {\n\tstatic function main() {\n\t\ttrace(2);\n\t}\n}\n';
 	private static final BAD: String = 'class Main {\n\tstatic function main() {\n\t\tnope();\n\t}\n}\n';
 	private static final MUTATOR: String = 'class Mutator {\n\tpublic static function once():Void {\n'
 		+ '\t\tif (sys.FileSystem.exists(\'mutated.flag\')) return;\n\t\tsys.io.File.saveContent(\'mutated.flag\', \'\');\n'
@@ -89,8 +90,8 @@ final class OracleRunMemoTest extends Test {
 	}
 
 	/**
-	 * A compile whose input changed while it ran is not filed: here an init macro rewrites `Main.hx` before typing, so the
-	 * compile judged content its starting fingerprint never named, and the restored tree must be compiled afresh.
+	 * A compile whose input changed while it ran is not filed: here an init macro rewrites `Main.hx` before typing, so
+	 * that compile judged content its starting fingerprint never named, and must not replace the confirm filed for it.
 	 */
 	@:pin('control')
 	@:killer('M-RUNMEMO-FILES-A-MOVED-INPUT')
@@ -99,10 +100,15 @@ final class OracleRunMemoTest extends Test {
 		final dir: Null<String> = scratch(GOOD, '$BUILD--macro Mutator.once()\n');
 		if (dir == null) return;
 		sys.io.File.saveContent('$dir/Mutator.hx', MUTATOR);
+		// the flag keeps the macro quiet for the first compile, which proves what the configuration reads
+		sys.io.File.saveContent('$dir/mutated.flag', '');
 		final oracles: Array<OracleConfig> = remembering(dir);
+		Assert.isTrue(CompilerOracle.judging(oracles).verdict.match(Confirmed), 'the first content confirms');
+		sys.FileSystem.deleteFile('$dir/mutated.flag');
+		sys.io.File.saveContent('$dir/Main.hx', OTHER);
 		Assert.isTrue(CompilerOracle.judging(oracles).verdict.match(Rejected(_)), 'the compile read what the macro wrote');
-		sys.io.File.saveContent('$dir/Main.hx', GOOD);
-		Assert.isTrue(CompilerOracle.judging(oracles).verdict.match(Confirmed), 'the restored tree is compiled, not answered');
+		sys.io.File.saveContent('$dir/Main.hx', OTHER);
+		Assert.isTrue(CompilerOracle.judging(oracles).verdict.match(Confirmed), 'the restored content is compiled, not answered');
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
@@ -122,6 +128,36 @@ final class OracleRunMemoTest extends Test {
 		Assert.isTrue(CompilerOracle.judging(oracles).verdict.match(Confirmed), 'the baseline confirms');
 		Assert.equals(2, CompileCounter.count(dir), 'and it is answered from the memo');
 		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A compile that reads a file outside every directory its fingerprint walks — here one an init macro adds to the
+	 * classpath — can change with no fingerprint changing, so the configuration is never answered from the memo.
+	 */
+	@:pin('control')
+	@:killer('M-RUNMEMO-TRUSTS-UNSEEN-SOURCES')
+	public function testASourceTheFingerprintCannotSeeIsAlwaysCompiled(): Void {
+		#if (sys || nodejs)
+		// outside the project: a directory under the compile root is walked like any other
+		final extra: String = CliFixture.writeDir('runmemoextra', [
+			{ name: 'Extra.hx', source: 'class Extra {\n\tpublic static function go():Void {}\n}\n' }
+		]);
+		final dir: Null<String> = scratch(
+			'class Main {\n\tstatic function main() {\n\t\tExtra.go();\n\t}\n}\n', '$BUILD--macro addClassPath(\'$extra\')\n'
+		);
+		if (dir == null) {
+			CliFixture.removeDir(extra);
+			return;
+		}
+		final oracles: Array<OracleConfig> = remembering(dir);
+		Assert.isTrue(CompilerOracle.judging(oracles).verdict.match(Confirmed), 'the build confirms');
+		Assert.isTrue(CompilerOracle.judging(oracles).verdict.match(Confirmed), 'and again');
+		Assert.equals(2, CompileCounter.count(dir), 'both baselines compiled: `extra` is invisible to the fingerprint');
+		CliFixture.removeDir(dir);
+		CliFixture.removeDir(extra);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -173,7 +209,7 @@ final class OracleRunMemoTest extends Test {
 
 	/** The one configuration of `dir`, as a lint run prepares it: carrying a fresh memo. */
 	private static function remembering(dir: String): Array<OracleConfig> {
-		return OracleRunMemo.attach([{ hxml: 'build.hxml', dir: dir, defines: [] }], new OracleRunMemo(false));
+		return OracleRunMemo.attach([{ hxml: 'build.hxml', dir: dir, defines: [] }], new OracleRunMemo(false, () -> ['$dir/Main.hx']));
 	}
 	#end
 

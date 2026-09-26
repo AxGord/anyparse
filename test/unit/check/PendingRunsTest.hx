@@ -38,6 +38,32 @@ final class PendingRunsTest extends Test {
 		#end
 	}
 
+	/**
+	 * The batch talks to its driver inside a directory of its own, readable by this user alone, and the jobs file is gone
+	 * as soon as the driver read it — a run killed mid-batch leaves no job list behind — and the directory with the answer.
+	 */
+	@:pin('control')
+	@:killer('M-PENDING-JOBS-FILE-KEPT')
+	public function testTheBatchFilesArePrivateAndShortLived(): Void {
+		#if nodejs
+		final dir: String = CliFixture.writeDir('pendingfiles', []);
+		final before: Array<String> = pendingDirs();
+		final pending: PendingRuns = HaxeSpawn.startAll([{ args: [], cwd: dir, shell: 'sleep 1' }], BUFFER, 1);
+		Sys.sleep(0.5);
+		final made: Array<String> = [for (d in pendingDirs()) if (!before.contains(d)) d];
+		Assert.equals(1, made.length, 'one directory for the batch');
+		final own: String = haxe.io.Path.join([anyparse.core.TempScratch.root(), made[0] ?? '']);
+		final mode: Int = (js.Syntax.code('require("fs").statSync({0}).mode', own): Int) & 511;
+		Assert.equals(448, mode, 'owner-only permissions');
+		Assert.isFalse(sys.FileSystem.exists('$own/jobs.json'), 'the driver deleted the jobs once read');
+		pending.await();
+		Assert.isFalse(sys.FileSystem.exists(own), 'and the directory is gone with the answer');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('no asynchronous process API on this target');
+		#end
+	}
+
 	/** A cancelled batch ends the job it started: the job's last step never runs, and the answer is a cancellation. */
 	@:pin('control')
 	@:killer('M-PENDING-CANCEL-LEAVES-JOBS')
@@ -55,5 +81,15 @@ final class PendingRunsTest extends Test {
 		Assert.pass('no asynchronous process API on this target');
 		#end
 	}
+
+	#if nodejs
+	/** The batch directories under the scratch root now. */
+	private static function pendingDirs(): Array<String> {
+		return [
+			for (entry in sys.FileSystem.readDirectory(anyparse.core.TempScratch.root())) if (StringTools.startsWith(entry, 'apq-pending-'))
+				entry
+		];
+	}
+	#end
 
 }

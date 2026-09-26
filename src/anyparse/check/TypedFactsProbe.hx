@@ -135,7 +135,7 @@ final class TypedFactsProbe {
 		}
 		final memo: Null<OracleRunMemo> = OracleRunMemo.of(oracles);
 		final baselines: Array<OracleConfig> = memo == null ? [] : [for (a in asked) a.oracle];
-		final before: Array<Null<String>> = memo == null ? [] : OracleRunMemo.fingerprints(baselines);
+		final before: Array<Null<String>> = memo == null ? [] : memo.fingerprints(baselines);
 		final ahead: Array<Int> = memo == null ? [] : [for (k in 0...baselines.length) if (wanted(memo, baselines[k], before[k])) k];
 		final runs: PendingRuns = HaxeSpawn.startAll([for (a in asked) { args: a.args, cwd: a.oracle.dir }].concat([
 			for (k in ahead) { args: OracleCoverage.probeArgs(baselines[k].hxml, baselines[k].defines), cwd: baselines[k].dir }
@@ -175,7 +175,7 @@ final class TypedFactsProbe {
 		final asked: Array<FactsCompile> = probe.asked;
 		final memo: Null<OracleRunMemo> = probe.memo;
 		if (memo != null && probe.baselines.length > 0) {
-			final after: Array<Null<String>> = OracleRunMemo.fingerprints(probe.baselines);
+			final after: Array<Null<String>> = memo.fingerprints(probe.baselines);
 			for (j in 0...probe.baselines.length) memo.file(probe.baselines[j], true, probe.before[j], after[j], runs[asked.length + j]);
 		}
 		final facts: CompilerFacts = CompilerFacts.create(
@@ -211,7 +211,10 @@ final class TypedFactsProbe {
 	 */
 	private static function wanted(memo: OracleRunMemo, oracle: OracleConfig, fingerprint: Null<String>): Bool {
 		if (fingerprint == null || memo.holds(oracle, fingerprint)) return false;
-		return !memo.persisted || OracleCache.lookup(oracle.hxml, oracle.dir, fingerprint, oracle.defines) == null;
+		if (!memo.persisted) return true;
+		// the persisted cache files a verdict under its own fingerprint, not the run's
+		final persisted: Null<String> = OracleCache.fingerprint(oracle.hxml, oracle.dir, oracle.defines);
+		return persisted == null || OracleCache.lookup(oracle.hxml, oracle.dir, persisted, oracle.defines) == null;
 	}
 
 	/** Why the compile `run` left no facts, in one line. */
