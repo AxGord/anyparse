@@ -110,6 +110,8 @@ final class LintFixDriver {
 		function baselineBeforeCreate(): Void {
 			if (preWrite.taken) return;
 			preWrite.taken = true;
+			// the first write of the run: the facts compiles must have read every file before it lands
+			cached.compilerFactsSettled();
 			if (oracleConfigured) preWrite.baseline = CompilerOracle.judging(oracles);
 		}
 		var fixedCount: Int = 0;
@@ -158,6 +160,8 @@ final class LintFixDriver {
 		// just done as a pre-existing condition, and left the tree un-typecheckable with no
 		// hint that `--fix` was the cause. The insurance was disabled at exactly the moment
 		// it was needed.
+		// no disk write before this one but a create, which settled the facts compiles already
+		cached.compilerFactsSettled();
 		final safePass: SafePassOutcome = commitSafeWrites(files, changedFiles, originalOf, coupled, oracles, created, preWrite.baseline);
 		// WHICH configurations judged nothing, and why — named by every phase, and once per run:
 		// see `nameExclusions`. Printed as each phase learns them, so an aborting run names them

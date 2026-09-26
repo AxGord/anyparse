@@ -499,6 +499,25 @@ class TypedFactsProbeTest extends Test {
 		scratch.remove();
 	}
 
+	@:pin('control') @:killer('M-FACTS-WRITTEN-DURING') @:killer('M-FACTS-CHANGED-STALE')
+	public function testAFileWrittenWhileTheCompileRanIsStale(): Void {
+		// a build macro rewrites its own file, same bytes, while the facts compile types it: the hash then names a text
+		// the positions need not come from, so the file has no facts
+		final touch: String = 'class Touch {\n\tpublic static macro function build():Array<haxe.macro.Expr.Field> {\n'
+			+ '\t\tif (Sys.args().join(" ").indexOf("TypedFactsMacro") >= 0) {\n'
+			+ '\t\t\tfinal p = haxe.macro.Context.getPosInfos(haxe.macro.Context.currentPos()).file;\n'
+			+ '\t\t\tsys.io.File.saveContent(p, sys.io.File.getContent(p));\n\t\t}\n\t\treturn null;\n\t}\n}\n';
+		final scratch: Scratch = compile([
+			'Main.hx' => '@:build(Touch.build())\nclass Main { static function main() { var x = 1; trace(x); } }\n',
+			'Touch.hx' => touch
+		]);
+		final facts: Null<CompilerFacts> = scratch.facts;
+		final main: String = scratch.path('Main.hx');
+		Assert.isTrue(facts?.compiled(main) ?? false, 'the compile typed the file');
+		Assert.isNull(facts == null ? null : facts.sourceOf(facts.keyOf(main)), 'facts of a file written during the compile answered');
+		scratch.remove();
+	}
+
 	@:pin('control') @:killer('M-FACTS-DROPPED')
 	public function testAConfigurationThatFailsContributesNothing(): Void {
 		final dir: String = CliFixture.writeTree('typed_facts', [

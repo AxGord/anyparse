@@ -49,6 +49,19 @@ class FactsTypeOracleE2ETest extends Test {
 	private static final APQLINT: String = '{"compilerOracle":[{"hxml":"check.hxml"},{"hxml":"check.hxml","defines":["alt"]}],'
 		+ '"resolutionRoots":["."],"rules":{"explicit-local-type":{"enabled":true}}}';
 	private static inline final BUFFER: Int = 1 << 20;
+	private static final RACED: String = 'abstract Meters(Float) to Float {\n' + '\tpublic function new(f:Float)\n' + '\t\tthis = f;\n'
+		+ '\n' + '\t@:from static function fromInt(i:Int):Meters\n' + '\t\treturn new Meters(i * 100.0);\n' + '}\n' + '\n'
+		+ '@:build(Slow.build())\n' + 'class Main {\n' + '\tpublic static function big():Int\n' + '\t\treturn 7;\n' + '\n'
+		+ '\tpublic static function main() {\n' + '\t\tvar r = new Meters(1.5\n' + '\t\t\t+ [\n'
+		+ '\t\t\t\t(0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0),\n'
+		+ '\t\t\t\t(0), (0), (0), (0)\n' + '\t\t\t].length);\n' + '\t\tSys.println((r : Float));\n' + '\t\tvar r = big();\n'
+		+ '\t\tSys.println((r : Float));\n' + '\t}\n' + '}\n';
+	private static final SLOW: String = 'import haxe.macro.Context;\n' + 'import haxe.macro.Expr;\n' + '\n' + 'class Slow {\n'
+		+ '\tpublic static macro function build():Array<Field> {\n'
+		+ '\t\tif (Sys.args().join(\' \').indexOf(\'TypedFactsMacro\') >= 0) {\n' + '\t\t\tSys.sleep(6);\n'
+		+ '\t\t\tfinal file:String = Context.getPosInfos(Context.currentPos()).file;\n'
+		+ '\t\t\tsys.io.File.saveContent(haxe.io.Path.join([haxe.io.Path.directory(sys.FileSystem.fullPath(file)), \'typed.log\']), Std.string(Sys.time()));\n'
+		+ '\t\t}\n' + '\t\treturn null;\n' + '\t}\n' + '}\n';
 	private static final MOVED: String = 'abstract Meters(Float) to Float {\n' + '\tpublic function new(f:Float)\n' + '\t\tthis = f;\n'
 		+ '\n' + '\t@:from static function fromInt(i:Int):Meters\n' + '\t\treturn new Meters(i * 100.0);\n' + '}\n' + '\n' + 'class P1 {\n'
 		+ '\tpublic static function big():Int\n' + '\t\treturn 7;\n' + '\n' + '\tstatic function a() {\n'
@@ -154,6 +167,43 @@ class FactsTypeOracleE2ETest extends Test {
 		Assert.isTrue(
 			File.getContent('$dir/Ctl.hx').replace(' ', '').indexOf('finallens:Array<Int>=') >= 0, 'the shifted member is annotated'
 		);
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * The early facts compile is still typing (a build macro sleeps in it, and only in it) when the safe pass is ready to
+	 * write. The run must wait for it: the first write lands after the compile passed that macro, and the annotation it
+	 * then makes of the rewritten file is placed through the recorded edits — never read off the new text with positions
+	 * of the old one, which typed `var r = big()` as the `Meters` of the line before it. Pinned as a guard: in-process
+	 * the run reaches its first write after the compile anyway, so the barrier itself is pinned by `LintFixFactsSettleTest`.
+	 */
+	@:pin('guard')
+	public function testTheFirstWriteWaitsForTheFactsCompile(): Void {
+		#if (sys || nodejs)
+		final dir: String = CliFixture.writeTree('factsrace', [
+			{ name: 'Main.hx', source: RACED },
+			{ name: 'Slow.hx', source: SLOW },
+			{ name: 'check.hxml', source: '-cp .\n-main Main\n--interp\n' },
+			{
+				name: 'apqlint.json',
+				source: '{"compilerOracle":[{"hxml":"check.hxml"}],"resolutionRoots":["."],"rules":{"explicit-local-type":{"enabled":true}}}'
+			}
+		]);
+		if (!CompilerOracle.typecheck('check.hxml', dir).match(Confirmed)) {
+			CliFixture.removeDir(dir);
+			Assert.pass('haxe unavailable — skipped');
+			return;
+		}
+		final before: String = run(dir, []);
+		CliFixture.captureStderr(() -> Cli.run(['lint', '--fix', dir]));
+		final typed: Float = Std.parseFloat(File.getContent('$dir/typed.log'));
+		final written: Float = sys.FileSystem.stat('$dir/Main.hx').mtime.getTime() / 1000;
+		Assert.isTrue(written >= typed, 'the run wrote Main.hx at $written, before the facts compile typed it at $typed');
+		Assert.equals(before, run(dir, []), 'the program prints what it printed');
+		Assert.isTrue(File.getContent('$dir/Main.hx').replace(' ', '').indexOf('r:Meters=big()') < 0);
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');

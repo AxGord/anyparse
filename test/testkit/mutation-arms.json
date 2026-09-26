@@ -7871,7 +7871,7 @@
 			"name": "M-FACTS-ORACLE-ORIGINAL",
 			"type": "anyparse.query.CompilerFacts",
 			"method": "invalidate",
-			"find": "if (original != null && !_stale.exists(key) && !_originals.exists(key)) _originals[key] = original;",
+			"find": "if (original != null && matches && !_stale.exists(key) && !_originals.exists(key)) _originals[key] = original;",
 			"replace": "",
 			"note": "a rewritten file keeps no original text, so its facts cannot be placed and every declaration in it declines"
 		},
@@ -7879,9 +7879,9 @@
 			"name": "M-FACTS-INVALIDATE-FOREIGN",
 			"type": "anyparse.query.CompilerFacts",
 			"method": "invalidate",
-			"find": "if (original != null && expected != null && FactText.contentHash(original) != expected) return;",
-			"replace": "",
-			"note": "facts compiled from the rewritten text are dropped as if they described the original"
+			"find": "if (now != null && FactText.contentHash(now) == expected) return;",
+			"note": "facts a compile certified for the text now on disk are dropped with the rewrite, so a compile that ran after the write answers nothing",
+			"replace": "{}"
 		},
 		{
 			"name": "M-FACTS-FIELD-TYPES",
@@ -8034,6 +8034,29 @@
 			"find": "type = node.name ?? node.children.find(c -> c.name != null)?.name;",
 			"replace": "type = node.name;",
 			"note": "a `final class` names no type, so every declaration in one reads as homeless and declines"
+		},
+		{
+			"name": "M-FACTS-WRITTEN-DURING",
+			"type": "anyparse.check.TypedFactsMacro",
+			"method": "writtenSince",
+			"force": "false",
+			"note": "a file written while the facts compile ran is certified by a hash of the text it has now"
+		},
+		{
+			"name": "M-FACTS-CHANGED-STALE",
+			"type": "anyparse.query.CompilerFacts",
+			"method": "addSource",
+			"find": "if (record.changed == true || (known != null && known != hash))",
+			"replace": "if (known != null && known != hash)",
+			"note": "a file the compile marked written during it keeps its facts"
+		},
+		{
+			"name": "M-FIX-FACTS-SETTLED",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "applyLintFixes",
+			"find": "// no disk write before this one but a create, which settled the facts compiles already\n\t\tcached.compilerFactsSettled();",
+			"replace": "",
+			"note": "the safe pass writes while the early facts compiles may still be reading the files"
 		}
 	]
 }

@@ -263,15 +263,21 @@ final class CompilerFacts {
 	/**
 	 * Drop every fact of `file`: the run rewrote it (`--fix`), so no position the compile recorded names its text any more.
 	 * The file answers as never compiled from here on. `original` is the text it had before the run wrote it: kept when it is
-	 * the text the compile read, so `asCompiled` can still place its facts — and when the compile read ANOTHER text, the
-	 * facts were never of the original, the rewrite did not outdate them, and the text check `sourceOf` makes stays the
-	 * only judge.
+	 * the text the compile read, so `asCompiled` can still place its facts.
+	 *
+	 * Facts certified for the text the file has on disk NOW are not the rewrite's to drop: a compile started on demand after
+	 * the run wrote reads the new text, and a file written while a compile ran is never certified (`TypedFactsMacro`
+	 * marks it). Any other text leaves the file stale and keeps nothing.
 	 */
 	public function invalidate(file: String, ?original: String): Void {
 		final key: String = _key(file);
 		final expected: Null<String> = _expected[key];
-		if (original != null && expected != null && FactText.contentHash(original) != expected) return;
-		if (original != null && !_stale.exists(key) && !_originals.exists(key)) _originals[key] = original;
+		final matches: Bool = original != null && (expected == null || FactText.contentHash(original) == expected);
+		if (original != null && !matches && expected != null && !_stale.exists(key)) {
+			final now: Null<String> = _read(key);
+			if (now != null && FactText.contentHash(now) == expected) return;
+		}
+		if (original != null && matches && !_stale.exists(key) && !_originals.exists(key)) _originals[key] = original;
 		_stale[key] = true;
 		_sources.remove(key);
 		_indexes.remove(key);
@@ -451,7 +457,8 @@ final class CompilerFacts {
 		final file: String = dump.file(record.path);
 		final hash: String = '${record.len}:${record.md5}';
 		final known: Null<String> = _expected[file];
-		if (known != null && known != hash)
+		// a file written while the compile ran: the hash names a text the positions may not come from
+		if (record.changed == true || (known != null && known != hash))
 			_stale[file] = true
 		else
 			_expected[file] = hash;
@@ -761,6 +768,7 @@ private typedef SourceRecord = {
 	final path: String;
 	final len: Int;
 	final md5: String;
+	final ?changed: Bool;
 }
 
 private typedef FileRecord = {

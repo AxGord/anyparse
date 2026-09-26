@@ -436,6 +436,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.cli.ExtractDestinationCollisionCliTest',
 		'unit.cli.LintConfigCliTest',
 		'unit.cli.LintFailOnCliTest',
+		'unit.cli.LintFixFactsSettleTest',
 		'unit.cli.LintFixFixedPointCliTest',
 		'unit.cli.LintFixQuietDefaultTest',
 		'unit.cli.LintListRulesCliTest',
@@ -1170,6 +1171,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-EXTRACT-REPEAT-RENDER-SPLIT',
 			'unit.check.FactsTypeOracleE2ETest#testAReorderedFileIsPlacedOnlyThroughTheEditsItsRunApplied :: guard :: ',
 			'unit.check.FactsTypeOracleE2ETest#testTheFactsTypeEveryDeclarationKindAndKeepTheProgram :: control :: M-ASSISTED-FACTS-FIRST,M-ASSISTED-DECLINE-CENSUS,M-EXPLICIT-TYPE-ORACLE-PARAMS,M-EXPLICIT-TYPE-ORACLE-FIELDS,M-FACTS-DYNAMIC-SOURCE',
+			'unit.check.FactsTypeOracleE2ETest#testTheFirstWriteWaitsForTheFactsCompile :: guard :: ',
 			'unit.check.FactsTypeOracleTest#testAFieldTheConfigurationsTypeApartDeclines :: control :: M-FACTS-FIELD-TYPES',
 			'unit.check.FactsTypeOracleTest#testAFinalClassIsItsOwnHome :: control :: M-ORACLE-HOME-MODIFIED-TYPE',
 			'unit.check.FactsTypeOracleTest#testARewrittenFileIsReadAtTheTextTheCompileRead :: control :: M-FACTS-ORACLE-ORIGINAL,M-JOURNAL-SHIFT',
@@ -1182,7 +1184,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.FactsTypeOracleTest#testConfigurationsThatDisagreeDecline :: control :: M-FACTS-ORACLE-AGREE,M-FACTS-UNION',
 			'unit.check.FactsTypeOracleTest#testExplicitTypeSaysWhyItsStructuralFixDeclined :: control :: M-EXPLICIT-TYPE-STRUCTURAL-DECLINE',
 			'unit.check.FactsTypeOracleTest#testFactsOfAnotherMemberDecline :: control :: M-ORACLE-HOME-GUARD',
-			'unit.check.FactsTypeOracleTest#testFactsOfTheRewrittenTextStayCurrent :: control :: M-FACTS-INVALIDATE-FOREIGN',
+			'unit.check.FactsTypeOracleTest#testFactsOfAnotherTextThanTheOriginalAreStale :: control :: M-FACTS-INVALIDATE-FOREIGN',
 			'unit.check.FactsTypeOracleTest#testTypesNoSourceCanSpellDecline :: control :: M-FACTS-SPELL-IMPL',
 			'unit.check.FieldInitAtDeclarationCrossingSuperTest#testCollectionOfForeignReadAfterSuperNotMoved :: control :: '
 				+ 'M-FIAD-INERT-ADMITS-ALL,M-FIAD-INERT-ELEMENT-ADMITS-ALL',
@@ -1643,6 +1645,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-TRIVGET-MOVABLE-LITERAL-FALSE',
 			'unit.check.TypedFactsProbeTest#testACallSiteInlineIsASpliceOfItsMethodNotAMacro :: control :: M-FACTS-CALL-SITE-INLINE',
 			'unit.check.TypedFactsProbeTest#testAConfigurationThatFailsContributesNothing :: control :: M-FACTS-DROPPED',
+			'unit.check.TypedFactsProbeTest#testAFileWrittenWhileTheCompileRanIsStale :: control :: M-FACTS-WRITTEN-DURING,M-FACTS-CHANGED-STALE',
 			'unit.check.TypedFactsProbeTest#testALostSplicedFactMarksItsNodeAndOnlyTheStdIsReflection :: control :: M-FACTS-STALE-FOREIGN,M-FACTS-REFLECTION-PATH',
 			'unit.check.TypedFactsProbeTest#testARangeMeetingTheBodyIsItsOwnCode :: control :: M-FACTS-ABSTRACT-THIS',
 			'unit.check.TypedFactsProbeTest#testAbstractOperatorsConversionsAndAccessorsAreCallsOfTheirImplementations :: control :: M-FACTS-CALL-TARGET',
@@ -1770,6 +1773,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.cli.CliCommandSeamTest#testTheRequireMatchFlagDoesNotSurviveItsRun :: control :: M-CLI-REQUIREMATCH-STATIC',
 			'unit.cli.CliUnknownSubcommandTest#testAPluralMissNamesTheSingularCommands :: control :: M-CLI-UNKNOWN-NO-PLURAL-PROBE',
 			'unit.cli.LintConfigCliTest#testTheScopeGapNoticesReachTheRun :: control :: M-SCOPE-GAP-UNWIRED,M-SCOPE-GAP-ROOT-UNWIRED',
+			'unit.cli.LintFixFactsSettleTest#testTheFactsSettleBeforeTheFirstWrite :: control :: M-FIX-FACTS-SETTLED',
 			'unit.cli.LintFixQuietDefaultTest#testTheRuleAccountingWaitsForAnEditOrForVerbose :: control :: M-LINT-FIX-CENSUS-UNGATED',
 			'unit.cli.LintRangeCliTest#testWriteFixLeavesAStandingFindingOutsideTheWindow :: control :: M-LINT-RANGE-INERT',
 			'unit.cli.ResolutionScopeCliTest#testCrossingSuperNeedsRootsThatMatch :: control :: M-FIAD-ROOTS-MATCH-IGNORED',
@@ -3533,7 +3537,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-JOURNAL-RECORD',
 			'M-ORACLE-WHOLE-MEMBER',
 			'M-ORACLE-HOME-GUARD',
-			'M-ORACLE-HOME-MODIFIED-TYPE'
+			'M-ORACLE-HOME-MODIFIED-TYPE',
+			'M-FACTS-WRITTEN-DURING',
+			'M-FACTS-CHANGED-STALE',
+			'M-FIX-FACTS-SETTLED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
@@ -3653,6 +3660,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-SPLICE-OWN-ARGUMENTS :: anyparse.check.TypedFactsWalk#spliced',
 			'M-FACTS-ABSTRACT-THIS :: anyparse.check.TypedFactsWalk#walk',
 			'M-PENDING-JOBS-FILE-KEPT :: anyparse.check.HaxeSpawn#FinalMember:PARALLEL_DRIVER',
+			'M-FACTS-WRITTEN-DURING :: anyparse.check.TypedFactsMacro#writtenSince',
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 

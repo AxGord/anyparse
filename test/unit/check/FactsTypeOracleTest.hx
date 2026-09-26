@@ -123,17 +123,22 @@ class FactsTypeOracleTest extends Test {
 	}
 
 	@:pin('control') @:killer('M-FACTS-INVALIDATE-FOREIGN')
-	public function testFactsOfTheRewrittenTextStayCurrent(): Void {
-		// the facts compile ran after the run wrote the file: the rewrite did not outdate them
+	public function testFactsOfAnotherTextThanTheOriginalAreStale(): Void {
+		// the run waits for the facts compiles before it writes: facts of a text other than the run-start one name nothing
 		final hash: Array<String> = FactText.contentHash(SRC).split(':');
 		final read: String = dump('Int')
 			.replace('\n{"k":"end"', '\n{"k":"src","path":"A.hx","len":${hash[0]},"md5":"${hash[1]}"}\n{"k":"end"');
 		final facts: CompilerFacts = table([read]);
+		// the file on disk is still the text the facts certify: a compile after the rewrite read it, the facts stay
 		facts.invalidate('A.hx', SRC.replace('class A', 'class  A'));
-		Assert.same(
-			Typed('Int'),
-			new FactsTypeOracle(facts, file -> SRC, null, PLUGIN).localType('A.hx', declOf(SRC), 'v', SRC.indexOf('var v') + 5)
+		Assert.equals(SRC, facts.sourceOf('A.hx'));
+		// certified for neither the original nor the text on disk: stale, and the original is not kept
+		final other: CompilerFacts = CompilerFacts.build(
+			[{ name: 'one', text: read, file: path -> path }], file -> file == 'A.hx' ? SRC + '\n' : null, file -> file
 		);
+		other.invalidate('A.hx', SRC.replace('class A', 'class  A'));
+		Assert.isNull(other.sourceOf('A.hx'));
+		Assert.isNull(other.asCompiled().sourceOf('A.hx'), 'a text the compile never read was kept as the original');
 	}
 
 	@:pin('control') @:killer('M-CODEPOINT-NATIVE')

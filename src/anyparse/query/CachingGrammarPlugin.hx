@@ -329,6 +329,12 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		return read == null ? null : read();
 	}
 
+	/** Let the facts compiles the run started ahead finish before it writes (`ResolutionScope.factsSettled`). */
+	public function compilerFactsSettled(): Void {
+		final settle: Null<() -> Void> = _resolutionScope?.factsSettled;
+		if (settle != null) settle();
+	}
+
 	/**
 	 * Tell the run's compiler facts that `files` were rewritten, without compiling them if no one asked yet. `originals`
 	 * holds the text each had when the run started, which the facts keep to read the file as the compile read it.
@@ -757,4 +763,10 @@ typedef ResolutionScope = {
 	 * or once `facts` builds them (`CompilerFacts.invalidate`).
 	 */
 	@:optional final factsEdited: (String, Null<String>) -> Void;
+
+	/**
+	 * Wait for the facts compiles the run started ahead, when it did: called before the run's first write, so no compile
+	 * reads a file half way through a rewrite. A run that started none compiles on demand, after its writes.
+	 */
+	@:optional final factsSettled: () -> Void;
 };

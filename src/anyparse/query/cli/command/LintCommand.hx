@@ -434,7 +434,8 @@ final class LintCommand implements CliCommand {
 			sources: resolution.sources,
 			builds: resolution.builds,
 			facts: probe,
-			factsEdited: touched
+			factsEdited: touched,
+			factsSettled: () -> if (early != null) probe()
 		};
 	}
 

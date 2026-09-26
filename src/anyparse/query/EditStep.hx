@@ -42,7 +42,9 @@ final class EditStep {
 		for (e in _edits) {
 			final start: Int = e.span.from + shift;
 			final end: Int = start + e.text.length;
-			// an edit meeting the span's interior — text inserted in it, or text deleted from it — leaves no counterpart
+			// an edit meeting the span's interior — text inserted in it, or text deleted from it — leaves no counterpart; a
+			// deletion exactly at `from` counts as before the span, which a fix deleting an inference-relevant modifier or
+			// meta at a member's start would have to revisit
 			if (start < to && from < end) return null;
 			if (end <= from) at = shift + e.text.length - (e.span.to - e.span.from);
 			shift += e.text.length - (e.span.to - e.span.from);
