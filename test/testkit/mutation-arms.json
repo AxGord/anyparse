@@ -8228,6 +8228,13 @@
 			"find": "&& declared.kind == CLASS_KIND && !declared.isExtern;",
 			"replace": "&& declared.kind == CLASS_KIND;",
 			"note": "an extern class's `.toString()` is dropped, though the string coercion may call the native one"
+		},
+		{
+			"name": "M-FACTS-ESCAPE-SHIFT",
+			"type": "anyparse.check.FactsTypeOracle",
+			"method": "escapedBefore",
+			"force": "false",
+			"note": "an expression in a string after an escape is typed by the fact the compiler shifted onto its range"
 		}
 	]
 }

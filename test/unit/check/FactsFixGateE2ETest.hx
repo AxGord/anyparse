@@ -39,7 +39,10 @@ class FactsFixGateE2ETest extends Test {
 		+ '\tpublic static macro function build():Array<Field> {\n' + '\t\treturn null;\n' + '\t}\n' + '}\n';
 	private static final TOSTRING_MAIN: String = 'import haxe.io.Path;\n' + '\n' + '@:nullSafety(Strict)\n' + 'class Main {\n'
 		+ '\tstatic function main() {\n' + '\t\tfinal p:Path = new Path(\'a/b.txt\');\n' + '\t\tSys.println(\'$${p.toString()}\');\n'
-		+ '\t\tSys.println(\'x\' + p.toString());\n' + '\t\tSys.println(\'d $${Date.now().toString()}\'.length);\n' + '\t}\n' + '}\n';
+		+ '\t\tSys.println(\'x\' + p.toString());\n' + '\t\tSys.println(\'d $${Date.now().toString()}\'.length);\n'
+		+ '\t\tfinal d:Date = Date.now();\n' + '\t\tfinal n:Named = new Named();\n'
+		+ '\t\tSys.println(\'\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t$${d.toString()}$${n.label}\'.length);\n' + '\t}\n' + '}\n'
+		+ '\n' + 'class Named {\n' + '\tpublic final label:String = \'l\';\n' + '\n' + '\tpublic function new() {}\n' + '}\n';
 	private static final HXML: String = '-cp .\n-main Main\n--interp\n';
 	private static inline final APQLINT: String = '{"compilerOracle":[{"hxml":"check.hxml"}],"resolutionRoots":["."]}';
 	private static inline final BUFFER: Int = 1 << 20;
@@ -97,9 +100,10 @@ class FactsFixGateE2ETest extends Test {
 
 	/**
 	 * A receiver of a class the resolution scope does not declare (`haxe.io.Path`) loses its `.toString()` once the facts
-	 * show every configuration compiled it as a non-extern class; an extern one (`Date` on `--interp`) keeps it.
+	 * show every configuration compiled it as a non-extern class; an extern one (`Date` on `--interp`) keeps it — also
+	 * where, after fifteen escapes, the compiler places the read of `n` exactly at `d`'s range.
 	 */
-	@:pin('control') @:killer('M-TOSTRING-FACTS-CLASS') @:killer('M-TOSTRING-FACTS-EXTERN')
+	@:pin('control') @:killer('M-TOSTRING-FACTS-CLASS') @:killer('M-TOSTRING-FACTS-EXTERN') @:killer('M-FACTS-ESCAPE-SHIFT')
 	public function testAReceiverTheFactsTypeAsANonExternClassLosesItsToString(): Void {
 		#if (sys || nodejs)
 		final dir: Null<String> = tree('tostringfacts', [{ name: 'Main.hx', source: TOSTRING_MAIN }], HXML);
@@ -110,6 +114,7 @@ class FactsFixGateE2ETest extends Test {
 		Assert.isTrue(after.indexOf('Sys.println(\'$$p\');') >= 0, after);
 		Assert.isTrue(after.indexOf('Sys.println(\'x\' + p);') >= 0, after);
 		Assert.isTrue(after.indexOf('Date.now().toString()') >= 0, after);
+		Assert.isTrue(after.indexOf('$${d.toString()}') >= 0, after);
 		Assert.equals(before, run(dir), 'the program prints what it printed');
 		CliFixture.removeDir(dir);
 		#else

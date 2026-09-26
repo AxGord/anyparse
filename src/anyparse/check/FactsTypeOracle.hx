@@ -7,6 +7,7 @@ import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CompilerFacts;
 import anyparse.query.EditJournal;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.LexicalRegions;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndexHost;
 import anyparse.runtime.Span;
@@ -70,6 +71,9 @@ final class FactsTypeOracle implements TypeOracle {
 	public static inline final DECLINE_DYNAMIC_SOURCE: String =
 		'a `Dynamic` value flows into it, so the type the compiler gave it was inferred from its uses, not from the value';
 
+
+	public static inline final DECLINE_SHIFTED: String =
+		'it sits in a string after an escape sequence, where the compiler shifts the ranges of the interpolated code';
 
 	public static inline final DECLINE_ELSEWHERE: String =
 		'the facts place this code in another member or type than the file as it is now does';
@@ -224,6 +228,7 @@ final class FactsTypeOracle implements TypeOracle {
 	private function typedAt(flows: Bool, site: FactsSite, at: Span, here: Home): OracleType {
 		final nodes: Array<FactNode> = site.facts.nodesAround(site.file, at);
 		if (nodes.length == 0) return Declined(DECLINE_CODE_NOT_COMPILED);
+		if (escapedBefore(site, at)) return Declined(DECLINE_SHIFTED);
 		if (!sameHome(site, nodes[nodes.length - 1], here)) return Declined(DECLINE_ELSEWHERE);
 		final typed: Null<String> = site.facts.typeOfExpressionAt(site.file, at);
 		final types: Array<String> = typed == null ? [] : [typed];
@@ -233,6 +238,18 @@ final class FactsTypeOracle implements TypeOracle {
 				if (f.at.file == site.key && f.at.span.from == at.from && f.at.span.to == at.to && !types.contains(f.from))
 					types.push(f.from);
 		return agreed(types, scopeOf(nodes[nodes.length - 1]), DECLINE_NO_FACT);
+	}
+
+	/**
+	 * Whether `at` lies inside a string literal of the text `site` describes after an escape sequence of it: the compiler
+	 * places the code of an interpolation hole there at a range shifted by the escapes before it, where it can name
+	 * another expression exactly.
+	 */
+	private function escapedBefore(site: FactsSite, at: Span): Bool {
+		final regions: Array<LexRegion> = site.regions ?? _plugin.lexicalRegions(site.text);
+		site.regions = regions;
+		final literal: Null<LexRegion> = LexicalRegions.regionAt(at.from, regions);
+		return literal != null && literal.kind == StringLit && site.text.substring(literal.from, at.from).indexOf('\\') >= 0;
 	}
 
 	/**
@@ -357,7 +374,8 @@ final class FactsTypeOracle implements TypeOracle {
 			key: key,
 			text: text,
 			current: current,
-			types: null
+			types: null,
+			regions: null
 		};
 		_sites[key] = site;
 		return site;
@@ -445,6 +463,9 @@ private typedef FactsSite = {
 
 	/** The types `typesIn` read, once it has. */
 	var types: Null<Array<{ id: String, span: Span }>>;
+
+	/** The lexical regions of `text`, once `escapedBefore` read them. */
+	var regions: Null<Array<LexRegion>>;
 }
 
 /** The member and the type holding a span of a file as it is now, and the member's own span; null where it lies in none. */
