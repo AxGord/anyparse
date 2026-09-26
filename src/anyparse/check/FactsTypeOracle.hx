@@ -68,18 +68,17 @@ final class FactsTypeOracle implements TypeOracle {
 	/** The node kinds that are a member function's own body (`TypedFactsProbe`). */
 	private static final MEMBER_FUNCTION_KINDS: Array<String> = ['method', 'ctor'];
 
-	/** The kinds the facts give a type no operator overload can be declared on (`CompilerFacts.TypeFact`). */
-	private static final PLAIN_KINDS: Array<String> = ['class', 'interface', 'enum'];
-
 	public static inline final DECLINE_DYNAMIC_SOURCE: String =
 		'a `Dynamic` value flows into it, so the type the compiler gave it was inferred from its uses, not from the value';
-
 
 	public static inline final DECLINE_SHIFTED: String =
 		'it sits in a string after an escape sequence, where the compiler shifts the ranges of the interpolated code';
 
 	public static inline final DECLINE_ELSEWHERE: String =
 		'the facts place this code in another member or type than the file as it is now does';
+
+	/** The kinds the facts give a type no operator overload can be declared on (`CompilerFacts.TypeFact`). */
+	private static final PLAIN_KINDS: Array<String> = ['class', 'interface', 'enum'];
 
 	/** The table this oracle reads. */
 	public final facts: CompilerFacts;

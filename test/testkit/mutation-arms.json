@@ -8243,6 +8243,30 @@
 			"find": "return id != null && (builtins.contains(id) || (declared != null && declared.alike && PLAIN_KINDS.contains(declared.kind)))",
 			"replace": "return id != null",
 			"note": "any type the facts name is named, an abstract included, and the overload table judges another declaration of that simple name"
+		},
+		{
+			"name": "M-FACTS-ALIKE-FOLD",
+			"type": "anyparse.check.FactsTypeOracle",
+			"method": "nonOverloadingName",
+			"find": "(declared != null && declared.alike && PLAIN_KINDS.contains(declared.kind))",
+			"replace": "(declared != null && PLAIN_KINDS.contains(declared.kind))",
+			"note": "a type one configuration declares a class and another an overloading abstract is named by the first one's record"
+		},
+		{
+			"name": "M-FACTS-ALIKE-TOSTRING",
+			"type": "anyparse.check.RedundantToString",
+			"method": "compiledClass",
+			"find": "declared != null && declared.alike && declared.kind == CLASS_KIND",
+			"replace": "declared != null && declared.kind == CLASS_KIND",
+			"note": "a class extern in one configuration and not in another is proven by the first one's record"
+		},
+		{
+			"name": "M-FACTS-META-UNION",
+			"type": "anyparse.query.FactMerge",
+			"method": "type",
+			"find": "for (m in from.meta) if (!into.meta.contains(m)) into.meta.push(m);",
+			"replace": "",
+			"note": "a type's metadata is the first configuration's only, so an `@:autoBuild` another configuration sees is lost"
 		}
 	]
 }

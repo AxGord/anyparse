@@ -54,6 +54,22 @@ class FactsFixGateE2ETest extends Test {
 	private static final FAR_PATH: String = 'package far;\n' + '\n' + 'abstract Path2(String) from String to String {\n'
 		+ '\t@:op(A + B) static function add(a:Path2, b:String):Path2\n' + '\t\treturn (a : String) + \'/\' + b;\n' + '}\n';
 	private static final NEAR_PATH: String = 'package other;\n' + '\n' + 'class Path2 {\n' + '\tpublic function new() {}\n' + '}\n';
+	private static final SPLIT_MAIN: String = 'import far.Buf;\n' + 'import far.Tag;\n' + '\n' + '@:nullSafety(Strict)\n'
+		+ 'class Holder {\n' + '\tpublic final tag:Tag = new Tag();\n' + '\n' + '\tpublic function new() {}\n' + '}\n' + '\n'
+		+ 'class Leaf extends Built {\n' + '\tprivate function kept():Void {\n' + '\t\ttrace(\'k\');\n' + '\t}\n' + '}\n' + '\n'
+		+ '@:nullSafety(Strict)\n' + 'class Main {\n' + '\tstatic function main() {\n' + '\t\tfinal hs:Array<Holder> = [new Holder()];\n'
+		+ '\t\tnew Leaf();\n' + '\t\ttrace((hs[0].tag) + \'x\' + \'y\');\n' + '\t\ttrace(\'$${new Buf().toString()}|\');\n' + '\t}\n'
+		+ '}\n';
+	private static final SPLIT_TAG: String = 'package far;\n' + '\n' + '#if interp\n' + 'class Tag {\n' + '\tpublic function new() {}\n'
+		+ '\n' + '\tpublic function toString():String {\n' + '\t\treturn \'r\';\n' + '\t}\n' + '}\n' + '#else\n'
+		+ 'abstract Tag(String) {\n' + '\tpublic function new() {\n' + '\t\tthis = \'r\';\n' + '\t}\n' + '\n'
+		+ '\t@:op(A + B) static function add(a:Tag, b:String):String\n' + '\t\treturn (cast a : String) + \'/\' + b;\n' + '}\n' + '#end\n';
+	private static final SPLIT_NEAR_TAG: String = 'package other;\n' + '\n' + 'class Tag {\n' + '\tpublic function new() {}\n' + '}\n';
+	private static final SPLIT_BUF: String = 'package far;\n' + '\n' + '#if js\n' + 'extern class Buf {\n' + '\tpublic function new();\n'
+		+ '\n' + '\tpublic function toString():String;\n' + '}\n' + '#else\n' + 'class Buf {\n' + '\tpublic function new() {}\n' + '\n'
+		+ '\tpublic function toString():String {\n' + '\t\treturn \'b\';\n' + '\t}\n' + '}\n' + '#end\n';
+	private static final SPLIT_BUILT: String = '#if js\n' + '@:autoBuild(Noop.build())\n' + '#end\n' + 'class Built {\n'
+		+ '\tpublic function new() {}\n' + '}\n';
 	private static final HXML: String = '-cp .\n-main Main\n--interp\n';
 	private static inline final APQLINT: String = '{"compilerOracle":[{"hxml":"check.hxml"}],"resolutionRoots":["."]}';
 	private static inline final BUFFER: Int = 1 << 20;
@@ -150,6 +166,46 @@ class FactsFixGateE2ETest extends Test {
 		Assert.isTrue(after.indexOf('Sys.println(\'x\' + p);') >= 0, after);
 		Assert.isTrue(after.indexOf('Date.now().toString()') >= 0, after);
 		Assert.isTrue(after.indexOf('$${d.toString()}') >= 0, after);
+		Assert.equals(before, run(dir), 'the program prints what it printed');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * Two configurations that record one type differently leave every fix off: `far.Tag` is a class on `--interp` and an
+	 * abstract overloading `+` on js, `far.Buf` a class on `--interp` and an extern one on js, and `Built` is under
+	 * `@:autoBuild` on js only. The `--interp` configuration is listed first, so its record is the one the table keeps, and
+	 * only the agreement flag and the metadata union stand between it and a fix that changes the js build. The `Tag`
+	 * operand is parenthesized: unwrapped, the compiler's inserted `Std.string` puts its receiver at the operand's range.
+	 */
+	@:pin('control') @:killer('M-FACTS-ALIKE-FOLD') @:killer('M-FACTS-ALIKE-TOSTRING') @:killer('M-FACTS-META-UNION')
+	public function testWhatTheConfigurationsRecordDifferentlyKeepsEveryFixOff(): Void {
+		#if (sys || nodejs)
+		final dir: Null<String> = tree('splitfacts', [
+			{ name: 'src/Main.hx', source: SPLIT_MAIN },
+			{ name: 'src/other/Tag.hx', source: SPLIT_NEAR_TAG },
+			{ name: 'lib/far/Tag.hx', source: SPLIT_TAG },
+			{ name: 'lib/far/Buf.hx', source: SPLIT_BUF },
+			{ name: 'lib/Built.hx', source: SPLIT_BUILT },
+			{ name: 'lib/Noop.hx', source: CHAIN_NOOP },
+			{ name: 'js.hxml', source: '-cp src\n-cp lib\n-main Main\n-js out.js\n' }
+		], '-cp src\n-cp lib\n-main Main\n--interp\n', '{"compilerOracle":[{"hxml":"check.hxml"},{"hxml":"js.hxml"}],"resolutionRoots":["src"]}');
+		if (dir == null) return;
+		final before: String = run(dir);
+		CliFixture.captureStderr(() -> Cli.run([
+			'lint',
+			'--fix',
+			'--rule',
+			'fold-adjacent-string-literals',
+			'--rule',
+			'redundant-tostring',
+			'--rule',
+			'unused-private',
+			'$dir/src'
+		]));
+		Assert.equals(SPLIT_MAIN, File.getContent('$dir/src/Main.hx'));
 		Assert.equals(before, run(dir), 'the program prints what it printed');
 		CliFixture.removeDir(dir);
 		#else

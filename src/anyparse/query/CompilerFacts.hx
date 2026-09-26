@@ -245,7 +245,6 @@ final class CompilerFacts {
 	private final _expected: Map<String, String> = [];
 	private final _stale: Map<String, Bool> = [];
 
-
 	/** Table key -> the text a rewritten file had when the run started, when it is the text the compile read. */
 	private final _originals: Map<String, String> = [];
 
@@ -309,7 +308,6 @@ final class CompilerFacts {
 		for (k => v in _nodeFiles) twin._nodeFiles[k] = v;
 		for (k => v in _types) twin._types[k] = v;
 		for (k => v in _typeHomes) twin._typeHomes[k] = v;
-
 		for (k => v in _supers) twin._supers[k] = v;
 		for (k => v in _subs) twin._subs[k] = v;
 		for (k => v in _expected) twin._expected[k] = v;
@@ -399,7 +397,6 @@ final class CompilerFacts {
 	public inline function typeIds(): Iterator<String> {
 		return _types.keys();
 	}
-
 
 	/** Where the type `id` is declared; null when no configuration typed it or its file cannot be read. */
 	public function typePosition(id: String): Null<FactPos> {
