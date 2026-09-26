@@ -457,6 +457,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.core.DocMeasureFillStackTest',
 		'unit.core.DocMeasureFirstVisibleTextTest',
 		'unit.core.DocRendererTest',
+		'unit.core.RendererSharedDocTest',
 		'unit.core.WriterTrailingWhitespaceTest',
 		'unit.format.BraceSymmetrySliceTest',
 		'unit.format.CommentInventoryTest',
@@ -703,6 +704,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.grammar.haxe.HxMultiVarDeclSliceTest',
 		'unit.grammar.haxe.HxMultilineDeclSliceTest',
 		'unit.grammar.haxe.HxNamedFnExprSliceTest',
+		'unit.grammar.haxe.HxNestingCostTest',
 		'unit.grammar.haxe.HxNoBodyAbstractTest',
 		'unit.grammar.haxe.HxNumericSeparatorSliceTest',
 		'unit.grammar.haxe.HxObjectFieldColonOptionsTest',
@@ -1819,6 +1821,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.cli.LintFixQuietDefaultTest#testTheRuleAccountingWaitsForAnEditOrForVerbose :: control :: M-LINT-FIX-CENSUS-UNGATED',
 			'unit.cli.LintRangeCliTest#testWriteFixLeavesAStandingFindingOutsideTheWindow :: control :: M-LINT-RANGE-INERT',
 			'unit.cli.ResolutionScopeCliTest#testCrossingSuperNeedsRootsThatMatch :: control :: M-FIAD-ROOTS-MATCH-IGNORED',
+			'unit.core.RendererSharedDocTest#testProbeSearchVisitsASharedNodeOnce :: control :: M-PROBE-SEARCH-REVISITS',
 			'unit.format.BraceSymmetrySliceTest#testAWrappedValueThenBranchDropsItsSourceSemicolon :: control :: M-SSB-VALUE-WRAP-OFF',
 			'unit.format.BraceSymmetrySliceTest#testTheSameTryOutsideAMacroIsStillBraced :: control :: '
 				+ 'M-TRY-BODY-SYM-OFF,M-SSB-TRY-SUBST-OFF',
@@ -1972,6 +1975,11 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testReportedConfigGuardStaysGlued :: control :: M-LOOPIF-ALWAYS',
 			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testReportedSiteBreaksUnderHeader :: control :: M-LOOPIF-NEVER',
 			'unit.grammar.haxe.HxLoopBodyIfElseSliceTest#testWhileIfElseBreaksUnderHeader :: control :: M-LOOPIF-NEVER',
+			'unit.grammar.haxe.HxNestingCostTest#testCollapsePassComputesEachSharedNodeOnce :: control :: '
+				+ 'M-COLLAPSE-REWRITE-MEMO-OFF,M-COLLAPSE-SUBTREE-MEMO-OFF,M-COLLAPSE-COMMIT-MEMO-OFF',
+			'unit.grammar.haxe.HxNestingCostTest#testComprehensionBodyIsWrittenOnce :: control :: M-FOR-BODY-PROBE-EAGER',
+			'unit.grammar.haxe.HxNestingCostTest#testParserRunsEachNestedAtomOnce :: control :: M-PARSE-MEMO-REPLAY-OFF,M-PARSE-MEMO-STASHED-SKIP',
+			'unit.grammar.haxe.HxNestingCostTest#testWriterDocKeepsItsSharing :: control :: M-GROUPIFY-SHARED-OFF',
 			'unit.grammar.haxe.HxSameLineOptionsTest#testStatementBareTryBreaksByDefault :: control :: M-BLOCK-SHAPE-EQUIV-NONE',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testBareThenIfGetsBracesAdded :: control :: M-SSB-WRAP-DIRECTION',
 			'unit.grammar.haxe.HxSingleStmtBracesSliceTest#testBareThenOppositeBracedElseGetsBraces :: control :: M-SSB-CHAIN-TAIL-OFF',
@@ -3630,7 +3638,15 @@ class TestDiscoveryParityTest extends Test {
 			'M-PSE-FACTS-USING-MODULE-WIDE',
 			'M-PSE-USING-ALIAS-HOST',
 			'M-PSE-USING-SELF-MODULE',
-			'M-PSE-FACTS-USING-SELF-MODULE'
+			'M-PSE-FACTS-USING-SELF-MODULE',
+			'M-PARSE-MEMO-REPLAY-OFF',
+			'M-PARSE-MEMO-STASHED-SKIP',
+			'M-COLLAPSE-REWRITE-MEMO-OFF',
+			'M-COLLAPSE-SUBTREE-MEMO-OFF',
+			'M-COLLAPSE-COMMIT-MEMO-OFF',
+			'M-FOR-BODY-PROBE-EAGER',
+			'M-GROUPIFY-SHARED-OFF',
+			'M-PROBE-SEARCH-REVISITS'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
@@ -3751,6 +3767,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-ABSTRACT-THIS :: anyparse.check.TypedFactsWalk#walk',
 			'M-PENDING-JOBS-FILE-KEPT :: anyparse.check.HaxeSpawn#FinalMember:PARALLEL_DRIVER',
 			'M-FACTS-WRITTEN-DURING :: anyparse.check.TypedFactsMacro#writtenSince',
+			'M-FOR-BODY-PROBE-EAGER :: anyparse.macro.WriterBodyPolicyLowering#wrapBodyAllman',
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 

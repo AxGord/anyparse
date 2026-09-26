@@ -174,6 +174,9 @@ class Lowering {
 
 	private final _eregByRule: Map<String, GeneratedRule.EregSpec> = [];
 
+	/** Generated functions a `@:memo` grammar type asks `memoize` to wrap. */
+	private final _memoFns: Array<String> = [];
+
 	/**
 	 * One record per `@:tryparse` Star call site the lowering walked,
 	 * accumulated as a side effect of `emitStarFieldSteps` exactly as
@@ -259,7 +262,54 @@ class Lowering {
 		dumpDispatch(_shape.rules, _starGates);
 		#end
 		if (_ctx.spans) for (rule in rules) if (spanRuleNames.exists(rule.fnName)) rule.body = instrumentSpans(rule.body);
-		return rules;
+		// After span instrumentation: the memo shell returns a value the raw
+		// rule already built, so it must not gain a second span argument.
+		return _memoFns.length == 0 ? rules : [for (rule in rules) for (r in memoize(rule)) r];
+	}
+
+	/**
+	 * `@:memo` on a grammar type: its operand unit — the atom wrapper of a
+	 * Pratt enum (what every operand, prefix recursion and bracketed
+	 * sub-expression goes through), else the rule itself — records its outcome
+	 * per start position in the parse context, so sibling alternatives that
+	 * share a prefix (`(e : T)` then `(e)`) parse the shared operand once
+	 * instead of once per alternative, which nests into `2^depth`.
+	 *
+	 * Returns `[rule]` for a rule not marked, else the shell under the rule's
+	 * own name plus the raw body renamed `<fn>Unmemoized`. A replay must equal
+	 * a re-run: besides `pos`, the one context field a rule reads or leaves
+	 * behind is the pending trivia stash, so its content is part of the key and
+	 * its effect part of the record (`Parser.memoKey` / `memoRecord`).
+	 */
+	private function memoize(rule: GeneratedRule): Array<GeneratedRule> {
+		if (!_memoFns.contains(rule.fnName)) return [rule];
+		if (rule.hasMinPrec) Context.fatalError('Lowering: @:memo cannot wrap the precedence loop ${rule.fnName}', Context.currentPos());
+		final rawName: String = '${rule.fnName}Unmemoized';
+		final raw: GeneratedRule = new GeneratedRule(rawName, rule.returnCT, rule.body, rule.eregs, false);
+		final localClass: Null<haxe.macro.Type.Ref<haxe.macro.Type.ClassType>> = Context.getLocalClass();
+		final key: String = '${localClass == null ? '' : localClass.toString()}.${rule.fnName}';
+		final returnCT: ComplexType = rule.returnCT;
+		final shellBody: Expr = macro {
+			final _memoStart: Int = ctx.pos;
+			final _memoKey: String = ctx.memoKey($v{key});
+			final _memoHit: Null<anyparse.runtime.MemoEntry> = ctx.memoReplay(_memoKey, _memoStart);
+			if (_memoHit != null) {
+				final _memoError: Null<anyparse.runtime.ParseError> = _memoHit.error;
+				if (_memoError != null) throw _memoError;
+				return (cast _memoHit.value: $returnCT);
+			}
+			final _memoHanded: Null<anyparse.runtime.PendingTrivia> = ctx.pendingTrivia;
+			final _memoHandedComments: Int = _memoHanded == null ? 0 : _memoHanded.leadingComments.length;
+			try {
+				final _memoValue: $returnCT = $i{rawName}(ctx);
+				ctx.memoRecord(_memoKey, _memoStart, _memoHanded, _memoHandedComments, _memoValue, null);
+				return _memoValue;
+			} catch (_memoFail: anyparse.runtime.ParseError) {
+				ctx.memoRecord(_memoKey, _memoStart, _memoHanded, _memoHandedComments, null, _memoFail);
+				throw _memoFail;
+			}
+		};
+		return [new GeneratedRule(rule.fnName, returnCT, shellBody, [], false), raw];
 	}
 
 	private function lowerRule(typePath: String, node: ShapeNode): Array<GeneratedRule> {
@@ -363,6 +413,7 @@ class Lowering {
 		// non-raw parent rule) handles whitespace before the raw rule's
 		// entry point; inside the raw rule, every character is significant.
 		if (node.hasMeta(':raw') || _formatInfo.isBinary) for (rule in rules) rule.body = stripSkipWs(rule.body);
+		if (node.hasMeta(':memo')) _memoFns.push(node.kind == Alt && hasPrattBranch(node) ? '${fnName}Atom' : fnName);
 		return rules;
 	}
 

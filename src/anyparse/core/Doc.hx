@@ -17,6 +17,12 @@ package anyparse.core;
  * compile-time net of exhaustive spine walkers that catches a new ctor —
  * together with the one walker whose nested arm the net does not cover.
  *
+ * A Doc is a DAG, not a tree: a two-branch ctor's branches share their
+ * operands, and those operands nest. A walker that descends BOTH branches
+ * visits a shared node once per path to it — `2^depth` on a nest — so it
+ * either visits each node once (`DocIdentityMap`) or, if it rebuilds, maps a
+ * shared node to one shared result.
+ *
  * See `D` for builder helpers and `Renderer` for the layout algorithm.
  */
 enum Doc {

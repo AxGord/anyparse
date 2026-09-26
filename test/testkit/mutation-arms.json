@@ -8434,6 +8434,69 @@
 			"find": "usings.contains(module) ? usings : usings.concat([module])",
 			"replace": "usings",
 			"note": "the facts do not weigh the other types of the configured module"
+		},
+		{
+			"name": "M-PARSE-MEMO-REPLAY-OFF",
+			"type": "anyparse.runtime.Parser",
+			"method": "memoReplay",
+			"force": "null",
+			"note": "a `@:memo` rule never replays a recorded run, so every `(`-led alternative re-parses the operand it shares with its siblings and a paren nest costs 2^depth"
+		},
+		{
+			"name": "M-PARSE-MEMO-STASHED-SKIP",
+			"type": "anyparse.runtime.Parser",
+			"method": "memoRecord",
+			"find": "memoRuns++;",
+			"replace": "memoRuns++;\n\t\tif (handed != null) return;",
+			"note": "a run handed a pending trivia stash is not recorded, so a nest whose operands follow a line break (`(a) ->` newline `(`) re-parses 2^depth times"
+		},
+		{
+			"name": "M-COLLAPSE-REWRITE-MEMO-OFF",
+			"type": "anyparse.core.CollapsePass",
+			"method": "rewrite",
+			"find": "if (hit != null) return hit;",
+			"replace": "",
+			"note": "the pass rewrites a shared Doc node once per path to it, so a nest of two-branch ctors is rewritten 2^depth times"
+		},
+		{
+			"name": "M-COLLAPSE-SUBTREE-MEMO-OFF",
+			"type": "anyparse.core.CollapsePass",
+			"method": "anyInSubtree",
+			"find": "if (hit != null) return hit;",
+			"replace": "",
+			"note": "every subtree question walks a shared node once per path to it, 2^depth on a nest of two-branch ctors"
+		},
+		{
+			"name": "M-COLLAPSE-COMMIT-MEMO-OFF",
+			"type": "anyparse.core.CollapsePass",
+			"method": "commitOpens",
+			"find": "if (hit != null) return hit;",
+			"replace": "",
+			"note": "committing an opened paren re-commits a shared node once per path to it"
+		},
+		{
+			"name": "M-FOR-BODY-PROBE-EAGER",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "wrapBodyAllman",
+			"find": "final _bodyForAllman: Null<anyparse.core.Doc> =",
+			"replace": "final _eagerProbe: anyparse.core.Doc = $writeCall;\n\t\t\tfinal _bodyForAllman: Null<anyparse.core.Doc> =",
+			"note": "the Allman probe writes every body whatever its ctor and the layout writes it again, so a comprehension nest writes its innermost body 2^depth times"
+		},
+		{
+			"name": "M-GROUPIFY-SHARED-OFF",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "groupifyShared",
+			"find": "if (hit != null) return hit;",
+			"replace": "",
+			"note": "regrouping a comprehension's items copies every shared Doc node once per path to it, so the writer's Doc grows 2^depth"
+		},
+		{
+			"name": "M-PROBE-SEARCH-REVISITS",
+			"type": "anyparse.core.Renderer",
+			"method": "findCollapseProbe",
+			"find": "if (seen.exists(node)) continue;",
+			"replace": "",
+			"note": "the collapse-probe search re-walks a shared Doc node once per path to it, 2^depth on a nest of two-branch ctors"
 		}
 	]
 }
