@@ -804,3 +804,7 @@ decided the question; it may not become a record of runs.
 - closing a null that non-null-safe code passes into a parameter declared as a class (`x?.name` -> `x.name` in a Strict
   class called from a plain one) → the compiler checks only the code in its own null-safety scope, and every declared-type
   proof trusts the declaration; the same residual as the value-type one above — `3537f901`
+- typing an oracle-assisted annotation with the display server → it compiles one configuration lazily: code no build compiles answers empty on every path form, a monomorph a later use binds answers `Unknown<0>`, and a disagreement between builds is invisible; the facts of every configuration answer all three
+- asking the display server for code no configuration compiles → its hxml is one of those configurations, so the answer is empty by construction; the facts oracle declines instead
+- dropping the facts of every file the `--fix` run rewrote → the facts compile may have read the REWRITTEN text (it starts on first demand), so they were current; keep the run-start text and invalidate only facts of that text
+- writing the type the compiler gave a local a `Dynamic` value initializes → assignment from `Dynamic` binds no monomorph, so the type is whatever its uses bound (`{k:String}` for a `Json.parse` result read as a string), not the value's

@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.Check.OracleType;
 import anyparse.check.Check.TypeOracle;
 import anyparse.check.Check.Violation;
 import anyparse.check.DynamicShape.DynCtx;
@@ -344,7 +345,12 @@ final class DynamicBag {
 			var t: Null<String> = bagValueType(w, tree, shape, declaredTypes);
 			if (t == null && oracle != null) {
 				final ws: Null<Span> = w.span;
-				final raw: Null<String> = ws == null ? null : oracle.typeAt(file, ws.to - 1);
+				final raw: Null<String> = ws == null
+					? null
+					: switch oracle.expressionType(file, ws) {
+						case Typed(type): type;
+						case Declined(_): null;
+					};
 				t = raw == null ? null : LiteralInfer.normalizeInferredType(raw, imports, BAG_MAX_ANON);
 			}
 			if (t == null) {

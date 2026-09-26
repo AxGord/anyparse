@@ -3,6 +3,7 @@ package unit.check;
 import anyparse.check.Check;
 import anyparse.check.ExplicitLocalType;
 import anyparse.check.ExplicitType;
+import anyparse.check.PositionTypeOracle;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.SourceText;
 import anyparse.runtime.Span;
@@ -172,7 +173,7 @@ final class OracleFixImportLeakTest extends Test {
  * answers the SAME type at every position.
  */
 @:nullSafety(Strict)
-private final class IdentTypeOracle implements TypeOracle {
+private final class IdentTypeOracle extends PositionTypeOracle {
 
 	private final _source: String;
 	private final _byName: Map<String, String>;

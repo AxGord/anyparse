@@ -233,22 +233,42 @@ interface VersionGated {
 }
 
 /**
- * The type-query seam a `CompilerOracle`-backed display server exposes to an
- * `OracleAssisted` check: `typeAt` returns the compiler's OWN inferred type at a
- * byte position (the local's name token), or null when the position carries no
- * type / the query failed. The type text is already XML-decoded and trimmed — the
- * fully-qualified, possibly-generic form the compiler prints (`haxe.ds.Map<String, Int>`);
- * the check normalises and rejects it. The concrete implementation
- * (`CompilerDisplayOracle`) drives the Haxe display protocol against a warm
- * compilation server, but the seam is compiler-agnostic — a test double supplies
- * canned types with no process.
+ * The type-query seam an `OracleAssisted` check asks for a type it cannot pin structurally. It is
+ * STRUCTURAL: each question names the declaration it is about — a local, a function's return or
+ * parameter, a field, an expression — by its span and name, so an oracle reading the compiler's
+ * typed tree (`FactsTypeOracle`) and one reading a display server at a byte position
+ * (`PositionTypeOracle`) answer the same question. A `Typed` answer is the compiler's type spelled
+ * as Haxe source, still fully qualified, with a type parameter printed `<owner>.<name>` — the check
+ * normalises it (`LiteralInfer.normalizeWith`). A `Declined` answer says why no sound type exists,
+ * and the check records it as the finding's decline reason.
+ *
+ * `nameEnd` is the offset right after the declaration's name token, which is where a
+ * position-based oracle asks.
  */
 @:nullSafety(Strict)
 interface TypeOracle {
 
-	/** The compiler's inferred type at `bytePos` in `file` (XML-decoded, trimmed), or null when none / the query failed. */
-	public function typeAt(file: String, bytePos: Int): Null<String>;
+	/** The type of the local named `name` declared at `decl`. */
+	public function localType(file: String, decl: Span, name: String, nameEnd: Int): OracleType;
 
+	/** The return type of the function named `name` declared at `fn`. */
+	public function returnType(file: String, fn: Span, name: String, nameEnd: Int): OracleType;
+
+	/** The type of the `index`-th parameter, named `param`, of the function named `name` declared at `fn`. */
+	public function paramType(file: String, fn: Span, name: String, index: Int, param: String, nameEnd: Int): OracleType;
+
+	/** The type of the field named `name` declared at `field`. */
+	public function fieldType(file: String, field: Span, name: String, nameEnd: Int): OracleType;
+
+	/** The type of the expression at `expr`. */
+	public function expressionType(file: String, expr: Span): OracleType;
+
+}
+
+/** A `TypeOracle` answer: the type spelled as Haxe source, or why the oracle names none. */
+enum OracleType {
+	Typed(type: String);
+	Declined(reason: String);
 }
 
 /**

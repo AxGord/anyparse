@@ -3,6 +3,7 @@ package unit.check;
 import anyparse.check.AvoidDynamic;
 import anyparse.check.Check.TypeOracle;
 import anyparse.check.Check.Violation;
+import anyparse.check.PositionTypeOracle;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
 import utest.Assert;
@@ -140,7 +141,7 @@ class AvoidDynamicBagFixTest extends Test {
 }
 
 /** A canned `TypeOracle` for the bag-fix inference tail — returns one fixed type (or null) for every query, no process. */
-private class FakeTypeOracle implements TypeOracle {
+private class FakeTypeOracle extends PositionTypeOracle {
 
 	private final _answer: Null<String>;
 

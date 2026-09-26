@@ -148,6 +148,12 @@ typedef FactNode = {
 	/** The parameters, in order: the compiler gives a parameter no position of its own. */
 	final params: Array<{ name: String, type: String }>;
 
+	/**
+	 * The signature and parameters each configuration gave the node, one entry per distinct pair: `signature` and
+	 * `params` are the first configuration's, and a second entry is a build that typed the node differently.
+	 */
+	final variants: Array<FactSignature>;
+
 	final calls: Array<CallFact>;
 	final news: Array<NewFact>;
 	final fields: Array<FieldFact>;
@@ -161,6 +167,12 @@ typedef FactNode = {
 	final fns: Array<String>;
 }
 
+/** A node's signature and parameters as one configuration typed them. */
+typedef FactSignature = {
+	final signature: String;
+	final params: Array<{ name: String, type: String }>;
+}
+
 /** A declared field of a typed type. `kind` is `method`, `inline`, `dynamic`, `macro` or `var(<read>,<write>)`. */
 typedef FieldDeclFact = {
 	final name: String;
@@ -168,6 +180,9 @@ typedef FieldDeclFact = {
 	final type: String;
 	final isStatic: Bool;
 	final meta: Array<String>;
+
+	/** Every type a configuration gave the field, `type` first: more than one when the builds disagree. */
+	final types: Array<String>;
 }
 
 /**
@@ -222,6 +237,10 @@ final class CompilerFacts {
 	private final _sources: Map<String, Null<String>> = [];
 	private final _expected: Map<String, String> = [];
 	private final _stale: Map<String, Bool> = [];
+
+	/** Table key -> the text a rewritten file had when the run started, when it is the text the compile read. */
+	private final _originals: Map<String, String> = [];
+
 	private final _dumps: Array<DumpFiles> = [];
 	private final _read: (String) -> Null<String>;
 	private final _key: (String) -> String;
@@ -243,14 +262,44 @@ final class CompilerFacts {
 
 	/**
 	 * Drop every fact of `file`: the run rewrote it (`--fix`), so no position the compile recorded names its text any more.
-	 * The file answers as never compiled from here on.
+	 * The file answers as never compiled from here on. `original` is the text it had before the run wrote it: kept when it is
+	 * the text the compile read, so `asCompiled` can still place its facts — and when the compile read ANOTHER text, the
+	 * facts were never of the original, the rewrite did not outdate them, and the text check `sourceOf` makes stays the
+	 * only judge.
 	 */
-	public function invalidate(file: String): Void {
+	public function invalidate(file: String, ?original: String): Void {
 		final key: String = _key(file);
+		final expected: Null<String> = _expected[key];
+		if (original != null && expected != null && FactText.contentHash(original) != expected) return;
+		if (original != null && !_stale.exists(key) && !_originals.exists(key)) _originals[key] = original;
 		_stale[key] = true;
 		_sources.remove(key);
 		_indexes.remove(key);
 		_nodeCache.clear();
+	}
+
+	/**
+	 * The table read against the text each file had when the compile read it: a file the run rewrote (`invalidate`) answers
+	 * at its original text when that was kept, instead of as never compiled. Positions it answers are in that original
+	 * text, not in the file as it is now — only a caller that maps between the two may ask it.
+	 */
+	public function asCompiled(): CompilerFacts {
+		if (!_originals.keys().hasNext()) return this;
+		final originals: Map<String, String> = _originals;
+		final read: (String) -> Null<String> = _read;
+		final twin: CompilerFacts = new CompilerFacts(file -> originals[file] ?? read(file), _key);
+		for (d in dropped) twin.dropped.push(d);
+		for (c in configurations) twin.configurations.push(c);
+		for (d in _dumps) twin._dumps.push(d);
+		for (k => v in _nodeLines) twin._nodeLines[k] = v;
+		for (k => v in _nodeFiles) twin._nodeFiles[k] = v;
+		for (k => v in _types) twin._types[k] = v;
+		for (k => v in _typeHomes) twin._typeHomes[k] = v;
+		for (k => v in _supers) twin._supers[k] = v;
+		for (k => v in _subs) twin._subs[k] = v;
+		for (k => v in _expected) twin._expected[k] = v;
+		for (k in _stale.keys()) if (!originals.exists(k)) twin._stale[k] = true;
+		return twin;
 	}
 
 	/** The node `id`, its facts unioned over every configuration that typed it; null when none did. */
@@ -344,12 +393,12 @@ final class CompilerFacts {
 
 	/** Every type `id` extends or implements, directly or not, over the whole typed set; by id, without type arguments. */
 	public function supertypesOf(id: String): Array<String> {
-		return closure(_supers, id);
+		return FactMerge.closure(_supers, id);
 	}
 
 	/** Every typed type that extends or implements `id`, directly or not; by id. */
 	public function subtypesOf(id: String): Array<String> {
-		return closure(_subs, id);
+		return FactMerge.closure(_subs, id);
 	}
 
 	/** Add one configuration's facts; a dump that is not a complete facts file joins `dropped` instead. */
@@ -417,7 +466,8 @@ final class CompilerFacts {
 					kind: f.k,
 					type: f.t,
 					isStatic: f.s ?? false,
-					meta: f.meta ?? []
+					meta: f.meta ?? [],
+					types: [f.t]
 				}
 		];
 		final known: Null<TypeFact> = _types[record.id];
@@ -439,7 +489,7 @@ final class CompilerFacts {
 			_typeHomes[record.id] = { home: home, p: record.p };
 		} else {
 			// a configuration that typed more of the type (a conditional member) adds what the others lacked
-			for (f in fields) if (!known.fields.exists(k -> k.name == f.name && k.isStatic == f.isStatic)) known.fields.push(f);
+			FactMerge.fields(known.fields, fields);
 			for (i in record.ifaces ?? []) if (!known.interfaces.contains(i)) known.interfaces.push(i);
 		}
 		final parents: Array<String> = (record.ifaces ?? []).copy();
@@ -461,7 +511,7 @@ final class CompilerFacts {
 	 * The nodes of `file` whose range contains `span` — or, when `touching`,
 	 * meets it — outermost first; none when the file cannot be read.
 	 */
-	private function nodesAround(file: String, span: Span, ?touching: Bool): Array<FactNode> {
+	public function nodesAround(file: String, span: Span, ?touching: Bool): Array<FactNode> {
 		final home: String = _key(file);
 		final index: Null<CodepointIndex> = indexOf(home);
 		if (index == null) return [];
@@ -545,6 +595,7 @@ final class CompilerFacts {
 			inlinedFrom: record.inl,
 			overloadIndex: record.ov ?? 0,
 			params: [for (p in record.params ?? []) { name: p.n, type: p.t }],
+			variants: [],
 			calls: [],
 			news: [],
 			fields: [],
@@ -570,6 +621,7 @@ final class CompilerFacts {
 			if (at == null) continue;
 			final node: FactNode = made ?? emptyNode(id, record, at);
 			made = node;
+			FactMerge.variant(node.variants, record.t, [for (p in record.params ?? []) { name: p.n, type: p.t }]);
 			for (channel in record.inc ?? []) if (!node.incomplete.contains(channel)) node.incomplete.push(channel);
 
 			// a fact whose file the table cannot read any more — rewritten, or of another text — is lost to the node: say so
@@ -586,7 +638,7 @@ final class CompilerFacts {
 				seen[identity] = true;
 				return true;
 			}
-			collect(
+			FactMerge.collect(
 				record.calls, c -> place(c.p), fresh.bind('call'), (c, where) -> ({
 					target: c.t,
 					access: c.a,
@@ -598,11 +650,11 @@ final class CompilerFacts {
 				}: CallFact),
 				node.calls
 			);
-			collect(
+			FactMerge.collect(
 				record.news, x -> place(x.p), fresh.bind('new'), (x, where) -> ({type: x.t, instance: x.ty, at: where }: NewFact),
 				node.news
 			);
-			collect(
+			FactMerge.collect(
 				record.fields, f -> place(f.p), fresh.bind('field'), (f, where) -> ({
 					owner: f.o,
 					field: f.f,
@@ -614,7 +666,7 @@ final class CompilerFacts {
 				}: FieldFact),
 				node.fields
 			);
-			collect(
+			FactMerge.collect(
 				record.flows, f -> place(f.p), fresh.bind('flow'), (f, where) -> ({
 					from: f.s,
 					to: f.d,
@@ -623,12 +675,14 @@ final class CompilerFacts {
 				}: FlowFact),
 				node.flows
 			);
-			collect(record.strs, s -> place(s.p), fresh.bind('str'), (s, where) -> ({operand: s.o, at: where }: StringFact), node.strings);
-			collect(
+			FactMerge.collect(
+				record.strs, s -> place(s.p), fresh.bind('str'), (s, where) -> ({operand: s.o, at: where }: StringFact), node.strings
+			);
+			FactMerge.collect(
 				record.iters, i -> place(i.p), fresh.bind('iter'), (i, where) -> ({binder: i.v, iterated: i.i, at: where }: IterationFact),
 				node.iterations
 			);
-			collect(
+			FactMerge.collect(
 				record.refl, r -> place(r.p), fresh.bind('refl'), (r, where) -> ({
 					target: r.t,
 					name: r.n,
@@ -638,14 +692,14 @@ final class CompilerFacts {
 				}: ReflectionFact),
 				node.reflection
 			);
-			collect(
+			FactMerge.collect(
 				record.native, n -> place(n.p), fresh.bind('native'), (n, where) -> ({kind: n.w, name: n.n, at: where }: NativeFact),
 				node.natives
 			);
-			collect(
+			FactMerge.collect(
 				record.vars, v -> place(v.p), fresh.bind('var'), (v, where) -> ({name: v.n, type: v.t, at: where }: VarFact), node.vars
 			);
-			collect(
+			FactMerge.collect(
 				record.reads, r -> place([for (i in 0...r.length - 1) (r[i]: Int)]), fresh.bind('read'), (r, where) -> ({
 					type: (r[r.length - 1]: String),
 					at: where
@@ -680,30 +734,6 @@ final class CompilerFacts {
 	public static function baseId(type: String): String {
 		final open: Int = type.indexOf('<');
 		return open < 0 ? type : type.substr(0, open);
-	}
-
-	private static function closure(edges: Map<String, Array<String>>, from: String): Array<String> {
-		final out: Array<String> = [];
-		final work: Array<String> = [from];
-		while (work.length > 0) {
-			final next: String = work.pop() ?? '';
-			for (to in edges[next] ?? []) if (to != from && !out.contains(to)) {
-				out.push(to);
-				work.push(to);
-			}
-		}
-		return out;
-	}
-
-	/** Every record of `records` whose position resolves and is `fresh`, made into a fact and appended to `into`. */
-	private static function collect<R, F>(
-		records: Null<Array<R>>, position: (R) -> Null<FactPos>, fresh: (Any, FactPos) -> Bool, make: (R, FactPos) -> F, into: Array<F>
-	): Void {
-		if (records == null) return;
-		for (record in records) {
-			final where: Null<FactPos> = position(record);
-			if (where != null && fresh(record, where)) into.push(make(record, where));
-		}
 	}
 
 }

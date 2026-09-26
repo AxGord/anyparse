@@ -167,6 +167,8 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.ExplicitTypeCheckTest',
 		'unit.check.ExplicitTypeReturnOracleTest',
 		'unit.check.ExtractRepeatedExpressionTest',
+		'unit.check.FactsTypeOracleE2ETest',
+		'unit.check.FactsTypeOracleTest',
 		'unit.check.FieldInitAtDeclarationCheckTest',
 		'unit.check.FieldInitAtDeclarationCrossingSuperTest',
 		'unit.check.FieldInitInConstructorCheckTest',
@@ -960,6 +962,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.SymbolIndexRunMemoSliceTest',
 		'unit.query.SymbolIndexSliceTest',
 		'unit.query.SymbolQuerySliceTest',
+		'unit.query.TextMapTest',
 		'unit.query.ThinArrowParamBindingSliceTest',
 		'unit.query.TypeInfoMemoTest',
 		'unit.query.TypeRefPrinterTest',
@@ -1163,6 +1166,18 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-DUP-CODE-RENAMED-GATE-RAW',
 			'unit.check.ExtractRepeatedExpressionTest#testALiteralInteriorDifferenceSplitsTheGroup :: control :: '
 				+ 'M-EXTRACT-REPEAT-RENDER-SPLIT',
+			'unit.check.FactsTypeOracleE2ETest#testTheFactsTypeEveryDeclarationKindAndKeepTheProgram :: control :: M-ASSISTED-FACTS-FIRST,M-ASSISTED-DECLINE-CENSUS,M-EXPLICIT-TYPE-ORACLE-PARAMS,M-EXPLICIT-TYPE-ORACLE-FIELDS,M-FACTS-DYNAMIC-SOURCE',
+			'unit.check.FactsTypeOracleTest#testAFieldTheConfigurationsTypeApartDeclines :: control :: M-FACTS-FIELD-TYPES',
+			'unit.check.FactsTypeOracleTest#testARewrittenFileIsReadAtTheTextTheCompileRead :: control :: M-FACTS-ORACLE-ORIGINAL',
+			'unit.check.FactsTypeOracleTest#testASignatureTheConfigurationsTypeApartDeclines :: control :: M-FACTS-SIGNATURE-VARIANTS',
+			'unit.check.FactsTypeOracleTest#testASiteAfterNonAsciiTextIsFound :: control :: M-CODEPOINT-NATIVE',
+			'unit.check.FactsTypeOracleTest#testATypeParameterOutOfScopeDeclines :: control :: M-FACTS-SPELL-SCOPE',
+			'unit.check.FactsTypeOracleTest#testAnUnknownDeclines :: control :: M-FACTS-SPELL-UNKNOWN',
+			'unit.check.FactsTypeOracleTest#testCodeNoConfigurationCompiledDeclines :: control :: M-FACTS-ABSENT',
+			'unit.check.FactsTypeOracleTest#testConfigurationsThatDisagreeDecline :: control :: M-FACTS-ORACLE-AGREE,M-FACTS-UNION',
+			'unit.check.FactsTypeOracleTest#testExplicitTypeSaysWhyItsStructuralFixDeclined :: control :: M-EXPLICIT-TYPE-STRUCTURAL-DECLINE',
+			'unit.check.FactsTypeOracleTest#testFactsOfTheRewrittenTextStayCurrent :: control :: M-FACTS-INVALIDATE-FOREIGN',
+			'unit.check.FactsTypeOracleTest#testTypesNoSourceCanSpellDecline :: control :: M-FACTS-SPELL-IMPL',
 			'unit.check.FieldInitAtDeclarationCrossingSuperTest#testCollectionOfForeignReadAfterSuperNotMoved :: control :: '
 				+ 'M-FIAD-INERT-ADMITS-ALL,M-FIAD-INERT-ELEMENT-ADMITS-ALL',
 			'unit.check.FieldInitAtDeclarationCrossingSuperTest#testCrossingWithoutResolutionRootsNotMoved :: control :: '
@@ -2467,7 +2482,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.StdResolverTest#testMultiEntryEnvAnswersTheStdEntry :: control :: M-STD-ENV-ENTRIES',
 			'unit.query.StdResolverTest#testTheStdBesideTheCompilerIsFoundInEitherLayout :: control :: M-STD-SIBLING-HOMEBREW',
 			'unit.query.SymbolIndexRunMemoSliceTest#testConfinementGateReadsTheIndexGrantSlot :: control :: M-GRANT-SLOT-UNREAD',
-			'unit.query.SymbolIndexRunMemoSliceTest#testSupertypeNameUnionIsBuiltOncePerIndex :: control :: M-SUPERTYPE-UNION-NOMEMO'
+			'unit.query.SymbolIndexRunMemoSliceTest#testSupertypeNameUnionIsBuiltOncePerIndex :: control :: M-SUPERTYPE-UNION-NOMEMO',
+			'unit.query.TextMapTest#testALineTheRewriteLeftAloneMapsExactly :: control :: M-TEXTMAP-MYERS',
+			'unit.query.TextMapTest#testAnEditedLineKeepsWhatItsEditLeftAround :: control :: M-TEXTMAP-PREFIX'
 		];
 		final actualPins: Array<String> = TestRegistry.pins();
 		Assert.same(
@@ -3480,6 +3497,22 @@ class TestDiscoveryParityTest extends Test {
 			'M-BINDING-PACKAGE-TIER-CUT',
 			'M-CTOR-IMPORT-ALIAS-BLIND',
 			'M-CTOR-QUALIFIED-BLIND',
+			'M-FACTS-ORACLE-AGREE',
+			'M-FACTS-SPELL-UNKNOWN',
+			'M-FACTS-SPELL-SCOPE',
+			'M-FACTS-SPELL-IMPL',
+			'M-FACTS-ORACLE-ORIGINAL',
+			'M-FACTS-INVALIDATE-FOREIGN',
+			'M-FACTS-FIELD-TYPES',
+			'M-FACTS-SIGNATURE-VARIANTS',
+			'M-TEXTMAP-MYERS',
+			'M-TEXTMAP-PREFIX',
+			'M-EXPLICIT-TYPE-ORACLE-PARAMS',
+			'M-EXPLICIT-TYPE-ORACLE-FIELDS',
+			'M-EXPLICIT-TYPE-STRUCTURAL-DECLINE',
+			'M-ASSISTED-FACTS-FIRST',
+			'M-ASSISTED-DECLINE-CENSUS',
+			'M-FACTS-DYNAMIC-SOURCE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

@@ -188,7 +188,12 @@ class ExplicitLocalTypeOracleAbstainTest extends Test {
 		}
 		final result: String = packed;
 		Assert.isTrue(result.indexOf('finalmapped:Array<Int>') != -1, 'the oracle pass ran over this file');
-		Assert.isTrue(result.indexOf('finala=e.split') != -1, 'the comprehension-body local keeps no enclosing type');
+		// A display server answered the comprehension-body local with the ENCLOSING local's type; the compiler's facts give
+		// the local's own, and only that may land.
+		Assert.isTrue(
+			result.indexOf('finala=e.split') != -1 || result.indexOf('finala:Array<String>=e.split') != -1,
+			'the comprehension-body local keeps no enclosing type: $result'
+		);
 		Assert.isTrue(result.indexOf('finalloose=Reflect.field') != -1, 'the untypeable local keeps no Dynamic');
 		Assert.isTrue(result.indexOf('finalt:Thing=newThing(1)') != -1, 'the structurally derivable declaration is still annotated');
 		// Defect 2, in its POSITIVE form. The redeclaration used to get the compiler's repo-rooted

@@ -409,7 +409,7 @@ final class LintCommand implements CliCommand {
 		if (resolution == null || oracles.length == 0 || noOracle) return resolution;
 		var probed: Bool = false;
 		var facts: Null<CompilerFacts> = null;
-		final edited: Array<String> = [];
+		final edited: Array<{ file: String, original: Null<String> }> = [];
 		function probe(): Null<CompilerFacts> {
 			if (!probed) {
 				probed = true;
@@ -417,17 +417,17 @@ final class LintCommand implements CliCommand {
 				facts = built;
 				if (built != null) {
 					for (d in built.dropped) CliIo.stderr('apq lint: compilerOracle ${d.name}: no compiler facts — ${d.reason}\n');
-					for (f in edited) built.invalidate(f);
+					for (e in edited) built.invalidate(e.file, e.original);
 				}
 			}
 			return facts;
 		}
-		function touched(file: String): Void {
+		function touched(file: String, original: Null<String>): Void {
 			final built: Null<CompilerFacts> = facts;
 			if (built != null)
-				built.invalidate(file)
-			else if (!edited.contains(file))
-				edited.push(file);
+				built.invalidate(file, original)
+			else if (!edited.exists(e -> e.file == file))
+				edited.push({ file: file, original: original });
 		}
 		return {
 			declared: resolution.declared,

@@ -323,10 +323,13 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		return read == null ? null : read();
 	}
 
-	/** Tell the run's compiler facts that `files` were rewritten, without compiling them if no one asked yet. */
-	public function compilerFactsEdited(files: Array<String>): Void {
-		final edited: Null<(String) -> Void> = _resolutionScope?.factsEdited;
-		if (edited != null) for (f in files) edited(f);
+	/**
+	 * Tell the run's compiler facts that `files` were rewritten, without compiling them if no one asked yet. `originals`
+	 * holds the text each had when the run started, which the facts keep to read the file as the compile read it.
+	 */
+	public function compilerFactsEdited(files: Array<String>, ?originals: Map<String, String>): Void {
+		final edited: Null<(String, Null<String>) -> Void> = _resolutionScope?.factsEdited;
+		if (edited != null) for (f in files) edited(f, originals?.get(f));
 	}
 
 	/**
@@ -743,6 +746,9 @@ typedef ResolutionScope = {
 	 */
 	@:optional final facts: () -> Null<CompilerFacts>;
 
-	/** Record that the run rewrote a file: its facts are dropped now, or once `facts` builds them. */
-	@:optional final factsEdited: (String) -> Void;
+	/**
+	 * Record that the run rewrote a file, with the text it had when the run started when known: its facts are dropped now,
+	 * or once `facts` builds them (`CompilerFacts.invalidate`).
+	 */
+	@:optional final factsEdited: (String, Null<String>) -> Void;
 };

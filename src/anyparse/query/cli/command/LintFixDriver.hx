@@ -137,7 +137,7 @@ final class LintFixDriver {
 				passes++;
 				final pass: LintPassResult = applyLintPass(
 					active, files, cached, split.activeScope, split.fullScope, split.safe, resolveConfig, applyEnablement, optsByFile,
-					passes, noted, notedRewrites, changedFiles, ledger, coupled, range, created, baselineBeforeCreate
+					passes, noted, notedRewrites, changedFiles, ledger, coupled, range, created, baselineBeforeCreate, originalOf
 				);
 				fixedCount += pass.fixedDelta;
 				active = pass.nextActive;
@@ -183,10 +183,11 @@ final class LintFixDriver {
 		nameExclusions(named, risky.excluded);
 		final riskyTail: String = risky.tail;
 
-		// OracleAssisted checks (explicit-local-type's inference tail, explicit-type's return
-		// types): applied ONLY with a compilerOracle — each finding's type is asked of a warm
-		// display server, the edited files are re-typechecked, and any that break the build are
-		// reverted to report-only (verifyOracleBatch). No oracle / no such check → inert.
+		// OracleAssisted checks (explicit-local-type's inference tail, explicit-type's return types,
+		// parameters and fields): applied ONLY with a compilerOracle — each finding's type is read off
+		// the compiler facts (the display server only when the run has none), the edited files are
+		// re-typechecked, and any that break the build are reverted to report-only
+		// (verifyOracleBatch). No oracle / no such check → inert.
 		final oracleAssisted: Array<Check> = [for (c in checks) if (c is OracleAssisted) c];
 		final oa: AssistedOutcome = LintFixVerify.applyOracleAssistedFixes(
 			files, oracleAssisted, cached, oracles, optsByFile, changedFiles, resolveConfig, risky.coverage
@@ -259,7 +260,7 @@ final class LintFixDriver {
 		activeScopeChecks: Array<Check>, fullScopeChecks: Array<Check>, checks: Array<Check>, resolveConfig: (String) -> LintConfig,
 		applyEnablement: Bool, optsByFile: Map<String, Null<String>>, passes: Int, noted: Array<String>, notedRewrites: Array<String>,
 		changedFiles: Array<String>, ledger: Map<String, RuleFixOutcome>, coupled: Array<Array<String>>, range: Null<LintRange>,
-		?created: Array<String>, ?baselineBeforeCreate: () -> Void
+		?created: Array<String>, ?baselineBeforeCreate: () -> Void, ?originals: Map<String, String>
 	): LintPassResult {
 		// Every memo whose answer depends on an ambient source's TEXT is dropped at the head of each
 		// pass: a previous pass may have created or rewritten one, and a memo taken before that
@@ -267,7 +268,7 @@ final class LintFixDriver {
 		// chain from disk fresh, so the stale memo is a SECOND answer for the same file.
 		cached.invalidateAmbientChain();
 		// a file an earlier pass rewrote no longer holds the text the compile's facts describe
-		cached.compilerFactsEdited(changedFiles);
+		cached.compilerFactsEdited(changedFiles, originals);
 		// The `index` PASSED to each check's `fix` is REPORT-scoped (the mutated report sources
 		// only): a fix's report-scope gates — naming's confinement / reflection-string / rtti proofs,
 		// prefer-final-field's confinement — reason about what a REPORT file can reach, and a
