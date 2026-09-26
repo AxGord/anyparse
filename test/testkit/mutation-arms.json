@@ -8174,6 +8174,99 @@
 			"find": "// no disk write before this one but a create, which settled the facts compiles already\n\t\tcached.compilerFactsSettled();",
 			"replace": "",
 			"note": "the safe pass writes while the early facts compiles may still be reading the files"
+		},
+		{
+			"name": "M-FOLD-FACTS-OPERAND",
+			"type": "anyparse.check.FoldStringLiterals",
+			"method": "fix",
+			"find": "final oracle: Null<FactsTypeOracle> = tree == null ? null : FactsTypeOracle.forFix(plugin, file, source);",
+			"replace": "final oracle: Null<FactsTypeOracle> = null;",
+			"note": "a construct the run left Unproven is never asked of the compiler's facts, so an operand only they type keeps the fix off"
+		},
+		{
+			"name": "M-FACTS-VALUE-TYPE-FLOWS",
+			"type": "anyparse.check.FactsTypeOracle",
+			"method": "typeIdAt",
+			"find": "var spelled: String = switch valueType(file, expr) {",
+			"replace": "var spelled: String = switch expressionType(file, expr) {",
+			"note": "a value's type is read with the flows at its range, so a check-type `(e : T)` answers the type of `e`, not `T`"
+		},
+		{
+			"name": "M-UNUSED-PRIVATE-CHAIN-FACTS",
+			"type": "anyparse.check.UnusedPrivate",
+			"method": "supertypeDecline",
+			"force": "DECLINE_ABSTRACT_IMPL",
+			"note": "every private method of an `extends` class stays, whatever the compiler's facts say of its supertypes"
+		},
+		{
+			"name": "M-UNUSED-PRIVATE-CHAIN-DECLARED",
+			"type": "anyparse.check.UnusedPrivate",
+			"method": "supertypeDecline",
+			"find": "if (declared == null || declared.fields.exists(f -> f.name == name)) return DECLINE_ABSTRACT_IMPL;",
+			"replace": "if (declared == null) return DECLINE_ABSTRACT_IMPL;",
+			"note": "a member a supertype declares, an abstract one's implementation among them, is deleted"
+		},
+		{
+			"name": "M-UNUSED-PRIVATE-CHAIN-AUTOBUILD",
+			"type": "anyparse.check.UnusedPrivate",
+			"method": "supertypeDecline",
+			"find": "if (declared.meta.contains(AUTO_BUILD_META))",
+			"replace": "if (false)",
+			"note": "a member of a class a supertype's `@:autoBuild` builds is deleted"
+		},
+		{
+			"name": "M-TOSTRING-FACTS-CLASS",
+			"type": "anyparse.check.RedundantToString",
+			"method": "compiledClass",
+			"force": "false",
+			"note": "a receiver the resolution scope does not declare keeps its `.toString()` whatever the compiler's facts say"
+		},
+		{
+			"name": "M-TOSTRING-FACTS-EXTERN",
+			"type": "anyparse.check.RedundantToString",
+			"method": "compiledClass",
+			"find": "&& declared.kind == CLASS_KIND && !declared.isExtern;",
+			"replace": "&& declared.kind == CLASS_KIND;",
+			"note": "an extern class's `.toString()` is dropped, though the string coercion may call the native one"
+		},
+		{
+			"name": "M-FACTS-ESCAPE-SHIFT",
+			"type": "anyparse.check.FactsTypeOracle",
+			"method": "escapedBefore",
+			"force": "false",
+			"note": "an expression in a string after an escape is typed by the fact the compiler shifted onto its range"
+		},
+		{
+			"name": "M-FOLD-FACTS-PLAIN-KINDS",
+			"type": "anyparse.check.FactsTypeOracle",
+			"method": "nonOverloadingName",
+			"find": "return id != null && (builtins.contains(id) || (declared != null && declared.alike && PLAIN_KINDS.contains(declared.kind)))",
+			"replace": "return id != null",
+			"note": "any type the facts name is named, an abstract included, and the overload table judges another declaration of that simple name"
+		},
+		{
+			"name": "M-FACTS-ALIKE-FOLD",
+			"type": "anyparse.check.FactsTypeOracle",
+			"method": "nonOverloadingName",
+			"find": "(declared != null && declared.alike && PLAIN_KINDS.contains(declared.kind))",
+			"replace": "(declared != null && PLAIN_KINDS.contains(declared.kind))",
+			"note": "a type one configuration declares a class and another an overloading abstract is named by the first one's record"
+		},
+		{
+			"name": "M-FACTS-ALIKE-TOSTRING",
+			"type": "anyparse.check.RedundantToString",
+			"method": "compiledClass",
+			"find": "declared != null && declared.alike && declared.kind == CLASS_KIND",
+			"replace": "declared != null && declared.kind == CLASS_KIND",
+			"note": "a class extern in one configuration and not in another is proven by the first one's record"
+		},
+		{
+			"name": "M-FACTS-META-UNION",
+			"type": "anyparse.query.FactMerge",
+			"method": "type",
+			"find": "for (m in from.meta) if (!into.meta.contains(m)) into.meta.push(m);",
+			"replace": "",
+			"note": "a type's metadata is the first configuration's only, so an `@:autoBuild` another configuration sees is lost"
 		}
 	]
 }

@@ -18,7 +18,6 @@ import anyparse.query.Cli.RuleFixOutcome;
 import anyparse.query.CompilerFacts;
 import anyparse.query.EditJournal;
 import anyparse.query.LexicalRegions.LexRegion;
-import anyparse.query.SymbolIndexHost;
 import anyparse.runtime.Span;
 import haxe.io.Path;
 import anyparse.query.ExitCode.*;
@@ -614,8 +613,8 @@ final class LintFixVerify {
 	private static function assistedOracle(
 		plugin: GrammarPlugin, display: DisplayHandle, files: Array<{ file: String, source: String }>
 	): Null<TypeOracle> {
-		final facts: Null<CompilerFacts> = plugin is SymbolIndexHost ? (cast plugin: SymbolIndexHost).compilerFacts() : null;
-		if (facts == null || facts.dropped.length > 0 || facts.configurations.length == 0) return displayOf(display);
+		final facts: Null<CompilerFacts> = FactsTypeOracle.runFacts(plugin);
+		if (facts == null) return displayOf(display);
 		final current: Map<String, String> = [for (entry in files) entry.file => entry.source];
 		final journal: Null<EditJournal> = plugin is CachingGrammarPlugin ? (cast plugin: CachingGrammarPlugin).editJournal : null;
 		return new FactsTypeOracle(facts, file -> current[file], journal, plugin, displayOf.bind(display));
