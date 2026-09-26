@@ -28,10 +28,11 @@ typedef NullFacts = {
 	var nonNull: String -> Bool;
 
 	/**
-	 * Whether `name` is `NonNull` by flow AND every proof of it is a narrowing the Haxe compiler's own null-safety performs
-	 * too — a direct `!= null` / `== null` comparison of the name, or an assignment of a non-null value. False whenever
-	 * some path proves it only through a laundered Bool local, an alias copy, or a safe-navigation comparison
-	 * (`x?.f != null`): sound at runtime, rejected by the compiler, so a rewrite that relies on it may not compile.
+	 * Whether `name` is `NonNull` by flow through forms the compiler's null-safety is probed to follow, and only those:
+	 * a direct `!= null` / `== null` of the name narrowing its own `if` / `while` / `&&` / `||`, an early exit or a
+	 * non-null assignment in the same statement sequence, and a join of live arms that are each visible. Everything else
+	 * is unseen — a Bool local, an alias, a `?.` comparison, what the body of a lone surviving `if` arm or `switch` branch
+	 * proved, what a `try` proved, and any construct `ownsVisibility` does not name.
 	 */
 	var nonNullVisible: String -> Bool;
 	var isNull: String -> Bool;
@@ -304,6 +305,9 @@ final class NullFlow {
 		'HexLit',
 		'BoolLit'
 	];
+
+	/** The array-literal node kind — its elements evaluate in order, so it keeps what they prove. */
+	private static final ARRAY_KIND: String = 'ArrayExpr';
 
 	/** Sequential statement-list containers — children share one running state. */
 	private static final BLOCK_KINDS: Array<String> = ['BlockBody', 'BlockStmt', 'BlockExpr'];
@@ -651,6 +655,14 @@ final class NullFlow {
 			return;
 		}
 		visitNode(node, state, ctx);
+		final before: Null<Array<String>> = node.children.length == 0 || ownsVisibility(kind, ctx) ? null : visibleIn(state);
+		transfer(node, state, ctx);
+		if (before != null) keepVisible(state, before);
+	}
+
+	/** Apply `node`'s flow transfer to `state` — the per-construct dispatch of `walk`. */
+	private static function transfer(node: QueryNode, state: FlowState, ctx: FlowCtx): Void {
+		final kind: String = node.kind;
 		if (ctx.writeKinds.contains(kind))
 			handleWrite(node, state, ctx);
 		else if (ctx.localDeclKinds.contains(kind))
@@ -845,6 +857,7 @@ final class NullFlow {
 		// a positive `m.exists(k)` conjunct, the else-arm — and hence the fall-through of an
 		// early-returning `if (!m.exists(k)) return;` — from a negated disjunct.
 		final thenState: FlowState = narrowedCopy(cond, state, ctx, ctx.notEqKind, ctx.eqKind, BOOL_AND_KIND);
+		final thenKept: Array<String> = visibleUnwritten(thenState, thenArm, ctx);
 		walk(thenArm, thenState, ctx);
 		// An unbraced arm declaration (`if (c) var v = null;`) never passes through
 		// `handleBlock`'s exit clearing — drop its facts before the join.
@@ -852,6 +865,7 @@ final class NullFlow {
 		// Else path: the negated condition (`!(a || b)` = `!a && !b`), so an `== null`
 		// disjunct proves non-null and a `!= null` disjunct proves null.
 		final elseState: FlowState = narrowedCopy(cond, state, ctx, ctx.eqKind, ctx.notEqKind, BOOL_OR_KIND);
+		final elseKept: Array<String> = elseArm == null ? visibleIn(elseState) : visibleUnwritten(elseState, elseArm, ctx);
 		if (elseArm != null) {
 			walk(elseArm, elseState, ctx);
 			clearDeclaredIn(elseArm, elseState, ctx);
@@ -859,15 +873,17 @@ final class NullFlow {
 		// Join: a fact holds after the `if` only if it holds on every path that falls
 		// through to here. An arm that returns / throws contributes no path, so the
 		// surviving arm's state passes through unintersected — this gives early-return
-		// narrowing (`if (x == null) return;` leaves x non-null after).
+		// narrowing (`if (x == null) return;` leaves x non-null after). The compiler joins only
+		// two live arms: past a lone survivor it keeps the condition's narrowing and nothing the
+		// arm's body proved, so only what was visible on entering that arm stays visible.
 		final thenExits: Bool = armExits(thenArm, ctx);
 		final elseExits: Bool = elseArm != null && armExits(elseArm, ctx);
 		final post: FlowState = if (thenExits && elseExits)
 			emptyState();
 		else if (thenExits)
-			elseState;
+			survivor(elseState, elseKept);
 		else if (elseExits)
-			thenState;
+			survivor(thenState, thenKept);
 		else
 			intersect(thenState, elseState);
 		setState(state, post);
@@ -944,10 +960,19 @@ final class NullFlow {
 		// `maybe`-only, so the seed-less consumers (the six flow checks) stay byte-identical.
 		final exitStates: Array<FlowState> = [];
 		var nullConsumed: Bool = false;
+		var live: Null<QueryNode> = null;
 		for (b in branches) {
 			final exit: Null<FlowState> = walkBranch(b, state, ctx, subjectName, nullConsumed);
-			if (exit != null) exitStates.push(exit);
+			if (exit != null) {
+				exitStates.push(exit);
+				live = b;
+			}
 			if (isNullConsumingCase(b, ctx)) nullConsumed = true;
+		}
+		// A lone surviving branch is the `if` arm's case: the compiler keeps nothing its body proved.
+		if (hasDefault && exitStates.length == 1 && live != null) {
+			setState(state, survivor(exitStates[0], visibleUnwritten(state, live, ctx)));
+			return;
 		}
 		var post: Null<FlowState> = hasDefault ? null : copyState(state);
 		for (e in exitStates) post = post == null ? e : intersect(post, e);
@@ -1005,6 +1030,9 @@ final class NullFlow {
 	private static function handleTry(node: QueryNode, state: FlowState, ctx: FlowCtx): Void {
 		if (node.children.length == 0) return;
 		final body: QueryNode = node.children[0];
+		// The compiler carries nothing a `try` or its catches prove past the construct — only what
+		// was visible on entering it and is written nowhere inside.
+		final kept: Array<String> = visibleUnwritten(state, node, ctx);
 		final tryState: FlowState = copyState(state);
 		walk(body, tryState, ctx);
 		final catchEntry: FlowState = copyState(state);
@@ -1028,7 +1056,7 @@ final class NullFlow {
 		}
 		var post: Null<FlowState> = null;
 		for (e in exitStates) post = post == null ? e : intersect(post, e);
-		setState(state, post ?? emptyState());
+		setState(state, survivor(post ?? emptyState(), kept));
 	}
 
 	/**
@@ -1322,6 +1350,41 @@ final class NullFlow {
 				for (e in a.present) if (b.present.exists(q -> q.map == e.map && q.key == e.key)) e
 			]
 		};
+	}
+
+	/**
+	 * Whether `kind` states its own visibility rule, so `walk` leaves its post-state alone: the constructs the compiler is
+	 * probed to follow in order (a block, a statement, a write, a declaration, a call, a parenthesis, an array literal) and
+	 * the constructs whose handlers apply the rule themselves (`if`, `switch`, `try`). Every other kind keeps visible only
+	 * what was visible before it.
+	 */
+	private static function ownsVisibility(kind: String, ctx: FlowCtx): Bool {
+		return ctx.blockKinds.contains(kind) || kind == ctx.exprStmtKind || ctx.writeKinds.contains(kind)
+			|| ctx.localDeclKinds.contains(kind) || kind == ctx.callKind || kind == ctx.parenKind || kind == ARRAY_KIND
+			|| ctx.ifKinds.contains(kind) || ctx.switchKinds.contains(kind) || ctx.tryKinds.contains(kind);
+	}
+
+	/** The `nonNull` names `state` proves visibly. */
+	private static function visibleIn(state: FlowState): Array<String> {
+		return [for (n in state.nonNull) if (!state.unseen.contains(n)) n];
+	}
+
+	/** The names visible in `state` that `node` writes nowhere — what survives a construct the compiler does not follow into. */
+	private static function visibleUnwritten(state: FlowState, node: QueryNode, ctx: FlowCtx): Array<String> {
+		final written: Array<String> = [];
+		collectWrites(node, written, ctx);
+		return [for (n in visibleIn(state)) if (!written.contains(n)) n];
+	}
+
+	/** Mark unseen every `nonNull` name of `state` outside `kept`: a construct keeps a name visible only when its rule names it. */
+	private static function keepVisible(state: FlowState, kept: Array<String>): Void {
+		for (n in state.nonNull) if (!kept.contains(n) && !state.unseen.contains(n)) state.unseen.push(n);
+	}
+
+	/** `state` with `keepVisible(state, kept)` applied — the post-state of a lone surviving path. */
+	private static function survivor(state: FlowState, kept: Array<String>): FlowState {
+		keepVisible(state, kept);
+		return state;
 	}
 
 	/** The joined `nonNull` names either arm proved only invisibly — a join is visible only where both arms were. */

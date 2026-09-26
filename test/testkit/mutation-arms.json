@@ -7443,8 +7443,8 @@
 			"name": "M-DSN-NULLSAFE-ALWAYS",
 			"type": "anyparse.check.DeadSafeNav",
 			"method": "run",
-			"find": "final nullSafe: Bool = underMacro",
-			"replace": "final nullSafe: Bool = true || underMacro",
+			"find": "final nullSafe: Bool = buildNullSafe",
+			"replace": "final nullSafe: Bool = true || buildNullSafe",
 			"note": "plain code is treated as null-checked, so a runtime-sound Bool-local proof loses its fix where nothing typechecks it"
 		},
 		{
@@ -7474,16 +7474,108 @@
 		{
 			"name": "M-DSN-MACRO-BLIND",
 			"type": "anyparse.check.DeadSafeNav",
-			"method": "underNullSafetyMacro",
+			"method": "buildMayEnableNullSafety",
 			"force": "false",
 			"note": "a project-wide `--macro nullSafety` in the oracle hxml is ignored, so a meta-free module gets the `.` rewrite its build rejects"
 		},
 		{
-			"name": "M-DSN-MACRO-COVERS-ALL",
+			"name": "M-DSN-HXML-ALWAYS-ON",
 			"type": "anyparse.check.DeadSafeNav",
-			"method": "macroCovers",
+			"method": "buildMayEnableNullSafety",
 			"force": "true",
-			"note": "a `nullSafety` macro on another package is read as covering this module, so its fix is declined"
+			"note": "every oracle build reads as enabling null-safety, so a plain project loses the runtime-sound fix"
+		},
+		{
+			"name": "M-DSN-HXML-COMMENT-READ",
+			"type": "anyparse.check.DeadSafeNav",
+			"method": "buildMayEnableNullSafety",
+			"find": "if (line == '' || line.startsWith('#')) continue;",
+			"replace": "if (line == '') continue;",
+			"note": "a commented-out `#--macro nullSafety` is read as live, so the fix is declined in a plain build"
+		},
+		{
+			"name": "M-DSN-HXML-LIB-PLAIN",
+			"type": "anyparse.check.DeadSafeNav",
+			"method": "buildMayEnableNullSafety",
+			"find": "} else if (line.startsWith('-') && !PLAIN_HXML_FLAGS.contains(line.split(' ')[0]))",
+			"replace": "} else if (line.startsWith('-') && !line.startsWith('-lib') && !PLAIN_HXML_FLAGS.contains(line.split(' ')[0]))",
+			"note": "a `-lib` is taken as plain although its extraParams may add `@:nullSafety`, so the build-breaking fix lands"
+		},
+		{
+			"name": "M-DSN-HXML-INCLUDE-SKIPPED",
+			"type": "anyparse.check.DeadSafeNav",
+			"method": "buildMayEnableNullSafety",
+			"find": "mayEnable(LintConfig.resolveAgainstConfigDir(base, line), base, depth + 1)",
+			"replace": "false",
+			"note": "an included hxml is never read, so a `nullSafety` macro in it goes unseen and the build-breaking fix lands"
+		},
+		{
+			"name": "M-DSN-HXML-UNREADABLE-PLAIN",
+			"type": "anyparse.check.DeadSafeNav",
+			"method": "buildMayEnableNullSafety",
+			"find": "if (text == null) return true;",
+			"replace": "if (text == null) return false;",
+			"note": "an oracle hxml not generated yet reads as plain, so the fix lands before the build that may reject it exists"
+		},
+		{
+			"name": "M-DSN-TRY-KEEPS-ALL",
+			"type": "anyparse.check.NullFlow",
+			"method": "handleTry",
+			"find": "setState(state, survivor(post ?? emptyState(), kept));",
+			"replace": "setState(state, post ?? emptyState());",
+			"note": "a proof made inside a `try` stays visible past it, so the `.` rewrite after the try does not compile"
+		},
+		{
+			"name": "M-DSN-TRY-HIDES-ALL",
+			"type": "anyparse.check.NullFlow",
+			"method": "handleTry",
+			"find": "final kept: Array<String> = visibleUnwritten(state, node, ctx);",
+			"replace": "final kept: Array<String> = [];",
+			"note": "a proof made before a `try` is hidden past it, so an accepted fix is declined"
+		},
+		{
+			"name": "M-DSN-LONE-ARM-KEEPS-BODY",
+			"type": "anyparse.check.NullFlow",
+			"method": "handleIf",
+			"find": [
+				"survivor(elseState, elseKept);",
+				"survivor(thenState, thenKept);"
+			],
+			"replace": [
+				"elseState;",
+				"thenState;"
+			],
+			"note": "what the body of a lone surviving `if` arm proved stays visible past the `if`, so the `.` rewrite does not compile"
+		},
+		{
+			"name": "M-DSN-LONE-ARM-HIDES-ALL",
+			"type": "anyparse.check.NullFlow",
+			"method": "handleIf",
+			"find": "final elseKept: Array<String> = elseArm == null ? visibleIn(elseState) : visibleUnwritten(elseState, elseArm, ctx);",
+			"replace": "final elseKept: Array<String> = [];",
+			"note": "the condition's own narrowing is hidden past a lone surviving arm, so the fix after `if (x == null || b) return;`-style guards is declined"
+		},
+		{
+			"name": "M-DSN-JOIN-HIDES-ALL",
+			"type": "anyparse.check.NullFlow",
+			"method": "unseenAfterJoin",
+			"force": "nonNull",
+			"note": "every join hides its proof, so two live arms that each narrow visibly lose their fix"
+		},
+		{
+			"name": "M-DSN-LONE-BRANCH-KEEPS-BODY",
+			"type": "anyparse.check.NullFlow",
+			"method": "handleSwitch",
+			"find": "setState(state, survivor(exitStates[0], visibleUnwritten(state, live, ctx)));",
+			"replace": "setState(state, exitStates[0]);",
+			"note": "what a lone live `switch` branch proved stays visible past the switch, so the `.` rewrite does not compile"
+		},
+		{
+			"name": "M-DSN-OWNS-NONE",
+			"type": "anyparse.check.NullFlow",
+			"method": "ownsVisibility",
+			"force": "false",
+			"note": "no construct keeps what its children proved, so an assignment inside a call argument loses a fix the compiler accepts"
 		}
 	]
 }

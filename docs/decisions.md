@@ -770,3 +770,10 @@ decided the question; it may not become a record of runs.
 - making `dead-safe-nav` a `RiskyFix` instead of declining the invisible proofs → `RiskyFix` is per rule, so every
   plain-code fix and every compiler-visible one would go report-only on a run with no oracle, to recover only an
   invisible proof that typechecks anyway — neither of anyparse's two did
+- deriving compiler visibility NEGATIVELY (every NullFlow fact visible except a Bool local, an alias or a `?.`
+  comparison) → the compiler also drops what the body of a lone surviving `if` arm or `switch` branch proved and
+  everything a `try` proved, so each missed construct was another build-breaking fix; visibility is now granted only
+  by the probed forms, and every construct it does not name keeps what was visible before it
+- matching `--macro nullSafety(path, …)` against the module to decide whether an oracle build enables null-safety →
+  `addGlobalMetadata`, a `-lib`'s extraParams and any project macro reach the same metadata, so a build is plain
+  only when every hxml line is a known inert flag
