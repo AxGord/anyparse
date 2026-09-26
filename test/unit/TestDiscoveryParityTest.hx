@@ -1481,6 +1481,10 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PossibleNullDereferenceTest#testFieldPathMapExistsGuardedNotFlagged :: control :: M-EXISTS-GUARD-BLIND',
 			'unit.check.PossibleNullDereferenceTest#testFieldPathMapReceiverFlagged :: control :: M-NULLABLE-NO-CHAIN',
 			'unit.check.PossibleNullDereferenceTest#testNullWrappedMapFlagged :: control :: M-NULLABLE-WRAPPER-OPAQUE',
+			'unit.check.PreferBindCheckTest#testFieldArgumentNotFlagged :: control :: M-BIND-FIELD-ARG',
+			'unit.check.PreferBindCheckTest#testFieldReceiverNotFlagged :: control :: M-BIND-FIELD-RECEIVER',
+			'unit.check.PreferBindCheckTest#testNullableArgumentNotFlagged :: control :: M-BIND-NULLABLE-ARG',
+			'unit.check.PreferBindCheckTest#testReassignedLocalNotFlagged :: control :: M-BIND-WRITES-IGNORED',
 			'unit.check.PreferCaseGuardCheckTest#testInScopeEnumNotFlagged :: control :: M-DECLARINGFILES-EMPTY',
 			'unit.check.PreferComprehensionIndexFillTest#testACommentInsideTheInnerDeclarationRefusesTheNest :: control :: '
 				+ 'M-COMPR-NESTED-DECL-COMMENT',
@@ -3731,6 +3735,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-CHAIN-WALK-EAGER',
 			'M-SWITCH-BARE-BODY-VERBATIM',
 			'M-SWITCH-TERMINATED-BODY-DOUBLED',
+			'M-BIND-WRITES-IGNORED',
+			'M-BIND-FIELD-ARG',
+			'M-BIND-NULLABLE-ARG',
+			'M-BIND-FIELD-RECEIVER',
 			'M-LOCALFN-RESULT-DROPPED',
 			'M-LOCALFN-SIGNATURE-ANY',
 			'M-LOCALFN-VOID-RETURNED'

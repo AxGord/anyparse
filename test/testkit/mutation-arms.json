@@ -8781,6 +8781,38 @@
 			"note": "the terminator is appended even after a body that already ends in `;` or `}`"
 		},
 		{
+			"name": "M-BIND-WRITES-IGNORED",
+			"type": "anyparse.check.PreferBind",
+			"method": "unchangingBinding",
+			"find": "return !Refs.find(name, ctx.root, shape).exists(hit -> hit.kind == RefKind.Write && hit.bindingSpan?.from == from);",
+			"replace": "return true;",
+			"note": "a local written after the lambda is created still counts as unchanging"
+		},
+		{
+			"name": "M-BIND-FIELD-ARG",
+			"type": "anyparse.check.PreferBind",
+			"method": "stableArg",
+			"find": "unchangingBinding(arg, ctx)",
+			"replace": "true",
+			"note": "any identifier, a field included, is a stable bind argument"
+		},
+		{
+			"name": "M-BIND-NULLABLE-ARG",
+			"type": "anyparse.check.PreferBind",
+			"method": "unchangingBinding",
+			"find": "if (declared == null || (shape.nullableWrapperTypeNames ?? []).contains(declared)) return false;",
+			"replace": "if (declared == null) return false;",
+			"note": "a `Null<T>` binding is bound although null safety rejects it as an argument"
+		},
+		{
+			"name": "M-BIND-FIELD-RECEIVER",
+			"type": "anyparse.check.PreferBind",
+			"method": "stableCallee",
+			"find": "if (cur.kind != shape.identKind) return false;",
+			"replace": "if (cur.kind != shape.identKind) return false;\n\t\treturn true;",
+			"note": "any receiver chain is read as stable"
+		},
+		{
 			"name": "M-LOCALFN-RESULT-DROPPED",
 			"type": "anyparse.check.PreferLocalFunction",
 			"method": "declarationText",
