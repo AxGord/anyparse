@@ -2,8 +2,10 @@ package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
+import anyparse.query.DeclaredNullity;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
@@ -111,7 +113,7 @@ final class RedundantToString implements Check implements DefaultOff {
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final context: Null<Ctx> = contextFor(plugin, entry.source, seams, index);
+			final context: Null<Ctx> = contextFor(plugin, entry.file, entry.source, seams, index);
 			if (context == null) continue;
 			for (found in collect(context)) {
 				final blocker: Null<String> = found.blocker;
@@ -144,7 +146,7 @@ final class RedundantToString implements Check implements DefaultOff {
 		final seams: Null<Seams> = resolveSeams(plugin);
 		if (seams == null) return [];
 		final scope: SymbolIndex = index ?? SymbolIndex.build([{ file: '', source: source }], plugin);
-		final context: Null<Ctx> = contextFor(plugin, source, seams, scope);
+		final context: Null<Ctx> = contextFor(plugin, violations.length == 0 ? '' : violations[0].file, source, seams, scope);
 		if (context == null) return [];
 		final wanted: Array<String> = RunScan.spanKeys(violations);
 		final edits: Array<{ span: Span, text: String }> = [];
@@ -172,9 +174,10 @@ final class RedundantToString implements Check implements DefaultOff {
 	/**
 	 * The per-file context `run` and `fix` share, or null when `source` does not parse. Both build
 	 * it the same way, so the collector they drive can only differ through `index` — whole-scope in
-	 * `run`, and whole-scope in `fix` too whenever the caller passes one (`Cli` always does).
+	 * `run`, and whole-scope in `fix` too whenever the caller passes one (`Cli` always does). The
+	 * null proof resolves written types against the run's resolution scope when there is one.
 	 */
-	private static function contextFor(plugin: GrammarPlugin, source: String, seams: Seams, index: SymbolIndex): Null<Ctx> {
+	private static function contextFor(plugin: GrammarPlugin, file: String, source: String, seams: Seams, index: SymbolIndex): Null<Ctx> {
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return null;
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
@@ -183,6 +186,7 @@ final class RedundantToString implements Check implements DefaultOff {
 			source: source,
 			seams: seams,
 			declaredTypes: provider == null ? [] : provider.declaredTypes(source),
+			nullity: DeclaredNullity.of(file, tree, source, seams.shape, provider, RefactorSupport.lazySymbolIndex([], plugin, index)),
 			index: index
 		};
 	}
@@ -373,7 +377,7 @@ final class RedundantToString implements Check implements DefaultOff {
 		final unresolved: ReceiverInfo = { typeName: null, nonNull: false };
 		if (receiver.kind == seams.identKind) return {
 			typeName: TypeResolver.identTypeName(receiver, ctx.root, seams.shape, ctx.declaredTypes),
-			nonNull: TypeResolver.isProvablyNonNull(receiver, ctx.root, seams.shape, ctx.declaredTypes)
+			nonNull: TypeResolver.isProvablyNonNull(receiver, ctx.root, seams.shape, ctx.nullity)
 		};
 		if (receiver.kind == seams.shape.nullLiteralKind) return unresolved;
 		final newExprKind: Null<String> = seams.shape.newExprKind;
@@ -418,6 +422,7 @@ final class RedundantToString implements Check implements DefaultOff {
 		return returned == null ? unresolved : {
 			typeName: returned,
 			nonNull: TypeResolver.enclosingIsNullSafe(ctx.root, callSpan, metaName, seams.shape.nullSafetyDisableArg)
+				&& ctx.nullity.ofMemberReturn(ownerType, method) != Unproven
 		};
 	}
 
@@ -581,6 +586,9 @@ private typedef Ctx = {
 	final source: String;
 	final seams: Seams;
 	final declaredTypes: Map<Int, String>;
+
+	/** The null proof over this file's declared types. */
+	final nullity: DeclaredNullity;
 
 	/** The resolution scope: whole-analysed-set in `run`, and in `fix` whenever the caller passes one. */
 	final index: SymbolIndex;

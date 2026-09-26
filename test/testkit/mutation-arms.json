@@ -7624,6 +7624,217 @@
 			"find": "if (written.contains(n)) continue;",
 			"replace": "",
 			"note": "the outer fact is restored even when the construct writes the name, so a null written by the iterable is read as non-null"
+		},
+		{
+			"name": "M-NULLITY-ALIAS-TRUSTED",
+			"type": "anyparse.query.DeclaredNullity",
+			"method": "ofDecl",
+			"find": "if (_nominalKinds.contains(t.kind) || t.isAnonStruct) return NonNull;",
+			"replace": "if (_nominalKinds.contains(t.kind) || t.isAnonStruct || _aliasKinds.contains(t.kind)) return NonNull;",
+			"note": "a typedef proves non-null by being one, so `typedef MaybeR = Null<R>` reads as a plain nominal again"
+		},
+		{
+			"name": "M-NULLITY-UNDERLYING-TRUSTED",
+			"type": "anyparse.query.DeclaredNullity",
+			"method": "ofDecl",
+			"find": "if (_nominalKinds.contains(t.kind) || t.isAnonStruct) return NonNull;",
+			"replace": "if (_nominalKinds.contains(t.kind) || t.isAnonStruct || t.underlyingRaw != null) return NonNull;",
+			"note": "an abstract proves non-null whatever it wraps, so one over `Null<R>` is trusted"
+		},
+		{
+			"name": "M-NULLITY-TYPE-PARAMS-IGNORED",
+			"type": "anyparse.query.DeclaredNullity",
+			"method": "resolve",
+			"find": "if (head == null || hops > MAX_HOPS || typeParams.contains(head)) return Unproven;",
+			"replace": "if (head == null || hops > MAX_HOPS) return Unproven;",
+			"note": "a type parameter resolves to whatever same-named type is in scope, so `m<R>(x:R)` borrows class `R`'s proof"
+		},
+		{
+			"name": "M-NULLITY-UNRESOLVED-PROVEN",
+			"type": "anyparse.query.DeclaredNullity",
+			"method": "resolve",
+			"find": "candidates != null && candidates.length > 0 && candidates.foreach(",
+			"replace": "(candidates ?? []).foreach(",
+			"note": "a name that resolves to nothing is proven by the empty agreement"
+		},
+		{
+			"name": "M-NULLITY-GUARD-IGNORED",
+			"type": "anyparse.query.DeclaredNullity",
+			"method": "ofDecl",
+			"find": "if (t.guarded || seen.contains(key)) return Unproven;",
+			"replace": "if (seen.contains(key)) return Unproven;",
+			"note": "a `#if`-guarded declaration answers for every branch, though the index kept only one"
+		},
+		{
+			"name": "M-NULLITY-HOPS-CUT",
+			"type": "anyparse.query.DeclaredNullity",
+			"method": "ofDecl",
+			"find": "final next: Null<String> = _aliasKinds.contains(t.kind) ? t.aliasTargetRaw : t.underlyingRaw;",
+			"replace": "final next: Null<String> = null;",
+			"note": "no alias or underlying type is followed, so an alias of a class or an abstract over one proves nothing"
+		},
+		{
+			"name": "M-NULLITY-ANON-REFUSED",
+			"type": "anyparse.query.DeclaredNullity",
+			"method": "ofDecl",
+			"find": "if (_nominalKinds.contains(t.kind) || t.isAnonStruct) return NonNull;",
+			"replace": "if (_nominalKinds.contains(t.kind)) return NonNull;",
+			"note": "an anonymous-structure typedef proves nothing, though a structure value is non-null under null safety"
+		},
+		{
+			"name": "M-NULLITY-SCOPE-LOST",
+			"type": "anyparse.query.DeclaredNullity",
+			"method": "bindingOf",
+			"find": "index.fileInfo(fromFile)",
+			"replace": "index.fileInfo('')",
+			"note": "names resolve from no file, so an imported class stops proving anything"
+		},
+		{
+			"name": "M-PROVER-NULLITY-SKIPPED",
+			"type": "anyparse.query.TypeResolver",
+			"method": "provablyNonNull",
+			"find": " && types.ofBinding(bindingFrom) != Unproven;",
+			"replace": ";",
+			"note": "the null-safety arm trusts any declared nominal again, so a typedef of `Null<…>` is rewritten by every null-aware check"
+		},
+		{
+			"name": "M-VALUE-TYPE-UNINIT-FIELD",
+			"type": "anyparse.query.DeclaredNullity",
+			"method": "isValueType",
+			"find": "return field == null || _accessors[bindingFrom] == true || !field.children.foreach(c -> typeChildKinds.contains(c.kind));",
+			"replace": "return true;",
+			"note": "a value-typed field with no initialiser keeps the fast path, though it reads null on a dynamic target until assigned"
+		},
+		{
+			"name": "M-VALUE-TYPE-FIELDS-REFUSED",
+			"type": "anyparse.query.DeclaredNullity",
+			"method": "isValueType",
+			"find": "return field == null || _accessors[bindingFrom] == true || !field.children.foreach(c -> typeChildKinds.contains(c.kind));",
+			"replace": "return field == null;",
+			"note": "every value-typed field loses the fast path, an initialised one and one read through its getter included"
+		},
+		{
+			"name": "M-INTERP-NULLITY-SKIPPED",
+			"type": "anyparse.check.PreferInterpolation",
+			"method": "isSafeArg",
+			"find": "return nullity.ofBinding(bindingFrom) != Unproven;",
+			"replace": "return true;",
+			"note": "any annotated identifier is interpolation-safe, a typedef of `Null<…>` included"
+		},
+		{
+			"name": "M-TOSTRING-RETURN-TRUSTED",
+			"type": "anyparse.check.RedundantToString",
+			"method": "callReceiver",
+			"find": "&& ctx.nullity.ofMemberReturn(ownerType, method) != Unproven",
+			"replace": "",
+			"note": "an instance call's declared return is trusted by name under null safety, so a method returning a typedef of `Null<…>` loses its `.toString()`"
+		},
+		{
+			"name": "M-ENTRY-POINT-UNREACHED",
+			"type": "anyparse.grammar.haxe.HaxeNamingSupport",
+			"method": "isEntryPoint",
+			"force": "false",
+			"note": "`static function main()` is an ordinary private method, so `unused-private` deletes the program's entry point"
+		},
+		{
+			"name": "M-ENTRY-POINT-ANY-ARITY",
+			"type": "anyparse.grammar.haxe.HaxeNamingSupport",
+			"method": "isEntryPoint",
+			"find": "&& !node.children.exists(c -> categoryOf(c, []) == NamingCategory.Param)",
+			"replace": "",
+			"note": "a `main` taking parameters counts as the entry point, which the compiler never calls"
+		},
+		{
+			"name": "M-CTOR-CLASS-VALUE-BLIND",
+			"type": "anyparse.check.UnusedPrivate",
+			"method": "usedAsValue",
+			"force": "false",
+			"note": "a class handed around as a value is still never-instantiated, so the constructor `Type.createInstance` runs is deleted"
+		},
+		{
+			"name": "M-CTOR-RECEIVER-AS-VALUE",
+			"type": "anyparse.check.UnusedPrivate",
+			"method": "usedAsValue",
+			"find": " && !isReceiver",
+			"replace": "",
+			"note": "a static access `U.K` counts as a class value, so no utility class's private constructor is reported"
+		},
+		{
+			"name": "M-CTOR-ALIAS-BLIND",
+			"type": "anyparse.check.UnusedPrivate",
+			"method": "isAliased",
+			"force": "false",
+			"note": "a typedef aliasing the class is ignored, so a class value spelled by the alias reaches a deleted constructor"
+		},
+		{
+			"name": "M-BINDING-ALIAS-BLIND",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "importTier",
+			"find": "if (imp.alias != name)",
+			"replace": "if (true)",
+			"note": "an import alias never binds its alias name, so a same-package class answers for `import other.Opt as MaybeR`"
+		},
+		{
+			"name": "M-BINDING-UNINDEXED-IMPORT-FREE",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "boundOrUnknown",
+			"find": "return decls.length == 0 ? Unknown : Bound(decls);",
+			"replace": "return decls.length == 0 ? Free : Bound(decls);",
+			"note": "an import or alias naming a type outside the index falls through to the package tier"
+		},
+		{
+			"name": "M-BINDING-UNINDEXED-MODULE-FREE",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "importTier",
+			"find": "? Free : Unknown;",
+			"replace": "? Free : Free;",
+			"note": "an unindexed module import is taken to declare no sub-type of the name"
+		},
+		{
+			"name": "M-BINDING-UNINDEXED-WILDCARD-FREE",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "wildcardTier",
+			"find": "if (files.length == 0 && !index.allFiles().exists(f -> f.module == pkg)) return Unknown;",
+			"replace": "",
+			"note": "a wildcard over an unindexed package is taken to bind nothing"
+		},
+		{
+			"name": "M-BINDING-OWN-TIER-CUT",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "bind",
+			"find": "if (own.length > 0) return [for (t in own) { file: fi, type: t }];",
+			"replace": "",
+			"note": "the module's own types are not asked first, so an import answers for a name the module itself declares"
+		},
+		{
+			"name": "M-BINDING-WILDCARD-CUT",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "wildcardTier",
+			"force": "Free",
+			"note": "no wildcard import binds anything"
+		},
+		{
+			"name": "M-BINDING-PACKAGE-TIER-CUT",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "packageTier",
+			"force": "Free",
+			"note": "no package or toplevel type binds anything"
+		},
+		{
+			"name": "M-CTOR-IMPORT-ALIAS-BLIND",
+			"type": "anyparse.check.UnusedPrivate",
+			"method": "usedAsValue",
+			"find": "names.push(alias);",
+			"replace": "names.push(className);",
+			"note": "an import alias of the class is not a spelling of it, so `Type.createInstance(K, [])` reaches a deleted constructor"
+		},
+		{
+			"name": "M-CTOR-QUALIFIED-BLIND",
+			"type": "anyparse.check.UnusedPrivate",
+			"method": "usedAsValue",
+			"find": "&& node.name == className;",
+			"replace": "&& false;",
+			"note": "a qualified path to the class is not a class value, so `Type.createInstance(pkg.U, [])` reaches a deleted constructor"
 		}
 	]
 }

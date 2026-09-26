@@ -3,7 +3,9 @@ package anyparse.check;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.check.NullFlowScan.IdentOperand;
+import anyparse.query.DeclaredNullity;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
@@ -52,15 +54,16 @@ final class DeadNullGuard implements Check implements RiskyFix {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final shape: RefShape = plugin.refShape();
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+		final index: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
 		return RunScan.collectWith(files, plugin, NullFlowScan.seamsOf(shape), (entry, root, s, violations) -> {
-			final declaredTypes: Map<Int, String> = provider != null ? provider.declaredTypes(entry.source) : [];
+			final types: DeclaredNullity = DeclaredNullity.of(entry.file, root, entry.source, shape, provider, index);
 			NullFlow.analyze(root, shape, entry.source, (node, facts) -> {
 				final compared: Null<IdentOperand> = NullFlowScan.nullComparedOperand(node, s);
 				if (compared == null) return;
 				// Owned by `unnecessary-null-check` when the declared type proves it — the SAME
 				// predicate it reports on, so a value-typed operand the null-comparison variant
 				// declines falls to this check's flow proof instead of between the two.
-				if (TypeResolver.isProvablyNonNullAtNullComparison(compared.operand, root, shape, declaredTypes)) return;
+				if (TypeResolver.isProvablyNonNullAtNullComparison(compared.operand, root, shape, types)) return;
 				if (facts.nonNull(compared.name)) violations.push({
 					file: entry.file,
 					span: compared.span,

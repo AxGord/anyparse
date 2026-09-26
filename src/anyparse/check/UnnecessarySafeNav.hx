@@ -1,8 +1,10 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.DeclaredNullity;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
@@ -47,15 +49,16 @@ final class UnnecessarySafeNav implements Check {
 		if (safeNavKind == null) return [];
 		final kind: String = safeNavKind;
 		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
+		final index: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
 		return RunScan.collectWith(files, plugin, RunScan.typeInfoOf(plugin), (entry, tree, typed, violations) -> {
 			final root: QueryNode = tree;
-			final declaredTypes: Map<Int, String> = typed.declaredTypes(entry.source);
+			final types: DeclaredNullity = DeclaredNullity.of(entry.file, root, entry.source, shape, typed, index);
 			function walk(node: QueryNode): Void {
 				if (opaqueKinds.contains(node.kind)) return;
 				if (node.kind == kind && node.children.length == 1) {
 					final span: Null<Span> = node.span;
 					final receiver: QueryNode = node.children[0];
-					if (span != null && TypeResolver.isProvablyNonNull(receiver, root, shape, declaredTypes)) violations.push({
+					if (span != null && TypeResolver.isProvablyNonNull(receiver, root, shape, types)) violations.push({
 						file: entry.file,
 						span: span,
 						rule: 'unnecessary-safe-nav',

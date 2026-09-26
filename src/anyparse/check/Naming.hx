@@ -1800,6 +1800,10 @@ private class RenameRefusal {
 	public static inline final TYPE_REGISTRY: String =
 		'the member is a `static final` bound to a TYPE reference — a `Class<T>` registry entry a macro / framework resolves by NAME, through references no identifier-level proof sees';
 
+	/** The program's entry point: the build names it, not the sources. */
+	public static inline final ENTRY_POINT: String =
+		'the method is the program\'s ENTRY POINT (`static function main()`), named by the build — `-main`, a generated launcher, `--run` — and by no identifier a rename could follow';
+
 	/** No enclosing type: the confinement proof has nothing to scope to. */
 	public static inline final NO_OWNER: String = 'the declaration reports no enclosing type, and the confinement proof is scoped to one';
 
@@ -1882,13 +1886,13 @@ private class RenameRefusal {
 
 	/**
 	 * The sentence for the mechanism that reaches `reach`'s member without an identifier naming it —
-	 * one gate per `ImplicitReach`, where there used to be one sentence for all five.
+	 * one gate per `ImplicitReach`, where there used to be one sentence for all of them.
 	 *
 	 * A decline reason that names a mechanism the member does not have (`the member carries
 	 * metadata` for a `private function new()`) sends the next reader after the wrong thing, which
 	 * is worse than no reason at all — hence one sentence per reach.
 	 *
-	 * THREE of the five are what `of` reaches: `TypeRegistry` needs a `FinalMember`, whose category
+	 * FOUR of the six are what `of` reaches: `TypeRegistry` needs a `FinalMember`, whose category
 	 * is Constant or Field and never Method, so the question must be asked of every member and not
 	 * under `category == Method`, or the arm that exists FOR a `Class<T>` registry refuses nothing.
 	 * The two that remain unreachable THROUGH here are unreachable rather than dead: `MagicName`
@@ -1905,6 +1909,7 @@ private class RenameRefusal {
 			case ImplicitReach.Accessor: IS_ACCESSOR;
 			case ImplicitReach.Annotation: CARRIES_METADATA;
 			case ImplicitReach.TypeRegistry: TYPE_REGISTRY;
+			case ImplicitReach.EntryPoint: ENTRY_POINT;
 		}
 	}
 
@@ -2018,7 +2023,7 @@ private class RenameRefusal {
 		// `unused-private` declines even to REPORT because a macro may reach it by NAME, would be
 		// renamed. A name a rename breaks is broken exactly as a deletion breaks it. WHICH mechanism is
 		// what `implicitReach` names and this refusal repeats, rather than claiming metadata for all
-		// five.
+		// of them.
 		if (category == NamingCategory.Method && decl.mods.contains('override')) return OVERRIDE;
 		final reach: Null<ImplicitReach> = decl.implicitReach;
 		if (reach != null) return implicitReach(reach);

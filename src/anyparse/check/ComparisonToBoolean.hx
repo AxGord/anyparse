@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.BoolExprShape;
+import anyparse.query.DeclaredNullity;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
 import anyparse.query.NodeShape;
@@ -88,9 +89,9 @@ using StringTools;
  * true for a `Bool` annotation with no null-safety involved at all). That premise is exact on a
  * static target and NOT exact on a dynamic one, where an uninitialized or `@:optional`
  * `public var flag:Bool` class field reads `null`: there `o.flag == false` is `false` while
- * `!o.flag` is `true`. ALL arms share the hole — the identifier arm has carried it since the
- * declared-type gate landed — so closing it belongs to the shared premise (or to a per-target
- * seam), not to one arm. A `Bool`-returning METHOD is the least exposed of the three where the body
+ * `!o.flag` is `true`. The identifier arm no longer carries it for a field written with no initialiser (the shared
+ * premise withholds the value-type fast path there); the two resolved arms still do, and closing it for them belongs to
+ * the member lookup (or to a per-target seam). A `Bool`-returning METHOD is the least exposed of the three where the body
  * is Haxe: the annotation is written by hand at the one place the value is produced, with no
  * default-initialisation seam behind it. An EXTERN method is the exception — there its `:Bool` is a
  * promise about foreign code, which a JS `undefined` can break, exactly as a field's can.
@@ -135,7 +136,7 @@ final class ComparisonToBoolean implements Check {
 		// proofs demand it — after every cheaper arm on every candidate has failed.
 		final index: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
 		return RunScan.collectWith(files, plugin, resolveSeams(plugin), (entry, tree, seams, violations) -> {
-			walk(violations, tree, seams, proofOf(entry.file, entry.source, tree, provider, index));
+			walk(violations, tree, seams, proofOf(entry.file, entry.source, tree, seams.shape, provider, index));
 		});
 	}
 
@@ -175,7 +176,7 @@ final class ComparisonToBoolean implements Check {
 		// `lazySymbolIndex` prefers the run's resolution scope, then the caller's report index, and
 		// only then builds over `source` alone — enough for a same-file receiver type.
 		final resolver: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex([{ file: file, source: source }], plugin, index);
-		final proof: TypeProof = proofOf(file, source, root, provider, resolver);
+		final proof: TypeProof = proofOf(file, source, root, seams.shape, provider, resolver);
 		return CheckScan.applyBySpan(
 			plugin, source, violations, seams.equalityKinds, (node, span) -> comparisonEdit(node, span, source, seams, proof, eqKind)
 		);
@@ -192,12 +193,13 @@ final class ComparisonToBoolean implements Check {
 	 * `SymbolIndex` — neither is touched until a field-access operand actually reaches the proof.
 	 */
 	private static function proofOf(
-		file: String, source: String, root: QueryNode, provider: Null<TypeInfoProvider>, index: () -> Null<SymbolIndex>
+		file: String, source: String, root: QueryNode, shape: RefShape, provider: Null<TypeInfoProvider>, index: () -> Null<SymbolIndex>
 	): TypeProof {
 		return {
 			file: file,
 			root: root,
 			declaredTypes: provider?.declaredTypes(source),
+			nullity: provider == null ? null : DeclaredNullity.of(file, root, source, shape, provider, index),
 			castTargets: TypeInfoMemo.castTargetSources(provider, source),
 			index: index
 		};
@@ -276,7 +278,7 @@ final class ComparisonToBoolean implements Check {
 	 */
 	private static function operandProven(other: QueryNode, seams: Seams, proof: TypeProof, fallbackReport: Bool): Bool {
 		final structural: Bool = !operandIsNullable(other, seams.nullableKinds)
-			&& operandProvablyBool(other, proof.root, seams.shape, proof.declaredTypes, seams.boolOpKinds, fallbackReport);
+			&& operandProvablyBool(other, proof.root, seams.shape, proof.nullity, seams.boolOpKinds, fallbackReport);
 		return structural || resolvedNonNullBool(other, seams.shape, proof) || resolvedCallReturnBool(other, seams, proof);
 	}
 
@@ -472,11 +474,11 @@ final class ComparisonToBoolean implements Check {
 	 * strip without proof — an unproven `== true` may be load-bearing).
 	 */
 	private static function operandProvablyBool(
-		other: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Null<Map<Int, String>>, boolOpKinds: Array<String>,
+		other: QueryNode, root: QueryNode, shape: RefShape, nullity: Null<DeclaredNullity>, boolOpKinds: Array<String>,
 		fallbackReport: Bool
 	): Bool {
 		return BoolExprShape.provablyBoolOperand(other, boolOpKinds, shape.parenKind) || other.kind == shape.identKind
-			&& (declaredTypes == null ? fallbackReport : TypeResolver.isProvablyNonNull(other, root, shape, declaredTypes));
+			&& (nullity == null ? fallbackReport : TypeResolver.isProvablyNonNull(other, root, shape, nullity));
 	}
 
 	/** Whether `operand`'s subtree reaches any kind whose nullness the check cannot rule out. */
@@ -602,6 +604,7 @@ private typedef TypeProof = {
 	final file: String;
 	final root: QueryNode;
 	final declaredTypes: Null<Map<Int, String>>;
+	final nullity: Null<DeclaredNullity>;
 	final castTargets: () -> Map<Int, String>;
 	final index: () -> Null<SymbolIndex>;
 };

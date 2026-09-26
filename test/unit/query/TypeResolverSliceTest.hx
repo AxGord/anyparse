@@ -3,6 +3,7 @@ package unit.query;
 import anyparse.check.Check.Violation;
 import anyparse.check.UnusedLocal;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.DeclaredNullity;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
@@ -164,7 +165,7 @@ class TypeResolverSliceTest extends Test {
 
 	public function testNonNullNominalUnderNullSafety(): Void {
 		Assert.isTrue(
-			nonNull('@:nullSafety class C { static function m(x:Foo):Void { if (x != null) {} } }'),
+			nonNull('@:nullSafety class C { static function m(x:Foo):Void { if (x != null) {} } } class Foo {}'),
 			'a nominal operand under @:nullSafety is provably non-null'
 		);
 	}
@@ -221,14 +222,14 @@ class TypeResolverSliceTest extends Test {
 
 	public function testNonNullExplicitStrictAffirmed(): Void {
 		Assert.isTrue(
-			nonNull('@:nullSafety(Strict) class C { static function m(x:Foo):Void { if (x != null) {} } }'),
+			nonNull('@:nullSafety(Strict) class C { static function m(x:Foo):Void { if (x != null) {} } } class Foo {}'),
 			'a nominal operand under explicit @:nullSafety(Strict) is provably non-null'
 		);
 	}
 
 	public function testNonNullExplicitLooseAffirmed(): Void {
 		Assert.isTrue(
-			nonNull('@:nullSafety(Loose) class C { static function m(x:Foo):Void { if (x != null) {} } }'),
+			nonNull('@:nullSafety(Loose) class C { static function m(x:Foo):Void { if (x != null) {} } } class Foo {}'),
 			'Loose rejects null into a non-nullable binding just as Strict does — trusted for this proof'
 		);
 	}
@@ -374,14 +375,15 @@ class TypeResolverSliceTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final tree: QueryNode = plugin.parseFile(src);
 		final shape: RefShape = plugin.refShape();
-		final declaredTypes: Map<Int, String> = plugin.declaredTypes(src);
+		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }];
+		final types: DeclaredNullity = DeclaredNullity.of('C.hx', tree, src, shape, plugin, () -> SymbolIndex.build(files, plugin));
 		final operand: Null<QueryNode> = nullCheckOperand(tree, shape);
 		Assert.notNull(operand, 'fixture must contain a `… != null` comparison');
 		if (operand == null) return false;
 		final found: QueryNode = operand;
 		return atNullComparison
-			? TypeResolver.isProvablyNonNullAtNullComparison(found, tree, shape, declaredTypes)
-			: TypeResolver.isProvablyNonNull(found, tree, shape, declaredTypes);
+			? TypeResolver.isProvablyNonNullAtNullComparison(found, tree, shape, types)
+			: TypeResolver.isProvablyNonNull(found, tree, shape, types);
 	}
 
 	private function nullCheckOperand(tree: QueryNode, shape: RefShape): Null<QueryNode> {

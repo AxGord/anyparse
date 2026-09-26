@@ -164,7 +164,8 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	 * scan for a confined type, else the report-UNION-resolution zero-occurrence proof)
 	 * plus a deletable private empty constructor: a `private function new() {}` in a
 	 * never-instantiated all-static utility class (no structural `new C`, no reflection
-	 * mention of the class name, no `@:build`, no subtype). The RESOLUTION-scope string-literal contents gathered here
+	 * mention of the class name, no use of the class as a value or through an alias, no `@:build`,
+	 * no subtype). The RESOLUTION-scope string-literal contents gathered here
 	 * (`ReflectionScan.reflectionSurface` — report UNION the library) serve TWO readers — `fix`'s per-member reflection gate, and the
 	 * constructor arm below, which asks them about the CLASS name. Widening the scope can only
 	 * add contents, so the arm can only stop reporting a constructor, never start.
@@ -179,6 +180,7 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 		final reflected: Array<String> = surface.whole;
 		final violations: Array<Violation> = [];
 		final ctorCandidates: Array<{ file: String, className: String, span: Span }> = [];
+
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
@@ -219,6 +221,7 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 		for (c in ctorCandidates) if (
 			!index.text.skippedMayReference(c.className) && !index.subtypes.hasSubtype(c.className, c.file)
 			&& !isInstantiatedAnywhere(c.className, files) && !mentionedInStrings(c.className, reflected)
+			&& !usedAsValue(c.className, files, plugin, index) && !isAliased(c.className, scopeIndex)
 		) violations.push({
 			file: c.file,
 			span: c.span,
@@ -746,6 +749,46 @@ final class UnusedPrivate implements Check implements ConfigAware implements Fra
 	/** Whether `className` is instantiated (`new ClassName`) anywhere in the file set. */
 	private static function isInstantiatedAnywhere(className: String, files: Array<{ file: String, source: String }>): Bool {
 		return files.exists(entry -> containsInstantiation(entry.source, className));
+	}
+
+	/**
+	 * Whether any parsed file uses `className` as a VALUE — a reference to the class anywhere but the
+	 * receiver of a member access. A class value reaches its constructor with no `new` written
+	 * (`Type.createInstance(C, [])`), so it is never proven never-instantiated. Every spelling that can
+	 * denote the class counts: its simple name, a qualified path ending in it (`mk(app.C)`), and an
+	 * import alias of it (`import app.C as K`); the positive shape is the receiver slot alone, since that
+	 * is the only one a static-utility class needs.
+	 */
+	private static function usedAsValue(
+		className: String, files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, index: SymbolIndex
+	): Bool {
+		final shape: RefShape = plugin.refShape();
+		function valueUse(node: QueryNode, parent: Null<QueryNode>, names: Array<String>): Bool {
+			final isReceiver: Bool = parent != null && parent.kind == shape.fieldAccessKind && parent.children[0] == node;
+			final named: Bool = node.kind == shape.identKind && names.contains(node.name ?? '') || node.kind == shape.fieldAccessKind
+				&& node.name == className;
+			return named && !isReceiver || node.children.exists(c -> valueUse(c, node, names));
+		}
+		return files.exists(entry -> {
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			final names: Array<String> = [className];
+			final fi: Null<FileInfo> = index.fileInfo(entry.file);
+			final imports: Array<ImportInfo> = fi == null ? [] : fi.imports.concat([for (g in fi.ambientImports) for (i in g.imports) i]);
+			for (imp in imports) {
+				final target: String = imp.aliasTarget ?? '';
+				final alias: Null<String> = imp.alias;
+				if (alias != null && (target == className || target.endsWith('.$className'))) names.push(alias);
+			}
+			tree != null && valueUse(tree, null, names);
+		});
+	}
+
+	/**
+	 * Whether a `typedef` in `index` aliases `className`: the alias's own name is then a class value of
+	 * the same class, spelled with a name the value scan was not asked about.
+	 */
+	private static function isAliased(className: String, index: SymbolIndex): Bool {
+		return index.allFiles().exists(f -> f.types.exists(t -> t.aliasTargetNominal == className));
 	}
 
 	/**

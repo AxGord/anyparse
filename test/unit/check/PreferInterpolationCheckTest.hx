@@ -7,6 +7,7 @@ import anyparse.check.PreferInterpolation;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -295,7 +296,7 @@ class PreferInterpolationCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new PreferInterpolation().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return new PreferInterpolation().run(CheckFixture.withStd(src), new HaxeQueryPlugin());
 	}
 
 	/** What `fold-adjacent-string-literals` reports for `src` — the other half of every hand-off fixture. */
@@ -316,6 +317,19 @@ class PreferInterpolationCheckTest extends Test {
 			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
 		);
 		return edits.length == 1 ? edits[0].text : '<${edits.length} edits>';
+	}
+
+	@:pin('control')
+	@:killer('M-INTERP-NULLITY-SKIPPED')
+	public function testTypedefOfNullArgumentNotFlagged(): Void {
+		// `'$x'` rejects a nullable operand under Strict where `Std.string(x)` accepts it.
+		Assert.equals(
+			0,
+			violations(
+				'typedef MaybeR = Null<R>; class R {} '
+				+ '@:nullSafety(Strict) class C { function f(x:MaybeR) { var r: String = Std.string(x); } }'
+			).length
+		);
 	}
 
 }

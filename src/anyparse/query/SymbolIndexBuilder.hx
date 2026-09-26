@@ -261,6 +261,8 @@ final class SymbolIndexBuilder {
 					members: collectMembers(node, source, accessors, writeAccessors, returnTypes, typeSources, memberSeams),
 					abstractSelfRebind: isAbstract && abstractRebindsThisScan(node, shape, pendingMeta),
 					abstractForwardUnderlying: isAbstract ? forwardUnderlyingOf(node, pendingMeta, shape) : null,
+					underlyingRaw: underlyingPathOf(source, typeDecl, isAbstract, gn.guarded),
+					guarded: gn.guarded,
 					forwardedMembers: pendingForwarded
 				});
 				pendingMeta = [];
@@ -780,6 +782,33 @@ final class SymbolIndexBuilder {
 			i++;
 		}
 		return null;
+	}
+
+	/**
+	 * The head path of the underlying type an abstract `decl` writes in the `(…)` after its name and
+	 * type-parameter list (`TypeDeclInfo.underlyingRaw`), or null for a non-abstract (`isAbstract`), a
+	 * `guarded` one, a header that carries none, or one that is not a plain nominal path. The `<…>`
+	 * list is skipped by `declTypeParamListText`'s own bracket scan, so a `>` inside a constraint
+	 * cannot end it early.
+	 */
+	private static function underlyingPathOf(source: String, decl: TypeDeclMatch, isAbstract: Bool, guarded: Bool): Null<String> {
+		if (!isAbstract || guarded) return null;
+		final anchor: Null<Span> = decl.nameNode.span;
+		final nameAt: Int = source.indexOf(decl.name, anchor == null ? decl.fullSpan.from : anchor.from);
+		if (nameAt < 0) return null;
+		final params: Null<String> = declTypeParamListText(source, decl);
+		var i: Int = nameAt + decl.name.length;
+		while (i < source.length && source.isSpace(i)) i++;
+		if (params != null) i = source.indexOf(params, i) + params.length + 1;
+		while (i < source.length && source.isSpace(i)) i++;
+		if (i >= source.length || source.fastCodeAt(i) != '('.code) return null;
+		final close: Int = source.indexOf(')', i);
+		if (close < 0) return null;
+		final inner: String = source.substring(i + 1, close).trim();
+		if (inner.indexOf('->') != -1 || inner.indexOf('(') != -1) return null;
+		final lt: Int = inner.indexOf('<');
+		final head: String = (lt < 0 ? inner : inner.substring(0, lt)).trim();
+		return head.length > 0 && head.split('.').foreach(SourceText.isIdentifier) ? head : null;
 	}
 
 	/**

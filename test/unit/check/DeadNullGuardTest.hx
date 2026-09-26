@@ -6,6 +6,7 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
+import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -769,7 +770,7 @@ class DeadNullGuardTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return new DeadNullGuard().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return new DeadNullGuard().run(CheckFixture.withStd(src), new HaxeQueryPlugin());
 	}
 
 }

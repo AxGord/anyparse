@@ -1,8 +1,10 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.query.DeclaredNullity;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
@@ -60,9 +62,10 @@ final class UnnecessaryNullCheck implements Check {
 		final nullLit: String = nullLitKind;
 		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+		final index: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
 		return RunScan.collect(files, plugin, (entry, tree, violations) -> {
 			final root: QueryNode = tree;
-			final declaredTypes: Map<Int, String> = provider != null ? provider.declaredTypes(entry.source) : [];
+			final types: DeclaredNullity = DeclaredNullity.of(entry.file, root, entry.source, shape, provider, index);
 			function walk(node: QueryNode): Void {
 				if (opaqueKinds.contains(node.kind)) return;
 				final span: Null<Span> = node.span;
@@ -71,7 +74,7 @@ final class UnnecessaryNullCheck implements Check {
 					final rightIsNull: Bool = node.children[1].kind == nullLit;
 					if (leftIsNull != rightIsNull) {
 						final operand: QueryNode = leftIsNull ? node.children[1] : node.children[0];
-						if (TypeResolver.isProvablyNonNullAtNullComparison(operand, root, shape, declaredTypes)) violations.push({
+						if (TypeResolver.isProvablyNonNullAtNullComparison(operand, root, shape, types)) violations.push({
 							file: entry.file,
 							span: span,
 							rule: 'unnecessary-null-check',
