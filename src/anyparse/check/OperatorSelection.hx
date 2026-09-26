@@ -175,9 +175,7 @@ final class OperatorSelection {
 		_shape = shape;
 		final literalTypeNames: Map<String, String> = shape.literalTypeNames ?? [];
 		_literalKinds = [for (kind in literalTypeNames.keys()) kind];
-		final builtins: Array<String> = [for (name in literalTypeNames) name];
-		for (name in shape.nonNullableTypeNames ?? []) if (!builtins.contains(name)) builtins.push(name);
-		_builtinTypeNames = builtins;
+		_builtinTypeNames = OperandBinder.builtinNamesOf(shape);
 		_abstractKinds = shape.underlyingThisTypeKinds ?? [];
 		_plainKinds = (shape.classDeclKinds ?? []).concat(shape.interfaceDeclKinds ?? []).concat(shape.runtimeTaggedTypeKinds ?? []);
 		_parenKind = shape.parenKind;

@@ -269,6 +269,67 @@ class OperandBindingTest extends Test {
 		).exists(v -> v.message.indexOf('not provably non-null') == -1);
 	}
 
+	/**
+	 * `h.get()` on the imported `far.Holder` (unindexed) is typed by where `h`'s type BINDS, not by the
+	 * simple name `Holder`: the same-package `u.Holder.get()` returns a class, `far.Holder.get()` an
+	 * abstract overloading `+` (`s + h.get().toString()` printed `sTS`, dropped `s/OP/r`).
+	 */
+	@:pin('control')
+	@:killer('M-TOSTRING-CALL-BY-NAME')
+	public function testToStringCallReceiverBindsItsOwner(): Void {
+		Assert.equals(REPORT_ONLY, toStringOf(TAGISH_TREE, 'import far.Holder;', 'h: Holder', 'h.get().toString()', '\'s\''));
+	}
+
+	/** The same call on the same-package `Holder` is proven, so the pair above is discriminating. */
+	@:pin('control')
+	@:killer('M-TOSTRING-CALL-CUT')
+	public function testToStringCallReceiverOfIndexedOwnerIsProven(): Void {
+		Assert.equals(FIXABLE, toStringOf(TAGISH_TREE, '', 'h: Holder', 'h.get().toString()'));
+	}
+
+	/** A local of an indexed class is proven through its binding. */
+	@:pin('control')
+	@:killer('M-TOSTRING-IDENT-CUT')
+	public function testToStringIdentReceiverOfIndexedClassIsProven(): Void {
+		Assert.equals(FIXABLE, toStringOf(TAGISH_TREE, '', 't: Tagish', 't.toString()'));
+	}
+
+	/** `String` imported from an unindexed module is not the built-in: the `+` is not proven concatenation. */
+	@:pin('control')
+	@:killer('M-TOSTRING-STRING-BINDING')
+	public function testShadowedStringIsNotTheBuiltin(): Void {
+		Assert.equals(ABSENT, toStringOf(TAGISH_TREE, 'import far.String;', 't: Tagish', 't.toString()'));
+	}
+
+	/** A same-package `Tagish` class with a `toString`, and a `Holder` whose `get()` returns one. */
+	private static final TAGISH_TREE: Map<String, String> = [
+		'u/Tagish.hx' => 'package u;\n\nclass Tagish {\n\n\tpublic function new() {}\n\n'
+			+ '\tpublic function toString(): String {\n\t\treturn \'C\';\n\t}\n\n}\n',
+		'u/Holder.hx' => 'package u;\n\nclass Holder {\n\n\tpublic function new() {}\n\n'
+			+ '\tpublic function get(): Tagish {\n\t\treturn new Tagish();\n\t}\n\n}\n'
+	];
+
+	/**
+	 * What `redundant-tostring` makes of `<left> + <call>` in a null-safe `u/Use.hx` with `imports` whose
+	 * function takes `param` and `s: String`: fixed, reported without the fix, or not reported. An import
+	 * of an unindexed module may declare a `String` of its own, so such a test leads with a literal.
+	 */
+	private static function toStringOf(
+		extra: Map<String, String>, imports: String, param: String, call: String, left: String = 's'
+	): String {
+		final use: String = 'package u;\n\n$imports\n\n@:nullSafety(Strict)\nclass Use {\n\n'
+			+ '\tpublic static function f($param, s: String): String {\n\t\treturn $left + $call;\n\t}\n\n}\n';
+		final files: Map<String, String> = extra.copy();
+		files['u/Use.hx'] = use;
+		final found: Array<Violation> = violationsAt(new RedundantToString(), files, call);
+		return if (found.length == 0)
+			ABSENT
+		else if (found.exists(v -> v.message.indexOf(', but ') != -1))
+			REPORT_ONLY
+		else
+			FIXABLE;
+	}
+
 	private static inline final FIXABLE: String = 'fixable';
 	private static inline final REPORT_ONLY: String = 'report-only';
 	private static inline final ABSENT: String = 'absent';

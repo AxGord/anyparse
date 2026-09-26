@@ -1339,8 +1339,12 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.OperandBindingTest#testOverloadMetaIsIndexed :: control :: M-INDEX-OVERLOAD-META',
 			'unit.check.OperandBindingTest#testOverloadedSignatureIsNotItsWrittenReturn :: control :: M-OPERAND-OVERLOAD-SIGNATURE',
 			'unit.check.OperandBindingTest#testSamePackageClassIsProven :: control :: M-BINDING-PACKAGE-TIER-CUT',
+			'unit.check.OperandBindingTest#testShadowedStringIsNotTheBuiltin :: control :: M-TOSTRING-STRING-BINDING',
 			'unit.check.OperandBindingTest#testStaticCallThroughTypeNameIsProven :: control :: M-OPERAND-STATIC-RECEIVER-CUT',
 			'unit.check.OperandBindingTest#testSubTypeOfUnindexedModuleOutranksSamePackageClass :: control :: M-BINDING-UNINDEXED-MODULE-FREE',
+			'unit.check.OperandBindingTest#testToStringCallReceiverBindsItsOwner :: control :: M-TOSTRING-CALL-BY-NAME',
+			'unit.check.OperandBindingTest#testToStringCallReceiverOfIndexedOwnerIsProven :: control :: M-TOSTRING-CALL-CUT',
+			'unit.check.OperandBindingTest#testToStringIdentReceiverOfIndexedClassIsProven :: control :: M-TOSTRING-IDENT-CUT',
 			'unit.check.OperandBindingTest#testWildcardOverUnindexedPackageOutranksSamePackageClass :: control :: M-BINDING-UNINDEXED-WILDCARD-FREE',
 			'unit.check.OracleCacheTest#testAFingerprintReadsItsSourcesThroughTheMemo :: control :: ' + 'M-ORACLE-CACHE-MEMO-UNREAD',
 			'unit.check.OracleCacheTest#testAVerdictIsNotFiledUnderAFingerprintTheTreeLeft :: control :: '
@@ -3671,7 +3675,11 @@ class TestDiscoveryParityTest extends Test {
 			'M-INDEX-OVERLOAD-META',
 			'M-NULLITY-RETURN-LAST-SEGMENT',
 			'M-NULLITY-RETURN-OVERLOAD',
-			'M-NULLITY-RETURN-CUT'
+			'M-NULLITY-RETURN-CUT',
+			'M-TOSTRING-CALL-BY-NAME',
+			'M-TOSTRING-CALL-CUT',
+			'M-TOSTRING-IDENT-CUT',
+			'M-TOSTRING-STRING-BINDING'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

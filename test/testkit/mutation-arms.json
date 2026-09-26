@@ -7725,7 +7725,7 @@
 			"name": "M-TOSTRING-RETURN-TRUSTED",
 			"type": "anyparse.check.RedundantToString",
 			"method": "callReceiver",
-			"find": "&& ctx.nullity.ofMemberReturn(ownerType, method) != Unproven",
+			"find": "&& ctx.nullity.ofMemberReturn(owners, method) != Unproven",
 			"replace": "",
 			"note": "an instance call's declared return is trusted by name under null safety, so a method returning a typedef of `Null<…>` loses its `.toString()`"
 		},
@@ -8558,6 +8558,37 @@
 			"method": "ofMemberReturn",
 			"force": "Unproven",
 			"note": "no member return is ever proven non-null"
+		},
+		{
+			"name": "M-TOSTRING-CALL-BY-NAME",
+			"type": "anyparse.check.RedundantToString",
+			"method": "callReceiver",
+			"find": ["final owners: Null<Array<ResolvedType>> = binder.receiverDecls(owner);", "decls: boundDecls(binder.tierOf(call)),"],
+			"replace": ["final owners: Null<Array<ResolvedType>> = ctx.index.refs.resolvedDeclsNamed(TypeResolver.identTypeName(owner, ctx.root, seams.shape, ctx.declaredTypes) ?? '');", "decls: ctx.index.refs.resolvedDeclsNamed(ctx.index.members.returnNominalOf(TypeResolver.identTypeName(owner, ctx.root, seams.shape, ctx.declaredTypes) ?? '', method) ?? ''),"],
+			"note": "a call receiver is typed by its owner's SIMPLE name, so `far.Holder.get()` reads as the same-package `Holder.get()`"
+		},
+		{
+			"name": "M-TOSTRING-CALL-CUT",
+			"type": "anyparse.check.RedundantToString",
+			"method": "callReceiver",
+			"force": "{ decls: null, nonNull: false }",
+			"note": "no call receiver is ever typed"
+		},
+		{
+			"name": "M-TOSTRING-IDENT-CUT",
+			"type": "anyparse.check.RedundantToString",
+			"method": "resolveReceiver",
+			"find": "decls: boundDecls(ctx.binder?.tierOf(receiver)),",
+			"replace": "decls: null,",
+			"note": "an identifier receiver's type is never bound"
+		},
+		{
+			"name": "M-TOSTRING-STRING-BINDING",
+			"type": "anyparse.check.RedundantToString",
+			"method": "isStringTyped",
+			"find": "&& isBuiltinBinding(ctx.binder?.tierOf(node), stringTypeName);",
+			"replace": ";",
+			"note": "an identifier typed `String` counts as the built-in even where an import binds `String` to another type"
 		}
 	]
 }

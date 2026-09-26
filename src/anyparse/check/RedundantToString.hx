@@ -10,6 +10,7 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
+import anyparse.query.TypeNameBinding.Tier;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
@@ -190,6 +191,9 @@ final class RedundantToString implements Check implements DefaultOff {
 		if (tree == null) return null;
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		return {
+			binder: provider == null
+				? null
+				: new OperandBinder(file, source, tree, seams.shape, index, provider, OperandBinder.builtinNamesOf(seams.shape)),
 			root: tree,
 			source: source,
 			seams: seams,
@@ -259,10 +263,10 @@ final class RedundantToString implements Check implements DefaultOff {
 	 */
 	private static function blockerFor(arm: Arm, info: ReceiverInfo, recvSpan: Span, callSpan: Span, ctx: Ctx): Null<String> {
 		if (!info.nonNull) return 'the receiver is not provably non-null, so dropping the call would print "null" where it throws';
-		final typeName: Null<String> = info.typeName;
+		final decls: Null<Array<ResolvedType>> = info.decls;
 		if (arm != StringReceiver) {
-			final declared: Bool = typeName != null && coercionCallsDeclaredToString(typeName, ctx);
-			final classDeclared: Bool = typeName != null && declared && isClassType(typeName, ctx);
+			final declared: Bool = decls != null && coercionCallsDeclaredToString(decls);
+			final classDeclared: Bool = decls != null && declared && isClassType(decls, ctx);
 			final compiled: Bool = (!declared || (arm == Concat && !classDeclared)) && compiledClass(recvSpan, ctx);
 			if (!declared && !compiled)
 				return 'the receiver type is not a non-extern type '
@@ -300,8 +304,8 @@ final class RedundantToString implements Check implements DefaultOff {
 
 	/**
 	 * Whether the string coercion the context arms rely on provably calls the SAME `toString` the
-	 * explicit call does: `typeName` must be declared in the analysed scope and NO declaration of it
-	 * may be EXTERN. The two genuinely diverge for an extern type, whose methods are declarations
+	 * explicit call does: the receiver's type must bind to declarations in the analysed scope and NO
+	 * one of them may be EXTERN. The two genuinely diverge for an extern type, whose methods are declarations
 	 * over a foreign runtime object — on js, `extern class Date`'s `d.toString()` yields
 	 * `2023-11-15 00:13:20` where `'$d'`, `Std.string(d)` and `'' + d` all yield the native
 	 * `Wed Nov 15 2023 …`, and `extern class Array`'s `a.toString()` yields `1,2` where the same
@@ -310,21 +314,19 @@ final class RedundantToString implements Check implements DefaultOff {
 	 * inherited `toString`, an `abstract` over `Array` and over `Date`, and an `enum abstract`
 	 * alike. An unresolved, out-of-scope or extern type keeps the conservative default.
 	 */
-	private static function coercionCallsDeclaredToString(typeName: String, ctx: Ctx): Bool {
-		final decls: Array<TypeDeclInfo> = declsOf(typeName, ctx);
-		return decls.length != 0 && !decls.exists(decl -> decl.isExtern);
+	private static function coercionCallsDeclaredToString(decls: Array<ResolvedType>): Bool {
+		return decls.length != 0 && !decls.exists(r -> r.type.isExtern);
 	}
 
 	/**
-	 * Whether every in-scope declaration of `typeName` is a CLASS. Haxe lets an `abstract` overload
+	 * Whether every declaration the receiver's type binds to is a CLASS. Haxe lets an `abstract` overload
 	 * `+` (`@:op(A + B)`), and the overload is resolved BEFORE the String-concatenation rule, so the
 	 * `+` arm's premise — the other operand being a String makes this a concatenation — holds only
 	 * for a type that cannot carry one. Verified: an `abstract Tag(String)` with `@:op(A + B)` and
 	 * `@:to String` silently changes the value once the explicit call is dropped.
 	 */
-	private static function isClassType(typeName: String, ctx: Ctx): Bool {
-		final decls: Array<TypeDeclInfo> = declsOf(typeName, ctx);
-		return decls.length != 0 && decls.foreach(decl -> ctx.seams.classDeclKinds.contains(decl.kind));
+	private static function isClassType(decls: Array<ResolvedType>, ctx: Ctx): Bool {
+		return decls.length != 0 && decls.foreach(r -> ctx.seams.classDeclKinds.contains(r.type.kind));
 	}
 
 	/**
@@ -339,13 +341,6 @@ final class RedundantToString implements Check implements DefaultOff {
 		if (facts == null || id == null) return false;
 		final declared: Null<TypeFact> = facts.facts.type(id);
 		return declared != null && declared.alike && declared.kind == CLASS_KIND && !declared.isExtern;
-	}
-
-	/** Every in-scope top-level declaration named `typeName`. */
-	private static function declsOf(typeName: String, ctx: Ctx): Array<TypeDeclInfo> {
-		return [
-			for (info in ctx.index.refs.declaringFiles(typeName)) for (decl in info.types) if (decl.name == typeName) decl
-		];
 	}
 
 	/** The human-facing half of a finding's message — why this position already stringifies. */
@@ -384,7 +379,8 @@ final class RedundantToString implements Check implements DefaultOff {
 		if (seams.stringLiteralKinds.contains(node.kind)) return true;
 		final stringTypeName: Null<String> = seams.stringTypeName;
 		if (node.kind == seams.identKind)
-			return stringTypeName != null && TypeResolver.identTypeName(node, ctx.root, seams.shape, ctx.declaredTypes) == stringTypeName;
+			return stringTypeName != null && TypeResolver.identTypeName(node, ctx.root, seams.shape, ctx.declaredTypes) == stringTypeName
+				&& isBuiltinBinding(ctx.binder?.tierOf(node), stringTypeName);
 		final concatKind: Null<String> = seams.concatKind;
 		return concatKind != null && node.kind == concatKind && node.children.length == 2
 			&& (isStringTyped(node.children[0], ctx) || isStringTyped(node.children[1], ctx));
@@ -401,18 +397,18 @@ final class RedundantToString implements Check implements DefaultOff {
 	 */
 	private static function resolveReceiver(receiver: QueryNode, callSpan: Span, ctx: Ctx): ReceiverInfo {
 		final seams: Seams = ctx.seams;
-		final unresolved: ReceiverInfo = { typeName: null, nonNull: false };
+		final unresolved: ReceiverInfo = { decls: null, nonNull: false };
 		if (receiver.kind == seams.identKind) return {
-			typeName: TypeResolver.identTypeName(receiver, ctx.root, seams.shape, ctx.declaredTypes),
+			decls: boundDecls(ctx.binder?.tierOf(receiver)),
 			nonNull: TypeResolver.isProvablyNonNull(receiver, ctx.root, seams.shape, ctx.nullity)
 		};
 		if (receiver.kind == seams.shape.nullLiteralKind) return unresolved;
 		final newExprKind: Null<String> = seams.shape.newExprKind;
+		final recvSpan: Null<Span> = receiver.span;
 		if (newExprKind != null && receiver.kind == newExprKind)
-			return { typeName: TypeResolver.simpleNominalName(receiver.name), nonNull: true };
-		final literalType: Null<String> = seams.literalTypeNames[receiver.kind];
-		return if (literalType != null)
-			{ typeName: literalType, nonNull: true }
+			return { decls: recvSpan == null ? null : boundDecls(ctx.binder?.writtenTier(receiver.name, recvSpan.from)), nonNull: true };
+		return if (seams.literalTypeNames.exists(receiver.kind))
+			{ decls: [], nonNull: true }
 		else if (receiver.kind == seams.callKind)
 			callReceiver(receiver, callSpan, ctx)
 		else
@@ -420,36 +416,60 @@ final class RedundantToString implements Check implements DefaultOff {
 	}
 
 	/**
-	 * The `resolveReceiver` arm for a CALL receiver: its declared return type, when that is recovered
-	 * and is not a nullable wrapper. A genuine `Type.method()` goes through the curated
-	 * `RefShape.staticMethodReturns` table, whose entries are hand-picked stdlib statics whose
-	 * contract excludes null, so no further gate applies. An INSTANCE call is resolved through
-	 * `MemberLookup.returnNominalOf` and is non-null only while `@:nullSafety` is active at the call
-	 * site — the same trust `isProvablyNonNull` places in a declared field type, with the same
-	 * residual: a declarer under `@:nullSafety(Off)` could still return null.
+	 * The `resolveReceiver` arm for a CALL receiver `owner.method()`. When the owner BINDS — a value
+	 * whose declared type binds, or a type name for a static — the call's type is the member's written
+	 * return bound in its declaring file (`OperandBinder`), non-null only while `@:nullSafety` is active
+	 * at the call site and the written return resolves non-null (`DeclaredNullity.ofMemberReturn`) —
+	 * the same trust `isProvablyNonNull` places in a declared field type, with the same residual: a
+	 * declarer under `@:nullSafety(Off)` could still return null. A type name NO tier binds is the
+	 * compiler's own, and only then is the curated `RefShape.staticMethodReturns` table asked, whose
+	 * entries are hand-picked stdlib statics whose contract excludes null. A name a tier binds to
+	 * something unindexed (`import far.Date`) proves nothing.
 	 */
 	private static function callReceiver(call: QueryNode, callSpan: Span, ctx: Ctx): ReceiverInfo {
 		final seams: Seams = ctx.seams;
-		final unresolved: ReceiverInfo = { typeName: null, nonNull: false };
-		if (call.children.length == 0) return unresolved;
+		final unresolved: ReceiverInfo = { decls: null, nonNull: false };
+		final binder: Null<OperandBinder> = ctx.binder;
+		if (call.children.length == 0 || binder == null) return unresolved;
 		final callee: QueryNode = call.children[0];
 		if (callee.kind != seams.fieldAccessKind || callee.children.length != 1) return unresolved;
 		final method: Null<String> = callee.name;
 		if (method == null) return unresolved;
 		final owner: QueryNode = callee.children[0];
 		final ownerName: Null<String> = owner.name;
-		if (ownerName != null && TypeResolver.receiverRootIsUnboundType(owner, ctx.root, seams.shape)) {
+		final unboundType: Bool = ownerName != null && TypeResolver.receiverRootIsUnboundType(owner, ctx.root, seams.shape);
+		if (ownerName != null && unboundType && binder.typeNameTier(ownerName).match(Free)) {
 			final declared: Null<String> = nonWrapperNominal(seams.staticMethodReturns['$ownerName.$method'], seams);
-			return declared == null ? unresolved : { typeName: declared, nonNull: true };
+			return declared == null ? unresolved : { decls: ctx.index.refs.resolveQualifiedRefAll(declared), nonNull: true };
 		}
-		final ownerType: Null<String> = TypeResolver.identTypeName(owner, ctx.root, seams.shape, ctx.declaredTypes);
+		final owners: Null<Array<ResolvedType>> = binder.receiverDecls(owner);
 		final metaName: Null<String> = seams.shape.nullSafetyMetaName;
-		if (ownerType == null || metaName == null) return unresolved;
-		final returned: Null<String> = nonWrapperNominal(ctx.index.members.returnNominalOf(ownerType, method), seams);
-		return returned == null ? unresolved : {
-			typeName: returned,
+		if (owners == null || metaName == null) return unresolved;
+		return {
+			decls: boundDecls(binder.tierOf(call)),
 			nonNull: TypeResolver.enclosingIsNullSafe(ctx.root, callSpan, metaName, seams.shape.nullSafetyDisableArg)
-				&& ctx.nullity.ofMemberReturn(ownerType, method) != Unproven
+				&& ctx.nullity.ofMemberReturn(owners, method) != Unproven
+		};
+	}
+
+	/** The declarations a binding answer names: none for a built-in (`Free`), null when it is not proven. */
+	private static function boundDecls(tier: Null<Tier>): Null<Array<ResolvedType>> {
+		return switch tier {
+			case Bound(decls): decls;
+			case Free: [];
+			case _: null;
+		};
+	}
+
+	/**
+	 * Whether `tier` leaves `name` the compiler's built-in type: no tier binds it, or it binds only to a
+	 * toplevel declaration of that name (the standard library's own, when the scope indexes it).
+	 */
+	private static function isBuiltinBinding(tier: Null<Tier>, name: String): Bool {
+		return switch tier {
+			case Free: true;
+			case Bound(decls): decls.foreach(r -> r.type.name == name && r.file.pkg == '');
+			case _: false;
 		};
 	}
 
@@ -617,6 +637,9 @@ private typedef Ctx = {
 	/** The null proof over this file's declared types. */
 	final nullity: DeclaredNullity;
 
+	/** What a receiver's type BINDS to where it is written; null when the grammar carries no type information. */
+	final binder: Null<OperandBinder>;
+
 	/** The resolution scope: whole-analysed-set in `run`, and in `fix` whenever the caller passes one. */
 	final index: SymbolIndex;
 
@@ -630,8 +653,11 @@ private typedef Ctx = {
 /** What a receiver resolves to — the two facts every gate downstream needs. */
 private typedef ReceiverInfo = {
 
-	/** The receiver's SIMPLE nominal type name, or null when unresolved. */
-	final typeName: Null<String>;
+	/**
+	 * The declarations the receiver's type binds to — empty for a built-in or a literal, which no
+	 * declaration in scope stands for — or null when the binding is not proven.
+	 */
+	final decls: Null<Array<ResolvedType>>;
 
 	/** Whether the receiver is provably non-null. */
 	final nonNull: Bool;

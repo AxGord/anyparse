@@ -167,18 +167,18 @@ final class DeclaredNullity {
 	}
 
 	/**
-	 * The verdict on the RETURN type of `owner`'s method `method`, over every indexed declaration of
-	 * the method directly on a type named `owner`; none, or any that does not resolve non-null, is
-	 * `Unproven`. Each is resolved from its WRITTEN return type in its declaring file, with the owner's
-	 * and the method's own type parameters shadowing. An inherited method is not followed, and neither
-	 * is one carrying `@:overload` (a call may select another signature) or a macro (its written
-	 * return is not the call site's type).
+	 * The verdict on the RETURN type of method `method` as each of `owners` declares it DIRECTLY — the
+	 * declarations the receiver's type BINDS to, never a simple name; none, or any that does not
+	 * resolve non-null, is `Unproven`. Each is resolved from its WRITTEN return type in its declaring
+	 * file, with the owner's and the method's own type parameters shadowing. An inherited method is not
+	 * followed, and neither is one carrying `@:overload` (a call may select another signature) or a
+	 * macro (its written return is not the call site's type).
 	 */
-	public function ofMemberReturn(owner: String, method: String): Nullity {
+	public function ofMemberReturn(owners: Array<ResolvedType>, method: String): Nullity {
 		final index: Null<SymbolIndex> = _index();
-		if (index == null) return Unproven;
+		if (index == null || owners.exists(r -> !r.type.members.exists(m -> m.name == method))) return Unproven;
 		var verdict: Nullity = Unproven;
-		for (r in index.refs.resolvedDeclsNamed(owner)) for (m in r.type.members) if (m.name == method) {
+		for (r in owners) for (m in r.type.members) if (m.name == method) {
 			final returned: Null<String> = m.returnSource;
 			final source: Null<String> = index.sourceOf(r.file.file);
 			if (returned == null || source == null || !paramsReadable(r) || m.hasOverloadMeta || m.isMacro) return Unproven;

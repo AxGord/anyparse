@@ -62,6 +62,17 @@ final class OperandBinder {
 		_fnKinds = (shape.functionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);
 	}
 
+	/** What a type NAME written in this file binds to at the file's top level, tier by tier; `Unknown` when the file is not indexed. */
+	public function typeNameTier(name: String): Tier {
+		final fi: Null<FileInfo> = _index.fileInfo(_file);
+		return fi == null ? Unknown : TypeNameBinding.tierOf(name, fi, _index);
+	}
+
+	/** What the type `written` at offset `at` of this file binds to, with the type parameters in scope there. */
+	public inline function writtenTier(written: Null<String>, at: Int): Tier {
+		return _declared.headTier(written, at, _wrappers, _builtins);
+	}
+
 	/** What `operand`'s declared type binds to. */
 	public function tierOf(operand: QueryNode): Tier {
 		final fieldKind: Null<String> = _shape.fieldAccessKind;
@@ -187,7 +198,7 @@ final class OperandBinder {
 	 * access. Null when neither is proven, including a built-in receiver whose declaration the index
 	 * does not hold.
 	 */
-	private function receiverDecls(receiver: QueryNode): Null<Array<ResolvedType>> {
+	public function receiverDecls(receiver: QueryNode): Null<Array<ResolvedType>> {
 		switch tierOf(receiver) {
 			case Bound(decls):
 				return decls;
@@ -204,6 +215,13 @@ final class OperandBinder {
 			case Bound(decls): decls;
 			case _: null;
 		};
+	}
+
+	/** The type names the grammar declares built in — a literal's type or a basic value type — each once. */
+	public static function builtinNamesOf(shape: RefShape): Array<String> {
+		final out: Array<String> = [for (name in shape.literalTypeNames ?? []) name];
+		for (name in shape.nonNullableTypeNames ?? []) if (!out.contains(name)) out.push(name);
+		return out;
 	}
 
 }
