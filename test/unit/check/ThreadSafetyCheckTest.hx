@@ -200,6 +200,48 @@ class ThreadSafetyCheckTest extends Test {
 		#end
 	}
 
+	/**
+	 * Two config chains naming different sinks, one graph: each call site is judged by the chain of its own
+	 * file, whichever file the run lists first, and the main-thread chain still crosses from one chain into the other.
+	 */
+	@:pin('control') @:killer('M-TS-FIRST-FILE-LISTS')
+	public function testEachCallSiteJudgedByItsOwnChain(): Void {
+		#if (sys || nodejs)
+		final a: { file: String, source: String } = {
+			file: 'a/A.hx',
+			source: 'class A { static function main():Void { Sys.sleep(1); Gate.block(); B.f(); } }'
+		};
+		final gate: { file: String, source: String } = {
+			file: 'a/Gate.hx',
+			source: 'class Gate { public static function block():Void {} }'
+		};
+		final b: { file: String, source: String } = {
+			file: 'b/B.hx',
+			source: 'class B { public static function f():Void { Sys.sleep(2); Gate.block(); } }'
+		};
+		final root: String = CliFixture.writeTree('threadsafetychains', [
+			{ name: 'apqlint.json', source: '{"rules":{"thread-safety":{"sinks":["Sys.sleep"]}}}' },
+			{ name: 'a/apqlint.json', source: '{"inherit":false,"rules":{"thread-safety":{"sinks":["Gate.block"]}}}' },
+			{ name: a.file, source: a.source },
+			{ name: gate.file, source: gate.source },
+			{ name: b.file, source: b.source }
+		]);
+		for (order in [[a, gate, b], [b, gate, a]]) {
+			final files: Array<{ file: String, source: String }> = [for (f in order) { file: '$root/${f.file}', source: f.source }];
+			final vs: Array<Violation> = Linter.run(files, new HaxeQueryPlugin(), [new ThreadSafety()]);
+			final found: Array<String> = [for (v in vs) '${v.file.substring(root.length + 1)}: ${v.message}'];
+			found.sort(Reflect.compare);
+			Assert.same([
+				'a/A.hx: main thread reaches blocking "Gate.block": A.main -> Gate.block',
+				'b/B.hx: main thread reaches blocking "Sys.sleep": A.main -> B.f -> Sys.sleep'
+			], found);
+		}
+		CliFixture.removeDir(root);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
 	private function violations(config: String, sources: Array<String>): Array<Violation> {
 		final dir: String = CliFixture.writeDir('threadsafety', [{ name: 'apqlint.json', source: config }]);

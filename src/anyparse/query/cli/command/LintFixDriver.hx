@@ -184,7 +184,7 @@ final class LintFixDriver {
 		// otherwise left report-only. With no risky check present this block is a
 		// no-op, so a real run (no risky builtin) is byte-identical to before the key.
 		final risky: RiskyFixOutcome = LintFixVerify.verifyRiskyFixes(
-			files, split.risky, cached, oracles, optsByFile, changedFiles, ledger
+			files, split.risky, cached, oracles, optsByFile, changedFiles, ledger, resolveConfig
 		);
 		fixedCount += risky.appliedCount;
 		nameExclusions(named, risky.excluded);

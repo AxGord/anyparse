@@ -8589,6 +8589,30 @@
 			"find": "&& isBuiltinBinding(ctx.binder?.tierOf(node), stringTypeName);",
 			"replace": ";",
 			"note": "an identifier typed `String` counts as the built-in even where an import binds `String` to another type"
+		},
+		{
+			"name": "M-TS-FIRST-FILE-LISTS",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "run",
+			"find": "listsOfFile.bind(byFile)",
+			"replace": "_ -> sets[0]",
+			"note": "every file is judged by the thread-safety lists of the chain the first file sits under"
+		},
+		{
+			"name": "M-FIXVERIFY-DISCOVERS-CONFIG",
+			"type": "anyparse.check.FixVerifier",
+			"method": "verify",
+			"find": "Linter.collect(files, plugin, [check], resolveConfig)",
+			"replace": "Linter.collect(files, plugin, [check])",
+			"note": "the risky checks' file gate resolves each file's config by an unmemoised discover instead of the run's resolver"
+		},
+		{
+			"name": "M-FIXVERIFY-CHECK-DISCOVERS-CONFIG",
+			"type": "anyparse.check.FixVerifier",
+			"method": "verify",
+			"find": "(cast check: ConfigAware).setConfigResolver(resolveConfig);",
+			"replace": "{};",
+			"note": "a ConfigAware risky check reads its own options by an unmemoised discover instead of the run's resolver"
 		}
 	]
 }

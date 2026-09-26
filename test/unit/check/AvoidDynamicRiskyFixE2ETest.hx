@@ -6,11 +6,15 @@ import sys.io.File;
 import anyparse.check.AvoidDynamic;
 import anyparse.check.CompilerOracle;
 import anyparse.check.FixVerifier;
+import anyparse.check.LintConfig;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
+import haxe.io.Path;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
+
+using StringTools;
 
 /**
  * End-to-end coverage of `avoid-dynamic` as the first real `RiskyFix` consumer:
@@ -108,6 +112,68 @@ final class AvoidDynamicRiskyFixE2ETest extends Test {
 		Assert.isTrue(onDisk.indexOf('var x:Good = a;') != -1, 'disk carries the narrowed local');
 		Assert.isTrue(onDisk.indexOf('Dynamic') == -1, 'no Dynamic remains');
 		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * The run's config resolver decides which files a `FileGated` risky check scans: a resolver excluding the
+	 * fixture's directory leaves the narrowing `testNarrowingAppliedWhenValid` applies unfound, whatever the disk says.
+	 */
+	@:pin('control') @:killer('M-FIXVERIFY-DISCOVERS-CONFIG')
+	public function testTheRunResolverGatesTheScannedFiles(): Void {
+		#if (sys || nodejs)
+		if (!oracleWorks()) {
+			Assert.pass('haxe unavailable — skipped');
+			return;
+		}
+		final dir: String = CliFixture.writeDir('addyn', [{ name: 'Good.hx', source: APPLIES }, { name: 'check.hxml', source: HXML }]);
+		final path: String = '$dir/Good.hx';
+		final excluding: LintConfig = LintConfig.parse('{"rules":{"avoid-dynamic":{"excludePaths":["${Path.withoutDirectory(dir)}"]}}}');
+		final result: FixVerifyResult = FixVerifier.verify(
+			[{ file: path, source: APPLIES }],
+			[new AvoidDynamic()],
+			new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }],
+			(p, c) -> File.saveContent(p, c), null, null, _ -> excluding
+		);
+		Assert.isTrue(result.baseline.match(Confirmed), 'the oracle baseline must confirm — otherwise the zero below is vacuous');
+		Assert.equals(0, result.applied.length, 'the resolver excludes the file, so nothing is found to narrow');
+		Assert.isTrue(File.getContent(path).indexOf('var x:Dynamic = a;') != -1, 'disk keeps the Dynamic local');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * The run's config resolver also reaches the risky check's OWN options: the same narrowing is left alone under a
+	 * resolver whose `excludeMeta` names the member's metadata, and applied under one that names nothing.
+	 */
+	@:pin('control') @:killer('M-FIXVERIFY-CHECK-DISCOVERS-CONFIG')
+	public function testTheRunResolverReachesTheCheckOptions(): Void {
+		#if (sys || nodejs)
+		if (!oracleWorks()) {
+			Assert.pass('haxe unavailable — skipped');
+			return;
+		}
+		final kept: String = APPLIES.replace('\tstatic function main()', '\t@:keep static function main()');
+		for (arm in [
+			{ config: '{"rules":{"avoid-dynamic":{"excludeMeta":["@:keep"]}}}', applied: 0 },
+			{ config: '{}', applied: 1 }
+		]) {
+			final dir: String = CliFixture.writeDir('addyn', [{ name: 'Good.hx', source: kept }, { name: 'check.hxml', source: HXML }]);
+			final config: LintConfig = LintConfig.parse(arm.config);
+			final result: FixVerifyResult = FixVerifier.verify(
+				[{ file: '$dir/Good.hx', source: kept }],
+				[new AvoidDynamic()],
+				new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }],
+				(p, c) -> File.saveContent(p, c), null, null, _ -> config
+			);
+			Assert.isTrue(result.baseline.match(Confirmed));
+			Assert.equals(arm.applied, result.applied.length, 'applied under ${arm.config}');
+			CliFixture.removeDir(dir);
+		}
 		#else
 		Assert.pass('non-sys target');
 		#end

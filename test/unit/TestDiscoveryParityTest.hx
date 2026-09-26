@@ -1091,6 +1091,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-AMBIENT-IMPORT-BAND',
 			'unit.check.AvoidDynamicBagFixTest#testANullableValueIsNeverTypedByItsBareWrapper :: control :: M-BAG-NULL-OUTER',
 			'unit.check.AvoidDynamicBagFixTest#testAnInitializerOfAnotherTypeKeepsTheDeclaration :: control :: M-BAG-INITIALIZER',
+			'unit.check.AvoidDynamicRiskyFixE2ETest#testTheRunResolverGatesTheScannedFiles :: control :: M-FIXVERIFY-DISCOVERS-CONFIG',
+			'unit.check.AvoidDynamicRiskyFixE2ETest#testTheRunResolverReachesTheCheckOptions :: control :: M-FIXVERIFY-CHECK-DISCOVERS-CONFIG',
 			'unit.check.BuiltinFixClassCensusTest#testEveryDeclaredNoAutofixRuleAnswersNoEdit :: control :: M-NO-AUTOFIX-STILL-EDITS',
 			'unit.check.BuiltinFixClassCensusTest#testNoAutofixReasonIsNotTheRuleNameReadBack :: control :: '
 				+ 'M-NO-AUTOFIX-REASON-IS-THE-RULE-NAME',
@@ -1704,6 +1706,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.StructuralConformanceProofTest#testUnresolvableSupertypeSuppliesNoMember :: control :: M-STRUCT-DECLARES-LOOSE',
 			'unit.check.TailMergeCheckTest#testStructuralIdentityHalfNeeded :: control :: M-TAILMERGE-NORM-ONLY',
 			'unit.check.TailMergeCheckTest#testSwitchCaseOutOfScope :: control :: M-TAILMERGE-FALL-KEPT',
+			'unit.check.ThreadSafetyCheckTest#testEachCallSiteJudgedByItsOwnChain :: control :: M-TS-FIRST-FILE-LISTS',
 			'unit.check.ThreadSafetyCheckTest#testLockHeldAcrossABlockingGetterFlagged :: control :: M-TS-ACCESSOR-TAINT',
 			'unit.check.TrivialGetterCheckTest#testBasicBlockBodyFlagged :: control :: M-SUBOVERRIDE-TRUE',
 			'unit.check.TrivialGetterShapeCollapseTest#testForeignHierarchyBackingNameStaysAccountedFor :: control :: '
@@ -3679,7 +3682,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-TOSTRING-CALL-BY-NAME',
 			'M-TOSTRING-CALL-CUT',
 			'M-TOSTRING-IDENT-CUT',
-			'M-TOSTRING-STRING-BINDING'
+			'M-TOSTRING-STRING-BINDING',
+			'M-TS-FIRST-FILE-LISTS',
+			'M-FIXVERIFY-DISCOVERS-CONFIG',
+			'M-FIXVERIFY-CHECK-DISCOVERS-CONFIG'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

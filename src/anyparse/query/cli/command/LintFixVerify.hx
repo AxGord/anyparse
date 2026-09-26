@@ -111,12 +111,15 @@ final class LintFixVerify {
 	 */
 	public static function verifyRiskyFixes(
 		files: Array<{ file: String, source: String }>, riskyChecks: Array<Check>, cached: GrammarPlugin, oracles: Array<OracleConfig>,
-		optsByFile: Map<String, Null<String>>, changedFiles: Array<String>, ledger: Map<String, RuleFixOutcome>
+		optsByFile: Map<String, Null<String>>, changedFiles: Array<String>, ledger: Map<String, RuleFixOutcome>,
+		resolveConfig: (String) -> LintConfig
 	): RiskyFixOutcome {
 		if (riskyChecks.length == 0) return quietRisky('');
 		if (oracles.length == 0)
 			return quietRisky(', ${riskyChecks.length} risky-fix rule(s) left report-only (no compiler oracle for this run)');
-		final verified: FixVerifyResult = FixVerifier.verify(files, riskyChecks, cached, oracles, CliIo.writeFile, optsByFile);
+		final verified: FixVerifyResult = FixVerifier.verify(
+			files, riskyChecks, cached, oracles, CliIo.writeFile, optsByFile, null, resolveConfig
+		);
 		switch verified.baseline {
 			case Confirmed:
 				final unknownCoverage: Null<String> = verified.coverageUnknown;
@@ -526,7 +529,11 @@ final class LintFixVerify {
 		// in `FixVerifier.verify`, which IS discriminating. Keep this line spelled the same as that
 		// one so the two cannot drift apart unnoticed.
 		final findingsByCheck: Array<{ check: Check, all: Array<Violation> }> = [
-			for (check in oracleChecks) { check: check, all: Linter.collect(files, plugin, [check]).filter(v -> v.rule == check.id()) }
+			for (check in oracleChecks)
+				{
+					check: check,
+					all: Linter.collect(files, plugin, [check], resolveConfig).filter(v -> v.rule == check.id())
+				}
 		];
 		// Nothing to annotate costs nothing: no probe, no display server.
 		if (!findingsByCheck.exists(byCheck -> byCheck.all.length > 0))
