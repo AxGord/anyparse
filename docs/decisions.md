@@ -763,3 +763,10 @@ decided the question; it may not become a record of runs.
   process, so a project whose own sources arrive through `-lib` (a local `.haxelib` dev path) fingerprinted an edit at
   its old content and a build-breaking `--fix` was verified from the baseline; the run key adds a fresh hash of every
   path the run may write, and a configuration reading outside the walked directories is never answered — `cb5c668e`
+- `dead-safe-nav`'s `?.` → `.` as a SAFE fix wherever the flow facts hold → Haxe null-safety narrows only a direct
+  `== null` / `!= null` of the name and a non-null assignment, never a Bool local (`ok = x != null`), an alias copy
+  or a safe-navigation comparison (`x?.f == null`), so under null-safety those proofs broke a green build and aborted
+  `--fix`; they now report with a `declineReason` instead
+- making `dead-safe-nav` a `RiskyFix` instead of declining the invisible proofs → `RiskyFix` is per rule, so every
+  plain-code fix and every compiler-visible one would go report-only on a run with no oracle, to recover only an
+  invisible proof that typechecks anyway — neither of anyparse's two did

@@ -1110,6 +1110,16 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.CrossScopeSoundnessTest#testTheScopeHalfHoldingAReflectiveStringDoesNotMatter :: control :: '
 				+ 'M-REFLECTION-SCOPE-PROJECT-ONLY',
 			'unit.check.DeadBinderCounterLoopCheckTest#testFixRewritesMapLoopAndInsertsUsing :: control :: M-SHADOWEXT-TRUE',
+			'unit.check.DeadSafeNavTest#testAliasProofKeepsNoFixUnderNullSafety :: control :: M-DSN-UNSEEN-DROPPED',
+			'unit.check.DeadSafeNavTest#testBoolLocalProofKeepsNoFixUnderNullSafety :: control :: M-DSN-UNSEEN-DROPPED',
+			'unit.check.DeadSafeNavTest#testBoolLocalProofKeepsTheFixWithoutNullSafety :: control :: M-DSN-NULLSAFE-ALWAYS',
+			'unit.check.DeadSafeNavTest#testDirectGuardKeepsTheFixUnderNullSafety :: control :: M-DSN-UNSEEN-ALL',
+			'unit.check.DeadSafeNavTest#testJoinWithOneUnseenArmKeepsNoFix :: control :: M-DSN-JOIN-EITHER',
+			'unit.check.DeadSafeNavTest#testNonNullAssignmentMakesTheProofVisible :: control :: M-DSN-ASSIGN-KEEPS-UNSEEN',
+			'unit.check.DeadSafeNavTest#testOracleMacroNullSafetyKeepsNoFix :: control :: M-DSN-MACRO-BLIND',
+			'unit.check.DeadSafeNavTest#testOracleMacroOnAnotherPackageKeepsTheFix :: control :: M-DSN-MACRO-COVERS-ALL',
+			'unit.check.DeadSafeNavTest#testSafeNavComparisonProofKeepsNoFixUnderNullSafety :: control :: M-DSN-UNSEEN-DROPPED',
+			'unit.check.DeadSafeNavTest#testVisibleProofSurvivesAnUnseenRenarrowing :: control :: M-DSN-RENARROW-HIDES',
 			'unit.check.DocLengthCheckTest#testOnlyADocBlockIsMeasured :: control :: M-DOC-LENGTH-ANY-COMMENT',
 			'unit.check.DocLengthCheckTest#testTheDeclaredMaximumIsRead :: control :: M-DOC-LENGTH-CONFIG-BLIND',
 			'unit.check.DocMeasurementClaimCheckTest#testANumericContractIsNotAReading :: control :: M-DOC-CLAIM-BARE-NUMBER',
@@ -3355,6 +3365,14 @@ class TestDiscoveryParityTest extends Test {
 			'M-RUNMEMO-WRITTEN-UNHASHED',
 			'M-RUNMEMO-TRUSTS-UNSEEN-SOURCES',
 			'M-PENDING-JOBS-FILE-KEPT',
+			'M-DSN-UNSEEN-DROPPED',
+			'M-DSN-UNSEEN-ALL',
+			'M-DSN-NULLSAFE-ALWAYS',
+			'M-DSN-JOIN-EITHER',
+			'M-DSN-RENARROW-HIDES',
+			'M-DSN-ASSIGN-KEEPS-UNSEEN',
+			'M-DSN-MACRO-BLIND',
+			'M-DSN-MACRO-COVERS-ALL',
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

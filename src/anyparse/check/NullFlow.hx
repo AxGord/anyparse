@@ -26,6 +26,14 @@ using StringTools;
  */
 typedef NullFacts = {
 	var nonNull: String -> Bool;
+
+	/**
+	 * Whether `name` is `NonNull` by flow AND every proof of it is a narrowing the Haxe compiler's own null-safety performs
+	 * too — a direct `!= null` / `== null` comparison of the name, or an assignment of a non-null value. False whenever
+	 * some path proves it only through a laundered Bool local, an alias copy, or a safe-navigation comparison
+	 * (`x?.f != null`): sound at runtime, rejected by the compiler, so a rewrite that relies on it may not compile.
+	 */
+	var nonNullVisible: String -> Bool;
 	var isNull: String -> Bool;
 	var isMaybeNull: String -> Bool;
 	var indexPresent: QueryNode -> Bool;
@@ -39,6 +47,9 @@ typedef NullFacts = {
  */
 private typedef FlowState = {
 	var nonNull: Array<String>;
+
+	/** The `nonNull` names some path proves only through a narrowing the compiler cannot see (see `NullFacts.nonNullVisible`). */
+	var unseen: Array<String>;
 	var known: Array<String>;
 	var maybe: Array<String>;
 	var predicates: Array<PredicateFact>;
@@ -476,6 +487,7 @@ final class NullFlow {
 	/** Record `name` as `NonNull` in `state`, clearing any `Null` / `MaybeNull` fact (the three sets stay disjoint), deduplicated. */
 	private static inline function markNonNull(state: FlowState, name: String): Void {
 		if (!state.nonNull.contains(name)) state.nonNull.push(name);
+		state.unseen.remove(name);
 		state.known.remove(name);
 		state.maybe.remove(name);
 	}
@@ -483,7 +495,7 @@ final class NullFlow {
 	/** Record `name` as `Null` in `state`, clearing any `NonNull` / `MaybeNull` fact (the three sets stay disjoint), deduplicated. */
 	private static inline function markKnown(state: FlowState, name: String): Void {
 		if (!state.known.contains(name)) state.known.push(name);
-		state.nonNull.remove(name);
+		dropNonNull(state, name);
 		state.maybe.remove(name);
 	}
 
@@ -493,13 +505,19 @@ final class NullFlow {
 	 */
 	private static inline function markMaybe(state: FlowState, name: String): Void {
 		if (!state.maybe.contains(name)) state.maybe.push(name);
-		state.nonNull.remove(name);
+		dropNonNull(state, name);
 		state.known.remove(name);
+	}
+
+	/** Drop a `NonNull` fact about `name` together with its visibility mark, which never outlives it. */
+	private static inline function dropNonNull(state: FlowState, name: String): Void {
+		state.nonNull.remove(name);
+		state.unseen.remove(name);
 	}
 
 	/** Drop every fact about `name` — it becomes `Unknown`. */
 	private static inline function clearName(state: FlowState, name: String): Void {
-		state.nonNull.remove(name);
+		dropNonNull(state, name);
 		state.known.remove(name);
 		state.maybe.remove(name);
 		killAuxFacts(state, name);
@@ -509,6 +527,7 @@ final class NullFlow {
 	private static inline function copyState(state: FlowState): FlowState {
 		return {
 			nonNull: state.nonNull.copy(),
+			unseen: state.unseen.copy(),
 			known: state.known.copy(),
 			maybe: state.maybe.copy(),
 			predicates: state.predicates.copy(),
@@ -519,18 +538,19 @@ final class NullFlow {
 
 	/** Replace the contents of `state` in place with `next` (the running state is mutated for the caller). */
 	private static inline function setState(state: FlowState, next: FlowState): Void {
-		state.nonNull.resize(0);
-		for (n in next.nonNull) state.nonNull.push(n);
-		state.known.resize(0);
-		for (n in next.known) state.known.push(n);
-		state.maybe.resize(0);
-		for (n in next.maybe) state.maybe.push(n);
-		state.predicates.resize(0);
-		for (p in next.predicates) state.predicates.push(p);
-		state.aliases.resize(0);
-		for (a in next.aliases) state.aliases.push(a);
-		state.present.resize(0);
-		for (e in next.present) state.present.push(e);
+		refill(state.nonNull, next.nonNull);
+		refill(state.unseen, next.unseen);
+		refill(state.known, next.known);
+		refill(state.maybe, next.maybe);
+		refill(state.predicates, next.predicates);
+		refill(state.aliases, next.aliases);
+		refill(state.present, next.present);
+	}
+
+	/** Replace the contents of `into` with `from`'s, keeping `into` the same array. */
+	private static inline function refill<T>(into: Array<T>, from: Array<T>): Void {
+		into.resize(0);
+		for (item in from) into.push(item);
 	}
 
 	/**
@@ -546,6 +566,7 @@ final class NullFlow {
 	private static inline function emptyState(): FlowState {
 		return {
 			nonNull: [],
+			unseen: [],
 			known: [],
 			maybe: [],
 			predicates: [],
@@ -874,6 +895,8 @@ final class NullFlow {
 	private static function visitNode(node: QueryNode, state: FlowState, ctx: FlowCtx): Void {
 		final facts: NullFacts = {
 			nonNull: n -> ctx.ownNames.contains(n) && !ctx.captured.contains(n) && state.nonNull.contains(n),
+			nonNullVisible: n ->
+				ctx.ownNames.contains(n) && !ctx.captured.contains(n) && state.nonNull.contains(n) && !state.unseen.contains(n),
 			isNull: n -> ctx.ownNames.contains(n) && !ctx.captured.contains(n) && state.known.contains(n),
 			isMaybeNull: n -> ctx.ownNames.contains(n) && !ctx.captured.contains(n) && state.maybe.contains(n),
 			indexPresent: n -> indexPresentIn(n, state, ctx)
@@ -1158,7 +1181,12 @@ final class NullFlow {
 		final written: Array<String> = [];
 		collectWrites(cond, written, ctx);
 		final nonNull: Array<String> = [];
-		collectNarrow(cond, nonNull, ctx, cmpNonNull, combineKind, true);
+		final viaSafeNav: Array<String> = [];
+		collectNarrow(cond, nonNull, ctx, cmpNonNull, combineKind, true, viaSafeNav);
+		// What the compiler narrows too: the direct comparisons alone, before the three kinds of
+		// proof it cannot follow — safe navigation, a laundered Bool, an alias — join them.
+		final visible: Array<String> = nonNull.copy();
+		for (n in viaSafeNav) nonNull.push(n);
 		final known: Array<String> = [];
 		collectNarrow(cond, known, ctx, cmpKnown, combineKind, false);
 		// Feature 1: a bare Bool conjunct/disjunct carrying a laundered-guard fact narrows its target.
@@ -1174,7 +1202,11 @@ final class NullFlow {
 		final present: Array<ExistsFact> = [];
 		collectExists(cond, present, ctx, combineKind, combineKind == BOOL_OR_KIND);
 		for (e in present) if (!e.names.exists(n -> written.contains(n))) out.present.push(e);
-		for (n in nonNull) if (!written.contains(n)) markNonNull(out, n);
+		for (n in nonNull) if (!written.contains(n)) {
+			final seen: Bool = visible.contains(n) || out.nonNull.contains(n) && !out.unseen.contains(n);
+			markNonNull(out, n);
+			if (!seen && !out.unseen.contains(n)) out.unseen.push(n);
+		}
 		for (n in known) if (!written.contains(n)) markKnown(out, n);
 		return out;
 	}
@@ -1212,7 +1244,8 @@ final class NullFlow {
 	 * (`!(a || b)` = `!a && !b`), so an `== null` disjunct proves non-null when false.
 	 */
 	private static function collectNarrow(
-		cond: QueryNode, out: Array<String>, ctx: FlowCtx, cmpKind: Null<String>, combineKind: String, provesNonNull: Bool
+		cond: QueryNode, out: Array<String>, ctx: FlowCtx, cmpKind: Null<String>, combineKind: String, provesNonNull: Bool,
+		?viaSafeNav: Array<String>
 	): Void {
 		final kind: String = cond.kind;
 		if (cmpKind != null && kind == cmpKind) {
@@ -1220,17 +1253,16 @@ final class NullFlow {
 			// `cmpKind` — is what says which side this call is filling: the operator alone cannot,
 			// since the else-arm collects non-null names through `== null` by duality. `x?.a` null
 			// leaves `x` itself entirely unconstrained, so the known-null slot must never take one.
-			final operand: Null<QueryNode> = nullComparisonOperand(cond, ctx.identKind, ctx.nullLitKind) ?? (
-				provesNonNull ? safeNavChainRoot(cond, ctx) : null
-			);
-			if (operand != null) {
-				final nm: Null<String> = operand.name;
-				if (nm != null) out.push(nm);
-			}
+			final direct: Null<QueryNode> = nullComparisonOperand(cond, ctx.identKind, ctx.nullLitKind);
+			final operand: Null<QueryNode> = direct ?? (provesNonNull ? safeNavChainRoot(cond, ctx) : null);
+			final nm: Null<String> = operand?.name;
+			// A caller that tracks compiler visibility takes the safe-navigation names apart: the
+			// compiler narrows `x` on `x != null`, never on `x?.f != null`.
+			if (nm != null) (direct == null ? viaSafeNav ?? out : out).push(nm);
 		} else if (kind == combineKind) {
-			for (c in cond.children) collectNarrow(c, out, ctx, cmpKind, combineKind, provesNonNull);
+			for (c in cond.children) collectNarrow(c, out, ctx, cmpKind, combineKind, provesNonNull, viaSafeNav);
 		} else if (ctx.parenKind != null && kind == ctx.parenKind && cond.children.length == 1) {
-			collectNarrow(cond.children[0], out, ctx, cmpKind, combineKind, provesNonNull);
+			collectNarrow(cond.children[0], out, ctx, cmpKind, combineKind, provesNonNull, viaSafeNav);
 		} else if (ctx.notKind != null && kind == ctx.notKind && cond.children.length == 1) {
 			// Feature 3: `!(…)` flips the comparison polarity AND the combine operator (De Morgan) — a
 			// negand proving x null then proves x non-null, and its `&&`/`||` swap; nested `!` unwinds
@@ -1242,7 +1274,7 @@ final class NullFlow {
 			else
 				cmpKind;
 			final flipCombine: String = combineKind == BOOL_AND_KIND ? BOOL_OR_KIND : BOOL_AND_KIND;
-			collectNarrow(cond.children[0], out, ctx, flipCmp, flipCombine, provesNonNull);
+			collectNarrow(cond.children[0], out, ctx, flipCmp, flipCombine, provesNonNull, viaSafeNav);
 		}
 	}
 
@@ -1271,8 +1303,10 @@ final class NullFlow {
 
 	/** The facts holding on both `a` and `b` — a name keeps a polarity after a join only if it held it on both arms. */
 	private static function intersect(a: FlowState, b: FlowState): FlowState {
+		final nonNull: Array<String> = [for (n in a.nonNull) if (b.nonNull.contains(n)) n];
 		return {
-			nonNull: [for (n in a.nonNull) if (b.nonNull.contains(n)) n],
+			nonNull: nonNull,
+			unseen: unseenAfterJoin(nonNull, a, b),
 			known: [for (n in a.known) if (b.known.contains(n)) n],
 			maybe: [for (n in a.maybe) if (b.maybe.contains(n)) n],
 			predicates: [
@@ -1288,6 +1322,11 @@ final class NullFlow {
 				for (e in a.present) if (b.present.exists(q -> q.map == e.map && q.key == e.key)) e
 			]
 		};
+	}
+
+	/** The joined `nonNull` names either arm proved only invisibly — a join is visible only where both arms were. */
+	private static function unseenAfterJoin(nonNull: Array<String>, a: FlowState, b: FlowState): Array<String> {
+		return [for (n in nonNull) if (a.unseen.contains(n) || b.unseen.contains(n)) n];
 	}
 
 	/**

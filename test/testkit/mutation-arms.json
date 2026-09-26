@@ -7422,6 +7422,68 @@
 			"find": "+ \"if (process.argv[5]) try { require('fs').unlinkSync(process.argv[5]); } catch (err) {}\"",
 			"replace": "+ \"\"",
 			"note": "the driver leaves the job list in its directory, so a run killed mid-batch leaves the job list behind"
+		},
+		{
+			"name": "M-DSN-UNSEEN-DROPPED",
+			"type": "anyparse.check.NullFlow",
+			"method": "narrowedCopy",
+			"find": "if (!seen && !out.unseen.contains(n)) out.unseen.push(n);",
+			"replace": "if (!seen && false) out.unseen.push(n);",
+			"note": "no narrowing is ever marked invisible to the compiler, so dead-safe-nav rewrites a Bool-local / alias / `?.`-comparison proof to `.` under null-safety and the build breaks"
+		},
+		{
+			"name": "M-DSN-UNSEEN-ALL",
+			"type": "anyparse.check.NullFlow",
+			"method": "narrowedCopy",
+			"find": "final visible: Array<String> = nonNull.copy();",
+			"replace": "final visible: Array<String> = [];",
+			"note": "a direct `== null` / `!= null` guard counts as invisible too, so dead-safe-nav declines the fix the compiler would accept"
+		},
+		{
+			"name": "M-DSN-NULLSAFE-ALWAYS",
+			"type": "anyparse.check.DeadSafeNav",
+			"method": "run",
+			"find": "final nullSafe: Bool = underMacro",
+			"replace": "final nullSafe: Bool = true || underMacro",
+			"note": "plain code is treated as null-checked, so a runtime-sound Bool-local proof loses its fix where nothing typechecks it"
+		},
+		{
+			"name": "M-DSN-JOIN-EITHER",
+			"type": "anyparse.check.NullFlow",
+			"method": "unseenAfterJoin",
+			"find": "a.unseen.contains(n) || b.unseen.contains(n)",
+			"replace": "a.unseen.contains(n) && b.unseen.contains(n)",
+			"note": "a join forgets that one arm proved the name only invisibly, so the fix lands on a path the compiler never narrowed"
+		},
+		{
+			"name": "M-DSN-RENARROW-HIDES",
+			"type": "anyparse.check.NullFlow",
+			"method": "narrowedCopy",
+			"find": "final seen: Bool = visible.contains(n) || out.nonNull.contains(n) && !out.unseen.contains(n);",
+			"replace": "final seen: Bool = visible.contains(n);",
+			"note": "an invisible re-narrowing hides a proof the compiler already has, so an accepted fix is declined"
+		},
+		{
+			"name": "M-DSN-ASSIGN-KEEPS-UNSEEN",
+			"type": "anyparse.check.NullFlow",
+			"method": "markNonNull",
+			"find": "state.unseen.remove(name);",
+			"replace": "if (false) state.unseen.remove(name);",
+			"note": "a non-null assignment no longer makes the proof visible, so the fix after `x = new T()` is declined"
+		},
+		{
+			"name": "M-DSN-MACRO-BLIND",
+			"type": "anyparse.check.DeadSafeNav",
+			"method": "underNullSafetyMacro",
+			"force": "false",
+			"note": "a project-wide `--macro nullSafety` in the oracle hxml is ignored, so a meta-free module gets the `.` rewrite its build rejects"
+		},
+		{
+			"name": "M-DSN-MACRO-COVERS-ALL",
+			"type": "anyparse.check.DeadSafeNav",
+			"method": "macroCovers",
+			"force": "true",
+			"note": "a `nullSafety` macro on another package is read as covering this module, so its fix is declined"
 		}
 	]
 }
