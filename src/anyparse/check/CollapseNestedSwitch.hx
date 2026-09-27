@@ -177,7 +177,7 @@ final class CollapseNestedSwitch implements Check implements DefaultOff {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
 		return RunScan.collectWith(files, plugin, resolveSeams(plugin), (entry, tree, resolved, violations) -> {
-			final scope: Null<PatternNameScope> = PatternNameScope.of(entry.file, tree, resolved.shape, index);
+			final scope: Null<PatternNameScope> = PatternNameScope.of(entry.file, tree, plugin, index);
 			for (candidate in collect({
 				tree: tree,
 				source: entry.source,
@@ -209,7 +209,7 @@ final class CollapseNestedSwitch implements Check implements DefaultOff {
 		final file: String = RunScan.oneFile(violations, RULE_ID);
 		return RunScan.edits(plugin, source, tree -> {
 			final resolvedIndex: SymbolIndex = index ?? SymbolIndex.build([{ file: file, source: source }], plugin);
-			final scope: Null<PatternNameScope> = PatternNameScope.of(file, tree, resolved.shape, resolvedIndex);
+			final scope: Null<PatternNameScope> = PatternNameScope.of(file, tree, plugin, resolvedIndex);
 			final byKey: Map<String, Candidate> = [];
 			for (candidate in collect({
 				tree: tree,

@@ -90,7 +90,7 @@ final class ShadowingCaseBinder implements Check implements NoAutofix {
 		if (seams == null) return [];
 		final context: CaseRunContext = CasePatternScan.runContextOf(seams, files, plugin);
 		final violations: Array<Violation> = [];
-		for (entry in context.parsed) collect(seams, context.constants, context.index, entry.file, entry.tree, violations);
+		for (entry in context.parsed) collect(seams, plugin, context.constants, context.index, entry.file, entry.tree, violations);
 		return violations;
 	}
 
@@ -107,9 +107,10 @@ final class ShadowingCaseBinder implements Check implements NoAutofix {
 
 	/** Every shadowing binder in `tree`, in document order. */
 	private static function collect(
-		seams: CaseSeams, constants: Array<String>, index: SymbolIndex, file: String, tree: QueryNode, out: Array<Violation>
+		seams: CaseSeams, plugin: GrammarPlugin, constants: Array<String>, index: SymbolIndex, file: String, tree: QueryNode,
+		out: Array<Violation>
 	): Void {
-		final scope: Null<PatternNameScope> = PatternNameScope.of(file, tree, seams.shape, index);
+		final scope: Null<PatternNameScope> = PatternNameScope.of(file, tree, plugin, index);
 		CasePatternScan.eachCaseArm(
 			seams, tree,
 			(switchNode, at) -> armFindings(seams, constants, index, scope, file, tree, switchNode, switchNode.children[at], out)

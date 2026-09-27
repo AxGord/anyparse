@@ -1795,6 +1795,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.UnnecessarySafeNavCheckTest#testTypedefOfNullReceiverNotFlagged :: control :: M-PROVER-NULLITY-SKIPPED',
 			'unit.check.UnreachableCatchTest#testSubtypeAfterSupertypeFlagged :: control :: M-ISSUBTYPE-FALSE',
 			'unit.check.UnusedCaseBinderCheckTest#testBinderAnAmbientImportMayBindRefused :: control :: M-SCOPE-AMBIENT-BLIND',
+			'unit.check.UnusedCaseBinderCheckTest#testBinderAnImportedModuleFieldMayBindRefused :: control :: M-SCOPE-MODULE-IMPORT-BLIND',
 			'unit.check.UnusedCaseBinderCheckTest#testBinderTheLookupOrderMayBindRefused :: control :: M-SCOPE-IMPORT-BLIND,M-SCOPE-MODULE-FIELDS',
 			'unit.check.UnusedCaseBinderCheckTest#testElementBinderNeedsADynamicSubject :: control :: M-CAPTURE-STRUCTURAL',
 			'unit.check.UnusedCaseBinderCheckTest#testUndeclaredConstructorArgumentRefused :: control :: M-UNUSED-BINDER-UNPROVEN,M-CAPTURE-SLOT-UNPROVEN',
@@ -3823,7 +3824,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-COLLAPSE-BINDER-UNPROVEN',
 			'M-SCOPE-IMPORT-BLIND',
 			'M-SCOPE-AMBIENT-BLIND',
-			'M-SCOPE-MODULE-FIELDS'
+			'M-SCOPE-MODULE-FIELDS',
+			'M-SCOPE-MODULE-IMPORT-BLIND'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

@@ -5,6 +5,7 @@ import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ImportInfo;
 import anyparse.query.SymbolIndex.ImportKind;
 import anyparse.query.SymbolIndex.ResolvedType;
+import haxe.Exception;
 
 using Lambda;
 
@@ -39,22 +40,28 @@ final class PatternNameScope {
 	private final _local: Array<String>;
 	private final _fi: FileInfo;
 	private final _index: SymbolIndex;
+	private final _plugin: GrammarPlugin;
 
-	private function new(root: QueryNode, shape: RefShape, local: Array<String>, fi: FileInfo, index: SymbolIndex) {
+	/** The module-level names of every imported module read so far, by module file. */
+	private final _moduleNames: Map<String, Null<Array<String>>> = [];
+
+	private function new(root: QueryNode, plugin: GrammarPlugin, local: Array<String>, fi: FileInfo, index: SymbolIndex) {
 		this.root = root;
-		this.shape = shape;
+		shape = plugin.refShape();
+		_plugin = plugin;
 		_local = local;
 		_fi = fi;
 		_index = index;
 	}
 
 	/** The scope of `file` (whose parsed tree is `root`), or null when the index does not hold the file — nothing can then be proven. */
-	public static function of(file: String, root: QueryNode, shape: RefShape, index: SymbolIndex): Null<PatternNameScope> {
+	public static function of(file: String, root: QueryNode, plugin: GrammarPlugin, index: SymbolIndex): Null<PatternNameScope> {
+		final shape: RefShape = plugin.refShape();
 		final fi: Null<FileInfo> = index.fileInfo(file);
 		if (fi == null) return null;
 		final local: Array<String> = CasePatterns.constantNames([root], shape);
 		for (name in moduleLevelNames(root, shape)) if (!local.contains(name)) local.push(name);
-		return new PatternNameScope(root, shape, local, fi, index);
+		return new PatternNameScope(root, plugin, local, fi, index);
 	}
 
 	/** Whether `name` may resolve to a value a bare pattern compares against, from this file. */
@@ -97,7 +104,9 @@ final class PatternNameScope {
 				lastSegment(imp.raw) == WILDCARD_SEGMENT && SourceText.isUpperInitial(lastSegment(prefix))
 					&& typeMayCarry(prefix, name, true);
 			case _:
-				lastSegment(imp.raw) == name || (SourceText.isUpperInitial(lastSegment(imp.raw)) && typeMayCarry(imp.raw, name, false));
+				lastSegment(imp.raw) == name || (
+					SourceText.isUpperInitial(lastSegment(imp.raw)) && (typeMayCarry(imp.raw, name, false) || moduleMayCarry(imp.raw, name))
+				);
 		};
 	}
 
@@ -119,6 +128,31 @@ final class PatternNameScope {
 				return true;
 		}
 		return false;
+	}
+
+	/**
+	 * Whether the module `path` names declares a module-level field `name`: importing a whole module
+	 * (`import pk.Mod;`) brings its module-level fields in unqualified, and a bare pattern compares
+	 * against them — a wildcard over the module or its package does not. A module file whose source
+	 * the index does not hold, or that does not parse, may declare anything.
+	 */
+	private function moduleMayCarry(path: String, name: String): Bool {
+		for (f in _index.allFiles()) if (f.module == path) {
+			final names: Null<Array<String>> = moduleNamesOf(f.file);
+			if (names == null || names.contains(name)) return true;
+		}
+		return false;
+	}
+
+	/** The module-level names of `file`, read once; null when its source is unknown or does not parse. */
+	private function moduleNamesOf(file: String): Null<Array<String>> {
+		if (_moduleNames.exists(file)) return _moduleNames[file];
+		final source: Null<String> = _index.sourceOf(file);
+		final names: Null<Array<String>> = source == null
+			? null
+			: try moduleLevelNames(_plugin.parseFile(source), shape) catch (_: Exception) null;
+		_moduleNames[file] = names;
+		return names;
 	}
 
 	private static inline function lastSegment(path: String): String {

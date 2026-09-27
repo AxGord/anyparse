@@ -9125,6 +9125,13 @@
 			"method": "moduleLevelNames",
 			"force": "[]",
 			"note": "a module-level field, which a bare pattern compares against, is not consulted"
+		},
+		{
+			"name": "M-SCOPE-MODULE-IMPORT-BLIND",
+			"type": "anyparse.query.PatternNameScope",
+			"method": "moduleMayCarry",
+			"force": "false",
+			"note": "a module import's module-level fields, which a bare pattern compares against, are not consulted"
 		}
 	]
 }

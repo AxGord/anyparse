@@ -128,7 +128,7 @@ final class UnusedCaseBinder implements Check {
 		final context: CaseRunContext = CasePatternScan.runContextOf(resolved, files, plugin);
 		return [
 			for (entry in context.parsed)
-				for (candidate in collect(resolved, entry.file, entry.tree, entry.source, context.constants, context.index))
+				for (candidate in collect(resolved, plugin, entry.file, entry.tree, entry.source, context.constants, context.index))
 					{
 						file: entry.file,
 						span: candidate.span,
@@ -158,7 +158,7 @@ final class UnusedCaseBinder implements Check {
 			final constants: Array<String> = CasePatternScan.declaredConstantNames(resolved, [tree]);
 			final resolvedIndex: SymbolIndex = index ?? SymbolIndex.build([{ file: file, source: source }], plugin);
 			final byKey: Map<String, Candidate> = [];
-			for (candidate in collect(resolved, file, tree, source, constants, resolvedIndex))
+			for (candidate in collect(resolved, plugin, file, tree, source, constants, resolvedIndex))
 				byKey['${candidate.span.from}:${candidate.span.to}'] = candidate;
 
 			final edits: Array<{ span: Span, text: String }> = [];
@@ -169,10 +169,11 @@ final class UnusedCaseBinder implements Check {
 
 	/** Every unread binder in `tree`, in document order. */
 	private static function collect(
-		seams: CaseSeams, file: String, tree: QueryNode, source: String, constants: Array<String>, index: SymbolIndex
+		seams: CaseSeams, plugin: GrammarPlugin, file: String, tree: QueryNode, source: String, constants: Array<String>,
+		index: SymbolIndex
 	): Array<Candidate> {
 		final out: Array<Candidate> = [];
-		final scope: Null<PatternNameScope> = PatternNameScope.of(file, tree, seams.shape, index);
+		final scope: Null<PatternNameScope> = PatternNameScope.of(file, tree, plugin, index);
 		CasePatternScan.eachCaseArm(
 			seams, tree, (switchNode, at) -> armCandidates(seams, tree, switchNode, at, source, constants, index, scope, out)
 		);

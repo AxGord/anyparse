@@ -125,8 +125,32 @@ class UnusedCaseBinderCheckTest extends Test {
 			source: 'package pk;\n\nclass T2 {\n\tfunction f(v: Dynamic): Void {\n\t\tswitch v {\n\t\t\tcase [value]: r();'
 				+ '\n\t\t\tcase _: r();\n\t\t}\n\t}\n}\n'
 		};
-		Assert.equals(1, violationsOnDisk([consts, use], 'src/pk/T2.hx'));
-		Assert.equals(0, violationsOnDisk([consts, use, { name: 'src/pk/import.hx', source: 'import pk.Consts.*;\n' }], 'src/pk/T2.hx'));
+		Assert.equals(1, violationsOnDisk([consts, use], 'src/pk/T2.hx', true));
+		Assert.equals(
+			0, violationsOnDisk([consts, use, { name: 'src/pk/import.hx', source: 'import pk.Consts.*;\n' }], 'src/pk/T2.hx', true)
+		);
+	}
+
+	/**
+	 * Importing a whole MODULE (`import pk.Mod;`) brings its module-level fields in unqualified, and a
+	 * bare pattern compares against them (`compared` on `--interp`); a wildcard over the module or its
+	 * package does not, so the binder there is unread.
+	 */
+	@:pin('control')
+	@:killer('M-SCOPE-MODULE-IMPORT-BLIND')
+	public function testBinderAnImportedModuleFieldMayBindRefused(): Void {
+		final mod: { name: String, source: String } = {
+			name: 'src/pk/Mod.hx',
+			source: 'package pk;\n\nfinal modval = \'x\';\n\nclass Mod {}\n'
+		};
+		final use: String -> { name: String, source: String } = head -> {
+			name: 'src/qk/A.hx',
+			source: 'package qk;\n\n$head\n\nclass A {\n\tfunction f(v: Dynamic): Void {\n\t\tswitch v {\n\t\t\tcase [modval]: r();'
+				+ '\n\t\t\tcase _: r();\n\t\t}\n\t}\n}\n'
+		};
+		Assert.equals(0, violationsOnDisk([mod, use('import pk.Mod;')], 'src/qk/A.hx'));
+		Assert.equals(1, violationsOnDisk([mod, use('import pk.Mod.*;')], 'src/qk/A.hx'));
+		Assert.equals(1, violationsOnDisk([mod, use('import pk.*;')], 'src/qk/A.hx'));
 	}
 
 	/** An array-pattern element nothing reads becomes `_`. */
@@ -314,14 +338,24 @@ class UnusedCaseBinderCheckTest extends Test {
 		return new UnusedCaseBinder().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
 
-	/** How many findings the rule reports on `subject` of `tree`, written to disk so its `import.hx` chain is read. */
-	private function violationsOnDisk(tree: Array<{ name: String, source: String }>, subject: String): Int {
+	/**
+	 * How many findings the rule reports on `subject` of `tree`, written to disk so its `import.hx` chain is read,
+	 * with every other module of the tree in the run so the index holds it - or `subject` `alone`, so the
+	 * run's own constant scan does not see the others.
+	 */
+	private function violationsOnDisk(tree: Array<{ name: String, source: String }>, subject: String, alone: Bool = false): Int {
 		#if (sys || nodejs)
 		final root: String = CliFixture.writeTree('apq_unused_case_binder', tree);
 		var count: Int = -1;
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
-			final file: String = '$root/$subject';
-			count = new UnusedCaseBinder().run([{ file: file, source: sys.io.File.getContent(file) }], new HaxeQueryPlugin()).length;
+			final files: Array<{ file: String, source: String }> = [
+				for (f in tree) if (
+					(alone ? f.name == subject : StringTools.endsWith(f.name, '.hx')) && !StringTools.endsWith(f.name, 'import.hx')
+				)
+					{ file: '$root/${f.name}', source: f.source }
+			];
+			final found: Array<Violation> = new UnusedCaseBinder().run(files, new HaxeQueryPlugin());
+			count = found.filter(v -> v.file == '$root/$subject').length;
 		});
 		return count;
 		#else
