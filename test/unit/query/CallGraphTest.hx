@@ -684,6 +684,26 @@ class CallGraphTest extends Test {
 		Assert.equals(0, edges(g, 'Shadow.own', 'A.m', Call).length);
 	}
 
+	/**
+	 * `this` inside an abstract is its UNDERLYING value, read from the declaration's type slot — never a bound its type
+	 * parameters project among the children; an abstract over one of its own parameters is a value of that bound.
+	 */
+	@:pin('control') @:killer('M-GRAPH-ABSTRACT-UNDER-SLOT') @:killer('M-GRAPH-ABSTRACT-PARAM-BOUND')
+	public function testThisInsideAnAbstractIsItsUnderlyingNotAParameterBound(): Void {
+		final g: CallGraph = graphOf([
+			'class Foo { public function m():Void {} }',
+			'class A { public function m():Void {} }',
+			'class SubA extends A { override public function m():Void {} }',
+			'class B { public function m():Void {} }',
+			'abstract X<T:B>(Foo) { function f():Void this.m(); }',
+			'abstract W<T:A>(T) { function f():Void this.m(); }'
+		]);
+		Assert.equals(1, edges(g, 'X.f', 'Foo.m', Call).length);
+		Assert.equals(0, edges(g, 'X.f', 'B.m', Call).length);
+		Assert.equals(1, edges(g, 'W.f', 'A.m', Call).length);
+		Assert.equals(1, edges(g, 'W.f', 'SubA.m', Virtual).length);
+	}
+
 	/** Two types sharing a simple name keep their own bounds: `p1.Gen<T:A>` is not read with `p2.Gen<T:B>`'s. */
 	@:pin('control') @:killer('M-GRAPH-BOUNDS-BY-FILE')
 	public function testTypeParameterBoundsOfSameNamedTypesStayApart(): Void {

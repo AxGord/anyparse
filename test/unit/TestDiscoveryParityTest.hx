@@ -2276,6 +2276,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CallGraphTest#testSuperIsTheSuperclassWhateverTheHeaderOrder :: control :: M-GRAPH-SUPERCLASS',
 			'unit.query.CallGraphTest#testSuperOfAnAmbiguousNameIsUnresolved :: control :: M-GRAPH-SUPER-AMBIGUOUS',
 			'unit.query.CallGraphTest#testSupertypesOfASharedNameAreUnioned :: control :: M-GRAPH-SUPERS-UNION',
+			'unit.query.CallGraphTest#testThisInsideAnAbstractIsItsUnderlyingNotAParameterBound :: control :: '
+				+ 'M-GRAPH-ABSTRACT-UNDER-SLOT,M-GRAPH-ABSTRACT-PARAM-BOUND',
 			'unit.query.CallGraphTest#testThisInsideAnAbstractIsTheUnderlyingValue :: control :: M-GRAPH-ABSTRACT-THIS',
 			'unit.query.CallGraphTest#testThisInsideAnAbstractOverAnAliasIsTheAliasedType :: control :: M-GRAPH-ABSTRACT-THIS-ALIAS',
 			'unit.query.CallGraphTest#testTypeParameterBoundsOfSameNamedTypesStayApart :: control :: M-GRAPH-BOUNDS-BY-FILE',
@@ -3884,7 +3886,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-SPANINFO-BOUND-MORE',
 			'M-GRAPH-BOUND-DECL-SCOPE',
 			'M-GRAPH-BOUND-LOCAL-SCOPE',
-			'M-GRAPH-BOUNDS-BY-FILE'
+			'M-GRAPH-BOUNDS-BY-FILE',
+			'M-GRAPH-ABSTRACT-UNDER-SLOT',
+			'M-GRAPH-ABSTRACT-PARAM-BOUND'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

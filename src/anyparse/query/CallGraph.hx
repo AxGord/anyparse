@@ -520,8 +520,9 @@ final class CallGraph {
 			final declared: Null<String> = CallGraphNames.typeNameOf(node);
 			final typeName: Null<String> = declared ?? currentType;
 			if (declared != null && underlyingKinds.contains(node.kind)) {
-				final under: Null<QueryNode> = node.children.find(c -> annotationKinds.contains(c.kind));
-				_facts.abstracts[declared] = under?.name == null ? null : CallGraphNames.lastSegments(under?.name ?? '', 1);
+				// the declared-type slot, never a child: a bounded `<T:B>` projects its bound among the children
+				final under: Null<String> = node.type?.name;
+				_facts.abstracts[declared] = under == null ? null : CallGraphNames.lastSegments(under, 1);
 			}
 			// a `final class` declares its parameters on the inner form the wrapper holds, which is where they are keyed
 			final declaredAt: Null<Span> = declared == null ? null : (RefactorSupport.typeDeclOf(node)?.nameNode ?? node).span;
@@ -1165,7 +1166,12 @@ final class CallGraph {
 			if (recv.kind == identKind && name != null) {
 				final span: Null<Span> = recv.span;
 				if (name == selfText) {
-					final self: Null<String> = selfTypeOf(currentType);
+					final underlying: Null<String> = selfTypeOf(currentType);
+					// an abstract over one of its own type parameters (`abstract W<T:A>(T)`) is a value of that bound
+					final self: Null<String> = underlying != null && currentType != null
+						&& types.generics.declaresTypeParam(currentType, underlying)
+						? (member == null ? null : boundType(underlying, currentType, member, MEMBER_SCOPE))
+						: underlying;
 					return self == null ? null : {
 						typeName: self,
 						isValue: true,

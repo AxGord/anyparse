@@ -9347,6 +9347,22 @@
 			"find": "return '${CallGraphNames.normalizePath(file)}#$typeName';",
 			"replace": "return typeName;",
 			"note": "type-parameter bounds are keyed by simple name, so of two same-named types the last one walked lends its bounds to both"
+		},
+		{
+			"name": "M-GRAPH-ABSTRACT-UNDER-SLOT",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectNodes",
+			"find": "final under: Null<String> = node.type?.name;",
+			"replace": "final under: Null<String> = node.children.find(c -> annotationKinds.contains(c.kind))?.name;",
+			"note": "an abstract's underlying type is read as its first annotation child, which is a type parameter's bound when one is declared"
+		},
+		{
+			"name": "M-GRAPH-ABSTRACT-PARAM-BOUND",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "? (member == null ? null : boundType(underlying, currentType, member, MEMBER_SCOPE))",
+			"replace": "? underlying",
+			"note": "`this` of an abstract over its own type parameter is taken for a type named like the parameter"
 		}
 	]
 }
