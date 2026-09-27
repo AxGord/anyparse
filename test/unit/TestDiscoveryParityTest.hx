@@ -1812,8 +1812,10 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-DECL-INIT-NONNULL-BLIND,M-DECL-INIT-LITERAL-BLIND',
 			'unit.check.UnguardedNullableDerefTest#testExistsGuardEarlyReturnPathKeySuppressed :: control :: M-EXISTS-GUARD-BLIND',
 			'unit.check.UnguardedNullableDerefTest#testFieldPathMapSeedFlagged :: control :: M-NULLABLE-NO-CHAIN',
+			'unit.check.UnguardedNullableDerefTest#testInlinePredicateGuardNotFlagged :: control :: M-NULLFLOW-PREDICATE-BLIND',
 			'unit.check.UnguardedNullableDerefTest#testReflectCopyBindingNotFlagged :: control :: M-NULLABLE-FLOW-EXCLUDE-NONE',
 			'unit.check.UnguardedNullableDerefTest#testSafeNavGuardNarrowsRoot :: control :: M-SAFENAV-NO-NARROW',
+			'unit.check.UnguardedNullableDerefTest#testUnprovenPredicateStillFlagged :: control :: M-NULLFLOW-PREDICATE-UNCHECKED',
 			'unit.check.UnnecessaryNullCheckCheckTest#testTypedefOfNullOperandNotFlagged :: control :: M-PROVER-NULLITY-SKIPPED',
 			'unit.check.UnnecessarySafeNavCheckTest#testTypedefOfNullReceiverNotFlagged :: control :: M-PROVER-NULLITY-SKIPPED',
 			'unit.check.UnreachableCatchTest#testSubtypeAfterSupertypeFlagged :: control :: M-ISSUBTYPE-FALSE',
@@ -3880,7 +3882,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-CMPBOOL-RESOLVED-TYPE-PARAM-BLIND',
 			'M-DECLSPAN-FINAL-WRAPPER-BLIND',
 			'M-NULLFLOW-VALUE-FACT-BLIND',
-			'M-NULLFLOW-VALUE-FACT-UNKILLED'
+			'M-NULLFLOW-VALUE-FACT-UNKILLED',
+			'M-NULLFLOW-PREDICATE-BLIND',
+			'M-NULLFLOW-PREDICATE-UNCHECKED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

@@ -9319,6 +9319,21 @@
 			"find": "if (state.present.exists(e -> e.value)) state.present = state.present.filter(e -> !e.value);",
 			"replace": "return;",
 			"note": "a value fact survives a call, a `new`, a write through a path and a loop's back edge"
+		},
+		{
+			"name": "M-NULLFLOW-PREDICATE-BLIND",
+			"type": "anyparse.check.NullFlow",
+			"method": "predicateArgs",
+			"force": "[]",
+			"note": "a true call to a non-null predicate proves nothing about its argument"
+		},
+		{
+			"name": "M-NULLFLOW-PREDICATE-UNCHECKED",
+			"type": "anyparse.check.NullFlow",
+			"method": "predicateOf",
+			"find": "if (fn.kind != shape.finalModifierMemberKind && ",
+			"replace": "if (false && ",
+			"note": "an overridable member is trusted as a non-null predicate"
 		}
 	]
 }

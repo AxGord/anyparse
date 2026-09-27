@@ -6,6 +6,8 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.MemberKinds;
 import anyparse.query.NodeShape;
 import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
+import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.SourceText;
 import anyparse.runtime.Span;
 
@@ -96,6 +98,19 @@ private typedef ExistsFact = {
 };
 
 /**
+ * A function whose truth proves some of its arguments non-null: its body is one `return` of a
+ * conjunction holding `param != null` for each of `nonNullParams` (indices into its `arity`
+ * parameters). `body` is the span of the type body declaring it — a bare call to `name` binds to
+ * it only from inside that span.
+ */
+private typedef NonNullPredicate = {
+	name: String,
+	body: Span,
+	arity: Int,
+	nonNullParams: Array<Int>
+};
+
+/**
  * Per-function context for one `NullFlow` walk: the grammar-derived node-kind
  * sets, the per-function set of names mutated inside a nested closure
  * (`captured`, excluded from narrowing), and the consumer `visit` callback.
@@ -147,6 +162,9 @@ private typedef FlowCtx = {
 	var nullCoalKind: Null<String>;
 	var callKind: Null<String>;
 	var newExprKind: Null<String>;
+
+	/** The file's non-null predicate functions (`nonNullPredicates`), which a positive call to narrows its arguments. */
+	var nonNullPredicates: Array<NonNullPredicate>;
 	var fieldAccessKind: Null<String>;
 	var nullSafeAccessKind: Null<String>;
 	var indexAccessKind: Null<String>;
@@ -368,9 +386,137 @@ final class NullFlow {
 		final identKind: Null<String> = shape.identKind;
 		if (identKind == null) return;
 		final id: String = identKind;
+		final predicates: Array<NonNullPredicate> = nonNullPredicates(root, shape, id);
 		forEachFunctionUnit(
-			root, shape, (body, paramNames) -> analyzeBody(body, shape, source, id, paramNames, visit, seed, declaredNullable)
+			root, shape, (body, paramNames) -> analyzeBody(body, shape, source, id, paramNames, visit, seed, declaredNullable, predicates)
 		);
+	}
+
+	/**
+	 * The file's NON-NULL PREDICATES: member functions whose truth proves an argument non-null, so a
+	 * guard `if (!check(item)) return;` narrows `item` like `if (item == null) return;` would. A
+	 * positive whitelist, every clause of which a call site must be able to rely on:
+	 *
+	 *  - the body is ONE `return` of a conjunction (`&&`, parentheses unwrapped) with a
+	 *    `param != null` conjunct, and writes nothing — so a true result means the argument passed
+	 *    was not null;
+	 *  - the member cannot be replaced: `inline`, `static` or `final`, and not `dynamic`, `macro`,
+	 *    `overload` or `@:overload` — a subclass override or a reassigned body would answer instead;
+	 *  - no rest parameter, and its name is declared nowhere else in the file (no local, parameter,
+	 *    capture or second member of that name), so a bare call inside the declaring type body can
+	 *    only bind to it.
+	 *
+	 * Anything else is not a predicate. A call must be bare, pass exactly `arity` arguments, and sit
+	 * inside the declaring type body (`predicateArgs`).
+	 */
+	private static function nonNullPredicates(root: QueryNode, shape: RefShape, identKind: String): Array<NonNullPredicate> {
+		final maybeNotEq: Null<String> = shape.notEqKind;
+		if (maybeNotEq == null) return [];
+		final notEqKind: String = maybeNotEq;
+		final fnKinds: Array<String> = (
+			shape.functionKinds ?? []
+		).concat(shape.finalModifierMemberKind == null ? [] : [shape.finalModifierMemberKind]);
+		final declKinds: Array<String> = BinderScan.binderKinds(shape).concat(fnKinds).concat(shape.fieldDeclKinds ?? []);
+		final modifierKinds: Array<String> = (
+			shape.visibilityModifierKinds ?? []
+		).concat(shape.modifierOrderKinds ?? []).concat(META_KINDS);
+		final declared: Map<String, Int> = [];
+		function count(node: QueryNode): Void {
+			final name: Null<String> = node.name;
+			if (name != null && declKinds.contains(node.kind)) declared[name] = (declared[name] ?? 0) + 1;
+			for (c in node.children) count(c);
+		}
+		count(root);
+		final out: Array<NonNullPredicate> = [];
+		function walk(node: QueryNode): Void {
+			final decl: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
+			final bodySpan: Null<Span> = decl?.nameNode.span;
+			if (decl != null && bodySpan != null) for (fn in decl.nameNode.children) {
+				final name: Null<String> = fn.name;
+				if (name == null || !fnKinds.contains(fn.kind) || declared[name] != 1) continue;
+				final modifiers: Array<QueryNode> = MemberKinds.precedingModifiers(fn, decl.nameNode, modifierKinds).concat(fn.children);
+				final predicate: Null<NonNullPredicate> = predicateOf(fn, name, bodySpan, modifiers, shape, identKind, notEqKind);
+				if (predicate != null) out.push(predicate);
+			}
+			for (c in node.children) walk(c);
+		}
+		walk(root);
+		return out;
+	}
+
+	/** `fn` as a `NonNullPredicate` under `nonNullPredicates`' whitelist, given its modifier run `modifiers`, else null. */
+	private static function predicateOf(
+		fn: QueryNode, name: String, bodySpan: Span, modifiers: Array<QueryNode>, shape: RefShape, identKind: String, notEqKind: String
+	): Null<NonNullPredicate> {
+		inline function carries(kind: Null<String>): Bool return kind != null && modifiers.exists(m -> m.kind == kind);
+		final overloadMeta: Null<String> = shape.signatureOverloadMetaName;
+		if (
+			carries(shape.dynamicModifierKind) || carries(shape.macroModifierKind) || carries(shape.overloadModifierKind)
+			|| overloadMeta != null && modifiers.exists(m -> META_KINDS.contains(m.kind) && m.name == overloadMeta)
+		)
+			return null;
+		if (fn.kind != shape.finalModifierMemberKind && !carries(shape.inlineModifierKind) && !carries(shape.staticModifierKind))
+			return null;
+		final params: Array<QueryNode> = fn.children.filter(c -> (shape.paramKinds ?? []).contains(c.kind));
+		if (params.exists(p -> p.kind == shape.restParamKind)) return null;
+		final returned: Null<QueryNode> = soleReturnedExpr(fn, shape);
+		if (returned == null || (shape.writeParentKinds ?? []).exists(k -> MemberKinds.subtreeContainsKind(returned, k))) return null;
+		final conjuncts: Array<QueryNode> = [];
+		function flatten(n: QueryNode): Void {
+			if (n.kind == BOOL_AND_KIND || n.kind == shape.parenKind && n.children.length == 1)
+				for (c in n.children) flatten(c)
+			else
+				conjuncts.push(n);
+		}
+		flatten(returned);
+		final nonNullParams: Array<Int> = [];
+		for (c in conjuncts) if (c.kind == notEqKind) {
+			final operand: Null<String> = nullComparisonOperand(c, identKind, shape.nullLiteralKind)?.name;
+			final index: Int = params.findIndex(p -> p.name == operand);
+			if (operand != null && index >= 0 && !nonNullParams.contains(index)) nonNullParams.push(index);
+		}
+		return nonNullParams.length == 0 ? null : {
+			name: name,
+			body: bodySpan,
+			arity: params.length,
+			nonNullParams: nonNullParams
+		};
+	}
+
+	/**
+	 * The expression `fn` returns when its whole body is one value `return` — a block holding only
+	 * that statement, or an expression body — else null.
+	 */
+	private static function soleReturnedExpr(fn: QueryNode, shape: RefShape): Null<QueryNode> {
+		final bodies: Array<QueryNode> = fn.children.filter(c -> (shape.functionBodyKinds ?? []).contains(c.kind));
+		if (bodies.length != 1) return null;
+		final body: QueryNode = bodies[0];
+		final wrapped: Bool = body.kind == shape.blockBodyKind || (shape.expressionBodyKinds ?? []).contains(body.kind);
+		if (!wrapped || body.children.length != 1) return null;
+		final ret: QueryNode = body.children[0];
+		return (shape.valueReturnKinds ?? []).contains(ret.kind) && ret.children.length == 1 ? ret.children[0] : null;
+	}
+
+	/**
+	 * The argument names a positive call `call` to a `NonNullPredicate` proves non-null: a bare callee
+	 * naming one whose type body holds the call, exactly `arity` arguments, and each proven argument a
+	 * plain identifier. Empty for any other call.
+	 */
+	private static function predicateArgs(call: QueryNode, ctx: FlowCtx): Array<String> {
+		final span: Null<Span> = call.span;
+		if (span == null || call.children.length == 0 || call.children[0].kind != ctx.identKind) return [];
+		final callee: Null<String> = call.children[0].name;
+		final predicate: Null<NonNullPredicate> = ctx.nonNullPredicates.find(
+			p -> p.name == callee && p.body.from <= span.from && span.to <= p.body.to && p.arity == call.children.length - 1
+		);
+		if (predicate == null) return [];
+		final out: Array<String> = [];
+		for (i in predicate.nonNullParams) {
+			final arg: QueryNode = call.children[i + 1];
+			final name: Null<String> = arg.name;
+			if (arg.kind == ctx.identKind && name != null) out.push(name);
+		}
+		return out;
 	}
 
 	/**
@@ -604,7 +750,8 @@ final class NullFlow {
 	 */
 	private static function analyzeBody(
 		body: QueryNode, shape: RefShape, source: String, identKind: String, paramNames: Array<String>,
-		visit: (QueryNode, NullFacts) -> Void, seed: Null<(QueryNode) -> Bool>, declaredNullable: Null<(QueryNode) -> Bool>
+		visit: (QueryNode, NullFacts) -> Void, seed: Null<(QueryNode) -> Bool>, declaredNullable: Null<(QueryNode) -> Bool>,
+		predicates: Array<NonNullPredicate>
 	): Void {
 		final localDeclKinds: Array<String> = shape.localDeclKinds ?? [];
 		final nestedFnKinds: Array<String> = MemberKinds.nestedFunctionKinds(shape);
@@ -641,6 +788,7 @@ final class NullFlow {
 			nullCoalKind: shape.nullCoalesceKind,
 			callKind: shape.callKind,
 			newExprKind: shape.newExprKind,
+			nonNullPredicates: predicates,
 			fieldAccessKind: shape.fieldAccessKind,
 			nullSafeAccessKind: shape.nullSafeAccessKind,
 			indexAccessKind: shape.indexAccessKind,
@@ -1316,6 +1464,10 @@ final class NullFlow {
 				cmpKind;
 			final flipCombine: String = combineKind == BOOL_AND_KIND ? BOOL_OR_KIND : BOOL_AND_KIND;
 			collectNarrow(cond.children[0], out, ctx, flipCmp, flipCombine, provesNonNull, viaSafeNav);
+		} else if (provesNonNull && cmpKind != null && cmpKind == ctx.notEqKind && kind == ctx.callKind) {
+			// A true NON-NULL PREDICATE call proves its argument the way `x != null` does — in the
+			// polarity a `!= null` holds here. The compiler's own narrowing is not claimed for it.
+			for (n in predicateArgs(cond, ctx)) (viaSafeNav ?? out).push(n);
 		}
 	}
 

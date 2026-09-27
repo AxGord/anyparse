@@ -678,12 +678,79 @@ class UnguardedNullableDerefTest extends Test {
 		);
 	}
 
+	/**
+	 * A call to a NON-NULL PREDICATE guards its argument like `x != null` does: a same-type member
+	 * that nothing can replace (`inline`, `static`, `final`) and whose whole body returns a
+	 * conjunction with `param != null` (TM `src/popups/fileDialog/share/ShareUsersStore.hx:334`).
+	 */
+	@:pin('control')
+	@:killer('M-NULLFLOW-PREDICATE-BLIND')
+	public function testInlinePredicateGuardNotFlagged(): Void {
+		for (fn in [
+			'private inline function check(i:Null<Item>):Bool {\n\t\treturn i != null && i.id != null;\n\t}',
+			'static function check(i:Null<Item>):Bool\n\t\treturn (i != null);',
+			'final function check(i:Null<Item>):Bool\n\t\treturn true && i != null;'
+		]) {
+			Assert.equals(0, violations(predicateFixture(fn, 'if (!check(item)) return;\n\t\titem.id;')).length, fn);
+			Assert.equals(0, violations(predicateFixture(fn, 'if (check(item)) item.id;')).length, fn);
+		}
+	}
+
+	/**
+	 * Everything the whitelist does not name stays unguarded: an overridable member, a disjunction, a
+	 * body of more than one statement, the wrong polarity, a name something else in the file also
+	 * declares, a non-identifier argument, and a call carrying fewer arguments than parameters.
+	 */
+	@:pin('control')
+	@:killer('M-NULLFLOW-PREDICATE-UNCHECKED')
+	public function testUnprovenPredicateStillFlagged(): Void {
+		final guarded: String = 'if (!check(item)) return;\n\t\titem.id;';
+		for (pair in [
+			[
+				'private function check(i:Null<Item>):Bool {\n\t\treturn i != null;\n\t}',
+				guarded
+			],
+			[
+				'inline function check(i:Null<Item>):Bool\n\t\treturn i != null || true;',
+				guarded
+			],
+			[
+				'inline function check(i:Null<Item>):Bool {\n\t\ttrace(1);\n\t\treturn i != null;\n\t}',
+				guarded
+			],
+			['dynamic function check(i:Null<Item>):Bool\n\t\treturn i != null;', guarded],
+			[
+				'inline function check(i:Null<Item>):Bool\n\t\treturn i != null;',
+				'if (check(item)) return;\n\t\titem.id;'
+			],
+			[
+				'inline function check(i:Null<Item>):Bool\n\t\treturn i != null;',
+				'function check(i:Null<Item>):Bool return true;\n\t\t' + guarded
+			],
+			[
+				'inline function check(i:Null<Item>):Bool\n\t\treturn i != null;',
+				'if (!check((item))) return;\n\t\titem.id;'
+			],
+
+			[
+				'inline function check(?j:Null<Item>, i:Null<Item>):Bool\n\t\treturn i != null;',
+				'if (!check(item)) return;\n\t\titem.id;'
+			]
+		]) Assert.equals(1, violations(predicateFixture(pair[0], pair[1])).length, pair.join(' / '));
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new UnguardedNullableDeref().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
 
 	private function violationsFiles(files: Array<{ file: String, source: String }>): Array<Violation> {
 		return new UnguardedNullableDeref().run(files, new HaxeQueryPlugin());
+	}
+
+	/** A class declaring the predicate `fn` and a method whose `item: Null<Item>` local then runs `use`. */
+	private function predicateFixture(fn: String, use: String): String {
+		return 'class Item {\n\tpublic var id:Null<Int>;\n}\n\nclass C {\n\t$fn\n\n\tfunction f(src:{ item:Null<Item> }):Void {\n'
+			+ '\t\tfinal item:Null<Item> = src.item;\n\t\t$use\n\t}\n}\n';
 	}
 
 }
