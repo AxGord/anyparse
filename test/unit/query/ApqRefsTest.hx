@@ -276,17 +276,19 @@ class ApqRefsTest extends Test {
 	}
 
 	/**
-	 * An enum-pattern binding is NOT a declaration to this resolver: `case Some(x)` projects `x` as a
-	 * plain `IdentExpr` inside the pattern, so it is collected as a READ like the body's own `x` and
-	 * binds to nothing. Arm framing therefore does not touch these — worth pinning, because the shape
-	 * LOOKS like a per-arm declaration and assuming so costs a wrong blast-radius estimate.
+	 * An enum-pattern binding IS a declaration: `case Some(x)` captures `x` for its own arm (a bare lowercase
+	 * identifier in a pattern never compares), so each arm's body read binds to that arm's capture and
+	 * never to the sibling arm's.
 	 */
-	public function testEnumPatternBindingIsNotADeclaration(): Void {
+	public function testEnumPatternBindingDeclaresInItsOwnArm(): Void {
 		final src: String = 'class X { static function f(v:Opt) { switch v { case Some(x): trace(x); case Other(x): trace(x); } } }';
 		final hits: Array<RefHit> = findIn(src, 'x');
-		Assert.equals(4, hits.length);
-		Assert.equals(0, hits.filter(h -> h.kind == RefKind.Decl).length);
-		Assert.equals(0, hits.filter(h -> h.bindingSpan != null).length);
+		final decls: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
+		Assert.equals(2, decls.length, describe(hits));
+		if (decls.length != 2) return;
+		final expected: String = '${src.indexOf('trace(x)') + 'trace('.length}->${decls[0].span.from} '
+			+ '${src.lastIndexOf('trace(x)') + 'trace('.length}->${decls[1].span.from}';
+		Assert.equals(expected, bindings(hits), describe(hits));
 	}
 
 	public function testVarReadAndDeclCollected(): Void {

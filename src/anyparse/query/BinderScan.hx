@@ -8,8 +8,9 @@ import anyparse.runtime.Span;
 
 /**
  * Which node kinds BIND a name, which names a construct binds that the scope resolver does not see, and the
- * subtree that owns a binding. The resolver indexes declarations; a `case` pattern capture, a bare
- * (unparenthesised) arrow-lambda parameter and a key-value loop's key are bindings the grammar spells
+ * subtree that owns a binding. The resolver indexes declarations (and the `case`
+ * captures it can decide); a `case` pattern capture, a bare (unparenthesised)
+ * arrow-lambda parameter and a key-value loop's key are bindings the grammar spells
  * without a declaration node, so a scan that trusts the resolver alone reads them as free references to
  * whatever else carries that name.
  *
@@ -117,7 +118,9 @@ final class BinderScan {
 	 * lambda param, the `catch` binder and a local function's own parameters all DO resolve, and are
 	 * deliberately absent):
 	 *
-	 *  - CASE PATTERNS (`case Leaf(m):`) — the binder lives inside the pattern subtree.
+	 *  - CASE PATTERNS (`case Leaf(m):`) — the binder lives inside the pattern subtree. The resolver
+	 *    binds a capture it can decide, but a pattern name it cannot (`RefHit.patternUndecided`)
+	 *    stays a read of the outer binding, so every pattern name stays in the set.
 	 *  - the BARE single-parameter arrow lambda (`m -> m.f()`), whose parameter the grammar projects
 	 *    as a plain identifier expression indistinguishable from a read — the model carries no binder
 	 *    node to resolve, so the resolver has nothing to bind. Recovering that distinction in the
@@ -204,30 +207,25 @@ final class BinderScan {
 	}
 
 	/**
-	 * Every identifier a `case` pattern in `tree` BINDS — the pattern wrapper is a case
-	 * branch's first child. Sibling case-branch captures flatten into ONE scope frame, so a
-	 * member sharing a capture's name can be mis-attributed by the resolver; the member
-	 * operations refuse a rename or a move when the member name is in this set.
+	 * Every name a `case` pattern in `tree` MAY bind - each `CasePatterns.scan` name, whether a decided
+	 * capture or one that a constant of the same name may claim instead. The member operations refuse a
+	 * rename or a move when the member name is in this set: a bare pattern name the resolver cannot
+	 * decide may be a reference to the member or a capture that hides it.
 	 *
-	 * An identifier the LANGUAGE cannot bind as a pattern variable is left out: it is a
-	 * reference to a constant, and counting it as a capture refused every rename of an
-	 * `enum abstract` value that its own type spells in a `switch`. Governed by
-	 * `RefShape.upperInitialNeverCaptures`; unset keeps every pattern identifier.
+	 * A name the LANGUAGE cannot bind as a pattern variable is left out (`CasePatterns.isCaptureSpelling`):
+	 * it is a reference to a constant, and counting it as a capture refused every rename of an
+	 * `enum abstract` value that its own type spells in a `switch`. So is an
+	 * extractor's function and a constructor call's callee, which are reads.
 	 */
 	public static function casePatternCaptures(tree: QueryNode, shape: RefShape): Array<String> {
 		final out: Array<String> = [];
-		final identKind: String = shape.identKind;
 		final caseBranchKind: Null<String> = shape.caseBranchKind;
 		if (caseBranchKind == null) return out;
-		final skipUpperInitial: Bool = shape.upperInitialNeverCaptures == true;
-		function walkPattern(node: QueryNode): Void {
-			final name: Null<String> = node.name;
-			if (node.kind == identKind && name != null && !(skipUpperInitial && SourceText.isUpperInitial(name)) && !out.contains(name))
-				out.push(name);
-			for (c in node.children) walkPattern(c);
-		}
+		final constants: Array<String> = CasePatterns.constantNames([tree], shape);
 		function walk(node: QueryNode): Void {
-			if (node.kind == caseBranchKind && node.children.length > 0) walkPattern(node.children[0]);
+			if (node.kind == caseBranchKind)
+				for (ident in CasePatterns.scan(node, shape, constants).idents)
+					if (!out.contains(ident.name)) out.push(ident.name);
 			for (c in node.children) walk(c);
 		}
 		walk(tree);

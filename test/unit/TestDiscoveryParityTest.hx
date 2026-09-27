@@ -870,6 +870,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.CachingGrammarPluginTest',
 		'unit.query.CallGraphTest',
 		'unit.query.CallSitesTest',
+		'unit.query.CaseCaptureTest',
 		'unit.query.ChangeSigSliceTest',
 		'unit.query.ClassifyOccurrencesTest',
 		'unit.query.CliAtomicWriteSliceTest',
@@ -1333,7 +1334,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.OperandBindingTest#testAliasOfUnindexedTypeOutranksSamePackageClass :: control :: M-BINDING-ALIAS-BLIND',
 			'unit.check.OperandBindingTest#testAmbientImportOfUnindexedTypeOutranksSamePackageClass :: control :: M-BINDING-UNINDEXED-IMPORT-FREE',
 			'unit.check.OperandBindingTest#testCallToFunctionOfThisFileIsProven :: control :: M-OPERAND-LOCAL-CALL-CUT',
-			'unit.check.OperandBindingTest#testCaseCaptureShadowsTheOuterBinding :: control :: M-OPERAND-CASE-CAPTURE',
+
 			'unit.check.OperandBindingTest#testDeclarationInsideTheBranchOutranksItsCapture :: control :: M-OPERAND-CASE-CAPTURE-INSIDE',
 			'unit.check.OperandBindingTest#testImportOfUnindexedTypeIsNotItsIndexedNamesake :: control :: M-OPERAND-SIMPLE-NAME',
 			'unit.check.OperandBindingTest#testImportOfUnindexedTypeOutranksSamePackageClass :: control :: M-BINDING-UNINDEXED-IMPORT-FREE',
@@ -1357,6 +1358,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.OperandBindingTest#testToStringCallReceiverBindsItsOwner :: control :: M-TOSTRING-CALL-BY-NAME',
 			'unit.check.OperandBindingTest#testToStringCallReceiverOfIndexedOwnerIsProven :: control :: M-TOSTRING-CALL-CUT',
 			'unit.check.OperandBindingTest#testToStringIdentReceiverOfIndexedClassIsProven :: control :: M-TOSTRING-IDENT-CUT',
+			'unit.check.OperandBindingTest#testUndecidedCaptureShadowsTheOuterBinding :: control :: M-OPERAND-CASE-CAPTURE',
 			'unit.check.OperandBindingTest#testWildcardOverUnindexedPackageOutranksSamePackageClass :: control :: M-BINDING-UNINDEXED-WILDCARD-FREE',
 			'unit.check.OracleCacheTest#testAFingerprintReadsItsSourcesThroughTheMemo :: control :: ' + 'M-ORACLE-CACHE-MEMO-UNREAD',
 			'unit.check.OracleCacheTest#testAVerdictIsNotFiledUnderAFingerprintTheTreeLeft :: control :: '
@@ -2255,6 +2257,17 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CallGraphTest#testUntypedPropertyAccessIsRecordedAgainstItsAccessor :: control :: '
 				+ 'M-GRAPH-ACCESS-RECORDED,M-GRAPH-ACCESS-COUNTED',
 			'unit.query.CallSitesTest#testASecondLocalFunctionOfTheSameNameRefusesTheProof :: control :: M-NAME-CLASH-KINDS-NO-BINDERS',
+			'unit.query.CaseCaptureTest#testAlternativesShareTheFirstCapture :: control :: M-CAPTURE-ALT-SELF',
+			'unit.query.CaseCaptureTest#testBareCaptureBindsItsArm :: control :: M-CAPTURE-ARM-BIND',
+			'unit.query.CaseCaptureTest#testCalleeAndExtractorStayReads :: control :: M-PATTERN-CALLEE-CAPTURE',
+			'unit.query.CaseCaptureTest#testConstantNamedPatternIsARead :: control :: M-PATTERN-CONST-DECIDED',
+			'unit.query.CaseCaptureTest#testFreshCaptureIsUndecided :: control :: M-CAPTURE-FRESH-DECIDED',
+			'unit.query.CaseCaptureTest#testInlineLeavesTheCaptureAlone :: control :: M-CAPTURE-ARM-BIND',
+			'unit.query.CaseCaptureTest#testInlineRefusesARecapturedRead :: control :: M-INLINE-RECAPTURE',
+			'unit.query.CaseCaptureTest#testInlineRefusesAnUndecidedPattern :: control :: M-INLINE-UNDECIDED',
+			'unit.query.CaseCaptureTest#testRenameLeavesTheCaptureAlone :: control :: M-CAPTURE-ARM-BIND',
+			'unit.query.CaseCaptureTest#testRenameMovesEveryAlternative :: control :: M-RENAME-DECL-SELF,M-BINDING-FROM-DECL-SELF',
+			'unit.query.CaseCaptureTest#testRenameRefusesAnUndecidedCapture :: control :: M-RENAME-UNDECIDED',
 			'unit.query.CodepointIndexTest#testAWideCodepointCountsTwoNativeUnits :: control :: M-CODEPOINT-NATIVE,M-CODEPOINT-BACK',
 			'unit.query.CommentOwnerGuardSliceTest#testACarryDeclarationThatDoesNotHoldIsNotARefusal :: control :: M-COMMENT-CARRY-REFUSES',
 			'unit.query.CommentOwnerGuardSliceTest#testACommentThatKeepsItsPlaceUnderACarryIsAccepted :: control :: '
@@ -3780,7 +3793,17 @@ class TestDiscoveryParityTest extends Test {
 			'M-LOCALFN-OUTER-NAME-READ',
 			'M-BIND-LIBRARY-CALLEE',
 			'M-BIND-EXTERN-TYPE',
-			'M-BIND-ABSTRACT-SELF'
+			'M-BIND-ABSTRACT-SELF',
+			'M-CAPTURE-ARM-BIND',
+			'M-CAPTURE-ALT-SELF',
+			'M-CAPTURE-FRESH-DECIDED',
+			'M-PATTERN-CONST-DECIDED',
+			'M-PATTERN-CALLEE-CAPTURE',
+			'M-INLINE-RECAPTURE',
+			'M-INLINE-UNDECIDED',
+			'M-RENAME-UNDECIDED',
+			'M-RENAME-DECL-SELF',
+			'M-BINDING-FROM-DECL-SELF'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

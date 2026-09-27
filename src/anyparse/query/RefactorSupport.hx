@@ -298,8 +298,8 @@ final class RefactorSupport {
 	 * Resolve which binding the cursor node belongs to, as the `from`
 	 * offset of that binding's declaration:
 	 *
-	 *  - The cursor node sits on a Decl hit (`span.from` matches) → the
-	 *    decl binds itself.
+	 *  - The cursor node sits on a Decl hit (`span.from` matches) → the decl binds itself, or - for a later
+	 *    alternative of `case A(x), B(x):` - to the first capture.
 	 *  - It sits on a Read / Write hit → follow the hit's `bindingSpan`.
 	 *  - It is a `this.<field>` field access (no matching ref hit) → the
 	 *    member decl of the same name.
@@ -314,7 +314,7 @@ final class RefactorSupport {
 
 		final hit: Null<RefHit> = hits.find(h -> h.span.from == nodeFrom);
 		if (hit != null) {
-			if (hit.kind == RefKind.Decl) return hit.span.from;
+			if (hit.kind == RefKind.Decl) return hit.bindingSpan?.from ?? hit.span.from;
 			final boundTo: Null<Span> = hit.bindingSpan;
 			return boundTo?.from;
 		}
@@ -325,6 +325,17 @@ final class RefactorSupport {
 		if (node.kind != MemberKinds.FIELD_ACCESS_KIND) return null;
 		final memberDecl: Null<RefHit> = hits.find(h -> h.kind == RefKind.Decl);
 		return memberDecl?.span.from;
+	}
+
+	/**
+	 * The first hit bound to `binding` that is a `case` pattern name one file cannot decide between a
+	 * capture and a constant (`RefHit.patternUndecided`), or null when there is none. A rewrite whose
+	 * occurrence set is that binding's must refuse on one: splicing it assumes an answer the source
+	 * does not give — a capture of a name an import may turn into a constant, or a name a constant
+	 * declaration may claim from the local it resolves to.
+	 */
+	public static function undecidedPatternHit(hits: Array<RefHit>, binding: Int): Null<RefHit> {
+		return hits.find(h -> h.patternUndecided && (h.bindingSpan?.from ?? h.span.from) == binding);
 	}
 
 	/**

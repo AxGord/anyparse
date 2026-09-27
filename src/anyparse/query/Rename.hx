@@ -266,8 +266,11 @@ final class Rename {
 
 	/**
 	 * A same-name RESOLUTION BLIND SPOT that would turn this rename into a silent semantic
-	 * change, or null when none applies. Three cases:
+	 * change, or null when none applies. Four cases:
 	 *
+	 *  - a bare `case` pattern name bound to this binding whose reading one file cannot decide
+	 *    (`RefHit.patternUndecided`): a capture of a name nothing in the file declares, or a name
+	 *    a constant declaration may claim;
 	 *  - a `$oldName` string-interpolation read of THIS binding that the occurrence set does not
 	 *    rewrite. An ordinary one is rewritten — `Refs` indexes it and `identTokenOffset` finds
 	 *    its identifier token inside the `$name` span — so only an escape-spelled `$` or name
@@ -298,6 +301,12 @@ final class Rename {
 		final scope: QueryNode = BinderScan.bindingHostSubtree(tree, cursor, binding, shape);
 
 		if (binding != null) {
+			final undecided: Null<RefHit> = RefactorSupport.undecidedPatternHit(hits, binding);
+			if (undecided != null) {
+				final at: Position = undecided.span.lineCol(source);
+				return 'rename of "$oldName" is unsafe: the case pattern at ${at.line}:${at.col} names it bare, and one file cannot'
+					+ ' decide whether that pattern captures or compares against a constant of the same name - rename it by hand';
+			}
 			final stray: Null<Span> = OccurrenceScan.unrewrittenInterpRead(hits, binding, occurrences);
 			if (stray != null) {
 				final at: Position = stray.lineCol(source);
@@ -367,7 +376,7 @@ final class Rename {
 
 		for (h in hits) {
 			final boundFrom: Null<Int> = switch h.kind {
-				case RefKind.Decl: h.span.from;
+				case RefKind.Decl: h.bindingSpan?.from ?? h.span.from;
 				case _:
 					final b: Null<Span> = h.bindingSpan;
 					b?.from;

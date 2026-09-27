@@ -8563,8 +8563,8 @@
 			"name": "M-OPERAND-CASE-CAPTURE-INSIDE",
 			"type": "anyparse.check.OperandBinder",
 			"method": "capturedBetween",
-			"find": "if (node.kind == branchKind && !inside)",
-			"replace": "if (node.kind == branchKind)",
+			"find": "node.kind == branchKind && !inside &&",
+			"replace": "node.kind == branchKind &&",
 			"note": "a binding declared inside the capturing branch is refused too, though it shadows the capture"
 		},
 		{
@@ -8960,6 +8960,85 @@
 			"find": "abstractSelf ? true : null",
 			"replace": "null",
 			"note": "an abstract's instance method is bound through an implicit `this` the abstract may reassign"
+		},
+		{
+			"name": "M-CAPTURE-ARM-BIND",
+			"type": "anyparse.query.Refs",
+			"method": "frameFor",
+			"find": "if (isBranchScope && node.kind == shape.caseBranchKind) captures.bindArm(node, frame, scopes, out);",
+			"replace": "",
+			"note": "a `case` pattern capture is not bound into its arm, so the pattern reads as the outer declaration it shadows"
+		},
+		{
+			"name": "M-CAPTURE-ALT-SELF",
+			"type": "anyparse.query.Refs",
+			"method": "walkMulti",
+			"find": "scopes.resolveInnermost(nname, at.from) ?? self;",
+			"replace": "self;",
+			"note": "a later alternative of `case A(x), B(x):` self-binds instead of joining the first capture"
+		},
+		{
+			"name": "M-CAPTURE-FRESH-DECIDED",
+			"type": "anyparse.query.CaptureIndex",
+			"method": "bindArm",
+			"find": "undecided: !ident.explicit && outer == null",
+			"replace": "undecided: false",
+			"note": "a capture of a name nothing in the file declares is taken as decided, though an imported constant would compare"
+		},
+		{
+			"name": "M-PATTERN-CONST-DECIDED",
+			"type": "anyparse.query.CaptureIndex",
+			"method": "bindArm",
+			"find": "undecided: outer == null || !isSoleConstant(constants, outer.node, name)",
+			"replace": "undecided: false",
+			"note": "a pattern name a constant may claim is taken as decided while it resolves to a local that shadows the constant"
+		},
+		{
+			"name": "M-PATTERN-CALLEE-CAPTURE",
+			"type": "anyparse.query.CasePatterns",
+			"method": "scanCall",
+			"find": "for (i in 1...node.children.length)",
+			"replace": "for (i in 0...node.children.length)",
+			"note": "a constructor call's callee in a pattern is scanned as a capture"
+		},
+		{
+			"name": "M-INLINE-RECAPTURE",
+			"type": "anyparse.query.Inline",
+			"method": "recapturedIdent",
+			"force": "null",
+			"note": "a read site where a binding shadows an initializer's name is inlined, so the substitution reads that binding"
+		},
+		{
+			"name": "M-INLINE-UNDECIDED",
+			"type": "anyparse.query.Inline",
+			"method": "resolveInlineTarget",
+			"find": "RefactorSupport.undecidedPatternHit(hits, binding);",
+			"replace": "null;",
+			"note": "an inline proceeds past a case pattern it cannot decide between a capture and a constant"
+		},
+		{
+			"name": "M-RENAME-UNDECIDED",
+			"type": "anyparse.query.Rename",
+			"method": "sameNameBlindSpot",
+			"find": "RefactorSupport.undecidedPatternHit(hits, binding);",
+			"replace": "null;",
+			"note": "a rename proceeds past a case pattern it cannot decide between a capture and a constant"
+		},
+		{
+			"name": "M-RENAME-DECL-SELF",
+			"type": "anyparse.query.Rename",
+			"method": "collectOccurrences",
+			"find": "case RefKind.Decl: h.bindingSpan?.from ?? h.span.from;",
+			"replace": "case RefKind.Decl: h.span.from;",
+			"note": "a rename drops the later alternatives of `case A(x), B(x):`, which bind to the first capture"
+		},
+		{
+			"name": "M-BINDING-FROM-DECL-SELF",
+			"type": "anyparse.query.RefactorSupport",
+			"method": "resolveBindingFrom",
+			"find": "return hit.bindingSpan?.from ?? hit.span.from;",
+			"replace": "return hit.span.from;",
+			"note": "a cursor on a later alternative of `case A(x), B(x):` resolves to itself instead of the arm's binding"
 		}
 	]
 }

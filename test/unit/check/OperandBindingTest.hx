@@ -166,13 +166,25 @@ class OperandBindingTest extends Test {
 
 	/**
 	 * `case t:` CAPTURES the switched `Dir` — a bare lowercase identifier in a pattern binds, it never
-	 * compares — so the `t` after it is the `Dir`, not the outer `String` the reference walk resolves
-	 * it to. `r/a/b` became `rab` when folded (4.3.7 `--interp`).
+	 * compares — so the `t` after it is the `Dir`, not the outer `String`. `r/a/b` became `rab` when
+	 * folded (4.3.7 `--interp`). Two layers decline it: the reference walk binds the read to the
+	 * capture itself, and the branch scan would decline the outer binding anyway — so no single cut
+	 * turns this red, and it is not pinned.
+	 */
+	public function testCaseCaptureShadowsTheOuterBinding(): Void {
+		Assert.equals(REPORT_ONLY, foldOf(['u/Use.hx' => caseUse('case t:', '')], 't + \''));
+	}
+
+	/**
+	 * The same capture when a `static inline` of its name also exists: the walk cannot decide between
+	 * the capture and the constant, so its read keeps resolving to the outer `String` local — which
+	 * captures here, since a local outranks the constant — and only the branch scan declines it.
 	 */
 	@:pin('control')
 	@:killer('M-OPERAND-CASE-CAPTURE')
-	public function testCaseCaptureShadowsTheOuterBinding(): Void {
-		Assert.equals(REPORT_ONLY, foldOf(['u/Use.hx' => caseUse('case t:', '')], 't + \''));
+	public function testUndecidedCaptureShadowsTheOuterBinding(): Void {
+		final use: String = caseUse('case t:', '', '\tstatic inline var t: String = \'k\';\n\n');
+		Assert.equals(REPORT_ONLY, foldOf(['u/Use.hx' => use], 't + \''));
 	}
 
 	/** A declaration INSIDE the branch shadows the capture in turn, so the walk's answer stands. */
@@ -252,8 +264,8 @@ class OperandBindingTest extends Test {
 		+ '\tpublic function toString(): String {\n\t\treturn \'M\';\n\t}\n\n}\n';
 
 	/** A `Use` whose outer `t: String` meets a switch over a `lib.Dir` with `pattern`, the branch body led by `lead`. */
-	private static function caseUse(pattern: String, lead: String): String {
-		return 'package u;\n\nimport lib.Dir;\n\nclass Use {\n\n\tpublic static function f(d: Dir): String {\n'
+	private static function caseUse(pattern: String, lead: String, members: String = ''): String {
+		return 'package u;\n\nimport lib.Dir;\n\nclass Use {\n\n${members}\tpublic static function f(d: Dir): String {\n'
 			+ '\t\tfinal t: String = \'q\';\n\t\tswitch d {\n\t\t\t$pattern\n\t\t\t\t${lead}return t + \'a\' + \'b\';\n\t\t}\n'
 			+ '\t\treturn t;\n\t}\n\n}\n';
 	}
