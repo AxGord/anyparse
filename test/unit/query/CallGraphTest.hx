@@ -633,6 +633,92 @@ class CallGraphTest extends Test {
 		Assert.isNull(g.node('U.w'));
 	}
 
+	/**
+	 * A value typed by a type parameter in scope reaches its members through the parameter's BOUND — its type argument is the
+	 * bound or a subtype of it, so the bound's member and every override are what the call runs: a class parameter read
+	 * through a field or a parameter, a `final class`'s, a function's own; of several bounds, the one declaring the member.
+	 * An unbounded parameter and an anonymous-structure bound still name no type.
+	 */
+	@:pin('control') @:killer('M-GRAPH-CLASS-BOUND') @:killer('M-GRAPH-FINAL-CLASS-BOUND') @:killer('M-GRAPH-FN-BOUND')
+	@:killer('M-GRAPH-BOUND-DECLARING')
+	public function testTypeParameterReceiverResolvesThroughItsBound(): Void {
+		final g: CallGraph = graphOf([
+			'class H { public function run():Void {} }',
+			'class Sub extends H { override public function run():Void {} }',
+			'interface A { function a():Void; }',
+			'interface B { function b():Void; }',
+			'class G<T:H> { var w:T; function viaField():Void w.run(); function viaParam(o:Null<T>):Void o.run(); }',
+			'final class F<T:H> { var w:T; function viaField():Void w.run(); }',
+			'class M { function both<U:A & B>(u:U):Void { u.a(); u.b(); } function free<V>(v:V):Void v.run(); '
+			+ 'function anon<X:{ function run():Void; }>(x:X):Void x.run(); }'
+		]);
+		for (fn in ['G.viaField', 'G.viaParam', 'F.viaField']) {
+			Assert.equals(1, edges(g, fn, 'H.run', Call).length, fn);
+			Assert.equals(1, edges(g, fn, 'Sub.run', Virtual).length, fn);
+		}
+		Assert.equals(1, edges(g, 'M.both', 'A.a', Call).length);
+		Assert.equals(1, edges(g, 'M.both', 'B.b', Call).length);
+		for (fn in ['M.free', 'M.anon']) Assert.equals(0, g.outEdges(fn).length, fn);
+	}
+
+	/**
+	 * A type parameter is looked up where the receiver's type was WRITTEN, not where the call is: a field and an outer
+	 * parameter declared `T` hold the CLASS `T` even inside a method or a local function declaring a `T` of its own,
+	 * while that function's own parameter holds its own `T`.
+	 */
+	@:pin('control') @:killer('M-GRAPH-BOUND-DECL-SCOPE') @:killer('M-GRAPH-BOUND-LOCAL-SCOPE')
+	public function testTypeParameterIsLookedUpWhereTheReceiverTypeWasWritten(): Void {
+		final g: CallGraph = graphOf([
+			'class A { public function m():Void {} }',
+			'class SubA extends A { override public function m():Void {} }',
+			'class B { public function m():Void {} }',
+			'class Shadow<T:A> { var item:T; function methodShadow<T:B>(x:T):Void item.m(); '
+			+ 'function localShadow(x:T):Void { function g<T:B>(y:T):Void x.m(); } ' + 'function own<T:B>(x:T):Void x.m(); }'
+		]);
+		for (fn in ['Shadow.methodShadow', 'Shadow.localShadow#g']) {
+			Assert.equals(1, edges(g, fn, 'A.m', Call).length, fn);
+			Assert.equals(1, edges(g, fn, 'SubA.m', Virtual).length, fn);
+			Assert.equals(0, edges(g, fn, 'B.m', Call).length, fn);
+		}
+		Assert.equals(1, edges(g, 'Shadow.own', 'B.m', Call).length);
+		Assert.equals(0, edges(g, 'Shadow.own', 'A.m', Call).length);
+	}
+
+	/**
+	 * `this` inside an abstract is its UNDERLYING value, read from the declaration's type slot — never a bound its type
+	 * parameters project among the children; an abstract over one of its own parameters is a value of that bound.
+	 */
+	@:pin('control') @:killer('M-GRAPH-ABSTRACT-UNDER-SLOT') @:killer('M-GRAPH-ABSTRACT-PARAM-BOUND')
+	public function testThisInsideAnAbstractIsItsUnderlyingNotAParameterBound(): Void {
+		final g: CallGraph = graphOf([
+			'class Foo { public function m():Void {} }',
+			'class A { public function m():Void {} }',
+			'class SubA extends A { override public function m():Void {} }',
+			'class B { public function m():Void {} }',
+			'abstract X<T:B>(Foo) { function f():Void this.m(); }',
+			'abstract W<T:A>(T) { function f():Void this.m(); }'
+		]);
+		Assert.equals(1, edges(g, 'X.f', 'Foo.m', Call).length);
+		Assert.equals(0, edges(g, 'X.f', 'B.m', Call).length);
+		Assert.equals(1, edges(g, 'W.f', 'A.m', Call).length);
+		Assert.equals(1, edges(g, 'W.f', 'SubA.m', Virtual).length);
+	}
+
+	/** Two types sharing a simple name keep their own bounds: `p1.Gen<T:A>` is not read with `p2.Gen<T:B>`'s. */
+	@:pin('control') @:killer('M-GRAPH-BOUNDS-BY-FILE')
+	public function testTypeParameterBoundsOfSameNamedTypesStayApart(): Void {
+		final g: CallGraph = CallGraph.build([
+			{ file: 'A.hx', source: 'class A { public function m():Void {} }' },
+			{ file: 'B.hx', source: 'class B { public function m():Void {} }' },
+			{ file: 'p1/Gen.hx', source: 'package p1; class Gen<T:A> { function f(x:T):Void x.m(); }' },
+			{ file: 'p2/Gen.hx', source: 'package p2; class Gen<T:B> { function h(x:T):Void x.m(); }' }
+		], new CachingGrammarPlugin(new HaxeQueryPlugin()));
+		Assert.equals(1, edges(g, 'Gen.f', 'A.m', Call).length);
+		Assert.equals(0, edges(g, 'Gen.f', 'B.m', Call).length);
+		Assert.equals(1, edges(g, 'Gen.h', 'B.m', Call).length);
+		Assert.equals(0, edges(g, 'Gen.h', 'A.m', Call).length);
+	}
+
 	@:pin('control') @:killer('M-GRAPH-TYPEDEF-ALIAS')
 	public function testTypedefAliasIsSeenThrough(): Void {
 		final g: CallGraph = graphOf([

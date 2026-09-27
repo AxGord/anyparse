@@ -36,4 +36,11 @@ typedef SpanTypeInfo = {
 	final declaredTypeSources: Map<Int, String>;
 	final castTargetSources: Map<Int, String>;
 	final typeParamNames: Map<Int, Array<String>>;
+
+	/**
+	 * The bounds of the type parameters `typeParamNames` lists, keyed the same way and then by parameter name: the verbatim
+	 * source of each bound in written order (`<W:A & B>` -> `W` -> `['A', 'B']`). An unbounded parameter is absent. Only the
+	 * batched bundle carries it — no `TypeInfoProvider` accessor mirrors it, so a non-batching plugin answers none.
+	 */
+	final typeParamConstraints: Map<Int, Map<String, Array<String>>>;
 };

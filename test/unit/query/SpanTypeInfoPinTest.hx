@@ -161,6 +161,30 @@ class SpanTypeInfoPinTest extends Test {
 		], seen);
 	}
 
+	/**
+	 * A type parameter's bounds are kept verbatim, in written order, under the declaration that declares it and the
+	 * parameter's name — the first bound and every `& Type` after it; an unbounded parameter has no entry.
+	 */
+	@:pin('control') @:killer('M-SPANINFO-BOUND-MORE')
+	public function testTypeParamConstraintsAreKeyedByDeclarationAndName(): Void {
+		final src: String = 'class Cell<D:A & B, K> {\n\tfunction f<U:Array<Int>, V>(x:U):Void {}\n}\nfinal class F<Z:pkg.Q<Int>> {}';
+		final tree: QueryNode = new HaxeQueryPlugin().parseFile(src);
+		final bounds: Map<Int, Map<String, Array<String>>> = new HaxeQueryPlugin().spanTypeInfo(src).typeParamConstraints;
+		final seen: Array<String> = [];
+		function walk(node: QueryNode): Void {
+			final span: Null<Span> = node.span;
+			final own: Null<Map<String, Array<String>>> = span == null ? null : bounds[span.from];
+			if (own != null) {
+				final names: Array<String> = [for (name in own.keys()) name];
+				names.sort(Reflect.compare);
+				for (name in names) seen.push('${node.kind}:$name=${(own[name] ?? []).join('|')}');
+			}
+			for (c in node.children) walk(c);
+		}
+		walk(tree);
+		Assert.same(['ClassDecl:D=A|B', 'FnMember:U=Array<Int>', 'ClassForm:Z=pkg.Q<Int>'], seen);
+	}
+
 	private static function assertBundleMatches(
 		bundle: SpanTypeInfo, declaredTypes: Map<Int, String>, returnTypes: Map<Int, String>, propertyAccessors: Map<Int, Bool>,
 		propertyWriteAccessors: Map<Int, Bool>, declaredTypeSources: Map<Int, String>, castTargetSources: Map<Int, String>, src: String
