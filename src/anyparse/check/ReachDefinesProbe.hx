@@ -192,7 +192,7 @@ final class ReachDefinesProbe {
 	/** The configuration the compile `run` of `oracle` reports (`parse`), its paths made canonical, or null. */
 	private static function answer(oracle: OracleConfig, run: HaxeRun): Null<ReachConfiguration> {
 		if (run.failure != '' || run.status != 0) return null;
-		final read: Null<ReachConfiguration> = parse(LintConfig.describeOracle(oracle), run.out);
+		final read: Null<ReachConfiguration> = parse(OracleDeclaration.describeOracle(oracle), run.out);
 		if (read == null) return null;
 		final root: String = oracle.dir ?? Sys.getCwd();
 		// the probe's own macro is not the build's code

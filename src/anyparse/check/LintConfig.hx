@@ -5,6 +5,7 @@ import anyparse.check.config.ApqLintConfigParser;
 import anyparse.grammar.json.JValue;
 import anyparse.query.ConfigFinder;
 import anyparse.query.NamingPolicy.FrameworkContract;
+import anyparse.query.format.LintFormat;
 import haxe.Exception;
 import haxe.io.Path;
 
@@ -98,6 +99,7 @@ typedef LintDocument = {
 	var ?resolutionStd: Bool;
 	var ?languageVersion: String;
 	var ?frameworks: Array<FrameworkContract>;
+	var ?reportSummaryThreshold: Int;
 
 	/** Read off the document as PARSED, never off a merged one — a fold has already decided where the chain ends. */
 	var ?inherit: Bool;
@@ -182,11 +184,15 @@ final class LintConfig {
 	/** Ready diagnostic lines for the per-ENTRY drops this document survived — see `drops`. */
 	private final _drops: Array<String>;
 
+	/** How many findings a text report lists before it summarises them (`reportSummaryThreshold`); see the accessor. */
+	private final _reportSummaryThreshold: Int;
+
 	public function new(
 		rules: Map<String, RuleConfig>, ?compilerOracles: Array<OracleConfig>, ?resolutionRoots: Array<String>,
 		?resolutionLibs: Array<String>, ?resolutionStd: Bool, ?compilerOracleServer: Bool, ?languageVersion: String,
-		?frameworks: Array<FrameworkContract>, ?drops: Array<String>, ?reachConfigurationsComplete: Bool
+		?frameworks: Array<FrameworkContract>, ?drops: Array<String>, ?reachConfigurationsComplete: Bool, ?reportSummaryThreshold: Int
 	) {
+		_reportSummaryThreshold = reportSummaryThreshold ?? LintFormat.DEFAULT_REPORT_SUMMARY_THRESHOLD;
 		_reachConfigurationsComplete = reachConfigurationsComplete ?? false;
 		_rules = rules;
 		_compilerOracles = compilerOracles ?? [];
@@ -283,6 +289,16 @@ final class LintConfig {
 	 */
 	public function resolutionStd(): Bool {
 		return _resolutionStd;
+	}
+
+	/**
+	 * How many findings a TEXT `apq lint` report may list one per line before it prints a per-rule
+	 * summary instead (`reportSummaryThreshold`, default `LintFormat.DEFAULT_REPORT_SUMMARY_THRESHOLD`). Zero or
+	 * less never summarises. `--full` / `--summary` override it per run; json and checkstyle are
+	 * never summarised. A project-level key: the run reads it off the config of its first path.
+	 */
+	public function reportSummaryThreshold(): Int {
+		return _reportSummaryThreshold;
 	}
 
 	/**
@@ -569,27 +585,6 @@ final class LintConfig {
 		return baseDir == null || Path.isAbsolute(path) ? path : Path.normalize(Path.join([baseDir, path]));
 	}
 
-	/**
-	 * One configuration named for a diagnostic: its hxml, plus the defines it adds when it
-	 * declares any.
-	 *
-	 * Every message that used to quote a bare hxml path now has several configurations to tell
-	 * apart, and two of them can share one hxml and differ only in a define.
-	 */
-	public static function describeOracle(oracle: OracleConfig): String {
-		return oracle.defines.length == 0 ? oracle.hxml : '${oracle.hxml} -D ${oracle.defines.join(' -D ')}';
-	}
-
-	/**
-	 * One string per distinct compile a configuration describes: hxml, directory, and defines in
-	 * declared order, each separated by a newline no path or define name carries. The ONE spelling
-	 * every "same configuration?" question shares — the coverage memo, the warm server's state file,
-	 * a report's dedupe — so two of them cannot disagree on what counts as the same build.
-	 */
-	public static function oracleKey(oracle: OracleConfig): String {
-		return [oracle.hxml, oracle.dir ?? ''].concat(oracle.defines).join('\n');
-	}
-
 	/** Guarded stderr write — mirrors `Cli.stderr` (`#if sys` alone is false on hxnodejs). */
 	private static function stderr(s: String): Void {
 		#if (sys || nodejs)
@@ -628,6 +623,7 @@ final class LintConfig {
 			resolutionStd: near.resolutionStd ?? far.resolutionStd,
 			languageVersion: near.languageVersion ?? far.languageVersion,
 			frameworks: near.frameworks ?? far.frameworks,
+			reportSummaryThreshold: near.reportSummaryThreshold ?? far.reportSummaryThreshold,
 			drops: near.drops.concat(far.drops)
 		};
 	}
@@ -650,7 +646,7 @@ final class LintConfig {
 	private static function fromDocument(doc: LintDocument): LintConfig {
 		return new LintConfig(
 			doc.rules, doc.compilerOracles, doc.resolutionRoots, doc.resolutionLibs, doc.resolutionStd, doc.compilerOracleServer,
-			doc.languageVersion, doc.frameworks, doc.drops, doc.reachConfigurationsComplete
+			doc.languageVersion, doc.frameworks, doc.drops, doc.reachConfigurationsComplete, doc.reportSummaryThreshold
 		);
 	}
 
@@ -693,6 +689,7 @@ final class LintConfig {
 			resolutionStd: config.resolutionStd,
 			languageVersion: config.languageVersion,
 			frameworks: frameworks,
+			reportSummaryThreshold: config.reportSummaryThreshold,
 			inherit: config.inherit,
 			drops: drops
 		};

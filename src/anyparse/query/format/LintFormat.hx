@@ -1,9 +1,13 @@
 package anyparse.query.format;
 
 import anyparse.check.Check.Violation;
+import anyparse.check.Severity;
 import anyparse.runtime.LineIndex;
 import anyparse.runtime.Span;
 import haxe.Json;
+
+using Lambda;
+using StringTools;
 
 /**
  * Machine-readable renderers for analysis-check violations — the JSON and
@@ -16,6 +20,57 @@ import haxe.Json;
  */
 @:nullSafety(Strict)
 final class LintFormat {
+
+	/** Files named under each rule of a summary that spans several rules. */
+	public static inline final SUMMARY_FILES_PER_RULE: Int = 3;
+
+	/** Files named, one per line, when a summary covers ONE rule — the by-file breakdown a `--rule` run asks for. */
+	public static inline final SUMMARY_FILES_SINGLE_RULE: Int = 10;
+
+	/**
+	 * `violations` condensed for a reader who cannot use them one per line: one line per rule —
+	 * `<rule>  <count>  <severity>  <files> file(s)` — sorted by count, most first (ties by rule id),
+	 * each followed by the files holding most of that rule's findings.
+	 *
+	 * Several rules name their top `SUMMARY_FILES_PER_RULE` files on one indented line; a summary of
+	 * ONE rule (a `--rule` run over a wide scope) is a by-file breakdown instead, the top
+	 * `SUMMARY_FILES_SINGLE_RULE` files one per line. Either way a file cut off is counted, never
+	 * dropped silently. A rule reported at more than one severity (a per-directory override) lists
+	 * each, most severe first.
+	 */
+	public static function summary(violations: Array<Violation>): String {
+		final rules: Array<String> = [];
+		final byRule: Map<String, Array<Violation>> = [];
+		for (v in violations) {
+			final group: Null<Array<Violation>> = byRule[v.rule];
+			if (group == null) {
+				rules.push(v.rule);
+				byRule[v.rule] = [v];
+			} else
+				group.push(v);
+		}
+		final countOf: String -> Int = rule -> byRule[rule]?.length ?? 0;
+		rules.sort((a, b) -> countOf(a) != countOf(b) ? countOf(b) - countOf(a) : Reflect.compare(a, b));
+		final idWidth: Int = rules.fold((rule, width) -> rule.length > width ? rule.length : width, 0);
+		final countWidth: Int = rules.fold((rule, width) -> '${countOf(rule)}'.length > width ? '${countOf(rule)}'.length : width, 0);
+		final buf: StringBuf = new StringBuf();
+		for (rule in rules) {
+			final group: Array<Violation> = byRule[rule] ?? [];
+			final files: Array<{ file: String, count: Int }> = countByFile(group);
+			buf.add(
+				'${rule.rpad(' ', idWidth)}  ${'${group.length}'.lpad(' ', countWidth)}  ${severitiesOf(group)}  ${files.length} file(s)\n'
+			);
+			if (rules.length == 1) {
+				for (f in files.slice(0, SUMMARY_FILES_SINGLE_RULE)) buf.add('  ${'${f.count}'.lpad(' ', countWidth)}  ${f.file}\n');
+				if (files.length > SUMMARY_FILES_SINGLE_RULE) buf.add('  ... +${files.length - SUMMARY_FILES_SINGLE_RULE} more file(s)\n');
+			} else {
+				final named: Array<String> = [for (f in files.slice(0, SUMMARY_FILES_PER_RULE)) '${f.file} (${f.count})'];
+				if (files.length > SUMMARY_FILES_PER_RULE) named.push('+${files.length - SUMMARY_FILES_PER_RULE} more');
+				buf.add('    ${named.join(', ')}\n');
+			}
+		}
+		return buf.toString();
+	}
 
 	/**
 	 * Render `violations` as a pretty-printed JSON array of
@@ -135,5 +190,32 @@ final class LintFormat {
 		cache[file] = built;
 		return built;
 	}
+
+	/** Each file of `group` with its finding count, most first (ties by path). */
+	private static function countByFile(group: Array<Violation>): Array<{ file: String, count: Int }> {
+		final order: Array<String> = [];
+		final counts: Map<String, Int> = [];
+		for (v in group) {
+			final seen: Null<Int> = counts[v.file];
+			if (seen == null) order.push(v.file);
+			counts[v.file] = (seen ?? 0) + 1;
+		}
+		final files: Array<{ file: String, count: Int }> = [for (file in order) { file: file, count: counts[file] ?? 0 }];
+		files.sort((a, b) -> a.count != b.count ? b.count - a.count : Reflect.compare(a.file, b.file));
+		return files;
+	}
+
+	/** The distinct severity labels of `group`, most severe first, joined by `/`. */
+	private static function severitiesOf(group: Array<Violation>): String {
+		final levels: Array<Severity> = [Severity.Error, Severity.Warning, Severity.Info];
+		return [for (level in levels) if (group.exists(v -> v.severity == level)) level.label()].join('/');
+	}
+
+	/**
+	 * The findings a text report lists before summarising when no `reportSummaryThreshold` is declared.
+	 * Sized for a reader rather than a tool: a few screens, and well above what one file's lint yields
+	 * in practice, so a per-file run keeps its list.
+	 */
+	public static inline final DEFAULT_REPORT_SUMMARY_THRESHOLD: Int = 200;
 
 }

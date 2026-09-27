@@ -302,6 +302,27 @@ final class OracleDeclaration {
 		#end
 	}
 
+	/**
+	 * One configuration named for a diagnostic: its hxml, plus the defines it adds when it
+	 * declares any.
+	 *
+	 * Every message that used to quote a bare hxml path now has several configurations to tell
+	 * apart, and two of them can share one hxml and differ only in a define.
+	 */
+	public static function describeOracle(oracle: OracleConfig): String {
+		return oracle.defines.length == 0 ? oracle.hxml : '${oracle.hxml} -D ${oracle.defines.join(' -D ')}';
+	}
+
+	/**
+	 * One string per distinct compile a configuration describes: hxml, directory, and defines in
+	 * declared order, each separated by a newline no path or define name carries. The ONE spelling
+	 * every "same configuration?" question shares — the coverage memo, the warm server's state file,
+	 * a report's dedupe — so two of them cannot disagree on what counts as the same build.
+	 */
+	public static function oracleKey(oracle: OracleConfig): String {
+		return [oracle.hxml, oracle.dir ?? ''].concat(oracle.defines).join('\n');
+	}
+
 }
 
 /**

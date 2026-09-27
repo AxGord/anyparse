@@ -288,6 +288,12 @@ writer reflowed onto a continuation line still lands — and `// CHECKSTYLE:OFF`
 <error|warning|info>` exits non-zero when a finding at or above that severity survives
 (default: report-only, exit 0), and `--format <text|json|checkstyle>` switches the
 output — checkstyle XML the same CI tooling that reads `checkstyle.json` can ingest.
+A TEXT report that would list more findings than the top-level `"reportSummaryThreshold"`
+(default 200, `0` = never) prints a per-rule summary instead — count, severity and top
+files per rule, most findings first; one rule gets its top files one per line — and a
+stderr line naming the ways to the full list: `--full` (always list), `--rule <id>` or a
+smaller scope, `--format json` (json and checkstyle always list). `--summary` forces the
+summary.
 `--list-rules` prints every registered check as `id  description`, one per line, in
 registration order and exits — the machine-consumable listing (review tooling
 subtracts linter-owned rules from manual checklists by it; the check table below is

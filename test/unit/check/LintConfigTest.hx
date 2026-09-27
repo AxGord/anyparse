@@ -3,6 +3,7 @@ package unit.check;
 import anyparse.check.Check.Violation;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
+import anyparse.check.OracleDeclaration;
 import anyparse.check.Severity;
 import anyparse.check.UnusedImport;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
@@ -278,7 +279,8 @@ class LintConfigTest extends Test {
 			}
 		], withDefines, 'two configurations may share one hxml and differ only in a define');
 		Assert.equals(
-			'/proj/build.hxml -D GRID_MODE -D android', LintConfig.describeOracle(withDefines[1]), 'and a diagnostic can tell them apart'
+			'/proj/build.hxml -D GRID_MODE -D android', OracleDeclaration.describeOracle(withDefines[1]),
+			'and a diagnostic can tell them apart'
 		);
 	}
 

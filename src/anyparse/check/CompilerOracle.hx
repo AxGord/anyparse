@@ -232,7 +232,7 @@ final class CompilerOracle {
 	 * never the sentence — see `OracleExclusion`.
 	 */
 	public static function exclusionKey(exclusion: OracleExclusion): String {
-		return '${LintConfig.oracleKey(exclusion.config)}\n${exclusion.cause}';
+		return '${OracleDeclaration.oracleKey(exclusion.config)}\n${exclusion.cause}';
 	}
 
 	/** The sentences of `exclusions`, in order — what a decline's reason list quotes. */
@@ -347,7 +347,7 @@ final class CompilerOracle {
 	 * dump per configuration would bury the list it belongs to.
 	 */
 	private static function exclusion(oracle: OracleConfig, outcome: OracleOutcome): String {
-		final named: String = LintConfig.describeOracle(oracle);
+		final named: String = OracleDeclaration.describeOracle(oracle);
 		return switch outcome {
 			case Confirmed: named;
 			case Unavailable(reason): '$named was excluded — it could not run ($reason)';

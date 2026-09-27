@@ -5,6 +5,7 @@ import anyparse.check.Severity;
 import anyparse.query.Cli;
 import anyparse.query.cli.CliArgs;
 import anyparse.query.cli.command.LintCommand;
+import anyparse.query.format.LintFormat;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -193,6 +194,94 @@ class LintReportChannelSliceTest extends Test {
 	}
 
 	/**
+	 * The threshold decides between the list and the summary, and nothing else does except the two flags.
+	 *
+	 * RED under M-LINT-SUMMARY-NEVER (the decision always answers "list"): every `isTrue` below goes red,
+	 * while the `isFalse` arms — at the threshold, a machine format, a non-positive threshold, `--full` —
+	 * stay green and are what separate "summarises over the threshold" from "summarises always".
+	 */
+	@:pin('control')
+	@:killer('M-LINT-SUMMARY-NEVER')
+	public function testTheThresholdDecidesBetweenListAndSummary(): Void {
+		Assert.isTrue(LintCommand.summarises(201, 'text', null, 200), 'over the threshold is summarised');
+		Assert.isFalse(LintCommand.summarises(200, 'text', null, 200), 'AT the threshold still lists');
+		Assert.isFalse(LintCommand.summarises(5000, 'json', null, 200), 'json always lists');
+		Assert.isFalse(LintCommand.summarises(5000, 'checkstyle', true, 200), 'checkstyle too, whatever is forced');
+		Assert.isFalse(LintCommand.summarises(5000, 'text', null, 0), 'a threshold of zero never summarises');
+		Assert.isFalse(LintCommand.summarises(5000, 'text', false, 200), '--full lists over the threshold');
+		Assert.isTrue(LintCommand.summarises(1, 'text', true, 200), '--summary summarises under it');
+	}
+
+	/**
+	 * A summary of several rules is one line per rule, most findings first, each with its top files; a
+	 * summary of ONE rule is a by-file breakdown instead.
+	 *
+	 * RED under M-LINT-SUMMARY-ONE-SHAPE (the single-rule branch cut, so one rule gets the inline top-3
+	 * line): the one-per-line file rows and the `+N more file(s)` tail go red. The multi-rule
+	 * assertions are green under the arm and pin that the cut changed only the one-rule shape.
+	 */
+	@:pin('control')
+	@:killer('M-LINT-SUMMARY-ONE-SHAPE')
+	public function testASummaryIsPerRuleAndOneRuleIsByFile(): Void {
+		final many: Array<Violation> = [
+			for (i in 0...12) finding('F$i.hx', 'rule-a', Severity.Warning)
+		].concat([
+			finding('F0.hx', 'rule-a', Severity.Warning),
+			finding('G.hx', 'rule-b', Severity.Error)
+		]);
+		final mixed: String = LintFormat.summary(many.concat([finding('G.hx', 'rule-b', Severity.Info)]));
+		final lines: Array<String> = mixed.split('\n');
+		Assert.isTrue(lines[0].startsWith('rule-a  13  warning  12 file(s)'), 'the rule with most findings leads: $mixed');
+		Assert.equals('    F0.hx (2), F1.hx (1), F10.hx (1), +9 more', lines[1], 'its top 3 files, most first, the rest counted');
+		Assert.isTrue(lines[2].startsWith('rule-b   2  error/info  1 file(s)'), 'a rule at two severities names both, worst first: $mixed');
+
+		final one: String = LintFormat.summary(many.filter(v -> v.rule == 'rule-a'));
+		final rows: Array<String> = one.split('\n');
+		Assert.equals('rule-a  13  warning  12 file(s)', rows[0]);
+		Assert.equals('   2  F0.hx', rows[1], 'one rule lists its files one per line: $one');
+		Assert.equals(13, rows.length, 'the header, ten file rows, the tail and the trailing newline: $one');
+		Assert.equals('  ... +2 more file(s)', rows[11]);
+	}
+
+	/**
+	 * END TO END: a text run over its `reportSummaryThreshold` prints the summary on stdout and the way
+	 * to the full list on stderr; `--full` restores the list; `--summary` with a machine format is refused.
+	 *
+	 * RED under M-LINT-SUMMARY-THRESHOLD-UNREAD (the config key ignored, so the default 200 applies and
+	 * three findings are listed): the summary assertions go red. The `--full` and refusal arms are green
+	 * under it and pin that the flags do not ride on the config.
+	 */
+	@:pin('control')
+	@:killer('M-LINT-SUMMARY-THRESHOLD-UNREAD')
+	public function testATextRunOverTheThresholdPrintsTheSummary(): Void {
+		#if nodejs
+		final dir: String = CliFixture.writeDir('lintsum', [
+			{ name: 'apqlint.json', source: '{ "reportSummaryThreshold": 2 }' },
+			{
+				name: 'C.hx',
+				source: 'package pkg;\n\nclass C {\n\n\tpublic function f(k: Int): Int {\n\t\treturn k * 7 + k * 9 + k * 11;\n\t}\n\n}\n'
+			}
+		]);
+		final args: Array<String> = ['lint', '--rule', 'magic-number', '--no-oracle', dir];
+		var summary: String = '';
+		final noise: String = CliFixture.captureStderr(() -> summary = captureStdout(() -> Cli.run(args)));
+		Assert.isTrue(summary.startsWith('magic-number  3  warning  1 file(s)\n'), 'three findings over a threshold of 2: $summary');
+		Assert.equals(-1, summary.indexOf(':6:'), 'and no finding is listed: $summary');
+		Assert.isTrue(noise.indexOf('the full list: --full') != -1, 'stderr names the way back: $noise');
+
+		final full: String = captureStdout(() -> Cli.run(args.concat(['--full'])));
+		Assert.equals(3, full.split('\n').filter(l -> l.indexOf('magic number') != -1).length, '--full lists all three: $full');
+
+		var exit: Int = 0;
+		CliFixture.captureStderr(() -> exit = Cli.run(args.concat(['--summary', '--format', 'json'])));
+		Assert.equals(2, exit, 'a summary of a machine format is a usage error');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('stdout capture needs the node target');
+		#end
+	}
+
+	/**
 	 * `fn`'s writes to stdout, captured.
 	 *
 	 * `Cli.run` reports through `Sys.print`, which on node is `process.stdout.write` — there is no
@@ -246,6 +335,17 @@ class LintReportChannelSliceTest extends Test {
 				message: 'a warning'
 			}
 		];
+	}
+
+	/** A span-less finding of `rule` at `severity` in `file`. */
+	private static function finding(file: String, rule: String, severity: Severity): Violation {
+		return {
+			file: file,
+			span: null,
+			rule: rule,
+			severity: severity,
+			message: 'm'
+		};
 	}
 
 }

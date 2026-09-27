@@ -130,7 +130,7 @@ final class TypedFactsProbe {
 				asked.push(prepared)
 			else
 				dropped.push({
-					name: LintConfig.describeOracle(oracles[i]),
+					name: OracleDeclaration.describeOracle(oracles[i]),
 					reason: oracles[i].unavailable ?? 'its probe directory could not be written'
 				});
 		}
@@ -188,7 +188,7 @@ final class TypedFactsProbe {
 			if (dump != null)
 				facts.add(dump)
 			else
-				facts.dropped.push({ name: LintConfig.describeOracle(asked[i].oracle), reason: failureOf(runs[i]) });
+				facts.dropped.push({ name: OracleDeclaration.describeOracle(asked[i].oracle), reason: failureOf(runs[i]) });
 			discard(asked[i].dir);
 		}
 		return facts;
@@ -274,7 +274,7 @@ final class TypedFactsProbe {
 		if (run.failure != '' || run.status != 0) return null;
 		final text: Null<String> = try sys.io.File.getContent(out) catch (exception: haxe.Exception) null;
 		if (text == null) return null;
-		return { name: LintConfig.describeOracle(oracle), text: text, file: memoised(oracle.dir ?? Sys.getCwd()) };
+		return { name: OracleDeclaration.describeOracle(oracle), text: text, file: memoised(oracle.dir ?? Sys.getCwd()) };
 	}
 
 	/** `OracleCoverage.canonical` against `root`, each path resolved once: a facts file names one path on many lines. */
