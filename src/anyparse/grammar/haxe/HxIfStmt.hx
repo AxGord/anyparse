@@ -39,14 +39,19 @@ package anyparse.grammar.haxe;
  * (`PrevBodyInfo.headGlue`) and routes a glued close to `sameLineElse` as a curly close is
  * routed. `@:fmt(dropSingleStmtBraces)` on BOTH bodies opts into `opt.dropSingleStmtBraces`
  * (`SingleStmtBraces.unwrapStmt`, trivia mode only, every safety gate fails closed).
+ * `@:fmt(trailOptKeepIf('elementIsConditional_HxStatement'))` on BOTH bodies keeps the
+ * `@:trailOpt(';')` slot after a `#if` region, whose last branch may end unterminated
+ * (`#if d b() #else c() #end;`): there the `;` is the statement's terminator, not a redundant one.
  */
 @:peg
 typedef HxIfStmt = {
 	@:lead('(') @:trail(')') @:fmt(condWrap('conditionWrap'), condParensInside('ifCondParensInsideOpen', 'ifCondParensInsideClose'),
 		captureCondOpenNewline) var cond: HxExpr;
 	@:trailOpt(';') @:fmt(bodyPolicy('ifBody', 'expressionIfBody'), fitLineIfWithElse, clearElseIfBranch,
-		elseSwitch('elseSwitch', 'SwitchStmt', 'SwitchStmtBare'), dropSingleStmtBraces) var thenBody: HxStatement;
+		elseSwitch('elseSwitch', 'SwitchStmt', 'SwitchStmtBare'), dropSingleStmtBraces,
+		trailOptKeepIf('elementIsConditional_HxStatement')) var thenBody: HxStatement;
 	@:optional @:trailOpt(';') @:kw('else') @:fmt(sameLine('sameLineElse'), shapeAware, semicolonNextLineElse,
 		bodyPolicy('elseBody', 'expressionElseBody'), elseIf, elseSwitch('elseSwitch', 'SwitchStmt', 'SwitchStmtBare'),
-		elseIfCommentReflow, fitLineIfWithElse, propagateElseIfBranch, dropSingleStmtBraces) var elseBody: Null<HxStatement>;
+		elseIfCommentReflow, fitLineIfWithElse, propagateElseIfBranch, dropSingleStmtBraces,
+		trailOptKeepIf('elementIsConditional_HxStatement')) var elseBody: Null<HxStatement>;
 };

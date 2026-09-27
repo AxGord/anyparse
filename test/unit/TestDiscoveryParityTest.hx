@@ -572,6 +572,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.grammar.haxe.HxCondDeclPrefixKeywordSliceTest',
 		'unit.grammar.haxe.HxCondDeclPrefixSliceTest',
 		'unit.grammar.haxe.HxCondElseifChainBlankTest',
+		'unit.grammar.haxe.HxCondEndTerminatorSliceTest',
 		'unit.grammar.haxe.HxCondExprValueFixpointSliceTest',
 		'unit.grammar.haxe.HxCondForContainerGlueSliceTest',
 		'unit.grammar.haxe.HxCondHeritageSliceTest',
@@ -1941,6 +1942,12 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testNestedComprehensionsChooseTheSameLayout :: control :: M-ELSE-GATE',
 			'unit.grammar.haxe.HxComprehensionIfElseBodySliceTest#testNestedComprehensionsUnderFitLineStaircase :: control :: '
 				+ 'M-FIRST-LINE-FIT',
+			'unit.grammar.haxe.HxCondEndTerminatorSliceTest#testElseBodyKeepsSemiAfterEnd :: control :: M-TRAILOPT-KEEP-OFF',
+			'unit.grammar.haxe.HxCondEndTerminatorSliceTest#testElseIfChainTailKeepsSemiUnderRemove :: control :: M-TRAILOPT-KEEP-OFF',
+			'unit.grammar.haxe.HxCondEndTerminatorSliceTest#testLoopBodiesKeepSemiAfterEnd :: control :: M-TRAILOPT-KEEP-OFF',
+			'unit.grammar.haxe.HxCondEndTerminatorSliceTest#testRedundantSemiAfterBlockStillDropped :: control :: M-TRAILOPT-KEEP-UNGATED',
+			'unit.grammar.haxe.HxCondEndTerminatorSliceTest#testTerminatedRegionGainsNoSemi :: control :: M-TRAILOPT-KEEP-PRESENCE-BLIND',
+			'unit.grammar.haxe.HxCondEndTerminatorSliceTest#testThenBodyKeepsSemiAfterEnd :: control :: M-TRAILOPT-KEEP-OFF',
 			'unit.grammar.haxe.HxCondSpliceOwnLineSliceTest#testOwnLineStatementConditionalAfterMetaBlockStaysStructured :: control :: '
 				+ 'M-WORDOP-NO-RESTORE',
 			'unit.grammar.haxe.HxCondUnbalancedRegionSliceTest#testBlockTailRegionCollapsesEmptyCatchBody :: control :: '
@@ -2687,6 +2694,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-ARM-PATH-FLAT',
 			'M-CURLY-CTORS-NONE',
 			'M-SBE-UNGATED',
+			'M-TRAILOPT-KEEP-OFF',
+			'M-TRAILOPT-KEEP-PRESENCE-BLIND',
+			'M-TRAILOPT-KEEP-UNGATED',
 			'M-SKIPSCAN-SCOPEWIDE',
 			'M-CHECKINDEX-PROJECT-FINAL',
 			'M-CHECKINDEX-PROJECT-READONLY',
@@ -3776,6 +3786,9 @@ class TestDiscoveryParityTest extends Test {
 		Assert.same([
 			'M-CURLY-CTORS-NONE :: anyparse.macro.WriterCtorPatternLowering#collectCurlyBlockCtorPatterns',
 			'M-SBE-UNGATED :: anyparse.macro.WriterRefFieldLowering#semicolonBeforeSiblingWrap',
+			'M-TRAILOPT-KEEP-OFF :: anyparse.macro.WriterRefFieldLowering#trailOptKeepIfExpr',
+			'M-TRAILOPT-KEEP-PRESENCE-BLIND :: anyparse.macro.WriterRefFieldLowering#trailOptKeepIfExpr',
+			'M-TRAILOPT-KEEP-UNGATED :: anyparse.macro.WriterRefFieldLowering#trailOptKeepIfExpr',
 			'M-TRY-BODY-SYM-OFF :: anyparse.macro.WriterBraceSymmetryLowering#tryBraceSymmetryWrap',
 			'M-TRY-CATCHES-SYM-OFF :: anyparse.macro.WriterBraceSymmetryLowering#tryCatchesSymmetryWrap',
 			'M-NONCURLY-SAME-DROP :: anyparse.macro.WriterPolicyLowering#sameLineNonCurlyBlockPolicySwitch',

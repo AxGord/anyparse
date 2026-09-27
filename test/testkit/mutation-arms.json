@@ -482,6 +482,29 @@
 			"note": "the optional `;` drop stops being gated on a following sibling, so an else-less value-`if` loses the terminator its enclosing statement needs"
 		},
 		{
+			"name": "M-TRAILOPT-KEEP-OFF",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "trailOptKeepIfExpr",
+			"force": "null",
+			"note": "no body field keeps its `@:trailOpt(';')` slot, so the `;` after an unterminated `#if` region body is dropped and the next statement fails with `Missing ;`"
+		},
+		{
+			"name": "M-TRAILOPT-KEEP-PRESENCE-BLIND",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "trailOptKeepIfExpr",
+			"find": "return macro $structTrailOptAccess == true && $keep ? _dt($v{trailOptText}) : _de();",
+			"replace": "return macro $keep ? _dt($v{trailOptText}) : _de();",
+			"note": "the kept slot stops reading source presence, so a region whose branches carry their own `;` gains a second one after `#end`"
+		},
+		{
+			"name": "M-TRAILOPT-KEEP-UNGATED",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "trailOptKeepIfExpr",
+			"find": "return macro $structTrailOptAccess == true && $keep ? _dt($v{trailOptText}) : _de();",
+			"replace": "return macro $structTrailOptAccess == true ? _dt($v{trailOptText}) : _de();",
+			"note": "the slot is kept for every body, not just a `#if` region, so the redundant `;` after a de-braced block comes back as `;;`"
+		},
+		{
 			"name": "M-SKIPSCAN-SCOPEWIDE",
 			"type": "anyparse.query.RawSourceScan",
 			"method": "admits",
@@ -1881,8 +1904,8 @@
 			"name": "M-SSB-TRAILOPT-REEMIT",
 			"type": "anyparse.macro.WriterRefFieldLowering",
 			"method": "emitMandatoryRefTrail",
-			"find": "\tif (\n\t\t!hasStructFieldTrailOptSlot || isOptional || hasCondWrap || hasCondWrapEnd || trailOptText == null\n\t\t|| child.fmtHasFlag('dropSingleStmtBraces')\n\t)\n\t\treturn;",
-			"replace": "\tif (!hasStructFieldTrailOptSlot || isOptional || hasCondWrap || hasCondWrapEnd || trailOptText == null) return;",
+			"find": "\tif (child.fmtHasFlag('dropSingleStmtBraces')) {\n\t\tfinal keep: Null<Expr> = trailOptKeepIfExpr(child, trailOptText, structTrailOptAccess, fieldAccess);\n\t\tif (keep != null) parts.push(keep);\n\t\treturn;\n\t}",
+			"replace": "",
 			"note": "a brace-droppable field re-emits its `@:trailOpt` slot again, so the redundant `;` a for/if body carried comes back and holds the braces the drop had earned"
 		},
 		{
