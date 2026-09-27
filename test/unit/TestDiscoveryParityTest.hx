@@ -1955,6 +1955,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxCondEndTerminatorSliceTest#testElseIfChainTailKeepsSemiUnderRemove :: control :: M-TRAILOPT-KEEP-OFF',
 			'unit.grammar.haxe.HxCondEndTerminatorSliceTest#testLoopBodiesKeepSemiAfterEnd :: control :: M-TRAILOPT-KEEP-OFF',
 			'unit.grammar.haxe.HxCondEndTerminatorSliceTest#testRedundantSemiAfterBlockStillDropped :: control :: M-TRAILOPT-KEEP-UNGATED',
+			'unit.grammar.haxe.HxCondEndTerminatorSliceTest#testSemiAfterEndStaysBeforeTrailingComment :: control :: M-SEP-GLUE-OFF',
 			'unit.grammar.haxe.HxCondEndTerminatorSliceTest#testTerminatedRegionGainsNoSemi :: control :: M-TRAILOPT-KEEP-PRESENCE-BLIND',
 			'unit.grammar.haxe.HxCondEndTerminatorSliceTest#testThenBodyKeepsSemiAfterEnd :: control :: M-TRAILOPT-KEEP-OFF',
 			'unit.grammar.haxe.HxCondSpliceOwnLineSliceTest#testOwnLineStatementConditionalAfterMetaBlockStaysStructured :: control :: '
@@ -2708,6 +2709,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-TRAILOPT-KEEP-UNGATED',
 			'M-TRAILSEP-KEEP-OFF',
 			'M-TRAILSEP-KEEP-ALL',
+			'M-SEP-GLUE-OFF',
 			'M-REGION-TERM-OFF',
 			'M-INVERT-REGION-UNGUARDED',
 			'M-SKIPSCAN-SCOPEWIDE',
@@ -3804,6 +3806,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-TRAILOPT-KEEP-UNGATED :: anyparse.macro.WriterRefFieldLowering#pushTrailOptKeep',
 			'M-TRAILSEP-KEEP-OFF :: anyparse.macro.TriviaBlockLowering#triviaBlockSepExprs',
 			'M-TRAILSEP-KEEP-ALL :: anyparse.macro.TriviaBlockLowering#triviaBlockSepExprs',
+			'M-SEP-GLUE-OFF :: anyparse.macro.TriviaBlockLowering#triviaBlockSepExprs',
 			'M-TRY-BODY-SYM-OFF :: anyparse.macro.WriterBraceSymmetryLowering#tryBraceSymmetryWrap',
 			'M-TRY-CATCHES-SYM-OFF :: anyparse.macro.WriterBraceSymmetryLowering#tryCatchesSymmetryWrap',
 			'M-NONCURLY-SAME-DROP :: anyparse.macro.WriterPolicyLowering#sameLineNonCurlyBlockPolicySwitch',

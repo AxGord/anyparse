@@ -97,6 +97,19 @@ final class HxCondEndTerminatorSliceTest extends Test {
 		Assert.equals(lambda, HxWriteFixture.triviaWrite(lambda, DEFAULT));
 	}
 
+	/**
+	 * A trailing comment after the kept `;`: the separator is written BEFORE the comment, which
+	 * would otherwise swallow it (`fmt` refused the file as dropping `// c`). Tail and mid-block.
+	 */
+	@:pin('control')
+	@:killer('M-SEP-GLUE-OFF')
+	public function testSemiAfterEndStaysBeforeTrailingComment(): Void {
+		final tail: String = wrap('#if d b() #else c() #end; // c');
+		Assert.equals(tail, HxWriteFixture.triviaWrite(tail, DEFAULT));
+		final mid: String = wrap('#if d b() #else c() #end; // c\n\t\tx();');
+		Assert.equals(mid, HxWriteFixture.triviaWrite(mid, DEFAULT));
+	}
+
 	/** Every other `stmtNoSemi` tail still loses its redundant `;`. */
 	@:pin('control')
 	@:killer('M-TRAILSEP-KEEP-ALL')

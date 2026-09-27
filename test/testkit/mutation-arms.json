@@ -509,17 +509,25 @@
 			"name": "M-TRAILSEP-KEEP-OFF",
 			"type": "anyparse.macro.TriviaBlockLowering",
 			"method": "triviaBlockSepExprs",
-			"find": "(!($lastPredCall) || $lastKeepCall)",
-			"replace": "!($lastPredCall)",
+			"find": "(!($p) || $k)",
+			"replace": "!($p)",
 			"note": "a block's trailing `;` after a `#if` region is dropped again like any `stmtNoSemi` tail, so `#end;` before `}` loses the only terminator of the region's last branch"
 		},
 		{
 			"name": "M-TRAILSEP-KEEP-ALL",
 			"type": "anyparse.macro.TriviaBlockLowering",
 			"method": "triviaBlockSepExprs",
-			"find": "(!($lastPredCall) || $lastKeepCall)",
+			"find": "(!($p) || $k)",
 			"replace": "true",
 			"note": "every source `;` after a block's last element is kept, so the redundant one after a closing `}` comes back"
+		},
+		{
+			"name": "M-SEP-GLUE-OFF",
+			"type": "anyparse.macro.TriviaBlockLowering",
+			"method": "triviaBlockSepExprs",
+			"find": "_sepGlued = _t.trailingComment != null && (_si < _arr.length - 1 ? $ownBetween : $ownTrail);",
+			"replace": "_sepGlued = false;",
+			"note": "an element's separator goes after its trailing comment again, so `#end; // c` comments out its own terminator and `fmt` refuses the file"
 		},
 		{
 			"name": "M-REGION-TERM-OFF",
