@@ -7,6 +7,7 @@ import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
@@ -156,6 +157,7 @@ final class ValueEscapes {
 	private function escapeType(g: CallGraph, out: Array<String>, seen: Map<String, Bool>, typeSource: String): Bool {
 		// noqa: complexity
 		final wrappers: Array<String> = _shape.memberTransparentWrapperTypeNames ?? [];
+		final typeSyntax: TypeSyntaxReader = _scope.plugin.typeSyntax;
 		final catchAll: Array<String> = _shape.catchAllTypeNames ?? [];
 		final fieldKinds: Array<String> = _shape.fieldDeclKinds ?? [];
 		final functionKinds: Array<String> = _shape.functionKinds ?? [];
@@ -163,12 +165,12 @@ final class ValueEscapes {
 		final work: Array<String> = [typeSource];
 		var wi: Int = 0;
 		while (wi < work.length) {
-			final source: String = NominalTypes.unwrapNullable(StringTools.trim(work[wi++]), wrappers);
-			if (source.indexOf('->') >= 0) continue;
-			final nominal: Null<String> = NominalTypes.outerNominalOf(source);
+			final source: String = NominalTypes.unwrapNullable(StringTools.trim(work[wi++]), wrappers, typeSyntax);
+			if (typeSyntax(source)?.holdsFunction() == true) continue;
+			final nominal: Null<String> = NominalTypes.outerNominalOf(source, typeSyntax);
 			if (nominal == null) return false;
 			if (catchAll.contains(nominal) || _g.inertType(source)) continue;
-			final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(source);
+			final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(source, typeSyntax);
 			// a container written without its arguments holds what nothing here says: `Array` is any `Array<T>`
 			if ((args ?? []).length < g.types.generics.typeParamsOf(nominal).length) return false;
 			for (arg in args ?? []) work.push(arg);
@@ -195,7 +197,7 @@ final class ValueEscapes {
 						return false;
 					for (heldType in held) {
 						if (heldType == null) return false;
-						final at: Int = ownParams.indexOf(NominalTypes.outerNominalOf(StringTools.trim(heldType)) ?? '');
+						final at: Int = ownParams.indexOf(NominalTypes.outerNominalOf(StringTools.trim(heldType), typeSyntax) ?? '');
 						if (at < 0) {
 							work.push(heldType);
 							continue;
@@ -534,8 +536,8 @@ final class ValueEscapes {
 		for (fi in _scope.index.allFiles())
 			for (t in fi.types)
 				for (m in t.members)
-					if (functionKinds.contains(m.kind) && m.returnNominal == classType && m.paramTypeSources.exists(p ->
-						p != null && NominalTypes.outerNominalOf(StringTools.trim(p)) == stringType
+					if (functionKinds.contains(m.kind) && m.returnNominal == classType && m.paramTypeSources.exists(
+						p -> p != null && NominalTypes.outerNominalOf(StringTools.trim(p), _scope.plugin.typeSyntax) == stringType
 					) && !producers.contains(m.name))
 						producers.push(m.name);
 		if (producers.length == 0) return true;

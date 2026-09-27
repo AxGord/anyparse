@@ -69,7 +69,7 @@ class ExplicitLocalTypeOracleE2ETest extends Test {
 		final check: ExplicitLocalType = new ExplicitLocalType();
 		final violations: Array<Violation> = check.run([{ file: path, source: SRC }], plugin).filter(v -> v.rule == 'explicit-local-type');
 		Assert.equals(3, violations.length, 'three untyped locals are flagged');
-		final display: Null<CompilerDisplayOracle> = CompilerDisplayOracle.start('check.hxml', dir);
+		final display: Null<CompilerDisplayOracle> = CompilerDisplayOracle.start(new HaxeQueryPlugin().typeSyntax, 'check.hxml', dir);
 		if (display == null) {
 			Assert.pass('display server unavailable — skipped');
 			CliFixture.removeDir(dir);

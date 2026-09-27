@@ -56,7 +56,7 @@ final class RedundantIsCheck implements Check {
 		final index: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
 		return RunScan.collectWith(files, plugin, RunScan.typeInfoOf(plugin), (entry, tree, typed, violations) -> {
 			final root: QueryNode = tree;
-			final types: DeclaredNullity = DeclaredNullity.of(entry.file, root, entry.source, shape, typed, index);
+			final types: DeclaredNullity = DeclaredNullity.of(entry.file, root, entry.source, shape, typed, plugin.typeSyntax, index);
 			final declaredTypeSources: Map<Int, String> = typed.declaredTypeSources(entry.source);
 			final importMap: Map<String, String> = typed.importMap(entry.source, entry.file);
 			function walk(node: QueryNode): Void {

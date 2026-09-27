@@ -13,6 +13,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeSyntax;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -247,7 +248,7 @@ final class PreferComprehension implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		return RunScan.collectWith(files, plugin, readSeams(plugin.refShape()), (entry, tree, seams, violations) -> {
+		return RunScan.collectWith(files, plugin, readSeams(plugin), (entry, tree, seams, violations) -> {
 			for (m in collectMatches(tree, entry.source, seams, plugin.refShape(), plugin.lexicalRegions(entry.source))) violations.push({
 				file: entry.file,
 				span: m.span,
@@ -275,7 +276,7 @@ final class PreferComprehension implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return RunScan.editsWith(plugin, source, readSeams(plugin.refShape()), (tree, seams) -> {
+		return RunScan.editsWith(plugin, source, readSeams(plugin), (tree, seams) -> {
 			final byKey: Map<String, Array<{ span: Span, text: String }>> = [];
 			for (m in collectMatches(tree, source, seams, plugin.refShape(), plugin.lexicalRegions(source)))
 				byKey['${m.span.from}:${m.span.to}'] = m.edits;
@@ -286,7 +287,8 @@ final class PreferComprehension implements Check {
 	}
 
 	/** Bundle the required + optional `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */
-	private static function readSeams(shape: RefShape): Null<ComprehensionSeams> {
+	private static function readSeams(plugin: GrammarPlugin): Null<ComprehensionSeams> {
+		final shape: RefShape = plugin.refShape();
 		final forStmtKind: Null<String> = shape.forStmtKind;
 		if (forStmtKind == null) return null;
 		final localDeclKinds: Array<String> = shape.localDeclKinds ?? [];
@@ -322,6 +324,7 @@ final class PreferComprehension implements Check {
 			indexAccessKind: shape.indexAccessKind,
 			objectFieldKind: shape.objectFieldKind,
 			elementTypeParams: shape.indexedElementTypeParams ?? [],
+			typeSyntax: plugin.typeSyntax,
 			atomKinds: readAtomKinds(shape),
 			pureKinds: readPureKinds(shape),
 			eagerKinds: readEagerKinds(shape)
@@ -438,8 +441,8 @@ final class PreferComprehension implements Check {
 		final scopeSpan: Null<Span> = scope.span;
 		if (declName == null || declSpan == null || initSpan == null || forSpan == null || scopeSpan == null) return null;
 		if (!gapAdmits(source, declName, declSpan, forSpan, gapped)) return null;
-		final annotation: Null<String> = CtorFieldFold.declaredTypeAnnotation(source, declSpan, initSpan, declName);
-		final element: Null<String> = annotation == null ? null : elementTypeOf(annotation, s.elementTypeParams);
+		final annotation: Null<String> = CtorFieldFold.declaredTypeAnnotation(source, decl);
+		final element: Null<String> = annotation == null ? null : elementTypeOf(annotation, s);
 		final acc: ComprehensionAcc = { checks: [], hoisted: [], elementType: element };
 		// A comment on its own line between an ADJACENT pair documents the loop the fix dissolves, so it
 		// is hoisted above the result like a body comment; one trailing the declaration still refuses
@@ -655,41 +658,13 @@ final class PreferComprehension implements Check {
 	 * Null when the annotation is not of that shape, names an unlisted container, or carries too few
 	 * arguments; null means NOTHING is restated, so the link keeps its annotation.
 	 */
-	private static function elementTypeOf(annotation: String, params: Map<String, Int>): Null<String> {
-		final trimmed: String = annotation.trim();
-		final open: Int = trimmed.indexOf('<');
-		final close: Int = trimmed.lastIndexOf('>');
-		if (open < 0 || close != trimmed.length - 1) return null;
-		final at: Null<Int> = params[trimmed.substring(0, open).trim()];
-		if (at == null) return null;
-		final args: Array<String> = splitTypeArguments(trimmed.substring(open + 1, close));
-		return at < args.length ? args[at] : null;
-	}
-
-	/**
-	 * Split a type-argument list on its TOP-LEVEL commas. Bracket depth counts `<`, `(`, `[` and
-	 * `{` against their closers, and a `>` immediately preceded by `-` is the tail of a function
-	 * arrow rather than a closer — without that, `Array<Int -> Int>` mis-splits.
-	 */
-	private static function splitTypeArguments(list: String): Array<String> {
-		final out: Array<String> = [];
-		var depth: Int = 0;
-		var at: Int = 0;
-		for (i in 0...list.length) {
-			final c: Int = list.fastCodeAt(i);
-			if (c == '<'.code || c == '('.code || c == '['.code || c == '{'.code)
-				depth++;
-			else if (c == ')'.code || c == ']'.code || c == '}'.code)
-				depth--;
-			else if (c == '>'.code && (i == 0 || list.fastCodeAt(i - 1) != '-'.code))
-				depth--;
-			else if (c == ','.code && depth == 0) {
-				out.push(list.substring(at, i).trim());
-				at = i + 1;
-			}
-		}
-		out.push(list.substring(at).trim());
-		return out;
+	private static function elementTypeOf(annotation: String, s: ComprehensionSeams): Null<String> {
+		return switch s.typeSyntax(annotation)?.shape {
+			case Nominal(path, args):
+				final at: Null<Int> = s.elementTypeParams[path];
+				at != null && at < args.length ? args[at].text : null;
+			case _: null;
+		};
 	}
 
 	/**
@@ -805,14 +780,13 @@ final class PreferComprehension implements Check {
 		if (useSpan == null || host == null || !useRunsInPlace(host, uses[0], useSpan, name, s)) return null;
 		// Re-bound as non-null locals: field narrowing does not reach an anonymous struct literal.
 		final boundName: String = declName;
-		final declRange: Span = declSpan;
 		final initRange: Span = initSpan;
 		final useRange: Span = useSpan;
 		return {
 			name: boundName,
 			init: init,
 			initSpan: initRange,
-			annotation: CtorFieldFold.declaredTypeAnnotation(ctx.source, declRange, initRange, boundName),
+			annotation: CtorFieldFold.declaredTypeAnnotation(ctx.source, decl),
 			useSpan: useRange,
 			useParent: uses[0].parent,
 			useIndex: uses[0].index,
@@ -1158,6 +1132,10 @@ typedef ComprehensionSeams = {
 	var indexAccessKind: Null<String>;
 	var objectFieldKind: Null<String>;
 	var elementTypeParams: Map<String, Int>;
+
+	/** `GrammarPlugin.typeSyntax` — how an annotation's element type is read. */
+	var typeSyntax: TypeSyntaxReader;
+
 	var atomKinds: Array<String>;
 	var pureKinds: Array<String>;
 	var eagerKinds: Array<String>;

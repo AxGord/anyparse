@@ -9,6 +9,7 @@ import anyparse.query.SourceComments;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
+import anyparse.query.TypeSyntax;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -160,9 +161,10 @@ using StringTools;
  *   (unwrapping only ONE layer, per the rule).
  * - `name = null` and `?name = null` (no type annotation) — skipped: no type text to carry
  *   the rewrite.
- * - A `Null<`-prefixed type text that `unwrapNull` rejects — decorated (e.g. a comment
- *   between the type and the `=`) or malformed; coercing it into the bare-type arm would
- *   prepend `?` without unwrapping, so it stays a safe miss.
+ * - A `Null<…>` type text that is decorated (e.g. a comment between the type and the `=`),
+ *   malformed, or not ONE argument; coercing it into the bare-type arm would prepend `?` without
+ *   unwrapping, so it stays a safe miss. The `Null` wrapper is only ever unwrapped out of an
+ *   undecorated text, because the unwrap splices its argument back without the decoration.
  * - For the FOURTH arm: a parameter with no coalescing read at all, one read some other way, one
  *   whose fallbacks disagree, one whose fallback is not a compile-time constant (a call, an
  *   arithmetic expression, an unresolvable name) or does not fit the declared type, and an
@@ -184,6 +186,9 @@ final class OptionalParamShorthand implements Check {
 
 	/** The rule id — repeated across `id()` and every arm's violation push. */
 	private static inline final RULE_ID: String = 'optional-param-shorthand';
+
+	/** The one nullable wrapper this rule unwraps. */
+	private static inline final NULL_WRAPPER: String = 'Null';
 
 	public function new() {}
 
@@ -305,7 +310,8 @@ final class OptionalParamShorthand implements Check {
 			numericKinds: shape.numericLiteralKinds ?? [],
 			literalTypeNames: shape.literalTypeNames ?? [],
 			negationKind: shape.negationKind,
-			stringFold: plugin.stringFoldSupport()
+			stringFold: plugin.stringFoldSupport(),
+			typeSyntax: plugin.typeSyntax
 		};
 	}
 
@@ -485,14 +491,17 @@ final class OptionalParamShorthand implements Check {
 	 * as a single `Null<T>`, `inner` is `T` (the wrapped arm); otherwise the type text
 	 * stands as its own `inner` (the bare-type arm) — a live compiler probe confirmed
 	 * `p:T = null` and `?p:T` type identically to `(?p:Null<T>)`, so the rewrite is safe
-	 * without unwrapping. A `Null<`-prefixed text that `unwrapNull` rejected (decorated or
-	 * malformed) is refused rather than claimed by the bare arm. For an already-optional
+	 * without unwrapping. A `Null<…>` that is decorated, malformed or of any other arity is refused
+	 * rather than claimed by the bare arm; a decorated text of any other type IS the bare arm, carried
+	 * verbatim. For an already-optional
 	 * parameter (`opt` true) the `= null` default is redundant — `inner` is the type text
 	 * verbatim (no unwrap, so `?x:Null<T> = null` keeps `Null<T>`), and the fix only drops
 	 * the ` = null`. `raw` is always the trimmed type text, used to compose the violation
 	 * message.
 	 */
-	private static function nullableDefaultInner(node: QueryNode, source: String): Null<{ inner: String, raw: String, opt: Bool }> {
+	private static function nullableDefaultInner(
+		node: QueryNode, source: String, typeSyntax: TypeSyntaxReader
+	): Null<{ inner: String, raw: String, opt: Bool }> {
 		final span: Null<Span> = node.span;
 		if (span == null) return null;
 		final opt: Bool = source.fastCodeAt(span.from) == '?'.code;
@@ -500,68 +509,23 @@ final class OptionalParamShorthand implements Check {
 		if (slice == null || slice.defText != 'null') return null;
 		final raw: String = slice.typeText.trim();
 		if (opt) return raw.length > 0 ? { inner: raw, raw: raw, opt: true } : null;
-		final unwrapped: Null<String> = unwrapNull(slice.typeText);
+		final typed: Null<TypeSyntax> = typeSyntax(slice.typeText);
+		if (typed == null) return null;
+		final unwrapped: Null<TypeSyntax> = typed.text == raw ? typed.wrapped([NULL_WRAPPER]) : null;
 		return if (unwrapped != null)
-			{ inner: unwrapped, raw: raw, opt: false }
-		else if (raw.length > 0 && !nullWrapperPrefixed(raw))
+			{ inner: typed.argumentsSource() ?? unwrapped.text, raw: raw, opt: false }
+		else if (!nullApplied(typed))
 			{ inner: raw, raw: raw, opt: false }
 		else
 			null;
 	}
 
-	/**
-	 * The inner `T` of a `Null<T>` type text, else null. The text (trimmed) must be `Null`
-	 * followed by a `<...>` whose matching close is the final character — so a same-prefix
-	 * name (`Nullable<T>`) or trailing tokens are rejected. A `>` preceded by `-` is the
-	 * arrow `->` of a function-type parameter, not an angle close, and does not decrement
-	 * the depth.
-	 */
-	private static function unwrapNull(typeText: String): Null<String> {
-		final t: String = typeText.trim();
-		if (!t.startsWith('Null')) return null;
-		var i: Int = 4;
-		while (i < t.length && t.isSpace(i)) i++;
-		if (i >= t.length || t.fastCodeAt(i) != '<'.code) return null;
-		final open: Int = i;
-		var depth: Int = 0;
-		var close: Int = -1;
-		while (i < t.length) {
-			switch t.fastCodeAt(i) {
-				case '<'.code:
-					depth++;
-				case '>'.code if (t.fastCodeAt(i - 1) != '-'.code):
-					depth--;
-					if (depth == 0) {
-						close = i;
-						break;
-					}
-				case _:
-			}
-			i++;
-		}
-		if (close < 0) return null;
-		// The matching `>` must be the last non-space character, else the text is not a
-		// clean single `Null<...>` (e.g. `Null<Int>Foo`).
-		var j: Int = t.length - 1;
-		while (j > close && t.isSpace(j)) j--;
-		if (j != close) return null;
-		final inner: String = t.substring(open + 1, close).trim();
-		return inner.length > 0 ? inner : null;
-	}
-
-
-	/**
-	 * Whether the trimmed type text opens as a `Null<` wrapper — `Null` followed, after
-	 * optional spaces, by `<`. Such a text that `unwrapNull` still rejected is a decorated
-	 * or malformed `Null<...>` (e.g. a trailing comment before the default's `=`), which
-	 * the bare-type arm must not claim: coercing it would prepend `?` without unwrapping,
-	 * violating the one-layer-unwrap contract.
-	 */
-	private static function nullWrapperPrefixed(t: String): Bool {
-		if (!t.startsWith('Null')) return false;
-		var i: Int = 4;
-		while (i < t.length && t.isSpace(i)) i++;
-		return i < t.length && t.fastCodeAt(i) == '<'.code;
+	/** Whether `t` applies the `Null` wrapper to type arguments — `Null<T>`, or a malformed `Null<A, B>`. */
+	private static function nullApplied(t: TypeSyntax): Bool {
+		return switch t.shape {
+			case Nominal(NULL_WRAPPER, args): args.length > 0;
+			case _: false;
+		};
 	}
 
 	/**
@@ -659,7 +623,7 @@ final class OptionalParamShorthand implements Check {
 		final colon: Int = typeColonOffset(source, span, name);
 		if (colon < 0 || fn == null) return null;
 		final rawType: String = source.substring(colon + 1, span.to).trim();
-		final typeText: Null<String> = hoistTypeText(rawType);
+		final typeText: Null<String> = hoistTypeText(rawType, seams.typeSyntax);
 		if (typeText == null) return null;
 		// Re-bound to a non-null local: strict null-safety does not narrow a captured
 		// parameter across the calls below.
@@ -689,11 +653,17 @@ final class OptionalParamShorthand implements Check {
 	 * nullable after the unwrap, are both refused — `name:Null<T> = CONST` would leave the body type
 	 * nullable and defeat the whole rewrite.
 	 */
-	private static function hoistTypeText(rawType: String): Null<String> {
-		if (rawType.length == 0) return null;
-		final unwrapped: Null<String> = unwrapNull(rawType);
-		final inner: String = unwrapped ?? rawType;
-		return nullWrapperPrefixed(inner) ? null : inner;
+	private static function hoistTypeText(rawType: String, typeSyntax: TypeSyntaxReader): Null<String> {
+		final typed: Null<TypeSyntax> = typeSyntax(rawType);
+		if (typed == null) return null;
+		final unwrapped: Null<TypeSyntax> = typed.text == rawType ? typed.wrapped([NULL_WRAPPER]) : null;
+		final inner: TypeSyntax = unwrapped ?? typed;
+		return if (nullApplied(inner))
+			null
+		else if (unwrapped != null)
+			typed.argumentsSource() ?? unwrapped.text
+		else
+			rawType;
 	}
 
 	/**
@@ -848,7 +818,7 @@ final class OptionalParamShorthand implements Check {
 	 */
 	private static function classify(site: ParamSite, source: String, seams: Seams, scope: HoistScope): Null<ParamArm> {
 		final node: QueryNode = site.node;
-		final shape: Null<{ inner: String, raw: String, opt: Bool }> = nullableDefaultInner(node, source);
+		final shape: Null<{ inner: String, raw: String, opt: Bool }> = nullableDefaultInner(node, source, seams.typeSyntax);
 		if (shape != null) return NullDefault(shape);
 		final rawType: Null<String> = redundantSigil(node, source);
 		if (rawType != null) return RedundantSigil(rawType);
@@ -955,6 +925,9 @@ private typedef Seams = {
 	final literalTypeNames: Map<String, String>;
 	final negationKind: Null<String>;
 	final stringFold: Null<StringFoldSupport>;
+
+	/** `GrammarPlugin.typeSyntax` — how the arms that read a type read it. */
+	final typeSyntax: TypeSyntaxReader;
 };
 
 /**

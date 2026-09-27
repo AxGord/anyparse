@@ -5,6 +5,7 @@ import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ImportKind;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
@@ -49,11 +50,11 @@ typedef UnresolvedWrite = {
 	var thirdParty: Bool;
 }
 
-/** A parsed nominal type source: the simple `name` plus the raw text between its type-parameter brackets, if any. */
+/** A parsed nominal type source: the simple `name`, the written `path` it came from, and its type arguments as written. */
 private typedef NominalParts = {
 	var name: String;
 	var path: String;
-	var params: Null<String>;
+	var args: Array<String>;
 }
 
 /**
@@ -85,6 +86,10 @@ typedef ScanCtx = {
 	var tree: QueryNode;
 	var shape: RefShape;
 	var typeSources: Map<Int, String>;
+
+	/** This file's type-parameter names per declaring span (`TypeInfoProvider.typeParamNames`). */
+	var headerTypeParams: Map<Int, Array<String>>;
+
 	var index: SymbolIndex;
 	var writes: Array<FieldWrite>;
 	var unresolved: Array<UnresolvedWrite>;
@@ -312,7 +317,7 @@ final class FieldWriteIndex {
 		if (!allTyped) return true;
 		final candidateTypeSource: Null<String> = _index.members.memberTypeSourceOf(owner, field);
 		if (candidateTypeSource == null) return true;
-		final parsed: Null<NominalParts> = nominalParse(candidateTypeSource, _unwrapNames);
+		final parsed: Null<NominalParts> = nominalParse(candidateTypeSource, _unwrapNames, _index.typeSyntax);
 		if (parsed == null || _rejectNames.contains(parsed.name) || _builtinNames.contains(parsed.name)) return true;
 		final ownerParams: Null<Array<String>> = _typeParams[owner];
 		if (ownerParams != null && ownerParams.contains(parsed.name)) return true;
@@ -422,12 +427,19 @@ final class FieldWriteIndex {
 			final parsed: Null<QueryNode> = try plugin.parseFile(entry.source) catch (_: Exception) null;
 			if (parsed == null) continue;
 			final tree: QueryNode = parsed;
+			final typed: {
+				sources: Map<Int, String>,
+				params: Map<Int, Array<String>>
+			} = provider == null
+				? { sources: [], params: [] }
+				: { sources: provider.declaredTypeSources(entry.source), params: provider.typeParamNames(entry.source) };
 			final ctx: ScanCtx = {
 				file: entry.file,
 				source: entry.source,
 				tree: tree,
 				shape: shape,
-				typeSources: provider != null ? provider.declaredTypeSources(entry.source) : [],
+				typeSources: typed.sources,
+				headerTypeParams: typed.params,
 				index: symbols,
 				writes: writes,
 				unresolved: unresolved,
@@ -478,7 +490,7 @@ final class FieldWriteIndex {
 					memberFroms: directMemberFroms(node)
 				};
 				final sp: Null<Span> = node.span;
-				if (sp != null) mergeTypeParams(c.typeParams, nm, headerTypeParams(c.source, nm, sp.from));
+				if (sp != null) mergeTypeParams(c.typeParams, nm, c.headerTypeParams[sp.from] ?? []);
 			}
 		}
 		if (c.writeKinds.contains(node.kind)) classify(node, ctx, opaque, c);
@@ -515,7 +527,7 @@ final class FieldWriteIndex {
 				return;
 			}
 			final ts: Null<String> = resolveReceiverTypeSource(recv, typeCtx, c);
-			final owner: Null<String> = ts == null ? null : nominalSimpleName(ts, c.unwrapNames, c.rejectNames);
+			final owner: Null<String> = ts == null ? null : nominalSimpleName(ts, c.unwrapNames, c.rejectNames, c.index.typeSyntax);
 			final rhs: Null<String> = rhsTypeOf(write, c);
 			if (owner != null)
 				record(c, owner, fieldName, span, rhs);
@@ -626,7 +638,7 @@ final class FieldWriteIndex {
 			if (member == null || node.children.length == 0) return null;
 			final recvTs: Null<String> = resolveReceiverTypeSource(node.children[0], typeCtx, c);
 			if (recvTs == null) return null;
-			final recvName: Null<String> = nominalSimpleName(recvTs, c.unwrapNames, c.rejectNames);
+			final recvName: Null<String> = nominalSimpleName(recvTs, c.unwrapNames, c.rejectNames, c.index.typeSyntax);
 			return recvName == null ? null : memberTypeSourceInChain(c.index, recvName, member, []);
 		}
 		if (c.indexKind == null || node.kind != c.indexKind) return null;
@@ -726,41 +738,36 @@ final class FieldWriteIndex {
 	 * dropped. Null when the source is not a plain dotted nominal (a function or
 	 * anonymous-struct type) or names an untypable wrapper (`Dynamic` / `Any`).
 	 */
-	private static function nominalSimpleName(source: String, unwrapNames: Array<String>, rejectNames: Array<String>): Null<String> {
-		final parsed: Null<NominalParts> = nominalParse(source, unwrapNames);
+	private static function nominalSimpleName(
+		source: String, unwrapNames: Array<String>, rejectNames: Array<String>, typeSyntax: TypeSyntaxReader
+	): Null<String> {
+		final parsed: Null<NominalParts> = nominalParse(source, unwrapNames, typeSyntax);
 		return parsed == null || rejectNames.contains(parsed.name) ? null : parsed.name;
 	}
 
 	/**
-	 * Parse a verbatim type source into its nominal simple name, the WRITTEN path that name came
-	 * from, and the raw type-parameter text: `Null<…>` wrappers (`unwrapNames`) unwrapped first,
-	 * then the head validated as a dotted identifier path. Null for any other shape.
+	 * Read a verbatim type source into its nominal simple name, the WRITTEN path that name came
+	 * from, and its type arguments: `Null<…>` wrappers (`unwrapNames`) unwrapped first. Null for
+	 * any other shape — a wrapper applied to other than ONE argument included, since what it wraps
+	 * is then no type at all.
 	 *
 	 * `path` keeps what the annotation actually says, `name` its last segment. A resolver that is
 	 * handed the simple name of a QUALIFIED annotation resolves some other type of that name; one
 	 * handed the path resolves the written one.
 	 */
-	private static function nominalParse(source: String, unwrapNames: Array<String>): Null<NominalParts> {
-		var t: String = source.trim();
-		var unwrapped: Bool = true;
-		while (unwrapped) {
-			unwrapped = false;
-			for (w in unwrapNames) if (t.startsWith(w)) {
-				final rest: String = t.substring(w.length).trim();
-				if (rest.startsWith('<') && rest.endsWith('>')) {
-					t = rest.substring(1, rest.length - 1).trim();
-					unwrapped = true;
-					break;
-				}
-			}
+	private static function nominalParse(source: String, unwrapNames: Array<String>, typeSyntax: TypeSyntaxReader): Null<NominalParts> {
+		var t: Null<TypeSyntax> = typeSyntax(source);
+		while (t != null) switch t.shape {
+			case Nominal(path, [arg]) if (unwrapNames.contains(path)):
+				t = arg;
+			case Nominal(path, args) if (args.length > 0 && unwrapNames.contains(path)):
+				return null;
+			case Nominal(path, args):
+				return { name: SourceText.lastSegment(path), path: path, args: [for (a in args) a.text] };
+			case _:
+				return null;
 		}
-		final lt: Int = t.indexOf('<');
-		if (lt < 0) return isDottedIdentPath(t) ? { name: SourceText.lastSegment(t), path: t, params: null } : null;
-		if (!t.endsWith('>')) return null;
-		final head: String = t.substring(0, lt).trim();
-		return isDottedIdentPath(head)
-			? { name: SourceText.lastSegment(head), path: head, params: t.substring(lt + 1, t.length - 1) }
-			: null;
+		return null;
 	}
 
 	/**
@@ -770,30 +777,10 @@ final class FieldWriteIndex {
 	 * parameters, or the listed parameter is missing.
 	 */
 	private static function elementTypeSource(containerSource: String, c: ScanCtx): Null<String> {
-		final parsed: Null<NominalParts> = nominalParse(containerSource, c.unwrapNames);
+		final parsed: Null<NominalParts> = nominalParse(containerSource, c.unwrapNames, c.index.typeSyntax);
 		if (parsed == null) return null;
-		final params: Null<String> = parsed.params;
 		final at: Null<Int> = c.elementTypeParams[parsed.name];
-		if (params == null || at == null) return null;
-		final split: Array<String> = NominalTypes.splitTypeArgumentList(params);
-		return at < split.length ? split[at] : null;
-	}
-
-	/** Whether `s` is a plain dotted identifier path (`pkg.sub.Name`), with no other characters. */
-	private static function isDottedIdentPath(s: String): Bool {
-		if (s.length == 0) return false;
-		var expectStart: Bool = true;
-		for (i in 0...s.length) {
-			final ch: Int = s.fastCodeAt(i);
-			if (expectStart) {
-				if (!SourceText.isIdentStartChar(ch)) return false;
-				expectStart = false;
-			} else if (ch == '.'.code)
-				expectStart = true;
-			else if (!SourceText.isIdentChar(ch))
-				return false;
-		}
-		return !expectStart;
+		return at != null && at < parsed.args.length ? parsed.args[at] : null;
 	}
 
 	/**
@@ -838,44 +825,6 @@ final class FieldWriteIndex {
 		if (c.builtinNames.contains(owner)) return true;
 		final decls: Array<TypeDeclInfo> = declsNamedIn(c.index, owner);
 		return decls.length != 0 && decls.foreach(d -> !(c.aliasKinds.contains(d.kind)));
-	}
-
-	/**
-	 * The type-parameter names of a type-declaration header (`class Cell<Data,
-	 * K:B>` → `Data`, `K`), extracted TEXTUALLY from the decl's source slice — the
-	 * `QueryNode` projection drops type parameters, so the header text is the only
-	 * carrier. Empty when the header carries none or the shape is unrecognisable
-	 * (a miss only loses a poison guard elsewhere is compensating for, never a
-	 * write).
-	 */
-	private static function headerTypeParams(source: String, name: String, from: Int): Array<String> {
-		final bodyAt: Int = source.indexOf('{', from);
-		final nameAt: Int = source.indexOf(name, from);
-		if (nameAt < 0 || (bodyAt >= 0 && nameAt > bodyAt)) return [];
-		var i: Int = nameAt + name.length;
-		while (i < source.length && SourceText.isSpace(source.fastCodeAt(i))) i++;
-		if (i >= source.length || source.fastCodeAt(i) != '<'.code) return [];
-		var depth: Int = 1;
-		final start: Int = i + 1;
-		var j: Int = start;
-		var prev: Int = 0;
-		while (j < source.length && depth > 0) {
-			final ch: Int = source.fastCodeAt(j);
-			if (ch == '<'.code)
-				depth++;
-			else if (ch == '>'.code && prev != '-'.code)
-				depth--;
-			prev = ch;
-			j++;
-		}
-		if (depth != 0) return [];
-		final out: Array<String> = [];
-		for (p in NominalTypes.splitTypeArgumentList(source.substring(start, j - 1))) {
-			final colon: Int = p.indexOf(':');
-			final nm: String = StringTools.trim(colon < 0 ? p : p.substring(0, colon));
-			if (isDottedIdentPath(nm) && !out.contains(nm)) out.push(nm);
-		}
-		return out;
 	}
 
 	/** Union `params` into `map[owner]` — a simple-name collision merges conservatively (more names → more poisons). */

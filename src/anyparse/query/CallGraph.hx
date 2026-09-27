@@ -5,6 +5,7 @@ import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.SymbolIndex.MemberInfo;
+import anyparse.query.TypeSyntax;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -203,7 +204,7 @@ final class CallGraph {
 	public static inline final STATIC_INIT_NAME: String = '<static>';
 
 	/** What a type parameter nothing binds becomes in a written type: text that names no type. */
-	private static inline final UNKNOWN_TYPE: String = '?';
+	private static inline final UNKNOWN_TYPE: String = '$$_';
 
 	public final nodes: Map<String, FnNode> = [];
 	public final edges: Array<CallEdge> = [];
@@ -483,6 +484,7 @@ final class CallGraph {
 		// noqa: complexity
 		final shape: RefShape = _shape;
 		final returnTypes: Map<Int, String> = _provider == null ? [] : _provider.returnTypes(entry.source);
+		final typeParams: Map<Int, Array<String>> = _provider == null ? [] : _provider.typeParamNames(entry.source);
 		// a local `inline function` is a function of its own like any local one, though the grammar gives it a kind apart
 		final fnKinds: Array<String> = (shape.functionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);
 		final lambdaKinds: Array<String> = shape.lambdaKinds ?? [];
@@ -519,8 +521,8 @@ final class CallGraph {
 					noBodyKind != null && node.children.exists(c -> c.kind == noBodyKind)
 				);
 				if (parentFn == null) registerMember(owner, name, fnId);
-				final params: Array<String> = CallGraphNames.declaredTypeParams(entry.source, span, name);
-				if (params.length > 0) _facts.typeParams[fnId] = params;
+				final params: Null<Array<String>> = typeParams[span.from];
+				if (params != null) _facts.typeParams[fnId] = params;
 				final returned: Null<String> = returnTypes[span.from];
 				if (returned != null && !_facts.returns.exists(fnId)) _facts.returns[fnId] = returned;
 				final written: Null<String> = CallGraphNames.returnSourceOf(node, entry.source, annotationKinds);
@@ -798,6 +800,16 @@ final class CallGraph {
 			});
 		}
 
+		/** The simple type name a `Null<T>` annotation source wraps, or null. */
+		function nullableInner(typeSource: Null<String>): Null<String> {
+			final inner: Null<TypeSyntax> = typeSource == null ? null : _plugin.typeSyntax(typeSource)?.wrapped(['Null']);
+			final name: Null<String> = switch inner?.shape {
+				case Nominal(path, _): SourceText.lastSegment(path);
+				case _: null;
+			};
+			return name != null && CallGraphNames.isTypeLike(name) ? name : null;
+		}
+
 		/** Declared simple type of a value identifier, `Null<T>` unwrapped to `T`. */
 		function identDeclaredType(name: String, span: Span): Null<String> {
 			final bindingFrom: Null<Int> = bindFor(name)[span.from];
@@ -806,7 +818,7 @@ final class CallGraph {
 			return if (typeName == null)
 				null
 			else if (typeName == 'Null')
-				CallGraphNames.unwrapNullable(typeSources[bindingFrom])
+				nullableInner(typeSources[bindingFrom])
 			else if (nullableWrappers.contains(typeName))
 				null
 			else
@@ -844,7 +856,9 @@ final class CallGraph {
 		 * to whatever type argument the value carries, which a declared annotation does not name.
 		 */
 		function nominalOf(typeSource: String, currentType: Null<String>): Null<String> {
-			final outer: Null<String> = NominalTypes.outerNominalOf(NominalTypes.unwrapNullable(typeSource.trim(), transparentWrappers));
+			final outer: Null<String> = NominalTypes.outerNominalOf(
+				NominalTypes.unwrapNullable(typeSource.trim(), transparentWrappers, _plugin.typeSyntax), _plugin.typeSyntax
+			);
 			return outer == null || isTypeParam(outer, currentType) ? null : types.resolveAlias(outer);
 		}
 
@@ -861,7 +875,9 @@ final class CallGraph {
 			final bound: Array<String> = valueArgs != null && valueArgs.length >= viewParams.length
 				? valueArgs
 				: [for (_ in viewParams) UNKNOWN_TYPE];
-			return [for (a in inherited) CallGraphNames.substituteTypeParams(a, viewParams, bound)];
+			return [
+				for (a in inherited) CallGraphNames.substituteTypeParams(a, viewParams, bound, _plugin.typeSyntax)
+			];
 		}
 
 		/**
@@ -877,23 +893,28 @@ final class CallGraph {
 			written: String, owner: Null<String>, receiverSource: Null<String>, receiverType: Null<String>, currentType: Null<String>
 		): String {
 			final params: Array<String> = owner == null ? [] : types.generics.typeParamsOf(owner);
-			if (owner == null || !CallGraphNames.mentionsTypeName(written, params)) return written;
+			if (owner == null || !CallGraphNames.mentionsTypeName(written, params, _plugin.typeSyntax)) return written;
 			final viewType: Null<String> = receiverType ?? currentType;
 			final ownArgs: Null<Array<String>> = receiverSource == null
 				? null
-				: NominalTypes.typeArgumentSourcesOf(NominalTypes.unwrapNullable(receiverSource.trim(), transparentWrappers));
+				: NominalTypes.typeArgumentSourcesOf(
+					NominalTypes.unwrapNullable(receiverSource.trim(), transparentWrappers, _plugin.typeSyntax), _plugin.typeSyntax
+				);
 			final args: Null<Array<String>> = if (owner == receiverType)
 				ownArgs
 			else if (viewType == null || viewType == owner)
 				null
 			else
-				viewedArgs(types.generics.argumentsFor(owner, viewType), viewType, viewType == receiverType ? ownArgs : null, currentType);
+				viewedArgs(
+					types.generics.argumentsFor(owner, viewType, _plugin.typeSyntax), viewType, viewType == receiverType ? ownArgs : null,
+					currentType
+				);
 			return if (args != null && args.length >= params.length)
-				CallGraphNames.substituteTypeParams(written, params, args)
+				CallGraphNames.substituteTypeParams(written, params, args, _plugin.typeSyntax)
 			else if (owner == currentType)
 				written
 			else
-				CallGraphNames.substituteTypeParams(written, params, [for (_ in params) UNKNOWN_TYPE]);
+				CallGraphNames.substituteTypeParams(written, params, [for (_ in params) UNKNOWN_TYPE], _plugin.typeSyntax);
 		}
 
 		/** `member`'s written type on `receiverType`'s chain as a value written `receiverSource` sees it (`throughParams`). */
@@ -924,10 +945,10 @@ final class CallGraph {
 
 		/** The element type an index access into a value of `container`'s written type yields, per `indexedElementTypeParams`. */
 		function elementTypeSource(container: String): Null<String> {
-			final peeled: String = NominalTypes.unwrapNullable(container.trim(), transparentWrappers);
-			final outer: Null<String> = NominalTypes.outerNominalOf(peeled);
+			final peeled: String = NominalTypes.unwrapNullable(container.trim(), transparentWrappers, _plugin.typeSyntax);
+			final outer: Null<String> = NominalTypes.outerNominalOf(peeled, _plugin.typeSyntax);
 			final at: Null<Int> = outer == null ? null : elementParams[outer];
-			final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(peeled);
+			final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(peeled, _plugin.typeSyntax);
 			if (at == null || args == null) return null;
 			final list: Array<String> = args;
 			return at >= list.length ? null : list[at];
@@ -998,7 +1019,7 @@ final class CallGraph {
 				final returned: Null<String> = call == null ? null : _facts.returnSources[call.target];
 				if (call == null || returned == null) return null;
 				final written: String = returned;
-				if (CallGraphNames.mentionsTypeName(written, _facts.typeParams[call.target] ?? [])) return null;
+				if (CallGraphNames.mentionsTypeName(written, _facts.typeParams[call.target] ?? [], _plugin.typeSyntax)) return null;
 				return throughParams(written, nodes[call.target]?.typeName, call.receiverSource, call.onType, currentType);
 			}
 			return null;
@@ -1211,16 +1232,16 @@ final class CallGraph {
 		function storedField(recv: QueryNode, field: String, currentType: Null<String>): Bool {
 			final declared: Null<String> = typeSourceOf(recv, currentType);
 			if (declared == null) return false;
-			final peeled: String = NominalTypes.unwrapNullable(StringTools.trim(declared), transparentWrappers);
-			final outer: Null<String> = NominalTypes.outerNominalOf(peeled);
+			final peeled: String = NominalTypes.unwrapNullable(StringTools.trim(declared), transparentWrappers, _plugin.typeSyntax);
+			final outer: Null<String> = NominalTypes.outerNominalOf(peeled, _plugin.typeSyntax);
 			final anon: Null<String> = outer == null ? peeled : types.resolveAlias(outer);
 			final fieldType: Null<String> = if (anon == peeled)
-				CallGraphNames.anonFieldTypeSource(peeled, field)
+				CallGraphNames.anonFieldTypeSource(_plugin.typeSyntax(peeled), field)
 			else if (anon != null && types.holdsNoFunction(anon) && types.declarationCount(anon) > 0)
 				types.memberOnChain(anon, field)?.typeSource
 			else
 				null;
-			if (fieldType == null || fieldType.indexOf('->') >= 0) return false;
+			if (fieldType == null || _plugin.typeSyntax(fieldType)?.holdsFunction() != false) return false;
 			final nominal: Null<String> = nominalOf(fieldType, currentType);
 			return nominal != null && types.holdsNoFunction(nominal);
 		}
@@ -1428,7 +1449,7 @@ final class CallGraph {
 			final param: Null<String> = params == null || at >= params.length ? null : params[at];
 			if (target == null || param == null) return null;
 			final written: String = param;
-			if (CallGraphNames.mentionsTypeName(written, _facts.typeParams[target] ?? [])) return null;
+			if (CallGraphNames.mentionsTypeName(written, _facts.typeParams[target] ?? [], _plugin.typeSyntax)) return null;
 			final receiver: Null<QueryNode> = site.receiver;
 			final receiverSource: Null<String> = receiver == null ? null : typeSourceOf(receiver, currentType);
 			final onType: Null<String> = receiver == null ? null : receiverType(receiver, currentType)?.typeName;
@@ -1448,13 +1469,13 @@ final class CallGraph {
 			final id: Null<String> = span == null ? null : entry.fnBySpanFrom[span.from];
 			final declared: Null<String> = id == null ? null : _facts.returns[id];
 			if (declared != null || !lambdaKinds.contains(lineage[at].kind)) return declared;
-			return CallGraphNames.functionReturnSource(expected(at - 1, currentType) ?? '');
+			return CallGraphNames.functionReturnSource(_plugin.typeSyntax(expected(at - 1, currentType) ?? ''));
 		}
 
 		/** The written type of field `field` of a value written `outer`: an inline anonymous structure's, or a typedef's or class's member. */
 		function fieldTypeSource(outer: String, field: String, currentType: Null<String>): Null<String> {
-			final peeled: String = NominalTypes.unwrapNullable(outer.trim(), transparentWrappers);
-			final written: Null<String> = CallGraphNames.anonFieldTypeSource(peeled, field);
+			final peeled: String = NominalTypes.unwrapNullable(outer.trim(), transparentWrappers, _plugin.typeSyntax);
+			final written: Null<String> = CallGraphNames.anonFieldTypeSource(_plugin.typeSyntax(peeled), field);
 			if (written != null) return written;
 			final nominal: Null<String> = nominalOf(peeled, currentType);
 			return nominal == null ? null : memberTypeThrough(peeled, nominal, field, currentType);
@@ -1482,7 +1503,7 @@ final class CallGraph {
 			else if (returnKinds.contains(kind))
 				returnExpectation(level, currentType, expectedAt)
 			else if (lambdaKinds.contains(kind) && last)
-				CallGraphNames.functionReturnSource(expectedAt(level - 1, currentType) ?? '')
+				CallGraphNames.functionReturnSource(_plugin.typeSyntax(expectedAt(level - 1, currentType) ?? ''))
 			else if (
 				kind == parenKind || (kind == ternaryKind && index >= 1) || (ifExprKinds.contains(kind) && index >= 1)
 				|| (switchKinds.contains(kind) && index >= 1) || ((kind == caseBranchKind || blockKinds.contains(kind)) && last)

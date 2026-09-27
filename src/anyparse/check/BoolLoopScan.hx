@@ -543,7 +543,7 @@ final class BoolLoopScan {
 				// single declarator with a literal initializer has both. The two answers are also
 				// worth the same here — a dropped annotation still compiles, since the call's own
 				// type is the `Bool` it would have restated — so no branch separates them.
-				annotation: CtorFieldFold.declaredTypeAnnotation(source, declSpan, initSpan, name)
+				annotation: CtorFieldFold.declaredTypeAnnotation(source, decl)
 			}
 		};
 	}

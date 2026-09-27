@@ -8,7 +8,6 @@ import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.CondBranchProjection;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.FormatConfigDiscovery;
-import anyparse.query.FunctionTypeProvider;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.NamingPolicy.NamingSupport;
@@ -19,6 +18,7 @@ import anyparse.query.SpanTypeInfoProvider;
 import anyparse.query.StdResolver;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.TypeInfoProvider;
+import anyparse.query.TypeSyntax;
 import anyparse.runtime.ParseError;
 import haxe.Exception;
 
@@ -58,7 +58,7 @@ using Lambda;
  */
 @:nullSafety(Strict)
 final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider implements SpanTypeInfoProvider
-		implements ParsedRootProvider implements FunctionTypeProvider {
+		implements ParsedRootProvider {
 
 	/**
 	 * Binding-declaration kinds shared by `refShape` and `metaShape` so the two contracts cannot
@@ -1838,6 +1838,11 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		return spanTypeInfo(source).castTargetSources;
 	}
 
+	/** `TypeInfoProvider`: each declaration's type-parameter names, keyed by the span `from` of the node declaring them. */
+	public function typeParamNames(source: String): Map<Int, Array<String>> {
+		return spanTypeInfo(source).typeParamNames;
+	}
+
 	/**
 	 * `SpanTypeInfoProvider`: the six span-indexed maps from ONE `HaxeModuleSpanParser`
 	 * parse + ONE `walkGrammarSpans` traversal - the batched form of `declaredTypes`
@@ -2040,14 +2045,9 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		return fn.children.exists(c -> c.kind == 'Required' || c.kind == 'Optional' || c.kind == 'Rest');
 	}
 
-	/** The all-empty bundle returned when the source does not parse - the six maps are simply unpopulated, never null. */
-	/**
-	 * `FunctionTypeProvider` — the parameter count of a Haxe 4 arrow function type read
-	 * out of its annotation text; `HxFunctionTypeArity` documents the shapes that answer
-	 * and the ones that deliberately do not.
-	 */
-	public function functionTypeArity(typeSource: String): Null<Int> {
-		return HxFunctionTypeArity.of(typeSource);
+	/** `GrammarPlugin` — `HxTypeSyntax` documents how each spelling reads. */
+	public function typeSyntax(typeSource: String): Null<TypeSyntax> {
+		return HxTypeSyntax.of(typeSource);
 	}
 
 	/** The package a projected module tree declares, empty for a root-package module. */

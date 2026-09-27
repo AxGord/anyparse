@@ -335,7 +335,7 @@ final class MemberReach {
 		final seeds: Seeds = seedsOf(g, entry);
 		final declaring: String = g.types.declaringTypeOf(member.owner, member.name) ?? member.owner;
 		final typeSource: Null<String> = g.types.memberOnChain(declaring, member.name)?.typeSource;
-		final outer: Null<String> = typeSource == null ? null : NominalTypes.outerNominalOf(typeSource);
+		final outer: Null<String> = typeSource == null ? null : NominalTypes.outerNominalOf(typeSource, _plugin.typeSyntax);
 		final arrayTyped: Bool = outer != null && (_shape.arrayTypeNames ?? []).contains(outer);
 		final scan: MemberTouches = _touches.scan(g, member.name, declaring, access, arrayTyped, seeds.file, seeds.region);
 		if (scan.inRegion != null) return Reached([scan.inRegion]);

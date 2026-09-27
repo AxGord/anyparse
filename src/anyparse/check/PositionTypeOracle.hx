@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.OracleType;
 import anyparse.check.Check.TypeOracle;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
 /**
@@ -17,6 +18,13 @@ abstract class PositionTypeOracle implements TypeOracle {
 	/** What a position-based oracle declines with when the position carries no type. */
 	public static inline final DECLINE_NO_ANSWER: String = 'the display server named no type at the declaration';
 
+	/** `GrammarPlugin.typeSyntax` — how a printed function type is read for its result. */
+	private final _typeSyntax: TypeSyntaxReader;
+
+	private function new(typeSyntax: TypeSyntaxReader) {
+		_typeSyntax = typeSyntax;
+	}
+
 	/** The compiler's inferred type at `bytePos` in `file` (XML-decoded, trimmed), or null when none / the query failed. */
 	public abstract function typeAt(file: String, bytePos: Int): Null<String>;
 
@@ -26,7 +34,7 @@ abstract class PositionTypeOracle implements TypeOracle {
 
 	public function returnType(file: String, fn: Span, name: String, nameEnd: Int): OracleType {
 		final raw: Null<String> = typeAt(file, nameEnd - 1);
-		final ret: Null<String> = raw == null ? null : ExplicitType.returnTypeOf(raw);
+		final ret: Null<String> = raw == null ? null : ExplicitType.returnTypeOf(raw, _typeSyntax);
 		return ret == null ? Declined(DECLINE_NO_ANSWER) : Typed(ret);
 	}
 

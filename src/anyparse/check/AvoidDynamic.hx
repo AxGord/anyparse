@@ -17,6 +17,7 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
+import anyparse.query.TypeSyntax;
 import anyparse.runtime.Span;
 
 using StringTools;
@@ -176,7 +177,7 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 		final shape: RefShape = plugin.refShape();
 		final dynName: Null<String> = shape.rawDynamicTypeName;
 		if (dynName == null) return [];
-		final ctx: DynCtx = DynamicShape.buildCtx(shape, dynName);
+		final ctx: DynCtx = DynamicShape.buildCtx(shape, dynName, plugin.typeSyntax);
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final cfg: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
@@ -185,8 +186,9 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 			final excludeMeta: Array<String> = cfg.stringListOption(RULE_ID, 'excludeMeta') ?? [];
 			final boundaryCalls: Array<String> = cfg.stringListOption(RULE_ID, 'boundaryCalls') ?? DEFAULT_BOUNDARY_CALLS;
 			final found: Array<Violation> = [];
-			walk(found, entry.file, entry.source, tree, null, false, ctx, excludeMeta, boundaryCalls);
 			final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+			final typeSources: Map<Int, String> = provider != null ? provider.declaredTypeSources(entry.source) : [];
+			walk(found, entry.file, entry.source, typeSources, tree, null, false, ctx, excludeMeta, boundaryCalls);
 			final declaredTypes: Map<Int, String> = provider != null ? provider.declaredTypes(entry.source) : [];
 			final imports: Map<String, String> = provider != null ? provider.importMap(entry.source, entry.file) : [];
 			DynamicBag.annotateBags(
@@ -225,6 +227,7 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		final declaredTypes: Map<Int, String> = provider != null ? provider.declaredTypes(source) : [];
 		final castTargets: Map<Int, String> = provider != null ? provider.castTargetSources(source) : [];
+		final typeParams: Map<Int, Array<String>> = provider != null ? provider.typeParamNames(source) : [];
 		// The inferred type must resolve to a provably plain nominal — resolved against the
 		// caller's cross-file index (FixVerifier), or this file alone when invoked directly.
 		final symbols: SymbolIndex = index ?? SymbolIndex.build([{ file: '', source: source }], plugin);
@@ -258,7 +261,7 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 			// parameter whose reads or whose owning method refuse the signature rewrite. Folded into
 			// one sentence, a reader chasing either of the last two would look for a failure that
 			// never ran.
-			final param: ParamVerdict = ParamAscription.rewrite(tree, source, span, shape, dynName, castTargets, scope);
+			final param: ParamVerdict = ParamAscription.rewrite(tree, source, span, shape, dynName, castTargets, typeParams, scope);
 			if (!param.subject) {
 				v.declineReason = DECLINE_NOT_A_LOCAL;
 				continue;
@@ -546,10 +549,10 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 	 * real node.
 	 */
 	private static function walk(
-		out: Array<Violation>, file: String, source: String, node: QueryNode, parentKind: Null<String>, excluded: Bool, ctx: DynCtx,
-		excludeMeta: Array<String>, boundaryCalls: Array<String>
+		out: Array<Violation>, file: String, source: String, typeSources: Map<Int, String>, node: QueryNode, parentKind: Null<String>,
+		excluded: Bool, ctx: DynCtx, excludeMeta: Array<String>, boundaryCalls: Array<String>
 	): Void {
-		if (!excluded) inspectNode(out, file, source, node, parentKind, ctx, boundaryCalls);
+		if (!excluded) inspectNode(out, file, source, typeSources, node, parentKind, ctx, boundaryCalls);
 		final kids: Array<QueryNode> = node.children;
 		var pendingExclude: Bool = false;
 		for (child in kids) {
@@ -562,32 +565,32 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 				}
 				continue;
 			}
-			walk(out, file, source, child, node.kind, excluded || pendingExclude, ctx, excludeMeta, boundaryCalls);
+			walk(out, file, source, typeSources, child, node.kind, excluded || pendingExclude, ctx, excludeMeta, boundaryCalls);
 			pendingExclude = false;
 		}
 	}
 
 	/** Emit findings for `node` when it is a declared type position of one of the recognised shapes. */
 	private static function inspectNode(
-		out: Array<Violation>, file: String, source: String, node: QueryNode, parentKind: Null<String>, ctx: DynCtx,
-		boundaryCalls: Array<String>
+		out: Array<Violation>, file: String, source: String, typeSources: Map<Int, String>, node: QueryNode, parentKind: Null<String>,
+		ctx: DynCtx, boundaryCalls: Array<String>
 	): Void {
 		final kind: String = node.kind;
 		if (ctx.fieldKinds.contains(kind)) {
-			if (parentKind != ctx.enumAbstractKind) scanDeclType(out, file, source, node, Field, ctx, false);
+			if (parentKind != ctx.enumAbstractKind) scanDeclType(out, file, source, typeSources, node, Field, ctx, false);
 			return;
 		}
 		if (kind == ctx.varFieldKind) {
-			scanDeclType(out, file, source, node, Field, ctx, false);
+			scanDeclType(out, file, source, typeSources, node, Field, ctx, false);
 			return;
 		}
 		if (ctx.paramKinds.contains(kind)) {
 			// A parameter node inside an anonymous structure is a struct field, not a real parameter.
-			scanDeclType(out, file, source, node, parentKind == ctx.anonKind ? Field : Param, ctx, false);
+			scanDeclType(out, file, source, typeSources, node, parentKind == ctx.anonKind ? Field : Param, ctx, false);
 			return;
 		}
 		if (ctx.localKinds.contains(kind)) {
-			scanDeclType(out, file, source, node, Local, ctx, isBoundaryInit(node, ctx, boundaryCalls));
+			scanDeclType(out, file, source, typeSources, node, Local, ctx, isBoundaryInit(node, ctx, boundaryCalls));
 			return;
 		}
 		final ret: Null<QueryNode> = DynamicShape.returnTypeNode(node, ctx);
@@ -595,54 +598,41 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 	}
 
 	/**
-	 * Scan the type-annotation region of a field / parameter / local: the source
-	 * between the first `:` after the name and the initializer / default (the first
-	 * child's start) or the node's end. An anonymous-structure type is projected as
-	 * the first child, so the region ends before it and its inner fields are walked
-	 * independently — no double count.
+	 * Scan the declared type of a field / parameter / local — its `QueryNode.type` slot, or for an
+	 * anonymous-structure `var` field its declaration's. An anonymous-structure `name:Type` field has no
+	 * slot: its type is the text `TypeInfoProvider.declaredTypeSources` keys by the field, which ends the
+	 * field's span. An anonymous-structure type the projection publishes as the node's own `Anon` child is
+	 * skipped: its fields are walked independently, so scanning it here would count them twice.
 	 */
 	private static function scanDeclType(
-		out: Array<Violation>, file: String, source: String, node: QueryNode, position: DynPos, ctx: DynCtx, boundary: Bool
+		out: Array<Violation>, file: String, source: String, typeSources: Map<Int, String>, node: QueryNode, position: DynPos, ctx: DynCtx,
+		boundary: Bool
 	): Void {
+		final holder: Null<QueryNode> = node.kind == ctx.varFieldKind ? node.children[0] : node;
+		final type: Null<Span> = holder?.type?.span ?? fieldTypeSpan(node, source, typeSources);
+		if (type == null || publishedAnon(node, ctx)) return;
+		scanRange(out, file, source, type.from, type.to, position, ctx, boundary);
+	}
+
+	/** The span of the type ending an anonymous-structure field `node` (`name:Type`), or null when it writes none. */
+	private static function fieldTypeSpan(node: QueryNode, source: String, typeSources: Map<Int, String>): Null<Span> {
 		final span: Null<Span> = node.span;
-		if (span == null) return;
-		scanTypeAfterColon(out, file, source, span.from, declTypeCutoff(node, ctx, span.to), position, ctx, boundary);
+		if (span == null) return null;
+		final written: Null<String> = typeSources[span.from];
+		// The field's span may run on over the whitespace after its type.
+		final text: String = source.substring(span.from, span.to).rtrim();
+		final end: Int = span.from + text.length;
+		return written == null || !text.endsWith(written) ? null : new Span(end - written.length, end);
 	}
 
 	/**
-	 * The end of the type-annotation region: the initializer / default (the first
-	 * child's start) for a field / parameter / local, a nested anonymous type for a
-	 * `VarField` (whose own type sits inside a name-wrapping child), else the node
-	 * end. An anonymous type's inner fields are walked independently — no double count.
-	 *
-	 * A `RefShape.typeRefChildKinds` child is SKIPPED rather than taken as the
-	 * boundary: it is a projection of the annotation itself (an anon-struct field's
-	 * `f:Map<A, B>` projects `(TypeRef Map) (TypeRef A) (TypeRef B)`, all three
-	 * inside the text being scanned), so stopping there would cut the region to
-	 * nothing and the check would report no `Dynamic` at all.
+	 * Whether `node`'s annotation is an anonymous structure the projection publishes as its own `Anon`
+	 * child — the first child that is not a `RefShape.typeRefChildKinds` projection of the annotation
+	 * itself (an anon-struct field's `f:Map<A, B>` projects `(TypeRef Map) (TypeRef A) (TypeRef B)`).
 	 */
-	private static function declTypeCutoff(node: QueryNode, ctx: DynCtx, end: Int): Int {
-		if (node.kind == ctx.varFieldKind) {
-			for (c in node.children) if (c.kind == ctx.anonKind) {
-				final cs: Null<Span> = c.span;
-				if (cs != null) return cs.from;
-			}
-			return end;
-		}
-		for (c in node.children) if (!ctx.typeRefKinds.contains(c.kind)) {
-			final cs: Null<Span> = c.span;
-			if (cs != null) return cs.from;
-		}
-		return end;
-	}
-
-	/** Find the `:` after the name in `[spanFrom, cutoff)` and scan the type that follows it for the raw dynamic name. */
-	private static function scanTypeAfterColon(
-		out: Array<Violation>, file: String, source: String, spanFrom: Int, cutoff: Int, position: DynPos, ctx: DynCtx, boundary: Bool
-	): Void {
-		final colon: Int = source.substring(spanFrom, cutoff).indexOf(':');
-		if (colon < 0) return;
-		scanRange(out, file, source, spanFrom + colon + 1, cutoff, position, ctx, boundary);
+	private static function publishedAnon(node: QueryNode, ctx: DynCtx): Bool {
+		final kids: Array<QueryNode> = node.kind == ctx.varFieldKind ? node.children.slice(1) : node.children;
+		return kids.find(c -> !ctx.typeRefKinds.contains(c.kind))?.kind == ctx.anonKind;
 	}
 
 	/** Scan a projected type node (a function return type) over its whole span. */
@@ -655,45 +645,35 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 	}
 
 	/**
-	 * Scan `source[from...to)` for whole-word occurrences of the raw dynamic name,
-	 * tracking generic-bracket depth so a nested `Dynamic` reports as a type
-	 * argument. A `>` that is the tail of a `->` arrow is not a bracket close. A
-	 * match preceded by an identifier char or `.` (a longer name / a qualified
-	 * user type) or followed by an identifier char (`DynamicAccess`) is skipped.
+	 * Report every type in `source[from...to)` named exactly the raw dynamic name — a longer name
+	 * (`DynamicAccess`) or a qualified user type (`pkg.Dynamic`) is another type. One written as a
+	 * type ARGUMENT, at any depth, reports as `TypeArg`; one anywhere else in the annotation (the
+	 * annotation itself, a function type's parameter or result, a structure's field) as `position`.
 	 */
 	private static function scanRange(
 		out: Array<Violation>, file: String, source: String, from: Int, to: Int, position: DynPos, ctx: DynCtx, boundary: Bool
 	): Void {
 		final dyn: String = ctx.dynName;
-		final dynLen: Int = dyn.length;
-		var depth: Int = 0;
-		var i: Int = from;
-		while (i < to) {
-			final c: Int = source.fastCodeAt(i);
-			if (c == '<'.code) {
-				depth++;
-				i++;
-			} else if (c == '>'.code && (i == 0 || source.fastCodeAt(i - 1) != '-'.code)) {
-				depth--;
-				i++;
-			} else if (matchesWordAt(source, i, dyn, dynLen)) {
-				final prev: Int = i > 0 ? source.fastCodeAt(i - 1) : -1;
-				if (!DynamicShape.isWordChar(prev) && prev != '.'.code) {
-					final pos: DynPos = depth > 0 ? TypeArg : position;
-					push(out, file, i, i + dynLen, pos, boundary && pos == Local);
-				}
-				i += dynLen;
-			} else
-				i++;
+		function visit(t: TypeSyntax, inArgs: Bool): Void {
+			switch t.shape {
+				case Nominal(path, args):
+					if (path == dyn) {
+						final pos: DynPos = inArgs ? TypeArg : position;
+						push(out, file, from + t.span.from, from + t.span.from + dyn.length, pos, boundary && pos == Local);
+					}
+					for (a in args) visit(a, true);
+				case Function(params, ret, _):
+					for (p in params) visit(p.type, inArgs);
+					visit(ret, inArgs);
+				case Structure(fields):
+					for (f in fields) visit(f.type, inArgs);
+				case Intersection(parts), Conditional(parts):
+					for (p in parts) visit(p, inArgs);
+				case Other:
+			}
 		}
-	}
-
-	/** Whether `source` holds `dyn` at `i` as a whole word (not immediately followed by an identifier char). */
-	private static function matchesWordAt(source: String, i: Int, dyn: String, dynLen: Int): Bool {
-		if (i + dynLen > source.length) return false;
-		for (k in 0...dynLen) if (source.fastCodeAt(i + k) != dyn.fastCodeAt(k)) return false;
-		final after: Int = i + dynLen < source.length ? source.fastCodeAt(i + dynLen) : -1;
-		return !DynamicShape.isWordChar(after);
+		final t: Null<TypeSyntax> = ctx.typeSyntax(source.substring(from, to));
+		if (t != null) visit(t, false);
 	}
 
 	/** Whether the local's initializer (its last child) is a call whose callee path roots at a boundary segment. */

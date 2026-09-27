@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import haxe.io.Path;
 
 using StringTools;
@@ -78,7 +79,10 @@ final class CompilerDisplayOracle extends PositionTypeOracle {
 	private var _pathForm: Int = -1;
 
 	#if nodejs
-	private function new(hxml: String, cwd: Null<String>, defines: Array<String>, port: Int, child: Dynamic) {
+	private function new(
+		typeSyntax: TypeSyntaxReader, hxml: String, cwd: Null<String>, defines: Array<String>, port: Int, child: Dynamic
+	) {
+		super(typeSyntax);
 		_hxml = hxml;
 		_cwd = cwd;
 		_defines = defines;
@@ -86,7 +90,8 @@ final class CompilerDisplayOracle extends PositionTypeOracle {
 		_child = child;
 	}
 	#else
-	private function new(hxml: String, cwd: Null<String>, defines: Array<String>, port: Int) {
+	private function new(typeSyntax: TypeSyntaxReader, hxml: String, cwd: Null<String>, defines: Array<String>, port: Int) {
+		super(typeSyntax);
 		_hxml = hxml;
 		_cwd = cwd;
 		_defines = defines;
@@ -136,7 +141,9 @@ final class CompilerDisplayOracle extends PositionTypeOracle {
 	 * hxml and differ only in a define, and a server warmed without it types a build nobody judges.
 	 * They are placed by `CompilerServer.connect`, the one spelling the typecheck shares.
 	 */
-	public static function start(hxml: String, ?cwd: String, ?defines: Array<String>): Null<CompilerDisplayOracle> {
+	public static function start(
+		typeSyntax: TypeSyntaxReader, hxml: String, ?cwd: String, ?defines: Array<String>
+	): Null<CompilerDisplayOracle> {
 		#if nodejs
 		var attempt: Int = 0;
 		while (attempt < MAX_PORT_ATTEMPTS) {
@@ -144,7 +151,8 @@ final class CompilerDisplayOracle extends PositionTypeOracle {
 			final port: Int = PORT_BASE + Std.random(PORT_SPAN);
 			final child: Dynamic = CompilerServer.spawnServer(port, false);
 			if (child == null) continue;
-			if (CompilerServer.warm(port, hxml, cwd, defines)) return new CompilerDisplayOracle(hxml, cwd, defines ?? [], port, child);
+			if (CompilerServer.warm(port, hxml, cwd, defines))
+				return new CompilerDisplayOracle(typeSyntax, hxml, cwd, defines ?? [], port, child);
 			CompilerServer.killChild(child);
 		}
 		return null;

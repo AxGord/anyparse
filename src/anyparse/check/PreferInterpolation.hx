@@ -184,7 +184,7 @@ final class PreferInterpolation implements Check implements RiskyFix implements 
 			root: tree,
 			seams: seams,
 			shape: plugin.refShape(),
-			nullity: DeclaredNullity.of(file, tree, source, plugin.refShape(), relaxed ? null : provider, index),
+			nullity: DeclaredNullity.of(file, tree, source, plugin.refShape(), relaxed ? null : provider, plugin.typeSyntax, index),
 			relaxed: relaxed,
 			collectNested: collectNested
 		}, tree, null, false, false, false);

@@ -2,8 +2,10 @@ package anyparse.query;
 
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /** The name arithmetic `CallGraph` resolves with: type declarations, module names, dotted paths, written type heads. */
@@ -32,51 +34,46 @@ final class CallGraphNames {
 	}
 
 	/**
-	 * The type parameters a function declaration spells between its name and its parameter list (`f<T, U:B>`),
-	 * read from the source because the projection keeps only their constraints.
+	 * Whether `typeSource` names one of `names` as a type anywhere inside it (`Array<T>`, `T -> Void`); a text the
+	 * grammar does not read as a type counts as naming them, since nothing proves it does not.
 	 */
-	public static function declaredTypeParams(source: String, span: Span, name: String): Array<String> {
-		final open: Int = source.indexOf('(', span.from);
-		if (open < 0) return [];
-		final header: String = source.substring(span.from, open);
-		final named: EReg = new EReg('(^|[^A-Za-z0-9_])$name\\s*<', '');
-		if (!named.match(header)) return [];
-		final head: String = header.substring(named.matchedPos().pos + named.matched(0).length - 1).trim();
-		if (!head.startsWith('<') || !head.endsWith('>')) return [];
-		final out: Array<String> = [];
-		for (part in NominalTypes.splitTypeArgumentList(head.substring(1, head.length - 1))) {
-			final colon: Int = part.indexOf(':');
-			final param: String = StringTools.trim(colon < 0 ? part : part.substring(0, colon));
-			if (param.length > 0) out.push(param);
-		}
-		return out;
-	}
-
-	/** Whether `typeSource` spells one of `names` as a whole type name (not as a segment of a dotted path). */
-	public static function mentionsTypeName(typeSource: String, names: Array<String>): Bool {
-		return names.length > 0 && typeNamePattern(names).match(typeSource);
-	}
-
-	/** `typeSource` with each whole type name `params[i]` in it replaced by `args[i]`, all at once. */
-	public static function substituteTypeParams(typeSource: String, params: Array<String>, args: Array<String>): String {
-		if (params.length == 0) return typeSource;
-		return typeNamePattern(params).map(typeSource, m -> m.matched(1) + args[params.indexOf(m.matched(2))]);
+	public static function mentionsTypeName(typeSource: String, names: Array<String>, typeSyntax: TypeSyntaxReader): Bool {
+		if (names.length == 0) return false;
+		final t: Null<TypeSyntax> = typeSyntax(typeSource);
+		return t == null || t.descendants().exists(d -> namedAmong(d, names));
 	}
 
 	/**
-	 * The written type of field `field` in the inline anonymous structure type `typeSource` (`{ a: Int, b: T }`,
-	 * `{ var a: Int; }`), or null when `typeSource` is not one or declares no such field.
+	 * `typeSource` with each type named `params[i]` in it replaced by `args[i]`, all at once — or unchanged when the
+	 * grammar does not read it as a type.
 	 */
-	public static function anonFieldTypeSource(typeSource: String, field: String): Null<String> {
-		final text: String = typeSource.trim();
-		if (!text.startsWith('{') || !text.endsWith('}')) return null;
-		for (part in splitTopLevel(text.substring(1, text.length - 1))) {
-			var decl: String = StringTools.trim(part);
-			for (prefix in ['var ', 'final ', '?']) if (decl.startsWith(prefix)) decl = decl.substr(prefix.length).trim();
-			final colon: Int = decl.indexOf(':');
-			if (colon > 0 && decl.substring(0, colon).trim() == field) return decl.substr(colon + 1).trim();
+	public static function substituteTypeParams(
+		typeSource: String, params: Array<String>, args: Array<String>, typeSyntax: TypeSyntaxReader
+	): String {
+		final t: Null<TypeSyntax> = params.length == 0 ? null : typeSyntax(typeSource);
+		if (t == null) return typeSource;
+		final out: StringBuf = new StringBuf();
+		var at: Int = 0;
+		for (d in t.descendants()) switch d.shape {
+			case Nominal(path, _) if (params.contains(path)):
+				out.add(typeSource.substring(at, d.span.from));
+				out.add(args[params.indexOf(path)]);
+				at = d.span.from + path.length;
+			case _:
 		}
-		return null;
+		out.add(typeSource.substring(at));
+		return out.toString();
+	}
+
+	/**
+	 * The written type of field `field` of the anonymous structure type `type` (`{ a: Int, ?b: T }`), or null
+	 * when `type` is not one or declares no such field.
+	 */
+	public static function anonFieldTypeSource(type: Null<TypeSyntax>, field: String): Null<String> {
+		return switch type?.shape {
+			case Structure(fields): fields.find(f -> f.name == field)?.type.text;
+			case _: null;
+		};
 	}
 
 	/** Whether `t` is a typedef naming another type of its own simple name — a re-export, not a second declaration. */
@@ -118,21 +115,6 @@ final class CallGraphNames {
 		return c >= 'A'.code && c <= 'Z'.code;
 	}
 
-	/** Inner simple name of a `Null<...>` annotation source, or null. */
-	public static function unwrapNullable(typeSource: Null<String>): Null<String> {
-		if (typeSource == null) return null;
-		final trimmed: String = StringTools.trim(typeSource);
-		final prefix: String = 'Null<';
-		if (!trimmed.startsWith(prefix) || !trimmed.endsWith('>')) return null;
-		var inner: String = trimmed.substring(prefix.length, trimmed.length - 1).trim();
-		final lt: Int = inner.indexOf('<');
-		if (lt != -1) inner = inner.substring(0, lt);
-		final dot: Int = inner.lastIndexOf('.');
-		if (dot != -1) inner = inner.substring(dot + 1);
-		inner = inner.trim();
-		return inner.length > 0 && isTypeLike(inner) ? inner : null;
-	}
-
 	/**
 	 * `file` in one spelling per path: separators as `/`, no `./` segment, no doubled separator — the key two
 	 * spellings of the same file (`./src/Y.hx`, `src/Y.hx`) share.
@@ -155,53 +137,20 @@ final class CallGraphNames {
 		return dot == -1 ? base : base.substring(0, dot);
 	}
 
-	/**
-	 * The return type of the function type `typeSource` (`Int->S`, `(a:Int) -> S`): what follows its last `->`
-	 * that no bracket encloses, or null when `typeSource` is not a function type.
-	 */
-	public static function functionReturnSource(typeSource: String): Null<String> {
-		var depth: Int = 0;
-		var arrow: Int = -1;
-		for (i in 0...typeSource.length) {
-			final c: Int = typeSource.fastCodeAt(i);
-			if (c == '-'.code && i + 1 < typeSource.length && typeSource.fastCodeAt(i + 1) == '>'.code) {
-				if (depth == 0) arrow = i;
-			} else if (c == '<'.code || c == '('.code || c == '{'.code || c == '['.code) {
-				depth++;
-			} else if (
-				(c == '>'.code && (i == 0 || typeSource.fastCodeAt(i - 1) != '-'.code)) || c == ')'.code || c == '}'.code || c == ']'.code
-			) {
-				depth--;
-			}
-		}
-		return arrow < 0 ? null : typeSource.substr(arrow + 2).trim();
+	/** The written result of the function type `type` (`Int -> S`, `(a: Int) -> S`), or null when `type` is not a function type. */
+	public static function functionReturnSource(type: Null<TypeSyntax>): Null<String> {
+		return switch type?.shape {
+			case Function(_, ret, _): ret.text;
+			case _: null;
+		};
 	}
 
-	/** `text` split on the `,` and `;` that no bracket encloses. */
-	private static function splitTopLevel(text: String): Array<String> {
-		final out: Array<String> = [];
-		var depth: Int = 0;
-		var start: Int = 0;
-		for (i in 0...text.length) {
-			final c: Int = text.fastCodeAt(i);
-			// the `>` of a function arrow closes nothing
-			final arrow: Bool = c == '>'.code && i > 0 && text.fastCodeAt(i - 1) == '-'.code;
-			if (c == '<'.code || c == '('.code || c == '{'.code || c == '['.code)
-				depth++;
-			else if (!arrow && (c == '>'.code || c == ')'.code || c == '}'.code || c == ']'.code))
-				depth--;
-			else if ((c == ','.code || c == ';'.code) && depth == 0) {
-				out.push(text.substring(start, i));
-				start = i + 1;
-			}
-		}
-		out.push(text.substr(start));
-		return out;
-	}
-
-	/** A pattern matching any of `names` standing alone as a type name: not inside an identifier, not after a `.`. */
-	private static function typeNamePattern(names: Array<String>): EReg {
-		return new EReg('(^|[^A-Za-z0-9_.])(' + names.join('|') + ')(?![A-Za-z0-9_])', 'g');
+	/** Whether `t` is a type named by one of `names`. */
+	private static function namedAmong(t: TypeSyntax, names: Array<String>): Bool {
+		return switch t.shape {
+			case Nominal(path, _): names.contains(path);
+			case _: false;
+		};
 	}
 
 }

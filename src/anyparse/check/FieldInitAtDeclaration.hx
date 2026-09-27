@@ -2,7 +2,6 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.CondRegionScan;
-import anyparse.query.CtorFieldFold.DeclaredType;
 import anyparse.query.CtorFieldWrite;
 import anyparse.query.ElementSpan;
 import anyparse.query.FieldWriteIndex;
@@ -11,11 +10,11 @@ import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
 import anyparse.query.RawSourceScan;
 import anyparse.query.RefactorSupport;
-import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.SymbolIndexHost;
 import anyparse.query.TreePath;
 import anyparse.query.TypeResolver;
+import anyparse.query.TypeSyntax;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
@@ -945,7 +944,10 @@ final class FieldInitAtDeclaration implements Check {
 			? null
 			: RefactorSupport.resolutionProjectSourcesOf(plugin) ?? files;
 		if (name == null || span == null || host == null || scope == null) return false;
-		final declared: DeclaredType = fieldDeclaredType(source, span, name);
+		final annotation: Null<Span> = member.type?.span;
+		final declared: Null<TypeSyntax> = annotation == null ? null : plugin.typeSyntax(source.substring(annotation.from, annotation.to));
+		// An annotation the grammar cannot read proves nothing about the value it holds.
+		if (annotation != null && declared == null) return false;
 		return inertCollection(rhs, plugin, shape) && faultingFieldType(declared, shape) && !coreNameShadowed(host, file, declared, scope)
 			&& !fieldExposed(tree, member, container, plugin, shape)
 			&& !ReflectionScan.runtimeName(ReflectionScan.reflectionSurface(files, plugin), name)
@@ -1045,37 +1047,19 @@ final class FieldInitAtDeclaration implements Check {
 	}
 
 	/**
-	 * The type annotation the declaration of the field `name` at `span` writes, read from `source`:
-	 * `Absent` with no annotation, `Written(text)` with one, `Unreadable` when the name cannot be found in
-	 * the declaration text.
-	 */
-	private static function fieldDeclaredType(source: String, span: Span, name: String): DeclaredType {
-		final text: String = source.substring(span.from, span.to);
-		final at: Int = SourceText.lastStandaloneIdentIndex(text, name);
-		if (at < 0) return Unreadable;
-		var rest: String = text.substring(at + name.length).trim();
-		if (rest.endsWith(';')) rest = rest.substring(0, rest.length - 1).trim();
-		if (rest == '') return Absent;
-		if (!rest.startsWith(':')) return Unreadable;
-		final type: String = rest.substring(1).trim();
-		return type == '' ? Unreadable : Written(type);
-	}
-
-	/**
 	 * Whether a field declared with `declared` holds a value whose `null` stand-in FAULTS on a member or
 	 * index access: no annotation (the literal types it), an anonymous structure, `Dynamic`, or an
 	 * UNQUALIFIED core array / map name (`RefShape.arrayTypeNames` / `mapAbstractTypeNames`). Anything
 	 * else refuses — an abstract whose `@:from` turns the literal into a call, an abstract method that
-	 * accepts a `null` receiver, a class of unknown behaviour — as does an unreadable annotation.
+	 * accepts a `null` receiver, a class of unknown behaviour. An unreadable annotation is refused before this is asked.
 	 */
-	private static function faultingFieldType(declared: DeclaredType, shape: RefShape): Bool {
-		return switch declared {
-			case Absent: true;
-			case Written(text):
-				final head: String = annotationHead(text);
-				text.startsWith('{') || head == shape.rawDynamicTypeName || (shape.arrayTypeNames ?? []).contains(head)
+	private static function faultingFieldType(declared: Null<TypeSyntax>, shape: RefShape): Bool {
+		return switch declared?.shape {
+			case null, Structure(_): true;
+			case Nominal(head, _):
+				head == shape.rawDynamicTypeName || (shape.arrayTypeNames ?? []).contains(head)
 					|| (shape.mapAbstractTypeNames ?? []).contains(head);
-			case Unreadable: false;
+			case _: false;
 		};
 	}
 
@@ -1150,12 +1134,6 @@ final class FieldInitAtDeclaration implements Check {
 		return false;
 	}
 
-	/** The outer name an annotation writes — the text before its type arguments, trimmed. */
-	private static function annotationHead(text: String): String {
-		final lt: Int = text.indexOf('<');
-		return (lt < 0 ? text : text.substring(0, lt)).trim();
-	}
-
 	/**
 	 * Whether the core name a WRITTEN annotation relies on (`faultingFieldType`) may name a user type in
 	 * `file` instead, decided by the resolution index rather than by text. Shadowed when the file, or an
@@ -1167,14 +1145,12 @@ final class FieldInitAtDeclaration implements Check {
 	 * ambient chain could not be bounded.
 	 */
 	private static function coreNameShadowed(
-		host: SymbolIndexHost, file: String, declared: DeclaredType, scope: Array<{ file: String, source: String }>
+		host: SymbolIndexHost, file: String, declared: Null<TypeSyntax>, scope: Array<{ file: String, source: String }>
 	): Bool {
-		final text: String = switch declared {
-			case Written(written): written;
+		final head: String = switch declared?.shape {
+			case Nominal(path, _): path;
 			case _: return false;
 		};
-		if (text.startsWith('{')) return false;
-		final head: String = annotationHead(text);
 		final index: Null<SymbolIndex> = host.resolutionIndex();
 		if (index == null) return true;
 		final found: Null<FileInfo> = index.fileInfo(file);

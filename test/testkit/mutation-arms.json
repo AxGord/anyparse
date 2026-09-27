@@ -2649,8 +2649,8 @@
 			"name": "M-KV-OPENER-SELF-CALL",
 			"type": "anyparse.check.PreferKeyValueLoop",
 			"method": "fixWalk",
-			"find": "openerDecline(m, f.source) ?? ElementLoopRewrite.reachDecline(gate.reachOf(), gate.file, m.header)",
-			"replace": "openerDecline(m, f.source)",
+			"find": "openerDecline(m, f) ?? ElementLoopRewrite.reachDecline(gate.reachOf(), gate.file, m.header)",
+			"replace": "openerDecline(m, f)",
 			"note": "the opener arm never asks the body's reach, so a callee that grows the collection runs on under the key-value iterator"
 		},
 		{
@@ -2697,7 +2697,7 @@
 			"name": "M-KV-NOOPENER-NON-ARRAY",
 			"type": "anyparse.check.PreferKeyValueLoop",
 			"method": "analyzeReads",
-			"find": "\t\tif (collectionTypeSource != null && NominalTypes.outerNominalOf(collectionTypeSource) != ARRAY_TYPE) return null;\n",
+			"find": "\t\tif (collectionTypeSource != null && NominalTypes.outerNominalOf(collectionTypeSource, f.typeSyntax) != ARRAY_TYPE) return null;\n",
 			"replace": "",
 			"note": "a container resolved to something other than Array is reported with a key-value form it has no iterator for"
 		},
@@ -3494,8 +3494,8 @@
 			"name": "M-DISPLAY-ORACLE-DROPS-DEFINES",
 			"type": "anyparse.query.cli.command.LintFixVerify",
 			"method": "startDisplay",
-			"find": "CompilerDisplayOracle.start(config.hxml, config.dir, config.defines)",
-			"replace": "CompilerDisplayOracle.start(config.hxml, config.dir)",
+			"find": "CompilerDisplayOracle.start(typeSyntax, config.hxml, config.dir, config.defines)",
+			"replace": "CompilerDisplayOracle.start(typeSyntax, config.hxml, config.dir)",
 			"note": "the display server is warmed and queried without its configuration's defines, so it names types for a build nobody judges"
 		},
 		{
@@ -4700,7 +4700,7 @@
 			"name": "M-COMPR-INDEXFILL-ANY-CONTAINER",
 			"type": "anyparse.check.ComprehensionFills",
 			"method": "loopText",
-			"find": "indexesLikeArray(annotation) ? indexFill(loop, name, ctx, acc) : null",
+			"find": "indexesLikeArray(annotation, ctx.seams.typeSyntax) ? indexFill(loop, name, ctx, acc) : null",
 			"replace": "indexFill(loop, name, ctx, acc)",
 			"note": "an index fill into a Map or an @:arrayAccess abstract folds, which does not compile or skips the setter"
 		},
@@ -5776,8 +5776,8 @@
 			"name": "M-GRAPH-TYPE-ARGUMENT",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "return if (args != null && args.length >= params.length)\n\t\t\t\tCallGraphNames.substituteTypeParams(written, params, args)",
-			"replace": "return if (args != null && false)\n\t\t\t\tCallGraphNames.substituteTypeParams(written, params, args)",
+			"find": "return if (args != null && args.length >= params.length)\n\t\t\t\tCallGraphNames.substituteTypeParams(written, params, args, _plugin.typeSyntax)",
+			"replace": "return if (args != null && false)\n\t\t\t\tCallGraphNames.substituteTypeParams(written, params, args, _plugin.typeSyntax)",
 			"note": "a member type spelling a type parameter never takes the receiver's argument for it"
 		},
 		{
@@ -5792,7 +5792,7 @@
 			"name": "M-GRAPH-FN-TYPE-PARAM",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectNodes",
-			"find": "if (params.length > 0) _facts.typeParams[fnId] = params;",
+			"find": "if (params != null) _facts.typeParams[fnId] = params;",
 			"replace": "",
 			"note": "a function's own type parameters are not recorded, so a receiver typed by one becomes a phantom type"
 		},
@@ -6022,7 +6022,7 @@
 			"name": "M-GRAPH-UNSUBSTITUTED-PARAM",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "CallGraphNames.substituteTypeParams(written, params, [for (_ in params) UNKNOWN_TYPE]);",
+			"find": "CallGraphNames.substituteTypeParams(written, params, [for (_ in params) UNKNOWN_TYPE], _plugin.typeSyntax);",
 			"replace": "written;",
 			"note": "a member type spelling a parameter the receiver gives no argument for resolves to a class of that name"
 		},
@@ -6838,8 +6838,8 @@
 			"name": "M-FACTS-CAST-ALWAYS",
 			"type": "anyparse.check.TypedFactsWalk",
 			"method": "flowText",
-			"find": "if (how != 'cast' && TypedFactsShapes.unwrapNull(s) == TypedFactsShapes.unwrapNull(d)) return;",
-			"replace": "if (TypedFactsShapes.unwrapNull(s) == TypedFactsShapes.unwrapNull(d)) return;",
+			"find": "if (how != 'cast' && FactsTypeText.unwrapNull(s) == FactsTypeText.unwrapNull(d)) return;",
+			"replace": "if (FactsTypeText.unwrapNull(s) == FactsTypeText.unwrapNull(d)) return;",
 			"note": "an unchecked cast between equal types records no source"
 		},
 		{
@@ -8250,8 +8250,8 @@
 			"name": "M-FACTS-VALUE-TYPE-FLOWS",
 			"type": "anyparse.check.FactsTypeOracle",
 			"method": "typeIdAt",
-			"find": "var spelled: String = switch valueType(file, expr) {",
-			"replace": "var spelled: String = switch expressionType(file, expr) {",
+			"find": "final spelled: String = switch valueType(file, expr) {",
+			"replace": "final spelled: String = switch expressionType(file, expr) {",
 			"note": "a value's type is read with the flows at its range, so a check-type `(e : T)` answers the type of `e`, not `T`"
 		},
 		{
@@ -8398,7 +8398,7 @@
 			"name": "M-PSE-FACTS-NULL",
 			"type": "anyparse.check.StaticExtensionFacts",
 			"method": "judge",
-			"find": "final receiver: String = unwrapNull(typed);",
+			"find": "final receiver: String = FactsTypeText.unwrapNull(typed);",
 			"replace": "final receiver: String = typed;",
 			"note": "a nullable receiver is read as the Null abstract, which hosts no member"
 		},
@@ -8510,8 +8510,8 @@
 			"name": "M-OPERAND-WRAPPER-KEPT",
 			"type": "anyparse.query.DeclaredNullity",
 			"method": "headTierIn",
-			"find": "headPathOf(NominalTypes.unwrapNullable(written.trim(), wrappers))",
-			"replace": "headPathOf(written.trim())",
+			"find": "headPathOf(NominalTypes.unwrapNullable(written.trim(), wrappers, index.typeSyntax), index.typeSyntax)",
+			"replace": "headPathOf(written.trim(), index.typeSyntax)",
 			"note": "a `Null<T>` operand is not seen through, so the overload `T` declares goes unseen"
 		},
 		{
@@ -8533,7 +8533,7 @@
 			"name": "M-OPERAND-METHOD-PARAMS-IGNORED",
 			"type": "anyparse.check.OperandBinder",
 			"method": "memberTier",
-			"find": "ownParams.concat(CallGraphNames.declaredTypeParams(source, new Span(m.declFrom, m.declFrom), name))",
+			"find": "ownParams.concat(m.typeParamNames)",
 			"replace": "ownParams",
 			"note": "a method's own type parameters do not shadow a type of the same name in its return type"
 		},
@@ -9132,6 +9132,45 @@
 			"method": "moduleMayCarry",
 			"force": "false",
 			"note": "a module import's module-level fields, which a bare pattern compares against, are not consulted"
+		},
+		{
+			"name": "M-ALIAS-TARGET-SIMPLE-NAME",
+			"type": "anyparse.query.SymbolIndexBuilder",
+			"method": "aliasTargetPathOf",
+			"find": "case Nominal(path, _): path;",
+			"replace": "case Nominal(path, _): SourceText.lastSegment(path);",
+			"note": "a typedef's written target path is reduced to its simple name, so a qualified target resolves to any namesake"
+		},
+		{
+			"name": "M-AVOIDDYN-COMPOSITE-SKIPPED",
+			"type": "anyparse.check.AvoidDynamic",
+			"method": "scanRange",
+			"find": "case Intersection(parts), Conditional(parts):\n\t\t\t\t\tfor (p in parts) visit(p, inArgs);",
+			"replace": "case Intersection(_), Conditional(_):",
+			"note": "a Dynamic inside an intersection or a conditional-type branch goes unreported"
+		},
+		{
+			"name": "M-OPTPARAM-COMMENT-DROPPED",
+			"type": "anyparse.check.OptionalParamShorthand",
+			"method": "nullableDefaultInner",
+			"find": "typed.argumentsSource() ?? unwrapped.text, raw: raw",
+			"replace": "unwrapped.text, raw: raw",
+			"note": "the suggested spelling drops a comment the author wrote inside the Null<...> wrapper"
+		},
+		{
+			"name": "M-AST-SLOT-DUPLICATED",
+			"type": "anyparse.query.format.Text",
+			"method": "toSValue",
+			"find": "!node.children.exists(c -> sameNode(c, declared))",
+			"replace": "true",
+			"note": "a declared type the projection also publishes as a child prints twice"
+		},
+		{
+			"name": "M-FACTS-NULL-PEEL-UNMATCHED",
+			"type": "anyparse.check.FactsTypeText",
+			"method": "closesAtEnd",
+			"force": "true",
+			"note": "a leading Null<...> is peeled off a facts type it does not enclose, mangling Null<A>->Null<B>"
 		}
 	]
 }

@@ -56,7 +56,7 @@ final class DeadNullGuard implements Check implements RiskyFix {
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		final index: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
 		return RunScan.collectWith(files, plugin, NullFlowScan.seamsOf(shape), (entry, root, s, violations) -> {
-			final types: DeclaredNullity = DeclaredNullity.of(entry.file, root, entry.source, shape, provider, index);
+			final types: DeclaredNullity = DeclaredNullity.of(entry.file, root, entry.source, shape, provider, plugin.typeSyntax, index);
 			NullFlow.analyze(root, shape, entry.source, (node, facts) -> {
 				final compared: Null<IdentOperand> = NullFlowScan.nullComparedOperand(node, s);
 				if (compared == null) return;

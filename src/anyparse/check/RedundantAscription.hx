@@ -7,6 +7,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
 /**
@@ -117,7 +118,7 @@ final class RedundantAscription implements Check implements DefaultOff {
 				final operandSpan: Null<Span> = operand.span;
 				if (
 					span != null && operandSpan != null && operand.kind == seams.newExprKind
-					&& redundantTargetSource(node, span, operand, operandSpan, source, castTargets) != null
+					&& redundantTargetSource(node, span, operand, operandSpan, source, castTargets, plugin.typeSyntax) != null
 				) violations.push({
 					file: entry.file,
 					span: span,
@@ -138,14 +139,17 @@ final class RedundantAscription implements Check implements DefaultOff {
 	 * either region the fix deletes. Null at the first gate that fails.
 	 */
 	private static function redundantTargetSource(
-		node: QueryNode, span: Span, operand: QueryNode, operandSpan: Span, source: String, castTargets: Map<Int, String>
+		node: QueryNode, span: Span, operand: QueryNode, operandSpan: Span, source: String, castTargets: Map<Int, String>,
+		typeSyntax: TypeSyntaxReader
 	): Null<String> {
 		final ctorName: Null<String> = operand.name;
 		if (ctorName == null) return null;
 		final targetSource: Null<String> = TypeResolver.castTargetWithin(span, castTargets);
-		return if (targetSource == null || targetSource.indexOf('<') != -1)
-			null
-		else if (TypeResolver.stripWs(targetSource) != TypeResolver.stripWs(ctorName))
+		final plainName: Null<String> = switch targetSource == null ? null : typeSyntax(targetSource)?.shape {
+			case Nominal(path, []): path;
+			case _: null;
+		};
+		return if (targetSource == null || plainName != TypeResolver.stripWs(ctorName))
 			null
 		else if (deletedRegionHasComment(source, span, operandSpan))
 			null

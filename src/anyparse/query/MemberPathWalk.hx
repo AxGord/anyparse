@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
 using StringTools;
 using Lambda;
@@ -28,11 +29,15 @@ final class MemberPathWalk {
 	/** The member layer that answers each individual hop. */
 	private final _members: MemberLookup;
 
+	/** `GrammarPlugin.typeSyntax` of the grammar that built the owning index. */
+	private final _typeSyntax: TypeSyntaxReader;
+
 	/** Built once by the owning `SymbolIndex`, which hands over the shared, immutable index data. */
-	public function new(files: Array<FileInfo>, refs: TypeRefIndex, members: MemberLookup) {
+	public function new(files: Array<FileInfo>, refs: TypeRefIndex, members: MemberLookup, typeSyntax: TypeSyntaxReader) {
 		_files = files;
 		_refs = refs;
 		_members = members;
+		_typeSyntax = typeSyntax;
 	}
 
 	/**
@@ -99,9 +104,9 @@ final class MemberPathWalk {
 		var args: Array<String> = [];
 		var startName: String = startSource;
 		if (substitute) {
-			final startArgs: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(startSource);
+			final startArgs: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(startSource, _typeSyntax);
 			if (startArgs != null) {
-				final head: Null<String> = NominalTypes.outerNominalOf(startSource);
+				final head: Null<String> = NominalTypes.outerNominalOf(startSource, _typeSyntax);
 				if (head == null) return null;
 				args = startArgs;
 				startName = head;
@@ -118,10 +123,13 @@ final class MemberPathWalk {
 			// An INTERMEDIATE link is a receiver for the next segment, so a member-transparent
 			// wrapper on it is peeled (`res: Null<Res>` in `box.res.count`). The FINAL member's
 			// source, returned below, is never peeled — a read of `Null<T>` IS `Null<T>`.
-			final carried: String = NominalTypes.memberLookupReceiverSource(effective, transparentWrappers);
-			if (substitute) args = NominalTypes.typeArgumentSourcesOf(carried) ?? [];
-			final nominal: String = StringTools.trim(carried.split('<')[0]);
-			current = _refs.resolveTypeRef(nominal, cur.file);
+			final carried: String = NominalTypes.memberLookupReceiverSource(effective, transparentWrappers, _typeSyntax);
+			if (substitute) args = NominalTypes.typeArgumentSourcesOf(carried, _typeSyntax) ?? [];
+			final nominal: Null<String> = switch _typeSyntax(carried)?.shape {
+				case Nominal(path, _): path;
+				case _: null;
+			};
+			current = nominal == null ? null : _refs.resolveTypeRef(nominal, cur.file);
 		}
 		if (current == null) return null;
 		final last: ResolvedType = current;
@@ -154,24 +162,7 @@ final class MemberPathWalk {
 		final at: Int = params.indexOf(memberSource.trim());
 		final declaredHere: Bool = cur.type.members.exists(m -> m.name == member);
 		final effective: String = declaredHere && at >= 0 && at < args.length ? args[at] : memberSource;
-		return mentionsTypeParam(effective, params) ? null : effective;
-	}
-
-	/** Whether `text` names any of `params` as a WHOLE identifier token — `Item` does not mention `T`, `Array<T>` does. */
-	private static function mentionsTypeParam(text: String, params: Array<String>): Bool {
-		if (params.length == 0) return false;
-		var i: Int = 0;
-		while (i < text.length) {
-			if (!SourceText.isIdentStartChar(text.fastCodeAt(i))) {
-				i++;
-				continue;
-			}
-			var end: Int = i + 1;
-			while (end < text.length && SourceText.isIdentChar(text.fastCodeAt(end))) end++;
-			if (params.contains(text.substring(i, end))) return true;
-			i = end;
-		}
-		return false;
+		return CallGraphNames.mentionsTypeName(effective, params, _typeSyntax) ? null : effective;
 	}
 
 }

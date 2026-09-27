@@ -205,7 +205,9 @@ class DeclaredNullityTest extends Test {
 		final src: String = sources[0];
 		final tree: QueryNode = plugin.parseFile(src);
 		final shape: RefShape = plugin.refShape();
-		final types: DeclaredNullity = DeclaredNullity.of(files[0].file, tree, src, shape, plugin, SymbolIndex.build.bind(files, plugin));
+		final types: DeclaredNullity = DeclaredNullity.of(
+			files[0].file, tree, src, shape, plugin, plugin.typeSyntax, SymbolIndex.build.bind(files, plugin)
+		);
 		final operand: Null<QueryNode> = nullCheckOperand(tree, shape);
 		Assert.notNull(operand, 'fixture must contain a `… != null` comparison');
 		return operand != null && TypeResolver.isProvablyNonNull(operand, tree, shape, types);

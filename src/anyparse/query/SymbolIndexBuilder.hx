@@ -11,6 +11,7 @@ import anyparse.query.SymbolIndex.ImportInfo;
 import anyparse.query.SymbolIndex.ImportKind;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
+import anyparse.query.TypeSyntax;
 import anyparse.runtime.Span;
 import haxe.Exception;
 import haxe.io.Path;
@@ -79,6 +80,9 @@ final class SymbolIndexBuilder {
 	/** The anonymous-structure node a `typedef T = {…}` projects as its body. */
 	private static inline final ANON_KIND: String = 'Anon';
 
+	/** The type node a named type reference projects as. */
+	private static inline final NAMED_KIND: String = 'Named';
+
 	/** The grammar kind a `typedef` declaration projects as. */
 	private static inline final TYPEDEF_DECL_KIND: String = 'TypedefDecl';
 
@@ -143,8 +147,10 @@ final class SymbolIndexBuilder {
 			final writeAccessors: Map<Int, Bool> = provider != null ? provider.propertyWriteAccessors(entry.source) : [];
 			final returnTypes: Map<Int, String> = provider != null ? provider.returnTypes(entry.source) : [];
 			final typeSources: Map<Int, String> = provider != null ? provider.declaredTypeSources(entry.source) : [];
+			final typeParams: Map<Int, Array<String>> = provider != null ? provider.typeParamNames(entry.source) : [];
 			infos.push(extractFileInfo(
-				entry.file, entry.source, tree, accessors, writeAccessors, returnTypes, typeSources, shape, memberSeams, abstractKinds
+				entry.file, entry.source, tree, accessors, writeAccessors, returnTypes, typeSources, typeParams, shape, memberSeams,
+				abstractKinds, plugin.typeSyntax
 			));
 		}
 		attachAmbientImports(infos, plugin, shape, memberSeams, abstractKinds, provider);
@@ -205,8 +211,8 @@ final class SymbolIndexBuilder {
 	 */
 	private static function extractFileInfo(
 		file: String, source: String, tree: QueryNode, accessors: Map<Int, Bool>, writeAccessors: Map<Int, Bool>,
-		returnTypes: Map<Int, String>, typeSources: Map<Int, String>, shape: RefShape, memberSeams: MemberSeams,
-		abstractKinds: Array<String>
+		returnTypes: Map<Int, String>, typeSources: Map<Int, String>, typeParams: Map<Int, Array<String>>, shape: RefShape,
+		memberSeams: MemberSeams, abstractKinds: Array<String>, typeSyntax: TypeSyntaxReader
 	): FileInfo {
 		final basename: String = RefactorSupport.baseNameOf(file);
 		var pkg: String = '';
@@ -240,10 +246,9 @@ final class SymbolIndexBuilder {
 			final typeDecl: Null<TypeDeclMatch> = typeDeclAt(node);
 			if (typeDecl != null) {
 				final supersRaw: Array<String> = collectSupertypesRaw(node);
-				final aliasPath: Null<String> = aliasTargetPathOf(source, typeDecl, node, gn.guarded);
+				final aliasPath: Null<String> = aliasTargetPathOf(source, typeDecl, node, gn.guarded, typeSyntax);
 				final isAbstract: Bool = abstractKinds.contains(typeDecl.kind);
-				final paramsText: Null<String> = declTypeParamListText(source, typeDecl);
-				final paramSegments: Array<String> = paramsText == null ? [] : NominalTypes.splitTypeArgumentList(paramsText);
+				final paramNames: Array<String> = declTypeParams(typeParams, typeDecl);
 				types.push({
 					name: typeDecl.name,
 					kind: typeDecl.kind,
@@ -251,8 +256,8 @@ final class SymbolIndexBuilder {
 					isMain: typeDecl.name == basename,
 					isPrivate: pendingPrivate,
 					isExtern: pendingExtern,
-					typeParamArity: paramSegments.length,
-					typeParamNames: declTypeParamNames(paramSegments),
+					typeParamArity: paramNames.length,
+					typeParamNames: paramNames,
 					supertypes: supersRaw.map(simpleName),
 					supertypesRaw: supersRaw,
 					supertypesWritten: collectSupertypesWritten(node, source),
@@ -268,10 +273,10 @@ final class SymbolIndexBuilder {
 					hasKeep: carriesMeta(pendingMeta, shape.retainedDeclMetaName),
 					constructsFromLiteral: carriesAnyMeta(pendingMeta, shape.execution?.implicitConstructionTypeMetaNames),
 					bringsExtensions: carriesAnyMeta(pendingMeta, shape.execution?.extensionTypeMetaNames),
-					members: collectMembers(node, source, accessors, writeAccessors, returnTypes, typeSources, memberSeams),
+					members: collectMembers(node, source, accessors, writeAccessors, returnTypes, typeSources, typeParams, memberSeams),
 					abstractSelfRebind: isAbstract && abstractRebindsThisScan(node, shape, pendingMeta),
 					abstractForwardUnderlying: isAbstract ? forwardUnderlyingOf(node, pendingMeta, shape) : null,
-					underlyingRaw: underlyingPathOf(source, typeDecl, isAbstract, gn.guarded),
+					underlyingRaw: underlyingPathOf(typeDecl.nameNode, isAbstract, gn.guarded),
 					guarded: gn.guarded,
 					forwardedMembers: pendingForwarded
 				});
@@ -513,7 +518,7 @@ final class SymbolIndexBuilder {
 	 */
 	private static function collectMembers(
 		node: QueryNode, source: String, accessors: Map<Int, Bool>, writeAccessors: Map<Int, Bool>, returnTypes: Map<Int, String>,
-		typeSources: Map<Int, String>, seams: MemberSeams
+		typeSources: Map<Int, String>, typeParams: Map<Int, Array<String>>, seams: MemberSeams
 	): Array<MemberInfo> {
 		// noqa: complexity
 		final out: Array<MemberInfo> = [];
@@ -558,6 +563,7 @@ final class SymbolIndexBuilder {
 								? CallGraphNames.returnSourceOf(child, source, seams.annotationKinds)
 								: null,
 							typeSource: typeSources[typeKey],
+							typeParamNames: typeParams[typeKey] ?? [],
 							firstParamTypeSource: firstParamTypeSourceOf(child, typeSources, seams.paramKinds),
 							paramTypeSources: paramTypeSourcesOf(child, typeSources, seams.paramKinds),
 							visibility: runVisibility,
@@ -779,95 +785,25 @@ final class SymbolIndexBuilder {
 	 */
 	private static function forwardUnderlyingOf(node: QueryNode, pendingMeta: Array<String>, shape: RefShape): Null<String> {
 		if (!carriesMeta(pendingMeta, shape.forwardingDeclMetaName)) return null;
-		final named: Null<QueryNode> = node.children.find(c -> c.kind == 'Named');
+		final named: Null<QueryNode> = node.children.find(c -> c.kind == NAMED_KIND);
 		if (named == null) return null;
 		final raw: Null<String> = named.name;
-		return raw == null ? null : simpleName(StringTools.trim(raw.split('<')[0]));
+		return raw == null ? null : simpleName(raw);
 	}
 
 	/**
-	 * The INNER text of the `<...>` type-parameter list written on `decl`'s header
-	 * (`class Cell<Data, K:B>` -> `Data, K:B`), or null when the header carries no
-	 * `<` after its name or the bracket run never closes. Locate the name token in
-	 * the header text (the projection drops `<...>` params entirely, so no node's
-	 * span points AT the name), then bracket-match the following `<...>` (a `->`
-	 * return arrow's `>` is not a closer).
-	 *
-	 * The scan starts at `decl.nameNode`'s span, falling back to `fullSpan`. The
-	 * name node IS the header for every shape - the inner `ClassForm` of a `final
-	 * class`, the `*Head` of a split-header conditional region - so the scan never
-	 * has to cross a `final` keyword or a whole `#if` line to reach the name.
-	 *
-	 * ONE scan answers both header questions: the arity (`splitTypeArgumentList`'s
-	 * segment count) and the parameter NAMES. They used to be separate scans with
-	 * separate comma logic, which is how they could have disagreed.
+	 * The head path of the underlying type an abstract declares (`TypeDeclInfo.underlyingRaw`) — the
+	 * `QueryNode.type` slot of the node naming it — or null for a non-abstract (`isAbstract`), a `guarded`
+	 * one, one that writes none, or one that writes something other than a named type.
 	 */
-	private static function declTypeParamListText(source: String, decl: TypeDeclMatch): Null<String> {
-		final anchor: Null<Span> = decl.nameNode.span;
-		final from: Int = anchor == null ? decl.fullSpan.from : anchor.from;
-		final bodyAt: Int = source.indexOf('{', from);
-		final nameAt: Int = source.indexOf(decl.name, from);
-		if (nameAt < 0 || (bodyAt >= 0 && nameAt > bodyAt)) return null;
-		var i: Int = nameAt + decl.name.length;
-		while (i < source.length && source.isSpace(i)) i++;
-		if (i >= source.length || source.fastCodeAt(i) != '<'.code) return null;
-		final start: Int = i + 1;
-		var depth: Int = 0;
-		while (i < source.length) {
-			switch source.fastCodeAt(i) {
-				case '<'.code:
-					depth++;
-				case '>'.code if (source.fastCodeAt(i - 1) != '-'.code):
-					depth--;
-					if (depth == 0) return source.substring(start, i);
-				case _:
-			}
-			i++;
-		}
-		return null;
+	private static function underlyingPathOf(nameNode: QueryNode, isAbstract: Bool, guarded: Bool): Null<String> {
+		final underlying: Null<QueryNode> = isAbstract && !guarded ? nameNode.type : null;
+		return underlying != null && underlying.kind == NAMED_KIND ? underlying.name : null;
 	}
 
-	/**
-	 * The head path of the underlying type an abstract `decl` writes in the `(…)` after its name and
-	 * type-parameter list (`TypeDeclInfo.underlyingRaw`), or null for a non-abstract (`isAbstract`), a
-	 * `guarded` one, a header that carries none, or one that is not a plain nominal path. The `<…>`
-	 * list is skipped by `declTypeParamListText`'s own bracket scan, so a `>` inside a constraint
-	 * cannot end it early.
-	 */
-	private static function underlyingPathOf(source: String, decl: TypeDeclMatch, isAbstract: Bool, guarded: Bool): Null<String> {
-		if (!isAbstract || guarded) return null;
-		final anchor: Null<Span> = decl.nameNode.span;
-		final nameAt: Int = source.indexOf(decl.name, anchor == null ? decl.fullSpan.from : anchor.from);
-		if (nameAt < 0) return null;
-		final params: Null<String> = declTypeParamListText(source, decl);
-		var i: Int = nameAt + decl.name.length;
-		while (i < source.length && source.isSpace(i)) i++;
-		if (params != null) i = source.indexOf(params, i) + params.length + 1;
-		while (i < source.length && source.isSpace(i)) i++;
-		if (i >= source.length || source.fastCodeAt(i) != '('.code) return null;
-		final close: Int = source.indexOf(')', i);
-		if (close < 0) return null;
-		final inner: String = source.substring(i + 1, close).trim();
-		if (inner.indexOf('->') != -1 || inner.indexOf('(') != -1) return null;
-		final lt: Int = inner.indexOf('<');
-		final head: String = (lt < 0 ? inner : inner.substring(0, lt)).trim();
-		return head.length > 0 && head.split('.').foreach(SourceText.isIdentifier) ? head : null;
-	}
-
-	/**
-	 * Every segment's parameter name, or EMPTY when ANY segment fails to yield one -
-	 * a partial list would silently mis-index a substitution, so all-or-nothing is
-	 * the only safe answer. Empty is also what a non-generic header gives, which is
-	 * why `TypeDeclInfo.typeParamNames` must never be read as proof of non-genericity.
-	 */
-	private static function declTypeParamNames(segments: Array<String>): Array<String> {
-		final out: Array<String> = [];
-		for (segment in segments) {
-			final name: Null<String> = NominalTypes.typeParamNameOf(segment);
-			if (name == null) return [];
-			out.push(name);
-		}
-		return out;
+	/** The type-parameter names `decl` declares — `typeParams` keyed by the node naming it (`TypeInfoProvider.typeParamNames`). */
+	private static function declTypeParams(typeParams: Map<Int, Array<String>>, decl: TypeDeclMatch): Array<String> {
+		return typeParams[(decl.nameNode.span ?? decl.fullSpan).from] ?? [];
 	}
 
 	/**
@@ -1094,40 +1030,33 @@ final class SymbolIndexBuilder {
 	 * `aliasTargetRaw` is this verbatim; both are derived from ONE read so they can never
 	 * disagree, the same pairing `supertypes` / `supertypesRaw` carries.
 	 *
-	 * The projection carries NO alias link — a `TypedefDecl` aliasing a named
-	 * type has no children at all — so the target is read from the declaration's own source: the
-	 * text after the first `=`, stripped of a trailing `;`, accepted only when
-	 * `NominalTypes.outerNominalOf` recognises it as a nominal path (`Widget`, `pkg.Deep.Thing`,
+	 * The target is the declaration's `QueryNode.type` slot, read by the grammar
+	 * (`GrammarPlugin.typeSyntax`) and accepted only as a named type (`Widget`, `pkg.Deep.Thing`,
 	 * `Array<Int>`). Null must be read by every consumer as "the alias is not resolvable", never
-	 * as "it aliases nothing". Four shapes yield it:
+	 * as "it aliases nothing". Five shapes yield it:
 	 *
 	 *  - an anon-struct typedef — its fields ARE its members and the index already models them;
-	 *  - a FUNCTION type (`Holder<Int> -> String`), whose head `outerNominalOf` would otherwise
-	 *    read as the nominal `Holder` and prove absence against a type the alias never denotes;
-	 *  - anything else `outerNominalOf` does not recognise as a nominal path;
+	 *  - a FUNCTION type (`Holder<Int> -> String`), or a named type holding one — refused whole;
+	 *  - an intersection (`typedef A = B & C;`), which aliases neither half;
+	 *  - anything else that is not a named type;
 	 *  - a `#if`-GUARDED declaration. Every branch projects under one `Conditional` and the
 	 *    index keeps the FIRST decl of a name, so a followed alias would silently commit to
 	 *    whichever branch happened to be indexed and be wrong for the other compilation.
 	 */
-	private static function aliasTargetPathOf(source: String, decl: TypeDeclMatch, node: QueryNode, guarded: Bool): Null<String> {
-		if (guarded || decl.kind != TYPEDEF_DECL_KIND || node.children.exists(c -> c.kind == ANON_KIND)) return null;
-		final text: String = source.substring(decl.fullSpan.from, decl.fullSpan.to);
-		final eq: Int = text.indexOf('=');
-		if (eq == -1) return null;
-		final tail: String = text.substring(eq + 1).trim();
-		final body: String = tail.endsWith(';') ? tail.substring(0, tail.length - 1) : tail;
-		// A `->` anywhere makes the alias a function type: its head is not the type the alias
-		// denotes. Over-refusing a `Holder<Int -> Void>` argument the same way is harmless.
-		if (body.indexOf('->') != -1) return null;
-		final lt: Int = body.indexOf('<');
-		final head: String = (lt < 0 ? body : body.substring(0, lt)).trim();
-		// `outerNominalOf` stays the VALIDATOR and the FALLBACK, so the simple name this function's
-		// callers derive is bit-for-bit what it always was. The head is answered instead only when
-		// EVERY segment of it is an identifier: the head is raw source, so a comment or a metadata
-		// run before the path (`typedef A = /* c */ pkg.B;`) rides along in it, and handing that on
-		// as a type reference would resolve to nothing where the simple name resolves fine.
-		final nominal: Null<String> = NominalTypes.outerNominalOf(head);
-		return nominal != null && head.split('.').foreach(SourceText.isIdentifier) ? head : nominal;
+	private static function aliasTargetPathOf(
+		source: String, decl: TypeDeclMatch, node: QueryNode, guarded: Bool, typeSyntax: TypeSyntaxReader
+	): Null<String> {
+		final aliased: Null<Span> = node.type?.span;
+		if (guarded || decl.kind != TYPEDEF_DECL_KIND || aliased == null) return null;
+		// An intersection (`typedef A = B & C;`) follows the slot's type; it aliases neither half.
+		final rest: String = source.substring(aliased.to, decl.fullSpan.to).trim();
+		if (rest != '' && rest != ';') return null;
+		final t: Null<TypeSyntax> = typeSyntax(source.substring(aliased.from, aliased.to));
+		if (t == null || t.holdsFunction()) return null;
+		return switch t.shape {
+			case Nominal(path, _): path;
+			case _: null;
+		};
 	}
 
 	/**
@@ -1202,7 +1131,8 @@ final class SymbolIndexBuilder {
 				ambient.file, ambient.source, tree, provider != null ? provider.propertyAccessors(ambient.source) : [],
 				provider != null ? provider.propertyWriteAccessors(ambient.source) : [],
 				provider != null ? provider.returnTypes(ambient.source) : [],
-				provider != null ? provider.declaredTypeSources(ambient.source) : [], shape, memberSeams, abstractKinds
+				provider != null ? provider.declaredTypeSources(ambient.source) : [],
+				provider != null ? provider.typeParamNames(ambient.source) : [], shape, memberSeams, abstractKinds, plugin.typeSyntax
 			).imports;
 		extracted[ambient.file] = imports;
 		return imports;

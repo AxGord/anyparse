@@ -198,7 +198,9 @@ final class RedundantToString implements Check implements DefaultOff {
 			source: source,
 			seams: seams,
 			declaredTypes: provider == null ? [] : provider.declaredTypes(source),
-			nullity: DeclaredNullity.of(file, tree, source, seams.shape, provider, RefactorSupport.lazySymbolIndex([], plugin, index)),
+			nullity: DeclaredNullity.of(
+				file, tree, source, seams.shape, provider, plugin.typeSyntax, RefactorSupport.lazySymbolIndex([], plugin, index)
+			),
 			index: index,
 			file: file,
 			facts: facts

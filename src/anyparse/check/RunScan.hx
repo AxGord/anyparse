@@ -149,6 +149,11 @@ final class RunScan {
 		return plugin is TypeInfoProvider ? cast plugin : null;
 	}
 
+	/** Each declaration's type-parameter names in `source` (`TypeInfoProvider.typeParamNames`), none for a grammar without type info. */
+	public static function typeParamNamesOf(plugin: GrammarPlugin, source: String): Map<Int, Array<String>> {
+		return typeInfoOf(plugin)?.typeParamNames(source) ?? [];
+	}
+
 	/**
 	 * Runs `body` for every spanned violation whose `from:to` key resolves in `byKey`, in report order — the
 	 * match loop of a fix that answers more than one edit per finding; `CheckScan.collectSpanEdits` is the

@@ -120,7 +120,7 @@ final class RedundantCastType implements Check implements DefaultOff {
 		final rawTarget: Null<String> = TypeResolver.castTargetWithin(site.span, types.castTargets);
 		if (operandSpan == null || rawTarget == null) return null;
 		final targetSource: String = rawTarget;
-		if (ExpectedType.isNullableWrapper(targetSource, types.wrapperNames)) return null;
+		if (ExpectedType.isNullableWrapper(targetSource, types)) return null;
 		if (deletedRegionHasComment(types.source, site.span, operandSpan)) return null;
 		final expected: Null<String> = ExpectedType.expectedTypeSource(site, scan.root, types, scan.resolutionIndex);
 		return expected != null && TypeResolver.sameTypeSource(expected, targetSource, types.importMap) ? targetSource : null;

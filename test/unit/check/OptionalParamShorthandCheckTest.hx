@@ -435,6 +435,14 @@ class OptionalParamShorthandCheckTest extends Test {
 		Assert.equals(fnConst('a:Int = 5', 'final x:Int = a ?? 7;'), applyFix(source));
 	}
 
+	/** A comment inside the unwrapped `Null<…>` stays in the suggested spelling, exactly as written. */
+	@:pin('control') @:killer('M-OPTPARAM-COMMENT-DROPPED')
+	public function testCommentInsideTheWrapperIsKept(): Void {
+		final vs: Array<Violation> = violations(fn('z:Null</*c*/ Int> = null'));
+		Assert.equals(1, vs.length);
+		Assert.equals('prefer ?z:/*c*/ Int over z:Null</*c*/ Int> = null', vs[0].message);
+	}
+
 	private function fn(params: String): String {
 		return 'class C {\n\tfunction f($params):Void {}\n}';
 	}

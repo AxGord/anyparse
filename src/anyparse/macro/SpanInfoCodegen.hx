@@ -131,7 +131,8 @@ class SpanInfoCodegen {
 				propertyAccessors: [],
 				propertyWriteAccessors: [],
 				declaredTypeSources: [],
-				castTargetSources: []
+				castTargetSources: [],
+				typeParamNames: []
 			};
 			final _r = root;
 			if (_r != null) $rootCall;
@@ -191,7 +192,8 @@ class SpanInfoCodegen {
 				propertyAccessors: [],
 				propertyWriteAccessors: [],
 				declaredTypeSources: [],
-				castTargetSources: []
+				castTargetSources: [],
+				typeParamNames: []
 			};
 			final _r = root;
 			if (_r != null) $rootCall;

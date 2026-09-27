@@ -41,9 +41,6 @@ final class StaticExtensionFacts {
 	/** The annotation that keeps a static out of `using` (`TypedFactsProbe` writes metadata without its `@`). */
 	private static inline final NO_USING_META: String = ':noUsing';
 
-	/** The wrapper a nullable type is spelled with; member lookup and `using` both look through it. */
-	private static inline final NULL_OPEN: String = 'Null<';
-
 	/** The one type that dispatches nothing statically. */
 	private static inline final DYNAMIC: String = 'Dynamic';
 
@@ -64,7 +61,7 @@ final class StaticExtensionFacts {
 		if (facts.dropped.length > 0 || facts.configurations.length == 0 || facts.sourceOf(facts.keyOf(file)) != source) return Unproven;
 		final typed: Null<String> = receiverType(facts, file, recv);
 		if (typed == null) return Unproven;
-		final receiver: String = unwrapNull(typed);
+		final receiver: String = FactsTypeText.unwrapNull(typed);
 		if (receiver == DYNAMIC) return DynamicReceiver;
 		if (!NOMINAL.match(CompilerFacts.baseId(receiver))) return Unproven;
 		final base: String = CompilerFacts.baseId(receiver);
@@ -221,7 +218,7 @@ final class StaticExtensionFacts {
 	 * An abstract parameter is refused, `Null` aside.
 	 */
 	private static function accepts(facts: CompilerFacts, param: String, base: String, chain: Array<String>): Bool {
-		final type: String = unwrapNull(param);
+		final type: String = FactsTypeText.unwrapNull(param);
 		if (type.startsWith('$') || type.startsWith('{') || type.startsWith('(')) return true;
 		final id: String = CompilerFacts.baseId(type);
 		final declared: Null<TypeFact> = facts.type(id);
@@ -233,13 +230,6 @@ final class StaticExtensionFacts {
 				declared.targets.length > 0 && declared.targets.foreach(t -> t.startsWith('{'));
 			case _: false;
 		};
-	}
-
-	/** `type` without its `Null<…>` wrappers. */
-	private static function unwrapNull(type: String): String {
-		var out: String = type;
-		while (out.startsWith(NULL_OPEN) && out.endsWith('>')) out = out.substring(NULL_OPEN.length, out.length - 1);
-		return out;
 	}
 
 }

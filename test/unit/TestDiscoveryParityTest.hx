@@ -171,6 +171,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.FactsFixGateE2ETest',
 		'unit.check.FactsTypeOracleE2ETest',
 		'unit.check.FactsTypeOracleTest',
+		'unit.check.FactsTypeTextTest',
 		'unit.check.FieldInitAtDeclarationCheckTest',
 		'unit.check.FieldInitAtDeclarationCrossingSuperTest',
 		'unit.check.FieldInitInConstructorCheckTest',
@@ -977,6 +978,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.TypeInfoMemoTest',
 		'unit.query.TypeRefPrinterTest',
 		'unit.query.TypeResolverSliceTest',
+		'unit.query.TypeSyntaxTest',
 		'unit.runtime.CommonPrefixTest',
 		'unit.runtime.InputTest',
 		'unit.runtime.ParseErrorTest',
@@ -1098,6 +1100,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.AnonTypeDupCheckTest#testEachFileHeldToItsOwnChainThreshold :: control :: M-ANON-FIRST-FILE-CONFIG',
 			'unit.check.AvoidDynamicBagFixTest#testANullableValueIsNeverTypedByItsBareWrapper :: control :: M-BAG-NULL-OUTER',
 			'unit.check.AvoidDynamicBagFixTest#testAnInitializerOfAnotherTypeKeepsTheDeclaration :: control :: M-BAG-INITIALIZER',
+			'unit.check.AvoidDynamicCheckTest#testDynamicInsideIntersectionOrConditionalArgumentFlagged :: control :: '
+				+ 'M-AVOIDDYN-COMPOSITE-SKIPPED',
 			'unit.check.AvoidDynamicRiskyFixE2ETest#testAFixNeverLandsWhereItsRuleIsDisabled :: control :: '
 				+ 'M-COLLECT-NO-ENABLEMENT,M-FIXVERIFY-ENABLEMENT-DROPPED',
 			'unit.check.AvoidDynamicRiskyFixE2ETest#testTheRunResolverGatesTheScannedFiles :: control :: M-FIXVERIFY-DISCOVERS-CONFIG',
@@ -1219,6 +1223,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.FactsTypeOracleTest#testFactsOfAnotherMemberDecline :: control :: M-ORACLE-HOME-GUARD',
 			'unit.check.FactsTypeOracleTest#testFactsOfAnotherTextThanTheOriginalAreStale :: control :: M-FACTS-INVALIDATE-FOREIGN',
 			'unit.check.FactsTypeOracleTest#testTypesNoSourceCanSpellDecline :: control :: M-FACTS-SPELL-IMPL',
+			'unit.check.FactsTypeTextTest#testOnlyAWrapperEnclosingTheWholeTypeIsPeeled :: control :: M-FACTS-NULL-PEEL-UNMATCHED',
 			'unit.check.FieldInitAtDeclarationCrossingSuperTest#testCollectionOfForeignReadAfterSuperNotMoved :: control :: '
 				+ 'M-FIAD-INERT-ADMITS-ALL,M-FIAD-INERT-ELEMENT-ADMITS-ALL',
 			'unit.check.FieldInitAtDeclarationCrossingSuperTest#testCrossingWithoutResolutionRootsNotMoved :: control :: '
@@ -1361,6 +1366,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.OperandBindingTest#testToStringIdentReceiverOfIndexedClassIsProven :: control :: M-TOSTRING-IDENT-CUT',
 			'unit.check.OperandBindingTest#testUndecidedCaptureShadowsTheOuterBinding :: control :: M-OPERAND-CASE-CAPTURE',
 			'unit.check.OperandBindingTest#testWildcardOverUnindexedPackageOutranksSamePackageClass :: control :: M-BINDING-UNINDEXED-WILDCARD-FREE',
+			'unit.check.OptionalParamShorthandCheckTest#testCommentInsideTheWrapperIsKept :: control :: M-OPTPARAM-COMMENT-DROPPED',
 			'unit.check.OracleCacheTest#testAFingerprintReadsItsSourcesThroughTheMemo :: control :: ' + 'M-ORACLE-CACHE-MEMO-UNREAD',
 			'unit.check.OracleCacheTest#testAVerdictIsNotFiledUnderAFingerprintTheTreeLeft :: control :: '
 				+ 'M-ORACLE-CACHE-STORES-A-MOVED-FINGERPRINT',
@@ -1916,6 +1922,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-ELSE-SWITCH-CLOSE-NONE',
 			'unit.grammar.haxe.ElseSwitchPlacementSliceTest#testSamePlacesTheSwitchOnTheElseLine :: control :: M-ELSE-SWITCH-TESTS-NONE',
 			'unit.grammar.haxe.ElseSwitchPlacementSliceTest#testTheValueIfThenBranchGluesAsWell :: control :: M-ELSE-SWITCH-TESTS-NONE',
+			'unit.grammar.haxe.HxAnonFieldTypeProjectionTest#testATypeSlotThatIsAlsoAChildPrintsOnce :: control :: M-AST-SLOT-DUPLICATED',
 			'unit.grammar.haxe.HxArrowBlockIfOverflowSliceTest#testOverflowingBlockIfBreaksAfterArrow :: control :: '
 				+ 'M-ARROW-HEAD-WIDTH-NONE',
 			'unit.grammar.haxe.HxBlankAroundMultilineMembersTest#testBlankAppearsBeforeAMultilineMember :: control :: '
@@ -2647,6 +2654,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.SetModifierSliceTest#testAnEnumAbstractMemberStillTakesPublic :: control :: M-SETMOD-MODULE-BY-TYPE-KINDS',
 			'unit.query.StdResolverTest#testMultiEntryEnvAnswersTheStdEntry :: control :: M-STD-ENV-ENTRIES',
 			'unit.query.StdResolverTest#testTheStdBesideTheCompilerIsFoundInEitherLayout :: control :: M-STD-SIBLING-HOMEBREW',
+			'unit.query.StructuralMembershipTest#testAliasTargetPairAgrees :: control :: M-ALIAS-TARGET-SIMPLE-NAME',
 			'unit.query.SymbolIndexRunMemoSliceTest#testConfinementGateReadsTheIndexGrantSlot :: control :: M-GRANT-SLOT-UNREAD',
 			'unit.query.SymbolIndexRunMemoSliceTest#testSupertypeNameUnionIsBuiltOncePerIndex :: control :: M-SUPERTYPE-UNION-NOMEMO',
 		];
@@ -3825,7 +3833,12 @@ class TestDiscoveryParityTest extends Test {
 			'M-SCOPE-IMPORT-BLIND',
 			'M-SCOPE-AMBIENT-BLIND',
 			'M-SCOPE-MODULE-FIELDS',
-			'M-SCOPE-MODULE-IMPORT-BLIND'
+			'M-SCOPE-MODULE-IMPORT-BLIND',
+			'M-ALIAS-TARGET-SIMPLE-NAME',
+			'M-AVOIDDYN-COMPOSITE-SKIPPED',
+			'M-OPTPARAM-COMMENT-DROPPED',
+			'M-AST-SLOT-DUPLICATED',
+			'M-FACTS-NULL-PEEL-UNMATCHED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

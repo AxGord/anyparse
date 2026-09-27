@@ -33,6 +33,6 @@ package anyparse.grammar.haxe;
 typedef HxAbstractDeclHead = {
 	@:kw('abstract') var name: HxIdentLit;
 	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe) var typeParams: Null<Array<HxTypeParamDecl>>;
-	@:optional @:lead('(') @:trail(')') @:fmt(tightLead) var underlyingType: Null<HxType>;
+	@:optional @:lead('(') @:trail(')') @:fmt(tightLead) @:queryTypeSlot var underlyingType: Null<HxType>;
 	@:trivia @:tryparse @:fmt(padLeading, lineLengthAwareSeps) var clauses: Array<HxAbstractClause>;
 }

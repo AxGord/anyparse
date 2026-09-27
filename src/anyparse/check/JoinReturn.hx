@@ -11,6 +11,7 @@ import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -192,6 +193,7 @@ final class JoinReturn implements Check {
 		if (support == null) return null;
 		final functionKinds: Array<String> = (shape.functionKinds ?? []).concat(shape.lambdaKinds ?? []);
 		return {
+			typeSyntax: plugin.typeSyntax,
 			localDeclKinds: localDeclKinds,
 			returnKind: returnKind,
 			exprStmtKind: shape.exprStatementKind,
@@ -270,7 +272,7 @@ final class JoinReturn implements Check {
 		return ({
 			declSpan: keySpan,
 			editSpan: new Span(keySpan.from, retSpan.to),
-			text: buildReturn(initSource, annotation, retType, init, s.newExprKind),
+			text: buildReturn(initSource, annotation, retType, init, s),
 			message: 'this declaration and its next-line return can be joined into a single return'
 		}: Match);
 	}
@@ -281,13 +283,13 @@ final class JoinReturn implements Check {
 	 * only for the `new T(...)`-matches-annotation skip (see `isRedundantNewAscription`).
 	 */
 	private static function buildReturn(
-		initSource: String, annotation: Null<String>, retType: Null<String>, initNode: QueryNode, newExprKind: Null<String>
+		initSource: String, annotation: Null<String>, retType: Null<String>, initNode: QueryNode, s: Seams
 	): String {
 		if (annotation == null) return 'return $initSource;';
 		final ann: String = annotation;
 		return if (retType != null && TypeResolver.stripWs(retType) == TypeResolver.stripWs(ann))
 			'return $initSource;'
-		else if (isRedundantNewAscription(initNode, ann, newExprKind))
+		else if (isRedundantNewAscription(initNode, ann, s))
 			'return $initSource;'
 		else
 			'return ($initSource : $ann);';
@@ -311,11 +313,13 @@ final class JoinReturn implements Check {
 	 * this gate correct on its own semantic terms (`T` carries no type parameters), independent
 	 * of what a future grammar's constructor node happens to encode in `.name`.
 	 */
-	private static function isRedundantNewAscription(initNode: QueryNode, ann: String, newExprKind: Null<String>): Bool {
-		if (newExprKind == null || initNode.kind != newExprKind) return false;
+	private static function isRedundantNewAscription(initNode: QueryNode, ann: String, s: Seams): Bool {
+		if (s.newExprKind == null || initNode.kind != s.newExprKind) return false;
 		final ctorName: Null<String> = initNode.name;
-		return ctorName != null && TypeResolver.stripWs(ann).indexOf('<') == -1
-			&& TypeResolver.stripWs(ctorName) == TypeResolver.stripWs(ann);
+		return ctorName != null && switch s.typeSyntax(ann)?.shape {
+			case Nominal(path, []): path == TypeResolver.stripWs(ctorName);
+			case _: false;
+		};
 	}
 
 	/**
@@ -377,7 +381,7 @@ final class JoinReturn implements Check {
 		return ({
 			declSpan: keySpan,
 			editSpan: new Span(keySpan.from, retSpan.to),
-			text: buildReturn(initSource, annotation, retType, rhs, s.newExprKind),
+			text: buildReturn(initSource, annotation, retType, rhs, s),
 			message: 'this assignment and its next-line return can be joined into a single return'
 		}: Match);
 	}
@@ -428,6 +432,9 @@ final class JoinReturn implements Check {
 
 /** The kinds `JoinReturn` reads. */
 private typedef Seams = {
+	/** `GrammarPlugin.typeSyntax` — how an ascription is read. */
+	var typeSyntax: TypeSyntaxReader;
+
 	var localDeclKinds: Array<String>;
 	var returnKind: String;
 	var exprStmtKind: Null<String>;

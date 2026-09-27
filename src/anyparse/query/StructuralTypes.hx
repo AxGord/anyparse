@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
 using Lambda;
 
@@ -93,12 +94,18 @@ final class StructuralTypes {
 	/** The member layer: what the family members this one asks about actually declare. */
 	private final _members: MemberLookup;
 
+	/** `GrammarPlugin.typeSyntax` of the grammar that built the owning index. */
+	private final _typeSyntax: TypeSyntaxReader;
+
 	/** Built once by the owning `SymbolIndex`, which hands over the shared, immutable index data. */
-	public function new(files: Array<FileInfo>, refs: TypeRefIndex, subtypes: SubtypeGraph, members: MemberLookup) {
+	public function new(
+		files: Array<FileInfo>, refs: TypeRefIndex, subtypes: SubtypeGraph, members: MemberLookup, typeSyntax: TypeSyntaxReader
+	) {
 		_files = files;
 		_refs = refs;
 		_subtypes = subtypes;
 		_members = members;
+		_typeSyntax = typeSyntax;
 	}
 
 	/**
@@ -190,7 +197,7 @@ final class StructuralTypes {
 			final paramSource: Null<String> = m.firstParamTypeSource;
 			final ret: Null<String> = m.returnNominal;
 			if (!m.isStatic || paramSource == null || ret == null) return null;
-			final accepts: Null<String> = NominalTypes.outerNominalOf(paramSource);
+			final accepts: Null<String> = NominalTypes.outerNominalOf(paramSource, _typeSyntax);
 			if (accepts == null || !receiverFitsParameter(receiver, accepts, paramSource, host, fromFile)) return null;
 			if (found != null && found != ret) return null;
 			found = ret;
@@ -287,7 +294,7 @@ final class StructuralTypes {
 	): Bool {
 		if (accepts == receiver || _subtypes.isSubtype(receiver, accepts)) return true;
 		if (accepts != ITERABLE_TYPE_NAME && accepts != ITERATOR_TYPE_NAME) return false;
-		final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(paramSource);
+		final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(paramSource, _typeSyntax);
 		if (args == null || args.length != 1) return false;
 		final element: String = args[0];
 		return SourceText.isIdentifier(element) && _refs.resolveTypeRef(element, host.file) == null
@@ -456,11 +463,11 @@ final class StructuralTypes {
 	 * pins the residual, so a future instance is a test change rather than a silent one.
 	 */
 	private function comparableNominalOf(typeSource: String, host: ResolvedType, seen: Array<String>): Null<String> {
-		final nominal: Null<String> = NominalTypes.outerNominalOf(typeSource);
+		final nominal: Null<String> = NominalTypes.outerNominalOf(typeSource, _typeSyntax);
 		if (nominal == null || MemberLookup.dynamicSupertypeRef(nominal)) return null;
 		if (host.type.typeParamNames.contains(nominal)) return null;
 		if (nominal == NULLABLE_WRAPPER_TYPE_NAME) {
-			final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(typeSource);
+			final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(typeSource, _typeSyntax);
 			return args == null || args.length != 1 ? null : comparableNominalOf(args[0], host, seen);
 		}
 		final decl: Null<ResolvedType> = _refs.resolveTypeRef(nominal, host.file);

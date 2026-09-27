@@ -14,6 +14,7 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoMemo;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefPrinter;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
 using StringTools;
@@ -133,7 +134,8 @@ final class ExplicitType implements Check implements OracleAssisted {
 			flagged: [for (v in violations) if (v.span != null) '${v.span.from}:${v.span.to}' => v],
 			printer: printer,
 			oracle: oracle,
-			regions: plugin.lexicalRegions(source)
+			regions: plugin.lexicalRegions(source),
+			typeParams: RunScan.typeParamNamesOf(plugin, source)
 		};
 		final macroKind: Null<String> = shape.macroModifierKind;
 		final boundary: QueryNode -> Bool = c -> members.contains(c.kind);
@@ -242,31 +244,19 @@ final class ExplicitType implements Check implements OracleAssisted {
 
 	/**
 	 * The RETURN half of a printed function type — `(name : String) -> String` yields `String`.
-	 * Public as the parse seam its own tests drive: only a function-TYPED parameter discriminates
-	 * the depth scan, and no realistic fixture reaches that shape through the display server.
+	 * Public as the parse seam its own tests drive: a function-TYPED parameter is the shape that
+	 * tells a real reading from a split at the first `->`, and no realistic fixture reaches it
+	 * through the display server.
 	 * The compiler prints a method's own type as a parenthesised parameter group followed by
-	 * `->` and the result, so a reply of any other shape (a position that resolved to a value,
-	 * a query the server could not answer) yields null. The group's closing parenthesis is
-	 * found by DEPTH, so a function-typed parameter cannot end it early.
+	 * `->` and the result, read by the grammar (`GrammarPlugin.typeSyntax`), so a reply of any
+	 * other shape (a position that resolved to a value, a query the server could not answer, a
+	 * type the grammar cannot read) yields null.
 	 */
-	public static function returnTypeOf(printed: String): Null<String> {
-		final t: String = printed.trim();
-		if (t.length == 0 || t.fastCodeAt(0) != '('.code) return null;
-		var depth: Int = 0;
-		var i: Int = 0;
-		while (i < t.length) {
-			final c: Int = t.fastCodeAt(i);
-			if (c == '('.code)
-				depth++;
-			else if (c == ')'.code && --depth == 0)
-				break;
-			i++;
-		}
-		if (i >= t.length) return null;
-		final rest: String = t.substring(i + 1).ltrim();
-		if (!rest.startsWith('->')) return null;
-		final ret: String = rest.substring(2).trim();
-		return ret.length == 0 ? null : ret;
+	public static function returnTypeOf(printed: String, typeSyntax: TypeSyntaxReader): Null<String> {
+		return switch typeSyntax(printed)?.shape {
+			case Function(_, ret, false): ret.text;
+			case _: null;
+		};
 	}
 
 	/** Whether `c` is a space or tab — horizontal whitespace, excluding line breaks. */
@@ -296,7 +286,7 @@ final class ExplicitType implements Check implements OracleAssisted {
 		// `function` keyword the node's span starts on.
 		final nameAt: Int = OccurrenceScan.activeCodeIdentTokenOffset(s.source, span, name, s.regions);
 		if (nameAt < 0) return decline(v, DECLINE_NO_NAME);
-		return annotation(s, v, s.oracle.returnType(s.file, span, name, nameAt + name.length), at, methodProof(s, name, nameAt), false);
+		return annotation(s, v, s.oracle.returnType(s.file, span, name, nameAt + name.length), at, methodProof(s, fn), false);
 	}
 
 	/** The oracle-assisted edits for the flagged return type and parameters of the function `fn`. */
@@ -330,9 +320,9 @@ final class ExplicitType implements Check implements OracleAssisted {
 		if (nameAt < 0) return decline(v, DECLINE_NO_NAME);
 		final at: Int = param.children.length > 0 ? LiteralInfer.insertPoint(param, param.children[0], s.source) : nameAt + name.length;
 		if (at < 0) return decline(v, DECLINE_NO_SLOT);
-		final fnAt: Int = OccurrenceScan.activeCodeIdentTokenOffset(s.source, fnSpan, fnName, s.regions);
-		final proof: Null<String> = fnAt < 0 ? null : methodProof(s, fnName, fnAt);
-		return annotation(s, v, s.oracle.paramType(s.file, fnSpan, fnName, index, name, nameAt + name.length), at, proof, true);
+		return annotation(
+			s, v, s.oracle.paramType(s.file, fnSpan, fnName, index, name, nameAt + name.length), at, methodProof(s, fn), true
+		);
 	}
 
 	/** The annotation edit for the flagged field `field`, or null when any gate fails (the finding's `declineReason` says which). */
@@ -374,12 +364,13 @@ final class ExplicitType implements Check implements OracleAssisted {
 	}
 
 	/**
-	 * `name` when the function whose name token starts at `nameAt` DECLARES type parameters — `<` right after the name
-	 * token — else null. The `<method>.<param>` form a compiler prints can only belong to such a method; without that
-	 * proof the same shape is an ordinary package-qualified type whose package tail happens to match the method name.
+	 * `fn`'s name when it DECLARES type parameters (`TypeInfoProvider.typeParamNames`), else null. The
+	 * `<method>.<param>` form a compiler prints can only belong to such a method; without that proof the same
+	 * shape is an ordinary package-qualified type whose package tail happens to match the method name.
 	 */
-	private static function methodProof(s: ReturnSeams, name: String, nameAt: Int): Null<String> {
-		return s.source.fastCodeAt(nameAt + name.length) == '<'.code ? name : null;
+	private static function methodProof(s: ReturnSeams, fn: QueryNode): Null<String> {
+		final span: Null<Span> = fn.span;
+		return span != null && s.typeParams.exists(span.from) ? fn.name : null;
 	}
 
 	/**
@@ -874,6 +865,9 @@ private typedef ReturnSeams = {
 	 * answer (`GrammarPlugin.lexicalRegions`), carried here rather than re-derived per member.
 	 */
 	final regions: Array<LexRegion>;
+
+	/** This file's type-parameter names per declaring span (`TypeInfoProvider.typeParamNames`). */
+	final typeParams: Map<Int, Array<String>>;
 };
 
 /**

@@ -10,6 +10,7 @@ import anyparse.check.ExplicitType;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.Cli;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 import unit.cli.CliFixture;
 import utest.Assert;
@@ -32,6 +33,8 @@ using StringTools;
  */
 class ExplicitTypeReturnOracleTest extends Test {
 
+	private static final TYPES: TypeSyntaxReader = new HaxeQueryPlugin().typeSyntax;
+
 	#if (sys || nodejs)
 	private static final SRC: String = 'class Main {\n\n\tpublic var count = 0;\n\n\tpublic function new() {}\n\n'
 		+ '\tpublic function label(n:Int) {\n\t\treturn n > 1 ? \'many\' : \'one\';\n\t}\n\n'
@@ -53,35 +56,35 @@ class ExplicitTypeReturnOracleTest extends Test {
 	// --- returnTypeOf: the printed function type ---
 
 	public function testReturnTypeOfSimple(): Void {
-		Assert.equals('String', ExplicitType.returnTypeOf('(name : String) -> String'));
+		Assert.equals('String', ExplicitType.returnTypeOf('(name : String) -> String', TYPES));
 	}
 
 	public function testReturnTypeOfNoParams(): Void {
-		Assert.equals('Void', ExplicitType.returnTypeOf('() -> Void'));
+		Assert.equals('Void', ExplicitType.returnTypeOf('() -> Void', TYPES));
 	}
 
 	public function testReturnTypeOfFunctionTypedParam(): Void {
-		Assert.equals('Int', ExplicitType.returnTypeOf('(f : (Int) -> Int) -> Int'));
+		Assert.equals('Int', ExplicitType.returnTypeOf('(f : (Int) -> Int) -> Int', TYPES));
 	}
 
 	public function testReturnTypeOfGenericResult(): Void {
-		Assert.equals('Array<Int>', ExplicitType.returnTypeOf('(xs : Array<Int>) -> Array<Int>'));
+		Assert.equals('Array<Int>', ExplicitType.returnTypeOf('(xs : Array<Int>) -> Array<Int>', TYPES));
 	}
 
 	public function testReturnTypeOfRejectsNonFunction(): Void {
-		Assert.isNull(ExplicitType.returnTypeOf('String'));
+		Assert.isNull(ExplicitType.returnTypeOf('String', TYPES));
 	}
 
 	public function testReturnTypeOfRejectsUnbalanced(): Void {
-		Assert.isNull(ExplicitType.returnTypeOf('(a : Int -> Int'));
+		Assert.isNull(ExplicitType.returnTypeOf('(a : Int -> Int', TYPES));
 	}
 
 	public function testReturnTypeOfRejectsMissingArrow(): Void {
-		Assert.isNull(ExplicitType.returnTypeOf('(a : Int) Int'));
+		Assert.isNull(ExplicitType.returnTypeOf('(a : Int) Int', TYPES));
 	}
 
 	public function testReturnTypeOfRejectsEmptyResult(): Void {
-		Assert.isNull(ExplicitType.returnTypeOf('(a : Int) ->   '));
+		Assert.isNull(ExplicitType.returnTypeOf('(a : Int) ->   ', TYPES));
 	}
 
 	// --- fixWithOracle end to end ---
@@ -99,7 +102,7 @@ class ExplicitTypeReturnOracleTest extends Test {
 		final all: Array<Violation> = check.run([{ file: path, source: SRC }], plugin);
 		final returns: Array<Violation> = all.filter(v -> v.message.indexOf('return type') != -1);
 		Assert.equals(3, returns.length, 'label, shout and main are flagged; the constructor is not');
-		final display: Null<CompilerDisplayOracle> = CompilerDisplayOracle.start('check.hxml', dir);
+		final display: Null<CompilerDisplayOracle> = CompilerDisplayOracle.start(TYPES, 'check.hxml', dir);
 		if (display == null) {
 			Assert.pass('display server unavailable — skipped');
 			CliFixture.removeDir(dir);

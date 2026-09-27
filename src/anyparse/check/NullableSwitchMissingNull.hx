@@ -7,11 +7,13 @@ import anyparse.check.NullableSource.NullableSourceCfg;
 import anyparse.query.BoolExprShape;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.NodeShape;
+import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -92,7 +94,7 @@ final class NullableSwitchMissingNull implements Check implements NoAutofix {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final shape: RefShape = plugin.refShape();
-		final seams: Null<Seams> = readSeams(shape);
+		final seams: Null<Seams> = readSeams(shape, plugin.typeSyntax);
 		if (seams == null) return [];
 		final s: Seams = seams;
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
@@ -137,7 +139,7 @@ final class NullableSwitchMissingNull implements Check implements NoAutofix {
 	}
 
 	/** Bundle the required + optional `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */
-	private static function readSeams(shape: RefShape): Null<Seams> {
+	private static function readSeams(shape: RefShape, typeSyntax: TypeSyntaxReader): Null<Seams> {
 		final switchKinds: Null<Array<String>> = shape.switchKinds;
 		if (switchKinds == null || switchKinds.length == 0) return null;
 		final caseBranchKind: Null<String> = shape.caseBranchKind;
@@ -165,6 +167,7 @@ final class NullableSwitchMissingNull implements Check implements NoAutofix {
 			localDeclKinds: shape.localDeclKinds ?? [],
 			paramKinds: shape.paramKinds ?? [],
 			nullMarkers: shape.nullableReturnMarkerTypes ?? [],
+			typeSyntax: typeSyntax,
 			callKind: shape.callKind,
 			fieldAccessKind: shape.fieldAccessKind,
 			nullAssertionCalls: shape.nullAssertionCalls ?? [],
@@ -274,26 +277,9 @@ final class NullableSwitchMissingNull implements Check implements NoAutofix {
 		if (bindingFrom == null) return false;
 		final declared: Null<String> = ctx.declaredTypeSources[bindingFrom];
 		if (declared == null) return false;
-		final inner: String = unwrapNullable(declared, s);
+		final inner: String = NominalTypes.unwrapNullable(declared.trim(), s.nullMarkers, s.typeSyntax);
 		return ctx.index.resolveTypeRefsFrom(inner, ctx.file).exists(hit -> s.taggedKinds.contains(hit.type.kind));
 	}
-
-	/**
-	 * The type argument of a `Null<T>`-style wrapper in the declared-type SOURCE `declared`, or
-	 * `declared` trimmed when it carries no wrapper. Only a wrapper named in `Seams.nullMarkers`
-	 * is unwrapped, and only one level -- `Null<Null<T>>` is not a shape Haxe produces.
-	 */
-	private static function unwrapNullable(declared: String, s: Seams): String {
-		final trimmed: String = declared.trim();
-		final open: Int = trimmed.indexOf('<');
-		return if (open <= 0 || !trimmed.endsWith('>'))
-			trimmed
-		else if (s.nullMarkers.contains(trimmed.substring(0, open)))
-			trimmed.substring(open + 1, trimmed.length - 1).trim()
-		else
-			trimmed;
-	}
-
 
 	/**
 	 * Whether a `nullAssertionCalls` assertion (`Assert.notNull(x)`) proving the
@@ -384,6 +370,10 @@ private typedef Seams = {
 	var localDeclKinds: Array<String>;
 	var paramKinds: Array<String>;
 	var nullMarkers: Array<String>;
+
+	/** `GrammarPlugin.typeSyntax` — how a declared type's wrapper is read. */
+	var typeSyntax: TypeSyntaxReader;
+
 	var callKind: Null<String>;
 	var fieldAccessKind: Null<String>;
 	var nullAssertionCalls: Array<String>;

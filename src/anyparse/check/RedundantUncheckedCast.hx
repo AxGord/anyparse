@@ -111,7 +111,7 @@ final class RedundantUncheckedCast implements Check {
 		final operandSpan: Null<Span> = operand.span;
 		if (operandSpan == null || CheckScan.hasCommentMarker(types.source, site.span.from, operandSpan.from)) return null;
 		final expected: Null<String> = ExpectedType.expectedTypeSource(site, scan.root, types, scan.resolutionIndex);
-		if (expected == null || ExpectedType.isNullableWrapper(expected, types.wrapperNames)) return null;
+		if (expected == null || ExpectedType.isNullableWrapper(expected, types)) return null;
 		final position: String = expected;
 		final declared: Null<String> = TypeResolver.identDeclaredTypeSource(
 			operand, types.shape, scan.root, () -> types.declaredTypeSources, true

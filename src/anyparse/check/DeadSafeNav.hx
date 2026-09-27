@@ -125,7 +125,7 @@ final class DeadSafeNav implements Check implements ConfigAware {
 		final buildMay: Map<String, Bool> = [];
 		final index: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
 		return RunScan.collectWith(files, plugin, RunScan.typeInfoOf(plugin), (entry, root, typed, violations) -> {
-			final types: DeclaredNullity = DeclaredNullity.of(entry.file, root, entry.source, shape, typed, index);
+			final types: DeclaredNullity = DeclaredNullity.of(entry.file, root, entry.source, shape, typed, plugin.typeSyntax, index);
 			final configDir: String = Path.directory(entry.file);
 			if (!buildMay.exists(configDir)) buildMay[configDir] = buildMayEnableNullSafety(entry.file, hxmlText);
 			final buildNullSafe: Bool = buildMay[configDir] == true;

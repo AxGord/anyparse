@@ -147,6 +147,21 @@ class PreferLocalFunctionCheckTest extends Test {
 	}
 
 	/**
+	 * A parenthesised parameter list is ONE function per list: `(Int) -> (Int) -> Int` takes one
+	 * `Int` and returns a function. Read as a chain of arrows it looked like two parameters, so the
+	 * one-parameter literal that spells it exactly was refused.
+	 */
+	public function testParenthesisedListReturningAFunctionIsHoisted(): Void {
+		final src: String =
+			'class C {\n\tfunction f():Void {\n\t\tfinal add:(Int) -> (Int) -> Int = (a:Int) -> (b:Int) -> a + b;\n\t\tg(add);\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(
+			'class C {\n\tfunction f():Void {\n\t\tfunction add(a:Int):(Int) -> Int return (b:Int) -> a + b;\n\t\tg(add);\n\t}\n}',
+			fixed(src)
+		);
+	}
+
+	/**
 	 * An expression body under a `Void` result is wrapped in a block, not returned: `return x + 1` in a
 	 * `:Void` function is `Int should be Void`, while the lambda's value was simply discarded.
 	 */

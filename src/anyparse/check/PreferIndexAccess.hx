@@ -10,6 +10,7 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -154,7 +155,7 @@ final class PreferIndexAccess implements Check {
 	 * a nullable wrapper whose inner nominal is one — the shared `CheckScan` predicate.
 	 */
 	private static inline function nominalIsMap(nominal: String, source: Null<String>, cfg: Cfg): Bool {
-		return MapNominal.isMap(nominal, source, cfg.mapTypes, cfg.nullableWrappers);
+		return MapNominal.isMap(nominal, source, cfg.mapTypes, cfg.nullableWrappers, cfg.typeSyntax);
 	}
 
 	/** Resolve the per-grammar seams + type provider, or null when the grammar lacks a needed kind / type info. */
@@ -179,6 +180,7 @@ final class PreferIndexAccess implements Check {
 			objectLiteralKind: shape.objectLiteralKind,
 			mapTypes: mapTypes,
 			nullableWrappers: shape.nullableWrapperTypeNames ?? [],
+			typeSyntax: plugin.typeSyntax,
 			opaqueKinds: shape.opaqueKinds ?? [],
 			ternaryKind: shape.ternaryKind,
 			nullCoalKind: shape.nullCoalesceKind,
@@ -270,7 +272,7 @@ final class PreferIndexAccess implements Check {
 		final rootType: Null<String> = NominalTypes.pathRootTypeName(recv, root, declaredTypes, cfg.shape);
 		final src: Null<String> = NominalTypes.pathReceiverMemberTypeSource(path, rootType, index, file);
 		if (src == null) return false;
-		final nominal: Null<String> = NominalTypes.outerNominalOf(src);
+		final nominal: Null<String> = NominalTypes.outerNominalOf(src, cfg.typeSyntax);
 		return nominal != null && nominalIsMap(nominal, src, cfg);
 	}
 
@@ -289,7 +291,7 @@ final class PreferIndexAccess implements Check {
 		if (index == null) return false;
 		final src: Null<String> = RefactorSupport.implicitThisMemberTypeSource(recv, root, cfg.shape, index, file, invisibleBinders());
 		if (src == null) return false;
-		final nominal: Null<String> = NominalTypes.outerNominalOf(src);
+		final nominal: Null<String> = NominalTypes.outerNominalOf(src, cfg.typeSyntax);
 		return nominal != null && nominalIsMap(nominal, src, cfg);
 	}
 
@@ -389,6 +391,10 @@ private typedef Cfg = {
 	var objectLiteralKind: Null<String>;
 	var mapTypes: Array<String>;
 	var nullableWrappers: Array<String>;
+
+	/** `GrammarPlugin.typeSyntax` — how a receiver's written type is read. */
+	var typeSyntax: TypeSyntaxReader;
+
 	var opaqueKinds: Array<String>;
 	var ternaryKind: Null<String>;
 	var nullCoalKind: Null<String>;

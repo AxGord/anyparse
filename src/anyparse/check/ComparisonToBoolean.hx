@@ -13,6 +13,7 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoMemo;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -136,7 +137,7 @@ final class ComparisonToBoolean implements Check {
 		// proofs demand it — after every cheaper arm on every candidate has failed.
 		final index: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
 		return RunScan.collectWith(files, plugin, resolveSeams(plugin), (entry, tree, seams, violations) -> {
-			walk(violations, tree, seams, proofOf(entry.file, entry.source, tree, seams.shape, provider, index));
+			walk(violations, tree, seams, proofOf(entry.file, entry.source, tree, seams.shape, provider, plugin.typeSyntax, index));
 		});
 	}
 
@@ -176,7 +177,7 @@ final class ComparisonToBoolean implements Check {
 		// `lazySymbolIndex` prefers the run's resolution scope, then the caller's report index, and
 		// only then builds over `source` alone — enough for a same-file receiver type.
 		final resolver: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex([{ file: file, source: source }], plugin, index);
-		final proof: TypeProof = proofOf(file, source, root, seams.shape, provider, resolver);
+		final proof: TypeProof = proofOf(file, source, root, seams.shape, provider, plugin.typeSyntax, resolver);
 		return CheckScan.applyBySpan(
 			plugin, source, violations, seams.equalityKinds, (node, span) -> comparisonEdit(node, span, source, seams, proof, eqKind)
 		);
@@ -193,13 +194,14 @@ final class ComparisonToBoolean implements Check {
 	 * `SymbolIndex` — neither is touched until a field-access operand actually reaches the proof.
 	 */
 	private static function proofOf(
-		file: String, source: String, root: QueryNode, shape: RefShape, provider: Null<TypeInfoProvider>, index: () -> Null<SymbolIndex>
+		file: String, source: String, root: QueryNode, shape: RefShape, provider: Null<TypeInfoProvider>, typeSyntax: TypeSyntaxReader,
+		index: () -> Null<SymbolIndex>
 	): TypeProof {
 		return {
 			file: file,
 			root: root,
 			declaredTypes: provider?.declaredTypes(source),
-			nullity: provider == null ? null : DeclaredNullity.of(file, root, source, shape, provider, index),
+			nullity: provider == null ? null : DeclaredNullity.of(file, root, source, shape, provider, typeSyntax, index),
 			castTargets: TypeInfoMemo.castTargetSources(provider, source),
 			index: index
 		};
@@ -315,7 +317,7 @@ final class ComparisonToBoolean implements Check {
 		final lookup: Null<PinnedLookup> = pinnedLookup(other.children[0], field, shape, proof);
 		if (lookup == null) return null;
 		final memberSource: Null<String> = lookup.index.paths.resolvePathFinalMemberTypeSource(proof.file, lookup.recvType, [field]);
-		return memberSource == null ? null : NominalTypes.outerNominalOf(memberSource);
+		return memberSource == null ? null : NominalTypes.outerNominalOf(memberSource, lookup.index.typeSyntax);
 	}
 
 	/**
@@ -386,7 +388,7 @@ final class ComparisonToBoolean implements Check {
 		if (written != null) return written;
 		if (NominalTypes.shadowedByNonStdType(lookup.index, recvType)) return null;
 		final tabled: Null<String> = seams.instanceMethodReturns['$recvType.$method'];
-		return tabled == null ? null : NominalTypes.outerNominalOf(tabled);
+		return tabled == null ? null : NominalTypes.outerNominalOf(tabled, lookup.index.typeSyntax);
 	}
 
 	/**

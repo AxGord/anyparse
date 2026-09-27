@@ -5,7 +5,6 @@ import haxe.macro.Type;
 import haxe.macro.TypeTools;
 import haxe.macro.TypedExprTools;
 
-using StringTools;
 
 /** The shapes of the typed tree `TypedFactsWalk` asks about, answered without walking. */
 @:nullSafety(Strict)
@@ -52,12 +51,6 @@ final class TypedFactsShapes {
 			case TAbstract(a, [element]) if (a.toString() == 'haxe.Rest' || a.toString() == 'haxe.extern.Rest'): element;
 			case _: null;
 		};
-	}
-
-	public static function unwrapNull(t: String): String {
-		var inner: String = t;
-		while (inner.startsWith('Null<') && inner.endsWith('>')) inner = inner.substring(5, inner.length - 1);
-		return inner;
 	}
 
 	public static function describe(fa: FieldAccess): FieldRef {

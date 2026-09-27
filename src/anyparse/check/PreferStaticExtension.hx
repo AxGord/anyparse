@@ -13,6 +13,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ImportInfo;
@@ -379,7 +380,12 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		// DEEP-mode resolution context (see `receiverNominal`): built once per file, and only for a
 		// file that actually holds a call on a configured module.
 		final usings: Array<String> = UsingScan.usingModules(UsingScan.headerOf(tree, source, plugin));
-		final chain: ChainTypeContext = { declaredTypeSources: s.typed.declaredTypeSources(source), source: source, usings: usings };
+		final chain: ChainTypeContext = {
+			declaredTypeSources: s.typed.declaredTypeSources(source),
+			source: source,
+			usings: usings,
+			typeSyntax: plugin.typeSyntax
+		};
 		// The conflict verdict depends only on (module, method), while a file repeats the same
 		// pair across every call site — and each miss costs a whole-index member-closure query.
 		final conflicts: Map<String, UsingConflict> = [];
@@ -672,7 +678,7 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		final underlying: Array<QueryNode> = decl.nameNode.children;
 		if (underlying.length == 0 || underlying[0].kind != UNDERLYING_TYPE_KIND) return null;
 		final written: Null<String> = underlying[0].name;
-		return written == null ? null : NominalTypes.outerNominalOf(written);
+		return written == null ? null : SourceText.lastSegment(written);
 	}
 
 	/**

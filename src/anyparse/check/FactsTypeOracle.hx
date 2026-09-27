@@ -56,9 +56,6 @@ final class FactsTypeOracle implements TypeOracle {
 
 	public static inline final DECLINE_PARAM_MISMATCH: String = "the compiler's parameter list does not match the declaration's";
 
-	/** The opening of a nullable type, as `FactsTypeSpelling` writes it. */
-	private static inline final NULL_OPEN: String = 'Null<';
-
 	/** The nullable wrapper's own name: never the type of a value `typeIdAt` names. */
 	private static inline final NULL_TYPE: String = 'Null';
 
@@ -134,17 +131,15 @@ final class FactsTypeOracle implements TypeOracle {
 
 	/**
 	 * The id of the type every configuration gave the expression at `expr` (`valueType`) — a `Null<…>` unwrapped when
-	 * `unwrapNull`, type arguments dropped — when it names a type the facts hold; null otherwise: a declined answer, a type
-	 * parameter, a function or structure type, or a `Null<…>` kept.
+	 * `unwrapNull` (`FactsTypeText.unwrapNull`), type arguments dropped — when it names a type the facts hold; null
+	 * otherwise: a declined answer, a type parameter, a function or structure type, or a `Null<…>` kept.
 	 */
 	public function typeIdAt(file: String, expr: Span, unwrapNull: Bool): Null<String> {
-		var spelled: String = switch valueType(file, expr) {
+		final spelled: String = switch valueType(file, expr) {
 			case Typed(type): type;
 			case Declined(_): return null;
 		};
-		if (unwrapNull && spelled.startsWith(NULL_OPEN) && spelled.endsWith('>'))
-			spelled = spelled.substring(NULL_OPEN.length, spelled.length - 1);
-		final id: String = CompilerFacts.baseId(spelled);
+		final id: String = CompilerFacts.baseId(unwrapNull ? FactsTypeText.unwrapNull(spelled) : spelled);
 		return id == NULL_TYPE || facts.type(id) == null ? null : id;
 	}
 

@@ -65,7 +65,7 @@ final class UnnecessaryNullCheck implements Check {
 		final index: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
 		return RunScan.collect(files, plugin, (entry, tree, violations) -> {
 			final root: QueryNode = tree;
-			final types: DeclaredNullity = DeclaredNullity.of(entry.file, root, entry.source, shape, provider, index);
+			final types: DeclaredNullity = DeclaredNullity.of(entry.file, root, entry.source, shape, provider, plugin.typeSyntax, index);
 			function walk(node: QueryNode): Void {
 				if (opaqueKinds.contains(node.kind)) return;
 				final span: Null<Span> = node.span;

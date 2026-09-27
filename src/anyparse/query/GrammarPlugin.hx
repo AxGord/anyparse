@@ -229,6 +229,22 @@ interface GrammarPlugin {
 	public function reconParse(source: String): Bool;
 
 	/**
+	 * `typeSource` — a type written as TEXT: an annotation's verbatim source, a span of a file, a
+	 * type a rule composed — read as ONE type by this grammar's own parser, or null when it is not
+	 * one: it does not parse, or a second token stands before or after the type. Comments around
+	 * the type are trivia, as they are to the parser: the answer's span covers the type alone, so a
+	 * consumer that splices `typeSource` back needs `text == typeSource` to know it is undecorated.
+	 * Offsets in the answer are into `typeSource` itself.
+	 *
+	 * The query tree keeps a type only as far as its projection does, so a consumer asking for the
+	 * SHAPE of a written type (its type arguments, a function's parameters and result, a structure's
+	 * fields) has text in hand, and reading text is grammar knowledge: it belongs here, never to a
+	 * bracket-counting loop in a check. A consumer declines on null — never guesses. A grammar with
+	 * no type syntax returns null for everything.
+	 */
+	public function typeSyntax(typeSource: String): Null<TypeSyntax>;
+
+	/**
 	 * Optional: the grammar's naming-convention capability, consumed by the
 	 * `naming` analysis check. Return null when the grammar has no naming
 	 * concept (binary formats) — the check then no-ops for it, mirroring the

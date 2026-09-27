@@ -11,6 +11,8 @@ import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeResolver;
+import anyparse.query.TypeSyntax;
 import anyparse.runtime.Span;
 
 using StringTools;
@@ -37,6 +39,13 @@ private typedef Seams = {
 	var functionBodyKinds: Array<String>;
 	var opaqueKinds: Array<String>;
 	var conditionalIf: Null<String>;
+	var typedCastKinds: Array<String>;
+
+	/** This file's declared-type sources by binding span (`TypeInfoProvider.declaredTypeSources`), read on demand. */
+	var typeSources: () -> Map<Int, String>;
+
+	/** `GrammarPlugin.typeSyntax` — how a written key and a pinning annotation are read. */
+	var typeSyntax: TypeSyntaxReader;
 }
 
 /**
@@ -103,8 +112,8 @@ private typedef Site = {
  * bare `new Map()`, which resolves only from the declaration it initializes: that declaration must
  * itself be annotated with `Map` or a concrete map — resolved through the same name proof, never
  * matched by bare name — and must write the arguments that determine both parameters.
- * `NewLiteral.pinnedByTypeHint` — the predicate `prefer-map-literal` gates its `[]` on — answers
- * the head-SHAPE half and is reused verbatim; the stricter "determines K and V" half lives here,
+ * The declaration's own annotation — the pin `prefer-map-literal` gates its `[]` on
+ * (`NewLiteral.pinningTypeHint`) — is read; the stricter "determines K and V" half lives here,
  * because `prefer-map-literal` needs that predicate exactly as loose as it is.
  *
  * ## Gates — fail closed
@@ -339,7 +348,10 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 			declHostKinds: shape.declHostKinds,
 			functionBodyKinds: shape.functionBodyKinds ?? [],
 			opaqueKinds: shape.opaqueKinds ?? [],
-			conditionalIf: shape.conditionalIfKeyword
+			conditionalIf: shape.conditionalIfKeyword,
+			typedCastKinds: shape.typedCastKinds ?? [],
+			typeSources: TypeResolver.memoizedDeclaredTypeSources(plugin, source),
+			typeSyntax: plugin.typeSyntax
 		}, out);
 		return out;
 	}
@@ -431,7 +443,7 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 			out.push({ span: site.span, message: MSG_NO_TYPE_PARAMS, edits: [] });
 			return;
 		}
-		if (writesItsOwnKey(site.concrete) && !keyResolvesBack(site.text, open, seams.scope)) {
+		if (writesItsOwnKey(site.concrete) && !keyResolvesBack(site.text, seams)) {
 			out.push({ span: site.span, message: MSG_KEY_UNPROVEN, edits: [] });
 			return;
 		}
@@ -456,7 +468,8 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 		}
 		final open: Int = typeParameterOpen(site.text, nameAt + site.name.length);
 		if (open != -1) {
-			if (writesItsOwnKey(site.concrete) && !keyResolvesBack(site.text, open, seams.scope)) {
+			final written: String = site.text.substring(nameAt, site.text.rtrim().length - EMPTY_ARGUMENT_LIST.length);
+			if (writesItsOwnKey(site.concrete) && !keyResolvesBack(written, seams)) {
 				out.push({ span: site.span, message: MSG_KEY_UNPROVEN, edits: [] });
 				return;
 			}
@@ -465,9 +478,11 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 		}
 		// A bare construction carries no type arguments of its own, so everything `new Map()` needs to
 		// resolve has to come off the declaration it initializes.
+		// The type-refs tree this rule walks carries no `type` slot; the declaration's annotation is the one
+		// `TypeInfoProvider.declaredTypeSources` keys by the same span.
 		final host: Null<Span> = parent?.span;
-		final pin: Null<String> = host == null ? null : pinningAnnotation(seams.source, host.from, site.span.from);
-		if (pin == null || !pinDeterminesMapType(pin, site.concrete, seams.scope)) {
+		final pin: Null<String> = host == null || seams.typedCastKinds.contains(parent?.kind ?? '') ? null : seams.typeSources()[host.from];
+		if (pin == null || !pinDeterminesMapType(pin, site.concrete, seams)) {
 			out.push({ span: site.span, message: MSG_UNPINNED_NEW, edits: [] });
 			return;
 		}
@@ -508,33 +523,10 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 	}
 
 	/**
-	 * The type annotation that pins the construction at `newStart`, or null when the declaration head
-	 * carries none. `NewLiteral.pinnedByTypeHint` owns the head-SHAPE question — it is the same
-	 * predicate `prefer-map-literal` gates on, and it stays exactly as loose as that caller needs;
-	 * this reads the annotation OUT of the head so the stricter question below can be asked here.
-	 */
-	private static function pinningAnnotation(source: String, declStart: Int, newStart: Int): Null<String> {
-		if (!NewLiteral.pinnedByTypeHint(source, declStart, newStart)) return null;
-		final head: String = source.substring(declStart, newStart).rtrim();
-		var depth: Int = 0;
-		for (i in 0...head.length - 1) {
-			final c: Int = head.fastCodeAt(i);
-			if (c == '<'.code || c == '('.code || c == '['.code || c == '{'.code)
-				depth++;
-			else if (c == '>'.code || c == ')'.code || c == ']'.code || c == '}'.code) {
-				if (depth > 0) depth--;
-			} else if (c == ':'.code && depth == 0 && (i == 0 || head.fastCodeAt(i - 1) != '@'.code))
-				// The head ends in the initializer's `=`, which `pinnedByTypeHint` proved is its last char.
-				return head.substring(i + 1, head.length - 1).trim();
-		}
-		return null;
-	}
-
-	/**
 	 * Whether `annotation` determines the `Map` a bare `new Map()` would build — and determines it to
 	 * the SAME implementation `concrete` names.
 	 *
-	 * "There is an annotation" — all `pinnedByTypeHint` answers, and all `prefer-map-literal`'s `[]`
+	 * "There is an annotation" — all `pinningTypeHint` answers, and all `prefer-map-literal`'s `[]`
 	 * needs — is not enough here: `var d:Dynamic = new Map()` fails with "Type parameters of multi
 	 * type abstracts must be known", and `var a:IMap<Int, String> = new Map()` fails to unify. So the
 	 * annotation must name `Map` or a concrete map AND write the arguments that pin it.
@@ -549,20 +541,22 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 	 * the implementation being replaced, or the rewrite would quietly swap one for another
 	 * (`var m:Map<Dynamic, Int> = new IntMap()` is an IntMap today and a StringMap after).
 	 */
-	private static function pinDeterminesMapType(annotation: String, concrete: String, scope: Scope): Bool {
-		final open: Int = annotation.indexOf('<');
-		if (open == -1 || !annotation.endsWith('>')) return false;
-		final split: { first: String, more: Bool } = typeArgumentSplit(annotation, open);
-		if (split.first == '') return false;
-		final impliedKey: Null<String> = CONCRETE_MAP_KEY_TYPES[concrete];
-		final writesOwnKey: Bool = impliedKey == null || impliedKey == '';
-		final nominal: String = annotation.substring(0, open).trim();
-		return if (nominal == MapScopeScan.UNIFIED_MAP || nominal == MapScopeScan.QUALIFIED_PREFIX + MapScopeScan.UNIFIED_MAP)
-			split.more && (writesOwnKey ? keyProven(split.first, scope) : split.first == impliedKey)
-		else if (resolveConcreteMap(nominal, scope) != concrete)
-			false
-		else
-			!writesOwnKey || split.more && keyProven(split.first, scope);
+	private static function pinDeterminesMapType(annotation: String, concrete: String, seams: Seams): Bool {
+		final scope: Scope = seams.scope;
+		return switch seams.typeSyntax(annotation)?.shape {
+			case Nominal(nominal, args) if (args.length > 0):
+				final first: String = args[0].text;
+				final more: Bool = args.length > 1;
+				final impliedKey: Null<String> = CONCRETE_MAP_KEY_TYPES[concrete];
+				final writesOwnKey: Bool = impliedKey == null || impliedKey == '';
+				if (nominal == MapScopeScan.UNIFIED_MAP || nominal == MapScopeScan.QUALIFIED_PREFIX + MapScopeScan.UNIFIED_MAP)
+					more && (writesOwnKey ? keyProven(first, scope) : first == impliedKey)
+				else if (resolveConcreteMap(nominal, scope) != concrete)
+					false
+				else
+					!writesOwnKey || more && keyProven(first, scope);
+			case _: false;
+		};
 	}
 
 	/** Whether `concrete` writes its key as the first type parameter (`ObjectMap` / `EnumValueMap`) rather than implying it. */
@@ -571,13 +565,14 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 	}
 
 	/**
-	 * Whether the WRITTEN first type argument at `open` sends `Map`'s `@:multiType` selector chain
+	 * Whether the WRITTEN first type argument of `typeText` sends `Map`'s `@:multiType` selector chain
 	 * back to the implementation the source names. Only the implementations that write their own key
 	 * ask this: `IntMap` / `StringMap` become `Map<Int, …>` / `Map<String, …>`, which the chain's
 	 * first two selectors claim by construction.
 	 */
-	private static function keyResolvesBack(text: String, open: Int, scope: Scope): Bool {
-		return keyProven(typeArgumentSplit(text, open).first, scope);
+	private static function keyResolvesBack(typeText: String, seams: Seams): Bool {
+		final args: Array<String> = seams.typeSyntax(typeText)?.argumentTexts() ?? [];
+		return args.length > 0 && keyProven(args[0], seams.scope);
 	}
 
 	/**
@@ -626,29 +621,6 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 	private static function isNominalChar(code: Int): Bool {
 		return code == '.'.code || code == '_'.code || (code >= 'a'.code && code <= 'z'.code) || (code >= 'A'.code && code <= 'Z'.code)
 			|| (code >= '0'.code && code <= '9'.code);
-	}
-
-	/**
-	 * The type-argument list opening at `open`, split into its FIRST argument's source text and
-	 * whether a second one follows. `first` is empty when the list never closes. The `more` half is
-	 * what tells `Map<K, V>` (both parameters written, so the multi-type is determined) from a
-	 * one-argument list.
-	 */
-	private static function typeArgumentSplit(text: String, open: Int): { first: String, more: Bool } {
-		var depth: Int = 0;
-		for (i in open ... text.length) {
-			final c: Int = text.fastCodeAt(i);
-			if (c == '<'.code || c == '('.code || c == '{'.code || c == '['.code)
-				depth++;
-			else if (c == ')'.code || c == '}'.code || c == ']'.code)
-				depth--;
-			else if (c == '>'.code && text.fastCodeAt(i - 1) != '-'.code) {
-				depth--;
-				if (depth == 0) return { first: text.substring(open + 1, i).trim(), more: false };
-			} else if (c == ','.code && depth == 1)
-				return { first: text.substring(open + 1, i).trim(), more: true };
-		}
-		return { first: '', more: false };
 	}
 
 	/**

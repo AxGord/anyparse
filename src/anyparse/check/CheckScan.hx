@@ -361,7 +361,8 @@ final class CheckScan {
 		final chain: ChainTypeContext = {
 			declaredTypeSources: provider.declaredTypeSources(source),
 			source: source,
-			usings: UsingScan.usingModules(UsingScan.headerOf(tree, source, plugin))
+			usings: UsingScan.usingModules(UsingScan.headerOf(tree, source, plugin)),
+			typeSyntax: plugin.typeSyntax
 		};
 		return node -> NominalTypes.expressionTypeNominal(node, tree, shape, declaredTypes, resolved, file, chain, asReceiver);
 	}

@@ -1,8 +1,7 @@
 package anyparse.check;
 
-import anyparse.query.TypeResolver;
-
-using StringTools;
+import anyparse.query.SourceText;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
 /**
  * The one question two checks ask about a receiver's written type: does it name the
@@ -23,20 +22,19 @@ final class MapNominal {
 	 * `mapTypes` entry — directly (`Map`), or through a nullable wrapper whose inner nominal
 	 * is one (`Null<Map<…>>`).
 	 */
-	public static function isMap(nominal: String, source: Null<String>, mapTypes: Array<String>, nullableWrappers: Array<String>): Bool {
-		return mapTypes.contains(nominal) || (source != null && nullableWrappers.contains(nominal) && wrapsMap(source, nominal, mapTypes));
+	public static function isMap(
+		nominal: String, source: Null<String>, mapTypes: Array<String>, nullableWrappers: Array<String>, typeSyntax: TypeSyntaxReader
+	): Bool {
+		return mapTypes.contains(nominal)
+			|| (source != null && nullableWrappers.contains(nominal) && wrapsMap(source, nominal, mapTypes, typeSyntax));
 	}
 
 	/** Whether the verbatim type `source` is `wrapper<Nominal…>` whose inner nominal is a `mapTypes` name. */
-	private static function wrapsMap(source: String, wrapper: String, mapTypes: Array<String>): Bool {
-		final s: String = source.trim();
-		final prefix: String = '$wrapper<';
-		if (!s.startsWith(prefix) || !s.endsWith('>')) return false;
-		final inner: String = s.substring(prefix.length, s.length - 1);
-		final lt: Int = inner.indexOf('<');
-		final head: String = lt == -1 ? inner : inner.substring(0, lt);
-		final simple: Null<String> = TypeResolver.simpleNominalName(head);
-		return simple != null && mapTypes.contains(simple);
+	private static function wrapsMap(source: String, wrapper: String, mapTypes: Array<String>, typeSyntax: TypeSyntaxReader): Bool {
+		return switch typeSyntax(source)?.wrapped([wrapper])?.shape {
+			case Nominal(path, _): mapTypes.contains(SourceText.lastSegment(path));
+			case _: false;
+		};
 	}
 
 }

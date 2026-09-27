@@ -2,9 +2,11 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
 using StringTools;
@@ -71,14 +73,12 @@ final class NewLiteral {
 				if (node == null || !matches(node, source, newExprKind, typeName)) continue;
 				final parent: Null<QueryNode> = parentByKey[key];
 				if (parent == null) continue;
-				final parentSpan: Null<Span> = parent.span;
-				if (parentSpan == null) continue;
 				// Rewrite when the `new` is the direct initializer of an annotated declaration
 				// (`var xs:Array<Int> = new …`), OR the RHS of a plain assignment whose lvalue's
 				// declaration pins the collection type.
 				if (
-					pinnedByTypeHint(source, parentSpan.from, span.from)
-					|| assignmentTargetPinsType(parent, node, shape, tree, symbolIndex, declaredTypeSources, typeName)
+					pinningTypeHint(source, parent, shape.typedCastKinds ?? []) != null
+					|| assignmentTargetPinsType(parent, node, shape, tree, symbolIndex, declaredTypeSources, typeName, plugin.typeSyntax)
 				)
 					edits.push({ span: span, text: '[]' });
 			}
@@ -87,48 +87,22 @@ final class NewLiteral {
 	}
 
 	/**
-	 * Whether the `new` node starting at `newStart` is the direct initializer of a
-	 * declaration whose target type is PINNED by an explicit annotation — the only context
+	 * The annotation that PINS a `new` node whose parent is `decl` — the type hint of the declaration it
+	 * directly initializes, `decl`'s `QueryNode.type` slot — or null when there is none: the only context
 	 * where `[]` safely preserves the intended type. `[]` infers `Array`, so an unannotated
-	 * `var m = new Map()` rewritten to `var m = []` silently becomes an `Array` (and no
-	 * longer compiles once used as a map), and an unannotated `var xs = new Array<Int>()`
-	 * loses its `<Int>`. `declStart` is the enclosing declaration node's span start.
-	 *
-	 * The head — `source[declStart...newStart]` — is the declaration up to and including the
-	 * `=`. It qualifies when it ends in a lone `=` (a plain initializer) and its left side
-	 * carries a top-level type-hint `:` with no top-level `,`. A metadata colon (`@:meta`) is
-	 * excluded (the `:` follows `@`); a colon or comma inside `<>` / `()` / `[]` / `{}` is a
-	 * type parameter or access clause, not the hint, so bracket depth is tracked. An
-	 * unannotated declaration, an argument / return / element position, an assignment to an
-	 * lvalue typed elsewhere, and a later declarator in a multi-variable declaration all fail
-	 * and stay a finding — conservative by construction: a context the annotation cannot prove
-	 * safe is never rewritten.
+	 * `var m = new Map()` rewritten to `var m = []` silently becomes an `Array` (and no longer compiles
+	 * once used as a map), and an unannotated `var xs = new Array<Int>()` loses its `<Int>`. A cast or a
+	 * type check carries a type slot too, and pins nothing: `cast(new Map(), T)` stays a finding, as do
+	 * an argument / return / element position, an assignment to an lvalue typed elsewhere, and a later
+	 * declarator in a multi-variable declaration (its own node, with no annotation of its own).
 	 *
 	 * PUBLIC because the same question — does an annotation pin the constructed type? — gates
 	 * `prefer-map-type`'s bare `new IntMap()` arm, which rewrites the constructed NAME rather
-	 * than collapsing to `[]`. The predicate is about the declaration head alone, so it carries
-	 * over unchanged; only the caller's use of the answer differs.
+	 * than collapsing to `[]` and reads the hint itself.
 	 */
-	public static function pinnedByTypeHint(source: String, declStart: Int, newStart: Int): Bool {
-		final head: String = source.substring(declStart, newStart).rtrim();
-		final len: Int = head.length;
-		if (len == 0 || head.fastCodeAt(len - 1) != '='.code) return false;
-		var depth: Int = 0;
-		var sawColon: Bool = false;
-		for (i in 0...len - 1) {
-			final c: Int = head.fastCodeAt(i);
-			switch c {
-				case '<'.code, '('.code, '['.code, '{'.code:
-					depth++;
-				case '>'.code, ')'.code, ']'.code, '}'.code:
-					if (depth > 0) depth--;
-				case ':'.code:
-					if (depth == 0 && (i == 0 || head.fastCodeAt(i - 1) != '@'.code)) sawColon = true;
-				case ','.code:
-					if (depth == 0) return false;
-			}
-		}
-		return sawColon;
+	public static function pinningTypeHint(source: String, decl: QueryNode, typedCastKinds: Array<String>): Null<String> {
+		final type: Null<Span> = decl.type?.span;
+		return type == null || typedCastKinds.contains(decl.kind) ? null : source.substring(type.from, type.to);
 	}
 
 	private static function walk(
@@ -192,7 +166,7 @@ final class NewLiteral {
 	 */
 	private static function assignmentTargetPinsType(
 		parent: QueryNode, newNode: QueryNode, shape: RefShape, tree: QueryNode, symbolIndex: Null<SymbolIndex>,
-		declaredTypeSources: () -> Map<Int, String>, typeName: String
+		declaredTypeSources: () -> Map<Int, String>, typeName: String, typeSyntax: TypeSyntaxReader
 	): Bool {
 		final assignKind: Null<String> = shape.assignKind;
 		if (assignKind == null || parent.kind != assignKind || parent.children.length != 2) return false;
@@ -203,7 +177,7 @@ final class NewLiteral {
 		if (rhsSpan == null || newSpan == null) return false;
 		if (rhsSpan.from != newSpan.from || rhsSpan.to != newSpan.to) return false;
 		final typeSrc: Null<String> = lvalueTypeSource(parent.children[0], shape, tree, symbolIndex, declaredTypeSources, newSpan);
-		return typeSrc != null && outerNominal(typeSrc) == typeName;
+		return typeSrc != null && NominalTypes.outerNominalOf(typeSrc, typeSyntax) == typeName;
 	}
 
 	/**
@@ -228,17 +202,6 @@ final class NewLiteral {
 		if (symbolIndex == null || member == null || recv.kind != identKind || recv.name != 'this') return null;
 		final enclosing: Null<String> = TypeResolver.enclosingTypeName(tree, newSpan);
 		return enclosing == null ? null : symbolIndex.members.memberTypeSourceOf(enclosing, member);
-	}
-
-	/**
-	 * The simple OUTER nominal of a declared type source — `Array<Int>` / `haxe.ds.Map<K, V>`
-	 * → `Array` / `Map`. The generic tail is cut at the first `<`, then the last `.`-segment
-	 * is taken (`TypeResolver.simpleNominalName`). Null when the base is not a plain nominal (a
-	 * function type, an anonymous struct), so such a target stays a finding.
-	 */
-	private static function outerNominal(typeSrc: String): Null<String> {
-		final lt: Int = typeSrc.indexOf('<');
-		return TypeResolver.simpleNominalName(lt == -1 ? typeSrc : typeSrc.substring(0, lt));
 	}
 
 }

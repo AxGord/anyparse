@@ -54,7 +54,7 @@ final class OperandBinder {
 		_tree = tree;
 		_shape = shape;
 		_index = index;
-		_declared = DeclaredNullity.of(file, tree, source, shape, provider, () -> index);
+		_declared = DeclaredNullity.of(file, tree, source, shape, provider, index.typeSyntax, () -> index);
 		_builtins = builtins;
 		_wrappers = shape.memberTransparentWrapperTypeNames ?? [];
 		_identKinds = [
@@ -159,9 +159,7 @@ final class OperandBinder {
 			for (m in members) {
 				final written: Null<String> = call ? m.returnSource : m.typeSource;
 				if (written == null || (call && !typedByItsReturn(m))) return Unknown;
-				final params: Array<String> = call
-					? ownParams.concat(CallGraphNames.declaredTypeParams(source, new Span(m.declFrom, m.declFrom), name))
-					: ownParams;
+				final params: Array<String> = call ? ownParams.concat(m.typeParamNames) : ownParams;
 				switch DeclaredNullity.headTierIn(written, owner.file, _index, params, _wrappers, _builtins) {
 					case Bound(decls):
 						for (d in decls) found.push(d);

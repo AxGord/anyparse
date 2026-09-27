@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
 using StringTools;
@@ -27,6 +28,9 @@ typedef DynCtx = {
 	final identKind: String;
 	final selfText: Null<String>;
 	final typeDeclKinds: Array<String>;
+
+	/** `GrammarPlugin.typeSyntax` — how a declared type is read for the raw dynamic name. */
+	final typeSyntax: TypeSyntaxReader;
 };
 
 /**
@@ -97,7 +101,7 @@ final class DynamicShape {
 	}
 
 	/** The resolved kind sets threaded through the walk, built once per run. */
-	public static function buildCtx(shape: RefShape, dynName: String): DynCtx {
+	public static function buildCtx(shape: RefShape, dynName: String, typeSyntax: TypeSyntaxReader): DynCtx {
 		final fieldKinds: Array<String> = shape.fieldDeclKinds ?? [];
 		final paramKinds: Array<String> = shape.paramKinds ?? [];
 		final localKinds: Array<String> = shape.localDeclKinds ?? [];
@@ -124,7 +128,8 @@ final class DynamicShape {
 			fieldAccessKind: shape.fieldAccessKind ?? '',
 			identKind: shape.identKind,
 			selfText: shape.selfReferenceText,
-			typeDeclKinds: shape.visibilityContainerKinds ?? []
+			typeDeclKinds: shape.visibilityContainerKinds ?? [],
+			typeSyntax: typeSyntax
 		};
 	}
 

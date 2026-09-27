@@ -283,7 +283,7 @@ final class FieldInitInConstructor implements Check implements DefaultOff {
 			if (m.condition != null || !isConstantRank(m.rank) || init == null || name == null || declSpan == null || initSpan == null)
 				continue;
 			if (!isBareLiteral(init, shape) || source.substring(initSpan.from, initSpan.to) != site.defaultText) continue;
-			if (CtorFieldFold.declaredTypeAnnotation(source, declSpan, initSpan, name) == annotation) return name;
+			if (CtorFieldFold.declaredTypeAnnotation(source, m.node) == annotation) return name;
 		}
 		return null;
 	}

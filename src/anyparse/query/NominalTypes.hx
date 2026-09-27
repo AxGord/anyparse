@@ -4,6 +4,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.NodeShape;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -23,10 +24,11 @@ using StringTools;
  * Three layers, outside in:
  *
  * - **Reducing a written type source.** `outerNominalOf` strips the type arguments and the
- *   package prefix off a source (`pkg.Map<String, Int>` → `Map`); `splitTypeArgumentList`
- *   and `typeArgumentSourcesOf` take the argument list apart on its top-level commas;
- *   `shadowedByNonStdType` says whether an indexed non-std file claims a name that would
- *   otherwise read as the stdlib type.
+ *   package prefix off a source (`pkg.Map<String, Int>` → `Map`); `typeArgumentSourcesOf`,
+ *   `unwrapNullable` and `memberLookupReceiverSource` read its arguments and peel its wrappers —
+ *   every one of them through the grammar's `GrammarPlugin.typeSyntax`; `shadowedByNonStdType`
+ *   says whether an indexed non-std file claims a name that would otherwise read as the stdlib
+ *   type.
  * - **Walking a receiver path.** `pathOf` flattens a plain field chain into its segments,
  *   `pathRootTypeName` types the root off `declaredTypes`, and `pathFinalMemberTypeSource`
  *   / `pathReceiverMemberTypeSource` follow the segments through the `SymbolIndex` to the
@@ -86,142 +88,51 @@ final class NominalTypes {
 	 * `--interp` alike settles nothing — a null `String` operand DISAGREES on js and `--interp` while
 	 * agreeing on `-cpp`.
 	 *
-	 * The peel is TEXTUAL over the written annotation, so a typedef that RESOLVES to `Null<T>`
+	 * The peel reads the WRITTEN annotation (`typeSyntax`), so a typedef that RESOLVES to `Null<T>`
 	 * carries no wrapper to peel and is left alone — following the alias would mean resolving a
 	 * type reference here, and the miss fails closed like every other unresolved link.
 	 */
-	public static function memberLookupReceiverSource(typeSource: String, wrappers: Array<String>): String {
+	public static function memberLookupReceiverSource(typeSource: String, wrappers: Array<String>, typeSyntax: TypeSyntaxReader): String {
 		if (wrappers.length == 0) return typeSource;
 		var t: String = typeSource.trim();
 		while (true) {
-			final lt: Int = t.indexOf('<');
-			if (lt <= 0 || !t.endsWith('>') || !wrappers.contains(t.substring(0, lt).trim())) return t;
-			final inner: String = t.substring(lt + 1, t.length - 1).trim();
-			// A multi-argument application is not a wrapper of ONE type; peeling it would hand a
-			// comma-joined fragment on as if it were a type name.
-			if (splitTypeArgumentList(inner).length != 1) return t;
+			final inner: String = unwrapNullable(t, wrappers, typeSyntax);
+			if (inner == t) return t;
 			t = inner;
 		}
 	}
 
-	/** The simple outer nominal of a written type — `pkg.Map<String, Int>` → `Map` — or null when the text is not a nominal at all. */
-	public static function outerNominalOf(typeSource: String): Null<String> {
-		final lt: Int = typeSource.indexOf('<');
-		final head: String = StringTools.trim(lt < 0 ? typeSource : typeSource.substring(0, lt));
-		final dot: Int = head.lastIndexOf('.');
-		final name: String = dot < 0 ? head : head.substring(dot + 1);
-		return SourceText.isIdentifier(name) ? name : null;
+	/**
+	 * The simple outer nominal of a written type — `pkg.Map<String, Int>` → `Map` — or null when the
+	 * text is not a named type.
+	 */
+	public static function outerNominalOf(typeSource: String, typeSyntax: TypeSyntaxReader): Null<String> {
+		return switch typeSyntax(typeSource)?.shape {
+			case Nominal(path, _): SourceText.lastSegment(path);
+			case _: null;
+		};
 	}
 
 	/**
 	 * `typeSource` with a leading nullable WRAPPER peeled off — `Null<Foo>` -> `Foo` — or unchanged
-	 * when its head is not one of `wrappers`. The caller names the wrappers because the question
-	 * differs per consumer: a nullability reader passes every name that stays nullable under a
-	 * null-safety meta, a rewriter passes only the one syntactic wrapper it may re-emit.
-	 *
-	 * The whole source must close on the wrapper's own `>`, so a `Null<A>->B` arrow is left alone:
-	 * peeling there would hand back a fragment that no longer names a type.
+	 * when it is not one of `wrappers` applied to one type. The caller names the wrappers because the
+	 * question differs per consumer: a nullability reader passes every name that stays nullable under
+	 * a null-safety meta, a rewriter passes only the one syntactic wrapper it may re-emit. The one
+	 * `Null<>` unwrap every consumer shares — `memberLookupReceiverSource` repeats it to a fixed point.
 	 */
-	public static function unwrapNullable(typeSource: String, wrappers: Array<String>): String {
-		final lt: Int = typeSource.indexOf('<');
-		return lt > 0 && typeSource.endsWith('>') && wrappers.contains(typeSource.substring(0, lt))
-			? typeSource.substring(lt + 1, typeSource.length - 1)
-			: typeSource;
-	}
-
-	/**
-	 * Split a type-argument list on its TOP-LEVEL commas, respecting EVERY delimiter a written
-	 * Haxe type may nest a comma inside — `<…>` arguments, `(…)` multi-constraints, `{…}`
-	 * structures, `[…]` — and the `->` arrow whose `>` is not a bracket closer. So
-	 * `Map<String, (Int, Int) -> Void>` is two segments, `<T:(A, B)>` is ONE parameter, and
-	 * `<T:{a:Int, b:Int}>` is one too.
-	 *
-	 * Each of those four groups is load-bearing for a caller, not defensive: the index-access
-	 * element lookup (`FieldWriteIndex.elementTypeSource`), the declaration-header type-parameter
-	 * scan (`SymbolIndexBuilder.declTypeParamNames`, whose result is a POSITIONAL substitution
-	 * table — a phantom segment there shifts every parameter after it) and `typeArgumentSourcesOf`
-	 * all route through this one function. Brace-blindness read `<T:{a:Int, b:Int}>` as the two
-	 * parameters `T` and `b`; the structural constraint is ordinary Haxe.
-	 *
-	 * The scan is delimiter-only, so a comma inside a string literal in metadata still splits. No
-	 * caller feeds it metadata (`SymbolIndexBuilder` strips a parameter's metadata run AFTER this
-	 * split), and the failure direction there is a segment that yields no plain identifier, which
-	 * refuses the whole header.
-	 */
-	public static function splitTypeArgumentList(text: String): Array<String> {
-		final out: Array<String> = [];
-		var depth: Int = 0;
-		var start: Int = 0;
-		var prev: Int = 0;
-		for (i in 0...text.length) {
-			final ch: Int = text.fastCodeAt(i);
-			if (ch == '<'.code || ch == '('.code || ch == '{'.code || ch == '['.code)
-				depth++;
-			else if (ch == ')'.code || ch == '}'.code || ch == ']'.code)
-				depth--;
-			else if (ch == '>'.code && prev != '-'.code)
-				depth--;
-			else if (ch == ','.code && depth == 0) {
-				out.push(text.substring(start, i).trim());
-				start = i + 1;
-			}
-			prev = ch;
-		}
-		out.push(text.substring(start).trim());
-		return out;
-	}
-
-	/**
-	 * The NAME a type-parameter segment declares (`T:Item` -> `T`, `K = Int` -> `K`), or null when the
-	 * segment does not open with a plain identifier.
-	 *
-	 * The second half of a header type-parameter read: `splitTypeArgumentList` cuts the `<...>` run into
-	 * segments, this reduces one segment to the name it binds. Null means UNREADABLE, never "no name" —
-	 * a caller building a POSITIONAL substitution table must drop the whole header on it rather than skip
-	 * the segment, or every parameter after it shifts.
-	 *
-	 * A segment carrying METADATA (`class C<@:const N>`) is deliberately not stepped over: the scan stops
-	 * at the first `:`, so such a segment reads as unreadable rather than as a wrong name.
-	 */
-	public static function typeParamNameOf(segment: String): Null<String> {
-		final text: String = segment.trim();
-		var end: Int = 0;
-		while (end < text.length) {
-			final ch: Int = text.fastCodeAt(end);
-			if (ch == ':'.code || ch == '='.code || SourceText.isSpace(ch)) break;
-			end++;
-		}
-		final name: String = text.substring(0, end);
-		return SourceText.isIdentifier(name) ? name : null;
+	public static function unwrapNullable(typeSource: String, wrappers: Array<String>, typeSyntax: TypeSyntaxReader): String {
+		return typeSyntax(typeSource)?.wrapped(wrappers)?.text ?? typeSource;
 	}
 
 	/**
 	 * The verbatim type-ARGUMENT sources of a generic application (`Map<String, Array<Int>>` →
-	 * `['String', 'Array<Int>']`), or null when `typeSource` is not `Head<…>`.
-	 *
-	 * Two gates keep the answer honest, both failing closed: the head before the first `<` must be
-	 * a plain nominal (`outerNominalOf` answers it), and the `>` that closes that `<` must be the
-	 * LAST character. Together they refuse a function type whose RESULT is generic
-	 * (`(Int) -> Array<Int>`), which a naive first-`<`/last-`>` slice would mis-read as an
-	 * application of `(Int) -> Array` carrying the argument `Int`.
+	 * `['String', 'Array<Int>']`), or null when `typeSource` is not a named type written with
+	 * arguments — a function type whose RESULT is generic (`(Int) -> Array<Int>`) included, and any
+	 * text the grammar does not read as one type.
 	 */
-	public static function typeArgumentSourcesOf(typeSource: String): Null<Array<String>> {
-		final t: String = typeSource.trim();
-		final lt: Int = t.indexOf('<');
-		if (lt <= 0 || outerNominalOf(t) == null) return null;
-		var depth: Int = 0;
-		var prev: Int = 0;
-		for (i in lt ... t.length) {
-			final ch: Int = t.fastCodeAt(i);
-			if (ch == '<'.code)
-				depth++;
-			else if (ch == '>'.code && prev != '-'.code) {
-				depth--;
-				if (depth == 0) return i == t.length - 1 ? splitTypeArgumentList(t.substring(lt + 1, i)) : null;
-			}
-			prev = ch;
-		}
-		return null;
+	public static function typeArgumentSourcesOf(typeSource: String, typeSyntax: TypeSyntaxReader): Null<Array<String>> {
+		final args: Null<Array<String>> = typeSyntax(typeSource)?.argumentTexts();
+		return args == null || args.length == 0 ? null : args;
 	}
 
 	/**
@@ -254,7 +165,9 @@ final class NominalTypes {
 		var current: String = rootType;
 		for (i in 1...path.length - 1) {
 			final memberType: Null<String> = index.members.memberTypeSourceOf(current, path[i]);
-			final nominal: Null<String> = memberType == null ? null : outerNominalOf(memberLookupReceiverSource(memberType, wrappers));
+			final nominal: Null<String> = memberType == null
+				? null
+				: outerNominalOf(memberLookupReceiverSource(memberType, wrappers, index.typeSyntax), index.typeSyntax);
 			if (nominal == null) return null;
 			current = nominal;
 		}
@@ -290,7 +203,7 @@ final class NominalTypes {
 		// The path root is a RECEIVER here, never the answer, so a member-transparent wrapper on it
 		// is peeled: `Null<Res>.count` IS `Res.count`. The FINAL member's own source is returned
 		// untouched below, so a `Null<T>`-typed member still reads as `Null<T>`.
-		final startType: String = memberLookupReceiverSource(rootType ?? path[0], wrappers);
+		final startType: String = memberLookupReceiverSource(rootType ?? path[0], wrappers, index.typeSyntax);
 		final resolved: Null<String> = substituteTypeArgs
 			? index.paths.resolveGenericPathFinalMemberTypeSource(fromFile, startType, path.slice(1), wrappers)
 			: index.paths.resolvePathFinalMemberTypeSource(fromFile, startType, path.slice(1));
@@ -299,12 +212,14 @@ final class NominalTypes {
 		// root's NOMINAL, since a `Box<Item>` start source is not a name any member lookup matches.
 		if (rootType != null)
 			return pathFinalMemberTypeSource(
-				path, substituteTypeArgs ? outerNominalOf(startType) ?? startType : startType, index, wrappers
+				path, substituteTypeArgs ? outerNominalOf(startType, index.typeSyntax) ?? startType : startType, index, wrappers
 			);
 		final firstSource: Null<String> = index.paths.resolvePathFinalMemberTypeSource(fromFile, path[0], [path[1]]);
 		if (firstSource == null) return null;
 		if (path.length == 2) return firstSource;
-		final firstNominal: Null<String> = outerNominalOf(memberLookupReceiverSource(firstSource, wrappers));
+		final firstNominal: Null<String> = outerNominalOf(
+			memberLookupReceiverSource(firstSource, wrappers, index.typeSyntax), index.typeSyntax
+		);
 		return firstNominal == null ? null : pathFinalMemberTypeSource(path.slice(1), firstNominal, index, wrappers);
 	}
 
@@ -341,7 +256,7 @@ final class NominalTypes {
 		if (path.length == 1) return rootType;
 		if (index == null) return null;
 		final typeSource: Null<String> = pathReceiverMemberTypeSource(path, rootType, index, file);
-		return typeSource == null ? null : outerNominalOf(typeSource);
+		return typeSource == null ? null : outerNominalOf(typeSource, index.typeSyntax);
 	}
 
 	/**
@@ -549,7 +464,7 @@ final class NominalTypes {
 		final identKind: Null<String> = shape.identKind;
 		if (identKind == null || node.kind != identKind) return null;
 		final source: Null<String> = RefactorSupport.implicitThisMemberTypeSource(node, root, shape, index, file, []);
-		return source == null ? null : outerNominalOf(source);
+		return source == null ? null : outerNominalOf(source, index.typeSyntax);
 	}
 
 	/**
@@ -689,9 +604,11 @@ final class NominalTypes {
 		return if (source == null)
 			null
 		else if (asReceiver)
-			outerNominalOf(memberLookupReceiverSource(source, shape.memberTransparentWrapperTypeNames ?? []))
+			outerNominalOf(
+				memberLookupReceiverSource(source, shape.memberTransparentWrapperTypeNames ?? [], chain.typeSyntax), chain.typeSyntax
+			)
 		else
-			outerNominalOf(source);
+			outerNominalOf(source, chain.typeSyntax);
 	}
 
 	/**
@@ -817,8 +734,8 @@ final class NominalTypes {
 		final iterableSource: Null<String> = valueTypeSourceDeep(iterable, root, shape, declaredTypes, chain, index, file, seen);
 		seen.pop();
 		if (iterableSource == null) return null;
-		final nominal: Null<String> = outerNominalOf(iterableSource);
-		final args: Null<Array<String>> = typeArgumentSourcesOf(iterableSource);
+		final nominal: Null<String> = outerNominalOf(iterableSource, chain.typeSyntax);
+		final args: Null<Array<String>> = typeArgumentSourcesOf(iterableSource, chain.typeSyntax);
 		if (nominal == null || args == null) return null;
 		final at: Null<Int> = elementParams[nominal];
 		return if (at == null)
@@ -930,4 +847,7 @@ typedef ChainTypeContext = {
 	 * static extensions should pass.
 	 */
 	final usings: Array<String>;
+
+	/** `GrammarPlugin.typeSyntax` — how the deep mode reads a written type's wrapper and arguments. */
+	final typeSyntax: TypeSyntaxReader;
 }

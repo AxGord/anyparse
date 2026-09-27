@@ -11,8 +11,10 @@ import anyparse.query.NominalTypes;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
 using StringTools;
@@ -257,7 +259,8 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 			continueKind: continueKind,
 			exprStmtKind: exprStmtKind,
 			blockKinds: flow.blockKinds(),
-			mutableKinds: mutableKinds
+			mutableKinds: mutableKinds,
+			typeSyntax: plugin.typeSyntax
 		};
 	}
 
@@ -335,7 +338,7 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 		final incrSpan: Null<Span> = sh.incr.span;
 		final scopeSpan: Null<Span> = scope.span;
 		if (declSpan == null || forSpan == null || bodySpan == null || incrSpan == null || scopeSpan == null) return null;
-		if (declaredNonInt(declSpan.from, types)) return null;
+		if (declaredNonInt(declSpan.from, types, s.typeSyntax)) return null;
 		// The binder-is-dead proof is a TEXT scan, not a node walk. A bare `'$x'` interpolation read
 		// and a `macro` reification subtree both hide the mention from the tree, and HERE a missed
 		// mention is a licence to DELETE the binder — the unsafe direction of the imprecision.
@@ -343,7 +346,9 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 		if (!bodyAdmitsRewrite(sh.body, sh.counter, sh.collection, s)) return null;
 		if (OccurrenceScan.referencedInRange(source, sh.counter, forSpan.to, scopeSpan.to, [])) return null;
 		if (LoopScan.capturedByClosure(scope, source, sh.counter, core)) return null;
-		final bound: Null<Bound> = boundOf(sh.collection, LoopScan.identTypeSource(sh.iterable, root, types, core), index, qualified);
+		final bound: Null<Bound> = boundOf(
+			sh.collection, LoopScan.identTypeSource(sh.iterable, root, types, core), index, qualified, s.typeSyntax
+		);
 		return bound == null ? null : {
 			declSpan: declSpan,
 			forSpan: forSpan,
@@ -425,10 +430,14 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 	 * not reach the module here.
 	 */
 	private static function boundOf(
-		collection: String, typeSource: Null<String>, index: () -> Null<SymbolIndex>, qualified: () -> Bool
+		collection: String, typeSource: Null<String>, index: () -> Null<SymbolIndex>, qualified: () -> Bool, typeSyntax: TypeSyntaxReader
 	): Null<Bound> {
-		if (typeSource == null || !stdlibSpelling(typeSource)) return null;
-		final nominal: Null<String> = NominalTypes.outerNominalOf(typeSource);
+		final path: Null<String> = switch typeSource == null ? null : typeSyntax(typeSource)?.shape {
+			case Nominal(path, _): path;
+			case _: null;
+		};
+		if (path == null || !stdlibSpelling(path)) return null;
+		final nominal: Null<String> = SourceText.lastSegment(path);
 		return if (nominal == null)
 			null
 		else if (LENGTH_TYPES.contains(nominal))
@@ -470,23 +479,21 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 	}
 
 	/**
-	 * Whether the written type is spelled as a container the whitelist can be ABOUT — a bare simple
+	 * Whether the written type's `path` is spelled as a container the whitelist can be ABOUT — a bare simple
 	 * name, or a `haxe.`-qualified path. The whitelist matches the SIMPLE nominal, so without this a
 	 * project-local `mygame.Map` (no `count`) would be admitted by its last segment alone. A bare
 	 * name an `import` rebinds to a project type is the residual, and it fails LOUDLY at compile
 	 * time rather than silently at run time.
 	 */
-	private static function stdlibSpelling(typeSource: String): Bool {
-		final lt: Int = typeSource.indexOf('<');
-		final head: String = StringTools.trim(lt < 0 ? typeSource : typeSource.substring(0, lt));
-		return head.lastIndexOf('.') < 0 || head.startsWith(STD_PACKAGE_PREFIX);
+	private static function stdlibSpelling(path: String): Bool {
+		return path.lastIndexOf('.') < 0 || path.startsWith(STD_PACKAGE_PREFIX);
 	}
 
 	/** Whether the declaration binding at `from` carries an explicit non-`Int` annotation. */
-	private static function declaredNonInt(from: Int, types: Null<Map<Int, String>>): Bool {
+	private static function declaredNonInt(from: Int, types: Null<Map<Int, String>>, typeSyntax: TypeSyntaxReader): Bool {
 		if (types == null) return false;
 		final source: Null<String> = types[from];
-		return source != null && NominalTypes.outerNominalOf(source) != INT_TYPE;
+		return source != null && NominalTypes.outerNominalOf(source, typeSyntax) != INT_TYPE;
 	}
 
 	/**
@@ -527,6 +534,9 @@ private typedef Seams = {
 	var exprStmtKind: String;
 	var blockKinds: Array<String>;
 	var mutableKinds: Array<String>;
+
+	/** `GrammarPlugin.typeSyntax` — how a declared container type is read. */
+	var typeSyntax: TypeSyntaxReader;
 }
 
 /** The counting expression a matched container yields, plus whether it needs `using Lambda;` in scope. */

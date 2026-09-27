@@ -9,11 +9,9 @@ import anyparse.check.Check.Violation;
 import anyparse.check.LintConfig;
 import anyparse.query.BoolExprShape;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.MemberKinds;
 import anyparse.query.NodeShape;
 import anyparse.query.NominalTypes;
-import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SourceText;
@@ -21,6 +19,7 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoMemo;
 import anyparse.query.TypeRefPrinter;
 import anyparse.query.TypeResolver;
+import anyparse.query.TypeSyntax;
 import anyparse.runtime.Span;
 
 using StringTools;
@@ -322,7 +321,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 			}
 			final init: QueryNode = node.children[0];
 			final typeSource: Null<String> = inferLocalType(
-				init, source, shape, tree, castTargets, declaredTypeSources, index, resolution, anonCap
+				init, source, shape, tree, castTargets, declaredTypeSources, index, resolution, anonCap, plugin.typeSyntax
 			);
 			// The admissibility gate covers BOTH arms, not just the oracle's: a structural arm can
 			// copy `Dynamic` or a `Void` return out of a declared type just as the compiler can
@@ -374,7 +373,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 			for (k in (shape.memberDeclKinds ?? []).concat(shape.localFunctionKinds ?? [])) if (!fields.contains(k)) k
 		];
 		final edits: Array<{ span: Span, text: String }> = [];
-		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
+		final typeParams: Map<Int, Array<String>> = RunScan.typeParamNamesOf(plugin, source);
 		for (v in violations) {
 			final span: Null<Span> = v.span;
 			if (span == null) continue;
@@ -390,7 +389,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 					v.declineReason = reason;
 					continue;
 			};
-			final owner: Null<String> = enclosingGenericFunction(tree, source, span.from, functions, regions);
+			final owner: Null<String> = enclosingGenericFunction(tree, span.from, functions, typeParams);
 			// `normalizeWith` ENDS in a print, and printing is what promises the printer an import —
 			// `admissibleLocal` only gets to reject the candidate afterwards. Abstaining has to take
 			// the promise back, or it rides into the file on the next admissible candidate's edit
@@ -440,12 +439,12 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 
 	/**
 	 * The name of the innermost GENERIC function enclosing `offset`, or null when none does —
-	 * the `methodName` proof `stripTypeParamQualifiers` needs. Genericity is read from the
-	 * source: a `<` immediately after the name token. Descending order makes the last match the
+	 * the `methodName` proof `stripTypeParamQualifiers` needs. Genericity is the grammar's own
+	 * reading (`TypeInfoProvider.typeParamNames`). Descending order makes the last match the
 	 * innermost, and a subtree whose span excludes `offset` is pruned.
 	 */
 	private static function enclosingGenericFunction(
-		tree: QueryNode, source: String, offset: Int, functions: Array<String>, regions: Array<LexRegion>
+		tree: QueryNode, offset: Int, functions: Array<String>, typeParams: Map<Int, Array<String>>
 	): Null<String> {
 		var best: Null<String> = null;
 
@@ -454,10 +453,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 			// A spanless node (the module root) is NOT a miss — it is pruneless, so descend.
 			if (span != null && (offset < span.from || offset > span.to)) return;
 			final name: Null<String> = node.name;
-			if (span != null && functions.contains(node.kind) && name != null) {
-				final at: Int = OccurrenceScan.activeCodeIdentTokenOffset(source, span, name, regions);
-				if (at >= 0 && source.fastCodeAt(at + name.length) == '<'.code) best = name;
-			}
+			if (span != null && functions.contains(node.kind) && name != null && typeParams.exists(span.from)) best = name;
 			for (c in node.children) walk(c);
 		}
 		walk(tree);
@@ -517,15 +513,16 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	 */
 	private static function inferLocalType(
 		rawInit: QueryNode, source: String, shape: RefShape, tree: QueryNode, castTargets: () -> Map<Int, String>,
-		declaredTypeSources: () -> Map<Int, String>, index: Null<SymbolIndex>, resolution: Null<SymbolIndex>, maxAnonLen: Int
+		declaredTypeSources: () -> Map<Int, String>, index: Null<SymbolIndex>, resolution: Null<SymbolIndex>, maxAnonLen: Int,
+		typeSyntax: TypeSyntaxReader
 	): Null<String> {
 		final init: QueryNode = BoolExprShape.unwrapParens(rawInit, shape.parenKind);
 		return
 			LiteralInfer.inferType(init, source, shape, castTargets) ?? bareNewType(init, source, shape, index, resolution) ?? arrayType(
 				init, shape
-			) ?? methodReturnType(init, shape, tree, declaredTypeSources) ?? staticMethodReturnType(init, shape, tree, index) ?? staticFieldType(
+			) ?? methodReturnType(init, shape, tree, declaredTypeSources, typeSyntax) ?? staticMethodReturnType(init, shape, tree, index) ?? staticFieldType(
 				init, shape, tree, index
-			) ?? indexAccessType(init, shape, tree, declaredTypeSources, index, maxAnonLen) ?? TypeResolver.identDeclaredTypeSource(
+			) ?? indexAccessType(init, shape, tree, declaredTypeSources, index, maxAnonLen, typeSyntax) ?? TypeResolver.identDeclaredTypeSource(
 				init, shape, tree, declaredTypeSources, true
 			);
 	}
@@ -572,7 +569,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	 */
 	private static function indexAccessType(
 		init: QueryNode, shape: RefShape, tree: QueryNode, declaredTypeSources: () -> Map<Int, String>, index: Null<SymbolIndex>,
-		maxAnonLen: Int
+		maxAnonLen: Int, typeSyntax: TypeSyntaxReader
 	): Null<String> {
 		final indexKind: Null<String> = shape.indexAccessKind;
 		final elementParams: Null<Map<String, Int>> = shape.indexedElementTypeParams;
@@ -580,9 +577,9 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		final containerSource: Null<String> =
 			TypeResolver.identDeclaredTypeSource(init.children[0], shape, tree, declaredTypeSources, true);
 		if (containerSource == null) return null;
-		final container: String = NominalTypes.unwrapNullable(containerSource, shape.nullableWrapperTypeNames ?? []);
-		final nominal: Null<String> = NominalTypes.outerNominalOf(container);
-		final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(container);
+		final container: String = NominalTypes.unwrapNullable(containerSource, shape.nullableWrapperTypeNames ?? [], typeSyntax);
+		final nominal: Null<String> = NominalTypes.outerNominalOf(container, typeSyntax);
+		final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(container, typeSyntax);
 		if (nominal == null || args == null) return null;
 		final at: Null<Int> = elementParams[nominal];
 		if (at == null || at >= args.length || NominalTypes.shadowedByNonStdType(index, nominal)) return null;
@@ -724,7 +721,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	 * table seams, or the call is not the `recv.method(...)` shape.
 	 */
 	private static function methodReturnType(
-		init: QueryNode, shape: RefShape, tree: QueryNode, declaredTypeSources: () -> Map<Int, String>
+		init: QueryNode, shape: RefShape, tree: QueryNode, declaredTypeSources: () -> Map<Int, String>, typeSyntax: TypeSyntaxReader
 	): Null<String> {
 		final table: Null<Map<String, String>> = shape.stringLiteralMethodReturns;
 		final callKind: Null<String> = shape.callKind;
@@ -735,7 +732,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		final ret: Null<String> = table[call.method];
 		return if (ret == null)
 			null
-		else if (receiverIsString(call.receiver, shape, tree, declaredTypeSources))
+		else if (receiverIsString(call.receiver, shape, tree, declaredTypeSources, typeSyntax))
 			ret
 		else
 			null;
@@ -751,7 +748,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	 * false.
 	 */
 	private static function receiverIsString(
-		recv: QueryNode, shape: RefShape, tree: QueryNode, declaredTypeSources: () -> Map<Int, String>
+		recv: QueryNode, shape: RefShape, tree: QueryNode, declaredTypeSources: () -> Map<Int, String>, typeSyntax: TypeSyntaxReader
 	): Bool {
 		final stringKinds: Array<String> = shape.stringLiteralKinds ?? [];
 		if (stringKinds.contains(recv.kind)) return true;
@@ -761,7 +758,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		// type (`split` -> `Array<String>` regardless), so this path wants the DECLARED type and
 		// must NOT drop optional params (`skipNullableOptionalParam = false`).
 		final typeSrc: Null<String> = TypeResolver.identDeclaredTypeSource(recv, shape, tree, declaredTypeSources, false);
-		return typeSrc != null && NominalTypes.unwrapNullable(typeSrc, shape.nullableWrapperTypeNames ?? []) == stringType;
+		return typeSrc != null && NominalTypes.unwrapNullable(typeSrc, shape.nullableWrapperTypeNames ?? [], typeSyntax) == stringType;
 	}
 
 	/**

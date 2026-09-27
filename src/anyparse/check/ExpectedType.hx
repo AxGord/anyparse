@@ -1,11 +1,13 @@
 package anyparse.check;
 
 import anyparse.query.GrammarPlugin;
+import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -160,7 +162,7 @@ final class ExpectedType {
 			final scan: CastScan = {
 				file: entry.file,
 				root: entry.tree,
-				types: fileTypes(shape, typed, entry.source, entry.file),
+				types: fileTypes(shape, typed, plugin.typeSyntax, entry.source, entry.file),
 				resolutionIndex: resolutionIndex
 			};
 			eachCastInPosition(entry.tree, kind, shape, site -> report(site, scan));
@@ -176,14 +178,17 @@ final class ExpectedType {
 	}
 
 	/** ONE file's type information, gathered from the provider the calling check already holds. */
-	public static function fileTypes(shape: RefShape, typed: TypeInfoProvider, source: String, ?path: String): FileTypes {
+	public static function fileTypes(
+		shape: RefShape, typed: TypeInfoProvider, typeSyntax: TypeSyntaxReader, source: String, ?path: String
+	): FileTypes {
 		return {
 			shape: shape,
 			source: source,
 			declaredTypeSources: typed.declaredTypeSources(source),
 			castTargets: typed.castTargetSources(source),
 			importMap: typed.importMap(source, path),
-			wrapperNames: shape.nullableWrapperTypeNames ?? []
+			wrapperNames: shape.nullableWrapperTypeNames ?? [],
+			typeSyntax: typeSyntax
 		};
 	}
 
@@ -204,17 +209,16 @@ final class ExpectedType {
 	}
 
 	/**
-	 * Whether `typeSource`'s OUTER nominal (the text before its first `<`) is a
+	 * Whether `typeSource`'s OUTER nominal is a
 	 * `RefShape.nullableWrapperTypeNames` entry — `Null` / `Dynamic` / `Any`. Neither check has
 	 * anything to say about such a position: the runtime check a `Null` / `Dynamic` / `Any` target
 	 * performs never throws, so `redundant-cast-type` would trade away nothing, and a `cast` INTO
 	 * one is what ERASES a type rather than restating it, so `redundant-unchecked-cast` would
 	 * delete a conversion that is doing work.
 	 */
-	public static function isNullableWrapper(typeSource: String, wrapperNames: Array<String>): Bool {
-		final lt: Int = typeSource.indexOf('<');
-		final outer: Null<String> = TypeResolver.simpleNominalName(lt == -1 ? typeSource : typeSource.substring(0, lt));
-		return outer != null && wrapperNames.contains(outer);
+	public static function isNullableWrapper(typeSource: String, types: FileTypes): Bool {
+		final outer: Null<String> = NominalTypes.outerNominalOf(typeSource, types.typeSyntax);
+		return outer != null && types.wrapperNames.contains(outer);
 	}
 
 	/** One step of `eachCastInPosition`'s descent, carrying the context the next step inherits. */
@@ -457,6 +461,9 @@ typedef FileTypes = {
 	final castTargets: Map<Int, String>;
 	final importMap: Map<String, String>;
 	final wrapperNames: Array<String>;
+
+	/** `GrammarPlugin.typeSyntax` — how a cast's target type is read. */
+	final typeSyntax: TypeSyntaxReader;
 };
 
 /**
