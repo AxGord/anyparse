@@ -336,7 +336,7 @@ final class OracleCoverage {
 			excluded.push({
 				config: oracles[i],
 				cause: Coverage,
-				sentence: '${LintConfig.describeOracle(oracles[i])} cannot vouch for any edit — its compiled set is unknown'
+				sentence: '${OracleDeclaration.describeOracle(oracles[i])} cannot vouch for any edit — its compiled set is unknown'
 				+ ' (${coverage.reason}); it still typechecks every candidate, so it can refuse one'
 			});
 		}
@@ -548,7 +548,7 @@ final class OracleCoverage {
 
 	/** Whether two configurations describe the same compile: one hxml, one directory, one define list in order. */
 	private static function sameConfig(a: OracleConfig, b: OracleConfig): Bool {
-		return LintConfig.oracleKey(a) == LintConfig.oracleKey(b);
+		return OracleDeclaration.oracleKey(a) == OracleDeclaration.oracleKey(b);
 	}
 
 	#if (sys || nodejs)

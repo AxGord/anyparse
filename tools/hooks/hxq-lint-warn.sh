@@ -212,11 +212,17 @@ mkdir -p "$CACHE_DIR" 2>/dev/null || snapshot=""
 # mode worse than being verbose. The hook process is fresh per op, so this is
 # asked on every write rather than cached: ~0.11s measured, against the ~5s of
 # the lint it guards.
+# The same help text answers `--full`: an engine that summarises a large text
+# report would hand the grep below a per-rule summary and no `<file>:<l>:<c>:`
+# line, and the nudge would go silent on exactly the file with the most to say.
+# It counts and caps findings itself (SHOWN_MAX), so it always asks for the list.
 baseline=""
-if [ -n "$snapshot" ] \
-  && node "$ENGINE" lint --help 2>/dev/null | grep -q -- '--baseline'; then
+full=""
+help=$(node "$ENGINE" lint --help 2>/dev/null)
+if [ -n "$snapshot" ] && printf '%s\n' "$help" | grep -q -- '--baseline'; then
   baseline="--baseline $snapshot"
 fi
+printf '%s\n' "$help" | grep -q -- '--full ' && full="--full"
 
 # ---- one lint process over every written file ----------------------------
 # `--flat` so each finding carries its own path (a nudge is read, not scrolled).
@@ -233,7 +239,7 @@ fi
 # standing set what this edit added.
 noise=$(mktemp "${TMPDIR:-/tmp}/hxq-lint-warn.XXXXXX") || noise=/dev/null
 # shellcheck disable=SC2086
-out=$(cd "$tree" && APQ_NO_CONFIG_WARN=1 node "$ENGINE" lint $files --all --no-oracle --flat $baseline 2>"$noise" \
+out=$(cd "$tree" && APQ_NO_CONFIG_WARN=1 node "$ENGINE" lint $files --all --no-oracle --flat $full $baseline 2>"$noise" \
   | grep -E ':[0-9]+:[0-9]+:')
 subtracted=no
 grep -q ' new of .* finding(s)' "$noise" 2>/dev/null && subtracted=yes

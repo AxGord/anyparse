@@ -1328,7 +1328,13 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-LEDGER-CROSS-FILE-MUTE',
 			'unit.check.LintFixDeclineWiringSliceTest#testAnAcceptedFileIsWrittenAndBlamesNobody :: control :: M-LINTFIX-ACCEPTED-BLAMED',
 			'unit.check.LintLanguageVersionGateTest#testAnExplicitRuleSelectionKeepsTheVersionFloor :: control :: M-VERSION-LIFTED-BY-RULE',
+			'unit.check.LintReportChannelSliceTest#testASummaryIsPerRuleAndOneRuleIsByFile :: control :: M-LINT-SUMMARY-ONE-SHAPE',
+			'unit.check.LintReportChannelSliceTest#testATextRunOverTheThresholdPrintsTheSummary :: control :: '
+				+ 'M-LINT-SUMMARY-THRESHOLD-UNREAD',
+			'unit.check.LintReportChannelSliceTest#testTheThresholdDecidesBetweenListAndSummary :: control :: M-LINT-SUMMARY-NEVER',
 			'unit.check.LintScopeGateTest#testALibsOnlyScopeIsNamedAsAGap :: control :: M-SCOPE-GAP-SILENT',
+			'unit.check.MagicNumberCheckTest#testADirectArgumentOfAnIgnoredCallIsExempt :: control :: M-MAGIC-CALLARG-BLIND',
+			'unit.check.MagicNumberCheckTest#testADottedEntryMatchesTheCalleeTail :: control :: M-MAGIC-CALLARG-SUFFIX-LOOSE',
 			'unit.check.NamingCheckCrossFileFixTest#testCrossFileRenameAsksTheResolutionScopeForUnreadableFiles :: control :: '
 				+ 'M-NAMING-SKIPSCAN-REPORT-INDEX,M-SKIPSCAN-SCOPEWIDE',
 			'unit.check.NamingCheckMemberFixTest#testAccessGrantOutsideReportScopeRefusesSingleFileRename :: control :: '
@@ -3970,7 +3976,12 @@ class TestDiscoveryParityTest extends Test {
 			'M-NULLFLOW-VALUE-FACT-UNKILLED',
 			'M-NULLFLOW-PREDICATE-BLIND',
 			'M-NULLFLOW-PREDICATE-UNCHECKED',
-			'M-NULLFLOW-PREDICATE-TYPE-UNCHECKED'
+			'M-NULLFLOW-PREDICATE-TYPE-UNCHECKED',
+			'M-LINT-SUMMARY-NEVER',
+			'M-LINT-SUMMARY-ONE-SHAPE',
+			'M-LINT-SUMMARY-THRESHOLD-UNREAD',
+			'M-MAGIC-CALLARG-BLIND',
+			'M-MAGIC-CALLARG-SUFFIX-LOOSE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

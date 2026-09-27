@@ -4,6 +4,7 @@ import anyparse.check.CompilerOracle;
 import anyparse.check.ConfigDisagreement;
 import anyparse.check.LintConfig;
 import anyparse.check.OracleCache;
+import anyparse.check.OracleDeclaration;
 import anyparse.check.OracleGeneration;
 import anyparse.query.cli.CliContext;
 import anyparse.query.ExitCode.*;
@@ -132,10 +133,10 @@ final class OracleCommand implements CliCommand {
 				&& OracleCache.storeIfUnchanged(oracle.hxml, oracle.dir, fingerprint, outcome, oracle.defines, after);
 			if (reportOracleRun(oracle, outcome) != EXIT_OK) exit = EXIT_RUNTIME;
 			if (fingerprint == null && oracle.unavailable == null)
-				CliIo.stderr('apq oracle: no fingerprint for ${LintConfig.describeOracle(oracle)} — the verdict was not recorded\n');
+				CliIo.stderr('apq oracle: no fingerprint for ${OracleDeclaration.describeOracle(oracle)} — the verdict was not recorded\n');
 			else if (fingerprint != null && !stored)
 				CliIo.stderr(
-					'apq oracle: the compile input of ${LintConfig.describeOracle(oracle)} changed during the typecheck — the verdict was not recorded\n'
+					'apq oracle: the compile input of ${OracleDeclaration.describeOracle(oracle)} changed during the typecheck — the verdict was not recorded\n'
 				);
 		}
 		CliIo.stderr(verdictSummary(answered));
@@ -146,7 +147,7 @@ final class OracleCommand implements CliCommand {
 
 	/** One stderr line per configuration's `apq oracle` outcome, plus the exit status that goes with it. */
 	private static function reportOracleRun(oracle: OracleConfig, outcome: OracleOutcome): Int {
-		final named: String = LintConfig.describeOracle(oracle);
+		final named: String = OracleDeclaration.describeOracle(oracle);
 		switch outcome {
 			case Confirmed:
 				CliIo.stderr('apq oracle: $named typechecks — verdict recorded (lint will not recompile an unchanged tree)\n');

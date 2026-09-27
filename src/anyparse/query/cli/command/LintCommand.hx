@@ -5,6 +5,7 @@ import anyparse.check.ConfigDisagreement;
 import anyparse.check.EffectiveRules;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
+import anyparse.check.OracleDeclaration;
 import anyparse.check.OracleGeneration;
 import anyparse.check.OracleRunMemo;
 import anyparse.check.ReachDefinesProbe;
@@ -99,6 +100,12 @@ typedef LintOpts = {
 	 * and the `--no-oracle` net notice. It adds output, never behaviour.
 	 */
 	var verbose: Bool;
+
+	/**
+	 * How the TEXT report is laid out: `true` = `--summary` (per-rule summary), `false` = `--full`
+	 * (every finding), null = the `reportSummaryThreshold` decides. See `LintCommand.summarises`.
+	 */
+	var summary: Null<Bool>;
 	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag/value -> EXIT_USAGE);
 	// the caller returns this immediately and ignores the rest of the struct.
 	var errExit: Null<Int>;
@@ -269,8 +276,7 @@ final class LintCommand implements CliCommand {
 		final all: Array<Violation> = baselineDelta(found, o.baseline, sourceOf);
 
 		final shown: Array<Violation> = reportedViolations(all, o.includeInfo, o.format);
-		renderLintReport(paths, shown, sourceOf, o.format, o.flat, cached);
-		lintSummary(all, paths, shown.length == all.length, LintFixVerify.unparseableFiles(files, cached));
+		reportFindings(o, paths, all, shown, sourceOf, cached, oracleConfig, LintFixVerify.unparseableFiles(files, cached));
 
 		// `--no-oracle` skips the typecheck entirely rather than faking its verdict:
 		// the note below says the compiler was not asked, so nothing downstream can
@@ -321,6 +327,7 @@ final class LintCommand implements CliCommand {
 			range: null,
 			baseline: null,
 			verbose: false,
+			summary: null,
 
 			errExit: code
 		};
@@ -913,6 +920,14 @@ final class LintCommand implements CliCommand {
 		CliIo.sysPrint('  --all, -a        Include Info-severity advisories in the report (text format only —\n');
 		CliIo.sysPrint('                   json and checkstyle are never capped)\n');
 		CliIo.sysPrint('  --flat           One <file>:<line>:<col> per line (text format only)\n');
+		CliIo.sysPrint('  --full           Always list every finding (text format only)\n');
+		CliIo.sysPrint('  --summary        Always print the per-rule summary instead (text format only)\n');
+		CliIo.sysPrint('                   Without either, a text report listing more findings than the\n');
+		CliIo.sysPrint('                   apqlint.json reportSummaryThreshold (default 200; 0 = never)\n');
+		CliIo.sysPrint('                   prints the summary instead: one line per rule (count, severity,\n');
+		CliIo.sysPrint('                   files) sorted by count, each with its top 3 files — a single\n');
+		CliIo.sysPrint('                   rule gets its top 10 files one per line. --rule follows the\n');
+		CliIo.sysPrint('                   same threshold; json and checkstyle always list everything\n');
 		CliIo.sysPrint('  --range <a>:<b>  Only findings whose span STARTS on a line in [a, b], 1-based\n');
 		CliIo.sysPrint('                   and inclusive; the scope must be exactly one file. Narrows\n');
 		CliIo.sysPrint('                   the report AND --fix. It narrows FINDINGS, not EDITS: an\n');
@@ -946,6 +961,7 @@ final class LintCommand implements CliCommand {
 		var baseline: Null<String> = null;
 		var verbose: Bool = false;
 		var listRules: Bool = false;
+		var summary: Null<Bool> = null;
 
 		var i: Int = 0;
 		while (i < args.length) {
@@ -965,6 +981,13 @@ final class LintCommand implements CliCommand {
 					noOracle = true;
 				case '--verbose':
 					verbose = true;
+				case '--full', '--summary':
+					final wanted: Bool = a == '--summary';
+					if (summary == !wanted) {
+						CliIo.stderr('apq lint: --full and --summary contradict each other — pass one\n');
+						return lintParseExit(EXIT_USAGE);
+					}
+					summary = wanted;
 				case '--baseline':
 					baseline = CliArgs.expectValue(args, ++i, '--baseline');
 				case '--range':
@@ -1018,8 +1041,15 @@ final class LintCommand implements CliCommand {
 			range: range,
 			baseline: baseline,
 			verbose: verbose,
+			summary: summary,
 			errExit: null
 		};
+		// A machine format is never summarised, so asking for a summary of one is a mistake the run
+		// could only honour by ignoring it. `--full` is what such a format does anyway and passes.
+		if (summary == true && format != FORMAT_TEXT) {
+			CliIo.stderr('apq lint: --summary applies to the text report — --format $format always lists every finding\n');
+			return lintParseExit(EXIT_USAGE);
+		}
 		return listRules ? lintParseExit(runListRules(opts)) : opts;
 	}
 
@@ -1110,6 +1140,30 @@ final class LintCommand implements CliCommand {
 	}
 
 	/**
+	 * Whether the TEXT report prints `LintFormat.summary` instead of one line per finding.
+	 *
+	 * `shown` is what the report would list — after the `--all` cap, so hidden advisories never tip a
+	 * run into a summary. `forced` is `--summary` (true) / `--full` (false) and wins outright; with
+	 * neither, a run listing more than `threshold` findings is summarised, and a `threshold` of zero or
+	 * less never is. json and checkstyle are never summarised: their stdout is the answer a tool reads.
+	 *
+	 * `--rule` is deliberately NOT a second switch. A narrowed run is small in the common case and so
+	 * keeps its list by the same threshold; one that is still over it (a single rule across a whole
+	 * tree) gets the summary, which for one rule is a by-file breakdown.
+	 */
+	public static function summarises(shown: Int, format: String, forced: Null<Bool>, threshold: Int): Bool {
+		if (format != FORMAT_TEXT) return false;
+		if (forced != null) return forced;
+		return threshold > 0 && shown > threshold;
+	}
+
+	/** The stderr line that closes a summarised report: why it is a summary, and the ways to the full list. */
+	private static function summaryHint(shown: Int, forced: Null<Bool>, threshold: Int): String {
+		final why: String = forced == true ? '--summary' : '$shown finding(s), over the reportSummaryThreshold of $threshold';
+		return 'apq lint: summarised ($why) — the full list: --full, or narrow with --rule <id> / a smaller scope, or --format json\n';
+	}
+
+	/**
 	 * The findings a `--range` window keeps: those whose span STARTS on a line inside it.
 	 *
 	 * A null window keeps everything, so both lint paths — the report and every pass of
@@ -1131,9 +1185,25 @@ final class LintCommand implements CliCommand {
 		});
 	}
 
+	/**
+	 * The report half of a report-mode run: the findings on stdout — listed, or summarised when
+	 * `summarises` says so under the threshold `config` declares — then the stderr breakdown, closed by
+	 * the way to the full list when the stdout was a summary. `config` is the run's first path's, the
+	 * one every project-level key is read off.
+	 */
+	private static function reportFindings(
+		o: LintOpts, paths: Array<String>, all: Array<Violation>, shown: Array<Violation>, sourceOf: Map<String, String>,
+		cached: CachingGrammarPlugin, config: Null<LintConfig>, skipped: Array<String>
+	): Void {
+		final threshold: Int = config?.reportSummaryThreshold() ?? LintFormat.DEFAULT_REPORT_SUMMARY_THRESHOLD;
+		final summarised: Bool = summarises(shown.length, o.format, o.summary, threshold);
+		renderLintReport(paths, shown, sourceOf, o.format, o.flat, cached, summarised);
+		lintSummary(all, paths, shown.length == all.length, summarised ? summaryHint(shown.length, o.summary, threshold) : null, skipped);
+	}
+
 	private static function renderLintReport(
 		paths: Array<String>, shown: Array<Violation>, sourceOf: Map<String, String>, format: String, flat: Bool,
-		plugin: CachingGrammarPlugin
+		plugin: CachingGrammarPlugin, summarised: Bool
 	): Void {
 		// Group findings per file, each group sorted by source position so the report
 		// reads top-to-bottom. ONE pass rather than a filter per path: that scan was
@@ -1188,6 +1258,8 @@ final class LintCommand implements CliCommand {
 				}));
 			case FORMAT_CHECKSTYLE:
 				CliIo.sysPrint(LintFormat.checkstyle(orderedByPath(), sourceOf));
+			case _ if (summarised):
+				CliIo.sysPrint(LintFormat.summary(shown));
 			case _:
 				for (path in paths) {
 					final group: Null<Array<Violation>> = byFile[path];
@@ -1198,13 +1270,16 @@ final class LintCommand implements CliCommand {
 
 	/**
 	 * The stderr breakdown under a lint report: the files the grammar could not read, the severity
-	 * counts, and — when the report was CAPPED — how much it withheld.
+	 * counts, when the report was CAPPED how much it withheld, and — when it was summarised — `hint`, the way to
+	 * the full list (null otherwise).
 	 *
 	 * `reportedAll` is what the report actually carried, not the `--all` flag: a machine format is
 	 * never capped, so telling its reader that advisories were hidden would be a lie the run has no
 	 * way to make true.
 	 */
-	private static function lintSummary(all: Array<Violation>, paths: Array<String>, reportedAll: Bool, ?skipped: Array<String>): Void {
+	private static function lintSummary(
+		all: Array<Violation>, paths: Array<String>, reportedAll: Bool, hint: Null<String>, ?skipped: Array<String>
+	): Void {
 		// A file the grammar cannot read is a hole in the analysis, and one that stays SILENT
 		// otherwise: the per-member confinement gates decline for anything such a file mentions,
 		// and nothing in the report says so. Naming the files is what lets a reader tell "no
@@ -1231,6 +1306,7 @@ final class LintCommand implements CliCommand {
 			CliIo.stderr('apq lint: $errors error(s), $warnings warning(s), $infos info(s) in ${paths.length} file(s)\n');
 			if (!reportedAll && infos > 0) CliIo.stderr('apq lint: $infos info advisory(ies) hidden — pass --all to show\n');
 		}
+		if (hint != null) CliIo.stderr(hint);
 	}
 
 	/**
@@ -1285,7 +1361,8 @@ final class LintCommand implements CliCommand {
 			{ flag: '--format', set: o.format != FORMAT_TEXT },
 			{ flag: '--range', set: o.range != null },
 			{ flag: '--baseline', set: o.baseline != null },
-			{ flag: '--verbose', set: o.verbose }
+			{ flag: '--verbose', set: o.verbose },
+			{ flag: o.summary == true ? '--summary' : '--full', set: o.summary != null }
 		];
 		return given.find(g -> g.set)?.flag;
 	}
@@ -1350,7 +1427,7 @@ final class LintCommand implements CliCommand {
 	 */
 	private static function reachComplete(paths: Array<String>, resolveConfig: String -> LintConfig): Bool {
 		if (paths.length == 0) return false;
-		final list: LintConfig -> String = c -> [for (o in c.compilerOracles()) LintConfig.oracleKey(o)].join('|');
+		final list: LintConfig -> String = c -> [for (o in c.compilerOracles()) OracleDeclaration.oracleKey(o)].join('|');
 		final first: String = list(resolveConfig(paths[0]));
 		var declared: Bool = false;
 		var all: Bool = true;

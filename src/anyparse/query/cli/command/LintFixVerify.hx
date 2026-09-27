@@ -11,6 +11,7 @@ import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.check.OracleCache;
 import anyparse.check.OracleCoverage;
+import anyparse.check.OracleDeclaration;
 import anyparse.core.EnvFlag;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
@@ -337,9 +338,13 @@ final class LintFixVerify {
 			case Confirmed:
 				confirmed.push(oracles[i]);
 			case Unavailable(reason):
-				CliIo.stderr('apq lint: compiler oracle unavailable for ${LintConfig.describeOracle(oracles[i])} — $reason (skipped)\n');
+				CliIo.stderr(
+					'apq lint: compiler oracle unavailable for ${OracleDeclaration.describeOracle(oracles[i])} — $reason (skipped)\n'
+				);
 			case Rejected(errors):
-				CliIo.stderr('apq lint: compiler oracle REJECTED ${LintConfig.describeOracle(oracles[i])} — build does not typecheck:\n');
+				CliIo.stderr(
+					'apq lint: compiler oracle REJECTED ${OracleDeclaration.describeOracle(oracles[i])} — build does not typecheck:\n'
+				);
 				CliIo.stderr('$errors\n');
 				return EXIT_RUNTIME;
 		}
@@ -367,7 +372,7 @@ final class LintFixVerify {
 
 	/** Every configuration named for one diagnostic line, in declared order. */
 	private static function describeOracles(oracles: Array<OracleConfig>): String {
-		return [for (oracle in oracles) LintConfig.describeOracle(oracle)].join(', ');
+		return [for (oracle in oracles) OracleDeclaration.describeOracle(oracle)].join(', ');
 	}
 
 	/**
@@ -410,7 +415,7 @@ final class LintFixVerify {
 				: OracleCache.lookup(oracle.hxml, oracle.dir, fingerprint, oracle.defines);
 			if (cached != null)
 				CliIo.stderr(
-					'apq lint: compiler oracle verdict reused for ${LintConfig.describeOracle(oracle)} — the compile input hashes'
+					'apq lint: compiler oracle verdict reused for ${OracleDeclaration.describeOracle(oracle)} — the compile input hashes'
 					+ ' identical to the last typecheck (no compile)\n'
 				);
 			outcomes.push(unavailable == null ? cached : Unavailable(unavailable));

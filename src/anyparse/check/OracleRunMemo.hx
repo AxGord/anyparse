@@ -31,7 +31,7 @@ final class OracleRunMemo {
 
 	private final _runs: Map<String, HaxeRun> = [];
 
-	/** The directories each configuration's fingerprint walked (`OracleCache.scanned`), by `LintConfig.oracleKey`. */
+	/** The directories each configuration's fingerprint walked (`OracleCache.scanned`), by `OracleDeclaration.oracleKey`. */
 	private final _roots: Map<String, Array<String>> = [];
 
 	/** The configurations a `-v` compile of this run showed to read nothing outside the directories their fingerprint walked. */
@@ -54,7 +54,7 @@ final class OracleRunMemo {
 	 * the fingerprint cannot see can change with no fingerprint changing.
 	 */
 	public function run(oracle: OracleConfig, verbose: Bool, fingerprint: Null<String>): Null<HaxeRun> {
-		final config: String = LintConfig.oracleKey(oracle);
+		final config: String = OracleDeclaration.oracleKey(oracle);
 		return fingerprint == null || !_seen.contains(config) || _blind.contains(config) ? null : _runs[key(oracle, verbose, fingerprint)];
 	}
 
@@ -95,7 +95,7 @@ final class OracleRunMemo {
 				if (scan == null)
 					null
 				else {
-					_roots[LintConfig.oracleKey(oracle)] = scan.roots;
+					_roots[OracleDeclaration.oracleKey(oracle)] = scan.roots;
 					written = written ?? writtenDigest(_written());
 					OracleCache.md5('${scan.fingerprint}\n$written');
 				}
@@ -108,7 +108,7 @@ final class OracleRunMemo {
 	 * walked makes the configuration answerable, one outside makes it blind for the rest of the run.
 	 */
 	private function judgeReads(oracle: OracleConfig, run: HaxeRun): Void {
-		final config: String = LintConfig.oracleKey(oracle);
+		final config: String = OracleDeclaration.oracleKey(oracle);
 		if (run.status != 0 || _blind.contains(config)) return;
 		final base: String = oracle.dir ?? Sys.getCwd();
 		final roots: Array<String> = [
@@ -147,7 +147,7 @@ final class OracleRunMemo {
 	}
 
 	private static function key(oracle: OracleConfig, verbose: Bool, fingerprint: String): String {
-		return '${verbose ? 'v' : 'p'}\n${LintConfig.oracleKey(oracle)}\n$fingerprint';
+		return '${verbose ? 'v' : 'p'}\n${OracleDeclaration.oracleKey(oracle)}\n$fingerprint';
 	}
 
 	/** `dir` with exactly one trailing separator, so a prefix test cannot match a sibling that merely shares its name's start. */

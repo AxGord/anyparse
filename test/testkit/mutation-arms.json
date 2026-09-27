@@ -6958,7 +6958,7 @@
 			"name": "M-FACTS-DROPPED",
 			"type": "anyparse.check.TypedFactsProbe",
 			"method": "finish",
-			"find": "facts.dropped.push({ name: LintConfig.describeOracle(asked[i].oracle), reason: failureOf(runs[i]) });",
+			"find": "facts.dropped.push({ name: OracleDeclaration.describeOracle(asked[i].oracle), reason: failureOf(runs[i]) });",
 			"replace": "{}",
 			"note": "a configuration that failed is dropped in silence"
 		},
@@ -9678,6 +9678,43 @@
 			"find": " && ctx.argType(arg) == written",
 			"replace": "",
 			"note": "a predicate argument counts whatever its written type, so an implicit @:from / @:to conversion into the parameter launders a null"
+		},
+		{
+			"name": "M-LINT-SUMMARY-NEVER",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "summarises",
+			"force": "false",
+			"note": "a text report over its threshold, or asked for --summary, still lists every finding"
+		},
+		{
+			"name": "M-LINT-SUMMARY-ONE-SHAPE",
+			"type": "anyparse.query.format.LintFormat",
+			"method": "summary",
+			"find": "if (rules.length == 1) {",
+			"replace": "if (false) {",
+			"note": "a summary of one rule names its top three files inline instead of a by-file breakdown"
+		},
+		{
+			"name": "M-LINT-SUMMARY-THRESHOLD-UNREAD",
+			"type": "anyparse.check.LintConfig",
+			"method": "reportSummaryThreshold",
+			"force": "LintFormat.DEFAULT_REPORT_SUMMARY_THRESHOLD",
+			"note": "an apqlint.json reportSummaryThreshold is ignored and every run summarises at the default"
+		},
+		{
+			"name": "M-MAGIC-CALLARG-BLIND",
+			"type": "anyparse.check.MagicNumber",
+			"method": "isIgnoredCallArgument",
+			"force": "false",
+			"note": "a direct argument of a call ignoreCallArguments names is flagged as a magic number"
+		},
+		{
+			"name": "M-MAGIC-CALLARG-SUFFIX-LOOSE",
+			"type": "anyparse.check.MagicNumber",
+			"method": "pathEndsWith",
+			"find": ["suffix.length > path.length", "for (i in 0...suffix.length)"],
+			"replace": ["false", "for (i in suffix.length - 1...suffix.length)"],
+			"note": "an ignoreCallArguments entry matches any callee sharing its last segment, so Lang.t exempts a bare t()"
 		}
 	]
 }

@@ -193,7 +193,7 @@ final class CompilerServer {
 	 */
 	public static function stateFile(hxml: String, cwd: Null<String>, ?defines: Array<String>): String {
 		#if nodejs
-		final key: String = LintConfig.oracleKey({ hxml: absolute(hxml), dir: cwd, defines: defines ?? [] });
+		final key: String = OracleDeclaration.oracleKey({ hxml: absolute(hxml), dir: cwd, defines: defines ?? [] });
 		return Path.join([TempScratch.root(), 'apq-oracle-${Md5.encode(key)}.json']);
 		#else
 		return '';

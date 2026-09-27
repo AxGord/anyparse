@@ -41,6 +41,9 @@ import anyparse.grammar.json.JValue;
  * `JValue` for the same reason `rules` does: `LintConfig` maps them onto the neutral
  * `FrameworkContract` the naming layer speaks, and a per-entry typo must degrade that one entry
  * rather than the document.
+ *
+ * `reportSummaryThreshold` is how many findings a TEXT report may list before
+ * it prints a per-rule summary instead (`LintConfig.reportSummaryThreshold`).
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef ApqLintConfig = {
@@ -64,4 +67,6 @@ typedef ApqLintConfig = {
 	@:optional var languageVersion: String;
 
 	@:optional var frameworks: Array<JValue>;
+
+	@:optional var reportSummaryThreshold: Int;
 };

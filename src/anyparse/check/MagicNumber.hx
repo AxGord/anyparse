@@ -4,10 +4,12 @@ import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.NodeShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -42,8 +44,10 @@ using StringTools;
  *     literal reaching a string-position method argument (`positionMethodNames`, e.g.
  *     `s.charCodeAt(i + 5)` / `s.substr(0, 4)`), directly or through `+` / `-` offset
  *     arithmetic (`additiveKinds`), is a position, and a literal offset from a size field
- *     (`s.length - 3`) is a count offset — both exempt, while a bare offset with no size
- *     sibling (`from + 3`) stays flagged.
+ *     (`s.length - 3`) is a count offset — both exempt, while a bare offset
+ *     with no size sibling (`from + 3`) stays flagged. A literal that is DIRECTLY an argument of a
+ *     call named in the `ignoreCallArguments` option (`t('label', 10233)` under `["t"]`) is a key
+ *     the callee owns, and exempt; one nested in an argument expression (`t('x', 100 + k)`) is not.
  *  3. its numeric value is not in the exempt set `{0, 1, 2}` plus any number
  *     listed in the `magic-number` `ignore` option of a discovered
  *     `apqlint.json`. A negative literal parses as a negation wrapping a
@@ -92,7 +96,12 @@ final class MagicNumber implements Check implements ConfigAware implements NoAut
 			final ignore: Array<Float> = LintConfig.resolveWith(_resolveConfig, entry.file)
 				.numberListOption('magic-number', 'ignore') ?? [];
 			final exempt: Array<Float> = base.concat(ignore);
-			walk(violations, entry.file, tree, null, false, false, cfg, exempt);
+			final calls: Array<String> = LintConfig.resolveWith(_resolveConfig, entry.file)
+				.stringListOption('magic-number', 'ignoreCallArguments') ?? [];
+			walk(
+				violations, entry.file, tree, null, false, false, cfg,
+				{ values: exempt, calls: [for (c in calls) if (c != '') c.split('.')] }
+			);
 		});
 	}
 
@@ -133,7 +142,7 @@ final class MagicNumber implements Check implements ConfigAware implements NoAut
 	 */
 	private static function walk(
 		out: Array<Violation>, file: String, node: QueryNode, parent: Null<QueryNode>, inFunction: Bool, positionCtx: Bool,
-		cfg: MagicNumberCfg, exempt: Array<Float>
+		cfg: MagicNumberCfg, exempt: MagicNumberExempt
 	): Void {
 		final parentKind: String = parent != null ? parent.kind : '';
 		final here: Bool = inFunction || cfg.functionKinds.contains(node.kind);
@@ -141,8 +150,9 @@ final class MagicNumber implements Check implements ConfigAware implements NoAut
 			here && cfg.numericKinds.contains(node.kind) && !cfg.localDeclKinds.contains(parentKind) && parentKind != cfg.objectFieldKind
 			&& !isArrayIndex(parent, cfg) && !hasSizeFieldSibling(node, parent, cfg, cfg.comparisonKinds)
 			&& !hasSizeFieldSibling(node, parent, cfg, cfg.additiveKinds) && !positionCtx
+			&& !isIgnoredCallArgument(node, parent, cfg, exempt.calls)
 		)
-			flag(out, file, node, exempt);
+			flag(out, file, node, exempt.values);
 		final posCall: Bool = isPositionCall(node, cfg);
 		for (i in 0...node.children.length)
 			walk(out, file, node.children[i], node, here, childPositionCtx(node, i, positionCtx, posCall, cfg), cfg, exempt);
@@ -207,6 +217,7 @@ final class MagicNumber implements Check implements ConfigAware implements NoAut
 			indexAccessKind: shape.indexAccessKind ?? '',
 			comparisonKinds: shape.comparisonKinds ?? [],
 			fieldAccessKind: shape.fieldAccessKind ?? '',
+			identKind: shape.identKind,
 			sizeFieldNames: shape.sizeFieldNames ?? [],
 			callKind: shape.callKind ?? '',
 			parenKind: shape.parenKind ?? '',
@@ -233,6 +244,37 @@ final class MagicNumber implements Check implements ConfigAware implements NoAut
 		return false;
 	}
 
+	/**
+	 * A literal that is DIRECTLY an argument of a call whose callee matches an `ignoreCallArguments`
+	 * entry — `t('Complete with AI', 10233)`, where the number is a key the callee owns, not a quantity.
+	 *
+	 * Direct means the call is the literal's parent and the literal is not its callee: `t('x', 100 + k)`
+	 * keeps the literal under the operator and stays flagged, and so does a negated one (`t('x', -5)`).
+	 * An entry matches when its dotted segments are the LAST segments of the callee as written (see
+	 * `pathEndsWith`).
+	 */
+	private static function isIgnoredCallArgument(
+		node: QueryNode, parent: Null<QueryNode>, cfg: MagicNumberCfg, calls: Array<Array<String>>
+	): Bool {
+		if (parent == null || calls.length == 0 || cfg.callKind == '' || parent.kind != cfg.callKind || parent.children[0] == node)
+			return false;
+		final path: Array<String> = NodeShape.calleePath(parent.children[0], cfg.fieldAccessKind, cfg.identKind);
+		return calls.exists(entry -> pathEndsWith(path, entry));
+	}
+
+	/**
+	 * Whether `suffix` is the tail of `path`, segment for segment. So a bare `t` matches every call whose
+	 * last name is `t` (`t(…)`, `Lang.t(…)`, `this.t(…)`), `Lang.t` matches `Lang.t(…)` and
+	 * `macros.Lang.t(…)` but not a bare `t(…)` — a call imported by name no longer spells its type — and a
+	 * receiver that is no path (`make().t(…)`) contributes nothing, so only a bare entry reaches it.
+	 */
+	private static function pathEndsWith(path: Array<String>, suffix: Array<String>): Bool {
+		if (suffix.length == 0 || suffix.length > path.length) return false;
+		final offset: Int = path.length - suffix.length;
+		for (i in 0...suffix.length) if (path[offset + i] != suffix[i]) return false;
+		return true;
+	}
+
 }
 
 /**
@@ -247,9 +289,19 @@ private typedef MagicNumberCfg = {
 	final indexAccessKind: String;
 	final comparisonKinds: Array<String>;
 	final fieldAccessKind: String;
+	final identKind: String;
 	final sizeFieldNames: Array<String>;
 	final callKind: String;
 	final parenKind: String;
 	final positionMethodNames: Array<String>;
 	final additiveKinds: Array<String>;
+};
+
+/**
+ * What exempts a literal in one file: the exempt `values`, and the `ignoreCallArguments` entries,
+ * each already split into its dotted segments.
+ */
+private typedef MagicNumberExempt = {
+	final values: Array<Float>;
+	final calls: Array<Array<String>>;
 };

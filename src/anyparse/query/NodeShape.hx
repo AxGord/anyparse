@@ -72,4 +72,21 @@ final class NodeShape {
 		return retIdent.kind == identKind && retIdent.name == name ? { lhs: lhs, name: name, retIdent: retIdent } : null;
 	}
 
+	/**
+	 * The dotted path a call's `callee` is WRITTEN as, root first: `a.b.f` -> `[a, b, f]`, bare `f` -> `[f]`.
+	 * A receiver that is not a path (a call, an index, a literal) ends the path there, so `x().f` -> `[f]`
+	 * and the answer holds the trailing named segments only; a callee that is no path at all -> `[]`.
+	 */
+	public static function calleePath(callee: QueryNode, fieldAccessKind: String, identKind: String): Array<String> {
+		if (callee.kind == fieldAccessKind) {
+			final base: Array<String> = callee.children.length > 0 ? calleePath(callee.children[0], fieldAccessKind, identKind) : [];
+			final nm: Null<String> = callee.name;
+			if (nm != null) base.push(nm);
+			return base;
+		}
+		if (callee.kind != identKind) return [];
+		final nm: Null<String> = callee.name;
+		return nm != null ? [nm] : [];
+	}
+
 }
