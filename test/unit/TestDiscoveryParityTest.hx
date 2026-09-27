@@ -2678,6 +2678,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.SetModifierSliceTest#testAConditionalRegionOutsideTheKeywordRunIsStillServed :: control :: '
 				+ 'M-SETMOD-GUARDED-ANY-VISIBILITY',
 			'unit.query.SetModifierSliceTest#testAnEnumAbstractMemberStillTakesPublic :: control :: M-SETMOD-MODULE-BY-TYPE-KINDS',
+			'unit.query.SetModifierSliceTest#testPrivateOnAFinalClassPrecedesTheFinal :: control :: M-DECLSPAN-FINAL-WRAPPER-BLIND',
 			'unit.query.StdResolverTest#testMultiEntryEnvAnswersTheStdEntry :: control :: M-STD-ENV-ENTRIES',
 			'unit.query.StdResolverTest#testTheStdBesideTheCompilerIsFoundInEitherLayout :: control :: M-STD-SIBLING-HOMEBREW',
 			'unit.query.StructuralMembershipTest#testAliasTargetPairAgrees :: control :: M-ALIAS-TARGET-SIMPLE-NAME',

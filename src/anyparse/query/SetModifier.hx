@@ -127,10 +127,16 @@ final class SetModifier {
 		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 
 		final cursor: Int = Span.offsetOf(source, line, col);
-		final node: Null<QueryNode> = Engine.at(tree, cursor);
-		if (node == null) return Err('position $line:$col is not on a node');
-		final parent: Null<QueryNode> = TreePath.parentOf(tree, node);
-		if (parent == null) return Err('the node at $line:$col has no parent (not a member / declaration)');
+		final hitNode: Null<QueryNode> = Engine.at(tree, cursor);
+		if (hitNode == null) return Err('position $line:$col is not on a node');
+		final hitParent: Null<QueryNode> = TreePath.parentOf(tree, hitNode);
+		if (hitParent == null) return Err('the node at $line:$col has no parent (not a member / declaration)');
+		// A `final class` addressed through its inner form: the run sits beside the wrapper, so the
+		// wrapper is the declaration (`validate` already refuses `final` itself, which wraps it).
+		final wrapper: Null<QueryNode> = ElementSpan.foldingWrapperOf(hitNode, hitParent);
+		final wrapperParent: Null<QueryNode> = wrapper == null ? null : TreePath.parentOf(tree, wrapper);
+		final node: QueryNode = wrapper ?? hitNode;
+		final parent: QueryNode = wrapperParent ?? hitParent;
 
 		final siblings: Array<QueryNode> = parent.children;
 		final cursorIndex: Int = siblings.indexOf(node);

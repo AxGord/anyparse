@@ -44,6 +44,18 @@ class SetModifierSliceTest extends Test {
 		Assert.isTrue(text.contains('public static function f'));
 	}
 
+	/**
+	 * A `final class` addressed at its name lands on the inner form, whose `final` is folded into
+	 * the wrapper: the new keyword goes in front of the whole declaration, after the annotations
+	 * beside it, never between `final` and `class` (`final private\nclass X`).
+	 */
+	@:pin('control')
+	@:killer('M-DECLSPAN-FINAL-WRAPPER-BLIND')
+	public function testPrivateOnAFinalClassPrecedesTheFinal(): Void {
+		final text: String = okText(SetModifier.setModifier('@:keep final class X {}\n', 1, 20, ['private'], false, new HaxeQueryPlugin()));
+		Assert.equals('@:keep private final class X {}\n', text);
+	}
+
 	/** A boolean modifier is removed. */
 	public function testRemoveInline(): Void {
 		final src: String = 'package p;\nclass C {\n\tpublic inline function f(): Int return 1;\n}';

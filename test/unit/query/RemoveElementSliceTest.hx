@@ -37,6 +37,10 @@ class RemoveElementSliceTest extends Test {
 	public function testRemoveFinalClassTakesItsFinal(): Void {
 		final source: String = 'final class X {}\n\nabstract class Y {}\n';
 		assertRemove(source, 1, 7, false, 'abstract class Y {}\n');
+		final documented: String = '/** Doc X. */\n$source';
+		Assert.equals(
+			'removed ClassDecl X: 2 lines, with its doc comment', RemoveElement.describeRemoval(documented, 2, 7, new HaxeQueryPlugin())
+		);
 	}
 
 	/** Remove the first element — its trailing comma goes with it. */

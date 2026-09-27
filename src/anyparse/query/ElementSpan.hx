@@ -548,8 +548,11 @@ final class ElementSpan {
 			source, node, parent, nodeSpan, withDoc, lazyRegions(source, plugin)
 		);
 		final subject: QueryNode = cutSubject(node, parent);
-		final name: Null<String> = subject.name;
-		final what: String = name == null ? subject.kind : '${subject.kind} $name';
+		// A wrapper that folds a type's modifier in reads as the declaration it names (`ClassDecl X`).
+		final decl: Null<RefactorSupport.TypeDeclMatch> = RefactorSupport.typeDeclOf(subject);
+		final kind: String = decl == null ? subject.kind : decl.kind;
+		final name: Null<String> = decl == null ? subject.name : decl.name;
+		final what: String = name == null ? kind : '$kind $name';
 		var lines: Int = 1;
 		var i: Int = cut.span.from;
 		final last: Int = cut.span.to - 1;
