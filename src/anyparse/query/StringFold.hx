@@ -116,13 +116,23 @@ interface StringFoldSupport {
 	public function segmentsOf(node: QueryNode, source: String): Null<Array<ConcatSegment>>;
 
 	/**
-	 * `node` as ONE `ConcatSegment` in expression position — `SegIdent` for a bare
-	 * identifier, else `SegExpr` carrying its source and whether it binds tighter
-	 * than concatenation (so a lone group can be emitted without parentheses).
-	 * Null when the node has no span. A `Std.string(x)` wrapper is NOT unwrapped
-	 * here; the caller does that before asking.
+	 * `node` as ONE `ConcatSegment` in expression position — `SegText` for a literal
+	 * `constantText` answers (it converts to the same text on every target, so it is
+	 * text already), `SegIdent` for a bare identifier, else `SegExpr` carrying its
+	 * source and whether it binds tighter than concatenation (so a lone group can be
+	 * emitted without parentheses). Null when the node has no span. A `Std.string(x)`
+	 * wrapper is NOT unwrapped here; the caller does that before asking.
 	 */
 	public function expressionSegment(node: QueryNode, source: String): Null<ConcatSegment>;
+
+	/**
+	 * The text `node` converts to when it is a LITERAL whose string conversion is the
+	 * same on every target the grammar compiles for, else null — what lets a
+	 * concatenation operand (`0 + ' '`) or an interpolation block (`'${0} '`) be written
+	 * as plain text instead of a runtime conversion. The answer carries no quote, no
+	 * `$` and no backslash, so it is its own raw spelling under any quoting.
+	 */
+	public function constantText(node: QueryNode, source: String): Null<String>;
 
 	/**
 	 * ONE group of consecutive segments rendered as a single concatenation

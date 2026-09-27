@@ -286,6 +286,63 @@ class PreferInterpolationCheckTest extends Test {
 		Assert.equals("'${e.cloudId}'", edits[0].text);
 	}
 
+	/**
+	 * A `${ … }` block holding nothing but a constant that prints alike on every target is plain text written as a runtime
+	 * conversion: `fold-adjacent-string-literals` used to leave `'${0} ${i + 1}'` behind for `0 + ' ' + (i + 1)`, and this
+	 * is the rule that cleans such a literal up. The fix re-renders the whole literal.
+	 */
+	@:pin('control')
+	@:killer('M-FOLD-CONSTANT-AS-EXPRESSION')
+	@:killer('M-INTERP-CONSTANT-BLOCK-IGNORED')
+	public function testInterpolatedConstantBecomesText(): Void {
+		final src: String = "class C {\n\tfunction f(i:Int):Void {\n\t\tvar s = '${0} ${i + 1}';\n\t}\n}";
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals('this interpolated constant can be plain text', vs[0]?.message);
+		Assert.equals("'0 ${i + 1}'", fixText(src));
+	}
+
+	/** Every constant kind the seam answers, each spelled as the value it prints: hex as decimal, `-0` as `0`, separators dropped. */
+	@:pin('control')
+	@:killer('M-CONSTANT-NEGATIVE-ZERO-SIGNED')
+	public function testEveryInterpolatedConstantKindBecomesItsPrintedText(): Void {
+		Assert.equals(
+			"'16|-1|-16|0|null|true|false|1000'", fixText(wrap("'${0x10}|${-1}|${-0x10}|${-0}|${null}|${true}|${false}|${1_000}'"))
+		);
+	}
+
+	/**
+	 * A `$name` directly in front of the spliced text would read a longer name (`'$x0'` is `x0`), so the re-render braces
+	 * it — the renderer decides that, not this rule.
+	 */
+	@:pin('control')
+	@:killer('M-INTERP-CONSTANT-BLOCK-IGNORED')
+	public function testConstantAfterAShorthandReadBracesTheRead(): Void {
+		Assert.equals("'${x}0'", fixText(body("var x: Int = 1;\n\t\tvar s = '$x${0}';")));
+	}
+
+	/**
+	 * A `Float` prints differently per target (`1.0` is `1` on js, `1.0` on python), `0xFFFFFFFF` wraps to `-1`, and a
+	 * decimal past `2147483647` types as `Float`: none of them is text on every target, so each keeps its block.
+	 */
+	@:pin('control')
+	@:killer('M-CONSTANT-DECIMAL-RANGE-UNCHECKED')
+	@:killer('M-CONSTANT-FLOAT-ADMITTED')
+	@:killer('M-CONSTANT-HEX-RANGE-UNCHECKED')
+	public function testTargetDependentConstantsKeepTheirBlock(): Void {
+		Assert.equals(0, violations(wrap("'${1.5}|${1.0}'")).length);
+		Assert.equals(0, violations(wrap("'${0xFFFFFFFF}|${0x80000000}'")).length);
+		Assert.equals(0, violations(wrap("'${2147483648}'")).length);
+		Assert.equals("'2147483647|2147483647'", fixText(wrap("'${2147483647}|${0x7FFFFFFF}'")));
+	}
+
+	/** An annotation argument is read as syntax, so its interpolated constant stays as written. */
+	@:pin('control')
+	@:killer('M-INTERP-CONSTANT-IN-META')
+	public function testInterpolatedConstantInAnnotationNotFlagged(): Void {
+		Assert.equals(0, violations("class C {\n\t@:m('${0}')\n\tfunction f():Void {}\n}").length);
+	}
+
 	private function wrap(expr: String): String {
 		return 'class C {\n\tfunction f():Void {\n\t\tvar x = $expr;\n\t}\n}';
 	}

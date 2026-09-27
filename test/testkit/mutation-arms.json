@@ -9731,6 +9731,61 @@
 			"find": ["suffix.length > path.length", "for (i in 0...suffix.length)"],
 			"replace": ["false", "for (i in suffix.length - 1...suffix.length)"],
 			"note": "an ignoreCallArguments entry matches any callee sharing its last segment, so Lang.t exempts a bare t()"
+		},
+		{
+			"name": "M-INTERP-CONSTANT-BLOCK-IGNORED",
+			"type": "anyparse.check.PreferInterpolation",
+			"method": "flagConstantBlocks",
+			"force": "false",
+			"note": "an interpolation block holding a target-invariant constant is never flagged, so '${0} ${i + 1}' is left for nobody to clean up"
+		},
+		{
+			"name": "M-FOLD-CONSTANT-AS-EXPRESSION",
+			"type": "anyparse.grammar.haxe.HaxeStringFoldSupport",
+			"method": "expressionSegment",
+			"find": "\tif (constant != null) return SegText(\"'\", constant);\n",
+			"replace": "",
+			"note": "a constant operand or block decomposes as an expression again, so the fold writes '${0} ' for 0 + ' ' and the re-render keeps the block"
+		},
+		{
+			"name": "M-CONSTANT-NEGATIVE-ZERO-SIGNED",
+			"type": "anyparse.grammar.haxe.HaxeStringFoldSupport",
+			"method": "constantText",
+			"find": "magnitude == null || magnitude == '0' ? magnitude : '-$magnitude'",
+			"replace": "magnitude == null ? magnitude : '-$magnitude'",
+			"note": "a negated zero is spliced as -0, while the Int it evaluates to prints 0"
+		},
+		{
+			"name": "M-CONSTANT-FLOAT-ADMITTED",
+			"type": "anyparse.grammar.haxe.HaxeStringFoldSupport",
+			"method": "constantText",
+			"find": "case 'BoolLit', 'NullLit':",
+			"replace": "case 'BoolLit', 'NullLit', 'FloatLit':",
+			"note": "a Float literal counts as target-invariant text, though 1.0 prints 1 on js and 1.0 on python"
+		},
+		{
+			"name": "M-CONSTANT-HEX-RANGE-UNCHECKED",
+			"type": "anyparse.grammar.haxe.HaxeStringFoldSupport",
+			"method": "hexText",
+			"find": "\tif (digits.length == HEX_INT_DIGITS && digits.charAt(0) > '7') return null;\n",
+			"replace": "",
+			"note": "a hex literal past 0x7FFFFFFF is spliced as its unsigned value, though the Int it types as wraps negative"
+		},
+		{
+			"name": "M-CONSTANT-DECIMAL-RANGE-UNCHECKED",
+			"type": "anyparse.grammar.haxe.HaxeStringFoldSupport",
+			"method": "decimalText",
+			"find": "digits.length < INT_MAX.length || (digits.length == INT_MAX.length && digits <= INT_MAX);",
+			"replace": "true;",
+			"note": "a decimal literal past 2147483647 counts as Int text, though it types as Float and prints per target"
+		},
+		{
+			"name": "M-INTERP-CONSTANT-IN-META",
+			"type": "anyparse.check.PreferInterpolation",
+			"method": "scanInterpBlocks",
+			"find": "if (!inMeta && flagConstantBlocks(",
+			"replace": "if (flagConstantBlocks(",
+			"note": "an interpolated constant inside an annotation argument is rewritten, though a metadata string is read as syntax"
 		}
 	]
 }

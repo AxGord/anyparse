@@ -8,16 +8,18 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SourceText;
+import anyparse.query.StringFold.ConcatSegment;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
- * Flags `Std.string(x)` and rewrites it to string interpolation — `'$x'` for a simple
+ * Flags `Std.string(x)` (and an interpolated constant, see below) and rewrites it to string interpolation — `'$x'` for a simple
  * identifier, `'${expr}'` for any other interpolation-safe expression — `Severity.Info`
  * (a modernization cleanup matching the Haxe idiom: direct conversion, no reflection
  * overhead), with an autofix.
@@ -84,6 +86,14 @@ using StringTools;
  * the check stays in the unverified safe loop with the gate ON (the `OracleRelaxable`
  * carve-out in `Cli.partitionChecks`), byte-identical to its pre-seam behavior.
  *
+ * ## An interpolated constant
+ *
+ * A `${ … }` block holding nothing but a literal that converts to the same text on every target
+ * (`StringFoldSupport.constantText`: an `Int` in range, `true` / `false`, `null`) is flagged too — `'${0} ${i + 1}'` is
+ * `'0 ${i + 1}'` with a runtime conversion added. The fix re-renders the WHOLE literal through the fold seam
+ * (`segmentsOf` then `renderGroup`), so the escaping and the braces a `$name` in front of the spliced text needs are the
+ * renderer's, never this rule's (`flagConstantBlocks`). An annotation argument is skipped: its string is read as syntax.
+ *
  * ## Grammar-agnostic
  *
  * Driven by `RefShape.callKind`, `fieldAccessKind`, and `identKind` (a missing optional
@@ -120,7 +130,7 @@ final class PreferInterpolation implements Check implements RiskyFix implements 
 	}
 
 	public function description(): String {
-		return "a Std.string(x) call replaceable with string interpolation ('$x')";
+		return "a Std.string(x) call replaceable with string interpolation ('$x'), or an interpolated constant ('${0}') writable as text";
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -134,7 +144,7 @@ final class PreferInterpolation implements Check implements RiskyFix implements 
 				span: m.span,
 				rule: 'prefer-interpolation',
 				severity: Severity.Info,
-				message: 'this Std.string() call can be string interpolation'
+				message: m.message
 			});
 		}
 		return violations;
@@ -244,9 +254,37 @@ final class PreferInterpolation implements Check implements RiskyFix implements 
 	private static function scanInterpBlocks(out: Array<ScanMatch>, ctx: ScanCtx, literal: QueryNode, inMeta: Bool): Void {
 		final blockKind: Null<String> = ctx.shape.stringInterpBlockKind;
 		if (blockKind == null) return;
+		if (!inMeta && flagConstantBlocks(out, ctx, literal, blockKind) && !ctx.collectNested) return;
 		for (block in literal.children)
 			if (block.kind == blockKind)
 				for (c in block.children) scan(out, ctx, c, null, inMeta, true, block.children.length == 1);
+	}
+
+	/**
+	 * Flag `literal` when one of its `${ … }` blocks holds nothing but a constant that converts to the same text on every
+	 * target (`StringFoldSupport.constantText`) — `'${0} ${i + 1}'`, which runs a conversion for what could be written as
+	 * `'0 ${i + 1}'`. The replacement is the WHOLE literal re-rendered through the fold seam (`segmentsOf` then
+	 * `renderGroup`), whose decomposition already turns such a block into text: the escaping, and the braces a `$name` in
+	 * front of the spliced text needs (`'$x${0}'` becomes `'${x}0'`, never the read of `x0`), are the renderer's, the same
+	 * one `fold-adjacent-string-literals` writes with. A literal the renderer refuses stays as it is. The caller skips an
+	 * annotation argument, whose string is read as syntax.
+	 */
+	private static function flagConstantBlocks(out: Array<ScanMatch>, ctx: ScanCtx, literal: QueryNode, blockKind: String): Bool {
+		final support: Null<StringFoldSupport> = ctx.seams.stringFold;
+		final span: Null<Span> = literal.span;
+		if (support == null || span == null) return false;
+		final fold: StringFoldSupport = support;
+		final constantBlock: Bool = literal.children.exists(
+			block -> block.kind == blockKind && block.children.length == 1 && fold.constantText(block.children[0], ctx.source) != null
+		);
+		if (!constantBlock) return false;
+		final segments: Null<Array<ConcatSegment>> = fold.segmentsOf(literal, ctx.source);
+		final rendered: Null<String> = segments == null ? null : fold.renderGroup(segments);
+		if (rendered == null || rendered == ctx.source.substring(span.from, span.to)) return false;
+		final at: Span = span;
+		final text: String = rendered;
+		out.push({ span: at, replacement: text, message: 'this interpolated constant can be plain text' });
+		return true;
 	}
 
 	/**
@@ -358,7 +396,7 @@ final class PreferInterpolation implements Check implements RiskyFix implements 
 		if (callCarriesComment(span, argSpan, ctx.source)) return false;
 		final at: Span = span;
 		final text: String = replacement;
-		out.push({ span: at, replacement: text });
+		out.push({ span: at, replacement: text, message: 'this Std.string() call can be string interpolation' });
 		return true;
 	}
 
@@ -416,6 +454,7 @@ final class PreferInterpolation implements Check implements RiskyFix implements 
 			fieldAccessKind: fieldAccessKind,
 			identKind: identKind,
 			concatKind: stringFold?.concatKind(),
+			stringFold: stringFold,
 			metaKinds: plugin.metaShape().metaKinds
 		};
 	}
@@ -434,6 +473,9 @@ private typedef Seams = {
 	 * `fold-adjacent-string-literals`, not to this rule.
 	 */
 	final concatKind: Null<String>;
+
+	/** The grammar's string-literal seam, or null without one: it answers and re-renders an interpolated constant. */
+	final stringFold: Null<StringFoldSupport>;
 
 	/**
 	 * The ANNOTATION-argument kinds. `fold-adjacent-string-literals` skips them
@@ -470,4 +512,5 @@ private typedef ScanCtx = {
 private typedef ScanMatch = {
 	final span: Span;
 	final replacement: String;
+	final message: String;
 };
