@@ -40,6 +40,28 @@ class ThreadSafetyCheckTest extends Test {
 		#end
 	}
 
+	/**
+	 * A field typed by the class's `T` reached inside a method that declares a `T` of its own still runs the CLASS
+	 * bound's member: here only on the spawned thread, so `A.m` is not main-reached and `B.m`, which nothing calls, is.
+	 */
+	@:pin('control') @:killer('M-GRAPH-BOUND-DECL-SCOPE')
+	public function testShadowedTypeParameterKeepsTheFieldsBound(): Void {
+		#if (sys || nodejs)
+		final vs: Array<Violation> = violations('{"rules":{"thread-safety":{"sinks":["Sys.sleep"],"spawns":["Runner.create"]}}}', [
+			'class A { public function m():Void Sys.sleep(1); }',
+			'class B { public function new() {} public function m():Void Sys.sleep(2); }',
+			'class Shadow<T:A> { var item:T; function methodShadow<T:B>(x:T):Void item.m(); '
+			+ 'function start():Void Runner.create(() -> methodShadow(new B())); }',
+			'class Runner { public static function create(fn:()->Void):Void {} }'
+		]);
+		Assert.same(['B.m'], [
+			for (v in vs) v.message.indexOf('A.m') != -1 ? 'A.m' : v.message.indexOf('B.m') != -1 ? 'B.m' : v.message
+		]);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	public function testSpawnedCallbackNotFlagged(): Void {
 		#if (sys || nodejs)
 		final vs: Array<Violation> = violations('{"rules":{"thread-safety":{"sinks":["Sys.sleep"],"spawns":["Runner.create"]}}}', [

@@ -213,6 +213,9 @@ final class CallGraph {
 	/** What a type parameter nothing binds becomes in a written type: text that names no type. */
 	private static inline final UNKNOWN_TYPE: String = '$$_';
 
+	/** The scope of a type written on a MEMBER: only the parameters of the type declaring it are in scope there. */
+	private static inline final MEMBER_SCOPE: Int = -1;
+
 	public final nodes: Map<String, FnNode> = [];
 	public final edges: Array<CallEdge> = [];
 	public final unresolved: Array<UnresolvedCall> = [];
@@ -525,9 +528,9 @@ final class CallGraph {
 			if (declared != null && declaredAt != null) {
 				final own: Null<Map<String, Array<String>>> = bounds[declaredAt.from];
 				if (own != null)
-					_facts.typeBounds[declared] = own
+					_facts.typeBounds[boundsKey(entry.file, declared)] = own
 				else
-					_facts.typeBounds.remove(declared);
+					_facts.typeBounds.remove(boundsKey(entry.file, declared));
 			}
 
 			var fnId: Null<String> = parentFn;
@@ -697,6 +700,11 @@ final class CallGraph {
 		final into: Array<CallEdge> = _in[edge.to] ?? [];
 		into.push(edge);
 		_in[edge.to] = into;
+	}
+
+	/** The key of `typeName`'s parameter bounds as the declaration in `file` writes them — two types may share a simple name. */
+	private static inline function boundsKey(file: String, typeName: String): String {
+		return '${CallGraphNames.normalizePath(file)}#$typeName';
 	}
 
 	private function collectEdges(entry: ParsedEntry): Void {
@@ -876,23 +884,30 @@ final class CallGraph {
 		}
 
 		/**
-		 * The type whose members a value of the type parameter `name` in scope reaches `member` on: the bound of
-		 * the innermost declaration of `name` that declares `member`, or the bound when it is the only one. The
-		 * value's type argument is that bound or a subtype of it, so the bound's member and every override are
-		 * what the call can run. Null when `name` is no type parameter in scope, when it is unbounded, or when no
+		 * The type whose members a value of the type parameter `name` reaches `member` on, `name` looked up where the
+		 * value's type was WRITTEN — `scope` (`typeScopeOf`): the functions on the frame stack enclosing that offset,
+		 * innermost first, then the enclosing type; only the type for `MEMBER_SCOPE`. A function's own `<T>` therefore
+		 * never captures the `T` a field or an outer parameter was declared with. The answer is the bound of that
+		 * declaration of `name` that declares `member`, or the bound when it is the only one: the value's type
+		 * argument is that bound or a subtype of it, so the bound's member and every override are what the call can
+		 * run. Null when the scope is unknown, when `name` is no type parameter there, when it is unbounded, or when no
 		 * single nominal bound answers — an anonymous-structure bound, another parameter, several none of which
 		 * declares `member`.
 		 */
-		function boundType(name: String, currentType: Null<String>, member: String): Null<String> {
+		function boundType(name: String, currentType: Null<String>, member: String, scope: Null<Int>): Null<String> {
+			if (scope == null) return null;
+			final at: Int = scope;
 			var written: Null<Array<String>> = null;
 			var i: Int = frames.length - 1;
 			while (i >= 0 && written == null) {
 				final id: String = frames[i].id;
-				if ((_facts.typeParams[id] ?? []).contains(name)) written = _facts.typeParamBounds[id]?.get(name) ?? [];
+				final span: Null<Span> = nodes[id]?.span;
+				final encloses: Bool = at != MEMBER_SCOPE && span != null && at >= span.from && at < span.to;
+				if (encloses && (_facts.typeParams[id] ?? []).contains(name)) written = _facts.typeParamBounds[id]?.get(name) ?? [];
 				i--;
 			}
 			if (written == null && currentType != null && types.generics.declaresTypeParam(currentType, name))
-				written = _facts.typeBounds[currentType]?.get(name) ?? [];
+				written = _facts.typeBounds[boundsKey(file, currentType)]?.get(name) ?? [];
 			if (written == null) return null;
 			final bounds: Array<String> = written;
 			final nominals: Array<String> = [];
@@ -907,10 +922,10 @@ final class CallGraph {
 		/**
 		 * The nominal a written type denotes in member-lookup position: a member-transparent wrapper peeled, a
 		 * typedef alias followed, the outer name kept. A type parameter in scope denotes its bound (`boundType`)
-		 * when `member` names the member looked up, and nothing otherwise — its members belong to whatever type
-		 * argument the value carries, which a declared annotation does not name.
+		 * when `member` names the member looked up and `scope` where the type was written, and nothing otherwise —
+		 * its members belong to whatever type argument the value carries, which a declared annotation does not name.
 		 */
-		function nominalOf(typeSource: String, currentType: Null<String>, ?member: String): Null<String> {
+		function nominalOf(typeSource: String, currentType: Null<String>, ?member: String, ?scope: Int): Null<String> {
 			final outer: Null<String> = NominalTypes.outerNominalOf(
 				NominalTypes.unwrapNullable(typeSource.trim(), transparentWrappers, _plugin.typeSyntax), _plugin.typeSyntax
 			);
@@ -921,7 +936,7 @@ final class CallGraph {
 			else if (member == null)
 				null
 			else
-				boundType(outer, currentType, member);
+				boundType(outer, currentType, member, scope);
 		}
 
 		/**
@@ -995,14 +1010,15 @@ final class CallGraph {
 		 * dispatchable type. `member`, when the result is a receiver, is the member looked up on it (`nominalOf`).
 		 */
 		function returnedNominal(
-			target: String, receiverSource: Null<String>, receiverType: Null<String>, currentType: Null<String>, ?member: String
+			target: String, receiverSource: Null<String>, receiverType: Null<String>, currentType: Null<String>, ?member: String,
+			?scope: Int
 		): Null<String> {
 			final returned: Null<String> = _facts.returns[target];
 			if (returned == null || nullableWrappers.contains(returned) || (_facts.typeParams[target] ?? []).contains(returned))
 				return null;
 			final owner: Null<String> = nodes[target]?.typeName;
 			final nominal: Null<String> = nominalOf(
-				throughParams(returned, owner, receiverSource, receiverType, currentType), currentType, member
+				throughParams(returned, owner, receiverSource, receiverType, currentType), currentType, member, scope
 			);
 			return nominal == null || nullableWrappers.contains(nominal) ? null : nominal;
 		}
@@ -1045,6 +1061,39 @@ final class CallGraph {
 		var callTargetOf: (QueryNode, Null<String>) -> Null<CallTarget> = (call, currentType) -> null;
 
 		/**
+		 * Where the DECLARED type `typeSourceOf` reads for `exprRaw` was written, for looking up a type parameter it
+		 * names (`boundType`): the binding offset of a local or a parameter, `MEMBER_SCOPE` for `this` and a member
+		 * (read bare, and every link of a field path, an element or a call result rooted at one, which takes its
+		 * arguments from that root's type), a local function's own declaration for a call to it. Null where that is
+		 * unknown — a static read off a type, any other shape.
+		 */
+		function typeScopeOf(exprRaw: QueryNode, currentType: Null<String>): Null<Int> {
+			final expr: QueryNode = unwrap(exprRaw);
+			final name: Null<String> = expr.name;
+			final span: Null<Span> = expr.span;
+			if (expr.kind == identKind && name != null) {
+				if (name == selfText) return MEMBER_SCOPE;
+				if (span == null) return null;
+				final bound: Null<Int> = bindFor(name)[span.from];
+				if (bound != null && bound >= 0) return bindsLocally(bound) ? bound : MEMBER_SCOPE;
+				return CallGraphNames.isTypeLike(name) ? null : MEMBER_SCOPE;
+			}
+			if (isAccessKind(expr.kind) && name != null && expr.children.length > 0)
+				return typeNameReceiver(expr.children[0]) != null ? null : typeScopeOf(expr.children[0], currentType);
+			if (indexKind != null && expr.kind == indexKind && expr.children.length > 0) return typeScopeOf(expr.children[0], currentType);
+			if (expr.kind == callKind && expr.children.length > 0) {
+				final callee: QueryNode = unwrap(expr.children[0]);
+				if (isAccessKind(callee.kind) && callee.children.length > 0) return typeScopeOf(callee.children[0], currentType);
+				final target: Null<String> = callTargetOf(expr, currentType)?.target;
+				final declaredAt: Null<Span> = target == null ? null : nodes[target]?.span;
+				if (target == null || declaredAt == null) return null;
+				// a local function's return type is written inside the functions enclosing it; a member's, on the member
+				return target.contains('#') ? declaredAt.from : MEMBER_SCOPE;
+			}
+			return null;
+		}
+
+		/**
 		 * The DECLARED type source of a value expression the receiver arms below do not name: an
 		 * identifier's own annotation, an inherited field read without `this` (through the index),
 		 * each link of a field path, and an element `a[i]` of a container whose written type names
@@ -1070,7 +1119,7 @@ final class CallGraph {
 				final inner: Null<String> = typeSourceOf(expr.children[0], currentType);
 				if (inner == null) return null;
 				final innerSource: String = inner;
-				final innerType: Null<String> = nominalOf(innerSource, currentType, name);
+				final innerType: Null<String> = nominalOf(innerSource, currentType, name, typeScopeOf(expr.children[0], currentType));
 				return innerType == null ? null : memberTypeThrough(innerSource, innerType, name, currentType);
 			}
 			if (indexKind != null && expr.kind == indexKind && expr.children.length > 0) {
@@ -1106,7 +1155,7 @@ final class CallGraph {
 				final call: Null<CallTarget> = callTargetOf(recv, currentType);
 				final returned: Null<String> = call == null
 					? null
-					: returnedNominal(call.target, call.receiverSource, call.onType, currentType, member);
+					: returnedNominal(call.target, call.receiverSource, call.onType, currentType, member, typeScopeOf(recv, currentType));
 				return returned == null ? null : {
 					typeName: returned,
 					isValue: true,
@@ -1134,7 +1183,9 @@ final class CallGraph {
 				if (span != null) {
 					final declared: Null<String> = identDeclaredType(name, span);
 					if (declared != null && isTypeParam(declared, currentType)) {
-						final bound: Null<String> = member == null ? null : boundType(declared, currentType, member);
+						final bound: Null<String> = member == null
+							? null
+							: boundType(declared, currentType, member, typeScopeOf(recv, currentType));
 						return bound == null ? null : {
 							typeName: bound,
 							isValue: true,
@@ -1163,7 +1214,7 @@ final class CallGraph {
 				};
 			}
 			final written: Null<String> = typeSourceOf(recv, currentType);
-			final nominal: Null<String> = written == null ? null : nominalOf(written, currentType, member);
+			final nominal: Null<String> = written == null ? null : nominalOf(written, currentType, member, typeScopeOf(recv, currentType));
 			return nominal == null ? null : {
 				typeName: nominal,
 				isValue: true,
@@ -1575,7 +1626,7 @@ final class CallGraph {
 			final peeled: String = NominalTypes.unwrapNullable(outer.trim(), transparentWrappers, _plugin.typeSyntax);
 			final written: Null<String> = CallGraphNames.anonFieldTypeSource(_plugin.typeSyntax(peeled), field);
 			if (written != null) return written;
-			final nominal: Null<String> = nominalOf(peeled, currentType, field);
+			final nominal: Null<String> = nominalOf(peeled, currentType);
 			return nominal == null ? null : memberTypeThrough(peeled, nominal, field, currentType);
 		}
 

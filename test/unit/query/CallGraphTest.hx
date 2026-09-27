@@ -661,6 +661,44 @@ class CallGraphTest extends Test {
 		for (fn in ['M.free', 'M.anon']) Assert.equals(0, g.outEdges(fn).length, fn);
 	}
 
+	/**
+	 * A type parameter is looked up where the receiver's type was WRITTEN, not where the call is: a field and an outer
+	 * parameter declared `T` hold the CLASS `T` even inside a method or a local function declaring a `T` of its own,
+	 * while that function's own parameter holds its own `T`.
+	 */
+	@:pin('control') @:killer('M-GRAPH-BOUND-DECL-SCOPE') @:killer('M-GRAPH-BOUND-LOCAL-SCOPE')
+	public function testTypeParameterIsLookedUpWhereTheReceiverTypeWasWritten(): Void {
+		final g: CallGraph = graphOf([
+			'class A { public function m():Void {} }',
+			'class SubA extends A { override public function m():Void {} }',
+			'class B { public function m():Void {} }',
+			'class Shadow<T:A> { var item:T; function methodShadow<T:B>(x:T):Void item.m(); '
+			+ 'function localShadow(x:T):Void { function g<T:B>(y:T):Void x.m(); } ' + 'function own<T:B>(x:T):Void x.m(); }'
+		]);
+		for (fn in ['Shadow.methodShadow', 'Shadow.localShadow#g']) {
+			Assert.equals(1, edges(g, fn, 'A.m', Call).length, fn);
+			Assert.equals(1, edges(g, fn, 'SubA.m', Virtual).length, fn);
+			Assert.equals(0, edges(g, fn, 'B.m', Call).length, fn);
+		}
+		Assert.equals(1, edges(g, 'Shadow.own', 'B.m', Call).length);
+		Assert.equals(0, edges(g, 'Shadow.own', 'A.m', Call).length);
+	}
+
+	/** Two types sharing a simple name keep their own bounds: `p1.Gen<T:A>` is not read with `p2.Gen<T:B>`'s. */
+	@:pin('control') @:killer('M-GRAPH-BOUNDS-BY-FILE')
+	public function testTypeParameterBoundsOfSameNamedTypesStayApart(): Void {
+		final g: CallGraph = CallGraph.build([
+			{ file: 'A.hx', source: 'class A { public function m():Void {} }' },
+			{ file: 'B.hx', source: 'class B { public function m():Void {} }' },
+			{ file: 'p1/Gen.hx', source: 'package p1; class Gen<T:A> { function f(x:T):Void x.m(); }' },
+			{ file: 'p2/Gen.hx', source: 'package p2; class Gen<T:B> { function h(x:T):Void x.m(); }' }
+		], new CachingGrammarPlugin(new HaxeQueryPlugin()));
+		Assert.equals(1, edges(g, 'Gen.f', 'A.m', Call).length);
+		Assert.equals(0, edges(g, 'Gen.f', 'B.m', Call).length);
+		Assert.equals(1, edges(g, 'Gen.h', 'B.m', Call).length);
+		Assert.equals(0, edges(g, 'Gen.h', 'A.m', Call).length);
+	}
+
 	@:pin('control') @:killer('M-GRAPH-TYPEDEF-ALIAS')
 	public function testTypedefAliasIsSeenThrough(): Void {
 		final g: CallGraph = graphOf([

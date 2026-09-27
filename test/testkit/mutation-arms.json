@@ -9288,8 +9288,8 @@
 			"name": "M-GRAPH-CLASS-BOUND",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectNodes",
-			"find": "_facts.typeBounds[declared] = own",
-			"replace": "_facts.typeBounds.remove(declared)",
+			"find": "_facts.typeBounds[boundsKey(entry.file, declared)] = own",
+			"replace": "_facts.typeBounds.remove(boundsKey(entry.file, declared))",
 			"note": "a type's own parameter bounds are not recorded, so a receiver typed by a class parameter stays unresolved"
 		},
 		{
@@ -9323,6 +9323,30 @@
 			"find": "out.push(macro for (_cm in $e{field(ident('v'), CONSTRAINT_MORE_FIELD)}) $push);",
 			"replace": "",
 			"note": "only a type parameter's first bound is kept, the `& Type` tail is dropped"
+		},
+		{
+			"name": "M-GRAPH-BOUND-DECL-SCOPE",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "final encloses: Bool = at != MEMBER_SCOPE && span != null && at >= span.from && at < span.to;",
+			"replace": "final encloses: Bool = true;",
+			"note": "a type parameter is looked up from the call site, so a function's own `T` captures the `T` a field or an outer parameter was declared with"
+		},
+		{
+			"name": "M-GRAPH-BOUND-LOCAL-SCOPE",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "return bindsLocally(bound) ? bound : MEMBER_SCOPE;",
+			"replace": "return MEMBER_SCOPE;",
+			"note": "a parameter's type is read in the enclosing type's scope, so a function's own bounded `T` is taken for the class's"
+		},
+		{
+			"name": "M-GRAPH-BOUNDS-BY-FILE",
+			"type": "anyparse.query.CallGraph",
+			"method": "boundsKey",
+			"find": "return '${CallGraphNames.normalizePath(file)}#$typeName';",
+			"replace": "return typeName;",
+			"note": "type-parameter bounds are keyed by simple name, so of two same-named types the last one walked lends its bounds to both"
 		}
 	]
 }

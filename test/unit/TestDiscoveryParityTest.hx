@@ -1767,6 +1767,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyCheckTest#testEachCallSiteJudgedByItsOwnChain :: control :: M-TS-FIRST-FILE-LISTS',
 			'unit.check.ThreadSafetyCheckTest#testLockHeldAcrossABlockingGetterFlagged :: control :: M-TS-ACCESSOR-TAINT',
 			'unit.check.ThreadSafetyCheckTest#testNoFindingInAFileWhoseChainNamesNoSinks :: control :: M-TS-REPORT-UNGATED',
+			'unit.check.ThreadSafetyCheckTest#testShadowedTypeParameterKeepsTheFieldsBound :: control :: M-GRAPH-BOUND-DECL-SCOPE',
 			'unit.check.TrivialGetterCheckTest#testBasicBlockBodyFlagged :: control :: M-SUBOVERRIDE-TRUE',
 			'unit.check.TrivialGetterShapeCollapseTest#testForeignHierarchyBackingNameStaysAccountedFor :: control :: '
 				+ 'M-SUPERDECLARES-FALSE',
@@ -2277,6 +2278,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CallGraphTest#testSupertypesOfASharedNameAreUnioned :: control :: M-GRAPH-SUPERS-UNION',
 			'unit.query.CallGraphTest#testThisInsideAnAbstractIsTheUnderlyingValue :: control :: M-GRAPH-ABSTRACT-THIS',
 			'unit.query.CallGraphTest#testThisInsideAnAbstractOverAnAliasIsTheAliasedType :: control :: M-GRAPH-ABSTRACT-THIS-ALIAS',
+			'unit.query.CallGraphTest#testTypeParameterBoundsOfSameNamedTypesStayApart :: control :: M-GRAPH-BOUNDS-BY-FILE',
+			'unit.query.CallGraphTest#testTypeParameterIsLookedUpWhereTheReceiverTypeWasWritten :: control :: '
+				+ 'M-GRAPH-BOUND-DECL-SCOPE,M-GRAPH-BOUND-LOCAL-SCOPE',
 			'unit.query.CallGraphTest#testTypeParameterReceiverResolvesThroughItsBound :: control :: '
 				+ 'M-GRAPH-CLASS-BOUND,M-GRAPH-FINAL-CLASS-BOUND,M-GRAPH-FN-BOUND,M-GRAPH-BOUND-DECLARING',
 			'unit.query.CallGraphTest#testTypeParametersInsideWrittenTypesAreSubstituted :: control :: '
@@ -3877,7 +3881,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-GRAPH-FINAL-CLASS-BOUND',
 			'M-GRAPH-FN-BOUND',
 			'M-GRAPH-BOUND-DECLARING',
-			'M-SPANINFO-BOUND-MORE'
+			'M-SPANINFO-BOUND-MORE',
+			'M-GRAPH-BOUND-DECL-SCOPE',
+			'M-GRAPH-BOUND-LOCAL-SCOPE',
+			'M-GRAPH-BOUNDS-BY-FILE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

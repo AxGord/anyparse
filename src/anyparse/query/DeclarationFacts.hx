@@ -22,7 +22,7 @@ final class DeclarationFacts {
 	/** Function node id -> type parameter -> the written sources of its bounds (`<U:A & B>` -> `U` -> `['A', 'B']`). */
 	public final typeParamBounds: Map<String, Map<String, Array<String>>> = [];
 
-	/** Type name -> type parameter -> the written sources of its bounds, as the type's declaration in the graph writes them. */
+	/** File + type name (`CallGraph.boundsKey`) -> type parameter -> the written sources of its bounds, as that declaration writes them. */
 	public final typeBounds: Map<String, Map<String, Array<String>>> = [];
 
 	/** Function node id -> its parameters' written types, `null` where one carries none. */
