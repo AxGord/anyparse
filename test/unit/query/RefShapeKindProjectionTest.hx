@@ -446,6 +446,14 @@ final class RefShapeKindProjectionTest extends Test {
 				after: ' class C {}'
 			},
 			{
+				field: 'genericFunctionMetaName',
+				slot: '',
+				kind: 'Meta',
+				names: NAME_IS,
+				before: '',
+				after: ' class C {}'
+			},
+			{
 				field: 'parenDelimiters',
 				slot: 'open',
 				kind: 'ParenExpr',

@@ -161,9 +161,10 @@ using StringTools;
  * `switch [D1, D2] { case [P1, P2]: … }`, written with `tuplePatternDelimiters` and NO
  * outer parentheses (a parenthesised tuple subject would draw a `redundant-parens` finding
  * on the result). The `case _` line is unconditional, gate 7 having already refused every
- * chain that could not supply its body. `seams.bodyTerminator` is appended after each branch
- * body — empty for the statement rule, whose bodies already carry their own `;` / `{}`, and
- * `;` for the expression rule, whose bodies are bare expressions. Bodies and patterns are
+ * chain that could not supply its body. `seams.bodyTerminator` (`;` for both rules) is appended after each
+ * branch body unless it already ends with one of `seams.selfTerminatingEndings` — `;` or `}` for the
+ * statement rule, whose bodies mostly carry their own terminator but lose it before an `else` (`if (c) a
+ * else b;`), and nothing for the expression rule, whose bodies are bare expressions. Bodies and patterns are
  * taken VERBATIM from the source; the emitted text is tabs and newlines only, and the
  * canonical pipeline reformats it.
  *
@@ -207,8 +208,8 @@ final class SwitchChain {
 	private static inline final BINARY_CHILD_COUNT: Int = 2;
 
 	/**
-	 * Resolve the configuration both switch checks scan and render against: the caller's
-	 * `chainKinds` and `bodyTerminator`, and the `RefShape` seams. Null when a REQUIRED seam
+	 * Resolve the configuration both switch checks scan and render against: the caller's `chainKinds`,
+	 * `bodyTerminator` and `selfTerminatingEndings`, and the `RefShape` seams. Null when a REQUIRED seam
 	 * is unset — an empty `chainKinds`, no `eqKind` (without `==` nothing maps to a `case`
 	 * pattern) or no `caseLiteralKinds`. The optional seams degrade individually: no
 	 * `andKind` leaves only single-discriminant conditions, no `tuplePatternDelimiters`
@@ -217,7 +218,9 @@ final class SwitchChain {
 	 * (gate 5 cannot prove call-freedom without it). `mutationKinds` is derived once here
 	 * rather than per rung — gate 5 tests it on every discriminant of every rung.
 	 */
-	public static function seamsOf(plugin: GrammarPlugin, chainKinds: Array<String>, bodyTerminator: String): Null<ChainSeams> {
+	public static function seamsOf(
+		plugin: GrammarPlugin, chainKinds: Array<String>, bodyTerminator: String, selfTerminatingEndings: Array<String>
+	): Null<ChainSeams> {
 		final shape: RefShape = plugin.refShape();
 		final eqKind: Null<String> = shape.eqKind;
 		final litKinds: Array<String> = shape.caseLiteralKinds ?? [];
@@ -225,6 +228,7 @@ final class SwitchChain {
 			shape: shape,
 			chainKinds: chainKinds,
 			bodyTerminator: bodyTerminator,
+			selfTerminatingEndings: selfTerminatingEndings,
 			eqKind: eqKind,
 			litKinds: litKinds,
 			fieldKinds: shape.fieldDeclKinds ?? [],
@@ -444,11 +448,24 @@ final class SwitchChain {
 		for (rung in scan.rungs) {
 			final pattern: Null<String> = groupText(rung.patterns, seams);
 			if (pattern == null) return null;
-			lines.push('\tcase $pattern: ${spanText(source, rung.body)}${seams.bodyTerminator}');
+			lines.push('\tcase $pattern: ${terminatedBody(source, rung.body, seams)}');
 		}
-		lines.push('\tcase _: ${spanText(source, scan.elseBody)}${seams.bodyTerminator}');
+		lines.push('\tcase _: ${terminatedBody(source, scan.elseBody, seams)}');
 		lines.push('}');
 		return lines.join('\n');
+	}
+
+	/**
+	 * The branch body at `span` as a `case` body: its trimmed source followed by
+	 * `seams.bodyTerminator`, unless the body already ends with one of
+	 * `seams.selfTerminatingEndings`. A statement-position branch body does not always carry its
+	 * own terminator: in `if (c) a else b;` the `;` before `else` is elided and the one after `b`
+	 * belongs to the whole chain, so `a` arrives bare and a `case` body built from it verbatim
+	 * would not compile.
+	 */
+	private static function terminatedBody(source: String, span: Span, seams: ChainSeams): String {
+		final text: String = spanText(source, span);
+		return seams.selfTerminatingEndings.exists(ending -> text.endsWith(ending)) ? text : '$text${seams.bodyTerminator}';
 	}
 
 	/**
@@ -713,9 +730,9 @@ typedef ChainScope = {
 /**
  * The per-rule configuration a switch chain is scanned and rendered against, resolved once
  * per run by `SwitchChain.seamsOf`. The first two fields are the CALLER's policy:
- * `chainKinds` (the statement rule passes `ifStatementKinds`, the expression rule
- * `ternaryKind` plus `ifExpressionKinds`) and `bodyTerminator` (appended after each rendered
- * branch body — empty for statement bodies, which already carry their own `;` / `{}`). The
+ * `chainKinds` (the statement rule passes `ifStatementKinds`, the expression rule `ternaryKind`
+ * plus `ifExpressionKinds`), `bodyTerminator` (appended after each rendered branch body) and
+ * `selfTerminatingEndings` (the endings that make that append unnecessary). The
  * rest are `RefShape` seams, each degrading on its own when the grammar leaves it unset.
  */
 typedef ChainSeams = {
@@ -728,6 +745,14 @@ typedef ChainSeams = {
 
 	final chainKinds: Array<String>;
 	final bodyTerminator: String;
+
+	/**
+	 * Trailing texts that mean a rendered body already terminates itself, so
+	 * `bodyTerminator` is not appended — empty for the expression rule, whose bodies are bare
+	 * values.
+	 */
+	final selfTerminatingEndings: Array<String>;
+
 	final eqKind: String;
 	final litKinds: Array<String>;
 	final fieldKinds: Array<String>;

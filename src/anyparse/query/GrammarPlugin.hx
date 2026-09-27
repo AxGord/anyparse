@@ -1254,6 +1254,20 @@ typedef RefShape = {
 	@:optional var signatureOverloadMetaName: String;
 
 	/**
+	 * The modifier kind that declares a member as one of several same-named OVERLOADS (Haxe
+	 * `overload`). Recorded as `SymbolIndex.MemberInfo.isOverload`: a reference to such a member
+	 * names no single function, so it cannot be taken as a value. Unset means the grammar has none.
+	 */
+	@:optional var overloadModifierKind: String;
+
+	/**
+	 * The annotation name that makes a function GENERIC — compiled once per type argument, so it
+	 * has no single function value to close over (Haxe `@:generic`: `Cannot create closure on
+	 * generic function`). Read off `SymbolIndex.MemberInfo.metaNames`. Unset means none.
+	 */
+	@:optional var genericFunctionMetaName: String;
+
+	/**
 	 * The ANNOTATION names that make a member COMPILER-DISPATCHED — one the compiler selects and
 	 * calls by the STATIC TYPE of its operands rather than by a written call: Haxe `@:from`, `@:op`,
 	 * `@:arrayAccess` and `@:resolve`. Every such member's parameter type IS the dispatch key, so a

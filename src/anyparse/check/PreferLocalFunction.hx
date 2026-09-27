@@ -51,6 +51,10 @@ using StringTools;
  * - `name` occurs NOWHERE before the point the declaration moves to. This is what refuses the
  *   mutually-recursive-closure idiom (`var a = cast null; a = function() { … b … };`), whose
  *   whole reason for the `var` is the forward reference a declaration cannot express.
+ * - `name` occurs nowhere INSIDE the literal either. In `final g = (x:Int) -> g(x) + 1` the
+ *   inner `g` is an outer function, the local not being in scope in its own initializer; in the
+ *   hoisted `function g(x:Int)` it is the function itself, so the call became unbounded
+ *   recursion.
  * - `name` is WRITTEN only by the flagged assignment, and DECLARED exactly once — a rebound
  *   binding has to stay a variable.
  * - the declaration is BARE, or initialized by the definite-assignment placeholder (`null`,
@@ -58,8 +62,11 @@ using StringTools;
  *   a candidate.
  * - EVERY parameter of the literal carries a type. The expected type that the declaration's
  *   `:T` annotation supplied is gone after the hoist, and an unannotated parameter whose body
- *   dereferences it no longer types. The RETURN type needs no such gate: a `function` literal
- *   with no explicit `return` is `Void` in both forms. A rest parameter is refused outright.
+ *   dereferences it no longer types. A rest parameter is refused outright.
+ * - a WRITTEN function type is carried over whole: the literal's parameters must spell it
+ *   exactly (count, optionality, types) and its result becomes the return hint, so the binding
+ *   keeps its declared type rather than one inferred from the body. A nominal or aliased type
+ *   (`Fn`, `Null<() -> T>`) is refused — the hoist could not reproduce it.
  * - a lambda whose body is a BLOCK is hoisted only where the declaration's written type names a
  *   `Void` result. `->` takes an expression, and a block IS one — its value is its last
  *   expression (`() -> { 5; }` returns `5`) — while a declaration's block body has no implicit
@@ -242,14 +249,14 @@ final class PreferLocalFunction implements Check {
 		final declared: DeclaredType = declaredType(source, stSpan, name, s.voidTypeName);
 		return if (!declared.survives)
 			null
-		else if (!resultSurvives(parts, declared.returnsVoid))
+		else if (!resultSurvives(parts, declared.returnsVoid) || !signatureCarries(parts, declared.signature, source))
 			null
-		else if (!bindingIsSole(list, name, stSpan.from, null, s))
+		else if (!nameIsFree(list, fn, name, stSpan.from, null, s))
 			null
 		else if (commentOverlaps(comments, stSpan.from, fnSpan.from) || commentOverlaps(comments, fnSpan.to, stSpan.to))
 			null
 		else
-			{ reportSpan: fnSpan, edits: [{ span: stSpan, text: declarationText(name, parts, source) }] };
+			{ reportSpan: fnSpan, edits: [{ span: stSpan, text: declarationText(name, parts, source, declared) }] };
 	}
 
 	/** The match for an assignment of the literal paired with an earlier bare declaration, or null when a gate refuses it. */
@@ -275,15 +282,15 @@ final class PreferLocalFunction implements Check {
 		if (declSpan == null) return null;
 		final declared: DeclaredType = declaredType(source, declSpan, name, s.voidTypeName);
 		if (!declared.survives) return null;
-		if (!resultSurvives(parts, declared.returnsVoid)) return null;
-		if (!bindingIsSole(list, name, stSpan.from, lhsSpan, s)) return null;
+		if (!resultSurvives(parts, declared.returnsVoid) || !signatureCarries(parts, declared.signature, source)) return null;
+		if (!nameIsFree(list, fn, name, stSpan.from, lhsSpan, s)) return null;
 		if (commentOverlaps(comments, assignSpan.from, fnSpan.from)) return null;
 		final cut: Span = ElementSpan.lineExtendedSpan(source, declSpan);
 		if (commentOverlaps(comments, cut.from, cut.to)) return null;
 		// The removal must not touch the host statement's start: an edit batch drops any edit another
 		// edit CONTAINS, so a cut ending exactly there would swallow the zero-width hoist insertion.
 		if (cut.to >= stSpan.from) return null;
-		final text: String = declarationText(name, parts, source);
+		final text: String = declarationText(name, parts, source, declared);
 		final wholeStatement: Bool = st.kind == s.exprStmtKind && st.children.length == 1 && st.children[0] == assign;
 		return if (wholeStatement)
 			{ reportSpan: fnSpan, edits: [{ span: cut, text: '' }, { span: stSpan, text: text }] }
@@ -343,16 +350,18 @@ final class PreferLocalFunction implements Check {
 	}
 
 	/**
-	 * What the declaration's written type says about the hoist: whether the annotation may be DROPPED, and
-	 * whether it named a `Void` result.
+	 * What the declaration's written type says about the hoist: whether the annotation may be DROPPED, whether
+	 * it named a `Void` result, and the function type it spelled.
 	 *
-	 * It survives being dropped only when the literal's own signature REPRODUCES it. A written FUNCTION
-	 * type does: the parameters are annotated (`partsOf` refuses otherwise) and a `function` literal
-	 * without an explicit `return` is `Void`, so the hoisted declaration carries the same type. A NOMINAL
-	 * one does not, and the failure is silent: Pony's `var l:Listener1<Int> = null; l = function(n:Int):Void { … }`
-	 * binds an abstract whose `@:from` wraps the literal ONCE, at the assignment. Hoisted, `l` is the raw
-	 * function and every use site wraps it again — so an `add(l)` / `remove(l)` pair that shared one wrapper
-	 * stops doing so, and the code still compiles. No annotation at all is trivially safe.
+	 * It survives being dropped only when the hoisted declaration REPRODUCES it. A written FUNCTION type can
+	 * be: `signatureCarries` requires the literal's parameters to spell the declared ones exactly, and
+	 * `declarationText` writes the declared result as the return hint, so the declaration keeps the type
+	 * instead of inferring one from its body (an inferred `{ report: … }` does not unify with a declared
+	 * structure of `final` fields). A NOMINAL one cannot, and the failure is silent: Pony's
+	 * `var l:Listener1<Int> = null; l = function(n:Int):Void { … }` binds an abstract whose `@:from` wraps the
+	 * literal ONCE, at the assignment. Hoisted, `l` is the raw function and every use site wraps it again —
+	 * so an `add(l)` / `remove(l)` pair that shared one wrapper stops doing so, and the code still compiles.
+	 * No annotation at all is trivially safe: both forms infer the same type.
 	 *
 	 * The RESULT type it named is what `resultSurvives` needs before a lambda's block body may be hoisted.
 	 */
@@ -363,38 +372,151 @@ final class PreferLocalFunction implements Check {
 		while (i < text.length && SourceText.isSpace(text.fastCodeAt(i))) i++;
 		final nameStart: Int = i;
 		while (i < text.length && SourceText.isIdentChar(text.fastCodeAt(i))) i++;
-		if (text.substring(nameStart, i) != name) return { survives: false, returnsVoid: false };
+		if (text.substring(nameStart, i) != name) return { survives: false, returnsVoid: false, signature: null };
 		while (i < text.length && SourceText.isSpace(text.fastCodeAt(i))) i++;
-		if (i >= text.length || text.fastCodeAt(i) != ':'.code) return { survives: true, returnsVoid: false };
-		final returnType: Null<String> = topLevelReturnType(text, i + 1);
-		return { survives: returnType != null, returnsVoid: returnType != null && returnType == voidTypeName };
+		if (i >= text.length || text.fastCodeAt(i) != ':'.code) return { survives: true, returnsVoid: false, signature: null };
+		final signature: Null<FnSignature> = functionSignature(text, i + 1);
+		return {
+			survives: signature != null,
+			returnsVoid: signature != null && signature.ret == voidTypeName,
+			signature: signature
+		};
 	}
 
 	/**
-	 * The result type a written type names after its LAST top-level `->`, or null when it carries none — a
-	 * nominal type that merely holds functions (`Array<Int->Void>`, `Null<Void->Void>`). Scanning stops at
-	 * the depth-0 `=` / `;` that ends the annotation.
+	 * The FUNCTION type a written annotation names, from its colon at `from` up to the depth-0 `=` / `;` that
+	 * ends it: the parameters (the parenthesised list, or the old curried `A -> B -> R` segments, `Void`
+	 * alone meaning none) and the result after the LAST depth-0 `->`. Null for a type that carries no
+	 * depth-0 arrow — a nominal type that merely holds functions (`Array<Int->Void>`, `Null<() -> T>`) or
+	 * an alias — whose hoist could not keep the binding typed as written.
 	 */
-	private static function topLevelReturnType(text: String, from: Int): Null<String> {
+	private static function functionSignature(text: String, from: Int): Null<FnSignature> {
+		final scan: { arrows: Array<Int>, stop: Int } = topLevelArrows(text, from);
+		final arrows: Array<Int> = scan.arrows;
+		if (arrows.length == 0) return null;
+		final head: String = text.substring(from, arrows[0]).trim();
+		final segments: Array<String> = if (arrows.length == 1 && enclosedInParens(head)) {
+			final inner: String = head.substring(1, head.length - 1).trim();
+			inner == '' ? [] : splitTopLevel(inner, ','.code);
+		} else {
+			final heads: Array<String> = [head];
+			for (k in 1...arrows.length) heads.push(text.substring(arrows[k - 1] + 2, arrows[k]).trim());
+			heads.length == 1 && heads[0] == 'Void' ? [] : heads;
+		}
+		return { params: [for (s in segments) declaredParam(s)], ret: text.substring(arrows[arrows.length - 1] + 2, scan.stop).trim() };
+	}
+
+	/**
+	 * The offset of every depth-0 `->` in `text` from `from`, and where the annotation stops — the depth-0
+	 * `=` / `;` that ends it, or the text's end. A `->`'s `>` closes no bracket.
+	 */
+	private static function topLevelArrows(text: String, from: Int): { arrows: Array<Int>, stop: Int } {
 		var depth: Int = 0;
-		var arrowEnd: Int = -1;
-		var stop: Int = text.length;
-		var i: Int = from;
-		while (i < text.length) {
+		final arrows: Array<Int> = [];
+		for (i in from ... text.length) {
 			final c: Int = text.fastCodeAt(i);
 			if (c == '<'.code || c == '('.code || c == '{'.code || c == '['.code)
 				depth++
 			else if (c == '>'.code && i > from && text.fastCodeAt(i - 1) == '-'.code) {
-				if (depth == 0) arrowEnd = i + 1;
+				if (depth == 0) arrows.push(i - 1);
 			} else if (c == '>'.code || c == ')'.code || c == '}'.code || c == ']'.code)
 				depth--
-			else if (depth == 0 && (c == '='.code || c == ';'.code)) {
-				stop = i;
-				break;
-			}
-			i++;
+			else if (depth == 0 && (c == '='.code || c == ';'.code))
+				return { arrows: arrows, stop: i };
 		}
-		return arrowEnd < 0 ? null : text.substring(arrowEnd, stop).trim();
+		return { arrows: arrows, stop: text.length };
+	}
+
+	/**
+	 * Whether the literal's own signature spells EXACTLY the declared function type, so the hoisted
+	 * declaration keeps the binding's type: the same parameter count, each parameter optional where the
+	 * declared one is and of the same written type, and a return hint, if the literal carries one, equal
+	 * to the declared result. No declared type (`signature == null`) has nothing to keep. Comparison is
+	 * textual with whitespace and redundant outer parentheses dropped, so an alias spelled for its target
+	 * is a mismatch — a refusal, never a wrong rewrite.
+	 */
+	private static function signatureCarries(parts: FnParts, signature: Null<FnSignature>, source: String): Bool {
+		if (signature == null) return true;
+		if (signature.params.length != parts.params.length) return false;
+		for (k in 0...parts.params.length) {
+			final written: ParamSig = literalParam(parts.params[k]);
+			final declared: ParamSig = signature.params[k];
+			if (written.optional != declared.optional || normalizedType(written.type) != normalizedType(declared.type)) return false;
+		}
+		final hintSpan: Null<Span> = parts.hintSpan;
+		return hintSpan == null || normalizedType(source.substring(hintSpan.from, hintSpan.to)) == normalizedType(signature.ret);
+	}
+
+	/** One declared parameter — `?name:T`, `name:T`, `?T` or `T` — as its optionality and written type. */
+	private static function declaredParam(text: String): ParamSig {
+		final optional: Bool = text.startsWith('?');
+		final rest: String = optional ? text.substring(1).trim() : text;
+		final colon: Int = topLevelIndexOf(rest, ':'.code);
+		final named: Bool = colon > 0 && [for (k in 0...colon) rest.fastCodeAt(k)].foreach(SourceText.isIdentChar);
+		return { optional: optional, type: named ? rest.substring(colon + 1).trim() : rest };
+	}
+
+	/** One literal parameter — `?name:T` or `name:T = default` — as its optionality and written type. */
+	private static function literalParam(text: String): ParamSig {
+		final colon: Int = topLevelIndexOf(text, ':'.code);
+		final typed: String = colon < 0 ? '' : text.substring(colon + 1);
+		final assign: Int = topLevelIndexOf(typed, '='.code);
+		return {
+			optional: text.startsWith('?') || assign >= 0,
+			type: (assign < 0 ? typed : typed.substring(0, assign)).trim()
+		};
+	}
+
+	/** `type` with every space dropped and any redundant outer parentheses peeled. */
+	private static function normalizedType(type: String): String {
+		var t: String = [
+			for (k in 0...type.length) if (!SourceText.isSpace(type.fastCodeAt(k))) type.charAt(k)
+		].join('');
+		while (enclosedInParens(t)) t = t.substring(1, t.length - 1);
+		return t;
+	}
+
+	/** Whether `text` opens with `(` whose matching `)` is its last character. */
+	private static function enclosedInParens(text: String): Bool {
+		if (text.length < 2 || text.fastCodeAt(0) != '('.code || text.fastCodeAt(text.length - 1) != ')'.code) return false;
+		var depth: Int = 0;
+		for (k in 0...text.length) {
+			final c: Int = text.fastCodeAt(k);
+			if (c == '('.code) depth++;
+			if (c == ')'.code) depth--;
+			if (depth == 0 && k < text.length - 1) return false;
+		}
+		return true;
+	}
+
+	/** `text` split at every depth-0 `separator`, each piece trimmed. */
+	private static function splitTopLevel(text: String, separator: Int): Array<String> {
+		final out: Array<String> = [];
+		var start: Int = 0;
+		var at: Int = topLevelIndexOf(text, separator);
+		while (at >= 0) {
+			out.push(text.substring(start, start + at).trim());
+			start += at + 1;
+			at = topLevelIndexOf(text.substring(start), separator);
+		}
+		out.push(text.substring(start).trim());
+		return out;
+	}
+
+	/** The index of the first `code` outside any bracket pair in `text`, or -1; a `->` arrow's `>` closes nothing. */
+	private static function topLevelIndexOf(text: String, code: Int): Int {
+		var depth: Int = 0;
+		for (k in 0...text.length) {
+			final c: Int = text.fastCodeAt(k);
+			if (depth == 0 && c == code) return k;
+			if (c == '<'.code || c == '('.code || c == '{'.code || c == '['.code)
+				depth++
+			else if (c == '>'.code && k > 0 && text.fastCodeAt(k - 1) == '-'.code)
+				continue
+			else if (c == '>'.code || c == ')'.code || c == '}'.code || c == ']'.code)
+				depth--;
+		}
+		return -1;
 	}
 
 	/**
@@ -405,6 +527,28 @@ final class PreferLocalFunction implements Check {
 		if (node.kind == s.nullLiteralKind) return true;
 		final isCast: Bool = node.kind == s.uncheckedCastKind || s.castKinds.contains(node.kind);
 		return isCast && node.children.length > 0 && isNullPlaceholder(node.children[0], s);
+	}
+
+	/**
+	 * Whether `name` may become the literal `fn`'s local function name: the binding is the sole one
+	 * (`bindingIsSole`) and the literal does not mention the name itself (`readsName`).
+	 */
+	private static function nameIsFree(
+		list: QueryNode, fn: QueryNode, name: String, hoistFrom: Int, allowedWrite: Null<Span>, s: Seams
+	): Bool {
+		return bindingIsSole(list, name, hoistFrom, allowedWrite, s) && !readsName(fn, name, s);
+	}
+
+	/**
+	 * Whether the literal `fn` mentions `name` anywhere in its own text, whatever that occurrence binds
+	 * to. Inside a local declaration's initializer the name is NOT yet the local — `final g = x -> g(x)`
+	 * calls an OUTER `g` — while in the hoisted `function g(x) … g(x)` it is the function itself, so the
+	 * hoist would turn a call to another function into unbounded recursion.
+	 */
+	private static function readsName(fn: QueryNode, name: String, s: Seams): Bool {
+		return (
+			fn.kind == s.identKind || fn.kind == s.stringInterpKind
+		) && fn.name == name || fn.children.exists(c -> readsName(c, name, s));
 	}
 
 	/**
@@ -494,12 +638,22 @@ final class PreferLocalFunction implements Check {
 
 	/**
 	 * The local function declaration replacing the binding — body verbatim, `return` restored for an
-	 * arrow's expression body and `;` for any body that does not close on a brace.
+	 * arrow's expression body and `;` for any body that does not close on a brace. A declared function
+	 * type's result becomes the return hint the literal did not write, so the declaration keeps the
+	 * binding's type instead of inferring one from the body; an expression body under a `Void` result is
+	 * wrapped in a block rather than returned, since its own value need not be `Void`.
 	 */
-	private static function declarationText(name: String, parts: FnParts, source: String): String {
+	private static function declarationText(name: String, parts: FnParts, source: String, declared: DeclaredType): String {
 		final hintSpan: Null<Span> = parts.hintSpan;
-		final hint: String = hintSpan == null ? '' : ':${source.substring(hintSpan.from, hintSpan.to).trim()}';
+		final signature: Null<FnSignature> = declared.signature;
+		final hint: String = if (hintSpan != null)
+			':${source.substring(hintSpan.from, hintSpan.to).trim()}'
+		else if (signature != null)
+			':${signature.ret}'
+		else
+			'';
 		final body: String = source.substring(parts.bodySpan.from, parts.bodySpan.to);
+		if (parts.bare && !parts.block && declared.returnsVoid) return 'function $name(${parts.params.join(', ')})$hint {\n$body;\n}';
 		final lead: String = parts.bare && !parts.block ? 'return ' : '';
 		return 'function $name(${parts.params.join(', ')})$hint $lead$body${parts.block ? '' : ';'}';
 	}
@@ -555,11 +709,25 @@ private typedef FnParts = {
 }
 
 /**
- * What a binding's written type says: whether the hoist may drop it, and whether it named a `Void` result.
+ * What a binding's written type says: whether the hoist may drop it, whether it named
+ * a `Void` result, and the function type the hoisted declaration must reproduce.
  */
 private typedef DeclaredType = {
 	var survives: Bool;
 	var returnsVoid: Bool;
+	var signature: Null<FnSignature>;
+}
+
+/** A written function type: each parameter's optionality and type, and the result. */
+private typedef FnSignature = {
+	var params: Array<ParamSig>;
+	var ret: String;
+}
+
+/** One parameter of a written function type or of a literal: whether it is optional, and its written type. */
+private typedef ParamSig = {
+	var optional: Bool;
+	var type: String;
 }
 
 /**

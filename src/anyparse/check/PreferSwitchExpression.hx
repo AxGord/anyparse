@@ -78,8 +78,7 @@ final class PreferSwitchExpression implements Check {
 
 	/**
 	 * A branch value of an expression chain is a bare expression, so each rendered `case`
-	 * body needs its own terminator — unlike the statement rule, whose bodies already
-	 * carry one.
+	 * body needs its own terminator, whatever it ends with.
 	 */
 	private static inline final BODY_TERMINATOR: String = ';';
 
@@ -142,7 +141,7 @@ final class PreferSwitchExpression implements Check {
 		final kinds: Array<String> = (shape.ifExpressionKinds ?? []).copy();
 		final ternary: Null<String> = shape.ternaryKind;
 		if (ternary != null && !kinds.contains(ternary)) kinds.push(ternary);
-		final seams: Null<ChainSeams> = SwitchChain.seamsOf(plugin, kinds, BODY_TERMINATOR);
+		final seams: Null<ChainSeams> = SwitchChain.seamsOf(plugin, kinds, BODY_TERMINATOR, []);
 		return seams == null ? null : { seams: seams, hosts: hostKinds };
 	}
 

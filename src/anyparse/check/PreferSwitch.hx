@@ -43,8 +43,9 @@ import anyparse.runtime.Span;
  * an enum-abstract subject, a name-shadowed built-in reached three different
  * ways, a `#if`-guarded `else` that never lands in the `if`'s else-slot — and
  * names the `OracleAssisted` / `RiskyFix` machinery as the only sound home for
- * restoring the conversion. Statement bodies already carry their own `;` / `{}`,
- * so no terminator is appended. The generated source is re-parsed and
+ * restoring the conversion. A body is taken with its own terminator, and a `;` is appended to
+ * one that has none: the `;` before an `else` is elided, so `if (c) a else b;` hands over a bare
+ * `a`, and the `;` after `b` belonged to the whole chain. The generated source is re-parsed and
  * reformatted by the canonical pipeline; a chain whose pieces resist a clean
  * rebuild, or one carrying a comment (whose trivia the verbatim-body rebuild
  * would drop), is report-only.
@@ -58,10 +59,16 @@ import anyparse.runtime.Span;
 final class PreferSwitch implements Check {
 
 	/**
-	 * A statement branch body already carries its own `;` / `{}`, so nothing is appended
-	 * after it — unlike the expression rule, whose bodies are bare values.
+	 * Appended after a branch body that does not end in one of `SELF_TERMINATING_ENDINGS`: the
+	 * `;` before an `else` is elided (`if (c) a else b;`), so a then-branch can arrive bare.
 	 */
-	private static inline final BODY_TERMINATOR: String = '';
+	private static inline final BODY_TERMINATOR: String = ';';
+
+	/**
+	 * A body ending in `;` carries its own terminator, and one ending in `}` needs none — the
+	 * language makes the `;` after a closing brace optional.
+	 */
+	private static final SELF_TERMINATING_ENDINGS: Array<String> = [';', '}'];
 
 	public function new() {}
 
@@ -85,9 +92,9 @@ final class PreferSwitch implements Check {
 		return seams == null ? [] : SwitchChain.editsOf(source, violations, plugin, seams, anyHost, index);
 	}
 
-	/** This rule's chain configuration: statement-position `if` kinds, bodies self-terminating. */
+	/** This rule's chain configuration: statement-position `if` kinds, a bare body given a `;`. */
 	private static function seamsOf(plugin: GrammarPlugin): Null<ChainSeams> {
-		return SwitchChain.seamsOf(plugin, plugin.refShape().ifStatementKinds ?? [], BODY_TERMINATOR);
+		return SwitchChain.seamsOf(plugin, plugin.refShape().ifStatementKinds ?? [], BODY_TERMINATOR, SELF_TERMINATING_ENDINGS);
 	}
 
 	/** A statement chain reads well as a switch wherever it stands, so every host is accepted. */

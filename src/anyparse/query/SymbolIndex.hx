@@ -243,6 +243,18 @@ typedef MemberInfo = {
 	 */
 	var isDynamic: Bool;
 
+	/** True when the member's modifier run carries the grammar's extern modifier (`RefShape.externModifierKind`). */
+	var isExtern: Bool;
+
+	/**
+	 * True when the member's modifier run carries the grammar's overload modifier (`RefShape.overloadModifierKind`):
+	 * it is one of several same-named signatures, so its name alone does not pick a function.
+	 */
+	var isOverload: Bool;
+
+	/** The names of the annotations on the member, in source order (`@:generic`, `@:keep`, …). */
+	var metaNames: Array<String>;
+
 	/**
 	 * True when the member carries an annotation that keeps it out of the extension channel
 	 * (`ExecutionShape.extensionExcludingMetaNames`, Haxe `@:noUsing`): `using` never binds it.
@@ -616,6 +628,9 @@ final class SymbolIndex {
 	 */
 	private final _abstractKinds: Array<String>;
 
+	/** The scope's THIRD-PARTY half (`resolutionLibs` / std paths), empty for an index over project sources alone. */
+	private final _thirdParty: Map<String, Bool>;
+
 	private function new(
 		files: Array<FileInfo>, skipped: Array<String>, sources: Map<String, String>, plugin: GrammarPlugin, thirdParty: Map<String, Bool>
 	) {
@@ -623,6 +638,7 @@ final class SymbolIndex {
 		_skipped = skipped;
 		_sources = sources;
 		_abstractKinds = plugin.refShape().underlyingThisTypeKinds ?? [];
+		_thirdParty = thirdParty;
 		refs = new TypeRefIndex(files);
 		subtypes = new SubtypeGraph(files, sources, refs);
 		members = new MemberLookup(files, refs);
@@ -640,6 +656,15 @@ final class SymbolIndex {
 	/** The `FileInfo` for `file`, or null when the file is not indexed. */
 	public function fileInfo(file: String): Null<FileInfo> {
 		return _files.find(f -> f.file == file);
+	}
+
+	/**
+	 * Whether `file` belongs to the scope's third-party half — a `resolutionLibs` or standard-library
+	 * source rather than one of the project's own roots. Such a declaration is one view of the
+	 * library among several: a target may override the file (`std/js/_std`) with a different one.
+	 */
+	public inline function isThirdParty(file: String): Bool {
+		return _thirdParty.exists(file);
 	}
 
 	/** Files that failed to parse and were excluded from the index. */

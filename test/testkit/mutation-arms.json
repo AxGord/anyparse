@@ -8764,6 +8764,139 @@
 			"find": "if (_isChain) {",
 			"replace": "if (true) {",
 			"note": "the method-chain walk writes every call's arguments before it knows the value is a chain, and the plain call writes them again, so `a.m(a.m(\u2026))` doubles per level"
+		},
+		{
+			"name": "M-SWITCH-BARE-BODY-VERBATIM",
+			"type": "anyparse.check.SwitchChain",
+			"method": "terminatedBody",
+			"force": "spanText(source, span)",
+			"note": "a case body is taken verbatim, so a branch whose `;` was elided before `else` arrives bare"
+		},
+		{
+			"name": "M-SWITCH-TERMINATED-BODY-DOUBLED",
+			"type": "anyparse.check.SwitchChain",
+			"method": "terminatedBody",
+			"find": "seams.selfTerminatingEndings.exists(ending -> text.endsWith(ending))",
+			"replace": "false",
+			"note": "the terminator is appended even after a body that already ends in `;` or `}`"
+		},
+		{
+			"name": "M-BIND-WRITES-IGNORED",
+			"type": "anyparse.check.PreferBind",
+			"method": "unchangingBinding",
+			"find": "return !Refs.find(name, ctx.root, shape).exists(hit -> hit.kind == RefKind.Write && hit.bindingSpan?.from == from);",
+			"replace": "return true;",
+			"note": "a local written after the lambda is created still counts as unchanging"
+		},
+		{
+			"name": "M-BIND-FIELD-ARG",
+			"type": "anyparse.check.PreferBind",
+			"method": "stableArg",
+			"find": "unchangingBinding(arg, ctx)",
+			"replace": "true",
+			"note": "any identifier, a field included, is a stable bind argument"
+		},
+		{
+			"name": "M-BIND-NULLABLE-ARG",
+			"type": "anyparse.check.PreferBind",
+			"method": "unchangingBinding",
+			"find": "if (declared == null || (shape.nullableWrapperTypeNames ?? []).contains(declared)) return false;",
+			"replace": "if (declared == null) return false;",
+			"note": "a `Null<T>` binding is bound although null safety rejects it as an argument"
+		},
+		{
+			"name": "M-BIND-FIELD-RECEIVER",
+			"type": "anyparse.check.PreferBind",
+			"method": "stableCallee",
+			"find": "if (receiver.kind != shape.identKind || receiverName == null) return false;",
+			"replace": "if (receiver.kind != shape.identKind || receiverName == null) return false;\n\t\treturn true;",
+			"note": "any single-level receiver is read as stable"
+		},
+		{
+			"name": "M-LOCALFN-RESULT-DROPPED",
+			"type": "anyparse.check.PreferLocalFunction",
+			"method": "declarationText",
+			"find": "':${signature.ret}'",
+			"replace": "''",
+			"note": "the declared result is not carried, so the hoisted declaration infers its type from the body"
+		},
+		{
+			"name": "M-LOCALFN-SIGNATURE-ANY",
+			"type": "anyparse.check.PreferLocalFunction",
+			"method": "signatureCarries",
+			"force": "true",
+			"note": "any literal signature is taken to reproduce the declared function type"
+		},
+		{
+			"name": "M-LOCALFN-VOID-RETURNED",
+			"type": "anyparse.check.PreferLocalFunction",
+			"method": "declarationText",
+			"find": "if (parts.bare && !parts.block && declared.returnsVoid)",
+			"replace": "if (false)",
+			"note": "an expression body under a `Void` result is returned rather than wrapped"
+		},
+		{
+			"name": "M-BIND-METHOD-UNPROVEN",
+			"type": "anyparse.check.PreferBind",
+			"method": "plainMethod",
+			"force": "owner.type.members.exists(m -> m.name == name)",
+			"note": "any member the owner declares under the name is taken as a closable, unchanging method"
+		},
+		{
+			"name": "M-BIND-DYNAMIC-CALLEE",
+			"type": "anyparse.check.PreferBind",
+			"method": "plainMethod",
+			"find": "!m.isDynamic && ",
+			"replace": "",
+			"note": "a `dynamic` method, rebindable after the callback is created, is bound"
+		},
+		{
+			"name": "M-BIND-CLOSURELESS-CALLEE",
+			"type": "anyparse.check.PreferBind",
+			"method": "plainMethod",
+			"find": "!m.isMacro && !m.isOverload",
+			"replace": "true",
+			"note": "a macro or an overloaded method, which has no closure to bind, is bound"
+		},
+		{
+			"name": "M-BIND-UNDECLARED-BARE",
+			"type": "anyparse.check.PreferBind",
+			"method": "bareCalleeIsMethod",
+			"find": "&& enclosingDeclares(callee, name, ctx)",
+			"replace": "",
+			"note": "a bare callee name the enclosing type does not declare is taken as a method"
+		},
+		{
+			"name": "M-LOCALFN-OUTER-NAME-READ",
+			"type": "anyparse.check.PreferLocalFunction",
+			"method": "nameIsFree",
+			"find": " && !readsName(fn, name, s)",
+			"replace": "",
+			"note": "an initializer literal reading an outer function of the binding's name is hoisted into self-recursion"
+		},
+		{
+			"name": "M-BIND-LIBRARY-CALLEE",
+			"type": "anyparse.check.PreferBind",
+			"method": "plainMethod",
+			"find": "!index.isThirdParty(owner.file.file) && ",
+			"replace": "",
+			"note": "a library or standard-library method, which a target may override as `extern inline`, is bound"
+		},
+		{
+			"name": "M-BIND-EXTERN-TYPE",
+			"type": "anyparse.check.PreferBind",
+			"method": "plainMethod",
+			"find": "!owner.type.isExtern\n",
+			"replace": "true\n",
+			"note": "a member of an `extern` type is bound"
+		},
+		{
+			"name": "M-BIND-ABSTRACT-SELF",
+			"type": "anyparse.check.PreferBind",
+			"method": "enclosingDeclares",
+			"find": "abstractSelf ? true : null",
+			"replace": "null",
+			"note": "an abstract's instance method is bound through an implicit `this` the abstract may reassign"
 		}
 	]
 }
