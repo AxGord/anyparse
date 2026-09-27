@@ -1481,9 +1481,11 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PossibleNullDereferenceTest#testFieldPathMapExistsGuardedNotFlagged :: control :: M-EXISTS-GUARD-BLIND',
 			'unit.check.PossibleNullDereferenceTest#testFieldPathMapReceiverFlagged :: control :: M-NULLABLE-NO-CHAIN',
 			'unit.check.PossibleNullDereferenceTest#testNullWrappedMapFlagged :: control :: M-NULLABLE-WRAPPER-OPAQUE',
+			'unit.check.PreferBindCheckTest#testAbstractInstanceMethodNotFlagged :: control :: M-BIND-ABSTRACT-SELF',
 			'unit.check.PreferBindCheckTest#testClosurelessCalleeNotFlagged :: control :: M-BIND-METHOD-UNPROVEN,M-BIND-CLOSURELESS-CALLEE',
 			'unit.check.PreferBindCheckTest#testFieldArgumentNotFlagged :: control :: M-BIND-FIELD-ARG',
 			'unit.check.PreferBindCheckTest#testFieldReceiverNotFlagged :: control :: M-BIND-FIELD-RECEIVER',
+			'unit.check.PreferBindCheckTest#testLibraryOrExternCalleeNotFlagged :: control :: M-BIND-LIBRARY-CALLEE,M-BIND-EXTERN-TYPE',
 			'unit.check.PreferBindCheckTest#testNullableArgumentNotFlagged :: control :: M-BIND-NULLABLE-ARG',
 			'unit.check.PreferBindCheckTest#testReassignedLocalNotFlagged :: control :: M-BIND-WRITES-IGNORED',
 			'unit.check.PreferBindCheckTest#testRebindableCalleeNotFlagged :: control :: M-BIND-METHOD-UNPROVEN,M-BIND-DYNAMIC-CALLEE',
@@ -3750,7 +3752,10 @@ class TestDiscoveryParityTest extends Test {
 			'M-BIND-DYNAMIC-CALLEE',
 			'M-BIND-CLOSURELESS-CALLEE',
 			'M-BIND-UNDECLARED-BARE',
-			'M-LOCALFN-OUTER-NAME-READ'
+			'M-LOCALFN-OUTER-NAME-READ',
+			'M-BIND-LIBRARY-CALLEE',
+			'M-BIND-EXTERN-TYPE',
+			'M-BIND-ABSTRACT-SELF'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

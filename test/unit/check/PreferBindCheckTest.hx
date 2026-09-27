@@ -5,6 +5,7 @@ import anyparse.check.Linter;
 import anyparse.check.PreferBind;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
@@ -191,6 +192,49 @@ class PreferBindCheckTest extends Test {
 	@:killer('M-BIND-UNDECLARED-BARE')
 	public function testUndeclaredBareCalleeNotFlagged(): Void {
 		Assert.equals(0, violations('class C extends B {\n\tfunction f():Void {\n\t\tfinal g = () -> inherited(1);\n\t}\n}').length);
+	}
+
+	/**
+	 * A method of a library or standard-library type is one view among the target's overrides —
+	 * `std/js/_std` makes `String.charCodeAt` `extern inline`, which has no closure — and a member of
+	 * an `extern` type may be native. Only a project type's method is bound.
+	 */
+	@:pin('control')
+	@:killer('M-BIND-LIBRARY-CALLEE')
+	@:killer('M-BIND-EXTERN-TYPE')
+	public function testLibraryOrExternCalleeNotFlagged(): Void {
+		final lib: String =
+			'class Lib {\n\tpublic static function m(n:Int):Void {}\n}\nextern class Ext {\n\tpublic static function e(n:Int):Void;\n}\n';
+		final src: String = 'class C {\n\tfunction f(p:Int):Void {\n\t\tfinal g = () -> CALLEE(p);\n\t}\n}';
+		function edits(callee: String, thirdParty: Array<String>): Int {
+			final files: Array<{ file: String, source: String }> = [
+				{ file: 'C.hx', source: src.replace('CALLEE', callee) },
+				{ file: 'Lib.hx', source: lib }
+			];
+			final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+			final check: PreferBind = new PreferBind();
+			final own: Array<Violation> = check.run(files, plugin).filter(v -> v.file == 'C.hx');
+			return check.fix(files[0].source, own, plugin, SymbolIndex.build(files, plugin, thirdParty)).length;
+		}
+		Assert.equals(0, edits('Lib.m', ['Lib.hx']), 'a library method');
+		Assert.equals(1, edits('Lib.m', []), 'the project twin');
+		Assert.equals(0, edits('Ext.e', []), 'an extern type');
+	}
+
+	/**
+	 * Through an implicit `this`, an abstract's instance method is bound to the value `this` holds at
+	 * creation, and an abstract may reassign `this` before the call (`200` became `6`). A static one is
+	 * unaffected.
+	 */
+	@:pin('control')
+	@:killer('M-BIND-ABSTRACT-SELF')
+	public function testAbstractInstanceMethodNotFlagged(): Void {
+		final src: String = 'abstract W(Int) {\n\tpublic function plain(x:Int):Int return this * x;\n'
+			+ '\tpublic static function st(x:Int):Int return x;\n\tpublic inline function run(v:Int):Void {\n'
+			+ '\t\tfinal c:() -> Int = () -> CALLEE(v);\n\t\tthis = 100;\n\t}\n}';
+		Assert.equals(0, violations(src.replace('CALLEE', 'plain')).length);
+		Assert.equals(0, violations(src.replace('CALLEE', 'this.plain')).length);
+		Assert.equals(1, violations(src.replace('CALLEE', 'st')).length, 'the static twin');
 	}
 
 	public function testRegisteredInBuiltins(): Void {

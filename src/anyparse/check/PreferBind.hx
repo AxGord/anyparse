@@ -47,6 +47,10 @@ using Lambda;
  *   rather than a function-typed `var` / `final`, and not `dynamic` (rebindable), not a
  *   macro (`Macro functions must be called immediately`), not generic, not `inline`
  *   together with `extern`, and not one of several overloads (`Cannot create closure`).
+ *   Its type must be a non-extern one from the project's own roots: a library or
+ *   standard-library declaration may be `extern inline` on some target (`std/js/_std`).
+ *   An abstract's INSTANCE method reached through an implicit `this` is refused, since an
+ *   abstract may reassign `this` after the callback is created; a class `this` cannot be.
  *   A local function is accepted as it stands. Anything the index cannot answer — an
  *   inherited member, a static import, a type outside the index, an ambiguous name, a
  *   field receiver, a longer chain — is refused.
@@ -204,14 +208,19 @@ final class PreferBind implements Check {
 		final found: Null<TypeDeclInfo> = fi.types.find(t -> t.span.from <= span.from && span.to <= t.span.to);
 		if (found == null) return false;
 		final owner: TypeDeclInfo = found;
-		return plainMethod({ type: owner, file: file }, name, null, ctx);
+		// Called through an implicit `this`, an ABSTRACT's instance method is bound to the value `this`
+		// holds NOW, and an abstract may reassign `this` before the call; a class `this` never changes.
+		final abstractSelf: Bool = (ctx.seams.shape.underlyingThisTypeKinds ?? []).contains(owner.kind);
+		return plainMethod({ type: owner, file: file }, name, abstractSelf ? true : null, ctx);
 	}
 
 	/**
 	 * Whether `owner` declares `name` exactly once, as a method `bind` can close over and nothing can rebind:
 	 * a function member (not a function-typed `var` / `final` field), outside any `#if`, and not `dynamic`,
-	 * a macro, generic, one of several overloads (by modifier or `@:overload`), or `inline` together with
-	 * `extern` (on the member or its type). `isStatic`, when given, is what the access demands.
+	 * a macro, generic, one of several overloads (by modifier or `@:overload`), or `extern inline`. The
+	 * owner must be a non-extern type from the project's own roots: a library or standard-library
+	 * declaration is one view among the target's overrides (`std/js/_std` makes `String.charCodeAt`
+	 * `extern inline`, which has no closure). `isStatic`, when given, is what the access demands.
 	 */
 	private static function plainMethod(owner: ResolvedType, name: String, isStatic: Null<Bool>, ctx: Ctx): Bool {
 		final shape: RefShape = ctx.seams.shape;
@@ -219,9 +228,11 @@ final class PreferBind implements Check {
 		if (members.length != 1) return false;
 		final m: MemberInfo = members[0];
 		final generic: Null<String> = shape.genericFunctionMetaName;
-		return (shape.functionKinds ?? []).contains(m.kind) && !m.guarded && !m.isDynamic && !m.isMacro && !m.isOverload
-			&& !m.hasOverloadMeta && !(m.isInline && (m.isExtern || owner.type.isExtern))
-			&& (generic == null || !m.metaNames.contains(generic)) && (isStatic == null || isStatic == m.isStatic);
+		final index: Null<SymbolIndex> = ctx.index();
+		return index != null && !index.isThirdParty(owner.file.file) && !owner.type.isExtern
+			&& (shape.functionKinds ?? []).contains(m.kind) && !m.guarded && !m.isDynamic && !m.isMacro && !m.isOverload
+			&& !m.hasOverloadMeta && !(m.isInline && m.isExtern) && (generic == null || !m.metaNames.contains(generic))
+			&& (isStatic == null || isStatic == m.isStatic);
 	}
 
 	/** The file's `OperandBinder`, built on first use; null when the grammar supplies no type information or the index is missing. */
