@@ -492,6 +492,10 @@ final class CallGraph {
 		final shape: RefShape = _shape;
 		final returnTypes: Map<Int, String> = _provider == null ? [] : _provider.returnTypes(entry.source);
 		final typeParams: Map<Int, Array<String>> = _provider == null ? [] : _provider.typeParamNames(entry.source);
+		final spanInfo: Null<SpanTypeInfoProvider> = _plugin is SpanTypeInfoProvider ? cast _plugin : null;
+		final bounds: Map<Int, Map<String, Array<String>>> = spanInfo == null
+			? []
+			: spanInfo.spanTypeInfo(entry.source).typeParamConstraints;
 		// a local `inline function` is a function of its own like any local one, though the grammar gives it a kind apart
 		final fnKinds: Array<String> = (shape.functionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);
 		final lambdaKinds: Array<String> = shape.lambdaKinds ?? [];
@@ -516,6 +520,15 @@ final class CallGraph {
 				final under: Null<QueryNode> = node.children.find(c -> annotationKinds.contains(c.kind));
 				_facts.abstracts[declared] = under?.name == null ? null : CallGraphNames.lastSegments(under?.name ?? '', 1);
 			}
+			// a `final class` declares its parameters on the inner form the wrapper holds, which is where they are keyed
+			final declaredAt: Null<Span> = declared == null ? null : (RefactorSupport.typeDeclOf(node)?.nameNode ?? node).span;
+			if (declared != null && declaredAt != null) {
+				final own: Null<Map<String, Array<String>>> = bounds[declaredAt.from];
+				if (own != null)
+					_facts.typeBounds[declared] = own
+				else
+					_facts.typeBounds.remove(declared);
+			}
 
 			var fnId: Null<String> = parentFn;
 			final span: Null<Span> = node.span;
@@ -530,6 +543,8 @@ final class CallGraph {
 				if (parentFn == null) registerMember(owner, name, fnId);
 				final params: Null<Array<String>> = typeParams[span.from];
 				if (params != null) _facts.typeParams[fnId] = params;
+				final bounded: Null<Map<String, Array<String>>> = bounds[span.from];
+				if (bounded != null) _facts.typeParamBounds[fnId] = bounded;
 				final returned: Null<String> = returnTypes[span.from];
 				if (returned != null && !_facts.returns.exists(fnId)) _facts.returns[fnId] = returned;
 				final written: Null<String> = CallGraphNames.returnSourceOf(node, entry.source, annotationKinds);
@@ -861,15 +876,52 @@ final class CallGraph {
 		}
 
 		/**
-		 * The nominal a written type denotes in member-lookup position: a member-transparent wrapper peeled, a
-		 * typedef alias followed, the outer name kept. Null for a type parameter in scope — its members belong
-		 * to whatever type argument the value carries, which a declared annotation does not name.
+		 * The type whose members a value of the type parameter `name` in scope reaches `member` on: the bound of
+		 * the innermost declaration of `name` that declares `member`, or the bound when it is the only one. The
+		 * value's type argument is that bound or a subtype of it, so the bound's member and every override are
+		 * what the call can run. Null when `name` is no type parameter in scope, when it is unbounded, or when no
+		 * single nominal bound answers — an anonymous-structure bound, another parameter, several none of which
+		 * declares `member`.
 		 */
-		function nominalOf(typeSource: String, currentType: Null<String>): Null<String> {
+		function boundType(name: String, currentType: Null<String>, member: String): Null<String> {
+			var written: Null<Array<String>> = null;
+			var i: Int = frames.length - 1;
+			while (i >= 0 && written == null) {
+				final id: String = frames[i].id;
+				if ((_facts.typeParams[id] ?? []).contains(name)) written = _facts.typeParamBounds[id]?.get(name) ?? [];
+				i--;
+			}
+			if (written == null && currentType != null && types.generics.declaresTypeParam(currentType, name))
+				written = _facts.typeBounds[currentType]?.get(name) ?? [];
+			if (written == null) return null;
+			final bounds: Array<String> = written;
+			final nominals: Array<String> = [];
+			for (w in bounds) {
+				final outer: Null<String> = NominalTypes.outerNominalOf(w.trim(), _plugin.typeSyntax);
+				if (outer != null && !isTypeParam(outer, currentType)) nominals.push(types.resolveAlias(outer));
+			}
+			final declaring: Null<String> = nominals.find(n -> types.declaringTypeOf(n, member) != null);
+			return declaring ?? (bounds.length == 1 && nominals.length == 1 ? nominals[0] : null);
+		}
+
+		/**
+		 * The nominal a written type denotes in member-lookup position: a member-transparent wrapper peeled, a
+		 * typedef alias followed, the outer name kept. A type parameter in scope denotes its bound (`boundType`)
+		 * when `member` names the member looked up, and nothing otherwise — its members belong to whatever type
+		 * argument the value carries, which a declared annotation does not name.
+		 */
+		function nominalOf(typeSource: String, currentType: Null<String>, ?member: String): Null<String> {
 			final outer: Null<String> = NominalTypes.outerNominalOf(
 				NominalTypes.unwrapNullable(typeSource.trim(), transparentWrappers, _plugin.typeSyntax), _plugin.typeSyntax
 			);
-			return outer == null || isTypeParam(outer, currentType) ? null : types.resolveAlias(outer);
+			return if (outer == null)
+				null
+			else if (!isTypeParam(outer, currentType))
+				types.resolveAlias(outer)
+			else if (member == null)
+				null
+			else
+				boundType(outer, currentType, member);
 		}
 
 		/**
@@ -940,16 +992,18 @@ final class CallGraph {
 		 * The nominal the DECLARED return type of `target` denotes for a call made on a value of `receiverType`
 		 * written `receiverSource`: a type parameter the function declares itself is unknown, one of its owner
 		 * is the receiver's argument for it (`throughParams`), and a nullable or dynamic wrapper names no
-		 * dispatchable type.
+		 * dispatchable type. `member`, when the result is a receiver, is the member looked up on it (`nominalOf`).
 		 */
 		function returnedNominal(
-			target: String, receiverSource: Null<String>, receiverType: Null<String>, currentType: Null<String>
+			target: String, receiverSource: Null<String>, receiverType: Null<String>, currentType: Null<String>, ?member: String
 		): Null<String> {
 			final returned: Null<String> = _facts.returns[target];
 			if (returned == null || nullableWrappers.contains(returned) || (_facts.typeParams[target] ?? []).contains(returned))
 				return null;
 			final owner: Null<String> = nodes[target]?.typeName;
-			final nominal: Null<String> = nominalOf(throughParams(returned, owner, receiverSource, receiverType, currentType), currentType);
+			final nominal: Null<String> = nominalOf(
+				throughParams(returned, owner, receiverSource, receiverType, currentType), currentType, member
+			);
 			return nominal == null || nullableWrappers.contains(nominal) ? null : nominal;
 		}
 
@@ -1016,7 +1070,7 @@ final class CallGraph {
 				final inner: Null<String> = typeSourceOf(expr.children[0], currentType);
 				if (inner == null) return null;
 				final innerSource: String = inner;
-				final innerType: Null<String> = nominalOf(innerSource, currentType);
+				final innerType: Null<String> = nominalOf(innerSource, currentType, name);
 				return innerType == null ? null : memberTypeThrough(innerSource, innerType, name, currentType);
 			}
 			if (indexKind != null && expr.kind == indexKind && expr.children.length > 0) {
@@ -1039,9 +1093,10 @@ final class CallGraph {
 		 * Receiver classification: the simple type name plus whether the
 		 * receiver is a VALUE (instance dispatch — virtual expansion applies)
 		 * or a TYPE (static dispatch), and whether it is declared `Dynamic` /
-		 * `Any` (dispatch by name). Null when unrecoverable.
+		 * `Any` (dispatch by name). Null when unrecoverable. `member` is the member looked up on the receiver:
+		 * a receiver typed by a type parameter in scope is typed by its bound only when it is given (`nominalOf`).
 		 */
-		function receiverType(recvRaw: QueryNode, currentType: Null<String>): Null<Receiver> {
+		function receiverType(recvRaw: QueryNode, currentType: Null<String>, ?member: String): Null<Receiver> {
 			final recv: QueryNode = unwrap(recvRaw);
 			final name: Null<String> = recv.name;
 			// a receiver that is itself a CALL takes the callee's DECLARED return type —
@@ -1051,7 +1106,7 @@ final class CallGraph {
 				final call: Null<CallTarget> = callTargetOf(recv, currentType);
 				final returned: Null<String> = call == null
 					? null
-					: returnedNominal(call.target, call.receiverSource, call.onType, currentType);
+					: returnedNominal(call.target, call.receiverSource, call.onType, currentType, member);
 				return returned == null ? null : {
 					typeName: returned,
 					isValue: true,
@@ -1078,7 +1133,14 @@ final class CallGraph {
 				}
 				if (span != null) {
 					final declared: Null<String> = identDeclaredType(name, span);
-					if (declared != null && isTypeParam(declared, currentType)) return null;
+					if (declared != null && isTypeParam(declared, currentType)) {
+						final bound: Null<String> = member == null ? null : boundType(declared, currentType, member);
+						return bound == null ? null : {
+							typeName: bound,
+							isValue: true,
+							isDynamic: false
+						};
+					}
 					if (declared != null) return {
 						typeName: types.resolveAlias(declared),
 						isValue: true,
@@ -1101,7 +1163,7 @@ final class CallGraph {
 				};
 			}
 			final written: Null<String> = typeSourceOf(recv, currentType);
-			final nominal: Null<String> = written == null ? null : nominalOf(written, currentType);
+			final nominal: Null<String> = written == null ? null : nominalOf(written, currentType, member);
 			return nominal == null ? null : {
 				typeName: nominal,
 				isValue: true,
@@ -1126,7 +1188,7 @@ final class CallGraph {
 				if (bound != null && bound >= 0 && bindsLocally(bound)) return null;
 				owner = currentType;
 			} else if (isAccessKind(receiver.kind) && receiver.children.length > 0) {
-				final base: Null<Receiver> = receiverType(receiver.children[0], currentType);
+				final base: Null<Receiver> = receiverType(receiver.children[0], currentType, name);
 				owner = base == null || base.isDynamic ? null : base.typeName;
 			}
 			// a property with an accessor hands back whatever its getter returns, not one stored object
@@ -1143,7 +1205,7 @@ final class CallGraph {
 				return target == null ? null : { target: target, receiverSource: null, onType: currentType };
 			}
 			if (!isAccessKind(inner.kind) || inner.children.length == 0) return null;
-			final innerRecv: Null<Receiver> = receiverType(inner.children[0], currentType);
+			final innerRecv: Null<Receiver> = receiverType(inner.children[0], currentType, innerName);
 			final target: Null<String> = innerRecv == null || innerRecv.isDynamic ? null : memberOnChain(innerRecv.typeName, innerName);
 			return target == null ? null : {
 				target: target,
@@ -1169,7 +1231,7 @@ final class CallGraph {
 				return { id: target, dispatch: dispatch };
 			}
 			if (!isAccessKind(arg.kind) || arg.children.length <= 0) return null;
-			final recv: Null<Receiver> = receiverType(arg.children[0], currentType);
+			final recv: Null<Receiver> = receiverType(arg.children[0], currentType, name);
 			if (recv == null || recv.isDynamic) return null;
 			final resolved: Null<String> = memberOnChain(recv.typeName, name);
 			final dispatch: Null<String> = recv.isValue ? recv.typeName : null;
@@ -1288,7 +1350,7 @@ final class CallGraph {
 			final name: String = rawName;
 			if (!(_byMember.exists(name) || types.hasFunctionNamed(name))) return;
 			if (storedField(node.children[0], name, currentType)) return;
-			final recv: Null<Receiver> = receiverType(node.children[0], currentType);
+			final recv: Null<Receiver> = receiverType(node.children[0], currentType, name);
 			if ((recv == null || recv.isDynamic) && facts?.muted.exists(frameId(currentType)) != true) unresolvedAccess.push({
 				file: file,
 				span: node.span,
@@ -1384,7 +1446,7 @@ final class CallGraph {
 							if (ref != null) refEdges(from, ref, null, span);
 						}
 					} else {
-						final written: Null<Receiver> = receiverType(callee.children[0], currentType);
+						final written: Null<Receiver> = receiverType(callee.children[0], currentType, calleeName);
 						if (written == null) {
 							unresolvedAt(span, UnresolvedReceiver(calleeName), currentType);
 						} else if (written.isDynamic) {
@@ -1488,7 +1550,7 @@ final class CallGraph {
 			if (CallGraphNames.mentionsTypeName(written, _facts.typeParams[target] ?? [], _plugin.typeSyntax)) return null;
 			final receiver: Null<QueryNode> = site.receiver;
 			final receiverSource: Null<String> = receiver == null ? null : typeSourceOf(receiver, currentType);
-			final onType: Null<String> = receiver == null ? null : receiverType(receiver, currentType)?.typeName;
+			final onType: Null<String> = receiver == null ? null : receiverType(receiver, currentType, nodes[target]?.name)?.typeName;
 			return throughParams(written, nodes[target]?.typeName, receiverSource, onType, currentType);
 		}
 
@@ -1513,7 +1575,7 @@ final class CallGraph {
 			final peeled: String = NominalTypes.unwrapNullable(outer.trim(), transparentWrappers, _plugin.typeSyntax);
 			final written: Null<String> = CallGraphNames.anonFieldTypeSource(_plugin.typeSyntax(peeled), field);
 			if (written != null) return written;
-			final nominal: Null<String> = nominalOf(peeled, currentType);
+			final nominal: Null<String> = nominalOf(peeled, currentType, field);
 			return nominal == null ? null : memberTypeThrough(peeled, nominal, field, currentType);
 		}
 
@@ -1605,7 +1667,7 @@ final class CallGraph {
 				ownStorage = true;
 			} else if (isAccessKind(node.kind) && node.children.length > 0) {
 				ownStorage = unwrap(node.children[0]).kind == identKind && unwrap(node.children[0]).name == selfText;
-				final recv: Null<Receiver> = receiverType(node.children[0], currentType);
+				final recv: Null<Receiver> = receiverType(node.children[0], currentType, name);
 				if (recv == null || recv.isDynamic) {
 					if (facts?.muted.exists(frameId(currentType)) == true) return;
 					unresolvedAccess.push({

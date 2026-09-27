@@ -2277,6 +2277,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CallGraphTest#testSupertypesOfASharedNameAreUnioned :: control :: M-GRAPH-SUPERS-UNION',
 			'unit.query.CallGraphTest#testThisInsideAnAbstractIsTheUnderlyingValue :: control :: M-GRAPH-ABSTRACT-THIS',
 			'unit.query.CallGraphTest#testThisInsideAnAbstractOverAnAliasIsTheAliasedType :: control :: M-GRAPH-ABSTRACT-THIS-ALIAS',
+			'unit.query.CallGraphTest#testTypeParameterReceiverResolvesThroughItsBound :: control :: '
+				+ 'M-GRAPH-CLASS-BOUND,M-GRAPH-FINAL-CLASS-BOUND,M-GRAPH-FN-BOUND,M-GRAPH-BOUND-DECLARING',
 			'unit.query.CallGraphTest#testTypeParametersInsideWrittenTypesAreSubstituted :: control :: '
 				+ 'M-GRAPH-TYPE-ARGUMENT,M-GRAPH-UNSUBSTITUTED-PARAM,M-GRAPH-RETURN-PARAM,M-GRAPH-FN-RETURN-PARAM,M-GRAPH-INHERITED-ARGS,M-GRAPH-CALL-ELEMENT',
 			'unit.query.CallGraphTest#testTypeParametersResolveThroughTheirArguments :: control :: '
@@ -2669,6 +2671,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.SetModifierSliceTest#testAConditionalRegionOutsideTheKeywordRunIsStillServed :: control :: '
 				+ 'M-SETMOD-GUARDED-ANY-VISIBILITY',
 			'unit.query.SetModifierSliceTest#testAnEnumAbstractMemberStillTakesPublic :: control :: M-SETMOD-MODULE-BY-TYPE-KINDS',
+			'unit.query.SpanTypeInfoPinTest#testTypeParamConstraintsAreKeyedByDeclarationAndName :: control :: M-SPANINFO-BOUND-MORE',
 			'unit.query.StdResolverTest#testMultiEntryEnvAnswersTheStdEntry :: control :: M-STD-ENV-ENTRIES',
 			'unit.query.StdResolverTest#testTheStdBesideTheCompilerIsFoundInEitherLayout :: control :: M-STD-SIBLING-HOMEBREW',
 			'unit.query.StructuralMembershipTest#testAliasTargetPairAgrees :: control :: M-ALIAS-TARGET-SIMPLE-NAME',
@@ -3869,7 +3872,12 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-BLIND-CALL-SHORT',
 			'M-TS-CTOR-ESCAPE-BLIND',
 			'M-TS-LOOP-ONE-PASS',
-			'M-TS-UNNAMED-RECEIVER-SEALED'
+			'M-TS-UNNAMED-RECEIVER-SEALED',
+			'M-GRAPH-CLASS-BOUND',
+			'M-GRAPH-FINAL-CLASS-BOUND',
+			'M-GRAPH-FN-BOUND',
+			'M-GRAPH-BOUND-DECLARING',
+			'M-SPANINFO-BOUND-MORE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
@@ -3998,6 +4006,7 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-WRITTEN-DURING :: anyparse.check.TypedFactsMacro#writtenSince',
 			'M-FOR-BODY-PROBE-EAGER :: anyparse.macro.WriterBodyPolicyLowering#wrapBodyAllman',
 			'M-CHAIN-WALK-EAGER :: anyparse.macro.WriterChainLowering#wrapChainTriviaBody',
+			'M-SPANINFO-BOUND-MORE :: anyparse.macro.SpanInfoLowering#constraintCollect',
 		], TestRegistry.deferredArms(), 'the arms the typer could not answer for');
 	}
 

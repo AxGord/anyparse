@@ -633,6 +633,34 @@ class CallGraphTest extends Test {
 		Assert.isNull(g.node('U.w'));
 	}
 
+	/**
+	 * A value typed by a type parameter in scope reaches its members through the parameter's BOUND — its type argument is the
+	 * bound or a subtype of it, so the bound's member and every override are what the call runs: a class parameter read
+	 * through a field or a parameter, a `final class`'s, a function's own; of several bounds, the one declaring the member.
+	 * An unbounded parameter and an anonymous-structure bound still name no type.
+	 */
+	@:pin('control') @:killer('M-GRAPH-CLASS-BOUND') @:killer('M-GRAPH-FINAL-CLASS-BOUND') @:killer('M-GRAPH-FN-BOUND')
+	@:killer('M-GRAPH-BOUND-DECLARING')
+	public function testTypeParameterReceiverResolvesThroughItsBound(): Void {
+		final g: CallGraph = graphOf([
+			'class H { public function run():Void {} }',
+			'class Sub extends H { override public function run():Void {} }',
+			'interface A { function a():Void; }',
+			'interface B { function b():Void; }',
+			'class G<T:H> { var w:T; function viaField():Void w.run(); function viaParam(o:Null<T>):Void o.run(); }',
+			'final class F<T:H> { var w:T; function viaField():Void w.run(); }',
+			'class M { function both<U:A & B>(u:U):Void { u.a(); u.b(); } function free<V>(v:V):Void v.run(); '
+			+ 'function anon<X:{ function run():Void; }>(x:X):Void x.run(); }'
+		]);
+		for (fn in ['G.viaField', 'G.viaParam', 'F.viaField']) {
+			Assert.equals(1, edges(g, fn, 'H.run', Call).length, fn);
+			Assert.equals(1, edges(g, fn, 'Sub.run', Virtual).length, fn);
+		}
+		Assert.equals(1, edges(g, 'M.both', 'A.a', Call).length);
+		Assert.equals(1, edges(g, 'M.both', 'B.b', Call).length);
+		for (fn in ['M.free', 'M.anon']) Assert.equals(0, g.outEdges(fn).length, fn);
+	}
+
 	@:pin('control') @:killer('M-GRAPH-TYPEDEF-ALIAS')
 	public function testTypedefAliasIsSeenThrough(): Void {
 		final g: CallGraph = graphOf([
