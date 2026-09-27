@@ -9304,6 +9304,21 @@
 			"method": "foldingWrapperOf",
 			"force": "null",
 			"note": "a `final class` addressed through its inner form is edited without the wrapper's `final` and the modifier run beside the wrapper"
+		},
+		{
+			"name": "M-NULLFLOW-VALUE-FACT-BLIND",
+			"type": "anyparse.check.NullFlow",
+			"method": "indexFact",
+			"force": "null",
+			"note": "a `m[k] != null` guard or a non-null write to `m[k]` proves nothing about a re-read of the same entry"
+		},
+		{
+			"name": "M-NULLFLOW-VALUE-FACT-UNKILLED",
+			"type": "anyparse.check.NullFlow",
+			"method": "killValueFacts",
+			"find": "if (state.present.exists(e -> e.value)) state.present = state.present.filter(e -> !e.value);",
+			"replace": "return;",
+			"note": "a value fact survives a call, a `new`, a write through a path and a loop's back edge"
 		}
 	]
 }

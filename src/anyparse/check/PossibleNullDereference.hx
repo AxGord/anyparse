@@ -48,9 +48,11 @@ import anyparse.runtime.Span;
  * `NullFlow` already models for the flow check's seed: this check asks it, through
  * `NullFacts.indexPresent`, for the map reads a dominating guard proves present, and
  * skips them; without that the rule reports a fifth of its findings on sites the author had
- * guarded. The guard must match BOTH operands by source text, so `if (m.exists(k)) m[j].f` stays
- * flagged, and every non-`exists` route to presence (a conditional write
- * `if (!m.exists(k)) m[k] = v;`, a key drawn from `m.keys()`) stays flagged too.
+ * guarded. The guard must match BOTH operands by source text, so `if (m.exists(k)) m[j].f` stays flagged. The
+ * same model answers a RE-READ of the entry: `if (m[k] != null) m[k].f`, `m[k] != null && m[k].f` and `if (m[k]
+ * == null) m[k] = []; m[k].f` are present as long as nothing but name reads sits between the check or write and
+ * the read (a call, a `new` or a write through a path drops it). A path proven by `exists` on one side of a join and by
+ * the entry on the other (`if (!m.exists(k)) m[k] = 1;`) proves nothing, and a key drawn from `m.keys()` stays flagged.
  *
  * A cross-file `Type.static()` / `obj.method()` return IS now resolved via
  * `MemberLookup.returnNominalOf` (conservative under a simple-name collision); a bare

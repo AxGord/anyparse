@@ -82,10 +82,18 @@ private typedef AliasPair = { a: String, b: String };
  * A map/key pair proven present by a dominating `m.exists(k)` guard: the two operand expressions by their verbatim source
  * text, plus `names` — every identifier either of them mentions, so any write to one kills the fact. Both operands must be
  * PURE REF PATHS (identifier, field access, index access, a leaf literal), never a call: text identity plus the write-kill
- * is the whole soundness argument, and a call could answer a different map on the second evaluation. A same-map/key `m[k]`
- * read under the guard is not seeded `MaybeNull`, and `NullFacts.indexPresent` reports it to the point-wise consumer.
+ * is the whole soundness argument, and a call could answer a different map on the second evaluation. A same-map/key `m[k]` read
+ * under the guard is not seeded `MaybeNull`, and `NullFacts.indexPresent` reports it to the point-wise consumer. A `value` fact
+ * is the same pair proven by the ENTRY rather than by `exists`: a `m[k] != null` guard, or a write of a non-null value to
+ * `m[k]`. Since a call or a write through a path can change an entry without writing either name, every call, `new`, non-name
+ * write and loop entry kills the value facts, so a value fact holds only for a re-read with nothing but name reads between.
  */
-private typedef ExistsFact = { map: String, key: String, names: Array<String> };
+private typedef ExistsFact = {
+	map: String,
+	key: String,
+	names: Array<String>,
+	value: Bool
+};
 
 /**
  * Per-function context for one `NullFlow` walk: the grammar-derived node-kind
@@ -138,6 +146,7 @@ private typedef FlowCtx = {
 	var nullCoalAssignKind: Null<String>;
 	var nullCoalKind: Null<String>;
 	var callKind: Null<String>;
+	var newExprKind: Null<String>;
 	var fieldAccessKind: Null<String>;
 	var nullSafeAccessKind: Null<String>;
 	var indexAccessKind: Null<String>;
@@ -631,6 +640,7 @@ final class NullFlow {
 			nullCoalAssignKind: shape.nullCoalAssignKind,
 			nullCoalKind: shape.nullCoalesceKind,
 			callKind: shape.callKind,
+			newExprKind: shape.newExprKind,
 			fieldAccessKind: shape.fieldAccessKind,
 			nullSafeAccessKind: shape.nullSafeAccessKind,
 			indexAccessKind: shape.indexAccessKind,
@@ -693,8 +703,12 @@ final class NullFlow {
 			handleNullCoalescing(node, state, ctx);
 		else if (ctx.callKind != null && kind == ctx.callKind) {
 			for (c in node.children) walk(c, state, ctx);
+			killValueFacts(state);
 			handleNullAssertionCall(node, state, ctx);
 			handleRelationalAssertCall(node, state, ctx);
+		} else if (ctx.newExprKind != null && kind == ctx.newExprKind) {
+			for (c in node.children) walk(c, state, ctx);
+			killValueFacts(state);
 		} else if (ctx.blockKinds.contains(kind))
 			handleBlock(node, state, ctx);
 		else
@@ -715,8 +729,15 @@ final class NullFlow {
 		if (node.children.length == 0) return;
 		final target: QueryNode = node.children[0];
 		final name: Null<String> = target.name;
-		if (target.kind != ctx.identKind || name == null) return;
 		final rhs: Null<QueryNode> = node.children.length >= 2 ? node.children[1] : null;
+		if (target.kind != ctx.identKind || name == null) {
+			// A write through anything but a plain name may land on any map entry; a non-null value
+			// assigned to `m[k]` itself is then the one entry known.
+			killValueFacts(state);
+			final written: Null<ExistsFact> = node.kind == ctx.assignKind && isNonNullRhs(rhs, ctx) ? indexFact(target, ctx) : null;
+			if (written != null) state.present.push(written);
+			return;
+		}
 		// A write invalidates every aux fact naming the target — the mark paths never route through clearName.
 		killAuxFacts(state, name);
 		if (node.kind == ctx.assignKind && isNonNullRhs(rhs, ctx))
@@ -748,7 +769,10 @@ final class NullFlow {
 			setState(state, intersect(state, rhsState));
 		}
 		final name: Null<String> = target.name;
-		if (target.kind != ctx.identKind || name == null) return;
+		if (target.kind != ctx.identKind || name == null) {
+			killValueFacts(state);
+			return;
+		}
 		// A `??=` may reassign the target — every aux fact naming it is stale (the
 		// markNonNull path below never routes through clearName's kill).
 		killAuxFacts(state, name);
@@ -904,6 +928,8 @@ final class NullFlow {
 	/** Loop: clear every name the loop assigns before walking it (back-edge soundness); the post-state is that cleared state. */
 	private static function handleLoop(node: QueryNode, state: FlowState, ctx: FlowCtx): Void {
 		killWritten(node, state, ctx);
+		// The body is walked once, so a call late in it never reaches the next pass's reads.
+		killValueFacts(state);
 		final bodyState: FlowState = copyState(state);
 		if (!ctx.preTestLoopKinds.contains(node.kind) || node.children.length < 2) {
 			for (c in node.children) walk(c, bodyState, ctx);
@@ -1334,7 +1360,7 @@ final class NullFlow {
 				for (x in a.aliases) if (b.aliases.exists(q -> (q.a == x.a && q.b == x.b) || (q.a == x.b && q.b == x.a))) x
 			],
 			present: [
-				for (e in a.present) if (b.present.exists(q -> q.map == e.map && q.key == e.key)) e
+				for (e in a.present) if (b.present.exists(q -> q.map == e.map && q.key == e.key && q.value == e.value)) e
 			]
 		};
 	}
@@ -1574,8 +1600,15 @@ final class NullFlow {
 		final method: Null<String> = callee.name;
 		if (callee.kind != ctx.fieldAccessKind || method == null || !ctx.mapExistsMethods.contains(method) || callee.children.length != 1)
 			return null;
-		final recv: QueryNode = callee.children[0];
-		final key: QueryNode = cond.children[1];
+		return pairFact(callee.children[0], cond.children[1], ctx, false);
+	}
+
+	/**
+	 * The fact that the pair (`recv`, `key`) is present — a VALUE fact when `value`, proven by the
+	 * entry itself rather than by `exists` — or null when either operand is not a PURE REF PATH, has no
+	 * source text, or mentions a closure-captured name.
+	 */
+	private static function pairFact(recv: QueryNode, key: QueryNode, ctx: FlowCtx, value: Bool): Null<ExistsFact> {
 		if (!pureRefPath(recv, ctx) || !pureRefPath(key, ctx)) return null;
 		final mapText: String = pathText(recv, ctx.source);
 		final keyText: String = pathText(key, ctx.source);
@@ -1584,7 +1617,47 @@ final class NullFlow {
 		collectPathNames(recv, names, ctx);
 		collectPathNames(key, names, ctx);
 		for (n in names) if (ctx.captured.contains(n)) return null;
-		return { map: mapText, key: keyText, names: names };
+		return {
+			map: mapText,
+			key: keyText,
+			names: names,
+			value: value
+		};
+	}
+
+	/** The value fact of an index read `rawNode` (`m[k]`, parentheses unwrapped), else null. */
+	private static function indexFact(rawNode: QueryNode, ctx: FlowCtx): Null<ExistsFact> {
+		final node: QueryNode = BoolExprShape.unwrapParens(rawNode, ctx.parenKind);
+		return ctx.indexAccessKind != null && node.kind == ctx.indexAccessKind && node.children.length == 2
+			? pairFact(node.children[0], node.children[1], ctx, true)
+			: null;
+	}
+
+	/**
+	 * The value fact `rawCond` states when it compares an index read against `null` with `cmpKind`
+	 * (`m[k] != null`, `null != m[k]`, parentheses unwrapped), else null. `collectExists` passes the
+	 * operator whose truth on this branch means the entry is not null.
+	 */
+	private static function nullCompareFact(rawCond: QueryNode, ctx: FlowCtx, cmpKind: Null<String>): Null<ExistsFact> {
+		final cond: QueryNode = BoolExprShape.unwrapParens(rawCond, ctx.parenKind);
+		final nullLit: Null<String> = ctx.nullLitKind;
+		if (cmpKind == null || nullLit == null || cond.kind != cmpKind || cond.children.length != 2) return null;
+		final left: QueryNode = cond.children[0];
+		final right: QueryNode = cond.children[1];
+		return if (right.kind == nullLit)
+			indexFact(left, ctx)
+		else if (left.kind == nullLit)
+			indexFact(right, ctx)
+		else
+			null;
+	}
+
+	/**
+	 * Drop every VALUE fact: a call, a `new`, or a write through anything but a plain name may have
+	 * changed a map entry without writing either operand's name, which is all the name-keyed kill sees.
+	 */
+	private static function killValueFacts(state: FlowState): Void {
+		if (state.present.exists(e -> e.value)) state.present = state.present.filter(e -> !e.value);
 	}
 
 	/**
@@ -1644,8 +1717,10 @@ final class NullFlow {
 			collectExists(cond.children[0], out, ctx, combineKind, wantNegated);
 		} else if (ctx.notKind != null && kind == ctx.notKind && cond.children.length == 1) {
 			collectExists(cond.children[0], out, ctx, combineKind == BOOL_AND_KIND ? BOOL_OR_KIND : BOOL_AND_KIND, !wantNegated);
-		} else if (!wantNegated) {
-			final fact: Null<ExistsFact> = existsGuardFact(cond, ctx);
+		} else {
+			final fact: Null<ExistsFact> = wantNegated
+				? nullCompareFact(cond, ctx, ctx.eqKind)
+				: existsGuardFact(cond, ctx) ?? nullCompareFact(cond, ctx, ctx.notEqKind);
 			if (fact != null) out.push(fact);
 		}
 	}

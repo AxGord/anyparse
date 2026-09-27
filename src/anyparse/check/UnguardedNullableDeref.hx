@@ -46,8 +46,8 @@ import anyparse.runtime.Span;
  * (`Assert.notNull(u)`) — so a guarded deref is a safe miss. Only a function unit's own names
  * (parameters / locals) are tracked, so a field / static / `this` receiver is never reported.
  * Residual false positives remain where the non-null guarantee lives in a value / relational
- * invariant the name-keyed flow cannot see — an `m.exists(k)` guard before `m[k]`, a key just
- * written (`m[k] = v; var u = m[k];`), a key drawn from `m.keys()`, or an alias (`var v = u;
+ * invariant the name-keyed flow cannot see — a key just written with a value the flow cannot type
+ * as non-null (`m[k] = v; var u = m[k];`), a key drawn from `m.keys()`, or an alias (`var v = u;
  * if (v != null) u.f;`); these are report-only Warning residuals, suppressible via `// noqa`
  * or `apqlint.json`.
  *

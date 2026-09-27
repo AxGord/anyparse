@@ -1494,6 +1494,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PossibleNullDereferenceTest#testFieldPathMapExistsGuardedNotFlagged :: control :: M-EXISTS-GUARD-BLIND',
 			'unit.check.PossibleNullDereferenceTest#testFieldPathMapReceiverFlagged :: control :: M-NULLABLE-NO-CHAIN',
 			'unit.check.PossibleNullDereferenceTest#testNullWrappedMapFlagged :: control :: M-NULLABLE-WRAPPER-OPAQUE',
+			'unit.check.PossibleNullDereferenceTest#testRereadMapEntryAfterAChangeStillFlagged :: control :: M-NULLFLOW-VALUE-FACT-UNKILLED',
+			'unit.check.PossibleNullDereferenceTest#testRereadMapEntryNotFlagged :: control :: M-NULLFLOW-VALUE-FACT-BLIND',
 			'unit.check.PreferBindCheckTest#testAbstractInstanceMethodNotFlagged :: control :: M-BIND-ABSTRACT-SELF',
 			'unit.check.PreferBindCheckTest#testClosurelessCalleeNotFlagged :: control :: M-BIND-METHOD-UNPROVEN,M-BIND-CLOSURELESS-CALLEE',
 			'unit.check.PreferBindCheckTest#testFieldArgumentNotFlagged :: control :: M-BIND-FIELD-ARG',
@@ -3876,7 +3878,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-UNNAMED-RECEIVER-SEALED',
 			'M-NULLITY-TYPE-PARAM-BLIND',
 			'M-CMPBOOL-RESOLVED-TYPE-PARAM-BLIND',
-			'M-DECLSPAN-FINAL-WRAPPER-BLIND'
+			'M-DECLSPAN-FINAL-WRAPPER-BLIND',
+			'M-NULLFLOW-VALUE-FACT-BLIND',
+			'M-NULLFLOW-VALUE-FACT-UNKILLED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

@@ -330,6 +330,46 @@ class PossibleNullDereferenceTest extends Test {
 		);
 	}
 
+	/**
+	 * A RE-READ of the entry the guard just read proves it present: the `if` spelling and the `&&`
+	 * spelling of `m[k] != null`, and the fill-then-read idiom `if (m[k] == null) m[k] = []; m[k].f`
+	 * (TM `src/macros/Lang.hx:73`, `:78`, `:94`), where the write and the negated check each prove
+	 * the entry on their own path.
+	 */
+	@:pin('control')
+	@:killer('M-NULLFLOW-VALUE-FACT-BLIND')
+	public function testRereadMapEntryNotFlagged(): Void {
+		final head: String = 'class C { function f(m:Map<String,Array<Int>>, k:String, j:String, t:Null<Int>) { ';
+		Assert.equals(0, violations(head + 'if (t == null && m[k] != null) { final d = m[k].length; } } }').length);
+		Assert.equals(0, violations(head + 'if (t == null && m[k] != null && m[k].length == 1) t = 1; } }').length);
+		Assert.equals(0, violations(head + 'if (m[k] == null) m[k] = []; m[k].push(1); } }').length);
+		Assert.equals(0, violations(head + 'if (m[k] == null) return; m[k].push(1); } }').length);
+	}
+
+	/**
+	 * Anything between the check and the read that could change the entry without writing either
+	 * operand's NAME drops the proof — a call, a write through an index or a field — and so does a
+	 * rewritten key, a different key, a loop's back edge, a call receiver, or a `null` check that does
+	 * not dominate the read.
+	 */
+	@:pin('control')
+	@:killer('M-NULLFLOW-VALUE-FACT-UNKILLED')
+	public function testRereadMapEntryAfterAChangeStillFlagged(): Void {
+		final head: String = 'class C { var fm:Map<String,Array<Int>>; function g():Map<String,Array<Int>> return fm; '
+			+ 'function f(m:Map<String,Array<Int>>, k:String, j:String) { ';
+		for (body in [
+			'if (m[k] != null) { trace(1); m[k].push(1); }',
+			'if (m[k] != null) { m[j] = null; m[k].push(1); }',
+			'if (fm[k] != null) { this.fm = null; fm[k].push(1); }',
+			'if (m[k] != null) { new C(); m[k].push(1); }',
+			'if (m[k] != null) { k = j; m[k].push(1); }',
+			'if (m[k] != null) m[j].push(1);',
+			'if (m[k] != null) for (i in 0...2) m[k].push(i);',
+			'if (g()[k] != null) g()[k].push(1);',
+			'if (m[k] == null) trace(0); m[k].push(1);'
+		]) Assert.equals(1, violations(head + body + ' } }').length, body);
+	}
+
 	/** A membership test whose receiver is a CALL cannot be identified by text — refused, so the read stays reported. */
 	public function testExistsGuardOnCallReceiverStillFlagged(): Void {
 		Assert.equals(
