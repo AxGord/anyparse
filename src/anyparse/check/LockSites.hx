@@ -4,6 +4,7 @@ import anyparse.check.LockWindow.HeldWindow;
 import anyparse.query.CallGraph;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 
@@ -28,6 +29,9 @@ typedef LockAcquire = {
 
 	/** Whether some path leaves the function still holding the lock — the hold then lasts as long as its caller wants. */
 	final leaks: Bool;
+
+	/** Whether the window runs a call the graph resolves to no target — a function value, a dynamic or untyped receiver. */
+	final blind: Bool;
 
 	/** Whether the hold sits in the owner's own constructor, on an instance lock, before the object can reach another thread. */
 	final uncontended: Bool;
@@ -61,6 +65,7 @@ final class LockSites {
 	private final _shape: RefShape;
 	private final _walker: Null<LockWindow>;
 	private final _ctorName: String;
+	private final _nestedFnKinds: Array<String>;
 
 	/** Collects the acquires over the `files` of `graph`; `pairsOf` names the pairs the chain of a file configures. */
 	public function new(graph: CallGraph, files: Array<String>, plugin: GrammarPlugin, pairsOf: (String) -> Array<LockPair>) {
@@ -70,6 +75,7 @@ final class LockSites {
 		final flow: Null<ControlFlowSupport> = plugin.controlFlowSupport();
 		_walker = flow == null ? null : new LockWindow(_shape, flow);
 		_ctorName = _shape.constructorName ?? 'new';
+		_nestedFnKinds = MemberKinds.nestedFunctionKinds(_shape);
 		final takes: Array<{ edge: CallEdge, pair: LockPair }> = [];
 		final gives: Array<{ edge: CallEdge, pair: LockPair }> = [];
 		for (edge in graph.edges) if (edge.kind == Call) for (pair in pairsOf(edge.file)) {
@@ -117,7 +123,8 @@ final class LockSites {
 			lock: lock,
 			window: [for (e in held) if (e.kind.isInvocation()) e],
 			leaks: leaks,
-			uncontended: !leaks && traced != null && lock != null && ownConstructorHold(edge, lock, held, traced)
+			blind: traced == null || traced.held.exists(n -> runsUnresolved(n, edge, start, releases)),
+			uncontended: !leaks && fn != null && lock != null && ownConstructorHold(edge, lock, fn)
 		};
 	}
 
@@ -144,14 +151,33 @@ final class LockSites {
 	}
 
 	/**
-	 * Whether the hold is its owner's constructor taking an INSTANCE lock of the object under construction while that
-	 * object has not left it: no function value made, no instance dispatch, no `this` handed anywhere inside the window.
+	 * Whether the hold is its owner's constructor taking an INSTANCE lock of the object under construction, which never
+	 * leaves it: nowhere in the constructor a function value made, a method of its own type dispatched (on `this`,
+	 * written or implicit), the superclass constructor run, or `this` handed to anything — so no other thread can reach the lock while the constructor runs.
 	 */
-	private function ownConstructorHold(edge: CallEdge, lock: String, held: Array<CallEdge>, traced: HeldWindow): Bool {
+	private function ownConstructorHold(edge: CallEdge, lock: String, body: QueryNode): Bool {
 		final fn: Null<FnNode> = _graph.node(edge.from);
 		final owner: String = lock.substring(0, lock.lastIndexOf('.'));
-		return fn != null && fn.name == _ctorName && fn.typeName == owner && !_graph.types.isStatic(owner, memberName(lock))
-			&& !held.exists(e -> e.kind == Ref || e.dispatchType != null) && !traced.held.exists(n -> passesSelf(n, null));
+		if (fn == null || fn.name != _ctorName || fn.typeName != owner || _graph.types.isStatic(owner, memberName(lock))) return false;
+		final superclass: Null<String> = _graph.types.superclassOf(owner);
+		return !_graph.outEdges(edge.from)
+				.exists(e -> e.kind == Ref || e.dispatchType == owner || superclass != null && _graph.node(e.to)?.typeName == superclass)
+			&& !passesSelf(body, null);
+	}
+
+	/**
+	 * Whether `node` holds a call of `edge`'s function — neither the acquire at `start` nor one of the `releases`, nor
+	 * inside a nested function — the graph resolved to no target: it may run anything, a blocking call included.
+	 */
+	private function runsUnresolved(node: QueryNode, edge: CallEdge, start: Int, releases: Array<Int>): Bool {
+		if (_nestedFnKinds.contains(node.kind)) return false;
+		final at: Null<Span> = node.span;
+		if (
+			node.kind == _shape.callKind && at != null && at.from != start && !releases.contains(at.from)
+			&& !_graph.outEdges(edge.from).exists(e -> e.kind.isInvocation() && e.span?.from == at.from)
+		)
+			return true;
+		return node.children.exists(c -> runsUnresolved(c, edge, start, releases));
 	}
 
 	/** The function node `edge` leaves, found in the branch-aware tree of its file; null when the graph holds no such node. */

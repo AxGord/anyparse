@@ -1748,11 +1748,15 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.StructuralConformanceProofTest#testUnresolvableSupertypeSuppliesNoMember :: control :: M-STRUCT-DECLARES-LOOSE',
 			'unit.check.TailMergeCheckTest#testStructuralIdentityHalfNeeded :: control :: M-TAILMERGE-NORM-ONLY',
 			'unit.check.TailMergeCheckTest#testSwitchCaseOutOfScope :: control :: M-TAILMERGE-FALL-KEPT',
+			'unit.check.ThreadSafetyCheckTest#testAConstructorPublishingItselfFirstHoldsAContendedLock :: control :: '
+				+ 'M-TS-CTOR-ESCAPE-BLIND',
 			'unit.check.ThreadSafetyCheckTest#testAFileWithoutSinksStillShapesTheGraph :: control :: M-TS-GRAPH-CUT',
+			'unit.check.ThreadSafetyCheckTest#testAHoldAcrossAnUnresolvedCallMakesTheLockLong :: control :: M-TS-BLIND-CALL-SHORT',
 			'unit.check.ThreadSafetyCheckTest#testAHoldInTheOwnersConstructorBlocksNoOne :: control :: M-TS-CTOR-CONTENDED',
 			'unit.check.ThreadSafetyCheckTest#testAHoldOnlyABackgroundThreadTakesIsQuiet :: control :: M-TS-HELD-ANY-THREAD',
 			'unit.check.ThreadSafetyCheckTest#testALockHeldAcrossASleepStallsItsMainThreadTaker :: control :: M-TS-LONG-NEVER-GROWS',
 			'unit.check.ThreadSafetyCheckTest#testALockMemberThatEscapesStaysReported :: control :: M-TS-UNSEALED-TRUSTED',
+			'unit.check.ThreadSafetyCheckTest#testALockTakenInALoopIsHeldOnTheNextPass :: control :: M-TS-LOOP-ONE-PASS',
 			'unit.check.ThreadSafetyCheckTest#testAMalformedOptionOfANonReportingChainIsSilent :: control :: M-TS-MALFORMED-UNGATED',
 			'unit.check.ThreadSafetyCheckTest#testAReleaseOnAnEarlyReturnKeepsTheRestOfTheWindow :: control :: M-TS-WINDOW-IF-RELEASES',
 			'unit.check.ThreadSafetyCheckTest#testAReleaseWithoutATakeMakesTheLockLong :: control :: M-TS-CROSSING-IGNORED',
@@ -2258,8 +2262,10 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CallGraphTest#testPropertyAccessRunsItsAccessor :: control :: '
 				+ 'M-GRAPH-SETTER-EDGE,M-GRAPH-GETTER-EDGE,M-GRAPH-ELEMENT-RECEIVER,'
 				+ 'M-GRAPH-OWN-ACCESSOR-ANY-RECEIVER,M-GRAPH-SETTER-READ-DIRECT',
+			'unit.query.CallGraphTest#testReceiverFieldNamesAMemberReadOffATypedValue :: control :: M-GRAPH-RECEIVER-TYPED-BASE',
 			'unit.query.CallGraphTest#testReceiverFieldNamesOnlyAMemberReadDirectly :: control :: '
 				+ 'M-GRAPH-RECEIVER-LOCAL-FIELD',
+			'unit.query.CallGraphTest#testReceiverFieldSkipsAPropertyWithAGetter :: control :: M-GRAPH-RECEIVER-PROPERTY',
 			'unit.query.CallGraphTest#testReceiverTypedThroughDeclaredMemberTypes :: control :: M-GRAPH-FIELD-PATH-RECEIVER',
 			'unit.query.CallGraphTest#testStaticExtensionResolvesThroughTheUsing :: control :: M-GRAPH-USING-EXTENSION',
 			'unit.query.CallGraphTest#testStaticFieldReadOffItsTypeIsTyped :: control :: M-GRAPH-STATIC-FIELD-TYPE',
@@ -3855,7 +3861,12 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-WINDOW-IF-RELEASES',
 			'M-TS-HELD-ANY-THREAD',
 			'M-TS-CROSSING-IGNORED',
-			'M-TS-CTOR-CONTENDED'
+			'M-TS-CTOR-CONTENDED',
+			'M-GRAPH-RECEIVER-TYPED-BASE',
+			'M-GRAPH-RECEIVER-PROPERTY',
+			'M-TS-BLIND-CALL-SHORT',
+			'M-TS-CTOR-ESCAPE-BLIND',
+			'M-TS-LOOP-ONE-PASS'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

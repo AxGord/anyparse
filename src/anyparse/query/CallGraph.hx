@@ -840,35 +840,6 @@ final class CallGraph {
 				|| (forceAccessKind != null && kind == forceAccessKind);
 		}
 
-		/** `receiverRaw` as the member it names directly — a bare field, `this.f`, a static `T.f` — spelled `Owner.f`, or null. */
-		function receiverField(receiverRaw: QueryNode, currentType: Null<String>): Null<String> {
-			final receiver: QueryNode = unwrap(receiverRaw);
-			final name: Null<String> = receiver.name;
-			if (name == null) return null;
-			var owner: Null<String> = null;
-			if (receiver.kind == identKind) {
-				final span: Null<Span> = receiver.span;
-				if (span == null || name == selfText) return null;
-				final bound: Null<Int> = bindFor(name)[span.from];
-				// a local or a parameter is a value some other binding may alias: no member names it
-				if (bound != null && bound >= 0 && bindsLocally(bound)) return null;
-				owner = currentType;
-			} else if (isAccessKind(receiver.kind) && receiver.children.length > 0) {
-				final base: QueryNode = unwrap(receiver.children[0]);
-				final baseName: Null<String> = base.name;
-				final baseSpan: Null<Span> = base.span;
-				if (base.kind != identKind || baseName == null || baseSpan == null) return null;
-				final bound: Null<Int> = bindFor(baseName)[baseSpan.from];
-				owner = if (baseName == selfText)
-					currentType
-				else if ((bound == null || bound < 0) && CallGraphNames.isTypeLike(baseName))
-					baseName
-				else
-					null;
-			}
-			if (owner == null || !types.fieldOnChain(owner, name)) return null;
-			return '${types.declaringTypeOf(owner, name) ?? owner}.$name';
-		}
 
 		/** Resolve an identifier that NAMES a function — a local one, a scope-bound declaration, or a member on the type chain. */
 		function identTarget(name: String, span: Null<Span>, currentType: Null<String>): Null<String> {
@@ -1136,6 +1107,31 @@ final class CallGraph {
 				isValue: true,
 				isDynamic: nullableWrappers.contains(nominal)
 			};
+		}
+
+		/**
+		 * `receiverRaw` as the member it names — a bare field, or a field read off a receiver whose type the graph
+		 * recovers (`this.f`, a static `T.f`, `o.f` on a typed `o`) — spelled `Owner.f`; null for anything else.
+		 */
+		function receiverField(receiverRaw: QueryNode, currentType: Null<String>): Null<String> {
+			final receiver: QueryNode = unwrap(receiverRaw);
+			final name: Null<String> = receiver.name;
+			if (name == null) return null;
+			var owner: Null<String> = null;
+			if (receiver.kind == identKind) {
+				final span: Null<Span> = receiver.span;
+				if (span == null || name == selfText) return null;
+				final bound: Null<Int> = bindFor(name)[span.from];
+				// a local or a parameter is a value some other binding may alias: no member names it
+				if (bound != null && bound >= 0 && bindsLocally(bound)) return null;
+				owner = currentType;
+			} else if (isAccessKind(receiver.kind) && receiver.children.length > 0) {
+				final base: Null<Receiver> = receiverType(receiver.children[0], currentType);
+				owner = base == null || base.isDynamic ? null : base.typeName;
+			}
+			// a property with an accessor hands back whatever its getter returns, not one stored object
+			if (owner == null || !types.fieldOnChain(owner, name) || types.propertyOnChain(owner, name) != null) return null;
+			return '${types.declaringTypeOf(owner, name) ?? owner}.$name';
 		}
 
 		callTargetOf = (call, currentType) -> {

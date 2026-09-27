@@ -9235,6 +9235,46 @@
 			"find": "uncontended: !leaks && ",
 			"replace": "uncontended: false && !leaks && ",
 			"note": "a hold in the owner's own constructor makes the lock long, so every later take of it reads as a stall"
+		},
+		{
+			"name": "M-GRAPH-RECEIVER-TYPED-BASE",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "owner = base == null || base.isDynamic ? null : base.typeName;",
+			"replace": "owner = null;",
+			"note": "a member read off another typed value names no member, so a lock taken through another instance is an unknown lock and never the member it is"
+		},
+		{
+			"name": "M-GRAPH-RECEIVER-PROPERTY",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "|| types.propertyOnChain(owner, name) != null) return null;",
+			"replace": ") return null;",
+			"note": "a property with a getter names one stored lock, though the getter may hand back any other"
+		},
+		{
+			"name": "M-TS-BLIND-CALL-SHORT",
+			"type": "anyparse.check.LockSites",
+			"method": "acquire",
+			"find": "blind: traced == null || traced.held.exists(",
+			"replace": "blind: traced == null && traced.held.exists(",
+			"note": "a hold across a call the graph resolves to nothing reads as short, so a lock held across a stored callback never stalls its main-thread taker"
+		},
+		{
+			"name": "M-TS-CTOR-ESCAPE-BLIND",
+			"type": "anyparse.check.LockSites",
+			"method": "ownConstructorHold",
+			"find": "&& !passesSelf(body, null);",
+			"replace": ";",
+			"note": "a constructor that hands `this` out before its hold still counts as private, so the hold blocks no one"
+		},
+		{
+			"name": "M-TS-LOOP-ONE-PASS",
+			"type": "anyparse.check.LockWindow",
+			"method": "step",
+			"find": "if (next == entry) return entry;",
+			"replace": "return next;",
+			"note": "a loop body is walked once, so a lock taken on one pass is not held across the next pass's calls"
 		}
 	]
 }

@@ -114,7 +114,15 @@ final class LockWindow {
 			final otherwise: Null<Bool> = kids.length > 2 ? step(kids[2], cond) : cond;
 			return join(step(kids[1], cond), otherwise);
 		}
-		if (_loopKinds.contains(kind)) return join(held, sequence(kids, held));
+		if (_loopKinds.contains(kind)) {
+			// iterate to a fixed point: a lock one pass leaves held is held on the next, from its first statement on
+			var entry: Bool = held;
+			while (true) {
+				final next: Bool = join(entry, sequence(kids, entry)) == true;
+				if (next == entry) return entry;
+				entry = next;
+			}
+		}
 		if (_tryKinds.contains(kind) && kids.length > 0) {
 			final body: Null<Bool> = step(kids[0], held);
 			// a catch starts holding what the body was entered or left holding: a call's own exception is out of the model

@@ -272,8 +272,11 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		taintHop: Map<String, CallEdge>
 	): Void {
 		for (lock in sites.crossing) if (!long.contains(lock)) long.push(lock);
-		for (a in sites.acquires) if (a.leaks && a.lock != null && !long.contains(a.lock)) long.push(a.lock);
+		// a hold that outlives its function, or spans a call to nothing the graph knows, may last any time at all
+		for (a in sites.acquires) if ((a.leaks || a.blind && !a.uncontended) && a.lock != null && !long.contains(a.lock)) long.push(a.lock);
 		var grew: Bool = true;
+		// the taint is rebuilt from scratch each round: a lock turning long adds sink edges anywhere in the graph, and the
+		// rounds are bounded by the number of locks, so a worklist would buy little over the plain recompute
 		while (grew) {
 			taintHop.clear();
 			collectTaint(graph, sinkIds, listsOf, sites, long, taintHop);
@@ -281,11 +284,18 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			for (a in sites.acquires) {
 				final lock: Null<String> = a.lock;
 				if (lock == null || a.uncontended || long.contains(lock)) continue;
-				if (!a.window.exists(e -> blocks(e, listsOf, sites, long) || taintHop.exists(e.to) && !takesLock(e, listsOf))) continue;
+				if (!a.window.exists(e -> heldAcrossBlocking(e, listsOf, sites, long, taintHop))) continue;
 				long.push(lock);
 				grew = true;
 			}
 		}
+	}
+
+	/** Whether a hold spanning `edge` spans a blocking call: `edge` blocks itself, or reaches a sink — through anything but a lock. */
+	private static function heldAcrossBlocking(
+		edge: CallEdge, listsOf: (String) -> ChainLists, sites: LockSites, long: Array<String>, taintHop: Map<String, CallEdge>
+	): Bool {
+		return blocks(edge, listsOf, sites, long) || taintHop.exists(edge.to) && !takesLock(edge, listsOf);
 	}
 
 	/** Whether `edge` is a call to a sink `lockPairs` names a lock of: one whose cost is the wait for that lock. */
@@ -393,9 +403,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			for (edge in a.window) {
 				final span: Null<Span> = edge.span;
 				if (span == null) continue;
-				final direct: Bool = blocks(edge, listsOf, sites, long);
-				if (!direct && (!taintHop.exists(edge.to) || takesLock(edge, listsOf))) continue;
-				final evidence: String = direct ? edge.to : taintChain(edge.to, taintHop);
+				if (!heldAcrossBlocking(edge, listsOf, sites, long, taintHop)) continue;
+				final evidence: String = blocks(edge, listsOf, sites, long) ? edge.to : taintChain(edge.to, taintHop);
 				final message: String = '"${a.edge.from}" holds "${a.pair.lockId}" across a call that can block: $evidence';
 				final key: String = '${edge.file}:${span.from}:$message';
 				if (seen.contains(key)) continue;

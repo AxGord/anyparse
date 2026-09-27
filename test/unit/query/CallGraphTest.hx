@@ -41,6 +41,26 @@ class CallGraphTest extends Test {
 		Assert.same([null, 'A.m', 'A.s', 'A.s'], [for (e in edges(g, 'A.f', 'M.go', Call)) e.receiverField]);
 	}
 
+	/** A member read off ANOTHER value of a type the graph recovers names that member too: `o.m` is `A.m`. */
+	@:pin('control') @:killer('M-GRAPH-RECEIVER-TYPED-BASE')
+	public function testReceiverFieldNamesAMemberReadOffATypedValue(): Void {
+		final g: CallGraph = graphOf([
+			'class A { public var m:M; static function f(o:A):Void o.m.go(); }',
+			'class M { public function go():Void {} }'
+		]);
+		Assert.same(['A.m'], [for (e in edges(g, 'A.f', 'M.go', Call)) e.receiverField]);
+	}
+
+	/** A property with a getter hands back whatever the getter returns, so it names no one stored object. */
+	@:pin('control') @:killer('M-GRAPH-RECEIVER-PROPERTY')
+	public function testReceiverFieldSkipsAPropertyWithAGetter(): Void {
+		final g: CallGraph = graphOf([
+			'class A { var p(get, never):M; var q:M; function get_p():M return q; function f():Void p.go(); }',
+			'class M { public function go():Void {} }'
+		]);
+		Assert.same([null], [for (e in edges(g, 'A.f', 'M.go', Call)) e.receiverField]);
+	}
+
 	public function testLocalFunctionCallAndContains(): Void {
 		final g: CallGraph = graphOf(['class A { function a():Void { function helper():Void {} helper(); } }']);
 		Assert.equals(1, edges(g, 'A.a', 'A.a#helper', Call).length);
