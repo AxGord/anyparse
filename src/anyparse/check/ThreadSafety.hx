@@ -26,6 +26,7 @@ private typedef ChainLists = {
 	final sinkIds: Array<String>;
 	final spawnIds: Array<String>;
 	final marshalIds: Array<String>;
+	final quietIds: Array<String>;
 	final lockPairs: Array<String>;
 	final pairs: Array<LockPair>;
 }
@@ -53,18 +54,31 @@ private typedef ChainLists = {
  *         "spawns":    ["app.Worker.spawn", "Thread.create"],
  *         "marshals":  ["app.Worker.runOnMain"],
  *         "lockPairs": ["app.Mutex.lock/unlock", "RwLock.lock/unlock"],
+ *         "quietRoots": ["app.App.shutdown"],
  *         "exclude":   ["test"]
  *     }
  *
  * `exclude` drops files whose path contains an entry as a '/'-bounded segment run BEFORE the graph is built. Patterns
  * are matched by their last two dot-segments (`SymbolIndex` models no packages); `Type.*` covers every recorded member
- * of a type. A `lockPairs` entry is `<lock pattern>/<unlock member name>` on the same type.
+ * of a type. A `lockPairs` entry is `<lock pattern>/<unlock member name>` on the same type. A call of a lock WRAPPER
+ * (`LockSites`) takes or gives back its lock with no entry of its own. The main thread entering a `quietRoots`
+ * function — a shutdown or crash path that blocks on purpose — goes on QUIET: what only such paths reach is reported
+ * neither as a main-thread sink call nor as a main-thread take of a lock, and every other path still is.
  */
 @:nullSafety(Strict)
 final class ThreadSafety implements Check implements ConfigAware implements NoAutofix implements GraphScoped {
 
 	private static inline final CTX_MAIN: Int = 1;
 	private static inline final CTX_BG: Int = 2;
+
+	/** The main thread on a path through a `quietRoots` function: reached, but never reported. */
+	private static inline final CTX_QUIET: Int = 4;
+
+	/** A background thread on a path through a `quietRoots` function: what it marshals to the main thread is QUIET. */
+	private static inline final CTX_BG_QUIET: Int = 8;
+
+	private static inline final CTX_LOUD: Int = CTX_MAIN | CTX_BG;
+	private static inline final CTX_QUIETED: Int = CTX_QUIET | CTX_BG_QUIET;
 	private static inline final CHAIN_CAP: Int = 8;
 
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
@@ -106,7 +120,11 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 
 		final contexts: Map<String, Int> = [];
 		final mainParent: Map<String, CallEdge> = [];
-		propagateContexts(graph, listsOf, contexts, mainParent);
+		// a quiet root is judged by the chain of the file declaring it
+		final quiet: Array<String> = [
+			for (id => node in graph.nodes) if (byFile[node.file]?.quietIds.contains(id) == true) id
+		];
+		propagateContexts(graph, listsOf, quiet, contexts, mainParent);
 
 		final sites: LockSites = new LockSites(graph, [for (f in files) f.file], plugin, file -> listsOf(file).pairs);
 		final long: Array<String> = [];
@@ -160,13 +178,15 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			final spawns: Array<String> = config.stringListOption('thread-safety', 'spawns') ?? [];
 			final marshals: Array<String> = config.stringListOption('thread-safety', 'marshals') ?? [];
 			final lockPairs: Array<String> = config.stringListOption('thread-safety', 'lockPairs') ?? [];
-			final signature: String = [for (list in [sinks, spawns, marshals, lockPairs]) list.join('\n')].join('\t');
+			final quietRoots: Array<String> = config.stringListOption('thread-safety', 'quietRoots') ?? [];
+			final signature: String = [for (list in [sinks, spawns, marshals, lockPairs, quietRoots]) list.join('\n')].join('\t');
 			final known: Null<ChainLists> = bySignature[signature];
 			final lists: ChainLists = known ?? {
 				reports: sinks.length > 0,
 				sinkIds: matchAll(graph, sinks),
 				spawnIds: matchAll(graph, spawns),
 				marshalIds: matchAll(graph, marshals),
+				quietIds: matchAll(graph, quietRoots),
 				lockPairs: lockPairs,
 				pairs: resolvePairs(graph, lockPairs)
 			};
@@ -210,16 +230,18 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	/**
 	 * Fixed-point MAIN/BG propagation. Roots and caller-less nodes seed MAIN;
 	 * spawn-received callbacks seed BG; marshal-received callbacks seed MAIN;
-	 * every other edge propagates the source context. `mainParent` records the
-	 * edge that first carried MAIN into a node — the chain evidence.
+	 * every other edge propagates the source context. A thread entering a quiet root
+	 * goes quiet (`enter`), and a callback registered from quiet code stays quiet (`carry`).
+	 * `mainParent` records the edge that first carried MAIN into a node — the chain evidence.
 	 */
 	private static function propagateContexts(
-		graph: CallGraph, listsOf: (String) -> ChainLists, contexts: Map<String, Int>, mainParent: Map<String, CallEdge>
+		graph: CallGraph, listsOf: (String) -> ChainLists, quiet: Array<String>, contexts: Map<String, Int>,
+		mainParent: Map<String, CallEdge>
 	): Void {
 		// noqa: complexity
 		final queue: Array<String> = [];
 		for (id => node in graph.nodes) if (!node.isExternal && graph.inEdges(id).length == 0) {
-			contexts[id] = CTX_MAIN;
+			contexts[id] = enter(quiet, id, CTX_MAIN);
 			queue.push(id);
 		}
 		var qi: Int = 0;
@@ -228,19 +250,20 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 				final id: String = queue[qi++];
 				final ctx: Int = contexts[id] ?? 0;
 				for (edge in graph.outEdges(id)) {
-					final propagated: Int = switch edge.kind {
+					final carried: Int = switch edge.kind {
 						case Contains: 0;
 						case Ref:
 							final via: Null<String> = edge.via;
 							if (via != null && listsOf(edge.file).spawnIds.contains(via))
-								CTX_BG;
+								carry(ctx, CTX_BG, CTX_BG_QUIET);
 							else if (via != null && listsOf(edge.file).marshalIds.contains(via))
-								CTX_MAIN;
+								carry(ctx, CTX_MAIN, CTX_QUIET);
 							else
 								ctx;
 						case _: ctx;
 					};
-					if (propagated == 0) continue;
+					if (carried == 0) continue;
+					final propagated: Int = enter(quiet, edge.to, carried);
 					final old: Int = contexts[edge.to] ?? 0;
 					final merged: Int = old | propagated;
 					if (merged == old) continue;
@@ -254,12 +277,23 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			// plain post-drain fill would silently miss their sink calls)
 			var seeded: Bool = false;
 			for (id => node in graph.nodes) if (!(node.isExternal || contexts.exists(id))) {
-				contexts[id] = CTX_MAIN;
+				contexts[id] = enter(quiet, id, CTX_MAIN);
 				queue.push(id);
 				seeded = true;
 			}
 			if (!seeded) break;
 		}
+	}
+
+	/** The context `ctx` becomes on entering `id`: each thread goes quiet in a `quiet` root. */
+	private static function enter(quiet: Array<String>, id: String, ctx: Int): Int {
+		if (!quiet.contains(id)) return ctx;
+		return (ctx & CTX_MAIN != 0 ? CTX_QUIET : 0) | (ctx & CTX_BG != 0 ? CTX_BG_QUIET : 0) | (ctx & CTX_QUIETED);
+	}
+
+	/** What a thread boundary hands a callback registered in `ctx`: `loud` from a path through no quiet root, `quieted` from one through one. */
+	private static inline function carry(ctx: Int, loud: Int, quieted: Int): Int {
+		return (ctx & CTX_LOUD != 0 ? loud : 0) | (ctx & CTX_QUIETED != 0 ? quieted : 0);
 	}
 
 	/**
@@ -273,7 +307,9 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	): Void {
 		for (lock in sites.crossing) if (!long.contains(lock)) long.push(lock);
 		// a hold that outlives its function, or spans a call to nothing the graph knows, may last any time at all
-		for (a in sites.acquires) if ((a.leaks || a.blind && !a.uncontended) && a.lock != null && !long.contains(a.lock)) long.push(a.lock);
+		// a wrapper's own take leaks by design: whether it lasts is decided at each call of the wrapper, an acquire itself
+		for (a in sites.acquires) if ((a.leaks && !a.delegated || a.blind && !a.uncontended) && a.lock != null && !long.contains(a.lock))
+			long.push(a.lock);
 		var grew: Bool = true;
 		// the taint is rebuilt from scratch each round: a lock turning long adds sink edges anywhere in the graph, and the
 		// rounds are bounded by the number of locks, so a worklist would buy little over the plain recompute
@@ -357,7 +393,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			final ctx: Int = contexts[edge.from] ?? 0;
 			if (ctx & CTX_MAIN == 0) continue;
 			final chain: String = mainChain(edge.from, mainParent);
-			final also: String = ctx & CTX_BG != 0 ? ' (also reachable from a background thread)' : '';
+			final also: String = ctx & (CTX_BG | CTX_BG_QUIET) != 0 ? ' (also reachable from a background thread)' : '';
 			violations.push({
 				file: edge.file,
 				span: edge.span,

@@ -488,6 +488,137 @@ class ThreadSafetyCheckTest extends Test {
 		#end
 	}
 
+	/** A call of a function whose whole lock traffic is one take is that take: the caller holds the lock from the call on. */
+	@:pin('control') @:killer('M-TS-WRAPPER-NONE')
+	public function testAHoldTakenThroughAWrapperIsTheCallersHold(): Void {
+		#if (sys || nodejs)
+		Assert.contains('"A.main" holds "Mutex.acquire" across a call that can block: Sys.sleep', lockFindings([
+			'class A { static final m:Mutex = new Mutex(); static function lockIt():Void m.acquire();'
+			+ ' static function unlockIt():Void m.release(); static function main():Void { lockIt(); Sys.sleep(1); unlockIt(); } }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A wrapper's own take outlives its body and its partner's release precedes it by design: neither makes the lock long. */
+	@:pin('control') @:killer('M-TS-WRAPPER-LEAKS', 'M-TS-WRAPPER-CROSSING')
+	public function testABriefHoldThroughWrappersKeepsTheLockShort(): Void {
+		#if (sys || nodejs)
+		Assert.same([], lockFindings([
+			'class A { static final m:Mutex = new Mutex(); static function lockIt():Void m.acquire();'
+			+ ' static function unlockIt():Void m.release(); static function main():Void { lockIt(); unlockIt(); } }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A function that releases on SOME path only is no release wrapper: the caller's hold goes on past the call. */
+	@:pin('control') @:killer('M-TS-WRAPPER-MAY-RELEASE')
+	public function testAConditionalReleaseIsNoWrapper(): Void {
+		#if (sys || nodejs)
+		Assert.contains('"A.main" holds "Mutex.acquire" across a call that can block: Sys.sleep', lockFindings([
+			'class A { static final m:Mutex = new Mutex(); static function lockIt():Void m.acquire();'
+			+ ' static function unlockIt(c:Bool):Void if (c) m.release();'
+			+ ' static function main():Void { lockIt(); unlockIt(true); Sys.sleep(1); } }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A function that takes on SOME path only is no take wrapper: its take leaks, so the lock stays long. */
+	@:pin('control') @:killer('M-TS-WRAPPER-MAY-TAKE')
+	public function testAConditionalTakeIsNoWrapper(): Void {
+		#if (sys || nodejs)
+		Assert.contains('main thread reaches blocking "Mutex.acquire": A.main -> A.lockIt -> Mutex.acquire', lockFindings([
+			'class A { static final m:Mutex = new Mutex(); static function lockIt(c:Bool):Void if (c) m.acquire();'
+			+ ' static function unlockIt():Void m.release(); static function main():Void { lockIt(true); unlockIt(); } }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A wrapper called by its name through a receiver the graph cannot type has a caller no one sees: its take stays its own. */
+	@:pin('control') @:killer('M-TS-WRAPPER-UNRESOLVED')
+	public function testAWrapperCalledThroughAnUntypedReceiverKeepsItsTakeLong(): Void {
+		#if (sys || nodejs)
+		Assert.contains('main thread reaches blocking "Mutex.acquire": A.main -> B.lockIt -> Mutex.acquire', lockFindings([
+			'class B { final m:Mutex = new Mutex(); public function new() {} public function lockIt():Void m.acquire();'
+			+ ' public function unlockIt():Void m.release(); }',
+			'class A { static function main(b:B, d:Dynamic):Void { b.lockIt(); b.unlockIt(); d.lockIt(); } }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A call through an interface whose every implementation is the same wrapper is that wrapper's take. */
+	@:pin('control') @:killer('M-TS-WRAPPER-NO-PASS-THROUGH')
+	public function testAWrapperReachedThroughAnInterfaceTakesTheLock(): Void {
+		#if (sys || nodejs)
+		Assert.contains('"A.main" holds "Mutex.acquire" across a call that can block: Sys.sleep', lockFindings([
+			'interface I { function lockIt():Void; function unlockIt():Void; }',
+			'class B implements I { final m:Mutex = new Mutex(); public function new() {} public function lockIt():Void m.acquire();'
+			+ ' public function unlockIt():Void m.release(); }',
+			'class A { static function main(i:I):Void { i.lockIt(); Sys.sleep(1); i.unlockIt(); } }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** The main thread through a `quietRoots` function reaches its sinks unreported. */
+	@:pin('control') @:killer('M-TS-QUIET-IGNORED')
+	public function testAPathThroughAQuietRootIsNotReported(): Void {
+		#if (sys || nodejs)
+		Assert.same([], violations('{"rules":{"thread-safety":{"sinks":["Sys.sleep"],"quietRoots":["A.shutdown"]}}}', [
+			'class A { static function main():Void shutdown(); static function shutdown():Void stop();'
+			+ ' static function stop():Void Sys.sleep(1); }'
+		]));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A sink a quiet root reaches is still reported when another main-thread path reaches it too. */
+	@:pin('control') @:killer('M-TS-QUIET-SWALLOWS')
+	public function testAnotherPathToAQuietSinkStillReports(): Void {
+		#if (sys || nodejs)
+		final vs: Array<Violation> = violations('{"rules":{"thread-safety":{"sinks":["Sys.sleep"],"quietRoots":["A.shutdown"]}}}', [
+			'class A { static function main():Void { shutdown(); save(); } static function shutdown():Void save();'
+			+ ' static function save():Void Sys.sleep(1); }'
+		]);
+		Assert.same(['main thread reaches blocking "Sys.sleep": A.main -> A.save -> Sys.sleep'], [for (v in vs) v.message]);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** What a quiet root running on a background thread marshals to the main thread is as quiet as the root. */
+	@:pin('control') @:killer('M-TS-QUIET-MARSHAL-LOUD')
+	public function testACallbackAQuietRootMarshalsStaysQuiet(): Void {
+		#if (sys || nodejs)
+		Assert.same(
+			[],
+			violations(
+				'{"rules":{"thread-safety":{"sinks":["Sys.sleep"],"spawns":["Runner.create"],"marshals":["Ui.marshal"],'
+				+ '"quietRoots":["A.shutdown"]}}}',
+				[
+					'class A { static function main():Void Runner.create(shutdown);'
+					+ ' static function shutdown():Void Ui.marshal(() -> Sys.sleep(1)); }',
+					'class Runner { public static function create(fn:()->Void):Void {} }',
+					'class Ui { public static function marshal(fn:()->Void):Void {} }'
+				]
+			)
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
 	/** Every finding over `tree` with the run's files listed in `order`, as sorted `<relative path>: <message>` lines. */
 	private function chainFindings(tree: Array<{ name: String, source: String }>, order: Array<String>): Array<String> {

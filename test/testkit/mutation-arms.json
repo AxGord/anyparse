@@ -9269,6 +9269,86 @@
 			"note": "a constructor that hands `this` out before its hold still counts as private, so the hold blocks no one"
 		},
 		{
+			"name": "M-TS-WRAPPER-NONE",
+			"type": "anyparse.check.LockSites",
+			"method": "inferWrappers",
+			"find": "for (round in 0...WRAPPER_ROUNDS) {",
+			"replace": "for (round in 0...0) {",
+			"note": "no function is a lock wrapper, so a hold taken through one is nobody's and goes unreported"
+		},
+		{
+			"name": "M-TS-WRAPPER-LEAKS",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "solveLongLocks",
+			"find": "a.leaks && !a.delegated",
+			"replace": "a.leaks",
+			"note": "a wrapper's own take leaking out of its body makes its lock long, so every main-thread take of it is reported again"
+		},
+		{
+			"name": "M-TS-WRAPPER-CROSSING",
+			"type": "anyparse.check.LockSites",
+			"method": "collectCrossing",
+			"find": " || _wrappers.exists(give.edge.from)",
+			"replace": "",
+			"note": "a release wrapper's own release reads as a release without a take, so its lock is always long"
+		},
+		{
+			"name": "M-TS-WRAPPER-MAY-RELEASE",
+			"type": "anyparse.check.LockSites",
+			"method": "wrapperOf",
+			"find": ": walker.releasesOnEveryPath(fn, [at.from]);",
+			"replace": ": true;",
+			"note": "a function releasing on some path only counts as a release, so the caller's hold ends where it may go on"
+		},
+		{
+			"name": "M-TS-WRAPPER-MAY-TAKE",
+			"type": "anyparse.check.LockSites",
+			"method": "wrapperOf",
+			"find": "takes ? walker.runsOnEveryPath(fn, at.from) :",
+			"replace": "takes ? true :",
+			"note": "a function taking on some path only counts as a take wrapper, so its leaking take stops making the lock long"
+		},
+		{
+			"name": "M-TS-WRAPPER-UNRESOLVED",
+			"type": "anyparse.check.LockSites",
+			"method": "mayWrap",
+			"find": " && !unresolvedNames.contains(name)",
+			"replace": "",
+			"note": "a wrapper some untyped receiver calls by name counts, so a take at a call nobody sees stops making the lock long"
+		},
+		{
+			"name": "M-TS-WRAPPER-NO-PASS-THROUGH",
+			"type": "anyparse.check.LockSites",
+			"method": "wrapperSites",
+			"find": " || passesThrough(o.to)",
+			"replace": "",
+			"note": "a call through an interface member is no wrapper call, so a wrapper reached by dispatch is dropped and its caller's hold goes unreported"
+		},
+		{
+			"name": "M-TS-QUIET-IGNORED",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "enter",
+			"find": "if (!quiet.contains(id)) return ctx;",
+			"replace": "if (true) return ctx;",
+			"note": "a quiet root silences nothing, so shutdown and crash paths are reported as main-thread stalls"
+		},
+		{
+			"name": "M-TS-QUIET-SWALLOWS",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "reportMainSinkCalls",
+			"find": "if (ctx & CTX_MAIN == 0) continue;",
+			"replace": "if (ctx & CTX_MAIN == 0 || ctx & CTX_QUIETED != 0) continue;",
+			"note": "one path through a quiet root silences a sink every other main-thread path still reaches"
+		},
+		{
+			"name": "M-TS-QUIET-MARSHAL-LOUD",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "propagateContexts",
+			"find": "carry(ctx, CTX_MAIN, CTX_QUIET)",
+			"replace": "CTX_MAIN",
+			"note": "a callback a quiet root marshals to the main thread is loud, so a quiet background shutdown is reported through it"
+		},
+		{
 			"name": "M-TS-LOOP-ONE-PASS",
 			"type": "anyparse.check.LockWindow",
 			"method": "step",
