@@ -573,8 +573,9 @@ class ThreadSafetyCheckTest extends Test {
 	public function testAPathThroughAQuietRootIsNotReported(): Void {
 		#if (sys || nodejs)
 		Assert.same([], violations('{"rules":{"thread-safety":{"sinks":["Sys.sleep"],"quietRoots":["A.shutdown"]}}}', [
-			'class A { static function main():Void shutdown(); static function shutdown():Void stop();'
-			+ ' static function stop():Void Sys.sleep(1); }'
+			'class A { static function main():Void Ui.onExit(shutdown); static function shutdown():Void stop();'
+			+ ' static function stop():Void Sys.sleep(1); }',
+			'class Ui { public static function onExit(fn:()->Void):Void {} }'
 		]));
 		#else
 		Assert.pass('non-sys target');
@@ -586,7 +587,7 @@ class ThreadSafetyCheckTest extends Test {
 	public function testAnotherPathToAQuietSinkStillReports(): Void {
 		#if (sys || nodejs)
 		final vs: Array<Violation> = violations('{"rules":{"thread-safety":{"sinks":["Sys.sleep"],"quietRoots":["A.shutdown"]}}}', [
-			'class A { static function main():Void { shutdown(); save(); } static function shutdown():Void save();'
+			'class A { static function main():Void save(); static function shutdown():Void save();'
 			+ ' static function save():Void Sys.sleep(1); }'
 		]);
 		Assert.same(['main thread reaches blocking "Sys.sleep": A.main -> A.save -> Sys.sleep'], [for (v in vs) v.message]);
@@ -596,26 +597,94 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** What a quiet root running on a background thread marshals to the main thread is as quiet as the root. */
-	@:pin('control') @:killer('M-TS-QUIET-MARSHAL-LOUD')
-	public function testACallbackAQuietRootMarshalsStaysQuiet(): Void {
+	@:pin('control') @:killer('M-TS-QUIET-INTO-CALLBACK')
+	public function testWhatAQuietRootRegistersRunsLoud(): Void {
 		#if (sys || nodejs)
 		Assert.same(
-			[],
-			violations(
-				'{"rules":{"thread-safety":{"sinks":["Sys.sleep"],"spawns":["Runner.create"],"marshals":["Ui.marshal"],'
-				+ '"quietRoots":["A.shutdown"]}}}',
-				[
-					'class A { static function main():Void Runner.create(shutdown);'
-					+ ' static function shutdown():Void Ui.marshal(() -> Sys.sleep(1)); }',
-					'class Runner { public static function create(fn:()->Void):Void {} }',
-					'class Ui { public static function marshal(fn:()->Void):Void {} }'
-				]
-			)
+			[
+				'main thread reaches blocking "Sys.sleep": A.shutdown -> A.shutdown#1 -> Sys.sleep',
+				'main thread reaches blocking "Sys.sleep": A.shutdown#2 -> A.shutdown#2#3 -> Sys.sleep'
+			],
+			[
+				for (v in violations(
+					'{"rules":{"thread-safety":{"sinks":["Sys.sleep"],"spawns":["Runner.create"],"marshals":["Ui.marshal"],'
+					+ '"quietRoots":["A.shutdown"]}}}',
+					[
+						'class A { static final ls:Array<()->Void> = []; static function shutdown():Void {'
+						+ ' ls.push(() -> Sys.sleep(1)); Runner.create(() -> Ui.marshal(() -> Sys.sleep(2))); } }',
+						'class Runner { public static function create(fn:()->Void):Void {} }',
+						'class Ui { public static function marshal(fn:()->Void):Void {} }'
+					]
+				)) v.message
+			]
 		);
 		#else
 		Assert.pass('non-sys target');
 		#end
 	}
+
+	/** A quiet root loud main-thread code calls is no quiet root: its whole reach reports. */
+	@:pin('control') @:killer('M-TS-QUIET-LOUD-CALLER')
+	public function testAQuietRootALoudCallerCallsIsLoud(): Void {
+		#if (sys || nodejs)
+		Assert.same(
+			[
+				'main thread reaches blocking "Sys.sleep": A.main -> A.onButton -> A.shutdown -> Sys.sleep'
+			],
+			[
+				for (v in violations('{"rules":{"thread-safety":{"sinks":["Sys.sleep"],"quietRoots":["A.shutdown"]}}}', [
+					'class A { static function main():Void onButton(); static function onButton():Void shutdown();'
+					+ ' static function shutdown():Void Sys.sleep(1); }'
+				])) v.message
+			]
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** Re-entrance is per OBJECT: another instance's lock of the same member, taken under a hold, is a real wait. */
+	@:pin('control') @:killer('M-TS-REENTRANT-ANY-OBJECT')
+	public function testATakeOfAnotherObjectsLockBlocksUnderAReentrantHold(): Void {
+		#if (sys || nodejs)
+		Assert.same(['"C.transfer" holds "C._m" across a call that can block: Mutex.acquire'], heldBy('C.transfer', objectFixture()));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A wrapper called on another object takes that object's lock: a real wait under a re-entrant hold. */
+	@:pin('control') @:killer('M-TS-REENTRANT-WRAPPER-ELSEWHERE')
+	public function testAWrapperOnAnotherObjectBlocksUnderAReentrantHold(): Void {
+		#if (sys || nodejs)
+		Assert.same([
+			'"C.transfer2" holds "C._m" across a call that can block: C.lockIt (the held lock, on another object)'
+		], heldBy('C.transfer2', objectFixture()));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A hold of ANOTHER object's lock is no hold of the running object's: re-taking the own lock under it still waits. */
+	@:pin('control') @:killer('M-TS-REENTRANT-HOLDER-ELSEWHERE')
+	public function testAHoldOfAnotherObjectsLockIsNotReentrantForTheOwnLock(): Void {
+		#if (sys || nodejs)
+		Assert.same(['"C.cross" holds "C._m" across a call that can block: Mutex.acquire'], heldBy('C.cross', objectFixture()));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** Re-taking the running object's own lock, directly or through its own methods, blocks nothing under its hold. */
+	@:pin('control') @:killer('M-TS-SELF-NEVER')
+	public function testARetakeOfTheOwnObjectsLockIsFree(): Void {
+		#if (sys || nodejs)
+		Assert.same([], heldBy('C.nested', objectFixture()));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 
 	/** A hold of a `reentrantLocks` lock may take that same lock again: the re-take inside it blocks nothing. */
 	@:pin('control') @:killer('M-TS-REENTRANT-IGNORED')
@@ -643,14 +712,16 @@ class ThreadSafetyCheckTest extends Test {
 	@:pin('control') @:killer('M-TS-EVIDENCE-UNCAPPED')
 	public function testAHoldIsOneFindingListingItsBlockingCalls(): Void {
 		#if (sys || nodejs)
+		final names: Array<String> = [for (i in 0...9) 'f$i'];
 		Assert.same(
 			[
-				'"A.main" holds "A.m" across 5 calls that can block: Sys.sleep; A.a -> Sys.sleep; A.b -> Sys.sleep; +1 more'
+				'"A.main" holds "A.m" across 11 calls that can block: Sys.sleep; '
+				+ [for (n in names.slice(0, 7)) 'A.$n -> Sys.sleep'].join('; ') + '; +2 more'
 			],
 			heldBy('A.main', lockFindings([
-				'class A { static final m:Mutex = new Mutex(); static function main():Void { m.acquire(); Sys.sleep(1); a(); Sys.sleep(2);'
-				+ ' b(); c(); m.release(); } static function a():Void Sys.sleep(1); static function b():Void Sys.sleep(1);'
-				+ ' static function c():Void Sys.sleep(1); }'
+				'class A { static final m:Mutex = new Mutex(); static function main():Void { m.acquire(); Sys.sleep(1); '
+				+ [for (n in names) '$n();'].join(' ') + ' Sys.sleep(2); m.release(); } '
+				+ [for (n in names) 'static function $n():Void Sys.sleep(1);'].join(' ') + ' }'
 			]))
 		);
 		#else
@@ -705,6 +776,35 @@ class ThreadSafetyCheckTest extends Test {
 	/** The hold findings of `holder` among `found`. */
 	private static function heldBy(holder: String, found: Array<String>): Array<String> {
 		return found.filter(f -> f.indexOf('"$holder" holds') == 0);
+	}
+
+	/**
+	 * Instance locks of two objects: `slow` holds its own across a sleep on a background thread, so `C._m` is long;
+	 * `transfer`/`transfer2` take another object's under their own, `cross` its own under another's, `nested` its own twice.
+	 */
+	private function objectFixture(): Array<String> {
+		final found: Array<String> = [
+			for (v in violations(
+				'{"rules":{"thread-safety":{"reentrantLocks":["Mutex.acquire"],"sinks":["Mutex.acquire","Sys.sleep"],'
+				+ '"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"]}}}',
+				[
+					MUTEX,
+					'class C { public static final a:C = new C(); public static final b:C = new C(); final _m:Mutex = new Mutex();'
+					+ ' public function new() {} public function lockIt():Void _m.acquire(); public function unlockIt():Void _m.release();'
+					+ ' public function slow():Void { _m.acquire(); Sys.sleep(5); _m.release(); }'
+					+ ' public function transfer(o:C):Void { _m.acquire(); o._m.acquire(); o._m.release(); _m.release(); }'
+					+ ' public function transfer2(o:C):Void { lockIt(); o.lockIt(); o.unlockIt(); unlockIt(); }'
+					+ ' public function cross(o:C):Void { o._m.acquire(); _m.acquire(); _m.release(); o._m.release(); }'
+					+ ' public function nested():Void { _m.acquire(); inner(); this.lockIt(); this.unlockIt(); _m.release(); }'
+					+ ' function inner():Void { _m.acquire(); _m.release(); }'
+					+ ' public static function main():Void { Runner.create(() -> b.slow()); a.transfer(b); a.transfer2(b); a.cross(b);'
+					+ ' a.nested(); } }',
+					'class Runner { public static function create(fn:()->Void):Void {} }'
+				]
+			)) v.message
+		];
+		found.sort(Reflect.compare);
+		return found;
 	}
 
 	/** `A.main` holding `A.m` across `A.inner`, which takes `A.m` again, while a background thread sleeps under it. */

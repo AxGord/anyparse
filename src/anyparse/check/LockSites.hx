@@ -47,11 +47,15 @@ private typedef LockCall = {
 	final pair: LockPair;
 }
 
-/** What a lock wrapper does to its one lock: a call of it takes (`takes`) or gives back the `lock` of `pair`. */
+/**
+ * What a lock wrapper does to its one lock: a call of it takes (`takes`) or gives back the `lock` of `pair` — on the
+ * object the wrapper runs on (`self`), or on another one.
+ */
 private typedef LockWrapper = {
 	final takes: Bool;
 	final lock: Null<String>;
 	final pair: LockPair;
+	final self: Bool;
 }
 
 /**
@@ -85,6 +89,9 @@ final class LockSites {
 
 	/** `<file>:<start>` of every call of a wrapper -> the lock the call takes or gives back, null for an unknown one. */
 	private final _siteLocks: Map<String, Null<String>> = [];
+
+	/** `<file>:<start>` of every call of a wrapper -> whether the wrapper works the lock of the object it runs on. */
+	private final _siteSelf: Map<String, Bool> = [];
 
 	/** Each file's branch-aware tree, projected the first time an acquire in it is traced; null for a file the graph cannot give. */
 	private final _trees: Map<String, Null<QueryNode>> = [];
@@ -135,8 +142,56 @@ final class LockSites {
 		return field == null || _unsealed.contains(memberName(field)) ? null : field;
 	}
 
+	/**
+	 * Whether the lock call `edge` provably works the lock of the object its own function runs on: a static lock, a
+	 * lock member read bare or off `this`, or a wrapper that does so called bare or on `this`. Anything else — another
+	 * object's member, a call through an interface or another receiver — may be any object's lock.
+	 */
+	public function selfTake(edge: CallEdge): Bool {
+		final lock: Null<String> = lockOf(edge);
+		if (lock == null) return false;
+		if (isStaticLock(lock)) return true;
+		final site: Null<String> = siteKey(edge);
+		if (site != null && _siteLocks.exists(site)) return _siteSelf[site] == true && selfCall(edge);
+		final callee: Null<QueryNode> = calleeOf(edge);
+		return callee != null && isAccess(callee.kind) && callee.children.length > 0 && readsOwnMember(callee.children[0]);
+	}
+
+	/** Whether the call `edge` runs on the object its own function runs on: a callee named bare or read off `this`. */
+	public function selfCall(edge: CallEdge): Bool {
+		final callee: Null<QueryNode> = calleeOf(edge);
+		return callee != null && readsOwnMember(callee);
+	}
+
+	/** Whether `lock` (`Owner.member`) is a static member: one object however it is reached. */
+	public function isStaticLock(lock: String): Bool {
+		final dot: Int = lock.lastIndexOf('.');
+		return dot > 0 && _graph.types.isStatic(lock.substring(0, dot), lock.substring(dot + 1));
+	}
+
 	private inline function isAccess(kind: String): Bool {
 		return kind == _shape.fieldAccessKind || kind == _shape.nullSafeAccessKind || kind == _shape.forceFieldAccessKind;
+	}
+
+	/** Whether `node` names a member of the running object: a bare name, or a member read off `this`. */
+	private function readsOwnMember(node: QueryNode): Bool {
+		return node.kind == _shape.identKind
+			? node.name != _shape.selfReferenceText
+			: isAccess(node.kind) && node.children.length > 0 && node.children[0].kind == _shape.identKind
+				&& node.children[0].name == _shape.selfReferenceText;
+	}
+
+	/** The callee expression of the call `edge` sits at, found by its exact span in the branch-aware tree. */
+	private function calleeOf(edge: CallEdge): Null<QueryNode> {
+		final at: Null<Span> = edge.span;
+		var node: Null<QueryNode> = at == null ? null : functionNode(edge);
+		while (node != null && at != null) {
+			final span: Null<Span> = node.span;
+			if (node.kind == _shape.callKind && span != null && span.from == at.from && span.to == at.to)
+				return node.children.length > 0 ? node.children[0] : null;
+			node = node.children.find(c -> c.span != null && c.span.from <= at.from && c.span.to >= at.to);
+		}
+		return null;
 	}
 
 	private function acquire(edge: CallEdge, pair: LockPair, gives: Array<LockCall>): LockAcquire {
@@ -324,7 +379,11 @@ final class LockSites {
 		for (_ in 0...WRAPPER_ROUNDS) {
 			final sites: Map<String, { call: LockCall, wrapper: LockWrapper }> = wrapperSites(wrappers);
 			_siteLocks.clear();
-			for (key => site in sites) _siteLocks[key] = site.wrapper.lock;
+			_siteSelf.clear();
+			for (key => site in sites) {
+				_siteLocks[key] = site.wrapper.lock;
+				_siteSelf[key] = site.wrapper.self;
+			}
 			final ops: Map<String, Array<{ call: LockCall, takes: Bool }>> = [];
 			function add(call: LockCall, takes: Bool): Void {
 				final list: Array<{ call: LockCall, takes: Bool }> = ops[call.edge.from] ?? [];
@@ -347,6 +406,7 @@ final class LockSites {
 			wrappers = next;
 		}
 		_siteLocks.clear();
+		_siteSelf.clear();
 		return [];
 	}
 
@@ -362,7 +422,12 @@ final class LockSites {
 		final walker: Null<LockWindow> = _walker;
 		if (fn == null || at == null || walker == null) return null;
 		final wraps: Bool = takes ? walker.runsOnEveryPath(fn, at.from) : walker.releasesOnEveryPath(fn, [at.from]);
-		return wraps ? { takes: takes, lock: lockOf(call.edge), pair: call.pair } : null;
+		return wraps ? {
+			takes: takes,
+			lock: lockOf(call.edge),
+			pair: call.pair,
+			self: selfTake(call.edge)
+		} : null;
 	}
 
 	/**
@@ -435,7 +500,7 @@ final class LockSites {
 	}
 
 	private static inline function sameWrapper(a: Null<LockWrapper>, b: LockWrapper): Bool {
-		return a != null && a.takes == b.takes && a.lock == b.lock && a.pair == b.pair;
+		return a != null && a.takes == b.takes && a.lock == b.lock && a.pair == b.pair && a.self == b.self;
 	}
 
 	private static inline function memberName(field: String): String {

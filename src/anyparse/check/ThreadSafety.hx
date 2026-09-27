@@ -46,12 +46,12 @@ using StringTools;
  * `exclude` drops files whose path contains an entry as a '/'-bounded segment run BEFORE the graph is built. Patterns
  * are matched by their last two dot-segments (`SymbolIndex` models no packages); `Type.*` covers every recorded member
  * of a type. A `lockPairs` entry is `<lock pattern>/<unlock member name>` on the same type. A call of a lock WRAPPER
- * (`LockSites`) takes or gives back its lock with no entry of its own. The main thread entering a `quietRoots`
- * function — a shutdown or crash path that blocks on purpose — goes on QUIET: what only such paths reach is reported
- * neither as a main-thread sink call nor as a main-thread take of a lock, and every other path still is. A take listed
- * in `reentrantLocks` is one the holding thread may repeat without waiting: inside a hold of a NAMED lock of that kind,
- * taking the same lock again — directly or through anything that does — blocks nothing. Re-entrance is never assumed:
- * a lock kind not listed, or a lock no member names, keeps every re-take a blocking call.
+ * (`LockSites`) takes or gives back its lock with no entry of its own. A `quietRoots` function — a shutdown or crash
+ * handler that blocks on purpose — makes the main thread QUIET in it and in what it calls directly, but only while no
+ * loud main-thread code calls it (`settleContexts`), and never in a callback it registers or a thread it spawns: those
+ * run later, loud. A take listed in `reentrantLocks` is one the holding thread may repeat without waiting: inside a
+ * hold of a NAMED lock of that kind, taking the SAME OBJECT's lock again (`LockTaint`) blocks nothing. Re-entrance is
+ * never assumed: a lock kind not listed, a lock no member names, or a take on another object keeps it a blocking call.
  *
  * Findings are grouped: one per hold, at its first blocking call, and one per main-thread sink call site.
  */
@@ -64,13 +64,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	/** The main thread on a path through a `quietRoots` function: reached, but never reported. */
 	private static inline final CTX_QUIET: Int = 4;
 
-	/** A background thread on a path through a `quietRoots` function: what it marshals to the main thread is QUIET. */
-	private static inline final CTX_BG_QUIET: Int = 8;
-
-	private static inline final CTX_LOUD: Int = CTX_MAIN | CTX_BG;
-	private static inline final CTX_QUIETED: Int = CTX_QUIET | CTX_BG_QUIET;
 	private static inline final CHAIN_CAP: Int = 8;
-	private static inline final EVIDENCE_CAP: Int = 3;
+	private static inline final EVIDENCE_CAP: Int = 8;
 
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
@@ -112,10 +107,9 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		final contexts: Map<String, Int> = [];
 		final mainParent: Map<String, CallEdge> = [];
 		// a quiet root is judged by the chain of the file declaring it
-		final quiet: Array<String> = [
+		settleContexts(graph, listsOf, [
 			for (id => node in graph.nodes) if (byFile[node.file]?.quietIds.contains(id) == true) id
-		];
-		propagateContexts(graph, listsOf, quiet, contexts, mainParent);
+		], contexts, mainParent);
 
 		final sites: LockSites = new LockSites(graph, [for (f in files) f.file], plugin, file -> listsOf(file).pairs);
 		final long: Array<String> = [];
@@ -194,24 +188,6 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		return byFile;
 	}
 
-	/** What a thread boundary hands a callback registered in `ctx`: `loud` from a path through no quiet root, else `quieted`. */
-	private static inline function carry(ctx: Int, loud: Int, quieted: Int): Int {
-		return (ctx & CTX_LOUD != 0 ? loud : 0) | (ctx & CTX_QUIETED != 0 ? quieted : 0);
-	}
-
-	/** The context a callback `edge` registers from `ctx` runs in: a `spawns` target's BG, a `marshals` target's MAIN, else `ctx`. */
-	private static function callbackContext(edge: CallEdge, lists: ChainLists, ctx: Int): Int {
-		final via: Null<String> = edge.via;
-		return if (via == null)
-			ctx
-		else if (lists.spawnIds.contains(via))
-			carry(ctx, CTX_BG, CTX_BG_QUIET)
-		else if (lists.marshalIds.contains(via))
-			carry(ctx, CTX_MAIN, CTX_QUIET)
-		else
-			ctx;
-	}
-
 	/** The lists of the chain `file` sits under — every edge's file is one the graph was built from. */
 	private static function listsOfFile(byFile: Map<String, ChainLists>, file: String): ChainLists {
 		final lists: Null<ChainLists> = byFile[file];
@@ -241,10 +217,52 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	}
 
 	/**
+	 * The context a callback `edge` registers from `ctx` runs in: a `spawns` target's BG, a `marshals` target's MAIN,
+	 * any other the registrar's own — quiet never among them: a callback runs later, from whatever invokes it.
+	 */
+	private static function callbackContext(edge: CallEdge, lists: ChainLists, ctx: Int): Int {
+		final via: Null<String> = edge.via;
+		final loud: Int = (ctx & CTX_QUIET != 0 ? CTX_MAIN : 0) | (ctx & (CTX_MAIN | CTX_BG));
+		return if (via != null && lists.spawnIds.contains(via))
+			CTX_BG
+		else if (via != null && lists.marshalIds.contains(via))
+			CTX_MAIN
+		else
+			loud;
+	}
+
+	/**
+	 * `propagateContexts` with the `quiet` roots only the main thread never enters loud: a root some invocation reaches
+	 * from loud MAIN code is dropped, and the contexts are solved again until none is. A root's registration as a
+	 * callback (a `Ref`, as a handler is) does not make it loud: declaring how such a callback runs is what the list is for.
+	 */
+	private static function settleContexts(
+		graph: CallGraph, listsOf: (String) -> ChainLists, quiet: Array<String>, contexts: Map<String, Int>,
+		mainParent: Map<String, CallEdge>
+	): Void {
+		var roots: Array<String> = quiet;
+		while (true) {
+			contexts.clear();
+			mainParent.clear();
+			propagateContexts(graph, listsOf, roots, contexts, mainParent);
+			final loud: Array<String> = [
+				for (q in roots) if (graph.inEdges(q).exists(e -> e.kind.isInvocation() && (contexts[e.from] ?? 0) & CTX_MAIN != 0)) q
+			];
+			if (loud.length == 0) return;
+			roots = roots.filter(q -> !loud.contains(q));
+		}
+	}
+
+	/** The context `ctx` becomes on entering `id`: the main thread goes quiet in a `quiet` root. */
+	private static function enter(quiet: Array<String>, id: String, ctx: Int): Int {
+		return quiet.contains(id) && ctx & CTX_MAIN != 0 ? (ctx & ~CTX_MAIN) | CTX_QUIET : ctx;
+	}
+
+	/**
 	 * Fixed-point MAIN/BG propagation. Roots and caller-less nodes seed MAIN;
 	 * spawn-received callbacks seed BG; marshal-received callbacks seed MAIN;
-	 * every other edge propagates the source context. A thread entering a quiet root
-	 * goes quiet (`enter`), and a callback registered from quiet code stays quiet (`carry`).
+	 * every other edge propagates the source context. The main thread entering a quiet
+	 * root goes quiet (`enter`) and stays so through direct calls; callbacks never inherit it.
 	 * `mainParent` records the edge that first carried MAIN into a node — the chain evidence.
 	 */
 	private static function propagateContexts(
@@ -289,13 +307,6 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			}
 			if (!seeded) break;
 		}
-	}
-
-	/** The context `ctx` becomes on entering `id`: each thread goes quiet in a `quiet` root. */
-	private static function enter(quiet: Array<String>, id: String, ctx: Int): Int {
-		return quiet.contains(id)
-			? (ctx & CTX_MAIN != 0 ? CTX_QUIET : 0) | (ctx & CTX_BG != 0 ? CTX_BG_QUIET : 0) | (ctx & CTX_QUIETED)
-			: ctx;
 	}
 
 	/**
@@ -357,7 +368,7 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 			final ctx: Int = contexts[edge.from] ?? 0;
 			final sinks: Array<String> = targets[site.key] ?? [edge.to];
 			final named: String = [for (t in sinks) '"$t"'].join(' / ');
-			final also: String = ctx & (CTX_BG | CTX_BG_QUIET) != 0 ? ' (also reachable from a background thread)' : '';
+			final also: String = ctx & CTX_BG != 0 ? ' (also reachable from a background thread)' : '';
 			violations.push({
 				file: edge.file,
 				span: edge.span,
@@ -425,7 +436,12 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	private static function evidenceOf(blocking: Array<CallEdge>, held: Null<String>, taints: LockTaint): String {
 		final evidence: Array<String> = [];
 		for (e in blocking) {
-			final shown: String = taints.blocks(e, held) ? e.to : taintChain(e.to, taints.hops(held));
+			final shown: String = if (taints.blocks(e, held))
+				e.to
+			else if (taints.hops(held).exists(e.to))
+				taintChain(e.to, taints.hops(held))
+			else
+				'${e.to} (the held lock, on another object)';
 			if (!evidence.contains(shown)) evidence.push(shown);
 		}
 		final more: Int = evidence.length - EVIDENCE_CAP;

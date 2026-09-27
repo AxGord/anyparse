@@ -9328,8 +9328,8 @@
 			"name": "M-TS-REENTRANT-IGNORED",
 			"type": "anyparse.check.LockTaint",
 			"method": "blocks",
-			"find": "return lock == null || lock != held && _long.contains(lock);",
-			"replace": "return lock == null || _long.contains(lock);",
+			"find": "!(lock == held && _sites.selfTake(edge)) && ",
+			"replace": "",
 			"note": "a hold re-taking its own re-entrant lock counts as blocking, so every nested take of a held Mutex is reported"
 		},
 		{
@@ -9373,6 +9373,46 @@
 			"note": "every sink a dispatch may reach is its own finding at one call site"
 		},
 		{
+			"name": "M-TS-QUIET-LOUD-CALLER",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "settleContexts",
+			"find": "if (loud.length == 0) return;",
+			"replace": "return;",
+			"note": "a quiet root loud UI code also calls stays quiet, so everything it reaches from that handler goes unreported"
+		},
+		{
+			"name": "M-TS-REENTRANT-ANY-OBJECT",
+			"type": "anyparse.check.LockTaint",
+			"method": "blocks",
+			"find": "!(lock == held && _sites.selfTake(edge))",
+			"replace": "!(lock == held)",
+			"note": "another object's lock of the same member counts as a re-take, so a cross-object wait (a lock-order deadlock shape) is dropped"
+		},
+		{
+			"name": "M-TS-REENTRANT-WRAPPER-ELSEWHERE",
+			"type": "anyparse.check.LockTaint",
+			"method": "retakesElsewhere",
+			"find": "&& selfTakers(held).contains(edge.to)",
+			"replace": "&& false",
+			"note": "a wrapper called on another object reads as a free re-take of the held lock"
+		},
+		{
+			"name": "M-TS-REENTRANT-HOLDER-ELSEWHERE",
+			"type": "anyparse.check.LockTaint",
+			"method": "reentrantHeld",
+			"find": " && _sites.selfTake(a.edge)",
+			"replace": "",
+			"note": "a hold of another object's lock makes the running object's own lock free to take"
+		},
+		{
+			"name": "M-TS-SELF-NEVER",
+			"type": "anyparse.check.LockSites",
+			"method": "readsOwnMember",
+			"find": "? node.name != _shape.selfReferenceText",
+			"replace": "? false",
+			"note": "a lock member read bare is never the running object's, so re-taking one's own re-entrant lock is reported as a wait"
+		},
+		{
 			"name": "M-TS-QUIET-IGNORED",
 			"type": "anyparse.check.ThreadSafety",
 			"method": "enter",
@@ -9385,16 +9425,16 @@
 			"type": "anyparse.check.ThreadSafety",
 			"method": "reportMainSinkCalls",
 			"find": "if (ctx & CTX_MAIN == 0) continue;",
-			"replace": "if (ctx & CTX_MAIN == 0 || ctx & CTX_QUIETED != 0) continue;",
+			"replace": "if (ctx & CTX_MAIN == 0 || ctx & CTX_QUIET != 0) continue;",
 			"note": "one path through a quiet root silences a sink every other main-thread path still reaches"
 		},
 		{
-			"name": "M-TS-QUIET-MARSHAL-LOUD",
+			"name": "M-TS-QUIET-INTO-CALLBACK",
 			"type": "anyparse.check.ThreadSafety",
 			"method": "callbackContext",
-			"find": "carry(ctx, CTX_MAIN, CTX_QUIET)",
-			"replace": "CTX_MAIN",
-			"note": "a callback a quiet root marshals to the main thread is loud, so a quiet background shutdown is reported through it"
+			"find": "final loud: Int = (ctx & CTX_QUIET != 0 ? CTX_MAIN : 0) | (ctx & (CTX_MAIN | CTX_BG));",
+			"replace": "final loud: Int = ctx;",
+			"note": "a callback a quiet root registers or spawns inherits its quiet, so a listener or worker it hands on is never reported"
 		},
 		{
 			"name": "M-TS-LOOP-ONE-PASS",
