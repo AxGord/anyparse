@@ -58,6 +58,13 @@ typedef CallEdge = {
 	var file: String;
 	var span: Null<Span>;
 	var dispatchType: Null<String>;
+
+	/**
+	 * The member a call's receiver names directly — a bare field, `this.f`, a static `T.f` — as `Owner.f`, set on the
+	 * edges of that call site; null for every other receiver (a local, a parameter, an expression) and every other edge.
+	 * What names one lock OBJECT for a lock-discipline analysis: the receiver's type alone merges every lock of a class.
+	 */
+	var receiverField: Null<String>;
 }
 
 /**
@@ -649,7 +656,8 @@ final class CallGraph {
 	}
 
 	private function addEdge(
-		from: String, to: String, kind: EdgeKind, via: Null<String>, file: String, span: Null<Span>, ?dispatchType: String
+		from: String, to: String, kind: EdgeKind, via: Null<String>, file: String, span: Null<Span>, ?dispatchType: String,
+		?receiverField: String
 	): Void {
 		// a faceted function's syntax still records every edge it names: the facts add to them and make them precise, never
 		// take one away, since a build the list does not name may resolve a name the way the syntax reads it
@@ -660,7 +668,8 @@ final class CallGraph {
 			via: via,
 			file: file,
 			span: span,
-			dispatchType: dispatchType
+			dispatchType: dispatchType,
+			receiverField: receiverField
 		});
 	}
 
@@ -830,6 +839,7 @@ final class CallGraph {
 			return kind == fieldAccessKind || (safeAccessKind != null && kind == safeAccessKind)
 				|| (forceAccessKind != null && kind == forceAccessKind);
 		}
+
 
 		/** Resolve an identifier that NAMES a function — a local one, a scope-bound declaration, or a member on the type chain. */
 		function identTarget(name: String, span: Null<Span>, currentType: Null<String>): Null<String> {
@@ -1097,6 +1107,31 @@ final class CallGraph {
 				isValue: true,
 				isDynamic: nullableWrappers.contains(nominal)
 			};
+		}
+
+		/**
+		 * `receiverRaw` as the member it names — a bare field, or a field read off a receiver whose type the graph
+		 * recovers (`this.f`, a static `T.f`, `o.f` on a typed `o`) — spelled `Owner.f`; null for anything else.
+		 */
+		function receiverField(receiverRaw: QueryNode, currentType: Null<String>): Null<String> {
+			final receiver: QueryNode = unwrap(receiverRaw);
+			final name: Null<String> = receiver.name;
+			if (name == null) return null;
+			var owner: Null<String> = null;
+			if (receiver.kind == identKind) {
+				final span: Null<Span> = receiver.span;
+				if (span == null || name == selfText) return null;
+				final bound: Null<Int> = bindFor(name)[span.from];
+				// a local or a parameter is a value some other binding may alias: no member names it
+				if (bound != null && bound >= 0 && bindsLocally(bound)) return null;
+				owner = currentType;
+			} else if (isAccessKind(receiver.kind) && receiver.children.length > 0) {
+				final base: Null<Receiver> = receiverType(receiver.children[0], currentType);
+				owner = base == null || base.isDynamic ? null : base.typeName;
+			}
+			// a property with an accessor hands back whatever its getter returns, not one stored object
+			if (owner == null || !types.fieldOnChain(owner, name) || types.propertyOnChain(owner, name) != null) return null;
+			return '${types.declaringTypeOf(owner, name) ?? owner}.$name';
 		}
 
 		callTargetOf = (call, currentType) -> {
@@ -1388,9 +1423,10 @@ final class CallGraph {
 								calleeId = resolved ?? externalNode(
 									types.declaringTypeOf(recv.typeName, calleeName) ?? recv.typeName, calleeName
 								);
-								addEdge(from, calleeId, Call, null, file, span, recv.isValue ? recv.typeName : null);
+								final field: Null<String> = receiverField(callee.children[0], currentType);
+								addEdge(from, calleeId, Call, null, file, span, recv.isValue ? recv.typeName : null, field);
 								if (recv.isValue) for (v in virtualTargets(recv.typeName, calleeName))
-									addEdge(from, v, Virtual, null, file, span, recv.typeName);
+									addEdge(from, v, Virtual, null, file, span, recv.typeName, field);
 								if (nodes[calleeId]?.isDynamic == true) unresolvedAt(span, FunctionValue(calleeName), currentType);
 							}
 						}

@@ -5478,10 +5478,10 @@
 		},
 		{
 			"name": "M-TS-ACCESSOR-TAINT",
-			"type": "anyparse.check.ThreadSafety",
-			"method": "reportLockHeld",
-			"find": "\t\t\t\t\t\tif (!edge.kind.isInvocation()) continue;\n",
-			"replace": "\t\t\t\t\t\tif (edge.kind != Call && edge.kind != New && edge.kind != Virtual) continue;\n",
+			"type": "anyparse.check.LockSites",
+			"method": "acquire",
+			"find": "if (e.kind.isInvocation()) e",
+			"replace": "if (e.kind == Call || e.kind == New || e.kind == Virtual) e",
 			"note": "a property read inside a lock window is not a call, so a getter that blocks while the lock is held goes unreported"
 		},
 		{
@@ -5848,8 +5848,8 @@
 			"name": "M-GRAPH-DISPATCH-TYPE",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "addEdge(from, calleeId, Call, null, file, span, recv.isValue ? recv.typeName : null);",
-			"replace": "addEdge(from, calleeId, Call, null, file, span);",
+			"find": "addEdge(from, calleeId, Call, null, file, span, recv.isValue ? recv.typeName : null, field);",
+			"replace": "addEdge(from, calleeId, Call, null, file, span, null, field);",
 			"note": "an instance call records no dispatch type, so overrides loaded later are never reached"
 		},
 		{
@@ -8681,8 +8681,8 @@
 			"name": "M-TS-TAINT-UNION-SINK",
 			"type": "anyparse.check.ThreadSafety",
 			"method": "collectTaint",
-			"find": "if (lists.sinkIds.contains(edge.from) || taintHop.exists(edge.from)) continue;",
-			"replace": "if (sinkIds.contains(edge.from) || taintHop.exists(edge.from)) continue;",
+			"find": "&& !listsOf(edge.file).sinkIds.contains(edge.from)",
+			"replace": "&& !sinkIds.contains(edge.from)",
 			"note": "a node one chain names a sink never carries taint to its callers in a chain where it is a plain function"
 		},
 		{
@@ -8752,9 +8752,9 @@
 		{
 			"name": "M-TS-MALFORMED-UNGATED",
 			"type": "anyparse.check.ThreadSafety",
-			"method": "reportLockHeld",
-			"find": "!lists.reports || ",
-			"replace": "",
+			"method": "reportMalformedPairs",
+			"find": " || !lists.reports) continue;",
+			"replace": ") continue;",
 			"note": "a malformed option of a chain that reports nothing is reported"
 		},
 		{
@@ -9171,6 +9171,118 @@
 			"method": "closesAtEnd",
 			"force": "true",
 			"note": "a leading Null<...> is peeled off a facts type it does not enclose, mangling Null<A>->Null<B>"
+		},
+		{
+			"name": "M-GRAPH-RECEIVER-LOCAL-FIELD",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "if (bound != null && bound >= 0 && bindsLocally(bound)) return null;",
+			"replace": "",
+			"note": "a parameter or local named like a member is read as that member, so a lock some other binding aliases gets the member's identity"
+		},
+		{
+			"name": "M-TS-LOCK-ALWAYS-BLOCKS",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "blocks",
+			"find": "if (!takesLock(edge, listsOf)) return true;",
+			"replace": "return true;",
+			"note": "a sink taking a lock blocks whatever the lock is, so a main-thread take of a lock nobody holds long is reported again"
+		},
+		{
+			"name": "M-TS-LONG-NEVER-GROWS",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "solveLongLocks",
+			"find": "if (!a.window.exists(",
+			"replace": "if (true || !a.window.exists(",
+			"note": "a hold across a blocking call no longer makes its lock long, so the main-thread take of a lock a worker sleeps under goes unreported"
+		},
+		{
+			"name": "M-TS-UNSEALED-TRUSTED",
+			"type": "anyparse.check.LockSites",
+			"method": "lockOf",
+			"find": "return field == null || _unsealed.contains(memberName(field)) ? null : field;",
+			"replace": "return field;",
+			"note": "a member read as a value still names one lock, so a hold through an alias of it never makes it long"
+		},
+		{
+			"name": "M-TS-WINDOW-IF-RELEASES",
+			"type": "anyparse.check.LockWindow",
+			"method": "step",
+			"find": "return join(step(kids[1], cond), otherwise);",
+			"replace": "return join(step(kids[1], cond), false);",
+			"note": "a release in an if-branch releases on every path, so the statements after an early-return release fall out of the window"
+		},
+		{
+			"name": "M-TS-HELD-ANY-THREAD",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "reportLockHeld",
+			"find": "if (a.uncontended || lock != null && !mainTaken.contains(lock)) continue;",
+			"replace": "if (a.uncontended) continue;",
+			"note": "a hold of a lock only background threads take is reported as a main-thread stall"
+		},
+		{
+			"name": "M-TS-CROSSING-IGNORED",
+			"type": "anyparse.check.LockSites",
+			"method": "collectCrossing",
+			"find": "if (!worked) crossing.push(lock);",
+			"replace": "",
+			"note": "a lock released by a function that never took it reads as short, so its main-thread take goes unreported"
+		},
+		{
+			"name": "M-TS-CTOR-CONTENDED",
+			"type": "anyparse.check.LockSites",
+			"method": "acquire",
+			"find": "uncontended: !leaks && ",
+			"replace": "uncontended: false && !leaks && ",
+			"note": "a hold in the owner's own constructor makes the lock long, so every later take of it reads as a stall"
+		},
+		{
+			"name": "M-GRAPH-RECEIVER-TYPED-BASE",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "owner = base == null || base.isDynamic ? null : base.typeName;",
+			"replace": "owner = null;",
+			"note": "a member read off another typed value names no member, so a lock taken through another instance is an unknown lock and never the member it is"
+		},
+		{
+			"name": "M-GRAPH-RECEIVER-PROPERTY",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "|| types.propertyOnChain(owner, name) != null) return null;",
+			"replace": ") return null;",
+			"note": "a property with a getter names one stored lock, though the getter may hand back any other"
+		},
+		{
+			"name": "M-TS-BLIND-CALL-SHORT",
+			"type": "anyparse.check.LockSites",
+			"method": "acquire",
+			"find": "blind: traced == null || traced.held.exists(",
+			"replace": "blind: traced == null || false && traced.held.exists(",
+			"note": "a hold across a call the graph resolves to nothing reads as short, so a lock held across a stored callback never stalls its main-thread taker"
+		},
+		{
+			"name": "M-TS-CTOR-ESCAPE-BLIND",
+			"type": "anyparse.check.LockSites",
+			"method": "ownConstructorHold",
+			"find": "&& !passesSelf(body, null);",
+			"replace": ";",
+			"note": "a constructor that hands `this` out before its hold still counts as private, so the hold blocks no one"
+		},
+		{
+			"name": "M-TS-LOOP-ONE-PASS",
+			"type": "anyparse.check.LockWindow",
+			"method": "step",
+			"find": "if (next == entry) return entry;",
+			"replace": "return next;",
+			"note": "a loop body is walked once, so a lock taken on one pass is not held across the next pass's calls"
+		},
+		{
+			"name": "M-TS-UNNAMED-RECEIVER-SEALED",
+			"type": "anyparse.check.LockSites",
+			"method": "sealedAt",
+			"find": " && namedCalls.contains('${call.span?.from}:${node.name}');",
+			"replace": ";",
+			"note": "any method call on a member keeps it sealed, so a lock call through a Dynamic, cast or type-parameter receiver never makes the member long"
 		}
 	]
 }
