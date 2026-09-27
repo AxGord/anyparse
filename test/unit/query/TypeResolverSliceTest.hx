@@ -376,7 +376,9 @@ class TypeResolverSliceTest extends Test {
 		final tree: QueryNode = plugin.parseFile(src);
 		final shape: RefShape = plugin.refShape();
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }];
-		final types: DeclaredNullity = DeclaredNullity.of('C.hx', tree, src, shape, plugin, () -> SymbolIndex.build(files, plugin));
+		final types: DeclaredNullity = DeclaredNullity.of(
+			'C.hx', tree, src, shape, plugin, plugin.typeSyntax, () -> SymbolIndex.build(files, plugin)
+		);
 		final operand: Null<QueryNode> = nullCheckOperand(tree, shape);
 		Assert.notNull(operand, 'fixture must contain a `… != null` comparison');
 		if (operand == null) return false;

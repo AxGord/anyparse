@@ -9,6 +9,7 @@ import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.OracleCache;
 import anyparse.check.OracleCoverage;
 import anyparse.check.ReachDefinesProbe;
+import anyparse.grammar.haxe.HaxeQueryPlugin;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -110,7 +111,9 @@ final class OracleDirTest extends Test {
 		#if nodejs
 		final root: String = fixture();
 		final config: OracleConfig = at(root, []);
-		final display: Null<CompilerDisplayOracle> = CompilerDisplayOracle.start(config.hxml, config.dir, config.defines);
+		final display: Null<CompilerDisplayOracle> = CompilerDisplayOracle.start(
+			new HaxeQueryPlugin().typeSyntax, config.hxml, config.dir, config.defines
+		);
 		final type: Null<String> = display?.typeAt('$root/sub/src/Main.hx', MAIN.indexOf('trace(1)') + 'trace('.length);
 		display?.stop();
 		Assert.equals('Int', type, 'the server compiled the build from dir, so it can type a module there');

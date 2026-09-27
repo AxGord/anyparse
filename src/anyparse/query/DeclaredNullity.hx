@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.TypeNameBinding.Tier;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -58,6 +59,11 @@ final class DeclaredNullity {
 	private final _declaredTypes: Map<Int, String>;
 	private final _typeSources: Map<Int, String>;
 
+	/** This file's type-parameter names per declaring span (`TypeInfoProvider.typeParamNames`). */
+	private final _typeParams: Map<Int, Array<String>>;
+
+	private final _typeSyntax: TypeSyntaxReader;
+
 	/** Binding offsets of the properties read through a getter (`TypeInfoProvider.propertyAccessors`). */
 	private final _accessors: Map<Int, Bool>;
 
@@ -71,7 +77,7 @@ final class DeclaredNullity {
 
 	public function new(
 		file: String, root: QueryNode, source: String, shape: RefShape, declaredTypes: Map<Int, String>, typeSources: Map<Int, String>,
-		accessors: Map<Int, Bool>, index: () -> Null<SymbolIndex>
+		typeParams: Map<Int, Array<String>>, accessors: Map<Int, Bool>, typeSyntax: TypeSyntaxReader, index: () -> Null<SymbolIndex>
 	) {
 		_file = file;
 		_root = root;
@@ -79,7 +85,9 @@ final class DeclaredNullity {
 		_shape = shape;
 		_declaredTypes = declaredTypes;
 		_typeSources = typeSources;
+		_typeParams = typeParams;
 		_accessors = accessors;
+		_typeSyntax = typeSyntax;
 		_index = index;
 		_nominalKinds = (shape.classDeclKinds ?? []).concat(shape.interfaceDeclKinds ?? []).concat(shape.runtimeTaggedTypeKinds ?? []);
 		final abstractKinds: Array<String> = shape.underlyingThisTypeKinds ?? [];
@@ -154,7 +162,7 @@ final class DeclaredNullity {
 		written: String, fi: SymbolIndex.FileInfo, index: SymbolIndex, params: Array<String>, wrappers: Array<String>,
 		builtins: Array<String>
 	): Tier {
-		final head: Null<String> = headPathOf(NominalTypes.unwrapNullable(written.trim(), wrappers));
+		final head: Null<String> = headPathOf(NominalTypes.unwrapNullable(written.trim(), wrappers, index.typeSyntax), index.typeSyntax);
 		if (head == null || wrappers.contains(head) || params.contains(head)) return Unknown;
 		if (head.indexOf('.') >= 0) {
 			final decls: Array<ResolvedType> = index.resolveTypeRefsFrom(head, fi.file);
@@ -181,10 +189,8 @@ final class DeclaredNullity {
 		for (r in owners) for (m in r.type.members) if (m.name == method) {
 			final returned: Null<String> = m.returnSource;
 			final source: Null<String> = index.sourceOf(r.file.file);
-			if (returned == null || source == null || !paramsReadable(r) || m.hasOverloadMeta || m.isMacro) return Unproven;
-			final params: Array<String> = r.type.typeParamNames.concat(
-				CallGraphNames.declaredTypeParams(source, new Span(m.declFrom, m.declFrom), method)
-			);
+			if (returned == null || source == null || m.hasOverloadMeta || m.isMacro) return Unproven;
+			final params: Array<String> = r.type.typeParamNames.concat(m.typeParamNames);
 			if (resolve(returned, r.file.file, params, 1, []) != NonNull) return Unproven;
 			verdict = NonNull;
 		}
@@ -197,7 +203,7 @@ final class DeclaredNullity {
 	 * type is still `ValueType` (its own spelling at the binding) or only `NonNull`.
 	 */
 	private function resolve(typeSource: String, fromFile: String, typeParams: Array<String>, hops: Int, seen: Array<String>): Nullity {
-		final head: Null<String> = headPathOf(typeSource);
+		final head: Null<String> = headPathOf(typeSource, _typeSyntax);
 		if (head == null || hops > MAX_HOPS || typeParams.contains(head)) return Unproven;
 		final simple: String = head.substr(head.lastIndexOf('.') + 1);
 		if ((_shape.nullableWrapperTypeNames ?? []).contains(simple)) return Unproven;
@@ -217,7 +223,7 @@ final class DeclaredNullity {
 		if (t.guarded || seen.contains(key)) return Unproven;
 		if (_nominalKinds.contains(t.kind) || t.isAnonStruct) return NonNull;
 		final next: Null<String> = _aliasKinds.contains(t.kind) ? t.aliasTargetRaw : t.underlyingRaw;
-		return next == null || !paramsReadable(r) ? Unproven : resolve(next, r.file.file, t.typeParamNames, hops + 1, seen.concat([key]));
+		return next == null ? Unproven : resolve(next, r.file.file, t.typeParamNames, hops + 1, seen.concat([key]));
 	}
 
 	/**
@@ -233,8 +239,7 @@ final class DeclaredNullity {
 			final span: Null<Span> = node.span;
 			if (span != null && (bindingFrom < span.from || bindingFrom >= span.to)) return;
 			final name: Null<String> = node.name;
-			if (span != null && name != null && fnKinds.contains(node.kind))
-				for (p in CallGraphNames.declaredTypeParams(_source, span, name)) out.push(p);
+			if (span != null && fnKinds.contains(node.kind)) for (p in _typeParams[span.from] ?? []) out.push(p);
 			final decl: Null<RefactorSupport.TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
 			if (decl != null) {
 				final params: Null<Array<String>> = typeDeclParams(decl.name);
@@ -253,7 +258,7 @@ final class DeclaredNullity {
 	private function typeDeclParams(name: String): Null<Array<String>> {
 		final index: Null<SymbolIndex> = _index();
 		final r: Null<ResolvedType> = index?.refs.findDeclaredType(_file, name);
-		return r == null || !paramsReadable(r) ? null : r.type.typeParamNames;
+		return r?.type.typeParamNames;
 	}
 
 	/**
@@ -261,19 +266,15 @@ final class DeclaredNullity {
 	 * `TypeInfoProvider` gets empty maps, so every binding is `Unproven`.
 	 */
 	public static function of(
-		file: String, root: QueryNode, source: String, shape: RefShape, typed: Null<TypeInfoProvider>, index: () -> Null<SymbolIndex>
+		file: String, root: QueryNode, source: String, shape: RefShape, typed: Null<TypeInfoProvider>, typeSyntax: TypeSyntaxReader,
+		index: () -> Null<SymbolIndex>
 	): DeclaredNullity {
 		return typed == null
-			? new DeclaredNullity(file, root, source, shape, [], [], [], index)
+			? new DeclaredNullity(file, root, source, shape, [], [], [], [], typeSyntax, index)
 			: new DeclaredNullity(
-				file, root, source, shape, typed.declaredTypes(source), typed.declaredTypeSources(source), typed.propertyAccessors(source),
-				index
+				file, root, source, shape, typed.declaredTypes(source), typed.declaredTypeSources(source), typed.typeParamNames(source),
+				typed.propertyAccessors(source), typeSyntax, index
 			);
-	}
-
-	/** Whether `r`'s parameter names are known: a generic header whose names could not be read hides one. */
-	private static inline function paramsReadable(r: ResolvedType): Bool {
-		return r.type.typeParamArity == r.type.typeParamNames.length;
 	}
 
 	/**
@@ -287,15 +288,16 @@ final class DeclaredNullity {
 	}
 
 	/**
-	 * The head path of a written type (`pkg.Box<Int>` -> `pkg.Box`), or null when it is not a plain
-	 * nominal: a function type, an anonymous structure, anything whose head is not dotted identifiers.
+	 * The head path of a written type (`pkg.Box<Int>` -> `pkg.Box`), or null when it is not a named type
+	 * or one that holds a function type (`Array<Int -> Void>`) — the latter kept refused.
 	 */
-	private static function headPathOf(typeSource: String): Null<String> {
-		final text: String = typeSource.trim();
-		if (text.indexOf('->') != -1) return null;
-		final lt: Int = text.indexOf('<');
-		final head: String = (lt < 0 ? text : text.substring(0, lt)).trim();
-		return head.length > 0 && head.split('.').foreach(SourceText.isIdentifier) ? head : null;
+	private static function headPathOf(typeSource: String, typeSyntax: TypeSyntaxReader): Null<String> {
+		final t: Null<TypeSyntax> = typeSyntax(typeSource);
+		if (t == null || t.holdsFunction()) return null;
+		return switch t.shape {
+			case Nominal(path, _): path;
+			case _: null;
+		};
 	}
 
 }

@@ -500,7 +500,7 @@ final class OptionalParamShorthand implements Check {
 	 * message.
 	 */
 	private static function nullableDefaultInner(
-		node: QueryNode, source: String, typeSyntax: String -> Null<TypeSyntax>
+		node: QueryNode, source: String, typeSyntax: TypeSyntaxReader
 	): Null<{ inner: String, raw: String, opt: Bool }> {
 		final span: Null<Span> = node.span;
 		if (span == null) return null;
@@ -653,14 +653,17 @@ final class OptionalParamShorthand implements Check {
 	 * nullable after the unwrap, are both refused — `name:Null<T> = CONST` would leave the body type
 	 * nullable and defeat the whole rewrite.
 	 */
-	private static function hoistTypeText(rawType: String, typeSyntax: String -> Null<TypeSyntax>): Null<String> {
+	private static function hoistTypeText(rawType: String, typeSyntax: TypeSyntaxReader): Null<String> {
 		final typed: Null<TypeSyntax> = typeSyntax(rawType);
 		if (typed == null) return null;
 		final unwrapped: Null<TypeSyntax> = typed.text == rawType ? typed.wrapped([NULL_WRAPPER]) : null;
-		return if (unwrapped != null)
-			nullApplied(unwrapped) ? null : unwrapped.text
+		final inner: TypeSyntax = unwrapped ?? typed;
+		return if (nullApplied(inner))
+			null
+		else if (unwrapped != null)
+			unwrapped.text
 		else
-			nullApplied(typed) ? null : rawType;
+			rawType;
 	}
 
 	/**
@@ -924,7 +927,7 @@ private typedef Seams = {
 	final stringFold: Null<StringFoldSupport>;
 
 	/** `GrammarPlugin.typeSyntax` — how the arms that read a type read it. */
-	final typeSyntax: String -> Null<TypeSyntax>;
+	final typeSyntax: TypeSyntaxReader;
 };
 
 /**

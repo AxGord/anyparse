@@ -2648,6 +2648,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.SetModifierSliceTest#testAnEnumAbstractMemberStillTakesPublic :: control :: M-SETMOD-MODULE-BY-TYPE-KINDS',
 			'unit.query.StdResolverTest#testMultiEntryEnvAnswersTheStdEntry :: control :: M-STD-ENV-ENTRIES',
 			'unit.query.StdResolverTest#testTheStdBesideTheCompilerIsFoundInEitherLayout :: control :: M-STD-SIBLING-HOMEBREW',
+			'unit.query.StructuralMembershipTest#testAliasTargetPairAgrees :: control :: M-ALIAS-TARGET-SIMPLE-NAME',
 			'unit.query.SymbolIndexRunMemoSliceTest#testConfinementGateReadsTheIndexGrantSlot :: control :: M-GRANT-SLOT-UNREAD',
 			'unit.query.SymbolIndexRunMemoSliceTest#testSupertypeNameUnionIsBuiltOncePerIndex :: control :: M-SUPERTYPE-UNION-NOMEMO',
 		];
@@ -3826,7 +3827,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-SCOPE-IMPORT-BLIND',
 			'M-SCOPE-AMBIENT-BLIND',
 			'M-SCOPE-MODULE-FIELDS',
-			'M-SCOPE-MODULE-IMPORT-BLIND'
+			'M-SCOPE-MODULE-IMPORT-BLIND',
+			'M-ALIAS-TARGET-SIMPLE-NAME'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

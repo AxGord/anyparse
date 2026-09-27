@@ -95,6 +95,7 @@ private class CannedTypeOracle extends PositionTypeOracle {
 	private final _type: String;
 
 	public function new(type: String) {
+		super(new HaxeQueryPlugin().typeSyntax);
 		_type = type;
 	}
 

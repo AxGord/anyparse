@@ -13,6 +13,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ImportInfo;
@@ -677,7 +678,7 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		final underlying: Array<QueryNode> = decl.nameNode.children;
 		if (underlying.length == 0 || underlying[0].kind != UNDERLYING_TYPE_KIND) return null;
 		final written: Null<String> = underlying[0].name;
-		return written == null ? null : NominalTypes.outerNominalOf(written);
+		return written == null ? null : SourceText.lastSegment(written);
 	}
 
 	/**

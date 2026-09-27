@@ -227,7 +227,7 @@ final class TailMerge implements Check {
 			stmts: fall.stmts,
 			prevEnd: fall.prevEnd,
 			shadow: fall.shadow.concat(localDeclNames(kids, seams)),
-			opaqueDecl: fall.opaqueDecl || hasOpaqueDecl(kids, source, seams)
+			opaqueDecl: fall.opaqueDecl || hasOpaqueDecl(kids, seams)
 		};
 		for (i in 0...kids.length) visit(kids[i], restFall(kids, i, inherited), source, seams, out);
 	}
@@ -309,7 +309,7 @@ final class TailMerge implements Check {
 			null
 		else if (hasConditionalCompilation(source, fall.prevEnd, fallLast.to))
 			null
-		else if (fall.opaqueDecl || hasOpaqueDecl(kept, source, seams))
+		else if (fall.opaqueDecl || hasOpaqueDecl(kept, seams))
 			null
 		else if (referencesAny(tail, fall.shadow.concat(localDeclNames(kept, seams)), seams.identKinds))
 			null
@@ -394,68 +394,17 @@ final class TailMerge implements Check {
 	 * A MULTI-DECLARATOR (`var a = 1, t = 2;`) is no longer one of them: every binding after the first surfaces as its
 	 * own continuation node (`RefShape.localDeclContinuationKinds`) and `localDeclNames` walks the chain, so the precise
 	 * shadowing gate decides it. The arms below stay as the fail-closed net for a declaration whose span or head
-	 * initializer the projection does not resolve — and the comma scan still catches a form no continuation node covers.
-	 *
-	 * The projection children are the INITIALIZERS, one per initialized declarator (a type annotation is NOT a child).
-	 * The remaining shapes declare without initializing and are found as a declarator-separating comma in the text
-	 * outside the initializers — at bracket depth 0, so a generic type parameter list (`var m:Map<String, Int> = …`)
-	 * does not count. That text holds no expression, which is what makes counting `<` / `>` as brackets safe there.
+	 * initializer the projection does not resolve, and for one whose first declarator writes no initializer before a
+	 * continuation (`var a, b;`).
 	 */
-	private static function hasOpaqueDecl(stmts: Array<QueryNode>, source: String, seams: Seams): Bool {
+	private static function hasOpaqueDecl(stmts: Array<QueryNode>, seams: Seams): Bool {
 		for (c in stmts) {
 			final decl: Null<QueryNode> = declaredNode(c, seams);
 			if (decl == null || seams.fnDeclKinds.contains(decl.kind)) continue;
-			if (decl.children.length > 1) return true;
-			final span: Null<Span> = decl.span;
-			if (span == null) return true;
-			final first: Null<Span> = decl.children.length == 1 ? decl.children[0].span : null;
-			if (decl.children.length == 1 && first == null) return true;
-			final headTo: Int = first == null ? span.to : first.from;
-			if (hasTopLevelComma(source, span.from, headTo)) return true;
-			if (first != null && hasTopLevelComma(source, first.to, span.to)) return true;
+			if (decl.children.length > 1 || decl.span == null) return true;
+			if (decl.children.exists(k -> k.span == null || seams.localDeclContinuationKinds.contains(k.kind))) return true;
 		}
 		return false;
-	}
-
-	/**
-	 * Whether `[from, to)` holds a `,` outside every bracket pair and string literal.
-	 * `(` `[` `{` `<` open and `)` `]` `}` `>` close, the depth clamped at zero so a stray
-	 * closer (the `>` of an `Int -> Int` function type) cannot push a later comma below the
-	 * top level and hide it.
-	 */
-	private static function hasTopLevelComma(source: String, from: Int, to: Int): Bool {
-		var depth: Int = 0;
-		var i: Int = from;
-		while (i < to) {
-			final c: Int = source.fastCodeAt(i);
-			if (c == '"'.code || c == "'".code)
-				i = stringLiteralEnd(source, i, to)
-			else {
-				if (c == ','.code && depth == 0) return true;
-				if (c == '('.code || c == '['.code || c == '{'.code || c == '<'.code)
-					depth++
-				else if ((c == ')'.code || c == ']'.code || c == '}'.code || c == '>'.code) && depth > 0)
-					depth--;
-				i++;
-			}
-		}
-		return false;
-	}
-
-	/** The offset just past the string literal opening at `start`, or `to` when it is unterminated. */
-	private static function stringLiteralEnd(source: String, start: Int, to: Int): Int {
-		final quote: Int = source.fastCodeAt(start);
-		var i: Int = start + 1;
-		while (i < to) {
-			final c: Int = source.fastCodeAt(i);
-			if (c == '\\'.code)
-				i += 2
-			else if (c == quote)
-				return i + 1
-			else
-				i++;
-		}
-		return to;
 	}
 
 	/** Whether any of `names` is read as an identifier anywhere in the `tail` subtrees. */

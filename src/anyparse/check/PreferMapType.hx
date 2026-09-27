@@ -11,6 +11,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeResolver;
 import anyparse.query.TypeSyntax;
 import anyparse.runtime.Span;
 
@@ -38,9 +39,13 @@ private typedef Seams = {
 	var functionBodyKinds: Array<String>;
 	var opaqueKinds: Array<String>;
 	var conditionalIf: Null<String>;
+	var typedCastKinds: Array<String>;
+
+	/** This file's declared-type sources by binding span (`TypeInfoProvider.declaredTypeSources`), read on demand. */
+	var typeSources: () -> Map<Int, String>;
 
 	/** `GrammarPlugin.typeSyntax` — how a written key and a pinning annotation are read. */
-	var typeSyntax: String -> Null<TypeSyntax>;
+	var typeSyntax: TypeSyntaxReader;
 }
 
 /**
@@ -107,8 +112,8 @@ private typedef Site = {
  * bare `new Map()`, which resolves only from the declaration it initializes: that declaration must
  * itself be annotated with `Map` or a concrete map — resolved through the same name proof, never
  * matched by bare name — and must write the arguments that determine both parameters.
- * `NewLiteral.pinningTypeHint` — the head `prefer-map-literal` gates its `[]` on — answers
- * the head-SHAPE half and hands over the annotation; the stricter "determines K and V" half lives here,
+ * The declaration's own annotation — the pin `prefer-map-literal` gates its `[]` on
+ * (`NewLiteral.pinningTypeHint`) — is read; the stricter "determines K and V" half lives here,
  * because `prefer-map-literal` needs that predicate exactly as loose as it is.
  *
  * ## Gates — fail closed
@@ -344,6 +349,8 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 			functionBodyKinds: shape.functionBodyKinds ?? [],
 			opaqueKinds: shape.opaqueKinds ?? [],
 			conditionalIf: shape.conditionalIfKeyword,
+			typedCastKinds: shape.typedCastKinds ?? [],
+			typeSources: TypeResolver.memoizedDeclaredTypeSources(plugin, source),
 			typeSyntax: plugin.typeSyntax
 		}, out);
 		return out;
@@ -471,8 +478,10 @@ final class PreferMapType implements Check implements RiskyFix implements Groupe
 		}
 		// A bare construction carries no type arguments of its own, so everything `new Map()` needs to
 		// resolve has to come off the declaration it initializes.
+		// The type-refs tree this rule walks carries no `type` slot; the declaration's annotation is the one
+		// `TypeInfoProvider.declaredTypeSources` keys by the same span.
 		final host: Null<Span> = parent?.span;
-		final pin: Null<String> = host == null ? null : NewLiteral.pinningTypeHint(seams.source, host.from, site.span.from);
+		final pin: Null<String> = host == null || seams.typedCastKinds.contains(parent?.kind ?? '') ? null : seams.typeSources()[host.from];
 		if (pin == null || !pinDeterminesMapType(pin, site.concrete, seams)) {
 			out.push({ span: site.span, message: MSG_UNPINNED_NEW, edits: [] });
 			return;

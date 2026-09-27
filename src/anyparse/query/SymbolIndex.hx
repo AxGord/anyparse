@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
 using StringTools;
@@ -252,6 +253,12 @@ typedef MemberInfo = {
 	 */
 	var isOverload: Bool;
 
+	/**
+	 * The type parameters a METHOD declares on its own header (`function f<T, U:B>()` → `['T', 'U']`),
+	 * in order; empty for any other member and for a method that declares none.
+	 */
+	var typeParamNames: Array<String>;
+
 	/** The names of the annotations on the member, in source order (`@:generic`, `@:keep`, …). */
 	var metaNames: Array<String>;
 
@@ -321,16 +328,10 @@ typedef TypeDeclInfo = {
 	 * (`class Box<T:Item, K>` → `['T', 'K']`). Lets a consumer substitute a member declared as
 	 * one of them for the matching type ARGUMENT of the receiver that reached it.
 	 *
-	 * EMPTY when the header carried none OR when its `<…>` list could not be read as a plain
-	 * name list (a segment that is not an identifier after its metadata run and before its `:`
-	 * constraint or `=` default). Never read empty as "non-generic" — `typeParamArity` answers
-	 * that question, and the two disagree exactly when the names were unreadable, which is the
-	 * case a substituting consumer must refuse rather than guess at.
-	 *
-	 * The list is POSITIONAL — its index IS the argument index a consumer substitutes through — so
-	 * a phantom entry is worse than an empty list: it shifts every parameter after it. That is why
-	 * the header segmentation (`NominalTypes.splitTypeArgumentList`) has to know every delimiter
-	 * a Haxe constraint may nest a comma inside, structures (`<T:{a:Int, b:Int}>`) included.
+	 * EMPTY when the header carries none — the grammar's own reading
+	 * (`TypeInfoProvider.typeParamNames`), so every written parameter has its name and the list's
+	 * length is `typeParamArity`. The list is POSITIONAL: its index IS the argument index a consumer
+	 * substitutes through.
 	 */
 	var typeParamNames: Array<String>;
 
@@ -632,7 +633,7 @@ final class SymbolIndex {
 	private final _thirdParty: Map<String, Bool>;
 
 	/** `GrammarPlugin.typeSyntax` of the grammar that built the index — see `typeSyntax`. */
-	private final _typeSyntax: String -> Null<TypeSyntax>;
+	private final _typeSyntax: TypeSyntaxReader;
 
 	private function new(
 		files: Array<FileInfo>, skipped: Array<String>, sources: Map<String, String>, plugin: GrammarPlugin, thirdParty: Map<String, Bool>

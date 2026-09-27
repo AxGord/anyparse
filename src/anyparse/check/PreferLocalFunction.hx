@@ -610,7 +610,7 @@ private typedef Seams = {
 	var blockKinds: Array<String>;
 
 	/** `GrammarPlugin.typeSyntax` — how a declared function type is read. */
-	var typeSyntax: String -> Null<TypeSyntax>;
+	var typeSyntax: TypeSyntaxReader;
 }
 
 /** One rewritable binding: the literal's span (the finding key) and the edits that hoist it. */

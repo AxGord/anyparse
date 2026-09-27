@@ -1838,6 +1838,11 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		return spanTypeInfo(source).castTargetSources;
 	}
 
+	/** `TypeInfoProvider`: each declaration's type-parameter names, keyed by the span `from` of the node declaring them. */
+	public function typeParamNames(source: String): Map<Int, Array<String>> {
+		return spanTypeInfo(source).typeParamNames;
+	}
+
 	/**
 	 * `SpanTypeInfoProvider`: the six span-indexed maps from ONE `HaxeModuleSpanParser`
 	 * parse + ONE `walkGrammarSpans` traversal - the batched form of `declaredTypes`
@@ -2040,7 +2045,6 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		return fn.children.exists(c -> c.kind == 'Required' || c.kind == 'Optional' || c.kind == 'Rest');
 	}
 
-	/** The all-empty bundle returned when the source does not parse - the six maps are simply unpopulated, never null. */
 	/** `GrammarPlugin` — `HxTypeSyntax` documents how each spelling reads. */
 	public function typeSyntax(typeSource: String): Null<TypeSyntax> {
 		return HxTypeSyntax.of(typeSource);

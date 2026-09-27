@@ -15,6 +15,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -319,6 +320,7 @@ final class JoinArrayPushes implements Check {
 			interpIdentKind: interpIdentKind,
 			newExprKind: shape.newExprKind,
 			arrayTypeNames: shape.arrayTypeNames ?? [],
+			typeSyntax: plugin.typeSyntax,
 			selfText: shape.selfReferenceText,
 			superText: shape.superReferenceText,
 			overrideKind: shape.overrideModifierKind,
@@ -409,7 +411,7 @@ final class JoinArrayPushes implements Check {
 		if (span == null || name == null || !s.localDeclKinds.contains(stmt.kind)) return null;
 		if (s.continuationKinds.contains(stmt.kind) || stmt.children.length != 1) return null;
 		final literal: Null<Span> = emptyArraySpan(stmt.children[0], s);
-		return literal == null || !annotationNamesArray(span, literal, name, ctx) ? null : {
+		return literal == null || !annotationNamesArray(stmt, ctx) ? null : {
 			name: name,
 			span: span,
 			literal: literal
@@ -425,14 +427,10 @@ final class JoinArrayPushes implements Check {
 	 * an unset seam refuses every annotated binding — REACH, never soundness. A wrapper spelling
 	 * (`Null<Array<Int>>`) names the wrapper and is refused too, the conservative direction.
 	 */
-	private static function annotationNamesArray(declSpan: Span, literal: Span, name: String, ctx: Ctx): Bool {
-		return switch CtorFieldFold.declaredType(ctx.source, declSpan, literal, name) {
-			case Absent: true;
-			case Written(text):
-				final root: Null<String> = NominalTypes.outerNominalOf(text);
-				root != null && ctx.seams.arrayTypeNames.contains(root);
-			case Unreadable: false;
-		};
+	private static function annotationNamesArray(decl: QueryNode, ctx: Ctx): Bool {
+		final text: Null<String> = CtorFieldFold.declaredTypeAnnotation(ctx.source, decl);
+		final root: Null<String> = text == null ? null : NominalTypes.outerNominalOf(text, ctx.seams.typeSyntax);
+		return text == null || root != null && ctx.seams.arrayTypeNames.contains(root);
 	}
 
 	/** The maximal run of adjacent `<name>.push(e);` siblings starting at `start`, unqualified receivers only. */
@@ -675,7 +673,7 @@ final class JoinArrayPushes implements Check {
 		if (statics.contains(span.from)) return null;
 		final literal: Null<Span> = emptyArraySpan(member.children[0], s);
 		if (literal == null || ctx.source.substring(span.from, literal.from).indexOf('(') >= 0) return null;
-		if (!annotationNamesArray(span, literal, name, ctx)) return null;
+		if (!annotationNamesArray(member, ctx)) return null;
 		final proven: Span = literal;
 		return { span: span, literal: proven };
 	}
@@ -796,6 +794,10 @@ private typedef Seams = {
 	var interpIdentKind: String;
 	var newExprKind: Null<String>;
 	var arrayTypeNames: Array<String>;
+
+	/** `GrammarPlugin.typeSyntax` — how a declaration's annotation is read. */
+	var typeSyntax: TypeSyntaxReader;
+
 	var selfText: Null<String>;
 	var superText: Null<String>;
 	var overrideKind: Null<String>;

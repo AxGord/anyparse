@@ -49,7 +49,7 @@ final class DeadNullCoalescing implements Check {
 		final ident: String = identKind;
 		final index: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
 		return RunScan.collectWith(files, plugin, RunScan.typeInfoOf(plugin), (entry, root, typed, violations) -> {
-			final types: DeclaredNullity = DeclaredNullity.of(entry.file, root, entry.source, shape, typed, index);
+			final types: DeclaredNullity = DeclaredNullity.of(entry.file, root, entry.source, shape, typed, plugin.typeSyntax, index);
 			NullFlow.analyze(root, shape, entry.source, (node, facts) -> {
 				if (node.kind != coalKind || node.children.length != 2) return;
 				final left: Null<IdentOperand> = NullFlowScan.identOperand(node, node.children[0], ident);

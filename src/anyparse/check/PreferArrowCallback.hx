@@ -2,11 +2,13 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
+import anyparse.query.TypeSyntax;
 import anyparse.runtime.Span;
 
 using StringTools;
@@ -85,6 +87,12 @@ final class PreferArrowCallback implements Check {
 
 	/** Typedef-alias hop cap for the function-type source analysis. */
 	private static inline final MAX_ALIAS_DEPTH: Int = 4;
+
+	/** The nullable wrapper a receiver's written type is peeled of. */
+	private static inline final NULL_WRAPPER: String = 'Null';
+
+	/** The result type a callback slot must name for the arrow form to keep its meaning. */
+	private static inline final VOID_TYPE: String = 'Void';
 
 	/** The finding message when the fix gates passed — the rewrite is proven safe. */
 	private static inline final MSG_FIXABLE: String = 'this function-literal callback can be an arrow lambda';
@@ -424,7 +432,7 @@ final class PreferArrowCallback implements Check {
 				);
 			final typeSrc: Null<String> = ctx.typeSources()[bindingFrom];
 			if (typeSrc == null) return null;
-			final paramType: Null<String> = paramOfFnTypeSource(typeSrc, argIndex, argCount);
+			final paramType: Null<String> = paramOfFnTypeSource(ctx, typeSrc, argIndex, argCount);
 			return paramType == null ? null : fnTypeReturnVoid(ctx, idx, paramType, ctx.file, typeParamsAround(ctx, ctx.tree, span), 0);
 		}
 		final callSpan: Null<Span> = call.span;
@@ -453,7 +461,7 @@ final class PreferArrowCallback implements Check {
 			}
 			final typeSrc: Null<String> = TypeResolver.identDeclaredTypeSource(recv, ctx.shape, ctx.tree, ctx.typeSources, false);
 			if (typeSrc != null) {
-				final nominal: Null<String> = receiverNominal(typeSrc);
+				final nominal: Null<String> = receiverNominal(ctx, typeSrc);
 				return nominal == null
 					? null
 					: chainLookup(ctx, idx, idx.resolveTypeRefsFrom(nominal, ctx.file), member, argIndex, argCount, [], 0);
@@ -486,17 +494,13 @@ final class PreferArrowCallback implements Check {
 		return prefix == null ? null : '$prefix.$name';
 	}
 
-	/** The head nominal of a receiver's declared type source (`Null<Signal<Int>>` -> `Signal`). */
-	private static function receiverNominal(typeSrc: String): Null<String> {
-		final s: String = typeSrc.trim();
-		final lt: Int = s.indexOf('<');
-		final head: String = lt < 0 ? s : s.substr(0, lt).trim();
-		return if (head == 'Null' && lt >= 0 && s.endsWith('>'))
-			receiverNominal(s.substring(lt + 1, s.length - 1))
-		else if (TypeResolver.simpleNominalName(head) == null)
-			null
-		else
-			head;
+	/** The head path of a receiver's declared type source, `Null<>` peeled (`Null<Signal<Int>>` -> `Signal`). */
+	private static function receiverNominal(ctx: Ctx, typeSrc: String): Null<String> {
+		final peeled: String = NominalTypes.memberLookupReceiverSource(typeSrc, [NULL_WRAPPER], ctx.plugin.typeSyntax);
+		return switch ctx.plugin.typeSyntax(peeled)?.shape {
+			case Nominal(path, _): path;
+			case _: null;
+		};
 	}
 
 	/**
@@ -543,8 +547,8 @@ final class PreferArrowCallback implements Check {
 		if (declared == 1) {
 			final valueTypeSrc: Null<String> = declaredTypeSrc;
 			if (valueTypeSrc == null) return memberParamReturnVoid(ctx, idx, rt, member, argIndex, argCount);
-			final paramType: Null<String> = paramOfFnTypeSource(valueTypeSrc, argIndex, argCount);
-			return paramType == null ? null : fnTypeReturnVoid(ctx, idx, paramType, rt.file.file, typeHeaderParams(ctx, idx, rt), 0);
+			final paramType: Null<String> = paramOfFnTypeSource(ctx, valueTypeSrc, argIndex, argCount);
+			return paramType == null ? null : fnTypeReturnVoid(ctx, idx, paramType, rt.file.file, rt.type.typeParamNames, 0);
 		}
 		for (raw in rt.type.supertypesRaw) {
 			final v: Null<Bool> = chainLookup(
@@ -570,8 +574,7 @@ final class PreferArrowCallback implements Check {
 		collectNamedFnMembers(typeDecl, member, functionKinds, ctx.shape.conditionalMemberKind, found);
 		if (found.length != 1) return null;
 		final fn: QueryNode = found[0];
-		final typeParams: Array<String> = headerTypeParams(declSource, typeDecl, '{');
-		for (p in headerTypeParams(declSource, fn, '(')) typeParams.push(p);
+		final typeParams: Array<String> = rt.type.typeParamNames.concat(declaredTypeParams(ctx, declSource, fn));
 		return paramReturnVoid(
 			ctx, idx, fn, argIndex, argCount, TypeResolver.memoizedDeclaredTypeSources(ctx.plugin, declSource), rt.file.file, typeParams
 		);
@@ -654,65 +657,64 @@ final class PreferArrowCallback implements Check {
 	}
 
 	/**
-	 * Whether `typeSrc` is a function type whose return segment is `Void`: true / false as
-	 * proven, null as unresolvable. A bare nominal hops through its typedef alias.
+	 * Whether `typeSrc` is a function type whose result is `Void`: true / false as proven, null as
+	 * unresolvable. A bare nominal hops through its typedef alias.
 	 */
 	private static function fnTypeReturnVoid(
 		ctx: Ctx, idx: SymbolIndex, typeSrc: String, fromFile: String, typeParams: Array<String>, depth: Int
 	): Null<Bool> {
 		if (depth > MAX_ALIAS_DEPTH) return null;
-		final s: String = stripOuterParens(typeSrc.trim());
-		final segs: Array<String> = splitTopArrows(s);
-		if (segs.length >= 2) return returnSegmentIsVoid(ctx, idx, StringTools.trim(segs[segs.length - 1]), fromFile, typeParams, depth);
-		final rhs: Null<String> = typedefAlias(ctx, idx, s, fromFile);
-		return rhs == null ? null : fnTypeReturnVoid(ctx, idx, rhs, fromFile, typeParams, depth + 1);
+		final t: Null<TypeSyntax> = ctx.plugin.typeSyntax(typeSrc);
+		if (t == null) return null;
+		return switch t.shape {
+			case Function(_, ret, _): returnIsVoid(ctx, idx, ret, fromFile, typeParams, depth);
+			case _:
+				final rhs: Null<String> = typedefAlias(ctx, idx, t, fromFile);
+				rhs == null ? null : fnTypeReturnVoid(ctx, idx, rhs, fromFile, typeParams, depth + 1);
+		};
 	}
 
-	/** Whether a function type's RETURN segment is `Void` (typedef aliases hopped; a type parameter is proven non-`Void`). */
-	private static function returnSegmentIsVoid(
-		ctx: Ctx, idx: SymbolIndex, segment: String, fromFile: String, typeParams: Array<String>, depth: Int
+	/** Whether a function type's RESULT is `Void` (typedef aliases hopped; a type parameter is proven non-`Void`). */
+	private static function returnIsVoid(
+		ctx: Ctx, idx: SymbolIndex, ret: TypeSyntax, fromFile: String, typeParams: Array<String>, depth: Int
 	): Null<Bool> {
-		if (segment == 'Void') return true;
+		if (ret.shape.match(Nominal(VOID_TYPE, []))) return true;
 		if (depth > MAX_ALIAS_DEPTH) return null;
-		if (typeParams.contains(segment)) return false;
-		if (splitTopArrows(segment).length >= 2 || segment.startsWith('(') || segment.startsWith('{')) return false;
-		final rhs: Null<String> = typedefAlias(ctx, idx, segment, fromFile);
-		return rhs == null ? null : returnSegmentIsVoid(ctx, idx, stripOuterParens(StringTools.trim(rhs)), fromFile, typeParams, depth + 1);
+		switch ret.shape {
+			case Nominal(path, []) if (typeParams.contains(path)):
+				return false;
+			case Function(_, _, _), Structure(_):
+				return false;
+			case _:
+		}
+		final rhs: Null<String> = typedefAlias(ctx, idx, ret, fromFile);
+		final aliased: Null<TypeSyntax> = rhs == null ? null : ctx.plugin.typeSyntax(rhs);
+		return aliased == null ? null : returnIsVoid(ctx, idx, aliased, fromFile, typeParams, depth + 1);
 	}
 
-	/** The right-hand side of a nominal's `typedef` declaration, or null when it is not a resolvable typedef. */
-	private static function typedefAlias(ctx: Ctx, idx: SymbolIndex, nominal: String, fromFile: String): Null<String> {
-		final lt: Int = nominal.indexOf('<');
-		final head: String = StringTools.trim(lt < 0 ? nominal : nominal.substr(0, lt));
-		if (TypeResolver.simpleNominalName(head) == null) return null;
+	/** The type a named `t`'s `typedef` declaration aliases, or null when `t` does not name one resolvable typedef. */
+	private static function typedefAlias(ctx: Ctx, idx: SymbolIndex, t: TypeSyntax, fromFile: String): Null<String> {
+		final head: Null<String> = switch t.shape {
+			case Nominal(path, _): path;
+			case _: null;
+		};
+		if (head == null) return null;
 		final all: Array<Candidate> = idx.resolveTypeRefsFrom(head, fromFile);
 		final rt: Null<Candidate> = all.length == 1 ? all[0] : null;
 		if (rt == null || rt.type.kind != 'TypedefDecl') return null;
 		final declSource: Null<String> = idx.sourceOf(rt.file.file);
-		if (declSource == null) return null;
-		final declText: String = declSource.substring(rt.type.span.from, rt.type.span.to);
-		final eq: Int = topLevelIndexOf(declText, '=');
-		if (eq < 0) return null;
-		final rhs: String = declText.substr(eq + 1).trim();
-		return rhs.endsWith(';') ? rhs.substr(0, rhs.length - 1).trim() : rhs;
+		return declSource == null ? null : TypeResolver.memoizedDeclaredTypeSources(ctx.plugin, declSource)()[rt.type.span.from];
 	}
 
-	/** The parameter segment at `argIndex` of a function-type SOURCE (`(a:Int, b:X)->Void` / `A->B->Void`), or null. */
-	private static function paramOfFnTypeSource(typeSrc: String, argIndex: Int, argCount: Int): Null<String> {
-		final s: String = stripOuterParens(typeSrc.trim());
-		final segs: Array<String> = splitTopArrows(s);
-		if (segs.length < 2) return null;
-		if (segs.length != 2 || !StringTools.trim(segs[0]).startsWith('('))
-			return segs.length - 1 != argCount || argIndex >= segs.length - 1 ? null : StringTools.trim(segs[argIndex]);
-		final interior: String = stripOuterParens(StringTools.trim(segs[0]));
-		// An empty interior is a zero-parameter list — splitTopCommas('') would report
-		// arity 1 (a single empty element) and defeat the alignment gate below.
-		if (interior.trim() == '') return null;
-		final parts: Array<String> = splitTopCommas(interior);
-		if (parts.length != argCount || argIndex >= parts.length) return null;
-		final part: String = StringTools.trim(parts[argIndex]);
-		final colon: Int = topLevelIndexOf(part, ':');
-		return colon >= 0 ? part.substr(colon + 1).trim() : part;
+	/**
+	 * The written type of the parameter at `argIndex` of the function type `typeSrc` (`(a:Int, b:X) -> Void`,
+	 * `A -> B -> Void`), or null when it is not a function type of exactly `argCount` parameters.
+	 */
+	private static function paramOfFnTypeSource(ctx: Ctx, typeSrc: String, argIndex: Int, argCount: Int): Null<String> {
+		return switch ctx.plugin.typeSyntax(typeSrc)?.shape {
+			case Function(params, _, _) if (params.length == argCount && argIndex < argCount): params[argIndex].type.text;
+			case _: null;
+		};
 	}
 
 	/** Type-parameter names in scope at `span` — the enclosing member's and type declaration's header params. */
@@ -731,169 +733,16 @@ final class PreferArrowCallback implements Check {
 				final fnKinds: Array<String> = ctx.shape.functionKinds ?? [];
 				final isFn: Bool = fnKinds.contains(c.kind);
 				final isType: Bool = c.kind.indexOf('Decl') >= 0 || c.kind.indexOf('Form') >= 0;
-				if (isFn || isType) for (p in headerTypeParams(ctx.source, c, isFn ? '(' : '{')) out.push(p);
+				if (isFn || isType) for (p in declaredTypeParams(ctx, ctx.source, c)) out.push(p);
 			}
 			collectEnclosingTypeParams(ctx, c, span, out);
 		}
 	}
 
-	/** The type-parameter names of `rt`'s declaration header (`class Box<T, U>` -> `[T, U]`). */
-	private static function typeHeaderParams(ctx: Ctx, idx: SymbolIndex, rt: Candidate): Array<String> {
-		if (rt.type.typeParamArity == 0) return [];
-		final declSource: Null<String> = idx.sourceOf(rt.file.file);
-		if (declSource == null) return [];
-		final declTree: Null<QueryNode> = declTreeOf(ctx, rt.file.file, declSource);
-		final decl: Null<QueryNode> = declTree == null ? null : findNamedDecl(declTree, rt.type.name);
-		return decl == null ? [] : headerTypeParams(declSource, decl, '{');
-	}
-
-	/**
-	 * The `<…>` type-parameter names written right after `decl`'s name, extracted from the
-	 * header slice of its source span (the projection drops type parameters). The name is
-	 * matched as a WHOLE WORD — a short name is otherwise found inside a preceding
-	 * modifier keyword (`n` inside `function`) and the scan silently misses the list.
-	 */
-	private static function headerTypeParams(source: String, decl: QueryNode, stop: String): Array<String> {
+	/** The type parameters `decl` declares in `source` (`TypeInfoProvider.typeParamNames`). */
+	private static function declaredTypeParams(ctx: Ctx, source: String, decl: QueryNode): Array<String> {
 		final span: Null<Span> = decl.span;
-		final name: Null<String> = decl.name;
-		if (span == null || name == null) return [];
-		final text: String = source.substring(span.from, span.to);
-		var end: Int = text.indexOf(stop);
-		if (end < 0) end = text.length;
-		final head: String = text.substr(0, end);
-		final nameAt: Int = wholeWordIndexOf(head, name);
-		if (nameAt < 0) return [];
-		var i: Int = nameAt + name.length;
-		while (i < head.length && head.isSpace(i)) i++;
-		if (i >= head.length || head.charAt(i) != '<') return [];
-		var d: Int = 0;
-		var j: Int = i;
-		while (j < head.length) {
-			final c: String = head.charAt(j);
-			if (c == '<') d++;
-			if (c == '>') {
-				d--;
-				if (d == 0) break;
-			}
-			j++;
-		}
-		if (d != 0) return [];
-		final out: Array<String> = [];
-		for (part in splitTopCommas(head.substring(i + 1, j))) {
-			var p: String = StringTools.trim(part);
-			final colon: Int = topLevelIndexOf(p, ':');
-			if (colon >= 0) p = p.substr(0, colon).trim();
-			if (p.length > 0) out.push(p);
-		}
-		return out;
-	}
-
-	/** The first WHOLE-WORD occurrence of `word` in `s` (identifier-boundary on both sides), or -1. */
-	private static function wholeWordIndexOf(s: String, word: String): Int {
-		var from: Int = 0;
-		while (from <= s.length - word.length) {
-			final at: Int = s.indexOf(word, from);
-			if (at < 0) return -1;
-			final beforeOk: Bool = at == 0 || !isIdentChar(s.charAt(at - 1));
-			final afterOk: Bool = at + word.length >= s.length || !isIdentChar(s.charAt(at + word.length));
-			if (beforeOk && afterOk) return at;
-			from = at + 1;
-		}
-		return -1;
-	}
-
-	/** Whether `c` is an identifier character (`[A-Za-z0-9_]`). */
-	private static function isIdentChar(c: String): Bool {
-		return c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9');
-	}
-
-	/** Strip one balanced pair of parentheses wrapping the WHOLE string, repeatedly. */
-	private static function stripOuterParens(s: String): String {
-		var out: String = s;
-		while (out.startsWith('(') && out.endsWith(')')) {
-			var d: Int = 0;
-			var wraps: Bool = true;
-			for (i in 0...out.length) {
-				final c: String = out.charAt(i);
-				if (c == '(') d++;
-				if (c != ')') continue;
-				d--;
-				if (d == 0 && i < out.length - 1) {
-					wraps = false;
-					break;
-				}
-			}
-			if (!wraps) return out;
-			out = out.substring(1, out.length - 1).trim();
-		}
-		return out;
-	}
-
-	/** Split on `->` at bracket depth 0 (respecting `()`, `<>`, `{}`; the arrow token is consumed atomically). */
-	private static function splitTopArrows(s: String): Array<String> {
-		final out: Array<String> = [];
-		var d: Int = 0;
-		var start: Int = 0;
-		var i: Int = 0;
-		while (i < s.length) {
-			final c: String = s.charAt(i);
-			if (c == '-' && i + 1 < s.length && s.charAt(i + 1) == '>') {
-				if (d == 0) {
-					out.push(s.substring(start, i));
-					i += 2;
-					start = i;
-				} else
-					i += 2;
-				continue;
-			}
-			if (c == '(' || c == '<' || c == '{' || c == '[') d++;
-			if (c == ')' || c == '>' || c == '}' || c == ']') d--;
-			i++;
-		}
-		out.push(s.substr(start));
-		return out;
-	}
-
-	/** Split on `,` at bracket depth 0 (the `->` token is consumed atomically, its `>` never closes a bracket). */
-	private static function splitTopCommas(s: String): Array<String> {
-		final out: Array<String> = [];
-		var d: Int = 0;
-		var start: Int = 0;
-		var i: Int = 0;
-		while (i < s.length) {
-			final c: String = s.charAt(i);
-			if (c == '-' && i + 1 < s.length && s.charAt(i + 1) == '>') {
-				i += 2;
-				continue;
-			}
-			if (c == '(' || c == '<' || c == '{' || c == '[') d++;
-			if (c == ')' || c == '>' || c == '}' || c == ']') d--;
-			if (d == 0 && c == ',') {
-				out.push(s.substring(start, i));
-				start = i + 1;
-			}
-			i++;
-		}
-		out.push(s.substr(start));
-		return out;
-	}
-
-	/** The index of the first `needle` at bracket depth 0, or -1 (the `->` token is consumed atomically). */
-	private static function topLevelIndexOf(s: String, needle: String): Int {
-		var d: Int = 0;
-		var i: Int = 0;
-		while (i < s.length) {
-			final c: String = s.charAt(i);
-			if (c == '-' && i + 1 < s.length && s.charAt(i + 1) == '>') {
-				i += 2;
-				continue;
-			}
-			if (c == '(' || c == '<' || c == '{' || c == '[') d++;
-			if (c == ')' || c == '>' || c == '}' || c == ']') d--;
-			if (d == 0 && c == needle) return i;
-			i++;
-		}
-		return -1;
+		return span == null ? [] : RunScan.typeParamNamesOf(ctx.plugin, source)[span.from] ?? [];
 	}
 
 }

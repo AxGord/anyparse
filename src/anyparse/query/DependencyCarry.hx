@@ -855,77 +855,35 @@ final class DependencyCarry {
 	}
 
 	/**
-	 * Every type-parameter name a FUNCTION inside `declSpan` declares (`function f<K, V>(...)`).
+	 * Every type-parameter name a FUNCTION inside `declSpan` declares (`function f<K, V>(...)`), with the
+	 * function's span — the region the name shadows.
 	 *
-	 * The grammar does not project a function's `<...>` list — there is no node for it at any depth —
-	 * so the names exist in the tree only as the type POSITIONS that spell them, indistinguishable
-	 * from a dependency on a module of that name. This recovers them from the source the same way a
-	 * type declaration's header parameters are recovered: the `<...>` run that closes immediately
-	 * before the parameter list's `(`, split on its top-level commas.
-	 *
-	 * Anchored on the `(` rather than on the function's name, because a function node's span starts at
-	 * the `function` keyword and searching forward for the name would match that keyword's own first
-	 * letter. A multi-constraint parameter (`<T:(A, B)>`) puts a `(` inside the list and so is not
-	 * read — the names stay priced, which costs a refusal rather than a miss.
+	 * The tree keeps a function's `<...>` list only as the type POSITIONS of its constraints, where a
+	 * name is indistinguishable from a dependency on a module of that name; the names come from the
+	 * grammar's own reading (`TypeInfoProvider.typeParamNames`), keyed by the function node's span.
 	 */
 	private static function functionTypeParamNames(plugin: GrammarPlugin, source: String, declSpan: Span): Array<NameSpan> {
 		final shape: RefShape = plugin.refShape();
 		final kinds: Array<String> = (shape.functionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);
-		if (kinds.length == 0) return [];
+		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
+		if (kinds.length == 0 || provider == null) return [];
 		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (_: Exception) null;
 		if (tree == null) return [];
 		final out: Array<NameSpan> = [];
-		collectFunctionTypeParams(tree, source, declSpan, kinds, out);
+		collectFunctionTypeParams(tree, provider.typeParamNames(source), declSpan, kinds, out);
 		return out;
 	}
 
 	/** The recursive half of `functionTypeParamNames`. */
 	private static function collectFunctionTypeParams(
-		node: QueryNode, source: String, declSpan: Span, kinds: Array<String>, out: Array<NameSpan>
+		node: QueryNode, typeParams: Map<Int, Array<String>>, declSpan: Span, kinds: Array<String>, out: Array<NameSpan>
 	): Void {
 		final nullableSpan: Null<Span> = node.span;
 		if (nullableSpan != null && kinds.contains(node.kind) && nullableSpan.from >= declSpan.from && nullableSpan.to <= declSpan.to) {
 			final span: Span = nullableSpan;
-			final list: Null<String> = typeParamListBefore(source, span);
-			if (list != null) for (segment in NominalTypes.splitTypeArgumentList(list)) {
-				final name: Null<String> = NominalTypes.typeParamNameOf(segment);
-				// The FUNCTION's span, not the parameter's: that is the region the name shadows.
-				if (name == null) continue;
-				final param: String = name;
-				out.push({ name: param, span: span });
-			}
+			for (name in typeParams[span.from] ?? []) out.push({ name: name, span: span });
 		}
-		for (c in node.children) collectFunctionTypeParams(c, source, declSpan, kinds, out);
-	}
-
-	/**
-	 * The text between the `<` and the `>` of the type-parameter list that closes immediately before
-	 * the parameter list of the function starting at `span`, or null when there is none.
-	 *
-	 * Anchored on the `(` rather than on the function's name: a function node's span starts at the
-	 * `function` keyword, so searching forward for the name would match that keyword's own first
-	 * letter. A multi-constraint parameter (`<T:(A, B)>`) puts a `(` inside the list and so reads as
-	 * "no list" — the names stay priced, which costs a refusal rather than a miss.
-	 */
-	private static function typeParamListBefore(source: String, span: Span): Null<String> {
-		final open: Int = source.indexOf('(', span.from);
-		if (open <= span.from || open >= span.to) return null;
-		var close: Int = open - 1;
-		while (close > span.from && SourceText.isSpace(source.fastCodeAt(close))) close--;
-		if (source.fastCodeAt(close) != '>'.code) return null;
-		var depth: Int = 0;
-		var i: Int = close;
-		while (i > span.from) {
-			final ch: Int = source.fastCodeAt(i);
-			if (ch == '>'.code && source.fastCodeAt(i - 1) != '-'.code)
-				depth++;
-			else if (ch == '<'.code) {
-				depth--;
-				if (depth == 0) break;
-			}
-			i--;
-		}
-		return depth == 0 && i > span.from ? source.substring(i + 1, close) : null;
+		for (c in node.children) collectFunctionTypeParams(c, typeParams, declSpan, kinds, out);
 	}
 
 	/**

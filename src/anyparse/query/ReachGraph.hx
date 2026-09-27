@@ -12,6 +12,7 @@ import anyparse.query.MemberReach.ReachUnknown;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
@@ -190,7 +191,10 @@ final class ReachGraph {
 			final nominal: Null<String> = param == null
 				? null
 				: NominalTypes.outerNominalOf(
-					NominalTypes.unwrapNullable(StringTools.trim(param), _scope.shape.memberTransparentWrapperTypeNames ?? [])
+					NominalTypes.unwrapNullable(
+						StringTools.trim(param), _scope.shape.memberTransparentWrapperTypeNames ?? [], _scope.plugin.typeSyntax
+					),
+					_scope.plugin.typeSyntax
 				);
 			if (nominal == null || catchAll.contains(nominal)) return true;
 			if (!ownParams.contains(nominal) && !g.types.holdsNoFunction(nominal)) return true;
@@ -219,7 +223,7 @@ final class ReachGraph {
 				break;
 			}
 			final own: String -> Bool = written -> {
-				final nominal: Null<String> = NominalTypes.outerNominalOf(StringTools.trim(written));
+				final nominal: Null<String> = NominalTypes.outerNominalOf(StringTools.trim(written), _scope.plugin.typeSyntax);
 				inertType(written) || nominal == current || nominal == type || nominal == _scope.shape.voidTypeName;
 			};
 			for (m in decl.members) {
@@ -253,7 +257,8 @@ final class ReachGraph {
 	 */
 	public function externTakesObject(g: CallGraph, type: String, name: String): Bool {
 		final info: Null<MemberInfo> = g.types.memberOnChain(type, name);
-		return info == null || info.paramTypeSources.exists(p -> p == null || (p.indexOf('->') < 0 && !inertType(p)));
+		return info == null
+			|| info.paramTypeSources.exists(p -> p == null || (_scope.plugin.typeSyntax(p)?.holdsFunction() != true && !inertType(p)));
 	}
 
 	/**
@@ -272,20 +277,21 @@ final class ReachGraph {
 		final fieldKinds: Array<String> = _scope.shape.fieldDeclKinds ?? [];
 		final ctorKinds: Array<String> = _scope.shape.execution?.enumConstructorKinds ?? [];
 		final wrappers: Array<String> = _scope.shape.memberTransparentWrapperTypeNames ?? [];
+		final typeSyntax: TypeSyntaxReader = _scope.plugin.typeSyntax;
 		final out: Array<String> = [];
 		final seen: Map<String, Bool> = [];
 		final written: Array<String> = [type];
 		var wi: Int = 0;
 		while (wi < written.length) {
-			final source: String = NominalTypes.unwrapNullable(StringTools.trim(written[wi++]), wrappers);
-			final nominal: Null<String> = NominalTypes.outerNominalOf(source);
+			final source: String = NominalTypes.unwrapNullable(StringTools.trim(written[wi++]), wrappers, typeSyntax);
+			final nominal: Null<String> = NominalTypes.outerNominalOf(source, typeSyntax);
 			if (nominal == null) {
 				// a function type holds a function value, which the value channel admits; any other shape is a structure
-				if (source.indexOf('->') >= 0) continue;
+				if (typeSyntax(source)?.holdsFunction() == true) continue;
 				return null;
 			}
 			if (inertType(source)) continue;
-			final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(source, _scope.plugin.typeSyntax);
+			final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(source, typeSyntax);
 			for (arg in args ?? []) written.push(arg);
 			if (seen.exists(nominal)) continue;
 			seen[nominal] = true;
@@ -314,7 +320,7 @@ final class ReachGraph {
 						if (heldType == null) return null;
 						// a value typed by one of the type's own parameters holds what the written argument says — known only
 						// for the type written with its arguments, not for a supertype or subtype reached from it
-						if (ownParams.contains(NominalTypes.outerNominalOf(StringTools.trim(heldType)) ?? '')) {
+						if (ownParams.contains(NominalTypes.outerNominalOf(StringTools.trim(heldType), typeSyntax) ?? '')) {
 							if (t == nominal && args != null) continue;
 							return null;
 						}
@@ -334,11 +340,14 @@ final class ReachGraph {
 	/** Whether a value written `typeSource` runs no code when a call converts it to a string: a string, number or boolean. */
 	public function inertType(typeSource: String): Bool {
 		final nominal: Null<String> = NominalTypes.outerNominalOf(
-			NominalTypes.unwrapNullable(StringTools.trim(typeSource), _scope.shape.memberTransparentWrapperTypeNames ?? [])
+			NominalTypes.unwrapNullable(
+				StringTools.trim(typeSource), _scope.shape.memberTransparentWrapperTypeNames ?? [], _scope.plugin.typeSyntax
+			),
+			_scope.plugin.typeSyntax
 		);
 		final values: Array<String> =
 			[for (t in (_scope.shape.literalTypeNames ?? []).iterator()) t].concat(_scope.shape.nonNullableTypeNames ?? []);
-		return typeSource.indexOf('->') < 0 && nominal != null && values.contains(nominal);
+		return _scope.plugin.typeSyntax(typeSource)?.holdsFunction() != true && nominal != null && values.contains(nominal);
 	}
 
 	/**
@@ -636,7 +645,7 @@ final class ReachGraph {
 	private function runtimeTypes(g: CallGraph, type: String, family: SiteFamily, escaped: Bool = true): Null<Array<String>> {
 		// an abstract's own member of the family runs on it — static calls the compiler puts where the static type is it; its
 		// own conversion may convert the value it wraps in turn, as `Any`'s does, which may be anything
-		final own: String = g.types.resolveAlias(NominalTypes.outerNominalOf(StringTools.trim(type)) ?? type);
+		final own: String = g.types.resolveAlias(NominalTypes.outerNominalOf(StringTools.trim(type), _scope.plugin.typeSyntax) ?? type);
 		if (isAbstract(own) && indexImplicit().exists(c -> c.type == own && matches(c.family, family)))
 			return family == Text ? null : [own];
 		// otherwise the value is one of its value types, which run what they and their supertypes declare
@@ -945,7 +954,8 @@ final class ReachGraph {
 		final classType: Null<String> = _scope.shape.execution?.classValueTypeName;
 		if (classType == null) return [];
 		final functionKinds: Array<String> = _scope.shape.functionKinds ?? [];
-		final isClass: Null<String> -> Bool = t -> t != null && NominalTypes.outerNominalOf(StringTools.trim(t)) == classType;
+		final isClass: Null<String> -> Bool = t ->
+			t != null && NominalTypes.outerNominalOf(StringTools.trim(t), _scope.plugin.typeSyntax) == classType;
 		final out: Array<{ name: String, file: String }> = [
 			for (fi in _scope.index.allFiles()) for (t in fi.types) for (m in t.members)
 				if (functionKinds.contains(m.kind) && (m.returnNominal == classType || m.paramTypeSources.exists(isClass)))

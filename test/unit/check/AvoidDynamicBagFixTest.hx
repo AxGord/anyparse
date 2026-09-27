@@ -163,6 +163,7 @@ private class FakeTypeOracle extends PositionTypeOracle {
 	private final _answer: Null<String>;
 
 	public function new(answer: Null<String>) {
+		super(new HaxeQueryPlugin().typeSyntax);
 		_answer = answer;
 	}
 

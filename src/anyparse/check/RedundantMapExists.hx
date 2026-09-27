@@ -11,6 +11,7 @@ import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
 /**
@@ -282,7 +283,8 @@ final class RedundantMapExists implements Check implements DefaultOff {
 		final bindingFrom: Null<Int> = TypeResolver.identBindingFrom(recv, root, cfg.shape);
 		if (bindingFrom == null) return null;
 		final typeName: Null<String> = declaredTypes[bindingFrom];
-		return typeName != null && MapNominal.isMap(typeName, declaredTypeSources[bindingFrom], cfg.mapTypes, cfg.nullableWrappers)
+		return typeName != null
+			&& MapNominal.isMap(typeName, declaredTypeSources[bindingFrom], cfg.mapTypes, cfg.nullableWrappers, cfg.typeSyntax)
 			? bindingFrom
 			: null;
 	}
@@ -313,6 +315,7 @@ final class RedundantMapExists implements Check implements DefaultOff {
 			existsMethods: existsMethods,
 			mapTypes: mapTypes,
 			nullableWrappers: shape.nullableWrapperTypeNames ?? [],
+			typeSyntax: plugin.typeSyntax,
 			opaqueKinds: shape.opaqueKinds ?? [],
 			mutationKinds: CheckScan.mutationKinds(shape)
 		};
@@ -353,6 +356,10 @@ private typedef Cfg = {
 	final existsMethods: Array<String>;
 	final mapTypes: Array<String>;
 	final nullableWrappers: Array<String>;
+
+	/** `GrammarPlugin.typeSyntax` — how a receiver's written type is read. */
+	final typeSyntax: TypeSyntaxReader;
+
 	final opaqueKinds: Array<String>;
 	final mutationKinds: Array<String>;
 };

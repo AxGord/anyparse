@@ -10,6 +10,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -179,6 +180,7 @@ final class JoinStringAppend implements Check implements DefaultOff {
 		final caseKinds: Array<String> = [for (k in [shape.caseBranchKind, shape.defaultBranchKind]) if (k != null) k];
 		return {
 			shape: shape,
+			typeSyntax: plugin.typeSyntax,
 			addAssignKind: addAssignKind,
 			assignKind: shape.assignKind,
 			identKind: identKind,
@@ -366,7 +368,9 @@ final class JoinStringAppend implements Check implements DefaultOff {
 		target: QueryNode, tree: QueryNode, s: Seams, declaredTypeSources: () -> Map<Int, String>
 	): Null<String> {
 		final raw: Null<String> = TypeResolver.identDeclaredTypeSource(target, s.shape, tree, declaredTypeSources, false);
-		return raw == null ? null : NominalTypes.unwrapNullable(StringTools.trim(raw), s.shape.nullableWrapperTypeNames ?? []);
+		return raw == null
+			? null
+			: NominalTypes.unwrapNullable(StringTools.trim(raw), s.shape.nullableWrapperTypeNames ?? [], s.typeSyntax);
 	}
 
 	/** `term`'s own verbatim source text, wrapped in parens when its root kind is not a provable `+`-safe operand. */
@@ -404,6 +408,10 @@ final class JoinStringAppend implements Check implements DefaultOff {
 /** The seams `JoinStringAppend` reads. */
 private typedef Seams = {
 	var shape: RefShape;
+
+	/** `GrammarPlugin.typeSyntax` — how a target's declared type is read. */
+	var typeSyntax: TypeSyntaxReader;
+
 	var addAssignKind: String;
 	var assignKind: Null<String>;
 	var identKind: String;

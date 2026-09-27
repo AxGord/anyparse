@@ -183,8 +183,9 @@ class SpanInfoLowering extends PairedShapeLowering {
 		final body: Array<Expr> = [
 			{ expr: EVars([{ name: '_sp', type: null, expr: own }]), pos: Context.currentPos() }
 		];
-		// A type-parameter name is collected with NO span guard: the reflective
-		// scan reached this visitor directly, not through the span-filtered one.
+		// A type-parameter name is collected into the whole-file list with NO span
+		// guard (the reflective scan reached this visitor directly), and into its
+		// declaration's list under `_sp`, the span of the node that declares it.
 		final tpCollect: Null<Expr> = typeParamCollect(node);
 		if (tpCollect != null) body.push(tpCollect);
 		final writes: Array<Expr> = spanInfoWrites(node);
@@ -266,6 +267,14 @@ class SpanInfoLowering extends PairedShapeLowering {
 		return macro {
 			final _tp: Null<String> = $n;
 			if (_tp != null && !$acc.contains(_tp)) $acc.push(_tp);
+			if (_tp != null && _sp != null) {
+				final _name: String = _tp;
+				final _own: Null<Array<String>> = b.typeParamNames[_sp.from];
+				if (_own == null)
+					b.typeParamNames[_sp.from] = [_name]
+				else
+					_own.push(_name);
+			}
 		};
 	}
 

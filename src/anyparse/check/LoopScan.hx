@@ -601,5 +601,5 @@ typedef LoopFileScan = {
 	var seams: IntervalLoopSeams;
 
 	/** `GrammarPlugin.typeSyntax` — how a gate reads a declared type's arguments. */
-	var typeSyntax: String -> Null<TypeSyntax>;
+	var typeSyntax: TypeSyntaxReader;
 }

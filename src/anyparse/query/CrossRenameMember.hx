@@ -11,6 +11,7 @@ import anyparse.query.Refs.RefKind;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.OverrideFamilyMember;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -663,7 +664,8 @@ final class CrossRenameMember {
 		// parameterised — split at its first `<` and pass as the nominal `pkg.Other`.
 		if (proof.nominals[from] == null) return false;
 		final written: Null<String> = proof.typeSources[from];
-		return written != null && resolvesToSourceType(nominalPathOf(written), proof);
+		final path: Null<String> = written == null ? null : nominalPathOf(written, proof.index.typeSyntax);
+		return path != null && resolvesToSourceType(path, proof);
 	}
 
 	/**
@@ -710,17 +712,16 @@ final class CrossRenameMember {
 
 	/**
 	 * `written` reduced to the PATH it names — type ARGUMENTS dropped, the package KEPT:
-	 * `pkg.Box<Int>` -> `pkg.Box`. Both halves are load-bearing: resolution needs the whole path,
-	 * and it needs the arguments gone, since a generic receiver (`b: Box<Int>`) was already proven
-	 * by the simple-name compare and dropping it would be a silent loss.
-	 *
-	 * Splitting at the first `<` is exact ONLY because the caller has already asked the AST whether
-	 * the annotation is nominal at all (`declaredTypes`). Used as the nominality test itself, this
-	 * text read accepts an arrow type with a parameterised left operand.
+	 * `pkg.Box<Int>` -> `pkg.Box`, or null when it is not a named type. Both halves are
+	 * load-bearing: resolution needs the whole path, and it needs the arguments gone, since a
+	 * generic receiver (`b: Box<Int>`) was already proven by the simple-name compare and dropping
+	 * it would be a silent loss.
 	 */
-	private static function nominalPathOf(written: String): String {
-		final lt: Int = written.indexOf('<');
-		return (lt < 0 ? written : written.substring(0, lt)).trim();
+	private static function nominalPathOf(written: String, typeSyntax: TypeSyntaxReader): Null<String> {
+		return switch typeSyntax(written)?.shape {
+			case Nominal(path, _): path;
+			case _: null;
+		};
 	}
 
 	/**
@@ -1026,7 +1027,9 @@ final class CrossRenameMember {
 		if (ret == null) return false;
 		final span: Null<Span> = ret.span;
 		if (span == null) return false;
-		final written: String = unwrapTypeWrapper(scan.source.substring(span.from, span.to).trim(), scan.seams.nullableWrappers);
+		final written: String = NominalTypes.unwrapNullable(
+			scan.source.substring(span.from, span.to).trim(), scan.seams.nullableWrappers, scan.index.typeSyntax
+		);
 		if (written == '') return false;
 		final matches: Array<{ file: FileInfo, type: TypeDeclInfo }> = scan.index.resolveTypeRefsFrom(written, scan.file);
 		return matches.length == 1 && matches[0].type.name == scan.target.typeName && matches[0].file.file == scan.cursorFile;
@@ -1055,18 +1058,6 @@ final class CrossRenameMember {
 			return at != null && body != null && RefactorSupport.isReturnTypeSlot(source, at.to, body.from) ? candidate : null;
 		}
 		return null;
-	}
-
-	/**
-	 * `written` with ONE outer type-argument wrapper named in `wrappers` removed —
-	 * `Null<Colour>` -> `Colour`. Any other parametric type is returned WHOLE and then resolves to
-	 * no declaration, which is the conservative answer rather than a guess at its element type.
-	 */
-	private static function unwrapTypeWrapper(written: String, wrappers: Array<String>): String {
-		final open: Int = written.indexOf('<');
-		return open <= 0 || !written.endsWith('>') || !wrappers.contains(written.substring(0, open))
-			? written
-			: written.substring(open + 1, written.length - 1).trim();
 	}
 
 	/**

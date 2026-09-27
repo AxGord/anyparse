@@ -18,6 +18,7 @@ import anyparse.query.Cli.RuleFixOutcome;
 import anyparse.query.CompilerFacts;
 import anyparse.query.EditJournal;
 import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 import haxe.io.Path;
 import anyparse.query.ExitCode.*;
@@ -553,7 +554,12 @@ final class LintFixVerify {
 			appliedCount: 0,
 			excluded: excluded
 		};
-		final display: DisplayHandle = { configs: current.configs, server: null, tried: false };
+		final display: DisplayHandle = {
+			configs: current.configs,
+			typeSyntax: plugin.typeSyntax,
+			server: null,
+			tried: false
+		};
 		final oracle: Null<TypeOracle> = assistedOracle(plugin, display, files);
 		if (oracle == null) return { tail: ', oracle-assisted skipped (display server unavailable)', appliedCount: 0, excluded: excluded };
 		for (entry in files) {
@@ -631,7 +637,7 @@ final class LintFixVerify {
 	private static function displayOf(handle: DisplayHandle): Null<TypeOracle> {
 		if (!handle.tried) {
 			handle.tried = true;
-			handle.server = startDisplay(handle.configs);
+			handle.server = startDisplay(handle.configs, handle.typeSyntax);
 		}
 		return handle.server;
 	}
@@ -672,9 +678,9 @@ final class LintFixVerify {
 	 * `CompilerDisplayOracle`), but not blindly the first: a server that will not come up for one
 	 * build is no reason to skip the phase while its sibling's would.
 	 */
-	private static function startDisplay(configs: Array<OracleConfig>): Null<CompilerDisplayOracle> {
+	private static function startDisplay(configs: Array<OracleConfig>, typeSyntax: TypeSyntaxReader): Null<CompilerDisplayOracle> {
 		for (config in configs) if (config.unavailable == null) {
-			final display: Null<CompilerDisplayOracle> = CompilerDisplayOracle.start(config.hxml, config.dir, config.defines);
+			final display: Null<CompilerDisplayOracle> = CompilerDisplayOracle.start(typeSyntax, config.hxml, config.dir, config.defines);
 			if (display != null) return display;
 		}
 		return null;
@@ -919,6 +925,7 @@ final class LintFixVerify {
 /** The display server `LintFixVerify.displayOf` starts for `configs` on first need, and whether it was tried. */
 private typedef DisplayHandle = {
 	final configs: Array<OracleConfig>;
+	final typeSyntax: TypeSyntaxReader;
 	var server: Null<CompilerDisplayOracle>;
 	var tried: Bool;
 }

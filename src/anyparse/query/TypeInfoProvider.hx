@@ -82,6 +82,14 @@ interface TypeInfoProvider {
 	public function castTargetSources(source: String): Map<Int, String>;
 
 	/**
+	 * Maps each declaration that declares type PARAMETERS — a type, a function, an enum constructor —
+	 * by its span `from` (the span of its `QueryNode`) to their names in declaration order:
+	 * `class Cell<Data, K:B>` → `['Data', 'K']`. The projection keeps only a parameter's constraint,
+	 * so this is the one carrier of the names; a declaration with none has no key.
+	 */
+	public function typeParamNames(source: String): Map<Int, Array<String>>;
+
+	/**
 	 * Maps each simple type name brought into scope by a plain `import a.b.X;` to
 	 * its fully-qualified path (`X` → `a.b.X`). Aliased imports (`import a.b.X as Y;` —
 	 * the original path is not exposed by the grammar), wildcard imports, and `using`

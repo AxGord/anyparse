@@ -98,8 +98,9 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	private static inline final QUERY_TYPE_META: String = ':queryType';
 
 	/**
-	 * Grammar opt-in on a `type` field: project it into the ENCLOSING addressable
-	 * node's `QueryNode.type` SLOT, leaving that node's children exactly as they were.
+	 * Grammar opt-in on a `type` field — or on any other field holding the one type a
+	 * node is ABOUT, such as an abstract's underlying type: project it into the ENCLOSING
+	 * addressable node's `QueryNode.type` SLOT, leaving that node's children exactly as they were.
 	 *
 	 * The third answer to the `type`-slot question, and the only one a DECLARATION can
 	 * take. `@:queryType` makes the annotation a child, which is right where the host
@@ -423,7 +424,18 @@ class QueryWalkerLowering extends PairedShapeLowering {
 		final name: String = fieldNameOf(child);
 		if (name == 'name') return [];
 		final access: Expr = field(ident('v'), name);
-		if (name != 'type') return descend(child, access, intoName, typeOutName, 0);
+		if (name != 'type') {
+			final walked: Array<Expr> = descend(child, access, intoName, typeOutName, 0);
+			if (!child.hasMeta(QUERY_TYPE_SLOT_META)) return walked;
+			if (!isOptional(child)) return walked.concat(typeSlotFill(child, access, typeOutName));
+			final fill: Expr = block(typeSlotFill(child, ident('_ty'), typeOutName));
+			return walked.concat([
+				block([
+					{ expr: EVars([{ name: '_ty', type: null, expr: access }]), pos: Context.currentPos() },
+					macro if (_ty != null) $fill
+				])
+			]);
+		}
 
 		final ref: Null<String> = refOf(child);
 		// A `Null<HxType>` slot is bound to a local first: the switch below must
@@ -459,23 +471,11 @@ class QueryWalkerLowering extends PairedShapeLowering {
 				$refsAware
 			else
 				$walkArm;
-		else if (child.hasMeta(QUERY_TYPE_SLOT_META)) {
+		else if (child.hasMeta(QUERY_TYPE_SLOT_META))
 			// The slot is filled from a walk of its own, so the pre-existing arm's
 			// contribution to `into` stays exactly what it was.
-			final slotWalk: Expr = block(descendCore(child, value, TYPE_SLOT_OWN_LOCAL, TYPE_SLOT_OWN_LOCAL, 0));
-			macro {
-				$refsAware;
-				// The slot is a DEFAULT-tree projection: `parseFileTypeRefs` answers with its
-				// flat `TypeRef` run and its consumers never read the slot, so filling it
-				// there would only cost a second walk of every annotation and print twice.
-				if (!withTypeRefs) {
-					final _typeSlotOwn: Array<anyparse.query.QueryNode> = [];
-					final withTypeRefs: Bool = false;
-					$slotWalk;
-					if (_typeSlotOwn.length > 0) $i{typeOutName}.push(_typeSlotOwn[0]);
-				}
-			};
-		} else
+			block([refsAware].concat(typeSlotFill(child, value, typeOutName)));
+		else
 			refsAware;
 
 		return !optional ? [core] : [
@@ -483,6 +483,25 @@ class QueryWalkerLowering extends PairedShapeLowering {
 				{ expr: EVars([{ name: '_ty', type: null, expr: access }]), pos: Context.currentPos() },
 				macro if (_ty != null) $core
 			])
+		];
+	}
+
+	/**
+	 * Fill the enclosing node's `QueryNode.type` slot from `value`: a walk of its own, in the
+	 * DEFAULT mode, whose first node lands in the slot; the node's children do not change. The
+	 * slot is a DEFAULT-tree projection: `parseFileTypeRefs` answers with its flat `TypeRef` run
+	 * and its consumers never read the slot, so filling it there would only cost a second walk of
+	 * every annotation and print twice.
+	 */
+	private function typeSlotFill(child: ShapeNode, value: Expr, typeOutName: String): Array<Expr> {
+		final slotWalk: Expr = block(descendCore(child, value, TYPE_SLOT_OWN_LOCAL, TYPE_SLOT_OWN_LOCAL, 0));
+		return [
+			macro if (!withTypeRefs) {
+				final _typeSlotOwn: Array<anyparse.query.QueryNode> = [];
+				final withTypeRefs: Bool = false;
+				$slotWalk;
+				if (_typeSlotOwn.length > 0) $i{typeOutName}.push(_typeSlotOwn[0]);
+			}
 		];
 	}
 

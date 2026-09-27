@@ -5,6 +5,7 @@ import anyparse.check.PreferComprehension.ComprehensionCtx;
 import anyparse.check.PreferComprehension.ComprehensionSeams;
 import anyparse.query.CtorFieldFold;
 import anyparse.query.QueryNode;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -40,7 +41,7 @@ final class ComprehensionFills {
 	public static function loopText(
 		loop: QueryNode, name: String, annotation: Null<String>, ctx: ComprehensionCtx, acc: ComprehensionAcc
 	): Null<String> {
-		final fill: Null<String> = indexesLikeArray(annotation) ? indexFill(loop, name, ctx, acc) : null;
+		final fill: Null<String> = indexesLikeArray(annotation, ctx.seams.typeSyntax) ? indexFill(loop, name, ctx, acc) : null;
 		return fill ?? PreferComprehension.buildInner(loop, name, ctx, acc);
 	}
 
@@ -107,7 +108,7 @@ final class ComprehensionFills {
 		if (PreferComprehension.commentIntersects(declSpan, ctx)) return null;
 		if (pushed == null || pushed.kind != s.identKind || pushed.name != innerName) return null;
 		if (fill.kind != s.forStmtKind && fill.kind != s.whileStmtKind) return null;
-		final annotation: Null<String> = CtorFieldFold.declaredTypeAnnotation(ctx.source, declSpan, initSpan, innerName);
+		final annotation: Null<String> = CtorFieldFold.declaredTypeAnnotation(ctx.source, decl);
 		final innerAcc: ComprehensionAcc = {
 			checks: [],
 			hoisted: [],
@@ -127,10 +128,12 @@ final class ComprehensionFills {
 	 * turns the fold into a compile error, and an abstract `@:from` an array with an `@:arrayAccess` setter
 	 * runs code on every write that a comprehension would never call — both are refused rather than judged.
 	 */
-	private static function indexesLikeArray(annotation: Null<String>): Bool {
+	private static function indexesLikeArray(annotation: Null<String>, typeSyntax: TypeSyntaxReader): Bool {
 		if (annotation == null) return true;
-		final open: Int = annotation.indexOf('<');
-		return open > 0 && annotation.substring(0, open).trim() == ARRAY_HEAD;
+		return switch typeSyntax(annotation)?.shape {
+			case Nominal(ARRAY_HEAD, args): args.length > 0;
+			case _: false;
+		};
 	}
 
 	/**

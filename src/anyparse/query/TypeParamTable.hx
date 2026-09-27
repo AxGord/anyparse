@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.SymbolIndex.TypeDeclInfo;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
 /**
  * The type parameters every indexed type declares, and the type arguments its `extends` / `implements`
@@ -33,7 +34,7 @@ final class TypeParamTable {
 	 * `viewType`'s own terms (`class D extends B<W>` passes `W`, `class M<X> extends B<X>` passes `X`), or null
 	 * when `owner` is not on the chain or a link writes no arguments.
 	 */
-	public function argumentsFor(owner: String, viewType: String, typeSyntax: String -> Null<TypeSyntax>): Null<Array<String>> {
+	public function argumentsFor(owner: String, viewType: String, typeSyntax: TypeSyntaxReader): Null<Array<String>> {
 		return argumentsVia(owner, viewType, [], typeSyntax);
 	}
 
@@ -43,18 +44,17 @@ final class TypeParamTable {
 		CallGraphTypes.unionInto(_supersWritten, t.name, t.supertypesWritten);
 	}
 
-	private function argumentsVia(
-		owner: String, typeName: String, seen: Array<String>, typeSyntax: String -> Null<TypeSyntax>
-	): Null<Array<String>> {
+	private function argumentsVia(owner: String, typeName: String, seen: Array<String>, typeSyntax: TypeSyntaxReader): Null<Array<String>> {
 		if (seen.contains(typeName)) return null;
 		seen.push(typeName);
 		for (written in _supersWritten[typeName] ?? []) {
-			final outer: Null<String> = NominalTypes.outerNominalOf(written);
+			final outer: Null<String> = NominalTypes.outerNominalOf(written, typeSyntax);
 			final args: Array<String> = NominalTypes.typeArgumentSourcesOf(written, typeSyntax) ?? [];
 			if (outer == owner) return args;
 			final up: Null<Array<String>> = outer == null ? null : argumentsVia(owner, outer, seen, typeSyntax);
 			final params: Array<String> = outer == null ? [] : typeParamsOf(outer);
-			if (up != null && args.length >= params.length) return [for (a in up) CallGraphNames.substituteTypeParams(a, params, args)];
+			if (up != null && args.length >= params.length)
+				return [for (a in up) CallGraphNames.substituteTypeParams(a, params, args, typeSyntax)];
 		}
 		return null;
 	}

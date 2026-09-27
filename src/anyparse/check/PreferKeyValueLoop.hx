@@ -164,7 +164,7 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 	/** Descend `node`, testing it as a loop and recursing; a reification subtree is skipped wholesale. */
 	private static function walk(node: QueryNode, f: LoopFileScan, outerFn: Null<QueryNode>, file: String, out: Array<Violation>): Void {
 		if (f.seams.core.opaqueKinds.contains(node.kind)) return;
-		final opener: Null<Match> = analyze(node, f.root, f.source, f.types, f.seams);
+		final opener: Null<Match> = analyze(node, f);
 		final reads: Null<ReadsMatch> = opener == null ? analyzeReads(node, f, outerFn) : null;
 		if (opener != null)
 			out.push(finding(
@@ -184,7 +184,7 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 		node: QueryNode, f: LoopFileScan, outerFn: Null<QueryNode>, wanted: Array<String>, out: Array<FixEdit>, gate: ReachGate
 	): Void {
 		if (f.seams.core.opaqueKinds.contains(node.kind)) return;
-		final m: Null<Match> = analyze(node, f.root, f.source, f.types, f.seams);
+		final m: Null<Match> = analyze(node, f);
 		if (m != null && wanted.contains('${m.forSpan.from}:${m.forSpan.to}')) {
 			final decline: Null<String> = openerDecline(m, f) ?? ElementLoopRewrite.reachDecline(gate.reachOf(), gate.file, m.header);
 			if (decline == null)
@@ -204,9 +204,11 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 	 * annotations the rewrite gate reads — or null when any gate fails. Shared by `walk` (report)
 	 * and `fixWalk` (rewrite) so both see one decision.
 	 */
-	private static function analyze(
-		forNode: QueryNode, root: QueryNode, source: String, types: Null<Map<Int, String>>, s: IntervalLoopSeams
-	): Null<Match> {
+	private static function analyze(forNode: QueryNode, f: LoopFileScan): Null<Match> {
+		final root: QueryNode = f.root;
+		final source: String = f.source;
+		final types: Null<Map<Int, String>> = f.types;
+		final s: IntervalLoopSeams = f.seams;
 		final core: LoopSeams = s.core;
 		final h: Null<IndexedLoopHeader> = matchHeader(forNode, source, s);
 		if (h == null) return null;
@@ -224,7 +226,7 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 		// A container that RESOLVES to something other than `Array` has no key-value iteration to
 		// offer, so the message would be advice that does not compile; only an UNRESOLVED one keeps
 		// the report-only tolerance, where the suggestion is a lead rather than a claim.
-		return collectionTypeSource != null && NominalTypes.outerNominalOf(collectionTypeSource) != ARRAY_TYPE ? null : {
+		return collectionTypeSource != null && NominalTypes.outerNominalOf(collectionTypeSource, f.typeSyntax) != ARRAY_TYPE ? null : {
 			forSpan: forSpan,
 			declSpan: declSpan,
 			keyVar: h.index,
@@ -290,9 +292,9 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 	 * `E`. A widening annotation (`Dynamic`, a supertype) would change what the binder is typed
 	 * as, so it stays report-only.
 	 */
-	private static function provablyArrayElement(m: Match, typeSyntax: String -> Null<TypeSyntax>): Bool {
+	private static function provablyArrayElement(m: Match, typeSyntax: TypeSyntaxReader): Bool {
 		final collectionType: Null<String> = m.collectionTypeSource;
-		if (collectionType == null || NominalTypes.outerNominalOf(collectionType) != ARRAY_TYPE) return false;
+		if (collectionType == null || NominalTypes.outerNominalOf(collectionType, typeSyntax) != ARRAY_TYPE) return false;
 		final declared: Null<String> = m.declTypeSource;
 		if (declared == null) return true;
 		final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(collectionType, typeSyntax);
@@ -322,7 +324,7 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 		final readSpans: Null<Array<Span>> = spansOf(reads);
 		if (forSpan == null || iterableSpan == null || readSpans == null) return null;
 		final collectionTypeSource: Null<String> = LoopScan.identTypeSource(h.sizeReceiver, f.root, f.types, core);
-		if (collectionTypeSource != null && NominalTypes.outerNominalOf(collectionTypeSource) != ARRAY_TYPE) return null;
+		if (collectionTypeSource != null && NominalTypes.outerNominalOf(collectionTypeSource, f.typeSyntax) != ARRAY_TYPE) return null;
 		final binder: BinderChoice = binderOf(f, forNode, outerFn?.span ?? new Span(0, f.source.length), h.index, h.collection);
 		return {
 			forSpan: forSpan,

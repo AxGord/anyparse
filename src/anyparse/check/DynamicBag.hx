@@ -68,7 +68,7 @@ final class DynamicBag {
 		final dynName: Null<String> = shape.rawDynamicTypeName;
 		final tree: Null<QueryNode> = dynName == null ? null : CheckScan.parseOrNull(plugin, source);
 		if (dynName == null || tree == null) return [];
-		final ctx: DynCtx = DynamicShape.buildCtx(shape, dynName);
+		final ctx: DynCtx = DynamicShape.buildCtx(shape, dynName, plugin.typeSyntax);
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		final declaredTypes: Map<Int, String> = provider != null ? provider.declaredTypes(source) : [];
 		final imports: Map<String, String> = provider != null ? provider.importMap(source, violations[0]?.file) : [];

@@ -28,17 +28,6 @@ final class HxTypeSyntax {
 
 	private static inline final PREFIX: String = 'typedef _ = ';
 
-	/** `text` read as one type, or null when it does not parse as exactly one — see `GrammarPlugin.typeSyntax`. */
-	public static function of(text: String): Null<TypeSyntax> {
-		final root: HxModuleS = try HaxeModuleSpanParser.parse(PREFIX + text + '\n;') catch (exception: Exception) return null;
-		if (root.decls.length != 1) return null;
-		final type: Null<HxTypeS> = switch root.decls[0].decl {
-			case TypedefDecl({ typeParams: null, type: t, intersections: [] }, _): t;
-			case _: null;
-		};
-		return type == null ? null : new HxTypeSyntax(text).type(type);
-	}
-
 	private final _text: String;
 
 	private function new(text: String) {
@@ -124,6 +113,17 @@ final class HxTypeSyntax {
 		final from: Int = span.from - PREFIX.length;
 		final text: String = _text.substring(from, span.to - PREFIX.length).rtrim();
 		return new TypeSyntax(new Span(from, from + text.length), text, shape);
+	}
+
+	/** `text` read as one type, or null when it does not parse as exactly one — see `GrammarPlugin.typeSyntax`. */
+	public static function of(text: String): Null<TypeSyntax> {
+		final root: HxModuleS = try HaxeModuleSpanParser.parse(PREFIX + text + '\n;') catch (exception: Exception) return null;
+		if (root.decls.length != 1) return null;
+		final type: Null<HxTypeS> = switch root.decls[0].decl {
+			case TypedefDecl({ typeParams: null, type: t, intersections: [] }, _): t;
+			case _: null;
+		};
+		return type == null ? null : new HxTypeSyntax(text).type(type);
 	}
 
 }

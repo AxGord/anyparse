@@ -169,7 +169,7 @@ final class MemberTouchScan {
 			final typed: Null<String> = at == null ? null : g.facts?.view.typeSourceAt(g, file, at);
 			if (typed != null)
 				return _carriers.relation(
-					NominalTypes.unwrapNullable(typed, shape.memberTransparentWrapperTypeNames ?? []), declaring
+					NominalTypes.unwrapNullable(typed, shape.memberTransparentWrapperTypeNames ?? [], _scope.plugin.typeSyntax), declaring
 				) != CannotCarry;
 			final types: Map<Int, String> = declaredTypes ?? typesOf(provider, source);
 			declaredTypes = types;
@@ -399,7 +399,7 @@ final class MemberTouchScan {
 		final provider: Null<TypeInfoProvider> = _scope.plugin is TypeInfoProvider ? cast _scope.plugin : null;
 		final bound: Null<Int> = TypeResolver.identBindingFrom(node, ctx.tree, _scope.shape);
 		final written: Null<String> = bound == null || provider == null ? null : provider.declaredTypeSources(ctx.source)[bound];
-		final outer: Null<String> = written == null ? null : NominalTypes.outerNominalOf(written);
+		final outer: Null<String> = written == null ? null : NominalTypes.outerNominalOf(written, _scope.plugin.typeSyntax);
 		return outer != null && (arrays.contains(outer) || strings.contains(outer)) ? outer : null;
 	}
 

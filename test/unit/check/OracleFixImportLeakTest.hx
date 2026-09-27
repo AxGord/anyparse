@@ -179,6 +179,7 @@ private final class IdentTypeOracle extends PositionTypeOracle {
 	private final _byName: Map<String, String>;
 
 	public function new(source: String, byName: Map<String, String>) {
+		super(new HaxeQueryPlugin().typeSyntax);
 		_source = source;
 		_byName = byName;
 	}

@@ -2,6 +2,8 @@ package anyparse.query;
 
 import anyparse.runtime.Span;
 
+using Lambda;
+
 /**
  * A written type as its grammar reads it (`GrammarPlugin.typeSyntax`): the parts an analysis
  * asks of type text, with the verbatim slice and the offsets of every part, so a consumer can hand
@@ -40,6 +42,27 @@ final class TypeSyntax {
 		};
 	}
 
+	/** This type and every type written inside it — arguments, parameters, results, field types — outermost first. */
+	public function descendants(): Array<TypeSyntax> {
+		final inner: Array<TypeSyntax> = switch shape {
+			case Nominal(_, args): args;
+			case Function(params, ret, _): [for (p in params) p.type].concat([ret]);
+			case Structure(fields): [for (f in fields) f.type];
+			case Other: [];
+		};
+		return [this].concat([for (t in inner) for (d in t.descendants()) d]);
+	}
+
+	/** Whether this type is a function type or holds one anywhere inside it (`Array<Int -> Void>`). */
+	public function holdsFunction(): Bool {
+		return switch shape {
+			case Function(_, _, _): true;
+			case Nominal(_, args): args.exists(a -> a.holdsFunction());
+			case Structure(fields): fields.exists(f -> f.type.holdsFunction());
+			case Other: false;
+		};
+	}
+
 	/**
 	 * The one argument of a named type whose path is one of `wrappers` (`Null<T>` → `T`), or null
 	 * when this is not such a wrapper of exactly one argument.
@@ -52,6 +75,9 @@ final class TypeSyntax {
 	}
 
 }
+
+/** `GrammarPlugin.typeSyntax` as a value — how code that holds no plugin reads a written type. */
+typedef TypeSyntaxReader = String -> Null<TypeSyntax>;
 
 /** What a `TypeSyntax` is. */
 enum TypeShape {

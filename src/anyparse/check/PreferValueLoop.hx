@@ -186,7 +186,7 @@ final class PreferValueLoop implements Check implements DefaultOff {
 		// A container that RESOLVES to something else has no value iteration to offer — `String`
 		// is the one that stings, since it carries a `length` — so the message would be advice
 		// that does not compile; only an UNRESOLVED one keeps the report-only tolerance.
-		if (collectionTypeSource != null && NominalTypes.outerNominalOf(collectionTypeSource) != ARRAY_TYPE) return null;
+		if (collectionTypeSource != null && NominalTypes.outerNominalOf(collectionTypeSource, f.typeSyntax) != ARRAY_TYPE) return null;
 		final binder: BinderChoice = ElementLoopRewrite.binderFor(f, forNode, h.index, h.collection, bodySpan, 'the loop body');
 		return {
 			forSpan: forSpan,

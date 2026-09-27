@@ -8,6 +8,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -43,12 +44,13 @@ final class ParamAscription {
 	 * The arm's verdict for one `Dynamic` finding — see `ParamVerdict` for what its two answers separate.
 	 */
 	public static function rewrite(
-		tree: QueryNode, source: String, span: Span, shape: RefShape, dynName: String, castTargets: Map<Int, String>, symbols: SymbolIndex
+		tree: QueryNode, source: String, span: Span, shape: RefShape, dynName: String, castTargets: Map<Int, String>,
+		typeParams: Map<Int, Array<String>>, symbols: SymbolIndex
 	): ParamVerdict {
 		final subject: Null<ParamSubject> = wholeDynamicParam(tree, span, shape, dynName);
 		return subject == null ? { subject: false, edits: null } : {
 			subject: true,
-			edits: editsFor(subject, tree, source, shape, dynName, castTargets, symbols)
+			edits: editsFor(subject, tree, source, shape, dynName, castTargets, typeParams, symbols)
 		};
 	}
 
@@ -115,9 +117,9 @@ final class ParamAscription {
 	 */
 	private static function editsFor(
 		subject: ParamSubject, tree: QueryNode, source: String, shape: RefShape, dynName: String, castTargets: Map<Int, String>,
-		symbols: SymbolIndex
+		typeParams: Map<Int, Array<String>>, symbols: SymbolIndex
 	): Null<Array<FixEdit>> {
-		final host: Null<TypeDeclMatch> = ownerAllowsSignatureRewrite(subject, shape, source, symbols);
+		final host: Null<TypeDeclMatch> = ownerAllowsSignatureRewrite(subject, shape, typeParams, symbols);
 		// The signature edit replaces the WHOLE written type, so a comment anywhere inside it is text
 		// the replacement would delete.
 		if (host == null || CheckScan.hasCommentMarker(source, subject.typeSpan.from, subject.typeSpan.to)) return null;
@@ -131,17 +133,19 @@ final class ParamAscription {
 		// WRITTEN path is kept — a dotted one resolves as a path, not by its last segment. A name the
 		// enclosing type declares as a type PARAMETER is not a type at all (the method's own are
 		// handled by refusing a generic method outright).
-		final path: String = headOfTypeSource(withoutNullableWrapper(written, shape));
+		final path: Null<String> = headOfTypeSource(withoutNullableWrapper(written, shape, symbols.typeSyntax), symbols.typeSyntax);
 		if (
-			!DynamicShape.isNominalName(path) || !DynamicShape.acceptableType(path, dynName) || typeParameterOf(host, path, symbols)
-			|| !symbols.resolvesToConversionFreeType(path)
+			path == null || !DynamicShape.isNominalName(path) || !DynamicShape.acceptableType(path, dynName)
+			|| typeParameterOf(host, path, symbols) || !symbols.resolvesToConversionFreeType(path)
 		)
 			return null;
 		final edits: Null<Array<FixEdit>> = unwrapEdits(pinned, source);
 		if (edits == null) return null;
 		// A parameter the source declared nullable, or one a read compares with null, must keep
 		// admitting it; every other one takes the ascribed type verbatim.
-		final declared: Null<String> = subject.wrapped || pinned.nullCompared ? wrappedNullable(written, shape) : written;
+		final declared: Null<String> = subject.wrapped || pinned.nullCompared
+			? wrappedNullable(written, shape, symbols.typeSyntax)
+			: written;
 		if (declared == null) return null;
 		// Re-bind to a non-null local — Strict null-safety takes a struct literal's field type from
 		// the declared type, not the narrowed one.
@@ -186,7 +190,7 @@ final class ParamAscription {
 	 * and a family the index cannot prove (`null`) is refused with it.
 	 */
 	private static function ownerAllowsSignatureRewrite(
-		subject: ParamSubject, shape: RefShape, source: String, symbols: SymbolIndex
+		subject: ParamSubject, shape: RefShape, typeParams: Map<Int, Array<String>>, symbols: SymbolIndex
 	): Null<TypeDeclMatch> {
 		final chain: Array<QueryNode> = subject.chain;
 		final owner: QueryNode = subject.owner;
@@ -198,7 +202,7 @@ final class ParamAscription {
 		// name neither it nor its type, so its parameter type is the dispatch key and cannot move.
 		final pinnedByItsDeclaration: Bool = carries(mods, shape.overrideModifierKind) || carries(mods, shape.dynamicModifierKind)
 			|| carries(mods, shape.macroModifierKind) || run.metas.exists(meta -> dispatched.contains(meta));
-		if (method == null || pinnedByItsDeclaration || declaresTypeParameters(owner, shape, source)) return null;
+		if (method == null || pinnedByItsDeclaration || declaresTypeParameters(owner, shape, typeParams)) return null;
 		// A bodyless member is an interface method or an `abstract` one: the signature is a contract
 		// the implementors already match. Haxe admits no other bodiless member, so this gate alone
 		// carries what an owner-kind test would have said.
@@ -243,16 +247,13 @@ final class ParamAscription {
 	 * Whether the owner method declares type parameters of its own. The projection carries a type
 	 * parameter's CONSTRAINT as a child and its NAME not at all, so an ascription to a bare `T` cannot
 	 * be told from one to a type called `T`; the whole generic method is refused rather than resolved
-	 * against the wrong declaration. Read from the header text — `function <name><…>` up to the
-	 * parameter list — and an unreadable header counts as generic.
+	 * against the wrong declaration. A method with no parameter at all is refused with it, as it
+	 * always was: there is no ascription to hoist.
 	 */
-	private static function declaresTypeParameters(owner: QueryNode, shape: RefShape, source: String): Bool {
+	private static function declaresTypeParameters(owner: QueryNode, shape: RefShape, typeParams: Map<Int, Array<String>>): Bool {
 		final span: Null<Span> = owner.span;
-		final first: Null<QueryNode> = owner.children.find(c -> (shape.paramKinds ?? []).contains(c.kind));
-		final firstSpan: Null<Span> = first?.span;
-		final header: Null<String> = span != null && firstSpan != null ? source.substring(span.from, firstSpan.from) : null;
-		// An unreadable header counts as generic.
-		return header == null || header.indexOf('<') >= 0;
+		final hasParam: Bool = owner.children.exists(c -> (shape.paramKinds ?? []).contains(c.kind) && c.span != null);
+		return span == null || !hasParam || typeParams.exists(span.from);
 	}
 
 	/**
@@ -314,11 +315,11 @@ final class ParamAscription {
 	 * its head already IS that wrapper; null when the grammar names none. A parameter a read compares
 	 * with null must keep admitting it, and must not gain a second wrapper doing so.
 	 */
-	private static function wrappedNullable(typeSource: String, shape: RefShape): Null<String> {
+	private static function wrappedNullable(typeSource: String, shape: RefShape, typeSyntax: TypeSyntaxReader): Null<String> {
 		final wrapper: Null<String> = nullableWrapperName(shape);
 		return if (wrapper == null)
 			null
-		else if (TypeResolver.stripWs(headOfTypeSource(typeSource)) == wrapper)
+		else if (headOfTypeSource(typeSource, typeSyntax) == wrapper)
 			typeSource
 		else
 			'$wrapper<$typeSource>';
@@ -336,15 +337,17 @@ final class ParamAscription {
 	}
 
 	/** `typeSource` with a leading explicit nullable wrapper peeled off, or unchanged when it carries none. */
-	private static function withoutNullableWrapper(typeSource: String, shape: RefShape): String {
+	private static function withoutNullableWrapper(typeSource: String, shape: RefShape, typeSyntax: TypeSyntaxReader): String {
 		final wrapper: Null<String> = nullableWrapperName(shape);
-		return wrapper == null ? typeSource : NominalTypes.unwrapNullable(TypeResolver.stripWs(typeSource), [wrapper]);
+		return wrapper == null ? typeSource : NominalTypes.unwrapNullable(TypeResolver.stripWs(typeSource), [wrapper], typeSyntax);
 	}
 
-	/** The nominal head of a written type source — its text before any type-argument list. */
-	private static function headOfTypeSource(typeSource: String): String {
-		final lt: Int = typeSource.indexOf('<');
-		return lt < 0 ? typeSource : typeSource.substring(0, lt);
+	/** The written path of a named type source (`pkg.Box<Int>` -> `pkg.Box`), or null for any other type. */
+	private static function headOfTypeSource(typeSource: String, typeSyntax: TypeSyntaxReader): Null<String> {
+		return switch typeSyntax(typeSource)?.shape {
+			case Nominal(path, _): path;
+			case _: null;
+		};
 	}
 
 	/** The root-to-`target` node chain, or null when `target` is not in `root`'s tree. */

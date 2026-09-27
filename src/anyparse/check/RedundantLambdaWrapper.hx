@@ -638,7 +638,7 @@ private typedef Ctx = {
 	final typeSources: Null<Map<Int, String>>;
 
 	/** `GrammarPlugin.typeSyntax` — how a binder's function-type annotation is read. */
-	final typeSyntax: String -> Null<TypeSyntax>;
+	final typeSyntax: TypeSyntaxReader;
 
 	/** Memo of "is this name ever written in this file", filled on demand by `written`. */
 	final written: Map<String, Bool>;

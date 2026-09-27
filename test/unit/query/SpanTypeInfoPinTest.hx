@@ -2,7 +2,9 @@ package unit.query;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
+import anyparse.query.QueryNode;
 import anyparse.query.SpanTypeInfoProvider.SpanTypeInfo;
+import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
 
@@ -129,6 +131,34 @@ class SpanTypeInfoPinTest extends Test {
 			Assert.equals(e[4], render(b.declaredTypeSources), 'declaredTypeSources for fixture $i');
 			Assert.equals(e[5], render(b.castTargetSources), 'castTargetSources for fixture $i');
 		}
+	}
+
+	/**
+	 * Type-parameter names are keyed by the node that declares them — a type, a `final` type, a function, a `final`
+	 * method, an enum constructor.
+	 */
+	public function testTypeParamNamesAreKeyedByTheirDeclaration(): Void {
+		final src: String = 'class Cell<Data, K:B> {\n\tfunction f<U:{a:Int}, V>(x:U):Void {}\n\tfinal function g<W>():Void {}\n}\n'
+			+ 'final class F<Z> {}\nenum E<A> {\n\tC<B>(b:B);\n}\ntypedef T<Q> = Array<Q>;';
+		final tree: QueryNode = new HaxeQueryPlugin().parseFile(src);
+		final names: Map<Int, Array<String>> = new HaxeQueryPlugin().typeParamNames(src);
+		final seen: Array<String> = [];
+		function walk(node: QueryNode): Void {
+			final span: Null<Span> = node.span;
+			final own: Null<Array<String>> = span == null ? null : names[span.from];
+			if (own != null) seen.push('${node.kind}:${own.join(',')}');
+			for (c in node.children) walk(c);
+		}
+		walk(tree);
+		Assert.same([
+			'ClassDecl:Data,K',
+			'FnMember:U,V',
+			'FinalModifiedMember:W',
+			'ClassForm:Z',
+			'EnumDecl:A',
+			'ParamCtor:B',
+			'TypedefDecl:Q'
+		], seen);
 	}
 
 	private static function assertBundleMatches(

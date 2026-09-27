@@ -73,52 +73,14 @@ final class CtorFieldFold {
 	}
 
 	/**
-	 * What the head of a declaration whose initializer starts at `initSpan` says about its TYPE. The
-	 * tree holds no type child for a local or a field, so it is read off the source: everything
-	 * before the LAST `=`, then the first `:` at or after the last STANDALONE occurrence of the
-	 * declared name — standalone so a leading `@:meta` cannot be mistaken for the annotation, and so
-	 * a type whose own spelling ends in the name (`t:MyToolt`) cannot swallow it.
-	 *
-	 * The scan can FAIL, and `DeclaredType` keeps that case apart from a genuinely unannotated
-	 * declaration, because a consumer may treat absence as a PROOF (see the enum's own doc). The two
-	 * are told apart by asking the FIRST standalone occurrence as well: no `:` after either one means
-	 * the head really writes no type, while a `:` after the first and none after the last means the
-	 * annotation's own text repeats the declared name (`stack:pkg.stack`, `a:Stack<a>`) and the scan
-	 * cannot say which occurrence is the binder. A missing `=`, a name that occurs nowhere standalone
-	 * and an empty annotation text are `Unreadable` for the same reason.
-	 *
-	 * Shared by the checks that must know what a `[]` initializer was DECLARED as:
-	 * `prefer-comprehension` transcribes the annotation onto the comprehension it emits (and reads
-	 * `Unreadable` exactly as `Absent`, since neither gives it anything to copy — that is what
-	 * `declaredTypeAnnotation` projects), while `join-array-pushes` asks whether it names an array
-	 * type and must refuse an unreadable head.
+	 * The type annotation `decl` writes — its `QueryNode.type` slot's verbatim source — or null when it
+	 * writes none. Shared by the checks that must know what a `[]` initializer was DECLARED as:
+	 * `prefer-comprehension` transcribes it onto the comprehension it emits, `join-array-pushes`
+	 * asks whether it names an array type.
 	 */
-	public static function declaredType(source: String, declSpan: Span, initSpan: Span, name: String): DeclaredType {
-		final prefix: String = source.substring(declSpan.from, initSpan.from);
-		final eq: Int = prefix.lastIndexOf('=');
-		if (eq < 0) return Unreadable;
-		final head: String = prefix.substring(0, eq);
-		final at: Int = SourceText.lastStandaloneIdentIndex(head, name);
-		if (at < 0) return Unreadable;
-		final colon: Int = head.indexOf(':', at);
-		if (colon >= 0) {
-			final text: String = head.substring(colon + 1).trim();
-			return text == '' ? Unreadable : Written(text);
-		}
-		final first: Int = SourceText.firstStandaloneIdentIndex(head, name);
-		return first >= 0 && head.indexOf(':', first) < 0 ? Absent : Unreadable;
-	}
-
-	/**
-	 * The annotation text `declaredType` read, or null when it read none — the `Null<String>`
-	 * projection for a consumer that only TRANSCRIBES the annotation, for which an unreadable head
-	 * and an absent one are the same answer: there is nothing to copy either way.
-	 */
-	public static function declaredTypeAnnotation(source: String, declSpan: Span, initSpan: Span, name: String): Null<String> {
-		return switch declaredType(source, declSpan, initSpan, name) {
-			case Written(text): text;
-			case Absent, Unreadable: null;
-		};
+	public static function declaredTypeAnnotation(source: String, decl: QueryNode): Null<String> {
+		final type: Null<Span> = decl.type?.span;
+		return type == null ? null : source.substring(type.from, type.to);
 	}
 
 	/**
@@ -317,7 +279,7 @@ final class CtorFieldFold {
 			: extract({
 				container: base.container,
 				fieldName: decl.name,
-				typeAnnotation: declaredTypeAnnotation(source, decl.span, decl.initSpan, decl.name),
+				typeAnnotation: declaredTypeAnnotation(source, decl.node),
 				defaultNode: decl.initNode,
 				defaultText: defaultText
 			})) ?? defaultText;
@@ -598,6 +560,7 @@ final class CtorFieldFold {
 		if (initSpan.from < head.end || !defaultIsMoveSafe(source, init, shape)) return null;
 		final initDrop: Null<Span> = initializerDropSpan(source, fieldSpan, initSpan, head.end);
 		return initDrop == null ? null : {
+			node: field,
 			name: name,
 			span: fieldSpan,
 			dropped: head.dropped,
@@ -825,6 +788,7 @@ final class CtorFieldFold {
  * `var`), the default expression, and the ` = <default>` region the fold deletes.
  */
 private typedef FoldableDecl = {
+	final node: QueryNode;
 	final name: String;
 	final span: Span;
 	final dropped: Null<Span>;
@@ -897,29 +861,3 @@ typedef CtorDefaultSite = {
 	/** The default's verbatim source text, exactly as the fold would splice it. */
 	final defaultText: String;
 };
-
-/**
- * What a declaration's HEAD says about its type, as `RefactorSupport.declaredType` reads it off the
- * source text (the tree carries no type child for a local or a field).
- *
- * Three cases, not two, because the reader can FAIL. `Absent` is a positive statement — the head
- * holds no annotation, so the initializer's own type is the declared one — and a consumer may act
- * on it; `Unreadable` says only that the scan could not attribute an annotation, and a consumer
- * that would treat absence as a PROOF must refuse there instead. The distinction is load-bearing:
- * `final stack:pkg.stack = []` puts a standalone occurrence of the declared name in the TYPE's own
- * tail, so the naive "no `:` after the name" test reads the annotation as absent and would hand a
- * caller a proof it never had. A consumer that only TRANSCRIBES an annotation (there is nothing to
- * copy either way) may collapse the two.
- */
-enum DeclaredType {
-
-	/** The head writes no type annotation — the initializer types the binding. */
-	Absent;
-
-	/** The head writes `: <text>`; `text` is the annotation's verbatim source, trimmed. */
-	Written(text: String);
-
-	/** The head carries a type the scan could not attribute to the declared name — nothing is proven. */
-	Unreadable;
-
-}

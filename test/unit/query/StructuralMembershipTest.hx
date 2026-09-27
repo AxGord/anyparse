@@ -95,13 +95,11 @@ class StructuralMembershipTest extends Test {
 		Assert.isTrue(index.structural.satisfiesIterable('SubStruct', 'Use.hx'));
 		// A function-type alias has no nominal head to follow.
 		Assert.isFalse(index.structural.satisfiesIterable('Fn', 'Use.hx'));
-		// The head is RAW source, so a comment before the path rides along in it. The raw answer
-		// falls back to the simple name there rather than handing a comment on as a type
-		// reference — which resolves here, because `Sack` is unique among the indexed decls.
+		// A comment before the path is trivia to the grammar, so the written path is followed —
+		// including to a target whose SIMPLE name is not unique, which a head read off the raw
+		// source could only answer by that simple name and left unproven.
 		Assert.isTrue(index.structural.satisfiesIterable('Commented', 'Use.hx'));
-		// The same fallback with a target whose SIMPLE name is not enough leaves it unproven,
-		// which is where the raw path would have been needed and is not available.
-		Assert.isFalse(index.structural.satisfiesIterable('CommentedDup', 'Use.hx'));
+		Assert.isTrue(index.structural.satisfiesIterable('CommentedDup', 'Use.hx'));
 
 		// The second half of the same hop, and the one the REAL path reaches first:
 		// `NominalTypes.staticExtensionNominal` consults an extension only after the receiver is
@@ -125,6 +123,7 @@ class StructuralMembershipTest extends Test {
 	 * with the receiver type — so re-pointing the FIELD, rather than adding one beside it, would
 	 * have broken both silently.
 	 */
+	@:pin('control') @:killer('M-ALIAS-TARGET-SIMPLE-NAME')
 	public function testAliasTargetPairAgrees(): Void {
 		final index: SymbolIndex = SymbolIndex.build(aliasFiles(), new HaxeQueryPlugin());
 
@@ -134,9 +133,9 @@ class StructuralMembershipTest extends Test {
 		Assert.equals('haxe.ds.Map', aliasRaw(index, 'Map'));
 		Assert.equals('Sack', aliasNominal(index, 'Renamed'));
 		Assert.equals('deep.Sack', aliasRaw(index, 'Renamed'));
-		// The comment fallback answers the SIMPLE name on both sides, never the raw head.
+		// A comment before the path is trivia to the grammar: the raw side is the written path.
 		Assert.equals('Sack', aliasNominal(index, 'Commented'));
-		Assert.equals('Sack', aliasRaw(index, 'Commented'));
+		Assert.equals('deep.Sack', aliasRaw(index, 'Commented'));
 		// Null on one side is null on the other, for every form that yields none.
 		for (form in ['Anon', 'Fn', 'Bag', 'IterStruct']) {
 			Assert.isNull(aliasNominal(index, form), 'expected no alias nominal for $form');

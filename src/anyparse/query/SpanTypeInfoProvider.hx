@@ -35,4 +35,5 @@ typedef SpanTypeInfo = {
 	final propertyWriteAccessors: Map<Int, Bool>;
 	final declaredTypeSources: Map<Int, String>;
 	final castTargetSources: Map<Int, String>;
+	final typeParamNames: Map<Int, Array<String>>;
 };

@@ -441,7 +441,7 @@ final class PreferComprehension implements Check {
 		final scopeSpan: Null<Span> = scope.span;
 		if (declName == null || declSpan == null || initSpan == null || forSpan == null || scopeSpan == null) return null;
 		if (!gapAdmits(source, declName, declSpan, forSpan, gapped)) return null;
-		final annotation: Null<String> = CtorFieldFold.declaredTypeAnnotation(source, declSpan, initSpan, declName);
+		final annotation: Null<String> = CtorFieldFold.declaredTypeAnnotation(source, decl);
 		final element: Null<String> = annotation == null ? null : elementTypeOf(annotation, s);
 		final acc: ComprehensionAcc = { checks: [], hoisted: [], elementType: element };
 		// A comment on its own line between an ADJACENT pair documents the loop the fix dissolves, so it
@@ -780,14 +780,13 @@ final class PreferComprehension implements Check {
 		if (useSpan == null || host == null || !useRunsInPlace(host, uses[0], useSpan, name, s)) return null;
 		// Re-bound as non-null locals: field narrowing does not reach an anonymous struct literal.
 		final boundName: String = declName;
-		final declRange: Span = declSpan;
 		final initRange: Span = initSpan;
 		final useRange: Span = useSpan;
 		return {
 			name: boundName,
 			init: init,
 			initSpan: initRange,
-			annotation: CtorFieldFold.declaredTypeAnnotation(ctx.source, declRange, initRange, boundName),
+			annotation: CtorFieldFold.declaredTypeAnnotation(ctx.source, decl),
 			useSpan: useRange,
 			useParent: uses[0].parent,
 			useIndex: uses[0].index,
@@ -1135,7 +1134,7 @@ typedef ComprehensionSeams = {
 	var elementTypeParams: Map<String, Int>;
 
 	/** `GrammarPlugin.typeSyntax` — how an annotation's element type is read. */
-	var typeSyntax: String -> Null<TypeSyntax>;
+	var typeSyntax: TypeSyntaxReader;
 
 	var atomKinds: Array<String>;
 	var pureKinds: Array<String>;

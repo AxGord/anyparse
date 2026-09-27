@@ -77,6 +77,11 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	// Layout metrics per config JSON — one entry per distinct `hxformat.json` in a run.
 	private final _layoutMetricsCache: Map<String, Null<LayoutMetrics>> = [];
 
+	// The inner grammar's `typeSyntax` answers per type text. A pure function of the text, so
+	// nothing ever expires it; the same annotation is asked about by every check that reads it.
+	// Values may be null (text that is not one type), so reads go through `exists`.
+	private final _typeSyntaxCache: Map<String, Null<TypeSyntax>> = [];
+
 	/**
 	 * The complexity threshold per DIRECTORY. `maxComplexity` walks up from a file to a
 	 * `checkstyle.json`, reads it off disk and re-derives the threshold, and `Complexity.run` asks
@@ -120,11 +125,6 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	// Null for a grammar without it, and every entry point below then falls back to its
 	// source-taking `_inner` call, byte-identically.
 	private final _rootProvider: Null<ParsedRootProvider>;
-
-	// The inner grammar's `typeSyntax` answers per type text. A pure function of the text, so
-	// nothing ever expires it; the same annotation is asked about by every check that reads it.
-	// Values may be null (text that is not one type), so reads go through `exists`.
-	private final _typeSyntaxCache: Map<String, Null<TypeSyntax>> = [];
 
 	// The PROCESS-scoped tier behind the run-scoped caches below: this wrapper's language slice
 	// of it, resolved once in the constructor. Only RESOLUTION-LIBRARY sources ever enter it —
@@ -611,6 +611,9 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		return read;
 	}
 
+	/** `TypeInfoProvider`: forward + memoize the type-parameter names per declaring span. */
+	public function typeParamNames(source: String): Map<Int, Array<String>> return spanTypeInfo(source).typeParamNames;
+
 	/** `TypeInfoProvider`: forward + memoize the typed-cast target-type-source map per source. */
 	public function castTargetSources(source: String): Map<Int, String> return spanTypeInfo(source).castTargetSources;
 
@@ -668,7 +671,8 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 			propertyAccessors: inner != null ? inner.propertyAccessors(source) : [],
 			propertyWriteAccessors: inner != null ? inner.propertyWriteAccessors(source) : [],
 			declaredTypeSources: inner != null ? inner.declaredTypeSources(source) : [],
-			castTargetSources: inner != null ? inner.castTargetSources(source) : []
+			castTargetSources: inner != null ? inner.castTargetSources(source) : [],
+			typeParamNames: inner != null ? inner.typeParamNames(source) : []
 		};
 	}
 

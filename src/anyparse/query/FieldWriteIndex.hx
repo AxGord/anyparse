@@ -5,6 +5,7 @@ import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ImportKind;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
@@ -85,6 +86,10 @@ typedef ScanCtx = {
 	var tree: QueryNode;
 	var shape: RefShape;
 	var typeSources: Map<Int, String>;
+
+	/** This file's type-parameter names per declaring span (`TypeInfoProvider.typeParamNames`). */
+	var headerTypeParams: Map<Int, Array<String>>;
+
 	var index: SymbolIndex;
 	var writes: Array<FieldWrite>;
 	var unresolved: Array<UnresolvedWrite>;
@@ -422,12 +427,19 @@ final class FieldWriteIndex {
 			final parsed: Null<QueryNode> = try plugin.parseFile(entry.source) catch (_: Exception) null;
 			if (parsed == null) continue;
 			final tree: QueryNode = parsed;
+			final typed: {
+				sources: Map<Int, String>,
+				params: Map<Int, Array<String>>
+			} = provider == null
+				? { sources: [], params: [] }
+				: { sources: provider.declaredTypeSources(entry.source), params: provider.typeParamNames(entry.source) };
 			final ctx: ScanCtx = {
 				file: entry.file,
 				source: entry.source,
 				tree: tree,
 				shape: shape,
-				typeSources: provider != null ? provider.declaredTypeSources(entry.source) : [],
+				typeSources: typed.sources,
+				headerTypeParams: typed.params,
 				index: symbols,
 				writes: writes,
 				unresolved: unresolved,
@@ -478,7 +490,7 @@ final class FieldWriteIndex {
 					memberFroms: directMemberFroms(node)
 				};
 				final sp: Null<Span> = node.span;
-				if (sp != null) mergeTypeParams(c.typeParams, nm, headerTypeParams(c.source, nm, sp.from));
+				if (sp != null) mergeTypeParams(c.typeParams, nm, c.headerTypeParams[sp.from] ?? []);
 			}
 		}
 		if (c.writeKinds.contains(node.kind)) classify(node, ctx, opaque, c);
@@ -727,7 +739,7 @@ final class FieldWriteIndex {
 	 * anonymous-struct type) or names an untypable wrapper (`Dynamic` / `Any`).
 	 */
 	private static function nominalSimpleName(
-		source: String, unwrapNames: Array<String>, rejectNames: Array<String>, typeSyntax: String -> Null<TypeSyntax>
+		source: String, unwrapNames: Array<String>, rejectNames: Array<String>, typeSyntax: TypeSyntaxReader
 	): Null<String> {
 		final parsed: Null<NominalParts> = nominalParse(source, unwrapNames, typeSyntax);
 		return parsed == null || rejectNames.contains(parsed.name) ? null : parsed.name;
@@ -743,9 +755,7 @@ final class FieldWriteIndex {
 	 * handed the simple name of a QUALIFIED annotation resolves some other type of that name; one
 	 * handed the path resolves the written one.
 	 */
-	private static function nominalParse(
-		source: String, unwrapNames: Array<String>, typeSyntax: String -> Null<TypeSyntax>
-	): Null<NominalParts> {
+	private static function nominalParse(source: String, unwrapNames: Array<String>, typeSyntax: TypeSyntaxReader): Null<NominalParts> {
 		var t: Null<TypeSyntax> = typeSyntax(source);
 		while (t != null) switch t.shape {
 			case Nominal(path, [arg]) if (unwrapNames.contains(path)):
@@ -771,23 +781,6 @@ final class FieldWriteIndex {
 		if (parsed == null) return null;
 		final at: Null<Int> = c.elementTypeParams[parsed.name];
 		return at != null && at < parsed.args.length ? parsed.args[at] : null;
-	}
-
-	/** Whether `s` is a plain dotted identifier path (`pkg.sub.Name`), with no other characters. */
-	private static function isDottedIdentPath(s: String): Bool {
-		if (s.length == 0) return false;
-		var expectStart: Bool = true;
-		for (i in 0...s.length) {
-			final ch: Int = s.fastCodeAt(i);
-			if (expectStart) {
-				if (!SourceText.isIdentStartChar(ch)) return false;
-				expectStart = false;
-			} else if (ch == '.'.code)
-				expectStart = true;
-			else if (!SourceText.isIdentChar(ch))
-				return false;
-		}
-		return !expectStart;
 	}
 
 	/**
@@ -832,44 +825,6 @@ final class FieldWriteIndex {
 		if (c.builtinNames.contains(owner)) return true;
 		final decls: Array<TypeDeclInfo> = declsNamedIn(c.index, owner);
 		return decls.length != 0 && decls.foreach(d -> !(c.aliasKinds.contains(d.kind)));
-	}
-
-	/**
-	 * The type-parameter names of a type-declaration header (`class Cell<Data,
-	 * K:B>` → `Data`, `K`), extracted TEXTUALLY from the decl's source slice — the
-	 * `QueryNode` projection drops type parameters, so the header text is the only
-	 * carrier. Empty when the header carries none or the shape is unrecognisable
-	 * (a miss only loses a poison guard elsewhere is compensating for, never a
-	 * write).
-	 */
-	private static function headerTypeParams(source: String, name: String, from: Int): Array<String> {
-		final bodyAt: Int = source.indexOf('{', from);
-		final nameAt: Int = source.indexOf(name, from);
-		if (nameAt < 0 || (bodyAt >= 0 && nameAt > bodyAt)) return [];
-		var i: Int = nameAt + name.length;
-		while (i < source.length && SourceText.isSpace(source.fastCodeAt(i))) i++;
-		if (i >= source.length || source.fastCodeAt(i) != '<'.code) return [];
-		var depth: Int = 1;
-		final start: Int = i + 1;
-		var j: Int = start;
-		var prev: Int = 0;
-		while (j < source.length && depth > 0) {
-			final ch: Int = source.fastCodeAt(j);
-			if (ch == '<'.code)
-				depth++;
-			else if (ch == '>'.code && prev != '-'.code)
-				depth--;
-			prev = ch;
-			j++;
-		}
-		if (depth != 0) return [];
-		final out: Array<String> = [];
-		for (p in NominalTypes.splitTypeArgumentList(source.substring(start, j - 1))) {
-			final colon: Int = p.indexOf(':');
-			final nm: String = StringTools.trim(colon < 0 ? p : p.substring(0, colon));
-			if (isDottedIdentPath(nm) && !out.contains(nm)) out.push(nm);
-		}
-		return out;
 	}
 
 	/** Union `params` into `map[owner]` — a simple-name collision merges conservatively (more names → more poisons). */
