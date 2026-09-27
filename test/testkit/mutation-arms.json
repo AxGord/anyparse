@@ -9257,7 +9257,7 @@
 			"type": "anyparse.check.LockSites",
 			"method": "acquire",
 			"find": "blind: traced == null || traced.held.exists(",
-			"replace": "blind: traced == null && traced.held.exists(",
+			"replace": "blind: traced == null || false && traced.held.exists(",
 			"note": "a hold across a call the graph resolves to nothing reads as short, so a lock held across a stored callback never stalls its main-thread taker"
 		},
 		{
