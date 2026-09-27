@@ -76,7 +76,7 @@ class ThreadSafetyCheckTest extends Test {
 			]);
 		final held: Array<Violation> = [for (v in vs) if (v.message.indexOf('holds') != -1) v];
 		Assert.equals(1, held.length);
-		Assert.isTrue(held[0].message.indexOf('Mut.lock') != -1);
+		Assert.isTrue(held[0].message.indexOf('A._m') != -1);
 		Assert.isTrue(held[0].message.indexOf('File.saveContent') != -1);
 		#else
 		Assert.pass('non-sys target');
@@ -187,7 +187,7 @@ class ThreadSafetyCheckTest extends Test {
 	@:pin('control') @:killer('M-TS-WINDOW-IF-RELEASES')
 	public function testAReleaseOnAnEarlyReturnKeepsTheRestOfTheWindow(): Void {
 		#if (sys || nodejs)
-		Assert.contains('"A.main" holds "Mutex.acquire" across a call that can block: Sys.sleep', lockFindings([
+		Assert.contains('"A.main" holds "A.m" across a call that can block: Sys.sleep', lockFindings([
 			'class A { static final m:Mutex = new Mutex(); static var c:Bool; static function main():Void { m.acquire();'
 			+ ' if (c) { m.release(); return; } Sys.sleep(1); m.release(); } }'
 		]));
@@ -255,7 +255,7 @@ class ThreadSafetyCheckTest extends Test {
 	@:pin('control') @:killer('M-TS-CTOR-ESCAPE-BLIND')
 	public function testAConstructorPublishingItselfFirstHoldsAContendedLock(): Void {
 		#if (sys || nodejs)
-		Assert.contains('"A.new" holds "Mutex.acquire" across a call that can block: Sys.sleep', lockFindings([
+		Assert.contains('"A.new" holds "A.m" across a call that can block: Sys.sleep', lockFindings([
 			'class A { public static var instance:A; final m:Mutex = new Mutex(); public function new() { instance = this; m.acquire();'
 			+ ' Sys.sleep(1); m.release(); } public function work():Void { m.acquire(); m.release(); } }'
 		]));
@@ -268,7 +268,7 @@ class ThreadSafetyCheckTest extends Test {
 	@:pin('control') @:killer('M-TS-LOOP-ONE-PASS')
 	public function testALockTakenInALoopIsHeldOnTheNextPass(): Void {
 		#if (sys || nodejs)
-		Assert.contains('"A.main" holds "Mutex.acquire" across a call that can block: Sys.sleep', lockFindings([
+		Assert.contains('"A.main" holds "A.m" across a call that can block: Sys.sleep', lockFindings([
 			'class A { static final m:Mutex = new Mutex(); static function main():Void { for (i in 0...3) { Sys.sleep(1);'
 			+ ' if (i == 0) m.acquire(); } m.release(); } }'
 		]));
@@ -416,9 +416,7 @@ class ThreadSafetyCheckTest extends Test {
 			}
 		];
 		for (order in [['x/X.hx', 'y/A.hx', 'y/B.hx'], ['y/A.hx', 'y/B.hx', 'x/X.hx']])
-			Assert.contains(
-				'y/B.hx: "B.f" holds "Mutex.acquire" across a call that can block: A.n -> Sys.sleep', chainFindings(tree, order)
-			);
+			Assert.contains('y/B.hx: "B.f" holds "B.m" across a call that can block: A.n -> Sys.sleep', chainFindings(tree, order));
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -492,7 +490,7 @@ class ThreadSafetyCheckTest extends Test {
 	@:pin('control') @:killer('M-TS-WRAPPER-NONE')
 	public function testAHoldTakenThroughAWrapperIsTheCallersHold(): Void {
 		#if (sys || nodejs)
-		Assert.contains('"A.main" holds "Mutex.acquire" across a call that can block: Sys.sleep', lockFindings([
+		Assert.contains('"A.main" holds "A.m" across a call that can block: Sys.sleep', lockFindings([
 			'class A { static final m:Mutex = new Mutex(); static function lockIt():Void m.acquire();'
 			+ ' static function unlockIt():Void m.release(); static function main():Void { lockIt(); Sys.sleep(1); unlockIt(); } }'
 		]));
@@ -518,7 +516,7 @@ class ThreadSafetyCheckTest extends Test {
 	@:pin('control') @:killer('M-TS-WRAPPER-MAY-RELEASE')
 	public function testAConditionalReleaseIsNoWrapper(): Void {
 		#if (sys || nodejs)
-		Assert.contains('"A.main" holds "Mutex.acquire" across a call that can block: Sys.sleep', lockFindings([
+		Assert.contains('"A.main" holds "A.m" across a call that can block: Sys.sleep', lockFindings([
 			'class A { static final m:Mutex = new Mutex(); static function lockIt():Void m.acquire();'
 			+ ' static function unlockIt(c:Bool):Void if (c) m.release();'
 			+ ' static function main():Void { lockIt(); unlockIt(true); Sys.sleep(1); } }'
@@ -559,7 +557,7 @@ class ThreadSafetyCheckTest extends Test {
 	@:pin('control') @:killer('M-TS-WRAPPER-NO-PASS-THROUGH')
 	public function testAWrapperReachedThroughAnInterfaceTakesTheLock(): Void {
 		#if (sys || nodejs)
-		Assert.contains('"A.main" holds "Mutex.acquire" across a call that can block: Sys.sleep', lockFindings([
+		Assert.contains('"A.main" holds "B.m" across a call that can block: Sys.sleep', lockFindings([
 			'interface I { function lockIt():Void; function unlockIt():Void; }',
 			'class B implements I { final m:Mutex = new Mutex(); public function new() {} public function lockIt():Void m.acquire();'
 			+ ' public function unlockIt():Void m.release(); }',
@@ -618,6 +616,116 @@ class ThreadSafetyCheckTest extends Test {
 		Assert.pass('non-sys target');
 		#end
 	}
+
+	/** A hold of a `reentrantLocks` lock may take that same lock again: the re-take inside it blocks nothing. */
+	@:pin('control') @:killer('M-TS-REENTRANT-IGNORED')
+	public function testARetakeOfAHeldReentrantLockIsNoBlockingCall(): Void {
+		#if (sys || nodejs)
+		Assert.same([], heldBy('A.main', reentrantFixture('"reentrantLocks":["Mutex.acquire"],')));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** Re-entrance is a property a lock kind is GIVEN: an unlisted one keeps the re-take a blocking call. */
+	@:pin('control') @:killer('M-TS-REENTRANT-ASSUMED')
+	public function testARetakeOfAnUnlistedLockKindStillBlocks(): Void {
+		#if (sys || nodejs)
+		Assert.same(
+			['"A.main" holds "A.m" across a call that can block: A.inner -> Mutex.acquire'], heldBy('A.main', reentrantFixture(''))
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** One finding per hold: the calls that block are counted, the first `EVIDENCE_CAP` distinct ones named, the rest counted. */
+	@:pin('control') @:killer('M-TS-EVIDENCE-UNCAPPED')
+	public function testAHoldIsOneFindingListingItsBlockingCalls(): Void {
+		#if (sys || nodejs)
+		Assert.same(
+			[
+				'"A.main" holds "A.m" across 5 calls that can block: Sys.sleep; A.a -> Sys.sleep; A.b -> Sys.sleep; +1 more'
+			],
+			heldBy('A.main', lockFindings([
+				'class A { static final m:Mutex = new Mutex(); static function main():Void { m.acquire(); Sys.sleep(1); a(); Sys.sleep(2);'
+				+ ' b(); c(); m.release(); } static function a():Void Sys.sleep(1); static function b():Void Sys.sleep(1);'
+				+ ' static function c():Void Sys.sleep(1); }'
+			]))
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A hold's finding sits at the first call of the hold that can block. */
+	@:pin('control') @:killer('M-TS-HOLD-ANCHOR-LAST')
+	public function testAHoldIsAnchoredAtItsFirstBlockingCall(): Void {
+		#if (sys || nodejs)
+		final source: String = 'class A { static final m:Mutex = new Mutex(); static function main():Void { m.acquire(); x();'
+			+ ' Sys.sleep(1); Sys.sleep(2); m.release(); } static function x():Void {} }';
+		final held: Array<Violation> = violations(
+			'{"rules":{"thread-safety":{"sinks":["Mutex.acquire","Sys.sleep"],"lockPairs":["Mutex.acquire/release"]}}}', [MUTEX, source]
+		).filter(v -> v.message.indexOf(' holds ') != -1);
+		Assert.same([source.indexOf('Sys.sleep(1)')], [for (v in held) v.span?.from]);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A hold of a lock no member names is reported under the pair's take member. */
+	@:pin('control') @:killer('M-TS-UNKNOWN-LOCK-UNNAMED')
+	public function testAHoldOfAnUnknownLockNamesThePair(): Void {
+		#if (sys || nodejs)
+		Assert.same(['"B.use" holds "Mutex.acquire" across a call that can block: Sys.sleep'], heldBy('B.use', lockFindings([
+			'class A { static function main():Void B.use(new Mutex()); }',
+			'class B { public static function use(x:Mutex):Void { x.acquire(); Sys.sleep(1); x.release(); } }'
+		])));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** One main-thread finding per call site, naming every sink a dispatch there may reach. */
+	@:pin('control') @:killer('M-TS-SITE-PER-TARGET')
+	public function testAMainThreadCallSiteIsOneFinding(): Void {
+		#if (sys || nodejs)
+		final vs: Array<Violation> = violations('{"rules":{"thread-safety":{"sinks":["I.read","B.read"]}}}', [
+			'interface I { function read():Void; }',
+			'class B implements I { public function new() {} public function read():Void {} }',
+			'class A { static function main(i:I):Void i.read(); }'
+		]);
+		Assert.same(['main thread reaches blocking "I.read" / "B.read": A.main -> I.read / B.read'], [for (v in vs) v.message]);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	#if (sys || nodejs)
+	/** The hold findings of `holder` among `found`. */
+	private static function heldBy(holder: String, found: Array<String>): Array<String> {
+		return found.filter(f -> f.indexOf('"$holder" holds') == 0);
+	}
+
+	/** `A.main` holding `A.m` across `A.inner`, which takes `A.m` again, while a background thread sleeps under it. */
+	private function reentrantFixture(extraConfig: String): Array<String> {
+		final found: Array<String> = [
+			for (v in violations(
+				'{"rules":{"thread-safety":{$extraConfig"sinks":["Mutex.acquire","Sys.sleep"],"spawns":["Runner.create"],'
+				+ '"lockPairs":["Mutex.acquire/release"]}}}',
+				[
+					MUTEX,
+					'class A { static final m:Mutex = new Mutex(); static function main():Void { Runner.create(work); m.acquire();'
+					+ ' inner(); m.release(); } static function inner():Void { m.acquire(); m.release(); }'
+					+ ' static function work():Void { m.acquire(); Sys.sleep(1); m.release(); } }',
+					'class Runner { public static function create(fn:()->Void):Void {} }'
+				]
+			)) v.message
+		];
+		found.sort(Reflect.compare);
+		return found;
+	}
+	#end
 
 	#if (sys || nodejs)
 	/** Every finding over `tree` with the run's files listed in `order`, as sorted `<relative path>: <message>` lines. */

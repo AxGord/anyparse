@@ -83,9 +83,6 @@ final class LockSites {
 
 	private final _unsealed: Array<String> = [];
 
-	/** The lock wrappers, by function id. */
-	private var _wrappers: Map<String, LockWrapper> = [];
-
 	/** `<file>:<start>` of every call of a wrapper -> the lock the call takes or gives back, null for an unknown one. */
 	private final _siteLocks: Map<String, Null<String>> = [];
 
@@ -98,6 +95,9 @@ final class LockSites {
 	private final _walker: Null<LockWindow>;
 	private final _ctorName: String;
 	private final _nestedFnKinds: Array<String>;
+
+	/** The lock wrappers, by function id. */
+	private var _wrappers: Map<String, LockWrapper> = [];
 
 	/** Collects the acquires over the `files` of `graph`; `pairsOf` names the pairs the chain of a file configures. */
 	public function new(graph: CallGraph, files: Array<String>, plugin: GrammarPlugin, pairsOf: (String) -> Array<LockPair>) {
@@ -127,7 +127,7 @@ final class LockSites {
 		collectCrossing(gives);
 	}
 
-	/** The lock `edge` is made on: the wrapper's lock at a wrapper call, else its receiver's member when that member is sealed, else null. */
+	/** The lock `edge` is made on: a wrapper call's lock, else its receiver's member when that member is sealed, else null. */
 	public function lockOf(edge: CallEdge): Null<String> {
 		final site: Null<String> = siteKey(edge);
 		if (site != null && _siteLocks.exists(site)) return _siteLocks[site];
@@ -321,7 +321,7 @@ final class LockSites {
 	): Array<{ call: LockCall, wrapper: LockWrapper }> {
 		final unresolvedNames: Array<String> = [for (u in _graph.unresolved) for (n in ReachAdmission.admittedNames(u)) n];
 		var wrappers: Map<String, LockWrapper> = [];
-		for (round in 0...WRAPPER_ROUNDS) {
+		for (_ in 0...WRAPPER_ROUNDS) {
 			final sites: Map<String, { call: LockCall, wrapper: LockWrapper }> = wrapperSites(wrappers);
 			_siteLocks.clear();
 			for (key => site in sites) _siteLocks[key] = site.wrapper.lock;
@@ -434,24 +434,24 @@ final class LockSites {
 		return fn != null && type != null && fn.isBodyless && !fn.isExternal && !_graph.types.meta.isExtern(type);
 	}
 
+	private static inline function sameWrapper(a: Null<LockWrapper>, b: LockWrapper): Bool {
+		return a != null && a.takes == b.takes && a.lock == b.lock && a.pair == b.pair;
+	}
+
+	private static inline function memberName(field: String): String {
+		return field.substr(field.lastIndexOf('.') + 1);
+	}
+
 	/** `<file>:<start>` of `edge`'s site; null for an edge with no site. */
 	private static function siteKey(edge: CallEdge): Null<String> {
 		final at: Null<Span> = edge.span;
 		return at == null ? null : '${edge.file}:${at.from}';
 	}
 
-	private static function sameWrapper(a: Null<LockWrapper>, b: LockWrapper): Bool {
-		return a != null && a.takes == b.takes && a.lock == b.lock && a.pair == b.pair;
-	}
-
 	private static function sameWrappers(a: Map<String, LockWrapper>, b: Map<String, LockWrapper>): Bool {
 		for (id => w in a) if (!sameWrapper(b[id], w)) return false;
 		for (id in b.keys()) if (!a.exists(id)) return false;
 		return true;
-	}
-
-	private static inline function memberName(field: String): String {
-		return field.substr(field.lastIndexOf('.') + 1);
 	}
 
 }

@@ -8679,10 +8679,10 @@
 		},
 		{
 			"name": "M-TS-TAINT-UNION-SINK",
-			"type": "anyparse.check.ThreadSafety",
-			"method": "collectTaint",
+			"type": "anyparse.check.LockTaint",
+			"method": "hops",
 			"find": "&& !listsOf(edge.file).sinkIds.contains(edge.from)",
-			"replace": "&& !sinkIds.contains(edge.from)",
+			"replace": "&& !_sinkIds.contains(edge.from)",
 			"note": "a node one chain names a sink never carries taint to its callers in a chain where it is a plain function"
 		},
 		{
@@ -9182,9 +9182,9 @@
 		},
 		{
 			"name": "M-TS-LOCK-ALWAYS-BLOCKS",
-			"type": "anyparse.check.ThreadSafety",
+			"type": "anyparse.check.LockTaint",
 			"method": "blocks",
-			"find": "if (!takesLock(edge, listsOf)) return true;",
+			"find": "if (!takesLock(edge)) return true;",
 			"replace": "return true;",
 			"note": "a sink taking a lock blocks whatever the lock is, so a main-thread take of a lock nobody holds long is reported again"
 		},
@@ -9272,8 +9272,8 @@
 			"name": "M-TS-WRAPPER-NONE",
 			"type": "anyparse.check.LockSites",
 			"method": "inferWrappers",
-			"find": "for (round in 0...WRAPPER_ROUNDS) {",
-			"replace": "for (round in 0...0) {",
+			"find": "for (_ in 0...WRAPPER_ROUNDS) {",
+			"replace": "for (_ in 0...0) {",
 			"note": "no function is a lock wrapper, so a hold taken through one is nobody's and goes unreported"
 		},
 		{
@@ -9325,11 +9325,59 @@
 			"note": "a call through an interface member is no wrapper call, so a wrapper reached by dispatch is dropped and its caller's hold goes unreported"
 		},
 		{
+			"name": "M-TS-REENTRANT-IGNORED",
+			"type": "anyparse.check.LockTaint",
+			"method": "blocks",
+			"find": "return lock == null || lock != held && _long.contains(lock);",
+			"replace": "return lock == null || _long.contains(lock);",
+			"note": "a hold re-taking its own re-entrant lock counts as blocking, so every nested take of a held Mutex is reported"
+		},
+		{
+			"name": "M-TS-REENTRANT-ASSUMED",
+			"type": "anyparse.check.LockTaint",
+			"method": "reentrantHeld",
+			"find": "listsOf(a.edge.file).reentrantIds.contains(a.pair.lockId)",
+			"replace": "true",
+			"note": "every lock kind is taken as re-entrant, so a re-take of a binary semaphore under its own hold (a self-deadlock) goes unreported"
+		},
+		{
+			"name": "M-TS-EVIDENCE-UNCAPPED",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "evidenceOf",
+			"find": "final more: Int = evidence.length - EVIDENCE_CAP;",
+			"replace": "final more: Int = 0;",
+			"note": "a hold's blocking calls past the cap vanish from its finding instead of being counted"
+		},
+		{
+			"name": "M-TS-HOLD-ANCHOR-LAST",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "reportLockHeld",
+			"find": "final anchor: CallEdge = blocking[0];",
+			"replace": "final anchor: CallEdge = blocking[blocking.length - 1];",
+			"note": "a hold's finding sits at its last blocking call, not where the stall first begins"
+		},
+		{
+			"name": "M-TS-UNKNOWN-LOCK-UNNAMED",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "reportLockHeld",
+			"find": "${lock ?? a.pair.lockId}",
+			"replace": "${lock ?? ''}",
+			"note": "a hold of a lock no member names is reported naming nothing"
+		},
+		{
+			"name": "M-TS-SITE-PER-TARGET",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "reportMainSinkCalls",
+			"find": "final key: String = '${edge.file}:${edge.span?.from ?? -1}:${edge.from}';",
+			"replace": "final key: String = '${edge.file}:${edge.span?.from ?? -1}:${edge.from}:${edge.to}';",
+			"note": "every sink a dispatch may reach is its own finding at one call site"
+		},
+		{
 			"name": "M-TS-QUIET-IGNORED",
 			"type": "anyparse.check.ThreadSafety",
 			"method": "enter",
-			"find": "if (!quiet.contains(id)) return ctx;",
-			"replace": "if (true) return ctx;",
+			"find": "return quiet.contains(id)",
+			"replace": "return false",
 			"note": "a quiet root silences nothing, so shutdown and crash paths are reported as main-thread stalls"
 		},
 		{
@@ -9343,7 +9391,7 @@
 		{
 			"name": "M-TS-QUIET-MARSHAL-LOUD",
 			"type": "anyparse.check.ThreadSafety",
-			"method": "propagateContexts",
+			"method": "callbackContext",
 			"find": "carry(ctx, CTX_MAIN, CTX_QUIET)",
 			"replace": "CTX_MAIN",
 			"note": "a callback a quiet root marshals to the main thread is loud, so a quiet background shutdown is reported through it"
