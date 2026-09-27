@@ -68,8 +68,8 @@ import anyparse.runtime.Span;
  * (visible only inside the clause body) and a lambda parameter is a
  * decl-host bound into the enclosing lambda scope frame.
  *
- * A `case` pattern capture is a declaration too, bound into its arm frame: see `CaptureIndex`. A bare name
- * there that one file cannot decide between a capture and a constant is marked `RefHit.patternUndecided`.
+ * A `case` pattern capture is a declaration too, bound into its arm frame: see `CaptureIndex`. A bare name there that is
+ * not a PROVEN capture (`CasePatterns.isDecidedCapture`) is marked `RefHit.patternUndecided`.
  *
  * Nodes carrying a null `span` are skipped — without source coordinates
  * the result is not addressable.
@@ -103,8 +103,7 @@ final class Refs {
 		final out: Map<String, Array<RefHit>> = [];
 		for (n in names) if (!out.exists(n)) out[n] = [];
 		if (names.length == 0) return out;
-		final scopes: ScopeStack = new ScopeStack();
-		walkMulti(tree, shape, scopes, out, WalkFlags.None, new CaptureIndex(tree, shape));
+		walkWithSubjects(tree, shape, out);
 		return out;
 	}
 
@@ -122,8 +121,24 @@ final class Refs {
 	public static function findWithSkipped(name: String, tree: QueryNode, shape: RefShape): { hits: Array<RefHit>, skipped: Int } {
 		final out: Map<String, Array<RefHit>> = [name => []];
 		final skipped: Map<String, Int> = [name => 0];
-		walkMulti(tree, shape, new ScopeStack(), out, WalkFlags.None, new CaptureIndex(tree, shape), skipped);
+		walkWithSubjects(tree, shape, out, skipped);
 		return { hits: out[name] ?? [], skipped: skipped[name] ?? 0 };
+	}
+
+	/**
+	 * One walk over `tree` filling `out`, with the switch SUBJECT names resolved alongside: whether a
+	 * `case` capture is decided depends on its subject's declared type (`CaptureIndex`), and the walk
+	 * only tracks the bindings of the names it searches for. A subject name the caller did not ask for is
+	 * searched too and its hits dropped, so every requested name answers as if asked alone.
+	 */
+	private static function walkWithSubjects(
+		tree: QueryNode, shape: RefShape, out: Map<String, Array<RefHit>>, ?skipped: Map<String, Int>
+	): Void {
+		final captures: CaptureIndex = new CaptureIndex(tree, shape);
+		final extra: Array<String> = [for (name in captures.subjectNames()) if (!out.exists(name)) name];
+		for (name in extra) out[name] = [];
+		walkMulti(tree, shape, new ScopeStack(), out, WalkFlags.None, captures, skipped);
+		for (name in extra) out.remove(name);
 	}
 
 	/**
@@ -259,14 +274,16 @@ final class Refs {
 							final at: Span = span;
 							// A pattern capture binds through its arm's frame, so every alternative of
 							// `case A(x), B(x):` answers the FIRST one's binding.
-							final self: RefBinding = { node: node, span: at };
-							final binding: Null<RefBinding> = if (kind != RefKind.Decl)
-								scopes.resolveInnermost(nname, at.from)
-							else if (pattern == null)
-								self
+							final captured: Null<RefBinding> = pattern?.binding;
+							final binding: Null<RefBinding> = if (captured != null)
+								captured
+							else if (kind == RefKind.Decl)
+								{ node: node, span: at }
 							else
-								scopes.resolveInnermost(nname, at.from) ?? self;
-							hits.push(new RefHit(kind, nname, at, binding, isInterpRead(node.kind, shape), pattern?.undecided == true));
+								scopes.resolveInnermost(nname, at.from);
+							hits.push(new RefHit(
+								kind, nname, at, binding, isInterpRead(node.kind, shape), pattern?.undecided == true, pattern?.shadows
+							));
 						} else if (skipped != null && isMemberAccess(node.kind, shape))
 							skipped[nname] = (skipped[nname] ?? 0) + 1;
 					}
@@ -524,8 +541,16 @@ final class RefHit {
 	 */
 	public final patternUndecided: Bool;
 
+	/**
+	 * For an undecided pattern CAPTURE, the span of the binding it hides if it does capture — the
+	 * outer local, parameter or field of the same name. If the pattern compares instead, the arm's
+	 * reads of the name are THAT binding's, so a rewrite of it refuses on this hit too.
+	 */
+	public final patternShadows: Null<Span>;
+
 	public function new(
-		kind: RefKind, name: String, span: Span, ?binding: RefBinding, interpolated: Bool = false, patternUndecided: Bool = false
+		kind: RefKind, name: String, span: Span, ?binding: RefBinding, interpolated: Bool = false, patternUndecided: Bool = false,
+		?patternShadows: Span
 	) {
 		this.kind = kind;
 		this.name = name;
@@ -534,6 +559,7 @@ final class RefHit {
 		bindingNode = binding?.node;
 		this.interpolated = interpolated;
 		this.patternUndecided = patternUndecided;
+		this.patternShadows = patternShadows;
 	}
 
 }

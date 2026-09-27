@@ -305,7 +305,7 @@ final class Rename {
 			if (undecided != null) {
 				final at: Position = undecided.span.lineCol(source);
 				return 'rename of "$oldName" is unsafe: the case pattern at ${at.line}:${at.col} names it bare, and one file cannot'
-					+ ' decide whether that pattern captures or compares against a constant of the same name - rename it by hand';
+					+ ' prove that pattern captures rather than compares against a constant of the same name - rename it by hand';
 			}
 			final stray: Null<Span> = OccurrenceScan.unrewrittenInterpRead(hits, binding, occurrences);
 			if (stray != null) {

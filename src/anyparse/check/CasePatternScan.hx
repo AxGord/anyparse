@@ -6,6 +6,7 @@ import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TreePath;
+import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -143,6 +144,27 @@ final class CasePatternScan {
 			});
 		}
 		return out;
+	}
+
+	/**
+	 * Whether `binder` of `arm` is a PROVEN capture (`CasePatterns.isDecidedCapture`) — the gate every
+	 * rule that ACTS on a binder being a capture (spelling it `_`, reporting it as a catch-all, splicing
+	 * a nested switch over it) must pass. A bare name that may compare against a constant of the
+	 * subject's type or of an import is not one, and such a rule declines.
+	 */
+	public static function provesCapture(
+		seams: CaseSeams, root: QueryNode, switchNode: QueryNode, arm: QueryNode, binder: PatternBinder
+	): Bool {
+		return CasePatterns.provesCaptureAt(arm, switchNode, root, seams.shape, binder.node, subjectResolver(root, seams.shape));
+	}
+
+	/** How a lint rule resolves a switch subject identifier to its declaration: through the reference walk. */
+	public static function subjectResolver(root: QueryNode, shape: RefShape): QueryNode -> Null<QueryNode> {
+		return subject -> {
+			final name: Null<String> = subject.name;
+			final span: Null<Span> = subject.span;
+			return name == null || span == null ? null : TypeResolver.resolveBindingHit(name, span, root, shape)?.bindingNode;
+		};
 	}
 
 	/** How many nodes in `node`'s subtree MENTION `name` — an identifier, a `'$name'` interpolation, or a pattern binder. */

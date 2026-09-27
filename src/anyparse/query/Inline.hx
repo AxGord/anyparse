@@ -88,7 +88,7 @@ final class Inline {
 		final prep: InlinePrep = resolveInlineTarget(source, line, col, cursor, tree, shape);
 		return switch prep {
 			case PErr(message): Err(message);
-			case POk(target): buildInlineEdits(source, tree, target, plugin, shape);
+			case POk(target): buildInlineEdits(source, target, plugin, shape);
 		};
 	}
 
@@ -112,11 +112,13 @@ final class Inline {
 	 * Returns an `Err` message string on the first hazard, or null when
 	 * every free ident is safe to duplicate.
 	 */
-	private static function checkFreeIdents(name: String, init: QueryNode, tree: QueryNode, shape: RefShape): Null<String> {
+	private static function checkFreeIdents(
+		name: String, init: QueryNode, tree: QueryNode, initHits: Map<String, Array<RefHit>>
+	): Null<String> {
 		for (id in namedIdents(init)) {
 			final nm: String = id.name;
 			final idSpan: Span = id.span;
-			final nmHits: Array<RefHit> = Refs.find(nm, tree, shape);
+			final nmHits: Array<RefHit> = initHits[nm] ?? [];
 			if (nmHits.exists(h -> h.kind == RefKind.Write))
 				return '"$name" initializer depends on reassigned variable "$nm" — cannot inline';
 
@@ -200,16 +202,11 @@ final class Inline {
 
 		// Every free identifier the initializer reads must be a stable
 		// local (not reassigned anywhere, not a field / property).
-		final freeIdentErr: Null<String> = checkFreeIdents(name, initializer, tree, shape);
+		final initHits: Map<String, Array<RefHit>> = Refs.findMulti(namedIdents(initializer).map(id -> id.name), tree, shape);
+		final freeIdentErr: Null<String> = checkFreeIdents(name, initializer, tree, initHits);
 		if (freeIdentErr != null) return PErr(freeIdentErr);
-		final undecided: Null<RefHit> = RefactorSupport.undecidedPatternHit(hits, binding);
-		if (undecided != null) {
-			final at: Position = undecided.span.lineCol(source);
-			return PErr(
-				'"$name" is named by the case pattern at ${at.line}:${at.col}, which one file cannot decide between a capture'
-				+ ' and a constant - the reads of the arm may or may not be this local\'s'
-			);
-		}
+		final undecided: Null<String> = undecidedPatternRefusal(source, hits, binding, name);
+		if (undecided != null) return PErr(undecided);
 
 		// The "go edit the source and retry" refusals come LAST: that advice is wasted when an
 		// unconditional gate above would reject the inline anyway.
@@ -228,8 +225,22 @@ final class Inline {
 				decl: decl,
 				initializer: initializer,
 				initRange: initRange,
-				reads: reads
+				reads: reads,
+				initHits: initHits
 			});
+	}
+
+	/**
+	 * The refusal for a `case` pattern name bound to the local, or hiding it, that is not a PROVEN
+	 * capture (`RefactorSupport.undecidedPatternHit`), or null when there is none: the arm's reads of the
+	 * name may be the local's or the capture's, and the substitution can serve only one reading.
+	 */
+	private static function undecidedPatternRefusal(source: String, hits: Array<RefHit>, binding: Int, name: String): Null<String> {
+		final undecided: Null<RefHit> = RefactorSupport.undecidedPatternHit(hits, binding);
+		if (undecided == null) return null;
+		final at: Position = undecided.span.lineCol(source);
+		return '"$name" is named by the case pattern at ${at.line}:${at.col}, which one file cannot prove a capture'
+			+ ' rather than a comparison with a constant - the reads of the arm may or may not be this local\'s';
 	}
 
 	/**
@@ -259,9 +270,7 @@ final class Inline {
 	 * every read, delete the decl line (refusing if the decl shares its line),
 	 * then re-parse the rewrite — an unparseable result is rejected.
 	 */
-	private static function buildInlineEdits(
-		source: String, tree: QueryNode, target: InlineTarget, plugin: GrammarPlugin, shape: RefShape
-	): InlineResult {
+	private static function buildInlineEdits(source: String, target: InlineTarget, plugin: GrammarPlugin, shape: RefShape): InlineResult {
 		final name: String = target.name;
 		final initializer: QueryNode = target.initializer;
 		final initRange: Span = target.initRange;
@@ -302,7 +311,7 @@ final class Inline {
 		)
 		catch (exception: Exception) return Err('rewritten source does not parse: ${exception.message}');
 		final paren: Int = substitution == initText ? 0 : 1;
-		final captured: Null<Int> = recapturedIdent(target, readFroms, edits, paren, tree, newTree, shape);
+		final captured: Null<Int> = recapturedIdent(target, readFroms, edits, paren, newTree, shape);
 		if (captured == null) return Ok(rewritten);
 		final at: Position = new Span(captured, captured).lineCol(rewritten);
 		return Err(
@@ -320,19 +329,20 @@ final class Inline {
 	 * initializer text inside the substitution.
 	 */
 	private static function recapturedIdent(
-		target: InlineTarget, readFroms: Array<Int>, edits: Array<{ span: Span, text: String }>, paren: Int, tree: QueryNode,
-		newTree: QueryNode, shape: RefShape
+		target: InlineTarget, readFroms: Array<Int>, edits: Array<{ span: Span, text: String }>, paren: Int, newTree: QueryNode,
+		shape: RefShape
 	): Null<Int> {
-		for (id in namedIdents(target.initializer)) {
-			final nm: String = id.name;
+		final idents: Array<NamedIdent> = namedIdents(target.initializer);
+		final newHits: Map<String, Array<RefHit>> = Refs.findMulti([for (id in idents) id.name], newTree, shape);
+		for (id in idents) {
 			final from: Int = id.span.from;
-			final bound: Null<Span> = Refs.find(nm, tree, shape).find(h -> h.span.from == from)?.bindingSpan;
+			final bound: Null<Span> = (target.initHits[id.name] ?? []).find(h -> h.span.from == from)?.bindingSpan;
 			if (bound == null) continue;
 			final expected: Int = shifted(bound.from, edits);
-			final newHits: Array<RefHit> = Refs.find(nm, newTree, shape);
+			final hits: Array<RefHit> = newHits[id.name] ?? [];
 			for (readFrom in readFroms) {
 				final at: Int = shifted(readFrom, edits) + paren + (from - target.initRange.from);
-				final hit: Null<RefHit> = newHits.find(h -> h.span.from == at);
+				final hit: Null<RefHit> = hits.find(h -> h.span.from == at);
 				if (hit == null || hit.bindingSpan?.from != expected) return at;
 			}
 		}
@@ -358,6 +368,9 @@ private typedef InlineTarget = {
 	final decl: QueryNode;
 	final initializer: QueryNode;
 	final initRange: Span;
+
+	/** Every hit of every name the initializer reads, resolved once over the original tree. */
+	final initHits: Map<String, Array<RefHit>>;
 	final reads: Array<RefHit>;
 };
 

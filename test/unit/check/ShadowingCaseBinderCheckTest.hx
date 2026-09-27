@@ -35,6 +35,18 @@ class ShadowingCaseBinderCheckTest extends Test {
 		Assert.equals(0, violations(withField('freeName')).length);
 	}
 
+	/**
+	 * A subject of another file's type may be an `enum abstract` with a `closeAction` value, which the
+	 * pattern then COMPARES against: it is no catch-all, so nothing is reported.
+	 */
+	@:pin('control')
+	@:killer('M-SHADOWING-BINDER-UNPROVEN')
+	public function testUnprovenSubjectRefused(): Void {
+		final src: String = 'class C {\n\tvar closeAction: Kind;\n\n\tfunction f(v: Kind): Void {\n\t\tswitch v {\n\t\t\tcase closeAction: r();'
+			+ '\n\t\t}\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
 	/** A binder the arm READS is a deliberate capture, whatever it shadows. */
 	public function testReadBinderRefused(): Void {
 		final src: String = 'class C {\n\tvar closeAction: String;\n\n\tfunction f(v: Dynamic): Void {\n\t\tswitch v {'

@@ -202,6 +202,7 @@ final class UnusedCaseBinder implements Check {
 		for (group in groups) {
 			final name: String = group[0].name;
 			if (CasePatternScan.mentionCount(seams, arm, name) != group.length) continue;
+			if (!CasePatternScan.provesCapture(seams, root, switchNode, arm, group[0])) continue;
 			if (!admissible(group, constants, last, single, constantLanguage) || !commentFree(group, source)) continue;
 			// A WHOLE-pattern binder naming something already in scope, read nowhere — almost always an
 			// intended comparison Haxe silently turned into a catch-all. Spelling it `_` preserves

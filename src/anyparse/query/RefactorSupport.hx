@@ -335,7 +335,7 @@ final class RefactorSupport {
 	 * declaration may claim from the local it resolves to.
 	 */
 	public static function undecidedPatternHit(hits: Array<RefHit>, binding: Int): Null<RefHit> {
-		return hits.find(h -> h.patternUndecided && (h.bindingSpan?.from ?? h.span.from) == binding);
+		return hits.find(h -> h.patternUndecided && ((h.bindingSpan?.from ?? h.span.from) == binding || h.patternShadows?.from == binding));
 	}
 
 	/**

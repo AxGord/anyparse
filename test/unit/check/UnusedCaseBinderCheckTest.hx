@@ -26,6 +26,9 @@ using StringTools;
  */
 class UnusedCaseBinderCheckTest extends Test {
 
+	/** The enum the constructor fixtures match, declared so each argument is a PROVEN capture. */
+	private static inline final ENUMS: String = '\nenum N {\n\tNode(x: Int, y: Int);\n\tA(x: Int);\n\tB(x: Int);\n}';
+
 	/** The reported message for the canary's unread binder. */
 	private static inline final CANARY_MESSAGE: String = 'case binder \'_data\' is never read; replace it with _';
 
@@ -49,6 +52,17 @@ class UnusedCaseBinderCheckTest extends Test {
 	public function testConstructorArgumentUnbound(): Void {
 		final out: String = applyFixOnce(sw('case Node(x, y): use(y);'));
 		Assert.stringContains('case Node(_, y):', out);
+	}
+
+	/**
+	 * An argument of a constructor the file does not declare has an expected type it cannot see: a
+	 * lowercase `foo` there may be a constructor of that type, which the pattern compares against, and
+	 * spelling it `_` would turn the comparison into a catch-all (`other` became `foo` on `--interp`).
+	 */
+	@:pin('control')
+	@:killer('M-UNUSED-BINDER-UNPROVEN')
+	public function testUndeclaredConstructorArgumentRefused(): Void {
+		Assert.equals(0, violations(sw('case Some(foo): r();')).length);
 	}
 
 	/** An array-pattern element nothing reads becomes `_`. */
@@ -178,13 +192,13 @@ class UnusedCaseBinderCheckTest extends Test {
 	}
 
 	/**
-	 * `case A | B:` is Haxe's OTHER or-pattern spelling and projects as a bitwise-or node
-	 * the pattern whitelist does not model, so `binders` refuses the arm. That refusal is
-	 * the load-bearing property of the whitelist design — pinned here rather than left to
-	 * hold by accident.
+	 * `case A(x) | B(x):` is Haxes OTHER or-pattern spelling and projects as a bitwise-or node the pattern
+	 * whitelist models (`RefShape.orPatternKind`): both sides bind `x`, so both are spelled `_` together.
 	 */
-	public function testUnmodelledOrPatternRefused(): Void {
-		Assert.equals(0, violations(sw('case A(x) | B(x): r();')).length);
+	public function testOrPatternSidesUnboundTogether(): Void {
+		final src: String = sw('case A(x) | B(x): r();');
+		Assert.equals(1, violations(src).length);
+		Assert.stringContains('case A(_) | B(_):', applyFixOnce(src));
 	}
 
 	/** A reification subtree may splice in a read no source scan resolves, so an arm inside one is skipped. */
@@ -216,7 +230,7 @@ class UnusedCaseBinderCheckTest extends Test {
 	 */
 	public function testNestedShadowingBinderStillFlagged(): Void {
 		final src: String = 'class C {\n\tfunction f(e: Dynamic, v: Dynamic): Void {\n\t\tswitch v {\n\t\t\tcase Node(e): r();'
-			+ '\n\t\t\tcase _: r();\n\t\t}\n\t}\n}';
+			+ '\n\t\t\tcase _: r();\n\t\t}\n\t}\n}' + ENUMS;
 		Assert.equals(1, violations(src).length);
 		Assert.stringContains('case Node(_)', applyFixOnce(src));
 	}
@@ -229,7 +243,7 @@ class UnusedCaseBinderCheckTest extends Test {
 
 	/** A statement switch over `v` holding `branches`. */
 	private function sw(branches: String): String {
-		return 'class C {\n\tfunction f(v: Dynamic): Void {\n\t\tswitch v {\n\t\t\t$branches\n\t\t}\n\t}\n}';
+		return 'class C {\n\tfunction f(v: Dynamic): Void {\n\t\tswitch v {\n\t\t\t$branches\n\t\t}\n\t}\n}' + ENUMS;
 	}
 
 	private function violations(src: String): Array<Violation> {
