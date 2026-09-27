@@ -3883,6 +3883,22 @@
 			"note": "a directory input that holds the generation root hashes hxq's own state, which every generation rewrites, so it never reads as current"
 		},
 		{
+			"name": "M-GENERATE-STATE-NOT-IGNORED",
+			"type": "anyparse.check.OracleGeneration",
+			"method": "prepare",
+			"find": "sys.io.File.saveContent(ignore, '*\\n')",
+			"replace": "sys.io.File.saveContent(ignore, '')",
+			"note": "the state directory's .gitignore matches nothing, so every project has to list .apq/ in its own ignore file again"
+		},
+		{
+			"name": "M-GENERATE-IGNORE-OVERWRITTEN",
+			"type": "anyparse.check.OracleGeneration",
+			"method": "prepare",
+			"find": " && !sys.FileSystem.exists(ignore)",
+			"replace": "",
+			"note": "an ignore file already inside the state directory is rewritten on every run, discarding whatever the project put there"
+		},
+		{
 			"name": "M-GENERATE-ORDER-BY-KEY",
 			"type": "anyparse.check.OracleGeneration",
 			"method": "lockOrder",

@@ -1454,6 +1454,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-GENERATE-STATE-BY-CONFIG-ROOT,M-GENERATE-STATE-BY-SPELLING,M-GENERATE-STATE-IN-OUTPUT-DIR',
 			'unit.check.OracleGenerationTest#testGenerationsAreWaitedOnInLockOrder :: control :: ' + 'M-GENERATE-ORDER-BY-KEY',
 			'unit.check.OracleGenerationTest#testOnlyOneRunTakesOverADeadLock :: control :: ' + 'M-GENERATE-TAKEOVER-UNVERIFIED',
+			'unit.check.OracleGenerationTest#testTheGenerationStateIgnoresItself :: control :: '
+				+ 'M-GENERATE-IGNORE-OVERWRITTEN,M-GENERATE-STATE-NOT-IGNORED',
 			'unit.check.OracleGenerationTest#testTheGenerationStateIsSharedAcrossTempDirectories :: control :: '
 				+ 'M-GENERATE-STATE-IN-TMPDIR',
 			'unit.check.OracleGenerationTest#testTheLibraryStateTheHxmlNamesIsAnInput :: control :: '
@@ -3244,6 +3246,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-GENERATE-REJUDGE-UNBOUNDED',
 			'M-GENERATE-STATE-IN-TMPDIR',
 			'M-GENERATE-STATE-DIR-HASHED',
+			'M-GENERATE-STATE-NOT-IGNORED',
+			'M-GENERATE-IGNORE-OVERWRITTEN',
 			'M-GENERATE-ORDER-BY-KEY',
 			'M-GENERATE-ENDJOB-PID-ONLY',
 			'M-GENERATE-SHARE-JUDGES-STALENESS',
