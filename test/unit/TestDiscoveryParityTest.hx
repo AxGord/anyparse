@@ -1593,6 +1593,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FOLD-CONSTANT-AS-EXPRESSION,M-INTERP-CONSTANT-BLOCK-IGNORED',
 			'unit.check.PreferInterpolationCheckTest#testInterpolatedConstantInAnnotationNotFlagged :: control :: '
 				+ 'M-INTERP-CONSTANT-IN-META',
+			'unit.check.PreferInterpolationCheckTest#testMacroArgumentIsReportedButNotFixed :: control :: '
+				+ 'M-INTERP-MACRO-ARGUMENT-REWRITTEN',
 			'unit.check.PreferInterpolationCheckTest#testTargetDependentConstantsKeepTheirBlock :: control :: '
 				+ 'M-CONSTANT-DECIMAL-RANGE-UNCHECKED,M-CONSTANT-FLOAT-ADMITTED,M-CONSTANT-HEX-RANGE-UNCHECKED',
 			'unit.check.PreferInterpolationCheckTest#testTypedefOfNullArgumentNotFlagged :: control :: M-INTERP-NULLITY-SKIPPED',
@@ -4003,7 +4005,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-CONSTANT-FLOAT-ADMITTED',
 			'M-CONSTANT-HEX-RANGE-UNCHECKED',
 			'M-CONSTANT-DECIMAL-RANGE-UNCHECKED',
-			'M-INTERP-CONSTANT-IN-META'
+			'M-INTERP-CONSTANT-IN-META',
+			'M-INTERP-MACRO-ARGUMENT-REWRITTEN'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

@@ -3,6 +3,7 @@ package unit.check;
 import anyparse.check.Check.Violation;
 import anyparse.check.FoldStringLiterals;
 import anyparse.check.Linter;
+import anyparse.check.MacroGate;
 import anyparse.check.PreferInterpolation;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
@@ -10,6 +11,8 @@ import anyparse.runtime.Span;
 import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
+
+using StringTools;
 
 /**
  * The `prefer-interpolation` check: a single-argument `Std.string(x)` is flagged `Info`
@@ -341,6 +344,23 @@ class PreferInterpolationCheckTest extends Test {
 	@:killer('M-INTERP-CONSTANT-IN-META')
 	public function testInterpolatedConstantInAnnotationNotFlagged(): Void {
 		Assert.equals(0, violations("class C {\n\t@:m('${0}')\n\tfunction f():Void {}\n}").length);
+	}
+
+	/**
+	 * A macro reads its arguments as SYNTAX, and one keyed by a literal's text (TM's `Lang.t('text')`) sees every rewrite of
+	 * this rule as a different key: both the constant fix and the `${Std.string(x)}` peel stay report-only there, refused by
+	 * the same `MacroGate` `fold-adjacent-string-literals` asks. The same shapes outside the macro call are still fixed.
+	 */
+	@:pin('control')
+	@:killer('M-INTERP-MACRO-ARGUMENT-REWRITTEN')
+	public function testMacroArgumentIsReportedButNotFixed(): Void {
+		final src: String = 'class L { public static macro function t(e: haxe.macro.Expr) { return e; } }\n'
+			+ "class C {\n\tfunction f(x:Int):Void {\n\t\tvar a = L.t('${0} a');\n\t\tvar b = L.t('v=${Std.string(x)}');\n\t}\n}";
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(2, vs.length);
+		for (v in vs) Assert.isTrue(v.message.endsWith(MacroGate.SYNTAX_REFUSAL), 'the macro gate refuses it: ${v.message}');
+		Assert.equals('<0 edits>', fixText(src));
+		Assert.equals("'0 a'", fixText(wrap("'${0} a'")));
 	}
 
 	private function wrap(expr: String): String {

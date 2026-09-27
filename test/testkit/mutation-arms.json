@@ -9786,6 +9786,13 @@
 			"find": "if (!inMeta && flagConstantBlocks(",
 			"replace": "if (flagConstantBlocks(",
 			"note": "an interpolated constant inside an annotation argument is rewritten, though a metadata string is read as syntax"
+		},
+		{
+			"name": "M-INTERP-MACRO-ARGUMENT-REWRITTEN",
+			"type": "anyparse.check.PreferInterpolation",
+			"method": "syntaxRefusal",
+			"force": "''",
+			"note": "prefer-interpolation rewrites a literal inside a macro call argument, so a macro keyed by the literal's text (Lang.t) silently sees a different key"
 		}
 	]
 }

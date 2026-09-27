@@ -3,6 +3,8 @@ package anyparse.check;
 import anyparse.check.Check.OracleRelaxable;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
+import anyparse.check.MacroGate.CallRef;
+import anyparse.check.MacroGate.MacroIndex;
 import anyparse.query.DeclaredNullity;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
@@ -94,6 +96,13 @@ using StringTools;
  * (`segmentsOf` then `renderGroup`), so the escaping and the braces a `$name` in front of the spliced text needs are the
  * renderer's, never this rule's (`flagConstantBlocks`). An annotation argument is skipped: its string is read as syntax.
  *
+ * ## A macro argument
+ *
+ * A macro reads its arguments as SYNTAX, and one keyed by a literal's text (a translation lookup) sees every rewrite of this rule —
+ * the constant fix, the peel, the `Std.string` rewrite — as a different key. Each finding under such a call is asked of
+ * `MacroGate.readsAsSyntax`, the gate `fold-adjacent-string-literals` refuses by, and carries `MacroGate.SYNTAX_REFUSAL`: reported,
+ * never fixed. No `concatFoldingMacros` entry lifts it, since that claims a target folds a `+` chain, not that it ignores the text.
+ *
  * ## Grammar-agnostic
  *
  * Driven by `RefShape.callKind`, `fieldAccessKind`, and `identKind` (a missing optional
@@ -136,8 +145,13 @@ final class PreferInterpolation implements Check implements RiskyFix implements 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final violations: Array<Violation> = [];
 		final index: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
+		final macros: MacroIndex = new MacroIndex(plugin, files);
+		final support: Null<StringFoldSupport> = plugin.stringFoldSupport();
 		for (entry in files) {
-			final matches: Null<Array<ScanMatch>> = scanSource(entry.file, entry.source, plugin, _oracleRelaxed, false, index);
+			// No whitelist: `concatFoldingMacros` claims a target folds a `+` chain, and every rewrite here changes the TEXT
+			// of a literal, which no such claim covers.
+			final gate: Null<MacroGate> = support == null ? null : new MacroGate(macros, [], entry.file, support);
+			final matches: Null<Array<ScanMatch>> = scanSource(entry.file, entry.source, plugin, _oracleRelaxed, false, index, gate);
 			if (matches == null) continue;
 			for (m in matches) violations.push({
 				file: entry.file,
@@ -160,10 +174,13 @@ final class PreferInterpolation implements Check implements RiskyFix implements 
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final matches: Null<Array<ScanMatch>> = scanSource('', source, plugin, true, true, () -> null);
+		final matches: Null<Array<ScanMatch>> = scanSource('', source, plugin, true, true, () -> null, null);
 		if (matches == null) return [];
 		final byKey: Map<String, ScanMatch> = [for (m in matches) '${m.span.from}:${m.span.to}' => m];
-		return CheckScan.collectSpanEdits(violations, byKey, (m, _) -> ({ span: m.span, text: m.replacement }));
+		// A macro argument's refusal is a property of the finding's ANCESTRY and of a cross-file index, neither of which a
+		// one-file `fix` holds: `run` decided it, and the finding carries the decision.
+		final fixable: Array<Violation> = violations.filter(v -> v.message.indexOf(MacroGate.SYNTAX_REFUSAL) == -1);
+		return CheckScan.collectSpanEdits(fixable, byKey, (m, _) -> ({ span: m.span, text: m.replacement }));
 	}
 
 	/**
@@ -179,7 +196,8 @@ final class PreferInterpolation implements Check implements RiskyFix implements 
 	 * findings, and nested ones would overlap.
 	 */
 	private static function scanSource(
-		file: String, source: String, plugin: GrammarPlugin, relaxed: Bool, collectNested: Bool, index: () -> Null<SymbolIndex>
+		file: String, source: String, plugin: GrammarPlugin, relaxed: Bool, collectNested: Bool, index: () -> Null<SymbolIndex>,
+		gate: Null<MacroGate>
 	): Null<Array<ScanMatch>> {
 		final resolved: Null<Seams> = resolveSeams(plugin);
 		if (resolved == null) return null;
@@ -196,7 +214,9 @@ final class PreferInterpolation implements Check implements RiskyFix implements 
 			shape: plugin.refShape(),
 			nullity: DeclaredNullity.of(file, tree, source, plugin.refShape(), relaxed ? null : provider, plugin.typeSyntax, index),
 			relaxed: relaxed,
-			collectNested: collectNested
+			collectNested: collectNested,
+			gate: gate,
+			calls: []
 		}, tree, null, false, false, false);
 		return matches;
 	}
@@ -242,7 +262,10 @@ final class PreferInterpolation implements Check implements RiskyFix implements 
 		final concatKind: Null<String> = seams.concatKind;
 		final childChain: Null<QueryNode> = concatKind != null && node.kind == concatKind ? chain ?? node : null;
 		final childMeta: Bool = inMeta || seams.metaKinds.contains(node.kind);
+		final callee: Null<CallRef> = MacroGate.callOf(node, seams.callKind, seams.fieldAccessKind, seams.identKind);
+		if (callee != null) ctx.calls.push(callee);
 		for (c in node.children) scan(out, ctx, c, childChain, childMeta, inString, false);
+		if (callee != null) ctx.calls.pop();
 	}
 
 	/**
@@ -283,7 +306,7 @@ final class PreferInterpolation implements Check implements RiskyFix implements 
 		if (rendered == null || rendered == ctx.source.substring(span.from, span.to)) return false;
 		final at: Span = span;
 		final text: String = rendered;
-		out.push({ span: at, replacement: text, message: 'this interpolated constant can be plain text' });
+		out.push({ span: at, replacement: text, message: 'this interpolated constant can be plain text${syntaxRefusal(ctx)}' });
 		return true;
 	}
 
@@ -396,8 +419,18 @@ final class PreferInterpolation implements Check implements RiskyFix implements 
 		if (callCarriesComment(span, argSpan, ctx.source)) return false;
 		final at: Span = span;
 		final text: String = replacement;
-		out.push({ span: at, replacement: text, message: 'this Std.string() call can be string interpolation' });
+		out.push({ span: at, replacement: text, message: 'this Std.string() call can be string interpolation${syntaxRefusal(ctx)}' });
 		return true;
+	}
+
+	/**
+	 * What a finding adds when an enclosing call reads its arguments as SYNTAX (`MacroGate.readsAsSyntax` — the gate
+	 * `fold-adjacent-string-literals` refuses by): a macro matching a literal's text, or an intrinsic emitting it, sees every
+	 * rewrite of this rule as different code, so the finding is reported and never fixed. Empty otherwise.
+	 */
+	private static function syntaxRefusal(ctx: ScanCtx): String {
+		final gate: Null<MacroGate> = ctx.gate;
+		return gate != null && gate.readsAsSyntax(ctx.calls) ? MacroGate.SYNTAX_REFUSAL : '';
 	}
 
 	/**
@@ -506,6 +539,12 @@ private typedef ScanCtx = {
 	 * still be recoverable. A `run` scan stays outermost-only in both modes.
 	 */
 	final collectNested: Bool;
+
+	/** The macro-argument gate of a `run` scan, null for the `fix`-side re-find (the finding already carries the verdict). */
+	final gate: Null<MacroGate>;
+
+	/** The calls enclosing the node being scanned, innermost last — what `gate` is asked about. */
+	final calls: Array<CallRef>;
 };
 
 /** One flagged call: its span and the replacement text `fix` writes there. */
