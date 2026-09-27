@@ -1100,7 +1100,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.AnonTypeDupCheckTest#testEachFileHeldToItsOwnChainThreshold :: control :: M-ANON-FIRST-FILE-CONFIG',
 			'unit.check.AvoidDynamicBagFixTest#testANullableValueIsNeverTypedByItsBareWrapper :: control :: M-BAG-NULL-OUTER',
 			'unit.check.AvoidDynamicBagFixTest#testAnInitializerOfAnotherTypeKeepsTheDeclaration :: control :: M-BAG-INITIALIZER',
-			'unit.check.AvoidDynamicCheckTest#testDynamicInsideIntersectionOrConditionalArgumentFlagged :: control :: M-AVOIDDYN-COMPOSITE-SKIPPED',
+			'unit.check.AvoidDynamicCheckTest#testDynamicInsideIntersectionOrConditionalArgumentFlagged :: control :: '
+				+ 'M-AVOIDDYN-COMPOSITE-SKIPPED',
 			'unit.check.AvoidDynamicRiskyFixE2ETest#testAFixNeverLandsWhereItsRuleIsDisabled :: control :: '
 				+ 'M-COLLECT-NO-ENABLEMENT,M-FIXVERIFY-ENABLEMENT-DROPPED',
 			'unit.check.AvoidDynamicRiskyFixE2ETest#testTheRunResolverGatesTheScannedFiles :: control :: M-FIXVERIFY-DISCOVERS-CONFIG',

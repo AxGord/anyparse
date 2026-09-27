@@ -131,8 +131,8 @@ final class FactsTypeOracle implements TypeOracle {
 
 	/**
 	 * The id of the type every configuration gave the expression at `expr` (`valueType`) — a `Null<…>` unwrapped when
-	 * `unwrapNull` (`FactsTypeText.unwrapNull`), type arguments dropped — when it names a type the facts hold; null otherwise: a declined answer, a type
-	 * parameter, a function or structure type, or a `Null<…>` kept.
+	 * `unwrapNull` (`FactsTypeText.unwrapNull`), type arguments dropped — when it names a type the facts hold; null
+	 * otherwise: a declined answer, a type parameter, a function or structure type, or a `Null<…>` kept.
 	 */
 	public function typeIdAt(file: String, expr: Span, unwrapNull: Bool): Null<String> {
 		final spelled: String = switch valueType(file, expr) {

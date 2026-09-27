@@ -41,7 +41,6 @@ final class StaticExtensionFacts {
 	/** The annotation that keeps a static out of `using` (`TypedFactsProbe` writes metadata without its `@`). */
 	private static inline final NO_USING_META: String = ':noUsing';
 
-	/** The wrapper a nullable type is spelled with; member lookup and `using` both look through it. */
 	/** The one type that dispatches nothing statically. */
 	private static inline final DYNAMIC: String = 'Dynamic';
 

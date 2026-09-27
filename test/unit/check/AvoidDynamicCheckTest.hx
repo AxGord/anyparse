@@ -184,6 +184,18 @@ class AvoidDynamicCheckTest extends Test {
 		Assert.isTrue(vs[0].message.contains('type argument'));
 	}
 
+	/** A `Dynamic` inside an intersection argument or a conditional-type branch is a type argument like any other. */
+	@:pin('control') @:killer('M-AVOIDDYN-COMPOSITE-SKIPPED')
+	public function testDynamicInsideIntersectionOrConditionalArgumentFlagged(): Void {
+		final src: String = 'class C {\n\tpublic var m3:Array<A & Dynamic>;\n\tpublic var m6:Array<#if js Dynamic #else Int #end>;\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(2, vs.length);
+		for (v in vs) {
+			Assert.isTrue(v.message.contains('type argument'), v.message);
+			Assert.equals('Dynamic', slice(src, v));
+		}
+	}
+
 	private function slice(src: String, v: Violation): String {
 		final span: Null<Span> = v.span;
 		return span == null ? '' : src.substring(span.from, span.to);
@@ -196,18 +208,6 @@ class AvoidDynamicCheckTest extends Test {
 		final colon: Int = src.lastIndexOf(':', span.from);
 		final nameStart: Int = src.lastIndexOf(' ', colon);
 		return src.substring(nameStart + 1, colon);
-	}
-
-	/** A `Dynamic` inside an intersection argument or a conditional-type branch is a type argument like any other. */
-	@:pin('control') @:killer('M-AVOIDDYN-COMPOSITE-SKIPPED')
-	public function testDynamicInsideIntersectionOrConditionalArgumentFlagged(): Void {
-		final src: String = 'class C {\n\tpublic var m3:Array<A & Dynamic>;\n\tpublic var m6:Array<#if js Dynamic #else Int #end>;\n}';
-		final vs: Array<Violation> = violations(src);
-		Assert.equals(2, vs.length);
-		for (v in vs) {
-			Assert.isTrue(v.message.contains('type argument'), v.message);
-			Assert.equals('Dynamic', slice(src, v));
-		}
 	}
 
 	private function violations(src: String): Array<Violation> {

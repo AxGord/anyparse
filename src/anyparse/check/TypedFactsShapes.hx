@@ -5,7 +5,6 @@ import haxe.macro.Type;
 import haxe.macro.TypeTools;
 import haxe.macro.TypedExprTools;
 
-using StringTools;
 
 /** The shapes of the typed tree `TypedFactsWalk` asks about, answered without walking. */
 @:nullSafety(Strict)
