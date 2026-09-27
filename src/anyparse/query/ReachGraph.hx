@@ -285,7 +285,7 @@ final class ReachGraph {
 				return null;
 			}
 			if (inertType(source)) continue;
-			final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(source);
+			final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(source, _scope.plugin.typeSyntax);
 			for (arg in args ?? []) written.push(arg);
 			if (seen.exists(nominal)) continue;
 			seen[nominal] = true;

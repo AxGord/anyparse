@@ -2649,8 +2649,8 @@
 			"name": "M-KV-OPENER-SELF-CALL",
 			"type": "anyparse.check.PreferKeyValueLoop",
 			"method": "fixWalk",
-			"find": "openerDecline(m, f.source) ?? ElementLoopRewrite.reachDecline(gate.reachOf(), gate.file, m.header)",
-			"replace": "openerDecline(m, f.source)",
+			"find": "openerDecline(m, f) ?? ElementLoopRewrite.reachDecline(gate.reachOf(), gate.file, m.header)",
+			"replace": "openerDecline(m, f)",
 			"note": "the opener arm never asks the body's reach, so a callee that grows the collection runs on under the key-value iterator"
 		},
 		{

@@ -379,7 +379,12 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		// DEEP-mode resolution context (see `receiverNominal`): built once per file, and only for a
 		// file that actually holds a call on a configured module.
 		final usings: Array<String> = UsingScan.usingModules(UsingScan.headerOf(tree, source, plugin));
-		final chain: ChainTypeContext = { declaredTypeSources: s.typed.declaredTypeSources(source), source: source, usings: usings };
+		final chain: ChainTypeContext = {
+			declaredTypeSources: s.typed.declaredTypeSources(source),
+			source: source,
+			usings: usings,
+			typeSyntax: plugin.typeSyntax
+		};
 		// The conflict verdict depends only on (module, method), while a file repeats the same
 		// pair across every call site — and each miss costs a whole-index member-closure query.
 		final conflicts: Map<String, UsingConflict> = [];

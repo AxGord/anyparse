@@ -4,6 +4,7 @@ import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /** The name arithmetic `CallGraph` resolves with: type declarations, module names, dotted paths, written type heads. */
@@ -64,19 +65,14 @@ final class CallGraphNames {
 	}
 
 	/**
-	 * The written type of field `field` in the inline anonymous structure type `typeSource` (`{ a: Int, b: T }`,
-	 * `{ var a: Int; }`), or null when `typeSource` is not one or declares no such field.
+	 * The written type of field `field` of the anonymous structure type `type` (`{ a: Int, ?b: T }`), or null
+	 * when `type` is not one or declares no such field.
 	 */
-	public static function anonFieldTypeSource(typeSource: String, field: String): Null<String> {
-		final text: String = typeSource.trim();
-		if (!text.startsWith('{') || !text.endsWith('}')) return null;
-		for (part in splitTopLevel(text.substring(1, text.length - 1))) {
-			var decl: String = StringTools.trim(part);
-			for (prefix in ['var ', 'final ', '?']) if (decl.startsWith(prefix)) decl = decl.substr(prefix.length).trim();
-			final colon: Int = decl.indexOf(':');
-			if (colon > 0 && decl.substring(0, colon).trim() == field) return decl.substr(colon + 1).trim();
-		}
-		return null;
+	public static function anonFieldTypeSource(type: Null<TypeSyntax>, field: String): Null<String> {
+		return switch type?.shape {
+			case Structure(fields): fields.find(f -> f.name == field)?.type.text;
+			case _: null;
+		};
 	}
 
 	/** Whether `t` is a typedef naming another type of its own simple name — a re-export, not a second declaration. */
@@ -155,48 +151,12 @@ final class CallGraphNames {
 		return dot == -1 ? base : base.substring(0, dot);
 	}
 
-	/**
-	 * The return type of the function type `typeSource` (`Int->S`, `(a:Int) -> S`): what follows its last `->`
-	 * that no bracket encloses, or null when `typeSource` is not a function type.
-	 */
-	public static function functionReturnSource(typeSource: String): Null<String> {
-		var depth: Int = 0;
-		var arrow: Int = -1;
-		for (i in 0...typeSource.length) {
-			final c: Int = typeSource.fastCodeAt(i);
-			if (c == '-'.code && i + 1 < typeSource.length && typeSource.fastCodeAt(i + 1) == '>'.code) {
-				if (depth == 0) arrow = i;
-			} else if (c == '<'.code || c == '('.code || c == '{'.code || c == '['.code) {
-				depth++;
-			} else if (
-				(c == '>'.code && (i == 0 || typeSource.fastCodeAt(i - 1) != '-'.code)) || c == ')'.code || c == '}'.code || c == ']'.code
-			) {
-				depth--;
-			}
-		}
-		return arrow < 0 ? null : typeSource.substr(arrow + 2).trim();
-	}
-
-	/** `text` split on the `,` and `;` that no bracket encloses. */
-	private static function splitTopLevel(text: String): Array<String> {
-		final out: Array<String> = [];
-		var depth: Int = 0;
-		var start: Int = 0;
-		for (i in 0...text.length) {
-			final c: Int = text.fastCodeAt(i);
-			// the `>` of a function arrow closes nothing
-			final arrow: Bool = c == '>'.code && i > 0 && text.fastCodeAt(i - 1) == '-'.code;
-			if (c == '<'.code || c == '('.code || c == '{'.code || c == '['.code)
-				depth++;
-			else if (!arrow && (c == '>'.code || c == ')'.code || c == '}'.code || c == ']'.code))
-				depth--;
-			else if ((c == ','.code || c == ';'.code) && depth == 0) {
-				out.push(text.substring(start, i));
-				start = i + 1;
-			}
-		}
-		out.push(text.substr(start));
-		return out;
+	/** The written result of the function type `type` (`Int -> S`, `(a: Int) -> S`), or null when `type` is not a function type. */
+	public static function functionReturnSource(type: Null<TypeSyntax>): Null<String> {
+		return switch type?.shape {
+			case Function(_, ret, _): ret.text;
+			case _: null;
+		};
 	}
 
 	/** A pattern matching any of `names` standing alone as a type name: not inside an identifier, not after a `.`. */

@@ -5,6 +5,7 @@ import anyparse.query.OccurrenceScan;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceText;
 import anyparse.query.TypeResolver;
+import anyparse.query.TypeSyntax;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -439,7 +440,8 @@ final class LoopScan {
 			source: source,
 			types: types,
 			inert: OccurrenceScan.inertMask(source, plugin),
-			seams: seams
+			seams: seams,
+			typeSyntax: plugin.typeSyntax
 		};
 	}
 
@@ -589,7 +591,7 @@ typedef LoopJumpSeams = {
 /**
  * The per-FILE facts every gate reads: the tree root a type lookup resolves against, the source
  * and its inert-region mask (comments, regexes and non-interpolating literals — the spans a text
- * scan must not read as a use), the declared-type map, and the seams.
+ * scan must not read as a use), the declared-type map, the seams, and the grammar's type reader.
  */
 typedef LoopFileScan = {
 	var root: QueryNode;
@@ -597,4 +599,7 @@ typedef LoopFileScan = {
 	var types: Null<Map<Int, String>>;
 	var inert: Array<Span>;
 	var seams: IntervalLoopSeams;
+
+	/** `GrammarPlugin.typeSyntax` — how a gate reads a declared type's arguments. */
+	var typeSyntax: String -> Null<TypeSyntax>;
 }

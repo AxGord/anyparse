@@ -1237,36 +1237,15 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	}
 
 	/**
-	 * The declared type annotation of a `var` / `final` member, whitespace-stripped:
-	 * the text between the first top-level `:` (past the accessor clause, tracked by
-	 * bracket depth) and the first top-level `=` / span end, without the trailing
-	 * `;`. Null when the member carries no annotation (a top-level `=` or the span
-	 * end arrives first). A `->` return arrow's `>` is not a closing bracket.
+	 * The declared type annotation of a `var` / `final` member — the node's `type` slot —
+	 * whitespace-stripped. Null when the member carries no annotation.
 	 */
 	private static function declaredTypeText(source: String, node: QueryNode): Null<String> {
-		final span: Null<Span> = node.span;
-		if (span == null) return null;
-		var depth: Int = 0;
-		var colon: Int = -1;
-		var i: Int = span.from;
-		while (i < span.to) {
-			final c: Int = source.fastCodeAt(i);
-			if (c == '('.code || c == '<'.code || c == '{'.code || c == '['.code)
-				depth++;
-			else if (c == ')'.code || c == '}'.code || c == ']'.code)
-				depth--;
-			else if (c == '>'.code && (i == span.from || source.fastCodeAt(i - 1) != '-'.code))
-				depth--;
-			else if (c == ':'.code && depth == 0 && colon < 0)
-				colon = i;
-			else if (c == '='.code && depth == 0)
-				return colon < 0 ? null : normalizedSlice(source, colon + 1, i);
-			i++;
-		}
-		return colon < 0 ? null : normalizedSlice(source, colon + 1, span.to);
+		final type: Null<Span> = node.type?.span;
+		return type == null ? null : normalizedSlice(source, type.from, type.to);
 	}
 
-	/** The `[from, to)` slice of `source` with every whitespace char and one trailing `;` removed. */
+	/** The `[from, to)` slice of `source` with every whitespace char and `;` removed. */
 	private static function normalizedSlice(source: String, from: Int, to: Int): String {
 		final out: StringBuf = new StringBuf();
 		for (i in from ... to) {

@@ -8,6 +8,7 @@ import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.Pattern;
 import anyparse.query.QueryNode;
 import anyparse.query.StringFold.StringFoldSupport;
+import anyparse.query.TypeSyntax;
 import haxe.exceptions.NotImplementedException;
 
 /**
@@ -73,6 +74,10 @@ final class UntypedPlugin implements GrammarPlugin {
 	}
 
 	public function reconParse(source: String): Bool {
+		throw new NotImplementedException();
+	}
+
+	public function typeSyntax(typeSource: String): Null<TypeSyntax> {
 		throw new NotImplementedException();
 	}
 

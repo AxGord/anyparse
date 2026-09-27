@@ -631,6 +631,9 @@ final class SymbolIndex {
 	/** The scope's THIRD-PARTY half (`resolutionLibs` / std paths), empty for an index over project sources alone. */
 	private final _thirdParty: Map<String, Bool>;
 
+	/** `GrammarPlugin.typeSyntax` of the grammar that built the index — see `typeSyntax`. */
+	private final _typeSyntax: String -> Null<TypeSyntax>;
+
 	private function new(
 		files: Array<FileInfo>, skipped: Array<String>, sources: Map<String, String>, plugin: GrammarPlugin, thirdParty: Map<String, Bool>
 	) {
@@ -639,13 +642,22 @@ final class SymbolIndex {
 		_sources = sources;
 		_abstractKinds = plugin.refShape().underlyingThisTypeKinds ?? [];
 		_thirdParty = thirdParty;
+		_typeSyntax = plugin.typeSyntax;
 		refs = new TypeRefIndex(files);
 		subtypes = new SubtypeGraph(files, sources, refs);
 		members = new MemberLookup(files, refs);
-		structural = new StructuralTypes(files, refs, subtypes, members);
-		paths = new MemberPathWalk(files, refs, members);
+		structural = new StructuralTypes(files, refs, subtypes, members, plugin.typeSyntax);
+		paths = new MemberPathWalk(files, refs, members, plugin.typeSyntax);
 		text = new RawSourceScan(files, skipped, sources, plugin, thirdParty);
 		traits = new TypeTraits(files, sources, refs);
+	}
+
+	/**
+	 * `typeSource` read as one type by the grammar that built this index (`GrammarPlugin.typeSyntax`), for a
+	 * caller that holds the index but no plugin.
+	 */
+	public inline function typeSyntax(typeSource: String): Null<TypeSyntax> {
+		return _typeSyntax(typeSource);
 	}
 
 	/** Every indexed file's `FileInfo`, in input order. */

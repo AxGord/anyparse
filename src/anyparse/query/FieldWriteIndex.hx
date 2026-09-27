@@ -49,11 +49,11 @@ typedef UnresolvedWrite = {
 	var thirdParty: Bool;
 }
 
-/** A parsed nominal type source: the simple `name` plus the raw text between its type-parameter brackets, if any. */
+/** A parsed nominal type source: the simple `name`, the written `path` it came from, and its type arguments as written. */
 private typedef NominalParts = {
 	var name: String;
 	var path: String;
-	var params: Null<String>;
+	var args: Array<String>;
 }
 
 /**
@@ -312,7 +312,7 @@ final class FieldWriteIndex {
 		if (!allTyped) return true;
 		final candidateTypeSource: Null<String> = _index.members.memberTypeSourceOf(owner, field);
 		if (candidateTypeSource == null) return true;
-		final parsed: Null<NominalParts> = nominalParse(candidateTypeSource, _unwrapNames);
+		final parsed: Null<NominalParts> = nominalParse(candidateTypeSource, _unwrapNames, _index.typeSyntax);
 		if (parsed == null || _rejectNames.contains(parsed.name) || _builtinNames.contains(parsed.name)) return true;
 		final ownerParams: Null<Array<String>> = _typeParams[owner];
 		if (ownerParams != null && ownerParams.contains(parsed.name)) return true;
@@ -515,7 +515,7 @@ final class FieldWriteIndex {
 				return;
 			}
 			final ts: Null<String> = resolveReceiverTypeSource(recv, typeCtx, c);
-			final owner: Null<String> = ts == null ? null : nominalSimpleName(ts, c.unwrapNames, c.rejectNames);
+			final owner: Null<String> = ts == null ? null : nominalSimpleName(ts, c.unwrapNames, c.rejectNames, c.index.typeSyntax);
 			final rhs: Null<String> = rhsTypeOf(write, c);
 			if (owner != null)
 				record(c, owner, fieldName, span, rhs);
@@ -626,7 +626,7 @@ final class FieldWriteIndex {
 			if (member == null || node.children.length == 0) return null;
 			final recvTs: Null<String> = resolveReceiverTypeSource(node.children[0], typeCtx, c);
 			if (recvTs == null) return null;
-			final recvName: Null<String> = nominalSimpleName(recvTs, c.unwrapNames, c.rejectNames);
+			final recvName: Null<String> = nominalSimpleName(recvTs, c.unwrapNames, c.rejectNames, c.index.typeSyntax);
 			return recvName == null ? null : memberTypeSourceInChain(c.index, recvName, member, []);
 		}
 		if (c.indexKind == null || node.kind != c.indexKind) return null;
@@ -726,41 +726,38 @@ final class FieldWriteIndex {
 	 * dropped. Null when the source is not a plain dotted nominal (a function or
 	 * anonymous-struct type) or names an untypable wrapper (`Dynamic` / `Any`).
 	 */
-	private static function nominalSimpleName(source: String, unwrapNames: Array<String>, rejectNames: Array<String>): Null<String> {
-		final parsed: Null<NominalParts> = nominalParse(source, unwrapNames);
+	private static function nominalSimpleName(
+		source: String, unwrapNames: Array<String>, rejectNames: Array<String>, typeSyntax: String -> Null<TypeSyntax>
+	): Null<String> {
+		final parsed: Null<NominalParts> = nominalParse(source, unwrapNames, typeSyntax);
 		return parsed == null || rejectNames.contains(parsed.name) ? null : parsed.name;
 	}
 
 	/**
-	 * Parse a verbatim type source into its nominal simple name, the WRITTEN path that name came
-	 * from, and the raw type-parameter text: `Null<…>` wrappers (`unwrapNames`) unwrapped first,
-	 * then the head validated as a dotted identifier path. Null for any other shape.
+	 * Read a verbatim type source into its nominal simple name, the WRITTEN path that name came
+	 * from, and its type arguments: `Null<…>` wrappers (`unwrapNames`) unwrapped first. Null for
+	 * any other shape — a wrapper applied to other than ONE argument included, since what it wraps
+	 * is then no type at all.
 	 *
 	 * `path` keeps what the annotation actually says, `name` its last segment. A resolver that is
 	 * handed the simple name of a QUALIFIED annotation resolves some other type of that name; one
 	 * handed the path resolves the written one.
 	 */
-	private static function nominalParse(source: String, unwrapNames: Array<String>): Null<NominalParts> {
-		var t: String = source.trim();
-		var unwrapped: Bool = true;
-		while (unwrapped) {
-			unwrapped = false;
-			for (w in unwrapNames) if (t.startsWith(w)) {
-				final rest: String = t.substring(w.length).trim();
-				if (rest.startsWith('<') && rest.endsWith('>')) {
-					t = rest.substring(1, rest.length - 1).trim();
-					unwrapped = true;
-					break;
-				}
-			}
+	private static function nominalParse(
+		source: String, unwrapNames: Array<String>, typeSyntax: String -> Null<TypeSyntax>
+	): Null<NominalParts> {
+		var t: Null<TypeSyntax> = typeSyntax(source);
+		while (t != null) switch t.shape {
+			case Nominal(path, [arg]) if (unwrapNames.contains(path)):
+				t = arg;
+			case Nominal(path, args) if (args.length > 0 && unwrapNames.contains(path)):
+				return null;
+			case Nominal(path, args):
+				return { name: SourceText.lastSegment(path), path: path, args: [for (a in args) a.text] };
+			case _:
+				return null;
 		}
-		final lt: Int = t.indexOf('<');
-		if (lt < 0) return isDottedIdentPath(t) ? { name: SourceText.lastSegment(t), path: t, params: null } : null;
-		if (!t.endsWith('>')) return null;
-		final head: String = t.substring(0, lt).trim();
-		return isDottedIdentPath(head)
-			? { name: SourceText.lastSegment(head), path: head, params: t.substring(lt + 1, t.length - 1) }
-			: null;
+		return null;
 	}
 
 	/**
@@ -770,13 +767,10 @@ final class FieldWriteIndex {
 	 * parameters, or the listed parameter is missing.
 	 */
 	private static function elementTypeSource(containerSource: String, c: ScanCtx): Null<String> {
-		final parsed: Null<NominalParts> = nominalParse(containerSource, c.unwrapNames);
+		final parsed: Null<NominalParts> = nominalParse(containerSource, c.unwrapNames, c.index.typeSyntax);
 		if (parsed == null) return null;
-		final params: Null<String> = parsed.params;
 		final at: Null<Int> = c.elementTypeParams[parsed.name];
-		if (params == null || at == null) return null;
-		final split: Array<String> = NominalTypes.splitTypeArgumentList(params);
-		return at < split.length ? split[at] : null;
+		return at != null && at < parsed.args.length ? parsed.args[at] : null;
 	}
 
 	/** Whether `s` is a plain dotted identifier path (`pkg.sub.Name`), with no other characters. */

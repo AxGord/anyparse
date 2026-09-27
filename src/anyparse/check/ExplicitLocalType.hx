@@ -21,6 +21,7 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoMemo;
 import anyparse.query.TypeRefPrinter;
 import anyparse.query.TypeResolver;
+import anyparse.query.TypeSyntax;
 import anyparse.runtime.Span;
 
 using StringTools;
@@ -322,7 +323,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 			}
 			final init: QueryNode = node.children[0];
 			final typeSource: Null<String> = inferLocalType(
-				init, source, shape, tree, castTargets, declaredTypeSources, index, resolution, anonCap
+				init, source, shape, tree, castTargets, declaredTypeSources, index, resolution, anonCap, plugin.typeSyntax
 			);
 			// The admissibility gate covers BOTH arms, not just the oracle's: a structural arm can
 			// copy `Dynamic` or a `Void` return out of a declared type just as the compiler can
@@ -517,7 +518,8 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	 */
 	private static function inferLocalType(
 		rawInit: QueryNode, source: String, shape: RefShape, tree: QueryNode, castTargets: () -> Map<Int, String>,
-		declaredTypeSources: () -> Map<Int, String>, index: Null<SymbolIndex>, resolution: Null<SymbolIndex>, maxAnonLen: Int
+		declaredTypeSources: () -> Map<Int, String>, index: Null<SymbolIndex>, resolution: Null<SymbolIndex>, maxAnonLen: Int,
+		typeSyntax: String -> Null<TypeSyntax>
 	): Null<String> {
 		final init: QueryNode = BoolExprShape.unwrapParens(rawInit, shape.parenKind);
 		return
@@ -525,7 +527,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 				init, shape
 			) ?? methodReturnType(init, shape, tree, declaredTypeSources) ?? staticMethodReturnType(init, shape, tree, index) ?? staticFieldType(
 				init, shape, tree, index
-			) ?? indexAccessType(init, shape, tree, declaredTypeSources, index, maxAnonLen) ?? TypeResolver.identDeclaredTypeSource(
+			) ?? indexAccessType(init, shape, tree, declaredTypeSources, index, maxAnonLen, typeSyntax) ?? TypeResolver.identDeclaredTypeSource(
 				init, shape, tree, declaredTypeSources, true
 			);
 	}
@@ -572,7 +574,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	 */
 	private static function indexAccessType(
 		init: QueryNode, shape: RefShape, tree: QueryNode, declaredTypeSources: () -> Map<Int, String>, index: Null<SymbolIndex>,
-		maxAnonLen: Int
+		maxAnonLen: Int, typeSyntax: String -> Null<TypeSyntax>
 	): Null<String> {
 		final indexKind: Null<String> = shape.indexAccessKind;
 		final elementParams: Null<Map<String, Int>> = shape.indexedElementTypeParams;
@@ -582,7 +584,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		if (containerSource == null) return null;
 		final container: String = NominalTypes.unwrapNullable(containerSource, shape.nullableWrapperTypeNames ?? []);
 		final nominal: Null<String> = NominalTypes.outerNominalOf(container);
-		final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(container);
+		final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(container, typeSyntax);
 		if (nominal == null || args == null) return null;
 		final at: Null<Int> = elementParams[nominal];
 		if (at == null || at >= args.length || NominalTypes.shadowedByNonStdType(index, nominal)) return null;

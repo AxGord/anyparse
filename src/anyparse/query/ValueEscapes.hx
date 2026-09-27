@@ -168,7 +168,7 @@ final class ValueEscapes {
 			final nominal: Null<String> = NominalTypes.outerNominalOf(source);
 			if (nominal == null) return false;
 			if (catchAll.contains(nominal) || _g.inertType(source)) continue;
-			final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(source);
+			final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(source, _scope.plugin.typeSyntax);
 			// a container written without its arguments holds what nothing here says: `Array` is any `Array<T>`
 			if ((args ?? []).length < g.types.generics.typeParamsOf(nominal).length) return false;
 			for (arg in args ?? []) work.push(arg);

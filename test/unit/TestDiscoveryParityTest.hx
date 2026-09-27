@@ -977,6 +977,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.TypeInfoMemoTest',
 		'unit.query.TypeRefPrinterTest',
 		'unit.query.TypeResolverSliceTest',
+		'unit.query.TypeSyntaxTest',
 		'unit.runtime.CommonPrefixTest',
 		'unit.runtime.InputTest',
 		'unit.runtime.ParseErrorTest',

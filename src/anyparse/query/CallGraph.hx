@@ -881,13 +881,18 @@ final class CallGraph {
 			final viewType: Null<String> = receiverType ?? currentType;
 			final ownArgs: Null<Array<String>> = receiverSource == null
 				? null
-				: NominalTypes.typeArgumentSourcesOf(NominalTypes.unwrapNullable(receiverSource.trim(), transparentWrappers));
+				: NominalTypes.typeArgumentSourcesOf(
+					NominalTypes.unwrapNullable(receiverSource.trim(), transparentWrappers), _plugin.typeSyntax
+				);
 			final args: Null<Array<String>> = if (owner == receiverType)
 				ownArgs
 			else if (viewType == null || viewType == owner)
 				null
 			else
-				viewedArgs(types.generics.argumentsFor(owner, viewType), viewType, viewType == receiverType ? ownArgs : null, currentType);
+				viewedArgs(
+					types.generics.argumentsFor(owner, viewType, _plugin.typeSyntax), viewType, viewType == receiverType ? ownArgs : null,
+					currentType
+				);
 			return if (args != null && args.length >= params.length)
 				CallGraphNames.substituteTypeParams(written, params, args)
 			else if (owner == currentType)
@@ -927,7 +932,7 @@ final class CallGraph {
 			final peeled: String = NominalTypes.unwrapNullable(container.trim(), transparentWrappers);
 			final outer: Null<String> = NominalTypes.outerNominalOf(peeled);
 			final at: Null<Int> = outer == null ? null : elementParams[outer];
-			final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(peeled);
+			final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(peeled, _plugin.typeSyntax);
 			if (at == null || args == null) return null;
 			final list: Array<String> = args;
 			return at >= list.length ? null : list[at];
@@ -1215,7 +1220,7 @@ final class CallGraph {
 			final outer: Null<String> = NominalTypes.outerNominalOf(peeled);
 			final anon: Null<String> = outer == null ? peeled : types.resolveAlias(outer);
 			final fieldType: Null<String> = if (anon == peeled)
-				CallGraphNames.anonFieldTypeSource(peeled, field)
+				CallGraphNames.anonFieldTypeSource(_plugin.typeSyntax(peeled), field)
 			else if (anon != null && types.holdsNoFunction(anon) && types.declarationCount(anon) > 0)
 				types.memberOnChain(anon, field)?.typeSource
 			else
@@ -1448,13 +1453,13 @@ final class CallGraph {
 			final id: Null<String> = span == null ? null : entry.fnBySpanFrom[span.from];
 			final declared: Null<String> = id == null ? null : _facts.returns[id];
 			if (declared != null || !lambdaKinds.contains(lineage[at].kind)) return declared;
-			return CallGraphNames.functionReturnSource(expected(at - 1, currentType) ?? '');
+			return CallGraphNames.functionReturnSource(_plugin.typeSyntax(expected(at - 1, currentType) ?? ''));
 		}
 
 		/** The written type of field `field` of a value written `outer`: an inline anonymous structure's, or a typedef's or class's member. */
 		function fieldTypeSource(outer: String, field: String, currentType: Null<String>): Null<String> {
 			final peeled: String = NominalTypes.unwrapNullable(outer.trim(), transparentWrappers);
-			final written: Null<String> = CallGraphNames.anonFieldTypeSource(peeled, field);
+			final written: Null<String> = CallGraphNames.anonFieldTypeSource(_plugin.typeSyntax(peeled), field);
 			if (written != null) return written;
 			final nominal: Null<String> = nominalOf(peeled, currentType);
 			return nominal == null ? null : memberTypeThrough(peeled, nominal, field, currentType);
@@ -1482,7 +1487,7 @@ final class CallGraph {
 			else if (returnKinds.contains(kind))
 				returnExpectation(level, currentType, expectedAt)
 			else if (lambdaKinds.contains(kind) && last)
-				CallGraphNames.functionReturnSource(expectedAt(level - 1, currentType) ?? '')
+				CallGraphNames.functionReturnSource(_plugin.typeSyntax(expectedAt(level - 1, currentType) ?? ''))
 			else if (
 				kind == parenKind || (kind == ternaryKind && index >= 1) || (ifExprKinds.contains(kind) && index >= 1)
 				|| (switchKinds.contains(kind) && index >= 1) || ((kind == caseBranchKind || blockKinds.contains(kind)) && last)

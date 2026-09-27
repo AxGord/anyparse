@@ -111,7 +111,7 @@ final class ComprehensionFills {
 		final innerAcc: ComprehensionAcc = {
 			checks: [],
 			hoisted: [],
-			elementType: annotation == null ? null : PreferComprehension.elementTypeOf(annotation, s.elementTypeParams)
+			elementType: annotation == null ? null : PreferComprehension.elementTypeOf(annotation, s)
 		};
 		final text: Null<String> = loopText(fill, innerName, annotation, ctx, innerAcc);
 		if (text == null || innerAcc.checks.exists(cn -> PreferComprehension.referencesName(cn, innerName, s))) return null;

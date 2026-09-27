@@ -3,7 +3,6 @@ package anyparse.query;
 import anyparse.check.ReflectionMemo;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.ControlFlow.ControlFlowSupport;
-import anyparse.query.FunctionTypeProvider;
 import anyparse.query.GrammarPlugin.AmbientImportGovernance;
 import anyparse.query.GrammarPlugin.AmbientImports;
 import anyparse.query.GrammarPlugin.CheckOverrides;
@@ -55,7 +54,7 @@ import haxe.io.Path;
  */
 @:nullSafety(Strict)
 final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoProvider implements SpanTypeInfoProvider
-		implements SymbolIndexHost implements FunctionTypeProvider {
+		implements SymbolIndexHost {
 
 	/** Roots parsed by this wrapper — one per distinct source once the projections share it. */
 	public var rootParses(default, null): Int = 0;
@@ -122,12 +121,10 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	// source-taking `_inner` call, byte-identically.
 	private final _rootProvider: Null<ParsedRootProvider>;
 
-	// The wrapped grammar's OPTIONAL function-type reader, resolved once by the same seam as
-	// `_rootProvider`. The wrapper implements `FunctionTypeProvider` UNCONDITIONALLY and answers
-	// null here for a grammar that has none, which is the same verdict a consumer would reach by
-	// finding the capability absent — and it keeps the wrapper from hiding a capability the inner
-	// grammar does have, which is exactly what an unforwarded one does.
-	private final _functionTypes: Null<FunctionTypeProvider>;
+	// The inner grammar's `typeSyntax` answers per type text. A pure function of the text, so
+	// nothing ever expires it; the same annotation is asked about by every check that reads it.
+	// Values may be null (text that is not one type), so reads go through `exists`.
+	private final _typeSyntaxCache: Map<String, Null<TypeSyntax>> = [];
 
 	// The PROCESS-scoped tier behind the run-scoped caches below: this wrapper's language slice
 	// of it, resolved once in the constructor. Only RESOLUTION-LIBRARY sources ever enter it —
@@ -155,7 +152,6 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	public function new(inner: GrammarPlugin) {
 		_inner = inner;
 		_rootProvider = inner is ParsedRootProvider ? cast inner : null;
-		_functionTypes = inner is FunctionTypeProvider ? cast inner : null;
 		_shared = new SharedParseTier(inner.langName());
 	}
 
@@ -607,8 +603,13 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	/** `TypeInfoProvider`: forward + memoize the declaration type-source map per source. */
 	public function declaredTypeSources(source: String): Map<Int, String> return spanTypeInfo(source).declaredTypeSources;
 
-	/** `FunctionTypeProvider`, forwarded verbatim — the answer is a pure function of the text, so there is nothing to cache. */
-	public function functionTypeArity(typeSource: String): Null<Int> return _functionTypes?.functionTypeArity(typeSource);
+	/** `GrammarPlugin`: forward + memoize per type text. */
+	public function typeSyntax(typeSource: String): Null<TypeSyntax> {
+		if (_typeSyntaxCache.exists(typeSource)) return _typeSyntaxCache[typeSource];
+		final read: Null<TypeSyntax> = _inner.typeSyntax(typeSource);
+		_typeSyntaxCache[typeSource] = read;
+		return read;
+	}
 
 	/** `TypeInfoProvider`: forward + memoize the typed-cast target-type-source map per source. */
 	public function castTargetSources(source: String): Map<Int, String> return spanTypeInfo(source).castTargetSources;

@@ -2,12 +2,12 @@ package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
-import anyparse.query.FunctionTypeProvider;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
+import anyparse.query.TypeSyntax;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -71,7 +71,7 @@ using Lambda;
  *   at all — the grammar projects a bare lowercase pattern as a plain identifier — so it is
  *   refused one gate earlier, as a name nothing declares); each carries an explicit annotation the
  *   grammar reads as a function type of this same arity with every parameter positional
- *   (`FunctionTypeProvider` — an optional or rest one answers null, because Haxe refuses
+ *   (`GrammarPlugin.typeSyntax`, read by `positionalArity` — an optional one answers null, because Haxe refuses
  *   `(?Int) -> Void` where `() -> Void` is expected); and the name is never WRITTEN anywhere in
  *   the file, proven with the same scope-resolved write walker `prefer-final` trusts. Miss any one
  *   and re-reading the name at call time, which is what the wrapper does, stops being the same
@@ -153,7 +153,6 @@ final class RedundantLambdaWrapper implements Check implements DefaultOff {
 		final parsed: Array<{ file: String, source: String, tree: QueryNode }> = CheckScan.parseAll(plugin, files);
 		final types: Map<String, Null<Map<String, Signature>>> = collectTypes(parsed, seams);
 		final typeInfo: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
-		final functionTypes: Null<FunctionTypeProvider> = plugin is FunctionTypeProvider ? cast plugin : null;
 		final shape: RefShape = plugin.refShape();
 		final violations: Array<Violation> = [];
 		for (entry in parsed) {
@@ -164,7 +163,7 @@ final class RedundantLambdaWrapper implements Check implements DefaultOff {
 				scope: fileScope(entry.tree, seams),
 				tree: entry.tree,
 				typeSources: typeInfo?.declaredTypeSources(entry.source),
-				functionTypes: functionTypes,
+				typeSyntax: plugin.typeSyntax,
 				written: []
 			};
 			walk(violations, entry.file, entry.tree, null, ctx);
@@ -305,18 +304,17 @@ final class RedundantLambdaWrapper implements Check implements DefaultOff {
 	 */
 	private static function binderSignature(name: String, ctx: Ctx): Null<Signature> {
 		final sources: Null<Map<Int, String>> = ctx.typeSources;
-		final provider: Null<FunctionTypeProvider> = ctx.functionTypes;
 		final spans: Null<Array<Span>> = ctx.scope.binderSpans[name];
 		if (spans == null || spans.length == 0) return null;
 		// Resolution here is by NAME over the whole file, so the answer has to hold for EVERY binder
 		// that carries it: one binder of a kind this rule may not read through, and the occurrence
 		// could be the one it cannot see.
-		if (sources == null || provider == null || ctx.scope.binderCounts[name] != spans.length) return null;
+		if (sources == null || ctx.scope.binderCounts[name] != spans.length) return null;
 		var agreed: Null<Int> = null;
 		for (span in spans) {
 			final annotation: Null<String> = sources[span.from];
 			if (annotation == null) return null;
-			final declared: Null<Int> = provider.functionTypeArity(annotation);
+			final declared: Null<Int> = positionalArity(ctx.typeSyntax(annotation));
 			if (declared == null || (agreed != null && declared != agreed)) return null;
 			agreed = declared;
 		}
@@ -324,6 +322,18 @@ final class RedundantLambdaWrapper implements Check implements DefaultOff {
 		// A narrowed local never reaches a non-nullable field of an anonymous structure literal.
 		final params: Int = agreed;
 		return { arity: params, isStatic: false, safe: true };
+	}
+
+	/**
+	 * How many parameters the function type `t` takes, or null when a value of it cannot be called
+	 * positionally with exactly that many: not a function type, a parameter that is optional, or the
+	 * curried spelling, whose `Void -> R` reads as nullary to some and as taking `Void` to others.
+	 */
+	private static function positionalArity(t: Null<TypeSyntax>): Null<Int> {
+		return switch t?.shape {
+			case Function(params, _, false) if (!params.exists(p -> p.optional)): params.length;
+			case _: null;
+		};
 	}
 
 	/**
@@ -627,8 +637,8 @@ private typedef Ctx = {
 	/** Verbatim `:Type` annotations by binding-span start, or null when the grammar exposes none. */
 	final typeSources: Null<Map<Int, String>>;
 
-	/** The grammar's function-type reader, or null when it implements none. */
-	final functionTypes: Null<FunctionTypeProvider>;
+	/** `GrammarPlugin.typeSyntax` — how a binder's function-type annotation is read. */
+	final typeSyntax: String -> Null<TypeSyntax>;
 
 	/** Memo of "is this name ever written in this file", filled on demand by `written`. */
 	final written: Map<String, Bool>;

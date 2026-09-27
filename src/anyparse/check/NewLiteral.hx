@@ -77,7 +77,7 @@ final class NewLiteral {
 				// (`var xs:Array<Int> = new …`), OR the RHS of a plain assignment whose lvalue's
 				// declaration pins the collection type.
 				if (
-					pinnedByTypeHint(source, parentSpan.from, span.from)
+					pinningTypeHint(source, parentSpan.from, span.from) != null
 					|| assignmentTargetPinsType(parent, node, shape, tree, symbolIndex, declaredTypeSources, typeName)
 				)
 					edits.push({ span: span, text: '[]' });
@@ -87,8 +87,8 @@ final class NewLiteral {
 	}
 
 	/**
-	 * Whether the `new` node starting at `newStart` is the direct initializer of a
-	 * declaration whose target type is PINNED by an explicit annotation — the only context
+	 * The annotation text that PINS the `new` node starting at `newStart` — the type hint of the
+	 * declaration it directly initializes — or null when there is none: the only context
 	 * where `[]` safely preserves the intended type. `[]` infers `Array`, so an unannotated
 	 * `var m = new Map()` rewritten to `var m = []` silently becomes an `Array` (and no
 	 * longer compiles once used as a map), and an unannotated `var xs = new Array<Int>()`
@@ -96,7 +96,8 @@ final class NewLiteral {
 	 *
 	 * The head — `source[declStart...newStart]` — is the declaration up to and including the
 	 * `=`. It qualifies when it ends in a lone `=` (a plain initializer) and its left side
-	 * carries a top-level type-hint `:` with no top-level `,`. A metadata colon (`@:meta`) is
+	 * carries a top-level type-hint `:` with no top-level `,`; the hint is what follows the
+	 * first such `:` up to the `=`. A metadata colon (`@:meta`) is
 	 * excluded (the `:` follows `@`); a colon or comma inside `<>` / `()` / `[]` / `{}` is a
 	 * type parameter or access clause, not the hint, so bracket depth is tracked. An
 	 * unannotated declaration, an argument / return / element position, an assignment to an
@@ -106,15 +107,16 @@ final class NewLiteral {
 	 *
 	 * PUBLIC because the same question — does an annotation pin the constructed type? — gates
 	 * `prefer-map-type`'s bare `new IntMap()` arm, which rewrites the constructed NAME rather
-	 * than collapsing to `[]`. The predicate is about the declaration head alone, so it carries
-	 * over unchanged; only the caller's use of the answer differs.
+	 * than collapsing to `[]` and reads the hint itself. The head is a declaration, not a type,
+	 * so this is a head scan and not `GrammarPlugin.typeSyntax`'s question — the tree that
+	 * rule walks (`parseFileTypeRefs`) carries no declaration `type` slot.
 	 */
-	public static function pinnedByTypeHint(source: String, declStart: Int, newStart: Int): Bool {
+	public static function pinningTypeHint(source: String, declStart: Int, newStart: Int): Null<String> {
 		final head: String = source.substring(declStart, newStart).rtrim();
 		final len: Int = head.length;
-		if (len == 0 || head.fastCodeAt(len - 1) != '='.code) return false;
+		if (len == 0 || head.fastCodeAt(len - 1) != '='.code) return null;
 		var depth: Int = 0;
-		var sawColon: Bool = false;
+		var colon: Int = -1;
 		for (i in 0...len - 1) {
 			final c: Int = head.fastCodeAt(i);
 			switch c {
@@ -123,12 +125,12 @@ final class NewLiteral {
 				case '>'.code, ')'.code, ']'.code, '}'.code:
 					if (depth > 0) depth--;
 				case ':'.code:
-					if (depth == 0 && (i == 0 || head.fastCodeAt(i - 1) != '@'.code)) sawColon = true;
+					if (depth == 0 && colon < 0 && (i == 0 || head.fastCodeAt(i - 1) != '@'.code)) colon = i;
 				case ','.code:
-					if (depth == 0) return false;
+					if (depth == 0) return null;
 			}
 		}
-		return sawColon;
+		return colon < 0 ? null : head.substring(colon + 1, len - 1).trim();
 	}
 
 	private static function walk(

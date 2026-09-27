@@ -9,6 +9,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeSyntax;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -190,7 +191,9 @@ final class PreferLocalFunction implements Check {
 			castKinds: shape.typedCastKinds ?? [],
 			uncheckedCastKind: shape.uncheckedCastKind,
 			voidTypeName: shape.voidTypeName,
-			blockKinds: support.blockKinds()
+			optionalParamKind: shape.optionalParamKind,
+			blockKinds: support.blockKinds(),
+			typeSyntax: plugin.typeSyntax
 		};
 	}
 
@@ -246,7 +249,7 @@ final class PreferLocalFunction implements Check {
 		if (name == null || stSpan == null || fnSpan == null) return null;
 		final parts: Null<FnParts> = partsOf(fn, source, s);
 		if (parts == null) return null;
-		final declared: DeclaredType = declaredType(source, stSpan, name, s.voidTypeName);
+		final declared: DeclaredType = declaredType(source, st.type?.span, s);
 		return if (!declared.survives)
 			null
 		else if (!resultSurvives(parts, declared.returnsVoid) || !signatureCarries(parts, declared.signature, source))
@@ -280,7 +283,7 @@ final class PreferLocalFunction implements Check {
 		final decl: Null<QueryNode> = bareDeclarationBefore(kids, index, name, s);
 		final declSpan: Null<Span> = decl?.span;
 		if (declSpan == null) return null;
-		final declared: DeclaredType = declaredType(source, declSpan, name, s.voidTypeName);
+		final declared: DeclaredType = declaredType(source, decl?.type?.span, s);
 		if (!declared.survives) return null;
 		if (!resultSurvives(parts, declared.returnsVoid) || !signatureCarries(parts, declared.signature, source)) return null;
 		if (!nameIsFree(list, fn, name, stSpan.from, lhsSpan, s)) return null;
@@ -350,8 +353,9 @@ final class PreferLocalFunction implements Check {
 	}
 
 	/**
-	 * What the declaration's written type says about the hoist: whether the annotation may be DROPPED, whether
-	 * it named a `Void` result, and the function type it spelled.
+	 * What the declaration's written type — its `annotation` span, null when it carries none — says about the
+	 * hoist: whether the annotation may be DROPPED, whether it named a `Void` result, and the function type it
+	 * spelled.
 	 *
 	 * It survives being dropped only when the hoisted declaration REPRODUCES it. A written FUNCTION type can
 	 * be: `signatureCarries` requires the literal's parameters to spell the declared ones exactly, and
@@ -363,68 +367,26 @@ final class PreferLocalFunction implements Check {
 	 * so an `add(l)` / `remove(l)` pair that shared one wrapper stops doing so, and the code still compiles.
 	 * No annotation at all is trivially safe: both forms infer the same type.
 	 *
+	 * The function type is the grammar's reading of the annotation (`GrammarPlugin.typeSyntax`): the parameters
+	 * of its parenthesised list or of its curried chain, a curried `Void -> R` standing for none, and its
+	 * result. A type that merely holds functions (`Array<Int -> Void>`, `Null<() -> T>`) is not one.
+	 *
 	 * The RESULT type it named is what `resultSurvives` needs before a lambda's block body may be hoisted.
 	 */
-	private static function declaredType(source: String, declSpan: Span, name: String, voidTypeName: Null<String>): DeclaredType {
-		final text: String = source.substring(declSpan.from, declSpan.to);
-		var i: Int = 0;
-		while (i < text.length && SourceText.isIdentChar(text.fastCodeAt(i))) i++; // the var / final keyword
-		while (i < text.length && SourceText.isSpace(text.fastCodeAt(i))) i++;
-		final nameStart: Int = i;
-		while (i < text.length && SourceText.isIdentChar(text.fastCodeAt(i))) i++;
-		if (text.substring(nameStart, i) != name) return { survives: false, returnsVoid: false, signature: null };
-		while (i < text.length && SourceText.isSpace(text.fastCodeAt(i))) i++;
-		if (i >= text.length || text.fastCodeAt(i) != ':'.code) return { survives: true, returnsVoid: false, signature: null };
-		final signature: Null<FnSignature> = functionSignature(text, i + 1);
+	private static function declaredType(source: String, annotation: Null<Span>, s: Seams): DeclaredType {
+		if (annotation == null) return { survives: true, returnsVoid: false, signature: null };
+		final signature: Null<FnSignature> = switch s.typeSyntax(source.substring(annotation.from, annotation.to))?.shape {
+			case Function([{ type: { text: only } }], ret, true) if (only == s.voidTypeName):
+				{ params: [], ret: ret.text };
+			case Function(params, ret, _):
+				{ params: [for (p in params) { optional: p.optional, type: p.type.text }], ret: ret.text };
+			case _: null;
+		};
 		return {
 			survives: signature != null,
-			returnsVoid: signature != null && signature.ret == voidTypeName,
+			returnsVoid: signature != null && signature.ret == s.voidTypeName,
 			signature: signature
 		};
-	}
-
-	/**
-	 * The FUNCTION type a written annotation names, from its colon at `from` up to the depth-0 `=` / `;` that
-	 * ends it: the parameters (the parenthesised list, or the old curried `A -> B -> R` segments, `Void`
-	 * alone meaning none) and the result after the LAST depth-0 `->`. Null for a type that carries no
-	 * depth-0 arrow — a nominal type that merely holds functions (`Array<Int->Void>`, `Null<() -> T>`) or
-	 * an alias — whose hoist could not keep the binding typed as written.
-	 */
-	private static function functionSignature(text: String, from: Int): Null<FnSignature> {
-		final scan: { arrows: Array<Int>, stop: Int } = topLevelArrows(text, from);
-		final arrows: Array<Int> = scan.arrows;
-		if (arrows.length == 0) return null;
-		final head: String = text.substring(from, arrows[0]).trim();
-		final segments: Array<String> = if (arrows.length == 1 && enclosedInParens(head)) {
-			final inner: String = head.substring(1, head.length - 1).trim();
-			inner == '' ? [] : splitTopLevel(inner, ','.code);
-		} else {
-			final heads: Array<String> = [head];
-			for (k in 1...arrows.length) heads.push(text.substring(arrows[k - 1] + 2, arrows[k]).trim());
-			heads.length == 1 && heads[0] == 'Void' ? [] : heads;
-		}
-		return { params: [for (s in segments) declaredParam(s)], ret: text.substring(arrows[arrows.length - 1] + 2, scan.stop).trim() };
-	}
-
-	/**
-	 * The offset of every depth-0 `->` in `text` from `from`, and where the annotation stops — the depth-0
-	 * `=` / `;` that ends it, or the text's end. A `->`'s `>` closes no bracket.
-	 */
-	private static function topLevelArrows(text: String, from: Int): { arrows: Array<Int>, stop: Int } {
-		var depth: Int = 0;
-		final arrows: Array<Int> = [];
-		for (i in from ... text.length) {
-			final c: Int = text.fastCodeAt(i);
-			if (c == '<'.code || c == '('.code || c == '{'.code || c == '['.code)
-				depth++
-			else if (c == '>'.code && i > from && text.fastCodeAt(i - 1) == '-'.code) {
-				if (depth == 0) arrows.push(i - 1);
-			} else if (c == '>'.code || c == ')'.code || c == '}'.code || c == ']'.code)
-				depth--
-			else if (depth == 0 && (c == '='.code || c == ';'.code))
-				return { arrows: arrows, stop: i };
-		}
-		return { arrows: arrows, stop: text.length };
 	}
 
 	/**
@@ -437,34 +399,14 @@ final class PreferLocalFunction implements Check {
 	 */
 	private static function signatureCarries(parts: FnParts, signature: Null<FnSignature>, source: String): Bool {
 		if (signature == null) return true;
-		if (signature.params.length != parts.params.length) return false;
-		for (k in 0...parts.params.length) {
-			final written: ParamSig = literalParam(parts.params[k]);
+		if (signature.params.length != parts.signature.length) return false;
+		for (k in 0...parts.signature.length) {
+			final written: ParamSig = parts.signature[k];
 			final declared: ParamSig = signature.params[k];
 			if (written.optional != declared.optional || normalizedType(written.type) != normalizedType(declared.type)) return false;
 		}
 		final hintSpan: Null<Span> = parts.hintSpan;
 		return hintSpan == null || normalizedType(source.substring(hintSpan.from, hintSpan.to)) == normalizedType(signature.ret);
-	}
-
-	/** One declared parameter — `?name:T`, `name:T`, `?T` or `T` — as its optionality and written type. */
-	private static function declaredParam(text: String): ParamSig {
-		final optional: Bool = text.startsWith('?');
-		final rest: String = optional ? text.substring(1).trim() : text;
-		final colon: Int = topLevelIndexOf(rest, ':'.code);
-		final named: Bool = colon > 0 && [for (k in 0...colon) rest.fastCodeAt(k)].foreach(SourceText.isIdentChar);
-		return { optional: optional, type: named ? rest.substring(colon + 1).trim() : rest };
-	}
-
-	/** One literal parameter — `?name:T` or `name:T = default` — as its optionality and written type. */
-	private static function literalParam(text: String): ParamSig {
-		final colon: Int = topLevelIndexOf(text, ':'.code);
-		final typed: String = colon < 0 ? '' : text.substring(colon + 1);
-		final assign: Int = topLevelIndexOf(typed, '='.code);
-		return {
-			optional: text.startsWith('?') || assign >= 0,
-			type: (assign < 0 ? typed : typed.substring(0, assign)).trim()
-		};
 	}
 
 	/** `type` with every space dropped and any redundant outer parentheses peeled. */
@@ -487,36 +429,6 @@ final class PreferLocalFunction implements Check {
 			if (depth == 0 && k < text.length - 1) return false;
 		}
 		return true;
-	}
-
-	/** `text` split at every depth-0 `separator`, each piece trimmed. */
-	private static function splitTopLevel(text: String, separator: Int): Array<String> {
-		final out: Array<String> = [];
-		var start: Int = 0;
-		var at: Int = topLevelIndexOf(text, separator);
-		while (at >= 0) {
-			out.push(text.substring(start, start + at).trim());
-			start += at + 1;
-			at = topLevelIndexOf(text.substring(start), separator);
-		}
-		out.push(text.substring(start).trim());
-		return out;
-	}
-
-	/** The index of the first `code` outside any bracket pair in `text`, or -1; a `->` arrow's `>` closes nothing. */
-	private static function topLevelIndexOf(text: String, code: Int): Int {
-		var depth: Int = 0;
-		for (k in 0...text.length) {
-			final c: Int = text.fastCodeAt(k);
-			if (depth == 0 && c == code) return k;
-			if (c == '<'.code || c == '('.code || c == '{'.code || c == '['.code)
-				depth++
-			else if (c == '>'.code && k > 0 && text.fastCodeAt(k - 1) == '-'.code)
-				continue
-			else if (c == '>'.code || c == ')'.code || c == '}'.code || c == ']'.code)
-				depth--;
-		}
-		return -1;
 	}
 
 	/**
@@ -590,6 +502,7 @@ final class PreferLocalFunction implements Check {
 	 */
 	private static function partsOf(fn: QueryNode, source: String, s: Seams): Null<FnParts> {
 		final params: Array<String> = [];
+		final signature: Array<ParamSig> = [];
 		final last: Int = fn.children.length - 1;
 		var hintSpan: Null<Span> = null;
 		var body: Null<QueryNode> = null;
@@ -601,8 +514,13 @@ final class PreferLocalFunction implements Check {
 				final span: Null<Span> = c.span;
 				if (span == null) return null;
 				final text: String = source.substring(span.from, span.to).trim();
-				if (!parameterIsTyped(text)) return null;
+				final typeSpan: Null<Span> = c.type?.span;
+				if (!parameterIsTyped(text) || typeSpan == null) return null;
 				params.push(text);
+				signature.push({
+					optional: c.kind == s.optionalParamKind || c.children.length > 0,
+					type: source.substring(typeSpan.from, typeSpan.to)
+				});
 			} else if (s.bodyKinds.contains(c.kind))
 				body = c;
 			else if (s.typeAnnotationKinds.contains(c.kind))
@@ -618,6 +536,7 @@ final class PreferLocalFunction implements Check {
 		final bodySpan: Null<Span> = b.span;
 		return bodySpan == null ? null : {
 			params: params,
+			signature: signature,
 			hintSpan: hintSpan,
 			bodySpan: bodySpan,
 			block: s.blockKinds.contains(b.kind),
@@ -687,7 +606,11 @@ private typedef Seams = {
 	var castKinds: Array<String>;
 	var uncheckedCastKind: Null<String>;
 	var voidTypeName: Null<String>;
+	var optionalParamKind: Null<String>;
 	var blockKinds: Array<String>;
+
+	/** `GrammarPlugin.typeSyntax` — how a declared function type is read. */
+	var typeSyntax: String -> Null<TypeSyntax>;
 }
 
 /** One rewritable binding: the literal's span (the finding key) and the edits that hoist it. */
@@ -702,6 +625,10 @@ private typedef Match = {
  */
 private typedef FnParts = {
 	var params: Array<String>;
+
+	/** Each parameter's optionality (a `?` or a default value) and written type, read off its node. */
+	var signature: Array<ParamSig>;
+
 	var hintSpan: Null<Span>;
 	var bodySpan: Span;
 	var block: Bool;

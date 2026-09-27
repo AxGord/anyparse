@@ -112,7 +112,7 @@ final class ValueCarriers {
 		final decl: Null<TypeDeclInfo> = nominal == null ? null : declarationOf(nominal);
 		if (decl == null || (_scope.shape.underlyingThisTypeKinds ?? []).contains(decl.kind)) return false;
 		// what the value holds is typed only when every argument is: `Array<Dynamic>` holds anything
-		final args: Array<String> = NominalTypes.typeArgumentSourcesOf(source) ?? [];
+		final args: Array<String> = NominalTypes.typeArgumentSourcesOf(source, _scope.plugin.typeSyntax) ?? [];
 		if (args.length < decl.typeParamNames.length) return false;
 		for (a in args) if (!primitive(a) && !typedNominal(a)) return false;
 		return true;

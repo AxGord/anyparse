@@ -28,11 +28,17 @@ final class MemberPathWalk {
 	/** The member layer that answers each individual hop. */
 	private final _members: MemberLookup;
 
+	/** `GrammarPlugin.typeSyntax` of the grammar that built the owning index. */
+	private final _typeSyntax: String -> Null<TypeSyntax>;
+
 	/** Built once by the owning `SymbolIndex`, which hands over the shared, immutable index data. */
-	public function new(files: Array<FileInfo>, refs: TypeRefIndex, members: MemberLookup) {
+	public function new(
+		files: Array<FileInfo>, refs: TypeRefIndex, members: MemberLookup, typeSyntax: String -> Null<TypeSyntax>
+	) {
 		_files = files;
 		_refs = refs;
 		_members = members;
+		_typeSyntax = typeSyntax;
 	}
 
 	/**
@@ -99,7 +105,7 @@ final class MemberPathWalk {
 		var args: Array<String> = [];
 		var startName: String = startSource;
 		if (substitute) {
-			final startArgs: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(startSource);
+			final startArgs: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(startSource, _typeSyntax);
 			if (startArgs != null) {
 				final head: Null<String> = NominalTypes.outerNominalOf(startSource);
 				if (head == null) return null;
@@ -118,8 +124,8 @@ final class MemberPathWalk {
 			// An INTERMEDIATE link is a receiver for the next segment, so a member-transparent
 			// wrapper on it is peeled (`res: Null<Res>` in `box.res.count`). The FINAL member's
 			// source, returned below, is never peeled — a read of `Null<T>` IS `Null<T>`.
-			final carried: String = NominalTypes.memberLookupReceiverSource(effective, transparentWrappers);
-			if (substitute) args = NominalTypes.typeArgumentSourcesOf(carried) ?? [];
+			final carried: String = NominalTypes.memberLookupReceiverSource(effective, transparentWrappers, _typeSyntax);
+			if (substitute) args = NominalTypes.typeArgumentSourcesOf(carried, _typeSyntax) ?? [];
 			final nominal: String = StringTools.trim(carried.split('<')[0]);
 			current = _refs.resolveTypeRef(nominal, cur.file);
 		}

@@ -14,6 +14,7 @@ import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
+import anyparse.query.TypeSyntax;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -185,8 +186,7 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 		if (f.seams.core.opaqueKinds.contains(node.kind)) return;
 		final m: Null<Match> = analyze(node, f.root, f.source, f.types, f.seams);
 		if (m != null && wanted.contains('${m.forSpan.from}:${m.forSpan.to}')) {
-			final decline: Null<String> =
-				openerDecline(m, f.source) ?? ElementLoopRewrite.reachDecline(gate.reachOf(), gate.file, m.header);
+			final decline: Null<String> = openerDecline(m, f) ?? ElementLoopRewrite.reachDecline(gate.reachOf(), gate.file, m.header);
 			if (decline == null)
 				out.push(buildEdit(m));
 			else
@@ -290,12 +290,12 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 	 * `E`. A widening annotation (`Dynamic`, a supertype) would change what the binder is typed
 	 * as, so it stays report-only.
 	 */
-	private static function provablyArrayElement(m: Match): Bool {
+	private static function provablyArrayElement(m: Match, typeSyntax: String -> Null<TypeSyntax>): Bool {
 		final collectionType: Null<String> = m.collectionTypeSource;
 		if (collectionType == null || NominalTypes.outerNominalOf(collectionType) != ARRAY_TYPE) return false;
 		final declared: Null<String> = m.declTypeSource;
 		if (declared == null) return true;
-		final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(collectionType);
+		final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(collectionType, typeSyntax);
 		return args != null && args.length == ARRAY_TYPE_ARGUMENTS && StringTools.trim(args[0]) == StringTools.trim(declared);
 	}
 
@@ -414,9 +414,10 @@ final class PreferKeyValueLoop implements Check implements DefaultOff {
 	 * start, as the declaration was, but code the body runs can still grow `X`, which the key-value
 	 * iterator follows.
 	 */
-	private static function openerDecline(m: Match, source: String): Null<String> {
+	private static function openerDecline(m: Match, f: LoopFileScan): Null<String> {
+		final source: String = f.source;
 		final declEnd: Int = m.declSpan.to;
-		return if (!provablyArrayElement(m))
+		return if (!provablyArrayElement(m, f.typeSyntax))
 			ELEMENT_TYPE_DECLINE
 		else if (CheckScan.hasCommentMarker(source, m.forSpan.from, declEnd))
 			ElementLoopRewrite.COMMENT_DECLINE
