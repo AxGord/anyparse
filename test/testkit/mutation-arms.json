@@ -9253,6 +9253,46 @@
 			"note": "a take through an alias reads as a re-take of the holder's own lock, though it may be another object's"
 		},
 		{
+			"name": "M-TS-ALIAS-REFLECTED-ANY-ARGS",
+			"type": "anyparse.check.LockAliases",
+			"method": "reflectionSafe",
+			"find": "if (values == null || arrayKind == null || values.kind != arrayKind || values.children.length > slot) return false;",
+			"replace": "",
+			"note": "a reflective construction of a class chosen by name no longer refuses an alias, whatever lock it passes"
+		},
+		{
+			"name": "M-TS-ALIAS-REFLECTED-SHORT-REFUSED",
+			"type": "anyparse.check.LockAliases",
+			"method": "reflectionSafe",
+			"find": "|| values.children.length > slot)",
+			"replace": "|| values.children.length >= 0)",
+			"note": "a reflective construction too short to reach the parameter still refuses the alias"
+		},
+		{
+			"name": "M-TS-ALIAS-REFLECTED-UNTYPED",
+			"type": "anyparse.check.LockAliases",
+			"method": "reflectionSafe",
+			"find": "if (bounds != null && bounds.foreach(b -> unrelated(b, family))) continue;",
+			"replace": "",
+			"note": "a class value written to be of an unrelated type still refuses the alias"
+		},
+		{
+			"name": "M-TS-ALIAS-REFLECTED-FAMILY",
+			"type": "anyparse.check.LockAliases",
+			"method": "unrelated",
+			"find": "return _graph.types.declarationCount(bound) == 1 && !family.exists(t -> _graph.types.firstOnChain(t, s -> s == bound) != null);",
+			"replace": "return true;",
+			"note": "a class value written to be of the aliased type's family counts as unrelated"
+		},
+		{
+			"name": "M-TS-ALIAS-STATIC-REWRITTEN",
+			"type": "anyparse.check.LockSites",
+			"method": "selfTake",
+			"find": "if (isStaticLock(lock)) return !_rewrittenLocks.contains(lock);",
+			"replace": "if (isStaticLock(lock)) return true;",
+			"note": "a take through an alias of a static member written again reads as a re-take of the same object"
+		},
+		{
 			"name": "M-TS-WINDOW-IF-RELEASES",
 			"type": "anyparse.check.LockWindow",
 			"method": "step",

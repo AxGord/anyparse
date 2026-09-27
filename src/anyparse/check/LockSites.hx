@@ -99,6 +99,9 @@ final class LockSites {
 	/** The locks some alias names: several members of possibly one object hold them, so no take of one is provably on the holder's own. */
 	private final _aliasedLocks: Array<String> = [];
 
+	/** The aliased locks whose member some code writes (`LockAliases.rewritten`). */
+	private final _rewrittenLocks: Array<String> = [];
+
 	/** `<file>:<start>` of every call of a wrapper -> the lock the call takes or gives back, null for an unknown one. */
 	private final _siteLocks: Map<String, Null<String>> = [];
 
@@ -121,7 +124,6 @@ final class LockSites {
 	/** Collects the acquires over the `files` of `graph`; `pairsOf` names the pairs the chain of a file configures. */
 	public function new(graph: CallGraph, files: Array<String>, plugin: GrammarPlugin, pairsOf: (String) -> Array<LockPair>) {
 		_graph = graph;
-
 		_plugin = plugin;
 		_shape = plugin.refShape();
 		final flow: Null<ControlFlowSupport> = plugin.controlFlowSupport();
@@ -167,7 +169,8 @@ final class LockSites {
 	public function selfTake(edge: CallEdge): Bool {
 		final lock: Null<String> = lockOf(edge);
 		if (lock == null) return false;
-		if (isStaticLock(lock)) return true;
+		// an alias may hold a value a static member it names has since been given up for
+		if (isStaticLock(lock)) return !_rewrittenLocks.contains(lock);
 		if (_aliasedLocks.contains(lock)) return false;
 		final site: Null<String> = siteKey(edge);
 		if (site != null && _siteLocks.exists(site)) return _siteSelf[site] == true && selfCall(edge);
@@ -337,7 +340,7 @@ final class LockSites {
 			named[e.file] = keys;
 		}
 		final breaking: Map<String, Array<Occurrence>> = [];
-		final aliases: LockAliases = new LockAliases(_graph, _shape, this, _ctorName, files);
+		final aliases: LockAliases = new LockAliases(_graph, _shape, this, _ctorName, files, _plugin.typeSyntax);
 		final walked: Array<String> = [];
 		var pending: Array<String> = names;
 		// the member an alias holds the lock of is walked too: it must be sealed apart from its hand-offs
@@ -349,6 +352,7 @@ final class LockSites {
 		aliases.settle(breaking);
 		for (target => source in aliases.targets) _aliases[target] = source;
 		for (lock in aliases.locks) _aliasedLocks.push(lock);
+		for (lock in aliases.rewritten) _rewrittenLocks.push(lock);
 		for (name => found in breaking) if (found.exists(o -> !aliases.accounts(o))) _unsealed.push(name);
 	}
 

@@ -251,7 +251,7 @@ class ThreadSafetyCheckTest extends Test {
 		#end
 	}
 
-	/** A type read as a value may be constructed by reflection, with any argument at all. */
+	/** A type handed to code as a value — a library factory the graph holds no body of — may be constructed with anything. */
 	@:pin('control') @:killer('M-TS-ALIAS-REFLECTED')
 	public function testAReflectedTypeAliasesNothing(): Void {
 		#if (sys || nodejs)
@@ -259,12 +259,126 @@ class ThreadSafetyCheckTest extends Test {
 			['"B.work" holds "Mutex.acquire" across a call that can block: Sys.sleep'],
 			heldBy(
 				'B.work',
+				lockFindings(
+					aliasFixture(
+						'public function make():B return new Sub(m); public function reflect():Void Factory.build(Sub, [new Mutex()]);',
+						'p', '_l = p;'
+					).concat([
+						'extern class Factory { public static function build(c:Dynamic, args:Array<Dynamic>):Dynamic; }'
+					])
+				)
+			)
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A construction by reflection of a class chosen by name may pass any lock at the parameter. */
+	@:pin('control') @:killer('M-TS-ALIAS-REFLECTED-ANY-ARGS')
+	public function testAReflectiveConstructionAliasesNothing(): Void {
+		#if (sys || nodejs)
+		Assert.same(
+			['"B.work" holds "Mutex.acquire" across a call that can block: Sys.sleep'],
+			heldBy(
+				'B.work',
 				lockFindings(aliasFixture(
-					'public function make():B return new Sub(m); public function reflect():Void Type.createInstance(Sub, [new Mutex()]);',
+					'final k:Mutex = new Mutex(); public function make():B return new Sub(m);'
+					+ ' public function other():B return Type.createInstance(Type.resolveClass("Sub"), [k]);',
 					'p', '_l = p;'
 				))
 			)
 		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A reflective construction whose argument list stops before the parameter leaves it null: the alias stands. */
+	@:pin('control') @:killer('M-TS-ALIAS-REFLECTED-SHORT-REFUSED')
+	public function testAReflectiveConstructionTooShortToReachTheParameterKeepsTheAlias(): Void {
+		#if (sys || nodejs)
+		Assert.same(
+			['"B.work" holds "A.m" across a call that can block: Sys.sleep'],
+			heldBy(
+				'B.work',
+				lockFindings(aliasFixture(
+					'public function make():B return new Sub(m); public function other():Any return Type.createInstance(Type.resolveClass("X"), []);',
+					'p', '_l = p;'
+				))
+			)
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A reflective construction of a class value written to be of an unrelated type builds nothing the alias rests on. */
+	@:pin('control') @:killer('M-TS-ALIAS-REFLECTED-UNTYPED')
+	public function testAReflectiveConstructionOfAnUnrelatedClassKeepsTheAlias(): Void {
+		#if (sys || nodejs)
+		Assert.same(
+			['"B.work" holds "A.m" across a call that can block: Sys.sleep'],
+			heldBy(
+				'B.work',
+				lockFindings(
+					aliasFixture(
+						'final k:Mutex = new Mutex(); public function make():B return new Sub(m); function kind():Class<Other> return cast null;'
+						+ ' public function other():Other return Type.createInstance(kind(), [k]);',
+						'p', '_l = p;'
+					).concat(['class Other { public function new(x:Mutex) {} }'])
+				)
+			)
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A class value written to be of the aliased type's own family may be any constructor of it. */
+	@:pin('control') @:killer('M-TS-ALIAS-REFLECTED-FAMILY')
+	public function testAReflectiveConstructionOfTheFamilyAliasesNothing(): Void {
+		#if (sys || nodejs)
+		Assert.same(
+			['"B.work" holds "Mutex.acquire" across a call that can block: Sys.sleep'],
+			heldBy(
+				'B.work',
+				lockFindings(aliasFixture(
+					'final k:Mutex = new Mutex(); public function make():B return new Sub(m); function kind():Class<B> return cast null;'
+					+ ' public function other():B return Type.createInstance(kind(), [k]);',
+					'p', '_l = p;'
+				))
+			)
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A static member handed over and written again later: `_l` may still hold the old lock, so taking the member's
+	 * lock under a hold of `_l` waits for another object, re-entrant or not.
+	 */
+	@:pin('control') @:killer('M-TS-ALIAS-STATIC-REWRITTEN')
+	public function testARewrittenStaticSourceIsNoRetake(): Void {
+		#if (sys || nodejs)
+		final found: Array<String> = [
+			for (v in violations(
+				'{"rules":{"thread-safety":{"reentrantLocks":["Mutex.acquire"],"sinks":["Mutex.acquire","Sys.sleep"],'
+				+ '"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"]}}}',
+				[
+					MUTEX,
+					'class A { static var s:Mutex = new Mutex(); public static function renew():Void s = new Mutex();'
+					+ ' public static function make():B return new B(s); public static function take():Void { s.acquire(); s.release(); }'
+					+ ' public static function slow():Void { s.acquire(); Sys.sleep(1); s.release(); }'
+					+ ' public static function main():Void { take(); final b:B = make(); renew(); Runner.create(() -> { slow(); b.work(); }); } }',
+					'class B { final _l:Mutex; public function new(p:Mutex) { _l = p; }'
+					+ ' public function work():Void { _l.acquire(); A.take(); _l.release(); } }',
+					'class Runner { public static function create(fn:()->Void):Void {} }'
+				]
+			)) v.message
+		];
+		Assert.same(['"B.work" holds "A.s" across a call that can block: A.take -> Mutex.acquire'], heldBy('B.work', found));
 		#else
 		Assert.pass('non-sys target');
 		#end

@@ -1,10 +1,15 @@
 package anyparse.check;
 
 import anyparse.query.CallGraph;
+import anyparse.query.CallGraphNames;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
+import anyparse.query.SourceText;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
+using StringTools;
 using Lambda;
 
 /** One occurrence of a lock member's name that unseals the member, unless a proven alias accounts for it. */
@@ -40,6 +45,15 @@ private typedef MemberRead = {
 }
 
 /**
+ * A node naming a reflective construction call (`ExecutionShape.reflectiveInstantiationCalls`): the `call` it makes, in
+ * the function `fn`, or null for any other use of the name — a function value, another receiver.
+ */
+private typedef Instantiation = {
+	final call: Null<QueryNode>;
+	final fn: Null<String>;
+}
+
+/**
  * The lock members of a call graph that ALIAS another (`LockSites`): a member written once, in its type's constructor,
  * from a parameter used nowhere else, where every construction the graph can see — each `new`, each subclass
  * constructor forwarding a parameter of its own through `super(...)` — passes that parameter a read of one other
@@ -56,6 +70,9 @@ final class LockAliases {
 	/** The locks some alias names. */
 	public final locks: Array<String> = [];
 
+	/** The aliased locks whose member some code writes: an alias may hold a value the member no longer does. */
+	public final rewritten: Array<String> = [];
+
 	/** `occurrenceKey` of every occurrence a settled alias accounts for. */
 	private final _explained: Array<String> = [];
 
@@ -64,13 +81,20 @@ final class LockAliases {
 	private final _sites: LockSites;
 	private final _ctorName: String;
 	private final _files: Array<String>;
+	private final _typeSyntax: TypeSyntaxReader;
 
 	private var _candidates: Array<LockAlias> = [];
 
 	/** Every declared type some expression reads as a value; null until asked. */
 	private var _typesAsValues: Null<Array<String>> = null;
 
-	public function new(graph: CallGraph, shape: RefShape, sites: LockSites, ctorName: String, files: Array<String>) {
+	/** Every reflective construction (`instantiations`); null until asked. */
+	private var _instantiations: Null<Array<Instantiation>> = null;
+
+	public function new(
+		graph: CallGraph, shape: RefShape, sites: LockSites, ctorName: String, files: Array<String>, typeSyntax: TypeSyntaxReader
+	) {
+		_typeSyntax = typeSyntax;
 		_graph = graph;
 		_shape = shape;
 		_sites = sites;
@@ -98,7 +122,10 @@ final class LockAliases {
 		_candidates = [];
 		for (w in writes) if (writes.count(x -> x.member == w.member) == 1) {
 			final reads: Array<MemberRead> = [];
-			if (!handOffs(w.ctor, w.param, [], reads) || reads.length == 0) continue;
+			final slots: Array<Int> = [];
+			if (!handOffs(w.ctor, w.param, [], reads, slots) || reads.length == 0) continue;
+			final root: Null<String> = _graph.node(w.ctor)?.typeName;
+			if (root == null || !reflectionSafe(familyOf(root), smallest(slots))) continue;
 			final source: String = reads[0].member;
 			if (source != w.member && reads.foreach(r -> r.member == source))
 				_candidates.push({ target: w.member, source: source, keys: [w.key].concat([for (r in reads) r.key]) });
@@ -133,6 +160,8 @@ final class LockAliases {
 			if (!locks.contains(a.source)) locks.push(a.source);
 			for (k in a.keys) _explained.push(k);
 		}
+		final written: Array<String> = writtenMembers();
+		for (lock in locks) if (written.contains(LockSites.memberName(lock))) rewritten.push(lock);
 	}
 
 	/**
@@ -177,16 +206,17 @@ final class LockAliases {
 	 * `reads`: each `new` of it (`newHandOff`), and each subclass constructor handing it a parameter of its own through
 	 * `super(...)` (`superHandOff`), with no other construction possible (`constructedOnlyThrough`).
 	 */
-	private function handOffs(ctor: String, index: Int, visited: Array<String>, reads: Array<MemberRead>): Bool {
+	private function handOffs(ctor: String, index: Int, visited: Array<String>, reads: Array<MemberRead>, slots: Array<Int>): Bool {
 		final type: Null<String> = _graph.node(ctor)?.typeName;
 		if (type == null || visited.contains(ctor) || !constructedOnlyThrough(type, ctor)) return false;
 		visited.push(ctor);
+		slots.push(index);
 		for (e in _graph.inEdges(ctor)) {
 			final at: Null<Span> = e.span;
 			if (at == null || e.from.indexOf('#') >= 0) return false;
 			final seen: Bool = switch e.kind {
 				case New: newHandOff(e, at, index, reads);
-				case Call: superHandOff(e, at, index, visited, reads);
+				case Call: superHandOff(e, at, index, visited, reads, slots);
 				case _: false;
 			};
 			if (!seen) return false;
@@ -209,7 +239,9 @@ final class LockAliases {
 	 * Whether the call at `at` is a subclass constructor's `super(...)` passing argument `index` a parameter of its own
 	 * (`parameterIndex`) that every run of that constructor hands a member read in turn (`handOffs`).
 	 */
-	private function superHandOff(e: CallEdge, at: Span, index: Int, visited: Array<String>, reads: Array<MemberRead>): Bool {
+	private function superHandOff(
+		e: CallEdge, at: Span, index: Int, visited: Array<String>, reads: Array<MemberRead>, slots: Array<Int>
+	): Bool {
 		final caller: Null<FnNode> = _graph.node(e.from);
 		final decl: Null<QueryNode> = caller == null ? null : declarationOf(caller);
 		final call: Null<QueryNode> = _shape.callKind == null ? null : nodeAt(e.file, at, _shape.callKind);
@@ -218,7 +250,7 @@ final class LockAliases {
 		if (args.length <= index + 1 || args[0].kind != _shape.identKind || args[0].name != _shape.superReferenceText) return false;
 		final forwarded: Null<String> = args[index + 1].kind == _shape.identKind ? args[index + 1].name : null;
 		final from: Int = forwarded == null ? -1 : parameterIndex(decl, forwarded);
-		return from >= 0 && handOffs(e.from, from, visited, reads);
+		return from >= 0 && handOffs(e.from, from, visited, reads, slots);
 	}
 
 	/**
@@ -234,6 +266,173 @@ final class LockAliases {
 				return false;
 		}
 		return true;
+	}
+
+	/** `type` and every type extending it, directly or not: the types whose construction may run `type`'s constructor. */
+	private function familyOf(type: String): Array<String> {
+		final family: Array<String> = [type];
+		var i: Int = 0;
+		while (i < family.length) for (sub in _graph.types.subtypesOf(family[i++])) if (!family.contains(sub)) family.push(sub);
+		return family;
+	}
+
+	/**
+	 * Whether no reflective construction may run a constructor of `family` with a lock at a hand-off parameter: each one
+	 * builds a class value whose written bounds are unrelated to `family` (`classBounds`), or passes an array literal
+	 * too short to reach the first hand-off position, `slot` — a parameter it does not supply is null.
+	 */
+	private function reflectionSafe(family: Array<String>, slot: Int): Bool {
+		final arrayKind: Null<String> = _shape.arrayLiteralKind;
+		for (made in instantiations()) {
+			final call: Null<QueryNode> = made.call;
+			final fn: Null<String> = made.fn;
+			if (call == null || fn == null || call.children.length < 2) return false;
+			final bounds: Null<Array<String>> = classBounds(call.children[1], fn);
+			if (bounds != null && bounds.foreach(b -> unrelated(b, family))) continue;
+			final values: Null<QueryNode> = call.children.length > 2 ? call.children[2] : null;
+			if (values == null || arrayKind == null || values.kind != arrayKind || values.children.length > slot) return false;
+		}
+		return true;
+	}
+
+	/** Whether the declared type `bound` is none of `family` and none of their supertypes: a class value of it builds none of them. */
+	private function unrelated(bound: String, family: Array<String>): Bool {
+		return _graph.types.declarationCount(bound) == 1 && !family.exists(t -> _graph.types.firstOnChain(t, s -> s == bound) != null);
+	}
+
+	/**
+	 * The declared types a class value `expr` in the function `fn` is one of or extends: a bare type name, a parameter
+	 * (`nameBounds`) or a call (`callBounds`) whose written type is the language's class-value type of a type or a
+	 * bounded type parameter (`classTypeBounds`), through parentheses, unchecked casts and null coalescing; null for
+	 * anything else.
+	 */
+	private function classBounds(expr: QueryNode, fn: String): Null<Array<String>> {
+		final kind: String = expr.kind;
+		final name: Null<String> = expr.name;
+		final at: Null<Span> = expr.span;
+		if ((kind == _shape.parenKind || kind == _shape.uncheckedCastKind) && expr.children.length == 1)
+			return classBounds(expr.children[0], fn);
+		final coalesced: Bool = kind == _shape.nullCoalesceKind && expr.children.length == 2;
+		final left: Null<Array<String>> = coalesced ? classBounds(expr.children[0], fn) : null;
+		final right: Null<Array<String>> = coalesced ? classBounds(expr.children[1], fn) : null;
+		return if (coalesced)
+			left == null || right == null ? null : left.concat(right)
+		else if (kind == _shape.identKind && name != null)
+			nameBounds(name, fn)
+		else if (kind == _shape.callKind && at != null)
+			callBounds(at, fn)
+		else
+			null;
+	}
+
+	/** `classBounds` of the bare name `name` in the function `fn`: a parameter's written type, else a declared type. */
+	private function nameBounds(name: String, fn: String): Null<Array<String>> {
+		final node: Null<FnNode> = _graph.node(fn);
+		final decl: Null<QueryNode> = node == null ? null : declarationOf(node);
+		final source: Null<String> = node == null ? null : _graph.sourceOf(node.file);
+		if (decl == null || source == null) return null;
+		final paramKinds: Array<String> = _shape.paramKinds ?? [];
+		final param: Null<QueryNode> = decl.children.find(c -> paramKinds.contains(c.kind) && c.name == name);
+		if (param == null) return unshadowed(decl, name) && _graph.types.declarationCount(name) == 1 ? [name] : null;
+		final written: Null<Span> = param.type?.span;
+		return written == null ? null : classTypeBounds(source.substring(written.from, written.to), fn);
+	}
+
+	/** `classBounds` of the call at `at` in the function `fn`: the written return type of every target it may run. */
+	private function callBounds(at: Span, fn: String): Null<Array<String>> {
+		final targets: Array<CallEdge> = _graph.outEdges(fn).filter(e -> e.kind.isInvocation() && e.span?.from == at.from);
+		final bounds: Array<String> = [];
+		for (e in targets) {
+			final target: Null<FnNode> = _graph.node(e.to);
+			final decl: Null<QueryNode> = target == null ? null : declarationOf(target);
+			final source: Null<String> = target == null ? null : _graph.sourceOf(target.file);
+			final written: Null<String> = decl == null || source == null
+				? null
+				: CallGraphNames.returnSourceOf(decl, source, _shape.typeAnnotationKinds ?? []);
+			final found: Null<Array<String>> = written == null ? null : classTypeBounds(written, e.to);
+			if (found == null) return null;
+			for (b in found) bounds.push(b);
+		}
+		return targets.length == 0 ? null : bounds;
+	}
+
+	/**
+	 * The declared types a value of the written type `written`, as the function `fn` sees it, is one of or extends: for
+	 * the class-value type of a declared type, that type; of a type parameter, each of its bounds; null otherwise.
+	 */
+	private function classTypeBounds(written: String, fn: String): Null<Array<String>> {
+		final classType: Null<String> = _shape.execution?.classValueTypeName;
+		final of: Null<String> = switch _typeSyntax(written.trim())?.shape {
+			case Nominal(path, [arg]) if (classType != null && SourceText.lastSegment(path) == classType):
+				NominalTypes.outerNominalOf(arg.text, _typeSyntax);
+			case _: null;
+		};
+		if (of == null) return null;
+		final bounds: Null<Array<String>> = _graph.typeParamBoundsOf(fn, of);
+		if (bounds == null) return _graph.types.declarationCount(of) == 1 ? [of] : null;
+		final nominals: Array<String> = [];
+		for (bound in bounds) {
+			final boundSource: String = bound;
+			final nominal: Null<String> = NominalTypes.outerNominalOf(boundSource.trim(), _typeSyntax);
+			if (nominal == null) return null;
+			nominals.push(nominal);
+		}
+		return nominals.length == 0 ? null : nominals;
+	}
+
+	/**
+	 * Every node of the graph's files naming a reflective construction member: its call when the node is
+	 * `<Type>.<member>(...)` as `ExecutionShape.reflectiveInstantiationCalls` spells it, else none.
+	 */
+	private function instantiations(): Array<Instantiation> {
+		final known: Null<Array<Instantiation>> = _instantiations;
+		if (known != null) return known;
+		final found: Array<Instantiation> = [];
+		final calls: Array<String> = _shape.execution?.reflectiveInstantiationCalls ?? [];
+		final members: Array<String> = [for (c in calls) SourceText.lastSegment(c)];
+		var file: String = '';
+		function walk(node: QueryNode, parent: Null<QueryNode>): Void {
+			final name: Null<String> = node.name;
+			if (name != null && members.contains(name)) {
+				final receiver: Null<QueryNode> = _sites.isAccess(node.kind) && node.children.length > 0 ? node.children[0] : null;
+				final named: Bool = receiver != null && receiver.kind == _shape.identKind && calls.contains('${receiver.name}.$name');
+				final call: Null<QueryNode> = named && parent != null && parent.kind == _shape.callKind && parent.children[0] == node
+					? parent
+					: null;
+				final at: Null<Span> = node.span;
+				found.push({ call: call, fn: at == null ? null : _graph.functionAt(file, at.from) });
+			}
+			for (c in node.children) walk(c, node);
+		}
+		for (f in _files) {
+			final tree: Null<QueryNode> = _graph.treeOf(f);
+			file = f;
+			if (tree != null) walk(tree, null);
+		}
+		_instantiations = found;
+		return found;
+	}
+
+	/** The member names some code writes — assigns, increments — other than in a declaration's initializer. */
+	private function writtenMembers(): Array<String> {
+		final writeKinds: Array<String> = _shape.writeParentKinds;
+		final found: Array<String> = [];
+		function walk(node: QueryNode): Void {
+			final target: Null<QueryNode> = writeKinds.contains(node.kind) && node.children.length > 0 ? node.children[0] : null;
+			final name: Null<String> = target?.name;
+			if (
+				target != null && name != null && (target.kind == _shape.identKind || _sites.isAccess(target.kind)) && !found.contains(
+					name
+				)
+			)
+				found.push(name);
+			for (c in node.children) walk(c);
+		}
+		for (f in _files) {
+			final tree: Null<QueryNode> = _graph.treeOf(f);
+			if (tree != null) walk(tree);
+		}
+		return found;
 	}
 
 	/**
@@ -329,6 +528,12 @@ final class LockAliases {
 	private static function collectNamed(node: QueryNode, name: String, into: Array<QueryNode>): Void {
 		if (node.name == name) into.push(node);
 		for (c in node.children) collectNamed(c, name, into);
+	}
+
+	private static function smallest(values: Array<Int>): Int {
+		var least: Int = values[0];
+		for (v in values) if (v < least) least = v;
+		return least;
 	}
 
 }
