@@ -1127,6 +1127,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.CommentWidthCheckTest#testTheFixReflowsIntoTheWidthWordForWord :: control :: M-COMMENT-REFLOW-ABSENT',
 			'unit.check.CommentWidthCheckTest#testTwoIdenticalWideLinesAreTwoLines :: control :: M-COMMENT-WIDTH-PROTECTION-BY-TEXT',
 			'unit.check.ComparisonToBooleanCheckTest#testFieldAccessBoolMemberFlagged :: control :: M-PATHWALK-NULL',
+			'unit.check.ComparisonToBooleanCheckTest#testResolvedMemberTypedByTypeParamSkipped :: control :: M-CMPBOOL-RESOLVED-TYPE-PARAM-BLIND',
+			'unit.check.ComparisonToBooleanCheckTest#testTypeParamSpelledLikeBoolSkipped :: control :: M-NULLITY-TYPE-PARAM-BLIND',
 			'unit.check.CrossScopeSoundnessTest#testAnUnreadableReflectiveFileLicensesNothingExtra :: control :: '
 				+ 'M-REFLECTION-UNREADABLE-BLIND,M-INLINE-UNREADABLE-BLIND',
 			'unit.check.CrossScopeSoundnessTest#testNarrowReportFindsNothingTheWideRunDoesNot :: control :: '
@@ -3869,7 +3871,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-BLIND-CALL-SHORT',
 			'M-TS-CTOR-ESCAPE-BLIND',
 			'M-TS-LOOP-ONE-PASS',
-			'M-TS-UNNAMED-RECEIVER-SEALED'
+			'M-TS-UNNAMED-RECEIVER-SEALED',
+			'M-NULLITY-TYPE-PARAM-BLIND',
+			'M-CMPBOOL-RESOLVED-TYPE-PARAM-BLIND'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

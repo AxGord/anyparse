@@ -72,6 +72,41 @@ class ComparisonToBooleanCheckTest extends Test {
 		Assert.equals(1, violations('class C {\n\tfunction f():Void {\n\t\tfinal x:Bool = a > c;\n\t\tvar b = x == true;\n\t}\n}').length);
 	}
 
+	/**
+	 * A basic value type's spelling names a TYPE PARAMETER where a declaration introduces one by that
+	 * name — a method's own (`function f<Bool>(x: Bool)`) or its enclosing type's (`class B<Bool>`) —
+	 * so `x == true` there compares an arbitrary type, and neither the report nor the fix may treat it
+	 * as a redundant Bool comparison. The same comparison on a genuine `Bool` in the same file stays.
+	 */
+	@:pin('control')
+	@:killer('M-NULLITY-TYPE-PARAM-BLIND')
+	public function testTypeParamSpelledLikeBoolSkipped(): Void {
+		final src: String = 'class A {\n\tfunction f<Bool>(x:Bool):Bool\n\t\treturn x == true;\n\n\tfunction g(x:Bool):Bool\n\t\treturn x == true;\n}\n\n'
+			+ 'class B<Bool> {\n\tfunction h(x:Bool):Bool\n\t\treturn x == true;\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals(6, vs.length == 1 ? src.substring(0, vs[0].span.from).split('\n').length : -1);
+		Assert.equals(
+			src.split('function g(x:Bool):Bool\n\t\treturn x == true;').join('function g(x:Bool):Bool\n\t\treturn x;'), applyFix(src)
+		);
+	}
+
+	/**
+	 * The RESOLVED arms read a member's written type and a method's written return off the index, and
+	 * there too `Bool` may name the declaring type's parameter: `Box<Null<Int>>.flag` is a
+	 * `Null<Int>`, so `b.flag == true` is not a Bool comparison at all.
+	 */
+	@:pin('control')
+	@:killer('M-CMPBOOL-RESOLVED-TYPE-PARAM-BLIND')
+	public function testResolvedMemberTypedByTypeParamSkipped(): Void {
+		final box: String = 'class Box<Bool> {\n\tpublic var flag:Bool;\n\n\tpublic function get():Bool\n\t\treturn flag;\n}';
+		final use: String = 'class Use {\n\tfunction u(b:Box<Null<Int>>):Bool\n\t\treturn b.flag == true;\n\n'
+			+ '\tfunction v(b:Box<Null<Int>>):Bool\n\t\treturn b.get() == true;\n}';
+		Assert.equals(0, violationsAcross([{ file: 'Box.hx', source: box }, { file: 'Use.hx', source: use }]).length);
+		final plain: String = box.split('<Bool>').join('');
+		Assert.equals(2, violationsAcross([{ file: 'Box.hx', source: plain }, { file: 'Use.hx', source: use }]).length);
+	}
+
 	public function testBooleanExprOperandFlagged(): Void {
 		Assert.equals(1, violations('class C {\n\tfunction f():Void {\n\t\tvar b = (a > c) == true;\n\t}\n}').length);
 	}

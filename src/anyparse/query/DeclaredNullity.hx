@@ -109,7 +109,8 @@ final class DeclaredNullity {
 	 */
 	public function isValueType(bindingFrom: Int): Bool {
 		final typeName: Null<String> = _declaredTypes[bindingFrom];
-		if (typeName == null || !(_shape.nonNullableTypeNames ?? []).contains(typeName)) return false;
+		if (typeName == null || !(_shape.nonNullableTypeNames ?? []).contains(typeName) || isTypeParamAt(typeName, bindingFrom))
+			return false;
 		final typeChildKinds: Array<String> = _shape.declTypeChildKinds ?? [];
 		final field: Null<QueryNode> = TypeResolver.innermostDeclCovering(_root, _shape.fieldDeclKinds ?? [], bindingFrom);
 		return field == null || _accessors[bindingFrom] == true || !field.children.foreach(c -> typeChildKinds.contains(c.kind));
@@ -123,7 +124,7 @@ final class DeclaredNullity {
 	 */
 	public function ofBinding(bindingFrom: Int): Nullity {
 		final typeName: Null<String> = _declaredTypes[bindingFrom];
-		if (typeName == null) return Unproven;
+		if (typeName == null || isTypeParamAt(typeName, bindingFrom)) return Unproven;
 		if ((_shape.nonNullableTypeNames ?? []).contains(typeName)) return ValueType;
 		final params: Null<Array<String>> = typeParamsAt(bindingFrom);
 		return params == null ? Unproven : resolve(_typeSources[bindingFrom] ?? typeName, _file, params, 0, []);
@@ -252,6 +253,22 @@ final class DeclaredNullity {
 		}
 		walk(_root);
 		return readable ? out : null;
+	}
+
+	/**
+	 * Whether `name` is a type parameter a declaration enclosing `at` introduces — a method's own
+	 * (`function f<Bool>(x: Bool)`) or an enclosing type's (`class C<Bool>`) — which makes a basic
+	 * value type's spelling name the parameter instead. Read off this file's `_typeParams` alone, so
+	 * the value-type fast path that asks it stays free of the index `typeParamsAt` may build.
+	 */
+	private function isTypeParamAt(name: String, at: Int): Bool {
+		function declares(node: QueryNode): Bool {
+			final span: Null<Span> = node.span;
+			if (span == null) return node.children.exists(declares);
+			if (at < span.from || at >= span.to) return false;
+			return (_typeParams[span.from] ?? []).contains(name) || node.children.exists(declares);
+		}
+		return declares(_root);
 	}
 
 	/** The type parameters of the type named `name` declared in this file, or null when the index cannot read them. */

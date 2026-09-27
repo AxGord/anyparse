@@ -9283,6 +9283,20 @@
 			"find": " && namedCalls.contains('${call.span?.from}:${node.name}');",
 			"replace": ";",
 			"note": "any method call on a member keeps it sealed, so a lock call through a Dynamic, cast or type-parameter receiver never makes the member long"
+		},
+		{
+			"name": "M-NULLITY-TYPE-PARAM-BLIND",
+			"type": "anyparse.query.DeclaredNullity",
+			"method": "isTypeParamAt",
+			"force": "false",
+			"note": "a basic value type's spelling is read as the value type even where an enclosing declaration names a type parameter so"
+		},
+		{
+			"name": "M-CMPBOOL-RESOLVED-TYPE-PARAM-BLIND",
+			"type": "anyparse.check.ComparisonToBoolean",
+			"method": "spelledAsTypeParam",
+			"force": "false",
+			"note": "a member type or method return written `Bool` is proven a Bool even where a declaring type or method names a type parameter Bool"
 		}
 	]
 }
