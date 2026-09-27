@@ -51,7 +51,10 @@ final class LockWindow {
 	private var _leaks: Bool = false;
 
 	public function new(shape: RefShape, flow: ControlFlowSupport) {
-		_sequenceKinds = flow.blockKinds().concat(shape.exprStatementKind == null ? [] : [shape.exprStatementKind]);
+		// an expression body is a sequence of the one expression it holds
+		_sequenceKinds = flow.blockKinds()
+			.concat(shape.exprStatementKind == null ? [] : [shape.exprStatementKind])
+			.concat(shape.expressionBodyKinds ?? []);
 		_ifKinds = (
 			shape.ifStatementKinds ?? []
 		).concat(shape.ifExpressionKinds ?? []).concat(shape.ternaryKind == null ? [] : [shape.ternaryKind]);
@@ -83,6 +86,41 @@ final class LockWindow {
 		_leaks = false;
 		if (sequence(fn.children, false) == true) _leaks = true;
 		return { held: _held, leaks: _leaks };
+	}
+
+	/**
+	 * Whether every path through the function node `fn` gives back a lock held on entry: one of the calls starting at
+	 * `releaseFroms` runs on each way out of the body. False when the grammar names no exit kinds.
+	 */
+	public function releasesOnEveryPath(fn: QueryNode, releaseFroms: Array<Int>): Bool {
+		if (_exitKinds.length == 0) return false;
+		_acquireFrom = -1;
+		_releaseFroms = releaseFroms;
+		_held = [];
+		_leaks = false;
+		return sequence(fn.children, true) != true && !_leaks;
+	}
+
+	/**
+	 * Whether the call starting at `callFrom` runs on every path into the function node `fn`: it is reached through
+	 * statement sequences alone, and nothing before it on the way holds a path out of the body.
+	 */
+	public function runsOnEveryPath(fn: QueryNode, callFrom: Int): Bool {
+		var nodes: Array<QueryNode> = fn.children;
+		while (true) {
+			var inner: Null<QueryNode> = null;
+			for (node in nodes) {
+				if (contains(node, callFrom)) {
+					inner = node;
+					break;
+				}
+				if (_exitKinds.contains(node.kind) || exits(node)) return false;
+			}
+			if (inner == null) return false;
+			if (inner.kind == _callKind && inner.span?.from == callFrom) return true;
+			if (!_sequenceKinds.contains(inner.kind)) return false;
+			nodes = inner.children;
+		}
 	}
 
 	/** The may-held state after `nodes` run in order from `held`; null when no path completes them normally. */

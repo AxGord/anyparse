@@ -8679,10 +8679,10 @@
 		},
 		{
 			"name": "M-TS-TAINT-UNION-SINK",
-			"type": "anyparse.check.ThreadSafety",
-			"method": "collectTaint",
+			"type": "anyparse.check.LockTaint",
+			"method": "hops",
 			"find": "&& !listsOf(edge.file).sinkIds.contains(edge.from)",
-			"replace": "&& !sinkIds.contains(edge.from)",
+			"replace": "&& !_sinkIds.contains(edge.from)",
 			"note": "a node one chain names a sink never carries taint to its callers in a chain where it is a plain function"
 		},
 		{
@@ -9182,9 +9182,9 @@
 		},
 		{
 			"name": "M-TS-LOCK-ALWAYS-BLOCKS",
-			"type": "anyparse.check.ThreadSafety",
+			"type": "anyparse.check.LockTaint",
 			"method": "blocks",
-			"find": "if (!takesLock(edge, listsOf)) return true;",
+			"find": "if (!takesLock(edge)) return true;",
 			"replace": "return true;",
 			"note": "a sink taking a lock blocks whatever the lock is, so a main-thread take of a lock nobody holds long is reported again"
 		},
@@ -9267,6 +9267,174 @@
 			"find": "&& !passesSelf(body, null);",
 			"replace": ";",
 			"note": "a constructor that hands `this` out before its hold still counts as private, so the hold blocks no one"
+		},
+		{
+			"name": "M-TS-WRAPPER-NONE",
+			"type": "anyparse.check.LockSites",
+			"method": "inferWrappers",
+			"find": "for (_ in 0...WRAPPER_ROUNDS) {",
+			"replace": "for (_ in 0...0) {",
+			"note": "no function is a lock wrapper, so a hold taken through one is nobody's and goes unreported"
+		},
+		{
+			"name": "M-TS-WRAPPER-LEAKS",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "solveLongLocks",
+			"find": "a.leaks && !a.delegated",
+			"replace": "a.leaks",
+			"note": "a wrapper's own take leaking out of its body makes its lock long, so every main-thread take of it is reported again"
+		},
+		{
+			"name": "M-TS-WRAPPER-CROSSING",
+			"type": "anyparse.check.LockSites",
+			"method": "collectCrossing",
+			"find": " || _wrappers.exists(give.edge.from)",
+			"replace": "",
+			"note": "a release wrapper's own release reads as a release without a take, so its lock is always long"
+		},
+		{
+			"name": "M-TS-WRAPPER-MAY-RELEASE",
+			"type": "anyparse.check.LockSites",
+			"method": "wrapperOf",
+			"find": ": walker.releasesOnEveryPath(fn, [at.from]);",
+			"replace": ": true;",
+			"note": "a function releasing on some path only counts as a release, so the caller's hold ends where it may go on"
+		},
+		{
+			"name": "M-TS-WRAPPER-MAY-TAKE",
+			"type": "anyparse.check.LockSites",
+			"method": "wrapperOf",
+			"find": "takes ? walker.runsOnEveryPath(fn, at.from) :",
+			"replace": "takes ? true :",
+			"note": "a function taking on some path only counts as a take wrapper, so its leaking take stops making the lock long"
+		},
+		{
+			"name": "M-TS-WRAPPER-UNRESOLVED",
+			"type": "anyparse.check.LockSites",
+			"method": "mayWrap",
+			"find": " && !unresolvedNames.contains(name)",
+			"replace": "",
+			"note": "a wrapper some untyped receiver calls by name counts, so a take at a call nobody sees stops making the lock long"
+		},
+		{
+			"name": "M-TS-WRAPPER-NO-PASS-THROUGH",
+			"type": "anyparse.check.LockSites",
+			"method": "wrapperSites",
+			"find": " || passesThrough(o.to)",
+			"replace": "",
+			"note": "a call through an interface member is no wrapper call, so a wrapper reached by dispatch is dropped and its caller's hold goes unreported"
+		},
+		{
+			"name": "M-TS-REENTRANT-IGNORED",
+			"type": "anyparse.check.LockTaint",
+			"method": "blocks",
+			"find": "!(lock == held && _sites.selfTake(edge)) && ",
+			"replace": "",
+			"note": "a hold re-taking its own re-entrant lock counts as blocking, so every nested take of a held Mutex is reported"
+		},
+		{
+			"name": "M-TS-REENTRANT-ASSUMED",
+			"type": "anyparse.check.LockTaint",
+			"method": "reentrantHeld",
+			"find": "listsOf(a.edge.file).reentrantIds.contains(a.pair.lockId)",
+			"replace": "true",
+			"note": "every lock kind is taken as re-entrant, so a re-take of a binary semaphore under its own hold (a self-deadlock) goes unreported"
+		},
+		{
+			"name": "M-TS-EVIDENCE-UNCAPPED",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "evidenceOf",
+			"find": "final more: Int = evidence.length - EVIDENCE_CAP;",
+			"replace": "final more: Int = 0;",
+			"note": "a hold's blocking calls past the cap vanish from its finding instead of being counted"
+		},
+		{
+			"name": "M-TS-HOLD-ANCHOR-LAST",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "reportLockHeld",
+			"find": "final anchor: CallEdge = blocking[0];",
+			"replace": "final anchor: CallEdge = blocking[blocking.length - 1];",
+			"note": "a hold's finding sits at its last blocking call, not where the stall first begins"
+		},
+		{
+			"name": "M-TS-UNKNOWN-LOCK-UNNAMED",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "reportLockHeld",
+			"find": "${lock ?? a.pair.lockId}",
+			"replace": "${lock ?? ''}",
+			"note": "a hold of a lock no member names is reported naming nothing"
+		},
+		{
+			"name": "M-TS-SITE-PER-TARGET",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "reportMainSinkCalls",
+			"find": "final key: String = '${edge.file}:${edge.span?.from ?? -1}:${edge.from}';",
+			"replace": "final key: String = '${edge.file}:${edge.span?.from ?? -1}:${edge.from}:${edge.to}';",
+			"note": "every sink a dispatch may reach is its own finding at one call site"
+		},
+		{
+			"name": "M-TS-QUIET-LOUD-CALLER",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "settleContexts",
+			"find": "if (loud.length == 0) return;",
+			"replace": "return;",
+			"note": "a quiet root loud UI code also calls stays quiet, so everything it reaches from that handler goes unreported"
+		},
+		{
+			"name": "M-TS-REENTRANT-ANY-OBJECT",
+			"type": "anyparse.check.LockTaint",
+			"method": "blocks",
+			"find": "!(lock == held && _sites.selfTake(edge))",
+			"replace": "!(lock == held)",
+			"note": "another object's lock of the same member counts as a re-take, so a cross-object wait (a lock-order deadlock shape) is dropped"
+		},
+		{
+			"name": "M-TS-REENTRANT-WRAPPER-ELSEWHERE",
+			"type": "anyparse.check.LockTaint",
+			"method": "retakesElsewhere",
+			"find": "&& selfTakers(held).contains(edge.to)",
+			"replace": "&& false",
+			"note": "a wrapper called on another object reads as a free re-take of the held lock"
+		},
+		{
+			"name": "M-TS-REENTRANT-HOLDER-ELSEWHERE",
+			"type": "anyparse.check.LockTaint",
+			"method": "reentrantHeld",
+			"find": " && _sites.selfTake(a.edge)",
+			"replace": "",
+			"note": "a hold of another object's lock makes the running object's own lock free to take"
+		},
+		{
+			"name": "M-TS-SELF-NEVER",
+			"type": "anyparse.check.LockSites",
+			"method": "readsOwnMember",
+			"find": "? node.name != _shape.selfReferenceText",
+			"replace": "? false",
+			"note": "a lock member read bare is never the running object's, so re-taking one's own re-entrant lock is reported as a wait"
+		},
+		{
+			"name": "M-TS-QUIET-IGNORED",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "enter",
+			"find": "return quiet.contains(id)",
+			"replace": "return false",
+			"note": "a quiet root silences nothing, so shutdown and crash paths are reported as main-thread stalls"
+		},
+		{
+			"name": "M-TS-QUIET-SWALLOWS",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "reportMainSinkCalls",
+			"find": "if (ctx & CTX_MAIN == 0) continue;",
+			"replace": "if (ctx & CTX_MAIN == 0 || ctx & CTX_QUIET != 0) continue;",
+			"note": "one path through a quiet root silences a sink every other main-thread path still reaches"
+		},
+		{
+			"name": "M-TS-QUIET-INTO-CALLBACK",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "callbackContext",
+			"find": "final loud: Int = (ctx & CTX_QUIET != 0 ? CTX_MAIN : 0) | (ctx & (CTX_MAIN | CTX_BG));",
+			"replace": "final loud: Int = ctx;",
+			"note": "a callback a quiet root registers or spawns inherits its quiet, so a listener or worker it hands on is never reported"
 		},
 		{
 			"name": "M-TS-LOOP-ONE-PASS",
