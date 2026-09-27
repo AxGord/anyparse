@@ -2652,6 +2652,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-PATCH-STRADDLED-DOC-UNWATCHED',
 			'unit.query.PatchSliceTest#testDocCodeSampleIndentationSurvives :: control :: M-PATCH-COMMENT-SHAPE-CHECKED',
 			'unit.query.PatchSliceTest#testDocPayloadWithASpaceGutterApplies :: control :: M-PATCH-COMMENT-SHAPE-CHECKED',
+			'unit.query.PatchSliceTest#testFinalClassHeaderIsInTheSearchRegion :: control :: M-DECLSPAN-FINAL-WRAPPER-BLIND',
 			'unit.query.PatchSliceTest#testGrowingPairsUnderOneClassDocAcceptedAtEveryDelta :: control :: M-PATCH-DOCEND-SHIFTS-EVERY-EDIT',
 			'unit.query.PatchSliceTest#testRenamePlusAnUnrelatedInsertElsewhereApplies :: control :: '
 				+ 'M-PATCH-GROWTH-COUNTED-CONTAINER-WIDE',
@@ -2662,6 +2663,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.RefShapeKindProjectionTest#testEveryDeclaredTokenIsOneTheParserCaptures :: control :: '
 				+ 'M-AND-OPERATOR-TEXT-STALE,M-CONSTRUCTOR-NAME-PADDED',
 			'unit.query.RefShapeKindProjectionTest#testEveryProjectedKindIsOneSomeSourceEmits :: control :: M-ELLIPSIS-STMT-TOKEN-STALE',
+			'unit.query.RemoveElementSliceTest#testRemoveFinalClassTakesItsFinal :: control :: M-DECLSPAN-FINAL-WRAPPER-BLIND',
 			'unit.query.RemoveMemberSliceTest#testSiblingRegionsWithOneConditionAreRefusedByCount :: control :: '
 				+ 'M-COND-FRAME-REGION-KEYED,M-COND-FRAME-CONDITION-RAW',
 			'unit.query.RemoveMemberSliceTest#testTwoDeclarationsInOneBranchAreRefusedByCount :: control :: M-REMOVE-MEMBER-BRANCH-BLIND',
@@ -3873,7 +3875,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-TS-LOOP-ONE-PASS',
 			'M-TS-UNNAMED-RECEIVER-SEALED',
 			'M-NULLITY-TYPE-PARAM-BLIND',
-			'M-CMPBOOL-RESOLVED-TYPE-PARAM-BLIND'
+			'M-CMPBOOL-RESOLVED-TYPE-PARAM-BLIND',
+			'M-DECLSPAN-FINAL-WRAPPER-BLIND'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

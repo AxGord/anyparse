@@ -54,12 +54,18 @@ final class RemoveElement {
 		final cursor: Int = Span.offsetOf(source, line, col);
 
 		final hit: Null<{ node: QueryNode, parent: Null<QueryNode> }> = RefactorSupport.elementAtFrom(tree, source, cursor);
-		return hit == null
-			? Err(
+		if (hit == null)
+			return Err(
 				'position $line:$col'
 				+ ' is not on the first token of an element — point at the first token of a statement / case / list element / member'
-			)
-			: ElementSpan.deleteNode(source, hit.node, hit.parent, reformat, plugin, withDoc, optsJson);
+			);
+		// A `final class` lands on the inner form, whose own span leaves the wrapper's `final` behind to
+		// glue onto the NEXT declaration (`final abstract class Y`); delete the wrapper instead.
+		final parent: Null<QueryNode> = hit.parent;
+		final wrapper: Null<QueryNode> = parent == null ? null : ElementSpan.foldingWrapperOf(hit.node, parent);
+		return wrapper == null
+			? ElementSpan.deleteNode(source, hit.node, parent, reformat, plugin, withDoc, optsJson)
+			: ElementSpan.deleteNode(source, wrapper, TreePath.parentOf(tree, wrapper), reformat, plugin, withDoc, optsJson);
 	}
 
 	/**

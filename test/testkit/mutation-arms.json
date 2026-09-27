@@ -9297,6 +9297,13 @@
 			"method": "spelledAsTypeParam",
 			"force": "false",
 			"note": "a member type or method return written `Bool` is proven a Bool even where a declaring type or method names a type parameter Bool"
+		},
+		{
+			"name": "M-DECLSPAN-FINAL-WRAPPER-BLIND",
+			"type": "anyparse.query.ElementSpan",
+			"method": "foldingWrapperOf",
+			"force": "null",
+			"note": "a `final class` addressed through its inner form is edited without the wrapper's `final` and the modifier run beside the wrapper"
 		}
 	]
 }
