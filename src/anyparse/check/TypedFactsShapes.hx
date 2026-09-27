@@ -54,12 +54,6 @@ final class TypedFactsShapes {
 		};
 	}
 
-	public static function unwrapNull(t: String): String {
-		var inner: String = t;
-		while (inner.startsWith('Null<') && inner.endsWith('>')) inner = inner.substring(5, inner.length - 1);
-		return inner;
-	}
-
 	public static function describe(fa: FieldAccess): FieldRef {
 		return switch fa {
 			case FInstance(c, _, cf): { owner: c.toString(), field: cf.toString(), kind: 'FInstance' };

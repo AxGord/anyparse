@@ -186,7 +186,7 @@ final class TypedFactsWalk {
 
 	/** A value of type `s` reaching a place of type `d`, kept only when the two differ beyond nullability. */
 	private function flowText(s: String, d: String, how: String, p: Position): Void {
-		if (how != 'cast' && TypedFactsShapes.unwrapNull(s) == TypedFactsShapes.unwrapNull(d)) return;
+		if (how != 'cast' && FactsTypeText.unwrapNull(s) == FactsTypeText.unwrapNull(d)) return;
 		add('flows', '{"s":${q(s)},"d":${q(d)},"c":"$how","p":${at(p)}}');
 	}
 

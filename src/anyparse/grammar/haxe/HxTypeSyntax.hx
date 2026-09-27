@@ -46,17 +46,30 @@ final class HxTypeSyntax {
 				node(span, Function([for (a in fn.args) param(a)], type(fn.ret), false));
 			case Anon(members, span):
 				node(span, Structure([for (m in members) for (f in field(m)) f]));
-			case DollarType(_, span), OptionalArg(_, span), ConstStringType(_, span), BracketExprListType(_, span), ConditionalType(_, span):
+			case ConditionalType(c, span):
+				node(
+					span,
+					Conditional(
+						[type(c.type)].concat([for (e in c.elseifs) type(e.type)])
+							.concat(c.elseClause == null ? [] : [type(c.elseClause.type)])
+					)
+				);
+			case DollarType(_, span), OptionalArg(_, span), ConstStringType(_, span), BracketExprListType(_, span):
 				node(span, Other);
 		};
 	}
 
-	/** A type argument — `Other` when it carries an intersection (`A & B`), whose span runs to the last member. */
+	/** A type argument — an `Intersection` when it carries one (`A & B`), spanning its first member to its last. */
 	private function argument(a: HxTypeArgS): TypeSyntax {
-		final head: TypeSyntax = type(a.type);
-		if (a.intersections.length == 0) return head;
-		final last: TypeSyntax = type(a.intersections[a.intersections.length - 1].type);
-		return new TypeSyntax(new Span(head.span.from, last.span.to), _text.substring(head.span.from, last.span.to), Other);
+		return intersection(type(a.type), a.intersections);
+	}
+
+	/** `head` alone, or the intersection of `head` and every `clauses` member. */
+	private function intersection(head: TypeSyntax, clauses: Array<HxIntersectionClauseS>): TypeSyntax {
+		if (clauses.length == 0) return head;
+		final members: Array<TypeSyntax> = [head].concat([for (c in clauses) type(c.type)]);
+		final to: Int = members[members.length - 1].span.to;
+		return new TypeSyntax(new Span(head.span.from, to), _text.substring(head.span.from, to), Intersection(members));
 	}
 
 	/** The curried chain whose head is `t`: one parameter per left operand on the right spine, the last operand the result. */
@@ -119,11 +132,13 @@ final class HxTypeSyntax {
 	public static function of(text: String): Null<TypeSyntax> {
 		final root: HxModuleS = try HaxeModuleSpanParser.parse(PREFIX + text + '\n;') catch (exception: Exception) return null;
 		if (root.decls.length != 1) return null;
-		final type: Null<HxTypeS> = switch root.decls[0].decl {
-			case TypedefDecl({ typeParams: null, type: t, intersections: [] }, _): t;
+		final decl: Null<HxTypedefDeclS> = switch root.decls[0].decl {
+			case TypedefDecl(d, _) if (d.typeParams == null): d;
 			case _: null;
 		};
-		return type == null ? null : new HxTypeSyntax(text).type(type);
+		if (decl == null) return null;
+		final reader: HxTypeSyntax = new HxTypeSyntax(text);
+		return reader.intersection(reader.type(decl.type), decl.intersections);
 	}
 
 }

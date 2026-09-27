@@ -102,7 +102,8 @@ final class TypedFactsProbe {
 	private static final MACRO_FILES: Array<{ path: String, text: String }> = [
 		{ path: 'anyparse/check/TypedFactsMacro.hx', text: EmbeddedSource.text('anyparse/check/TypedFactsMacro.hx') },
 		{ path: 'anyparse/check/TypedFactsWalk.hx', text: EmbeddedSource.text('anyparse/check/TypedFactsWalk.hx') },
-		{ path: 'anyparse/check/TypedFactsShapes.hx', text: EmbeddedSource.text('anyparse/check/TypedFactsShapes.hx') }
+		{ path: 'anyparse/check/TypedFactsShapes.hx', text: EmbeddedSource.text('anyparse/check/TypedFactsShapes.hx') },
+		{ path: 'anyparse/check/FactsTypeText.hx', text: EmbeddedSource.text('anyparse/check/FactsTypeText.hx') }
 	];
 
 	/**

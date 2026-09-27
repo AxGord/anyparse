@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.runtime.Span;
 
 using Lambda;
+using StringTools;
 
 /**
  * A written type as its grammar reads it (`GrammarPlugin.typeSyntax`): the parts an analysis
@@ -42,12 +43,27 @@ final class TypeSyntax {
 		};
 	}
 
+	/**
+	 * The verbatim source between a named type's `<` and `>`, trimmed, a comment in front of an argument
+	 * included — or null when this is not a named type written with arguments. An argument's own `text`
+	 * stops at the type; this is what re-spells the list with nothing the author wrote dropped.
+	 */
+	public function argumentsSource(): Null<String> {
+		return switch shape {
+			case Nominal(path, args) if (args.length > 0 && text.startsWith(path)):
+				final list: String = text.substring(path.length).trim();
+				list.substring(1, list.length - 1).trim();
+			case _: null;
+		};
+	}
+
 	/** This type and every type written inside it — arguments, parameters, results, field types — outermost first. */
 	public function descendants(): Array<TypeSyntax> {
 		final inner: Array<TypeSyntax> = switch shape {
 			case Nominal(_, args): args;
 			case Function(params, ret, _): [for (p in params) p.type].concat([ret]);
 			case Structure(fields): [for (f in fields) f.type];
+			case Intersection(parts), Conditional(parts): parts;
 			case Other: [];
 		};
 		return [this].concat([for (t in inner) for (d in t.descendants()) d]);
@@ -59,6 +75,7 @@ final class TypeSyntax {
 			case Function(_, _, _): true;
 			case Nominal(_, args): args.exists(a -> a.holdsFunction());
 			case Structure(fields): fields.exists(f -> f.type.holdsFunction());
+			case Intersection(parts), Conditional(parts): parts.exists(p -> p.holdsFunction());
 			case Other: false;
 		};
 	}
@@ -96,7 +113,13 @@ enum TypeShape {
 	/** An anonymous structure type, its typed fields in order. */
 	Structure(fields: Array<TypeField>);
 
-	/** A type this model does not break down: a macro splice, a conditional region, a constant, an intersection. */
+	/** An intersection `A & B`, its members in order. */
+	Intersection(members: Array<TypeSyntax>);
+
+	/** A conditional-compilation region in type position, one type per branch in order. */
+	Conditional(branches: Array<TypeSyntax>);
+
+	/** A type this model does not break down: a macro splice, a constant, a bracketed macro argument list. */
 	Other;
 
 }

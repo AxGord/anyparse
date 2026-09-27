@@ -15,6 +15,7 @@ import anyparse.query.Uses.UsesHit;
 import anyparse.runtime.LineIndex;
 import anyparse.runtime.Span;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -44,7 +45,8 @@ final class Text {
 	 * The `QueryNode.type` slot renders as a `(: <type>)` group between the name and the
 	 * children — a slot, so it is NOT one of them, and the `:` head says so at a glance
 	 * (`(FinalStmt arr (: (Named Array (Named CodePoint))) (Call (IdentExpr mk)))`).
-	 * A node with no declared type prints exactly as it did before the slot existed.
+	 * A node with no declared type prints exactly as it did before the slot existed, and so does one whose
+	 * declared type is also one of its children (`sameNode`).
 	 */
 	private static inline final TYPE_SLOT_HEAD: String = ':';
 
@@ -261,9 +263,21 @@ final class Text {
 			if (span != null) items.push(SAtom('@${span.from}-${span.to}'));
 		}
 		final declared: Null<QueryNode> = node.type;
-		if (declared != null) items.push(SList([SAtom(TYPE_SLOT_HEAD), toSValue(declared, spans)]));
+		if (declared != null && !node.children.exists(c -> sameNode(c, declared)))
+			items.push(SList([SAtom(TYPE_SLOT_HEAD), toSValue(declared, spans)]));
 		for (c in node.children) items.push(toSValue(c, spans));
 		return SList(items);
+	}
+
+	/**
+	 * Whether `child` is the node the `type` slot `declared` projects again — same kind, same span. An
+	 * annotation the projection also publishes as a child (an anonymous structure, an abstract's underlying
+	 * type) prints once, as the child.
+	 */
+	private static function sameNode(child: QueryNode, declared: QueryNode): Bool {
+		final a: Null<Span> = child.span;
+		final b: Null<Span> = declared.span;
+		return child.kind == declared.kind && a != null && b != null && a.from == b.from && a.to == b.to;
 	}
 
 	/**

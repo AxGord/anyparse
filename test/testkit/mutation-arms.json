@@ -6838,8 +6838,8 @@
 			"name": "M-FACTS-CAST-ALWAYS",
 			"type": "anyparse.check.TypedFactsWalk",
 			"method": "flowText",
-			"find": "if (how != 'cast' && TypedFactsShapes.unwrapNull(s) == TypedFactsShapes.unwrapNull(d)) return;",
-			"replace": "if (TypedFactsShapes.unwrapNull(s) == TypedFactsShapes.unwrapNull(d)) return;",
+			"find": "if (how != 'cast' && FactsTypeText.unwrapNull(s) == FactsTypeText.unwrapNull(d)) return;",
+			"replace": "if (FactsTypeText.unwrapNull(s) == FactsTypeText.unwrapNull(d)) return;",
 			"note": "an unchecked cast between equal types records no source"
 		},
 		{
@@ -8250,8 +8250,8 @@
 			"name": "M-FACTS-VALUE-TYPE-FLOWS",
 			"type": "anyparse.check.FactsTypeOracle",
 			"method": "typeIdAt",
-			"find": "var spelled: String = switch valueType(file, expr) {",
-			"replace": "var spelled: String = switch expressionType(file, expr) {",
+			"find": "final spelled: String = switch valueType(file, expr) {",
+			"replace": "final spelled: String = switch expressionType(file, expr) {",
 			"note": "a value's type is read with the flows at its range, so a check-type `(e : T)` answers the type of `e`, not `T`"
 		},
 		{
@@ -8398,7 +8398,7 @@
 			"name": "M-PSE-FACTS-NULL",
 			"type": "anyparse.check.StaticExtensionFacts",
 			"method": "judge",
-			"find": "final receiver: String = unwrapNull(typed);",
+			"find": "final receiver: String = FactsTypeText.unwrapNull(typed);",
 			"replace": "final receiver: String = typed;",
 			"note": "a nullable receiver is read as the Null abstract, which hosts no member"
 		},
@@ -9140,6 +9140,37 @@
 			"find": "case Nominal(path, _): path;",
 			"replace": "case Nominal(path, _): SourceText.lastSegment(path);",
 			"note": "a typedef's written target path is reduced to its simple name, so a qualified target resolves to any namesake"
+		},
+		{
+			"name": "M-AVOIDDYN-COMPOSITE-SKIPPED",
+			"type": "anyparse.check.AvoidDynamic",
+			"method": "scanRange",
+			"find": "case Intersection(parts), Conditional(parts):\n\t\t\t\t\tfor (p in parts) visit(p, inArgs);",
+			"replace": "case Intersection(_), Conditional(_):",
+			"note": "a Dynamic inside an intersection or a conditional-type branch goes unreported"
+		},
+		{
+			"name": "M-OPTPARAM-COMMENT-DROPPED",
+			"type": "anyparse.check.OptionalParamShorthand",
+			"method": "nullableDefaultInner",
+			"find": "typed.argumentsSource() ?? unwrapped.text, raw: raw",
+			"replace": "unwrapped.text, raw: raw",
+			"note": "the suggested spelling drops a comment the author wrote inside the Null<...> wrapper"
+		},
+		{
+			"name": "M-AST-SLOT-DUPLICATED",
+			"type": "anyparse.query.format.Text",
+			"method": "toSValue",
+			"find": "!node.children.exists(c -> sameNode(c, declared))",
+			"replace": "true",
+			"note": "a declared type the projection also publishes as a child prints twice"
+		},
+		{
+			"name": "M-FACTS-NULL-PEEL-UNMATCHED",
+			"type": "anyparse.check.FactsTypeText",
+			"method": "closesAtEnd",
+			"force": "true",
+			"note": "a leading Null<...> is peeled off a facts type it does not enclose, mangling Null<A>->Null<B>"
 		}
 	]
 }

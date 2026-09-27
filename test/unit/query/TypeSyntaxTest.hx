@@ -78,13 +78,32 @@ class TypeSyntaxTest extends Test {
 		}
 	}
 
-	public function testAnIntersectionArgumentIsReadWholeButNotBrokenDown(): Void {
+	public function testAnIntersectionArgumentListsItsMembers(): Void {
 		final args: Array<TypeSyntax> = switch PLUGIN.typeSyntax('EitherType<A & B, C>')?.shape {
 			case Nominal(_, args): args;
 			case _: [];
 		};
 		Assert.same(['A & B', 'C'], [for (a in args) a.text]);
-		Assert.equals(Other, args[0]?.shape);
+		switch args[0]?.shape {
+			case Intersection(members):
+				Assert.same(['A', 'B'], [for (m in members) m.text]);
+			case _:
+				Assert.fail('not an intersection');
+		}
+	}
+
+	public function testAConditionalTypeListsItsBranches(): Void {
+		switch PLUGIN.typeSyntax('#if js Dynamic #elseif cpp Float #else Int #end')?.shape {
+			case Conditional(branches):
+				Assert.same(['Dynamic', 'Float', 'Int'], [for (b in branches) b.text]);
+			case _:
+				Assert.fail('not a conditional type');
+		}
+	}
+
+	public function testArgumentsSourceKeepsAComment(): Void {
+		Assert.equals('/* c */ Int', PLUGIN.typeSyntax('Null</* c */ Int>')?.argumentsSource());
+		Assert.isNull(PLUGIN.typeSyntax('Int')?.argumentsSource());
 	}
 
 	public function testACommentAroundTheTypeIsTrivia(): Void {

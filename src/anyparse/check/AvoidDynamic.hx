@@ -667,6 +667,8 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 					visit(ret, inArgs);
 				case Structure(fields):
 					for (f in fields) visit(f.type, inArgs);
+				case Intersection(parts), Conditional(parts):
+					for (p in parts) visit(p, inArgs);
 				case Other:
 			}
 		}
