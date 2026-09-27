@@ -6,6 +6,7 @@ import anyparse.check.CasePatternScan.PatternBinder;
 import anyparse.check.Check.Violation;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.PatternNameScope;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -127,7 +128,7 @@ final class UnusedCaseBinder implements Check {
 		final context: CaseRunContext = CasePatternScan.runContextOf(resolved, files, plugin);
 		return [
 			for (entry in context.parsed)
-				for (candidate in collect(resolved, entry.tree, entry.source, context.constants, context.index))
+				for (candidate in collect(resolved, entry.file, entry.tree, entry.source, context.constants, context.index))
 					{
 						file: entry.file,
 						span: candidate.span,
@@ -157,7 +158,7 @@ final class UnusedCaseBinder implements Check {
 			final constants: Array<String> = CasePatternScan.declaredConstantNames(resolved, [tree]);
 			final resolvedIndex: SymbolIndex = index ?? SymbolIndex.build([{ file: file, source: source }], plugin);
 			final byKey: Map<String, Candidate> = [];
-			for (candidate in collect(resolved, tree, source, constants, resolvedIndex))
+			for (candidate in collect(resolved, file, tree, source, constants, resolvedIndex))
 				byKey['${candidate.span.from}:${candidate.span.to}'] = candidate;
 
 			final edits: Array<{ span: Span, text: String }> = [];
@@ -168,11 +169,12 @@ final class UnusedCaseBinder implements Check {
 
 	/** Every unread binder in `tree`, in document order. */
 	private static function collect(
-		seams: CaseSeams, tree: QueryNode, source: String, constants: Array<String>, index: SymbolIndex
+		seams: CaseSeams, file: String, tree: QueryNode, source: String, constants: Array<String>, index: SymbolIndex
 	): Array<Candidate> {
 		final out: Array<Candidate> = [];
+		final scope: Null<PatternNameScope> = PatternNameScope.of(file, tree, seams.shape, index);
 		CasePatternScan.eachCaseArm(
-			seams, tree, (switchNode, at) -> armCandidates(seams, tree, switchNode, at, source, constants, index, out)
+			seams, tree, (switchNode, at) -> armCandidates(seams, tree, switchNode, at, source, constants, index, scope, out)
 		);
 		return out;
 	}
@@ -181,7 +183,7 @@ final class UnusedCaseBinder implements Check {
 	/** Every unread binder of `switchNode`'s arm at `at`, grouped by name so an or-pattern is replaced as one. */
 	private static function armCandidates(
 		seams: CaseSeams, root: QueryNode, switchNode: QueryNode, at: Int, source: String, constants: Array<String>, index: SymbolIndex,
-		out: Array<Candidate>
+		scope: Null<PatternNameScope>, out: Array<Candidate>
 	): Void {
 		final arm: QueryNode = switchNode.children[at];
 		final groups: Null<Array<Array<PatternBinder>>> = CasePatternScan.binderGroups(seams, arm);
@@ -202,7 +204,7 @@ final class UnusedCaseBinder implements Check {
 		for (group in groups) {
 			final name: String = group[0].name;
 			if (CasePatternScan.mentionCount(seams, arm, name) != group.length) continue;
-			if (!CasePatternScan.provesCapture(seams, root, switchNode, arm, group[0])) continue;
+			if (!CasePatternScan.provesCapture(seams, root, switchNode, arm, group[0], scope)) continue;
 			if (!admissible(group, constants, last, single, constantLanguage) || !commentFree(group, source)) continue;
 			// A WHOLE-pattern binder naming something already in scope, read nowhere — almost always an
 			// intended comparison Haxe silently turned into a catch-all. Spelling it `_` preserves

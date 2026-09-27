@@ -23,9 +23,6 @@ import utest.Test;
  */
 class CaseCaptureTest extends Test {
 
-	/** The enum the alternatives fixtures match, declared so its constructors' arguments are proven captures. */
-	private static inline final ENUM_E: String = 'enum E {\n\tA(x:Int);\n\tB(x:Int);\n}';
-
 	/** The capture declares, the arm's reads bind to it, and a read past the switch still binds to the parameter. */
 	@:pin('control')
 	@:killer('M-CAPTURE-ARM-BIND')
@@ -40,17 +37,16 @@ class CaseCaptureTest extends Test {
 			'\t}',
 			'}'
 		]);
-		Assert.equals('decl 2:23 | decl 4:9 | read 4:16 -> 4:9 | read 6:7 -> 2:23', render(source, 't'));
+		Assert.equals('decl 2:23 | decl? 4:9 | read 4:16 -> 4:9 | read 6:7 -> 2:23', render(source, 't'));
 	}
 
 	/**
 	 * Every alternative of `case A(x), B(x):` binds the same name, so the later ones resolve to the FIRST
-	 * capture. A constructor argument is a PROVEN capture only when the file declares the constructor with a
-	 * parameter type that carries no pattern constant; an undeclared `A` may take an enum whose `x` compares.
+	 * capture. The reference walk has no view of the files lookup order (its imports, its `import.hx`
+	 * chain), so a bare capture is never proven there: every one is undecided.
 	 */
 	@:pin('control')
 	@:killer('M-CAPTURE-ALT-SELF')
-	@:killer('M-CAPTURE-SLOT-UNPROVEN')
 	public function testAlternativesShareTheFirstCapture(): Void {
 		final arm: Array<String> = [
 			'class C {',
@@ -61,31 +57,7 @@ class CaseCaptureTest extends Test {
 			'\t}',
 			'}'
 		];
-		final declared: String = lines(arm.concat([ENUM_E]));
-		Assert.equals('decl 2:18 | decl 4:11 | decl 4:17 -> 4:11 | read 4:25 -> 4:11 | decl 9:4 | decl 10:4', render(declared, 'x'));
 		Assert.equals('decl 2:18 | decl? 4:11 | decl? 4:17 -> 4:11 | read 4:25 -> 4:11', render(lines(arm), 'x'));
-	}
-
-	/**
-	 * A whole bare capture is PROVEN only by its subject's type: a built-in type carries no pattern constant,
-	 * while a type from another file may be an `enum abstract` whose `fresh` value the pattern compares against
-	 * - ahead of the capture, and ahead of any local of that name.
-	 */
-	@:pin('control')
-	@:killer('M-CAPTURE-SUBJECT-UNPROVEN')
-	public function testCaptureIsDecidedByTheSubjectType(): Void {
-		final source: (String) -> String = type -> lines([
-			'class C {',
-			'\tfunction f(o:$type) {',
-			'\t\tswitch o {',
-			'\t\t\tcase fresh: use(fresh);',
-			'\t\t}',
-			'\t}',
-			'}'
-		]);
-		Assert.equals('decl 4:9 | read 4:20 -> 4:9', render(source('String'), 'fresh'));
-		Assert.equals('decl 4:9 | read 4:20 -> 4:9', render(source('Null<Int>'), 'fresh'));
-		Assert.equals('decl? 4:9 | read 4:20 -> 4:9', render(source('Kind'), 'fresh'));
 	}
 
 	/**
@@ -143,7 +115,7 @@ class CaseCaptureTest extends Test {
 			'\tfunction f(other:String) {',
 			'\t\tfinal k:String = "lit";',
 			'\t\tswitch other {',
-			'\t\t\tcase k: use(k);',
+			'\t\t\tcase var k: use(k);',
 			'\t\t}',
 			'\t\tuse(k);',
 			'\t}',
@@ -153,7 +125,7 @@ class CaseCaptureTest extends Test {
 			'class C {',
 			'\tfunction f(other:String) {',
 			'\t\tswitch other {',
-			'\t\t\tcase k: use(k);',
+			'\t\t\tcase var k: use(k);',
 			'\t\t}',
 			'\t\tuse("lit");',
 			'\t}',
@@ -225,7 +197,7 @@ class CaseCaptureTest extends Test {
 			'\tfunction f(other:String) {',
 			'\t\tfinal t:String = "outer";',
 			'\t\tswitch other {',
-			'\t\t\tcase t: use(t);',
+			'\t\t\tcase var t: use(t);',
 			'\t\t}',
 			'\t\tuse(t);',
 			'\t}',
@@ -236,7 +208,7 @@ class CaseCaptureTest extends Test {
 			'\tfunction f(other:String) {',
 			'\t\tfinal z:String = "outer";',
 			'\t\tswitch other {',
-			'\t\t\tcase t: use(t);',
+			'\t\t\tcase var t: use(t);',
 			'\t\t}',
 			'\t\tuse(z);',
 			'\t}',
@@ -275,24 +247,22 @@ class CaseCaptureTest extends Test {
 			'class C {',
 			'\tfunction f(o:E, x:Int) {',
 			'\t\tswitch o {',
-			'\t\t\tcase A(x), B(x): use(x);',
+			'\t\t\tcase x = A(_), x = B(_): use(x);',
 			'\t\t}',
 			'\t}',
-			'}',
-			ENUM_E
+			'}'
 		]);
 		final expected: String = lines([
 			'class C {',
 			'\tfunction f(o:E, x:Int) {',
 			'\t\tswitch o {',
-			'\t\t\tcase A(z), B(z): use(z);',
+			'\t\t\tcase z = A(_), z = B(_): use(z);',
 			'\t\t}',
 			'\t}',
-			'}',
-			ENUM_E
+			'}'
 		]);
-		assertRenamed(source, 4, 25, 'z', expected);
-		assertRenamed(source, 4, 17, 'z', expected);
+		assertRenamed(source, 4, 33, 'z', expected);
+		assertRenamed(source, 4, 19, 'z', expected);
 	}
 
 	/**
@@ -363,42 +333,6 @@ class CaseCaptureTest extends Test {
 			'}'
 		]);
 		assertRenameRefused(foreignSubject, 3, 9);
-	}
-
-	/** A static import may bring a `static inline` constant of the name in, which the pattern then compares against. */
-	@:pin('control')
-	@:killer('M-CAPTURE-IMPORT-BLIND')
-	public function testStaticImportLeavesACaptureUndecided(): Void {
-		final source: (String) -> String = head -> lines([
-			head,
-			'class C {',
-			'\tfunction f(o:Int) {',
-			'\t\tswitch o {',
-			'\t\t\tcase lim: use(lim);',
-			'\t\t}',
-			'\t}',
-			'}'
-		]);
-		Assert.equals('decl 5:9 | read 5:18 -> 5:9', render(source('import Other;'), 'lim'));
-		Assert.equals('decl? 5:9 | read 5:18 -> 5:9', render(source('import Consts.lim;'), 'lim'));
-		Assert.equals('decl? 5:9 | read 5:18 -> 5:9', render(source('import Consts.*;'), 'lim'));
-	}
-
-	/** An array element or structure field of a DYNAMIC subject is dynamic too; of any other type, unknown. */
-	@:pin('control')
-	@:killer('M-CAPTURE-STRUCTURAL')
-	public function testStructuralCaptureNeedsADynamicSubject(): Void {
-		final source: (String) -> String = type -> lines([
-			'class C {',
-			'\tfunction f(o:$type) {',
-			'\t\tswitch o {',
-			'\t\t\tcase [a, _]: use(a);',
-			'\t\t}',
-			'\t}',
-			'}'
-		]);
-		Assert.equals('decl 4:10 | read 4:21 -> 4:10', render(source('Dynamic'), 'a'));
-		Assert.equals('decl? 4:10 | read 4:21 -> 4:10', render(source('Array<Kind>'), 'a'));
 	}
 
 	/** An or-pattern `A(n) | B(n)` is inside the whitelist: both sides are scanned, and the scan stays modelled. */

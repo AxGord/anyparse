@@ -21,8 +21,9 @@ import anyparse.runtime.Span;
  *
  * A capture is visible from the end of the arm's pattern run, and every alternative of
  * `case A(x), B(x):` resolves to the FIRST one's binding. A capture `CasePatterns.isDecidedCapture`
- * cannot prove is still a declaration, marked undecided with the binding it would hide: the
- * subject's type or an import may make it a comparison instead. A name a
+ * cannot prove is still a declaration, marked undecided with the binding it would hide. The walk sees
+ * one file and no index, so the file's lookup order (`PatternNameScope`) is unreadable here and
+ * every BARE capture is undecided; only `var x` and `x = p` are proven. A name a
  * constant declaration in this file may claim stays a READ of whatever it resolves to, undecided
  * unless it resolves to the file's ONLY constant declaration of that name.
  *
@@ -107,7 +108,7 @@ final class CaptureIndex {
 						first[name] = binding;
 						frame.declare(name, ident.node, span, visibleFrom);
 					}
-					final decided: Bool = CasePatterns.isDecidedCapture(ident, proof, _root, _shape);
+					final decided: Bool = CasePatterns.isDecidedCapture(ident, proof, null);
 					{
 						kind: RefKind.Decl,
 						binding: binding,
@@ -115,8 +116,8 @@ final class CaptureIndex {
 						shadows: decided ? null : outer?.span
 					};
 				case Undecided:
-					final constant: Bool = outer != null && isSoleConstant(constants, outer.node, name) && ident.whole && proof.typed
-						&& !CasePatterns.importsMayBind(_root, _shape, name);
+					final constant: Bool = outer != null && isSoleConstant(constants, outer.node, name) && ident.whole && proof.typed;
+
 					{
 						kind: RefKind.Read,
 						binding: null,

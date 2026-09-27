@@ -9068,16 +9068,9 @@
 			"name": "M-CAPTURE-SLOT-UNPROVEN",
 			"type": "anyparse.query.CasePatterns",
 			"method": "isDecidedCapture",
-			"find": "case Slot(callee, index): ctorArgRulesOutConstants(root, shape, callee, index);",
+			"find": "case Slot(callee, index): ctorArgRulesOutConstants(scope.root, scope.shape, callee, index);",
 			"replace": "case Slot(_, _): true;",
 			"note": "a constructor argument capture is decided without its constructor's parameter type"
-		},
-		{
-			"name": "M-CAPTURE-IMPORT-BLIND",
-			"type": "anyparse.query.CasePatterns",
-			"method": "importsMayBind",
-			"force": "false",
-			"note": "a static import that may bring a constant of the capture's name in is ignored"
 		},
 		{
 			"name": "M-PATTERN-OR-UNMODELLED",
@@ -9091,7 +9084,7 @@
 			"name": "M-UNUSED-BINDER-UNPROVEN",
 			"type": "anyparse.check.UnusedCaseBinder",
 			"method": "armCandidates",
-			"find": "if (!CasePatternScan.provesCapture(seams, root, switchNode, arm, group[0])) continue;",
+			"find": "if (!CasePatternScan.provesCapture(seams, root, switchNode, arm, group[0], scope)) continue;",
 			"replace": "",
 			"note": "an unread binder that may be a constant is spelled `_`, which turns a comparison into a catch-all"
 		},
@@ -9099,7 +9092,7 @@
 			"name": "M-SHADOWING-BINDER-UNPROVEN",
 			"type": "anyparse.check.ShadowingCaseBinder",
 			"method": "armFindings",
-			"find": "if (!CasePatternScan.provesCapture(seams, root, switchNode, arm, binder)) continue;",
+			"find": "if (!CasePatternScan.provesCapture(seams, root, switchNode, arm, binder, scope)) continue;",
 			"replace": "",
 			"note": "a binder that may compare against a constant is reported as a catch-all"
 		},
@@ -9107,9 +9100,31 @@
 			"name": "M-COLLAPSE-BINDER-UNPROVEN",
 			"type": "anyparse.check.CollapseNestedSwitch",
 			"method": "isolatedBinder",
-			"find": "return CasePatterns.provesCaptureAt(arm, switchNode, scan.tree, seams.shape, node, resolve) ? node : null;",
+			"find": "return CasePatterns.provesCaptureAt(arm, switchNode, node, resolve, scan.scope, scan.tree, seams.shape) ? node : null;",
 			"replace": "return node;",
 			"note": "a nested switch over a binder that may be a constant is spliced into the pattern"
+		},
+		{
+			"name": "M-SCOPE-IMPORT-BLIND",
+			"type": "anyparse.query.PatternNameScope",
+			"method": "importMayBind",
+			"force": "false",
+			"note": "an import that may bring a value of the binder's name in (a static import, a type wildcard) is not consulted"
+		},
+		{
+			"name": "M-SCOPE-AMBIENT-BLIND",
+			"type": "anyparse.query.PatternNameScope",
+			"method": "mayCompare",
+			"find": "return _fi.ambientImports.exists(group -> group.imports.exists(imp -> importMayBind(imp, name)));",
+			"replace": "return false;",
+			"note": "the ambient `import.hx` chain is not consulted, so a static it brings in reads as a capture"
+		},
+		{
+			"name": "M-SCOPE-MODULE-FIELDS",
+			"type": "anyparse.query.PatternNameScope",
+			"method": "moduleLevelNames",
+			"force": "[]",
+			"note": "a module-level field, which a bare pattern compares against, is not consulted"
 		}
 	]
 }

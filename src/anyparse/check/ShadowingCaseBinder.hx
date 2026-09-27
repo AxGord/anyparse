@@ -6,6 +6,7 @@ import anyparse.check.CasePatternScan.PatternBinder;
 import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.PatternNameScope;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -108,15 +109,17 @@ final class ShadowingCaseBinder implements Check implements NoAutofix {
 	private static function collect(
 		seams: CaseSeams, constants: Array<String>, index: SymbolIndex, file: String, tree: QueryNode, out: Array<Violation>
 	): Void {
+		final scope: Null<PatternNameScope> = PatternNameScope.of(file, tree, seams.shape, index);
 		CasePatternScan.eachCaseArm(
-			seams, tree, (switchNode, at) -> armFindings(seams, constants, index, file, tree, switchNode, switchNode.children[at], out)
+			seams, tree,
+			(switchNode, at) -> armFindings(seams, constants, index, scope, file, tree, switchNode, switchNode.children[at], out)
 		);
 	}
 
 	/** Every shadowing binder of one arm, grouped by name so an or-pattern reports once. */
 	private static function armFindings(
-		seams: CaseSeams, constants: Array<String>, index: SymbolIndex, file: String, root: QueryNode, switchNode: QueryNode,
-		arm: QueryNode, out: Array<Violation>
+		seams: CaseSeams, constants: Array<String>, index: SymbolIndex, scope: Null<PatternNameScope>, file: String, root: QueryNode,
+		switchNode: QueryNode, arm: QueryNode, out: Array<Violation>
 	): Void {
 		final groups: Null<Array<Array<PatternBinder>>> = CasePatternScan.binderGroups(seams, arm);
 		if (groups == null) return;
@@ -132,7 +135,7 @@ final class ShadowingCaseBinder implements Check implements NoAutofix {
 			if (!binder.bare || !binder.whole || constants.contains(name)) continue;
 			if (CasePatternScan.mentionCount(seams, arm, name) != group.length) continue;
 			// A bare name the subject's type or an import may claim as a constant compares; it is no catch-all.
-			if (!CasePatternScan.provesCapture(seams, root, switchNode, arm, binder)) continue;
+			if (!CasePatternScan.provesCapture(seams, root, switchNode, arm, binder, scope)) continue;
 			final shadowed: Null<String> = CasePatternScan.shadowedDeclaration(seams, root, arm, name, index);
 			final span: Null<Span> = binder.node.span;
 			if (shadowed == null || span == null) continue;

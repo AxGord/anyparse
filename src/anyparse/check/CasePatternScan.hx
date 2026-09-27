@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.query.CasePatterns;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
+import anyparse.query.PatternNameScope;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TreePath;
@@ -153,9 +154,9 @@ final class CasePatternScan {
 	 * subject's type or of an import is not one, and such a rule declines.
 	 */
 	public static function provesCapture(
-		seams: CaseSeams, root: QueryNode, switchNode: QueryNode, arm: QueryNode, binder: PatternBinder
+		seams: CaseSeams, root: QueryNode, switchNode: QueryNode, arm: QueryNode, binder: PatternBinder, scope: Null<PatternNameScope>
 	): Bool {
-		return CasePatterns.provesCaptureAt(arm, switchNode, root, seams.shape, binder.node, subjectResolver(root, seams.shape));
+		return CasePatterns.provesCaptureAt(arm, switchNode, binder.node, subjectResolver(root, seams.shape), scope, root, seams.shape);
 	}
 
 	/** How a lint rule resolves a switch subject identifier to its declaration: through the reference walk. */

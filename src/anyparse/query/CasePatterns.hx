@@ -60,22 +60,22 @@ final class CasePatterns {
 	/**
 	 * Whether a pattern name the scan reports as a `Capture` is PROVEN to capture - the positive rule every
 	 * consumer that acts on a capture reads. A name bound by syntax (`var x`, `x = p`) always is. A BARE name
-	 * is only when no import of the file may bring a constant of that name in (`importsMayBind`) and the
-	 * type it is matched against is proven to carry no constant: Haxe resolves a bare lowercase pattern name
-	 * against the enum constructors and `enum abstract` values of that EXPECTED type, and against imported
-	 * `static inline` fields, before it falls back to a capture - and ahead of any local of the same name.
-	 * The expected type comes from the `site`: the subjects for the whole pattern, a dynamic subjects for
-	 * an array element or structure field, an in-file enum constructors parameter for its argument.
-	 * Anything else is unproven.
+	 * is only when two things are proven. No tier of the files lookup order may resolve the name to a value
+	 * the pattern compares against (`PatternNameScope.mayCompare`; a null `scope` - no index holding the file,
+	 * so its imports and its `import.hx` chain cannot be read - proves nothing). And the type the name is
+	 * matched against carries no constant: Haxe resolves a bare lowercase pattern name against the enum
+	 * constructors and `enum abstract` values of that EXPECTED type ahead of any local. The expected type comes
+	 * from the `site`: the subjects for the whole pattern, a dynamic subjects for an array element or
+	 * structure field, an in-file enum constructors parameter for its argument. Anything else is unproven.
 	 */
-	public static function isDecidedCapture(ident: PatternIdent, subject: SubjectProof, root: QueryNode, shape: RefShape): Bool {
+	public static function isDecidedCapture(ident: PatternIdent, subject: SubjectProof, scope: Null<PatternNameScope>): Bool {
 		if (ident.role != Capture) return false;
 		if (ident.explicit) return true;
-		if (importsMayBind(root, shape, ident.name)) return false;
+		if (scope == null || scope.mayCompare(ident.name)) return false;
 		return switch ident.site {
 			case Whole: subject.typed;
 			case Structural: subject.isDynamic;
-			case Slot(callee, index): ctorArgRulesOutConstants(root, shape, callee, index);
+			case Slot(callee, index): ctorArgRulesOutConstants(scope.root, scope.shape, callee, index);
 			case Opaque: false;
 		};
 	}
@@ -86,11 +86,11 @@ final class CasePatterns {
 	 * declaration a subject identifier binds to. False when `node` is no capture of the arm at all.
 	 */
 	public static function provesCaptureAt(
-		arm: QueryNode, switchNode: Null<QueryNode>, root: QueryNode, shape: RefShape, node: QueryNode,
-		resolve: QueryNode -> Null<QueryNode>
+		arm: QueryNode, switchNode: Null<QueryNode>, node: QueryNode, resolve: QueryNode -> Null<QueryNode>, scope: Null<PatternNameScope>,
+		root: QueryNode, shape: RefShape
 	): Bool {
 		final ident: Null<PatternIdent> = scan(arm, shape, []).idents.find(i -> i.node == node);
-		return ident != null && isDecidedCapture(ident, subjectProof(switchNode, root, shape, resolve), root, shape);
+		return ident != null && isDecidedCapture(ident, subjectProof(switchNode, root, shape, resolve), scope);
 	}
 
 	/**
@@ -165,28 +165,6 @@ final class CasePatterns {
 		if (ctors.length != 1) return false;
 		final params: Array<QueryNode> = [for (c in ctors[0].children) if (paramKinds.contains(c.kind)) c];
 		return index < params.length && typeRulesOutConstants(params[index].type, root, shape);
-	}
-
-	/**
-	 * Whether an import of `root` may bring a pattern constant named `name` in unqualified: an import
-	 * (`modulePathKinds`, the package declaration aside) whose last segment is `name`, an alias of that name,
-	 * or a wildcard over a TYPEs statics (a module path ending in `*` after an upper-initial segment). A
-	 * grammar that declares no module path kinds answers true - nothing can then be ruled out.
-	 */
-	public static function importsMayBind(root: QueryNode, shape: RefShape, name: String): Bool {
-		final modulePaths: Null<Array<String>> = shape.modulePathKinds;
-		if (modulePaths == null) return true;
-		final aliases: Array<String> = shape.importAliasKinds ?? [];
-		for (node in root.children) {
-			final path: Null<String> = node.name;
-			if (path == null) continue;
-			final segments: Array<String> = path.split('.');
-			final last: String = segments[segments.length - 1];
-			if (aliases.contains(node.kind) && path == name) return true;
-			if (modulePaths.contains(node.kind) && node.kind != shape.packageDeclKind && last == name) return true;
-			if (last == WILDCARD_SEGMENT && segments.length >= 2 && SourceText.isUpperInitial(segments[segments.length - 2])) return true;
-		}
-		return false;
 	}
 
 	/**

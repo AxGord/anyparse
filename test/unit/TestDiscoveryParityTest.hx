@@ -1794,7 +1794,11 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.UnnecessaryNullCheckCheckTest#testTypedefOfNullOperandNotFlagged :: control :: M-PROVER-NULLITY-SKIPPED',
 			'unit.check.UnnecessarySafeNavCheckTest#testTypedefOfNullReceiverNotFlagged :: control :: M-PROVER-NULLITY-SKIPPED',
 			'unit.check.UnreachableCatchTest#testSubtypeAfterSupertypeFlagged :: control :: M-ISSUBTYPE-FALSE',
-			'unit.check.UnusedCaseBinderCheckTest#testUndeclaredConstructorArgumentRefused :: control :: M-UNUSED-BINDER-UNPROVEN',
+			'unit.check.UnusedCaseBinderCheckTest#testBinderAnAmbientImportMayBindRefused :: control :: M-SCOPE-AMBIENT-BLIND',
+			'unit.check.UnusedCaseBinderCheckTest#testBinderTheLookupOrderMayBindRefused :: control :: M-SCOPE-IMPORT-BLIND,M-SCOPE-MODULE-FIELDS',
+			'unit.check.UnusedCaseBinderCheckTest#testElementBinderNeedsADynamicSubject :: control :: M-CAPTURE-STRUCTURAL',
+			'unit.check.UnusedCaseBinderCheckTest#testUndeclaredConstructorArgumentRefused :: control :: M-UNUSED-BINDER-UNPROVEN,M-CAPTURE-SLOT-UNPROVEN',
+			'unit.check.UnusedCaseBinderCheckTest#testWholeBinderNeedsAProvenSubjectType :: control :: M-CAPTURE-SUBJECT-UNPROVEN',
 			'unit.check.UnusedLoopBinderCheckTest#testBracedInterpolationRefuses :: control :: M-ULB-INTERP-LITERAL-BLIND',
 			'unit.check.UnusedLoopBinderCheckTest#testCaseWildcardInBodyStillRenamed :: control :: M-ULB-PATTERN-WILDCARD-UNEXEMPT',
 			'unit.check.UnusedLoopBinderCheckTest#testClosureMentionCountsAsRead :: control :: M-ULB-CLOSURE-BLIND',
@@ -2260,10 +2264,9 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CallGraphTest#testUntypedPropertyAccessIsRecordedAgainstItsAccessor :: control :: '
 				+ 'M-GRAPH-ACCESS-RECORDED,M-GRAPH-ACCESS-COUNTED',
 			'unit.query.CallSitesTest#testASecondLocalFunctionOfTheSameNameRefusesTheProof :: control :: M-NAME-CLASH-KINDS-NO-BINDERS',
-			'unit.query.CaseCaptureTest#testAlternativesShareTheFirstCapture :: control :: M-CAPTURE-ALT-SELF,M-CAPTURE-SLOT-UNPROVEN',
+			'unit.query.CaseCaptureTest#testAlternativesShareTheFirstCapture :: control :: M-CAPTURE-ALT-SELF',
 			'unit.query.CaseCaptureTest#testBareCaptureBindsItsArm :: control :: M-CAPTURE-ARM-BIND',
 			'unit.query.CaseCaptureTest#testCalleeAndExtractorStayReads :: control :: M-PATTERN-CALLEE-CAPTURE',
-			'unit.query.CaseCaptureTest#testCaptureIsDecidedByTheSubjectType :: control :: M-CAPTURE-SUBJECT-UNPROVEN',
 			'unit.query.CaseCaptureTest#testConstantNamedPatternIsARead :: control :: M-PATTERN-CONST-DECIDED',
 			'unit.query.CaseCaptureTest#testExtractorLeftSideReadsTheOuterBinding :: control :: M-CAPTURE-VISIBLE-FROM-ARM',
 			'unit.query.CaseCaptureTest#testInlineLeavesTheCaptureAlone :: control :: M-CAPTURE-ARM-BIND',
@@ -2274,8 +2277,6 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CaseCaptureTest#testRenameLeavesTheCaptureAlone :: control :: M-CAPTURE-ARM-BIND',
 			'unit.query.CaseCaptureTest#testRenameMovesEveryAlternative :: control :: M-RENAME-DECL-SELF,M-BINDING-FROM-DECL-SELF',
 			'unit.query.CaseCaptureTest#testRenameRefusesAnUndecidedCapture :: control :: M-RENAME-UNDECIDED',
-			'unit.query.CaseCaptureTest#testStaticImportLeavesACaptureUndecided :: control :: M-CAPTURE-IMPORT-BLIND',
-			'unit.query.CaseCaptureTest#testStructuralCaptureNeedsADynamicSubject :: control :: M-CAPTURE-STRUCTURAL',
 			'unit.query.CodepointIndexTest#testAWideCodepointCountsTwoNativeUnits :: control :: M-CODEPOINT-NATIVE,M-CODEPOINT-BACK',
 			'unit.query.CommentOwnerGuardSliceTest#testACarryDeclarationThatDoesNotHoldIsNotARefusal :: control :: M-COMMENT-CARRY-REFUSES',
 			'unit.query.CommentOwnerGuardSliceTest#testACommentThatKeepsItsPlaceUnderACarryIsAccepted :: control :: '
@@ -3816,11 +3817,13 @@ class TestDiscoveryParityTest extends Test {
 			'M-CAPTURE-SUBJECT-UNPROVEN',
 			'M-CAPTURE-STRUCTURAL',
 			'M-CAPTURE-SLOT-UNPROVEN',
-			'M-CAPTURE-IMPORT-BLIND',
 			'M-PATTERN-OR-UNMODELLED',
 			'M-UNUSED-BINDER-UNPROVEN',
 			'M-SHADOWING-BINDER-UNPROVEN',
-			'M-COLLAPSE-BINDER-UNPROVEN'
+			'M-COLLAPSE-BINDER-UNPROVEN',
+			'M-SCOPE-IMPORT-BLIND',
+			'M-SCOPE-AMBIENT-BLIND',
+			'M-SCOPE-MODULE-FIELDS'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
