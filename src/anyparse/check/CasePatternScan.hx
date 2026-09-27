@@ -1,10 +1,13 @@
 package anyparse.check;
 
+import anyparse.query.CasePatterns;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.MemberKinds;
+import anyparse.query.PatternNameScope;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TreePath;
+import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -16,8 +19,9 @@ using StringTools;
  * body a neighbour already carries). Both have to answer the same question about a
  * `case` label: WHICH NAMES DOES IT BIND, and can that be decided at all?
  *
- * `binders` answers it as a WHITELIST over pattern positions, never as a list of
- * banned ones: an identifier, a `var x` capture, an `=`-capture's left slot, a
+ * `binders` answers it from `CasePatterns.scan` — the ONE definition of a capture, shared
+ * with the scope resolver — which reads pattern positions as a WHITELIST, never as a list
+ * of banned ones: an identifier, a `var x` capture, an `=`-capture's left slot, a
  * constructor call's ARGUMENTS (never its callee), an array element, a structure
  * field's value, a parenthesised sub-pattern, an extractor's RIGHT side (its left
  * side is an EXPRESSION evaluated on the subject, so identifiers there are reads),
@@ -30,8 +34,8 @@ using StringTools;
  *
  * A BARE identifier in a pattern is treated as a capture binder unless it opens
  * with an uppercase ASCII letter, in which case it is a constructor or constant
- * reference. This is the assumption `prefer-case-guard` and `collapse-nested-switch`
- * already make, and it is not universally true in Haxe: a LOWERCASE `enum` /
+ * reference. This is the assumption `prefer-case-guard`, `collapse-nested-switch` and the scope resolver
+ * (`CasePatterns.isCaptureSpelling`) make, and it is not universally true in Haxe: a LOWERCASE `enum` /
  * `enum abstract` value resolves unqualified in a pattern too, so `case one:` may
  * denote a constant rather than a binder. `declaredConstantNames` closes the
  * realistic half of that — every constructor / value name declared by an
@@ -45,15 +49,6 @@ using StringTools;
  */
 @:nullSafety(Strict)
 final class CasePatternScan {
-
-	/** An `=`-capture has exactly [name, pattern] children. */
-	private static inline final ASSIGN_CHILD_COUNT: Int = 2;
-
-	/** An extractor has exactly [expression, pattern] children. */
-	private static inline final EXTRACTOR_CHILD_COUNT: Int = 2;
-
-	/** A structure-pattern field carries exactly its value pattern. */
-	private static inline final OBJECT_FIELD_CHILD_COUNT: Int = 1;
 
 	/**
 	 * Whether `name` opens with an uppercase ASCII letter — the family spelling of a constructor reference. Public
@@ -80,8 +75,9 @@ final class CasePatternScan {
 			|| assignKind == null || callKind == null || fieldAccessKind == null
 		)
 			return null;
-		final leaves: Array<String> = constantLeafKindsOf(shape, fieldAccessKind);
+		final leaves: Array<String> = CasePatterns.constantLeafKinds(shape);
 		return {
+			shape: shape,
 			switchKinds: switchKinds,
 			caseBranchKind: caseBranchKind,
 			defaultBranchKind: shape.defaultBranchKind,
@@ -115,13 +111,8 @@ final class CasePatternScan {
 	 * A `var x` capture projects as its own kind rather than through the plain wrapper,
 	 * so both count.
 	 */
-	public static function patternRun(seams: CaseSeams, branch: QueryNode): Array<QueryNode> {
-		final out: Array<QueryNode> = [];
-		for (child in branch.children) {
-			if (child.kind != seams.plainCasePatternKind && !seams.binderKinds.contains(child.kind)) break;
-			out.push(child);
-		}
-		return out;
+	public static inline function patternRun(seams: CaseSeams, branch: QueryNode): Array<QueryNode> {
+		return CasePatterns.patternRun(branch, seams.shape);
 	}
 
 	/** The guard node of `branch` (the parenthesised condition after its pattern run), or null when it has none. */
@@ -136,13 +127,45 @@ final class CasePatternScan {
 	 * shape may bind a name this scan would otherwise report as absent.
 	 */
 	public static function binders(seams: CaseSeams, branch: QueryNode): Null<Array<PatternBinder>> {
+		final found: PatternScan = CasePatterns.scan(branch, seams.shape, []);
+		if (!found.modelled) return null;
 		final out: Array<PatternBinder> = [];
-		for (pattern in patternRun(seams, branch)) {
-			final node: Null<QueryNode> = seams.binderKinds.contains(pattern.kind) ? pattern : sole(pattern);
-			if (node == null) return null;
-			if (!scanPattern(seams, node, true, out)) return null;
+		for (ident in found.idents) {
+			final span: Null<Span> = ident.node.span;
+			final assigned: Null<QueryNode> = ident.assigned;
+			final assignedSpan: Null<Span> = assigned?.span;
+			if (span == null || (assigned != null && assignedSpan == null)) return null;
+			out.push({
+				node: ident.node,
+				name: ident.name,
+				bare: !ident.explicit,
+				whole: ident.whole,
+				editSpan: assignedSpan == null ? span : new Span(span.from, assignedSpan.from),
+				editText: assignedSpan == null ? seams.wildcardPatternName : ''
+			});
 		}
 		return out;
+	}
+
+	/**
+	 * Whether `binder` of `arm` is a PROVEN capture (`CasePatterns.isDecidedCapture`) — the gate every
+	 * rule that ACTS on a binder being a capture (spelling it `_`, reporting it as a catch-all, splicing
+	 * a nested switch over it) must pass. A bare name that may compare against a constant of the
+	 * subject's type or of an import is not one, and such a rule declines.
+	 */
+	public static function provesCapture(
+		seams: CaseSeams, root: QueryNode, switchNode: QueryNode, arm: QueryNode, binder: PatternBinder, scope: Null<PatternNameScope>
+	): Bool {
+		return CasePatterns.provesCaptureAt(arm, switchNode, binder.node, subjectResolver(root, seams.shape), scope, root, seams.shape);
+	}
+
+	/** How a lint rule resolves a switch subject identifier to its declaration: through the reference walk. */
+	public static function subjectResolver(root: QueryNode, shape: RefShape): QueryNode -> Null<QueryNode> {
+		return subject -> {
+			final name: Null<String> = subject.name;
+			final span: Null<Span> = subject.span;
+			return name == null || span == null ? null : TypeResolver.resolveBindingHit(name, span, root, shape)?.bindingNode;
+		};
 	}
 
 	/** How many nodes in `node`'s subtree MENTION `name` — an identifier, a `'$name'` interpolation, or a pattern binder. */
@@ -207,10 +230,8 @@ final class CasePatternScan {
 	 * the spelling assumption before this set is ever consulted, so admitting one would
 	 * grow the set without changing a single verdict.
 	 */
-	public static function declaredConstantNames(seams: CaseSeams, trees: Array<QueryNode>): Array<String> {
-		final out: Array<String> = [];
-		for (tree in trees) collectConstantNames(seams, tree, out);
-		return out;
+	public static inline function declaredConstantNames(seams: CaseSeams, trees: Array<QueryNode>): Array<String> {
+		return CasePatterns.constantNames(trees, seams.shape);
 	}
 
 	/**
@@ -229,10 +250,8 @@ final class CasePatternScan {
 	 * carry. Public for the same reason `startsUpper` is: `case-pattern-separator`'s pattern
 	 * whitelist asks this exact question of the same node, and a second copy would drift.
 	 */
-	public static function isNamedCallee(seams: CaseSeams, node: QueryNode): Bool {
-		if (node.children.length == 0) return false;
-		final callee: QueryNode = node.children[0];
-		return callee.kind == seams.identKind || callee.kind == seams.fieldAccessKind;
+	public static inline function isNamedCallee(seams: CaseSeams, node: QueryNode): Bool {
+		return CasePatterns.isNamedCallee(node, seams.shape);
 	}
 
 	/**
@@ -337,160 +356,9 @@ final class CasePatternScan {
 		};
 	}
 
-	/**
-	 * Walk `node`, collecting every unqualified-resolvable constant name it declares.
-	 * Modifiers project as SIBLING nodes preceding their member, so a pending `static` run
-	 * is carried across the nameless modifier nodes and consumed by the next named child.
-	 */
-	private static function collectConstantNames(seams: CaseSeams, node: QueryNode, out: Array<String>): Void {
-		final allMembers: Bool = seams.constantMemberHostKinds.contains(node.kind);
-		var pendingStatic: Bool = false;
-		for (member in node.children) {
-			if (member.kind == seams.staticModifierKind) {
-				pendingStatic = true;
-				continue;
-			}
-			final name: Null<String> = member.name;
-			if (name == null) continue;
-			if ((allMembers || pendingStatic) && name.length > 0 && !startsUpper(name) && !out.contains(name)) out.push(name);
-			pendingStatic = false;
-		}
-		for (child in node.children) collectConstantNames(seams, child, out);
-	}
-
 	/** `wrapper`'s ONE child, or null when it holds any other number. */
 	private static function sole(wrapper: QueryNode): Null<QueryNode> {
 		return wrapper.children.length == 1 ? wrapper.children[0] : null;
-	}
-
-	/**
-	 * Walk one pattern node, pushing every binder it introduces, and return whether the
-	 * whole subtree matched the whitelist. `whole` marks a node that IS the entire pattern
-	 * — a bare identifier there is a CATCH-ALL, which the top-level arm of
-	 * `unused-case-binder` gates on separately.
-	 */
-	private static function scanPattern(seams: CaseSeams, node: QueryNode, whole: Bool, out: Array<PatternBinder>): Bool {
-		final kind: String = node.kind;
-		final span: Null<Span> = node.span;
-		if (span == null) return false;
-		return if (kind == seams.identKind)
-			scanIdentPattern(seams, node, span, whole, out)
-		else if (seams.binderKinds.contains(kind))
-			scanBinderPattern(seams, node, span, whole, out)
-		else if (kind == seams.assignKind)
-			scanAssignPattern(seams, node, out)
-		else if (kind == seams.callKind)
-			scanCallPattern(seams, node, out)
-		else if (kind == seams.arrayLiteralKind)
-			scanArrayPattern(seams, node, out)
-		else if (kind == seams.objectLiteralKind)
-			scanObjectPattern(seams, node, out)
-		else if (kind == seams.parenKind)
-			node.children.length == 1 && scanPattern(seams, node.children[0], whole, out)
-		else if (seams.extractorKinds.contains(kind))
-			node.children.length == EXTRACTOR_CHILD_COUNT && scanPattern(seams, node.children[1], false, out)
-		// A leading minus reaches only a numeric literal in practice — Haxe rejects `case -c:`
-		// for any constant `c` — so this arm exists to accept `case -1:`, not to find binders.
-		else if (kind == seams.negationKind)
-			node.children.length == 1 && scanPattern(seams, node.children[0], false, out)
-		else
-			seams.constantLeafKinds.contains(kind);
-	}
-
-	/**
-	 * A bare identifier pattern: the wildcard and an upper-case name (a constructor / constant
-	 * spelled bare) introduce no binder, anything else binds and is replaceable by the wildcard.
-	 */
-	private static function scanIdentPattern(seams: CaseSeams, node: QueryNode, at: Span, whole: Bool, out: Array<PatternBinder>): Bool {
-		final ident: Null<String> = patternName(node);
-		if (ident == null) return false;
-		final name: String = ident;
-		if (name == seams.wildcardPatternName || startsUpper(name)) return true;
-		out.push({
-			node: node,
-			name: name,
-			bare: true,
-			whole: whole,
-			editSpan: at,
-			editText: seams.wildcardPatternName
-		});
-		return true;
-	}
-
-	/** A grammar-declared binder node — a leaf carrying the bound name and no children of its own. */
-	private static function scanBinderPattern(seams: CaseSeams, node: QueryNode, at: Span, whole: Bool, out: Array<PatternBinder>): Bool {
-		final captured: Null<String> = node.name;
-		if (captured == null || node.children.length != 0) return false;
-		final name: String = captured;
-		out.push({
-			node: node,
-			name: name,
-			bare: false,
-			whole: whole,
-			editSpan: at,
-			editText: seams.wildcardPatternName
-		});
-		return true;
-	}
-
-	/**
-	 * A `name = subpattern` capture: the name binds (its edit span reaches up to the subpattern, so
-	 * dropping the binder drops the `=` with it) and the subpattern is scanned on its own.
-	 */
-	private static function scanAssignPattern(seams: CaseSeams, node: QueryNode, out: Array<PatternBinder>): Bool {
-		if (node.children.length != ASSIGN_CHILD_COUNT) return false;
-		final lhs: QueryNode = node.children[0];
-		final rhs: QueryNode = node.children[1];
-		final head: Null<String> = lhs.name;
-		final lhsSpan: Null<Span> = lhs.span;
-		final rhsSpan: Null<Span> = rhs.span;
-		if (lhs.kind != seams.identKind || head == null || lhsSpan == null || rhsSpan == null) return false;
-		final name: String = head;
-		if (name != seams.wildcardPatternName) out.push({
-			node: lhs,
-			name: name,
-			bare: false,
-			whole: false,
-			editSpan: new Span(lhsSpan.from, rhsSpan.from),
-			editText: ''
-		});
-		return scanPattern(seams, rhs, false, out);
-	}
-
-	/** A constructor-extraction pattern: an identifier or field-access callee over scanned arguments. */
-	private static function scanCallPattern(seams: CaseSeams, node: QueryNode, out: Array<PatternBinder>): Bool {
-		if (!isNamedCallee(seams, node)) return false;
-		for (i in 1...node.children.length) if (!scanPattern(seams, node.children[i], false, out)) return false;
-		return true;
-	}
-
-	/** An array pattern: every element subpattern must scan clean. */
-	private static function scanArrayPattern(seams: CaseSeams, node: QueryNode, out: Array<PatternBinder>): Bool {
-		return node.children.foreach(child -> scanPattern(seams, child, false, out));
-	}
-
-	/** A structure pattern: every child must be a field whose value subpattern scans clean. */
-	private static function scanObjectPattern(seams: CaseSeams, node: QueryNode, out: Array<PatternBinder>): Bool {
-		for (child in node.children) {
-			if (child.kind != seams.objectFieldKind || child.children.length != OBJECT_FIELD_CHILD_COUNT) return false;
-			if (!scanPattern(seams, child.children[0], false, out)) return false;
-		}
-		return true;
-	}
-
-	/**
-	 * The node kinds a case pattern may bottom out at as a constant: the field access that spells a
-	 * qualified constructor, plus every literal kind the grammar declares.
-	 */
-	private static function constantLeafKindsOf(shape: RefShape, fieldAccessKind: String): Array<String> {
-		final leaves: Array<String> = [fieldAccessKind];
-		for (kind in shape.stringLiteralKinds ?? []) leaves.push(kind);
-		for (kind in shape.numericLiteralKinds ?? []) leaves.push(kind);
-		final boolKind: Null<String> = shape.boolLitKind;
-		if (boolKind != null) leaves.push(boolKind);
-		final nullKind: Null<String> = shape.nullLiteralKind;
-		if (nullKind != null) leaves.push(nullKind);
-		return leaves;
 	}
 
 
@@ -555,6 +423,9 @@ typedef PatternBinder = {
 
 /** The seam kinds `CasePatternScan` resolves once per run for both case-arm rules. */
 typedef CaseSeams = {
+
+	/** The shape the seams were read from — what `CasePatterns` takes. */
+	final shape: RefShape;
 	final switchKinds: Array<String>;
 	final caseBranchKind: String;
 	final defaultBranchKind: Null<String>;

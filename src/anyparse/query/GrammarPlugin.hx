@@ -452,8 +452,8 @@ typedef RefShape = {
 	 * `switch` arm (Haxe `CaseBranch` / `DefaultBranch`). A local declared inside one dies at the arm's
 	 * end, so the arm needs a frame of its own AND must stop the enclosing frame from adopting its
 	 * declarations; without both, the first arm's local shadows the field it was named after and every
-	 * sibling arm's same-named binding. (An enum-pattern binding such as `case Some(x)` is NOT affected:
-	 * it projects as a plain identifier read, not a declaration.)
+	 * sibling arm's same-named binding. A `case` pattern capture binds into
+	 * the same frame: `Refs` declares it there itself (`CaptureIndex`).
 	 *
 	 * Deliberately separate from `scopeKinds`: that vocabulary is read by a dozen checks as "lexical
 	 * container of a declaration", which an arm is not. It is also NOT the same as the branch-aware

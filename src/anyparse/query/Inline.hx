@@ -112,14 +112,13 @@ final class Inline {
 	 * Returns an `Err` message string on the first hazard, or null when
 	 * every free ident is safe to duplicate.
 	 */
-	private static function checkFreeIdents(name: String, init: QueryNode, tree: QueryNode, shape: RefShape): Null<String> {
-		final idents: Array<QueryNode> = collectIdentExprs(init);
-		for (id in idents) {
-			final nm: Null<String> = id.name;
-			final idSpan: Null<Span> = id.span;
-			if (nm == null || nm == 'this' || idSpan == null) continue;
-
-			final nmHits: Array<RefHit> = Refs.find(nm, tree, shape);
+	private static function checkFreeIdents(
+		name: String, init: QueryNode, tree: QueryNode, initHits: Map<String, Array<RefHit>>
+	): Null<String> {
+		for (id in namedIdents(init)) {
+			final nm: String = id.name;
+			final idSpan: Span = id.span;
+			final nmHits: Array<RefHit> = initHits[nm] ?? [];
 			if (nmHits.exists(h -> h.kind == RefKind.Write))
 				return '"$name" initializer depends on reassigned variable "$nm" — cannot inline';
 
@@ -134,11 +133,19 @@ final class Inline {
 		return null;
 	}
 
-	/** Every `IdentExpr` node in `node`'s subtree, in pre-order. */
-	private static function collectIdentExprs(node: QueryNode): Array<QueryNode> {
-		final out: Array<QueryNode> = [];
+	/**
+	 * Every `IdentExpr` in `node`'s subtree that names a binding (not `this`), in pre-order.
+	 */
+	private static function namedIdents(node: QueryNode): Array<NamedIdent> {
+		final out: Array<NamedIdent> = [];
 		function walk(n: QueryNode): Void {
-			if (n.kind == 'IdentExpr') out.push(n);
+			final name: Null<String> = n.name;
+			final span: Null<Span> = n.span;
+			if (n.kind == 'IdentExpr' && name != null && name != 'this' && span != null) {
+				final named: String = name;
+				final at: Span = span;
+				out.push({ name: named, span: at });
+			}
 			for (c in n.children) walk(c);
 		}
 		walk(node);
@@ -195,8 +202,11 @@ final class Inline {
 
 		// Every free identifier the initializer reads must be a stable
 		// local (not reassigned anywhere, not a field / property).
-		final freeIdentErr: Null<String> = checkFreeIdents(name, initializer, tree, shape);
+		final initHits: Map<String, Array<RefHit>> = Refs.findMulti(namedIdents(initializer).map(id -> id.name), tree, shape);
+		final freeIdentErr: Null<String> = checkFreeIdents(name, initializer, tree, initHits);
 		if (freeIdentErr != null) return PErr(freeIdentErr);
+		final undecided: Null<String> = undecidedPatternRefusal(source, hits, binding, name);
+		if (undecided != null) return PErr(undecided);
 
 		// The "go edit the source and retry" refusals come LAST: that advice is wasted when an
 		// unconditional gate above would reject the inline anyway.
@@ -215,8 +225,22 @@ final class Inline {
 				decl: decl,
 				initializer: initializer,
 				initRange: initRange,
-				reads: reads
+				reads: reads,
+				initHits: initHits
 			});
+	}
+
+	/**
+	 * The refusal for a `case` pattern name bound to the local, or hiding it, that is not a PROVEN
+	 * capture (`RefactorSupport.undecidedPatternHit`), or null when there is none: the arm's reads of the
+	 * name may be the local's or the capture's, and the substitution can serve only one reading.
+	 */
+	private static function undecidedPatternRefusal(source: String, hits: Array<RefHit>, binding: Int, name: String): Null<String> {
+		final undecided: Null<RefHit> = RefactorSupport.undecidedPatternHit(hits, binding);
+		if (undecided == null) return null;
+		final at: Position = undecided.span.lineCol(source);
+		return '"$name" is named by the case pattern at ${at.line}:${at.col}, which one file cannot prove a capture'
+			+ ' rather than a comparison with a constant - the reads of the arm may or may not be this local\'s';
 	}
 
 	/**
@@ -262,9 +286,12 @@ final class Inline {
 		final edits: Array<{ span: Span, text: String }> = [];
 
 		// Each read's identifier token is replaced with the substitution.
+		final readFroms: Array<Int> = [];
 		for (read in target.reads) {
 			final identFrom: Int = SourceText.identTokenOffset(source, read.span, name);
-			if (identFrom >= 0) edits.push({ span: new Span(identFrom, identFrom + name.length), text: substitution });
+			if (identFrom < 0) continue;
+			readFroms.push(identFrom);
+			edits.push({ span: new Span(identFrom, identFrom + name.length), text: substitution });
 		}
 
 		// The decl line is deleted. The decl span includes its trailing
@@ -279,14 +306,54 @@ final class Inline {
 		final rewritten: String = CanonicalEdit.applyEdits(source, edits);
 		if (rewritten == source) return Err('inline of "$name" is a no-op');
 
-		try
-			plugin.parseFile(rewritten)
-		catch (exception: ParseError)
-			return Err('rewritten source does not parse: $exception')
-		catch (exception: Exception)
-			return Err('rewritten source does not parse: ${exception.message}');
+		final newTree: QueryNode = try plugin.parseFile(rewritten) catch (exception: ParseError) return Err(
+			'rewritten source does not parse: $exception'
+		)
+		catch (exception: Exception) return Err('rewritten source does not parse: ${exception.message}');
+		final paren: Int = substitution == initText ? 0 : 1;
+		final captured: Null<Int> = recapturedIdent(target, readFroms, edits, paren, newTree, shape);
+		if (captured == null) return Ok(rewritten);
+		final at: Position = new Span(captured, captured).lineCol(rewritten);
+		return Err(
+			'inline of "$name" is unsafe: at ${at.line}:${at.col} of the rewrite an identifier of its initializer would bind to'
+			+ ' a different declaration - a binding of that name shadows it there'
+		);
+	}
 
-		return Ok(rewritten);
+	/**
+	 * The offset in `rewritten` of the first substituted identifier that binds to a DIFFERENT declaration
+	 * than the same identifier does inside the initializer, or null when every one keeps its binding. A
+	 * read site can sit where a lambda parameter, a nested local or a `case` capture of an initializer's
+	 * name shadows it, and the substitution then reads that binding instead. Decided by re-resolving the
+	 * rewritten tree, the way `Rename.captureMismatch` decides a rename; `paren` is the offset of the
+	 * initializer text inside the substitution.
+	 */
+	private static function recapturedIdent(
+		target: InlineTarget, readFroms: Array<Int>, edits: Array<{ span: Span, text: String }>, paren: Int, newTree: QueryNode,
+		shape: RefShape
+	): Null<Int> {
+		final idents: Array<NamedIdent> = namedIdents(target.initializer);
+		final newHits: Map<String, Array<RefHit>> = Refs.findMulti([for (id in idents) id.name], newTree, shape);
+		for (id in idents) {
+			final from: Int = id.span.from;
+			final bound: Null<Span> = (target.initHits[id.name] ?? []).find(h -> h.span.from == from)?.bindingSpan;
+			if (bound == null) continue;
+			final expected: Int = shifted(bound.from, edits);
+			final hits: Array<RefHit> = newHits[id.name] ?? [];
+			for (readFrom in readFroms) {
+				final at: Int = shifted(readFrom, edits) + paren + (from - target.initRange.from);
+				final hit: Null<RefHit> = hits.find(h -> h.span.from == at);
+				if (hit == null || hit.bindingSpan?.from != expected) return at;
+			}
+		}
+		return null;
+	}
+
+	/** Where `offset` of the original source lands once every edit wholly before it is applied. */
+	private static function shifted(offset: Int, edits: Array<{ span: Span, text: String }>): Int {
+		var out: Int = offset;
+		for (edit in edits) if (edit.span.to <= offset) out += edit.text.length - (edit.span.to - edit.span.from);
+		return out;
 	}
 
 }
@@ -301,7 +368,16 @@ private typedef InlineTarget = {
 	final decl: QueryNode;
 	final initializer: QueryNode;
 	final initRange: Span;
+
+	/** Every hit of every name the initializer reads, resolved once over the original tree. */
+	final initHits: Map<String, Array<RefHit>>;
 	final reads: Array<RefHit>;
+};
+
+/** An identifier of an initializer that names a binding, with the span it is written at. */
+private typedef NamedIdent = {
+	final name: String;
+	final span: Span;
 };
 
 /** Resolution outcome of `resolveInlineTarget`: the target or a refusal. */

@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.query.CallGraphNames;
+import anyparse.query.CasePatterns;
 import anyparse.query.DeclaredNullity;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
@@ -105,31 +106,21 @@ final class OperandBinder {
 
 	/**
 	 * Whether a `case` branch holding the read at `at` may capture `name` in its pattern while the
-	 * binding the reference walk found (`bindingFrom`) lies OUTSIDE that branch. The walk does not see
-	 * a bare lowercase identifier in a pattern as a binder (`case t:` captures, it never compares), so
-	 * its answer is the outer declaration the capture shadows. Every non-upper-initial identifier in a
-	 * pattern counts, an extractor's function name included: over-counting only declines.
+	 * binding the reference walk found (`bindingFrom`) lies OUTSIDE that branch. The walk binds a decided
+	 * capture inside its arm, so this answers true only for a pattern name `Refs` could not decide
+	 * (`CasePatterns.scan` with no constants counts every name a capture MAY bind): its answer is then the
+	 * outer declaration a capture would shadow, and over-counting only declines.
 	 */
 	private function capturedBetween(name: String, at: Span, bindingFrom: Null<Int>): Bool {
 		final branchKind: Null<String> = _shape.caseBranchKind;
-		final plainKind: Null<String> = _shape.plainCasePatternKind;
-		final binderKinds: Array<String> = _shape.casePatternBinderKinds ?? [];
-		final skipUpper: Bool = _shape.upperInitialNeverCaptures == true;
 		if (branchKind == null) return false;
 		final from: Int = bindingFrom ?? -1;
-		function captures(pattern: QueryNode): Bool {
-			final n: Null<String> = pattern.name;
-			return (n == name && (
-				binderKinds.contains(pattern.kind) || (pattern.kind == _shape.identKind && !(skipUpper && SourceText.isUpperInitial(n)))
-			)) || pattern.children.exists(captures);
-		}
 		function walk(node: QueryNode): Bool {
 			final span: Null<Span> = node.span;
 			if (span == null || at.from < span.from || at.to > span.to) return span == null && node.children.exists(walk);
 			final inside: Bool = from >= span.from && from < span.to;
-			if (node.kind == branchKind && !inside)
-				for (c in node.children)
-					if ((c.kind == plainKind || binderKinds.contains(c.kind)) && captures(c)) return true;
+			if (node.kind == branchKind && !inside && CasePatterns.scan(node, _shape, []).idents.exists(ident -> ident.name == name))
+				return true;
 			return node.children.exists(walk);
 		}
 		return walk(_tree);

@@ -3,7 +3,9 @@ package anyparse.check;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.query.CanonicalEdit;
+import anyparse.query.CasePatterns;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.PatternNameScope;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -173,8 +175,15 @@ final class CollapseNestedSwitch implements Check implements DefaultOff {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
+		final index: SymbolIndex = SymbolIndex.build(files, plugin);
 		return RunScan.collectWith(files, plugin, resolveSeams(plugin), (entry, tree, resolved, violations) -> {
-			for (candidate in collect({ tree: tree, source: entry.source, seams: resolved })) violations.push({
+			final scope: Null<PatternNameScope> = PatternNameScope.of(entry.file, tree, plugin, index);
+			for (candidate in collect({
+				tree: tree,
+				source: entry.source,
+				seams: resolved,
+				scope: scope
+			})) violations.push({
 				file: entry.file,
 				span: candidate.span,
 				rule: RULE_ID,
@@ -197,11 +206,17 @@ final class CollapseNestedSwitch implements Check implements DefaultOff {
 		final seams: Null<Seams> = resolveSeams(plugin);
 		if (seams == null || violations.length == 0) return [];
 		final resolved: Seams = seams;
-		RunScan.assertOneFile(violations, RULE_ID);
+		final file: String = RunScan.oneFile(violations, RULE_ID);
 		return RunScan.edits(plugin, source, tree -> {
+			final resolvedIndex: SymbolIndex = index ?? SymbolIndex.build([{ file: file, source: source }], plugin);
+			final scope: Null<PatternNameScope> = PatternNameScope.of(file, tree, plugin, resolvedIndex);
 			final byKey: Map<String, Candidate> = [];
-			for (candidate in collect({ tree: tree, source: source, seams: resolved }))
-				byKey['${candidate.span.from}:${candidate.span.to}'] = candidate;
+			for (candidate in collect({
+				tree: tree,
+				source: source,
+				seams: resolved,
+				scope: scope
+			})) byKey['${candidate.span.from}:${candidate.span.to}'] = candidate;
 
 			return CanonicalEdit.dropContainedEdits(
 				CheckScan.collectSpanEdits(violations, byKey, (candidate, _) -> ({ span: candidate.span, text: candidate.text }))
@@ -255,7 +270,7 @@ final class CollapseNestedSwitch implements Check implements DefaultOff {
 		if (subject.kind != seams.identKind) return null;
 		final binder: Null<String> = subject.name;
 		if (binder == null || CasePatternScan.startsUpper(binder)) return null;
-		final resolvedBinder: Null<QueryNode> = isolatedBinder(seams, arm, pat, subject, binder);
+		final resolvedBinder: Null<QueryNode> = isolatedBinder(scan, switchNode, arm, pat, subject, binder);
 		if (resolvedBinder == null) return null;
 		final binderNode: QueryNode = resolvedBinder;
 		if (CasePatternScan.containsAnyKind(pat, [seams.assignKind])) return null;
@@ -465,8 +480,9 @@ final class CollapseNestedSwitch implements Check implements DefaultOff {
 	 * an ordinary identifier, so it satisfies this one.
 	 */
 	private static function isolatedBinder(
-		seams: Seams, arm: QueryNode, pat: QueryNode, subject: QueryNode, binder: String
+		scan: Scan, switchNode: QueryNode, arm: QueryNode, pat: QueryNode, subject: QueryNode, binder: String
 	): Null<QueryNode> {
+		final seams: Seams = scan.seams;
 		final all: Array<QueryNode> = [];
 		mentions(seams, arm, binder, all);
 		if (all.length != BINDER_MENTION_COUNT || !all.contains(subject)) return null;
@@ -474,7 +490,11 @@ final class CollapseNestedSwitch implements Check implements DefaultOff {
 		mentions(seams, pat, binder, inPattern);
 		if (inPattern.length != 1) return null;
 		final node: QueryNode = inPattern[0];
-		return node == subject ? null : node;
+		if (node == subject) return null;
+		// The splice turns `switch binder` into a sub-pattern, which is only the same program when the
+		// binder CAPTURES; a bare name a constant may claim compares, and `switch binder` reads another binding.
+		final resolve: QueryNode -> Null<QueryNode> = CasePatternScan.subjectResolver(scan.tree, seams.shape);
+		return CasePatterns.provesCaptureAt(arm, switchNode, node, resolve, scan.scope, scan.tree, seams.shape) ? node : null;
 	}
 
 	/** Every node in `node`'s subtree that MENTIONS `binder` — see `isolatedBinder` for the three shapes. */
@@ -551,6 +571,7 @@ final class CollapseNestedSwitch implements Check implements DefaultOff {
 			|| assignKind == null
 			? null
 			: {
+				shape: shape,
 				switchKinds: switchKinds,
 				switchStatementKinds: shape.switchStatementKinds ?? [],
 				caseBranchKind: caseBranchKind,
@@ -618,10 +639,16 @@ private typedef Scan = {
 	final tree: QueryNode;
 	final source: String;
 	final seams: Seams;
+
+	/** What the file's lookup order may bind a bare pattern name to; null when the index does not hold the file. */
+	final scope: Null<PatternNameScope>;
 };
 
 /** The seam kinds `CollapseNestedSwitch` resolves once per run. */
 private typedef Seams = {
+
+	/** The shape the seams were read from — what `CasePatterns` takes. */
+	final shape: RefShape;
 	final switchKinds: Array<String>;
 
 	/** The statement-position subset — empty leaves the outer fall-through path permanently closed. */

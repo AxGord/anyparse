@@ -7,6 +7,7 @@ import anyparse.check.UnusedCaseBinder;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
+import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
 
@@ -25,6 +26,9 @@ using StringTools;
  * reading stop agreeing.
  */
 class UnusedCaseBinderCheckTest extends Test {
+
+	/** The enum the constructor fixtures match, declared so each argument is a PROVEN capture. */
+	private static inline final ENUMS: String = '\nenum N {\n\tNode(x: Int, y: Int);\n\tA(x: Int);\n\tB(x: Int);\n}';
 
 	/** The reported message for the canary's unread binder. */
 	private static inline final CANARY_MESSAGE: String = 'case binder \'_data\' is never read; replace it with _';
@@ -49,6 +53,104 @@ class UnusedCaseBinderCheckTest extends Test {
 	public function testConstructorArgumentUnbound(): Void {
 		final out: String = applyFixOnce(sw('case Node(x, y): use(y);'));
 		Assert.stringContains('case Node(_, y):', out);
+	}
+
+	/**
+	 * An argument of a constructor the file does not declare has an expected type it cannot see: a
+	 * lowercase `foo` there may be a constructor of that type, which the pattern compares against, and
+	 * spelling it `_` would turn the comparison into a catch-all (`other` became `foo` on `--interp`).
+	 */
+	@:pin('control')
+	@:killer('M-UNUSED-BINDER-UNPROVEN')
+	@:killer('M-CAPTURE-SLOT-UNPROVEN')
+	public function testUndeclaredConstructorArgumentRefused(): Void {
+		Assert.equals(0, violations(sw('case Some(foo): r();')).length);
+	}
+
+	/**
+	 * A WHOLE bare binder is proven only by the subject's type: a built-in type carries no pattern
+	 * constant, while a type from another file may be an `enum abstract` whose `other` value the
+	 * pattern compares against — ahead of the capture and ahead of any local of that name.
+	 */
+	@:pin('control')
+	@:killer('M-CAPTURE-SUBJECT-UNPROVEN')
+	public function testWholeBinderNeedsAProvenSubjectType(): Void {
+		final source: (String) -> String = type ->
+			'class C {\n\tfunction f(v: $type): Void {\n\t\tswitch v {\n\t\t\tcase "a": p();' + '\n\t\t\tcase other: r();\n\t\t}\n\t}\n}';
+		Assert.equals(1, violations(source('String')).length);
+		Assert.equals(0, violations(source('Kind')).length);
+	}
+
+	/** An array element is dynamic only under a dynamic subject; under `Array<Kind>` it is a `Kind`, which may carry the name. */
+	@:pin('control')
+	@:killer('M-CAPTURE-STRUCTURAL')
+	public function testElementBinderNeedsADynamicSubject(): Void {
+		final source: (String) -> String = type ->
+			'class C {\n\tfunction f(v: $type): Void {\n\t\tswitch v {\n\t\t\tcase [a, b]: use(b);' + '\n\t\t\tcase _: r();\n\t\t}\n\t}\n}';
+		Assert.equals(1, violations(source('Dynamic')).length);
+		Assert.equals(0, violations(source('Array<Kind>')).length);
+	}
+
+	/**
+	 * A name the file's lookup order may bind to a value compares, so its binder is not unread and
+	 * spelling it `_` would turn a comparison into a catch-all: a static import, a wildcard over a
+	 * type's statics, or a module-level field (`final lim` compares on `--interp` too).
+	 */
+	@:pin('control')
+	@:killer('M-SCOPE-IMPORT-BLIND')
+	@:killer('M-SCOPE-MODULE-FIELDS')
+	public function testBinderTheLookupOrderMayBindRefused(): Void {
+		final source: (String) -> String = head ->
+			'$head\nclass C {\n\tfunction f(v: Dynamic): Void {\n\t\tswitch v {\n\t\t\tcase [lim]: r();'
+				+ '\n\t\t\tcase _: r();\n\t\t}\n\t}\n}';
+		Assert.equals(1, violations(source('')).length);
+		Assert.equals(0, violations(source('import Consts.lim;')).length);
+		Assert.equals(0, violations(source('import Consts.*;')).length);
+		Assert.equals(0, violations(source('final lim = 1;')).length);
+	}
+
+	/**
+	 * An `import.hx` over the file's package brings its statics in exactly as the file's own import
+	 * would — the chain is read from disk, so the fixture is a real tree. Without it the binder is unread.
+	 */
+	@:pin('control')
+	@:killer('M-SCOPE-AMBIENT-BLIND')
+	public function testBinderAnAmbientImportMayBindRefused(): Void {
+		final consts: { name: String, source: String } = {
+			name: 'src/pk/Consts.hx',
+			source: 'package pk;\n\nclass Consts {\n\tpublic static inline final value = \'x\';\n}\n'
+		};
+		final use: { name: String, source: String } = {
+			name: 'src/pk/T2.hx',
+			source: 'package pk;\n\nclass T2 {\n\tfunction f(v: Dynamic): Void {\n\t\tswitch v {\n\t\t\tcase [value]: r();'
+				+ '\n\t\t\tcase _: r();\n\t\t}\n\t}\n}\n'
+		};
+		Assert.equals(1, violationsOnDisk([consts, use], 'src/pk/T2.hx', true));
+		Assert.equals(
+			0, violationsOnDisk([consts, use, { name: 'src/pk/import.hx', source: 'import pk.Consts.*;\n' }], 'src/pk/T2.hx', true)
+		);
+	}
+
+	/**
+	 * Importing a whole MODULE (`import pk.Mod;`) brings its module-level fields in unqualified, and a
+	 * bare pattern compares against them (`compared` on `--interp`); a wildcard over the module or its
+	 * package does not, so the binder there is unread.
+	 */
+	@:pin('control')
+	@:killer('M-SCOPE-MODULE-IMPORT-BLIND')
+	public function testBinderAnImportedModuleFieldMayBindRefused(): Void {
+		final mod: { name: String, source: String } = {
+			name: 'src/pk/Mod.hx',
+			source: 'package pk;\n\nfinal modval = \'x\';\n\nclass Mod {}\n'
+		};
+		final use: String -> { name: String, source: String } = head -> {
+			name: 'src/qk/A.hx',
+			source: 'package qk;\n\n$head\n\nclass A {\n\tfunction f(v: Dynamic): Void {\n\t\tswitch v {\n\t\t\tcase [modval]: r();'
+				+ '\n\t\t\tcase _: r();\n\t\t}\n\t}\n}\n'
+		};
+		Assert.equals(0, violationsOnDisk([mod, use('import pk.Mod;')], 'src/qk/A.hx'));
+		Assert.equals(1, violationsOnDisk([mod, use('import pk.Mod.*;')], 'src/qk/A.hx'));
+		Assert.equals(1, violationsOnDisk([mod, use('import pk.*;')], 'src/qk/A.hx'));
 	}
 
 	/** An array-pattern element nothing reads becomes `_`. */
@@ -178,13 +280,13 @@ class UnusedCaseBinderCheckTest extends Test {
 	}
 
 	/**
-	 * `case A | B:` is Haxe's OTHER or-pattern spelling and projects as a bitwise-or node
-	 * the pattern whitelist does not model, so `binders` refuses the arm. That refusal is
-	 * the load-bearing property of the whitelist design — pinned here rather than left to
-	 * hold by accident.
+	 * `case A(x) | B(x):` is Haxes OTHER or-pattern spelling and projects as a bitwise-or node the pattern
+	 * whitelist models (`RefShape.orPatternKind`): both sides bind `x`, so both are spelled `_` together.
 	 */
-	public function testUnmodelledOrPatternRefused(): Void {
-		Assert.equals(0, violations(sw('case A(x) | B(x): r();')).length);
+	public function testOrPatternSidesUnboundTogether(): Void {
+		final src: String = sw('case A(x) | B(x): r();');
+		Assert.equals(1, violations(src).length);
+		Assert.stringContains('case A(_) | B(_):', applyFixOnce(src));
 	}
 
 	/** A reification subtree may splice in a read no source scan resolves, so an arm inside one is skipped. */
@@ -216,7 +318,7 @@ class UnusedCaseBinderCheckTest extends Test {
 	 */
 	public function testNestedShadowingBinderStillFlagged(): Void {
 		final src: String = 'class C {\n\tfunction f(e: Dynamic, v: Dynamic): Void {\n\t\tswitch v {\n\t\t\tcase Node(e): r();'
-			+ '\n\t\t\tcase _: r();\n\t\t}\n\t}\n}';
+			+ '\n\t\t\tcase _: r();\n\t\t}\n\t}\n}' + ENUMS;
 		Assert.equals(1, violations(src).length);
 		Assert.stringContains('case Node(_)', applyFixOnce(src));
 	}
@@ -229,11 +331,36 @@ class UnusedCaseBinderCheckTest extends Test {
 
 	/** A statement switch over `v` holding `branches`. */
 	private function sw(branches: String): String {
-		return 'class C {\n\tfunction f(v: Dynamic): Void {\n\t\tswitch v {\n\t\t\t$branches\n\t\t}\n\t}\n}';
+		return 'class C {\n\tfunction f(v: Dynamic): Void {\n\t\tswitch v {\n\t\t\t$branches\n\t\t}\n\t}\n}' + ENUMS;
 	}
 
 	private function violations(src: String): Array<Violation> {
 		return new UnusedCaseBinder().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	/**
+	 * How many findings the rule reports on `subject` of `tree`, written to disk so its `import.hx` chain is read,
+	 * with every other module of the tree in the run so the index holds it - or `subject` `alone`, so the
+	 * run's own constant scan does not see the others.
+	 */
+	private function violationsOnDisk(tree: Array<{ name: String, source: String }>, subject: String, alone: Bool = false): Int {
+		#if (sys || nodejs)
+		final root: String = CliFixture.writeTree('apq_unused_case_binder', tree);
+		var count: Int = -1;
+		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
+			final files: Array<{ file: String, source: String }> = [
+				for (f in tree) if (
+					(alone ? f.name == subject : StringTools.endsWith(f.name, '.hx')) && !StringTools.endsWith(f.name, 'import.hx')
+				)
+					{ file: '$root/${f.name}', source: f.source }
+			];
+			final found: Array<Violation> = new UnusedCaseBinder().run(files, new HaxeQueryPlugin());
+			count = found.filter(v -> v.file == '$root/$subject').length;
+		});
+		return count;
+		#else
+		return -1;
+		#end
 	}
 
 	private function fixEdits(src: String): Array<{ span: Span, text: String }> {

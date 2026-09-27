@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.CaptureIndex.PatternHit;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.Scope.ScopeFrame;
 import anyparse.query.Scope.ScopeStack;
@@ -39,7 +40,8 @@ import anyparse.runtime.Span;
  *
  * Each emitted hit carries a `bindingSpan` and the declaring node
  * behind it (`bindingNode`):
- *  - Decl hits self-bind (`bindingSpan == own span`).
+ *  - Decl hits self-bind (`bindingSpan == own span`), except a later
+ *    alternative of a `case` arm, which binds to the arm's first capture.
  *  - Read / Write hits bind to the innermost in-file declaration with
  *    a matching name (null when unresolved — typically a cross-file or
  *    implicit-`this` reference).
@@ -65,6 +67,9 @@ import anyparse.runtime.Span;
  * addressable nodes, so a catch-clause exception is a self-scoped decl
  * (visible only inside the clause body) and a lambda parameter is a
  * decl-host bound into the enclosing lambda scope frame.
+ *
+ * A `case` pattern capture is a declaration too, bound into its arm frame: see `CaptureIndex`. A bare name there that is
+ * not a PROVEN capture (`CasePatterns.isDecidedCapture`) is marked `RefHit.patternUndecided`.
  *
  * Nodes carrying a null `span` are skipped — without source coordinates
  * the result is not addressable.
@@ -98,8 +103,7 @@ final class Refs {
 		final out: Map<String, Array<RefHit>> = [];
 		for (n in names) if (!out.exists(n)) out[n] = [];
 		if (names.length == 0) return out;
-		final scopes: ScopeStack = new ScopeStack();
-		walkMulti(tree, shape, scopes, out, WalkFlags.None);
+		walkWithSubjects(tree, shape, out);
 		return out;
 	}
 
@@ -117,8 +121,24 @@ final class Refs {
 	public static function findWithSkipped(name: String, tree: QueryNode, shape: RefShape): { hits: Array<RefHit>, skipped: Int } {
 		final out: Map<String, Array<RefHit>> = [name => []];
 		final skipped: Map<String, Int> = [name => 0];
-		walkMulti(tree, shape, new ScopeStack(), out, WalkFlags.None, skipped);
+		walkWithSubjects(tree, shape, out, skipped);
 		return { hits: out[name] ?? [], skipped: skipped[name] ?? 0 };
+	}
+
+	/**
+	 * One walk over `tree` filling `out`, with the switch SUBJECT names resolved alongside: whether a
+	 * `case` capture is decided depends on its subject's declared type (`CaptureIndex`), and the walk
+	 * only tracks the bindings of the names it searches for. A subject name the caller did not ask for is
+	 * searched too and its hits dropped, so every requested name answers as if asked alone.
+	 */
+	private static function walkWithSubjects(
+		tree: QueryNode, shape: RefShape, out: Map<String, Array<RefHit>>, ?skipped: Map<String, Int>
+	): Void {
+		final captures: CaptureIndex = new CaptureIndex(tree, shape);
+		final extra: Array<String> = [for (name in captures.subjectNames()) if (!out.exists(name)) name];
+		for (name in extra) out[name] = [];
+		walkMulti(tree, shape, new ScopeStack(), out, WalkFlags.None, captures, skipped);
+		for (name in extra) out.remove(name);
 	}
 
 	/**
@@ -230,14 +250,15 @@ final class Refs {
 
 
 	private static function walkMulti(
-		node: QueryNode, shape: RefShape, scopes: ScopeStack, out: Map<String, Array<RefHit>>, flags: WalkFlags, ?skipped: Map<String, Int>
+		node: QueryNode, shape: RefShape, scopes: ScopeStack, out: Map<String, Array<RefHit>>, flags: WalkFlags, captures: CaptureIndex,
+		?skipped: Map<String, Int>
 	): Void {
 		// Inside a macro-reification subtree a plain identifier is a runtime emit spliced into
 		// generated code — NOT a reference to the enclosing scope — and a reified `var` is not a
 		// real binding, so this context suppresses scope handling and ref emission alike. Where the
 		// context begins and ends is `childContext`'s answer.
 		final macroEmit: Bool = flags.has(WalkFlags.MacroEmit);
-		final frame: Null<ScopeFrame> = frameFor(node, shape, macroEmit, out, scopes);
+		final frame: Null<ScopeFrame> = frameFor(node, shape, macroEmit, out, scopes, captures);
 		if (frame != null) scopes.push(frame);
 		if (!macroEmit) {
 			final nname: Null<String> = node.name;
@@ -246,14 +267,23 @@ final class Refs {
 				if (hits != null) {
 					final span: Null<Span> = node.span;
 					if (span != null) {
-						final kind: Null<RefKind> = classify(node.kind, shape, flags);
+						final pattern: Null<PatternHit> = captures.hitOf(node);
+						final kind: Null<RefKind> = pattern == null ? classify(node.kind, shape, flags) : pattern.kind;
 						if (kind != null) {
 							// Re-bind: a narrowed local does not reach an anonymous-structure literal.
 							final at: Span = span;
-							final binding: Null<RefBinding> = kind == RefKind.Decl
-								? ({ node: node, span: at }: RefBinding)
-								: scopes.resolveInnermost(nname, at.from);
-							hits.push(new RefHit(kind, nname, at, binding, isInterpRead(node.kind, shape)));
+							// A pattern capture binds through its arm's frame, so every alternative of
+							// `case A(x), B(x):` answers the FIRST one's binding.
+							final captured: Null<RefBinding> = pattern?.binding;
+							final binding: Null<RefBinding> = if (captured != null)
+								captured
+							else if (kind == RefKind.Decl)
+								{ node: node, span: at }
+							else
+								scopes.resolveInnermost(nname, at.from);
+							hits.push(new RefHit(
+								kind, nname, at, binding, isInterpRead(node.kind, shape), pattern?.undecided == true, pattern?.shadows
+							));
 						} else if (skipped != null && isMemberAccess(node.kind, shape))
 							skipped[nname] = (skipped[nname] ?? 0) + 1;
 					}
@@ -264,7 +294,7 @@ final class Refs {
 		final childFlags: WalkFlags = childContext(node, shape, flags);
 		final children: Array<QueryNode> = node.children;
 		for (i in 0...children.length)
-			walkMulti(children[i], shape, scopes, out, childFlags.with(WalkFlags.WriteTarget, isWriteParent && i == 0), skipped);
+			walkMulti(children[i], shape, scopes, out, childFlags.with(WalkFlags.WriteTarget, isWriteParent && i == 0), captures, skipped);
 		if (frame != null) scopes.pop();
 	}
 
@@ -315,14 +345,14 @@ final class Refs {
 	 * before.
 	 */
 	private static function frameFor(
-		node: QueryNode, shape: RefShape, macroEmit: Bool, out: Map<String, Array<RefHit>>, scopes: ScopeStack
+		node: QueryNode, shape: RefShape, macroEmit: Bool, out: Map<String, Array<RefHit>>, scopes: ScopeStack, captures: CaptureIndex
 	): Null<ScopeFrame> {
 		if (macroEmit) return null;
 		final isScope: Bool = shape.scopeKinds.contains(node.kind);
 		// A switch ARM frames its own body (`branchScopeKinds`): a local declared there dies at the
 		// arm's end. `collectIntoMulti` stops at the same kinds so the enclosing frame does not adopt
-		// it — the two halves together are what confine an arm's binding. (An enum-PATTERN binding is
-		// not a declaration to this walker at all; it projects as a plain identifier read.)
+		// it — the two halves together are what confine an arm's binding. A `case` arm's PATTERN
+		// captures bind into the same frame — see `CaptureIndex`.
 		final branchKinds: Null<Array<String>> = shape.branchScopeKinds;
 		final isBranchScope: Bool = branchKinds != null && branchKinds.contains(node.kind);
 		final isCondBranch: Bool = node.kind == CondBranchProjection.COND_BRANCH_KIND;
@@ -333,6 +363,7 @@ final class Refs {
 		final positionScoped: Bool = isCondBranch ? scopes.currentPositionScoped() : posKinds != null && posKinds.contains(node.kind);
 		final frame: ScopeFrame = new ScopeFrame(node, positionScoped, headerFloor(node, shape, positionScoped));
 		collectDeclsMulti(node, shape, frame, out);
+		if (isBranchScope && node.kind == shape.caseBranchKind) captures.bindArm(node, frame, scopes, out);
 		final selfSpan: Null<Span> = node.span;
 		final selfName: Null<String> = node.name;
 		if (isScope && selfSpan != null && selfName != null && out.exists(selfName) && shape.selfScopeDeclKinds.contains(node.kind))
@@ -460,7 +491,8 @@ enum abstract WalkFlags(Int) from Int to Int {
  * `bindingSpan` is the span of the declaration this hit resolves to, and
  * `bindingNode` that declaration's own node:
  *  - Decl hits self-bind (`bindingSpan == span`, `bindingNode` the hit's
- *    own node).
+ *    own node) - except a later alternative of `case A(x), B(x):`,
+ *    which binds to the FIRST capture of the arm.
  *  - Read / Write hits point to the innermost enclosing decl with a
  *    matching name, or null when unresolved (cross-file / implicit-
  *    `this` / grammar-gap on the binding's decl site).
@@ -499,13 +531,35 @@ final class RefHit {
 	 */
 	public final interpolated: Bool;
 
-	public function new(kind: RefKind, name: String, span: Span, ?binding: RefBinding, interpolated: Bool = false) {
+	/**
+	 * Whether the occurrence is a bare name in a `case` pattern whose reading one file cannot
+	 * decide — a capture of a name nothing in the file declares (an imported constant of that name
+	 * would compare instead), or a name a constant declaration may claim (a local of that name
+	 * captures, an `enum abstract` value of the subject's type compares). The hit still carries the
+	 * walk's best answer; a rewrite whose occurrence set holds one must REFUSE rather than splice
+	 * it (`RefactorSupport.undecidedPatternHit`).
+	 */
+	public final patternUndecided: Bool;
+
+	/**
+	 * For an undecided pattern CAPTURE, the span of the binding it hides if it does capture — the
+	 * outer local, parameter or field of the same name. If the pattern compares instead, the arm's
+	 * reads of the name are THAT binding's, so a rewrite of it refuses on this hit too.
+	 */
+	public final patternShadows: Null<Span>;
+
+	public function new(
+		kind: RefKind, name: String, span: Span, ?binding: RefBinding, interpolated: Bool = false, patternUndecided: Bool = false,
+		?patternShadows: Span
+	) {
 		this.kind = kind;
 		this.name = name;
 		this.span = span;
 		bindingSpan = binding?.span;
 		bindingNode = binding?.node;
 		this.interpolated = interpolated;
+		this.patternUndecided = patternUndecided;
+		this.patternShadows = patternShadows;
 	}
 
 }

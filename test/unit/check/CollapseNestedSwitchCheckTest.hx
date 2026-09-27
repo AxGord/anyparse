@@ -27,6 +27,13 @@ using StringTools;
  */
 class CollapseNestedSwitchCheckTest extends Test {
 
+	/**
+	 * The enums the fixtures match, declared so each switched binder is a constructor argument whose written
+	 * type proves it a capture — an undeclared constructor may take an enum whose same-named value compares.
+	 */
+	private static inline final ENUMS: String =
+		'\nenum PE {\n\tP(b: QE, c: QE);\n\tR(x: QE);\n}\nenum QE {\n\tQ;\n\tA;\n\tB;\n}\nenum ExprDef {\n\tEConst(c: Constant);\n}\nenum Constant {\n\tCString(s: String, kind: String);\n\tCInt(i: String);\n}';
+
 	/** The line break + indent before an INNER case label in a `nest()` fixture. */
 	private static inline final INNER_LABEL: String = '\n\t\t\t\t\t';
 
@@ -61,6 +68,16 @@ class CollapseNestedSwitchCheckTest extends Test {
 		final src: String = sw(nest('P(b)', 'b', 'case Q: p();') + EMPTY_TAIL);
 		Assert.equals(1, violations(src).length);
 		Assert.stringContains('case P(Q): p();', applyFixOnce(src));
+	}
+
+	/**
+	 * The splice is the same program only when the switched binder CAPTURES; an argument of a constructor
+	 * the file does not declare may be a constant of its type, and `switch b` then reads another binding.
+	 */
+	@:pin('control')
+	@:killer('M-COLLAPSE-BINDER-UNPROVEN')
+	public function testUnprovenBinderRefused(): Void {
+		Assert.equals(0, violations(sw(nest('Other(b)', 'b', 'case Q: p();') + EMPTY_TAIL)).length);
 	}
 
 	/** A NON-empty inner wildcard is never merged away — it becomes the explicit backstop arm. */
@@ -320,12 +337,12 @@ class CollapseNestedSwitchCheckTest extends Test {
 
 	/** Wrap switch `branches` in a minimal parseable class + method; an outer case label lands at three tabs. */
 	private function sw(branches: String): String {
-		return 'class C {\n\tfunction f(s: String): Void {\n\t\tswitch s {\n\t\t\t$branches\n\t\t}\n\t}\n}';
+		return 'class C {\n\tfunction f(s: String): Void {\n\t\tswitch s {\n\t\t\t$branches\n\t\t}\n\t}\n}' + ENUMS;
 	}
 
 	/** `sw()` with the outer switch in EXPRESSION position, where every arm must yield a value. */
 	private function swExpr(branches: String): String {
-		return 'class C {\n\tfunction f(s: String): Void {\n\t\tfinal v = switch s {\n\t\t\t$branches\n\t\t};\n\t}\n}';
+		return 'class C {\n\tfunction f(s: String): Void {\n\t\tfinal v = switch s {\n\t\t\t$branches\n\t\t};\n\t}\n}' + ENUMS;
 	}
 
 	/** `nest()` with an explicit `gap` between the label's `:` and the nested `switch`. */
