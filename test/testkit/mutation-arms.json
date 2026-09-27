@@ -9200,9 +9200,97 @@
 			"name": "M-TS-UNSEALED-TRUSTED",
 			"type": "anyparse.check.LockSites",
 			"method": "lockOf",
-			"find": "return field == null || _unsealed.contains(memberName(field)) ? null : field;",
+			"find": "return field == null || _unsealed.contains(memberName(field)) ? null : _aliases[field] ?? field;",
 			"replace": "return field;",
 			"note": "a member read as a value still names one lock, so a hold through an alias of it never makes it long"
+		},
+		{
+			"name": "M-TS-ALIAS-UNNAMED",
+			"type": "anyparse.check.LockSites",
+			"method": "lockOf",
+			"find": "return field == null || _unsealed.contains(memberName(field)) ? null : _aliases[field] ?? field;",
+			"replace": "return field == null || _unsealed.contains(memberName(field)) ? null : field;",
+			"note": "an alias names a lock of its own, so a hold of it across a sleep never makes the member it holds long"
+		},
+		{
+			"name": "M-TS-ALIAS-FOREIGN-VALUE",
+			"type": "anyparse.check.LockAliases",
+			"method": "newHandOff",
+			"find": "if (read == null) return false;",
+			"replace": "if (read == null) return true;",
+			"note": "a construction passing anything but a member read is skipped, so the parameter's member aliases a lock it may not hold"
+		},
+		{
+			"name": "M-TS-ALIAS-PARAM-REUSED",
+			"type": "anyparse.check.LockAliases",
+			"method": "parameterIndex",
+			"find": "return named.length == 2 && named.count(n -> n.kind == _shape.identKind) == 1 ? index : -1;",
+			"replace": "return index;",
+			"note": "a parameter the constructor reassigns before storing it still aliases what the construction passed"
+		},
+		{
+			"name": "M-TS-ALIAS-REFLECTED",
+			"type": "anyparse.check.LockAliases",
+			"method": "constructedOnlyThrough",
+			"find": " || typesAsValues().contains(type)",
+			"replace": "",
+			"note": "a type read as a value, which reflection may construct with anything, still proves an alias"
+		},
+		{
+			"name": "M-TS-ALIAS-SOURCE-UNSEALED",
+			"type": "anyparse.check.LockAliases",
+			"method": "settle",
+			"find": " && accounted(a.source)",
+			"replace": "",
+			"note": "an alias stands on a member that escapes elsewhere, naming a lock some third name may also reach"
+		},
+		{
+			"name": "M-TS-ALIAS-SELF-REENTRANT",
+			"type": "anyparse.check.LockSites",
+			"method": "selfTake",
+			"find": "if (_aliasedLocks.contains(lock)) return false;",
+			"replace": "",
+			"note": "a take through an alias reads as a re-take of the holder's own lock, though it may be another object's"
+		},
+		{
+			"name": "M-TS-ALIAS-REFLECTED-ANY-ARGS",
+			"type": "anyparse.check.LockAliases",
+			"method": "reflectionSafe",
+			"find": "if (values == null || arrayKind == null || values.kind != arrayKind || values.children.length > slot) return false;",
+			"replace": "",
+			"note": "a reflective construction of a class chosen by name no longer refuses an alias, whatever lock it passes"
+		},
+		{
+			"name": "M-TS-ALIAS-REFLECTED-SHORT-REFUSED",
+			"type": "anyparse.check.LockAliases",
+			"method": "reflectionSafe",
+			"find": "|| values.children.length > slot)",
+			"replace": "|| values.children.length >= 0)",
+			"note": "a reflective construction too short to reach the parameter still refuses the alias"
+		},
+		{
+			"name": "M-TS-ALIAS-REFLECTED-UNTYPED",
+			"type": "anyparse.check.LockAliases",
+			"method": "reflectionSafe",
+			"find": "if (bounds != null && bounds.foreach(b -> unrelated(b, family))) continue;",
+			"replace": "",
+			"note": "a class value written to be of an unrelated type still refuses the alias"
+		},
+		{
+			"name": "M-TS-ALIAS-REFLECTED-FAMILY",
+			"type": "anyparse.check.LockAliases",
+			"method": "unrelated",
+			"find": "return _graph.types.declarationCount(bound) == 1 && !family.exists(t -> _graph.types.firstOnChain(t, s -> s == bound) != null);",
+			"replace": "return true;",
+			"note": "a class value written to be of the aliased type's family counts as unrelated"
+		},
+		{
+			"name": "M-TS-ALIAS-STATIC-REWRITTEN",
+			"type": "anyparse.check.LockSites",
+			"method": "selfTake",
+			"find": "if (isStaticLock(lock)) return !_rewrittenLocks.contains(lock);",
+			"replace": "if (isStaticLock(lock)) return true;",
+			"note": "a take through an alias of a static member written again reads as a re-take of the same object"
 		},
 		{
 			"name": "M-TS-WINDOW-IF-RELEASES",

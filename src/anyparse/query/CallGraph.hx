@@ -280,6 +280,22 @@ final class CallGraph {
 		return _members.keys();
 	}
 
+	/**
+	 * The written bounds of the type parameter `name` as function `id` sees it — its own, else its type's; empty for an
+	 * unbounded one, null when `name` is no type parameter there.
+	 */
+	public function typeParamBoundsOf(id: String, name: String): Null<Array<String>> {
+		final own: Null<Map<String, Array<String>>> = _facts.typeParamBounds[id];
+		if ((_facts.typeParams[id] ?? []).contains(name)) return own == null ? [] : own[name] ?? [];
+		final fn: Null<FnNode> = nodes[id];
+		final type: Null<String> = fn?.typeName;
+		if (fn == null || type == null) return null;
+		final owner: String = type;
+		if (!types.generics.declaresTypeParam(owner, name)) return null;
+		final bounds: Null<Map<String, Array<String>>> = _facts.typeBounds[boundsKey(fn.file, owner)];
+		return bounds == null ? [] : bounds[name] ?? [];
+	}
+
 	public function outEdges(id: String): Array<CallEdge> {
 		return _out[id] ?? [];
 	}
