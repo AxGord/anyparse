@@ -53,13 +53,25 @@ final class RemoveElement {
 		// line:col is 1-based, as apq refs / ast --at / source print.
 		final cursor: Int = Span.offsetOf(source, line, col);
 
-		final hit: Null<{ node: QueryNode, parent: Null<QueryNode> }> = RefactorSupport.elementAtFrom(tree, source, cursor);
-		return hit == null
-			? Err(
+		final hit: Null<{ node: QueryNode, parent: Null<QueryNode> }> = elementAt(tree, source, cursor);
+		if (hit == null)
+			return Err(
 				'position $line:$col'
 				+ ' is not on the first token of an element — point at the first token of a statement / case / list element / member'
-			)
-			: ElementSpan.deleteNode(source, hit.node, hit.parent, reformat, plugin, withDoc, optsJson);
+			);
+		return ElementSpan.deleteNode(source, hit.node, hit.parent, reformat, plugin, withDoc, optsJson);
+	}
+
+	/**
+	 * The element at `cursor` with its parent — lifted to the wrapper when it is a `final class`'s
+	 * inner form, whose own span leaves the wrapper's `final` behind to glue onto the NEXT declaration
+	 * (`final abstract class Y`). Both the removal and its description read it, so they name one cut.
+	 */
+	private static function elementAt(tree: QueryNode, source: String, cursor: Int): Null<{ node: QueryNode, parent: Null<QueryNode> }> {
+		final hit: Null<{ node: QueryNode, parent: Null<QueryNode> }> = RefactorSupport.elementAtFrom(tree, source, cursor);
+		final parent: Null<QueryNode> = hit?.parent;
+		final wrapper: Null<QueryNode> = hit == null || parent == null ? null : ElementSpan.foldingWrapperOf(hit.node, parent);
+		return wrapper == null ? hit : { node: wrapper, parent: TreePath.parentOf(tree, wrapper) };
 	}
 
 	/**
@@ -73,9 +85,7 @@ final class RemoveElement {
 	public static function describeRemoval(source: String, line: Int, col: Int, plugin: GrammarPlugin, withDoc: Bool = true): Null<String> {
 		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: Exception) null;
 		if (tree == null) return null;
-		final hit: Null<{ node: QueryNode, parent: Null<QueryNode> }> = RefactorSupport.elementAtFrom(
-			tree, source, Span.offsetOf(source, line, col)
-		);
+		final hit: Null<{ node: QueryNode, parent: Null<QueryNode> }> = elementAt(tree, source, Span.offsetOf(source, line, col));
 		if (hit == null) return null;
 		final nodeSpan: Null<Span> = hit.node.span;
 		return nodeSpan == null ? null : ElementSpan.describeCut(source, hit.node, hit.parent, nodeSpan, withDoc, plugin);

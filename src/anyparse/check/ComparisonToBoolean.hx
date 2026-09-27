@@ -296,7 +296,23 @@ final class ComparisonToBoolean implements Check {
 	 */
 	private static function resolvedNonNullBool(other: QueryNode, shape: RefShape, proof: TypeProof): Bool {
 		final nominal: Null<String> = fieldAccessTypeNominal(other, shape, proof);
-		return nominal != null && (shape.nonNullableTypeNames ?? []).contains(nominal);
+		return nominal != null && (shape.nonNullableTypeNames ?? []).contains(nominal) && !spelledAsTypeParam(proof, nominal);
+	}
+
+	/**
+	 * Whether some indexed declaration introduces a type parameter spelled `nominal` — a type's
+	 * (`class Box<Bool>`) or a method's (`function get<Bool>()`). A member type or a method return
+	 * written `Bool` there names the PARAMETER, so neither resolved arm may read it as the value type.
+	 * Asked of the whole index rather than of the declaring type because an INHERITED member leaves
+	 * no declaring type to read here; the refusal is wider than the hole, and it bites only a project
+	 * that names a type parameter after a basic value type. No index answers true (nothing resolved).
+	 */
+	private static function spelledAsTypeParam(proof: TypeProof, nominal: String): Bool {
+		final index: Null<SymbolIndex> = proof.index();
+		return index == null
+			|| index.allFiles().exists(
+				fi -> fi.types.exists(t -> t.typeParamNames.contains(nominal) || t.members.exists(m -> m.typeParamNames.contains(nominal)))
+			);
 	}
 
 	/**
@@ -346,7 +362,7 @@ final class ComparisonToBoolean implements Check {
 	 */
 	private static function resolvedCallReturnBool(other: QueryNode, seams: Seams, proof: TypeProof): Bool {
 		final nominal: Null<String> = callReturnTypeNominal(other, seams, proof);
-		return nominal != null && (seams.shape.nonNullableTypeNames ?? []).contains(nominal);
+		return nominal != null && (seams.shape.nonNullableTypeNames ?? []).contains(nominal) && !spelledAsTypeParam(proof, nominal);
 	}
 
 	/**

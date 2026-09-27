@@ -6,7 +6,10 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.MemberKinds;
 import anyparse.query.NodeShape;
 import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
+import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.SourceText;
+import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -82,10 +85,33 @@ private typedef AliasPair = { a: String, b: String };
  * A map/key pair proven present by a dominating `m.exists(k)` guard: the two operand expressions by their verbatim source
  * text, plus `names` — every identifier either of them mentions, so any write to one kills the fact. Both operands must be
  * PURE REF PATHS (identifier, field access, index access, a leaf literal), never a call: text identity plus the write-kill
- * is the whole soundness argument, and a call could answer a different map on the second evaluation. A same-map/key `m[k]`
- * read under the guard is not seeded `MaybeNull`, and `NullFacts.indexPresent` reports it to the point-wise consumer.
+ * is the whole soundness argument, and a call could answer a different map on the second evaluation. A same-map/key `m[k]` read
+ * under the guard is not seeded `MaybeNull`, and `NullFacts.indexPresent` reports it to the point-wise consumer. A `value` fact
+ * is the same pair proven by the ENTRY rather than by `exists`: a `m[k] != null` guard, or a write of a non-null value to
+ * `m[k]`. Since a call or a write through a path can change an entry without writing either name, every call, `new`, non-name
+ * write and loop entry kills the value facts, so a value fact holds only for a re-read with nothing but name reads between.
  */
-private typedef ExistsFact = { map: String, key: String, names: Array<String> };
+private typedef ExistsFact = {
+	map: String,
+	key: String,
+	names: Array<String>,
+	value: Bool
+};
+
+/**
+ * A function whose truth proves some of its arguments non-null: its body is one `return` of a
+ * conjunction holding `param != null` for each of `nonNullParams` (indices into its `arity`
+ * parameters), with each parameter's written type (`paramTypes`, whitespace-stripped, null when
+ * unwritten). `body` is the span of the type body declaring it — a bare call to `name` binds to
+ * it only from inside that span.
+ */
+private typedef NonNullPredicate = {
+	name: String,
+	body: Span,
+	arity: Int,
+	nonNullParams: Array<Int>,
+	paramTypes: Array<Null<String>>
+};
 
 /**
  * Per-function context for one `NullFlow` walk: the grammar-derived node-kind
@@ -138,6 +164,13 @@ private typedef FlowCtx = {
 	var nullCoalAssignKind: Null<String>;
 	var nullCoalKind: Null<String>;
 	var callKind: Null<String>;
+	var newExprKind: Null<String>;
+
+	/** The file's non-null predicate functions (`nonNullPredicates`), which a positive call to narrows its arguments. */
+	var nonNullPredicates: Array<NonNullPredicate>;
+
+	/** The written type of the binding an argument identifier resolves to, whitespace-stripped, or null. */
+	var argType: QueryNode -> Null<String>;
 	var fieldAccessKind: Null<String>;
 	var nullSafeAccessKind: Null<String>;
 	var indexAccessKind: Null<String>;
@@ -354,14 +387,162 @@ final class NullFlow {
 	 */
 	public static function analyze(
 		root: QueryNode, shape: RefShape, source: String, visit: (QueryNode, NullFacts) -> Void, ?seed: (QueryNode) -> Bool,
-		?declaredNullable: (QueryNode) -> Bool
+		?declaredNullable: (QueryNode) -> Bool, ?typeSources: Map<Int, String>
 	): Void {
 		final identKind: Null<String> = shape.identKind;
 		if (identKind == null) return;
 		final id: String = identKind;
+		final predicates: Array<NonNullPredicate> = typeSources == null ? [] : nonNullPredicates(root, shape, id, typeSources);
+		final written: Map<Int, String> = typeSources ?? [];
+		final argType: QueryNode -> Null<String> = arg -> TypeResolver.identDeclaredTypeSource(arg, shape, root, () -> written, false);
 		forEachFunctionUnit(
-			root, shape, (body, paramNames) -> analyzeBody(body, shape, source, id, paramNames, visit, seed, declaredNullable)
+			root, shape,
+			(body, paramNames) -> analyzeBody(body, shape, source, id, paramNames, visit, seed, declaredNullable, predicates, argType)
 		);
+	}
+
+	/**
+	 * The file's NON-NULL PREDICATES: member functions whose truth proves an argument non-null, so a
+	 * guard `if (!check(item)) return;` narrows `item` like `if (item == null) return;` would. A
+	 * positive whitelist, every clause of which a call site must be able to rely on:
+	 *
+	 *  - the body is ONE `return` of a conjunction (`&&`, parentheses unwrapped) with a
+	 *    `param != null` conjunct, and writes nothing — so a true result means the argument passed
+	 *    was not null;
+	 *  - the member cannot be replaced: `inline`, `static` or `final`, and not `dynamic`, `macro`,
+	 *    `overload` or `@:overload` — a subclass override or a reassigned body would answer instead;
+	 *  - no rest parameter, and its name is declared nowhere else in the file (no local, parameter,
+	 *    capture or second member of that name), so a bare call inside the declaring type body can
+	 *    only bind to it.
+	 *
+	 * Anything else is not a predicate. A call must be bare, pass exactly `arity` arguments, and sit inside the
+	 * declaring type body, and an argument counts only when its binding is written with the SAME type text as the
+	 * parameter (`predicateArgs`): a different type may reach the parameter through an implicit conversion (an
+	 * abstract's `@:from` / `@:to`) that turns a null argument into a non-null parameter. The written types come
+	 * from `TypeInfoProvider.declaredTypeSources`, so a consumer passing none to `analyze` gets no predicates at all.
+	 */
+	private static function nonNullPredicates(
+		root: QueryNode, shape: RefShape, identKind: String, typeSources: Map<Int, String>
+	): Array<NonNullPredicate> {
+		final maybeNotEq: Null<String> = shape.notEqKind;
+		if (maybeNotEq == null) return [];
+		final notEqKind: String = maybeNotEq;
+		final fnKinds: Array<String> = (
+			shape.functionKinds ?? []
+		).concat(shape.finalModifierMemberKind == null ? [] : [shape.finalModifierMemberKind]);
+		final declKinds: Array<String> = BinderScan.binderKinds(shape).concat(fnKinds).concat(shape.fieldDeclKinds ?? []);
+		final modifierKinds: Array<String> = (
+			shape.visibilityModifierKinds ?? []
+		).concat(shape.modifierOrderKinds ?? []).concat(META_KINDS);
+		final declared: Map<String, Int> = [];
+		function count(node: QueryNode): Void {
+			final name: Null<String> = node.name;
+			if (name != null && declKinds.contains(node.kind)) declared[name] = (declared[name] ?? 0) + 1;
+			for (c in node.children) count(c);
+		}
+		count(root);
+		final out: Array<NonNullPredicate> = [];
+		function walk(node: QueryNode): Void {
+			final decl: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
+			final bodySpan: Null<Span> = decl?.nameNode.span;
+			if (decl != null && bodySpan != null) for (fn in decl.nameNode.children) {
+				final name: Null<String> = fn.name;
+				if (name == null || !fnKinds.contains(fn.kind) || declared[name] != 1) continue;
+				final modifiers: Array<QueryNode> = MemberKinds.precedingModifiers(fn, decl.nameNode, modifierKinds).concat(fn.children);
+				final predicate: Null<NonNullPredicate> = predicateOf(
+					fn, name, bodySpan, modifiers, shape, identKind, notEqKind, typeSources
+				);
+				if (predicate != null) out.push(predicate);
+			}
+			for (c in node.children) walk(c);
+		}
+		walk(root);
+		return out;
+	}
+
+	/** `fn` as a `NonNullPredicate` under `nonNullPredicates`' whitelist, given its modifier run `modifiers`, else null. */
+	private static function predicateOf(
+		fn: QueryNode, name: String, bodySpan: Span, modifiers: Array<QueryNode>, shape: RefShape, identKind: String, notEqKind: String,
+		typeSources: Map<Int, String>
+	): Null<NonNullPredicate> {
+		inline function carries(kind: Null<String>): Bool return kind != null && modifiers.exists(m -> m.kind == kind);
+		final overloadMeta: Null<String> = shape.signatureOverloadMetaName;
+		if (
+			carries(shape.dynamicModifierKind) || carries(shape.macroModifierKind) || carries(shape.overloadModifierKind)
+			|| overloadMeta != null && modifiers.exists(m -> META_KINDS.contains(m.kind) && m.name == overloadMeta)
+		)
+			return null;
+		if (fn.kind != shape.finalModifierMemberKind && !carries(shape.inlineModifierKind) && !carries(shape.staticModifierKind))
+			return null;
+		final params: Array<QueryNode> = fn.children.filter(c -> (shape.paramKinds ?? []).contains(c.kind));
+		if (params.exists(p -> p.kind == shape.restParamKind)) return null;
+		final returned: Null<QueryNode> = soleReturnedExpr(fn, shape);
+		if (returned == null || (shape.writeParentKinds ?? []).exists(k -> MemberKinds.subtreeContainsKind(returned, k))) return null;
+		final conjuncts: Array<QueryNode> = [];
+		function flatten(n: QueryNode): Void {
+			if (n.kind == BOOL_AND_KIND || n.kind == shape.parenKind && n.children.length == 1)
+				for (c in n.children) flatten(c)
+			else
+				conjuncts.push(n);
+		}
+		flatten(returned);
+		final nonNullParams: Array<Int> = [];
+		for (c in conjuncts) if (c.kind == notEqKind) {
+			final operand: Null<String> = nullComparisonOperand(c, identKind, shape.nullLiteralKind)?.name;
+			final index: Int = params.findIndex(p -> p.name == operand);
+			if (operand != null && index >= 0 && !nonNullParams.contains(index)) nonNullParams.push(index);
+		}
+		final paramTypes: Array<Null<String>> = [
+			for (p in params) {
+				final span: Null<Span> = p.span;
+				final written: Null<String> = span == null ? null : typeSources[span.from];
+				written == null ? null : TypeResolver.stripWs(written);
+			}
+		];
+		return nonNullParams.length == 0 ? null : {
+			name: name,
+			body: bodySpan,
+			arity: params.length,
+			nonNullParams: nonNullParams,
+			paramTypes: paramTypes
+		};
+	}
+
+	/**
+	 * The expression `fn` returns when its whole body is one value `return` — a block holding only
+	 * that statement, or an expression body — else null.
+	 */
+	private static function soleReturnedExpr(fn: QueryNode, shape: RefShape): Null<QueryNode> {
+		final bodies: Array<QueryNode> = fn.children.filter(c -> (shape.functionBodyKinds ?? []).contains(c.kind));
+		if (bodies.length != 1) return null;
+		final body: QueryNode = bodies[0];
+		final wrapped: Bool = body.kind == shape.blockBodyKind || (shape.expressionBodyKinds ?? []).contains(body.kind);
+		if (!wrapped || body.children.length != 1) return null;
+		final ret: QueryNode = body.children[0];
+		return (shape.valueReturnKinds ?? []).contains(ret.kind) && ret.children.length == 1 ? ret.children[0] : null;
+	}
+
+	/**
+	 * The argument names a positive call `call` to a `NonNullPredicate` proves non-null: a bare callee
+	 * naming one whose type body holds the call, exactly `arity` arguments, and each proven argument a
+	 * plain identifier. Empty for any other call.
+	 */
+	private static function predicateArgs(call: QueryNode, ctx: FlowCtx): Array<String> {
+		final span: Null<Span> = call.span;
+		if (span == null || call.children.length == 0 || call.children[0].kind != ctx.identKind) return [];
+		final callee: Null<String> = call.children[0].name;
+		final predicate: Null<NonNullPredicate> = ctx.nonNullPredicates.find(
+			p -> p.name == callee && p.body.from <= span.from && span.to <= p.body.to && p.arity == call.children.length - 1
+		);
+		if (predicate == null) return [];
+		final out: Array<String> = [];
+		for (i in predicate.nonNullParams) {
+			final arg: QueryNode = call.children[i + 1];
+			final name: Null<String> = arg.name;
+			final written: Null<String> = predicate.paramTypes[i];
+			if (arg.kind == ctx.identKind && name != null && written != null && ctx.argType(arg) == written) out.push(name);
+		}
+		return out;
 	}
 
 	/**
@@ -595,7 +776,8 @@ final class NullFlow {
 	 */
 	private static function analyzeBody(
 		body: QueryNode, shape: RefShape, source: String, identKind: String, paramNames: Array<String>,
-		visit: (QueryNode, NullFacts) -> Void, seed: Null<(QueryNode) -> Bool>, declaredNullable: Null<(QueryNode) -> Bool>
+		visit: (QueryNode, NullFacts) -> Void, seed: Null<(QueryNode) -> Bool>, declaredNullable: Null<(QueryNode) -> Bool>,
+		predicates: Array<NonNullPredicate>, argType: QueryNode -> Null<String>
 	): Void {
 		final localDeclKinds: Array<String> = shape.localDeclKinds ?? [];
 		final nestedFnKinds: Array<String> = MemberKinds.nestedFunctionKinds(shape);
@@ -631,6 +813,9 @@ final class NullFlow {
 			nullCoalAssignKind: shape.nullCoalAssignKind,
 			nullCoalKind: shape.nullCoalesceKind,
 			callKind: shape.callKind,
+			newExprKind: shape.newExprKind,
+			nonNullPredicates: predicates,
+			argType: argType,
 			fieldAccessKind: shape.fieldAccessKind,
 			nullSafeAccessKind: shape.nullSafeAccessKind,
 			indexAccessKind: shape.indexAccessKind,
@@ -693,8 +878,12 @@ final class NullFlow {
 			handleNullCoalescing(node, state, ctx);
 		else if (ctx.callKind != null && kind == ctx.callKind) {
 			for (c in node.children) walk(c, state, ctx);
+			killValueFacts(state);
 			handleNullAssertionCall(node, state, ctx);
 			handleRelationalAssertCall(node, state, ctx);
+		} else if (ctx.newExprKind != null && kind == ctx.newExprKind) {
+			for (c in node.children) walk(c, state, ctx);
+			killValueFacts(state);
 		} else if (ctx.blockKinds.contains(kind))
 			handleBlock(node, state, ctx);
 		else
@@ -715,8 +904,15 @@ final class NullFlow {
 		if (node.children.length == 0) return;
 		final target: QueryNode = node.children[0];
 		final name: Null<String> = target.name;
-		if (target.kind != ctx.identKind || name == null) return;
 		final rhs: Null<QueryNode> = node.children.length >= 2 ? node.children[1] : null;
+		if (target.kind != ctx.identKind || name == null) {
+			// A write through anything but a plain name may land on any map entry; a non-null value
+			// assigned to `m[k]` itself is then the one entry known.
+			killValueFacts(state);
+			final written: Null<ExistsFact> = node.kind == ctx.assignKind && isNonNullRhs(rhs, ctx) ? indexFact(target, ctx) : null;
+			if (written != null) state.present.push(written);
+			return;
+		}
 		// A write invalidates every aux fact naming the target — the mark paths never route through clearName.
 		killAuxFacts(state, name);
 		if (node.kind == ctx.assignKind && isNonNullRhs(rhs, ctx))
@@ -748,7 +944,10 @@ final class NullFlow {
 			setState(state, intersect(state, rhsState));
 		}
 		final name: Null<String> = target.name;
-		if (target.kind != ctx.identKind || name == null) return;
+		if (target.kind != ctx.identKind || name == null) {
+			killValueFacts(state);
+			return;
+		}
 		// A `??=` may reassign the target — every aux fact naming it is stale (the
 		// markNonNull path below never routes through clearName's kill).
 		killAuxFacts(state, name);
@@ -904,6 +1103,8 @@ final class NullFlow {
 	/** Loop: clear every name the loop assigns before walking it (back-edge soundness); the post-state is that cleared state. */
 	private static function handleLoop(node: QueryNode, state: FlowState, ctx: FlowCtx): Void {
 		killWritten(node, state, ctx);
+		// The body is walked once, so a call late in it never reaches the next pass's reads.
+		killValueFacts(state);
 		final bodyState: FlowState = copyState(state);
 		if (!ctx.preTestLoopKinds.contains(node.kind) || node.children.length < 2) {
 			for (c in node.children) walk(c, bodyState, ctx);
@@ -1290,6 +1491,10 @@ final class NullFlow {
 				cmpKind;
 			final flipCombine: String = combineKind == BOOL_AND_KIND ? BOOL_OR_KIND : BOOL_AND_KIND;
 			collectNarrow(cond.children[0], out, ctx, flipCmp, flipCombine, provesNonNull, viaSafeNav);
+		} else if (provesNonNull && cmpKind != null && cmpKind == ctx.notEqKind && kind == ctx.callKind) {
+			// A true NON-NULL PREDICATE call proves its argument the way `x != null` does — in the
+			// polarity a `!= null` holds here. The compiler's own narrowing is not claimed for it.
+			for (n in predicateArgs(cond, ctx)) (viaSafeNav ?? out).push(n);
 		}
 	}
 
@@ -1334,7 +1539,7 @@ final class NullFlow {
 				for (x in a.aliases) if (b.aliases.exists(q -> (q.a == x.a && q.b == x.b) || (q.a == x.b && q.b == x.a))) x
 			],
 			present: [
-				for (e in a.present) if (b.present.exists(q -> q.map == e.map && q.key == e.key)) e
+				for (e in a.present) if (b.present.exists(q -> q.map == e.map && q.key == e.key && q.value == e.value)) e
 			]
 		};
 	}
@@ -1574,8 +1779,15 @@ final class NullFlow {
 		final method: Null<String> = callee.name;
 		if (callee.kind != ctx.fieldAccessKind || method == null || !ctx.mapExistsMethods.contains(method) || callee.children.length != 1)
 			return null;
-		final recv: QueryNode = callee.children[0];
-		final key: QueryNode = cond.children[1];
+		return pairFact(callee.children[0], cond.children[1], ctx, false);
+	}
+
+	/**
+	 * The fact that the pair (`recv`, `key`) is present — a VALUE fact when `value`, proven by the
+	 * entry itself rather than by `exists` — or null when either operand is not a PURE REF PATH, has no
+	 * source text, or mentions a closure-captured name.
+	 */
+	private static function pairFact(recv: QueryNode, key: QueryNode, ctx: FlowCtx, value: Bool): Null<ExistsFact> {
 		if (!pureRefPath(recv, ctx) || !pureRefPath(key, ctx)) return null;
 		final mapText: String = pathText(recv, ctx.source);
 		final keyText: String = pathText(key, ctx.source);
@@ -1584,7 +1796,47 @@ final class NullFlow {
 		collectPathNames(recv, names, ctx);
 		collectPathNames(key, names, ctx);
 		for (n in names) if (ctx.captured.contains(n)) return null;
-		return { map: mapText, key: keyText, names: names };
+		return {
+			map: mapText,
+			key: keyText,
+			names: names,
+			value: value
+		};
+	}
+
+	/** The value fact of an index read `rawNode` (`m[k]`, parentheses unwrapped), else null. */
+	private static function indexFact(rawNode: QueryNode, ctx: FlowCtx): Null<ExistsFact> {
+		final node: QueryNode = BoolExprShape.unwrapParens(rawNode, ctx.parenKind);
+		return ctx.indexAccessKind != null && node.kind == ctx.indexAccessKind && node.children.length == 2
+			? pairFact(node.children[0], node.children[1], ctx, true)
+			: null;
+	}
+
+	/**
+	 * The value fact `rawCond` states when it compares an index read against `null` with `cmpKind`
+	 * (`m[k] != null`, `null != m[k]`, parentheses unwrapped), else null. `collectExists` passes the
+	 * operator whose truth on this branch means the entry is not null.
+	 */
+	private static function nullCompareFact(rawCond: QueryNode, ctx: FlowCtx, cmpKind: Null<String>): Null<ExistsFact> {
+		final cond: QueryNode = BoolExprShape.unwrapParens(rawCond, ctx.parenKind);
+		final nullLit: Null<String> = ctx.nullLitKind;
+		if (cmpKind == null || nullLit == null || cond.kind != cmpKind || cond.children.length != 2) return null;
+		final left: QueryNode = cond.children[0];
+		final right: QueryNode = cond.children[1];
+		return if (right.kind == nullLit)
+			indexFact(left, ctx)
+		else if (left.kind == nullLit)
+			indexFact(right, ctx)
+		else
+			null;
+	}
+
+	/**
+	 * Drop every VALUE fact: a call, a `new`, or a write through anything but a plain name may have
+	 * changed a map entry without writing either operand's name, which is all the name-keyed kill sees.
+	 */
+	private static function killValueFacts(state: FlowState): Void {
+		if (state.present.exists(e -> e.value)) state.present = state.present.filter(e -> !e.value);
 	}
 
 	/**
@@ -1644,8 +1896,10 @@ final class NullFlow {
 			collectExists(cond.children[0], out, ctx, combineKind, wantNegated);
 		} else if (ctx.notKind != null && kind == ctx.notKind && cond.children.length == 1) {
 			collectExists(cond.children[0], out, ctx, combineKind == BOOL_AND_KIND ? BOOL_OR_KIND : BOOL_AND_KIND, !wantNegated);
-		} else if (!wantNegated) {
-			final fact: Null<ExistsFact> = existsGuardFact(cond, ctx);
+		} else {
+			final fact: Null<ExistsFact> = wantNegated
+				? nullCompareFact(cond, ctx, ctx.eqKind)
+				: existsGuardFact(cond, ctx) ?? nullCompareFact(cond, ctx, ctx.notEqKind);
 			if (fact != null) out.push(fact);
 		}
 	}

@@ -1127,6 +1127,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.CommentWidthCheckTest#testTheFixReflowsIntoTheWidthWordForWord :: control :: M-COMMENT-REFLOW-ABSENT',
 			'unit.check.CommentWidthCheckTest#testTwoIdenticalWideLinesAreTwoLines :: control :: M-COMMENT-WIDTH-PROTECTION-BY-TEXT',
 			'unit.check.ComparisonToBooleanCheckTest#testFieldAccessBoolMemberFlagged :: control :: M-PATHWALK-NULL',
+			'unit.check.ComparisonToBooleanCheckTest#testResolvedMemberTypedByTypeParamSkipped :: control :: M-CMPBOOL-RESOLVED-TYPE-PARAM-BLIND',
+			'unit.check.ComparisonToBooleanCheckTest#testTypeParamSpelledLikeBoolSkipped :: control :: M-NULLITY-TYPE-PARAM-BLIND',
 			'unit.check.CrossScopeSoundnessTest#testAnUnreadableReflectiveFileLicensesNothingExtra :: control :: '
 				+ 'M-REFLECTION-UNREADABLE-BLIND,M-INLINE-UNREADABLE-BLIND',
 			'unit.check.CrossScopeSoundnessTest#testNarrowReportFindsNothingTheWideRunDoesNot :: control :: '
@@ -1492,6 +1494,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PossibleNullDereferenceTest#testFieldPathMapExistsGuardedNotFlagged :: control :: M-EXISTS-GUARD-BLIND',
 			'unit.check.PossibleNullDereferenceTest#testFieldPathMapReceiverFlagged :: control :: M-NULLABLE-NO-CHAIN',
 			'unit.check.PossibleNullDereferenceTest#testNullWrappedMapFlagged :: control :: M-NULLABLE-WRAPPER-OPAQUE',
+			'unit.check.PossibleNullDereferenceTest#testRereadMapEntryAfterAChangeStillFlagged :: control :: M-NULLFLOW-VALUE-FACT-UNKILLED',
+			'unit.check.PossibleNullDereferenceTest#testRereadMapEntryNotFlagged :: control :: M-NULLFLOW-VALUE-FACT-BLIND',
 			'unit.check.PreferBindCheckTest#testAbstractInstanceMethodNotFlagged :: control :: M-BIND-ABSTRACT-SELF',
 			'unit.check.PreferBindCheckTest#testClosurelessCalleeNotFlagged :: control :: M-BIND-METHOD-UNPROVEN,M-BIND-CLOSURELESS-CALLEE',
 			'unit.check.PreferBindCheckTest#testFieldArgumentNotFlagged :: control :: M-BIND-FIELD-ARG',
@@ -1809,8 +1813,11 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-DECL-INIT-NONNULL-BLIND,M-DECL-INIT-LITERAL-BLIND',
 			'unit.check.UnguardedNullableDerefTest#testExistsGuardEarlyReturnPathKeySuppressed :: control :: M-EXISTS-GUARD-BLIND',
 			'unit.check.UnguardedNullableDerefTest#testFieldPathMapSeedFlagged :: control :: M-NULLABLE-NO-CHAIN',
+			'unit.check.UnguardedNullableDerefTest#testInlinePredicateGuardNotFlagged :: control :: M-NULLFLOW-PREDICATE-BLIND',
+			'unit.check.UnguardedNullableDerefTest#testPredicateAcrossAConversionStillFlagged :: control :: M-NULLFLOW-PREDICATE-TYPE-UNCHECKED',
 			'unit.check.UnguardedNullableDerefTest#testReflectCopyBindingNotFlagged :: control :: M-NULLABLE-FLOW-EXCLUDE-NONE',
 			'unit.check.UnguardedNullableDerefTest#testSafeNavGuardNarrowsRoot :: control :: M-SAFENAV-NO-NARROW',
+			'unit.check.UnguardedNullableDerefTest#testUnprovenPredicateStillFlagged :: control :: M-NULLFLOW-PREDICATE-UNCHECKED',
 			'unit.check.UnnecessaryNullCheckCheckTest#testTypedefOfNullOperandNotFlagged :: control :: M-PROVER-NULLITY-SKIPPED',
 			'unit.check.UnnecessarySafeNavCheckTest#testTypedefOfNullReceiverNotFlagged :: control :: M-PROVER-NULLITY-SKIPPED',
 			'unit.check.UnreachableCatchTest#testSubtypeAfterSupertypeFlagged :: control :: M-ISSUBTYPE-FALSE',
@@ -2658,6 +2665,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-PATCH-STRADDLED-DOC-UNWATCHED',
 			'unit.query.PatchSliceTest#testDocCodeSampleIndentationSurvives :: control :: M-PATCH-COMMENT-SHAPE-CHECKED',
 			'unit.query.PatchSliceTest#testDocPayloadWithASpaceGutterApplies :: control :: M-PATCH-COMMENT-SHAPE-CHECKED',
+			'unit.query.PatchSliceTest#testFinalClassHeaderIsInTheSearchRegion :: control :: M-DECLSPAN-FINAL-WRAPPER-BLIND',
 			'unit.query.PatchSliceTest#testGrowingPairsUnderOneClassDocAcceptedAtEveryDelta :: control :: M-PATCH-DOCEND-SHIFTS-EVERY-EDIT',
 			'unit.query.PatchSliceTest#testRenamePlusAnUnrelatedInsertElsewhereApplies :: control :: '
 				+ 'M-PATCH-GROWTH-COUNTED-CONTAINER-WIDE',
@@ -2668,6 +2676,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.RefShapeKindProjectionTest#testEveryDeclaredTokenIsOneTheParserCaptures :: control :: '
 				+ 'M-AND-OPERATOR-TEXT-STALE,M-CONSTRUCTOR-NAME-PADDED',
 			'unit.query.RefShapeKindProjectionTest#testEveryProjectedKindIsOneSomeSourceEmits :: control :: M-ELLIPSIS-STMT-TOKEN-STALE',
+			'unit.query.RemoveElementSliceTest#testRemoveFinalClassTakesItsFinal :: control :: M-DECLSPAN-FINAL-WRAPPER-BLIND',
 			'unit.query.RemoveMemberSliceTest#testSiblingRegionsWithOneConditionAreRefusedByCount :: control :: '
 				+ 'M-COND-FRAME-REGION-KEYED,M-COND-FRAME-CONDITION-RAW',
 			'unit.query.RemoveMemberSliceTest#testTwoDeclarationsInOneBranchAreRefusedByCount :: control :: M-REMOVE-MEMBER-BRANCH-BLIND',
@@ -2677,6 +2686,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.SetModifierSliceTest#testAConditionalRegionOutsideTheKeywordRunIsStillServed :: control :: '
 				+ 'M-SETMOD-GUARDED-ANY-VISIBILITY',
 			'unit.query.SetModifierSliceTest#testAnEnumAbstractMemberStillTakesPublic :: control :: M-SETMOD-MODULE-BY-TYPE-KINDS',
+			'unit.query.SetModifierSliceTest#testPrivateOnAFinalClassPrecedesTheFinal :: control :: M-DECLSPAN-FINAL-WRAPPER-BLIND',
 			'unit.query.SpanTypeInfoPinTest#testTypeParamConstraintsAreKeyedByDeclarationAndName :: control :: M-SPANINFO-BOUND-MORE',
 			'unit.query.StdResolverTest#testMultiEntryEnvAnswersTheStdEntry :: control :: M-STD-ENV-ENTRIES',
 			'unit.query.StdResolverTest#testTheStdBesideTheCompilerIsFoundInEitherLayout :: control :: M-STD-SIBLING-HOMEBREW',
@@ -3888,7 +3898,15 @@ class TestDiscoveryParityTest extends Test {
 			'M-GRAPH-BOUND-LOCAL-SCOPE',
 			'M-GRAPH-BOUNDS-BY-FILE',
 			'M-GRAPH-ABSTRACT-UNDER-SLOT',
-			'M-GRAPH-ABSTRACT-PARAM-BOUND'
+			'M-GRAPH-ABSTRACT-PARAM-BOUND',
+			'M-NULLITY-TYPE-PARAM-BLIND',
+			'M-CMPBOOL-RESOLVED-TYPE-PARAM-BLIND',
+			'M-DECLSPAN-FINAL-WRAPPER-BLIND',
+			'M-NULLFLOW-VALUE-FACT-BLIND',
+			'M-NULLFLOW-VALUE-FACT-UNKILLED',
+			'M-NULLFLOW-PREDICATE-BLIND',
+			'M-NULLFLOW-PREDICATE-UNCHECKED',
+			'M-NULLFLOW-PREDICATE-TYPE-UNCHECKED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

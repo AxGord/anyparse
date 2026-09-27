@@ -26,6 +26,23 @@ class RemoveElementSliceTest extends Test {
 		assertRemove(source, 3, 15, true, expected);
 	}
 
+	/**
+	 * Removing a `final class` from the cursor `ClassDecl:X` resolves to — the inner form, one past
+	 * the wrapper's `final` — takes the whole declaration. Deleting only the form left `final`
+	 * behind to glue onto the next declaration, which turned `abstract class Y` into
+	 * `final abstract class Y` at rc 0.
+	 */
+	@:pin('control')
+	@:killer('M-DECLSPAN-FINAL-WRAPPER-BLIND')
+	public function testRemoveFinalClassTakesItsFinal(): Void {
+		final source: String = 'final class X {}\n\nabstract class Y {}\n';
+		assertRemove(source, 1, 7, false, 'abstract class Y {}\n');
+		final documented: String = '/** Doc X. */\n$source';
+		Assert.equals(
+			'removed ClassDecl X: 2 lines, with its doc comment', RemoveElement.describeRemoval(documented, 2, 7, new HaxeQueryPlugin())
+		);
+	}
+
 	/** Remove the first element — its trailing comma goes with it. */
 	public function testRemoveArrayFirst(): Void {
 		final source: String = 'class C {\n\tfunction f():Void {\n\t\tvar a = [1, 2, 3];\n\t}\n}\n';

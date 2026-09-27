@@ -9363,6 +9363,65 @@
 			"find": "? (member == null ? null : boundType(underlying, currentType, member, MEMBER_SCOPE))",
 			"replace": "? underlying",
 			"note": "`this` of an abstract over its own type parameter is taken for a type named like the parameter"
+		},
+		{
+			"name": "M-NULLITY-TYPE-PARAM-BLIND",
+			"type": "anyparse.query.DeclaredNullity",
+			"method": "isTypeParamAt",
+			"force": "false",
+			"note": "a basic value type's spelling is read as the value type even where an enclosing declaration names a type parameter so"
+		},
+		{
+			"name": "M-CMPBOOL-RESOLVED-TYPE-PARAM-BLIND",
+			"type": "anyparse.check.ComparisonToBoolean",
+			"method": "spelledAsTypeParam",
+			"force": "false",
+			"note": "a member type or method return written `Bool` is proven a Bool even where a declaring type or method names a type parameter Bool"
+		},
+		{
+			"name": "M-DECLSPAN-FINAL-WRAPPER-BLIND",
+			"type": "anyparse.query.ElementSpan",
+			"method": "foldingWrapperOf",
+			"force": "null",
+			"note": "a `final class` addressed through its inner form is edited without the wrapper's `final` and the modifier run beside the wrapper"
+		},
+		{
+			"name": "M-NULLFLOW-VALUE-FACT-BLIND",
+			"type": "anyparse.check.NullFlow",
+			"method": "indexFact",
+			"force": "null",
+			"note": "a `m[k] != null` guard or a non-null write to `m[k]` proves nothing about a re-read of the same entry"
+		},
+		{
+			"name": "M-NULLFLOW-VALUE-FACT-UNKILLED",
+			"type": "anyparse.check.NullFlow",
+			"method": "killValueFacts",
+			"find": "if (state.present.exists(e -> e.value)) state.present = state.present.filter(e -> !e.value);",
+			"replace": "return;",
+			"note": "a value fact survives a call, a `new`, a write through a path and a loop's back edge"
+		},
+		{
+			"name": "M-NULLFLOW-PREDICATE-BLIND",
+			"type": "anyparse.check.NullFlow",
+			"method": "predicateArgs",
+			"force": "[]",
+			"note": "a true call to a non-null predicate proves nothing about its argument"
+		},
+		{
+			"name": "M-NULLFLOW-PREDICATE-UNCHECKED",
+			"type": "anyparse.check.NullFlow",
+			"method": "predicateOf",
+			"find": "if (fn.kind != shape.finalModifierMemberKind && ",
+			"replace": "if (false && ",
+			"note": "an overridable member is trusted as a non-null predicate"
+		},
+		{
+			"name": "M-NULLFLOW-PREDICATE-TYPE-UNCHECKED",
+			"type": "anyparse.check.NullFlow",
+			"method": "predicateArgs",
+			"find": " && ctx.argType(arg) == written",
+			"replace": "",
+			"note": "a predicate argument counts whatever its written type, so an implicit @:from / @:to conversion into the parameter launders a null"
 		}
 	]
 }

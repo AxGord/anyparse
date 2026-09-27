@@ -3,6 +3,7 @@ package unit.query;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
 import anyparse.query.Patch;
+import anyparse.query.ReplaceNode;
 import anyparse.query.ReplaceNode.ReplaceTarget;
 import unit.cli.CliFixture;
 import utest.Assert;
@@ -35,6 +36,33 @@ class PatchSliceTest extends Test {
 		final source: String = 'class C {\n\tfunction f():Int {\n\t\tvar a:Int = 1;\n\t\treturn a;\n\t}\n}\n';
 		final expected: String = 'class C {\n\tfunction f():Int {\n\t\tvar a:Int = 2;\n\t\treturn a + 1;\n\t}\n}\n';
 		assertPatch(source, BySelector('FnMember:f'), 'var a:Int = 1;\nreturn a;', 'var a:Int = 2;\nreturn a + 1;', expected);
+	}
+
+	/**
+	 * A `final class` projects as `(FinalDecl (ClassForm X))`: `ClassDecl:X` resolves the inner form,
+	 * whose span starts after `final`, and the `extern` / `@:meta` run sits beside the wrapper. The
+	 * search region is the whole declaration as written, so a fragment spelling its header applies,
+	 * and `replace-node` given the text `apq source --select` prints does not duplicate the `final`.
+	 */
+	@:pin('control')
+	@:killer('M-DECLSPAN-FINAL-WRAPPER-BLIND')
+	public function testFinalClassHeaderIsInTheSearchRegion(): Void {
+		final source: String = 'final class X {}\n\n@:keep final class Z {}\n\nextern final class W {}\n';
+		for (header in ['final class X', '@:keep final class Z', 'extern final class W']) {
+			final name: String = header.charAt(header.length - 1);
+			assertPatch(
+				source, BySelector('ClassDecl:$name'), '$header {}', '$header implements I {}',
+				source.replace('$header {}', '$header implements I {}')
+			);
+		}
+		switch ReplaceNode.replaceNode(
+			source, BySelector('ClassDecl:X'), 'final class X {\n\tvar v:Int;\n}', false, new HaxeQueryPlugin()
+		) {
+			case Ok(text):
+				Assert.equals(source.replace('final class X {}', 'final class X {\n\tvar v:Int;\n}'), text);
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+		}
 	}
 
 	/**

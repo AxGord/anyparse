@@ -444,13 +444,33 @@ final class ElementSpan {
 	 * one declaration disagreed, which is what let a replacement copied out of one of them drop the
 	 * declaration's `@:keep` at rc 0.
 	 *
+	 * A type whose `final` the grammar folds into a WRAPPER rather than a sibling (`(FinalDecl (ClassForm X))`, what
+	 * `RefactorSupport.typeDeclOf` names `ClassDecl`) is lifted to that wrapper first: `--select 'ClassDecl:X'` resolves
+	 * the inner form, whose span starts after `final` and whose siblings hold no modifier run, while the leading `extern`
+	 * / `@:meta` run sits beside the wrapper. Without the lift a fragment spelling `final class X` never occurred in
+	 * `patch`'s search region, and a `replace-node` payload copied from `apq source --select` duplicated the `final`.
+	 *
 	 * `MoveSymbol` and `removeElement` still call the two halves themselves: the first needs the
 	 * UNTRIMMED group end and the modifier run separately, the second already holds the parent.
 	 */
 	public static function declEditSpan(
 		source: String, tree: QueryNode, node: QueryNode, nodeSpan: Span, regions: () -> Array<LexRegion>
 	): Span {
-		return trailingTrimmedSpan(source, declGroupSpan(node, TreePath.parentOf(tree, node), nodeSpan), regions);
+		final parent: Null<QueryNode> = TreePath.parentOf(tree, node);
+		final wrapper: Null<QueryNode> = parent == null ? null : foldingWrapperOf(node, parent);
+		final wrapperSpan: Null<Span> = wrapper?.span;
+		if (wrapper == null || wrapperSpan == null) return trailingTrimmedSpan(source, declGroupSpan(node, parent, nodeSpan), regions);
+		return trailingTrimmedSpan(source, declGroupSpan(wrapper, TreePath.parentOf(tree, wrapper), wrapperSpan), regions);
+	}
+
+	/**
+	 * `parent` when it is the wrapper a type declaration's modifier is folded into and `node` the
+	 * form it wraps — `RefactorSupport.typeDeclOf(parent)` names `node` as the declaration's name
+	 * node — else null.
+	 */
+	public static function foldingWrapperOf(node: QueryNode, parent: QueryNode): Null<QueryNode> {
+		final decl: Null<RefactorSupport.TypeDeclMatch> = RefactorSupport.typeDeclOf(parent);
+		return decl != null && decl.declNode == parent && decl.nameNode == node && parent != node ? parent : null;
 	}
 
 	/**
@@ -528,8 +548,11 @@ final class ElementSpan {
 			source, node, parent, nodeSpan, withDoc, lazyRegions(source, plugin)
 		);
 		final subject: QueryNode = cutSubject(node, parent);
-		final name: Null<String> = subject.name;
-		final what: String = name == null ? subject.kind : '${subject.kind} $name';
+		// A wrapper that folds a type's modifier in reads as the declaration it names (`ClassDecl X`).
+		final decl: Null<RefactorSupport.TypeDeclMatch> = RefactorSupport.typeDeclOf(subject);
+		final kind: String = decl == null ? subject.kind : decl.kind;
+		final name: Null<String> = decl == null ? subject.name : decl.name;
+		final what: String = name == null ? kind : '$kind $name';
 		var lines: Int = 1;
 		var i: Int = cut.span.from;
 		final last: Int = cut.span.to - 1;
