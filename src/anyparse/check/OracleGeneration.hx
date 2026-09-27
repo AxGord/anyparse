@@ -106,6 +106,20 @@ final class OracleGeneration {
 				run.observed[group.key] = observe(group, seen);
 			OracleGenerationLock.dropShared(lock, run.me);
 		}
+		// Every state directory the judging created ignores ITSELF — a `.gitignore` of `*`, the pytest / ruff / mypy
+		// cache shape — so no project lists it in its own ignore file. Written only when missing; a failed write costs one
+		// note per root, never the run.
+		#if (sys || nodejs)
+		final stateRoots: Array<String> = [];
+		for (group in groups) addOnce(stateRoots, Path.directory(Path.directory(stateDir(group))));
+		for (root in stateRoots) {
+			final ignore: String = Path.join([root, '.gitignore']);
+			if (sys.FileSystem.exists(root) && !sys.FileSystem.exists(ignore)) try
+				sys.io.File.saveContent(ignore, '*\n')
+			catch (exception: Exception)
+				notes.push('could NOT write $ignore (${exception.message}) — list $STATE_DIR/ in the project\'s ignore file instead');
+		}
+		#end
 		var attempts: Int = 0;
 		while (true) {
 			regenerate(run, candidates, groups);
@@ -482,8 +496,8 @@ final class OracleGeneration {
 	 * the nearest directory at or above the DECLARING config's directory holding a project marker (`ConfigFinder.projectRoot`),
 	 * else that directory itself: never a walk from the hxml, which could stop at a marker the generation writes into the tree
 	 * it deletes, or climb past a top-level hxml's own project into an enclosing one. Nothing in it is `.hx`, so no scan of
-	 * the project reads it, and a directory input never hashes it (`listTree`); a project keeps it out of version control
-	 * (`.apq/` in its ignore file).
+	 * the project reads it, and a directory input never hashes it (`listTree`); it keeps ITSELF out of version control
+	 * (`prepare` writes a `.gitignore` of `*` into it), so a project lists nothing in its own ignore file.
 	 */
 	public static function stateDir(group: GenerationGroup): String {
 		#if (sys || nodejs)

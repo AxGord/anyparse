@@ -3,6 +3,7 @@ package unit.check;
 import anyparse.check.Check.Violation;
 import anyparse.check.FoldStringLiterals;
 import anyparse.check.Linter;
+import anyparse.check.MacroGate;
 import anyparse.check.PreferInterpolation;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
@@ -10,6 +11,8 @@ import anyparse.runtime.Span;
 import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
+
+using StringTools;
 
 /**
  * The `prefer-interpolation` check: a single-argument `Std.string(x)` is flagged `Info`
@@ -284,6 +287,80 @@ class PreferInterpolationCheckTest extends Test {
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
 		Assert.equals(1, edits.length);
 		Assert.equals("'${e.cloudId}'", edits[0].text);
+	}
+
+	/**
+	 * A `${ … }` block holding nothing but a constant that prints alike on every target is plain text written as a runtime
+	 * conversion: `fold-adjacent-string-literals` used to leave `'${0} ${i + 1}'` behind for `0 + ' ' + (i + 1)`, and this
+	 * is the rule that cleans such a literal up. The fix re-renders the whole literal.
+	 */
+	@:pin('control')
+	@:killer('M-FOLD-CONSTANT-AS-EXPRESSION')
+	@:killer('M-INTERP-CONSTANT-BLOCK-IGNORED')
+	public function testInterpolatedConstantBecomesText(): Void {
+		final src: String = "class C {\n\tfunction f(i:Int):Void {\n\t\tvar s = '${0} ${i + 1}';\n\t}\n}";
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals('this interpolated constant can be plain text', vs[0]?.message);
+		Assert.equals("'0 ${i + 1}'", fixText(src));
+	}
+
+	/** Every constant kind the seam answers, each spelled as the value it prints: hex as decimal, `-0` as `0`, separators dropped. */
+	@:pin('control')
+	@:killer('M-CONSTANT-NEGATIVE-ZERO-SIGNED')
+	public function testEveryInterpolatedConstantKindBecomesItsPrintedText(): Void {
+		Assert.equals(
+			"'16|-1|-16|0|null|true|false|1000'", fixText(wrap("'${0x10}|${-1}|${-0x10}|${-0}|${null}|${true}|${false}|${1_000}'"))
+		);
+	}
+
+	/**
+	 * A `$name` directly in front of the spliced text would read a longer name (`'$x0'` is `x0`), so the re-render braces
+	 * it — the renderer decides that, not this rule.
+	 */
+	@:pin('control')
+	@:killer('M-INTERP-CONSTANT-BLOCK-IGNORED')
+	public function testConstantAfterAShorthandReadBracesTheRead(): Void {
+		Assert.equals("'${x}0'", fixText(body("var x: Int = 1;\n\t\tvar s = '$x${0}';")));
+	}
+
+	/**
+	 * A `Float` prints differently per target (`1.0` is `1` on js, `1.0` on python), `0xFFFFFFFF` wraps to `-1`, and a
+	 * decimal past `2147483647` types as `Float`: none of them is text on every target, so each keeps its block.
+	 */
+	@:pin('control')
+	@:killer('M-CONSTANT-DECIMAL-RANGE-UNCHECKED')
+	@:killer('M-CONSTANT-FLOAT-ADMITTED')
+	@:killer('M-CONSTANT-HEX-RANGE-UNCHECKED')
+	public function testTargetDependentConstantsKeepTheirBlock(): Void {
+		Assert.equals(0, violations(wrap("'${1.5}|${1.0}'")).length);
+		Assert.equals(0, violations(wrap("'${0xFFFFFFFF}|${0x80000000}'")).length);
+		Assert.equals(0, violations(wrap("'${2147483648}'")).length);
+		Assert.equals("'2147483647|2147483647'", fixText(wrap("'${2147483647}|${0x7FFFFFFF}'")));
+	}
+
+	/** An annotation argument is read as syntax, so its interpolated constant stays as written. */
+	@:pin('control')
+	@:killer('M-INTERP-CONSTANT-IN-META')
+	public function testInterpolatedConstantInAnnotationNotFlagged(): Void {
+		Assert.equals(0, violations("class C {\n\t@:m('${0}')\n\tfunction f():Void {}\n}").length);
+	}
+
+	/**
+	 * A macro reads its arguments as SYNTAX, and one keyed by a literal's text (TM's `Lang.t('text')`) sees every rewrite of
+	 * this rule as a different key: both the constant fix and the `${Std.string(x)}` peel stay report-only there, refused by
+	 * the same `MacroGate` `fold-adjacent-string-literals` asks. The same shapes outside the macro call are still fixed.
+	 */
+	@:pin('control')
+	@:killer('M-INTERP-MACRO-ARGUMENT-REWRITTEN')
+	public function testMacroArgumentIsReportedButNotFixed(): Void {
+		final src: String = 'class L { public static macro function t(e: haxe.macro.Expr) { return e; } }\n'
+			+ "class C {\n\tfunction f(x:Int):Void {\n\t\tvar a = L.t('${0} a');\n\t\tvar b = L.t('v=${Std.string(x)}');\n\t}\n}";
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(2, vs.length);
+		for (v in vs) Assert.isTrue(v.message.endsWith(MacroGate.SYNTAX_REFUSAL), 'the macro gate refuses it: ${v.message}');
+		Assert.equals('<0 edits>', fixText(src));
+		Assert.equals("'0 a'", fixText(wrap("'${0} a'")));
 	}
 
 	private function wrap(expr: String): String {

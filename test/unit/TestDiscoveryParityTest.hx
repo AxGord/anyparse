@@ -1280,6 +1280,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.FieldWriteResolutionScopeTest#testThirdPartySubtypeWriteVetoesFinal :: control :: M-WRITEINDEX-PROJECT-FINAL',
 			'unit.check.FieldWriteResolutionScopeTest#testThirdPartySubtypeWriteVetoesReadOnly :: control :: M-WRITEINDEX-PROJECT-READONLY',
 			'unit.check.FieldWriteResolutionScopeTest#testThirdPartyUnresolvedWriteDoesNotVeto :: control :: M-ADMITS-TRUE',
+			'unit.check.FoldStringLiteralsCheckTest#testConstantOperandMergesAsText :: control :: M-FOLD-CONSTANT-AS-EXPRESSION',
 			'unit.check.HaxeSpawnTest#testACancelledShellJobTakesItsChildrenWithIt :: control :: ' + 'M-DRIVER-KILLS-ONLY-THE-SHELL',
 			'unit.check.HaxeSpawnTest#testAFailureEndsTheJobsDeclaredAfterIt :: control :: ' + 'M-DRIVER-NEVER-STOPS',
 			'unit.check.HaxeSpawnTest#testAJobPastItsTimeoutIsKilled :: control :: ' + 'M-DRIVER-NO-TIMEOUT',
@@ -1454,6 +1455,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-GENERATE-STATE-BY-CONFIG-ROOT,M-GENERATE-STATE-BY-SPELLING,M-GENERATE-STATE-IN-OUTPUT-DIR',
 			'unit.check.OracleGenerationTest#testGenerationsAreWaitedOnInLockOrder :: control :: ' + 'M-GENERATE-ORDER-BY-KEY',
 			'unit.check.OracleGenerationTest#testOnlyOneRunTakesOverADeadLock :: control :: ' + 'M-GENERATE-TAKEOVER-UNVERIFIED',
+			'unit.check.OracleGenerationTest#testTheGenerationStateIgnoresItself :: control :: '
+				+ 'M-GENERATE-IGNORE-OVERWRITTEN,M-GENERATE-STATE-NOT-IGNORED',
 			'unit.check.OracleGenerationTest#testTheGenerationStateIsSharedAcrossTempDirectories :: control :: '
 				+ 'M-GENERATE-STATE-IN-TMPDIR',
 			'unit.check.OracleGenerationTest#testTheLibraryStateTheHxmlNamesIsAnInput :: control :: '
@@ -1582,6 +1585,18 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PreferInlineCheckTest#testOwnFileBuildMacroTokenCostsNoResolutionIndex :: control :: M-INLINE-LOCAL-BUILD-MACRO',
 			'unit.check.PreferInlineCheckTest#testQualifiedSupertypeKeySplitsTheTwinFromTheRealSubtypesOwner :: control :: '
 				+ 'M-INLINE-SUBTYPE-REPORT-INDEX',
+			'unit.check.PreferInterpolationCheckTest#testConstantAfterAShorthandReadBracesTheRead :: control :: '
+				+ 'M-INTERP-CONSTANT-BLOCK-IGNORED',
+			'unit.check.PreferInterpolationCheckTest#testEveryInterpolatedConstantKindBecomesItsPrintedText :: control :: '
+				+ 'M-CONSTANT-NEGATIVE-ZERO-SIGNED',
+			'unit.check.PreferInterpolationCheckTest#testInterpolatedConstantBecomesText :: control :: '
+				+ 'M-FOLD-CONSTANT-AS-EXPRESSION,M-INTERP-CONSTANT-BLOCK-IGNORED',
+			'unit.check.PreferInterpolationCheckTest#testInterpolatedConstantInAnnotationNotFlagged :: control :: '
+				+ 'M-INTERP-CONSTANT-IN-META',
+			'unit.check.PreferInterpolationCheckTest#testMacroArgumentIsReportedButNotFixed :: control :: '
+				+ 'M-INTERP-MACRO-ARGUMENT-REWRITTEN',
+			'unit.check.PreferInterpolationCheckTest#testTargetDependentConstantsKeepTheirBlock :: control :: '
+				+ 'M-CONSTANT-DECIMAL-RANGE-UNCHECKED,M-CONSTANT-FLOAT-ADMITTED,M-CONSTANT-HEX-RANGE-UNCHECKED',
 			'unit.check.PreferInterpolationCheckTest#testTypedefOfNullArgumentNotFlagged :: control :: M-INTERP-NULLITY-SKIPPED',
 			'unit.check.PreferKeyValueLoopCheckTest#testConstructorCallIsReportOnly :: control :: M-ELEMENT-LOOP-NEW-EXPR',
 			'unit.check.PreferKeyValueLoopCheckTest#testIndexOnlyLoopLeftToValueLoop :: control :: M-KV-NOOPENER-INDEX-ONLY',
@@ -3244,6 +3259,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-GENERATE-REJUDGE-UNBOUNDED',
 			'M-GENERATE-STATE-IN-TMPDIR',
 			'M-GENERATE-STATE-DIR-HASHED',
+			'M-GENERATE-STATE-NOT-IGNORED',
+			'M-GENERATE-IGNORE-OVERWRITTEN',
 			'M-GENERATE-ORDER-BY-KEY',
 			'M-GENERATE-ENDJOB-PID-ONLY',
 			'M-GENERATE-SHARE-JUDGES-STALENESS',
@@ -3981,7 +3998,15 @@ class TestDiscoveryParityTest extends Test {
 			'M-LINT-SUMMARY-ONE-SHAPE',
 			'M-LINT-SUMMARY-THRESHOLD-UNREAD',
 			'M-MAGIC-CALLARG-BLIND',
-			'M-MAGIC-CALLARG-SUFFIX-LOOSE'
+			'M-MAGIC-CALLARG-SUFFIX-LOOSE',
+			'M-INTERP-CONSTANT-BLOCK-IGNORED',
+			'M-FOLD-CONSTANT-AS-EXPRESSION',
+			'M-CONSTANT-NEGATIVE-ZERO-SIGNED',
+			'M-CONSTANT-FLOAT-ADMITTED',
+			'M-CONSTANT-HEX-RANGE-UNCHECKED',
+			'M-CONSTANT-DECIMAL-RANGE-UNCHECKED',
+			'M-INTERP-CONSTANT-IN-META',
+			'M-INTERP-MACRO-ARGUMENT-REWRITTEN'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

@@ -12,6 +12,7 @@ import anyparse.check.OracleGeneration;
 import anyparse.check.OracleGenerationLock;
 import anyparse.query.Cli;
 import anyparse.query.cli.command.LintFixVerify;
+import haxe.io.Path;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
@@ -874,6 +875,35 @@ final class OracleGenerationTest extends Test {
 			'its state is in the project'
 		);
 		CliFixture.removeDir(other);
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * The state directory ignores ITSELF: the first generation leaves `<root>/.apq/.gitignore` holding `*`, so no project
+	 * lists `.apq/` in its own ignore file — and an ignore file already there is the project's, never rewritten.
+	 */
+	@:pin('control')
+	@:killer('M-GENERATE-IGNORE-OVERWRITTEN')
+	@:killer('M-GENERATE-STATE-NOT-IGNORED')
+	public function testTheGenerationStateIgnoresItself(): Void {
+		#if (sys || nodejs)
+		final dir: String = fixture();
+		final config: OracleConfig = entry(dir, WRITE, ['$dir/input.txt']);
+		final ignore: String =
+			'${Path.directory(Path.directory(OracleGeneration.stateDir(OracleGeneration.groupsOf([config])[0])))}/.gitignore';
+		Assert.isTrue(ignore.endsWith('/${OracleGeneration.STATE_DIR}/.gitignore'), 'directly inside the state directory: $ignore');
+		final notes: Array<String> = OracleGeneration.prepare([config]).notes;
+		OracleGeneration.release([config]);
+		Assert.equals('*\n', FileSystem.exists(ignore) ? File.getContent(ignore) : 'missing', 'the first run ignores the state directory');
+		Assert.equals(1, notes.length, 'and says nothing more than that it generated: $notes');
+		File.saveContent(ignore, 'lock\n');
+		File.saveContent('$dir/input.txt', 'two');
+		OracleGeneration.prepare([config]);
+		OracleGeneration.release([config]);
+		Assert.equals('lock\n', File.getContent(ignore), 'an ignore file already there is left alone');
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');

@@ -68,8 +68,20 @@ class FoldStringLiteralsCheckTest extends FoldStringLiteralsCheckTestBase {
 		Assert.equals("'a${name}b'", foldOf('class C { function f(name:String) { final a = "a" + name + "b"; } }'));
 	}
 
+	/** An `Int` operand prints alike on every target, so it merges as the TEXT it prints. */
 	public function testNumericOperandMerges(): Void {
-		Assert.equals("'z${1}'", foldOf('class C { function f() { final a = "z" + 1; } }'));
+		Assert.equals("'z1'", foldOf('class C { function f() { final a = "z" + 1; } }'));
+	}
+
+	/**
+	 * A constant operand is text before the first literal too — `0 + ' ' + (i + 1)` used to become `'${0} ${…}'` — while
+	 * a `Float` keeps its block: `1.5` does not print alike on every target.
+	 */
+	@:pin('control')
+	@:killer('M-FOLD-CONSTANT-AS-EXPRESSION')
+	public function testConstantOperandMergesAsText(): Void {
+		Assert.equals("'0 ${(i + 1)}'", foldOf("class C { function f(i:Int) { final a = 0 + ' ' + (i + 1); } }"));
+		Assert.equals("'a${1.5}16true'", foldOf("class C { function f() { final a = 'a' + 1.5 + 0x10 + true; } }"));
 	}
 
 	/** The WHOLE chain is one candidate now — the trailing identifier merges in with the literal pair. */
@@ -158,7 +170,7 @@ class FoldStringLiteralsCheckTest extends FoldStringLiteralsCheckTestBase {
 	}
 
 	public function testConcatNumericOperands(): Void {
-		Assert.equals("'s${3}${4}'", foldOf(wrap("'s' + 3 + 4")));
+		Assert.equals("'s34'", foldOf(wrap("'s' + 3 + 4")));
 	}
 
 	public function testConcatSingleIdentPrefixBeforeIdentChar(): Void {

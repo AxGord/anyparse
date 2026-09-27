@@ -26,15 +26,16 @@ using Lambda;
  * `fold-adjacent-string-literals` grouping runs on, and `renderGroup` / `renderBare`
  * are their inverse. A text fragment is cut twice more: at each `\n` ESCAPE it carries
  * (`splitAtNewlines`), then at each SEPARATOR boundary (`splitAtSeparators`) — together
- * the only seams a literal with no interpolation has. Four Haxe facts live here and nowhere else: `PRIMARY_KINDS`,
+ * the only seams a literal with no interpolation has. Five Haxe facts live here and nowhere else: `PRIMARY_KINDS`,
  * the expression kinds that bind at least as tightly as `+` (so a bare operand needs
  * no parentheses); the single-quoted escaping rules — a lone `$` normalises to `$$`,
  * a double-quoted literal re-escapes `\"` to `"`, `$` to `$$` and `'` to `\'`, and a
  * double-quoted raw whose escapes DECODE to a `$` (`"\x24a"`) may not be re-emitted
  * into a single-quoted literal at all, because the compiler decodes before it scans
- * for `$`, so the text `$a` would become the VALUE of `a` (`HxStringEscape`); and
+ * for `$`, so the text `$a` would become the VALUE of `a` (`HxStringEscape`);
  * `interpolationBlockSafe`, what a `${ … }` block may LEX, beside `nestsHostQuote`,
- * what one may readably HOLD; and `INTRINSIC_MARK`, the affix a target intrinsic's name
+ * what one may readably HOLD; `constantText`, which literals print alike on every target and so decompose as TEXT (an
+ * in-range `Int`, `true` / `false`, `null` — never a `Float`); and `INTRINSIC_MARK`, the affix a target intrinsic's name
  * carries at BOTH ends.
  */
 @:nullSafety(Strict)
@@ -52,6 +53,18 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 	 * ends are required rather than the prefix alone.
 	 */
 	private static inline final INTRINSIC_MARK: String = '__';
+
+	/** The largest `Int` a decimal literal spells, as written: one past it types as `Float`. */
+	private static inline final INT_MAX: String = '2147483647';
+
+	/** How many significant hex digits fill an `Int`: at that width a top digit above `7` wraps negative. */
+	private static inline final HEX_INT_DIGITS: Int = 8;
+
+	/** A decimal `Int` literal with its separators removed: no leading zero, which Haxe rejects. */
+	private static final DECIMAL_LITERAL: EReg = ~/^(0|[1-9][0-9]*)$/;
+
+	/** A hex `Int` literal with its separators removed, its significant digits (at most `HEX_INT_DIGITS`) in group 1. */
+	private static final HEX_LITERAL: EReg = ~/^0[xX]0*([0-9a-fA-F]{1,8})$/;
 
 	/**
 	 * Expression kinds that bind at least as tightly as `+`, so a lone segment of
@@ -197,10 +210,37 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 	public function expressionSegment(node: QueryNode, source: String): Null<ConcatSegment> {
 		final span: Null<Span> = node.span;
 		if (span == null) return null;
+		final constant: Null<String> = constantText(node, source);
+		if (constant != null) return SegText("'", constant);
 		final name: Null<String> = node.name;
 		return node.kind == 'IdentExpr' && name != null && name != 'this'
 			? SegIdent(name)
 			: SegExpr(source.substring(span.from, span.to), PRIMARY_KINDS.contains(node.kind));
+	}
+
+	/**
+	 * An `Int` literal as the decimal value it prints, `true` / `false`, `null`, and a negated `Int` literal (its sign kept
+	 * unless the value is zero). Those print alike on every target; a `Float` does not (`1.0` is `1` on js and `1.0` on
+	 * python), so a `FloatLit` is never answered. An `Int` literal is answered only inside the non-negative 32-bit range —
+	 * `0xFFFFFFFF` wraps to `-1`, and a decimal past `2147483647` types as `Float` — and a decimal with a leading zero is no
+	 * Haxe literal at all.
+	 */
+	public function constantText(node: QueryNode, source: String): Null<String> {
+		final span: Null<Span> = node.span;
+		if (span == null) return null;
+		return switch node.kind {
+			case 'BoolLit', 'NullLit':
+				source.substring(span.from, span.to);
+			case 'IntLit':
+				decimalText(source.substring(span.from, span.to).replace('_', ''));
+			case 'HexLit':
+				hexText(source.substring(span.from, span.to).replace('_', ''));
+			case 'Neg' if (node.children.length == 1 && (node.children[0].kind == 'IntLit' || node.children[0].kind == 'HexLit')):
+				final magnitude: Null<String> = constantText(node.children[0], source);
+				magnitude == null || magnitude == '0' ? magnitude : '-$magnitude';
+			case _:
+				null;
+		};
 	}
 
 	public function renderGroup(segments: Array<ConcatSegment>): Null<String> {
@@ -265,6 +305,21 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 	 */
 	private static inline function splitAtSeparators(segments: Array<ConcatSegment>): Array<ConcatSegment> {
 		return splitText(segments, separatorPieces);
+	}
+
+	/** `digits` — a decimal `Int` literal, separators removed — when it is one inside `INT_MAX`, else null. */
+	private static function decimalText(digits: String): Null<String> {
+		final inRange: Bool = digits.length < INT_MAX.length || (digits.length == INT_MAX.length && digits <= INT_MAX);
+		return DECIMAL_LITERAL.match(digits) && inRange ? digits : null;
+	}
+
+	/** `literal` — a hex `Int` literal, separators removed — as its decimal value when it is at most `0x7FFFFFFF`, else null. */
+	private static function hexText(literal: String): Null<String> {
+		if (!HEX_LITERAL.match(literal)) return null;
+		final digits: String = HEX_LITERAL.matched(1);
+		if (digits.length == HEX_INT_DIGITS && digits.charAt(0) > '7') return null;
+		final value: Null<Int> = Std.parseInt('0x$digits');
+		return value == null ? null : '$value';
 	}
 
 	/**
