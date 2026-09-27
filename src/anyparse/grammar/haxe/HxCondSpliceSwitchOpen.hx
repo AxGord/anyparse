@@ -45,7 +45,6 @@ typedef HxCondSpliceSwitchOpen = {
 	var raw: HxCondSwitchOpenRaw;
 	@:trail('}') @:trivia @:fmt(nestBody, indentCaseLabels, rightCurly, condSwitchOpenCasesNest,
 		caseSiblingSymmetry('caseBody', 'expressionCase')) var cases: Array<HxSwitchCase>;
-	@:trail('}') @:trivia @:fmt(nestBody, rightCurly, emptyBlockBreak) @:sep(';', tailRelax, blockEnded(
-		'stmtNoSemi', sepStartsElement
-	)) var body: Array<HxStatement>;
+	@:trail('}') @:trivia @:fmt(nestBody, rightCurly, emptyBlockBreak, trailSepKeepIf('elementIsConditional_HxStatement')) @:sep(';',
+		tailRelax, blockEnded('stmtNoSemi', sepStartsElement)) var body: Array<HxStatement>;
 }

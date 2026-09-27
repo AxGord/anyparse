@@ -133,12 +133,13 @@ final class WriterRefFieldLowering {
 		// emitOptionalKwBody.
 		final optParts: Array<Expr> = [];
 		// ω-N-break-after-eq: lead+RHS bundle handled in emitOptionalRefLead.
-		if (kwLead != null)
+		if (kwLead != null) {
 			emitOptionalKwBody(
 				ctx, child, optParts, kwLead, fieldName, bodyPolicyFlag, bodyPolicyExprFlag, writeCall, refName, hasElseIf, elseFieldName,
 				prevBodyField, typePath, prevPadTrailing, indentObjArgs
 			);
-		else if (leadText != null)
+			pushTrailOptKeep(optParts, child, trailOptText, structTrailOptAccess, fieldAccess);
+		} else if (leadText != null)
 			emitOptionalRefLead(
 				ctx, child, optParts, leadText, writeCall, prevBodyField, typePath, prevPadTrailing, trailText, trailOptText,
 				hasStructFieldTrailOptSlot, structTrailOptAccess
@@ -666,15 +667,38 @@ final class WriterRefFieldLowering {
 		// inner `ExprStmt`), so the slot can only ever hold a REDUNDANT `;`
 		// (`for (…) { x; };`). Canonicalising it away removes the `for (…) x;;`
 		// hazard at the root instead of defending against it with a keep-braces
-		// gate, and matches what the optional `elseBody` path has always done.
-		if (
-			!hasStructFieldTrailOptSlot || isOptional || hasCondWrap || hasCondWrapEnd || trailOptText == null
-			|| child.fmtHasFlag('dropSingleStmtBraces')
-		)
+		// gate, and matches what the optional `elseBody` path does. The one
+		// exception is `@:fmt(trailOptKeepIf)` - see `pushTrailOptKeep`.
+		if (!hasStructFieldTrailOptSlot || isOptional || hasCondWrap || hasCondWrapEnd || trailOptText == null) return;
+		if (child.fmtHasFlag('dropSingleStmtBraces')) {
+			pushTrailOptKeep(parts, child, trailOptText, structTrailOptAccess, fieldAccess);
 			return;
+		}
 		final sourcePresent: Expr = macro $structTrailOptAccess == false ? _de() : _dt($v{trailOptText});
 		final emit: Expr = semicolonBeforeSiblingWrap(ctx, child, trailOptText, fieldAccess, sourcePresent) ?? sourcePresent;
 		parts.push(valueBraceSymmetryTrailDrop(ctx.braceSym, child, fieldAccess, emit));
+	}
+
+	/**
+	 * `@:fmt(trailOptKeepIf('<predicate>'))`: the statement-body `@:trailOpt` slot a
+	 * `dropSingleStmtBraces` field otherwise never re-emits, kept (from source presence) when the
+	 * named predicate answers true for the SOURCE body. A `#if` region's last branch may end
+	 * unterminated (`else #if d b() #else c() #end;`), and then the `;` after `#end` is the
+	 * statement's own terminator: dropping it emits code that does not compile. The predicate sees
+	 * the field value before any de-brace substitution, so a redundant `;` after a `}` still goes.
+	 * Pushes nothing for a field without the meta or without a source-presence slot.
+	 */
+	private static function pushTrailOptKeep(
+		parts: Array<Expr>, child: ShapeNode, trailOptText: Null<String>, structTrailOptAccess: Null<Expr>, fieldAccess: Expr
+	): Void {
+		final args: Null<Array<String>> = child.fmtReadStringArgs('trailOptKeepIf');
+		if (args == null || structTrailOptAccess == null || trailOptText == null) return;
+		if (args.length != 1)
+			Context.fatalError(
+				'WriterLowering: @:fmt(trailOptKeepIf) expects 1 string arg (predicate), got ${args.length}', Context.currentPos()
+			);
+		final keep: Expr = WriterLowering.astPredCallT(args[0], [fieldAccess]);
+		parts.push(macro $structTrailOptAccess == true && $keep ? _dt($v{trailOptText}) : _de());
 	}
 
 	/**

@@ -1,9 +1,12 @@
 package anyparse.macro;
 
 #if macro
+import anyparse.core.ShapeTree;
+import anyparse.macro.WriterBlankLowering.*;
 import haxe.macro.Context;
 import haxe.macro.Expr;
-import anyparse.macro.WriterBlankLowering.*;
+
+using anyparse.macro.MetaInspect;
 
 /**
  * Pass 3W helpers — the block-mode (`@:lead` + `@:trail` + `@:trivia`) Star
@@ -481,6 +484,9 @@ final class TriviaBlockLowering {
 		// identical to the pre-fix path (no predicate consult).
 		?blockEndedPredicate: String,
 		?blockEndedSchemaPath: String,
+		// `@:fmt(trailSepKeepIf('<pred>'))`: a source `;` after the LAST element is kept, whatever
+		// `blockEndedPredicate` says, when this predicate holds for that element. Null → dropped as before.
+		?trailSepKeepPredicate: String,
 		// ω-cond-leading-doc-lookthrough: when set (only alongside
 		// `beforeDocCommentEmptyLines`), the `_currHasDocComment` scan looks
 		// through a `#if … #end` member to its first inner member's leading
@@ -652,7 +658,7 @@ final class TriviaBlockLowering {
 		// spliced Expr into a BlockStarCtx and delegates to triviaBlockMainExpr.
 		final beginEnd = triviaBlockBeginEndExpr(beginEndType, keepCurlyBlanks, beginTypeKnob, endTypeKnob);
 		final between = triviaBlockBetweenExprs(blankBeforeFinalDocInLeading, betweenMultilineCommentsBlanks);
-		final sep = triviaBlockSepExprs(sepText, blockEnded, blockEndedPredicate, blockEndedSchemaPath);
+		final sep = triviaBlockSepExprs(sepText, blockEnded, blockEndedPredicate, blockEndedSchemaPath, trailSepKeepPredicate);
 		final leaf = triviaBlockLeafExprs(
 			afterFieldsWithDocComments, beforeDocCommentEmptyLines, existingBetweenFields, interMember, indentCaseLabelsGate,
 			lineCommentTrailBlank
@@ -689,6 +695,7 @@ final class TriviaBlockLowering {
 			blockTrailBetweenExpr: between.blockTrailBetweenExpr,
 			blockSepBeforeHardlineExpr: sep.blockSepBeforeHardlineExpr,
 			blockTrailSepEmitExpr: sep.blockTrailSepEmitExpr,
+			elemSepGlueExpr: sep.elemSepGlueExpr,
 			afterFieldsWithDocComments: afterFieldsWithDocComments,
 			existingBetweenFields: existingBetweenFields,
 			beforeDocCommentEmptyLines: beforeDocCommentEmptyLines,
@@ -963,19 +970,49 @@ final class TriviaBlockLowering {
 		};
 	}
 
+	/** The predicate named by a block Star's `@:fmt(trailSepKeepIf('<pred>'))`, or null. */
+	private static function trailSepKeepPredicate(node: ShapeNode): Null<String> {
+		final args: Null<Array<String>> = node.fmtReadStringArgs('trailSepKeepIf');
+		if (args == null) return null;
+		if (args.length != 1)
+			Context.fatalError('@:fmt(trailSepKeepIf) expects 1 string arg (predicate), got ${args.length}', Context.currentPos());
+		return args[0];
+	}
+
 	/**
 	 * Block-Star blockEnded between-element / trailing sep emission (ω-blockended-
 	 * trivia, Session 3 + ω-phase-g + ω-condcomp-stray-semi). Builds the
 	 * `blockSepBeforeHardlineExpr` (inter-element sep when the prior element isn't
 	 * already statement-terminated) and the `blockTrailSepEmitExpr` (source-trail
 	 * sep after the last element). Null sepText / non-blockEnded → no-op.
+	 * `trailSepKeepPredicate` exempts a last element from the predicate drop: a `#if`
+	 * region whose last branch ends unterminated needs the `;` after its `#end`.
+	 * `elemSepGlueExpr` writes an element's sep BEFORE its trailing comment (`#end; // c`)
+	 * and sets `_sepGlued`, which the two sep emissions then honour; after the comment the
+	 * sep would be commented out.
 	 */
 	private static function triviaBlockSepExprs(
-		sepText: Null<String>, blockEnded: Bool, blockEndedPredicate: Null<String>, blockEndedSchemaPath: Null<String>
-	): { final blockSepBeforeHardlineExpr: Expr; final blockTrailSepEmitExpr: Expr; } {
-		if (sepText == null || !blockEnded) return { blockSepBeforeHardlineExpr: macro {}, blockTrailSepEmitExpr: macro {} };
-		final priorPredCall: Expr = triviaBlockPredCallExpr(blockEndedPredicate, blockEndedSchemaPath, macro _arr[_si - 1].node);
-		final lastPredCall: Expr = triviaBlockPredCallExpr(blockEndedPredicate, blockEndedSchemaPath, macro _arr[_arr.length - 1].node);
+		sepText: Null<String>, blockEnded: Bool, blockEndedPredicate: Null<String>, blockEndedSchemaPath: Null<String>,
+		trailSepKeepPredicate: Null<String>
+	): { final blockSepBeforeHardlineExpr: Expr; final blockTrailSepEmitExpr: Expr; final elemSepGlueExpr: Expr; } {
+		if (sepText == null || !blockEnded)
+			return { blockSepBeforeHardlineExpr: macro {}, blockTrailSepEmitExpr: macro {}, elemSepGlueExpr: macro _elem };
+		inline function pred(i: Expr): Expr return triviaBlockPredCallExpr(blockEndedPredicate, blockEndedSchemaPath, macro _arr[$i].node);
+		inline function keep(i: Expr): Expr
+			return triviaBlockPredCallExpr(trailSepKeepPredicate, blockEndedSchemaPath, macro _arr[$i].node);
+		inline function betweenSep(i: Expr, doc: Expr): Expr {
+			final p: Expr = pred(i);
+			return macro (_arr[$i].sepAfter || (!anyparse.core.DocMeasure.endsWithStmtTerminator($doc) && !($p)));
+		}
+		inline function trailSep(i: Expr, doc: Expr): Expr {
+			final p: Expr = pred(i);
+			final k: Expr = keep(i);
+			return macro (_arr[$i].sepAfter && !anyparse.core.DocMeasure.endsWithSemi($doc) && (!($p) || $k));
+		}
+		final priorSep: Expr = betweenSep(macro _si - 1, macro _priorElemDoc);
+		final lastSep: Expr = trailSep(macro _arr.length - 1, macro _priorElemDoc);
+		final ownBetween: Expr = betweenSep(macro _si, macro _elem);
+		final ownTrail: Expr = trailSep(macro _si, macro _elem);
 		// ω-phase-g (Session 4): source-fidelity OR `_arr[_si - 1].sepAfter`. Trust
 		// the parser: if it consumed a sep after the prior element, preserve it even
 		// when the prior already ends with `}`. The `endsWithStmtTerminator` arm is
@@ -983,10 +1020,7 @@ final class TriviaBlockLowering {
 		// `!priorPredCall` guard suppresses the spurious `;` between `#end` and the
 		// next stmt (a `#if … #end` ends with `d`, byte check misses).
 		final blockSepBeforeHardlineExpr: Expr = macro {
-			if (
-				_si > 0 && _priorElemDoc != null
-				&& (_arr[_si - 1].sepAfter || (!anyparse.core.DocMeasure.endsWithStmtTerminator(_priorElemDoc) && !($priorPredCall)))
-			) {
+			if (_si > 0 && _priorElemDoc != null && !_sepGlued && $priorSep) {
 				_inner.push(_dt($v{sepText}));
 			}
 		};
@@ -994,14 +1028,19 @@ final class TriviaBlockLowering {
 		// `;` iff the LAST element's `sepAfter` is true and it doesn't already end
 		// with `;` (inner `@:trail(';')` baked it in).
 		final blockTrailSepEmitExpr: Expr = macro {
-			if (
-				_arr.length > 0 && _priorElemDoc != null && _arr[_arr.length - 1].sepAfter
-				&& !anyparse.core.DocMeasure.endsWithSemi(_priorElemDoc) && !($lastPredCall)
-			) {
+			if (_arr.length > 0 && _priorElemDoc != null && !_sepGlued && $lastSep) {
 				_inner.push(_dt($v{sepText}));
 			}
 		};
-		return { blockSepBeforeHardlineExpr: blockSepBeforeHardlineExpr, blockTrailSepEmitExpr: blockTrailSepEmitExpr };
+		final elemSepGlueExpr: Expr = macro {
+			_sepGlued = _t.trailingComment != null && (_si < _arr.length - 1 ? $ownBetween : $ownTrail);
+			_sepGlued ? _dc([_elem, _dt($v{sepText})]) : _elem;
+		};
+		return {
+			blockSepBeforeHardlineExpr: blockSepBeforeHardlineExpr,
+			blockTrailSepEmitExpr: blockTrailSepEmitExpr,
+			elemSepGlueExpr: elemSepGlueExpr
+		};
 	}
 
 	/**
@@ -1073,6 +1112,7 @@ final class TriviaBlockLowering {
 		final blockLeadingBetweenExpr: Expr = c.blockLeadingBetweenExpr;
 		final trackDocCommentExpr: Expr = c.trackDocCommentExpr;
 		final triviaElemCall: Expr = c.triviaElemCall;
+		final elemSepGlueExpr: Expr = c.elemSepGlueExpr;
 		final trackPrevKindExpr: Expr = c.trackPrevKindExpr;
 		final balcEmitExpr: Expr = triviaBalcEmitExpr(c.uniformStmtBlanks);
 		final blankAroundMarkExpr: Expr = c.blankAroundMarkExpr;
@@ -1101,7 +1141,8 @@ final class TriviaBlockLowering {
 				final _elem: anyparse.core.Doc = $triviaElemCall;
 				$blankAroundApplyExpr;
 				final _tc: Null<String> = _t.trailingComment;
-				_inner.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDocVerbatim(_tc, opt)) : _elem);
+				final _elemSep: anyparse.core.Doc = $elemSepGlueExpr;
+				_inner.push(_tc != null ? foldTrailingIntoBodyGroup(_elemSep, trailingCommentDocVerbatim(_tc, opt)) : _elem);
 				_priorElemDoc = _elem;
 				$trackPrevKindExpr;
 				_si++;
@@ -1143,6 +1184,7 @@ final class TriviaBlockLowering {
 			// element Doc so the between-element sep emission can query
 			// `DocMeasure.endsWithStmtTerminator`. Null on the first iteration.
 			var _priorElemDoc: Null<anyparse.core.Doc> = null;
+			var _sepGlued: Bool = false;
 			var _si: Int = 0;
 			$whileExpr;
 			// ω-blockended-trivia-trail-sep (Session 3): after the last element, if

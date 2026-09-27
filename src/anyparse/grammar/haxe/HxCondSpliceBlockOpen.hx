@@ -43,6 +43,7 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxCondSpliceBlockOpen = {
 	var raw: HxCondBlockOpenRaw;
-	@:trail('}') @:trivia @:fmt(nestBody, rightCurly) @:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
+	@:trail('}') @:trivia @:fmt(nestBody, rightCurly, trailSepKeepIf('elementIsConditional_HxStatement')) @:sep(';', tailRelax,
+		blockEnded('stmtNoSemi', sepStartsElement))
 	var body: Array<HxStatement>;
 }

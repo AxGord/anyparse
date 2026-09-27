@@ -25,13 +25,16 @@ package anyparse.grammar.haxe;
  * `@:spanned('KeyValueBinder')` one-field wrapper — rather than a bare `HxIdentLit`, because
  * a Terminal projects no `QueryNode` and the value binder would be invisible to `refs` /
  * `rename` and to every declaration-walking check; the emitted bytes are unchanged.
+ *
+ * `@:fmt(trailOptKeepIf('elementIsConditional_HxStatement'))` on the body keeps the
+ * `@:trailOpt(';')` slot after a `#if` region, whose last branch may end unterminated
+ * (`#if d b() #else c() #end;`): there the `;` is the statement's terminator, not a redundant one.
  */
 @:peg
 typedef HxForStmt = {
 	@:lead('(') @:fmt(condWrap('conditionWrap')) var varName: HxIdentLit;
 	@:optional @:lead('=>') var valueName: Null<HxKeyValueBinder>;
 	@:kw('in') @:trail(')') @:fmt(condWrapEnd) var iterable: HxExpr;
-	@:trailOpt(';') @:fmt(bodyPolicy('forBody'), dropSingleStmtBraces, loopBodyIfElseNext(
-		'loopBodyIfElseNext', 'IfStmt', 'elseBody'
-	)) var body: HxStatement;
+	@:trailOpt(';') @:fmt(bodyPolicy('forBody'), dropSingleStmtBraces, trailOptKeepIf('elementIsConditional_HxStatement'),
+		loopBodyIfElseNext('loopBodyIfElseNext', 'IfStmt', 'elseBody')) var body: HxStatement;
 };

@@ -2262,6 +2262,7 @@ typedef BlockStarCtx = {
 	final blockTrailBetweenExpr: Expr;
 	final blockSepBeforeHardlineExpr: Expr;
 	final blockTrailSepEmitExpr: Expr;
+	final elemSepGlueExpr: Expr;
 	final afterFieldsWithDocComments: Bool;
 	final existingBetweenFields: Bool;
 	final beforeDocCommentEmptyLines: Bool;

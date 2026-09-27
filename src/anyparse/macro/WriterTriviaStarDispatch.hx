@@ -363,9 +363,10 @@ final class WriterTriviaStarDispatch {
 			keepCurlyBlanks, lineCommentTrailBlank, blankBeforeFinalDocInLeading, staticVarSubdivInfo, betweenMultilineCommentsBlanks,
 			uniformBetweenOptField, anonFnClear, emptyCurlyKnob, rightCurlyKnob, rightCurlyAnonFnKnob, blockEndedFlag ? sepText : null,
 			blockEndedFlag, blockEndedFlag ? (starNode.annotations[AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE]: Null<String>) : null,
-			blockEndedFlag ? tc.formatInfo.schemaTypePath : null, condLeadingDocInfo, clearExprPositionNonTail, beginTypeKnob, endTypeKnob,
-			uniformStmtBlanks, emptyBlockBreak, caseSymArgs, caseSiblingUnitsFn, caseSiblingStructuralFn, caseSiblingControlFlowFn,
-			blankAroundOptField
+			blockEndedFlag ? tc.formatInfo.schemaTypePath : null,
+			blockEndedFlag ? TriviaBlockLowering.trailSepKeepPredicate(starNode) : null, condLeadingDocInfo, clearExprPositionNonTail,
+			beginTypeKnob, endTypeKnob, uniformStmtBlanks, emptyBlockBreak, caseSymArgs, caseSiblingUnitsFn, caseSiblingStructuralFn,
+			caseSiblingControlFlowFn, blankAroundOptField
 		);
 		final blockStarNested: Expr = macro {
 			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;

@@ -689,6 +689,15 @@ typedef RefShape = {
 	@:optional var emptyStmtKind: String;
 
 	/**
+	 * The statement terminator (Haxe `;`). A conditional-compilation region
+	 * (`conditionalMemberKind`) in statement position may end unterminated
+	 * (`else #if d b() #else c() #end;`), and then the terminator after its closer belongs to the
+	 * region although its PARENT's span owns it; `RegionTerminator` reads it so a fix moving the
+	 * region carries it along. Optional; unset makes every region own nothing past its span.
+	 */
+	@:optional var statementTerminator: String;
+
+	/**
 	 * The member-scope empty-statement node kind — a stray `;` after a class
 	 * member (e.g. `function f():Void {};`). Flagged by the same `empty-statement`
 	 * check alongside `emptyStmtKind`. Optional; unset makes the check ignore

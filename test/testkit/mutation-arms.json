@@ -482,6 +482,69 @@
 			"note": "the optional `;` drop stops being gated on a following sibling, so an else-less value-`if` loses the terminator its enclosing statement needs"
 		},
 		{
+			"name": "M-TRAILOPT-KEEP-OFF",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "pushTrailOptKeep",
+			"find": "parts.push(macro $structTrailOptAccess == true && $keep ? _dt($v{trailOptText}) : _de());",
+			"replace": "",
+			"note": "no body field keeps its `@:trailOpt(';')` slot, so the `;` after an unterminated `#if` region body is dropped and the next statement fails with `Missing ;`"
+		},
+		{
+			"name": "M-TRAILOPT-KEEP-PRESENCE-BLIND",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "pushTrailOptKeep",
+			"find": "parts.push(macro $structTrailOptAccess == true && $keep ? _dt($v{trailOptText}) : _de());",
+			"replace": "parts.push(macro $keep ? _dt($v{trailOptText}) : _de());",
+			"note": "the kept slot stops reading source presence, so a region whose branches carry their own `;` gains a second one after `#end`"
+		},
+		{
+			"name": "M-TRAILOPT-KEEP-UNGATED",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "pushTrailOptKeep",
+			"find": "parts.push(macro $structTrailOptAccess == true && $keep ? _dt($v{trailOptText}) : _de());",
+			"replace": "parts.push(macro $structTrailOptAccess == true ? _dt($v{trailOptText}) : _de());",
+			"note": "the slot is kept for every body, not just a `#if` region, so the redundant `;` after a de-braced block comes back as `;;`"
+		},
+		{
+			"name": "M-TRAILSEP-KEEP-OFF",
+			"type": "anyparse.macro.TriviaBlockLowering",
+			"method": "triviaBlockSepExprs",
+			"find": "(!($p) || $k)",
+			"replace": "!($p)",
+			"note": "a block's trailing `;` after a `#if` region is dropped again like any `stmtNoSemi` tail, so `#end;` before `}` loses the only terminator of the region's last branch"
+		},
+		{
+			"name": "M-TRAILSEP-KEEP-ALL",
+			"type": "anyparse.macro.TriviaBlockLowering",
+			"method": "triviaBlockSepExprs",
+			"find": "(!($p) || $k)",
+			"replace": "true",
+			"note": "every source `;` after a block's last element is kept, so the redundant one after a closing `}` comes back"
+		},
+		{
+			"name": "M-SEP-GLUE-OFF",
+			"type": "anyparse.macro.TriviaBlockLowering",
+			"method": "triviaBlockSepExprs",
+			"find": "_sepGlued = _t.trailingComment != null && (_si < _arr.length - 1 ? $ownBetween : $ownTrail);",
+			"replace": "_sepGlued = false;",
+			"note": "an element's separator goes after its trailing comment again, so `#end; // c` comments out its own terminator and `fmt` refuses the file"
+		},
+		{
+			"name": "M-REGION-TERM-OFF",
+			"type": "anyparse.check.RegionTerminator",
+			"method": "terminatorAt",
+			"force": "-1",
+			"note": "no region owns the terminator after its `#end`, so a fix moving the region drops it and `empty-statement` deletes it"
+		},
+		{
+			"name": "M-INVERT-REGION-UNGUARDED",
+			"type": "anyparse.check.InvertNegatedIfElse",
+			"method": "inversionEdits",
+			"find": "\t\tif (RegionTerminator.unterminatedRegion(thenBranch, source, seams.shape)) return;\n",
+			"replace": "",
+			"note": "a then-region closed only by the `else` is swapped into the tail slot with no terminator"
+		},
+		{
 			"name": "M-SKIPSCAN-SCOPEWIDE",
 			"type": "anyparse.query.RawSourceScan",
 			"method": "admits",
@@ -1881,8 +1944,8 @@
 			"name": "M-SSB-TRAILOPT-REEMIT",
 			"type": "anyparse.macro.WriterRefFieldLowering",
 			"method": "emitMandatoryRefTrail",
-			"find": "\tif (\n\t\t!hasStructFieldTrailOptSlot || isOptional || hasCondWrap || hasCondWrapEnd || trailOptText == null\n\t\t|| child.fmtHasFlag('dropSingleStmtBraces')\n\t)\n\t\treturn;",
-			"replace": "\tif (!hasStructFieldTrailOptSlot || isOptional || hasCondWrap || hasCondWrapEnd || trailOptText == null) return;",
+			"find": "\tif (child.fmtHasFlag('dropSingleStmtBraces')) {\n\t\tpushTrailOptKeep(parts, child, trailOptText, structTrailOptAccess, fieldAccess);\n\t\treturn;\n\t}",
+			"replace": "",
 			"note": "a brace-droppable field re-emits its `@:trailOpt` slot again, so the redundant `;` a for/if body carried comes back and holds the braces the drop had earned"
 		},
 		{
