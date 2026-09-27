@@ -9700,6 +9700,21 @@
 			"method": "reportSummaryThreshold",
 			"force": "LintFormat.DEFAULT_REPORT_SUMMARY_THRESHOLD",
 			"note": "an apqlint.json reportSummaryThreshold is ignored and every run summarises at the default"
+		},
+		{
+			"name": "M-MAGIC-CALLARG-BLIND",
+			"type": "anyparse.check.MagicNumber",
+			"method": "isIgnoredCallArgument",
+			"force": "false",
+			"note": "a direct argument of a call ignoreCallArguments names is flagged as a magic number"
+		},
+		{
+			"name": "M-MAGIC-CALLARG-SUFFIX-LOOSE",
+			"type": "anyparse.check.MagicNumber",
+			"method": "pathEndsWith",
+			"find": ["suffix.length > path.length", "for (i in 0...suffix.length)"],
+			"replace": ["false", "for (i in suffix.length - 1...suffix.length)"],
+			"note": "an ignoreCallArguments entry matches any callee sharing its last segment, so Lang.t exempts a bare t()"
 		}
 	]
 }

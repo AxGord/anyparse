@@ -6,6 +6,7 @@ import anyparse.check.Linter;
 import anyparse.check.MagicNumber;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import haxe.Json;
 import sys.FileSystem;
 import sys.io.File;
 import utest.Assert;
@@ -33,6 +34,41 @@ class MagicNumberCheckTest extends Test {
 
 	public function testFlaggedAsCallArgument(): Void {
 		Assert.equals(1, violations('class C {\n\tfunction f() { trace(16); }\n}').length);
+	}
+
+	/**
+	 * A literal that is DIRECTLY an argument of a call `ignoreCallArguments` names is a key the callee
+	 * owns (`t('Complete with AI', 10233)`), whatever receiver the call is written through.
+	 *
+	 * RED under M-MAGIC-CALLARG-BLIND (the exemption answers false): the three exempt calls come back as
+	 * findings. The nested `100 + k`, the negated `-55` and the unlisted `other(…, 5000)` are flagged
+	 * with the exemption on and off alike, and are what separate "direct arguments of listed calls" from
+	 * "every argument".
+	 */
+	@:pin('control')
+	@:killer('M-MAGIC-CALLARG-BLIND')
+	public function testADirectArgumentOfAnIgnoredCallIsExempt(): Void {
+		final src: String = 'class C {\n\tfunction f(k:Int) {\n\t\tt("a", 10233);\n\t\tthis.t("b", 77);\n\t\tmake().t("c", 88);\n'
+			+ '\t\tt("x", 100 + k);\n\t\tt("y", -55);\n\t\tother("z", 5000);\n\t}\n}';
+		final flagged: Array<String> = [for (v in withCalls(src, ['t'])) v.message.split(' ')[2]];
+		Assert.same(['100', '55', '5000'], flagged, 'only the nested, the negated and the unlisted call stay flagged');
+		Assert.equals(6, violations(src).length, 'without the option every one of them is a finding');
+	}
+
+	/**
+	 * A dotted entry matches the TAIL of the callee as written, segment for segment: `Lang.t` exempts
+	 * `Lang.t(…)` and `macros.Lang.t(…)`, but not a bare `t(…)` imported by name, nor `Blang.t(…)`.
+	 *
+	 * RED under M-MAGIC-CALLARG-SUFFIX-LOOSE (only the last segment compared, the length guard gone):
+	 * the bare `t(…)` is exempted too. The two dotted calls are exempt with and without the arm.
+	 */
+	@:pin('control')
+	@:killer('M-MAGIC-CALLARG-SUFFIX-LOOSE')
+	public function testADottedEntryMatchesTheCalleeTail(): Void {
+		final src: String = 'class C {\n\tfunction f() {\n\t\tLang.t("a", 11);\n\t\tmacros.Lang.t("b", 22);\n\t\tt("c", 33);\n'
+			+ '\t\tBlang.t("d", 44);\n\t}\n}';
+		final flagged: Array<String> = [for (v in withCalls(src, ['Lang.t'])) v.message.split(' ')[2]];
+		Assert.same(['33', '44'], flagged, 'a bare t() and a different receiver are not Lang.t');
 	}
 
 	public function testEveryMagicLiteralFlagged(): Void {
@@ -233,6 +269,14 @@ class MagicNumberCheckTest extends Test {
 
 	private function violations(src: String): Array<Violation> {
 		return new MagicNumber().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	/** The findings on `src` under a config whose `ignoreCallArguments` lists `calls`. */
+	private function withCalls(src: String, calls: Array<String>): Array<Violation> {
+		final check: MagicNumber = new MagicNumber();
+		final config: LintConfig = LintConfig.parse('{"rules":{"magic-number":{"ignoreCallArguments":${Json.stringify(calls)}}}}');
+		check.setConfigResolver(_ -> config);
+		return check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
 
 }

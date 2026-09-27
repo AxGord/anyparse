@@ -12,6 +12,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.DynamicShape.DynCtx;
 import anyparse.check.ParamAscription.ParamVerdict;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.NodeShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -682,21 +683,9 @@ final class AvoidDynamic implements Check implements ConfigAware implements Risk
 		if (kids.length == 0) return false;
 		final last: QueryNode = kids[kids.length - 1];
 		if (last.kind != ctx.callKind || last.children.length == 0) return false;
-		for (seg in calleePath(last.children[0], ctx)) if (boundaryCalls.contains(seg)) return true;
+		for (seg in NodeShape.calleePath(last.children[0], ctx.fieldAccessKind, ctx.identKind)) if (boundaryCalls.contains(seg))
+			return true;
 		return false;
-	}
-
-	/** The dotted callee path (root first) of a call's callee expression, or an empty array for a shape it cannot read. */
-	private static function calleePath(callee: QueryNode, ctx: DynCtx): Array<String> {
-		if (callee.kind == ctx.fieldAccessKind) {
-			final base: Array<String> = callee.children.length > 0 ? calleePath(callee.children[0], ctx) : [];
-			final nm: Null<String> = callee.name;
-			if (nm != null) base.push(nm);
-			return base;
-		}
-		if (callee.kind != ctx.identKind) return [];
-		final nm: Null<String> = callee.name;
-		return nm != null ? [nm] : [];
 	}
 
 	/** Whether `file`'s path contains any of the configured exclusion substrings. */
