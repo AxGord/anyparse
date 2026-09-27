@@ -54,7 +54,8 @@ final class EmptyStatement implements Check {
 		return emptyKinds.length == 0 && blockKinds.length == 0
 			? []
 			: RunScan.collect(
-				files, plugin, (entry, tree, violations) -> walk(violations, entry.file, entry.source, tree, emptyKinds, blockKinds)
+				files, plugin,
+				(entry, tree, violations) -> walk(violations, entry.file, entry.source, tree, null, emptyKinds, blockKinds, shape)
 			);
 	}
 
@@ -70,11 +71,16 @@ final class EmptyStatement implements Check {
 		return edits;
 	}
 
-	/** Walk `node`, flagging every empty statement reached. */
+	/**
+	 * Walk `node` (whose previous sibling is `prev`), flagging every empty statement reached. One
+	 * that closes the conditional-compilation region right before it is that region's terminator,
+	 * not a stray (`RegionTerminator`).
+	 */
 	private static function walk(
-		out: Array<Violation>, file: String, source: String, node: QueryNode, emptyKinds: Array<String>, blockKinds: Array<String>
+		out: Array<Violation>, file: String, source: String, node: QueryNode, prev: Null<QueryNode>, emptyKinds: Array<String>,
+		blockKinds: Array<String>, shape: RefShape
 	): Void {
-		if (emptyKinds.contains(node.kind)) {
+		if (emptyKinds.contains(node.kind) && !RegionTerminator.terminatesRegion(prev, node, source, shape)) {
 			final span: Null<Span> = node.span;
 			if (span != null) out.push({
 				file: file,
@@ -92,7 +98,11 @@ final class EmptyStatement implements Check {
 			severity: Severity.Warning,
 			message: 'stray ; after a block that already terminates the statement'
 		});
-		for (c in node.children) walk(out, file, source, c, emptyKinds, blockKinds);
+		var before: Null<QueryNode> = null;
+		for (c in node.children) {
+			walk(out, file, source, c, before, emptyKinds, blockKinds, shape);
+			before = c;
+		}
 	}
 
 	/**

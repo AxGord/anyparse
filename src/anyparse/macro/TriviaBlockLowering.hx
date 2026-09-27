@@ -1,9 +1,12 @@
 package anyparse.macro;
 
 #if macro
+import anyparse.core.ShapeTree;
+import anyparse.macro.WriterBlankLowering.*;
 import haxe.macro.Context;
 import haxe.macro.Expr;
-import anyparse.macro.WriterBlankLowering.*;
+
+using anyparse.macro.MetaInspect;
 
 /**
  * Pass 3W helpers — the block-mode (`@:lead` + `@:trail` + `@:trivia`) Star
@@ -481,6 +484,9 @@ final class TriviaBlockLowering {
 		// identical to the pre-fix path (no predicate consult).
 		?blockEndedPredicate: String,
 		?blockEndedSchemaPath: String,
+		// `@:fmt(trailSepKeepIf('<pred>'))`: a source `;` after the LAST element is kept, whatever
+		// `blockEndedPredicate` says, when this predicate holds for that element. Null → dropped as before.
+		?trailSepKeepPredicate: String,
 		// ω-cond-leading-doc-lookthrough: when set (only alongside
 		// `beforeDocCommentEmptyLines`), the `_currHasDocComment` scan looks
 		// through a `#if … #end` member to its first inner member's leading
@@ -652,7 +658,7 @@ final class TriviaBlockLowering {
 		// spliced Expr into a BlockStarCtx and delegates to triviaBlockMainExpr.
 		final beginEnd = triviaBlockBeginEndExpr(beginEndType, keepCurlyBlanks, beginTypeKnob, endTypeKnob);
 		final between = triviaBlockBetweenExprs(blankBeforeFinalDocInLeading, betweenMultilineCommentsBlanks);
-		final sep = triviaBlockSepExprs(sepText, blockEnded, blockEndedPredicate, blockEndedSchemaPath);
+		final sep = triviaBlockSepExprs(sepText, blockEnded, blockEndedPredicate, blockEndedSchemaPath, trailSepKeepPredicate);
 		final leaf = triviaBlockLeafExprs(
 			afterFieldsWithDocComments, beforeDocCommentEmptyLines, existingBetweenFields, interMember, indentCaseLabelsGate,
 			lineCommentTrailBlank
@@ -963,19 +969,32 @@ final class TriviaBlockLowering {
 		};
 	}
 
+	/** The predicate named by a block Star's `@:fmt(trailSepKeepIf('<pred>'))`, or null. */
+	private static function trailSepKeepPredicate(node: ShapeNode): Null<String> {
+		final args: Null<Array<String>> = node.fmtReadStringArgs('trailSepKeepIf');
+		if (args == null) return null;
+		if (args.length != 1)
+			Context.fatalError('@:fmt(trailSepKeepIf) expects 1 string arg (predicate), got ${args.length}', Context.currentPos());
+		return args[0];
+	}
+
 	/**
 	 * Block-Star blockEnded between-element / trailing sep emission (ω-blockended-
 	 * trivia, Session 3 + ω-phase-g + ω-condcomp-stray-semi). Builds the
 	 * `blockSepBeforeHardlineExpr` (inter-element sep when the prior element isn't
 	 * already statement-terminated) and the `blockTrailSepEmitExpr` (source-trail
 	 * sep after the last element). Null sepText / non-blockEnded → no-op.
+	 * `trailSepKeepPredicate` exempts a last element from the predicate drop: a `#if`
+	 * region whose last branch ends unterminated needs the `;` after its `#end`.
 	 */
 	private static function triviaBlockSepExprs(
-		sepText: Null<String>, blockEnded: Bool, blockEndedPredicate: Null<String>, blockEndedSchemaPath: Null<String>
+		sepText: Null<String>, blockEnded: Bool, blockEndedPredicate: Null<String>, blockEndedSchemaPath: Null<String>,
+		trailSepKeepPredicate: Null<String>
 	): { final blockSepBeforeHardlineExpr: Expr; final blockTrailSepEmitExpr: Expr; } {
 		if (sepText == null || !blockEnded) return { blockSepBeforeHardlineExpr: macro {}, blockTrailSepEmitExpr: macro {} };
 		final priorPredCall: Expr = triviaBlockPredCallExpr(blockEndedPredicate, blockEndedSchemaPath, macro _arr[_si - 1].node);
 		final lastPredCall: Expr = triviaBlockPredCallExpr(blockEndedPredicate, blockEndedSchemaPath, macro _arr[_arr.length - 1].node);
+		final lastKeepCall: Expr = triviaBlockPredCallExpr(trailSepKeepPredicate, blockEndedSchemaPath, macro _arr[_arr.length - 1].node);
 		// ω-phase-g (Session 4): source-fidelity OR `_arr[_si - 1].sepAfter`. Trust
 		// the parser: if it consumed a sep after the prior element, preserve it even
 		// when the prior already ends with `}`. The `endsWithStmtTerminator` arm is
@@ -996,7 +1015,7 @@ final class TriviaBlockLowering {
 		final blockTrailSepEmitExpr: Expr = macro {
 			if (
 				_arr.length > 0 && _priorElemDoc != null && _arr[_arr.length - 1].sepAfter
-				&& !anyparse.core.DocMeasure.endsWithSemi(_priorElemDoc) && !($lastPredCall)
+				&& !anyparse.core.DocMeasure.endsWithSemi(_priorElemDoc) && (!($lastPredCall) || $lastKeepCall)
 			) {
 				_inner.push(_dt($v{sepText}));
 			}

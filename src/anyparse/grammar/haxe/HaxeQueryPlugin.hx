@@ -671,9 +671,8 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			caseBranchKind: 'CaseBranch',
 			orPatternKind: 'BitOr',
 			switchKinds: ['SwitchStmt', 'SwitchStmtBare', 'SwitchExpr', 'SwitchExprBare'],
-			// The two statement-position forms of the four above: a bare subject and a
-			// parenthesised one. Their arms need not be exhaustive, which is what a case
-			// guard's fall-through to the next pattern requires.
+			// The two statement-position forms of the four above: a bare subject and a parenthesised one. Their
+			// arms need not be exhaustive, which is what a case guard's fall-through to the next pattern requires.
 			switchStatementKinds: ['SwitchStmt', 'SwitchStmtBare'],
 			// The subject types Haxe never exhaustiveness-checks a statement switch over, so
 			// an arm may be deleted without the compiler noticing the arm list shrank. Every
@@ -686,6 +685,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			nonNullBoolTypeName: 'Bool',
 			branchConditionKinds: ['IfStmt', 'IfExpr'],
 			emptyStmtKind: 'EmptyStmt',
+			statementTerminator: ';',
 			emptyMemberKind: 'EmptySemiMember',
 			// `VarMore` IS a local declaration — the binding after the comma in
 			// `var a = 1, b = 2;`. Listed here so every declaration-walking check reaches it

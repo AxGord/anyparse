@@ -262,7 +262,7 @@ enum HxStatement {
 	LocalInlineFnStmt(decl: HxFnDecl);
 
 	@:fmt(leftCurly('blockLeftCurly'), emptyCurlyBreak('blockEmptyCurly'), rightCurly('blockRightCurly'), keepCurlyBlanks,
-		clearExprPositionNonTail, uniformStmtBlanks)
+		clearExprPositionNonTail, uniformStmtBlanks, trailSepKeepIf('elementIsConditional_HxStatement'))
 	@:lead('{') @:trail('}') @:trivia
 	@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
 	BlockStmt(stmts: Array<HxStatement>);

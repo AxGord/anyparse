@@ -518,6 +518,14 @@ final class RefShapeKindProjectionTest extends Test {
 				after: 'b"; } }'
 			},
 			{
+				field: 'statementTerminator',
+				slot: '',
+				kind: 'EmptyStmt',
+				names: NAME_NONE,
+				before: 'class C { function f() { a(); ',
+				after: ' } }'
+			},
+			{
 				field: 'superReferenceText',
 				slot: '',
 				kind: 'IdentExpr',

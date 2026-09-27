@@ -160,9 +160,12 @@ final class InvertNegatedIfElse implements Check {
 		final elseBranch: QueryNode = ifNode.children[2];
 		final notNode: QueryNode = BoolExprShape.unwrapParens(cond, seams.parenKind);
 		if (notNode.children.length != 1) return;
+		// A region then-body closed only by the `else` after it would land in the tail slot with no
+		// terminator it can be proved not to need; every branch travels with the one it owns.
+		if (RegionTerminator.unterminatedRegion(thenBranch, source, seams.shape)) return;
 		final condSpan: Null<Span> = cond.span;
-		final thenSpan: Null<Span> = thenBranch.span;
-		final elseSpan: Null<Span> = elseBranch.span;
+		final thenSpan: Null<Span> = RegionTerminator.ownedSpan(thenBranch, source, seams.shape);
+		final elseSpan: Null<Span> = RegionTerminator.ownedSpan(elseBranch, source, seams.shape);
 		final positive: Null<String> = positiveConditionText(notNode.children[0], source, seams.parenKind);
 		if (condSpan == null || thenSpan == null || elseSpan == null || positive == null) return;
 		edits.push({ span: condSpan, text: positive });
@@ -196,7 +199,8 @@ final class InvertNegatedIfElse implements Check {
 			ifKinds: ifKinds,
 			notKind: notKind,
 			parenKind: parenKind,
-			selection: OperatorSelection.of(plugin, files)
+			selection: OperatorSelection.of(plugin, files),
+			shape: shape
 		};
 	}
 
@@ -214,4 +218,7 @@ private typedef Seams = {
 	 * that `!` is the built-in one — see `builtinNot`.
 	 */
 	final selection: Null<OperatorSelection>;
+
+	/** Read by `RegionTerminator` for the region kind and its terminator. */
+	final shape: RefShape;
 };

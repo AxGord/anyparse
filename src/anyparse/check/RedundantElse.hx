@@ -160,7 +160,7 @@ final class RedundantElse implements Check {
 			span: elseSpan,
 			rule: 'redundant-else-after-return',
 			severity: Severity.Info,
-			message: deNestDropsComment(ifNode, seams.support, comments) ? MESSAGE + COMMENT_NOTE : MESSAGE
+			message: deNestDropsComment(ifNode, source, seams, comments) ? MESSAGE + COMMENT_NOTE : MESSAGE
 		});
 	}
 
@@ -173,12 +173,12 @@ final class RedundantElse implements Check {
 	 * survives verbatim, and is not counted.
 	 */
 	private static function deNestDropsComment(
-		ifNode: QueryNode, support: ControlFlowSupport, comments: Array<{ from: Int, to: Int, isLine: Bool }>
+		ifNode: QueryNode, source: String, seams: Seams, comments: Array<{ from: Int, to: Int, isLine: Bool }>
 	): Bool {
 		if (ifNode.children.length < IF_WITH_ELSE_CHILD_COUNT) return false;
 		final ifSpan: Null<Span> = ifNode.span;
 		final thenSpan: Null<Span> = ifNode.children[1].span;
-		final run: Null<Span> = deNestedRun(ifNode.children[2], support);
+		final run: Null<Span> = deNestedRun(ifNode.children[2], source, seams);
 		return ifSpan != null && thenSpan != null && run != null
 			&& comments.exists(tok -> tok.from >= thenSpan.to && tok.to <= ifSpan.to && (tok.to <= run.from || tok.from >= run.to));
 	}
@@ -188,10 +188,10 @@ final class RedundantElse implements Check {
 	 * single statement, its first-to-last statement run when it is a block, and an EMPTY span at the
 	 * body's end when the block holds no statement. Null when a coordinate is missing.
 	 */
-	private static function deNestedRun(elseNode: QueryNode, support: ControlFlowSupport): Null<Span> {
+	private static function deNestedRun(elseNode: QueryNode, source: String, seams: Seams): Null<Span> {
 		final elseSpan: Null<Span> = elseNode.span;
 		if (elseSpan == null) return null;
-		if (!support.blockKinds().contains(elseNode.kind)) return elseSpan;
+		if (!seams.support.blockKinds().contains(elseNode.kind)) return RegionTerminator.ownedSpan(elseNode, source, seams.shape);
 		final kids: Array<QueryNode> = elseNode.children;
 		if (kids.length == 0) return new Span(elseSpan.to, elseSpan.to);
 		final first: Null<Span> = kids[0].span;
@@ -270,12 +270,12 @@ final class RedundantElse implements Check {
 		final elseNode: QueryNode = ifNode.children[2];
 		final elseSpan: Null<Span> = elseNode.span;
 		if (elseSpan == null || !flagged.contains('${elseSpan.from}:${elseSpan.to}')) return;
-		if (deNestDropsComment(ifNode, seams.support, comments)) return;
+		if (deNestDropsComment(ifNode, source, seams, comments)) return;
 		if (narrowingLapses(ifNode, elseNode, seams, narrowed)) return;
 		final ifSpan: Null<Span> = ifNode.span;
 		final thenSpan: Null<Span> = ifNode.children[1].span;
 		if (ifSpan == null || thenSpan == null) return;
-		final deNested: Null<String> = deNestText(elseNode, source, seams.support, seams.localDeclKinds, scopeNames);
+		final deNested: Null<String> = deNestText(elseNode, source, seams, scopeNames);
 		if (deNested == null) return;
 		final ifKept: String = source.substring(ifSpan.from, thenSpan.to);
 		edits.push({ span: new Span(ifSpan.from, ifSpan.to), text: deNested == '' ? ifKept : '$ifKept\n$deNested' });
@@ -287,12 +287,10 @@ final class RedundantElse implements Check {
 	 * local (`localDeclKinds`) has a name in `scopeNames` (the enclosing scope) — de-nesting would
 	 * redeclare it in the same scope — or when a coordinate is missing.
 	 */
-	private static function deNestText(
-		elseNode: QueryNode, source: String, support: ControlFlowSupport, localDeclKinds: Array<String>, scopeNames: Array<String>
-	): Null<String> {
-		final stmts: Array<QueryNode> = support.blockKinds().contains(elseNode.kind) ? elseNode.children : [elseNode];
-		if (ScopeFrames.collidesWithScope(stmts, localDeclKinds, scopeNames)) return null;
-		final run: Null<Span> = deNestedRun(elseNode, support);
+	private static function deNestText(elseNode: QueryNode, source: String, seams: Seams, scopeNames: Array<String>): Null<String> {
+		final stmts: Array<QueryNode> = seams.support.blockKinds().contains(elseNode.kind) ? elseNode.children : [elseNode];
+		if (ScopeFrames.collidesWithScope(stmts, seams.localDeclKinds, scopeNames)) return null;
+		final run: Null<Span> = deNestedRun(elseNode, source, seams);
 		return run == null ? null : source.substring(run.from, run.to);
 	}
 
@@ -369,7 +367,7 @@ private typedef Seams = {
 	final ifKinds: Array<String>;
 	final support: ControlFlowSupport;
 
-	/** Read by nothing here — handed to `PreferIfExpressionReturn.claimsChain`, which reads its own. */
+	/** Handed to `PreferIfExpressionReturn.claimsChain`, and read by `RegionTerminator` for a region body's terminator. */
 	final shape: RefShape;
 	final blockKinds: Array<String>;
 	final localDeclKinds: Array<String>;

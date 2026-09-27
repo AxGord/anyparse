@@ -80,6 +80,31 @@ final class HxCondEndTerminatorSliceTest extends Test {
 		Assert.isTrue(out.indexOf('a();') != -1, 'expected the body in: <$out>');
 	}
 
+	/**
+	 * The last statement of a block: the `;` after `#end` is the block Star's trailing separator,
+	 * which the writer drops after a `stmtNoSemi` element unless `@:fmt(trailSepKeepIf)` names it.
+	 */
+	@:pin('control')
+	@:killer('M-TRAILSEP-KEEP-OFF')
+	public function testBlockTailKeepsSemiAfterEnd(): Void {
+		final fnBody: String = wrap('#if d b() #else c() #end;');
+		Assert.equals(fnBody, HxWriteFixture.triviaWrite(fnBody, DEFAULT));
+		final ifBlock: String = wrap('if (x) {\n\t\t\t#if d b() #else c() #end;\n\t\t}');
+		Assert.equals(ifBlock, HxWriteFixture.triviaWrite(ifBlock, DEFAULT));
+		final doBlock: String = wrap('do {\n\t\t\t#if d b() #else c() #end;\n\t\t} while (x);');
+		Assert.equals(doBlock, HxWriteFixture.triviaWrite(doBlock, DEFAULT));
+		final lambda: String = wrap('var q = () -> {\n\t\t\t#if d b() #else c() #end;\n\t\t};');
+		Assert.equals(lambda, HxWriteFixture.triviaWrite(lambda, DEFAULT));
+	}
+
+	/** Every other `stmtNoSemi` tail still loses its redundant `;`. */
+	@:pin('control')
+	@:killer('M-TRAILSEP-KEEP-ALL')
+	public function testBlockTailStillDropsSemiAfterSwitch(): Void {
+		final src: String = wrap('switch x {\n\t\t\tcase _:\n\t\t};');
+		Assert.equals(wrap('switch x {\n\t\t\tcase _:\n\t\t}'), HxWriteFixture.triviaWrite(src, DEFAULT));
+	}
+
 	private static function wrap(body: String): String {
 		return 'class C {\n\tfunction f() {\n\t\t$body\n\t}\n}';
 	}

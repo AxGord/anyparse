@@ -9,15 +9,11 @@ package anyparse.grammar.haxe;
  * follows, consumed-not-stored); with NO `else` before a block-end (`{ if (c) foo() }`) it
  * is still rejected — relaxing `;` before `}` would break the Star-loop statement boundary.
  *
- * `@:fmt(sameLine("sameLineElse"))` on `elseBody` makes the separator between the then-body
- * and `else` runtime-switchable (`} else {` vs `}\n    else {`). `@:fmt(shapeAware)` (ψ₉)
- * opts that flag into shape-awareness on the preceding sibling: a non-block `thenBody`
- * forced onto its own line suppresses the space in favour of a hardline regardless of the
- * flag. `@:fmt(semicolonNextLineElse)` (ψ₆) is the inline-shape counterpart: when the
- * then-body is forced inline, `else` breaks onto its own line if the then-body's trailing
- * `;` was present in source AND `opt.ifElseSemicolonNextLine` is true (haxe-formatter's
- * `markElse` Semicolon branch). Both live on `HxIfStmt.elseBody` ONLY — `HxIfExpr.elseBranch`
- * is governed by `sameLineExpressionElse` and keeps `else` glued.
+ * `@:fmt(sameLine("sameLineElse"))` on `elseBody` makes the then-body → `else` separator
+ * runtime-switchable; `@:fmt(shapeAware)` (ψ₉) turns it into a hardline after a non-block
+ * `thenBody` forced onto its own line, and `@:fmt(semicolonNextLineElse)` (ψ₆) breaks before
+ * `else` after an inline then-body whose source `;` was present when
+ * `opt.ifElseSemicolonNextLine` is set. `HxIfExpr.elseBranch` keeps `else` glued instead.
  *
  * `@:fmt(elseIf)` on `elseBody` activates the `opt.elseIf:KeywordPlacement` knob: when the
  * else branch is itself an `if`, the separator is picked from `opt.elseIf`, so `else if
@@ -38,10 +34,9 @@ package anyparse.grammar.haxe;
  * `if` head's column, so the separator asks the PREVIOUS FIELD whether it glued
  * (`PrevBodyInfo.headGlue`) and routes a glued close to `sameLineElse` as a curly close is
  * routed. `@:fmt(dropSingleStmtBraces)` on BOTH bodies opts into `opt.dropSingleStmtBraces`
- * (`SingleStmtBraces.unwrapStmt`, trivia mode only, every safety gate fails closed).
- * `@:fmt(trailOptKeepIf('elementIsConditional_HxStatement'))` on BOTH bodies keeps the
- * `@:trailOpt(';')` slot after a `#if` region, whose last branch may end unterminated
- * (`#if d b() #else c() #end;`): there the `;` is the statement's terminator, not a redundant one.
+ * (`SingleStmtBraces.unwrapStmt`, trivia mode only, every safety gate fails closed), and
+ * `@:fmt(trailOptKeepIf(…))` keeps the `;` after a `#if` region body (`… #end;`): its last
+ * branch may end unterminated, so that `;` is the statement's terminator.
  */
 @:peg
 typedef HxIfStmt = {
