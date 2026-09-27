@@ -9,6 +9,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.SourceText;
+import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -100,14 +101,16 @@ private typedef ExistsFact = {
 /**
  * A function whose truth proves some of its arguments non-null: its body is one `return` of a
  * conjunction holding `param != null` for each of `nonNullParams` (indices into its `arity`
- * parameters). `body` is the span of the type body declaring it — a bare call to `name` binds to
+ * parameters), with each parameter's written type (`paramTypes`, whitespace-stripped, null when
+ * unwritten). `body` is the span of the type body declaring it — a bare call to `name` binds to
  * it only from inside that span.
  */
 private typedef NonNullPredicate = {
 	name: String,
 	body: Span,
 	arity: Int,
-	nonNullParams: Array<Int>
+	nonNullParams: Array<Int>,
+	paramTypes: Array<Null<String>>
 };
 
 /**
@@ -165,6 +168,9 @@ private typedef FlowCtx = {
 
 	/** The file's non-null predicate functions (`nonNullPredicates`), which a positive call to narrows its arguments. */
 	var nonNullPredicates: Array<NonNullPredicate>;
+
+	/** The written type of the binding an argument identifier resolves to, whitespace-stripped, or null. */
+	var argType: QueryNode -> Null<String>;
 	var fieldAccessKind: Null<String>;
 	var nullSafeAccessKind: Null<String>;
 	var indexAccessKind: Null<String>;
@@ -381,14 +387,17 @@ final class NullFlow {
 	 */
 	public static function analyze(
 		root: QueryNode, shape: RefShape, source: String, visit: (QueryNode, NullFacts) -> Void, ?seed: (QueryNode) -> Bool,
-		?declaredNullable: (QueryNode) -> Bool
+		?declaredNullable: (QueryNode) -> Bool, ?typeSources: Map<Int, String>
 	): Void {
 		final identKind: Null<String> = shape.identKind;
 		if (identKind == null) return;
 		final id: String = identKind;
-		final predicates: Array<NonNullPredicate> = nonNullPredicates(root, shape, id);
+		final predicates: Array<NonNullPredicate> = typeSources == null ? [] : nonNullPredicates(root, shape, id, typeSources);
+		final written: Map<Int, String> = typeSources ?? [];
+		final argType: QueryNode -> Null<String> = arg -> TypeResolver.identDeclaredTypeSource(arg, shape, root, () -> written, false);
 		forEachFunctionUnit(
-			root, shape, (body, paramNames) -> analyzeBody(body, shape, source, id, paramNames, visit, seed, declaredNullable, predicates)
+			root, shape,
+			(body, paramNames) -> analyzeBody(body, shape, source, id, paramNames, visit, seed, declaredNullable, predicates, argType)
 		);
 	}
 
@@ -406,10 +415,15 @@ final class NullFlow {
 	 *    capture or second member of that name), so a bare call inside the declaring type body can
 	 *    only bind to it.
 	 *
-	 * Anything else is not a predicate. A call must be bare, pass exactly `arity` arguments, and sit
-	 * inside the declaring type body (`predicateArgs`).
+	 * Anything else is not a predicate. A call must be bare, pass exactly `arity` arguments, and sit inside the
+	 * declaring type body, and an argument counts only when its binding is written with the SAME type text as the
+	 * parameter (`predicateArgs`): a different type may reach the parameter through an implicit conversion (an
+	 * abstract's `@:from` / `@:to`) that turns a null argument into a non-null parameter. The written types come
+	 * from `TypeInfoProvider.declaredTypeSources`, so a consumer passing none to `analyze` gets no predicates at all.
 	 */
-	private static function nonNullPredicates(root: QueryNode, shape: RefShape, identKind: String): Array<NonNullPredicate> {
+	private static function nonNullPredicates(
+		root: QueryNode, shape: RefShape, identKind: String, typeSources: Map<Int, String>
+	): Array<NonNullPredicate> {
 		final maybeNotEq: Null<String> = shape.notEqKind;
 		if (maybeNotEq == null) return [];
 		final notEqKind: String = maybeNotEq;
@@ -435,7 +449,9 @@ final class NullFlow {
 				final name: Null<String> = fn.name;
 				if (name == null || !fnKinds.contains(fn.kind) || declared[name] != 1) continue;
 				final modifiers: Array<QueryNode> = MemberKinds.precedingModifiers(fn, decl.nameNode, modifierKinds).concat(fn.children);
-				final predicate: Null<NonNullPredicate> = predicateOf(fn, name, bodySpan, modifiers, shape, identKind, notEqKind);
+				final predicate: Null<NonNullPredicate> = predicateOf(
+					fn, name, bodySpan, modifiers, shape, identKind, notEqKind, typeSources
+				);
 				if (predicate != null) out.push(predicate);
 			}
 			for (c in node.children) walk(c);
@@ -446,7 +462,8 @@ final class NullFlow {
 
 	/** `fn` as a `NonNullPredicate` under `nonNullPredicates`' whitelist, given its modifier run `modifiers`, else null. */
 	private static function predicateOf(
-		fn: QueryNode, name: String, bodySpan: Span, modifiers: Array<QueryNode>, shape: RefShape, identKind: String, notEqKind: String
+		fn: QueryNode, name: String, bodySpan: Span, modifiers: Array<QueryNode>, shape: RefShape, identKind: String, notEqKind: String,
+		typeSources: Map<Int, String>
 	): Null<NonNullPredicate> {
 		inline function carries(kind: Null<String>): Bool return kind != null && modifiers.exists(m -> m.kind == kind);
 		final overloadMeta: Null<String> = shape.signatureOverloadMetaName;
@@ -475,11 +492,19 @@ final class NullFlow {
 			final index: Int = params.findIndex(p -> p.name == operand);
 			if (operand != null && index >= 0 && !nonNullParams.contains(index)) nonNullParams.push(index);
 		}
+		final paramTypes: Array<Null<String>> = [
+			for (p in params) {
+				final span: Null<Span> = p.span;
+				final written: Null<String> = span == null ? null : typeSources[span.from];
+				written == null ? null : TypeResolver.stripWs(written);
+			}
+		];
 		return nonNullParams.length == 0 ? null : {
 			name: name,
 			body: bodySpan,
 			arity: params.length,
-			nonNullParams: nonNullParams
+			nonNullParams: nonNullParams,
+			paramTypes: paramTypes
 		};
 	}
 
@@ -514,7 +539,8 @@ final class NullFlow {
 		for (i in predicate.nonNullParams) {
 			final arg: QueryNode = call.children[i + 1];
 			final name: Null<String> = arg.name;
-			if (arg.kind == ctx.identKind && name != null) out.push(name);
+			final written: Null<String> = predicate.paramTypes[i];
+			if (arg.kind == ctx.identKind && name != null && written != null && ctx.argType(arg) == written) out.push(name);
 		}
 		return out;
 	}
@@ -751,7 +777,7 @@ final class NullFlow {
 	private static function analyzeBody(
 		body: QueryNode, shape: RefShape, source: String, identKind: String, paramNames: Array<String>,
 		visit: (QueryNode, NullFacts) -> Void, seed: Null<(QueryNode) -> Bool>, declaredNullable: Null<(QueryNode) -> Bool>,
-		predicates: Array<NonNullPredicate>
+		predicates: Array<NonNullPredicate>, argType: QueryNode -> Null<String>
 	): Void {
 		final localDeclKinds: Array<String> = shape.localDeclKinds ?? [];
 		final nestedFnKinds: Array<String> = MemberKinds.nestedFunctionKinds(shape);
@@ -789,6 +815,7 @@ final class NullFlow {
 			callKind: shape.callKind,
 			newExprKind: shape.newExprKind,
 			nonNullPredicates: predicates,
+			argType: argType,
 			fieldAccessKind: shape.fieldAccessKind,
 			nullSafeAccessKind: shape.nullSafeAccessKind,
 			indexAccessKind: shape.indexAccessKind,

@@ -9334,6 +9334,14 @@
 			"find": "if (fn.kind != shape.finalModifierMemberKind && ",
 			"replace": "if (false && ",
 			"note": "an overridable member is trusted as a non-null predicate"
+		},
+		{
+			"name": "M-NULLFLOW-PREDICATE-TYPE-UNCHECKED",
+			"type": "anyparse.check.NullFlow",
+			"method": "predicateArgs",
+			"find": " && ctx.argType(arg) == written",
+			"replace": "",
+			"note": "a predicate argument counts whatever its written type, so an implicit @:from / @:to conversion into the parameter launders a null"
 		}
 	]
 }

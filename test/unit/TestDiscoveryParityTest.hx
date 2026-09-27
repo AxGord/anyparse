@@ -1813,6 +1813,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.UnguardedNullableDerefTest#testExistsGuardEarlyReturnPathKeySuppressed :: control :: M-EXISTS-GUARD-BLIND',
 			'unit.check.UnguardedNullableDerefTest#testFieldPathMapSeedFlagged :: control :: M-NULLABLE-NO-CHAIN',
 			'unit.check.UnguardedNullableDerefTest#testInlinePredicateGuardNotFlagged :: control :: M-NULLFLOW-PREDICATE-BLIND',
+			'unit.check.UnguardedNullableDerefTest#testPredicateAcrossAConversionStillFlagged :: control :: M-NULLFLOW-PREDICATE-TYPE-UNCHECKED',
 			'unit.check.UnguardedNullableDerefTest#testReflectCopyBindingNotFlagged :: control :: M-NULLABLE-FLOW-EXCLUDE-NONE',
 			'unit.check.UnguardedNullableDerefTest#testSafeNavGuardNarrowsRoot :: control :: M-SAFENAV-NO-NARROW',
 			'unit.check.UnguardedNullableDerefTest#testUnprovenPredicateStillFlagged :: control :: M-NULLFLOW-PREDICATE-UNCHECKED',
@@ -3884,7 +3885,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-NULLFLOW-VALUE-FACT-BLIND',
 			'M-NULLFLOW-VALUE-FACT-UNKILLED',
 			'M-NULLFLOW-PREDICATE-BLIND',
-			'M-NULLFLOW-PREDICATE-UNCHECKED'
+			'M-NULLFLOW-PREDICATE-UNCHECKED',
+			'M-NULLFLOW-PREDICATE-TYPE-UNCHECKED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

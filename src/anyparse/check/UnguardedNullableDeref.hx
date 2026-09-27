@@ -131,8 +131,11 @@ final class UnguardedNullableDeref implements Check implements NoAutofix {
 			final declaredNullable: (QueryNode) -> Bool = decl ->
 				NullableSource.declaredNullable(decl, declaredTypes, cfg)
 				&& !NullableSource.initTypeIsNonNull(NullFlow.declInit(decl, declTypeChildKinds), cfg, valueNominalOf);
+			// The written types are what lets a non-null predicate call guard its argument; the
+			// other `NullFlow` consumers pass none, so for them no call is a guard.
 			NullFlow.analyze(
-				tree, shape, entry.source, (node, facts) -> checkDeref(violations, entry.file, node, facts, ctx), seed, declaredNullable
+				tree, shape, entry.source, (node, facts) -> checkDeref(violations, entry.file, node, facts, ctx), seed, declaredNullable,
+				typed.declaredTypeSources(entry.source)
 			);
 		});
 	}
