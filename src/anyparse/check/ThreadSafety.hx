@@ -4,6 +4,7 @@ import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.GraphScoped;
 import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.Violation;
+import anyparse.check.LockSites.LockPair;
 import anyparse.query.CallGraph;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.SymbolIndex;
@@ -14,8 +15,8 @@ using Lambda;
 using StringTools;
 
 /**
- * One `apqlint.json` chain's `thread-safety` lists: the three name lists resolved to graph ids, the
- * lock pairs as written (`reportLockHeld` parses them).
+ * One `apqlint.json` chain's `thread-safety` lists: the three name lists resolved to graph ids, the lock pairs as
+ * written (a malformed one is reported) and as resolved.
  */
 private typedef ChainLists = {
 
@@ -26,28 +27,24 @@ private typedef ChainLists = {
 	final spawnIds: Array<String>;
 	final marshalIds: Array<String>;
 	final lockPairs: Array<String>;
+	final pairs: Array<LockPair>;
 }
 
 /**
- * Config-driven thread-context analysis over the approximate `CallGraph` —
- * finds the two classic main-thread stall shapes:
+ * Config-driven thread-context analysis over the approximate `CallGraph` — finds the two classic main-thread stalls:
+ * (a) a MAIN-context function calling a configured blocking sink; (b) a function holding a configured lock across a
+ * call that transitively reaches a sink, while the main thread takes that lock somewhere.
  *
- *  (a) a MAIN-context function directly calling a configured blocking sink
- *      without an intervening thread spawn — "blocking operation on the main
- *      thread";
- *  (b) a function holding a configured lock across a call that transitively
- *      reaches a blocking sink — "lock held across blocking call" (the other
- *      thread then stalls main on the same lock).
+ * Context propagation: graph roots start MAIN; a callback passed to a `spawns` target runs BG, one passed to a
+ * `marshals` target runs MAIN, any other inherits its registrar's context. A node with no resolved callers is ASSUMED
+ * main — the over-approximation a finder wants. Sinks inside a `marshals` function's own body are the primitive's
+ * machinery and are not reported.
  *
- * Context propagation: graph roots (no incoming edges) start MAIN — a UI app
- * runs everything on the main thread unless spawned off it. A callback passed
- * to a `spawns` target executes in a NEW thread (BG); one passed to a
- * `marshals` target executes on MAIN; any other callback inherits the
- * registrar's context. A node with no resolved callers is ASSUMED main — the
- * over-approximation a finder wants (candidates for human review, never a
- * silent miss). Sinks INSIDE a `marshals` function's own body are not
- * reported: the marshal primitive IS the thread boundary, and its internal
- * dispatch (context checks, queue pumping) is invisible to the graph.
+ * Locks are told apart by the OBJECT (`LockSites`: the sealed member holding it). A sink that TAKES a `lockPairs` lock
+ * stalls only when the lock is LONG: some function holds it, on some path (`LockWindow`), across a call that blocks;
+ * leaves it held on a path out of the function; or releases it without taking it. A lock no sealed member names is
+ * always long, so an unknown lock keeps every report; a hold in the owner's constructor before the object escapes
+ * blocks no one. Holding a long lock is itself blocking, so the locks and the taint are solved together.
  *
  * Configured per project in `apqlint.json` (the rule is inert without it):
  *
@@ -59,13 +56,9 @@ private typedef ChainLists = {
  *         "exclude":   ["test"]
  *     }
  *
- * `exclude` drops files whose path contains an entry as a '/'-bounded
- * segment run BEFORE the graph is built — test code exercising blocking
- * calls on its own thread would otherwise pollute every context.
- *
- * Patterns are matched by their last two dot-segments (`SymbolIndex` models no
- * packages); `Type.*` covers every recorded member of a type. A `lockPairs`
- * entry is `<lock pattern>/<unlock member name>` on the same type.
+ * `exclude` drops files whose path contains an entry as a '/'-bounded segment run BEFORE the graph is built. Patterns
+ * are matched by their last two dot-segments (`SymbolIndex` models no packages); `Type.*` covers every recorded member
+ * of a type. A `lockPairs` entry is `<lock pattern>/<unlock member name>` on the same type.
  */
 @:nullSafety(Strict)
 final class ThreadSafety implements Check implements ConfigAware implements NoAutofix implements GraphScoped {
@@ -92,10 +85,10 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	}
 
 	/**
-	 * ONE graph over every file of the run but an `exclude`d one, whatever config chains they span — a file whose chain
-	 * names no `sinks` included, since its calls and registrations shape the other files' contexts — and each SITE
-	 * judged by the chain of its own file: a call is a sink call when its call site's chain lists that sink, a callback
-	 * is spawned or marshalled when the registering site's chain lists that target, a lock window opens under its file's
+	 * ONE graph over every file of the run, whatever config chains they span — a file whose chain names no `sinks`
+	 * included, since its calls and registrations shape the other files' contexts — and each SITE judged by the chain
+	 * of its own file: a call is a sink call when its call site's chain lists that sink, a callback is spawned or
+	 * marshalled when the registering site's chain lists that target, a lock window opens under its file's
 	 * `lockPairs`. Reachability stays whole-graph, so a single-chain run is unchanged and a main-thread caller in one
 	 * chain still reaches a sink call in another.
 	 */
@@ -115,12 +108,15 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		final mainParent: Map<String, CallEdge> = [];
 		propagateContexts(graph, listsOf, contexts, mainParent);
 
+		final sites: LockSites = new LockSites(graph, [for (f in files) f.file], plugin, file -> listsOf(file).pairs);
+		final long: Array<String> = [];
 		final taintHop: Map<String, CallEdge> = [];
-		collectTaint(graph, sinkIds, listsOf, taintHop);
+		solveLongLocks(graph, sinkIds, listsOf, sites, long, taintHop);
 
 		final violations: Array<Violation> = [];
-		reportMainSinkCalls(graph, listsOf, contexts, mainParent, violations);
-		reportLockHeld(graph, sets, listsOf, taintHop, violations);
+		reportMainSinkCalls(graph, listsOf, sites, long, contexts, mainParent, violations);
+		reportMalformedPairs(sets, violations);
+		reportLockHeld(sites, listsOf, long, taintHop, contexts, violations);
 		return violations;
 	}
 
@@ -171,7 +167,8 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 				sinkIds: matchAll(graph, sinks),
 				spawnIds: matchAll(graph, spawns),
 				marshalIds: matchAll(graph, marshals),
-				lockPairs: lockPairs
+				lockPairs: lockPairs,
+				pairs: resolvePairs(graph, lockPairs)
 			};
 			if (known == null) {
 				bySignature[signature] = lists;
@@ -194,6 +191,20 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		final result: Array<String> = [];
 		for (p in patterns) for (id in graph.matchIds(p)) if (!result.contains(id)) result.push(id);
 		return result;
+	}
+
+	/** Every well-formed `lockPairs` entry as the graph's lock ids, each paired with the same type's unlock member. */
+	private static function resolvePairs(graph: CallGraph, lockPairs: Array<String>): Array<LockPair> {
+		final pairs: Array<LockPair> = [];
+		for (entry in lockPairs) {
+			final slash: Int = entry.lastIndexOf('/');
+			if (slash <= 0) continue;
+			for (lockId in graph.matchIds(entry.substring(0, slash))) {
+				final dot: Int = lockId.lastIndexOf('.');
+				if (dot > 0) pairs.push({ lockId: lockId, unlockId: lockId.substring(0, dot + 1) + entry.substring(slash + 1) });
+			}
+		}
+		return pairs;
 	}
 
 	/**
@@ -252,36 +263,83 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 	}
 
 	/**
-	 * Reverse BFS from the sinks over the invocation edges (`EdgeKind.isInvocation`) — `taintHop[n]` is n's next edge toward a sink.
-	 * `sinkIds` is the union over every chain: a call taints its caller when the call site's own chain names the callee a
-	 * sink, or when the callee is itself tainted.
+	 * The long locks and the taint they imply, solved together: a call blocks when it reaches a sink, and a lock taken
+	 * by a sink call blocks only when it is long, while a lock is long when a hold of it spans a call that blocks. Grows
+	 * from the locks long on their own (`LockAcquire.leaks`, `LockSites.crossing`) until nothing changes.
+	 */
+	private static function solveLongLocks(
+		graph: CallGraph, sinkIds: Array<String>, listsOf: (String) -> ChainLists, sites: LockSites, long: Array<String>,
+		taintHop: Map<String, CallEdge>
+	): Void {
+		for (lock in sites.crossing) if (!long.contains(lock)) long.push(lock);
+		for (a in sites.acquires) if (a.leaks && a.lock != null && !long.contains(a.lock)) long.push(a.lock);
+		var grew: Bool = true;
+		while (grew) {
+			taintHop.clear();
+			collectTaint(graph, sinkIds, listsOf, sites, long, taintHop);
+			grew = false;
+			for (a in sites.acquires) {
+				final lock: Null<String> = a.lock;
+				if (lock == null || a.uncontended || long.contains(lock)) continue;
+				if (!a.window.exists(e -> blocks(e, listsOf, sites, long) || taintHop.exists(e.to) && !takesLock(e, listsOf))) continue;
+				long.push(lock);
+				grew = true;
+			}
+		}
+	}
+
+	/** Whether `edge` is a call to a sink `lockPairs` names a lock of: one whose cost is the wait for that lock. */
+	private static function takesLock(edge: CallEdge, listsOf: (String) -> ChainLists): Bool {
+		final lists: ChainLists = listsOf(edge.file);
+		return lists.sinkIds.contains(edge.to) && lists.pairs.exists(p -> p.lockId == edge.to);
+	}
+
+	/** Whether `edge` itself blocks: a sink call its site's chain names, one taking a lock only when the lock is long or unknown. */
+	private static function blocks(edge: CallEdge, listsOf: (String) -> ChainLists, sites: LockSites, long: Array<String>): Bool {
+		if (!edge.kind.isInvocation() || !listsOf(edge.file).sinkIds.contains(edge.to)) return false;
+		if (!takesLock(edge, listsOf)) return true;
+		final lock: Null<String> = sites.lockOf(edge);
+		return lock == null || long.contains(lock);
+	}
+
+	/**
+	 * Reverse BFS from the blocking calls over the invocation edges (`EdgeKind.isInvocation`) — `taintHop[n]` is n's next
+	 * edge toward a sink. A call taking a lock taints its caller by what the lock is (`blocks`), never through the lock
+	 * primitive's own body: that body IS the wait.
 	 */
 	private static function collectTaint(
-		graph: CallGraph, sinkIds: Array<String>, listsOf: (String) -> ChainLists, taintHop: Map<String, CallEdge>
+		graph: CallGraph, sinkIds: Array<String>, listsOf: (String) -> ChainLists, sites: LockSites, long: Array<String>,
+		taintHop: Map<String, CallEdge>
 	): Void {
-		final queue: Array<String> = sinkIds.copy();
+		final queue: Array<String> = [];
+		// a node its call site's own chain names a sink is where a chain ENDS: a call to it blocks by that name (`blocks`)
+		for (edge in graph.edges) if (
+			sinkIds.contains(edge.to) && !taintHop.exists(edge.from) && !listsOf(edge.file).sinkIds.contains(edge.from)
+			&& blocks(edge, listsOf, sites, long)
+		) {
+			taintHop[edge.from] = edge;
+			queue.push(edge.from);
+		}
 		var qi: Int = 0;
 		while (qi < queue.length) {
 			final id: String = queue[qi++];
-			for (edge in graph.inEdges(id)) if (edge.kind.isInvocation()) {
+			for (edge in graph.inEdges(id)) if (edge.kind.isInvocation() && !taintHop.exists(edge.from) && !takesLock(edge, listsOf)) {
 				// the edge leaves `from`'s body, so its file's chain is the one that says whether `from` is a sink
-				final lists: ChainLists = listsOf(edge.file);
-				if (lists.sinkIds.contains(edge.from) || taintHop.exists(edge.from)) continue;
-				if (!(lists.sinkIds.contains(id) || taintHop.exists(id))) continue;
+				if (listsOf(edge.file).sinkIds.contains(edge.from)) continue;
 				taintHop[edge.from] = edge;
 				queue.push(edge.from);
 			}
 		}
 	}
 
-	/** Finding (a): a MAIN-context function directly calls a sink. */
+	/** Finding (a): a MAIN-context function directly calls a sink — one taking a lock only when that lock is long or unknown. */
 	private static function reportMainSinkCalls(
-		graph: CallGraph, listsOf: (String) -> ChainLists, contexts: Map<String, Int>, mainParent: Map<String, CallEdge>,
-		violations: Array<Violation>
+		graph: CallGraph, listsOf: (String) -> ChainLists, sites: LockSites, long: Array<String>, contexts: Map<String, Int>,
+		mainParent: Map<String, CallEdge>, violations: Array<Violation>
 	): Void {
 		for (edge in graph.edges) if (edge.kind.isInvocation()) {
 			final lists: ChainLists = listsOf(edge.file);
-			if (!lists.sinkIds.contains(edge.to)) continue;
+			if (!blocks(edge, listsOf, sites, long)) continue;
 			// a `marshals` function IS the thread boundary — its body dispatches
 			// between contexts in ways the graph cannot see; sinks inside it are
 			// the primitive's own machinery, not application-level main calls
@@ -300,88 +358,57 @@ final class ThreadSafety implements Check implements ConfigAware implements NoAu
 		}
 	}
 
-	/**
-	 * Finding (b): between a lock call and the SAME TYPE's unlock call inside
-	 * one function body (source order), a call transitively reaches a sink.
-	 * Receiver identity is not tracked — same-type pairing is the
-	 * over-approximation. Each chain's `lockPairs` open windows only in its own files; a malformed
-	 * entry several chains share is reported once.
-	 */
-	private static function reportLockHeld(
-		graph: CallGraph, sets: Array<ChainLists>, listsOf: (String) -> ChainLists, taintHop: Map<String, CallEdge>,
-		violations: Array<Violation>
-	): Void {
-		// noqa: complexity
-		final seen: Array<String> = [];
+	/** Every malformed `lockPairs` entry of a reporting chain, once however many chains share it. */
+	private static function reportMalformedPairs(sets: Array<ChainLists>, violations: Array<Violation>): Void {
 		for (setIndex => lists in sets) for (pair in lists.lockPairs) {
-			final slash: Int = pair.lastIndexOf('/');
-			if (slash <= 0) {
-				// a chain that reports nothing (`needs-config`) says nothing about its options either
-				if (!lists.reports || sets.slice(0, setIndex).exists(earlier -> earlier.reports && earlier.lockPairs.contains(pair)))
-					continue;
-				violations.push({
-					file: '',
-					span: null,
-					rule: 'thread-safety',
-					severity: Severity.Info,
-					message: 'malformed lockPairs entry "$pair" — expected "<lock pattern>/<unlock member>"'
-				});
-				continue;
-			}
-			final lockIds: Array<String> = graph.matchIds(pair.substring(0, slash));
-			final unlockMember: String = pair.substring(slash + 1);
-			for (lockId in lockIds) {
-				final dot: Int = lockId.lastIndexOf('.');
-				if (dot <= 0) continue;
-				final unlockId: String = lockId.substring(0, dot + 1) + unlockMember;
-				for (lockEdge in graph.inEdges(lockId)) if (lockEdge.kind == Call && listsOf(lockEdge.file) == lists) {
-					final lockSpan: Null<Span> = lockEdge.span;
-					if (lockSpan == null) continue;
-					final windowEnd: Null<Int> = closingUnlockFrom(graph, lockEdge, unlockId);
-					if (windowEnd == null) continue;
-					for (edge in graph.outEdges(lockEdge.from)) {
-						if (!edge.kind.isInvocation()) continue;
-						// same-simple-name types merge into one graph node — only
-						// edges from the SAME FILE belong to this lock's body window
-						if (edge.file != lockEdge.file) continue;
-						final span: Null<Span> = edge.span;
-						if (span == null || span.from <= lockSpan.from || span.from >= windowEnd) continue;
-						// the closing unlock is excluded; a SECOND lock call inside
-						// the window is a nested re-acquire and stays reportable
-						if (edge.to == unlockId) continue;
-						final direct: Bool = lists.sinkIds.contains(edge.to);
-						if (!direct && !taintHop.exists(edge.to)) continue;
-						final evidence: String = direct ? edge.to : taintChain(edge.to, taintHop);
-						final message: String = '"${lockEdge.from}" holds "$lockId" across a call that can block: $evidence';
-						final key: String = '${edge.file}:${span.from}:$message';
-						if (seen.contains(key)) continue;
-						seen.push(key);
-						violations.push({
-							file: edge.file,
-							span: span,
-							rule: 'thread-safety',
-							severity: Severity.Warning,
-							message: message
-						});
-					}
-				}
-			}
+			// a chain that reports nothing (`needs-config`) says nothing about its options either
+			if (pair.lastIndexOf('/') > 0 || !lists.reports) continue;
+			if (sets.slice(0, setIndex).exists(earlier -> earlier.reports && earlier.lockPairs.contains(pair))) continue;
+			violations.push({
+				file: '',
+				span: null,
+				rule: 'thread-safety',
+				severity: Severity.Info,
+				message: 'malformed lockPairs entry "$pair" — expected "<lock pattern>/<unlock member>"'
+			});
 		}
 	}
 
-	/** Span start of the first same-function unlock call after `lockEdge`, or null when the lock is not closed in this body. */
-	private static function closingUnlockFrom(graph: CallGraph, lockEdge: CallEdge, unlockId: String): Null<Int> {
-		final lockSpan: Null<Span> = lockEdge.span;
-		if (lockSpan == null) return null;
-		var best: Null<Int> = null;
-		for (edge in graph.outEdges(lockEdge.from)) {
-			if (edge.kind != Call || edge.to != unlockId) continue;
-			if (edge.file != lockEdge.file) continue;
-			final span: Null<Span> = edge.span;
-			if (span == null || span.from <= lockSpan.from) continue;
-			if (best == null || span.from < best) best = span.from;
+	/**
+	 * Finding (b): on some path of one function body a lock is held across a call that blocks. Reported for a lock the
+	 * main thread takes somewhere (or one no sealed member names), since only then does the hold stall main; a hold in
+	 * the owner's constructor before the object escapes stalls no one.
+	 */
+	private static function reportLockHeld(
+		sites: LockSites, listsOf: (String) -> ChainLists, long: Array<String>, taintHop: Map<String, CallEdge>,
+		contexts: Map<String, Int>, violations: Array<Violation>
+	): Void {
+		final seen: Array<String> = [];
+		final mainTaken: Array<String> = [
+			for (a in sites.acquires) if (a.lock != null && (contexts[a.edge.from] ?? 0) & CTX_MAIN != 0) a.lock
+		];
+		for (a in sites.acquires) {
+			final lock: Null<String> = a.lock;
+			if (a.uncontended || lock != null && !mainTaken.contains(lock)) continue;
+			for (edge in a.window) {
+				final span: Null<Span> = edge.span;
+				if (span == null) continue;
+				final direct: Bool = blocks(edge, listsOf, sites, long);
+				if (!direct && (!taintHop.exists(edge.to) || takesLock(edge, listsOf))) continue;
+				final evidence: String = direct ? edge.to : taintChain(edge.to, taintHop);
+				final message: String = '"${a.edge.from}" holds "${a.pair.lockId}" across a call that can block: $evidence';
+				final key: String = '${edge.file}:${span.from}:$message';
+				if (seen.contains(key)) continue;
+				seen.push(key);
+				violations.push({
+					file: edge.file,
+					span: span,
+					rule: 'thread-safety',
+					severity: Severity.Warning,
+					message: message
+				});
+			}
 		}
-		return best;
 	}
 
 	/** `root -> ... -> id` — how MAIN reached `id`, capped at CHAIN_CAP hops, cycle-safe (marshal ping-pong). */

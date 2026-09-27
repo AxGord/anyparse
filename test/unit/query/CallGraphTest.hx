@@ -28,6 +28,19 @@ class CallGraphTest extends Test {
 		Assert.equals(1, edges(g, 'A.a', 'A.b', Call).length);
 	}
 
+	/**
+	 * A call's receiver names the lock OBJECT only when it is a member read directly — a bare field, `this.f`, a static
+	 * `T.f`; a parameter of the same name is a value some other binding may alias, and names none.
+	 */
+	@:pin('control') @:killer('M-GRAPH-RECEIVER-LOCAL-FIELD')
+	public function testReceiverFieldNamesOnlyAMemberReadDirectly(): Void {
+		final g: CallGraph = graphOf([
+			'class A { var m:M; static var s:M; function f(m:M):Void { m.go(); this.m.go(); A.s.go(); s.go(); } }',
+			'class M { public function go():Void {} }'
+		]);
+		Assert.same([null, 'A.m', 'A.s', 'A.s'], [for (e in edges(g, 'A.f', 'M.go', Call)) e.receiverField]);
+	}
+
 	public function testLocalFunctionCallAndContains(): Void {
 		final g: CallGraph = graphOf(['class A { function a():Void { function helper():Void {} helper(); } }']);
 		Assert.equals(1, edges(g, 'A.a', 'A.a#helper', Call).length);

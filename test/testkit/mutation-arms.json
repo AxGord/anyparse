@@ -5478,10 +5478,10 @@
 		},
 		{
 			"name": "M-TS-ACCESSOR-TAINT",
-			"type": "anyparse.check.ThreadSafety",
-			"method": "reportLockHeld",
-			"find": "\t\t\t\t\t\tif (!edge.kind.isInvocation()) continue;\n",
-			"replace": "\t\t\t\t\t\tif (edge.kind != Call && edge.kind != New && edge.kind != Virtual) continue;\n",
+			"type": "anyparse.check.LockSites",
+			"method": "acquire",
+			"find": "if (e.kind.isInvocation()) e",
+			"replace": "if (e.kind == Call || e.kind == New || e.kind == Virtual) e",
 			"note": "a property read inside a lock window is not a call, so a getter that blocks while the lock is held goes unreported"
 		},
 		{
@@ -5848,8 +5848,8 @@
 			"name": "M-GRAPH-DISPATCH-TYPE",
 			"type": "anyparse.query.CallGraph",
 			"method": "collectEdges",
-			"find": "addEdge(from, calleeId, Call, null, file, span, recv.isValue ? recv.typeName : null);",
-			"replace": "addEdge(from, calleeId, Call, null, file, span);",
+			"find": "addEdge(from, calleeId, Call, null, file, span, recv.isValue ? recv.typeName : null, field);",
+			"replace": "addEdge(from, calleeId, Call, null, file, span, null, field);",
 			"note": "an instance call records no dispatch type, so overrides loaded later are never reached"
 		},
 		{
@@ -8681,8 +8681,8 @@
 			"name": "M-TS-TAINT-UNION-SINK",
 			"type": "anyparse.check.ThreadSafety",
 			"method": "collectTaint",
-			"find": "if (lists.sinkIds.contains(edge.from) || taintHop.exists(edge.from)) continue;",
-			"replace": "if (sinkIds.contains(edge.from) || taintHop.exists(edge.from)) continue;",
+			"find": "&& !listsOf(edge.file).sinkIds.contains(edge.from)",
+			"replace": "&& !sinkIds.contains(edge.from)",
 			"note": "a node one chain names a sink never carries taint to its callers in a chain where it is a plain function"
 		},
 		{
@@ -8752,9 +8752,9 @@
 		{
 			"name": "M-TS-MALFORMED-UNGATED",
 			"type": "anyparse.check.ThreadSafety",
-			"method": "reportLockHeld",
-			"find": "!lists.reports || ",
-			"replace": "",
+			"method": "reportMalformedPairs",
+			"find": " || !lists.reports) continue;",
+			"replace": ") continue;",
 			"note": "a malformed option of a chain that reports nothing is reported"
 		},
 		{
@@ -9171,6 +9171,70 @@
 			"method": "closesAtEnd",
 			"force": "true",
 			"note": "a leading Null<...> is peeled off a facts type it does not enclose, mangling Null<A>->Null<B>"
+		},
+		{
+			"name": "M-GRAPH-RECEIVER-LOCAL-FIELD",
+			"type": "anyparse.query.CallGraph",
+			"method": "collectEdges",
+			"find": "if (bound != null && bound >= 0 && bindsLocally(bound)) return null;",
+			"replace": "",
+			"note": "a parameter or local named like a member is read as that member, so a lock some other binding aliases gets the member's identity"
+		},
+		{
+			"name": "M-TS-LOCK-ALWAYS-BLOCKS",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "blocks",
+			"find": "if (!takesLock(edge, listsOf)) return true;",
+			"replace": "return true;",
+			"note": "a sink taking a lock blocks whatever the lock is, so a main-thread take of a lock nobody holds long is reported again"
+		},
+		{
+			"name": "M-TS-LONG-NEVER-GROWS",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "solveLongLocks",
+			"find": "if (!a.window.exists(",
+			"replace": "if (true || !a.window.exists(",
+			"note": "a hold across a blocking call no longer makes its lock long, so the main-thread take of a lock a worker sleeps under goes unreported"
+		},
+		{
+			"name": "M-TS-UNSEALED-TRUSTED",
+			"type": "anyparse.check.LockSites",
+			"method": "lockOf",
+			"find": "return field == null || _unsealed.contains(memberName(field)) ? null : field;",
+			"replace": "return field;",
+			"note": "a member read as a value still names one lock, so a hold through an alias of it never makes it long"
+		},
+		{
+			"name": "M-TS-WINDOW-IF-RELEASES",
+			"type": "anyparse.check.LockWindow",
+			"method": "step",
+			"find": "return join(step(kids[1], cond), otherwise);",
+			"replace": "return join(step(kids[1], cond), false);",
+			"note": "a release in an if-branch releases on every path, so the statements after an early-return release fall out of the window"
+		},
+		{
+			"name": "M-TS-HELD-ANY-THREAD",
+			"type": "anyparse.check.ThreadSafety",
+			"method": "reportLockHeld",
+			"find": "if (a.uncontended || lock != null && !mainTaken.contains(lock)) continue;",
+			"replace": "if (a.uncontended) continue;",
+			"note": "a hold of a lock only background threads take is reported as a main-thread stall"
+		},
+		{
+			"name": "M-TS-CROSSING-IGNORED",
+			"type": "anyparse.check.LockSites",
+			"method": "collectCrossing",
+			"find": "if (!worked) crossing.push(lock);",
+			"replace": "",
+			"note": "a lock released by a function that never took it reads as short, so its main-thread take goes unreported"
+		},
+		{
+			"name": "M-TS-CTOR-CONTENDED",
+			"type": "anyparse.check.LockSites",
+			"method": "acquire",
+			"find": "uncontended: !leaks && ",
+			"replace": "uncontended: false && !leaks && ",
+			"note": "a hold in the owner's own constructor makes the lock long, so every later take of it reads as a stall"
 		}
 	]
 }

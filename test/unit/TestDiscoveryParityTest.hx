@@ -1749,7 +1749,14 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.TailMergeCheckTest#testStructuralIdentityHalfNeeded :: control :: M-TAILMERGE-NORM-ONLY',
 			'unit.check.TailMergeCheckTest#testSwitchCaseOutOfScope :: control :: M-TAILMERGE-FALL-KEPT',
 			'unit.check.ThreadSafetyCheckTest#testAFileWithoutSinksStillShapesTheGraph :: control :: M-TS-GRAPH-CUT',
+			'unit.check.ThreadSafetyCheckTest#testAHoldInTheOwnersConstructorBlocksNoOne :: control :: M-TS-CTOR-CONTENDED',
+			'unit.check.ThreadSafetyCheckTest#testAHoldOnlyABackgroundThreadTakesIsQuiet :: control :: M-TS-HELD-ANY-THREAD',
+			'unit.check.ThreadSafetyCheckTest#testALockHeldAcrossASleepStallsItsMainThreadTaker :: control :: M-TS-LONG-NEVER-GROWS',
+			'unit.check.ThreadSafetyCheckTest#testALockMemberThatEscapesStaysReported :: control :: M-TS-UNSEALED-TRUSTED',
 			'unit.check.ThreadSafetyCheckTest#testAMalformedOptionOfANonReportingChainIsSilent :: control :: M-TS-MALFORMED-UNGATED',
+			'unit.check.ThreadSafetyCheckTest#testAReleaseOnAnEarlyReturnKeepsTheRestOfTheWindow :: control :: M-TS-WINDOW-IF-RELEASES',
+			'unit.check.ThreadSafetyCheckTest#testAReleaseWithoutATakeMakesTheLockLong :: control :: M-TS-CROSSING-IGNORED',
+			'unit.check.ThreadSafetyCheckTest#testAShortLockTakenOnMainIsQuiet :: control :: M-TS-LOCK-ALWAYS-BLOCKS',
 			'unit.check.ThreadSafetyCheckTest#testASinkOfOneChainIsAPlainCallInAnother :: control :: M-TS-TAINT-UNION-SINK',
 			'unit.check.ThreadSafetyCheckTest#testEachCallSiteJudgedByItsOwnChain :: control :: M-TS-FIRST-FILE-LISTS',
 			'unit.check.ThreadSafetyCheckTest#testLockHeldAcrossABlockingGetterFlagged :: control :: M-TS-ACCESSOR-TAINT',
@@ -2251,6 +2258,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.CallGraphTest#testPropertyAccessRunsItsAccessor :: control :: '
 				+ 'M-GRAPH-SETTER-EDGE,M-GRAPH-GETTER-EDGE,M-GRAPH-ELEMENT-RECEIVER,'
 				+ 'M-GRAPH-OWN-ACCESSOR-ANY-RECEIVER,M-GRAPH-SETTER-READ-DIRECT',
+			'unit.query.CallGraphTest#testReceiverFieldNamesOnlyAMemberReadDirectly :: control :: '
+				+ 'M-GRAPH-RECEIVER-LOCAL-FIELD',
 			'unit.query.CallGraphTest#testReceiverTypedThroughDeclaredMemberTypes :: control :: M-GRAPH-FIELD-PATH-RECEIVER',
 			'unit.query.CallGraphTest#testStaticExtensionResolvesThroughTheUsing :: control :: M-GRAPH-USING-EXTENSION',
 			'unit.query.CallGraphTest#testStaticFieldReadOffItsTypeIsTyped :: control :: M-GRAPH-STATIC-FIELD-TYPE',
@@ -3838,7 +3847,15 @@ class TestDiscoveryParityTest extends Test {
 			'M-AVOIDDYN-COMPOSITE-SKIPPED',
 			'M-OPTPARAM-COMMENT-DROPPED',
 			'M-AST-SLOT-DUPLICATED',
-			'M-FACTS-NULL-PEEL-UNMATCHED'
+			'M-FACTS-NULL-PEEL-UNMATCHED',
+			'M-GRAPH-RECEIVER-LOCAL-FIELD',
+			'M-TS-LOCK-ALWAYS-BLOCKS',
+			'M-TS-LONG-NEVER-GROWS',
+			'M-TS-UNSEALED-TRUSTED',
+			'M-TS-WINDOW-IF-RELEASES',
+			'M-TS-HELD-ANY-THREAD',
+			'M-TS-CROSSING-IGNORED',
+			'M-TS-CTOR-CONTENDED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

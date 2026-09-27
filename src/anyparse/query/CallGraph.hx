@@ -58,6 +58,13 @@ typedef CallEdge = {
 	var file: String;
 	var span: Null<Span>;
 	var dispatchType: Null<String>;
+
+	/**
+	 * The member a call's receiver names directly — a bare field, `this.f`, a static `T.f` — as `Owner.f`, set on the
+	 * edges of that call site; null for every other receiver (a local, a parameter, an expression) and every other edge.
+	 * What names one lock OBJECT for a lock-discipline analysis: the receiver's type alone merges every lock of a class.
+	 */
+	var receiverField: Null<String>;
 }
 
 /**
@@ -649,7 +656,8 @@ final class CallGraph {
 	}
 
 	private function addEdge(
-		from: String, to: String, kind: EdgeKind, via: Null<String>, file: String, span: Null<Span>, ?dispatchType: String
+		from: String, to: String, kind: EdgeKind, via: Null<String>, file: String, span: Null<Span>, ?dispatchType: String,
+		?receiverField: String
 	): Void {
 		// a faceted function's syntax still records every edge it names: the facts add to them and make them precise, never
 		// take one away, since a build the list does not name may resolve a name the way the syntax reads it
@@ -660,7 +668,8 @@ final class CallGraph {
 			via: via,
 			file: file,
 			span: span,
-			dispatchType: dispatchType
+			dispatchType: dispatchType,
+			receiverField: receiverField
 		});
 	}
 
@@ -829,6 +838,36 @@ final class CallGraph {
 		function isAccessKind(kind: String): Bool {
 			return kind == fieldAccessKind || (safeAccessKind != null && kind == safeAccessKind)
 				|| (forceAccessKind != null && kind == forceAccessKind);
+		}
+
+		/** `receiverRaw` as the member it names directly — a bare field, `this.f`, a static `T.f` — spelled `Owner.f`, or null. */
+		function receiverField(receiverRaw: QueryNode, currentType: Null<String>): Null<String> {
+			final receiver: QueryNode = unwrap(receiverRaw);
+			final name: Null<String> = receiver.name;
+			if (name == null) return null;
+			var owner: Null<String> = null;
+			if (receiver.kind == identKind) {
+				final span: Null<Span> = receiver.span;
+				if (span == null || name == selfText) return null;
+				final bound: Null<Int> = bindFor(name)[span.from];
+				// a local or a parameter is a value some other binding may alias: no member names it
+				if (bound != null && bound >= 0 && bindsLocally(bound)) return null;
+				owner = currentType;
+			} else if (isAccessKind(receiver.kind) && receiver.children.length > 0) {
+				final base: QueryNode = unwrap(receiver.children[0]);
+				final baseName: Null<String> = base.name;
+				final baseSpan: Null<Span> = base.span;
+				if (base.kind != identKind || baseName == null || baseSpan == null) return null;
+				final bound: Null<Int> = bindFor(baseName)[baseSpan.from];
+				owner = if (baseName == selfText)
+					currentType
+				else if ((bound == null || bound < 0) && CallGraphNames.isTypeLike(baseName))
+					baseName
+				else
+					null;
+			}
+			if (owner == null || !types.fieldOnChain(owner, name)) return null;
+			return '${types.declaringTypeOf(owner, name) ?? owner}.$name';
 		}
 
 		/** Resolve an identifier that NAMES a function — a local one, a scope-bound declaration, or a member on the type chain. */
@@ -1388,9 +1427,10 @@ final class CallGraph {
 								calleeId = resolved ?? externalNode(
 									types.declaringTypeOf(recv.typeName, calleeName) ?? recv.typeName, calleeName
 								);
-								addEdge(from, calleeId, Call, null, file, span, recv.isValue ? recv.typeName : null);
+								final field: Null<String> = receiverField(callee.children[0], currentType);
+								addEdge(from, calleeId, Call, null, file, span, recv.isValue ? recv.typeName : null, field);
 								if (recv.isValue) for (v in virtualTargets(recv.typeName, calleeName))
-									addEdge(from, v, Virtual, null, file, span, recv.typeName);
+									addEdge(from, v, Virtual, null, file, span, recv.typeName, field);
 								if (nodes[calleeId]?.isDynamic == true) unresolvedAt(span, FunctionValue(calleeName), currentType);
 							}
 						}
