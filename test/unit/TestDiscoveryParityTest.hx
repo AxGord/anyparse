@@ -1754,6 +1754,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.ThreadSafetyCheckTest#testAHoldAcrossAnUnresolvedCallMakesTheLockLong :: control :: M-TS-BLIND-CALL-SHORT',
 			'unit.check.ThreadSafetyCheckTest#testAHoldInTheOwnersConstructorBlocksNoOne :: control :: M-TS-CTOR-CONTENDED',
 			'unit.check.ThreadSafetyCheckTest#testAHoldOnlyABackgroundThreadTakesIsQuiet :: control :: M-TS-HELD-ANY-THREAD',
+			'unit.check.ThreadSafetyCheckTest#testALockCallThroughAnUntypedReceiverUnsealsTheMember :: control :: '
+				+ 'M-TS-UNNAMED-RECEIVER-SEALED',
 			'unit.check.ThreadSafetyCheckTest#testALockHeldAcrossASleepStallsItsMainThreadTaker :: control :: M-TS-LONG-NEVER-GROWS',
 			'unit.check.ThreadSafetyCheckTest#testALockMemberThatEscapesStaysReported :: control :: M-TS-UNSEALED-TRUSTED',
 			'unit.check.ThreadSafetyCheckTest#testALockTakenInALoopIsHeldOnTheNextPass :: control :: M-TS-LOOP-ONE-PASS',
@@ -3866,7 +3868,8 @@ class TestDiscoveryParityTest extends Test {
 			'M-GRAPH-RECEIVER-PROPERTY',
 			'M-TS-BLIND-CALL-SHORT',
 			'M-TS-CTOR-ESCAPE-BLIND',
-			'M-TS-LOOP-ONE-PASS'
+			'M-TS-LOOP-ONE-PASS',
+			'M-TS-UNNAMED-RECEIVER-SEALED'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

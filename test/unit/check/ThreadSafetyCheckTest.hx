@@ -277,6 +277,23 @@ class ThreadSafetyCheckTest extends Test {
 		#end
 	}
 
+	/**
+	 * A lock call through a receiver the graph cannot type (`Dynamic`, a cast, a type parameter) may reach ANY object's
+	 * member of that name, so the member is no longer sealed: its main-thread take stays reported.
+	 */
+	@:pin('control') @:killer('M-TS-UNNAMED-RECEIVER-SEALED')
+	public function testALockCallThroughAnUntypedReceiverUnsealsTheMember(): Void {
+		#if (sys || nodejs)
+		final found: Array<String> = lockFindings([
+			'class A { final m:Mutex = new Mutex(); public function new() {} public function work():Void { m.acquire(); m.release(); }'
+			+ ' static function hold(d:Dynamic):Void d.m.acquire(); }'
+		]);
+		Assert.isTrue(found.exists(f -> f.indexOf('A.work -> Mutex.acquire') != -1), found.join('\n'));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	@:pin('control') @:killer('M-TS-ACCESSOR-TAINT')
 	public function testLockHeldAcrossABlockingGetterFlagged(): Void {
 		// Reading `_p.v` runs `get_v`, and that getter sleeps: the property read is a call like any other.

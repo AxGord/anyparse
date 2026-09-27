@@ -205,34 +205,54 @@ final class LockSites {
 			: node.children.exists(c -> passesSelf(c, node));
 	}
 
-	/** Every member name among `names` some file of `files` reads as a value or fills from anything but a `new`. */
+	/**
+	 * Every member name among `names` some file of `files` reads as a value, fills from anything but a `new`, or calls a
+	 * method on through a receiver the graph did not name that member for (`named`: per file, `<call start>:<member>`
+	 * for every invocation whose `receiverField` names one).
+	 */
 	private function collectUnsealed(files: Array<String>, names: Array<String>): Void {
 		if (names.length == 0) return;
+		final named: Map<String, Array<String>> = [];
+		for (e in _graph.edges) {
+			final field: Null<String> = e.receiverField;
+			final at: Null<Span> = e.span;
+			if (field == null || at == null || !e.kind.isInvocation()) continue;
+			final keys: Array<String> = named[e.file] ?? [];
+			keys.push('${at.from}:${memberName(field)}');
+			named[e.file] = keys;
+		}
+		var calls: Array<String> = [];
 		function walk(node: QueryNode, parent: Null<QueryNode>, grand: Null<QueryNode>): Void {
 			final name: Null<String> = node.name;
-			if (name != null && names.contains(name) && !_unsealed.contains(name) && !sealedAt(node, parent, grand)) _unsealed.push(name);
+			if (name != null && names.contains(name) && !_unsealed.contains(name) && !sealedAt(node, parent, grand, calls))
+				_unsealed.push(name);
 			for (c in node.children) walk(c, node, parent);
 		}
 		for (file in files) {
 			final tree: Null<QueryNode> = _graph.treeOf(file);
+			calls = named[file] ?? [];
 			if (tree != null) walk(tree, null, null);
 		}
 	}
 
 	/**
 	 * Whether this occurrence of a member name keeps the member sealed: a field declaration initialized by a `new` or not
-	 * at all, the receiver of a method call, the target of an assignment from a `new` — or a node that reads no member.
+	 * at all, the receiver of a method call the graph names THIS member for (`namedCalls`) — an untyped, cast or
+	 * type-parameter receiver names none, and may be any object's member — the target of an assignment from a `new`,
+	 * or a node that reads no member.
 	 */
-	private function sealedAt(node: QueryNode, parent: Null<QueryNode>, grand: Null<QueryNode>): Bool {
+	private function sealedAt(node: QueryNode, parent: Null<QueryNode>, grand: Null<QueryNode>, namedCalls: Array<String>): Bool {
 		if ((_shape.fieldDeclKinds ?? []).contains(node.kind)) {
 			final init: Null<QueryNode> = node.children.length == 0 ? null : node.children[node.children.length - 1];
 			return init == null || (_shape.typeAnnotationKinds ?? []).contains(init.kind) || init.kind == _shape.newExprKind;
 		}
 		if (!(node.kind == _shape.identKind || isAccess(node.kind)) || parent == null) return true;
-		final receiver: Bool = grand != null && isAccess(parent.kind) && parent.children[0] == node && grand.kind == _shape.callKind
-			&& grand.children[0] == parent;
-		return receiver || parent.kind == _shape.assignKind && parent.children.length == 2 && parent.children[0] == node
-			&& parent.children[1].kind == _shape.newExprKind;
+		final host: QueryNode = parent;
+		final call: Null<QueryNode> = grand;
+		final receiver: Bool = call != null && isAccess(host.kind) && host.children[0] == node && call.kind == _shape.callKind
+			&& call.children[0] == host && namedCalls.contains('${call.span?.from}:${node.name}');
+		return receiver || host.kind == _shape.assignKind && host.children.length == 2 && host.children[0] == node
+			&& host.children[1].kind == _shape.newExprKind;
 	}
 
 	/** Every lock one of `gives` releases in a function that makes no other call on it: the hold began in another function. */

@@ -9275,6 +9275,14 @@
 			"find": "if (next == entry) return entry;",
 			"replace": "return next;",
 			"note": "a loop body is walked once, so a lock taken on one pass is not held across the next pass's calls"
+		},
+		{
+			"name": "M-TS-UNNAMED-RECEIVER-SEALED",
+			"type": "anyparse.check.LockSites",
+			"method": "sealedAt",
+			"find": " && namedCalls.contains('${call.span?.from}:${node.name}');",
+			"replace": ";",
+			"note": "any method call on a member keeps it sealed, so a lock call through a Dynamic, cast or type-parameter receiver never makes the member long"
 		}
 	]
 }
