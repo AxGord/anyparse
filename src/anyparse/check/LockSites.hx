@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.LockAliases.Occurrence;
 import anyparse.check.LockWindow.HeldWindow;
 import anyparse.query.CallGraph;
 import anyparse.query.ControlFlow.ControlFlowSupport;
@@ -73,6 +74,11 @@ private typedef LockWrapper = {
  * same object or the same unknown one, where it stands, however it names the wrapper (a bare call, another object's,
  * through an interface), and wrappers nest. Only a wrapper every call of which the graph sees counts: no value
  * reference, no unresolved call of its name, no override outside the scope, no call site that may run anything else.
+ *
+ * A lock member may also ALIAS another (`LockAliases`): written once, in its type's constructor, from a
+ * parameter every construction passes a read of one other member. Those hand-offs then leave both
+ * members sealed, and the alias names the lock of the member it holds: a hold of either is a hold of that
+ * lock. No take of an aliased lock counts as on the holder's own object — two members of one object may be two locks.
  */
 @:nullSafety(Strict)
 final class LockSites {
@@ -86,6 +92,12 @@ final class LockSites {
 	public final crossing: Array<String> = [];
 
 	private final _unsealed: Array<String> = [];
+
+	/** Each aliased lock member (`Owner.member`) -> the member it holds the lock of, which names the lock of both. */
+	private final _aliases: Map<String, String> = [];
+
+	/** The locks some alias names: several members of possibly one object hold them, so no take of one is provably on the holder's own. */
+	private final _aliasedLocks: Array<String> = [];
 
 	/** `<file>:<start>` of every call of a wrapper -> the lock the call takes or gives back, null for an unknown one. */
 	private final _siteLocks: Map<String, Null<String>> = [];
@@ -109,6 +121,7 @@ final class LockSites {
 	/** Collects the acquires over the `files` of `graph`; `pairsOf` names the pairs the chain of a file configures. */
 	public function new(graph: CallGraph, files: Array<String>, plugin: GrammarPlugin, pairsOf: (String) -> Array<LockPair>) {
 		_graph = graph;
+
 		_plugin = plugin;
 		_shape = plugin.refShape();
 		final flow: Null<ControlFlowSupport> = plugin.controlFlowSupport();
@@ -134,12 +147,16 @@ final class LockSites {
 		collectCrossing(gives);
 	}
 
+	public inline function isAccess(kind: String): Bool {
+		return kind == _shape.fieldAccessKind || kind == _shape.nullSafeAccessKind || kind == _shape.forceFieldAccessKind;
+	}
+
 	/** The lock `edge` is made on: a wrapper call's lock, else its receiver's member when that member is sealed, else null. */
 	public function lockOf(edge: CallEdge): Null<String> {
 		final site: Null<String> = siteKey(edge);
 		if (site != null && _siteLocks.exists(site)) return _siteLocks[site];
 		final field: Null<String> = edge.receiverField;
-		return field == null || _unsealed.contains(memberName(field)) ? null : field;
+		return field == null || _unsealed.contains(memberName(field)) ? null : _aliases[field] ?? field;
 	}
 
 	/**
@@ -151,6 +168,7 @@ final class LockSites {
 		final lock: Null<String> = lockOf(edge);
 		if (lock == null) return false;
 		if (isStaticLock(lock)) return true;
+		if (_aliasedLocks.contains(lock)) return false;
 		final site: Null<String> = siteKey(edge);
 		if (site != null && _siteLocks.exists(site)) return _siteSelf[site] == true && selfCall(edge);
 		final callee: Null<QueryNode> = calleeOf(edge);
@@ -169,12 +187,8 @@ final class LockSites {
 		return dot > 0 && _graph.types.isStatic(lock.substring(0, dot), lock.substring(dot + 1));
 	}
 
-	private inline function isAccess(kind: String): Bool {
-		return kind == _shape.fieldAccessKind || kind == _shape.nullSafeAccessKind || kind == _shape.forceFieldAccessKind;
-	}
-
 	/** Whether `node` names a member of the running object: a bare name, or a member read off `this`. */
-	private function readsOwnMember(node: QueryNode): Bool {
+	public function readsOwnMember(node: QueryNode): Bool {
 		return node.kind == _shape.identKind
 			? node.name != _shape.selfReferenceText
 			: isAccess(node.kind) && node.children.length > 0 && node.children[0].kind == _shape.identKind
@@ -254,7 +268,11 @@ final class LockSites {
 	private function ownConstructorHold(edge: CallEdge, lock: String, body: QueryNode): Bool {
 		final fn: Null<FnNode> = _graph.node(edge.from);
 		final owner: String = lock.substring(0, lock.lastIndexOf('.'));
-		if (fn == null || fn.name != _ctorName || fn.typeName != owner || _graph.types.isStatic(owner, memberName(lock))) return false;
+		if (
+			fn == null || fn.name != _ctorName || fn.typeName != owner || _graph.types.isStatic(owner, memberName(lock))
+			|| _aliasedLocks.contains(lock)
+		)
+			return false;
 		final superclass: Null<String> = _graph.types.superclassOf(owner);
 		return !_graph.outEdges(edge.from)
 				.exists(e -> e.kind == Ref || e.dispatchType == owner || superclass != null && _graph.node(e.to)?.typeName == superclass)
@@ -304,7 +322,8 @@ final class LockSites {
 	/**
 	 * Every member name among `names` some file of `files` reads as a value, fills from anything but a `new`, or calls a
 	 * method on through a receiver the graph did not name that member for (`named`: per file, `<call start>:<member>`
-	 * for every invocation whose `receiverField` names one).
+	 * for every invocation whose `receiverField` names one) — unless a proven alias (`settleAliases`) accounts for each
+	 * such occurrence (`LockAliases`): the member then stays sealed, and an alias names the lock of the member it holds.
 	 */
 	private function collectUnsealed(files: Array<String>, names: Array<String>): Void {
 		if (names.length == 0) return;
@@ -317,16 +336,41 @@ final class LockSites {
 			keys.push('${at.from}:${memberName(field)}');
 			named[e.file] = keys;
 		}
+		final breaking: Map<String, Array<Occurrence>> = [];
+		final aliases: LockAliases = new LockAliases(_graph, _shape, this, _ctorName, files);
+		final walked: Array<String> = [];
+		var pending: Array<String> = names;
+		// the member an alias holds the lock of is walked too: it must be sealed apart from its hand-offs
+		while (pending.length > 0) {
+			collectBreaking(files, pending, named, breaking);
+			for (n in pending) walked.push(n);
+			pending = aliases.propose(breaking).filter(n -> !walked.contains(n));
+		}
+		aliases.settle(breaking);
+		for (target => source in aliases.targets) _aliases[target] = source;
+		for (lock in aliases.locks) _aliasedLocks.push(lock);
+		for (name => found in breaking) if (found.exists(o -> !aliases.accounts(o))) _unsealed.push(name);
+	}
+
+	/** Adds to `into` every occurrence of a member name among `names` that does not keep its member sealed (`sealedAt`). */
+	private function collectBreaking(
+		files: Array<String>, names: Array<String>, named: Map<String, Array<String>>, into: Map<String, Array<Occurrence>>
+	): Void {
 		var calls: Array<String> = [];
+		var file: String = '';
 		function walk(node: QueryNode, parent: Null<QueryNode>, grand: Null<QueryNode>): Void {
 			final name: Null<String> = node.name;
-			if (name != null && names.contains(name) && !_unsealed.contains(name) && !sealedAt(node, parent, grand, calls))
-				_unsealed.push(name);
+			if (name != null && names.contains(name) && !sealedAt(node, parent, grand, calls)) {
+				final found: Array<Occurrence> = into[name] ?? [];
+				found.push({ file: file, node: node, parent: parent });
+				into[name] = found;
+			}
 			for (c in node.children) walk(c, node, parent);
 		}
-		for (file in files) {
-			final tree: Null<QueryNode> = _graph.treeOf(file);
-			calls = named[file] ?? [];
+		for (f in files) {
+			final tree: Null<QueryNode> = _graph.treeOf(f);
+			calls = named[f] ?? [];
+			file = f;
 			if (tree != null) walk(tree, null, null);
 		}
 	}
@@ -499,12 +543,12 @@ final class LockSites {
 		return fn != null && type != null && fn.isBodyless && !fn.isExternal && !_graph.types.meta.isExtern(type);
 	}
 
-	private static inline function sameWrapper(a: Null<LockWrapper>, b: LockWrapper): Bool {
-		return a != null && a.takes == b.takes && a.lock == b.lock && a.pair == b.pair && a.self == b.self;
+	public static inline function memberName(field: String): String {
+		return field.substr(field.lastIndexOf('.') + 1);
 	}
 
-	private static inline function memberName(field: String): String {
-		return field.substr(field.lastIndexOf('.') + 1);
+	private static inline function sameWrapper(a: Null<LockWrapper>, b: LockWrapper): Bool {
+		return a != null && a.takes == b.takes && a.lock == b.lock && a.pair == b.pair && a.self == b.self;
 	}
 
 	/** `<file>:<start>` of `edge`'s site; null for an edge with no site. */

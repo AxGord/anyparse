@@ -205,6 +205,117 @@ class ThreadSafetyCheckTest extends Test {
 		#end
 	}
 
+	/**
+	 * `A.m` handed to `Sub`'s constructor, forwarded through `super(...)` into `B._l`: one lock, named after `A.m`, and
+	 * long for `A.tick` because `B.work` holds it across a sleep.
+	 */
+	@:pin('control') @:killer('M-TS-ALIAS-UNNAMED')
+	public function testALockHandedToAConstructorKeepsItsName(): Void {
+		#if (sys || nodejs)
+		final found: Array<String> = lockFindings(aliasFixture('public function make():B return new Sub(m);', 'p', '_l = p;'));
+		Assert.contains('"B.work" holds "A.m" across a call that can block: Sys.sleep', found);
+		Assert.contains('main thread reaches blocking "Mutex.acquire": A.main -> A.tick -> Mutex.acquire', found);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A construction passing anything but the member leaves the parameter's member an unknown lock. */
+	@:pin('control') @:killer('M-TS-ALIAS-FOREIGN-VALUE')
+	public function testALockHandedAnotherValueStaysUnknown(): Void {
+		#if (sys || nodejs)
+		Assert.same(
+			['"B.work" holds "Mutex.acquire" across a call that can block: Sys.sleep'],
+			heldBy(
+				'B.work',
+				lockFindings(aliasFixture(
+					'public function make():B return new Sub(m); public function other():B return new B(new Mutex());', 'p', '_l = p;'
+				))
+			)
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A parameter the constructor writes before storing it may hold another lock by then. */
+	@:pin('control') @:killer('M-TS-ALIAS-PARAM-REUSED')
+	public function testAReassignedParameterAliasesNothing(): Void {
+		#if (sys || nodejs)
+		Assert.same(
+			['"B.work" holds "Mutex.acquire" across a call that can block: Sys.sleep'],
+			heldBy('B.work', lockFindings(aliasFixture('public function make():B return new Sub(m);', 'p', 'p = new Mutex(); _l = p;')))
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A type read as a value may be constructed by reflection, with any argument at all. */
+	@:pin('control') @:killer('M-TS-ALIAS-REFLECTED')
+	public function testAReflectedTypeAliasesNothing(): Void {
+		#if (sys || nodejs)
+		Assert.same(
+			['"B.work" holds "Mutex.acquire" across a call that can block: Sys.sleep'],
+			heldBy(
+				'B.work',
+				lockFindings(aliasFixture(
+					'public function make():B return new Sub(m); public function reflect():Void Type.createInstance(Sub, [new Mutex()]);',
+					'p', '_l = p;'
+				))
+			)
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** The member handed over, read as a value anywhere else, may alias a third lock: both stay unknown. */
+	@:pin('control') @:killer('M-TS-ALIAS-SOURCE-UNSEALED')
+	public function testAnEscapingSourceAliasesNothing(): Void {
+		#if (sys || nodejs)
+		Assert.same(
+			['"B.work" holds "Mutex.acquire" across a call that can block: Sys.sleep'],
+			heldBy(
+				'B.work',
+				lockFindings(
+					aliasFixture('public function make():B return new Sub(m); public function leak():Mutex return m;', 'p', '_l = p;')
+				)
+			)
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * `B` extends `A`, so a `B` holds its own `A.m` and, in `_l`, the `A.m` of whoever made it: taking `_l` under a hold
+	 * of `m` waits for another object's lock, re-entrant or not.
+	 */
+	@:pin('control') @:killer('M-TS-ALIAS-SELF-REENTRANT')
+	public function testAnAliasIsNeverARetakeOfTheHoldersOwnLock(): Void {
+		#if (sys || nodejs)
+		final found: Array<String> = [
+			for (v in violations(
+				'{"rules":{"thread-safety":{"reentrantLocks":["Mutex.acquire"],"sinks":["Mutex.acquire","Sys.sleep"],'
+				+ '"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"]}}}',
+				[
+					MUTEX,
+					'class A { final m:Mutex = new Mutex(); public function new() {} public function make():B return new B(m);'
+					+ ' public function slow():Void { m.acquire(); Sys.sleep(1); m.release(); }'
+					+ ' public static function main():Void { final a:A = new A(); Runner.create(a.slow); } }',
+					'class B extends A { final _l:Mutex; public function new(p:Mutex) { super(); _l = p; }'
+					+ ' public function both():Void { m.acquire(); _l.acquire(); _l.release(); m.release(); } }',
+					'class Runner { public static function create(fn:()->Void):Void {} }'
+				]
+			)) v.message
+		];
+		Assert.same(['"B.both" holds "A.m" across a call that can block: Mutex.acquire'], heldBy('B.both', found));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	/** A release on an early-return path closes the window on THAT path only: the sleep after the `if` is still held. */
 	@:pin('control') @:killer('M-TS-WINDOW-IF-RELEASES')
 	public function testAReleaseOnAnEarlyReturnKeepsTheRestOfTheWindow(): Void {
@@ -846,6 +957,21 @@ class ThreadSafetyCheckTest extends Test {
 		];
 		found.sort(Reflect.compare);
 		return found;
+	}
+	/**
+	 * `A.m`, taken by `A.tick` on the main thread, handed by `members` of `A` to `Sub`, whose constructor forwards its
+	 * parameter to `B`'s `param`; `B`'s constructor runs `store`, and `B.work` holds `_l` across a sleep on a background
+	 * thread.
+	 */
+	private static function aliasFixture(members: String, param: String, store: String): Array<String> {
+		return [
+			'class A { final m:Mutex = new Mutex(); public function new() {} $members public function tick():Void { m.acquire(); m.release(); }'
+				+ ' public static function main():Void { final a:A = new A(); Runner.create(() -> a.make().work()); a.tick(); } }',
+			'class B { final _l:Mutex; public function new($param:Mutex) { $store }'
+				+ ' public function work():Void { _l.acquire(); Sys.sleep(1); _l.release(); } }',
+			'class Sub extends B { public function new(q:Mutex) { super(q); } }',
+			'class Runner { public static function create(fn:()->Void):Void {} }'
+		];
 	}
 	#end
 
