@@ -43,7 +43,7 @@ class PreferSwitchExpressionCheckTest extends Test {
 		+ '\tpublic static inline final KIND_TEXT_NODE_BUBBLE_FILL_SHADE:String = \'tf\';\n}';
 
 	/**
-	 * The live bare-constant shape, reduced from `anyparse`'s own `BoolLoopScan.literalValue`:
+	 * The live bare-constant shape, reduced from `anyparse`'s own `LambdaLoopScan.literalValue`:
 	 * two `static inline final` constants declared in the SAME class and reached with no
 	 * receiver.
 	 */
@@ -310,7 +310,7 @@ class PreferSwitchExpressionCheckTest extends Test {
 
 	/**
 	 * The BARE spelling of a same-class `static inline final` constant — the live shape
-	 * (`anyparse`'s own `BoolLoopScan.literalValue`, `text == TRUE_LITERAL`). Identical to
+	 * (`anyparse`'s own `LambdaLoopScan.literalValue`, `text == TRUE_LITERAL`). Identical to
 	 * `testStaticInlineFinalConstantFlagged` except that the constant is reached without a
 	 * receiver, so this fixture pins ONLY the bare-identifier arm.
 	 */

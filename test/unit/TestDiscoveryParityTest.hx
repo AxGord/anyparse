@@ -276,6 +276,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.check.PreferComprehensionCheckTest',
 		'unit.check.PreferComprehensionFinalTest',
 		'unit.check.PreferComprehensionIndexFillTest',
+		'unit.check.PreferCountCheckTest',
 		'unit.check.PreferDocCommentCheckTest',
 		'unit.check.PreferEnumAbstractCheckTest',
 		'unit.check.PreferExistsCheckTest',

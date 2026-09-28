@@ -211,7 +211,7 @@ final class UsingScan {
 	 * no, and the one that used to say nothing at all. The refusal it explains is FILE-WIDE: a caller that mixes extension-form
 	 * and qualified rewrites drops both, and the sentence says so rather than implying every dropped rewrite needed the module
 	 * in scope. Narrowing it to the extension-form sites is a behaviour change with its own gate, not a
-	 * wording fix — the back-link exists (`PreferFind.rewrote`, `BoolLoopScan.extensionForm`).
+	 * wording fix — the back-link exists (`PreferFind.rewrote`, `LambdaLoopScan.extensionForm`).
 	 *
 	 * `conflictingUsing` answers a Bool, so the conflicting module is not nameable here; what the
 	 * reader needs is the rule, which is the same in every file it fires on. Written in one place for
@@ -241,7 +241,7 @@ final class UsingScan {
 	 * The zero-width `using <module>;` edit for `header`, or null when an already-accepted edit covers
 	 * the byte it would be spliced at — in which case the refusal is ALREADY written on `violations`.
 	 *
-	 * This is the decision `appendUsingInsert` and `BoolLoopScan.withUsingInsert` share; they differ
+	 * This is the decision `appendUsingInsert` and `LambdaLoopScan.withUsingInsert` share; they differ
 	 * only in what a refusal looks like to their own caller (`false` against an empty grouped set).
 	 * Returning the edit rather than pushing it is what makes "did not insert" unrepresentable as
 	 * "inserted": there is no success value to hand back when nothing was produced.

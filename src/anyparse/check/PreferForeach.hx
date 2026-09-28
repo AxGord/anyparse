@@ -1,8 +1,8 @@
 package anyparse.check;
 
-import anyparse.check.BoolLoopScan.BoolLoopKind;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
+import anyparse.check.LambdaLoopScan.LambdaLoopKind;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -14,14 +14,14 @@ import anyparse.runtime.Span;
  * inserts a `using Lambda;` when the file lacks one. The inversion is a WRAP, never De Morgan
  * (distributing `!` through a chain reorders the operands a null narrowing depends on); a
  * condition that is already a `!` drops it instead of gaining a second. Purely structural; the
- * shape recovery, the gates and the edit all live in `BoolLoopScan`, shared with the twin
+ * shape recovery, the gates and the edit all live in `LambdaLoopScan`, shared with the twin
  * `prefer-exists`.
  *
  * Two SINKS, as in that twin and in this direction's polarity: the RETURN form
  * `for (x in xs) if (cond) return false;` + `return true;`, and the FLAG form
  * `var f:Bool = true;` + `for (x in xs) if (cond) f = false;` -> `final f:Bool = xs.foreach(x -> !(cond));`.
  * `Lambda.foreach` short-circuits on the first `false` exactly as `exists` does on the first
- * `true`, so the flag form's PURITY gate is load-bearing here too — see `BoolLoopScan`.
+ * `true`, so the flag form's PURITY gate is load-bearing here too — see `LambdaLoopScan`.
  *
  * The GUARDED variant that twin claims has no counterpart here: `if (g) for … return false;` +
  * `return true;` reads as `!g || xs.foreach(…)`, and negating a guard — a null test, at every
@@ -36,7 +36,7 @@ import anyparse.runtime.Span;
  * paths, worth declining in a measured hot spot, which the `Info` severity is there to say.
  * Unlike `exists`, `foreach` names nothing in the standard collections, so the emitted call
  * cannot be captured by a member — the fix is trusted, as `prefer-find`'s is. A PROJECT type
- * declaring `foreach` is the residual, and it no longer costs the site: `BoolLoopScan` falls back
+ * declaring `foreach` is the residual, and it no longer costs the site: `LambdaLoopScan` falls back
  * to the QUALIFIED `Lambda.foreach(m, x -> !(cond))`, which routes around the member and needs no
  * `using` at all.
  */
@@ -57,14 +57,14 @@ final class PreferForeach implements Check implements DefaultOff {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		return BoolLoopScan.findings(files, plugin, BoolLoopKind.Foreach, RULE_ID);
+		return LambdaLoopScan.findings(files, plugin, LambdaLoopKind.Foreach, RULE_ID);
 	}
 
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		return [
-			for (e in BoolLoopScan.edits(source, violations, plugin, index, BoolLoopKind.Foreach)) { span: e.span, text: e.text }
+			for (e in LambdaLoopScan.edits(source, violations, plugin, index, LambdaLoopKind.Foreach)) { span: e.span, text: e.text }
 		];
 	}
 

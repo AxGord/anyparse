@@ -266,6 +266,9 @@ final class Linter {
 			// for `prefer-exists` and `false` for `prefer-foreach`, so no site can be both.
 			new PreferExists(),
 			new PreferForeach(),
+			// The third `LambdaLoopScan` face, disjoint from the two above by its SINK: a counter
+			// stepped by an increment, where they need a boolean literal.
+			new PreferCount(),
 			new PreferStaticExtension(),
 			new LoopGuard(),
 			new GuardContinue(),

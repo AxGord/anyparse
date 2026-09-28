@@ -1,11 +1,11 @@
 package anyparse.check;
 
-import anyparse.check.BoolLoopScan.BoolLoopKind;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.GroupedEdit;
 import anyparse.check.Check.GroupedFix;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
+import anyparse.check.LambdaLoopScan.LambdaLoopKind;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -15,7 +15,7 @@ import anyparse.runtime.Span;
  * element satisfies a condition — which the user's rule replaces with `Lambda.exists`.
  * `Severity.Info`, with an autofix that rewrites the loop and inserts a `using Lambda;` when the
  * file lacks one. Purely structural; the shape recovery, the gates and the edit all live in
- * `BoolLoopScan`, shared with the twin `prefer-foreach`.
+ * `LambdaLoopScan`, shared with the twin `prefer-foreach`.
  *
  * Two SINKS carry the answer, and the rule claims both:
  *
@@ -30,7 +30,7 @@ import anyparse.runtime.Span;
  * The flag form carries a gate the return form does not need: the CONDITION must be side-effect
  * free (`PurityScan.isPure`). A `return` leaves the loop at the first match, so the emitted call's
  * short-circuit is invisible; a flag assignment does not, and real sites call a
- * function that does the loop's work on every element. `BoolLoopScan`'s type doc has the full
+ * function that does the loop's work on every element. `LambdaLoopScan`'s type doc has the full
  * reasoning and names them.
  *
  * ## Why `DefaultOff`
@@ -57,7 +57,7 @@ import anyparse.runtime.Span;
  *
  * A receiver whose type declares `exists` is not out of reach, only out of reach of the EXTENSION
  * spelling: `Lambda.exists(m, x -> …)` names the module outright and never consults the receiver's
- * members. `BoolLoopScan` emits that QUALIFIED form wherever the shadow gate fires (and inserts no
+ * members. `LambdaLoopScan` emits that QUALIFIED form wherever the shadow gate fires (and inserts no
  * `using`, which a static call does not need), so the `Map` receiver above converts rather than
  * staying silent. The one gate the fallback adds is its own name: `Lambda` must still MEAN the
  * module here — see `UsingScan.qualifiedCallReaches`.
@@ -79,7 +79,7 @@ final class PreferExists implements Check implements DefaultOff implements Risky
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		return BoolLoopScan.findings(files, plugin, BoolLoopKind.Exists, RULE_ID);
+		return LambdaLoopScan.findings(files, plugin, LambdaLoopKind.Exists, RULE_ID);
 	}
 
 	public function fix(
@@ -93,7 +93,7 @@ final class PreferExists implements Check implements DefaultOff implements Risky
 	public function fixGrouped(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<GroupedEdit> {
-		return BoolLoopScan.edits(source, violations, plugin, index, BoolLoopKind.Exists);
+		return LambdaLoopScan.edits(source, violations, plugin, index, LambdaLoopKind.Exists);
 	}
 
 }

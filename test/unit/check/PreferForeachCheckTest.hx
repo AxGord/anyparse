@@ -229,6 +229,26 @@ class PreferForeachCheckTest extends Test {
 		Assert.equals(-1, out.indexOf('for (b in bs)'));
 	}
 
+	public function testIteratorIterableNotFlagged(): Void {
+		// `for` accepts an `Iterator`, `Lambda.foreach` does not, and this fix is TRUSTED — so a
+		// proven `Iterator` identifier is refused by type, not left to a compiler to catch.
+		final src: String =
+			'class C {\n\tfunction f(it:Iterator<Int>):Bool {\n\t\tfor (x in it) if (x > 2) return false;\n\t\treturn true;\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	public function testFlagFormConditionReadingTheFlagNotFlagged(): Void {
+		// The fold moves the condition into the flag's own initializer, where `all` is not bound yet.
+		Assert.equals(
+			0, violations(flagFn('var all:Bool = true;\n\t\tfor (b in bs) if (!b || !all) all = false;\n\t\treturn all;')).length
+		);
+	}
+
+	public function testFlagFormLoopBinderShadowingTheFlagNotFlagged(): Void {
+		// The loop writes its own binder `all`; the declared flag never changes.
+		Assert.equals(0, violations(flagFn('var all:Bool = true;\n\t\tfor (all in bs) if (a) all = false;\n\t\treturn all;')).length);
+	}
+
 	/** A receiver whose OWN type declares `foreach` — the name this direction rewrites to. */
 	private function memberFn(body: String): String {
 		return 'class C {\n\tfunction f(m:M):Bool {\n\t\t$body\n\t}\n}\n\nclass M {\n\tpublic function foreach(key:Int):Bool {\n'

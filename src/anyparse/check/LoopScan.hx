@@ -55,6 +55,12 @@ final class LoopScan {
 	/** The one numeric literal a counter / range may start from. */
 	private static inline final ZERO_LITERAL: String = '0';
 
+	/** The step a compound `+=` must add for the statement to count as an increment. */
+	private static inline final ONE_LITERAL: String = '1';
+
+	/** A compound assignment has exactly [target, value] children. */
+	private static inline final COMPOUND_ASSIGN_CHILD_COUNT: Int = 2;
+
 	/** An `if` with no `else` has exactly [condition, then-branch] children. */
 	private static inline final IF_NO_ELSE_CHILD_COUNT: Int = 2;
 
@@ -89,6 +95,11 @@ final class LoopScan {
 	/** Whether `node` is a loop of either body order. */
 	public static inline function isLoop(node: QueryNode, s: LoopJumpSeams): Bool {
 		return s.loopKinds.contains(node.kind) || s.doWhileKinds.contains(node.kind);
+	}
+
+	/** Whether `node` is the numeric literal `0` — the only lower bound either rewrite can transcribe. */
+	public static inline function isZeroLiteral(node: QueryNode, source: String, s: LoopSeams): Bool {
+		return isNumericLiteral(node, ZERO_LITERAL, source, s);
 	}
 
 	/**
@@ -184,10 +195,20 @@ final class LoopScan {
 		return scope.children.exists(c -> capturedByClosure(c, source, name, s));
 	}
 
-	/** Whether `node` is the numeric literal `0` — the only lower bound either rewrite can transcribe. */
-	public static function isZeroLiteral(node: QueryNode, source: String, s: LoopSeams): Bool {
-		final span: Null<Span> = node.span;
-		return span != null && s.numericLiteralKinds.contains(node.kind) && source.substring(span.from, span.to) == ZERO_LITERAL;
+	/**
+	 * Whether `stmt` is exactly an expression statement adding one to the bare identifier `name`:
+	 * one of `incrementKinds` over it (`n++`, `++n` — the caller names which spellings it accepts),
+	 * or `addAssignKind` with the literal `1` (`n += 1`; null refuses that spelling).
+	 */
+	public static function isUnitIncrementOf(
+		stmt: QueryNode, name: String, exprStmtKind: String, incrementKinds: Array<String>, addAssignKind: Null<String>, source: String,
+		s: LoopSeams
+	): Bool {
+		if (stmt.kind != exprStmtKind || stmt.children.length != 1) return false;
+		final step: QueryNode = stmt.children[0];
+		return step.children.length > 0 && bareIdentName(step.children[0], s) == name
+			&& (incrementKinds.contains(step.kind) || addAssignKind != null && step.kind == addAssignKind
+				&& step.children.length == COMPOUND_ASSIGN_CHILD_COUNT && isNumericLiteral(step.children[1], ONE_LITERAL, source, s));
 	}
 
 	/**
@@ -461,6 +482,12 @@ final class LoopScan {
 	/** Whether `kind` is one of the two positions that READ a name — plain identifier, or `$name` inside a string. */
 	private static inline function isReadKind(kind: String, s: LoopSeams): Bool {
 		return kind == s.identKind || s.stringInterpIdentKind != null && kind == s.stringInterpIdentKind;
+	}
+
+	/** Whether `node` is a numeric literal spelled exactly `text`. */
+	private static function isNumericLiteral(node: QueryNode, text: String, source: String, s: LoopSeams): Bool {
+		final span: Null<Span> = node.span;
+		return span != null && s.numericLiteralKinds.contains(node.kind) && source.substring(span.from, span.to) == text;
 	}
 
 	/** Recursive body of `collectIndexReads`, appending in document order so the caller needs no sort. */

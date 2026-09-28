@@ -94,6 +94,23 @@ using StringTools;
 @:nullSafety(Strict)
 final class DeadBinderCounterLoop implements Check implements DefaultOff {
 
+	/** The element-count member of a container that has one. */
+	public static inline final LENGTH_MEMBER: String = 'length';
+
+	/**
+	 * Container nominals whose element count is a plain `length` member — no `Lambda` needed.
+	 * `Vector` is deliberately absent: the whitelist matches a SIMPLE nominal, and a geometry
+	 * `Vector` whose `length` is a magnitude is a common enough spelling to make the name unsafe.
+	 */
+	public static final LENGTH_TYPES: Array<String> = ['Array', 'List'];
+
+	/**
+	 * Container nominals counted through `Lambda.count` — see the type doc for why this is a
+	 * whitelist. `haxe.ds.HashMap` is deliberately ABSENT: a `for` accepts it, but it is an
+	 * abstract that does not unify with `Iterable`, so `Lambda.count` does not apply to it.
+	 */
+	public static final COUNT_TYPES: Array<String> = ['Map', 'StringMap', 'IntMap', 'ObjectMap', 'EnumValueMap', 'BalancedTree'];
+
 	/** This check's stable id, spelled once. */
 	private static inline final RULE_ID: String = 'dead-binder-counter-loop';
 
@@ -102,9 +119,6 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 
 	/** The `Lambda` method counting an `Iterable`'s elements. */
 	private static inline final COUNT_METHOD: String = 'count';
-
-	/** The element-count member of a container that has one. */
-	private static inline final LENGTH_MEMBER: String = 'length';
 
 	/** The nominal a range binder must not provably differ from. */
 	private static inline final INT_TYPE: String = 'Int';
@@ -120,20 +134,6 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 
 	/** The package prefix a QUALIFIED container spelling must carry to be one the whitelist is about. */
 	private static inline final STD_PACKAGE_PREFIX: String = 'haxe.';
-
-	/**
-	 * Container nominals whose element count is a plain `length` member — no `Lambda` needed.
-	 * `Vector` is deliberately absent: the whitelist matches a SIMPLE nominal, and a geometry
-	 * `Vector` whose `length` is a magnitude is a common enough spelling to make the name unsafe.
-	 */
-	private static final LENGTH_TYPES: Array<String> = ['Array', 'List'];
-
-	/**
-	 * Container nominals counted through `Lambda.count` — see the type doc for why this is a
-	 * whitelist. `haxe.ds.HashMap` is deliberately ABSENT: a `for` accepts it, but it is an
-	 * abstract that does not unify with `Iterable`, so `Lambda.count` does not apply to it.
-	 */
-	private static final COUNT_TYPES: Array<String> = ['Map', 'StringMap', 'IntMap', 'ObjectMap', 'EnumValueMap', 'BalancedTree'];
 
 	public function new() {}
 
@@ -225,6 +225,11 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 		return (decl, forNode, scope) ->
 			seams.blockKinds.contains(scope.kind)
 				&& analyze(decl, forNode, scope, root, source, typeSources, seams, index, qualified) != null;
+	}
+
+	/** Whether `stmt` is exactly `<counter>++;` — an expression statement wrapping a post-increment of the counter. */
+	private static inline function isPostIncrementOf(stmt: QueryNode, counter: String, source: String, s: Seams): Bool {
+		return LoopScan.isUnitIncrementOf(stmt, counter, s.exprStmtKind, [s.postIncrKind], null, source, s.core);
 	}
 
 	/** Whether any SURVIVING edit is the `count()` form — matched by span, since the containment filter rebuilds the list. */
@@ -385,7 +390,7 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 		final body: QueryNode = forNode.children[1];
 		if (body.kind != core.blockStmtKind || body.children.length < MIN_BODY_STATEMENTS) return null;
 		final incr: QueryNode = body.children[body.children.length - 1];
-		return !isPostIncrementOf(incr, counter, s) ? null : {
+		return !isPostIncrementOf(incr, counter, source, s) ? null : {
 			counter: counter,
 			binder: binder,
 			collection: collection,
@@ -404,13 +409,6 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 		final core: LoopSeams = s.core;
 		return LoopScan.countWrites(body, counter, core) == COUNTER_WRITES && !LoopScan.containsKind(body, s.continueKind, core)
 			&& !LoopScan.declares(body, counter, core) && LoopScan.usedOnlyAsStableCollection(body, collection, LENGTH_MEMBER, core);
-	}
-
-	/** Whether `stmt` is exactly `<counter>++;` — an expression statement wrapping a post-increment of the counter. */
-	private static function isPostIncrementOf(stmt: QueryNode, counter: String, s: Seams): Bool {
-		if (stmt.kind != s.exprStmtKind || stmt.children.length != 1) return false;
-		final incr: QueryNode = stmt.children[0];
-		return incr.kind == s.postIncrKind && incr.children.length >= 1 && LoopScan.bareIdentName(incr.children[0], s.core) == counter;
 	}
 
 	/**
