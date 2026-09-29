@@ -387,7 +387,7 @@
 			"type": "anyparse.query.MemberLookup",
 			"method": "memberShadowsExtension",
 			"force": "true",
-			"note": "every member reads as shadowing a `using` extension, so dead-binder-counter-loop stops writing the extension call"
+			"note": "every member reads as shadowing a `using` extension, so prefer-count takes the qualified `Lambda.count(xs, …)` spelling and inserts no `using`"
 		},
 		{
 			"name": "M-SUBOVERRIDE-TRUE",

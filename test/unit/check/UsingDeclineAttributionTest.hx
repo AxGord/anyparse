@@ -9,6 +9,7 @@ import anyparse.check.PreferLpad;
 import anyparse.check.Severity;
 import anyparse.check.UsingScan;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 import utest.Assert;
@@ -199,8 +200,17 @@ class UsingDeclineAttributionTest extends Test {
 	@:killer('M-COUNT-CONFLICT-SILENT')
 	public function testCounterLoopConflictNamesTheSkippedSiteAndKeepsTheOther(): Void {
 		final check: DeadBinderCounterLoop = new DeadBinderCounterLoop();
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final found: Array<Violation> = check.run([{ file: 'C.hx', source: CONFLICTING_COUNT }], plugin);
+		// A whole-project std scope: the rule claims a container only once it PROVES it the std one,
+		// and that proof needs the `using`'s module indexed — here, one that also supplies `count`.
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: CONFLICTING_COUNT },
+			{
+				file: 'p/Other.hx',
+				source: 'package p;\n\nclass Other {\n\tpublic static function count(m:Map<Int, Int>):Int {\n\t\treturn 0;\n\t}\n}\n'
+			}
+		];
+		final plugin: CachingGrammarPlugin = StdScope.plugin(files);
+		final found: Array<Violation> = check.run(files, plugin);
 		Assert.equals(2, found.length);
 		// The `length` site still rewrites — the refusal is per site, not per file.
 		Assert.equals(1, check.fix(CONFLICTING_COUNT, found, plugin).length);
@@ -219,7 +229,7 @@ class UsingDeclineAttributionTest extends Test {
 	@:killer('M-COUNT-GUARDED-MIS-ATTRIBUTED')
 	public function testCounterLoopGuardRefusalNamesOnlyTheSurvivingFinding(): Void {
 		final check: DeadBinderCounterLoop = new DeadBinderCounterLoop();
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final plugin: CachingGrammarPlugin = StdScope.plugin([{ file: 'C.hx', source: GUARDED_COUNT }]);
 		final found: Array<Violation> = check.run([{ file: 'C.hx', source: GUARDED_COUNT }], plugin);
 		Assert.equals(1, found.length);
 		final unmatched: Violation = probeViolation();

@@ -5,6 +5,7 @@ import anyparse.check.DeadBinderCounterLoop;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 import utest.Assert;
 import utest.Test;
@@ -55,7 +56,8 @@ class DeadBinderCounterLoopCheckTest extends Test {
 			Assert.equals(
 				0,
 				new DeadBinderCounterLoop().run(
-					[{ file: 'C.hx', source: header + body }, { file: 'p/List.hx', source: list }], new HaxeQueryPlugin()
+					[{ file: 'C.hx', source: header + body }, { file: 'p/List.hx', source: list }],
+					StdScope.plugin([{ file: 'C.hx', source: header + body }, { file: 'p/List.hx', source: list }])
 				)
 					.length,
 				header
@@ -157,7 +159,6 @@ class DeadBinderCounterLoopCheckTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-SHADOWEXT-TRUE')
 	public function testFixRewritesMapLoopAndInsertsUsing(): Void {
 		assertFixCanonical(
 			wrapMap('var i = 0;\n\t\tfor (x in table) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t}'),
@@ -169,7 +170,7 @@ class DeadBinderCounterLoopCheckTest extends Test {
 		final src: String = 'package p;\n\nusing Lambda;\n\nclass C {\n\tfunction f(table:Map<Int, Item>):Void {\n\t\tvar i = 0;\n'
 			+ '\t\tfor (x in table) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t}\n\t}\n}';
 		final r = runAndExpectOne(src);
-		switch CanonicalEdit.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, r.check.fix(src, r.vs, stdPlugin(src)), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.equals(1, countOccurrences(text, 'using Lambda;'));
 			case Err(message):
@@ -257,15 +258,6 @@ class DeadBinderCounterLoopCheckTest extends Test {
 		Assert.equals(0, violations(src).length);
 	}
 
-	public function testShadowedLambdaModuleRefusesTheQualifiedCount(): Void {
-		// `Lambda` may itself be shadowed — a project declaring its own `Lambda.hx`. The qualified
-		// count would then reach THAT type, so the container keeps its old refusal.
-		final src: String = wrapMap('var i = 0;\n\t\tfor (x in table) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t}')
-			+ '\n\nclass Map {\n\tpublic function count():Int {\n\t\treturn 0;\n\t}\n}'
-			+ '\n\nclass Lambda {\n\tpublic function count(it:Int):Int {\n\t\treturn 0;\n\t}\n}';
-		Assert.equals(0, violations(src).length);
-	}
-
 	public function testLengthContainerDeclaringCountStillFlagged(): Void {
 		// The `length` arm needs no `Lambda` at all, so a same-file `count` member is irrelevant to
 		// it — the gate is scoped to the name the rewrite actually emits.
@@ -282,13 +274,18 @@ class DeadBinderCounterLoopCheckTest extends Test {
 		return wrapParam('table:Map<Int, Item>', body);
 	}
 
+	/** `C.hx` holding `source`, in a scope beside the std container stubs the `length` / `count()` proof resolves. */
+	private inline function stdPlugin(source: String): CachingGrammarPlugin {
+		return StdScope.plugin([{ file: 'C.hx', source: source }]);
+	}
+
 	/** One method taking `param`, with `body` as its statements — the shape every fixture here has. */
 	private function wrapParam(param: String, body: String): String {
 		return 'class C {\n\tfunction f($param):Void {\n\t\t$body\n\t}\n}';
 	}
 
 	private function violations(source: String): Array<Violation> {
-		return new DeadBinderCounterLoop().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+		return new DeadBinderCounterLoop().run([{ file: 'C.hx', source: source }], stdPlugin(source));
 	}
 
 	private function countOccurrences(text: String, needle: String): Int {
@@ -303,7 +300,7 @@ class DeadBinderCounterLoopCheckTest extends Test {
 
 	private function assertFixCanonical(src: String, present: Array<String>, absent: Array<String>): Void {
 		final r = runAndExpectOne(src);
-		switch CanonicalEdit.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, r.check.fix(src, r.vs, stdPlugin(src)), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				for (p in present) Assert.isTrue(text.indexOf(p) >= 0, 'expected $p in $text');
 				for (a in absent) Assert.isTrue(text.indexOf(a) == -1, 'expected no $a in $text');
@@ -314,12 +311,12 @@ class DeadBinderCounterLoopCheckTest extends Test {
 
 	private function assertFixRefused(src: String): Void {
 		final r = runAndExpectOne(src);
-		Assert.equals(0, r.check.fix(src, r.vs, new HaxeQueryPlugin()).length);
+		Assert.equals(0, r.check.fix(src, r.vs, stdPlugin(src)).length);
 	}
 
 	private function runAndExpectOne(src: String): { check: DeadBinderCounterLoop, vs: Array<Violation> } {
 		final check: DeadBinderCounterLoop = new DeadBinderCounterLoop();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], stdPlugin(src));
 		Assert.equals(1, vs.length);
 		return { check: check, vs: vs };
 	}

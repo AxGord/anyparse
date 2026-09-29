@@ -4,7 +4,7 @@ import anyparse.check.Check;
 import anyparse.check.JoinReturn;
 import anyparse.check.PreferCount;
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
@@ -31,6 +31,7 @@ class PreferCountCheckTest extends Test {
 		Assert.isTrue(vs[0].message.indexOf('final n = xs.count(x -> x > 2)') != -1, vs[0].message);
 	}
 
+	@:pin('control') @:killer('M-SHADOWEXT-TRUE')
 	public function testFilteredFixFoldsDeclarationAndLoopAndInsertsUsing(): Void {
 		final out: String = fixResult(file('var n:Int = 0;\n\t\tfor (x in xs) if (x > 2) n++;\n\t\treturn n;', false));
 		Assert.isTrue(out.indexOf('final n:Int = xs.count(x -> x > 2);') != -1, out);
@@ -148,6 +149,53 @@ class PreferCountCheckTest extends Test {
 		Assert.isTrue(vs[0].message.indexOf('final n = q.length') != -1, vs[0].message);
 	}
 
+	public function testUnresolvedImportInScopeGetsCount(): Void {
+		// An import the index does not RESOLVE could bring `List` in, whatever it spells: a `using` of
+		// a type, a module whose sub-type is `List`, a `haxe.`-prefixed package that is not the std, a
+		// wildcard. Unknown is no proof.
+		for (header in [
+			'using lib.List;\n\n',
+			'import lib2.Coll;\n\n',
+			'import haxe.mine.List;\n\n',
+			'import haxe.mine.*;\n\n'
+		]) Assert.isTrue(bareListMessage(header, []).indexOf('final n = q.count()') != -1, header);
+	}
+
+	public function testAliasSpellingTheNameGetsCount(): Void {
+		Assert.isTrue(bareListMessage('import haxe.ds.StringMap as List;\n\n', []).indexOf('final n = q.count()') != -1);
+	}
+
+	public function testLibraryDeclaringARootListGetsCount(): Void {
+		// A `resolutionLibs` library's root-package `List` makes the bare name ambiguous.
+		final lib: Array<{ file: String, source: String }> = [
+			{ file: 'vendor/List.hx', source: 'class List<T> {\n\tpublic var length:Int = 99;\n}' }
+		];
+		Assert.isTrue(bareListMessage('', lib).indexOf('final n = q.count()') != -1);
+	}
+
+	public function testNonStdHaxePackageGetsCount(): Void {
+		// ONE declaration, but in a library, not under the std root: a `haxe.`-prefixed package proves nothing.
+		final lib: Array<{ file: String, source: String }> = [
+			{ file: 'vendor/haxe/mine/List.hx', source: 'package haxe.mine;\n\nclass List<T> {\n\tpublic var length:Int = 99;\n}' }
+		];
+		final vs: Array<Violation> = run([{ file: 'C.hx', source: listFn('', 'haxe.mine.List<Int>') }], lib);
+		Assert.isTrue(vs[0].message.indexOf('final n = q.count()') != -1, vs[0].message);
+	}
+
+	public function testIncompleteProjectGetsCount(): Void {
+		// Roots that did not all match: a root-package project `Array` the run never read may shadow the std one.
+		final vs: Array<Violation> = run([{ file: 'C.hx', source: listFn('', 'Array<Int>') }], [], false);
+		Assert.isTrue(vs[0].message.indexOf('final n = q.count()') != -1, vs[0].message);
+	}
+
+	public function testStdArrayAndListUnshadowedGetLength(): Void {
+		// Controls for every refusal above: the same fixture, nothing capturing the name, std resolved.
+		for (type in ['Array<Int>', 'List<Int>', 'haxe.ds.List<Int>']) {
+			final vs: Array<Violation> = run([{ file: 'C.hx', source: listFn('import haxe.ds.StringMap;\n\n', type) }]);
+			Assert.isTrue(vs[0].message.indexOf('final n = q.length') != -1, '$type: ${vs[0].message}');
+		}
+	}
+
 	public function testSuperInTheConditionNotFlagged(): Void {
 		final src: String = 'class Base {\n\tfunction ok(x:Int):Bool {\n\t\treturn x > 0;\n\t}\n}\n\nclass S extends Base {\n'
 			+ '\tfunction f(xs:Array<Int>):Int {\n\t\tvar n:Int = 0;\n\t\tfor (x in xs) if (super.ok(x)) n++;\n\t\treturn n;\n\t}\n}';
@@ -258,7 +306,7 @@ class PreferCountCheckTest extends Test {
 	public function testCommentInDroppedRegionNotFixed(): Void {
 		final src: String = file('var n:Int = 0;\n\t\tfor (x in xs) // why\n\t\t\tif (x > 2) n++;\n\t\treturn n;', true);
 		Assert.equals(1, violations(src).length);
-		Assert.equals(0, new PreferCount().fix(src, violations(src), new HaxeQueryPlugin()).length);
+		Assert.equals(0, new PreferCount().fix(src, violations(src), StdScope.plugin([{ file: 'C.hx', source: src }])).length);
 	}
 
 	public function testReceiverDeclaringCountTakesTheQualifiedForm(): Void {
@@ -306,7 +354,7 @@ class PreferCountCheckTest extends Test {
 
 	/** `C` under `header` counting a bare `List<Int>`, beside a project `p.List` whose `length` is not its count. */
 	private function projectListViolations(header: String): Array<Violation> {
-		return new PreferCount().run([
+		return run([
 			{
 				file: 'C.hx',
 				source: header
@@ -317,7 +365,20 @@ class PreferCountCheckTest extends Test {
 				source: 'package p;\n\nclass List<T> {\n\tpublic var length:Int = 99;\n\n\tpublic function iterator():Iterator<T> {\n'
 				+ '\t\treturn [].iterator();\n\t}\n}'
 			}
-		], new HaxeQueryPlugin());
+		]);
+	}
+
+	/** `C` in package `r` under `header`, counting a parameter `q` written `type`. */
+	private function listFn(header: String, type: String): String {
+		return
+			'package r;\n\n${header}class C {\n\tfunction f(q:$type):Int {\n\t\tvar n:Int = 0;\n\t\tfor (x in q) n++;\n\t\treturn n;\n\t}\n}';
+	}
+
+	/** The one finding's message for a bare `List<Int>` counted under `header`, beside `libraries`. */
+	private function bareListMessage(header: String, libraries: Array<{ file: String, source: String }>): String {
+		final vs: Array<Violation> = run([{ file: 'C.hx', source: listFn(header, 'List<Int>') }], libraries);
+		Assert.equals(1, vs.length, header);
+		return vs.length == 0 ? '' : vs[0].message;
 	}
 
 	/** `walker` a class iterator, `sub` one inheriting it, `both` a class that is also `Iterable`. */
@@ -347,7 +408,7 @@ class PreferCountCheckTest extends Test {
 	 * returning an `Iterator` and a `Map`.
 	 */
 	private function typedViolations(body: String): Array<Violation> {
-		return new PreferCount().run([
+		return run([
 			{ file: 'C.hx', source: 'class C {\n\tfunction f(v:V, b:B):Int {\n\t\t$body\n\t}\n}' },
 			{
 				file: 'V.hx',
@@ -360,11 +421,18 @@ class PreferCountCheckTest extends Test {
 				+ 'get_elements():Iterator<Int> {\n\t\treturn all.iterator();\n\t}\n\n\tpublic function walker():Iterator<Int> {\n'
 				+ '\t\treturn all.iterator();\n\t}\n\n\tpublic function table():Map<String, Int> {\n\t\treturn [];\n\t}\n}'
 			}
-		], new HaxeQueryPlugin());
+		]);
 	}
 
 	private function violations(source: String): Array<Violation> {
-		return new PreferCount().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+		return run([{ file: 'C.hx', source: source }]);
+	}
+
+	/** `files` through this rule, in a whole-project scope beside the std stubs (`StdScope`) and any non-std `libraries`. */
+	private function run(
+		files: Array<{ file: String, source: String }>, ?libraries: Array<{ file: String, source: String }>, complete: Bool = true
+	): Array<Violation> {
+		return new PreferCount().run(files, StdScope.plugin(files, libraries, complete));
 	}
 
 	private function fixResult(src: String): String {
@@ -373,10 +441,10 @@ class PreferCountCheckTest extends Test {
 
 	/** `source` fixed by this rule, with `other` (when given) indexed beside it as `Other.hx`. */
 	private function fixResultWith(source: String, other: Null<String>): String {
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: PreferCount = new PreferCount();
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: source }];
 		if (other != null) files.push({ file: 'Other.hx', source: other });
+		final plugin: CachingGrammarPlugin = StdScope.plugin(files);
 		final edits: Array<{ span: Span, text: String }> = check.fix(
 			source, check.run(files, plugin), plugin, SymbolIndex.build(files, plugin)
 		);
@@ -393,8 +461,8 @@ class PreferCountCheckTest extends Test {
 	private function fixCascade(source: String): String {
 		var out: String = source;
 		for (check in ([new PreferCount(), new JoinReturn()]: Array<Check>)) {
-			final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 			final text: String = out;
+			final plugin: CachingGrammarPlugin = StdScope.plugin([{ file: 'C.hx', source: text }]);
 			final edits: Array<{ span: Span, text: String }> = check.fix(
 				text, check.run([{ file: 'C.hx', source: text }], plugin), plugin,
 				SymbolIndex.build([{ file: 'C.hx', source: text }], plugin)

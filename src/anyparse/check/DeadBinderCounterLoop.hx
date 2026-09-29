@@ -29,9 +29,8 @@ using StringTools;
  * `"dead-binder-counter-loop": { "enabled": true }`.
  *
  * A collection with no `length` is counted through `Lambda.count`, and a `using Lambda;` is
- * inserted when the file lacks one — unless the container's own type declares `count`, where
- * the QUALIFIED `Lambda.count(coll)` is emitted instead (no `using`, and the member never
- * consulted). That costs ONE extra traversal the original did not pay (`count()` walks, then
+ * inserted when the file lacks one (no std map declares a `count` of its own, so the call reaches
+ * `Lambda`'s). That costs ONE extra traversal the original did not pay (`count()` walks, then
  * the range loop walks again) — cheap for the containers below, and stated here rather than
  * glossed.
  *
@@ -70,8 +69,8 @@ using StringTools;
  * Unlike its sibling `prefer-keyvalue-loop`, this check does NOT report an unresolved
  * container: the replacement TEXT depends on the type (`length` vs `count()`), so a finding it
  * cannot spell would be noise. `coll` must be a bare identifier whose binding is declared as
- * one of the containers below, PROVED the std one (`stdContainerNominal`: a bare name no project
- * type or import captures). Everything else — a path receiver, a call, an unannotated binding, a
+ * one of the containers below, PROVED the std one (`stdContainerNominal`: it resolves to one std declaration,
+ * with every import in scope resolved). Everything else — a path receiver, a call, an unannotated binding, a
  * range — is silently skipped.
  *
  * - `length` (no `Lambda`): `Array`, `List`.
@@ -132,12 +131,6 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 	/** The trailing `i++` is the counter's only write. */
 	private static inline final COUNTER_WRITES: Int = 1;
 
-	/** The package prefix a QUALIFIED container spelling must carry to be one the whitelist is about. */
-	private static inline final STD_PACKAGE_PREFIX: String = 'haxe.';
-
-	/** The std's own top package, which `STD_PACKAGE_PREFIX` spells with its separator. */
-	private static inline final STD_ROOT_PACKAGE: String = 'haxe';
-
 	public function new() {}
 
 	public function id(): String {
@@ -155,7 +148,7 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 		final index: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
 		return RunScan.collectWith(files, plugin, readSeams(plugin), (entry, tree, s, violations) -> {
 			final types: Null<Map<Int, String>> = typed?.declaredTypeSources(entry.source);
-			walk(tree, tree, entry.file, entry.source, types, s, index, lazyQualified(tree, entry.source, plugin, index), violations);
+			walk(tree, tree, entry.file, entry.source, types, s, index, violations);
 		});
 	}
 
@@ -174,9 +167,8 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 			final typed: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 			final types: Null<Map<Int, String>> = typed?.declaredTypeSources(source);
 			// The SAME lazy resolver the report pass used, falling back to a one-file index when the
-			// caller supplied none — the two passes must reach the same verdict, because the shadow now
-			// picks the call SPELLING rather than dropping the site.
-			// The file the findings name, so the std-container proof resolves the scope the report pass did.
+			// caller supplied none, and under the file the findings name — the two passes must reach
+			// the same verdict, and the std-container proof resolves that file's scope.
 			final file: String = violations.length == 0 ? '' : violations[0].file;
 			final symbols: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(
 				[{ file: file, source: source }], plugin, RefactorSupport.resolutionIndexOf(plugin) ?? index
@@ -193,9 +185,7 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 				if (span != null) wanted['${span.from}:${span.to}'] = v;
 			}
 			final collected: Array<CountEdit> = [];
-			fixWalk(
-				tree, tree, source, types, s, wanted, lambdaBlocked, symbols, lazyQualified(tree, source, plugin, symbols), file, collected
-			);
+			fixWalk(tree, tree, source, types, s, wanted, lambdaBlocked, symbols, file, collected);
 			// The containment filter runs BEFORE the `using` decision, not after: a nested rewrite whose
 			// edit an enclosing one swallows is not in the output, so neither is the `count()` that
 			// needed `Lambda` — deciding first would leave an unused `using Lambda;` behind, which
@@ -219,7 +209,7 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 	 * `(decl, forNode)`, adjacent in the statement list `scope`, and its rewrite drops the loop's dead
 	 * binder together with the counter. `unused-loop-binder` asks so it can leave such a loop to this
 	 * rule: one owner per loop. The answer is the report pass's own `analyze`, so the two cannot
-	 * drift; the seams and the qualified-call probe are built once per file. `typeSources` is the
+	 * drift; the seams are read once per file. `typeSources` is the
 	 * file's `declaredTypeSources` map. Null when the grammar lacks this rule's seams.
 	 */
 	public static function claimer(
@@ -229,59 +219,30 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 		final s: Null<Seams> = readSeams(plugin);
 		if (s == null) return null;
 		final seams: Seams = s;
-		final qualified: () -> Bool = lazyQualified(root, source, plugin, index);
 		return (decl, forNode, scope) ->
-			seams.blockKinds.contains(scope.kind)
-				&& analyze(decl, forNode, scope, root, source, typeSources, seams, index, qualified, file) != null;
+			seams.blockKinds.contains(scope.kind) && analyze(decl, forNode, scope, root, source, typeSources, seams, index, file) != null;
 	}
 
 	/**
-	 * The SIMPLE nominal of the written container type `typeSource`, or null unless it provably names
-	 * the std type `LENGTH_TYPES` / `COUNT_TYPES` are about: spelled `haxe.`-qualified, or BARE with
-	 * nothing in `file`'s scope capturing the name (`bareNameIsStd`). The lists match a simple name,
-	 * and a project `List` whose `length` is not its element count compiles under either rewrite, so
-	 * the name alone is no proof. Shared with `prefer-count`'s `length` spelling.
+	 * The SIMPLE nominal of the written container type `typeSource`, or null unless it PROVABLY names a
+	 * std declaration from `file` (`SymbolIndex.resolvesToStdType`: one declaration, under the std root, with every import in scope
+	 * resolved), over an index `projectComplete` says spans the whole project. The lists match a simple name, and a project `List`
+	 * whose `length` is not its element count compiles under either rewrite, so neither the name nor its
+	 * spelling is proof. Shared with `prefer-count`'s `length` spelling.
 	 */
 	public static function stdContainerNominal(
-		typeSource: Null<String>, typeSyntax: TypeSyntaxReader, index: Null<SymbolIndex>, file: String
+		typeSource: Null<String>, typeSyntax: TypeSyntaxReader, index: Null<SymbolIndex>, file: String, projectComplete: Bool
 	): Null<String> {
 		final path: Null<String> = switch typeSource == null ? null : typeSyntax(typeSource)?.shape {
 			case Nominal(path, _): path;
 			case _: null;
 		};
-		if (path == null || !stdlibSpelling(path)) return null;
-		final nominal: String = SourceText.lastSegment(path);
-		return path.indexOf('.') < 0 && !bareNameIsStd(nominal, index, file) ? null : nominal;
+		return projectComplete && path != null && index?.resolvesToStdType(path, file) == true ? SourceText.lastSegment(path) : null;
 	}
 
 	/** Whether `stmt` is exactly `<counter>++;` — an expression statement wrapping a post-increment of the counter. */
 	private static inline function isPostIncrementOf(stmt: QueryNode, counter: String, source: String, s: Seams): Bool {
 		return LoopScan.isUnitIncrementOf(stmt, counter, s.exprStmtKind, [s.postIncrKind], null, source, s.core);
-	}
-
-	/**
-	 * Whether the BARE type name `name` written in `file` denotes the std declaration: no import —
-	 * the file's own or an ambient `import.hx` group's — binds it from outside `haxe.`, and every
-	 * declaration the index resolves it to in that file's scope (same package, root package, a
-	 * wildcard import) is a std one. An unknown file, or no index at all, is no proof. The residual is
-	 * a wildcard import of a package the index does not hold.
-	 */
-	private static function bareNameIsStd(name: String, index: Null<SymbolIndex>, file: String): Bool {
-		final info: Null<FileInfo> = index?.fileInfo(file);
-		if (index == null || info == null) return false;
-		final imports: Array<ImportInfo> = info.imports.concat([for (group in info.ambientImports) for (imp in group.imports) imp]);
-		return !imports.exists(imp -> importBinds(imp, name) && !imp.raw.startsWith(STD_PACKAGE_PREFIX))
-			&& !index.refs.resolveTypeRefAll(name, info).exists(r -> !isStdDeclaration(r.file, index));
-	}
-
-	/** Whether `imp` brings the simple name `name` into scope by itself — a plain import of it, or an alias spelling it. */
-	private static function importBinds(imp: ImportInfo, name: String): Bool {
-		return imp.alias == name || imp.kind == ImportKind.Import && SourceText.lastSegment(imp.raw) == name;
-	}
-
-	/** Whether `file` is a std module: third-party, in the root package or under `haxe`. */
-	private static function isStdDeclaration(file: FileInfo, index: SymbolIndex): Bool {
-		return index.isThirdParty(file.file) && (file.pkg == '' || file.pkg == STD_ROOT_PACKAGE || file.pkg.startsWith(STD_PACKAGE_PREFIX));
 	}
 
 	/** Whether any SURVIVING edit is the `count()` form — matched by span, since the containment filter rebuilds the list. */
@@ -317,7 +278,8 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 			exprStmtKind: exprStmtKind,
 			blockKinds: flow.blockKinds(),
 			mutableKinds: mutableKinds,
-			typeSyntax: plugin.typeSyntax
+			typeSyntax: plugin.typeSyntax,
+			projectComplete: RefactorSupport.projectIsComplete(plugin)
 		};
 	}
 
@@ -328,12 +290,12 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 	 */
 	private static function walk(
 		node: QueryNode, root: QueryNode, file: String, source: String, types: Null<Map<Int, String>>, s: Seams,
-		index: () -> Null<SymbolIndex>, qualified: () -> Bool, out: Array<Violation>
+		index: () -> Null<SymbolIndex>, out: Array<Violation>
 	): Void {
 		if (s.core.opaqueKinds.contains(node.kind)) return;
 		final kids: Array<QueryNode> = node.children;
 		if (s.blockKinds.contains(node.kind)) for (i in 0...kids.length - 1) {
-			final m: Null<Match> = analyze(kids[i], kids[i + 1], node, root, source, types, s, index, qualified, file);
+			final m: Null<Match> = analyze(kids[i], kids[i + 1], node, root, source, types, s, index, file);
 			if (m != null) out.push({
 				file: file,
 				span: m.declSpan,
@@ -342,18 +304,18 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 				message: 'this loop discards its binder and counts by hand — it can be for (${m.counter} in 0...${m.bound})'
 			});
 		}
-		for (c in kids) walk(c, root, file, source, types, s, index, qualified, out);
+		for (c in kids) walk(c, root, file, source, types, s, index, out);
 	}
 
 	/** Mirror of `walk` for the fix path: emit the range-loop rewrite for each wanted, rewritable pair. */
 	private static function fixWalk(
 		node: QueryNode, root: QueryNode, source: String, types: Null<Map<Int, String>>, s: Seams, wanted: Map<String, Violation>,
-		lambdaBlocked: Bool, index: () -> Null<SymbolIndex>, qualified: () -> Bool, file: String, out: Array<CountEdit>
+		lambdaBlocked: Bool, index: () -> Null<SymbolIndex>, file: String, out: Array<CountEdit>
 	): Void {
 		if (s.core.opaqueKinds.contains(node.kind)) return;
 		final kids: Array<QueryNode> = node.children;
 		if (s.blockKinds.contains(node.kind)) for (i in 0...kids.length - 1) {
-			final m: Null<Match> = analyze(kids[i], kids[i + 1], node, root, source, types, s, index, qualified, file);
+			final m: Null<Match> = analyze(kids[i], kids[i + 1], node, root, source, types, s, index, file);
 			if (m == null) continue;
 			final key: String = '${m.declSpan.from}:${m.declSpan.to}';
 			final found: Null<Violation> = wanted[key];
@@ -373,7 +335,7 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 			final edit: { span: Span, text: String } = e;
 			out.push({ edit: edit, lambda: m.needsLambda, key: key });
 		}
-		for (c in kids) fixWalk(c, root, source, types, s, wanted, lambdaBlocked, index, qualified, file, out);
+		for (c in kids) fixWalk(c, root, source, types, s, wanted, lambdaBlocked, index, file, out);
 	}
 
 	/**
@@ -383,7 +345,7 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 	 */
 	private static function analyze(
 		decl: QueryNode, forNode: QueryNode, scope: QueryNode, root: QueryNode, source: String, types: Null<Map<Int, String>>, s: Seams,
-		index: () -> Null<SymbolIndex>, qualified: () -> Bool, file: String
+		index: () -> Null<SymbolIndex>, file: String
 	): Null<Match> {
 		final core: LoopSeams = s.core;
 		final shape = matchShape(decl, forNode, source, s);
@@ -403,9 +365,7 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 		if (!bodyAdmitsRewrite(sh.body, sh.counter, sh.collection, s)) return null;
 		if (OccurrenceScan.referencedInRange(source, sh.counter, forSpan.to, scopeSpan.to, [])) return null;
 		if (LoopScan.capturedByClosure(scope, source, sh.counter, core)) return null;
-		final bound: Null<Bound> = boundOf(
-			sh.collection, LoopScan.identTypeSource(sh.iterable, root, types, core), index, qualified, s.typeSyntax, file
-		);
+		final bound: Null<Bound> = boundOf(sh.collection, LoopScan.identTypeSource(sh.iterable, root, types, core), index, s, file);
 		return bound == null ? null : {
 			declSpan: declSpan,
 			forSpan: forSpan,
@@ -464,73 +424,22 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 	}
 
 	/**
-	 * The bound expression counting `collection`, or null when its declared container is not one
-	 * this rewrite can spell — or when the `count()` form would not reach `Lambda`.
-	 *
-	 * The whitelist is proved to name the std container (`stdContainerNominal`), so no project type
-	 * reaches either arm; a std type declaring `count` of its own is what the QUALIFIED arm remains
-	 * for, because the emitted call goes through the `using Lambda;` the fix inserts and Haxe binds a
-	 * real MEMBER first. `MemberLookup.memberShadowsExtension` — the one question shared with
-	 * `prefer-exists` / `prefer-foreach` / `prefer-find` / `prefer-static-extension` — sends that
-	 * container to the QUALIFIED spelling `Lambda.count(coll)` instead, which routes around the
-	 * member and needs no `using` at all. Both spellings put `coll` in `Lambda.count`'s
-	 * `Iterable<A>` slot, so the fallback changes the call and nothing about the type it demands;
-	 * the skip survives only where `UsingScan.qualifiedCallReaches` says the bare name `Lambda` does
-	 * not reach the module here.
+	 * The bound expression counting `collection`, or null when its declared container is not one this
+	 * rewrite can spell. The whitelist is proved to name the std container (`stdContainerNominal`), and
+	 * no std map declares a `count` of its own, so the `count()` call always reaches `Lambda`'s.
 	 */
 	private static function boundOf(
-		collection: String, typeSource: Null<String>, index: () -> Null<SymbolIndex>, qualified: () -> Bool, typeSyntax: TypeSyntaxReader,
-		file: String
+		collection: String, typeSource: Null<String>, index: () -> Null<SymbolIndex>, s: Seams, file: String
 	): Null<Bound> {
-		final nominal: Null<String> = stdContainerNominal(typeSource, typeSyntax, index(), file);
+		final nominal: Null<String> = stdContainerNominal(typeSource, s.typeSyntax, index(), file, s.projectComplete);
 		return if (nominal == null)
 			null
 		else if (LENGTH_TYPES.contains(nominal))
 			{ expr: '${collection}.$LENGTH_MEMBER', lambda: false }
-		else if (!COUNT_TYPES.contains(nominal))
-			null
-		else if (!countShadowed(nominal, index))
+		else if (COUNT_TYPES.contains(nominal))
 			{ expr: '${collection}.$COUNT_METHOD()', lambda: true }
-		// The shadow no longer refuses the site: the QUALIFIED `Lambda.count(coll)` names the module
-		// outright, so the container's own `count` is never consulted — and no `using` is needed.
-		else if (qualified())
-			{ expr: '$LAMBDA_MODULE.$COUNT_METHOD($collection)', lambda: false }
 		else
 			null;
-	}
-
-	/**
-	 * Whether the QUALIFIED `Lambda.count(coll)` fallback reaches the module from this file, memoised
-	 * and built on FIRST demand — a file holding no shadowed container never reads its header.
-	 */
-	private static function lazyQualified(
-		tree: QueryNode, source: String, plugin: GrammarPlugin, index: () -> Null<SymbolIndex>
-	): () -> Bool {
-		var reaches: Bool = false;
-		var built: Bool = false;
-		return () -> {
-			if (!built) {
-				built = true;
-				reaches = UsingScan.qualifiedCallReaches(UsingScan.headerOf(tree, source, plugin), LAMBDA_MODULE, COUNT_METHOD, index);
-			}
-			return reaches;
-		};
-	}
-
-	/** Whether `nominal` provably declares a `count` member of its own, which the inserted `using Lambda;` would never beat. */
-	private static function countShadowed(nominal: String, index: () -> Null<SymbolIndex>): Bool {
-		final symbols: Null<SymbolIndex> = index();
-		return symbols != null && symbols.members.memberShadowsExtension(nominal, COUNT_METHOD);
-	}
-
-	/**
-	 * Whether the written type's `path` is spelled as a container the whitelist can be ABOUT — a bare simple
-	 * name, or a `haxe.`-qualified path. The whitelist matches the SIMPLE nominal, so without this a
-	 * project-local `mygame.Map` (no `count`) would be admitted by its last
-	 * segment alone. A BARE name is proved separately (`bareNameIsStd`).
-	 */
-	private static function stdlibSpelling(path: String): Bool {
-		return path.lastIndexOf('.') < 0 || path.startsWith(STD_PACKAGE_PREFIX);
 	}
 
 	/** Whether the declaration binding at `from` carries an explicit non-`Int` annotation. */
@@ -581,6 +490,9 @@ private typedef Seams = {
 
 	/** `GrammarPlugin.typeSyntax` — how a declared container type is read. */
 	var typeSyntax: TypeSyntaxReader;
+
+	/** `RefactorSupport.projectIsComplete` — whether the std-container proof has a whole project to rule project types out over. */
+	var projectComplete: Bool;
 }
 
 /** The counting expression a matched container yields, plus whether it needs `using Lambda;` in scope. */

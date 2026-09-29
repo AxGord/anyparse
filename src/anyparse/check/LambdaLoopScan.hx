@@ -330,6 +330,7 @@ final class LambdaLoopScan {
 			],
 			addAssignKind: shape.addAssignKind,
 			superText: shape.superReferenceText,
+			projectComplete: RefactorSupport.projectIsComplete(plugin),
 			typeSyntax: plugin.typeSyntax
 		};
 	}
@@ -752,7 +753,7 @@ final class LambdaLoopScan {
 	 */
 	private static function isLengthContainer(iterable: QueryNode, probe: Probes, s: Seams): Bool {
 		final nominal: Null<String> = DeadBinderCounterLoop.stdContainerNominal(
-			probe.writtenType(iterable), s.typeSyntax, probe.index(), probe.file
+			probe.writtenType(iterable), s.typeSyntax, probe.index(), probe.file, s.projectComplete
 		);
 		return nominal != null && DeadBinderCounterLoop.LENGTH_TYPES.contains(nominal);
 	}
@@ -1112,6 +1113,9 @@ private typedef Seams = {
 
 	/** The base-object identifier (`super`), which a condition moved into a lambda must not name. */
 	var superText: Null<String>;
+
+	/** `RefactorSupport.projectIsComplete`, the `length` spelling's precondition (`isLengthContainer`). */
+	var projectComplete: Bool;
 	var typeSyntax: TypeSyntaxReader;
 }
 

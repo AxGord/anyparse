@@ -966,6 +966,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.SpanTypeInfoPinTest',
 		'unit.query.StdResolverReturnTypeTest',
 		'unit.query.StdResolverTest',
+
 		'unit.query.StdlibDifferentialTest',
 		'unit.query.StdlibDupScanTest',
 		'unit.query.StructuralMembershipTest',
@@ -974,6 +975,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.query.SymbolIndexLayerSeamTest',
 		'unit.query.SymbolIndexRunMemoSliceTest',
 		'unit.query.SymbolIndexSliceTest',
+		'unit.query.SymbolIndexStdTypeTest',
 		'unit.query.SymbolQuerySliceTest',
 		'unit.query.ThinArrowParamBindingSliceTest',
 		'unit.query.TypeInfoMemoTest',
@@ -1139,7 +1141,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-ORPHAN-ACCESSOR-REPORT-SCOPE,M-MAPVALUE-SUBTYPE-REPORT-INDEX,M-TYPEDTHROW-CATCH-REPORT-ONLY',
 			'unit.check.CrossScopeSoundnessTest#testTheScopeHalfHoldingAReflectiveStringDoesNotMatter :: control :: '
 				+ 'M-REFLECTION-SCOPE-PROJECT-ONLY',
-			'unit.check.DeadBinderCounterLoopCheckTest#testFixRewritesMapLoopAndInsertsUsing :: control :: M-SHADOWEXT-TRUE',
+
 			'unit.check.DeadNullCoalescingTest#testLoopBinderShadowsTheOuterProof :: control :: M-NULLFLOW-BINDER-BLIND',
 			'unit.check.DeadSafeNavTest#testAliasProofKeepsNoFixUnderNullSafety :: control :: M-DSN-UNSEEN-DROPPED',
 			'unit.check.DeadSafeNavTest#testAssignmentInsideACallKeepsTheFix :: control :: M-DSN-OWNS-NONE',
@@ -1542,6 +1544,7 @@ class TestDiscoveryParityTest extends Test {
 			'unit.check.PreferComprehensionIndexFillTest#testAnOuterPushOfSomethingElseIsRefused :: control :: M-COMPR-NESTED-PUSH-ANY',
 			'unit.check.PreferComprehensionIndexFillTest#testAnOwnLineCommentBetweenTheDeclarationAndTheLoopIsHoisted :: control :: '
 				+ 'M-COMPR-GAP-COMMENT-DROPPED',
+			'unit.check.PreferCountCheckTest#testFilteredFixFoldsDeclarationAndLoopAndInsertsUsing :: control :: M-SHADOWEXT-TRUE',
 			'unit.check.PreferEnumAbstractCheckTest#testFixRefusalFollowsTheDeclarationNotTheSimpleName :: control :: '
 				+ 'M-SUBTYPE-KEY-SIMPLE-NAME',
 			'unit.check.PreferEnumAbstractCheckTest#testFixRefusesAnRttiHomonym :: control :: M-RTTI-FALSE',

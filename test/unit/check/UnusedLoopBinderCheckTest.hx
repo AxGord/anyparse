@@ -226,10 +226,13 @@ import utest.Test;
 	/** `dead-binder-counter-loop` rewrites the counter and the dead binder together, so it owns the loop. */
 	@:pin('control') @:killer('M-ULB-COUNTER-CLAIM-BLIND')
 	public function testCounterLoopLeftToItsRule(): Void {
+		// A std-scoped whole-project run: `dead-binder-counter-loop` claims a loop only over a
+		// container it PROVES the std one, and a plain test index holds no std.
 		final src: String = wrap('var c = 0; for (x in xs) { g(); c++; }');
-		Assert.equals(0, violations(src).length);
+		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }];
+		Assert.equals(0, rule().run(files, StdScope.plugin(files)).length);
 		final counter: Null<Check> = Linter.byId('dead-binder-counter-loop');
-		Assert.equals(1, counter == null ? 0 : counter.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()).length);
+		Assert.equals(1, counter == null ? 0 : counter.run(files, StdScope.plugin(files)).length);
 		// Read after the loop, the counter is no counter loop: the dead binder is this rule's again.
 		Assert.equals(1, violations(wrap('var c = 0; for (x in xs) { g(); c++; } h(c);')).length);
 	}
