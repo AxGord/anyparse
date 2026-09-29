@@ -9797,18 +9797,62 @@
 		{
 			"name": "M-PAREN-SIBLING-FLAT",
 			"type": "anyparse.core.Renderer",
-			"method": "pushExceedsBranch",
-			"find": "final restWidth: Int = flatTokenWidthOfRestStack(stack, { fireAt: fireAt, width: width });",
-			"replace": "final restWidth: Int = flatTokenWidthOfRestStack(stack);",
-			"note": "a later paren-open probe on the line is measured flat instead of as a break point, so the leftmost of two paren operands opens although only the second crosses the limit"
+			"method": "siblingRestStep",
+			"force": "null",
+			"note": "a paren-open probe measures the rest of its line flat, so the leftmost of two paren operands opens although only the second crosses the limit"
 		},
 		{
 			"name": "M-PAREN-SIBLING-COLLAPSE",
 			"type": "anyparse.core.Renderer",
-			"method": "restNodeWidth",
-			"find": " && findCollapseProbe(breakDoc) == null) {",
-			"replace": ") {",
+			"method": "siblingRestStep",
+			"find": "open.broke && findCollapseProbe(breakDoc) == null ?",
+			"replace": "open.broke ?",
 			"note": "a collapse-candidate paren counts as a break point although it may stay glued at the expression tail, so the paren before it glues and the line overflows"
+		},
+		{
+			"name": "M-PAREN-LIST-BREAK",
+			"type": "anyparse.core.Renderer",
+			"method": "flatTokenWidthOfRestStack",
+			"find": "exact ? penCol - pending : -1",
+			"replace": "-1",
+			"note": "an argument list that crosses the limit is not seen breaking by itself, so the fitting paren before it opens instead"
+		},
+		{
+			"name": "M-PAREN-FLATTEN-REGION",
+			"type": "anyparse.core.Renderer",
+			"method": "siblingRestStep",
+			"find": "case Flatten(innerDoc), HardFlatten(innerDoc):",
+			"replace": "case Flatten(innerDoc), HardFlatten(innerDoc) if (false):",
+			"note": "a paren inside a pinned-flat argument list counts as a break point, so the paren before it glues and the line overflows"
+		},
+		{
+			"name": "M-PAREN-SIBLING-FORCE-FLAT-FRAME",
+			"type": "anyparse.core.Renderer",
+			"method": "flatTokenWidthOfRestStack",
+			"find": "final frameSibling: Null<RestSibling> = f.forceFlat ? null : sibling;",
+			"replace": "final frameSibling: Null<RestSibling> = sibling;",
+			"note": "a probe in a force-flat frame counts as a break point, so the paren before it glues and the line overflows"
+		},
+		{
+			"name": "M-PAREN-EXACT-CONTENT",
+			"type": "anyparse.core.Renderer",
+			"method": "rendersAsMeasured",
+			"force": "true",
+			"note": "a paren whose own content can break trusts the columns after it, glues, and its lambda breaks against a rest it no longer counts"
+		},
+		{
+			"name": "M-PAREN-EXACT-REST",
+			"type": "anyparse.core.Renderer",
+			"method": "keepsColumnExact",
+			"force": "true",
+			"note": "a rest node measured on a guessed flat side keeps the column exact, so a group after it is predicted to break at a column render never reaches"
+		},
+		{
+			"name": "M-PAREN-CHAIN-PREDICTS",
+			"type": "anyparse.core.Renderer",
+			"method": "opensDelimiterAlone",
+			"force": "true",
+			"note": "a method-chain probe trusts a later argument list's break, keeps its link glued, and the short call breaks instead"
 		}
 	]
 }

@@ -58,6 +58,10 @@ final class HxExprParenDivOpenBoundaryTest extends Test {
 		+ '"expressionParens":{"openingPolicy":"none","closingPolicy":"none"}}},' + '"lineEnds":{"emptyCurly":"noBreak"},'
 		+ '"sameLine":{"ifBody":"fitLine","forBody":"fitLine","whileBody":"fitLine",'
 		+ '"functionBody":"fitLine","expressionIf":"next","comprehensionFor":"fitLine"}}';
+	private static final SOLE_ARRAY_SECTION: String = '"maxLineLength":140,"soleItemCuddledBrackets":true,"arrayWrap":'
+		+ '{"defaultWrap":"ignore","rules":[{"conditions":[{"cond":"complexItemCount >= n","value":2}'
+		+ ',{"cond":"totalItemLength >= n","value":100}],"type":"onePerLine"},{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],'
+		+ '"type":"noWrap"},{"conditions":[{"cond":"exceedsMaxLineLength","value":1}],"type":"packedOrOnePerLine"}]},';
 	private static final EXPR_WRAP_SECTION: String = '"expressionWrapping":{"defaultWrap":"fillLineWithLeadingBreak",'
 		+ '"rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"}]},';
 
@@ -236,6 +240,226 @@ final class HxExprParenDivOpenBoundaryTest extends Test {
 			triviaWrite(
 				'class Sample {\n\tfunction run() {\n\t\tfinal kinds:Array<String> = (hxxxxxxxxxxxxxxxxxxxxxxx.headKinds ??'
 				+ ' []).concat(shape.middleKinds ?? []).concat(shape.tailKinds ?? []);\n\t}\n}',
+				CFG
+			)
+		);
+	}
+
+	/**
+	 * The crossing paren sits inside a call's argument list: the list is what crosses, so it
+	 * breaks after its `(`, and the leading paren, which fits, stays glued.
+	 */
+	@:pin('control')
+	@:killer('M-PAREN-LIST-BREAK')
+	public function testCallArgumentListBreaksInsteadOfTheFirstParen(): Void {
+		Assert.equals(
+			'class Sample {\n\n\tfunction run() {\n\t\tvalue = (aaaa.top - baseSpan.top) / Math.max(\n'
+			+ '\t\t\t1, (tailSpanValues[tailSpanValues.length - 1].top - baseSpans[baseSpans.length - 1].top)\n\t\t);\n\t}\n\n}',
+			triviaWrite(
+				'class Sample {\n\tfunction run() {\n\t\tvalue = (aaaa.top - baseSpan.top) / Math.max(1, ('
+				+ 'tailSpanValues[tailSpanValues.length - 1].top - baseSpans[baseSpans.length - 1].top));\n\t}\n}',
+				CFG
+			)
+		);
+	}
+
+	/**
+	 * Same through a `new` expression's argument list.
+	 */
+	public function testNewArgumentListBreaksInsteadOfTheFirstParen(): Void {
+		Assert.equals(
+			'class Sample {\n\n\tfunction run() {\n\t\tvalue = (aaaa.top - baseSpan.top) / new Wrapper(\n'
+			+ '\t\t\t(tailSpanValues[tailSpanValues.length - 1].top - baseSpans[baseSpans.length - 1].top)\n\t\t).v;\n\t}\n\n}',
+			triviaWrite(
+				'class Sample {\n\tfunction run() {\n\t\tvalue = (aaaa.top - baseSpan.top) '
+				+ '/ new Wrapper((tailSpanValues[tailSpanValues.length - 1].top - baseSpans[baseSpans.length - 1].top)).v;\n\t}\n}',
+				CFG
+			)
+		);
+	}
+
+	/**
+	 * A nested call: the OUTER argument list is the first construct that breaks by itself.
+	 */
+	public function testNestedCallBreaksItsOuterArgumentList(): Void {
+		Assert.equals(
+			'class Sample {\n\n\tfunction run() {\n\t\tvalue = (aaaa.top - baseSpan.top) / outer(\n'
+			+ '\t\t\tinner(1, (tailSpanValues[tailSpanValues.length - 1].top - baseSpans[baseSpans.length - 1].top))\n\t\t);\n\t}\n\n}',
+			triviaWrite(
+				'class Sample {\n\tfunction run() {\n\t\tvalue = (aaaa.top - baseSpan.top) / outer(inner(1, ('
+				+ 'tailSpanValues[tailSpanValues.length - 1].top - baseSpans[baseSpans.length - 1].top)));\n\t}\n}',
+				CFG
+			)
+		);
+	}
+
+	/**
+	 * An array comprehension that crosses breaks after its head; the leading paren stays glued.
+	 */
+	public function testComprehensionBreaksInsteadOfTheFirstParen(): Void {
+		Assert.equals(
+			'class Sample {\n\n\tfunction run() {\n\t\tvalue = (aaaa.top - baseSpan.top) / [\n\t\t\tfor (i in 0...n) ('
+			+ 'tailSpanValues[tailSpanValues.length - 1].top - baseSpans[baseSpans.length - 1].top)\n\t\t][0];\n\t}\n\n}',
+			triviaWrite(
+				'class Sample {\n\tfunction run() {\n\t\tvalue = (aaaa.top - baseSpan.top) / [for (i in 0...n)'
+				+ ' (tailSpanValues[tailSpanValues.length - 1].top - baseSpans[baseSpans.length - 1].top)][0];\n\t}\n}',
+				CFG
+			)
+		);
+	}
+
+	/**
+	 * An object literal that crosses breaks after `{`.
+	 */
+	public function testObjectLiteralBreaksInsteadOfTheFirstParen(): Void {
+		Assert.equals(
+			'class Sample {\n\n\tfunction run() {\n\t\tvalueQQQQQ = (aaaa.top - baseSpan.top) / {\n'
+			+ '\t\t\tv: (tailSpanValues[tailSpanValues.length - 1].top - baseSpans[baseSpans.length - 1].top)\n\t\t}.v;\n\t}\n\n}',
+			triviaWrite(
+				'class Sample {\n\tfunction run() {\n\t\tvalueQQQQQ = (aaaa.top - baseSpan.top) / {v: ('
+				+ 'tailSpanValues[tailSpanValues.length - 1].top - baseSpans[baseSpans.length - 1].top)}.v;\n\t}\n}',
+				CFG
+			)
+		);
+	}
+
+	/**
+	 * A crossing paren that is the sole item of an array literal (cuddled brackets) opens
+	 * inside `[(`; the leading one stays glued.
+	 */
+	public function testSoleItemArrayOpensTheCrossingParen(): Void {
+		Assert.equals(
+			'class Sample {\n\n\tfunction run() {\n\t\tvalueQQQQQQQQQQQQQQQQQQQQ = (aaaa.top - baseSpan.top) / [(\n'
+			+ '\t\t\ttailSpanValues[tailSpanValues.length - 1].top - baseSpans[baseSpans.length - 1].top\n\t\t)][0];\n\t}\n\n}',
+			triviaWrite(
+				'class Sample {\n\tfunction run() {\n\t\tvalueQQQQQQQQQQQQQQQQQQQQ = (aaaa.top - baseSpan.top) /'
+				+ ' [(tailSpanValues[tailSpanValues.length - 1].top - baseSpans[baseSpans.length - 1].top)][0];\n\t}\n}',
+				CFG.replace('"maxLineLength":140,', SOLE_ARRAY_SECTION)
+			)
+		);
+	}
+
+	/**
+	 * The reported site shape: an opAddSub paren followed by a `Math.min` call whose arguments
+	 * cross; the call breaks and the paren stays glued.
+	 */
+	public function testTransitionShapeBreaksTheMinArguments(): Void {
+		Assert.equals(
+			'class Sample {\n\n\tfunction run() {\n\t\tfinal fromFrame:Float = _isTransitioning\n'
+			+ '\t\t\t? _transitionFromFrame + (_transitionToFrame - _transitionFromFrame) * Math.min(\n\t\t\t\t(Lib.getTimer() '
+			+ '/ 1000.0 - _transitionStartTime) / Frames.FRAME_TRANSITION, 1.0\n\t\t\t)\n\t\t\t: _animationState.frame;\n\t}\n\n}',
+			triviaWrite(
+				'class Sample {\n\tfunction run() {\n\t\tfinal fromFrame:Float = _isTransitioning ? _transitionFromFrame + ('
+				+ '_transitionToFrame - _transitionFromFrame) * Math.min((Lib.getTimer() / 1000.0 - _transitionStartTime) /'
+				+ ' Frames.FRAME_TRANSITION, 1.0) : _animationState.frame;\n\t}\n}',
+				CFG
+			)
+		);
+	}
+
+	/**
+	 * A `.concat(` argument that crosses breaks; the `(x ?? [])` head paren stays glued.
+	 */
+	public function testParenBeforeAnArgumentOfAChainLink(): Void {
+		Assert.equals(
+			'class Sample {\n\n\tfunction run() {\n\t\tfinal kinds:Array<String> = (shape.functionKinds ?? []).concat(\n'
+			+ '\t\t\tshape.finalModifierMemberKind == null ? [] : [shape.finalModifierMemberKind]\n\t\t);\n\t}\n\n}',
+			triviaWrite(
+				'class Sample {\n\tfunction run() {\n\t\tfinal kinds:Array<String> = (shape.functionKinds ??'
+				+ ' []).concat(shape.finalModifierMemberKind == null ? [] : [shape.finalModifierMemberKind]);\n\t}\n}',
+				CFG
+			)
+		);
+	}
+
+	/**
+	 * A chain whose lambda body forces a break fires at the bare limit, a later paren one
+	 * column past it; the paren still ends the chain's line, since a line it leaves unbroken
+	 * is never wider than the limit.
+	 */
+	public function testForcedBreakChainGluesALaterParenLine(): Void {
+		Assert.equals(
+			'class Sample {\n\n\tfunction run() {\n\t\ttotalQQQQQQQQQQQQQQQQQ = items.map(v -> {\n\t\t\ttrace(v);\n\t\t\treturn v;\n'
+			+ '\t\t}).filter(v -> v != null).length + (aaaaaaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbb);\n\t}\n\n}',
+			triviaWrite(
+				'class Sample {\n\tfunction run() {\n\t\ttotalQQQQQQQQQQQQQQQQQ = items.map(v -> { trace(v); return v; }).filter(v -> v '
+				+ '!= null).length + (aaaaaaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbb);\n\t}\n}',
+				CFG
+			)
+		);
+	}
+
+	/**
+	 * A single short argument is pinned flat (`itemCount <= 1` noWrap), so the paren inside it
+	 * can never open: it is no break point, and the leading paren opens.
+	 */
+	@:pin('control')
+	@:killer('M-PAREN-FLATTEN-REGION')
+	public function testPinnedArgumentListIsMeasuredFlat(): Void {
+		Assert.equals(
+			'class Sample {\n\n\tfunction run() {\n\t\tratioValueQQQQQQQQQQQQQQ = (\n\t\t\taaaa - bbbb\n'
+			+ '\t\t) / compute((tailSpanValues[tailSpanValues.length - 1].top - baseSpans[0].top)) * scaleFactor;\n\t}\n\n}',
+			triviaWrite(
+				'class Sample {\n\tfunction run() {\n\t\tratioValueQQQQQQQQQQQQQQ = (aaaa - bbbb) /'
+				+ ' compute((tailSpanValues[tailSpanValues.length - 1].top - baseSpans[0].top)) * scaleFactor;\n\t}\n}',
+				CFG
+			)
+		);
+	}
+
+	/**
+	 * A paren around a lambda may break inside itself, so the columns after it are not the
+	 * measured ones and the argument list after it is no break point: the lambda paren opens.
+	 */
+	@:pin('control')
+	@:killer('M-PAREN-EXACT-CONTENT')
+	public function testLambdaParenMeasuresItsOwnBreakableContent(): Void {
+		Assert.equals(
+			'class Sample {\n\n\tfunction run() {\n\t\tvalueQQQQQQQQQQQQQQQQQQQQQQQQQ = (aaaa - bbbb) / (\n'
+			+ '\t\t\tv -> v.someLongFieldName + anotherFieldRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR\n'
+			+ '\t\t)(1) / (tailSpanValues[tailSpanValues.length - 1].top - baseSpans[baseSpans.length - 1].top);\n\t}\n\n}',
+			triviaWrite(
+				'class Sample {\n\tfunction run() {\n\t\tvalueQQQQQQQQQQQQQQQQQQQQQQQQQ = (aaaa - bbbb) / (v -> v.someLongFieldName +'
+				+ ' anotherFieldRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR)(1) /'
+				+ ' (tailSpanValues[tailSpanValues.length - 1].top - baseSpans[baseSpans.length - 1].top);\n\t}\n}',
+				CFG
+			)
+		);
+	}
+
+	/**
+	 * Without `expressionWrapping` the lambda paren is a collapse candidate measured flat in
+	 * the rest, so every column after it is a guess and the call after it predicts nothing.
+	 */
+	@:pin('control')
+	@:killer('M-PAREN-EXACT-REST')
+	public function testUnmeasuredRestNodeEndsColumnPredictions(): Void {
+		Assert.equals(
+			'class Sample {\n\n\tfunction run() {\n\t\tvalueQQQQQQQQQQQQQQQQQQQQQQQQQ = (\n\t\t\taaaa - bbbb\n\t\t) / (\n'
+			+ '\t\t\tv -> v.someLongFieldName + anotherFieldRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR\n'
+			+ '\t\t)(1) / (tailSpanValues[tailSpanValues.length - 1].top - baseSpans[baseSpans.length - 1].top);\n\t}\n\n}',
+			triviaWrite(
+				'class Sample {\n\tfunction run() {\n\t\tvalueQQQQQQQQQQQQQQQQQQQQQQQQQ = (aaaa - bbbb) / (v -> v.someLongFieldName +'
+				+ ' anotherFieldRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR)(1) /'
+				+ ' (tailSpanValues[tailSpanValues.length - 1].top - baseSpans[baseSpans.length - 1].top);\n\t}\n}',
+				CFG.replace(EXPR_WRAP_SECTION, '')
+			)
+		);
+	}
+
+	/**
+	 * A method-chain probe keeps the plain rest: its own link break is better than a short
+	 * argument list its flat width pushed past the limit.
+	 */
+	@:pin('control')
+	@:killer('M-PAREN-CHAIN-PREDICTS')
+	public function testChainProbeKeepsBreakingItsOwnLink(): Void {
+		Assert.equals(
+			'class Sample {\n\n\tfunction run() {\n\t\tfinal max:Int = LintConfig.resolveWith(_resolveConfig, entry.file)\n'
+			+ '\t\t\t.intOption(\'complexity\', \'max\') ?? plugin.maxComplexity(entry.file) ?? DEFAULT_MAX_COMPLEXITY;\n\t}\n\n}',
+			triviaWrite(
+				'class Sample {\n\tfunction run() {\n\t\tfinal max:Int = LintConfig.resolveWith(_resolveConfig, '
+				+ 'entry.file).intOption(\'complexity\', \'max\') ?? plugin.maxComplexity(entry.file) ?? DEFAULT_MAX_COMPLEXITY;\n\t}\n}',
 				CFG
 			)
 		);

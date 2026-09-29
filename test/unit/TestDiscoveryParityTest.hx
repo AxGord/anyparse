@@ -461,6 +461,7 @@ class TestDiscoveryParityTest extends Test {
 		'unit.core.DocMeasureFillStackTest',
 		'unit.core.DocMeasureFirstVisibleTextTest',
 		'unit.core.DocRendererTest',
+		'unit.core.RendererParenSiblingRestTest',
 		'unit.core.RendererSharedDocTest',
 		'unit.core.WriterTrailingWhitespaceTest',
 		'unit.format.BraceSymmetrySliceTest',
@@ -1980,6 +1981,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.cli.LintFixQuietDefaultTest#testTheRuleAccountingWaitsForAnEditOrForVerbose :: control :: M-LINT-FIX-CENSUS-UNGATED',
 			'unit.cli.LintRangeCliTest#testWriteFixLeavesAStandingFindingOutsideTheWindow :: control :: M-LINT-RANGE-INERT',
 			'unit.cli.ResolutionScopeCliTest#testCrossingSuperNeedsRootsThatMatch :: control :: M-FIAD-ROOTS-MATCH-IGNORED',
+			'unit.core.RendererParenSiblingRestTest#testAProbeInAForceFlatFrameIsNoBreakPoint :: control :: '
+				+ 'M-PAREN-SIBLING-FORCE-FLAT-FRAME',
 			'unit.core.RendererSharedDocTest#testProbeSearchVisitsASharedNodeOnce :: control :: M-PROBE-SEARCH-REVISITS',
 			'unit.format.BraceSymmetrySliceTest#testAWrappedValueThenBranchDropsItsSourceSemicolon :: control :: M-SSB-VALUE-WRAP-OFF',
 			'unit.format.BraceSymmetrySliceTest#testTheSameTryOutsideAMacroIsStillBraced :: control :: '
@@ -2089,8 +2092,15 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxElseIfOptionsTest#testElseIfNextOnlyLastLevelKeepsFirstLevelInline :: control :: M-KEEP-ELSEIF-NEXT-OFF',
 			'unit.grammar.haxe.HxExprForGuardGlueSliceTest#testArrowForForBlockGluesTheWholeSpine :: control :: M-STRICT-HEAD-DELIM-OFF',
 			'unit.grammar.haxe.HxExprForGuardGlueSliceTest#testArrowForIfBlockGluesTheWholeSpine :: control :: M-STRICT-HEAD-DELIM-OFF',
+			'unit.grammar.haxe.HxExprParenDivOpenBoundaryTest#testCallArgumentListBreaksInsteadOfTheFirstParen :: control :: '
+				+ 'M-PAREN-LIST-BREAK',
+			'unit.grammar.haxe.HxExprParenDivOpenBoundaryTest#testChainProbeKeepsBreakingItsOwnLink :: control :: M-PAREN-CHAIN-PREDICTS',
 			'unit.grammar.haxe.HxExprParenDivOpenBoundaryTest#testCollapseTailParenIsNotABreakPoint :: control :: M-PAREN-SIBLING-COLLAPSE',
+			'unit.grammar.haxe.HxExprParenDivOpenBoundaryTest#testLambdaParenMeasuresItsOwnBreakableContent :: control :: '
+				+ 'M-PAREN-EXACT-CONTENT',
+			'unit.grammar.haxe.HxExprParenDivOpenBoundaryTest#testPinnedArgumentListIsMeasuredFlat :: control :: M-PAREN-FLATTEN-REGION',
 			'unit.grammar.haxe.HxExprParenDivOpenBoundaryTest#testSecondParenOpensWhenOnlyItCrossesDiv :: control :: M-PAREN-SIBLING-FLAT',
+			'unit.grammar.haxe.HxExprParenDivOpenBoundaryTest#testUnmeasuredRestNodeEndsColumnPredictions :: control :: M-PAREN-EXACT-REST',
 			'unit.grammar.haxe.HxFileHeaderCommentSliceTest#testDocOnSecondDeclIsNotAFileHeader :: control :: M-FILEHEADER-ANY-DECL',
 			'unit.grammar.haxe.HxFileHeaderCommentSliceTest#testFileHeaderBlankBeforeConditionalImportBlock :: control :: '
 				+ 'M-FILEHEADER-COND-OPAQUE',
@@ -4012,7 +4022,13 @@ class TestDiscoveryParityTest extends Test {
 			'M-INTERP-CONSTANT-IN-META',
 			'M-INTERP-MACRO-ARGUMENT-REWRITTEN',
 			'M-PAREN-SIBLING-FLAT',
-			'M-PAREN-SIBLING-COLLAPSE'
+			'M-PAREN-SIBLING-COLLAPSE',
+			'M-PAREN-LIST-BREAK',
+			'M-PAREN-FLATTEN-REGION',
+			'M-PAREN-SIBLING-FORCE-FLAT-FRAME',
+			'M-PAREN-EXACT-CONTENT',
+			'M-PAREN-EXACT-REST',
+			'M-PAREN-CHAIN-PREDICTS'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));
