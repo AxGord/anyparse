@@ -249,6 +249,33 @@ class PreferForeachCheckTest extends Test {
 		Assert.equals(0, violations(flagFn('var all:Bool = true;\n\t\tfor (all in bs) if (a) all = false;\n\t\treturn all;')).length);
 	}
 
+	public function testFlagFormMemberTailNamedLikeTheFlagFlagged(): Void {
+		final src: String = 'class C {\n\tfunction f(ps:Array<P>):Bool {\n\t\tvar visible:Bool = true;\n\t\tfor (p in ps) if (!p.visible) '
+			+ 'visible = false;\n\t\treturn visible;\n\t}\n}\n\nclass P {\n\tpublic var visible:Bool = false;\n}';
+		Assert.equals(1, violations(src).length);
+	}
+
+	public function testFlagFormIterableMentioningTheFlagNotFlagged(): Void {
+		Assert.equals(
+			0, violations(flagFn('var all:Bool = true;\n\t\tfor (b in (all ? bs : bs)) if (!b) all = false;\n\t\treturn all;')).length
+		);
+	}
+
+	public function testSuperInTheConditionNotFlagged(): Void {
+		// The condition becomes a lambda body: `Cannot access super inside a local function`.
+		final src: String = 'class Base {\n\tfunction ok(x:Int):Bool {\n\t\treturn x > 0;\n\t}\n}\n\nclass S extends Base {\n'
+			+ '\tfunction f(xs:Array<Int>):Bool {\n\t\tfor (x in xs) if (super.ok(x)) return false;\n\t\treturn true;\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	public function testIteratorClassIterableNotFlagged(): Void {
+		// Structural, not by name: a class with `hasNext` / `next` and no `iterator()` is an Iterator.
+		final src: String = 'class C {\n\tvar ai:Walker;\n\n\tfunction f():Bool {\n\t\tfor (x in ai) if (x > 2) return false;\n'
+			+ '\t\treturn true;\n\t}\n}\n\nclass Walker {\n\tpublic function hasNext() {\n\t\treturn false;\n\t}\n\n'
+			+ '\tpublic function next() {\n\t\treturn 0;\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
 	/** A receiver whose OWN type declares `foreach` — the name this direction rewrites to. */
 	private function memberFn(body: String): String {
 		return 'class C {\n\tfunction f(m:M):Bool {\n\t\t$body\n\t}\n}\n\nclass M {\n\tpublic function foreach(key:Int):Bool {\n'

@@ -227,6 +227,21 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 				&& analyze(decl, forNode, scope, root, source, typeSources, seams, index, qualified) != null;
 	}
 
+	/**
+	 * The SIMPLE nominal of the written container type `typeSource`, or null unless it is spelled as
+	 * one `LENGTH_TYPES` / `COUNT_TYPES` can be about — bare or `haxe.`-qualified (`stdlibSpelling`).
+	 * The lists match a simple name, so without this a project `mygame.List` whose `length` is not
+	 * its element count would be admitted by its last segment alone. Shared with `prefer-count`'s
+	 * `length` spelling, which trusts the same list.
+	 */
+	public static function stdContainerNominal(typeSource: Null<String>, typeSyntax: TypeSyntaxReader): Null<String> {
+		final path: Null<String> = switch typeSource == null ? null : typeSyntax(typeSource)?.shape {
+			case Nominal(path, _): path;
+			case _: null;
+		};
+		return path == null || !stdlibSpelling(path) ? null : SourceText.lastSegment(path);
+	}
+
 	/** Whether `stmt` is exactly `<counter>++;` — an expression statement wrapping a post-increment of the counter. */
 	private static inline function isPostIncrementOf(stmt: QueryNode, counter: String, source: String, s: Seams): Bool {
 		return LoopScan.isUnitIncrementOf(stmt, counter, s.exprStmtKind, [s.postIncrKind], null, source, s.core);
@@ -430,12 +445,7 @@ final class DeadBinderCounterLoop implements Check implements DefaultOff {
 	private static function boundOf(
 		collection: String, typeSource: Null<String>, index: () -> Null<SymbolIndex>, qualified: () -> Bool, typeSyntax: TypeSyntaxReader
 	): Null<Bound> {
-		final path: Null<String> = switch typeSource == null ? null : typeSyntax(typeSource)?.shape {
-			case Nominal(path, _): path;
-			case _: null;
-		};
-		if (path == null || !stdlibSpelling(path)) return null;
-		final nominal: Null<String> = SourceText.lastSegment(path);
+		final nominal: Null<String> = stdContainerNominal(typeSource, typeSyntax);
 		return if (nominal == null)
 			null
 		else if (LENGTH_TYPES.contains(nominal))

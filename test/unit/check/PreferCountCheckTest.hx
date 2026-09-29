@@ -98,11 +98,47 @@ class PreferCountCheckTest extends Test {
 		Assert.equals(0, violations(fn('var n:Int = 0;\n\t\tfor (x in walk) if (x > 2) n++;\n\t\treturn n;')).length);
 	}
 
+	public function testIteratorClassesNotFlagged(): Void {
+		// Structural, not by name: `hasNext` + `next` and no `iterator()` is an Iterator, whether the
+		// class declares them (with INFERRED returns, as `haxe.iterators.ArrayIterator` does) or inherits them.
+		for (field in ['walker', 'sub'])
+			Assert.equals(0, iteratorClassViolations('var n:Int = 0;\n\t\tfor (x in $field) n++;\n\t\treturn n;').length, field);
+	}
+
+	public function testIterableClassWithIteratorMembersStillFlagged(): Void {
+		// Control: a class that is BOTH (it also declares `iterator()`) is an Iterable, and is claimed.
+		Assert.equals(1, iteratorClassViolations('var n:Int = 0;\n\t\tfor (x in both) n++;\n\t\treturn n;').length);
+	}
+
+	public function testConstructedIteratorNotFlagged(): Void {
+		// The CodepointIndexTest shape: `new haxe.iterators.StringIteratorUnicode(s)` writes its type
+		// at the site, and a construction is not something the expression resolver reads.
+		Assert.equals(0, iteratorClassViolations('var n:Int = 0;\n\t\tfor (x in new Walker()) n++;\n\t\treturn n;').length);
+		Assert.equals(0, iteratorClassViolations('var n:Int = 0;\n\t\tfor (x in new p.Walker()) n++;\n\t\treturn n;').length);
+	}
+
+	public function testLengthNeedsAStdSpelling(): Void {
+		// `p.List` is a PROJECT type named like the std one: its `length` need not be its element
+		// count, so the fold falls back to `count()`, which is right for any `Iterable`.
+		final out: String = fixResult(
+			'package p;\n\nusing Lambda;\n\nclass C {\n\tfunction f(q:p.List<Int>):Int {\n\t\tvar n:Int = 0;\n\t\tfor (x in q) n++;\n'
+			+ '\t\treturn n;\n\t}\n}\n'
+		);
+		Assert.isTrue(out.indexOf('final n:Int = q.count();') != -1, out);
+	}
+
+	public function testSuperInTheConditionNotFlagged(): Void {
+		final src: String = 'class Base {\n\tfunction ok(x:Int):Bool {\n\t\treturn x > 0;\n\t}\n}\n\nclass S extends Base {\n'
+			+ '\tfunction f(xs:Array<Int>):Int {\n\t\tvar n:Int = 0;\n\t\tfor (x in xs) if (super.ok(x)) n++;\n\t\treturn n;\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
 	public function testIterableFieldStillFlagged(): Void {
-		// Control for the `Iterator` refusal: the same fixture over an `Array` field is claimed.
+		// Control for the `Iterator` refusal: the same fixture over an `Array` field is claimed — as
+		// `count()`, since a field access carries no WRITTEN type the `length` spelling could trust.
 		final vs: Array<Violation> = typedViolations('var n:Int = 0;\n\t\tfor (_ in b.all) n++;\n\t\treturn n;');
 		Assert.equals(1, vs.length);
-		Assert.isTrue(vs[0].message.indexOf('final n = b.all.length') != -1, vs[0].message);
+		Assert.isTrue(vs[0].message.indexOf('final n = b.all.count()') != -1, vs[0].message);
 	}
 
 	public function testCallIterableResolvingToIteratorNotFlagged(): Void {
@@ -125,6 +161,21 @@ class PreferCountCheckTest extends Test {
 		Assert.equals(0, violations(fn('var n:Int = 0;\n\t\tfor (x in xs) if (x > n) n++;\n\t\treturn n;')).length);
 	}
 
+	public function testIterableMentioningTheCounterNotFlagged(): Void {
+		// The fold moves the iterable into the counter's own initializer: `final n = rows[n].count()`
+		// reads whatever OUTER `n` is in scope, silently, and still compiles.
+		for (iterable in ['rows[n]', 'row(n)'])
+			Assert.equals(
+				0, violations(rowsFn('var n:Int = 0;\n\t\tfor (x in $iterable) if (x > 2) n++;\n\t\treturn n;')).length, iterable
+			);
+	}
+
+	public function testMemberTailAndStringNamedLikeTheCounterFlagged(): Void {
+		// `r.n` is a dotted tail and `'n'` an inert literal — neither reads the local `n`.
+		for (cond in ['r.n > 0', 'r.name == \'n\''])
+			Assert.equals(1, violations(rowsFn('var n:Int = 0;\n\t\tfor (r in recs) if ($cond) n++;\n\t\treturn n;')).length, cond);
+	}
+
 	public function testInterpolatedReadOfTheCounterNotFlagged(): Void {
 		// A braceless `'$n'` is a read the tree does not index — the text scan still sees it.
 		Assert.equals(0, violations(fn("var n:Int = 0;\n\t\tfor (x in xs) if ('$n' != '') n++;\n\t\treturn n;")).length);
@@ -139,7 +190,8 @@ class PreferCountCheckTest extends Test {
 	}
 
 	public function testNonIntCounterNotFlagged(): Void {
-		Assert.equals(0, violations(fn('var n:Float = 0;\n\t\tfor (x in xs) if (x > 2) n++;\n\t\treturn 0;')).length);
+		for (type in ['Float', 'Null<Int>', 'UInt'])
+			Assert.equals(0, violations(fn('var n:$type = 0;\n\t\tfor (x in xs) if (x > 2) n++;\n\t\treturn 0;')).length, type);
 	}
 
 	public function testElseBranchNotFlagged(): Void {
@@ -222,6 +274,23 @@ class PreferCountCheckTest extends Test {
 	private function fn(body: String): String {
 		return 'class C {\n\tfunction f(xs:Array<Int>, l:List<Int>, it:Iterable<Int>, walk:Iterator<Int>, m:Map<String, Int>):Int {\n'
 			+ '\t\t$body\n\t}\n\n\tfunction keep(x:Int):Bool {\n\t\treturn x > 0;\n\t}\n}';
+	}
+
+	/** `rows` / `row(i)` to index by the counter, and `recs` of `R`, whose fields share the counter's name. */
+	private function rowsFn(body: String): String {
+		return 'class C {\n\tvar rows:Array<Array<Int>> = [];\n\n\tfunction f(recs:Array<R>):Int {\n\t\t$body\n\t}\n\n'
+			+ '\tfunction row(i:Int):Array<Int> {\n\t\treturn rows[i];\n\t}\n}\n\nclass R {\n\tpublic var n:Int = 0;\n'
+			+ '\tpublic var name:String = \'\';\n}';
+	}
+
+	/** `walker` a class iterator, `sub` one inheriting it, `both` a class that is also `Iterable`. */
+	private function iteratorClassViolations(body: String): Array<Violation> {
+		final walker: String = '\tpublic function hasNext() {\n\t\treturn false;\n\t}\n\n\tpublic function next() {\n\t\treturn 0;\n\t}\n';
+		return violations(
+			'class C {\n\tvar walker:Walker;\n\tvar sub:Sub;\n\tvar both:Both;\n\n\tfunction f():Int {\n\t\t$body\n\t}\n}\n\n'
+			+ 'class Walker {\n$walker}\n\nclass Sub extends Walker {}\n\n'
+			+ 'class Both {\n$walker\n\tpublic function iterator():Iterator<Int> {\n\t\treturn [].iterator();\n\t}\n}'
+		);
 	}
 
 	private function file(body: String, withUsing: Bool): String {
