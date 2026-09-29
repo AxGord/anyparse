@@ -259,8 +259,8 @@ class DeadBinderCounterLoopCheckTest extends Test {
 	}
 
 	public function testLengthContainerDeclaringCountStillFlagged(): Void {
-		// The `length` arm needs no `Lambda` at all, so a same-file `count` member is irrelevant to
-		// it — the gate is scoped to the name the rewrite actually emits.
+		// The `length` arm emits no `Lambda` call, so an unrelated same-file type declaring `count`
+		// cannot capture the rewrite.
 		final src: String = wrapArray('var i = 0;\n\t\tfor (x in items) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t}')
 			+ '\n\nclass Array2 {\n\tpublic function count():Int {\n\t\treturn 0;\n\t}\n}';
 		Assert.equals(1, violations(src).length);
