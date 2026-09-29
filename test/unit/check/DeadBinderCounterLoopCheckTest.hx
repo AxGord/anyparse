@@ -39,6 +39,38 @@ class DeadBinderCounterLoopCheckTest extends Test {
 		Assert.equals('this loop discards its binder and counts by hand — it can be for (i in 0...table.count())', vs[0].message);
 	}
 
+	public function testProjectListShadowingTheStdNameNotFlagged(): Void {
+		// A project `List` whose `length` is not its element count: `0...items.length` would COMPILE and
+		// run a different number of times, so a bare name any project declaration captures is no proof.
+		final list: String = 'package p;\n\nclass List<T> {\n\tpublic var length:Int = 99;\n\n\tpublic function new() {}\n\n'
+			+ '\tpublic function iterator():Iterator<T> {\n\t\treturn [].iterator();\n\t}\n}';
+		final body: String = '\tfunction f(items:List<Int>):Void {\n\t\tvar i = 0;\n\t\tfor (x in items) {\n\t\t\twork(i);\n\t\t\ti++;\n'
+			+ '\t\t}\n\t}\n\n\tfunction work(i:Int):Void {}\n}';
+		final headers: Array<String> = [
+			'package p;\n\nclass C {\n',
+			'package r;\n\nimport p.List;\n\nclass C {\n',
+			'package r;\n\nimport lib.List;\n\nclass C {\n'
+		];
+		for (header in headers)
+			Assert.equals(
+				0,
+				new DeadBinderCounterLoop().run(
+					[{ file: 'C.hx', source: header + body }, { file: 'p/List.hx', source: list }], new HaxeQueryPlugin()
+				)
+					.length,
+				header
+			);
+	}
+
+	public function testUnshadowedBareListStillFlagged(): Void {
+		// Control: a package that neither declares nor imports a `List` still gets the `length` bound.
+		final src: String = 'package r;\n\nclass C {\n\tfunction f(items:List<Int>):Void {\n\t\tvar i = 0;\n\t\tfor (x in items) {\n'
+			+ '\t\t\twork(i);\n\t\t\ti++;\n\t\t}\n\t}\n\n\tfunction work(i:Int):Void {}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('0...items.length') != -1, vs[0].message);
+	}
+
 	public function testBinderReadNotFlagged(): Void {
 		Assert.equals(0, violations(wrapArray('var i = 0;\n\t\tfor (x in items) {\n\t\t\twork(x);\n\t\t\ti++;\n\t\t}')).length);
 	}
@@ -215,17 +247,14 @@ class DeadBinderCounterLoopCheckTest extends Test {
 		Assert.equals(0, violations(wrapArray(body)).length);
 	}
 
-	public function testContainerDeclaringCountTakesTheQualifiedForm(): Void {
-		// The `count()` arm emits a `using Lambda;` call, and a real MEMBER beats a `using`. The
-		// whitelist matches a SIMPLE nominal, so a project type named after a std container is the
-		// residual this rule's own doc names — and the count survives in the QUALIFIED spelling,
-		// which routes around that member and needs no `using` at all.
+	public function testProjectContainerNamedLikeAStdOneNotFlagged(): Void {
+		// A project `Map` in the file's own scope captures the bare name, so the written type is not
+		// the std container the whitelist is about — whatever it declares, the rule does not spell it.
+		// This used to reach the QUALIFIED `Lambda.count(table)` spelling; that arm now serves only a
+		// container the std itself declares `count` on.
 		final src: String = wrapMap('var i = 0;\n\t\tfor (x in table) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t}')
 			+ '\n\nclass Map {\n\tpublic function count():Int {\n\t\treturn 0;\n\t}\n}';
-		final vs: Array<Violation> = violations(src);
-		Assert.equals(1, vs.length);
-		Assert.isTrue(vs[0].message.indexOf('for (i in 0...Lambda.count(table))') != -1, vs[0].message);
-		assertFixCanonical(src, ['for (i in 0...Lambda.count(table))'], ['using Lambda;', 'var i = 0;']);
+		Assert.equals(0, violations(src).length);
 	}
 
 	public function testShadowedLambdaModuleRefusesTheQualifiedCount(): Void {

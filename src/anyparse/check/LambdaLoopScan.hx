@@ -91,8 +91,8 @@ final class LambdaLoopScan {
 
 	/**
 	 * The nominal a loop may iterate and no `Lambda` call accepts: `for` takes an `Iterator`, the
-	 * `Iterable<A>` parameter does not (`Iterator<Int> has no field count`). Refused BY TYPE for every
-	 * iterable shape and every direction — the CALL shape is refused by the accept list below already.
+	 * `Iterable<A>` parameter does not (`Iterator<Int> has no field count`). The gate is `provenIterator`,
+	 * which proves an iterator STRUCTURALLY; this name is only its fallback when no index is available.
 	 */
 	private static inline final ITERATOR_TYPE_NAME: String = 'Iterator';
 
@@ -652,8 +652,8 @@ final class LambdaLoopScan {
 	}
 
 	/**
-	 * Whether `iterable` PROVABLY resolves to one of `names` — for a CALL iterable the direction's `iterableTypes`, the
-	 * gate that replaced a blanket refusal of every call; for the `length` spelling `DeadBinderCounterLoop.LENGTH_TYPES`.
+	 * Whether `iterable` PROVABLY resolves to one of `names` — the direction's
+	 * `iterableTypes`, the CALL-iterable gate that replaced a blanket refusal of every call.
 	 *
 	 * The proof is `CheckScan.typeNominalResolver`, the resolver seven shipped checks already
 	 * consume: `TypeInfoProvider` answers the declared types written in this file, and the run's
@@ -751,7 +751,9 @@ final class LambdaLoopScan {
 	 * could not tell. Anything else falls back to `count()`, which is right for every `Iterable`.
 	 */
 	private static function isLengthContainer(iterable: QueryNode, probe: Probes, s: Seams): Bool {
-		final nominal: Null<String> = DeadBinderCounterLoop.stdContainerNominal(probe.writtenType(iterable), s.typeSyntax);
+		final nominal: Null<String> = DeadBinderCounterLoop.stdContainerNominal(
+			probe.writtenType(iterable), s.typeSyntax, probe.index(), probe.file
+		);
 		return nominal != null && DeadBinderCounterLoop.LENGTH_TYPES.contains(nominal);
 	}
 

@@ -127,6 +127,27 @@ class PreferCountCheckTest extends Test {
 		Assert.isTrue(out.indexOf('final n:Int = q.count();') != -1, out);
 	}
 
+	public function testBareProjectListGetsCount(): Void {
+		// A BARE `List` a project declaration captures — imported, or declared by the file's own
+		// package — is not the std one: its `length` compiles and need not count, so `count()` it is.
+		// `lib.List` is a library the index does not hold, so only the import itself says so.
+		for (header in [
+			'package p;\n\n',
+			'package r;\n\nimport p.List;\n\n',
+			'package r;\n\nimport lib.List;\n\n'
+		]) {
+			final vs: Array<Violation> = projectListViolations(header);
+			Assert.equals(1, vs.length, header);
+			Assert.isTrue(vs[0].message.indexOf('final n = q.count()') != -1, vs[0].message);
+		}
+	}
+
+	public function testUnshadowedBareListStillGetsLength(): Void {
+		// Control: the same fixture in a package that neither declares nor imports a `List`.
+		final vs: Array<Violation> = projectListViolations('package r;\n\n');
+		Assert.isTrue(vs[0].message.indexOf('final n = q.length') != -1, vs[0].message);
+	}
+
 	public function testSuperInTheConditionNotFlagged(): Void {
 		final src: String = 'class Base {\n\tfunction ok(x:Int):Bool {\n\t\treturn x > 0;\n\t}\n}\n\nclass S extends Base {\n'
 			+ '\tfunction f(xs:Array<Int>):Int {\n\t\tvar n:Int = 0;\n\t\tfor (x in xs) if (super.ok(x)) n++;\n\t\treturn n;\n\t}\n}';
@@ -281,6 +302,22 @@ class PreferCountCheckTest extends Test {
 		return 'class C {\n\tvar rows:Array<Array<Int>> = [];\n\n\tfunction f(recs:Array<R>):Int {\n\t\t$body\n\t}\n\n'
 			+ '\tfunction row(i:Int):Array<Int> {\n\t\treturn rows[i];\n\t}\n}\n\nclass R {\n\tpublic var n:Int = 0;\n'
 			+ '\tpublic var name:String = \'\';\n}';
+	}
+
+	/** `C` under `header` counting a bare `List<Int>`, beside a project `p.List` whose `length` is not its count. */
+	private function projectListViolations(header: String): Array<Violation> {
+		return new PreferCount().run([
+			{
+				file: 'C.hx',
+				source: header
+				+ 'class C {\n\tfunction f(q:List<Int>):Int {\n\t\tvar n:Int = 0;\n\t\tfor (x in q) n++;\n\t\treturn n;\n\t}\n}'
+			},
+			{
+				file: 'p/List.hx',
+				source: 'package p;\n\nclass List<T> {\n\tpublic var length:Int = 99;\n\n\tpublic function iterator():Iterator<T> {\n'
+				+ '\t\treturn [].iterator();\n\t}\n}'
+			}
+		], new HaxeQueryPlugin());
 	}
 
 	/** `walker` a class iterator, `sub` one inheriting it, `both` a class that is also `Iterable`. */

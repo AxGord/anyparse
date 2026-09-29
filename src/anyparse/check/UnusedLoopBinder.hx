@@ -165,7 +165,7 @@ final class UnusedLoopBinder implements Check implements DefaultOff {
 			index: index,
 			types: memo(typeMapOf.bind(typed, source, false)),
 			importMap: memo(importMapOf.bind(typed, source, file)),
-			claimer: memo(() -> DeadBinderCounterLoop.claimer(tree, source, plugin, typeSources(), index))
+			claimer: memo(() -> DeadBinderCounterLoop.claimer(tree, source, plugin, typeSources(), index, file))
 		};
 	}
 
