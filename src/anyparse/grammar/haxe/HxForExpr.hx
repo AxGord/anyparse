@@ -27,10 +27,13 @@ package anyparse.grammar.haxe;
  * body's writeCall has internal hardlines (`flatLength == -1`) and `opt.indentObjectLiteral`
  * is true: the layout becomes `_dn(_cols, [_dhl(), _dn(_cols, body)])` — `{` on its own line
  * at +cols, fields at +2cols, `}` at +cols — regardless of the policy axis AND of
- * `opt.objectLiteralLeftCurly` (which governs RHS-value contexts like `var x = {...}`). The
- * comprehension body breaks the object literal out structurally per the fork's rule for
- * `[for (x in xs) {<multi>}]`; the asymmetry vs `HxIfExpr.thenBranch` (which stays cuddled
- * for `if (cond) {<obj>}`) is the fork's per-construct rule.
+ * `opt.objectLiteralLeftCurly` (which governs RHS-value contexts like `var x = {...}`). A
+ * body that breaks only by WIDTH (a literal the source wrote flat) takes the same placement
+ * on its own break side (`BodyAllman.gluedLayout`), so one write already emits the shape a
+ * source-multi-line literal gets. The comprehension body breaks the object literal out
+ * structurally per the fork's rule for `[for (x in xs) {<multi>}]`; the asymmetry vs
+ * `HxIfExpr.thenBranch` (which stays cuddled for `if (cond) {<obj>}`) is the fork's
+ * per-construct rule.
  */
 @:peg
 typedef HxForExpr = {

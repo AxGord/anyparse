@@ -718,11 +718,18 @@ branch_fmt() {
     # the shape the writer produced, not the source, decides the gate.
     # Measured with single round trips through `apq ast <f> --writer-output`
     # under the vendored config; the other three entries are untouched.
+    #
+    # `TriviaPairConverters.hx` and `MemberReachTest.hx` left the set together
+    # when the S77 family was closed at its root (`BodyAllman`): the Allman
+    # placement and the cuddled `[for` head now follow the object literal's own
+    # width verdict rather than a forced hardline only the second rewrite could
+    # see, so the first rewrite already emits the shape the second used to.
+    # Measured with `fmt --list --one-pass` over this arm's scratch root: the
+    # set went from these four files to the two below, and the remaining two are
+    # other families, untouched.
     cat > "$work/fmt-xconfig.base" <<'XCFG'
 src/anyparse/check/UnnecessarySwitch.hx
 src/anyparse/macro/ParseDispatchLowering.hx
-src/anyparse/macro/TriviaPairConverters.hx
-test/unit/query/MemberReachTest.hx
 XCFG
     # The exit code is non-zero on drift alone, so it says nothing here; the
     # `--one-pass` verdict is read off stderr, which is why the two streams are

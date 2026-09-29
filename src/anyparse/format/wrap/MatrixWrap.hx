@@ -100,8 +100,8 @@ final class MatrixWrap {
 					if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) return true;
 				case OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline:
 					return true;
-				case Nest(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner), Flatten(inner), WrapBoundary(inner),
-					HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
+				case Nest(_, inner), LeadingBreak(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner), Flatten(inner),
+					WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
 					CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
 					stack.push(inner);
 				case Concat(parts):

@@ -4,6 +4,7 @@ import anyparse.core.CollapsePass;
 import anyparse.core.Doc;
 import anyparse.core.DocIdentityMap;
 import anyparse.core.DocMeasure;
+import anyparse.format.BodyAllman;
 import anyparse.format.BodyFit;
 import anyparse.format.IndentChar;
 import anyparse.format.WriteOptions;
@@ -983,7 +984,7 @@ class WrapList {
 				// break point" so the wrap still places close on its own
 				// line.
 				return true;
-			case Nest(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner):
+			case Nest(_, inner), LeadingBreak(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner):
 				node = inner;
 			case IfBreak(brk, _):
 				node = brk;
@@ -1089,9 +1090,9 @@ class WrapList {
 				return s.length > 0
 					&& (StringTools.fastCodeAt(s, 0) == '('.code || StringTools.fastCodeAt(s, 0) == '['.code
 						|| StringTools.fastCodeAt(s, 0) == '{'.code);
-			case Nest(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner), Flatten(inner), WrapBoundary(inner),
-				HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner),
-				ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+			case Nest(_, inner), LeadingBreak(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner), Flatten(inner),
+				WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
+				CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
 				node = inner;
 			case IfBreak(_, flat), IfWidthExceeds(_, _, flat), IfFirstLineExceeds(_, _, flat), IfLineExceeds(_, _, flat),
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
@@ -1138,9 +1139,9 @@ class WrapList {
 				if (s.length == 0) return false;
 				final c: Int = StringTools.fastCodeAt(s, s.length - 1);
 				return c == ')'.code || c == ']'.code || c == '}'.code;
-			case Nest(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner), Flatten(inner), WrapBoundary(inner),
-				HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner),
-				ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+			case Nest(_, inner), LeadingBreak(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner), Flatten(inner),
+				WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
+				CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
 				node = inner;
 			case IfBreak(_, flat), IfWidthExceeds(_, _, flat), IfFirstLineExceeds(_, _, flat), IfLineExceeds(_, _, flat),
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
@@ -1179,9 +1180,9 @@ class WrapList {
 				if (s.length == 0) return false;
 				final c: Int = StringTools.fastCodeAt(s, s.length - 1);
 				return c >= '0'.code && c <= '9'.code;
-			case Nest(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner), Flatten(inner), WrapBoundary(inner),
-				HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner),
-				ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+			case Nest(_, inner), LeadingBreak(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner), Flatten(inner),
+				WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
+				CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
 				node = inner;
 			case IfBreak(_, flat), IfWidthExceeds(_, _, flat), IfFirstLineExceeds(_, _, flat), IfLineExceeds(_, _, flat),
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
@@ -1283,9 +1284,9 @@ class WrapList {
 				return false;
 			case Text(s):
 				return s.length > 0 && (StringTools.fastCodeAt(s, 0) == '['.code || StringTools.fastCodeAt(s, 0) == '{'.code);
-			case Nest(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner), Flatten(inner), WrapBoundary(inner),
-				HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner),
-				ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+			case Nest(_, inner), LeadingBreak(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner), Flatten(inner),
+				WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
+				CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
 				node = inner;
 			case IfBreak(_, flat), IfWidthExceeds(_, _, flat), IfFirstLineExceeds(_, _, flat), IfLineExceeds(_, _, flat),
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
@@ -1321,9 +1322,9 @@ class WrapList {
 				return false;
 			case Text(s):
 				return StringTools.endsWith(s, '#end');
-			case Nest(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner), Flatten(inner), WrapBoundary(inner),
-				HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner),
-				ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+			case Nest(_, inner), LeadingBreak(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner), Flatten(inner),
+				WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
+				CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
 				node = inner;
 			case IfBreak(_, flat), IfWidthExceeds(_, _, flat), IfFirstLineExceeds(_, _, flat), IfLineExceeds(_, _, flat),
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
@@ -1386,9 +1387,9 @@ class WrapList {
 				var i: Int = arr.length;
 				while (--i >= 0 && r == null) r = lastVisibleText(arr[i]);
 				r;
-			case Group(i), BodyGroup(i), GroupWithRestProbe(i), Nest(_, i), Flatten(i), HardFlatten(i), CollapseProbe(i),
-				CollapseAddProbe(i), CollapseBoolProbe(i), CollapseChainProbe(i), WrapBoundary(i), ConditionalMarkerZero(i),
-				ConditionalMarkerDecrease(i):
+			case Group(i), BodyGroup(i), GroupWithRestProbe(i), Nest(_, i), LeadingBreak(_, i), Flatten(i), HardFlatten(i),
+				CollapseProbe(i), CollapseAddProbe(i), CollapseBoolProbe(i), CollapseChainProbe(i), WrapBoundary(i),
+				ConditionalMarkerZero(i), ConditionalMarkerDecrease(i):
 				lastVisibleText(i);
 			case IfBreak(brk, _), IfWidthExceeds(_, brk, _), IfFirstLineExceeds(_, brk, _), IfLineExceeds(_, brk, _),
 				IfResidualLineExceeds(_, brk, _), IfFullLineExceeds(_, brk, _), IfNaturalFirstLineExceeds(_, brk, _),
@@ -1856,8 +1857,8 @@ class WrapList {
 		function w(n: Doc, depth: Int): Void {
 			if (found || depth > 1) return;
 			switch n {
-				case Group(i), BodyGroup(i), GroupWithRestProbe(i), Nest(_, i), Flatten(i), HardFlatten(i), CollapseProbe(i),
-					CollapseAddProbe(i), CollapseBoolProbe(i), CollapseChainProbe(i), ConditionalMarkerZero(i),
+				case Group(i), BodyGroup(i), GroupWithRestProbe(i), Nest(_, i), LeadingBreak(_, i), Flatten(i), HardFlatten(i),
+					CollapseProbe(i), CollapseAddProbe(i), CollapseBoolProbe(i), CollapseChainProbe(i), ConditionalMarkerZero(i),
 					ConditionalMarkerDecrease(i):
 					w(i, depth);
 				case WrapBoundary(i):
@@ -1913,8 +1914,8 @@ class WrapList {
 		function w(n: Doc, depth: Int): Void {
 			if (found || depth > 1) return;
 			switch n {
-				case Group(i), BodyGroup(i), GroupWithRestProbe(i), Nest(_, i), Flatten(i), HardFlatten(i), CollapseProbe(i),
-					CollapseAddProbe(i), CollapseBoolProbe(i), CollapseChainProbe(i), ConditionalMarkerZero(i),
+				case Group(i), BodyGroup(i), GroupWithRestProbe(i), Nest(_, i), LeadingBreak(_, i), Flatten(i), HardFlatten(i),
+					CollapseProbe(i), CollapseAddProbe(i), CollapseBoolProbe(i), CollapseChainProbe(i), ConditionalMarkerZero(i),
 					ConditionalMarkerDecrease(i):
 					w(i, depth);
 				case WrapBoundary(i):
@@ -2057,8 +2058,8 @@ class WrapList {
 				stack.push(flatDoc);
 			case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
 				DocMeasure.pushFillReversed(stack, items, sep);
-			case Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner),
-				CollapseBoolProbe(inner), CollapseChainProbe(inner):
+			case Flatten(inner), WrapBoundary(inner), LeadingBreak(_, inner), HardFlatten(inner), CollapseProbe(inner),
+				CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner):
 				stack.push(inner);
 			case ConditionalMarkerZero(inner):
 				stack.push(inner);
@@ -3086,9 +3087,9 @@ class WrapList {
 					IfArrowContinuationFits(_, _, _, _, _), IfArrowContinuationFitsWithRest(_, _, _, _, _),
 					IfIndentWidthExceeds(_, _, _, _), IfGluedFirstLineExceeds(_, _, _, _):
 					return true;
-				case WrapBoundary(inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner), Nest(_, inner), Flatten(inner),
-					HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
-					CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+				case WrapBoundary(inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner), Nest(_, inner),
+					LeadingBreak(_, inner), Flatten(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner),
+					CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
 					stack.push(inner);
 				case Concat(arr):
 					for (it in arr) stack.push(it);
@@ -3170,9 +3171,9 @@ class WrapList {
 	// NOT this item's top-level layout — so we do NOT recurse through it.
 	private static function isMethodChainItem(item: Doc): Bool {
 		return switch item {
-			case WrapBoundary(inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner), Nest(_, inner), Flatten(inner),
-				HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner),
-				ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+			case WrapBoundary(inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner), Nest(_, inner), LeadingBreak(_, inner),
+				Flatten(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
+				CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
 				isMethodChainItem(inner);
 			case IfBreak(brk, _), IfWidthExceeds(_, brk, _), IfFirstLineExceeds(_, brk, _), IfLineExceeds(_, brk, _),
 				IfResidualLineExceeds(_, brk, _), IfFullLineExceeds(_, brk, _), IfNaturalFirstLineExceeds(_, brk, _),
@@ -4085,9 +4086,9 @@ class WrapList {
 						hit = firstVisibleTextIsFunctionKw(it);
 				}
 				hit;
-			case Group(i), BodyGroup(i), GroupWithRestProbe(i), Nest(_, i), Flatten(i), HardFlatten(i), CollapseProbe(i),
-				CollapseAddProbe(i), CollapseBoolProbe(i), CollapseChainProbe(i), WrapBoundary(i), ConditionalMarkerZero(i),
-				ConditionalMarkerDecrease(i):
+			case Group(i), BodyGroup(i), GroupWithRestProbe(i), Nest(_, i), LeadingBreak(_, i), Flatten(i), HardFlatten(i),
+				CollapseProbe(i), CollapseAddProbe(i), CollapseBoolProbe(i), CollapseChainProbe(i), WrapBoundary(i),
+				ConditionalMarkerZero(i), ConditionalMarkerDecrease(i):
 				firstVisibleTextIsFunctionKw(i);
 			case IfBreak(_, flat), IfWidthExceeds(_, _, flat), IfFirstLineExceeds(_, _, flat), IfLineExceeds(_, _, flat),
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
@@ -4185,9 +4186,9 @@ class WrapList {
 						r = firstVisibleText(it);
 				}
 				r;
-			case Group(i), BodyGroup(i), GroupWithRestProbe(i), Nest(_, i), Flatten(i), HardFlatten(i), CollapseProbe(i),
-				CollapseAddProbe(i), CollapseBoolProbe(i), CollapseChainProbe(i), WrapBoundary(i), ConditionalMarkerZero(i),
-				ConditionalMarkerDecrease(i):
+			case Group(i), BodyGroup(i), GroupWithRestProbe(i), Nest(_, i), LeadingBreak(_, i), Flatten(i), HardFlatten(i),
+				CollapseProbe(i), CollapseAddProbe(i), CollapseBoolProbe(i), CollapseChainProbe(i), WrapBoundary(i),
+				ConditionalMarkerZero(i), ConditionalMarkerDecrease(i):
 				firstVisibleText(i);
 			case IfBreak(_, flat), IfWidthExceeds(_, _, flat), IfFirstLineExceeds(_, _, flat), IfLineExceeds(_, _, flat),
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
@@ -4249,7 +4250,7 @@ class WrapList {
 			case Concat(arr):
 				for (it in arr) if (hasTopLevelElse(it, depth)) return true;
 				false;
-			case Nest(_, inner):
+			case Nest(_, inner), LeadingBreak(_, inner):
 				hasTopLevelElse(inner, depth + 1);
 			case Group(i), BodyGroup(i), GroupWithRestProbe(i), Flatten(i), HardFlatten(i), CollapseProbe(i), CollapseAddProbe(i),
 				CollapseBoolProbe(i), CollapseChainProbe(i), WrapBoundary(i), ConditionalMarkerZero(i), ConditionalMarkerDecrease(i):
@@ -4398,9 +4399,9 @@ class WrapList {
 	 * cuddling spends the whole prefix as head budget. A wrapping ITERABLE is NOT excluded,
 	 * because the walk resolves every probe to its flat side.
 	 *
-	 * The tail mirrors `shapeOnePerLine` exactly, so switching the head placement never adds or
-	 * drops a token, and `closeInside` is dropped because the close delimiter no longer shares a
-	 * line with the body.
+	 * A flat item whose body carries a `BodyAllman` break cuddles only when that body will break and its head cannot
+	 * (`BodyAllman.tailSides`, `headCanBreakBeforeBody`). The tail mirrors `shapeOnePerLine` exactly, so switching the
+	 * head placement never adds or drops a token, and `closeInside` is dropped: the close no longer shares the body's line.
 	 */
 	private static function shapeComprehensionCuddledOpen(
 		enabled: Bool, mode: WrapMode, open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, cols: Int,
@@ -4408,21 +4409,76 @@ class WrapList {
 	): Null<Doc> {
 		if (!enabled || mode != OnePerLine || items.length != 1 || !isCuddleableComprehensionItem(items[0])) return null;
 		final itemFlat: Int = flatLength(items[0]);
+		inline function glueShape(item: Doc): Doc {
+			return Concat([
+				Text(open),
+				openInside,
+				item,
+				appendTrailingComma ? Text(sep) : Empty,
+				trailBreak,
+				Text(close)
+			]);
+		}
+		inline function openShape(item: Doc): Doc {
+			return shapeOnePerLine(open, close, sep, [item], cols, appendTrailingComma, trailBreak, sepBeforeFlags);
+		}
+		final allman: Null<AllmanSides> = itemFlat < 0
+			? null
+			: BodyAllman.tailSides(items[0], lineWidth, appendTrailingComma ? sep.length : 0);
+		if (allman != null) {
+			return headCanBreakBeforeBody(allman.brk)
+				? null
+				: IfIndentWidthExceeds(
+					cols + flatLength(allman.flat), allman.limit,
+					IfFirstLineExceeds(lineWidth, openShape(items[0]), glueShape(allman.brk)), openShape(items[0])
+				);
+		}
 		if (itemFlat >= 0 && !firstBreakIsDelimChar(items[0], ')'.code)) return null;
 		final item: Null<Doc> = itemFlat < 0 ? items[0] : dropComprehensionBody(items[0]);
-		if (item == null) return null;
-		final glueShape: Doc = Concat([
-			Text(open),
-			openInside,
-			item,
-			appendTrailingComma ? Text(sep) : Empty,
-			trailBreak,
-			Text(close)
-		]);
-		final openShape: Doc = shapeOnePerLine(open, close, sep, items, cols, appendTrailingComma, trailBreak, sepBeforeFlags);
-		return itemFlat < 0
-			? IfFirstLineExceeds(lineWidth, openShape, glueShape)
-			: IfNaturalFirstLineExceeds(lineWidth, openShape, glueShape);
+		return if (item == null)
+			null
+		else if (itemFlat < 0)
+			IfFirstLineExceeds(lineWidth, openShape(items[0]), glueShape(item))
+		else
+			IfNaturalFirstLineExceeds(lineWidth, openShape(items[0]), glueShape(item));
+	}
+
+	/**
+	 * Can `item` — a comprehension with its body resolved to the Allman break — break anywhere before that body's
+	 * forced line? A break opportunity in the HEAD (an iterable call that wraps) is taken before the body is asked, so
+	 * the body's own width verdict no longer describes the line it lands on and no static answer does. Positive walk:
+	 * text, wrappers and anything inside a force-flat region pass; any other break point, or a construct the walk does
+	 * not model, answers `true`.
+	 */
+	private static function headCanBreakBeforeBody(item: Doc): Bool {
+		final stack: Array<{ d: Doc, flat: Bool }> = [{ d: item, flat: false }];
+		while (stack.length > 0) {
+			final top: { d: Doc, flat: Bool } = stack.pop();
+			final inFlat: Bool = top.flat;
+			switch top.d {
+				case Empty, Text(_), OptSpace(_), OptSpaceSkipAfterHardline:
+				case Line(flat) if (flat.length > 0 && flat.fastCodeAt(0) == '\n'.code):
+					if (!inFlat) return false;
+				case Line(_):
+					if (!inFlat) return true;
+				case Concat(items):
+					var i: Int = items.length;
+					while (--i >= 0) stack.push({ d: items[i], flat: inFlat });
+				case Nest(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner):
+					stack.push({ d: inner, flat: inFlat });
+				case Flatten(inner), HardFlatten(inner):
+					stack.push({ d: inner, flat: true });
+				case WrapBoundary(inner):
+					stack.push({ d: inner, flat: false });
+				case LeadingBreak(_, _):
+					if (!inFlat) return false;
+				case IfBreak(_, fl), IfWidthExceeds(_, _, fl), IfFirstLineExceeds(_, _, fl), IfLineExceeds(_, _, fl) if (inFlat):
+					stack.push({ d: fl, flat: true });
+				case _:
+					return true;
+			}
+		}
+		return true;
 	}
 
 	/**
@@ -4589,6 +4645,8 @@ class WrapList {
 				Flatten(groupifyShared(inner, memo));
 			case WrapBoundary(inner):
 				WrapBoundary(groupifyShared(inner, memo));
+			case LeadingBreak(n, inner):
+				LeadingBreak(n, groupifyShared(inner, memo));
 			case HardFlatten(inner):
 				HardFlatten(groupifyShared(inner, memo));
 			case CollapseProbe(inner):

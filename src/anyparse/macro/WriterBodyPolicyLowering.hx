@@ -879,14 +879,18 @@ final class WriterBodyPolicyLowering {
 		// The probe write happens only for the ctor it can apply to: `wrapExpr` writes the
 		// body again, so an unconditional probe writes every body twice, and a body that
 		// nests the same construct (`[for (…) [for (…) …]]`) is written `2^depth` times.
+		// A matching body with no forced hardline may still break by width where the policy
+		// glued it; `BodyAllman.gluedLayout` makes that break and the Allman move one verdict.
 		return macro {
 			final _bodyForAllman: Null<anyparse.core.Doc> = $optAccess && Type.enumConstructor($bodyValueExpr) == $v{ctorName}
 				? $writeCall
 				: null;
 			if (_bodyForAllman != null && anyparse.format.wrap.WrapList.flatLength(_bodyForAllman) == -1)
 				_dn(_cols, _dc([_dhl(), _bodyForAllman]))
-			else
-				$wrapExpr;
+			else {
+				final _layoutForAllman: anyparse.core.Doc = $wrapExpr;
+				_bodyForAllman == null ? _layoutForAllman : anyparse.format.BodyAllman.gluedLayout(_cols, _layoutForAllman);
+			}
 		};
 	}
 

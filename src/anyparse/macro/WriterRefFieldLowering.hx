@@ -915,7 +915,9 @@ final class WriterRefFieldLowering {
 		// policy-decided layout when the body's runtime ctor
 		// matches `<ctor>` AND `opt.<optField>` is true AND
 		// `opt.<lcField>` is `Next` AND the body's writeCall
-		// emits internal hardlines (multi-line). The override
+		// emits internal hardlines (multi-line) — or, at runtime,
+		// when a body that can render flat breaks by width where
+		// the policy glued it (`BodyAllman.gluedLayout`). The override
 		// places the body in Allman position with extra
 		// `+cols` indent on contents, regardless of Keep/Same/
 		// Next/FitLine policy. Currently consumed by

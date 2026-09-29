@@ -1061,9 +1061,9 @@ final class CollapsePass {
 			case Empty, Text(_), Line(_), OptSpace(_), OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline,
 				OptSpaceSkipAfterHardline:
 				[];
-			case Nest(_, inner), Group(inner), GroupWithRestProbe(inner), BodyGroup(inner), Flatten(inner), WrapBoundary(inner),
-				HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner),
-				ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
+			case Nest(_, inner), LeadingBreak(_, inner), Group(inner), GroupWithRestProbe(inner), BodyGroup(inner), Flatten(inner),
+				WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
+				CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
 				[inner];
 			case Concat(items):
 				items;
