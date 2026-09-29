@@ -708,10 +708,21 @@ branch_fmt() {
     # shape needed the second rewrite under this config, and the file now
     # reaches its fixed point in one pass. Progress in the tail, recorded as
     # the rule above demands; the other three entries are untouched.
+    #
+    # `MemberReachTest.hx` joined with `16720f84` (the file is new there) and
+    # went unrecorded until `batch/prefer-count`. It is the S77 construct
+    # family again, not a new one: a `types: [for (t in [...]) { ... }]`
+    # comprehension with an object-literal body. The first rewrite breaks after
+    # `[` and keeps `{` on the `for` line; the second pulls `for` up against
+    # `[` and drops `{` onto its own line, where a third rewrite leaves it --
+    # the shape the writer produced, not the source, decides the gate.
+    # Measured with single round trips through `apq ast <f> --writer-output`
+    # under the vendored config; the other three entries are untouched.
     cat > "$work/fmt-xconfig.base" <<'XCFG'
 src/anyparse/check/UnnecessarySwitch.hx
 src/anyparse/macro/ParseDispatchLowering.hx
 src/anyparse/macro/TriviaPairConverters.hx
+test/unit/query/MemberReachTest.hx
 XCFG
     # The exit code is non-zero on drift alone, so it says nothing here; the
     # `--one-pass` verdict is read off stderr, which is why the two streams are
