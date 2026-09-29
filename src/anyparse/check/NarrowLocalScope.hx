@@ -178,9 +178,9 @@ final class NarrowLocalScope implements Check {
 			assignKind: assignKind,
 			identKind: shape.identKind,
 			opaqueKinds: shape.opaqueKinds ?? [],
-			functionKinds: (
-				shape.functionKinds ?? []
-			).concat(shape.localFunctionKinds ?? []).concat(shape.inlineFunctionKinds ?? []).concat(shape.lambdaKinds ?? []),
+			functionKinds: (shape.functionKinds ?? []).concat(shape.localFunctionKinds ?? [])
+				.concat(shape.inlineFunctionKinds ?? [])
+				.concat(shape.lambdaKinds ?? []),
 			// A candidate's host and its sink target must both be a REAL lexical scope, which is
 			// what excludes the branch-aware projection's `CondBranch` -- a statement list that
 			// binds nothing of its own.

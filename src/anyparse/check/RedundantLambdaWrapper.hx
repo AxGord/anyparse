@@ -565,9 +565,8 @@ final class RedundantLambdaWrapper implements Check implements DefaultOff {
 			localFunctionKinds: shape.localFunctionKinds ?? [],
 			inlineFunctionKinds: shape.inlineFunctionKinds ?? [],
 			binderKinds: binderKindsOf(shape),
-			reducibleBinderKinds: (
-				shape.paramKinds ?? []
-			).filter(k -> k != shape.optionalParamKind && k != shape.restParamKind).concat(shape.localDeclKinds ?? []),
+			reducibleBinderKinds: (shape.paramKinds ?? []).filter(k -> k != shape.optionalParamKind && k != shape.restParamKind)
+				.concat(shape.localDeclKinds ?? []),
 			modifierKinds: modifiers,
 			metaKinds: plugin.metaShape().metaKinds,
 			staticModifierKind: shape.staticModifierKind,

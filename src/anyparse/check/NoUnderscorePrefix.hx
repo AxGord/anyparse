@@ -408,9 +408,9 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 	 * function declaration, a local (or local inline) function, a lambda.
 	 */
 	private static function functionScopeKinds(shape: RefShape): Array<String> {
-		return (
-			shape.functionKinds ?? []
-		).concat(shape.localFunctionKinds ?? []).concat(shape.inlineFunctionKinds ?? []).concat(shape.lambdaKinds ?? []);
+		return (shape.functionKinds ?? []).concat(shape.localFunctionKinds ?? [])
+			.concat(shape.inlineFunctionKinds ?? [])
+			.concat(shape.lambdaKinds ?? []);
 	}
 
 }

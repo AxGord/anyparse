@@ -59,6 +59,18 @@ private typedef EmbeddedLineWidths = {
 };
 
 /**
+	The `IfFullLineExceeds` probe a rest-of-stack walk measures FOR: a later
+	`IfFullLineExceeds` on the same line that fires at or below `fireAt` is a
+	break point of that line, not flat content (see
+	`Renderer.restNodeWidth`). `width` is the render budget, which a
+	sibling's own firing threshold is derived from.
+**/
+private typedef RestSibling = {
+	final fireAt: Int;
+	final width: Int;
+};
+
+/**
 	Layout mode for a `Doc` frame: flat (line breaks become their flat
 	replacement) or broken (line breaks become real newlines).
 **/
@@ -663,6 +675,23 @@ class Renderer {
 	}
 
 	/**
+	 * The column at which an `IfFullLineExceeds(n, _, flatDoc)` fires under render
+	 * budget `width` (ω-chain-exact-limit-boundary). A chain probe (`n == width`,
+	 * the FAMILY DISCRIMINATOR that also selects the no-pending-space charge) whose
+	 * glued tail is genuinely one-line-able measures the TRUE physical line, and the
+	 * fork keeps a flush-at-limit line, so it fires at `n + 1` (a plain `>= n`
+	 * dot-broke a chain landing exactly on the limit one column early). A tail
+	 * carrying a forced hardline (multi-line lambda body, trivia-bearing object
+	 * literal) measures a flattened PROXY instead, and the explode-vs-cuddle
+	 * decision for those shapes is calibrated to the raw `>= n`
+	 * (`HxMethodChainCuddledLinkTest`'s exploded fixtures). The strict probes
+	 * (`n == width + 1`) already encode the exceed threshold in `n`.
+	 */
+	private static inline function fireAtFor(n: Int, width: Int, flatDoc: Doc): Int {
+		return n > width || DocMeasure.hasForcedBreak(flatDoc) ? n : n + 1;
+	}
+
+	/**
 	 * Decide whether a collapse-candidate expression paren COMMITS to open
 	 * for the `CollapsePass` decision list (ω-collapse-commit). `breakDoc` is
 	 * the paren's OPEN branch from `IfFullLineExceeds(n, breakDoc, glued)`;
@@ -1249,11 +1278,14 @@ class Renderer {
 	 *    — was wrong about its own function; see `flatTokenWidthFirstLine`'s doc
 	 *    for which of the two answers is right and what agreement costs.)
 	 *
+	 * With `sibling` (the `IfFullLineExceeds` arm only) a later full-line probe that fires no
+	 * later than the asker ends the walk at its break-side first line; see `restNodeWidth`.
+	 *
 	 * Stack-based walk over a `(doc, mode)` pair list — items pushed in
 	 * reverse so pop order matches left-to-right traversal of each
 	 * frame's subtree.
 	 */
-	private static function flatTokenWidthOfRestStack(stack: Array<Frame>): Int {
+	private static function flatTokenWidthOfRestStack(stack: Array<Frame>, ?sibling: RestSibling): Int {
 		var total: Int = 0;
 		var aborted: Bool = false;
 		var i: Int = stack.length - 1;
@@ -1282,10 +1314,13 @@ class Renderer {
 				aborted = true;
 				continue;
 			}
+			// A force-flat frame renders every probe in it on its flat side, so none
+			// of them is a break point.
+			final frameSibling: Null<RestSibling> = f.forceFlat ? null : sibling;
 			final inner: Array<{ doc: Doc, mode: Mode }> = [{ doc: f.doc, mode: f.mode }];
 			while (inner.length > 0 && !aborted) {
 				final node: { doc: Doc, mode: Mode } = inner.pop();
-				final step: { add: Int, aborted: Bool } = restNodeWidth(node, inner, false);
+				final step: { add: Int, aborted: Bool } = restNodeWidth(node, inner, false, frameSibling);
 				total += step.add;
 				aborted = step.aborted;
 			}
@@ -1535,9 +1570,37 @@ class Renderer {
 	 * header line's layout (ω-header-wrap-ladder).
 	 */
 	private static function restNodeWidth(
-		node: { doc: Doc, mode: Mode }, inner: Array<{ doc: Doc, mode: Mode }>, bgDescend: Bool
+		node: { doc: Doc, mode: Mode }, inner: Array<{ doc: Doc, mode: Mode }>, bgDescend: Bool, ?sibling: RestSibling
 	): { add: Int, aborted: Bool } {
 		switch node.doc {
+			case IfFullLineExceeds(n, breakDoc, flatDoc) if (sibling != null):
+				// A later full-line probe on the same line is decided by the same
+				// rule when render reaches it: it opens exactly when the line crosses
+				// its threshold, so a line whose content fits up to that probe's
+				// break never overflows once this probe keeps its content glued.
+				// The line the asking probe owns therefore ends at the sibling's
+				// break-side first line, as it ends at a `Line` of a broken group.
+				// Only a sibling that fires no later than the asker, and whose open
+				// is the raw crossing verdict, qualifies: a collapse-candidate paren
+				// also consults its operator class and trailing content, so it may
+				// stay glued past the limit and is measured flat as before.
+				if (fireAtFor(n, sibling.width, flatDoc) <= sibling.fireAt && findCollapseProbe(breakDoc) == null) {
+					final open: { width: Int, broke: Bool } = flatTokenWidthFirstLineWithBreak(breakDoc, false);
+					if (open.broke) return { add: open.width, aborted: true };
+				}
+				inner.push({ doc: flatDoc, mode: MFlat });
+				return { add: 0, aborted: false };
+			case Flatten(innerDoc), HardFlatten(innerDoc) if (sibling != null):
+				// A force-flat region renders every probe in it flat, so none of them
+				// is a break point: measure the region without the sibling rule.
+				final region: Array<{ doc: Doc, mode: Mode }> = [{ doc: innerDoc, mode: node.mode }];
+				var add: Int = 0;
+				while (region.length > 0) {
+					final step: { add: Int, aborted: Bool } = restNodeWidth(region.pop(), region, bgDescend);
+					add += step.add;
+					if (step.aborted) return { add: add, aborted: true };
+				}
+				return { add: add, aborted: false };
 			case Empty:
 				return { add: 0, aborted: false };
 			case Text(s):
@@ -2301,24 +2364,12 @@ class Renderer {
 					// the now-short last link happily re-glues the body onto its
 					// `))`. Measuring the header ALONE is what makes the ladder's
 					// step 2 (flat header, body on the next line) reachable.
-					final restWidth: Int = flatTokenWidthOfRestStack(stack);
-					// ω-chain-exact-limit-boundary: a chain probe (`n == lineWidth` —
-					// bare `lineWidth` is the FAMILY DISCRIMINATOR selecting the
-					// no-pending-space charge above)
-					// whose glued tail is genuinely one-line-able measures the TRUE
-					// physical line, and the fork keeps a flush-at-limit line — so its
-					// exceed threshold is `n + 1` (a plain `>= n` dot-broke a chain
-					// landing EXACTLY on the limit one column early). A tail carrying a
-					// forced hardline (multi-line lambda body, trivia-bearing object
-					// literal) measures a flattened PROXY instead (hardlines measure 0,
-					// their flat-join space 1, a BG-deferred body 0), and the
-					// explode-vs-cuddle decision for those shapes is
-					// calibrated to the raw `>= n` — real fluent chains sit flush on the
-					// proxy boundary (`HxMethodChainCuddledLinkTest`'s exploded
-					// fixtures), so the `+ 1` applies ONLY to the true-width tails. The
-					// strict probes (`n == lineWidth + 1`) already encode the exceed
-					// threshold in `n`.
-					final fireAt: Int = n > width || DocMeasure.hasForcedBreak(flatDoc) ? n : n + 1;
+					final fireAt: Int = fireAtFor(n, width, flatDoc);
+					// A later full-line probe on this line is a break point of it, not
+					// flat content: of two parens that each fit, only the one whose
+					// span crosses opens, and the leftmost one glues when the line
+					// fits up to the next one's open delimiter.
+					final restWidth: Int = flatTokenWidthOfRestStack(stack, { fireAt: fireAt, width: width });
 					final fullLineCrosses: Bool = col + effPending + DocMeasure.flatTokenWidth(flatDoc) + restWidth >= fireAt;
 					// ω-collapse-commit: record the open/glued decision at
 					// this node's true render column for the Doc→Doc pass.

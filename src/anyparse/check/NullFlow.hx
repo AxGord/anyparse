@@ -431,9 +431,8 @@ final class NullFlow {
 			shape.functionKinds ?? []
 		).concat(shape.finalModifierMemberKind == null ? [] : [shape.finalModifierMemberKind]);
 		final declKinds: Array<String> = BinderScan.binderKinds(shape).concat(fnKinds).concat(shape.fieldDeclKinds ?? []);
-		final modifierKinds: Array<String> = (
-			shape.visibilityModifierKinds ?? []
-		).concat(shape.modifierOrderKinds ?? []).concat(META_KINDS);
+		final modifierKinds: Array<String> = (shape.visibilityModifierKinds ?? []).concat(shape.modifierOrderKinds ?? [])
+			.concat(META_KINDS);
 		final declared: Map<String, Int> = [];
 		function count(node: QueryNode): Void {
 			final name: Null<String> = node.name;

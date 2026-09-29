@@ -2089,6 +2089,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.grammar.haxe.HxElseIfOptionsTest#testElseIfNextOnlyLastLevelKeepsFirstLevelInline :: control :: M-KEEP-ELSEIF-NEXT-OFF',
 			'unit.grammar.haxe.HxExprForGuardGlueSliceTest#testArrowForForBlockGluesTheWholeSpine :: control :: M-STRICT-HEAD-DELIM-OFF',
 			'unit.grammar.haxe.HxExprForGuardGlueSliceTest#testArrowForIfBlockGluesTheWholeSpine :: control :: M-STRICT-HEAD-DELIM-OFF',
+			'unit.grammar.haxe.HxExprParenDivOpenBoundaryTest#testCollapseTailParenIsNotABreakPoint :: control :: M-PAREN-SIBLING-COLLAPSE',
+			'unit.grammar.haxe.HxExprParenDivOpenBoundaryTest#testSecondParenOpensWhenOnlyItCrossesDiv :: control :: M-PAREN-SIBLING-FLAT',
 			'unit.grammar.haxe.HxFileHeaderCommentSliceTest#testDocOnSecondDeclIsNotAFileHeader :: control :: M-FILEHEADER-ANY-DECL',
 			'unit.grammar.haxe.HxFileHeaderCommentSliceTest#testFileHeaderBlankBeforeConditionalImportBlock :: control :: '
 				+ 'M-FILEHEADER-COND-OPAQUE',
@@ -4008,7 +4010,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-CONSTANT-HEX-RANGE-UNCHECKED',
 			'M-CONSTANT-DECIMAL-RANGE-UNCHECKED',
 			'M-INTERP-CONSTANT-IN-META',
-			'M-INTERP-MACRO-ARGUMENT-REWRITTEN'
+			'M-INTERP-MACRO-ARGUMENT-REWRITTEN',
+			'M-PAREN-SIBLING-FLAT',
+			'M-PAREN-SIBLING-COLLAPSE'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

@@ -339,9 +339,8 @@ final class MemberTouchScan {
 		if (sequence && parent.children[parent.children.length - 1] != node) return true;
 		if ((shape.loopStatementKinds ?? []).concat(shape.doWhileLoopKinds ?? []).contains(kind)) return true;
 		if (kind == shape.blockBodyKind) return at >= 2 && bodyDiscardsItsValue(lineage[at - 2]);
-		final statementForms: Array<String> = (
-			shape.ifStatementKinds ?? []
-		).concat(shape.switchStatementKinds ?? []).concat(shape.tryStatementKinds ?? []);
+		final statementForms: Array<String> = (shape.ifStatementKinds ?? []).concat(shape.switchStatementKinds ?? [])
+			.concat(shape.tryStatementKinds ?? []);
 		// an arm or a catch is climbed to its `switch` / `try`, which decides for itself
 		final climbs: Bool = kind == shape.blockStmtKind || statementForms.contains(kind) || (shape.branchScopeKinds ?? []).contains(kind)
 			|| kind == shape.catchClauseKind;

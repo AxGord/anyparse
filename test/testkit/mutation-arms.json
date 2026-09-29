@@ -9793,6 +9793,22 @@
 			"method": "syntaxRefusal",
 			"force": "''",
 			"note": "prefer-interpolation rewrites a literal inside a macro call argument, so a macro keyed by the literal's text (Lang.t) silently sees a different key"
+		},
+		{
+			"name": "M-PAREN-SIBLING-FLAT",
+			"type": "anyparse.core.Renderer",
+			"method": "pushExceedsBranch",
+			"find": "final restWidth: Int = flatTokenWidthOfRestStack(stack, { fireAt: fireAt, width: width });",
+			"replace": "final restWidth: Int = flatTokenWidthOfRestStack(stack);",
+			"note": "a later paren-open probe on the line is measured flat instead of as a break point, so the leftmost of two paren operands opens although only the second crosses the limit"
+		},
+		{
+			"name": "M-PAREN-SIBLING-COLLAPSE",
+			"type": "anyparse.core.Renderer",
+			"method": "restNodeWidth",
+			"find": " && findCollapseProbe(breakDoc) == null) {",
+			"replace": ") {",
+			"note": "a collapse-candidate paren counts as a break point although it may stay glued at the expression tail, so the paren before it glues and the line overflows"
 		}
 	]
 }

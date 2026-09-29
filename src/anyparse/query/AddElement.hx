@@ -320,9 +320,8 @@ final class AddElement {
 		final at: Int = children.indexOf(element);
 		if (at < 0) return false;
 		if ((shape.lambdaKinds ?? []).contains(parent.kind)) return at == children.length - 1;
-		final constructKinds: Array<String> = (
-			shape.ifStatementKinds ?? []
-		).concat(shape.ifExpressionKinds ?? []).concat(shape.loopStatementKinds ?? []);
+		final constructKinds: Array<String> = (shape.ifStatementKinds ?? []).concat(shape.ifExpressionKinds ?? [])
+			.concat(shape.loopStatementKinds ?? []);
 		return constructKinds.contains(parent.kind) && at > 0;
 	}
 
