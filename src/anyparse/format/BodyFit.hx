@@ -410,6 +410,17 @@ final class BodyFit {
 		return Doc.IfLineExceeds(n, Doc.Nest(cols, Doc.Concat([Doc.Line('\n'), forceChainBreaks(body)])), sameLine);
 	}
 
+	/** Index of the last element of `items` that is not an `Empty` placeholder, or `-1`. */
+	public static function lastNonEmptyIdx(items: Array<Doc>): Int {
+		var i: Int = items.length;
+		while (--i >= 0) switch items[i] {
+			case Doc.Empty:
+			case _:
+				return i;
+		}
+		return -1;
+	}
+
 	/**
 	 * Pin a body that IS an expression paren to its GLUED delimiters: `({` on
 	 * the header line, `})` closing the body, never the opened
@@ -533,17 +544,6 @@ final class BodyFit {
 			case _:
 				return null;
 		}
-	}
-
-	/** Index of the last element of `items` that is not an `Empty` placeholder, or `-1`. */
-	private static function lastNonEmptyIdx(items: Array<Doc>): Int {
-		var i: Int = items.length;
-		while (--i >= 0) switch items[i] {
-			case Doc.Empty:
-			case _:
-				return i;
-		}
-		return -1;
 	}
 
 	/** The `Line(' ')`-led body slot at the tail of `d`, unwrapped to its body, or `null`. */

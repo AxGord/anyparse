@@ -4,6 +4,7 @@ import anyparse.core.CollapsePass;
 import anyparse.core.Doc;
 import anyparse.core.DocIdentityMap;
 import anyparse.core.DocMeasure;
+import anyparse.format.BodyAllman;
 import anyparse.format.BodyFit;
 import anyparse.format.IndentChar;
 import anyparse.format.WriteOptions;
@@ -4398,9 +4399,9 @@ class WrapList {
 	 * cuddling spends the whole prefix as head budget. A wrapping ITERABLE is NOT excluded,
 	 * because the walk resolves every probe to its flat side.
 	 *
-	 * The tail mirrors `shapeOnePerLine` exactly, so switching the head placement never adds or
-	 * drops a token, and `closeInside` is dropped because the close delimiter no longer shares a
-	 * line with the body.
+	 * A flat item carrying a `BodyAllman` hoist cuddles only when its body will break (`BodyAllman.tailSides`). The
+	 * tail mirrors `shapeOnePerLine` exactly, so switching the head placement never adds or drops a token, and
+	 * `closeInside` is dropped because the close delimiter no longer shares a line with the body.
 	 */
 	private static function shapeComprehensionCuddledOpen(
 		enabled: Bool, mode: WrapMode, open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, cols: Int,
@@ -4408,21 +4409,35 @@ class WrapList {
 	): Null<Doc> {
 		if (!enabled || mode != OnePerLine || items.length != 1 || !isCuddleableComprehensionItem(items[0])) return null;
 		final itemFlat: Int = flatLength(items[0]);
+		inline function glueShape(item: Doc): Doc {
+			return Concat([
+				Text(open),
+				openInside,
+				item,
+				appendTrailingComma ? Text(sep) : Empty,
+				trailBreak,
+				Text(close)
+			]);
+		}
+		inline function openShape(item: Doc): Doc {
+			return shapeOnePerLine(open, close, sep, [item], cols, appendTrailingComma, trailBreak, sepBeforeFlags);
+		}
+		final allman: Null<AllmanSides> = itemFlat < 0 ? null : BodyAllman.tailSides(items[0]);
+		if (allman != null) {
+			final limit: Int = allman.limit == BodyAllman.LINE_WIDTH ? lineWidth : allman.limit;
+			return IfIndentWidthExceeds(
+				cols + flatLength(allman.flat), limit, IfFirstLineExceeds(lineWidth, openShape(items[0]), glueShape(allman.brk)),
+				openShape(items[0])
+			);
+		}
 		if (itemFlat >= 0 && !firstBreakIsDelimChar(items[0], ')'.code)) return null;
 		final item: Null<Doc> = itemFlat < 0 ? items[0] : dropComprehensionBody(items[0]);
-		if (item == null) return null;
-		final glueShape: Doc = Concat([
-			Text(open),
-			openInside,
-			item,
-			appendTrailingComma ? Text(sep) : Empty,
-			trailBreak,
-			Text(close)
-		]);
-		final openShape: Doc = shapeOnePerLine(open, close, sep, items, cols, appendTrailingComma, trailBreak, sepBeforeFlags);
-		return itemFlat < 0
-			? IfFirstLineExceeds(lineWidth, openShape, glueShape)
-			: IfNaturalFirstLineExceeds(lineWidth, openShape, glueShape);
+		return if (item == null)
+			null
+		else if (itemFlat < 0)
+			IfFirstLineExceeds(lineWidth, openShape(items[0]), glueShape(item))
+		else
+			IfNaturalFirstLineExceeds(lineWidth, openShape(items[0]), glueShape(item));
 	}
 
 	/**
