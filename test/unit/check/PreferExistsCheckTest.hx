@@ -354,6 +354,25 @@ class PreferExistsCheckTest extends Test {
 		Assert.isTrue(vs[0].message.indexOf('final found = xs.exists(x -> x > 2)') != -1, vs[0].message);
 	}
 
+	public function testFlagFormMemberTailAndStringNamedLikeTheFlagFlagged(): Void {
+		// `p.found` is the member tail of a dotted access and `'found'` an inert literal: neither reads
+		// the local `found`, so the sink-mention gate must not refuse them.
+		for (cond in ['p.found', 'p.name == \'found\''])
+			Assert.equals(
+				1, violations(itemFn('var found:Bool = false;\n\t\tfor (p in ps) if ($cond) found = true;\n\t\treturn found;')).length,
+				cond
+			);
+	}
+
+	public function testFlagFormIterableMentioningTheFlagNotFlagged(): Void {
+		// The fold moves the iterable into the flag's own initializer, where an outer `found` would bind.
+		Assert.equals(
+			0,
+			violations(itemFn('var found:Bool = false;\n\t\tfor (p in lists[found ? 1 : 0]) if (p.found) found = true;\n\t\treturn found;'))
+				.length
+		);
+	}
+
 	public function testFlagFormFieldReadConditionFlagged(): Void {
 		// The motivating TM site's shape (`child.nodeType == CData`): the condition READS a field,
 		// which `RefactorSupport.isSideEffectFree` refuses outright and `PurityScan` admits. The twin
@@ -521,6 +540,12 @@ class PreferExistsCheckTest extends Test {
 		);
 		Assert.equals(1, violations(src).length);
 		Assert.equals(0, new PreferExists().fix(src, violations(src), new HaxeQueryPlugin()).length);
+	}
+
+	/** `ps` of `P`, whose fields share their names with the flags, and `lists` to index by one. */
+	private function itemFn(body: String): String {
+		return 'class C {\n\tfunction f(ps:Array<P>, lists:Array<Array<P>>):Bool {\n\t\t$body\n\t}\n}\n\n'
+			+ 'class P {\n\tpublic var found:Bool = false;\n\tpublic var visible:Bool = false;\n\tpublic var name:String = \'\';\n}';
 	}
 
 	/** The FLAG form's fixture: `ps` gives a field-read condition a receiver, `keep` an effectful one. */

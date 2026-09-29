@@ -2728,6 +2728,12 @@ typedef RefShape = {
 	@:optional var postIncrKind: String;
 
 	/**
+	 * The pre-increment node kind (Haxe `PreIncr`, `++i`) — `prefer-count` accepts it beside
+	 * `postIncrKind` as the counter's step. Optional; unset narrows that rule to `i++` / `i += 1`.
+	 */
+	@:optional var preIncrKind: String;
+
+	/**
 	 * Top-level type-declaration kinds that constitute a documentable public API
 	 * surface (Haxe `ClassDecl` / `FinalDecl` / `AbstractClassDecl` / `AbstractDecl`
 	 * / `InterfaceDecl` / `EnumDecl` / `TypedefDecl`). The `doc-coverage` check flags

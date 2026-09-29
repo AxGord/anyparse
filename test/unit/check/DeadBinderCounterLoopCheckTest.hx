@@ -5,6 +5,7 @@ import anyparse.check.DeadBinderCounterLoop;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 import utest.Assert;
 import utest.Test;
@@ -37,6 +38,39 @@ class DeadBinderCounterLoopCheckTest extends Test {
 		final vs: Array<Violation> = violations(wrapMap('var i = 0;\n\t\tfor (x in table) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t}'));
 		Assert.equals(1, vs.length);
 		Assert.equals('this loop discards its binder and counts by hand — it can be for (i in 0...table.count())', vs[0].message);
+	}
+
+	public function testProjectListShadowingTheStdNameNotFlagged(): Void {
+		// A project `List` whose `length` is not its element count: `0...items.length` would COMPILE and
+		// run a different number of times, so a bare name any project declaration captures is no proof.
+		final list: String = 'package p;\n\nclass List<T> {\n\tpublic var length:Int = 99;\n\n\tpublic function new() {}\n\n'
+			+ '\tpublic function iterator():Iterator<T> {\n\t\treturn [].iterator();\n\t}\n}';
+		final body: String = '\tfunction f(items:List<Int>):Void {\n\t\tvar i = 0;\n\t\tfor (x in items) {\n\t\t\twork(i);\n\t\t\ti++;\n'
+			+ '\t\t}\n\t}\n\n\tfunction work(i:Int):Void {}\n}';
+		final headers: Array<String> = [
+			'package p;\n\nclass C {\n',
+			'package r;\n\nimport p.List;\n\nclass C {\n',
+			'package r;\n\nimport lib.List;\n\nclass C {\n'
+		];
+		for (header in headers)
+			Assert.equals(
+				0,
+				new DeadBinderCounterLoop().run(
+					[{ file: 'C.hx', source: header + body }, { file: 'p/List.hx', source: list }],
+					StdScope.plugin([{ file: 'C.hx', source: header + body }, { file: 'p/List.hx', source: list }])
+				)
+					.length,
+				header
+			);
+	}
+
+	public function testUnshadowedBareListStillFlagged(): Void {
+		// Control: a package that neither declares nor imports a `List` still gets the `length` bound.
+		final src: String = 'package r;\n\nclass C {\n\tfunction f(items:List<Int>):Void {\n\t\tvar i = 0;\n\t\tfor (x in items) {\n'
+			+ '\t\t\twork(i);\n\t\t\ti++;\n\t\t}\n\t}\n\n\tfunction work(i:Int):Void {}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('0...items.length') != -1, vs[0].message);
 	}
 
 	public function testBinderReadNotFlagged(): Void {
@@ -125,7 +159,6 @@ class DeadBinderCounterLoopCheckTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-SHADOWEXT-TRUE')
 	public function testFixRewritesMapLoopAndInsertsUsing(): Void {
 		assertFixCanonical(
 			wrapMap('var i = 0;\n\t\tfor (x in table) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t}'),
@@ -137,7 +170,7 @@ class DeadBinderCounterLoopCheckTest extends Test {
 		final src: String = 'package p;\n\nusing Lambda;\n\nclass C {\n\tfunction f(table:Map<Int, Item>):Void {\n\t\tvar i = 0;\n'
 			+ '\t\tfor (x in table) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t}\n\t}\n}';
 		final r = runAndExpectOne(src);
-		switch CanonicalEdit.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, r.check.fix(src, r.vs, stdPlugin(src)), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				Assert.equals(1, countOccurrences(text, 'using Lambda;'));
 			case Err(message):
@@ -215,31 +248,19 @@ class DeadBinderCounterLoopCheckTest extends Test {
 		Assert.equals(0, violations(wrapArray(body)).length);
 	}
 
-	public function testContainerDeclaringCountTakesTheQualifiedForm(): Void {
-		// The `count()` arm emits a `using Lambda;` call, and a real MEMBER beats a `using`. The
-		// whitelist matches a SIMPLE nominal, so a project type named after a std container is the
-		// residual this rule's own doc names — and the count survives in the QUALIFIED spelling,
-		// which routes around that member and needs no `using` at all.
+	public function testProjectContainerNamedLikeAStdOneNotFlagged(): Void {
+		// A project `Map` in the file's own scope captures the bare name, so the written type is not
+		// the std container the whitelist is about — whatever it declares, the rule does not spell it.
+		// This used to reach the QUALIFIED `Lambda.count(table)` spelling; that arm now serves only a
+		// container the std itself declares `count` on.
 		final src: String = wrapMap('var i = 0;\n\t\tfor (x in table) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t}')
 			+ '\n\nclass Map {\n\tpublic function count():Int {\n\t\treturn 0;\n\t}\n}';
-		final vs: Array<Violation> = violations(src);
-		Assert.equals(1, vs.length);
-		Assert.isTrue(vs[0].message.indexOf('for (i in 0...Lambda.count(table))') != -1, vs[0].message);
-		assertFixCanonical(src, ['for (i in 0...Lambda.count(table))'], ['using Lambda;', 'var i = 0;']);
-	}
-
-	public function testShadowedLambdaModuleRefusesTheQualifiedCount(): Void {
-		// `Lambda` may itself be shadowed — a project declaring its own `Lambda.hx`. The qualified
-		// count would then reach THAT type, so the container keeps its old refusal.
-		final src: String = wrapMap('var i = 0;\n\t\tfor (x in table) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t}')
-			+ '\n\nclass Map {\n\tpublic function count():Int {\n\t\treturn 0;\n\t}\n}'
-			+ '\n\nclass Lambda {\n\tpublic function count(it:Int):Int {\n\t\treturn 0;\n\t}\n}';
 		Assert.equals(0, violations(src).length);
 	}
 
 	public function testLengthContainerDeclaringCountStillFlagged(): Void {
-		// The `length` arm needs no `Lambda` at all, so a same-file `count` member is irrelevant to
-		// it — the gate is scoped to the name the rewrite actually emits.
+		// The `length` arm emits no `Lambda` call, so an unrelated same-file type declaring `count`
+		// cannot capture the rewrite.
 		final src: String = wrapArray('var i = 0;\n\t\tfor (x in items) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t}')
 			+ '\n\nclass Array2 {\n\tpublic function count():Int {\n\t\treturn 0;\n\t}\n}';
 		Assert.equals(1, violations(src).length);
@@ -253,13 +274,18 @@ class DeadBinderCounterLoopCheckTest extends Test {
 		return wrapParam('table:Map<Int, Item>', body);
 	}
 
+	/** `C.hx` holding `source`, in a scope beside the std container stubs the `length` / `count()` proof resolves. */
+	private inline function stdPlugin(source: String): CachingGrammarPlugin {
+		return StdScope.plugin([{ file: 'C.hx', source: source }]);
+	}
+
 	/** One method taking `param`, with `body` as its statements — the shape every fixture here has. */
 	private function wrapParam(param: String, body: String): String {
 		return 'class C {\n\tfunction f($param):Void {\n\t\t$body\n\t}\n}';
 	}
 
 	private function violations(source: String): Array<Violation> {
-		return new DeadBinderCounterLoop().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+		return new DeadBinderCounterLoop().run([{ file: 'C.hx', source: source }], stdPlugin(source));
 	}
 
 	private function countOccurrences(text: String, needle: String): Int {
@@ -274,7 +300,7 @@ class DeadBinderCounterLoopCheckTest extends Test {
 
 	private function assertFixCanonical(src: String, present: Array<String>, absent: Array<String>): Void {
 		final r = runAndExpectOne(src);
-		switch CanonicalEdit.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+		switch CanonicalEdit.canonicalize(src, r.check.fix(src, r.vs, stdPlugin(src)), true, new HaxeQueryPlugin()) {
 			case Ok(text):
 				for (p in present) Assert.isTrue(text.indexOf(p) >= 0, 'expected $p in $text');
 				for (a in absent) Assert.isTrue(text.indexOf(a) == -1, 'expected no $a in $text');
@@ -285,12 +311,12 @@ class DeadBinderCounterLoopCheckTest extends Test {
 
 	private function assertFixRefused(src: String): Void {
 		final r = runAndExpectOne(src);
-		Assert.equals(0, r.check.fix(src, r.vs, new HaxeQueryPlugin()).length);
+		Assert.equals(0, r.check.fix(src, r.vs, stdPlugin(src)).length);
 	}
 
 	private function runAndExpectOne(src: String): { check: DeadBinderCounterLoop, vs: Array<Violation> } {
 		final check: DeadBinderCounterLoop = new DeadBinderCounterLoop();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], stdPlugin(src));
 		Assert.equals(1, vs.length);
 		return { check: check, vs: vs };
 	}

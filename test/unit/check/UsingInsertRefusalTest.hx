@@ -1,9 +1,9 @@
 package unit.check;
 
-import anyparse.check.BoolLoopScan;
 import anyparse.check.Check.GroupedEdit;
 import anyparse.check.Check.Violation;
 import anyparse.check.CheckScan;
+import anyparse.check.LambdaLoopScan;
 import anyparse.check.PreferStaticExtension;
 import anyparse.check.Severity;
 import anyparse.check.UsingScan;
@@ -20,7 +20,7 @@ import utest.Test;
  * ## Why this is pinned
  *
  * All three implementations answered that case by inserting NOTHING and reporting SUCCESS —
- * `UsingScan.appendUsingInsert` returned `true`, `BoolLoopScan.withUsingInsert` handed back the
+ * `UsingScan.appendUsingInsert` returned `true`, `LambdaLoopScan.withUsingInsert` handed back the
  * ungrouped rewrites, `PreferStaticExtension.appendUsingInserts` returned `Void`. The caller then
  * KEPT its rewrites, and the file it wrote spelled an extension call with no `using` to bind it:
  * output that does not compile, reported as a clean fix. That is precisely the outcome the
@@ -92,25 +92,25 @@ class UsingInsertRefusalTest extends Test {
 	 */
 	@:pin('control')
 	@:killer('M-BOOL-LOOP-USING-COVERED-KEPT')
-	@:access(anyparse.check.BoolLoopScan)
+	@:access(anyparse.check.LambdaLoopScan)
 	public function testBoolLoopCoveredAnchorDropsTheWholeSet(): Void {
 		final header: UsingHeader = headerOf();
 		final anchor: Int = anchorOf(header);
 		final rewrites: Array<{ span: Span, text: String }> = [{ span: new Span(anchor - 1, anchor + 1), text: 'ZZ' }];
 		final found: Array<Violation> = [violation(anchor - 1, anchor + 1)];
-		final out: Array<GroupedEdit> = BoolLoopScan.withUsingInsert(rewrites, [true], header, found);
+		final out: Array<GroupedEdit> = LambdaLoopScan.withUsingInsert(rewrites, [true], header, found);
 		Assert.equals(0, out.length);
 		Assert.notNull(found[0].declineReason);
 	}
 
 	/** The uncovered twin: the rewrite and the `using` come back as ONE atomic group. */
 	@:pin('guard')
-	@:access(anyparse.check.BoolLoopScan)
+	@:access(anyparse.check.LambdaLoopScan)
 	public function testBoolLoopUncoveredAnchorGroupsTheInsert(): Void {
 		final header: UsingHeader = headerOf();
 		final rewrites: Array<{ span: Span, text: String }> = [{ span: new Span(SRC.length - 4, SRC.length - 2), text: 'ZZ' }];
 		final found: Array<Violation> = [violation(SRC.length - 4, SRC.length - 2)];
-		final out: Array<GroupedEdit> = BoolLoopScan.withUsingInsert(rewrites, [true], header, found);
+		final out: Array<GroupedEdit> = LambdaLoopScan.withUsingInsert(rewrites, [true], header, found);
 		Assert.equals(2, out.length);
 		Assert.equals(out[0].group, out[1].group);
 		Assert.notNull(out[1].group);

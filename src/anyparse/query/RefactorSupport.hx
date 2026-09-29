@@ -240,6 +240,18 @@ final class RefactorSupport {
 	}
 
 	/**
+	 * Whether `plugin`'s run indexes the WHOLE project — declared `resolutionRoots` that all matched
+	 * (`SymbolIndexHost.completeProjectFiles`) — so a type the project declares cannot be missing from
+	 * the resolution index. The precondition of any proof that a name is NOT a project type
+	 * (`SymbolIndex.resolvesToStdType`): without it a same-package or root-package declaration the run
+	 * never read is invisible, and unknown is no proof.
+	 */
+	public static function projectIsComplete(plugin: GrammarPlugin): Bool {
+		final host: Null<SymbolIndexHost> = plugin is SymbolIndexHost ? cast plugin : null;
+		return host?.completeProjectFiles() != null;
+	}
+
+	/**
 	 * Resolve the cursor to the named occurrence node it sits on, in two
 	 * tiers (innermost-wins within each):
 	 *

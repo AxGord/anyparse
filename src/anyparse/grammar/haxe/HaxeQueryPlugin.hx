@@ -1019,6 +1019,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			whileExprKind: 'WhileExpr',
 			ltKind: 'Lt',
 			postIncrKind: 'PostIncr',
+			preIncrKind: 'PreIncr',
 			andLowerPrecedenceKinds: [
 				'Or',
 				'Ternary',
@@ -1623,14 +1624,11 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	}
 
 	public function metaShape(): MetaShape {
-		// Annotation nodes come through the three `HxMetadata` enum
-		// ctors: `MetaCall` for the paren-bearing `@:name(args)` form
-		// (its arg expressions are children), `Meta` for the paren-less
-		// `@:name`, and `PlainMeta` for the verbatim raw catch-all
-		// (`@:name(args)` carried inline as the node's `name` slot).
-		// Decl-host kinds are shared with `refShape` so an annotation
-		// attributes to the same binding-declaration nodes the refs
-		// walker recognises.
+		// Annotation nodes come through the three `HxMetadata` enum ctors: `MetaCall` for the
+		// paren-bearing `@:name(args)` form (its arg expressions are children), `Meta` for the
+		// paren-less `@:name`, and `PlainMeta` for the verbatim raw catch-all (`@:name(args)` carried
+		// inline as the node's `name` slot). Decl-host kinds are shared with `refShape` so an
+		// annotation attributes to the same binding-declaration nodes the refs walker recognises.
 		return {
 			metaKinds: ['MetaCall', 'Meta', 'PlainMeta'],
 			declHostKinds: DECL_HOST_KINDS

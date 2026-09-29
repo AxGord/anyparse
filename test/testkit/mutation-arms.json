@@ -387,7 +387,7 @@
 			"type": "anyparse.query.MemberLookup",
 			"method": "memberShadowsExtension",
 			"force": "true",
-			"note": "every member reads as shadowing a `using` extension, so dead-binder-counter-loop stops writing the extension call"
+			"note": "every member reads as shadowing a `using` extension, so prefer-count takes the qualified `Lambda.count(xs, …)` spelling and inserts no `using`"
 		},
 		{
 			"name": "M-SUBOVERRIDE-TRUE",
@@ -2383,7 +2383,7 @@
 		},
 		{
 			"name": "M-BOOL-LOOP-USING-COVERED-KEPT",
-			"type": "anyparse.check.BoolLoopScan",
+			"type": "anyparse.check.LambdaLoopScan",
 			"method": "withUsingInsert",
 			"find": "if (usingEdit == null) return [];",
 			"replace": "if (usingEdit == null) return flat;",
@@ -2499,7 +2499,7 @@
 		},
 		{
 			"name": "M-BOOL-LOOP-CONFLICT-SILENT",
-			"type": "anyparse.check.BoolLoopScan",
+			"type": "anyparse.check.LambdaLoopScan",
 			"method": "edits",
 			"find": "\tUsingScan.noteDeclineWhereUnset(accepted, UsingScan.conflictingUsingDecline(LAMBDA_MODULE, method(kind)));",
 			"replace": "\tUsingScan.noteDeclineWhereUnset([], UsingScan.conflictingUsingDecline(LAMBDA_MODULE, method(kind)));",

@@ -577,6 +577,9 @@ typedef ResolvedType = {
 @:allow(anyparse.query.StructuralTypes)
 final class SymbolIndex {
 
+	/** The tail a wildcard import's path carries after its package (`a.b.*`). */
+	private static inline final WILDCARD_SUFFIX: String = '.*';
+
 	/** The grammar kind a `class` declaration projects as. */
 	private static final CLASS_DECL_KIND: String = 'ClassDecl';
 
@@ -666,11 +669,6 @@ final class SymbolIndex {
 		return _files.copy();
 	}
 
-	/** The `FileInfo` for `file`, or null when the file is not indexed. */
-	public function fileInfo(file: String): Null<FileInfo> {
-		return _files.find(f -> f.file == file);
-	}
-
 	/**
 	 * Whether `file` belongs to the scope's third-party half — a `resolutionLibs` or standard-library
 	 * source rather than one of the project's own roots. Such a declaration is one view of the
@@ -678,6 +676,36 @@ final class SymbolIndex {
 	 */
 	public inline function isThirdParty(file: String): Bool {
 		return _thirdParty.exists(file);
+	}
+
+	/** The `FileInfo` for `file`, or null when the file is not indexed. */
+	public function fileInfo(file: String): Null<FileInfo> {
+		return _files.find(f -> f.file == file);
+	}
+
+	/**
+	 * Whether the written type reference `raw` (bare or dotted) PROVABLY denotes a declaration of the Haxe standard library
+	 * as `fromFile` would resolve it, over an index that spans the whole project (`RefactorSupport.projectIsComplete` — the
+	 * caller's precondition, since only the host knows it) — the positive proof a rule needs before
+	 * trusting what a std container's member MEANS (`length` as an element count). True only when:
+	 *
+	 * - `fromFile` is indexed, its ambient `import.hx` chain is bounded, and `raw` resolves in its scope to exactly ONE declaration;
+	 * - that declaration's file lies under the auto-discovered std root (`StdResolver.isStdFile`) —
+	 *   not merely third-party, since a `resolutionLibs` library may declare `haxe.ui.List` or a
+	 *   root-package `List` of its own;
+	 * - every import, `using` and wildcard in scope — the file's own and its ambient groups' — is
+	 *   one the index RESOLVES, and no alias spells the simple name. An unresolved one could bring the
+	 *   name in (a sub-type of a module, a `using` of a type), and unknown is no proof.
+	 */
+	public function resolvesToStdType(raw: String, fromFile: String): Bool {
+		final info: Null<FileInfo> = fileInfo(fromFile);
+		// An ambient chain that could not be bounded may hold an import this file never shows.
+		if (info == null || !info.ambientImportsBounded) return false;
+		final simple: String = raw.substr(raw.lastIndexOf('.') + 1);
+		final imports: Array<ImportInfo> = info.imports.concat([for (group in info.ambientImports) for (imp in group.imports) imp]);
+		if (imports.exists(imp -> imp.kind == ImportKind.Alias ? imp.alias == simple : !importResolves(imp, info))) return false;
+		final found: Array<ResolvedType> = refs.resolveTypeRefAll(raw, info);
+		return found.length == 1 && StdResolver.isStdFile(found[0].file.file);
 	}
 
 	/** Files that failed to parse and were excluded from the index. */
@@ -896,6 +924,21 @@ final class SymbolIndex {
 	public function resolveTypeRefsFrom(raw: String, fromFile: String): Array<{ file: FileInfo, type: TypeDeclInfo }> {
 		final fi: Null<FileInfo> = fileInfo(fromFile);
 		return fi == null ? [] : refs.resolveTypeRefAll(raw, fi);
+	}
+
+	/**
+	 * Whether the index holds what the non-alias import `imp` names, resolved from `from` as a type
+	 * reference is (so a same-package or module-relative spelling counts): a type (`a.b.C`, a sub-type
+	 * `a.b.Mod.Sub`), a module, the type whose static member it imports (`a.b.C.field`), or — for a
+	 * wildcard — a package some indexed file declares, or a type whose statics it imports.
+	 */
+	private function importResolves(imp: ImportInfo, from: FileInfo): Bool {
+		final path: String = imp.kind == ImportKind.Wild ? imp.raw.substr(0, imp.raw.length - WILDCARD_SUFFIX.length) : imp.raw;
+		if (refs.resolveTypeRefAll(path, from).length > 0 || _files.exists(f -> f.module == path)) return true;
+		final dot: Int = path.lastIndexOf('.');
+		return imp.kind == ImportKind.Wild
+			? _files.exists(f -> f.pkg == path)
+			: dot > 0 && refs.resolveTypeRefAll(path.substr(0, dot), from).length > 0;
 	}
 
 	/**
