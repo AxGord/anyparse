@@ -979,4 +979,16 @@ enum Doc {
 	 */
 	ConditionalMarkerDecrease(inner: Doc);
 
+	/**
+	 * Render-only line break AHEAD of `inner`: the renderer emits a hardline and then `inner` with the indent raised
+	 * by `indent` — what `Nest(indent, Concat([Line('\n'), inner]))` renders. Every other walker, static or
+	 * speculative, sees `inner` alone, transparent like `WrapBoundary`.
+	 *
+	 * It places a construct without reshaping it. Its consumer (`BodyAllman`) puts it on the BREAK side of a body's
+	 * own width decision, so a body that breaks lands in Allman position while every layout decision measured on that
+	 * break side — a declaration's `=`, a cond-wrap close, a pivot — reads the same shape it read before, and stays the
+	 * decision it was. A walker that must see the real break asks for it by name.
+	 */
+	LeadingBreak(indent: Int, inner: Doc);
+
 }
