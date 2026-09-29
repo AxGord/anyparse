@@ -72,6 +72,42 @@ private typedef RestSibling = {
 };
 
 /**
+	What the routes a sibling-aware rest walk did NOT take add to the line
+	(`Renderer.recordRoute`): whether the walk is still on the path render takes
+	(`onPath`), the widest line an untaken route ends on (`altLine`), the extra
+	width of untaken routes that run on (`surplus`), and whether a prediction
+	ended the walk, the one case that answers the widest route.
+**/
+private typedef RestRoutes = {
+	var onPath: Bool;
+	var altLine: Int;
+	var surplus: Int;
+	var endedByPrediction: Bool;
+};
+
+/**
+	One node of an `alternativeLineWidth` walk with the render state it is reached
+	in: whether soft breaks around it render flat (`grouped`), and whether it sits
+	in a force-flat or a hard force-flat region.
+**/
+private typedef RouteEntry = {
+	final doc: Doc;
+	final grouped: Bool;
+	final forceFlat: Bool;
+	final hardFlat: Bool;
+};
+
+/**
+	The routes an `alternativeLineWidth` walk found: the widest line one of them
+	ends on (`ends`) and the widest width one runs on with past the walked node
+	(`cont`), each negative when no route does.
+**/
+private typedef RouteWidths = {
+	final ends: Int;
+	final cont: Int;
+};
+
+/**
 	Layout mode for a `Doc` frame: flat (line breaks become their flat
 	replacement) or broken (line breaks become real newlines).
 **/
@@ -358,6 +394,9 @@ private class Frame {
 	carved to reach a number.
 **/
 class Renderer {
+
+	/** How deep `alternativeLineWidth` follows nested two-sided nodes before it gives up. */
+	private static inline final MAX_ROUTE_DEPTH: Int = 4;
 
 	/**
 		Render a `Doc` tree to a string at the given `width`, indenting with
@@ -690,6 +729,17 @@ class Renderer {
 	 */
 	private static inline function fireAtFor(n: Int, width: Int, flatDoc: Doc): Int {
 		return n > width || DocMeasure.hasForcedBreak(flatDoc) ? n : n + 1;
+	}
+
+	/**
+	 * The width of the `OptSpace`s held back after a rest step over `d`: render
+	 * accumulates consecutive ones until the next token flushes them.
+	 */
+	private static inline function heldBackSpace(d: Doc, add: Int, pending: Int): Int {
+		return switch d {
+			case OptSpace(_), OptSpaceSkipAfterHardline: pending + add;
+			case _: add > 0 ? 0 : pending;
+		};
 	}
 
 	/**
@@ -1297,6 +1347,13 @@ class Renderer {
 		// everything measured so far renders as measured (`rendersAsMeasured` for
 		// the asker's own content, `keepsColumnExact` for each rest node).
 		var exact: Bool = sibling != null && sibling.exactCol;
+		// What the routes the walk did not take add to the line (`recordRoute`).
+		final routes: RestRoutes = {
+			onPath: true,
+			altLine: 0,
+			surplus: 0,
+			endedByPrediction: false
+		};
 		var i: Int = stack.length - 1;
 		while (i >= 0 && !aborted) {
 			final f: Frame = stack[i];
@@ -1333,18 +1390,22 @@ class Renderer {
 				final penCol: Int = sibling == null ? 0 : sibling.col + total;
 				final predicted: Null<{ add: Int, aborted: Bool }> = frameSibling == null
 					? null
-					: siblingRestStep(node, inner, frameSibling, exact ? penCol - pending : -1, penCol);
+					: siblingRestStep(node, inner, frameSibling, exact ? penCol - pending : -1, penCol, routes.onPath);
 				final step: { add: Int, aborted: Bool } = predicted ?? restNodeWidth(node, inner, false);
+				if (predicted == null) recordRoute(routes, node, exact, total);
 				exact = exact && keepsColumnExact(node.doc, predicted != null);
 				total += step.add;
 				aborted = step.aborted;
-				pending = switch node.doc {
-					case OptSpace(_), OptSpaceSkipAfterHardline: step.add;
-					case _: step.add > 0 ? 0 : pending;
-				};
+				if (aborted && predicted != null) routes.endedByPrediction = true;
+				pending = heldBackSpace(node.doc, step.add, pending);
 			}
 		}
-		return total;
+		return if (!routes.endedByPrediction)
+			total
+		else if (total + routes.surplus > routes.altLine)
+			total + routes.surplus
+		else
+			routes.altLine;
 	}
 
 	/**
@@ -3831,7 +3892,8 @@ class Renderer {
 	 *    nothing in it is a break point: it is measured without these rules.
 	 */
 	private static function siblingRestStep(
-		node: { doc: Doc, mode: Mode }, inner: Array<{ doc: Doc, mode: Mode }>, sibling: RestSibling, renderCol: Int, penCol: Int
+		node: { doc: Doc, mode: Mode }, inner: Array<{ doc: Doc, mode: Mode }>, sibling: RestSibling, renderCol: Int, penCol: Int,
+		onPath: Bool
 	): Null<{ add: Int, aborted: Bool }> {
 		inline function broken(d: Doc): { add: Int, aborted: Bool } {
 			inner.push({ doc: d, mode: MBreak });
@@ -3846,7 +3908,7 @@ class Renderer {
 				renderCol + DocMeasure.flatTokenWidth(flatDoc) >= n ? broken(breakDoc) : null;
 			case IfFirstLineExceeds(n, breakDoc, flatDoc) if (renderCol >= 0):
 				renderCol + flatTokenWidthFirstLine(flatDoc) >= n ? broken(breakDoc) : null;
-			case IfFullLineExceeds(_, breakDoc, _):
+			case IfFullLineExceeds(_, breakDoc, _) if (onPath):
 				final open: { width: Int, broke: Bool } = flatTokenWidthFirstLineWithBreak(breakDoc, false);
 				open.broke && findCollapseProbe(breakDoc) == null ? { add: open.width, aborted: true } : null;
 			case Flatten(innerDoc), HardFlatten(innerDoc):
@@ -3877,28 +3939,70 @@ class Renderer {
 	 * against a rest the asker no longer counts.
 	 */
 	private static function rendersAsMeasured(d: Doc): Bool {
-		final stack: Array<{ doc: Doc, grouped: Bool }> = [{ doc: d, grouped: false }];
+		final stack: Array<{
+			doc: Doc,
+			flat: Bool,
+			forceFlat: Bool,
+			hardFlat: Bool
+		}> = [
+			{
+				doc: d,
+				flat: false,
+				forceFlat: false,
+				hardFlat: false
+			}
+		];
 		while (stack.length > 0) {
-			final e: { doc: Doc, grouped: Bool } = stack.pop();
+			final e: {
+				doc: Doc,
+				flat: Bool,
+				forceFlat: Bool,
+				hardFlat: Bool
+			} = stack.pop();
+			inline function push(x: Doc, flat: Bool, forceFlat: Bool, hardFlat: Bool): Void {
+				stack.push({
+					doc: x,
+					flat: flat,
+					forceFlat: forceFlat,
+					hardFlat: hardFlat
+				});
+			}
 			switch e.doc {
 				case Empty, OptSpace(_), OptSpaceSkipAfterHardline:
 				case Text(s):
 					if (s.indexOf('\n') >= 0) return false;
 				case Line(flat):
-					if (!e.grouped || flat.charAt(0) == '\n') return false;
+					if (!e.flat || flat.charAt(0) == '\n') return false;
 				case Concat(items):
-					for (it in items) stack.push({ doc: it, grouped: e.grouped });
+					for (it in items) push(it, e.flat, e.forceFlat, e.hardFlat);
 				case Fill(items, sep, _):
-					for (it in items) stack.push({ doc: it, grouped: true });
-					stack.push({ doc: sep, grouped: true });
-				case Nest(_, x), WrapBoundary(x), CollapseProbe(x), CollapseAddProbe(x), CollapseBoolProbe(x), CollapseChainProbe(x),
+					for (it in items) push(it, true, e.forceFlat, e.hardFlat);
+					push(sep, true, e.forceFlat, e.hardFlat);
+				case Nest(_, x), CollapseProbe(x), CollapseAddProbe(x), CollapseBoolProbe(x), CollapseChainProbe(x),
 					ConditionalMarkerZero(x), ConditionalMarkerDecrease(x):
-					stack.push({ doc: x, grouped: e.grouped });
-				case Group(x), Flatten(x), HardFlatten(x):
-					stack.push({ doc: x, grouped: true });
+					push(x, e.flat, e.forceFlat, e.hardFlat);
+				case WrapBoundary(x):
+					// Render's boundary: a hard region survives it, a soft one ends at it and
+					// restores break mode, so a soft break directly under it is a newline.
+					if (e.hardFlat)
+						push(x, e.flat, true, true)
+					else if (e.forceFlat)
+						push(x, false, false, false)
+					else
+						push(x, e.flat, false, false);
+				case Group(x):
+					push(x, true, e.forceFlat, e.hardFlat);
+				case Flatten(x):
+					push(x, true, true, e.hardFlat);
+				case HardFlatten(x):
+					push(x, true, true, true);
+				case LeadingBreak(_, x):
+					// Its break is rendered everywhere but in a force-flat region.
+					if (!e.forceFlat) return false;
+					push(x, e.flat, true, e.hardFlat);
 				case IfBreak(_, fl):
-					if (!e.grouped) return false;
-					stack.push({ doc: fl, grouped: true });
+					if (!e.flat) return false;
+					push(fl, true, e.forceFlat, e.hardFlat);
 				case _:
 					return false;
 			}
@@ -3917,7 +4021,7 @@ class Renderer {
 	 */
 	private static function keepsColumnExact(d: Doc, predicted: Bool): Bool {
 		return switch d {
-			case Flatten(x), HardFlatten(x): rendersAsMeasured(x);
+			case Flatten(_), HardFlatten(_): rendersAsMeasured(d);
 			case _ if (predicted): true;
 			case Empty, OptSpace(_), OptSpaceSkipAfterHardline, Line(_), Concat(_), Nest(_, _), WrapBoundary(_), CollapseProbe(_),
 				CollapseAddProbe(_), CollapseBoolProbe(_), CollapseChainProbe(_), ConditionalMarkerZero(_), ConditionalMarkerDecrease(_),
@@ -3941,6 +4045,228 @@ class Renderer {
 	private static function opensDelimiterAlone(breakDoc: Doc): Bool {
 		final open: { width: Int, broke: Bool } = flatTokenWidthFirstLineWithBreak(breakDoc, false);
 		return open.broke && open.width == 1 && DocMeasure.firstVisibleTextStartsWith(breakDoc, '('.code);
+	}
+
+	/**
+	 * Whether a one-sided node the plain rest step walks keeps the walk on the path
+	 * render takes, whatever the column. Leaves and wrappers do; so do a group and a
+	 * fill, whose content render emits in either mode (a break only ends the line
+	 * sooner), and an `IfBreak`, whose mode is real while the path holds: a group the
+	 * walk could not decide had its break route measured by `unresolvedAlternative`.
+	 * A two-sided node is `unresolvedAlternative`'s; anything else ends the path.
+	 */
+	private static function keepsRenderedPath(d: Doc): Bool {
+		return switch d {
+			case Empty, Text(_), OptSpace(_), OptSpaceSkipAfterHardline, Line(_), Concat(_), Nest(_, _), WrapBoundary(_),
+				CollapseProbe(_), CollapseAddProbe(_), CollapseBoolProbe(_), CollapseChainProbe(_), ConditionalMarkerZero(_),
+				ConditionalMarkerDecrease(_), Flatten(_), HardFlatten(_), Group(_), GroupWithRestProbe(_), Fill(_, _, _),
+				FillWithRestProbe(_, _, _), FillBreakAfterWrap(_, _, _), LeadingBreak(_, _), IfBreak(_, _), IfWidthExceeds(_, _, _),
+				IfFirstLineExceeds(_, _, _):
+				true;
+			case _: false;
+		};
+	}
+
+	/**
+	 * The route the plain rest step does NOT walk through `node`, when render may
+	 * take it: the break side of every probe the sibling walk leaves unresolved (a
+	 * width probe only while the column is inexact, since at an exact column its null
+	 * answer was a verdict), and the broken content of a group whose mode the walk
+	 * guessed (a plain group off an exact column, a rest-aware group whose fit also
+	 * weighs its tail). Null for a node render lays out one way.
+	 */
+	private static function unresolvedAlternative(node: { doc: Doc, mode: Mode }, exact: Bool): Null<Doc> {
+		return switch node.doc {
+			case Group(inner): exact ? null : inner;
+			case GroupWithRestProbe(inner): inner;
+			case IfWidthExceeds(_, brk, _), IfFirstLineExceeds(_, brk, _): exact ? null : brk;
+			case IfLineExceeds(_, brk, _), IfResidualLineExceeds(_, brk, _), IfFullLineExceeds(_, brk, _),
+				IfNaturalFirstLineExceeds(_, brk, _), IfNaturalFirstLineExceedsWithRest(_, brk, _),
+				IfNaturalFirstLineFitsOpenDelim(_, brk, _), IfArrowContinuationFits(_, _, _, brk, _),
+				IfArrowContinuationFitsWithRest(_, _, _, brk, _), IfIndentWidthExceeds(_, _, brk, _),
+				IfGluedFirstLineExceeds(_, _, brk, _):
+				brk;
+			case _: null;
+		};
+	}
+
+	/**
+	 * The routes `d` can take on the current line when it renders broken (outside
+	 * any force-flat region), summarised as the widest line one ends on (`ends`,
+	 * at its first break) and the widest width one runs on with past `d` (`cont`),
+	 * negative for none; null when some route is not known. A group's content counts
+	 * as flat, which a group that breaks only shortens; a nested full-line probe ends
+	 * its route at its open delimiter or fits the limit; every other two-sided node
+	 * splits the route into both of its sides, to `MAX_ROUTE_DEPTH`. A verbatim
+	 * multi-line token, a deferred body or any other node answers null. Positive
+	 * list.
+	 */
+	private static function alternativeLineWidth(
+		d: Doc, grouped: Bool = false, forceFlat: Bool = false, hardFlat: Bool = false, depth: Int = 0
+	): Null<RouteWidths> {
+		if (depth > MAX_ROUTE_DEPTH) return null;
+		final stack: Array<RouteEntry> = [
+			{
+				doc: d,
+				grouped: grouped,
+				forceFlat: forceFlat,
+				hardFlat: hardFlat
+			}
+		];
+		var width: Int = 0;
+		var ends: Int = -1;
+		inline function broke(at: Int): RouteWidths {
+			return { ends: at > ends ? at : ends, cont: -1 };
+		}
+		while (stack.length > 0) {
+			final e: RouteEntry = stack.pop();
+			switch e.doc {
+				case Empty:
+				case Text(s):
+					if (s.indexOf('\n') >= 0) return null;
+					width += s.length;
+				case OptSpace(s):
+					width += s.length;
+				case OptSpaceSkipAfterHardline:
+					width += 1;
+				case Line(flat):
+					if (flat.charAt(0) == '\n' || !e.grouped) return broke(width);
+					width += flat.length;
+				case OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline:
+					return broke(width);
+				case LeadingBreak(_, _) if (!e.forceFlat):
+					return broke(width);
+				case IfFullLineExceeds(_, brk, _) if (!e.forceFlat && findCollapseProbe(brk) == null):
+					// A nested full-line probe either opens, ending this route's line at its
+					// open delimiter, or stays glued because its line fits the limit, when the
+					// route needs no bound at all.
+					final open: { width: Int, broke: Bool } = flatTokenWidthFirstLineWithBreak(brk, false);
+					return open.broke ? broke(width + open.width) : null;
+				case _ if (pushRouteChildren(e, stack)):
+				case _:
+					// Any other two-sided node splits the route: both of its sides are walked,
+					// the widest line either ends on is kept, and the widest side that runs on
+					// is the width the route continues with. A force-flat region renders the
+					// flat side only.
+					final split: Null<RouteWidths> = splitRoute(e, depth);
+					if (split == null) return null;
+					if (split.ends >= 0 && width + split.ends > ends) ends = width + split.ends;
+					if (split.cont < 0) return { ends: ends, cont: -1 };
+					width += split.cont;
+			}
+		}
+		return { ends: ends, cont: width };
+	}
+
+	/**
+	 * The break and flat sides of every two-sided `Doc` node the route walk splits
+	 * on, or null for any other node.
+	 */
+	private static function twoSides(d: Doc): Null<{ brk: Doc, fl: Doc }> {
+		return switch d {
+			case IfWidthExceeds(_, brk, fl), IfFirstLineExceeds(_, brk, fl), IfLineExceeds(_, brk, fl), IfResidualLineExceeds(_, brk, fl),
+				IfFullLineExceeds(_, brk, fl), IfNaturalFirstLineExceeds(_, brk, fl), IfNaturalFirstLineExceedsWithRest(_, brk, fl),
+				IfNaturalFirstLineFitsOpenDelim(_, brk, fl), IfArrowContinuationFits(_, _, _, brk, fl),
+				IfArrowContinuationFitsWithRest(_, _, _, brk, fl), IfIndentWidthExceeds(_, _, brk, fl),
+				IfGluedFirstLineExceeds(_, _, brk, fl):
+				{ brk: brk, fl: fl };
+			case _: null;
+		};
+	}
+
+	/**
+	 * Records in `routes` what `node`, stepped over on the walked route, adds to the
+	 * routes the walk did not take. A two-sided node render may lay out the other way
+	 * (`unresolvedAlternative`) has that route bounded (`alternativeLineWidth`): the
+	 * widest line one ends on raises `altLine`, the extra width of one that runs on
+	 * raises `surplus`. A route that cannot be bounded, or any node outside
+	 * `keepsRenderedPath`, takes the walk off the rendered path, where no later paren
+	 * ends the line.
+	 */
+	private static function recordRoute(routes: RestRoutes, node: { doc: Doc, mode: Mode }, exact: Bool, total: Int): Void {
+		if (!routes.onPath) return;
+		final alt: Null<Doc> = unresolvedAlternative(node, exact);
+		if (alt == null) {
+			if (!keepsRenderedPath(node.doc)) routes.onPath = false;
+			return;
+		}
+		final route: Null<RouteWidths> = alternativeLineWidth(alt);
+		if (route == null) {
+			routes.onPath = false;
+			return;
+		}
+		if (route.ends >= 0 && total + routes.surplus + route.ends > routes.altLine) routes.altLine = total + routes.surplus + route.ends;
+		final extra: Int = route.cont - DocMeasure.flatTokenWidth(node.doc);
+		if (extra > 0) routes.surplus += extra;
+	}
+
+	/**
+	 * Pushes the children of a render-structural node onto an `alternativeLineWidth`
+	 * stack in the mode render gives them, and answers whether `e` was one: a
+	 * wrapper, a group (its content counts as flat), an `IfBreak` (the side its mode
+	 * picks), a flat fill, a force-flat region, a `LeadingBreak` inside one, and a
+	 * `WrapBoundary`, which a hard region survives and a soft one ends at.
+	 */
+	private static function pushRouteChildren(e: RouteEntry, stack: Array<RouteEntry>): Bool {
+		inline function push(x: Doc, grouped: Bool, forceFlat: Bool, hardFlat: Bool): Void {
+			stack.push({
+				doc: x,
+				grouped: grouped,
+				forceFlat: forceFlat,
+				hardFlat: hardFlat
+			});
+		}
+		switch e.doc {
+			case Concat(items):
+				var k: Int = items.length;
+				while (--k >= 0) push(items[k], e.grouped, e.forceFlat, e.hardFlat);
+			case Nest(_, x), CollapseProbe(x), CollapseAddProbe(x), CollapseBoolProbe(x), CollapseChainProbe(x), ConditionalMarkerZero(x),
+				ConditionalMarkerDecrease(x):
+				push(x, e.grouped, e.forceFlat, e.hardFlat);
+			case LeadingBreak(_, x):
+				push(x, e.grouped, e.forceFlat, e.hardFlat);
+			case WrapBoundary(x):
+				if (e.hardFlat)
+					push(x, e.grouped, true, true)
+				else
+					push(x, e.grouped && !e.forceFlat, false, false);
+			case Group(x), GroupWithRestProbe(x):
+				push(x, true, e.forceFlat, e.hardFlat);
+			case IfBreak(brk, fl):
+				push(e.grouped ? fl : brk, e.grouped, e.forceFlat, e.hardFlat);
+			case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _) if (e.grouped):
+				var k: Int = items.length;
+				while (k > 0) {
+					k--;
+					push(items[k], true, e.forceFlat, e.hardFlat);
+					if (k > 0) push(sep, true, e.forceFlat, e.hardFlat);
+				}
+			case Flatten(x):
+				push(x, true, true, e.hardFlat);
+			case HardFlatten(x):
+				push(x, true, true, true);
+			case _:
+				return false;
+		}
+		return true;
+	}
+
+	/**
+	 * Both routes through a two-sided node an `alternativeLineWidth` walk meets:
+	 * the widest line either ends on and the widest width either runs on with (a
+	 * force-flat region renders the flat side only), or null when `e` is not
+	 * two-sided or a side is not known.
+	 */
+	private static function splitRoute(e: RouteEntry, depth: Int): Null<RouteWidths> {
+		final sides: Null<{ brk: Doc, fl: Doc }> = twoSides(e.doc);
+		if (sides == null) return null;
+		final fl: Null<RouteWidths> = alternativeLineWidth(sides.fl, e.grouped, e.forceFlat, e.hardFlat, depth + 1);
+		final brk: Null<RouteWidths> = e.forceFlat
+			? { ends: -1, cont: -1 }
+			: alternativeLineWidth(sides.brk, false, false, false, depth + 1);
+		return fl == null || brk == null
+			? null
+			: { ends: fl.ends > brk.ends ? fl.ends : brk.ends, cont: fl.cont > brk.cont ? fl.cont : brk.cont };
 	}
 
 }

@@ -1982,8 +1982,15 @@ class TestDiscoveryParityTest extends Test {
 			'unit.cli.LintFixQuietDefaultTest#testTheRuleAccountingWaitsForAnEditOrForVerbose :: control :: M-LINT-FIX-CENSUS-UNGATED',
 			'unit.cli.LintRangeCliTest#testWriteFixLeavesAStandingFindingOutsideTheWindow :: control :: M-LINT-RANGE-INERT',
 			'unit.cli.ResolutionScopeCliTest#testCrossingSuperNeedsRootsThatMatch :: control :: M-FIAD-ROOTS-MATCH-IGNORED',
+			'unit.core.RendererParenSiblingRestTest#testAParenOnAnUnresolvedFlatSideIsNoBreakPoint :: control :: M-PAREN-ALT-ROUTE',
 			'unit.core.RendererParenSiblingRestTest#testAProbeInAForceFlatFrameIsNoBreakPoint :: control :: '
 				+ 'M-PAREN-SIBLING-FORCE-FLAT-FRAME',
+			'unit.core.RendererParenSiblingRestTest#testARunOnBreakRouteWidensTheLine :: control :: M-PAREN-ALT-SURPLUS',
+			'unit.core.RendererParenSiblingRestTest#testASoftBreakUnderABoundaryInsideFlattenIsNotMeasured :: control :: '
+				+ 'M-PAREN-EXACT-SOFT-BOUNDARY',
+			'unit.core.RendererParenSiblingRestTest#testAnUnboundedBreakSideTakesTheWalkOffThePath :: control :: M-PAREN-SIBLING-OFF-PATH',
+			'unit.core.RendererParenSiblingRestTest#testConsecutiveHeldBackSpacesAllStayOutOfTheColumn :: control :: '
+				+ 'M-PAREN-PENDING-LAST-ONLY',
 			'unit.core.RendererSharedDocTest#testProbeSearchVisitsASharedNodeOnce :: control :: M-PROBE-SEARCH-REVISITS',
 			'unit.format.BraceSymmetrySliceTest#testAWrappedValueThenBranchDropsItsSourceSemicolon :: control :: M-SSB-VALUE-WRAP-OFF',
 			'unit.format.BraceSymmetrySliceTest#testTheSameTryOutsideAMacroIsStillBraced :: control :: '
@@ -4029,7 +4036,12 @@ class TestDiscoveryParityTest extends Test {
 			'M-PAREN-SIBLING-FORCE-FLAT-FRAME',
 			'M-PAREN-EXACT-CONTENT',
 			'M-PAREN-EXACT-REST',
-			'M-PAREN-CHAIN-PREDICTS'
+			'M-PAREN-CHAIN-PREDICTS',
+			'M-PAREN-EXACT-SOFT-BOUNDARY',
+			'M-PAREN-SIBLING-OFF-PATH',
+			'M-PAREN-PENDING-LAST-ONLY',
+			'M-PAREN-ALT-ROUTE',
+			'M-PAREN-ALT-SURPLUS'
 		];
 		final actualArms: Array<String> = [for (line in TestRegistry.arms()) line.split(' :: ')[0]];
 		Assert.same(expectedArms, actualArms, diffedMsg(expectedArms, actualArms, 'the arms every @:killer resolves into'));

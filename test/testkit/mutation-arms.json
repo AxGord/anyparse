@@ -9853,6 +9853,46 @@
 			"method": "opensDelimiterAlone",
 			"force": "true",
 			"note": "a method-chain probe trusts a later argument list's break, keeps its link glued, and the short call breaks instead"
+		},
+		{
+			"name": "M-PAREN-EXACT-SOFT-BOUNDARY",
+			"type": "anyparse.core.Renderer",
+			"method": "rendersAsMeasured",
+			"find": "push(x, false, false, false)",
+			"replace": "push(x, e.flat, false, false)",
+			"note": "a soft break under a WrapBoundary inside a Flatten reads as flat, though render restores break mode there, so the asker trusts columns it never reaches"
+		},
+		{
+			"name": "M-PAREN-SIBLING-OFF-PATH",
+			"type": "anyparse.core.Renderer",
+			"method": "siblingRestStep",
+			"find": "case IfFullLineExceeds(_, breakDoc, _) if (onPath):",
+			"replace": "case IfFullLineExceeds(_, breakDoc, _):",
+			"note": "a paren on the flat side of an unresolved probe counts as a break point, though render may take that probe's break side and run the line on"
+		},
+		{
+			"name": "M-PAREN-PENDING-LAST-ONLY",
+			"type": "anyparse.core.Renderer",
+			"method": "heldBackSpace",
+			"find": "case OptSpace(_), OptSpaceSkipAfterHardline: pending + add;",
+			"replace": "case OptSpace(_), OptSpaceSkipAfterHardline: add;",
+			"note": "only the last of several held-back spaces stays out of the column, so a plain group that fits is predicted to break"
+		},
+		{
+			"name": "M-PAREN-ALT-ROUTE",
+			"type": "anyparse.core.Renderer",
+			"method": "flatTokenWidthOfRestStack",
+			"find": "return if (!routes.endedByPrediction)",
+			"replace": "return if (true)",
+			"note": "a walk a later paren ends answers the walked route only, though render may take an unresolved probe's break side and run the line on past that paren"
+		},
+		{
+			"name": "M-PAREN-ALT-SURPLUS",
+			"type": "anyparse.core.Renderer",
+			"method": "recordRoute",
+			"find": "if (extra > 0) routes.surplus += extra;",
+			"replace": "",
+			"note": "an untaken side that runs on past its node without breaking adds nothing, so a group that breaks onto its wider IfBreak side is measured too short"
 		}
 	]
 }
