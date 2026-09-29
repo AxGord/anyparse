@@ -204,9 +204,8 @@ final class JoinStringAppend implements Check implements DefaultOff {
 	 * simply drop from the whitelist, never widen it.
 	 */
 	private static function safeOperandKindsOf(shape: RefShape): Array<String> {
-		final out: Array<String> = (
-			shape.atomExprKinds ?? []
-		).concat(shape.atomChainKinds ?? []).concat(shape.additiveOperandUnwrapKinds ?? []);
+		final out: Array<String> = (shape.atomExprKinds ?? []).concat(shape.atomChainKinds ?? [])
+			.concat(shape.additiveOperandUnwrapKinds ?? []);
 		for (k in [
 			shape.callKind,
 			shape.fieldAccessKind,

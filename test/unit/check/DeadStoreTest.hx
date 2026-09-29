@@ -276,9 +276,8 @@ class DeadStoreTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final shape: RefShape = plugin.refShape();
 		final authority: Array<String> = MemberKinds.nestedFunctionKinds(shape);
-		final declared: Array<String> = (
-			shape.lambdaKinds ?? []
-		).concat(shape.localFunctionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);
+		final declared: Array<String> = (shape.lambdaKinds ?? []).concat(shape.localFunctionKinds ?? [])
+			.concat(shape.inlineFunctionKinds ?? []);
 		for (kind in [shape.fnExprKind, shape.namedFnExprKind]) if (kind != null) declared.push(kind);
 		Assert.isTrue(declared.length > 0, 'the plugin must declare at least one function-value kind');
 		Assert.notNull(shape.namedFnExprKind, 'the Haxe plugin must declare its named function-literal kind');

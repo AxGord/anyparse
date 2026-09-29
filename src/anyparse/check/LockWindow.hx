@@ -55,9 +55,8 @@ final class LockWindow {
 		_sequenceKinds = flow.blockKinds()
 			.concat(shape.exprStatementKind == null ? [] : [shape.exprStatementKind])
 			.concat(shape.expressionBodyKinds ?? []);
-		_ifKinds = (
-			shape.ifStatementKinds ?? []
-		).concat(shape.ifExpressionKinds ?? []).concat(shape.ternaryKind == null ? [] : [shape.ternaryKind]);
+		_ifKinds = (shape.ifStatementKinds ?? []).concat(shape.ifExpressionKinds ?? [])
+			.concat(shape.ternaryKind == null ? [] : [shape.ternaryKind]);
 		// a `while` shares the condition-first slot with an `if`; what is left after the `if` kinds are the loops
 		_loopKinds = [for (k in shape.conditionFirstChildKinds ?? []) if (!_ifKinds.contains(k)) k].concat(
 			shape.conditionLastChildKinds ?? []

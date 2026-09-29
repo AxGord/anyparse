@@ -427,13 +427,12 @@ final class NullFlow {
 		final maybeNotEq: Null<String> = shape.notEqKind;
 		if (maybeNotEq == null) return [];
 		final notEqKind: String = maybeNotEq;
-		final fnKinds: Array<String> = (
-			shape.functionKinds ?? []
-		).concat(shape.finalModifierMemberKind == null ? [] : [shape.finalModifierMemberKind]);
+		final fnKinds: Array<String> = (shape.functionKinds ?? []).concat(
+			shape.finalModifierMemberKind == null ? [] : [shape.finalModifierMemberKind]
+		);
 		final declKinds: Array<String> = BinderScan.binderKinds(shape).concat(fnKinds).concat(shape.fieldDeclKinds ?? []);
-		final modifierKinds: Array<String> = (
-			shape.visibilityModifierKinds ?? []
-		).concat(shape.modifierOrderKinds ?? []).concat(META_KINDS);
+		final modifierKinds: Array<String> = (shape.visibilityModifierKinds ?? []).concat(shape.modifierOrderKinds ?? [])
+			.concat(META_KINDS);
 		final declared: Map<String, Int> = [];
 		function count(node: QueryNode): Void {
 			final name: Null<String> = node.name;
