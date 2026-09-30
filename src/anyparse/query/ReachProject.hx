@@ -12,19 +12,21 @@ import anyparse.runtime.Span;
 @:nullSafety(Strict)
 final class ReachProject {
 
+	/**
+	 * The compiler facts of the run's builds, as the analysis reads them (`FactsView`): set once by the analysis that owns
+	 * this scope (`readThrough`), null for syntax alone.
+	 */
+	public var facts(default, null): Null<FactsView> = null;
+
+	/** What types resolve against: the index the scope was made with, less the files no build runs (`readThrough`). */
+	public var index(default, null): SymbolIndex;
+
 	/** Project file -> its text. */
 	public final sources: Map<String, String> = [];
 
 	public final plugin: GrammarPlugin;
 	public final shape: RefShape;
-	public final index: SymbolIndex;
 	public final files: Array<{ file: String, source: String }>;
-
-	/**
-	 * The compiler facts of the run's builds, as the analysis reads them (`FactsView`): set once by the analysis that owns
-	 * this scope, null for syntax alone.
-	 */
-	public var facts: Null<FactsView> = null;
 
 	/** What the facts say the builds made of the index and the text (`FactsProvenance`), made on first need. */
 	private var _provenance: Null<FactsProvenance> = null;
@@ -38,6 +40,17 @@ final class ReachProject {
 		this.index = index;
 		this.files = files;
 		for (f in files) sources[f.file] = f.source;
+	}
+
+	/**
+	 * Read the project through the compiler facts `view` from here on. Under the truth (`FactsView.truth`) a project file no
+	 * build runs (`runsInNoBuild`) declares nothing either: the index loses it, so a type of it is no second declaration of
+	 * a name a build compiles, and no member, supertype or site it declares answers for one.
+	 */
+	public function readThrough(view: Null<FactsView>): Void {
+		facts = view;
+		final idle: Array<String> = [for (f in files) if (runsInNoBuild(f.file)) f.file];
+		if (idle.length > 0) index = index.without(idle);
 	}
 
 	/**

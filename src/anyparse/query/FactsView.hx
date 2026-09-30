@@ -4,6 +4,7 @@ import anyparse.query.CallGraph.FnNode;
 import anyparse.query.CompilerFacts.CallFact;
 import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FactPos;
+import anyparse.query.CompilerFacts.FieldDeclFact;
 import anyparse.query.CompilerFacts.FlowFact;
 import anyparse.query.CompilerFacts.IterationFact;
 import anyparse.query.CompilerFacts.NativeFact;
@@ -48,8 +49,11 @@ using StringTools;
  * declaration can read differently in one, and the facts hold every branch of a conditional region some build takes,
  * the union of what each typed. Every test above that guards against such a build is then skipped: a body holding a
  * directive or lying in a conditional region is faceted, and nothing it resolved its sites through is examined. What stays is what
- * holds in every build as much as in one: the facts are whole, none lost to a macro's expansion or a stale file, the graph node
- * stands for one declaration, and a body another graph node starts at is that node's. A body an inlined function was spliced into is
+ * holds in every build as much as in one: the facts are whole, none lost to a macro's expansion or a stale file, and a body another
+ * graph node starts at is that node's. A node the graph folded from several declarations - of a member, one per branch of a region, or
+ * of its type, one per build - is read by its id, the union of what every build typed under it, whichever declaration each read
+ * (`foldedBodies`), when every declaration of its type is the one type the builds typed (`soleType`); a node of a name two types share
+ * keeps its syntax. A body an inlined function was spliced into is
  * faceted too: the splice's facts are the body's, at the callee's positions, each run at a site of the `inlined` call whose method
  * declares it — the innermost expression of the body around the call — so a range question meeting such a site takes it, and one
  * no call's method declares from every body it meets (`CompilerFacts.within`, `CallGraphFacts.siteOf`): more than the range runs,
@@ -59,7 +63,8 @@ using StringTools;
  * only at a site its facts do not type (`CallGraphFacts.holdsBack`): at one they type, the compiler resolved the site
  * in every build there is. A local `inline function` keeps its edge under it: the compiler splices its body at its
  * declaration and types nothing at the site of its call. A faceted body's natives and reflective calls are then its
- * facts' (`truthSites`), and a project file no listed build read runs in none (`ReachProject.runsInNoBuild`).
+ * facts' (`truthSites`), and a project file no listed build read runs in none (`ReachProject.runsInNoBuild`) and declares nothing: the
+ * index the analysis reads leaves it out (`ReachProject.readThrough`), so no type of it makes a name a build compiles a second declaration.
  */
 @:nullSafety(Strict)
 final class FactsView {
@@ -87,6 +92,9 @@ final class FactsView {
 
 	/** The name an abstract's constructor takes in its implementation class. */
 	private static inline final IMPL_CONSTRUCTOR: String = '_new';
+
+	/** The kind of a typed typedef (`TypeFact.kind`). */
+	private static inline final TYPEDEF_KIND: String = 'typedef';
 
 	/** The markers that leave some fact of a node without a place: its body keeps the syntactic reading. */
 	private static final UNPLACED: Array<String> = [MACRO_EXPANSION, INLINE_SITE_UNKNOWN, 'stale-foreign'];
@@ -126,6 +134,9 @@ final class FactsView {
 	/** `Type.member` or `Type` -> whether every build resolves it the same (`resolvedAlike`), settled once. */
 	private final _alike: Map<String, Bool> = [];
 
+	/** Graph type name -> the one typed type every declaration of it is (`soleType`), or null, settled once. */
+	private final _sole: Map<String, Null<String>> = [];
+
 	private final _scope: ReachProject;
 
 	/** Graph type name -> the typed types standing for it, built on first need. */
@@ -150,16 +161,26 @@ final class FactsView {
 	public function forget(file: String): Void {
 		_conditional.remove(file);
 		_alike.clear();
+		_sole.clear();
 	}
 
 	/**
 	 * The facts of the function the graph node `node` declares when they replace its syntax (see the type
 	 * doc; under the truth, whatever a build the list does not name might read otherwise): the outermost
 	 * typed function bodies inside its span. Null keeps the syntactic reading. `declarations` is how many
-	 * declarations the graph folded into the node.
+	 * declarations of `node` the graph folded into it in its own file: a node folding several — or of a type the index
+	 * declares more than once — is read, under the truth only, by its id (`foldedBodies`).
 	 */
 	public function bodyFacts(g: CallGraph, node: FnNode, declarations: Int): Null<Array<FactNode>> {
-		final outer: Null<Array<FactNode>> = declarations == 1 ? typedBodies(g, node) : null;
+		final type: Null<String> = node.typeName;
+		// the graph folded several declarations into the node, of the member or of its type: under the truth, read by id
+		final single: Bool = declarations == 1 && (type == null || g.types.declarationCount(type) <= 1);
+		final outer: Null<Array<FactNode>> = if (single)
+			typedBodies(g, node)
+		else if (truth && declarations > 0)
+			foldedBodies(node)
+		else
+			null;
 		if (outer == null) return null;
 		for (n in outer) if (n.incomplete.exists(unplaced)) return null;
 		// under the truth no build the list does not name exists, to resolve the sites otherwise
@@ -321,6 +342,28 @@ final class FactsView {
 		return byKey[key];
 	}
 
+	/**
+	 * The one type the builds typed that every declaration of the graph type `type` the index holds is, when the facts are
+	 * the truth: each declaration names it — a copy of it per target, a declaration of it in each branch of a conditional
+	 * region — and every typed type the graph calls `type` is it, an instance of it (`@:generic`), its implementation
+	 * class or a typedef aliasing it. Null otherwise: two types share the simple name, a declaration no build typed may
+	 * run under another name (`@:genericBuild`), or the facts are not the truth.
+	 */
+	public function soleType(type: String): Null<String> {
+		if (!truth) return null;
+		if (_sole.exists(type)) return _sole[type];
+		final declared: Array<String> = [];
+		for (fi in _scope.index.allFiles()) for (t in fi.types) if (t.name == type && !CallGraphNames.selfAlias(t)) {
+			final named: String = declaredId(fi, t);
+			if (!declared.contains(named)) declared.push(named);
+		}
+		final id: Null<String> = declared.length == 1 ? declared[0] : null;
+		final typed: Array<String> = bySimpleName()[type] ?? [];
+		final sole: Null<String> = id != null && table.type(id) != null && typed.foreach(t -> standsFor(t, id)) ? id : null;
+		_sole[type] = sole;
+		return sole;
+	}
+
 	/** Graph type name -> the typed types standing for it. */
 	public function bySimpleName(): Map<String, Array<String>> {
 		final held: Null<Map<String, Array<String>>> = _bySimpleName;
@@ -334,6 +377,43 @@ final class FactsView {
 		}
 		_bySimpleName = out;
 		return out;
+	}
+
+	/**
+	 * The facts of the member `node` the graph folded from several declarations of one typed type (`soleType`), read by
+	 * id rather than by range: its body and each further overload of it, every one the union over the builds that typed
+	 * it, whichever declaration each build read. Null when the node is a nested function, which has no id of its own to
+	 * read by, when the type is not one (`soleType`), or when one of those bodies was not typed as a function or was
+	 * placed by a macro.
+	 */
+	private function foldedBodies(node: FnNode): Null<Array<FactNode>> {
+		final type: Null<String> = node.typeName;
+		final name: Null<String> = node.name;
+		final sole: Null<String> = type == null || name == null || node.id.indexOf(NESTED_MARK) >= 0 ? null : soleType(type);
+		final field: Null<FieldDeclFact> = sole == null ? null : table.type(sole)?.fields.find(f -> f.name == name);
+		if (sole == null || field == null) return null;
+		var overloads: Int = 0;
+		for (n in field.overloads) if (n > overloads) overloads = n;
+		final out: Array<FactNode> = [];
+		for (i in 0...overloads + 1) {
+			final found: Null<FactNode> = table.node(i == 0 ? '$sole.$name' : '$sole.$name~$i');
+			if (found == null || found.generated || !FUNCTION_KINDS.contains(found.kind)) return null;
+			out.push(found);
+		}
+		return out;
+	}
+
+	/**
+	 * Whether the typed type `typed` is the type `id` as the graph reads it: itself, an instance of it (`@:generic`), its
+	 * implementation class (an abstract's), or a typedef aliasing it.
+	 */
+	private function standsFor(typed: String, id: String): Bool {
+		final fact: Null<TypeFact> = table.type(typed);
+		if (typed == id || fact == null) return typed == id;
+		final generic: Null<String> = fact.genericOf;
+		if (generic != null) return CompilerFacts.baseId(generic) == id;
+		if (fact.kind == IMPL_KIND) return implemented(typed) == id;
+		return fact.kind == TYPEDEF_KIND && fact.targets.length > 0 && fact.targets.foreach(t -> CompilerFacts.baseId(t) == id);
 	}
 
 	/**
@@ -635,6 +715,31 @@ final class FactsView {
 	/** Whether `a` and `b` share a position. */
 	private static inline function meets(a: Span, b: Span): Bool {
 		return a.from < b.to && b.from < a.to;
+	}
+
+	/**
+	 * The id the compiler gives the type `t` the indexed file `fi` declares (`TypedFactsMacro.typeId`): its package, then its
+	 * name — a private type's package ends in its module's name, prefixed `_`.
+	 */
+	private static function declaredId(fi: FileInfo, t: TypeDeclInfo): String {
+		final path: Array<String> = fi.pkg == '' ? [] : fi.pkg.split('.');
+		if (t.isPrivate) path.push('_' + fi.module.substr(fi.module.lastIndexOf('.') + 1));
+		path.push(t.name);
+		return path.join('.');
+	}
+
+	/**
+	 * The abstract the implementation class `impl` (`pack._Module.Name_Impl_`) implements: `pack.Name`, or `impl` itself
+	 * when the id is not spelled so.
+	 */
+	private static function implemented(impl: String): String {
+		final dot: Int = impl.lastIndexOf('.');
+		final name: String = impl.substr(dot + 1);
+		final pack: String = dot < 0 ? '' : impl.substr(0, dot);
+		final module: Int = pack.lastIndexOf('.');
+		if (!name.endsWith(IMPL_SUFFIX) || !pack.substr(module + 1).startsWith('_')) return impl;
+		final abstractName: String = name.substr(0, name.length - IMPL_SUFFIX.length);
+		return module < 0 ? abstractName : '${pack.substr(0, module)}.$abstractName';
 	}
 
 }

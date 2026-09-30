@@ -7012,6 +7012,62 @@
 			"note": "the facts of listed builds type the member though the list is not every build, so a property is answered with no truth"
 		},
 		{
+			"name": "M-FACTS-IDLE-INDEX",
+			"type": "anyparse.query.ReachProject",
+			"method": "readThrough",
+			"find": "if (idle.length > 0) index = index.without(idle);",
+			"replace": "if (false) index = index.without(idle);",
+			"note": "(precision) a type of a project file no build runs stays in the index, a second declaration of its name, so the one the builds compile is ambiguous"
+		},
+		{
+			"name": "M-REACH-AMBIGUOUS-SOLE-ANY",
+			"type": "anyparse.query.MemberReach",
+			"method": "answerReach",
+			"find": "if (g.types.declarationCount(declaring) > 1 && _scope.facts?.soleType(declaring) == null) return Unknown(Ambiguous(declaring));",
+			"replace": "if (false) return Unknown(Ambiguous(declaring));",
+			"note": "two types sharing the member owner's simple name are answered as one, whose members the graph cannot tell apart"
+		},
+		{
+			"name": "M-REACH-AMBIGUOUS-SOLE-NONE",
+			"type": "anyparse.query.MemberReach",
+			"method": "answerReach",
+			"find": "if (g.types.declarationCount(declaring) > 1 && _scope.facts?.soleType(declaring) == null) return Unknown(Ambiguous(declaring));",
+			"replace": "if (g.types.declarationCount(declaring) > 1) return Unknown(Ambiguous(declaring));",
+			"note": "(precision) a type declared once per branch, the one type every build typed, is ambiguous under the truth too"
+		},
+		{
+			"name": "M-FACTS-SOLE-TYPED-ONLY",
+			"type": "anyparse.query.FactsView",
+			"method": "soleType",
+			"find": "final id: Null<String> = declared.length == 1 ? declared[0] : null;",
+			"replace": "final id: Null<String> = (bySimpleName()[type] ?? [])[0];",
+			"note": "only the typed types decide, so a declaration of a compiled file no build typed under the name, which may run under another, is no second type"
+		},
+		{
+			"name": "M-FACTS-SOLE-STANDS-ANY",
+			"type": "anyparse.query.FactsView",
+			"method": "soleType",
+			"find": "typed.foreach(t -> standsFor(t, id))",
+			"replace": "true",
+			"note": "a type the builds typed under the name that the index does not declare is taken for the one it does"
+		},
+		{
+			"name": "M-FACTS-SOLE-NEVER",
+			"type": "anyparse.query.FactsView",
+			"method": "soleType",
+			"find": "if (!truth) return null;",
+			"replace": "if (true) return null;",
+			"note": "(precision) a type declared once per branch is several types under the truth too: its members keep their syntax and its member questions are ambiguous"
+		},
+		{
+			"name": "M-FACTS-FOLDED-BY-ID",
+			"type": "anyparse.query.FactsView",
+			"method": "bodyFacts",
+			"find": "else if (truth && declarations > 0)",
+			"replace": "else if (false)",
+			"note": "(precision) a function the graph folded from several declarations keeps its syntax under the truth, though its facts over every build are read by its id"
+		},
+		{
 			"name": "M-REACH-BASE-CLASSPATH",
 			"type": "anyparse.query.MemberReach",
 			"method": "forRun",

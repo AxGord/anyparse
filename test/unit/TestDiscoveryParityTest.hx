@@ -2568,6 +2568,7 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-TEXT-SPELLED',
 			'unit.query.MemberReachFactsTest#testAMacroExpansionIsUnknown :: control :: M-FACTS-REACH-MACRO',
 			'unit.query.MemberReachFactsTest#testAMemberAnotherBuildDeclaresShadowsAnExtension :: control :: M-FACTS-REACH-GUARDED-NAME',
+			'unit.query.MemberReachFactsTest#testAMemberDeclaredInEachBranchIsReadByIdUnderTheTruth :: control :: M-FACTS-FOLDED-BY-ID',
 			'unit.query.MemberReachFactsTest#testAMemberOnlyAListedBuildDeclaresShadowsAnExtensionThere :: control :: '
 				+ 'M-FACTS-TRUTH-CONTEXT',
 			'unit.query.MemberReachFactsTest#testAMethodABuildMacroAddedTheFactsCannotReadTouchesTheMemberUnderTheTruth :: control :: '
@@ -2597,8 +2598,12 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-TRUTH-CONTEXT',
 			'unit.query.MemberReachFactsTest#testATypeBringingExtensionsInUnderAConditionIsUnknown :: control :: '
 				+ 'M-FACTS-REACH-USING-META,M-GRAPH-USING-META,M-INDEX-GUARDED-META-LIFT',
+			'unit.query.MemberReachFactsTest#testATypeDeclaredOncePerBuildIsOneTypeUnderTheTruth :: control :: '
+				+ 'M-FACTS-FOLDED-BY-ID,M-FACTS-SOLE-NEVER,M-REACH-AMBIGUOUS-SOLE-NONE',
 			'unit.query.MemberReachFactsTest#testATypeInAFileImportingUnderAConditionKeepsTheSyntax :: control :: '
 				+ 'M-FACTS-REACH-GUARDED-IMPORT',
+			'unit.query.MemberReachFactsTest#testATypeNoBuildCompilesIsNoSecondDeclarationOfItsNameUnderTheTruth :: control :: '
+				+ 'M-FACTS-IDLE-INDEX',
 			'unit.query.MemberReachFactsTest#testAVariableABuildMacroMadeAPropertyKeepsItsOwnerUnknownUnderTheTruth :: control :: '
 				+ 'M-FACTS-TEXT-FIELDS-ANY',
 			'unit.query.MemberReachFactsTest#testAWriteTheCompilerSeesStoringOnlyFreshValuesLetsNothingEscape :: control :: '
@@ -2626,6 +2631,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-FACTS-TRUTH-NATIVES,M-FACTS-TRUTH-NATIVE-CALLS-KEPT,M-FACTS-TRUTH-NATIVE-METAS-DROPPED',
 			'unit.query.MemberReachFactsTest#testTheTruthNeedsTheFactsToNameExactlyTheListedBuilds :: control :: '
 				+ 'M-FACTS-TRUTH-UNLISTED,M-FACTS-TRUTH-COUNT,M-FACTS-TRUTH-NAMES,M-FACTS-TRUTH-ORDER',
+			'unit.query.MemberReachFactsTest#testTwoTypesUnderOneNameStayAmbiguousUnderTheTruth :: control :: '
+				+ 'M-REACH-AMBIGUOUS-SOLE-ANY,M-FACTS-SOLE-TYPED-ONLY,M-FACTS-SOLE-STANDS-ANY',
 			'unit.query.MemberReachFactsTest#testUnderTheTruthASpliceElsewhereInTheFunctionIsNoneOfTheRegions :: control :: '
 				+ 'M-REACH-SPLICED-SITES,M-GRAPH-FACTS-SPLICE-TAG,M-GRAPH-FACTS-INLINED-SITE,M-FACTS-SPLICE-SITE,'
 				+ 'M-FACTS-SPLICE-SITE-INNERMOST,M-FACTS-SPLICE-BODY',
@@ -3780,6 +3787,13 @@ class TestDiscoveryParityTest extends Test {
 			'M-REACH-PROPERTY-STRAIGHT',
 			'M-REACH-PROPERTY-GETTER',
 			'M-REACH-FACTS-FIELDS-UNTRUE',
+			'M-FACTS-IDLE-INDEX',
+			'M-REACH-AMBIGUOUS-SOLE-ANY',
+			'M-REACH-AMBIGUOUS-SOLE-NONE',
+			'M-FACTS-SOLE-TYPED-ONLY',
+			'M-FACTS-SOLE-STANDS-ANY',
+			'M-FACTS-SOLE-NEVER',
+			'M-FACTS-FOLDED-BY-ID',
 			'M-REACH-BASE-CLASSPATH',
 			'M-REACH-TYPES-HELD',
 			'M-GRAPH-READ-DECLARED',
