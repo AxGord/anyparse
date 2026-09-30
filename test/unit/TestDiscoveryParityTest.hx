@@ -1842,6 +1842,8 @@ class TestDiscoveryParityTest extends Test {
 				+ 'M-TRIVGET-MOVABLE-LITERAL-FALSE',
 			'unit.check.TypedFactsProbeTest#testACallSiteInlineIsASpliceOfItsMethodNotAMacro :: control :: M-FACTS-CALL-SITE-INLINE',
 			'unit.check.TypedFactsProbeTest#testAConfigurationThatFailsContributesNothing :: control :: M-FACTS-DROPPED',
+			'unit.check.TypedFactsProbeTest#testAFieldReadAnInlinedMethodTakesAsItsReceiverIsTheCallsReceiver :: control :: '
+				+ 'M-FACTS-INLINED-RECEIVER,M-FACTS-RECEIVER-BLOCK,M-FACTS-RECEIVER-PARAM',
 			'unit.check.TypedFactsProbeTest#testAFieldReadSaysHowItsValueIsUsed :: control :: M-FACTS-USE,M-FACTS-HELD,M-FACTS-CAPTURE',
 			'unit.check.TypedFactsProbeTest#testAFileWrittenWhileTheCompileRanIsStale :: control :: M-FACTS-WRITTEN-DURING,M-FACTS-CHANGED-STALE',
 			'unit.check.TypedFactsProbeTest#testALostSplicedFactMarksItsNodeAndOnlyTheStdIsReflection :: control :: M-FACTS-STALE-FOREIGN,M-FACTS-REFLECTION-PATH',
@@ -2558,6 +2560,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testAFunctionWithoutFactsOfItsOwnIsNotReadThroughANestedOnes :: control :: '
 				+ 'M-FACTS-REACH-NESTED-OWNER',
 			'unit.query.MemberReachFactsTest#testAGenericInstanceIsItsGenericClass :: control :: M-FACTS-REACH-GENERIC',
+			'unit.query.MemberReachFactsTest#testAKeyValueLoopOverTheMemberLetsNothingEscapeUnderTheTruth :: control :: '
+				+ 'M-FACTS-INLINED-RECEIVER',
 			'unit.query.MemberReachFactsTest#testALibraryDynamicMethodNotReadYetIsFollowed :: control :: M-FACTS-REACH-LIBRARY-DYNAMIC',
 			'unit.query.MemberReachFactsTest#testALocalACalleeRebuiltInPlaceHandsOutIsNoProofUnderTheTruth :: control :: '
 				+ 'M-FACTS-TEXT-CALLS-ANY',
@@ -2567,6 +2571,8 @@ class TestDiscoveryParityTest extends Test {
 			'unit.query.MemberReachFactsTest#testAMacroBuiltTypeAnswersFromItsTextOnlyWhenItsFactsAreItsText :: control :: '
 				+ 'M-FACTS-TEXT-SPELLED',
 			'unit.query.MemberReachFactsTest#testAMacroExpansionIsUnknown :: control :: M-FACTS-REACH-MACRO',
+			'unit.query.MemberReachFactsTest#testAMemberAnInlinedMethodTakesAsAnArgumentStillEscapesUnderTheTruth :: control :: '
+				+ 'M-FACTS-RECEIVER-BLOCK,M-FACTS-RECEIVER-PARAM',
 			'unit.query.MemberReachFactsTest#testAMemberAnotherBuildDeclaresShadowsAnExtension :: control :: M-FACTS-REACH-GUARDED-NAME',
 			'unit.query.MemberReachFactsTest#testAMemberDeclaredInEachBranchIsReadByIdUnderTheTruth :: control :: M-FACTS-FOLDED-BY-ID',
 			'unit.query.MemberReachFactsTest#testAMemberOnlyAListedBuildDeclaresShadowsAnExtensionThere :: control :: '
@@ -3916,6 +3922,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-CAPTURE',
 			'M-FACTS-FRESH',
 			'M-FACTS-FRESH-DISCARDED',
+			'M-FACTS-INLINED-RECEIVER',
+			'M-FACTS-RECEIVER-BLOCK',
+			'M-FACTS-RECEIVER-PARAM',
 			'M-FACTS-REACH-NESTED-OWNER',
 			'M-FACTS-REACH-SYNTAX-UNION',
 			'M-FACTS-REACH-GUARDED-IMPORT',
@@ -4393,6 +4402,9 @@ class TestDiscoveryParityTest extends Test {
 			'M-FACTS-CAPTURE :: anyparse.check.TypedFactsWalk#visit',
 			'M-FACTS-FRESH :: anyparse.check.TypedFactsWalk#target',
 			'M-FACTS-FRESH-DISCARDED :: anyparse.check.TypedFactsWalk#visit',
+			'M-FACTS-INLINED-RECEIVER :: anyparse.check.TypedFactsWalk#visit',
+			'M-FACTS-RECEIVER-BLOCK :: anyparse.check.TypedFactsWalk#receiverCall',
+			'M-FACTS-RECEIVER-PARAM :: anyparse.check.TypedFactsMacro#collectFields',
 			'M-PENDING-JOBS-FILE-KEPT :: anyparse.check.HaxeSpawn#FinalMember:PARALLEL_DRIVER',
 			'M-FACTS-WRITTEN-DURING :: anyparse.check.TypedFactsMacro#writtenSince',
 			'M-FOR-BODY-PROBE-EAGER :: anyparse.macro.WriterBodyPolicyLowering#wrapBodyAllman',

@@ -1222,6 +1222,49 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(files, null, true, points, false, build), r -> r.match(Unknown(Reification(_, _))));
 	}
 
+	@:pin('control') @:killer('M-FACTS-INLINED-RECEIVER')
+	public function testAKeyValueLoopOverTheMemberLetsNothingEscapeUnderTheTruth(): Void {
+		// TM's `GridScale`: `for (i => p in _points)` is the inlined `_points.keyValueIterator()`, whose receiver the compiler
+		// binds to a local of its own and hands to `new ArrayKeyValueIterator(_this)` — a read the facts took for a value
+		// handed on. It is the receiver of a call of the array's own reader, as the syntax spells it; so is the one of
+		// `iterator()`, whose result is stored. The value loop and the indexed one are lowered with no call at all
+		final main: String = 'class Main {\n\tprivate final _points:Array<P> = [];\n\tpublic var it:Iterator<P> = [].iterator();\n'
+			+ '\tpublic function new() {}\n\tstatic function main() {\n\t\tfinal m = new Main();\n\t\tm.f();\n\t\tm.g();\n\t}\n'
+			+ '\tfunction g():Void {\n\t\tfor (i => p in _points) p.x = i;\n\t\tfor (p in _points) p.x = 0;\n'
+			+ '\t\tit = _points.iterator();\n\t}\n'
+			+ '\tfunction f():Void {\n\t\tfor (i in 0..._points.length) { /*<*/ _points[i].x = i; poke(); /*>*/ }\n\t}\n'
+			+ '\tfunction poke():Void Other.poke(this);\n}\n' + 'class P {\n\tpublic var x:Int = 0;\n\tpublic function new() {}\n}\n'
+			+ 'class Other {\n\tpublic static var seen:Null<Main> = null;\n\tpublic static function poke(m:Main):Void seen = m;\n}\n';
+		final points: MemberRef = { owner: 'Main', name: '_points' };
+		assertMatch(ask(['Main.hx' => main], null, true, points, false, null, null, null, true), r -> r.match(Proven));
+		// the syntax reads a loop's iterable, and a call of the array's own reader, as no escape
+		assertMatch(ask(['Main.hx' => main], null, false, points), r -> r.match(Proven));
+	}
+
+	@:pin('control') @:killer('M-FACTS-RECEIVER-BLOCK') @:killer('M-FACTS-RECEIVER-PARAM')
+	public function testAMemberAnInlinedMethodTakesAsAnArgumentStillEscapesUnderTheTruth(): Void {
+		// `Keeper.push` and `Keeper.pop` bear the array's own method names, and each keeps the array it is handed: `push`
+		// through a local of its own named as the compiler names a receiver, `pop` through a parameter so named, which the
+		// compiler binds as it binds a receiver. Neither is the receiver, so the read escapes. So does the member handed to
+		// the constructor of an iterator of the project's, stored
+		function fixture(use: String): Map<String, String> {
+			final main: String = 'class Main {\n\tprivate final _points:Array<Int> = [];\n\tpublic function new() {}\n'
+				+ '\tstatic function main() {\n\t\tfinal m = new Main();\n\t\tm.f();\n\t\tm.g(new Keeper());\n\t}\n'
+				+ '\tfunction g(k:Keeper):Void {\n\t\t' + use + '\n\t}\n'
+				+ '\tfunction f():Void {\n\t\tfor (i in 0..._points.length) { /*<*/ Keeper.grow(); /*>*/ }\n\t}\n}\n'
+				+ 'class Keeper {\n\tpublic static var held:Array<Int> = [];\n\tpublic var it:Null<Walk> = null;\n'
+				+ '\tpublic var count:Int = 0;\n\tpublic function new() {}\n\tpublic static function grow():Void held.push(1);\n'
+				+ '\tpublic inline function push(a:Array<Int>):Array<Int> {\n\t\tvar _this = a;\n\t\treturn _this;\n\t}\n'
+				+ '\tpublic inline function pop(_this:Array<Int>):Void {\n\t\theld = _this;\n\t\tcount = _this.length;\n\t}\n}\n'
+				+ 'class Walk {\n\tfinal a:Array<Int>;\n\tvar i:Int = 0;\n\tpublic inline function new(a:Array<Int>) this.a = a;\n'
+				+ '\tpublic inline function hasNext():Bool return i < a.length;\n\tpublic inline function next():Int return a[i++];\n}\n';
+			return ['Main.hx' => main];
+		}
+		final points: MemberRef = { owner: 'Main', name: '_points' };
+		for (use in ['Keeper.held = k.push(_points);', 'k.pop(_points);', 'k.it = new Walk(_points);'])
+			assertMatch(ask(fixture(use), null, true, points, false, null, null, null, true), r -> r.match(Unknown(Escape(_, _))));
+	}
+
 	/**
 	 * The answer for `member` (by default `Main.items`) over the region of `Main.hx` among `files`, compiled by `build` under
 	 * each define set of `configurations` and read through the facts unless `withFacts` is false; `classpathComplete` is
