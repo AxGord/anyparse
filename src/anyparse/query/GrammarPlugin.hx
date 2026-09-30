@@ -3333,6 +3333,13 @@ typedef ExecutionShape = {
 	@:optional var literalAbstractTypes: Map<String, String>;
 
 	/**
+	 * The type the compiler CONSTRUCTS where the text writes a literal of the node kind, by that kind: a regex literal
+	 * (Haxe `RegexLit` -> `EReg`), an array literal a map is expected of (`ArrayExpr` -> `Map`). Whether a build compiled
+	 * a type as its text reads such a construction at the literal as the text's own. Optional; unset makes none.
+	 */
+	@:optional var literalConstructions: Map<String, String>;
+
+	/**
 	 * The simple name of the language's CLASS-VALUE type (Haxe `Class`): a member returning or taking one may produce
 	 * an instance of a class no code names (`Type.resolveClass`, `Type.createInstance`). `MemberReach` reads the
 	 * producers off the declarations with it. Optional; unset means no class may be instantiated from a value.

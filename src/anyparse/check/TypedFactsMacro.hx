@@ -54,6 +54,7 @@ final class TypedFactsMacro {
 	private final _replaceable: Map<String, Bool> = [];
 	private final _homes: Map<String, Bool> = [];
 	private final _inlines: Map<String, Array<InlineMethod>> = [];
+	private final _macros: Map<String, Array<InlineMethod>> = [];
 	private final _reflectionFiles: Map<String, Bool> = [];
 	private final _out: FileOutput;
 
@@ -292,7 +293,7 @@ final class TypedFactsMacro {
 	/**
 	 * Note, for every class, which fields have overloads and where each method the compiler may splice in is declared:
 	 * an `inline` one, and any other one a call site inlines (`inline f()`, `inline new`) — every method but a macro,
-	 * whose expansion is code of its own.
+	 * whose expansion is code of its own, and whose declaration is noted apart (`macroCallee`).
 	 */
 	private function collectFields(t: ModuleType): Void {
 		switch t {
@@ -304,10 +305,15 @@ final class TypedFactsMacro {
 				if (ctor != null) all.push(ctor);
 				for (f in all) {
 					if (f.overloads.get().length > 0) _overloaded['$owner.${f.name}'] = true;
-					if (f.kind.match(FMethod(MethInline | MethNormal))) {
+					final methods: Null<Map<String, Array<InlineMethod>>> = switch f.kind {
+						case FMethod(MethInline | MethNormal): _inlines;
+						case FMethod(MethMacro): _macros;
+						case _: null;
+					};
+					if (methods != null) {
 						final info: { min: Int, max: Int, file: String } = Context.getPosInfos(f.pos);
-						final list: Array<InlineMethod> = _inlines[info.file] ?? [];
-						_inlines[info.file] = list;
+						final list: Array<InlineMethod> = methods[info.file] ?? [];
+						methods[info.file] = list;
 						list.push({
 							file: info.file,
 							min: info.min,
@@ -323,8 +329,21 @@ final class TypedFactsMacro {
 
 	/** The method declared around `min`–`max` of `file` (the innermost), whose body was spliced from there; null for none. */
 	public function inlineCallee(file: String, min: Int, max: Int): Null<InlineMethod> {
+		return innermost(_inlines[file] ?? [], min, max);
+	}
+
+	/**
+	 * The macro method declared around `min`–`max` of `file` (the innermost), null for none: code an expression macro
+	 * built there and returned, which the compiler keeps at the positions it was built at.
+	 */
+	public function macroCallee(file: String, min: Int, max: Int): Null<InlineMethod> {
+		return innermost(_macros[file] ?? [], min, max);
+	}
+
+	/** The innermost of `methods` declared around `min`–`max`, or null. */
+	private static function innermost(methods: Array<InlineMethod>, min: Int, max: Int): Null<InlineMethod> {
 		var best: Null<InlineMethod> = null;
-		for (f in _inlines[file] ?? []) if (f.min <= min && max <= f.max && (best == null || f.max - f.min < best.max - best.min)) best = f;
+		for (f in methods) if (f.min <= min && max <= f.max && (best == null || f.max - f.min < best.max - best.min)) best = f;
 		return best;
 	}
 

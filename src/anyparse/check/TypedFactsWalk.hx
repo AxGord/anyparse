@@ -22,7 +22,7 @@ final class TypedFactsWalk {
 
 	/** The categories of a node line, in the order they are written. */
 	private static final CATEGORIES: Array<String> = [
-		'params', 'calls', 'news', 'fields', 'elems', 'flows', 'strs', 'iters', 'refl', 'native', 'vars', 'reads', 'fns'
+		'params', 'calls', 'news', 'fields', 'elems', 'flows', 'strs', 'iters', 'refl', 'native', 'vars', 'reads', 'exps', 'fns'
 	];
 
 	public final id: String;
@@ -79,6 +79,15 @@ final class TypedFactsWalk {
 
 	/** The method whose spliced body is being walked; null in the body's own code, and in a splice no method was found for. */
 	private var _splice: Null<InlineMethod> = null;
+
+	/**
+	 * The range of the innermost walked expression that lies in `_splice`'s declared range: the code of that method that
+	 * holds what is walked below it — the whole declared range while none does.
+	 */
+	private var _spliceSite: { min: Int, max: Int } = { min: 0, max: 0 };
+
+	/** The macro method whose expansion, spliced into `_splice`'s code, is being walked (`nestedSplice`); null otherwise. */
+	private var _expansion: Null<InlineMethod> = null;
 
 	/** Extra header fields: `gen`, `gi`, `inl`, `ov`. */
 	private var _header: String = '';
@@ -259,23 +268,35 @@ final class TypedFactsWalk {
 		final saved: Bool = _inBody;
 		final site: { min: Int, max: Int } = _site;
 		final splice: Null<InlineMethod> = _splice;
+		final spliceSite: { min: Int, max: Int } = _spliceSite;
+		final expansion: Null<InlineMethod> = _expansion;
 		final code: Bool = !e.expr.match(TConst(_) | TTypeExpr(_));
 		if (inside)
 			_site = { min: info.min, max: info.max }
 		else if (straddles)
 			_site = { min: _min, max: _max };
-		if (inside || straddles)
-			_splice = null
-		else if (saved && code)
+		if (inside || straddles) {
+			_splice = null;
+			_expansion = null;
+		} else if (saved && code)
 			spliced(e, info)
-		else if (splice != null && code && !(info.file == splice.file && info.min >= splice.min && info.max <= splice.max))
+		else if (splice != null && code && !holds(splice, info) && (expansion == null || !holds(expansion, info)))
 			nestedSplice(e, info);
+		final current: Null<InlineMethod> = _splice;
+		if (current != null && holds(current, info)) _spliceSite = { min: info.min, max: info.max };
 		// back inside, as the call site's own arguments are: a further splice there is a call of its own
 		_inBody = inside || straddles;
 		visit(e);
 		_inBody = saved;
 		_site = site;
 		_splice = splice;
+		_spliceSite = spliceSite;
+		_expansion = expansion;
+	}
+
+	/** Whether `info` lies in the declared range of `method`. */
+	private static inline function holds(method: InlineMethod, info: { min: Int, max: Int, file: String }): Bool {
+		return info.file == method.file && info.min >= method.min && info.max <= method.max;
 	}
 
 	/** Walk `e`, whose value is used as `use`. */
@@ -287,8 +308,10 @@ final class TypedFactsWalk {
 	/**
 	 * Record the spliced body rooted at `e`: the call of the method it came from — `inline`, or inlined by its call site — found at the root or, when
 	 * the root carries a position of its own — an abstract's `this` stands at the whole abstract — at the first
-	 * expression under it that lies in one; `macro-expansion` when none does. The call carries where it ran, the range
-	 * of the innermost expression of the body around it (`_site`), and the method's declared range, which holds its code.
+	 * expression under it that lies in one; `macro-expansion` when none does, and then, where a macro method's declared
+	 * range holds the root, the expansion of that macro (`expanded`) at the innermost expression of the body around it.
+	 * The call carries where it ran, the range of the innermost expression of the body around it (`_site`), and the
+	 * method's declared range, which holds its code.
 	 */
 	private function spliced(e: TypedExpr, info: { min: Int, max: Int, file: String }): Void {
 		incomplete('inline-site-unknown');
@@ -307,6 +330,7 @@ final class TypedFactsWalk {
 		}
 		if (callee == null) {
 			incomplete('macro-expansion');
+			expanded(_host.macroCallee(info.file, info.min, info.max), e.pos, _home, _site);
 			return;
 		}
 		inlinedCall(callee, e.t, at(e.pos));
@@ -314,11 +338,34 @@ final class TypedFactsWalk {
 
 	/**
 	 * A spliced body walked below the one of `_splice` that is none of its method's code: a body that method's code spliced
-	 * in turn, run at the same site. Code no method holds stays the outer body's.
+	 * in turn, run at the same site, or the expansion of a macro that code calls (`expanded`), at the innermost expression
+	 * of that code around it (`_spliceSite`). Code no method holds stays the outer body's.
 	 */
 	private function nestedSplice(e: TypedExpr, info: { min: Int, max: Int, file: String }): Void {
 		final callee: Null<InlineMethod> = _host.inlineCallee(info.file, info.min, info.max);
-		if (callee != null) inlinedCall(callee, e.t, at(e.pos));
+		if (callee != null) {
+			inlinedCall(callee, e.t, at(e.pos));
+			return;
+		}
+		final splice: Null<InlineMethod> = _splice;
+		final expander: Null<InlineMethod> = _host.macroCallee(info.file, info.min, info.max);
+		if (splice == null || expander == null) return;
+		expanded(expander, e.pos, splice.file, _spliceSite);
+		_expansion = expander;
+	}
+
+	/**
+	 * The expansion of the macro `expander`, rooted at `root`, written into the code of `file` at `anchor`: the innermost
+	 * expression of that code around the expansion, which holds the call of the macro the compiler replaced (`a`), and
+	 * the macro's declared range (`d`), which holds the code it built. With no macro declared around the root the record
+	 * names none: code no method is known to hold.
+	 */
+	private function expanded(expander: Null<InlineMethod>, root: Position, file: String, anchor: { min: Int, max: Int }): Void {
+		final written: String = _host.range(file, anchor.min, anchor.max, _home);
+		final built: String = expander == null
+			? ''
+			: ',"t":${q(expander.id)},"d":${_host.range(expander.file, expander.min, expander.max, _home)}';
+		add('exps', '{"p":${at(root)},"a":$written$built}');
 	}
 
 	/**
@@ -329,6 +376,8 @@ final class TypedFactsWalk {
 		final declared: String = _host.range(callee.file, callee.min, callee.max, _home);
 		add('calls', '{"t":${q(callee.id)},"a":"inlined","rt":${q(str(result))},"p":$where,"s":[${_site.min},${_site.max}],"d":$declared}');
 		_splice = callee;
+		_spliceSite = { min: callee.min, max: callee.max };
+		_expansion = null;
 	}
 
 	private function visit(e: TypedExpr): Void {

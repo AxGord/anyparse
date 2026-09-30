@@ -80,6 +80,11 @@ import haxe.io.Path;
  *   - `native`: `{w, n, p}` — `syntax` for a `*.Syntax` call, `ident` for every native identifier, read or called.
  *   - `vars`: `{n, t, p}` — a local or loop binder (compiler temporaries are left out).
  *   - `reads`: `[min, max, type]` (foreign: `[i, min, max, type]`) — a read of a local, at the identifier.
+ *   - `exps`: `{p, a, t?, d?}` — code spliced in where no inlined method is declared, rooted at `p`: in the body's own
+ *     code, and in the code of a method an inlined call spliced in when a macro is declared around it. `t` is the macro
+ *     method declared around the root and `d` its declared range, which holds the code it built; `a` is the innermost
+ *     expression around the root of the code it was written in — the body's, or the spliced method's — where the
+ *     compiler replaced the call of the macro. Without `t`, no macro is declared there either.
  *   - `fns`: the node ids of the functions nested directly in this one.
  *
  * ## Markers (`inc`) — what a consumer answers Unknown for
@@ -88,6 +93,7 @@ import haxe.io.Path;
  *   query not covering the whole node is Unknown — unless it reads them by the `s` and `d` of their `inlined` calls.
  * - `macro-expansion`: a spliced body no method could be matched to — an expression macro's expansion, or
  *   an inlined piece that carries only its declaring type's range (an abstract's `this`); as above, and no callee is named.
+ *   Each such body is an `exps` record.
  * - `reflection-inlined`: a `Reflect`/`Type` body was inlined; its call, name and arguments are gone.
  * - `stale-foreign` (added by the table): a fact positioned in a file whose text the table no longer has was dropped.
  *

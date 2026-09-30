@@ -206,6 +206,21 @@ typedef FactNode = {
 
 	/** The bodies inlined calls spliced into this node, one per method's declared range (`spliceOf`). */
 	final splices: Array<SpliceFact>;
+
+	/** The expansions of expression macros written in this node's code or in code an inlined call spliced into it. */
+	final expansions: Array<ExpansionFact>;
+}
+
+/**
+ * The expansion of the expression macro `expander` (`pack.Type.method`): the code it built lies in its declared range
+ * (`declared`), and the call of it the compiler replaced in the innermost expression around the expansion of the code it
+ * was written in (`anchor`) — the node's own, or a method's an inlined call spliced in. Code spliced in that no inlined
+ * method and no macro is declared around has neither `expander` nor `declared`.
+ */
+typedef ExpansionFact = {
+	final expander: Null<String>;
+	final anchor: FactPos;
+	final declared: Null<FactPos>;
 }
 
 /**
@@ -741,7 +756,8 @@ final class CompilerFacts {
 			vars: [],
 			reads: [],
 			fns: [],
-			splices: []
+			splices: [],
+			expansions: []
 		};
 	}
 
@@ -852,6 +868,15 @@ final class CompilerFacts {
 				}: LocalReadFact),
 				node.reads
 			);
+			for (x in record.exps ?? []) {
+				final root: Null<FactPos> = place(x.p);
+				final anchor: Null<FactPos> = place(x.a);
+				final declared: Null<FactPos> = place(x.d);
+				if (root == null || anchor == null || (x.d != null && declared == null)) continue;
+				final written: FactPos = anchor;
+				// the root tells one expansion from another, and no question asks it
+				if (fresh('exp', x, root)) node.expansions.push({ expander: x.t, anchor: written, declared: declared });
+			}
 			for (f in record.fns ?? []) if (!node.fns.contains(f)) node.fns.push(f);
 		}
 		collectSplices(made);
@@ -1054,5 +1079,11 @@ private typedef NodeRecord = {
 
 	/** `[min, max, type]`, or `[file index, min, max, type]` for a foreign position. */
 	final ?reads: Array<Array<Any>>;
+	final ?exps: Array<{
+		?t: String,
+		p: Array<Int>,
+		a: Array<Int>,
+		?d: Array<Int>
+	}>;
 	final ?fns: Array<String>;
 }

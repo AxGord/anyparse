@@ -708,6 +708,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			execution: {
 				implicitConversionMetaName: '@:from',
 				literalAbstractTypes: ['Rest' => 'Rest', 'Arrow' => 'Map'],
+				literalConstructions: ['RegexLit' => 'EReg', 'ArrayExpr' => 'Map'],
 				classValueTypeName: 'Class',
 				concatenationKinds: ['Add', 'AddAssign'],
 				stringConversionMethodNames: ['toString'],
