@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.query.CallGraph.FnNode;
 import anyparse.query.CompilerFacts.FactNode;
+import anyparse.query.CompilerFacts.FactPos;
 import anyparse.query.CompilerFacts.FieldFact;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.MemberReach.ReachAccess;
@@ -87,7 +88,8 @@ final class MemberTouchScan {
 			out.hidden = SkipParse(file);
 			break;
 		}
-		final typed: Map<String, Array<FieldFact>> = typedAccesses(g, name, declaring) ?? [];
+		final unread: Array<String> = [];
+		final typed: Map<String, Array<FieldFact>> = typedAccesses(g, name, declaring, unread) ?? [];
 		for (f in _scope.files) {
 			final tree: Null<QueryNode> = g.treeOf(f.file);
 			if (tree == null || !RawSourceScan.mentionsWord(f.source, name)) continue;
@@ -98,6 +100,7 @@ final class MemberTouchScan {
 			scanFile(g, f.file, f.source, tree, name, declaring, access, arrayTyped, out, f.file == regionFile ? region : null, typed);
 		}
 		for (id => accesses in typed) recordTyped(g, id, name, accesses, access, arrayTyped, out, regionFile, region);
+		for (id in unread) recordUnread(g, id, access, out);
 		// a field initializer that is not freshly built shares its value from the start
 		if (access == Mutate) {
 			final site: Null<{ file: String, span: Span }> = sharedInitializer(g, declaring, name);
@@ -280,9 +283,13 @@ final class MemberTouchScan {
 	 * Every access of a field in typed code is a `FieldFact`, a property's through its accessor a call, so no access of the
 	 * member escapes them. An access binds to the member when its declaring type is one of the typed types standing for
 	 * `declaring` (`FactsView.bySimpleName`), or, off a structure or a dynamic receiver, when the receiver's value may carry
-	 * the member (`ValueCarriers.relation`). Null without the truth, or when no typed type stands for `declaring`.
+	 * the member (`ValueCarriers.relation`). Null without the truth, or when no typed type stands for `declaring`. A method a
+	 * build macro made (`CallGraphFacts.adopted`) has no text to fall back on: when its accesses are not all of a shape the
+	 * facts answer for, its id goes to `unread`, and it touches the member and lets it escape (`recordUnread`).
 	 */
-	private function typedAccesses(g: CallGraph, name: String, declaring: String): Null<Map<String, Array<FieldFact>>> {
+	private function typedAccesses(
+		g: CallGraph, name: String, declaring: String, unread: Array<String>
+	): Null<Map<String, Array<FieldFact>>> {
 		final facts: Null<CallGraphFacts> = g.facts;
 		if (facts == null || !facts.view.truth) return null;
 		final owners: Array<String> = facts.view.bySimpleName()[declaring] ?? [];
@@ -291,8 +298,12 @@ final class MemberTouchScan {
 		for (id => bodies in facts.faceted) {
 			final node: Null<FnNode> = g.node(id);
 			if (node == null || !_scope.sources.exists(node.file)) continue;
-			final accesses: Null<Array<FieldFact>> = nodeAccesses(g, node, bodies, name, declaring, owners, facts.view);
-			if (accesses != null) out[id] = accesses;
+			final made: Bool = facts.adopted.exists(id);
+			final accesses: Null<Array<FieldFact>> = nodeAccesses(g, node, bodies, name, declaring, owners, facts.view, made);
+			if (accesses != null)
+				out[id] = accesses;
+			else if (made)
+				unread.push(id);
 		}
 		return out;
 	}
@@ -302,33 +313,49 @@ final class MemberTouchScan {
 	 * those of every function the compiler made inside them that the graph declares no node for (a `.bind` closure) — one it
 	 * does declare is read as that node is. Null — the syntax reads `node` — when such an access is of a shape `classifyTyped`
 	 * does not answer for, or lies outside `node`'s text, when a call names a field of the member's name (a call of the value
-	 * a variable holds is a call fact, never a field one), or when a function inside it was placed by a macro.
+	 * a variable holds is a call fact, never a field one), or when a function inside it was placed by a macro. A body a build
+	 * macro made (`made`, `CallGraphFacts.adopted`) is read whole, wherever its facts lie and every function nested in it
+	 * with it: no text holds any of it.
 	 */
 	private function nodeAccesses(
-		g: CallGraph, node: FnNode, bodies: Array<FactNode>, name: String, declaring: String, owners: Array<String>, view: FactsView
+		g: CallGraph, node: FnNode, bodies: Array<FactNode>, name: String, declaring: String, owners: Array<String>, view: FactsView,
+		made: Bool
 	): Null<Array<FieldFact>> {
 		final span: Null<Span> = node.span;
-		if (span == null) return null;
+		if (span == null && !made) return null;
 		final home: String = view.table.keyOf(node.file);
 		final out: Array<FieldFact> = [];
 		final work: Array<FactNode> = bodies.copy();
 		while (work.length > 0) {
 			final n: Null<FactNode> = work.pop();
-			if (n == null || n.generated) return null;
+			if (n == null || (n.generated && !made)) return null;
 			// a field the compiler calls — a function a variable holds, a dynamic receiver's field — is a call, no field fact
 			for (c in n.calls) if (calledField(c.target) == name) return null;
 			for (f in n.fields) if (f.field == name && bindsTo(f, declaring, owners)) {
-				final at: Span = f.at.span;
-				if (f.at.file != home || at.from < span.from || at.to > span.to || !typedShape(f)) return null;
+				if (!typedShape(f) || (!made && !inside(f.at, home, span))) return null;
 				out.push(f);
 			}
 			for (child in n.fns) {
-				final made: Null<FactNode> = view.table.node(child);
-				if (made == null) return null;
-				if (CallGraphFacts.graphNodeOf(g, node, child, view) == null) work.push(made);
+				final nested: Null<FactNode> = view.table.node(child);
+				if (nested == null) return null;
+				if (made || CallGraphFacts.graphNodeOf(g, node, child, view) == null) work.push(nested);
 			}
 		}
 		return out;
+	}
+
+	/**
+	 * Record the method `id` a build macro made (`CallGraphFacts.adopted`) whose facts do not say how it accesses a name of
+	 * the member (`typedAccesses`): it touches the member, and — for `Mutate` — lets its value escape, both where its body is.
+	 */
+	private function recordUnread(g: CallGraph, id: String, access: ReachAccess, out: MemberTouches): Void {
+		final node: Null<FnNode> = g.node(id);
+		final body: Null<FactNode> = g.facts?.adopted[id];
+		if (node == null || body == null) return;
+		final at: Occurrence = { file: node.file, span: node.span ?? body.at.span };
+		out.touchers[id] = at;
+		out.notOnSelf[id] = at;
+		if (access == Mutate) out.escapes.push(at);
 	}
 
 	/**
@@ -363,14 +390,16 @@ final class MemberTouchScan {
 	): Void {
 		final held: Null<String> = g.node(id)?.file;
 		if (held == null) return;
+		// a body a build macro made lies in no text: none of it is the region's, and none is `this.name` spelled
+		final made: Bool = g.facts?.adopted.exists(id) == true;
 		final file: String = held;
 		for (f in accesses) {
 			final span: Span = f.at.span;
 			final verdict: Verdict = classifyTyped(f, access, arrayTyped);
-			if (verdict.escape) out.escapes.push({ file: file, span: span });
+			if (verdict.escape) out.escapes.push({ file: made ? f.at.file : file, span: span });
 			if (!verdict.touch) continue;
 			// the compiler may place what it made of an expression at a range wider than the expression's own
-			if (file == regionFile && meets(span, region) && out.inRegion == null) out.inRegion = {
+			if (!made && file == regionFile && meets(span, region) && out.inRegion == null) out.inRegion = {
 				from: 'entry',
 				to: name,
 				kind: 'touch',
@@ -378,7 +407,7 @@ final class MemberTouchScan {
 				span: span
 			};
 			out.touchers[id] = { file: file, span: span };
-			if (!onSelf(g, file, span, name) && !out.notOnSelf.exists(id)) out.notOnSelf[id] = { file: file, span: span };
+			if ((made || !onSelf(g, file, span, name)) && !out.notOnSelf.exists(id)) out.notOnSelf[id] = { file: file, span: span };
 		}
 	}
 
@@ -627,6 +656,11 @@ final class MemberTouchScan {
 	/** The field a call fact's `target` names (`pack.Type.field`, a bare field name), or null for a call of no field. */
 	private static function calledField(target: Null<String>): Null<String> {
 		return target == null ? null : target.substr(target.lastIndexOf('.') + 1);
+	}
+
+	/** Whether `at` lies in `span` of the file the facts key as `home`; false when there is no span. */
+	private static function inside(at: FactPos, home: String, span: Null<Span>): Bool {
+		return span != null && at.file == home && span.from <= at.span.from && at.span.to <= span.to;
 	}
 
 	/** Whether `span` shares a position with `region`; false when there is no region. */

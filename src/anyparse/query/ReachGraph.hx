@@ -60,6 +60,9 @@ final class ReachGraph {
 	/** Type -> whether a build macro may rewrite it (`isBuilt`). */
 	private final _built: Map<String, Bool> = [];
 
+	/** Type -> whether the builds compiled its text (`FactsProvenance.typeIsItsText`), settled on first demand. */
+	private final _textual: Map<String, Bool> = [];
+
 	/** `file:Type.member` -> what that member's code can give it a type (`inferredFrom`), read on first demand. */
 	private final _inferred: Map<String, Null<{ words: Array<String>, reads: Array<MemberRead> }>> = [];
 
@@ -535,6 +538,24 @@ final class ReachGraph {
 		return null;
 	}
 
+	/**
+	 * The site of a build macro that may have made the code of `typeName` other than its text (`buildMacroOn`), or null.
+	 * Where the compiler facts are the truth (`FactsView.truth`), they are the code every build compiled after its macros
+	 * ran: a macro whose output they show is the text (`FactsProvenance.typeIsItsText`) changed nothing the text does not
+	 * say, and is none.
+	 */
+	public function rewrittenBy(typeName: String): Null<ReachUnknown> {
+		final built: Null<ReachUnknown> = buildMacroOn(typeName);
+		final provenance: Null<FactsProvenance> = _scope.facts?.truth == true ? _scope.provenance() : null;
+		if (built == null || provenance == null) return built;
+		final g: CallGraph = graph();
+		final held: Null<Bool> = _textual[typeName];
+		final textual: Bool = held ?? provenance.typeIsItsText(g, typeName);
+		// a type whose file the graph has not read yet is asked again once it has
+		if (held == null && (textual || g.treeOf(_scope.siteOf(typeName)?.file ?? '') != null)) _textual[typeName] = textual;
+		return textual ? null : built;
+	}
+
 	public function unresolvedFrom(g: CallGraph, id: String): Array<UnresolvedCall> {
 		var grouped: Null<Map<String, Array<UnresolvedCall>>> = _unresolvedFrom;
 		if (grouped == null) {
@@ -866,11 +887,11 @@ final class ReachGraph {
 		return made;
 	}
 
-	/** Whether a build macro may rewrite `typeName` (`buildMacroOn`), answered once per type. */
+	/** Whether a build macro may rewrite `typeName` (`rewrittenBy`), answered once per type. */
 	private function isBuilt(typeName: String): Bool {
 		final held: Null<Bool> = _built[typeName];
 		if (held != null) return held;
-		final built: Bool = buildMacroOn(typeName) != null;
+		final built: Bool = rewrittenBy(typeName) != null;
 		_built[typeName] = built;
 		return built;
 	}
